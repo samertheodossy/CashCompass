@@ -1,0 +1,217 @@
+function loadDashboardActionSections() {
+  loadBillsDueUi_();
+  loadRecurringBillsUi_();
+}
+
+function loadBillsDueUi_() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      renderBillsList_('bd_overdueList', (data && data.overdue) || [], 'No overdue bills.');
+      renderBillsList_('bd_next7List', (data && data.next7) || [], 'No bills due soon.');
+      renderBillsDueSummary_(data || {});
+    })
+    .withFailureHandler(function(err) {
+      const msg = 'Error loading bills due: ' + (err.message || String(err));
+      renderBillsList_('bd_overdueList', [], msg);
+      renderBillsList_('bd_next7List', [], msg);
+      renderBillsDueSummary_({ overdue: [], next7: [] }, msg);
+      setStatus('planner_status', msg, true);
+    })
+    .getBillsDueFromCashFlowForDashboard();
+}
+
+function renderBillsDueSummary_(data, errorMessage) {
+  const overdue = (data && data.overdue) || [];
+  const next7 = (data && data.next7) || [];
+
+  const overdueCount = overdue.length;
+  const next7Count = next7.length;
+
+  const ovDueSoon = document.getElementById('ov_bills_dueSoonCount');
+  const ovOverdue = document.getElementById('ov_bills_overdueCount');
+  const ovSummary = document.getElementById('ov_bills_summaryText');
+
+  const cfDueSoon = document.getElementById('cf_bills_dueSoonCount');
+  const cfOverdue = document.getElementById('cf_bills_overdueCount');
+
+  const ovDueSoonCard = document.getElementById('ov_billsDueSoonCard');
+  const ovOverdueCard = document.getElementById('ov_billsOverdueCard');
+  const cfDueSoonCard = document.getElementById('cf_bills_dueSoonCard');
+  const cfOverdueCard = document.getElementById('cf_bills_overdueCard');
+
+  if (ovDueSoon) ovDueSoon.textContent = String(next7Count);
+  if (ovOverdue) ovOverdue.textContent = String(overdueCount);
+  if (cfDueSoon) cfDueSoon.textContent = String(next7Count);
+  if (cfOverdue) cfOverdue.textContent = String(overdueCount);
+
+  if (ovSummary) {
+    if (errorMessage) {
+      ovSummary.textContent = errorMessage;
+    } else if (overdueCount > 0) {
+      ovSummary.textContent = overdueCount + ' overdue bill(s) need attention.';
+    } else if (next7Count > 0) {
+      ovSummary.textContent = next7Count + ' bill(s) due in the next 7 days.';
+    } else {
+      ovSummary.textContent = 'No bills due right now.';
+    }
+  }
+
+  [ovDueSoonCard, cfDueSoonCard].forEach(function(card) {
+    if (!card) return;
+    card.classList.remove('bill-card-due', 'bill-card-clear');
+    card.classList.add(next7Count > 0 ? 'bill-card-due' : 'bill-card-clear');
+  });
+
+  [ovOverdueCard, cfOverdueCard].forEach(function(card) {
+    if (!card) return;
+    card.classList.remove('bill-card-overdue', 'bill-card-clear');
+    card.classList.add(overdueCount > 0 ? 'bill-card-overdue' : 'bill-card-clear');
+  });
+}
+
+function renderBillsList_(elementId, rows, emptyMsg) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+
+  window.__dashboardBills = window.__dashboardBills || {};
+
+  if (!rows || !rows.length) {
+    el.innerHTML = '<div class="muted">' + escapeHtml(emptyMsg || 'No items.') + '</div>';
+    return;
+  }
+
+  el.innerHTML = rows.map(function(r, idx) {
+    const key = elementId + '::' + idx;
+    window.__dashboardBills[key] = r;
+
+    const metaBits = [];
+    if (r.category) metaBits.push('Category: ' + escapeHtml(r.category));
+    if (r.autopay) metaBits.push('Autopay: ' + escapeHtml(r.autopay));
+    if (r.varies) metaBits.push('Varies: ' + escapeHtml(r.varies));
+    if (r.sourceLabel) metaBits.push('Source: ' + escapeHtml(r.sourceLabel));
+    else if (r.sourceType === 'debt') metaBits.push('Source: DEBTS');
+
+    return (
+      '<div class="change-item">' +
+        '<div class="change-label">' + escapeHtml(r.name || 'Bill') + '</div>' +
+        '<div class="change-value">' + fmtCurrency(r.amount || 0) + '</div>' +
+        '<div class="change-meta">Due: ' + escapeHtml(r.dueDate || '—') + '</div>' +
+        '<div class="change-meta">Suggested amount: ' + fmtCurrency(r.amount || 0) + '</div>' +
+        (metaBits.length ? '<div class="change-meta">' + metaBits.join(' • ') + '</div>' : '') +
+        '<div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">' +
+          '<button class="small-btn primary" onclick="payBillFromDashboard(\'' + escapeJs(key) + '\')">Pay</button>' +
+          '<button class="small-btn" onclick="skipBillFromDashboard(\'' + escapeJs(r.id || '') + '\')">Skip</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+function payBillFromDashboard(billKey) {
+  const store = window.__dashboardBills || {};
+  const bill = store[billKey];
+
+  if (!bill) {
+    setStatus('planner_status', 'Error: Bill not found.', true);
+    return;
+  }
+
+  prefillQuickPayment({
+    entryType: 'Expense',
+    payee: bill.payee || bill.name || '',
+    entryDate: bill.dueDate || '',
+    amount: bill.amount || 0
+  });
+}
+
+function skipBillFromDashboard(skipKey) {
+  if (!skipKey) {
+    setStatus('planner_status', 'Error: Missing bill key.', true);
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('planner_status', (res && res.message) || 'Skipped.', false);
+      loadDashboardActionSections();
+      refreshSnapshot();
+      loadPaymentPreview();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('planner_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .skipDashboardBill(skipKey);
+}
+
+function loadRecurringBillsUi_() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      renderRecurringBillsList_('bd_recurringList', data || [], 'No recurring bills pending.');
+    })
+    .withFailureHandler(function(err) {
+      renderRecurringBillsList_('bd_recurringList', [], 'Error: ' + (err.message || String(err)));
+    })
+    .getRecurringBillsWithoutDueDateForDashboard();
+}
+
+function renderRecurringBillsList_(elementId, rows, emptyMsg) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+
+  window.__dashboardRecurring = window.__dashboardRecurring || {};
+
+  if (!rows || !rows.length) {
+    el.innerHTML = '<div class="muted">' + escapeHtml(emptyMsg || 'No items.') + '</div>';
+    return;
+  }
+
+  el.innerHTML = rows.map(function(r, idx) {
+    const key = elementId + '::' + idx;
+    window.__dashboardRecurring[key] = r;
+
+    return (
+      '<div class="change-item">' +
+        '<div class="change-label">' + escapeHtml(r.name || 'Recurring Bill') + '</div>' +
+        '<div class="change-value">—</div>' +
+        '<div class="change-meta">Not yet mapped in INPUT - Bills</div>' +
+        '<div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">' +
+          '<button class="small-btn primary" onclick="payRecurringBill(\'' + escapeJs(key) + '\')">Pay</button>' +
+          '<button class="small-btn" onclick="skipRecurringBill(\'' + escapeJs(r.id || '') + '\')">Skip</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+function payRecurringBill(key) {
+  const bill = (window.__dashboardRecurring || {})[key];
+  if (!bill) {
+    setStatus('planner_status', 'Error: Recurring bill not found.', true);
+    return;
+  }
+
+  prefillQuickPayment({
+    entryType: 'Expense',
+    payee: bill.payee || bill.name || '',
+    entryDate: new Date().toISOString().slice(0, 10),
+    amount: 0
+  });
+}
+
+function skipRecurringBill(skipKey) {
+  if (!skipKey) {
+    setStatus('planner_status', 'Error: Missing recurring bill key.', true);
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('planner_status', (res && res.message) || 'Skipped.', false);
+      loadDashboardActionSections();
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('planner_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .skipDashboardBill(skipKey);
+}

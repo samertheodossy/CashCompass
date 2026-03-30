@@ -1,0 +1,748 @@
+<div class="page">
+  <div class="topbar">
+    <div>
+      <h1>Planner Dashboard</h1>
+      <div class="subtle">Unified browser dashboard for House Values, Bank Accounts, Investments, Debts, Quick Add Payment, Upcoming Expenses, Retirement, and Purchase Simulation.</div>
+    </div>
+    <div class="top-actions">
+      <button onclick="runPlannerNow()">Run Planner + Refresh Snapshot</button>
+      <div id="planner_status" class="status"></div>
+    </div>
+  </div>
+
+  <div class="page-nav">
+    <button class="page-btn active" data-page="overview" onclick="showPage('overview')">Overview</button>
+    <button class="page-btn" data-page="assets" onclick="showPage('assets')">Assets</button>
+    <button class="page-btn" data-page="cashflow" onclick="showPage('cashflow')">Cash Flow</button>
+    <button class="page-btn" data-page="properties" onclick="showPage('properties')">Properties</button>
+    <button class="page-btn" data-page="planning" onclick="showPage('planning')">Planning</button>
+  </div>
+
+  <div id="page_overview" class="workspace-page active">
+    <div class="snapshot-grid">
+      <div class="snapshot-card" onclick="showTab('bank')">
+        <div class="snapshot-label">Total Cash</div>
+        <div class="snapshot-value" id="snap_cash">—</div>
+        <div class="snapshot-delta" id="snap_delta_cash">—</div>
+      </div>
+      <div class="snapshot-card" onclick="showTab('investments')">
+        <div class="snapshot-label">Total Investments</div>
+        <div class="snapshot-value" id="snap_investments">—</div>
+        <div class="snapshot-delta" id="snap_delta_investments">—</div>
+      </div>
+      <div class="snapshot-card" onclick="showTab('houses')">
+        <div class="snapshot-label">Real Estate Value</div>
+        <div class="snapshot-value" id="snap_houseEquity">—</div>
+        <div class="snapshot-delta" id="snap_delta_houseEquity">—</div>
+      </div>
+      <div class="snapshot-card" onclick="showTab('debts')">
+        <div class="snapshot-label">Total Debt</div>
+        <div class="snapshot-value" id="snap_debt">—</div>
+        <div class="snapshot-delta" id="snap_delta_debt">—</div>
+      </div>
+      <div class="snapshot-card" onclick="showTab('bank')">
+        <div class="snapshot-label">Net Worth</div>
+        <div class="snapshot-value" id="snap_netWorth">—</div>
+        <div class="snapshot-delta" id="snap_delta_netWorth">—</div>
+        <div class="snapshot-meta">Snapshot refreshed: <span id="snap_refreshedAt">—</span></div>
+      </div>
+    </div>
+
+    <div class="six-grid">
+      <div class="card">
+        <div class="card-title">Financial Health</div>
+        <div class="health-row">
+          <div class="health-score-wrap">
+            <div id="health_score" class="health-score health-neutral">—</div>
+            <div id="health_label" class="health-label health-neutral">Unavailable</div>
+          </div>
+          <div>
+            <div id="health_summary" class="health-summary">Run the planner to generate health scoring.</div>
+            <div class="health-bar">
+              <div id="health_bar_fill" class="health-bar-fill"></div>
+            </div>
+            <div class="snapshot-meta">Health baseline: <span id="health_baseline">—</span></div>
+            <div id="health_trend" class="health-trend">Trend: —</div>
+            <ul id="health_drivers" class="health-drivers"></ul>
+          </div>
+        </div>
+
+        <div class="health-explainer">
+          <button class="health-explainer-toggle" onclick="toggleHealthExplainer()">Why this score?</button>
+          <div id="health_explainer_body" class="health-explainer-body">
+            <div><strong>How the score works</strong></div>
+            <div>The score starts at 100 and applies deductions based on your latest planner run in <strong>OUT - History</strong>.</div>
+            <div style="margin-top:8px;"><strong>Main factors currently used</strong></div>
+            <div>• Projected Cash Flow</div>
+            <div>• Usable Cash After Buffers</div>
+            <div>• Debt-to-Assets Ratio</div>
+            <div>• Active Credit Card Debt</div>
+            <div>• Estimated Months to Pay Off All Cards</div>
+            <div>• Monthly Stability</div>
+            <div>• Upcoming overdue and near-term planned obligations</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" onclick="showTab('retirement')" style="cursor:pointer;">
+        <div class="card-title">Retirement Outlook</div>
+        <div class="ret-row">
+          <div class="ret-kpi">
+            <div class="ret-kpi-label">Selected Scenario</div>
+            <div class="ret-kpi-value" id="ret_scenario">—</div>
+          </div>
+          <div class="ret-kpi">
+            <div class="ret-kpi-label">Goal Amount</div>
+            <div class="ret-kpi-value" id="ret_goal">—</div>
+          </div>
+          <div class="ret-kpi">
+            <div class="ret-kpi-label">Current Investable Assets</div>
+            <div class="ret-kpi-value" id="ret_assets">—</div>
+          </div>
+          <div class="ret-kpi">
+            <div class="ret-kpi-label">Estimated Retirement Age</div>
+            <div class="ret-kpi-value" id="ret_age">—</div>
+          </div>
+          <div class="ret-kpi">
+            <div class="ret-kpi-label">Monte Carlo Success</div>
+            <div class="ret-kpi-value" id="ret_mc">—</div>
+          </div>
+        </div>
+        <div id="ret_summary" class="ret-summary">—</div>
+        <button onclick="event.stopPropagation(); showTab('retirement')">Open Retirement</button>
+      </div>
+
+      <div class="card" onclick="showTab('upcoming')" style="cursor:pointer;">
+        <div class="card-title">Buffer Runway</div>
+        <div class="ret-kpi">
+          <div class="ret-kpi-label">Months of survival</div>
+          <div class="ret-kpi-value" id="runway_label">—</div>
+        </div>
+        <div id="runway_detail" class="ret-summary">—</div>
+      </div>
+    </div>
+
+    <div class="six-grid">
+      <div class="card">
+        <div class="card-title">Suggested Actions</div>
+        <div id="actions_list" class="actions-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Operations Snapshot</div>
+        <div class="changes-list">
+          <div class="change-item" onclick="showTab('upcoming')" style="cursor:pointer;">
+            <div class="change-label">Upcoming Next 7 Days</div>
+            <div class="change-value" id="ov_upcoming_next7">—</div>
+            <div class="change-meta">Quick view from Upcoming Expenses</div>
+          </div>
+          <div class="change-item" onclick="showTab('upcoming')" style="cursor:pointer;">
+            <div class="change-label">Upcoming Next 30 Days</div>
+            <div class="change-value" id="ov_upcoming_next30">—</div>
+            <div class="change-meta">Quick view from Upcoming Expenses</div>
+          </div>
+          <div class="change-item" onclick="showTab('houseExpenses')" style="cursor:pointer;">
+            <div class="change-label">House Expenses This Month</div>
+            <div class="change-value" id="ov_house_thisMonth">—</div>
+            <div class="change-meta">Net total across all house sheets</div>
+          </div>
+          <div class="change-item" onclick="showTab('houseExpenses')" style="cursor:pointer;">
+            <div class="change-label">House Expenses YTD</div>
+            <div class="change-value" id="ov_house_ytd">—</div>
+            <div class="change-meta">Net total across all house sheets</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Open Workspaces</div>
+        <div class="actions-list">
+          <button class="action-item severity-info" onclick="showPage('assets')">
+            <div class="action-title">Assets</div>
+            <div class="action-message">House values, bank accounts, and investments.</div>
+            <div class="action-cta">Open Assets</div>
+          </button>
+          <button class="action-item severity-info" onclick="showPage('cashflow')">
+            <div class="action-title">Cash Flow</div>
+            <div class="action-message">Quick payments and upcoming expenses.</div>
+            <div class="action-cta">Open Cash Flow</div>
+          </button>
+          <button class="action-item severity-info" onclick="showPage('properties')">
+            <div class="action-title">Properties</div>
+            <div class="action-message">House expenses and property summaries.</div>
+            <div class="action-cta">Open Properties</div>
+          </button>
+          <button class="action-item severity-info" onclick="showPage('planning')">
+            <div class="action-title">Planning</div>
+            <div class="action-message">Debts, retirement, and big purchase simulation.</div>
+            <div class="action-cta">Open Planning</div>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="six-grid">
+      <div class="card" onclick="showPage('cashflow'); showTab('billsDue');" style="cursor:pointer;">
+        <div class="card-title">Bills Due</div>
+
+        <div class="mini-grid">
+          <div class="mini-card" id="ov_billsDueSoonCard">
+            <div class="mini-card-title">Due Soon</div>
+            <div class="mini-card-value" id="ov_bills_dueSoonCount">—</div>
+          </div>
+          <div class="mini-card" id="ov_billsOverdueCard">
+            <div class="mini-card-title">Overdue</div>
+            <div class="mini-card-value" id="ov_bills_overdueCount">—</div>
+          </div>
+        </div>
+
+        <div class="ret-summary" id="ov_bills_summaryText">Open Bills Due</div>
+        <button onclick="event.stopPropagation(); showPage('cashflow'); showTab('billsDue');">Open Bills Due</button>
+      </div>
+    </div>
+
+    <div class="six-grid">
+      <div class="card">
+        <div class="card-title">What Changed?</div>
+        <div id="changes_list" class="changes-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Net Worth Attribution</div>
+        <div id="attrib_root" class="changes-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Issues</div>
+        <div id="issues_root"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="page_assets" class="workspace-page">
+    <div class="tabs assets-tabs">
+      <button class="tab-btn active" data-tab="houses" onclick="showTab('houses')">House Values</button>
+      <button class="tab-btn" data-tab="bank" onclick="showTab('bank')">Bank Accounts</button>
+      <button class="tab-btn" data-tab="investments" onclick="showTab('investments')">Investments</button>
+    </div>
+
+    <div id="houses" class="panel active">
+      <div class="panel-head">
+        <h2>Update House Value</h2>
+        <div class="updated">Last updated: <span id="house_updated">—</span></div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <label>House</label>
+          <select id="house_house" onchange="loadHouseData()"></select>
+          <label>Date</label>
+          <input type="date" id="house_date" onchange="loadHouseData()">
+          <label>Value</label>
+          <input type="text" id="house_value" inputmode="decimal" onfocus="currencyFocus('house_value')" onblur="currencyBlur('house_value')">
+          <button onclick="saveHouse()">Save House Value</button>
+          <div id="house_status" class="status"></div>
+        </div>
+        <div class="info">
+          <div><strong>Selected month:</strong> <span id="house_selectedMonth" class="muted">—</span></div>
+          <div><strong>Stored value for selected month:</strong> <span id="house_selectedMonthValue" class="muted">—</span></div>
+          <div><strong>Current House Assets value:</strong> <span id="house_currentAssetValue" class="muted">—</span></div>
+          <div><strong>Loan amount left:</strong> <span id="house_loanAmountLeft" class="muted">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="bank" class="panel">
+      <div class="panel-head">
+        <h2>Update Bank Account</h2>
+        <div class="updated">Last updated: <span id="bank_updated">—</span></div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <label>Account</label>
+          <select id="bank_account" onchange="loadBankData()"></select>
+          <label>Date</label>
+          <input type="date" id="bank_date" onchange="loadBankData()">
+          <label>Value</label>
+          <input type="text" id="bank_value" inputmode="decimal" onfocus="currencyFocus('bank_value')" onblur="currencyBlur('bank_value')" oninput="evaluateBankBufferWarning()">
+          <div id="bank_bufferWarning" class="warning-box"></div>
+          <div class="check-row">
+            <input type="checkbox" id="bank_updateAvailableNow" checked>
+            <label for="bank_updateAvailableNow" style="margin:0;font-weight:normal;">Also update Available Now</label>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="bank_updateMinBuffer" onchange="evaluateBankBufferWarning()">
+            <label for="bank_updateMinBuffer" style="margin:0;font-weight:normal;">Also update Min Buffer</label>
+          </div>
+          <button onclick="saveBank()">Save Bank Account</button>
+          <div id="bank_status" class="status"></div>
+        </div>
+        <div class="info">
+          <div><strong>Selected month:</strong> <span id="bank_selectedMonth" class="muted">—</span></div>
+          <div><strong>Stored value for selected month:</strong> <span id="bank_selectedMonthValue" class="muted">—</span></div>
+          <div><strong>Current balance:</strong> <span id="bank_currentBalance" class="muted">—</span></div>
+          <div><strong>Available now:</strong> <span id="bank_availableNow" class="muted">—</span></div>
+          <div><strong>Min buffer:</strong> <span id="bank_minBuffer" class="muted">—</span></div>
+          <div><strong>Type:</strong> <span id="bank_type" class="muted">—</span></div>
+          <div><strong>Use policy:</strong> <span id="bank_usePolicy" class="muted">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="investments" class="panel">
+      <div class="panel-head">
+        <h2>Update Investment</h2>
+        <div class="updated">Last updated: <span id="inv_updated">—</span></div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <label>Investment Account</label>
+          <select id="inv_account" onchange="loadInvestmentData()"></select>
+          <label>Date</label>
+          <input type="date" id="inv_date" onchange="loadInvestmentData()">
+          <label>Value</label>
+          <input type="text" id="inv_value" inputmode="decimal" onfocus="currencyFocus('inv_value')" onblur="currencyBlur('inv_value')">
+          <button onclick="saveInvestment()">Save Investment</button>
+          <div id="inv_status" class="status"></div>
+        </div>
+        <div class="info">
+          <div><strong>Selected month:</strong> <span id="inv_selectedMonth" class="muted">—</span></div>
+          <div><strong>Stored value for selected month:</strong> <span id="inv_selectedMonthValue" class="muted">—</span></div>
+          <div><strong>Current SYS - Assets balance:</strong> <span id="inv_currentBalance" class="muted">—</span></div>
+          <div><strong>Type:</strong> <span id="inv_type" class="muted">—</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="page_cashflow" class="workspace-page">
+    <div class="tabs cashflow-tabs">
+      <button class="tab-btn active" data-tab="payments" onclick="showTab('payments')">Quick Payment</button>
+      <button class="tab-btn" data-tab="upcoming" onclick="showTab('upcoming')">Upcoming</button>
+      <button class="tab-btn" data-tab="billsDue" onclick="showTab('billsDue')">Bills Due</button>
+    </div>
+
+    <div id="payments" class="panel active">
+      <div class="panel-head">
+        <h2>Quick Add Payment</h2>
+        <div class="updated">Last updated: <span id="pay_updated">—</span></div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <label>Type</label>
+          <select id="pay_type" onchange="filterPaymentPayees(); loadPaymentPreview();">
+            <option value="Expense">Expense</option>
+            <option value="Income">Income</option>
+          </select>
+          <label>Date</label>
+          <input type="date" id="pay_date" onchange="loadPaymentPreview()">
+          <label>Existing Payee</label>
+          <select id="pay_payeeSelect" onchange="syncPaymentPayeeInput(); loadPaymentPreview();"></select>
+          <label>Or Type / Edit Payee</label>
+          <input type="text" id="pay_payeeInput" oninput="loadPaymentPreview()" placeholder="Enter payee name">
+          <label>Amount</label>
+          <input type="text" id="pay_amount" inputmode="decimal" onfocus="currencyFocus('pay_amount')" onblur="currencyBlur('pay_amount')">
+          <div class="check-row">
+            <input type="checkbox" id="pay_createIfMissing" checked>
+            <label for="pay_createIfMissing" style="margin:0;font-weight:normal;">Create row if payee is missing</label>
+          </div>
+          <button onclick="savePayment()">Add Payment</button>
+          <div id="pay_status" class="status"></div>
+        </div>
+        <div class="info">
+          <div><strong>Sheet:</strong> <span id="pay_sheetName" class="muted">—</span></div>
+          <div><strong>Month:</strong> <span id="pay_monthName" class="muted">—</span></div>
+          <div><strong>Current value in cell:</strong> <span id="pay_currentValue" class="muted">—</span></div>
+          <div><strong>Existing row:</strong> <span id="pay_rowExists" class="muted">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="upcoming" class="panel">
+      <div class="panel-head">
+        <h2>Upcoming Expenses</h2>
+        <div class="updated">Last updated: <span id="upcoming_updated">—</span></div>
+      </div>
+
+      <div class="mini-grid">
+        <div class="mini-card">
+          <div class="mini-card-title">Next 7 Days</div>
+          <div class="mini-card-value" id="upcoming_next7">—</div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-card-title">Next 30 Days</div>
+          <div class="mini-card-value" id="upcoming_next30">—</div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-card-title">Overdue</div>
+          <div class="mini-card-value" id="upcoming_overdue">—</div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-card-title">Total Planned</div>
+          <div class="mini-card-value" id="upcoming_total">—</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>Expense Name</label>
+          <input type="text" id="up_name">
+
+          <label>Category</label>
+          <input type="text" id="up_category">
+
+          <label>Payee</label>
+          <input type="text" id="up_payee">
+
+          <label>Due Date</label>
+          <input type="date" id="up_dueDate">
+
+          <label>Amount</label>
+          <input type="text" id="up_amount" inputmode="decimal" onfocus="currencyFocus('up_amount')" onblur="currencyBlur('up_amount')">
+
+          <label>Account / Source</label>
+          <input type="text" id="up_accountSource">
+
+          <div class="check-row">
+            <input type="checkbox" id="up_autoAdd">
+            <label for="up_autoAdd" style="margin:0;font-weight:normal;">Auto Add To Cash Flow</label>
+          </div>
+
+          <label>Notes</label>
+          <textarea id="up_notes"></textarea>
+
+          <button onclick="saveUpcomingExpense()">Add Upcoming Expense</button>
+          <div id="upcoming_status" class="status"></div>
+        </div>
+
+        <div>
+          <div class="card-title" style="margin-top:0;">Upcoming List</div>
+          <div id="upcoming_list" class="upcoming-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="billsDue" class="panel">
+      <div class="panel-head">
+        <h2>Bills Due</h2>
+        <div class="updated">Operational bills queue from Cash Flow + Debts minimums</div>
+      </div>
+
+      <div class="mini-grid">
+        <div class="mini-card" id="cf_bills_dueSoonCard">
+          <div class="mini-card-title">Due Soon</div>
+          <div class="mini-card-value" id="cf_bills_dueSoonCount">—</div>
+        </div>
+        <div class="mini-card" id="cf_bills_overdueCard">
+          <div class="mini-card-title">Overdue</div>
+          <div class="mini-card-value" id="cf_bills_overdueCount">—</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <div class="card-title" style="margin-top:0;">Overdue</div>
+        <div id="bd_overdueList" class="bills-grid"></div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <div class="card-title" style="margin-top:0;">Next 7 Days</div>
+        <div id="bd_next7List" class="bills-grid"></div>
+      </div>
+
+      <div>
+        <div class="card-title" style="margin-top:0;">Recurring Bills (No Due Date)</div>
+        <div id="bd_recurringList" class="bills-grid">
+          <div class="muted">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="page_properties" class="workspace-page">
+    <div class="tabs properties-tabs">
+      <button class="tab-btn active" data-tab="houseExpenses" onclick="showTab('houseExpenses')">House Expenses</button>
+    </div>
+
+    <div id="houseExpenses" class="panel active">
+      <div class="panel-head">
+        <h2>Add House Expense</h2>
+        <div class="updated">Uses the same house expense writer as the sidebar</div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>House</label>
+          <select id="hx_house"></select>
+
+          <label>Date</label>
+          <input type="date" id="hx_date">
+
+          <label>Item</label>
+          <input type="text" id="hx_item" placeholder="Example: HOA Fees April">
+
+          <label>Type</label>
+          <select id="hx_type">
+            <option value="Repair">Repair</option>
+            <option value="HOA">HOA</option>
+            <option value="Insurance">Insurance</option>
+            <option value="Utilities">Utilities</option>
+            <option value="Mgmt">Mgmt</option>
+            <option value="Cleaning">Cleaning</option>
+            <option value="Warranty">Warranty</option>
+            <option value="Tax">Tax</option>
+            <option value="Appliance">Appliance</option>
+            <option value="Improvement">Improvement</option>
+            <option value="Other">Other</option>
+          </select>
+
+          <label>Location</label>
+          <input type="text" id="hx_location">
+
+          <label>Cost</label>
+          <input type="text" id="hx_cost" inputmode="decimal" onfocus="currencyFocus('hx_cost')" onblur="currencyBlur('hx_cost')">
+
+          <label>Service Fees Paid</label>
+          <input type="text" id="hx_serviceFees" inputmode="decimal" onfocus="currencyFocus('hx_serviceFees')" onblur="currencyBlur('hx_serviceFees')">
+
+          <label>Insurance Covered</label>
+          <select id="hx_insurance">
+            <option value="">—</option>
+            <option value="Yes">Yes</option>
+            <option value="No" selected>No</option>
+          </select>
+
+          <label>Payment Links</label>
+          <input type="text" id="hx_paymentLinks" placeholder="PDF name, payment ref, URL, etc.">
+
+          <label>Notes</label>
+          <textarea id="hx_notes" placeholder="Optional notes"></textarea>
+
+          <div class="check-row">
+            <input type="checkbox" id="hx_autoAddToCashFlow">
+            <label for="hx_autoAddToCashFlow" style="margin:0;font-weight:normal;">Also add to Cash Flow</label>
+          </div>
+
+          <button onclick="saveHouseExpense()">Add House Expense</button>
+          <div id="hx_status" class="status"></div>
+        </div>
+
+        <div>
+          <div class="info">
+            <div><strong>Selected house sheet:</strong> <span id="hx_sheetName" class="muted">—</span></div>
+            <div><strong>Location preview:</strong> <span id="hx_locationPreview" class="muted">—</span></div>
+            <div><strong>Year from date:</strong> <span id="hx_yearPreview" class="muted">—</span></div>
+            <div style="margin-top:10px;"><strong>Behavior:</strong> saves into the selected house sheet, uses the date to choose the year block, and creates the year section if missing.</div>
+            <div style="margin-top:10px;"><strong>Cash Flow behavior:</strong> if checked, net amount = Cost + Service Fees Paid. Positive net adds as Expense, negative net adds as Income.</div>
+          </div>
+
+          <div class="card" style="margin-top:14px;">
+            <div class="card-title">House Expense Summaries</div>
+
+            <div style="margin-bottom:12px;">
+              <div class="change-label">This Month by House</div>
+              <div id="hx_summaryThisMonthByHouse" class="changes-list">
+                <div class="muted">Loading...</div>
+              </div>
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <div class="change-label">YTD by House</div>
+              <div id="hx_summaryYtdByHouse" class="changes-list">
+                <div class="muted">Loading...</div>
+              </div>
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <div class="change-label">YTD by Type</div>
+              <div id="hx_summaryYtdByType" class="changes-list">
+                <div class="muted">Loading...</div>
+              </div>
+            </div>
+
+            <div class="change-label" style="margin-top:14px;">Recent House Expenses</div>
+            <div id="hx_recentList" class="changes-list">
+              <div class="muted">Loading...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="page_planning" class="workspace-page">
+    <div class="tabs planning-tabs">
+      <button class="tab-btn active" data-tab="debts" onclick="showTab('debts')">Debts</button>
+      <button class="tab-btn" data-tab="retirement" onclick="showTab('retirement')">Retirement</button>
+      <button class="tab-btn" data-tab="purchase" onclick="showTab('purchase')">Purchase Sim</button>
+    </div>
+
+    <div id="debts" class="panel active">
+      <div class="panel-head">
+        <h2>Update Debt Field</h2>
+        <div class="updated">Last updated: <span id="debt_updated">—</span></div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <label>Type Filter</label>
+          <select id="debt_typeFilter" onchange="filterDebtAccounts()"></select>
+          <label>Debt Account</label>
+          <select id="debt_account" onchange="loadDebtFieldValue()"></select>
+          <label>Field</label>
+          <select id="debt_field" onchange="loadDebtFieldValue()"></select>
+          <label>New Value</label>
+          <input type="text" id="debt_value" inputmode="decimal" onfocus="handleDebtValueFocus()" onblur="handleDebtValueBlur()">
+          <button onclick="saveDebt()">Save Debt Update</button>
+          <div id="debt_status" class="status"></div>
+        </div>
+        <div class="info">
+          <div><strong>Current value:</strong> <span id="debt_currentValue" class="muted">—</span></div>
+          <div><strong>Type:</strong> <span id="debt_type" class="muted">—</span></div>
+          <div><strong>Acct PCT Avail:</strong> <span id="debt_pctAvail" class="muted">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="retirement" class="panel">
+      <div class="panel-head">
+        <h2>Retirement Planner</h2>
+        <div class="updated">Last updated: <span id="retirement_updated">—</span></div>
+      </div>
+
+      <div class="grid-3" style="margin-bottom:14px;">
+        <div class="scenario-card" id="scenario_card_Conservative"></div>
+        <div class="scenario-card" id="scenario_card_Base"></div>
+        <div class="scenario-card" id="scenario_card_Aggressive"></div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>Selected Scenario</label>
+          <select id="ret_selectedScenario" onchange="onRetirementScenarioChange()">
+            <option value="Conservative">Conservative</option>
+            <option value="Base">Base</option>
+            <option value="Aggressive">Aggressive</option>
+          </select>
+
+          <label>Your Current Age</label>
+          <input type="number" id="ret_yourCurrentAge" step="1">
+
+          <label>Spouse Current Age</label>
+          <input type="number" id="ret_spouseCurrentAge" step="1">
+
+          <label>Target Retirement Age</label>
+          <input type="number" id="ret_targetRetirementAge" step="1">
+
+          <label>Household Retirement Spending / Year</label>
+          <input type="text" id="ret_householdRetirementSpendingPerYear" inputmode="decimal" onfocus="currencyFocus('ret_householdRetirementSpendingPerYear')" onblur="currencyBlur('ret_householdRetirementSpendingPerYear')">
+
+          <label>Your Social Security / Year</label>
+          <input type="text" id="ret_yourSocialSecurityPerYear" inputmode="decimal" onfocus="currencyFocus('ret_yourSocialSecurityPerYear')" onblur="currencyBlur('ret_yourSocialSecurityPerYear')">
+
+          <label>Spouse Social Security / Year</label>
+          <input type="text" id="ret_spouseSocialSecurityPerYear" inputmode="decimal" onfocus="currencyFocus('ret_spouseSocialSecurityPerYear')" onblur="currencyBlur('ret_spouseSocialSecurityPerYear')">
+
+          <label>Other Retirement Income / Year</label>
+          <input type="text" id="ret_otherRetirementIncomePerYear" inputmode="decimal" onfocus="currencyFocus('ret_otherRetirementIncomePerYear')" onblur="currencyBlur('ret_otherRetirementIncomePerYear')">
+
+          <label>Annual Contributions</label>
+          <input type="text" id="ret_annualContributions" inputmode="decimal" onfocus="currencyFocus('ret_annualContributions')" onblur="currencyBlur('ret_annualContributions')">
+
+          <label>Expected Annual Return %</label>
+          <input type="number" id="ret_expectedAnnualReturnPct" step="0.01">
+
+          <label>Inflation %</label>
+          <input type="number" id="ret_inflationPct" step="0.01">
+
+          <label>Safe Withdrawal Rate %</label>
+          <input type="number" id="ret_safeWithdrawalRatePct" step="0.01">
+
+          <label>One-Time Future Cash Needs</label>
+          <input type="text" id="ret_oneTimeFutureCashNeeds" inputmode="decimal" onfocus="currencyFocus('ret_oneTimeFutureCashNeeds')" onblur="currencyBlur('ret_oneTimeFutureCashNeeds')">
+
+          <button onclick="saveRetirement()">Save Selected Scenario</button>
+          <div id="retirement_status" class="status"></div>
+        </div>
+
+        <div class="info">
+          <div><strong>Scenario:</strong> <span id="ret_info_scenario" class="muted">—</span></div>
+          <div><strong>Current investable assets:</strong> <span id="ret_info_assets" class="muted">—</span></div>
+          <div><strong>Retirement goal amount:</strong> <span id="ret_info_goal" class="muted">—</span></div>
+          <div><strong>Funded %:</strong> <span id="ret_info_funded" class="muted">—</span></div>
+          <div><strong>Can retire now:</strong> <span id="ret_info_canRetireNow" class="muted">—</span></div>
+          <div><strong>Estimated retirement age:</strong> <span id="ret_info_estAge" class="muted">—</span></div>
+          <div><strong>Years until retirement:</strong> <span id="ret_info_years" class="muted">—</span></div>
+          <div><strong>Spouse age at retirement:</strong> <span id="ret_info_spouseAgeAtRetirement" class="muted">—</span></div>
+          <div><strong>Projected assets at target age:</strong> <span id="ret_info_projectedAtTarget" class="muted">—</span></div>
+          <div><strong>Surplus / Shortfall at target age:</strong> <span id="ret_info_surplusShortfall" class="muted">—</span></div>
+          <div><strong>Money runs out age:</strong> <span id="ret_info_depletionAge" class="muted">—</span></div>
+          <div><strong>Monte Carlo success %:</strong> <span id="ret_info_mc" class="muted">—</span></div>
+          <div><strong>Household retirement income / year:</strong> <span id="ret_info_income" class="muted">—</span></div>
+          <div><strong>Max annual spend today:</strong> <span id="ret_info_maxSpendToday" class="muted">—</span></div>
+          <div><strong>Real return assumption:</strong> <span id="ret_info_realReturn" class="muted">—</span></div>
+          <div style="margin-top:10px;"><strong>Summary:</strong> <span id="ret_info_summary" class="muted">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="purchase" class="panel">
+      <div class="panel-head">
+        <h2>Big Purchase Simulator</h2>
+        <div class="updated">What happens if I buy this?</div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>Purchase Name</label>
+          <input type="text" id="ps_name" placeholder="Example: Car, Remodel, Vacation">
+
+          <label>Purchase Amount</label>
+          <input type="text" id="ps_amount" inputmode="decimal" onfocus="currencyFocus('ps_amount')" onblur="currencyBlur('ps_amount')">
+
+          <label>Funding Mode</label>
+          <select id="ps_fundingMode" onchange="togglePurchaseFields()">
+            <option value="Cash">Cash</option>
+            <option value="Finance">Finance</option>
+            <option value="Split">Split</option>
+          </select>
+
+          <div id="ps_cashDownWrap" style="display:none;">
+            <label>Cash Down</label>
+            <input type="text" id="ps_cashDown" inputmode="decimal" onfocus="currencyFocus('ps_cashDown')" onblur="currencyBlur('ps_cashDown')">
+          </div>
+
+          <div id="ps_financeWrap" style="display:none;">
+            <label>APR %</label>
+            <input type="number" id="ps_aprPct" step="0.01">
+
+            <label>Term Months</label>
+            <input type="number" id="ps_termMonths" step="1">
+          </div>
+
+          <label>Monthly Running Cost</label>
+          <input type="text" id="ps_monthlyRunningCost" inputmode="decimal" onfocus="currencyFocus('ps_monthlyRunningCost')" onblur="currencyBlur('ps_monthlyRunningCost')">
+
+          <div class="check-row">
+            <input type="checkbox" id="ps_treatAsAsset">
+            <label for="ps_treatAsAsset" style="margin:0;font-weight:normal;">Treat purchase as an asset (no immediate net worth hit)</label>
+          </div>
+
+          <button onclick="runPurchaseSimulationUi()">Run Simulation</button>
+          <div id="ps_status" class="status"></div>
+        </div>
+
+        <div class="info">
+          <div><strong>Immediate cash hit:</strong> <span id="ps_immediateCashHit" class="muted">—</span></div>
+          <div><strong>Financed amount:</strong> <span id="ps_financedAmount" class="muted">—</span></div>
+          <div><strong>Monthly payment:</strong> <span id="ps_monthlyPayment" class="muted">—</span></div>
+          <div><strong>Total monthly impact:</strong> <span id="ps_totalMonthlyImpact" class="muted">—</span></div>
+          <div><strong>Cash after purchase:</strong> <span id="ps_newCash" class="muted">—</span></div>
+          <div><strong>Usable cash after purchase:</strong> <span id="ps_newUsableCash" class="muted">—</span></div>
+          <div><strong>Projected cash flow after purchase:</strong> <span id="ps_newProjectedCashFlow" class="muted">—</span></div>
+          <div><strong>Net worth change:</strong> <span id="ps_netWorthChange" class="muted">—</span></div>
+          <div><strong>Buffer runway before:</strong> <span id="ps_runwayBefore" class="muted">—</span></div>
+          <div><strong>Buffer runway after:</strong> <span id="ps_runwayAfter" class="muted">—</span></div>
+          <div style="margin-top:10px;"><strong>Warning:</strong> <span id="ps_warning" class="muted">—</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

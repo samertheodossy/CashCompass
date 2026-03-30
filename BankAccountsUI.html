@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 12px; color: #1f2937; }
+    label { display:block; margin-top:10px; font-weight:bold; font-size:12px; }
+    input, select, button {
+      width:100%;
+      padding:8px;
+      margin-top:4px;
+      box-sizing:border-box;
+      border:1px solid #cbd5e1;
+      border-radius:6px;
+      font-size:13px;
+    }
+    button {
+      margin-top:12px;
+      background:#1f4e78;
+      color:white;
+      border:none;
+      cursor:pointer;
+      font-weight:bold;
+    }
+    .status { margin-top:10px; font-size:12px; white-space:pre-wrap; }
+    .error { color:#991b1b; }
+    .info {
+      background:#eef6ff;
+      border:1px solid #cfe3ff;
+      border-radius:6px;
+      padding:10px;
+      margin:12px 0;
+      font-size:12px;
+      line-height:1.5;
+    }
+    .muted { color:#475569; }
+    .checks {
+      margin-top: 12px;
+      padding: 10px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      background: #fafafa;
+    }
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 12px;
+    }
+    .check-row input[type="checkbox"] {
+      width: auto;
+      margin: 0;
+    }
+    .warning-box {
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.5;
+      display: none;
+      white-space: pre-wrap;
+    }
+    .warning-danger {
+      background: #fde8e8;
+      border: 1px solid #f5c2c7;
+      color: #991b1b;
+      display: block;
+    }
+    .warning-info {
+      background: #fff4db;
+      border: 1px solid #f3d08b;
+      color: #7a4b00;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+<h3>Update Bank Account Value</h3>
+
+<label>Account</label>
+<select id="account" onchange="loadSelectedAccountData()"></select>
+
+<label>Date</label>
+<input type="date" id="date" onchange="loadSelectedAccountData()">
+
+<div class="info">
+  <div><strong>Selected month:</strong> <span id="selectedMonth" class="muted">—</span></div>
+  <div><strong>Stored value for selected month:</strong> <span id="selectedMonthValue" class="muted">—</span></div>
+  <div><strong>Current Accounts balance:</strong> <span id="currentBalance" class="muted">—</span></div>
+  <div><strong>Available now:</strong> <span id="availableNow" class="muted">—</span></div>
+  <div><strong>Min buffer:</strong> <span id="minBuffer" class="muted">—</span></div>
+  <div><strong>Type:</strong> <span id="type" class="muted">—</span></div>
+  <div><strong>Use policy:</strong> <span id="usePolicy" class="muted">—</span></div>
+</div>
+
+<label>Value</label>
+<input type="text" id="value" inputmode="decimal" onfocus="handleValueFocus()" onblur="handleValueBlur()" oninput="evaluateBufferWarning()">
+
+<div id="bufferWarning" class="warning-box"></div>
+
+<div class="checks">
+  <div class="check-row">
+    <input type="checkbox" id="updateAvailableNow" checked>
+    <label for="updateAvailableNow" style="margin:0;font-weight:normal;">Also update Available Now to this value</label>
+  </div>
+
+  <div class="check-row">
+    <input type="checkbox" id="updateMinBuffer" onchange="evaluateBufferWarning()">
+    <label for="updateMinBuffer" style="margin:0;font-weight:normal;">Also update Min Buffer to this value</label>
+  </div>
+</div>
+
+<button onclick="save()">Save</button>
+
+<div id="status" class="status"></div>
+
+<script>
+let currentAccountData = null;
+
+function setStatus(msg, isError) {
+  const el = document.getElementById('status');
+  el.textContent = msg || '';
+  el.className = isError ? 'status error' : 'status';
+}
+
+function toNumber(value) {
+  if (value === '' || value === null || value === undefined) return 0;
+  const cleaned = String(value)
+    .replace(/\$/g, '')
+    .replace(/,/g, '')
+    .replace(/\s+/g, '')
+    .trim();
+  if (!cleaned) return 0;
+  const num = Number(cleaned);
+  return isNaN(num) ? NaN : num;
+}
+
+function fmtCurrency(value) {
+  if (value === '' || value === null || value === undefined) return '—';
+  const num = Number(value);
+  if (isNaN(num)) return '—';
+  return '$' + num.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function setCurrencyInputValue(value) {
+  const input = document.getElementById('value');
+  if (value === '' || value === null || value === undefined) {
+    input.value = '';
+    return;
+  }
+
+  const num = Number(value);
+  if (isNaN(num)) {
+    input.value = '';
+    return;
+  }
+
+  input.value = fmtCurrency(num);
+}
+
+function handleValueFocus() {
+  const input = document.getElementById('value');
+  const num = toNumber(input.value);
+
+  if (input.value === '') return;
+  if (isNaN(num)) return;
+
+  input.value = String(num);
+}
+
+function handleValueBlur() {
+  const input = document.getElementById('value');
+  const raw = String(input.value || '').trim();
+
+  if (!raw) {
+    input.value = '';
+    evaluateBufferWarning();
+    return;
+  }
+
+  const num = toNumber(raw);
+  if (isNaN(num)) {
+    evaluateBufferWarning();
+    return;
+  }
+
+  input.value = fmtCurrency(num);
+  evaluateBufferWarning();
+}
+
+function setWarning(message, level) {
+  const box = document.getElementById('bufferWarning');
+  box.textContent = message || '';
+  box.className = 'warning-box';
+
+  if (!message) return;
+
+  if (level === 'danger') box.className = 'warning-box warning-danger';
+  else box.className = 'warning-box warning-info';
+}
+
+function evaluateBufferWarning() {
+  if (!currentAccountData) {
+    setWarning('', '');
+    return;
+  }
+
+  const rawValue = document.getElementById('value').value;
+  const entered = toNumber(rawValue);
+  const minBuffer = Number(currentAccountData.minBuffer || 0);
+  const updateMinBuffer = document.getElementById('updateMinBuffer').checked;
+  const accountName = currentAccountData.accountName || document.getElementById('account').value || 'This account';
+
+  if (!String(rawValue || '').trim() || isNaN(entered)) {
+    setWarning('', '');
+    return;
+  }
+
+  if (entered < minBuffer) {
+    if (updateMinBuffer) {
+      setWarning(
+        accountName + ' is below the current Min Buffer of ' + fmtCurrency(minBuffer) + '.\n' +
+        'Because "Also update Min Buffer" is checked, saving will lower Min Buffer to ' + fmtCurrency(entered) + '.',
+        'info'
+      );
+    } else {
+      setWarning(
+        accountName + ' is below the current Min Buffer of ' + fmtCurrency(minBuffer) + '.\n' +
+        'If you save like this, the account may become less usable in the planner until you either raise the balance or lower Min Buffer.',
+        'danger'
+      );
+    }
+  } else {
+    setWarning('', '');
+  }
+}
+
+function setAccountInfo(data) {
+  currentAccountData = data || null;
+
+  document.getElementById('selectedMonth').textContent =
+    data && data.selectedMonth ? data.selectedMonth : '—';
+
+  document.getElementById('selectedMonthValue').textContent =
+    data && data.selectedMonthValue !== '' ? fmtCurrency(data.selectedMonthValue) : '—';
+
+  document.getElementById('currentBalance').textContent =
+    data && data.currentBalance !== '' ? fmtCurrency(data.currentBalance) : '—';
+
+  document.getElementById('availableNow').textContent =
+    data && data.availableNow !== '' ? fmtCurrency(data.availableNow) : '—';
+
+  document.getElementById('minBuffer').textContent =
+    data && data.minBuffer !== '' ? fmtCurrency(data.minBuffer) : '—';
+
+  document.getElementById('type').textContent =
+    data && data.type ? data.type : '—';
+
+  document.getElementById('usePolicy').textContent =
+    data && data.usePolicy ? data.usePolicy : '—';
+
+  if (data && data.selectedMonthValue !== '' && data.selectedMonthValue !== null) {
+    setCurrencyInputValue(data.selectedMonthValue);
+  } else {
+    document.getElementById('value').value = '';
+  }
+
+  evaluateBufferWarning();
+}
+
+function loadAccounts() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      const sel = document.getElementById('account');
+      sel.innerHTML = '<option value=""></option>';
+      (data.accounts || []).forEach(function(a) {
+        const opt = document.createElement('option');
+        opt.value = a;
+        opt.textContent = a;
+        sel.appendChild(opt);
+      });
+    })
+    .withFailureHandler(function(err) {
+      setStatus('Error: ' + (err.message || String(err)), true);
+    })
+    .getBankAccountUiData();
+}
+
+function loadSelectedAccountData() {
+  const account = document.getElementById('account').value;
+  const date = document.getElementById('date').value;
+
+  if (!account || !date) {
+    currentAccountData = null;
+    setAccountInfo(null);
+    return;
+  }
+
+  setStatus('Loading selected month value...', false);
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      currentAccountData = data;
+      setAccountInfo(data);
+      setStatus('', false);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('Error: ' + (err.message || String(err)), true);
+    })
+    .getBankAccountValueForDate(account, date);
+}
+
+function save() {
+  const rawValue = document.getElementById('value').value;
+  const numericValue = toNumber(rawValue);
+
+  if (String(rawValue || '').trim() && isNaN(numericValue)) {
+    setStatus('Error: Value must be a valid number.', true);
+    return;
+  }
+
+  const payload = {
+    accountName: document.getElementById('account').value,
+    balanceDate: document.getElementById('date').value,
+    currentValue: numericValue,
+    updateAvailableNow: document.getElementById('updateAvailableNow').checked,
+    updateMinBuffer: document.getElementById('updateMinBuffer').checked
+  };
+
+  setStatus('Saving...', false);
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus(res.message || 'Saved.');
+      loadSelectedAccountData();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('Error: ' + (err.message || String(err)), true);
+    })
+    .updateBankAccountValueByDate(payload);
+}
+
+document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+loadAccounts();
+</script>
+
+</body>
+</html>

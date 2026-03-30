@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <?!= includeHtml_('Dashboard_Styles'); ?>
+</head>
+<body>
+  <?!= includeHtml_('Dashboard_Body'); ?>
+
+<script>
+  window.onerror = function(message, source, lineno, colno) {
+    var el = document.getElementById('planner_status');
+    if (el) {
+      el.textContent = 'JS Error: ' + message + ' @ line ' + lineno;
+      el.className = 'status error';
+    }
+  };
+</script>
+
+<script>
+  <?!= includeHtml_('Dashboard_Script_Render'); ?>
+</script>
+
+<script>
+  <?!= includeHtml_('Dashboard_Script_Features_1'); ?>
+</script>
+
+<script>
+  <?!= includeHtml_('Dashboard_Script_Payments'); ?>
+</script>
+
+<script>
+  <?!= includeHtml_('Dashboard_Script_BillsDue'); ?>
+</script>
+
+<script>
+  try {
+    function initDashboard() {
+      refreshSnapshot();
+      loadHouseSection();
+      loadHouseExpensesSection();
+      loadBankSection();
+      loadInvestmentSection();
+      loadDebtSection();
+      loadPaymentSection();
+      loadUpcomingSection();
+      loadRetirementSection();
+      loadPurchaseSimulatorSection();
+      if (typeof loadDashboardActionSections === 'function') {
+        loadDashboardActionSections();
+      }
+    }
+
+    initDashboard();
+  } catch (e) {
+    var el = document.getElementById('planner_status');
+    if (el) {
+      el.textContent = 'Init Error: ' + (e && e.message ? e.message : String(e));
+      el.className = 'status error';
+    }
+  }
+</script>
+</body>
+</html>

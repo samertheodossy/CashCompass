@@ -1,0 +1,1092 @@
+/* Houses */
+function loadHouseSection() {
+  document.getElementById('house_date').value = new Date().toISOString().slice(0, 10);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      const sel = document.getElementById('house_house');
+      sel.innerHTML = '<option value=""></option>';
+      (data.houses || []).forEach(function(h) {
+        const opt = document.createElement('option');
+        opt.value = h;
+        opt.textContent = h;
+        sel.appendChild(opt);
+      });
+    })
+    .withFailureHandler(function(err) {
+      setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getHouseUiData();
+}
+
+function loadHouseData() {
+  const house = document.getElementById('house_house').value;
+  const date = document.getElementById('house_date').value;
+
+  if (!house || !date) {
+    document.getElementById('house_selectedMonth').textContent = '—';
+    document.getElementById('house_selectedMonthValue').textContent = '—';
+    document.getElementById('house_currentAssetValue').textContent = '—';
+    document.getElementById('house_loanAmountLeft').textContent = '—';
+    document.getElementById('house_value').value = '';
+    return;
+  }
+
+  setStatus('house_status', 'Loading...', false);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      document.getElementById('house_selectedMonth').textContent = data.selectedMonth || '—';
+      document.getElementById('house_selectedMonthValue').textContent =
+        data.selectedMonthValue !== '' ? fmtCurrency(data.selectedMonthValue) : '—';
+      document.getElementById('house_currentAssetValue').textContent =
+        data.currentAssetValue !== '' ? fmtCurrency(data.currentAssetValue) : '—';
+      document.getElementById('house_loanAmountLeft').textContent =
+        data.loanAmountLeft !== '' ? fmtCurrency(data.loanAmountLeft) : '—';
+
+      if (data.selectedMonthValue !== '' && data.selectedMonthValue !== null) {
+        setCurrencyInputValue('house_value', data.selectedMonthValue);
+      } else {
+        document.getElementById('house_value').value = '';
+      }
+
+      setStatus('house_status', '', false);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getHouseValueForDate(house, date);
+}
+
+function saveHouse() {
+  const rawValue = document.getElementById('house_value').value;
+  const numericValue = toNumber(rawValue);
+
+  if (String(rawValue || '').trim() && isNaN(numericValue)) {
+    setStatus('house_status', 'Error: Value must be a valid number.', true);
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('house_status', res.message || 'Saved.', false);
+      loadHouseData();
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .updateHouseValueByDate({
+      house: document.getElementById('house_house').value,
+      valuationDate: document.getElementById('house_date').value,
+      currentValue: numericValue
+    });
+}
+
+/* House Expenses */
+function syncHouseExpenseLocation() {
+  const sel = document.getElementById('hx_house');
+  const opt = sel && sel.options.length ? sel.options[sel.selectedIndex] : null;
+  const location = opt ? (opt.getAttribute('data-location') || '') : '';
+
+  document.getElementById('hx_location').value = location;
+  document.getElementById('hx_sheetName').textContent = sel ? (sel.value || '—') : '—';
+  document.getElementById('hx_locationPreview').textContent = location || '—';
+
+  const date = document.getElementById('hx_date').value;
+  document.getElementById('hx_yearPreview').textContent = date ? String(new Date(date).getFullYear()) : '—';
+}
+
+function loadHouseExpensesSection() {
+  document.getElementById('hx_date').value = new Date().toISOString().slice(0, 10);
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      houseExpenseOptions = (data && data.houses) || [];
+
+      const sel = document.getElementById('hx_house');
+      sel.innerHTML = '';
+
+      houseExpenseOptions.forEach(function(h) {
+        const opt = document.createElement('option');
+        opt.value = h.sheetName;
+        opt.textContent = h.locationName;
+        opt.setAttribute('data-location', h.locationName || '');
+        sel.appendChild(opt);
+      });
+
+      sel.onchange = syncHouseExpenseLocation;
+      document.getElementById('hx_date').onchange = syncHouseExpenseLocation;
+
+      if (sel.options.length) {
+        sel.selectedIndex = 0;
+      }
+
+      syncHouseExpenseLocation();
+      loadRecentHouseExpenses();
+      loadHouseExpenseSummaries();
+      setStatus('hx_status', '', false);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('hx_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getHouseExpenseUiData();
+}
+
+function loadRecentHouseExpenses() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      const groups = (data && data.groups) ? data.groups : groupRecentHouseExpensesFallback_((data && data.expenses) || []);
+      renderRecentHouseExpenses(groups);
+    })
+    .withFailureHandler(function(err) {
+      const root = document.getElementById('hx_recentList');
+      if (root) {
+        root.innerHTML = '<div class="muted">Error loading recent house expenses: ' +
+          escapeHtml(err.message || String(err)) + '</div>';
+      }
+    })
+    .getRecentHouseExpenses(20);
+}
+
+function groupRecentHouseExpensesFallback_(rows) {
+  const grouped = {};
+
+  (rows || []).forEach(function(row) {
+    const house = row.house || row.location || row.houseSheet || 'Unknown House';
+    if (!grouped[house]) grouped[house] = [];
+    grouped[house].push(row);
+  });
+
+  return Object.keys(grouped).sort().map(function(house) {
+    grouped[house].sort(function(a, b) {
+      const aDate = new Date(a.date || '');
+      const bDate = new Date(b.date || '');
+      const aTime = isNaN(aDate.getTime()) ? 0 : aDate.getTime();
+      const bTime = isNaN(bDate.getTime()) ? 0 : bDate.getTime();
+      return bTime - aTime;
+    });
+
+    return {
+      house: house,
+      expenses: grouped[house]
+    };
+  });
+}
+
+function renderRecentHouseExpenses(groups) {
+  const root = document.getElementById('hx_recentList');
+  if (!root) return;
+
+  if (!groups || !groups.length) {
+    root.innerHTML = '<div class="muted">No house expenses found yet.</div>';
+    return;
+  }
+
+  root.innerHTML = groups.map(function(group) {
+    const itemsHtml = (group.expenses || []).map(function(row) {
+      return (
+        '<div class="change-item" style="margin-top:8px;">' +
+          '<div class="change-label">' + escapeHtml(row.date || '—') + '</div>' +
+          '<div class="change-value">' + escapeHtml(row.item || '—') + '</div>' +
+          '<div class="change-meta">' +
+            'Type: ' + escapeHtml(row.type || '—') +
+            ' · Cost: ' + fmtCurrency(row.cost || 0) +
+            ' · Service Fees: ' + fmtCurrency(row.serviceFees || 0) +
+            ' · Insurance: ' + escapeHtml(row.insurance || '—') +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+
+    return (
+      '<div class="card" style="padding:12px;">' +
+        '<div class="card-title" style="margin-bottom:8px;">' + escapeHtml(group.house || 'Unknown House') + '</div>' +
+        itemsHtml +
+      '</div>'
+    );
+  }).join('');
+}
+
+function loadHouseExpenseSummaries() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      const thisMonthByHouse = (data && data.thisMonthByHouse) || [];
+      const ytdByHouse = (data && data.ytdByHouse) || [];
+      const ytdByType = (data && data.ytdByType) || [];
+
+      renderHouseExpenseSummaryList_(
+        'hx_summaryThisMonthByHouse',
+        thisMonthByHouse,
+        'No house expenses found for this month.'
+      );
+      renderHouseExpenseSummaryList_(
+        'hx_summaryYtdByHouse',
+        ytdByHouse,
+        'No house expenses found YTD.'
+      );
+      renderHouseExpenseSummaryList_(
+        'hx_summaryYtdByType',
+        ytdByType,
+        'No house expense types found YTD.'
+      );
+
+      const thisMonthTotal = thisMonthByHouse.reduce(function(sum, row) {
+        return sum + Number(row.netTotal || 0);
+      }, 0);
+
+      const ytdTotal = ytdByHouse.reduce(function(sum, row) {
+        return sum + Number(row.netTotal || 0);
+      }, 0);
+
+      const ovThisMonth = document.getElementById('ov_house_thisMonth');
+      const ovYtd = document.getElementById('ov_house_ytd');
+
+      if (ovThisMonth) ovThisMonth.textContent = fmtCurrency(thisMonthTotal);
+      if (ovYtd) ovYtd.textContent = fmtCurrency(ytdTotal);
+    })
+    .withFailureHandler(function(err) {
+      ['hx_summaryThisMonthByHouse', 'hx_summaryYtdByHouse', 'hx_summaryYtdByType'].forEach(function(id) {
+        const root = document.getElementById(id);
+        if (root) {
+          root.innerHTML = '<div class="muted">Error loading summaries: ' +
+            escapeHtml(err.message || String(err)) + '</div>';
+        }
+      });
+    })
+    .getHouseExpenseSummaryData();
+}
+
+function renderHouseExpenseSummaryList_(elementId, rows, emptyMessage) {
+  const root = document.getElementById(elementId);
+  if (!root) return;
+
+  if (!rows || !rows.length) {
+    root.innerHTML = '<div class="muted">' + escapeHtml(emptyMessage || 'No data.') + '</div>';
+    return;
+  }
+
+  root.innerHTML = rows.map(function(row) {
+    return (
+      '<div class="change-item">' +
+        '<div class="change-label">' + escapeHtml(row.key || '—') + '</div>' +
+        '<div class="change-value">' + fmtCurrency(row.netTotal || 0) + '</div>' +
+        '<div class="change-meta">' +
+          'Cost: ' + fmtCurrency(row.costTotal || 0) +
+          ' · Service Fees: ' + fmtCurrency(row.serviceFeesTotal || 0) +
+          ' · Items: ' + escapeHtml(String(row.itemCount || 0)) +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+function saveHouseExpense() {
+  const cost = toNumber(document.getElementById('hx_cost').value);
+  const serviceFees = toNumber(document.getElementById('hx_serviceFees').value);
+
+  if (String(document.getElementById('hx_cost').value || '').trim() && isNaN(cost)) {
+    setStatus('hx_status', 'Error: Cost must be a valid number.', true);
+    return;
+  }
+
+  if (String(document.getElementById('hx_serviceFees').value || '').trim() && isNaN(serviceFees)) {
+    setStatus('hx_status', 'Error: Service Fees Paid must be a valid number.', true);
+    return;
+  }
+
+  const payload = {
+    house: document.getElementById('hx_house').value,
+    date: document.getElementById('hx_date').value,
+    item: document.getElementById('hx_item').value,
+    type: document.getElementById('hx_type').value,
+    location: document.getElementById('hx_location').value,
+    cost: cost,
+    serviceFees: serviceFees,
+    insurance: document.getElementById('hx_insurance').value,
+    paymentLinks: document.getElementById('hx_paymentLinks').value,
+    notes: document.getElementById('hx_notes').value,
+    autoAddToCashFlow: document.getElementById('hx_autoAddToCashFlow').checked
+  };
+
+  if (!payload.house) {
+    setStatus('hx_status', 'Error: Please choose a house.', true);
+    return;
+  }
+  if (!payload.date) {
+    setStatus('hx_status', 'Error: Please enter a date.', true);
+    return;
+  }
+  if (!payload.item) {
+    setStatus('hx_status', 'Error: Please enter an item.', true);
+    return;
+  }
+
+  setStatus('hx_status', 'Saving...', false);
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('hx_status', res.message || 'Saved.', false);
+      document.getElementById('hx_item').value = '';
+      document.getElementById('hx_cost').value = '';
+      document.getElementById('hx_serviceFees').value = '';
+      document.getElementById('hx_paymentLinks').value = '';
+      document.getElementById('hx_notes').value = '';
+      document.getElementById('hx_insurance').value = 'No';
+      document.getElementById('hx_autoAddToCashFlow').checked = false;
+      syncHouseExpenseLocation();
+      loadRecentHouseExpenses();
+      loadHouseExpenseSummaries();
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('hx_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .addHouseExpense(payload);
+}
+
+/* Bank */
+function loadBankSection() {
+  document.getElementById('bank_date').value = new Date().toISOString().slice(0, 10);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      const sel = document.getElementById('bank_account');
+      sel.innerHTML = '<option value=""></option>';
+      (data.accounts || []).forEach(function(a) {
+        const opt = document.createElement('option');
+        opt.value = a;
+        opt.textContent = a;
+        sel.appendChild(opt);
+      });
+      if (pendingFocus && pendingFocus.tab === 'bank') focusBankTarget_(pendingFocus);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getBankAccountUiData();
+}
+
+function evaluateBankBufferWarning() {
+  if (!bankCurrentData) {
+    setWarning('bank_bufferWarning', '', '');
+    return;
+  }
+
+  const rawValue = document.getElementById('bank_value').value;
+  const entered = toNumber(rawValue);
+  const minBuffer = Number(bankCurrentData.minBuffer || 0);
+  const updateMinBuffer = document.getElementById('bank_updateMinBuffer').checked;
+  const accountName = bankCurrentData.accountName || document.getElementById('bank_account').value || 'This account';
+
+  if (!String(rawValue || '').trim() || isNaN(entered)) {
+    setWarning('bank_bufferWarning', '', '');
+    return;
+  }
+
+  if (entered < minBuffer) {
+    if (updateMinBuffer) {
+      setWarning(
+        'bank_bufferWarning',
+        accountName + ' is below the current Min Buffer of ' + fmtCurrency(minBuffer) + '.\n' +
+        'Because "Also update Min Buffer" is checked, saving will lower Min Buffer to ' + fmtCurrency(entered) + '.',
+        'info'
+      );
+    } else {
+      setWarning(
+        'bank_bufferWarning',
+        accountName + ' is below the current Min Buffer of ' + fmtCurrency(minBuffer) + '.\n' +
+        'If you save like this, the account may become less usable in the planner until you either raise the balance or lower Min Buffer.',
+        'danger'
+      );
+    }
+  } else {
+    setWarning('bank_bufferWarning', '', '');
+  }
+}
+
+function loadBankData() {
+  const account = document.getElementById('bank_account').value;
+  const date = document.getElementById('bank_date').value;
+
+  if (!account || !date) {
+    bankCurrentData = null;
+    document.getElementById('bank_selectedMonth').textContent = '—';
+    document.getElementById('bank_selectedMonthValue').textContent = '—';
+    document.getElementById('bank_currentBalance').textContent = '—';
+    document.getElementById('bank_availableNow').textContent = '—';
+    document.getElementById('bank_minBuffer').textContent = '—';
+    document.getElementById('bank_type').textContent = '—';
+    document.getElementById('bank_usePolicy').textContent = '—';
+    document.getElementById('bank_value').value = '';
+    setWarning('bank_bufferWarning', '', '');
+    return;
+  }
+
+  setStatus('bank_status', 'Loading...', false);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      bankCurrentData = data;
+      document.getElementById('bank_selectedMonth').textContent = data.selectedMonth || '—';
+      document.getElementById('bank_selectedMonthValue').textContent =
+        data.selectedMonthValue !== '' ? fmtCurrency(data.selectedMonthValue) : '—';
+      document.getElementById('bank_currentBalance').textContent =
+        data.currentBalance !== '' ? fmtCurrency(data.currentBalance) : '—';
+      document.getElementById('bank_availableNow').textContent =
+        data.availableNow !== '' ? fmtCurrency(data.availableNow) : '—';
+      document.getElementById('bank_minBuffer').textContent =
+        data.minBuffer !== '' ? fmtCurrency(data.minBuffer) : '—';
+      document.getElementById('bank_type').textContent = data.type || '—';
+      document.getElementById('bank_usePolicy').textContent = data.usePolicy || '—';
+
+      if (data.selectedMonthValue !== '' && data.selectedMonthValue !== null) {
+        setCurrencyInputValue('bank_value', data.selectedMonthValue);
+      } else {
+        document.getElementById('bank_value').value = '';
+      }
+
+      evaluateBankBufferWarning();
+      setStatus('bank_status', '', false);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getBankAccountValueForDate(account, date);
+}
+
+function saveBank() {
+  const rawValue = document.getElementById('bank_value').value;
+  const numericValue = toNumber(rawValue);
+
+  if (String(rawValue || '').trim() && isNaN(numericValue)) {
+    setStatus('bank_status', 'Error: Value must be a valid number.', true);
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('bank_status', res.message || 'Saved.', false);
+      loadBankData();
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .updateBankAccountValueByDate({
+      accountName: document.getElementById('bank_account').value,
+      balanceDate: document.getElementById('bank_date').value,
+      currentValue: numericValue,
+      updateAvailableNow: document.getElementById('bank_updateAvailableNow').checked,
+      updateMinBuffer: document.getElementById('bank_updateMinBuffer').checked
+    });
+}
+
+/* Investments */
+function loadInvestmentSection() {
+  document.getElementById('inv_date').value = new Date().toISOString().slice(0, 10);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      const sel = document.getElementById('inv_account');
+      sel.innerHTML = '<option value=""></option>';
+      (data.accounts || []).forEach(function(a) {
+        const opt = document.createElement('option');
+        opt.value = a;
+        opt.textContent = a;
+        sel.appendChild(opt);
+      });
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getInvestmentUiData();
+}
+
+function loadInvestmentData() {
+  const account = document.getElementById('inv_account').value;
+  const date = document.getElementById('inv_date').value;
+
+  if (!account || !date) {
+    document.getElementById('inv_selectedMonth').textContent = '—';
+    document.getElementById('inv_selectedMonthValue').textContent = '—';
+    document.getElementById('inv_currentBalance').textContent = '—';
+    document.getElementById('inv_type').textContent = '—';
+    document.getElementById('inv_value').value = '';
+    return;
+  }
+
+  setStatus('inv_status', 'Loading...', false);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      document.getElementById('inv_selectedMonth').textContent = data.selectedMonth || '—';
+      document.getElementById('inv_selectedMonthValue').textContent =
+        data.selectedMonthValue !== '' ? fmtCurrency(data.selectedMonthValue) : '—';
+      document.getElementById('inv_currentBalance').textContent =
+        data.currentBalance !== '' ? fmtCurrency(data.currentBalance) : '—';
+      document.getElementById('inv_type').textContent = data.type || '—';
+
+      if (data.selectedMonthValue !== '' && data.selectedMonthValue !== null) {
+        setCurrencyInputValue('inv_value', data.selectedMonthValue);
+      } else {
+        document.getElementById('inv_value').value = '';
+      }
+
+      setStatus('inv_status', '', false);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getInvestmentValueForDate(account, date);
+}
+
+function saveInvestment() {
+  const rawValue = document.getElementById('inv_value').value;
+  const numericValue = toNumber(rawValue);
+
+  if (String(rawValue || '').trim() && isNaN(numericValue)) {
+    setStatus('inv_status', 'Error: Value must be a valid number.', true);
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('inv_status', res.message || 'Saved.', false);
+      loadInvestmentData();
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .updateInvestmentValueByDate({
+      accountName: document.getElementById('inv_account').value,
+      balanceDate: document.getElementById('inv_date').value,
+      currentValue: numericValue
+    });
+}
+
+/* Debts */
+function loadDebtSection() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      allDebtRows = data.debts || [];
+
+      const typeSel = document.getElementById('debt_typeFilter');
+      typeSel.innerHTML = '';
+      (data.types || ['All']).forEach(function(t) {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        typeSel.appendChild(opt);
+      });
+
+      const fieldSel = document.getElementById('debt_field');
+      fieldSel.innerHTML = '';
+      (data.editableFields || []).forEach(function(f) {
+        const opt = document.createElement('option');
+        opt.value = f;
+        opt.textContent = f;
+        fieldSel.appendChild(opt);
+      });
+
+      filterDebtAccounts();
+
+      if (pendingFocus && pendingFocus.tab === 'debts') {
+        focusDebtTarget_(pendingFocus);
+      }
+    })
+    .withFailureHandler(function(err) {
+      setStatus('debt_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getDebtsUiData();
+}
+
+function filterDebtAccounts() {
+  const filterType = document.getElementById('debt_typeFilter').value || 'All';
+  const sel = document.getElementById('debt_account');
+  sel.innerHTML = '<option value=""></option>';
+
+  allDebtRows.filter(function(d) {
+    return filterType === 'All' || d.type === filterType;
+  }).forEach(function(d) {
+    const opt = document.createElement('option');
+    opt.value = d.accountName;
+    opt.textContent = d.accountName;
+    sel.appendChild(opt);
+  });
+
+  loadDebtFieldValue();
+}
+
+function handleDebtValueFocus() {
+  const fieldName = document.getElementById('debt_field').value;
+  if (debtFieldTypes[fieldName] !== 'currency') return;
+  currencyFocus('debt_value');
+}
+
+function handleDebtValueBlur() {
+  const fieldName = document.getElementById('debt_field').value;
+  if (debtFieldTypes[fieldName] !== 'currency') return;
+  currencyBlur('debt_value');
+}
+
+function loadDebtFieldValue() {
+  const accountName = document.getElementById('debt_account').value;
+  const fieldName = document.getElementById('debt_field').value;
+
+  if (!accountName || !fieldName) {
+    document.getElementById('debt_currentValue').textContent = '—';
+    document.getElementById('debt_type').textContent = '—';
+    document.getElementById('debt_pctAvail').textContent = '—';
+    document.getElementById('debt_value').value = '';
+    return;
+  }
+
+  setStatus('debt_status', 'Loading...', false);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      document.getElementById('debt_type').textContent = data.type || '—';
+      document.getElementById('debt_pctAvail').textContent = data.pctAvail || '—';
+
+      if (debtFieldTypes[fieldName] === 'currency') {
+        document.getElementById('debt_currentValue').textContent =
+          data.value !== '' && data.value !== null ? fmtCurrency(data.value) : '—';
+
+        if (data.value !== '' && data.value !== null) {
+          setCurrencyInputValue('debt_value', data.value);
+        } else {
+          document.getElementById('debt_value').value = '';
+        }
+      } else {
+        document.getElementById('debt_currentValue').textContent =
+          data.displayValue !== '' && data.displayValue !== null ? data.displayValue : '—';
+        document.getElementById('debt_value').value =
+          data.value !== '' && data.value !== null ? data.value : '';
+      }
+
+      setStatus('debt_status', '', false);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('debt_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getDebtFieldValue(accountName, fieldName);
+}
+
+function saveDebt() {
+  const fieldName = document.getElementById('debt_field').value;
+  let value = document.getElementById('debt_value').value;
+
+  if (debtFieldTypes[fieldName] === 'currency') {
+    const num = toNumber(value);
+    if (String(value || '').trim() && isNaN(num)) {
+      setStatus('debt_status', 'Error: Value must be a valid number.', true);
+      return;
+    }
+    value = num;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('debt_status', res.message || 'Saved.', false);
+      loadDebtFieldValue();
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('debt_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .updateDebtField({
+      accountName: document.getElementById('debt_account').value,
+      fieldName: fieldName,
+      value: value
+    });
+}
+
+/* Upcoming */
+function loadUpcomingSection() {
+  document.getElementById('up_dueDate').value =
+    document.getElementById('up_dueDate').value || new Date().toISOString().slice(0, 10);
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      upcomingExpenses = data.expenses || [];
+      renderUpcomingSummary(data.summary || {});
+      renderUpcomingList(upcomingExpenses);
+
+      if (pendingFocus && pendingFocus.tab === 'upcoming') {
+        pendingFocus = null;
+      }
+    })
+    .withFailureHandler(function(err) {
+      setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getUpcomingExpensesUiData();
+}
+
+function renderUpcomingSummary(summary) {
+  document.getElementById('upcoming_next7').textContent =
+    (summary.next7Count || 0) + ' / ' + fmtCurrency(summary.next7Amount || 0);
+  document.getElementById('upcoming_next30').textContent =
+    (summary.next30Count || 0) + ' / ' + fmtCurrency(summary.next30Amount || 0);
+  document.getElementById('upcoming_overdue').textContent =
+    (summary.overdueCount || 0) + ' / ' + fmtCurrency(summary.overdueAmount || 0);
+  document.getElementById('upcoming_total').textContent =
+    (summary.plannedCount || 0) + ' / ' + fmtCurrency(summary.plannedAmount || 0);
+
+  const ovNext7 = document.getElementById('ov_upcoming_next7');
+  const ovNext30 = document.getElementById('ov_upcoming_next30');
+
+  if (ovNext7) ovNext7.textContent = fmtCurrency(summary.next7Amount || 0);
+  if (ovNext30) ovNext30.textContent = fmtCurrency(summary.next30Amount || 0);
+}
+
+function upcomingBucketClass(bucket) {
+  const key = String(bucket || '').toLowerCase();
+  if (key === 'overdue') return 'bucket-overdue';
+  if (key === 'today') return 'bucket-today';
+  if (key === 'next 7 days') return 'bucket-next7';
+  if (key === 'this month') return 'bucket-thismonth';
+  return '';
+}
+
+function renderUpcomingList(rows) {
+  const root = document.getElementById('upcoming_list');
+
+  if (!rows || !rows.length) {
+    root.innerHTML = '<div class="muted">No upcoming expenses yet.</div>';
+    return;
+  }
+
+  root.innerHTML = rows.map(function(row) {
+    const canAddToCashFlow = row.status !== 'Skipped' && row.addedToCashFlow !== 'Yes';
+    return (
+      '<div class="upcoming-item ' + upcomingBucketClass(row.dayBucket) + '">' +
+        '<div class="upcoming-top">' +
+          '<div>' +
+            '<div class="upcoming-name">' + escapeHtml(row.expenseName || 'Unnamed Expense') + '</div>' +
+            '<div class="upcoming-meta">' +
+              'Status: ' + escapeHtml(row.status || 'Planned') + '<br>' +
+              'Due: ' + escapeHtml(row.dueDate || '—') + ' · ' + escapeHtml(row.dayBucket || '') + '<br>' +
+              'Payee: ' + escapeHtml(row.payee || '—') + '<br>' +
+              'Category: ' + escapeHtml(row.category || '—') + '<br>' +
+              'Source: ' + escapeHtml(row.accountSource || '—') + '<br>' +
+              'Added To Cash Flow: ' + escapeHtml(row.addedToCashFlow || 'No') +
+              (row.notes ? '<br>Notes: ' + escapeHtml(row.notes) : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="upcoming-amount">' + fmtCurrency(row.amount) + '</div>' +
+        '</div>' +
+        '<div class="upcoming-actions">' +
+          '<button class="small-btn primary" onclick="setUpcomingStatus(\'' + escapeJs(row.id) + '\', \'Planned\')">Planned</button>' +
+          '<button class="small-btn" onclick="setUpcomingStatus(\'' + escapeJs(row.id) + '\', \'Paid\')">Paid</button>' +
+          '<button class="small-btn" onclick="setUpcomingStatus(\'' + escapeJs(row.id) + '\', \'Skipped\')">Skipped</button>' +
+          (canAddToCashFlow ? '<button class="small-btn" onclick="addUpcomingToCashFlow(\'' + escapeJs(row.id) + '\')">Add to Cash Flow</button>' : '') +
+          '<button class="small-btn" onclick="openUpcomingInQuickPayment(\'' + escapeJs(row.id) + '\')">Open in Quick Payment</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+function saveUpcomingExpense() {
+  const rawAmount = document.getElementById('up_amount').value;
+  const numericAmount = toNumber(rawAmount);
+
+  if (String(rawAmount || '').trim() && isNaN(numericAmount)) {
+    setStatus('upcoming_status', 'Error: Amount must be a valid number.', true);
+    return;
+  }
+
+  const payload = {
+    expenseName: document.getElementById('up_name').value,
+    category: document.getElementById('up_category').value,
+    payee: document.getElementById('up_payee').value,
+    dueDate: document.getElementById('up_dueDate').value,
+    amount: numericAmount,
+    accountSource: document.getElementById('up_accountSource').value,
+    autoAddToCashFlow: document.getElementById('up_autoAdd').checked,
+    notes: document.getElementById('up_notes').value
+  };
+
+  setStatus('upcoming_status', 'Saving...', false);
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('upcoming_status', res.message || 'Saved.', false);
+      document.getElementById('up_name').value = '';
+      document.getElementById('up_category').value = '';
+      document.getElementById('up_payee').value = '';
+      document.getElementById('up_amount').value = '';
+      document.getElementById('up_accountSource').value = '';
+      document.getElementById('up_notes').value = '';
+      document.getElementById('up_autoAdd').checked = false;
+      loadUpcomingSection();
+      loadDashboardActionSections();
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .addUpcomingExpense(payload);
+}
+
+function setUpcomingStatus(id, status) {
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('upcoming_status', res.message || 'Updated.', false);
+      loadUpcomingSection();
+      loadDashboardActionSections();
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .updateUpcomingExpenseStatus(id, status);
+}
+
+function addUpcomingToCashFlow(id) {
+  setStatus('upcoming_status', 'Adding to cash flow...', false);
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('upcoming_status', res.message || 'Added to cash flow.', false);
+      loadUpcomingSection();
+      loadDashboardActionSections();
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .addUpcomingExpenseToCashFlow(id);
+}
+
+function openUpcomingInQuickPayment(id) {
+  google.script.run
+    .withSuccessHandler(function(prefill) {
+      prefillQuickPayment(prefill);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getUpcomingExpenseForQuickPayment(id);
+}
+
+/* Retirement */
+function loadRetirementSection() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      retirementUiData = data;
+      document.getElementById('ret_selectedScenario').value = data.selectedScenario || 'Base';
+
+      document.getElementById('ret_yourCurrentAge').value = data.household ? data.household.yourCurrentAge : '';
+      document.getElementById('ret_spouseCurrentAge').value = data.household ? data.household.spouseCurrentAge : '';
+
+      fillRetirementScenarioInputs(data.selectedScenario || 'Base');
+      renderRetirementScenarioCards(data);
+      renderRetirementPanelInfo(data.analysis);
+      setStatus('retirement_status', '', false);
+
+      if (pendingFocus && pendingFocus.tab === 'retirement') {
+        pendingFocus = null;
+      }
+    })
+    .withFailureHandler(function(err) {
+      setStatus('retirement_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getRetirementUiData();
+}
+
+function onRetirementScenarioChange() {
+  const scenario = document.getElementById('ret_selectedScenario').value || 'Base';
+  fillRetirementScenarioInputs(scenario);
+
+  if (retirementUiData && retirementUiData.analyses && retirementUiData.analyses[scenario]) {
+    renderRetirementPanelInfo(retirementUiData.analyses[scenario]);
+  }
+
+  renderRetirementScenarioCards(retirementUiData);
+}
+
+function fillRetirementScenarioInputs(scenario) {
+  if (!retirementUiData || !retirementUiData.scenarios || !retirementUiData.scenarios[scenario]) return;
+  const s = retirementUiData.scenarios[scenario];
+
+  document.getElementById('ret_targetRetirementAge').value = s.targetRetirementAge || '';
+  setCurrencyInputValue('ret_householdRetirementSpendingPerYear', s.householdRetirementSpendingPerYear);
+  setCurrencyInputValue('ret_yourSocialSecurityPerYear', s.yourSocialSecurityPerYear);
+  setCurrencyInputValue('ret_spouseSocialSecurityPerYear', s.spouseSocialSecurityPerYear);
+  setCurrencyInputValue('ret_otherRetirementIncomePerYear', s.otherRetirementIncomePerYear);
+  setCurrencyInputValue('ret_annualContributions', s.annualContributions);
+  document.getElementById('ret_expectedAnnualReturnPct').value = s.expectedAnnualReturnPct || '';
+  document.getElementById('ret_inflationPct').value = s.inflationPct || '';
+  document.getElementById('ret_safeWithdrawalRatePct').value = s.safeWithdrawalRatePct || '';
+  setCurrencyInputValue('ret_oneTimeFutureCashNeeds', s.oneTimeFutureCashNeeds);
+}
+
+function renderRetirementScenarioCards(data) {
+  if (!data || !data.analyses) return;
+  const selected = data.selectedScenario || document.getElementById('ret_selectedScenario').value || 'Base';
+
+  ['Conservative', 'Base', 'Aggressive'].forEach(function(name) {
+    const el = document.getElementById('scenario_card_' + name);
+    const a = data.analyses[name];
+    if (!el || !a) return;
+
+    const ss = a.surplusAtTargetAge || 0;
+    const sf = a.shortfallAtTargetAge || 0;
+    const targetText = ss > 0 ? ('Surplus: ' + fmtCurrency(ss)) : ('Shortfall: ' + fmtCurrency(sf));
+
+    el.className = 'scenario-card' + (name === selected ? ' active' : '');
+    el.innerHTML =
+      '<div class="scenario-card-title">' +
+        escapeHtml(name) +
+        (name === selected ? '<span class="scenario-badge">Selected</span>' : '') +
+      '</div>' +
+      '<div class="scenario-card-row">Goal: ' + fmtCurrency(a.retirementGoalAmount) + '</div>' +
+      '<div class="scenario-card-row">Est. age: ' + (a.estimatedRetirementAge === null ? '—' : a.estimatedRetirementAge) + '</div>' +
+      '<div class="scenario-card-row">Funded: ' + fmtPercent(a.fundedPct) + '</div>' +
+      '<div class="scenario-card-row">' + targetText + '</div>' +
+      '<div class="scenario-card-row">MC success: ' + fmtPercent(a.monteCarloSuccessProbabilityPct) + '</div>';
+  });
+}
+
+function renderRetirementPanelInfo(analysis) {
+  if (!analysis) return;
+
+  document.getElementById('ret_info_scenario').textContent = analysis.scenarioName || '—';
+  document.getElementById('ret_info_assets').textContent = fmtCurrency(analysis.currentInvestableAssets);
+  document.getElementById('ret_info_goal').textContent = fmtCurrency(analysis.retirementGoalAmount);
+  document.getElementById('ret_info_funded').textContent = fmtPercent(analysis.fundedPct);
+  document.getElementById('ret_info_canRetireNow').textContent = analysis.canRetireNow ? 'Yes' : 'No';
+  document.getElementById('ret_info_estAge').textContent = analysis.estimatedRetirementAge !== null ? analysis.estimatedRetirementAge : '—';
+  document.getElementById('ret_info_years').textContent = analysis.yearsUntilRetirement !== null ? analysis.yearsUntilRetirement : '—';
+  document.getElementById('ret_info_spouseAgeAtRetirement').textContent = analysis.spouseAgeAtRetirement !== null ? analysis.spouseAgeAtRetirement : '—';
+  document.getElementById('ret_info_projectedAtTarget').textContent = fmtCurrency(analysis.projectedAssetsAtTargetAge);
+  document.getElementById('ret_info_income').textContent = fmtCurrency(analysis.householdRetirementIncomePerYear);
+  document.getElementById('ret_info_maxSpendToday').textContent = fmtCurrency(analysis.maxAnnualSpendToday);
+  document.getElementById('ret_info_realReturn').textContent = fmtPercent(analysis.realReturnPct);
+  document.getElementById('ret_info_summary').textContent = analysis.summary || '—';
+  document.getElementById('ret_info_mc').textContent = fmtPercent(analysis.monteCarloSuccessProbabilityPct);
+
+  const el = document.getElementById('ret_info_surplusShortfall');
+  if ((analysis.surplusAtTargetAge || 0) > 0) {
+    el.textContent = 'Surplus: ' + fmtCurrency(analysis.surplusAtTargetAge);
+    el.style.color = '#166534';
+    el.style.fontWeight = 'bold';
+  } else if ((analysis.shortfallAtTargetAge || 0) > 0) {
+    el.textContent = 'Shortfall: ' + fmtCurrency(analysis.shortfallAtTargetAge);
+    el.style.color = '#b91c1c';
+    el.style.fontWeight = 'bold';
+  } else {
+    el.textContent = '—';
+    el.style.color = '#475569';
+    el.style.fontWeight = 'normal';
+  }
+
+  const dep = document.getElementById('ret_info_depletionAge');
+  if (analysis.moneyRunsOutAge === null || analysis.moneyRunsOutAge === '' || analysis.moneyRunsOutAge === undefined) {
+    dep.textContent = 'Never (under assumptions)';
+    dep.style.color = '#166534';
+    dep.style.fontWeight = 'bold';
+  } else {
+    dep.textContent = 'Age ' + analysis.moneyRunsOutAge;
+    dep.style.color = '#b91c1c';
+    dep.style.fontWeight = 'bold';
+  }
+}
+
+function saveRetirement() {
+  const payload = {
+    selectedScenario: document.getElementById('ret_selectedScenario').value,
+    yourCurrentAge: Number(document.getElementById('ret_yourCurrentAge').value || 0),
+    spouseCurrentAge: Number(document.getElementById('ret_spouseCurrentAge').value || 0),
+    targetRetirementAge: Number(document.getElementById('ret_targetRetirementAge').value || 0),
+    householdRetirementSpendingPerYear: toNumber(document.getElementById('ret_householdRetirementSpendingPerYear').value),
+    yourSocialSecurityPerYear: toNumber(document.getElementById('ret_yourSocialSecurityPerYear').value),
+    spouseSocialSecurityPerYear: toNumber(document.getElementById('ret_spouseSocialSecurityPerYear').value),
+    otherRetirementIncomePerYear: toNumber(document.getElementById('ret_otherRetirementIncomePerYear').value),
+    annualContributions: toNumber(document.getElementById('ret_annualContributions').value),
+    expectedAnnualReturnPct: Number(document.getElementById('ret_expectedAnnualReturnPct').value || 0),
+    inflationPct: Number(document.getElementById('ret_inflationPct').value || 0),
+    safeWithdrawalRatePct: Number(document.getElementById('ret_safeWithdrawalRatePct').value || 0),
+    oneTimeFutureCashNeeds: toNumber(document.getElementById('ret_oneTimeFutureCashNeeds').value)
+  };
+
+  setStatus('retirement_status', 'Saving...', false);
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('retirement_status', res.message || 'Saved.', false);
+      retirementUiData = res.data || retirementUiData;
+      if (retirementUiData) {
+        document.getElementById('ret_selectedScenario').value = retirementUiData.selectedScenario || payload.selectedScenario;
+        renderRetirementScenarioCards(retirementUiData);
+        renderRetirementPanelInfo(retirementUiData.analysis);
+      }
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('retirement_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .saveRetirementInputs(payload);
+}
+
+/* Purchase simulator */
+function togglePurchaseFields() {
+  const mode = document.getElementById('ps_fundingMode').value;
+  document.getElementById('ps_cashDownWrap').style.display = mode === 'Split' ? 'block' : 'none';
+  document.getElementById('ps_financeWrap').style.display = (mode === 'Finance' || mode === 'Split') ? 'block' : 'none';
+}
+
+function loadPurchaseSimulatorSection() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      const d = data.defaults || {};
+      document.getElementById('ps_fundingMode').value = d.fundingMode || 'Cash';
+      document.getElementById('ps_aprPct').value = d.aprPct || 7.5;
+      document.getElementById('ps_termMonths').value = d.termMonths || 60;
+      document.getElementById('ps_monthlyRunningCost').value = '';
+      document.getElementById('ps_treatAsAsset').checked = !!d.treatAsAsset;
+      togglePurchaseFields();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('ps_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getPurchaseSimulatorUiData();
+}
+
+function runPurchaseSimulationUi() {
+  const payload = {
+    purchaseName: document.getElementById('ps_name').value,
+    purchaseAmount: toNumber(document.getElementById('ps_amount').value),
+    fundingMode: document.getElementById('ps_fundingMode').value,
+    cashDown: toNumber(document.getElementById('ps_cashDown').value),
+    aprPct: Number(document.getElementById('ps_aprPct').value || 0),
+    termMonths: Number(document.getElementById('ps_termMonths').value || 0),
+    monthlyRunningCost: toNumber(document.getElementById('ps_monthlyRunningCost').value),
+    treatAsAsset: document.getElementById('ps_treatAsAsset').checked
+  };
+
+  setStatus('ps_status', 'Running simulation...', false);
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('ps_status', 'Simulation complete.', false);
+      document.getElementById('ps_immediateCashHit').textContent = fmtCurrency(res.immediateCashHit);
+      document.getElementById('ps_financedAmount').textContent = fmtCurrency(res.financedAmount);
+      document.getElementById('ps_monthlyPayment').textContent = fmtCurrency(res.monthlyPayment);
+      document.getElementById('ps_totalMonthlyImpact').textContent = fmtCurrency(res.totalMonthlyImpact);
+      document.getElementById('ps_newCash').textContent = fmtCurrency(res.newCash);
+      document.getElementById('ps_newUsableCash').textContent = fmtCurrency(res.newUsableCash);
+      document.getElementById('ps_newProjectedCashFlow').textContent = fmtCurrency(res.newProjectedCashFlow);
+      document.getElementById('ps_netWorthChange').textContent = fmtCurrency(res.immediateNetWorthChange);
+      document.getElementById('ps_runwayBefore').textContent = res.runwayBefore ? res.runwayBefore.label : '—';
+      document.getElementById('ps_runwayAfter').textContent = res.runwayAfter ? res.runwayAfter.label : '—';
+      document.getElementById('ps_warning').textContent = res.warning || '—';
+
+      const nw = document.getElementById('ps_netWorthChange');
+      nw.className = 'muted';
+      if (Number(res.immediateNetWorthChange) < 0) nw.className = 'accent-bad';
+      if (Number(res.immediateNetWorthChange) === 0) nw.className = 'accent-good';
+
+      const cf = document.getElementById('ps_newProjectedCashFlow');
+      cf.className = Number(res.newProjectedCashFlow) < 0 ? 'accent-bad' : 'accent-good';
+    })
+    .withFailureHandler(function(err) {
+      setStatus('ps_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .runPurchaseSimulation(payload);
+}

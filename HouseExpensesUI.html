@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 16px;
+      color: #1f2937;
+      background: #f8fafc;
+    }
+
+    h2 {
+      margin: 0 0 14px 0;
+      font-size: 16px;
+    }
+
+    label {
+      display: block;
+      margin-top: 10px;
+      margin-bottom: 4px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    input, select, textarea, button {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 13px;
+      background: #ffffff;
+      color: #1f2937;
+    }
+
+    textarea {
+      min-height: 58px;
+      resize: vertical;
+    }
+
+    button {
+      margin-top: 14px;
+      background: #1f4e78;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .status {
+      margin-top: 10px;
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+
+    .error {
+      color: #991b1b;
+    }
+
+    .hint {
+      margin-top: 12px;
+      font-size: 12px;
+      color: #64748b;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <h2>House Expenses</h2>
+
+  <label>House</label>
+  <select id="house"></select>
+
+  <label>Date</label>
+  <input type="date" id="date">
+
+  <label>Item</label>
+  <input type="text" id="item" placeholder="Example: HOA Fees April">
+
+  <label>Type</label>
+  <select id="type">
+    <option value="Repair">Repair</option>
+    <option value="HOA">HOA</option>
+    <option value="Insurance">Insurance</option>
+    <option value="Utilities">Utilities</option>
+    <option value="Mgmt">Mgmt</option>
+    <option value="Cleaning">Cleaning</option>
+    <option value="Warranty">Warranty</option>
+    <option value="Tax">Tax</option>
+    <option value="Appliance">Appliance</option>
+    <option value="Improvement">Improvement</option>
+    <option value="Other">Other</option>
+  </select>
+
+  <label>Location</label>
+  <input type="text" id="location">
+
+  <label>Cost</label>
+  <input type="number" id="cost" step="0.01">
+
+  <label>Service Fees Paid</label>
+  <input type="number" id="serviceFees" step="0.01">
+
+  <label>Insurance Covered</label>
+  <select id="insurance">
+    <option value="">—</option>
+    <option value="Yes">Yes</option>
+    <option value="No" selected>No</option>
+  </select>
+
+  <label>Payment Links</label>
+  <input type="text" id="paymentLinks" placeholder="PDF name, payment ref, URL, etc.">
+
+  <label>Notes</label>
+  <textarea id="notes" placeholder="Optional notes"></textarea>
+
+  <button onclick="save()">Add House Expense</button>
+
+  <div id="status" class="status"></div>
+  <div class="hint">Location updates from the selected house, but you can still edit it before saving.</div>
+
+  <script>
+    function setStatus(message, isError) {
+      const el = document.getElementById('status');
+      el.textContent = message || '';
+      el.className = isError ? 'status error' : 'status';
+    }
+
+    function todayIso() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + day;
+    }
+
+    function syncLocationFromHouse() {
+      const sel = document.getElementById('house');
+      const opt = sel.options[sel.selectedIndex];
+      document.getElementById('location').value = opt ? (opt.getAttribute('data-location') || '') : '';
+    }
+
+    function load() {
+      document.getElementById('date').value = todayIso();
+
+      google.script.run
+        .withSuccessHandler(function(data) {
+          const sel = document.getElementById('house');
+          sel.innerHTML = '';
+
+          ((data && data.houses) || []).forEach(function(h) {
+            const opt = document.createElement('option');
+            opt.value = h.sheetName;
+            opt.textContent = h.locationName;
+            opt.setAttribute('data-location', h.locationName || '');
+            sel.appendChild(opt);
+          });
+
+          sel.onchange = syncLocationFromHouse;
+
+          if (sel.options.length) {
+            sel.selectedIndex = 0;
+            syncLocationFromHouse();
+          }
+        })
+        .withFailureHandler(function(err) {
+          setStatus('Error: ' + (err.message || String(err)), true);
+        })
+        .getHouseExpenseUiData();
+    }
+
+    function save() {
+      syncLocationFromHouse();
+
+      const payload = {
+        house: document.getElementById('house').value,
+        date: document.getElementById('date').value,
+        item: document.getElementById('item').value,
+        type: document.getElementById('type').value,
+        location: document.getElementById('location').value,
+        cost: document.getElementById('cost').value,
+        serviceFees: document.getElementById('serviceFees').value,
+        insurance: document.getElementById('insurance').value,
+        paymentLinks: document.getElementById('paymentLinks').value,
+        notes: document.getElementById('notes').value
+      };
+
+      if (!payload.house) {
+        setStatus('Please choose a house.', true);
+        return;
+      }
+      if (!payload.date) {
+        setStatus('Please enter a date.', true);
+        return;
+      }
+      if (!payload.item) {
+        setStatus('Please enter an item.', true);
+        return;
+      }
+
+      setStatus('Saving...', false);
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          setStatus(res.message || 'Saved.', false);
+          document.getElementById('item').value = '';
+          document.getElementById('cost').value = '';
+          document.getElementById('serviceFees').value = '';
+          document.getElementById('paymentLinks').value = '';
+          document.getElementById('notes').value = '';
+          document.getElementById('insurance').value = 'No';
+          syncLocationFromHouse();
+        })
+        .withFailureHandler(function(err) {
+          setStatus('Error: ' + (err.message || String(err)), true);
+        })
+        .addHouseExpense(payload);
+    }
+
+    load();
+  </script>
+</body>
+</html>

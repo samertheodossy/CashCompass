@@ -1,0 +1,169 @@
+let bankCurrentData = null;
+let paymentPayees = [];
+let allDebtRows = [];
+let pendingFocus = null;
+let upcomingExpenses = [];
+let retirementUiData = null;
+let houseExpenseOptions = [];
+let debtFieldTypes = {
+  'Account Balance': 'currency',
+  'Due Date': 'integer',
+  'Credit Limit': 'currency',
+  'Minimum Payment': 'currency',
+  'Credit Left': 'currency',
+  'Int Rate': 'plain'
+};
+
+const TAB_PAGE_MAP = {
+  houses: 'overview',
+  houseExpenses: 'properties',
+  bank: 'assets',
+  investments: 'assets',
+  debts: 'planning',
+  payments: 'cashflow',
+  upcoming: 'cashflow',
+  retirement: 'planning',
+  purchase: 'planning'
+};
+
+function showPage(name) {
+  document.querySelectorAll('.workspace-page').forEach(function(el) { el.classList.remove('active'); });
+  document.querySelectorAll('.page-btn').forEach(function(el) { el.classList.remove('active'); });
+
+  const pageEl = document.getElementById('page_' + name);
+  if (pageEl) pageEl.classList.add('active');
+
+  const btn = document.querySelector('.page-btn[data-page="' + name + '"]');
+  if (btn) btn.classList.add('active');
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showTab(name) {
+  const pageName = TAB_PAGE_MAP[name] || 'overview';
+  showPage(pageName);
+
+  document.querySelectorAll('.panel').forEach(function(el) { el.classList.remove('active'); });
+  document.querySelectorAll('.tab-btn').forEach(function(el) { el.classList.remove('active'); });
+
+  const panel = document.getElementById(name);
+  if (panel) panel.classList.add('active');
+
+  document.querySelectorAll('.tab-btn[data-tab="' + name + '"]').forEach(function(btn) {
+    btn.classList.add('active');
+  });
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function toggleHealthExplainer() {
+  const el = document.getElementById('health_explainer_body');
+  el.classList.toggle('open');
+}
+
+function setStatus(id, msg, isError) {
+  const el = document.getElementById(id);
+  el.textContent = msg || '';
+  el.className = isError ? 'status error' : 'status';
+}
+
+function toNumber(value) {
+  if (value === '' || value === null || value === undefined) return 0;
+  const cleaned = String(value).replace(/\$/g, '').replace(/,/g, '').replace(/\s+/g, '').trim();
+  if (!cleaned) return 0;
+  const num = Number(cleaned);
+  return isNaN(num) ? NaN : num;
+}
+
+function fmtCurrency(value) {
+  if (value === '' || value === null || value === undefined) return '—';
+  const num = Number(value);
+  if (isNaN(num)) return '—';
+  return '$' + num.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function fmtPercent(value) {
+  if (value === '' || value === null || value === undefined) return '—';
+  const num = Number(value);
+  if (isNaN(num)) return '—';
+  return num.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }) + '%';
+}
+
+function fmtDelta(value, baselineLabel) {
+  if (value === null || value === undefined) return 'Change since comparison point: —';
+  const num = Number(value);
+  if (isNaN(num)) return 'Change since comparison point: —';
+  const label = baselineLabel ? String(baselineLabel) : 'comparison point';
+  const sign = num > 0 ? '+' : '';
+  return 'Change since ' + label + ': ' + sign + fmtCurrency(num);
+}
+
+function fmtSignedCurrency(value) {
+  if (value === null || value === undefined || isNaN(Number(value))) return '—';
+  const num = Number(value);
+  const sign = num > 0 ? '+' : '';
+  return sign + fmtCurrency(num);
+}
+
+function setCurrencyInputValue(id, value) {
+  const input = document.getElementById(id);
+  if (value === '' || value === null || value === undefined) {
+    input.value = '';
+    return;
+  }
+  const num = Number(value);
+  if (isNaN(num)) {
+    input.value = '';
+    return;
+  }
+  input.value = fmtCurrency(num);
+}
+
+function currencyFocus(id) {
+  const input = document.getElementById(id);
+  const num = toNumber(input.value);
+  if (input.value === '' || isNaN(num)) return;
+  input.value = String(num);
+}
+
+function currencyBlur(id) {
+  const input = document.getElementById(id);
+  const raw = String(input.value || '').trim();
+  if (!raw) {
+    input.value = '';
+    return;
+  }
+  const num = toNumber(raw);
+  if (isNaN(num)) return;
+  input.value = fmtCurrency(num);
+}
+
+function setWarning(id, message, level) {
+  const box = document.getElementById(id);
+  box.textContent = message || '';
+  box.className = 'warning-box';
+  if (!message) return;
+  if (level === 'danger') box.className = 'warning-box warning-danger';
+  else box.className = 'warning-box warning-info';
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeJs(value) {
+  return String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'");
+}

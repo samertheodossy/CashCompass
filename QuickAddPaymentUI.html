@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 12px; color: #1f2937; }
+    label { display:block; margin-top:10px; font-weight:bold; font-size:12px; }
+    input, select, button {
+      width:100%;
+      padding:8px;
+      margin-top:4px;
+      box-sizing:border-box;
+      border:1px solid #cbd5e1;
+      border-radius:6px;
+      font-size:13px;
+    }
+    button {
+      margin-top:12px;
+      background:#1f4e78;
+      color:white;
+      border:none;
+      cursor:pointer;
+      font-weight:bold;
+    }
+    .status { margin-top:10px; font-size:12px; white-space:pre-wrap; }
+    .error { color:#991b1b; }
+    .info {
+      background:#eef6ff;
+      border:1px solid #cfe3ff;
+      border-radius:6px;
+      padding:10px;
+      margin:12px 0;
+      font-size:12px;
+      line-height:1.5;
+    }
+    .muted { color:#475569; }
+    .check-row {
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin-top:12px;
+      font-size:12px;
+    }
+    .check-row input[type="checkbox"] {
+      width:auto;
+      margin:0;
+    }
+  </style>
+</head>
+<body>
+
+<h3>Quick Add Payment</h3>
+
+<label>Type</label>
+<select id="entryType" onchange="filterPayees(); loadPreview();">
+  <option value="Expense">Expense</option>
+  <option value="Income">Income</option>
+</select>
+
+<label>Date</label>
+<input type="date" id="entryDate" onchange="loadPreview()">
+
+<label>Existing Payee</label>
+<select id="payeeSelect" onchange="syncPayeeInput(); loadPreview();"></select>
+
+<label>Or Type / Edit Payee</label>
+<input type="text" id="payeeInput" oninput="loadPreview()" placeholder="Enter payee name">
+
+<label>Amount</label>
+<input type="text" id="amount" inputmode="decimal" onfocus="handleAmountFocus()" onblur="handleAmountBlur()" oninput="loadPreview()">
+
+<div class="check-row">
+  <input type="checkbox" id="createIfMissing" checked>
+  <label for="createIfMissing" style="margin:0;font-weight:normal;">Create row if payee is missing</label>
+</div>
+
+<div class="info">
+  <div><strong>Sheet:</strong> <span id="sheetName" class="muted">—</span></div>
+  <div><strong>Month:</strong> <span id="monthName" class="muted">—</span></div>
+  <div><strong>Current value in cell:</strong> <span id="currentValue" class="muted">—</span></div>
+  <div><strong>Existing row:</strong> <span id="rowExists" class="muted">—</span></div>
+</div>
+
+<button onclick="save()">Add Payment</button>
+
+<div id="status" class="status"></div>
+
+<script>
+let allPayees = [];
+
+function setStatus(msg, isError) {
+  const el = document.getElementById('status');
+  el.textContent = msg || '';
+  el.className = isError ? 'status error' : 'status';
+}
+
+function toNumber(value) {
+  if (value === '' || value === null || value === undefined) return 0;
+  const cleaned = String(value)
+    .replace(/\$/g, '')
+    .replace(/,/g, '')
+    .replace(/\s+/g, '')
+    .trim();
+  if (!cleaned) return 0;
+  const num = Number(cleaned);
+  return isNaN(num) ? NaN : num;
+}
+
+function fmtCurrency(value) {
+  if (value === '' || value === null || value === undefined) return '—';
+  const num = Number(value);
+  if (isNaN(num)) return '—';
+  return '$' + num.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function setCurrencyInputValue(id, value) {
+  const input = document.getElementById(id);
+  if (value === '' || value === null || value === undefined) {
+    input.value = '';
+    return;
+  }
+
+  const num = Number(value);
+  if (isNaN(num)) {
+    input.value = '';
+    return;
+  }
+
+  input.value = fmtCurrency(num);
+}
+
+function handleAmountFocus() {
+  const input = document.getElementById('amount');
+  const num = toNumber(input.value);
+
+  if (input.value === '') return;
+  if (isNaN(num)) return;
+
+  input.value = String(num);
+}
+
+function handleAmountBlur() {
+  const input = document.getElementById('amount');
+  const raw = String(input.value || '').trim();
+
+  if (!raw) {
+    input.value = '';
+    return;
+  }
+
+  const num = toNumber(raw);
+  if (isNaN(num)) return;
+
+  input.value = fmtCurrency(num);
+}
+
+function currentPayeeValue() {
+  const typed = document.getElementById('payeeInput').value.trim();
+  if (typed) return typed;
+  return document.getElementById('payeeSelect').value || '';
+}
+
+function syncPayeeInput() {
+  const selected = document.getElementById('payeeSelect').value || '';
+  document.getElementById('payeeInput').value = selected;
+}
+
+function filterPayees() {
+  const type = document.getElementById('entryType').value;
+  const sel = document.getElementById('payeeSelect');
+  sel.innerHTML = '<option value=""></option>';
+
+  allPayees
+    .filter(function(p) { return p.type === type; })
+    .forEach(function(p) {
+      const opt = document.createElement('option');
+      opt.value = p.payee;
+      opt.textContent = p.payee;
+      sel.appendChild(opt);
+    });
+}
+
+function loadUiData() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      allPayees = data.payees || [];
+      filterPayees();
+      document.getElementById('entryDate').value = new Date().toISOString().slice(0, 10);
+      loadPreview();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('Error: ' + (err.message || String(err)), true);
+    })
+    .getQuickAddPaymentUiData();
+}
+
+function loadPreview() {
+  const payload = {
+    entryType: document.getElementById('entryType').value,
+    payee: currentPayeeValue(),
+    entryDate: document.getElementById('entryDate').value
+  };
+
+  if (!payload.payee || !payload.entryDate) {
+    document.getElementById('sheetName').textContent = '—';
+    document.getElementById('monthName').textContent = '—';
+    document.getElementById('currentValue').textContent = '—';
+    document.getElementById('rowExists').textContent = '—';
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      document.getElementById('sheetName').textContent = data.sheetName || '—';
+      document.getElementById('monthName').textContent = data.month || '—';
+      document.getElementById('currentValue').textContent = fmtCurrency(data.currentValue);
+      document.getElementById('rowExists').textContent = data.rowExists ? 'Yes' : 'No';
+    })
+    .withFailureHandler(function(err) {
+      setStatus('Error: ' + (err.message || String(err)), true);
+    })
+    .getQuickAddPreview(payload);
+}
+
+function save() {
+  const rawAmount = document.getElementById('amount').value;
+  const numericAmount = toNumber(rawAmount);
+
+  if (String(rawAmount || '').trim() && isNaN(numericAmount)) {
+    setStatus('Error: Amount must be a valid number.', true);
+    return;
+  }
+
+  const payload = {
+    entryType: document.getElementById('entryType').value,
+    payee: currentPayeeValue(),
+    entryDate: document.getElementById('entryDate').value,
+    amount: numericAmount,
+    createIfMissing: document.getElementById('createIfMissing').checked
+  };
+
+  setStatus('Saving...', false);
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus(res.message || 'Saved.');
+      loadPreview();
+      document.getElementById('amount').value = '';
+    })
+    .withFailureHandler(function(err) {
+      setStatus('Error: ' + (err.message || String(err)), true);
+    })
+    .quickAddPayment(payload);
+}
+
+loadUiData();
+</script>
+
+</body>
+</html>

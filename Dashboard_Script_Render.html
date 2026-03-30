@@ -1,0 +1,504 @@
+let bankCurrentData = null;
+let paymentPayees = [];
+let allDebtRows = [];
+let pendingFocus = null;
+let upcomingExpenses = [];
+let retirementUiData = null;
+let houseExpenseOptions = [];
+let debtFieldTypes = {
+  'Account Balance': 'currency',
+  'Due Date': 'integer',
+  'Credit Limit': 'currency',
+  'Minimum Payment': 'currency',
+  'Credit Left': 'currency',
+  'Int Rate': 'plain'
+};
+
+function showPage(name) {
+  document.querySelectorAll('.workspace-page').forEach(function(el) {
+    el.classList.remove('active');
+  });
+  document.querySelectorAll('.page-btn').forEach(function(el) {
+    el.classList.remove('active');
+  });
+
+  const page = document.getElementById('page_' + name);
+  if (page) page.classList.add('active');
+
+  const btn = document.querySelector('.page-btn[data-page="' + name + '"]');
+  if (btn) btn.classList.add('active');
+}
+
+function showTab(name) {
+  document.querySelectorAll('.panel').forEach(function(el) {
+    el.classList.remove('active');
+  });
+  document.querySelectorAll('.tab-btn').forEach(function(el) {
+    el.classList.remove('active');
+  });
+
+  const panel = document.getElementById(name);
+  if (panel) panel.classList.add('active');
+
+  const tabBtn = document.querySelector('.tab-btn[data-tab="' + name + '"]');
+  if (tabBtn) tabBtn.classList.add('active');
+
+  if (name === 'houses' || name === 'bank' || name === 'investments') {
+    showPage('assets');
+  } else if (name === 'payments' || name === 'upcoming') {
+    showPage('cashflow');
+  } else if (name === 'houseExpenses') {
+    showPage('properties');
+  } else if (name === 'debts' || name === 'retirement' || name === 'purchase') {
+    showPage('planning');
+  }
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function toggleHealthExplainer() {
+  const el = document.getElementById('health_explainer_body');
+  if (el) el.classList.toggle('open');
+}
+
+function setStatus(id, msg, isError) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg || '';
+  el.className = isError ? 'status error' : 'status';
+}
+
+function toNumber(value) {
+  if (value === '' || value === null || value === undefined) return 0;
+  const cleaned = String(value).replace(/\$/g, '').replace(/,/g, '').replace(/\s+/g, '').trim();
+  if (!cleaned) return 0;
+  const num = Number(cleaned);
+  return isNaN(num) ? NaN : num;
+}
+
+function fmtCurrency(value) {
+  if (value === '' || value === null || value === undefined) return '—';
+  const num = Number(value);
+  if (isNaN(num)) return '—';
+  return '$' + num.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function fmtPercent(value) {
+  if (value === '' || value === null || value === undefined) return '—';
+  const num = Number(value);
+  if (isNaN(num)) return '—';
+  return num.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }) + '%';
+}
+
+function fmtDelta(value, baselineLabel) {
+  if (value === null || value === undefined) return 'Change since comparison point: —';
+  const num = Number(value);
+  if (isNaN(num)) return 'Change since comparison point: —';
+  const label = baselineLabel ? String(baselineLabel) : 'comparison point';
+  const sign = num > 0 ? '+' : '';
+  return 'Change since ' + label + ': ' + sign + fmtCurrency(num);
+}
+
+function fmtSignedCurrency(value) {
+  if (value === null || value === undefined || isNaN(Number(value))) return '—';
+  const num = Number(value);
+  const sign = num > 0 ? '+' : '';
+  return sign + fmtCurrency(num);
+}
+
+function setCurrencyInputValue(id, value) {
+  const input = document.getElementById(id);
+  if (!input) return;
+
+  if (value === '' || value === null || value === undefined) {
+    input.value = '';
+    return;
+  }
+  const num = Number(value);
+  if (isNaN(num)) {
+    input.value = '';
+    return;
+  }
+  input.value = fmtCurrency(num);
+}
+
+function currencyFocus(id) {
+  const input = document.getElementById(id);
+  if (!input) return;
+  const num = toNumber(input.value);
+  if (input.value === '' || isNaN(num)) return;
+  input.value = String(num);
+}
+
+function currencyBlur(id) {
+  const input = document.getElementById(id);
+  if (!input) return;
+  const raw = String(input.value || '').trim();
+  if (!raw) {
+    input.value = '';
+    return;
+  }
+  const num = toNumber(raw);
+  if (isNaN(num)) return;
+  input.value = fmtCurrency(num);
+}
+
+function setWarning(id, message, level) {
+  const box = document.getElementById(id);
+  if (!box) return;
+
+  box.textContent = message || '';
+  box.className = 'warning-box';
+  if (!message) return;
+  if (level === 'danger') box.className = 'warning-box warning-danger';
+  else box.className = 'warning-box warning-info';
+}
+
+function renderSourceUpdated(sourceUpdated) {
+  sourceUpdated = sourceUpdated || {};
+  const set = function(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value || '—';
+  };
+
+  set('house_updated', sourceUpdated.house_values);
+  set('bank_updated', sourceUpdated.bank_accounts);
+  set('inv_updated', sourceUpdated.investments);
+  set('debt_updated', sourceUpdated.debts);
+  set('pay_updated', sourceUpdated.quick_payment || sourceUpdated.cash_flow);
+  set('upcoming_updated', sourceUpdated.upcoming_expenses);
+  set('retirement_updated', sourceUpdated.retirement);
+}
+
+function renderIssues(issues) {
+  const root = document.getElementById('issues_root');
+  if (!root) return;
+
+  const items = issues || [];
+  if (!items.length) {
+    root.innerHTML = '<div class="muted">No active issues detected.</div>';
+    window.__dashboardIssues = [];
+    return;
+  }
+
+  const groups = { danger: [], warn: [], info: [] };
+  items.forEach(function(issue) {
+    const sev = issue.severity || 'info';
+    if (!groups[sev]) groups[sev] = [];
+    groups[sev].push(issue);
+  });
+
+  const order = [
+    { key: 'danger', label: 'Critical' },
+    { key: 'warn', label: 'Needs Attention' },
+    { key: 'info', label: 'Informational' }
+  ];
+
+  const flat = [];
+  let html = '';
+
+  order.forEach(function(group) {
+    const arr = groups[group.key] || [];
+    if (!arr.length) return;
+
+    html += '<div class="issues-group">';
+    html += '<div class="issues-group-title">' + group.label + '</div>';
+    html += '<div class="issues-list">';
+
+    arr.forEach(function(issue) {
+      flat.push(issue);
+      html += '<button class="issue-item severity-' + (issue.severity || 'info') + '" onclick="focusIssueByIndex(' + (flat.length - 1) + ')">' +
+        escapeHtml(issue.message) +
+      '</button>';
+    });
+
+    html += '</div></div>';
+  });
+
+  root.innerHTML = html;
+  window.__dashboardIssues = flat;
+}
+
+function renderActions(actions) {
+  const root = document.getElementById('actions_list');
+  if (!root) return;
+
+  const items = actions || [];
+  if (!items.length) {
+    root.innerHTML = '<div class="muted">No suggested actions right now.</div>';
+    window.__dashboardActions = [];
+    return;
+  }
+
+  root.innerHTML = items.map(function(action, idx) {
+    return (
+      '<button class="action-item severity-' + (action.severity || 'info') + '" onclick="runActionByIndex(' + idx + ')">' +
+        '<div class="action-title">' + escapeHtml(action.title) + '</div>' +
+        '<div class="action-message">' + escapeHtml(action.message) + '</div>' +
+        '<div class="action-cta">' + escapeHtml(action.ctaLabel || 'Open') + '</div>' +
+      '</button>'
+    );
+  }).join('');
+
+  window.__dashboardActions = items.slice();
+}
+
+function renderRecentChanges(changes) {
+  const root = document.getElementById('changes_list');
+  if (!root) return;
+
+  const items = changes || [];
+  if (!items.length) {
+    root.innerHTML = '<div class="muted">Need at least two planner runs to show changes.</div>';
+    return;
+  }
+
+  root.innerHTML = items.map(function(change) {
+    return (
+      '<div class="change-item">' +
+        '<div class="change-label">' + escapeHtml(change.label) + '</div>' +
+        '<div class="change-value">' + fmtSignedCurrency(change.value) + '</div>' +
+        '<div class="change-meta">vs ' + escapeHtml(change.baselineLabel || 'prior run') + '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+function renderAttribution(attribution) {
+  const root = document.getElementById('attrib_root');
+  if (!root) return;
+
+  if (!attribution || !attribution.items || !attribution.items.length) {
+    root.innerHTML = '<div class="muted">Need at least two planner runs to show attribution.</div>';
+    return;
+  }
+
+  root.innerHTML = attribution.items.map(function(item) {
+    return (
+      '<div class="change-item">' +
+        '<div class="change-label">' + escapeHtml(item.label) + '</div>' +
+        '<div class="change-value">' + fmtSignedCurrency(item.value) + '</div>' +
+        '<div class="change-meta">vs ' + escapeHtml(attribution.baselineLabel || 'prior run') + '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+function renderBufferRunway(bufferRunway) {
+  const label = document.getElementById('runway_label');
+  const detail = document.getElementById('runway_detail');
+  if (label) label.textContent = bufferRunway ? bufferRunway.label : '—';
+  if (detail) detail.textContent = bufferRunway ? bufferRunway.detail : '—';
+}
+
+function renderHealth(health) {
+  health = health || {};
+  const scoreEl = document.getElementById('health_score');
+  const labelEl = document.getElementById('health_label');
+  const summaryEl = document.getElementById('health_summary');
+  const baselineEl = document.getElementById('health_baseline');
+  const trendEl = document.getElementById('health_trend');
+  const driversEl = document.getElementById('health_drivers');
+  const fillEl = document.getElementById('health_bar_fill');
+
+  if (!scoreEl || !labelEl || !summaryEl || !baselineEl || !trendEl || !driversEl || !fillEl) return;
+
+  const color = health.color || 'neutral';
+  const score = health.score;
+
+  scoreEl.className = 'health-score health-' + color;
+  labelEl.className = 'health-label health-' + color;
+  fillEl.className = 'health-bar-fill health-' + color;
+
+  scoreEl.textContent = (score === null || score === undefined) ? '—' : String(score);
+  labelEl.textContent = health.label || 'Unavailable';
+  summaryEl.textContent = health.summary || 'Run the planner to generate health scoring.';
+  baselineEl.textContent = health.baselineLabel || 'Latest planner run';
+
+  if (score === null || score === undefined || isNaN(Number(score))) fillEl.style.width = '0%';
+  else fillEl.style.width = Math.max(0, Math.min(100, Number(score))) + '%';
+
+  if (health.trend && health.trend.change !== null && health.trend.change !== undefined) {
+    const sign = health.trend.change > 0 ? '+' : '';
+    trendEl.textContent = 'Trend: ' + sign + health.trend.change + ' vs ' + (health.trend.previousLabel || 'prior run');
+  } else {
+    trendEl.textContent = 'Trend: —';
+  }
+
+  const drivers = health.drivers || [];
+  driversEl.innerHTML = drivers.map(function(x) {
+    return '<li>' + escapeHtml(x) + '</li>';
+  }).join('');
+}
+
+function renderRetirementSummary(retirement) {
+  const analysis = retirement && retirement.analysis ? retirement.analysis : null;
+
+  const set = function(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+
+  set('ret_scenario', analysis ? analysis.scenarioName : '—');
+  set('ret_goal', analysis ? fmtCurrency(analysis.retirementGoalAmount) : '—');
+  set('ret_assets', analysis ? fmtCurrency(analysis.currentInvestableAssets) : '—');
+  set('ret_age', analysis && analysis.estimatedRetirementAge !== null ? analysis.estimatedRetirementAge : '—');
+  set('ret_mc', analysis ? fmtPercent(analysis.monteCarloSuccessProbabilityPct) : '—');
+  set('ret_summary', analysis ? analysis.summary : '—');
+}
+
+function applySnapshot(snapshot) {
+  const deltas = snapshot.deltas || null;
+  const baselineLabel = deltas && deltas.baselineLabel ? deltas.baselineLabel : '';
+
+  const set = function(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+
+  set('snap_cash', fmtCurrency(snapshot.cash));
+  set('snap_investments', fmtCurrency(snapshot.investments));
+  set('snap_houseEquity', fmtCurrency(snapshot.houseValues !== undefined ? snapshot.houseValues : snapshot.houseEquity));
+  set('snap_debt', fmtCurrency(snapshot.debt));
+  set('snap_netWorth', fmtCurrency(snapshot.netWorth));
+  set('snap_refreshedAt', snapshot.refreshedAt || '—');
+
+  set('snap_delta_cash', fmtDelta(deltas ? deltas.cash : null, baselineLabel));
+  set('snap_delta_investments', fmtDelta(deltas ? deltas.investments : null, baselineLabel));
+  set('snap_delta_houseEquity', fmtDelta(deltas ? deltas.houseEquity : null, baselineLabel));
+  set('snap_delta_debt', fmtDelta(deltas ? deltas.debt : null, baselineLabel));
+  set('snap_delta_netWorth', fmtDelta(deltas ? deltas.netWorth : null, baselineLabel));
+
+  renderSourceUpdated(snapshot.sourceUpdated);
+  renderIssues(snapshot.issues || []);
+  renderHealth(snapshot.health || null);
+  renderRecentChanges(snapshot.recentChanges || []);
+  renderAttribution(snapshot.attribution || null);
+  renderBufferRunway(snapshot.bufferRunway || null);
+  renderActions(snapshot.suggestedActions || []);
+  renderRetirementSummary(snapshot.retirement || null);
+}
+
+function refreshSnapshot() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      applySnapshot(data);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('planner_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getDashboardSnapshot();
+}
+
+function runPlannerNow() {
+  setStatus('planner_status', 'Running planner...', false);
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('planner_status', res.message || 'Planner run complete.', false);
+      if (res.snapshot) applySnapshot(res.snapshot);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('planner_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .runPlannerAndRefreshDashboard();
+}
+
+function runActionByIndex(index) {
+  const actions = window.__dashboardActions || [];
+  const action = actions[index];
+  if (!action) return;
+  focusTarget(action);
+}
+
+function focusIssueByIndex(index) {
+  const issues = window.__dashboardIssues || [];
+  const issue = issues[index];
+  if (!issue) return;
+  focusTarget(issue);
+}
+
+function focusTarget(obj) {
+  pendingFocus = obj || null;
+  if (!obj || !obj.tab) return;
+
+  showTab(obj.tab);
+
+  if (obj.tab === 'bank') {
+    focusBankTarget_(obj);
+  } else if (obj.tab === 'debts') {
+    focusDebtTarget_(obj);
+  } else if (obj.tab === 'payments') {
+    if (obj.prefill) prefillQuickPayment(obj.prefill);
+  } else if (obj.tab === 'upcoming') {
+    loadUpcomingSection();
+  } else if (obj.tab === 'retirement') {
+    loadRetirementSection();
+  } else if (obj.tab === 'purchase') {
+    loadPurchaseSimulatorSection();
+  }
+}
+
+function focusBankTarget_(obj) {
+  const select = document.getElementById('bank_account');
+  if (!select || !obj.accountName) return;
+
+  setTimeout(function() {
+    const opt = Array.from(select.options).find(function(x) {
+      return x.value === obj.accountName;
+    });
+    if (!opt) return;
+    select.value = obj.accountName;
+    if (!document.getElementById('bank_date').value) {
+      document.getElementById('bank_date').value = new Date().toISOString().slice(0, 10);
+    }
+    loadBankData();
+    pendingFocus = null;
+  }, 50);
+}
+
+function focusDebtTarget_(obj) {
+  const typeSelect = document.getElementById('debt_typeFilter');
+  const accountSelect = document.getElementById('debt_account');
+  if (!typeSelect || !accountSelect) return;
+
+  setTimeout(function() {
+    if (obj.debtType) {
+      const typeOpt = Array.from(typeSelect.options).find(function(x) {
+        return x.value === obj.debtType;
+      });
+      typeSelect.value = typeOpt ? obj.debtType : 'All';
+      filterDebtAccounts();
+    }
+
+    setTimeout(function() {
+      const opt = Array.from(accountSelect.options).find(function(x) {
+        return x.value === obj.accountName;
+      });
+      if (!opt) return;
+      accountSelect.value = obj.accountName;
+      loadDebtFieldValue();
+      pendingFocus = null;
+    }, 50);
+  }, 50);
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeJs(value) {
+  return String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'");
+}

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 12px; color: #1f2937; }
+    label { display:block; margin-top:10px; font-weight:bold; font-size:12px; }
+    input, select, button {
+      width:100%;
+      padding:8px;
+      margin-top:4px;
+      box-sizing:border-box;
+      border:1px solid #cbd5e1;
+      border-radius:6px;
+      font-size:13px;
+    }
+    button {
+      margin-top:12px;
+      background:#1f4e78;
+      color:white;
+      border:none;
+      cursor:pointer;
+      font-weight:bold;
+    }
+    .status { margin-top:10px; font-size:12px; white-space:pre-wrap; }
+    .error { color:#991b1b; }
+    .info {
+      background:#eef6ff;
+      border:1px solid #cfe3ff;
+      border-radius:6px;
+      padding:10px;
+      margin:12px 0;
+      font-size:12px;
+      line-height:1.5;
+    }
+    .muted { color:#475569; }
+  </style>
+</head>
+<body>
+
+<h3>Update Debt</h3>
+
+<label>Type Filter</label>
+<select id="typeFilter" onchange="filterAccounts()"></select>
+
+<label>Debt Account</label>
+<select id="account" onchange="loadFieldValue()"></select>
+
+<label>Field</label>
+<select id="field" onchange="loadFieldValue()"></select>
+
+<div class="info">
+  <div><strong>Type:</strong> <span id="type" class="muted">—</span></div>
+  <div><strong>Current value:</strong> <span id="currentValue" class="muted">—</span></div>
+  <div><strong>Acct PCT Avail:</strong> <span id="pctAvail" class="muted">—</span></div>
+</div>
+
+<label>New Value</label>
+<input type="text" id="value" placeholder="Enter value">
+
+<button onclick="save()">Save</button>
+
+<div id="status" class="status"></div>
+
+<script>
+let allDebts = [];
+
+function setStatus(msg, isError) {
+  const el = document.getElementById('status');
+  el.textContent = msg || '';
+  el.className = isError ? 'status error' : 'status';
+}
+
+function fmtMaybeValue(field, value) {
+  if (value === '' || value === null || value === undefined) return '—';
+
+  const currencyFields = {
+    'Account Balance': true,
+    'Minimum Payment': true,
+    'Credit Limit': true,
+    'Credit Left': true
+  };
+
+  if (currencyFields[field]) {
+    const num = Number(value || 0);
+    return '$' + num.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  }
+
+  if (field === 'Int Rate') {
+    return Number(value || 0).toFixed(2);
+  }
+
+  return String(value);
+}
+
+function loadUiData() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      allDebts = data.debts || [];
+
+      const typeSel = document.getElementById('typeFilter');
+      const fieldSel = document.getElementById('field');
+
+      typeSel.innerHTML = '';
+      (data.types || []).forEach(function(t) {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        typeSel.appendChild(opt);
+      });
+
+      fieldSel.innerHTML = '<option value=""></option>';
+      (data.editableFields || []).forEach(function(f) {
+        const opt = document.createElement('option');
+        opt.value = f;
+        opt.textContent = f;
+        fieldSel.appendChild(opt);
+      });
+
+      filterAccounts();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('Error: ' + (err.message || String(err)), true);
+    })
+    .getDebtsUiData();
+}
+
+function filterAccounts() {
+  const selectedType = document.getElementById('typeFilter').value || 'All';
+  const accountSel = document.getElementById('account');
+  const currentSelected = accountSel.value;
+
+  accountSel.innerHTML = '<option value=""></option>';
+
+  allDebts
+    .filter(function(d) {
+      return selectedType === 'All' || d.type === selectedType;
+    })
+    .forEach(function(d) {
+      const opt = document.createElement('option');
+      opt.value = d.accountName;
+      opt.textContent = d.accountName;
+      accountSel.appendChild(opt);
+    });
+
+  if (currentSelected) {
+    accountSel.value = currentSelected;
+  }
+
+  loadFieldValue();
+}
+
+function loadFieldValue() {
+  const account = document.getElementById('account').value;
+  const field = document.getElementById('field').value;
+
+  if (!account || !field) {
+    document.getElementById('type').textContent = '—';
+    document.getElementById('currentValue').textContent = '—';
+    document.getElementById('pctAvail').textContent = '—';
+    document.getElementById('value').value = '';
+    return;
+  }
+
+  setStatus('Loading current value...', false);
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      document.getElementById('type').textContent = data.type || '—';
+      document.getElementById('currentValue').textContent = fmtMaybeValue(field, data.value);
+      document.getElementById('pctAvail').textContent = data.pctAvail || '—';
+      document.getElementById('value').value = data.displayValue || data.value || '';
+      setStatus('', false);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('Error: ' + (err.message || String(err)), true);
+    })
+    .getDebtFieldValue(account, field);
+}
+
+function save() {
+  const payload = {
+    accountName: document.getElementById('account').value,
+    fieldName: document.getElementById('field').value,
+    value: document.getElementById('value').value
+  };
+
+  setStatus('Saving...', false);
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus(res.message || 'Saved.');
+      loadFieldValue();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('Error: ' + (err.message || String(err)), true);
+    })
+    .updateDebtField(payload);
+}
+
+loadUiData();
+</script>
+
+</body>
+</html>

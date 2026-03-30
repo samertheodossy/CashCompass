@@ -1,0 +1,149 @@
+function currentPaymentPayee() {
+  const typed = document.getElementById('pay_payeeInput').value.trim();
+  if (typed) return typed;
+  return document.getElementById('pay_payeeSelect').value || '';
+}
+
+function syncPaymentPayeeInput() {
+  const selected = document.getElementById('pay_payeeSelect').value || '';
+  document.getElementById('pay_payeeInput').value = selected;
+}
+
+function prefillQuickPayment(prefill) {
+  if (!prefill) return;
+
+  showPage('cashflow');
+  showTab('payments');
+
+  if (prefill.entryType) {
+    document.getElementById('pay_type').value = prefill.entryType;
+  }
+
+  if (prefill.entryDate) {
+    document.getElementById('pay_date').value = prefill.entryDate;
+  }
+
+  filterPaymentPayees();
+
+  const input = document.getElementById('pay_payeeInput');
+  const select = document.getElementById('pay_payeeSelect');
+
+  input.value = '';
+  select.value = '';
+
+  if (prefill.payee) {
+    const wantedRaw = String(prefill.payee || '').trim();
+    const wanted = wantedRaw.toLowerCase();
+    let matchedValue = '';
+
+    for (let i = 0; i < select.options.length; i++) {
+      const optValue = String(select.options[i].value || '').trim();
+      if (optValue.toLowerCase() === wanted) {
+        matchedValue = optValue;
+        break;
+      }
+    }
+
+    if (matchedValue) {
+      select.value = matchedValue;
+      input.value = matchedValue;
+    } else {
+      input.value = wantedRaw;
+    }
+  }
+
+  if (prefill.amount !== null && prefill.amount !== undefined) {
+    setCurrencyInputValue('pay_amount', prefill.amount);
+  } else {
+    document.getElementById('pay_amount').value = '';
+  }
+
+  loadPaymentPreview();
+}
+
+function loadPaymentSection() {
+  document.getElementById('pay_date').value = new Date().toISOString().slice(0, 10);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      paymentPayees = data.payees || [];
+      filterPaymentPayees();
+      loadPaymentPreview();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('pay_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getQuickAddPaymentUiData();
+}
+
+function filterPaymentPayees() {
+  const type = document.getElementById('pay_type').value;
+  const sel = document.getElementById('pay_payeeSelect');
+  sel.innerHTML = '<option value=""></option>';
+
+  paymentPayees.filter(function(p) {
+    return p.type === type;
+  }).forEach(function(p) {
+    const opt = document.createElement('option');
+    opt.value = p.payee;
+    opt.textContent = p.payee;
+    sel.appendChild(opt);
+  });
+}
+
+function loadPaymentPreview() {
+  const payload = {
+    entryType: document.getElementById('pay_type').value,
+    payee: currentPaymentPayee(),
+    entryDate: document.getElementById('pay_date').value
+  };
+
+  if (!payload.payee || !payload.entryDate) {
+    document.getElementById('pay_sheetName').textContent = '—';
+    document.getElementById('pay_monthName').textContent = '—';
+    document.getElementById('pay_currentValue').textContent = '—';
+    document.getElementById('pay_rowExists').textContent = '—';
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      document.getElementById('pay_sheetName').textContent = data.sheetName || '—';
+      document.getElementById('pay_monthName').textContent = data.month || '—';
+      document.getElementById('pay_currentValue').textContent = fmtCurrency(data.currentValue);
+      document.getElementById('pay_rowExists').textContent = data.rowExists ? 'Yes' : 'No';
+    })
+    .withFailureHandler(function(err) {
+      setStatus('pay_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getQuickAddPreview(payload);
+}
+
+function savePayment() {
+  const rawAmount = document.getElementById('pay_amount').value;
+  const numericAmount = toNumber(rawAmount);
+
+  if (String(rawAmount || '').trim() && isNaN(numericAmount)) {
+    setStatus('pay_status', 'Error: Amount must be a valid number.', true);
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('pay_status', res.message || 'Saved.', false);
+      loadPaymentPreview();
+      document.getElementById('pay_amount').value = '';
+      refreshSnapshot();
+      loadUpcomingSection();
+      loadDashboardActionSections();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('pay_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .quickAddPayment({
+      entryType: document.getElementById('pay_type').value,
+      payee: currentPaymentPayee(),
+      entryDate: document.getElementById('pay_date').value,
+      amount: numericAmount,
+      createIfMissing: document.getElementById('pay_createIfMissing').checked
+    });
+}
