@@ -964,6 +964,12 @@ function isCashFlowBillHandled_(cellValue, cellDisplay) {
   return false;
 }
 
+/** True when INPUT - Debts Type is Credit Card (whitespace/case normalized). */
+function isDebtCreditCardType_(debtType) {
+  const t = String(debtType || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return t === 'credit card';
+}
+
 /*
 function isCashFlowBillHandled_(cellValue, cellDisplay) {
   const displayText = String(cellDisplay || '').trim();
@@ -1089,7 +1095,7 @@ function getDebtBillsDueRows_(ss, today, tz) {
     if (isCashFlowBillHandled_(cellValue, cellDisplay)) continue;
 
     const suggestedAmount = match.minimumPayment && match.minimumPayment > 0 ? match.minimumPayment : 0;
-    if (!suggestedAmount) continue;
+    if (!isDebtCreditCardType_(match.debtType) && !suggestedAmount) continue;
 
     rows.push({
       id: buildDashboardBillSkipKey_(payee, Utilities.formatDate(chosenDueDate, tz, 'yyyy-MM-dd')),
