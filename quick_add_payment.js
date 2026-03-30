@@ -114,14 +114,21 @@ function quickAddPayment(payload) {
 
   touchDashboardSourceUpdated_('quick_payment');
   touchDashboardSourceUpdated_('cash_flow');
-  if (typeof runDebtPlanner === 'function') runDebtPlanner();
+
+  const monthLabel = Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'MMM-yy');
 
   return {
     ok: true,
+    preview: {
+      sheetName: sheet.getName(),
+      month: monthLabel,
+      currentValue: newValue,
+      rowExists: true
+    },
     message:
       'Payment added.\n' +
       'Sheet: ' + sheet.getName() + '\n' +
-      'Month: ' + Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'MMM-yy') + '\n' +
+      'Month: ' + monthLabel + '\n' +
       'Payee: ' + payee + '\n' +
       'Previous value: ' + fmtCurrency_(previousValue) + '\n' +
       'Added: ' + fmtCurrency_(signedAmount) + '\n' +

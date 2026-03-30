@@ -225,6 +225,14 @@ function loadPreview() {
     .getQuickAddPreview(payload);
 }
 
+function applyQuickAddPreviewFromResult_(data) {
+  if (!data) return;
+  document.getElementById('sheetName').textContent = data.sheetName || '—';
+  document.getElementById('monthName').textContent = data.month || '—';
+  document.getElementById('currentValue').textContent = fmtCurrency(data.currentValue);
+  document.getElementById('rowExists').textContent = data.rowExists ? 'Yes' : 'No';
+}
+
 function save() {
   const rawAmount = document.getElementById('amount').value;
   const numericAmount = toNumber(rawAmount);
@@ -247,8 +255,17 @@ function save() {
   google.script.run
     .withSuccessHandler(function(res) {
       setStatus(res.message || 'Saved.');
-      loadPreview();
+      if (res && res.preview) {
+        applyQuickAddPreviewFromResult_(res.preview);
+      } else {
+        loadPreview();
+      }
       document.getElementById('amount').value = '';
+      google.script.run
+        .withFailureHandler(function(err) {
+          setStatus('Planner error: ' + (err.message || String(err)), true);
+        })
+        .runDebtPlanner();
     })
     .withFailureHandler(function(err) {
       setStatus('Error: ' + (err.message || String(err)), true);

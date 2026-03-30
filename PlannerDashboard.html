@@ -752,6 +752,14 @@ function loadPaymentPreview() {
     .getQuickAddPreview(payload);
 }
 
+function applyQuickAddPreviewFromResult_(data) {
+  if (!data) return;
+  document.getElementById('pay_sheetName').textContent = data.sheetName || '—';
+  document.getElementById('pay_monthName').textContent = data.month || '—';
+  document.getElementById('pay_currentValue').textContent = fmtCurrency(data.currentValue);
+  document.getElementById('pay_rowExists').textContent = data.rowExists ? 'Yes' : 'No';
+}
+
 function savePayment() {
   const rawAmount = document.getElementById('pay_amount').value;
   const numericAmount = toNumber(rawAmount);
@@ -774,8 +782,22 @@ function savePayment() {
   google.script.run
     .withSuccessHandler(function(res) {
       setStatus('pay_status', res.message || 'Saved.', false);
-      loadPaymentPreview();
+      if (res && res.preview) {
+        applyQuickAddPreviewFromResult_(res.preview);
+      } else {
+        loadPaymentPreview();
+      }
       document.getElementById('pay_amount').value = '';
+      google.script.run
+        .withFailureHandler(function(err) {
+          const msg = 'Planner error: ' + (err.message || String(err));
+          if (document.getElementById('planner_status')) {
+            setStatus('planner_status', msg, true);
+          } else {
+            setStatus('pay_status', msg, true);
+          }
+        })
+        .runDebtPlanner();
     })
     .withFailureHandler(function(err) {
       setStatus('pay_status', 'Error: ' + (err.message || String(err)), true);

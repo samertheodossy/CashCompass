@@ -227,6 +227,8 @@ function addUpcomingExpenseRowToCashFlow_(rowInfo) {
   sheet.getRange(rowInfo.row, colMap['Added To Cash Flow'] + 1).setValue('Yes');
   touchDashboardSourceUpdated_('upcoming_expenses');
 
+  if (typeof runDebtPlanner === 'function') runDebtPlanner();
+
   return {
     ok: true,
     message: 'Added to cash flow.\n' + (result && result.message ? result.message : '')

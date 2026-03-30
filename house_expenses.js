@@ -95,6 +95,8 @@ function addHouseExpenseToCashFlow_(payload, cost, serviceFees) {
     createIfMissing: true
   });
 
+  if (typeof runDebtPlanner === 'function') runDebtPlanner();
+
   return 'Also added to Cash Flow as ' + entryType + ' for ' + fmtCurrency_(amount) + '.';
 }
 
