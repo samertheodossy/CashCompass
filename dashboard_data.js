@@ -1329,17 +1329,45 @@ function normalizeYesNo_(value) {
 }
 
 function normalizeFrequency_(value) {
-  const v = String(value || '').trim().toLowerCase();
+  const v = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
   if (v === 'quarterly') return 'quarterly';
   if (v === 'biweekly') return 'biweekly';
+  if (v === 'weekly') return 'weekly';
+  if (v === 'yearly' || v === 'annual' || v === 'annually' || v === 'yealry') return 'yearly';
+  if (
+    v === 'semi annually' ||
+    v === 'semi-annually' ||
+    v === 'semiannually' ||
+    v === 'semi annual' ||
+    v === 'semi-annual'
+  ) {
+    return 'semi_annually';
+  }
+  if (v === 'bimonthly' || v === 'bi-monthly' || v === 'bi monthly') return 'bimonthly';
   return 'monthly';
 }
 
 function billAppliesInMonth_(frequency, startMonth, monthNumber1to12) {
-  if (frequency === 'monthly') return true;
-  if (frequency === 'biweekly') return true;
+  const start = Math.min(12, Math.max(1, Number(startMonth) || 1));
+
+  if (frequency === 'monthly' || frequency === 'biweekly' || frequency === 'weekly') {
+    return true;
+  }
+  if (frequency === 'yearly') {
+    return monthNumber1to12 === start;
+  }
+  if (frequency === 'semi_annually') {
+    const second = start + 6 > 12 ? start + 6 - 12 : start + 6;
+    return monthNumber1to12 === start || monthNumber1to12 === second;
+  }
+  if (frequency === 'bimonthly') {
+    const diff = (monthNumber1to12 - start + 12) % 12;
+    return diff % 2 === 0;
+  }
   if (frequency === 'quarterly') {
-    const start = Number(startMonth || 1);
     const diff = (monthNumber1to12 - start + 12) % 12;
     return diff % 3 === 0;
   }
