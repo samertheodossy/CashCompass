@@ -4,4 +4,5 @@
 In this change: hasHistory was removed in getRecurringBillsWithoutDueDateForDashboard() in dashboard_data.js, with a short comment so you can restore the old gate if you ever need to.
 3/31 Session
 - sped up the debt code 
-- updated the overview page (too slow still)
+- updated the overview page
+- Sped up the overview page update as well

@@ -84,7 +84,7 @@ function renderRecentChanges(changes) {
   const items = changes || [];
 
   if (!items.length) {
-    root.innerHTML = '<div class="muted">Need at least two planner runs to show changes.</div>';
+    root.innerHTML = '<div class="muted">Run the planner once (OUT - History) to compare live sheet vs last snapshot.</div>';
     return;
   }
 
@@ -104,7 +104,7 @@ function renderAttribution(attribution) {
   if (!root) return;
 
   if (!attribution || !attribution.items || !attribution.items.length) {
-    root.innerHTML = '<div class="muted">Need at least two planner runs to show attribution.</div>';
+    root.innerHTML = '<div class="muted">Run the planner once (OUT - History) to compare live sheet vs last snapshot.</div>';
     return;
   }
 
