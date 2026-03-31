@@ -32,8 +32,9 @@ function buildDashboardSnapshot_() {
 
   const netWorth = round2_(investments + houseValues - totalDebt);
 
-  const historySnapshots = getLatestHistorySnapshots_(1);
+  const historySnapshots = getLatestHistorySnapshots_(2);
   const latestHistory = historySnapshots.length ? historySnapshots[0] : null;
+  const previousHistory = historySnapshots.length > 1 ? historySnapshots[1] : null;
   const propertyBaseline = getDashboardBaselineSnapshot_();
 
   const deltas = latestHistory
@@ -64,13 +65,7 @@ function buildDashboardSnapshot_() {
   const retirement = getRetirementSummarySafe_();
 
   const bufferRunway = buildBufferRunway_(latestMetrics, cash);
-  const attribution = buildNetWorthAttributionLiveVsLatest_(
-    investments,
-    houseValues,
-    totalDebt,
-    netWorth,
-    latestHistory
-  );
+  const attribution = buildNetWorthAttribution_(latestHistory, previousHistory);
   const health = buildFinancialHealthScore_(latestMetrics, previousMetrics, upcoming);
   const issues = buildDashboardIssues_(ss, {
     cash: cash,
@@ -218,46 +213,35 @@ function getPlannerHistoryMetricsByOffset_(offsetFromLatest) {
   };
 }
 
-function buildNetWorthAttributionLiveVsLatest_(investments, houseValues, totalDebt, netWorth, latestHistory) {
-  if (!latestHistory) return null;
-
-  const vsLabel = latestHistory.runLabel || latestHistory.runDate || 'Latest planner run';
-
-  const li = Number(latestHistory.investments || 0);
-  const lh = Number(latestHistory.houseValues || 0);
-  const ld = Number(latestHistory.debt || 0);
-  const ln = Number(latestHistory.netWorth || 0);
+function buildNetWorthAttribution_(latest, previous) {
+  if (!latest || !previous) return null;
 
   const items = [
     {
       key: 'financialAssets',
       label: 'Financial Assets',
-      value: round2_(investments - li),
-      baselineLabel: vsLabel
+      value: round2_(latest.investments - previous.investments)
     },
     {
       key: 'realEstate',
       label: 'Real Estate Value',
-      value: round2_(houseValues - lh),
-      baselineLabel: vsLabel
+      value: round2_(latest.houseValues - previous.houseValues)
     },
     {
       key: 'liabilities',
       label: 'Total Liabilities',
-      value: round2_(totalDebt - ld),
-      baselineLabel: vsLabel
+      value: round2_(previous.debt - latest.debt)
     },
     {
       key: 'netWorth',
       label: 'Net Worth',
-      value: round2_(netWorth - ln),
-      baselineLabel: vsLabel
+      value: round2_(latest.netWorth - previous.netWorth)
     }
   ];
 
   return {
-    baselineLabel: vsLabel,
-    latestLabel: vsLabel,
+    baselineLabel: previous.runLabel || previous.runDate || 'Previous planner run',
+    latestLabel: latest.runLabel || latest.runDate || 'Latest planner run',
     items: items
   };
 }
