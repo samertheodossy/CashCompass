@@ -112,10 +112,30 @@ function quickAddPayment(payload) {
 
   const newValue = round2_(toNumber_(sheet.getRange(rowInfo.row, monthCol).getValue()));
 
+  const debtBalanceNote = adjustDebtsBalanceAfterQuickPayment_(ss, payee, entryType, amount);
+
   touchDashboardSourceUpdated_('quick_payment');
   touchDashboardSourceUpdated_('cash_flow');
 
   const monthLabel = Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'MMM-yy');
+
+  let message =
+    'Payment added.\n' +
+    'Sheet: ' + sheet.getName() + '\n' +
+    'Month: ' + monthLabel + '\n' +
+    'Payee: ' + payee + '\n' +
+    'Previous value: ' + fmtCurrency_(previousValue) + '\n' +
+    'Added: ' + fmtCurrency_(signedAmount) + '\n' +
+    'New value: ' + fmtCurrency_(newValue);
+
+  if (debtBalanceNote) {
+    message +=
+      '\nDebts: Account Balance ' +
+      fmtCurrency_(debtBalanceNote.previousBalance) +
+      ' → ' +
+      fmtCurrency_(debtBalanceNote.newBalance) +
+      ' (INPUT - Debts).';
+  }
 
   return {
     ok: true,
@@ -125,15 +145,62 @@ function quickAddPayment(payload) {
       currentValue: newValue,
       rowExists: true
     },
-    message:
-      'Payment added.\n' +
-      'Sheet: ' + sheet.getName() + '\n' +
-      'Month: ' + monthLabel + '\n' +
-      'Payee: ' + payee + '\n' +
-      'Previous value: ' + fmtCurrency_(previousValue) + '\n' +
-      'Added: ' + fmtCurrency_(signedAmount) + '\n' +
-      'New value: ' + fmtCurrency_(newValue)
+    message: message
   };
+}
+
+/**
+ * For Expense quick payments whose payee matches INPUT - Debts (normalized name),
+ * reduce Account Balance by the payment amount, floored at 0.
+ * Skips Type Loan and HELOC (payment vs principal rules differ; revisit later).
+ */
+function adjustDebtsBalanceAfterQuickPayment_(ss, payee, entryType, paymentAmount) {
+  if (entryType !== 'Expense') return null;
+
+  const normPayee = normalizeBillName_(payee);
+  const debtSheet = getSheet_(ss, 'DEBTS');
+  const headerMap = getDebtsHeaderMap_(debtSheet);
+  if (headerMap.balanceCol === -1) return null;
+
+  const display = debtSheet.getDataRange().getDisplayValues();
+  const values = debtSheet.getDataRange().getValues();
+
+  for (let r = 1; r < display.length; r++) {
+    const name = String(display[r][headerMap.nameColZero] || '').trim();
+    if (!name || isDebtSummaryRowName_(name)) continue;
+    if (normalizeBillName_(name) !== normPayee) continue;
+
+    const dType = String(display[r][headerMap.typeColZero] || '').trim();
+    if (isDebtTypeLoanOrHeloc_(dType)) return null;
+
+    const curBal = round2_(toNumber_(values[r][headerMap.balanceColZero]));
+    const newBal = Math.max(0, round2_(curBal - paymentAmount));
+    const targetRow = r + 1;
+    const targetCol = headerMap.balanceCol;
+
+    setCurrencyCellPreserveRowFormat_(debtSheet, targetRow, targetCol, newBal, 1);
+
+    recalcDebtPctAvailForRow_(debtSheet, targetRow, {
+      creditLimitCol: headerMap.creditLimitColZero,
+      creditLeftCol: headerMap.creditLeftColZero,
+      balanceCol: headerMap.balanceColZero,
+      pctAvailCol: headerMap.pctAvailColZero
+    });
+
+    touchDashboardSourceUpdated_('debts');
+
+    return {
+      previousBalance: curBal,
+      newBalance: newBal
+    };
+  }
+
+  return null;
+}
+
+function isDebtTypeLoanOrHeloc_(typeStr) {
+  const t = String(typeStr || '').trim().toLowerCase();
+  return t === 'loan' || t === 'heloc';
 }
 
 function findCashFlowRowByTypeAndPayee_(sheet, entryType, payee) {
