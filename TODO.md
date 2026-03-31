@@ -28,3 +28,4 @@ TO DO and issues I see in the testing
 	13.	We should split credit card into 2 parts
 	⁃	Normal ones I can use for everything 
 	⁃	Merchant Specific like HD/Lowes/Macys etc…
+    14. tune loans/HELOC (principal vs interest, or partial paydown rules) to reduce from Debts
