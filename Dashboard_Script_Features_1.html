@@ -685,6 +685,9 @@ function saveDebt() {
       setStatus('debt_status', res.message || 'Saved.', false);
       loadDebtFieldValue();
       refreshSnapshot();
+      loadUpcomingSection();
+      loadDashboardActionSections();
+      runDebtPlannerAfterQuickPayment_();
     })
     .withFailureHandler(function(err) {
       setStatus('debt_status', 'Error: ' + (err.message || String(err)), true);
