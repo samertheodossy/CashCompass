@@ -1,11 +1,7 @@
 # Next Task
 
-Refine Bills Due logic without breaking the rest of the app.
+Refine Debt logic to add a confirmation screen at the bottom like we did in the quick payment
 
 Focus:
-- fallback recurring logic for unmapped bills
-- current-cycle vs next-cycle handling
-
-Likely files:
-- dashboard_data.js
-- Dashboard_Script_BillsDue.html
+- display and confirmation cleanup
+- speed up the displays as well

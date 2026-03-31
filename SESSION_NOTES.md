@@ -1,0 +1,3 @@
+- sped up the quick payment / bill pay screen updates
+- fixed credit card logic to show even if value is 0
+- subtracted the payument for other than loans from the Debt page
