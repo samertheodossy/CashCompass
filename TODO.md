@@ -29,4 +29,5 @@ TO DO and issues I see in the testing
 	    ⁃	Normal ones I can use for everything 
 	    ⁃	Merchant Specific like HD/Lowes/Macys etc…
     14. tune loans/HELOC (principal vs interest, or partial paydown rules) to reduce from Debts
+	15. Need to hook up Tax workflow into the system
 
