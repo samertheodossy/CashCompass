@@ -879,16 +879,8 @@ function getRecurringBillsWithoutDueDateForDashboard() {
     if (mappedBills[normalizeBillName_(payee)]) continue;
     if (debtBills[normalizeBillName_(payee)]) continue;
 
-    let hasHistory = false;
-    for (let c = 2; c < currentHeaders.length; c++) {
-      if (c === currentMonthCol) continue;
-      const val = toNumber_(currentValues[r][c]);
-      if (!isNaN(val) && val !== 0) {
-        hasHistory = true;
-        break;
-      }
-    }
-    if (!hasHistory) continue;
+    /* hasHistory gate removed: show unmapped expenses even when only the current month has activity.
+       Revert: require non-zero in some month column other than currentMonthCol before currentCellValue. */
 
     const currentCellValue = currentValues[r][currentMonthCol];
     const currentCellDisplay = currentDisplay[r][currentMonthCol];
