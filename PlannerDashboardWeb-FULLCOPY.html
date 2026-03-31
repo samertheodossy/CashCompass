@@ -1623,15 +1623,6 @@ function saveDebt() {
       setStatus('debt_status', res.message || 'Saved.', false);
       loadDebtFieldValue();
       refreshSnapshot();
-      loadUpcomingSection();
-      google.script.run
-        .withSuccessHandler(function() {
-          refreshSnapshot();
-        })
-        .withFailureHandler(function(err) {
-          setStatus('planner_status', 'Planner error: ' + (err.message || String(err)), true);
-        })
-        .runDebtPlanner();
     })
     .withFailureHandler(function(err) { setStatus('debt_status', 'Error: ' + (err.message || String(err)), true); })
     .updateDebtField({

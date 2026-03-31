@@ -194,11 +194,6 @@ function save() {
     .withSuccessHandler(function(res) {
       setStatus(res.message || 'Saved.');
       loadFieldValue();
-      google.script.run
-        .withFailureHandler(function(err) {
-          setStatus('Planner error: ' + (err.message || String(err)), true);
-        })
-        .runDebtPlanner();
     })
     .withFailureHandler(function(err) {
       setStatus('Error: ' + (err.message || String(err)), true);

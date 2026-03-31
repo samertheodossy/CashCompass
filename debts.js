@@ -146,10 +146,11 @@ function updateDebtField(payload) {
   });
 
   touchDashboardSourceUpdated_('debts');
+  if (typeof runDebtPlanner === 'function') runDebtPlanner();
 
   return {
     ok: true,
-    message: 'Debt updated.'
+    message: 'Debt updated and planner refreshed.'
   };
 }
 
