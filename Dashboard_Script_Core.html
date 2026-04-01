@@ -177,10 +177,22 @@ function applySnapshot(snapshot) {
   document.getElementById('snap_netWorth').textContent = fmtCurrency(snapshot.netWorth);
   document.getElementById('snap_refreshedAt').textContent = snapshot.refreshedAt || '—';
 
-  document.getElementById('snap_delta_cash').textContent = fmtDelta(deltas ? deltas.cash : null, baselineLabel);
-  document.getElementById('snap_delta_investments').textContent = fmtDelta(deltas ? deltas.investments : null, baselineLabel);
-  document.getElementById('snap_delta_houseEquity').textContent = fmtDelta(deltas ? deltas.houseEquity : null, baselineLabel);
-  document.getElementById('snap_delta_debt').textContent = fmtDelta(deltas ? deltas.debt : null, baselineLabel);
+  document.getElementById('snap_delta_cash').textContent = fmtPriorMonthDelta(
+    deltas ? deltas.cash : null,
+    deltas && deltas.cashMoMLabel ? deltas.cashMoMLabel : ''
+  );
+  document.getElementById('snap_delta_investments').textContent = fmtPriorMonthDelta(
+    deltas ? deltas.investments : null,
+    deltas && deltas.investmentsMoMLabel ? deltas.investmentsMoMLabel : ''
+  );
+  document.getElementById('snap_delta_houseEquity').textContent = fmtPriorMonthDelta(
+    deltas ? deltas.houseEquity : null,
+    deltas && deltas.houseValuesMoMLabel ? deltas.houseValuesMoMLabel : ''
+  );
+  document.getElementById('snap_delta_debt').textContent = fmtPriorMonthDelta(
+    deltas ? deltas.debt : null,
+    deltas && deltas.debtMoMLabel ? deltas.debtMoMLabel : ''
+  );
   document.getElementById('snap_delta_netWorth').textContent = fmtDelta(deltas ? deltas.netWorth : null, baselineLabel);
 
   renderSourceUpdated(snapshot.sourceUpdated);

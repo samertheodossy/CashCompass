@@ -279,3 +279,42 @@ function getHouseAssetsHeaderMap_(sheet) {
     valueCol: valueColZero + 1
   };
 }
+
+/**
+ * Sums INPUT - House Values for the prior calendar month (script timezone) for all data rows.
+ * Pairs with SYS - House Assets total (Current Value) on the dashboard Real Estate card.
+ */
+function getPriorMonthHouseValuesTotalFromHouseValuesInput_() {
+  const tz = Session.getScriptTimeZone();
+  const now = new Date();
+  const parts = Utilities.formatDate(now, tz, 'yyyy-MM-dd').split('-');
+  const curY = parseInt(parts[0], 10);
+  const curM = parseInt(parts[1], 10);
+  var prevY = curY;
+  var prevM = curM - 1;
+  if (prevM < 1) {
+    prevM = 12;
+    prevY -= 1;
+  }
+  const monthIndexZero = prevM - 1;
+  const year = prevY;
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = getSheet_(ss, 'HOUSE_VALUES');
+    const block = getHouseValuesYearBlock_(sheet, year);
+    const refDate = new Date(year, monthIndexZero, 15);
+    const monthCol = getMonthColumnByDate_(sheet, refDate, block.headerRow);
+    var sum = 0;
+    for (var row = block.dataStartRow; row <= block.dataEndRow; row++) {
+      var name = String(sheet.getRange(row, 1).getDisplayValue() || '').trim();
+      var sub = String(sheet.getRange(row, 2).getDisplayValue() || '').trim();
+      if (!isHouseDataRowName_(name, sub)) continue;
+      sum += toNumber_(sheet.getRange(row, monthCol).getValue());
+    }
+    var label = Utilities.formatDate(new Date(year, monthIndexZero, 1), tz, 'MMM yyyy');
+    return { total: round2_(sum), label: label };
+  } catch (e) {
+    return { total: null, label: '' };
+  }
+}

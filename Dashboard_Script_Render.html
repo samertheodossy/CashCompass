@@ -384,8 +384,14 @@ function applySnapshot(snapshot) {
     'snap_delta_investments',
     fmtPriorMonthDelta(deltas ? deltas.investments : null, deltas && deltas.investmentsMoMLabel ? deltas.investmentsMoMLabel : '')
   );
-  set('snap_delta_houseEquity', fmtDelta(deltas ? deltas.houseEquity : null, baselineLabel));
-  set('snap_delta_debt', fmtDelta(deltas ? deltas.debt : null, baselineLabel));
+  set(
+    'snap_delta_houseEquity',
+    fmtPriorMonthDelta(deltas ? deltas.houseEquity : null, deltas && deltas.houseValuesMoMLabel ? deltas.houseValuesMoMLabel : '')
+  );
+  set(
+    'snap_delta_debt',
+    fmtPriorMonthDelta(deltas ? deltas.debt : null, deltas && deltas.debtMoMLabel ? deltas.debtMoMLabel : '')
+  );
   set('snap_delta_netWorth', fmtDelta(deltas ? deltas.netWorth : null, baselineLabel));
 
   renderSourceUpdated(snapshot.sourceUpdated);

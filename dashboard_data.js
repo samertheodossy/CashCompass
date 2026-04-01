@@ -82,6 +82,30 @@ function buildDashboardSnapshot_() {
     }
   }
 
+  const housePrior = getPriorMonthHouseValuesTotalFromHouseValuesInput_();
+  if (housePrior && housePrior.total !== null) {
+    if (!deltas) deltas = {};
+    deltas.houseEquity = round2_(houseValues - housePrior.total);
+    deltas.houseValuesMoMLabel = housePrior.label;
+  } else {
+    if (deltas) {
+      deltas.houseEquity = null;
+      deltas.houseValuesMoMLabel = null;
+    }
+  }
+
+  const debtPrior = getPriorMonthTotalDebtFromHistory_();
+  if (debtPrior && debtPrior.total !== null) {
+    if (!deltas) deltas = {};
+    deltas.debt = round2_(totalDebt - debtPrior.total);
+    deltas.debtMoMLabel = debtPrior.label;
+  } else {
+    if (deltas) {
+      deltas.debt = null;
+      deltas.debtMoMLabel = null;
+    }
+  }
+
   const latestMetrics = getLatestPlannerHistoryMetrics_();
   const previousMetrics = getPreviousPlannerHistoryMetrics_();
   const upcoming = getUpcomingExpenseMetricsSafe_();
@@ -178,6 +202,44 @@ function getLatestHistorySnapshots_(count) {
   }
 
   return out;
+}
+
+/**
+ * INPUT - Debts has no monthly columns; use the latest OUT - History row whose Run Date
+ * falls in the prior calendar month (script timezone) for Total Liabilities.
+ */
+function getPriorMonthTotalDebtFromHistory_() {
+  const tz = Session.getScriptTimeZone();
+  const now = new Date();
+  const parts = Utilities.formatDate(now, tz, 'yyyy-MM-dd').split('-');
+  const curY = parseInt(parts[0], 10);
+  const curM = parseInt(parts[1], 10);
+  var prevY = curY;
+  var prevM = curM - 1;
+  if (prevM < 1) {
+    prevM = 12;
+    prevY -= 1;
+  }
+  const targetMonthIndex = prevM - 1;
+
+  const rows = getAllHistorySnapshotRows_();
+  var best = null;
+  var bestTime = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var d = r.runDate;
+    if (d.getFullYear() !== prevY || d.getMonth() !== targetMonthIndex) continue;
+    var t = d.getTime();
+    if (t > bestTime) {
+      bestTime = t;
+      best = r;
+    }
+  }
+  if (!best) {
+    return { total: null, label: '' };
+  }
+  var label = Utilities.formatDate(new Date(prevY, targetMonthIndex, 1), tz, 'MMM yyyy');
+  return { total: best.debt, label: label };
 }
 
 function stripDateOnly_(d) {
