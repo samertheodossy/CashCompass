@@ -108,6 +108,15 @@ function fmtDelta(value, baselineLabel) {
   return 'Change since ' + label + ': ' + sign + fmtCurrency(num);
 }
 
+function fmtInvestmentsDelta(value, monthLabel) {
+  if (value === null || value === undefined) return 'Change vs prior month: —';
+  const num = Number(value);
+  if (isNaN(num)) return 'Change vs prior month: —';
+  const label = monthLabel ? String(monthLabel) : 'prior month';
+  const sign = num > 0 ? '+' : '';
+  return 'Change vs ' + label + ': ' + sign + fmtCurrency(num);
+}
+
 function fmtSignedCurrency(value) {
   if (value === null || value === undefined || isNaN(Number(value))) return '—';
   const num = Number(value);
@@ -368,7 +377,10 @@ function applySnapshot(snapshot) {
   set('snap_refreshedAt', snapshot.refreshedAt || '—');
 
   set('snap_delta_cash', fmtDelta(deltas ? deltas.cash : null, baselineLabel));
-  set('snap_delta_investments', fmtDelta(deltas ? deltas.investments : null, baselineLabel));
+  set(
+    'snap_delta_investments',
+    fmtInvestmentsDelta(deltas ? deltas.investments : null, deltas && deltas.investmentsMoMLabel ? deltas.investmentsMoMLabel : '')
+  );
   set('snap_delta_houseEquity', fmtDelta(deltas ? deltas.houseEquity : null, baselineLabel));
   set('snap_delta_debt', fmtDelta(deltas ? deltas.debt : null, baselineLabel));
   set('snap_delta_netWorth', fmtDelta(deltas ? deltas.netWorth : null, baselineLabel));

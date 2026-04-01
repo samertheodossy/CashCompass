@@ -36,7 +36,7 @@ function buildDashboardSnapshot_() {
   const latestHistory = historySnapshots.length ? historySnapshots[0] : null;
   const propertyBaseline = getDashboardBaselineSnapshot_();
 
-  const deltas = latestHistory
+  let deltas = latestHistory
     ? {
         cash: null,
         investments: round2_(investments - Number(latestHistory.investments || 0)),
@@ -57,6 +57,18 @@ function buildDashboardSnapshot_() {
           baselineSource: 'baseline'
         }
       : null);
+
+  const invPrior = getPriorMonthInvestmentsTotalFromInput_();
+  if (invPrior && invPrior.total !== null) {
+    if (!deltas) deltas = {};
+    deltas.investments = round2_(investments - invPrior.total);
+    deltas.investmentsMoMLabel = invPrior.label;
+  } else {
+    if (deltas) {
+      deltas.investments = null;
+      deltas.investmentsMoMLabel = null;
+    }
+  }
 
   const latestMetrics = getLatestPlannerHistoryMetrics_();
   const previousMetrics = getPreviousPlannerHistoryMetrics_();
