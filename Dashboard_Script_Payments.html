@@ -9,6 +9,26 @@ function syncPaymentPayeeInput() {
   document.getElementById('pay_payeeInput').value = selected;
 }
 
+function applyQuickPaymentPriorMonth_(data) {
+  const labelEl = document.getElementById('pay_priorMonthLabel');
+  const valEl = document.getElementById('pay_priorMonthPayment');
+  if (!valEl) return;
+  if (labelEl) labelEl.textContent = data && data.priorMonthLabel ? data.priorMonthLabel : '—';
+  if (!data) {
+    valEl.textContent = '—';
+    return;
+  }
+  if (data.priorMonthUnavailableMessage) {
+    valEl.textContent = data.priorMonthUnavailableMessage;
+    return;
+  }
+  if (data.priorMonthValue !== null && data.priorMonthValue !== undefined && data.priorMonthValue !== '') {
+    valEl.textContent = fmtCurrency(data.priorMonthValue);
+  } else {
+    valEl.textContent = '—';
+  }
+}
+
 function prefillQuickPayment(prefill) {
   if (!prefill) return;
 
@@ -102,6 +122,7 @@ function loadPaymentPreview() {
     document.getElementById('pay_monthName').textContent = '—';
     document.getElementById('pay_currentValue').textContent = '—';
     document.getElementById('pay_rowExists').textContent = '—';
+    applyQuickPaymentPriorMonth_(null);
     return;
   }
 
@@ -111,6 +132,7 @@ function loadPaymentPreview() {
       document.getElementById('pay_monthName').textContent = data.month || '—';
       document.getElementById('pay_currentValue').textContent = fmtCurrency(data.currentValue);
       document.getElementById('pay_rowExists').textContent = data.rowExists ? 'Yes' : 'No';
+      applyQuickPaymentPriorMonth_(data);
     })
     .withFailureHandler(function(err) {
       setStatus('pay_status', 'Error: ' + (err.message || String(err)), true);
@@ -124,6 +146,7 @@ function applyQuickAddPreviewFromResult_(data) {
   document.getElementById('pay_monthName').textContent = data.month || '—';
   document.getElementById('pay_currentValue').textContent = fmtCurrency(data.currentValue);
   document.getElementById('pay_rowExists').textContent = data.rowExists ? 'Yes' : 'No';
+  applyQuickPaymentPriorMonth_(data);
 }
 
 function runDebtPlannerAfterQuickPayment_() {

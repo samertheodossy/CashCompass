@@ -40,6 +40,66 @@ function getQuickAddPaymentUiData() {
   };
 }
 
+/**
+ * Prior calendar month cell for same Type + Payee on the Cash Flow tab for that calendar year.
+ *
+ * Each tab is one year: INPUT - Cash Flow YYYY has month columns Jan-YY … Dec-YY for that year only.
+ * So for a January date, "last month" is December of the *previous* year → that month lives on
+ * INPUT - Cash Flow (year−1), not on the current year’s tab. A payee row must exist on that tab
+ * (same Type + Payee text) or there is nothing to read.
+ */
+function computeQuickAddPriorMonthPreview_(ss, entryType, payee, entryDate) {
+  const prior = new Date(entryDate.getFullYear(), entryDate.getMonth() - 1, 15);
+  const priorMonthLabel = Utilities.formatDate(prior, Session.getScriptTimeZone(), 'MMM-yy');
+  const priorYear = prior.getFullYear();
+  const priorTabName = getCashFlowSheetName_(priorYear);
+
+  var priorSheet;
+  try {
+    priorSheet = getCashFlowSheet_(ss, priorYear);
+  } catch (e) {
+    return {
+      priorMonthLabel: priorMonthLabel,
+      priorMonthValue: null,
+      priorMonthUnavailableMessage:
+        'Missing tab "' +
+        priorTabName +
+        '" — last month (' +
+        priorMonthLabel +
+        ') is stored there, not on the current year’s cash flow sheet.'
+    };
+  }
+
+  const rowPrior = findCashFlowRowByTypeAndPayee_(priorSheet, entryType, payee);
+  if (!rowPrior) {
+    return {
+      priorMonthLabel: priorMonthLabel,
+      priorMonthValue: null,
+      priorMonthUnavailableMessage:
+        'No row for this payee on "' +
+        priorTabName +
+        '" — last month’s amount is read from that tab (e.g. new payee this year or renamed payee).'
+    };
+  }
+
+  try {
+    const priorMonthCol = getMonthColumnByDate_(priorSheet, prior, 1);
+    const priorMonthValue = round2_(toNumber_(priorSheet.getRange(rowPrior.row, priorMonthCol).getValue()));
+    return {
+      priorMonthLabel: priorMonthLabel,
+      priorMonthValue: priorMonthValue,
+      priorMonthUnavailableMessage: null
+    };
+  } catch (e) {
+    return {
+      priorMonthLabel: priorMonthLabel,
+      priorMonthValue: null,
+      priorMonthUnavailableMessage:
+        'Could not find column ' + priorMonthLabel + ' on "' + priorSheet.getName() + '".'
+    };
+  }
+}
+
 function getQuickAddPreview(payload) {
   validateRequired_(payload, ['entryType', 'payee', 'entryDate']);
 
@@ -65,11 +125,16 @@ function getQuickAddPreview(payload) {
     currentValue = round2_(toNumber_(sheet.getRange(rowInfo.row, monthCol).getValue()));
   }
 
+  const priorPreview = computeQuickAddPriorMonthPreview_(ss, entryType, payee, entryDate);
+
   return {
     sheetName: sheet.getName(),
     month: Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'MMM-yy'),
     currentValue: currentValue,
-    rowExists: !!rowInfo
+    rowExists: !!rowInfo,
+    priorMonthLabel: priorPreview.priorMonthLabel,
+    priorMonthValue: priorPreview.priorMonthValue,
+    priorMonthUnavailableMessage: priorPreview.priorMonthUnavailableMessage
   };
 }
 
@@ -119,6 +184,8 @@ function quickAddPayment(payload) {
 
   const monthLabel = Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'MMM-yy');
 
+  const priorPreview = computeQuickAddPriorMonthPreview_(ss, entryType, payee, entryDate);
+
   let message =
     'Payment added.\n' +
     'Sheet: ' + sheet.getName() + '\n' +
@@ -143,7 +210,10 @@ function quickAddPayment(payload) {
       sheetName: sheet.getName(),
       month: monthLabel,
       currentValue: newValue,
-      rowExists: true
+      rowExists: true,
+      priorMonthLabel: priorPreview.priorMonthLabel,
+      priorMonthValue: priorPreview.priorMonthValue,
+      priorMonthUnavailableMessage: priorPreview.priorMonthUnavailableMessage
     },
     message: message
   };

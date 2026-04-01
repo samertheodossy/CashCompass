@@ -79,6 +79,8 @@
   <div><strong>Month:</strong> <span id="monthName" class="muted">—</span></div>
   <div><strong>Current value in cell:</strong> <span id="currentValue" class="muted">—</span></div>
   <div><strong>Existing row:</strong> <span id="rowExists" class="muted">—</span></div>
+  <div class="house-value-delta-sep" aria-hidden="true" style="border-top:1px solid #cbd5e1;margin:12px 0 10px;"></div>
+  <div><strong>Last month's payment (<span id="priorMonthLabel">—</span>):</strong> <span id="priorMonthPayment" class="muted">—</span></div>
 </div>
 
 <button onclick="save()">Add Payment</button>
@@ -168,6 +170,26 @@ function syncPayeeInput() {
   document.getElementById('payeeInput').value = selected;
 }
 
+function applyPriorMonthPreview_(data) {
+  const labelEl = document.getElementById('priorMonthLabel');
+  const valEl = document.getElementById('priorMonthPayment');
+  if (!valEl) return;
+  if (labelEl) labelEl.textContent = data && data.priorMonthLabel ? data.priorMonthLabel : '—';
+  if (!data) {
+    valEl.textContent = '—';
+    return;
+  }
+  if (data.priorMonthUnavailableMessage) {
+    valEl.textContent = data.priorMonthUnavailableMessage;
+    return;
+  }
+  if (data.priorMonthValue !== null && data.priorMonthValue !== undefined && data.priorMonthValue !== '') {
+    valEl.textContent = fmtCurrency(data.priorMonthValue);
+  } else {
+    valEl.textContent = '—';
+  }
+}
+
 function filterPayees() {
   const type = document.getElementById('entryType').value;
   const sel = document.getElementById('payeeSelect');
@@ -209,6 +231,7 @@ function loadPreview() {
     document.getElementById('monthName').textContent = '—';
     document.getElementById('currentValue').textContent = '—';
     document.getElementById('rowExists').textContent = '—';
+    applyPriorMonthPreview_(null);
     return;
   }
 
@@ -218,6 +241,7 @@ function loadPreview() {
       document.getElementById('monthName').textContent = data.month || '—';
       document.getElementById('currentValue').textContent = fmtCurrency(data.currentValue);
       document.getElementById('rowExists').textContent = data.rowExists ? 'Yes' : 'No';
+      applyPriorMonthPreview_(data);
     })
     .withFailureHandler(function(err) {
       setStatus('Error: ' + (err.message || String(err)), true);
@@ -231,6 +255,7 @@ function applyQuickAddPreviewFromResult_(data) {
   document.getElementById('monthName').textContent = data.month || '—';
   document.getElementById('currentValue').textContent = fmtCurrency(data.currentValue);
   document.getElementById('rowExists').textContent = data.rowExists ? 'Yes' : 'No';
+  applyPriorMonthPreview_(data);
 }
 
 function save() {
