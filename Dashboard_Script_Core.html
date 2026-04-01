@@ -1,3 +1,13 @@
+function fmtHealthTrendPoints(change, monthLabel) {
+  if (change === null || change === undefined) return 'Change vs prior month: —';
+  const num = Number(change);
+  if (isNaN(num)) return 'Change vs prior month: —';
+  const label = monthLabel ? String(monthLabel) : 'prior month';
+  const sign = num > 0 ? '+' : '';
+  const pts = Math.round(num);
+  return 'Change vs ' + label + ': ' + sign + pts + ' pts';
+}
+
 function renderSourceUpdated(sourceUpdated) {
   sourceUpdated = sourceUpdated || {};
   document.getElementById('house_updated').textContent = sourceUpdated.house_values || '—';
@@ -146,10 +156,9 @@ function renderHealth(health) {
   else fillEl.style.width = Math.max(0, Math.min(100, Number(score))) + '%';
 
   if (health.trend && health.trend.change !== null && health.trend.change !== undefined) {
-    const sign = health.trend.change > 0 ? '+' : '';
-    trendEl.textContent = 'Trend: ' + sign + health.trend.change + ' vs ' + (health.trend.previousLabel || 'prior run');
+    trendEl.textContent = fmtHealthTrendPoints(health.trend.change, health.trend.monthLabel || '');
   } else {
-    trendEl.textContent = 'Trend: —';
+    trendEl.textContent = 'Change vs prior month: —';
   }
 
   const drivers = health.drivers || [];

@@ -128,7 +128,6 @@ function buildDashboardSnapshot_() {
   }
 
   const latestMetrics = getLatestPlannerHistoryMetrics_();
-  const previousMetrics = getPreviousPlannerHistoryMetrics_();
   const upcoming = getUpcomingExpenseMetricsSafe_();
   const retirement = getRetirementSummarySafe_();
 
@@ -144,7 +143,7 @@ function buildDashboardSnapshot_() {
     },
     weeklyPick
   );
-  const health = buildFinancialHealthScore_(latestMetrics, previousMetrics, upcoming);
+  const health = buildFinancialHealthScore_(latestMetrics, upcoming);
   const issues = buildDashboardIssues_(ss, {
     cash: cash,
     investments: investments,
@@ -446,15 +445,7 @@ function getPreviousPlannerHistoryMetrics_() {
   return getPlannerHistoryMetricsByOffset_(1);
 }
 
-function getPlannerHistoryMetricsByOffset_(offsetFromLatest) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('OUT - History');
-  if (!sheet) return null;
-
-  const values = sheet.getDataRange().getValues();
-  const display = sheet.getDataRange().getDisplayValues();
-  if (display.length < 2) return null;
-
+function readPlannerHistoryMetricsRow_(values, display, r) {
   const headers = display[0];
   const cols = {
     runDate: headers.indexOf('Run Date'),
@@ -474,20 +465,11 @@ function getPlannerHistoryMetricsByOffset_(offsetFromLatest) {
   };
 
   if (cols.runDate === -1) return null;
-
-  const validRows = [];
-  for (let r = values.length - 1; r >= 1; r--) {
-    const runDate = String(display[r][cols.runDate] || '').trim();
-    if (!runDate) continue;
-    validRows.push(r);
-  }
-
-  if (offsetFromLatest >= validRows.length) return null;
-
-  const r = validRows[offsetFromLatest];
+  const runDate = String(display[r][cols.runDate] || '').trim();
+  if (!runDate) return null;
 
   return {
-    runDate: String(display[r][cols.runDate] || '').trim(),
+    runDate: runDate,
     runLabel: cols.runLabel === -1 ? '' : String(display[r][cols.runLabel] || '').trim(),
     month: cols.month === -1 ? '' : String(display[r][cols.month] || '').trim(),
     mode: cols.mode === -1 ? '' : String(display[r][cols.mode] || '').trim(),
@@ -502,6 +484,80 @@ function getPlannerHistoryMetricsByOffset_(offsetFromLatest) {
     payoffTarget: cols.payoffTarget === -1 ? 0 : round2_(toNumber_(values[r][cols.payoffTarget])),
     payoffAll: cols.payoffAll === -1 ? 0 : round2_(toNumber_(values[r][cols.payoffAll]))
   };
+}
+
+function getPlannerHistoryMetricsByOffset_(offsetFromLatest) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('OUT - History');
+  if (!sheet) return null;
+
+  const values = sheet.getDataRange().getValues();
+  const display = sheet.getDataRange().getDisplayValues();
+  if (display.length < 2) return null;
+
+  const headers = display[0];
+  const runDateCol = headers.indexOf('Run Date');
+  if (runDateCol === -1) return null;
+
+  const validRows = [];
+  for (let r = values.length - 1; r >= 1; r--) {
+    const runDate = String(display[r][runDateCol] || '').trim();
+    if (!runDate) continue;
+    validRows.push(r);
+  }
+
+  if (offsetFromLatest >= validRows.length) return null;
+
+  const r = validRows[offsetFromLatest];
+  return readPlannerHistoryMetricsRow_(values, display, r);
+}
+
+/** Latest planner run in the prior calendar month (script TZ), for health score MoM. */
+function getPriorMonthPlannerHistoryMetrics_() {
+  const tz = Session.getScriptTimeZone();
+  const now = new Date();
+  const parts = Utilities.formatDate(now, tz, 'yyyy-MM-dd').split('-');
+  const curY = parseInt(parts[0], 10);
+  const curM = parseInt(parts[1], 10);
+  var prevY = curY;
+  var prevM = curM - 1;
+  if (prevM < 1) {
+    prevM = 12;
+    prevY -= 1;
+  }
+  const targetMonthIndex = prevM - 1;
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('OUT - History');
+  if (!sheet) return { metrics: null, label: '' };
+
+  const values = sheet.getDataRange().getValues();
+  const display = sheet.getDataRange().getDisplayValues();
+  if (display.length < 2) return { metrics: null, label: '' };
+
+  const headers = display[0];
+  const runDateCol = headers.indexOf('Run Date');
+  if (runDateCol === -1) return { metrics: null, label: '' };
+
+  var bestRow = -1;
+  var bestTime = 0;
+  for (var r = 1; r < values.length; r++) {
+    const runDateObj = parseHistoryRunDate_(values[r][runDateCol], display[r][runDateCol]);
+    if (!runDateObj) continue;
+    if (runDateObj.getFullYear() !== prevY || runDateObj.getMonth() !== targetMonthIndex) continue;
+    const t = runDateObj.getTime();
+    if (t > bestTime) {
+      bestTime = t;
+      bestRow = r;
+    }
+  }
+  if (bestRow === -1) return { metrics: null, label: '' };
+
+  const metrics = readPlannerHistoryMetricsRow_(values, display, bestRow);
+  if (!metrics) return { metrics: null, label: '' };
+
+  const label = Utilities.formatDate(new Date(prevY, targetMonthIndex, 1), tz, 'MMM yyyy');
+  return { metrics: metrics, label: label };
 }
 
 function buildBufferRunway_(latestMetrics, cash) {
@@ -541,7 +597,69 @@ function buildRunwayFromValues_(usableCash, projectedCashFlow) {
   };
 }
 
-function buildFinancialHealthScore_(latestMetrics, previousMetrics, upcoming) {
+function computeFinancialHealthScoreNumber_(metrics, upcomingData) {
+  let score = 100;
+  const drivers = [];
+  const upcoming = upcomingData || {
+    overduePlannedCount: 0,
+    overduePlannedAmount: 0,
+    next7PlannedAmount: 0,
+    next30PlannedAmount: 0
+  };
+
+  if (metrics.projectedCashFlow < 0) {
+    const penalty = Math.min(35, Math.ceil(Math.abs(metrics.projectedCashFlow) / 5000) * 5);
+    score -= penalty;
+    drivers.push('Projected cash flow is negative at ' + fmtCurrency_(metrics.projectedCashFlow) + '.');
+  } else {
+    drivers.push('Projected cash flow is positive at ' + fmtCurrency_(metrics.projectedCashFlow) + '.');
+  }
+
+  if (metrics.usableCash < 0) {
+    score -= 20;
+    drivers.push('Usable cash after buffers is negative.');
+  } else if (metrics.usableCash < 25000) {
+    score -= 10;
+    drivers.push('Usable cash after buffers is tight at ' + fmtCurrency_(metrics.usableCash) + '.');
+  } else {
+    drivers.push('Usable cash after buffers is healthy at ' + fmtCurrency_(metrics.usableCash) + '.');
+  }
+
+  const debtToAssets = metrics.totalAssets > 0 ? (metrics.totalDebt / metrics.totalAssets) : 0;
+  if (debtToAssets >= 0.50) {
+    score -= 20;
+    drivers.push('Debt is high relative to assets (' + round2_(debtToAssets * 100) + '%).');
+  } else if (debtToAssets >= 0.30) {
+    score -= 10;
+    drivers.push('Debt-to-assets ratio is elevated (' + round2_(debtToAssets * 100) + '%).');
+  }
+
+  if (metrics.ccDebt >= 100000) {
+    score -= 15;
+    drivers.push('Active credit card debt is very high at ' + fmtCurrency_(metrics.ccDebt) + '.');
+  } else if (metrics.ccDebt >= 50000) {
+    score -= 8;
+    drivers.push('Active credit card debt is elevated at ' + fmtCurrency_(metrics.ccDebt) + '.');
+  }
+
+  if (metrics.payoffAll >= 48) {
+    score -= 20;
+    drivers.push('Estimated payoff horizon is long at ' + round2_(metrics.payoffAll) + ' months.');
+  } else if (metrics.payoffAll >= 24) {
+    score -= 10;
+    drivers.push('Estimated payoff horizon is moderate at ' + round2_(metrics.payoffAll) + ' months.');
+  }
+
+  if (upcoming.overduePlannedCount > 0) {
+    score -= Math.min(10, upcoming.overduePlannedCount * 2);
+    drivers.push(upcoming.overduePlannedCount + ' overdue upcoming expense(s).');
+  }
+
+  score = Math.max(0, Math.min(100, round2_(score)));
+  return { score: score, drivers: drivers };
+}
+
+function buildFinancialHealthScore_(latestMetrics, upcoming) {
   if (!latestMetrics) {
     return {
       score: null,
@@ -554,8 +672,6 @@ function buildFinancialHealthScore_(latestMetrics, previousMetrics, upcoming) {
     };
   }
 
-  let score = 100;
-  const drivers = [];
   const upcomingData = upcoming || {
     overduePlannedCount: 0,
     overduePlannedAmount: 0,
@@ -563,55 +679,9 @@ function buildFinancialHealthScore_(latestMetrics, previousMetrics, upcoming) {
     next30PlannedAmount: 0
   };
 
-  if (latestMetrics.projectedCashFlow < 0) {
-    const penalty = Math.min(35, Math.ceil(Math.abs(latestMetrics.projectedCashFlow) / 5000) * 5);
-    score -= penalty;
-    drivers.push('Projected cash flow is negative at ' + fmtCurrency_(latestMetrics.projectedCashFlow) + '.');
-  } else {
-    drivers.push('Projected cash flow is positive at ' + fmtCurrency_(latestMetrics.projectedCashFlow) + '.');
-  }
-
-  if (latestMetrics.usableCash < 0) {
-    score -= 20;
-    drivers.push('Usable cash after buffers is negative.');
-  } else if (latestMetrics.usableCash < 25000) {
-    score -= 10;
-    drivers.push('Usable cash after buffers is tight at ' + fmtCurrency_(latestMetrics.usableCash) + '.');
-  } else {
-    drivers.push('Usable cash after buffers is healthy at ' + fmtCurrency_(latestMetrics.usableCash) + '.');
-  }
-
-  const debtToAssets = latestMetrics.totalAssets > 0 ? (latestMetrics.totalDebt / latestMetrics.totalAssets) : 0;
-  if (debtToAssets >= 0.50) {
-    score -= 20;
-    drivers.push('Debt is high relative to assets (' + round2_(debtToAssets * 100) + '%).');
-  } else if (debtToAssets >= 0.30) {
-    score -= 10;
-    drivers.push('Debt-to-assets ratio is elevated (' + round2_(debtToAssets * 100) + '%).');
-  }
-
-  if (latestMetrics.ccDebt >= 100000) {
-    score -= 15;
-    drivers.push('Active credit card debt is very high at ' + fmtCurrency_(latestMetrics.ccDebt) + '.');
-  } else if (latestMetrics.ccDebt >= 50000) {
-    score -= 8;
-    drivers.push('Active credit card debt is elevated at ' + fmtCurrency_(latestMetrics.ccDebt) + '.');
-  }
-
-  if (latestMetrics.payoffAll >= 48) {
-    score -= 20;
-    drivers.push('Estimated payoff horizon is long at ' + round2_(latestMetrics.payoffAll) + ' months.');
-  } else if (latestMetrics.payoffAll >= 24) {
-    score -= 10;
-    drivers.push('Estimated payoff horizon is moderate at ' + round2_(latestMetrics.payoffAll) + ' months.');
-  }
-
-  if (upcomingData.overduePlannedCount > 0) {
-    score -= Math.min(10, upcomingData.overduePlannedCount * 2);
-    drivers.push(upcomingData.overduePlannedCount + ' overdue upcoming expense(s).');
-  }
-
-  score = Math.max(0, Math.min(100, round2_(score)));
+  const current = computeFinancialHealthScoreNumber_(latestMetrics, upcomingData);
+  const score = current.score;
+  const drivers = current.drivers;
 
   let label = 'Critical';
   let color = 'bad';
@@ -630,12 +700,18 @@ function buildFinancialHealthScore_(latestMetrics, previousMetrics, upcoming) {
   }
 
   let trend = null;
-  if (previousMetrics) {
-    const priorScore = Number(previousMetrics.projectedCashFlow >= 0 ? 80 : 60);
+  const priorPack = getPriorMonthPlannerHistoryMetrics_();
+  if (priorPack.metrics) {
+    const emptyUpcoming = {
+      overduePlannedCount: 0,
+      overduePlannedAmount: 0,
+      next7PlannedAmount: 0,
+      next30PlannedAmount: 0
+    };
+    const prior = computeFinancialHealthScoreNumber_(priorPack.metrics, emptyUpcoming);
     trend = {
-      previousScore: priorScore,
-      change: round2_(score - priorScore),
-      previousLabel: previousMetrics.runLabel || previousMetrics.runDate || ''
+      change: round2_(score - prior.score),
+      monthLabel: priorPack.label
     };
   }
 
