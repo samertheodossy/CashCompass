@@ -91,14 +91,13 @@ function addUpcomingExpense(payload) {
   const expenseName = String(payload.expenseName || '').trim();
   const category = String(payload.category || '').trim();
   const payee = String(payload.payee || '').trim();
-  const dueDate = new Date(payload.dueDate);
+  const dueDate = parseIsoDateLocal_(payload.dueDate);
   const amount = round2_(toNumber_(payload.amount));
   const accountSource = String(payload.accountSource || '').trim();
   const notes = String(payload.notes || '').trim();
   const autoAddToCashFlow = payload.autoAddToCashFlow ? 'Yes' : 'No';
 
   if (!expenseName) throw new Error('Expense Name is required.');
-  if (isNaN(dueDate.getTime())) throw new Error('Invalid Due Date.');
   if (amount <= 0) throw new Error('Amount must be greater than 0.');
 
   const row = sheet.getLastRow() + 1;

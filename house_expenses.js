@@ -27,8 +27,7 @@ function addHouseExpense(payload) {
   const sheet = ss.getSheetByName(payload.house);
   if (!sheet) throw new Error('House sheet not found: ' + payload.house);
 
-  const parsedDate = new Date(payload.date);
-  if (isNaN(parsedDate.getTime())) throw new Error('Invalid date.');
+  const parsedDate = parseIsoDateLocal_(payload.date);
 
   const year = parsedDate.getFullYear();
   const yearInfo = findOrCreateHouseExpenseYearBlock_(sheet, year);

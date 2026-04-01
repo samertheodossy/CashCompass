@@ -77,8 +77,7 @@ function getBankAccountValueForDate(accountName, balanceDate) {
   const name = String(accountName || '').trim();
   if (!name) throw new Error('Account name is required.');
 
-  const d = new Date(balanceDate);
-  if (isNaN(d.getTime())) throw new Error('Invalid date.');
+  const d = parseIsoDateLocal_(balanceDate);
 
   const year = d.getFullYear();
   const monthValue = getBankAccountHistoryValueForMonth_(name, year, d);
@@ -114,14 +113,13 @@ function updateBankAccountValueByDate(payload) {
   validateRequired_(payload, ['accountName', 'balanceDate', 'currentValue']);
 
   const accountName = String(payload.accountName || '').trim();
-  const balanceDate = new Date(payload.balanceDate);
+  const balanceDate = parseIsoDateLocal_(payload.balanceDate);
   const currentValue = toNumber_(payload.currentValue);
 
   const updateAvailableNow = !!payload.updateAvailableNow;
   const updateMinBuffer = !!payload.updateMinBuffer;
 
   if (!accountName) throw new Error('Account name is required.');
-  if (isNaN(balanceDate.getTime())) throw new Error('Invalid balance date.');
 
   const year = balanceDate.getFullYear();
 

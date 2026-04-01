@@ -26,8 +26,7 @@ function getHouseValueForDate(house, valuationDate) {
   const houseName = String(house || '').trim();
   if (!houseName) throw new Error('House is required.');
 
-  const d = new Date(valuationDate);
-  if (isNaN(d.getTime())) throw new Error('Invalid date.');
+  const d = parseIsoDateLocal_(valuationDate);
 
   const year = d.getFullYear();
   const monthValue = getHouseValueFromHistoryForMonth_(houseName, year, d);
@@ -46,11 +45,10 @@ function updateHouseValueByDate(payload) {
   validateRequired_(payload, ['house', 'valuationDate', 'currentValue']);
 
   const house = String(payload.house || '').trim();
-  const valuationDate = new Date(payload.valuationDate);
+  const valuationDate = parseIsoDateLocal_(payload.valuationDate);
   const currentValue = toNumber_(payload.currentValue);
 
   if (!house) throw new Error('House is required.');
-  if (isNaN(valuationDate.getTime())) throw new Error('Invalid valuation date.');
   if (currentValue <= 0) throw new Error('Current value must be greater than 0.');
 
   const year = valuationDate.getFullYear();
