@@ -307,3 +307,41 @@ function getAccountsHeaderMap_(sheet) {
     policyCol: policyColZero === -1 ? -1 : policyColZero + 1
   };
 }
+
+/**
+ * Sums INPUT - Bank Accounts for the prior calendar month (script timezone) for all data rows.
+ * Used for dashboard "Total cash" change vs prior month (same pattern as investments).
+ */
+function getPriorMonthCashTotalFromBankInput_() {
+  const tz = Session.getScriptTimeZone();
+  const now = new Date();
+  const parts = Utilities.formatDate(now, tz, 'yyyy-MM-dd').split('-');
+  const curY = parseInt(parts[0], 10);
+  const curM = parseInt(parts[1], 10);
+  var prevY = curY;
+  var prevM = curM - 1;
+  if (prevM < 1) {
+    prevM = 12;
+    prevY -= 1;
+  }
+  const monthIndexZero = prevM - 1;
+  const year = prevY;
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = getSheet_(ss, 'BANK_ACCOUNTS');
+    const block = getBankAccountsYearBlock_(sheet, year);
+    const refDate = new Date(year, monthIndexZero, 15);
+    const monthCol = getMonthColumnByDate_(sheet, refDate, block.headerRow);
+    var sum = 0;
+    for (var row = block.dataStartRow; row <= block.dataEndRow; row++) {
+      var name = String(sheet.getRange(row, 1).getDisplayValue() || '').trim();
+      if (!isBankAccountDataRowName_(name)) continue;
+      sum += toNumber_(sheet.getRange(row, monthCol).getValue());
+    }
+    var label = Utilities.formatDate(new Date(year, monthIndexZero, 1), tz, 'MMM yyyy');
+    return { total: round2_(sum), label: label };
+  } catch (e) {
+    return { total: null, label: '' };
+  }
+}

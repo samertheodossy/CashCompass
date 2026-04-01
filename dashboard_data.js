@@ -70,6 +70,18 @@ function buildDashboardSnapshot_() {
     }
   }
 
+  const cashPrior = getPriorMonthCashTotalFromBankInput_();
+  if (cashPrior && cashPrior.total !== null) {
+    if (!deltas) deltas = {};
+    deltas.cash = round2_(cash - cashPrior.total);
+    deltas.cashMoMLabel = cashPrior.label;
+  } else {
+    if (deltas) {
+      deltas.cash = null;
+      deltas.cashMoMLabel = null;
+    }
+  }
+
   const latestMetrics = getLatestPlannerHistoryMetrics_();
   const previousMetrics = getPreviousPlannerHistoryMetrics_();
   const upcoming = getUpcomingExpenseMetricsSafe_();
