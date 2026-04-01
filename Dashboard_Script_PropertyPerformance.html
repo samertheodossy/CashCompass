@@ -1,0 +1,72 @@
+function loadPropertyPerformanceSection() {
+  const yearSel = document.getElementById('pp_year');
+  const year = yearSel && yearSel.value ? Number(yearSel.value) : new Date().getFullYear();
+
+  setStatus('pp_status', 'Loading…', false);
+  const msgEl = document.getElementById('pp_message');
+  if (msgEl) msgEl.textContent = '';
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      setStatus('pp_status', '', false);
+
+      if (data && data.yearOptions && yearSel) {
+        const currentVal = String(data.year);
+        yearSel.innerHTML = '';
+        (data.yearOptions || []).forEach(function(y) {
+          const opt = document.createElement('option');
+          opt.value = String(y);
+          opt.textContent = String(y);
+          if (String(y) === currentVal) opt.selected = true;
+          yearSel.appendChild(opt);
+        });
+      }
+
+      if (msgEl && data && data.message) {
+        msgEl.textContent = data.message;
+      }
+
+      const p = (data && data.portfolio) ? data.portfolio : {};
+      const setMini = function(id, v) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = fmtCurrency(v);
+      };
+      setMini('pp_port_equity', p.equity);
+      setMini('pp_port_rent', p.rent);
+      setMini('pp_port_exp', p.expenses);
+      setMini('pp_port_net', p.netCash);
+
+      const tbody = document.getElementById('pp_tbody');
+      if (!tbody) return;
+
+      const rows = (data && data.rows) ? data.rows : [];
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="muted" style="padding:12px;">No houses in SYS - House Assets.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = rows.map(function(row) {
+        const hs = row.hasHousesSheet ? 'Yes' : '—';
+        return (
+          '<tr>' +
+          '<td style="padding:8px;border-top:1px solid #e2e8f0;">' + escapeHtml(row.house) + '</td>' +
+          '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.currentValue) + '</td>' +
+          '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.loanAmount) + '</td>' +
+          '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.equity) + '</td>' +
+          '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.rent) + '</td>' +
+          '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.expenses) + '</td>' +
+          '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.netCash) + '</td>' +
+          '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:center;">' + escapeHtml(hs) + '</td>' +
+          '</tr>'
+        );
+      }).join('');
+    })
+    .withFailureHandler(function(err) {
+      setStatus('pp_status', 'Error: ' + (err.message || String(err)), true);
+      const tbody = document.getElementById('pp_tbody');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="8" class="muted" style="padding:12px;">Could not load.</td></tr>';
+      }
+    })
+    .getPropertyPerformanceData({ year: year });
+}

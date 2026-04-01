@@ -460,6 +460,7 @@
   <div id="page_properties" class="workspace-page">
     <div class="tabs properties-tabs">
       <button class="tab-btn active" data-tab="houseExpenses" onclick="showTab('houseExpenses')">House Expenses</button>
+      <button class="tab-btn" data-tab="propertyPerformance" onclick="showTab('propertyPerformance')">Property performance</button>
     </div>
 
     <div id="houseExpenses" class="panel active">
@@ -565,6 +566,66 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <div id="propertyPerformance" class="panel">
+      <div class="panel-head">
+        <h2>Property performance</h2>
+        <div class="updated">SYS - House Assets + Cash Flow rent + HOUSES expenses</div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>Year</label>
+          <select id="pp_year" onchange="loadPropertyPerformanceSection()"></select>
+          <button type="button" onclick="loadPropertyPerformanceSection()">Refresh</button>
+          <div id="pp_status" class="status"></div>
+          <div id="pp_message" class="muted" style="margin-top:8px;"></div>
+        </div>
+        <div class="mini-grid">
+          <div class="mini-card">
+            <div class="mini-card-title">Portfolio equity</div>
+            <div class="mini-card-value" id="pp_port_equity">—</div>
+          </div>
+          <div class="mini-card">
+            <div class="mini-card-title">Rent (year)</div>
+            <div class="mini-card-value" id="pp_port_rent">—</div>
+          </div>
+          <div class="mini-card">
+            <div class="mini-card-title">HOUSES expenses</div>
+            <div class="mini-card-value" id="pp_port_exp">—</div>
+          </div>
+          <div class="mini-card">
+            <div class="mini-card-title">Net (rent − expenses)</div>
+            <div class="mini-card-value" id="pp_port_net">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;margin-top:16px;">
+        <table id="pp_table" style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:8px;">House</th>
+              <th style="text-align:right;padding:8px;">Value</th>
+              <th style="text-align:right;padding:8px;">Loan</th>
+              <th style="text-align:right;padding:8px;">Equity</th>
+              <th style="text-align:right;padding:8px;">Rent</th>
+              <th style="text-align:right;padding:8px;">Expenses</th>
+              <th style="text-align:right;padding:8px;">Net</th>
+              <th style="text-align:center;padding:8px;">HOUSES sheet</th>
+            </tr>
+          </thead>
+          <tbody id="pp_tbody">
+            <tr><td colspan="8" class="muted" style="padding:12px;">Open this tab to load.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="muted" style="margin-top:12px;font-size:0.9em;">
+        Rent sums <strong>Income</strong> rows on <strong>INPUT - Cash Flow (year)</strong> whose Payee starts with <strong>Rent</strong> plus the same house name as in SYS - House Assets (e.g. <code>Rent Oakley House - …</code>).
+        Expenses sum <strong>Cost + Service Fees</strong> from the <strong>HOUSES - …</strong> sheet whose location matches that row (case/spacing-insensitive). If the tab is named differently from the House cell (e.g. <code>SD Condo</code> vs <code>San Diego House</code>), align the names or expenses stay $0 for that row.
+      </p>
     </div>
   </div>
 

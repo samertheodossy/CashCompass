@@ -47,8 +47,11 @@ function showTab(name) {
     showPage('assets');
   } else if (name === 'payments' || name === 'upcoming') {
     showPage('cashflow');
-  } else if (name === 'houseExpenses') {
+  } else if (name === 'houseExpenses' || name === 'propertyPerformance') {
     showPage('properties');
+    if (name === 'propertyPerformance' && typeof loadPropertyPerformanceSection === 'function') {
+      loadPropertyPerformanceSection();
+    }
   } else if (name === 'debts' || name === 'retirement' || name === 'purchase') {
     showPage('planning');
   }
