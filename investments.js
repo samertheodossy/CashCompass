@@ -84,12 +84,30 @@ function getInvestmentValueForDate(accountName, balanceDate) {
   const monthValue = getInvestmentHistoryValueForMonth_(name, year, d);
   const assetInfo = getAssetRowData_(name);
 
+  var previousMonthLabel = '';
+  var deltaFromPreviousMonth = null;
+  try {
+    const prior = new Date(d.getFullYear(), d.getMonth() - 1, 15);
+    const priorYear = prior.getFullYear();
+    const previousMonthValue = getInvestmentHistoryValueForMonth_(name, priorYear, prior);
+    previousMonthLabel = Utilities.formatDate(prior, Session.getScriptTimeZone(), 'MMM-yy');
+    const cur = Number(monthValue);
+    const prev = Number(previousMonthValue);
+    if (!isNaN(cur) && !isNaN(prev)) {
+      deltaFromPreviousMonth = round2_(cur - prev);
+    }
+  } catch (e) {
+    /* prior month block/column unavailable */
+  }
+
   return {
     accountName: name,
     selectedMonth: Utilities.formatDate(d, Session.getScriptTimeZone(), 'MMM-yy'),
     selectedMonthValue: monthValue,
     currentBalance: assetInfo ? assetInfo.currentBalance : '',
-    type: assetInfo ? assetInfo.type : ''
+    type: assetInfo ? assetInfo.type : '',
+    previousMonthLabel: previousMonthLabel,
+    deltaFromPreviousMonth: deltaFromPreviousMonth
   };
 }
 

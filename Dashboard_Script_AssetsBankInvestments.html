@@ -70,6 +70,8 @@ function loadBankData() {
     document.getElementById('bank_minBuffer').textContent = '—';
     document.getElementById('bank_type').textContent = '—';
     document.getElementById('bank_usePolicy').textContent = '—';
+    const bankDeltaEl = document.getElementById('bank_deltaPriorMonth');
+    if (bankDeltaEl) bankDeltaEl.textContent = '—';
     document.getElementById('bank_value').value = '';
     setWarning('bank_bufferWarning', '', '');
     return;
@@ -90,6 +92,13 @@ function loadBankData() {
         data.minBuffer !== '' ? fmtCurrency(data.minBuffer) : '—';
       document.getElementById('bank_type').textContent = data.type || '—';
       document.getElementById('bank_usePolicy').textContent = data.usePolicy || '—';
+      const bankDeltaEl = document.getElementById('bank_deltaPriorMonth');
+      if (bankDeltaEl) {
+        bankDeltaEl.textContent =
+          data.deltaFromPreviousMonth !== null && data.deltaFromPreviousMonth !== undefined
+            ? fmtSignedCurrency(data.deltaFromPreviousMonth)
+            : '—';
+      }
 
       if (data.selectedMonthValue !== '' && data.selectedMonthValue !== null) {
         setCurrencyInputValue('bank_value', data.selectedMonthValue);
@@ -161,6 +170,8 @@ function loadInvestmentData() {
     document.getElementById('inv_selectedMonthValue').textContent = '—';
     document.getElementById('inv_currentBalance').textContent = '—';
     document.getElementById('inv_type').textContent = '—';
+    const invDeltaEl = document.getElementById('inv_deltaPriorMonth');
+    if (invDeltaEl) invDeltaEl.textContent = '—';
     document.getElementById('inv_value').value = '';
     return;
   }
@@ -174,6 +185,13 @@ function loadInvestmentData() {
       document.getElementById('inv_currentBalance').textContent =
         data.currentBalance !== '' ? fmtCurrency(data.currentBalance) : '—';
       document.getElementById('inv_type').textContent = data.type || '—';
+      const invDeltaEl = document.getElementById('inv_deltaPriorMonth');
+      if (invDeltaEl) {
+        invDeltaEl.textContent =
+          data.deltaFromPreviousMonth !== null && data.deltaFromPreviousMonth !== undefined
+            ? fmtSignedCurrency(data.deltaFromPreviousMonth)
+            : '—';
+      }
 
       if (data.selectedMonthValue !== '' && data.selectedMonthValue !== null) {
         setCurrencyInputValue('inv_value', data.selectedMonthValue);

@@ -210,6 +210,8 @@
     <div><strong>Min buffer:</strong> <span id="bank_minBuffer" class="muted">—</span></div>
     <div><strong>Type:</strong> <span id="bank_type" class="muted">—</span></div>
     <div><strong>Use policy:</strong> <span id="bank_usePolicy" class="muted">—</span></div>
+    <div class="house-value-delta-sep" aria-hidden="true"></div>
+    <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="bank_deltaPriorMonth" class="muted">—</span></div>
   </div>
 
   <label>Value</label>
@@ -245,6 +247,8 @@
     <div><strong>Stored value for selected month:</strong> <span id="inv_selectedMonthValue" class="muted">—</span></div>
     <div><strong>Current SYS - Assets balance:</strong> <span id="inv_currentBalance" class="muted">—</span></div>
     <div><strong>Type:</strong> <span id="inv_type" class="muted">—</span></div>
+    <div class="house-value-delta-sep" aria-hidden="true"></div>
+    <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="inv_deltaPriorMonth" class="muted">—</span></div>
   </div>
 
   <label>Value</label>
@@ -550,6 +554,8 @@ function loadBankData() {
     document.getElementById('bank_minBuffer').textContent = '—';
     document.getElementById('bank_type').textContent = '—';
     document.getElementById('bank_usePolicy').textContent = '—';
+    const bankDeltaEl0 = document.getElementById('bank_deltaPriorMonth');
+    if (bankDeltaEl0) bankDeltaEl0.textContent = '—';
     document.getElementById('bank_value').value = '';
     setWarning('bank_bufferWarning', '', '');
     return;
@@ -567,6 +573,13 @@ function loadBankData() {
       document.getElementById('bank_minBuffer').textContent = data.minBuffer !== '' ? fmtCurrency(data.minBuffer) : '—';
       document.getElementById('bank_type').textContent = data.type || '—';
       document.getElementById('bank_usePolicy').textContent = data.usePolicy || '—';
+      const bankDeltaEl = document.getElementById('bank_deltaPriorMonth');
+      if (bankDeltaEl) {
+        bankDeltaEl.textContent =
+          data.deltaFromPreviousMonth !== null && data.deltaFromPreviousMonth !== undefined
+            ? fmtSignedCurrency(data.deltaFromPreviousMonth)
+            : '—';
+      }
 
       if (data.selectedMonthValue !== '' && data.selectedMonthValue !== null) {
         setCurrencyInputValue('bank_value', data.selectedMonthValue);
@@ -644,6 +657,8 @@ function loadInvestmentData() {
     document.getElementById('inv_selectedMonthValue').textContent = '—';
     document.getElementById('inv_currentBalance').textContent = '—';
     document.getElementById('inv_type').textContent = '—';
+    const invDeltaEl0 = document.getElementById('inv_deltaPriorMonth');
+    if (invDeltaEl0) invDeltaEl0.textContent = '—';
     document.getElementById('inv_value').value = '';
     return;
   }
@@ -656,6 +671,13 @@ function loadInvestmentData() {
       document.getElementById('inv_selectedMonthValue').textContent = data.selectedMonthValue !== '' ? fmtCurrency(data.selectedMonthValue) : '—';
       document.getElementById('inv_currentBalance').textContent = data.currentBalance !== '' ? fmtCurrency(data.currentBalance) : '—';
       document.getElementById('inv_type').textContent = data.type || '—';
+      const invDeltaEl = document.getElementById('inv_deltaPriorMonth');
+      if (invDeltaEl) {
+        invDeltaEl.textContent =
+          data.deltaFromPreviousMonth !== null && data.deltaFromPreviousMonth !== undefined
+            ? fmtSignedCurrency(data.deltaFromPreviousMonth)
+            : '—';
+      }
 
       if (data.selectedMonthValue !== '' && data.selectedMonthValue !== null) {
         setCurrencyInputValue('inv_value', data.selectedMonthValue);

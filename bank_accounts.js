@@ -83,6 +83,22 @@ function getBankAccountValueForDate(accountName, balanceDate) {
   const monthValue = getBankAccountHistoryValueForMonth_(name, year, d);
   const accountInfo = getAccountsRowData_(name);
 
+  var previousMonthLabel = '';
+  var deltaFromPreviousMonth = null;
+  try {
+    const prior = new Date(d.getFullYear(), d.getMonth() - 1, 15);
+    const priorYear = prior.getFullYear();
+    const previousMonthValue = getBankAccountHistoryValueForMonth_(name, priorYear, prior);
+    previousMonthLabel = Utilities.formatDate(prior, Session.getScriptTimeZone(), 'MMM-yy');
+    const cur = Number(monthValue);
+    const prev = Number(previousMonthValue);
+    if (!isNaN(cur) && !isNaN(prev)) {
+      deltaFromPreviousMonth = round2_(cur - prev);
+    }
+  } catch (e) {
+    /* prior month block/column unavailable */
+  }
+
   return {
     accountName: name,
     selectedMonth: Utilities.formatDate(d, Session.getScriptTimeZone(), 'MMM-yy'),
@@ -91,7 +107,9 @@ function getBankAccountValueForDate(accountName, balanceDate) {
     availableNow: accountInfo ? accountInfo.availableNow : '',
     minBuffer: accountInfo ? accountInfo.minBuffer : '',
     type: accountInfo ? accountInfo.type : '',
-    usePolicy: accountInfo ? accountInfo.usePolicy : ''
+    usePolicy: accountInfo ? accountInfo.usePolicy : '',
+    previousMonthLabel: previousMonthLabel,
+    deltaFromPreviousMonth: deltaFromPreviousMonth
   };
 }
 
