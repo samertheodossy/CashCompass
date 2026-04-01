@@ -30,7 +30,7 @@ function buildDashboardSnapshot_() {
   const houseEquity = round2_(houseValues - houseLoans);
   const totalDebt = sumDebtBalances_(getSheet_(ss, 'DEBTS'));
 
-  const netWorth = round2_(investments + houseValues - totalDebt);
+  const netWorth = round2_(cash + investments + houseValues - totalDebt);
 
   const historySnapshots = getLatestHistorySnapshots_(2);
   const latestHistory = historySnapshots.length ? historySnapshots[0] : null;
@@ -107,6 +107,8 @@ function buildDashboardSnapshot_() {
   }
 
   if (
+    cashPrior &&
+    cashPrior.total !== null &&
     invPrior &&
     invPrior.total !== null &&
     housePrior &&
@@ -115,7 +117,7 @@ function buildDashboardSnapshot_() {
     debtPrior.total !== null
   ) {
     if (!deltas) deltas = {};
-    const priorNetWorth = round2_(invPrior.total + housePrior.total - debtPrior.total);
+    const priorNetWorth = round2_(cashPrior.total + invPrior.total + housePrior.total - debtPrior.total);
     deltas.netWorth = round2_(netWorth - priorNetWorth);
     deltas.netWorthMoMLabel = invPrior.label;
   } else {

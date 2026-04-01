@@ -92,7 +92,8 @@ function runDebtPlanner() {
   const houseAssetSummary = calculateHouseAssetSummary_(houseAssets);
   const liabilitySummary = calculateLiabilitySummary_(debts);
 
-  const totalAssets = round2_(assetSummary.totalAssets + houseAssetSummary.totalRealEstateValue);
+  const totalCashBalance = round2_(accounts.reduce(function(sum, a) { return sum + a.currentBalance; }, 0));
+  const totalAssets = round2_(totalCashBalance + assetSummary.totalAssets + houseAssetSummary.totalRealEstateValue);
   const netWorth = round2_(totalAssets - liabilitySummary.totalLiabilities);
 
   const minimumDueTotal = round2_(
