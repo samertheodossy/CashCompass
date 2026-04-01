@@ -310,8 +310,15 @@ function renderWeeklyAttribution(attribution) {
 function renderBufferRunway(bufferRunway) {
   const label = document.getElementById('runway_label');
   const detail = document.getElementById('runway_detail');
+  const monthsLine = document.getElementById('runway_months_line');
   if (label) label.textContent = bufferRunway ? bufferRunway.label : '—';
   if (detail) detail.textContent = bufferRunway ? bufferRunway.detail : '—';
+  if (monthsLine) {
+    monthsLine.textContent =
+      bufferRunway && bufferRunway.monthsLine !== undefined && bufferRunway.monthsLine !== null
+        ? bufferRunway.monthsLine
+        : '—';
+  }
 }
 
 function renderHealth(health) {

@@ -562,20 +562,32 @@ function getPriorMonthPlannerHistoryMetrics_() {
 
 function buildBufferRunway_(latestMetrics, cash) {
   if (!latestMetrics) {
-    return buildRunwayFromValues_(cash, 0);
+    return buildRunwayFromValues_(cash, 0, 0);
   }
-  return buildRunwayFromValues_(latestMetrics.usableCash, latestMetrics.projectedCashFlow);
+  return buildRunwayFromValues_(latestMetrics.usableCash, latestMetrics.projectedCashFlow, latestMetrics.minPayments);
 }
 
-function buildRunwayFromValues_(usableCash, projectedCashFlow) {
+/**
+ * minPaymentsOpt: optional total minimum payments (planner). When cash flow is non-negative,
+ * monthsLine uses usable ÷ min payments as "months of minimum-payment coverage" so a number still shows.
+ */
+function buildRunwayFromValues_(usableCash, projectedCashFlow, minPaymentsOpt) {
   const usable = Number(usableCash || 0);
   const cf = Number(projectedCashFlow || 0);
+  const minPay = Number(minPaymentsOpt || 0);
 
   if (cf >= 0) {
+    var monthsLine = '—';
+    if (usable > 0 && minPay > 0) {
+      monthsLine = round2_(usable / minPay).toFixed(1) + ' months';
+    } else if (usable > 0 && minPay <= 0) {
+      monthsLine = 'Many months+';
+    }
     return {
       months: null,
       label: 'Growing / stable',
-      detail: 'Projected monthly cash flow is non-negative.'
+      detail: 'Projected monthly cash flow is non-negative.',
+      monthsLine: monthsLine
     };
   }
 
@@ -586,14 +598,16 @@ function buildRunwayFromValues_(usableCash, projectedCashFlow) {
     return {
       months: 0,
       label: '0.0 months',
-      detail: 'Usable cash is already at or below zero.'
+      detail: 'Usable cash is already at or below zero.',
+      monthsLine: '0.0 months'
     };
   }
 
   return {
     months: months,
     label: months === null ? '—' : months.toFixed(1) + ' months',
-    detail: 'Based on usable cash after buffers and projected monthly cash flow.'
+    detail: 'Based on usable cash after buffers and projected monthly cash flow.',
+    monthsLine: months === null ? '—' : months.toFixed(1) + ' months'
   };
 }
 

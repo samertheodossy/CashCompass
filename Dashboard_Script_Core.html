@@ -128,6 +128,13 @@ function renderWeeklyAttribution(attribution) {
 function renderBufferRunway(bufferRunway) {
   document.getElementById('runway_label').textContent = bufferRunway ? bufferRunway.label : '—';
   document.getElementById('runway_detail').textContent = bufferRunway ? bufferRunway.detail : '—';
+  const monthsEl = document.getElementById('runway_months_line');
+  if (monthsEl) {
+    monthsEl.textContent =
+      bufferRunway && bufferRunway.monthsLine !== undefined && bufferRunway.monthsLine !== null
+        ? bufferRunway.monthsLine
+        : '—';
+  }
 }
 
 function renderHealth(health) {
