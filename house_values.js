@@ -32,12 +32,30 @@ function getHouseValueForDate(house, valuationDate) {
   const monthValue = getHouseValueFromHistoryForMonth_(houseName, year, d);
   const assetsInfo = getHouseAssetRowData_(houseName);
 
+  var previousMonthLabel = '';
+  var deltaFromPreviousMonth = null;
+  try {
+    const prior = new Date(d.getFullYear(), d.getMonth() - 1, 15);
+    const priorYear = prior.getFullYear();
+    const previousMonthValue = getHouseValueFromHistoryForMonth_(houseName, priorYear, prior);
+    previousMonthLabel = Utilities.formatDate(prior, Session.getScriptTimeZone(), 'MMM-yy');
+    const cur = Number(monthValue);
+    const prev = Number(previousMonthValue);
+    if (!isNaN(cur) && !isNaN(prev)) {
+      deltaFromPreviousMonth = round2_(cur - prev);
+    }
+  } catch (e) {
+    /* prior month block/column unavailable */
+  }
+
   return {
     house: houseName,
     selectedMonth: Utilities.formatDate(d, Session.getScriptTimeZone(), 'MMM-yy'),
     selectedMonthValue: monthValue,
     currentAssetValue: assetsInfo ? assetsInfo.currentValue : '',
-    loanAmountLeft: assetsInfo ? assetsInfo.loanAmountLeft : ''
+    loanAmountLeft: assetsInfo ? assetsInfo.loanAmountLeft : '',
+    previousMonthLabel: previousMonthLabel,
+    deltaFromPreviousMonth: deltaFromPreviousMonth
   };
 }
 

@@ -182,6 +182,8 @@
     <div><strong>Stored value for selected month:</strong> <span id="house_selectedMonthValue" class="muted">—</span></div>
     <div><strong>Current House Assets value:</strong> <span id="house_currentAssetValue" class="muted">—</span></div>
     <div><strong>Loan amount left:</strong> <span id="house_loanAmountLeft" class="muted">—</span></div>
+    <div class="house-value-delta-sep" aria-hidden="true"></div>
+    <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="house_deltaPriorMonth" class="muted">—</span></div>
   </div>
 
   <label>Value</label>
@@ -333,6 +335,13 @@ function fmtCurrency(value) {
   });
 }
 
+function fmtSignedCurrency(value) {
+  if (value === null || value === undefined || isNaN(Number(value))) return '—';
+  const num = Number(value);
+  const sign = num > 0 ? '+' : '';
+  return sign + fmtCurrency(num);
+}
+
 function setCurrencyInputValue(id, value) {
   const input = document.getElementById(id);
   if (value === '' || value === null || value === undefined) {
@@ -406,6 +415,8 @@ function loadHouseData() {
     document.getElementById('house_selectedMonthValue').textContent = '—';
     document.getElementById('house_currentAssetValue').textContent = '—';
     document.getElementById('house_loanAmountLeft').textContent = '—';
+    const deltaEl = document.getElementById('house_deltaPriorMonth');
+    if (deltaEl) deltaEl.textContent = '—';
     document.getElementById('house_value').value = '';
     return;
   }
@@ -418,6 +429,13 @@ function loadHouseData() {
       document.getElementById('house_selectedMonthValue').textContent = data.selectedMonthValue !== '' ? fmtCurrency(data.selectedMonthValue) : '—';
       document.getElementById('house_currentAssetValue').textContent = data.currentAssetValue !== '' ? fmtCurrency(data.currentAssetValue) : '—';
       document.getElementById('house_loanAmountLeft').textContent = data.loanAmountLeft !== '' ? fmtCurrency(data.loanAmountLeft) : '—';
+      const deltaEl = document.getElementById('house_deltaPriorMonth');
+      if (deltaEl) {
+        deltaEl.textContent =
+          data.deltaFromPreviousMonth !== null && data.deltaFromPreviousMonth !== undefined
+            ? fmtSignedCurrency(data.deltaFromPreviousMonth)
+            : '—';
+      }
       if (data.selectedMonthValue !== '' && data.selectedMonthValue !== null) {
         setCurrencyInputValue('house_value', data.selectedMonthValue);
       } else {

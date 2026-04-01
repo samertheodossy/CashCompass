@@ -27,6 +27,8 @@ function loadHouseData() {
     document.getElementById('house_selectedMonthValue').textContent = '—';
     document.getElementById('house_currentAssetValue').textContent = '—';
     document.getElementById('house_loanAmountLeft').textContent = '—';
+    const deltaEl = document.getElementById('house_deltaPriorMonth');
+    if (deltaEl) deltaEl.textContent = '—';
     document.getElementById('house_value').value = '';
     return;
   }
@@ -41,6 +43,14 @@ function loadHouseData() {
         data.currentAssetValue !== '' ? fmtCurrency(data.currentAssetValue) : '—';
       document.getElementById('house_loanAmountLeft').textContent =
         data.loanAmountLeft !== '' ? fmtCurrency(data.loanAmountLeft) : '—';
+
+      const deltaEl = document.getElementById('house_deltaPriorMonth');
+      if (deltaEl) {
+        deltaEl.textContent =
+          data.deltaFromPreviousMonth !== null && data.deltaFromPreviousMonth !== undefined
+            ? fmtSignedCurrency(data.deltaFromPreviousMonth)
+            : '—';
+      }
 
       if (data.selectedMonthValue !== '' && data.selectedMonthValue !== null) {
         setCurrencyInputValue('house_value', data.selectedMonthValue);
