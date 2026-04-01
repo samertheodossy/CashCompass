@@ -106,6 +106,25 @@ function buildDashboardSnapshot_() {
     }
   }
 
+  if (
+    invPrior &&
+    invPrior.total !== null &&
+    housePrior &&
+    housePrior.total !== null &&
+    debtPrior &&
+    debtPrior.total !== null
+  ) {
+    if (!deltas) deltas = {};
+    const priorNetWorth = round2_(invPrior.total + housePrior.total - debtPrior.total);
+    deltas.netWorth = round2_(netWorth - priorNetWorth);
+    deltas.netWorthMoMLabel = invPrior.label;
+  } else {
+    if (deltas) {
+      deltas.netWorth = null;
+      deltas.netWorthMoMLabel = null;
+    }
+  }
+
   const latestMetrics = getLatestPlannerHistoryMetrics_();
   const previousMetrics = getPreviousPlannerHistoryMetrics_();
   const upcoming = getUpcomingExpenseMetricsSafe_();

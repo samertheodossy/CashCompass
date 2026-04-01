@@ -193,7 +193,10 @@ function applySnapshot(snapshot) {
     deltas ? deltas.debt : null,
     deltas && deltas.debtMoMLabel ? deltas.debtMoMLabel : ''
   );
-  document.getElementById('snap_delta_netWorth').textContent = fmtDelta(deltas ? deltas.netWorth : null, baselineLabel);
+  document.getElementById('snap_delta_netWorth').textContent = fmtPriorMonthDelta(
+    deltas ? deltas.netWorth : null,
+    deltas && deltas.netWorthMoMLabel ? deltas.netWorthMoMLabel : ''
+  );
 
   renderSourceUpdated(snapshot.sourceUpdated);
   renderIssues(snapshot.issues || []);

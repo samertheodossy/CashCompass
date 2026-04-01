@@ -392,7 +392,10 @@ function applySnapshot(snapshot) {
     'snap_delta_debt',
     fmtPriorMonthDelta(deltas ? deltas.debt : null, deltas && deltas.debtMoMLabel ? deltas.debtMoMLabel : '')
   );
-  set('snap_delta_netWorth', fmtDelta(deltas ? deltas.netWorth : null, baselineLabel));
+  set(
+    'snap_delta_netWorth',
+    fmtPriorMonthDelta(deltas ? deltas.netWorth : null, deltas && deltas.netWorthMoMLabel ? deltas.netWorthMoMLabel : '')
+  );
 
   renderSourceUpdated(snapshot.sourceUpdated);
   renderIssues(snapshot.issues || []);
