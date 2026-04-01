@@ -29,3 +29,10 @@
 
 - **Change**: display label **Tax** → **Property Tax** in Add House Expense (Type). The option still uses **`value="Tax"`** so existing HOUSES sheet rows and stored values stay valid.
 - **Files**: `Dashboard_Body.html`, `HouseExpensesUI.html`, `PlannerDashboardWeb-FULLCOPY.html`.
+
+---
+
+## Operations Snapshot — Bills next 7 days
+
+- **UI**: first row in **Operations Snapshot** card: **Bills Next 7 Days** — sum of **`amount`** for bills in **`getBillsDueFromCashFlowForDashboard()`** `next7` (same as Bills Due list). Click opens **Cash Flow → Bills Due**.
+- **Files**: `Dashboard_Body.html`, `Dashboard_Script_BillsDue.html`. (`Dashboard_Script_DueCards.html` mirrors the same helpers but is not included by `PlannerDashboardWeb.html`.)

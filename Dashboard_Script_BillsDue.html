@@ -4,6 +4,9 @@ function loadDashboardActionSections() {
 }
 
 function loadBillsDueUi_() {
+  const ovBillsNext7 = document.getElementById('ov_bills_next7');
+  if (ovBillsNext7) ovBillsNext7.textContent = '...';
+
   google.script.run
     .withSuccessHandler(function(data) {
       renderBillsList_('bd_overdueList', (data && data.overdue) || [], 'No overdue bills.');
@@ -43,6 +46,19 @@ function renderBillsDueSummary_(data, errorMessage) {
   if (ovOverdue) ovOverdue.textContent = String(overdueCount);
   if (cfDueSoon) cfDueSoon.textContent = String(next7Count);
   if (cfOverdue) cfOverdue.textContent = String(overdueCount);
+
+  const ovBillsNext7Amt = document.getElementById('ov_bills_next7');
+  if (ovBillsNext7Amt) {
+    if (errorMessage) {
+      ovBillsNext7Amt.textContent = '—';
+    } else {
+      let sumNext7 = 0;
+      next7.forEach(function(r) {
+        sumNext7 += Number(r.amount || 0);
+      });
+      ovBillsNext7Amt.textContent = fmtCurrency(sumNext7);
+    }
+  }
 
   if (ovSummary) {
     if (errorMessage) {
