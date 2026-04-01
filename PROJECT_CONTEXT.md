@@ -23,8 +23,15 @@ We are building a Google Apps Script Planner Dashboard for personal finance / pr
 - PlannerDashboardWeb.html = main wrapper
 - Dashboard_Styles.html
 - Dashboard_Body.html
-- Dashboard_Script_Render.html
-- Dashboard_Script_Features_1.html
+- Dashboard_Script_Render.html (overview + shared globals/helpers)
+- Dashboard_Script_AssetsHouseValues.html
+- Dashboard_Script_PropertiesHouseExpenses.html
+- Dashboard_Script_AssetsBankInvestments.html
+- Dashboard_Script_PlanningDebts.html
+- Dashboard_Script_CashFlowUpcoming.html
+- Dashboard_Script_PlanningRetirement.html
+- Dashboard_Script_PlanningPurchaseSim.html
+- Dashboard_Script_PropertyPerformance.html
 - Dashboard_Script_Payments.html
 - Dashboard_Script_BillsDue.html
 

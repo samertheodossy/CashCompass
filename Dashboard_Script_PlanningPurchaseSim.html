@@ -1,0 +1,66 @@
+/* Planning — Purchase simulator tab */
+function togglePurchaseFields() {
+  const mode = document.getElementById('ps_fundingMode').value;
+  document.getElementById('ps_cashDownWrap').style.display = mode === 'Split' ? 'block' : 'none';
+  document.getElementById('ps_financeWrap').style.display = (mode === 'Finance' || mode === 'Split') ? 'block' : 'none';
+}
+
+function loadPurchaseSimulatorSection() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      const d = data.defaults || {};
+      document.getElementById('ps_fundingMode').value = d.fundingMode || 'Cash';
+      document.getElementById('ps_aprPct').value = d.aprPct || 7.5;
+      document.getElementById('ps_termMonths').value = d.termMonths || 60;
+      document.getElementById('ps_monthlyRunningCost').value = '';
+      document.getElementById('ps_treatAsAsset').checked = !!d.treatAsAsset;
+      togglePurchaseFields();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('ps_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getPurchaseSimulatorUiData();
+}
+
+function runPurchaseSimulationUi() {
+  const payload = {
+    purchaseName: document.getElementById('ps_name').value,
+    purchaseAmount: toNumber(document.getElementById('ps_amount').value),
+    fundingMode: document.getElementById('ps_fundingMode').value,
+    cashDown: toNumber(document.getElementById('ps_cashDown').value),
+    aprPct: Number(document.getElementById('ps_aprPct').value || 0),
+    termMonths: Number(document.getElementById('ps_termMonths').value || 0),
+    monthlyRunningCost: toNumber(document.getElementById('ps_monthlyRunningCost').value),
+    treatAsAsset: document.getElementById('ps_treatAsAsset').checked
+  };
+
+  setStatus('ps_status', 'Running simulation...', false);
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('ps_status', 'Simulation complete.', false);
+      document.getElementById('ps_immediateCashHit').textContent = fmtCurrency(res.immediateCashHit);
+      document.getElementById('ps_financedAmount').textContent = fmtCurrency(res.financedAmount);
+      document.getElementById('ps_monthlyPayment').textContent = fmtCurrency(res.monthlyPayment);
+      document.getElementById('ps_totalMonthlyImpact').textContent = fmtCurrency(res.totalMonthlyImpact);
+      document.getElementById('ps_newCash').textContent = fmtCurrency(res.newCash);
+      document.getElementById('ps_newUsableCash').textContent = fmtCurrency(res.newUsableCash);
+      document.getElementById('ps_newProjectedCashFlow').textContent = fmtCurrency(res.newProjectedCashFlow);
+      document.getElementById('ps_netWorthChange').textContent = fmtCurrency(res.immediateNetWorthChange);
+      document.getElementById('ps_runwayBefore').textContent = res.runwayBefore ? res.runwayBefore.label : '—';
+      document.getElementById('ps_runwayAfter').textContent = res.runwayAfter ? res.runwayAfter.label : '—';
+      document.getElementById('ps_warning').textContent = res.warning || '—';
+
+      const nw = document.getElementById('ps_netWorthChange');
+      nw.className = 'muted';
+      if (Number(res.immediateNetWorthChange) < 0) nw.className = 'accent-bad';
+      if (Number(res.immediateNetWorthChange) === 0) nw.className = 'accent-good';
+
+      const cf = document.getElementById('ps_newProjectedCashFlow');
+      cf.className = Number(res.newProjectedCashFlow) < 0 ? 'accent-bad' : 'accent-good';
+    })
+    .withFailureHandler(function(err) {
+      setStatus('ps_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .runPurchaseSimulation(payload);
+}

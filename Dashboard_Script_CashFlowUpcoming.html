@@ -1,0 +1,167 @@
+/* Cash Flow — Upcoming Expenses tab */
+function loadUpcomingSection() {
+  document.getElementById('up_dueDate').value =
+    document.getElementById('up_dueDate').value || new Date().toISOString().slice(0, 10);
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      upcomingExpenses = data.expenses || [];
+      renderUpcomingSummary(data.summary || {});
+      renderUpcomingList(upcomingExpenses);
+
+      if (pendingFocus && pendingFocus.tab === 'upcoming') {
+        pendingFocus = null;
+      }
+    })
+    .withFailureHandler(function(err) {
+      setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getUpcomingExpensesUiData();
+}
+
+function renderUpcomingSummary(summary) {
+  document.getElementById('upcoming_next7').textContent =
+    (summary.next7Count || 0) + ' / ' + fmtCurrency(summary.next7Amount || 0);
+  document.getElementById('upcoming_next30').textContent =
+    (summary.next30Count || 0) + ' / ' + fmtCurrency(summary.next30Amount || 0);
+  document.getElementById('upcoming_overdue').textContent =
+    (summary.overdueCount || 0) + ' / ' + fmtCurrency(summary.overdueAmount || 0);
+  document.getElementById('upcoming_total').textContent =
+    (summary.plannedCount || 0) + ' / ' + fmtCurrency(summary.plannedAmount || 0);
+
+  const ovNext7 = document.getElementById('ov_upcoming_next7');
+  const ovNext30 = document.getElementById('ov_upcoming_next30');
+
+  if (ovNext7) ovNext7.textContent = fmtCurrency(summary.next7Amount || 0);
+  if (ovNext30) ovNext30.textContent = fmtCurrency(summary.next30Amount || 0);
+}
+
+function upcomingBucketClass(bucket) {
+  const key = String(bucket || '').toLowerCase();
+  if (key === 'overdue') return 'bucket-overdue';
+  if (key === 'today') return 'bucket-today';
+  if (key === 'next 7 days') return 'bucket-next7';
+  if (key === 'this month') return 'bucket-thismonth';
+  return '';
+}
+
+function renderUpcomingList(rows) {
+  const root = document.getElementById('upcoming_list');
+
+  if (!rows || !rows.length) {
+    root.innerHTML = '<div class="muted">No upcoming expenses yet.</div>';
+    return;
+  }
+
+  root.innerHTML = rows.map(function(row) {
+    const canAddToCashFlow = row.status !== 'Skipped' && row.addedToCashFlow !== 'Yes';
+    return (
+      '<div class="upcoming-item ' + upcomingBucketClass(row.dayBucket) + '">' +
+        '<div class="upcoming-top">' +
+          '<div>' +
+            '<div class="upcoming-name">' + escapeHtml(row.expenseName || 'Unnamed Expense') + '</div>' +
+            '<div class="upcoming-meta">' +
+              'Status: ' + escapeHtml(row.status || 'Planned') + '<br>' +
+              'Due: ' + escapeHtml(row.dueDate || '—') + ' · ' + escapeHtml(row.dayBucket || '') + '<br>' +
+              'Payee: ' + escapeHtml(row.payee || '—') + '<br>' +
+              'Category: ' + escapeHtml(row.category || '—') + '<br>' +
+              'Source: ' + escapeHtml(row.accountSource || '—') + '<br>' +
+              'Added To Cash Flow: ' + escapeHtml(row.addedToCashFlow || 'No') +
+              (row.notes ? '<br>Notes: ' + escapeHtml(row.notes) : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="upcoming-amount">' + fmtCurrency(row.amount) + '</div>' +
+        '</div>' +
+        '<div class="upcoming-actions">' +
+          '<button class="small-btn primary" onclick="setUpcomingStatus(\'' + escapeJs(row.id) + '\', \'Planned\')">Planned</button>' +
+          '<button class="small-btn" onclick="setUpcomingStatus(\'' + escapeJs(row.id) + '\', \'Paid\')">Paid</button>' +
+          '<button class="small-btn" onclick="setUpcomingStatus(\'' + escapeJs(row.id) + '\', \'Skipped\')">Skipped</button>' +
+          (canAddToCashFlow ? '<button class="small-btn" onclick="addUpcomingToCashFlow(\'' + escapeJs(row.id) + '\')">Add to Cash Flow</button>' : '') +
+          '<button class="small-btn" onclick="openUpcomingInQuickPayment(\'' + escapeJs(row.id) + '\')">Open in Quick Payment</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+function saveUpcomingExpense() {
+  const rawAmount = document.getElementById('up_amount').value;
+  const numericAmount = toNumber(rawAmount);
+
+  if (String(rawAmount || '').trim() && isNaN(numericAmount)) {
+    setStatus('upcoming_status', 'Error: Amount must be a valid number.', true);
+    return;
+  }
+
+  const payload = {
+    expenseName: document.getElementById('up_name').value,
+    category: document.getElementById('up_category').value,
+    payee: document.getElementById('up_payee').value,
+    dueDate: document.getElementById('up_dueDate').value,
+    amount: numericAmount,
+    accountSource: document.getElementById('up_accountSource').value,
+    autoAddToCashFlow: document.getElementById('up_autoAdd').checked,
+    notes: document.getElementById('up_notes').value
+  };
+
+  setStatus('upcoming_status', 'Saving...', false);
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('upcoming_status', res.message || 'Saved.', false);
+      document.getElementById('up_name').value = '';
+      document.getElementById('up_category').value = '';
+      document.getElementById('up_payee').value = '';
+      document.getElementById('up_amount').value = '';
+      document.getElementById('up_accountSource').value = '';
+      document.getElementById('up_notes').value = '';
+      document.getElementById('up_autoAdd').checked = false;
+      loadUpcomingSection();
+      loadDashboardActionSections();
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .addUpcomingExpense(payload);
+}
+
+function setUpcomingStatus(id, status) {
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('upcoming_status', res.message || 'Updated.', false);
+      loadUpcomingSection();
+      loadDashboardActionSections();
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .updateUpcomingExpenseStatus(id, status);
+}
+
+function addUpcomingToCashFlow(id) {
+  setStatus('upcoming_status', 'Adding to cash flow...', false);
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('upcoming_status', res.message || 'Added to cash flow.', false);
+      loadUpcomingSection();
+      loadDashboardActionSections();
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .addUpcomingExpenseToCashFlow(id);
+}
+
+function openUpcomingInQuickPayment(id) {
+  google.script.run
+    .withSuccessHandler(function(prefill) {
+      prefillQuickPayment(prefill);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getUpcomingExpenseForQuickPayment(id);
+}

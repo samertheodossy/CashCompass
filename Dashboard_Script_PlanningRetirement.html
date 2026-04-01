@@ -1,0 +1,159 @@
+/* Planning — Retirement tab */
+function loadRetirementSection() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      retirementUiData = data;
+      document.getElementById('ret_selectedScenario').value = data.selectedScenario || 'Base';
+
+      document.getElementById('ret_yourCurrentAge').value = data.household ? data.household.yourCurrentAge : '';
+      document.getElementById('ret_spouseCurrentAge').value = data.household ? data.household.spouseCurrentAge : '';
+
+      fillRetirementScenarioInputs(data.selectedScenario || 'Base');
+      renderRetirementScenarioCards(data);
+      renderRetirementPanelInfo(data.analysis);
+      setStatus('retirement_status', '', false);
+
+      if (pendingFocus && pendingFocus.tab === 'retirement') {
+        pendingFocus = null;
+      }
+    })
+    .withFailureHandler(function(err) {
+      setStatus('retirement_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getRetirementUiData();
+}
+
+function onRetirementScenarioChange() {
+  const scenario = document.getElementById('ret_selectedScenario').value || 'Base';
+  fillRetirementScenarioInputs(scenario);
+
+  if (retirementUiData && retirementUiData.analyses && retirementUiData.analyses[scenario]) {
+    renderRetirementPanelInfo(retirementUiData.analyses[scenario]);
+  }
+
+  renderRetirementScenarioCards(retirementUiData);
+}
+
+function fillRetirementScenarioInputs(scenario) {
+  if (!retirementUiData || !retirementUiData.scenarios || !retirementUiData.scenarios[scenario]) return;
+  const s = retirementUiData.scenarios[scenario];
+
+  document.getElementById('ret_targetRetirementAge').value = s.targetRetirementAge || '';
+  setCurrencyInputValue('ret_householdRetirementSpendingPerYear', s.householdRetirementSpendingPerYear);
+  setCurrencyInputValue('ret_yourSocialSecurityPerYear', s.yourSocialSecurityPerYear);
+  setCurrencyInputValue('ret_spouseSocialSecurityPerYear', s.spouseSocialSecurityPerYear);
+  setCurrencyInputValue('ret_otherRetirementIncomePerYear', s.otherRetirementIncomePerYear);
+  setCurrencyInputValue('ret_annualContributions', s.annualContributions);
+  document.getElementById('ret_expectedAnnualReturnPct').value = s.expectedAnnualReturnPct || '';
+  document.getElementById('ret_inflationPct').value = s.inflationPct || '';
+  document.getElementById('ret_safeWithdrawalRatePct').value = s.safeWithdrawalRatePct || '';
+  setCurrencyInputValue('ret_oneTimeFutureCashNeeds', s.oneTimeFutureCashNeeds);
+}
+
+function renderRetirementScenarioCards(data) {
+  if (!data || !data.analyses) return;
+  const selected = data.selectedScenario || document.getElementById('ret_selectedScenario').value || 'Base';
+
+  ['Conservative', 'Base', 'Aggressive'].forEach(function(name) {
+    const el = document.getElementById('scenario_card_' + name);
+    const a = data.analyses[name];
+    if (!el || !a) return;
+
+    const ss = a.surplusAtTargetAge || 0;
+    const sf = a.shortfallAtTargetAge || 0;
+    const targetText = ss > 0 ? ('Surplus: ' + fmtCurrency(ss)) : ('Shortfall: ' + fmtCurrency(sf));
+
+    el.className = 'scenario-card' + (name === selected ? ' active' : '');
+    el.innerHTML =
+      '<div class="scenario-card-title">' +
+        escapeHtml(name) +
+        (name === selected ? '<span class="scenario-badge">Selected</span>' : '') +
+      '</div>' +
+      '<div class="scenario-card-row">Goal: ' + fmtCurrency(a.retirementGoalAmount) + '</div>' +
+      '<div class="scenario-card-row">Est. age: ' + (a.estimatedRetirementAge === null ? '—' : a.estimatedRetirementAge) + '</div>' +
+      '<div class="scenario-card-row">Funded: ' + fmtPercent(a.fundedPct) + '</div>' +
+      '<div class="scenario-card-row">' + targetText + '</div>' +
+      '<div class="scenario-card-row">MC success: ' + fmtPercent(a.monteCarloSuccessProbabilityPct) + '</div>';
+  });
+}
+
+function renderRetirementPanelInfo(analysis) {
+  if (!analysis) return;
+
+  document.getElementById('ret_info_scenario').textContent = analysis.scenarioName || '—';
+  document.getElementById('ret_info_assets').textContent = fmtCurrency(analysis.currentInvestableAssets);
+  document.getElementById('ret_info_goal').textContent = fmtCurrency(analysis.retirementGoalAmount);
+  document.getElementById('ret_info_funded').textContent = fmtPercent(analysis.fundedPct);
+  document.getElementById('ret_info_canRetireNow').textContent = analysis.canRetireNow ? 'Yes' : 'No';
+  document.getElementById('ret_info_estAge').textContent = analysis.estimatedRetirementAge !== null ? analysis.estimatedRetirementAge : '—';
+  document.getElementById('ret_info_years').textContent = analysis.yearsUntilRetirement !== null ? analysis.yearsUntilRetirement : '—';
+  document.getElementById('ret_info_spouseAgeAtRetirement').textContent = analysis.spouseAgeAtRetirement !== null ? analysis.spouseAgeAtRetirement : '—';
+  document.getElementById('ret_info_projectedAtTarget').textContent = fmtCurrency(analysis.projectedAssetsAtTargetAge);
+  document.getElementById('ret_info_income').textContent = fmtCurrency(analysis.householdRetirementIncomePerYear);
+  document.getElementById('ret_info_maxSpendToday').textContent = fmtCurrency(analysis.maxAnnualSpendToday);
+  document.getElementById('ret_info_realReturn').textContent = fmtPercent(analysis.realReturnPct);
+  document.getElementById('ret_info_summary').textContent = analysis.summary || '—';
+  document.getElementById('ret_info_mc').textContent = fmtPercent(analysis.monteCarloSuccessProbabilityPct);
+
+  const el = document.getElementById('ret_info_surplusShortfall');
+  if ((analysis.surplusAtTargetAge || 0) > 0) {
+    el.textContent = 'Surplus: ' + fmtCurrency(analysis.surplusAtTargetAge);
+    el.style.color = '#166534';
+    el.style.fontWeight = 'bold';
+  } else if ((analysis.shortfallAtTargetAge || 0) > 0) {
+    el.textContent = 'Shortfall: ' + fmtCurrency(analysis.shortfallAtTargetAge);
+    el.style.color = '#b91c1c';
+    el.style.fontWeight = 'bold';
+  } else {
+    el.textContent = '—';
+    el.style.color = '#475569';
+    el.style.fontWeight = 'normal';
+  }
+
+  const dep = document.getElementById('ret_info_depletionAge');
+  if (analysis.moneyRunsOutAge === null || analysis.moneyRunsOutAge === '' || analysis.moneyRunsOutAge === undefined) {
+    dep.textContent = 'Never (under assumptions)';
+    dep.style.color = '#166534';
+    dep.style.fontWeight = 'bold';
+  } else {
+    dep.textContent = 'Age ' + analysis.moneyRunsOutAge;
+    dep.style.color = '#b91c1c';
+    dep.style.fontWeight = 'bold';
+  }
+}
+
+function saveRetirement() {
+  const payload = {
+    selectedScenario: document.getElementById('ret_selectedScenario').value,
+    yourCurrentAge: Number(document.getElementById('ret_yourCurrentAge').value || 0),
+    spouseCurrentAge: Number(document.getElementById('ret_spouseCurrentAge').value || 0),
+    targetRetirementAge: Number(document.getElementById('ret_targetRetirementAge').value || 0),
+    householdRetirementSpendingPerYear: toNumber(document.getElementById('ret_householdRetirementSpendingPerYear').value),
+    yourSocialSecurityPerYear: toNumber(document.getElementById('ret_yourSocialSecurityPerYear').value),
+    spouseSocialSecurityPerYear: toNumber(document.getElementById('ret_spouseSocialSecurityPerYear').value),
+    otherRetirementIncomePerYear: toNumber(document.getElementById('ret_otherRetirementIncomePerYear').value),
+    annualContributions: toNumber(document.getElementById('ret_annualContributions').value),
+    expectedAnnualReturnPct: Number(document.getElementById('ret_expectedAnnualReturnPct').value || 0),
+    inflationPct: Number(document.getElementById('ret_inflationPct').value || 0),
+    safeWithdrawalRatePct: Number(document.getElementById('ret_safeWithdrawalRatePct').value || 0),
+    oneTimeFutureCashNeeds: toNumber(document.getElementById('ret_oneTimeFutureCashNeeds').value)
+  };
+
+  setStatus('retirement_status', 'Saving...', false);
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('retirement_status', res.message || 'Saved.', false);
+      retirementUiData = res.data || retirementUiData;
+      if (retirementUiData) {
+        document.getElementById('ret_selectedScenario').value = retirementUiData.selectedScenario || payload.selectedScenario;
+        renderRetirementScenarioCards(retirementUiData);
+        renderRetirementPanelInfo(retirementUiData.analysis);
+      }
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('retirement_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .saveRetirementInputs(payload);
+}

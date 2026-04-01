@@ -1,0 +1,215 @@
+/* Assets — Bank Accounts & Investments tabs */
+function loadBankSection() {
+  document.getElementById('bank_date').value = new Date().toISOString().slice(0, 10);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      const sel = document.getElementById('bank_account');
+      sel.innerHTML = '<option value=""></option>';
+      (data.accounts || []).forEach(function(a) {
+        const opt = document.createElement('option');
+        opt.value = a;
+        opt.textContent = a;
+        sel.appendChild(opt);
+      });
+      if (pendingFocus && pendingFocus.tab === 'bank') focusBankTarget_(pendingFocus);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getBankAccountUiData();
+}
+
+function evaluateBankBufferWarning() {
+  if (!bankCurrentData) {
+    setWarning('bank_bufferWarning', '', '');
+    return;
+  }
+
+  const rawValue = document.getElementById('bank_value').value;
+  const entered = toNumber(rawValue);
+  const minBuffer = Number(bankCurrentData.minBuffer || 0);
+  const updateMinBuffer = document.getElementById('bank_updateMinBuffer').checked;
+  const accountName = bankCurrentData.accountName || document.getElementById('bank_account').value || 'This account';
+
+  if (!String(rawValue || '').trim() || isNaN(entered)) {
+    setWarning('bank_bufferWarning', '', '');
+    return;
+  }
+
+  if (entered < minBuffer) {
+    if (updateMinBuffer) {
+      setWarning(
+        'bank_bufferWarning',
+        accountName + ' is below the current Min Buffer of ' + fmtCurrency(minBuffer) + '.\n' +
+        'Because "Also update Min Buffer" is checked, saving will lower Min Buffer to ' + fmtCurrency(entered) + '.',
+        'info'
+      );
+    } else {
+      setWarning(
+        'bank_bufferWarning',
+        accountName + ' is below the current Min Buffer of ' + fmtCurrency(minBuffer) + '.\n' +
+        'If you save like this, the account may become less usable in the planner until you either raise the balance or lower Min Buffer.',
+        'danger'
+      );
+    }
+  } else {
+    setWarning('bank_bufferWarning', '', '');
+  }
+}
+
+function loadBankData() {
+  const account = document.getElementById('bank_account').value;
+  const date = document.getElementById('bank_date').value;
+
+  if (!account || !date) {
+    bankCurrentData = null;
+    document.getElementById('bank_selectedMonth').textContent = '—';
+    document.getElementById('bank_selectedMonthValue').textContent = '—';
+    document.getElementById('bank_currentBalance').textContent = '—';
+    document.getElementById('bank_availableNow').textContent = '—';
+    document.getElementById('bank_minBuffer').textContent = '—';
+    document.getElementById('bank_type').textContent = '—';
+    document.getElementById('bank_usePolicy').textContent = '—';
+    document.getElementById('bank_value').value = '';
+    setWarning('bank_bufferWarning', '', '');
+    return;
+  }
+
+  setStatus('bank_status', 'Loading...', false);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      bankCurrentData = data;
+      document.getElementById('bank_selectedMonth').textContent = data.selectedMonth || '—';
+      document.getElementById('bank_selectedMonthValue').textContent =
+        data.selectedMonthValue !== '' ? fmtCurrency(data.selectedMonthValue) : '—';
+      document.getElementById('bank_currentBalance').textContent =
+        data.currentBalance !== '' ? fmtCurrency(data.currentBalance) : '—';
+      document.getElementById('bank_availableNow').textContent =
+        data.availableNow !== '' ? fmtCurrency(data.availableNow) : '—';
+      document.getElementById('bank_minBuffer').textContent =
+        data.minBuffer !== '' ? fmtCurrency(data.minBuffer) : '—';
+      document.getElementById('bank_type').textContent = data.type || '—';
+      document.getElementById('bank_usePolicy').textContent = data.usePolicy || '—';
+
+      if (data.selectedMonthValue !== '' && data.selectedMonthValue !== null) {
+        setCurrencyInputValue('bank_value', data.selectedMonthValue);
+      } else {
+        document.getElementById('bank_value').value = '';
+      }
+
+      evaluateBankBufferWarning();
+      setStatus('bank_status', '', false);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getBankAccountValueForDate(account, date);
+}
+
+function saveBank() {
+  const rawValue = document.getElementById('bank_value').value;
+  const numericValue = toNumber(rawValue);
+
+  if (String(rawValue || '').trim() && isNaN(numericValue)) {
+    setStatus('bank_status', 'Error: Value must be a valid number.', true);
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('bank_status', res.message || 'Saved.', false);
+      loadBankData();
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .updateBankAccountValueByDate({
+      accountName: document.getElementById('bank_account').value,
+      balanceDate: document.getElementById('bank_date').value,
+      currentValue: numericValue,
+      updateAvailableNow: document.getElementById('bank_updateAvailableNow').checked,
+      updateMinBuffer: document.getElementById('bank_updateMinBuffer').checked
+    });
+}
+
+function loadInvestmentSection() {
+  document.getElementById('inv_date').value = new Date().toISOString().slice(0, 10);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      const sel = document.getElementById('inv_account');
+      sel.innerHTML = '<option value=""></option>';
+      (data.accounts || []).forEach(function(a) {
+        const opt = document.createElement('option');
+        opt.value = a;
+        opt.textContent = a;
+        sel.appendChild(opt);
+      });
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getInvestmentUiData();
+}
+
+function loadInvestmentData() {
+  const account = document.getElementById('inv_account').value;
+  const date = document.getElementById('inv_date').value;
+
+  if (!account || !date) {
+    document.getElementById('inv_selectedMonth').textContent = '—';
+    document.getElementById('inv_selectedMonthValue').textContent = '—';
+    document.getElementById('inv_currentBalance').textContent = '—';
+    document.getElementById('inv_type').textContent = '—';
+    document.getElementById('inv_value').value = '';
+    return;
+  }
+
+  setStatus('inv_status', 'Loading...', false);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      document.getElementById('inv_selectedMonth').textContent = data.selectedMonth || '—';
+      document.getElementById('inv_selectedMonthValue').textContent =
+        data.selectedMonthValue !== '' ? fmtCurrency(data.selectedMonthValue) : '—';
+      document.getElementById('inv_currentBalance').textContent =
+        data.currentBalance !== '' ? fmtCurrency(data.currentBalance) : '—';
+      document.getElementById('inv_type').textContent = data.type || '—';
+
+      if (data.selectedMonthValue !== '' && data.selectedMonthValue !== null) {
+        setCurrencyInputValue('inv_value', data.selectedMonthValue);
+      } else {
+        document.getElementById('inv_value').value = '';
+      }
+
+      setStatus('inv_status', '', false);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getInvestmentValueForDate(account, date);
+}
+
+function saveInvestment() {
+  const rawValue = document.getElementById('inv_value').value;
+  const numericValue = toNumber(rawValue);
+
+  if (String(rawValue || '').trim() && isNaN(numericValue)) {
+    setStatus('inv_status', 'Error: Value must be a valid number.', true);
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('inv_status', res.message || 'Saved.', false);
+      loadInvestmentData();
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .updateInvestmentValueByDate({
+      accountName: document.getElementById('inv_account').value,
+      balanceDate: document.getElementById('inv_date').value,
+      currentValue: numericValue
+    });
+}

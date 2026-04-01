@@ -1,0 +1,135 @@
+/* Planning — Debts tab */
+function loadDebtSection() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      allDebtRows = data.debts || [];
+
+      const typeSel = document.getElementById('debt_typeFilter');
+      typeSel.innerHTML = '';
+      (data.types || ['All']).forEach(function(t) {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        typeSel.appendChild(opt);
+      });
+
+      const fieldSel = document.getElementById('debt_field');
+      fieldSel.innerHTML = '';
+      (data.editableFields || []).forEach(function(f) {
+        const opt = document.createElement('option');
+        opt.value = f;
+        opt.textContent = f;
+        fieldSel.appendChild(opt);
+      });
+
+      filterDebtAccounts();
+
+      if (pendingFocus && pendingFocus.tab === 'debts') {
+        focusDebtTarget_(pendingFocus);
+      }
+    })
+    .withFailureHandler(function(err) {
+      setStatus('debt_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getDebtsUiData();
+}
+
+function filterDebtAccounts() {
+  const filterType = document.getElementById('debt_typeFilter').value || 'All';
+  const sel = document.getElementById('debt_account');
+  sel.innerHTML = '<option value=""></option>';
+
+  allDebtRows.filter(function(d) {
+    return filterType === 'All' || d.type === filterType;
+  }).forEach(function(d) {
+    const opt = document.createElement('option');
+    opt.value = d.accountName;
+    opt.textContent = d.accountName;
+    sel.appendChild(opt);
+  });
+
+  loadDebtFieldValue();
+}
+
+function handleDebtValueFocus() {
+  const fieldName = document.getElementById('debt_field').value;
+  if (debtFieldTypes[fieldName] !== 'currency') return;
+  currencyFocus('debt_value');
+}
+
+function handleDebtValueBlur() {
+  const fieldName = document.getElementById('debt_field').value;
+  if (debtFieldTypes[fieldName] !== 'currency') return;
+  currencyBlur('debt_value');
+}
+
+function loadDebtFieldValue() {
+  const accountName = document.getElementById('debt_account').value;
+  const fieldName = document.getElementById('debt_field').value;
+
+  if (!accountName || !fieldName) {
+    document.getElementById('debt_currentValue').textContent = '—';
+    document.getElementById('debt_type').textContent = '—';
+    document.getElementById('debt_pctAvail').textContent = '—';
+    document.getElementById('debt_value').value = '';
+    return;
+  }
+
+  setStatus('debt_status', 'Loading...', false);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      document.getElementById('debt_type').textContent = data.type || '—';
+      document.getElementById('debt_pctAvail').textContent = data.pctAvail || '—';
+
+      if (debtFieldTypes[fieldName] === 'currency') {
+        document.getElementById('debt_currentValue').textContent =
+          data.value !== '' && data.value !== null ? fmtCurrency(data.value) : '—';
+
+        if (data.value !== '' && data.value !== null) {
+          setCurrencyInputValue('debt_value', data.value);
+        } else {
+          document.getElementById('debt_value').value = '';
+        }
+      } else {
+        document.getElementById('debt_currentValue').textContent =
+          data.displayValue !== '' && data.displayValue !== null ? data.displayValue : '—';
+        document.getElementById('debt_value').value =
+          data.value !== '' && data.value !== null ? data.value : '';
+      }
+
+      setStatus('debt_status', '', false);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('debt_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getDebtFieldValue(accountName, fieldName);
+}
+
+function saveDebt() {
+  const fieldName = document.getElementById('debt_field').value;
+  let value = document.getElementById('debt_value').value;
+
+  if (debtFieldTypes[fieldName] === 'currency') {
+    const num = toNumber(value);
+    if (String(value || '').trim() && isNaN(num)) {
+      setStatus('debt_status', 'Error: Value must be a valid number.', true);
+      return;
+    }
+    value = num;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('debt_status', res.message || 'Saved.', false);
+      loadDebtFieldValue();
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('debt_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .updateDebtField({
+      accountName: document.getElementById('debt_account').value,
+      fieldName: fieldName,
+      value: value
+    });
+}

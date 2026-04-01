@@ -1,0 +1,261 @@
+/* Properties — House Expenses tab */
+function syncHouseExpenseLocation() {
+  const sel = document.getElementById('hx_house');
+  const opt = sel && sel.options.length ? sel.options[sel.selectedIndex] : null;
+  const location = opt ? (opt.getAttribute('data-location') || '') : '';
+
+  document.getElementById('hx_location').value = location;
+  document.getElementById('hx_sheetName').textContent = sel ? (sel.value || '—') : '—';
+  document.getElementById('hx_locationPreview').textContent = location || '—';
+
+  const date = document.getElementById('hx_date').value;
+  document.getElementById('hx_yearPreview').textContent = date ? String(new Date(date).getFullYear()) : '—';
+}
+
+function loadHouseExpensesSection() {
+  document.getElementById('hx_date').value = new Date().toISOString().slice(0, 10);
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      houseExpenseOptions = (data && data.houses) || [];
+
+      const sel = document.getElementById('hx_house');
+      sel.innerHTML = '';
+
+      houseExpenseOptions.forEach(function(h) {
+        const opt = document.createElement('option');
+        opt.value = h.sheetName;
+        opt.textContent = h.locationName;
+        opt.setAttribute('data-location', h.locationName || '');
+        sel.appendChild(opt);
+      });
+
+      sel.onchange = syncHouseExpenseLocation;
+      document.getElementById('hx_date').onchange = syncHouseExpenseLocation;
+
+      if (sel.options.length) {
+        sel.selectedIndex = 0;
+      }
+
+      syncHouseExpenseLocation();
+      loadRecentHouseExpenses();
+      loadHouseExpenseSummaries();
+      setStatus('hx_status', '', false);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('hx_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getHouseExpenseUiData();
+}
+
+function loadRecentHouseExpenses() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      const groups = (data && data.groups) ? data.groups : groupRecentHouseExpensesFallback_((data && data.expenses) || []);
+      renderRecentHouseExpenses(groups);
+    })
+    .withFailureHandler(function(err) {
+      const root = document.getElementById('hx_recentList');
+      if (root) {
+        root.innerHTML = '<div class="muted">Error loading recent house expenses: ' +
+          escapeHtml(err.message || String(err)) + '</div>';
+      }
+    })
+    .getRecentHouseExpenses(20);
+}
+
+function groupRecentHouseExpensesFallback_(rows) {
+  const grouped = {};
+
+  (rows || []).forEach(function(row) {
+    const house = row.house || row.location || row.houseSheet || 'Unknown House';
+    if (!grouped[house]) grouped[house] = [];
+    grouped[house].push(row);
+  });
+
+  return Object.keys(grouped).sort().map(function(house) {
+    grouped[house].sort(function(a, b) {
+      const aDate = new Date(a.date || '');
+      const bDate = new Date(b.date || '');
+      const aTime = isNaN(aDate.getTime()) ? 0 : aDate.getTime();
+      const bTime = isNaN(bDate.getTime()) ? 0 : bDate.getTime();
+      return bTime - aTime;
+    });
+
+    return {
+      house: house,
+      expenses: grouped[house]
+    };
+  });
+}
+
+function renderRecentHouseExpenses(groups) {
+  const root = document.getElementById('hx_recentList');
+  if (!root) return;
+
+  if (!groups || !groups.length) {
+    root.innerHTML = '<div class="muted">No house expenses found yet.</div>';
+    return;
+  }
+
+  root.innerHTML = groups.map(function(group) {
+    const itemsHtml = (group.expenses || []).map(function(row) {
+      return (
+        '<div class="change-item" style="margin-top:8px;">' +
+          '<div class="change-label">' + escapeHtml(row.date || '—') + '</div>' +
+          '<div class="change-value">' + escapeHtml(row.item || '—') + '</div>' +
+          '<div class="change-meta">' +
+            'Type: ' + escapeHtml(row.type || '—') +
+            ' · Cost: ' + fmtCurrency(row.cost || 0) +
+            ' · Service Fees: ' + fmtCurrency(row.serviceFees || 0) +
+            ' · Insurance: ' + escapeHtml(row.insurance || '—') +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+
+    return (
+      '<div class="card" style="padding:12px;">' +
+        '<div class="card-title" style="margin-bottom:8px;">' + escapeHtml(group.house || 'Unknown House') + '</div>' +
+        itemsHtml +
+      '</div>'
+    );
+  }).join('');
+}
+
+function loadHouseExpenseSummaries() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      const thisMonthByHouse = (data && data.thisMonthByHouse) || [];
+      const ytdByHouse = (data && data.ytdByHouse) || [];
+      const ytdByType = (data && data.ytdByType) || [];
+
+      renderHouseExpenseSummaryList_(
+        'hx_summaryThisMonthByHouse',
+        thisMonthByHouse,
+        'No house expenses found for this month.'
+      );
+      renderHouseExpenseSummaryList_(
+        'hx_summaryYtdByHouse',
+        ytdByHouse,
+        'No house expenses found YTD.'
+      );
+      renderHouseExpenseSummaryList_(
+        'hx_summaryYtdByType',
+        ytdByType,
+        'No house expense types found YTD.'
+      );
+
+      const thisMonthTotal = thisMonthByHouse.reduce(function(sum, row) {
+        return sum + Number(row.netTotal || 0);
+      }, 0);
+
+      const ytdTotal = ytdByHouse.reduce(function(sum, row) {
+        return sum + Number(row.netTotal || 0);
+      }, 0);
+
+      const ovThisMonth = document.getElementById('ov_house_thisMonth');
+      const ovYtd = document.getElementById('ov_house_ytd');
+
+      if (ovThisMonth) ovThisMonth.textContent = fmtCurrency(thisMonthTotal);
+      if (ovYtd) ovYtd.textContent = fmtCurrency(ytdTotal);
+    })
+    .withFailureHandler(function(err) {
+      ['hx_summaryThisMonthByHouse', 'hx_summaryYtdByHouse', 'hx_summaryYtdByType'].forEach(function(id) {
+        const root = document.getElementById(id);
+        if (root) {
+          root.innerHTML = '<div class="muted">Error loading summaries: ' +
+            escapeHtml(err.message || String(err)) + '</div>';
+        }
+      });
+    })
+    .getHouseExpenseSummaryData();
+}
+
+function renderHouseExpenseSummaryList_(elementId, rows, emptyMessage) {
+  const root = document.getElementById(elementId);
+  if (!root) return;
+
+  if (!rows || !rows.length) {
+    root.innerHTML = '<div class="muted">' + escapeHtml(emptyMessage || 'No data.') + '</div>';
+    return;
+  }
+
+  root.innerHTML = rows.map(function(row) {
+    return (
+      '<div class="change-item">' +
+        '<div class="change-label">' + escapeHtml(row.key || '—') + '</div>' +
+        '<div class="change-value">' + fmtCurrency(row.netTotal || 0) + '</div>' +
+        '<div class="change-meta">' +
+          'Cost: ' + fmtCurrency(row.costTotal || 0) +
+          ' · Service Fees: ' + fmtCurrency(row.serviceFeesTotal || 0) +
+          ' · Items: ' + escapeHtml(String(row.itemCount || 0)) +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+function saveHouseExpense() {
+  const cost = toNumber(document.getElementById('hx_cost').value);
+  const serviceFees = toNumber(document.getElementById('hx_serviceFees').value);
+
+  if (String(document.getElementById('hx_cost').value || '').trim() && isNaN(cost)) {
+    setStatus('hx_status', 'Error: Cost must be a valid number.', true);
+    return;
+  }
+
+  if (String(document.getElementById('hx_serviceFees').value || '').trim() && isNaN(serviceFees)) {
+    setStatus('hx_status', 'Error: Service Fees Paid must be a valid number.', true);
+    return;
+  }
+
+  const payload = {
+    house: document.getElementById('hx_house').value,
+    date: document.getElementById('hx_date').value,
+    item: document.getElementById('hx_item').value,
+    type: document.getElementById('hx_type').value,
+    location: document.getElementById('hx_location').value,
+    cost: cost,
+    serviceFees: serviceFees,
+    insurance: document.getElementById('hx_insurance').value,
+    paymentLinks: document.getElementById('hx_paymentLinks').value,
+    notes: document.getElementById('hx_notes').value,
+    autoAddToCashFlow: document.getElementById('hx_autoAddToCashFlow').checked
+  };
+
+  if (!payload.house) {
+    setStatus('hx_status', 'Error: Please choose a house.', true);
+    return;
+  }
+  if (!payload.date) {
+    setStatus('hx_status', 'Error: Please enter a date.', true);
+    return;
+  }
+  if (!payload.item) {
+    setStatus('hx_status', 'Error: Please enter an item.', true);
+    return;
+  }
+
+  setStatus('hx_status', 'Saving...', false);
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('hx_status', res.message || 'Saved.', false);
+      document.getElementById('hx_item').value = '';
+      document.getElementById('hx_cost').value = '';
+      document.getElementById('hx_serviceFees').value = '';
+      document.getElementById('hx_paymentLinks').value = '';
+      document.getElementById('hx_notes').value = '';
+      document.getElementById('hx_insurance').value = 'No';
+      document.getElementById('hx_autoAddToCashFlow').checked = false;
+      syncHouseExpenseLocation();
+      loadRecentHouseExpenses();
+      loadHouseExpenseSummaries();
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('hx_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .addHouseExpense(payload);
+}
