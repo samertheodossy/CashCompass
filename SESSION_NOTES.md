@@ -28,7 +28,7 @@
 ## House Expenses — Type dropdown label
 
 - **Change**: display label **Tax** → **Property Tax** in Add House Expense (Type). The option still uses **`value="Tax"`** so existing HOUSES sheet rows and stored values stay valid.
-- **Files**: `Dashboard_Body.html`, `HouseExpensesUI.html`, `PlannerDashboardWeb-FULLCOPY.html`.
+- **Files**: `Dashboard_Body.html`, `HouseExpensesUI.html`.
 
 ---
 
@@ -42,5 +42,5 @@
 ## Overview — Weekly net worth change (replaces duplicate “What changed” / “Net worth Attribution”)
 
 - **Behavior**: One card **Weekly net worth change**. Deltas = **live** balances (assets / house values / debts / net worth from sheets) **minus** a **baseline row** from **`OUT - History`**: the **latest** run whose **Run Date** is on or **before** (today − 7 calendar days). If no run is that old, **fallback** to the **earliest** row in History and show a short note in the card.
-- **Removed**: `buildNetWorthAttribution_(latest, previous)` (consecutive History rows). **Revert**: restore that function and wire `buildDashboardSnapshot_` to it; restore two Overview cards + `renderRecentChanges` / `renderAttribution` in `Dashboard_Script_Render.html`, `Dashboard_Body.html`, `Dashboard_Script_Features_2.html`, `Dashboard_Script_Core.html`, `PlannerDashboardWeb-FULLCOPY.html`.
-- **Files touched**: `dashboard_data.js` (`getAllHistorySnapshotRows_`, `pickWeeklyBaselineFromRows_`, `buildNetWorthAttributionWeekly_`, `parseHistoryRunDate_`), `Dashboard_Body.html`, `Dashboard_Script_Render.html`, `Dashboard_Script_Features_2.html`, `Dashboard_Script_Core.html`, `PlannerDashboardWeb-FULLCOPY.html`.
+- **Removed**: `buildNetWorthAttribution_(latest, previous)` (consecutive History rows). **Revert**: restore that function and wire `buildDashboardSnapshot_` to it; restore two Overview cards + `renderRecentChanges` / `renderAttribution` in `Dashboard_Script_Render.html` and `Dashboard_Body.html`.
+- **Files touched**: `dashboard_data.js` (`getAllHistorySnapshotRows_`, `pickWeeklyBaselineFromRows_`, `buildNetWorthAttributionWeekly_`, `parseHistoryRunDate_`), `Dashboard_Body.html`, `Dashboard_Script_Render.html`. (`Dashboard_Script_Core.html` is an offline mirror of render helpers — not loaded by `PlannerDashboardWeb.html`.)
