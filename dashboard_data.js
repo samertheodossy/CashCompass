@@ -34,7 +34,6 @@ function buildDashboardSnapshot_() {
 
   const historySnapshots = getLatestHistorySnapshots_(2);
   const latestHistory = historySnapshots.length ? historySnapshots[0] : null;
-  const previousHistory = historySnapshots.length > 1 ? historySnapshots[1] : null;
   const propertyBaseline = getDashboardBaselineSnapshot_();
 
   const deltas = latestHistory
@@ -65,7 +64,17 @@ function buildDashboardSnapshot_() {
   const retirement = getRetirementSummarySafe_();
 
   const bufferRunway = buildBufferRunway_(latestMetrics, cash);
-  const attribution = buildNetWorthAttribution_(latestHistory, previousHistory);
+  const historyRows = getAllHistorySnapshotRows_();
+  const weeklyPick = pickWeeklyBaselineFromRows_(historyRows);
+  const attribution = buildNetWorthAttributionWeekly_(
+    {
+      investments: investments,
+      houseValues: houseValues,
+      debt: totalDebt,
+      netWorth: netWorth
+    },
+    weeklyPick
+  );
   const health = buildFinancialHealthScore_(latestMetrics, previousMetrics, upcoming);
   const issues = buildDashboardIssues_(ss, {
     cash: cash,
@@ -96,7 +105,7 @@ function buildDashboardSnapshot_() {
     issues: issues,
     anomalies: issues.map(function(x) { return x.message; }),
     health: health,
-    recentChanges: attribution ? attribution.items : [],
+    recentChanges: attribution && attribution.items ? attribution.items : [],
     suggestedActions: suggestedActions,
     retirement: retirement,
     sourceUpdated: getDashboardSourceUpdatedMap_(),
@@ -145,6 +154,181 @@ function getLatestHistorySnapshots_(count) {
   }
 
   return out;
+}
+
+function stripDateOnly_(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function parseHistoryRunDate_(cellValue, displayValue) {
+  if (cellValue instanceof Date && !isNaN(cellValue.getTime())) {
+    return stripDateOnly_(cellValue);
+  }
+  const s = String(displayValue || '').trim();
+  try {
+    const iso = parseIsoDateLocal_(s);
+    if (iso) return stripDateOnly_(iso);
+  } catch (isoErr) {
+    /* not YYYY-MM-DD */
+  }
+  const parsed = Date.parse(s);
+  if (!isNaN(parsed)) return stripDateOnly_(new Date(parsed));
+  return null;
+}
+
+function getAllHistorySnapshotRows_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('OUT - History');
+  if (!sheet) return [];
+
+  const values = sheet.getDataRange().getValues();
+  const display = sheet.getDataRange().getDisplayValues();
+  if (display.length < 2) return [];
+
+  const headers = display[0];
+  const runDateCol = headers.indexOf('Run Date');
+  const runLabelCol = headers.indexOf('Run Label');
+  const investmentsCol = headers.indexOf('Total Financial Assets');
+  const houseValuesCol = headers.indexOf('Total Real Estate Assets');
+  const debtCol = headers.indexOf('Total Liabilities');
+  const assetsCol = headers.indexOf('Total Assets');
+  const netWorthCol = headers.indexOf('Net Worth');
+
+  if (runDateCol === -1 || investmentsCol === -1 || houseValuesCol === -1 || debtCol === -1 || assetsCol === -1 || netWorthCol === -1) {
+    return [];
+  }
+
+  const out = [];
+  for (let r = 1; r < values.length; r++) {
+    const runDateObj = parseHistoryRunDate_(values[r][runDateCol], display[r][runDateCol]);
+    if (!runDateObj) continue;
+
+    out.push({
+      runDate: runDateObj,
+      runLabel: runLabelCol === -1 ? '' : String(display[r][runLabelCol] || '').trim(),
+      investments: round2_(toNumber_(values[r][investmentsCol])),
+      houseValues: round2_(toNumber_(values[r][houseValuesCol])),
+      debt: round2_(toNumber_(values[r][debtCol])),
+      totalAssets: round2_(toNumber_(values[r][assetsCol])),
+      netWorth: round2_(toNumber_(values[r][netWorthCol]))
+    });
+  }
+
+  return out;
+}
+
+function pickWeeklyBaselineFromRows_(rows) {
+  const tz = Session.getScriptTimeZone();
+  const now = new Date();
+  const today = stripDateOnly_(now);
+  const cutoff = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7);
+
+  if (!rows.length) {
+    return {
+      baseline: null,
+      insufficientHistory: true,
+      note: 'No rows in OUT - History yet. Run the planner to record history.',
+      daysSinceBaseline: null
+    };
+  }
+
+  const older = rows.filter(function(r) {
+    return r.runDate.getTime() <= cutoff.getTime();
+  });
+
+  if (older.length) {
+    older.sort(function(a, b) {
+      return b.runDate.getTime() - a.runDate.getTime();
+    });
+    const b = older[0];
+    const days = Math.round((today.getTime() - b.runDate.getTime()) / 86400000);
+    return {
+      baseline: b,
+      insufficientHistory: false,
+      note: '',
+      daysSinceBaseline: days
+    };
+  }
+
+  rows.sort(function(a, b) {
+    return a.runDate.getTime() - b.runDate.getTime();
+  });
+  const oldest = rows[0];
+  const days = Math.round((today.getTime() - oldest.runDate.getTime()) / 86400000);
+  return {
+    baseline: oldest,
+    insufficientHistory: true,
+    note:
+      'No planner run at least 7 days ago yet — comparing to earliest available (' +
+      Utilities.formatDate(oldest.runDate, tz, 'MMM d, yyyy') +
+      ').',
+    daysSinceBaseline: days
+  };
+}
+
+function buildNetWorthAttributionWeekly_(current, pickMeta) {
+  const b = pickMeta && pickMeta.baseline;
+  const tz = Session.getScriptTimeZone();
+
+  if (!pickMeta || !b) {
+    return {
+      items: [],
+      baselineLabel: '',
+      baselineDetail: '',
+      note: (pickMeta && pickMeta.note) || 'No OUT - History data.',
+      insufficientHistory: true,
+      comparisonMode: 'weekly'
+    };
+  }
+
+  const items = [
+    {
+      key: 'financialAssets',
+      label: 'Financial Assets',
+      value: round2_(current.investments - b.investments)
+    },
+    {
+      key: 'realEstate',
+      label: 'Real Estate Value',
+      value: round2_(current.houseValues - b.houseValues)
+    },
+    {
+      key: 'liabilities',
+      label: 'Total Liabilities',
+      value: round2_(b.debt - current.debt)
+    },
+    {
+      key: 'netWorth',
+      label: 'Net Worth',
+      value: round2_(current.netWorth - b.netWorth)
+    }
+  ];
+
+  const dateFmt = Utilities.formatDate(b.runDate, tz, 'MMM d, yyyy');
+  const baselineLabel = b.runLabel ? b.runLabel + ' · ' + dateFmt : dateFmt;
+  const todayForDetail = stripDateOnly_(new Date());
+  const cutoffForDetail = new Date(todayForDetail.getFullYear(), todayForDetail.getMonth(), todayForDetail.getDate() - 7);
+  let baselineDetail =
+    'Live sheet balances vs planner run on ' +
+    dateFmt +
+    ' (' +
+    (pickMeta.daysSinceBaseline != null ? pickMeta.daysSinceBaseline : '—') +
+    ' days ago). Baseline = latest run on or before ' +
+    Utilities.formatDate(cutoffForDetail, tz, 'MMM d, yyyy') +
+    '.';
+
+  if (pickMeta.insufficientHistory) {
+    baselineDetail += ' (No run that old yet — earliest run used.)';
+  }
+
+  return {
+    items: items,
+    baselineLabel: baselineLabel,
+    baselineDetail: baselineDetail,
+    note: pickMeta.note || '',
+    insufficientHistory: pickMeta.insufficientHistory,
+    comparisonMode: 'weekly'
+  };
 }
 
 function getLatestPlannerHistoryMetrics_() {
@@ -210,39 +394,6 @@ function getPlannerHistoryMetricsByOffset_(offsetFromLatest) {
     minPayments: cols.minPayments === -1 ? 0 : round2_(toNumber_(values[r][cols.minPayments])),
     payoffTarget: cols.payoffTarget === -1 ? 0 : round2_(toNumber_(values[r][cols.payoffTarget])),
     payoffAll: cols.payoffAll === -1 ? 0 : round2_(toNumber_(values[r][cols.payoffAll]))
-  };
-}
-
-function buildNetWorthAttribution_(latest, previous) {
-  if (!latest || !previous) return null;
-
-  const items = [
-    {
-      key: 'financialAssets',
-      label: 'Financial Assets',
-      value: round2_(latest.investments - previous.investments)
-    },
-    {
-      key: 'realEstate',
-      label: 'Real Estate Value',
-      value: round2_(latest.houseValues - previous.houseValues)
-    },
-    {
-      key: 'liabilities',
-      label: 'Total Liabilities',
-      value: round2_(previous.debt - latest.debt)
-    },
-    {
-      key: 'netWorth',
-      label: 'Net Worth',
-      value: round2_(latest.netWorth - previous.netWorth)
-    }
-  ];
-
-  return {
-    baselineLabel: previous.runLabel || previous.runDate || 'Previous planner run',
-    latestLabel: latest.runLabel || latest.runDate || 'Latest planner run',
-    items: items
   };
 }
 

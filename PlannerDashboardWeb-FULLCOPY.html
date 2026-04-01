@@ -289,21 +289,16 @@
     </div>
 
     <div class="card">
-      <div class="card-title">What Changed?</div>
-      <div id="changes_list" class="changes-list"></div>
+      <div class="card-title">Weekly net worth change</div>
+      <div id="weekly_attrib_subtitle" class="subtle" style="margin-bottom:8px;"></div>
+      <div id="weekly_attrib_root" class="changes-list"></div>
     </div>
 
     <div class="card">
-      <div class="card-title">Net Worth Attribution</div>
-      <div id="attrib_root" class="changes-list"></div>
+      <div class="card-title">Issues</div>
+      <div id="issues_root"></div>
     </div>
   </div>
-
-  <div class="card">
-    <div class="card-title">Issues</div>
-    <div id="issues_root"></div>
-  </div>
-
 
   <div class="tabs">
     
@@ -947,44 +942,40 @@ function renderActions(actions) {
   window.__dashboardActions = items.slice();
 }
 
-function renderRecentChanges(changes) {
-  const root = document.getElementById('changes_list');
-  const items = changes || [];
-
-  if (!items.length) {
-    root.innerHTML = '<div class="muted">Need at least two planner runs to show changes.</div>';
-    return;
-  }
-
-  root.innerHTML = items.map(function(change) {
-    return (
-      '<div class="change-item">' +
-        '<div class="change-label">' + escapeHtml(change.label) + '</div>' +
-        '<div class="change-value">' + fmtSignedCurrency(change.value) + '</div>' +
-        '<div class="change-meta">vs ' + escapeHtml(change.baselineLabel || 'prior run') + '</div>' +
-      '</div>'
-    );
-  }).join('');
-}
-
-function renderAttribution(attribution) {
-  const root = document.getElementById('attrib_root');
+function renderWeeklyAttribution(attribution) {
+  const root = document.getElementById('weekly_attrib_root');
+  const subEl = document.getElementById('weekly_attrib_subtitle');
   if (!root) return;
 
+  if (subEl) {
+    subEl.textContent = attribution && attribution.baselineDetail ? attribution.baselineDetail : '';
+  }
+
   if (!attribution || !attribution.items || !attribution.items.length) {
-    root.innerHTML = '<div class="muted">Need at least two planner runs to show attribution.</div>';
+    const msg =
+      (attribution && attribution.note) ||
+      'No OUT - History rows yet, or required columns are missing. Run the planner to record history.';
+    root.innerHTML = '<div class="muted">' + escapeHtml(msg) + '</div>';
     return;
   }
 
-  root.innerHTML = attribution.items.map(function(item) {
-    return (
-      '<div class="change-item">' +
-        '<div class="change-label">' + escapeHtml(item.label) + '</div>' +
-        '<div class="change-value">' + fmtSignedCurrency(item.value) + '</div>' +
-        '<div class="change-meta">vs ' + escapeHtml(attribution.baselineLabel || 'prior run') + '</div>' +
-      '</div>'
-    );
-  }).join('');
+  const noteHtml = attribution.note
+    ? '<div class="muted" style="margin-bottom:10px;">' + escapeHtml(attribution.note) + '</div>'
+    : '';
+
+  root.innerHTML =
+    noteHtml +
+    attribution.items
+      .map(function(item) {
+        return (
+          '<div class="change-item">' +
+          '<div class="change-label">' + escapeHtml(item.label) + '</div>' +
+          '<div class="change-value">' + fmtSignedCurrency(item.value) + '</div>' +
+          '<div class="change-meta">vs ' + escapeHtml(attribution.baselineLabel || 'baseline') + '</div>' +
+          '</div>'
+        );
+      })
+      .join('');
 }
 
 function renderBufferRunway(bufferRunway) {
@@ -1058,8 +1049,7 @@ function applySnapshot(snapshot) {
   renderSourceUpdated(snapshot.sourceUpdated);
   renderIssues(snapshot.issues || []);
   renderHealth(snapshot.health || null);
-  renderRecentChanges(snapshot.recentChanges || []);
-  renderAttribution(snapshot.attribution || null);
+  renderWeeklyAttribution(snapshot.attribution || null);
   renderBufferRunway(snapshot.bufferRunway || null);
   renderActions(snapshot.suggestedActions || []);
   renderRetirementSummary(snapshot.retirement || null);
