@@ -463,7 +463,7 @@ function refreshSnapshot() {
 }
 
 function runPlannerNow() {
-  setStatus('planner_status', 'Running planner...', false);
+  setStatusLoading('planner_status', 'Running planner…');
   google.script.run
     .withSuccessHandler(function(res) {
       setStatus('planner_status', res.message || 'Planner run complete.', false);
@@ -561,6 +561,35 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function loadingIndicatorHtml(label) {
+  const text = label != null && String(label).trim() !== '' ? String(label) : 'Loading…';
+  return (
+    '<span class="dash-loading" role="status" aria-live="polite">' +
+    '<span class="dash-loading-spinner" aria-hidden="true"></span>' +
+    '<span class="dash-loading-label">' + escapeHtml(text) + '</span>' +
+    '</span>'
+  );
+}
+
+function loadingBlockHtml(label, center) {
+  const text = label != null && String(label).trim() !== '' ? String(label) : 'Loading…';
+  let cls = 'dash-loading dash-loading--block';
+  if (center) cls += ' dash-loading--center';
+  return (
+    '<div class="' + cls + '" role="status" aria-live="polite">' +
+    '<span class="dash-loading-spinner" aria-hidden="true"></span>' +
+    '<span class="dash-loading-label">' + escapeHtml(text) + '</span>' +
+    '</div>'
+  );
+}
+
+function setStatusLoading(id, label) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = loadingIndicatorHtml(label);
+  el.className = 'status dash-status-loading';
 }
 
 function escapeJs(value) {

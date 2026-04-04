@@ -35,7 +35,7 @@ function loadHouseData() {
     return;
   }
 
-  setStatus('house_status', 'Loading...', false);
+  setStatusLoading('house_status');
   google.script.run
     .withSuccessHandler(function(data) {
       document.getElementById('house_selectedMonth').textContent = data.selectedMonth || '—';

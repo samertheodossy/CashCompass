@@ -77,7 +77,7 @@ function loadBankData() {
     return;
   }
 
-  setStatus('bank_status', 'Loading...', false);
+  setStatusLoading('bank_status');
   google.script.run
     .withSuccessHandler(function(data) {
       bankCurrentData = data;
@@ -176,7 +176,7 @@ function loadInvestmentData() {
     return;
   }
 
-  setStatus('inv_status', 'Loading...', false);
+  setStatusLoading('inv_status');
   google.script.run
     .withSuccessHandler(function(data) {
       document.getElementById('inv_selectedMonth').textContent = data.selectedMonth || '—';

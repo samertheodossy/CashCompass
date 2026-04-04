@@ -50,8 +50,7 @@ function getPropertyPerformanceData(payload) {
       equity: equity,
       rent: rent,
       expenses: expenses,
-      netCash: netCash,
-      hasHousesSheet: housesSheetName !== null
+      netCash: netCash
     };
   });
 

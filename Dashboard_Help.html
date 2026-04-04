@@ -57,9 +57,9 @@
         <h3>Property performance (detail)</h3>
         <p><strong>Rent</strong> — The table sums <strong>Income</strong> rows on <strong>INPUT - Cash Flow</strong> for the selected <strong>year</strong> where the <strong>Payee</strong> starts with <code>Rent </code> plus the <strong>same house name</strong> as in <strong>SYS - House Assets</strong> (for example <code>Rent Oakley House - …</code>).</p>
         <p><strong>Rent only for rentals</strong> — On SYS - House Assets, the <strong>Type</strong> column controls this: values <strong>Rental</strong> (and the common typo <strong>Renal</strong>) use Cash Flow rent. Types such as <strong>Home</strong> or <strong>Vacation Home</strong> show <strong>$0</strong> rent in the table even if Income rows exist. If <strong>Type</strong> is blank, rent is still summed (legacy behavior).</p>
-        <p><strong>Expenses</strong> — Sums <strong>Cost</strong> + <strong>Service Fees</strong> from the <strong>HOUSES - …</strong> sheet whose location matches that house (matching is case- and spacing-insensitive).</p>
-        <p><strong>HOUSES sheet</strong> column — <strong>Yes</strong> means a matching expense tab was found; <strong>—</strong> means no tab matched. If the tab name does not align with the <strong>House</strong> name in SYS (for example <code>SD Condo</code> vs <code>San Diego House</code>), expense totals stay <strong>$0</strong> until names are aligned.</p>
-        <p><strong>Net</strong> — Rent minus expenses for that row (portfolio cards sum the columns).</p>
+        <p><strong>Expenses</strong> — These come from each property’s <strong>HOUSES - …</strong> sheet. The table sums <strong>Cost</strong> + <strong>Service Fees</strong> for the selected year from the sheet whose location matches that house (matching is case- and spacing-insensitive).</p>
+        <p><strong>HOUSES sheet</strong> — There must be a <strong>HOUSES - …</strong> tab that lines up with the <strong>House</strong> name on SYS for those expenses to show. If there is no matching <strong>HOUSES</strong> sheet—or the tab name doesn’t match the SYS house (for example <code>SD Condo</code> vs <code>San Diego House</code>)—expense totals stay <strong>$0</strong> until you add or rename the <strong>HOUSES</strong> sheet so it aligns.</p>
+        <p><strong>Net</strong> — Rent minus expenses for that row; the portfolio mini-cards sum the same figures across all houses.</p>
       </section>
 
       <section id="help-planning" class="help-section">

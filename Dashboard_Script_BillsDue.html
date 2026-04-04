@@ -7,6 +7,11 @@ function loadBillsDueUi_() {
   const ovBillsNext7 = document.getElementById('ov_bills_next7');
   if (ovBillsNext7) ovBillsNext7.textContent = '...';
 
+  ['bd_overdueList', 'bd_next7List'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = loadingBlockHtml('Loading…');
+  });
+
   google.script.run
     .withSuccessHandler(function(data) {
       renderBillsList_('bd_overdueList', (data && data.overdue) || [], 'No overdue bills.');
@@ -160,6 +165,9 @@ function skipBillFromDashboard(skipKey) {
 }
 
 function loadRecurringBillsUi_() {
+  const recEl = document.getElementById('bd_recurringList');
+  if (recEl) recEl.innerHTML = loadingBlockHtml('Loading…');
+
   google.script.run
     .withSuccessHandler(function(data) {
       renderRecurringBillsList_('bd_recurringList', data || [], 'No recurring bills pending.');

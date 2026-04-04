@@ -2,9 +2,15 @@ function loadPropertyPerformanceSection() {
   const yearSel = document.getElementById('pp_year');
   const year = yearSel && yearSel.value ? Number(yearSel.value) : new Date().getFullYear();
 
-  setStatus('pp_status', 'Loading…', false);
+  setStatusLoading('pp_status');
   const msgEl = document.getElementById('pp_message');
   if (msgEl) msgEl.textContent = '';
+
+  const tbodyLoading = document.getElementById('pp_tbody');
+  if (tbodyLoading) {
+    tbodyLoading.innerHTML =
+      '<tr><td colspan="8" style="padding:0;">' + loadingBlockHtml('Loading…', true) + '</td></tr>';
+  }
 
   google.script.run
     .withSuccessHandler(function(data) {
@@ -41,12 +47,11 @@ function loadPropertyPerformanceSection() {
 
       const rows = (data && data.rows) ? data.rows : [];
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="9" class="muted" style="padding:12px;">No houses in SYS - House Assets.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="muted" style="padding:12px;">No houses in SYS - House Assets.</td></tr>';
         return;
       }
 
       tbody.innerHTML = rows.map(function(row) {
-        const hs = row.hasHousesSheet ? 'Yes' : '—';
         const ptype = row.propertyType ? escapeHtml(row.propertyType) : '—';
         return (
           '<tr>' +
@@ -58,7 +63,6 @@ function loadPropertyPerformanceSection() {
           '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.rent) + '</td>' +
           '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.expenses) + '</td>' +
           '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.netCash) + '</td>' +
-          '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:center;">' + escapeHtml(hs) + '</td>' +
           '</tr>'
         );
       }).join('');
@@ -67,7 +71,7 @@ function loadPropertyPerformanceSection() {
       setStatus('pp_status', 'Error: ' + (err.message || String(err)), true);
       const tbody = document.getElementById('pp_tbody');
       if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="9" class="muted" style="padding:12px;">Could not load.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="muted" style="padding:12px;">Could not load.</td></tr>';
       }
     })
     .getPropertyPerformanceData({ year: year });

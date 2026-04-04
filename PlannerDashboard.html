@@ -95,6 +95,45 @@
       white-space: pre-wrap;
     }
 
+    .status.dash-status-loading {
+      white-space: normal;
+    }
+
+    .dash-loading {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      vertical-align: middle;
+    }
+
+    .dash-loading-spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid #e2e8f0;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: dash-loading-spin 0.72s linear infinite;
+      flex-shrink: 0;
+      box-sizing: border-box;
+    }
+
+    .dash-loading-label {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    @keyframes dash-loading-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .dash-loading-spinner {
+        animation: none;
+        border-color: #cbd5e1;
+        border-top-color: #2563eb;
+      }
+    }
+
     .error {
       color: #991b1b;
     }
@@ -320,6 +359,18 @@ function setStatus(id, msg, isError) {
   el.className = isError ? 'status error' : 'status';
 }
 
+function setStatusLoading(id, label) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const text = label != null && String(label).trim() !== '' ? String(label) : 'Loading…';
+  el.innerHTML =
+    '<span class="dash-loading" role="status" aria-live="polite">' +
+    '<span class="dash-loading-spinner" aria-hidden="true"></span>' +
+    '<span class="dash-loading-label"></span></span>';
+  el.querySelector('.dash-loading-label').textContent = text;
+  el.className = 'status dash-status-loading';
+}
+
 function toNumber(value) {
   if (value === '' || value === null || value === undefined) return 0;
   const cleaned = String(value)
@@ -430,7 +481,7 @@ function loadHouseData() {
     return;
   }
 
-  setStatus('house_status', 'Loading...', false);
+  setStatusLoading('house_status');
 
   google.script.run
     .withSuccessHandler(function(data) {
@@ -568,7 +619,7 @@ function loadBankData() {
     return;
   }
 
-  setStatus('bank_status', 'Loading...', false);
+  setStatusLoading('bank_status');
 
   google.script.run
     .withSuccessHandler(function(data) {
@@ -670,7 +721,7 @@ function loadInvestmentData() {
     return;
   }
 
-  setStatus('inv_status', 'Loading...', false);
+  setStatusLoading('inv_status');
 
   google.script.run
     .withSuccessHandler(function(data) {

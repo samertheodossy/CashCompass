@@ -49,6 +49,9 @@ function loadHouseExpensesSection() {
 }
 
 function loadRecentHouseExpenses() {
+  const recentRoot = document.getElementById('hx_recentList');
+  if (recentRoot) recentRoot.innerHTML = loadingBlockHtml('Loading…');
+
   google.script.run
     .withSuccessHandler(function(data) {
       const groups = (data && data.groups) ? data.groups : groupRecentHouseExpensesFallback_((data && data.expenses) || []);
@@ -124,6 +127,11 @@ function renderRecentHouseExpenses(groups) {
 }
 
 function loadHouseExpenseSummaries() {
+  ['hx_summaryThisMonthByHouse', 'hx_summaryYtdByHouse', 'hx_summaryYtdByType'].forEach(function(id) {
+    const root = document.getElementById(id);
+    if (root) root.innerHTML = loadingBlockHtml('Loading…');
+  });
+
   google.script.run
     .withSuccessHandler(function(data) {
       const thisMonthByHouse = (data && data.thisMonthByHouse) || [];

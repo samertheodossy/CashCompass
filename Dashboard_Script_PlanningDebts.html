@@ -75,7 +75,7 @@ function loadDebtFieldValue() {
     return;
   }
 
-  setStatus('debt_status', 'Loading...', false);
+  setStatusLoading('debt_status');
   google.script.run
     .withSuccessHandler(function(data) {
       document.getElementById('debt_type').textContent = data.type || '—';

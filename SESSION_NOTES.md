@@ -47,7 +47,7 @@
 
 - **Planner Dashboard → Properties**: new sub-tab **Property performance** next to **House Expenses** (CSS: `properties-tabs` uses two columns like other tab rows).
 - **Data**: `property_performance.js` + `getPropertyPerformanceData` — per row in **SYS - House Assets**: **Type** (SYS column), equity, rent (calendar year from **INPUT - Cash Flow** `Income` rows whose Payee matches `Rent {House name}` with optional suffix), expenses (sum **Cost + Service Fees** on **HOUSES - …** for that year). Portfolio mini-cards sum columns. Property performance table shows **Type** next to **House**.
-- **HOUSES sheet column / expenses**: resolve tab by exact `HOUSES - {House}` first, then normalized match on location suffix (case/spacing) so casing mismatches don’t show false “—”. Expense totals use the resolved sheet’s location key.
+- **HOUSES matching / expenses**: resolve tab by exact `HOUSES - {House}` first, then normalized match on location suffix (case/spacing). Expense totals use the resolved sheet’s location key (UI no longer shows a Yes/— column).
 - **Files**: `property_performance.js`, `Dashboard_Script_PropertyPerformance.html`, `Dashboard_Body.html`, `Dashboard_Script_Render.html`, `PlannerDashboardWeb.html`, `Dashboard_Styles.html`.
 - **Sheet naming**: align **INPUT - House Values** `House`, **SYS - House Assets** `House`, **`HOUSES - {same}`**, and Cash Flow **`Rent {same}`**; optional mismatch handled by normalized HOUSES lookup only when strings match after normalize.
 
@@ -110,4 +110,14 @@
 - **Content**: `Dashboard_Help.html` included from **`PlannerDashboardWeb.html`** after `Dashboard_Body` (same template level — `includeHtml_` uses `getRawContent()`, so nested `<?!= … ?>` inside Body does not run).
 - **JS**: `scrollHelpToSection`, `openHelpToSection`; delegated clicks on `.help-toc a` use `preventDefault` + `scrollIntoView` to avoid hash/sticky layout jumps (Safari).
 - **CSS**: `.help-toc-wrap` sticky wrapper, `.help-section` `scroll-margin-top`; styles in `Dashboard_Styles.html`.
-- **Property performance**: Short in-panel note + link to Help section `help-property-performance` where the long footnote lives.
+- **Property performance**: Table has no **HOUSES sheet** column (matching is documented in Help only); no in-panel footnote.
+- **Help — property performance copy**: **HOUSES sheet** paragraph explains tab alignment (not a table column); **Expenses** + **HOUSES sheet** split for clarity.
+
+---
+
+## Planner Dashboard — loading spinner (CSS + `setStatusLoading`)
+
+- **CSS** (`Dashboard_Styles.html`): `.dash-loading`, `.dash-loading-spinner`, `.dash-loading--block`, `.dash-loading--center`, `dash-loading-spin` keyframes; `prefers-reduced-motion` tames animation.
+- **JS** (`Dashboard_Script_Render.html`): `loadingIndicatorHtml`, `loadingBlockHtml`, `setStatusLoading` (after `escapeHtml`).
+- **Used for**: house/bank/investments/debt fetch status lines; property performance status + table row; **Run planner** status; house expense summaries/recent; bills due lists + recurring; initial placeholders in `Dashboard_Body.html`.
+- **Standalone**: `PlannerDashboard.html` includes same spinner styles + `setStatusLoading` for assets tabs.
