@@ -50,6 +50,7 @@
   <div><strong>Selected month:</strong> <span id="selectedMonth" class="muted">—</span></div>
   <div><strong>Stored value for selected month:</strong> <span id="selectedMonthValue" class="muted">—</span></div>
   <div><strong>Current House Assets value:</strong> <span id="currentAssetValue" class="muted">—</span></div>
+  <div><strong>Property type:</strong> <span id="propertyType" class="muted">—</span></div>
   <div><strong>Loan amount left:</strong> <span id="loanAmountLeft" class="muted">—</span></div>
 </div>
 
@@ -139,6 +140,9 @@ function setHouseInfo(data) {
 
   document.getElementById('currentAssetValue').textContent =
     data && data.currentAssetValue !== '' ? fmtCurrency(data.currentAssetValue) : '—';
+
+  document.getElementById('propertyType').textContent =
+    data && data.propertyType ? String(data.propertyType) : '—';
 
   document.getElementById('loanAmountLeft').textContent =
     data && data.loanAmountLeft !== '' ? fmtCurrency(data.loanAmountLeft) : '—';

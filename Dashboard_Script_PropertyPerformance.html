@@ -41,15 +41,17 @@ function loadPropertyPerformanceSection() {
 
       const rows = (data && data.rows) ? data.rows : [];
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="8" class="muted" style="padding:12px;">No houses in SYS - House Assets.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="muted" style="padding:12px;">No houses in SYS - House Assets.</td></tr>';
         return;
       }
 
       tbody.innerHTML = rows.map(function(row) {
         const hs = row.hasHousesSheet ? 'Yes' : '—';
+        const ptype = row.propertyType ? escapeHtml(row.propertyType) : '—';
         return (
           '<tr>' +
           '<td style="padding:8px;border-top:1px solid #e2e8f0;">' + escapeHtml(row.house) + '</td>' +
+          '<td style="padding:8px;border-top:1px solid #e2e8f0;">' + ptype + '</td>' +
           '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.currentValue) + '</td>' +
           '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.loanAmount) + '</td>' +
           '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.equity) + '</td>' +
@@ -65,7 +67,7 @@ function loadPropertyPerformanceSection() {
       setStatus('pp_status', 'Error: ' + (err.message || String(err)), true);
       const tbody = document.getElementById('pp_tbody');
       if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="8" class="muted" style="padding:12px;">Could not load.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="muted" style="padding:12px;">Could not load.</td></tr>';
       }
     })
     .getPropertyPerformanceData({ year: year });

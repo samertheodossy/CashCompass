@@ -5,7 +5,10 @@
       <div class="subtle">Unified browser dashboard for House Values, Bank Accounts, Investments, Debts, Quick Add Payment, Upcoming Expenses, Retirement, and Purchase Simulation.</div>
     </div>
     <div class="top-actions">
-      <button onclick="runPlannerNow()">Run Planner + Refresh Snapshot</button>
+      <div class="top-actions-buttons">
+        <button type="button" class="btn-help-prominent" onclick="showPage('help')">Help</button>
+        <button type="button" class="btn-planner-run" onclick="runPlannerNow()">Run Planner + Refresh Snapshot</button>
+      </div>
       <div id="planner_status" class="status"></div>
     </div>
   </div>
@@ -248,6 +251,7 @@
           <div><strong>Selected month:</strong> <span id="house_selectedMonth" class="muted">—</span></div>
           <div><strong>Stored value for selected month:</strong> <span id="house_selectedMonthValue" class="muted">—</span></div>
           <div><strong>Current House Assets value:</strong> <span id="house_currentAssetValue" class="muted">—</span></div>
+          <div><strong>Property type:</strong> <span id="house_propertyType" class="muted">—</span></div>
           <div><strong>Loan amount left:</strong> <span id="house_loanAmountLeft" class="muted">—</span></div>
           <div class="house-value-delta-sep" aria-hidden="true"></div>
           <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="house_deltaPriorMonth" class="muted">—</span></div>
@@ -617,6 +621,7 @@
           <thead>
             <tr>
               <th style="text-align:left;padding:8px;">House</th>
+              <th style="text-align:left;padding:8px;">Type</th>
               <th style="text-align:right;padding:8px;">Value</th>
               <th style="text-align:right;padding:8px;">Loan</th>
               <th style="text-align:right;padding:8px;">Equity</th>
@@ -627,14 +632,14 @@
             </tr>
           </thead>
           <tbody id="pp_tbody">
-            <tr><td colspan="8" class="muted" style="padding:12px;">Open this tab to load.</td></tr>
+            <tr><td colspan="9" class="muted" style="padding:12px;">Open this tab to load.</td></tr>
           </tbody>
         </table>
       </div>
 
-      <p class="muted" style="margin-top:12px;font-size:0.9em;">
-        Rent sums <strong>Income</strong> rows on <strong>INPUT - Cash Flow (year)</strong> whose Payee starts with <strong>Rent</strong> plus the same house name as in SYS - House Assets (e.g. <code>Rent Oakley House - …</code>).
-        Expenses sum <strong>Cost + Service Fees</strong> from the <strong>HOUSES - …</strong> sheet whose location matches that row (case/spacing-insensitive). If the tab is named differently from the House cell (e.g. <code>SD Condo</code> vs <code>San Diego House</code>), align the names or expenses stay $0 for that row.
+      <p class="muted help-footnote-pp">
+        <strong>NOTE:</strong> How rent, expenses, and the HOUSES sheet column work is explained in Help.
+        <button type="button" class="btn-link-help" onclick="openHelpToSection('help-property-performance')">Property performance → Help</button>
       </p>
     </div>
   </div>
@@ -816,4 +821,3 @@
       </div>
     </div>
   </div>
-</div>

@@ -53,6 +53,7 @@ function getHouseValueForDate(house, valuationDate) {
     selectedMonth: Utilities.formatDate(d, Session.getScriptTimeZone(), 'MMM-yy'),
     selectedMonthValue: monthValue,
     currentAssetValue: assetsInfo ? assetsInfo.currentValue : '',
+    propertyType: assetsInfo ? assetsInfo.propertyType : '',
     loanAmountLeft: assetsInfo ? assetsInfo.loanAmountLeft : '',
     previousMonthLabel: previousMonthLabel,
     deltaFromPreviousMonth: deltaFromPreviousMonth
@@ -119,6 +120,10 @@ function getHouseValueFromHistoryForMonth_(house, year, valuationDate) {
   return round2_(toNumber_(sheet.getRange(houseRow, monthCol).getValue()));
 }
 
+/**
+ * Copies latest INPUT - House Values (current year) into SYS - House Assets **Current Value** only.
+ * Other columns (Type, Loan Amount Left) are left unchanged.
+ */
 function syncAllHouseAssetsFromLatestCurrentYear_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const hvSheet = getSheet_(ss, 'HOUSE_VALUES');
@@ -190,6 +195,10 @@ function getHouseAssetRowData_(house) {
     const rowHouse = String(displayValues[r][headerMap.houseColZero] || '').trim();
     if (rowHouse === house) {
       return {
+        propertyType:
+          headerMap.typeColZero === -1
+            ? ''
+            : String(displayValues[r][headerMap.typeColZero] || '').trim(),
         loanAmountLeft: headerMap.loanColZero === -1 ? '' : round2_(toNumber_(values[r][headerMap.loanColZero])),
         currentValue: headerMap.valueColZero === -1 ? '' : round2_(toNumber_(values[r][headerMap.valueColZero]))
       };
@@ -277,6 +286,7 @@ function getHouseAssetsHeaderMap_(sheet) {
   const headers = sheet.getDataRange().getDisplayValues()[0] || [];
 
   const houseColZero = headers.indexOf('House');
+  const typeColZero = headers.indexOf('Type');
   const loanColZero = headers.indexOf('Loan Amount Left');
   const valueColZero = headers.indexOf('Current Value');
 
@@ -290,9 +300,11 @@ function getHouseAssetsHeaderMap_(sheet) {
 
   return {
     houseColZero: houseColZero,
+    typeColZero: typeColZero,
     loanColZero: loanColZero,
     valueColZero: valueColZero,
     houseCol: houseColZero + 1,
+    typeCol: typeColZero === -1 ? -1 : typeColZero + 1,
     loanCol: loanColZero === -1 ? -1 : loanColZero + 1,
     valueCol: valueColZero + 1
   };

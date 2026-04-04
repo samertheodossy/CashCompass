@@ -181,6 +181,7 @@
     <div><strong>Selected month:</strong> <span id="house_selectedMonth" class="muted">—</span></div>
     <div><strong>Stored value for selected month:</strong> <span id="house_selectedMonthValue" class="muted">—</span></div>
     <div><strong>Current House Assets value:</strong> <span id="house_currentAssetValue" class="muted">—</span></div>
+    <div><strong>Property type:</strong> <span id="house_propertyType" class="muted">—</span></div>
     <div><strong>Loan amount left:</strong> <span id="house_loanAmountLeft" class="muted">—</span></div>
     <div class="house-value-delta-sep" aria-hidden="true"></div>
     <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="house_deltaPriorMonth" class="muted">—</span></div>
@@ -420,6 +421,8 @@ function loadHouseData() {
     document.getElementById('house_selectedMonth').textContent = '—';
     document.getElementById('house_selectedMonthValue').textContent = '—';
     document.getElementById('house_currentAssetValue').textContent = '—';
+    const ptElH = document.getElementById('house_propertyType');
+    if (ptElH) ptElH.textContent = '—';
     document.getElementById('house_loanAmountLeft').textContent = '—';
     const deltaEl = document.getElementById('house_deltaPriorMonth');
     if (deltaEl) deltaEl.textContent = '—';
@@ -434,6 +437,8 @@ function loadHouseData() {
       document.getElementById('house_selectedMonth').textContent = data.selectedMonth || '—';
       document.getElementById('house_selectedMonthValue').textContent = data.selectedMonthValue !== '' ? fmtCurrency(data.selectedMonthValue) : '—';
       document.getElementById('house_currentAssetValue').textContent = data.currentAssetValue !== '' ? fmtCurrency(data.currentAssetValue) : '—';
+      const ptElH2 = document.getElementById('house_propertyType');
+      if (ptElH2) ptElH2.textContent = data.propertyType ? String(data.propertyType) : '—';
       document.getElementById('house_loanAmountLeft').textContent = data.loanAmountLeft !== '' ? fmtCurrency(data.loanAmountLeft) : '—';
       const deltaEl = document.getElementById('house_deltaPriorMonth');
       if (deltaEl) {

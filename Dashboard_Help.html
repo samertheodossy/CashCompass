@@ -1,0 +1,82 @@
+<div id="page_help" class="workspace-page help-page">
+  <div class="help-header">
+    <div>
+      <h2 class="help-title">Help &amp; how it works</h2>
+      <p class="help-subtitle muted">Documentation for this planner. Main areas match the buttons below the header (Overview, Assets, …).</p>
+    </div>
+    <button type="button" class="btn-help-back" onclick="showPage('overview')">← Back to Overview</button>
+  </div>
+
+  <div class="help-layout">
+    <div class="help-toc-wrap">
+      <nav class="help-toc" aria-label="Help sections">
+        <div class="help-toc-title">On this page</div>
+        <a href="#help-intro">Introduction</a>
+        <a href="#help-overview">Overview</a>
+        <a href="#help-assets">Assets</a>
+        <a href="#help-cashflow">Cash Flow</a>
+        <a href="#help-properties">Properties</a>
+        <a href="#help-property-performance">Property performance</a>
+        <a href="#help-planning">Planning</a>
+        <a href="#help-sheets">Sheet names</a>
+      </nav>
+    </div>
+
+    <div class="help-main">
+      <section id="help-intro" class="help-section">
+        <h3>Introduction</h3>
+        <p>This dashboard reads and updates your Google Sheets (INPUT and SYS tabs). Use <strong>Run Planner + Refresh Snapshot</strong> to sync latest values into the overview and run the debt planner.</p>
+        <p>Numbers come from your spreadsheets; this UI does not store its own copy of balances.</p>
+      </section>
+
+      <section id="help-overview" class="help-section">
+        <h3>Overview</h3>
+        <p>Snapshot cards show totals for cash, investments, real estate, debt, and net worth. Some cards include <strong>change vs prior month</strong> (or week, where noted)—compares live sheet totals to a prior period from INPUT history or OUT - History as documented in your project notes.</p>
+        <p>Click a card to jump to the related workspace tab when that shortcut exists.</p>
+      </section>
+
+      <section id="help-assets" class="help-section">
+        <h3>Assets</h3>
+        <p><strong>House Values</strong> — Edits <strong>INPUT - House Values</strong> for the selected month. <strong>SYS - House Assets</strong> <strong>Current Value</strong> is refreshed from the latest values in the current year block when you run the planner (other columns on SYS, such as <strong>Type</strong> and <strong>Loan Amount Left</strong>, are not overwritten by that sync).</p>
+        <p><strong>Bank Accounts</strong> and <strong>Investments</strong> — Update INPUT sheets; SYS tabs reflect synced balances.</p>
+      </section>
+
+      <section id="help-cashflow" class="help-section">
+        <h3>Cash Flow</h3>
+        <p><strong>Quick Payment</strong> — Adds to <strong>INPUT - Cash Flow</strong> for the selected year. The info box can show <strong>last month’s payment</strong> for the same payee: it reads the prior calendar month’s cell on the correct year’s Cash Flow tab (January uses the <em>previous year’s</em> tab for December).</p>
+        <p><strong>Upcoming</strong> and <strong>Bills Due</strong> — Driven by Cash Flow and bills logic in your sheet setup.</p>
+      </section>
+
+      <section id="help-properties" class="help-section">
+        <h3>Properties</h3>
+        <p><strong>House Expenses</strong> — Adds rows to the <strong>HOUSES - …</strong> tabs (per property).</p>
+        <p><strong>Property performance</strong> — See the next section for how rent, expenses, and the <strong>Type</strong> column on SYS - House Assets work together.</p>
+      </section>
+
+      <section id="help-property-performance" class="help-section">
+        <h3>Property performance (detail)</h3>
+        <p><strong>Rent</strong> — The table sums <strong>Income</strong> rows on <strong>INPUT - Cash Flow</strong> for the selected <strong>year</strong> where the <strong>Payee</strong> starts with <code>Rent </code> plus the <strong>same house name</strong> as in <strong>SYS - House Assets</strong> (for example <code>Rent Oakley House - …</code>).</p>
+        <p><strong>Rent only for rentals</strong> — On SYS - House Assets, the <strong>Type</strong> column controls this: values <strong>Rental</strong> (and the common typo <strong>Renal</strong>) use Cash Flow rent. Types such as <strong>Home</strong> or <strong>Vacation Home</strong> show <strong>$0</strong> rent in the table even if Income rows exist. If <strong>Type</strong> is blank, rent is still summed (legacy behavior).</p>
+        <p><strong>Expenses</strong> — Sums <strong>Cost</strong> + <strong>Service Fees</strong> from the <strong>HOUSES - …</strong> sheet whose location matches that house (matching is case- and spacing-insensitive).</p>
+        <p><strong>HOUSES sheet</strong> column — <strong>Yes</strong> means a matching expense tab was found; <strong>—</strong> means no tab matched. If the tab name does not align with the <strong>House</strong> name in SYS (for example <code>SD Condo</code> vs <code>San Diego House</code>), expense totals stay <strong>$0</strong> until names are aligned.</p>
+        <p><strong>Net</strong> — Rent minus expenses for that row (portfolio cards sum the columns).</p>
+      </section>
+
+      <section id="help-planning" class="help-section">
+        <h3>Planning</h3>
+        <p><strong>Debts</strong> — Update <strong>INPUT - Debts</strong>; planner output uses balances and minimums.</p>
+        <p><strong>Retirement</strong> and <strong>Purchase Sim</strong> — Use the latest snapshot and your inputs; details depend on your sheet configuration.</p>
+      </section>
+
+      <section id="help-sheets" class="help-section">
+        <h3>Sheet names (quick reference)</h3>
+        <ul class="help-list">
+          <li><strong>INPUT - House Values</strong> — Year blocks, monthly valuations per house.</li>
+          <li><strong>SYS - House Assets</strong> — One row per property: House, Type, Loan Amount Left, Current Value (and sync targets for value).</li>
+          <li><strong>HOUSES - {House}</strong> — Expense detail per property; name should match SYS for expense rollups.</li>
+          <li><strong>INPUT - Cash Flow {year}</strong> — Monthly columns; Rent payees for rental income.</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</div>

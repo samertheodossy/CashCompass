@@ -1,3 +1,13 @@
+## SYS - House Assets — Property type column
+
+- **Layout**: `House | Type | Loan Amount Left | Current Value` (optional **Type**; if absent, code behaves as before).
+- **Sync**: `syncAllHouseAssetsFromLatestCurrentYear_` still updates **Current Value** only (by header); **Type** and **Loan Amount Left** are never overwritten from INPUT - House Values.
+- **API**: `getHouseAssetsHeaderMap_` / `getHouseAssetRowData_` expose **propertyType**; `getHouseValueForDate` returns **propertyType** for UIs.
+- **Property performance**: Cash Flow **rent** is summed only when **Type** is **Rental** or **Renal** (typo); **Home**, **Vacation Home**, etc. show **$0** rent. Empty **Type** keeps legacy behavior (still sum rent). Table includes a **Type** column (from SYS).
+- **Planner**: `normalizeHouseAssets_` includes **propertyType** from column **Type**.
+
+---
+
 ## Cash Flow — Quick Payment: last month's payment (info box)
 
 - **Behavior**: **Last month's payment** = **cell value** on the **prior calendar month** for the same **Type + Payee** on that year's **INPUT - Cash Flow** tab. **January** date → **December** of the **previous calendar year** → read from **INPUT - Cash Flow (year−1)** (e.g. Jan-26 on 2026 tab → Dec-25 on **2025** tab). Each tab only has **Jan-YY … Dec-YY** for that year, so “last month” for January is **never** on the current year’s tab. Not a delta.
@@ -36,7 +46,7 @@
 ## Properties — Property performance tab (commit: feature + HOUSES matching + tabs layout)
 
 - **Planner Dashboard → Properties**: new sub-tab **Property performance** next to **House Expenses** (CSS: `properties-tabs` uses two columns like other tab rows).
-- **Data**: `property_performance.js` + `getPropertyPerformanceData` — per row in **SYS - House Assets**: equity, rent (calendar year from **INPUT - Cash Flow** `Income` rows whose Payee matches `Rent {House name}` with optional suffix), expenses (sum **Cost + Service Fees** on **HOUSES - …** for that year). Portfolio mini-cards sum columns.
+- **Data**: `property_performance.js` + `getPropertyPerformanceData` — per row in **SYS - House Assets**: **Type** (SYS column), equity, rent (calendar year from **INPUT - Cash Flow** `Income` rows whose Payee matches `Rent {House name}` with optional suffix), expenses (sum **Cost + Service Fees** on **HOUSES - …** for that year). Portfolio mini-cards sum columns. Property performance table shows **Type** next to **House**.
 - **HOUSES sheet column / expenses**: resolve tab by exact `HOUSES - {House}` first, then normalized match on location suffix (case/spacing) so casing mismatches don’t show false “—”. Expense totals use the resolved sheet’s location key.
 - **Files**: `property_performance.js`, `Dashboard_Script_PropertyPerformance.html`, `Dashboard_Body.html`, `Dashboard_Script_Render.html`, `PlannerDashboardWeb.html`, `Dashboard_Styles.html`.
 - **Sheet naming**: align **INPUT - House Values** `House`, **SYS - House Assets** `House`, **`HOUSES - {same}`**, and Cash Flow **`Rent {same}`**; optional mismatch handled by normalized HOUSES lookup only when strings match after normalize.
@@ -91,3 +101,13 @@
 - **Was**: one large `Dashboard_Script_Features_1.html` (House Values, House Expenses, Bank, Investments, Debts, Upcoming, Retirement, Purchase sim).
 - **Now**: seven includes after `Dashboard_Script_Render` in `PlannerDashboardWeb.html`: `Dashboard_Script_AssetsHouseValues`, `Dashboard_Script_PropertiesHouseExpenses`, `Dashboard_Script_AssetsBankInvestments`, `Dashboard_Script_PlanningDebts`, `Dashboard_Script_CashFlowUpcoming`, `Dashboard_Script_PlanningRetirement`, `Dashboard_Script_PlanningPurchaseSim`.
 - **Globals** (`bankCurrentData`, `houseExpenseOptions`, etc.) stay in `Dashboard_Script_Render.html`.
+
+---
+
+## Planner Dashboard — Help page (no nav tab)
+
+- **Entry**: Prominent **Help** button in the top bar with Run Planner; opens `page_help` via `showPage('help')` (not a sixth page tab).
+- **Content**: `Dashboard_Help.html` included from **`PlannerDashboardWeb.html`** after `Dashboard_Body` (same template level — `includeHtml_` uses `getRawContent()`, so nested `<?!= … ?>` inside Body does not run).
+- **JS**: `scrollHelpToSection`, `openHelpToSection`; delegated clicks on `.help-toc a` use `preventDefault` + `scrollIntoView` to avoid hash/sticky layout jumps (Safari).
+- **CSS**: `.help-toc-wrap` sticky wrapper, `.help-section` `scroll-margin-top`; styles in `Dashboard_Styles.html`.
+- **Property performance**: Short in-panel note + link to Help section `help-property-performance` where the long footnote lives.

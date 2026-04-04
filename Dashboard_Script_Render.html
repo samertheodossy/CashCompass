@@ -27,7 +27,36 @@ function showPage(name) {
 
   const btn = document.querySelector('.page-btn[data-page="' + name + '"]');
   if (btn) btn.classList.add('active');
+
+  window.scrollTo(0, 0);
 }
+
+function scrollHelpToSection(anchorId) {
+  var el = document.getElementById(anchorId);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function openHelpToSection(anchorId) {
+  showPage('help');
+  setTimeout(function() {
+    scrollHelpToSection(anchorId);
+  }, 50);
+}
+
+(function bindHelpTocNav() {
+  var root = document.getElementById('page_help');
+  if (!root) return;
+  root.addEventListener('click', function(e) {
+    var a = e.target.closest('.help-toc a[href^="#"]');
+    if (!a) return;
+    var href = a.getAttribute('href');
+    if (!href || href.length < 2) return;
+    var id = href.slice(1);
+    e.preventDefault();
+    scrollHelpToSection(id);
+  });
+})();
 
 function showTab(name) {
   document.querySelectorAll('.panel').forEach(function(el) {

@@ -52,6 +52,7 @@ function normalizeHouseAssets_(rows) {
       const value = round2_(toNumber_(r['Current Value']));
       return {
         house: String(r['House'] || '').trim(),
+        propertyType: String(r['Type'] || '').trim(),
         loanAmountLeft: loan,
         currentValue: value,
         estimatedEquity: round2_(value - loan)

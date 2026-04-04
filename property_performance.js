@@ -1,7 +1,16 @@
 /**
  * Property investment summary: SYS - House Assets + INPUT - Cash Flow (Rent*) + HOUSES - * expenses.
  * Localized; does not change planner or debt logic.
+ *
+ * Rent from Cash Flow is summed only when SYS - House Assets **Type** is rental
+ * (`Rental` or common typo `Renal`). Empty Type keeps legacy behavior (still sum rent).
  */
+
+function isHouseAssetsRentalForCashFlow_(typeStr) {
+  const t = String(typeStr || '').trim().toLowerCase();
+  if (!t) return true;
+  return t === 'rental' || t === 'renal';
+}
 
 function getPropertyPerformanceData(payload) {
   const year = getCurrentOrSelectedYear_(payload && payload.year);
@@ -21,7 +30,10 @@ function getPropertyPerformanceData(payload) {
     const loan = assets && assets.loanAmountLeft !== '' ? Number(assets.loanAmountLeft) : 0;
     const equity = round2_(cv - loan);
 
-    const rent = cfSheet ? sumCashFlowRentForHouse_(cfSheet, year, name) : 0;
+    const rent =
+      cfSheet && isHouseAssetsRentalForCashFlow_(assets && assets.propertyType)
+        ? sumCashFlowRentForHouse_(cfSheet, year, name)
+        : 0;
 
     const housesSheetName = findHousesSheetNameForAssetHouse_(ss, name);
     const expenseHouseKey = housesSheetName
@@ -32,6 +44,7 @@ function getPropertyPerformanceData(payload) {
 
     return {
       house: name,
+      propertyType: assets && assets.propertyType ? String(assets.propertyType).trim() : '',
       currentValue: round2_(cv),
       loanAmount: round2_(loan),
       equity: equity,
