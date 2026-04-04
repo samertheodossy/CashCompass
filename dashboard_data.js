@@ -568,8 +568,9 @@ function buildBufferRunway_(latestMetrics, cash) {
 }
 
 /**
- * minPaymentsOpt: optional total minimum payments (planner). When cash flow is non-negative,
- * monthsLine uses usable ÷ min payments as "months of minimum-payment coverage" so a number still shows.
+ * minPaymentsOpt: optional total minimum payments (planner). When projected cash flow is non-negative,
+ * monthsLine uses usable ÷ min payments as "months of minimum-payment coverage". When cash flow is
+ * negative (burn mode), monthsLine is omitted so the UI does not repeat the same value as label.
  */
 function buildRunwayFromValues_(usableCash, projectedCashFlow, minPaymentsOpt) {
   const usable = Number(usableCash || 0);
@@ -599,7 +600,7 @@ function buildRunwayFromValues_(usableCash, projectedCashFlow, minPaymentsOpt) {
       months: 0,
       label: '0.0 months',
       detail: 'Usable cash is already at or below zero.',
-      monthsLine: '0.0 months'
+      monthsLine: null
     };
   }
 
@@ -607,7 +608,7 @@ function buildRunwayFromValues_(usableCash, projectedCashFlow, minPaymentsOpt) {
     months: months,
     label: months === null ? '—' : months.toFixed(1) + ' months',
     detail: 'Based on usable cash after buffers and projected monthly cash flow.',
-    monthsLine: months === null ? '—' : months.toFixed(1) + ' months'
+    monthsLine: null
   };
 }
 
