@@ -15,6 +15,7 @@
         <a href="#help-overview">Overview</a>
         <a href="#help-assets">Assets</a>
         <a href="#help-cashflow">Cash Flow</a>
+        <a href="#help-bills-due">Bills Due</a>
         <a href="#help-properties">Properties</a>
         <a href="#help-property-performance">Property performance</a>
         <a href="#help-planning">Planning</a>
@@ -44,7 +45,16 @@
       <section id="help-cashflow" class="help-section">
         <h3>Cash Flow</h3>
         <p><strong>Quick Payment</strong> — Adds to <strong>INPUT - Cash Flow</strong> for the selected year. The info box can show <strong>last month’s payment</strong> for the same payee: it reads the prior calendar month’s cell on the correct year’s Cash Flow tab (January uses the <em>previous year’s</em> tab for December).</p>
-        <p><strong>Upcoming</strong> and <strong>Bills Due</strong> — Driven by Cash Flow and bills logic in your sheet setup.</p>
+        <p><strong>Upcoming</strong> — Planned expenses from your sheet; <strong>Bills Due</strong> is described below.</p>
+      </section>
+
+      <section id="help-bills-due" class="help-section">
+        <h3>Bills Due (Cash Flow tab)</h3>
+        <p>Three groups: <strong>Overdue</strong>, <strong>Next 7 Days</strong>, and <strong>Recurring Bills (No Due Date)</strong>. Each card shows only the bill <strong>name</strong>, <strong>amount</strong>, and <strong>due date</strong> (where applicable), plus <strong>Pay</strong> and <strong>Skip</strong>.</p>
+        <p><strong>Pay</strong> opens <strong>Quick Payment</strong> with payee, due date, and amount pre-filled. You can change the amount there before saving—there is no separate “suggested” line on the card; the amount shown is the value the dashboard is using (same number Pay starts with).</p>
+        <p><strong>Where amounts come from</strong> — Rows from <strong>INPUT - Bills</strong> use the bill fields from that sheet. Items tied to <strong>INPUT - Debts</strong> (minimum payments) use the planner/debt amount; the card does not list category, autopay, or “varies” flags—those stay on the sheet for your reference.</p>
+        <p><strong>Recurring (no due date)</strong> — Bills that are not yet tied to a dated row in <strong>INPUT - Bills</strong> appear in the third section. <strong>Pay</strong> opens Quick Payment with today’s date and amount 0 so you can enter the real payment; map or add due dates in <strong>INPUT - Bills</strong> when you want them in the dated lists.</p>
+        <p><strong>Skip</strong> marks the bill skipped in the dashboard flow (per your backend rules) and refreshes the lists. Feedback from <strong>Pay</strong> / <strong>Skip</strong> (for example “Bill skipped… wrote 0 into Cash Flow”) appears in the status line <strong>under the Bills Due heading</strong>, not next to Run Planner.</p>
       </section>
 
       <section id="help-properties" class="help-section">
@@ -75,6 +85,8 @@
           <li><strong>SYS - House Assets</strong> — One row per property: House, Type, Loan Amount Left, Current Value (and sync targets for value).</li>
           <li><strong>HOUSES - {House}</strong> — Expense detail per property; name should match SYS for expense rollups.</li>
           <li><strong>INPUT - Cash Flow {year}</strong> — Monthly columns; Rent payees for rental income.</li>
+          <li><strong>INPUT - Bills</strong> — Dated bills (category, autopay, varies, etc.); drives most Bills Due cards.</li>
+          <li><strong>INPUT - Debts</strong> — Loan accounts; minimum payments can appear on Bills Due.</li>
         </ul>
       </section>
     </div>

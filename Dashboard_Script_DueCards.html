@@ -112,12 +112,11 @@ function renderBillsList_(elementId, rows, emptyMsg) {
     window.__dashboardBills[key] = r;
 
     return (
-      '<div class="change-item">' +
+      '<div class="change-item bill-card-compact">' +
         '<div class="change-label">' + escapeHtml(r.name || 'Bill') + '</div>' +
         '<div class="change-value">' + fmtCurrency(r.amount || 0) + '</div>' +
-        '<div class="change-meta">Due: ' + escapeHtml(r.dueDate || '—') + '</div>' +
-        '<div class="change-meta">Suggested amount: ' + fmtCurrency(r.amount || 0) + '</div>' +
-        '<div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">' +
+        '<div class="change-meta">Due ' + escapeHtml(r.dueDate || '—') + '</div>' +
+        '<div class="bill-card-actions">' +
           '<button class="small-btn primary" onclick="payBillFromDashboard(\'' + escapeJs(key) + '\')">Pay</button>' +
           '<button class="small-btn" onclick="skipBillFromDashboard(\'' + escapeJs(r.id || '') + '\')">Skip</button>' +
         '</div>' +
@@ -131,7 +130,7 @@ function payBillFromDashboard(billKey) {
   const bill = store[billKey];
 
   if (!bill) {
-    setStatus('planner_status', 'Error: Bill not found.', true);
+    setStatus('bills_due_status', 'Error: Bill not found.', true);
     return;
   }
 
@@ -145,19 +144,19 @@ function payBillFromDashboard(billKey) {
 
 function skipBillFromDashboard(skipKey) {
   if (!skipKey) {
-    setStatus('planner_status', 'Error: Missing bill key.', true);
+    setStatus('bills_due_status', 'Error: Missing bill key.', true);
     return;
   }
 
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('planner_status', (res && res.message) || 'Skipped.', false);
+      setStatus('bills_due_status', (res && res.message) || 'Skipped.', false);
       loadDashboardActionSections();
       refreshSnapshot();
       loadPaymentPreview();
     })
     .withFailureHandler(function(err) {
-      setStatus('planner_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('bills_due_status', 'Error: ' + (err.message || String(err)), true);
     })
     .skipDashboardBill(skipKey);
 }
@@ -195,11 +194,10 @@ function renderRecurringBillsList_(elementId, rows, emptyMsg) {
     window.__dashboardRecurring[key] = r;
 
     return (
-      '<div class="change-item">' +
-        '<div class="change-label">' + escapeHtml(r.name) + '</div>' +
-        '<div class="change-value">—</div>' +
-        '<div class="change-meta">Recurring (no due date)</div>' +
-        '<div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">' +
+      '<div class="change-item bill-card-compact">' +
+        '<div class="change-label">' + escapeHtml(r.name || 'Recurring Bill') + '</div>' +
+        '<div class="change-meta">Recurring · no due date in INPUT - Bills</div>' +
+        '<div class="bill-card-actions">' +
           '<button class="small-btn primary" onclick="payRecurringBill(\'' + escapeJs(key) + '\')">Pay</button>' +
           '<button class="small-btn" onclick="skipRecurringBill(\'' + escapeJs(r.id) + '\')">Skip</button>' +
         '</div>' +
@@ -223,13 +221,13 @@ function payRecurringBill(key) {
 function skipRecurringBill(skipKey) {
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('planner_status', (res && res.message) || 'Skipped.', false);
+      setStatus('bills_due_status', (res && res.message) || 'Skipped.', false);
       loadDashboardActionSections();
       refreshSnapshot();
       loadPaymentPreview();
     })
     .withFailureHandler(function(err) {
-      setStatus('planner_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('bills_due_status', 'Error: ' + (err.message || String(err)), true);
     })
     .skipDashboardBill(skipKey);
 }

@@ -72,6 +72,8 @@
 
 - **UI**: first row in **Operations Snapshot** card: **Bills Next 7 Days** — sum of **`amount`** for bills in **`getBillsDueFromCashFlowForDashboard()`** `next7` (same as Bills Due list). Click opens **Cash Flow → Bills Due**.
 - **Files**: `Dashboard_Body.html`, `Dashboard_Script_BillsDue.html`. (`Dashboard_Script_DueCards.html` mirrors the same helpers but is not included by `PlannerDashboardWeb.html`.)
+- **Bills Due cards (compact UI)**: Each card shows **name**, **amount**, **due date**, **Pay** / **Skip** only—no duplicate “suggested amount,” no category/autopay/varies/source line. Details in Help **`#help-bills-due`**. Recurring row: one short meta line. Styles: `.bill-card-compact`, `.bill-card-actions` in `Dashboard_Styles.html`.
+- **Bills Due status**: `bills_due_status` under the Bills Due panel head; Pay/Skip success and errors use it (not `planner_status`). Load failures for the bills API still use `planner_status` for visibility.
 
 ---
 
