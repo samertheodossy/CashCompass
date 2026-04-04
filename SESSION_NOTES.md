@@ -71,7 +71,7 @@
 ## Operations Snapshot — Bills next 7 days
 
 - **UI**: first row in **Operations Snapshot** card: **Bills Next 7 Days** — sum of **`amount`** for bills in **`getBillsDueFromCashFlowForDashboard()`** `next7` (same as Bills Due list). Click opens **Cash Flow → Bills Due**.
-- **Files**: `Dashboard_Body.html`, `Dashboard_Script_BillsDue.html`. (`Dashboard_Script_DueCards.html` mirrors the same helpers but is not included by `PlannerDashboardWeb.html`.)
+- **Files**: `Dashboard_Body.html`, `Dashboard_Script_BillsDue.html`.
 - **Bills Due cards (compact UI)**: Each card shows **name**, **amount**, **due date**, **Pay** / **Skip** only—no duplicate “suggested amount,” no category/autopay/varies/source line. Details in Help **`#help-bills-due`**. Recurring row: one short meta line. Styles: `.bill-card-compact`, `.bill-card-actions` in `Dashboard_Styles.html`.
 - **Bills Due status**: `bills_due_status` under the Bills Due panel head; Pay/Skip success and errors use it (not `planner_status`). Load failures for the bills API still use `planner_status` for visibility.
 
@@ -81,13 +81,13 @@
 
 - **Behavior**: One card **Weekly net worth change**. Deltas = **live** balances (assets / house values / debts / net worth from sheets) **minus** a **baseline row** from **`OUT - History`**: the **latest** run whose **Run Date** is on or **before** (today − 7 calendar days). If no run is that old, **fallback** to the **earliest** row in History and show a short note in the card.
 - **Removed**: `buildNetWorthAttribution_(latest, previous)` (consecutive History rows). **Revert**: restore that function and wire `buildDashboardSnapshot_` to it; restore two Overview cards + `renderRecentChanges` / `renderAttribution` in `Dashboard_Script_Render.html` and `Dashboard_Body.html`.
-- **Files touched**: `dashboard_data.js` (`getAllHistorySnapshotRows_`, `pickWeeklyBaselineFromRows_`, `buildNetWorthAttributionWeekly_`, `parseHistoryRunDate_`), `Dashboard_Body.html`, `Dashboard_Script_Render.html`. (`Dashboard_Script_Core.html` is an offline mirror of render helpers — not loaded by `PlannerDashboardWeb.html`.)
+- **Files touched**: `dashboard_data.js` (`getAllHistorySnapshotRows_`, `pickWeeklyBaselineFromRows_`, `buildNetWorthAttributionWeekly_`, `parseHistoryRunDate_`), `Dashboard_Body.html`, `Dashboard_Script_Render.html`.
 
 ---
 
 ## Overview — Snapshot month-over-month + net worth + health + buffer runway (2026)
 
-- **Top snapshot cards — “Change vs MMM yyyy”** (script timezone, **prior calendar month**). **`fmtPriorMonthDelta`** in `Dashboard_Script_Render.html` / Core mirror.
+- **Top snapshot cards — “Change vs MMM yyyy”** (script timezone, **prior calendar month**). **`fmtPriorMonthDelta`** in `Dashboard_Script_Render.html`.
   - **Total cash**: sum **INPUT - Bank Accounts** prior month column vs **SYS - Accounts** current (`getPriorMonthCashTotalFromBankInput_` in `bank_accounts.js`).
   - **Total investments**: sum **INPUT - Investments** prior month vs **SYS - Assets** (`getPriorMonthInvestmentsTotalFromInput_` in `investments.js`). Not from `OUT - History` for this line.
   - **Real estate value**: sum **INPUT - House Values** prior month vs **SYS - House Assets** (`getPriorMonthHouseValuesTotalFromHouseValuesInput_` in `house_values.js`).
@@ -123,3 +123,9 @@
 - **JS** (`Dashboard_Script_Render.html`): `loadingIndicatorHtml`, `loadingBlockHtml`, `setStatusLoading` (after `escapeHtml`).
 - **Used for**: house/bank/investments/debt fetch status lines; property performance status + table row; **Run planner** status; house expense summaries/recent; bills due lists + recurring; initial placeholders in `Dashboard_Body.html`.
 - **Standalone**: `PlannerDashboard.html` includes same spinner styles + `setStatusLoading` for assets tabs.
+
+---
+
+## Dead code — removed unreferenced dashboard HTML
+
+- **Removed**: `Dashboard_Script_DueCards.html`, `Dashboard_Script_Core.html`, `Dashboard_Script_Utils.html` (never `includeHtml_`’d from `PlannerDashboardWeb.html` nor `createHtmlOutputFromFile` elsewhere). **Revert**: restore those files from git history if a mirror is needed again.
