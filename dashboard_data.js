@@ -22,6 +22,7 @@ function runPlannerAndRefreshDashboard() {
 
 function buildDashboardSnapshot_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureActivityLogSheet_(ss);
 
   const cash = sumColumnByHeader_(getSheet_(ss, 'ACCOUNTS'), 'Current Balance');
   const investments = sumColumnByHeader_(getSheet_(ss, 'ASSETS'), 'Current Balance');
@@ -1151,6 +1152,7 @@ function getUpcomingBillsDueForDashboard() {
 
 function getBillsDueFromCashFlowForDashboard() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureActivityLogSheet_(ss);
   const today = new Date();
   const tz = Session.getScriptTimeZone();
 
@@ -1526,6 +1528,21 @@ function getInputBillsDueRows_(ss, today, tz) {
       if (canAutopay && dueHasPassed && !isCashFlowBillHandled_(cellValue, cellDisplay)) {
         writeDashboardBillValuePreserveFormat_(sheet, rowInfo.row, monthCol + 1, -defaultAmount);
         touchDashboardSourceUpdated_('cash_flow');
+
+        var autopayDedupe = buildBillAutopayDedupeKey_(payee, cand.monthHeader, cand.dueDate, defaultAmount);
+        appendActivityLog_(ss, {
+          eventType: 'bill_autopay',
+          entryDate: Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd'),
+          amount: defaultAmount,
+          direction: 'expense',
+          payee: payee,
+          category: category,
+          accountSource: '',
+          cashFlowSheet: sheet.getName(),
+          cashFlowMonth: cand.monthHeader,
+          dedupeKey: autopayDedupe,
+          details: JSON.stringify({ source: 'INPUT - Bills', autopay: true, varies: varies })
+        });
       }
 
       const refreshedValue = cellRange.getValue();
@@ -1831,6 +1848,23 @@ function skipDashboardBill(skipKey) {
       .setHorizontalAlignment(horizontalAlignment)
       .setVerticalAlignment(verticalAlignment)
       .setWrap(wrap);
+
+    var bill = getDashboardBillByKey_(ss, skipKey);
+    var monthHdr = bill && bill.monthHeader ? bill.monthHeader : activityLogMonthHeaderFromCell_(info.sheet, info.col);
+    var payeeName = bill ? bill.payee : activityLogFallbackPayeeFromSkipKey_(skipKey);
+    appendActivityLog_(ss, {
+      eventType: 'bill_skip',
+      entryDate: bill ? activityLogEntryDateFromSkipBill_(bill) : '',
+      amount: 0,
+      direction: 'skip',
+      payee: payeeName || '(unknown)',
+      category: '',
+      accountSource: '',
+      cashFlowSheet: info.sheet.getName(),
+      cashFlowMonth: monthHdr,
+      dedupeKey: 'bill_skip::' + String(skipKey || '').trim(),
+      details: JSON.stringify({ skipKey: skipKey, wroteZero: true, billResolved: !!bill })
+    });
 
     return {
       ok: true,

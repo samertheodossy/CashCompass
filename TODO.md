@@ -41,11 +41,12 @@ TO DO and issues I see in the testing
 - **Privacy:** same workbook sensitivity as other INPUT/OUT tabs.
 
 **Phased rollout (stick to this order)**  
-1. **Phase 1 — Quick Pay only:** highest signal, single choke point (`quickAddPayment`).  
-2. **Phase 2 — Bill skip + bill autopay** (with dedupe / transition-only logging).  
+1. **Phase 1 — Quick Pay only:** ~~highest signal, single choke point (`quickAddPayment`)~~ **Done** — `LOG - Activity` + `activity_log.js`.  
+2. **Phase 2 — Bill skip + bill autopay** ~~(with dedupe / transition-only logging)~~ **Done** — skip logs `bill_skip`; INPUT - Bills autopay logs `bill_autopay` with dedupe on refresh.  
 3. **Phase 3 — Upcoming** lifecycle (add, paid, push to cash flow).  
 4. **Phase 4 — House expenses** (`addHouseExpense`).  
-5. **Phase 5 (optional):** Correlate to **OUT - History** (e.g. planner run date / id column after `runPlanner`) for “what activity sat around this run?”
+5. **Phase 5 (optional):** Correlate to **OUT - History** (e.g. planner run date / id column after `runPlanner`) for “what activity sat around this run?”  
+6. **UI (any phase):** Activity / History page to filter/sort/export (sheet is readable manually until then).
 
 ---
 

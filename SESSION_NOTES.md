@@ -1,3 +1,13 @@
+## LOG - Activity (append-only audit)
+
+- **Tab**: `LOG - Activity` — created on first log if missing; header row: Logged At, Event Type, Entry Date, Amount, Direction, Payee, Category, Account / Source, Cash Flow Sheet, Cash Flow Month, Dedupe Key, Details.
+- **Phase 1**: `quick_pay` after successful `quickAddPayment` (`quick_add_payment.js`); Details JSON includes previous/new cell values, signed amount, `createIfMissing`, optional debt balance note.
+- **Phase 2**: `bill_skip` when Bills Due skip writes **0** into Cash Flow (`skipDashboardBill` in `dashboard_data.js`); `bill_autopay` after INPUT - Bills autopay write; **dedupe** on `bill_autopay::…` so dashboard refresh does not duplicate rows (`buildBillAutopayDedupeKey_`, `activityLogDedupeKeyExists_`).
+- **Server**: `activity_log.js` — failures are logged with `Logger.log` and do not block payments/skips.
+- **Tab visibility**: `ensureActivityLogSheet_(ss)` runs at the start of **`buildDashboardSnapshot_`** and **`getBillsDueFromCashFlowForDashboard`** so **LOG - Activity** exists after **Overview refresh** or **Bills Due load**, even before any row is appended. Skip logging no longer requires `getDashboardBillByKey_` to succeed (fallback payee + month column from the Cash Flow header row).
+
+---
+
 ## SYS - House Assets — Property type column
 
 - **Layout**: `House | Type | Loan Amount Left | Current Value` (optional **Type**; if absent, code behaves as before).

@@ -16,6 +16,7 @@ We are building a Google Apps Script Planner Dashboard for personal finance / pr
 - Monte Carlo / retirement success
 - Purchase simulator / big purchase sim
 - Planner run + OUT history snapshot logic
+- **LOG - Activity** — append-only ledger of script actions (Quick Pay, bill skip, bill autopay from INPUT - Bills autopay); not a substitute for **OUT - History** (planner snapshots). Created automatically if missing (`activity_log.js`).
 
 ## Current architecture
 
@@ -39,6 +40,7 @@ We are building a Google Apps Script Planner Dashboard for personal finance / pr
 - webapp.js = main doGet()
 - html_includes.js = includeHtml_() using raw content
 - dashboard_data.js = main dashboard snapshot + bills due backend
+- activity_log.js = LOG - Activity append-only audit (`appendActivityLog_`, dedupe keys for bill autopay)
 - other feature files exist for house, debts, payments, retirement, etc.
 
 ## Important resolved infra issues
