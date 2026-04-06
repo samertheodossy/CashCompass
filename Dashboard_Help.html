@@ -20,6 +20,7 @@
         <a href="#help-properties">Properties</a>
         <a href="#help-property-performance">Property performance</a>
         <a href="#help-planning">Planning</a>
+        <a href="#help-debt-email">Debt Planner email</a>
         <a href="#help-sheets">Sheet names</a>
       </nav>
     </div>
@@ -104,6 +105,16 @@
         <h3>Planning</h3>
         <p><strong>Debts</strong> — Update <strong>INPUT - Debts</strong>; planner output uses balances and minimums.</p>
         <p><strong>Retirement</strong> and <strong>Purchase Sim</strong> — Use the latest snapshot and your inputs; details depend on your sheet configuration.</p>
+      </section>
+
+      <section id="help-debt-email" class="help-section">
+        <h3>Debt Planner email</h3>
+        <p>When you <strong>run the debt planner</strong>, you may get a short email titled <strong>Debt Planner Update</strong>. It is meant as a quick glance: bill buckets first, then a compact summary (stability, net worth, cash flow, extra-payoff hints). Full definitions live here—not in the email.</p>
+        <p><strong>Overdue bills</strong> — Same idea as <strong>Bills Due → Overdue</strong>: due date is before today and the matching <strong>INPUT - Cash Flow</strong> month cell for that cycle does not yet count as having a value (handled). Includes items tied to <strong>INPUT - Debts</strong> and <strong>INPUT - Bills</strong>.</p>
+        <p><strong>Pay now</strong> — Sum of <strong>minimum payments</strong> on active debts whose <strong>next</strong> due date falls within the next <strong>7 days</strong> (from the day the planner runs).</p>
+        <p><strong>Pay soon</strong> — Same logic, but due dates from <strong>day 8 through day 30</strong> out.</p>
+        <p><strong>Already paid this month</strong> — If the expense row for that debt already has a value in the <strong>current month column</strong> on Cash Flow (same “handled” rule as Bills Due), that debt is <strong>omitted</strong> from Pay now / Pay soon for that run. Re-run the planner after updating Cash Flow to refresh the email.</p>
+        <p><strong>Recommended total to pay now</strong> — Appears in the email <em>only when</em> the planner suggests an <strong>extra</strong> payment on top of Pay now minimums. If there is no extra, the Pay now total is all you need for minimums; the summary section still notes the best card target and liquidity when relevant.</p>
       </section>
 
       <section id="help-sheets" class="help-section">

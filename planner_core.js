@@ -1,24 +1,108 @@
+var ACTION_PLAN_MAX_VISIBLE_PAY_ITEMS_ = 12;
+
+function appendScheduledMinimumLines_(lines, items) {
+  const cap = ACTION_PLAN_MAX_VISIBLE_PAY_ITEMS_;
+  if (!items || items.length === 0) {
+    lines.push('  (none)');
+    return;
+  }
+  const show = Math.min(items.length, cap);
+  for (let i = 0; i < show; i++) {
+    const p = items[i];
+    lines.push(
+      '  • ' +
+        p.account +
+        ' - ' +
+        fmtCurrency_(p.minimumPayment) +
+        ' min, due ' +
+        p.dueDate +
+        ' (' +
+        p.daysUntilDue +
+        'd)'
+    );
+  }
+  if (items.length > show) {
+    let hiddenSum = 0;
+    for (let j = show; j < items.length; j++) hiddenSum += items[j].minimumPayment;
+    lines.push(
+      '  • ... and ' +
+        (items.length - show) +
+        ' more - ' +
+        fmtCurrency_(round2_(hiddenSum)) +
+        ' in minimums (included in total above).'
+    );
+  }
+}
+
+function appendOverdueBillLines_(lines, items, today) {
+  const cap = ACTION_PLAN_MAX_VISIBLE_PAY_ITEMS_;
+  const todayOnly = stripTime_(today);
+  if (!items || items.length === 0) {
+    lines.push('  (none)');
+    return;
+  }
+  const show = Math.min(items.length, cap);
+  for (let i = 0; i < show; i++) {
+    const row = items[i];
+    const label = String(row.name || row.payee || 'Bill').trim() || 'Bill';
+    const amt = round2_(Math.abs(toNumber_(row.amount)));
+    const dueStr = String(row.dueDate || '').trim();
+    let lateSuffix = '';
+    if (dueStr) {
+      const dueDate = new Date(dueStr + 'T00:00:00');
+      if (!isNaN(dueDate.getTime())) {
+        const daysLate = Math.floor((todayOnly.getTime() - stripTime_(dueDate).getTime()) / 86400000);
+        if (daysLate > 0) lateSuffix = ', (' + daysLate + 'd overdue)';
+      }
+    }
+    lines.push(
+      '  • ' + label + ' - ' + fmtCurrency_(amt) + ', due ' + dueStr + lateSuffix
+    );
+  }
+  if (items.length > show) {
+    let hiddenSum = 0;
+    for (let j = show; j < items.length; j++) hiddenSum += Math.abs(toNumber_(items[j].amount));
+    lines.push(
+      '  • ... and ' +
+        (items.length - show) +
+        ' more - ' +
+        fmtCurrency_(round2_(hiddenSum)) +
+        ' (included in total above).'
+    );
+  }
+}
+
 function buildActionPlan_(data) {
   const lines = [];
 
-  if (data.payNow.length > 0) lines.push('Pay now total: ' + fmtCurrency_(data.payNowMinimumTotal) + '.');
-  else lines.push('Pay now total: ' + fmtCurrency_(0) + '.');
+  const overdue = data.overdueBills || [];
+  if (overdue.length > 0) {
+    let overdueSum = 0;
+    overdue.forEach(function(r) {
+      overdueSum += Math.abs(toNumber_(r.amount));
+    });
+    lines.push('Overdue bills -- total ' + fmtCurrency_(round2_(overdueSum)) + ':');
+    appendOverdueBillLines_(lines, overdue, data.today);
+    lines.push('');
+  }
 
-  if (data.paySoon.length > 0) lines.push('Pay soon total: ' + fmtCurrency_(data.paySoonMinimumTotal) + '.');
-  else lines.push('Pay soon total: ' + fmtCurrency_(0) + '.');
+  lines.push('Pay now — total ' + fmtCurrency_(data.payNowMinimumTotal) + ':');
+  appendScheduledMinimumLines_(lines, data.payNow);
+  lines.push('');
+
+  lines.push('Pay soon — total ' + fmtCurrency_(data.paySoonMinimumTotal) + ':');
+  appendScheduledMinimumLines_(lines, data.paySoon);
+  lines.push('');
 
   if (data.recommendation && data.recommendation.suggestedExtraPayment > 0) {
     lines.push('Extra payment target this cycle: ' + data.recommendation.targetAccount + ' for ' + fmtCurrency_(data.recommendation.suggestedExtraPayment) + '.');
-  } else if (data.recommendation) {
-    lines.push('Hold extra debt payments this cycle and preserve liquidity.');
-    if (data.stability.label === 'Risky' || data.stability.label === 'Tight') {
-      lines.push('Resume aggressive payoff when monthly stability improves to Tight or Stable and extra payment recommendation returns.');
-    }
-  } else {
-    lines.push('No extra debt target was generated this cycle.');
+    lines.push(
+      'Recommended total to pay now (pay-now minimums plus suggested extra): ' +
+        fmtCurrency_(data.recommendedTotalToPayNow) +
+        '.'
+    );
   }
 
-  lines.push('Recommended total to pay now: ' + fmtCurrency_(data.recommendedTotalToPayNow) + '.');
   return lines;
 }
 
@@ -266,13 +350,44 @@ function calculateUsableCash_(accounts) {
   };
 }
 
-function buildUpcomingPayments_(debts, today, tz, payNowWindowDays, paySoonWindowDays) {
+/**
+ * For expense rows whose month cell looks "handled" (non-empty display + numeric value),
+ * records both alias-canonical payee and normalizeBillName_(raw payee) so matching stays
+ * aligned with dashboard getDebtBillsDueRows_.
+ */
+function buildDebtMinimumHandledMap_(cashFlowRows, monthHeader, aliasMap) {
+  const map = Object.create(null);
+  cashFlowRows.forEach(function(r) {
+    if (String(r['Type'] || '').trim() !== 'Expense') return;
+    const rawPayee = String(r['Payee'] || '').trim();
+    const payee = normalizeName_(r['Payee'], aliasMap);
+    const cellValue = Object.prototype.hasOwnProperty.call(r, monthHeader) ? r[monthHeader] : '';
+    const cellDisplay = Object.prototype.hasOwnProperty.call(r, '__display__' + monthHeader)
+      ? r['__display__' + monthHeader]
+      : '';
+    if (!isCashFlowBillHandled_(cellValue, cellDisplay)) return;
+    map[payee] = true;
+    if (rawPayee) map[normalizeBillName_(rawPayee)] = true;
+  });
+  return map;
+}
+
+function isDebtMinimumHandledThisMonth_(handledMap, debt) {
+  if (!handledMap) return false;
+  if (handledMap[debt.name]) return true;
+  if (debt.originalName && handledMap[normalizeBillName_(debt.originalName)]) return true;
+  return false;
+}
+
+function buildUpcomingPayments_(debts, today, tz, payNowWindowDays, paySoonWindowDays, debtMinimumHandledMap) {
   const payNow = [];
   const paySoon = [];
 
   debts
     .filter(function(d) { return d.active && d.minimumPayment > 0; })
     .forEach(function(d) {
+      if (isDebtMinimumHandledThisMonth_(debtMinimumHandledMap, d)) return;
+
       const dueDate = getNextDueDate_(today, d.dueDay);
       const daysUntilDue = daysBetween_(stripTime_(today), dueDate);
 
@@ -357,20 +472,6 @@ function buildExecutiveSummary_(data) {
   lines.push('Total liabilities: ' + fmtCurrency_(data.totalLiabilities) + '.');
   lines.push('Net worth: ' + fmtCurrency_(data.netWorth) + '.');
 
-  if (data.payNow.length > 0) {
-    const firstPayNow = data.payNow[0];
-    lines.push('Pay now: ' + firstPayNow.account + ' ' + fmtCurrency_(firstPayNow.minimumPayment) + ' due ' + firstPayNow.dueDate + '.');
-  } else {
-    lines.push('Pay now: no bills due inside the immediate window.');
-  }
-
-  if (data.paySoon.length > 0) {
-    const firstPaySoon = data.paySoon[0];
-    lines.push('Pay soon: ' + firstPaySoon.account + ' ' + fmtCurrency_(firstPaySoon.minimumPayment) + ' due ' + firstPaySoon.dueDate + '.');
-  } else {
-    lines.push('Pay soon: no additional bills due inside the next planning window.');
-  }
-
   lines.push('Projected cash flow for ' + data.monthHeader + ': ' + fmtCurrency_(data.thisMonthCashFlow) + '.');
 
   if (data.recommendation && data.recommendation.suggestedExtraPayment > 0) {
@@ -390,9 +491,6 @@ function buildExecutiveSummary_(data) {
   } else {
     lines.push('No extra-payment recommendation was generated.');
   }
-
-  lines.push('Minimums due now: ' + fmtCurrency_(data.payNowMinimumTotal) + '.');
-  lines.push('Recommended total to pay now: ' + fmtCurrency_(data.recommendedTotalToPayNow) + '.');
 
   return lines;
 }

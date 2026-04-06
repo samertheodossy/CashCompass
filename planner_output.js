@@ -877,6 +877,8 @@ function sendPlannerEmailIfConfigured_(summary) {
   lines.push('');
   summary.actionPlan.forEach(function(line) { lines.push(line); });
   lines.push('');
+  lines.push('---');
+  lines.push('');
   summary.executiveSummary.forEach(function(line) { lines.push(line); });
 
   MailApp.sendEmail({

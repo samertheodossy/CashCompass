@@ -102,7 +102,17 @@ function runDebtPlanner() {
   );
 
   const thisMonthCashFlow = round2_(cashFlow.monthNet);
-  const nextPayments = buildUpcomingPayments_(debts, today, tz, payNowWindowDays, paySoonWindowDays);
+  const debtMinimumHandledMap = buildDebtMinimumHandledMap_(cashFlowRows, monthHeader, aliasMap);
+  const nextPayments = buildUpcomingPayments_(
+    debts,
+    today,
+    tz,
+    payNowWindowDays,
+    paySoonWindowDays,
+    debtMinimumHandledMap
+  );
+
+  const overdueBillsForEmail = getBillsDueFromCashFlowForDashboard().overdue || [];
 
   const warnings = [];
   const notes = [];
@@ -294,21 +304,18 @@ function runDebtPlanner() {
   const actionPlan = buildActionPlan_({
     payNow: nextPayments.payNow,
     paySoon: nextPayments.paySoon,
+    overdueBills: overdueBillsForEmail,
     recommendation: recommendation,
     payNowMinimumTotal: payNowMinimumTotal,
     paySoonMinimumTotal: paySoonMinimumTotal,
     recommendedTotalToPayNow: recommendedTotalToPayNow,
-    stability: stability
+    today: today
   });
 
   const executiveSummary = buildExecutiveSummary_({
-    payNow: nextPayments.payNow,
-    paySoon: nextPayments.paySoon,
     monthHeader: monthHeader,
     thisMonthCashFlow: thisMonthCashFlow,
     recommendation: recommendation,
-    payNowMinimumTotal: payNowMinimumTotal,
-    recommendedTotalToPayNow: recommendedTotalToPayNow,
     stability: stability,
     totalAssets: totalAssets,
     totalLiabilities: liabilitySummary.totalLiabilities,
