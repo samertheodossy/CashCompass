@@ -496,6 +496,12 @@
           <input type="text" id="act_payeeSearch" placeholder="Contains…" class="activity-search-input" aria-label="Payee contains">
         </div>
         <div class="activity-filter-group">
+          <label class="activity-filter-label" for="act_kindFilter">Type</label>
+          <select id="act_kindFilter" class="activity-kind-select" aria-label="Filter by activity type">
+            <option value="">All types</option>
+          </select>
+        </div>
+        <div class="activity-filter-group">
           <label class="activity-filter-label">Amount (optional)</label>
           <div class="activity-amount-row">
             <input
@@ -523,6 +529,11 @@
 
     <div id="act_status" class="status"></div>
     <div id="act_summary" class="subtle activity-summary"></div>
+    <div id="act_pager" class="activity-pager" hidden>
+      <button type="button" class="btn-activity-page" id="act_prevPage" onclick="activityPrevPage()" disabled>Previous</button>
+      <span id="act_pageInfo" class="activity-page-info"></span>
+      <button type="button" class="btn-activity-page" id="act_nextPage" onclick="activityNextPage()" disabled>Next</button>
+    </div>
     <div id="act_tableWrap" class="activity-table-wrap">
       <div class="muted">Open this page or click Apply to load events.</div>
     </div>
@@ -554,6 +565,7 @@
           <label>Type</label>
           <select id="hx_type">
             <option value="Repair">Repair</option>
+            <option value="Maintenance">Maintenance</option>
             <option value="HOA">HOA</option>
             <option value="Insurance">Insurance</option>
             <option value="Utilities">Utilities</option>

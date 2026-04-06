@@ -454,10 +454,62 @@
   }
   .activity-date-row {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 8px;
     margin-top: 4px;
+  }
+  .activity-toolbar .activity-date-row input.activity-date-input {
+    width: auto;
+    flex: 0 0 auto;
+    min-width: 9.5rem;
+    max-width: 11rem;
+    margin-top: 0;
+  }
+  .activity-toolbar .activity-amount-row {
+    flex-wrap: nowrap;
+  }
+  .activity-toolbar .activity-amount-row input.activity-amount-input {
+    width: auto;
+    flex: 0 1 6.25rem;
+    max-width: 7rem;
+    margin-top: 0;
+  }
+  .activity-toolbar select.activity-kind-select {
+    width: 100%;
+    max-width: 15rem;
+    min-width: 11rem;
+    margin-top: 4px;
+  }
+  .activity-pager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 16px;
+    margin: 10px 0 8px;
+  }
+  .activity-page-info {
+    font-size: 13px;
+    color: #64748b;
+    flex: 1;
+    min-width: 10rem;
+  }
+  .btn-activity-page {
+    margin-top: 0;
+    width: auto;
+    padding: 8px 16px;
+    font-size: 13px;
+    background: #f1f5f9;
+    color: #0f172a;
+    border: 1px solid #cbd5e1;
+    font-weight: 600;
+  }
+  .btn-activity-page:hover:not(:disabled) {
+    background: #e2e8f0;
+  }
+  .btn-activity-page:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
   .activity-amount-row {
     display: flex;

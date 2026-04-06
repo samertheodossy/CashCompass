@@ -5,8 +5,7 @@ Before doing anything, read:
 **Core (every session)**  
 - `PROJECT_CONTEXT.md` — architecture, tabs, bills/cash-flow rules  
 - `WORKING_RULES.md` — HtmlService/includes, gotchas  
-- `NEXT_TASK.md` — immediate focus  
-- `TODO.md` — open work, important Activity/HISTORY item, codebase backlog  
+- `TODO.md` — immediate focus, open work (Important section first), Activity/HISTORY, codebase backlog  
 - `SESSION_NOTES.md` — what changed recently  
 
 **Strategic / planning (read or skim when the task touches roadmap, shipping, tests, or security)**  

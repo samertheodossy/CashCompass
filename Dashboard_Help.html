@@ -59,20 +59,21 @@
           <li><strong>Quick Pay</strong> — After a successful Quick Payment into <strong>INPUT - Cash Flow</strong> (and optional matching debt balance update).</li>
           <li><strong>Bill skip</strong> — When <strong>Skip</strong> writes <strong>0</strong> into Cash Flow for that bill cycle (not when the cell already had a value).</li>
           <li><strong>Bill autopay</strong> — When INPUT - Bills autopay writes the default amount for a due, eligible bill (deduplicated so dashboard refreshes don’t create duplicate rows).</li>
+          <li><strong>House expense</strong> — When you save <strong>Add House Expense</strong> (append to the property’s <strong>HOUSES - …</strong> sheet). If you also post to <strong>INPUT - Cash Flow</strong>, the script logs <strong>house_expense</strong> and does <em>not</em> add a separate Quick Pay row for the same save.</li>
         </ul>
 
-        <p><strong>Filters</strong> — <strong>Date range</strong> applies to <em>when the row was logged</em> (server timestamp). <strong>Payee</strong> filters rows whose payee <em>contains</em> your text (case-insensitive). <strong>Amount min / max</strong> are optional and filter on the logged amount (you can type currency-style numbers).</p>
+        <p><strong>Filters</strong> — <strong>Date range</strong> applies to <em>when the row was logged</em> (server timestamp). <strong>Payee</strong> filters rows whose payee <em>contains</em> your text (case-insensitive). <strong>Type</strong> lists every activity type that appears anywhere in <strong>LOG - Activity</strong> (derived the same way as the Type column); choose one to limit results. <strong>Amount min / max</strong> are optional and filter on the logged amount (you can type currency-style numbers). Up to 500 matching rows load per Apply; the table shows <strong>20 at a time</strong> with Previous / Next when there are more.</p>
 
         <p><strong>Table columns</strong></p>
         <ul class="help-list">
           <li><strong>Logged at</strong> — When the script appended the row (shown in your browser’s locale).</li>
           <li><strong>Payee</strong> — Cash Flow / bill payee for the action.</li>
-          <li><strong>Type</strong> — A short label for scanning: <strong>Loan</strong>, <strong>Bill</strong>, <strong>HOA</strong>, <strong>Tuition</strong>, <strong>Income</strong>, <strong>Other</strong>, etc. It is <em>derived</em> for the UI: we match the payee to <strong>INPUT - Debts</strong> (Account Name + Type) and <strong>INPUT - Bills</strong> (Payee + Category), and keyword checks for HOA and tuition. It is not a separate column you edit on LOG - Activity.</li>
+          <li><strong>Type</strong> — A short label for scanning: <strong>Loan</strong>, <strong>Bill</strong>, <strong>HOA</strong>, <strong>Tuition</strong>, <strong>Income</strong>, <strong>Repair</strong> / <strong>Maintenance</strong> / <strong>Utilities</strong> / <strong>Property Tax</strong> / etc. (the <strong>Type</strong> you pick on House Expenses), or <strong>House Expenses</strong> if that field was blank, plus <strong>Other</strong>. It is <em>derived</em> for the UI: we match the payee to <strong>INPUT - Debts</strong> (Account Name + Type) and <strong>INPUT - Bills</strong> (Payee + Category), keyword checks for HOA and tuition, and for <strong>house_expense</strong> events we use the log <strong>Category</strong> column (same as the House Expenses form type). It is not a separate column you edit on LOG - Activity.</li>
           <li><strong>Amount</strong> — The amount stored for that event (e.g. payment amount, or 0 for a skip).</li>
           <li><strong>Bill due date</strong> — The obligation date for that cycle (from the log’s entry date), not necessarily the same calendar day you clicked the button.</li>
         </ul>
 
-        <p><strong>Sorting</strong> — Click a column header to sort; click again to flip ascending/descending. Sorting applies to the rows already loaded for your filter (not the whole sheet history).</p>
+        <p><strong>Sorting</strong> — Click a column header to sort; click again to flip ascending/descending. Sorting applies to <em>all</em> rows that matched your filters on the last Apply (up to 500), then the table shows a page of 20 — not only the current page slice.</p>
 
         <p><strong>Source of truth</strong> — Cash Flow, Debts, and other INPUT/SYS tabs remain authoritative for balances. The Activity page helps you audit <em>what the automation recorded</em>; use the sheet <strong>LOG - Activity</strong> if you want the raw grid or to copy rows.</p>
       </section>
@@ -126,7 +127,7 @@
           <li><strong>INPUT - Cash Flow {year}</strong> — Monthly columns; Rent payees for rental income.</li>
           <li><strong>INPUT - Bills</strong> — Dated bills (category, autopay, varies, etc.); drives most Bills Due cards.</li>
           <li><strong>INPUT - Debts</strong> — Loan accounts; minimum payments can appear on Bills Due.</li>
-          <li><strong>LOG - Activity</strong> — Append-only audit of script actions (Quick Pay, bill skip, INPUT - Bills autopay); filter and sort on the <strong>Activity</strong> page.</li>
+          <li><strong>LOG - Activity</strong> — Append-only audit (Quick Pay, bill skip, INPUT - Bills autopay, house expense saves); filter, sort, and paginate on the <strong>Activity</strong> page.</li>
         </ul>
       </section>
     </div>

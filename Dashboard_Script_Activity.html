@@ -1,5 +1,7 @@
 window.__activityRows = [];
 window.__activitySort = { key: 'loggedAt', dir: 'desc' };
+window.__activityPage = 0;
+window.__ACTIVITY_PAGE_SIZE = 20;
 
 function initActivityFilterDefaults_() {
   var fromEl = document.getElementById('act_dateFrom');
@@ -11,6 +13,30 @@ function initActivityFilterDefaults_() {
   var from = new Date(to.getFullYear(), to.getMonth(), to.getDate() - 90);
   toEl.value = to.toISOString().slice(0, 10);
   fromEl.value = from.toISOString().slice(0, 10);
+}
+
+function fillActivityKindSelect_(kinds) {
+  var sel = document.getElementById('act_kindFilter');
+  if (!sel) return;
+  var prev = String(sel.value || '');
+  sel.innerHTML = '<option value="">All types</option>';
+  (kinds || []).forEach(function(k) {
+    if (!k) return;
+    var o = document.createElement('option');
+    o.value = k;
+    o.textContent = k;
+    sel.appendChild(o);
+  });
+  if (prev) {
+    var found = false;
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === prev) {
+        found = true;
+        break;
+      }
+    }
+    if (found) sel.value = prev;
+  }
 }
 
 /** Parse LOG "Logged At" display: yyyy-MM-dd H:mm:ss or HH:mm:ss */
@@ -112,10 +138,18 @@ function activityToggleSort(key) {
     st.dir = key === 'loggedAt' || key === 'dueDate' || key === 'amount' ? 'desc' : 'asc';
   }
   window.__activitySort = st;
-  renderActivityTable_(window.__activityRows);
+  window.__activityPage = 0;
+  activityRenderCurrentPage_();
 }
 
-function renderActivityTable_(rows) {
+function activitySortedFull_() {
+  var all = window.__activityRows || [];
+  var st = window.__activitySort || { key: 'loggedAt', dir: 'desc' };
+  return activitySortRows_(all, st.key, st.dir);
+}
+
+function renderActivityTable_(rows, options) {
+  options = options || {};
   var wrap = document.getElementById('act_tableWrap');
   if (!wrap) return;
 
@@ -125,7 +159,7 @@ function renderActivityTable_(rows) {
   }
 
   var st = window.__activitySort || { key: 'loggedAt', dir: 'desc' };
-  var sorted = activitySortRows_(rows, st.key, st.dir);
+  var sorted = options.skipSort ? rows : activitySortRows_(rows, st.key, st.dir);
 
   var html =
     '<table class="activity-table activity-table--compact">' +
@@ -176,6 +210,67 @@ function renderActivityTable_(rows) {
   wrap.innerHTML = html;
 }
 
+function activityUpdatePagerUi_() {
+  var pager = document.getElementById('act_pager');
+  var prevBtn = document.getElementById('act_prevPage');
+  var nextBtn = document.getElementById('act_nextPage');
+  var infoEl = document.getElementById('act_pageInfo');
+  var all = window.__activityRows || [];
+  var page = window.__activityPage || 0;
+  var ps = window.__ACTIVITY_PAGE_SIZE || 20;
+  var n = all.length;
+
+  if (!pager || !prevBtn || !nextBtn || !infoEl) return;
+
+  if (n === 0) {
+    pager.hidden = true;
+    return;
+  }
+
+  if (n <= ps) {
+    pager.hidden = true;
+    return;
+  }
+
+  pager.hidden = false;
+  var totalPages = Math.max(1, Math.ceil(n / ps));
+  if (page >= totalPages) {
+    window.__activityPage = totalPages - 1;
+    page = window.__activityPage;
+  }
+  var start = page * ps + 1;
+  var end = Math.min(n, (page + 1) * ps);
+  infoEl.textContent = 'Rows ' + start + '–' + end + ' of ' + n + ' (20 per page).';
+  prevBtn.disabled = page <= 0;
+  nextBtn.disabled = page >= totalPages - 1;
+}
+
+function activityRenderCurrentPage_() {
+  var sortedFull = activitySortedFull_();
+  var page = window.__activityPage || 0;
+  var ps = window.__ACTIVITY_PAGE_SIZE || 20;
+  var slice = sortedFull.slice(page * ps, page * ps + ps);
+  renderActivityTable_(slice, { skipSort: true });
+  activityUpdatePagerUi_();
+}
+
+function activityNextPage() {
+  var all = window.__activityRows || [];
+  var ps = window.__ACTIVITY_PAGE_SIZE || 20;
+  var totalPages = Math.max(1, Math.ceil(all.length / ps));
+  if ((window.__activityPage || 0) < totalPages - 1) {
+    window.__activityPage = (window.__activityPage || 0) + 1;
+    activityRenderCurrentPage_();
+  }
+}
+
+function activityPrevPage() {
+  if ((window.__activityPage || 0) > 0) {
+    window.__activityPage = (window.__activityPage || 0) - 1;
+    activityRenderCurrentPage_();
+  }
+}
+
 function loadActivitySection() {
   var wrap = document.getElementById('act_tableWrap');
   var statusEl = document.getElementById('act_status');
@@ -187,6 +282,7 @@ function loadActivitySection() {
   var dateFrom = document.getElementById('act_dateFrom') ? document.getElementById('act_dateFrom').value : '';
   var dateTo = document.getElementById('act_dateTo') ? document.getElementById('act_dateTo').value : '';
   var payeeSearch = document.getElementById('act_payeeSearch') ? String(document.getElementById('act_payeeSearch').value || '').trim() : '';
+  var kindType = document.getElementById('act_kindFilter') ? String(document.getElementById('act_kindFilter').value || '').trim() : '';
   var amountMinEl = document.getElementById('act_amountMin');
   var amountMaxEl = document.getElementById('act_amountMax');
   var amountMin = amountMinEl ? String(amountMinEl.value || '').trim() : '';
@@ -198,7 +294,12 @@ function loadActivitySection() {
   }
   if (summaryEl) summaryEl.textContent = '';
 
+  var pager = document.getElementById('act_pager');
+  if (pager) pager.hidden = true;
+
   wrap.innerHTML = loadingBlockHtml('Loading activity…', true);
+
+  window.__activityPage = 0;
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -211,15 +312,26 @@ function loadActivitySection() {
         return;
       }
 
+      fillActivityKindSelect_(res.kinds || []);
+
       var rows = res.rows || [];
       window.__activityRows = rows;
       window.__activitySort = { key: 'loggedAt', dir: 'desc' };
 
+      var scanNote = res.scannedRows ? 'Scanned ' + res.scannedRows + ' row(s) in LOG - Activity.' : '';
+      var truncNote = res.truncated ? ' Showing the first ' + (res.matchLimit || 500) + ' matches; narrow filters for older events.' : '';
+
       if (summaryEl) {
-        summaryEl.textContent =
-          rows.length === 0
-            ? res.message || 'No matching events.'
-            : 'Showing ' + rows.length + ' event(s)' + (res.scannedRows ? ' (scanned ' + res.scannedRows + ' row(s) in sheet)' : '') + '.';
+        if (rows.length === 0) {
+          summaryEl.textContent = res.message || 'No matching events. ' + scanNote;
+        } else {
+          summaryEl.textContent =
+            'Showing ' +
+            rows.length +
+            ' matching event(s). ' +
+            scanNote +
+            truncNote;
+        }
       }
 
       if (!rows.length) {
@@ -227,7 +339,7 @@ function loadActivitySection() {
         return;
       }
 
-      renderActivityTable_(rows);
+      activityRenderCurrentPage_();
     })
     .withFailureHandler(function(err) {
       wrap.innerHTML = '<div class="muted">Failed to load.</div>';
@@ -236,12 +348,13 @@ function loadActivitySection() {
         statusEl.className = 'status error';
       }
     })
-    .getActivityLogForDashboard({
+    .getActivityDashboardData({
       dateFrom: dateFrom,
       dateTo: dateTo,
       payeeSearch: payeeSearch,
+      kindType: kindType,
       amountMin: amountMin,
       amountMax: amountMax,
-      limit: 500
+      matchLimit: 500
     });
 }

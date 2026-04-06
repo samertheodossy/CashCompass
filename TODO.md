@@ -8,45 +8,38 @@ TO DO and issues I see in the testing
 
 ## Open items (not done)
 
-### Important — prioritize (before most items below)
+### Important — Activity / HISTORY flow (LOG - Activity vs OUT - History)
 
-**Activity / HISTORY flow** — Event ledger for bills paid, expenses entered, skips, etc. (searchable by date/type/payee/category/account). **Not** a replacement for **OUT - History**: that tab is **planner-run snapshots** (one row per run: rolled-up cash, debt, net worth, health inputs, etc.) and answers “how did the plan look after this run?” The activity log is **discrete mutations** with business dates and payees — different grain; **add** it rather than overload OUT - History.
+**LOG - Activity** = append-only **event** ledger (who/when/amount); **OUT - History** = **planner run** snapshots. Not the same grain. Implementation: **`activity_log.js`**, **`appendActivityLog_`**, Help **Activity log**.
 
-**Pattern (minimal behavior change)**  
-- Append-only audit: **`appendActivityLog_(payload)`** (or similar) called **after** a successful write. Same cells, same errors, same user messages; only append a row when the mutation actually committed.  
-- **v1 scope:** script-driven actions only. **Optional later:** bank / investment / house balance updates, or **onEdit** triggers for manual Cash Flow typing (heavier).
+**Done (recent)**  
+- **Phase 4 — House expenses** — **`house_expense`** after **`addHouseExpense`**; if the form also posts to Cash Flow, **`quickAddPayment`** runs with **`suppressActivityLog: true`** so you do not get a second **`quick_pay`** row for the same save. Activity **Type** uses the House Expenses form type (Repair, **Maintenance**, Utilities, etc.; stored **Tax** displays as **Property Tax**).  
+- **Activity page UI** — Logged **date range** (from/to on one row in the toolbar), **Payee** contains, **Type** dropdown (options computed from all rows in **LOG - Activity**, same rules as the Type column), **Amount** min/max, sortable table, **20 rows per page** with Previous/Next (**500** matching rows max per Apply; summary notes if truncated). Backend: **`getActivityDashboardData`**.  
+- **Debt Planner email** — Short action block (overdue, pay‑now / pay‑soon line items), debts omitted when the current Cash Flow month is already “handled,” definitions in Help **Debt Planner email** (not repeated in the email body).
 
-**Where to hook (existing code)**  
+**Still open**  
+- **Phase 3 — Upcoming** — Dedicated events for add / status / paid / push to Cash Flow (today, push to CF only adds **`quick_pay`**).  
+- **Phase 5 (optional)** — Correlate events to **OUT - History** / planner run.  
+- **Optional:** Activity **CSV export**; **last N events** on Overview; **onEdit** logging for manual Cash Flow typing.
 
-| Flow | Log after / in |
-|------|------------------|
-| Quick Add Payment | End of **`quickAddPayment`** (`quick_add_payment.js`) — type, payee, entry date, amount, sheet/month context, optional debt-adjustment note. |
-| Bills Due → Skip | After successful **`skipDashboardBill`** (`dashboard_data.js`) — e.g. “skip / wrote 0”, payee, due date, cash-flow target. |
-| Bills Due → Autopay | Today autopay calls **`writeDashboardBillValuePreserveFormat_`** from **`getInputBillsDueRows_`** on **read/refresh**. Do **not** blindly log inside the low-level writer (runs often). Log only on **real transition** (e.g. cell was unhandled → now has value), or only in the autopay branch after a successful write, with a stable **dedupe key** (payee + due month + amount) so repeated dashboard loads do not duplicate rows. |
-| Upcoming expenses | **`addUpcomingExpense`** and any path that changes status or **adds to Cash Flow** (`upcoming_expenses.js`; several `touchDashboardSourceUpdated_` sites). |
-| House expenses | **`addHouseExpense`** (`house_expenses.js`). |
+**Pattern (reference)**  
+- Append-only audit after successful writes only. **v1:** script-driven paths. **Later:** onEdit, etc.
 
-**Storage (sheet-friendly)**  
-- New tab e.g. **`OUT - Activity`** or **`LOG - Activity`**, **append-only**. Suggested columns: **Logged At** (script timestamp, ISO); **Event Type** (`quick_pay`, `bill_autopay`, `bill_skip`, `upcoming_added`, `upcoming_paid`, `upcoming_to_cash_flow`, `house_expense`, …); **Entry Date** (user-chosen / due — “when it happened in life”); **Amount** (pick one convention: signed expense negative, or always positive + **Direction**); **Payee / Name**; **Category**; **Account / Source**; **Cash Flow sheet name** + **month column** (optional, “where it landed”); **Reference / Details** (upcoming ID, skip key, short JSON). Optional: **Result** if logging failures (usually log success only to reduce noise).  
-- **Scale:** Filter/sort in Apps Script or client; later: monthly archive tabs or row-cap trim if needed.
+| Flow | Status |
+|------|--------|
+| Quick Add Payment | **Done** — `quick_pay` at end of **`quickAddPayment`**. |
+| Bills Due → Skip | **Done** — **`skipDashboardBill`**. |
+| Bills Due → Autopay | **Done** — dedupe key on refresh. |
+| Upcoming expenses | **Open** — Phase 3. |
+| House expenses | **Done** — **`addHouseExpense`** → `house_expense`; CF via Quick Pay + **`suppressActivityLog`**. |
 
-**Using the data (UI — can ship after logging works)**  
-- **Activity / History** page: date range, type multi-select, payee search, optional CSV export.  
-- **Cash Flow** remains **ledger of record** for totals; activity log is **provenance** (“we recorded this action at this time”).  
-- Optional: **last N events** on Overview with link to full history (keep uncluttered).
-
-**Risks / decisions**  
-- **Autopay + dashboard refresh:** idempotency required (see table above).  
-- **Manual cell edits** in Cash Flow: invisible to log unless triggers or accepted gap.  
-- **Privacy:** same workbook sensitivity as other INPUT/OUT tabs.
-
-**Phased rollout (stick to this order)**  
-1. **Phase 1 — Quick Pay only:** ~~highest signal, single choke point (`quickAddPayment`)~~ **Done** — `LOG - Activity` + `activity_log.js`.  
-2. **Phase 2 — Bill skip + bill autopay** ~~(with dedupe / transition-only logging)~~ **Done** — skip logs `bill_skip`; INPUT - Bills autopay logs `bill_autopay` with dedupe on refresh.  
-3. **Phase 3 — Upcoming** lifecycle (add, paid, push to cash flow).  
-4. **Phase 4 — House expenses** (`addHouseExpense`).  
-5. **Phase 5 (optional):** Correlate to **OUT - History** (e.g. planner run date / id column after `runPlanner`) for “what activity sat around this run?”  
-6. **UI:** **Activity** top-nav — filters: logged date range, payee contains, amount min/max; columns: logged at, payee, kind (Loan/Bill/HOA/…), amount, bill due date; sortable headers. *(Export CSV optional later.)*
+**Phased rollout**  
+1. **Phase 1 — Quick Pay** — **Done**  
+2. **Phase 2 — Skip + autopay** — **Done**  
+3. **Phase 3 — Upcoming** — **Open**  
+4. **Phase 4 — House expenses** — **Done**  
+5. **Phase 5 — OUT - History tie-in** — **Open** (optional)  
+6. **Activity UI** — **Done** (filters, type from sheet, paging, sort); **CSV export** optional later
 
 ---
 
@@ -110,6 +103,8 @@ Technical debt and consistency work suggested from repo review; no rush—pick o
 ## DONE (history)
 
 Completed items kept for reference (original list numbers preserved).
+
+**Activity ledger / UI (unnumbered)** — `house_expense` logging; no double ledger row when House Expense also writes Cash Flow; Activity **Type** filter + **getActivityDashboardData**; 20-row paging; inline date fields; Debt Planner email + Help **Debt Planner email**; Pay now/soon respect Cash Flow “handled” for current month.
 
 **5.** Fix SKIP issue in the Due Payments — adds 0 but does not refresh the screen (BUG). *(Marked done in prior testing; skip flow + UI refresh addressed.)*
 

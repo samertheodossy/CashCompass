@@ -1,11 +1,13 @@
 ## LOG - Activity (append-only audit)
 
 - **Tab**: `LOG - Activity` — created on first log if missing; header row: Logged At, Event Type, Entry Date, Amount, Direction, Payee, Category, Account / Source, Cash Flow Sheet, Cash Flow Month, Dedupe Key, Details.
-- **Phase 1**: `quick_pay` after successful `quickAddPayment` (`quick_add_payment.js`); Details JSON includes previous/new cell values, signed amount, `createIfMissing`, optional debt balance note.
+- **Phase 1**: `quick_pay` after successful `quickAddPayment` (`quick_add_payment.js`); Details JSON includes previous/new cell values, signed amount, `createIfMissing`, optional debt balance note. Payload may set **`suppressActivityLog: true`** when a higher-level flow already logged the action (e.g. **House Expense** saves that also post to Cash Flow — avoids a second `quick_pay` row next to `house_expense`).
 - **Phase 2**: `bill_skip` when Bills Due skip writes **0** into Cash Flow (`skipDashboardBill` in `dashboard_data.js`); `bill_autopay` after INPUT - Bills autopay write; **dedupe** on `bill_autopay::…` so dashboard refresh does not duplicate rows (`buildBillAutopayDedupeKey_`, `activityLogDedupeKeyExists_`).
-- **Server**: `activity_log.js` — failures are logged with `Logger.log` and do not block payments/skips.
+- **Phase 4**: `house_expense` after **`addHouseExpense`** (`house_expenses.js`); **Category** on the log row matches the House Expenses form **Type** (Repair, Maintenance, Utilities, etc.; stored **Tax** → **Property Tax** in the Activity **Type** column).
+- **Server**: `activity_log.js` — `getActivityDashboardData` (filters + derived kinds + **500** match cap) wraps `getActivityLogForDashboard`; failures are logged with `Logger.log` and do not block payments/skips.
 - **Tab visibility**: `ensureActivityLogSheet_(ss)` runs at the start of **`buildDashboardSnapshot_`** and **`getBillsDueFromCashFlowForDashboard`** so **LOG - Activity** exists after **Overview refresh** or **Bills Due load**, even before any row is appended. Skip logging no longer requires `getDashboardBillByKey_` to succeed (fallback payee + month column from the Cash Flow header row).
-- **Web UI**: **Activity** page (top nav) — `getActivityLogForDashboard` filters by **Logged At** date range, payee substring, optional amount min/max (parsed with `toNumber_`). Table columns: **Logged at** (locale time), **Payee**, **Type** (`kindLabel`: Loan/Bill/HOA/Tuition/Income/Other from INPUT - Debts / INPUT - Bills + keywords), **Amount**, **Bill due date**; sortable headers (client-side). `Dashboard_Script_Activity.html`, `Dashboard_Body.html` `#page_activity`.
+- **Web UI**: **Activity** page (top nav) — logged **from/to** on one row, **Payee** contains, **Type** `<select>` (options = distinct kinds from **LOG - Activity**, same derivation as the Type column), amount min/max, **Apply** → up to **500** matches; table **sort** applies to that full filtered set, then **20 rows per page** with Previous/Next. `Dashboard_Script_Activity.html`, `Dashboard_Body.html` `#page_activity`.
+- **Debt Planner email** — Compact action block (overdue, pay now / pay soon line items); debts omitted when the **current** Cash Flow month already “handles” that payment (same rule as Bills Due); term definitions in Help **Debt Planner email** only.
 
 ---
 

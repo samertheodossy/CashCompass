@@ -16,7 +16,7 @@ We are building a Google Apps Script Planner Dashboard for personal finance / pr
 - Monte Carlo / retirement success
 - Purchase simulator / big purchase sim
 - Planner run + OUT history snapshot logic
-- **LOG - Activity** — append-only ledger of script actions (Quick Pay, bill skip, bill autopay from INPUT - Bills autopay); not a substitute for **OUT - History** (planner snapshots). Created automatically if missing (`activity_log.js`). **Activity** top-nav page reads this log (filters: date logged, payee, amount range); compact table with **Type** column derived from INPUT - Debts / INPUT - Bills + HOA/Tuition keywords; sortable columns.
+- **LOG - Activity** — append-only ledger of script actions (Quick Pay, bill skip, bill autopay, **house expense** on save; nested Quick Pay can suppress its own log row to avoid duplicates). Not a substitute for **OUT - History** (planner snapshots). Created automatically if missing (`activity_log.js`). **Activity** top-nav page: **getActivityDashboardData** — date range, payee, **type** filter (sheet-derived kinds), amount range, sort on full filtered set (up to **500** rows), **20** per page.
 
 ## Current architecture
 
@@ -35,12 +35,13 @@ We are building a Google Apps Script Planner Dashboard for personal finance / pr
 - Dashboard_Script_PropertyPerformance.html
 - Dashboard_Script_Payments.html
 - Dashboard_Script_BillsDue.html
+- Dashboard_Script_Activity.html
 
 ### Backend files
 - webapp.js = main doGet()
 - html_includes.js = includeHtml_() using raw content
 - dashboard_data.js = main dashboard snapshot + bills due backend
-- activity_log.js = LOG - Activity append-only audit (`appendActivityLog_`, dedupe keys for bill autopay)
+- activity_log.js = LOG - Activity append-only audit (`appendActivityLog_`, dedupe keys for bill autopay, `getActivityDashboardData` / `getActivityLogForDashboard`, house expense + suppress duplicate Quick Pay)
 - other feature files exist for house, debts, payments, retirement, etc.
 
 ## Important resolved infra issues

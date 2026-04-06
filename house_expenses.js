@@ -1,3 +1,12 @@
+/** Payee string used when posting a house expense to INPUT - Cash Flow (must match quickAddPayment). */
+function buildHouseExpenseCashFlowPayee_(payload) {
+  const payeeParts = [];
+  payeeParts.push('House: ' + getHouseExpenseLocationName_(payload.house));
+  if (payload.type) payeeParts.push(payload.type);
+  if (payload.item) payeeParts.push(payload.item);
+  return payeeParts.join(' - ');
+}
+
 function getHouseExpenseUiData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -41,6 +50,7 @@ function addHouseExpense(payload) {
 
   const cost = toNumber_(payload.cost);
   const serviceFees = toNumber_(payload.serviceFees);
+  const netAmount = round2_(cost + serviceFees);
 
   sheet.getRange(insertRow, 1, 1, 9).setValues([[
     payload.item || '',
@@ -58,9 +68,47 @@ function addHouseExpense(payload) {
   SpreadsheetApp.flush();
 
   let cashFlowMessage = '';
+  let cashFlowUpdated = false;
   if (payload.autoAddToCashFlow) {
-    cashFlowMessage = addHouseExpenseToCashFlow_(payload, cost, serviceFees);
+    const cf = addHouseExpenseToCashFlow_(payload, cost, serviceFees);
+    cashFlowMessage = cf.message;
+    cashFlowUpdated = cf.updated;
   }
+
+  const tz = Session.getScriptTimeZone();
+  const entryDateStr = Utilities.formatDate(parsedDate, tz, 'yyyy-MM-dd');
+  const payeeForLog = buildHouseExpenseCashFlowPayee_(payload);
+  let cashFlowSheet = '';
+  let cashFlowMonth = '';
+  if (cashFlowUpdated) {
+    const cfSh = getCashFlowSheetForYear_(ss, parsedDate.getFullYear());
+    cashFlowSheet = cfSh.getName();
+    cashFlowMonth = Utilities.formatDate(parsedDate, tz, 'MMM-yy');
+  }
+
+  appendActivityLog_(ss, {
+    eventType: 'house_expense',
+    entryDate: entryDateStr,
+    amount: Math.abs(netAmount),
+    direction: netAmount < 0 ? 'income' : 'expense',
+    payee: payeeForLog,
+    category: String(payload.type || '').trim(),
+    accountSource: String(payload.house || '').trim(),
+    cashFlowSheet: cashFlowSheet,
+    cashFlowMonth: cashFlowMonth,
+    dedupeKey: '',
+    details: JSON.stringify({
+      houseSheet: payload.house,
+      houseRow: insertRow,
+      location: locationValue,
+      item: String(payload.item || ''),
+      expenseType: String(payload.type || '').trim(),
+      cost: round2_(cost),
+      serviceFees: round2_(serviceFees),
+      autoAddToCashFlow: !!payload.autoAddToCashFlow,
+      cashFlowUpdated: cashFlowUpdated
+    })
+  });
 
   return {
     message:
@@ -69,34 +117,36 @@ function addHouseExpense(payload) {
   };
 }
 
+/**
+ * @returns {{ message: string, updated: boolean }}
+ */
 function addHouseExpenseToCashFlow_(payload, cost, serviceFees) {
   const netAmount = round2_(cost + serviceFees);
 
   if (netAmount === 0) {
-    return 'Cash Flow not updated because net amount was $0.00.';
+    return { message: 'Cash Flow not updated because net amount was $0.00.', updated: false };
   }
 
   const entryType = netAmount > 0 ? 'Expense' : 'Income';
   const amount = Math.abs(netAmount);
 
-  const payeeParts = [];
-  payeeParts.push('House: ' + getHouseExpenseLocationName_(payload.house));
-  if (payload.type) payeeParts.push(payload.type);
-  if (payload.item) payeeParts.push(payload.item);
-
-  const payee = payeeParts.join(' - ');
+  const payee = buildHouseExpenseCashFlowPayee_(payload);
 
   quickAddPayment({
     entryType: entryType,
     payee: payee,
     entryDate: payload.date,
     amount: amount,
-    createIfMissing: true
+    createIfMissing: true,
+    suppressActivityLog: true
   });
 
   if (typeof runDebtPlanner === 'function') runDebtPlanner();
 
-  return 'Also added to Cash Flow as ' + entryType + ' for ' + fmtCurrency_(amount) + '.';
+  return {
+    message: 'Also added to Cash Flow as ' + entryType + ' for ' + fmtCurrency_(amount) + '.',
+    updated: true
+  };
 }
 
 function getRecentHouseExpenses(limit) {

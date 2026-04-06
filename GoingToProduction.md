@@ -55,7 +55,7 @@ The codebase today is **much closer to A than to B**.
 **Soft blockers (quality / completeness)**
 
 4. Open **TODO.md** product items (debt page UX, upcoming dropdowns, bills/debts cleanup, tax, etc.) — these don’t block *you* from daily use but block calling it “complete” for a general audience.
-5. **Activity / HISTORY ledger** (prioritized in TODO) — not required to ship, but it’s the kind of feature that reduces “where did that number come from?” support load.
+5. **Activity / HISTORY ledger** — Quick Pay, skip, autopay, and **house expenses** are logged; Activity UI supports filters, type-from-sheet, and paging. **Gaps** (upcoming lifecycle, manual Cash Flow edits, CSV export) still limit “full provenance” for strangers — soft quality gap, not a hard ship blocker for personal use.
 6. **Two surfaces** (`PlannerDashboardWeb` vs sidebar `PlannerDashboard.html`) — maintainability risk when you promise updates to others.
 
 **Non-blockers for a serious personal tool**
@@ -75,7 +75,7 @@ The codebase today is **much closer to A than to B**.
 **Phase 2 — “Friend / family beta” (productization lite)**  
 - **Validation-only** function: scan workbook, report missing tabs/headers (matches onboarding doc §2).  
 - One-page **“First run”** doc: time zone, required tabs, never rename list.  
-- Optional: **Activity log** phase 1 (Quick Pay only) to build trust.
+- **Activity log** is past phase 1 (see `TODO.md` / `SESSION_NOTES`); optional next steps: upcoming events, export, onEdit logging.
 
 **Phase 3 — “1.0 template product”**  
 - Guided tab/header creation (idempotent) from `ONBOARDING_TODO.md` rollout order.  

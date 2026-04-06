@@ -101,6 +101,8 @@ This complements `GoingToProduction.md`: validation/onboarding reduce user error
 - **Workbook validation** (“scan tabs/headers”) is **not** the same as regression tests; both help production. Validation answers “is this workbook structurally valid?” Tests answer “does our code still behave as intended on valid structures?”  
 - Order: you can start **unit tests** immediately; **validation** can land in parallel per onboarding plan.
 
+**Manual smoke (Activity / house expense)** — when exercising layer 3: open **Activity**, set **from/to**, **Payee**, **Type**, amount min/max; **Apply** and confirm rows match **LOG - Activity**; confirm **Type** options reflect distinct kinds in the sheet. Sort a column; use **Previous/Next** (20 per page); if you have more than 500 matches, confirm the summary notes truncation. Save a **House Expense** with **Add to Cash Flow** and confirm **one** new ledger row (`house_expense`), not an extra `quick_pay`.
+
 ---
 
 *This file is planning only; implementation choices (Node vs GAS runner, file layout) are intentionally left open until you start layer 1.*

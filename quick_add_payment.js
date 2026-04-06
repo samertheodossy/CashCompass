@@ -184,25 +184,27 @@ function quickAddPayment(payload) {
 
   const monthLabel = Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'MMM-yy');
 
-  appendActivityLog_(ss, {
-    eventType: 'quick_pay',
-    entryDate: Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'yyyy-MM-dd'),
-    amount: amount,
-    direction: entryType === 'Expense' ? 'expense' : 'income',
-    payee: payee,
-    category: '',
-    accountSource: '',
-    cashFlowSheet: sheet.getName(),
-    cashFlowMonth: monthLabel,
-    dedupeKey: '',
-    details: JSON.stringify({
-      previousValue: previousValue,
-      newValue: newValue,
-      signedAmount: signedAmount,
-      createIfMissing: createIfMissing,
-      debtBalanceNote: debtBalanceNote
-    })
-  });
+  if (!payload.suppressActivityLog) {
+    appendActivityLog_(ss, {
+      eventType: 'quick_pay',
+      entryDate: Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+      amount: amount,
+      direction: entryType === 'Expense' ? 'expense' : 'income',
+      payee: payee,
+      category: '',
+      accountSource: '',
+      cashFlowSheet: sheet.getName(),
+      cashFlowMonth: monthLabel,
+      dedupeKey: '',
+      details: JSON.stringify({
+        previousValue: previousValue,
+        newValue: newValue,
+        signedAmount: signedAmount,
+        createIfMissing: createIfMissing,
+        debtBalanceNote: debtBalanceNote
+      })
+    });
+  }
 
   const priorPreview = computeQuickAddPriorMonthPreview_(ss, entryType, payee, entryDate);
 

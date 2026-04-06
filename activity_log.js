@@ -1,5 +1,5 @@
 /**
- * Append-only activity ledger: discrete user/script actions (Quick Pay, bill skip, bill autopay, …).
+ * Append-only activity ledger: discrete user/script actions (Quick Pay, bill skip, bill autopay, house expense, …).
  * Complements OUT - History (planner-run snapshots). Tab: LOG - Activity.
  */
 
@@ -235,12 +235,31 @@ function buildActivityKindLookup_(ss) {
 }
 
 /**
- * Human-readable kind: Loan, Bill, HOA, Tuition, Income, Other.
+ * Stored Type on HOUSES sheets uses value "Tax" while the UI label is "Property Tax".
+ * @param {string} logCategory Category column from LOG - Activity (House Expenses form Type).
+ * @returns {string}
+ */
+function formatHouseExpenseTypeForActivityKind_(logCategory) {
+  var c = String(logCategory || '').trim();
+  if (!c) return '';
+  if (c === 'Tax') return 'Property Tax';
+  return c;
+}
+
+/**
+ * Human-readable kind: Loan, Bill, HOA, Tuition, Income, house expense types (Repair, Utilities, …), Other.
  * Uses INPUT - Debts / INPUT - Bills when payee matches; keyword overrides for HOA/Tuition.
  */
 function classifyActivityKind_(lookup, payee, eventType, direction, logCategory) {
   var pay = String(payee || '').trim();
   var cat = String(logCategory || '').trim();
+  var etEarly = String(eventType || '').toLowerCase();
+  if (etEarly === 'house_expense') {
+    var houseType = formatHouseExpenseTypeForActivityKind_(cat);
+    if (houseType) return houseType;
+    return 'House Expenses';
+  }
+
   var combined = pay + ' ' + cat;
   var blob = combined.toLowerCase();
 
@@ -278,64 +297,101 @@ function parseOptionalAmountFilter_(raw) {
   return n;
 }
 
+function activityLogLoggedDatePart_(loggedAtStr) {
+  var s = String(loggedAtStr || '').trim();
+  var m = /^(\d{4}-\d{2}-\d{2})/.exec(s);
+  return m ? m[1] : '';
+}
+
+function activityLogRowKind_(lookup, r) {
+  var payee = String(r[5] || '').trim();
+  return classifyActivityKind_(
+    lookup,
+    payee,
+    String(r[1] || '').trim(),
+    String(r[4] || '').trim(),
+    String(r[6] || '').trim()
+  );
+}
+
+function activityLogDistinctKindsFromValues_(values, lookup) {
+  var seen = {};
+  for (var i = 0; i < values.length; i++) {
+    var r = values[i];
+    if (!String(r[0] || '').trim() && !String(r[1] || '').trim()) continue;
+    var k = activityLogRowKind_(lookup, r);
+    if (k) seen[k] = true;
+  }
+  return Object.keys(seen).sort(function(a, b) {
+    return a.localeCompare(b);
+  });
+}
+
+function activityLogRowMatchesDashboardFilters_(r, dateFrom, dateTo, payeeSearch, minNum, maxNum, kindType, lookup) {
+  var loggedAt = String(r[0] || '').trim();
+  if (!loggedAt && !String(r[1] || '').trim()) return false;
+  var ld = activityLogLoggedDatePart_(loggedAt);
+  if (dateFrom && ld && ld < dateFrom) return false;
+  if (dateTo && ld && ld > dateTo) return false;
+  var payee = String(r[5] || '').trim();
+  if (payeeSearch && payee.toLowerCase().indexOf(payeeSearch) === -1) return false;
+  var amtVal = round2_(toNumber_(r[3]));
+  if (minNum !== null && amtVal < minNum) return false;
+  if (maxNum !== null && amtVal > maxNum) return false;
+  if (kindType) {
+    if (activityLogRowKind_(lookup, r) !== kindType) return false;
+  }
+  return true;
+}
+
 /**
- * Read LOG - Activity for the web dashboard. Filters: **Logged At** date, payee substring, optional amount min/max.
- * @param {{ dateFrom?: string, dateTo?: string, payeeSearch?: string, amountMin?: string|number, amountMax?: string|number, limit?: number }} filters
- * @returns {{ ok: boolean, rows?: Array<Object>, scannedRows?: number, message?: string, error?: string }}
+ * Activity tab: filtered rows (newest first, capped) plus distinct Type labels from the whole log.
+ * @param {{ dateFrom?: string, dateTo?: string, payeeSearch?: string, kindType?: string, amountMin?: string|number, amountMax?: string|number, matchLimit?: number }} filters
  */
-function getActivityLogForDashboard(filters) {
+function getActivityDashboardData(filters) {
   filters = filters || {};
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sh = ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
     if (!sh || sh.getLastRow() < 2) {
-      return { ok: true, rows: [], scannedRows: 0, message: 'No rows in LOG - Activity yet.' };
+      return {
+        ok: true,
+        rows: [],
+        kinds: [],
+        scannedRows: 0,
+        truncated: false,
+        message: 'No rows in LOG - Activity yet.'
+      };
     }
 
-    var lastRow = sh.getLastRow();
-    var numCols = ACTIVITY_LOG_HEADERS.length;
-    var values = sh.getRange(2, 1, lastRow, numCols).getDisplayValues();
+    var values = sh.getRange(2, 1, sh.getLastRow(), ACTIVITY_LOG_HEADERS.length).getDisplayValues();
+    var lookup = buildActivityKindLookup_(ss);
+    var kinds = activityLogDistinctKindsFromValues_(values, lookup);
 
     var dateFrom = String(filters.dateFrom || '').trim();
     var dateTo = String(filters.dateTo || '').trim();
     var payeeSearch = String(filters.payeeSearch || '').trim().toLowerCase();
     var minNum = parseOptionalAmountFilter_(filters.amountMin);
     var maxNum = parseOptionalAmountFilter_(filters.amountMax);
-
-    var limit = Math.min(2000, Math.max(1, Number(filters.limit) || 500));
-
-    var lookup = buildActivityKindLookup_(ss);
-
-    function logDatePart_(loggedAtStr) {
-      var s = String(loggedAtStr || '').trim();
-      if (!s) return '';
-      var m = /^(\d{4}-\d{2}-\d{2})/.exec(s);
-      return m ? m[1] : '';
-    }
+    var kindType = String(filters.kindType || '').trim();
+    var matchLimit = Math.min(2000, Math.max(1, Number(filters.matchLimit) || 500));
 
     var out = [];
-    for (var i = values.length - 1; i >= 0 && out.length < limit; i--) {
+    var i;
+    for (i = values.length - 1; i >= 0 && out.length < matchLimit; i--) {
       var r = values[i];
-      var loggedAt = String(r[0] || '').trim();
-      if (!loggedAt && !String(r[1] || '').trim()) continue;
-
-      var ld = logDatePart_(loggedAt);
-      if (dateFrom && ld && ld < dateFrom) continue;
-      if (dateTo && ld && ld > dateTo) continue;
+      if (!activityLogRowMatchesDashboardFilters_(r, dateFrom, dateTo, payeeSearch, minNum, maxNum, kindType, lookup)) {
+        continue;
+      }
 
       var payee = String(r[5] || '').trim();
-      if (payeeSearch && payee.toLowerCase().indexOf(payeeSearch) === -1) continue;
-
-      var amtVal = round2_(toNumber_(r[3]));
-      if (minNum !== null && amtVal < minNum) continue;
-      if (maxNum !== null && amtVal > maxNum) continue;
-
       var eventType = String(r[1] || '').trim();
       var direction = String(r[4] || '').trim();
       var logCategory = String(r[6] || '').trim();
+      var amtVal = round2_(toNumber_(r[3]));
 
       out.push({
-        loggedAt: loggedAt,
+        loggedAt: String(r[0] || '').trim(),
         eventType: eventType,
         entryDate: String(r[2] || '').trim(),
         amount: r[3],
@@ -348,16 +404,59 @@ function getActivityLogForDashboard(filters) {
         cashFlowMonth: String(r[9] || '').trim(),
         dedupeKey: String(r[10] || '').trim(),
         details: String(r[11] || '').trim(),
-        kindLabel: classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
+        kindLabel: activityLogRowKind_(lookup, r)
       });
+    }
+
+    var truncated = false;
+    if (out.length >= matchLimit && i >= 0) {
+      for (var j = i; j >= 0; j--) {
+        if (
+          activityLogRowMatchesDashboardFilters_(values[j], dateFrom, dateTo, payeeSearch, minNum, maxNum, kindType, lookup)
+        ) {
+          truncated = true;
+          break;
+        }
+      }
     }
 
     return {
       ok: true,
       rows: out,
-      scannedRows: values.length
+      kinds: kinds,
+      scannedRows: values.length,
+      truncated: truncated,
+      matchLimit: matchLimit
     };
   } catch (e) {
-    return { ok: false, error: String(e.message || e), rows: [] };
+    return { ok: false, error: String(e.message || e), rows: [], kinds: [], truncated: false };
   }
+}
+
+/**
+ * Read LOG - Activity for the web dashboard (rows only; use getActivityDashboardData for kinds + Type filter).
+ * @param {{ dateFrom?: string, dateTo?: string, payeeSearch?: string, kindType?: string, amountMin?: string|number, amountMax?: string|number, limit?: number, matchLimit?: number }} filters
+ */
+function getActivityLogForDashboard(filters) {
+  var f = filters || {};
+  var res = getActivityDashboardData({
+    dateFrom: f.dateFrom,
+    dateTo: f.dateTo,
+    payeeSearch: f.payeeSearch,
+    kindType: f.kindType,
+    amountMin: f.amountMin,
+    amountMax: f.amountMax,
+    matchLimit: f.matchLimit != null ? f.matchLimit : f.limit
+  });
+  if (!res.ok) {
+    return { ok: false, error: res.error, rows: [] };
+  }
+  return {
+    ok: true,
+    rows: res.rows,
+    scannedRows: res.scannedRows,
+    message: res.message,
+    truncated: res.truncated,
+    matchLimit: res.matchLimit
+  };
 }
