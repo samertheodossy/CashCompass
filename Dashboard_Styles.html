@@ -439,7 +439,12 @@
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
-    gap: 10px 16px;
+    gap: 12px 20px;
+  }
+  .activity-filter-group {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
   }
   .activity-filter-label {
     font-size: 12px;
@@ -447,26 +452,40 @@
     margin: 0;
     display: block;
   }
+  .activity-date-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .activity-amount-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
   .activity-date-input,
   .activity-search-input {
     max-width: 168px;
-    margin-top: 4px;
+    margin-top: 0;
+  }
+  .activity-amount-input {
+    width: 6.5rem;
+    max-width: 120px;
+    margin-top: 0;
   }
   .activity-filter-sep {
     font-size: 13px;
     color: #64748b;
-    padding: 0 4px;
-    align-self: center;
-    margin-bottom: 6px;
-  }
-  #act_eventType {
-    max-width: 180px;
-    margin-top: 4px;
+    padding: 0 2px;
+    flex-shrink: 0;
   }
   .btn-activity-apply {
     margin-top: 22px;
     width: auto;
-    padding: 10px 18px;
+    padding: 10px 20px;
   }
   .activity-summary {
     margin: 6px 0 10px;
@@ -483,10 +502,13 @@
     border-collapse: collapse;
     font-size: 13px;
   }
+  .activity-table--compact th,
+  .activity-table--compact td {
+    padding: 10px 12px;
+  }
   .activity-table th,
   .activity-table td {
     border-bottom: 1px solid #e2e8f0;
-    padding: 8px 10px;
     text-align: left;
     vertical-align: top;
   }
@@ -495,30 +517,38 @@
     font-weight: 600;
     white-space: nowrap;
   }
+  .activity-th-sortable {
+    cursor: pointer;
+    user-select: none;
+    color: #0f172a;
+  }
+  .activity-th-sortable:hover {
+    background: #f1f5f9;
+  }
+  .activity-th-sorted {
+    background: #e8f0fe;
+    color: #1e40af;
+  }
   .activity-table tbody tr:hover {
     background: #f8fafc;
   }
-  .activity-type-code {
+  .activity-cell-muted {
+    color: #475569;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .activity-kind-pill {
+    display: inline-block;
     font-size: 12px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 999px;
     background: #f1f5f9;
-    padding: 2px 6px;
-    border-radius: 4px;
+    color: #334155;
   }
   .activity-num {
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
-  }
-  .activity-nowrap {
-    white-space: nowrap;
-    max-width: 14rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .activity-details {
-    font-size: 12px;
-    color: #475569;
-    max-width: 22rem;
-    word-break: break-word;
   }
 
   @media (max-width: 1180px) {

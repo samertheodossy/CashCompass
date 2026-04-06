@@ -2,7 +2,7 @@
   <div class="help-header">
     <div>
       <h2 class="help-title">Help &amp; how it works</h2>
-      <p class="help-subtitle muted">Documentation for this planner. Main areas match the buttons below the header (Overview, Assets, …).</p>
+      <p class="help-subtitle muted">Documentation for this planner. Main areas match the nav below the header (Overview, Assets, Cash Flow, Activity, Properties, Planning).</p>
     </div>
     <button type="button" class="btn-help-back" onclick="showPage('overview')">← Back to Overview</button>
   </div>
@@ -15,6 +15,7 @@
         <a href="#help-overview">Overview</a>
         <a href="#help-assets">Assets</a>
         <a href="#help-cashflow">Cash Flow</a>
+        <a href="#help-activity">Activity log</a>
         <a href="#help-bills-due">Bills Due</a>
         <a href="#help-properties">Properties</a>
         <a href="#help-property-performance">Property performance</a>
@@ -46,6 +47,33 @@
         <h3>Cash Flow</h3>
         <p><strong>Quick Payment</strong> — Adds to <strong>INPUT - Cash Flow</strong> for the selected year. The info box can show <strong>last month’s payment</strong> for the same payee: it reads the prior calendar month’s cell on the correct year’s Cash Flow tab (January uses the <em>previous year’s</em> tab for December).</p>
         <p><strong>Upcoming</strong> — Planned expenses from your sheet; <strong>Bills Due</strong> is described below.</p>
+      </section>
+
+      <section id="help-activity" class="help-section">
+        <h3>Activity log</h3>
+        <p>The <strong>Activity</strong> top-nav page shows a read-only history of actions this script has recorded—not the same thing as <strong>OUT - History</strong>. <strong>OUT - History</strong> stores <em>planner run snapshots</em> (rolled-up cash, debt, net worth, etc.). <strong>LOG - Activity</strong> stores <em>discrete events</em> (who was paid, when it was logged, skip/autopay, etc.) and is created automatically if missing.</p>
+
+        <p><strong>What gets logged today</strong></p>
+        <ul class="help-list">
+          <li><strong>Quick Pay</strong> — After a successful Quick Payment into <strong>INPUT - Cash Flow</strong> (and optional matching debt balance update).</li>
+          <li><strong>Bill skip</strong> — When <strong>Skip</strong> writes <strong>0</strong> into Cash Flow for that bill cycle (not when the cell already had a value).</li>
+          <li><strong>Bill autopay</strong> — When INPUT - Bills autopay writes the default amount for a due, eligible bill (deduplicated so dashboard refreshes don’t create duplicate rows).</li>
+        </ul>
+
+        <p><strong>Filters</strong> — <strong>Date range</strong> applies to <em>when the row was logged</em> (server timestamp). <strong>Payee</strong> filters rows whose payee <em>contains</em> your text (case-insensitive). <strong>Amount min / max</strong> are optional and filter on the logged amount (you can type currency-style numbers).</p>
+
+        <p><strong>Table columns</strong></p>
+        <ul class="help-list">
+          <li><strong>Logged at</strong> — When the script appended the row (shown in your browser’s locale).</li>
+          <li><strong>Payee</strong> — Cash Flow / bill payee for the action.</li>
+          <li><strong>Type</strong> — A short label for scanning: <strong>Loan</strong>, <strong>Bill</strong>, <strong>HOA</strong>, <strong>Tuition</strong>, <strong>Income</strong>, <strong>Other</strong>, etc. It is <em>derived</em> for the UI: we match the payee to <strong>INPUT - Debts</strong> (Account Name + Type) and <strong>INPUT - Bills</strong> (Payee + Category), and keyword checks for HOA and tuition. It is not a separate column you edit on LOG - Activity.</li>
+          <li><strong>Amount</strong> — The amount stored for that event (e.g. payment amount, or 0 for a skip).</li>
+          <li><strong>Bill due date</strong> — The obligation date for that cycle (from the log’s entry date), not necessarily the same calendar day you clicked the button.</li>
+        </ul>
+
+        <p><strong>Sorting</strong> — Click a column header to sort; click again to flip ascending/descending. Sorting applies to the rows already loaded for your filter (not the whole sheet history).</p>
+
+        <p><strong>Source of truth</strong> — Cash Flow, Debts, and other INPUT/SYS tabs remain authoritative for balances. The Activity page helps you audit <em>what the automation recorded</em>; use the sheet <strong>LOG - Activity</strong> if you want the raw grid or to copy rows.</p>
       </section>
 
       <section id="help-bills-due" class="help-section">
@@ -87,6 +115,7 @@
           <li><strong>INPUT - Cash Flow {year}</strong> — Monthly columns; Rent payees for rental income.</li>
           <li><strong>INPUT - Bills</strong> — Dated bills (category, autopay, varies, etc.); drives most Bills Due cards.</li>
           <li><strong>INPUT - Debts</strong> — Loan accounts; minimum payments can appear on Bills Due.</li>
+          <li><strong>LOG - Activity</strong> — Append-only audit of script actions (Quick Pay, bill skip, INPUT - Bills autopay); filter and sort on the <strong>Activity</strong> page.</li>
         </ul>
       </section>
     </div>

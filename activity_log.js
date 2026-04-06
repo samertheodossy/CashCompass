@@ -190,8 +190,97 @@ function appendActivityLog_(ss, payload) {
 }
 
 /**
- * Read LOG - Activity for the web dashboard (newest first). Filters apply to **Logged At** date.
- * @param {{ dateFrom?: string, dateTo?: string, eventType?: string, payeeSearch?: string, limit?: number }} filters
+ * Maps normalized payee → INPUT - Debts Type and INPUT - Bills Category for Activity "Kind" column.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @returns {{ debtByNorm: Object<string, string>, billCatByNorm: Object<string, string> }}
+ */
+function buildActivityKindLookup_(ss) {
+  var debtByNorm = {};
+  var billCatByNorm = {};
+  try {
+    var debtSheet = getSheet_(ss, 'DEBTS');
+    var d = debtSheet.getDataRange().getDisplayValues();
+    var dh = d[0] || [];
+    var nameCol = dh.indexOf('Account Name');
+    var typeCol = dh.indexOf('Type');
+    if (nameCol !== -1 && typeCol !== -1) {
+      for (var r = 1; r < d.length; r++) {
+        var n = String(d[r][nameCol] || '').trim();
+        if (!n) continue;
+        var nk = normalizeBillName_(n);
+        if (nk) debtByNorm[nk] = String(d[r][typeCol] || '').trim();
+      }
+    }
+  } catch (e) {
+    Logger.log('buildActivityKindLookup_ debts: ' + e);
+  }
+  try {
+    var billSheet = getSheet_(ss, 'BILLS');
+    var b = billSheet.getDataRange().getDisplayValues();
+    var bh = b[0] || [];
+    var pCol = bh.indexOf('Payee');
+    var cCol = bh.indexOf('Category');
+    if (pCol !== -1 && cCol !== -1) {
+      for (var r2 = 1; r2 < b.length; r2++) {
+        var p = String(b[r2][pCol] || '').trim();
+        if (!p) continue;
+        var pk = normalizeBillName_(p);
+        if (pk) billCatByNorm[pk] = String(b[r2][cCol] || '').trim();
+      }
+    }
+  } catch (e2) {
+    Logger.log('buildActivityKindLookup_ bills: ' + e2);
+  }
+  return { debtByNorm: debtByNorm, billCatByNorm: billCatByNorm };
+}
+
+/**
+ * Human-readable kind: Loan, Bill, HOA, Tuition, Income, Other.
+ * Uses INPUT - Debts / INPUT - Bills when payee matches; keyword overrides for HOA/Tuition.
+ */
+function classifyActivityKind_(lookup, payee, eventType, direction, logCategory) {
+  var pay = String(payee || '').trim();
+  var cat = String(logCategory || '').trim();
+  var combined = pay + ' ' + cat;
+  var blob = combined.toLowerCase();
+
+  if (/\bhoa\b|hoa\s|^hoa|association/i.test(combined)) return 'HOA';
+  if (/tuition/i.test(blob)) return 'Tuition';
+
+  var norm = normalizeBillName_(pay);
+  var dt =
+    norm && lookup.debtByNorm[norm] ? String(lookup.debtByNorm[norm]).trim().toLowerCase() : '';
+  if (dt) {
+    if (dt === 'loan' || dt === 'heloc') return 'Loan';
+    if (dt.indexOf('credit') !== -1) return 'Bill';
+    return dt.charAt(0).toUpperCase() + dt.slice(1);
+  }
+
+  var billCat = norm && lookup.billCatByNorm[norm] ? String(lookup.billCatByNorm[norm]) : '';
+  if (billCat) {
+    if (/hoa/i.test(billCat)) return 'HOA';
+    if (/tuition/i.test(billCat)) return 'Tuition';
+  }
+
+  var et = String(eventType || '').toLowerCase();
+  var dir = String(direction || '').toLowerCase();
+  if (et === 'quick_pay' && dir === 'income') return 'Income';
+  if (et === 'quick_pay' && dir === 'expense') return 'Bill';
+  if (et === 'bill_skip' || et === 'bill_autopay') return 'Bill';
+  return 'Other';
+}
+
+function parseOptionalAmountFilter_(raw) {
+  var s = String(raw || '').trim();
+  if (!s) return null;
+  var n = round2_(toNumber_(s));
+  if (isNaN(n)) return null;
+  return n;
+}
+
+/**
+ * Read LOG - Activity for the web dashboard. Filters: **Logged At** date, payee substring, optional amount min/max.
+ * @param {{ dateFrom?: string, dateTo?: string, payeeSearch?: string, amountMin?: string|number, amountMax?: string|number, limit?: number }} filters
  * @returns {{ ok: boolean, rows?: Array<Object>, scannedRows?: number, message?: string, error?: string }}
  */
 function getActivityLogForDashboard(filters) {
@@ -209,9 +298,13 @@ function getActivityLogForDashboard(filters) {
 
     var dateFrom = String(filters.dateFrom || '').trim();
     var dateTo = String(filters.dateTo || '').trim();
-    var eventFilter = String(filters.eventType || '').trim().toLowerCase();
     var payeeSearch = String(filters.payeeSearch || '').trim().toLowerCase();
-    var limit = Math.min(500, Math.max(1, Number(filters.limit) || 250));
+    var minNum = parseOptionalAmountFilter_(filters.amountMin);
+    var maxNum = parseOptionalAmountFilter_(filters.amountMax);
+
+    var limit = Math.min(2000, Math.max(1, Number(filters.limit) || 500));
+
+    var lookup = buildActivityKindLookup_(ss);
 
     function logDatePart_(loggedAtStr) {
       var s = String(loggedAtStr || '').trim();
@@ -230,25 +323,32 @@ function getActivityLogForDashboard(filters) {
       if (dateFrom && ld && ld < dateFrom) continue;
       if (dateTo && ld && ld > dateTo) continue;
 
-      var et = String(r[1] || '').trim().toLowerCase();
-      if (eventFilter && eventFilter !== 'all' && et !== eventFilter) continue;
-
       var payee = String(r[5] || '').trim();
       if (payeeSearch && payee.toLowerCase().indexOf(payeeSearch) === -1) continue;
 
+      var amtVal = round2_(toNumber_(r[3]));
+      if (minNum !== null && amtVal < minNum) continue;
+      if (maxNum !== null && amtVal > maxNum) continue;
+
+      var eventType = String(r[1] || '').trim();
+      var direction = String(r[4] || '').trim();
+      var logCategory = String(r[6] || '').trim();
+
       out.push({
         loggedAt: loggedAt,
-        eventType: String(r[1] || '').trim(),
+        eventType: eventType,
         entryDate: String(r[2] || '').trim(),
         amount: r[3],
-        direction: String(r[4] || '').trim(),
+        amountNum: amtVal,
+        direction: direction,
         payee: payee,
-        category: String(r[6] || '').trim(),
+        category: logCategory,
         accountSource: String(r[7] || '').trim(),
         cashFlowSheet: String(r[8] || '').trim(),
         cashFlowMonth: String(r[9] || '').trim(),
         dedupeKey: String(r[10] || '').trim(),
-        details: String(r[11] || '').trim()
+        details: String(r[11] || '').trim(),
+        kindLabel: classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
       });
     }
 

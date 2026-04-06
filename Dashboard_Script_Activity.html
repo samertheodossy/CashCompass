@@ -1,3 +1,6 @@
+window.__activityRows = [];
+window.__activitySort = { key: 'loggedAt', dir: 'desc' };
+
 function initActivityFilterDefaults_() {
   var fromEl = document.getElementById('act_dateFrom');
   var toEl = document.getElementById('act_dateTo');
@@ -10,6 +13,169 @@ function initActivityFilterDefaults_() {
   fromEl.value = from.toISOString().slice(0, 10);
 }
 
+/** Parse LOG "Logged At" display: yyyy-MM-dd H:mm:ss or HH:mm:ss */
+function parseActivityLoggedAtMs_(s) {
+  var str = String(s || '').trim();
+  var m = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2}):(\d{2})/.exec(str);
+  if (!m) return NaN;
+  return new Date(
+    Number(m[1]),
+    Number(m[2]) - 1,
+    Number(m[3]),
+    Number(m[4]),
+    Number(m[5]),
+    Number(m[6])
+  ).getTime();
+}
+
+function formatActivityLoggedAtDisplay_(s) {
+  var ms = parseActivityLoggedAtMs_(s);
+  if (isNaN(ms)) return String(s || '');
+  var d = new Date(ms);
+  return d.toLocaleString('en-US', {
+    month: 'numeric',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+}
+
+/** entryDate yyyy-MM-dd */
+function formatActivityDueDateDisplay_(entryDateStr) {
+  var str = String(entryDateStr || '').trim();
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(str);
+  if (!m) return str || '—';
+  var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (isNaN(d.getTime())) return str;
+  return d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+}
+
+function activitySortKeyForRow_(row, key) {
+  if (key === 'loggedAt') return parseActivityLoggedAtMs_(row.loggedAt);
+  if (key === 'payee') return String(row.payee || '').toLowerCase();
+  if (key === 'amount') {
+    var n = row.amountNum;
+    if (n !== undefined && n !== null && !isNaN(Number(n))) return Number(n);
+    return typeof toNumber === 'function' ? toNumber(row.amount) : Number(row.amount);
+  }
+  if (key === 'dueDate') {
+    var ed = String(row.entryDate || '').trim();
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ed);
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime();
+    return 0;
+  }
+  if (key === 'kind') return String(row.kindLabel || '').toLowerCase();
+  return '';
+}
+
+function activitySortRows_(rows, key, dir) {
+  var copy = rows.slice();
+  var mult = dir === 'asc' ? 1 : -1;
+  copy.sort(function(a, b) {
+    var va = activitySortKeyForRow_(a, key);
+    var vb = activitySortKeyForRow_(b, key);
+    if (va < vb) return -1 * mult;
+    if (va > vb) return 1 * mult;
+    return 0;
+  });
+  return copy;
+}
+
+function activityHeaderLabel_(key, label) {
+  var st = window.__activitySort || { key: 'loggedAt', dir: 'desc' };
+  var isSorted = st.key === key;
+  var arrow = '';
+  if (isSorted) arrow = st.dir === 'asc' ? ' \u25B2' : ' \u25BC';
+  var cls = 'activity-th-sortable' + (isSorted ? ' activity-th-sorted' : '');
+  return (
+    '<th scope="col" class="' +
+    cls +
+    '" role="columnheader" data-sort="' +
+    escapeHtml(key) +
+    '" onclick="activityToggleSort(\'' +
+    escapeJs(key) +
+    "')\">" +
+    escapeHtml(label) +
+    arrow +
+    '</th>'
+  );
+}
+
+function activityToggleSort(key) {
+  var st = window.__activitySort || { key: 'loggedAt', dir: 'desc' };
+  if (st.key === key) {
+    st.dir = st.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    st.key = key;
+    st.dir = key === 'loggedAt' || key === 'dueDate' || key === 'amount' ? 'desc' : 'asc';
+  }
+  window.__activitySort = st;
+  renderActivityTable_(window.__activityRows);
+}
+
+function renderActivityTable_(rows) {
+  var wrap = document.getElementById('act_tableWrap');
+  if (!wrap) return;
+
+  if (!rows || !rows.length) {
+    wrap.innerHTML = '<div class="muted">No rows to show.</div>';
+    return;
+  }
+
+  var st = window.__activitySort || { key: 'loggedAt', dir: 'desc' };
+  var sorted = activitySortRows_(rows, st.key, st.dir);
+
+  var html =
+    '<table class="activity-table activity-table--compact">' +
+    '<thead><tr>' +
+    activityHeaderLabel_('loggedAt', 'Logged at') +
+    activityHeaderLabel_('payee', 'Payee') +
+    activityHeaderLabel_('kind', 'Type') +
+    activityHeaderLabel_('amount', 'Amount') +
+    activityHeaderLabel_('dueDate', 'Bill due date') +
+    '</tr></thead><tbody>';
+
+  sorted.forEach(function(row) {
+    var amt = row.amount;
+    var num =
+      row.amountNum !== undefined && row.amountNum !== null && !isNaN(Number(row.amountNum))
+        ? Number(row.amountNum)
+        : typeof toNumber === 'function'
+          ? toNumber(amt)
+          : Number(amt);
+    var amtStr =
+      amt === '' || amt === null || amt === undefined || (isNaN(num) && String(amt).trim() === '')
+        ? '—'
+        : typeof fmtCurrency === 'function'
+          ? fmtCurrency(num)
+          : String(amt);
+
+    html +=
+      '<tr>' +
+      '<td class="activity-cell-muted">' +
+      escapeHtml(formatActivityLoggedAtDisplay_(row.loggedAt)) +
+      '</td>' +
+      '<td>' +
+      escapeHtml(String(row.payee || '')) +
+      '</td>' +
+      '<td><span class="activity-kind-pill">' +
+      escapeHtml(String(row.kindLabel || '—')) +
+      '</span></td>' +
+      '<td class="activity-num">' +
+      escapeHtml(amtStr) +
+      '</td>' +
+      '<td>' +
+      escapeHtml(formatActivityDueDateDisplay_(row.entryDate)) +
+      '</td>' +
+      '</tr>';
+  });
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
 function loadActivitySection() {
   var wrap = document.getElementById('act_tableWrap');
   var statusEl = document.getElementById('act_status');
@@ -20,8 +186,11 @@ function loadActivitySection() {
 
   var dateFrom = document.getElementById('act_dateFrom') ? document.getElementById('act_dateFrom').value : '';
   var dateTo = document.getElementById('act_dateTo') ? document.getElementById('act_dateTo').value : '';
-  var eventType = document.getElementById('act_eventType') ? document.getElementById('act_eventType').value : 'all';
   var payeeSearch = document.getElementById('act_payeeSearch') ? String(document.getElementById('act_payeeSearch').value || '').trim() : '';
+  var amountMinEl = document.getElementById('act_amountMin');
+  var amountMaxEl = document.getElementById('act_amountMax');
+  var amountMin = amountMinEl ? String(amountMinEl.value || '').trim() : '';
+  var amountMax = amountMaxEl ? String(amountMaxEl.value || '').trim() : '';
 
   if (statusEl) {
     statusEl.textContent = '';
@@ -43,6 +212,9 @@ function loadActivitySection() {
       }
 
       var rows = res.rows || [];
+      window.__activityRows = rows;
+      window.__activitySort = { key: 'loggedAt', dir: 'desc' };
+
       if (summaryEl) {
         summaryEl.textContent =
           rows.length === 0
@@ -55,40 +227,7 @@ function loadActivitySection() {
         return;
       }
 
-      var html =
-        '<table class="activity-table">' +
-        '<thead><tr>' +
-        '<th>Logged at</th><th>Type</th><th>Entry date</th><th>Amount</th><th>Direction</th>' +
-        '<th>Payee</th><th>Cash Flow sheet</th><th>Month</th><th>Details</th>' +
-        '</tr></thead><tbody>';
-
-      rows.forEach(function(row) {
-        var amt = row.amount;
-        var num = typeof toNumber === 'function' ? toNumber(amt) : Number(amt);
-        var amtStr =
-          amt === '' || amt === null || amt === undefined || (isNaN(num) && String(amt).trim() === '')
-            ? '—'
-            : typeof fmtCurrency === 'function'
-              ? fmtCurrency(num)
-              : String(amt);
-        var det = String(row.details || '');
-        var detShort = det.length > 120 ? det.slice(0, 117) + '…' : det;
-        html +=
-          '<tr>' +
-          '<td>' + escapeHtml(String(row.loggedAt || '')) + '</td>' +
-          '<td><code class="activity-type-code">' + escapeHtml(String(row.eventType || '')) + '</code></td>' +
-          '<td>' + escapeHtml(String(row.entryDate || '')) + '</td>' +
-          '<td class="activity-num">' + escapeHtml(amtStr) + '</td>' +
-          '<td>' + escapeHtml(String(row.direction || '')) + '</td>' +
-          '<td>' + escapeHtml(String(row.payee || '')) + '</td>' +
-          '<td class="activity-nowrap">' + escapeHtml(String(row.cashFlowSheet || '')) + '</td>' +
-          '<td>' + escapeHtml(String(row.cashFlowMonth || '')) + '</td>' +
-          '<td class="activity-details" title="' + escapeHtml(det) + '">' + escapeHtml(detShort) + '</td>' +
-          '</tr>';
-      });
-
-      html += '</tbody></table>';
-      wrap.innerHTML = html;
+      renderActivityTable_(rows);
     })
     .withFailureHandler(function(err) {
       wrap.innerHTML = '<div class="muted">Failed to load.</div>';
@@ -100,8 +239,9 @@ function loadActivitySection() {
     .getActivityLogForDashboard({
       dateFrom: dateFrom,
       dateTo: dateTo,
-      eventType: eventType,
       payeeSearch: payeeSearch,
-      limit: 250
+      amountMin: amountMin,
+      amountMax: amountMax,
+      limit: 500
     });
 }

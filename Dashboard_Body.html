@@ -483,19 +483,40 @@
 
     <div class="activity-toolbar card">
       <div class="activity-filters">
-        <label class="activity-filter-label">Logged between</label>
-        <input type="date" id="act_dateFrom" class="activity-date-input" aria-label="From date">
-        <span class="activity-filter-sep">and</span>
-        <input type="date" id="act_dateTo" class="activity-date-input" aria-label="To date">
-        <label class="activity-filter-label">Event type</label>
-        <select id="act_eventType" aria-label="Event type">
-          <option value="all">All types</option>
-          <option value="quick_pay">quick_pay</option>
-          <option value="bill_skip">bill_skip</option>
-          <option value="bill_autopay">bill_autopay</option>
-        </select>
-        <label class="activity-filter-label">Payee contains</label>
-        <input type="text" id="act_payeeSearch" placeholder="Optional" class="activity-search-input" aria-label="Payee search">
+        <div class="activity-filter-group">
+          <label class="activity-filter-label">Date range (logged)</label>
+          <div class="activity-date-row">
+            <input type="date" id="act_dateFrom" class="activity-date-input" aria-label="From date">
+            <span class="activity-filter-sep">to</span>
+            <input type="date" id="act_dateTo" class="activity-date-input" aria-label="To date">
+          </div>
+        </div>
+        <div class="activity-filter-group">
+          <label class="activity-filter-label">Payee</label>
+          <input type="text" id="act_payeeSearch" placeholder="Contains…" class="activity-search-input" aria-label="Payee contains">
+        </div>
+        <div class="activity-filter-group">
+          <label class="activity-filter-label">Amount (optional)</label>
+          <div class="activity-amount-row">
+            <input
+              type="text"
+              id="act_amountMin"
+              class="activity-amount-input"
+              inputmode="decimal"
+              placeholder="Min"
+              aria-label="Minimum amount"
+            >
+            <span class="activity-filter-sep">–</span>
+            <input
+              type="text"
+              id="act_amountMax"
+              class="activity-amount-input"
+              inputmode="decimal"
+              placeholder="Max"
+              aria-label="Maximum amount"
+            >
+          </div>
+        </div>
         <button type="button" class="btn-activity-apply" onclick="loadActivitySection()">Apply</button>
       </div>
     </div>

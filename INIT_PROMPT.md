@@ -23,6 +23,7 @@ Then:
 **Rules**
 
 - **Do not write code yet.** This pass is orientation and summary only.  
-- **Do not commit** (`git add` / `git commit`) **unless the user explicitly asks** to commit (same idea as `COMMIT_RULES.md`).  
+- **Do not commit** — **never** `git add` / `git commit` / `git push` unless the user **explicitly** asks in that conversation (see `COMMIT_RULES.md` and `.cursor/rules/git-no-autonomous-stage-commit.mdc`).  
+- **Help:** User-visible changes should include updates to **`Dashboard_Help.html`** when appropriate (see `WORKING_RULES.md` / `COMMIT_RULES.md`).  
 
 Return the full answer in one complete response.

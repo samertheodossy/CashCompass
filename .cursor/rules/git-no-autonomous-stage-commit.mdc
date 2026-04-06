@@ -1,11 +1,14 @@
 ---
-description: Never git stage or commit unless the user explicitly requests it
+description: Never git stage or commit unless the user explicitly requests it — no exceptions without approval
 alwaysApply: true
 ---
 
 # Git — no autonomous staging or commits
 
-- **Do not** run `git add`, `git commit`, `git push`, or any action that stages or commits changes **unless the user clearly asks** in that conversation (e.g. “commit this”, “stage and commit”, “git commit”).
-- Finishing implementation, cleanup, or SESSION_NOTES updates **does not** imply permission to stage or commit.
-- If unsure, **leave the working tree unstaged** and tell the user what changed; they can commit when ready.
+- **Never** run `git add`, `git commit`, `git push`, or anything that stages or commits **unless the user clearly and explicitly asks** in that conversation (e.g. “commit this”, “commit it”, “git commit”, “stage and commit”).  
+- Do **not** commit “to be helpful”, after finishing a task, after tests pass, or because the work “should be saved”. **No commit without approval.**  
+- Finishing implementation, cleanup, SESSION_NOTES updates, or Help updates **does not** imply permission to stage or commit.  
+- If unsure, **leave the working tree unstaged** and tell the user what changed; they commit when ready.  
 - **Reverts** (`git reset`, `git revert`) only when the user asks to undo or fix history.
+
+See also **`COMMIT_RULES.md`** in the repo.
