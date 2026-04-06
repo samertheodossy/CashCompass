@@ -46,7 +46,7 @@ TO DO and issues I see in the testing
 3. **Phase 3 — Upcoming** lifecycle (add, paid, push to cash flow).  
 4. **Phase 4 — House expenses** (`addHouseExpense`).  
 5. **Phase 5 (optional):** Correlate to **OUT - History** (e.g. planner run date / id column after `runPlanner`) for “what activity sat around this run?”  
-6. **UI (any phase):** Activity / History page to filter/sort/export (sheet is readable manually until then).
+6. **UI:** **Activity** top-nav page — filter by logged date, type, payee; table view. *(Export CSV optional later.)*
 
 ---
 

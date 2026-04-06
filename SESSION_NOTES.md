@@ -5,6 +5,7 @@
 - **Phase 2**: `bill_skip` when Bills Due skip writes **0** into Cash Flow (`skipDashboardBill` in `dashboard_data.js`); `bill_autopay` after INPUT - Bills autopay write; **dedupe** on `bill_autopay::…` so dashboard refresh does not duplicate rows (`buildBillAutopayDedupeKey_`, `activityLogDedupeKeyExists_`).
 - **Server**: `activity_log.js` — failures are logged with `Logger.log` and do not block payments/skips.
 - **Tab visibility**: `ensureActivityLogSheet_(ss)` runs at the start of **`buildDashboardSnapshot_`** and **`getBillsDueFromCashFlowForDashboard`** so **LOG - Activity** exists after **Overview refresh** or **Bills Due load**, even before any row is appended. Skip logging no longer requires `getDashboardBillByKey_` to succeed (fallback payee + month column from the Cash Flow header row).
+- **Web UI**: **Activity** page (top nav) — `getActivityLogForDashboard` filters by **Logged At** date range, event type, payee substring; table + `Dashboard_Script_Activity.html`, `Dashboard_Body.html` `#page_activity`.
 
 ---
 

@@ -17,6 +17,7 @@
     <button class="page-btn active" data-page="overview" onclick="showPage('overview')">Overview</button>
     <button class="page-btn" data-page="assets" onclick="showPage('assets')">Assets</button>
     <button class="page-btn" data-page="cashflow" onclick="showPage('cashflow')">Cash Flow</button>
+    <button class="page-btn" data-page="activity" onclick="showPage('activity')">Activity</button>
     <button class="page-btn" data-page="properties" onclick="showPage('properties')">Properties</button>
     <button class="page-btn" data-page="planning" onclick="showPage('planning')">Planning</button>
   </div>
@@ -469,6 +470,40 @@
           <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="page_activity" class="workspace-page">
+    <div class="panel-head">
+      <h2>Activity log</h2>
+    </div>
+    <p class="subtle activity-intro">
+      Recorded script actions (Quick Pay, bill skip, autopay, …). Cash Flow and the rest of the workbook remain the source of truth for balances; this is an audit trail.
+    </p>
+
+    <div class="activity-toolbar card">
+      <div class="activity-filters">
+        <label class="activity-filter-label">Logged between</label>
+        <input type="date" id="act_dateFrom" class="activity-date-input" aria-label="From date">
+        <span class="activity-filter-sep">and</span>
+        <input type="date" id="act_dateTo" class="activity-date-input" aria-label="To date">
+        <label class="activity-filter-label">Event type</label>
+        <select id="act_eventType" aria-label="Event type">
+          <option value="all">All types</option>
+          <option value="quick_pay">quick_pay</option>
+          <option value="bill_skip">bill_skip</option>
+          <option value="bill_autopay">bill_autopay</option>
+        </select>
+        <label class="activity-filter-label">Payee contains</label>
+        <input type="text" id="act_payeeSearch" placeholder="Optional" class="activity-search-input" aria-label="Payee search">
+        <button type="button" class="btn-activity-apply" onclick="loadActivitySection()">Apply</button>
+      </div>
+    </div>
+
+    <div id="act_status" class="status"></div>
+    <div id="act_summary" class="subtle activity-summary"></div>
+    <div id="act_tableWrap" class="activity-table-wrap">
+      <div class="muted">Open this page or click Apply to load events.</div>
     </div>
   </div>
 

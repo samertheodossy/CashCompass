@@ -188,3 +188,76 @@ function appendActivityLog_(ss, payload) {
     return false;
   }
 }
+
+/**
+ * Read LOG - Activity for the web dashboard (newest first). Filters apply to **Logged At** date.
+ * @param {{ dateFrom?: string, dateTo?: string, eventType?: string, payeeSearch?: string, limit?: number }} filters
+ * @returns {{ ok: boolean, rows?: Array<Object>, scannedRows?: number, message?: string, error?: string }}
+ */
+function getActivityLogForDashboard(filters) {
+  filters = filters || {};
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sh = ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
+    if (!sh || sh.getLastRow() < 2) {
+      return { ok: true, rows: [], scannedRows: 0, message: 'No rows in LOG - Activity yet.' };
+    }
+
+    var lastRow = sh.getLastRow();
+    var numCols = ACTIVITY_LOG_HEADERS.length;
+    var values = sh.getRange(2, 1, lastRow, numCols).getDisplayValues();
+
+    var dateFrom = String(filters.dateFrom || '').trim();
+    var dateTo = String(filters.dateTo || '').trim();
+    var eventFilter = String(filters.eventType || '').trim().toLowerCase();
+    var payeeSearch = String(filters.payeeSearch || '').trim().toLowerCase();
+    var limit = Math.min(500, Math.max(1, Number(filters.limit) || 250));
+
+    function logDatePart_(loggedAtStr) {
+      var s = String(loggedAtStr || '').trim();
+      if (!s) return '';
+      var m = /^(\d{4}-\d{2}-\d{2})/.exec(s);
+      return m ? m[1] : '';
+    }
+
+    var out = [];
+    for (var i = values.length - 1; i >= 0 && out.length < limit; i--) {
+      var r = values[i];
+      var loggedAt = String(r[0] || '').trim();
+      if (!loggedAt && !String(r[1] || '').trim()) continue;
+
+      var ld = logDatePart_(loggedAt);
+      if (dateFrom && ld && ld < dateFrom) continue;
+      if (dateTo && ld && ld > dateTo) continue;
+
+      var et = String(r[1] || '').trim().toLowerCase();
+      if (eventFilter && eventFilter !== 'all' && et !== eventFilter) continue;
+
+      var payee = String(r[5] || '').trim();
+      if (payeeSearch && payee.toLowerCase().indexOf(payeeSearch) === -1) continue;
+
+      out.push({
+        loggedAt: loggedAt,
+        eventType: String(r[1] || '').trim(),
+        entryDate: String(r[2] || '').trim(),
+        amount: r[3],
+        direction: String(r[4] || '').trim(),
+        payee: payee,
+        category: String(r[6] || '').trim(),
+        accountSource: String(r[7] || '').trim(),
+        cashFlowSheet: String(r[8] || '').trim(),
+        cashFlowMonth: String(r[9] || '').trim(),
+        dedupeKey: String(r[10] || '').trim(),
+        details: String(r[11] || '').trim()
+      });
+    }
+
+    return {
+      ok: true,
+      rows: out,
+      scannedRows: values.length
+    };
+  } catch (e) {
+    return { ok: false, error: String(e.message || e), rows: [] };
+  }
+}

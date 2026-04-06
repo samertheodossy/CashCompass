@@ -1,0 +1,107 @@
+function initActivityFilterDefaults_() {
+  var fromEl = document.getElementById('act_dateFrom');
+  var toEl = document.getElementById('act_dateTo');
+  if (!fromEl || !toEl) return;
+  if (fromEl.value || toEl.value) return;
+
+  var to = new Date();
+  var from = new Date(to.getFullYear(), to.getMonth(), to.getDate() - 90);
+  toEl.value = to.toISOString().slice(0, 10);
+  fromEl.value = from.toISOString().slice(0, 10);
+}
+
+function loadActivitySection() {
+  var wrap = document.getElementById('act_tableWrap');
+  var statusEl = document.getElementById('act_status');
+  var summaryEl = document.getElementById('act_summary');
+  if (!wrap) return;
+
+  initActivityFilterDefaults_();
+
+  var dateFrom = document.getElementById('act_dateFrom') ? document.getElementById('act_dateFrom').value : '';
+  var dateTo = document.getElementById('act_dateTo') ? document.getElementById('act_dateTo').value : '';
+  var eventType = document.getElementById('act_eventType') ? document.getElementById('act_eventType').value : 'all';
+  var payeeSearch = document.getElementById('act_payeeSearch') ? String(document.getElementById('act_payeeSearch').value || '').trim() : '';
+
+  if (statusEl) {
+    statusEl.textContent = '';
+    statusEl.className = 'status';
+  }
+  if (summaryEl) summaryEl.textContent = '';
+
+  wrap.innerHTML = loadingBlockHtml('Loading activity…', true);
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res || !res.ok) {
+        wrap.innerHTML = '<div class="muted">Could not load activity.</div>';
+        if (statusEl) {
+          statusEl.textContent = res && res.error ? res.error : 'Unknown error';
+          statusEl.className = 'status error';
+        }
+        return;
+      }
+
+      var rows = res.rows || [];
+      if (summaryEl) {
+        summaryEl.textContent =
+          rows.length === 0
+            ? res.message || 'No matching events.'
+            : 'Showing ' + rows.length + ' event(s)' + (res.scannedRows ? ' (scanned ' + res.scannedRows + ' row(s) in sheet)' : '') + '.';
+      }
+
+      if (!rows.length) {
+        wrap.innerHTML = '<div class="muted">' + escapeHtml(res.message || 'No matching events.') + '</div>';
+        return;
+      }
+
+      var html =
+        '<table class="activity-table">' +
+        '<thead><tr>' +
+        '<th>Logged at</th><th>Type</th><th>Entry date</th><th>Amount</th><th>Direction</th>' +
+        '<th>Payee</th><th>Cash Flow sheet</th><th>Month</th><th>Details</th>' +
+        '</tr></thead><tbody>';
+
+      rows.forEach(function(row) {
+        var amt = row.amount;
+        var num = typeof toNumber === 'function' ? toNumber(amt) : Number(amt);
+        var amtStr =
+          amt === '' || amt === null || amt === undefined || (isNaN(num) && String(amt).trim() === '')
+            ? '—'
+            : typeof fmtCurrency === 'function'
+              ? fmtCurrency(num)
+              : String(amt);
+        var det = String(row.details || '');
+        var detShort = det.length > 120 ? det.slice(0, 117) + '…' : det;
+        html +=
+          '<tr>' +
+          '<td>' + escapeHtml(String(row.loggedAt || '')) + '</td>' +
+          '<td><code class="activity-type-code">' + escapeHtml(String(row.eventType || '')) + '</code></td>' +
+          '<td>' + escapeHtml(String(row.entryDate || '')) + '</td>' +
+          '<td class="activity-num">' + escapeHtml(amtStr) + '</td>' +
+          '<td>' + escapeHtml(String(row.direction || '')) + '</td>' +
+          '<td>' + escapeHtml(String(row.payee || '')) + '</td>' +
+          '<td class="activity-nowrap">' + escapeHtml(String(row.cashFlowSheet || '')) + '</td>' +
+          '<td>' + escapeHtml(String(row.cashFlowMonth || '')) + '</td>' +
+          '<td class="activity-details" title="' + escapeHtml(det) + '">' + escapeHtml(detShort) + '</td>' +
+          '</tr>';
+      });
+
+      html += '</tbody></table>';
+      wrap.innerHTML = html;
+    })
+    .withFailureHandler(function(err) {
+      wrap.innerHTML = '<div class="muted">Failed to load.</div>';
+      if (statusEl) {
+        statusEl.textContent = err && err.message ? err.message : String(err);
+        statusEl.className = 'status error';
+      }
+    })
+    .getActivityLogForDashboard({
+      dateFrom: dateFrom,
+      dateTo: dateTo,
+      eventType: eventType,
+      payeeSearch: payeeSearch,
+      limit: 250
+    });
+}

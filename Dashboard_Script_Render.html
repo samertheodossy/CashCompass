@@ -29,6 +29,10 @@ function showPage(name) {
   if (btn) btn.classList.add('active');
 
   window.scrollTo(0, 0);
+
+  if (name === 'activity' && typeof loadActivitySection === 'function') {
+    loadActivitySection();
+  }
 }
 
 function scrollHelpToSection(anchorId) {
