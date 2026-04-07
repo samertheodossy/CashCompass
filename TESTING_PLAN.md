@@ -81,6 +81,7 @@ Use this when you touch **`PlannerDashboardWeb.html`**, **`Dashboard_Body.html`*
 2. **Overview** loads without console errors; snapshot numbers appear.
 3. Switch **top nav** pages: **Activity**, **Bills Due**, **Cash Flow → Upcoming**, **Planning → Debts**, **Properties → House Expenses** — each panel should render (no blank white main area).
 4. If you added a **new** `Dashboard_Script_*.html`, confirm it is **included from `PlannerDashboardWeb.html`** (see grep below) and that the fragment has **no** nested `<?!= … ?>` (see `WORKING_RULES.md`).
+5. **Cash Flow → Donations** — Save one row; confirm it appears under the correct **Year** block on **INPUT - Donation** and **Tax year** dropdown lists your sheet’s years.
 
 ### Grep — include graph vs orphan scripts
 

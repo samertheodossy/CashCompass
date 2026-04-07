@@ -17,6 +17,7 @@ We are building a Google Apps Script Planner Dashboard for personal finance / pr
 - Purchase simulator / big purchase sim
 - Planner run + OUT history snapshot logic
 - **LOG - Activity** — append-only ledger of script actions (Quick Pay, bill skip, bill autopay, **house expense** on save; nested Quick Pay can suppress its own log row to avoid duplicates). Not a substitute for **OUT - History** (planner snapshots). Created automatically if missing (`activity_log.js`). **Activity** top-nav page: **getActivityDashboardData** — date range, payee, **type** filter (sheet-derived kinds), amount range, sort on full filtered set (up to **500** rows), **20** per page.
+- **INPUT - Donation** — Charitable giving by tax-year blocks (`Year` row + header row + data). **Cash Flow → Donations** appends rows (`donations.js`); does not write **INPUT - Cash Flow**.
 
 ## Current architecture
 
@@ -30,6 +31,7 @@ We are building a Google Apps Script Planner Dashboard for personal finance / pr
 - Dashboard_Script_AssetsBankInvestments.html
 - Dashboard_Script_PlanningDebts.html
 - Dashboard_Script_CashFlowUpcoming.html
+- Dashboard_Script_Donations.html
 - Dashboard_Script_PlanningRetirement.html
 - Dashboard_Script_PlanningPurchaseSim.html
 - Dashboard_Script_PropertyPerformance.html
@@ -42,6 +44,7 @@ We are building a Google Apps Script Planner Dashboard for personal finance / pr
 - html_includes.js = `includeHtml_()` — **raw** file content only; nested `<?!= … ?>` inside included files does **not** run (see `WORKING_RULES.md` § HtmlService includes).
 - dashboard_data.js = main dashboard snapshot + bills due backend
 - activity_log.js = LOG - Activity append-only audit (`appendActivityLog_`, dedupe keys for bill autopay, `getActivityDashboardData` / `getActivityLogForDashboard`, house expense + suppress duplicate Quick Pay)
+- donations.js = **INPUT - Donation** append (`getDonationsFormData`, `addDonation`)
 - other feature files exist for house, debts, payments, retirement, etc.
 
 ## Important resolved infra issues

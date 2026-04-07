@@ -1,0 +1,197 @@
+/* Cash Flow — Donations tab (INPUT - Donation) */
+var DONATION_SELECT_OTHER = '__other__';
+
+function onDonationCharityChange() {
+  const sel = document.getElementById('don_charitySelect');
+  const wrap = document.getElementById('don_charityOther_wrap');
+  if (!sel || !wrap) return;
+  wrap.style.display = sel.value === DONATION_SELECT_OTHER ? 'block' : 'none';
+  if (sel.value !== DONATION_SELECT_OTHER) {
+    const o = document.getElementById('don_charityOther');
+    if (o) o.value = '';
+  }
+}
+
+function onDonationPaymentChange() {
+  const sel = document.getElementById('don_paymentSelect');
+  const wrap = document.getElementById('don_paymentOther_wrap');
+  if (!sel || !wrap) return;
+  wrap.style.display = sel.value === DONATION_SELECT_OTHER ? 'block' : 'none';
+  if (sel.value !== DONATION_SELECT_OTHER) {
+    const o = document.getElementById('don_paymentOther');
+    if (o) o.value = '';
+  }
+}
+
+function fillDonationSelect_(selectEl, items, includeBlank) {
+  if (!selectEl) return;
+  selectEl.innerHTML = '';
+  if (includeBlank) {
+    const b = document.createElement('option');
+    b.value = '';
+    b.textContent = '—';
+    selectEl.appendChild(b);
+  }
+  (items || []).forEach(function(text) {
+    const opt = document.createElement('option');
+    opt.value = text;
+    opt.textContent = text;
+    selectEl.appendChild(opt);
+  });
+  const other = document.createElement('option');
+  other.value = DONATION_SELECT_OTHER;
+  other.textContent = 'Other…';
+  selectEl.appendChild(other);
+}
+
+function loadDonationsSection() {
+  const dateEl = document.getElementById('don_date');
+  if (dateEl && !dateEl.value) {
+    dateEl.value = new Date().toISOString().slice(0, 10);
+  }
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      const years = (data && data.taxYears) || [];
+      const sel = document.getElementById('don_taxYear');
+      const charitySel = document.getElementById('don_charitySelect');
+      const paymentSel = document.getElementById('don_paymentSelect');
+      if (!sel) return;
+
+      const prev = sel.value;
+      sel.innerHTML = '';
+      if (!years.length) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '— Add Year blocks on INPUT - Donation —';
+        sel.appendChild(opt);
+      } else {
+        years.forEach(function(y) {
+          const opt = document.createElement('option');
+          opt.value = String(y);
+          opt.textContent = String(y);
+          sel.appendChild(opt);
+        });
+        const def = data.defaultTaxYear != null ? String(data.defaultTaxYear) : String(years[0]);
+        sel.value = years.indexOf(Number(prev)) !== -1 ? prev : def;
+      }
+
+      const charities = (data && data.charitySuggestions) || [];
+      fillDonationSelect_(charitySel, charities, false);
+      if (charitySel && charities.length) {
+        charitySel.selectedIndex = 0;
+      } else if (charitySel) {
+        charitySel.value = DONATION_SELECT_OTHER;
+      }
+
+      const payTypes = (data && data.paymentTypeSuggestions) || [];
+      fillDonationSelect_(paymentSel, payTypes, false);
+      if (paymentSel) {
+        if (payTypes.length) {
+          paymentSel.selectedIndex = 0;
+        } else {
+          paymentSel.value = DONATION_SELECT_OTHER;
+        }
+      }
+
+      var co = document.getElementById('don_charityOther');
+      var po = document.getElementById('don_paymentOther');
+      if (co) co.value = '';
+      if (po) po.value = '';
+      onDonationCharityChange();
+      onDonationPaymentChange();
+
+      var ts = document.getElementById('don_recent_updated');
+      if (ts) ts.textContent = new Date().toLocaleString();
+      renderRecentDonations((data && data.recentDonations) || []);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('donations_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getDonationsFormData();
+}
+
+function renderRecentDonations(rows) {
+  var root = document.getElementById('don_recentList');
+  if (!root) return;
+  if (!rows || !rows.length) {
+    root.innerHTML = '<div class="muted">No donation rows found on INPUT - Donation yet.</div>';
+    return;
+  }
+  root.innerHTML = rows.map(function(r) {
+    var ty = r.taxYear != null && r.taxYear !== '' ? String(r.taxYear) : '';
+    return (
+      '<div class="donation-recent-item">' +
+        '<div><strong>' + escapeHtml(r.charity || '—') + '</strong>' +
+        (ty ? ' <span class="muted">TY ' + escapeHtml(ty) + '</span>' : '') +
+        ' <span class="muted donation-recent-date">' + escapeHtml(r.dateLabel || '') + '</span></div>' +
+        '<div class="donation-recent-meta">' + fmtCurrency(r.amount) +
+        (r.paymentType ? ' · <span class="muted">' + escapeHtml(r.paymentType) + '</span>' : '') +
+        (r.comments ? '<br><span class="muted">' + escapeHtml(r.comments) + '</span>' : '') +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+function saveDonation() {
+  const cSel = document.getElementById('don_charitySelect');
+  let charity = '';
+  if (cSel && cSel.value === DONATION_SELECT_OTHER) {
+    charity = (document.getElementById('don_charityOther') || {}).value || '';
+  } else {
+    charity = (cSel && cSel.value) || '';
+  }
+  charity = String(charity).trim();
+
+  const donationDate = (document.getElementById('don_date') || {}).value || '';
+  const amount = (document.getElementById('don_amount') || {}).value || '';
+  const taxYear = (document.getElementById('don_taxYear') || {}).value || '';
+  const comments = (document.getElementById('don_comments') || {}).value || '';
+
+  const pSel = document.getElementById('don_paymentSelect');
+  let paymentType = '';
+  if (pSel && pSel.value === DONATION_SELECT_OTHER) {
+    paymentType = (document.getElementById('don_paymentOther') || {}).value || '';
+  } else {
+    paymentType = (pSel && pSel.value) || '';
+  }
+  paymentType = String(paymentType).trim();
+
+  if (!taxYear) {
+    setStatus('donations_status', 'Select a tax year (add Year sections to INPUT - Donation if empty).', true);
+    return;
+  }
+  if (!charity) {
+    setStatus('donations_status', 'Choose a charity or pick Other… and enter the name.', true);
+    return;
+  }
+  if (!paymentType) {
+    setStatus('donations_status', 'Payment type is required — pick one from the list or Other… and type it.', true);
+    return;
+  }
+
+  setStatus('donations_status', 'Saving…', false);
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('donations_status', (res && res.message) || 'Saved.', false);
+      document.getElementById('don_comments').value = '';
+      var co2 = document.getElementById('don_charityOther');
+      var po2 = document.getElementById('don_paymentOther');
+      if (co2) co2.value = '';
+      if (po2) po2.value = '';
+      loadDonationsSection();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('donations_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .addDonation({
+      charityName: charity,
+      donationDate: donationDate,
+      amount: amount,
+      taxYear: Number(taxYear),
+      comments: comments,
+      paymentType: paymentType
+    });
+}

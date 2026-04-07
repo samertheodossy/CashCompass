@@ -78,7 +78,7 @@ function showTab(name) {
 
   if (name === 'houses' || name === 'bank' || name === 'investments') {
     showPage('assets');
-  } else if (name === 'payments' || name === 'upcoming') {
+  } else if (name === 'payments' || name === 'upcoming' || name === 'donations' || name === 'billsDue') {
     showPage('cashflow');
   } else if (name === 'houseExpenses' || name === 'propertyPerformance') {
     showPage('properties');
@@ -90,6 +90,10 @@ function showTab(name) {
   }
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  if (name === 'donations' && typeof loadDonationsSection === 'function') {
+    loadDonationsSection();
+  }
 }
 
 function toggleHealthExplainer() {

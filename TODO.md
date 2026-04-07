@@ -47,8 +47,6 @@ TO DO and issues I see in the testing
 
 1. Subscriptions
 
-2. Donnations - add a new UI for it too
-
 3. Income/Expense Classification
 
 4. Recurring Payments
@@ -113,3 +111,5 @@ Completed items kept for reference (original list numbers preserved).
 **18.** **HtmlService includes** — Documented in `WORKING_RULES.md` § HtmlService includes (`includeHtml_` + `getRawContent()`; no nested template tags in fragments). Cross-reference in `PROJECT_CONTEXT.md`.
 
 **23.** **Light safety net** — Manual checklist + `rg` include/orphan checks in `TESTING_PLAN.md` § Light safety net; notes on `PlannerDashboard.html` vs web app drift.
+
+**2.** **Donations UI** — **Cash Flow → Donations** tab: append rows to **INPUT - Donation** by tax-year block (`donations.js`, `Dashboard_Script_Donations.html`, Help **Donations**). *(Sidebar-only UI not required for this item.)*

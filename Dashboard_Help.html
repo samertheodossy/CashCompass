@@ -15,6 +15,7 @@
         <a href="#help-overview">Overview</a>
         <a href="#help-assets">Assets</a>
         <a href="#help-cashflow">Cash Flow</a>
+        <a href="#help-donations">Donations</a>
         <a href="#help-activity">Activity log</a>
         <a href="#help-bills-due">Bills Due</a>
         <a href="#help-properties">Properties</a>
@@ -47,7 +48,19 @@
       <section id="help-cashflow" class="help-section">
         <h3>Cash Flow</h3>
         <p><strong>Quick Payment</strong> — Adds to <strong>INPUT - Cash Flow</strong> for the selected year. The info box can show <strong>last month’s payment</strong> for the same payee: it reads the prior calendar month’s cell on the correct year’s Cash Flow tab (January uses the <em>previous year’s</em> tab for December).</p>
-        <p><strong>Upcoming</strong> — Planned expenses from your sheet; <strong>Bills Due</strong> is described below.</p>
+        <p><strong>Upcoming</strong> — Planned expenses from your sheet; <strong>Donations</strong> and <strong>Bills Due</strong> are separate tabs on this page (see Donations below).</p>
+      </section>
+
+      <section id="help-donations" class="help-section">
+        <h3>Donations</h3>
+        <p><strong>Cash Flow → Donations</strong> appends one row to <strong>INPUT - Donation</strong> for the tax-year section you pick. It does <strong>not</strong> write to <strong>INPUT - Cash Flow</strong>—only your charitable-giving log for records and taxes.</p>
+        <p><strong>Where rows go</strong> — New entries are written under the matching <strong>Year</strong> block: after the row with <strong>Year</strong> in column A and the year in column B, the next row must be the header <em>Name of Charity, Date, Amount, Tax Year, Comments, Payment type</em> (labels exactly). Data rows follow until the next <strong>Year</strong> row or the end of the sheet. The script adds your line after the last non-empty row in that block.</p>
+        <p><strong>Row formatting</strong> — When the block already has at least one data row, the new row copies <strong>number formats, fonts, borders, and fills</strong> from that last existing row (format only; your typed values stay). The first row in a new empty block still gets default date and currency formats on Date and Amount.</p>
+        <p><strong>Recent donations</strong> — The right-hand list shows the newest rows found in <strong>all</strong> year blocks (by date when the sheet has real dates), similar in spirit to recent house expenses.</p>
+        <p><strong>Tax year dropdown</strong> — Lists years found from <strong>Year</strong> rows. If a year is missing from the sheet, add that block on <strong>INPUT - Donation</strong> before using the UI.</p>
+        <p><strong>Amount</strong> — Negatives are allowed (e.g. adjustments). Currency-style typing works like elsewhere in the dashboard.</p>
+        <p><strong>Name of Charity</strong> — Dropdown from existing names on the sheet; <strong>Other…</strong> opens a field for a new name.</p>
+        <p><strong>Payment type</strong> — <strong>Required.</strong> Choose from values already on the sheet or <strong>Other…</strong> to type a new one (e.g. check #, Zelle).</p>
       </section>
 
       <section id="help-activity" class="help-section">
@@ -127,6 +140,7 @@
           <li><strong>INPUT - Cash Flow {year}</strong> — Monthly columns; Rent payees for rental income.</li>
           <li><strong>INPUT - Bills</strong> — Dated bills (category, autopay, varies, etc.); drives most Bills Due cards.</li>
           <li><strong>INPUT - Debts</strong> — Loan accounts; minimum payments can appear on Bills Due.</li>
+          <li><strong>INPUT - Donation</strong> — Charitable giving log by tax-year blocks; add rows from <strong>Cash Flow → Donations</strong>.</li>
           <li><strong>LOG - Activity</strong> — Append-only audit (Quick Pay, bill skip, INPUT - Bills autopay, house expense saves); filter, sort, and paginate on the <strong>Activity</strong> page.</li>
         </ul>
       </section>

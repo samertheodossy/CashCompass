@@ -331,6 +331,7 @@
     <div class="tabs cashflow-tabs">
       <button class="tab-btn active" data-tab="payments" onclick="showTab('payments')">Quick Payment</button>
       <button class="tab-btn" data-tab="upcoming" onclick="showTab('upcoming')">Upcoming</button>
+      <button class="tab-btn" data-tab="donations" onclick="showTab('donations')">Donations</button>
       <button class="tab-btn" data-tab="billsDue" onclick="showTab('billsDue')">Bills Due</button>
     </div>
 
@@ -432,6 +433,50 @@
         <div>
           <div class="card-title" style="margin-top:0;">Upcoming List</div>
           <div id="upcoming_list" class="upcoming-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="donations" class="panel">
+      <div class="panel-head">
+        <h2>Donations</h2>
+        <div class="updated">Log giving to <strong>INPUT - Donation</strong> · Sheet data: <span id="don_recent_updated">—</span></div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <label for="don_charitySelect">Name of Charity</label>
+          <select id="don_charitySelect" onchange="onDonationCharityChange()"></select>
+          <div id="don_charityOther_wrap" class="donations-other-wrap" style="display:none;">
+            <label for="don_charityOther">Other — charity name</label>
+            <input type="text" id="don_charityOther" placeholder="Type the charity name" autocomplete="off">
+          </div>
+
+          <label for="don_date">Date</label>
+          <input type="date" id="don_date">
+
+          <label for="don_amount">Amount</label>
+          <input type="text" id="don_amount" inputmode="decimal" onfocus="currencyFocus('don_amount')" onblur="currencyBlur('don_amount')" placeholder="e.g. 50 or -100 for adjustments">
+
+          <label for="don_taxYear">Tax year (section on sheet)</label>
+          <select id="don_taxYear"></select>
+
+          <label for="don_comments">Comments</label>
+          <input type="text" id="don_comments" placeholder="Optional note">
+
+          <label for="don_paymentSelect">Payment type <span class="muted">(required)</span></label>
+          <select id="don_paymentSelect" onchange="onDonationPaymentChange()"></select>
+          <div id="don_paymentOther_wrap" class="donations-other-wrap" style="display:none;">
+            <label for="don_paymentOther">Other — payment type</label>
+            <input type="text" id="don_paymentOther" placeholder="e.g. Cash, Zelle, check #" autocomplete="off">
+          </div>
+
+          <button type="button" onclick="saveDonation()">Add donation</button>
+          <div id="donations_status" class="status"></div>
+        </div>
+        <div class="info">
+          <div class="card-title" style="margin-top:0;">Recent donations</div>
+          <p class="muted" style="margin:0 0 8px 0;">Newest rows across your sheet (all tax-year blocks), same idea as recent house expenses.</p>
+          <div id="don_recentList" class="donation-recent-list"></div>
         </div>
       </div>
     </div>
