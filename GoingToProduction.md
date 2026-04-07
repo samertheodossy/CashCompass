@@ -69,6 +69,7 @@ The codebase today is **much closer to A than to B**.
 
 **Phase 1 — Lock “personal production” (short)**  
 - Frozen **template** spreadsheet (even if manual): “known good” copy linked from README or `PROJECT_CONTEXT.md`.  
+- **First-time setup steps:** `FIRST_RUN.md` (deploy URL, timezone, smoke check).  
 - Short **deploy checklist**: clasp push, deploy web app, set URL in script, smoke test Overview + Quick Pay + Bills Due + one planner run.  
 - Keep **SESSION_NOTES.md** / commits disciplined around risky areas (per your `COMMIT_RULES.md`).
 

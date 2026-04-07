@@ -98,3 +98,8 @@ Columns:
 
 ## Next task
 See **`TODO.md`** for current priorities (there is no separate next-task file).
+
+## First-time setup
+- Step-by-step (workbook, deploy web app, smoke check): **`FIRST_RUN.md`**.  
+- **Canonical template workbook (optional):** Add a “known good” Google Sheets link here when you freeze one for your household—omit from public repos if the URL is sensitive.  
+  - *Template link: (none yet — add when ready.)*

@@ -145,6 +145,12 @@
 
 ---
 
+## First run doc
+
+- **`FIRST_RUN.md`** — One-page setup: prerequisites, time zone, workbook/template, clasp vs editor, web app deploy (`USER_DEPLOYING` / `MYSELF`), Script Properties URL, smoke check, “do not rename” warnings. Linked from **`INIT_PROMPT.md`**, **`GoingToProduction.md`** Phase 1, **`PROJECT_CONTEXT.md`** § First-time setup (optional template link placeholder).
+
+---
+
 ## Contributor docs — `includeHtml_` + release safety net (TODO #18, #23)
 
 - **`WORKING_RULES.md`** — New § **HtmlService includes (`includeHtml_`)**: `getRawContent()` / no nested template tags in included fragments; where to put `<?!= … ?>`.
