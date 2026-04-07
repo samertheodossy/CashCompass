@@ -149,7 +149,7 @@
 
 - **UI:** **Cash Flow → Donations** (`Dashboard_Body.html`, `Dashboard_Script_Donations.html`, `PlannerDashboardWeb.html` include). **`showTab('donations')`** switches to Cash Flow and loads form data.
 - **Backend:** `donations.js` — `getDonationsFormData` (tax years from `Year` rows, distinct **Name of Charity** and **Payment type** lists), `addDonation` (find block by tax year, append after last non-empty row in block; headers must match **Name of Charity**, **Date**, **Amount**, **Tax Year**, **Comments**, **Payment type**).
-- **UI:** Charity and payment type are `<select>` lists from the sheet + **Other…**; **payment type is required**. **Recent donations** (right column) lists newest rows across all year blocks. Details in **Help → Donations**.
+- **UI:** Charity and payment type are `<select>` lists from the sheet + **Other…**; **payment type is required**. Sheet values **Check #4768** etc. collapse to one **Check** option; choosing Check shows **Check #** field and saves as `Check #` + number. **Recent donations** (right column) lists newest rows across all year blocks. Details in **Help → Donations**.
 - **Formats:** New rows copy **PASTE_FORMAT** from the last existing data row in that tax-year block when possible; first row in an empty block keeps explicit Date/Amount formats.
 - **Help:** `Dashboard_Help.html` § Donations + sheet list **INPUT - Donation**.
 

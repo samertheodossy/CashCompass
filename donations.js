@@ -104,6 +104,17 @@ function collectDistinctCharityNames_(values) {
   return list.slice(0, 150);
 }
 
+/**
+ * Collapse "Check #4768", "Check #4783", plain "Check", etc. to one dropdown label "Check".
+ */
+function normalizeDonationPaymentTypeForDropdown_(raw) {
+  const t = String(raw || '').trim();
+  if (!t) return '';
+  if (/^check\s*$/i.test(t)) return 'Check';
+  if (/^check\s*#\s*\S+/i.test(t)) return 'Check';
+  return t;
+}
+
 function collectDistinctPaymentTypes_(values) {
   const types = {};
   for (let r = 0; r < values.length; r++) {
@@ -115,7 +126,9 @@ function collectDistinctPaymentTypes_(values) {
     for (let dr = start; dr < values.length; dr++) {
       if (String(values[dr][0] || '').trim().toLowerCase() === 'year') break;
       const t = String(values[dr][colPay] || '').trim();
-      if (t) types[t] = true;
+      if (!t) continue;
+      const key = normalizeDonationPaymentTypeForDropdown_(t);
+      if (key) types[key] = true;
     }
   }
   const list = Object.keys(types);

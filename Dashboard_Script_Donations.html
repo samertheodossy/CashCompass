@@ -1,5 +1,6 @@
 /* Cash Flow — Donations tab (INPUT - Donation) */
 var DONATION_SELECT_OTHER = '__other__';
+var DONATION_PAYMENT_CHECK = 'Check';
 
 function onDonationCharityChange() {
   const sel = document.getElementById('don_charitySelect');
@@ -14,12 +15,24 @@ function onDonationCharityChange() {
 
 function onDonationPaymentChange() {
   const sel = document.getElementById('don_paymentSelect');
-  const wrap = document.getElementById('don_paymentOther_wrap');
-  if (!sel || !wrap) return;
-  wrap.style.display = sel.value === DONATION_SELECT_OTHER ? 'block' : 'none';
-  if (sel.value !== DONATION_SELECT_OTHER) {
-    const o = document.getElementById('don_paymentOther');
-    if (o) o.value = '';
+  const otherWrap = document.getElementById('don_paymentOther_wrap');
+  const checkWrap = document.getElementById('don_checkNumber_wrap');
+  if (!sel) return;
+
+  if (checkWrap) {
+    checkWrap.style.display = sel.value === DONATION_PAYMENT_CHECK ? 'block' : 'none';
+    if (sel.value !== DONATION_PAYMENT_CHECK) {
+      const cn = document.getElementById('don_checkNumber');
+      if (cn) cn.value = '';
+    }
+  }
+
+  if (otherWrap) {
+    otherWrap.style.display = sel.value === DONATION_SELECT_OTHER ? 'block' : 'none';
+    if (sel.value !== DONATION_SELECT_OTHER) {
+      const o = document.getElementById('don_paymentOther');
+      if (o) o.value = '';
+    }
   }
 }
 
@@ -96,8 +109,10 @@ function loadDonationsSection() {
 
       var co = document.getElementById('don_charityOther');
       var po = document.getElementById('don_paymentOther');
+      var cn = document.getElementById('don_checkNumber');
       if (co) co.value = '';
       if (po) po.value = '';
+      if (cn) cn.value = '';
       onDonationCharityChange();
       onDonationPaymentChange();
 
@@ -153,6 +168,14 @@ function saveDonation() {
   let paymentType = '';
   if (pSel && pSel.value === DONATION_SELECT_OTHER) {
     paymentType = (document.getElementById('don_paymentOther') || {}).value || '';
+  } else if (pSel && pSel.value === DONATION_PAYMENT_CHECK) {
+    let num = String((document.getElementById('don_checkNumber') || {}).value || '').trim();
+    num = num.replace(/^#+\s*/, '');
+    if (!num) {
+      setStatus('donations_status', 'Enter the check number (or pick a different payment type).', true);
+      return;
+    }
+    paymentType = 'Check #' + num;
   } else {
     paymentType = (pSel && pSel.value) || '';
   }
@@ -179,8 +202,10 @@ function saveDonation() {
       document.getElementById('don_comments').value = '';
       var co2 = document.getElementById('don_charityOther');
       var po2 = document.getElementById('don_paymentOther');
+      var cn2 = document.getElementById('don_checkNumber');
       if (co2) co2.value = '';
       if (po2) po2.value = '';
+      if (cn2) cn2.value = '';
       loadDonationsSection();
     })
     .withFailureHandler(function(err) {

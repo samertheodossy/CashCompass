@@ -465,6 +465,10 @@
 
           <label for="don_paymentSelect">Payment type <span class="muted">(required)</span></label>
           <select id="don_paymentSelect" onchange="onDonationPaymentChange()"></select>
+          <div id="don_checkNumber_wrap" class="donations-other-wrap" style="display:none;">
+            <label for="don_checkNumber">Check #</label>
+            <input type="text" id="don_checkNumber" inputmode="numeric" placeholder="e.g. 4783" autocomplete="off">
+          </div>
           <div id="don_paymentOther_wrap" class="donations-other-wrap" style="display:none;">
             <label for="don_paymentOther">Other — payment type</label>
             <input type="text" id="don_paymentOther" placeholder="e.g. Cash, Zelle, check #" autocomplete="off">
