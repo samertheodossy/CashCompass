@@ -142,3 +142,11 @@
 ## Dead code — removed unreferenced dashboard HTML
 
 - **Removed**: `Dashboard_Script_DueCards.html`, `Dashboard_Script_Core.html`, `Dashboard_Script_Utils.html` (never `includeHtml_`’d from `PlannerDashboardWeb.html` nor `createHtmlOutputFromFile` elsewhere). **Revert**: restore those files from git history if a mirror is needed again.
+
+---
+
+## Contributor docs — `includeHtml_` + release safety net (TODO #18, #23)
+
+- **`WORKING_RULES.md`** — New § **HtmlService includes (`includeHtml_`)**: `getRawContent()` / no nested template tags in included fragments; where to put `<?!= … ?>`.
+- **`PROJECT_CONTEXT.md`** — Backend bullet + resolved-infra pointer to that section; **Next task** now defers to **`TODO.md`**.
+- **`TESTING_PLAN.md`** — § **Light safety net**: manual checklist after risky dashboard edits; `grep` commands to list `PlannerDashboardWeb.html` includes and flag orphan `Dashboard_Script_*.html`; note on `PlannerDashboard.html` vs web app.

@@ -71,6 +71,42 @@ This complements `GoingToProduction.md`: validation/onboarding reduce user error
 
 ---
 
+## Light safety net — after risky dashboard changes
+
+Use this when you touch **`PlannerDashboardWeb.html`**, **`Dashboard_Body.html`**, **`Dashboard_Script_*.html`**, or **`html_includes.js`**. It complements automated tests (still optional); it is cheap and catches common foot-guns.
+
+### Manual checklist (about 5 minutes after `clasp push`)
+
+1. Open the **deployed web app** (or latest test deployment), hard-refresh.
+2. **Overview** loads without console errors; snapshot numbers appear.
+3. Switch **top nav** pages: **Activity**, **Bills Due**, **Cash Flow → Upcoming**, **Planning → Debts**, **Properties → House Expenses** — each panel should render (no blank white main area).
+4. If you added a **new** `Dashboard_Script_*.html`, confirm it is **included from `PlannerDashboardWeb.html`** (see grep below) and that the fragment has **no** nested `<?!= … ?>` (see `WORKING_RULES.md`).
+
+### Grep — include graph vs orphan scripts
+
+**List every dashboard include** (canonical web app shell):
+
+```bash
+grep -n "includeHtml_('" PlannerDashboardWeb.html
+```
+
+**Find `Dashboard_Script_` files that nothing includes** (possible orphans — verify before deleting):
+
+```bash
+for f in Dashboard_Script_*.html; do
+  base="${f%.html}"
+  grep -rq "includeHtml_('$base')" --include='*.html' . || echo "ORPHAN? $f"
+done
+```
+
+Run from the repo root. Each shipped script fragment should appear in **at least one** `includeHtml_('…')` in `PlannerDashboardWeb.html` (the root template for `doGet`).
+
+If you use **ripgrep**, the same checks are `rg "includeHtml_\('" PlannerDashboardWeb.html` and `rg -l "includeHtml_\('$base'\)"` inside the loop.
+
+**Sidebar / second surface:** `PlannerDashboard.html` is a separate HTML entry (spreadsheet sidebar). If you change behavior there and in the web app, compare both manually — there is no automatic sync (see `TODO.md` item 16).
+
+---
+
 ## What *not* to do first
 
 - Do **not** point a cloud CI job at your **personal** spreadsheet ID.  

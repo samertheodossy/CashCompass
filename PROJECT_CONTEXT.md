@@ -39,7 +39,7 @@ We are building a Google Apps Script Planner Dashboard for personal finance / pr
 
 ### Backend files
 - webapp.js = main doGet()
-- html_includes.js = includeHtml_() using raw content
+- html_includes.js = `includeHtml_()` — **raw** file content only; nested `<?!= … ?>` inside included files does **not** run (see `WORKING_RULES.md` § HtmlService includes).
 - dashboard_data.js = main dashboard snapshot + bills due backend
 - activity_log.js = LOG - Activity append-only audit (`appendActivityLog_`, dedupe keys for bill autopay, `getActivityDashboardData` / `getActivityLogForDashboard`, house expense + suppress duplicate Quick Pay)
 - other feature files exist for house, debts, payments, retirement, etc.
@@ -47,7 +47,7 @@ We are building a Google Apps Script Planner Dashboard for personal finance / pr
 ## Important resolved infra issues
 - Duplicate doGet() caused template problems before. Only keep one active doGet().
 - Duplicate includeHtml_() caused malformed HTML/script include problems before.
-- Correct include helper should use raw content, not HTML parsing, for included script files.
+- Correct include helper should use raw content, not HTML parsing, for included script files. **Contributor detail:** `WORKING_RULES.md` explains why included fragments cannot contain their own template tags.
 - The dashboard now renders correctly again.
 
 ## Current business rules for bills / cash flow
@@ -97,4 +97,4 @@ Columns:
 - Dashboard_Script_BillsDue.html
 
 ## Next task
-Refine Bills Due logic without breaking other features.
+See **`TODO.md`** for current priorities (there is no separate next-task file).
