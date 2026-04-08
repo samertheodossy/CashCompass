@@ -1,3 +1,10 @@
+## Recent — Quick add wording + Activity page
+
+- **Quick add** (UI) vs **`quick_pay`** (sheet event): aligned across `TESTING_PLAN.md`, `GoingToProduction.md`, `TODO.md` (incl. `planner_status` inventory #19), `PROJECT_CONTEXT.md`, `SESSION_NOTES.md`, `Dashboard_Help.html`, `activity_log.js` header comment.
+- **Activity** (`Dashboard_Body.html` `#page_activity`): removed redundant intro paragraph; full explanation stays in **Help → Activity log**. Removed unused `.activity-intro` from `Dashboard_Styles.html`.
+
+---
+
 ## LOG - Activity (audit log)
 
 - **Tab**: `LOG - Activity` — created on first log if missing; header row: Logged At, Event Type, Entry Date, Amount, Direction, Payee, Category, Account / Source, Cash Flow Sheet, Cash Flow Month, Dedupe Key, Details.
@@ -49,7 +56,7 @@
 
 ## Earlier session work (misc)
 
-- **Quick payment / bill pay**: sped up screen updates (faster round-trip pattern).
+- **Quick add** / **Bills Due** (bill pay): sped up screen updates (faster round-trip pattern).
 - **Debts / credit cards**: show cards in the UI even when balance is $0 where applicable.
 - **Debts — non-loan payments**: payment amount subtracted from the displayed balance for non-loan debt rows (see debt sheet logic).
 - **Bills Due / recurring**: `hasHistory` guard removed in `getRecurringBillsWithoutDueDateForDashboard()` in `dashboard_data.js` so unmapped Cash Flow rows can still surface; a short comment in code documents how to restore the old gate if needed.
@@ -70,7 +77,7 @@
 
 - **Bug**: `new Date('2026-04-01')` is parsed as **UTC** midnight, so in US timezones the **local** month/day can be the **previous** calendar day → wrong month label and wrong month column (e.g. Apr 1 → Mar-xx).
 - **Fix**: use **`parseIsoDateLocal_`** from `quick_add_payment.js` (`new Date(y, m-1, d)` in script timezone) for HTML `<input type="date">` payloads.
-- **Touched**: `house_values.js` (get/update house value), `bank_accounts.js`, `investments.js`, `house_expenses.js` (`addHouseExpense`), `upcoming_expenses.js` (`addUpcomingExpense`). Quick Add Payment already used the helper.
+- **Touched**: `house_values.js` (get/update house value), `bank_accounts.js`, `investments.js`, `house_expenses.js` (`addHouseExpense`), `upcoming_expenses.js` (`addUpcomingExpense`). **Quick add** already used the helper.
 
 ---
 

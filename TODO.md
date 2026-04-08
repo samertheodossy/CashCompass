@@ -10,7 +10,7 @@ TO DO and issues I see in the testing
 
 ### Important — Activity / HISTORY flow (LOG - Activity vs OUT - History)
 
-**LOG - Activity** = **event** ledger (who/when/amount); dashboard **Remove** is **donation-only** for now (**`deleteActivityLogRow`**); donations may also remove a matching **INPUT - Donation** row. Other event types: greyed UI + delete on the sheet if needed. **Smart undo** for Quick Pay / house expense / bills — phased list below. **OUT - History** = **planner run** snapshots. Implementation: **`activity_log.js`**, **`appendActivityLog_`**, Help **Activity log**.
+**LOG - Activity** = **event** ledger (who/when/amount); dashboard **Remove** is **donation-only** for now (**`deleteActivityLogRow`**); donations may also remove a matching **INPUT - Donation** row. Other event types: greyed UI + delete on the sheet if needed. **Smart undo** for **Quick add** (`quick_pay`) / house expense / bills — phased list below. **OUT - History** = **planner run** snapshots. Implementation: **`activity_log.js`**, **`appendActivityLog_`**, Help **Activity log**.
 
 **Done (recent)**  
 - **Phase 4 — House expenses** — **`house_expense`** after **`addHouseExpense`**; if the form also posts to Cash Flow, **`quickAddPayment`** runs with **`suppressActivityLog: true`** so you do not get a second **`quick_pay`** row for the same save. Activity **Type** uses the House Expenses form type (Repair, **Maintenance**, Utilities, etc.; stored **Tax** displays as **Property Tax**).  
@@ -27,14 +27,14 @@ TO DO and issues I see in the testing
 
 | Flow | Status |
 |------|--------|
-| Quick Add Payment | **Done** — `quick_pay` at end of **`quickAddPayment`**. |
+| Quick add | **Done** — `quick_pay` at end of **`quickAddPayment`**. |
 | Bills Due → Skip | **Done** — **`skipDashboardBill`**. |
 | Bills Due → Autopay | **Done** — dedupe key on refresh. |
 | Upcoming expenses | **Open** — Phase 3. |
-| House expenses | **Done** — **`addHouseExpense`** → `house_expense`; CF via Quick Pay + **`suppressActivityLog`**. |
+| House expenses | **Done** — **`addHouseExpense`** → `house_expense`; CF via **Quick add** + **`suppressActivityLog`**. |
 
 **Phased rollout**  
-1. **Phase 1 — Quick Pay** — **Done**  
+1. **Phase 1 — Quick add** (`quick_pay`) — **Done**  
 2. **Phase 2 — Skip + autopay** — **Done**  
 3. **Phase 3 — Upcoming** — **Open**  
 4. **Phase 4 — House expenses** — **Done**  
@@ -90,7 +90,7 @@ TO DO and issues I see in the testing
 8. Cleanup the Debts/Bills sheets now that we have the other stuff
    - Only Debts should be here and other move to Bills
 
-10. On the Debt update page we should update the screen on the bottom and right like we did for Quick Pay
+10. On the Debt update page we should update the screen on the bottom and right like we did for **Quick add**
    - The right updates but takes way too long - a BUG
    - The bottom is never shown we should add it - new
 
@@ -114,7 +114,13 @@ Technical debt and consistency work suggested from repo review; no rush—pick o
 
 16. **Two dashboards** — `PlannerDashboardWeb` + modular `Dashboard_*` is canonical (`doGet`). `PlannerDashboard.html` is sidebar HTML from the spreadsheet menu. Decide: Web-only maintenance, or one shared source of scripts/styles so fixes aren’t duplicated.
 
-19. **Status / `planner_status` audit** — After Bills Due → `bills_due_status`, scan remaining `setStatus('planner_status', …)` for actions that belong next to a specific panel.
+19. **Status / `planner_status` audit** — After Bills Due → `bills_due_status`, move remaining global status to panel-specific elements where it makes UX sense. **Inventory (repo scan — update if code moves):**
+   - **`Dashboard_Body.html`** — Markup: `#planner_status` container in the top bar (no `setStatus` here; anchor for all writers).
+   - **`Dashboard_Script_Render.html`** — `runPlannerNow`: `setStatusLoading` / `setStatus('planner_status', …)` for planner run (success/error). *Expected:* stays near **Run Planner** in top bar.
+   - **`Dashboard_Script_BillsDue.html`** — `loadBillsDueUi_` **failure** handler only → `planner_status` when `getBillsDueFromCashFlowForDashboard` fails. *Candidate:* surface on Overview/Bills cards or a dedicated bills load status instead.
+   - **`Dashboard_Script_Payments.html`** — `runDebtPlannerAfterQuickPayment_` failure → `planner_status` for `runDebtPlanner` errors. *Candidate:* `pay_status` or a Planning-scoped line.
+   - **`PlannerDashboardWeb.html`** — `window.onerror` and `initDashboard` catch → write to `planner_status` (global init/JS errors). *Reasonable to keep global.*
+   - **`PlannerDashboard.html`** (sidebar) — same pattern if still maintained (`TODO` item 16).
 
 20. **Large `dashboard_data.js`** — Optional long-term split by feature (bills, snapshot, etc.) behind stable exported function names if that file keeps growing.
 

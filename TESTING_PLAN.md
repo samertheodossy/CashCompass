@@ -2,7 +2,7 @@
 
 Goal: **build confidence for production-style releases** without pointing tests at your **live** financial workbook or changing how you use the app day to day.
 
-This complements `GoingToProduction.md`: validation/onboarding reduce user error; **automated tests** reduce regression risk when you change `dashboard_data.js`, bills logic, Quick Pay, etc.
+This complements `GoingToProduction.md`: validation/onboarding reduce user error; **automated tests** reduce regression risk when you change `dashboard_data.js`, bills logic, **Quick add** / `quickAddPayment`, etc.
 
 ---
 
@@ -61,7 +61,7 @@ This complements `GoingToProduction.md`: validation/onboarding reduce user error
 
 ### 3. Smoke / E2E — human or semi-automated checklist
 
-**What:** “Deploy web app → open Overview → Quick Pay → Bills Due → Run Planner” — things that need HtmlService or full stack.
+**What:** “Deploy web app → open Overview → **Quick add** → Bills Due → Run Planner” — things that need HtmlService or full stack.
 
 **How:**  
 - Keep a **short checklist** in repo (could live at the end of this file later): 10–15 steps, 5 minutes.  
@@ -82,6 +82,8 @@ Use this when you touch **`PlannerDashboardWeb.html`**, **`Dashboard_Body.html`*
 3. Switch **top nav** pages: **Activity**, **Bills Due**, **Cash Flow → Upcoming**, **Planning → Debts**, **Properties → House Expenses** — each panel should render (no blank white main area).
 4. If you added a **new** `Dashboard_Script_*.html`, confirm it is **included from `PlannerDashboardWeb.html`** (see grep below) and that the fragment has **no** nested `<?!= … ?>` (see `WORKING_RULES.md`).
 5. **Cash Flow → Donations** — Save one row; confirm it appears under the correct **Year** block on **INPUT - Donation** and **Tax year** dropdown lists your sheet’s years.
+6. **Activity → Donation Remove** (optional, if you have a recent donation log row): click **Remove** on a **Donation** row; confirm the line disappears from **LOG - Activity** and the matching row is removed from **INPUT - Donation** when the fingerprint still matches (otherwise only the log line goes away—read the status line under the filters).
+7. **Run Planner + Refresh Snapshot** — confirm the top **planner_status** line shows completion or a readable error (not a silent failure).
 
 ### Grep — include graph vs orphan scripts
 
@@ -121,7 +123,7 @@ If you use **ripgrep**, the same checks are `rg "includeHtml_\('" PlannerDashboa
 1. **Inventory pure functions** — 30-minute pass through `dashboard_data.js`, `quick_add_payment.js`, `planner_helpers.js`, etc.; list candidates for unit tests (frequency, dates, bill keys, parsing).  
 2. **Pick one runner strategy** — Node for extracted modules *or* in-script harness; choose based on how much you want to avoid extract-vs-duplicate tension.  
 3. **Add 5–10 unit tests** for the riskiest pure paths (bills frequency / `billAppliesInMonth_`-style behavior, amount sign rules).  
-4. **Create Test spreadsheet + one integration test** for Quick Pay or a read-only “load dashboard data” path.  
+4. **Create Test spreadsheet + one integration test** for **Quick add** (`quickAddPayment`) or a read-only “load dashboard data” path.  
 5. **Document** in `SESSION_NOTES` or README: “Run tests X before release”; optional GitHub Action **only** if tests run without Google secrets (unit-only CI is easy; full integration CI needs encrypted service account or is manual).
 
 ---
@@ -138,7 +140,7 @@ If you use **ripgrep**, the same checks are `rg "includeHtml_\('" PlannerDashboa
 - **Workbook validation** (“scan tabs/headers”) is **not** the same as regression tests; both help production. Validation answers “is this workbook structurally valid?” Tests answer “does our code still behave as intended on valid structures?”  
 - Order: you can start **unit tests** immediately; **validation** can land in parallel per onboarding plan.
 
-**Manual smoke (Activity / house expense)** — when exercising layer 3: open **Activity**, set **from/to**, **Payee**, **Type**, amount min/max; **Apply** and confirm rows match **LOG - Activity**; confirm **Type** options reflect distinct kinds in the sheet. Sort a column; use **Previous/Next** (20 per page); if you have more than 500 matches, confirm the summary notes truncation. Save a **House Expense** with **Add to Cash Flow** and confirm **one** new ledger row (`house_expense`), not an extra `quick_pay`.
+**Manual smoke (Activity / house expense)** — when exercising layer 3: open **Activity**, set **from/to**, **Payee**, **Type**, amount min/max; **Apply** and confirm rows match **LOG - Activity**; confirm **Type** options reflect distinct kinds in the sheet. Sort a column; use **Previous/Next** (20 per page); if you have more than 500 matches, confirm the summary notes truncation. For **Donation** rows, **Remove** is the only active remove control (others greyed)—exercise it if you need to verify log + **INPUT - Donation** undo. Save a **House Expense** with **Add to Cash Flow** and confirm **one** new ledger row (`house_expense`), not an extra `quick_pay`.
 
 ---
 

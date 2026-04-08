@@ -16,7 +16,7 @@ We are building a Google Apps Script Planner Dashboard for personal finance / pr
 - Monte Carlo / retirement success
 - Purchase simulator / big purchase sim
 - Planner run + OUT history snapshot logic
-- **LOG - Activity** — Ledger of script actions (**quick_pay**, bill skip, bill autopay, **house_expense**, **donation**; nested Quick Pay can suppress its own log row when house expense already logged). Rows can be removed from the **Activity** page: dashboard **Remove** is enabled for **`donation`** only (may also delete a matching **INPUT - Donation** row when the fingerprint matches); other event types are sheet-only for now. Not a substitute for **OUT - History** (planner snapshots). Created automatically if missing (`activity_log.js`). **Activity** page: **getActivityDashboardData** — filters, sort, up to **500** matches, **20** per page.
+- **LOG - Activity** — Ledger of script actions (**quick_pay**, bill skip, bill autopay, **house_expense**, **donation**; when **Quick add** runs inside house expense with **`suppressActivityLog`**, the extra **`quick_pay`** row is omitted because **`house_expense`** already logged the save). Rows can be removed from the **Activity** page: dashboard **Remove** is enabled for **`donation`** only (may also delete a matching **INPUT - Donation** row when the fingerprint matches); other event types are sheet-only for now. Not a substitute for **OUT - History** (planner snapshots). Created automatically if missing (`activity_log.js`). **Activity** page: **getActivityDashboardData** — filters, sort, up to **500** matches, **20** per page.
 - **INPUT - Donation** — Charitable giving by tax-year blocks (`Year` row + header row + data). **Cash Flow → Donations** appends rows (`donations.js`); does not write **INPUT - Cash Flow**.
 - **Car / vehicle expenses** — Often a **separate dedicated sheet** in the workbook today; **not** integrated in the dashboard yet. See **`TODO.md`** (Product / testing) for the open design item.
 
@@ -44,7 +44,7 @@ We are building a Google Apps Script Planner Dashboard for personal finance / pr
 - webapp.js = main doGet()
 - html_includes.js = `includeHtml_()` — **raw** file content only; nested `<?!= … ?>` inside included files does **not** run (see `WORKING_RULES.md` § HtmlService includes).
 - dashboard_data.js = main dashboard snapshot + bills due backend
-- activity_log.js = LOG - Activity (`appendActivityLog_`, `deleteActivityLogRow` donation-only from web UI, dedupe keys for bill autopay, `getActivityDashboardData` / `getActivityLogForDashboard`, house expense + suppress duplicate Quick Pay)
+- activity_log.js = LOG - Activity (`appendActivityLog_`, `deleteActivityLogRow` donation-only from web UI, dedupe keys for bill autopay, `getActivityDashboardData` / `getActivityLogForDashboard`, house expense + suppress duplicate **`quick_pay`** when CF is posted from the same save)
 - donations.js = **INPUT - Donation** append (`getDonationsFormData`, `addDonation`)
 - other feature files exist for house, debts, payments, retirement, etc.
 

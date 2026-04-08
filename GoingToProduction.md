@@ -55,7 +55,7 @@ The codebase today is **much closer to A than to B**.
 **Soft blockers (quality / completeness)**
 
 4. Open **TODO.md** product items (debt page UX, upcoming dropdowns, bills/debts cleanup, tax, etc.) — these don’t block *you* from daily use but block calling it “complete” for a general audience.
-5. **Activity / HISTORY ledger** — Quick Pay, skip, autopay, and **house expenses** are logged; Activity UI supports filters, type-from-sheet, and paging. **Gaps** (upcoming lifecycle, manual Cash Flow edits, CSV export) still limit “full provenance” for strangers — soft quality gap, not a hard ship blocker for personal use.
+5. **Activity / HISTORY ledger** — **Quick add** events (`quick_pay`), skip, autopay, **donations**, and **house expenses** are logged; Activity UI supports filters, type-from-sheet, paging, and **Remove** (donation-only from the dashboard for now). **Gaps** (upcoming lifecycle, manual Cash Flow edits, CSV export) still limit “full provenance” for strangers — soft quality gap, not a hard ship blocker for personal use.
 6. **Two surfaces** (`PlannerDashboardWeb` vs sidebar `PlannerDashboard.html`) — maintainability risk when you promise updates to others.
 
 **Non-blockers for a serious personal tool**
@@ -70,7 +70,7 @@ The codebase today is **much closer to A than to B**.
 **Phase 1 — Lock “personal production” (short)**  
 - Frozen **template** spreadsheet (even if manual): “known good” copy linked from README or `PROJECT_CONTEXT.md`.  
 - **First-time setup steps:** `FIRST_RUN.md` (deploy URL, timezone, smoke check).  
-- Short **deploy checklist**: clasp push, deploy web app, set URL in script, smoke test Overview + Quick Pay + Bills Due + one planner run.  
+- Short **deploy checklist**: clasp push, deploy web app, set URL in script, smoke test Overview + **Quick add** + Bills Due + one planner run.  
 - Keep **SESSION_NOTES.md** / commits disciplined around risky areas (per your `COMMIT_RULES.md`).
 
 **Phase 2 — “Friend / family beta” (productization lite)**  

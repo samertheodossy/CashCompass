@@ -1,5 +1,5 @@
 /**
- * Activity ledger: discrete user/script actions (Quick Pay, bill skip, bill autopay, house expense, donations, …). Rows can be removed from the web UI for mistaken log lines only.
+ * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, house expense, donations, …). Rows can be removed from the web UI for mistaken log lines only.
  * Complements OUT - History (planner-run snapshots). Tab: LOG - Activity.
  */
 

@@ -69,14 +69,14 @@
 
         <p><strong>What gets logged today</strong></p>
         <ul class="help-list">
-          <li><strong>Quick Pay</strong> — After a successful quick add into <strong>INPUT - Cash Flow</strong> (and optional matching debt balance update for expense payees tied to <strong>INPUT - Debts</strong>).</li>
+          <li><strong>Quick add</strong> — When you save into <strong>INPUT - Cash Flow</strong> from the Cash Flow quick-add flow (event type <strong>quick_pay</strong> on the sheet; optional matching debt balance update for expense payees tied to <strong>INPUT - Debts</strong>).</li>
           <li><strong>Bill skip</strong> — When <strong>Skip</strong> writes <strong>0</strong> into Cash Flow for that bill cycle (not when the cell already had a value).</li>
           <li><strong>Bill autopay</strong> — When INPUT - Bills autopay writes the default amount for a due, eligible bill (deduplicated so dashboard refreshes don’t create duplicate rows).</li>
-          <li><strong>House expense</strong> — When you save <strong>Add House Expense</strong> (append to the property’s <strong>HOUSES - …</strong> sheet). If you also post to <strong>INPUT - Cash Flow</strong>, the script logs <strong>house_expense</strong> and does <em>not</em> add a separate Quick Pay row for the same save.</li>
+          <li><strong>House expense</strong> — When you save <strong>Add House Expense</strong> (append to the property’s <strong>HOUSES - …</strong> sheet). If you also post to <strong>INPUT - Cash Flow</strong>, the script logs <strong>house_expense</strong> and does <em>not</em> add a separate <strong>quick_pay</strong> row for the same save.</li>
           <li><strong>Donation</strong> — When you save <strong>Add donation</strong> on <strong>Cash Flow → Donations</strong> (append to <strong>INPUT - Donation</strong>). Event type on the sheet is <strong>donation</strong>; the Activity <strong>Type</strong> column shows <strong>Donation</strong>.</li>
         </ul>
 
-        <p><strong>Remove</strong> — On the dashboard, <strong>Remove</strong> is <strong>enabled only for Donation</strong> log rows until safe undo exists for other event types. For those donations: after confirmation, the log line is removed; if <strong>INPUT - Donation</strong> still matches (charity, date, amount, tax year, payment type, comments), that sheet row is removed too. For Quick Pay, bill skip, house expense, etc., the button is greyed out—delete those lines on the <strong>LOG - Activity</strong> sheet if needed, or wait for a future release.</p>
+        <p><strong>Remove</strong> — On the dashboard, <strong>Remove</strong> is <strong>enabled only for Donation</strong> log rows until safe undo exists for other event types. For those donations: after confirmation, the log line is removed; if <strong>INPUT - Donation</strong> still matches (charity, date, amount, tax year, payment type, comments), that sheet row is removed too. For <strong>quick_pay</strong> (Quick add), bill skip, house expense, etc., the button is greyed out—delete those lines on the <strong>LOG - Activity</strong> sheet if needed, or wait for a future release.</p>
         <p><strong>Filters</strong> — <strong>Date range</strong> applies to <em>when the row was logged</em> (server timestamp). <strong>Payee</strong> filters rows whose payee <em>contains</em> your text (case-insensitive). <strong>Type</strong> lists every activity type that appears anywhere in <strong>LOG - Activity</strong> (derived the same way as the Type column); choose one to limit results. <strong>Amount min / max</strong> are optional and filter on the logged amount (you can type currency-style numbers). Up to 500 matching rows load per Apply; the table shows <strong>20 at a time</strong> with Previous / Next when there are more.</p>
 
         <p><strong>Table columns</strong></p>
@@ -143,7 +143,7 @@
           <li><strong>INPUT - Bills</strong> — Dated bills (category, autopay, varies, etc.); drives most Bills Due cards.</li>
           <li><strong>INPUT - Debts</strong> — Loan accounts; minimum payments can appear on Bills Due.</li>
           <li><strong>INPUT - Donation</strong> — Charitable giving log by tax-year blocks; add rows from <strong>Cash Flow → Donations</strong>.</li>
-          <li><strong>LOG - Activity</strong> — Audit log (Quick Pay, bill skip, INPUT - Bills autopay, house expense, donations); filter, sort, paginate, and remove mistaken rows on the <strong>Activity</strong> page.</li>
+          <li><strong>LOG - Activity</strong> — Audit log (Quick add / <strong>quick_pay</strong>, bill skip, INPUT - Bills autopay, house expense, donations); filter, sort, paginate, and remove mistaken rows on the <strong>Activity</strong> page.</li>
         </ul>
       </section>
     </div>
