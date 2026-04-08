@@ -117,8 +117,8 @@ Technical debt and consistency work suggested from repo review; no rush—pick o
 19. **Status / `planner_status` audit** — After Bills Due → `bills_due_status`, move remaining global status to panel-specific elements where it makes UX sense. **Inventory (repo scan — update if code moves):**
    - **`Dashboard_Body.html`** — Markup: `#planner_status` container in the top bar (no `setStatus` here; anchor for all writers).
    - **`Dashboard_Script_Render.html`** — `runPlannerNow`: `setStatusLoading` / `setStatus('planner_status', …)` for planner run (success/error). *Expected:* stays near **Run Planner** in top bar.
-   - **`Dashboard_Script_BillsDue.html`** — `loadBillsDueUi_` **failure** handler only → `planner_status` when `getBillsDueFromCashFlowForDashboard` fails. *Candidate:* surface on Overview/Bills cards or a dedicated bills load status instead.
-   - **`Dashboard_Script_Payments.html`** — `runDebtPlannerAfterQuickPayment_` failure → `planner_status` for `runDebtPlanner` errors. *Candidate:* `pay_status` or a Planning-scoped line.
+   - **`Dashboard_Script_BillsDue.html`** — **Done:** `loadBillsDueUi_` **failure** → `bills_due_status` when `getBillsDueFromCashFlowForDashboard` fails.
+   - **`Dashboard_Script_Payments.html`** — **Done:** `runDebtPlannerAfterQuickPayment_` failure → `pay_status` for `runDebtPlanner` errors.
    - **`PlannerDashboardWeb.html`** — `window.onerror` and `initDashboard` catch → write to `planner_status` (global init/JS errors). *Reasonable to keep global.*
    - **`PlannerDashboard.html`** (sidebar) — same pattern if still maintained (`TODO` item 16).
 

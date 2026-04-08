@@ -23,7 +23,7 @@ function loadBillsDueUi_() {
       renderBillsList_('bd_overdueList', [], msg);
       renderBillsList_('bd_next7List', [], msg);
       renderBillsDueSummary_({ overdue: [], next7: [] }, msg);
-      setStatus('planner_status', msg, true);
+      setStatus('bills_due_status', msg, true);
     })
     .getBillsDueFromCashFlowForDashboard();
 }

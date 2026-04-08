@@ -84,6 +84,8 @@ Use this when you touch **`PlannerDashboardWeb.html`**, **`Dashboard_Body.html`*
 5. **Cash Flow → Donations** — Save one row; confirm it appears under the correct **Year** block on **INPUT - Donation** and **Tax year** dropdown lists your sheet’s years.
 6. **Activity → Donation Remove** (optional, if you have a recent donation log row): click **Remove** on a **Donation** row; confirm the line disappears from **LOG - Activity** and the matching row is removed from **INPUT - Donation** when the fingerprint still matches (otherwise only the log line goes away—read the status line under the filters).
 7. **Run Planner + Refresh Snapshot** — confirm the top **planner_status** line shows completion or a readable error (not a silent failure).
+8. **Help** — **Upcoming expenses** in the TOC opens the new section; links from **Cash Flow** help jump correctly.
+9. **Status placement (regression)** — After load, the top bar should **not** show “Error loading bills due…” when bills loaded successfully (that message belongs under **Bills Due** if it ever appears). After a normal **Quick add** save, success text stays under the payment form; only **Run Planner** (button) failures should use **planner_status**.
 
 ### Grep — include graph vs orphan scripts
 

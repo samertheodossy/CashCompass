@@ -1,3 +1,11 @@
+## Recent — Status targets + Help Upcoming
+
+- **Bills Due load failure** (`loadBillsDueUi_`) → **`bills_due_status`** (was `planner_status`). Overview Bills card still shows the same error text in the summary. `Dashboard_Script_BillsDue.html`.
+- **Debt planner after Quick add** (`runDebtPlannerAfterQuickPayment_` failure) → **`pay_status`** (was `planner_status`). `Dashboard_Script_Payments.html`.
+- **Help**: **Upcoming expenses** section + TOC; Cash Flow intro links to Upcoming / Donations / Bills Due; **Bills Due** documents load errors under the panel heading; sheet list includes **INPUT - Upcoming Expenses**. `Dashboard_Help.html`.
+
+---
+
 ## Recent — Quick add wording + Activity page
 
 - **Quick add** (UI) vs **`quick_pay`** (sheet event): aligned across `TESTING_PLAN.md`, `GoingToProduction.md`, `TODO.md` (incl. `planner_status` inventory #19), `PROJECT_CONTEXT.md`, `SESSION_NOTES.md`, `Dashboard_Help.html`, `activity_log.js` header comment.
@@ -93,7 +101,7 @@
 - **UI**: first row in **Operations Snapshot** card: **Bills Next 7 Days** — sum of **`amount`** for bills in **`getBillsDueFromCashFlowForDashboard()`** `next7` (same as Bills Due list). Click opens **Cash Flow → Bills Due**.
 - **Files**: `Dashboard_Body.html`, `Dashboard_Script_BillsDue.html`.
 - **Bills Due cards (compact UI)**: Each card shows **name**, **amount**, **due date**, **Pay** / **Skip** only—no duplicate “suggested amount,” no category/autopay/varies/source line. Details in Help **`#help-bills-due`**. Recurring row: one short meta line. Styles: `.bill-card-compact`, `.bill-card-actions` in `Dashboard_Styles.html`.
-- **Bills Due status**: `bills_due_status` under the Bills Due panel head; Pay/Skip success and errors use it (not `planner_status`). Load failures for the bills API still use `planner_status` for visibility.
+- **Bills Due status**: `bills_due_status` under the Bills Due panel head; Pay/Skip success and errors use it, and **initial load** failures for `getBillsDueFromCashFlowForDashboard` use it too (not `planner_status`). Overview Bills card summary still shows the load error when applicable.
 
 ---
 

@@ -152,7 +152,7 @@ function applyQuickAddPreviewFromResult_(data) {
 function runDebtPlannerAfterQuickPayment_() {
   google.script.run
     .withFailureHandler(function(err) {
-      setStatus('planner_status', 'Planner error: ' + (err.message || String(err)), true);
+      setStatus('pay_status', 'Planner error: ' + (err.message || String(err)), true);
     })
     .runDebtPlanner();
 }
