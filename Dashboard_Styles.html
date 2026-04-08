@@ -235,7 +235,20 @@
 
   .tabs { display: grid; gap: 8px; margin-bottom: 16px; }
   .tabs.assets-tabs { grid-template-columns: repeat(3, 1fr); }
-  .tabs.cashflow-tabs { grid-template-columns: repeat(3, 1fr); }
+  /* Cash Flow: four tabs in one row, each shares full width evenly */
+  .tabs.cashflow-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .cashflow-tabs .tab-btn {
+    width: 100%;
+    min-width: 0;
+    padding: 12px 8px;
+    font-size: 13px;
+    font-weight: bold;
+    border-radius: 10px;
+  }
   .tabs.properties-tabs { grid-template-columns: repeat(2, 1fr); }
   .tabs.planning-tabs { grid-template-columns: repeat(3, 1fr); }
 
@@ -619,7 +632,7 @@
     .page-nav { grid-template-columns: repeat(3, 1fr); }
     .snapshot-grid { grid-template-columns: 1fr 1fr; }
     .six-grid { grid-template-columns: 1fr; }
-    .tabs.assets-tabs, .tabs.cashflow-tabs, .tabs.properties-tabs, .tabs.planning-tabs { grid-template-columns: 1fr 1fr; }
+    .tabs.assets-tabs, .tabs.properties-tabs, .tabs.planning-tabs { grid-template-columns: 1fr 1fr; }
     .grid-2, .grid-3, .health-row, .mini-grid, .sim-grid { grid-template-columns: 1fr; }
     .topbar { flex-direction: column; }
     .bills-grid { grid-template-columns: 1fr; }
