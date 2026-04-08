@@ -209,12 +209,12 @@ function quickAddPayment(payload) {
   const priorPreview = computeQuickAddPriorMonthPreview_(ss, entryType, payee, entryDate);
 
   let message =
-    'Payment added.\n' +
+    'Saved to Cash Flow.\n' +
     'Sheet: ' + sheet.getName() + '\n' +
     'Month: ' + monthLabel + '\n' +
     'Payee: ' + payee + '\n' +
     'Previous value: ' + fmtCurrency_(previousValue) + '\n' +
-    'Added: ' + fmtCurrency_(signedAmount) + '\n' +
+    'Change: ' + fmtCurrency_(signedAmount) + '\n' +
     'New value: ' + fmtCurrency_(newValue);
 
   if (debtBalanceNote) {

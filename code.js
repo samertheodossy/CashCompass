@@ -6,7 +6,7 @@ function onOpen() {
     .addItem('Open Bank Accounts UI', 'showBankAccountsSidebar')
     .addItem('Open Investments UI', 'showInvestmentsSidebar')
     .addItem('Open Debts UI', 'showDebtsSidebar')
-    .addItem('Open Quick Add Payment UI', 'showQuickAddPaymentSidebar')
+    .addItem('Open Quick add to Cash Flow (sidebar)', 'showQuickAddPaymentSidebar')
     .addItem('Run Planner', 'runDebtPlanner')
     .addSeparator()
     .addItem('Create Next Year Cash Flow Sheet', 'createNextYearCashFlowSheet')
@@ -51,7 +51,7 @@ function showDebtsSidebar() {
 
 function showQuickAddPaymentSidebar() {
   const html = HtmlService.createHtmlOutputFromFile('QuickAddPaymentUI')
-    .setTitle('Quick Add Payment');
+    .setTitle('Quick add to Cash Flow');
   SpreadsheetApp.getUi().showSidebar(html);
 }
 

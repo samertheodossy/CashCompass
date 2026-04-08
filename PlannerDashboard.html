@@ -204,7 +204,7 @@
   <button class="tab-btn active" data-tab="houses" onclick="showTab('houses')">House Values</button>
   <button class="tab-btn" data-tab="bank" onclick="showTab('bank')">Bank Accounts</button>
   <button class="tab-btn" data-tab="investments" onclick="showTab('investments')">Investments</button>
-  <button class="tab-btn" data-tab="payments" onclick="showTab('payments')">Quick Payment</button>
+  <button class="tab-btn" data-tab="payments" onclick="showTab('payments')">Quick add</button>
 </div>
 
 <div id="houses" class="panel active">
@@ -299,7 +299,7 @@
 </div>
 
 <div id="payments" class="panel">
-  <h3>Quick Add Payment</h3>
+  <h3>Quick add to Cash Flow</h3>
 
   <label>Type</label>
   <select id="pay_type" onchange="filterPaymentPayees(); loadPaymentPreview();">
@@ -330,10 +330,10 @@
     <div><strong>Current value in cell:</strong> <span id="pay_currentValue" class="muted">—</span></div>
     <div><strong>Existing row:</strong> <span id="pay_rowExists" class="muted">—</span></div>
     <div class="house-value-delta-sep" aria-hidden="true"></div>
-    <div class="house-value-delta-row"><strong>Last month's payment (<span id="pay_priorMonthLabel">—</span>):</strong> <span id="pay_priorMonthPayment" class="muted">—</span></div>
+    <div class="house-value-delta-row"><strong>Previous month (<span id="pay_priorMonthLabel">—</span>):</strong> <span id="pay_priorMonthPayment" class="muted">—</span></div>
   </div>
 
-  <button onclick="savePayment()">Add Payment</button>
+  <button onclick="savePayment()">Add to Cash Flow</button>
   <div id="pay_status" class="status"></div>
 </div>
 

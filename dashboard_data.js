@@ -898,7 +898,7 @@ function buildSuggestedActions_(issues, latestMetrics, upcoming, retirement, buf
       severity: 'warn',
       title: 'Improve monthly cash flow',
       message: 'Projected cash flow is ' + fmtCurrency_(latestMetrics.projectedCashFlow) + '.',
-      ctaLabel: 'Open Quick Payment',
+      ctaLabel: 'Open Quick add',
       tab: 'payments'
     });
   }

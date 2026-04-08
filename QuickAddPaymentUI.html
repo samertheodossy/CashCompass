@@ -49,7 +49,7 @@
 </head>
 <body>
 
-<h3>Quick Add Payment</h3>
+<h3>Quick add to Cash Flow</h3>
 
 <label>Type</label>
 <select id="entryType" onchange="filterPayees(); loadPreview();">
@@ -80,10 +80,10 @@
   <div><strong>Current value in cell:</strong> <span id="currentValue" class="muted">—</span></div>
   <div><strong>Existing row:</strong> <span id="rowExists" class="muted">—</span></div>
   <div class="house-value-delta-sep" aria-hidden="true" style="border-top:1px solid #cbd5e1;margin:12px 0 10px;"></div>
-  <div><strong>Last month's payment (<span id="priorMonthLabel">—</span>):</strong> <span id="priorMonthPayment" class="muted">—</span></div>
+  <div><strong>Previous month (<span id="priorMonthLabel">—</span>):</strong> <span id="priorMonthPayment" class="muted">—</span></div>
 </div>
 
-<button onclick="save()">Add Payment</button>
+<button onclick="save()">Add to Cash Flow</button>
 
 <div id="status" class="status"></div>
 

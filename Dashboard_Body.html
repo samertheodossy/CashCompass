@@ -2,7 +2,7 @@
   <div class="topbar">
     <div>
       <h1>Planner Dashboard</h1>
-      <div class="subtle">Unified browser dashboard for House Values, Bank Accounts, Investments, Debts, Quick Add Payment, Upcoming Expenses, Retirement, and Purchase Simulation.</div>
+      <div class="subtle">Unified browser dashboard for House Values, Bank Accounts, Investments, Debts, quick add to Cash Flow, Upcoming Expenses, Retirement, and Purchase Simulation.</div>
     </div>
     <div class="top-actions">
       <div class="top-actions-buttons">
@@ -174,7 +174,7 @@
           </button>
           <button class="action-item severity-info" onclick="showPage('cashflow')">
             <div class="action-title">Cash Flow</div>
-            <div class="action-message">Quick payments and upcoming expenses.</div>
+            <div class="action-message">Quick add to Cash Flow and upcoming expenses.</div>
             <div class="action-cta">Open Cash Flow</div>
           </button>
           <button class="action-item severity-info" onclick="showPage('properties')">
@@ -329,7 +329,7 @@
 
   <div id="page_cashflow" class="workspace-page">
     <div class="tabs cashflow-tabs">
-      <button class="tab-btn active" data-tab="payments" onclick="showTab('payments')">Quick Payment</button>
+      <button class="tab-btn active" data-tab="payments" onclick="showTab('payments')">Quick add</button>
       <button class="tab-btn" data-tab="upcoming" onclick="showTab('upcoming')">Upcoming</button>
       <button class="tab-btn" data-tab="donations" onclick="showTab('donations')">Donations</button>
       <button class="tab-btn" data-tab="billsDue" onclick="showTab('billsDue')">Bills Due</button>
@@ -337,7 +337,7 @@
 
     <div id="payments" class="panel active">
       <div class="panel-head">
-        <h2>Quick Add Payment</h2>
+        <h2>Quick add to Cash Flow</h2>
         <div class="updated">Last updated: <span id="pay_updated">—</span></div>
       </div>
       <div class="grid-2">
@@ -359,7 +359,7 @@
             <input type="checkbox" id="pay_createIfMissing" checked>
             <label for="pay_createIfMissing" style="margin:0;font-weight:normal;">Create row if payee is missing</label>
           </div>
-          <button onclick="savePayment()">Add Payment</button>
+          <button onclick="savePayment()">Add to Cash Flow</button>
           <div id="pay_status" class="status"></div>
         </div>
         <div class="info">
@@ -368,7 +368,7 @@
           <div><strong>Current value in cell:</strong> <span id="pay_currentValue" class="muted">—</span></div>
           <div><strong>Existing row:</strong> <span id="pay_rowExists" class="muted">—</span></div>
           <div class="house-value-delta-sep" aria-hidden="true"></div>
-          <div class="house-value-delta-row"><strong>Last month's payment (<span id="pay_priorMonthLabel">—</span>):</strong> <span id="pay_priorMonthPayment" class="muted">—</span></div>
+          <div class="house-value-delta-row"><strong>Previous month (<span id="pay_priorMonthLabel">—</span>):</strong> <span id="pay_priorMonthPayment" class="muted">—</span></div>
         </div>
       </div>
     </div>
