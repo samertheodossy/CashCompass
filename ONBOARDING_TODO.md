@@ -61,7 +61,7 @@ Each step: **“Add another” / “Done”**; show **plain-language preview** (
 
 **Phase E — First Cash Flow year**  
 - “Which year should we start?” → create **INPUT - Cash Flow {year}** with correct month columns + empty Payee rows or a small set of starter rows.  
-- Explain: **Quick Payment** and dashboard fill this in over time.
+- Explain: **Quick add** (Cash Flow) and the dashboard fill **INPUT - Cash Flow** over time.
 
 **Phase F — Validate**  
 - **Checklist** before first **Run Planner**: required tabs exist, required headers present, at least one bank row, debts sheet parseable, etc.  

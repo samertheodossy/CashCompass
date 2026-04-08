@@ -13,6 +13,7 @@
 ## Other rules
 
 - **Help (`Dashboard_Help.html`):** When you ship or change **user-visible** dashboard behavior (new nav page, new fields, Bills Due rules, Activity log, etc.), update **Help** in the same effort: TOC link, section content, and **Sheet names** list when new tabs matter. Keep Help aligned with the app so users don’t rely on stale copy.
+- **`PROJECT_CONTEXT.md` / `ONBOARDING_TODO.md`:** When you change **system overview** (major features, tab/sheet roles, Activity log rules, Cash Flow naming like Quick add vs payment, donation remove behavior), update these files in the **same change set** when practical—same idea as Help, but for **architecture** and **onboarding narrative**. If you defer, note it in **SESSION_NOTES.md** so the next pass can sync them.
 - Make incremental changes only.
 - Do not rewrite unrelated files.
 - Preserve existing architecture unless necessary.
