@@ -169,6 +169,8 @@ function renderActivityTable_(rows, options) {
     activityHeaderLabel_('kind', 'Type') +
     activityHeaderLabel_('amount', 'Amount') +
     activityHeaderLabel_('dueDate', 'Bill due date') +
+    '<th scope="col" class="activity-th-actions" title="Remove is active for Donation rows only until other undo paths are built.">' +
+    'Remove <span class="activity-th-actions-hint muted">(Donation)</span></th>' +
     '</tr></thead><tbody>';
 
   sorted.forEach(function(row) {
@@ -202,6 +204,26 @@ function renderActivityTable_(rows, options) {
       '</td>' +
       '<td>' +
       escapeHtml(formatActivityDueDateDisplay_(row.entryDate)) +
+      '</td>' +
+      '<td class="activity-td-actions">' +
+      (function() {
+        var sr = row.sheetRow;
+        var isDon = String(row.eventType || '').toLowerCase() === 'donation';
+        var can = isDon && sr >= 2;
+        if (sr < 2) return '—';
+        if (can) {
+          return (
+            '<button type="button" class="btn-activity-delete" data-event-type="donation" data-sheet-row="' +
+            Number(sr) +
+            '" onclick="activityDeleteClick_(event)">Remove</button>'
+          );
+        }
+        return (
+          '<button type="button" class="btn-activity-delete btn-activity-delete--disabled" disabled ' +
+          'title="Remove is only enabled for Donation entries for now. Other types: delete the row on the LOG - Activity sheet, or wait until undo is implemented (see TODO).">' +
+          'Remove</button>'
+        );
+      })() +
       '</td>' +
       '</tr>';
   });
@@ -269,6 +291,65 @@ function activityPrevPage() {
     window.__activityPage = (window.__activityPage || 0) - 1;
     activityRenderCurrentPage_();
   }
+}
+
+function activityDeleteClick_(ev) {
+  var btn = ev && ev.currentTarget;
+  if (!btn) return;
+  if (String(btn.getAttribute('data-event-type') || '').toLowerCase() !== 'donation') return;
+  var row = parseInt(btn.getAttribute('data-sheet-row'), 10);
+  if (!isFinite(row) || row < 2) return;
+  if (
+    !confirm(
+      'Remove this donation from LOG - Activity?\n\nIf INPUT - Donation still matches (charity, date, amount, tax year, payment type, comments), that sheet row is deleted too. Otherwise only the log line is removed.'
+    )
+  ) {
+    return;
+  }
+
+  var statusEl = document.getElementById('act_status');
+  btn.disabled = true;
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      if (!res || !res.ok) {
+        if (statusEl) {
+          statusEl.textContent = res && res.error ? res.error : 'Delete failed.';
+          statusEl.className = 'status error';
+        }
+        return;
+      }
+      if (statusEl) {
+        statusEl.className = 'status';
+        var u = res.activityUndo || '';
+        if (u === 'donation_sheet_deleted') {
+          statusEl.textContent =
+            'Removed log entry and deleted the matching row on INPUT - Donation.';
+        } else if (u === 'donation_skipped_mismatch') {
+          statusEl.textContent =
+            'Log entry removed. INPUT - Donation was left unchanged (row no longer matches this log).';
+        } else if (u === 'donation_skipped_error') {
+          statusEl.textContent =
+            'Log entry removed.' +
+            (res.activityUndoDetail ? ' Donation sheet: ' + res.activityUndoDetail : '');
+        } else if (u === 'donation_skipped_no_undo') {
+          statusEl.textContent =
+            'Log entry removed. Donation sheet was not changed (older log without row reference, or could not verify).';
+        } else {
+          statusEl.textContent = '';
+        }
+      }
+      loadActivitySection();
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      if (statusEl) {
+        statusEl.textContent = err && err.message ? err.message : String(err);
+        statusEl.className = 'status error';
+      }
+    })
+    .deleteActivityLogRow(row);
 }
 
 function loadActivitySection() {

@@ -373,9 +373,131 @@ function addDonation(payload) {
 
   touchDashboardSourceUpdated_('donations');
 
+  const ss = sheet.getParent();
   const tz = Session.getScriptTimeZone();
+  const entryDateStr = Utilities.formatDate(donationDate, tz, 'yyyy-MM-dd');
+
+  appendActivityLog_(ss, {
+    eventType: 'donation',
+    entryDate: entryDateStr,
+    amount: Math.abs(amount),
+    direction: 'charity',
+    payee: charityName,
+    category: paymentType,
+    accountSource: '',
+    cashFlowSheet: DONATION_SHEET_NAME_,
+    cashFlowMonth: 'TY ' + taxYear,
+    dedupeKey: '',
+    details: JSON.stringify({
+      taxYear: taxYear,
+      comments: comments,
+      paymentType: paymentType,
+      sheetRow: row1,
+      amountSigned: amount
+    })
+  });
+
   return {
     message: 'Donation saved to ' + DONATION_SHEET_NAME_ + '.',
     updated: Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss')
   };
+}
+
+/**
+ * Compare donation sheet date cell to yyyy-MM-dd from the activity log.
+ */
+function donationActivityUndoDateMatchesIso_(cellVal, isoYyyyMmDd) {
+  const target = String(isoYyyyMmDd || '').trim();
+  if (!target) return false;
+  let d;
+  if (cellVal instanceof Date && !isNaN(cellVal.getTime())) {
+    d = stripTime_(cellVal);
+  } else {
+    try {
+      const p = stripTime_(parseIsoDateLocal_(String(cellVal || '').trim()));
+      if (isNaN(p.getTime())) return false;
+      d = p;
+    } catch (e) {
+      return false;
+    }
+  }
+  const tz = Session.getScriptTimeZone();
+  return Utilities.formatDate(d, tz, 'yyyy-MM-dd') === target;
+}
+
+function donationDataRowMatchesActivityUndo_(row, colMap, fp) {
+  const charity = String(row[colMap['Name of Charity']] || '').trim();
+  if (charity !== String(fp.charityName || '').trim()) return false;
+  if (!donationActivityUndoDateMatchesIso_(row[colMap['Date']], fp.entryDate)) return false;
+
+  const cellAmt = round2_(toNumber_(row[colMap['Amount']]));
+  if (fp.amountSigned !== null && fp.amountSigned !== undefined && !isNaN(Number(fp.amountSigned))) {
+    if (cellAmt !== round2_(fp.amountSigned)) return false;
+  } else {
+    if (round2_(Math.abs(cellAmt)) !== round2_(fp.amountAbs)) return false;
+  }
+
+  const ty = Number(row[colMap['Tax Year']]);
+  if (ty !== Number(fp.taxYear)) return false;
+  const comments = String(row[colMap['Comments']] || '').trim();
+  if (comments !== String(fp.comments || '').trim()) return false;
+  const pay = String(row[colMap['Payment type']] || '').trim();
+  if (pay !== String(fp.paymentType || '').trim()) return false;
+  return true;
+}
+
+/**
+ * Activity Phase 1: remove matching INPUT - Donation row when log fingerprint still matches.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @param {number} sheetRow1 1-based row on INPUT - Donation (from log Details.sheetRow)
+ * @param {{ taxYear: number, charityName: string, entryDate: string, amountAbs: number, amountSigned?: number|null, comments: string, paymentType: string }} fp
+ * @returns {{ deleted: boolean, mismatch?: boolean, skip?: string, error?: string }}
+ */
+function tryDeleteDonationRowForActivityUndo_(ss, sheetRow1, fp) {
+  try {
+    const sheet = ss.getSheetByName(DONATION_SHEET_NAME_);
+    if (!sheet) {
+      return { deleted: false, skip: 'no_donation_sheet' };
+    }
+    const row = Number(sheetRow1);
+    if (!isFinite(row) || row !== Math.floor(row) || row < 2) {
+      return { deleted: false, skip: 'bad_row' };
+    }
+    if (isNaN(Number(fp.taxYear))) {
+      return { deleted: false, skip: 'bad_tax_year' };
+    }
+
+    const values = sheet.getDataRange().getValues();
+    if (row > values.length) {
+      return { deleted: false, mismatch: true };
+    }
+
+    const block = findDonationBlockForTaxYear_(values, fp.taxYear);
+    if (!block) {
+      return { deleted: false, skip: 'no_block' };
+    }
+
+    const firstData1 = block.dataStart0 + 1;
+    let lastData0 = block.dataStart0 - 1;
+    for (let r = block.dataStart0; r < values.length; r++) {
+      if (String(values[r][0] || '').trim().toLowerCase() === 'year') break;
+      lastData0 = r;
+    }
+    const lastData1 = lastData0 + 1;
+    if (lastData0 < block.dataStart0 || row < firstData1 || row > lastData1) {
+      return { deleted: false, mismatch: true };
+    }
+
+    const row0 = row - 1;
+    const dataRow = values[row0];
+    if (!donationDataRowMatchesActivityUndo_(dataRow, block.colMap, fp)) {
+      return { deleted: false, mismatch: true };
+    }
+
+    sheet.deleteRow(row);
+    touchDashboardSourceUpdated_('donations');
+    return { deleted: true };
+  } catch (e) {
+    return { deleted: false, error: String(e.message || e) };
+  }
 }

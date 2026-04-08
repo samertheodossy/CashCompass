@@ -1,5 +1,5 @@
 /**
- * Append-only activity ledger: discrete user/script actions (Quick Pay, bill skip, bill autopay, house expense, …).
+ * Activity ledger: discrete user/script actions (Quick Pay, bill skip, bill autopay, house expense, donations, …). Rows can be removed from the web UI for mistaken log lines only.
  * Complements OUT - History (planner-run snapshots). Tab: LOG - Activity.
  */
 
@@ -22,6 +22,28 @@ var ACTIVITY_LOG_HEADERS = [
 
 /** 1-based column index for Dedupe Key column. */
 var ACTIVITY_LOG_DEDUPE_COL = 11;
+
+/**
+ * LOG - Activity "Entry Date" is often a real date cell: getValues() returns a Date, not the yyyy-MM-dd string we wrote.
+ * Donation undo fingerprint must compare using the same calendar day as INPUT - Donation.
+ * @param {*} cellVal
+ * @returns {string} yyyy-MM-dd or best-effort trimmed string
+ */
+function activityLogEntryDateToYyyyMmDd_(cellVal) {
+  if (cellVal instanceof Date && !isNaN(cellVal.getTime())) {
+    return Utilities.formatDate(stripTime_(cellVal), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  var s = String(cellVal || '').trim();
+  var m = /^(\d{4}-\d{2}-\d{2})/.exec(s);
+  if (m) return m[1];
+  try {
+    var d = stripTime_(parseIsoDateLocal_(s));
+    if (isNaN(d.getTime())) return s;
+    return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  } catch (e) {
+    return s;
+  }
+}
 
 /**
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
@@ -190,6 +212,86 @@ function appendActivityLog_(ss, payload) {
 }
 
 /**
+ * Removes one data row from LOG - Activity (row 1 = headers is never deleted).
+ * @param {number} row1Based 1-based sheet row (must be >= 2).
+ * @returns {{ ok: boolean, error?: string }}
+ */
+function deleteActivityLogRow(row1Based) {
+  try {
+    var row = Number(row1Based);
+    if (!isFinite(row) || row !== Math.floor(row) || row < 2) {
+      return { ok: false, error: 'Invalid row.' };
+    }
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sh = ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
+    if (!sh) {
+      return { ok: false, error: 'LOG - Activity not found.' };
+    }
+    var last = sh.getLastRow();
+    if (row > last) {
+      return { ok: false, error: 'That row is no longer in the log. Click Apply to refresh.' };
+    }
+
+    var logVals = sh.getRange(row, 1, row, ACTIVITY_LOG_HEADERS.length).getValues()[0];
+    var ev = String(logVals[1] || '').trim().toLowerCase();
+    if (ev !== 'donation') {
+      return {
+        ok: false,
+        error:
+          'Remove from the dashboard is only enabled for Donation rows for now (other event types need safe undo before we enable them). You can delete other lines directly on the LOG - Activity sheet if needed.'
+      };
+    }
+
+    var activityUndo = '';
+    var activityUndoDetail = '';
+    var det = {};
+    try {
+      det = JSON.parse(String(logVals[11] || '') || '{}');
+    } catch (pe) {
+      det = {};
+    }
+    var sr = Number(det.sheetRow);
+    if (isFinite(sr) && sr >= 2) {
+      var amtSigned =
+        det.amountSigned !== undefined && det.amountSigned !== null && String(det.amountSigned) !== ''
+          ? round2_(toNumber_(det.amountSigned))
+          : null;
+      var fp = {
+        taxYear: Number(det.taxYear),
+        charityName: String(logVals[5] || '').trim(),
+        entryDate: activityLogEntryDateToYyyyMmDd_(logVals[2]),
+        amountAbs: round2_(toNumber_(logVals[3])),
+        amountSigned: amtSigned,
+        comments: det.comments != null ? String(det.comments).trim() : '',
+        paymentType: String(det.paymentType || logVals[6] || '').trim()
+      };
+      if (!isNaN(fp.taxYear)) {
+        var u = tryDeleteDonationRowForActivityUndo_(ss, Math.floor(sr), fp);
+        if (u.deleted) {
+          activityUndo = 'donation_sheet_deleted';
+        } else if (u.mismatch) {
+          activityUndo = 'donation_skipped_mismatch';
+        } else if (u.error) {
+          activityUndo = 'donation_skipped_error';
+          activityUndoDetail = u.error;
+        } else if (u.skip) {
+          activityUndo = 'donation_skipped_no_undo';
+        }
+      } else {
+        activityUndo = 'donation_skipped_no_undo';
+      }
+    } else {
+      activityUndo = 'donation_skipped_no_undo';
+    }
+
+    sh.deleteRow(row);
+    return { ok: true, activityUndo: activityUndo, activityUndoDetail: activityUndoDetail };
+  } catch (e) {
+    return { ok: false, error: String(e.message || e) };
+  }
+}
+
+/**
  * Maps normalized payee → INPUT - Debts Type and INPUT - Bills Category for Activity "Kind" column.
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
  * @returns {{ debtByNorm: Object<string, string>, billCatByNorm: Object<string, string> }}
@@ -259,6 +361,7 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
     if (houseType) return houseType;
     return 'House Expenses';
   }
+  if (etEarly === 'donation') return 'Donation';
 
   var combined = pay + ' ' + cat;
   var blob = combined.toLowerCase();
@@ -391,6 +494,7 @@ function getActivityDashboardData(filters) {
       var amtVal = round2_(toNumber_(r[3]));
 
       out.push({
+        sheetRow: i + 2,
         loggedAt: String(r[0] || '').trim(),
         eventType: eventType,
         entryDate: String(r[2] || '').trim(),

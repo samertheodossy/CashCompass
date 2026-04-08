@@ -10,7 +10,7 @@ TO DO and issues I see in the testing
 
 ### Important — Activity / HISTORY flow (LOG - Activity vs OUT - History)
 
-**LOG - Activity** = append-only **event** ledger (who/when/amount); **OUT - History** = **planner run** snapshots. Not the same grain. Implementation: **`activity_log.js`**, **`appendActivityLog_`**, Help **Activity log**.
+**LOG - Activity** = **event** ledger (who/when/amount); dashboard **Remove** is **donation-only** for now (**`deleteActivityLogRow`**); donations may also remove a matching **INPUT - Donation** row. Other event types: greyed UI + delete on the sheet if needed. **Smart undo** for Quick Pay / house expense / bills — phased list below. **OUT - History** = **planner run** snapshots. Implementation: **`activity_log.js`**, **`appendActivityLog_`**, Help **Activity log**.
 
 **Done (recent)**  
 - **Phase 4 — House expenses** — **`house_expense`** after **`addHouseExpense`**; if the form also posts to Cash Flow, **`quickAddPayment`** runs with **`suppressActivityLog: true`** so you do not get a second **`quick_pay`** row for the same save. Activity **Type** uses the House Expenses form type (Repair, **Maintenance**, Utilities, etc.; stored **Tax** displays as **Property Tax**).  
@@ -23,7 +23,7 @@ TO DO and issues I see in the testing
 - **Optional:** Activity **CSV export**; **last N events** on Overview; **onEdit** logging for manual Cash Flow typing.
 
 **Pattern (reference)**  
-- Append-only audit after successful writes only. **v1:** script-driven paths. **Later:** onEdit, etc.
+- Audit after successful writes; log rows removable from UI for mistakes; deeper “reverse transaction” only when phased preconditions are met. **v1:** script-driven paths. **Later:** onEdit, etc.
 
 | Flow | Status |
 |------|--------|
@@ -40,6 +40,35 @@ TO DO and issues I see in the testing
 4. **Phase 4 — House expenses** — **Done**  
 5. **Phase 5 — OUT - History tie-in** — **Open** (optional)  
 6. **Activity UI** — **Done** (filters, type from sheet, paging, sort); **CSV export** optional later
+
+### Activity — Smart undo / “reverse transaction”
+
+**Context:** Activity **Remove** always deletes the **LOG - Activity** row. **Phase 1 (donation)** is **implemented**: see **`tryDeleteDonationRowForActivityUndo_`** in **`donations.js`** and **`deleteActivityLogRow`** in **`activity_log.js`**. Phases 2–4 below are still optional follow-ons.
+
+**Fool-proof principles (apply to any phase)**
+
+1. **No guessing** — Never infer missing prior state (e.g. cell value before a skip wrote `0`); only use what was stored in log **Details** (consider `detailsVersion` if shape evolves).
+2. **Precondition gate** — Before mutating INPUT/SYS: e.g. current cell **===** logged `newValue` (with same rounding rules as writes); donation row still matches a **fingerprint** of logged fields + `sheetRow`.
+3. **UX** — Keep **Remove log only**; add a **separate** explicit action for “Reverse transaction and remove log” with a **second** confirmation listing exact sheet / row / cell / values.
+4. **Idempotent / safe failure** — If the sheet changed since the log row was written, **abort** with a clear message (no partial silent fixes).
+5. **Audit** — Prefer explicit success text listing what changed; optional future `activity_undo` log row if you want a paper trail.
+
+**Phased implementation (in order)**
+
+| Phase | Event type(s) | Risk | What it entails |
+|-------|----------------|------|------------------|
+| **1 — Done** | **`donation`** | **Lowest** | **Shipped:** Details carry **`sheetRow`** + fingerprint fields; **`deleteActivityLogRow`** calls **`tryDeleteDonationRowForActivityUndo_`** when safe, then deletes the log row. Older donation logs without **`sheetRow`** only remove the log line. |
+| **2** | **`quick_pay`** | Medium | Details must include **`previousValue` / `newValue`** (and stable CF sheet + row + month resolution). Reverse **only if** current cell matches logged `newValue`. Debt balance change: undo only if Details allow **verification** of post-state, or **exclude** from v1 and document manual **INPUT - Debts**. |
+| **3** | **`house_expense`** | Higher | Log must store house sheet, inserted row, and if CF was touched the same previous/new gates as Phase 2. Dual preconditions. |
+| **4** | **`bill_skip` / `bill_autopay`** | High until logging fixed | **First** extend writers to log **previousValue**, **newValue**, and coordinates; **then** same cell-match reversal as Phase 2. **Do not** ship auto-undo for these without that logging. |
+
+**Explicit non-goals**
+
+- Generic undo from payee + amount + date alone.
+- “Subtract logged amount from current cell” without proving current value still equals logged **newValue**.
+
+**Activity Remove — dashboard scope (temporary)**  
+- **Remove** in the web UI is **enabled only for `donation`** rows (`eventType` **donation**). Other types show a **greyed-out** control; **`deleteActivityLogRow`** rejects non-donation with a clear error (sheet-only delete still works). **Re-enable per type** as Phases 2–4 ship: set **`quick_pay`**, **`house_expense`**, then skip/autopay after logging upgrades—each needs UI enable + server gate + undo implementation.
 
 ---
 

@@ -65,7 +65,7 @@
 
       <section id="help-activity" class="help-section">
         <h3>Activity log</h3>
-        <p>The <strong>Activity</strong> top-nav page shows a read-only history of actions this script has recorded—not the same thing as <strong>OUT - History</strong>. <strong>OUT - History</strong> stores <em>planner run snapshots</em> (rolled-up cash, debt, net worth, etc.). <strong>LOG - Activity</strong> stores <em>discrete events</em> (who was paid, when it was logged, skip/autopay, etc.) and is created automatically if missing.</p>
+        <p>The <strong>Activity</strong> top-nav page shows actions this script has recorded—not the same thing as <strong>OUT - History</strong>. <strong>OUT - History</strong> stores <em>planner run snapshots</em> (rolled-up cash, debt, net worth, etc.). <strong>LOG - Activity</strong> stores <em>discrete events</em> (who was paid, when it was logged, skip/autopay, etc.) and is created automatically if missing.</p>
 
         <p><strong>What gets logged today</strong></p>
         <ul class="help-list">
@@ -73,15 +73,17 @@
           <li><strong>Bill skip</strong> — When <strong>Skip</strong> writes <strong>0</strong> into Cash Flow for that bill cycle (not when the cell already had a value).</li>
           <li><strong>Bill autopay</strong> — When INPUT - Bills autopay writes the default amount for a due, eligible bill (deduplicated so dashboard refreshes don’t create duplicate rows).</li>
           <li><strong>House expense</strong> — When you save <strong>Add House Expense</strong> (append to the property’s <strong>HOUSES - …</strong> sheet). If you also post to <strong>INPUT - Cash Flow</strong>, the script logs <strong>house_expense</strong> and does <em>not</em> add a separate Quick Pay row for the same save.</li>
+          <li><strong>Donation</strong> — When you save <strong>Add donation</strong> on <strong>Cash Flow → Donations</strong> (append to <strong>INPUT - Donation</strong>). Event type on the sheet is <strong>donation</strong>; the Activity <strong>Type</strong> column shows <strong>Donation</strong>.</li>
         </ul>
 
+        <p><strong>Remove</strong> — On the dashboard, <strong>Remove</strong> is <strong>enabled only for Donation</strong> log rows until safe undo exists for other event types. For those donations: after confirmation, the log line is removed; if <strong>INPUT - Donation</strong> still matches (charity, date, amount, tax year, payment type, comments), that sheet row is removed too. For Quick Pay, bill skip, house expense, etc., the button is greyed out—delete those lines on the <strong>LOG - Activity</strong> sheet if needed, or wait for a future release.</p>
         <p><strong>Filters</strong> — <strong>Date range</strong> applies to <em>when the row was logged</em> (server timestamp). <strong>Payee</strong> filters rows whose payee <em>contains</em> your text (case-insensitive). <strong>Type</strong> lists every activity type that appears anywhere in <strong>LOG - Activity</strong> (derived the same way as the Type column); choose one to limit results. <strong>Amount min / max</strong> are optional and filter on the logged amount (you can type currency-style numbers). Up to 500 matching rows load per Apply; the table shows <strong>20 at a time</strong> with Previous / Next when there are more.</p>
 
         <p><strong>Table columns</strong></p>
         <ul class="help-list">
           <li><strong>Logged at</strong> — When the script appended the row (shown in your browser’s locale).</li>
           <li><strong>Payee</strong> — Cash Flow / bill payee for the action.</li>
-          <li><strong>Type</strong> — A short label for scanning: <strong>Loan</strong>, <strong>Bill</strong>, <strong>HOA</strong>, <strong>Tuition</strong>, <strong>Income</strong>, <strong>Repair</strong> / <strong>Maintenance</strong> / <strong>Utilities</strong> / <strong>Property Tax</strong> / etc. (the <strong>Type</strong> you pick on House Expenses), or <strong>House Expenses</strong> if that field was blank, plus <strong>Other</strong>. It is <em>derived</em> for the UI: we match the payee to <strong>INPUT - Debts</strong> (Account Name + Type) and <strong>INPUT - Bills</strong> (Payee + Category), keyword checks for HOA and tuition, and for <strong>house_expense</strong> events we use the log <strong>Category</strong> column (same as the House Expenses form type). It is not a separate column you edit on LOG - Activity.</li>
+          <li><strong>Type</strong> — A short label for scanning: <strong>Loan</strong>, <strong>Bill</strong>, <strong>HOA</strong>, <strong>Tuition</strong>, <strong>Income</strong>, <strong>Donation</strong>, <strong>Repair</strong> / <strong>Maintenance</strong> / <strong>Utilities</strong> / <strong>Property Tax</strong> / etc. (the <strong>Type</strong> you pick on House Expenses), or <strong>House Expenses</strong> if that field was blank, plus <strong>Other</strong>. It is <em>derived</em> for the UI: we match the payee to <strong>INPUT - Debts</strong> (Account Name + Type) and <strong>INPUT - Bills</strong> (Payee + Category), keyword checks for HOA and tuition, <strong>donation</strong> events map to <strong>Donation</strong>, and for <strong>house_expense</strong> events we use the log <strong>Category</strong> column (same as the House Expenses form type). It is not a separate column you edit on LOG - Activity.</li>
           <li><strong>Amount</strong> — The amount stored for that event (e.g. payment amount, or 0 for a skip).</li>
           <li><strong>Bill due date</strong> — The obligation date for that cycle (from the log’s entry date), not necessarily the same calendar day you clicked the button.</li>
         </ul>
@@ -141,7 +143,7 @@
           <li><strong>INPUT - Bills</strong> — Dated bills (category, autopay, varies, etc.); drives most Bills Due cards.</li>
           <li><strong>INPUT - Debts</strong> — Loan accounts; minimum payments can appear on Bills Due.</li>
           <li><strong>INPUT - Donation</strong> — Charitable giving log by tax-year blocks; add rows from <strong>Cash Flow → Donations</strong>.</li>
-          <li><strong>LOG - Activity</strong> — Append-only audit (Quick Pay, bill skip, INPUT - Bills autopay, house expense saves); filter, sort, and paginate on the <strong>Activity</strong> page.</li>
+          <li><strong>LOG - Activity</strong> — Audit log (Quick Pay, bill skip, INPUT - Bills autopay, house expense, donations); filter, sort, paginate, and remove mistaken rows on the <strong>Activity</strong> page.</li>
         </ul>
       </section>
     </div>

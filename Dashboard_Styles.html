@@ -614,6 +614,45 @@
     font-size: 13px;
     white-space: nowrap;
   }
+  .activity-th-actions,
+  .activity-td-actions {
+    text-align: right;
+    white-space: nowrap;
+    width: 1%;
+    vertical-align: middle;
+  }
+  .btn-activity-delete {
+    margin: 0;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #ffffff;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+    border-radius: 6px;
+    cursor: pointer;
+    width: auto;
+  }
+  .btn-activity-delete:hover:not(:disabled) {
+    background: #fff1f2;
+  }
+  .btn-activity-delete:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .btn-activity-delete--disabled,
+  .btn-activity-delete--disabled:disabled {
+    color: #94a3b8;
+    border-color: #e2e8f0;
+    background: #f8fafc;
+    opacity: 1;
+    cursor: not-allowed;
+    font-weight: 500;
+  }
+  .activity-th-actions-hint {
+    font-weight: normal;
+    font-size: 11px;
+  }
   .activity-kind-pill {
     display: inline-block;
     font-size: 12px;
