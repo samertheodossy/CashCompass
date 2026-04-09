@@ -1,5 +1,6 @@
 ## Recent — Status targets + Help Upcoming
 
+- **INPUT - Bills Default Amount 0** — `getInputBillsDueRows_` no longer skips zero defaults; bills still show in Overdue / Next 7 when the Cash Flow cell is unhandled. Autopay only runs when **Default Amount > 0**. `dashboard_data.js`; Help **Bills Due**; `PROJECT_CONTEXT.md`.
 - **Bills Due load failure** (`loadBillsDueUi_`) → **`bills_due_status`** (was `planner_status`). Overview Bills card still shows the same error text in the summary. `Dashboard_Script_BillsDue.html`.
 - **Debt planner after Quick add** (`runDebtPlannerAfterQuickPayment_` failure) → **`pay_status`** (was `planner_status`). `Dashboard_Script_Payments.html`.
 - **Help**: **Upcoming expenses** section + TOC; Cash Flow intro links to Upcoming / Donations / Bills Due; **Bills Due** documents load errors under the panel heading; sheet list includes **INPUT - Upcoming Expenses**. `Dashboard_Help.html`.

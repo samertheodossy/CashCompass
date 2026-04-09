@@ -89,6 +89,7 @@ Columns:
 - Quarterly bills should only apply in scheduled months
 - Autopay = Yes and Varies = No → okay to auto-write
 - Autopay = Yes and Varies = Yes → do not auto-write
+- Default Amount = 0 → still list in Bills Due when unhandled; autopay does not write (use Pay / manual Cash Flow for the amount)
 - Fallback recurring bills should show overdue or upcoming correctly
 
 ## Current UI state

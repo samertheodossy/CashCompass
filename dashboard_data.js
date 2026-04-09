@@ -1496,7 +1496,6 @@ function getInputBillsDueRows_(ss, today, tz) {
     if (!dueDay) continue;
 
     const defaultAmount = round2_(Math.abs(toNumber_(values[r][colMap.defaultAmount])));
-    if (!defaultAmount) continue;
 
     const category = colMap.category === -1 ? '' : String(display[r][colMap.category] || '').trim();
     const varies = normalizeYesNo_(colMap.varies === -1 ? '' : display[r][colMap.varies]);
@@ -1525,7 +1524,7 @@ function getInputBillsDueRows_(ss, today, tz) {
       const dueHasPassed = cand.dueDate.getTime() < todayOnly.getTime();
       const canAutopay = autopay === 'yes' && varies !== 'yes';
 
-      if (canAutopay && dueHasPassed && !isCashFlowBillHandled_(cellValue, cellDisplay)) {
+      if (canAutopay && defaultAmount > 0 && dueHasPassed && !isCashFlowBillHandled_(cellValue, cellDisplay)) {
         writeDashboardBillValuePreserveFormat_(sheet, rowInfo.row, monthCol + 1, -defaultAmount);
         touchDashboardSourceUpdated_('cash_flow');
 
