@@ -158,7 +158,7 @@ function buildDashboardSnapshot_() {
     retirement: retirement,
     bufferRunway: bufferRunway
   });
-  const suggestedActions = buildSuggestedActions_(issues, latestMetrics, upcoming, retirement, bufferRunway);
+  const suggestedActions = buildSuggestedActions_(latestMetrics, upcoming, retirement, bufferRunway);
 
   return {
     cash: round2_(cash),
@@ -877,21 +877,8 @@ function getHighUtilizationDebtIssues_(sheet, thresholdPct) {
   return out;
 }
 
-function buildSuggestedActions_(issues, latestMetrics, upcoming, retirement, bufferRunway) {
+function buildSuggestedActions_(latestMetrics, upcoming, retirement, bufferRunway) {
   const out = [];
-
-  (issues || []).slice(0, 3).forEach(function(issue) {
-    out.push({
-      severity: issue.severity || 'info',
-      title: 'Review issue',
-      message: issue.message,
-      ctaLabel: 'Open',
-      tab: issue.tab || 'bank',
-      accountName: issue.accountName || '',
-      debtType: issue.debtType || '',
-      expenseId: issue.expenseId || ''
-    });
-  });
 
   if (latestMetrics && latestMetrics.projectedCashFlow < 0) {
     out.push({

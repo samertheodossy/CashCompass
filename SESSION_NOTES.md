@@ -1,5 +1,6 @@
 ## Recent — Status targets + Help Upcoming
 
+- **Overview — Suggested Actions vs Issues** — `buildSuggestedActions_` no longer copies the top 3 `issues` (removes duplicate utilization lines). Suggested Actions keeps cash-flow / runway / retirement nudges only. Hint under **Suggested Actions** when issues exist: points to **Issues** (no numeric count — full `issues` list mixes severities and types). `dashboard_data.js`, `Dashboard_Script_Render.html`, `Dashboard_Body.html`, `Dashboard_Styles.html`, Help **Overview**.
 - **INPUT - Bills Default Amount 0** — `getInputBillsDueRows_` no longer skips zero defaults; bills still show in Overdue / Next 7 when the Cash Flow cell is unhandled. Autopay only runs when **Default Amount > 0**. `dashboard_data.js`; Help **Bills Due**; `PROJECT_CONTEXT.md`.
 - **Bills Due load failure** (`loadBillsDueUi_`) → **`bills_due_status`** (was `planner_status`). Overview Bills card still shows the same error text in the summary. `Dashboard_Script_BillsDue.html`.
 - **Debt planner after Quick add** (`runDebtPlannerAfterQuickPayment_` failure) → **`pay_status`** (was `planner_status`). `Dashboard_Script_Payments.html`.

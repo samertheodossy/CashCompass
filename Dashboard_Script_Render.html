@@ -284,6 +284,20 @@ function renderIssues(issues) {
   window.__dashboardIssues = flat;
 }
 
+function renderSuggestedActionsIssueHint(issues) {
+  const el = document.getElementById('actions_issue_hint');
+  if (!el) return;
+  const list = issues || [];
+  if (!list.length) {
+    el.textContent = '';
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  el.textContent =
+    'Debt utilization and other alerts are listed in the Issues card below — not in this list.';
+}
+
 function renderActions(actions) {
   const root = document.getElementById('actions_list');
   if (!root) return;
@@ -453,6 +467,7 @@ function applySnapshot(snapshot) {
 
   renderSourceUpdated(snapshot.sourceUpdated);
   renderIssues(snapshot.issues || []);
+  renderSuggestedActionsIssueHint(snapshot.issues || []);
   renderHealth(snapshot.health || null);
   renderWeeklyAttribution(snapshot.attribution || null);
   renderBufferRunway(snapshot.bufferRunway || null);
