@@ -2,7 +2,39 @@
   body { font-family: Arial, sans-serif; margin: 0; color: #1f2937; background: #f8fafc; }
   .page { max-width: 1280px; margin: 0 auto; padding: 20px; }
   .topbar { display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 16px; }
+  .topbar-brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .topbar-brand-text { min-width: 0; }
+  /* Tight-cropped logo asset fills the frame; no zoom needed */
+  .product-logo-wrap {
+    width: 104px;
+    height: 104px;
+    flex-shrink: 0;
+    border-radius: 16px;
+    background: #ffffff;
+    border: 1px solid #94a3b8;
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.06),
+      0 4px 14px rgba(15, 23, 42, 0.12),
+      0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .product-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
   h1 { margin: 0 0 10px 0; font-size: 28px; }
+  .topbar h1 { margin-bottom: 4px; }
+  .product-tagline {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 500;
+    color: #64748b;
+    letter-spacing: 0.01em;
+  }
   .subtle { color: #64748b; font-size: 13px; margin-bottom: 0; }
   .top-actions { min-width: 240px; display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
   .top-actions-buttons {

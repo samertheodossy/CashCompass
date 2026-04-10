@@ -1,4 +1,4 @@
-# First run — get the Planner Dashboard working
+# First run — get **CashCompass** working
 
 Short path from **zero** to **deployed web app + working Overview**. For architecture, security detail, and long-term onboarding product work, see the linked docs at the end—this page stays **action-oriented**.
 
@@ -60,9 +60,9 @@ Defaults in **`appsscript.json`** should match the above; the deployment dialog 
 
 The project includes helpers in **`webapp.js`** so the spreadsheet can open the dashboard:
 
-- In the spreadsheet, open the **Debt Planner** menu (`onOpen` in `code.js`) → **Set Planner Dashboard Web App URL**, then **paste the `/exec` URL** once. That stores `PLANNER_DASHBOARD_WEBAPP_URL` in Script Properties for **Open Planner Dashboard Web**.
+- In the spreadsheet, open the **Debt Planner** menu (`onOpen` in `code.js`) → **Set CashCompass Web App URL**, then **paste the `/exec` URL** once. That stores `PLANNER_DASHBOARD_WEBAPP_URL` in Script Properties for **Open CashCompass Web**.
 
-If that property is not set, **Open Planner Dashboard Web** will error until you save the URL—opening the deployment link **directly in the browser** always works.
+If that property is not set, **Open CashCompass Web** will error until you save the URL—opening the deployment link **directly in the browser** always works.
 
 ---
 

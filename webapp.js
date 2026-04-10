@@ -1,14 +1,14 @@
 function doGet() {
   return HtmlService.createTemplateFromFile('PlannerDashboardWeb')
     .evaluate()
-    .setTitle('Planner Dashboard')
+    .setTitle('CashCompass')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 function setPlannerDashboardWebAppUrl() {
   const ui = SpreadsheetApp.getUi();
   const resp = ui.prompt(
-    'Set Planner Dashboard Web App URL',
+    'Set CashCompass Web App URL',
     'Paste the deployed Web App URL that ends with /exec',
     ui.ButtonSet.OK_CANCEL
   );
@@ -22,12 +22,12 @@ function setPlannerDashboardWebAppUrl() {
   }
 
   PropertiesService.getScriptProperties().setProperty('PLANNER_DASHBOARD_WEBAPP_URL', url);
-  ui.alert('Planner Dashboard Web App URL saved successfully.');
+  ui.alert('CashCompass Web App URL saved successfully.');
 }
 
 function clearPlannerDashboardWebAppUrl() {
   PropertiesService.getScriptProperties().deleteProperty('PLANNER_DASHBOARD_WEBAPP_URL');
-  SpreadsheetApp.getUi().alert('Planner Dashboard Web App URL cleared.');
+  SpreadsheetApp.getUi().alert('CashCompass Web App URL cleared.');
 }
 
 function getPlannerDashboardWebAppUrl_() {
@@ -35,8 +35,8 @@ function getPlannerDashboardWebAppUrl_() {
 
   if (!url) {
     throw new Error(
-      'Planner Dashboard Web App URL is not set.\n\n' +
-      'Run: Set Planner Dashboard Web App URL\n' +
+      'CashCompass Web App URL is not set.\n\n' +
+      'Run: Set CashCompass Web App URL\n' +
       'Then paste your deployed /exec URL once.'
     );
   }
@@ -55,9 +55,9 @@ function openPlannerDashboardWebLauncher() {
     'window.open("' + safeUrl + '", "_blank");' +
     'google.script.host.close();' +
     '</script>' +
-    '<div style="font-family:Arial,sans-serif;padding:16px;">Opening Planner Dashboard...</div>' +
+    '<div style="font-family:Arial,sans-serif;padding:16px;">Opening CashCompass...</div>' +
     '</body></html>'
   ).setWidth(220).setHeight(80);
 
-  SpreadsheetApp.getUi().showModelessDialog(html, 'Opening...');
+  SpreadsheetApp.getUi().showModelessDialog(html, 'Opening CashCompass...');
 }

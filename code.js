@@ -12,10 +12,10 @@ function onOpen() {
     .addItem('Create Next Year Cash Flow Sheet', 'createNextYearCashFlowSheet')
     .addItem('Rebuild HOME', 'buildHomePage')
     .addSeparator()
-    .addItem('Open Planner Dashboard', 'openPlannerDashboard')
+    .addItem('Open CashCompass (sidebar)', 'openPlannerDashboard')
     .addSeparator()
-    .addItem('Open Planner Dashboard Web', 'openPlannerDashboardWebLauncher')
-    .addItem('Set Planner Dashboard Web App URL', 'setPlannerDashboardWebAppUrl')
+    .addItem('Open CashCompass Web', 'openPlannerDashboardWebLauncher')
+    .addItem('Set CashCompass Web App URL', 'setPlannerDashboardWebAppUrl')
     .addToUi();
 }
 

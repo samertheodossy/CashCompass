@@ -1,5 +1,7 @@
 ## Recent — Status targets + Help Upcoming
 
+- **Product name** — Web dashboard and sidebar HTML titles rebranded to **CashCompass**; tagline *Guiding your money decisions.* Sheet menu: **Open CashCompass (sidebar)** / **Open CashCompass Web** / **Set CashCompass Web App URL**. Script property key `PLANNER_DASHBOARD_WEBAPP_URL` unchanged. `Dashboard_Body.html`, `PlannerDashboard.html`, `dashboard.js`, `webapp.js`, `code.js`, Help, `PROJECT_CONTEXT.md`, `FIRST_RUN.md`.
+- **Logo** — Top bar shows tight-cropped **CashCompass** mark: **PNG** embedded as `data:image/png;base64,…` in `Dashboard_Body.html` (256px max dimension for bundle size). Source files: `assets/CashCompass-logo-cropped.png`, `assets/CashCompass-logo-cropped-256.png`. Framed in `product-logo-wrap` (`Dashboard_Styles.html`). Apps Script `doGet` does not serve standalone images; inline data avoids extra hosting.
 - **Overview — Suggested Actions vs Issues** — `buildSuggestedActions_` no longer copies the top 3 `issues` (removes duplicate utilization lines). Suggested Actions keeps cash-flow / runway / retirement nudges only. Hint under **Suggested Actions** when issues exist: points to **Issues** (no numeric count — full `issues` list mixes severities and types). `dashboard_data.js`, `Dashboard_Script_Render.html`, `Dashboard_Body.html`, `Dashboard_Styles.html`, Help **Overview**.
 - **INPUT - Bills Default Amount 0** — `getInputBillsDueRows_` no longer skips zero defaults; bills still show in Overdue / Next 7 when the Cash Flow cell is unhandled. Autopay only runs when **Default Amount > 0**. `dashboard_data.js`; Help **Bills Due**; `PROJECT_CONTEXT.md`.
 - **Bills Due load failure** (`loadBillsDueUi_`) → **`bills_due_status`** (was `planner_status`). Overview Bills card still shows the same error text in the summary. `Dashboard_Script_BillsDue.html`.
@@ -75,7 +77,7 @@
 
 ## Properties — Property performance tab (commit: feature + HOUSES matching + tabs layout)
 
-- **Planner Dashboard → Properties**: new sub-tab **Property performance** next to **House Expenses** (CSS: `properties-tabs` uses two columns like other tab rows).
+- **CashCompass web → Properties**: new sub-tab **Property performance** next to **House Expenses** (CSS: `properties-tabs` uses two columns like other tab rows).
 - **Data**: `property_performance.js` + `getPropertyPerformanceData` — per row in **SYS - House Assets**: **Type** (SYS column), equity, rent (calendar year from **INPUT - Cash Flow** `Income` rows whose Payee matches `Rent {House name}` with optional suffix), expenses (sum **Cost + Service Fees** on **HOUSES - …** for that year). Portfolio mini-cards sum columns. Property performance table shows **Type** next to **House**.
 - **HOUSES matching / expenses**: resolve tab by exact `HOUSES - {House}` first, then normalized match on location suffix (case/spacing). Expense totals use the resolved sheet’s location key (UI no longer shows a Yes/— column).
 - **Files**: `property_performance.js`, `Dashboard_Script_PropertyPerformance.html`, `Dashboard_Body.html`, `Dashboard_Script_Render.html`, `PlannerDashboardWeb.html`, `Dashboard_Styles.html`.
@@ -128,7 +130,7 @@
 
 ---
 
-## Planner Dashboard — split workspace scripts (replaces `Dashboard_Script_Features_1.html`)
+## CashCompass web — split workspace scripts (replaces `Dashboard_Script_Features_1.html`)
 
 - **Was**: one large `Dashboard_Script_Features_1.html` (House Values, House Expenses, Bank, Investments, Debts, Upcoming, Retirement, Purchase sim).
 - **Now**: seven includes after `Dashboard_Script_Render` in `PlannerDashboardWeb.html`: `Dashboard_Script_AssetsHouseValues`, `Dashboard_Script_PropertiesHouseExpenses`, `Dashboard_Script_AssetsBankInvestments`, `Dashboard_Script_PlanningDebts`, `Dashboard_Script_CashFlowUpcoming`, `Dashboard_Script_PlanningRetirement`, `Dashboard_Script_PlanningPurchaseSim`.
@@ -136,7 +138,7 @@
 
 ---
 
-## Planner Dashboard — Help page (no nav tab)
+## CashCompass web — Help page (no nav tab)
 
 - **Entry**: Prominent **Help** button in the top bar with Run Planner; opens `page_help` via `showPage('help')` (not a sixth page tab).
 - **Content**: `Dashboard_Help.html` included from **`PlannerDashboardWeb.html`** after `Dashboard_Body` (same template level — `includeHtml_` uses `getRawContent()`, so nested `<?!= … ?>` inside Body does not run).
@@ -147,7 +149,7 @@
 
 ---
 
-## Planner Dashboard — loading spinner (CSS + `setStatusLoading`)
+## CashCompass web — loading spinner (CSS + `setStatusLoading`)
 
 - **CSS** (`Dashboard_Styles.html`): `.dash-loading`, `.dash-loading-spinner`, `.dash-loading--block`, `.dash-loading--center`, `dash-loading-spin` keyframes; `prefers-reduced-motion` tames animation.
 - **JS** (`Dashboard_Script_Render.html`): `loadingIndicatorHtml`, `loadingBlockHtml`, `setStatusLoading` (after `escapeHtml`).

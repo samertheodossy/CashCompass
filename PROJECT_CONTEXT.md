@@ -1,6 +1,6 @@
 # Samer Financial Planner - Project Context
 
-We are building a Google Apps Script Planner Dashboard for personal finance / property / debt planning.
+We are building **CashCompass** — a Google Apps Script web dashboard (and spreadsheet sidebar) for personal finance / property / debt planning. Tagline: *Guiding your money decisions.*
 
 ## Overall system areas already in the app
 - Dashboard snapshot / overview

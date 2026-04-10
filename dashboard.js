@@ -1,6 +1,6 @@
 function openPlannerDashboard() {
   const html = HtmlService.createHtmlOutputFromFile('PlannerDashboard')
-    .setTitle('Planner Dashboard')
+    .setTitle('CashCompass')
     .setWidth(420);
 
   SpreadsheetApp.getUi().showSidebar(html);
