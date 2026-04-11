@@ -9,12 +9,14 @@ function appendScheduledMinimumLines_(lines, items) {
   const show = Math.min(items.length, cap);
   for (let i = 0; i < show; i++) {
     const p = items[i];
+    const isBill = String(p.type || '').trim() === 'Bill';
+    const mid = isBill ? ', due ' : ' min, due ';
     lines.push(
       '  • ' +
         p.account +
         ' - ' +
         fmtCurrency_(p.minimumPayment) +
-        ' min, due ' +
+        mid +
         p.dueDate +
         ' (' +
         p.daysUntilDue +
@@ -29,7 +31,7 @@ function appendScheduledMinimumLines_(lines, items) {
         (items.length - show) +
         ' more - ' +
         fmtCurrency_(round2_(hiddenSum)) +
-        ' in minimums (included in total above).'
+        ' (included in total above).'
     );
   }
 }
@@ -409,6 +411,38 @@ function buildUpcomingPayments_(debts, today, tz, payNowWindowDays, paySoonWindo
   paySoon.sort(function(a, b) { return a.daysUntilDue - b.daysUntilDue; });
 
   return { payNow: payNow, paySoon: paySoon };
+}
+
+/**
+ * Merges INPUT - Bills-derived lines into debt Pay now / Pay soon lists.
+ * When the same payee + due date exists as a debt line, the debt row wins (no double count).
+ */
+function mergeDebtAndBillPaymentWindows_(debtPayNow, debtPaySoon, billPayNow, billPaySoon) {
+  function key_(item) {
+    return normalizeBillName_(item.account) + '|' + String(item.dueDate || '');
+  }
+  function mergeBucket_(debts, bills) {
+    const seen = Object.create(null);
+    const out = [];
+    (debts || []).forEach(function(d) {
+      seen[key_(d)] = true;
+      out.push(d);
+    });
+    (bills || []).forEach(function(b) {
+      if (seen[key_(b)]) return;
+      seen[key_(b)] = true;
+      out.push(b);
+    });
+    out.sort(function(a, c) {
+      if (a.daysUntilDue !== c.daysUntilDue) return a.daysUntilDue - c.daysUntilDue;
+      return String(a.account || '').localeCompare(String(c.account || ''));
+    });
+    return out;
+  }
+  return {
+    payNow: mergeBucket_(debtPayNow, billPayNow),
+    paySoon: mergeBucket_(debtPaySoon, billPaySoon)
+  };
 }
 
 function estimateAnnualInterestSavings_(paymentAmount, apr) {

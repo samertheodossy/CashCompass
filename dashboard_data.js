@@ -1561,6 +1561,53 @@ function getInputBillsDueRows_(ss, today, tz) {
   return rows;
 }
 
+/**
+ * INPUT - Bills rows shaped like buildUpcomingPayments_ items, split into the same
+ * Pay now (0..payNowWindowDays) and Pay soon (payNowWindowDays+1 .. paySoonWindowDays)
+ * windows as the debt planner email. Omits overdue (negative days) so they stay only
+ * in the email Overdue section from getBillsDueFromCashFlowForDashboard.
+ */
+function buildInputBillPlannerPaymentWindows_(today, tz, payNowWindowDays, paySoonWindowDays) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const rows = getInputBillsDueRows_(ss, today, tz);
+  const todayOnly = stripTime_(today);
+  const payNow = [];
+  const paySoon = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const due = parseIsoDateAtLocal_(row.dueDate);
+    if (!due || isNaN(due.getTime())) continue;
+
+    const daysUntilDue = daysBetween_(todayOnly, stripTime_(due));
+    if (daysUntilDue < 0) continue;
+
+    const item = {
+      account: String(row.payee || row.name || '').trim() || 'Bill',
+      type: 'Bill',
+      dueDate: String(row.dueDate || '').trim(),
+      daysUntilDue: Math.round(daysUntilDue),
+      minimumPayment: round2_(Math.abs(toNumber_(row.amount))),
+      balance: 0,
+      interestRate: 0
+    };
+
+    if (daysUntilDue <= payNowWindowDays) payNow.push(item);
+    else if (daysUntilDue <= paySoonWindowDays) paySoon.push(item);
+  }
+
+  payNow.sort(function(a, b) {
+    if (a.daysUntilDue !== b.daysUntilDue) return a.daysUntilDue - b.daysUntilDue;
+    return String(a.account).localeCompare(String(b.account));
+  });
+  paySoon.sort(function(a, b) {
+    if (a.daysUntilDue !== b.daysUntilDue) return a.daysUntilDue - b.daysUntilDue;
+    return String(a.account).localeCompare(String(b.account));
+  });
+
+  return { payNow: payNow, paySoon: paySoon };
+}
+
 function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth) {
   const candidates = [];
   const monthOffsets = [0, 1];

@@ -112,6 +112,19 @@ function runDebtPlanner() {
     debtMinimumHandledMap
   );
 
+  const billWindows = buildInputBillPlannerPaymentWindows_(
+    today,
+    tz,
+    payNowWindowDays,
+    paySoonWindowDays
+  );
+  const nextPaymentsForPlanner = mergeDebtAndBillPaymentWindows_(
+    nextPayments.payNow,
+    nextPayments.paySoon,
+    billWindows.payNow,
+    billWindows.paySoon
+  );
+
   const overdueBillsForEmail = getBillsDueFromCashFlowForDashboard().overdue || [];
 
   const warnings = [];
@@ -276,8 +289,8 @@ function runDebtPlanner() {
     notes.push('Because monthly cash flow is negative, the planner is prioritizing liquidity over aggressive payoff.');
   }
 
-  const payNowMinimumTotal = round2_(nextPayments.payNow.reduce(function(sum, p) { return sum + p.minimumPayment; }, 0));
-  const paySoonMinimumTotal = round2_(nextPayments.paySoon.reduce(function(sum, p) { return sum + p.minimumPayment; }, 0));
+  const payNowMinimumTotal = round2_(nextPaymentsForPlanner.payNow.reduce(function(sum, p) { return sum + p.minimumPayment; }, 0));
+  const paySoonMinimumTotal = round2_(nextPaymentsForPlanner.paySoon.reduce(function(sum, p) { return sum + p.minimumPayment; }, 0));
   const suggestedExtraPaymentFinal = recommendation ? round2_(recommendation.suggestedExtraPayment) : 0;
   const recommendedTotalToPayNow = round2_(payNowMinimumTotal + suggestedExtraPaymentFinal);
 
@@ -302,8 +315,8 @@ function runDebtPlanner() {
   );
 
   const actionPlan = buildActionPlan_({
-    payNow: nextPayments.payNow,
-    paySoon: nextPayments.paySoon,
+    payNow: nextPaymentsForPlanner.payNow,
+    paySoon: nextPaymentsForPlanner.paySoon,
     overdueBills: overdueBillsForEmail,
     recommendation: recommendation,
     payNowMinimumTotal: payNowMinimumTotal,
@@ -336,8 +349,8 @@ function runDebtPlanner() {
     previousMonthCashFlow: previousCashFlow.monthNet,
     monthChange: monthChange,
     minimumDueTotal: minimumDueTotal,
-    payNow: nextPayments.payNow,
-    paySoon: nextPayments.paySoon,
+    payNow: nextPaymentsForPlanner.payNow,
+    paySoon: nextPaymentsForPlanner.paySoon,
     recommendation: recommendation,
     warnings: warnings,
     notes: notes,
