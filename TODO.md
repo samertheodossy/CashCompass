@@ -72,6 +72,166 @@ TO DO and issues I see in the testing
 
 ---
 
+### Next big item — Planning: Debt payoff projection (“path out of debt”)
+
+**Intent:** One **Planning** workspace where the user can see a **month-by-month (or month-aggregated) projection** of balances going to zero, **assuming** current **INPUT - Debts** balances, APRs, minimums, and a clear rule for **how much per month** goes to debt (a fixed “extra to debt” knob plus strategy). **Read-only v1** — no sheet writes; scenario math only. Complements **Run Planner** (point-in-time liquidity + pay-now / extra target) with a **trajectory** view.
+
+#### How valuable is it?
+
+**High for the right user story:** a single place that answers “If I keep paying roughly like this, **when** am I out of debt and **how much interest** do I eat?” is motivating and easier to reason about than scattered **INPUT - Debts** rows plus a one-off **Run Planner** snapshot. It complements what you already have: the planner run is **now-centric** (liquidity, pay-now, one extra target); a payoff projection is **path-centric** (months/years, ordering, totals).
+
+**Caveats (honesty sells the feature):** revolving cards need clear assumptions (e.g. **no new charges**, fixed APR, minimum rules). Variable spending means the model is **scenario math**, not a promise—label it that way and it stays trustworthy.
+
+#### How doable is it?
+
+**Doable in phases.** You already have normalized debts, minimums, APRs, balances, and planner-side concepts (**`planner_core.js`**, **`runDebtPlanner`** in **`code.js`**, **`OUT - History`**). A first version can be **read-only simulation** (no sheet writes): inputs from **INPUT - Debts** (+ optional “monthly amount available for debt” from latest snapshot or a user-entered number), output as a **table + payoff month per account**.
+
+**Harder parts (defer or simplify v1):** exact issuer minimum formulas, promo APR windows, cards with mixed balances, and syncing “I already paid this month” with Cash Flow the same way the email does—v1 can ignore that nuance or use a single **“effective monthly debt payment”** knob.
+
+#### Where it fits in the planner (UI)
+
+**Best fit:** **Planning → new tab** alongside **Debts**, **Retirement**, **Purchase Sim** (in **`Dashboard_Body.html`** under **`#page_planning`**, plus a new **`Dashboard_Script_PlanningDebtPayoff.html`** or similar include in **`PlannerDashboardWeb.html`**).
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **Fourth Planning tab** (“Payoff path” / “Debt projection”) | Clear mental model; matches Retirement / Purchase “what if” | One more tab to maintain |
+| **Expand Debts panel** | Same topic | Crowded; Debts today is **field edit** UX, not analytics |
+| **Overview card → drill-in** | Discovery | Easy to miss; projection deserves space |
+
+**Recommendation:** fourth tab on **Planning**, with a one-line link from **Overview** (e.g. “Open payoff projection”) optional later.
+
+**Concrete wiring (same as earlier spec):**
+
+- **Planning** page (`#page_planning` in **`Dashboard_Body.html`**) — fourth tab, e.g. **Payoff path** or **Debt projection**.
+- **New include:** **`Dashboard_Script_PlanningDebtPayoff.html`** in **`PlannerDashboardWeb.html`** (same pattern as **`Dashboard_Script_PlanningRetirement.html`** / Purchase Sim).
+
+#### Suggested implementation plan (slices)
+
+**Product spec (short)**
+
+- **Assumptions:** no new charges on cards; APR from sheet; pay minimums unless user sets “extra to debt per month”; optional strategy: avalanche vs snowball vs minimum-only.
+- **Output:** payoff date per debt, total interest (rough), month when all consumer debt hits zero.
+
+**Backend (Apps Script)**
+
+- Pure function e.g. **`simulateDebtPayoffSchedule_(debts, monthlyTotalToDebt, strategy, opts)`** in a small new file or **`planner_core.js`**.
+- New **`google.script.run`** entry: **`getDebtPayoffProjection(payload)`** reading the spreadsheet the same way **`runDebtPlanner`** / dashboard debt loaders do — **no writes in v1**.
+
+**Frontend**
+
+- New script include + minimal HTML block: inputs (slider or number for extra payment, strategy dropdown), **Run projection** button, results table + simple text summary.
+- Reuse currency / format helpers from existing dashboard scripts.
+
+**Help**
+
+- One **Planning** subsection: assumptions, limitations; link from **Debt Planner email** in Help if useful.
+
+**Stretch (later)**
+
+- Chart (months vs balance).
+- Tie “monthly surplus” default to last **`OUT - History`** or last planner run fields.
+- Export CSV.
+
+**Data sources (reuse existing loaders)**
+
+- **`INPUT - Debts`** through the same normalization path as **`runDebtPlanner`** / **`normalizeDebts_`** (`planner_core.js`, `code.js`): account name, type, balance, minimum payment, APR, due day, active flag, alias map where applicable.
+- **Default “monthly $ to debt”** for v1: user-entered number; **stretch** suggest a default from **last `OUT - History`** / last planner summary — do **not** block v1 on perfect Cash Flow integration.
+
+**Backend shape (Apps Script)**
+
+1. **Pure simulation** — e.g. `simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToDebt, strategy, options)`  
+   - **Strategies (v1):** **minimum-only**, **avalanche** (extra to highest APR), **snowball** (extra to smallest balance).  
+   - **Month loop:** apply minimums; allocate `monthlyTotalToDebt - sum(minimums)` per strategy; accrue interest monthly (document formula in code + Help — e.g. APR/12 on average balance or standard revolving simplification).  
+   - **Safety:** cap max simulated months (e.g. 600) and cap rows returned to the client to avoid timeouts.
+2. **Server entry** — e.g. `getDebtPayoffProjection(payload)` in **`debt_payoff_projection.js`** (or extend an existing debt module): read spreadsheet, normalize debts, run simulator, return JSON `{ summary, byMonth[], perDebtPayoffMonth }`.  
+3. **No writes in v1** — no mutations to **INPUT - Debts** or Cash Flow from this tab.
+
+**Frontend shape**
+
+- Inputs: **monthly amount allocated to debt** (number), **strategy** (dropdown), **Run projection**; optional filters later (active only, exclude **Taxes** type — align with **`runDebtPlanner`** / email if product wants parity).
+- Output: table (month index, aggregate balance, interest paid to date, optional per-account columns or drill-down); short summary: **first debt-free month**, **approximate total interest**.
+- Reuse currency helpers and status-line patterns from other Planning scripts.
+
+**Phased delivery (suggested)**
+
+| Phase | Scope |
+|-------|--------|
+| **1 — MVP** | Fourth Planning tab + UI shell + `getDebtPayoffProjection` + strategies (minimum-only, avalanche, snowball) + fixed monthly total + table + summary; **Help** subsection under **Planning** (assumptions + limitations). |
+| **2** | Pre-fill monthly payment from **last planner run** / **OUT - History** with user override + stale-data note. |
+| **3** | Simple chart (balance vs month); CSV export. |
+| **4** | Deeper rules only if needed: promo APR windows, tighter minimum math, HELOC draw behavior. |
+
+**Testing / docs when shipped**
+
+- **`TESTING_PLAN.md`** — cases: two-card avalanche ordering, snowball ordering, inactive debt excluded, zero-APR edge.  
+- **`PROJECT_CONTEXT.md`** — one bullet under Planning.  
+- **`SESSION_NOTES.md`** — ship note.
+
+**Explicit non-goals (v1)**
+
+- Auto-posting simulator results to Cash Flow or **INPUT - Debts**.  
+- Full issuer-specific minimum-payment engines without a dedicated rules project.
+
+**Related code to read before building**
+
+- **`code.js`** — `runDebtPlanner`, `buildUpcomingPayments_`, recommendation / extra-payment paths.  
+- **`planner_core.js`** — debt normalization, interest / payoff helpers.  
+- **`Dashboard_Script_PlanningDebts.html`** — `google.script.run` + status + DOM update pattern.  
+- **`PlannerDashboardWeb.html`** — `includeHtml_` list for adding the new script fragment.
+
+---
+
+### Consider — Bank / card / loan sync (Plaid or similar)
+
+**Question:** How hard is it to hook **Plaid** (or **Finicity**, **MX**, **Yodlee**, etc.) into this app so **bank, credit card, and loan balances** land directly in the workbook / dashboard?
+
+**Context (today’s stack):** **Google Sheets** is the system of record; **Apps Script** reads **`ACCOUNTS`**, **`DEBTS`**, **`BANK_ACCOUNTS`** / year blocks (`readSheetAsObjects_`, `bank_accounts.js`, `dashboard_data.js`, `runDebtPlanner` in **`code.js`**). Any aggregator should **still end by writing normalized rows** into those tabs (or a **staging** tab + merge) so the **rest of the planner stays unchanged**.
+
+#### Short answer
+
+**Not “drop-in easy” in Apps Script alone.** These APIs expect a **backend you control** that holds **`client_id` / `secret`**, creates **link tokens**, exchanges **public_token** for **access_token**, and optionally handles **webhooks**. That does not map cleanly to “only GAS + spreadsheet” because:
+
+- **Secrets** must not live in the browser; **Script Properties** help in GAS, but you still need a **safe Plaid Link** flow and **token lifecycle** (refresh, revoke). **Webhooks** want an always-on HTTPS endpoint — awkward for GAS unless you add another service.
+- **Plaid Link** runs in the **browser**; your dashboard is **HtmlService** — doable, but the real work is **Link → bridge → Sheets**, not a single REST call from the sheet.
+
+**Practical shape:** **moderate effort with a small bridge service**; **high effort** if you insist on **100% Apps Script** with no other infra and production-grade behavior.
+
+#### Architecture that fits this app
+
+1. **Tiny backend** (common choices: **Node** on **Cloud Run**, **Cloud Functions**, **Firebase**) — stores Plaid secrets; implements e.g. **`/api/create-link-token`**, **`/api/exchange-token`**, optional **`/webhooks/plaid`**.
+2. **Web dashboard** — loads **Plaid Link** (JS), receives **`public_token`**, sends it to the bridge; bridge stores **`access_token`** keyed to **user id** (not in the spreadsheet).
+3. **Sync job** — schedule or **“Sync balances”** button: bridge calls **Plaid** (balances / liabilities), **maps** institutions → your **`Account Name`** / debt rows, **writes** via **Google Sheets API** *or* calls an **Apps Script web app** `doPost` with a shared secret (weaker pattern; document risk).
+
+Apps Script can stay **consumer-only** (reads sheet after sync) or **orchestrator** that calls the bridge with **`UrlFetchApp`** + **Script Properties** (`BRIDGE_URL`, `BRIDGE_API_KEY`).
+
+#### Effort rough cut
+
+| Approach | Difficulty | Notes |
+|----------|------------|--------|
+| **Manual / CSV / OFX** | Low | No aggregator; bank export → import. |
+| **Plaid + small bridge + sheet writes** | **Medium** | Usual “right” first production shape; mapping + secrets + Link + one sync path. |
+| **Plaid entirely in GAS** | Medium–high | Secrets + Link + refresh + errors in one place; webhooks harder; tighter security review. |
+| **Full bidirectional + reconciliation UI** | High | Payee matching, duplicates, pending vs posted, multi-currency, liability fields vs custom **DEBTS** columns. |
+
+#### Product / risk notes
+
+- **Matching** — Plaid names **≠** your **`ACCOUNTS`** / **`DEBTS`** labels; need a **mapping table** (e.g. Plaid `account_id` → sheet row) and **merge rules** (overwrite balance only vs full row).
+- **Liabilities** — Plaid **liabilities** help for cards; **loans** may still need **manual** planner fields (min payment rules, promo APR) unless you invest in normalization.
+- **Compliance** — Provider **developer agreement**, **use case** review, **data retention**; not “just an API key.”
+- **Multi-user** — Single household today is simpler; **per-user tokens** + auth is a large scope jump.
+
+#### Alternatives to Plaid (same problem space)
+
+- **Spreadsheet-first aggregators** (e.g. Tiller-style) that already write to Google Sheets.
+- **Bank “export to Sheets”** or scheduled **CSV** import — low tech, no aggregator contract.
+- **Finicity / MX / Yodlee** — same class: still want a **bridge** pattern and mapping.
+
+#### Bottom line (planning)
+
+Treat **aggregator → Sheets** as a **small sidecar + mapping layer**; keep the app **sheet-driven**. Reasonable to design and estimate; **not a trivial Apps Script–only weekend** if you want it **safe and maintainable**.
+
+---
+
 ### Product / testing
 
 **Car expenses (dedicated sheet today)**  
