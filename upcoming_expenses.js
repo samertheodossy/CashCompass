@@ -1,3 +1,56 @@
+function upcomingExpenseRowPayeeForLog_(row, colMap) {
+  const p = String(row[colMap['Payee']] || '').trim();
+  if (p) return p;
+  return String(row[colMap['Expense Name']] || '').trim();
+}
+
+function upcomingExpenseDueIsoForLog_(row, colMap) {
+  return parseSheetDateToIso_(row[colMap['Due Date']]);
+}
+
+function upcomingExpenseBaseDetails_(row, colMap, upcomingId) {
+  return {
+    detailsVersion: 1,
+    upcomingId: String(upcomingId || '').trim(),
+    expenseName: String(row[colMap['Expense Name']] || '').trim(),
+    category: String(row[colMap['Category']] || '').trim(),
+    payee: String(row[colMap['Payee']] || '').trim(),
+    accountSource: String(row[colMap['Account / Source']] || '').trim(),
+    amount: round2_(toNumber_(row[colMap['Amount']])),
+    notes: String(row[colMap['Notes']] || '').trim()
+  };
+}
+
+function appendUpcomingActivityStatus_(ss, row, colMap, upcomingId, previousStatus, newStatus, extraDetails) {
+  const dueIso = upcomingExpenseDueIsoForLog_(row, colMap);
+  const tz = Session.getScriptTimeZone();
+  const entryDate = dueIso || Utilities.formatDate(stripTime_(new Date()), tz, 'yyyy-MM-dd');
+  const payee = upcomingExpenseRowPayeeForLog_(row, colMap);
+  const amt = round2_(toNumber_(row[colMap['Amount']]));
+  const base = upcomingExpenseBaseDetails_(row, colMap, upcomingId);
+  base.previousStatus = String(previousStatus || '').trim();
+  base.newStatus = String(newStatus || '').trim();
+  if (extraDetails && typeof extraDetails === 'object') {
+    Object.keys(extraDetails).forEach(function(k) {
+      base[k] = extraDetails[k];
+    });
+  }
+
+  appendActivityLog_(ss, {
+    eventType: 'upcoming_status',
+    entryDate: entryDate,
+    amount: amt,
+    direction: 'expense',
+    payee: payee,
+    category: String(row[colMap['Category']] || '').trim(),
+    accountSource: String(row[colMap['Account / Source']] || '').trim(),
+    cashFlowSheet: '',
+    cashFlowMonth: '',
+    dedupeKey: '',
+    details: JSON.stringify(base)
+  });
+}
+
 function getUpcomingExpensesUiData() {
   const sheet = getOrCreateUpcomingExpensesSheet_();
   const values = sheet.getDataRange().getValues();
@@ -122,6 +175,36 @@ function addUpcomingExpense(payload) {
 
   touchDashboardSourceUpdated_('upcoming_expenses');
 
+  const ss = sheet.getParent();
+  const entryDateStr = Utilities.formatDate(stripTime_(dueDate), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const payeeForLog = payee || expenseName;
+  const addDetails = {
+    detailsVersion: 1,
+    upcomingId: id,
+    expenseName: expenseName,
+    category: category,
+    payee: payee,
+    accountSource: accountSource,
+    amount: amount,
+    notes: notes,
+    autoAddToCashFlow: autoAddToCashFlow,
+    initialStatus: 'Planned'
+  };
+
+  appendActivityLog_(ss, {
+    eventType: 'upcoming_add',
+    entryDate: entryDateStr,
+    amount: amount,
+    direction: 'expense',
+    payee: payeeForLog,
+    category: category,
+    accountSource: accountSource,
+    cashFlowSheet: '',
+    cashFlowMonth: '',
+    dedupeKey: 'upcoming_add::' + id,
+    details: JSON.stringify(addDetails)
+  });
+
   return {
     ok: true,
     message: 'Upcoming expense added.'
@@ -140,12 +223,25 @@ function updateUpcomingExpenseStatus(id, status) {
   const rowInfo = findUpcomingExpenseRowById_(targetId);
   if (!rowInfo) throw new Error('Upcoming expense not found: ' + targetId);
 
+  const row = rowInfo.values;
+  const colMap = rowInfo.colMap;
+  const oldStatus = String(row[colMap['Status']] || '').trim() || 'Planned';
+  if (oldStatus === newStatus) {
+    return {
+      ok: true,
+      message: 'Status is already ' + newStatus + '.'
+    };
+  }
+
   if (newStatus === 'Paid') {
     return markUpcomingExpensePaid_(rowInfo);
   }
 
   rowInfo.sheet.getRange(rowInfo.row, rowInfo.colMap['Status'] + 1).setValue(newStatus);
   touchDashboardSourceUpdated_('upcoming_expenses');
+
+  const ss = rowInfo.sheet.getParent();
+  appendUpcomingActivityStatus_(ss, row, colMap, String(row[colMap['ID']] || '').trim(), oldStatus, newStatus, {});
 
   return {
     ok: true,
@@ -165,15 +261,29 @@ function markUpcomingExpensePaid_(rowInfo) {
     throw new Error('Skipped expense cannot be marked paid.');
   }
 
+  if (currentStatus === 'Paid') {
+    return {
+      ok: true,
+      message: 'Already marked Paid.'
+    };
+  }
+
   let cashFlowMessage = '';
+  let pushedToCashFlowThisAction = false;
 
   if (addedToCashFlow !== 'Yes') {
     const result = addUpcomingExpenseRowToCashFlow_(rowInfo);
     cashFlowMessage = result && result.message ? result.message : '';
+    pushedToCashFlowThisAction = !!(result && result.wroteCashFlow);
   }
 
   sheet.getRange(rowInfo.row, colMap['Status'] + 1).setValue('Paid');
   touchDashboardSourceUpdated_('upcoming_expenses');
+
+  const ss = sheet.getParent();
+  appendUpcomingActivityStatus_(ss, row, colMap, String(row[colMap['ID']] || '').trim(), currentStatus, 'Paid', {
+    pushedToCashFlowThisAction: pushedToCashFlowThisAction
+  });
 
   return {
     ok: true,
@@ -209,28 +319,65 @@ function addUpcomingExpenseRowToCashFlow_(rowInfo) {
   if (addedToCashFlow === 'Yes') {
     return {
       ok: true,
-      message: 'Already added to cash flow.'
+      message: 'Already added to cash flow.',
+      wroteCashFlow: false
     };
   }
   if (!dueDate || isNaN(new Date(dueDate).getTime())) throw new Error('Upcoming expense has invalid Due Date.');
   if (amount <= 0) throw new Error('Upcoming expense amount must be greater than 0.');
+
+  const ss = sheet.getParent();
+  const upcomingId = String(row[colMap['ID']] || '').trim();
 
   const result = quickAddPayment({
     entryType: 'Expense',
     payee: payee,
     entryDate: Utilities.formatDate(new Date(dueDate), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
     amount: amount,
-    createIfMissing: true
+    createIfMissing: true,
+    suppressActivityLog: true
   });
+
+  const snap = result && result.activitySnapshot;
+  if (!snap) {
+    throw new Error('Quick add did not return activity data for the activity log.');
+  }
 
   sheet.getRange(rowInfo.row, colMap['Added To Cash Flow'] + 1).setValue('Yes');
   touchDashboardSourceUpdated_('upcoming_expenses');
 
   if (typeof runDebtPlanner === 'function') runDebtPlanner();
 
+  const cfDetails = {
+    detailsVersion: 1,
+    upcomingId: upcomingId,
+    expenseName: String(row[colMap['Expense Name']] || '').trim(),
+    source: 'INPUT - Upcoming Expenses',
+    previousValue: snap.previousValue,
+    newValue: snap.newValue,
+    signedAmount: snap.signedAmount,
+    createIfMissing: snap.createIfMissing,
+    debtBalanceNote: snap.debtBalanceNote
+  };
+
+  appendActivityLog_(ss, {
+    eventType: 'upcoming_cashflow',
+    entryDate: snap.entryDate,
+    amount: snap.amount,
+    direction: 'expense',
+    payee: snap.payee,
+    category: String(row[colMap['Category']] || '').trim(),
+    accountSource: String(row[colMap['Account / Source']] || '').trim(),
+    cashFlowSheet: snap.cashFlowSheet,
+    cashFlowMonth: snap.cashFlowMonth,
+    dedupeKey: 'upcoming_cf::' + upcomingId + '::' + String(snap.entryDate || '').trim(),
+    details: JSON.stringify(cfDetails)
+  });
+
   return {
     ok: true,
-    message: 'Added to cash flow.\n' + (result && result.message ? result.message : '')
+    message: 'Added to cash flow.\n' + (result && result.message ? result.message : ''),
+    wroteCashFlow: true
   };
 }
 

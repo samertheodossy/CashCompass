@@ -18,7 +18,7 @@ TO DO and issues I see in the testing
 - **Debt Planner email** — Short action block (overdue, pay‑now / pay‑soon line items), debts omitted when the current Cash Flow month is already “handled,” definitions in Help **Debt Planner email** (not repeated in the email body).
 
 **Still open**  
-- **Phase 3 — Upcoming** — Dedicated events for add / status / paid / push to Cash Flow (today, push to CF only adds **`quick_pay`**).  
+- **Phase 3 — Upcoming** — **Done:** **`upcoming_add`** / **`upcoming_status`** / **`upcoming_cashflow`** in **`upcoming_expenses.js`**; Cash Flow from Upcoming uses **`quickAddPayment`** with **`suppressActivityLog: true`** so **`quick_pay`** is not duplicated; **`quick_add_payment.js`** returns **`activitySnapshot`** for callers.  
 - **Phase 5 (optional)** — Correlate events to **OUT - History** / planner run.  
 - **Optional:** Activity **CSV export**; **last N events** on Overview; **onEdit** logging for manual Cash Flow typing.
 
@@ -30,13 +30,13 @@ TO DO and issues I see in the testing
 | Quick add | **Done** — `quick_pay` at end of **`quickAddPayment`**. |
 | Bills Due → Skip | **Done** — **`skipDashboardBill`**. |
 | Bills Due → Autopay | **Done** — dedupe key on refresh. |
-| Upcoming expenses | **Open** — Phase 3. |
+| Upcoming expenses | **Done** — Phase 3: **`upcoming_add`** / **`upcoming_status`** / **`upcoming_cashflow`**; CF push uses **`suppressActivityLog`** (no duplicate **`quick_pay`**). |
 | House expenses | **Done** — **`addHouseExpense`** → `house_expense`; CF via **Quick add** + **`suppressActivityLog`**. |
 
 **Phased rollout**  
 1. **Phase 1 — Quick add** (`quick_pay`) — **Done**  
 2. **Phase 2 — Skip + autopay** — **Done**  
-3. **Phase 3 — Upcoming** — **Open**  
+3. **Phase 3 — Upcoming** — **Done**  
 4. **Phase 4 — House expenses** — **Done**  
 5. **Phase 5 — OUT - History tie-in** — **Open** (optional)  
 6. **Activity UI** — **Done** (filters, type from sheet, paging, sort); **CSV export** optional later

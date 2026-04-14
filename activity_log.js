@@ -1,5 +1,5 @@
 /**
- * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, house expense, donations, …). Rows can be removed from the web UI for mistaken log lines only.
+ * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, house expense, donations, upcoming add/status/cashflow, …). Rows can be removed from the web UI for mistaken log lines only.
  * Complements OUT - History (planner-run snapshots). Tab: LOG - Activity.
  */
 
@@ -362,6 +362,7 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
     return 'House Expenses';
   }
   if (etEarly === 'donation') return 'Donation';
+  if (etEarly.indexOf('upcoming_') === 0) return 'Upcoming';
 
   var combined = pay + ' ' + cat;
   var blob = combined.toLowerCase();

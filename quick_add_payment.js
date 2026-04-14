@@ -183,11 +183,26 @@ function quickAddPayment(payload) {
   touchDashboardSourceUpdated_('cash_flow');
 
   const monthLabel = Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'MMM-yy');
+  const entryDateStr = Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+
+  var activitySnapshot = {
+    entryType: entryType,
+    payee: payee,
+    entryDate: entryDateStr,
+    amount: amount,
+    previousValue: previousValue,
+    newValue: newValue,
+    signedAmount: signedAmount,
+    createIfMissing: createIfMissing,
+    debtBalanceNote: debtBalanceNote,
+    cashFlowSheet: sheet.getName(),
+    cashFlowMonth: monthLabel
+  };
 
   if (!payload.suppressActivityLog) {
     appendActivityLog_(ss, {
       eventType: 'quick_pay',
-      entryDate: Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+      entryDate: entryDateStr,
       amount: amount,
       direction: entryType === 'Expense' ? 'expense' : 'income',
       payee: payee,
@@ -237,7 +252,8 @@ function quickAddPayment(payload) {
       priorMonthValue: priorPreview.priorMonthValue,
       priorMonthUnavailableMessage: priorPreview.priorMonthUnavailableMessage
     },
-    message: message
+    message: message,
+    activitySnapshot: activitySnapshot
   };
 }
 
