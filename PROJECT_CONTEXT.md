@@ -104,6 +104,9 @@ Columns:
 ## Next task
 See **`TODO.md`** for current priorities (there is no separate next-task file).
 
+## Release / “how far from 1.0?”
+See **`GoingToProduction.md`** — Goal A vs B, suggested **v0.9** label, three-bar interpretation of **1.0**, and what blocks broader distribution. Update that file when the readiness story changes so chat sessions don’t re-derive it.
+
 ## First-time setup
 - Step-by-step (workbook, deploy web app, smoke check): **`FIRST_RUN.md`**.  
 - **Canonical template workbook (optional):** Add a “known good” Google Sheets link here when you freeze one for your household—omit from public repos if the URL is sensitive.  

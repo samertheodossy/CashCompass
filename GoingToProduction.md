@@ -26,6 +26,31 @@ The codebase today is **much closer to A than to B**.
 
 ---
 
+## Interpreting “1.0” — three bars (keep this; don’t re-derive each time)
+
+**Canonical place for “how far are we from 1.0?”** — this section plus **`TODO.md`** (concrete backlog) and **`PROJECT_CONTEXT.md`** (what exists). Update the table when scope or reality shifts.
+
+| If “1.0” means… | Rough position today |
+|-----------------|------------------------|
+| **Daily personal use** — one household, you own the spreadsheet and web deploy | **There** for core paths, with known gaps in **`TODO.md`** (e.g. debt panel polish, two-HTML drift, product wishlist). |
+| **“We’d call it 1.0 on a changelog”** — agreed scope done: nagging TODO UX items, web/sidebar **parity** where you care, documented **golden-path** smoke after deploy | **About 1–3 focused iterations**, not months of greenfield. |
+| **Commercial SaaS / multi-tenant / bank sync (Plaid) / full undo** | **Different product** — not required for an honest household **1.0**; see **Goal B** and **`TODO.md`** research items. |
+
+### Already strong (household production)
+
+- **Breadth** — Overview; Assets (houses, banks, investments); Cash Flow (Quick add, Upcoming, Donations, Bills Due); Activity; Properties; Planning (debts, retirement, purchase sim); planner + **OUT - History**.
+- **Discipline** — **LOG - Activity** for major script-driven flows; duplicate logging avoided where wired; **Help** tracks behavior; infra gotchas in **`WORKING_RULES.md`**.
+- **Sheets as source of truth** — right model for Apps Script + HtmlService; the app is a **control surface**, not a second database.
+
+### Still shy of a crisp “product 1.0” label
+
+- **Open product/testing items** in **`TODO.md`** (not blockers for *your* daily use if you accept them).
+- **Two HTML surfaces** (`PlannerDashboardWeb` + modular `Dashboard_*` vs sidebar **`PlannerDashboard.html`**) — drift risk until one is canonical or parity is routine; see **`TODO.md`** item 16 and **Easy wins**.
+- **Activity undo** — dashboard **Remove** is safe for **donations**; other event types are audit + sheet edits until phased undo ships.
+- **Little automated regression** — normal for Apps Script; production confidence = **`TESTING_PLAN.md`** + disciplined manual smoke after **`clasp push`**.
+
+---
+
 ## How far from “productizable” (goal B)?
 
 **Rough estimate: medium–large gap**, not because the app is thin—it isn’t—but because **productization is mostly everything around the spreadsheet**.
@@ -55,7 +80,7 @@ The codebase today is **much closer to A than to B**.
 **Soft blockers (quality / completeness)**
 
 4. Open **TODO.md** product items (debt page UX, upcoming dropdowns, bills/debts cleanup, tax, etc.) — these don’t block *you* from daily use but block calling it “complete” for a general audience.
-5. **Activity / HISTORY ledger** — **Quick add** events (`quick_pay`), skip, autopay, **donations**, and **house expenses** are logged; Activity UI supports filters, type-from-sheet, paging, and **Remove** (donation-only from the dashboard for now). **Gaps** (upcoming lifecycle, manual Cash Flow edits, CSV export) still limit “full provenance” for strangers — soft quality gap, not a hard ship blocker for personal use.
+5. **Activity / HISTORY ledger** — **Quick add** (`quick_pay`), skip, autopay, **donations**, **house expenses**, and **Upcoming** (`upcoming_add` / `upcoming_status` / `upcoming_cashflow`, with no duplicate **`quick_pay`** when posting CF from Upcoming) are logged; Activity UI supports filters, type-from-sheet, paging, and **Remove** (donation-only from the dashboard for now). **Gaps** — optional **OUT - History** correlation (Phase 5), manual Cash Flow **onEdit** logging, CSV export — soft quality for “full provenance,” not a hard ship blocker for personal use.
 6. **Two surfaces** (`PlannerDashboardWeb` vs sidebar `PlannerDashboard.html`) — maintainability risk when you promise updates to others.
 
 **Non-blockers for a serious personal tool**
