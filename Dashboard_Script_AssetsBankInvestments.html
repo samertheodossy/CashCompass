@@ -50,7 +50,6 @@ function setBankPanelMode(mode) {
   const wrapA = document.getElementById('bank_mode_add_wrap');
   const btnU = document.getElementById('bank_mode_update_btn');
   const btnA = document.getElementById('bank_mode_add_btn');
-  const title = document.getElementById('bank_panel_title');
   if (wrapU) wrapU.classList.toggle('active', isUpdate);
   if (wrapA) wrapA.classList.toggle('active', !isUpdate);
   if (btnU) {
@@ -61,7 +60,6 @@ function setBankPanelMode(mode) {
     btnA.classList.toggle('active', !isUpdate);
     btnA.setAttribute('aria-selected', !isUpdate ? 'true' : 'false');
   }
-  if (title) title.textContent = isUpdate ? 'Bank accounts' : 'Add bank account';
   if (isUpdate) {
     setStatus('bank_status', '', false);
   }

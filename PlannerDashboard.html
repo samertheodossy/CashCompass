@@ -265,7 +265,7 @@
 </div>
 
 <div id="bank" class="panel">
-  <h3 id="bank_panel_title">Bank accounts</h3>
+  <h3 id="bank_panel_title">Bank Accounts</h3>
 
   <div class="segmented" role="tablist" aria-label="Bank account mode">
     <button type="button" id="bank_mode_update_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setBankPanelMode('update')">Update</button>
@@ -662,7 +662,6 @@ function setBankPanelMode(mode) {
   const wrapA = document.getElementById('bank_mode_add_wrap');
   const btnU = document.getElementById('bank_mode_update_btn');
   const btnA = document.getElementById('bank_mode_add_btn');
-  const title = document.getElementById('bank_panel_title');
   if (wrapU) wrapU.classList.toggle('active', isUpdate);
   if (wrapA) wrapA.classList.toggle('active', !isUpdate);
   if (btnU) {
@@ -673,7 +672,6 @@ function setBankPanelMode(mode) {
     btnA.classList.toggle('active', !isUpdate);
     btnA.setAttribute('aria-selected', !isUpdate ? 'true' : 'false');
   }
-  if (title) title.textContent = isUpdate ? 'Bank accounts' : 'Add bank account';
   if (isUpdate) {
     setStatus('bank_status', '', false);
   }
