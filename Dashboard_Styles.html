@@ -307,6 +307,35 @@
   .updated { font-size: 12px; color: #64748b; white-space: nowrap; }
 
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  .segmented {
+    display: inline-flex;
+    margin: 0 0 14px 0;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #f1f5f9;
+  }
+  .segment-btn {
+    margin-top: 0;
+    padding: 8px 20px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+  }
+  .segment-btn + .segment-btn {
+    border-left: 1px solid #cbd5e1;
+  }
+  .segment-btn.active {
+    background: #0f172a;
+    color: #fff;
+  }
+  .bank-mode-wrap { display: none; }
+  .bank-mode-wrap.active { display: block; }
   .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 
   label { display: block; margin-top: 10px; font-weight: bold; font-size: 12px; }

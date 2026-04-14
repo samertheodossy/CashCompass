@@ -1,16 +1,96 @@
 /* Assets — Bank Accounts & Investments tabs */
+function fillBankAccountDropdownFromData_(data) {
+  const sel = document.getElementById('bank_account');
+  if (!sel) return;
+  sel.innerHTML = '<option value=""></option>';
+  (data.accounts || []).forEach(function(a) {
+    const opt = document.createElement('option');
+    opt.value = a;
+    opt.textContent = a;
+    sel.appendChild(opt);
+  });
+  populateBankAddDatalists_(data);
+}
+
+function populateBankAddDatalists_(data) {
+  function fillList(listId, options) {
+    const dl = document.getElementById(listId);
+    if (!dl) return;
+    dl.innerHTML = '';
+    (options || []).forEach(function(t) {
+      const o = document.createElement('option');
+      o.value = t;
+      dl.appendChild(o);
+    });
+  }
+  fillList('bank_add_type_list', data.typeOptions);
+  fillList('bank_add_policy_list', data.policyOptions);
+}
+
+function resetBankAddForm_() {
+  const n = document.getElementById('bank_add_name');
+  const t = document.getElementById('bank_add_type');
+  const p = document.getElementById('bank_add_policy');
+  const d = document.getElementById('bank_add_opening_date');
+  const v = document.getElementById('bank_add_opening_value');
+  const ca = document.getElementById('bank_add_set_available');
+  const cm = document.getElementById('bank_add_set_min_buffer');
+  if (n) n.value = '';
+  if (t) t.value = '';
+  if (p) p.value = '';
+  if (d) d.value = '';
+  if (v) v.value = '';
+  if (ca) ca.checked = true;
+  if (cm) cm.checked = false;
+}
+
+function setBankPanelMode(mode) {
+  const isUpdate = mode === 'update';
+  const wrapU = document.getElementById('bank_mode_update_wrap');
+  const wrapA = document.getElementById('bank_mode_add_wrap');
+  const btnU = document.getElementById('bank_mode_update_btn');
+  const btnA = document.getElementById('bank_mode_add_btn');
+  const title = document.getElementById('bank_panel_title');
+  if (wrapU) wrapU.classList.toggle('active', isUpdate);
+  if (wrapA) wrapA.classList.toggle('active', !isUpdate);
+  if (btnU) {
+    btnU.classList.toggle('active', isUpdate);
+    btnU.setAttribute('aria-selected', isUpdate ? 'true' : 'false');
+  }
+  if (btnA) {
+    btnA.classList.toggle('active', !isUpdate);
+    btnA.setAttribute('aria-selected', !isUpdate ? 'true' : 'false');
+  }
+  if (title) title.textContent = isUpdate ? 'Bank accounts' : 'Add bank account';
+  if (isUpdate) {
+    setStatus('bank_status', '', false);
+  }
+}
+
 function loadBankSection() {
   document.getElementById('bank_date').value = new Date().toISOString().slice(0, 10);
   google.script.run
     .withSuccessHandler(function(data) {
+      fillBankAccountDropdownFromData_(data);
+      if (pendingFocus && pendingFocus.tab === 'bank') focusBankTarget_(pendingFocus);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getBankAccountUiData();
+}
+
+function loadBankSectionThenSelect_(accountName) {
+  document.getElementById('bank_date').value =
+    document.getElementById('bank_date').value || new Date().toISOString().slice(0, 10);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      fillBankAccountDropdownFromData_(data);
       const sel = document.getElementById('bank_account');
-      sel.innerHTML = '<option value=""></option>';
-      (data.accounts || []).forEach(function(a) {
-        const opt = document.createElement('option');
-        opt.value = a;
-        opt.textContent = a;
-        sel.appendChild(opt);
-      });
+      if (sel && accountName) {
+        sel.value = accountName;
+        loadBankData();
+      }
       if (pendingFocus && pendingFocus.tab === 'bank') focusBankTarget_(pendingFocus);
     })
     .withFailureHandler(function(err) {
@@ -115,6 +195,69 @@ function loadBankData() {
     .getBankAccountValueForDate(account, date);
 }
 
+function createBankAccount() {
+  const name = document.getElementById('bank_add_name').value.trim();
+  const typeStr = document.getElementById('bank_add_type').value.trim();
+  const policyStr = document.getElementById('bank_add_policy').value.trim();
+  const openDate = document.getElementById('bank_add_opening_date').value.trim();
+  const openRaw = document.getElementById('bank_add_opening_value').value;
+  const hasDate = !!openDate;
+  const hasAmt = String(openRaw || '').trim() !== '';
+
+  if (!name) {
+    setStatus('bank_status', 'Error: Account name is required.', true);
+    return;
+  }
+  if (!typeStr) {
+    setStatus('bank_status', 'Error: Type is required.', true);
+    return;
+  }
+  if (!policyStr) {
+    setStatus('bank_status', 'Error: Use policy is required.', true);
+    return;
+  }
+  if (hasDate !== hasAmt) {
+    setStatus('bank_status', 'Error: For an opening balance, enter both date and amount (or leave both blank).', true);
+    return;
+  }
+
+  const openNum = hasAmt ? toNumber(openRaw) : NaN;
+  if (hasAmt && isNaN(openNum)) {
+    setStatus('bank_status', 'Error: Opening balance must be a valid number.', true);
+    return;
+  }
+
+  const payload = {
+    accountName: name,
+    type: typeStr,
+    usePolicy: policyStr,
+    setAvailableFromOpening: document.getElementById('bank_add_set_available').checked,
+    setMinBufferFromOpening: document.getElementById('bank_add_set_min_buffer').checked
+  };
+  if (hasDate && hasAmt) {
+    payload.openingBalanceDate = openDate;
+    payload.openingBalance = openNum;
+  }
+
+  setStatusLoading('bank_status');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      const dateEl = document.getElementById('bank_add_opening_date');
+      const useOpenDate = dateEl && dateEl.value ? dateEl.value : new Date().toISOString().slice(0, 10);
+      setStatus('bank_status', res.message || 'Created.', false);
+      const createdName = res.accountName || name;
+      resetBankAddForm_();
+      setBankPanelMode('update');
+      document.getElementById('bank_date').value = useOpenDate;
+      loadBankSectionThenSelect_(createdName);
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .addBankAccountFromDashboard(payload);
+}
+
 function saveBank() {
   const rawValue = document.getElementById('bank_value').value;
   const numericValue = toNumber(rawValue);
@@ -123,6 +266,8 @@ function saveBank() {
     setStatus('bank_status', 'Error: Value must be a valid number.', true);
     return;
   }
+
+  setStatusLoading('bank_status');
 
   google.script.run
     .withSuccessHandler(function(res) {

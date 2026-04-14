@@ -89,6 +89,36 @@
       border: 1px solid #cbd5e1;
     }
 
+    .segmented {
+      display: flex;
+      margin: 10px 0 12px 0;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .segment-btn {
+      flex: 1;
+      margin-top: 0;
+      border: none;
+      border-radius: 0;
+      background: #f1f5f9;
+      color: #334155;
+      font-weight: bold;
+    }
+    .segment-btn + .segment-btn {
+      border-left: 1px solid #cbd5e1;
+    }
+    .segment-btn.active {
+      background: #1f4e78;
+      color: #fff;
+    }
+    .bank-mode-wrap {
+      display: none;
+    }
+    .bank-mode-wrap.active {
+      display: block;
+    }
+
     .status {
       margin-top: 10px;
       font-size: 12px;
@@ -235,42 +265,81 @@
 </div>
 
 <div id="bank" class="panel">
-  <h3>Update Bank Account</h3>
+  <h3 id="bank_panel_title">Bank accounts</h3>
 
-  <label>Account</label>
-  <select id="bank_account" onchange="loadBankData()"></select>
-
-  <label>Date</label>
-  <input type="date" id="bank_date" onchange="loadBankData()">
-
-  <div class="info">
-    <div><strong>Selected month:</strong> <span id="bank_selectedMonth" class="muted">—</span></div>
-    <div><strong>Stored value for selected month:</strong> <span id="bank_selectedMonthValue" class="muted">—</span></div>
-    <div><strong>Current balance:</strong> <span id="bank_currentBalance" class="muted">—</span></div>
-    <div><strong>Available now:</strong> <span id="bank_availableNow" class="muted">—</span></div>
-    <div><strong>Min buffer:</strong> <span id="bank_minBuffer" class="muted">—</span></div>
-    <div><strong>Type:</strong> <span id="bank_type" class="muted">—</span></div>
-    <div><strong>Use policy:</strong> <span id="bank_usePolicy" class="muted">—</span></div>
-    <div class="house-value-delta-sep" aria-hidden="true"></div>
-    <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="bank_deltaPriorMonth" class="muted">—</span></div>
+  <div class="segmented" role="tablist" aria-label="Bank account mode">
+    <button type="button" id="bank_mode_update_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setBankPanelMode('update')">Update</button>
+    <button type="button" id="bank_mode_add_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setBankPanelMode('add')">Add new</button>
   </div>
 
-  <label>Value</label>
-  <input type="text" id="bank_value" inputmode="decimal" onfocus="currencyFocus('bank_value')" onblur="currencyBlur('bank_value')" oninput="evaluateBankBufferWarning()">
+  <div id="bank_mode_update_wrap" class="bank-mode-wrap active">
+    <label>Account</label>
+    <select id="bank_account" onchange="loadBankData()"></select>
 
-  <div id="bank_bufferWarning" class="warning-box"></div>
+    <label>Date</label>
+    <input type="date" id="bank_date" onchange="loadBankData()">
 
-  <div class="check-row">
-    <input type="checkbox" id="bank_updateAvailableNow" checked>
-    <label for="bank_updateAvailableNow" style="margin:0;font-weight:normal;">Also update Available Now</label>
+    <div class="info">
+      <div><strong>Selected month:</strong> <span id="bank_selectedMonth" class="muted">—</span></div>
+      <div><strong>Stored value for selected month:</strong> <span id="bank_selectedMonthValue" class="muted">—</span></div>
+      <div><strong>Current balance:</strong> <span id="bank_currentBalance" class="muted">—</span></div>
+      <div><strong>Available now:</strong> <span id="bank_availableNow" class="muted">—</span></div>
+      <div><strong>Min buffer:</strong> <span id="bank_minBuffer" class="muted">—</span></div>
+      <div><strong>Type:</strong> <span id="bank_type" class="muted">—</span></div>
+      <div><strong>Use policy:</strong> <span id="bank_usePolicy" class="muted">—</span></div>
+      <div class="house-value-delta-sep" aria-hidden="true"></div>
+      <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="bank_deltaPriorMonth" class="muted">—</span></div>
+    </div>
+
+    <label>Value</label>
+    <input type="text" id="bank_value" inputmode="decimal" onfocus="currencyFocus('bank_value')" onblur="currencyBlur('bank_value')" oninput="evaluateBankBufferWarning()">
+
+    <div id="bank_bufferWarning" class="warning-box"></div>
+
+    <div class="check-row">
+      <input type="checkbox" id="bank_updateAvailableNow" checked>
+      <label for="bank_updateAvailableNow" style="margin:0;font-weight:normal;">Also update Available Now</label>
+    </div>
+
+    <div class="check-row">
+      <input type="checkbox" id="bank_updateMinBuffer" onchange="evaluateBankBufferWarning()">
+      <label for="bank_updateMinBuffer" style="margin:0;font-weight:normal;">Also update Min Buffer</label>
+    </div>
+
+    <button onclick="saveBank()">Save Bank Account</button>
   </div>
 
-  <div class="check-row">
-    <input type="checkbox" id="bank_updateMinBuffer" onchange="evaluateBankBufferWarning()">
-    <label for="bank_updateMinBuffer" style="margin:0;font-weight:normal;">Also update Min Buffer</label>
+  <div id="bank_mode_add_wrap" class="bank-mode-wrap">
+    <label>Account name</label>
+    <input type="text" id="bank_add_name" maxlength="120" autocomplete="off">
+
+    <label>Type</label>
+    <input type="text" id="bank_add_type" maxlength="80" list="bank_add_type_list" autocomplete="off">
+    <datalist id="bank_add_type_list"></datalist>
+
+    <label>Use policy</label>
+    <input type="text" id="bank_add_policy" maxlength="120" list="bank_add_policy_list" autocomplete="off">
+    <datalist id="bank_add_policy_list"></datalist>
+
+    <label>Opening balance date (optional)</label>
+    <input type="date" id="bank_add_opening_date">
+
+    <label>Opening balance amount (optional)</label>
+    <input type="text" id="bank_add_opening_value" inputmode="decimal" onfocus="currencyFocus('bank_add_opening_value')" onblur="currencyBlur('bank_add_opening_value')">
+
+    <div class="check-row">
+      <input type="checkbox" id="bank_add_set_available" checked>
+      <label for="bank_add_set_available" style="margin:0;font-weight:normal;">Also set Available Now to opening amount</label>
+    </div>
+
+    <div class="check-row">
+      <input type="checkbox" id="bank_add_set_min_buffer">
+      <label for="bank_add_set_min_buffer" style="margin:0;font-weight:normal;">Also set Min Buffer to opening amount</label>
+    </div>
+
+    <button onclick="createBankAccount()">Create account</button>
   </div>
 
-  <button onclick="saveBank()">Save Bank Account</button>
   <div id="bank_status" class="status"></div>
 </div>
 
@@ -542,19 +611,98 @@ function saveHouse() {
 
 /* Bank */
 
+function fillBankAccountDropdownFromData_(data) {
+  const sel = document.getElementById('bank_account');
+  if (!sel) return;
+  sel.innerHTML = '<option value=""></option>';
+  (data.accounts || []).forEach(function(a) {
+    const opt = document.createElement('option');
+    opt.value = a;
+    opt.textContent = a;
+    sel.appendChild(opt);
+  });
+  populateBankAddDatalists_(data);
+}
+
+function populateBankAddDatalists_(data) {
+  function fillList(listId, options) {
+    const dl = document.getElementById(listId);
+    if (!dl) return;
+    dl.innerHTML = '';
+    (options || []).forEach(function(t) {
+      const o = document.createElement('option');
+      o.value = t;
+      dl.appendChild(o);
+    });
+  }
+  fillList('bank_add_type_list', data.typeOptions);
+  fillList('bank_add_policy_list', data.policyOptions);
+}
+
+function resetBankAddForm_() {
+  const n = document.getElementById('bank_add_name');
+  const t = document.getElementById('bank_add_type');
+  const p = document.getElementById('bank_add_policy');
+  const d = document.getElementById('bank_add_opening_date');
+  const v = document.getElementById('bank_add_opening_value');
+  const ca = document.getElementById('bank_add_set_available');
+  const cm = document.getElementById('bank_add_set_min_buffer');
+  if (n) n.value = '';
+  if (t) t.value = '';
+  if (p) p.value = '';
+  if (d) d.value = '';
+  if (v) v.value = '';
+  if (ca) ca.checked = true;
+  if (cm) cm.checked = false;
+}
+
+function setBankPanelMode(mode) {
+  const isUpdate = mode === 'update';
+  const wrapU = document.getElementById('bank_mode_update_wrap');
+  const wrapA = document.getElementById('bank_mode_add_wrap');
+  const btnU = document.getElementById('bank_mode_update_btn');
+  const btnA = document.getElementById('bank_mode_add_btn');
+  const title = document.getElementById('bank_panel_title');
+  if (wrapU) wrapU.classList.toggle('active', isUpdate);
+  if (wrapA) wrapA.classList.toggle('active', !isUpdate);
+  if (btnU) {
+    btnU.classList.toggle('active', isUpdate);
+    btnU.setAttribute('aria-selected', isUpdate ? 'true' : 'false');
+  }
+  if (btnA) {
+    btnA.classList.toggle('active', !isUpdate);
+    btnA.setAttribute('aria-selected', !isUpdate ? 'true' : 'false');
+  }
+  if (title) title.textContent = isUpdate ? 'Bank accounts' : 'Add bank account';
+  if (isUpdate) {
+    setStatus('bank_status', '', false);
+  }
+}
+
 function loadBankSection() {
   document.getElementById('bank_date').value = new Date().toISOString().slice(0, 10);
 
   google.script.run
     .withSuccessHandler(function(data) {
+      fillBankAccountDropdownFromData_(data);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getBankAccountUiData();
+}
+
+function loadBankSectionThenSelect_(accountName) {
+  document.getElementById('bank_date').value =
+    document.getElementById('bank_date').value || new Date().toISOString().slice(0, 10);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      fillBankAccountDropdownFromData_(data);
       const sel = document.getElementById('bank_account');
-      sel.innerHTML = '<option value=""></option>';
-      (data.accounts || []).forEach(function(a) {
-        const opt = document.createElement('option');
-        opt.value = a;
-        opt.textContent = a;
-        sel.appendChild(opt);
-      });
+      if (sel && accountName) {
+        sel.value = accountName;
+        loadBankData();
+      }
     })
     .withFailureHandler(function(err) {
       setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
@@ -655,6 +803,69 @@ function loadBankData() {
     .getBankAccountValueForDate(account, date);
 }
 
+function createBankAccount() {
+  const name = document.getElementById('bank_add_name').value.trim();
+  const typeStr = document.getElementById('bank_add_type').value.trim();
+  const policyStr = document.getElementById('bank_add_policy').value.trim();
+  const openDate = document.getElementById('bank_add_opening_date').value.trim();
+  const openRaw = document.getElementById('bank_add_opening_value').value;
+  const hasDate = !!openDate;
+  const hasAmt = String(openRaw || '').trim() !== '';
+
+  if (!name) {
+    setStatus('bank_status', 'Error: Account name is required.', true);
+    return;
+  }
+  if (!typeStr) {
+    setStatus('bank_status', 'Error: Type is required.', true);
+    return;
+  }
+  if (!policyStr) {
+    setStatus('bank_status', 'Error: Use policy is required.', true);
+    return;
+  }
+  if (hasDate !== hasAmt) {
+    setStatus('bank_status', 'Error: For an opening balance, enter both date and amount (or leave both blank).', true);
+    return;
+  }
+
+  const openNum = hasAmt ? toNumber(openRaw) : NaN;
+  if (hasAmt && isNaN(openNum)) {
+    setStatus('bank_status', 'Error: Opening balance must be a valid number.', true);
+    return;
+  }
+
+  const payload = {
+    accountName: name,
+    type: typeStr,
+    usePolicy: policyStr,
+    setAvailableFromOpening: document.getElementById('bank_add_set_available').checked,
+    setMinBufferFromOpening: document.getElementById('bank_add_set_min_buffer').checked
+  };
+  if (hasDate && hasAmt) {
+    payload.openingBalanceDate = openDate;
+    payload.openingBalance = openNum;
+  }
+
+  setStatusLoading('bank_status');
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      const dateEl = document.getElementById('bank_add_opening_date');
+      const useOpenDate = dateEl && dateEl.value ? dateEl.value : new Date().toISOString().slice(0, 10);
+      setStatus('bank_status', res.message || 'Created.', false);
+      const createdName = res.accountName || name;
+      resetBankAddForm_();
+      setBankPanelMode('update');
+      document.getElementById('bank_date').value = useOpenDate;
+      loadBankSectionThenSelect_(createdName);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .addBankAccountFromDashboard(payload);
+}
+
 function saveBank() {
   const rawValue = document.getElementById('bank_value').value;
   const numericValue = toNumber(rawValue);
@@ -672,7 +883,7 @@ function saveBank() {
     updateMinBuffer: document.getElementById('bank_updateMinBuffer').checked
   };
 
-  setStatus('bank_status', 'Saving...', false);
+  setStatusLoading('bank_status');
 
   google.script.run
     .withSuccessHandler(function(res) {

@@ -538,6 +538,10 @@ function focusBankTarget_(obj) {
   const select = document.getElementById('bank_account');
   if (!select || !obj.accountName) return;
 
+  if (typeof setBankPanelMode === 'function') {
+    setBankPanelMode('update');
+  }
+
   setTimeout(function() {
     const opt = Array.from(select.options).find(function(x) {
       return x.value === obj.accountName;
