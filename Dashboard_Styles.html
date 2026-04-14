@@ -312,6 +312,59 @@
     margin-bottom: 0.4rem;
   }
 
+  .debt-payoff-chart-panel {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #fafbfc;
+  }
+  .debt-payoff-chart-title {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: #1f2937;
+  }
+  .debt-payoff-chart-body--scroll {
+    max-height: 420px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .debt-payoff-bar-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(80px, 2fr) minmax(5.5rem, auto);
+    gap: 6px 10px;
+    align-items: center;
+    margin-bottom: 7px;
+    font-size: 12px;
+  }
+  .debt-payoff-bar-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #334155;
+  }
+  .debt-payoff-bar-track {
+    height: 11px;
+    background: #e2e8f0;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .debt-payoff-bar-fill {
+    height: 100%;
+    background: #1f4e78;
+    border-radius: 6px;
+    min-width: 0;
+    transition: width 0.2s ease;
+  }
+  .debt-payoff-bar-value {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: #0f172a;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
   .tab-btn {
     width: 100%;
     padding: 12px;

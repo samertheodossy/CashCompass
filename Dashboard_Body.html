@@ -996,8 +996,14 @@
           <option value="minDesc">Min payment — high to low</option>
           <option value="minAsc">Min payment — low to high</option>
         </select>
+        <label for="debt_payoff_chart_metric" style="margin:0 0 0 8px;font-weight:600;">Chart</label>
+        <select id="debt_payoff_chart_metric" onchange="onDebtPayoffChartMetricChange()" style="min-width:200px;padding:6px 8px;border-radius:8px;border:1px solid #cbd5e1;">
+          <option value="payoff" selected>Est. payoff (months)</option>
+          <option value="balance">Balance</option>
+        </select>
       </div>
       <div id="debt_payoff_read_filter_note" class="muted" style="margin-bottom:8px;"></div>
+      <div id="debt_payoff_read_chart_wrap" class="debt-payoff-chart-panel" aria-live="polite"></div>
       <div id="debt_payoff_read_table_wrap" class="activity-table-wrap"></div>
       <div class="panel-head" style="margin-top:18px;">
         <h3 style="margin:0;">Recommendations</h3>

@@ -17,6 +17,8 @@ function loadDebtPayoffReadSection() {
   if (metaEl) metaEl.textContent = '';
   var filterNote = document.getElementById('debt_payoff_read_filter_note');
   if (filterNote) filterNote.textContent = '';
+  var chartWrap = document.getElementById('debt_payoff_read_chart_wrap');
+  if (chartWrap) chartWrap.innerHTML = '';
   if (wrap) {
     wrap.innerHTML =
       typeof loadingIndicatorHtml === 'function'
@@ -39,6 +41,11 @@ function loadDebtPayoffReadSection() {
 }
 
 function onDebtPayoffSortChange() {
+  if (!__debtPayoffReadCache || !__debtPayoffReadCache.data) return;
+  renderDebtPayoffTable_(__debtPayoffReadCache.data, __debtPayoffReadCache.yLabel);
+}
+
+function onDebtPayoffChartMetricChange() {
   if (!__debtPayoffReadCache || !__debtPayoffReadCache.data) return;
   renderDebtPayoffTable_(__debtPayoffReadCache.data, __debtPayoffReadCache.yLabel);
 }
@@ -131,6 +138,101 @@ function debtPayoffRowIsVisible_(d) {
   return bal > 0.005;
 }
 
+function truncateDebtPayoffLabel_(name, maxLen) {
+  var s = String(name || '');
+  if (s.length <= maxLen) return s;
+  return s.slice(0, Math.max(0, maxLen - 1)) + '…';
+}
+
+function getDebtPayoffChartMetric_() {
+  var sel = document.getElementById('debt_payoff_chart_metric');
+  return sel && sel.value === 'balance' ? 'balance' : 'payoff';
+}
+
+function renderDebtPayoffChart_(rows) {
+  var wrap = document.getElementById('debt_payoff_read_chart_wrap');
+  if (!wrap) return;
+  if (!rows || rows.length === 0) {
+    wrap.innerHTML = '';
+    return;
+  }
+
+  var metric = getDebtPayoffChartMetric_();
+  var maxVal = 0;
+  rows.forEach(function(d) {
+    if (metric === 'payoff') {
+      var n = d.estimatedPayoffMonths;
+      if (typeof n === 'number' && isFinite(n) && n > 0) {
+        maxVal = Math.max(maxVal, n);
+      }
+    } else {
+      var b = Number(d.balance) || 0;
+      if (b > 0) maxVal = Math.max(maxVal, b);
+    }
+  });
+
+  if (maxVal <= 0) {
+    wrap.innerHTML =
+      '<p class="muted" style="margin:0;">Nothing numeric to chart for this view (for example, no payoff months yet). Try <strong>Balance</strong> in Chart, or refresh after sheet updates.</p>';
+    return;
+  }
+
+  var title =
+    metric === 'payoff'
+      ? 'Est. payoff at minimum payment (same order as the table)'
+      : 'Balance (same order as the table)';
+  var scrollClass = rows.length > 16 ? ' debt-payoff-chart-body--scroll' : '';
+
+  var parts = [];
+  parts.push(
+    '<div class="debt-payoff-chart" role="region" aria-label="' +
+      escapeHtml(title) +
+      '">'
+  );
+  parts.push('<div class="debt-payoff-chart-title">' + escapeHtml(title) + '</div>');
+  parts.push('<div class="debt-payoff-chart-body' + scrollClass + '">');
+
+  rows.forEach(function(d) {
+    var fullName = String(d.name || '');
+    var label = escapeHtml(truncateDebtPayoffLabel_(fullName, 36));
+    var pct = 0;
+    var valText = '—';
+    if (metric === 'payoff') {
+      var mo = d.estimatedPayoffMonths;
+      if (typeof mo === 'number' && isFinite(mo) && mo > 0) {
+        pct = Math.min(100, (mo / maxVal) * 100);
+        valText = '~' + mo + ' mo';
+      }
+    } else {
+      var bal = Number(d.balance) || 0;
+      if (bal > 0) {
+        pct = Math.min(100, (bal / maxVal) * 100);
+        valText = fmtCurrency(bal);
+      }
+    }
+    parts.push('<div class="debt-payoff-bar-row">');
+    parts.push(
+      '<span class="debt-payoff-bar-label" title="' +
+        escapeHtml(fullName) +
+        '">' +
+        label +
+        '</span>'
+    );
+    parts.push('<div class="debt-payoff-bar-track">');
+    parts.push(
+      '<div class="debt-payoff-bar-fill" style="width:' + pct.toFixed(2) + '%"></div>'
+    );
+    parts.push('</div>');
+    parts.push(
+      '<span class="debt-payoff-bar-value">' + escapeHtml(valText) + '</span>'
+    );
+    parts.push('</div>');
+  });
+
+  parts.push('</div></div>');
+  wrap.innerHTML = parts.join('');
+}
+
 function renderDebtPayoffTable_(data, yLabel) {
   var wrap = document.getElementById('debt_payoff_read_table_wrap');
   var noteEl = document.getElementById('debt_payoff_read_filter_note');
@@ -166,10 +268,14 @@ function renderDebtPayoffTable_(data, yLabel) {
     '</tr></thead>';
 
   if (rows.length === 0) {
+    var chartEmpty = document.getElementById('debt_payoff_read_chart_wrap');
+    if (chartEmpty) chartEmpty.innerHTML = '';
     wrap.innerHTML =
       '<p class="muted" style="margin:0;">No accounts with a balance &gt; $0 to show. Update INPUT - Debts or refresh after you pay something down.</p>';
     return;
   }
+
+  renderDebtPayoffChart_(rows);
 
   var body = '<tbody>';
   rows.forEach(function(d) {
