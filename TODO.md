@@ -86,110 +86,49 @@ Small HTML/docs/a11y tasks; check off when shipped. *(Unnumbered — pick in any
 
 ### Next big item — Planning: Debt payoff projection (“path out of debt”)
 
-**Intent:** One **Planning** workspace where the user can see a **month-by-month (or month-aggregated) projection** of balances going to zero, **assuming** current **INPUT - Debts** balances, APRs, minimums, and a clear rule for **how much per month** goes to debt (a fixed “extra to debt” knob plus strategy). **Read-only v1** — no sheet writes; scenario math only. Complements **Run Planner** (point-in-time liquidity + pay-now / extra target) with a **trajectory** view.
+**Intent:** One **Planning** tab with **real projections** grounded in **sheet data**: **INPUT - Debts** (balances, APRs, minimums, active flags) plus **INPUT - Cash Flow** across **2025 / 2026** (and later years) to infer **typical payment pace** toward debt-linked payees. **Simulation** on top: **“If I pay $X more per month to account Y, how does the story change?”** (timeline, interest, ordering). **Read-only** for early phases — no writes to INPUT from this feature until explicitly scoped. Complements **Run Planner** (now-centric) with a **trajectory** view.
 
-#### How valuable is it?
+**Why Cash Flow over OUT - History for pace:** **OUT - History** is sparse (per planner run). **INPUT - Cash Flow** month columns hold **realized** payments — better for **median / typical** paydown and variability. **OUT - History** stays an **optional** default or sanity check, not the primary source.
 
-**High for the right user story:** a single place that answers “If I keep paying roughly like this, **when** am I out of debt and **how much interest** do I eat?” is motivating and easier to reason about than scattered **INPUT - Debts** rows plus a one-off **Run Planner** snapshot. It complements what you already have: the planner run is **now-centric** (liquidity, pay-now, one extra target); a payoff projection is **path-centric** (months/years, ordering, totals).
-
-**Caveats (honesty sells the feature):** revolving cards need clear assumptions (e.g. **no new charges**, fixed APR, minimum rules). Variable spending means the model is **scenario math**, not a promise—label it that way and it stays trustworthy.
-
-#### How doable is it?
-
-**Doable in phases.** You already have normalized debts, minimums, APRs, balances, and planner-side concepts (**`planner_core.js`**, **`runDebtPlanner`** in **`code.js`**, **`OUT - History`**). A first version can be **read-only simulation** (no sheet writes): inputs from **INPUT - Debts** (+ optional “monthly amount available for debt” from latest snapshot or a user-entered number), output as a **table + payoff month per account**.
-
-**Harder parts (defer or simplify v1):** exact issuer minimum formulas, promo APR windows, cards with mixed balances, and syncing “I already paid this month” with Cash Flow the same way the email does—v1 can ignore that nuance or use a single **“effective monthly debt payment”** knob.
+**Caveats:** Revolving assumptions (no new charges, simplified interest/minimums), **payee → debt** mapping via alias rules, **scenario math** — document in Help.
 
 #### Where it fits in the planner (UI)
 
-**Best fit:** **Planning → new tab** alongside **Debts**, **Retirement**, **Purchase Sim** (in **`Dashboard_Body.html`** under **`#page_planning`**, plus a new **`Dashboard_Script_PlanningDebtPayoff.html`** or similar include in **`PlannerDashboardWeb.html`**).
+**Planning → fourth tab** (“Payoff path” / “Debt projection”) — **`Dashboard_Body.html`** `#page_planning`, **`Dashboard_Script_PlanningDebtPayoff.html`**, **`PlannerDashboardWeb.html`** include. Optional: Overview link to this tab.
 
-| Option | Pros | Cons |
-|--------|------|------|
-| **Fourth Planning tab** (“Payoff path” / “Debt projection”) | Clear mental model; matches Retirement / Purchase “what if” | One more tab to maintain |
-| **Expand Debts panel** | Same topic | Crowded; Debts today is **field edit** UX, not analytics |
-| **Overview card → drill-in** | Discovery | Easy to miss; projection deserves space |
+#### Data inputs (by role)
 
-**Recommendation:** fourth tab on **Planning**, with a one-line link from **Overview** (e.g. “Open payoff projection”) optional later.
+| Role | Source | Use |
+|------|--------|-----|
+| **Levels / rates** | **INPUT - Debts** + **`normalizeDebts_`** / alias map | Starting balances, APR, minimums, allocation |
+| **Historical payment pace** | **INPUT - Cash Flow** (per-year sheets, e.g. 2025–2026) | Aggregate per month for lines mapped to debts; derive **typical monthly $** + date range for provenance |
+| **Optional** | **OUT - History** | Fallback when CF coverage is thin |
 
-**Concrete wiring (same as earlier spec):**
+#### Backend shape (stable core)
 
-- **Planning** page (`#page_planning` in **`Dashboard_Body.html`**) — fourth tab, e.g. **Payoff path** or **Debt projection**.
-- **New include:** **`Dashboard_Script_PlanningDebtPayoff.html`** in **`PlannerDashboardWeb.html`** (same pattern as **`Dashboard_Script_PlanningRetirement.html`** / Purchase Sim).
+1. **`simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToDebt, strategy, options)`** — month loop; minimums + extra (**avalanche** / **snowball** / **minimum-only**); accrue interest (document simplification); cap months (e.g. 600) and payload size.
+2. **`getDebtPayoffProjection(payload)`** — load debts, run simulator, return JSON `{ summary, byMonth[], perDebtPayoffMonth, … }`; payload selects **manual** vs **inferred** monthly total when Phase 2 exists.
+3. **Phase 2+** — **`inferDebtPaymentPaceFromCashFlow_(ss, years, aliasMap)`** (name TBD): roll Cash Flow rows into mapped buckets → **median** (or trimmed) monthly payment + metadata for UI (“Based on CF **…**”).
 
-#### Suggested implementation plan (slices)
+#### Phased delivery — **start Phase 1** to see shape end-to-end
 
-**Product spec (short)**
+| Phase | Scope | Purpose |
+|-------|--------|---------|
+| **1 — Core sim + shell** | Fourth tab + **`getDebtPayoffProjection`** + **manual** monthly $ to debt + strategy + **Run projection** → table + summary (payoff month per account, approximate interest, debt-free month). **`debt_payoff_projection.js`** (split with **`planner_core.js`** as needed). Help stub. | **Visible vertical slice** without CF ingestion. |
+| **2 — Real sheet defaults** | Infer pace from **2025/2026** (configurable) **INPUT - Cash Flow**; default monthly $ with **override**; **provenance** + low-coverage warning. | **Projections tied to actual payments.** |
+| **3 — Outlined plan** | Milestone narrative from the same schedule object the table uses (single source of truth). | Readable “plan” beside numbers. |
+| **4 — What-if** | +$X/mo to account **Y** vs baseline; **delta** (months, interest, outline). | Show how paying more changes the story. |
+| **5 — Polish** | Chart, CSV, optional OUT - History line for defaults, edge rules (promo APR, HELOC) if needed. | Depth. |
 
-- **Assumptions:** no new charges on cards; APR from sheet; pay minimums unless user sets “extra to debt per month”; optional strategy: avalanche vs snowball vs minimum-only.
-- **Output:** payoff date per debt, total interest (rough), month when all consumer debt hits zero.
+**Order:** Engine + UI **first** (Phase **1**); then **real data** ( **2** ), **outline** ( **3** ), **simulation** ( **4** ).
 
-**Backend (Apps Script)**
+**Frontend:** Reuse **`fmtCurrency`**, **`setStatus`**, Planning patterns; extend controls after Phase 1.
 
-- Pure function e.g. **`simulateDebtPayoffSchedule_(debts, monthlyTotalToDebt, strategy, opts)`** in a small new file or **`planner_core.js`**.
-- New **`google.script.run`** entry: **`getDebtPayoffProjection(payload)`** reading the spreadsheet the same way **`runDebtPlanner`** / dashboard debt loaders do — **no writes in v1**.
+**Testing / docs:** **`TESTING_PLAN.md`** (avalanche/snowball, inactive, zero APR, **sparse CF**); **`PROJECT_CONTEXT.md`** when Phase 1 ships; **`SESSION_NOTES.md`** per phase.
 
-**Frontend**
+**Explicit non-goals (early phases):** Auto-posting results to Cash Flow / **INPUT - Debts**; full issuer minimum engines.
 
-- New script include + minimal HTML block: inputs (slider or number for extra payment, strategy dropdown), **Run projection** button, results table + simple text summary.
-- Reuse currency / format helpers from existing dashboard scripts.
-
-**Help**
-
-- One **Planning** subsection: assumptions, limitations; link from **Debt Planner email** in Help if useful.
-
-**Stretch (later)**
-
-- Chart (months vs balance).
-- Tie “monthly surplus” default to last **`OUT - History`** or last planner run fields.
-- Export CSV.
-
-**Data sources (reuse existing loaders)**
-
-- **`INPUT - Debts`** through the same normalization path as **`runDebtPlanner`** / **`normalizeDebts_`** (`planner_core.js`, `code.js`): account name, type, balance, minimum payment, APR, due day, active flag, alias map where applicable.
-- **Default “monthly $ to debt”** for v1: user-entered number; **stretch** suggest a default from **last `OUT - History`** / last planner summary — do **not** block v1 on perfect Cash Flow integration.
-
-**Backend shape (Apps Script)**
-
-1. **Pure simulation** — e.g. `simulateDebtPayoffSchedule_(normalizedDebts, monthlyTotalToDebt, strategy, options)`  
-   - **Strategies (v1):** **minimum-only**, **avalanche** (extra to highest APR), **snowball** (extra to smallest balance).  
-   - **Month loop:** apply minimums; allocate `monthlyTotalToDebt - sum(minimums)` per strategy; accrue interest monthly (document formula in code + Help — e.g. APR/12 on average balance or standard revolving simplification).  
-   - **Safety:** cap max simulated months (e.g. 600) and cap rows returned to the client to avoid timeouts.
-2. **Server entry** — e.g. `getDebtPayoffProjection(payload)` in **`debt_payoff_projection.js`** (or extend an existing debt module): read spreadsheet, normalize debts, run simulator, return JSON `{ summary, byMonth[], perDebtPayoffMonth }`.  
-3. **No writes in v1** — no mutations to **INPUT - Debts** or Cash Flow from this tab.
-
-**Frontend shape**
-
-- Inputs: **monthly amount allocated to debt** (number), **strategy** (dropdown), **Run projection**; optional filters later (active only, exclude **Taxes** type — align with **`runDebtPlanner`** / email if product wants parity).
-- Output: table (month index, aggregate balance, interest paid to date, optional per-account columns or drill-down); short summary: **first debt-free month**, **approximate total interest**.
-- Reuse currency helpers and status-line patterns from other Planning scripts.
-
-**Phased delivery (suggested)**
-
-| Phase | Scope |
-|-------|--------|
-| **1 — MVP** | Fourth Planning tab + UI shell + `getDebtPayoffProjection` + strategies (minimum-only, avalanche, snowball) + fixed monthly total + table + summary; **Help** subsection under **Planning** (assumptions + limitations). |
-| **2** | Pre-fill monthly payment from **last planner run** / **OUT - History** with user override + stale-data note. |
-| **3** | Simple chart (balance vs month); CSV export. |
-| **4** | Deeper rules only if needed: promo APR windows, tighter minimum math, HELOC draw behavior. |
-
-**Testing / docs when shipped**
-
-- **`TESTING_PLAN.md`** — cases: two-card avalanche ordering, snowball ordering, inactive debt excluded, zero-APR edge.  
-- **`PROJECT_CONTEXT.md`** — one bullet under Planning.  
-- **`SESSION_NOTES.md`** — ship note.
-
-**Explicit non-goals (v1)**
-
-- Auto-posting simulator results to Cash Flow or **INPUT - Debts**.  
-- Full issuer-specific minimum-payment engines without a dedicated rules project.
-
-**Related code to read before building**
-
-- **`code.js`** — `runDebtPlanner`, `buildUpcomingPayments_`, recommendation / extra-payment paths.  
-- **`planner_core.js`** — debt normalization, interest / payoff helpers.  
-- **`Dashboard_Script_PlanningDebts.html`** — `google.script.run` + status + DOM update pattern.  
-- **`PlannerDashboardWeb.html`** — `includeHtml_` list for adding the new script fragment.
+**Related code:** **`code.js`** (`runDebtPlanner`, `buildUpcomingPayments_`); **`planner_core.js`** (`normalizeDebts_`); **`readCashFlowSheetAsObjects_`** / year tabs; **`Dashboard_Script_PlanningDebts.html`**; **`PlannerDashboardWeb.html`** includes.
 
 ---
 
