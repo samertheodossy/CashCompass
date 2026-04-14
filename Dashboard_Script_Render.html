@@ -85,7 +85,7 @@ function showTab(name) {
     if (name === 'propertyPerformance' && typeof loadPropertyPerformanceSection === 'function') {
       loadPropertyPerformanceSection();
     }
-  } else if (name === 'debts' || name === 'retirement' || name === 'purchase') {
+  } else if (name === 'debts' || name === 'retirement' || name === 'purchase' || name === 'debtPayoff') {
     showPage('planning');
   }
 
@@ -93,6 +93,10 @@ function showTab(name) {
 
   if (name === 'donations' && typeof loadDonationsSection === 'function') {
     loadDonationsSection();
+  }
+
+  if (name === 'debtPayoff' && typeof loadDebtPayoffReadSection === 'function') {
+    loadDebtPayoffReadSection();
   }
 }
 

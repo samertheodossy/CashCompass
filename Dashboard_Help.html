@@ -22,6 +22,7 @@
         <a href="#help-properties">Properties</a>
         <a href="#help-property-performance">Property performance</a>
         <a href="#help-planning">Planning</a>
+        <a href="#help-payoff-path">Payoff Path</a>
         <a href="#help-debt-email">Debt Planner email</a>
         <a href="#help-sheets">Sheet names</a>
       </nav>
@@ -138,6 +139,13 @@
         <h3>Planning</h3>
         <p><strong>Debts</strong> — Update <strong>INPUT - Debts</strong>; planner output uses balances and minimums.</p>
         <p><strong>Retirement</strong> and <strong>Purchase Sim</strong> — Use the latest snapshot and your inputs; details depend on your sheet configuration.</p>
+      </section>
+
+      <section id="help-payoff-path" class="help-section">
+        <h3>Payoff Path</h3>
+        <p><strong>Read-only from your sheets</strong> — Balances and minimums come from <strong>INPUT - Debts</strong>. <strong>CF paid</strong> sums <strong>Expense</strong> rows on <strong>INPUT - Cash Flow</strong> for the last two calendar years, where the <strong>Payee</strong> matches each debt.</p>
+        <p><strong>Estimated payoff</strong> — <strong>Loan</strong> and <strong>HELOC</strong> use a monthly amortization loop (APR and minimum from the sheet: interest on the remaining balance, then principal). Other debt types use balance ÷ minimum payment (rough). If the minimum payment is not greater than monthly interest on a loan, payoff is shown as unavailable.</p>
+        <p><strong>Summary and recommendations</strong> on the Payoff Path tab use <strong>SYS - Accounts</strong> cash and this month’s Cash Flow projection. Simulation / what-if is not part of this view yet.</p>
       </section>
 
       <section id="help-debt-email" class="help-section">

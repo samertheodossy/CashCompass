@@ -802,6 +802,7 @@
       <button class="tab-btn active" data-tab="debts" onclick="showTab('debts')">Debts</button>
       <button class="tab-btn" data-tab="retirement" onclick="showTab('retirement')">Retirement</button>
       <button class="tab-btn" data-tab="purchase" onclick="showTab('purchase')">Purchase Sim</button>
+      <button class="tab-btn" data-tab="debtPayoff" onclick="showTab('debtPayoff')">Payoff Path</button>
     </div>
 
     <div id="debts" class="panel active">
@@ -972,6 +973,36 @@
           <div style="margin-top:10px;"><strong>Warning:</strong> <span id="ps_warning" class="muted">—</span></div>
         </div>
       </div>
+    </div>
+
+    <div id="debtPayoff" class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Payoff Path</h2>
+        </div>
+        <button type="button" onclick="loadDebtPayoffReadSection()">Refresh</button>
+      </div>
+      <div id="debt_payoff_read_status" class="status"></div>
+      <div id="debt_payoff_read_summary" class="info" style="margin-bottom:14px;"></div>
+      <div id="debt_payoff_read_meta" class="muted" style="margin-bottom:10px;"></div>
+      <div class="debt-payoff-toolbar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+        <label for="debt_payoff_sort" style="margin:0;font-weight:600;">Sort by</label>
+        <select id="debt_payoff_sort" onchange="onDebtPayoffSortChange()" style="min-width:220px;padding:6px 8px;border-radius:8px;border:1px solid #cbd5e1;">
+          <option value="payoffAsc" selected>Est. payoff — fewest months first</option>
+          <option value="payoffDesc">Est. payoff — most months first</option>
+          <option value="type">Type (A–Z), then account</option>
+          <option value="balanceDesc">Balance — high to low</option>
+          <option value="balanceAsc">Balance — low to high</option>
+          <option value="minDesc">Min payment — high to low</option>
+          <option value="minAsc">Min payment — low to high</option>
+        </select>
+      </div>
+      <div id="debt_payoff_read_filter_note" class="muted" style="margin-bottom:8px;"></div>
+      <div id="debt_payoff_read_table_wrap" class="activity-table-wrap"></div>
+      <div class="panel-head" style="margin-top:18px;">
+        <h3 style="margin:0;">Recommendations</h3>
+      </div>
+      <div id="debt_payoff_read_recommendations" class="info" style="margin-top:8px;"></div>
     </div>
   </div>
 </div>

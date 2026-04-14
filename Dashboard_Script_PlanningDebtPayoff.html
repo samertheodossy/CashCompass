@@ -1,0 +1,291 @@
+/* Planning — Payoff Path (read-only sheet data first; simulation later) */
+
+/** Cached payload for re-sort without re-fetching */
+var __debtPayoffReadCache = null;
+
+function loadDebtPayoffReadSection() {
+  var statusEl = document.getElementById('debt_payoff_read_status');
+  var wrap = document.getElementById('debt_payoff_read_table_wrap');
+  if (statusEl) {
+    setStatus('debt_payoff_read_status', 'Loading…', false);
+  }
+  var sumEl = document.getElementById('debt_payoff_read_summary');
+  var recEl = document.getElementById('debt_payoff_read_recommendations');
+  if (sumEl) sumEl.innerHTML = '';
+  if (recEl) recEl.innerHTML = '';
+  var metaEl = document.getElementById('debt_payoff_read_meta');
+  if (metaEl) metaEl.textContent = '';
+  var filterNote = document.getElementById('debt_payoff_read_filter_note');
+  if (filterNote) filterNote.textContent = '';
+  if (wrap) {
+    wrap.innerHTML =
+      typeof loadingIndicatorHtml === 'function'
+        ? loadingIndicatorHtml('Loading payoff data…')
+        : '<p class="muted">Loading…</p>';
+  }
+
+  google.script.run
+    .withSuccessHandler(renderDebtPayoffReadData_)
+    .withFailureHandler(function(err) {
+      __debtPayoffReadCache = null;
+      if (wrap) wrap.innerHTML = '';
+      setStatus(
+        'debt_payoff_read_status',
+        'Error: ' + (err.message || String(err)),
+        true
+      );
+    })
+    .getDebtPayoffReadData();
+}
+
+function onDebtPayoffSortChange() {
+  if (!__debtPayoffReadCache || !__debtPayoffReadCache.data) return;
+  renderDebtPayoffTable_(__debtPayoffReadCache.data, __debtPayoffReadCache.yLabel);
+}
+
+function formatPayoffMonths_(n) {
+  if (n === 0) return '—';
+  if (n == null || n === '') return '—';
+  if (typeof n === 'number' && !isNaN(n)) return '~' + n + ' mo';
+  return '—';
+}
+
+function getDebtPayoffSortMode_() {
+  var sel = document.getElementById('debt_payoff_sort');
+  return sel && sel.value ? sel.value : 'payoffAsc';
+}
+
+function sortDebtPayoffRows_(rows, mode) {
+  var arr = rows.slice();
+
+  function payoffKey(r) {
+    var n = r.estimatedPayoffMonths;
+    if (n == null || typeof n !== 'number' || isNaN(n)) return null;
+    return n;
+  }
+
+  function nullsPayoffLast(a, b, preferHigher) {
+    var ak = payoffKey(a);
+    var bk = payoffKey(b);
+    var aNull = ak == null;
+    var bNull = bk == null;
+    if (aNull && bNull) return String(a.name || '').localeCompare(String(b.name || ''));
+    if (aNull) return 1;
+    if (bNull) return -1;
+    if (ak !== bk) return preferHigher ? bk - ak : ak - bk;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  }
+
+  switch (mode) {
+    case 'payoffDesc':
+      arr.sort(function(a, b) {
+        return nullsPayoffLast(a, b, true);
+      });
+      break;
+    case 'payoffAsc':
+      arr.sort(function(a, b) {
+        return nullsPayoffLast(a, b, false);
+      });
+      break;
+    case 'type':
+      arr.sort(function(a, b) {
+        var ta = String(a.type || '');
+        var tb = String(b.type || '');
+        if (ta !== tb) return ta.localeCompare(tb);
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      });
+      break;
+    case 'balanceDesc':
+      arr.sort(function(a, b) {
+        return (Number(b.balance) || 0) - (Number(a.balance) || 0);
+      });
+      break;
+    case 'balanceAsc':
+      arr.sort(function(a, b) {
+        return (Number(a.balance) || 0) - (Number(b.balance) || 0);
+      });
+      break;
+    case 'minDesc':
+      arr.sort(function(a, b) {
+        return (Number(b.minimumPayment) || 0) - (Number(a.minimumPayment) || 0);
+      });
+      break;
+    case 'minAsc':
+      arr.sort(function(a, b) {
+        return (Number(a.minimumPayment) || 0) - (Number(b.minimumPayment) || 0);
+      });
+      break;
+    default:
+      arr.sort(function(a, b) {
+        return nullsPayoffLast(a, b, false);
+      });
+  }
+
+  return arr;
+}
+
+/** Hide zero-balance rows — only show accounts you still owe (balance &gt; 0). CF-only history without a balance is omitted to reduce clutter. */
+function debtPayoffRowIsVisible_(d) {
+  var bal = Number(d.balance);
+  if (!isFinite(bal)) bal = 0;
+  return bal > 0.005;
+}
+
+function renderDebtPayoffTable_(data, yLabel) {
+  var wrap = document.getElementById('debt_payoff_read_table_wrap');
+  var noteEl = document.getElementById('debt_payoff_read_filter_note');
+  if (!wrap) return;
+
+  var mode = getDebtPayoffSortMode_();
+  var allRows = data.debts || [];
+  var sorted = sortDebtPayoffRows_(allRows, mode);
+  var rows = sorted.filter(debtPayoffRowIsVisible_);
+
+  if (noteEl) {
+    if (allRows.length === 0) {
+      noteEl.textContent = '';
+    } else if (rows.length < allRows.length) {
+      noteEl.textContent =
+        'Showing ' +
+        rows.length +
+        ' of ' +
+        allRows.length +
+        ' accounts ($0 balance rows are hidden, including paid-off cards with CF history). Refresh after you update the sheet.';
+    } else {
+      noteEl.textContent = '';
+    }
+  }
+
+  var thead =
+    '<thead><tr>' +
+    '<th>Account</th><th>Type</th><th>Balance</th><th>Min payment</th><th>APR</th>' +
+    '<th>CF paid (' +
+    escapeHtml(yLabel) +
+    ')</th>' +
+    '<th>Est. payoff (at min)</th>' +
+    '</tr></thead>';
+
+  if (rows.length === 0) {
+    wrap.innerHTML =
+      '<p class="muted" style="margin:0;">No accounts with a balance &gt; $0 to show. Update INPUT - Debts or refresh after you pay something down.</p>';
+    return;
+  }
+
+  var body = '<tbody>';
+  rows.forEach(function(d) {
+    var cfPaid = d.cashFlowPaid != null ? fmtCurrency(d.cashFlowPaid) : '—';
+    var est = formatPayoffMonths_(d.estimatedPayoffMonths);
+    body +=
+      '<tr>' +
+      '<td>' +
+      escapeHtml(d.name) +
+      '</td>' +
+      '<td>' +
+      escapeHtml(d.type || '') +
+      '</td>' +
+      '<td>' +
+      fmtCurrency(d.balance) +
+      '</td>' +
+      '<td>' +
+      fmtCurrency(d.minimumPayment) +
+      '</td>' +
+      '<td>' +
+      fmtPercent(d.interestRate) +
+      '</td>' +
+      '<td>' +
+      cfPaid +
+      '</td>' +
+      '<td>' +
+      est +
+      '</td>' +
+      '</tr>';
+  });
+  body += '</tbody>';
+
+  wrap.innerHTML =
+    '<table class="activity-table activity-table--compact" role="grid">' +
+    thead +
+    body +
+    '</table>';
+}
+
+function renderDebtPayoffReadData_(data) {
+  setStatus('debt_payoff_read_status', '', false);
+
+  var metaEl = document.getElementById('debt_payoff_read_meta');
+  var sumEl = document.getElementById('debt_payoff_read_summary');
+  var recEl = document.getElementById('debt_payoff_read_recommendations');
+  if (!data) return;
+
+  var years = data.projectionYears || [];
+  var yLabel =
+    years.length === 2
+      ? years[0] + ' & ' + years[1]
+      : years.join(', ');
+
+  __debtPayoffReadCache = { data: data, yLabel: yLabel };
+
+  if (metaEl) {
+    metaEl.textContent =
+      'CF paid = Expense sums on Cash Flow for ' +
+      yLabel +
+      ', where Payee matches each debt. For full definitions, see Help → Payoff Path.';
+  }
+
+  if (data.warnings && data.warnings.length && metaEl) {
+    metaEl.textContent += ' ' + data.warnings.join(' ');
+  }
+
+  if (sumEl && data.summary) {
+    var s = data.summary;
+    var bullets = [];
+    bullets.push(
+      '<li>Total debt balance: ' + fmtCurrency(s.totalDebtBalance) + '</li>'
+    );
+    bullets.push(
+      '<li>Minimum payments (about): ' +
+        fmtCurrency(s.totalMinimumPayments) +
+        '/month</li>'
+    );
+    bullets.push(
+      '<li>Usable after buffers: ' + fmtCurrency(s.usableCashAfterBuffers) + '</li>'
+    );
+    if (s.longestRoughPayoff && s.longestRoughPayoff.months) {
+      bullets.push(
+        '<li>Longest estimated payoff at the sheet minimum: ' +
+          escapeHtml(s.longestRoughPayoff.accountName) +
+          ' (~' +
+          s.longestRoughPayoff.months +
+          ' mo)</li>'
+      );
+    }
+    bullets.push(
+      '<li class="muted"><strong>Loan</strong> &amp; <strong>HELOC</strong>: months use a monthly amortization loop (interest on remaining balance, then principal).</li>'
+    );
+    bullets.push(
+      '<li class="muted">Other types: balance ÷ minimum payment (rough).</li>'
+    );
+    bullets.push(
+      '<li class="muted">If payment ≤ monthly interest on a loan, payoff is shown as unavailable.</li>'
+    );
+    sumEl.innerHTML =
+      '<div class="debt-payoff-summary">' +
+      '<div class="debt-payoff-overall-head">Overall</div>' +
+      '<ul class="debt-payoff-overall-list">' +
+      bullets.join('') +
+      '</ul></div>';
+  }
+
+  if (recEl && data.recommendations && data.recommendations.length) {
+    var lis = data.recommendations
+      .map(function(line) {
+        return '<li>' + escapeHtml(line) + '</li>';
+      })
+      .join('');
+    recEl.innerHTML = '<ul class="help-list" style="margin:0;padding-left:1.2rem;">' + lis + '</ul>';
+  } else if (recEl) {
+    recEl.innerHTML = '';
+  }
+
+  renderDebtPayoffTable_(data, yLabel);
+}
