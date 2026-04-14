@@ -8,6 +8,17 @@ TO DO and issues I see in the testing
 
 ## Open items (not done)
 
+### Easy wins (quick fixes)
+
+Small HTML/docs/a11y tasks; check off when shipped. *(Unnumbered — pick in any order.)*
+
+- [ ] **Bank Add new — sidebar hint** — Add a short muted note next to the **Add new** form in **`PlannerDashboard.html`** (parity with the web app’s **`Dashboard_Body.html`** info column) so spreadsheet-menu users see the same “where rows go / year block” context.
+- [ ] **Bank Add new — DRY inline copy** — On **`Dashboard_Body.html`**, replace the two-paragraph right-column blurb with **one line** plus **Help → Assets** so the canonical detail stays in **`Dashboard_Help.html`**.
+- [ ] **Docs — Bank add one-liner** — Add a single bullet to **`PROJECT_CONTEXT.md`** and/or **`SESSION_NOTES.md`**: Assets → Bank Accounts → Add new (INPUT + SYS rows, no full planner on save, run **Run Planner + Refresh Snapshot** after).
+- [ ] **Status lines (item 19 sweep)** — Grep for **`setStatus('planner_status', …)`**; move any remaining **panel-specific** errors to the same pattern as Bills Due / Quick add (see **Codebase cleanups → 19** below). Keep truly global init errors on **`planner_status`**.
+- [ ] **Help — cross-link to Assets** — In **`Dashboard_Help.html`** **Introduction** or **Overview**, add one sentence with a link to **`#help-assets`** so “create / edit bank accounts” is discoverable from the top of Help.
+- [ ] **A11y — Bank mode segment** — For **Update \| Add new**, tighten **`role` / `aria-selected`** (already partly there) with **`aria-controls`** on the tab buttons pointing at the two mode wraps, or a visible **`fieldset` / `legend`**, in **`Dashboard_Body.html`** and **`PlannerDashboard.html`**.
+
 ### Important — Activity / HISTORY flow (LOG - Activity vs OUT - History)
 
 **LOG - Activity** = **event** ledger (who/when/amount); dashboard **Remove** is **donation-only** for now (**`deleteActivityLogRow`**); donations may also remove a matching **INPUT - Donation** row. Other event types: greyed UI + delete on the sheet if needed. **Smart undo** for **Quick add** (`quick_pay`) / house expense / bills — phased list below. **OUT - History** = **planner run** snapshots. Implementation: **`activity_log.js`**, **`appendActivityLog_`**, Help **Activity log**.
