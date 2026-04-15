@@ -76,6 +76,18 @@ function stripTime_(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+/** Last calendar day of the month containing `d` (time stripped). */
+function endOfMonthContainingDate_(d) {
+  const s = stripTime_(d);
+  return stripTime_(new Date(s.getFullYear(), s.getMonth() + 1, 0));
+}
+
+/** `d` (date-only) plus `days` calendar days. */
+function addCalendarDays_(d, days) {
+  const s = stripTime_(d);
+  return stripTime_(new Date(s.getFullYear(), s.getMonth(), s.getDate() + days));
+}
+
 function daysBetween_(d1, d2) {
   return Math.round(
     (stripTime_(d2).getTime() - stripTime_(d1).getTime()) / (1000 * 60 * 60 * 24)

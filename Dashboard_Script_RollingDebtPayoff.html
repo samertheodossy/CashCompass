@@ -1,0 +1,950 @@
+/* Planning — Rolling debt payoff (tables + collapsible JSON) */
+
+/** Mode for this tab only; passed as {@code executionPlanMode} on refresh and appended in {@link appendRollingDebtPayoffModeToFinalPrompt}. */
+var selectedMode = 'Standard';
+
+function setRollingDebtPayoffSelectedMode(mode) {
+  var allowed = { Standard: 1, Operator: 1, Aggressive: 1, Automation: 1 };
+  if (!allowed[mode]) return;
+  selectedMode = mode;
+  var root = document.getElementById('rollingDebtPayoff');
+  if (!root) return;
+  root.querySelectorAll('.planner-mode-segmented .seg-planner').forEach(function(btn) {
+    var isOn = btn.getAttribute('data-mode') === mode;
+    btn.classList.toggle('active', isOn);
+    btn.setAttribute('aria-selected', isOn ? 'true' : 'false');
+  });
+  var line = document.getElementById('rolling_debt_payoff_current_mode');
+  if (line) line.textContent = 'Current mode: ' + mode;
+  if (typeof loadRollingDebtPayoffSection === 'function') {
+    loadRollingDebtPayoffSection();
+  }
+}
+
+function appendRollingDebtPayoffModeToFinalPrompt(basePrompt) {
+  var base = basePrompt == null ? '' : String(basePrompt);
+  var trimmed = base.replace(/\s+$/g, '');
+  var suffix = '\n\nMODE = ' + selectedMode;
+  return trimmed ? trimmed + suffix : 'MODE = ' + selectedMode;
+}
+
+function rollingDebtPayoffExecutionPlanMode_() {
+  if (selectedMode === 'Operator') return 'operator';
+  if (selectedMode === 'Aggressive') return 'aggressive';
+  if (selectedMode === 'Automation') return 'automation';
+  return '';
+}
+
+var __rollingDebtPayoffCache = null;
+
+function loadRollingDebtPayoffSection() {
+  var statusEl = document.getElementById('rolling_debt_payoff_status');
+  var tablesEl = document.getElementById('rolling_debt_payoff_tables');
+  var jsonEl = document.getElementById('rolling_debt_payoff_json');
+
+  if (statusEl) setStatus('rolling_debt_payoff_status', 'Loading…', false);
+  if (tablesEl) {
+    tablesEl.innerHTML =
+      typeof loadingIndicatorHtml === 'function'
+        ? loadingIndicatorHtml('Building rolling plan…')
+        : '<p class="muted">Loading…</p>';
+  }
+  if (jsonEl) jsonEl.textContent = '';
+
+  var dbgCb = document.getElementById('rolling_debt_payoff_include_debug');
+  var includeDebug = dbgCb && dbgCb.checked;
+  google.script.run
+    .withSuccessHandler(function(data) {
+      __rollingDebtPayoffCache = data;
+      renderRollingDebtPayoff_(data);
+    })
+    .withFailureHandler(function(err) {
+      __rollingDebtPayoffCache = null;
+      if (tablesEl) tablesEl.innerHTML = '';
+      setStatus(
+        'rolling_debt_payoff_status',
+        'Error: ' + (err.message || String(err)),
+        true
+      );
+    })
+    .getRollingDebtPayoffPlan({
+      includeDebugDetails: includeDebug,
+      executionPlanMode: rollingDebtPayoffExecutionPlanMode_()
+    });
+}
+
+function rollingDebtPayoffJsonForDisplay_(data) {
+  if (!data || typeof data !== 'object') return data;
+  if (!data.include_debug_details) {
+    var slim = {};
+    [
+      'generated_at',
+      'summary',
+      'key_warnings',
+      'default_output',
+      'this_month_plan',
+      'this_month_execution_plan',
+      'action_decision_box',
+      'next_3_month_preview',
+      'planned_expense_impact',
+      'assumptions',
+      'include_debug_details'
+    ].forEach(function(k) {
+      if (data[k] !== undefined) slim[k] = data[k];
+    });
+    return slim;
+  }
+  var o = {};
+  Object.keys(data).forEach(function(k) {
+    if (k.indexOf('_legacy') === 0) return;
+    if (k === 'this_month_execution_plan') return;
+    o[k] = data[k];
+  });
+  if (o.next_12_months && o.next_12_months.length) {
+    o.next_12_months = o.next_12_months.map(function(r) {
+      var c = {};
+      Object.keys(r).forEach(function(key) {
+        if (
+          key === 'debt_balances_start' ||
+          key === 'debt_balances_end' ||
+          key === 'extra_principal_allocations' ||
+          key === 'extra_principal_allocations_execution_now' ||
+          key === 'extra_principal_allocations_conditional_variable'
+        ) {
+          return;
+        }
+        c[key] = r[key];
+      });
+      return c;
+    });
+  }
+  return o;
+}
+
+function escapeHtml_(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function rollingFormatTopPayeeLines_(arr) {
+  if (!arr || !arr.length) return '—';
+  return arr
+    .slice(0, 10)
+    .map(function(x) {
+      return escapeHtml_(String(x.payee_display || '')) + ': ' + fmtCurrency(x.trailing_typical_monthly);
+    })
+    .join('<br />');
+}
+
+function rollingDpJoinLinesHtml_(arr) {
+  if (!arr || !arr.length) return '—';
+  return arr
+    .map(function(s) {
+      return escapeHtml_(String(s));
+    })
+    .join('<br />');
+}
+
+function rollingDpTable_(title, headerRow, bodyRows, numericCols) {
+  numericCols = numericCols || [];
+  var html = ['<h4 class="rolling-dp-section-title">' + escapeHtml_(title) + '</h4>'];
+  html.push('<table class="rolling-dp-table"><thead><tr>');
+  headerRow.forEach(function(h, idx) {
+    var cls = numericCols.indexOf(idx) >= 0 ? ' class="num"' : '';
+    html.push('<th' + cls + '>' + escapeHtml_(h) + '</th>');
+  });
+  html.push('</tr></thead><tbody>');
+  bodyRows.forEach(function(row) {
+    html.push('<tr>');
+    row.forEach(function(cell, idx) {
+      var cls = numericCols.indexOf(idx) >= 0 ? ' class="num"' : '';
+      html.push('<td' + cls + '>' + cell + '</td>');
+    });
+    html.push('</tr>');
+  });
+  html.push('</tbody></table>');
+  return html.join('');
+}
+
+function rollingDefaultOutputBulletsHtml_(def) {
+  if (!def || !def.this_month_plan_bullets || !def.this_month_plan_bullets.length) {
+    return '';
+  }
+  var h = ['<section class="rolling-dp-default-plan"><h4 class="rolling-dp-section-title">THIS MONTH PLAN</h4><ul class="rolling-dp-narrative-list">'];
+  def.this_month_plan_bullets.forEach(function(b) {
+    h.push('<li>' + escapeHtml_(String(b)) + '</li>');
+  });
+  h.push('</ul></section>');
+  return h.join('');
+}
+
+function rollingNext3ShortHtml_(def) {
+  var rows = def && def.next_3_month_preview_short ? def.next_3_month_preview_short : [];
+  if (!rows.length) {
+    return (
+      '<section class="rolling-dp-next3-short"><h4 class="rolling-dp-section-title">NEXT 3 MONTHS PREVIEW</h4><p class="muted">—</p></section>'
+    );
+  }
+  var h = ['<section class="rolling-dp-next3-short"><h4 class="rolling-dp-section-title">NEXT 3 MONTHS PREVIEW</h4><ul class="rolling-dp-narrative-list">'];
+  rows.forEach(function(r) {
+    h.push(
+      '<li><strong>' +
+        escapeHtml_(String(r.month || '')) +
+        '</strong> — focus: ' +
+        escapeHtml_(String(r.expected_focus || '—')) +
+        '; extra payments likely? ' +
+        escapeHtml_(String(r.extra_payments_likely || '—')) +
+        '</li>'
+    );
+  });
+  h.push('</ul></section>');
+  return h.join('');
+}
+
+function rollingWhyNotesHtml_(notes) {
+  var arr = notes && notes.length ? notes.slice(0, 4) : [];
+  if (!arr.length) {
+    return '';
+  }
+  var h = ['<section class="rolling-dp-why"><h4 class="rolling-dp-section-title">WHY / NOTES</h4><ul class="rolling-dp-narrative-list">'];
+  arr.forEach(function(n) {
+    h.push('<li>' + escapeHtml_(String(n)) + '</li>');
+  });
+  h.push('</ul></section>');
+  return h.join('');
+}
+
+function rollingDebtPayoffIsAutomationExecution_(data) {
+  var fromApi = data && data.summary && data.summary.execution_plan_mode;
+  var m = String(fromApi != null ? fromApi : '')
+    .toLowerCase()
+    .trim();
+  if (m.indexOf('automation') >= 0) return true;
+  if (typeof rollingDebtPayoffExecutionPlanMode_ === 'function' && rollingDebtPayoffExecutionPlanMode_() === 'automation') {
+    return true;
+  }
+  return false;
+}
+
+/** Automation mode: structured block only — no duplicate narrative heading. */
+function rollingAutomationExecutionPlanHtml_(text) {
+  var t = text != null && String(text).trim() ? String(text) : '';
+  if (!t) {
+    return (
+      '<section class="rolling-dp-exec-plan rolling-dp-exec-plan--automation">' +
+      '<p class="muted">No automation execution block returned.</p>' +
+      '</section>'
+    );
+  }
+  return (
+    '<section class="rolling-dp-exec-plan rolling-dp-exec-plan--automation">' +
+    '<pre class="rolling-dp-exec-pre rolling-dp-exec-pre--automation" tabindex="0">' +
+    escapeHtml_(t) +
+    '</pre></section>'
+  );
+}
+
+function rollingThisMonthExecutionPlanHtml_(text) {
+  var t = text != null && String(text).trim() ? String(text) : '';
+  if (!t) {
+    return (
+      '<section class="rolling-dp-exec-plan">' +
+      '<h4 class="rolling-dp-section-title">THIS MONTH EXECUTION PLAN</h4>' +
+      '<p class="muted">No execution plan text returned.</p>' +
+      '</section>'
+    );
+  }
+  return (
+    '<section class="rolling-dp-exec-plan">' +
+    '<h4 class="rolling-dp-section-title">THIS MONTH EXECUTION PLAN</h4>' +
+    '<pre class="rolling-dp-exec-pre" tabindex="0">' +
+    escapeHtml_(t) +
+    '</pre>' +
+    '</section>'
+  );
+}
+
+function rollingThisMonthPlanHtml_(tmp) {
+  if (!tmp || typeof tmp !== 'object') {
+    return (
+      '<section class="rolling-dp-narrative">' +
+      '<h4 class="rolling-dp-section-title">THIS MONTH PLAN</h4>' +
+      '<p class="muted">No monthly plan payload returned.</p>' +
+      '</section>'
+    );
+  }
+  var h = ['<section class="rolling-dp-narrative">'];
+  h.push(
+    '<h4 class="rolling-dp-section-title">THIS MONTH PLAN <span class="rolling-dp-anchor">(' +
+      escapeHtml_(String(tmp.anchor_month || '')) +
+      ')</span></h4>'
+  );
+
+  var lq = tmp.liquidity || {};
+  var liqBody = [
+    ['Total cash', fmtCurrency(lq.total_cash)],
+    ['Reserve target (untouchable)', fmtCurrency(lq.reserve_target)],
+    ['Buffer above reserve (do not deploy)', fmtCurrency(lq.buffer_above_reserve)]
+  ];
+  if (lq.near_term_planned_cash_reserved != null && Number(lq.near_term_planned_cash_reserved) > 0.005) {
+    liqBody.push([
+      'Near-term planned cash reserved (INPUT - Upcoming Expenses)',
+      fmtCurrency(lq.near_term_planned_cash_reserved)
+    ]);
+  }
+  liqBody.push(
+    ['Deployable cash after protections', fmtCurrency(lq.deployable_cash_after_protections != null ? lq.deployable_cash_after_protections : lq.deployable_cash)],
+    ['Cash available for extra debt today', fmtCurrency(lq.cash_available_for_extra_debt_today)]
+  );
+  if (lq.heloc_recommended_now != null && String(lq.heloc_recommended_now).trim()) {
+    liqBody.push(['HELOC recommended now (execution)', escapeHtml_(String(lq.heloc_recommended_now))]);
+  }
+  if (lq.execution_total_now != null && lq.execution_total_now === lq.execution_total_now) {
+    liqBody.push(['Total executable now (cash + optional HELOC)', fmtCurrency(lq.execution_total_now)]);
+  }
+  if (lq.conditional_variable_extra_total != null && lq.conditional_variable_extra_total === lq.conditional_variable_extra_total) {
+    liqBody.push(['Conditional extra if variable income arrives', fmtCurrency(lq.conditional_variable_extra_total)]);
+  }
+  liqBody.push(
+    ['Cash used this month (capped deployment)', fmtCurrency(lq.actual_cash_deployment_this_month)],
+    ['HELOC drawn this month (modeled)', fmtCurrency(lq.heloc_draw_this_month)]
+  );
+  h.push(rollingDpTable_('Liquidity &amp; deployment', ['Item', 'Amount'], liqBody, [1]));
+
+  var peiLines = tmp.planned_expense_lines;
+  if (peiLines && peiLines.length) {
+    h.push('<p class="rolling-dp-subhead">Planned expense impact (INPUT - Upcoming Expenses)</p>');
+    h.push('<ul class="rolling-dp-narrative-list">');
+    peiLines.forEach(function(line) {
+      var treat = line.execution_treatment ? String(line.execution_treatment) : String(line.impact_tag || '');
+      h.push(
+        '<li>' +
+          escapeHtml_(String(line.title || '')) +
+          ' (' +
+          escapeHtml_(String(line.due_label || '')) +
+          ') — ' +
+          fmtCurrency(line.amount) +
+          '. <span class="muted">' +
+          escapeHtml_(treat) +
+          '</span></li>'
+      );
+    });
+    h.push('</ul>');
+    h.push(
+      '<p class="rolling-dp-muted-note muted">Adjusted deployable cash is in the table above. Card-funded near-term items increase modeled credit card balances before the payoff waterfall.</p>'
+    );
+  }
+
+  var ams = tmp.anchor_month_minimum_schedule;
+  if (ams && typeof ams === 'object') {
+    var ap = ams.already_paid || [];
+    var pn = ams.pay_now || [];
+    h.push('<p class="rolling-dp-subhead">Anchor month minimums (INPUT - Cash Flow)</p>');
+    h.push(
+      '<p class="muted rolling-dp-anchor-cf-note">A positive expense in the anchor month column for a payee that matches the debt means that payment is already logged — do not schedule that minimum again.</p>'
+    );
+    h.push('<p class="rolling-dp-subhead rolling-dp-subhead-inner">Already paid (no action needed)</p>');
+    h.push('<ul class="rolling-dp-narrative-list">');
+    if (!ap.length) {
+      h.push('<li class="muted">— None —</li>');
+    } else {
+      ap.forEach(function(r) {
+        h.push(
+          '<li>' +
+            escapeHtml_(String(r.account || '')) +
+            ' — ' +
+            fmtCurrency(r.cf_paid_this_month) +
+            ' <span class="muted">(already paid this month)</span></li>'
+        );
+      });
+    }
+    h.push('</ul>');
+    h.push('<p class="rolling-dp-subhead rolling-dp-subhead-inner">Pay now</p>');
+    h.push('<ul class="rolling-dp-narrative-list">');
+    if (!pn.length) {
+      h.push('<li class="muted">— None —</li>');
+    } else {
+      pn.forEach(function(r) {
+        h.push(
+          '<li>' +
+            escapeHtml_(String(r.account || '')) +
+            ' — ' +
+            fmtCurrency(r.minimum_required) +
+            ' <span class="muted">minimum from operating cash</span></li>'
+        );
+      });
+    }
+    h.push('</ul>');
+  }
+
+  var actions = tmp.payment_actions || [];
+  if (actions.length) {
+    h.push(
+      '<p class="rolling-dp-subhead">' +
+        (ams && typeof ams === 'object' ? 'Extras &amp; HELOC (payment actions)' : 'Payment actions') +
+        '</p>'
+    );
+    h.push('<ol class="rolling-dp-payment-actions">');
+    actions.forEach(function(a) {
+      h.push('<li>' + escapeHtml_(String(a)) + '</li>');
+    });
+    h.push('</ol>');
+  } else {
+    h.push('<p class="muted">No numbered payment actions in payload.</p>');
+  }
+
+  var notes = tmp.context_notes || [];
+  if (notes.length) {
+    h.push('<p class="rolling-dp-subhead">Notes</p><ul class="rolling-dp-narrative-list">');
+    notes.forEach(function(b) {
+      h.push('<li>' + escapeHtml_(String(b)) + '</li>');
+    });
+    h.push('</ul>');
+  }
+
+  var tw = tmp.top_warnings || [];
+  if (tw.length) {
+    h.push('<p class="rolling-dp-subhead">Top warnings</p><ol class="rolling-dp-warnings-top">');
+    tw.forEach(function(w) {
+      h.push('<li>' + escapeHtml_(String(w)) + '</li>');
+    });
+    h.push('</ol>');
+  }
+  h.push(
+    '<p class="rolling-dp-why"><strong>Why this month:</strong> ' +
+      escapeHtml_(String(tmp.why_this_month || '')) +
+      '</p>'
+  );
+  if (tmp.deployment_check_note) {
+    h.push('<p class="rolling-dp-muted-note muted">' + escapeHtml_(String(tmp.deployment_check_note)) + '</p>');
+  }
+  h.push('<dl class="rolling-dp-meta-dl">');
+  h.push('<dt>Required payments</dt><dd>' + escapeHtml_(String(tmp.required_payments_summary || '—')) + '</dd>');
+  h.push('<dt>Recommended extra payments</dt><dd>' + escapeHtml_(String(tmp.recommended_extra_payments || '—')) + '</dd>');
+  h.push('<dt>Cash deployment policy</dt><dd>' + escapeHtml_(String(tmp.use_cash_above_reserve || '—')) + '</dd>');
+  h.push('<dt>Use HELOC?</dt><dd>' + escapeHtml_(String(tmp.use_heloc || '—')) + '</dd>');
+  h.push(
+    '<dt>Reserve protection mode</dt><dd>' + (tmp.reserve_protection_active ? 'Active' : 'Off') + '</dd>'
+  );
+  h.push('</dl>');
+  h.push('</section>');
+  return h.join('');
+}
+
+function rollingActionDecisionBoxHtml_(box) {
+  if (!box || typeof box !== 'object') {
+    return '';
+  }
+  var rows = [
+    ['Can I make an extra payment this month?', escapeHtml_(String(box.can_make_extra_payment || '—'))],
+    ['Should I draw from HELOC this month?', escapeHtml_(String(box.should_draw_from_heloc || '—'))],
+    ['Maximum HELOC draw allowed now', fmtCurrency(box.max_heloc_draw_allowed_now)],
+    ['Should I hold cash instead?', escapeHtml_(String(box.should_hold_cash_instead || '—'))],
+    ['Cleanup target this month', escapeHtml_(String(box.cleanup_target_this_month || '—'))],
+    ['Primary priority debt', escapeHtml_(String(box.primary_priority_debt || box.current_priority_debt || '—'))],
+    [
+      'Is allocation optimized for interest savings?',
+      escapeHtml_(String(box.is_allocation_optimized_for_interest_savings || '—'))
+    ],
+    ['Reserve protection mode', escapeHtml_(String(box.reserve_protection_mode || '—'))]
+  ];
+  return (
+    '<section class="rolling-dp-decision-box">' +
+    rollingDpTable_('ACTION DECISION BOX', ['Question', 'Answer'], rows, []) +
+    '</section>'
+  );
+}
+
+function rollingNext3PreviewHtml_(rows) {
+  rows = rows || [];
+  var body = rows.map(function(r) {
+    return [
+      escapeHtml_(String(r.month || '')),
+      escapeHtml_(String(r.expected_cash_pressure || '—')),
+      escapeHtml_(String(r.expected_debt_focus || '—')),
+      escapeHtml_(String(r.extra_payments_likely || '—')),
+      escapeHtml_(String(r.reserve_stress_likely || '—'))
+    ];
+  });
+  if (!body.length) body.push(['—', '—', '—', '—', '—']);
+  return (
+    '<section class="rolling-dp-preview">' +
+    rollingDpTable_(
+      'NEXT 3 MONTHS PREVIEW',
+      [
+        'Month',
+        'Expected cash pressure',
+        'Expected debt focus',
+        'Extra payments likely?',
+        'Reserve stress likely?'
+      ],
+      body,
+      []
+    ) +
+    '</section>'
+  );
+}
+
+function rollingRecurringBaselineAuditHtml_(audit) {
+  if (!audit || !audit.table_rows_top15 || !audit.table_rows_top15.length) {
+    return (
+      '<section class="rolling-dp-audit">' +
+      '<h4 class="rolling-dp-section-title">Recurring expense baseline audit</h4>' +
+      '<p class="muted">No recurring_operating payees in the forward baseline (or plan not loaded).</p>' +
+      '</section>'
+    );
+  }
+  var statRows = [
+    ['Sum of all included recurring payees', fmtCurrency(audit.sum_included_recurring)],
+    ['Sum included (payee name contains Tax, case-insensitive)', fmtCurrency(audit.sum_included_tax_in_name)],
+    ['Sum included (loan duplicate / alias heuristic)', fmtCurrency(audit.sum_included_loan_duplicate_or_alias)],
+    ['Count included with reason = default_operating', escapeHtml_(String(audit.count_default_operating))]
+  ];
+  var statsHtml =
+    '<div class="rolling-dp-audit-stats">' +
+    rollingDpTable_('Recurring baseline — rollups', ['Metric', 'Value'], statRows, [1]) +
+    '</div>';
+
+  var body = audit.table_rows_top15.map(function(r) {
+    return [
+      escapeHtml_(String(r.payee || '')),
+      escapeHtml_(String(r.bucket || '')),
+      escapeHtml_(String(r.reason || '')),
+      escapeHtml_(String(r.months_active != null ? r.months_active : '—')),
+      fmtCurrency(r.trailing_typical_monthly),
+      escapeHtml_(String(r.trailing_window || '')),
+      escapeHtml_(String(r.included_in_forward_baseline || 'Yes'))
+    ];
+  });
+
+  var mainTable =
+    rollingDpTable_(
+      'Included recurring payees (top 15 by trailing typical monthly)',
+      [
+        'Payee',
+        'Bucket',
+        'Reason',
+        'Months Active',
+        'Trailing Typical Monthly',
+        'Trailing Window',
+        'Included in Forward Baseline'
+      ],
+      body,
+      [4]
+    );
+
+  var sug = audit.suggested_treatment_rows || [];
+  var sugBody = sug.map(function(r) {
+    return [escapeHtml_(String(r.payee || '')), escapeHtml_(String(r.suggested_treatment || '—'))];
+  });
+  var sugTable = rollingDpTable_('Suggested treatment (all included recurring)', ['Payee', 'Suggested Treatment'], sugBody, []);
+
+  return (
+    '<section class="rolling-dp-audit">' +
+    '<h4 class="rolling-dp-section-title">Recurring expense baseline audit</h4>' +
+    '<p class="rolling-dp-audit-note muted">Heuristic review only — not applied to the model automatically. Full payee list lives in JSON <code>payee_classifications</code>.</p>' +
+    statsHtml +
+    mainTable +
+    sugTable +
+    '</section>'
+  );
+}
+
+function renderRollingDebtPayoff_(data) {
+  if (!data) return;
+
+  setStatus('rolling_debt_payoff_status', 'Updated.', false);
+
+  var sum = data.summary || {};
+  var diag = data.diagnostics || {};
+  var conf = data.confidence || {};
+  var pw = data.property_watchlist || {};
+  var parts = [];
+  var dbg = !!data.include_debug_details;
+  var execPlanStr = String(data.this_month_execution_plan || '');
+  var isOnePageOpPlan = execPlanStr.indexOf('ROLLING DEBT PAYOFF') === 0;
+  var isAutomationExec = rollingDebtPayoffIsAutomationExecution_(data);
+
+  parts.push('<div class="rolling-dp-primary' + (isAutomationExec ? ' rolling-dp-primary--automation' : '') + '">');
+  if (isAutomationExec) {
+    parts.push(rollingAutomationExecutionPlanHtml_(data.this_month_execution_plan));
+  } else {
+    if (!isOnePageOpPlan) {
+      parts.push(
+        '<p class="rolling-dp-status-line"><strong>Plan status:</strong> ' +
+          escapeHtml_(String(sum.plan_status || '—')) +
+          ' · <strong>Anchor:</strong> ' +
+          escapeHtml_(String(sum.anchor_month || '—')) +
+          ' · <strong>Confidence:</strong> ' +
+          escapeHtml_(String(sum.overall_confidence || '—')) +
+          '</p>'
+      );
+    }
+    parts.push(rollingThisMonthExecutionPlanHtml_(data.this_month_execution_plan));
+    if (data.default_output && !dbg) {
+      if (!isOnePageOpPlan) {
+        parts.push(rollingDefaultOutputBulletsHtml_(data.default_output));
+        parts.push(rollingNext3ShortHtml_(data.default_output));
+        parts.push(rollingWhyNotesHtml_(data.default_output.why_notes));
+      }
+    } else if (!dbg && !isOnePageOpPlan) {
+      parts.push(rollingThisMonthPlanHtml_(data.this_month_plan));
+      parts.push(rollingNext3PreviewHtml_(data.next_3_month_preview));
+    }
+    if (dbg) {
+      parts.push(rollingActionDecisionBoxHtml_(data.action_decision_box));
+      parts.push(rollingThisMonthPlanHtml_(data.this_month_plan));
+      parts.push(rollingNext3PreviewHtml_(data.next_3_month_preview));
+      parts.push(rollingRecurringBaselineAuditHtml_(data.recurring_baseline_audit));
+    }
+  }
+  parts.push('</div>');
+
+  if (!dbg) {
+    var tablesElEarly = document.getElementById('rolling_debt_payoff_tables');
+    if (tablesElEarly) tablesElEarly.innerHTML = parts.join('');
+    var jsonElEarly = document.getElementById('rolling_debt_payoff_json');
+    if (jsonElEarly) jsonElEarly.textContent = '';
+    var jsonWrap = document.querySelector('#rollingDebtPayoff .rolling-dp-json-wrap');
+    if (jsonWrap) jsonWrap.style.display = 'none';
+    return;
+  }
+
+  var jsonWrapShow = document.querySelector('#rollingDebtPayoff .rolling-dp-json-wrap');
+  if (jsonWrapShow) jsonWrapShow.style.display = '';
+
+  parts.push(
+    '<details class="rolling-dp-debug-master" open><summary>DEBUG DETAILS</summary><div class="rolling-dp-debug-master-body">'
+  );
+
+  parts.push(
+    '<details class="rolling-dp-details"><summary>Summary &amp; long-range context</summary><div class="rolling-dp-details-body">'
+  );
+  parts.push(
+    rollingDpTable_(
+      'SUMMARY',
+      ['Field', 'Value'],
+      [
+        ['Plan Status', escapeHtml_(String(sum.plan_status || '—'))],
+        ['Overall Confidence', escapeHtml_(String(sum.overall_confidence || '—'))],
+        ['Current Focus', escapeHtml_(String(sum.current_focus || '—'))],
+        ['Anchor Month', escapeHtml_(String(sum.anchor_month || '—'))],
+        ['Starting Available Cash', fmtCurrency(sum.starting_available_cash)],
+        ['Reserve Target', fmtCurrency(sum.reserve_target)],
+        ['Starting Total Debt', fmtCurrency(sum.starting_total_debt)],
+        ['Projected Debt After 84 Months', fmtCurrency(sum.projected_total_debt_84m)],
+        ['Projected Debt Reduction', fmtCurrency(sum.projected_debt_reduction_84m)]
+      ],
+      []
+    )
+  );
+  parts.push('</div></details>');
+
+  var m12 = data.next_12_months || [];
+  var mRows = m12.map(function(r) {
+    var expBasis =
+      r.expenses_column_label ||
+      (r.month_index === 0 ? 'Anchor Month Actual Expenses' : 'Forward Recurring Expense Baseline');
+    return [
+      escapeHtml_(String(r.month || '')),
+      fmtCurrency(r.starting_cash),
+      fmtCurrency(r.stable_income),
+      fmtCurrency(r.variable_income),
+      fmtCurrency(r.expenses),
+      escapeHtml_(String(expBasis)),
+      fmtCurrency(r.opening_sweep_extra_debt),
+      fmtCurrency(r.extra_debt_payment),
+      fmtCurrency(r.ending_cash),
+      fmtCurrency(r.ending_total_debt),
+      escapeHtml_(String(r.focus_debt || ''))
+    ];
+  });
+  if (!mRows.length) {
+    mRows.push(['—', '—', '—', '—', '—', '—', '—', '—', '—', '—', '—']);
+  }
+
+  var yp = data.yearly_projection || [];
+  var yRows = yp.map(function(r) {
+    return [String(r.year), fmtCurrency(r.ending_debt), fmtCurrency(r.debt_reduction_vs_prior_year)];
+  });
+  if (!yRows.length) yRows.push(['—', '—', '—']);
+
+  parts.push(
+    '<details class="rolling-dp-details rolling-dp-forecast-details">' +
+      '<summary>12-month cash &amp; yearly forecasts (reference only, not operating instructions)</summary>' +
+      '<div class="rolling-dp-details-body">'
+  );
+  parts.push(
+    rollingDpTable_(
+      'NEXT 12 MONTHS (forecast)',
+      [
+        'Month',
+        'Start Cash',
+        'Stable In',
+        'Variable In',
+        'Expenses',
+        'Expense basis',
+        'Opening Sweep',
+        'Extra Debt',
+        'End Cash',
+        'End Debt',
+        'Focus'
+      ],
+      mRows,
+      [1, 2, 3, 4, 6, 7, 8, 9]
+    )
+  );
+  parts.push(
+    rollingDpTable_('YEARLY PROJECTION (forecast)', ['Year', 'Ending Debt', 'Debt Reduction vs Prior Year'], yRows, [1, 2])
+  );
+  parts.push(
+    '<p class="rolling-dp-forecast-note muted">Operating guidance is intentionally limited to the anchor month and the next-three preview. Rows beyond that are simulation only.</p>'
+  );
+  parts.push('</div></details>');
+
+  var warnRows = (data.key_warnings || []).map(function(w) {
+    return [escapeHtml_(String(w))];
+  });
+  if (!warnRows.length) warnRows.push(['—']);
+
+  parts.push(
+    '<details class="rolling-dp-details rolling-dp-diagnostics-details"><summary>Full warnings, property, confidence &amp; diagnostics</summary><div class="rolling-dp-details-body">'
+  );
+  parts.push(rollingDpTable_('KEY WARNINGS (full list)', ['Warning'], warnRows, []));
+
+  var sd = pw.san_diego || {};
+  var tah = pw.tahoe || {};
+  var propRows = [
+    [
+      'Tahoe',
+      escapeHtml_(String(tah.status || 'KEEP')),
+      '—',
+      '—',
+      '—',
+      escapeHtml_(String(tah.reason || ''))
+    ],
+    [
+      'San Diego',
+      escapeHtml_(String(sd.status || 'HOLD / REVIEW')),
+      fmtCurrency(sd.monthly_rent),
+      fmtCurrency(sd.estimated_monthly_cost),
+      fmtCurrency(sd.estimated_monthly_drag),
+      escapeHtml_(String(sd.notes || (sd.used_override ? 'Used override defaults' : '')))
+    ]
+  ];
+  parts.push(
+    rollingDpTable_(
+      'PROPERTY WATCHLIST',
+      ['Property', 'Status', 'Rent', 'Cost', 'Monthly Drag', 'Notes'],
+      propRows,
+      [2, 3, 4]
+    )
+  );
+
+  parts.push(
+    rollingDpTable_(
+      'CONFIDENCE',
+      ['Category', 'Confidence'],
+      [
+        ['Overall', escapeHtml_(String(conf.overall || '—'))],
+        ['Income Projection', escapeHtml_(String(conf.income_projection || '—'))],
+        ['Expense Projection', escapeHtml_(String(conf.expense_projection || '—'))],
+        ['Debt Balances', escapeHtml_(String(conf.debt_balances || '—'))],
+        ['Rental Income', escapeHtml_(String(conf.rental_income || '—'))],
+        ['Credit Card Spend', escapeHtml_(String(conf.credit_card_spend || '—'))]
+      ],
+      []
+    )
+  );
+
+  var diagRows = [
+    ['History Months Loaded', escapeHtml_(String(diag.history_months_loaded != null ? diag.history_months_loaded : '—'))],
+    ['Months With CF Column Populated', escapeHtml_(String(diag.months_with_cf_column_populated != null ? diag.months_with_cf_column_populated : '—'))],
+    ['Matched stable payee count', escapeHtml_(String(diag.matched_stable_payee_count != null ? diag.matched_stable_payee_count : '—'))],
+    ['Stable match succeeded', escapeHtml_(String(diag.stable_match_succeeded != null ? diag.stable_match_succeeded : '—'))],
+    [
+      'Stable candidates found in CF',
+      escapeHtml_((diag.stable_candidate_payees_found_in_cf || []).join(', ') || '—')
+    ],
+    ['Stable list not found in CF', escapeHtml_((diag.stable_payees_not_found || []).join(', ') || '—')],
+    [
+      'Non-empty stable-income months (in median)',
+      escapeHtml_(String(diag.stable_non_empty_income_months_count != null ? diag.stable_non_empty_income_months_count : '—'))
+    ],
+    ['Stable median window used', escapeHtml_(String(diag.stable_median_window_used != null ? diag.stable_median_window_used : '—'))],
+    [
+      'Stable median input array (exact)',
+      escapeHtml_(JSON.stringify(diag.stable_median_input_array != null ? diag.stable_median_input_array : []))
+    ],
+    ['Stable numeric aggregation error', escapeHtml_(String(diag.stable_numeric_aggregation_error != null ? diag.stable_numeric_aggregation_error : '—'))],
+    ['First month cash identity residual', fmtCurrency(diag.first_month_cash_identity_residual)],
+    ['Stable Income Median (6m / best)', fmtCurrency(diag.forward_stable_income_median_6m)],
+    ['Forward recurring expense (months 1+ simulation)', fmtCurrency(diag.forward_smoothed_expense_monthly)],
+    ['Legacy total smoothed expense (all payees, reference)', fmtCurrency(diag.forward_legacy_total_smoothed_expense_monthly)],
+    ['Total cash-out median (reference, not used as forward baseline)', fmtCurrency(diag.forward_total_cash_out_median_reference)],
+    ['Stable Income Source', escapeHtml_(String(diag.stable_income_source || '—'))],
+    ['Expense Source', escapeHtml_(String(diag.expense_source || '—'))],
+    ['Statement Balance Tracking', escapeHtml_(String(diag.statement_balance_tracking))],
+    ['Reserved Buckets Tracked', escapeHtml_(String(diag.reserved_buckets_tracked))],
+    ['History Truly Empty', escapeHtml_(String(diag.history_truly_empty))]
+  ];
+  var eb = diag.expense_baseline || {};
+  diagRows.push([
+    'Expense baseline: irregular payees (anchor month count)',
+    escapeHtml_(String(eb.irregular_payees_anchor_month_count != null ? eb.irregular_payees_anchor_month_count : '—'))
+  ]);
+  diagRows.push([
+    'Expense baseline: irregular anchor payees (flagged vs recurring)',
+    escapeHtml_((eb.irregular_anchor_payees || []).join('; ') || '—')
+  ]);
+  diagRows.push([
+    'Expense baseline: projection confidence',
+    escapeHtml_(String(eb.expense_projection_confidence || '—'))
+  ]);
+  diagRows.push([
+    'Expense baseline: credit-card spike signals',
+    escapeHtml_(String(eb.credit_card_spike_signals != null ? eb.credit_card_spike_signals : '—'))
+  ]);
+  diagRows.push([
+    'Expense baseline: note',
+    escapeHtml_(String(eb.recurring_baseline_note || '—'))
+  ]);
+  diagRows.push(['Expense baseline: recurring expense forward', fmtCurrency(eb.recurring_expense_forward)]);
+  diagRows.push(['Expense baseline: debt cleanup excluded (typical monthly)', fmtCurrency(eb.debt_cleanup_excluded_monthly_avg)]);
+  diagRows.push(['Expense baseline: irregular excluded (typical monthly)', fmtCurrency(eb.irregular_excluded_monthly_avg)]);
+  diagRows.push([
+    'Expense baseline: top recurring payees included',
+    rollingFormatTopPayeeLines_(eb.top_recurring_payees_included)
+  ]);
+  diagRows.push([
+    'Expense baseline: top excluded debt-cleanup payees',
+    rollingFormatTopPayeeLines_(eb.top_excluded_debt_cleanup_payees)
+  ]);
+  diagRows.push([
+    'Expense baseline: top excluded irregular payees',
+    rollingFormatTopPayeeLines_(eb.top_excluded_irregular_payees)
+  ]);
+  parts.push(rollingDpTable_('DIAGNOSTICS', ['Diagnostic', 'Value'], diagRows, [1]));
+
+  var stableSamples = diag.stable_income_matched_payees || [];
+  if (stableSamples.length) {
+    var sr = stableSamples.map(function(s) {
+      return [
+        escapeHtml_(String(s.payee_raw || '')),
+        escapeHtml_(String(s.canonical_stable || s.payee_stable_key || '—')),
+        escapeHtml_(String(s.raw_cell != null ? s.raw_cell : '—')),
+        fmtCurrency(s.anchor_month_amount)
+      ];
+    });
+    parts.push(
+      rollingDpTable_(
+        'STABLE INCOME PAYEE MATCHES (anchor month)',
+        ['Payee (raw)', 'Canonical', 'Raw cell', 'Parsed'],
+        sr,
+        [3]
+      )
+    );
+  }
+
+  var parseSamps = diag.stable_income_parsing_samples || [];
+  if (parseSamps.length) {
+    var prRows = [];
+    parseSamps.forEach(function(block) {
+      (block.samples || []).forEach(function(s) {
+        prRows.push([
+          escapeHtml_(String(block.payee || '')),
+          escapeHtml_(String(s.month || '')),
+          escapeHtml_(String(s.raw_cell != null ? s.raw_cell : '—')),
+          fmtCurrency(s.parsed)
+        ]);
+      });
+    });
+    if (!prRows.length) prRows.push(['—', '—', '—', '—']);
+    parts.push(
+      rollingDpTable_(
+        'STABLE INCOME PARSING SAMPLES (last 12 loaded months)',
+        ['Payee', 'Month', 'Raw cell', 'Parsed'],
+        prRows,
+        [3]
+      )
+    );
+  }
+
+  var dbgStable = diag.stable_monthly_debug_last_12;
+  if (dbgStable && dbgStable.rows && dbgStable.rows.length) {
+    var sh = ['Month'].concat(dbgStable.column_headers || []);
+    var sRows = dbgStable.rows.map(function(r) {
+      var row = [escapeHtml_(String(r.month || ''))];
+      (dbgStable.column_headers || []).forEach(function(col) {
+        if (col === 'Stable Income Total') {
+          row.push(r.stable_income_total == null ? '—' : fmtCurrency(r.stable_income_total));
+        } else {
+          var cv = r.cells && r.cells[col];
+          row.push(cv == null ? '—' : fmtCurrency(cv));
+        }
+      });
+      return row;
+    });
+    var numIdx = [];
+    for (var ni = 1; ni < sh.length; ni++) numIdx.push(ni);
+    parts.push(
+      rollingDpTable_(
+        'STABLE INCOME BY MONTH (last 12 loaded)',
+        sh,
+        sRows,
+        numIdx
+      )
+    );
+  }
+
+  var expSamples = diag.expense_anchor_top_payees || [];
+  if (expSamples.length) {
+    var er = expSamples.map(function(s) {
+      return [escapeHtml_(String(s.payee_normalized || '')), fmtCurrency(s.anchor_month_amount)];
+    });
+    parts.push(
+      rollingDpTable_('EXPENSE PAYEES (anchor month, top amounts)', ['Payee (normalized)', 'Amount'], er, [1])
+    );
+  }
+
+  var payeeDbgRows = data.payee_debug_rows || [];
+  if (payeeDbgRows.length) {
+    var dr = payeeDbgRows.map(function(r) {
+      return [
+        escapeHtml_(String(r.category || '')),
+        escapeHtml_(String(r.payee || '')),
+        escapeHtml_(String(r.found_in_cf || '')),
+        escapeHtml_(String(r.type_matched || '')),
+        escapeHtml_(String(r.months_with_values != null ? r.months_with_values : '—')),
+        escapeHtml_(String(r.included_in_projection || ''))
+      ];
+    });
+    parts.push(
+      rollingDpTable_(
+        'PAYEE MATCHING DEBUG',
+        ['Category', 'Payee', 'Found in CF', 'Type matched', 'Months with values', 'Included in projection'],
+        dr,
+        [4]
+      )
+    );
+  }
+
+  parts.push('</div></details>');
+
+  parts.push('</div></details>');
+
+  var tablesEl = document.getElementById('rolling_debt_payoff_tables');
+  if (tablesEl) tablesEl.innerHTML = parts.join('');
+
+  var jsonEl = document.getElementById('rolling_debt_payoff_json');
+  if (jsonEl) {
+    try {
+      jsonEl.textContent = JSON.stringify(rollingDebtPayoffJsonForDisplay_(data), null, 2);
+    } catch (e) {
+      jsonEl.textContent = String(e);
+    }
+  }
+}

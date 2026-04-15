@@ -250,10 +250,15 @@ function normalizeDebts_(rows, aliasMap) {
       const creditLeft = toNumber_(r['Credit Left']);
       const rate = toNumber_(r['Int Rate']);
       const type = String(r['Type'] || '').trim();
+      const originalName = String(r['Account Name'] || '').trim();
+      const priorityClass =
+        originalName === 'Loan Depot - San Jose House' || rate <= 2.25
+          ? 'LOW_RATE_KEEP_LAST'
+          : 'STANDARD';
 
       return {
         name: normalizeName_(r['Account Name'], aliasMap),
-        originalName: String(r['Account Name'] || '').trim(),
+        originalName: originalName,
         type: type,
         balance: round2_(balance),
         dueDay: dueDay,
@@ -261,7 +266,8 @@ function normalizeDebts_(rows, aliasMap) {
         creditLeft: round2_(creditLeft),
         minimumPayment: minPayment,
         interestRate: round2_(rate),
-        active: balance > 0 || minPayment > 0
+        active: balance > 0 || minPayment > 0,
+        priorityClass: priorityClass
       };
     });
 }
@@ -286,8 +292,8 @@ function normalizeAccounts_(rows) {
 
 function normalizeCashFlow_(rows, monthHeader, aliasMap) {
   const validRows = rows.filter(function(r) {
-    const t = String(r['Type'] || '').trim();
-    return t === 'Income' || t === 'Expense';
+    const t = String(r['Type'] || '').trim().toUpperCase();
+    return t === 'INCOME' || t === 'EXPENSE';
   });
 
   let incomeTotal = 0;
@@ -295,7 +301,9 @@ function normalizeCashFlow_(rows, monthHeader, aliasMap) {
   const lineItems = [];
 
   validRows.forEach(function(r) {
-    const type = String(r['Type']).trim();
+    const rawType = String(r['Type'] || '').trim();
+    const typeUpper = rawType.toUpperCase();
+    const typeCanon = typeUpper === 'INCOME' ? 'Income' : typeUpper === 'EXPENSE' ? 'Expense' : rawType;
     const payee = normalizeName_(r['Payee'], aliasMap);
     let amount = 0;
 
@@ -310,11 +318,11 @@ function normalizeCashFlow_(rows, monthHeader, aliasMap) {
 
     amount = round2_(amount);
 
-    if (type === 'Income') incomeTotal += amount;
-    if (type === 'Expense') expenseTotal += amount;
+    if (typeUpper === 'INCOME') incomeTotal += amount;
+    if (typeUpper === 'EXPENSE') expenseTotal += amount;
 
     lineItems.push({
-      type: type,
+      type: typeCanon,
       payee: payee,
       amount: amount
     });

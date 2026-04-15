@@ -85,7 +85,13 @@ function showTab(name) {
     if (name === 'propertyPerformance' && typeof loadPropertyPerformanceSection === 'function') {
       loadPropertyPerformanceSection();
     }
-  } else if (name === 'debts' || name === 'retirement' || name === 'purchase' || name === 'debtPayoff') {
+  } else if (
+    name === 'debts' ||
+    name === 'retirement' ||
+    name === 'purchase' ||
+    name === 'debtPayoff' ||
+    name === 'rollingDebtPayoff'
+  ) {
     showPage('planning');
   }
 
@@ -97,6 +103,10 @@ function showTab(name) {
 
   if (name === 'debtPayoff' && typeof loadDebtPayoffReadSection === 'function') {
     loadDebtPayoffReadSection();
+  }
+
+  if (name === 'rollingDebtPayoff' && typeof loadRollingDebtPayoffSection === 'function') {
+    loadRollingDebtPayoffSection();
   }
 }
 

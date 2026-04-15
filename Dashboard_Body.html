@@ -803,6 +803,7 @@
       <button class="tab-btn" data-tab="retirement" onclick="showTab('retirement')">Retirement</button>
       <button class="tab-btn" data-tab="purchase" onclick="showTab('purchase')">Purchase Sim</button>
       <button class="tab-btn" data-tab="debtPayoff" onclick="showTab('debtPayoff')">Payoff Path</button>
+      <button class="tab-btn" data-tab="rollingDebtPayoff" onclick="showTab('rollingDebtPayoff')">Rolling debt payoff</button>
     </div>
 
     <div id="debts" class="panel active">
@@ -1009,6 +1010,34 @@
         <h3 style="margin:0;">Recommendations</h3>
       </div>
       <div id="debt_payoff_read_recommendations" class="info" style="margin-top:8px;"></div>
+    </div>
+
+    <div id="rollingDebtPayoff" class="panel">
+      <div class="panel-head">
+        <h2>Rolling debt payoff</h2>
+      </div>
+      <div class="rolling-dp-controls-row">
+        <div class="rolling-dp-controls-left">
+          <div class="segmented-control planner-mode-segmented" role="tablist" aria-label="Rolling debt payoff mode">
+            <button type="button" class="seg-planner active" role="tab" aria-selected="true" data-mode="Standard" onclick="setRollingDebtPayoffSelectedMode('Standard')">Standard</button>
+            <button type="button" class="seg-planner" role="tab" aria-selected="false" data-mode="Operator" onclick="setRollingDebtPayoffSelectedMode('Operator')">Operator</button>
+            <button type="button" class="seg-planner" role="tab" aria-selected="false" data-mode="Aggressive" onclick="setRollingDebtPayoffSelectedMode('Aggressive')">Aggressive</button>
+            <button type="button" class="seg-planner" role="tab" aria-selected="false" data-mode="Automation" onclick="setRollingDebtPayoffSelectedMode('Automation')">Automation</button>
+          </div>
+          <div id="rolling_debt_payoff_current_mode" class="planner-current-mode-line subtle">Current mode: Standard</div>
+        </div>
+        <label class="rolling-dp-debug-toggle muted" for="rolling_debt_payoff_include_debug">
+          <input type="checkbox" id="rolling_debt_payoff_include_debug" />
+          Debug Details
+        </label>
+      </div>
+      <div id="rolling_debt_payoff_status" class="status"></div>
+      <div id="rolling_debt_payoff_tables" class="rolling-dp-tables" aria-live="polite"></div>
+      <details class="rolling-dp-json-wrap">
+        <summary class="rolling-dp-json-summary">Raw JSON (export)</summary>
+        <p class="muted" style="margin:6px 0 8px 0;">Machine-readable plan payload (legacy trigger details omitted).</p>
+        <pre id="rolling_debt_payoff_json" class="rolling-dp-json" aria-label="Rolling debt payoff JSON"></pre>
+      </details>
     </div>
   </div>
 </div>

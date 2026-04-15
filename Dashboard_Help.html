@@ -23,6 +23,7 @@
         <a href="#help-property-performance">Property performance</a>
         <a href="#help-planning">Planning</a>
         <a href="#help-payoff-path">Payoff Path</a>
+        <a href="#help-rolling-debt-payoff">Rolling debt payoff</a>
         <a href="#help-debt-email">Debt Planner email</a>
         <a href="#help-sheets">Sheet names</a>
       </nav>
@@ -139,6 +140,7 @@
         <h3>Planning</h3>
         <p><strong>Debts</strong> — Update <strong>INPUT - Debts</strong>; planner output uses balances and minimums.</p>
         <p><strong>Retirement</strong> and <strong>Purchase Sim</strong> — Use the latest snapshot and your inputs; details depend on your sheet configuration.</p>
+        <p><strong>Payoff Path</strong> and <strong>Rolling debt payoff</strong> — Payoff Path is read-only payoff math from the sheet; Rolling debt payoff is a separate conservative rolling plan (see its help section).</p>
       </section>
 
       <section id="help-payoff-path" class="help-section">
@@ -146,6 +148,20 @@
         <p><strong>Read-only from your sheets</strong> — Balances and minimums come from <strong>INPUT - Debts</strong>. <strong>CF paid</strong> sums <strong>Expense</strong> rows on <strong>INPUT - Cash Flow</strong> for the last two calendar years, where the <strong>Payee</strong> matches each debt.</p>
         <p><strong>Estimated payoff</strong> — <strong>Loan</strong> and <strong>HELOC</strong> use a monthly amortization loop (APR and minimum from the sheet: interest on the remaining balance, then principal). Other debt types use balance ÷ minimum payment (rough). If the minimum payment is not greater than monthly interest on a loan, payoff is shown as unavailable.</p>
         <p><strong>Summary and recommendations</strong> on the Payoff Path tab use <strong>SYS - Accounts</strong> cash and this month’s Cash Flow projection. Simulation / what-if is not part of this view yet.</p>
+      </section>
+
+      <section id="help-rolling-debt-payoff" class="help-section">
+        <h3>Rolling debt payoff</h3>
+        <p><strong>Separate from Payoff Path</strong> — This tab runs a conservative, month-anchored household engine: anchor month is the <strong>latest month column on INPUT - Cash Flow that has any Income/Expense data</strong> (not today’s calendar date).</p>
+        <p><strong>Cash out vs minimums</strong> — Required cash out uses <strong>INPUT - Cash Flow</strong> expense lines. <strong>INPUT - Debts</strong> minimum payments appear as <em>reference only</em> in triggers and JSON; they are <strong>not</strong> added again on top of Cash Flow (no double count with mortgage or card payments already in CF).</p>
+        <p><strong>Reserve &amp; cash</strong> — Default reserve target is <strong>$100,000</strong> (hardcoded until a config sheet exists). If reserved buckets are not tracked on the sheet, <strong>available cash for planning = 85% of total liquid balances</strong> from <strong>SYS - Accounts</strong>.</p>
+        <p><strong>Income split</strong> — Stable income is modeled as <strong>Cisco</strong> (payee contains “Cisco”) plus the fixed recurring rent payees listed in product rules. Other income is treated as variable; variable inflows use the <strong>50% / 30% / 20%</strong> split (debt / reserve+cash / flexible) in the engine.</p>
+        <p><strong>Forward months</strong> — After the anchor month, stable income uses trailing medians. Forward <strong>expenses</strong> use a <strong>recurring operating</strong> baseline only: expense payees are bucketed (recurring operating vs debt cleanup vs irregular), and months 1+ sum trailing medians (6→3→1 non-empty fallback per payee) for <strong>recurring_operating</strong> payees only — not total cash-out. Credit-card payees with high volatility vs their own median go to debt cleanup; taxes, repairs, and similar keywords go to irregular. Variable income in projections defaults to <strong>$0</strong> (conservative).</p>
+        <p><strong>Debt ordering</strong> — Extra principal (after the reserve rule) goes to credit cards by <strong>highest APR first</strong>, then HELOC, Tahoe, San Diego, Missouri, and San Jose last. <strong>Loan Depot - San Jose House</strong> and any debt with APR <strong>≤ 2.25%</strong> get <code>LOW_RATE_KEEP_LAST</code> on the normalized debt row.</p>
+        <p><strong>Confidence</strong> — <code>overall_plan_confidence</code> is a simple rubric (see JSON <code>overall_plan_confidence_rubric</code>); credit-card “spend” without statement balance tracking is marked <strong>LOW</strong>.</p>
+        <p><strong>Operating vs forecast</strong> — The dashboard leads with <strong>THIS MONTH PLAN</strong>, an <strong>action decision box</strong>, and a <strong>next-three-month preview</strong>. The 12-month cash table and yearly rows are <strong>forecasts only</strong> (collapsed by default), not a month-by-month instruction list.</p>
+        <p><strong>Plan status</strong> — <code>OK</code> when the core forward model is clean. <code>PARTIALLY_VALID</code> only when an <strong>execution-integrity</strong> check fails (cash split vs execution total, missing per-account lines when cash extra is non-zero, or total executable mismatch). Advisory noise (expense confidence, irregular payees, unmapped planned card modeling) does not change status. <code>NEEDS_REVIEW</code> when sheet triggers fire; <code>INVALID</code> when income/expense forward numbers cannot be trusted. Turn on <strong>Include DEBUG DETAILS</strong> on the Rolling debt payoff tab for full tables, diagnostics, and JSON.</p>
+        <p><strong>JSON</strong> — Includes <code>this_month_plan</code>, <code>action_decision_box</code>, <code>next_3_month_preview</code>, plus <code>summary</code>, <code>key_warnings</code>, <code>next_12_months</code>, <code>yearly_projection</code> (with <code>debt_reduction_vs_prior_year</code> = prior year ending debt minus this year ending), <code>debt_priority</code>, <code>property_watchlist</code>, <code>assumptions</code>, <code>confidence</code>, and <code>diagnostics</code> (including <code>expense_baseline</code> irregular flags). Anchor month in <code>summary</code> uses <code>yyyy-MM</code>.</p>
       </section>
 
       <section id="help-debt-email" class="help-section">

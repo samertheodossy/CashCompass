@@ -132,6 +132,121 @@ Small HTML/docs/a11y tasks; check off when shipped. *(Unnumbered — pick in any
 
 ---
 
+### Rolling debt payoff (new Planning tab — separate from Payoff Path)
+
+**UI:** New sub-tab **next to** Payoff Path: **“Rolling debt payoff”** — own panel + script + server function; do **not** merge with Payoff Path.
+
+**Locked defaults (implementation)**
+
+1. **Mortgage / loan cash out vs debt mins**  
+   - **Required expenses:** **INPUT - Cash Flow** Expense lines = source of truth for **actual cash out** (including mortgage/loan payments if present that month).  
+   - **Minimum debt payments:** from **INPUT - Debts** only — **metadata / strategy context** in output; **do not add** to total required expenses (no double count).  
+   - If CF has the mortgage/loan payment for that month, that amount is the required expense for that cash out.
+
+2. **Stable vs variable rent**  
+   - **Stable (recurring rent):** `Rent Mo House`, `Rent Oakley House - Section 8`, `Rent Oakley House - Tenant Part 1`, `Rent Oakley House - Tenant Part 2`, `Rent Oakley House - Tenant Part 3`, `Rent San Diego House`, `Rent MN House`.  
+   - **Variable / non-recurring:** `Deposit San Diego House`, `Rent Oakley House - Section 8 Extra`, one-time catch-up rent, late fees, reimbursements, deposit-related amounts.  
+   - **Tahoe:** do **not** treat as rent unless explicit Tahoe rental income is added later.
+
+3. **San Jose low-rate “keep last”**  
+   - Exact **INPUT - Debts** account name: **`Loan Depot - San Jose House`**.  
+   - Add debts helper **`Priority Class`** (or equivalent): auto **`LOW_RATE_KEEP_LAST`** when account name is `Loan Depot - San Jose House` **or** APR **≤ 2.25%**.
+
+4. **Minimum cash reserve**  
+   - Default **`100000`**.  
+   - Target: **assumptions/config sheet**; until it exists, **hardcode 100000** with a single constant / TODO to migrate to config.
+
+5. **First month anchor**  
+   - **Not** system date: anchor = **latest month column present** on **INPUT - Cash Flow** (e.g. `Apr-26` → that month is “this month”; next projected month is `May-26`).
+
+6. **Credit card spend spike**  
+   - **Primary:** per CC payee (match debt/card payees): current month vs **trailing 6-month median** for that payee — spike if **> 150%** of median **and** **≥ $500** above median.  
+   - **Fallback** if **&lt; 3** months history: total CC spend vs **trailing 3-month average** of total CC — spike if **> 125%** of that average.  
+   - **Portfolio:** total monthly CC spend **> 130%** of trailing 6-month median of **total** CC spend.  
+   - Prefer distinguishing **new card spend** vs **payments**; if only net cash out, use expense as card cash out but **label confidence lower**.
+
+8. **Credit card spend estimation (critical)**  
+   - **Problem:** CF expense lines for cards may be **payments**, not true new spend.  
+   - **If statement balance data exists:**  
+     `New Spend = Current Statement Balance − Previous Statement Balance + Payments`  
+   - **If only payments exist (no balance tracking):** treat CF card expense as **cash out**, **not** true spend; set **`credit_card_spend_confidence = LOW`**.  
+   - **Optional:** track monthly card balances in a **separate table** for accurate spend.  
+   - **Planning:** never assume **payment = overspending** automatically; **spike detection = warning**, not a hard constraint.
+
+9. **RSU / stock income smoothing**  
+   - **Do not** treat RSU as stable income; tag RSU / stock sales as **variable**.  
+   - **RSU monthly baseline** = trailing **12-month average** of RSU sales (for projection context only).  
+   - **Base plan:** ignore RSU baseline (**conservative**).  
+   - **Projection (optional):** may include **50%** of RSU baseline.  
+   - **Label:** `RSU income confidence = MEDIUM` (depends on company / vesting).
+
+10. **Irregular expense smoothing**  
+   - For any expense category: if **monthly value > 2× trailing 6-month median** → classify **irregular spike**.  
+   - **Smoothed monthly expense** = **median of last 6 months** (use for **forward projections**).  
+   - **Keep actual** value in historical / audit trail.  
+   - **Examples:** Federal taxes, property taxes, large maintenance, one-time travel.
+
+11. **Rental income normalization**  
+   - **Per rental:** trailing **3-month average** rent.  
+   - If **variance > 20%**, mark rental **unstable**.  
+   - **Planning:** use **lower of** (trailing 3-month average, last known stable rent).  
+   - **Confidence:** Section 8 rent = **HIGH**; market rent (San Diego, MO, etc.) = **MEDIUM**.
+
+12. **Cash buffer accuracy**  
+   - **Total cash** = all liquid accounts.  
+   - **Available cash** = Total cash − **reserved buckets** (earmarked taxes, repairs, etc.).  
+   - If reserved buckets **not** tracked: **`Available Cash = 85%` of total cash** (conservative haircut).  
+   - **Planning:** use **Available cash** for decisions, not total cash.
+
+13. **Debt paydown accuracy**  
+   - If sheet balances **updated:** use directly.  
+   - If **not:** estimate  
+     `New Balance ≈ Prior Balance − Principal portion of payment`  
+   - If principal unknown:  
+     `Principal ≈ Payment − (Balance × APR / 12)`  
+   - Mark **estimated balances** = **MEDIUM** confidence.
+
+14. **Monthly plan stability guardrail**  
+   - **Do not** shift long-term trajectory on **one** good/bad month.  
+   - Require **2–3 consecutive** months of signal before adjusting projection / trajectory.  
+   - **Example:** one bad month → ignore for projection shift; three bad months → adjust plan.
+
+15. **San Diego property monitoring**  
+   - **Monthly loss** = expenses − rent (per agreed definitions).  
+   - If **trailing 6-month average loss > $1,500/month** → trigger **`REVIEW`**.  
+   - If loss **persists 12 months** **and** **appreciation < 3%** → trigger **`CONSIDER_SALE`** (advisory only; **do not** force).
+
+16. **Confidence scoring**  
+   - Each **major number** in the plan should carry a **per-field confidence**: `HIGH` | `MEDIUM` | `LOW`.  
+   - **Defaults by category:**  
+     - **HIGH:** salary / payroll, mortgage payments (from CF as agreed), Section 8 rent.  
+     - **MEDIUM:** market rent, RSU (and similar) **smoothed averages**, estimated loan balances when not sheet-updated.  
+     - **LOW:** credit card “spend” when **no** statement balance data (payment-only / net cash out), highly irregular expenses.  
+   - **Output:** include an **`overall_plan_confidence`** (aggregate score or label, e.g. weighted or worst-of-critical-path — **define in implementation** with a short rubric in Help) so the UI and JSON show how much to trust the month’s recommendations.
+
+**Income buckets**
+
+- **Variable income:** RSU sales, ESPP sales, bonus, tax refunds, other stock sales.  
+- **Stable income:** **Cisco regular pay** + **recurring rents** (list above) only.
+
+**Lump-sum split (variable inflows)**  
+- **50%** debt · **30%** reserve/cash · **20%** flexible (configurable later).
+
+**Extra debt payoff order (after CCs cleared by highest APR)**  
+1. HELOC  
+2. Tahoe mortgage  
+3. San Diego mortgage  
+4. MO mortgage  
+5. San Jose mortgage **last** (`Loan Depot - San Jose House` / `LOW_RATE_KEEP_LAST`)
+
+**Property stance**  
+- **San Diego:** **HOLD / REVIEW** — flag persistent negative cash flow; **do not** force sale.  
+- **Tahoe:** **protected lifestyle asset** — do **not** recommend sale.
+
+**Output shape (reminder):** executive summary, **12-month** detail table, **84-month** roll with lighter long-range + annual debt totals, alerts/triggers, suggested actions, **per-field confidence** + **`overall_plan_confidence`**, **machine-readable JSON** (see prior chat schema).
+
+---
+
 ### Consider — Bank / card / loan sync (Plaid or similar)
 
 **Question:** How hard is it to hook **Plaid** (or **Finicity**, **MX**, **Yodlee**, etc.) into this app so **bank, credit card, and loan balances** land directly in the workbook / dashboard?
