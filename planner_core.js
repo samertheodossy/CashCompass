@@ -337,26 +337,305 @@ function normalizeCashFlow_(rows, monthHeader, aliasMap) {
   };
 }
 
+/**
+ * Apply a total hold amount across policy pools without merging buckets first:
+ * reduce USE_WITH_CAUTION, then USE_FOR_BILLS, then USE_FOR_DEBT (preserves debt-preferred cash longest).
+ */
+function distributeHoldAcrossPolicyPools_(debtRaw, billsRaw, cautionRaw, holdTotal) {
+  let h = round2_(Math.max(0, toNumber_(holdTotal)));
+  let c = round2_(Math.max(0, toNumber_(cautionRaw)));
+  let b = round2_(Math.max(0, toNumber_(billsRaw)));
+  let d = round2_(Math.max(0, toNumber_(debtRaw)));
+  let take = round2_(Math.min(c, h));
+  c = round2_(c - take);
+  h = round2_(h - take);
+  take = round2_(Math.min(b, h));
+  b = round2_(b - take);
+  h = round2_(h - take);
+  take = round2_(Math.min(d, h));
+  d = round2_(d - take);
+  h = round2_(h - take);
+  return {
+    debt: round2_(Math.max(0, d)),
+    bills: round2_(Math.max(0, b)),
+    caution: round2_(Math.max(0, c)),
+    hold_remainder: round2_(Math.max(0, h))
+  };
+}
+
+/**
+ * SYS - Accounts–driven cash: per-account usable = max(0, currentBalance - minBuffer), buckets by use_policy,
+ * priority ASC within bucket. Global holds (optional) applied after pool totals — see distributeHoldAcrossPolicyPools_.
+ *
+ * @param {Array<{name:string,currentBalance:number,minBuffer:number,usePolicy:string,priority:number}>} accounts
+ * @param {{nearTermPlannedCash?:number,unmappedCardFundedCashRisk?:number,reserveTarget?:number,bufferAboveReserve?:number}} globalHolds
+ */
+function buildAccountCashAvailabilityModel_(accounts, globalHolds) {
+  globalHolds = globalHolds || {};
+  const nearTerm = round2_(Math.max(0, toNumber_(globalHolds.nearTermPlannedCash)));
+  const unmapped = round2_(Math.max(0, toNumber_(globalHolds.unmappedCardFundedCashRisk)));
+  const reserve = round2_(Math.max(0, toNumber_(globalHolds.reserveTarget)));
+  const buffer = round2_(Math.max(0, toNumber_(globalHolds.bufferAboveReserve)));
+  const holdTotal = round2_(nearTerm + unmapped + reserve + buffer);
+
+  const B_DEBT = 'USE_FOR_DEBT';
+  const B_BILLS = 'USE_FOR_BILLS';
+  const B_CAUTION = 'USE_WITH_CAUTION';
+
+  const debtList = [];
+  const billsList = [];
+  const cautionList = [];
+  const debug = [];
+  let liquidTotalSheet = 0;
+  let doNotTouchExcludedCash = 0;
+  let unsupportedPolicyBalanceTotal = 0;
+  let reserveAccountCount = 0;
+  let bufferAccountCount = 0;
+
+  accounts.forEach(function(a) {
+    liquidTotalSheet = round2_(liquidTotalSheet + (Number(a.currentBalance) || 0));
+  });
+
+  function sortByPriorityAsc(list) {
+    return list.slice().sort(function(x, y) {
+      const px = Number(x.priority) || 9;
+      const py = Number(y.priority) || 9;
+      if (px !== py) return px - py;
+      return String(x.name).localeCompare(String(y.name));
+    });
+  }
+
+  accounts.forEach(function(a) {
+    const name = String(a.name || '').trim();
+    if (!name) return;
+    const policy = String(a.usePolicy || '').trim().toUpperCase();
+    const usable = round2_(Math.max(0, (Number(a.currentBalance) || 0) - (Number(a.minBuffer) || 0)));
+
+    if (policy === 'DO_NOT_TOUCH') {
+      doNotTouchExcludedCash = round2_(doNotTouchExcludedCash + (Number(a.currentBalance) || 0));
+      reserveAccountCount += 1;
+      debug.push({
+        name: name,
+        usable_cash: usable,
+        included: false,
+        reason: 'DO_NOT_TOUCH — excluded from deployable pools (contributes to calculated_reserve)'
+      });
+      return;
+    }
+    if ((Number(a.minBuffer) || 0) > 0) {
+      bufferAccountCount += 1;
+    }
+    if (policy === B_DEBT) {
+      debtList.push({
+        name: name,
+        priority: a.priority,
+        currentBalance: Number(a.currentBalance) || 0,
+        minBuffer: Number(a.minBuffer) || 0,
+        usable_cash: usable
+      });
+      debug.push({
+        name: name,
+        usable_cash: usable,
+        included: true,
+        reason: 'USE_FOR_DEBT — highest execution preference (consumed before other pools when deploying)'
+      });
+      return;
+    }
+    if (policy === B_BILLS) {
+      billsList.push({
+        name: name,
+        priority: a.priority,
+        currentBalance: Number(a.currentBalance) || 0,
+        minBuffer: Number(a.minBuffer) || 0,
+        usable_cash: usable
+      });
+      debug.push({
+        name: name,
+        usable_cash: usable,
+        included: true,
+        reason: 'USE_FOR_BILLS — secondary pool (after debt-preferred accounts)'
+      });
+      return;
+    }
+    if (policy === B_CAUTION) {
+      cautionList.push({
+        name: name,
+        priority: a.priority,
+        currentBalance: Number(a.currentBalance) || 0,
+        minBuffer: Number(a.minBuffer) || 0,
+        usable_cash: usable
+      });
+      debug.push({
+        name: name,
+        usable_cash: usable,
+        included: true,
+        reason: 'USE_WITH_CAUTION — lowest pool (only after debt + bills pools when modeling execution order)'
+      });
+      return;
+    }
+    unsupportedPolicyBalanceTotal = round2_(
+      unsupportedPolicyBalanceTotal + (Number(a.currentBalance) || 0)
+    );
+    debug.push({
+      name: name,
+      usable_cash: usable,
+      included: false,
+      reason: policy ? 'unsupported use_policy: ' + policy : 'missing or blank use_policy'
+    });
+  });
+
+  const debtSorted = sortByPriorityAsc(debtList);
+  const billsSorted = sortByPriorityAsc(billsList);
+  const cautionSorted = sortByPriorityAsc(cautionList);
+
+  function sumUsable(list) {
+    return round2_(list.reduce(function(s, x) {
+      return s + (Number(x.usable_cash) || 0);
+    }, 0));
+  }
+
+  function sumMinBuffer(list) {
+    return round2_(
+      list.reduce(function(s, x) {
+        return s + (Number(x.minBuffer) || 0);
+      }, 0)
+    );
+  }
+
+  const debtRaw = sumUsable(debtSorted);
+  const billsRaw = sumUsable(billsSorted);
+  const cautionRaw = sumUsable(cautionSorted);
+  const totalUsable = round2_(debtRaw + billsRaw + cautionRaw);
+
+  const accountMinBuffersTotal = round2_(
+    sumMinBuffer(debtSorted) + sumMinBuffer(billsSorted) + sumMinBuffer(cautionSorted)
+  );
+
+  const policyScopedBalanceTotal = round2_(
+    debtSorted.reduce(function(s, x) {
+      return s + (Number(x.currentBalance) || 0);
+    }, 0) +
+      billsSorted.reduce(function(s, x) {
+        return s + (Number(x.currentBalance) || 0);
+      }, 0) +
+      cautionSorted.reduce(function(s, x) {
+        return s + (Number(x.currentBalance) || 0);
+      }, 0)
+  );
+
+  const policyEligibleCashBeforeBuffers = round2_(liquidTotalSheet - doNotTouchExcludedCash);
+
+  const linearSubtotalAfterBuffers = round2_(policyScopedBalanceTotal - accountMinBuffersTotal);
+  const bridgePerAccountFloorDelta = round2_(totalUsable - linearSubtotalAfterBuffers);
+
+  const liquidReconciliationDelta = round2_(
+    liquidTotalSheet - doNotTouchExcludedCash - unsupportedPolicyBalanceTotal - policyScopedBalanceTotal
+  );
+
+  const dist = distributeHoldAcrossPolicyPools_(debtRaw, billsRaw, cautionRaw, holdTotal);
+  const finalExecuteLinear = round2_(Math.max(0, totalUsable - holdTotal));
+
+  const cashBridgeValidationWarnings = [];
+  const bucketRawSum = round2_(debtRaw + billsRaw + cautionRaw);
+  if (Math.abs(bucketRawSum - totalUsable) > 0.02) {
+    cashBridgeValidationWarnings.push(
+      'after_bucketing_raw_pool_sum: debt_preferred_cash_raw + bills_available_cash_raw + caution_cash_raw must equal total_usable_cash (diff ' +
+        String(round2_(bucketRawSum - totalUsable)) +
+        ')'
+    );
+  }
+  const bucketPostSum = round2_(dist.debt + dist.bills + dist.caution);
+  if (Math.abs(bucketPostSum - finalExecuteLinear) > 0.02) {
+    cashBridgeValidationWarnings.push(
+      'post_hold_named_pools: debt_preferred_cash + bills_available_cash + caution_cash must equal final_execute_now_cash (linear total_usable minus holds) (diff ' +
+        String(round2_(bucketPostSum - finalExecuteLinear)) +
+        ')'
+    );
+  }
+  if (Math.abs(liquidReconciliationDelta) > 0.02) {
+    cashBridgeValidationWarnings.push(
+      'liquid_sheet_reconciliation: liquid_total_sheet should equal DNT + unsupported + policy-scoped balances (diff ' +
+        String(liquidReconciliationDelta) +
+        ')'
+    );
+  }
+
+  const finalExecuteNowCash = finalExecuteLinear;
+
+  /**
+   * Calculated reserve and buffer derived directly from the SYS - Accounts policy model.
+   * These replace the legacy hardcoded planner constants (reserve_hold / global_buffer_hold)
+   * as the authoritative values for the top-level UI deployable math.
+   *
+   * calculated_reserve: sum of Current Balance for all DO_NOT_TOUCH cash accounts
+   * calculated_buffer:  sum of per-account Min Buffer for all non-DO_NOT_TOUCH policy-eligible cash accounts
+   */
+  const calculatedReserve = round2_(doNotTouchExcludedCash);
+  const calculatedBuffer = round2_(accountMinBuffersTotal);
+  const deployableMaxCalculated = round2_(
+    Math.max(0, liquidTotalSheet - calculatedReserve - calculatedBuffer - nearTerm - unmapped)
+  );
+
+  return {
+    account_cash_policy_debug: debug,
+    debt_preferred_cash: dist.debt,
+    bills_available_cash: dist.bills,
+    caution_cash: dist.caution,
+    debt_preferred_cash_raw: debtRaw,
+    bills_available_cash_raw: billsRaw,
+    caution_cash_raw: cautionRaw,
+    total_usable_cash: totalUsable,
+    final_execute_now_cash: finalExecuteNowCash,
+    /** Canonical month-0 execute-now budget = min(final_execute_now_cash, monthly_execution_cap). Set by caller after monthly_execution_cap is known. */
+    month0_execute_now_budget: finalExecuteNowCash,
+    global_hold_total: holdTotal,
+    global_hold_applied_to_pools: round2_(Math.min(holdTotal, totalUsable)),
+    liquid_total_sheet: round2_(liquidTotalSheet),
+    do_not_touch_excluded_cash: round2_(doNotTouchExcludedCash),
+    unsupported_policy_balance_total: round2_(unsupportedPolicyBalanceTotal),
+    policy_eligible_cash_before_buffers: policyEligibleCashBeforeBuffers,
+    policy_scoped_balance_total: policyScopedBalanceTotal,
+    account_min_buffers_total: accountMinBuffersTotal,
+    calculated_reserve: calculatedReserve,
+    calculated_buffer: calculatedBuffer,
+    reserve_account_count: reserveAccountCount,
+    buffer_account_count: bufferAccountCount,
+    reserve_source: 'DO_NOT_TOUCH accounts (SYS - Accounts current balances)',
+    buffer_source: 'per-account Min Buffer (non-DO_NOT_TOUCH policy-eligible accounts)',
+    deployable_max_calculated: deployableMaxCalculated,
+    reserve_hold: reserve,
+    global_buffer_hold: buffer,
+    near_term_planned_cash_hold: nearTerm,
+    unmapped_card_risk_hold: unmapped,
+    bridge_linear_subtotal_after_buffers: linearSubtotalAfterBuffers,
+    bridge_per_account_floor_delta: bridgePerAccountFloorDelta,
+    liquid_reconciliation_delta: liquidReconciliationDelta,
+    cash_bridge_validation_warnings: cashBridgeValidationWarnings,
+    execution_order_note:
+      'Execution draws conceptually from USE_FOR_DEBT (priority ASC), then USE_FOR_BILLS, then USE_WITH_CAUTION; global holds reduce caution then bills then debt-preferred balances for reporting. final_execute_now_cash uses linear total_usable minus all holds; pool distribution is checked to match.'
+  };
+}
+
 function calculateUsableCash_(accounts) {
   let totalAvailableNow = 0;
   let totalBuffers = 0;
-  let usableAfterBuffers = 0;
-
-  const usablePolicies = ['USE_FOR_BILLS', 'USE_FOR_DEBT', 'USE_WITH_CAUTION'];
 
   accounts.forEach(function(a) {
-    totalAvailableNow += a.availableNow;
-    totalBuffers += a.minBuffer;
+    totalAvailableNow += Number(a.currentBalance) || 0;
+    totalBuffers += Number(a.minBuffer) || 0;
+  });
 
-    if (usablePolicies.indexOf(a.usePolicy) !== -1) {
-      usableAfterBuffers += Math.max(0, a.availableNow - a.minBuffer);
-    }
+  const model = buildAccountCashAvailabilityModel_(accounts, {
+    nearTermPlannedCash: 0,
+    unmappedCardFundedCashRisk: 0,
+    reserveTarget: 0,
+    bufferAboveReserve: 0
   });
 
   return {
     totalAvailableNow: round2_(totalAvailableNow),
     totalBuffers: round2_(totalBuffers),
-    usableAfterBuffers: round2_(usableAfterBuffers)
+    usableAfterBuffers: round2_(model.total_usable_cash)
   };
 }
 

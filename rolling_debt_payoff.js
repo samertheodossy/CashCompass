@@ -2679,6 +2679,7 @@ function slimThisMonthPlanForDashboard_(plan) {
   delete out.modeled_extra_principal_total;
   delete out.cash_plus_heloc_execution_cap;
   delete out.execution_total_now;
+  delete out.account_cash_policy_debug;
   out.top_warnings = (out.top_warnings || []).slice(0, 3);
   return out;
 }
@@ -2708,7 +2709,9 @@ function slimRollingDashboardExecutionRow_(row0) {
     'deployable_concentration_meta',
     'waterfall_execution_snapshot',
     'waterfall_execution_validated',
-    'waterfall_execution_validation_failures'
+    'waterfall_execution_validation_failures',
+    'allocation_audit',
+    'liquidity_summary'
   ];
   for (var i = 0; i < keys.length; i++) {
     var k = keys[i];
@@ -2745,6 +2748,7 @@ function slimRollingDebtPayoffForDefault_(full, defaultOutput) {
       reserve_target: full.assumptions.reserve_target,
       lump_sum_split: full.assumptions.lump_sum_split,
       anchor_sheet_month_header: full.assumptions.anchor_sheet_month_header,
+      cash_model: full.assumptions.cash_model,
       cash_haircut: full.assumptions.cash_haircut,
       reserved_buckets_tracked: full.assumptions.reserved_buckets_tracked
     },
@@ -2766,14 +2770,12 @@ function getRollingDebtPayoffPlan(options) {
   const accountRows = readSheetAsObjects_(ss, 'ACCOUNTS');
   const debts = normalizeDebts_(debtRows, aliasMap);
   const accounts = normalizeAccounts_(accountRows);
-  const usable = calculateUsableCash_(accounts);
   const liquidTotal = round2_(
     accounts.reduce(function(s, a) {
       return s + a.currentBalance;
     }, 0)
   );
   const reservedBucketsTracked = false;
-  const availableCash = round2_(reservedBucketsTracked ? usable.usableAfterBuffers : liquidTotal * 0.85);
 
   const anchor = findRollingCashFlowAnchor_(ss);
   const anchorHeader = anchor.header;
@@ -2892,7 +2894,50 @@ function getRollingDebtPayoffPlan(options) {
   const plannedLiquidityHolds = round2_(
     plannedExpenseModel.near_term_cash_total + plannedExpenseModel.unmapped_card_funded_cash_risk_total
   );
-  const availableCashForSim = round2_(Math.max(0, availableCash - plannedLiquidityHolds));
+
+  /**
+   * Reserve and Buffer are now CALCULATED from SYS - Accounts (DO_NOT_TOUCH balances
+   * and per-account Min Buffer), not from the legacy ROLLING_DP_RESERVE_DEFAULT_ /
+   * ROLLING_DP_BUFFER_ABOVE_RESERVE_ planner constants. We pass reserveTarget/
+   * bufferAboveReserve as 0 so legacy reserve_hold / global_buffer_hold do not reduce
+   * final_execute_now_cash. The legacy planner constants are still recorded separately
+   * (legacy_reserve_target / legacy_buffer_above_reserve) for audit/debug only.
+   */
+  const cashPolicyModel = buildAccountCashAvailabilityModel_(accounts, {
+    nearTermPlannedCash: plannedExpenseModel.near_term_cash_total,
+    unmappedCardFundedCashRisk: plannedExpenseModel.unmapped_card_funded_cash_risk_total,
+    reserveTarget: 0,
+    bufferAboveReserve: 0
+  });
+  cashPolicyModel.legacy_reserve_target = round2_(ROLLING_DP_RESERVE_DEFAULT_);
+  cashPolicyModel.legacy_buffer_above_reserve = round2_(ROLLING_DP_BUFFER_ABOVE_RESERVE_);
+  /**
+   * The legacy $50k monthly execution cap (`ROLLING_DP_MAX_CASH_DEPLOYMENT_MONTHLY_`)
+   * no longer gates the canonical month-0 execute-now budget. The user-facing
+   * "Cash to use now" input (bounded by `deployable_max_calculated`) is now the
+   * effective limit. We still surface the legacy constant as
+   * `legacy_monthly_execution_cap` for audit/debug only.
+   */
+  cashPolicyModel.legacy_monthly_execution_cap = round2_(ROLLING_DP_MAX_CASH_DEPLOYMENT_MONTHLY_);
+  cashPolicyModel.monthly_execution_cap = round2_(Number(cashPolicyModel.final_execute_now_cash) || 0);
+  cashPolicyModel.executable_now_budget = round2_(Number(cashPolicyModel.final_execute_now_cash) || 0);
+  /**
+   * Canonical single source of truth for month-0 deployable cash.
+   * month0_execute_now_budget = final_execute_now_cash (calculated-reserve / buffer /
+   * near-term / unmapped holds already subtracted). Allocator, summary, liquidity,
+   * decision box, and snapshot footers all resolve to this value; the user-entered
+   * "Cash to use now" is clamped to this ceiling by the dashboard.
+   */
+  cashPolicyModel.month0_execute_now_budget = cashPolicyModel.executable_now_budget;
+  (cashPolicyModel.cash_bridge_validation_warnings || []).forEach(function(w) {
+    if (w) keyWarnings.push('Cash bridge: ' + w);
+  });
+  /** Total policy-usable cash (pre–reserve/buffer/planned holds) — replaces legacy 85% liquid haircut. */
+  const availableCash = round2_(cashPolicyModel.total_usable_cash);
+  /** Simulator starting envelope: usable after sheet holds only; reserve + buffer still applied inside simulateRollingMonths_. */
+  const availableCashForSim = round2_(
+    Math.max(0, cashPolicyModel.total_usable_cash - plannedLiquidityHolds)
+  );
 
   const debtSheetAnchorSnapshot = snapshotDebtsForActionPlan_(
     debts.map(function(d) {
@@ -2916,6 +2961,7 @@ function getRollingDebtPayoffPlan(options) {
     reserveTarget: ROLLING_DP_RESERVE_DEFAULT_,
     bufferAboveReserve: ROLLING_DP_BUFFER_ABOVE_RESERVE_,
     maxCashDeploymentMonthly: ROLLING_DP_MAX_CASH_DEPLOYMENT_MONTHLY_,
+    month0ExecuteNowBudget: cashPolicyModel.month0_execute_now_budget,
     planInvalid: planInvalidEarly,
     liquidTotal: liquidTotal,
     tz: tz,
@@ -2927,6 +2973,28 @@ function getRollingDebtPayoffPlan(options) {
     executionPlanAggressiveAlloc: executionPlanModesList.indexOf('aggressive') >= 0,
     debtSheetAnchorSnapshot: debtSheetAnchorSnapshot
   });
+
+  if (sim.next12 && sim.next12[0]) {
+    sim.next12[0].cash_policy_pools = cashPolicyModel;
+    const ls0 = sim.next12[0].liquidity_summary;
+    const budget0 = round2_(Number(cashPolicyModel.month0_execute_now_budget) || 0);
+    if (ls0) {
+      ls0.month0_execute_now_budget = budget0;
+      if (
+        ls0.cash_available_for_extra_debt_today != null &&
+        ls0.cash_available_for_extra_debt_today === ls0.cash_available_for_extra_debt_today
+      ) {
+        ls0.cash_available_for_extra_debt_today = round2_(
+          Math.min(round2_(ls0.cash_available_for_extra_debt_today), budget0)
+        );
+      }
+    }
+    const auditWarnings =
+      (sim.next12[0].allocation_audit && sim.next12[0].allocation_audit.warnings) || [];
+    auditWarnings.forEach(function(w) {
+      if (w) keyWarnings.push('Allocation audit: ' + w);
+    });
+  }
 
   const endingDebt84 = sim.longRange.length ? sim.longRange[sim.longRange.length - 1].ending_total_debt : sim.debtStart;
   const projectedDebtReduction84 = round2_(sim.debtStart - endingDebt84);
@@ -3034,6 +3102,9 @@ function getRollingDebtPayoffPlan(options) {
   if (anchorBasisNote) {
     thisMonthPlan.context_notes = [anchorBasisNote].concat(thisMonthPlan.context_notes || []);
   }
+  if (includeDebugDetails && cashPolicyModel.account_cash_policy_debug) {
+    thisMonthPlan.account_cash_policy_debug = cashPolicyModel.account_cash_policy_debug;
+  }
   const next3Preview = buildNext3MonthPreview_(sim.next12, ROLLING_DP_RESERVE_DEFAULT_);
   const execPlanOut = buildThisMonthExecutionPlanText_(row0, planStatus === 'INVALID', {
     overall_confidence: overallConfidence.label,
@@ -3085,6 +3156,42 @@ function getRollingDebtPayoffPlan(options) {
     anchor_capped_to_current_month: !!anchor.anchor_capped_to_current_month,
     anchor_future_only_no_data_through_current_month: !!anchor.anchor_future_only_no_data_through_current_month,
     starting_available_cash: availableCash,
+    cash_availability: {
+      liquid_total_sheet: cashPolicyModel.liquid_total_sheet,
+      do_not_touch_excluded_cash: cashPolicyModel.do_not_touch_excluded_cash,
+      unsupported_policy_balance_total: cashPolicyModel.unsupported_policy_balance_total,
+      policy_eligible_cash_before_buffers: cashPolicyModel.policy_eligible_cash_before_buffers,
+      policy_scoped_balance_total: cashPolicyModel.policy_scoped_balance_total,
+      account_min_buffers_total: cashPolicyModel.account_min_buffers_total,
+      total_usable_cash: cashPolicyModel.total_usable_cash,
+      bridge_linear_subtotal_after_buffers: cashPolicyModel.bridge_linear_subtotal_after_buffers,
+      bridge_per_account_floor_delta: cashPolicyModel.bridge_per_account_floor_delta,
+      reserve_hold: cashPolicyModel.reserve_hold,
+      global_buffer_hold: cashPolicyModel.global_buffer_hold,
+      legacy_reserve_target: cashPolicyModel.legacy_reserve_target,
+      legacy_buffer_above_reserve: cashPolicyModel.legacy_buffer_above_reserve,
+      calculated_reserve: cashPolicyModel.calculated_reserve,
+      calculated_buffer: cashPolicyModel.calculated_buffer,
+      reserve_account_count: cashPolicyModel.reserve_account_count,
+      buffer_account_count: cashPolicyModel.buffer_account_count,
+      reserve_source: cashPolicyModel.reserve_source,
+      buffer_source: cashPolicyModel.buffer_source,
+      deployable_max_calculated: cashPolicyModel.deployable_max_calculated,
+      near_term_planned_cash_hold: cashPolicyModel.near_term_planned_cash_hold,
+      unmapped_card_risk_hold: cashPolicyModel.unmapped_card_risk_hold,
+      final_execute_now_cash: cashPolicyModel.final_execute_now_cash,
+      monthly_execution_cap: cashPolicyModel.monthly_execution_cap,
+      executable_now_budget: cashPolicyModel.executable_now_budget,
+      month0_execute_now_budget: cashPolicyModel.month0_execute_now_budget,
+      debt_preferred_cash: cashPolicyModel.debt_preferred_cash,
+      bills_available_cash: cashPolicyModel.bills_available_cash,
+      caution_cash: cashPolicyModel.caution_cash,
+      debt_preferred_cash_raw: cashPolicyModel.debt_preferred_cash_raw,
+      bills_available_cash_raw: cashPolicyModel.bills_available_cash_raw,
+      caution_cash_raw: cashPolicyModel.caution_cash_raw,
+      liquid_reconciliation_delta: cashPolicyModel.liquid_reconciliation_delta,
+      cash_bridge_validation_warnings: (cashPolicyModel.cash_bridge_validation_warnings || []).slice()
+    },
     near_term_planned_cash_reserved: plannedExpenseModel.near_term_cash_total,
     unmapped_card_funded_cash_risk: plannedExpenseModel.unmapped_card_funded_cash_risk_total,
     near_term_card_funded_mapped_total: plannedExpenseModel.near_term_card_funded_mapped_total,
@@ -3135,7 +3242,8 @@ function getRollingDebtPayoffPlan(options) {
     property_watchlist: propertyWatchlist,
     assumptions: {
       reserve_target: ROLLING_DP_RESERVE_DEFAULT_,
-      cash_haircut: reservedBucketsTracked ? 1 : 0.85,
+      cash_model: 'SYS_ACCOUNTS_POLICY_ORDERED',
+      cash_haircut: 1,
       lump_sum_split: {
         debt: ROLLING_DP_LUMP_DEBT_,
         reserve: ROLLING_DP_LUMP_RESERVE_,
@@ -3155,6 +3263,35 @@ function getRollingDebtPayoffPlan(options) {
     },
     payee_debug_rows: payeeDebugRows,
     diagnostics: Object.assign({}, forward.diagnostics, {
+      cash_policy_pools: {
+        liquid_total_sheet: cashPolicyModel.liquid_total_sheet,
+        do_not_touch_excluded_cash: cashPolicyModel.do_not_touch_excluded_cash,
+        policy_eligible_cash_before_buffers: cashPolicyModel.policy_eligible_cash_before_buffers,
+        account_min_buffers_total: cashPolicyModel.account_min_buffers_total,
+        total_usable_cash: cashPolicyModel.total_usable_cash,
+        reserve_hold: cashPolicyModel.reserve_hold,
+        global_buffer_hold: cashPolicyModel.global_buffer_hold,
+        legacy_reserve_target: cashPolicyModel.legacy_reserve_target,
+        legacy_buffer_above_reserve: cashPolicyModel.legacy_buffer_above_reserve,
+        calculated_reserve: cashPolicyModel.calculated_reserve,
+        calculated_buffer: cashPolicyModel.calculated_buffer,
+        reserve_account_count: cashPolicyModel.reserve_account_count,
+        buffer_account_count: cashPolicyModel.buffer_account_count,
+        reserve_source: cashPolicyModel.reserve_source,
+        buffer_source: cashPolicyModel.buffer_source,
+        deployable_max_calculated: cashPolicyModel.deployable_max_calculated,
+        near_term_planned_cash_hold: cashPolicyModel.near_term_planned_cash_hold,
+        unmapped_card_risk_hold: cashPolicyModel.unmapped_card_risk_hold,
+        final_execute_now_cash: cashPolicyModel.final_execute_now_cash,
+        monthly_execution_cap: cashPolicyModel.monthly_execution_cap,
+        executable_now_budget: cashPolicyModel.executable_now_budget,
+        month0_execute_now_budget: cashPolicyModel.month0_execute_now_budget,
+        debt_preferred_cash_raw: cashPolicyModel.debt_preferred_cash_raw,
+        bills_available_cash_raw: cashPolicyModel.bills_available_cash_raw,
+        caution_cash_raw: cashPolicyModel.caution_cash_raw,
+        cash_bridge_validation_warnings: (cashPolicyModel.cash_bridge_validation_warnings || []).slice(),
+        execution_order_note: cashPolicyModel.execution_order_note
+      },
       statement_balance_tracking: ccMeta.statement_balance_tracking,
       reserved_buckets_tracked: reservedBucketsTracked,
       history_months_loaded: history.length,
@@ -4769,6 +4906,11 @@ function simulateRollingMonths_(ctx) {
   const reserve = ctx.reserveTarget != null ? ctx.reserveTarget : ROLLING_DP_RESERVE_DEFAULT_;
   const buffer = ctx.bufferAboveReserve != null ? ctx.bufferAboveReserve : ROLLING_DP_BUFFER_ABOVE_RESERVE_;
   const maxCashDeploy = ctx.maxCashDeploymentMonthly != null ? ctx.maxCashDeploymentMonthly : ROLLING_DP_MAX_CASH_DEPLOYMENT_MONTHLY_;
+  /** Canonical month-0 execute-now budget (min of final execute-now cash and monthly execution cap). Hard-caps m=0 execute-now allocation. */
+  const month0ExecuteNowBudget =
+    ctx.month0ExecuteNowBudget != null && ctx.month0ExecuteNowBudget === ctx.month0ExecuteNowBudget
+      ? round2_(Math.max(0, Number(ctx.month0ExecuteNowBudget) || 0))
+      : null;
   const planInvalid = !!ctx.planInvalid;
   const displayTotalCash = ctx.displayTotalCash != null && ctx.displayTotalCash === ctx.displayTotalCash ? ctx.displayTotalCash : null;
   const nearTermPlannedCash = ctx.nearTermPlannedCashTotal != null && ctx.nearTermPlannedCashTotal === ctx.nearTermPlannedCashTotal ? round2_(ctx.nearTermPlannedCashTotal) : 0;
@@ -4827,8 +4969,29 @@ function simulateRollingMonths_(ctx) {
 
     let openingIntentMonth0 = 0;
     if (m === 0) {
-      const deployOpen = Math.max(0, round2_(liquid - reserve - buffer));
-      openingIntentMonth0 = round2_(Math.min(deployOpen, Math.max(0, maxCashDeploy - monthlyCashDeployUsed)));
+      /**
+       * Month-0 opening intent uses the canonical `month0ExecuteNowBudget` (min of
+       * final_execute_now_cash and monthly_execution_cap) as the ceiling. That value
+       * already accounts for the CALCULATED reserve / buffer / near-term / unmapped
+       * holds from the SYS - Accounts policy model. Subtracting the legacy
+       * $100k + $100k reserve/buffer constants here would double-count the holds and
+       * collapse the waterfall to $0 whenever calculated-deployable is below the
+       * legacy threshold (see "display plan validator" drift report). Forward months
+       * still use reserve/buffer to protect cash projections — only m=0 changes.
+       */
+      const baseCap = month0ExecuteNowBudget != null
+        ? round2_(Math.max(0, Math.min(round2_(liquid), month0ExecuteNowBudget)))
+        : Math.max(0, round2_(liquid - reserve - buffer));
+      /**
+       * Month-0 opening intent is bounded by `month0ExecuteNowBudget` (= final_execute_now_cash
+       * post calculated-reserve/buffer/holds) when provided. The legacy $50k
+       * `maxCashDeploymentMonthly` cap only applies when `month0ExecuteNowBudget` is null.
+       */
+      if (month0ExecuteNowBudget != null) {
+        openingIntentMonth0 = round2_(Math.min(baseCap, month0ExecuteNowBudget));
+      } else {
+        openingIntentMonth0 = round2_(Math.min(baseCap, Math.max(0, maxCashDeploy - monthlyCashDeployUsed)));
+      }
     }
 
     const stableIn = m === 0 ? anchorStable : fwdStable;
@@ -4840,16 +5003,36 @@ function simulateRollingMonths_(ctx) {
 
     liquid = round2_(liquid + netToLiquid);
 
-    const deployMid = Math.max(0, round2_(liquid - reserve - buffer));
-    /** Month 0: opening sweep already reserved up to maxCashDeploy; deployable must not add a second full cap (was double-counting). */
+    /**
+     * Month-0 deploy-mid uses the same calculated-model ceiling as opening intent:
+     * `liquid` already net of the calculated reserve/buffer/holds via availableCashStart,
+     * so we don't subtract the legacy $100k/$100k again. Forward months still apply
+     * legacy reserve/buffer to protect projected cash flow.
+     */
+    const deployMid =
+      m === 0 && month0ExecuteNowBudget != null
+        ? Math.max(0, round2_(liquid))
+        : Math.max(0, round2_(liquid - reserve - buffer));
+    /**
+     * Forward months keep the legacy monthly cap (`maxCashDeploy`) as a sanity bound
+     * on projected cash deployment. Month 0 uses `month0ExecuteNowBudget` (canonical
+     * final execute-now cash) as the only ceiling; the legacy $50k cap is ignored.
+     */
     let roomLeft = Math.max(0, round2_(maxCashDeploy - monthlyCashDeployUsed));
     if (m === 0) {
-      roomLeft = Math.max(0, round2_(roomLeft - openingIntentMonth0));
+      if (month0ExecuteNowBudget != null) {
+        roomLeft = Math.max(0, round2_(month0ExecuteNowBudget - openingIntentMonth0));
+      } else {
+        roomLeft = Math.max(0, round2_(roomLeft - openingIntentMonth0));
+      }
     }
     const fromLiquid = round2_(Math.min(deployMid, roomLeft));
 
     if (m === 0) {
-      const combinedIntent = round2_(openingIntentMonth0 + fromLiquid);
+      let combinedIntent = round2_(openingIntentMonth0 + fromLiquid);
+      if (month0ExecuteNowBudget != null) {
+        combinedIntent = round2_(Math.min(combinedIntent, month0ExecuteNowBudget));
+      }
       liquid = round2_(liquid - combinedIntent);
       const combinedRun = runExtraWaterfall_(simDebts, combinedIntent, waterfallOpts);
       const combinedApplied = round2_(combinedRun.totalExtra);
@@ -4901,7 +5084,14 @@ function simulateRollingMonths_(ctx) {
     let helocStrictFailures = [];
     if (m === 0 && !planInvalid) {
       const helocRefSim = findHelocDebt_(simDebts);
-      const capReached = actualCashDeployment >= maxCashDeploy - 0.5;
+      /**
+       * HELOC gating: "cap reached" now means the user has deployed the full
+       * month-0 execute-now budget (calculated final execute-now cash), not the
+       * legacy $50k monthly cap.
+       */
+      const helocCapReference =
+        month0ExecuteNowBudget != null ? month0ExecuteNowBudget : maxCashDeploy;
+      const capReached = actualCashDeployment >= helocCapReference - 0.5;
       const snapAfterCashWaterfalls = snapshotDebtsForActionPlan_(simDebts);
       const highCardsAfterCash = highAprCreditCardsFromSnapshot_(
         snapAfterCashWaterfalls,
@@ -5004,6 +5194,79 @@ function simulateRollingMonths_(ctx) {
       }
     }
 
+    /**
+     * Month-0 allocation audit (single source of truth = month0_execute_now_budget).
+     * The intent/waterfall is already capped at the canonical budget; as belt-and-suspenders
+     * this block clamps any rounding-drift overshoot, emits a warning to row.alerts, and
+     * publishes per-bucket allocated totals for the dashboard & automation output.
+     */
+    let allocationAudit = null;
+    if (m === 0) {
+      let allocatedExecuteNowCashTotal = round2_(sumRollingAllocMap_(execAllocCashObj));
+      const clampWarnings = [];
+      if (month0ExecuteNowBudget != null && allocatedExecuteNowCashTotal > month0ExecuteNowBudget + 0.01) {
+        const overshoot = round2_(allocatedExecuteNowCashTotal - month0ExecuteNowBudget);
+        const scale = allocatedExecuteNowCashTotal > 0 ? month0ExecuteNowBudget / allocatedExecuteNowCashTotal : 0;
+        const clampedMap = Object.create(null);
+        let runningSum = 0;
+        Object.keys(execAllocCashObj).forEach(function(nm) {
+          const amt = round2_((Number(execAllocCashObj[nm]) || 0) * scale);
+          if (amt > 0.005) {
+            clampedMap[nm] = amt;
+            runningSum = round2_(runningSum + amt);
+          }
+        });
+        execAllocCashObj = clampedMap;
+        allocatedExecuteNowCashTotal = runningSum;
+        executionExtraCashTotal = runningSum;
+        clampWarnings.push(
+          'allocator_exceeded_month0_budget: clamped by ' +
+            fmtCurrency_(overshoot) +
+            ' to match month0_execute_now_budget (' +
+            fmtCurrency_(month0ExecuteNowBudget) +
+            ')'
+        );
+      }
+      const auditBuckets = buildExecutionExtraBuckets_(execConcAnalysis, execAllocCashObj, planInvalid);
+      function sumBucket_(list) {
+        return round2_(
+          (list || []).reduce(function(s, e) {
+            return s + (Number(e && e.amt) || 0);
+          }, 0)
+        );
+      }
+      const allocatedCleanupTotal = sumBucket_(auditBuckets.cleanup);
+      const allocatedPrimaryTotal = sumBucket_(auditBuckets.primary);
+      const allocatedSecondaryTotal = sumBucket_(auditBuckets.secondary);
+      const allocatedOverflowTotal = sumBucket_(auditBuckets.overflow);
+      const budgetNum = month0ExecuteNowBudget != null ? round2_(month0ExecuteNowBudget) : null;
+      const gap = budgetNum != null ? round2_(budgetNum - allocatedExecuteNowCashTotal) : null;
+      const warnings = clampWarnings.slice();
+      if (
+        budgetNum != null &&
+        Math.abs(allocatedExecuteNowCashTotal - budgetNum) > 0.01
+      ) {
+        warnings.push(
+          'month0_allocation_vs_budget_drift: allocated_execute_now_cash_total (' +
+            fmtCurrency_(allocatedExecuteNowCashTotal) +
+            ') differs from month0_execute_now_budget (' +
+            fmtCurrency_(budgetNum) +
+            ') by ' +
+            fmtCurrency_(Math.abs(gap || 0))
+        );
+      }
+      allocationAudit = {
+        allocated_cleanup_total: allocatedCleanupTotal,
+        allocated_primary_total: allocatedPrimaryTotal,
+        allocated_secondary_total: allocatedSecondaryTotal,
+        allocated_overflow_total: allocatedOverflowTotal,
+        allocated_execute_now_cash_total: allocatedExecuteNowCashTotal,
+        month0_execute_now_budget: budgetNum,
+        allocation_gap_to_budget: gap,
+        warnings: warnings
+      };
+    }
+
     const helocRecExecution =
       m === 0 && helocDrawMonth >= ROLLING_DP_HELOC_MIN_MONTHLY_DRAW_
         ? 'Optional only with manual approval'
@@ -5034,6 +5297,8 @@ function simulateRollingMonths_(ctx) {
             )
           : deployableAtStart,
       cash_available_for_extra_debt_today: m === 0 ? executionExtraCashTotal : 0,
+      month0_execute_now_budget:
+        m === 0 && month0ExecuteNowBudget != null ? round2_(month0ExecuteNowBudget) : 0,
       heloc_recommended_now: m === 0 ? helocRecExecution : 'No',
       heloc_strict_failure_reasons: m === 0 ? helocStrictFailures.slice() : [],
       monthly_max_cash_deployment: maxCashDeploy,
@@ -5061,6 +5326,11 @@ function simulateRollingMonths_(ctx) {
     if (m === 0 && execConcAnalysis && execConcAnalysis.strict_waterfall_errors && execConcAnalysis.strict_waterfall_errors.length) {
       for (let ei = 0; ei < execConcAnalysis.strict_waterfall_errors.length; ei++) {
         monthAlerts.push(execConcAnalysis.strict_waterfall_errors[ei]);
+      }
+    }
+    if (m === 0 && allocationAudit && allocationAudit.warnings && allocationAudit.warnings.length) {
+      for (let ai = 0; ai < allocationAudit.warnings.length; ai++) {
+        monthAlerts.push('Allocation audit: ' + allocationAudit.warnings[ai]);
       }
     }
 
@@ -5109,7 +5379,8 @@ function simulateRollingMonths_(ctx) {
       heloc_recommendation_execution: m === 0 ? helocRecExecution : 'No',
       heloc_draw_capacity_remaining: round2_(ROLLING_DP_HELOC_ACTION_DRAW_CAP_ - helocDrawsCumulativeSim),
       liquidity_summary: liquiditySummary,
-      allocation_interest_optimized: m === 0 ? allocationInterestOptimized : false
+      allocation_interest_optimized: m === 0 ? allocationInterestOptimized : false,
+      allocation_audit: m === 0 ? allocationAudit : null
     };
 
     longRange.push({
@@ -5524,6 +5795,46 @@ function rollingAggressiveSpilloverExplainLines_(r0, planInvalid, primaryShow, s
 }
 
 /**
+ * Appends strict SYS–Accounts cash bridge (10 steps + execution cap) for auditability.
+ * @param {string[]} lines
+ * @param {Record<string, unknown>} cap cash_policy_pools from buildAccountCashAvailabilityModel_
+ */
+function appendRollingCashBridgeAuditLines_(lines, cap) {
+  if (!cap || cap.liquid_total_sheet == null || cap.liquid_total_sheet !== cap.liquid_total_sheet) return;
+  function f_(k) {
+    return fmtCurrency_(round2_(Number(cap[k]) || 0));
+  }
+  lines.push('=== cash_bridge (auditable) ===');
+  lines.push('01_liquid_total_sheet: ' + f_('liquid_total_sheet'));
+  lines.push('02_minus_do_not_touch_excluded: ' + f_('do_not_touch_excluded_cash'));
+  lines.push('03_policy_eligible_cash_before_buffers: ' + f_('policy_eligible_cash_before_buffers'));
+  lines.push('04_minus_account_min_buffers_total: ' + f_('account_min_buffers_total'));
+  lines.push('05_total_usable_cash: ' + f_('total_usable_cash'));
+  lines.push('06_minus_reserve_hold: ' + f_('reserve_hold'));
+  lines.push('07_minus_global_buffer_hold: ' + f_('global_buffer_hold'));
+  lines.push('08_minus_near_term_planned_cash_hold: ' + f_('near_term_planned_cash_hold'));
+  lines.push('09_minus_unmapped_card_risk_hold: ' + f_('unmapped_card_risk_hold'));
+  lines.push('10_final_execute_now_cash: ' + f_('final_execute_now_cash'));
+  lines.push('monthly_execution_cap: ' + f_('monthly_execution_cap'));
+  lines.push('executable_now_budget_min_final_and_cap: ' + f_('executable_now_budget'));
+  if (cap.unsupported_policy_balance_total != null && Number(cap.unsupported_policy_balance_total) > 0.005) {
+    lines.push('note_unsupported_policy_balance_on_sheet: ' + f_('unsupported_policy_balance_total'));
+  }
+  if (cap.bridge_per_account_floor_delta != null && Math.abs(Number(cap.bridge_per_account_floor_delta) || 0) > 0.02) {
+    lines.push('note_per_account_floor_vs_linear_buffers: ' + f_('bridge_per_account_floor_delta'));
+  }
+  if (cap.liquid_reconciliation_delta != null && Math.abs(Number(cap.liquid_reconciliation_delta) || 0) > 0.02) {
+    lines.push('note_liquid_sheet_reconciliation_delta: ' + f_('liquid_reconciliation_delta'));
+  }
+  if (cap.cash_bridge_validation_warnings && cap.cash_bridge_validation_warnings.length) {
+    cap.cash_bridge_validation_warnings.forEach(function(w) {
+      lines.push('WARNING: ' + String(w || ''));
+    });
+  }
+  lines.push('');
+}
+
+/**
  * Machine-oriented execution plan (no narrative paragraphs, full account names).
  */
 function buildThisMonthExecutionPlanAutomationFormat_(row0, planInvalid, renderCtx) {
@@ -5566,10 +5877,18 @@ function buildThisMonthExecutionPlanAutomationFormat_(row0, planInvalid, renderC
         : round2_(
             Math.max(0, totalCash - reserveTarget - bufferProtected - nearTermReservedExec - unmappedCashRiskExecAuto)
           );
-  const cashAvailExtra =
+  let cashAvailExtra =
     r0.execution_extra_cash_total != null && r0.execution_extra_cash_total === r0.execution_extra_cash_total
       ? round2_(r0.execution_extra_cash_total)
       : round2_(sumRollingAllocMap_(r0.extra_principal_allocations_execution_now || {}));
+  const capPoolsAuto = r0.cash_policy_pools || {};
+  if (
+    !planInvalid &&
+    capPoolsAuto.final_execute_now_cash != null &&
+    capPoolsAuto.final_execute_now_cash === capPoolsAuto.final_execute_now_cash
+  ) {
+    cashAvailExtra = round2_(Math.min(cashAvailExtra, round2_(Number(capPoolsAuto.final_execute_now_cash) || 0)));
+  }
   const helocUsed =
     liqIn.heloc_draw_this_month != null && liqIn.heloc_draw_this_month === liqIn.heloc_draw_this_month
       ? round2_(liqIn.heloc_draw_this_month)
@@ -5688,6 +6007,35 @@ function buildThisMonthExecutionPlanAutomationFormat_(row0, planInvalid, renderC
   lines.push('cash_for_extra_debt: ' + fmtCurrency_(planInvalid ? 0 : cashAvailExtra));
   lines.push('heloc_recommended: ' + helocRecShort);
   lines.push('');
+  appendRollingCashBridgeAuditLines_(lines, r0.cash_policy_pools || {});
+
+  if (!!renderCtx.include_debug_details && r0.cash_policy_pools && r0.cash_policy_pools.account_cash_policy_debug) {
+    const cap = r0.cash_policy_pools;
+    lines.push('=== cash_accounts_debug ===');
+    cap.account_cash_policy_debug.forEach(function(row) {
+      lines.push(
+        'account: ' +
+          String(row.name || '') +
+          ' | usable: ' +
+          fmtCurrency_(Number(row.usable_cash) || 0) +
+          ' | ' +
+          (row.included ? 'included' : 'excluded') +
+          ' | ' +
+          String(row.reason || '')
+      );
+    });
+    lines.push(
+      'policy_pools_after_global_holds: debt_preferred=' +
+        fmtCurrency_(Number(cap.debt_preferred_cash) || 0) +
+        ' | bills=' +
+        fmtCurrency_(Number(cap.bills_available_cash) || 0) +
+        ' | caution=' +
+        fmtCurrency_(Number(cap.caution_cash) || 0)
+    );
+    lines.push('total_usable_cash: ' + fmtCurrency_(Number(cap.total_usable_cash) || 0));
+    lines.push('final_execute_now_cash: ' + fmtCurrency_(Number(cap.final_execute_now_cash) || 0));
+    lines.push('');
+  }
 
   lines.push('=== minimums_due ===');
   if (!ordered.length) {
@@ -5936,10 +6284,18 @@ function buildThisMonthExecutionPlanText_(row0, planInvalid, renderCtx) {
         : round2_(
             Math.max(0, totalCash - reserveTarget - bufferProtected - nearTermReservedExec - unmappedCashRiskExecStd)
           );
-  const cashAvailExtra =
+  let cashAvailExtra =
     r0.execution_extra_cash_total != null && r0.execution_extra_cash_total === r0.execution_extra_cash_total
       ? round2_(r0.execution_extra_cash_total)
       : round2_(sumRollingAllocMap_(r0.extra_principal_allocations_execution_now || {}));
+  const capPoolsStd = r0.cash_policy_pools || {};
+  if (
+    !planInvalid &&
+    capPoolsStd.final_execute_now_cash != null &&
+    capPoolsStd.final_execute_now_cash === capPoolsStd.final_execute_now_cash
+  ) {
+    cashAvailExtra = round2_(Math.min(cashAvailExtra, round2_(Number(capPoolsStd.final_execute_now_cash) || 0)));
+  }
   const helocUsed =
     liqIn.heloc_draw_this_month != null && liqIn.heloc_draw_this_month === liqIn.heloc_draw_this_month
       ? round2_(liqIn.heloc_draw_this_month)
@@ -6009,6 +6365,57 @@ function buildThisMonthExecutionPlanText_(row0, planInvalid, renderCtx) {
   lines.push('- Cash available for extra debt: ' + fmtCurrency_(planInvalid ? 0 : cashAvailExtra));
   lines.push('- HELOC recommended: ' + helocRecShort);
   lines.push('');
+  if (r0.cash_policy_pools && r0.cash_policy_pools.liquid_total_sheet != null) {
+    const b = r0.cash_policy_pools;
+    lines.push('Cash bridge (audit)');
+    lines.push('- 1. Liquid total (sheet): ' + fmtCurrency_(Number(b.liquid_total_sheet) || 0));
+    lines.push('- 2. Minus DO_NOT_TOUCH excluded: ' + fmtCurrency_(Number(b.do_not_touch_excluded_cash) || 0));
+    lines.push('- 3. Policy eligible (before buffers): ' + fmtCurrency_(Number(b.policy_eligible_cash_before_buffers) || 0));
+    lines.push('- 4. Minus account min buffers: ' + fmtCurrency_(Number(b.account_min_buffers_total) || 0));
+    lines.push('- 5. Total usable cash: ' + fmtCurrency_(Number(b.total_usable_cash) || 0));
+    lines.push('- 6. Minus reserve hold: ' + fmtCurrency_(Number(b.reserve_hold) || 0));
+    lines.push('- 7. Minus global buffer hold: ' + fmtCurrency_(Number(b.global_buffer_hold) || 0));
+    lines.push('- 8. Minus near-term planned hold: ' + fmtCurrency_(Number(b.near_term_planned_cash_hold) || 0));
+    lines.push('- 9. Minus unmapped card risk hold: ' + fmtCurrency_(Number(b.unmapped_card_risk_hold) || 0));
+    lines.push('- 10. Final execute-now cash: ' + fmtCurrency_(Number(b.final_execute_now_cash) || 0));
+    lines.push('- Monthly execution cap: ' + fmtCurrency_(Number(b.monthly_execution_cap) || 0));
+    lines.push('- Executable now (min of final and cap): ' + fmtCurrency_(Number(b.executable_now_budget) || 0));
+    lines.push('');
+    if (b.cash_bridge_validation_warnings && b.cash_bridge_validation_warnings.length) {
+      lines.push('Cash bridge validation');
+      b.cash_bridge_validation_warnings.forEach(function(w) {
+        lines.push('- WARNING: ' + String(w || ''));
+      });
+      lines.push('');
+    }
+  }
+  if (!!renderCtx.include_debug_details && r0.cash_policy_pools && r0.cash_policy_pools.account_cash_policy_debug) {
+    const cap = r0.cash_policy_pools;
+    lines.push('Cash accounts (SYS - Accounts policy debug)');
+    cap.account_cash_policy_debug.forEach(function(row) {
+      lines.push(
+        '- ' +
+          String(row.name || '') +
+          ': usable ' +
+          fmtCurrency_(Number(row.usable_cash) || 0) +
+          ' · ' +
+          (row.included ? 'included' : 'excluded') +
+          ' — ' +
+          String(row.reason || '')
+      );
+    });
+    lines.push(
+      '- After global holds — debt-preferred: ' +
+        fmtCurrency_(Number(cap.debt_preferred_cash) || 0) +
+        ', bills pool: ' +
+        fmtCurrency_(Number(cap.bills_available_cash) || 0) +
+        ', caution pool: ' +
+        fmtCurrency_(Number(cap.caution_cash) || 0)
+    );
+    lines.push('- Total usable (pre-holds): ' + fmtCurrency_(Number(cap.total_usable_cash) || 0));
+    lines.push('- Final execute-now budget (post all holds): ' + fmtCurrency_(Number(cap.final_execute_now_cash) || 0));
+    lines.push('');
+  }
 
   const startSnap = r0.debt_balances_start || [];
   const anchorCfPaidByDebt = r0.anchor_cf_paid_by_debt || {};
@@ -6357,17 +6764,40 @@ function buildThisMonthPlan_(row0, keyWarnings, reserve, planInvalid, lumpDebt, 
   const liqIn = r0.liquidity_summary || {};
   const bufDefault = ROLLING_DP_BUFFER_ABOVE_RESERVE_;
   const maxCashRef = ROLLING_DP_MAX_CASH_DEPLOYMENT_MONTHLY_;
+  const poolsForBuild = r0.cash_policy_pools || {};
 
   const totalCash =
     liqIn.total_cash != null && liqIn.total_cash === liqIn.total_cash
       ? round2_(liqIn.total_cash)
       : round2_(Number(r0.starting_cash) || 0);
+  /**
+   * Reserve and Buffer on the dashboard are CALCULATED from SYS - Accounts:
+   *   reserveTargetDisplay = sum of Current Balance for DO_NOT_TOUCH cash accounts
+   *   bufferDisplay        = sum of Min Buffer for non-DO_NOT_TOUCH policy-eligible accounts
+   * Prefer the calculated fields from the cash_policy_pools. Fall back to the legacy
+   * liquidity_summary.reserve_target / buffer_above_reserve only if the calculated
+   * fields are missing. The legacy planner constants (ROLLING_DP_RESERVE_DEFAULT_ /
+   * ROLLING_DP_BUFFER_ABOVE_RESERVE_) are retained for audit (legacy_reserve_target /
+   * legacy_buffer_above_reserve) but MUST NOT drive the top-row display values.
+   */
+  const calcReservePool =
+    poolsForBuild.calculated_reserve != null && poolsForBuild.calculated_reserve === poolsForBuild.calculated_reserve
+      ? round2_(Number(poolsForBuild.calculated_reserve) || 0)
+      : null;
+  const calcBufferPool =
+    poolsForBuild.calculated_buffer != null && poolsForBuild.calculated_buffer === poolsForBuild.calculated_buffer
+      ? round2_(Number(poolsForBuild.calculated_buffer) || 0)
+      : null;
   const reserveTargetDisplay =
-    liqIn.reserve_target != null && liqIn.reserve_target === liqIn.reserve_target
+    calcReservePool != null
+      ? calcReservePool
+      : liqIn.reserve_target != null && liqIn.reserve_target === liqIn.reserve_target
       ? round2_(liqIn.reserve_target)
       : round2_(reserve);
   const bufferDisplay =
-    liqIn.buffer_above_reserve != null && liqIn.buffer_above_reserve === liqIn.buffer_above_reserve
+    calcBufferPool != null
+      ? calcBufferPool
+      : liqIn.buffer_above_reserve != null && liqIn.buffer_above_reserve === liqIn.buffer_above_reserve
       ? round2_(liqIn.buffer_above_reserve)
       : round2_(bufDefault);
   const nearTermPlannedReserved =
@@ -6388,10 +6818,26 @@ function buildThisMonthPlan_(row0, keyWarnings, reserve, planInvalid, lumpDebt, 
     liqIn.deployable_cash_after_protections != null && liqIn.deployable_cash_after_protections === liqIn.deployable_cash_after_protections
       ? round2_(liqIn.deployable_cash_after_protections)
       : deployableCash;
-  const cashAvailExtraToday =
+  const pools = r0.cash_policy_pools || {};
+  const cashAvailExtraRaw =
     liqIn.cash_available_for_extra_debt_today != null && liqIn.cash_available_for_extra_debt_today === liqIn.cash_available_for_extra_debt_today
       ? round2_(liqIn.cash_available_for_extra_debt_today)
       : round2_(Number(r0.execution_extra_cash_total) || 0);
+  let cashAvailExtraToday = cashAvailExtraRaw;
+  /**
+   * Canonical month-0 execute-now budget is the single source of truth for "how much cash
+   * we are actually telling the user to deploy this month". Cap the display field at this
+   * value so the liquidity panel can never exceed the allocator's hard cap.
+   */
+  const month0ExecuteNowBudgetPlan =
+    pools && pools.month0_execute_now_budget != null && pools.month0_execute_now_budget === pools.month0_execute_now_budget
+      ? round2_(Number(pools.month0_execute_now_budget) || 0)
+      : pools && pools.final_execute_now_cash != null && pools.final_execute_now_cash === pools.final_execute_now_cash
+      ? round2_(Number(pools.final_execute_now_cash) || 0)
+      : null;
+  if (month0ExecuteNowBudgetPlan != null) {
+    cashAvailExtraToday = round2_(Math.min(cashAvailExtraRaw, month0ExecuteNowBudgetPlan));
+  }
   const cashUsedThisMonth =
     liqIn.actual_cash_deployment_this_month != null && liqIn.actual_cash_deployment_this_month === liqIn.actual_cash_deployment_this_month
       ? round2_(liqIn.actual_cash_deployment_this_month)
@@ -6422,6 +6868,65 @@ function buildThisMonthPlan_(row0, keyWarnings, reserve, planInvalid, lumpDebt, 
     execution_total_now: execTotalNowPlan,
     conditional_variable_extra_total: condVarPlan
   };
+  if (pools && pools.total_usable_cash != null && pools.total_usable_cash === pools.total_usable_cash) {
+    liquidity.liquid_total_sheet = round2_(Number(pools.liquid_total_sheet) || 0);
+    liquidity.do_not_touch_excluded_cash = round2_(Number(pools.do_not_touch_excluded_cash) || 0);
+    liquidity.unsupported_policy_balance_total = round2_(Number(pools.unsupported_policy_balance_total) || 0);
+    liquidity.policy_eligible_cash_before_buffers = round2_(Number(pools.policy_eligible_cash_before_buffers) || 0);
+    liquidity.policy_scoped_balance_total = round2_(Number(pools.policy_scoped_balance_total) || 0);
+    liquidity.account_min_buffers_total = round2_(Number(pools.account_min_buffers_total) || 0);
+    liquidity.total_usable_cash = round2_(Number(pools.total_usable_cash) || 0);
+    liquidity.bridge_linear_subtotal_after_buffers = round2_(Number(pools.bridge_linear_subtotal_after_buffers) || 0);
+    liquidity.bridge_per_account_floor_delta = round2_(Number(pools.bridge_per_account_floor_delta) || 0);
+    liquidity.reserve_hold = round2_(Number(pools.reserve_hold) || 0);
+    liquidity.global_buffer_hold = round2_(Number(pools.global_buffer_hold) || 0);
+    if (pools.legacy_reserve_target != null && pools.legacy_reserve_target === pools.legacy_reserve_target) {
+      liquidity.legacy_reserve_target = round2_(Number(pools.legacy_reserve_target) || 0);
+    }
+    if (pools.legacy_buffer_above_reserve != null && pools.legacy_buffer_above_reserve === pools.legacy_buffer_above_reserve) {
+      liquidity.legacy_buffer_above_reserve = round2_(Number(pools.legacy_buffer_above_reserve) || 0);
+    }
+    if (pools.calculated_reserve != null && pools.calculated_reserve === pools.calculated_reserve) {
+      liquidity.calculated_reserve = round2_(Number(pools.calculated_reserve) || 0);
+    }
+    if (pools.calculated_buffer != null && pools.calculated_buffer === pools.calculated_buffer) {
+      liquidity.calculated_buffer = round2_(Number(pools.calculated_buffer) || 0);
+    }
+    if (pools.reserve_account_count != null && pools.reserve_account_count === pools.reserve_account_count) {
+      liquidity.reserve_account_count = Number(pools.reserve_account_count) || 0;
+    }
+    if (pools.buffer_account_count != null && pools.buffer_account_count === pools.buffer_account_count) {
+      liquidity.buffer_account_count = Number(pools.buffer_account_count) || 0;
+    }
+    if (pools.reserve_source) {
+      liquidity.reserve_source = String(pools.reserve_source);
+    }
+    if (pools.buffer_source) {
+      liquidity.buffer_source = String(pools.buffer_source);
+    }
+    if (pools.deployable_max_calculated != null && pools.deployable_max_calculated === pools.deployable_max_calculated) {
+      liquidity.deployable_max_calculated = round2_(Number(pools.deployable_max_calculated) || 0);
+    }
+    liquidity.near_term_planned_cash_hold = round2_(Number(pools.near_term_planned_cash_hold) || 0);
+    liquidity.unmapped_card_risk_hold = round2_(Number(pools.unmapped_card_risk_hold) || 0);
+    liquidity.final_execute_now_cash = round2_(Number(pools.final_execute_now_cash) || 0);
+    liquidity.monthly_execution_cap = round2_(Number(pools.monthly_execution_cap) || 0);
+    liquidity.executable_now_budget = round2_(Number(pools.executable_now_budget) || 0);
+    liquidity.month0_execute_now_budget =
+      pools.month0_execute_now_budget != null && pools.month0_execute_now_budget === pools.month0_execute_now_budget
+        ? round2_(Number(pools.month0_execute_now_budget) || 0)
+        : round2_(Number(pools.executable_now_budget) || 0);
+    liquidity.debt_preferred_cash = round2_(Number(pools.debt_preferred_cash) || 0);
+    liquidity.bills_available_cash = round2_(Number(pools.bills_available_cash) || 0);
+    liquidity.caution_cash = round2_(Number(pools.caution_cash) || 0);
+    liquidity.debt_preferred_cash_raw = round2_(Number(pools.debt_preferred_cash_raw) || 0);
+    liquidity.bills_available_cash_raw = round2_(Number(pools.bills_available_cash_raw) || 0);
+    liquidity.caution_cash_raw = round2_(Number(pools.caution_cash_raw) || 0);
+    liquidity.liquid_reconciliation_delta = round2_(Number(pools.liquid_reconciliation_delta) || 0);
+    if (pools.cash_bridge_validation_warnings && pools.cash_bridge_validation_warnings.length) {
+      liquidity.cash_bridge_validation_warnings = pools.cash_bridge_validation_warnings.slice();
+    }
+  }
 
   const startSnap = r0.debt_balances_start || [];
   const extraAlloc = r0.extra_principal_allocations || {};
@@ -6543,6 +7048,7 @@ function buildThisMonthPlan_(row0, keyWarnings, reserve, planInvalid, lumpDebt, 
     return {
       anchor_month: anchorMonth,
       liquidity: liquidity,
+      allocation_audit: r0.allocation_audit || null,
       anchor_month_minimum_schedule: anchorMonthMinimumSchedule,
       payment_actions: buildPaymentActions_(),
       narrative_bullets: [],
@@ -6577,9 +7083,12 @@ function buildThisMonthPlan_(row0, keyWarnings, reserve, planInvalid, lumpDebt, 
       'No executable extra principal from cash (and no approved HELOC path) after protections and caps; forecast may still show variable-income acceleration if received.';
   }
 
+  const allocationAuditPlan = r0.allocation_audit || null;
+
   return {
     anchor_month: anchorMonth,
     liquidity: liquidity,
+    allocation_audit: allocationAuditPlan,
     anchor_month_minimum_schedule: anchorMonthMinimumSchedule,
     payment_actions: paymentActions,
     narrative_bullets: [],

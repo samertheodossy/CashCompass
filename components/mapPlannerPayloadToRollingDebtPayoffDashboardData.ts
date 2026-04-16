@@ -8,6 +8,8 @@ import type {
   PlannedExpenseImpactBlock,
   PlannedExpenseImpactRow,
   PlannedExpenseImpactRowVariant,
+  RollingDebtPayoffAllocationAudit,
+  RollingDebtPayoffCashBridge,
   RollingDebtPayoffDashboardData,
   SnapshotRow
 } from './RollingDebtPayoffDashboard';
@@ -18,6 +20,83 @@ const RECONCILE_EPS = 0.15;
 /** Waterfall snapshot: per-row rounding vs execution_total_now — $0.15 is too tight for many-account totals. */
 const RECONCILE_WF_MIN_EPS = 5;
 const VALIDATION_EPS = 0.05;
+
+function buildCashBridgeFromLiquidity(liq: Record<string, unknown>): RollingDebtPayoffCashBridge | null {
+  if (liq.liquid_total_sheet == null || liq.liquid_total_sheet !== liq.liquid_total_sheet) return null;
+  const warns = (liq.cash_bridge_validation_warnings as unknown[] | undefined)?.map((w) => String(w || '').trim()).filter(Boolean);
+  return {
+    liquidTotalSheet: round2(num(liq.liquid_total_sheet)),
+    doNotTouchExcludedCash: round2(num(liq.do_not_touch_excluded_cash)),
+    policyEligibleCashBeforeBuffers: round2(num(liq.policy_eligible_cash_before_buffers)),
+    unsupportedPolicyBalanceTotal:
+      liq.unsupported_policy_balance_total != null && liq.unsupported_policy_balance_total === liq.unsupported_policy_balance_total
+        ? round2(num(liq.unsupported_policy_balance_total))
+        : undefined,
+    policyScopedBalanceTotal:
+      liq.policy_scoped_balance_total != null && liq.policy_scoped_balance_total === liq.policy_scoped_balance_total
+        ? round2(num(liq.policy_scoped_balance_total))
+        : undefined,
+    accountMinBuffersTotal: round2(num(liq.account_min_buffers_total)),
+    totalUsableCash: round2(num(liq.total_usable_cash)),
+    bridgeLinearSubtotalAfterBuffers:
+      liq.bridge_linear_subtotal_after_buffers != null && liq.bridge_linear_subtotal_after_buffers === liq.bridge_linear_subtotal_after_buffers
+        ? round2(num(liq.bridge_linear_subtotal_after_buffers))
+        : undefined,
+    bridgePerAccountFloorDelta:
+      liq.bridge_per_account_floor_delta != null && liq.bridge_per_account_floor_delta === liq.bridge_per_account_floor_delta
+        ? round2(num(liq.bridge_per_account_floor_delta))
+        : undefined,
+    reserveHold: round2(num(liq.reserve_hold)),
+    globalBufferHold: round2(num(liq.global_buffer_hold)),
+    nearTermPlannedCashHold: round2(num(liq.near_term_planned_cash_hold)),
+    unmappedCardRiskHold: round2(num(liq.unmapped_card_risk_hold)),
+    finalExecuteNowCash: round2(num(liq.final_execute_now_cash)),
+    monthlyExecutionCap: round2(num(liq.monthly_execution_cap)),
+    executableNowBudget: round2(num(liq.executable_now_budget)),
+    month0ExecuteNowBudget:
+      liq.month0_execute_now_budget != null && liq.month0_execute_now_budget === liq.month0_execute_now_budget
+        ? round2(num(liq.month0_execute_now_budget))
+        : round2(num(liq.executable_now_budget)),
+    cashBridgeValidationWarnings: warns && warns.length ? warns : undefined
+  };
+}
+
+/**
+ * Maps server month-0 `allocation_audit` block onto the dashboard shape, with a small
+ * backfill: if the backend did not attach the object (older payloads), we leave the block
+ * empty so the UI skips rendering. The dashboard uses this only for debug drift warnings.
+ */
+function buildAllocationAuditBlock(
+  row0: Record<string, unknown> | null | undefined,
+  month0ExecuteNowBudget: number | null
+): RollingDebtPayoffAllocationAudit | null {
+  if (!row0 || typeof row0 !== 'object') return null;
+  const audit = row0.allocation_audit as Record<string, unknown> | null | undefined;
+  if (!audit || typeof audit !== 'object') return null;
+  const warnings = ((audit.warnings as unknown[] | undefined) || [])
+    .map((w) => String(w || '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+  const budget =
+    audit.month0_execute_now_budget != null && audit.month0_execute_now_budget === audit.month0_execute_now_budget
+      ? round2(num(audit.month0_execute_now_budget))
+      : month0ExecuteNowBudget != null
+      ? month0ExecuteNowBudget
+      : 0;
+  const allocatedTotal = round2(num(audit.allocated_execute_now_cash_total));
+  return {
+    allocatedCleanupTotal: round2(num(audit.allocated_cleanup_total)),
+    allocatedPrimaryTotal: round2(num(audit.allocated_primary_total)),
+    allocatedSecondaryTotal: round2(num(audit.allocated_secondary_total)),
+    allocatedOverflowTotal: round2(num(audit.allocated_overflow_total)),
+    allocatedExecuteNowCashTotal: allocatedTotal,
+    month0ExecuteNowBudget: budget,
+    allocationGapToBudget:
+      audit.allocation_gap_to_budget != null && audit.allocation_gap_to_budget === audit.allocation_gap_to_budget
+        ? round2(num(audit.allocation_gap_to_budget))
+        : round2(budget - allocatedTotal),
+    warnings: warnings.length ? warnings : undefined
+  };
+}
 
 function round2(n: number): number {
   return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100;
@@ -257,7 +336,7 @@ function computeExecuteNowSourceValidation(args: {
   }
   if (Math.abs(args.liquidityCashRaw - args.canonicalCash) > VALIDATION_EPS) {
     failures.push(
-      `payload liquidity.cash_available_for_extra_debt_today (${args.liquidityCashRaw}) ≠ row execution_extra_cash_total (${args.canonicalCash})`
+      `payload liquidity.cash_available_for_extra_debt_today (${args.liquidityCashRaw}) ≠ capped execute-now cash (${args.canonicalCash})`
     );
   }
   return { validated: failures.length ? 'FAIL' : 'PASS', failures };
@@ -606,14 +685,19 @@ function buildSnapshotRows(
 }
 
 function presentationFromSummaryMode(raw: string | undefined): ExecutionPresentationMode | null {
+  // Presentation mode is now orthogonal to strategy. Legacy single-token values
+  // `operator` and `aggressive` both imply the advanced presentation; the
+  // `aggressive` strategy is handled separately via payoff strategy wiring.
   const m = String(raw || '')
     .toLowerCase()
     .trim();
   if (!m) return null;
-  if (m === 'standard') return 'standard';
-  if (m === 'operator') return 'operator';
-  if (m === 'aggressive') return 'aggressive';
-  if (m.indexOf('automation') >= 0) return 'automation';
+  const tokens = m.split(/[\s,|]+/).filter(Boolean);
+  if (tokens.indexOf('automation') >= 0) return 'automation';
+  if (tokens.indexOf('advanced') >= 0 || tokens.indexOf('operator') >= 0 || tokens.indexOf('aggressive') >= 0) {
+    return 'advanced';
+  }
+  if (tokens.indexOf('standard') >= 0) return 'standard';
   return null;
 }
 
@@ -772,13 +856,33 @@ export function mapPlannerPayloadToRollingDebtPayoffDashboardData(payload: unkno
           Object.keys(execCashMap).reduce((s, k) => round2(s + num(execCashMap[k])), 0)
         );
 
+  const finalExecuteBridge =
+    liqIn.final_execute_now_cash != null && liqIn.final_execute_now_cash === liqIn.final_execute_now_cash
+      ? round2(num(liqIn.final_execute_now_cash))
+      : null;
+  /**
+   * Single source of truth for month-0 execute-now capacity in the dashboard.
+   * Prefer month0_execute_now_budget if the backend attaches it; otherwise fall back to
+   * executable_now_budget, then final_execute_now_cash. All execute-now display fields
+   * (cash available for extra debt, executionTotals.fromCash, decision-box max, snapshot
+   * deployed-now footer) resolve to this value.
+   */
+  const month0ExecuteNowBudget: number | null =
+    liqIn.month0_execute_now_budget != null && liqIn.month0_execute_now_budget === liqIn.month0_execute_now_budget
+      ? round2(num(liqIn.month0_execute_now_budget))
+      : liqIn.executable_now_budget != null && liqIn.executable_now_budget === liqIn.executable_now_budget
+      ? round2(num(liqIn.executable_now_budget))
+      : finalExecuteBridge;
+  const canonicalExecuteNowCash =
+    month0ExecuteNowBudget != null ? round2(Math.min(executionExtraCash, month0ExecuteNowBudget)) : executionExtraCash;
+
   const helocFromRow = round2(num(row0.heloc_draw_this_month));
   const helocApplied = helocFromRow >= HELOC_MIN_MONTHLY_DRAW ? helocFromRow : 0;
 
   const execTotalNow =
     row0.execution_total_now != null && row0.execution_total_now === row0.execution_total_now
       ? round2(num(row0.execution_total_now))
-      : round2(executionExtraCash + helocApplied);
+      : round2(canonicalExecuteNowCash + helocApplied);
 
   const condLater =
     row0.conditional_variable_extra_total != null && row0.conditional_variable_extra_total === row0.conditional_variable_extra_total
@@ -843,7 +947,7 @@ export function mapPlannerPayloadToRollingDebtPayoffDashboardData(payload: unkno
 
   let aggressiveMeta: RollingDebtPayoffDashboardData['aggressiveMeta'];
   if (!planInvalid && isAggressiveRequest) {
-    const disp = rollingAggressiveCashExtrasReconcile(bucketsForUi, executionExtraCash);
+    const disp = rollingAggressiveCashExtrasReconcile(bucketsForUi, canonicalExecuteNowCash);
     const openMeta = row0.opening_concentration_meta as Record<string, unknown> | null | undefined;
     const depMeta = row0.deployable_concentration_meta as Record<string, unknown> | null | undefined;
     const audit = buildAggressivePhase2Audit(openMeta, depMeta);
@@ -889,10 +993,10 @@ export function mapPlannerPayloadToRollingDebtPayoffDashboardData(payload: unkno
     .filter(Boolean);
 
   const liquidityCashRaw = round2(num(liqIn.cash_available_for_extra_debt_today));
-  const canonicalExecuteNowCash = executionExtraCash;
+  const displayTotalNow = round2(canonicalExecuteNowCash + helocApplied);
   const executeNowSourceCheck = computeExecuteNowSourceValidation({
     canonicalCash: canonicalExecuteNowCash,
-    totalNow: execTotalNow,
+    totalNow: displayTotalNow,
     helocApplied,
     liquidityCashRaw
   });
@@ -909,7 +1013,11 @@ export function mapPlannerPayloadToRollingDebtPayoffDashboardData(payload: unkno
   });
 
   if (typeof console !== 'undefined' && console.error) {
-    if (helocApplied <= 0.005 && Math.abs(canonicalExecuteNowCash - execTotalNow) > VALIDATION_EPS) {
+    if (
+      helocApplied <= 0.005 &&
+      month0ExecuteNowBudget == null &&
+      Math.abs(canonicalExecuteNowCash - execTotalNow) > VALIDATION_EPS
+    ) {
       console.error(
         '[Rolling debt payoff dashboard] executionTotals.fromCash vs total_now mismatch (HELOC 0)',
         { fromCash: canonicalExecuteNowCash, totalNow: execTotalNow }
@@ -937,14 +1045,164 @@ export function mapPlannerPayloadToRollingDebtPayoffDashboardData(payload: unkno
       executionPlanMode: summaryModeLabel
     },
     liquidity: {
-      totalCash: round2(num(liqIn.total_cash)),
-      reserveTarget: round2(num(liqIn.reserve_target)),
-      buffer: round2(num(liqIn.buffer_above_reserve)),
+      /**
+       * `totalCash` is the true full liquid total from the sheet (all cash + checking + savings),
+       * not the policy-eligible subset. Prefer `liquid_total_sheet` (10-step cash-bridge input);
+       * fall back to legacy `total_cash` only when the bridge field is absent. Policy-usable
+       * subset is available in `totalUsableCash` for debug/details.
+       */
+      totalCash: (function () {
+        const sheet = liqIn.liquid_total_sheet;
+        if (sheet != null && sheet === sheet) return round2(num(sheet));
+        return round2(num(liqIn.total_cash));
+      })(),
+      /**
+       * Reserve and Buffer on the dashboard are CALCULATED from SYS - Accounts
+       * (DO_NOT_TOUCH balances and per-account Min Buffer). Prefer the calculated
+       * fields from the backend cash_policy model. Fall back to the legacy
+       * reserve_target / buffer_above_reserve only when the calculated fields are
+       * missing (older payloads). The legacy 100k / 100k planner constants are
+       * recorded separately under legacyReserveTarget / legacyBufferAboveReserve
+       * for audit/debug and MUST NOT drive the top-row KPIs.
+       */
+      reserveTarget: (function () {
+        const calc = liqIn.calculated_reserve;
+        if (calc != null && calc === calc) return round2(num(calc));
+        return round2(num(liqIn.reserve_target));
+      })(),
+      buffer: (function () {
+        const calc = liqIn.calculated_buffer;
+        if (calc != null && calc === calc) return round2(num(calc));
+        return round2(num(liqIn.buffer_above_reserve));
+      })(),
+      calculatedReserve:
+        liqIn.calculated_reserve != null && liqIn.calculated_reserve === liqIn.calculated_reserve
+          ? round2(num(liqIn.calculated_reserve))
+          : undefined,
+      calculatedBuffer:
+        liqIn.calculated_buffer != null && liqIn.calculated_buffer === liqIn.calculated_buffer
+          ? round2(num(liqIn.calculated_buffer))
+          : undefined,
+      reserveAccountCount:
+        liqIn.reserve_account_count != null && liqIn.reserve_account_count === liqIn.reserve_account_count
+          ? Number(liqIn.reserve_account_count) || 0
+          : undefined,
+      bufferAccountCount:
+        liqIn.buffer_account_count != null && liqIn.buffer_account_count === liqIn.buffer_account_count
+          ? Number(liqIn.buffer_account_count) || 0
+          : undefined,
+      reserveSource: liqIn.reserve_source ? String(liqIn.reserve_source) : undefined,
+      bufferSource: liqIn.buffer_source ? String(liqIn.buffer_source) : undefined,
+      deployableMaxCalculated:
+        liqIn.deployable_max_calculated != null && liqIn.deployable_max_calculated === liqIn.deployable_max_calculated
+          ? round2(num(liqIn.deployable_max_calculated))
+          : undefined,
+      legacyReserveTarget:
+        liqIn.legacy_reserve_target != null && liqIn.legacy_reserve_target === liqIn.legacy_reserve_target
+          ? round2(num(liqIn.legacy_reserve_target))
+          : undefined,
+      legacyBufferAboveReserve:
+        liqIn.legacy_buffer_above_reserve != null && liqIn.legacy_buffer_above_reserve === liqIn.legacy_buffer_above_reserve
+          ? round2(num(liqIn.legacy_buffer_above_reserve))
+          : undefined,
       deployableCash: deployable,
       cashAvailableForExtraDebt: canonicalExecuteNowCash,
       helocRecommended: helocRec || '—',
-      conditionalExtraLaterThisMonth: round2(num(liqIn.conditional_variable_extra_total ?? condLater))
+      conditionalExtraLaterThisMonth: round2(num(liqIn.conditional_variable_extra_total ?? condLater)),
+      debtPreferredCash:
+        liqIn.debt_preferred_cash != null && liqIn.debt_preferred_cash === liqIn.debt_preferred_cash
+          ? round2(num(liqIn.debt_preferred_cash))
+          : undefined,
+      billsAvailableCash:
+        liqIn.bills_available_cash != null && liqIn.bills_available_cash === liqIn.bills_available_cash
+          ? round2(num(liqIn.bills_available_cash))
+          : undefined,
+      cautionCash:
+        liqIn.caution_cash != null && liqIn.caution_cash === liqIn.caution_cash
+          ? round2(num(liqIn.caution_cash))
+          : undefined,
+      totalUsableCash:
+        liqIn.total_usable_cash != null && liqIn.total_usable_cash === liqIn.total_usable_cash
+          ? round2(num(liqIn.total_usable_cash))
+          : undefined,
+      finalExecuteNowCash:
+        liqIn.final_execute_now_cash != null && liqIn.final_execute_now_cash === liqIn.final_execute_now_cash
+          ? round2(num(liqIn.final_execute_now_cash))
+          : undefined,
+      monthlyExecutionCap:
+        liqIn.monthly_execution_cap != null && liqIn.monthly_execution_cap === liqIn.monthly_execution_cap
+          ? round2(num(liqIn.monthly_execution_cap))
+          : undefined,
+      executableNowBudget:
+        liqIn.executable_now_budget != null && liqIn.executable_now_budget === liqIn.executable_now_budget
+          ? round2(num(liqIn.executable_now_budget))
+          : undefined,
+      month0ExecuteNowBudget: month0ExecuteNowBudget != null ? month0ExecuteNowBudget : undefined,
+      nearTermPlannedCashHold: (function () {
+        /**
+         * Prefer explicit hold > reserved > plannedExpenseImpact summary. All three fall back to 0
+         * so the UI Deployable Max formula stays well-defined even when no near-term expense exists.
+         */
+        const holdRaw = liqIn.near_term_planned_cash_hold;
+        if (holdRaw != null && holdRaw === holdRaw) return round2(num(holdRaw));
+        const reservedRaw = liqIn.near_term_planned_cash_reserved;
+        if (reservedRaw != null && reservedRaw === reservedRaw) return round2(num(reservedRaw));
+        return 0;
+      })(),
+      unmappedCardRiskHold: (function () {
+        /**
+         * Temporary cash hold reserved for unmapped card-funded near-term expenses.
+         * Prefer the cash-bridge hold; fall back to the planned-expense-impact surface;
+         * default to 0 so the Deployable Max formula stays well-defined.
+         */
+        const holdRaw = liqIn.unmapped_card_risk_hold;
+        if (holdRaw != null && holdRaw === holdRaw) return round2(num(holdRaw));
+        const exec = liqIn.unmapped_card_funded_cash_risk;
+        if (exec != null && exec === exec) return round2(num(exec));
+        return 0;
+      })(),
+      deployableMax: (function () {
+        /**
+         * Deployable Max = max(0, TotalCash − CalculatedReserve − CalculatedBuffer − NearTermHold − UnmappedCardRiskHold).
+         * Uses the full liquid total from the sheet and the CALCULATED reserve/buffer from the
+         * SYS - Accounts policy model (DO_NOT_TOUCH balances / per-account Min Buffer). Legacy
+         * reserve_target / buffer_above_reserve from the payload are used only as fallbacks
+         * when the calculated fields are missing (older payloads).
+         */
+        const sheet = liqIn.liquid_total_sheet;
+        const totalCash =
+          sheet != null && sheet === sheet ? round2(num(sheet)) : round2(num(liqIn.total_cash));
+        const calcReserveRaw = liqIn.calculated_reserve;
+        const reserveTarget =
+          calcReserveRaw != null && calcReserveRaw === calcReserveRaw
+            ? round2(num(calcReserveRaw))
+            : round2(num(liqIn.reserve_target));
+        const calcBufferRaw = liqIn.calculated_buffer;
+        const buffer =
+          calcBufferRaw != null && calcBufferRaw === calcBufferRaw
+            ? round2(num(calcBufferRaw))
+            : round2(num(liqIn.buffer_above_reserve));
+        const holdRaw = liqIn.near_term_planned_cash_hold;
+        const reservedRaw = liqIn.near_term_planned_cash_reserved;
+        const nearTerm =
+          holdRaw != null && holdRaw === holdRaw
+            ? round2(num(holdRaw))
+            : reservedRaw != null && reservedRaw === reservedRaw
+            ? round2(num(reservedRaw))
+            : 0;
+        const unmappedRaw = liqIn.unmapped_card_risk_hold;
+        const unmappedExec = liqIn.unmapped_card_funded_cash_risk;
+        const unmapped =
+          unmappedRaw != null && unmappedRaw === unmappedRaw
+            ? round2(num(unmappedRaw))
+            : unmappedExec != null && unmappedExec === unmappedExec
+            ? round2(num(unmappedExec))
+            : 0;
+        return Math.max(0, round2(totalCash - reserveTarget - buffer - nearTerm - unmapped));
+      })()
     },
+    cashBridge: buildCashBridgeFromLiquidity(liqIn),
+    allocationAudit: buildAllocationAuditBlock(row0, month0ExecuteNowBudget),
     alreadyPaid: alreadyPaidRaw.map((r) => ({ account: str(r.account) })).filter((x) => x.account),
     minimums: payNowRaw
       .map((r) => ({ account: str(r.account), amountDue: round2(num(r.minimum_required)) }))
@@ -952,9 +1210,9 @@ export function mapPlannerPayloadToRollingDebtPayoffDashboardData(payload: unkno
     extraPayments: extraPaymentsOut,
     conditionalPayments: condPayments,
     executionTotals: {
-      fromCash: executionExtraCash,
+      fromCash: canonicalExecuteNowCash,
       fromHeloc: helocApplied,
-      totalNow: execTotalNow,
+      totalNow: round2(canonicalExecuteNowCash + helocApplied),
       conditionalLater: condLater
     },
     decisionBox: mapDecisionBox((data.action_decision_box as Record<string, unknown>) || undefined),

@@ -1,61 +1,118 @@
 /* Planning — Rolling debt payoff (tables + collapsible JSON) */
 
-/** Mode for this tab only; passed as {@code executionPlanMode} on refresh and appended in {@link appendRollingDebtPayoffModeToFinalPrompt}. */
-var selectedMode = 'Standard';
+/**
+ * Rolling debt payoff modes are split into two orthogonal controls:
+ *   • Presentation — how much detail the UI shows (Standard / Advanced / Automation).
+ *   • Payoff strategy — how extra debt cash is ALLOCATED (standard / aggressive).
+ *
+ * Both are composed into {@code executionPlanMode} when calling the backend
+ * (space-separated tokens the server already understands).
+ */
+var selectedPresentationMode = 'Standard';
+var selectedPayoffStrategy = 'standard';
 
-function setRollingDebtPayoffSelectedMode(mode) {
-  var allowed = { Standard: 1, Operator: 1, Aggressive: 1, Automation: 1 };
+function rollingDebtPayoffUpdateModeLine_() {
+  var line = document.getElementById('rolling_debt_payoff_current_mode');
+  if (!line) return;
+  var strategyLabel = selectedPayoffStrategy === 'aggressive' ? 'Aggressive payoff' : 'Standard payoff';
+  line.textContent = 'Presentation: ' + selectedPresentationMode + ' · Strategy: ' + strategyLabel;
+}
+
+function setRollingDebtPayoffSelectedPresentation(mode) {
+  var allowed = { Standard: 1, Advanced: 1, Automation: 1 };
   if (!allowed[mode]) return;
-  if (selectedMode === mode) return;
-  selectedMode = mode;
+  if (selectedPresentationMode === mode) return;
+  selectedPresentationMode = mode;
   var root = document.getElementById('rollingDebtPayoff');
   if (!root) return;
   root.querySelectorAll('.planner-mode-segmented .seg-planner').forEach(function(btn) {
-    var isOn = btn.getAttribute('data-mode') === mode;
+    var isOn = btn.getAttribute('data-presentation') === mode;
     btn.classList.toggle('active', isOn);
     btn.setAttribute('aria-selected', isOn ? 'true' : 'false');
   });
-  var line = document.getElementById('rolling_debt_payoff_current_mode');
-  if (line) line.textContent = 'Current mode: ' + mode;
+  rollingDebtPayoffUpdateModeLine_();
   if (typeof loadRollingDebtPayoffSection === 'function') {
     loadRollingDebtPayoffSection();
   }
 }
 
+function setRollingDebtPayoffSelectedPayoffStrategy(strategy) {
+  var allowed = { standard: 1, aggressive: 1 };
+  var s = strategy == null ? 'standard' : String(strategy).toLowerCase();
+  if (!allowed[s]) return;
+  if (selectedPayoffStrategy === s) return;
+  selectedPayoffStrategy = s;
+  var root = document.getElementById('rollingDebtPayoff');
+  if (!root) return;
+  root.querySelectorAll('.planner-strategy-segmented .seg-planner').forEach(function(btn) {
+    var isOn = btn.getAttribute('data-strategy') === s;
+    btn.classList.toggle('active', isOn);
+    btn.setAttribute('aria-selected', isOn ? 'true' : 'false');
+  });
+  rollingDebtPayoffUpdateModeLine_();
+  if (typeof loadRollingDebtPayoffSection === 'function') {
+    loadRollingDebtPayoffSection();
+  }
+}
+
+/**
+ * Backward-compatible alias. Old callers (and any persisted legacy state) may
+ * still invoke this with Operator/Aggressive — map them into the new model.
+ */
+function setRollingDebtPayoffSelectedMode(mode) {
+  var L = mode == null ? 'Standard' : String(mode);
+  if (L === 'Operator') {
+    setRollingDebtPayoffSelectedPresentation('Advanced');
+    setRollingDebtPayoffSelectedPayoffStrategy('standard');
+    return;
+  }
+  if (L === 'Aggressive') {
+    setRollingDebtPayoffSelectedPresentation('Advanced');
+    setRollingDebtPayoffSelectedPayoffStrategy('aggressive');
+    return;
+  }
+  setRollingDebtPayoffSelectedPresentation(L);
+}
+
 function appendRollingDebtPayoffModeToFinalPrompt(basePrompt) {
   var base = basePrompt == null ? '' : String(basePrompt);
   var trimmed = base.replace(/\s+$/g, '');
-  var suffix = '\n\nMODE = ' + selectedMode;
-  return trimmed ? trimmed + suffix : 'MODE = ' + selectedMode;
+  var composite = 'PRESENTATION = ' + selectedPresentationMode +
+    ' · STRATEGY = ' + (selectedPayoffStrategy === 'aggressive' ? 'Aggressive payoff' : 'Standard payoff');
+  return trimmed ? trimmed + '\n\n' + composite : composite;
 }
 
+/**
+ * Compose the {@code executionPlanMode} tokens the backend expects. The
+ * server already splits on whitespace/commas and treats each token
+ * independently, so stacking e.g. {@code "aggressive automation"} works.
+ */
 function rollingDebtPayoffExecutionPlanMode_() {
-  if (selectedMode === 'Operator') return 'operator';
-  if (selectedMode === 'Aggressive') return 'aggressive';
-  if (selectedMode === 'Automation') return 'automation';
-  return '';
+  var tokens = [];
+  if (selectedPresentationMode === 'Advanced') tokens.push('operator');
+  else if (selectedPresentationMode === 'Automation') tokens.push('automation');
+  if (selectedPayoffStrategy === 'aggressive') tokens.push('aggressive');
+  return tokens.join(' ');
 }
 
-/** Maps planner UI mode label to RollingDebtPayoffDashboard presentation mode. */
+/** Maps planner UI presentation label to RollingDebtPayoffDashboard presentation mode. */
 function rollingDebtPayoffLabelToPresentationMode_(label) {
   var L = label == null ? 'Standard' : String(label);
-  if (L === 'Operator') return 'operator';
-  if (L === 'Aggressive') return 'aggressive';
+  if (L === 'Advanced' || L === 'Operator' || L === 'Aggressive') return 'advanced';
   if (L === 'Automation') return 'automation';
   return 'standard';
 }
 
 function rollingDebtPayoffPresentationModeToLabel_(mode) {
   var m = mode == null ? 'standard' : String(mode).toLowerCase();
-  if (m === 'operator') return 'Operator';
-  if (m === 'aggressive') return 'Aggressive';
+  if (m === 'advanced') return 'Advanced';
   if (m === 'automation') return 'Automation';
   return 'Standard';
 }
 
 /**
  * Mounts React RollingDebtPayoffDashboard when the bundle is present; falls back to no-op.
- * Refetch on presentation mode change is handled via setRollingDebtPayoffSelectedMode (executionPlanMode).
+ * Refetch on presentation/strategy change is handled via the corresponding setters below.
  */
 function rollingDebtPayoffTryMountDashboard_(data) {
   var el = document.getElementById('rolling_debt_payoff_dashboard_root');
@@ -71,15 +128,21 @@ function rollingDebtPayoffTryMountDashboard_(data) {
   if (!payload) {
     return;
   }
-  var defaultMode = rollingDebtPayoffLabelToPresentationMode_(typeof selectedMode !== 'undefined' ? selectedMode : 'Standard');
+  var defaultMode = rollingDebtPayoffLabelToPresentationMode_(selectedPresentationMode);
   window.mountRollingDebtPayoffDashboard(el, {
     data: payload,
     useDemoFallback: useDemo,
     defaultPresentationMode: defaultMode,
+    defaultPayoffStrategy: selectedPayoffStrategy,
     onPresentationModeChange: function(mode) {
       var label = rollingDebtPayoffPresentationModeToLabel_(mode);
-      if (typeof setRollingDebtPayoffSelectedMode === 'function') {
-        setRollingDebtPayoffSelectedMode(label);
+      if (typeof setRollingDebtPayoffSelectedPresentation === 'function') {
+        setRollingDebtPayoffSelectedPresentation(label);
+      }
+    },
+    onPayoffStrategyChange: function(strategy) {
+      if (typeof setRollingDebtPayoffSelectedPayoffStrategy === 'function') {
+        setRollingDebtPayoffSelectedPayoffStrategy(strategy);
       }
     },
     style: { minHeight: 'auto', paddingBottom: 16 }

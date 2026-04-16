@@ -154,7 +154,20 @@
         <h3>Rolling debt payoff</h3>
         <p><strong>Separate from Payoff Path</strong> — This tab runs a conservative, month-anchored household engine: anchor month is the <strong>latest month column on INPUT - Cash Flow that has any Income/Expense data</strong> (not today’s calendar date).</p>
         <p><strong>Cash out vs minimums</strong> — Required cash out uses <strong>INPUT - Cash Flow</strong> expense lines. <strong>INPUT - Debts</strong> minimum payments appear as <em>reference only</em> in triggers and JSON; they are <strong>not</strong> added again on top of Cash Flow (no double count with mortgage or card payments already in CF).</p>
-        <p><strong>Reserve &amp; cash</strong> — Default reserve target is <strong>$100,000</strong> (hardcoded until a config sheet exists). If reserved buckets are not tracked on the sheet, <strong>available cash for planning = 85% of total liquid balances</strong> from <strong>SYS - Accounts</strong>.</p>
+        <p><strong>Liquidity model (calculated from SYS - Accounts)</strong> — The top KPI row and the Deployable max are derived directly from the accounts sheet; the legacy $100k/$100k hardcoded reserve and buffer constants are retained for audit only and do not drive the numbers you see.</p>
+        <ul class="help-list">
+          <li><strong>Total cash</strong> — full liquid total from <strong>SYS - Accounts</strong> (all cash + checking + savings).</li>
+          <li><strong>Reserve</strong> — sum of current balances for accounts flagged <code>DO_NOT_TOUCH</code>.</li>
+          <li><strong>Buffer</strong> — sum of the per-account <em>Min Buffer</em> for non-<code>DO_NOT_TOUCH</code> policy-eligible accounts.</li>
+          <li><strong>Cash available to use</strong> — Total cash − Reserve − Buffer, <em>before</em> subtracting near-term and unmapped holds.</li>
+          <li><strong>Near-term planned hold</strong> — cash reserved for upcoming planned expenses (INPUT - Upcoming Expenses within 90 days).</li>
+          <li><strong>Unmapped card risk hold</strong> — temporary safety hold for card-funded planned expenses that are not yet mapped.</li>
+          <li><strong>Deployable max</strong> = Total cash − Reserve − Buffer − Near-term hold − Unmapped card risk hold (floored at 0).</li>
+          <li><strong>Cash to use now</strong> — your planning input; what you want to deploy this month.</li>
+          <li><strong>Execute now</strong> = min(Cash to use now, Deployable max); this is the value the waterfall actually uses. The legacy $50k monthly cap has been retired — your input is the limit.</li>
+          <li><strong>Future / Conditional Cash (not available yet)</strong> — variable-income–contingent allocations surfaced below Execution totals. These are not part of Execute now until income arrives.</li>
+        </ul>
+        <p>Operator and Aggressive modes expose the full <em>Cash bridge (audit)</em> and <em>Allocation audit (month 0)</em> panels if you need to trace every deduction step by step.</p>
         <p><strong>Income split</strong> — Stable income is modeled as <strong>Cisco</strong> (payee contains “Cisco”) plus the fixed recurring rent payees listed in product rules. Other income is treated as variable; variable inflows use the <strong>50% / 30% / 20%</strong> split (debt / reserve+cash / flexible) in the engine.</p>
         <p><strong>Forward months</strong> — After the anchor month, stable income uses trailing medians. Forward <strong>expenses</strong> use a <strong>recurring operating</strong> baseline only: expense payees are bucketed (recurring operating vs debt cleanup vs irregular), and months 1+ sum trailing medians (6→3→1 non-empty fallback per payee) for <strong>recurring_operating</strong> payees only — not total cash-out. Credit-card payees with high volatility vs their own median go to debt cleanup; taxes, repairs, and similar keywords go to irregular. Variable income in projections defaults to <strong>$0</strong> (conservative).</p>
         <p><strong>Debt ordering</strong> — Extra principal (after the reserve rule) goes to credit cards by <strong>highest APR first</strong>, then HELOC, Tahoe, San Diego, Missouri, and San Jose last. <strong>Loan Depot - San Jose House</strong> and any debt with APR <strong>≤ 2.25%</strong> get <code>LOW_RATE_KEEP_LAST</code> on the normalized debt row.</p>
