@@ -389,28 +389,24 @@ function CashBridgeSection({
       </p>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {row('1', 'Total cash', currency(totalCashDisplay))}
-        {row(
-          '2',
-          reserveAccountCount != null
-            ? `Minus calculated reserve (DO_NOT_TOUCH accounts, ${reserveAccountCount})`
-            : 'Minus calculated reserve (DO_NOT_TOUCH accounts)',
-          `−${currency(reserveDisplay)}`
-        )}
-        {row(
-          '3',
-          bufferAccountCount != null
-            ? `Minus calculated buffer (per-account min buffers, ${bufferAccountCount})`
-            : 'Minus calculated buffer (per-account min buffers)',
-          `−${currency(bufferDisplay)}`
-        )}
+        {row('2', 'Minus reserve', `−${currency(reserveDisplay)}`)}
+        {row('3', 'Minus buffer', `−${currency(bufferDisplay)}`)}
         {row('4', 'Minus near-term planned hold', `−${currency(nearTermPlannedHoldDisplay)}`)}
         {row('5', 'Minus unmapped card risk hold', `−${currency(unmappedCardRiskHoldDisplay)}`)}
         {row('6', '= Deployable max', currency(deployableMaxDisplay), true)}
         {row('7', 'Cash to use now (user input)', currency(cashToUseNowInput))}
         {row('8', '= Execute now', currency(executeNowDisplay), true)}
       </div>
+      <p style={{ margin: '10px 0 0 0', fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
+        <strong>Reserve</strong> = DO_NOT_TOUCH balances
+        {reserveAccountCount != null ? ` (${reserveAccountCount} account${reserveAccountCount === 1 ? '' : 's'})` : ''}
+        .{' '}
+        <strong>Buffer</strong> = per-account min buffers on usable accounts only
+        {bufferAccountCount != null ? ` (${bufferAccountCount} account${bufferAccountCount === 1 ? '' : 's'})` : ''}
+        .
+      </p>
       {reserveSource || bufferSource ? (
-        <p style={{ margin: '10px 0 0 0', fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
+        <p style={{ margin: '4px 0 0 0', fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
           {reserveSource ? (
             <>
               <strong>Reserve source:</strong> {reserveSource}
@@ -703,6 +699,11 @@ function DisplayPlanValidator({
   exceedsDeployable,
   strategyComparison,
   isAggressiveStrategy,
+  totalCash,
+  reserve,
+  buffer,
+  nearTermPlannedHold,
+  unmappedCardRiskHold,
   visible
 }: {
   executeNow: number;
@@ -714,6 +715,11 @@ function DisplayPlanValidator({
   exceedsDeployable: boolean;
   strategyComparison: StrategyComparison;
   isAggressiveStrategy: boolean;
+  totalCash: number;
+  reserve: number;
+  buffer: number;
+  nearTermPlannedHold: number;
+  unmappedCardRiskHold: number;
   visible: boolean;
 }) {
   if (!visible) return null;
@@ -722,8 +728,18 @@ function DisplayPlanValidator({
   const bucketVsSnapshotGap = round2(extraTotal - snapshotPaymentTotal);
   const hasRealDrift = Math.abs(bucketVsSnapshotGap) > 0.01;
   const hasHeadroom = unallocatedHeadroom > 0.01;
-  const accent = hasRealDrift ? C.danger : hasHeadroom ? C.warn : C.success;
-  const accentBg = hasRealDrift ? C.dangerBg : hasHeadroom ? C.warnBg : '#ecfdf5';
+  /**
+   * Deployable max formula check: verify that the displayed deployable max equals
+   * max(0, total - reserve - buffer - near_term - unmapped). If the gap is > $0.01
+   * the upstream math has stacked legacy holds that were supposed to be removed.
+   */
+  const computedDeployableMax = round2(
+    Math.max(0, round2(totalCash - reserve - buffer - nearTermPlannedHold - unmappedCardRiskHold))
+  );
+  const deployableMaxFormulaGap = round2(deployableMax - computedDeployableMax);
+  const hasDeployableMaxDrift = Math.abs(deployableMaxFormulaGap) > 0.01;
+  const accent = hasRealDrift || hasDeployableMaxDrift ? C.danger : hasHeadroom ? C.warn : C.success;
+  const accentBg = hasRealDrift || hasDeployableMaxDrift ? C.dangerBg : hasHeadroom ? C.warnBg : '#ecfdf5';
   const row = (label: string, value: string, bold = false) => (
     <div
       key={label}
@@ -753,8 +769,15 @@ function DisplayPlanValidator({
         reading a stale backend allocation.
       </p>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {row('total_cash', currencyDetailed(totalCash))}
+        {row('reserve (DO_NOT_TOUCH accounts)', currencyDetailed(reserve))}
+        {row('buffer (per-account min buffers)', currencyDetailed(buffer))}
+        {row('near_term_planned_hold', currencyDetailed(nearTermPlannedHold))}
+        {row('unmapped_card_risk_hold', currencyDetailed(unmappedCardRiskHold))}
+        {row('deployable_max (displayed)', currencyDetailed(deployableMax), true)}
+        {row('deployable_max (formula: max(0, total − reserve − buffer − near-term − unmapped))', currencyDetailed(computedDeployableMax))}
+        {row('gap_deployable_max_formula', currencyDetailed(deployableMaxFormulaGap))}
         {row('user_cash_to_use_now_input', currencyDetailed(userCashToUseNowInput))}
-        {row('deployable_max', currencyDetailed(deployableMax))}
         {row('display_execute_now', currencyDetailed(executeNow), true)}
         {row('display_bucket_total', currencyDetailed(extraTotal), true)}
         {row('snapshot_payment_total', currencyDetailed(snapshotPaymentTotal), true)}
@@ -780,6 +803,13 @@ function DisplayPlanValidator({
             ]
           : null}
       </div>
+      {hasDeployableMaxDrift ? (
+        <p style={{ margin: '12px 0 0 0', fontSize: 13, color: C.danger, fontWeight: 700, lineHeight: 1.45 }}>
+          DEPLOYABLE MAX DRIFT: displayed {currencyDetailed(deployableMax)} ≠ formula{' '}
+          {currencyDetailed(computedDeployableMax)} (Δ {currencyDetailed(deployableMaxFormulaGap)}).
+          An upstream path is stacking legacy reserve/buffer holds on top of the calculated values.
+        </p>
+      ) : null}
       {hasRealDrift ? (
         <p style={{ margin: '12px 0 0 0', fontSize: 13, color: C.danger, fontWeight: 700, lineHeight: 1.45 }}>
           DRIFT: bucket total ({currencyDetailed(extraTotal)}) ≠ snapshot total (
@@ -1095,7 +1125,10 @@ function CashToUseNowInputCard({
   onChange,
   deployableMax,
   capWarning,
-  placeholder
+  placeholder,
+  suggestedValue,
+  executeNow,
+  remainingDeployable
 }: {
   label: string;
   helperText: string;
@@ -1104,23 +1137,31 @@ function CashToUseNowInputCard({
   deployableMax: number;
   capWarning?: string;
   placeholder?: string;
+  suggestedValue?: number | null;
+  executeNow?: number;
+  remainingDeployable?: number;
 }) {
   const [focused, setFocused] = useState(false);
   const borderColor = capWarning
     ? C.danger
     : focused
     ? C.primaryHi
-    : 'rgba(30, 58, 95, 0.35)';
+    : C.primary;
   const accentBg = capWarning
-    ? 'rgba(220, 38, 38, 0.04)'
+    ? 'rgba(220, 38, 38, 0.05)'
     : focused
-    ? 'rgba(30, 58, 95, 0.04)'
-    : 'rgba(30, 58, 95, 0.02)';
+    ? 'rgba(30, 58, 95, 0.06)'
+    : 'rgba(30, 58, 95, 0.04)';
   const maxRounded = Math.max(0, Math.round(deployableMax));
   const setPercent = (p: number) => {
     const v = Math.max(0, Math.round((deployableMax * p) / 100));
     onChange(String(v));
   };
+  const suggestionRounded =
+    suggestedValue != null && Number.isFinite(suggestedValue) && suggestedValue > 0.005
+      ? Math.max(0, Math.round(suggestedValue))
+      : null;
+  const showSuggestion = suggestionRounded != null && Math.abs(suggestionRounded - maxRounded) > 0;
   const chipStyle: React.CSSProperties = {
     appearance: 'none',
     border: `1px solid ${C.border}`,
@@ -1160,10 +1201,23 @@ function CashToUseNowInputCard({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-        <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.primaryHi }}>
+        <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.primaryHi }}>
           {label}
         </p>
-        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted }}>
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 800,
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            color: '#ffffff',
+            background: C.primary,
+            borderRadius: 999,
+            padding: '3px 9px',
+            lineHeight: 1.2
+          }}
+          aria-label="This field is editable"
+        >
           Editable
         </span>
       </div>
@@ -1171,16 +1225,16 @@ function CashToUseNowInputCard({
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 6,
+          gap: 8,
           background: C.paper,
-          border: `1px solid ${capWarning ? C.danger : focused ? C.primaryHi : C.border}`,
+          border: `2px solid ${capWarning ? C.danger : focused ? C.primaryHi : C.primary}`,
           borderRadius: 10,
-          padding: '8px 12px',
-          boxShadow: focused ? 'inset 0 0 0 2px rgba(30, 58, 95, 0.12)' : 'none',
+          padding: '10px 14px',
+          boxShadow: focused ? 'inset 0 0 0 2px rgba(30, 58, 95, 0.18)' : 'none',
           transition: 'border-color 120ms ease, box-shadow 120ms ease'
         }}
       >
-        <span style={{ fontSize: 18, fontWeight: 700, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>$</span>
+        <span style={{ fontSize: 22, fontWeight: 800, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>$</span>
         <input
           type="text"
           inputMode="decimal"
@@ -1189,7 +1243,7 @@ function CashToUseNowInputCard({
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           onKeyDown={(e) => {
-            if (e.key === 'Escape') {
+            if (e.key === 'Escape' || e.key === 'Enter') {
               e.currentTarget.blur();
             }
           }}
@@ -1200,7 +1254,7 @@ function CashToUseNowInputCard({
             minWidth: 0,
             border: 'none',
             outline: 'none',
-            fontSize: 22,
+            fontSize: 26,
             fontWeight: 800,
             color: C.text,
             fontVariantNumeric: 'tabular-nums',
@@ -1226,14 +1280,25 @@ function CashToUseNowInputCard({
         <button type="button" style={primaryChipStyle} onClick={() => onChange(String(maxRounded))} aria-label="Use deployable max">
           Use max
         </button>
+        {showSuggestion ? (
+          <button
+            type="button"
+            style={chipStyle}
+            onClick={() => onChange(String(suggestionRounded))}
+            aria-label={`Use suggested amount ${currency(suggestionRounded as number)}`}
+            title="Suggested by planner (backend execute-now budget)"
+          >
+            Use suggested ({currency(suggestionRounded as number)})
+          </button>
+        ) : null}
       </div>
-      <div style={{ marginTop: 'auto' }}>
+      <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
         {capWarning ? (
-          <p style={{ margin: 0, fontSize: 11, color: C.danger, fontWeight: 700, lineHeight: 1.35 }}>
+          <p style={{ margin: 0, fontSize: 12, color: C.danger, fontWeight: 700, lineHeight: 1.4 }}>
             {capWarning}
           </p>
         ) : (
-          <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.35 }}>
+          <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
             {helperText}
             {' · '}
             <span style={{ color: C.text, fontWeight: 700 }}>
@@ -1241,7 +1306,125 @@ function CashToUseNowInputCard({
             </span>
           </p>
         )}
+        {executeNow != null ? (
+          <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
+            <span aria-hidden>→</span>{' '}
+            <span style={{ fontWeight: 700, color: C.text }}>Execute now {currency(executeNow)}</span>
+            {remainingDeployable != null && remainingDeployable > 0.005 ? (
+              <>
+                {' · '}
+                Remaining deployable {currency(remainingDeployable)}
+              </>
+            ) : null}
+          </p>
+        ) : null}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Result / effect card rendered next to `CashToUseNowInputCard`. Visually it's the
+ * direct consequence of the input so the relationship is obvious (cause → effect).
+ * Renders:
+ *   - Execute now value (capped at Deployable max)
+ *   - Live formula `min(Cash to use now, Deployable max)` with the current values
+ *   - "Capped" badge if the user requested more than Deployable max
+ *   - Remaining deployable note
+ *
+ * This card is driven from the same canonical display model that feeds extra-payment
+ * buckets, snapshot, execution totals, aggressive panel and allocation audit, so any
+ * typed value flows here and downstream in a single tick.
+ */
+function ExecuteNowResultCard({
+  executeNow,
+  cashToUseNowRaw,
+  deployableMax,
+  exceedsDeployable,
+  remainingDeployable
+}: {
+  executeNow: number;
+  cashToUseNowRaw: number;
+  deployableMax: number;
+  exceedsDeployable: boolean;
+  remainingDeployable: number;
+}) {
+  const borderColor = exceedsDeployable ? C.danger : 'rgba(180, 83, 9, 0.55)';
+  const bg = exceedsDeployable ? 'rgba(220, 38, 38, 0.05)' : 'rgba(180, 83, 9, 0.05)';
+  return (
+    <div
+      style={{
+        minHeight: 124,
+        height: '100%',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        background: bg,
+        border: `2px solid ${borderColor}`,
+        borderRadius: 12,
+        padding: '14px 16px',
+        boxShadow: '0 1px 2px rgba(15,23,42,0.06)'
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <p
+          style={{
+            margin: 0,
+            fontSize: 12,
+            fontWeight: 800,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: 'rgba(180, 83, 9, 0.95)'
+          }}
+        >
+          Execute now
+        </p>
+        {exceedsDeployable ? (
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: '#ffffff',
+              background: C.danger,
+              borderRadius: 999,
+              padding: '3px 9px',
+              lineHeight: 1.2
+            }}
+            aria-label="Execute now is capped at deployable max"
+          >
+            Capped
+          </span>
+        ) : null}
+      </div>
+      <p
+        style={{
+          margin: '2px 0 0 0',
+          fontSize: 28,
+          fontWeight: 800,
+          color: C.text,
+          fontVariantNumeric: 'tabular-nums',
+          lineHeight: 1.15
+        }}
+      >
+        {currency(executeNow)}
+      </p>
+      <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
+        Amount the planner will actually deploy after caps.
+      </p>
+      <div style={{ flex: 1, minHeight: 2 }} aria-hidden />
+      <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.4, fontVariantNumeric: 'tabular-nums' }}>
+        = min(<span style={{ color: C.text, fontWeight: 700 }}>{currency(cashToUseNowRaw)}</span>,{' '}
+        <span style={{ color: C.text, fontWeight: 700 }}>{currency(deployableMax)}</span>)
+      </p>
+      {remainingDeployable > 0.005 ? (
+        <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
+          Remaining deployable after Execute now:{' '}
+          <span style={{ color: C.text, fontWeight: 700 }}>{currency(remainingDeployable)}</span>
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -2108,19 +2291,13 @@ export function RollingDebtPayoffDashboard({
   ]);
 
   /**
-   * Backend-suggested default for Cash To Use Now: prefer the server's committed execute-now
-   * total (so the input matches what the plan already allocated), falling back to the
-   * computed Deployable Max. This is what we show before the user has typed anything.
+   * Default for Cash To Use Now when no local/user value exists: Deployable max.
+   * Per the month-0 cash model, this input is user-owned and must NOT be prefilled
+   * from backend execute-now (which may reflect older planner constants or prior
+   * allocations); the user picks how much of Deployable max to actually deploy
+   * this month, and Execute now is then computed as min(input, Deployable max).
    */
-  const suggestedCashToUse = useMemo(() => {
-    const serverExec = Number(data.executionTotals.fromCash) || 0;
-    if (serverExec > 0.005) return Math.min(serverExec, deployableMax);
-    const budget = data.liquidity.month0ExecuteNowBudget;
-    if (budget != null && Number.isFinite(budget) && budget > 0.005) {
-      return Math.min(budget, deployableMax);
-    }
-    return deployableMax;
-  }, [data.executionTotals.fromCash, data.liquidity.month0ExecuteNowBudget, deployableMax]);
+  const suggestedCashToUse = useMemo(() => deployableMax, [deployableMax]);
 
   /** Persist per anchor month so the user's chosen amount survives reloads within a plan. */
   const persistKey = useMemo(() => {
@@ -2419,20 +2596,12 @@ export function RollingDebtPayoffDashboard({
           <KpiCard
             label="Reserve"
             value={currency(data.liquidity.reserveTarget)}
-            sub={
-              data.liquidity.reserveAccountCount != null
-                ? `DO_NOT_TOUCH accounts (${data.liquidity.reserveAccountCount})`
-                : 'DO_NOT_TOUCH accounts'
-            }
+            sub="DO_NOT_TOUCH accounts"
           />
           <KpiCard
             label="Buffer"
             value={currency(data.liquidity.buffer)}
-            sub={
-              data.liquidity.bufferAccountCount != null
-                ? `Per-account min buffers (${data.liquidity.bufferAccountCount})`
-                : 'Per-account min buffers'
-            }
+            sub="Per-account min buffers"
           />
           <KpiCard
             label="Cash available to use"
@@ -2466,10 +2635,18 @@ export function RollingDebtPayoffDashboard({
           />
         </div>
 
+        {/**
+         * Cause → Effect pair. The left (input) card is the user-owned Cash to use now
+         * control; the right (result) card is the derived Execute now amount the planner
+         * will actually deploy. Both cards read from the same canonical display model,
+         * so a keystroke in the input immediately flows through executeNow, the extra
+         * payment buckets, the post-payment snapshot, execution totals, the aggressive
+         * panel, allocation audit, and debug/automation blocks.
+         */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(280px, 2fr) minmax(200px, 1fr)',
+            gridTemplateColumns: 'minmax(300px, 2fr) minmax(220px, 1fr)',
             gap: 14,
             marginBottom: 16,
             alignItems: 'stretch'
@@ -2477,21 +2654,32 @@ export function RollingDebtPayoffDashboard({
         >
           <CashToUseNowInputCard
             label="Cash to use now"
-            helperText="Enter how much cash you want to deploy this month"
+            helperText="How much cash do you want to use this month?"
             inputValue={cashToUseNowInput}
             onChange={setCashToUseNowInput}
             deployableMax={deployableMax}
             capWarning={
               exceedsDeployable
-                ? `Input exceeds deployable max; execute-now is capped to ${currency(deployableMax)}.`
+                ? `Input exceeds deployable max. Execute now is capped at ${currency(deployableMax)}.`
                 : undefined
             }
+            suggestedValue={
+              data.liquidity.month0ExecuteNowBudget != null &&
+              Number.isFinite(data.liquidity.month0ExecuteNowBudget) &&
+              data.liquidity.month0ExecuteNowBudget > 0.005 &&
+              data.liquidity.month0ExecuteNowBudget < deployableMax - 0.5
+                ? Math.min(data.liquidity.month0ExecuteNowBudget, deployableMax)
+                : null
+            }
+            executeNow={executeNow}
+            remainingDeployable={Math.max(0, round2(deployableMax - executeNow))}
           />
-          <KpiCard
-            label="Execute now"
-            value={currency(executeNow)}
-            borderAccent="extra"
-            sub={`= min(${currency(cashToUseNowRaw)}, ${currency(deployableMax)})`}
+          <ExecuteNowResultCard
+            executeNow={executeNow}
+            cashToUseNowRaw={cashToUseNowRaw}
+            deployableMax={deployableMax}
+            exceedsDeployable={exceedsDeployable}
+            remainingDeployable={Math.max(0, round2(deployableMax - executeNow))}
           />
         </div>
 
@@ -2554,6 +2742,11 @@ export function RollingDebtPayoffDashboard({
           exceedsDeployable={displayExecutionPlan.exceedsDeployable}
           strategyComparison={displayExecutionPlan.strategyComparison}
           isAggressiveStrategy={isAggressiveStrategy}
+          totalCash={Number(data.liquidity.totalCash) || 0}
+          reserve={Number(data.liquidity.reserveTarget) || 0}
+          buffer={Number(data.liquidity.buffer) || 0}
+          nearTermPlannedHold={Number(data.liquidity.nearTermPlannedCashHold) || 0}
+          unmappedCardRiskHold={Number(data.liquidity.unmappedCardRiskHold) || 0}
           visible={!isAutomation && (isAdvanced || !displayExecutionPlan.validation.isConsistent)}
         />
 

@@ -2979,6 +2979,32 @@ function getRollingDebtPayoffPlan(options) {
     const ls0 = sim.next12[0].liquidity_summary;
     const budget0 = round2_(Number(cashPolicyModel.month0_execute_now_budget) || 0);
     if (ls0) {
+      /**
+       * The simulator seeds `liquidity_summary` for month 0 using its own
+       * `reserveTarget` / `bufferAboveReserve` inputs, which are still the legacy
+       * planner constants (ROLLING_DP_RESERVE_DEFAULT_ / ROLLING_DP_BUFFER_ABOVE_RESERVE_)
+       * so forward-month cash-floor protection keeps working. But for MONTH 0 the
+       * canonical source of truth is the SYS - Accounts policy model: Reserve is the
+       * DO_NOT_TOUCH balance total, Buffer is the per-account Min Buffer total, and
+       * Deployable max / Execute-now budget are derived directly from those values
+       * plus the near-term and unmapped-card-risk holds. We overwrite the legacy
+       * fields here so no downstream consumer (buildThisMonthPlan_, mappers,
+       * diagnostics) can accidentally re-subtract the legacy $100k / $100k on top
+       * of the calculated values. Legacy constants remain accessible via
+       * `cash_policy_pools.legacy_reserve_target` / `legacy_buffer_above_reserve`
+       * and via the simulator's forward-month rows for audit only.
+       */
+      const calcReserveLs0 = round2_(Number(cashPolicyModel.calculated_reserve) || 0);
+      const calcBufferLs0 = round2_(Number(cashPolicyModel.calculated_buffer) || 0);
+      const nearTermLs0 = round2_(Number(cashPolicyModel.near_term_planned_cash_hold) || 0);
+      const unmappedLs0 = round2_(Number(cashPolicyModel.unmapped_card_risk_hold) || 0);
+      const deployableMaxLs0 = round2_(Number(cashPolicyModel.deployable_max_calculated) || 0);
+      ls0.reserve_target = calcReserveLs0;
+      ls0.buffer_above_reserve = calcBufferLs0;
+      ls0.near_term_planned_cash_reserved = nearTermLs0;
+      ls0.unmapped_card_funded_cash_risk = unmappedLs0;
+      ls0.deployable_cash = deployableMaxLs0;
+      ls0.deployable_cash_after_protections = deployableMaxLs0;
       ls0.month0_execute_now_budget = budget0;
       if (
         ls0.cash_available_for_extra_debt_today != null &&
