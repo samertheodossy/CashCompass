@@ -6,6 +6,7 @@ var selectedMode = 'Standard';
 function setRollingDebtPayoffSelectedMode(mode) {
   var allowed = { Standard: 1, Operator: 1, Aggressive: 1, Automation: 1 };
   if (!allowed[mode]) return;
+  if (selectedMode === mode) return;
   selectedMode = mode;
   var root = document.getElementById('rollingDebtPayoff');
   if (!root) return;
@@ -35,12 +36,64 @@ function rollingDebtPayoffExecutionPlanMode_() {
   return '';
 }
 
+/** Maps planner UI mode label to RollingDebtPayoffDashboard presentation mode. */
+function rollingDebtPayoffLabelToPresentationMode_(label) {
+  var L = label == null ? 'Standard' : String(label);
+  if (L === 'Operator') return 'operator';
+  if (L === 'Aggressive') return 'aggressive';
+  if (L === 'Automation') return 'automation';
+  return 'standard';
+}
+
+function rollingDebtPayoffPresentationModeToLabel_(mode) {
+  var m = mode == null ? 'standard' : String(mode).toLowerCase();
+  if (m === 'operator') return 'Operator';
+  if (m === 'aggressive') return 'Aggressive';
+  if (m === 'automation') return 'Automation';
+  return 'Standard';
+}
+
+/**
+ * Mounts React RollingDebtPayoffDashboard when the bundle is present; falls back to no-op.
+ * Refetch on presentation mode change is handled via setRollingDebtPayoffSelectedMode (executionPlanMode).
+ */
+function rollingDebtPayoffTryMountDashboard_(data) {
+  var el = document.getElementById('rolling_debt_payoff_dashboard_root');
+  if (!el || typeof window.mountRollingDebtPayoffDashboard !== 'function') {
+    return;
+  }
+  var mapped =
+    typeof window.mapPlannerPayloadToRollingDebtPayoffDashboardData === 'function'
+      ? window.mapPlannerPayloadToRollingDebtPayoffDashboardData(data)
+      : null;
+  var useDemo = !mapped;
+  var payload = mapped || (typeof window.demoRollingDebtPayoffDashboardData !== 'undefined' ? window.demoRollingDebtPayoffDashboardData : null);
+  if (!payload) {
+    return;
+  }
+  var defaultMode = rollingDebtPayoffLabelToPresentationMode_(typeof selectedMode !== 'undefined' ? selectedMode : 'Standard');
+  window.mountRollingDebtPayoffDashboard(el, {
+    data: payload,
+    useDemoFallback: useDemo,
+    defaultPresentationMode: defaultMode,
+    onPresentationModeChange: function(mode) {
+      var label = rollingDebtPayoffPresentationModeToLabel_(mode);
+      if (typeof setRollingDebtPayoffSelectedMode === 'function') {
+        setRollingDebtPayoffSelectedMode(label);
+      }
+    },
+    style: { minHeight: 'auto', paddingBottom: 16 }
+  });
+}
+
 var __rollingDebtPayoffCache = null;
 
 function loadRollingDebtPayoffSection() {
   var statusEl = document.getElementById('rolling_debt_payoff_status');
   var tablesEl = document.getElementById('rolling_debt_payoff_tables');
   var jsonEl = document.getElementById('rolling_debt_payoff_json');
+  var jsonWrapLoad = document.querySelector('#rollingDebtPayoff .rolling-dp-json-wrap');
+  if (jsonWrapLoad) jsonWrapLoad.style.display = 'none';
 
   if (statusEl) setStatus('rolling_debt_payoff_status', 'Loading…', false);
   if (tablesEl) {
@@ -84,6 +137,7 @@ function rollingDebtPayoffJsonForDisplay_(data) {
       'default_output',
       'this_month_plan',
       'this_month_execution_plan',
+      'rolling_dashboard_execution_row',
       'action_decision_box',
       'next_3_month_preview',
       'planned_expense_impact',
@@ -293,6 +347,12 @@ function rollingThisMonthPlanHtml_(tmp) {
     liqBody.push([
       'Near-term planned cash reserved (INPUT - Upcoming Expenses)',
       fmtCurrency(lq.near_term_planned_cash_reserved)
+    ]);
+  }
+  if (lq.unmapped_card_funded_cash_risk != null && Number(lq.unmapped_card_funded_cash_risk) > 0.005) {
+    liqBody.push([
+      'Unmapped card-funded cash risk (held like cash until mapped)',
+      fmtCurrency(lq.unmapped_card_funded_cash_risk)
     ]);
   }
   liqBody.push(
@@ -564,42 +624,18 @@ function renderRollingDebtPayoff_(data) {
   var pw = data.property_watchlist || {};
   var parts = [];
   var dbg = !!data.include_debug_details;
-  var execPlanStr = String(data.this_month_execution_plan || '');
-  var isOnePageOpPlan = execPlanStr.indexOf('ROLLING DEBT PAYOFF') === 0;
   var isAutomationExec = rollingDebtPayoffIsAutomationExecution_(data);
 
   parts.push('<div class="rolling-dp-primary' + (isAutomationExec ? ' rolling-dp-primary--automation' : '') + '">');
+  parts.push('<div id="rolling_debt_payoff_dashboard_root" class="rolling-dp-react-dashboard-root"></div>');
   if (isAutomationExec) {
     parts.push(rollingAutomationExecutionPlanHtml_(data.this_month_execution_plan));
-  } else {
-    if (!isOnePageOpPlan) {
-      parts.push(
-        '<p class="rolling-dp-status-line"><strong>Plan status:</strong> ' +
-          escapeHtml_(String(sum.plan_status || '—')) +
-          ' · <strong>Anchor:</strong> ' +
-          escapeHtml_(String(sum.anchor_month || '—')) +
-          ' · <strong>Confidence:</strong> ' +
-          escapeHtml_(String(sum.overall_confidence || '—')) +
-          '</p>'
-      );
-    }
-    parts.push(rollingThisMonthExecutionPlanHtml_(data.this_month_execution_plan));
-    if (data.default_output && !dbg) {
-      if (!isOnePageOpPlan) {
-        parts.push(rollingDefaultOutputBulletsHtml_(data.default_output));
-        parts.push(rollingNext3ShortHtml_(data.default_output));
-        parts.push(rollingWhyNotesHtml_(data.default_output.why_notes));
-      }
-    } else if (!dbg && !isOnePageOpPlan) {
-      parts.push(rollingThisMonthPlanHtml_(data.this_month_plan));
-      parts.push(rollingNext3PreviewHtml_(data.next_3_month_preview));
-    }
-    if (dbg) {
-      parts.push(rollingActionDecisionBoxHtml_(data.action_decision_box));
-      parts.push(rollingThisMonthPlanHtml_(data.this_month_plan));
-      parts.push(rollingNext3PreviewHtml_(data.next_3_month_preview));
-      parts.push(rollingRecurringBaselineAuditHtml_(data.recurring_baseline_audit));
-    }
+  } else if (dbg) {
+    // Debug only: extra tables under the React dashboard (no legacy plaintext execution plan).
+    parts.push(rollingActionDecisionBoxHtml_(data.action_decision_box));
+    parts.push(rollingThisMonthPlanHtml_(data.this_month_plan));
+    parts.push(rollingNext3PreviewHtml_(data.next_3_month_preview));
+    parts.push(rollingRecurringBaselineAuditHtml_(data.recurring_baseline_audit));
   }
   parts.push('</div>');
 
@@ -610,6 +646,9 @@ function renderRollingDebtPayoff_(data) {
     if (jsonElEarly) jsonElEarly.textContent = '';
     var jsonWrap = document.querySelector('#rollingDebtPayoff .rolling-dp-json-wrap');
     if (jsonWrap) jsonWrap.style.display = 'none';
+    setTimeout(function() {
+      rollingDebtPayoffTryMountDashboard_(data);
+    }, 0);
     return;
   }
 
@@ -947,4 +986,8 @@ function renderRollingDebtPayoff_(data) {
       jsonEl.textContent = String(e);
     }
   }
+
+  setTimeout(function() {
+    rollingDebtPayoffTryMountDashboard_(data);
+  }, 0);
 }

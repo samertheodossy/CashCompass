@@ -1,0 +1,12 @@
+# Apps Script must not receive npm or Vite output (ESM "export", Node APIs, wrong runtime).
+# Use explicit ** patterns — a lone "node_modules/" can still let files through on some clasp versions.
+
+**/node_modules/**
+node_modules/**
+
+**/dist/**
+dist/**
+
+# Vite cache (if present)
+**/.vite/**
+.vite/

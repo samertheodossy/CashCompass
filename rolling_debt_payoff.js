@@ -24,8 +24,17 @@ var ROLLING_DP_PLAN_STATUS_PLACEHOLDER_ = '__ROLLING_DP_PLAN_STATUS__';
 var ROLLING_DP_HELOC_MIN_SPREAD_OVER_HELOC_APR_ = 3;
 /** Credit card balances at or below this are paid off before larger-card APR ordering. */
 var ROLLING_DP_EXEC_PLAN_SMALL_BALANCE_SNOWBALL_MAX_ = 2500;
-/** Post-cleanup extra principal pool: fraction routed to primary APR target first (rest to secondary, then sweep). */
+/** Post-cleanup extra principal pool: fraction routed to primary APR target first (legacy 75/25; simulation uses strict serial waterfall). */
 var ROLLING_DP_PHASE2_PRIMARY_FRACTION_STANDARD_ = 0.75;
+/**
+ * Secondary execute-now waterfall after primary (highest APR) is exhausted for this pass.
+ * Canonical labels resolved against INPUT debts via normalizeName_ + alias map.
+ */
+var ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_ = [
+  'Credit Card - CitiAA',
+  'Credit Card - Southwest',
+  'Credit Card - Marriott'
+];
 /** Aggressive mode: concentrate post-cleanup extras on primary (remainder only to secondary / spill). */
 var ROLLING_DP_PHASE2_PRIMARY_FRACTION_AGGRESSIVE_ = 0.9;
 var ROLLING_DP_LUMP_DEBT_ = 0.5;
@@ -990,11 +999,15 @@ function rollingResolveCcDebtNameForPlannedExpense_(accountSource, expenseName, 
 
 /**
  * Reads INPUT - Upcoming Expenses (Planned only), classifies by due date vs anchor month end,
- * reserves near-term cash from deployable liquidity, and increases CC balances for near-term card-funded plans.
+ * reserves near-term cash from deployable liquidity, and increases CC balances for near-term card-funded plans
+ * that are mapped to a specific card. Unmapped near-term card-funded amounts are held against deployable cash
+ * (cash risk) and are not applied as modeled card balance until mapped.
  */
 function buildRollingPlannedExpenseImpactModel_(anchorDate, tz, debts, aliasMap) {
   const out = {
     near_term_cash_total: 0,
+    unmapped_card_funded_cash_risk_total: 0,
+    near_term_card_funded_mapped_total: 0,
     debts_for_sim: debts.map(function(d) {
       return JSON.parse(JSON.stringify(d));
     }),
@@ -1005,6 +1018,7 @@ function buildRollingPlannedExpenseImpactModel_(anchorDate, tz, debts, aliasMap)
     has_unmapped_near_term_card: false,
     near_term_card_funded_within_30: false,
     modeling_unmapped_card_assumption: '',
+    first_unmapped_near_term_title: '',
     warnings: []
   };
 
@@ -1039,7 +1053,6 @@ function buildRollingPlannedExpenseImpactModel_(anchorDate, tz, debts, aliasMap)
     let impactTag = '';
     if (horizon === 'near_term') {
       if (funding === 'credit_card') {
-        impactTag = 'credit card → increases debt';
         if (dueObj && stripTime_(dueObj).getTime() <= anchorPlus30.getTime()) {
           out.near_term_card_funded_within_30 = true;
         }
@@ -1048,52 +1061,42 @@ function buildRollingPlannedExpenseImpactModel_(anchorDate, tz, debts, aliasMap)
         if (!tgt) {
           lineUnmapped = true;
           out.has_unmapped_near_term_card = true;
-          const cautionNm = rollingModelingCautionCardForUnmappedPlanned_(out.debts_for_sim);
-          out.modeling_unmapped_card_assumption = cautionNm || '';
-          if (cautionNm) {
-            out.debts_for_sim.forEach(function(d) {
-              if (d.name === cautionNm) {
-                d.balance = round2_(Math.max(0, d.balance) + amt);
-              }
-            });
+          out.modeling_unmapped_card_assumption = '';
+          out.unmapped_card_funded_cash_risk_total = round2_(out.unmapped_card_funded_cash_risk_total + amt);
+          if (!out.first_unmapped_near_term_title) {
+            out.first_unmapped_near_term_title = title;
           }
-          out.warnings.push(
-            'Near-term planned expense "' +
-              title +
-              '" is card-funded but no unique credit card debt matched Account / Source — map it to a specific card. For timeline caution only, modeled balance increase is applied to ' +
-              (cautionNm
-                ? 'the card used for modeling caution (' +
-                  cautionNm +
-                  ': highest utilization where Credit Limit is set, else highest APR)'
-                : '(no card identified)') +
-              '; executable payment steps do not rely on that assumption.'
-          );
+          impactTag = 'card-funded — unmapped (cash risk hold)';
+          out.display_lines.push({
+            title: title,
+            due_label: dueLabel,
+            amount: amt,
+            impact_tag: impactTag,
+            horizon: horizon,
+            execution_treatment:
+              'Conservative liquidity hold: treated like near-term cash risk until Account/Source maps to a specific card debt.',
+            is_unmapped_card: true,
+            mapped_card_name: ''
+          });
         } else {
+          impactTag = 'credit card → increases debt (mapped)';
+          out.near_term_card_funded_mapped_total = round2_(out.near_term_card_funded_mapped_total + amt);
           out.debts_for_sim.forEach(function(d) {
             if (d.name === tgt) {
               d.balance = round2_(Math.max(0, d.balance) + amt);
             }
           });
+          out.display_lines.push({
+            title: title,
+            due_label: dueLabel,
+            amount: amt,
+            impact_tag: impactTag,
+            horizon: horizon,
+            execution_treatment: 'Does not reduce deployable cash today; increases modeled balance on mapped card only.',
+            is_unmapped_card: false,
+            mapped_card_name: tgt
+          });
         }
-        let execTreat =
-          'Does not reduce cash today; increases modeled credit-card balance and caution for optional HELOC.';
-        if (lineUnmapped) {
-          execTreat +=
-            ' Unmapped target card — map in INPUT - Upcoming Expenses to finalize payoff sequence. Modeling-only balance load on ' +
-            (out.modeling_unmapped_card_assumption || '—') +
-            ' (highest utilization if limits exist, else highest APR) for caution; execution extra payments are not based on that assumption.';
-        } else {
-          execTreat += ' Mapped to ' + tgt + ' in the payoff model.';
-        }
-        out.display_lines.push({
-          title: title,
-          due_label: dueLabel,
-          amount: amt,
-          impact_tag: impactTag,
-          horizon: horizon,
-          execution_treatment: execTreat,
-          is_unmapped_card: lineUnmapped
-        });
         return;
       } else {
         impactTag = 'cash → reduces deployable cash';
@@ -1140,6 +1143,8 @@ function buildRollingPlannedExpenseImpactModel_(anchorDate, tz, debts, aliasMap)
   });
 
   out.near_term_cash_total = round2_(out.near_term_cash_total);
+  out.unmapped_card_funded_cash_risk_total = round2_(out.unmapped_card_funded_cash_risk_total);
+  out.near_term_card_funded_mapped_total = round2_(out.near_term_card_funded_mapped_total);
   out.debt_start_adjusted = round2_(
     out.debts_for_sim.reduce(function(s, d) {
       return s + Math.max(0, d.balance);
@@ -2253,6 +2258,342 @@ function buildExecutionExtraBuckets_(eca, execCashMap, planInvalid) {
 }
 
 /**
+ * Modeled month-end balances (simulator only). Shown only when DEBUG DETAILS is on; never mixed with execute-now snapshot.
+ */
+function buildModeledMonthEndSnapshotDebugLines_(row0, planInvalid) {
+  const lines = [];
+  if (planInvalid) return lines;
+  const startSnap = row0.debt_balances_start || [];
+  const endSnap = row0.debt_balances_end || [];
+  if (!startSnap.length || !endSnap.length) return lines;
+
+  const b0 = Object.create(null);
+  for (let i = 0; i < startSnap.length; i++) {
+    const d = startSnap[i];
+    b0[d.name] = round2_(Number(d.balance) || 0);
+  }
+  const b1 = Object.create(null);
+  for (let i = 0; i < endSnap.length; i++) {
+    const d = endSnap[i];
+    b1[d.name] = round2_(Number(d.balance) || 0);
+  }
+  const namesSet = Object.create(null);
+  for (let i = 0; i < startSnap.length; i++) {
+    namesSet[startSnap[i].name] = true;
+  }
+  for (let i = 0; i < endSnap.length; i++) {
+    namesSet[endSnap[i].name] = true;
+  }
+
+  const rows = [];
+  Object.keys(namesSet).forEach(function(nm) {
+    const ms = b0[nm] != null ? b0[nm] : 0;
+    const me = b1[nm] != null ? b1[nm] : 0;
+    const pay = round2_(Math.max(0, ms - me));
+    if (pay <= 0.005 && ms <= 0.005 && me <= 0.005) return;
+    rows.push({ name: nm, modelStart: ms, modeledPaydown: pay, modelEnd: me });
+  });
+  rows.sort(function(a, b) {
+    return b.modeledPaydown - a.modeledPaydown;
+  });
+  if (!rows.length) return lines;
+
+  function padCell_(s, w) {
+    s = String(s || '');
+    if (s.length > w) {
+      return s.substring(0, Math.max(0, w - 1)) + '\u2026';
+    }
+    while (s.length < w) {
+      s += ' ';
+    }
+    return s;
+  }
+  const wAcct = 28;
+  const wNum = 18;
+  lines.push('--------------------------------------------------');
+  lines.push('MODELED MONTH-END SNAPSHOT (DEBUG ONLY)');
+  lines.push('');
+  lines.push(
+    'Simulator month-start (incl. planned-expense balance modeling where applied), modeled paydown to month-end, and month-end balance. Not an execution checklist.'
+  );
+  lines.push('');
+  lines.push(
+    padCell_('Account', wAcct) +
+      ' | ' +
+      padCell_('Model month-start', wNum) +
+      ' | ' +
+      padCell_('Modeled paydown', wNum) +
+      ' | ' +
+      padCell_('Model month-end', wNum)
+  );
+  let dashLine = '';
+  const dashLen = wAcct + wNum * 3 + 13;
+  for (let di = 0; di < dashLen; di++) {
+    dashLine += '-';
+  }
+  lines.push(dashLine);
+  const cap = 16;
+  for (let i = 0; i < rows.length && i < cap; i++) {
+    const r = rows[i];
+    lines.push(
+      padCell_(r.name, wAcct) +
+        ' | ' +
+        padCell_(fmtCurrency_(r.modelStart), wNum) +
+        ' | ' +
+        padCell_(fmtCurrency_(r.modeledPaydown), wNum) +
+        ' | ' +
+        padCell_(fmtCurrency_(r.modelEnd), wNum)
+    );
+  }
+  if (rows.length > cap) {
+    lines.push('(' + (rows.length - cap) + ' more accounts omitted.)');
+  }
+  lines.push('');
+  return lines;
+}
+
+/**
+ * Plain-text table after EXECUTION TOTALS (Standard / Operator / Aggressive only; not Automation).
+ * Execute-now snapshot only: balances from INPUT - Debts anchor; payments from extra_principal_allocations_execution_now + HELOC to target; totals must match execution_total_now.
+ */
+function buildPostPaymentSnapshotLines_(row0, planInvalid, ctx) {
+  const lines = [];
+  if (planInvalid) return lines;
+
+  const execCashMap = ctx.execCashMap || {};
+  const buckets = ctx.buckets || {};
+  const eca = ctx.eca;
+  const execTotalDisplayed = ctx.execTotalDisplayed != null ? round2_(ctx.execTotalDisplayed) : 0;
+  const execHelocAmount =
+    ctx.execHelocAmount != null && ctx.execHelocAmount === ctx.execHelocAmount
+      ? round2_(ctx.execHelocAmount)
+      : 0;
+  const helocTargetRaw = String(row0.heloc_target_account || '').trim();
+  const includeDebug = !!ctx.include_debug_details;
+
+  const sheetAnchor = row0.debt_balances_sheet_anchor;
+  const s0 = Object.create(null);
+  if (sheetAnchor && sheetAnchor.length) {
+    for (let si = 0; si < sheetAnchor.length; si++) {
+      const d = sheetAnchor[si];
+      s0[d.name] = round2_(Number(d.balance) || 0);
+    }
+  }
+
+  const primaryNm = String(
+    (eca && eca.concentration_items && eca.concentration_items[0] && eca.concentration_items[0].name) ||
+      row0.primary_priority_debt ||
+      row0.focus_debt ||
+      ''
+  ).trim();
+  const secondarySet = Object.create(null);
+  if (eca && eca.concentration_items) {
+    for (let i = 1; i < eca.concentration_items.length; i++) {
+      const n = String(eca.concentration_items[i].name || '').trim();
+      if (n) secondarySet[n] = true;
+    }
+  }
+
+  const cleanupNameSet = Object.create(null);
+  if (eca && eca.cleanup_items) {
+    for (let ci = 0; ci < eca.cleanup_items.length; ci++) {
+      const c = eca.cleanup_items[ci];
+      const nm = String(c && c.name ? c.name : '').trim();
+      if (nm) cleanupNameSet[nm] = true;
+    }
+  }
+
+  function paymentNowForName_(nm) {
+    let p = round2_(Number(execCashMap[nm]) || 0);
+    if (helocTargetRaw && nm === helocTargetRaw && execHelocAmount > 0.005) {
+      p = round2_(p + execHelocAmount);
+    }
+    return p;
+  }
+
+  const candidateNames = Object.create(null);
+  Object.keys(execCashMap || {}).forEach(function(k) {
+    if (round2_(Number(execCashMap[k]) || 0) > 0.005) candidateNames[k] = true;
+  });
+  if (helocTargetRaw && execHelocAmount > 0.005) {
+    candidateNames[helocTargetRaw] = true;
+  }
+  Object.keys(cleanupNameSet).forEach(function(k) {
+    candidateNames[k] = true;
+  });
+  if (primaryNm) candidateNames[primaryNm] = true;
+  Object.keys(secondarySet).forEach(function(k) {
+    candidateNames[k] = true;
+  });
+
+  const orderedNames = [];
+  const seen = Object.create(null);
+  function pushBucketOrder_(items) {
+    (items || []).forEach(function(e) {
+      const nm = String(e && e.name ? e.name : '').trim();
+      if (!nm || seen[nm]) return;
+      if (!candidateNames[nm]) return;
+      seen[nm] = true;
+      orderedNames.push(nm);
+    });
+  }
+  pushBucketOrder_(buckets.cleanup);
+  pushBucketOrder_(buckets.primary);
+  pushBucketOrder_(buckets.secondary);
+  pushBucketOrder_(buckets.overflow);
+  const remainder = [];
+  Object.keys(candidateNames).forEach(function(nm) {
+    if (!seen[nm]) remainder.push(nm);
+  });
+  remainder.sort();
+  for (let ri = 0; ri < remainder.length; ri++) {
+    orderedNames.push(remainder[ri]);
+  }
+
+  const rows = [];
+  let sumPay = 0;
+  for (let oi = 0; oi < orderedNames.length; oi++) {
+    const nm = orderedNames[oi];
+    const pay = paymentNowForName_(nm);
+    const isCleanup = !!cleanupNameSet[nm];
+    const isPrimary = primaryNm && nm === primaryNm;
+    const isSecondary = !!secondarySet[nm];
+    if (pay <= 0.005 && !isCleanup && !isPrimary && !isSecondary) {
+      continue;
+    }
+    const before = s0[nm] != null ? s0[nm] : 0;
+    const after = round2_(before - pay);
+    let status = '';
+    if (before > 0.005 && after <= 0.05) {
+      status = 'CLOSED';
+    } else if (isPrimary) {
+      status = '\u2193 PRIMARY';
+    } else if (isSecondary) {
+      status = '\u2193 SECONDARY';
+    }
+    sumPay = round2_(sumPay + pay);
+    rows.push({ name: nm, before: before, pay: pay, after: after, status: status });
+  }
+
+  const reconcileOk = Math.abs(sumPay - execTotalDisplayed) <= 0.15;
+
+  function padCell_(s, w) {
+    s = String(s || '');
+    if (s.length > w) {
+      return s.substring(0, Math.max(0, w - 1)) + '\u2026';
+    }
+    while (s.length < w) {
+      s += ' ';
+    }
+    return s;
+  }
+  const wAcct = 28;
+  const wNum = 20;
+  const wStat = 16;
+
+  lines.push('--------------------------------------------------');
+  lines.push('POST-PAYMENT SNAPSHOT (EXECUTE NOW ONLY)');
+  lines.push('');
+
+  if (!reconcileOk) {
+    lines.push('POST-PAYMENT SNAPSHOT unavailable: execution totals do not reconcile.');
+    lines.push('');
+    if (includeDebug) {
+      buildModeledMonthEndSnapshotDebugLines_(row0, planInvalid).forEach(function(ln) {
+        lines.push(ln);
+      });
+    }
+    return lines;
+  }
+
+  if (!rows.length && execTotalDisplayed <= 0.005) {
+    lines.push('(No execute-now extra principal this month.)');
+    lines.push('');
+    if (includeDebug) {
+      buildModeledMonthEndSnapshotDebugLines_(row0, planInvalid).forEach(function(ln) {
+        lines.push(ln);
+      });
+    }
+    return lines;
+  }
+
+  let eliminatedNow = 0;
+  let primaryPay = 0;
+  for (let ri = 0; ri < rows.length; ri++) {
+    const r = rows[ri];
+    if (r.before > 0.005 && r.after <= 0.05) eliminatedNow++;
+    if (primaryNm && r.name === primaryNm) {
+      primaryPay = round2_(primaryPay + r.pay);
+    }
+  }
+
+  lines.push(
+    padCell_('Account', wAcct) +
+      ' | ' +
+      padCell_('Balance Before', wNum) +
+      ' | ' +
+      padCell_('Payment Applied Now', wNum) +
+      ' | ' +
+      padCell_('Balance After Now', wNum) +
+      ' | ' +
+      padCell_('Status', wStat)
+  );
+  let dashLine = '';
+  const dashLen = wAcct + wNum * 3 + wStat + 16;
+  for (let di = 0; di < dashLen; di++) {
+    dashLine += '-';
+  }
+  lines.push(dashLine);
+
+  let sumBefore = 0;
+  let sumAfter = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    sumBefore = round2_(sumBefore + r.before);
+    sumAfter = round2_(sumAfter + r.after);
+    lines.push(
+      padCell_(r.name, wAcct) +
+        ' | ' +
+        padCell_(fmtCurrency_(r.before), wNum) +
+        ' | ' +
+        padCell_(fmtCurrency_(r.pay), wNum) +
+        ' | ' +
+        padCell_(fmtCurrency_(r.after), wNum) +
+        ' | ' +
+        padCell_(r.status, wStat)
+    );
+  }
+
+  lines.push(
+    padCell_('TOTAL', wAcct) +
+      ' | ' +
+      padCell_(fmtCurrency_(sumBefore), wNum) +
+      ' | ' +
+      padCell_(fmtCurrency_(execTotalDisplayed), wNum) +
+      ' | ' +
+      padCell_(fmtCurrency_(sumAfter), wNum) +
+      ' | ' +
+      padCell_('', wStat)
+  );
+  lines.push('');
+  lines.push(
+    'Result: ' +
+      eliminatedNow +
+      ' accounts eliminated now \u00b7 ' +
+      fmtCurrency_(execTotalDisplayed) +
+      ' deployed now \u00b7 primary reduced by ~' +
+      fmtCurrency_(primaryPay)
+  );
+  lines.push('');
+  if (includeDebug) {
+    buildModeledMonthEndSnapshotDebugLines_(row0, planInvalid).forEach(function(ln) {
+      lines.push(ln);
+    });
+  }
+  return lines;
+}
+
+/**
  * Short, action-oriented bullets for default UI (no duplicate extra-principal lines vs execution plan).
  */
 function buildRollingDefaultOutput_(summary, thisMonthPlan, actionDecisionBox, next3Preview, keyWarningsFinal) {
@@ -2342,6 +2683,40 @@ function slimThisMonthPlanForDashboard_(plan) {
   return out;
 }
 
+/**
+ * Month-0 execution fields for dashboard clients when {@code next_12_months} is omitted from the slim payload.
+ * Keeps execute-now maps + concentration analysis in sync with THIS MONTH EXECUTION PLAN text.
+ */
+function slimRollingDashboardExecutionRow_(row0) {
+  if (!row0 || typeof row0 !== 'object') return null;
+  var o = row0;
+  var out = {};
+  var keys = [
+    'month',
+    'extra_principal_allocations_execution_now',
+    'execution_concentration_analysis',
+    'extra_principal_allocations_conditional_variable',
+    'conditional_variable_extra_total',
+    'execution_total_now',
+    'execution_extra_cash_total',
+    'heloc_draw_this_month',
+    'heloc_target_account',
+    'debt_balances_sheet_anchor',
+    'primary_priority_debt',
+    'focus_debt',
+    'opening_concentration_meta',
+    'deployable_concentration_meta',
+    'waterfall_execution_snapshot',
+    'waterfall_execution_validated',
+    'waterfall_execution_validation_failures'
+  ];
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    if (o[k] !== undefined) out[k] = o[k];
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 function slimRollingDebtPayoffForDefault_(full, defaultOutput) {
   const pei = full.planned_expense_impact || {};
   return {
@@ -2351,13 +2726,19 @@ function slimRollingDebtPayoffForDefault_(full, defaultOutput) {
     default_output: defaultOutput,
     this_month_plan: slimThisMonthPlanForDashboard_(full.this_month_plan),
     this_month_execution_plan: full.this_month_execution_plan,
+    rolling_dashboard_execution_row: slimRollingDashboardExecutionRow_(full.next_12_months && full.next_12_months[0]),
     action_decision_box: full.action_decision_box,
     next_3_month_preview: full.next_3_month_preview,
     planned_expense_impact: {
       near_term_cash_reserved: pei.near_term_cash_reserved,
+      unmapped_card_funded_cash_risk: pei.unmapped_card_funded_cash_risk,
+      near_term_card_funded_mapped_total: pei.near_term_card_funded_mapped_total,
+      display_lines: (pei.display_lines || []).slice(0, 40),
       has_mid_term: pei.has_mid_term,
+      has_long_term: pei.has_long_term,
       has_unmapped_near_term_card: pei.has_unmapped_near_term_card,
       near_term_card_funded_within_30: pei.near_term_card_funded_within_30,
+      modeling_unmapped_card_assumption: pei.modeling_unmapped_card_assumption || '',
       warnings: (pei.warnings || []).slice(0, 2)
     },
     assumptions: {
@@ -2480,7 +2861,7 @@ function getRollingDebtPayoffPlan(options) {
     );
   }
   keyWarnings.push(
-    'Month-0 execution uses reserve + buffer + near-term planned cash, a per-month cash cap, and split cash vs forecast variable principal. HELOC defaults to No unless every strict gate passes; when it passes it is still optional only with manual approval.'
+    'Month-0 execution uses reserve + buffer + near-term planned cash (cash-funded and unmapped card-funded cash-risk holds), a per-month cash cap, and split cash vs forecast variable principal. HELOC defaults to No unless every strict gate passes; when it passes it is still optional only with manual approval.'
   );
 
   const anchorExpensePositive = monthlyPositiveExpenseOutflow_(anchorEntry, aliasMap);
@@ -2499,13 +2880,28 @@ function getRollingDebtPayoffPlan(options) {
       'Upcoming planned expenses (INPUT - Upcoming Expenses, due within 90 days after anchor month-end) may reduce available cash in future months.'
     );
   }
-  (plannedExpenseModel.warnings || []).forEach(function(w) {
-    if (w) keyWarnings.push(w);
-  });
+  if (plannedExpenseModel.has_unmapped_near_term_card) {
+    var _uTitle = String(plannedExpenseModel.first_unmapped_near_term_title || 'Planned expense').trim() || 'Planned expense';
+    keyWarnings.unshift(
+      'HELOC remains conservative while unmapped near-term expense exists.',
+      'Near-term planned expenses reduce extra-payment flexibility.',
+      '"' + _uTitle + '" is card-funded but not mapped; treated as cash risk until mapped.'
+    );
+  }
 
-  const availableCashForSim = round2_(Math.max(0, availableCash - plannedExpenseModel.near_term_cash_total));
+  const plannedLiquidityHolds = round2_(
+    plannedExpenseModel.near_term_cash_total + plannedExpenseModel.unmapped_card_funded_cash_risk_total
+  );
+  const availableCashForSim = round2_(Math.max(0, availableCash - plannedLiquidityHolds));
+
+  const debtSheetAnchorSnapshot = snapshotDebtsForActionPlan_(
+    debts.map(function(d) {
+      return JSON.parse(JSON.stringify(d));
+    })
+  );
 
   const sim = simulateRollingMonths_({
+    aliasMap: aliasMap,
     anchorDate: anchorDate,
     anchorHeader: anchorHeader,
     debts: plannedExpenseModel.debts_for_sim,
@@ -2516,6 +2912,7 @@ function getRollingDebtPayoffPlan(options) {
     availableCashStart: availableCashForSim,
     displayTotalCash: availableCash,
     nearTermPlannedCashTotal: plannedExpenseModel.near_term_cash_total,
+    unmappedCardFundedCashRiskTotal: plannedExpenseModel.unmapped_card_funded_cash_risk_total,
     reserveTarget: ROLLING_DP_RESERVE_DEFAULT_,
     bufferAboveReserve: ROLLING_DP_BUFFER_ABOVE_RESERVE_,
     maxCashDeploymentMonthly: ROLLING_DP_MAX_CASH_DEPLOYMENT_MONTHLY_,
@@ -2527,7 +2924,8 @@ function getRollingDebtPayoffPlan(options) {
     plannedNearTermCardWithin30: !!plannedExpenseModel.near_term_card_funded_within_30,
     userCashPreservationMonth: false,
     modelingUnmappedCardAssumption: String(plannedExpenseModel.modeling_unmapped_card_assumption || ''),
-    executionPlanAggressiveAlloc: executionPlanModesList.indexOf('aggressive') >= 0
+    executionPlanAggressiveAlloc: executionPlanModesList.indexOf('aggressive') >= 0,
+    debtSheetAnchorSnapshot: debtSheetAnchorSnapshot
   });
 
   const endingDebt84 = sim.longRange.length ? sim.longRange[sim.longRange.length - 1].ending_total_debt : sim.debtStart;
@@ -2584,6 +2982,8 @@ function getRollingDebtPayoffPlan(options) {
     sim.next12[0].planned_expense_impact = {
       display_lines: plannedExpenseModel.display_lines,
       near_term_cash_total: plannedExpenseModel.near_term_cash_total,
+      unmapped_card_funded_cash_risk_total: plannedExpenseModel.unmapped_card_funded_cash_risk_total,
+      near_term_card_funded_mapped_total: plannedExpenseModel.near_term_card_funded_mapped_total,
       has_mid_term: plannedExpenseModel.has_mid_term,
       has_unmapped_near_term_card: !!plannedExpenseModel.has_unmapped_near_term_card,
       near_term_card_funded_within_30: !!plannedExpenseModel.near_term_card_funded_within_30,
@@ -2615,6 +3015,11 @@ function getRollingDebtPayoffPlan(options) {
       'Mid-term planned expenses are due within 90 days after anchor month-end (INPUT - Upcoming Expenses) — they may reduce available cash for debt extras in upcoming months.'
     ]);
   }
+  if (plannedExpenseModel.has_unmapped_near_term_card) {
+    thisMonthPlan.context_notes = (thisMonthPlan.context_notes || []).concat([
+      'Unmapped card-funded expense is being treated as cash risk until mapped.'
+    ]);
+  }
   if (plannedExpenseModel.display_lines && plannedExpenseModel.display_lines.length) {
     thisMonthPlan.planned_expense_lines = plannedExpenseModel.display_lines;
   }
@@ -2633,7 +3038,8 @@ function getRollingDebtPayoffPlan(options) {
   const execPlanOut = buildThisMonthExecutionPlanText_(row0, planStatus === 'INVALID', {
     overall_confidence: overallConfidence.label,
     next_3_month_preview: next3Preview,
-    execution_plan_mode: executionPlanMode
+    execution_plan_mode: executionPlanMode,
+    include_debug_details: includeDebugDetails
   });
   let thisMonthExecutionPlan = execPlanOut.text;
   if (sim.next12 && sim.next12.length && execPlanOut.interest_allocation_execution_ok != null) {
@@ -2680,6 +3086,8 @@ function getRollingDebtPayoffPlan(options) {
     anchor_future_only_no_data_through_current_month: !!anchor.anchor_future_only_no_data_through_current_month,
     starting_available_cash: availableCash,
     near_term_planned_cash_reserved: plannedExpenseModel.near_term_cash_total,
+    unmapped_card_funded_cash_risk: plannedExpenseModel.unmapped_card_funded_cash_risk_total,
+    near_term_card_funded_mapped_total: plannedExpenseModel.near_term_card_funded_mapped_total,
     reserve_target: ROLLING_DP_RESERVE_DEFAULT_,
     starting_total_debt: sim.debtStart,
     projected_total_debt_84m: endingDebt84,
@@ -2695,11 +3103,14 @@ function getRollingDebtPayoffPlan(options) {
     this_month_execution_plan: thisMonthExecutionPlan,
     planned_expense_impact: {
       near_term_cash_reserved: plannedExpenseModel.near_term_cash_total,
+      unmapped_card_funded_cash_risk: plannedExpenseModel.unmapped_card_funded_cash_risk_total,
+      near_term_card_funded_mapped_total: plannedExpenseModel.near_term_card_funded_mapped_total,
       display_lines: plannedExpenseModel.display_lines,
       has_mid_term: plannedExpenseModel.has_mid_term,
       has_long_term: plannedExpenseModel.has_long_term,
       has_unmapped_near_term_card: !!plannedExpenseModel.has_unmapped_near_term_card,
       near_term_card_funded_within_30: !!plannedExpenseModel.near_term_card_funded_within_30,
+      modeling_unmapped_card_assumption: String(plannedExpenseModel.modeling_unmapped_card_assumption || ''),
       warnings: plannedExpenseModel.warnings || []
     },
     action_decision_box: actionDecisionBox,
@@ -3024,6 +3435,37 @@ function rollingDebtExtraPayoffCap_(d) {
   return Math.max(0, round2_(d.balance + interest - d.minimumPayment));
 }
 
+/** Balance/residual threshold: treat as paid off for waterfall gating and dust closure. */
+var ROLLING_WF_ZERO_BAL_ = 0.01;
+var ROLLING_WF_POOL_EPS_ = 1e-9;
+
+/** Extra principal headroom using full-precision balance (avoids penny traps vs round2_ caps). */
+function rollingDebtExtraPayoffCapHp_(d) {
+  if (!d || d.active === false) return 0;
+  const bal = Number(d.balance) || 0;
+  if (bal <= ROLLING_WF_POOL_EPS_) return 0;
+  const r = (Number(d.interestRate) || 0) / 100 / 12;
+  const interest = bal * r;
+  const minp = Number(d.minimumPayment) || 0;
+  return Math.max(0, bal + interest - minp);
+}
+
+/** Apply extra principal with high-precision balance update; force-close dust <= ROLLING_WF_ZERO_BAL_. */
+function rollingApplyExtraPrincipalHp_(d, extra) {
+  extra = Math.max(0, Number(extra) || 0);
+  if (extra <= ROLLING_WF_POOL_EPS_) return;
+  const bal = Number(d.balance) || 0;
+  const r = (Number(d.interestRate) || 0) / 100 / 12;
+  const interest = bal * r;
+  const minp = Number(d.minimumPayment) || 0;
+  let newBal = bal + interest - minp - extra;
+  if (newBal <= ROLLING_WF_ZERO_BAL_) {
+    d.balance = 0;
+  } else {
+    d.balance = round2_(Math.max(0, newBal));
+  }
+}
+
 /**
  * Post-cleanup: primary_allocation = round(f×R), secondary_allocation = R − primary_allocation (f default 0.75);
  * apply to top two APR targets only, then sweep any cap shortfall across those two until R is placed or both capped.
@@ -3113,20 +3555,75 @@ function rollingPhase27525TwoTargets_(findDebt, addAlloc, applyDebtPayment_, P, 
   meta.phase2_secondary_paid = paidS;
 }
 
+/** Resolve a canonical CC debt label to the sheet debt `name` when present (alias-normalized). */
+function rollingResolveCanonicalCcNameOnDebts_(canonical, debtsLike, aliasMap) {
+  aliasMap = aliasMap || {};
+  const want = normalizeName_(String(canonical || '').trim(), aliasMap);
+  if (!want) return '';
+  const arr = debtsLike || [];
+  for (let i = 0; i < arr.length; i++) {
+    const d = arr[i];
+    if (String(d.type || '').trim() !== 'Credit Card') continue;
+    if (normalizeName_(String(d.name || ''), aliasMap) === want) return String(d.name || '').trim();
+  }
+  return '';
+}
+
+/** One dashboard row per account from waterfall trace (aggregates multi-step pays). */
+function rollingBuildExecutionSnapshotFromTrace_(trace) {
+  const agg = Object.create(null);
+  const firstIdx = Object.create(null);
+  (trace || []).forEach(function(r, idx) {
+    const nm = String(r.account || '');
+    if (!nm) return;
+    if (firstIdx[nm] == null) firstIdx[nm] = idx;
+    if (!agg[nm]) {
+      agg[nm] = {
+        balance_before: Number(r.balance_before) || 0,
+        balance_after: Number(r.balance_after) || 0,
+        phase: String(r.phase || '')
+      };
+    } else {
+      agg[nm].balance_after = Number(r.balance_after) || 0;
+    }
+  });
+  return Object.keys(agg)
+    .sort(function(a, b) {
+      return (firstIdx[a] || 0) - (firstIdx[b] || 0);
+    })
+    .map(function(nm) {
+      const a = agg[nm];
+      const before = Number(a.balance_before) || 0;
+      let after = Number(a.balance_after) || 0;
+      if (after <= ROLLING_WF_ZERO_BAL_ + 1e-9) after = 0;
+      const payShow = Math.max(0, before - after);
+      return {
+        account: nm,
+        balance_before: round2_(before),
+        payment_applied_now: round2_(payShow),
+        balance_after_now: round2_(after),
+        phase: a.phase || '',
+        closed: after <= ROLLING_WF_ZERO_BAL_ + 1e-9
+      };
+    });
+}
+
 /**
- * Cleanup trivial CC balances first, then post-cleanup pool R on at most two APR targets (primaryFraction / remainder).
- * @param {{ primaryPhase2Fraction?: number }} [opts]
+ * Strict serial execute-now / variable waterfall: literal payoff order with high-precision caps (no parallel split).
+ * @param {{ primaryPhase2Fraction?: number, aliasMap?: Object }} [opts]
+ * @returns {{ allocations: Object, totalExtra: number, meta: Object, trace: Array, waterfall_validation: { pass: boolean, failures: string[], label: string } }}
  */
-function runExtraWaterfallConcentratedInterest_(simDebtsSorted, pool, opts) {
+function rollingRunStrictExecuteWaterfall_(simDebtsSorted, pool, opts) {
   opts = opts || {};
+  const aliasMap = opts.aliasMap || getAliasMap_();
   const primaryPhase2Fraction =
     opts.primaryPhase2Fraction != null && opts.primaryPhase2Fraction === opts.primaryPhase2Fraction
       ? Number(opts.primaryPhase2Fraction)
       : ROLLING_DP_PHASE2_PRIMARY_FRACTION_STANDARD_;
-  const alloc = Object.create(null);
-  let extraPool = round2_(pool);
-  let totalExtra = 0;
   const smallCap = ROLLING_DP_EXEC_PLAN_SMALL_BALANCE_SNOWBALL_MAX_;
+  const allocHp = Object.create(null);
+  const trace = [];
+  let poolRem = Number(pool) || 0;
   const meta = {
     phase2_R0: 0,
     phase2_primary_paid: 0,
@@ -3139,13 +3636,6 @@ function runExtraWaterfallConcentratedInterest_(simDebtsSorted, pool, opts) {
     cap_primary_at_phase2_start: 0
   };
 
-  function addAlloc(nm, x) {
-    x = round2_(x);
-    if (x <= 0.005) return;
-    alloc[nm] = round2_((alloc[nm] || 0) + x);
-    totalExtra = round2_(totalExtra + x);
-  }
-
   function findDebt(nm) {
     for (let i = 0; i < simDebtsSorted.length; i++) {
       if (simDebtsSorted[i].name === nm) return simDebtsSorted[i];
@@ -3153,72 +3643,299 @@ function runExtraWaterfallConcentratedInterest_(simDebtsSorted, pool, opts) {
     return null;
   }
 
-  const trivial = simDebtsSorted
-    .filter(function(d) {
-      return d.active !== false && d.balance > 0.005 && String(d.type || '').trim() === 'Credit Card' && d.balance <= smallCap + 0.005;
-    })
-    .sort(function(a, b) {
-      return a.balance - b.balance;
+  function pushTrace(phase, nm, balBefore, pay, dAfter) {
+    trace.push({
+      phase: phase,
+      account: nm,
+      balance_before: Number(balBefore) || 0,
+      payment_applied: Number(pay) || 0,
+      balance_after: Number(dAfter.balance) || 0,
+      pool_remaining_after: round2_(poolRem),
+      extra_payoff_cap_after: round2_(rollingDebtExtraPayoffCapHp_(dAfter))
     });
-
-  trivial.forEach(function(d) {
-    if (extraPool <= 0.005) return;
-    const cap = rollingDebtExtraPayoffCap_(d);
-    const ex = round2_(Math.min(extraPool, cap));
-    if (ex > 0.005) {
-      meta.cleanup_names.push(d.name);
-      addAlloc(d.name, ex);
-      extraPool = round2_(extraPool - ex);
-      applyDebtPayment_(d, ex);
-    }
-  });
-
-  const R0 = extraPool;
-  meta.phase2_R0 = round2_(R0);
-  if (R0 <= 0.005) {
-    return { allocations: alloc, totalExtra: totalExtra, meta: meta };
   }
 
-  function listCCsByAprDesc() {
+  function paySerialOnAccount(phase, nm) {
+    nm = String(nm || '').trim();
+    if (!nm || poolRem <= ROLLING_WF_POOL_EPS_) return 0;
+    let sumPay = 0;
+    while (poolRem > ROLLING_WF_POOL_EPS_) {
+      const d = findDebt(nm);
+      if (!d || d.active === false) break;
+      const bal = Number(d.balance) || 0;
+      if (bal <= ROLLING_WF_ZERO_BAL_) break;
+      const cap = rollingDebtExtraPayoffCapHp_(d);
+      if (!(cap > ROLLING_WF_POOL_EPS_)) break;
+      const pay = Math.min(poolRem, cap);
+      if (!(pay > ROLLING_WF_POOL_EPS_)) break;
+      const bb = bal;
+      rollingApplyExtraPrincipalHp_(d, pay);
+      poolRem -= pay;
+      sumPay += pay;
+      allocHp[nm] = (allocHp[nm] || 0) + pay;
+      pushTrace(phase, nm, bb, pay, d);
+    }
+    return sumPay;
+  }
+
+  function listCCsByAprDescWf() {
     return simDebtsSorted
       .filter(function(d) {
-        return d.active !== false && d.balance > 0.005 && String(d.type || '').trim() === 'Credit Card';
+        return (
+          d.active !== false &&
+          (Number(d.balance) || 0) > ROLLING_WF_ZERO_BAL_ &&
+          String(d.type || '').trim() === 'Credit Card'
+        );
       })
       .sort(function(a, b) {
         const ra = Number(b.interestRate) || 0;
         const rb = Number(a.interestRate) || 0;
         if (Math.abs(ra - rb) > 0.005) return ra - rb;
-        return b.balance - a.balance;
+        return (Number(b.balance) || 0) - (Number(a.balance) || 0);
       });
   }
 
-  const snapCC = listCCsByAprDesc();
-  if (!snapCC.length) {
-    const rest = simDebtsSorted
-      .filter(function(d) {
-        return d.active !== false && d.balance > 0.005;
-      })
-      .sort(function(a, b) {
-        return (Number(b.interestRate) || 0) - (Number(a.interestRate) || 0);
-      });
-    if (!rest.length) {
-      return { allocations: alloc, totalExtra: totalExtra, meta: meta };
+  function primaryBlocksSecondaries_(P) {
+    if (!P) return false;
+    const d = findDebt(P.name);
+    if (!d) return false;
+    /** Strict serial: secondaries only after primary balance is fully zero (not “extra cap exhausted” with balance left). */
+    if ((Number(d.balance) || 0) > ROLLING_WF_ZERO_BAL_) return true;
+    return false;
+  }
+
+  function secondarySerialChainDone_(P) {
+    for (let si = 0; si < ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_.length; si++) {
+      const rnm = rollingResolveCanonicalCcNameOnDebts_(ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_[si], simDebtsSorted, aliasMap);
+      if (!rnm) continue;
+      if (P && normalizeName_(rnm, aliasMap) === normalizeName_(P.name, aliasMap)) continue;
+      const dr = findDebt(rnm);
+      if (!dr) continue;
+      if ((Number(dr.balance) || 0) > ROLLING_WF_ZERO_BAL_) return false;
     }
-    const P = rest[0];
-    const S = rest.length > 1 ? rest[1] : null;
-    const dP0 = findDebt(P.name);
-    meta.cap_primary_at_phase2_start = dP0 ? rollingDebtExtraPayoffCap_(dP0) : 0;
-    rollingPhase27525TwoTargets_(findDebt, addAlloc, applyDebtPayment_, P, S, R0, meta, primaryPhase2Fraction);
-    return { allocations: alloc, totalExtra: totalExtra, meta: meta };
+    return true;
   }
 
-  const P = snapCC[0];
-  const S = snapCC.length > 1 ? snapCC[1] : null;
-  const dP0 = findDebt(P.name);
-  meta.cap_primary_at_phase2_start = rollingDebtExtraPayoffCap_(dP0);
-  rollingPhase27525TwoTargets_(findDebt, addAlloc, applyDebtPayment_, P, S, R0, meta, primaryPhase2Fraction);
+  /** Preserve sheet / waterfall debt list order (strict serial “listed order”), not balance-sorted snowball. */
+  const trivial = simDebtsSorted.filter(function(d) {
+    return (
+      d.active !== false &&
+      (Number(d.balance) || 0) > ROLLING_WF_ZERO_BAL_ &&
+      String(d.type || '').trim() === 'Credit Card' &&
+      (Number(d.balance) || 0) <= smallCap + ROLLING_WF_ZERO_BAL_
+    );
+  });
 
-  return { allocations: alloc, totalExtra: totalExtra, meta: meta };
+  for (let ti = 0; ti < trivial.length; ti++) {
+    const nm0 = trivial[ti].name;
+    const paidC = paySerialOnAccount('cleanup', nm0);
+    if (paidC > ROLLING_WF_POOL_EPS_ && meta.cleanup_names.indexOf(nm0) < 0) {
+      meta.cleanup_names.push(nm0);
+    }
+  }
+
+  meta.phase2_R0 = round2_(Math.max(0, poolRem));
+  let phase2ExtraPaid = 0;
+  const snapCC = listCCsByAprDescWf();
+  const P = snapCC.length ? snapCC[0] : null;
+
+  if (!snapCC.length) {
+    const rest = sortActiveDebtLikeWaterfall_(
+      simDebtsSorted.filter(function(d) {
+        return d.active !== false && (Number(d.balance) || 0) > ROLLING_WF_ZERO_BAL_;
+      })
+    );
+    meta.phase2_primary_paid = 0;
+    meta.phase2_secondary_paid = 0;
+    for (let i = 0; i < rest.length && poolRem > ROLLING_WF_POOL_EPS_; i++) {
+      const nm = rest[i].name;
+      const d0 = findDebt(nm);
+      if (i === 0) {
+        meta.phase2_primary_name = nm;
+        meta.cap_primary_at_phase2_start = d0 ? round2_(rollingDebtExtraPayoffCapHp_(d0)) : 0;
+        if (rest.length > 1) meta.phase2_secondary_name = rest[1].name;
+      }
+      const p = paySerialOnAccount('overflow', nm);
+      if (i === 0) meta.phase2_primary_paid = round2_(meta.phase2_primary_paid + p);
+      else meta.phase2_secondary_paid = round2_(meta.phase2_secondary_paid + p);
+    }
+  } else {
+    const dP0 = findDebt(P.name);
+    meta.phase2_primary_name = P.name;
+    meta.cap_primary_at_phase2_start = dP0 ? round2_(rollingDebtExtraPayoffCapHp_(dP0)) : 0;
+    const pPri = paySerialOnAccount('primary', P.name);
+    meta.phase2_primary_paid = round2_(pPri);
+    phase2ExtraPaid += pPri;
+
+    let firstSecondary = '';
+    if (!primaryBlocksSecondaries_(P)) {
+      for (let si = 0; si < ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_.length && poolRem > ROLLING_WF_POOL_EPS_; si++) {
+        const resolved = rollingResolveCanonicalCcNameOnDebts_(ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_[si], simDebtsSorted, aliasMap);
+        if (!resolved) continue;
+        if (normalizeName_(resolved, aliasMap) === normalizeName_(P.name, aliasMap)) continue;
+        let prevOk = true;
+        for (let pj = 0; pj < si; pj++) {
+          const pr = rollingResolveCanonicalCcNameOnDebts_(ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_[pj], simDebtsSorted, aliasMap);
+          if (!pr || normalizeName_(pr, aliasMap) === normalizeName_(P.name, aliasMap)) continue;
+          const dr = findDebt(pr);
+          if (!dr) continue;
+          if ((Number(dr.balance) || 0) > ROLLING_WF_ZERO_BAL_) prevOk = false;
+        }
+        if (!prevOk) break;
+        const pS = paySerialOnAccount('secondary', resolved);
+        if (pS > ROLLING_WF_POOL_EPS_ && !firstSecondary) firstSecondary = resolved;
+        phase2ExtraPaid += pS;
+      }
+      meta.phase2_secondary_name = firstSecondary;
+    }
+
+    if (!primaryBlocksSecondaries_(P) && secondarySerialChainDone_(P) && poolRem > ROLLING_WF_POOL_EPS_) {
+      const skipNorm = Object.create(null);
+      if (P) skipNorm[normalizeName_(P.name, aliasMap)] = true;
+      trivial.forEach(function(tc) {
+        skipNorm[normalizeName_(tc.name, aliasMap)] = true;
+      });
+      for (let sx = 0; sx < ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_.length; sx++) {
+        const r2 = rollingResolveCanonicalCcNameOnDebts_(ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_[sx], simDebtsSorted, aliasMap);
+        if (r2) skipNorm[normalizeName_(r2, aliasMap)] = true;
+      }
+      const activeAll = simDebtsSorted.filter(function(d) {
+        return d.active !== false && (Number(d.balance) || 0) > ROLLING_WF_ZERO_BAL_;
+      });
+      const overflowList = sortActiveDebtLikeWaterfall_(activeAll).filter(function(d) {
+        return !skipNorm[normalizeName_(d.name, aliasMap)];
+      });
+      for (let oi = 0; oi < overflowList.length && poolRem > ROLLING_WF_POOL_EPS_; oi++) {
+        phase2ExtraPaid += paySerialOnAccount('overflow', overflowList[oi].name);
+      }
+    }
+    meta.phase2_secondary_paid = round2_(Math.max(0, phase2ExtraPaid - meta.phase2_primary_paid));
+  }
+
+  const alloc = Object.create(null);
+  let totalExtra = 0;
+  Object.keys(allocHp).forEach(function(k) {
+    const v = round2_(allocHp[k]);
+    if (v > 0.005) {
+      alloc[k] = v;
+      totalExtra = round2_(totalExtra + v);
+    }
+  });
+
+  const failures = rollingWaterfallTraceValidationFailures_(trace, alloc, trivial, P, aliasMap, simDebtsSorted, pool);
+  const pass = failures.length === 0;
+  const waterfall_validation = {
+    pass: pass,
+    failures: failures,
+    label: pass ? 'PASS' : 'FAIL'
+  };
+
+  return {
+    allocations: alloc,
+    totalExtra: totalExtra,
+    meta: meta,
+    trace: trace,
+    waterfall_validation: waterfall_validation
+  };
+}
+
+/**
+ * Post-execution checks on the trace (ordering / no illegal splits).
+ */
+function rollingWaterfallTraceValidationFailures_(trace, alloc, trivialArr, primaryP, aliasMap, simDebtsSorted, originalPool) {
+  const failures = [];
+  void originalPool;
+  const trivNorm = Object.create(null);
+  (trivialArr || []).forEach(function(x) {
+    trivNorm[normalizeName_(x.name, aliasMap)] = true;
+  });
+  const primaryNm = primaryP ? String(primaryP.name) : '';
+  const lastAfterByAccount = Object.create(null);
+  let sawSecondaryPay = false;
+  let sawOverflowPay = false;
+  (trace || []).forEach(function(row) {
+    const nm = String(row.account || '');
+    lastAfterByAccount[nm] = Number(row.balance_after) || 0;
+    const ph = String(row.phase || '');
+    const payRow = Number(row.payment_applied) || 0;
+    if (ph === 'secondary' && payRow > 0.005) sawSecondaryPay = true;
+    if (ph === 'overflow' && payRow > 0.005) sawOverflowPay = true;
+  });
+  (trivialArr || []).forEach(function(tc) {
+    const nm = String(tc.name || '');
+    if (!nm) return;
+    const bal = lastAfterByAccount[nm] != null ? Number(lastAfterByAccount[nm]) || 0 : null;
+    const tot = round2_(Number(alloc[nm]) || 0);
+    if (tot > 0.005 && bal != null && bal > ROLLING_WF_ZERO_BAL_ + 1e-9) {
+      var lastCleanup = null;
+      for (var ri = 0; ri < (trace || []).length; ri++) {
+        var rw = trace[ri];
+        if (String(rw.account || '') === nm && String(rw.phase || '') === 'cleanup') lastCleanup = rw;
+      }
+      var poolNote = '';
+      if (
+        lastCleanup &&
+        Number(lastCleanup.pool_remaining_after) > ROLLING_WF_ZERO_BAL_ &&
+        Number(lastCleanup.extra_payoff_cap_after) > ROLLING_WF_POOL_EPS_
+      ) {
+        poolNote =
+          ' Remaining execute-now pool was $' +
+          String(round2_(Number(lastCleanup.pool_remaining_after))) +
+          ' with positive extra-principal headroom — payoff should have closed.';
+      }
+      failures.push(
+        'Cleanup: ' +
+          nm +
+          ' had payment applied but balance_after > ' +
+          ROLLING_WF_ZERO_BAL_ +
+          '.' +
+          poolNote
+      );
+    }
+  });
+
+  if (sawSecondaryPay && primaryNm) {
+    const balP = lastAfterByAccount[primaryNm] != null ? Number(lastAfterByAccount[primaryNm]) || 0 : 999;
+    if (balP > ROLLING_WF_ZERO_BAL_) {
+      failures.push(
+        'Primary/secondary: secondary received funds while primary balance_after > ' + ROLLING_WF_ZERO_BAL_ + '.'
+      );
+    }
+  }
+  if (sawOverflowPay && primaryNm) {
+    const balP = lastAfterByAccount[primaryNm] != null ? Number(lastAfterByAccount[primaryNm]) || 0 : 999;
+    if (balP > ROLLING_WF_ZERO_BAL_) {
+      failures.push(
+        'Overflow: non-primary overflow received funds while primary balance_after > ' + ROLLING_WF_ZERO_BAL_ + '.'
+      );
+    }
+  }
+
+  const citiN = rollingResolveCanonicalCcNameOnDebts_(ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_[0], simDebtsSorted, aliasMap);
+  const swN = rollingResolveCanonicalCcNameOnDebts_(ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_[1], simDebtsSorted, aliasMap);
+  const marN = rollingResolveCanonicalCcNameOnDebts_(ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_[2], simDebtsSorted, aliasMap);
+  function paySumFor(nm) {
+    if (!nm) return 0;
+    return round2_(Number(alloc[nm]) || 0);
+  }
+  const balCiti = citiN ? Number(lastAfterByAccount[citiN]) || 0 : 0;
+  const balSw = swN ? Number(lastAfterByAccount[swN]) || 0 : 0;
+  if (citiN && balCiti > ROLLING_WF_ZERO_BAL_ && (paySumFor(swN) > 0.005 || paySumFor(marN) > 0.005)) {
+    failures.push('Secondary waterfall: Southwest or Marriott received funds while CitiAA balance_after > ' + ROLLING_WF_ZERO_BAL_ + '.');
+  }
+  if (swN && balSw > ROLLING_WF_ZERO_BAL_ && paySumFor(marN) > 0.005) {
+    failures.push('Secondary waterfall: Marriott received funds while Southwest balance_after > ' + ROLLING_WF_ZERO_BAL_ + '.');
+  }
+
+  return failures;
+}
+
+/**
+ * Cleanup trivial CC balances first, then strict serial phase (single engine; high-precision payoff).
+ * @param {{ primaryPhase2Fraction?: number, aliasMap?: Object }} [opts]
+ */
+function runExtraWaterfallConcentratedInterest_(simDebtsSorted, pool, opts) {
+  return rollingRunStrictExecuteWaterfall_(simDebtsSorted, pool, opts);
 }
 
 /** Legacy spread waterfall — retained for reference; simulation uses concentrated allocator. */
@@ -3342,10 +4059,84 @@ function rollingModelingCautionCardForUnmappedPlanned_(debts) {
   return rollingHighestAprCcNameForModeling_(debts);
 }
 
+/** Max extra principal on a snapshot row (same contract as rollingDebtExtraPayoffCap_). */
+function rollingExtraCapOnSnapRow_(row) {
+  if (!row) return 0;
+  const d = {
+    balance: Number(row.balance) || 0,
+    interestRate: Number(row.interestRate) || 0,
+    minimumPayment: round2_(Number(row.minimumPayment) || 0)
+  };
+  return rollingDebtExtraPayoffCap_(d);
+}
+
 /**
- * Classify execution extra into cleanup payoffs vs concentration bucket; validate primary share and leakage.
+ * Validates strict serial waterfall invariants on execute-now allocations (allows spill when prior target has no extra-principal headroom).
  */
-function rollingAnalyzeExecutionConcentration_(startSnap, endSnap, execAlloc) {
+function rollingStrictWaterfallValidationErrors_(startSnap, endSnap, execAlloc, aliasMap) {
+  const errors = [];
+  aliasMap = aliasMap || getAliasMap_();
+
+  function findSnapRow(snap, nm) {
+    for (let i = 0; i < (snap || []).length; i++) {
+      if ((snap[i].name || '') === nm) return snap[i];
+    }
+    return null;
+  }
+
+  function allocAmt(nm) {
+    return round2_(Number(execAlloc[nm]) || 0);
+  }
+
+  const primaryNm = rollingHighestAprCcNameForModeling_(startSnap);
+  if (primaryNm) {
+    const priEnd = findSnapRow(endSnap, primaryNm);
+    const priRem = priEnd ? Number(priEnd.balance) || 0 : 0;
+    const priCap = rollingExtraCapOnSnapRow_(priEnd);
+    let serialSecondaryTotal = 0;
+    for (let si = 0; si < ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_.length; si++) {
+      const resolved = rollingResolveCanonicalCcNameOnDebts_(
+        ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_[si],
+        startSnap,
+        aliasMap
+      );
+      if (!resolved) continue;
+      if (normalizeName_(resolved, aliasMap) === normalizeName_(primaryNm, aliasMap)) continue;
+      serialSecondaryTotal = round2_(serialSecondaryTotal + allocAmt(resolved));
+    }
+    if (priRem > 0.05 && priCap > 0.5 && serialSecondaryTotal > 0.005) {
+      errors.push(
+        'STRICT WATERFALL: serial secondary cards received execute-now funds while the primary (highest APR) still had extra-principal headroom — review allocations.'
+      );
+    }
+  }
+
+  const citi = rollingResolveCanonicalCcNameOnDebts_(ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_[0], startSnap, aliasMap);
+  const sw = rollingResolveCanonicalCcNameOnDebts_(ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_[1], startSnap, aliasMap);
+  const mar = rollingResolveCanonicalCcNameOnDebts_(ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_[2], startSnap, aliasMap);
+  if (citi) {
+    const cEnd = findSnapRow(endSnap, citi);
+    const cRem = cEnd ? Number(cEnd.balance) || 0 : 0;
+    const cCap = rollingExtraCapOnSnapRow_(cEnd);
+    if (cRem > 0.05 && cCap > 0.5) {
+      const downstream = round2_((sw ? allocAmt(sw) : 0) + (mar ? allocAmt(mar) : 0));
+      if (downstream > 0.005) {
+        errors.push(
+          'STRICT WATERFALL: Southwest or Marriott received execute-now funds while CitiAA still had payoff headroom — review secondary ordering.'
+        );
+      }
+    }
+  }
+
+  return errors;
+}
+
+/**
+ * Classify execution extra into cleanup payoffs vs concentration bucket; order concentration for strict serial UI.
+ * @param {Object} [aliasMap]
+ */
+function rollingAnalyzeExecutionConcentration_(startSnap, endSnap, execAlloc, aliasMap) {
+  aliasMap = aliasMap || getAliasMap_();
   const smallCap = ROLLING_DP_EXEC_PLAN_SMALL_BALANCE_SNOWBALL_MAX_;
   function b0(nm) {
     for (let i = 0; i < (startSnap || []).length; i++) {
@@ -3388,29 +4179,93 @@ function rollingAnalyzeExecutionConcentration_(startSnap, endSnap, execAlloc) {
     }
   });
 
-  const concTotal = concItems.reduce(function(s, x) {
-    return round2_(s + x.amount);
-  }, 0);
-  concItems.sort(function(a, b) {
+  const concByName = Object.create(null);
+  for (let i = 0; i < concItems.length; i++) {
+    concByName[concItems[i].name] = concItems[i];
+  }
+
+  const primaryNmModel = rollingHighestAprCcNameForModeling_(startSnap);
+  let primaryConc = null;
+  if (primaryNmModel && concByName[primaryNmModel]) {
+    primaryConc = concByName[primaryNmModel];
+  } else {
+    const ccConc = concItems
+      .filter(function(x) {
+        return isCcNm(x.name);
+      })
+      .sort(function(a, b) {
+        return aprNm(b.name) - aprNm(a.name);
+      });
+    primaryConc = ccConc.length ? ccConc[0] : null;
+  }
+  if (!primaryConc && concItems.length) {
+    primaryConc = concItems
+      .slice()
+      .sort(function(a, b) {
+        return aprNm(b.name) - aprNm(a.name);
+      })[0];
+  }
+
+  const orderedConc = [];
+  const used = Object.create(null);
+  if (primaryConc) {
+    orderedConc.push(primaryConc);
+    used[primaryConc.name] = true;
+  }
+  const concentration_secondary_items = [];
+  for (let si = 0; si < ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_.length; si++) {
+    const resolved = rollingResolveCanonicalCcNameOnDebts_(ROLLING_DP_SECONDARY_SERIAL_CC_CANONICAL_[si], startSnap, aliasMap);
+    if (!resolved || used[resolved]) continue;
+    if (primaryConc && normalizeName_(resolved, aliasMap) === normalizeName_(primaryConc.name, aliasMap)) continue;
+    if (concByName[resolved]) {
+      orderedConc.push(concByName[resolved]);
+      used[resolved] = true;
+      concentration_secondary_items.push(concByName[resolved]);
+    }
+  }
+  const tail = concItems.filter(function(x) {
+    return !used[x.name];
+  });
+  tail.sort(function(a, b) {
     return aprNm(b.name) - aprNm(a.name);
   });
-  const primaryName = concItems.length ? concItems[0].name : '';
-  const primaryAmt = concItems.length ? round2_(concItems[0].amount) : 0;
+  tail.forEach(function(x) {
+    orderedConc.push(x);
+  });
+
+  const concTotal = orderedConc.reduce(function(s, x) {
+    return round2_(s + x.amount);
+  }, 0);
+  const primaryName = primaryConc ? primaryConc.name : '';
+  const primaryAmt = primaryConc ? round2_(primaryConc.amount) : 0;
   let secondaryAmt = 0;
-  for (let i = 1; i < concItems.length; i++) {
-    secondaryAmt = round2_(secondaryAmt + concItems[i].amount);
+  for (let i = 0; i < orderedConc.length; i++) {
+    if (primaryConc && orderedConc[i].name === primaryConc.name) continue;
+    secondaryAmt = round2_(secondaryAmt + orderedConc[i].amount);
   }
+
   const primaryShare = concTotal > 0.005 ? round2_(primaryAmt / concTotal) : 1;
-  const concentration_leak = concItems.length > 4;
-  const secondary_share_ok = concItems.length <= 4;
+  const strict_waterfall_errors = rollingStrictWaterfallValidationErrors_(startSnap, endSnap, execAlloc, aliasMap);
+  const strict_waterfall_valid = strict_waterfall_errors.length === 0;
+  const concentration_leak = !strict_waterfall_valid || orderedConc.length > 6;
+  const secondary_share_ok = orderedConc.length <= 6;
   const cleanup_fully_paid_ok = cleanupItems.every(function(c) {
     return b1(c.name) <= 0.05;
   });
-  const primary_majority_ok = concItems.length <= 4;
+  const primary_majority_ok = orderedConc.length <= 6;
+
+  let strict_serial_split_note = '';
+  if (orderedConc.length > 1) {
+    strict_serial_split_note = 'Split occurred only because prior target reached payoff or extra-principal cap for this pass.';
+  }
+
+  const concentration_primary_items = primaryConc ? [{ name: primaryConc.name, amount: round2_(primaryConc.amount) }] : [];
 
   return {
     cleanup_items: cleanupItems,
-    concentration_items: concItems,
+    concentration_items: orderedConc,
+    concentration_primary_items: concentration_primary_items,
+    concentration_secondary_items: concentration_secondary_items,
     concentration_total: concTotal,
     primary_name: primaryName,
     primary_amount: primaryAmt,
@@ -3419,7 +4274,10 @@ function rollingAnalyzeExecutionConcentration_(startSnap, endSnap, execAlloc) {
     concentration_leak: concentration_leak,
     secondary_share_ok: secondary_share_ok,
     primary_majority_ok: primary_majority_ok,
-    cleanup_fully_paid_ok: cleanup_fully_paid_ok
+    cleanup_fully_paid_ok: cleanup_fully_paid_ok,
+    strict_waterfall_errors: strict_waterfall_errors,
+    strict_waterfall_valid: strict_waterfall_valid,
+    strict_serial_split_note: strict_serial_split_note
   };
 }
 
@@ -3659,7 +4517,7 @@ function buildRollingMonthlyActionPlan_(next12, opts) {
 
     if (idx === 0 && row.planned_unmapped_near_term_card) {
       required.push(
-        'User must map each near-term planned card-funded expense to a specific credit card in INPUT - Upcoming Expenses to finalize an optimal payoff sequence.'
+        'Map each near-term card-funded planned expense to a specific credit card in INPUT - Upcoming Expenses; until then it is held against deployable cash as cash risk (not free capacity).'
       );
       addItem(
         'required',
@@ -3667,7 +4525,7 @@ function buildRollingMonthlyActionPlan_(next12, opts) {
         'Manual / sheet',
         'INPUT - Upcoming Expenses',
         0,
-        'Planner will not guess the payee card for sequencing; modeling-only caution may load on highest-APR card until mapped.'
+        'Unmapped items reduce extra-payment capacity like a liquidity hold until mapped.'
       );
     }
 
@@ -3914,11 +4772,18 @@ function simulateRollingMonths_(ctx) {
   const planInvalid = !!ctx.planInvalid;
   const displayTotalCash = ctx.displayTotalCash != null && ctx.displayTotalCash === ctx.displayTotalCash ? ctx.displayTotalCash : null;
   const nearTermPlannedCash = ctx.nearTermPlannedCashTotal != null && ctx.nearTermPlannedCashTotal === ctx.nearTermPlannedCashTotal ? round2_(ctx.nearTermPlannedCashTotal) : 0;
+  const unmappedCardFundedCashRisk =
+    ctx.unmappedCardFundedCashRiskTotal != null && ctx.unmappedCardFundedCashRiskTotal === ctx.unmappedCardFundedCashRiskTotal
+      ? round2_(ctx.unmappedCardFundedCashRiskTotal)
+      : 0;
   const phase2PrimaryFraction =
     ctx.executionPlanAggressiveAlloc === true
       ? ROLLING_DP_PHASE2_PRIMARY_FRACTION_AGGRESSIVE_
       : ROLLING_DP_PHASE2_PRIMARY_FRACTION_STANDARD_;
-  const waterfallOpts = { primaryPhase2Fraction: phase2PrimaryFraction };
+  const waterfallOpts = {
+    primaryPhase2Fraction: phase2PrimaryFraction,
+    aliasMap: ctx.aliasMap || getAliasMap_()
+  };
 
   const anchorStable = ctx.incomeSplitAnchor.stableTotal;
   const anchorVar = ctx.incomeSplitAnchor.variableTotal;
@@ -3954,20 +4819,16 @@ function simulateRollingMonths_(ctx) {
     let fromLiquidUsed = 0;
     let openingConcMeta = {};
     let deployableConcMeta = {};
+    /** Month 0: debt snapshot after opening + deployable cash extras only (before variable-income waterfall). */
+    let debtBalancesAfterCashExecuteNow = null;
+    let month0WaterfallExecSnap = null;
+    let month0WaterfallExecValidatedLabel = null;
+    let month0WaterfallExecFailures = null;
 
+    let openingIntentMonth0 = 0;
     if (m === 0) {
       const deployOpen = Math.max(0, round2_(liquid - reserve - buffer));
-      const openingIntent = round2_(Math.min(deployOpen, Math.max(0, maxCashDeploy - monthlyCashDeployUsed)));
-      liquid = round2_(liquid - openingIntent);
-      const openRun = runExtraWaterfall_(simDebts, openingIntent, waterfallOpts);
-      openAlloc = openRun.allocations;
-      openingConcMeta = openRun.meta || {};
-      const appliedOpening = round2_(openRun.totalExtra);
-      if (appliedOpening < openingIntent - 0.01) {
-        liquid = round2_(liquid + openingIntent - appliedOpening);
-      }
-      openingSweepExtra = appliedOpening;
-      monthlyCashDeployUsed = round2_(monthlyCashDeployUsed + appliedOpening);
+      openingIntentMonth0 = round2_(Math.min(deployOpen, Math.max(0, maxCashDeploy - monthlyCashDeployUsed)));
     }
 
     const stableIn = m === 0 ? anchorStable : fwdStable;
@@ -3980,21 +4841,48 @@ function simulateRollingMonths_(ctx) {
     liquid = round2_(liquid + netToLiquid);
 
     const deployMid = Math.max(0, round2_(liquid - reserve - buffer));
-    const roomLeft = Math.max(0, round2_(maxCashDeploy - monthlyCashDeployUsed));
+    /** Month 0: opening sweep already reserved up to maxCashDeploy; deployable must not add a second full cap (was double-counting). */
+    let roomLeft = Math.max(0, round2_(maxCashDeploy - monthlyCashDeployUsed));
+    if (m === 0) {
+      roomLeft = Math.max(0, round2_(roomLeft - openingIntentMonth0));
+    }
     const fromLiquid = round2_(Math.min(deployMid, roomLeft));
 
     if (m === 0) {
-      runCash = runExtraWaterfall_(simDebts, fromLiquid, waterfallOpts);
-      deployableConcMeta = runCash.meta || {};
-      fromLiquidUsed = round2_(Math.min(fromLiquid, runCash.totalExtra));
-      liquid = round2_(liquid - fromLiquidUsed);
-      monthlyCashDeployUsed = round2_(monthlyCashDeployUsed + fromLiquidUsed);
+      const combinedIntent = round2_(openingIntentMonth0 + fromLiquid);
+      liquid = round2_(liquid - combinedIntent);
+      const combinedRun = runExtraWaterfall_(simDebts, combinedIntent, waterfallOpts);
+      const combinedApplied = round2_(combinedRun.totalExtra);
+      if (combinedApplied < combinedIntent - 0.01) {
+        liquid = round2_(liquid + combinedIntent - combinedApplied);
+      }
+      openingSweepExtra = round2_(Math.min(openingIntentMonth0, combinedApplied));
+      fromLiquidUsed = round2_(combinedApplied - openingSweepExtra);
+      monthlyCashDeployUsed = round2_(monthlyCashDeployUsed + combinedApplied);
+      openAlloc = {};
+      runCash = combinedRun;
+      deployableConcMeta = combinedRun.meta || {};
+      openingConcMeta = combinedRun.meta || {};
+      debtBalancesAfterCashExecuteNow = snapshotDebtsForActionPlan_(simDebts);
       runVar = runExtraWaterfall_(simDebts, debtSideFromVariable, waterfallOpts);
-      recurringExtraDebt = round2_(runCash.totalExtra + runVar.totalExtra);
+      recurringExtraDebt = round2_(combinedApplied + runVar.totalExtra);
       run = {
-        allocations: mergeAllocations_(runCash.allocations, runVar.allocations),
+        allocations: mergeAllocations_(combinedRun.allocations, runVar.allocations),
         totalExtra: recurringExtraDebt
       };
+      month0WaterfallExecSnap = rollingBuildExecutionSnapshotFromTrace_(combinedRun.trace || []);
+      month0WaterfallExecFailures = [];
+      if (combinedRun.waterfall_validation && combinedRun.waterfall_validation.failures) {
+        month0WaterfallExecFailures = combinedRun.waterfall_validation.failures.slice();
+      }
+      let wfPass = !!(combinedRun.waterfall_validation && combinedRun.waterfall_validation.pass);
+      if (runVar.waterfall_validation) {
+        if (runVar.waterfall_validation.failures && runVar.waterfall_validation.failures.length) {
+          month0WaterfallExecFailures = month0WaterfallExecFailures.concat(runVar.waterfall_validation.failures);
+        }
+        wfPass = wfPass && !!runVar.waterfall_validation.pass;
+      }
+      month0WaterfallExecValidatedLabel = wfPass ? 'PASS' : 'FAIL';
     } else {
       const extraPool = round2_(fromLiquid + debtSideFromVariable);
       run = runExtraWaterfall_(simDebts, extraPool, waterfallOpts);
@@ -4074,7 +4962,12 @@ function simulateRollingMonths_(ctx) {
 
     const debtBalancesEndSnapshot = snapshotDebtsForActionPlan_(simDebts);
     if (m === 0) {
-      execConcAnalysis = rollingAnalyzeExecutionConcentration_(debtBalancesStart, debtBalancesEndSnapshot, execAllocCashObj);
+      execConcAnalysis = rollingAnalyzeExecutionConcentration_(
+        debtBalancesStart,
+        debtBalancesAfterCashExecuteNow || debtBalancesEndSnapshot,
+        execAllocCashObj,
+        ctx.aliasMap || getAliasMap_()
+      );
       if (execConcAnalysis && execConcAnalysis.primary_name) {
         focusDebtName = execConcAnalysis.primary_name;
       }
@@ -4086,6 +4979,28 @@ function simulateRollingMonths_(ctx) {
       ).filter(Boolean);
       if (cnames.length) {
         cleanupTargetDebt = cnames.join(', ');
+      }
+      if (execConcAnalysis && debtBalancesAfterCashExecuteNow) {
+        const varErrs = rollingStrictWaterfallValidationErrors_(
+          debtBalancesAfterCashExecuteNow,
+          debtBalancesEndSnapshot,
+          execAllocVarObj,
+          ctx.aliasMap || getAliasMap_()
+        );
+        if (varErrs && varErrs.length) {
+          const prior = execConcAnalysis.strict_waterfall_errors || [];
+          const merged = prior.concat(varErrs);
+          execConcAnalysis.strict_waterfall_errors = merged;
+          execConcAnalysis.strict_waterfall_valid = merged.length === 0;
+          execConcAnalysis.concentration_leak = !!execConcAnalysis.concentration_leak || merged.length > 0;
+        }
+      }
+      if (execConcAnalysis && month0WaterfallExecFailures && month0WaterfallExecFailures.length) {
+        const prior2 = execConcAnalysis.strict_waterfall_errors || [];
+        const merged2 = prior2.concat(month0WaterfallExecFailures);
+        execConcAnalysis.strict_waterfall_errors = merged2;
+        execConcAnalysis.strict_waterfall_valid = merged2.length === 0;
+        execConcAnalysis.concentration_leak = !!execConcAnalysis.concentration_leak || merged2.length > 0;
       }
     }
 
@@ -4105,13 +5020,18 @@ function simulateRollingMonths_(ctx) {
       reserve_target: reserve,
       buffer_above_reserve: buffer,
       near_term_planned_cash_reserved: m === 0 && nearTermPlannedCash > 0.005 ? round2_(nearTermPlannedCash) : 0,
+      unmapped_card_funded_cash_risk: m === 0 && unmappedCardFundedCashRisk > 0.005 ? round2_(unmappedCardFundedCashRisk) : 0,
       deployable_cash:
         m === 0 && displayTotalCash != null
-          ? round2_(Math.max(0, displayTotalCash - reserve - buffer - nearTermPlannedCash))
+          ? round2_(
+              Math.max(0, displayTotalCash - reserve - buffer - nearTermPlannedCash - unmappedCardFundedCashRisk)
+            )
           : deployableAtStart,
       deployable_cash_after_protections:
         m === 0 && displayTotalCash != null
-          ? round2_(Math.max(0, displayTotalCash - reserve - buffer - nearTermPlannedCash))
+          ? round2_(
+              Math.max(0, displayTotalCash - reserve - buffer - nearTermPlannedCash - unmappedCardFundedCashRisk)
+            )
           : deployableAtStart,
       cash_available_for_extra_debt_today: m === 0 ? executionExtraCashTotal : 0,
       heloc_recommended_now: m === 0 ? helocRecExecution : 'No',
@@ -4138,6 +5058,11 @@ function simulateRollingMonths_(ctx) {
           ' from deployable cash (after reserve + buffer, within monthly cap) applied to debt.'
       );
     }
+    if (m === 0 && execConcAnalysis && execConcAnalysis.strict_waterfall_errors && execConcAnalysis.strict_waterfall_errors.length) {
+      for (let ei = 0; ei < execConcAnalysis.strict_waterfall_errors.length; ei++) {
+        monthAlerts.push(execConcAnalysis.strict_waterfall_errors[ei]);
+      }
+    }
 
     const row = {
       month: labelIso,
@@ -4161,8 +5086,12 @@ function simulateRollingMonths_(ctx) {
       calendar_year: calendarYear,
       alerts: monthAlerts,
       debt_balances_start: debtBalancesStart,
+      debt_balances_sheet_anchor: m === 0 && ctx.debtSheetAnchorSnapshot ? ctx.debtSheetAnchorSnapshot : null,
       debt_balances_end: debtBalancesEndSnapshot,
       execution_concentration_analysis: m === 0 ? execConcAnalysis : null,
+      waterfall_execution_snapshot: m === 0 ? month0WaterfallExecSnap : null,
+      waterfall_execution_validated: m === 0 ? month0WaterfallExecValidatedLabel : null,
+      waterfall_execution_validation_failures: m === 0 ? month0WaterfallExecFailures : null,
       opening_concentration_meta: m === 0 ? openingConcMeta : null,
       deployable_concentration_meta: m === 0 ? deployableConcMeta : null,
       planned_unmapped_near_term_card: m === 0 ? !!ctx.plannedUnmappedNearTermCard : false,
@@ -4624,13 +5553,19 @@ function buildThisMonthExecutionPlanAutomationFormat_(row0, planInvalid, renderC
     liqIn.near_term_planned_cash_reserved != null && liqIn.near_term_planned_cash_reserved === liqIn.near_term_planned_cash_reserved
       ? round2_(liqIn.near_term_planned_cash_reserved)
       : 0;
+  const unmappedCashRiskExecAuto =
+    liqIn.unmapped_card_funded_cash_risk != null && liqIn.unmapped_card_funded_cash_risk === liqIn.unmapped_card_funded_cash_risk
+      ? round2_(liqIn.unmapped_card_funded_cash_risk)
+      : 0;
   const deployableAfter =
     liqIn.deployable_cash_after_protections != null &&
     liqIn.deployable_cash_after_protections === liqIn.deployable_cash_after_protections
       ? round2_(liqIn.deployable_cash_after_protections)
       : liqIn.deployable_cash != null && liqIn.deployable_cash === liqIn.deployable_cash
         ? round2_(liqIn.deployable_cash)
-        : round2_(Math.max(0, totalCash - reserveTarget - bufferProtected - nearTermReservedExec));
+        : round2_(
+            Math.max(0, totalCash - reserveTarget - bufferProtected - nearTermReservedExec - unmappedCashRiskExecAuto)
+          );
   const cashAvailExtra =
     r0.execution_extra_cash_total != null && r0.execution_extra_cash_total === r0.execution_extra_cash_total
       ? round2_(r0.execution_extra_cash_total)
@@ -4748,6 +5683,7 @@ function buildThisMonthExecutionPlanAutomationFormat_(row0, planInvalid, renderC
   lines.push('reserve_target: ' + fmtCurrency_(reserveTarget));
   lines.push('buffer_do_not_deploy: ' + fmtCurrency_(bufferProtected));
   lines.push('near_term_planned_reserved: ' + fmtCurrency_(nearTermReservedExec));
+  lines.push('unmapped_card_funded_cash_risk: ' + fmtCurrency_(unmappedCashRiskExecAuto));
   lines.push('deployable_cash: ' + fmtCurrency_(deployableAfter));
   lines.push('cash_for_extra_debt: ' + fmtCurrency_(planInvalid ? 0 : cashAvailExtra));
   lines.push('heloc_recommended: ' + helocRecShort);
@@ -4987,13 +5923,19 @@ function buildThisMonthExecutionPlanText_(row0, planInvalid, renderCtx) {
     liqIn.near_term_planned_cash_reserved != null && liqIn.near_term_planned_cash_reserved === liqIn.near_term_planned_cash_reserved
       ? round2_(liqIn.near_term_planned_cash_reserved)
       : 0;
+  const unmappedCashRiskExecStd =
+    liqIn.unmapped_card_funded_cash_risk != null && liqIn.unmapped_card_funded_cash_risk === liqIn.unmapped_card_funded_cash_risk
+      ? round2_(liqIn.unmapped_card_funded_cash_risk)
+      : 0;
   const deployableAfter =
     liqIn.deployable_cash_after_protections != null &&
     liqIn.deployable_cash_after_protections === liqIn.deployable_cash_after_protections
       ? round2_(liqIn.deployable_cash_after_protections)
       : liqIn.deployable_cash != null && liqIn.deployable_cash === liqIn.deployable_cash
         ? round2_(liqIn.deployable_cash)
-        : round2_(Math.max(0, totalCash - reserveTarget - bufferProtected - nearTermReservedExec));
+        : round2_(
+            Math.max(0, totalCash - reserveTarget - bufferProtected - nearTermReservedExec - unmappedCashRiskExecStd)
+          );
   const cashAvailExtra =
     r0.execution_extra_cash_total != null && r0.execution_extra_cash_total === r0.execution_extra_cash_total
       ? round2_(r0.execution_extra_cash_total)
@@ -5264,6 +6206,16 @@ function buildThisMonthExecutionPlanText_(row0, planInvalid, renderCtx) {
   lines.push('- Total now: ' + fmtCurrency_(execTotalDisplayed));
   lines.push('- Conditional later: ' + fmtCurrency_(condVarDisplayed));
   lines.push('');
+  buildPostPaymentSnapshotLines_(r0, planInvalid, {
+    execCashMap: execCashMap,
+    buckets: buckets,
+    eca: eca,
+    execTotalDisplayed: execTotalDisplayed,
+    execHelocAmount: helocDisplayed,
+    include_debug_details: !!renderCtx.include_debug_details
+  }).forEach(function(ln) {
+    lines.push(ln);
+  });
 
   const interestAllocationExecutionOk = !planInvalid && (!eca || eca.concentration_leak !== true);
   const belowReserve = (Number(r0.ending_cash) || 0) < reserveTarget - 0.5;
@@ -5422,10 +6374,16 @@ function buildThisMonthPlan_(row0, keyWarnings, reserve, planInvalid, lumpDebt, 
     liqIn.near_term_planned_cash_reserved != null && liqIn.near_term_planned_cash_reserved === liqIn.near_term_planned_cash_reserved
       ? round2_(liqIn.near_term_planned_cash_reserved)
       : 0;
+  const unmappedCardCashRisk =
+    liqIn.unmapped_card_funded_cash_risk != null && liqIn.unmapped_card_funded_cash_risk === liqIn.unmapped_card_funded_cash_risk
+      ? round2_(liqIn.unmapped_card_funded_cash_risk)
+      : 0;
   const deployableCash =
     liqIn.deployable_cash != null && liqIn.deployable_cash === liqIn.deployable_cash
       ? round2_(liqIn.deployable_cash)
-      : round2_(Math.max(0, totalCash - reserveTargetDisplay - bufferDisplay - nearTermPlannedReserved));
+      : round2_(
+          Math.max(0, totalCash - reserveTargetDisplay - bufferDisplay - nearTermPlannedReserved - unmappedCardCashRisk)
+        );
   const deployableAfterProtections =
     liqIn.deployable_cash_after_protections != null && liqIn.deployable_cash_after_protections === liqIn.deployable_cash_after_protections
       ? round2_(liqIn.deployable_cash_after_protections)
@@ -5452,6 +6410,7 @@ function buildThisMonthPlan_(row0, keyWarnings, reserve, planInvalid, lumpDebt, 
     reserve_target: reserveTargetDisplay,
     buffer_above_reserve: bufferDisplay,
     near_term_planned_cash_reserved: nearTermPlannedReserved,
+    unmapped_card_funded_cash_risk: unmappedCardCashRisk,
     deployable_cash: deployableCash,
     deployable_cash_after_protections: deployableAfterProtections,
     cash_available_for_extra_debt_today: cashAvailExtraToday,
