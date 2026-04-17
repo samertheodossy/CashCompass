@@ -188,6 +188,12 @@ function findLongestRoughPayoff_(debtsOut) {
   return best;
 }
 
+/**
+ * Descriptive reference notes for the Debt Overview page. These lines are
+ * purely observational ("what is true right now") — they do not make payoff
+ * recommendations or direct the reader toward any action. Monthly action
+ * decisions live on the Rolling Debt Planner; this page is reference only.
+ */
 function buildDebtPayoffRecommendations_(ctx) {
   const lines = [];
   const usable = ctx.usableCash;
@@ -199,45 +205,41 @@ function buildDebtPayoffRecommendations_(ctx) {
       : '';
 
   lines.push(
-    'Cash: ' +
+    'Cash snapshot: ' +
       fmtCurrency_(usable.totalAvailableNow) +
-      ' available now; ' +
+      ' available now, ' +
       fmtCurrency_(usable.totalBuffers) +
-      ' in protected buffers; ' +
+      ' in protected buffers, and ' +
       fmtCurrency_(u) +
-      ' usable after buffers (SYS - Accounts).'
+      ' safe to use before planned expenses (SYS - Accounts).'
   );
 
   if (minTot > 0) {
     lines.push(
       'Active debts require about ' +
         fmtCurrency_(minTot) +
-        '/month in minimums. Compare that to usable cash after buffers when planning extra payments.'
+        '/month in minimum payments.'
     );
   }
 
   if (u < minTot && minTot > 0) {
     lines.push(
-      'Pressure: usable cash after buffers is below total minimum payments — prioritize liquidity and minimums before adding discretionary payoff.'
+      'Safe cash (before planned expenses) is currently below total minimum payments.'
     );
   } else if (u >= minTot * 2 && minTot > 0) {
     lines.push(
-      'Usable cash after buffers is at least 2× total minimums — you may have flexibility for targeted extra paydown (Run Planner suggests an extra target when applicable).'
+      'Safe cash (before planned expenses) is currently about 2× total minimum payments.'
     );
   }
 
   const cf = ctx.thisMonthCashFlow;
   if (cf < 0) {
     lines.push(
-      'This month’s projected net on Cash Flow is negative (' +
-        fmtCurrency_(cf) +
-        ') — treat aggressive payoff as secondary until cash flow stabilizes.'
+      'Projected net cash flow this month is negative (' + fmtCurrency_(cf) + ').'
     );
   } else if (cf > 0 && minTot > 0) {
     lines.push(
-      'Projected net Cash Flow this month: ' +
-        fmtCurrency_(cf) +
-        ' — not all of it should go to debt; keep buffers in mind.'
+      'Projected net cash flow this month: ' + fmtCurrency_(cf) + '.'
     );
   }
 
@@ -252,25 +254,25 @@ function buildDebtPayoffRecommendations_(ctx) {
     lines.push(
       'Among revolving balances, ' +
         cards[0].name +
-        ' has the highest APR (' +
+        ' has the highest APR at ' +
         fmtPercent_(cards[0].interestRate) +
-        ') — avalanche strategy usually applies extra principal there first.'
+        '.'
     );
   }
 
   if (ctx.longest && ctx.longest.months) {
     lines.push(
-      'Longest estimated time to finish at the sheet minimum payment: ' +
+      'Longest estimated payoff at the current minimum payment: ' +
         ctx.longest.accountName +
         ' (~' +
         ctx.longest.months +
-        ' mo). Loan/HELOC figures use amortization; still depends on sheet APR/min matching the real note.'
+        ' mo). Loan and HELOC rows use a monthly amortization loop; other types use balance ÷ minimum.'
     );
   }
 
   if (yearsLabel) {
     lines.push(
-      'The CF paid column sums Expense rows on INPUT - Cash Flow for ' +
+      'CF paid sums Expense rows on INPUT - Cash Flow for ' +
         yearsLabel +
         ' where Payee matches the debt name (aliases apply).'
     );

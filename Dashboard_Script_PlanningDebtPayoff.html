@@ -1,4 +1,4 @@
-/* Planning — Payoff Path (read-only sheet data first; simulation later) */
+/* Planning — Debt Overview (read-only reference view; monthly actions live on the Rolling Debt Planner) */
 
 /** Cached payload for re-sort without re-fetching */
 var __debtPayoffReadCache = null;
@@ -335,7 +335,7 @@ function renderDebtPayoffReadData_(data) {
     metaEl.textContent =
       'CF paid = Expense sums on Cash Flow for ' +
       yLabel +
-      ', where Payee matches each debt. For full definitions, see Help → Payoff Path.';
+      ', where Payee matches each debt. For full definitions, see Help → Debt Overview.';
   }
 
   if (data.warnings && data.warnings.length && metaEl) {
@@ -354,7 +354,9 @@ function renderDebtPayoffReadData_(data) {
         '/month</li>'
     );
     bullets.push(
-      '<li>Usable after buffers: ' + fmtCurrency(s.usableCashAfterBuffers) + '</li>'
+      '<li>Safe to use (before planned expenses): ' +
+        fmtCurrency(s.usableCashAfterBuffers) +
+        '</li>'
     );
     if (s.longestRoughPayoff && s.longestRoughPayoff.months) {
       bullets.push(
