@@ -685,18 +685,17 @@ function buildSnapshotRows(
 }
 
 function presentationFromSummaryMode(raw: string | undefined): ExecutionPresentationMode | null {
-  // Presentation mode is now orthogonal to strategy. Legacy single-token values
-  // `operator` and `aggressive` both imply the advanced presentation; the
-  // `aggressive` strategy is handled separately via payoff strategy wiring.
+  // Presentation view is now only Standard or Automation. Audit/debug panels
+  // are controlled by an independent Advanced toggle parsed separately by the
+  // dashboard. Legacy tokens like `operator` / `advanced` / `aggressive` are
+  // handled downstream — we return `null` here so the raw string passes
+  // through untouched and the dashboard's own normalizer can inspect tokens.
   const m = String(raw || '')
     .toLowerCase()
     .trim();
   if (!m) return null;
   const tokens = m.split(/[\s,|]+/).filter(Boolean);
   if (tokens.indexOf('automation') >= 0) return 'automation';
-  if (tokens.indexOf('advanced') >= 0 || tokens.indexOf('operator') >= 0 || tokens.indexOf('aggressive') >= 0) {
-    return 'advanced';
-  }
   if (tokens.indexOf('standard') >= 0) return 'standard';
   return null;
 }

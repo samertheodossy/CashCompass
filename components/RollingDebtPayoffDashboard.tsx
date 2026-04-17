@@ -2,19 +2,22 @@
  * Rolling Debt Payoff dashboard — React + TypeScript + inline styles only.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 // —— Types (single export each) ————————————————————————————————————————
 
 /**
- * Presentation mode controls how much detail the dashboard renders. It is
- * orthogonal to {@link PayoffStrategy}. The legacy `'operator'` and
- * `'aggressive'` tab values are still accepted on input (see
- * {@link normalizeModeFromSummary}) but map to the new model:
- *   - `'operator'`   → presentation `'advanced'`, strategy `'standard'`
- *   - `'aggressive'` → presentation `'advanced'`, strategy `'aggressive'`
+ * Presentation mode — the "view" the user is in. Audit/debug panels are no
+ * longer a separate view; they are gated by the independent boolean
+ * {@link RollingDebtPayoffDashboardProps#defaultIsAdvancedView Advanced toggle}
+ * so the user can stay in Standard and just flip on details when needed.
+ *
+ * Legacy tokens still recognized on input (see {@link normalizeModeFromSummary}):
+ *   - `'operator'` / `'advanced'` → presentation `'standard'`, advanced view `true`
+ *   - `'aggressive'`              → presentation `'standard'`, advanced view `true`,
+ *                                   strategy `'aggressive'`
  */
-export type ExecutionPresentationMode = 'standard' | 'advanced' | 'automation';
+export type ExecutionPresentationMode = 'standard' | 'automation';
 
 /**
  * Allocation strategy — separate from presentation. Aggressive changes how
@@ -228,6 +231,15 @@ export type RollingDebtPayoffDashboardProps = {
   useDemoFallback?: boolean;
   defaultPresentationMode?: ExecutionPresentationMode;
   onPresentationModeChange?: (mode: ExecutionPresentationMode) => void;
+  /**
+   * When true, audit / debug panels (cash bridge, allocation audit, display
+   * plan validator, aggressive panel) are shown in the Standard view. Default
+   * is `false` — the user stays in the clean Standard view and only flips
+   * Advanced on when they need to inspect the numbers. Automation view is
+   * unaffected by this toggle.
+   */
+  defaultIsAdvancedView?: boolean;
+  onIsAdvancedViewChange?: (on: boolean) => void;
   /** Payoff allocation strategy — orthogonal to presentation mode. */
   defaultPayoffStrategy?: PayoffStrategy;
   onPayoffStrategyChange?: (strategy: PayoffStrategy) => void;
@@ -300,7 +312,8 @@ function shortenWatchout(text: string, maxLen = 96): string {
 }
 
 /**
- * Main user-facing cash bridge: mirrors the top KPI row (Total cash → Execute now).
+ * Main user-facing cash bridge: mirrors the top KPI row
+ * (Total cash → Safe to use → Planned payment this month).
  * The legacy 10-step policy chain (DO_NOT_TOUCH, policy-eligible, min buffers, total usable cash)
  * is moved behind a "Show full policy bridge" toggle so the primary audit stays intuitive.
  */
@@ -384,8 +397,8 @@ function CashBridgeSection({
       <SectionTitle>Cash bridge (audit)</SectionTitle>
       <p style={{ margin: '0 0 10px 0', fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
         Trace from <strong>Total cash</strong> through reserve, buffer, and planned/unmapped holds
-        to <strong>Deployable max</strong>, then your <strong>Cash to use now</strong> and the
-        capped <strong>Execute now</strong> the waterfall actually uses.
+        to <strong>Safe to use</strong>, then your <strong>Cash to use now</strong> and the
+        capped <strong>Planned payment this month</strong> the waterfall actually uses.
       </p>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {row('1', 'Total cash', currency(totalCashDisplay))}
@@ -393,9 +406,9 @@ function CashBridgeSection({
         {row('3', 'Minus buffer', `−${currency(bufferDisplay)}`)}
         {row('4', 'Minus near-term planned hold', `−${currency(nearTermPlannedHoldDisplay)}`)}
         {row('5', 'Minus unmapped card risk hold', `−${currency(unmappedCardRiskHoldDisplay)}`)}
-        {row('6', '= Deployable max', currency(deployableMaxDisplay), true)}
+        {row('6', '= Safe to use', currency(deployableMaxDisplay), true)}
         {row('7', 'Cash to use now (user input)', currency(cashToUseNowInput))}
-        {row('8', '= Execute now', currency(executeNowDisplay), true)}
+        {row('8', '= Planned payment this month', currency(executeNowDisplay), true)}
       </div>
       <p style={{ margin: '10px 0 0 0', fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
         <strong>Reserve</strong> = DO_NOT_TOUCH balances
@@ -422,7 +435,7 @@ function CashBridgeSection({
       ) : null}
       {exceedsDeployable ? (
         <p style={{ margin: '10px 0 0 0', fontSize: 12, color: C.danger, fontWeight: 600 }}>
-          Requested amount exceeds deployable max; execute-now amount capped to{' '}
+          Requested amount exceeds Safe to use; Planned payment this month is capped to{' '}
           {currency(deployableMaxDisplay)}.
         </p>
       ) : null}
@@ -490,7 +503,7 @@ function CashBridgeSection({
                 'Minus unmapped card risk hold',
                 `−${currency(bridge.unmappedCardRiskHold)}`
               )}
-              {row('10', '= Final execute-now cash', currency(bridge.finalExecuteNowCash))}
+              {row('10', '= Final cash (legacy chain)', currency(bridge.finalExecuteNowCash))}
               {row(
                 '—',
                 'Legacy monthly cap (retired — user input now bounds this)',
@@ -498,7 +511,7 @@ function CashBridgeSection({
               )}
               {row(
                 '—',
-                'Execute-now budget (= final execute-now cash)',
+                'Safe to use (= final cash, legacy chain)',
                 currency(
                   bridge.month0ExecuteNowBudget != null
                     ? bridge.month0ExecuteNowBudget
@@ -612,9 +625,9 @@ function AllocationAuditSection({
           }}
         >
           User deploying <strong>{currency(userInput)}</strong> of <strong>{currency(maxDeployable)}</strong>
-          {' '}deployable max. Backend pre-planned the full waterfall for{' '}
+          {' '}Safe to use. Backend pre-planned the full waterfall for{' '}
           <strong>{currency(audit.allocatedExecuteNowCashTotal)}</strong>; dashboard scales the extra-payment
-          buckets down client-side to match Execute now. This is expected — not drift.
+          buckets down client-side to match the Planned payment this month. This is expected — not drift.
         </div>
       ) : null}
       {hasDrift ? (
@@ -631,7 +644,7 @@ function AllocationAuditSection({
             lineHeight: 1.4
           }}
         >
-          DRIFT: allocator total {currency(audit.allocatedExecuteNowCashTotal)} ≠ displayed execute-now{' '}
+          DRIFT: allocator total {currency(audit.allocatedExecuteNowCashTotal)} ≠ displayed Planned payment this month{' '}
           {currency(displayedExecuteNow)} (Δ {currency(driftAmount)}). Dashboard and waterfall are out of sync.
         </div>
       ) : null}
@@ -649,8 +662,8 @@ function AllocationAuditSection({
             lineHeight: 1.4
           }}
         >
-          Allocator vs budget gap {currency(gapToBudget)} (allocated {currency(audit.allocatedExecuteNowCashTotal)} vs
-          budget {currency(audit.month0ExecuteNowBudget)}).
+          Allocator vs Safe to use gap {currency(gapToBudget)} (allocated {currency(audit.allocatedExecuteNowCashTotal)} vs
+          Safe to use {currency(audit.month0ExecuteNowBudget)}).
         </div>
       ) : null}
       <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -658,9 +671,9 @@ function AllocationAuditSection({
         {row('Primary allocated', currency(audit.allocatedPrimaryTotal))}
         {row('Secondary allocated', currency(audit.allocatedSecondaryTotal))}
         {row('Overflow allocated', currency(audit.allocatedOverflowTotal))}
-        {row('Total allocated (execute-now cash)', currency(audit.allocatedExecuteNowCashTotal), true)}
-        {row('Execute-now budget', currency(audit.month0ExecuteNowBudget), true)}
-        {row('Gap to budget (budget − allocated)', currency(audit.allocationGapToBudget))}
+        {row('Total allocated (Planned payment this month)', currency(audit.allocatedExecuteNowCashTotal), true)}
+        {row('Safe to use', currency(audit.month0ExecuteNowBudget), true)}
+        {row('Gap (Safe to use − allocated)', currency(audit.allocationGapToBudget))}
       </div>
       {audit.warnings && audit.warnings.length ? (
         <ul style={{ margin: '14px 0 0 0', paddingLeft: 18, color: C.danger, fontSize: 12, fontWeight: 600, lineHeight: 1.45 }}>
@@ -820,12 +833,12 @@ function DisplayPlanValidator({
         <p style={{ margin: '12px 0 0 0', fontSize: 12, color: C.warn, fontWeight: 700, lineHeight: 1.45 }}>
           Requested {currencyDetailed(userCashToUseNowInput)} exceeds backend-allocated waterfall
           total ({currencyDetailed(extraTotal)}) by {currencyDetailed(unallocatedHeadroom)}. Backend
-          has no more per-account payoff capacity to absorb the extra — execute-now total is
-          capped at the allocated amount until the planner re-runs.
+          has no more per-account payoff capacity to absorb the extra — Planned payment this month
+          is capped at the allocated amount until the planner re-runs.
         </p>
       ) : exceedsDeployable ? (
         <p style={{ margin: '12px 0 0 0', fontSize: 12, color: C.warn, fontWeight: 700, lineHeight: 1.45 }}>
-          Input exceeds deployable max; execute-now is capped to {currencyDetailed(deployableMax)}.
+          Input exceeds Safe to use; Planned payment this month is capped to {currencyDetailed(deployableMax)}.
         </p>
       ) : (
         <p style={{ margin: '12px 0 0 0', fontSize: 12, color: C.success, fontWeight: 700, lineHeight: 1.45 }}>
@@ -999,7 +1012,7 @@ function redistributeSnapshotRows(
   });
 }
 
-const PRESENTATION_MODES: ExecutionPresentationMode[] = ['standard', 'advanced', 'automation'];
+const PRESENTATION_MODES: ExecutionPresentationMode[] = ['standard', 'automation'];
 const PAYOFF_STRATEGIES: PayoffStrategy[] = ['standard', 'aggressive'];
 
 /**
@@ -1061,19 +1074,90 @@ function shellStyle(): React.CSSProperties {
   };
 }
 
+/**
+ * Subtle wrapper around a group of KPI cards. Used to visually express the
+ * HAVE → PROTECTED → CAN USE mental model: each group gets a header strip and
+ * an optional muted/tinted background so the cards inside read as one unit
+ * ("these are all protected") rather than as independent competing metrics.
+ */
+function KpiGroup({
+  label,
+  sublabel,
+  background,
+  borderColor,
+  marginBottom,
+  children
+}: {
+  label: string;
+  sublabel?: string;
+  background?: string;
+  borderColor?: string;
+  marginBottom?: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      style={{
+        marginBottom: marginBottom ?? 12,
+        padding: background || borderColor ? '12px 14px' : 0,
+        borderRadius: 14,
+        background: background ?? 'transparent',
+        border: borderColor ? `1px solid ${borderColor}` : 'none'
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: 12,
+          marginBottom: 10
+        }}
+      >
+        <p
+          style={{
+            margin: 0,
+            fontSize: 10,
+            fontWeight: 800,
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+            color: C.muted
+          }}
+        >
+          {label}
+        </p>
+        {sublabel ? (
+          <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{sublabel}</p>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function KpiCard({
   label,
   value,
   sub,
-  borderAccent
+  borderAccent,
+  subMuted
 }: {
   label: string;
   value: React.ReactNode;
   sub?: string;
   borderAccent?: 'deployable' | 'extra';
+  /**
+   * When true, renders the helper (`sub`) text in a quieter style (smaller
+   * font + lower-contrast color) so the number itself stays the focal point.
+   * Used in the Protected group where the explanations are background context.
+   */
+  subMuted?: boolean;
 }) {
   const borderColor =
     borderAccent === 'deployable' ? 'rgba(13, 125, 77, 0.35)' : borderAccent === 'extra' ? 'rgba(180, 83, 9, 0.4)' : C.border;
+  const subStyle: React.CSSProperties = subMuted
+    ? { margin: '8px 0 0 0', fontSize: 10.5, color: 'rgba(100, 116, 139, 0.75)', lineHeight: 1.35 }
+    : { margin: '8px 0 0 0', fontSize: 11, color: C.muted, lineHeight: 1.35 };
   return (
     <div
       style={{
@@ -1093,7 +1177,7 @@ function KpiCard({
       <p style={{ margin: '10px 0 0 0', fontSize: 22, fontWeight: 800, color: C.text, fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>{value}</p>
       <div style={{ flex: 1, minHeight: 4 }} aria-hidden />
       {sub ? (
-        <p style={{ margin: '8px 0 0 0', fontSize: 11, color: C.muted, lineHeight: 1.35 }}>{sub}</p>
+        <p style={subStyle}>{sub}</p>
       ) : (
         <p style={{ margin: 0, fontSize: 11, minHeight: 16 }} aria-hidden />
       )}
@@ -1111,51 +1195,65 @@ function KpiCard({
  * Interactive "Cash to use now" input card. Unlike the static KPI cards this card is
  * clearly editable:
  *   - labelled input with border + focus ring + placeholder
- *   - quick-action chips (Clear, 25 %, 50 %, 75 %, Use max) that snap the value
- *   - helper text + "Max deployable: $X" note
- *   - cap warning shown inline when the user exceeds deployable max
+ *   - helper text + "Safe to use: $X" note
+ *   - inline micro-feedback (within safe limits / over the safe limit)
+ *
+ * Quick-action chips (25 %, 50 %, 75 %, Use max) are rendered as a separate row
+ * below the three-card flow by the parent via `CashToUseNowQuickActions`, so the
+ * input card reads as a clean decision box rather than a control panel.
  *
  * The card consumes and emits raw strings so parent can keep the canonical parse
- * (see `parseUserNumber`); parent owns the source of truth and derives Execute Now.
+ * (see `parseUserNumber`); parent owns the source of truth and derives Planned payment.
  */
 function CashToUseNowInputCard({
   label,
   helperText,
   inputValue,
+  parsedInput,
   onChange,
   deployableMax,
-  capWarning,
+  exceedsDeployable,
   placeholder,
-  suggestedValue,
-  executeNow,
-  remainingDeployable
+  suggestedValue
 }: {
   label: string;
   helperText: string;
   inputValue: string;
+  parsedInput: number;
   onChange: (raw: string) => void;
   deployableMax: number;
-  capWarning?: string;
+  exceedsDeployable: boolean;
   placeholder?: string;
   suggestedValue?: number | null;
-  executeNow?: number;
-  remainingDeployable?: number;
 }) {
   const [focused, setFocused] = useState(false);
-  const borderColor = capWarning
+  /**
+   * Card framing is intentionally subtler than the Planned payment result card so
+   * the visual hierarchy reads Outcome > Input > Constraint. Border is neutral
+   * at rest and only lights up on focus or when the input exceeds the cap.
+   */
+  const cardBorderColor = exceedsDeployable
     ? C.danger
     : focused
     ? C.primaryHi
-    : C.primary;
-  const accentBg = capWarning
-    ? 'rgba(220, 38, 38, 0.05)'
+    : C.border;
+  const inputBorderColor = exceedsDeployable
+    ? C.danger
     : focused
-    ? 'rgba(30, 58, 95, 0.06)'
-    : 'rgba(30, 58, 95, 0.04)';
+    ? C.primaryHi
+    : 'rgba(30, 58, 95, 0.28)';
+  const accentBg = exceedsDeployable
+    ? 'rgba(220, 38, 38, 0.03)'
+    : focused
+    ? 'rgba(30, 58, 95, 0.03)'
+    : '#ffffff';
+  const hasInput = parsedInput > 0.005;
   const maxRounded = Math.max(0, Math.round(deployableMax));
   const setPercent = (p: number) => {
     const v = Math.max(0, Math.round((deployableMax * p) / 100));
-    onChange(String(v));
+    // Emit the formatted string so the field reads with thousands separators
+    // without the user having to blur first.
+    onChange(v.toLocaleString('en-US'));
   };
   const suggestionRounded =
     suggestedValue != null && Number.isFinite(suggestedValue) && suggestedValue > 0.005
@@ -1167,20 +1265,31 @@ function CashToUseNowInputCard({
     border: `1px solid ${C.border}`,
     background: C.paper,
     color: C.text,
-    borderRadius: 999,
-    padding: '4px 10px',
-    fontSize: 11,
+    borderRadius: 8,
+    padding: '6px 10px',
+    fontSize: 12,
     fontWeight: 700,
     letterSpacing: '0.02em',
     cursor: 'pointer',
     lineHeight: 1.2,
-    fontVariantNumeric: 'tabular-nums'
+    fontVariantNumeric: 'tabular-nums',
+    flex: 1
   };
-  const primaryChipStyle: React.CSSProperties = {
-    ...chipStyle,
+  const useMaxStyle: React.CSSProperties = {
+    appearance: 'none',
+    border: `1px solid ${C.primary}`,
     background: C.primary,
     color: '#ffffff',
-    borderColor: C.primary
+    borderRadius: 8,
+    padding: '8px 12px',
+    fontSize: 12,
+    fontWeight: 800,
+    letterSpacing: '0.04em',
+    textTransform: 'uppercase',
+    cursor: 'pointer',
+    lineHeight: 1.2,
+    fontVariantNumeric: 'tabular-nums',
+    width: '100%'
   };
   return (
     <div
@@ -1190,14 +1299,13 @@ function CashToUseNowInputCard({
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        gap: 10,
+        gap: 6,
         background: accentBg,
-        border: `2px solid ${borderColor}`,
+        border: `1px solid ${cardBorderColor}`,
         borderRadius: 12,
         padding: '14px 16px',
-        boxShadow: focused ? '0 0 0 3px rgba(30, 58, 95, 0.12)' : '0 1px 2px rgba(15,23,42,0.06)',
-        transition: 'box-shadow 120ms ease, border-color 120ms ease, background 120ms ease',
-        gridColumn: 'span 2'
+        boxShadow: focused ? '0 0 0 3px rgba(30, 58, 95, 0.10)' : '0 1px 2px rgba(15,23,42,0.04)',
+        transition: 'box-shadow 120ms ease, border-color 120ms ease, background 120ms ease'
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
@@ -1207,11 +1315,11 @@ function CashToUseNowInputCard({
         <span
           style={{
             fontSize: 10,
-            fontWeight: 800,
+            fontWeight: 700,
             letterSpacing: '0.1em',
             textTransform: 'uppercase',
-            color: '#ffffff',
-            background: C.primary,
+            color: C.muted,
+            background: 'rgba(100, 116, 139, 0.10)',
             borderRadius: 999,
             padding: '3px 9px',
             lineHeight: 1.2
@@ -1227,10 +1335,10 @@ function CashToUseNowInputCard({
           alignItems: 'center',
           gap: 8,
           background: C.paper,
-          border: `2px solid ${capWarning ? C.danger : focused ? C.primaryHi : C.primary}`,
+          border: `1.5px solid ${inputBorderColor}`,
           borderRadius: 10,
           padding: '10px 14px',
-          boxShadow: focused ? 'inset 0 0 0 2px rgba(30, 58, 95, 0.18)' : 'none',
+          boxShadow: focused ? 'inset 0 0 0 1px rgba(30, 58, 95, 0.18)' : 'none',
           transition: 'border-color 120ms ease, box-shadow 120ms ease'
         }}
       >
@@ -1241,7 +1349,18 @@ function CashToUseNowInputCard({
           value={inputValue}
           onChange={(e) => onChange(e.target.value)}
           onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onBlur={(e) => {
+            setFocused(false);
+            // Normalize to a thousands-separated string on blur so numbers
+            // read naturally (1000 → 1,000). Parent state stays authoritative;
+            // `parseUserNumber` already strips commas for downstream math.
+            const parsed = parseUserNumber(e.target.value);
+            if (parsed != null) {
+              const rounded = Math.max(0, Math.round(parsed));
+              const formatted = rounded.toLocaleString('en-US');
+              if (formatted !== e.target.value) onChange(formatted);
+            }
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Escape' || e.key === 'Enter') {
               e.currentTarget.blur();
@@ -1264,60 +1383,87 @@ function CashToUseNowInputCard({
           }}
         />
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        <button type="button" style={chipStyle} onClick={() => onChange('0')} aria-label="Clear cash to use now">
-          Clear
-        </button>
-        <button type="button" style={chipStyle} onClick={() => setPercent(25)} aria-label="Use 25% of deployable max">
-          25%
-        </button>
-        <button type="button" style={chipStyle} onClick={() => setPercent(50)} aria-label="Use 50% of deployable max">
-          50%
-        </button>
-        <button type="button" style={chipStyle} onClick={() => setPercent(75)} aria-label="Use 75% of deployable max">
-          75%
-        </button>
-        <button type="button" style={primaryChipStyle} onClick={() => onChange(String(maxRounded))} aria-label="Use deployable max">
+      {/**
+       * Micro-feedback sits immediately under the input so the consequence of
+       * typing is obvious: green when safe, amber when about to be capped.
+       */}
+      {hasInput ? (
+        exceedsDeployable ? (
+          <p
+            style={{
+              margin: 0,
+              fontSize: 12,
+              color: C.warn,
+              fontWeight: 700,
+              lineHeight: 1.4,
+              fontVariantNumeric: 'tabular-nums'
+            }}
+            role="status"
+          >
+            You're over the safe limit — we'll cap it to {currency(deployableMax)}
+          </p>
+        ) : (
+          <p
+            style={{
+              margin: 0,
+              fontSize: 12,
+              color: C.success,
+              fontWeight: 700,
+              lineHeight: 1.4
+            }}
+            role="status"
+          >
+            You're within safe limits
+          </p>
+        )
+      ) : null}
+      {/**
+       * Quick-amount shortcuts. 25/50/75 share one row and equally split the
+       * width so they read as a single control block; "Use max" sits on its
+       * own row as the strongest filled button because it is the most common
+       * choice. An optional "Use suggested" row appears only when the planner
+       * provided a distinct suggested amount.
+       */}
+      <div
+        style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: -2 }}
+        role="group"
+        aria-label="Quick amounts"
+      >
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button type="button" style={chipStyle} onClick={() => setPercent(25)} aria-label="Use 25% of Safe to use">
+            25%
+          </button>
+          <button type="button" style={chipStyle} onClick={() => setPercent(50)} aria-label="Use 50% of Safe to use">
+            50%
+          </button>
+          <button type="button" style={chipStyle} onClick={() => setPercent(75)} aria-label="Use 75% of Safe to use">
+            75%
+          </button>
+        </div>
+        <button
+          type="button"
+          style={useMaxStyle}
+          onClick={() => onChange(maxRounded.toLocaleString('en-US'))}
+          aria-label="Use Safe to use"
+        >
           Use max
         </button>
         {showSuggestion ? (
           <button
             type="button"
-            style={chipStyle}
-            onClick={() => onChange(String(suggestionRounded))}
+            style={{ ...chipStyle, flex: 'none', width: '100%' }}
+            onClick={() => onChange((suggestionRounded as number).toLocaleString('en-US'))}
             aria-label={`Use suggested amount ${currency(suggestionRounded as number)}`}
-            title="Suggested by planner (backend execute-now budget)"
+            title="Suggested by planner"
           >
             Use suggested ({currency(suggestionRounded as number)})
           </button>
         ) : null}
       </div>
-      <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {capWarning ? (
-          <p style={{ margin: 0, fontSize: 12, color: C.danger, fontWeight: 700, lineHeight: 1.4 }}>
-            {capWarning}
-          </p>
-        ) : (
-          <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
-            {helperText}
-            {' · '}
-            <span style={{ color: C.text, fontWeight: 700 }}>
-              Max deployable: {currency(deployableMax)}
-            </span>
-          </p>
-        )}
-        {executeNow != null ? (
-          <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
-            <span aria-hidden>→</span>{' '}
-            <span style={{ fontWeight: 700, color: C.text }}>Execute now {currency(executeNow)}</span>
-            {remainingDeployable != null && remainingDeployable > 0.005 ? (
-              <>
-                {' · '}
-                Remaining deployable {currency(remainingDeployable)}
-              </>
-            ) : null}
-          </p>
-        ) : null}
+      <div style={{ marginTop: 'auto' }}>
+        <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
+          {helperText}
+        </p>
       </div>
     </div>
   );
@@ -1327,9 +1473,9 @@ function CashToUseNowInputCard({
  * Result / effect card rendered next to `CashToUseNowInputCard`. Visually it's the
  * direct consequence of the input so the relationship is obvious (cause → effect).
  * Renders:
- *   - Execute now value (capped at Deployable max)
- *   - Live formula `min(Cash to use now, Deployable max)` with the current values
- *   - "Capped" badge if the user requested more than Deployable max
+ *   - Planned payment this month value (capped at Safe to use)
+ *   - Live formula `min(Cash to use now, Safe to use)` with the current values
+ *   - "Capped" badge if the user requested more than Safe to use
  *   - Remaining deployable note
  *
  * This card is driven from the same canonical display model that feeds extra-payment
@@ -1338,19 +1484,15 @@ function CashToUseNowInputCard({
  */
 function ExecuteNowResultCard({
   executeNow,
-  cashToUseNowRaw,
-  deployableMax,
   exceedsDeployable,
   remainingDeployable
 }: {
   executeNow: number;
-  cashToUseNowRaw: number;
-  deployableMax: number;
   exceedsDeployable: boolean;
   remainingDeployable: number;
 }) {
-  const borderColor = exceedsDeployable ? C.danger : 'rgba(180, 83, 9, 0.55)';
-  const bg = exceedsDeployable ? 'rgba(220, 38, 38, 0.05)' : 'rgba(180, 83, 9, 0.05)';
+  const borderColor = exceedsDeployable ? C.danger : 'rgba(180, 83, 9, 0.9)';
+  const bg = exceedsDeployable ? 'rgba(220, 38, 38, 0.10)' : 'rgba(180, 83, 9, 0.20)';
   return (
     <div
       style={{
@@ -1361,10 +1503,11 @@ function ExecuteNowResultCard({
         flexDirection: 'column',
         gap: 8,
         background: bg,
-        border: `2px solid ${borderColor}`,
+        border: `3px solid ${borderColor}`,
         borderRadius: 12,
-        padding: '14px 16px',
-        boxShadow: '0 1px 2px rgba(15,23,42,0.06)'
+        padding: '16px 18px',
+        boxShadow:
+          '0 6px 18px rgba(180, 83, 9, 0.22), 0 2px 4px rgba(180, 83, 9, 0.12)'
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
@@ -1378,7 +1521,7 @@ function ExecuteNowResultCard({
             color: 'rgba(180, 83, 9, 0.95)'
           }}
         >
-          Execute now
+          Your payment this month
         </p>
         {exceedsDeployable ? (
           <span
@@ -1393,7 +1536,7 @@ function ExecuteNowResultCard({
               padding: '3px 9px',
               lineHeight: 1.2
             }}
-            aria-label="Execute now is capped at deployable max"
+            aria-label="Planned payment this month is capped at Safe to use"
           >
             Capped
           </span>
@@ -1401,27 +1544,36 @@ function ExecuteNowResultCard({
       </div>
       <p
         style={{
+          margin: '4px 0 -2px 0',
+          fontSize: 12,
+          color: C.text,
+          fontWeight: 700,
+          letterSpacing: '0.02em',
+          lineHeight: 1.2
+        }}
+      >
+        You'll pay:
+      </p>
+      <p
+        style={{
           margin: '2px 0 0 0',
-          fontSize: 28,
-          fontWeight: 800,
+          fontSize: 44,
+          fontWeight: 900,
           color: C.text,
           fontVariantNumeric: 'tabular-nums',
-          lineHeight: 1.15
+          lineHeight: 1.05,
+          letterSpacing: '-0.02em'
         }}
       >
         {currency(executeNow)}
       </p>
-      <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
-        Amount the planner will actually deploy after caps.
+      <p style={{ margin: 0, fontSize: 13, color: C.text, fontWeight: 600, lineHeight: 1.4 }}>
+        This will be paid this month
       </p>
       <div style={{ flex: 1, minHeight: 2 }} aria-hidden />
-      <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.4, fontVariantNumeric: 'tabular-nums' }}>
-        = min(<span style={{ color: C.text, fontWeight: 700 }}>{currency(cashToUseNowRaw)}</span>,{' '}
-        <span style={{ color: C.text, fontWeight: 700 }}>{currency(deployableMax)}</span>)
-      </p>
       {remainingDeployable > 0.005 ? (
         <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
-          Remaining deployable after Execute now:{' '}
+          Remaining Safe to use after Planned payment this month:{' '}
           <span style={{ color: C.text, fontWeight: 700 }}>{currency(remainingDeployable)}</span>
         </p>
       ) : null}
@@ -1711,9 +1863,9 @@ function SnapshotTable({ rows, summary }: { rows: SnapshotRow[]; summary?: Rolli
       }}
     >
       <div style={{ padding: '16px 18px', background: '#f8fafc', borderBottom: `1px solid ${C.border}` }}>
-        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: C.text }}>Post-payment snapshot — execute-now payments only</h3>
+        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: C.text }}>Post-payment snapshot — planned payment this month only</h3>
         <p style={{ margin: '6px 0 0 0', fontSize: 12, color: C.muted, lineHeight: 1.45 }}>
-          Balances and payments in this table are execute-now extras and minimum sequencing only — not modeled month-end balances.
+          Balances and payments in this table are the planned payment extras and minimum sequencing only — not modeled month-end balances.
         </p>
         <p style={{ margin: '6px 0 0 0', fontSize: 11, color: C.muted, lineHeight: 1.45, fontStyle: 'italic' }}>
           Planned expenses below may affect modeled month-end balances separately.
@@ -1789,60 +1941,10 @@ function SnapshotTable({ rows, summary }: { rows: SnapshotRow[]; summary?: Rolli
   );
 }
 
-function OperatorChecklist() {
-  const [done, setDone] = useState<Record<string, boolean>>({});
-  const toggle = useCallback((id: string) => {
-    setDone((d) => ({ ...d, [id]: !d[id] }));
-  }, []);
-  const items = [
-    { id: 'min', label: 'Pay all minimums' },
-    { id: 'cleanup', label: 'Pay cleanup balances' },
-    { id: 'primary', label: 'Pay primary allocation' },
-    { id: 'secondary', label: 'Pay secondary allocation' },
-    { id: 'cond', label: 'Review conditional income' }
-  ];
-  return (
-    <div style={{ border: '1px solid rgba(180, 83, 9, 0.35)', borderRadius: 12, background: C.warnBg, padding: 20, boxShadow: '0 1px 2px rgba(15,23,42,0.06)' }}>
-      <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.warn }}>Execution checklist</h3>
-      <ul style={{ listStyle: 'none', margin: '16px 0 0 0', padding: 0 }}>
-        {items.map((it) => (
-          <li key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-            <button
-              type="button"
-              aria-pressed={!!done[it.id]}
-              onClick={() => toggle(it.id)}
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: 6,
-                border: done[it.id] ? 'none' : `2px solid ${C.border}`,
-                background: done[it.id] ? C.success : C.paper,
-                color: '#fff',
-                cursor: 'pointer',
-                fontSize: 12,
-                fontWeight: 800,
-                flexShrink: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              {done[it.id] ? '✓' : ''}
-            </button>
-            <span style={{ fontSize: 14, fontWeight: 600, textDecoration: done[it.id] ? 'line-through' : 'none', color: done[it.id] ? C.muted : C.text }}>
-              {it.label}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 function strategyNoChangeReasonLabel(reason: StrategyNoChangeReason): string {
   switch (reason) {
     case 'cleanup_consumed_budget':
-      return 'Cleanup consumed the entire execute-now budget, so there was no post-cleanup pool for Aggressive to concentrate.';
+      return 'Cleanup consumed the entire Safe to use, so there was no post-cleanup pool for Aggressive to concentrate.';
     case 'no_secondary_pool':
       return 'No secondary pool existed this month — Standard and Aggressive both send 100% to the primary target.';
     case 'primary_balance_capped':
@@ -1913,7 +2015,7 @@ function StrategyComparisonNote({ cmp }: { cmp: StrategyComparison }) {
       {!changed ? (
         <p style={{ margin: '10px 0 0 0', fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
           Aggressive payoff produced the same allocation this month because cleanup consumed the
-          budget or the primary target was balance-capped.
+          Safe to use or the primary target was balance-capped.
           {cmp.strategyNoChangeReason ? (
             <>
               {' '}
@@ -2088,9 +2190,9 @@ function FutureConditionalCashSection({
       </summary>
 
       <p style={{ margin: '10px 0 0 0', fontSize: 12, lineHeight: 1.5, color: C.muted }}>
-        These amounts are <strong>not</strong> included in execute-now calculations until received.
-        Shown here for visibility only and will not affect the Execute-now totals or the payment
-        buckets above.
+        These amounts are <strong>not</strong> included in the Planned payment this month until
+        received. Shown here for visibility only and will not affect the Planned payment totals or
+        the payment buckets above.
       </p>
 
       <div
@@ -2144,8 +2246,9 @@ function FutureConditionalCashSection({
       )}
 
       <p style={{ margin: '12px 0 0 0', fontSize: 11, color: C.muted, lineHeight: 1.5, fontStyle: 'italic' }}>
-        If variable income arrives, these amounts follow the same strict serial waterfall as
-        execute-now (cleanup → primary APR → CitiAA → Southwest → Marriott → overflow).
+        If variable income arrives, these amounts follow the same strict serial waterfall as the
+        Planned payment this month (cleanup → primary APR → CitiAA → Southwest → Marriott →
+        overflow).
       </p>
     </details>
   );
@@ -2179,44 +2282,50 @@ function AutomationBlock({ title, body }: { title: string; body: string }) {
 
 type NormalizedMode = {
   presentation: ExecutionPresentationMode | null;
+  isAdvancedView: boolean;
   strategy: PayoffStrategy | null;
 };
 
 /**
  * Parse the backend `summary.executionPlanMode` string into a
- * presentation + strategy pair. The server historically emits a
- * space/comma-separated list (e.g. `"aggressive automation"`). Legacy
- * single values `"operator"` / `"aggressive"` are mapped into the new
- * orthogonal model for backward compatibility.
+ * presentation + advanced-toggle + strategy triple. The server historically
+ * emits a space/comma-separated list (e.g. `"aggressive automation"`).
+ * Legacy single values map into the new simplified model:
+ *   - `'operator'`   → presentation `'standard'`, advanced `true`
+ *   - `'advanced'`   → presentation `'standard'`, advanced `true`
+ *   - `'aggressive'` → strategy `'aggressive'`, advanced `true`
  */
 function normalizeModeFromSummary(raw: string | undefined): NormalizedMode {
   const m = String(raw || '')
     .toLowerCase()
     .trim();
-  if (!m) return { presentation: null, strategy: null };
+  if (!m) return { presentation: null, isAdvancedView: false, strategy: null };
   const tokens = m.split(/[\s,|]+/).filter(Boolean);
 
   let presentation: ExecutionPresentationMode | null = null;
+  let isAdvancedView = false;
   let strategy: PayoffStrategy | null = null;
 
   for (const t of tokens) {
-    if (t === 'automation') presentation = 'automation';
-    else if (t === 'advanced' || t === 'operator') {
-      // Map legacy operator → advanced (do not downgrade 'automation' if already set).
-      if (presentation !== 'automation') presentation = 'advanced';
+    if (t === 'automation') {
+      presentation = 'automation';
+    } else if (t === 'advanced' || t === 'operator') {
+      // Legacy Operator / Advanced tokens are no longer a separate view; they
+      // flip the Advanced audit-panel toggle while keeping the Standard view.
+      isAdvancedView = true;
+      if (presentation == null) presentation = 'standard';
     } else if (t === 'standard') {
       if (presentation == null) presentation = 'standard';
       if (strategy == null) strategy = 'standard';
     } else if (t === 'aggressive') {
-      // Aggressive is a STRATEGY; legacy usage also implied the advanced
-      // presentation (audit panels). Preserve that implication when no
-      // explicit presentation was set.
+      // Aggressive is a STRATEGY; legacy usage also implied audit panels on.
       strategy = 'aggressive';
-      if (presentation == null) presentation = 'advanced';
+      isAdvancedView = true;
+      if (presentation == null) presentation = 'standard';
     }
   }
 
-  return { presentation, strategy };
+  return { presentation, isAdvancedView, strategy };
 }
 
 export function RollingDebtPayoffDashboard({
@@ -2224,6 +2333,8 @@ export function RollingDebtPayoffDashboard({
   useDemoFallback = true,
   defaultPresentationMode = 'standard',
   onPresentationModeChange,
+  defaultIsAdvancedView,
+  onIsAdvancedViewChange,
   defaultPayoffStrategy = 'standard',
   onPayoffStrategyChange,
   className,
@@ -2257,6 +2368,12 @@ export function RollingDebtPayoffDashboard({
     return fromSummary.presentation != null ? fromSummary.presentation : 'standard';
   });
 
+  const [isAdvancedView, setIsAdvancedView] = useState<boolean>(() => {
+    if (typeof defaultIsAdvancedView === 'boolean') return defaultIsAdvancedView;
+    const fromSummary = normalizeModeFromSummary(data.summary.executionPlanMode);
+    return fromSummary.isAdvancedView;
+  });
+
   const [payoffStrategy, setPayoffStrategy] = useState<PayoffStrategy>(() => {
     if (defaultPayoffStrategy) return defaultPayoffStrategy;
     const fromSummary = normalizeModeFromSummary(data.summary.executionPlanMode);
@@ -2270,6 +2387,7 @@ export function RollingDebtPayoffDashboard({
   void setPayoffStrategy;
   void onPresentationModeChange;
   void onPayoffStrategyChange;
+  void onIsAdvancedViewChange;
 
   /**
    * Deployable Max = max(0, totalCash − reserve − buffer − nearTermHold − unmappedCardRiskHold).
@@ -2343,8 +2461,12 @@ export function RollingDebtPayoffDashboard({
   const exceedsDeployable = cashToUseNowRaw > deployableMax + 0.01;
 
   const isAutomation = presentationMode === 'automation';
-  const isAdvanced = presentationMode === 'advanced';
+  // Audit/debug panels are now controlled by the independent Advanced toggle,
+  // not by a separate presentation mode. Automation view ignores this toggle
+  // (it renders plain-text blocks only).
+  const isAdvanced = isAdvancedView && !isAutomation;
   const isAggressiveStrategy = payoffStrategy === 'aggressive';
+  void setIsAdvancedView;
 
   /**
    * Single canonical display-execution-plan, derived entirely from:
@@ -2549,11 +2671,28 @@ export function RollingDebtPayoffDashboard({
               Confidence <strong style={{ color: C.text }}>{data.summary.confidence}</strong>
             </span>
             <span style={{ fontSize: 14, color: C.muted }}>
-              Presentation{' '}
+              View{' '}
               <strong style={{ color: C.text, textTransform: 'capitalize' }}>
                 {presentationMode}
               </strong>
             </span>
+            {isAdvancedView && !isAutomation ? (
+              <span
+                title="Details are showing — audit panels (cash bridge, allocation audit, display validator, aggressive audit) are visible."
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: '0.04em',
+                  padding: '3px 9px',
+                  borderRadius: 999,
+                  border: `1px solid rgba(100, 116, 139, 0.3)`,
+                  background: 'rgba(100, 116, 139, 0.06)',
+                  color: C.muted
+                }}
+              >
+                Details on
+              </span>
+            ) : null}
             {isAggressiveStrategy ? (
               <span
                 title="Payoff strategy controls how extra debt cash is allocated. Presentation is separate."
@@ -2579,121 +2718,159 @@ export function RollingDebtPayoffDashboard({
           </div>
         </header>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-            gap: 12,
-            marginBottom: 14,
-            alignItems: 'stretch'
-          }}
+        {/**
+         * KPI section follows the HAVE → PROTECTED → CAN USE mental model:
+         *   A. TOTAL      — everything the user has in cash
+         *   B. PROTECTED  — what's effectively off-limits (muted background)
+         *   C. AVAILABLE  — what can actually be deployed, plus the input + output
+         * The individual values come from the same `data.liquidity` / `displayExecutionPlan`
+         * sources as before; only labels and visual grouping change.
+         */}
+        <KpiGroup label="Total" marginBottom={12}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+              gap: 12,
+              alignItems: 'stretch'
+            }}
+          >
+            <KpiCard
+              label="Total cash"
+              value={currency(data.liquidity.totalCash)}
+              sub="Full liquid total (all cash + checking + savings)"
+            />
+          </div>
+        </KpiGroup>
+
+        <KpiGroup
+          label="Protected"
+          sublabel="Not available for deployment"
+          background="rgba(100, 116, 139, 0.06)"
+          borderColor="rgba(100, 116, 139, 0.25)"
+          marginBottom={12}
         >
-          <KpiCard
-            label="Total cash"
-            value={currency(data.liquidity.totalCash)}
-            sub="Full liquid total (all cash + checking + savings)"
-          />
-          <KpiCard
-            label="Reserve"
-            value={currency(data.liquidity.reserveTarget)}
-            sub="DO_NOT_TOUCH accounts"
-          />
-          <KpiCard
-            label="Buffer"
-            value={currency(data.liquidity.buffer)}
-            sub="Per-account min buffers"
-          />
-          <KpiCard
-            label="Cash available to use"
-            value={currency(
-              Math.max(
-                0,
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+              gap: 12,
+              alignItems: 'stretch'
+            }}
+          >
+            <KpiCard
+              label="Do not touch"
+              value={currency(data.liquidity.reserveTarget)}
+              sub="Reserved accounts"
+              subMuted
+            />
+            <KpiCard
+              label="Required buffers"
+              value={currency(data.liquidity.buffer)}
+              sub="Minimum balances"
+              subMuted
+            />
+            <KpiCard
+              label="Planned / risk holds"
+              value={currency(
                 round2(
-                  (Number(data.liquidity.totalCash) || 0) -
-                    (Number(data.liquidity.reserveTarget) || 0) -
-                    (Number(data.liquidity.buffer) || 0)
+                  (Number(data.liquidity.nearTermPlannedCashHold) || 0) +
+                    (Number(data.liquidity.unmappedCardRiskHold) || 0)
                 )
-              )
-            )}
-            sub="Total cash − reserve − buffer (before near-term / unmapped holds)"
-          />
-          <KpiCard
-            label="Near-term planned hold"
-            value={currency(Number(data.liquidity.nearTermPlannedCashHold) || 0)}
-            sub="Reserved for upcoming cash expenses"
-          />
-          <KpiCard
-            label="Unmapped card risk hold"
-            value={currency(Number(data.liquidity.unmappedCardRiskHold) || 0)}
-            sub="Temporary safety hold for unmapped card expenses"
-          />
-          <KpiCard
-            label="Deployable max"
-            value={currency(deployableMax)}
-            borderAccent="deployable"
-            sub="Total − reserve − buffer − near-term − unmapped"
-          />
-        </div>
+              )}
+              sub={`Near-term ${currency(
+                Number(data.liquidity.nearTermPlannedCashHold) || 0
+              )} · Card risk ${currency(Number(data.liquidity.unmappedCardRiskHold) || 0)}`}
+              subMuted
+            />
+          </div>
+        </KpiGroup>
 
         {/**
-         * Cause → Effect pair. The left (input) card is the user-owned Cash to use now
-         * control; the right (result) card is the derived Execute now amount the planner
-         * will actually deploy. Both cards read from the same canonical display model,
-         * so a keystroke in the input immediately flows through executeNow, the extra
-         * payment buckets, the post-payment snapshot, execution totals, the aggressive
-         * panel, allocation audit, and debug/automation blocks.
+         * AVAILABLE group: Safe to use → Cash to use now (input) → Planned payment
+         * this month (result). The input + result cards stay adjacent so the cause →
+         * effect relationship is visually obvious; the group wrapper adds a subtle
+         * primary-tinted border so this section reads as "the part the user interacts with".
          */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(300px, 2fr) minmax(220px, 1fr)',
-            gap: 14,
-            marginBottom: 16,
-            alignItems: 'stretch'
-          }}
+        <KpiGroup
+          label="Available"
+          sublabel="What you can actually deploy this month"
+          background="rgba(30, 58, 95, 0.03)"
+          borderColor="rgba(30, 58, 95, 0.25)"
+          marginBottom={36}
         >
-          <CashToUseNowInputCard
-            label="Cash to use now"
-            helperText="How much cash do you want to use this month?"
-            inputValue={cashToUseNowInput}
-            onChange={setCashToUseNowInput}
-            deployableMax={deployableMax}
-            capWarning={
-              exceedsDeployable
-                ? `Input exceeds deployable max. Execute now is capped at ${currency(deployableMax)}.`
-                : undefined
-            }
-            suggestedValue={
-              data.liquidity.month0ExecuteNowBudget != null &&
-              Number.isFinite(data.liquidity.month0ExecuteNowBudget) &&
-              data.liquidity.month0ExecuteNowBudget > 0.005 &&
-              data.liquidity.month0ExecuteNowBudget < deployableMax - 0.5
-                ? Math.min(data.liquidity.month0ExecuteNowBudget, deployableMax)
-                : null
-            }
-            executeNow={executeNow}
-            remainingDeployable={Math.max(0, round2(deployableMax - executeNow))}
-          />
-          <ExecuteNowResultCard
-            executeNow={executeNow}
-            cashToUseNowRaw={cashToUseNowRaw}
-            deployableMax={deployableMax}
-            exceedsDeployable={exceedsDeployable}
-            remainingDeployable={Math.max(0, round2(deployableMax - executeNow))}
-          />
-        </div>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-            gap: 14,
-            marginBottom: 36,
-            alignItems: 'stretch'
-          }}
-        >
-          <KpiCard label="HELOC recommended" value={data.liquidity.helocRecommended} sub="Execution stance" />
-        </div>
+          {/**
+           * Decision flow on a single row:
+           *   [ Safe to use ] → [ Cash to use now (input) ] → [ Planned payment this month ]
+           * Three flexible columns that collapse to 2 rows on narrow viewports.
+           * Each card reads from the same canonical display model so typing in the
+           * input immediately updates the Planned payment result and downstream sections.
+           */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: 14,
+              alignItems: 'stretch'
+            }}
+          >
+            <KpiCard
+              label="Safe to use"
+              value={currency(deployableMax)}
+              borderAccent="deployable"
+              sub="After reserves, buffers, and upcoming expenses"
+            />
+            <CashToUseNowInputCard
+              label="Cash to use now"
+              helperText="Choose your payment amount"
+              inputValue={cashToUseNowInput}
+              parsedInput={cashToUseNowRaw}
+              onChange={setCashToUseNowInput}
+              deployableMax={deployableMax}
+              exceedsDeployable={exceedsDeployable}
+              suggestedValue={
+                data.liquidity.month0ExecuteNowBudget != null &&
+                Number.isFinite(data.liquidity.month0ExecuteNowBudget) &&
+                data.liquidity.month0ExecuteNowBudget > 0.005 &&
+                data.liquidity.month0ExecuteNowBudget < deployableMax - 0.5
+                  ? Math.min(data.liquidity.month0ExecuteNowBudget, deployableMax)
+                  : null
+              }
+            />
+            <ExecuteNowResultCard
+              executeNow={executeNow}
+              exceedsDeployable={exceedsDeployable}
+              remainingDeployable={Math.max(0, round2(deployableMax - executeNow))}
+            />
+          </div>
+          {/**
+           * Plain-language explanation of the relationship between the three cards.
+           * Slightly larger + darker than the default helper text so it reads as the
+           * definitive "how this works" note for the section.
+           */}
+          <p
+            style={{
+              margin: '14px 0 0 0',
+              fontSize: 13,
+              color: C.text,
+              fontWeight: 600,
+              lineHeight: 1.55
+            }}
+          >
+            Choose your payment — we'll keep it within safe limits.
+          </p>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+              gap: 12,
+              marginTop: 12,
+              alignItems: 'stretch'
+            }}
+          >
+            <KpiCard label="HELOC recommended" value={data.liquidity.helocRecommended} sub="Execution stance" />
+          </div>
+        </KpiGroup>
 
         {/**
          * Cash bridge (audit) and Allocation audit (month 0) are debug-grade views for
@@ -3033,9 +3210,9 @@ export function RollingDebtPayoffDashboard({
             </div>
 
             <div style={{ ...shellStyle(), marginTop: 8 }}>
-              <SectionTitle>Extra payments (execute now)</SectionTitle>
+              <SectionTitle>Extra payments (planned payment this month)</SectionTitle>
               <p style={{ margin: '0 0 22px 0', fontSize: 14, color: C.muted, lineHeight: 1.55 }}>
-                Total execute-now extras: <strong style={{ color: C.text, fontVariantNumeric: 'tabular-nums' }}>{currency(extraTotal)}</strong>
+                Total planned-payment extras: <strong style={{ color: C.text, fontVariantNumeric: 'tabular-nums' }}>{currency(extraTotal)}</strong>
               </p>
               {extraTotal > 0.005 ? (
                 <div
@@ -3102,20 +3279,18 @@ export function RollingDebtPayoffDashboard({
                   {data.strictWaterfallSplitNote}
                 </p>
               ) : null}
-              {isAggressiveStrategy ? (
+              {isAggressiveStrategy && !isAutomation ? (
                 <StrategyComparisonNote cmp={displayExecutionPlan.strategyComparison} />
               ) : null}
             </div>
 
-            {isAggressiveStrategy && displayAggressiveMeta ? (
+            {isAggressiveStrategy && !isAutomation && displayAggressiveMeta ? (
               <AggressivePanel
                 meta={displayAggressiveMeta}
                 cmp={displayExecutionPlan.strategyComparison}
                 totalExtraCash={extraTotal}
               />
             ) : null}
-            {isAdvanced ? <OperatorChecklist /> : null}
-
             <div
               style={{
                 borderRadius: 12,
@@ -3131,7 +3306,7 @@ export function RollingDebtPayoffDashboard({
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 18 }}>
                 {(
                   [
-                    { k: 'From cash (Execute now)', v: currency(displayExecutionTotals.fromCash), h: false },
+                    { k: 'Planned payment', v: currency(displayExecutionTotals.fromCash), h: false },
                     { k: 'From HELOC', v: currency(displayExecutionTotals.fromHeloc), h: false },
                     { k: 'Total now', v: currency(displayExecutionTotals.totalNow), h: true }
                   ] as const

@@ -80,14 +80,55 @@
   }
   .rolling-dp-controls-left {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
     min-width: 0;
+    flex-wrap: wrap;
+  }
+  .rolling-dp-controls-right {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
   }
   .rolling-dp-controls-left .planner-mode-segmented,
   .rolling-dp-controls-left .planner-strategy-segmented {
-    align-self: flex-start;
+    align-self: center;
+  }
+  .rolling-dp-strategy-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .rolling-dp-strategy-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #64748b;
+  }
+  .rolling-dp-strategy-select {
+    font-size: 12px;
+    font-weight: 600;
+    color: #0f172a;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+  .rolling-dp-strategy-select:hover {
+    border-color: #94a3b8;
+  }
+  .rolling-dp-strategy-select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
   }
   .rolling-dp-control-group {
     display: flex;
@@ -145,15 +186,33 @@
     background: #eef0fb;
     color: #3f51b5;
   }
-  .rolling-dp-debug-toggle {
+  .rolling-dp-debug-toggle,
+  .rolling-dp-advanced-toggle {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 11.5px;
     white-space: nowrap;
     flex-shrink: 0;
-    margin-top: 2px;
+    color: #94a3b8;
+    font-weight: 400;
+  }
+  .rolling-dp-advanced-toggle input[type="checkbox"],
+  .rolling-dp-debug-toggle input[type="checkbox"] {
+    accent-color: #94a3b8;
+    transform: scale(0.9);
+  }
+  .rolling-dp-advanced-toggle:hover,
+  .rolling-dp-debug-toggle:hover {
+    color: #475569;
+  }
+  .rolling-dp-advanced-toggle:has(input:checked) {
+    color: #475569;
+    font-weight: 500;
+  }
+  .rolling-dp-advanced-toggle:has(input:checked) input[type="checkbox"] {
+    accent-color: #64748b;
   }
   .rolling-dp-exec-plan--automation .rolling-dp-exec-pre--automation {
     margin: 0;

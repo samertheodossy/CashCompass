@@ -1018,27 +1018,29 @@
       </div>
       <div class="rolling-dp-controls-row">
         <div class="rolling-dp-controls-left">
-          <div class="rolling-dp-control-group">
-            <span class="rolling-dp-control-label subtle" title="Presentation controls how much detail is shown. It does not change any calculations.">Presentation</span>
-            <div class="segmented-control planner-mode-segmented" role="tablist" aria-label="Rolling debt payoff presentation">
-              <button type="button" class="seg-planner active" role="tab" aria-selected="true" data-presentation="Standard" onclick="setRollingDebtPayoffSelectedPresentation('Standard')" title="Operator-facing dashboard only">Standard</button>
-              <button type="button" class="seg-planner" role="tab" aria-selected="false" data-presentation="Advanced" onclick="setRollingDebtPayoffSelectedPresentation('Advanced')" title="Adds cash bridge, allocation audit, display validator, and checklist">Advanced</button>
-              <button type="button" class="seg-planner" role="tab" aria-selected="false" data-presentation="Automation" onclick="setRollingDebtPayoffSelectedPresentation('Automation')" title="Plain-text machine-readable blocks (for scripts / LLMs)">Automation</button>
-            </div>
+          <div class="segmented-control planner-mode-segmented" role="tablist" aria-label="Rolling debt payoff view">
+            <button type="button" class="seg-planner active" role="tab" aria-selected="true" data-presentation="Standard" onclick="setRollingDebtPayoffSelectedPresentation('Standard')" title="Clean operator-facing dashboard. Toggle Advanced to see audit panels.">Standard</button>
+            <button type="button" class="seg-planner" role="tab" aria-selected="false" data-presentation="Automation" onclick="setRollingDebtPayoffSelectedPresentation('Automation')" title="Plain-text machine-readable blocks (for scripts / LLMs)">Automation</button>
           </div>
-          <div class="rolling-dp-control-group">
-            <span class="rolling-dp-control-label subtle" title="Strategy controls how extra debt cash is allocated. It does not change the UI.">Strategy</span>
-            <div class="segmented-control planner-strategy-segmented" role="tablist" aria-label="Payoff strategy">
-              <button type="button" class="seg-planner active" role="tab" aria-selected="true" data-strategy="standard" onclick="setRollingDebtPayoffSelectedPayoffStrategy('standard')" title="Balanced waterfall: cleanup → primary → secondary → overflow">Standard payoff</button>
-              <button type="button" class="seg-planner" role="tab" aria-selected="false" data-strategy="aggressive" onclick="setRollingDebtPayoffSelectedPayoffStrategy('aggressive')" title="Concentrate post-cleanup extras on the primary target (payoff acceleration)">Aggressive payoff</button>
-            </div>
+          <div id="rolling_debt_payoff_strategy_wrap" class="rolling-dp-strategy-wrap" style="display:none;">
+            <label class="rolling-dp-strategy-label subtle" for="rolling_debt_payoff_strategy_select" title="Strategy controls how extra debt cash is allocated. It does not change the UI.">Strategy</label>
+            <select id="rolling_debt_payoff_strategy_select" class="rolling-dp-strategy-select" onchange="setRollingDebtPayoffSelectedPayoffStrategy(this.value)" aria-label="Payoff strategy">
+              <option value="standard" selected>Standard payoff</option>
+              <option value="aggressive">Aggressive payoff</option>
+            </select>
           </div>
-          <div id="rolling_debt_payoff_current_mode" class="planner-current-mode-line subtle">Presentation: Standard · Strategy: Standard payoff</div>
+          <div id="rolling_debt_payoff_current_mode" class="planner-current-mode-line subtle">Strategy: Standard payoff</div>
         </div>
-        <label class="rolling-dp-debug-toggle muted" for="rolling_debt_payoff_include_debug">
-          <input type="checkbox" id="rolling_debt_payoff_include_debug" />
-          Debug Details
-        </label>
+        <div class="rolling-dp-controls-right">
+          <label class="rolling-dp-advanced-toggle muted" for="rolling_debt_payoff_advanced_view" title="Shows cash bridge, allocation audit, display plan validator, aggressive audit panels, and the strategy selector. No effect on Automation view.">
+            <input type="checkbox" id="rolling_debt_payoff_advanced_view" onchange="setRollingDebtPayoffSelectedAdvancedView(this.checked)" />
+            Show details
+          </label>
+          <label class="rolling-dp-debug-toggle muted" for="rolling_debt_payoff_include_debug">
+            <input type="checkbox" id="rolling_debt_payoff_include_debug" />
+            Debug Details
+          </label>
+        </div>
       </div>
       <div id="rolling_debt_payoff_status" class="status"></div>
       <div id="rolling_debt_payoff_tables" class="rolling-dp-tables" aria-live="polite"></div>

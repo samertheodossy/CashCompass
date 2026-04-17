@@ -1,25 +1,45 @@
 /* Planning — Rolling debt payoff (tables + collapsible JSON) */
 
 /**
- * Rolling debt payoff modes are split into two orthogonal controls:
- *   • Presentation — how much detail the UI shows (Standard / Advanced / Automation).
+ * Rolling debt payoff modes are split into three orthogonal controls:
+ *   • View — Standard or Automation (no Operator / Aggressive views anymore).
+ *   • Advanced toggle — off by default; when on, the dashboard renders
+ *     audit/debug panels (cash bridge, allocation audit, display validator,
+ *     aggressive audit). Has no effect on the Automation view.
  *   • Payoff strategy — how extra debt cash is ALLOCATED (standard / aggressive).
  *
- * Both are composed into {@code executionPlanMode} when calling the backend
- * (space-separated tokens the server already understands).
+ * All three are composed into {@code executionPlanMode} when calling the
+ * backend (space-separated tokens the server already understands).
  */
 var selectedPresentationMode = 'Standard';
+var selectedIsAdvancedView = false;
 var selectedPayoffStrategy = 'standard';
 
 function rollingDebtPayoffUpdateModeLine_() {
   var line = document.getElementById('rolling_debt_payoff_current_mode');
   if (!line) return;
   var strategyLabel = selectedPayoffStrategy === 'aggressive' ? 'Aggressive payoff' : 'Standard payoff';
-  line.textContent = 'Presentation: ' + selectedPresentationMode + ' · Strategy: ' + strategyLabel;
+  // The View / Advanced state is visible in the control bar itself; the mode
+  // line only needs to surface strategy (which is hidden by default behind
+  // the Advanced toggle) so users know what's running.
+  line.textContent = 'Strategy: ' + strategyLabel;
+}
+
+/**
+ * Show the Strategy dropdown only when Advanced is on AND the view is
+ * Standard. Automation view stays minimal; Standard view keeps the default
+ * UI quiet until the user opts into Advanced.
+ */
+function rollingDebtPayoffUpdateStrategyVisibility_() {
+  var wrap = document.getElementById('rolling_debt_payoff_strategy_wrap');
+  var line = document.getElementById('rolling_debt_payoff_current_mode');
+  var show = selectedIsAdvancedView && selectedPresentationMode !== 'Automation';
+  if (wrap) wrap.style.display = show ? '' : 'none';
+  if (line) line.style.display = show ? '' : 'none';
 }
 
 function setRollingDebtPayoffSelectedPresentation(mode) {
-  var allowed = { Standard: 1, Advanced: 1, Automation: 1 };
+  var allowed = { Standard: 1, Automation: 1 };
   if (!allowed[mode]) return;
   if (selectedPresentationMode === mode) return;
   selectedPresentationMode = mode;
@@ -30,6 +50,20 @@ function setRollingDebtPayoffSelectedPresentation(mode) {
     btn.classList.toggle('active', isOn);
     btn.setAttribute('aria-selected', isOn ? 'true' : 'false');
   });
+  rollingDebtPayoffUpdateStrategyVisibility_();
+  rollingDebtPayoffUpdateModeLine_();
+  if (typeof loadRollingDebtPayoffSection === 'function') {
+    loadRollingDebtPayoffSection();
+  }
+}
+
+function setRollingDebtPayoffSelectedAdvancedView(on) {
+  var next = !!on;
+  if (selectedIsAdvancedView === next) return;
+  selectedIsAdvancedView = next;
+  var cb = document.getElementById('rolling_debt_payoff_advanced_view');
+  if (cb && cb.checked !== next) cb.checked = next;
+  rollingDebtPayoffUpdateStrategyVisibility_();
   rollingDebtPayoffUpdateModeLine_();
   if (typeof loadRollingDebtPayoffSection === 'function') {
     loadRollingDebtPayoffSection();
@@ -42,13 +76,8 @@ function setRollingDebtPayoffSelectedPayoffStrategy(strategy) {
   if (!allowed[s]) return;
   if (selectedPayoffStrategy === s) return;
   selectedPayoffStrategy = s;
-  var root = document.getElementById('rollingDebtPayoff');
-  if (!root) return;
-  root.querySelectorAll('.planner-strategy-segmented .seg-planner').forEach(function(btn) {
-    var isOn = btn.getAttribute('data-strategy') === s;
-    btn.classList.toggle('active', isOn);
-    btn.setAttribute('aria-selected', isOn ? 'true' : 'false');
-  });
+  var sel = document.getElementById('rolling_debt_payoff_strategy_select');
+  if (sel && sel.value !== s) sel.value = s;
   rollingDebtPayoffUpdateModeLine_();
   if (typeof loadRollingDebtPayoffSection === 'function') {
     loadRollingDebtPayoffSection();
@@ -57,17 +86,20 @@ function setRollingDebtPayoffSelectedPayoffStrategy(strategy) {
 
 /**
  * Backward-compatible alias. Old callers (and any persisted legacy state) may
- * still invoke this with Operator/Aggressive — map them into the new model.
+ * still invoke this with Operator/Advanced/Aggressive — map them into the new
+ * simplified model (Standard view + Advanced toggle on, plus strategy if set).
  */
 function setRollingDebtPayoffSelectedMode(mode) {
   var L = mode == null ? 'Standard' : String(mode);
-  if (L === 'Operator') {
-    setRollingDebtPayoffSelectedPresentation('Advanced');
+  if (L === 'Operator' || L === 'Advanced') {
+    setRollingDebtPayoffSelectedPresentation('Standard');
+    setRollingDebtPayoffSelectedAdvancedView(true);
     setRollingDebtPayoffSelectedPayoffStrategy('standard');
     return;
   }
   if (L === 'Aggressive') {
-    setRollingDebtPayoffSelectedPresentation('Advanced');
+    setRollingDebtPayoffSelectedPresentation('Standard');
+    setRollingDebtPayoffSelectedAdvancedView(true);
     setRollingDebtPayoffSelectedPayoffStrategy('aggressive');
     return;
   }
@@ -77,35 +109,39 @@ function setRollingDebtPayoffSelectedMode(mode) {
 function appendRollingDebtPayoffModeToFinalPrompt(basePrompt) {
   var base = basePrompt == null ? '' : String(basePrompt);
   var trimmed = base.replace(/\s+$/g, '');
-  var composite = 'PRESENTATION = ' + selectedPresentationMode +
-    ' · STRATEGY = ' + (selectedPayoffStrategy === 'aggressive' ? 'Aggressive payoff' : 'Standard payoff');
+  var strategyLabel = selectedPayoffStrategy === 'aggressive' ? 'Aggressive payoff' : 'Standard payoff';
+  var advancedLabel = selectedIsAdvancedView && selectedPresentationMode !== 'Automation' ? 'on' : 'off';
+  var composite =
+    'VIEW = ' + selectedPresentationMode +
+    ' · ADVANCED = ' + advancedLabel +
+    ' · STRATEGY = ' + strategyLabel;
   return trimmed ? trimmed + '\n\n' + composite : composite;
 }
 
 /**
  * Compose the {@code executionPlanMode} tokens the backend expects. The
  * server already splits on whitespace/commas and treats each token
- * independently, so stacking e.g. {@code "aggressive automation"} works.
+ * independently, so stacking e.g. {@code "operator aggressive"} works.
  */
 function rollingDebtPayoffExecutionPlanMode_() {
   var tokens = [];
-  if (selectedPresentationMode === 'Advanced') tokens.push('operator');
-  else if (selectedPresentationMode === 'Automation') tokens.push('automation');
+  if (selectedPresentationMode === 'Automation') tokens.push('automation');
+  if (selectedIsAdvancedView && selectedPresentationMode !== 'Automation') tokens.push('operator');
   if (selectedPayoffStrategy === 'aggressive') tokens.push('aggressive');
   return tokens.join(' ');
 }
 
-/** Maps planner UI presentation label to RollingDebtPayoffDashboard presentation mode. */
+/** Maps planner UI view label to RollingDebtPayoffDashboard presentation mode. */
 function rollingDebtPayoffLabelToPresentationMode_(label) {
   var L = label == null ? 'Standard' : String(label);
-  if (L === 'Advanced' || L === 'Operator' || L === 'Aggressive') return 'advanced';
   if (L === 'Automation') return 'automation';
+  // Legacy labels (Advanced / Operator / Aggressive) collapse to Standard view;
+  // the Advanced toggle captures the "show audit details" intent separately.
   return 'standard';
 }
 
 function rollingDebtPayoffPresentationModeToLabel_(mode) {
   var m = mode == null ? 'standard' : String(mode).toLowerCase();
-  if (m === 'advanced') return 'Advanced';
   if (m === 'automation') return 'Automation';
   return 'Standard';
 }
@@ -133,11 +169,17 @@ function rollingDebtPayoffTryMountDashboard_(data) {
     data: payload,
     useDemoFallback: useDemo,
     defaultPresentationMode: defaultMode,
+    defaultIsAdvancedView: !!selectedIsAdvancedView,
     defaultPayoffStrategy: selectedPayoffStrategy,
     onPresentationModeChange: function(mode) {
       var label = rollingDebtPayoffPresentationModeToLabel_(mode);
       if (typeof setRollingDebtPayoffSelectedPresentation === 'function') {
         setRollingDebtPayoffSelectedPresentation(label);
+      }
+    },
+    onIsAdvancedViewChange: function(on) {
+      if (typeof setRollingDebtPayoffSelectedAdvancedView === 'function') {
+        setRollingDebtPayoffSelectedAdvancedView(!!on);
       }
     },
     onPayoffStrategyChange: function(strategy) {
