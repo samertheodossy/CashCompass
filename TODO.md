@@ -86,6 +86,8 @@ Small HTML/docs/a11y tasks; check off when shipped. *(Unnumbered — pick in any
 
 ### Next big item — Planning: Debt payoff projection (“path out of debt”)
 
+**Status — Shipped (split into two Planning tabs).** The original scope landed as two products: **Debt Overview** (read-only reference view, renamed from the earlier working name "Payoff Path") and **Rolling Debt Payoff** (monthly decision engine with Standard / Details modes, narrative decision card, HELOC advisor, Payment result table with `[Add payment]` → Cash Flow → Quick add, and the "Why not more?" explainer). See **Help → Debt Overview** and **Help → Rolling Debt Payoff**, plus **SESSION_NOTES.md § Rolling Debt Payoff: Standard-mode UX sweep**. The design notes below are kept for historical context.
+
 **Intent:** One **Planning** tab with **real projections** grounded in **sheet data**: **INPUT - Debts** (balances, APRs, minimums, active flags) plus **INPUT - Cash Flow** across **2025 / 2026** (and later years) to infer **typical payment pace** toward debt-linked payees. **Simulation** on top: **“If I pay $X more per month to account Y, how does the story change?”** (timeline, interest, ordering). **Read-only** for early phases — no writes to INPUT from this feature until explicitly scoped. Complements **Run Planner** (now-centric) with a **trajectory** view.
 
 **Why Cash Flow over OUT - History for pace:** **OUT - History** is sparse (per planner run). **INPUT - Cash Flow** month columns hold **realized** payments — better for **median / typical** paydown and variability. **OUT - History** stays an **optional** default or sanity check, not the primary source.
@@ -132,9 +134,11 @@ Small HTML/docs/a11y tasks; check off when shipped. *(Unnumbered — pick in any
 
 ---
 
-### Rolling debt payoff (new Planning tab — separate from Payoff Path)
+### Rolling debt payoff (new Planning tab — separate from Debt Overview)
 
-**UI:** New sub-tab **next to** Payoff Path: **“Rolling debt payoff”** — own panel + script + server function; do **not** merge with Payoff Path.
+**Status — Shipped.** Now the **Rolling Debt Payoff** Planning tab (sibling to **Debt Overview**, which was the working name "Payoff Path" in this design note). Implementation lives in `components/RollingDebtPayoffDashboard.tsx` → `RollingDebtPayoffDashboardBundle.html`. Standard-mode UX (Cash-to-use-now, Decision card, HELOC card, Payment result table with **Small balance / Focus debt / Next debt / Excess** roles and **Paid off (this month) / Partially paid** actions, per-row **[Add payment]** → Cash Flow → Quick add, "Why not more?" breakdown → Cash Flow → Upcoming) and a single **Show details** toggle for the full planner output. The locked defaults below were preserved end-to-end; see **Help → Rolling Debt Payoff** and **SESSION_NOTES.md**. Historical design notes kept below.
+
+**UI:** New sub-tab **next to** Debt Overview: **“Rolling debt payoff”** — own panel + script + server function; do **not** merge with Debt Overview.
 
 **Locked defaults (implementation)**
 

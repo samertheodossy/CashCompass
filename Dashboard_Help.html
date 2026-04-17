@@ -153,28 +153,57 @@
 
       <section id="help-rolling-debt-payoff" class="help-section">
         <h3>Rolling Debt Payoff</h3>
-        <p><strong>Separate from Debt Overview</strong> — This tab runs a conservative, month-anchored household engine: anchor month is the <strong>latest month column on INPUT - Cash Flow that has any Income/Expense data</strong> (not today’s calendar date).</p>
-        <p><strong>Cash out vs minimums</strong> — Required cash out uses <strong>INPUT - Cash Flow</strong> expense lines. <strong>INPUT - Debts</strong> minimum payments appear as <em>reference only</em> in triggers and JSON; they are <strong>not</strong> added again on top of Cash Flow (no double count with mortgage or card payments already in CF).</p>
-        <p><strong>Liquidity model (calculated from SYS - Accounts)</strong> — The top KPI row and the Deployable max are derived directly from the accounts sheet; the legacy $100k/$100k hardcoded reserve and buffer constants are retained for audit only and do not drive the numbers you see.</p>
+        <p><strong>Separate from Debt Overview</strong> — Debt Overview is a read-only reference view of your balances; Rolling Debt Payoff is the monthly <strong>decision engine</strong>. The anchor month is the <strong>latest month column on INPUT - Cash Flow that has any Income/Expense data</strong> (not today’s calendar date).</p>
+
+        <h4>Standard view — what you see by default</h4>
+        <p>The tab opens in a compact decision layout. Everything here is driven by the same planner JSON; the <strong>Show details</strong> toggle at the bottom expands the full forecasts, audits, and diagnostics.</p>
+        <ul class="help-list">
+          <li><strong>Cash to use now</strong> — one input at the top. Type how much you want to deploy this month; the planner caps it at <strong>Safe to use</strong> (your deployable max after reserves, buffers, and holds) and reruns the waterfall instantly. A short live formula line shows <code>min(Cash to use now, Safe to use)</code>.</li>
+          <li><strong>Decision card</strong> — A narrative summary in three lines:
+            <ul class="help-list">
+              <li><strong>Recommendation:</strong> what the plan suggests (e.g. deploy $X now, focus on Account Y).</li>
+              <li><strong>Why:</strong> the short reason — typically the highest-APR target, balance caps, or a strategy choice.</li>
+              <li><strong>Caution:</strong> any near-term risk or reason the recommendation is conservative.</li>
+            </ul>
+          </li>
+          <li><strong>HELOC strategy card</strong> — Appears when a HELOC is modeled. Shows the recommended action, the draw size, and a <strong>What would change this?</strong> list: each bullet is an actionable lever (e.g. HELOC APR, eligible-debt spread, upcoming expense hold, recurring monthly repayment) with the current value so you can see what’s driving the recommendation.</li>
+          <li><strong>Payment result</strong> — A compact table of the accounts the plan actually touches this month:
+            <ul class="help-list">
+              <li><strong>Account</strong> — the debt name plus its role in the waterfall: <strong>Small balance</strong> (paid first to close small accounts), <strong>Focus debt</strong> (the highest-priority target this month), <strong>Next debt</strong> (spill once Focus debt is capped), or <strong>Excess</strong> (anything else, e.g. a low-rate line kept for last).</li>
+              <li><strong>Action</strong> — <strong>Paid off (this month)</strong> when the plan clears the balance this month (shown in green) or <strong>Partially paid</strong> when the plan reduces it.</li>
+              <li><strong>Remaining</strong> — projected balance after this month’s payment.</li>
+              <li><strong>[Add payment]</strong> — a small pill on rows with a real payable amount. Clicking it navigates to <strong>Cash Flow → Quick add</strong> pre-filled with the payee and the amount the planner applied, so you can review and save (or adjust first). The pill is hidden in standalone contexts where Quick add is not available.</li>
+            </ul>
+          </li>
+          <li><strong>Why not more?</strong> — When the plan deploys less than <strong>Safe to use</strong>, this block explains the two holds that caused it (near-term planned hold and unmapped card risk hold). Each bullet has an inline <strong>[View]</strong> pill that takes you directly to <strong>Cash Flow → Upcoming</strong> when that hold is driven by planned upcoming expenses, so you can act on the underlying rows.</li>
+          <li><strong>Strategy control</strong> — A small toggle lets you switch between the conservative default and a more aggressive concentration (e.g. push a larger share of the remainder onto the Focus debt). The decision card and payment result update in place.</li>
+          <li><strong>Show details</strong> — Expands the full output: the cash-bridge audit, allocation audit (month 0), 12-month cash table, yearly projection, forecasts, diagnostics, and raw JSON. Click <strong>Hide details</strong> to collapse back to the standard view.</li>
+        </ul>
+
+        <h4>Liquidity model (calculated from SYS - Accounts)</h4>
+        <p>The Safe-to-use number is derived directly from the accounts sheet; the legacy $100k/$100k hardcoded reserve and buffer constants are retained for audit only and do not drive the numbers you see.</p>
         <ul class="help-list">
           <li><strong>Total cash</strong> — full liquid total from <strong>SYS - Accounts</strong> (all cash + checking + savings).</li>
           <li><strong>Reserve</strong> — sum of current balances for accounts flagged <code>DO_NOT_TOUCH</code>.</li>
           <li><strong>Buffer</strong> — sum of the per-account <em>Min Buffer</em> for non-<code>DO_NOT_TOUCH</code> policy-eligible accounts.</li>
           <li><strong>Cash available to use</strong> — Total cash − Reserve − Buffer, <em>before</em> subtracting near-term and unmapped holds.</li>
-          <li><strong>Near-term planned hold</strong> — cash reserved for upcoming planned expenses (INPUT - Upcoming Expenses within 90 days).</li>
-          <li><strong>Unmapped card risk hold</strong> — temporary safety hold for card-funded planned expenses that are not yet mapped.</li>
-          <li><strong>Deployable max</strong> = Total cash − Reserve − Buffer − Near-term hold − Unmapped card risk hold (floored at 0).</li>
-          <li><strong>Cash to use now</strong> — your planning input; what you want to deploy this month.</li>
-          <li><strong>Execute now</strong> = min(Cash to use now, Deployable max); this is the value the waterfall actually uses. The legacy $50k monthly cap has been retired — your input is the limit.</li>
-          <li><strong>Future / Conditional Cash (not available yet)</strong> — variable-income–contingent allocations surfaced below Execution totals. These are not part of Execute now until income arrives.</li>
+          <li><strong>Near-term planned hold</strong> — cash reserved for upcoming planned expenses (INPUT - Upcoming Expenses within 90 days). This is the first driver behind <strong>Why not more?</strong>.</li>
+          <li><strong>Unmapped card risk hold</strong> — temporary safety hold for card-funded planned expenses that are not yet mapped. This is the second <strong>Why not more?</strong> driver; when it is materially fed by Upcoming rows, the bullet exposes the same <strong>[View]</strong> action.</li>
+          <li><strong>Safe to use (Deployable max)</strong> = Total cash − Reserve − Buffer − Near-term hold − Unmapped card risk hold (floored at 0).</li>
+          <li><strong>Cash to use now</strong> — your planning input; what you actually want to deploy this month.</li>
+          <li><strong>Execute now</strong> = min(Cash to use now, Safe to use). This is the value the waterfall uses. The legacy $50k monthly cap has been retired — your input is the limit.</li>
+          <li><strong>Future / Conditional Cash (not available yet)</strong> — variable-income-contingent allocations surfaced below execution totals. These are not part of Execute now until income arrives.</li>
         </ul>
-        <p>Operator and Aggressive modes expose the full <em>Cash bridge (audit)</em> and <em>Allocation audit (month 0)</em> panels if you need to trace every deduction step by step.</p>
+
+        <h4>Details mode — planner mechanics</h4>
+        <p><strong>Cash out vs minimums</strong> — Required cash out uses <strong>INPUT - Cash Flow</strong> expense lines. <strong>INPUT - Debts</strong> minimum payments appear as <em>reference only</em> in triggers and JSON; they are <strong>not</strong> added again on top of Cash Flow (no double count with mortgage or card payments already in CF).</p>
         <p><strong>Income split</strong> — Stable income is modeled as <strong>Cisco</strong> (payee contains “Cisco”) plus the fixed recurring rent payees listed in product rules. Other income is treated as variable; variable inflows use the <strong>50% / 30% / 20%</strong> split (debt / reserve+cash / flexible) in the engine.</p>
         <p><strong>Forward months</strong> — After the anchor month, stable income uses trailing medians. Forward <strong>expenses</strong> use a <strong>recurring operating</strong> baseline only: expense payees are bucketed (recurring operating vs debt cleanup vs irregular), and months 1+ sum trailing medians (6→3→1 non-empty fallback per payee) for <strong>recurring_operating</strong> payees only — not total cash-out. Credit-card payees with high volatility vs their own median go to debt cleanup; taxes, repairs, and similar keywords go to irregular. Variable income in projections defaults to <strong>$0</strong> (conservative).</p>
         <p><strong>Debt ordering</strong> — Extra principal (after the reserve rule) goes to credit cards by <strong>highest APR first</strong>, then HELOC, Tahoe, San Diego, Missouri, and San Jose last. <strong>Loan Depot - San Jose House</strong> and any debt with APR <strong>≤ 2.25%</strong> get <code>LOW_RATE_KEEP_LAST</code> on the normalized debt row.</p>
+        <p><strong>Role names in the waterfall</strong> — <strong>Small balance</strong> maps to the engine’s <em>Cleanup</em> bucket (paid first to simplify accounts), <strong>Focus debt</strong> to <em>Primary</em> (highest-priority target), <strong>Next debt</strong> to <em>Secondary</em> (spill), and <strong>Excess</strong> to <em>Overflow</em> (everything else). These are purely presentation labels for the Standard view; allocation math and JSON field names are unchanged.</p>
         <p><strong>Confidence</strong> — <code>overall_plan_confidence</code> is a simple rubric (see JSON <code>overall_plan_confidence_rubric</code>); credit-card “spend” without statement balance tracking is marked <strong>LOW</strong>.</p>
-        <p><strong>Operating vs forecast</strong> — The dashboard leads with <strong>THIS MONTH PLAN</strong>, an <strong>action decision box</strong>, and a <strong>next-three-month preview</strong>. The 12-month cash table and yearly rows are <strong>forecasts only</strong> (collapsed by default), not a month-by-month instruction list.</p>
-        <p><strong>Plan status</strong> — <code>OK</code> when the core forward model is clean. <code>PARTIALLY_VALID</code> only when an <strong>execution-integrity</strong> check fails (cash split vs execution total, missing per-account lines when cash extra is non-zero, or total executable mismatch). Advisory noise (expense confidence, irregular payees, unmapped planned card modeling) does not change status. <code>NEEDS_REVIEW</code> when sheet triggers fire; <code>INVALID</code> when income/expense forward numbers cannot be trusted. Turn on <strong>Include DEBUG DETAILS</strong> on the Rolling Debt Payoff tab for full tables, diagnostics, and JSON.</p>
+        <p><strong>Operating vs forecast</strong> — The Standard view is the <em>operating</em> picture (this month’s decision). The 12-month cash table, yearly rows, and next-three-month preview revealed by <strong>Show details</strong> are <strong>forecasts only</strong>, not a month-by-month instruction list.</p>
+        <p><strong>Plan status</strong> — <code>OK</code> when the core forward model is clean. <code>PARTIALLY_VALID</code> only when an <strong>execution-integrity</strong> check fails (cash split vs execution total, missing per-account lines when cash extra is non-zero, or total executable mismatch). Advisory noise (expense confidence, irregular payees, unmapped planned card modeling) does not change status. <code>NEEDS_REVIEW</code> when sheet triggers fire; <code>INVALID</code> when income/expense forward numbers cannot be trusted. Use <strong>Show details</strong> for the full tables, diagnostics, and JSON.</p>
         <p><strong>JSON</strong> — Includes <code>this_month_plan</code>, <code>action_decision_box</code>, <code>next_3_month_preview</code>, plus <code>summary</code>, <code>key_warnings</code>, <code>next_12_months</code>, <code>yearly_projection</code> (with <code>debt_reduction_vs_prior_year</code> = prior year ending debt minus this year ending), <code>debt_priority</code>, <code>property_watchlist</code>, <code>assumptions</code>, <code>confidence</code>, and <code>diagnostics</code> (including <code>expense_baseline</code> irregular flags). Anchor month in <code>summary</code> uses <code>yyyy-MM</code>.</p>
       </section>
 
