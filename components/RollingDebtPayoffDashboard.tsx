@@ -6132,8 +6132,17 @@ type CompactPaymentResultRoleKey =
 type CompactPaymentResultRow = {
   account: string;
   role: CompactPaymentResultRoleKey;
-  action: 'Closed' | 'Paid down';
+  // User-facing outcome copy for the current month's plan. These
+  // strings are displayed verbatim in the table and in ARIA labels,
+  // so treat them as product copy — if you change them, update the
+  // success-color check in `CompactPaymentResult` as well.
+  action: 'Paid off (this month)' | 'Partially paid';
   remaining: number;
+  // Extra payment the planner applied to this account for the
+  // executed decision (i.e. `paymentAppliedNow`). Drives the per-row
+  // "Add payment" affordance: rows with `paid > 0` can be pushed
+  // verbatim into the Cash Flow → Quick add form for user review.
+  paid: number;
 };
 
 type CompactPaymentResultValue =
@@ -6158,7 +6167,21 @@ const PAYMENT_RESULT_ROLE_LABEL: Record<CompactPaymentResultRoleKey, string> = {
   Other: 'Debt'
 };
 
-function CompactPaymentResult({ value }: { value: CompactPaymentResultValue }) {
+type CompactPaymentResultAddPaymentHandler = (row: CompactPaymentResultRow) => void;
+
+function CompactPaymentResult({
+  value,
+  onAddPayment
+}: {
+  value: CompactPaymentResultValue;
+  // Optional per-row "Add payment" handler. When provided, each row
+  // with `paid > 0` renders a compact [Add payment] pill that pushes
+  // the row's amount + account into the host's Quick add form
+  // (Cash Flow → Quick add). Absent when the host doesn't expose the
+  // prefill helper (e.g. standalone / preview contexts), so users
+  // never see a dead affordance.
+  onAddPayment?: CompactPaymentResultAddPaymentHandler;
+}) {
   const header = (
     <p
       style={{
@@ -6217,31 +6240,98 @@ function CompactPaymentResult({ value }: { value: CompactPaymentResultValue }) {
           <thead>
             <tr>
               <th style={headerCellStyle}>Account</th>
-              <th style={{ ...headerCellStyle, width: '22%' }}>Action</th>
-              <th style={{ ...headerCellStyle, width: '26%', textAlign: 'right' }}>Remaining</th>
+              <th style={{ ...headerCellStyle, width: '18%' }}>Action</th>
+              <th style={{ ...headerCellStyle, width: '22%', textAlign: 'right' }}>Remaining</th>
+              {onAddPayment ? (
+                // Blank header for the action column; the pill itself
+                // carries the label so we don't visually double up.
+                <th
+                  aria-label="Add payment"
+                  style={{ ...headerCellStyle, width: '18%' }}
+                />
+              ) : null}
             </tr>
           </thead>
           <tbody>
-            {value.rows.map((row) => (
-              <tr key={row.account}>
-                <td style={{ ...bodyCellStyle, fontWeight: 600 }}>
-                  {row.account}{' '}
-                  <span style={{ color: C.muted, fontWeight: 500 }}>
-                    ({PAYMENT_RESULT_ROLE_LABEL[row.role]})
-                  </span>
-                </td>
-                <td style={{ ...bodyCellStyle, fontWeight: 600, color: row.action === 'Closed' ? C.success : C.text }}>
-                  {row.action}
-                </td>
-                <td style={{ ...bodyCellStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                  {currency(row.remaining)}
-                </td>
-              </tr>
-            ))}
+            {value.rows.map((row) => {
+              // Only expose the [Add payment] pill when there's a
+              // real, non-zero amount to push into Quick add. Rows
+              // that made it into this table already have paid > 0,
+              // but this defense-in-depth check keeps the affordance
+              // honest if the row shape ever changes.
+              const canAddPayment = !!onAddPayment && row.paid > 0.005;
+              return (
+                <tr key={row.account}>
+                  <td style={{ ...bodyCellStyle, fontWeight: 600 }}>
+                    {row.account}{' '}
+                    <span style={{ color: C.muted, fontWeight: 500 }}>
+                      ({PAYMENT_RESULT_ROLE_LABEL[row.role]})
+                    </span>
+                  </td>
+                  <td style={{ ...bodyCellStyle, fontWeight: 600, color: row.action === 'Paid off (this month)' ? C.success : C.text }}>
+                    {row.action}
+                  </td>
+                  <td style={{ ...bodyCellStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {currency(row.remaining)}
+                  </td>
+                  {onAddPayment ? (
+                    <td style={{ ...bodyCellStyle, textAlign: 'right' }}>
+                      {canAddPayment ? (
+                        <button
+                          type="button"
+                          onClick={() => onAddPayment(row)}
+                          aria-label={`Add payment of ${currency(
+                            Math.round(row.paid)
+                          )} for ${row.account} to Cash Flow Quick add`}
+                          // Pill styling intentionally mirrors the
+                          // "View" pill used in the "Why not more?"
+                          // bullets (see `whyNotMore` rendering) so
+                          // the two navigation affordances feel like
+                          // one UI family. Inline styles explicitly
+                          // reset host overrides (e.g. `width: 100%`,
+                          // `margin-top: 14px`, default bg/color)
+                          // that would otherwise stretch the pill
+                          // onto its own row.
+                          style={{
+                            flex: '0 0 auto',
+                            width: 'auto',
+                            margin: 0,
+                            padding: '4px 10px',
+                            background: C.cashAccentBg,
+                            border: `1px solid ${C.cashAccentBg}`,
+                            color: C.cashAccent,
+                            borderRadius: 6,
+                            boxSizing: 'border-box',
+                            font: 'inherit',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            lineHeight: 1.2,
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            appearance: 'none',
+                            WebkitAppearance: 'none'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#dbeafe';
+                            e.currentTarget.style.borderColor = '#dbeafe';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = C.cashAccentBg;
+                            e.currentTarget.style.borderColor = C.cashAccentBg;
+                          }}
+                        >
+                          Add payment
+                        </button>
+                      ) : null}
+                    </td>
+                  ) : null}
+                </tr>
+              );
+            })}
             {value.overflowCount > 0 ? (
               <tr>
                 <td
-                  colSpan={3}
+                  colSpan={onAddPayment ? 4 : 3}
                   style={{
                     ...bodyCellStyle,
                     fontSize: 12,
@@ -7114,6 +7204,68 @@ export function RollingDebtPayoffDashboard({
     typeof (window as unknown as { showTab?: unknown }).showTab === 'function';
 
   /*
+   * Per-row [Add payment] affordance on the Payment result table.
+   *
+   * The host (Apps Script dashboard) exposes
+   * `window.prefillQuickPayment(payload)` which navigates to
+   * Cash Flow → Quick add, pre-fills Type / Date / Payee / Amount,
+   * and re-runs the preview so the side panel (Sheet, Month,
+   * Current value, Existing row, Previous month) stays visible
+   * before the user commits. See `Dashboard_Script_Payments.html`.
+   *
+   * We intentionally do NOT auto-submit: the user reviews the
+   * prefilled values and clicks the form's existing "Add to Cash
+   * Flow" button themselves. Debt payments are always Expenses, so
+   * `entryType` is hard-coded.
+   *
+   * Payee is passed verbatim from the debt account name. The host
+   * already does case-insensitive matching against the Cash Flow
+   * payee list and falls back to free-text entry (with the
+   * "Create row if missing" checkbox) when no existing row matches,
+   * so the preview panel tells the user whether they're editing an
+   * existing row or creating a new one.
+   *
+   * The callback is defensively guarded so the bundle still works
+   * in standalone / preview contexts where the host helper isn't
+   * defined — `quickAddPaymentAvailable` hides the pill entirely in
+   * that case so users never see a dead affordance.
+   */
+  const navigateToQuickAddPayment = useCallback(
+    (row: CompactPaymentResultRow) => {
+      if (typeof window === 'undefined') return;
+      const host = window as unknown as {
+        prefillQuickPayment?: (payload: {
+          entryType: string;
+          payee: string;
+          entryDate: string;
+          amount: number;
+        }) => void;
+      };
+      if (typeof host.prefillQuickPayment !== 'function') return;
+      const today = new Date().toISOString().slice(0, 10);
+      try {
+        host.prefillQuickPayment({
+          entryType: 'Expense',
+          payee: row.account,
+          entryDate: today,
+          // Round to whole dollars to match the Payment result
+          // table's display convention and avoid surfacing
+          // sub-cent planner artifacts in the form input.
+          amount: Math.round(row.paid)
+        });
+      } catch {
+        /* host prefill unavailable — silently no-op */
+      }
+    },
+    []
+  );
+
+  const quickAddPaymentAvailable =
+    typeof window !== 'undefined' &&
+    typeof (window as unknown as { prefillQuickPayment?: unknown })
+      .prefillQuickPayment === 'function';
+
+  /*
    * Gating signal for the bullet-2 ("ongoing card usage and near-term
    * risk") inline View action.
    *
@@ -7371,7 +7523,7 @@ export function RollingDebtPayoffDashboard({
     for (const l of extras.overflow || []) roleByAccount.set(l.account, 'Overflow');
 
     const snapshot = displayExecutionPlan.snapshot ?? [];
-    const affected: Array<CompactPaymentResultRow & { _paid: number }> = [];
+    const affected: CompactPaymentResultRow[] = [];
     for (const row of snapshot) {
       const paid = Number(row.paymentAppliedNow) || 0;
       if (paid <= 0.005) continue;
@@ -7386,9 +7538,9 @@ export function RollingDebtPayoffDashboard({
       affected.push({
         account: row.account,
         role: roleByAccount.get(row.account) ?? fallbackRole,
-        action: closed ? 'Closed' : 'Paid down',
+        action: closed ? 'Paid off (this month)' : 'Partially paid',
         remaining,
-        _paid: paid
+        paid
       });
     }
     if (!affected.length) {
@@ -7406,11 +7558,11 @@ export function RollingDebtPayoffDashboard({
       Other: 4
     };
     affected.sort(
-      (a, b) => roleOrder[a.role] - roleOrder[b.role] || b._paid - a._paid
+      (a, b) => roleOrder[a.role] - roleOrder[b.role] || b.paid - a.paid
     );
 
     const MAX_ROWS = 6;
-    const visible = affected.slice(0, MAX_ROWS).map(({ _paid, ...rest }) => rest);
+    const visible = affected.slice(0, MAX_ROWS);
     const overflowCount = Math.max(0, affected.length - visible.length);
     return { kind: 'table', rows: visible, overflowCount };
   }, [displayExecutionPlan]);
@@ -7900,7 +8052,12 @@ export function RollingDebtPayoffDashboard({
               why={compactDecision.why}
               caution={compactDecision.caution}
             />
-            <CompactPaymentResult value={compactPaymentResult} />
+            <CompactPaymentResult
+              value={compactPaymentResult}
+              onAddPayment={
+                quickAddPaymentAvailable ? navigateToQuickAddPayment : undefined
+              }
+            />
             {!displayExecutionPlan.validation.isConsistent ? (
               <DisplayPlanValidator
                 executeNow={displayExecutionPlan.executeNow}
