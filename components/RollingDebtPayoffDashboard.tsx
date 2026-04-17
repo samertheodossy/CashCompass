@@ -2,7 +2,7 @@
  * Rolling Debt Payoff dashboard — React + TypeScript + inline styles only.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 // —— Types (single export each) ————————————————————————————————————————
 
@@ -7056,18 +7056,146 @@ export function RollingDebtPayoffDashboard({
   }, [data.liquidity, displayExecutionPlan, helocStrategyModel]);
 
   /*
-   * "Why not more?" amount — the sum of the two material holds the
+   * "Why not more?" breakdown — exposes the two material holds the
    * user can actually understand (near-term planned expenses +
-   * unmapped card-risk). Reserves and buffers are permanent floors and
-   * don't read as "why not more this month", so they're excluded from
-   * this particular surface. Full reserve/buffer breakdown remains in
-   * the Protected KPI group under Show details.
+   * unmapped card-risk) as a compact labeled breakdown. Reserves and
+   * buffers are permanent floors and don't read as "why not more this
+   * month", so they're excluded from this particular surface. Full
+   * reserve/buffer breakdown remains in the Protected KPI group under
+   * Show details.
+   *
+   * Returned shape:
+   *   - total:   round2(plannedHold + cardRiskHold)
+   *   - bullets: labeled breakdown of the material components; each
+   *              item carries an `approximate` flag so the renderer
+   *              can prefix a "~" for modeled estimates (card risk) vs
+   *              booked near-term cash claims (planned expenses).
+   *
+   * Components below ~$0.50 are omitted so tiny residual amounts don't
+   * appear as bullets. If fewer than two material components exist the
+   * renderer falls back to a single-line description to avoid a
+   * tautological "$X reserved: $X <label>" bullet.
    */
-  const whyNotMoreAmount = useMemo(() => {
-    const plannedHold = Number(data.liquidity.nearTermPlannedCashHold) || 0;
-    const unmappedHold = Number(data.liquidity.unmappedCardRiskHold) || 0;
-    return round2(Math.max(0, plannedHold + unmappedHold));
-  }, [data.liquidity]);
+  const WHY_NOT_MORE_MATERIALITY = 0.5;
+
+  /*
+   * Host-page navigation for the "Why not more?" upcoming-expenses bullet.
+   *
+   * The dashboard is mounted inside the main planner dashboard page; that
+   * host exposes `showTab(name)` on `window` and `showTab('upcoming')`
+   * switches to Cash Flow → Upcoming (the real user-facing list of
+   * scheduled upcoming expenses). We invoke that directly rather than
+   * scrolling to an in-dashboard modeling section so the user sees their
+   * actual upcoming items (Roof Replacement, Solar Addition, etc.) in
+   * their canonical place.
+   *
+   * The callback is defensively guarded so the bundle still works in
+   * standalone / preview contexts where `window.showTab` isn't defined —
+   * in that case the navigation affordance is hidden entirely (see
+   * `upcomingExpensesNavAvailable` below) so users never see a dead
+   * button.
+   */
+  const navigateToUpcomingExpenses = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const host = window as unknown as {
+      showTab?: (name: string) => void;
+    };
+    if (typeof host.showTab === 'function') {
+      try {
+        host.showTab('upcoming');
+      } catch {
+        /* host navigation unavailable — silently no-op */
+      }
+    }
+  }, []);
+
+  const upcomingExpensesNavAvailable =
+    typeof window !== 'undefined' &&
+    typeof (window as unknown as { showTab?: unknown }).showTab === 'function';
+
+  /*
+   * Gating signal for the bullet-2 ("ongoing card usage and near-term
+   * risk") inline View action.
+   *
+   * `unmappedCardRiskHold` is populated by the planner from the set of
+   * planned-expense rows whose `variant === 'card-unmapped'`
+   * (card-funded, not yet mapped to a tracked card account). Those are
+   * the same upcoming rows rendered on Cash Flow → Upcoming — e.g.
+   * "Roof Replacement", "Garden Landscaping". See
+   * `mapPlannerPayloadToRollingDebtPayoffDashboardData.ts` where
+   * `unmappedCashRiskHold` is derived from lines with this variant.
+   *
+   * If the payload contains at least one such row, the bullet amount is
+   * materially attributable to upcoming items already visible on the
+   * Upcoming page, so surfacing the same View action is honest. If no
+   * such row exists (e.g. an abstract/server-only risk hold with no
+   * corresponding planned-expense row) we deliberately fall back to
+   * plain text to avoid a misleading navigation destination.
+   */
+  const cardRiskAttributableToUpcoming = useMemo(() => {
+    const lines = data.plannedExpenseImpact?.lines;
+    if (!lines || !lines.length) return false;
+    return lines.some((line) => line.variant === 'card-unmapped');
+  }, [data.plannedExpenseImpact]);
+
+  const whyNotMore = useMemo(() => {
+    const plannedHold = round2(
+      Math.max(0, Number(data.liquidity.nearTermPlannedCashHold) || 0)
+    );
+    const cardRiskHold = round2(
+      Math.max(0, Number(data.liquidity.unmappedCardRiskHold) || 0)
+    );
+    const total = round2(plannedHold + cardRiskHold);
+    const bullets: Array<{
+      label: string;
+      amount: number;
+      approximate: boolean;
+      navigation?: {
+        actionLabel: string;
+        ariaLabel: string;
+        onClick: () => void;
+      };
+    }> = [];
+    const upcomingNavigation = upcomingExpensesNavAvailable
+      ? {
+          actionLabel: 'View',
+          ariaLabel:
+            'Open Cash Flow → Upcoming to see the underlying expenses',
+          onClick: navigateToUpcomingExpenses
+        }
+      : undefined;
+    if (plannedHold >= WHY_NOT_MORE_MATERIALITY) {
+      bullets.push({
+        label: 'upcoming expenses',
+        amount: plannedHold,
+        approximate: false,
+        navigation: upcomingNavigation
+      });
+    }
+    if (cardRiskHold >= WHY_NOT_MORE_MATERIALITY) {
+      /*
+       * Bullet 2 routes to the same Upcoming page as bullet 1 — but
+       * only when its amount is actually backed by unmapped
+       * card-funded rows the user can see there. If the payload has
+       * no card-unmapped rows to show (abstract-only case) we omit
+       * the navigation and keep the bullet as plain text.
+       */
+      bullets.push({
+        label: 'ongoing card usage and near-term risk',
+        amount: cardRiskHold,
+        approximate: true,
+        navigation: cardRiskAttributableToUpcoming
+          ? upcomingNavigation
+          : undefined
+      });
+    }
+    return { total, bullets };
+  }, [
+    data.liquidity,
+    upcomingExpensesNavAvailable,
+    navigateToUpcomingExpenses,
+    cardRiskAttributableToUpcoming
+  ]);
 
   const compactHeloc = useMemo(() => {
     if (!helocStrategyModel) return null;
@@ -7518,7 +7646,7 @@ export function RollingDebtPayoffDashboard({
          * materially reducing the deployable amount. The full breakdown
          * lives in the Total / Protected KPI groups under Show details.
          */}
-        {whyNotMoreAmount > 0.005 ? (
+        {whyNotMore.total > 0.005 ? (
           <div
             style={{
               marginTop: 4,
@@ -7541,17 +7669,198 @@ export function RollingDebtPayoffDashboard({
             >
               Why not more?
             </p>
-            <p
-              style={{
-                margin: '4px 0 0 0',
-                fontSize: 13,
-                color: C.text,
-                fontWeight: 600,
-                lineHeight: 1.45
-              }}
-            >
-              {currency(whyNotMoreAmount)} reserved for upcoming expenses and ongoing card usage
-            </p>
+            {whyNotMore.bullets.length >= 2 ? (
+              <>
+                <p
+                  style={{
+                    margin: '4px 0 0 0',
+                    fontSize: 13,
+                    color: C.text,
+                    fontWeight: 600,
+                    lineHeight: 1.45
+                  }}
+                >
+                  {currency(whyNotMore.total)} reserved:
+                </p>
+                {/*
+                 * Bullet list.
+                 *
+                 * Each row is a flex row. The left side is a SINGLE
+                 * text span containing the entire phrase — bullet dot,
+                 * amount, and label — as one continuous string. An
+                 * earlier revision split these into nested flex spans,
+                 * which caused the text to fragment word-by-word in
+                 * narrow containers (e.g. "$19,000 / upcoming /
+                 * expenses" stacked vertically). A single span lets the
+                 * browser wrap at natural word boundaries instead.
+                 *
+                 * The native list marker is disabled (`listStyle: none`
+                 * + `padding: 0`) because the dot is part of the text
+                 * string itself, keeping the layout self-contained.
+                 */}
+                <ul
+                  style={{
+                    margin: '6px 0 0 0',
+                    padding: 0,
+                    listStyle: 'none',
+                    fontSize: 13,
+                    color: C.text,
+                    lineHeight: 1.4,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4
+                  }}
+                >
+                  {whyNotMore.bullets.map((b, idx) => {
+                    /*
+                     * Single coherent phrase: "• $19,000 upcoming
+                     * expenses" or "• ~$24,000 ongoing card usage and
+                     * near-term risk". `\u00a0` (non-breaking space)
+                     * after the dot guarantees the bullet stays glued
+                     * to the amount on the first wrapped line.
+                     */
+                    const text = `\u2022\u00a0${
+                      b.approximate ? '~' : ''
+                    }${currency(Math.round(b.amount))} ${b.label}`;
+                    /*
+                     * IMPORTANT — host CSS defeat.
+                     *
+                     * The Rolling Debt dashboard is mounted inside
+                     * `Dashboard_Body.html`, which carries a global
+                     * stylesheet (`Dashboard_Styles.html`) with these
+                     * rules:
+                     *
+                     *   input, select, button, textarea {
+                     *     width: 100%; padding: 10px; margin-top: 4px;
+                     *     border: 1px solid #cbd5e1; border-radius: 8px;
+                     *     font-size: 14px; color: #1f2937;
+                     *     background: #fff;
+                     *   }
+                     *   button { margin-top: 14px; background: #1f4e78;
+                     *            color: white; border: none;
+                     *            font-weight: bold; }
+                     *
+                     * `width: 100%` stretched our View pill to the
+                     * full row width; `margin-top: 14px` pushed it
+                     * onto its own line below the text; `background`
+                     * + `color` turned it navy-white. Inline styles
+                     * override `background`/`color` via specificity,
+                     * but width/margin/padding were never set inline
+                     * and leaked through. We now explicitly reset
+                     * every such property on the pill below, in
+                     * addition to the existing accent colors.
+                     *
+                     * Row layout: we also dropped
+                     * `justify-content: space-between` per the UX
+                     * request. The text span takes the remaining
+                     * width via `flex: 1 1 auto; min-width: 0`, and
+                     * the pill sits at the right edge via an explicit
+                     * `margin-left: 12`.
+                     */
+                    return (
+                      <li
+                        key={idx}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 0,
+                          fontWeight: 500,
+                          width: '100%'
+                        }}
+                      >
+                        <span
+                          style={{
+                            flex: '1 1 auto',
+                            minWidth: 0,
+                            display: 'block'
+                          }}
+                        >
+                          {text}
+                        </span>
+                        {b.navigation ? (
+                          <button
+                            type="button"
+                            onClick={b.navigation.onClick}
+                            aria-label={b.navigation.ariaLabel}
+                            style={{
+                              // Reset host `width: 100%` override
+                              // that was forcing full-row stretch.
+                              flex: '0 0 auto',
+                              width: 'auto',
+                              // Reset host `margin-top: 14px` that
+                              // pushed the pill onto its own row.
+                              margin: 0,
+                              marginLeft: 12,
+                              // Our own pill sizing (also overrides
+                              // host `padding: 10px`).
+                              padding: '4px 10px',
+                              // Our own pill colors (override host
+                              // `background: #1f4e78; color: white`).
+                              background: C.cashAccentBg,
+                              border: `1px solid ${C.cashAccentBg}`,
+                              color: C.cashAccent,
+                              borderRadius: 6,
+                              boxSizing: 'border-box',
+                              font: 'inherit',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              lineHeight: 1.2,
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap',
+                              // Strip native browser chrome so the
+                              // pill renders consistently across UAs.
+                              appearance: 'none',
+                              WebkitAppearance: 'none'
+                            }}
+                            onMouseEnter={(e) => {
+                              /*
+                               * Subtle hover: shift the pill toward
+                               * the accent color without relying on
+                               * global :hover rules (our styles are
+                               * all inline).
+                               */
+                              e.currentTarget.style.background =
+                                '#dbeafe';
+                              e.currentTarget.style.borderColor = '#dbeafe';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background =
+                                C.cashAccentBg;
+                              e.currentTarget.style.borderColor =
+                                C.cashAccentBg;
+                            }}
+                          >
+                            {b.navigation.actionLabel}
+                          </button>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            ) : (
+              /*
+               * Fallback single-line copy when only one component is
+               * material (or both are below the materiality floor but the
+               * rounded total is still visible). Avoids a tautological
+               * one-bullet breakdown like "$X reserved: $X upcoming
+               * expenses".
+               */
+              <p
+                style={{
+                  margin: '4px 0 0 0',
+                  fontSize: 13,
+                  color: C.text,
+                  fontWeight: 600,
+                  lineHeight: 1.45
+                }}
+              >
+                {currency(whyNotMore.total)}{' '}
+                {whyNotMore.bullets.length === 1
+                  ? `reserved for ${whyNotMore.bullets[0].label}`
+                  : 'reserved for upcoming expenses and ongoing card usage'}
+              </p>
+            )}
           </div>
         ) : null}
 
