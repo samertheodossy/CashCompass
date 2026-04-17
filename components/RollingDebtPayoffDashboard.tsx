@@ -1555,7 +1555,7 @@ function KpiCard({
  * clearly editable:
  *   - labelled input with border + focus ring + placeholder
  *   - helper text + "Safe to use: $X" note
- *   - inline micro-feedback (within safe limits / over the safe limit)
+ *   - inline micro-feedback (over-the-safe-limit warning only)
  *
  * Quick-action chips (25 %, 50 %, 75 %, Use max) are rendered as a separate row
  * below the three-card flow by the parent via `CashToUseNowQuickActions`, so the
@@ -1744,37 +1744,24 @@ function CashToUseNowInputCard({
       </div>
       {/**
        * Micro-feedback sits immediately under the input so the consequence of
-       * typing is obvious: green when safe, amber when about to be capped.
+       * typing is obvious. We only surface the amber cap warning — the
+       * "within safe limits" confirmation was removed to keep standard mode
+       * quiet when nothing needs attention.
        */}
-      {hasInput ? (
-        exceedsDeployable ? (
-          <p
-            style={{
-              margin: 0,
-              fontSize: 12,
-              color: C.warn,
-              fontWeight: 700,
-              lineHeight: 1.4,
-              fontVariantNumeric: 'tabular-nums'
-            }}
-            role="status"
-          >
-            You're over the safe limit — we'll cap it to {currency(deployableMax)}
-          </p>
-        ) : (
-          <p
-            style={{
-              margin: 0,
-              fontSize: 12,
-              color: C.success,
-              fontWeight: 700,
-              lineHeight: 1.4
-            }}
-            role="status"
-          >
-            You're within safe limits
-          </p>
-        )
+      {hasInput && exceedsDeployable ? (
+        <p
+          style={{
+            margin: 0,
+            fontSize: 12,
+            color: C.warn,
+            fontWeight: 700,
+            lineHeight: 1.4,
+            fontVariantNumeric: 'tabular-nums'
+          }}
+          role="status"
+        >
+          You're over the safe limit — we'll cap it to {currency(deployableMax)}
+        </p>
       ) : null}
       {/**
        * Quick-amount shortcuts. 25/50/75 share one row and equally split the
@@ -5968,15 +5955,13 @@ function normalizeModeFromSummary(raw: string | undefined): NormalizedMode {
  * ──────────────────────────────────────────────────────────────────────── */
 
 function CompactDecisionCard({
-  action,
-  constraint,
-  helocStance,
-  note
+  recommendation,
+  why,
+  caution
 }: {
-  action: string;
-  constraint: string;
-  helocStance: string | null;
-  note: string | null;
+  recommendation: string;
+  why: string;
+  caution: string | null;
 }) {
   return (
     <div style={{ ...shellStyle(), padding: '18px 20px' }}>
@@ -5992,35 +5977,42 @@ function CompactDecisionCard({
       >
         Decision
       </p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', rowGap: 6, columnGap: 12, marginTop: 10 }}>
-        <p style={{ margin: 0, fontSize: 13, color: C.muted, fontWeight: 700 }}>Action:</p>
-        <p style={{ margin: 0, fontSize: 15, color: C.text, fontWeight: 800, lineHeight: 1.3 }}>
-          {action}
-        </p>
-        <p style={{ margin: 0, fontSize: 13, color: C.muted, fontWeight: 700 }}>Constraint:</p>
-        <p style={{ margin: 0, fontSize: 13, color: C.text, fontWeight: 600, lineHeight: 1.4 }}>
-          {constraint}
-        </p>
-        {helocStance ? (
-          <>
-            <p style={{ margin: 0, fontSize: 13, color: C.muted, fontWeight: 700 }}>HELOC:</p>
-            <p style={{ margin: 0, fontSize: 13, color: C.text, fontWeight: 600, lineHeight: 1.4 }}>
-              {helocStance}
-            </p>
-          </>
-        ) : null}
-      </div>
-      {note ? (
+      <p
+        style={{
+          margin: '10px 0 0 0',
+          fontSize: 15,
+          color: C.text,
+          fontWeight: 800,
+          lineHeight: 1.3
+        }}
+      >
+        <span style={{ color: C.muted, fontWeight: 700 }}>Recommendation: </span>
+        {recommendation}
+      </p>
+      <p
+        style={{
+          margin: '6px 0 0 0',
+          fontSize: 13,
+          color: C.text,
+          fontWeight: 500,
+          lineHeight: 1.45
+        }}
+      >
+        <span style={{ color: C.muted, fontWeight: 700 }}>Why: </span>
+        {why}
+      </p>
+      {caution ? (
         <p
           style={{
-            margin: '12px 0 0 0',
-            fontSize: 12,
-            color: C.muted,
-            fontStyle: 'italic',
+            margin: '6px 0 0 0',
+            fontSize: 13,
+            color: C.text,
+            fontWeight: 500,
             lineHeight: 1.45
           }}
         >
-          {note}
+          <span style={{ color: C.muted, fontWeight: 700 }}>Caution: </span>
+          {caution}
         </p>
       ) : null}
     </div>
@@ -6959,54 +6951,67 @@ export function RollingDebtPayoffDashboard({
     const buffer = Number(data.liquidity.buffer) || 0;
     const plannedHold = Number(data.liquidity.nearTermPlannedCashHold) || 0;
     const unmappedHold = Number(data.liquidity.unmappedCardRiskHold) || 0;
+    const hasHolds = plannedHold > 0.005 || unmappedHold > 0.005;
+    const reserveBufferSignificant =
+      reserveTarget + buffer > 0.005 && totalCash > 0 && deployable < totalCash * 0.9;
     const cashPlanned = exec > 0.005;
     const atMax = cashPlanned && Math.round(exec) >= Math.round(deployable);
 
-    // Action: what is actually happening this month. We intentionally do
-    // NOT mix in alternative recommendations (e.g., "hold cash instead")
-    // here — those showed up as contradictions in the old decision box.
-    let action: string;
+    // Recommendation: the single action being taken this month. Intentionally
+    // does not mix in alternatives ("…or hold cash instead") so the card
+    // reads like one clear recommendation rather than a menu of options.
+    let recommendation: string;
     if (displayExecutionPlan.exceedsDeployable) {
-      action = `Capped — deploying ${currency(exec)} (safe maximum)`;
+      recommendation = `Deploy ${currency(exec)} this month (capped at the safe limit)`;
     } else if (cashPlanned && atMax) {
-      action = `Deploy ${currency(exec)} this month (full safe amount)`;
+      recommendation = `Deploy ${currency(exec)} this month (full amount)`;
     } else if (cashPlanned) {
-      action = `Deploy ${currency(exec)} this month`;
+      recommendation = `Deploy ${currency(exec)} this month`;
     } else {
-      action = 'Hold cash this month';
+      recommendation = 'Hold cash this month';
     }
 
-    // Constraint: the dominant reason cash is limited or unavailable.
-    // Wording is intentionally plain-English; internal model terms like
-    // "card-risk reserve hold" are kept out of the standard view.
-    let constraint: string;
-    if (deployable <= 0.005 && totalCash > 0.005) {
-      constraint = 'Cash reserved for near-term expenses and card risk';
-    } else if (plannedHold > 0.005 || unmappedHold > 0.005) {
-      constraint = 'Cash reserved for near-term expenses and card risk';
-    } else if (
-      reserveTarget + buffer > 0.005 &&
-      totalCash > 0 &&
-      deployable < totalCash * 0.9
-    ) {
-      constraint = 'Cash reserved for reserve & buffer holds';
-    } else if (deployable <= 0.005) {
-      constraint = 'No safe cash available';
+    // Why: a short narrative sentence explaining the recommendation. Same
+    // signals as the previous "Constraint" field but rewritten as a single
+    // advisor-style statement instead of a label/value fragment.
+    let why: string;
+    if (cashPlanned) {
+      if (hasHolds) {
+        why = 'Cash remains available after reserving for upcoming expenses and ongoing card usage.';
+      } else if (reserveBufferSignificant) {
+        why = 'Cash remains available after reserves and buffers are held back.';
+      } else {
+        why = 'Cash remains available after required reserves and buffers.';
+      }
+    } else if (deployable > 0.005) {
+      // User has safe cash but chose not to deploy it. Frame as conservation
+      // (holding for the same risks the planner would otherwise reserve
+      // against) rather than "you chose to hold" so wording stays consistent
+      // with the other holding branches.
+      why = 'Cash is being held for upcoming expenses and ongoing card usage.';
+    } else if (hasHolds) {
+      why = 'Cash is being reserved for upcoming expenses and ongoing card usage.';
+    } else if (reserveBufferSignificant) {
+      why = 'Cash is being held back to keep reserves and buffers intact.';
     } else {
-      constraint = 'Within safe limits';
+      why = 'There is no safe cash available to deploy this month.';
     }
 
-    // Optional secondary note. Shown only when unmapped card-risk holds
-    // are actively increasing conservatism. Single canonical sentence —
-    // replaces the old generic "Watch: …" line which mixed arbitrary
-    // watchouts into the decision surface.
-    const note =
-      unmappedHold > 0.005
-        ? 'Unmapped upcoming expenses are increasing conservatism'
-        : null;
+    // Caution: optional single-sentence complement to the HELOC card. Only
+    // shown when HELOC is actively not recommended so the decision block
+    // carries the "watch out" forward without re-reading the HELOC card's
+    // full Status / Reason / Action paragraph.
+    let caution: string | null = null;
+    if (helocStrategyModel && helocStrategyModel.status === 'not_recommended') {
+      const trap = helocStrategyModel.doubleDebtTrapModel?.trapRiskLevel ?? 'low';
+      caution =
+        trap === 'high' || trap === 'medium'
+          ? 'HELOC not recommended due to lack of repayment capacity.'
+          : 'HELOC is not recommended right now.';
+    }
 
-    return { action, constraint, note };
-  }, [data.liquidity, displayExecutionPlan]);
+    return { recommendation, why, caution };
+  }, [data.liquidity, displayExecutionPlan, helocStrategyModel]);
 
   /*
    * "Why not more?" amount — the sum of the two material holds the
@@ -7060,7 +7065,7 @@ export function RollingDebtPayoffDashboard({
       } else {
         reason = 'Current cash flow does not support safe HELOC repayment.';
       }
-      action = 'Do not draw from HELOC this month.';
+      action = 'Avoid using HELOC this month.';
     } else {
       reason = 'No eligible debts offer a rate benefit over the HELOC rate.';
       action = 'HELOC not needed this month.';
@@ -7131,10 +7136,13 @@ export function RollingDebtPayoffDashboard({
       return { kind: 'empty', message: 'No extra payments this month (minimums only)' };
     }
 
+    // Display order follows the user-facing waterfall: Small balance →
+    // Focus debt → Next debt → Excess. This is a presentation-only sort;
+    // allocation order in the waterfall itself is unchanged.
     const roleOrder: Record<CompactPaymentResultRow['role'], number> = {
-      Primary: 0,
-      Secondary: 1,
-      Cleanup: 2,
+      Cleanup: 0,
+      Primary: 1,
+      Secondary: 2,
       Overflow: 3,
       Other: 4
     };
@@ -7411,7 +7419,7 @@ export function RollingDebtPayoffDashboard({
                 lineHeight: 1.45
               }}
             >
-              {currency(whyNotMoreAmount)} reserved for upcoming expenses and card risk
+              {currency(whyNotMoreAmount)} reserved for upcoming expenses and ongoing card usage
             </p>
           </div>
         ) : null}
@@ -7447,10 +7455,9 @@ export function RollingDebtPayoffDashboard({
               />
             ) : null}
             <CompactDecisionCard
-              action={compactDecision.action}
-              constraint={compactDecision.constraint}
-              helocStance={compactHeloc ? compactHeloc.statusLabel : null}
-              note={compactDecision.note}
+              recommendation={compactDecision.recommendation}
+              why={compactDecision.why}
+              caution={compactDecision.caution}
             />
             <CompactPaymentResult value={compactPaymentResult} />
             {!displayExecutionPlan.validation.isConsistent ? (
