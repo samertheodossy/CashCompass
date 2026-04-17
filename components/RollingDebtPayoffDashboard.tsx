@@ -1019,10 +1019,10 @@ function AllocationAuditSection({
         </div>
       ) : null}
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {row('Cleanup allocated', currency(audit.allocatedCleanupTotal))}
-        {row('Primary allocated', currency(audit.allocatedPrimaryTotal))}
-        {row('Secondary allocated', currency(audit.allocatedSecondaryTotal))}
-        {row('Overflow allocated', currency(audit.allocatedOverflowTotal))}
+        {row('Small balances allocated', currency(audit.allocatedCleanupTotal))}
+        {row('Focus debt allocated', currency(audit.allocatedPrimaryTotal))}
+        {row('Next debt allocated', currency(audit.allocatedSecondaryTotal))}
+        {row('Excess allocated', currency(audit.allocatedOverflowTotal))}
         {row('Total allocated (Planned payment this month)', currency(audit.allocatedExecuteNowCashTotal), true)}
         {row('Safe to use', currency(audit.month0ExecuteNowBudget), true)}
         {row('Gap (Safe to use − allocated)', currency(audit.allocationGapToBudget))}
@@ -1440,13 +1440,14 @@ function KpiGroup({
   marginBottom,
   children
 }: {
-  label: string;
+  label?: string;
   sublabel?: string;
   background?: string;
   borderColor?: string;
   marginBottom?: number;
   children: React.ReactNode;
 }) {
+  const showHeader = !!(label || sublabel);
   return (
     <section
       style={{
@@ -1457,31 +1458,37 @@ function KpiGroup({
         border: borderColor ? `1px solid ${borderColor}` : 'none'
       }}
     >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          gap: 12,
-          marginBottom: 10
-        }}
-      >
-        <p
+      {showHeader ? (
+        <div
           style={{
-            margin: 0,
-            fontSize: 10,
-            fontWeight: 800,
-            letterSpacing: '0.18em',
-            textTransform: 'uppercase',
-            color: C.muted
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            gap: 12,
+            marginBottom: 10
           }}
         >
-          {label}
-        </p>
-        {sublabel ? (
-          <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{sublabel}</p>
-        ) : null}
-      </div>
+          {label ? (
+            <p
+              style={{
+                margin: 0,
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                color: C.muted
+              }}
+            >
+              {label}
+            </p>
+          ) : null}
+          {sublabel ? (
+            <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
+              {sublabel}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {children}
     </section>
   );
@@ -1949,10 +1956,14 @@ function ProgressBar({ label, valuePct }: { label: string; valuePct: number }) {
 }
 
 function StatusPill({ status }: { status: SnapshotRow['status'] }) {
+  // Internal status tokens ("↓ PRIMARY", "↓ SECONDARY") are preserved in
+  // the data model to avoid touching allocation/redistribution logic. Only
+  // the user-facing label is remapped here so the snapshot reads in the
+  // same vocabulary as the rest of the UI.
   const base: React.CSSProperties = { display: 'inline-block', padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 800 };
-  if (status === 'CLOSED') return <span style={{ ...base, background: C.successBg, color: C.success }}>{status}</span>;
-  if (status.includes('PRIMARY')) return <span style={{ ...base, background: '#e0e7ff', color: C.primary }}>{status}</span>;
-  if (status.includes('SECONDARY')) return <span style={{ ...base, background: '#ede9fe', color: '#5b21b6' }}>{status}</span>;
+  if (status === 'CLOSED') return <span style={{ ...base, background: C.successBg, color: C.success }}>CLOSED</span>;
+  if (status.includes('PRIMARY')) return <span style={{ ...base, background: '#e0e7ff', color: C.primary }}>↓ FOCUS DEBT</span>;
+  if (status.includes('SECONDARY')) return <span style={{ ...base, background: '#ede9fe', color: '#5b21b6' }}>↓ NEXT DEBT</span>;
   return <span style={{ ...base, background: '#f1f5f9', color: C.muted, border: `1px solid ${C.border}` }}>{status}</span>;
 }
 
@@ -2103,7 +2114,18 @@ function ExtraBucketCard({
 }) {
   const sum = lines.reduce((s, l) => s + l.amount, 0);
   const share = pct(sum, totalExtra);
-  const bucketLabel = bucketKey.toUpperCase();
+  // Display label mirrors the user-facing naming scheme used across the
+  // rest of the UI (small balance / focus debt / next debt / excess).
+  // Internal `bucketKey` (and the underlying extras bucket data) is left
+  // untouched so allocation logic continues to use its canonical tokens.
+  const bucketLabel =
+    bucketKey === 'cleanup'
+      ? 'SMALL BALANCES'
+      : bucketKey === 'primary'
+      ? 'FOCUS DEBT'
+      : bucketKey === 'secondary'
+      ? 'NEXT DEBT'
+      : 'EXCESS';
   return (
     <div
       style={{
@@ -2285,7 +2307,7 @@ function SnapshotTable({ rows, summary }: { rows: SnapshotRow[]; summary?: Rolli
           }}
         >
           <strong style={{ color: C.text }}>{summary.accountsClosedNow}</strong> accounts closed now ·{' '}
-          <strong style={{ color: C.text }}>{currency(summary.deployedNow)}</strong> deployed now · Primary reduced by{' '}
+          <strong style={{ color: C.text }}>{currency(summary.deployedNow)}</strong> deployed now · Focus debt reduced by{' '}
           <strong style={{ color: C.text }}>{currency(summary.primaryReduced)}</strong>
         </div>
       ) : null}
@@ -2296,11 +2318,11 @@ function SnapshotTable({ rows, summary }: { rows: SnapshotRow[]; summary?: Rolli
 function strategyNoChangeReasonLabel(reason: StrategyNoChangeReason): string {
   switch (reason) {
     case 'cleanup_consumed_budget':
-      return 'Cleanup consumed the entire Safe to use, so there was no post-cleanup pool for Aggressive to concentrate.';
+      return 'Small balances consumed the entire Safe to use, so there was no remainder for Aggressive to concentrate on the focus debt.';
     case 'no_secondary_pool':
-      return 'No secondary pool existed this month — Standard and Aggressive both send 100% to the primary target.';
+      return 'No next-debt pool existed this month — Standard and Aggressive both send 100% to the focus debt.';
     case 'primary_balance_capped':
-      return 'Primary target was balance-capped, so Aggressive could not reach its 90% target and spill went to secondary — same result as Standard.';
+      return 'Focus debt was balance-capped, so Aggressive could not reach its 90% target and spill went to the next debt — same result as Standard.';
     case 'other':
     default:
       return 'Allocation matched Standard within $0.01 without hitting a known constraint — review the concentration audit for the exact cause.';
@@ -2340,7 +2362,7 @@ function StrategyComparisonNote({ cmp }: { cmp: StrategyComparison }) {
           color: accent
         }}
       >
-        Strategy comparison — post-cleanup pool {currency(cmp.postCleanupPool)}
+        Strategy comparison — after small balances {currency(cmp.postCleanupPool)}
       </p>
       <div
         style={{
@@ -2354,20 +2376,20 @@ function StrategyComparisonNote({ cmp }: { cmp: StrategyComparison }) {
         <div>
           <p style={{ margin: 0, fontSize: 12, color: C.muted, fontWeight: 600 }}>Standard split reference (75 / 25)</p>
           <p style={{ margin: '4px 0 0 0', fontSize: 14, color: C.text }}>
-            {currency(cmp.stdPrimaryTarget)} to primary / {currency(cmp.stdSecondaryTarget)} to secondary
+            {currency(cmp.stdPrimaryTarget)} to focus debt / {currency(cmp.stdSecondaryTarget)} to next debt
           </p>
         </div>
         <div>
           <p style={{ margin: 0, fontSize: 12, color: C.muted, fontWeight: 600 }}>Aggressive actual</p>
           <p style={{ margin: '4px 0 0 0', fontSize: 14, color: C.text, fontWeight: 700 }}>
-            {currency(cmp.actualPrimary)} to primary / {currency(cmp.actualSecondary)} to secondary
+            {currency(cmp.actualPrimary)} to focus debt / {currency(cmp.actualSecondary)} to next debt
           </p>
         </div>
       </div>
       {!changed ? (
         <p style={{ margin: '10px 0 0 0', fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
-          Aggressive payoff produced the same allocation this month because cleanup consumed the
-          Safe to use or the primary target was balance-capped.
+          Aggressive payoff produced the same allocation this month because small balances consumed
+          the Safe to use or the focus debt was balance-capped.
           {cmp.strategyNoChangeReason ? (
             <>
               {' '}
@@ -2391,9 +2413,9 @@ function AggressivePanel({
 }) {
   const below = meta.primaryBelow90 && meta.primaryShareOfRemainingPct < 90;
   const cappedMsg =
-    meta.primaryBelow90Reason || 'Primary capped at remaining payoff balance; spill to secondary was required.';
+    meta.primaryBelow90Reason || 'Focus debt capped at remaining payoff balance; spill to the next debt was required.';
   const genericMsg =
-    'Primary share is below 90% without a confirmed payoff cap — review the concentration audit in the full plan output.';
+    'Focus debt share is below 90% without a confirmed payoff cap — review the concentration audit in the full plan output.';
   const shortfall = round2(cmp.aggPrimaryTarget - cmp.actualPrimary);
   const reachedTarget = cmp.primaryReachedAggressiveTarget;
   return (
@@ -2427,11 +2449,11 @@ function AggressivePanel({
         }}
       >
         {[
-          { k: 'Post-cleanup pool', v: currency(cmp.postCleanupPool) },
-          { k: 'Standard primary target (75%)', v: currency(cmp.stdPrimaryTarget) },
-          { k: 'Aggressive primary target (90%)', v: currency(cmp.aggPrimaryTarget) },
-          { k: 'Primary actually allocated', v: currency(cmp.actualPrimary) },
-          { k: 'Primary share (of remainder)', v: `${meta.primaryShareOfRemainingPct.toFixed(0)}%` }
+          { k: 'Pool after small balances', v: currency(cmp.postCleanupPool) },
+          { k: 'Standard focus-debt target (75%)', v: currency(cmp.stdPrimaryTarget) },
+          { k: 'Aggressive focus-debt target (90%)', v: currency(cmp.aggPrimaryTarget) },
+          { k: 'Focus debt actually allocated', v: currency(cmp.actualPrimary) },
+          { k: 'Focus debt share (of remainder)', v: `${meta.primaryShareOfRemainingPct.toFixed(0)}%` }
         ].map((x) => (
           <div key={x.k}>
             <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase' }}>
@@ -2456,7 +2478,7 @@ function AggressivePanel({
             color: C.text
           }}
         >
-          <strong>Did not reach the 90% target.</strong> Actual primary is
+          <strong>Did not reach the 90% target.</strong> Actual focus debt is
           {' '}
           {currency(cmp.actualPrimary)} vs target {currency(cmp.aggPrimaryTarget)} (shortfall
           {' '}
@@ -2598,9 +2620,9 @@ function FutureConditionalCashSection({
       )}
 
       <p style={{ margin: '12px 0 0 0', fontSize: 11, color: C.muted, lineHeight: 1.5, fontStyle: 'italic' }}>
-        If variable income arrives, these amounts follow the same strict serial waterfall as the
-        Planned payment this month (cleanup → primary APR → CitiAA → Southwest → Marriott →
-        overflow).
+        If variable income arrives, these amounts follow the same order as the Planned payment this
+        month: small balances first, then the focus debt, then the next debt, with any excess spilling
+        afterward.
       </p>
     </details>
   );
@@ -5927,6 +5949,283 @@ function normalizeModeFromSummary(raw: string | undefined): NormalizedMode {
   return { presentation, isAdvancedView, strategy };
 }
 
+/* ──────────────────────────────────────────────────────────────────────── *
+ * Compact standard-mode cards
+ *
+ * The default dashboard view is a "decision console", not a report. These
+ * three tiny presentational components (CompactDecisionCard,
+ * CompactHelocCard, CompactPaymentResult) are the only HELOC/decision
+ * surfaces visible when details are collapsed. All diagnostic breakdowns
+ * (KPI Total / Protected blocks, full HelocStrategySection, planned-
+ * expense impact, extras waterfall, execution totals, decision-box
+ * question list, snapshot table, next-3-months, watchouts list) are
+ * rendered only when `showDetails` is true.
+ *
+ * These components do NOT derive any financial values on their own — all
+ * numbers are pre-computed upstream from the canonical model
+ * (`helocStrategyModel`, `displayExecutionPlan`, `data.liquidity`,
+ * `data.snapshot`) so nothing here changes calculations.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+function CompactDecisionCard({
+  action,
+  constraint,
+  helocStance,
+  note
+}: {
+  action: string;
+  constraint: string;
+  helocStance: string | null;
+  note: string | null;
+}) {
+  return (
+    <div style={{ ...shellStyle(), padding: '18px 20px' }}>
+      <p
+        style={{
+          margin: 0,
+          fontSize: 11,
+          fontWeight: 800,
+          letterSpacing: '0.14em',
+          color: C.muted,
+          textTransform: 'uppercase'
+        }}
+      >
+        Decision
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', rowGap: 6, columnGap: 12, marginTop: 10 }}>
+        <p style={{ margin: 0, fontSize: 13, color: C.muted, fontWeight: 700 }}>Action:</p>
+        <p style={{ margin: 0, fontSize: 15, color: C.text, fontWeight: 800, lineHeight: 1.3 }}>
+          {action}
+        </p>
+        <p style={{ margin: 0, fontSize: 13, color: C.muted, fontWeight: 700 }}>Constraint:</p>
+        <p style={{ margin: 0, fontSize: 13, color: C.text, fontWeight: 600, lineHeight: 1.4 }}>
+          {constraint}
+        </p>
+        {helocStance ? (
+          <>
+            <p style={{ margin: 0, fontSize: 13, color: C.muted, fontWeight: 700 }}>HELOC:</p>
+            <p style={{ margin: 0, fontSize: 13, color: C.text, fontWeight: 600, lineHeight: 1.4 }}>
+              {helocStance}
+            </p>
+          </>
+        ) : null}
+      </div>
+      {note ? (
+        <p
+          style={{
+            margin: '12px 0 0 0',
+            fontSize: 12,
+            color: C.muted,
+            fontStyle: 'italic',
+            lineHeight: 1.45
+          }}
+        >
+          {note}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function CompactHelocCard({
+  statusLabel,
+  status,
+  reason,
+  action
+}: {
+  statusLabel: string;
+  status: HelocStrategyStatus;
+  reason: string;
+  action: string;
+}) {
+  const accent =
+    status === 'recommended'
+      ? C.primary
+      : status === 'optional'
+      ? '#0f766e'
+      : status === 'not_recommended'
+      ? C.danger
+      : C.muted;
+  const bg =
+    status === 'recommended'
+      ? 'rgba(30, 58, 95, 0.05)'
+      : status === 'optional'
+      ? 'rgba(15, 118, 110, 0.05)'
+      : status === 'not_recommended'
+      ? C.dangerBg
+      : '#f8fafc';
+  return (
+    <div
+      style={{
+        ...shellStyle(),
+        padding: '18px 20px',
+        background: bg,
+        border: `1px solid ${accent}`
+      }}
+    >
+      <p
+        style={{
+          margin: 0,
+          fontSize: 11,
+          fontWeight: 800,
+          letterSpacing: '0.14em',
+          color: C.muted,
+          textTransform: 'uppercase'
+        }}
+      >
+        HELOC
+      </p>
+      <p style={{ margin: '10px 0 0 0', fontSize: 16, fontWeight: 800, color: C.text }}>
+        Status: <span style={{ color: accent }}>{statusLabel}</span>
+      </p>
+      <p style={{ margin: '8px 0 0 0', fontSize: 13, color: C.text, lineHeight: 1.45 }}>
+        <strong>Reason:</strong> {reason}
+      </p>
+      <p style={{ margin: '6px 0 0 0', fontSize: 13, color: C.text, lineHeight: 1.45 }}>
+        <strong>Action:</strong> {action}
+      </p>
+    </div>
+  );
+}
+
+type CompactPaymentResultRoleKey =
+  | 'Cleanup'
+  | 'Primary'
+  | 'Secondary'
+  | 'Overflow'
+  | 'Other';
+
+type CompactPaymentResultRow = {
+  account: string;
+  role: CompactPaymentResultRoleKey;
+  action: 'Closed' | 'Paid down';
+  remaining: number;
+};
+
+type CompactPaymentResultValue =
+  | { kind: 'empty'; message: string }
+  | { kind: 'table'; rows: CompactPaymentResultRow[]; overflowCount: number };
+
+/**
+ * User-facing role labels for the Payment result table.
+ *
+ * Internal bucket keys ('cleanup' / 'primary' / 'secondary' / 'overflow')
+ * are preserved in logic, allocation, ordering, and the details view — only
+ * the label shown in the compact standard-mode table is remapped so first-
+ * time users aren't confronted with planner jargon. "Overflow" (spillover
+ * from a focus-debt-capped waterfall) is shown as "Excess" so the label is
+ * consistent with the allocation audit and extra-bucket cards in details.
+ */
+const PAYMENT_RESULT_ROLE_LABEL: Record<CompactPaymentResultRoleKey, string> = {
+  Cleanup: 'Small balance',
+  Primary: 'Focus debt',
+  Secondary: 'Next debt',
+  Overflow: 'Excess',
+  Other: 'Debt'
+};
+
+function CompactPaymentResult({ value }: { value: CompactPaymentResultValue }) {
+  const header = (
+    <p
+      style={{
+        margin: 0,
+        fontSize: 11,
+        fontWeight: 800,
+        letterSpacing: '0.14em',
+        color: C.muted,
+        textTransform: 'uppercase'
+      }}
+    >
+      Payment result
+    </p>
+  );
+
+  if (value.kind === 'empty') {
+    return (
+      <div style={{ ...shellStyle(), padding: '18px 20px' }}>
+        {header}
+        <p style={{ margin: '10px 0 0 0', fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.5 }}>
+          {value.message}
+        </p>
+      </div>
+    );
+  }
+
+  // Compact table styling: minimal borders, light row separators, role hint
+  // rendered inline with the account name so columns stay scannable.
+  const headerCellStyle: React.CSSProperties = {
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+    color: C.muted,
+    padding: '0 0 6px 0',
+    textAlign: 'left'
+  };
+  const bodyCellStyle: React.CSSProperties = {
+    fontSize: 13,
+    color: C.text,
+    padding: '8px 0',
+    borderTop: `1px solid ${C.border}`
+  };
+
+  return (
+    <div style={{ ...shellStyle(), padding: '18px 20px' }}>
+      {header}
+      <div style={{ marginTop: 10, overflowX: 'auto' }}>
+        <table
+          style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            fontFamily: 'inherit'
+          }}
+        >
+          <thead>
+            <tr>
+              <th style={headerCellStyle}>Account</th>
+              <th style={{ ...headerCellStyle, width: '22%' }}>Action</th>
+              <th style={{ ...headerCellStyle, width: '26%', textAlign: 'right' }}>Remaining</th>
+            </tr>
+          </thead>
+          <tbody>
+            {value.rows.map((row) => (
+              <tr key={row.account}>
+                <td style={{ ...bodyCellStyle, fontWeight: 600 }}>
+                  {row.account}{' '}
+                  <span style={{ color: C.muted, fontWeight: 500 }}>
+                    ({PAYMENT_RESULT_ROLE_LABEL[row.role]})
+                  </span>
+                </td>
+                <td style={{ ...bodyCellStyle, fontWeight: 600, color: row.action === 'Closed' ? C.success : C.text }}>
+                  {row.action}
+                </td>
+                <td style={{ ...bodyCellStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                  {currency(row.remaining)}
+                </td>
+              </tr>
+            ))}
+            {value.overflowCount > 0 ? (
+              <tr>
+                <td
+                  colSpan={3}
+                  style={{
+                    ...bodyCellStyle,
+                    fontSize: 12,
+                    color: C.muted,
+                    fontStyle: 'italic'
+                  }}
+                >
+                  +{value.overflowCount} more account{value.overflowCount === 1 ? '' : 's'} affected
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function RollingDebtPayoffDashboard({
   data: dataProp,
   useDemoFallback = true,
@@ -6066,6 +6365,31 @@ export function RollingDebtPayoffDashboard({
   const isAdvanced = isAdvancedView && !isAutomation;
   const isAggressiveStrategy = payoffStrategy === 'aggressive';
   void setIsAdvancedView;
+
+  /*
+   * Standard vs details separation.
+   *
+   * `isAdvanced` (derived from the plan summary mode) already flags
+   * operator/advanced/aggressive plans as "details on". For everyday
+   * standard-mode plans we want a cleaner decision-console by default,
+   * with a user-facing "Show details" button that expands the full
+   * diagnostic report inline. `showDetails` is the single gate every
+   * section below reads.
+   *
+   * Diagnostic sections (KPI Total / Protected breakdowns, full
+   * HelocStrategySection, planned-expense impact, already-paid / minimums
+   * lists, extras waterfall, execution totals, future/conditional cash,
+   * full decision box, post-payment snapshot, next-3-months, watchouts
+   * list) render only when `showDetails === true`. The top cash
+   * execution row (Available: Safe to use → Cash to use now → Planned
+   * payment) plus the three compact cards (Decision, HELOC, Result)
+   * and an optional one-line watchout are always visible.
+   *
+   * Automation presentation ignores this entirely — it emits flat text
+   * blocks regardless of toggle state.
+   */
+  const [showDetailsExpanded, setShowDetailsExpanded] = useState(false);
+  const showDetails = isAdvanced || showDetailsExpanded;
 
   /**
    * Single canonical display-execution-plan, derived entirely from:
@@ -6573,9 +6897,13 @@ export function RollingDebtPayoffDashboard({
       ? 'Yes — hold cash; a safe HELOC draw is not supported right now'
       : rawHoldCash;
 
+    // Keys on the left are the raw backend labels we may receive. Keys on
+    // the right are the user-facing labels shown in the decision box. All
+    // underlying data (targets, debts) is unchanged — only the heading
+    // terminology is aligned with "small balance / focus debt / next debt".
     const keyMap: Record<string, string> = {
-      'Cleanup target this month': 'Cleanup target this month',
-      'Primary priority debt': 'Primary priority debt'
+      'Cleanup target this month': 'Small balance target this month',
+      'Primary priority debt': 'Focus debt'
     };
     Object.keys(keyMap).forEach((srcKey) => {
       if (srcKey in src) out[keyMap[srcKey]] = String(src[srcKey] ?? '—');
@@ -6615,6 +6943,210 @@ export function RollingDebtPayoffDashboard({
     displayExecutionPlan,
     illustrativeForcedDraw
   ]);
+
+  /*
+   * Compact standard-mode signals. Pure presentation layer — every value
+   * is derived from the already-computed canonical models
+   * (`displayExecutionPlan`, `helocStrategyModel`, `data.liquidity`,
+   * `data.watchouts`). Nothing here recomputes safe-to-use, execute-now,
+   * waterfall allocations, HELOC decisions, or trap-risk logic.
+   */
+  const compactDecision = useMemo(() => {
+    const exec = Number(displayExecutionPlan.executeNow) || 0;
+    const deployable = Number(displayExecutionPlan.deployableMax) || 0;
+    const totalCash = Number(data.liquidity.totalCash) || 0;
+    const reserveTarget = Number(data.liquidity.reserveTarget) || 0;
+    const buffer = Number(data.liquidity.buffer) || 0;
+    const plannedHold = Number(data.liquidity.nearTermPlannedCashHold) || 0;
+    const unmappedHold = Number(data.liquidity.unmappedCardRiskHold) || 0;
+    const cashPlanned = exec > 0.005;
+    const atMax = cashPlanned && Math.round(exec) >= Math.round(deployable);
+
+    // Action: what is actually happening this month. We intentionally do
+    // NOT mix in alternative recommendations (e.g., "hold cash instead")
+    // here — those showed up as contradictions in the old decision box.
+    let action: string;
+    if (displayExecutionPlan.exceedsDeployable) {
+      action = `Capped — deploying ${currency(exec)} (safe maximum)`;
+    } else if (cashPlanned && atMax) {
+      action = `Deploy ${currency(exec)} this month (full safe amount)`;
+    } else if (cashPlanned) {
+      action = `Deploy ${currency(exec)} this month`;
+    } else {
+      action = 'Hold cash this month';
+    }
+
+    // Constraint: the dominant reason cash is limited or unavailable.
+    // Wording is intentionally plain-English; internal model terms like
+    // "card-risk reserve hold" are kept out of the standard view.
+    let constraint: string;
+    if (deployable <= 0.005 && totalCash > 0.005) {
+      constraint = 'Cash reserved for near-term expenses and card risk';
+    } else if (plannedHold > 0.005 || unmappedHold > 0.005) {
+      constraint = 'Cash reserved for near-term expenses and card risk';
+    } else if (
+      reserveTarget + buffer > 0.005 &&
+      totalCash > 0 &&
+      deployable < totalCash * 0.9
+    ) {
+      constraint = 'Cash reserved for reserve & buffer holds';
+    } else if (deployable <= 0.005) {
+      constraint = 'No safe cash available';
+    } else {
+      constraint = 'Within safe limits';
+    }
+
+    // Optional secondary note. Shown only when unmapped card-risk holds
+    // are actively increasing conservatism. Single canonical sentence —
+    // replaces the old generic "Watch: …" line which mixed arbitrary
+    // watchouts into the decision surface.
+    const note =
+      unmappedHold > 0.005
+        ? 'Unmapped upcoming expenses are increasing conservatism'
+        : null;
+
+    return { action, constraint, note };
+  }, [data.liquidity, displayExecutionPlan]);
+
+  /*
+   * "Why not more?" amount — the sum of the two material holds the
+   * user can actually understand (near-term planned expenses +
+   * unmapped card-risk). Reserves and buffers are permanent floors and
+   * don't read as "why not more this month", so they're excluded from
+   * this particular surface. Full reserve/buffer breakdown remains in
+   * the Protected KPI group under Show details.
+   */
+  const whyNotMoreAmount = useMemo(() => {
+    const plannedHold = Number(data.liquidity.nearTermPlannedCashHold) || 0;
+    const unmappedHold = Number(data.liquidity.unmappedCardRiskHold) || 0;
+    return round2(Math.max(0, plannedHold + unmappedHold));
+  }, [data.liquidity]);
+
+  const compactHeloc = useMemo(() => {
+    if (!helocStrategyModel) return null;
+    const m = helocStrategyModel;
+    const trap = m.doubleDebtTrapModel?.trapRiskLevel ?? 'low';
+    const plannedHold = Number(data.liquidity.nearTermPlannedCashHold) || 0;
+    const unmappedHold = Number(data.liquidity.unmappedCardRiskHold) || 0;
+    const spiky = Number(m.cardSpendModel?.spikyCardSpendNext120Days) || 0;
+
+    let statusLabel: string;
+    if (m.status === 'recommended') statusLabel = 'Recommended';
+    else if (m.status === 'optional') statusLabel = 'Optional';
+    else if (m.status === 'not_recommended') statusLabel = 'Not recommended';
+    else statusLabel = 'Not needed';
+
+    let reason: string;
+    let action: string;
+    if (m.status === 'recommended') {
+      reason = `Eligible debts offer a meaningful rate benefit over the ${m.helocRatePercent.toFixed(
+        2
+      )}% HELOC rate.`;
+      action = `Consider drawing ${currency(m.recommendedDrawAmount)} to consolidate.`;
+    } else if (m.status === 'optional') {
+      reason = 'Rate benefit exists but repayment window is tight.';
+      action = `HELOC is allowed; evaluate tradeoffs before drawing ${currency(
+        m.recommendedDrawAmount
+      )}.`;
+    } else if (m.status === 'not_recommended') {
+      if (trap === 'high') {
+        reason = 'No recurring repayment capacity and ongoing card burden.';
+      } else if (trap === 'medium') {
+        reason = 'Ongoing card burden and weak repayment capacity — a draw would be risky.';
+      } else if (plannedHold > 0.005 || unmappedHold > 0.005) {
+        reason = 'Near-term cash needs block a safe draw right now.';
+      } else if (spiky > 0.005) {
+        reason = 'Recent spiky card-funded charges block a safe draw right now.';
+      } else {
+        reason = 'Current cash flow does not support safe HELOC repayment.';
+      }
+      action = 'Do not draw from HELOC this month.';
+    } else {
+      reason = 'No eligible debts offer a rate benefit over the HELOC rate.';
+      action = 'HELOC not needed this month.';
+    }
+
+    return { statusLabel, status: m.status, reason, action };
+  }, [helocStrategyModel, data.liquidity]);
+
+  /*
+   * Compact payment-result rows.
+   *
+   * We intentionally avoid re-rendering the full post-payment snapshot
+   * (balance before, payment applied, APR, allocation share) in standard
+   * mode — that belongs under Show details. This memo produces a short
+   * affected-account list keyed on "what actually changed this month":
+   *
+   *   include row ⇢ paymentAppliedNow > $0 (which, by the status logic
+   *     in `redistributeSnapshotRows`, also covers every CLOSED row).
+   *
+   * Role is derived from the canonical extras buckets
+   * (`displayExecutionPlan.extras`) so the label always matches the
+   * allocation classification the waterfall used. Snapshot status is
+   * only a fallback for rows that don't appear in any extras bucket
+   * (e.g., unusual planner payloads).
+   *
+   * Sort order: bucket priority (Primary → Secondary → Cleanup →
+   * Overflow → Other), then by paymentApplied desc within each group,
+   * so the most impactful outcomes float to the top while the overall
+   * shape still mirrors the waterfall the user sees in details.
+   */
+  const compactPaymentResult = useMemo<
+    | { kind: 'empty'; message: string }
+    | { kind: 'table'; rows: CompactPaymentResultRow[]; overflowCount: number }
+  >(() => {
+    const exec = Number(displayExecutionPlan.executeNow) || 0;
+    if (exec <= 0.005) {
+      return { kind: 'empty', message: 'No extra payments this month (minimums only)' };
+    }
+    const extras = displayExecutionPlan.extras;
+    const roleByAccount = new Map<string, CompactPaymentResultRow['role']>();
+    for (const l of extras.cleanup || []) roleByAccount.set(l.account, 'Cleanup');
+    for (const l of extras.primary || []) roleByAccount.set(l.account, 'Primary');
+    for (const l of extras.secondary || []) roleByAccount.set(l.account, 'Secondary');
+    for (const l of extras.overflow || []) roleByAccount.set(l.account, 'Overflow');
+
+    const snapshot = displayExecutionPlan.snapshot ?? [];
+    const affected: Array<CompactPaymentResultRow & { _paid: number }> = [];
+    for (const row of snapshot) {
+      const paid = Number(row.paymentAppliedNow) || 0;
+      if (paid <= 0.005) continue;
+      const remaining = Math.max(0, Number(row.balanceAfterNow) || 0);
+      const closed = remaining <= 0.01;
+      const fallbackRole: CompactPaymentResultRow['role'] =
+        row.status === '↓ PRIMARY'
+          ? 'Primary'
+          : row.status === '↓ SECONDARY'
+          ? 'Secondary'
+          : 'Other';
+      affected.push({
+        account: row.account,
+        role: roleByAccount.get(row.account) ?? fallbackRole,
+        action: closed ? 'Closed' : 'Paid down',
+        remaining,
+        _paid: paid
+      });
+    }
+    if (!affected.length) {
+      return { kind: 'empty', message: 'No extra payments this month (minimums only)' };
+    }
+
+    const roleOrder: Record<CompactPaymentResultRow['role'], number> = {
+      Primary: 0,
+      Secondary: 1,
+      Cleanup: 2,
+      Overflow: 3,
+      Other: 4
+    };
+    affected.sort(
+      (a, b) => roleOrder[a.role] - roleOrder[b.role] || b._paid - a._paid
+    );
+
+    const MAX_ROWS = 6;
+    const visible = affected.slice(0, MAX_ROWS).map(({ _paid, ...rest }) => rest);
+    const overflowCount = Math.max(0, affected.length - visible.length);
+    return { kind: 'table', rows: visible, overflowCount };
+  }, [displayExecutionPlan]);
 
   return (
     <div
@@ -6657,9 +7189,9 @@ export function RollingDebtPayoffDashboard({
                 {presentationMode}
               </strong>
             </span>
-            {isAdvancedView && !isAutomation ? (
+            {showDetails && !isAutomation ? (
               <span
-                title="Details are showing — audit panels (cash bridge, allocation audit, display validator, aggressive audit) are visible."
+                title="Details are showing — full diagnostic report, decision box, snapshot, and HELOC analysis are visible."
                 style={{
                   fontSize: 11,
                   fontWeight: 600,
@@ -6707,65 +7239,79 @@ export function RollingDebtPayoffDashboard({
          * The individual values come from the same `data.liquidity` / `displayExecutionPlan`
          * sources as before; only labels and visual grouping change.
          */}
-        <KpiGroup label="Total" marginBottom={12}>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-              gap: 12,
-              alignItems: 'stretch'
-            }}
-          >
-            <KpiCard
-              label="Total cash"
-              value={currency(data.liquidity.totalCash)}
-              sub="Full liquid total (all cash + checking + savings)"
-            />
-          </div>
-        </KpiGroup>
+        {/*
+         * TOTAL + PROTECTED KPI groups are diagnostic breakdowns that
+         * explain *why* Safe to use is lower than Total cash. They are
+         * not part of the decision surface, so they live behind
+         * `showDetails`. The compact top cash execution row (Available
+         * group below) is the canonical standard-mode surface and always
+         * renders.
+         */}
+        {showDetails ? (
+          <>
+            <KpiGroup label="Total" marginBottom={12}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                  gap: 12,
+                  alignItems: 'stretch'
+                }}
+              >
+                <KpiCard
+                  label="Total cash"
+                  value={currency(data.liquidity.totalCash)}
+                  sub="Full liquid total (all cash + checking + savings)"
+                />
+              </div>
+            </KpiGroup>
 
-        <KpiGroup
-          label="Protected"
-          sublabel="Not available for deployment"
-          background="rgba(100, 116, 139, 0.06)"
-          borderColor="rgba(100, 116, 139, 0.25)"
-          marginBottom={12}
-        >
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-              gap: 12,
-              alignItems: 'stretch'
-            }}
-          >
-            <KpiCard
-              label="Do not touch"
-              value={currency(data.liquidity.reserveTarget)}
-              sub="Reserved accounts"
-              subMuted
-            />
-            <KpiCard
-              label="Required buffers"
-              value={currency(data.liquidity.buffer)}
-              sub="Minimum balances"
-              subMuted
-            />
-            <KpiCard
-              label="Planned / risk holds"
-              value={currency(
-                round2(
-                  (Number(data.liquidity.nearTermPlannedCashHold) || 0) +
-                    (Number(data.liquidity.unmappedCardRiskHold) || 0)
-                )
-              )}
-              sub={`Near-term ${currency(
-                Number(data.liquidity.nearTermPlannedCashHold) || 0
-              )} · Card risk ${currency(Number(data.liquidity.unmappedCardRiskHold) || 0)}`}
-              subMuted
-            />
-          </div>
-        </KpiGroup>
+            <KpiGroup
+              label="Protected"
+              sublabel="Not available for deployment"
+              background="rgba(100, 116, 139, 0.06)"
+              borderColor="rgba(100, 116, 139, 0.25)"
+              marginBottom={12}
+            >
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                  gap: 12,
+                  alignItems: 'stretch'
+                }}
+              >
+                <KpiCard
+                  label="Do not touch"
+                  value={currency(data.liquidity.reserveTarget)}
+                  sub="Reserved accounts"
+                  subMuted
+                />
+                <KpiCard
+                  label="Required buffers"
+                  value={currency(data.liquidity.buffer)}
+                  sub="Minimum balances"
+                  subMuted
+                />
+                <KpiCard
+                  label="Planned / risk holds"
+                  value={currency(
+                    round2(
+                      (Number(data.liquidity.nearTermPlannedCashHold) || 0) +
+                        (Number(data.liquidity.unmappedCardRiskHold) || 0)
+                    )
+                  )}
+                  sub={`Near-term ${currency(
+                    Number(data.liquidity.nearTermPlannedCashHold) || 0
+                  )} · Card risk ${currency(
+                    Number(data.liquidity.unmappedCardRiskHold) || 0
+                  )}`}
+                  subMuted
+                />
+              </div>
+            </KpiGroup>
+          </>
+        ) : null}
 
         {/**
          * AVAILABLE group: Safe to use → Cash to use now (input) → Planned payment
@@ -6774,18 +7320,18 @@ export function RollingDebtPayoffDashboard({
          * primary-tinted border so this section reads as "the part the user interacts with".
          */}
         <KpiGroup
-          label="Available"
-          sublabel="What you can actually deploy this month"
           background="rgba(30, 58, 95, 0.03)"
           borderColor="rgba(30, 58, 95, 0.25)"
-          marginBottom={36}
+          marginBottom={showDetails ? 20 : 14}
         >
-          {/**
+          {/*
            * Decision flow on a single row:
-           *   [ Safe to use ] → [ Cash to use now (input) ] → [ Planned payment this month ]
-           * Three flexible columns that collapse to 2 rows on narrow viewports.
-           * Each card reads from the same canonical display model so typing in the
-           * input immediately updates the Planned payment result and downstream sections.
+           *   [ Safe to use ] → [ Cash to use now (input) ] → [ Your payment this month ]
+           * Labels are intentionally terse — we dropped the old "Available /
+           * What you can actually deploy this month" header + the "After
+           * reserves, buffers, and upcoming expenses" subtext so the row
+           * reads in ~5 seconds. The "Why not more?" block below carries
+           * the one piece of context users actually need.
            */}
           <div
             style={{
@@ -6799,11 +7345,10 @@ export function RollingDebtPayoffDashboard({
               label="Safe to use"
               value={currency(deployableMax)}
               borderAccent="deployable"
-              sub="After reserves, buffers, and upcoming expenses"
             />
             <CashToUseNowInputCard
               label="Cash to use now"
-              helperText="Choose your payment amount"
+              helperText="Enter your payment amount (capped at safe-to-use)"
               inputValue={cashToUseNowInput}
               parsedInput={cashToUseNowRaw}
               onChange={setCashToUseNowInput}
@@ -6824,49 +7369,189 @@ export function RollingDebtPayoffDashboard({
               remainingDeployable={Math.max(0, round2(deployableMax - executeNow))}
             />
           </div>
-          {/**
-           * Plain-language explanation of the relationship between the three cards.
-           * Slightly larger + darker than the default helper text so it reads as the
-           * definitive "how this works" note for the section.
-           */}
-          <p
-            style={{
-              margin: '14px 0 0 0',
-              fontSize: 13,
-              color: C.text,
-              fontWeight: 600,
-              lineHeight: 1.55
-            }}
-          >
-            Choose your payment — we'll keep it within safe limits.
-          </p>
         </KpiGroup>
 
-        {/**
-         * HELOC strategy advisor — a separate decision-support card + optional
-         * 12-month acceleration plan. Renders only when the backend emitted a
-         * non-empty advisor snapshot (older plan payloads hide the section).
-         * Does NOT affect execute-now totals, waterfall allocation, or
-         * displayExecutionPlan in any way (see PART 5 guardrails).
+        {/*
+         * "Why not more?" — single contextual block that explains why
+         * Safe to use is lower than Total cash without exposing the
+         * full reserve / buffer / hold breakdown. Renders only when
+         * near-term planned-expense + unmapped card-risk holds are
+         * materially reducing the deployable amount. The full breakdown
+         * lives in the Total / Protected KPI groups under Show details.
          */}
-        {!isAutomation && data.helocAdvisor && helocStrategyModel && helocExecutionPlan ? (
-          <HelocStrategySection
-            snapshot={data.helocAdvisor}
-            model={helocStrategyModel}
-            plan={helocExecutionPlan}
-            isAdvanced={isAdvanced}
-            illustrativeForcedDraw={illustrativeForcedDraw}
-          />
+        {whyNotMoreAmount > 0.005 ? (
+          <div
+            style={{
+              marginTop: 4,
+              marginBottom: 28,
+              padding: '10px 14px',
+              borderRadius: 10,
+              border: `1px solid ${C.border}`,
+              background: 'rgba(100, 116, 139, 0.05)'
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                color: C.muted
+              }}
+            >
+              Why not more?
+            </p>
+            <p
+              style={{
+                margin: '4px 0 0 0',
+                fontSize: 13,
+                color: C.text,
+                fontWeight: 600,
+                lineHeight: 1.45
+              }}
+            >
+              {currency(whyNotMoreAmount)} reserved for upcoming expenses and card risk
+            </p>
+          </div>
         ) : null}
 
-        {/**
-         * Cash bridge (audit) and Allocation audit (month 0) are debug-grade views for
-         * operators/analysts — hidden in Standard presentation to reduce noise. They render
-         * in Advanced presentation, and Automation presentation emits equivalent structured
-         * blocks further down. The "Future / Conditional Cash" and top-row KPIs already
-         * carry the information a normal user needs.
+        {/*
+         * Standard-mode compact surface.
+         *
+         * When `showDetails` is false, only these four items render:
+         *   - Compact HELOC card (Status / Reason / Action)
+         *   - Compact decision card (Action / Constraint / optional watchout)
+         *   - Compact payment result summary
+         *   - "Show details" toggle (below)
+         *
+         * The full HelocStrategySection, cash-bridge audit, allocation
+         * audit, planned-expense impact, and the display-plan validator
+         * all move into the details container further down.
          */}
-        {!isAutomation && isAdvanced ? (
+        {!isAutomation && !showDetails ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 14,
+              marginBottom: 28
+            }}
+          >
+            {compactHeloc ? (
+              <CompactHelocCard
+                statusLabel={compactHeloc.statusLabel}
+                status={compactHeloc.status}
+                reason={compactHeloc.reason}
+                action={compactHeloc.action}
+              />
+            ) : null}
+            <CompactDecisionCard
+              action={compactDecision.action}
+              constraint={compactDecision.constraint}
+              helocStance={compactHeloc ? compactHeloc.statusLabel : null}
+              note={compactDecision.note}
+            />
+            <CompactPaymentResult value={compactPaymentResult} />
+            {!displayExecutionPlan.validation.isConsistent ? (
+              <DisplayPlanValidator
+                executeNow={displayExecutionPlan.executeNow}
+                extraTotal={displayExecutionPlan.extraTotal}
+                snapshotPaymentTotal={displayExecutionPlan.snapshotPaymentTotal}
+                unallocatedHeadroom={displayExecutionPlan.unallocatedHeadroom}
+                userCashToUseNowInput={displayExecutionPlan.cashToUseNowInput}
+                deployableMax={displayExecutionPlan.deployableMax}
+                exceedsDeployable={displayExecutionPlan.exceedsDeployable}
+                strategyComparison={displayExecutionPlan.strategyComparison}
+                isAggressiveStrategy={isAggressiveStrategy}
+                totalCash={Number(data.liquidity.totalCash) || 0}
+                reserve={Number(data.liquidity.reserveTarget) || 0}
+                buffer={Number(data.liquidity.buffer) || 0}
+                nearTermPlannedHold={Number(data.liquidity.nearTermPlannedCashHold) || 0}
+                unmappedCardRiskHold={Number(data.liquidity.unmappedCardRiskHold) || 0}
+                visible={true}
+              />
+            ) : null}
+          </div>
+        ) : null}
+
+        {/*
+         * User-facing toggle. Operator/advanced/aggressive plans already
+         * have `isAdvanced === true`, in which case `showDetails` is
+         * locked on and this button becomes a no-op label. Standard plans
+         * render collapsed by default and the user can expand inline.
+         */}
+        {!isAutomation ? (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              marginBottom: showDetails ? 18 : 28
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setShowDetailsExpanded((v) => !v)}
+              aria-expanded={showDetails}
+              aria-controls="rolling-debt-details"
+              disabled={isAdvanced}
+              title={
+                isAdvanced
+                  ? 'Details are always on in this plan mode.'
+                  : showDetails
+                  ? 'Collapse the full diagnostic report.'
+                  : 'Expand the full diagnostic report.'
+              }
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                padding: '7px 14px',
+                borderRadius: 999,
+                border: `1px solid ${C.border}`,
+                background: showDetails ? 'rgba(30, 58, 95, 0.08)' : '#ffffff',
+                color: isAdvanced ? C.muted : C.text,
+                cursor: isAdvanced ? 'default' : 'pointer',
+                opacity: isAdvanced ? 0.7 : 1
+              }}
+            >
+              {showDetails ? 'Hide details' : 'Show details'}
+            </button>
+          </div>
+        ) : null}
+
+        {/*
+         * Diagnostic container. Everything below is hidden in standard
+         * mode. When `showDetails` is true (operator plan OR user clicked
+         * Show details) the full dashboard report renders:
+         *   - Full HelocStrategySection (rate benefit, safe-to-use flags,
+         *     advised draw, illustrative forced draw, payoff time,
+         *     interest saved, trap risk, recurring & spiky card spend,
+         *     eligible-by-rate list, recommended-use list)
+         *   - Cash bridge audit & allocation audit (debug)
+         *   - Display-plan validator
+         *   - Planned-expense impact block
+         *   - Already-paid / minimums lists
+         *   - Extras waterfall buckets + aggressive panel
+         *   - Execution totals gradient
+         *   - Future / conditional cash
+         *   - Full decision box question list
+         *   - Post-payment snapshot table
+         *   - Next 3 months + watchouts list
+         */}
+        {!isAutomation && showDetails && data.helocAdvisor && helocStrategyModel && helocExecutionPlan ? (
+          <div id="rolling-debt-details">
+            <HelocStrategySection
+              snapshot={data.helocAdvisor}
+              model={helocStrategyModel}
+              plan={helocExecutionPlan}
+              isAdvanced={showDetails}
+              illustrativeForcedDraw={illustrativeForcedDraw}
+            />
+          </div>
+        ) : null}
+
+        {!isAutomation && showDetails ? (
           <CashBridgeSection
             bridge={data.cashBridge ?? null}
             totalCashDisplay={Number(data.liquidity.totalCash) || 0}
@@ -6887,7 +7572,7 @@ export function RollingDebtPayoffDashboard({
           />
         ) : null}
 
-        {!isAutomation && isAdvanced && data.allocationAudit ? (
+        {!isAutomation && showDetails && data.allocationAudit ? (
           <AllocationAuditSection
             audit={data.allocationAudit}
             displayedExecuteNow={displayExecutionTotals.fromCash}
@@ -6896,25 +7581,27 @@ export function RollingDebtPayoffDashboard({
           />
         ) : null}
 
-        <DisplayPlanValidator
-          executeNow={displayExecutionPlan.executeNow}
-          extraTotal={displayExecutionPlan.extraTotal}
-          snapshotPaymentTotal={displayExecutionPlan.snapshotPaymentTotal}
-          unallocatedHeadroom={displayExecutionPlan.unallocatedHeadroom}
-          userCashToUseNowInput={displayExecutionPlan.cashToUseNowInput}
-          deployableMax={displayExecutionPlan.deployableMax}
-          exceedsDeployable={displayExecutionPlan.exceedsDeployable}
-          strategyComparison={displayExecutionPlan.strategyComparison}
-          isAggressiveStrategy={isAggressiveStrategy}
-          totalCash={Number(data.liquidity.totalCash) || 0}
-          reserve={Number(data.liquidity.reserveTarget) || 0}
-          buffer={Number(data.liquidity.buffer) || 0}
-          nearTermPlannedHold={Number(data.liquidity.nearTermPlannedCashHold) || 0}
-          unmappedCardRiskHold={Number(data.liquidity.unmappedCardRiskHold) || 0}
-          visible={!isAutomation && (isAdvanced || !displayExecutionPlan.validation.isConsistent)}
-        />
+        {showDetails ? (
+          <DisplayPlanValidator
+            executeNow={displayExecutionPlan.executeNow}
+            extraTotal={displayExecutionPlan.extraTotal}
+            snapshotPaymentTotal={displayExecutionPlan.snapshotPaymentTotal}
+            unallocatedHeadroom={displayExecutionPlan.unallocatedHeadroom}
+            userCashToUseNowInput={displayExecutionPlan.cashToUseNowInput}
+            deployableMax={displayExecutionPlan.deployableMax}
+            exceedsDeployable={displayExecutionPlan.exceedsDeployable}
+            strategyComparison={displayExecutionPlan.strategyComparison}
+            isAggressiveStrategy={isAggressiveStrategy}
+            totalCash={Number(data.liquidity.totalCash) || 0}
+            reserve={Number(data.liquidity.reserveTarget) || 0}
+            buffer={Number(data.liquidity.buffer) || 0}
+            nearTermPlannedHold={Number(data.liquidity.nearTermPlannedCashHold) || 0}
+            unmappedCardRiskHold={Number(data.liquidity.unmappedCardRiskHold) || 0}
+            visible={!isAutomation}
+          />
+        ) : null}
 
-        {!isAutomation && data.plannedExpenseImpact && data.plannedExpenseImpact.lines.length ? (
+        {!isAutomation && showDetails && data.plannedExpenseImpact && data.plannedExpenseImpact.lines.length ? (
           <PlannedExpenseImpactSection block={data.plannedExpenseImpact} />
         ) : null}
 
@@ -7149,7 +7836,7 @@ export function RollingDebtPayoffDashboard({
               <SnapshotTable rows={displaySnapshot} summary={displaySnapshotSummary} />
             </div>
           </div>
-        ) : (
+        ) : showDetails ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
               <div style={shellStyle()}>
@@ -7210,9 +7897,9 @@ export function RollingDebtPayoffDashboard({
                     marginBottom: 26
                   }}
                 >
-                  <ProgressBar label="Cleanup share of extras" valuePct={pct(cleanupSum, extraTotal)} />
-                  <ProgressBar label="Primary share of extras" valuePct={pct(primarySum, extraTotal)} />
-                  <ProgressBar label="Secondary share of extras" valuePct={pct(secondarySum, extraTotal)} />
+                  <ProgressBar label="Small balance share of extras" valuePct={pct(cleanupSum, extraTotal)} />
+                  <ProgressBar label="Focus debt share of extras" valuePct={pct(primarySum, extraTotal)} />
+                  <ProgressBar label="Next debt share of extras" valuePct={pct(secondarySum, extraTotal)} />
                 </div>
               ) : null}
               {data.strictWaterfallErrors && data.strictWaterfallErrors.length ? (
@@ -7236,6 +7923,20 @@ export function RollingDebtPayoffDashboard({
                   ))}
                 </div>
               ) : null}
+              <p
+                style={{
+                  margin: '0 0 12px 0',
+                  fontSize: 12,
+                  color: C.muted,
+                  lineHeight: 1.55,
+                  fontStyle: 'italic'
+                }}
+              >
+                Small balances are paid first to simplify accounts and free up minimum payments.
+                After that, extra cash goes to the focus debt. Once the focus debt is cleared,
+                remaining extra cash moves to the next debt, and anything beyond that is shown as
+                excess.
+              </p>
               <div
                 style={{
                   display: 'grid',
@@ -7244,22 +7945,22 @@ export function RollingDebtPayoffDashboard({
                   alignItems: 'stretch'
                 }}
               >
-                <ExtraBucketCard title="1 · Cleanup" lines={displayExtras.cleanup} totalExtra={extraTotal} bucketKey="cleanup" />
+                <ExtraBucketCard title="1 · Small balances" lines={displayExtras.cleanup} totalExtra={extraTotal} bucketKey="cleanup" />
                 <ExtraBucketCard
-                  title="2 · Primary"
+                  title="2 · Focus debt"
                   lines={displayExtras.primary}
                   totalExtra={extraTotal}
                   bucketKey="primary"
-                  footerNote="Primary must be fully paid before secondary allocation begins."
+                  footerNote="The focus debt must be fully paid before the next debt receives extra."
                 />
                 <ExtraBucketCard
-                  title="3 · Secondary"
+                  title="3 · Next debt"
                   lines={displayExtras.secondary}
                   totalExtra={extraTotal}
                   bucketKey="secondary"
-                  footerNote="Secondary waterfall: CitiAA → Southwest → Marriott."
+                  footerNote="Next debt order: CitiAA → Southwest → Marriott."
                 />
-                <ExtraBucketCard title="4 · Overflow" lines={displayExtras.overflow} totalExtra={extraTotal} bucketKey="overflow" />
+                <ExtraBucketCard title="4 · Excess allocation" lines={displayExtras.overflow} totalExtra={extraTotal} bucketKey="overflow" />
               </div>
               {data.strictWaterfallSplitNote ? (
                 <p style={{ margin: '16px 0 0 0', fontSize: 12, color: C.muted, lineHeight: 1.5, fontStyle: 'italic' }}>
@@ -7357,7 +8058,7 @@ export function RollingDebtPayoffDashboard({
               </div>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -7465,13 +8166,13 @@ export const demoRollingDebtPayoffDashboardData: RollingDebtPayoffDashboardData 
     'Can I make an extra payment?': 'Yes — up to $25,550 now',
     'Use HELOC?': 'Optional with approval',
     'Hold cash instead?': 'No — reserve intact',
-    'Cleanup targets': 'Store Card A, Store Card B',
-    'Primary debt': 'Southwest Priority',
+    'Small balance targets': 'Store Card A, Store Card B',
+    'Focus debt': 'Southwest Priority',
     'Optimized for interest?': 'Yes'
   },
   next3Months: [
-    { month: 'May 2026', focus: 'Southwest + cleanup drift', detail: 'Reserve steady' },
-    { month: 'Jun 2026', focus: 'Primary on United if SW paid', detail: 'Watch variable income' },
+    { month: 'May 2026', focus: 'Southwest + small balance drift', detail: 'Reserve steady' },
+    { month: 'Jun 2026', focus: 'Focus debt on United if SW paid', detail: 'Watch variable income' },
     { month: 'Jul 2026', focus: 'Maintain buffer', detail: 'Planned trip cash reserved' }
   ],
   watchouts: [
@@ -7496,7 +8197,7 @@ export const demoRollingDebtPayoffDashboardData: RollingDebtPayoffDashboardData 
     primaryAllocated: 12_400,
     primaryShareOfRemainingPct: 65,
     primaryBelow90: true,
-    primaryBelow90Reason: 'Primary capped at remaining payoff balance; spill to secondary was required.'
+    primaryBelow90Reason: 'Focus debt capped at remaining payoff balance; spill to the next debt was required.'
   },
   plannedExpenseImpact: {
     summary: {
