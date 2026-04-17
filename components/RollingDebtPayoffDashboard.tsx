@@ -70,6 +70,352 @@ export type PlannedExpenseImpactBlock = {
   unmappedCardWarning?: string;
 };
 
+/**
+ * Read-only HELOC advisor snapshot — inputs for the dashboard's client-side
+ * HELOC decision model + 12-month acceleration plan. Populated by the backend
+ * from the month-0 `debt_balances_start` plus the identified HELOC line.
+ *
+ * The advisor consumes this snapshot and the user's Cash-to-use-now to derive
+ * `helocStrategyModel` and `helocExecutionPlan`. It never mutates the planner
+ * waterfall, allocation, or execution totals — purely decision support.
+ */
+export type HelocAdvisorDebt = {
+  name: string;
+  originalName?: string;
+  type: string;
+  balance: number;
+  /** Annual percentage rate as a percentage (e.g. 22.49 for 22.49%). */
+  aprPercent: number;
+  minimumPayment: number;
+};
+
+export type HelocAdvisorSnapshot = {
+  helocAprPercent: number;
+  helocCurrentBalance: number;
+  helocAccountName: string;
+  helocMinimumPayment: number;
+  debts: HelocAdvisorDebt[];
+  /** Required spread over HELOC APR (percentage points) for a debt to be eligible. */
+  minSpreadPercent: number;
+  /** Optional estimate of HELOC credit limit, used to cap recommended draw at 30–40%. */
+  estimatedHelocLimit?: number;
+  /** Optional user-defined override cap on HELOC draw. */
+  userDefinedCap?: number;
+  /**
+   * Recurring monthly paydown capacity for the HELOC — i.e. monthly free cash
+   * flow that can be trusted to repeat. This is the ONLY input that sizes
+   * ongoing HELOC payments. "Cash to use now" is a one-time input and is
+   * never treated as recurring. Default 0 when the planner cannot supply a
+   * trustworthy surplus figure (the conservative fallback).
+   */
+  monthlyRecurringPaydownCapacity?: number;
+  /**
+   * Optional, informational: conditional lump-sum paydown (e.g. RSU vests,
+   * stock sales). NEVER used to size the safe draw — only surfaced in the UI.
+   */
+  conditionalLumpPaydownCapacity?: number;
+  /** Optional human-readable note about cadence/likelihood of the lump. */
+  conditionalLumpFrequencyNote?: string;
+  /**
+   * Known large one-time expenses the user already has on the books within
+   * the next ~120 days (fence, solar, taxes, car, etc.). Their total is
+   * reserved OFF the upfront cash before any HELOC draw is considered. Items
+   * without `dueInDays` are treated as falling inside the window.
+   */
+  upcomingExpenses?: Array<{ label: string; amount: number; dueInDays?: number }>;
+  /**
+   * Conservative estimate of monthly spending. The safety layer reserves
+   * `estimate × 1.5` of upfront cash so a draw does not put the user at risk
+   * of missing 1.5 months of living expenses. When absent the advisor falls
+   * back to `HELOC_DEFAULT_MONTHLY_SPENDING_ESTIMATE` and flags the value as
+   * a default in the UI.
+   */
+  monthlySpendingEstimate?: number;
+  /**
+   * Expected ADDITIONAL monthly spending pressure that will reduce the
+   * recurring paydown capacity (e.g. renovations, childcare, elevated tax
+   * withholdings). Default 0.
+   */
+  monthlyNewSpendingEstimate?: number;
+  /**
+   * Ongoing credit-card spend signals — used by the HELOC realism layer to
+   * (a) detect whether the planner's recurring surplus already nets out card
+   * spending and (b) warn about the "double-debt trap" where a HELOC draw
+   * pays off cards while new charges rebuild balances. All fields optional;
+   * when the block is absent the advisor falls back to "no data, low
+   * confidence" and the UI surfaces that gap instead of inventing numbers.
+   */
+  cardSpend?: {
+    /** Trusted recent average (last 3–6 months) of card-paid spend. */
+    recentMonthlyAverage?: number;
+    /** Per-card breakdown (optional; display only). */
+    byAccount?: Array<{ account: string; monthlyAverage: number }>;
+    /** Known fixed card-routed recurring bills (Tahoe, ATT, subscriptions…). */
+    recurringBills?: Array<{ label: string; monthlyAmount: number }>;
+    /**
+     * Upcoming one-time card-funded expenses within ~120 days. Tracked
+     * informationally — they do NOT feed into recurring repayment math.
+     */
+    plannedCardFundedNext120Days?: number;
+    /**
+     * Trailing-4-month spiky / non-recurring card-funded spend (property
+     * taxes, federal taxes, one-off large charges) — a near-term proxy
+     * separate from `plannedCardFundedNext120Days`, which is forward-looking.
+     */
+    spikyCardSpendNext120Days?: number;
+    /** Per-month history of recurring card-routed totals (last 6 months). */
+    recurringCardSpendByMonth?: Array<{ month: string; amount: number }>;
+    /** Per-month history of spiky / non-recurring card-routed totals. */
+    plannedOrSpikyCardSpendByMonth?: Array<{ month: string; amount: number }>;
+    /** Payees classified as recurring (display / debug). */
+    recurringPayees?: string[];
+    /** Payees classified as spiky / non-recurring (display / debug). */
+    spikyPayees?: string[];
+    /** Number of months of CF history walked to build the signal. */
+    monthsObserved?: number;
+    /** Number of those months that actually had any card-routed charges. */
+    monthsWithCardData?: number;
+    /**
+     * Whether the planner's recurring surplus (`monthlyRecurringPaydownCapacity`)
+     * already nets out card spending. Default `true` when omitted — the
+     * pragmatic assumption for income-minus-expenses planners, and the only
+     * safe default against double-counting. Set to `false` if the planner's
+     * surplus is pre-card-spend.
+     */
+    alreadyInCashflow?: boolean;
+    /** How the estimate was produced — drives the UI confidence badge. */
+    estimationMethod?: CardSpendEstimationMethod;
+    /** Self-reported confidence from the planner. */
+    confidence?: CardSpendConfidence;
+    /**
+     * Whether any scanned Cash Flow sheet carried the optional "Active"
+     * column. When `false` (legacy tabs), every row is treated as active.
+     */
+    activeColumnPresent?: boolean;
+    /**
+     * Total trailing-6-month CREDIT_CARD spend that was skipped because the
+     * row's `Active` cell was `NO` / `N` / `FALSE` / `INACTIVE`. Debug-only
+     * — never feeds into recurring or spiky totals.
+     */
+    inactiveCardSpendRemoved?: number;
+    /** Top inactive payees removed, sorted by amount descending (debug). */
+    inactivePayeesRemoved?: Array<{ account: string; amount: number }>;
+    /**
+     * Bills-based forward-looking card obligation signal (INPUT - Bills
+     * with `Payment Source = CREDIT_CARD`). Always present when the
+     * combined-burden layer is in play; every field is optional so legacy
+     * workbooks without the Payment Source column simply omit this block.
+     */
+    billsPaymentSourceColumnPresent?: boolean;
+    /** Count of active CREDIT_CARD bills read from INPUT - Bills. */
+    activeCardBillCount?: number;
+    /** Monthly-equivalent burden from active Bills CREDIT_CARD rows. */
+    billsRecurringCardBurden?: number;
+    /** Scheduled card-funded spikes landing in the next 120 days. */
+    billsSpikyCardBurdenNext120Days?: number;
+    /** Trailing-history recurring card spend (mirror of `recentMonthlyAverage`). */
+    historicalRecurringCardSpend?: number;
+    /** Trailing-history spiky card-funded spend. */
+    historicalSpikyCardSpendNext120Days?: number;
+    /**
+     * `max(history_recurring, bills_recurring)` — the value actually fed
+     * into `recentMonthlyAverage` so the existing realism ladder lights
+     * up. Surfaced here so the UI can show both inputs + the chosen value.
+     */
+    chosenRecurringCardBurden?: number;
+    /** `max(history_spiky, bills_spiky)` — drives the near-term proxy. */
+    chosenSpikyCardBurdenNext120Days?: number;
+    /** Which source dominated the recurring-burden selection. */
+    sourceDecision?:
+      | 'history_dominated'
+      | 'bills_dominated'
+      | 'tied'
+      | 'history_only'
+      | 'bills_only'
+      | 'no_data';
+    /** Which source dominated the spiky-burden selection. */
+    spikySourceDecision?:
+      | 'history_dominated'
+      | 'bills_dominated'
+      | 'tied'
+      | 'history_only'
+      | 'bills_only'
+      | 'no_data';
+    /** Bills-based recurring card obligations (monthly equivalent), sorted desc. */
+    recurringCardBillsFromBills?: Array<{ account: string; monthlyEquivalent: number }>;
+    /** Bills-based spiky (next-120-day dollars), sorted desc. */
+    upcomingCardBillsFromBills?: Array<{ account: string; next120DayBurden: number }>;
+    /** Full bills-schedule debug (frequency / due day / occurrences). */
+    upcomingCardBillsSchedule?: Array<{
+      payee: string;
+      frequency: string;
+      defaultAmount: number;
+      monthlyEquivalent: number;
+      next120DayBurden: number;
+      next120DayDates?: string[];
+      isRecurring: boolean;
+      category?: string;
+    }>;
+    /** Payees classified as recurring by the bills model. */
+    recurringCardPayeesFromBills?: string[];
+    /** Payees classified as spiky by the bills model. */
+    spikyCardPayeesFromBills?: string[];
+  };
+};
+
+/** How `recurringMonthlyCardSpend` was derived. */
+export type CardSpendEstimationMethod =
+  | 'actual_recent'
+  | 'recurring_bills_only'
+  | 'explicit'
+  | 'conservative_default'
+  | 'no_data'
+  /** Forward-looking, derived from INPUT - Bills (Payment Source = CREDIT_CARD). */
+  | 'bills_scheduled'
+  /** Both Cash-Flow history and INPUT - Bills contributed; max() wins. */
+  | 'combined_history_and_bills';
+
+/** Qualitative confidence for a card-spend estimate. */
+export type CardSpendConfidence = 'high' | 'medium' | 'low';
+
+/**
+ * Estimation of ongoing credit-card spending used by the HELOC realism
+ * layer. Everything here is read-only / advisory and never mutates actual
+ * planner allocations.
+ */
+export type CardSpendModel = {
+  recurringMonthlyCardSpend: number;
+  recurringCardSpendByAccount: Array<{ account: string; monthlyAverage: number }>;
+  /** Optional itemized list of card-routed recurring bills used to derive the total. */
+  recurringCardBills: Array<{ label: string; monthlyAmount: number }>;
+  /** Optional forward-looking one-time card-funded spend within the next ~120 days. */
+  plannedCardFundedSpendNext120Days: number;
+  /**
+   * Trailing spiky / non-recurring card-funded spend (~last 4 months). Acts
+   * as a near-term proxy for the next 120 days when the planner hasn't
+   * explicitly listed upcoming spikes. Never mixes with the recurring total.
+   */
+  spikyCardSpendNext120Days: number;
+  /** Per-month recurring card-routed totals (up to last 6 months). */
+  recurringCardSpendByMonth: Array<{ month: string; amount: number }>;
+  /** Per-month spiky / non-recurring card-routed totals. */
+  plannedOrSpikyCardSpendByMonth: Array<{ month: string; amount: number }>;
+  /** Payees classified as recurring. */
+  recurringPayees: string[];
+  /** Payees classified as spiky / non-recurring. */
+  spikyPayees: string[];
+  spendEstimationMethod: CardSpendEstimationMethod;
+  spendConfidence: CardSpendConfidence;
+  cardSpendAlreadyInCashflow: boolean;
+  /**
+   * Whether any scanned Cash Flow sheet carried the optional "Active"
+   * column. Drives whether the UI surfaces the "Inactive card expenses are
+   * excluded from recurring spend" note — on legacy tabs without the
+   * column the note stays hidden because nothing is being filtered.
+   */
+  activeColumnPresent: boolean;
+  /**
+   * Total trailing-6-month CREDIT_CARD spend removed because its `Active`
+   * cell was `NO` / `N` / `FALSE` / `INACTIVE`. Purely informational; these
+   * rows do NOT feed into `recurringMonthlyCardSpend` or the spiky total.
+   */
+  inactiveCardSpendRemoved: number;
+  /** Top inactive payees removed (debug/review), sorted by amount desc. */
+  inactivePayeesRemoved: Array<{ account: string; amount: number }>;
+  /*
+   * ── Bills-based forward-looking signal (INPUT - Bills) ─────────────────
+   * Every field defaults to zero / empty / false on legacy workbooks that
+   * don't yet have the `Payment Source` column so the UI can render a
+   * clean "Scheduled card bills — none" state instead of hiding the whole
+   * block.
+   */
+  billsPaymentSourceColumnPresent: boolean;
+  /** Count of active CREDIT_CARD rows found in INPUT - Bills. */
+  activeCardBillCount: number;
+  /** Monthly-equivalent burden from active CREDIT_CARD bills. */
+  billsRecurringCardBurden: number;
+  /** Scheduled card-funded spikes landing in the next 120 days. */
+  billsSpikyCardBurdenNext120Days: number;
+  /**
+   * Trailing-history values — duplicated here for UI transparency so the
+   * panel can show "Historical recurring card spend" alongside
+   * "Bills-based recurring card burden" and "Chosen burden".
+   */
+  historicalRecurringCardSpend: number;
+  historicalSpikyCardSpendNext120Days: number;
+  /**
+   * `max(history_recurring, bills_recurring)` — this is what actually
+   * drives the HELOC realism math (via `recurringMonthlyCardSpend`).
+   */
+  chosenRecurringCardBurden: number;
+  chosenSpikyCardBurdenNext120Days: number;
+  /** Which source dominated the recurring-burden selection. */
+  sourceDecision:
+    | 'history_dominated'
+    | 'bills_dominated'
+    | 'tied'
+    | 'history_only'
+    | 'bills_only'
+    | 'no_data';
+  spikySourceDecision:
+    | 'history_dominated'
+    | 'bills_dominated'
+    | 'tied'
+    | 'history_only'
+    | 'bills_only'
+    | 'no_data';
+  /** Recurring CREDIT_CARD bills from INPUT - Bills (monthly-equivalent). */
+  recurringCardBillsFromBills: Array<{ account: string; monthlyEquivalent: number }>;
+  /** Spiky CREDIT_CARD bills from INPUT - Bills (next-120-day dollars). */
+  upcomingCardBillsFromBills: Array<{ account: string; next120DayBurden: number }>;
+  /** Payees classified as recurring by the Bills model. */
+  recurringCardPayeesFromBills: string[];
+  /** Payees classified as spiky by the Bills model. */
+  spikyCardPayeesFromBills: string[];
+};
+
+/**
+ * Walks the user step-by-step from raw recurring surplus to the
+ * after-card-spend effective repayment capacity that the HELOC advisor
+ * actually uses.
+ */
+export type EffectiveHelocRepaymentModel = {
+  /**
+   * Recurring surplus after generic "new spending" pressure but BEFORE the
+   * card-spend adjustment: `max(0, monthlyRecurring − monthlyNewSpending)`.
+   */
+  recurringMonthlySurplusBeforeCardAdjustment: number;
+  recurringMonthlyCardSpend: number;
+  /**
+   * Post-adjustment capacity. Equals the "before" value when
+   * `cardSpendAlreadyInCashflow` is true (to prevent double-counting);
+   * otherwise `max(0, before − card_spend)`. This is the figure used for
+   * safe-draw sizing and payoff months.
+   */
+  recurringMonthlyRepaymentCapacityEffective: number;
+  cardSpendAlreadyInCashflow: boolean;
+};
+
+/** "Double-debt trap" severity — feeds the UI warning band and the guardrail. */
+export type DoubleDebtSeverity = 'none' | 'watch' | 'critical';
+
+/** Trap-risk tier — coarser, outcome-oriented classification for the UI badge. */
+export type DoubleDebtTrapRiskLevel = 'low' | 'medium' | 'high';
+
+/**
+ * Structured double-debt-trap assessment. Captures the coarse risk tier, the
+ * human-readable reasons (shown in the UI) and the underlying numbers so the
+ * debug/automation output doesn't have to re-derive anything.
+ */
+export type DoubleDebtTrapModel = {
+  trapRiskLevel: DoubleDebtTrapRiskLevel;
+  warningReasons: string[];
+  recurringCardSpend: number;
+  recurringRepaymentCapacityEffective: number;
+  /** Near-term spiky card-funded risk that reduces confidence. */
+  spikyCardSpendNext120Days: number;
+};
+
 /** Auditable SYS–Accounts cash path (rolling debt payoff). */
 export type RollingDebtPayoffCashBridge = {
   liquidTotalSheet: number;
@@ -172,6 +518,12 @@ export type RollingDebtPayoffDashboardData = {
     /** Legacy hardcoded planner buffer above reserve (audit/debug only; must NOT drive top KPIs). */
     legacyBufferAboveReserve?: number;
   };
+  /**
+   * Optional read-only HELOC advisor inputs (debt list + identified HELOC line).
+   * When present, the dashboard renders the "HELOC strategy" advisory card and
+   * the 12-month acceleration plan. Never drives backend allocation / execution.
+   */
+  helocAdvisor?: HelocAdvisorSnapshot | null;
   /** Strict 10-step cash bridge for auditing deployable amounts. */
   cashBridge?: RollingDebtPayoffCashBridge | null;
   /** Month-0 allocation audit: totals per bucket vs month0_execute_now_budget. */
@@ -2254,6 +2606,3253 @@ function FutureConditionalCashSection({
   );
 }
 
+// —— HELOC Advisor (decision support only — never mutates execution plan) ——
+//
+// This module is a pure read-only decision layer layered on top of the existing
+// debt payoff dashboard. It answers three user questions: (1) Should I use
+// HELOC? (2) Where should I apply it? (3) What happens month-by-month if I do?
+//
+// Hard rule (see PART 5 guardrails): this advisor MUST NOT call back into the
+// waterfall allocator, modify `displayExecutionPlan`, or mix HELOC draws into
+// the current execute-now totals. It renders an independent advisory card +
+// 12-month simulation and is hidden whenever the advisor snapshot is absent.
+// All math lives in pure functions so it can be unit-tested without React.
+
+export type HelocStrategyStatus = 'not_needed' | 'recommended' | 'optional' | 'not_recommended';
+
+export type HelocEligibleDebt = {
+  name: string;
+  balance: number;
+  aprPercent: number;
+  minimumPayment: number;
+  /** `debt.apr - helocRate`, in percentage points. */
+  benefitSpread: number;
+  /**
+   * Composite interest-dollar benefit score used to order debts during
+   * greedy selection: `(APR − helocRate) * balance`. Larger score = more
+   * interest dollars avoided per dollar of draw.
+   */
+  benefitScore: number;
+};
+
+export type HelocIneligibleDebt = {
+  name: string;
+  balance: number;
+  aprPercent: number;
+  reason: string;
+};
+
+/**
+ * Paydown priority for the advisory repayment model. The advisor always
+ * recommends routing `cash_to_use_now` to the HELOC first until the balance
+ * hits zero, then reverting to the normal avalanche on any remaining debts.
+ * This is informational only — it does not re-route actual cash flows.
+ */
+export type HelocRepaymentPriority = 'heloc_first';
+
+export type HelocStrategyModel = {
+  status: HelocStrategyStatus;
+  /**
+   * True when ≥1 active debt clears the APR-spread threshold over the HELOC
+   * rate — i.e. a rate benefit mathematically exists. Distinct from
+   * `status`: a HELOC can offer a rate benefit yet still be `not_recommended`
+   * because repayment safety / cash-flow constraints block a safe draw. The
+   * UI uses this pair to avoid the contradictory "not needed" headline when
+   * clearly eligible high-APR targets are on the table.
+   */
+  rateBenefitExists: boolean;
+  helocRatePercent: number;
+  /** Balance-weighted average APR across the selected target debts. */
+  avgTargetAprPercent: number;
+  eligibleDebts: HelocEligibleDebt[];
+  targetDebts: HelocEligibleDebt[];
+  /**
+   * Eligible debts that did NOT make the selection because `recommendedDraw`
+   * ran out of safe capacity. UI uses this to surface "not all eligible debts
+   * included" when there are leftovers.
+   */
+  excludedEligibleDebts: HelocEligibleDebt[];
+  ineligibleDebts: HelocIneligibleDebt[];
+  recommendedDrawAmount: number;
+  /**
+   * Which constraint bound the recommended draw.
+   * - `cash_capacity_strict`: safe-draw window at the 9-month target was the tightest cap.
+   * - `cash_capacity_upper`: draw extended to the 12-month upper window (status = optional).
+   * - `heloc_limit` / `user_cap`: external safety caps.
+   * - `none`: the total eligible balance fits well inside all caps.
+   */
+  drawCapApplied:
+    | 'none'
+    | 'cash_capacity_strict'
+    | 'cash_capacity_upper'
+    | 'heloc_limit'
+    | 'user_cap';
+  /**
+   * One-time cash available to apply against the HELOC immediately at draw
+   * (Month 0). Sourced from "Cash to use now". NEVER treated as recurring.
+   */
+  upfrontCashNow: number;
+  /** Trusted recurring monthly cash that actually pays the HELOC down. */
+  monthlyRecurringPaydownCapacity: number;
+  /** Optional informational lump capacity (RSU, stock sale, bonus). */
+  conditionalLumpPaydownCapacity: number;
+  conditionalLumpFrequencyNote?: string;
+  /**
+   * Back-compat alias = `monthlyRecurringPaydownCapacity`. Preserved so the
+   * existing Paydown-strategy panel keeps rendering without wholesale changes.
+   */
+  monthlyRepaymentCapacity: number;
+  /**
+   * Strict safe draw = `upfrontCashNow + monthlyRecurring × target`.
+   * A draw at or below this is payable inside the 9-month target window.
+   */
+  safeDrawStrict: number;
+  /**
+   * Upper safe draw = `upfrontCashNow + monthlyRecurring × max`.
+   * Draws between strict and upper are still serviceable, but only inside
+   * the 12-month max window — status drops to `optional`.
+   */
+  safeDrawUpper: number;
+  /** Back-compat alias of `safeDrawStrict`. */
+  safeDrawCapacity: number;
+  /** Target payoff window used to derive `safeDrawStrict` (default 9 mo). */
+  targetPayoffMonths: number;
+  /** Hard cutoff for "recommended" vs "not_recommended" status (default 12 mo). */
+  maxPayoffMonths: number;
+
+  /*
+   * ── CASH PROTECTION / SAFETY BUFFER ─────────────────────────────────────
+   * The HELOC advisor reserves upfront cash for (a) known upcoming expenses
+   * and (b) a multiple of ongoing monthly spending, so a draw cannot leave
+   * the user short on living expenses or scheduled outflows.
+   */
+  /** Sum of upcomingExpenses that fall within `futureExpenseWindowDays`. */
+  futureExpenseReserve: number;
+  /** Filtered expense items used to produce `futureExpenseReserve`. */
+  futureExpenseItems: Array<{ label: string; amount: number; dueInDays?: number }>;
+  /** Horizon (days) for future-expense reserve; default 120. */
+  futureExpenseWindowDays: number;
+  /** `monthlySpendingEstimate × 1.5` held aside from upfront cash. */
+  spendingBuffer: number;
+  /** Monthly spending figure used to derive `spendingBuffer`. */
+  monthlySpendingEstimate: number;
+  /** True when `monthlySpendingEstimate` fell back to the default constant. */
+  monthlySpendingIsDefault: boolean;
+  /**
+   * Upfront cash that is actually safe to deploy against a HELOC after the
+   * future-expense reserve and spending buffer are carved off. Clamped at 0.
+   * All Month-0 paydown math uses this value, NOT the raw "Cash to use now".
+   */
+  adjustedUpfrontCash: number;
+  /**
+   * True when the future-expense reserve consumes more than 30% of raw
+   * upfront cash — the UI surfaces this as "large upcoming expenses reduce
+   * safe HELOC capacity".
+   */
+  cashProtectionWarning: boolean;
+  /**
+   * Expected additional monthly spending pressure (renovations, childcare,
+   * tax withholdings, etc.) that reduces recurring paydown. Default 0.
+   */
+  monthlyNewSpendingEstimate: number;
+  /**
+   * Post-ALL-adjustments recurring paydown used for Month 1+ payoff math.
+   * Layers applied in order:
+   *   1. `max(0, monthlyRecurringPaydownCapacity − monthlyNewSpendingEstimate)`
+   *      (generic new-spending pressure — childcare, renovations, taxes)
+   *   2. If `cardSpendAlreadyInCashflow === false`, subtract
+   *      `cardSpendModel.recurringMonthlyCardSpend` as well (clamped at 0).
+   * Always ≥ 0. Consumed by the safe-draw math AND the residual payoff loop
+   * — never use raw `monthlyRecurringPaydownCapacity` for sizing.
+   */
+  effectiveMonthlyRepayment: number;
+
+  /*
+   * ── HELOC REALISM LAYER (ongoing card spend) ────────────────────────────
+   * The advisor models ongoing credit-card spend separately so it can (a)
+   * avoid double-counting when the planner's surplus already nets it out,
+   * and (b) warn about the "double-debt trap" where a HELOC draw clears
+   * cards while new charges rebuild balances.
+   */
+  cardSpendModel: CardSpendModel;
+  effectiveHelocRepaymentModel: EffectiveHelocRepaymentModel;
+  /** True when any double-debt condition is met (watch OR critical). */
+  doubleDebtWarning: boolean;
+  doubleDebtSeverity: DoubleDebtSeverity;
+  /**
+   * Outcome-oriented trap-risk assessment (`low` / `medium` / `high`) plus
+   * the enumerated reasons surfaced to the UI. Mirrors `doubleDebtSeverity`
+   * on a coarser scale: `none → low`, `watch → medium`, `critical → high`,
+   * promoted further when spiky near-term card spend is material.
+   */
+  doubleDebtTrapModel: DoubleDebtTrapModel;
+  /** Advisory priority rule — always `"heloc_first"` for the current model. */
+  repaymentPriority: HelocRepaymentPriority;
+  /**
+   * Expected principal reduction on the HELOC per month under the advisory
+   * "all cash to HELOC" rule = max(0, monthlyRepaymentCapacity − monthly interest on month-0 draw).
+   * Kept as a single summary number so the UI can show "$X/month reduction" without the user
+   * reading the full 12-month table.
+   */
+  estimatedMonthlyReduction: number;
+  /** Short human-readable description of the paydown rule. */
+  paydownBehaviorNote: string;
+  /** Linear-capacity estimate (ceil(draw / monthlyCapacity)). May be `Infinity`. */
+  payoffMonths: number;
+  interestSavedEstimate: number;
+  payoffMonthsWithHeloc: number;
+  payoffMonthsWithoutHeloc: number;
+  accelerationMonthsSaved: number;
+  /** True when capacity + rate push payoff past 12 months — UI surfaces a warning. */
+  slowPayoffWarning: boolean;
+};
+
+export type HelocPlanRow = {
+  month: number;
+  startingHelocBalance: number;
+  drawAmount: number;
+  debtReplaced: string[];
+  /**
+   * Total cash applied to the HELOC in this month. For month 0 this equals
+   * `immediatePaydownFromCashNow`; for month 1..N it equals
+   * `recurringPaymentFromCash`. Kept for back-compat with existing UI.
+   */
+  payment: number;
+  /**
+   * Month 0 only: one-time cash (from "Cash to use now") applied to the
+   * freshly-drawn HELOC balance.
+   */
+  immediatePaydownFromCashNow: number;
+  /**
+   * Month 1+: recurring monthly cash flow applied to the HELOC. Never fed
+   * by a draw — always sourced from the user's recurring cash.
+   */
+  recurringPaymentFromCash: number;
+  /**
+   * Optional conditional payment (RSU/stock sale) for the month. Reserved
+   * field; always 0 until the user explicitly toggles a lump scenario.
+   */
+  conditionalPayment: number;
+  interestAccrued: number;
+  endingHelocBalance: number;
+  /** HELOC balance + remaining non-target debt balance at end of month. */
+  remainingDebt: number;
+  /**
+   * Human-readable behavior note for this month under the advisory rule.
+   * For months 1..N while the HELOC is not yet zero this reads:
+   *   "Recurring cash is directed to HELOC until fully paid"
+   * After the HELOC clears the note switches to the normal avalanche rule.
+   */
+  paymentBehaviorNote: string;
+};
+
+export type HelocExecutionPlan = {
+  rows: HelocPlanRow[];
+  summary: {
+    monthsToZeroHeloc: number;
+    totalInterestSaved: number;
+    accelerationMonthsSaved: number;
+    /** Recurring monthly cash applied to the HELOC in months 1..N. */
+    monthlyCashApplied: number;
+    /** Total one-time cash applied at Month 0. */
+    upfrontCashApplied: number;
+    /** Informational conditional lump amount (always additive, never assumed). */
+    conditionalLumpCapacity: number;
+    estimatedMonthlyReduction: number;
+    repaymentPriority: HelocRepaymentPriority;
+    paydownBehaviorNote: string;
+    slowPayoffWarning: boolean;
+    /** True when recurring capacity ≤ 0 — UI surfaces a conservative warning. */
+    recurringCapacityWarning: boolean;
+    /** Upfront cash remaining safe to deploy after reserves/buffer. */
+    adjustedUpfrontCash: number;
+    /** Recurring paydown used for Month 1+ payments (post new-spending drain). */
+    effectiveMonthlyRepayment: number;
+    /** `true` when upcoming expenses exceed 30% of raw upfront cash. */
+    cashProtectionWarning: boolean;
+    /**
+     * Ongoing credit-card spend figure (monthly) the advisor assumed. Drives
+     * the "Model assumes ongoing card spending continues at ≈ $X/month" note
+     * in the 12-month plan.
+     */
+    ongoingCardSpendMonthly: number;
+    /** Whether card spend was already netted out of the planner surplus. */
+    cardSpendAlreadyInCashflow: boolean;
+    /** True for watch-level or critical double-debt conditions. */
+    doubleDebtWarning: boolean;
+    doubleDebtSeverity: DoubleDebtSeverity;
+    /** Coarser outcome-oriented trap risk tier. */
+    doubleDebtTrapRiskLevel: DoubleDebtTrapRiskLevel;
+    /** Enumerated reasons behind the trap risk tier, for UI rendering. */
+    doubleDebtWarningReasons: string[];
+    /** Trailing spiky card spend captured from CF history. */
+    spikyCardSpendNext120Days: number;
+  };
+};
+
+type SimDebt = { name: string; balance: number; aprPercent: number; minimumPayment: number };
+
+/**
+ * Advisory paydown behavior note reused by the strategy model and every
+ * active month of the 12-month plan. Keeping it as a single constant keeps
+ * the UI copy and exported model in sync.
+ */
+const HELOC_PAYDOWN_BEHAVIOR_NOTE =
+  'Recurring cash is directed to HELOC until fully paid';
+
+const HELOC_POST_CLEAR_BEHAVIOR_NOTE =
+  'HELOC cleared — recurring cash reverts to the standard avalanche on remaining debts';
+
+const HELOC_MONTH0_BEHAVIOR_NOTE =
+  'One-time cash applied immediately to the fresh HELOC draw';
+
+/** Target payoff window: draws are sized to clear within this many months. */
+const HELOC_TARGET_PAYOFF_MONTHS = 9;
+/** Hard cutoff: anything beyond this falls to `status = 'not_recommended'`. */
+const HELOC_MAX_PAYOFF_MONTHS = 12;
+
+/*
+ * ─── Cash-protection / safety-buffer constants ──────────────────────────
+ * Used by the HELOC advisor to prevent over-leverage when sizing a draw.
+ */
+/** Horizon for "future expense reserve": include upcoming expenses within N days. */
+const HELOC_FUTURE_EXPENSE_WINDOW_DAYS = 120;
+/** Spending buffer = monthly spending × this multiplier (~1.5 months of runway). */
+const HELOC_SPENDING_BUFFER_MULTIPLIER = 1.5;
+/**
+ * Conservative default monthly spending estimate ($) when the planner has
+ * no trustworthy figure. Intentionally generous so the buffer stays safe.
+ * NOTE: this is a display constant, not a credential.
+ */
+const HELOC_DEFAULT_MONTHLY_SPENDING_ESTIMATE = 10_000;
+/** Future-expense-to-cash ratio above which the UI warns the user. */
+const HELOC_FUTURE_EXPENSE_WARNING_THRESHOLD = 0.3;
+
+/*
+ * ─── HELOC realism constants (ongoing card-spend layer) ─────────────────
+ */
+/**
+ * Card-spend level at/above which the "double-debt trap" logic applies.
+ * Below this threshold, ongoing card spend is assumed incidental and we do
+ * NOT downgrade recommendations or fire the rebuild warning.
+ */
+const HELOC_MATERIAL_CARD_SPEND_PER_MONTH = 500;
+/**
+ * Effective repayment must clear at least this multiple of ongoing card
+ * spend to avoid the watch-level double-debt warning. A value of 2 means
+ * the user can absorb new card charges AND still have an equal amount of
+ * capacity left over for HELOC paydown. Below that, the math implies cards
+ * rebuild nearly as fast as the HELOC shrinks.
+ */
+const HELOC_DOUBLE_DEBT_WEAKNESS_MULTIPLIER = 2;
+
+/**
+ * Simulate avalanche payoff with an optional HELOC tranche on top. Returns the
+ * number of months needed to zero out every debt (HELOC + non-target). Capped
+ * at 240 months so a pathological input can never run away. Interest is
+ * accrued monthly, minimums are paid on each active debt, and any remaining
+ * capacity is routed to the highest-APR debt (HELOC included).
+ */
+function simulateAvalanchePayoffMonths(params: {
+  helocRatePercent: number;
+  helocBalance: number;
+  remainingDebts: SimDebt[];
+  monthlyCapacity: number;
+}): number {
+  const MAX_MONTHS = 240;
+  const cap = Math.max(0, Number(params.monthlyCapacity) || 0);
+  if (cap <= 0.005) return MAX_MONTHS;
+  let helocBal = Math.max(0, Number(params.helocBalance) || 0);
+  const helocMonthlyRate = Math.max(0, Number(params.helocRatePercent) || 0) / 100 / 12;
+  const debts: SimDebt[] = params.remainingDebts
+    .filter((d) => d && d.balance > 0.005)
+    .map((d) => ({
+      name: d.name,
+      balance: Number(d.balance) || 0,
+      aprPercent: Number(d.aprPercent) || 0,
+      minimumPayment: Math.max(0, Number(d.minimumPayment) || 0)
+    }));
+  for (let m = 1; m <= MAX_MONTHS; m++) {
+    if (helocBal <= 0.005 && debts.every((d) => d.balance <= 0.005)) {
+      return m - 1;
+    }
+    helocBal = Math.max(0, helocBal + helocBal * helocMonthlyRate);
+    for (const d of debts) {
+      if (d.balance <= 0.005) continue;
+      d.balance = d.balance + d.balance * (d.aprPercent / 100 / 12);
+    }
+    let budget = cap;
+    for (const d of debts) {
+      if (d.balance <= 0.005 || d.minimumPayment <= 0.005) continue;
+      const pay = Math.min(d.minimumPayment, d.balance, budget);
+      d.balance = Math.max(0, d.balance - pay);
+      budget = Math.max(0, budget - pay);
+      if (budget <= 0.005) break;
+    }
+    while (budget > 0.005) {
+      let target: SimDebt | null = null;
+      let targetApr = helocBal > 0.005 ? params.helocRatePercent : -Infinity;
+      for (const d of debts) {
+        if (d.balance <= 0.005) continue;
+        if (d.aprPercent > targetApr) {
+          target = d;
+          targetApr = d.aprPercent;
+        }
+      }
+      if (helocBal > 0.005 && (!target || params.helocRatePercent >= targetApr)) {
+        const pay = Math.min(helocBal, budget);
+        helocBal = Math.max(0, helocBal - pay);
+        budget = Math.max(0, budget - pay);
+      } else if (target) {
+        const pay = Math.min(target.balance, budget);
+        target.balance = Math.max(0, target.balance - pay);
+        budget = Math.max(0, budget - pay);
+      } else {
+        break;
+      }
+    }
+  }
+  return MAX_MONTHS;
+}
+
+/**
+ * Build the advisory HELOC strategy model.
+ *
+ * Inputs are split into three distinct buckets so the model cannot confuse
+ * a one-time deployment with a recurring monthly paydown:
+ *
+ * - `upfrontCashNow`           → one-time cash to apply at Month 0.
+ * - `monthlyRecurringPaydown`  → trusted recurring cash flow that actually
+ *                                services the HELOC over months 1..N.
+ *                                MUST default to 0 when not explicitly known.
+ * - `conditionalLumpPaydown`   → optional, informational (RSU/stock sale).
+ *                                NEVER used to size the safe draw.
+ *
+ * Safe-draw thresholds:
+ *   safe_draw_strict = upfront + recurring × 9   (recommended window)
+ *   safe_draw_upper  = upfront + recurring × 12  (still serviceable, optional)
+ *
+ * Returns `null` when there are no non-HELOC debts to analyse.
+ */
+export function computeHelocStrategyModel(params: {
+  debts: Array<{ name: string; type: string; balance: number; aprPercent: number; minimumPayment: number }>;
+  helocRatePercent: number;
+  minSpreadPercent: number;
+  /** One-time cash available now (maps to the "Cash to use now" user input). */
+  upfrontCashNow: number;
+  /**
+   * Recurring monthly cash that services the HELOC. Pass 0 when no reliable
+   * surplus exists — NEVER fall back to `upfrontCashNow`.
+   */
+  monthlyRecurringPaydown: number;
+  /** Optional informational lump (e.g. RSU/stock sale). */
+  conditionalLumpPaydown?: number;
+  conditionalLumpFrequencyNote?: string;
+  /** Planned large expenses within the next ~120 days (fence, solar, taxes, car). */
+  upcomingExpenses?: Array<{ label: string; amount: number; dueInDays?: number }>;
+  /** Monthly spending; `× 1.5` is held back from upfront cash. */
+  monthlySpendingEstimate?: number;
+  /** Additional monthly spending pressure that erodes recurring paydown. */
+  monthlyNewSpendingEstimate?: number;
+  /**
+   * Realism-layer signal: ongoing credit-card spend. Drives the
+   * `cardSpendModel`, effective repayment adjustment, and the double-debt
+   * trap warning. Pass `undefined` when the planner has no data — the
+   * advisor will flag `no_data` / low confidence rather than inventing a
+   * number.
+   */
+  cardSpend?: HelocAdvisorSnapshot['cardSpend'];
+  estimatedHelocLimit?: number;
+  userDefinedCap?: number;
+}): HelocStrategyModel | null {
+  const helocRate = Math.max(0, Number(params.helocRatePercent) || 0);
+  const minSpread = Math.max(0, Number(params.minSpreadPercent) || 3);
+  const upfrontCashNow = Math.max(0, Number(params.upfrontCashNow) || 0);
+  const monthlyRecurring = Math.max(0, Number(params.monthlyRecurringPaydown) || 0);
+  const conditionalLump = Math.max(0, Number(params.conditionalLumpPaydown) || 0);
+  const conditionalNote = params.conditionalLumpFrequencyNote || undefined;
+  const targetPayoffMonths = HELOC_TARGET_PAYOFF_MONTHS;
+  const maxPayoffMonths = HELOC_MAX_PAYOFF_MONTHS;
+
+  /*
+   * Cash-protection layer — runs BEFORE any safe-draw math.
+   *
+   *   future_expense_reserve = Σ upcoming_expenses within 120 days
+   *   spending_buffer        = monthly_spending × 1.5
+   *   adjusted_upfront_cash  = max(0, upfrontCashNow − reserve − buffer)
+   *
+   * The adjusted figure is what the advisor is allowed to deploy; raw
+   * upfrontCashNow is preserved for UI display only.
+   */
+  const futureExpenseWindowDays = HELOC_FUTURE_EXPENSE_WINDOW_DAYS;
+  const futureExpenseItems = (params.upcomingExpenses || [])
+    .filter(
+      (e) =>
+        e &&
+        typeof e.label === 'string' &&
+        e.label.trim() &&
+        Number(e.amount) > 0 &&
+        (e.dueInDays == null || Number(e.dueInDays) <= futureExpenseWindowDays)
+    )
+    .map((e) => ({
+      label: e.label.trim(),
+      amount: round2(Math.max(0, Number(e.amount) || 0)),
+      dueInDays: e.dueInDays != null ? Math.max(0, Number(e.dueInDays) || 0) : undefined
+    }));
+  const futureExpenseReserve = round2(
+    futureExpenseItems.reduce((s, e) => s + e.amount, 0)
+  );
+
+  const hasExplicitSpending =
+    params.monthlySpendingEstimate != null && Number(params.monthlySpendingEstimate) > 0;
+  const monthlySpendingEstimate = hasExplicitSpending
+    ? round2(Math.max(0, Number(params.monthlySpendingEstimate) || 0))
+    : HELOC_DEFAULT_MONTHLY_SPENDING_ESTIMATE;
+  const monthlySpendingIsDefault = !hasExplicitSpending;
+  const spendingBuffer = round2(monthlySpendingEstimate * HELOC_SPENDING_BUFFER_MULTIPLIER);
+
+  const adjustedUpfrontCash = round2(
+    Math.max(0, upfrontCashNow - futureExpenseReserve - spendingBuffer)
+  );
+  const cashProtectionWarning =
+    upfrontCashNow > 0.005 &&
+    futureExpenseReserve > HELOC_FUTURE_EXPENSE_WARNING_THRESHOLD * upfrontCashNow;
+
+  const monthlyNewSpendingEstimate = Math.max(
+    0,
+    Number(params.monthlyNewSpendingEstimate) || 0
+  );
+  /*
+   * Step A: surplus AFTER generic "new spending" pressure but BEFORE the
+   * card-spend realism layer. Always ≥ 0.
+   */
+  const surplusBeforeCardAdjustment = round2(
+    Math.max(0, monthlyRecurring - monthlyNewSpendingEstimate)
+  );
+
+  /*
+   * ── Step B: card-spend realism layer ────────────────────────────────────
+   *
+   * Estimation ladder (first non-empty wins):
+   *   1. `cardSpend.recentMonthlyAverage`      → method `actual_recent`
+   *   2. Σ `cardSpend.recurringBills`          → method `recurring_bills_only`
+   *   3. fall-through (no data)                → method `no_data`, 0 spend
+   *
+   * `cardSpendAlreadyInCashflow` is the ONE decision that governs whether
+   * the card-spend total is subtracted from the recurring surplus. Default
+   * `true` — the pragmatic guard against double-counting when the planner's
+   * surplus is an income-minus-expenses figure that already nets out card
+   * charges. Backend sets `false` to force subtraction.
+   */
+  const rawCardSpend = params.cardSpend || undefined;
+  const cardSpendByAccount = (rawCardSpend?.byAccount || [])
+    .filter((a) => a && typeof a.account === 'string' && a.account.trim() && Number(a.monthlyAverage) > 0)
+    .map((a) => ({
+      account: a.account.trim(),
+      monthlyAverage: round2(Math.max(0, Number(a.monthlyAverage) || 0))
+    }));
+  const cardRecurringBills = (rawCardSpend?.recurringBills || [])
+    .filter(
+      (b) =>
+        b &&
+        typeof b.label === 'string' &&
+        b.label.trim() &&
+        Number(b.monthlyAmount) > 0
+    )
+    .map((b) => ({
+      label: b.label.trim(),
+      monthlyAmount: round2(Math.max(0, Number(b.monthlyAmount) || 0))
+    }));
+  const recentMonthlyAverageProvided =
+    rawCardSpend?.recentMonthlyAverage != null &&
+    Number(rawCardSpend.recentMonthlyAverage) >= 0;
+  const recurringBillsTotal = round2(
+    cardRecurringBills.reduce((s, b) => s + b.monthlyAmount, 0)
+  );
+  let recurringMonthlyCardSpend: number;
+  let spendEstimationMethod: CardSpendEstimationMethod;
+  let spendConfidence: CardSpendConfidence;
+  if (recentMonthlyAverageProvided) {
+    recurringMonthlyCardSpend = round2(
+      Math.max(0, Number(rawCardSpend!.recentMonthlyAverage) || 0)
+    );
+    spendEstimationMethod = rawCardSpend!.estimationMethod || 'actual_recent';
+    spendConfidence = rawCardSpend!.confidence || 'high';
+  } else if (recurringBillsTotal > 0.005) {
+    recurringMonthlyCardSpend = recurringBillsTotal;
+    spendEstimationMethod = rawCardSpend?.estimationMethod || 'recurring_bills_only';
+    spendConfidence = rawCardSpend?.confidence || 'medium';
+  } else {
+    recurringMonthlyCardSpend = 0;
+    spendEstimationMethod = rawCardSpend?.estimationMethod || 'no_data';
+    spendConfidence = rawCardSpend?.confidence || 'low';
+  }
+  const plannedCardFundedSpendNext120Days = round2(
+    Math.max(0, Number(rawCardSpend?.plannedCardFundedNext120Days) || 0)
+  );
+  const spikyCardSpendNext120Days = round2(
+    Math.max(0, Number(rawCardSpend?.spikyCardSpendNext120Days) || 0)
+  );
+  // Default TRUE: safest against double-counting when planner surplus
+  // already nets card spend (the common case). Backend flips to false
+  // when it knows the surplus is pre-card-spend.
+  const cardSpendAlreadyInCashflow =
+    rawCardSpend?.alreadyInCashflow == null ? true : rawCardSpend.alreadyInCashflow === true;
+
+  // Per-month series + payee classification — display / debug only. Cloned
+  // so downstream mutations can't leak back into the planner payload.
+  const recurringCardSpendByMonth = (rawCardSpend?.recurringCardSpendByMonth || [])
+    .filter((m) => m && typeof m.month === 'string' && m.month.trim())
+    .map((m) => ({
+      month: m.month.trim(),
+      amount: round2(Math.max(0, Number(m.amount) || 0))
+    }));
+  const plannedOrSpikyCardSpendByMonth = (
+    rawCardSpend?.plannedOrSpikyCardSpendByMonth || []
+  )
+    .filter((m) => m && typeof m.month === 'string' && m.month.trim())
+    .map((m) => ({
+      month: m.month.trim(),
+      amount: round2(Math.max(0, Number(m.amount) || 0))
+    }));
+  const recurringPayees = (rawCardSpend?.recurringPayees || [])
+    .map((p) => String(p || '').trim())
+    .filter(Boolean);
+  const spikyPayees = (rawCardSpend?.spikyPayees || [])
+    .map((p) => String(p || '').trim())
+    .filter(Boolean);
+
+  // Active-column bookkeeping (backend sends these whenever the Cash Flow
+  // sheet has the optional `Active` column). On legacy tabs we default to
+  // `false` / 0 / empty so the UI simply doesn't render the exclusion note
+  // (nothing is being filtered out to warn about).
+  const activeColumnPresent =
+    rawCardSpend?.activeColumnPresent === true;
+  const inactiveCardSpendRemoved = Math.max(
+    0,
+    Number(rawCardSpend?.inactiveCardSpendRemoved) || 0
+  );
+  const inactivePayeesRemoved = (rawCardSpend?.inactivePayeesRemoved || [])
+    .filter(
+      (entry): entry is { account: string; amount: number } =>
+        !!entry &&
+        typeof entry.account === 'string' &&
+        entry.account.trim().length > 0 &&
+        Number.isFinite(Number(entry.amount)) &&
+        Number(entry.amount) > 0.005
+    )
+    .map((entry) => ({
+      account: entry.account.trim(),
+      amount: round2(Number(entry.amount))
+    }));
+
+  /*
+   * ── Bills-based forward-looking card obligation signal ────────────────
+   * Pass through the derived burden-selection fields so the UI can render
+   * the full "History vs Bills vs Chosen" comparison. All values default
+   * to 0 / [] / false on legacy workbooks without the Payment Source
+   * column so the panel can still render a clean "Scheduled card bills —
+   * none" state instead of hiding the whole block.
+   */
+  const billsPaymentSourceColumnPresent =
+    rawCardSpend?.billsPaymentSourceColumnPresent === true;
+  const activeCardBillCount = Math.max(
+    0,
+    Math.round(Number(rawCardSpend?.activeCardBillCount) || 0)
+  );
+  const billsRecurringCardBurden = round2(
+    Math.max(0, Number(rawCardSpend?.billsRecurringCardBurden) || 0)
+  );
+  const billsSpikyCardBurdenNext120Days = round2(
+    Math.max(0, Number(rawCardSpend?.billsSpikyCardBurdenNext120Days) || 0)
+  );
+  // Default historical to the primary `recentMonthlyAverage` /
+  // `spikyCardSpendNext120Days` signals when the backend didn't emit the
+  // burden-selection block (combined payload not produced). Keeps the UI
+  // honest about what feeds the chosen value.
+  const historicalRecurringCardSpend = round2(
+    Math.max(
+      0,
+      Number(rawCardSpend?.historicalRecurringCardSpend) || recurringMonthlyCardSpend
+    )
+  );
+  const historicalSpikyCardSpendNext120Days = round2(
+    Math.max(
+      0,
+      Number(rawCardSpend?.historicalSpikyCardSpendNext120Days) ||
+        spikyCardSpendNext120Days
+    )
+  );
+  const chosenRecurringCardBurden = round2(
+    Math.max(
+      0,
+      Number(rawCardSpend?.chosenRecurringCardBurden) ||
+        Math.max(historicalRecurringCardSpend, billsRecurringCardBurden)
+    )
+  );
+  const chosenSpikyCardBurdenNext120Days = round2(
+    Math.max(
+      0,
+      Number(rawCardSpend?.chosenSpikyCardBurdenNext120Days) ||
+        Math.max(historicalSpikyCardSpendNext120Days, billsSpikyCardBurdenNext120Days)
+    )
+  );
+  type Decision = CardSpendModel['sourceDecision'];
+  const VALID_DECISIONS: readonly Decision[] = [
+    'history_dominated',
+    'bills_dominated',
+    'tied',
+    'history_only',
+    'bills_only',
+    'no_data'
+  ];
+  const normalizeDecision = (d: string | undefined): Decision => {
+    if (d && (VALID_DECISIONS as readonly string[]).includes(d)) return d as Decision;
+    return 'no_data';
+  };
+  const sourceDecision = normalizeDecision(rawCardSpend?.sourceDecision);
+  const spikySourceDecision = normalizeDecision(rawCardSpend?.spikySourceDecision);
+
+  const recurringCardBillsFromBills = (rawCardSpend?.recurringCardBillsFromBills || [])
+    .filter(
+      (b): b is { account: string; monthlyEquivalent: number } =>
+        !!b &&
+        typeof b.account === 'string' &&
+        b.account.trim().length > 0 &&
+        Number.isFinite(Number(b.monthlyEquivalent)) &&
+        Number(b.monthlyEquivalent) > 0.005
+    )
+    .map((b) => ({
+      account: b.account.trim(),
+      monthlyEquivalent: round2(Number(b.monthlyEquivalent))
+    }));
+  const upcomingCardBillsFromBills = (rawCardSpend?.upcomingCardBillsFromBills || [])
+    .filter(
+      (b): b is { account: string; next120DayBurden: number } =>
+        !!b &&
+        typeof b.account === 'string' &&
+        b.account.trim().length > 0 &&
+        Number.isFinite(Number(b.next120DayBurden)) &&
+        Number(b.next120DayBurden) > 0.005
+    )
+    .map((b) => ({
+      account: b.account.trim(),
+      next120DayBurden: round2(Number(b.next120DayBurden))
+    }));
+  const recurringCardPayeesFromBills = (rawCardSpend?.recurringCardPayeesFromBills || [])
+    .map((p) => String(p || '').trim())
+    .filter(Boolean);
+  const spikyCardPayeesFromBills = (rawCardSpend?.spikyCardPayeesFromBills || [])
+    .map((p) => String(p || '').trim())
+    .filter(Boolean);
+
+  const cardSpendModel: CardSpendModel = {
+    recurringMonthlyCardSpend,
+    recurringCardSpendByAccount: cardSpendByAccount,
+    recurringCardBills: cardRecurringBills,
+    plannedCardFundedSpendNext120Days,
+    spikyCardSpendNext120Days,
+    recurringCardSpendByMonth,
+    plannedOrSpikyCardSpendByMonth,
+    recurringPayees,
+    spikyPayees,
+    spendEstimationMethod,
+    spendConfidence,
+    cardSpendAlreadyInCashflow,
+    activeColumnPresent,
+    inactiveCardSpendRemoved,
+    inactivePayeesRemoved,
+    billsPaymentSourceColumnPresent,
+    activeCardBillCount,
+    billsRecurringCardBurden,
+    billsSpikyCardBurdenNext120Days,
+    historicalRecurringCardSpend,
+    historicalSpikyCardSpendNext120Days,
+    chosenRecurringCardBurden,
+    chosenSpikyCardBurdenNext120Days,
+    sourceDecision,
+    spikySourceDecision,
+    recurringCardBillsFromBills,
+    upcomingCardBillsFromBills,
+    recurringCardPayeesFromBills,
+    spikyCardPayeesFromBills
+  };
+
+  /*
+   * Step C: final effective monthly repayment.
+   *   already_in_cashflow → use "before" figure (don't double-count)
+   *   else                → subtract card spend, clamped at 0
+   */
+  const effectiveMonthlyRepayment = cardSpendAlreadyInCashflow
+    ? surplusBeforeCardAdjustment
+    : round2(Math.max(0, surplusBeforeCardAdjustment - recurringMonthlyCardSpend));
+
+  const effectiveHelocRepaymentModel: EffectiveHelocRepaymentModel = {
+    recurringMonthlySurplusBeforeCardAdjustment: surplusBeforeCardAdjustment,
+    recurringMonthlyCardSpend,
+    recurringMonthlyRepaymentCapacityEffective: effectiveMonthlyRepayment,
+    cardSpendAlreadyInCashflow
+  };
+
+  // Safe-draw math now runs off the protected (adjusted + effective) figures.
+  const safeDrawStrict = round2(
+    adjustedUpfrontCash + effectiveMonthlyRepayment * targetPayoffMonths
+  );
+  const safeDrawUpper = round2(
+    adjustedUpfrontCash + effectiveMonthlyRepayment * maxPayoffMonths
+  );
+  const working = (params.debts || [])
+    .filter((d) => d && d.name && d.balance > 0.005 && String(d.type || '').toUpperCase() !== 'HELOC')
+    .map((d) => ({
+      name: d.name,
+      type: String(d.type || ''),
+      balance: round2(d.balance),
+      aprPercent: Number(d.aprPercent) || 0,
+      minimumPayment: round2(Number(d.minimumPayment) || 0)
+    }));
+  if (!working.length) return null;
+
+  /**
+   * Case-insensitive match on the debt's `type` string for the double-debt
+   * warning logic. Treats any type containing "card" as a revolving card.
+   */
+  const isCardType = (t: string | undefined) =>
+    typeof t === 'string' && /card/i.test(t);
+  const cardTypeByName = new Map<string, boolean>();
+  for (const d of working) cardTypeByName.set(d.name, isCardType(d.type));
+
+  const eligible: HelocEligibleDebt[] = [];
+  const ineligible: HelocIneligibleDebt[] = [];
+  for (const d of working) {
+    const spread = round2(d.aprPercent - helocRate);
+    if (spread >= minSpread) {
+      eligible.push({
+        name: d.name,
+        balance: d.balance,
+        aprPercent: d.aprPercent,
+        minimumPayment: d.minimumPayment,
+        benefitSpread: spread,
+        // benefit_score = interest dollars avoided per year on the moved balance
+        benefitScore: round2((spread / 100) * d.balance)
+      });
+    } else {
+      ineligible.push({
+        name: d.name,
+        balance: d.balance,
+        aprPercent: d.aprPercent,
+        reason:
+          d.aprPercent <= helocRate
+            ? 'Rate at or below HELOC — no benefit'
+            : `Spread ${spread.toFixed(1)} pp below ${minSpread} pp threshold`
+      });
+    }
+  }
+  // Order by composite interest-dollar benefit score (spread × balance).
+  // Tie-break on spread, then balance, for stable selection.
+  eligible.sort(
+    (a, b) =>
+      b.benefitScore - a.benefitScore ||
+      b.benefitSpread - a.benefitSpread ||
+      b.balance - a.balance
+  );
+
+  if (!eligible.length) {
+    return {
+      status: 'not_needed',
+      rateBenefitExists: false,
+      helocRatePercent: helocRate,
+      avgTargetAprPercent: 0,
+      eligibleDebts: eligible,
+      targetDebts: [],
+      excludedEligibleDebts: [],
+      ineligibleDebts: ineligible,
+      recommendedDrawAmount: 0,
+      drawCapApplied: 'none',
+      upfrontCashNow,
+      monthlyRecurringPaydownCapacity: monthlyRecurring,
+      conditionalLumpPaydownCapacity: conditionalLump,
+      conditionalLumpFrequencyNote: conditionalNote,
+      monthlyRepaymentCapacity: monthlyRecurring,
+      safeDrawStrict,
+      safeDrawUpper,
+      safeDrawCapacity: safeDrawStrict,
+      targetPayoffMonths,
+      maxPayoffMonths,
+      futureExpenseReserve,
+      futureExpenseItems,
+      futureExpenseWindowDays,
+      spendingBuffer,
+      monthlySpendingEstimate,
+      monthlySpendingIsDefault,
+      adjustedUpfrontCash,
+      cashProtectionWarning,
+      monthlyNewSpendingEstimate,
+      effectiveMonthlyRepayment,
+      cardSpendModel,
+      effectiveHelocRepaymentModel,
+      doubleDebtWarning: false,
+      doubleDebtSeverity: 'none',
+      doubleDebtTrapModel: {
+        trapRiskLevel: 'low',
+        warningReasons: [],
+        recurringCardSpend: recurringMonthlyCardSpend,
+        recurringRepaymentCapacityEffective: effectiveMonthlyRepayment,
+        spikyCardSpendNext120Days
+      },
+      repaymentPriority: 'heloc_first',
+      estimatedMonthlyReduction: 0,
+      paydownBehaviorNote: HELOC_PAYDOWN_BEHAVIOR_NOTE,
+      payoffMonths: 0,
+      interestSavedEstimate: 0,
+      payoffMonthsWithHeloc: 0,
+      payoffMonthsWithoutHeloc: 0,
+      accelerationMonthsSaved: 0,
+      slowPayoffWarning: false
+    };
+  }
+
+  const totalEligibleBalance = round2(eligible.reduce((s, d) => s + d.balance, 0));
+
+  /*
+   * Status + draw cap order (spec):
+   *   strict supports it → status = recommended, cap = min(total, strict)
+   *   upper  supports it → status = optional,    cap = min(total, upper)
+   *   else             → status = not_recommended,
+   *                        cap = safeDrawStrict (partial, if > 0) else 0
+   */
+  let status: HelocStrategyStatus;
+  let drawCap: number;
+  let drawCapApplied: HelocStrategyModel['drawCapApplied'];
+  if (totalEligibleBalance <= safeDrawStrict + 0.005) {
+    status = 'recommended';
+    drawCap = totalEligibleBalance;
+    drawCapApplied = safeDrawStrict < totalEligibleBalance ? 'cash_capacity_strict' : 'none';
+  } else if (totalEligibleBalance <= safeDrawUpper + 0.005) {
+    status = 'optional';
+    drawCap = totalEligibleBalance;
+    drawCapApplied = 'cash_capacity_upper';
+  } else {
+    status = 'not_recommended';
+    drawCap = Math.max(0, safeDrawStrict);
+    drawCapApplied = drawCap > 0 ? 'cash_capacity_strict' : 'none';
+  }
+
+  // Tighten further with optional HELOC-limit safety / user cap.
+  if (params.estimatedHelocLimit != null && params.estimatedHelocLimit > 0) {
+    const safety = round2(params.estimatedHelocLimit * 0.4);
+    if (safety < drawCap) {
+      drawCap = safety;
+      drawCapApplied = 'heloc_limit';
+    }
+  }
+  if (params.userDefinedCap != null && params.userDefinedCap > 0 && params.userDefinedCap < drawCap) {
+    drawCap = round2(params.userDefinedCap);
+    drawCapApplied = 'user_cap';
+  }
+  drawCap = round2(Math.max(0, drawCap));
+
+  // Greedy selection by composite benefit score. Always include a debt when
+  // the running total + its balance stays within the cap, then stop — we do
+  // NOT skip ahead to find smaller fits, because selection order is driven by
+  // interest-dollar impact, not cap utilisation.
+  const targets: HelocEligibleDebt[] = [];
+  const excluded: HelocEligibleDebt[] = [];
+  let runningTotal = 0;
+  for (const d of eligible) {
+    if (runningTotal + d.balance <= drawCap + 0.005) {
+      targets.push(d);
+      runningTotal = round2(runningTotal + d.balance);
+    } else {
+      excluded.push(d);
+    }
+  }
+  const recommendedDraw = round2(runningTotal);
+
+  /*
+   * Residual-based payoff months. Month 0 applies `adjustedUpfrontCash`
+   * (one-time, AFTER the cash-protection reserve is carved off) immediately
+   * to the fresh HELOC balance. Months 1..N service the remaining residual
+   * from `effectiveMonthlyRepayment` only (recurring minus new-spending
+   * pressure) — upfront cash is NEVER treated as recurring and `upfrontCashNow`
+   * is never used directly for payoff math.
+   */
+  const residualAfterUpfront = round2(Math.max(0, recommendedDraw - adjustedUpfrontCash));
+  const payoffMonths =
+    residualAfterUpfront <= 0.005
+      ? 0
+      : effectiveMonthlyRepayment > 0.005
+      ? Math.ceil(residualAfterUpfront / effectiveMonthlyRepayment)
+      : Number.POSITIVE_INFINITY;
+
+  // Re-check status against the actual residual payoff curve. Strict/upper
+  // selection above already biases this, but we must also downgrade when a
+  // capped partial draw still cannot be serviced.
+  if (recommendedDraw <= 0.005) {
+    // We already passed the `!eligible.length` guard above, so a rate benefit
+    // DOES exist — zero draw here means the safety layer (cash protection,
+    // recurring paydown, future-expense reserve, etc.) forced the cap to 0.
+    // That is "not_recommended" (rate benefit exists but unsafe to use now),
+    // NOT "not_needed" (reserved for the no-rate-benefit case). Prevents the
+    // contradictory "All active debts are at or below the HELOC rate" copy.
+    status = 'not_recommended';
+  } else if (!Number.isFinite(payoffMonths) || payoffMonths > maxPayoffMonths) {
+    status = 'not_recommended';
+  } else if (payoffMonths > targetPayoffMonths) {
+    status = 'optional';
+  } else if (status !== 'not_recommended') {
+    // Already-uncontested recommended.
+    status = 'recommended';
+  }
+
+  // Hard safety guardrail: if the cash-protection layer consumed all of the
+  // upfront cash, no draw should be "recommended" regardless of how strong
+  // recurring paydown looks. Preserves user liquidity over HELOC acceleration.
+  if (recommendedDraw > 0.005 && adjustedUpfrontCash <= 0.005) {
+    status = 'not_recommended';
+  }
+
+  /*
+   * ── Double-debt trap detection ──────────────────────────────────────────
+   *
+   * Fires when a HELOC draw would clear card balances while ongoing card
+   * spending is poised to rebuild them. Two severities:
+   *
+   *   critical → effective monthly repayment is ≤ 0 after card spend. The
+   *              HELOC simply cannot be paid down on current cash flow.
+   *   watch    → material card spend coexists with card-type targets AND
+   *              either payoff exceeds the 9-month target OR effective
+   *              capacity is less than `weakness_multiplier × card_spend`
+   *              (i.e. not enough headroom to outpace new charges).
+   *
+   * A draw must be on the table (`recommendedDraw > 0`) for either to fire.
+   */
+  const anyCardTarget = targets.some((t) => cardTypeByName.get(t.name) === true);
+  const materialCardSpend = recurringMonthlyCardSpend >= HELOC_MATERIAL_CARD_SPEND_PER_MONTH;
+  const weakAgainstCardSpend =
+    recurringMonthlyCardSpend > 0.005 &&
+    effectiveMonthlyRepayment < recurringMonthlyCardSpend * HELOC_DOUBLE_DEBT_WEAKNESS_MULTIPLIER;
+  const hasDraw = recommendedDraw > 0.005;
+  let doubleDebtSeverity: DoubleDebtSeverity = 'none';
+  if (hasDraw && materialCardSpend && effectiveMonthlyRepayment <= 0.005) {
+    doubleDebtSeverity = 'critical';
+  } else if (
+    hasDraw &&
+    materialCardSpend &&
+    anyCardTarget &&
+    (weakAgainstCardSpend ||
+      !Number.isFinite(payoffMonths) ||
+      payoffMonths > targetPayoffMonths)
+  ) {
+    doubleDebtSeverity = 'watch';
+  }
+  const doubleDebtWarning = doubleDebtSeverity !== 'none';
+
+  /*
+   * Guardrail: high card spend + weak effective capacity can't be
+   * Recommended, regardless of upstream status. Downgrade:
+   *   critical → not_recommended
+   *   watch    → at most optional
+   */
+  if (doubleDebtSeverity === 'critical') {
+    status = 'not_recommended';
+  } else if (doubleDebtSeverity === 'watch' && status === 'recommended') {
+    status = 'optional';
+  }
+
+  /*
+   * ── Double-debt-trap model ─────────────────────────────────────────────
+   * A coarser, outcome-oriented view on top of `doubleDebtSeverity`. Maps
+   * severity to a 3-tier risk level and enumerates human-readable reasons
+   * for the UI badge. Promoted one tier when near-term spiky card-funded
+   * spend is also material — a signal that even if monthly math looks OK,
+   * a tax/one-off charge is poised to blow the HELOC paydown off course.
+   */
+  const trapReasons: string[] = [];
+  if (materialCardSpend) {
+    trapReasons.push(
+      `Recurring card spend is material (~${Math.round(recurringMonthlyCardSpend).toLocaleString('en-US')}/mo)`
+    );
+  }
+  if (effectiveMonthlyRepayment <= 0.005) {
+    trapReasons.push(
+      'Effective recurring HELOC paydown capacity is zero or negative after card spend'
+    );
+  } else if (weakAgainstCardSpend) {
+    trapReasons.push(
+      'Effective recurring paydown is too small relative to ongoing card spend to outpace new charges'
+    );
+  }
+  if (hasDraw && anyCardTarget && materialCardSpend) {
+    trapReasons.push(
+      'HELOC draw would clear card balances while ongoing card spending continues'
+    );
+  }
+  if (
+    hasDraw &&
+    (!Number.isFinite(payoffMonths) || payoffMonths > targetPayoffMonths) &&
+    materialCardSpend
+  ) {
+    trapReasons.push(
+      `HELOC payoff exceeds the ${targetPayoffMonths}-month target window — card balances are likely to rebuild first`
+    );
+  }
+  const spikyMaterial =
+    spikyCardSpendNext120Days >= HELOC_MATERIAL_CARD_SPEND_PER_MONTH;
+  if (spikyMaterial) {
+    trapReasons.push(
+      `Trailing spiky card-funded spend (~${Math.round(spikyCardSpendNext120Days).toLocaleString('en-US')} over last 4 months) is material`
+    );
+  }
+
+  /*
+   * ── Fundamental trap risk (independent of cash-slider state) ───────────
+   *
+   * The visible badge must not flip from "high" to "low" purely because the
+   * user moved the Cash-to-use-now slider to 100% (which zeroes out the
+   * current `recommendedDraw` and therefore `hasDraw`). The underlying
+   * card-spend-vs-repayment-capacity relationship is what actually
+   * determines whether a HELOC draw — current, hypothetical, or future —
+   * would get outpaced by ongoing card spending.
+   *
+   * So we derive `trapRiskLevel` from the fundamental signals only:
+   *   • recurring card spend is material
+   *   • effective recurring repayment capacity after card spend
+   *   • spiky near-term card burden
+   *   • presence of any card-type debt that could rebuild
+   *
+   * `doubleDebtSeverity` continues to feed the *status downgrade* logic
+   * (critical / watch), which legitimately depends on whether a draw is
+   * currently on the table; that separation is intentional.
+   */
+  const anyCardDebt = Array.from(cardTypeByName.values()).some((v) => v === true);
+  const fundamentalCritical =
+    materialCardSpend && effectiveMonthlyRepayment <= 0.005;
+  const fundamentalWatch =
+    materialCardSpend && anyCardDebt && weakAgainstCardSpend;
+
+  let trapRiskLevel: DoubleDebtTrapRiskLevel;
+  if (fundamentalCritical) {
+    trapRiskLevel = 'high';
+  } else if (fundamentalWatch) {
+    trapRiskLevel = spikyMaterial ? 'high' : 'medium';
+  } else if (spikyMaterial && anyCardDebt) {
+    trapRiskLevel = 'medium';
+  } else {
+    trapRiskLevel = 'low';
+  }
+
+  const doubleDebtTrapModel: DoubleDebtTrapModel = {
+    trapRiskLevel,
+    warningReasons: trapReasons,
+    recurringCardSpend: recurringMonthlyCardSpend,
+    recurringRepaymentCapacityEffective: effectiveMonthlyRepayment,
+    spikyCardSpendNext120Days
+  };
+
+  const avgTargetApr =
+    recommendedDraw > 0.005
+      ? round2(targets.reduce((s, d) => s + d.aprPercent * d.balance, 0) / recommendedDraw)
+      : 0;
+
+  const payoffFraction = Math.min(
+    1,
+    (Number.isFinite(payoffMonths) ? payoffMonths : maxPayoffMonths) / maxPayoffMonths
+  );
+  const interestSaved = round2(
+    targets.reduce(
+      (s, d) => s + ((d.aprPercent - helocRate) / 100) * d.balance * payoffFraction,
+      0
+    )
+  );
+
+  /*
+   * Avalanche "with vs without HELOC" comparison. Both simulations run on
+   * `monthlyRecurring` only — we do NOT inflate recurring capacity with the
+   * one-time upfront cash. For the HELOC path, upfront cash is applied at
+   * Month 0 (balance reduced directly). For the without-HELOC path, upfront
+   * is applied against the highest-APR debt at Month 0 so the comparison is
+   * fair and not biased against HELOC.
+   */
+  const targetNames = new Set(targets.map((t) => t.name));
+  const postTargetRemaining = working.filter((d) => !targetNames.has(d.name));
+  const withHeloc = simulateAvalanchePayoffMonths({
+    helocRatePercent: helocRate,
+    helocBalance: residualAfterUpfront,
+    remainingDebts: postTargetRemaining,
+    monthlyCapacity: effectiveMonthlyRepayment
+  });
+  const withoutHelocDebts = working.map((d) => ({ ...d }));
+  if (adjustedUpfrontCash > 0.005 && withoutHelocDebts.length) {
+    // Highest-APR active debt absorbs the one-time cash (protected portion only).
+    withoutHelocDebts.sort((a, b) => b.aprPercent - a.aprPercent);
+    let remaining = adjustedUpfrontCash;
+    for (const d of withoutHelocDebts) {
+      if (remaining <= 0.005) break;
+      const applied = Math.min(d.balance, remaining);
+      d.balance = round2(Math.max(0, d.balance - applied));
+      remaining = round2(remaining - applied);
+    }
+  }
+  const withoutHeloc = simulateAvalanchePayoffMonths({
+    helocRatePercent: 0,
+    helocBalance: 0,
+    remainingDebts: withoutHelocDebts,
+    monthlyCapacity: effectiveMonthlyRepayment
+  });
+  const acceleration = Math.max(0, withoutHeloc - withHeloc);
+
+  // First-full-month interest runs on the post-upfront residual balance.
+  const month1Interest = round2((helocRate / 100 / 12) * residualAfterUpfront);
+  const estimatedMonthlyReduction = round2(
+    Math.max(0, effectiveMonthlyRepayment - month1Interest)
+  );
+  const slowPayoffWarning =
+    !Number.isFinite(payoffMonths) || payoffMonths > maxPayoffMonths;
+
+  return {
+    status,
+    rateBenefitExists: true,
+    helocRatePercent: helocRate,
+    avgTargetAprPercent: avgTargetApr,
+    eligibleDebts: eligible,
+    targetDebts: targets,
+    excludedEligibleDebts: excluded,
+    ineligibleDebts: ineligible,
+    recommendedDrawAmount: recommendedDraw,
+    drawCapApplied,
+    upfrontCashNow,
+    monthlyRecurringPaydownCapacity: monthlyRecurring,
+    conditionalLumpPaydownCapacity: conditionalLump,
+    conditionalLumpFrequencyNote: conditionalNote,
+    monthlyRepaymentCapacity: monthlyRecurring,
+    safeDrawStrict,
+    safeDrawUpper,
+    safeDrawCapacity: safeDrawStrict,
+    targetPayoffMonths,
+    maxPayoffMonths,
+    futureExpenseReserve,
+    futureExpenseItems,
+    futureExpenseWindowDays,
+    spendingBuffer,
+    monthlySpendingEstimate,
+    monthlySpendingIsDefault,
+    adjustedUpfrontCash,
+    cashProtectionWarning,
+    monthlyNewSpendingEstimate,
+    effectiveMonthlyRepayment,
+    cardSpendModel,
+    effectiveHelocRepaymentModel,
+    doubleDebtWarning,
+    doubleDebtSeverity,
+    doubleDebtTrapModel,
+    repaymentPriority: 'heloc_first',
+    estimatedMonthlyReduction,
+    paydownBehaviorNote: HELOC_PAYDOWN_BEHAVIOR_NOTE,
+    payoffMonths: Number.isFinite(payoffMonths) ? payoffMonths : 0,
+    interestSavedEstimate: interestSaved,
+    payoffMonthsWithHeloc: withHeloc,
+    payoffMonthsWithoutHeloc: withoutHeloc,
+    accelerationMonthsSaved: acceleration,
+    slowPayoffWarning
+  };
+}
+
+/**
+ * Build the 12-month HELOC acceleration plan.
+ *
+ * Month 0 draws `recommendedDrawAmount`, pays off the selected target debts,
+ * and immediately applies `upfrontCashNow` (one-time cash from "Cash to use
+ * now") against the fresh HELOC balance.
+ *
+ * Months 1..12 service the residual using `monthlyRecurringPaydownCapacity`
+ * ONLY — the upfront cash is never assumed to recur, and conditional lump
+ * income is surfaced informationally but never auto-applied.
+ *
+ * Non-target debts are carried at their post-month-0 balance for the
+ * `remainingDebt` column only — payments to them are out of scope for this
+ * advisory view and do not change the execution plan / waterfall.
+ */
+export function buildHelocExecutionPlan(model: HelocStrategyModel): HelocExecutionPlan {
+  const rows: HelocPlanRow[] = [];
+  const rateMonthly = (model.helocRatePercent || 0) / 100 / 12;
+  // Post-cash-protection values drive ALL payoff math: raw `upfrontCashNow`
+  // is only kept in the model for UI display.
+  const monthlyRecurring = Math.max(0, model.effectiveMonthlyRepayment || 0);
+  const adjustedUpfrontCash = Math.max(0, model.adjustedUpfrontCash || 0);
+  const conditionalLump = Math.max(0, model.conditionalLumpPaydownCapacity || 0);
+  const targetNames = new Set(model.targetDebts.map((t) => t.name));
+  const nonTargetRemaining = round2(
+    model.eligibleDebts
+      .concat(
+        model.ineligibleDebts.map((d) => ({
+          name: d.name,
+          balance: d.balance,
+          aprPercent: d.aprPercent,
+          minimumPayment: 0,
+          benefitSpread: 0,
+          benefitScore: 0
+        }))
+      )
+      .filter((d) => !targetNames.has(d.name))
+      .reduce((s, d) => s + d.balance, 0)
+  );
+
+  const recurringCapacityWarning = monthlyRecurring <= 0.005;
+
+  if (model.recommendedDrawAmount <= 0.005) {
+    return {
+      rows: [],
+      summary: {
+        monthsToZeroHeloc: 0,
+        totalInterestSaved: 0,
+        accelerationMonthsSaved: model.accelerationMonthsSaved,
+        monthlyCashApplied: monthlyRecurring,
+        upfrontCashApplied: 0,
+        conditionalLumpCapacity: conditionalLump,
+        estimatedMonthlyReduction: 0,
+        repaymentPriority: 'heloc_first',
+        paydownBehaviorNote: HELOC_PAYDOWN_BEHAVIOR_NOTE,
+        slowPayoffWarning: false,
+        recurringCapacityWarning,
+        adjustedUpfrontCash,
+        effectiveMonthlyRepayment: monthlyRecurring,
+        cashProtectionWarning: model.cashProtectionWarning,
+        ongoingCardSpendMonthly: model.cardSpendModel.recurringMonthlyCardSpend,
+        cardSpendAlreadyInCashflow: model.cardSpendModel.cardSpendAlreadyInCashflow,
+        doubleDebtWarning: model.doubleDebtWarning,
+        doubleDebtSeverity: model.doubleDebtSeverity,
+        doubleDebtTrapRiskLevel: model.doubleDebtTrapModel.trapRiskLevel,
+        doubleDebtWarningReasons: model.doubleDebtTrapModel.warningReasons.slice(),
+        spikyCardSpendNext120Days: model.cardSpendModel.spikyCardSpendNext120Days
+      }
+    };
+  }
+
+  // Month 0: draw + immediate paydown from one-time cash (adjusted, not raw).
+  const immediatePaydown = round2(Math.min(adjustedUpfrontCash, model.recommendedDrawAmount));
+  const month0Ending = round2(Math.max(0, model.recommendedDrawAmount - immediatePaydown));
+  rows.push({
+    month: 0,
+    startingHelocBalance: 0,
+    drawAmount: model.recommendedDrawAmount,
+    debtReplaced: model.targetDebts.map((d) => d.name),
+    payment: immediatePaydown,
+    immediatePaydownFromCashNow: immediatePaydown,
+    recurringPaymentFromCash: 0,
+    conditionalPayment: 0,
+    interestAccrued: 0,
+    endingHelocBalance: month0Ending,
+    remainingDebt: round2(month0Ending + nonTargetRemaining),
+    paymentBehaviorNote:
+      immediatePaydown > 0.005 ? HELOC_MONTH0_BEHAVIOR_NOTE : HELOC_PAYDOWN_BEHAVIOR_NOTE
+  });
+
+  // Months 1..12: recurring monthly cash is the ONLY ongoing paydown source.
+  let bal = month0Ending;
+  let monthsToZero = bal <= 0.005 ? 0 : 0;
+  for (let m = 1; m <= 12; m++) {
+    const start = bal;
+    const interest = round2(start * rateMonthly);
+    const available = round2(start + interest);
+    const recurringPayment = Math.min(monthlyRecurring, available);
+    const ending = round2(Math.max(0, available - recurringPayment));
+    const cleared = ending <= 0.005;
+    rows.push({
+      month: m,
+      startingHelocBalance: start,
+      drawAmount: 0,
+      debtReplaced: [],
+      payment: recurringPayment,
+      immediatePaydownFromCashNow: 0,
+      recurringPaymentFromCash: recurringPayment,
+      conditionalPayment: 0,
+      interestAccrued: interest,
+      endingHelocBalance: ending,
+      remainingDebt: round2(ending + nonTargetRemaining),
+      paymentBehaviorNote: cleared
+        ? HELOC_POST_CLEAR_BEHAVIOR_NOTE
+        : HELOC_PAYDOWN_BEHAVIOR_NOTE
+    });
+    bal = ending;
+    if (cleared) {
+      monthsToZero = m;
+      break;
+    }
+  }
+  if (month0Ending <= 0.005) {
+    // Upfront cash fully covered the draw — there is no residual to service.
+    monthsToZero = 0;
+  }
+  const slowPayoffWarning = bal > 0.005;
+  if (slowPayoffWarning) monthsToZero = rows[rows.length - 1].month;
+
+  return {
+    rows,
+    summary: {
+      monthsToZeroHeloc: monthsToZero,
+      totalInterestSaved: model.interestSavedEstimate,
+      accelerationMonthsSaved: model.accelerationMonthsSaved,
+      monthlyCashApplied: monthlyRecurring,
+      upfrontCashApplied: immediatePaydown,
+      conditionalLumpCapacity: conditionalLump,
+      estimatedMonthlyReduction: model.estimatedMonthlyReduction,
+      repaymentPriority: 'heloc_first',
+      paydownBehaviorNote: HELOC_PAYDOWN_BEHAVIOR_NOTE,
+      slowPayoffWarning: slowPayoffWarning || model.slowPayoffWarning,
+      recurringCapacityWarning,
+      adjustedUpfrontCash,
+      effectiveMonthlyRepayment: monthlyRecurring,
+      cashProtectionWarning: model.cashProtectionWarning,
+      ongoingCardSpendMonthly: model.cardSpendModel.recurringMonthlyCardSpend,
+      cardSpendAlreadyInCashflow: model.cardSpendModel.cardSpendAlreadyInCashflow,
+      doubleDebtWarning: model.doubleDebtWarning,
+      doubleDebtSeverity: model.doubleDebtSeverity,
+      doubleDebtTrapRiskLevel: model.doubleDebtTrapModel.trapRiskLevel,
+      doubleDebtWarningReasons: model.doubleDebtTrapModel.warningReasons.slice(),
+      spikyCardSpendNext120Days: model.cardSpendModel.spikyCardSpendNext120Days
+    }
+  };
+}
+
+function HelocStatusBadge({ status }: { status: HelocStrategyStatus }) {
+  const base: React.CSSProperties = {
+    display: 'inline-block',
+    padding: '4px 10px',
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 800,
+    letterSpacing: '0.04em'
+  };
+  if (status === 'recommended') {
+    return <span style={{ ...base, background: C.successBg, color: C.success }}>Recommended</span>;
+  }
+  if (status === 'optional') {
+    return <span style={{ ...base, background: C.warnBg, color: C.warn }}>Optional</span>;
+  }
+  if (status === 'not_recommended') {
+    return <span style={{ ...base, background: C.dangerBg, color: C.danger }}>Not recommended</span>;
+  }
+  return (
+    <span style={{ ...base, background: '#f1f5f9', color: C.muted, border: `1px solid ${C.border}` }}>
+      Not needed
+    </span>
+  );
+}
+
+/**
+ * Renders the "Cash protection" block inside the HELOC strategy section.
+ *
+ * This is the human-readable face of the safety layer built in
+ * `computeHelocStrategyModel`: it walks the user through upfront cash →
+ * reserved expenses → spending buffer → remaining safe cash, and shows the
+ * recurring-side adjustment (raw recurring → new spending → effective
+ * recurring). No math happens here — it simply reads pre-computed fields.
+ */
+function CashProtectionPanel({ model }: { model: HelocStrategyModel }) {
+  const hasExpenses = model.futureExpenseItems.length > 0;
+  const hasNewSpending = model.monthlyNewSpendingEstimate > 0.005;
+  const cardSpend = model.cardSpendModel.recurringMonthlyCardSpend;
+  const hasCardSpend = cardSpend > 0.005;
+  const cardSubtractsHere =
+    hasCardSpend && !model.cardSpendModel.cardSpendAlreadyInCashflow;
+  const surplusBefore =
+    model.effectiveHelocRepaymentModel.recurringMonthlySurplusBeforeCardAdjustment;
+  const showAdjustmentLine = hasNewSpending || cardSubtractsHere;
+  return (
+    <div
+      style={{
+        padding: '12px 14px',
+        borderRadius: 10,
+        background: '#f0f9ff',
+        border: '1px solid #bae6fd',
+        marginBottom: 12,
+        fontSize: 12,
+        color: C.text,
+        lineHeight: 1.55
+      }}
+    >
+      <p
+        style={{
+          margin: '0 0 6px 0',
+          fontSize: 10,
+          fontWeight: 800,
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+          color: C.muted
+        }}
+      >
+        Cash protection
+      </p>
+      <p style={{ margin: '0 0 10px 0', color: C.muted }}>
+        Only remaining cash is considered safe for HELOC. Upcoming expenses and
+        a living-expense buffer are carved off first.
+      </p>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: 10,
+          fontVariantNumeric: 'tabular-nums'
+        }}
+      >
+        <div
+          style={{
+            padding: '8px 10px',
+            borderRadius: 8,
+            background: '#ffffff',
+            border: `1px solid ${C.border}`
+          }}
+        >
+          <div style={{ fontSize: 10, color: C.muted, letterSpacing: '0.08em' }}>
+            UPFRONT CASH
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>
+            {currency(model.upfrontCashNow)}
+          </div>
+        </div>
+        <div
+          style={{
+            padding: '8px 10px',
+            borderRadius: 8,
+            background: '#ffffff',
+            border: `1px solid ${C.border}`
+          }}
+        >
+          <div style={{ fontSize: 10, color: C.muted, letterSpacing: '0.08em' }}>
+            UPCOMING EXPENSES{' '}
+            <span style={{ textTransform: 'lowercase' }}>
+              (next {model.futureExpenseWindowDays} days)
+            </span>
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.danger }}>
+            −{currency(model.futureExpenseReserve)}
+          </div>
+        </div>
+        <div
+          style={{
+            padding: '8px 10px',
+            borderRadius: 8,
+            background: '#ffffff',
+            border: `1px solid ${C.border}`
+          }}
+        >
+          <div style={{ fontSize: 10, color: C.muted, letterSpacing: '0.08em' }}>
+            SPENDING BUFFER (1.5×)
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.danger }}>
+            −{currency(model.spendingBuffer)}
+          </div>
+          <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
+            {model.monthlySpendingIsDefault
+              ? `Default ${currency(model.monthlySpendingEstimate)}/mo estimate`
+              : `${currency(model.monthlySpendingEstimate)}/mo × 1.5`}
+          </div>
+        </div>
+        <div
+          style={{
+            padding: '8px 10px',
+            borderRadius: 8,
+            background: model.adjustedUpfrontCash > 0.005 ? '#ecfdf5' : '#fef2f2',
+            border: `1px solid ${
+              model.adjustedUpfrontCash > 0.005 ? C.success : C.danger
+            }`
+          }}
+        >
+          <div style={{ fontSize: 10, color: C.muted, letterSpacing: '0.08em' }}>
+            REMAINING SAFE CASH
+          </div>
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 800,
+              color: model.adjustedUpfrontCash > 0.005 ? C.success : C.danger
+            }}
+          >
+            {currency(model.adjustedUpfrontCash)}
+          </div>
+        </div>
+      </div>
+
+      {hasExpenses ? (
+        <div style={{ marginTop: 10 }}>
+          <div
+            style={{
+              fontSize: 10,
+              color: C.muted,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              marginBottom: 4
+            }}
+          >
+            Reserved expenses
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontVariantNumeric: 'tabular-nums' }}>
+            {model.futureExpenseItems.map((e, idx) => (
+              <li key={`${e.label}-${idx}`}>
+                {e.label}
+                {e.dueInDays != null ? (
+                  <span style={{ color: C.muted }}> · in ~{e.dueInDays} days</span>
+                ) : null}
+                {' — '}
+                <strong>{currency(e.amount)}</strong>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {showAdjustmentLine ? (
+        <div style={{ margin: '10px 0 0 0' }}>
+          <div style={{ color: C.muted, marginBottom: 2 }}>Recurring paydown adjustment:</div>
+          <div style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {currency(model.monthlyRecurringPaydownCapacity)}/mo
+            {hasNewSpending ? (
+              <>
+                {' '}<span style={{ color: C.muted }}>−</span>{' '}
+                {currency(model.monthlyNewSpendingEstimate)}/mo{' '}
+                <span style={{ color: C.muted }}>(new spending)</span>
+              </>
+            ) : null}
+            {hasNewSpending && cardSubtractsHere ? (
+              <>
+                {' '}={' '}{currency(surplusBefore)}/mo{' '}
+                <span style={{ color: C.muted }}>before card spend</span>
+              </>
+            ) : null}
+            {cardSubtractsHere ? (
+              <>
+                {' '}<span style={{ color: C.muted }}>−</span>{' '}
+                {currency(cardSpend)}/mo{' '}
+                <span style={{ color: C.muted }}>(card spend, not in cashflow)</span>
+              </>
+            ) : null}
+            {' '}={' '}<strong>{currency(model.effectiveMonthlyRepayment)}/mo</strong>{' '}
+            <span style={{ color: C.muted }}>(effective)</span>
+          </div>
+        </div>
+      ) : null}
+      {hasCardSpend && model.cardSpendModel.cardSpendAlreadyInCashflow ? (
+        <p style={{ margin: '6px 0 0 0', color: C.muted }}>
+          Ongoing card spend (~{currency(cardSpend)}/mo) is already netted out
+          of the planner&apos;s recurring surplus — no additional deduction
+          applied here.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * "Ongoing card spending" block: exposes the realism layer inputs (recurring
+ * monthly card spend, whether it's already in cash flow, planned card-funded
+ * spend in the next 120 days) so the user can see *why* the effective
+ * repayment capacity and safe draw came out the way they did.
+ *
+ * Only renders when we have SOME signal (recurring spend, bills, or planned
+ * card-funded expenses). Otherwise the UI stays uncluttered.
+ */
+function OngoingCardSpendPanel({
+  model,
+  isAdvanced = false
+}: {
+  model: HelocStrategyModel;
+  /** Advanced/debug view — surfaces a "review these payees" prompt. */
+  isAdvanced?: boolean;
+}) {
+  const m = model.cardSpendModel;
+  const trap = model.doubleDebtTrapModel;
+  const hasAny =
+    m.recurringMonthlyCardSpend > 0.005 ||
+    m.recurringCardBills.length > 0 ||
+    m.recurringCardSpendByAccount.length > 0 ||
+    m.plannedCardFundedSpendNext120Days > 0.005 ||
+    m.spikyCardSpendNext120Days > 0.005 ||
+    m.inactiveCardSpendRemoved > 0.005 ||
+    m.billsRecurringCardBurden > 0.005 ||
+    m.billsSpikyCardBurdenNext120Days > 0.005 ||
+    m.recurringCardBillsFromBills.length > 0 ||
+    m.upcomingCardBillsFromBills.length > 0 ||
+    m.spendEstimationMethod === 'no_data';
+  if (!hasAny) return null;
+
+  const methodLabel: Record<CardSpendEstimationMethod, string> = {
+    actual_recent: 'Recent actuals (last 3–6 months)',
+    recurring_bills_only: 'Known recurring card-routed bills',
+    explicit: 'Explicit planner estimate',
+    conservative_default: 'Conservative default (no planner data)',
+    no_data: 'No data — treated as $0 (likely underestimate)',
+    bills_scheduled: 'Scheduled bills (INPUT - Bills, Payment Source = CREDIT_CARD)',
+    combined_history_and_bills:
+      'Combined: Cash Flow history + scheduled Bills (max of both)'
+  };
+  const confidenceColor: Record<CardSpendConfidence, string> = {
+    high: C.success,
+    medium: C.warn,
+    low: C.danger
+  };
+  const noDataFallback = m.spendEstimationMethod === 'no_data';
+  const trapColors: Record<DoubleDebtTrapRiskLevel, { bg: string; fg: string; label: string }> = {
+    low: { bg: C.successBg, fg: C.success, label: 'Trap risk: low' },
+    medium: { bg: C.warnBg, fg: C.warn, label: 'Trap risk: medium' },
+    high: { bg: C.dangerBg, fg: C.danger, label: 'Trap risk: high' }
+  };
+  const trapBadge = trapColors[trap.trapRiskLevel];
+  const showTrapBadge =
+    trap.trapRiskLevel !== 'low' || trap.warningReasons.length > 0;
+
+  return (
+    <div
+      style={{
+        padding: '12px 14px',
+        borderRadius: 10,
+        background: '#fff7ed',
+        border: '1px solid #fed7aa',
+        marginBottom: 12,
+        fontSize: 12,
+        color: C.text,
+        lineHeight: 1.55
+      }}
+    >
+      <p
+        style={{
+          margin: '0 0 6px 0',
+          fontSize: 10,
+          fontWeight: 800,
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+          color: C.muted
+        }}
+      >
+        Ongoing card spending
+      </p>
+      {/*
+        Part 4 — methodology paragraph is now gated behind Show details.
+        The default view just shows the numbers + trap badge; the "why"
+        text belongs in the expanded view so the section stays scannable.
+      */}
+      {isAdvanced ? (
+        <p style={{ margin: '0 0 10px 0', color: C.muted }}>
+          Normal card-routed spending continues while the HELOC is repaid.
+          We surface it here so you can see whether it&apos;s already baked
+          into the planner&apos;s recurring surplus — and avoid the
+          &ldquo;double-debt trap&rdquo; where cards rebuild before the
+          HELOC is cleared.
+        </p>
+      ) : null}
+
+      {showTrapBadge ? (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+            padding: '8px 10px',
+            borderRadius: 8,
+            background: trapBadge.bg,
+            border: `1px solid ${trapBadge.fg}22`,
+            marginBottom: 10
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: trapBadge.fg
+            }}
+          >
+            {trapBadge.label}
+          </div>
+          {trap.warningReasons.length > 0 ? (
+            <ul style={{ margin: 0, paddingLeft: 18, color: C.text, fontSize: 11 }}>
+              {trap.warningReasons.map((r, idx) => (
+                <li key={`trap-${idx}`}>{r}</li>
+              ))}
+            </ul>
+          ) : (
+            <span style={{ color: C.muted, fontSize: 11 }}>
+              No active trap indicators — paydown math has enough headroom.
+            </span>
+          )}
+        </div>
+      ) : null}
+
+      {/*
+        Part 4 — default view shows the two headline numbers only:
+          • recurring card burden
+          • spiky card-funded charges next 120 days
+        Derivation lines (cash-flow netting, effective paydown capacity,
+        planned-card-funded 120-day total) move behind Show details so the
+        section reads at a glance.
+      */}
+      <ul
+        style={{
+          margin: 0,
+          paddingLeft: 18,
+          fontVariantNumeric: 'tabular-nums'
+        }}
+      >
+        <li>
+          Estimated recurring card spend:{' '}
+          <strong>{currency(m.recurringMonthlyCardSpend)}</strong> / month
+          {noDataFallback ? (
+            <span style={{ color: C.muted }}> (no data — fill this in for a sharper estimate)</span>
+          ) : null}
+        </li>
+        {m.spikyCardSpendNext120Days > 0.005 ? (
+          <li>
+            Spiky card-funded expenses (trailing 4 months):{' '}
+            <strong>{currency(m.spikyCardSpendNext120Days)}</strong>
+            <span style={{ color: C.muted }}>
+              {' '}— proxy for likely near-term spikes (taxes, one-offs)
+            </span>
+          </li>
+        ) : null}
+        {isAdvanced ? (
+          <>
+            <li>
+              Counted in cash flow already:{' '}
+              <strong>{m.cardSpendAlreadyInCashflow ? 'Yes' : 'No'}</strong>
+              <span style={{ color: C.muted }}>
+                {m.cardSpendAlreadyInCashflow
+                  ? ' — planner surplus already nets it out; not subtracted again'
+                  : ' — subtracted from recurring repayment capacity to avoid over-leverage'}
+              </span>
+            </li>
+            <li>
+              Effective recurring HELOC paydown capacity:{' '}
+              <strong>
+                {currency(trap.recurringRepaymentCapacityEffective)}
+              </strong>{' '}
+              / month
+              <span style={{ color: C.muted }}>
+                {' '}(after new-spending pressure
+                {m.cardSpendAlreadyInCashflow ? '' : ' and card spend'})
+              </span>
+            </li>
+            <li>
+              Planned card-funded spending next 120 days:{' '}
+              <strong>{currency(m.plannedCardFundedSpendNext120Days)}</strong>
+              <span style={{ color: C.muted }}>
+                {' '}(informational — does not consume upfront cash)
+              </span>
+            </li>
+          </>
+        ) : null}
+      </ul>
+
+      {/* Part 4 — debug-only derivation note, hidden from default view. */}
+      {isAdvanced && m.activeColumnPresent ? (
+        <p
+          style={{
+            margin: '8px 0 0 0',
+            fontSize: 11,
+            color: C.muted,
+            fontStyle: 'italic'
+          }}
+        >
+          Inactive card expenses are excluded from recurring spend
+          {m.inactiveCardSpendRemoved > 0.005 ? (
+            <>
+              {' '}— {currency(m.inactiveCardSpendRemoved)} removed from the
+              trailing 6-month CREDIT_CARD total.
+            </>
+          ) : (
+            '.'
+          )}
+        </p>
+      ) : null}
+
+      {isAdvanced && m.inactivePayeesRemoved.length > 0 ? (
+        <div
+          style={{
+            marginTop: 10,
+            padding: '8px 10px',
+            borderRadius: 8,
+            background: 'rgba(30, 58, 95, 0.05)',
+            border: `1px dashed ${C.border}`
+          }}
+        >
+          <div
+            style={{
+              fontSize: 10,
+              color: C.muted,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              marginBottom: 4
+            }}
+          >
+            Top inactive card-spend payees removed
+          </div>
+          <ul
+            style={{
+              margin: 0,
+              paddingLeft: 18,
+              fontVariantNumeric: 'tabular-nums',
+              fontSize: 11
+            }}
+          >
+            {m.inactivePayeesRemoved.slice(0, 5).map((entry, idx) => (
+              <li key={`inactive-${entry.account}-${idx}`}>
+                {entry.account} —{' '}
+                <strong>{currency(entry.amount)}</strong> removed
+              </li>
+            ))}
+          </ul>
+          <p style={{ margin: '4px 0 0 0', fontSize: 11, color: C.muted }}>
+            These rows were skipped because their <code>Active</code> cell
+            was marked <code>NO</code>. Flip back to <code>YES</code> (or
+            leave blank) if any are still live.
+          </p>
+        </div>
+      ) : null}
+
+      {isAdvanced && m.recurringCardBills.length > 0 ? (
+        <div
+          style={{
+            marginTop: 10,
+            padding: '8px 10px',
+            borderRadius: 8,
+            background: 'rgba(30, 58, 95, 0.05)',
+            border: `1px dashed ${C.border}`
+          }}
+        >
+          <div
+            style={{
+              fontSize: 10,
+              color: C.muted,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              marginBottom: 4
+            }}
+          >
+            Review these large recurring card-spend payees for correctness
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontVariantNumeric: 'tabular-nums', fontSize: 11 }}>
+            {[...m.recurringCardBills]
+              .sort((a, b) => (b.monthlyAmount || 0) - (a.monthlyAmount || 0))
+              .slice(0, 3)
+              .map((b, idx) => (
+                <li key={`review-${b.label}-${idx}`}>
+                  {b.label} — <strong>{currency(b.monthlyAmount)}</strong> / month
+                </li>
+              ))}
+          </ul>
+          <p style={{ margin: '4px 0 0 0', fontSize: 11, color: C.muted }}>
+            Mis-classified charges here inflate recurring card spend and can wrongly
+            push HELOC into &ldquo;not recommended&rdquo;.
+          </p>
+        </div>
+      ) : null}
+
+      {/*
+        Part 4 — repeated per-payee / per-card breakdowns are debug detail,
+        not scanning surface area. Hide them from the default view.
+      */}
+      {isAdvanced && m.recurringCardBills.length > 0 ? (
+        <div style={{ marginTop: 10 }}>
+          <div
+            style={{
+              fontSize: 10,
+              color: C.muted,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              marginBottom: 4
+            }}
+          >
+            Recurring card bills
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontVariantNumeric: 'tabular-nums' }}>
+            {m.recurringCardBills.map((b, idx) => (
+              <li key={`${b.label}-${idx}`}>
+                {b.label} — <strong>{currency(b.monthlyAmount)}</strong> / month
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {isAdvanced && m.recurringCardSpendByAccount.length > 0 ? (
+        <div style={{ marginTop: 10 }}>
+          <div
+            style={{
+              fontSize: 10,
+              color: C.muted,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              marginBottom: 4
+            }}
+          >
+            By card
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontVariantNumeric: 'tabular-nums' }}>
+            {m.recurringCardSpendByAccount.map((a, idx) => (
+              <li key={`${a.account}-${idx}`}>
+                {a.account} — <strong>{currency(a.monthlyAverage)}</strong> / month
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {(() => {
+        /*
+         * ── Scheduled card bills (Part 8) ──────────────────────────────
+         * Only show the block when the workbook actually ships with the
+         * Bills Payment Source column — otherwise legacy tabs would get
+         * a confusing "0 scheduled card bills" note.
+         *
+         * Part 4 — this is a pure derivation block (history vs Bills, the
+         * chosen-max decision, per-payee breakdowns). Hide from default
+         * view; only surface in Show details / Debug.
+         */
+        if (!isAdvanced) return null;
+        if (!m.billsPaymentSourceColumnPresent) return null;
+        const decisionLabel: Record<CardSpendModel['sourceDecision'], string> = {
+          history_dominated: 'Cash Flow history set the chosen burden',
+          bills_dominated: 'Scheduled Bills set the chosen burden',
+          tied: 'Cash Flow history + scheduled Bills tied; either feeds the chosen burden',
+          history_only: 'Only Cash Flow history available',
+          bills_only: 'Only scheduled Bills available',
+          no_data: 'No card-burden data on either side'
+        };
+        return (
+          <div
+            style={{
+              marginTop: 10,
+              padding: '8px 10px',
+              borderRadius: 8,
+              background: 'rgba(30, 58, 95, 0.05)',
+              border: `1px dashed ${C.border}`
+            }}
+          >
+            <div
+              style={{
+                fontSize: 10,
+                color: C.muted,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                marginBottom: 4
+              }}
+            >
+              Scheduled card bills (INPUT - Bills)
+            </div>
+            <ul
+              style={{
+                margin: 0,
+                paddingLeft: 18,
+                fontVariantNumeric: 'tabular-nums',
+                fontSize: 11
+              }}
+            >
+              <li>
+                Active CREDIT_CARD bills found:{' '}
+                <strong>{m.activeCardBillCount}</strong>
+              </li>
+              <li>
+                Historical recurring card spend:{' '}
+                <strong>{currency(m.historicalRecurringCardSpend)}</strong> / mo
+              </li>
+              <li>
+                Bills-based recurring card burden:{' '}
+                <strong>{currency(m.billsRecurringCardBurden)}</strong> / mo
+              </li>
+              <li>
+                <strong>Chosen recurring burden (max):</strong>{' '}
+                <strong>{currency(m.chosenRecurringCardBurden)}</strong> / mo
+                <span style={{ color: C.muted }}>
+                  {' '}— {decisionLabel[m.sourceDecision]}
+                </span>
+              </li>
+              <li>
+                Historical spiky (trailing 4 mo):{' '}
+                <strong>{currency(m.historicalSpikyCardSpendNext120Days)}</strong>
+              </li>
+              <li>
+                Bills-based spiky (next 120 days):{' '}
+                <strong>{currency(m.billsSpikyCardBurdenNext120Days)}</strong>
+              </li>
+              <li>
+                <strong>Chosen spiky burden (max):</strong>{' '}
+                <strong>{currency(m.chosenSpikyCardBurdenNext120Days)}</strong>
+                <span style={{ color: C.muted }}>
+                  {' '}— {decisionLabel[m.spikySourceDecision]}
+                </span>
+              </li>
+            </ul>
+            {m.recurringCardBillsFromBills.length > 0 ? (
+              <div style={{ marginTop: 6 }}>
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: C.muted,
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    marginBottom: 2
+                  }}
+                >
+                  Recurring card payees (from Bills)
+                </div>
+                <ul
+                  style={{
+                    margin: 0,
+                    paddingLeft: 18,
+                    fontVariantNumeric: 'tabular-nums',
+                    fontSize: 11
+                  }}
+                >
+                  {m.recurringCardBillsFromBills.slice(0, 5).map((b, idx) => (
+                    <li key={`bills-recur-${b.account}-${idx}`}>
+                      {b.account} —{' '}
+                      <strong>{currency(b.monthlyEquivalent)}</strong> / mo
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {m.upcomingCardBillsFromBills.length > 0 ? (
+              <div style={{ marginTop: 6 }}>
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: C.muted,
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    marginBottom: 2
+                  }}
+                >
+                  Upcoming spiky card bills (next 120 days)
+                </div>
+                <ul
+                  style={{
+                    margin: 0,
+                    paddingLeft: 18,
+                    fontVariantNumeric: 'tabular-nums',
+                    fontSize: 11
+                  }}
+                >
+                  {m.upcomingCardBillsFromBills.slice(0, 5).map((b, idx) => (
+                    <li key={`bills-spiky-${b.account}-${idx}`}>
+                      {b.account} —{' '}
+                      <strong>{currency(b.next120DayBurden)}</strong> due
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        );
+      })()}
+
+      {/* Part 4 — source methodology / confidence is debug detail. */}
+      {isAdvanced ? (
+        <p style={{ margin: '10px 0 0 0', color: C.muted, fontSize: 11 }}>
+          Source: {methodLabel[m.spendEstimationMethod]} · Confidence:{' '}
+          <strong style={{ color: confidenceColor[m.spendConfidence] }}>
+            {m.spendConfidence}
+          </strong>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function HelocStrategySection({
+  snapshot,
+  model,
+  plan,
+  isAdvanced = false,
+  illustrativeForcedDraw = null
+}: {
+  snapshot: HelocAdvisorSnapshot;
+  model: HelocStrategyModel;
+  plan: HelocExecutionPlan;
+  /** Advanced/debug view — enables extra review prompts in sub-panels. */
+  isAdvanced?: boolean;
+  /**
+   * Post-cash illustrative ceiling, computed in the parent so the KPI
+   * sub-line and Decision Box row share a single source of truth. When
+   * `null`, fall back to `model.recommendedDrawAmount` (pre-cash subset).
+   */
+  illustrativeForcedDraw?: number | null;
+}) {
+  const [showPlan, setShowPlan] = useState(false);
+
+  const headline = (() => {
+    if (model.status === 'recommended') {
+      return `Using HELOC could pay off high-interest debt immediately and shorten payoff by ${model.accelerationMonthsSaved} ${
+        model.accelerationMonthsSaved === 1 ? 'month' : 'months'
+      }.`;
+    }
+    if (model.status === 'optional') {
+      return 'HELOC can improve payoff speed but requires consistent repayment.';
+    }
+    if (model.status === 'not_recommended') {
+      // "not_recommended" now cleanly distinguishes two sub-cases from the
+      // old headline — rate benefit IS present (eligibles exist) but cash-
+      // flow / upcoming-obligations safety blocks a draw. Say so plainly
+      // instead of the old "no benefit from a draw" which contradicted the
+      // eligible-target list rendered directly below.
+      return model.rateBenefitExists
+        ? 'Some debts qualify by rate, but current cash flow and upcoming obligations make HELOC unsafe right now.'
+        : 'Current cash flow or payoff timeline makes HELOC too risky right now.';
+    }
+    // status === 'not_needed' — reserved for the genuine no-rate-benefit case.
+    return 'All active debts are at or below the HELOC rate — no benefit from a draw.';
+  })();
+
+  const hasTargets = model.targetDebts.length > 0;
+  const hasIneligible = model.ineligibleDebts.length > 0;
+
+  /*
+   * Part 3 — in the default view we only surface ONE warning: the highest-
+   * severity risk signal currently active. Everything else (and the full
+   * set in Show details) is still rendered below — we just suppress the
+   * lower-priority copies in standard view so the page reads cleanly.
+   *
+   * Priority (highest first):
+   *   1. doubleDebtSeverity === 'critical'  (danger — repayment impossible)
+   *   2. doubleDebtSeverity === 'watch'     (warn — repayment marginal)
+   *   3. cashProtectionWarning              (warn — upcoming expense pressure)
+   *
+   * `excludedEligibleDebts` is an informational targeting panel, not a
+   * warning, so it remains visible separately in both views.
+   */
+  type HelocWarningKey = 'doubleDebtCritical' | 'doubleDebtWatch' | 'cashProtection';
+  const topWarningKey: HelocWarningKey | null =
+    model.doubleDebtSeverity === 'critical'
+      ? 'doubleDebtCritical'
+      : model.doubleDebtSeverity === 'watch'
+      ? 'doubleDebtWatch'
+      : model.cashProtectionWarning
+      ? 'cashProtection'
+      : null;
+  const showWarning = (key: HelocWarningKey): boolean =>
+    isAdvanced || topWarningKey === key;
+
+  return (
+    <section
+      style={{
+        marginBottom: 24,
+        padding: '18px 20px',
+        borderRadius: 14,
+        background: C.paper,
+        border: `1px solid ${C.border}`,
+        boxShadow: '0 1px 2px rgba(15,23,42,0.05)'
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap',
+          marginBottom: 8
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: '0.18em',
+              textTransform: 'uppercase',
+              color: C.muted
+            }}
+          >
+            HELOC strategy
+          </p>
+          <HelocStatusBadge status={model.status} />
+        </div>
+        <p style={{ margin: 0, fontSize: 12, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
+          HELOC {model.helocRatePercent.toFixed(2)}%
+          {hasTargets
+            ? ` · avg target APR ${model.avgTargetAprPercent.toFixed(2)}%`
+            : ''}
+        </p>
+      </div>
+
+      <p style={{ margin: '4px 0 6px 0', fontSize: 13, color: C.text, fontWeight: 600, lineHeight: 1.55 }}>
+        {headline}
+      </p>
+
+      {/*
+        Part 5 — surface the two distinct questions the status conflates so
+        the user can see, at a glance, that "rate benefit exists" and "safe
+        to use now" are separate decisions. Only rendered for the
+        not_recommended case (where the headline now hinges on both).
+      */}
+      {model.status === 'not_recommended' ? (
+        <ul
+          style={{
+            margin: '0 0 12px 0',
+            paddingLeft: 18,
+            fontSize: 12,
+            color: C.muted,
+            lineHeight: 1.55
+          }}
+        >
+          <li>
+            Rate benefit exists:{' '}
+            <strong style={{ color: model.rateBenefitExists ? C.success : C.muted }}>
+              {model.rateBenefitExists ? 'Yes' : 'No'}
+            </strong>
+          </li>
+          <li>
+            Safe to use now:{' '}
+            <strong style={{ color: C.danger }}>No</strong>
+          </li>
+        </ul>
+      ) : (
+        <div style={{ height: 8 }} />
+      )}
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: 14,
+          marginBottom: hasTargets || hasIneligible ? 16 : 0
+        }}
+      >
+        {(() => {
+          /*
+           * Part 3 — the KPI that used to always read "Recommended draw" now
+           * splits by status so the headline and the number agree:
+           *
+           *   recommended / optional  → "Recommended draw" = actual amount
+           *   not_recommended, draw 0 → "Advised draw now"  = $0
+           *                             (no surfaced ceiling when there is
+           *                             literally no safe capacity at all)
+           *   not_recommended, draw>0 → "Advised draw now"  = $0 primary,
+           *                             with an "illustrative max if forced"
+           *                             sub-line that shows the theoretical
+           *                             ceiling without pretending it's advice.
+           */
+          const notRecommended = model.status === 'not_recommended';
+          const notNeeded = model.status === 'not_needed';
+          const drawZero = model.recommendedDrawAmount <= 0.005;
+          const showAdvisedZero = notRecommended || drawZero;
+          const kpiLabel = showAdvisedZero
+            ? 'Advised draw now'
+            : notNeeded
+            ? 'Advised draw now'
+            : 'Recommended draw';
+          const kpiValue = showAdvisedZero ? currency(0) : currency(model.recommendedDrawAmount);
+          const illustrativeValue =
+            illustrativeForcedDraw != null
+              ? illustrativeForcedDraw
+              : model.recommendedDrawAmount;
+          const kpiSub = showAdvisedZero
+            ? notRecommended && illustrativeValue > 0.005
+              ? `Illustrative max draw if forced: ${currency(illustrativeValue)} — not advice.`
+              : notRecommended && model.recommendedDrawAmount > 0.005
+              ? 'No safe HELOC draw is supported right now after this month’s cash paydown.'
+              : notNeeded
+              ? 'No eligible debts offer a rate benefit — HELOC not needed.'
+              : 'No safe HELOC draw is supported right now.'
+            : model.drawCapApplied === 'cash_capacity_strict'
+            ? `Capped at ${model.targetPayoffMonths}-month safe payoff window`
+            : model.drawCapApplied === 'cash_capacity_upper'
+            ? `Extended to ${model.maxPayoffMonths}-month max payoff window`
+            : model.drawCapApplied === 'heloc_limit'
+            ? 'Capped at 40% of estimated HELOC limit'
+            : model.drawCapApplied === 'user_cap'
+            ? 'Capped at user-defined amount'
+            : hasTargets
+            ? 'Sum of eligible target balances'
+            : 'No eligible targets';
+          return <KpiCard label={kpiLabel} value={kpiValue} sub={kpiSub} subMuted />;
+        })()}
+        <KpiCard
+          label="Payoff time"
+          value={
+            hasTargets && Number.isFinite(model.payoffMonths) && model.payoffMonths > 0
+              ? `${model.payoffMonths} ${model.payoffMonths === 1 ? 'month' : 'months'}`
+              : hasTargets && model.payoffMonths === 0 && model.recommendedDrawAmount > 0.005
+              ? 'Any payoff would rely entirely on one-time cash (no recurring paydown capacity)'
+              : '—'
+          }
+          sub={
+            hasTargets
+              ? model.effectiveMonthlyRepayment > 0
+                ? `At ${currency(model.effectiveMonthlyRepayment)}/mo effective recurring paydown`
+                : 'No effective recurring paydown assumed'
+              : 'n/a'
+          }
+          subMuted
+        />
+        <KpiCard
+          label="Interest saved (est.)"
+          value={hasTargets ? currency(model.interestSavedEstimate) : '—'}
+          sub={
+            hasTargets
+              ? `Debt-free ${model.payoffMonthsWithHeloc} mo vs ${model.payoffMonthsWithoutHeloc} mo without`
+              : 'n/a'
+          }
+          subMuted
+        />
+      </div>
+
+      {/*
+        Part 4 — Repayment inputs, the full cash-protection derivation, and
+        the safe-draw-capacity math are methodology/derivation detail, not
+        decision surface. Hide them in the default view; they remain fully
+        available under Show details / Debug Details (isAdvanced).
+      */}
+      {isAdvanced ? (
+        <div
+          style={{
+            padding: '12px 14px',
+            borderRadius: 10,
+            background: '#f8fafc',
+            border: `1px solid ${C.border}`,
+            marginBottom: 12,
+            fontSize: 12,
+            color: C.text,
+            lineHeight: 1.55
+          }}
+        >
+          <p
+            style={{
+              margin: '0 0 8px 0',
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: C.muted
+            }}
+          >
+            Repayment inputs
+          </p>
+          <ul
+            style={{
+              margin: 0,
+              paddingLeft: 18,
+              fontVariantNumeric: 'tabular-nums'
+            }}
+          >
+            <li>
+              Upfront cash available now:{' '}
+              <strong>{currency(model.upfrontCashNow)}</strong>{' '}
+              <span style={{ color: C.muted }}>(one-time, pre-protection)</span>
+            </li>
+            <li>
+              Recurring monthly paydown capacity:{' '}
+              <strong>{currency(model.monthlyRecurringPaydownCapacity)}</strong> / month
+              {model.monthlyRecurringPaydownCapacity <= 0.005 ? (
+                <span style={{ color: C.muted }}> (no trusted surplus — assumed 0)</span>
+              ) : null}
+            </li>
+            <li>
+              Optional variable-income paydown:{' '}
+              <strong>{currency(model.conditionalLumpPaydownCapacity)}</strong>
+              {model.conditionalLumpFrequencyNote ? (
+                <span style={{ color: C.muted }}>
+                  {' '}
+                  — {model.conditionalLumpFrequencyNote}
+                </span>
+              ) : (
+                <span style={{ color: C.muted }}> (informational only)</span>
+              )}
+            </li>
+          </ul>
+        </div>
+      ) : null}
+
+      {isAdvanced ? <CashProtectionPanel model={model} /> : null}
+
+      <OngoingCardSpendPanel model={model} isAdvanced={isAdvanced} />
+
+      {isAdvanced && hasTargets ? (
+        <div
+          style={{
+            padding: '12px 14px',
+            borderRadius: 10,
+            background: '#f8fafc',
+            border: `1px solid ${C.border}`,
+            marginBottom: 12,
+            fontSize: 12,
+            color: C.text,
+            lineHeight: 1.55
+          }}
+        >
+          <p
+            style={{
+              margin: '0 0 6px 0',
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: C.muted
+            }}
+          >
+            Safe draw capacity
+          </p>
+          <p style={{ margin: 0 }}>
+            <strong>Safe draw (strict, {model.targetPayoffMonths}-mo target):</strong>{' '}
+            {currency(model.adjustedUpfrontCash)}{' '}
+            <span style={{ color: C.muted }}>(remaining safe cash)</span> +{' '}
+            {currency(model.effectiveMonthlyRepayment)}/mo{' '}
+            <span style={{ color: C.muted }}>(effective recurring)</span> ×{' '}
+            {model.targetPayoffMonths} ={' '}
+            <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {currency(model.safeDrawStrict)}
+            </strong>
+          </p>
+          <p style={{ margin: '2px 0 0 0', color: C.muted }}>
+            <strong style={{ color: C.text }}>
+              Safe draw (upper, {model.maxPayoffMonths}-mo max):
+            </strong>{' '}
+            {currency(model.safeDrawUpper)} · beyond this the HELOC is not
+            recommended.
+          </p>
+          <p style={{ margin: '10px 0 0 0', color: C.muted }}>
+            HELOC safety is based on one-time cash available now plus recurring
+            monthly repayment capacity, minus upcoming expenses and a living-
+            expense buffer. Only remaining cash is considered safe for HELOC.
+          </p>
+          {(model.drawCapApplied === 'cash_capacity_strict' ||
+            model.drawCapApplied === 'cash_capacity_upper') && hasTargets ? (
+            <p style={{ margin: '4px 0 0 0', color: C.muted }}>
+              Only the highest-impact debts are selected within this limit.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {model.cashProtectionWarning && showWarning('cashProtection') ? (
+        <div
+          role="note"
+          style={{
+            padding: '10px 12px',
+            borderRadius: 10,
+            background: C.warnBg,
+            border: `1px solid ${C.warn}`,
+            color: C.text,
+            marginBottom: 12,
+            fontSize: 12,
+            lineHeight: 1.55
+          }}
+        >
+          <strong>Large upcoming expenses reduce safe HELOC capacity.</strong>{' '}
+          Upcoming expenses ({currency(model.futureExpenseReserve)}) exceed{' '}
+          {(HELOC_FUTURE_EXPENSE_WARNING_THRESHOLD * 100).toFixed(0)}% of your
+          upfront cash — consider waiting until these are paid or funded from
+          other sources before drawing.
+        </div>
+      ) : null}
+
+      {/*
+        Part 4 — explanatory note; already implied by the not_recommended
+        status and zero advised draw in the KPI row. Keep it in Show details
+        for people debugging why a draw that passed rate screening got
+        blocked, but don't clutter the default view with it.
+      */}
+      {isAdvanced &&
+      model.recommendedDrawAmount > 0.005 &&
+      model.adjustedUpfrontCash <= 0.005 ? (
+        <div
+          role="note"
+          style={{
+            padding: '10px 12px',
+            borderRadius: 10,
+            background: C.dangerBg,
+            border: `1px solid ${C.danger}`,
+            color: C.text,
+            marginBottom: 12,
+            fontSize: 12,
+            lineHeight: 1.55
+          }}
+        >
+          <strong>Upfront cash is fully reserved after protection.</strong>{' '}
+          No safe cash remains to seed the Month-0 paydown — HELOC is not
+          recommended until upcoming expenses clear or more cash becomes
+          available.
+        </div>
+      ) : null}
+
+      {model.doubleDebtSeverity === 'critical' && showWarning('doubleDebtCritical') ? (
+        <div
+          role="note"
+          style={{
+            padding: '10px 12px',
+            borderRadius: 10,
+            background: C.dangerBg,
+            border: `1px solid ${C.danger}`,
+            color: C.text,
+            marginBottom: 12,
+            fontSize: 12,
+            lineHeight: 1.55
+          }}
+        >
+          <strong>
+            Current recurring cash flow does not support HELOC repayment
+            after normal card spending.
+          </strong>{' '}
+          At{' '}
+          {currency(model.cardSpendModel.recurringMonthlyCardSpend)}
+          /mo of ongoing card charges, no cash is left for HELOC paydown —
+          the draw has been downgraded to not recommended.
+        </div>
+      ) : null}
+
+      {model.doubleDebtSeverity === 'watch' && showWarning('doubleDebtWatch') ? (
+        <div
+          role="note"
+          style={{
+            padding: '10px 12px',
+            borderRadius: 10,
+            background: C.warnBg,
+            border: `1px solid ${C.warn}`,
+            color: C.text,
+            marginBottom: 12,
+            fontSize: 12,
+            lineHeight: 1.55
+          }}
+        >
+          <strong>
+            HELOC may eliminate current card balances, but ongoing card
+            spending could rebuild balances before HELOC is repaid.
+          </strong>{' '}
+          Card spend of ~
+          {currency(model.cardSpendModel.recurringMonthlyCardSpend)}
+          /mo is close to (or above) the{' '}
+          {currency(model.effectiveMonthlyRepayment)}/mo effective recurring
+          paydown. Consider tightening card use during the HELOC window.
+        </div>
+      ) : null}
+
+      {/*
+        Part 4 — methodology note about the conservative fallback path; the
+        advised-draw KPI already carries the headline. Show only in the
+        advanced / debug view.
+      */}
+      {isAdvanced && model.monthlyRecurringPaydownCapacity <= 0.005 && hasTargets ? (
+        <div
+          role="note"
+          style={{
+            padding: '10px 12px',
+            borderRadius: 10,
+            background: C.warnBg,
+            border: `1px solid ${C.warn}`,
+            color: C.text,
+            marginBottom: 12,
+            fontSize: 12,
+            lineHeight: 1.55
+          }}
+        >
+          <strong>
+            Current recurring cash flow does not support fast HELOC repayment.
+          </strong>{' '}
+          Recommendation is conservative — the safe draw is limited to the
+          one-time cash available now.
+        </div>
+      ) : null}
+
+      {model.excludedEligibleDebts.length > 0 ? (() => {
+        /*
+         * Uniform wording rule: whenever "Advised HELOC draw now = $0"
+         * (i.e. `not_recommended` status OR `recommendedDrawAmount = 0`),
+         * collapse the excluded-eligibles block to the muted
+         * "Eligible by rate, excluded by safety" label used elsewhere.
+         *
+         * The old `drawZero` gate only caught the exact-zero case, so
+         * `not_recommended` with a non-zero illustrative ceiling still
+         * showed the "draw is limited to stay within the 9-month safe
+         * payoff window" copy — misleading, because the advised draw in
+         * that state is $0 and nothing is actually being trimmed by the
+         * window. We broaden the gate to cover both paths.
+         *
+         * The "Not all eligible debts are included — draw is limited…"
+         * message only appears when the advisor actually recommends /
+         * allows a positive draw AND had to trim lower-priority eligibles
+         * to fit the safe window — the only case where that wording is
+         * genuine new information.
+         *
+         * Advanced / debug view still surfaces the full bold prose for
+         * diagnostic clarity, unchanged.
+         */
+        const advisedZero =
+          model.status === 'not_recommended' || model.recommendedDrawAmount <= 0.005;
+        const showBoldIntro = !advisedZero || isAdvanced;
+        const intro = advisedZero
+          ? 'Some debts qualify by rate, but no safe HELOC draw is supported right now.'
+          : `Not all eligible debts are included — draw is limited to stay within the ${model.targetPayoffMonths}-month safe payoff window.`;
+        return (
+          <div
+            role="note"
+            style={{
+              padding: '10px 12px',
+              borderRadius: 10,
+              background: advisedZero && !showBoldIntro ? '#f8fafc' : C.warnBg,
+              border: `1px solid ${advisedZero && !showBoldIntro ? C.border : C.warn}`,
+              color: C.text,
+              marginBottom: 12,
+              fontSize: 12,
+              lineHeight: 1.55
+            }}
+          >
+            {showBoldIntro ? (
+              <p style={{ margin: 0, fontWeight: 700 }}>{intro}</p>
+            ) : (
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 10,
+                  fontWeight: 800,
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  color: C.muted
+                }}
+              >
+                Eligible by rate, excluded by safety
+              </p>
+            )}
+            <ul
+              style={{
+                margin: '6px 0 0 0',
+                paddingLeft: 18,
+                color: C.muted,
+                fontVariantNumeric: 'tabular-nums'
+              }}
+            >
+              {model.excludedEligibleDebts.map((d) => (
+                <li key={`heloc-excluded-${d.name}`}>
+                  <strong style={{ color: C.text }}>{d.name}</strong> — {currency(d.balance)} at{' '}
+                  {d.aprPercent.toFixed(2)}% APR ({d.benefitSpread.toFixed(1)} pp over HELOC)
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })() : null}
+
+      {hasTargets ? (
+        <div style={{ marginBottom: hasIneligible ? 14 : 8 }}>
+          <p
+            style={{
+              margin: '0 0 8px 0',
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: C.success
+            }}
+          >
+            Recommended use
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: C.text, lineHeight: 1.7 }}>
+            {model.targetDebts.map((d) => (
+              <li key={`heloc-target-${d.name}`}>
+                <strong>{d.name}</strong> — {currency(d.balance)} at {d.aprPercent.toFixed(2)}% APR
+                <span style={{ color: C.muted, marginLeft: 6, fontSize: 12 }}>
+                  ({d.benefitSpread.toFixed(1)} pp over HELOC)
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {/*
+        Part 4 — per-debt "not recommended" reason list is explanatory /
+        per-payee detail; the user doesn't need it at a glance. Hide from
+        the default view, keep in Show details.
+      */}
+      {isAdvanced && hasIneligible ? (
+        <div style={{ marginBottom: 8 }}>
+          <p
+            style={{
+              margin: '0 0 8px 0',
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: C.muted
+            }}
+          >
+            Not recommended
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 20, fontSize: 12.5, color: C.muted, lineHeight: 1.7 }}>
+            {model.ineligibleDebts.slice(0, 8).map((d) => (
+              <li key={`heloc-ineligible-${d.name}`}>
+                {d.name} — {currency(d.balance)} at {d.aprPercent.toFixed(2)}%{' '}
+                <span style={{ color: C.muted }}>· {d.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {hasTargets && plan.rows.length > 0 ? (
+        <div style={{ marginTop: 14 }}>
+          <button
+            type="button"
+            onClick={() => setShowPlan((v) => !v)}
+            aria-expanded={showPlan}
+            style={{
+              appearance: 'none',
+              background: showPlan ? C.primary : '#ffffff',
+              color: showPlan ? '#ffffff' : C.primary,
+              border: `1px solid ${C.primary}`,
+              padding: '8px 14px',
+              borderRadius: 8,
+              fontSize: 12.5,
+              fontWeight: 700,
+              cursor: 'pointer',
+              letterSpacing: '0.02em'
+            }}
+          >
+            {showPlan ? 'Hide acceleration plan' : 'View acceleration plan'}
+          </button>
+          {showPlan ? (
+            <HelocAccelerationPlan
+              snapshot={snapshot}
+              plan={plan}
+              model={model}
+            />
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function HelocAccelerationPlan({
+  snapshot,
+  plan,
+  model
+}: {
+  snapshot: HelocAdvisorSnapshot;
+  plan: HelocExecutionPlan;
+  model: HelocStrategyModel;
+}) {
+  const { summary, rows } = plan;
+  return (
+    <div
+      style={{
+        marginTop: 14,
+        padding: '14px 16px',
+        borderRadius: 12,
+        background: '#f8fafc',
+        border: `1px solid ${C.border}`
+      }}
+    >
+      <p
+        style={{
+          margin: '0 0 10px 0',
+          fontSize: 10,
+          fontWeight: 800,
+          letterSpacing: '0.18em',
+          textTransform: 'uppercase',
+          color: C.muted
+        }}
+      >
+        HELOC acceleration plan (12 months)
+      </p>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: 12,
+          marginBottom: 12
+        }}
+      >
+        <KpiCard
+          label="Debt-free in"
+          value={`${summary.monthsToZeroHeloc} mo`}
+          sub={`vs ${model.payoffMonthsWithoutHeloc} mo without HELOC`}
+          subMuted
+        />
+        <KpiCard
+          label="Interest saved (est.)"
+          value={currency(summary.totalInterestSaved)}
+          sub={`${summary.accelerationMonthsSaved} mo faster payoff`}
+          subMuted
+        />
+        <KpiCard
+          label="Using"
+          value={snapshot.helocAccountName || 'HELOC'}
+          sub={`Rate ${model.helocRatePercent.toFixed(2)}% · Draw ${currency(model.recommendedDrawAmount)}`}
+          subMuted
+        />
+      </div>
+
+      <div
+        style={{
+          padding: '12px 14px',
+          borderRadius: 10,
+          background: C.paper,
+          border: `1px solid ${C.border}`,
+          marginBottom: 12
+        }}
+      >
+        <p
+          style={{
+            margin: '0 0 8px 0',
+            fontSize: 10,
+            fontWeight: 800,
+            letterSpacing: '0.16em',
+            textTransform: 'uppercase',
+            color: C.muted
+          }}
+        >
+          Paydown strategy
+        </p>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: 10,
+            marginBottom: 8
+          }}
+        >
+          <div>
+            <p style={{ margin: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              Upfront cash applied (Month 0)
+            </p>
+            <p
+              style={{
+                margin: '2px 0 0 0',
+                fontSize: 18,
+                fontWeight: 800,
+                color: C.text,
+                fontVariantNumeric: 'tabular-nums'
+              }}
+            >
+              {currency(summary.upfrontCashApplied)}
+            </p>
+            <p style={{ margin: '2px 0 0 0', fontSize: 10, color: C.muted }}>
+              one-time (after cash protection)
+            </p>
+          </div>
+          <div>
+            <p style={{ margin: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              Recurring monthly cash applied
+            </p>
+            <p
+              style={{
+                margin: '2px 0 0 0',
+                fontSize: 18,
+                fontWeight: 800,
+                color: C.text,
+                fontVariantNumeric: 'tabular-nums'
+              }}
+            >
+              {currency(summary.monthlyCashApplied)}
+            </p>
+            <p style={{ margin: '2px 0 0 0', fontSize: 10, color: C.muted }}>
+              months 1+ (effective recurring)
+            </p>
+          </div>
+          <div>
+            <p style={{ margin: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              Expected payoff timeline
+            </p>
+            <p
+              style={{
+                margin: '2px 0 0 0',
+                fontSize: 18,
+                fontWeight: 800,
+                color: C.text,
+                fontVariantNumeric: 'tabular-nums'
+              }}
+            >
+              {summary.monthsToZeroHeloc === 0 && model.recommendedDrawAmount > 0.005
+                ? 'Month 0'
+                : `${summary.monthsToZeroHeloc} ${summary.monthsToZeroHeloc === 1 ? 'month' : 'months'}`}
+            </p>
+          </div>
+          <div>
+            <p style={{ margin: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              Est. monthly HELOC reduction
+            </p>
+            <p
+              style={{
+                margin: '2px 0 0 0',
+                fontSize: 18,
+                fontWeight: 800,
+                color: C.text,
+                fontVariantNumeric: 'tabular-nums'
+              }}
+            >
+              {currency(summary.estimatedMonthlyReduction)}
+            </p>
+          </div>
+        </div>
+        <p style={{ margin: 0, fontSize: 12, color: C.muted, lineHeight: 1.55 }}>
+          <strong style={{ color: C.text }}>Behavior:</strong> {summary.paydownBehaviorNote}.{' '}
+          Upfront cash is applied once at Month 0; months 1+ are serviced by recurring cash only.
+        </p>
+        {summary.ongoingCardSpendMonthly > 0.005 ? (
+          <p style={{ margin: '4px 0 0 0', fontSize: 12, color: C.muted, lineHeight: 1.55 }}>
+            Model assumes normal credit-card spending continues after the
+            HELOC draw at approximately{' '}
+            <strong style={{ color: C.text }}>
+              {currency(summary.ongoingCardSpendMonthly)}
+            </strong>
+            /month{' '}
+            {summary.cardSpendAlreadyInCashflow
+              ? '(already netted out of the recurring surplus).'
+              : '(subtracted from the recurring surplus to keep repayment honest).'}
+            {summary.spikyCardSpendNext120Days > 0.005 ? (
+              <>
+                {' '}Plus{' '}
+                <strong style={{ color: C.text }}>
+                  {currency(summary.spikyCardSpendNext120Days)}
+                </strong>{' '}
+                of spiky card-funded charges (trailing 4 mo or scheduled
+                Bills, whichever is larger).
+              </>
+            ) : null}
+            {(() => {
+              /*
+               * Explain when scheduled Bills (not just trailing history)
+               * drove the chosen burden, so the reader understands why
+               * the monthly figure may be bigger than recent actuals.
+               */
+              const cs = model.cardSpendModel;
+              if (!cs.billsPaymentSourceColumnPresent) return null;
+              const billsDroveRecurring =
+                cs.sourceDecision === 'bills_dominated' ||
+                cs.sourceDecision === 'bills_only';
+              const billsDroveSpiky =
+                cs.spikySourceDecision === 'bills_dominated' ||
+                cs.spikySourceDecision === 'bills_only';
+              if (!billsDroveRecurring && !billsDroveSpiky) return null;
+              return (
+                <>
+                  {' '}These figures include scheduled obligations from{' '}
+                  <code>INPUT - Bills</code> (Payment Source ={' '}
+                  <code>CREDIT_CARD</code>), which currently{' '}
+                  {billsDroveRecurring && billsDroveSpiky
+                    ? 'dominate both recurring and spiky'
+                    : billsDroveRecurring
+                    ? 'dominate the recurring'
+                    : 'dominate the spiky'}{' '}
+                  card burden.
+                </>
+              );
+            })()}
+          </p>
+        ) : null}
+        {summary.conditionalLumpCapacity > 0.005 ? (
+          <p style={{ margin: '4px 0 0 0', fontSize: 12, color: C.muted, lineHeight: 1.55 }}>
+            Optional variable-income capacity{' '}
+            <strong style={{ color: C.text }}>{currency(summary.conditionalLumpCapacity)}</strong>{' '}
+            {model.conditionalLumpFrequencyNote
+              ? `(${model.conditionalLumpFrequencyNote})`
+              : ''}{' '}
+            is tracked informationally and is NOT assumed to recur each month.
+          </p>
+        ) : null}
+      </div>
+
+      {summary.cashProtectionWarning && model.recommendedDrawAmount > 0.005 ? (
+        <div
+          role="note"
+          style={{
+            padding: '10px 12px',
+            borderRadius: 10,
+            background: C.warnBg,
+            border: `1px solid ${C.warn}`,
+            color: C.text,
+            marginBottom: 12,
+            fontSize: 12,
+            lineHeight: 1.55
+          }}
+        >
+          <strong>Large upcoming expenses reduce safe HELOC capacity.</strong>{' '}
+          Only {currency(summary.adjustedUpfrontCash)} of upfront cash is
+          treated as safe after carving off upcoming expenses and the spending
+          buffer. Month-0 paydown uses this protected figure — not the raw
+          "Cash to use now" amount.
+        </div>
+      ) : null}
+
+      {summary.doubleDebtSeverity === 'watch' && model.recommendedDrawAmount > 0.005 ? (
+        <div
+          role="note"
+          style={{
+            padding: '10px 12px',
+            borderRadius: 10,
+            background: C.warnBg,
+            border: `1px solid ${C.warn}`,
+            color: C.text,
+            marginBottom: 12,
+            fontSize: 12,
+            lineHeight: 1.55
+          }}
+        >
+          <strong>Double-debt watch:</strong> cards cleared at Month 0 could
+          rebuild before the HELOC is repaid given ongoing card spend of ~
+          {currency(summary.ongoingCardSpendMonthly)}/mo. Tighten card use
+          during the HELOC repayment window to keep the acceleration real.
+        </div>
+      ) : null}
+
+      {summary.recurringCapacityWarning && model.recommendedDrawAmount > 0.005 ? (
+        <div
+          role="note"
+          style={{
+            padding: '10px 12px',
+            borderRadius: 10,
+            background: C.warnBg,
+            border: `1px solid ${C.warn}`,
+            color: C.text,
+            marginBottom: 12,
+            fontSize: 12,
+            lineHeight: 1.55
+          }}
+        >
+          <strong>
+            Current recurring cash flow does not support fast HELOC repayment.
+          </strong>{' '}
+          Any residual left after the Month 0 upfront paydown will sit on the
+          HELOC until recurring surplus improves.
+        </div>
+      ) : null}
+
+      {summary.slowPayoffWarning ? (
+        <div
+          role="alert"
+          style={{
+            padding: '12px 14px',
+            borderRadius: 10,
+            background: C.warnBg,
+            border: `1px solid ${C.warn}`,
+            color: C.text,
+            marginBottom: 12,
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 10
+          }}
+        >
+          <span style={{ fontSize: 13, fontWeight: 800, color: C.warn, letterSpacing: '0.06em' }}>
+            WARNING
+          </span>
+          <span style={{ fontSize: 12, lineHeight: 1.55, color: C.text }}>
+            HELOC may not be repaid quickly enough given current cash flow. At{' '}
+            {currency(summary.monthlyCashApplied)}/month recurring (plus{' '}
+            {currency(summary.upfrontCashApplied)} upfront), the draw is not
+            cleared within 12 months — consider a smaller draw, paying off
+            fewer debts, or increasing recurring monthly capacity before
+            proceeding.
+          </span>
+        </div>
+      ) : null}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {rows.map((r) => {
+          const isDrawMonth = r.month === 0;
+          const paidOff = r.endingHelocBalance <= 0.005 && r.month > 0;
+          return (
+            <div
+              key={`heloc-plan-row-${r.month}`}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(70px, 90px) 1fr',
+                gap: 14,
+                padding: '10px 12px',
+                borderRadius: 10,
+                background: C.paper,
+                border: `1px solid ${paidOff ? 'rgba(13, 125, 77, 0.35)' : C.border}`
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color: C.muted,
+                  letterSpacing: '0.16em',
+                  textTransform: 'uppercase',
+                  alignSelf: 'center'
+                }}
+              >
+                {isDrawMonth ? 'Month 0' : `Month ${r.month}`}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 13,
+                    color: C.text,
+                    fontWeight: 600,
+                    fontVariantNumeric: 'tabular-nums'
+                  }}
+                >
+                  HELOC balance: {currency(r.startingHelocBalance)} → {currency(r.endingHelocBalance)}
+                  {paidOff ? (
+                    <span
+                      style={{
+                        marginLeft: 8,
+                        fontSize: 11,
+                        color: C.success,
+                        fontWeight: 800,
+                        letterSpacing: '0.08em'
+                      }}
+                    >
+                      PAID OFF
+                    </span>
+                  ) : null}
+                </p>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 12,
+                    color: C.muted,
+                    fontVariantNumeric: 'tabular-nums'
+                  }}
+                >
+                  {isDrawMonth ? (
+                    <>
+                      Draw {currency(r.drawAmount)} →{' '}
+                      {r.debtReplaced.length
+                        ? `pays off ${r.debtReplaced.join(', ')}`
+                        : 'applied to targets'}
+                    </>
+                  ) : (
+                    <>
+                      Recurring payment to HELOC: {currency(r.recurringPaymentFromCash)}/month{' '}
+                      <span style={{ color: C.muted }}>(from your cash, not funded by HELOC)</span>{' '}
+                      · Interest {currency(r.interestAccrued)}
+                    </>
+                  )}
+                </p>
+                {isDrawMonth && r.immediatePaydownFromCashNow > 0.005 ? (
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 12,
+                      color: C.success,
+                      fontVariantNumeric: 'tabular-nums',
+                      fontWeight: 600
+                    }}
+                  >
+                    Immediate paydown from cash now:{' '}
+                    {currency(r.immediatePaydownFromCashNow)}{' '}
+                    <span style={{ color: C.muted, fontWeight: 400 }}>
+                      (one-time, not recurring)
+                    </span>
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p style={{ margin: '12px 0 0 0', fontSize: 11, color: C.muted, lineHeight: 1.55 }}>
+        Advisory view only. Payments to non-HELOC debts continue per the current plan; this
+        section does not change the waterfall allocation or execute-now totals.
+      </p>
+    </div>
+  );
+}
+
 function AutomationBlock({ title, body }: { title: string; body: string }) {
   return (
     <section style={{ border: `1px solid ${C.border}`, borderRadius: 10, background: '#f8fafc', padding: 16 }}>
@@ -2635,6 +6234,388 @@ export function RollingDebtPayoffDashboard({
 
   const watchTop3 = useMemo(() => data.watchouts.slice(0, 3).map((w) => shortenWatchout(w)), [data.watchouts]);
 
+  /**
+   * HELOC advisor derived model — pure function of the snapshot + the user's
+   * Cash-to-use-now. Null when the backend did not emit an advisor snapshot
+   * (older plan payloads) so the UI can cleanly hide the section.
+   */
+  /*
+   * HELOC upfront-cash wiring — semantic fix.
+   *
+   * The advisor expects `upfrontCashNow` = one-time cash that is still
+   * available at Month 0 to seed HELOC paydown. Previously we passed the
+   * user's selected "Cash to use now" (`cashToUseNowRaw`) directly, which
+   * is the OPPOSITE signal: that cash has been committed to pay current
+   * debts, so it is NOT available to service/pre-pay a hypothetical HELOC.
+   *
+   * Symptom before the fix: pushing the cash slider UP increased the
+   * "Illustrative max draw if forced" — because the advisor thought the
+   * slider meant "more cash for the HELOC".
+   *
+   * Fix: feed the advisor the remaining safe liquidity AFTER the planned
+   * cash payment — `deployableMax − executeNow` — clamped to ≥ 0. Now:
+   *   • 0 cash selected   → full deployableMax available → largest draw
+   *   • partial selected  → smaller remaining cash → smaller draw
+   *   • max selected      → 0 remaining → 0 / near-0 draw
+   *
+   * `executeNow` (already capped at `deployableMax`) is used instead of
+   * the raw input so users who type a value over Safe-to-use don't flip
+   * the sign of the remaining cash.
+   */
+  const helocUpfrontCashRemaining = useMemo(
+    () => Math.max(0, round2(deployableMax - executeNow)),
+    [deployableMax, executeNow]
+  );
+
+  const helocStrategyModel = useMemo(() => {
+    const snap = data.helocAdvisor;
+    if (!snap || !snap.debts || !snap.debts.length) return null;
+    return computeHelocStrategyModel({
+      debts: snap.debts.map((d) => ({
+        name: d.name,
+        type: d.type,
+        balance: d.balance,
+        aprPercent: d.aprPercent,
+        minimumPayment: d.minimumPayment
+      })),
+      helocRatePercent: snap.helocAprPercent,
+      minSpreadPercent: snap.minSpreadPercent,
+      // One-time cash the HELOC can actually lean on at Month 0 = deployable
+      // safe liquidity that is NOT already committed to this month's planned
+      // debt payment. See the block comment above for why this is
+      // `deployableMax − executeNow` and not `cashToUseNowRaw`.
+      upfrontCashNow: helocUpfrontCashRemaining,
+      // Recurring monthly paydown must come from a trusted planner signal.
+      // Fall back to 0 when the snapshot has no surplus figure — this keeps
+      // recommendations conservative for users with weak/negative cash flow.
+      monthlyRecurringPaydown: snap.monthlyRecurringPaydownCapacity ?? 0,
+      conditionalLumpPaydown: snap.conditionalLumpPaydownCapacity ?? 0,
+      conditionalLumpFrequencyNote: snap.conditionalLumpFrequencyNote,
+      // Cash-protection / safety-buffer inputs. Upcoming expenses and spending
+      // drive the adjusted-upfront-cash and effective-recurring figures; all
+      // default conservatively (no reserves) when the planner omits them —
+      // except `monthlySpendingEstimate`, which falls back to a hard default
+      // inside `computeHelocStrategyModel` so the buffer is never zero.
+      upcomingExpenses: snap.upcomingExpenses,
+      monthlySpendingEstimate: snap.monthlySpendingEstimate,
+      monthlyNewSpendingEstimate: snap.monthlyNewSpendingEstimate,
+      // Realism layer: ongoing card spending (drives effective-repayment
+      // adjustment and double-debt warning). Pass through as-is; the
+      // advisor tolerates `undefined` → "no data" / low confidence.
+      cardSpend: snap.cardSpend,
+      estimatedHelocLimit: snap.estimatedHelocLimit,
+      userDefinedCap: snap.userDefinedCap
+    });
+  }, [data.helocAdvisor, helocUpfrontCashRemaining]);
+
+  const helocExecutionPlan = useMemo(
+    () => (helocStrategyModel ? buildHelocExecutionPlan(helocStrategyModel) : null),
+    [helocStrategyModel]
+  );
+
+  /**
+   * Illustrative "max draw if forced" — rebuilt against a POST-CASH debt
+   * subset so the sub-line on the HELOC KPI and the Decision Box row stay
+   * internally consistent.
+   *
+   * Why this exists:
+   *   The main `computeHelocStrategyModel` call above is fed post-cash
+   *   liquidity (`helocUpfrontCashRemaining`) but pre-cash debt balances
+   *   (`snap.debts`). That asymmetry is deliberate for the main status /
+   *   recommendation path — changing the advisor's debt input would flip
+   *   `totalEligibleBalance` and therefore the status decision. But it
+   *   produces a stale subset for the illustrative ceiling: a debt that
+   *   this month's cash waterfall already paid down can still show up at
+   *   its full pre-cash balance inside the greedy selection, and at
+   *   intermediate cash levels (e.g. 25%) that's what produced a
+   *   seemingly-off "$799" value — the cap was right, the subset was
+   *   stale.
+   *
+   * What this memo does:
+   *   1. Starts from `model.eligibleDebts` (the pre-cash rate-eligible set).
+   *   2. Reduces each debt by its `paymentAppliedNow` in
+   *      `displayExecutionPlan.snapshot`, which is the canonical post-cash
+   *      balance the user actually sees in the Month-0 panel.
+   *   3. Filters out anything with a post-cash balance ≤ 0 (fully paid).
+   *   4. Re-sorts by (spread × post-cash balance) benefit score.
+   *   5. Greedy-fits against the same effective cap the advisor used
+   *      (`safeDrawStrict`, further capped by HELOC 40% and user cap when
+   *      present), mirroring the main algorithm so the ceiling semantics
+   *      match the rest of the advisor surface.
+   *
+   * Scope guarantees (explicit):
+   *   - Does NOT change `computeHelocStrategyModel`, `helocStrategyModel`,
+   *     `recommendedDrawAmount`, `status`, or "Advised draw now".
+   *   - Only affects the two "Illustrative max draw if forced" display
+   *     sites (the KPI sub-line and the Decision Box row).
+   */
+  const illustrativeForcedDraw = useMemo<number | null>(() => {
+    if (!helocStrategyModel) return null;
+    if (helocStrategyModel.status !== 'not_recommended') return null;
+    const model = helocStrategyModel;
+
+    const paidByAccount = new Map<string, number>();
+    for (const row of displayExecutionPlan.snapshot ?? []) {
+      const prior = paidByAccount.get(row.account) ?? 0;
+      paidByAccount.set(row.account, prior + (Number(row.paymentAppliedNow) || 0));
+    }
+
+    const postCashEligibles = model.eligibleDebts
+      .map((d) => {
+        const paid = paidByAccount.get(d.name) ?? 0;
+        const balanceAfter = round2(Math.max(0, d.balance - paid));
+        return {
+          ...d,
+          balance: balanceAfter,
+          benefitScore: round2((d.benefitSpread / 100) * balanceAfter)
+        };
+      })
+      .filter((d) => d.balance > 0.005)
+      .sort(
+        (a, b) =>
+          b.benefitScore - a.benefitScore ||
+          b.benefitSpread - a.benefitSpread ||
+          b.balance - a.balance
+      );
+
+    let cap = Math.max(0, model.safeDrawStrict);
+    const estimatedHelocLimit = data.helocAdvisor?.estimatedHelocLimit;
+    const userDefinedCap = data.helocAdvisor?.userDefinedCap;
+    if (estimatedHelocLimit != null && estimatedHelocLimit > 0) {
+      cap = Math.min(cap, round2(estimatedHelocLimit * 0.4));
+    }
+    if (userDefinedCap != null && userDefinedCap > 0) {
+      cap = Math.min(cap, round2(userDefinedCap));
+    }
+    cap = round2(Math.max(0, cap));
+    if (cap <= 0.005) return 0;
+
+    let runningTotal = 0;
+    for (const d of postCashEligibles) {
+      if (runningTotal + d.balance <= cap + 0.005) {
+        runningTotal = round2(runningTotal + d.balance);
+      }
+    }
+    return round2(Math.max(0, runningTotal));
+  }, [helocStrategyModel, displayExecutionPlan, data.helocAdvisor]);
+
+  /**
+   * Decision-box wording refinements (UX only — no calc changes).
+   *
+   * Part 1 canonical HELOC rule: any row that tells the user a story about
+   * the HELOC (draw, "should I draw", "should I hold cash") must be driven
+   * by the same `helocStrategyModel` that powers the HELOC section — NOT
+   * by the raw backend answers, which were computed before the realism
+   * layer (cash protection, double-debt trap, card burden) ran. Otherwise
+   * the decision box happily claims a $25k "Maximum HELOC draw allowed now"
+   * while the HELOC section below says not_recommended with $0 advised.
+   *
+   * Part 2 canonical cash rule: the two cash questions are now derived from
+   * the same `displayExecutionPlan` that renders "Planned payment this
+   * month" in the Month-0 block. Before this fix, "Can I make an extra
+   * payment from cash?" was pulled from the raw backend answer (which
+   * reflects pre-slider state), so the user could see "Planned payment:
+   * $10,400" above and "Can I make an extra payment? No" in the box — a
+   * direct contradiction.
+   *
+   * Mapping rules (all UI-only):
+   *   - "Can I make an extra payment from cash?" — driven by the displayed
+   *     executeNow (Planned payment this month). executeNow > 0 ⇒ Yes.
+   *   - "Should I deploy the full amount now?" — synthesized from model +
+   *     liquidity risk signals. Independent question; answered only when
+   *     executeNow > 0.
+   *   - "Advised HELOC draw now" / "Illustrative max draw if forced" —
+   *     chosen by status + recommendedDrawAmount (see block below).
+   *   - "Should I draw from HELOC this month?" — forced to "No" copy when
+   *     status is not_recommended / not_needed or draw=0, regardless of
+   *     what the backend originally said.
+   *   - "Should I hold cash instead?" — aligned with the same flag so it
+   *     cannot contradict "Should I draw from HELOC".
+   */
+  const tunedDecisionBox = useMemo<Record<string, string>>(() => {
+    const src = data.decisionBox || {};
+    const out: Record<string, string> = {};
+    const helocStatus = helocStrategyModel?.status ?? null;
+    const trapRisk = helocStrategyModel?.doubleDebtTrapModel?.trapRiskLevel ?? 'low';
+    const plannedHold = Number(data.liquidity?.nearTermPlannedCashHold) || 0;
+    const unmappedCardRisk = Number(data.liquidity?.unmappedCardRiskHold) || 0;
+    const spikyNext120 =
+      Number(helocStrategyModel?.cardSpendModel?.spikyCardSpendNext120Days) || 0;
+    const recommendedDrawAmount = Number(helocStrategyModel?.recommendedDrawAmount) || 0;
+    const drawZero = recommendedDrawAmount <= 0.005;
+    // Canonical "HELOC is not advisable right now" flag. Drives every HELOC-
+    // specific row so the box speaks with one voice.
+    const helocBlocked =
+      helocStatus === 'not_recommended' ||
+      helocStatus === 'not_needed' ||
+      drawZero;
+
+    /*
+     * Canonical "cash is actually being deployed this month" signal —
+     * reads from the same executeNow the Month-0 panel renders, so the two
+     * surfaces can't contradict. We ignore the legacy backend "Can I make
+     * an extra payment?" answer here entirely; it was computed before the
+     * user's slider choice and was the source of the contradiction.
+     */
+    const displayExecuteNow = Number(displayExecutionPlan?.executeNow) || 0;
+    const displayDeployable = Number(displayExecutionPlan?.deployableMax) || 0;
+    const cashPlanned = displayExecuteNow > 0.005;
+    /*
+     * Full vs partial must match what the user actually sees. `currency()`
+     * rounds to whole dollars, so amounts like $55,393.07 deployable and
+     * $55,393.00 planned both render as "$55,393". Using a sub-cent
+     * tolerance produced the "Partial — $55,393 of $55,393 safe-to-use"
+     * bug: the numbers looked identical but were technically different.
+     * Snap the comparison to the same $1 resolution as the display.
+     */
+    const cashAtDeployableMax =
+      cashPlanned &&
+      displayDeployable > 0.005 &&
+      Math.round(displayExecuteNow) >= Math.round(displayDeployable);
+    const cashPartialOfDeployable =
+      cashPlanned && !cashAtDeployableMax && displayDeployable > 0.005;
+    const cashAnswer = cashPlanned
+      ? `Yes — ${currency(displayExecuteNow)} planned this month`
+      : displayDeployable > 0.005
+      ? 'No — cash is available but nothing is planned for extra debt paydown this month'
+      : 'No — no safe cash available after reserves / holds';
+
+    // Deploy-full answer is independent and only meaningful when cash is
+    // actually being deployed. When nothing is planned we say "n/a" rather
+    // than inventing a risk reason against a $0 outflow.
+    let deployAnswer: string;
+    if (!cashPlanned) {
+      deployAnswer = 'n/a — no cash is being deployed this month';
+    } else if (cashAtDeployableMax) {
+      const reasons: string[] = [];
+      if (helocStatus === 'not_recommended') reasons.push('HELOC not recommended');
+      if (trapRisk === 'high') reasons.push('high double-debt risk');
+      else if (trapRisk === 'medium') reasons.push('double-debt watch');
+      if (plannedHold > 0.005) reasons.push('near-term planned expenses');
+      if (unmappedCardRisk > 0.005) reasons.push('unmapped card-risk reserve');
+      if (spikyNext120 > 0.005) reasons.push('recent spiky card-funded charges');
+      const fullLine = `Full — ${currency(displayExecuteNow)} of ${currency(
+        displayDeployable
+      )} safe-to-use is being deployed`;
+      deployAnswer = reasons.length
+        ? `${fullLine}; watch ${reasons.slice(0, 2).join(' & ')}`
+        : fullLine;
+    } else if (cashPartialOfDeployable) {
+      deployAnswer = `Partial — ${currency(displayExecuteNow)} of ${currency(
+        displayDeployable
+      )} safe-to-use is being deployed`;
+    } else {
+      deployAnswer = `Yes — ${currency(displayExecuteNow)} is being deployed this month`;
+    }
+
+    // Rebuild in a deliberate order so the split reads naturally.
+    out['Can I make an extra payment from cash?'] = cashAnswer;
+    out['Should I deploy the full safe amount now?'] = deployAnswer;
+
+    /*
+     * Relabel the "Maximum HELOC draw allowed now" row so the key AND value
+     * track the canonical strategy model:
+     *
+     *   recommended / optional              → "Advised HELOC draw now" = strategy amount
+     *   not_recommended, draw > 0           → "Illustrative max draw if forced"
+     *                                         (value kept; key makes it clear it
+     *                                         is a ceiling, not advice)
+     *   not_recommended OR draw = 0 OR
+     *   not_needed                          → "Advised HELOC draw now" = $0
+     *
+     * We intentionally IGNORE the backend's pre-formatted value when the
+     * status says not_recommended/not_needed — that legacy value is what
+     * produced the contradictory "$25,000 allowed" display.
+     */
+    const maxDrawSrcKey = 'Maximum HELOC draw allowed now';
+    const maxDrawSrcValue = maxDrawSrcKey in src ? String(src[maxDrawSrcKey] ?? '—') : null;
+    let maxDrawKey: string;
+    let maxDrawValue: string | null;
+    if (helocStatus === 'not_recommended' && !drawZero) {
+      maxDrawKey = 'Illustrative max draw if forced';
+      // Prefer the post-cash illustrative figure (see `illustrativeForcedDraw`
+      // memo). Fall back to the main recommendedDrawAmount only if the memo
+      // short-circuited (non-not_recommended / missing model).
+      const illustrative =
+        illustrativeForcedDraw != null ? illustrativeForcedDraw : recommendedDrawAmount;
+      maxDrawValue = currency(illustrative);
+    } else if (helocBlocked) {
+      maxDrawKey = 'Advised HELOC draw now';
+      maxDrawValue = '$0';
+    } else {
+      maxDrawKey = 'Advised HELOC draw now';
+      // Prefer the strategy-driven amount so the two surfaces never diverge.
+      maxDrawValue =
+        recommendedDrawAmount > 0.005 ? currency(recommendedDrawAmount) : maxDrawSrcValue;
+    }
+
+    /*
+     * "Should I draw from HELOC this month?" — legacy backend answer is kept
+     * only when the strategy model confirms HELOC is on the table. Otherwise
+     * we substitute a strategy-aligned "No" so the decision box cannot
+     * contradict the HELOC section.
+     *
+     * "Should I hold cash instead?" — similarly flipped to "Yes" when HELOC
+     * is blocked, so the three HELOC-flavored rows read consistently.
+     */
+    const rawShouldDraw = 'Should I draw from HELOC this month?' in src
+      ? String(src['Should I draw from HELOC this month?'] ?? '—')
+      : null;
+    const rawHoldCash = 'Should I hold cash instead?' in src
+      ? String(src['Should I hold cash instead?'] ?? '—')
+      : null;
+    const shouldDrawOverride = helocBlocked
+      ? helocStatus === 'not_needed'
+        ? 'No — no eligible debts offer a rate benefit'
+        : 'No — HELOC not recommended right now (see HELOC section)'
+      : rawShouldDraw;
+    const holdCashOverride = helocBlocked
+      ? 'Yes — hold cash; a safe HELOC draw is not supported right now'
+      : rawHoldCash;
+
+    const keyMap: Record<string, string> = {
+      'Cleanup target this month': 'Cleanup target this month',
+      'Primary priority debt': 'Primary priority debt'
+    };
+    Object.keys(keyMap).forEach((srcKey) => {
+      if (srcKey in src) out[keyMap[srcKey]] = String(src[srcKey] ?? '—');
+    });
+    if (shouldDrawOverride != null) {
+      out['Should I draw from HELOC this month?'] = shouldDrawOverride;
+    }
+    if (holdCashOverride != null) {
+      out['Should I hold cash instead?'] = holdCashOverride;
+    }
+    if (maxDrawValue != null) {
+      out[maxDrawKey] = maxDrawValue;
+    }
+    // Preserve any additional backend-added keys we didn't explicitly handle,
+    // minus the ones we already consumed/renamed.
+    const consumedSrcKeys = new Set<string>([
+      'Can I make an extra payment?',
+      'Maximum HELOC draw allowed now',
+      'Should I draw from HELOC this month?',
+      'Should I hold cash instead?',
+      // Future-proofing: a backend that learns to emit either variant of
+      // the deploy-full question should not fight our slider-driven answer.
+      'Should I deploy the full amount now?',
+      'Should I deploy the full safe amount now?'
+    ]);
+    Object.keys(src).forEach((k) => {
+      if (consumedSrcKeys.has(k)) return;
+      if (k in keyMap) return;
+      if (k in out) return;
+      out[k] = String(src[k] ?? '—');
+    });
+    return out;
+  }, [
+    data.decisionBox,
+    data.liquidity,
+    helocStrategyModel,
+    displayExecutionPlan,
+    illustrativeForcedDraw
+  ]);
+
   return (
     <div
       className={className}
@@ -2661,7 +6642,7 @@ export function RollingDebtPayoffDashboard({
           >
             Monthly debt execution
           </p>
-          <h1 style={{ margin: '4px 0 0 0', fontSize: 'clamp(1.6rem, 4vw, 2.2rem)', fontWeight: 900, letterSpacing: '-0.02em' }}>Rolling debt payoff</h1>
+          <h1 style={{ margin: '4px 0 0 0', fontSize: 'clamp(1.6rem, 4vw, 2.2rem)', fontWeight: 900, letterSpacing: '-0.02em' }}>Rolling Debt Payoff</h1>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 18px', marginTop: 10, alignItems: 'center' }}>
             <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 8, border: `1px solid ${C.primary}`, color: C.primary }}>Plan: {data.summary.planStatus}</span>
             <span style={{ fontSize: 14, color: C.muted }}>
@@ -2859,18 +6840,24 @@ export function RollingDebtPayoffDashboard({
           >
             Choose your payment — we'll keep it within safe limits.
           </p>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-              gap: 12,
-              marginTop: 12,
-              alignItems: 'stretch'
-            }}
-          >
-            <KpiCard label="HELOC recommended" value={data.liquidity.helocRecommended} sub="Execution stance" />
-          </div>
         </KpiGroup>
+
+        {/**
+         * HELOC strategy advisor — a separate decision-support card + optional
+         * 12-month acceleration plan. Renders only when the backend emitted a
+         * non-empty advisor snapshot (older plan payloads hide the section).
+         * Does NOT affect execute-now totals, waterfall allocation, or
+         * displayExecutionPlan in any way (see PART 5 guardrails).
+         */}
+        {!isAutomation && data.helocAdvisor && helocStrategyModel && helocExecutionPlan ? (
+          <HelocStrategySection
+            snapshot={data.helocAdvisor}
+            model={helocStrategyModel}
+            plan={helocExecutionPlan}
+            isAdvanced={isAdvanced}
+            illustrativeForcedDraw={illustrativeForcedDraw}
+          />
+        ) : null}
 
         {/**
          * Cash bridge (audit) and Allocation audit (month 0) are debug-grade views for
@@ -3140,7 +7127,7 @@ export function RollingDebtPayoffDashboard({
                 .filter(Boolean)
                 .join('\n')}
             />
-            <AutomationBlock title="decision_box" body={Object.entries(data.decisionBox)
+            <AutomationBlock title="decision_box" body={Object.entries(tunedDecisionBox)
               .map(([k, v]) => `${k}: ${v}`)
               .join('\n')} />
             <AutomationBlock
@@ -3329,7 +7316,7 @@ export function RollingDebtPayoffDashboard({
             <div style={shellStyle()}>
               <SectionTitle>Decision box</SectionTitle>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-                {Object.entries(data.decisionBox).map(([q, a]) => (
+                {Object.entries(tunedDecisionBox).map(([q, a]) => (
                   <div key={q} style={{ padding: 14, borderRadius: 10, border: `1px solid ${C.border}`, background: 'rgba(30, 58, 95, 0.04)' }}>
                     <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase' }}>{q}</p>
                     <p style={{ margin: '8px 0 0 0', fontSize: 14, fontWeight: 700 }}>{a}</p>
@@ -3409,6 +7396,44 @@ export const demoRollingDebtPayoffDashboardData: RollingDebtPayoffDashboardData 
     legacyBufferAboveReserve: 100_000
   },
   cashBridge: null,
+  helocAdvisor: {
+    helocAprPercent: 8.75,
+    helocCurrentBalance: 0,
+    helocAccountName: 'HELOC',
+    helocMinimumPayment: 0,
+    minSpreadPercent: 3,
+    monthlyRecurringPaydownCapacity: 3_000,
+    conditionalLumpPaydownCapacity: 12_000,
+    conditionalLumpFrequencyNote: 'RSU vests (quarterly, not guaranteed)',
+    upcomingExpenses: [
+      { label: 'Fence replacement', amount: 9_500, dueInDays: 45 },
+      { label: 'Solar install down payment', amount: 18_000, dueInDays: 90 },
+      { label: 'Q2 estimated taxes', amount: 14_000, dueInDays: 60 }
+    ],
+    monthlySpendingEstimate: 11_000,
+    monthlyNewSpendingEstimate: 500,
+    cardSpend: {
+      recurringBills: [
+        { label: 'Lake Tahoe HOA', monthlyAmount: 680 },
+        { label: 'AT&T fiber', monthlyAmount: 110 },
+        { label: 'Xfinity', monthlyAmount: 95 },
+        { label: 'Subscriptions (Netflix, Spotify, etc.)', monthlyAmount: 85 },
+        { label: 'Groceries + gas (card-routed)', monthlyAmount: 2_200 }
+      ],
+      plannedCardFundedNext120Days: 3_400,
+      // Planner surplus already nets monthly expenses — don't double-count.
+      alreadyInCashflow: true,
+      estimationMethod: 'recurring_bills_only',
+      confidence: 'medium'
+    },
+    debts: [
+      { name: 'Southwest Priority', type: 'Credit Card', balance: 51_200, aprPercent: 22.49, minimumPayment: 1_025 },
+      { name: 'United Explorer', type: 'Credit Card', balance: 18_400, aprPercent: 20.24, minimumPayment: 370 },
+      { name: 'Freedom Flex', type: 'Credit Card', balance: 9_100, aprPercent: 19.49, minimumPayment: 185 },
+      { name: 'Ink Business', type: 'Credit Card', balance: 22_000, aprPercent: 17.99, minimumPayment: 450 },
+      { name: 'Lake Tahoe Mortgage', type: 'Mortgage', balance: 420_000, aprPercent: 6.125, minimumPayment: 2_550 }
+    ]
+  },
   alreadyPaid: [{ account: 'Chase Sapphire' }, { account: 'Amex Gold' }],
   minimums: [
     { account: 'Citi Double Cash', amountDue: 185 },

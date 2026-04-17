@@ -803,7 +803,7 @@
       <button class="tab-btn" data-tab="retirement" onclick="showTab('retirement')">Retirement</button>
       <button class="tab-btn" data-tab="purchase" onclick="showTab('purchase')">Purchase Sim</button>
       <button class="tab-btn" data-tab="debtPayoff" onclick="showTab('debtPayoff')">Payoff Path</button>
-      <button class="tab-btn" data-tab="rollingDebtPayoff" onclick="showTab('rollingDebtPayoff')">Rolling debt payoff</button>
+      <button class="tab-btn" data-tab="rollingDebtPayoff" onclick="showTab('rollingDebtPayoff')">Rolling Debt Payoff</button>
     </div>
 
     <div id="debts" class="panel active">
@@ -1014,11 +1014,11 @@
 
     <div id="rollingDebtPayoff" class="panel">
       <div class="panel-head">
-        <h2>Rolling debt payoff</h2>
+        <h2>Rolling Debt Payoff</h2>
       </div>
       <div class="rolling-dp-controls-row">
         <div class="rolling-dp-controls-left">
-          <div class="segmented-control planner-mode-segmented" role="tablist" aria-label="Rolling debt payoff view">
+          <div class="segmented-control planner-mode-segmented" role="tablist" aria-label="Rolling Debt Payoff view">
             <button type="button" class="seg-planner active" role="tab" aria-selected="true" data-presentation="Standard" onclick="setRollingDebtPayoffSelectedPresentation('Standard')" title="Clean operator-facing dashboard. Toggle Advanced to see audit panels.">Standard</button>
             <button type="button" class="seg-planner" role="tab" aria-selected="false" data-presentation="Automation" onclick="setRollingDebtPayoffSelectedPresentation('Automation')" title="Plain-text machine-readable blocks (for scripts / LLMs)">Automation</button>
           </div>
@@ -1047,7 +1047,7 @@
       <details class="rolling-dp-json-wrap">
         <summary class="rolling-dp-json-summary">Raw JSON (export)</summary>
         <p class="muted" style="margin:6px 0 8px 0;">Machine-readable plan payload (legacy trigger details omitted).</p>
-        <pre id="rolling_debt_payoff_json" class="rolling-dp-json" aria-label="Rolling debt payoff JSON"></pre>
+        <pre id="rolling_debt_payoff_json" class="rolling-dp-json" aria-label="Rolling Debt Payoff JSON"></pre>
       </details>
     </div>
   </div>

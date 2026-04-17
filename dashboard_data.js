@@ -1194,6 +1194,10 @@ function getRecurringBillsWithoutDueDateForDashboard() {
   const currentMonthCol = currentHeaders.indexOf(currentMonthHeader);
   if (currentMonthCol === -1) return [];
 
+  // Resolve Type/Payee by header label so inserting a column (e.g. "Flow
+  // Source") between them on the sheet does not silently mis-align reads.
+  const currentHeaderMap = getCashFlowHeaderMap_(currentSheet);
+
   const nextSheet = getCashFlowSheet_(ss, nextDate.getFullYear());
   const nextValues = nextSheet.getDataRange().getValues();
   const nextDisplay = nextSheet.getDataRange().getDisplayValues();
@@ -1208,8 +1212,8 @@ function getRecurringBillsWithoutDueDateForDashboard() {
   const result = [];
 
   for (let r = 1; r < currentValues.length; r++) {
-    const type = String(currentDisplay[r][0] || '').trim();
-    const payee = String(currentDisplay[r][1] || '').trim();
+    const type = String(currentDisplay[r][currentHeaderMap.typeColZero] || '').trim();
+    const payee = String(currentDisplay[r][currentHeaderMap.payeeColZero] || '').trim();
 
     if (type !== 'Expense') continue;
     if (!payee) continue;
@@ -1372,6 +1376,10 @@ function getDebtBillsDueRows_(ss, today, tz) {
   const currentMonthCol = currentHeaders.indexOf(currentCtx.monthHeader);
   if (currentMonthCol === -1) return [];
 
+  // Header-driven lookup of Type / Payee (they may no longer live at [0] / [1]
+  // once the Flow Source column is inserted between them on the sheet).
+  const currentHeaderMap = getCashFlowHeaderMap_(currentCtx.sheet);
+
   const nextValues = nextCtx.sheet.getDataRange().getValues();
   const nextDisplay = nextCtx.sheet.getDataRange().getDisplayValues();
   const nextHeaders = nextDisplay.length ? nextDisplay[0] : [];
@@ -1381,8 +1389,8 @@ function getDebtBillsDueRows_(ss, today, tz) {
   const rows = [];
 
   for (let r = 1; r < currentValues.length; r++) {
-    const type = String(currentDisplay[r][0] || '').trim();
-    const payee = String(currentDisplay[r][1] || '').trim();
+    const type = String(currentDisplay[r][currentHeaderMap.typeColZero] || '').trim();
+    const payee = String(currentDisplay[r][currentHeaderMap.payeeColZero] || '').trim();
 
     if (type !== 'Expense') continue;
     if (!payee) continue;

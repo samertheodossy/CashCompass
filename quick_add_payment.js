@@ -1,3 +1,36 @@
+/**
+ * Allow-list of Flow Source values for the `INPUT - Cash Flow YYYY` sheets.
+ * Phase 2 keeps this deliberately tiny:
+ *   CASH         — income, transfers, bank-funded payments, credit-card payoff rows.
+ *   CREDIT_CARD  — expenses actually charged to a card (spending, not payoff).
+ * Legacy rows created before the column existed are allowed to be blank.
+ * Add per-card values here later; consumers read via `normalizeFlowSource_`.
+ */
+var FLOW_SOURCE_ALLOWED_VALUES_ = ['CASH', 'CREDIT_CARD'];
+
+/**
+ * Normalize a raw Flow Source value (from UI, payload, or sheet cell) to the
+ * canonical uppercase form. Blank / null / undefined is allowed and returns ''.
+ * Accepts common variants ("credit card", "credit-card", "Cash") and folds
+ * whitespace/hyphens into underscores. Throws on any other value so typos
+ * never silently poison the sheet.
+ */
+function normalizeFlowSource_(raw) {
+  if (raw === null || raw === undefined) return '';
+  const text = String(raw).trim();
+  if (!text) return '';
+
+  const canonical = text.toUpperCase().replace(/[\s-]+/g, '_');
+  if (FLOW_SOURCE_ALLOWED_VALUES_.indexOf(canonical) !== -1) {
+    return canonical;
+  }
+
+  throw new Error(
+    'Unsupported Flow Source value: "' + raw + '". Allowed: ' +
+    FLOW_SOURCE_ALLOWED_VALUES_.join(', ') + ', or blank.'
+  );
+}
+
 function getQuickAddPaymentUiData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const year = getCurrentYear_();
@@ -8,11 +41,14 @@ function getQuickAddPaymentUiData() {
     return {
       year: year,
       payees: [],
-      types: ['Expense', 'Income']
+      types: ['Expense', 'Income'],
+      flowSources: FLOW_SOURCE_ALLOWED_VALUES_.slice(),
+      flowSourceColumnPresent: false
     };
   }
 
   const headerMap = getCashFlowHeaderMap_(sheet);
+  const hasFlowSource = headerMap.flowSourceColZero !== -1;
 
   const rows = [];
   for (let r = 1; r < values.length; r++) {
@@ -22,9 +58,22 @@ function getQuickAddPaymentUiData() {
     if (!type || !payee) continue;
     if (type === 'Summary') continue;
 
+    var existingFlowSource = '';
+    if (hasFlowSource) {
+      var rawExisting = values[r][headerMap.flowSourceColZero];
+      try {
+        existingFlowSource = normalizeFlowSource_(rawExisting);
+      } catch (e) {
+        // Leave legacy / typo values blank in the hint list rather than blowing
+        // up the whole sidebar. The raw cell is untouched.
+        existingFlowSource = '';
+      }
+    }
+
     rows.push({
       type: type,
-      payee: payee
+      payee: payee,
+      flowSource: existingFlowSource
     });
   }
 
@@ -36,7 +85,9 @@ function getQuickAddPaymentUiData() {
   return {
     year: year,
     payees: rows,
-    types: ['Expense', 'Income']
+    types: ['Expense', 'Income'],
+    flowSources: FLOW_SOURCE_ALLOWED_VALUES_.slice(),
+    flowSourceColumnPresent: hasFlowSource
   };
 }
 
@@ -117,12 +168,23 @@ function getQuickAddPreview(payload) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = getCashFlowSheetForYear_(ss, year);
   const monthCol = getMonthColumnByDate_(sheet, entryDate, 1);
+  const headerMap = getCashFlowHeaderMap_(sheet);
 
   const rowInfo = findCashFlowRowByTypeAndPayee_(sheet, entryType, payee);
 
   let currentValue = '';
+  let existingFlowSource = '';
   if (rowInfo) {
     currentValue = round2_(toNumber_(sheet.getRange(rowInfo.row, monthCol).getValue()));
+    if (headerMap.flowSourceColZero !== -1) {
+      try {
+        existingFlowSource = normalizeFlowSource_(
+          sheet.getRange(rowInfo.row, headerMap.flowSourceCol).getDisplayValue()
+        );
+      } catch (e) {
+        existingFlowSource = '';
+      }
+    }
   }
 
   const priorPreview = computeQuickAddPriorMonthPreview_(ss, entryType, payee, entryDate);
@@ -132,6 +194,8 @@ function getQuickAddPreview(payload) {
     month: Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'MMM-yy'),
     currentValue: currentValue,
     rowExists: !!rowInfo,
+    flowSourceColumnPresent: headerMap.flowSourceColZero !== -1,
+    existingFlowSource: existingFlowSource,
     priorMonthLabel: priorPreview.priorMonthLabel,
     priorMonthValue: priorPreview.priorMonthValue,
     priorMonthUnavailableMessage: priorPreview.priorMonthUnavailableMessage
@@ -146,6 +210,9 @@ function quickAddPayment(payload) {
   const entryDate = parseIsoDateLocal_(payload.entryDate);
   const amount = Math.abs(toNumber_(payload.amount));
   const createIfMissing = !!payload.createIfMissing;
+  // Validate up-front so a bad value can't land in the sheet. Blank is allowed
+  // (legacy-compatible) and simply skips the Flow Source write below.
+  const flowSource = normalizeFlowSource_(payload.flowSource);
 
   if (!payee) throw new Error('Payee is required.');
   if (isNaN(entryDate.getTime())) throw new Error('Invalid date.');
@@ -160,14 +227,17 @@ function quickAddPayment(payload) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = getCashFlowSheetForYear_(ss, year);
   const monthCol = getMonthColumnByDate_(sheet, entryDate, 1);
+  const headerMap = getCashFlowHeaderMap_(sheet);
 
   let rowInfo = findCashFlowRowByTypeAndPayee_(sheet, entryType, payee);
+  let rowWasCreated = false;
 
   if (!rowInfo) {
     if (!createIfMissing) {
       throw new Error('Payee row not found. Check "Create row if missing" to add it automatically.');
     }
-    rowInfo = insertCashFlowRow_(sheet, entryType, payee);
+    rowInfo = insertCashFlowRow_(sheet, entryType, payee, flowSource);
+    rowWasCreated = true;
   }
 
   const targetCell = sheet.getRange(rowInfo.row, monthCol);
@@ -176,6 +246,24 @@ function quickAddPayment(payload) {
   addCurrencyToCellPreserveRowFormat_(sheet, rowInfo.row, monthCol, signedAmount, 3);
 
   const newValue = round2_(toNumber_(sheet.getRange(rowInfo.row, monthCol).getValue()));
+
+  // Write Flow Source only when the column exists on this year's tab AND the
+  // caller passed a value. For existing rows we only fill a blank cell — we
+  // never overwrite a value the user (or a prior call) already set. New rows
+  // created by `insertCashFlowRow_` above already got the Flow Source seeded.
+  let flowSourceWritten = rowWasCreated && !!flowSource;
+  if (
+    flowSource &&
+    !rowWasCreated &&
+    headerMap.flowSourceColZero !== -1
+  ) {
+    const flowCell = sheet.getRange(rowInfo.row, headerMap.flowSourceCol);
+    const existingRaw = flowCell.getDisplayValue();
+    if (!String(existingRaw || '').trim()) {
+      flowCell.setValue(flowSource);
+      flowSourceWritten = true;
+    }
+  }
 
   const debtBalanceNote = adjustDebtsBalanceAfterQuickPayment_(ss, payee, entryType, amount);
 
@@ -196,7 +284,9 @@ function quickAddPayment(payload) {
     createIfMissing: createIfMissing,
     debtBalanceNote: debtBalanceNote,
     cashFlowSheet: sheet.getName(),
-    cashFlowMonth: monthLabel
+    cashFlowMonth: monthLabel,
+    flowSource: flowSource || '',
+    flowSourceWritten: flowSourceWritten
   };
 
   if (!payload.suppressActivityLog) {
@@ -232,6 +322,10 @@ function quickAddPayment(payload) {
     'Change: ' + fmtCurrency_(signedAmount) + '\n' +
     'New value: ' + fmtCurrency_(newValue);
 
+  if (flowSourceWritten) {
+    message += '\nFlow Source: ' + flowSource;
+  }
+
   if (debtBalanceNote) {
     message +=
       '\nDebts: Account Balance ' +
@@ -248,6 +342,8 @@ function quickAddPayment(payload) {
       month: monthLabel,
       currentValue: newValue,
       rowExists: true,
+      flowSourceColumnPresent: headerMap.flowSourceColZero !== -1,
+      flowSourceWritten: flowSourceWritten,
       priorMonthLabel: priorPreview.priorMonthLabel,
       priorMonthValue: priorPreview.priorMonthValue,
       priorMonthUnavailableMessage: priorPreview.priorMonthUnavailableMessage
@@ -329,7 +425,16 @@ function findCashFlowRowByTypeAndPayee_(sheet, entryType, payee) {
   return null;
 }
 
-function insertCashFlowRow_(sheet, entryType, payee) {
+/**
+ * Insert a new row into the cash-flow sheet for the given Type + Payee, seeded
+ * with an optional Flow Source value. The row is placed immediately after the
+ * last existing row of the same Type (or just before the Summary row if there
+ * is no prior row of that Type), and inherits the formatting of the row above.
+ *
+ * `flowSource` is already validated/normalized by the caller (empty allowed).
+ * When the column isn't present on legacy year tabs we silently skip it.
+ */
+function insertCashFlowRow_(sheet, entryType, payee, flowSource) {
   const values = sheet.getDataRange().getDisplayValues();
   if (!values.length) {
     throw new Error('Cash Flow sheet is empty.');
@@ -376,13 +481,39 @@ function insertCashFlowRow_(sheet, entryType, payee) {
   sheet.getRange(newRow, headerMap.typeCol).setValue(entryType);
   sheet.getRange(newRow, headerMap.payeeCol).setValue(payee);
 
+  if (flowSource && headerMap.flowSourceColZero !== -1) {
+    sheet.getRange(newRow, headerMap.flowSourceCol).setValue(flowSource);
+  }
+
+  // Seed Active=YES on freshly-created rows when the column exists so the
+  // sheet is self-documenting. Blank would be treated as YES by every
+  // consumer, but an explicit value avoids user confusion and keeps the
+  // HELOC debug output ("active_column_present") meaningful even if the
+  // user hasn't manually flagged anything as NO yet.
+  if (headerMap.activeColZero !== -1) {
+    sheet.getRange(newRow, headerMap.activeCol).setValue('YES');
+  }
+
   return { row: newRow };
 }
 
+/**
+ * Header-index map for an `INPUT - Cash Flow YYYY` sheet. Flow Source is
+ * optional for backward compatibility with legacy year tabs that predate the
+ * column — callers MUST branch on `flowSourceColZero !== -1` before reading
+ * or writing that column.
+ *
+ * Type and Payee remain required; if either is missing the sheet is
+ * unusable and we fail loudly rather than silently mis-align columns.
+ */
 function getCashFlowHeaderMap_(sheet) {
   const headers = sheet.getDataRange().getDisplayValues()[0] || [];
   const typeColZero = headers.indexOf('Type');
   const payeeColZero = headers.indexOf('Payee');
+  const flowSourceColZero = headers.indexOf('Flow Source');
+  // `Active` is optional metadata — YES/NO/blank. Blank is treated as YES
+  // by every consumer, so legacy tabs without the column stay valid.
+  const activeColZero = headers.indexOf('Active');
 
   if (typeColZero === -1 || payeeColZero === -1) {
     throw new Error('Cash Flow sheet must contain Type and Payee headers.');
@@ -391,8 +522,12 @@ function getCashFlowHeaderMap_(sheet) {
   return {
     typeColZero: typeColZero,
     payeeColZero: payeeColZero,
+    flowSourceColZero: flowSourceColZero,
+    activeColZero: activeColZero,
     typeCol: typeColZero + 1,
-    payeeCol: payeeColZero + 1
+    payeeCol: payeeColZero + 1,
+    flowSourceCol: flowSourceColZero === -1 ? -1 : flowSourceColZero + 1,
+    activeCol: activeColZero === -1 ? -1 : activeColZero + 1
   };
 }
 

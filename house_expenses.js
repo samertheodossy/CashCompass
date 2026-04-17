@@ -119,6 +119,11 @@ function addHouseExpense(payload) {
 
 /**
  * @returns {{ message: string, updated: boolean }}
+ *
+ * `payload.flowSource` is optional and forwarded verbatim to quickAddPayment,
+ * which validates it against the allow-list (CASH / CREDIT_CARD / blank). When
+ * the caller leaves it blank, Quick Add leaves the Flow Source cell untouched
+ * so legacy year tabs (without the column) keep working unchanged.
  */
 function addHouseExpenseToCashFlow_(payload, cost, serviceFees) {
   const netAmount = round2_(cost + serviceFees);
@@ -138,7 +143,8 @@ function addHouseExpenseToCashFlow_(payload, cost, serviceFees) {
     entryDate: payload.date,
     amount: amount,
     createIfMissing: true,
-    suppressActivityLog: true
+    suppressActivityLog: true,
+    flowSource: payload.flowSource
   });
 
   if (typeof runDebtPlanner === 'function') runDebtPlanner();

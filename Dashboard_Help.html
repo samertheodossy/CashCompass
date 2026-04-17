@@ -23,7 +23,7 @@
         <a href="#help-property-performance">Property performance</a>
         <a href="#help-planning">Planning</a>
         <a href="#help-payoff-path">Payoff Path</a>
-        <a href="#help-rolling-debt-payoff">Rolling debt payoff</a>
+        <a href="#help-rolling-debt-payoff">Rolling Debt Payoff</a>
         <a href="#help-debt-email">Debt Planner email</a>
         <a href="#help-sheets">Sheet names</a>
       </nav>
@@ -140,7 +140,7 @@
         <h3>Planning</h3>
         <p><strong>Debts</strong> — Update <strong>INPUT - Debts</strong>; planner output uses balances and minimums.</p>
         <p><strong>Retirement</strong> and <strong>Purchase Sim</strong> — Use the latest snapshot and your inputs; details depend on your sheet configuration.</p>
-        <p><strong>Payoff Path</strong> and <strong>Rolling debt payoff</strong> — Payoff Path is read-only payoff math from the sheet; Rolling debt payoff is a separate conservative rolling plan (see its help section).</p>
+        <p><strong>Payoff Path</strong> and <strong>Rolling Debt Payoff</strong> — Payoff Path is read-only payoff math from the sheet; Rolling Debt Payoff is a separate conservative rolling plan (see its help section).</p>
       </section>
 
       <section id="help-payoff-path" class="help-section">
@@ -151,7 +151,7 @@
       </section>
 
       <section id="help-rolling-debt-payoff" class="help-section">
-        <h3>Rolling debt payoff</h3>
+        <h3>Rolling Debt Payoff</h3>
         <p><strong>Separate from Payoff Path</strong> — This tab runs a conservative, month-anchored household engine: anchor month is the <strong>latest month column on INPUT - Cash Flow that has any Income/Expense data</strong> (not today’s calendar date).</p>
         <p><strong>Cash out vs minimums</strong> — Required cash out uses <strong>INPUT - Cash Flow</strong> expense lines. <strong>INPUT - Debts</strong> minimum payments appear as <em>reference only</em> in triggers and JSON; they are <strong>not</strong> added again on top of Cash Flow (no double count with mortgage or card payments already in CF).</p>
         <p><strong>Liquidity model (calculated from SYS - Accounts)</strong> — The top KPI row and the Deployable max are derived directly from the accounts sheet; the legacy $100k/$100k hardcoded reserve and buffer constants are retained for audit only and do not drive the numbers you see.</p>
@@ -173,7 +173,7 @@
         <p><strong>Debt ordering</strong> — Extra principal (after the reserve rule) goes to credit cards by <strong>highest APR first</strong>, then HELOC, Tahoe, San Diego, Missouri, and San Jose last. <strong>Loan Depot - San Jose House</strong> and any debt with APR <strong>≤ 2.25%</strong> get <code>LOW_RATE_KEEP_LAST</code> on the normalized debt row.</p>
         <p><strong>Confidence</strong> — <code>overall_plan_confidence</code> is a simple rubric (see JSON <code>overall_plan_confidence_rubric</code>); credit-card “spend” without statement balance tracking is marked <strong>LOW</strong>.</p>
         <p><strong>Operating vs forecast</strong> — The dashboard leads with <strong>THIS MONTH PLAN</strong>, an <strong>action decision box</strong>, and a <strong>next-three-month preview</strong>. The 12-month cash table and yearly rows are <strong>forecasts only</strong> (collapsed by default), not a month-by-month instruction list.</p>
-        <p><strong>Plan status</strong> — <code>OK</code> when the core forward model is clean. <code>PARTIALLY_VALID</code> only when an <strong>execution-integrity</strong> check fails (cash split vs execution total, missing per-account lines when cash extra is non-zero, or total executable mismatch). Advisory noise (expense confidence, irregular payees, unmapped planned card modeling) does not change status. <code>NEEDS_REVIEW</code> when sheet triggers fire; <code>INVALID</code> when income/expense forward numbers cannot be trusted. Turn on <strong>Include DEBUG DETAILS</strong> on the Rolling debt payoff tab for full tables, diagnostics, and JSON.</p>
+        <p><strong>Plan status</strong> — <code>OK</code> when the core forward model is clean. <code>PARTIALLY_VALID</code> only when an <strong>execution-integrity</strong> check fails (cash split vs execution total, missing per-account lines when cash extra is non-zero, or total executable mismatch). Advisory noise (expense confidence, irregular payees, unmapped planned card modeling) does not change status. <code>NEEDS_REVIEW</code> when sheet triggers fire; <code>INVALID</code> when income/expense forward numbers cannot be trusted. Turn on <strong>Include DEBUG DETAILS</strong> on the Rolling Debt Payoff tab for full tables, diagnostics, and JSON.</p>
         <p><strong>JSON</strong> — Includes <code>this_month_plan</code>, <code>action_decision_box</code>, <code>next_3_month_preview</code>, plus <code>summary</code>, <code>key_warnings</code>, <code>next_12_months</code>, <code>yearly_projection</code> (with <code>debt_reduction_vs_prior_year</code> = prior year ending debt minus this year ending), <code>debt_priority</code>, <code>property_watchlist</code>, <code>assumptions</code>, <code>confidence</code>, and <code>diagnostics</code> (including <code>expense_baseline</code> irregular flags). Anchor month in <code>summary</code> uses <code>yyyy-MM</code>.</p>
       </section>
 

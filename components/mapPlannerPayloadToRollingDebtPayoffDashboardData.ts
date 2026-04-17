@@ -4,7 +4,11 @@
  */
 
 import type {
+  CardSpendConfidence,
+  CardSpendEstimationMethod,
   ExecutionPresentationMode,
+  HelocAdvisorDebt,
+  HelocAdvisorSnapshot,
   PlannedExpenseImpactBlock,
   PlannedExpenseImpactRow,
   PlannedExpenseImpactRowVariant,
@@ -381,6 +385,538 @@ function computeSnapshotStatusValidation(args: {
     }
   }
   return { validated: failures.length ? 'FAIL' : 'PASS', failures };
+}
+
+/**
+ * Build the read-only HELOC advisor snapshot from either the slim
+ * `rolling_dashboard_execution_row` or the first `next_12_months` row. Returns
+ * `null` when the planner did not emit advisor data so the UI can hide the
+ * advisor section gracefully.
+ */
+function buildHelocAdvisorSnapshot(
+  data: Record<string, unknown>,
+  row0: Record<string, unknown>
+): HelocAdvisorSnapshot | null {
+  const slimRow = data.rolling_dashboard_execution_row as Record<string, unknown> | undefined;
+  const slim = (slimRow && slimRow.heloc_advisor_snapshot) as Record<string, unknown> | undefined;
+  const fromRow = row0.heloc_advisor_snapshot as Record<string, unknown> | undefined;
+  const raw = fromRow || slim;
+  if (!raw || typeof raw !== 'object') return null;
+  const debtsRaw = Array.isArray(raw.debts) ? (raw.debts as Record<string, unknown>[]) : [];
+  const debts: HelocAdvisorDebt[] = debtsRaw
+    .map((d) => ({
+      name: str(d.name),
+      originalName: str(d.original_name) || undefined,
+      type: str(d.type),
+      balance: round2(num(d.balance)),
+      aprPercent: num(d.apr_percent),
+      minimumPayment: round2(num(d.minimum_payment))
+    }))
+    .filter((d) => d.name && d.balance > 0.005);
+  const helocAprPercent = num(raw.heloc_apr_percent);
+  if (!debts.length && helocAprPercent <= 0) return null;
+  const monthlyRecurring = num(
+    (raw.monthly_recurring_paydown_capacity as unknown) ??
+      (raw.monthly_recurring_paydown_capacity_monthly as unknown) ??
+      (raw.recurring_monthly_surplus as unknown)
+  );
+  const conditionalLump = num(
+    (raw.conditional_lump_paydown_capacity as unknown) ??
+      (raw.optional_variable_income_capacity as unknown)
+  );
+  const conditionalNote = str(
+    (raw.conditional_lump_frequency_note as unknown) ??
+      (raw.optional_variable_income_note as unknown)
+  );
+
+  // Upcoming expenses — explicit advisor snapshot field wins; otherwise
+  // fall back to near-term CASH-funded planned expenses (the same items the
+  // planner already reserves against in `liquidity.near_term_planned_cash_hold`).
+  type RawExpense = { label?: unknown; title?: unknown; name?: unknown; amount?: unknown; due_in_days?: unknown; dueInDays?: unknown; horizon?: unknown };
+  const explicitExpensesRaw = Array.isArray(raw.upcoming_expenses)
+    ? (raw.upcoming_expenses as RawExpense[])
+    : [];
+  let upcomingExpenses: { label: string; amount: number; dueInDays?: number }[] | undefined;
+  if (explicitExpensesRaw.length) {
+    upcomingExpenses = explicitExpensesRaw
+      .map((e) => {
+        const label = str(e?.label || e?.title || e?.name);
+        const amount = round2(num(e?.amount));
+        const due = e?.due_in_days ?? e?.dueInDays;
+        const dueInDays =
+          due != null && due === due && Number.isFinite(Number(due))
+            ? Math.max(0, Math.round(Number(due)))
+            : undefined;
+        return { label, amount, dueInDays };
+      })
+      .filter((e) => e.label && e.amount > 0);
+    if (!upcomingExpenses.length) upcomingExpenses = undefined;
+  } else {
+    const pei = (data.planned_expense_impact as Record<string, unknown>) || {};
+    const displayLines = Array.isArray(pei.display_lines)
+      ? (pei.display_lines as Record<string, unknown>[])
+      : [];
+    const nearTermCashLines = displayLines.filter((ln) => {
+      const horizon = str(ln?.horizon).toLowerCase();
+      const tag = str(ln?.impact_tag).toLowerCase();
+      const unmapped = Boolean(ln?.is_unmapped_card);
+      // Include near-term cash outflows; exclude card-funded items (they don't
+      // consume upfront cash) and mid/long-term items (outside the 120-day
+      // safety window the advisor uses).
+      return horizon === 'near_term' && !unmapped && tag.indexOf('cash \u2192') >= 0;
+    });
+    if (nearTermCashLines.length) {
+      upcomingExpenses = nearTermCashLines
+        .map((ln) => ({
+          label: str(ln?.title) || 'Upcoming expense',
+          amount: round2(num(ln?.amount))
+        }))
+        .filter((e) => e.amount > 0);
+      if (!upcomingExpenses.length) upcomingExpenses = undefined;
+    }
+  }
+
+  const monthlySpending = num(
+    (raw.monthly_spending_estimate as unknown) ??
+      (raw.estimated_monthly_spending as unknown)
+  );
+  const monthlyNewSpending = num(
+    (raw.monthly_new_spending_estimate as unknown) ??
+      (raw.new_monthly_spending_pressure as unknown)
+  );
+
+  const cardSpend = buildHelocCardSpend(data, raw);
+
+  return {
+    helocAprPercent,
+    helocCurrentBalance: round2(num(raw.heloc_current_balance)),
+    helocAccountName: str(raw.heloc_account_name) || 'HELOC',
+    helocMinimumPayment: round2(num(raw.heloc_minimum_payment)),
+    debts,
+    minSpreadPercent: num(raw.min_spread_percent) || 3,
+    monthlyRecurringPaydownCapacity:
+      monthlyRecurring > 0 ? round2(monthlyRecurring) : undefined,
+    conditionalLumpPaydownCapacity:
+      conditionalLump > 0 ? round2(conditionalLump) : undefined,
+    conditionalLumpFrequencyNote: conditionalNote || undefined,
+    upcomingExpenses,
+    monthlySpendingEstimate: monthlySpending > 0 ? round2(monthlySpending) : undefined,
+    monthlyNewSpendingEstimate: monthlyNewSpending > 0 ? round2(monthlyNewSpending) : undefined,
+    cardSpend
+  };
+}
+
+/**
+ * Build the HELOC advisor's "ongoing card spending" signal. Walks the
+ * planner payload in descending order of trust:
+ *
+ *   1. Explicit `raw.card_spend` block (richest — full method/confidence
+ *      override, per-account breakdown, recurring bills, 120-day planned).
+ *   2. `planned_expense_impact.display_lines` filtered to `near_term` +
+ *      card-funded variants → feeds `plannedCardFundedNext120Days` only.
+ *      Recurring monthly spend is left undefined so the advisor falls
+ *      through to `no_data` / low confidence instead of fabricating a
+ *      number.
+ *
+ * Returns `undefined` when the payload carries no signal at all — the
+ * strategy model treats that as "no data" and surfaces the gap in the UI.
+ */
+function buildHelocCardSpend(
+  data: Record<string, unknown>,
+  raw: Record<string, unknown>
+): HelocAdvisorSnapshot['cardSpend'] {
+  const block = raw.card_spend as Record<string, unknown> | undefined;
+
+  // Fallback: infer `plannedCardFundedNext120Days` from the planner's own
+  // near-term card-funded expense lines (same data the UI already shows).
+  let plannedCardFundedNext120DaysFallback = 0;
+  const pei = (data.planned_expense_impact as Record<string, unknown>) || {};
+  const displayLines = Array.isArray(pei.display_lines)
+    ? (pei.display_lines as Record<string, unknown>[])
+    : [];
+  for (const ln of displayLines) {
+    const horizon = str(ln?.horizon).toLowerCase();
+    if (horizon !== 'near_term') continue;
+    const tag = str(ln?.impact_tag).toLowerCase();
+    const unmapped = Boolean(ln?.is_unmapped_card);
+    const mappedCardName = str(ln?.mapped_card_name);
+    const isCardFunded =
+      unmapped ||
+      tag.includes('credit card') ||
+      tag.includes('mapped') ||
+      !!mappedCardName;
+    if (!isCardFunded) continue;
+    plannedCardFundedNext120DaysFallback = round2(
+      plannedCardFundedNext120DaysFallback + num(ln?.amount)
+    );
+  }
+
+  if (!block || typeof block !== 'object') {
+    if (plannedCardFundedNext120DaysFallback > 0.005) {
+      return {
+        plannedCardFundedNext120Days: plannedCardFundedNext120DaysFallback
+      };
+    }
+    return undefined;
+  }
+
+  // Normalize per-account breakdown.
+  type RawAcct = { account?: unknown; name?: unknown; monthly_average?: unknown; monthlyAverage?: unknown };
+  const byAccountRaw = Array.isArray(block.by_account)
+    ? (block.by_account as RawAcct[])
+    : [];
+  const byAccount = byAccountRaw
+    .map((a) => ({
+      account: str(a?.account ?? a?.name),
+      monthlyAverage: round2(num(a?.monthly_average ?? a?.monthlyAverage))
+    }))
+    .filter((a) => a.account && a.monthlyAverage > 0.005);
+
+  // Normalize recurring bills (Tahoe, ATT, Xfinity, subscriptions…).
+  type RawBill = { label?: unknown; name?: unknown; monthly_amount?: unknown; monthlyAmount?: unknown; amount?: unknown };
+  const billsRaw = Array.isArray(block.recurring_bills)
+    ? (block.recurring_bills as RawBill[])
+    : [];
+  const recurringBills = billsRaw
+    .map((b) => ({
+      label: str(b?.label ?? b?.name),
+      monthlyAmount: round2(num(b?.monthly_amount ?? b?.monthlyAmount ?? b?.amount))
+    }))
+    .filter((b) => b.label && b.monthlyAmount > 0.005);
+
+  const recentMonthlyAverageRaw = block.recent_monthly_average ?? block.recentMonthlyAverage;
+  const recentMonthlyAverage =
+    recentMonthlyAverageRaw != null && Number.isFinite(Number(recentMonthlyAverageRaw))
+      ? round2(num(recentMonthlyAverageRaw))
+      : undefined;
+
+  const plannedRaw =
+    block.planned_card_funded_next_120_days ?? block.plannedCardFundedNext120Days;
+  const plannedCardFundedNext120Days =
+    plannedRaw != null && Number.isFinite(Number(plannedRaw))
+      ? round2(num(plannedRaw))
+      : plannedCardFundedNext120DaysFallback > 0.005
+      ? plannedCardFundedNext120DaysFallback
+      : undefined;
+
+  const alreadyRaw = block.already_in_cashflow ?? block.alreadyInCashflow;
+  const alreadyInCashflow = typeof alreadyRaw === 'boolean' ? alreadyRaw : undefined;
+
+  const methodRaw = str(block.estimation_method ?? block.estimationMethod).toLowerCase();
+  const VALID_METHODS: readonly CardSpendEstimationMethod[] = [
+    'actual_recent',
+    'recurring_bills_only',
+    'explicit',
+    'conservative_default',
+    'no_data',
+    'bills_scheduled',
+    'combined_history_and_bills'
+  ];
+  const estimationMethod = (VALID_METHODS as readonly string[]).includes(methodRaw)
+    ? (methodRaw as CardSpendEstimationMethod)
+    : undefined;
+
+  const confidenceRaw = str(block.confidence).toLowerCase();
+  const VALID_CONFIDENCE: readonly CardSpendConfidence[] = ['high', 'medium', 'low'];
+  const confidence = (VALID_CONFIDENCE as readonly string[]).includes(confidenceRaw)
+    ? (confidenceRaw as CardSpendConfidence)
+    : undefined;
+
+  // Trailing spiky/nonrecurring trailing-4-months estimate, separate from
+  // the forward-looking `plannedCardFundedNext120Days`. Used as a near-term
+  // proxy when the planner doesn't enumerate upcoming card-funded spikes.
+  const spikyRaw =
+    block.spiky_card_spend_next_120_days ?? block.spikyCardSpendNext120Days;
+  const spikyCardSpendNext120Days =
+    spikyRaw != null && Number.isFinite(Number(spikyRaw))
+      ? round2(num(spikyRaw))
+      : undefined;
+
+  // Per-month series (debug / automation output). Silently drop malformed
+  // entries so one bad row can't hide the rest of the signal.
+  type RawMonth = { month?: unknown; amount?: unknown };
+  const mapMonths = (arr: unknown): Array<{ month: string; amount: number }> | undefined => {
+    if (!Array.isArray(arr)) return undefined;
+    const out = (arr as RawMonth[])
+      .map((m) => ({ month: str(m?.month), amount: round2(num(m?.amount)) }))
+      .filter((m) => m.month);
+    return out.length ? out : undefined;
+  };
+  const recurringCardSpendByMonth = mapMonths(
+    block.recurring_card_spend_by_month ?? block.recurringCardSpendByMonth
+  );
+  const plannedOrSpikyCardSpendByMonth = mapMonths(
+    block.planned_or_spiky_card_spend_by_month ??
+      block.plannedOrSpikyCardSpendByMonth
+  );
+
+  // Payee classification lists — string arrays, filtered of empties.
+  const toStringArr = (arr: unknown): string[] | undefined => {
+    if (!Array.isArray(arr)) return undefined;
+    const out = (arr as unknown[]).map((v) => str(v)).filter(Boolean);
+    return out.length ? out : undefined;
+  };
+  const recurringPayees = toStringArr(block.recurring_payees ?? block.recurringPayees);
+  const spikyPayees = toStringArr(block.spiky_payees ?? block.spikyPayees);
+
+  const monthsObservedRaw = block.months_observed ?? block.monthsObserved;
+  const monthsObserved =
+    monthsObservedRaw != null && Number.isFinite(Number(monthsObservedRaw))
+      ? Math.max(0, Math.round(Number(monthsObservedRaw)))
+      : undefined;
+  const monthsWithCardDataRaw =
+    block.months_with_card_data ?? block.monthsWithCardData;
+  const monthsWithCardData =
+    monthsWithCardDataRaw != null && Number.isFinite(Number(monthsWithCardDataRaw))
+      ? Math.max(0, Math.round(Number(monthsWithCardDataRaw)))
+      : undefined;
+
+  // Active-filter bookkeeping (Part 4). Mirrors what `buildHelocFlowSourceCardSpend_`
+  // emits on the backend so the UI can: (a) show the "Inactive card
+  // expenses are excluded from recurring spend" note when the `Active`
+  // column is actually populated, and (b) surface the removed payees in
+  // the debug review block.
+  const activeColumnPresent =
+    block.active_column_present == null
+      ? undefined
+      : Boolean(block.active_column_present);
+  const inactiveCardSpendRemovedRaw =
+    block.inactive_card_spend_removed ?? block.inactiveCardSpendRemoved;
+  const inactiveCardSpendRemoved =
+    inactiveCardSpendRemovedRaw != null &&
+    Number.isFinite(Number(inactiveCardSpendRemovedRaw))
+      ? round2(Math.max(0, num(inactiveCardSpendRemovedRaw)))
+      : undefined;
+  const rawInactivePayees = Array.isArray(
+    block.inactive_payees_removed || block.inactivePayeesRemoved
+  )
+    ? ((block.inactive_payees_removed || block.inactivePayeesRemoved) as Array<
+        Record<string, unknown>
+      >)
+    : [];
+  const inactivePayeesRemovedList = rawInactivePayees
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const account = String(
+        (entry.account ?? entry.payee ?? entry.name ?? '') as string
+      ).trim();
+      const amountRaw = entry.amount ?? entry.monthly_amount ?? entry.value;
+      const amount = Number(amountRaw);
+      if (!account || !Number.isFinite(amount) || amount <= 0.005) return null;
+      return { account, amount: round2(amount) };
+    })
+    .filter((x): x is { account: string; amount: number } => x !== null);
+  const inactivePayeesRemoved = inactivePayeesRemovedList.length
+    ? inactivePayeesRemovedList
+    : undefined;
+
+  // ── Bills-based forward-looking card obligation signal ───────────────
+  // All fields optional — absent on legacy workbooks without the Payment
+  // Source column in INPUT - Bills.
+  const readNumOrUndef = (v: unknown): number | undefined =>
+    v != null && Number.isFinite(Number(v))
+      ? round2(Math.max(0, num(v)))
+      : undefined;
+  const billsPaymentSourceColumnPresent =
+    block.bills_payment_source_column_present == null
+      ? undefined
+      : Boolean(block.bills_payment_source_column_present);
+  const activeCardBillCountRaw =
+    block.active_card_bill_count ?? block.activeCardBillCount;
+  const activeCardBillCount =
+    activeCardBillCountRaw != null && Number.isFinite(Number(activeCardBillCountRaw))
+      ? Math.max(0, Math.round(Number(activeCardBillCountRaw)))
+      : undefined;
+  const billsRecurringCardBurden = readNumOrUndef(
+    block.bills_recurring_card_burden ?? block.billsRecurringCardBurden
+  );
+  const billsSpikyCardBurdenNext120Days = readNumOrUndef(
+    block.bills_spiky_card_burden_next_120_days ??
+      block.billsSpikyCardBurdenNext120Days
+  );
+  const historicalRecurringCardSpend = readNumOrUndef(
+    block.historical_recurring_card_spend ?? block.historicalRecurringCardSpend
+  );
+  const historicalSpikyCardSpendNext120Days = readNumOrUndef(
+    block.historical_spiky_card_spend_next_120_days ??
+      block.historicalSpikyCardSpendNext120Days
+  );
+  const chosenRecurringCardBurden = readNumOrUndef(
+    block.chosen_recurring_card_burden ?? block.chosenRecurringCardBurden
+  );
+  const chosenSpikyCardBurdenNext120Days = readNumOrUndef(
+    block.chosen_spiky_card_burden_next_120_days ??
+      block.chosenSpikyCardBurdenNext120Days
+  );
+  const VALID_DECISIONS = [
+    'history_dominated',
+    'bills_dominated',
+    'tied',
+    'history_only',
+    'bills_only',
+    'no_data'
+  ] as const;
+  type SourceDecision = (typeof VALID_DECISIONS)[number];
+  const parseDecision = (v: unknown): SourceDecision | undefined => {
+    const s = str(v).toLowerCase();
+    return (VALID_DECISIONS as readonly string[]).includes(s)
+      ? (s as SourceDecision)
+      : undefined;
+  };
+  const sourceDecision = parseDecision(block.source_decision ?? block.sourceDecision);
+  const spikySourceDecision = parseDecision(
+    block.spiky_source_decision ?? block.spikySourceDecision
+  );
+
+  type RawBillsRecurring = {
+    account?: unknown;
+    payee?: unknown;
+    name?: unknown;
+    monthly_equivalent?: unknown;
+    monthlyEquivalent?: unknown;
+  };
+  const billsRecurringRaw = Array.isArray(
+    block.recurring_card_bills_from_bills ?? block.recurringCardBillsFromBills
+  )
+    ? ((block.recurring_card_bills_from_bills ??
+        block.recurringCardBillsFromBills) as RawBillsRecurring[])
+    : [];
+  const recurringCardBillsFromBills = billsRecurringRaw
+    .map((entry) => {
+      const account = str(entry?.account ?? entry?.payee ?? entry?.name);
+      const monthlyEquivalent = round2(
+        Math.max(0, num(entry?.monthly_equivalent ?? entry?.monthlyEquivalent))
+      );
+      return account && monthlyEquivalent > 0.005
+        ? { account, monthlyEquivalent }
+        : null;
+    })
+    .filter(
+      (x): x is { account: string; monthlyEquivalent: number } => x !== null
+    );
+
+  type RawBillsUpcoming = {
+    account?: unknown;
+    payee?: unknown;
+    name?: unknown;
+    next_120_day_burden?: unknown;
+    next120DayBurden?: unknown;
+  };
+  const billsUpcomingRaw = Array.isArray(
+    block.upcoming_card_bills_from_bills ?? block.upcomingCardBillsFromBills
+  )
+    ? ((block.upcoming_card_bills_from_bills ??
+        block.upcomingCardBillsFromBills) as RawBillsUpcoming[])
+    : [];
+  const upcomingCardBillsFromBills = billsUpcomingRaw
+    .map((entry) => {
+      const account = str(entry?.account ?? entry?.payee ?? entry?.name);
+      const burden = round2(
+        Math.max(0, num(entry?.next_120_day_burden ?? entry?.next120DayBurden))
+      );
+      return account && burden > 0.005
+        ? { account, next120DayBurden: burden }
+        : null;
+    })
+    .filter(
+      (x): x is { account: string; next120DayBurden: number } => x !== null
+    );
+
+  type RawBillSched = {
+    payee?: unknown;
+    category?: unknown;
+    frequency?: unknown;
+    default_amount?: unknown;
+    defaultAmount?: unknown;
+    monthly_equivalent?: unknown;
+    monthlyEquivalent?: unknown;
+    next_120_day_burden?: unknown;
+    next120DayBurden?: unknown;
+    next_120_day_dates?: unknown;
+    next120DayDates?: unknown;
+    is_recurring?: unknown;
+    isRecurring?: unknown;
+  };
+  const schedRaw = Array.isArray(
+    block.upcoming_card_bills_schedule ?? block.upcomingCardBillsSchedule
+  )
+    ? ((block.upcoming_card_bills_schedule ??
+        block.upcomingCardBillsSchedule) as RawBillSched[])
+    : [];
+  const upcomingCardBillsSchedule = schedRaw
+    .map((entry) => {
+      const payee = str(entry?.payee);
+      if (!payee) return null;
+      const datesRaw = entry?.next_120_day_dates ?? entry?.next120DayDates;
+      const dates = Array.isArray(datesRaw)
+        ? (datesRaw as unknown[]).map((d) => str(d)).filter(Boolean)
+        : undefined;
+      return {
+        payee,
+        category: str(entry?.category) || undefined,
+        frequency: str(entry?.frequency) || 'monthly',
+        defaultAmount: round2(
+          Math.max(0, num(entry?.default_amount ?? entry?.defaultAmount))
+        ),
+        monthlyEquivalent: round2(
+          Math.max(0, num(entry?.monthly_equivalent ?? entry?.monthlyEquivalent))
+        ),
+        next120DayBurden: round2(
+          Math.max(0, num(entry?.next_120_day_burden ?? entry?.next120DayBurden))
+        ),
+        next120DayDates: dates && dates.length ? dates : undefined,
+        isRecurring: Boolean(entry?.is_recurring ?? entry?.isRecurring)
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+
+  const recurringCardPayeesFromBills = toStringArr(
+    block.recurring_card_payees_from_bills ?? block.recurringCardPayeesFromBills
+  );
+  const spikyCardPayeesFromBills = toStringArr(
+    block.spiky_card_payees_from_bills ?? block.spikyCardPayeesFromBills
+  );
+
+  return {
+    recentMonthlyAverage,
+    byAccount: byAccount.length ? byAccount : undefined,
+    recurringBills: recurringBills.length ? recurringBills : undefined,
+    plannedCardFundedNext120Days,
+    spikyCardSpendNext120Days,
+    recurringCardSpendByMonth,
+    plannedOrSpikyCardSpendByMonth,
+    recurringPayees,
+    spikyPayees,
+    monthsObserved,
+    monthsWithCardData,
+    alreadyInCashflow,
+    estimationMethod,
+    confidence,
+    activeColumnPresent,
+    inactiveCardSpendRemoved,
+    inactivePayeesRemoved,
+    billsPaymentSourceColumnPresent,
+    activeCardBillCount,
+    billsRecurringCardBurden,
+    billsSpikyCardBurdenNext120Days,
+    historicalRecurringCardSpend,
+    historicalSpikyCardSpendNext120Days,
+    chosenRecurringCardBurden,
+    chosenSpikyCardBurdenNext120Days,
+    sourceDecision,
+    spikySourceDecision,
+    recurringCardBillsFromBills: recurringCardBillsFromBills.length
+      ? recurringCardBillsFromBills
+      : undefined,
+    upcomingCardBillsFromBills: upcomingCardBillsFromBills.length
+      ? upcomingCardBillsFromBills
+      : undefined,
+    upcomingCardBillsSchedule: upcomingCardBillsSchedule.length
+      ? upcomingCardBillsSchedule
+      : undefined,
+    recurringCardPayeesFromBills,
+    spikyCardPayeesFromBills
+  };
 }
 
 function executionRow0FromPayload(data: Record<string, unknown>): Record<string, unknown> {
@@ -1200,6 +1736,7 @@ export function mapPlannerPayloadToRollingDebtPayoffDashboardData(payload: unkno
         return Math.max(0, round2(totalCash - reserveTarget - buffer - nearTerm - unmapped));
       })()
     },
+    helocAdvisor: buildHelocAdvisorSnapshot(data, row0),
     cashBridge: buildCashBridgeFromLiquidity(liqIn),
     allocationAudit: buildAllocationAuditBlock(row0, month0ExecuteNowBudget),
     alreadyPaid: alreadyPaidRaw.map((r) => ({ account: str(r.account) })).filter((x) => x.account),

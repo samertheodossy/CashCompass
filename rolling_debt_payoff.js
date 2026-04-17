@@ -2688,10 +2688,11 @@ function slimThisMonthPlanForDashboard_(plan) {
  * Month-0 execution fields for dashboard clients when {@code next_12_months} is omitted from the slim payload.
  * Keeps execute-now maps + concentration analysis in sync with THIS MONTH EXECUTION PLAN text.
  */
-function slimRollingDashboardExecutionRow_(row0) {
+function slimRollingDashboardExecutionRow_(row0, extras) {
   if (!row0 || typeof row0 !== 'object') return null;
   var o = row0;
   var out = {};
+  var extraOpts = extras && typeof extras === 'object' ? extras : null;
   var keys = [
     'month',
     'extra_principal_allocations_execution_now',
@@ -2717,11 +2718,57 @@ function slimRollingDashboardExecutionRow_(row0) {
     var k = keys[i];
     if (o[k] !== undefined) out[k] = o[k];
   }
+  /**
+   * HELOC advisor snapshot — read-only view of the starting debt list +
+   * identified HELOC line for the React dashboard's client-side advisory
+   * layer (helocStrategyModel + 12-month acceleration plan). Does NOT drive
+   * any backend allocation or execution logic; purely decision support.
+   */
+  var startSnap = Array.isArray(o.debt_balances_start) ? o.debt_balances_start : [];
+  if (startSnap.length) {
+    var helocRef = findHelocDebt_(startSnap);
+    var debtsAdv = [];
+    for (var j = 0; j < startSnap.length; j++) {
+      var d = startSnap[j] || {};
+      if (d.active === false) continue;
+      var bal = Number(d.balance) || 0;
+      if (bal <= 0.005) continue;
+      debtsAdv.push({
+        name: String(d.name || ''),
+        original_name: String(d.originalName || ''),
+        type: String(d.type || '').trim(),
+        balance: round2_(bal),
+        apr_percent: Number(d.interestRate) || 0,
+        minimum_payment: round2_(Number(d.minimumPayment) || 0)
+      });
+    }
+    out.heloc_advisor_snapshot = {
+      heloc_apr_percent: helocRef ? Number(helocRef.interestRate) || 0 : 0,
+      heloc_current_balance: helocRef ? round2_(Number(helocRef.balance) || 0) : 0,
+      heloc_account_name: helocRef ? String(helocRef.name || 'HELOC') : '',
+      heloc_minimum_payment: helocRef ? round2_(Number(helocRef.minimumPayment) || 0) : 0,
+      debts: debtsAdv,
+      min_spread_percent: ROLLING_DP_HELOC_MIN_SPREAD_OVER_HELOC_APR_
+    };
+    // Attach the optional card-spend realism block computed upstream from
+    // Cash Flow history (Flow Source column). Keeps the existing snapshot
+    // contract untouched when no data is available (legacy tabs or blank
+    // Flow Source values → extras.cardSpend is null).
+    if (extraOpts && extraOpts.cardSpend) {
+      out.heloc_advisor_snapshot.card_spend = extraOpts.cardSpend;
+    }
+    // TEMPORARY: attach the flow-source debug block so dashboards can see
+    // exactly what sheets/headers/rows the advisor read (or why it fell back).
+    if (extraOpts && extraOpts.cardSpendDebug) {
+      out.heloc_advisor_snapshot.card_spend_debug = extraOpts.cardSpendDebug;
+    }
+  }
   return Object.keys(out).length ? out : null;
 }
 
-function slimRollingDebtPayoffForDefault_(full, defaultOutput) {
+function slimRollingDebtPayoffForDefault_(full, defaultOutput, extras) {
   const pei = full.planned_expense_impact || {};
+  const slimExtras = extras && typeof extras === 'object' ? extras : null;
   return {
     generated_at: full.generated_at,
     summary: full.summary,
@@ -2729,7 +2776,10 @@ function slimRollingDebtPayoffForDefault_(full, defaultOutput) {
     default_output: defaultOutput,
     this_month_plan: slimThisMonthPlanForDashboard_(full.this_month_plan),
     this_month_execution_plan: full.this_month_execution_plan,
-    rolling_dashboard_execution_row: slimRollingDashboardExecutionRow_(full.next_12_months && full.next_12_months[0]),
+    rolling_dashboard_execution_row: slimRollingDashboardExecutionRow_(
+      full.next_12_months && full.next_12_months[0],
+      slimExtras
+    ),
     action_decision_box: full.action_decision_box,
     next_3_month_preview: full.next_3_month_preview,
     planned_expense_impact: {
@@ -2795,6 +2845,75 @@ function getRollingDebtPayoffPlan(options) {
     variableLines: []
   };
   const ccMeta = buildCreditCardSpendMeta_(history, debts);
+  // HELOC realism: derive ongoing card-routed spend from the Cash Flow
+  // "Flow Source" column in the last 6 months of history. Returns null on
+  // legacy tabs (no Flow Source header) so downstream consumers fall back
+  // cleanly to the planned-expense-based estimate.
+  const helocFlowSourceCardSpend = buildHelocFlowSourceCardSpend_(history);
+  // HELOC realism — Bills-based forward-looking companion to the Cash-Flow
+  // history signal above. Reads INPUT - Bills' new "Payment Source" column
+  // and converts every active credit-card bill into a monthly-equivalent
+  // burden + next-120-day scheduled burden. Returns null on legacy tabs
+  // (no Payment Source header) so the advisor stays history-only.
+  const helocBillsCardObligations = buildHelocBillsCardObligationModel_(
+    ss,
+    anchorDate
+  );
+  // Combine the two signals using the conservative "max" rule so neither
+  // trailing history nor forward-looking bills can cause the advisor to
+  // under-estimate card pressure. The chosen burden is written back into
+  // `recent_monthly_average` + `spiky_card_spend_next_120_days` so the
+  // existing React realism ladder picks it up unchanged.
+  const helocCombinedCardSpend = buildHelocCardSpendCombinedPayload_(
+    helocFlowSourceCardSpend,
+    helocBillsCardObligations
+  );
+  // TEMPORARY: verify which sheets / headers / rows the advisor is seeing so
+  // we can confirm the Flow Source column is actually being read. Purely
+  // observational; does not alter card-spend values or any other logic.
+  const helocFlowSourceDebug = buildHelocFlowSourceDebug_(
+    ss,
+    history,
+    helocFlowSourceCardSpend
+  );
+  // Extend the advisor debug block with the Bills-based obligation metrics
+  // (Part 10) so automation tests can assert on them end-to-end.
+  if (helocFlowSourceDebug && typeof helocFlowSourceDebug === 'object') {
+    helocFlowSourceDebug.bills_card_obligations = helocBillsCardObligations
+      ? {
+          payment_source_column_present: true,
+          active_card_bill_count: helocBillsCardObligations.active_card_bill_count,
+          bills_recurring_card_burden:
+            helocBillsCardObligations.recurring_monthly_equivalent_card_burden,
+          bills_spiky_card_burden_next_120_days:
+            helocBillsCardObligations.upcoming_card_bills_next_120_days,
+          recurring_card_payees_from_bills:
+            helocBillsCardObligations.recurring_card_payees.slice(),
+          spiky_card_payees_from_bills:
+            helocBillsCardObligations.spiky_card_payees.slice(),
+          estimation_method: helocBillsCardObligations.estimation_method,
+          confidence: helocBillsCardObligations.confidence
+        }
+      : { payment_source_column_present: false };
+    if (helocCombinedCardSpend) {
+      helocFlowSourceDebug.combined_card_burden = {
+        historical_recurring_card_spend:
+          helocCombinedCardSpend.historical_recurring_card_spend,
+        historical_spiky_card_spend_next_120_days:
+          helocCombinedCardSpend.historical_spiky_card_spend_next_120_days,
+        bills_recurring_card_burden:
+          helocCombinedCardSpend.bills_recurring_card_burden,
+        bills_spiky_card_burden_next_120_days:
+          helocCombinedCardSpend.bills_spiky_card_burden_next_120_days,
+        chosen_recurring_card_burden:
+          helocCombinedCardSpend.chosen_recurring_card_burden,
+        chosen_spiky_card_burden_next_120_days:
+          helocCombinedCardSpend.chosen_spiky_card_burden_next_120_days,
+        source_decision: helocCombinedCardSpend.source_decision,
+        spiky_source_decision: helocCombinedCardSpend.spiky_source_decision
+      };
+    }
+  }
   const sdSeries = buildSanDiegoLossSeries_(history, 6, aliasMap);
   const triggers = buildRollingTriggers_(history, debts, anchorNorm, ccMeta, sdSeries);
   const irregularNote = computeIrregularExpenseNote_(history, aliasMap);
@@ -3370,11 +3489,48 @@ function getRollingDebtPayoffPlan(options) {
   );
 
   if (!includeDebugDetails) {
-    return slimRollingDebtPayoffForDefault_(fullRollingPayload, defaultOutput);
+    const slim = slimRollingDebtPayoffForDefault_(fullRollingPayload, defaultOutput, {
+      // Prefer the merged history+bills payload (Part 6); fall back to the
+      // pure history payload when Bills has no Payment Source column. The
+      // `card_spend` contract is identical so the React mapper is unchanged.
+      cardSpend: helocCombinedCardSpend || helocFlowSourceCardSpend,
+      cardSpendDebug: helocFlowSourceDebug
+    });
+    // Expose the debug block at the top level of the slim payload so the
+    // dashboard can render it without hunting through nested rows.
+    if (slim && typeof slim === 'object') {
+      slim.heloc_flow_source_debug = helocFlowSourceDebug;
+    }
+    return slim;
   }
 
   fullRollingPayload.default_output = defaultOutput;
   fullRollingPayload.include_debug_details = true;
+  // Mirror the HELOC realism block onto the first forward month so the debug
+  // payload (non-slim path) also surfaces the Flow-Source-derived card spend
+  // through the same `heloc_advisor_snapshot.card_spend` contract the
+  // dashboard mapper already reads.
+  if (
+    Array.isArray(fullRollingPayload.next_12_months) &&
+    fullRollingPayload.next_12_months[0] &&
+    typeof fullRollingPayload.next_12_months[0] === 'object'
+  ) {
+    const firstForward = fullRollingPayload.next_12_months[0];
+    const snap =
+      (firstForward.heloc_advisor_snapshot &&
+        typeof firstForward.heloc_advisor_snapshot === 'object' &&
+        firstForward.heloc_advisor_snapshot) ||
+      {};
+    const mergedCardSpendForDebug = helocCombinedCardSpend || helocFlowSourceCardSpend;
+    if (mergedCardSpendForDebug) {
+      snap.card_spend = mergedCardSpendForDebug;
+    }
+    // Always attach the debug block — even when card_spend is null — so the
+    // user can see *why* the advisor fell back to legacy behavior.
+    snap.card_spend_debug = helocFlowSourceDebug;
+    firstForward.heloc_advisor_snapshot = snap;
+  }
+  fullRollingPayload.heloc_flow_source_debug = helocFlowSourceDebug;
   return fullRollingPayload;
 }
 
@@ -5549,6 +5705,912 @@ function buildPropertyWatchlist_(history, aliasMap) {
       reason: 'Protected lifestyle asset'
     }
   };
+}
+
+/**
+ * Build the HELOC advisor's card-spend realism block from actual Cash Flow
+ * history using the "Flow Source" column (CASH | CREDIT_CARD | blank).
+ *
+ * Walks the last 6 months of CF history already loaded by
+ * `buildRollingCfHistory_`, filters rows where Type === "Expense" AND Flow
+ * Source === "CREDIT_CARD", sums per-month per-payee, and classifies each
+ * payee as recurring or spiky using a frequency heuristic:
+ *   - recurring if the payee has a non-zero charge in ≥2 of the last 3 months
+ *     OR ≥3 of the last 6 months.
+ *   - spiky otherwise (property taxes, federal taxes, one-off large charges).
+ *
+ * Returns an object shaped to match the existing
+ * `heloc_advisor_snapshot.card_spend` contract (so the React mapper picks it
+ * up with zero extra work), plus richer per-month debug series. Returns
+ * `null` when:
+ *   - there is no history at all,
+ *   - no row in any month has a "Flow Source" column header (legacy tab), or
+ *   - no row across all months is flagged CREDIT_CARD.
+ *
+ * `already_in_cashflow` defaults to `true` because the planner's recurring
+ * surplus (income minus expenses in the same CF sheet) already nets these
+ * rows out — subtracting them again would double-count.
+ */
+function buildHelocFlowSourceCardSpend_(history) {
+  if (!Array.isArray(history) || !history.length) return null;
+
+  // Anchor at the last 6 months (most recent at the end of the array).
+  const recent = history.slice(-6);
+
+  // Detect whether ANY row (any month) carries a "Flow Source" header. If
+  // none do, we're on a legacy tab — bail out cleanly so the UI falls back
+  // to the existing no-data path instead of inventing a number.
+  let sawFlowSourceColumn = false;
+  for (let i = 0; i < recent.length && !sawFlowSourceColumn; i++) {
+    const rows = recent[i] && recent[i].rows;
+    if (!rows) continue;
+    for (let r = 0; r < rows.length; r++) {
+      if (Object.prototype.hasOwnProperty.call(rows[r], 'Flow Source')) {
+        sawFlowSourceColumn = true;
+        break;
+      }
+    }
+  }
+  if (!sawFlowSourceColumn) return null;
+
+  // Detect whether ANY row carries an "Active" column header. On legacy
+  // tabs without this column we fall back to treating every row as active,
+  // which matches the pre-Active behavior (backward-compatible).
+  let sawActiveColumn = false;
+  for (let i = 0; i < recent.length && !sawActiveColumn; i++) {
+    const rows = recent[i] && recent[i].rows;
+    if (!rows) continue;
+    for (let r = 0; r < rows.length; r++) {
+      if (Object.prototype.hasOwnProperty.call(rows[r], 'Active')) {
+        sawActiveColumn = true;
+        break;
+      }
+    }
+  }
+
+  // Per-month per-payee card-routed expense totals.
+  const byMonth = [];
+  const payeeSet = Object.create(null);
+  // Inactive CREDIT_CARD rows removed from the model — tracked only for debug
+  // surfacing (UI note + "top inactive payees removed" list). These totals
+  // are NEVER fed into the recurring/spiky math.
+  const inactiveByPayee = Object.create(null);
+  let inactiveTotal = 0;
+  for (let mi = 0; mi < recent.length; mi++) {
+    const entry = recent[mi];
+    const monthHeader = entry.monthHeader;
+    const rows = entry.rows || [];
+    const byPayee = Object.create(null);
+    let total = 0;
+    for (let ri = 0; ri < rows.length; ri++) {
+      const row = rows[ri];
+      const typ = String(row.Type || '').trim().toUpperCase();
+      if (typ !== 'EXPENSE') continue;
+      // Tolerant normalization: trim, upper-case, collapse internal spaces to
+      // underscores so "credit card" / "credit_card" / "Credit Card" all
+      // match. Blank / unknown values are skipped (never throws — we don't
+      // want a typo in one row to kill the whole HELOC realism layer).
+      const fs = String(row['Flow Source'] || '')
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, '_');
+      if (fs !== 'CREDIT_CARD') continue;
+      const payee = String(row.Payee || '').trim();
+      if (!payee) continue;
+      const amt = Math.abs(readCashFlowMonthAmount_(row, monthHeader));
+      if (!amt || !isFinite(amt)) continue;
+      // Active filter: default is YES. Only explicit NO / N / FALSE /
+      // INACTIVE kicks a row out. Missing column or blank value = active
+      // (matches the legacy, pre-Active behavior — see Part 5).
+      const activeRaw = String(row.Active == null ? '' : row.Active).trim().toUpperCase();
+      const isInactive =
+        activeRaw === 'NO' ||
+        activeRaw === 'N' ||
+        activeRaw === 'FALSE' ||
+        activeRaw === 'INACTIVE';
+      if (isInactive) {
+        inactiveByPayee[payee] = (inactiveByPayee[payee] || 0) + amt;
+        inactiveTotal += amt;
+        continue;
+      }
+      byPayee[payee] = (byPayee[payee] || 0) + amt;
+      total += amt;
+      payeeSet[payee] = true;
+    }
+    byMonth.push({
+      month: monthHeader,
+      total: round2_(total),
+      byPayee: byPayee
+    });
+  }
+
+  const anyCardRow = byMonth.some(function(m) {
+    return m.total > 0.005;
+  });
+  if (!anyCardRow) return null;
+
+  // Classify each payee as recurring vs spiky.
+  const payees = Object.keys(payeeSet);
+  const last3 = byMonth.slice(-3);
+  const last6 = byMonth.slice(-6);
+  const recurringPayees = [];
+  const spikyPayees = [];
+  payees.forEach(function(p) {
+    let cnt3 = 0;
+    let cnt6 = 0;
+    last3.forEach(function(m) {
+      if ((m.byPayee[p] || 0) > 0.005) cnt3++;
+    });
+    last6.forEach(function(m) {
+      if ((m.byPayee[p] || 0) > 0.005) cnt6++;
+    });
+    if (cnt3 >= 2 || cnt6 >= 3) {
+      recurringPayees.push(p);
+    } else {
+      spikyPayees.push(p);
+    }
+  });
+
+  // Recurring monthly average per payee — averaged over the full last-6
+  // window with missing months counted as 0 (conservative; a bill that only
+  // hits every other month averages down).
+  const windowSize = last6.length || 1;
+  const byAccount = [];
+  recurringPayees.forEach(function(p) {
+    let sum = 0;
+    last6.forEach(function(m) {
+      sum += m.byPayee[p] || 0;
+    });
+    const avg = round2_(sum / windowSize);
+    if (avg > 0.005) {
+      byAccount.push({ account: p, monthly_average: avg });
+    }
+  });
+  byAccount.sort(function(a, b) {
+    return b.monthly_average - a.monthly_average;
+  });
+  const recurringBills = byAccount.map(function(a) {
+    return { label: a.account, monthly_amount: a.monthly_average };
+  });
+
+  // Recurring per-month totals — used for the robust "recent monthly average"
+  // (median of the last 3 months, avoids one-off spikes).
+  const recurringMonthlyTotals = last6.map(function(m) {
+    let sum = 0;
+    recurringPayees.forEach(function(p) {
+      sum += m.byPayee[p] || 0;
+    });
+    return round2_(sum);
+  });
+  const recentWindow = recurringMonthlyTotals.slice(
+    -Math.min(3, recurringMonthlyTotals.length)
+  );
+  const recentMonthlyAverage = recentWindow.length
+    ? round2_(median_(recentWindow))
+    : 0;
+
+  // Spiky card-funded spend over the trailing 4 months — proxy for the next
+  // 120-day near-term spiky window. Tax-like seasonality and large one-offs
+  // are caught here; the advisor uses this figure as the "planned card-funded
+  // next 120 days" signal the UI already surfaces.
+  const last4 = byMonth.slice(-4);
+  let spikyNext120 = 0;
+  last4.forEach(function(m) {
+    spikyPayees.forEach(function(p) {
+      spikyNext120 += m.byPayee[p] || 0;
+    });
+  });
+  spikyNext120 = round2_(spikyNext120);
+
+  // Confidence: more months of non-zero card rows = higher confidence.
+  const monthsWithCardData = byMonth.filter(function(m) {
+    return m.total > 0.005;
+  }).length;
+  const confidence =
+    monthsWithCardData >= 3 ? 'high' : monthsWithCardData >= 1 ? 'medium' : 'low';
+
+  // Per-month series for the debug / automation output contract.
+  const recurringByMonth = byMonth.map(function(m) {
+    let sum = 0;
+    recurringPayees.forEach(function(p) {
+      sum += m.byPayee[p] || 0;
+    });
+    return { month: m.month, amount: round2_(sum) };
+  });
+  const spikyByMonth = byMonth.map(function(m) {
+    let sum = 0;
+    spikyPayees.forEach(function(p) {
+      sum += m.byPayee[p] || 0;
+    });
+    return { month: m.month, amount: round2_(sum) };
+  });
+
+  // Inactive CREDIT_CARD rows removed from the model — summarised for the
+  // UI note + the "top inactive payees removed" debug list. Sorted by
+  // amount descending so consumers can `.slice(0, N)` for a top-N view.
+  const inactivePayeesRemoved = Object.keys(inactiveByPayee)
+    .map(function(p) {
+      return { account: p, amount: round2_(inactiveByPayee[p]) };
+    })
+    .filter(function(x) {
+      return x.amount > 0.005;
+    })
+    .sort(function(a, b) {
+      return b.amount - a.amount;
+    });
+
+  return {
+    recent_monthly_average: recentMonthlyAverage,
+    by_account: byAccount,
+    recurring_bills: recurringBills,
+    planned_card_funded_next_120_days: spikyNext120,
+    // Planner surplus already nets these rows out (they live in the same
+    // Cash Flow sheet). Subtracting again would double-count.
+    already_in_cashflow: true,
+    estimation_method: 'actual_recent',
+    confidence: confidence,
+    // Richer debug series — surfaced by the mapper to the UI/automation.
+    recurring_card_spend_by_month: recurringByMonth,
+    planned_or_spiky_card_spend_by_month: spikyByMonth,
+    recurring_payees: recurringPayees.slice(),
+    spiky_payees: spikyPayees.slice(),
+    months_observed: byMonth.length,
+    months_with_card_data: monthsWithCardData,
+    // Active-filter bookkeeping (Part 4). Present on every payload so the
+    // UI can decide whether to show the "Inactive card expenses are
+    // excluded from recurring spend" note — even when zero rows were
+    // removed, because the column itself being populated is meaningful.
+    active_column_present: sawActiveColumn,
+    inactive_card_spend_removed: round2_(inactiveTotal),
+    inactive_payees_removed: inactivePayeesRemoved
+  };
+}
+
+/**
+ * Build the HELOC advisor's Bills-based card-obligation model — a forward
+ * looking companion to `buildHelocFlowSourceCardSpend_`'s trailing history
+ * signal. Reads INPUT - Bills (using the new "Payment Source" column) and
+ * converts each active credit-card bill into:
+ *   (a) a monthly equivalent burden, and
+ *   (b) an actual next-120-day scheduled burden built from the bill's
+ *       frequency, Start Month, and Due Day.
+ *
+ * Gracefully returns `null` when:
+ *   - INPUT - Bills does not exist (legacy workbook),
+ *   - required headers (Payee / Default Amount) are missing, or
+ *   - the optional "Payment Source" column is absent (legacy tab —
+ *     advisor falls back cleanly to the history-only path).
+ *
+ * Recurring vs spiky classification (Part 4):
+ *   - recurring: monthly / biweekly / weekly / bimonthly
+ *   - spiky   : quarterly / semi-annually / yearly (and anything that
+ *               otherwise looks one-off like tax payments)
+ *
+ * Frequency handling (Part 3):
+ *   - monthly       → monthly_equivalent = amount,       next_120d = walked
+ *   - biweekly      → monthly_equivalent = amount*26/12, next_120d ≈ amount*⌊120/14⌋
+ *   - weekly        → monthly_equivalent = amount*52/12, next_120d ≈ amount*⌊120/7⌋
+ *   - bimonthly     → monthly_equivalent = amount/2,     next_120d = walked via Start Month cadence
+ *   - quarterly     → monthly_equivalent = amount/3,     next_120d = walked via Start Month cadence
+ *   - semi_annually → monthly_equivalent = amount/6,     next_120d = walked (hits 0–1× in window)
+ *   - yearly        → monthly_equivalent = amount/12,    next_120d = walked (hits 0–1× in window)
+ */
+function buildHelocBillsCardObligationModel_(ss, anchorDate) {
+  let sheet;
+  try {
+    sheet = getSheet_(ss, 'BILLS');
+  } catch (e) {
+    return null;
+  }
+  if (!sheet) return null;
+
+  const values = sheet.getDataRange().getValues();
+  const display = sheet.getDataRange().getDisplayValues();
+  if (!values || values.length < 2) return null;
+
+  const headers = (display[0] || []).map(function(h) {
+    return String(h == null ? '' : h).trim();
+  });
+  const payeeCol = headers.indexOf('Payee');
+  const dueDayCol = headers.indexOf('Due Day');
+  const defaultAmtCol = headers.indexOf('Default Amount');
+  const activeCol = headers.indexOf('Active');
+  const paymentSourceCol = headers.indexOf('Payment Source');
+  const frequencyCol = headers.indexOf('Frequency');
+  const startMonthCol = headers.indexOf('Start Month');
+  const categoryCol = headers.indexOf('Category');
+
+  // Payment Source is the opt-in signal for this layer. Legacy tabs without
+  // it fall back cleanly — the existing history-based card-spend model
+  // continues to work unchanged.
+  if (paymentSourceCol === -1) return null;
+  if (payeeCol === -1 || defaultAmtCol === -1) return null;
+
+  const anchor = anchorDate instanceof Date && !isNaN(anchorDate.getTime())
+    ? new Date(anchorDate.getFullYear(), anchorDate.getMonth(), anchorDate.getDate())
+    : new Date();
+  const windowEnd = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + 120);
+
+  const recurringByPayee = Object.create(null);
+  const recurringPayeeSet = Object.create(null);
+  const spikyByPayee = Object.create(null);
+  const spikyPayeeSet = Object.create(null);
+  const schedule = [];
+  let totalRecurringMonthly = 0;
+  let totalSpikyNext120 = 0;
+  let activeCardBillCount = 0;
+
+  for (let r = 1; r < values.length; r++) {
+    const row = values[r];
+    const displayRow = display[r] || [];
+    const payee = String(displayRow[payeeCol] == null ? '' : displayRow[payeeCol]).trim();
+    if (!payee) continue;
+
+    // Normalize Payment Source — tolerant of "credit card", "Credit_Card",
+    // "CREDIT-CARD" variants. Anything else (blank, CASH, typo) is skipped.
+    const paymentSourceRaw = String(
+      displayRow[paymentSourceCol] == null ? '' : displayRow[paymentSourceCol]
+    )
+      .trim()
+      .toUpperCase()
+      .replace(/[\s-]+/g, '_');
+    if (paymentSourceRaw !== 'CREDIT_CARD') continue;
+
+    // Active filter: blank / missing column defaults to YES for backward
+    // compatibility with legacy workbooks. Only explicit NO / N / FALSE /
+    // INACTIVE kicks a row out.
+    const activeRawDisplay = activeCol === -1
+      ? ''
+      : String(displayRow[activeCol] == null ? '' : displayRow[activeCol]).trim().toUpperCase();
+    const isInactive =
+      activeRawDisplay === 'NO' ||
+      activeRawDisplay === 'N' ||
+      activeRawDisplay === 'FALSE' ||
+      activeRawDisplay === 'INACTIVE';
+    if (isInactive) continue;
+
+    const defaultAmt = Math.abs(Number(row[defaultAmtCol]) || 0);
+    const dueDayRaw = dueDayCol === -1 ? 1 : Number(row[dueDayCol]) || 1;
+    // Clamp to 1..28 so Feb doesn't shift the due date unexpectedly for
+    // bills whose source uses 30/31. Matches the existing reader's spirit.
+    const dueDay = Math.max(1, Math.min(28, Math.round(dueDayRaw)));
+    const startMonthRaw = startMonthCol === -1 ? 1 : Number(row[startMonthCol]) || 1;
+    const startMonth = Math.max(1, Math.min(12, Math.round(startMonthRaw)));
+    const frequency = frequencyCol === -1
+      ? 'monthly'
+      : normalizeFrequency_(displayRow[frequencyCol]);
+    const category = categoryCol === -1
+      ? ''
+      : String(displayRow[categoryCol] == null ? '' : displayRow[categoryCol]).trim();
+
+    activeCardBillCount++;
+
+    // Monthly equivalent burden (Part 3 conversion rules).
+    let monthlyEquivalent = 0;
+    switch (frequency) {
+      case 'weekly':
+        monthlyEquivalent = defaultAmt * 52 / 12;
+        break;
+      case 'biweekly':
+        monthlyEquivalent = defaultAmt * 26 / 12;
+        break;
+      case 'bimonthly':
+        monthlyEquivalent = defaultAmt / 2;
+        break;
+      case 'quarterly':
+        monthlyEquivalent = defaultAmt / 3;
+        break;
+      case 'semi_annually':
+        monthlyEquivalent = defaultAmt / 6;
+        break;
+      case 'yearly':
+        monthlyEquivalent = defaultAmt / 12;
+        break;
+      case 'monthly':
+      default:
+        monthlyEquivalent = defaultAmt;
+        break;
+    }
+    monthlyEquivalent = round2_(monthlyEquivalent);
+
+    // Next-120-day scheduled burden: walk months for month-tiered
+    // frequencies; approximate for sub-monthly cadence.
+    let next120Total = 0;
+    const next120Dates = [];
+    if (frequency === 'biweekly') {
+      const occurrences = Math.floor(120 / 14);
+      next120Total = defaultAmt * occurrences;
+    } else if (frequency === 'weekly') {
+      const occurrences = Math.floor(120 / 7);
+      next120Total = defaultAmt * occurrences;
+    } else {
+      // monthly / bimonthly / quarterly / semi_annually / yearly — honor
+      // each bill's Start Month / Due Day so taxes and other seasonal
+      // charges only land in the window when they really do.
+      let cursor = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+      let guard = 0; // Sanity belt against an infinite loop on bad data.
+      while (cursor <= windowEnd && guard < 14) {
+        guard++;
+        const monthNumber = cursor.getMonth() + 1;
+        if (billAppliesInMonth_(frequency, startMonth, monthNumber)) {
+          const occurDate = new Date(cursor.getFullYear(), cursor.getMonth(), dueDay);
+          if (!isNaN(occurDate.getTime()) && occurDate >= anchor && occurDate <= windowEnd) {
+            next120Total += defaultAmt;
+            next120Dates.push(Utilities.formatDate(occurDate, 'UTC', 'yyyy-MM-dd'));
+          }
+        }
+        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+      }
+    }
+    next120Total = round2_(next120Total);
+
+    // Classification (Part 4): monthly / biweekly / weekly / bimonthly =
+    // recurring; quarterly / semi / yearly = spiky. Recurring payees are
+    // summed as monthly equivalents; spiky payees are summed as
+    // next-120-day dollars (the figures the UI actually uses).
+    const isRecurring =
+      frequency === 'monthly' ||
+      frequency === 'biweekly' ||
+      frequency === 'weekly' ||
+      frequency === 'bimonthly';
+
+    if (isRecurring) {
+      recurringByPayee[payee] = round2_((recurringByPayee[payee] || 0) + monthlyEquivalent);
+      totalRecurringMonthly += monthlyEquivalent;
+      recurringPayeeSet[payee] = true;
+    } else if (next120Total > 0.005) {
+      spikyByPayee[payee] = round2_((spikyByPayee[payee] || 0) + next120Total);
+      totalSpikyNext120 += next120Total;
+      spikyPayeeSet[payee] = true;
+    } else {
+      // Spiky bill whose next occurrence is outside the 120-day window —
+      // still classify the payee so the UI lists it (informational) but
+      // contribute $0 to the near-term burden.
+      spikyPayeeSet[payee] = true;
+    }
+
+    schedule.push({
+      payee: payee,
+      category: category,
+      frequency: frequency,
+      default_amount: round2_(defaultAmt),
+      monthly_equivalent: monthlyEquivalent,
+      next_120_day_burden: next120Total,
+      next_120_day_dates: next120Dates,
+      is_recurring: isRecurring
+    });
+  }
+
+  const recurringCardBillsByPayee = Object.keys(recurringByPayee)
+    .map(function(p) {
+      return { account: p, monthly_equivalent: recurringByPayee[p] };
+    })
+    .filter(function(x) {
+      return x.monthly_equivalent > 0.005;
+    })
+    .sort(function(a, b) {
+      return b.monthly_equivalent - a.monthly_equivalent;
+    });
+
+  const upcomingCardBillsByPayee = Object.keys(spikyByPayee)
+    .map(function(p) {
+      return { account: p, next_120_day_burden: spikyByPayee[p] };
+    })
+    .filter(function(x) {
+      return x.next_120_day_burden > 0.005;
+    })
+    .sort(function(a, b) {
+      return b.next_120_day_burden - a.next_120_day_burden;
+    });
+
+  const confidence =
+    activeCardBillCount === 0
+      ? 'low'
+      : activeCardBillCount < 3
+      ? 'medium'
+      : 'high';
+
+  return {
+    payment_source_column_present: true,
+    active_card_bill_count: activeCardBillCount,
+    recurring_monthly_equivalent_card_burden: round2_(totalRecurringMonthly),
+    recurring_card_bills_by_payee: recurringCardBillsByPayee,
+    upcoming_card_bills_next_120_days: round2_(totalSpikyNext120),
+    upcoming_card_bills_by_payee: upcomingCardBillsByPayee,
+    upcoming_card_bills_schedule: schedule,
+    recurring_card_payees: Object.keys(recurringPayeeSet),
+    spiky_card_payees: Object.keys(spikyPayeeSet),
+    estimation_method: 'bills_scheduled',
+    confidence: confidence
+  };
+}
+
+/**
+ * Combine the trailing Cash-Flow history card-spend signal with the
+ * forward-looking Bills-based card-obligation model (Part 5). Applies the
+ * conservative "max" rule: whichever source reports the larger burden
+ * wins, so the HELOC realism layer never under-counts card pressure.
+ *
+ * Returns a small burden-selection block that the `card_spend` snapshot
+ * embeds alongside the raw history fields; the React mapper surfaces all
+ * of these as-is for UI transparency + debug.
+ */
+function buildHelocCombinedCardBurden_(historyCardSpend, billsObligationModel) {
+  const hist = historyCardSpend && typeof historyCardSpend === 'object'
+    ? historyCardSpend
+    : null;
+  const bills = billsObligationModel && typeof billsObligationModel === 'object'
+    ? billsObligationModel
+    : null;
+
+  const histRecurring = hist && Number.isFinite(Number(hist.recent_monthly_average))
+    ? Math.max(0, Number(hist.recent_monthly_average))
+    : 0;
+  // The history model currently uses `planned_card_funded_next_120_days` as
+  // its near-term spiky signal (trailing-4-month sum of spiky payees,
+  // treated as a proxy for what's likely to recur in the next 120 days).
+  const histSpiky = hist && Number.isFinite(Number(hist.planned_card_funded_next_120_days))
+    ? Math.max(0, Number(hist.planned_card_funded_next_120_days))
+    : 0;
+
+  const billsRecurring = bills ? Math.max(0, Number(bills.recurring_monthly_equivalent_card_burden) || 0) : 0;
+  const billsSpiky = bills ? Math.max(0, Number(bills.upcoming_card_bills_next_120_days) || 0) : 0;
+
+  const chosenRecurring = Math.max(histRecurring, billsRecurring);
+  const chosenSpiky = Math.max(histSpiky, billsSpiky);
+
+  let recurringDecision;
+  if (!hist && !bills) recurringDecision = 'no_data';
+  else if (!hist) recurringDecision = 'bills_only';
+  else if (!bills) recurringDecision = 'history_only';
+  else if (billsRecurring > histRecurring + 0.005) recurringDecision = 'bills_dominated';
+  else if (histRecurring > billsRecurring + 0.005) recurringDecision = 'history_dominated';
+  else recurringDecision = 'tied';
+
+  let spikyDecision;
+  if (!hist && !bills) spikyDecision = 'no_data';
+  else if (!hist) spikyDecision = 'bills_only';
+  else if (!bills) spikyDecision = 'history_only';
+  else if (billsSpiky > histSpiky + 0.005) spikyDecision = 'bills_dominated';
+  else if (histSpiky > billsSpiky + 0.005) spikyDecision = 'history_dominated';
+  else spikyDecision = 'tied';
+
+  return {
+    historical_recurring_card_spend: round2_(histRecurring),
+    historical_spiky_card_spend_next_120_days: round2_(histSpiky),
+    bills_recurring_card_burden: round2_(billsRecurring),
+    bills_spiky_card_burden_next_120_days: round2_(billsSpiky),
+    chosen_recurring_card_burden: round2_(chosenRecurring),
+    chosen_spiky_card_burden_next_120_days: round2_(chosenSpiky),
+    source_decision: recurringDecision,
+    spiky_source_decision: spikyDecision
+  };
+}
+
+/**
+ * Merge the history-based `card_spend` block with the Bills-based
+ * obligation model (Part 6). Produces the single `card_spend` payload
+ * the React advisor consumes — with the chosen (max) burden baked into
+ * `recent_monthly_average` + `spiky_card_spend_next_120_days` so all
+ * downstream logic (trap model, safe-draw sizing) automatically picks up
+ * the combined signal.
+ *
+ * Returns `null` when neither source has anything to report — caller
+ * falls back to the legacy "no data" path.
+ */
+function buildHelocCardSpendCombinedPayload_(historyCardSpend, billsObligationModel) {
+  if (!historyCardSpend && !billsObligationModel) return null;
+
+  const combined = buildHelocCombinedCardBurden_(historyCardSpend, billsObligationModel);
+
+  // Base payload: clone history shape when present so the rich per-month
+  // series / payee classification already threaded through the mapper
+  // keeps working. Otherwise scaffold a minimal block seeded from Bills.
+  const base = historyCardSpend
+    ? Object.assign({}, historyCardSpend)
+    : {
+        recent_monthly_average: 0,
+        by_account: [],
+        recurring_bills: [],
+        planned_card_funded_next_120_days: 0,
+        // Bills themselves don't tell us whether CF surplus already nets
+        // them out. Assume YES — the pragmatic guard against
+        // double-counting. Planner CF sheets typically include bill rows
+        // in the same expense totals feeding the surplus, so subtracting
+        // again would double-count.
+        already_in_cashflow: true,
+        estimation_method: 'bills_scheduled',
+        confidence: billsObligationModel && billsObligationModel.confidence
+          ? billsObligationModel.confidence
+          : 'low',
+        recurring_card_spend_by_month: [],
+        planned_or_spiky_card_spend_by_month: [],
+        recurring_payees: [],
+        spiky_payees: [],
+        months_observed: 0,
+        months_with_card_data: 0,
+        active_column_present: false,
+        inactive_card_spend_removed: 0,
+        inactive_payees_removed: []
+      };
+
+  // Override the advisor's primary drivers with the chosen (max) values so
+  // the existing React estimation ladder picks up the combined signal
+  // without code changes on the client.
+  base.recent_monthly_average = combined.chosen_recurring_card_burden;
+  base.spiky_card_spend_next_120_days = combined.chosen_spiky_card_burden_next_120_days;
+
+  // If both sources contributed, bump the method label so the UI
+  // confidence string reflects the combined derivation.
+  if (historyCardSpend && billsObligationModel) {
+    base.estimation_method = 'combined_history_and_bills';
+  }
+
+  // Expose the full burden-selection block for UI transparency + debug.
+  base.historical_recurring_card_spend = combined.historical_recurring_card_spend;
+  base.historical_spiky_card_spend_next_120_days = combined.historical_spiky_card_spend_next_120_days;
+  base.bills_recurring_card_burden = combined.bills_recurring_card_burden;
+  base.bills_spiky_card_burden_next_120_days = combined.bills_spiky_card_burden_next_120_days;
+  base.chosen_recurring_card_burden = combined.chosen_recurring_card_burden;
+  base.chosen_spiky_card_burden_next_120_days = combined.chosen_spiky_card_burden_next_120_days;
+  base.source_decision = combined.source_decision;
+  base.spiky_source_decision = combined.spiky_source_decision;
+
+  if (billsObligationModel) {
+    base.bills_payment_source_column_present = true;
+    base.active_card_bill_count = billsObligationModel.active_card_bill_count;
+    base.recurring_card_bills_from_bills = billsObligationModel.recurring_card_bills_by_payee;
+    base.upcoming_card_bills_from_bills = billsObligationModel.upcoming_card_bills_by_payee;
+    base.upcoming_card_bills_schedule = billsObligationModel.upcoming_card_bills_schedule;
+    base.recurring_card_payees_from_bills = billsObligationModel.recurring_card_payees;
+    base.spiky_card_payees_from_bills = billsObligationModel.spiky_card_payees;
+  } else {
+    base.bills_payment_source_column_present = false;
+    base.active_card_bill_count = 0;
+    base.recurring_card_bills_from_bills = [];
+    base.upcoming_card_bills_from_bills = [];
+    base.upcoming_card_bills_schedule = [];
+    base.recurring_card_payees_from_bills = [];
+    base.spiky_card_payees_from_bills = [];
+  }
+
+  return base;
+}
+
+/**
+ * TEMPORARY DEBUG — verify exactly what the HELOC Flow Source reader sees.
+ *
+ * Walks the same `history` the advisor uses (trimmed to last 6 months to
+ * match `buildHelocFlowSourceCardSpend_`), plus inspects each underlying
+ * Cash Flow sheet directly to report:
+ *   - sheets scanned + their exact names,
+ *   - header-row presence of "Flow Source",
+ *   - first 5 header cells of each sheet,
+ *   - detected column indices for Type / Flow Source / Payee,
+ *   - months included in the rolling window,
+ *   - per-month & overall CREDIT_CARD match counts,
+ *   - a 10-row sample of matching rows (sheet/payee/month/amount),
+ *   - whether the advisor payload will use the Flow Source data or fall
+ *     back to legacy / no-data behavior.
+ *
+ * No logic change — purely observational. Also mirrored via `Logger.log`
+ * so the Apps Script execution log shows the same numbers.
+ */
+function buildHelocFlowSourceDebug_(ss, history, cardSpendResult) {
+  const debug = {
+    generated_at: new Date().toISOString(),
+    advisor_will_use_flow_source_data: Boolean(cardSpendResult),
+    fallback_reason: null,
+    history_months_in_scope: [],
+    sheets_scanned: [],
+    credit_card_match_count: 0,
+    credit_card_match_count_by_month: [],
+    credit_card_sample_rows: [],
+    // Active-column bookkeeping (Part 4). Mirrors what the advisor payload
+    // carries so debug consumers can see what was filtered out and why.
+    active_column_present: cardSpendResult
+      ? Boolean(cardSpendResult.active_column_present)
+      : false,
+    inactive_card_spend_removed: cardSpendResult
+      ? Number(cardSpendResult.inactive_card_spend_removed) || 0
+      : 0,
+    inactive_payees_removed: cardSpendResult
+      ? (cardSpendResult.inactive_payees_removed || []).slice(0, 10)
+      : [],
+    inactive_sample_rows: [],
+    notes: []
+  };
+
+  if (!Array.isArray(history) || !history.length) {
+    debug.fallback_reason = 'history array is empty';
+    try {
+      Logger.log('[HELOC-FLOW-DEBUG] %s', JSON.stringify(debug));
+    } catch (e) {}
+    return debug;
+  }
+
+  // The advisor scans only the last 6 months of history. Mirror that here so
+  // the debug matches what `buildHelocFlowSourceCardSpend_` actually consumed.
+  const recent = history.slice(-6);
+  debug.history_months_in_scope = recent.map(function(h) {
+    return {
+      month_header: h.monthHeader,
+      month_has_cf_data: Boolean(h.monthHasCfData),
+      rows_in_month: Array.isArray(h.rows) ? h.rows.length : 0
+    };
+  });
+
+  // De-dupe sheets: one debug entry per distinct YYYY referenced by the
+  // month window. We pull the sheet's header row directly to avoid trusting
+  // the cached row objects (which normalize keys via `readCashFlowSheetAsObjects_`).
+  const yearsSeen = Object.create(null);
+  for (let i = 0; i < recent.length; i++) {
+    const entry = recent[i];
+    const d = entry.monthDate;
+    if (!(d instanceof Date)) continue;
+    const yr = d.getFullYear();
+    if (yearsSeen[yr]) continue;
+    yearsSeen[yr] = true;
+    const sheetName = getCashFlowSheetName_(yr);
+    const sheet = ss.getSheetByName(sheetName);
+    const entryOut = {
+      year: yr,
+      sheet_name: sheetName,
+      sheet_exists: Boolean(sheet),
+      flow_source_header_found: false,
+      active_header_found: false,
+      first_5_header_cells: [],
+      header_row_length: 0,
+      type_col_index_zero_based: -1,
+      flow_source_col_index_zero_based: -1,
+      payee_col_index_zero_based: -1,
+      active_col_index_zero_based: -1,
+      rows_below_header: 0
+    };
+    if (sheet) {
+      try {
+        const lastCol = sheet.getLastColumn();
+        const headers =
+          sheet.getRange(1, 1, 1, Math.max(1, lastCol)).getDisplayValues()[0] || [];
+        entryOut.header_row_length = headers.length;
+        entryOut.first_5_header_cells = headers.slice(0, 5).map(function(h) {
+          return String(h || '');
+        });
+        for (let c = 0; c < headers.length; c++) {
+          const h = String(headers[c] || '').trim();
+          const hLower = h.toLowerCase();
+          if (hLower === 'type' && entryOut.type_col_index_zero_based === -1) {
+            entryOut.type_col_index_zero_based = c;
+          } else if (
+            (hLower === 'flow source' || hLower === 'flow_source') &&
+            entryOut.flow_source_col_index_zero_based === -1
+          ) {
+            entryOut.flow_source_col_index_zero_based = c;
+            entryOut.flow_source_header_found = true;
+          } else if (hLower === 'payee' && entryOut.payee_col_index_zero_based === -1) {
+            entryOut.payee_col_index_zero_based = c;
+          } else if (hLower === 'active' && entryOut.active_col_index_zero_based === -1) {
+            entryOut.active_col_index_zero_based = c;
+            entryOut.active_header_found = true;
+          }
+        }
+        entryOut.rows_below_header = Math.max(0, sheet.getLastRow() - 1);
+      } catch (e) {
+        entryOut.error = 'Header inspection failed: ' + (e && e.message ? e.message : String(e));
+      }
+    }
+    debug.sheets_scanned.push(entryOut);
+  }
+
+  // Count CREDIT_CARD matches & collect a 10-row sample, using the SAME
+  // normalization rule the advisor applies (Type=Expense, Flow Source
+  // canonicalized to CREDIT_CARD). `monthMatches` only counts ACTIVE rows
+  // so the per-month count aligns with what feeds the recurring/spiky math.
+  let totalMatches = 0;
+  const countByMonth = [];
+  const sample = [];
+  const inactiveSample = [];
+  const SAMPLE_CAP = 10;
+
+  for (let mi = 0; mi < recent.length; mi++) {
+    const entry = recent[mi];
+    const rows = entry.rows || [];
+    const monthHeader = entry.monthHeader;
+    const sheetNameForMonth =
+      entry.monthDate instanceof Date
+        ? getCashFlowSheetName_(entry.monthDate.getFullYear())
+        : '';
+    let monthMatches = 0;
+    let monthInactive = 0;
+    for (let ri = 0; ri < rows.length; ri++) {
+      const row = rows[ri];
+      const typ = String(row.Type || '').trim().toUpperCase();
+      if (typ !== 'EXPENSE') continue;
+      const rawFs = row['Flow Source'];
+      // Preserve raw value in sample so the user can spot typos like leading
+      // whitespace or a weird unicode hyphen.
+      const fs = String(rawFs || '')
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, '_');
+      if (fs !== 'CREDIT_CARD') continue;
+      const rawActive = row.Active;
+      const activeStr = String(rawActive == null ? '' : rawActive).trim().toUpperCase();
+      const isInactive =
+        activeStr === 'NO' ||
+        activeStr === 'N' ||
+        activeStr === 'FALSE' ||
+        activeStr === 'INACTIVE';
+      if (isInactive) {
+        monthInactive++;
+        if (inactiveSample.length < SAMPLE_CAP) {
+          const payee = String(row.Payee || '').trim();
+          const amt = readCashFlowMonthAmount_(row, monthHeader);
+          inactiveSample.push({
+            sheet_name: sheetNameForMonth,
+            payee: payee,
+            month: monthHeader,
+            amount: round2_(amt),
+            raw_active_value: rawActive == null ? null : String(rawActive)
+          });
+        }
+        continue;
+      }
+      monthMatches++;
+      totalMatches++;
+      if (sample.length < SAMPLE_CAP) {
+        const payee = String(row.Payee || '').trim();
+        const amt = readCashFlowMonthAmount_(row, monthHeader);
+        sample.push({
+          sheet_name: sheetNameForMonth,
+          payee: payee,
+          month: monthHeader,
+          amount: round2_(amt),
+          raw_flow_source_value: rawFs == null ? null : String(rawFs)
+        });
+      }
+    }
+    countByMonth.push({
+      month: monthHeader,
+      sheet_name: sheetNameForMonth,
+      credit_card_row_count: monthMatches,
+      inactive_credit_card_row_count: monthInactive
+    });
+  }
+  debug.credit_card_match_count = totalMatches;
+  debug.credit_card_match_count_by_month = countByMonth;
+  debug.credit_card_sample_rows = sample;
+  debug.inactive_sample_rows = inactiveSample;
+
+  // Fill in the "why is the advisor not using Flow Source data" reason when
+  // the helper returned null.
+  if (!cardSpendResult) {
+    const anyHeader = debug.sheets_scanned.some(function(s) {
+      return s.flow_source_header_found;
+    });
+    if (!anyHeader) {
+      debug.fallback_reason =
+        'No scanned sheet had a "Flow Source" header in row 1';
+    } else if (!totalMatches) {
+      debug.fallback_reason =
+        'Flow Source header present but no Expense rows had Flow Source = CREDIT_CARD';
+    } else {
+      debug.fallback_reason =
+        'Helper returned null for another reason (inspect Logger.log for details)';
+    }
+  }
+
+  if (debug.sheets_scanned.length === 0) {
+    debug.notes.push('No sheets were scanned — history array had no usable monthDate entries.');
+  }
+
+  try {
+    Logger.log('[HELOC-FLOW-DEBUG] %s', JSON.stringify(debug));
+  } catch (e) {
+    // Logger.log on extremely large payloads can fail; ignore silently.
+  }
+
+  return debug;
 }
 
 function buildCreditCardSpendMeta_(history, debts) {
