@@ -1037,16 +1037,22 @@
           </div>
           <div id="rolling_debt_payoff_current_mode" class="planner-current-mode-line subtle">Strategy: Standard payoff</div>
         </div>
-        <div class="rolling-dp-controls-right">
-          <label class="rolling-dp-advanced-toggle muted" for="rolling_debt_payoff_advanced_view" title="Shows cash bridge, allocation audit, display plan validator, aggressive audit panels, and the strategy selector. No effect on Automation view.">
-            <input type="checkbox" id="rolling_debt_payoff_advanced_view" onchange="setRollingDebtPayoffSelectedAdvancedView(this.checked)" />
-            Show details
-          </label>
-          <label class="rolling-dp-debug-toggle muted" for="rolling_debt_payoff_include_debug">
-            <input type="checkbox" id="rolling_debt_payoff_include_debug" />
-            Debug Details
-          </label>
-        </div>
+        <!--
+          Details visibility is owned by the single "Show details" toggle
+          rendered inside the React dashboard (RollingDebtPayoffDashboard).
+          The previous outer controls ("Show details" / "Debug Details")
+          created overlapping toggles — the "Show details" checkbox here
+          was actually an advanced/operator-mode switch that forced a
+          refetch and remount, while the real user-facing details toggle
+          lives in-context inside the dashboard. "Debug Details" was a
+          developer-only flag with no normal user effect. Both have been
+          removed from the user-facing UI. Programmatic back-compat paths
+          (setRollingDebtPayoffSelectedAdvancedView,
+          setRollingDebtPayoffSelectedMode('Advanced'/'Aggressive')) still
+          work for internal callers; loadRollingDebtPayoffSection() reads
+          the debug checkbox defensively via `dbgCb && dbgCb.checked`, so
+          removing the input leaves includeDebug=false as intended.
+        -->
       </div>
       <div id="rolling_debt_payoff_status" class="status"></div>
       <div id="rolling_debt_payoff_tables" class="rolling-dp-tables" aria-live="polite"></div>

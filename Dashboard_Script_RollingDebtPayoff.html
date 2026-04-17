@@ -26,16 +26,30 @@ function rollingDebtPayoffUpdateModeLine_() {
 }
 
 /**
- * Show the Strategy dropdown only when Advanced is on AND the view is
- * Standard. Automation view stays minimal; Standard view keeps the default
- * UI quiet until the user opts into Advanced.
+ * Render the strategy control in a single, stable state across all rerenders.
+ *
+ * Rationale: the strategy dropdown was previously tied to
+ * `selectedIsAdvancedView`. That flag is also flipped by the React
+ * dashboard's internal "Show details" toggle (via `onIsAdvancedViewChange`),
+ * so toggling Show details briefly mounted the strategy `<select>` in the
+ * outer header and then triggered a `loadRollingDebtPayoffSection()` refetch
+ * — producing the transient dropdown flicker reported by users.
+ *
+ * Strategy switching is an admin/debug-only lever; it is intentionally
+ * not exposed on the standard decision surface. We keep the dropdown
+ * fully hidden here and show only the static `Strategy: …` text line in
+ * Standard mode (hidden in Automation). The dropdown DOM is retained so
+ * programmatic callers (`setRollingDebtPayoffSelectedPayoffStrategy`) and
+ * the back-compat `setRollingDebtPayoffSelectedMode('Aggressive')` path
+ * still update the underlying state without surfacing a UI control.
  */
 function rollingDebtPayoffUpdateStrategyVisibility_() {
   var wrap = document.getElementById('rolling_debt_payoff_strategy_wrap');
   var line = document.getElementById('rolling_debt_payoff_current_mode');
-  var show = selectedIsAdvancedView && selectedPresentationMode !== 'Automation';
-  if (wrap) wrap.style.display = show ? '' : 'none';
-  if (line) line.style.display = show ? '' : 'none';
+  if (wrap) wrap.style.display = 'none';
+  if (line) {
+    line.style.display = selectedPresentationMode === 'Automation' ? 'none' : '';
+  }
 }
 
 function setRollingDebtPayoffSelectedPresentation(mode) {

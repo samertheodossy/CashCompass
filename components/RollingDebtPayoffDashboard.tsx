@@ -6023,12 +6023,14 @@ function CompactHelocCard({
   statusLabel,
   status,
   reason,
-  action
+  action,
+  whatWouldChange
 }: {
   statusLabel: string;
   status: HelocStrategyStatus;
   reason: string;
   action: string;
+  whatWouldChange: string[];
 }) {
   const accent =
     status === 'recommended'
@@ -6076,6 +6078,46 @@ function CompactHelocCard({
       <p style={{ margin: '6px 0 0 0', fontSize: 13, color: C.text, lineHeight: 1.45 }}>
         <strong>Action:</strong> {action}
       </p>
+      {whatWouldChange.length > 0 ? (
+        <div
+          style={{
+            marginTop: 14,
+            paddingTop: 12,
+            borderTop: `1px dashed ${accent}`
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: '0.14em',
+              color: C.muted,
+              textTransform: 'uppercase'
+            }}
+          >
+            What would change this?
+          </p>
+          <ul
+            style={{
+              margin: '8px 0 0 0',
+              paddingLeft: 18,
+              fontSize: 13,
+              color: C.text,
+              lineHeight: 1.5,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4
+            }}
+          >
+            {whatWouldChange.map((bullet, idx) => (
+              <li key={idx} style={{ fontWeight: 500 }}>
+                {bullet}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -7071,7 +7113,96 @@ export function RollingDebtPayoffDashboard({
       action = 'HELOC not needed this month.';
     }
 
-    return { statusLabel, status: m.status, reason, action };
+    /*
+     * "What would change this?" bullets.
+     *
+     * Only generated when HELOC is `not_recommended` or `optional` (with
+     * meaningful constraints). These are presentation-only action levers
+     * derived from the existing model — no new HELOC logic, no new
+     * thresholds, no recommendation state changes. We reuse the same
+     * constants the safety logic already applies
+     * (`HELOC_MATERIAL_CARD_SPEND_PER_MONTH`,
+     * `HELOC_DOUBLE_DEBT_WEAKNESS_MULTIPLIER`) so the "targets" a user
+     * sees here match the levers the advisor actually watches.
+     *
+     * At most 4 bullets. If no clean bullets can be derived, returns an
+     * empty array and the subsection is hidden entirely (no vague filler).
+     */
+    const whatWouldChange: string[] = [];
+    if (m.status === 'not_recommended' || m.status === 'optional') {
+      const effectiveRepayment = Math.max(0, Number(m.effectiveMonthlyRepayment) || 0);
+      const cardSpend = Math.max(
+        0,
+        Number(m.cardSpendModel?.recurringMonthlyCardSpend) || 0
+      );
+      const futureExpenses = Math.max(0, Number(m.futureExpenseReserve) || 0);
+      const nearTermCashNeeds = plannedHold + unmappedHold;
+      const materialCardSpend = cardSpend >= HELOC_MATERIAL_CARD_SPEND_PER_MONTH;
+      const weakRepayment =
+        cardSpend > 0 &&
+        effectiveRepayment < cardSpend * HELOC_DOUBLE_DEBT_WEAKNESS_MULTIPLIER;
+      const spikyMaterial = spiky >= HELOC_MATERIAL_CARD_SPEND_PER_MONTH;
+
+      // 1. Repayment capacity lever.
+      //
+      // When there's no effective monthly repayment capacity at all, we
+      // anchor the bullet to the observed current state ("currently none
+      // available") rather than a generic "build capacity" call to action.
+      // The weak+material branch keeps its existing target wording — that
+      // number is derived from observed card spend × the safety multiplier
+      // (not a fallback constant), so it's a real model output.
+      if (effectiveRepayment <= 0.005) {
+        whatWouldChange.push(
+          'Free up monthly cash flow to start paying down new debt (currently none available)'
+        );
+      } else if (weakRepayment && materialCardSpend) {
+        const target = Math.round(
+          cardSpend * HELOC_DOUBLE_DEBT_WEAKNESS_MULTIPLIER
+        );
+        whatWouldChange.push(
+          `Build monthly repayment capacity above about ${currency(target)}/month`
+        );
+      }
+
+      // 2. Ongoing card-usage lever.
+      //
+      // We anchor this bullet to the user's currently observed recurring
+      // card spend (`cardSpend`, i.e. recurringMonthlyCardSpend) rather
+      // than projecting a forced target. Showing current-state grounding
+      // keeps the bullet honest and actionable without fabricating a
+      // precise reduction threshold. The underlying
+      // `materialCardSpend && weakRepayment` gate is unchanged.
+      if (materialCardSpend && weakRepayment) {
+        whatWouldChange.push(
+          `Bring ongoing card spending under control (currently about ${currency(
+            Math.round(cardSpend)
+          )}/month)`
+        );
+      } else if (spikyMaterial && effectiveRepayment < spiky / 2) {
+        whatWouldChange.push(
+          'Let trailing card-funded charges settle for a full month'
+        );
+      }
+
+      // 3. Upcoming expenses lever.
+      if (futureExpenses > 0.005) {
+        whatWouldChange.push(
+          `Clear or fund the next ${currency(Math.round(futureExpenses))} of upcoming expenses`
+        );
+      } else if (nearTermCashNeeds > 0.005) {
+        whatWouldChange.push(
+          `Clear or fund the next ${currency(Math.round(nearTermCashNeeds))} of near-term cash expenses`
+        );
+      }
+    }
+
+    return {
+      statusLabel,
+      status: m.status,
+      reason,
+      action,
+      whatWouldChange: whatWouldChange.slice(0, 4)
+    };
   }, [helocStrategyModel, data.liquidity]);
 
   /*
@@ -7452,6 +7583,7 @@ export function RollingDebtPayoffDashboard({
                 status={compactHeloc.status}
                 reason={compactHeloc.reason}
                 action={compactHeloc.action}
+                whatWouldChange={compactHeloc.whatWouldChange}
               />
             ) : null}
             <CompactDecisionCard
