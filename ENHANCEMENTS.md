@@ -28,6 +28,19 @@ What is working well right now:
 
 ---
 
+## 0. Locked product decisions
+
+Decisions below are settled. Do not casually revisit them inside an enhancement — revisiting requires its own explicit product conversation.
+
+- Rolling Debt Payoff is the primary monthly decision tool.
+- Standard vs Details split is intentional and must be preserved.
+- Debt Overview remains a reference layer, not a decision tool.
+- Aggressive strategy remains hidden until fully product-defined.
+- React bundle is presentation/navigation only (no direct writes).
+- Navigation to source pages (`[View]` / `[Add payment]`) is preferred over duplicating detail inside the planner.
+
+---
+
 ## 3. Key known gaps
 
 ### No automated regression harness
@@ -46,7 +59,7 @@ Without a true statement-balance feed, CF card-expense rows are treated as *cash
 The allocator, validators, and Phase 2 audit are fully implemented. The toggle is hidden because the UX (Focus debt selection, confirmation, explanation) is not designed. Carrying dead UI paths is a tax on every engine change.
 
 ### Execution flow is improved but still distributed
-`[Add payment]` is a big win, but execution still touches three surfaces (Rolling Debt Payoff → Cash Flow Quick add → LOG/Upcoming). There is no single "accept the plan" action, and no post-execution confirmation loop back into the planner.
+`[Add payment]` is a big win, but execution still touches three surfaces (Rolling Debt Payoff → Cash Flow Quick add → LOG/Upcoming). There is no single "accept the plan" action, and no post-execution confirmation loop back into the planner. This is acceptable for now and aligns with the current separation of concerns (decision layer vs. write layer), but leaves room for future streamlining.
 
 ---
 
@@ -55,24 +68,28 @@ The allocator, validators, and Phase 2 audit are fully implemented. The toggle i
 ### Tier 1 — Highest-value next improvements
 
 **Confidence / assumptions layer**
+- Status: Proposed
 - Why it matters: The planner already internally distinguishes high- and low-confidence inputs (`credit_card_spend_confidence`, `irregular_income_flag`, `unmapped_card_risk_hold > 0`, HELOC realism flags). None of that reaches the Standard surface. Users can't tell when a recommendation is rock-solid vs pattern-matched.
 - System touchpoints: backend (expose existing flags on a stable field), mapping layer (add a typed `assumptions` block), React (one compact "What this is based on" strip under the Decision card).
 - Risk: **Low.** Additive only; no math changes.
 - Timing: **Now.**
 
 **"Why this account?" explanation**
+- Status: Proposed
 - Why it matters: The Payment Result table shows *what* is being paid but not *why that account*. For Focus debt especially, users ask "why this one, not another?" A one-line rationale per role (highest APR above $X; smallest balance under $Y; spill to next by balance cap) builds trust and teaches the model.
 - System touchpoints: backend (emit a short reason code per row alongside `_paid`), mapping layer, React (tooltip or inline muted line per row).
 - Risk: **Low.** Presentation on top of data the engine already knows.
 - Timing: **Now.**
 
 **Data quality / mapping transparency**
+- Status: Proposed
 - Why it matters: The two biggest silent contributors to a conservative plan are (a) unmapped card-funded upcoming expenses and (b) low-confidence card spend. Today they're invisible unless you open Details. A visible "Data quality" indicator next to "Why not more?" makes the cause legible — even before we fix the underlying mapping.
 - System touchpoints: backend (aggregate a small list of unmapped payees + low-confidence sources), mapping layer, React ("Why not more?" block extension).
 - Risk: **Low.** Read-only exposure.
 - Timing: **Now.**
 
 **Stronger execution-readiness cues**
+- Status: Proposed
 - Why it matters: `[Add payment]` works but there's no feedback loop — after a user adds a payment, the planner doesn't visibly acknowledge it on rerun. A simple "X of Y planned payments entered this month" cue turns the table into a checklist.
 - System touchpoints: backend (cross-reference `LOG - Activity` Quick add rows against current-month planned payees), mapping layer, React (row-level ✓ or header counter).
 - Risk: **Low–Medium.** Needs a stable match rule between planned payee and logged payee.
@@ -81,24 +98,28 @@ The allocator, validators, and Phase 2 audit are fully implemented. The toggle i
 ### Tier 2 — High-value but more coupled
 
 **Alias / mapping repair workflow**
+- Status: Proposed
 - Why it matters: Fixes the root cause behind "unmapped card risk hold" and mis-classified CF rows. Today the only fix path is a code change.
 - System touchpoints: backend (persisted alias table in a new `SYS - Aliases` sheet + resolver), Apps Script write endpoint, a small UI (likely inside Cash Flow or a dedicated "Payees" admin panel), and updates to every resolver that currently reads from the code-side map.
 - Risk: **Medium.** New write surface + migration from code config to sheet.
 - Timing: **Soon.**
 
 **Reducing client/server allocation drift**
+- Status: Proposed
 - Why it matters: Prevents the small-balance/edge-case drift from becoming visible or wrong as we expose more strategies. Could be solved either by (a) serving a pre-computed allocation table at multiple cap points, or (b) lightweight debounced server round-trip for exact truth.
 - System touchpoints: backend (multi-cap allocation emitter or a fast sub-endpoint), mapping layer, React memo graph.
 - Risk: **Medium.** Touches the hottest path in the UI.
 - Timing: **Soon.**
 
 **Improving card-spend accuracy**
+- Status: Proposed
 - Why it matters: The card-spend model is the quiet driver of HELOC realism and unmapped-hold sizing. A true statement-balance ingest (even manual monthly entry) would upgrade `credit_card_spend_confidence` and tighten several decisions.
 - System touchpoints: new INPUT sheet or column set, `buildHelocFlowSourceCardSpend_` + `buildHelocBillsCardObligationModel_` rewrites, confidence reclassification.
 - Risk: **Medium–High.** Affects HELOC status/advised_draw downstream.
 - Timing: **Soon.**
 
 **Execution-flow streamlining**
+- Status: Proposed
 - Why it matters: Reduces friction from "see plan → execute six payments → come back" to something closer to a guided flow. Could be as small as a "Return to Rolling Debt Payoff" button after Quick add save, or as ambitious as a per-month execution tray.
 - System touchpoints: Cash Flow Quick add save handler (return address), Rolling Debt Payoff refetch hook, possibly a new summary strip.
 - Risk: **Medium.** UX-heavy; easy to over-design.
@@ -107,24 +128,28 @@ The allocator, validators, and Phase 2 audit are fully implemented. The toggle i
 ### Tier 3 — Strategic / later
 
 **Exposing Aggressive strategy safely**
+- Status: Proposed
 - Why it matters: The allocator already exists; what's missing is the product wrapper — when it's appropriate, how Focus debt is chosen, confirmation UX, and guardrails against user surprise.
 - System touchpoints: host strategy control (un-hide), Decision card (strategy-aware language), help/onboarding copy, validators.
 - Risk: **Medium–High.** Product judgement heavier than code effort.
 - Timing: **Later** (after confidence layer + readiness cues exist — they're prerequisites for trust).
 
 **Larger workflow unification**
+- Status: Proposed
 - Why it matters: Long-term, the sidebar dashboard and the web app dashboard should share a single set of fragments. Reduces the drift tax called out in `TODO.md` #16.
 - System touchpoints: `PlannerDashboard.html`, `PlannerDashboardWeb.html`, includes refactor.
 - Risk: **Medium.** Mechanical but touches every tab.
 - Timing: **Later.**
 
 **Deeper model simulations / what-if tools**
+- Status: Proposed
 - Why it matters: Once confidence + assumptions are visible, users will ask "what if I deploy $X more?" or "what if APR on card Y drops?". Infrastructure for this mostly exists backend-side (`purchase_simulator.js`, yearly projections) — it's a UI + contract problem.
 - System touchpoints: new React surface, new backend endpoint, careful isolation from the monthly decision surface to avoid noise.
 - Risk: **High** if merged into Standard view; **Low** if kept as a dedicated Details or Planning sub-tab.
 - Timing: **Later.**
 
 **Broader regression / test harness investment**
+- Status: Proposed
 - Why it matters: Every other Tier 2/3 item gets safer once there's a regression net around the waterfall and HELOC advisor. Today's manual checklist is the ceiling on refactor ambition.
 - System touchpoints: test runner (clasp-friendly), fixtures for `INPUT - *` tabs, snapshot assertions on payload shape.
 - Risk: **Medium.** Non-trivial setup; high long-term ROI.
@@ -159,6 +184,7 @@ Rules that apply to every future change in this backlog:
 - **Keep React as presentation/navigation layer, not direct write layer.** All writes go through Apps Script endpoints, with `LOG - Activity` entries. The React bundle calls host globals; it does not call `google.script.run` for writes.
 - **Add new logic backend-first, then map forward.** Emit from Apps Script → type in the mapping layer → consume in React. No parallel client-side derivations.
 - **Execute one improvement area at a time and lock it before moving on.** Ship, document in `SESSION_NOTES.md` / `Dashboard_Help.html`, then pick the next one. No stacking half-shipped features.
+- **Rebuild the React bundle after any component change.** `RollingDebtPayoffDashboardBundle.html` is a prebuilt artifact. Any edit to `components/*.tsx` or the mapping layer requires running `npm run build:rolling-dashboard`. Skipping this step means UI changes will not appear in the dashboard.
 
 ---
 
