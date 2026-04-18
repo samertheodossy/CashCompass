@@ -2,18 +2,17 @@ Use this folder as the source of truth.
 
 Before doing anything, read:
 
-**Core (every session)**  
-- `PROJECT_CONTEXT.md` — architecture, tabs, bills/cash-flow rules  
-- `WORKING_RULES.md` — HtmlService/includes, gotchas  
-- `TODO.md` — immediate focus, open work (Important section first), Activity/HISTORY, codebase backlog  
-- `SESSION_NOTES.md` — what changed recently  
+**Core (every session)**
+- `PROJECT_CONTEXT.md` — architecture, data flow
+- `TODO.md` — current work and issues
+- `SESSION_NOTES.md` — recent changes
 
-**Strategic / planning (read or skim when the task touches roadmap, shipping, tests, or security)**  
-- `FIRST_RUN.md` — first-time deploy: web app, workbook, smoke check (no code)  
-- `GoingToProduction.md` — v0.9 framing, gap to “product for others,” phased rollout  
-- `TESTING_PLAN.md` — automated testing layers; keep tests off the live sheet  
-- `SECURITY.md` — web app access (`MYSELF`), XSS/secrets/sharing, checklists  
-- `ONBOARDING_TODO.md` — long-term workbook setup for other users  
+**Contextual (read only when relevant)**
+- `ENHANCEMENTS.md` — roadmap and prioritization
+- `ONBOARDING_AND_INPUT_STRATEGY.md` — onboarding and input system
+- `FIRST_RUN.md` — deployment and setup
+- `SECURITY.md` — deployment and access control
+- `TESTING_PLAN.md` — testing strategy
 
 Then:
 

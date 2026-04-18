@@ -59,6 +59,8 @@ Each data type must have ONE home.
 
 ## Workbook Initialization & Validation
 
+The workbook should start from a structured template, even if user data is initially empty.
+
 - Each user operates on a single Google Sheet workbook as the source of truth.
 - The system assumes a consistent workbook structure across required tabs and columns.
 - Onboarding should help users get started without changing the existing architecture.

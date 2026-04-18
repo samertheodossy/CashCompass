@@ -1,3 +1,10 @@
+# ONBOARDING INFRASTRUCTURE (LONG-TERM)
+
+This document describes future system-level onboarding and workbook initialization.
+It is not part of the current product onboarding flow.
+
+---
+
 # Onboarding TODO (future work)
 
 Planned for after hardening the current flow with testing. No implementation yet—reference only.

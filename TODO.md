@@ -1,3 +1,14 @@
+## Purpose of this file
+
+TODO.md is a working list of ideas, bugs, and tasks.
+
+- It may contain unstructured, exploratory, or incomplete items.
+- It is not the authoritative roadmap.
+
+Only items that are refined, structured, and prioritized should be promoted to `ENHANCEMENTS.md`.
+
+---
+
 SAMER Financial Planner
 
 TO DO and issues I see in the testing

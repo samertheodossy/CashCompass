@@ -4,6 +4,9 @@ Short path from **zero** to **deployed web app + working Overview**. For archite
 
 **Audience:** You or another household with a **copy of a valid workbook** (or your existing bound sheet) and this Apps Script project.
 
+> This document assumes a structurally valid workbook (template or existing setup).
+> For first-time users starting from scratch, see **`ONBOARDING_AND_INPUT_STRATEGY.md`**.
+
 ---
 
 ## 1. Prerequisites
