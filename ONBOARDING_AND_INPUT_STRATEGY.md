@@ -57,6 +57,27 @@ Each data type must have ONE home.
 
 ---
 
+## Workbook Initialization & Validation
+
+- Each user operates on a single Google Sheet workbook as the source of truth.
+- The system assumes a consistent workbook structure across required tabs and columns.
+- Onboarding should help users get started without changing the existing architecture.
+
+Guidelines:
+- Prefer starting from a structured workbook/template rather than a totally blank spreadsheet.
+- The app should detect missing critical data and missing required workbook structure separately.
+- Missing data should trigger onboarding guidance.
+- Missing required structure should trigger validation / repair guidance.
+- The planner should only be expected to work correctly when the workbook is structurally valid.
+- Future improvements may include a lightweight “scan and repair workbook” flow.
+
+### First-run requirement
+
+- The onboarding path should leave the user with a workbook that can support a valid first planner run.
+- The goal is not perfect setup; the goal is a structurally valid workbook plus enough seed data to produce meaningful output.
+
+---
+
 ## Implementation Pattern (for all inputs)
 
 For each page:
@@ -93,7 +114,7 @@ DO:
 
 ## First-Time Experience
 
-When system is empty:
+When the workbook is structurally valid but has no user data yet:
 
 Welcome to CashCompass
 
@@ -109,6 +130,8 @@ To get started:
 ---
 
 ## Detection Logic
+
+Assumes the workbook is already structurally valid (structure issues are handled by validation / repair guidance, not onboarding).
 
 Show onboarding if:
 
