@@ -1,3 +1,64 @@
+## Recent — Liquidity model v1 (`cash_to_use`) design note (docs only)
+
+Locks the liquidity contract consumed by Planning → Next Actions v1. No code changes in this pass. Full spec lives in `PROJECT_CONTEXT.md → Decision Layer → Liquidity model v1 — cash_to_use`; this entry is a short pointer.
+
+### Key decisions recorded
+
+- **Definition** — `cash_to_use` = conservative, buffer-respecting, current-state dollars safely available to act on recommendations **right now**. No forecasts, no future income, no credit lines, no investments.
+- **Data sources** — Bank Accounts only (`INPUT - Bank Accounts` + `SYS - Accounts` mirror). Per-account fields read: `balance`, `minBuffer`, `active`, `usePolicy`. No new sheets / columns.
+- **Core formula** — `usable = max(0, balance - minBuffer)` per account; `cash_to_use = Σ usable` across eligible accounts.
+- **Eligibility** — include only active accounts (shared inactive rule); exclude restricted / do-not-use accounts; v1 Use Policy handling is simplified (include most, exclude only explicit restrictions). Finer-grained policies stay for a later phase.
+- **Output model** — `{ cashToUse, accounts: [{ name, balance, minBuffer, usable, included, excludedReason? }] }`. Per-account breakdown is part of the contract so the UI can show *why* a number is what it is.
+- **Usage in Next Actions** — compare `cashToUse` vs `sum(urgent)`; emit `review_cash_gap` when insufficient and suppress `recommended` money-movement until resolved; leftover feeds `pay_extra_debt` against the Rolling Debt Payoff focus debt.
+- **Guardrails** — never negative contributions (clamped at 0 per account); buffers are sacred; no future-income / pending-transfer / timing assumptions; HELOC is not counted (surfaced separately via `review_heloc_strategy`).
+- **Non-goals (v1)** — no forecasting, no time-based modeling, no cross-account optimization ("drain this first"-style logic is deferred to Phase 2 Cash Strategy).
+
+### Why lock this now
+
+Next Actions v1 already depends on the phrase *cash-to-use* in its deterministic rules (urgent-vs-cash comparison, `review_cash_gap` emission, leftover-for-recommended). Pinning the definition, formula, eligibility, and output shape **before** the backend aggregator is written keeps the Next Actions implementation thin and prevents the liquidity math from quietly drifting toward the richer Rolling Debt Payoff *Safe-to-use* model (which intentionally includes near-term holds, reserves, and unmapped card risk — those stay inside the Rolling Debt Payoff engine).
+
+### Files touched
+
+- `PROJECT_CONTEXT.md` — added "Liquidity model v1 — `cash_to_use`" subsection under Decision Layer, directly below the Next Actions v1 design note.
+- `SESSION_NOTES.md` — this entry.
+- `ENHANCEMENTS.md` — liquidity model listed as a prerequisite block inside the existing Tier 1 Next Actions enhancement.
+
+No feature code, no existing feature descriptions changed.
+
+---
+
+## Recent — Next Actions v1 decision-logic design note (docs only)
+
+Locks the backend contract and product rules for Planning → Next Actions **before** any UI is built. No code changes in this pass. Full spec lives in `PROJECT_CONTEXT.md → Decision Layer → Next Actions v1 — design note`; this entry is a short pointer.
+
+### Key decisions recorded
+
+- **Purpose** — answers *"what should I do next, in priority order?"* by interpreting existing data only. No writes.
+- **Output model** — single compact action object: `priorityBucket`, `actionType`, `title`, `reason`, `amount`, `dueDate`, `sourceEntity {type,name}`, `target {page,tab}`.
+- **Data sources (no new ones)** — Bills, Upcoming (remaining balance only), Debts, Bank Accounts / usable cash via the existing liquidity model, and the Rolling Debt Payoff recommendation. Next Actions **reuses** `getRollingDebtPayoffPlan`; it does not re-run the engine.
+- **Priority buckets** —
+  - `urgent` = overdue / due soon / unpaid minimums / near-term obligations / cash gap
+  - `recommended` = next best moves once urgent is covered
+  - `optimize` = optional improvements only after urgent is safe
+- **Deterministic rules** — build urgent obligations first; compare `sum(urgent)` vs cash-to-use; emit `review_cash_gap` when obligations exceed cash; suppress `recommended` money-movement until the gap is resolved; the preferred extra-debt target is the Rolling Debt Payoff focus debt.
+- **Action types (v1)** — `pay_bill`, `pay_debt_minimum`, `pay_upcoming`, `finish_upcoming`, `review_cash_gap`, `pay_extra_debt`, `review_heloc_strategy`.
+- **Explainability rule** — every action must be describable in **one sentence** from current snapshot data; if not, it's not emitted.
+- **Non-goals for v1** — retirement optimization, investment allocation advice, purchase simulation, scenario planning, automatic execution (Quick Add remains the single payment path; Next Actions only routes).
+
+### Why lock this before UI
+
+Next Actions is the new entry point inside Planning. Deciding the action object shape, the bucket rules, the cash-gap short-circuit, and the Rolling-Debt-Payoff reuse **now** keeps the eventual UI thin (it renders; it doesn't think) and keeps the backend contract stable before the first render lands.
+
+### Files touched
+
+- `PROJECT_CONTEXT.md` — added the "Next Actions v1 — design note" subsection under Decision Layer.
+- `SESSION_NOTES.md` — this entry.
+- `ENHANCEMENTS.md` — v1 design block added to the existing Tier 1 Next Actions entry (rules, action object shape, action types, non-goals).
+
+No feature code, no existing feature descriptions changed.
+
+---
+
 ## Recent — Decision Layer framing + Next Actions entry point (docs only)
 
 Introducing a product framing shift — no code changes in this pass. The app now has two named layers:

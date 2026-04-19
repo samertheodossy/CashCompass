@@ -76,6 +76,38 @@ The allocator, validators, and Phase 2 audit are fully implemented. The toggle i
 - Risk: **Low.** Read-only aggregation over already-canonical sheets; navigates to existing surfaces; no write path.
 - Timing: **Now** (Phase 1 of the Decision Layer roadmap).
 
+**Next Actions — v1 decision-logic design (docs only; lock before UI)**
+
+The full spec lives in `PROJECT_CONTEXT.md → Decision Layer → Next Actions v1 — design note`. Summarized here as the implementation contract:
+
+- **Action object shape** — `priorityBucket` (`urgent` | `recommended` | `optimize`), `actionType`, `title`, `reason`, `amount`, `dueDate`, `sourceEntity {type, name}`, `target {page, tab}`.
+- **Priority buckets** —
+  - `urgent` = overdue / due soon / unpaid minimums / near-term obligations / cash gap.
+  - `recommended` = next best moves once urgent is covered.
+  - `optimize` = optional improvements only after urgent is safe.
+- **Action types (v1)** — `pay_bill`, `pay_debt_minimum`, `pay_upcoming`, `finish_upcoming`, `review_cash_gap`, `pay_extra_debt`, `review_heloc_strategy`.
+- **Data sources (no new ones)** — `INPUT - Bills` (active), `INPUT - Upcoming Expenses` (remaining balance only), `INPUT - Debts` (active), bank / usable cash via the existing liquidity model (`SYS - Accounts` → Safe-to-use / Available Now / Min Buffer), and the existing `getRollingDebtPayoffPlan` output. No engine re-run.
+- **Deterministic rules** — build urgent obligations first; compare `sum(urgent)` vs cash-to-use; emit `review_cash_gap` at the top of `urgent` when obligations exceed cash and suppress `recommended` money-movement until resolved; the preferred extra-debt target is the Rolling Debt Payoff focus debt.
+- **Explainability rule** — every emitted action must be describable in **one sentence** from the current snapshot (amount / due date / remaining balance / bucket rule / Rolling-Debt-Payoff reason code). If not, it's not emitted.
+- **Non-goals (v1)** — retirement optimization, investment allocation advice, purchase simulation, scenario / what-if planning, automatic execution. Quick Add remains the single payment path; Next Actions only routes.
+
+Implementation order, when the code pass lands: backend aggregator (returns a typed list of action objects) → Planning sub-tab wrapper (renders the three bucket groups, reuses `window.prefillQuickPayment` / `window.showPage` / `window.showTab`) → help copy. No mapping-layer changes needed (the new backend is called directly from the Planning sub-tab, not from the Rolling Debt Payoff React bundle).
+
+**Next Actions — v1 liquidity model (`cash_to_use`) — prerequisite (docs only)**
+
+Hard dependency for the Next Actions v1 implementation. Full spec lives in `PROJECT_CONTEXT.md → Decision Layer → Liquidity model v1 — cash_to_use`. Implementation contract:
+
+- **Scope** — conservative, buffer-respecting, current-state dollars **safely available right now**. Not the same as Rolling Debt Payoff's *Safe-to-use* (which folds in near-term holds, reserves, and unmapped card risk). Keep the two models separate.
+- **Inputs** — Bank Accounts only: `balance`, `minBuffer`, `active`, `usePolicy` from `INPUT - Bank Accounts` + `SYS - Accounts`. No new sheets, no new columns.
+- **Formula** — `usable = max(0, balance - minBuffer)` per account; `cash_to_use = Σ usable` over eligible accounts.
+- **Eligibility** — active accounts only (shared inactive rule); exclude explicit restricted / do-not-use accounts; v1 Use Policy is a binary include/exclude (finer policies stay for Phase 2 Cash Strategy).
+- **Output** — `{ cashToUse, accounts: [{ name, balance, minBuffer, usable, included, excludedReason? }] }`. The per-account array is part of the contract so the UI can show the breakdown and any excluded-reason.
+- **Consumers in Next Actions** — compares `cashToUse` vs `sum(urgent)`, drives `review_cash_gap`, and feeds leftover to `pay_extra_debt`.
+- **Guardrails** — never negative per account; buffers are sacred; no future-income, pending-transfer, or timing assumptions; no credit / HELOC / investments (HELOC is a separate advisor signal via `review_heloc_strategy`).
+- **Non-goals (v1)** — no forecasting, no time-based modeling, no cross-account optimization.
+
+Implementation order: this reader ships **before or alongside** the Next Actions aggregator, since the aggregator calls into it directly. Exposed as a single server entry point returning the output object above; no changes to Bank Account editors or the existing liquidity consumers (Rolling Debt Payoff keeps its richer model unchanged).
+
 **Decision Layer roadmap (intent only — no implementation details yet)**
 - **Phase 1 — Next Actions (v1).** First landing surface inside Planning. Described above.
 - **Phase 2 — Cash Strategy.** Later. Intended to pair Next Actions with a forward-looking liquidity / deployment view. Not scoped yet.

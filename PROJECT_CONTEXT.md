@@ -39,6 +39,111 @@ Intended flow: **Next Actions → drill into these tabs**. No new top-level tabs
 
 See `ENHANCEMENTS.md` for the backlog entry and `SESSION_NOTES.md` for the shift summary.
 
+### Next Actions v1 — design note (docs only; no code yet)
+
+Locks the backend decision logic and product rules before any UI is built.
+
+**1. Purpose**
+- Answers: *"What should I do next, in priority order?"*
+- Interprets existing data only. No writes. Not a replacement for source-of-truth pages.
+
+**2. v1 output model (compact action object)**
+Each action is a plain object with:
+- `priorityBucket` — `urgent` | `recommended` | `optimize`
+- `actionType` — one of the types in §6
+- `title` — short imperative label (e.g. *"Pay PG&E bill"*)
+- `reason` — one-sentence justification built from current data (see §7)
+- `amount` — dollar amount (may be 0 when N/A, e.g. `review_cash_gap`)
+- `dueDate` — ISO date or null
+- `sourceEntity` — `{ type, name }` where `type` ∈ `bill | upcoming | debt | bank_account | heloc | cash_plan`
+- `target` — `{ page, tab }` the user is routed to (Quick Add stays the single payment path)
+
+**3. v1 data sources (no new sources)**
+- `INPUT - Bills` (active)
+- `INPUT - Upcoming Expenses` — **remaining balance only** (the live `Amount` column)
+- `INPUT - Debts` (active; balance / min payment / due day)
+- Bank Accounts / usable cash — via the existing liquidity model (`SYS - Accounts` → Safe-to-use / Available Now / Min Buffer)
+- Rolling Debt Payoff recommendation — reuse `getRollingDebtPayoffPlan` output; do not re-run the engine
+
+**4. v1 priority buckets**
+- **Urgent** — overdue items, due soon, unpaid debt minimums for the current cycle, near-term obligations (next ~7 days), and any detected cash gap. Must be addressed before anything else is surfaced as money-movement.
+- **Recommended** — next best moves once urgent items are covered (typical case: extra payment toward the Rolling Debt Payoff focus debt; finishing a partially-paid Upcoming).
+- **Optimize** — optional improvements that only make sense once urgent items are safe (e.g. *review HELOC strategy* when the advisor flags a better draw posture).
+
+**5. v1 deterministic rules**
+- Build the **urgent obligations** list first, from Bills + Debts + Upcoming + near-term windows.
+- Compare `sum(urgent obligations)` vs **cash-to-use** (Safe-to-use from the liquidity model).
+- If obligations exceed cash-to-use, emit `review_cash_gap` at the top of `urgent` — recommending / pay_extra actions are **suppressed** until the gap is resolved.
+- Only emit `pay_extra_debt` (and other `recommended` money-movement) **after** urgent obligations are covered.
+- When recommending an extra debt payment, use the **Rolling Debt Payoff** recommendation as the preferred target; do not invent a new waterfall.
+- All rules are deterministic over the current snapshot — same inputs, same output.
+
+**6. v1 action types**
+- `pay_bill` — active bill due in the current cycle, unhandled in Cash Flow.
+- `pay_debt_minimum` — debt with unpaid minimum for the current cycle.
+- `pay_upcoming` — Upcoming row with remaining > 0 and due within the urgent window.
+- `finish_upcoming` — partially-paid Upcoming row (remaining > 0, already touched) worth closing out.
+- `review_cash_gap` — informational; shown when obligations exceed cash-to-use.
+- `pay_extra_debt` — extra principal toward the Rolling Debt Payoff focus debt once urgent is clear.
+- `review_heloc_strategy` — informational; mirrors the existing HELOC advisor signal.
+
+**7. Explainability rule**
+Every emitted action must be explainable in **one sentence** built entirely from current snapshot data (amount, due date, remaining balance, bucket rule, or Rolling Debt Payoff reason code). If an action can't be explained that way, it is not emitted.
+
+**8. Non-goals for v1**
+- Retirement optimization
+- Investment allocation advice
+- Purchase simulation outputs
+- Scenario / what-if planning
+- Automatic execution (Quick Add remains the single payment path; Next Actions only routes)
+
+### Liquidity model v1 — `cash_to_use` (docs only; no code yet)
+
+Defines the safe, conservative "how much can I actually act on right now" number consumed by Next Actions v1. This is an explicit contract, not a re-derivation of the Rolling Debt Payoff *Safe-to-use* math — Next Actions uses this simpler model directly.
+
+**1. Definition**
+- `cash_to_use` = total amount of money **safely available right now** across active bank accounts.
+- Conservative, buffer-respecting, **current-state only** — no forecasts, no future income, no credit lines, no investments.
+
+**2. Data sources**
+- Bank Accounts only (canonical: `INPUT - Bank Accounts` + the `SYS - Accounts` mirror already read by the dashboard).
+- Per-account fields consumed:
+  - `balance` (current balance — same field the Bank Accounts panel surfaces)
+  - `minBuffer` (Min Buffer)
+  - `active` flag (shared filter: explicit `No / n / false / inactive` = inactive; blank = active)
+  - `usePolicy` (existing Use Policy column)
+
+**3. Core formula**
+- Per account: `usable = max(0, balance - minBuffer)` — never negative.
+- Total: `cash_to_use = Σ usable` across eligible accounts (§4).
+- Round to cents at the total; per-account values render at cents too.
+
+**4. Eligibility rules**
+- **Include** only accounts where `active !== inactive` (shared rule).
+- **Exclude** accounts flagged as restricted / do-not-use.
+- **Use Policy** (v1 simplified): include most policies; exclude only accounts with an explicit "do not use" / restricted policy. More granular policies (spend-first, reserve, etc.) stay for a later phase — v1 either counts an account fully eligible or fully excluded.
+
+**5. Output model**
+Single object returned by the liquidity reader:
+- `cashToUse` — total dollars, rounded to cents.
+- `accounts` — array of `{ name, balance, minBuffer, usable, included, excludedReason? }` for every considered row, so the UI can show the breakdown and the reason any account was skipped.
+
+**6. Usage in Next Actions**
+- Compare `cashToUse` vs `sum(urgent obligations)` (from the Next Actions v1 rules).
+- If `cashToUse < sum(urgent)`, emit **`review_cash_gap`** at the top of `urgent` and suppress `recommended` money-movement until resolved.
+- Otherwise, use `cashToUse − sum(urgent handled)` as the pool for `recommended` actions (e.g. `pay_extra_debt` against the Rolling Debt Payoff focus debt).
+
+**7. Guardrails**
+- Never allow negative contributions from any single account (`max(0, …)` clamp).
+- Always respect `minBuffer` — buffer is sacred in v1.
+- No future-income assumptions, no pending transfers, no optimistic timing.
+- No credit lines, no investments, no HELOC draw counted as "cash_to_use" (HELOC is a separate advisor signal via `review_heloc_strategy`).
+
+**8. Non-goals (v1)**
+- No forecasting (no 7-day / 30-day projection of cash).
+- No time-based modeling (same number whether asked at 8 AM or 5 PM on the same day).
+- No optimization across accounts (no "drain this one first" logic — that's a later phase paired with Cash Strategy).
+
 ## Overall system areas already in the app
 - Dashboard snapshot / overview
 - **Bills** (Cash Flow tab) — Internal two-view panel: **Due this period** (dated Pay / Skip cards) and **Manage bills** (table over **INPUT - Bills** with inline sort on **Payee** / **Due Day**, **Add bill**, and **Stop tracking** which sets **Active = No**). Server entry points: `addBillFromDashboard`, `deactivateBillFromDashboard` in `bills.js`. Category is a required field on Add bill.
