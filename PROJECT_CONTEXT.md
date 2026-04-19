@@ -4,7 +4,7 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
 
 ## Overall system areas already in the app
 - Dashboard snapshot / overview
-- Bills Due
+- **Bills** (Cash Flow tab) — Internal two-view panel: **Due this period** (dated Pay / Skip cards) and **Manage bills** (table over **INPUT - Bills** with inline sort on **Payee** / **Due Day**, **Add bill**, and **Stop tracking** which sets **Active = No**). Server entry points: `addBillFromDashboard`, `deactivateBillFromDashboard` in `bills.js`. Category is a required field on Add bill.
 - **Quick add** (Cash Flow tab) — expense/income lines to **INPUT - Cash Flow** (UI wording; activity log event type remains **`quick_pay`**)
 - Upcoming Expenses
 - House values
@@ -18,7 +18,7 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
 - Monte Carlo / retirement success
 - Purchase simulator / big purchase sim
 - Planner run + OUT history snapshot logic
-- **LOG - Activity** — Ledger of script actions (**quick_pay**, bill skip, bill autopay, **house_expense**, **donation**; when **Quick add** runs inside house expense with **`suppressActivityLog`**, the extra **`quick_pay`** row is omitted because **`house_expense`** already logged the save). Rows can be removed from the **Activity** page: dashboard **Remove** is enabled for **`donation`** only (may also delete a matching **INPUT - Donation** row when the fingerprint matches); other event types are sheet-only for now. Not a substitute for **OUT - History** (planner snapshots). Created automatically if missing (`activity_log.js`). **Activity** page: **getActivityDashboardData** — filters, sort, up to **500** matches, **20** per page.
+- **LOG - Activity** — Ledger of script actions (**quick_pay**, bill skip, bill autopay, **bill_add**, **bill_deactivate**, **house_expense**, **donation**, bank account add, upcoming lifecycle; when **Quick add** runs inside house expense with **`suppressActivityLog`**, the extra **`quick_pay`** row is omitted because **`house_expense`** already logged the save). Rows can be removed from the **Activity** page: dashboard **Remove** is enabled for **`donation`** only (may also delete a matching **INPUT - Donation** row when the fingerprint matches); other event types are sheet-only for now. Not a substitute for **OUT - History** (planner snapshots). Created automatically if missing (`activity_log.js`). **Activity** page: **getActivityDashboardData** — filters, sort, up to **500** matches, **20** per page. **Tracking stopped** rows render with **—** in Amount since no money moved.
 - **INPUT - Donation** — Charitable giving by tax-year blocks (`Year` row + header row + data). **Cash Flow → Donations** appends rows (`donations.js`); does not write **INPUT - Cash Flow**.
 - **Car / vehicle expenses** — Often a **separate dedicated sheet** in the workbook today; **not** integrated in the dashboard yet. See **`TODO.md`** (Product / testing) for the open design item.
 
@@ -46,8 +46,10 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
 ### Backend files
 - webapp.js = main doGet()
 - html_includes.js = `includeHtml_()` — **raw** file content only; nested `<?!= … ?>` inside included files does **not** run (see `WORKING_RULES.md` § HtmlService includes).
-- dashboard_data.js = main dashboard snapshot + bills due backend
-- activity_log.js = LOG - Activity (`appendActivityLog_`, `deleteActivityLogRow` donation-only from web UI, dedupe keys for bill autopay, `getActivityDashboardData` / `getActivityLogForDashboard`, house expense + suppress duplicate **`quick_pay`** when CF is posted from the same save)
+- dashboard_data.js = main dashboard snapshot + bills due backend (case/whitespace-tolerant `INPUT - Bills` header lookup in `getInputBillsDueRows_`)
+- activity_log.js = LOG - Activity (`appendActivityLog_`, `deleteActivityLogRow` donation-only from web UI, dedupe keys for bill autopay, `getActivityDashboardData` / `getActivityLogForDashboard`, house expense + suppress duplicate **`quick_pay`** when CF is posted from the same save, `bill_add` / `bill_deactivate` classification)
+- bills.js = `addBillFromDashboard`, `deactivateBillFromDashboard`; case/whitespace-tolerant header lookup; self-heals **INPUT - Bills** by auto-adding missing optional columns (Payment Source, Category, Frequency, Start Month, Notes) before append
+- quick_add_payment.js = `quickAddPayment`, `getQuickAddPreview`, prefill API; `resolveFlowSourceFromBillOrDebt_` server-side fallback populates **Flow Source** on newly created Cash Flow rows from **INPUT - Bills.Payment Source** (or inferred CREDIT_CARD / CASH from **INPUT - Debts**) when the caller doesn't pass one
 - donations.js = **INPUT - Donation** append (`getDonationsFormData`, `addDonation`)
 - other feature files exist for house, debts, payments, retirement, etc.
 
@@ -74,17 +76,20 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
 - should remain visible in the Recurring Bills (No Due Date) section until they are migrated into INPUT - Bills
 
 ## INPUT - Bills structure
-Columns:
+Columns (header lookup is **case- and whitespace-tolerant** — `PAYMENT SOURCE` and `Payment Source ` with a trailing space both match):
 - Payee
-- Category
+- Category *(required for new bills via Add bill)*
 - Due Day
 - Default Amount
 - Varies
 - Autopay
-- Active
+- Active *(Stop tracking sets this to `No`)*
+- Payment Source *(CASH | CREDIT_CARD — drives **Flow Source** on Cash Flow rows created from Bills → Pay)*
 - Frequency
-- Start Month
+- Start Month *(rows created from Bills → Pay leave months before this blank)*
 - Notes
+
+Missing optional columns (Payment Source, Category, Frequency, Start Month, Notes) are auto-added by `addBillFromDashboard` before writing a new row.
 
 ## Bills behavior wanted
 - If current month due date passed and Cash Flow cell is blank, show overdue

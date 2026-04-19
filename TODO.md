@@ -53,6 +53,9 @@ Small HTML/docs/a11y tasks; check off when shipped. *(Unnumbered — pick in any
 | Quick add | **Done** — `quick_pay` at end of **`quickAddPayment`**. |
 | Bills Due → Skip | **Done** — **`skipDashboardBill`**. |
 | Bills Due → Autopay | **Done** — dedupe key on refresh. |
+| Bills → Pay (Flow Source) | **Done** — new Cash Flow rows populate **Flow Source** from **INPUT - Bills.Payment Source**, with server-side fallback (`resolveFlowSourceFromBillOrDebt_`) + case/whitespace-tolerant header lookup. |
+| Manage bills → Add bill | **Done** — `bill_add` after **`addBillFromDashboard`** (`bills.js`); Category required. |
+| Manage bills → Stop tracking | **Done** — `bill_deactivate` after **`deactivateBillFromDashboard`** (`bills.js`); sets **Active = No** on INPUT - Bills, shows **—** in Activity Amount. |
 | Upcoming expenses | **Done** — Phase 3: **`upcoming_add`** / **`upcoming_status`** / **`upcoming_cashflow`**; CF push uses **`suppressActivityLog`** (no duplicate **`quick_pay`**). |
 | House expenses | **Done** — **`addHouseExpense`** → `house_expense`; CF via **Quick add** + **`suppressActivityLog`**. |
 
@@ -326,7 +329,7 @@ Treat **aggregator → Sheets** as a **small sidecar + mapping layer**; keep the
 
 6. Add ability to add new cards/loans etc to Debts Pages
 
-7. Add new bills to INPUT - Bills
+7. ~~Add new bills to INPUT - Bills~~ — **Done.** Cash Flow → **Bills** → **Manage bills** → **Add bill** writes to **INPUT - Bills** via **`addBillFromDashboard`** (`bills.js`). Required: Payee, Category, Due Day, Default Amount, Payment Source. **Stop tracking** sets **Active = No** (never deletes). Activity events: **`bill_add`** / **`bill_deactivate`**. Header lookup is case/whitespace tolerant; missing optional columns (Payment Source, Category, Frequency, Start Month, Notes) are auto-added before write. See **SESSION_NOTES.md § Bills page: Manage bills, Flow Source, header tolerance**.
 
 8. Cleanup the Debts/Bills sheets now that we have the other stuff
    - Only Debts should be here and other move to Bills

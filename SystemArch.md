@@ -13,7 +13,7 @@ Three layers, loosely coupled:
   - `SYS - *` tabs — sheet-side rollups (Accounts, Assets, House Assets); refreshed by planner runs but never *originate* user data.
   - `HOUSES - {Property}` — per-property expense ledgers.
   - `OUT - History` — planner run snapshots (rolled-up totals, one row per run).
-  - `LOG - Activity` — discrete event audit log (Quick add, bill skip/autopay, house expense, donation, upcoming lifecycle, bank add).
+  - `LOG - Activity` — discrete event audit log (Quick add, bill skip/autopay, bill add/deactivate, house expense, donation, upcoming lifecycle, bank add).
 
 - **Backend — Google Apps Script (server-side JavaScript).** One large module set. The important files for this briefing:
   - `rolling_debt_payoff.js` — the decision engine (~8k LOC). Single public entry point: `getRollingDebtPayoffPlan(options)`.
@@ -21,7 +21,7 @@ Three layers, loosely coupled:
   - `dashboard_data.js` — general dashboard snapshot + Bills Due + net-worth baselines.
   - `quick_add_payment.js` — the Quick Add entry point (`quickAddPayment`, `getQuickAddPreview`, prefill API).
   - `activity_log.js` — `LOG - Activity` writes + dashboard reads.
-  - Feature files (`bank_accounts.js`, `investments.js`, `house_values.js`, `house_expenses.js`, `donations.js`, `upcoming_expenses.js`, `debts.js`, `property_performance.js`, `retirement.js`, `purchase_simulator.js`).
+  - Feature files (`bank_accounts.js`, `investments.js`, `house_values.js`, `house_expenses.js`, `donations.js`, `upcoming_expenses.js`, `debts.js`, `bills.js`, `property_performance.js`, `retirement.js`, `purchase_simulator.js`). `bills.js` owns the **Manage bills** flows (`addBillFromDashboard`, `deactivateBillFromDashboard`) and uses case/whitespace-tolerant header lookup with self-heal for missing optional **INPUT - Bills** columns.
   - `webapp.js` (`doGet`), `html_includes.js` (`includeHtml_` — raw content, no nested templates).
 
 - **UI layer — two flavors:**
