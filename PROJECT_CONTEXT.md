@@ -2,6 +2,43 @@
 
 We are building **CashCompass** — a Google Apps Script web dashboard (and spreadsheet sidebar) for personal finance / property / debt planning. Tagline: *Guiding your money decisions.*
 
+## Decision Layer (product framing)
+
+The app has two layers. Do not conflate them:
+
+- **Input / execution layer** — source-of-truth editors and ledgers. Bills, Upcoming, Debts, Bank Accounts, Investments, House Values / Expenses, Donations, Cash Flow (Quick Add), LOG - Activity. These own the data; they are the only places that write canonical rows.
+- **Decision layer (Planning tab)** — answers *"what should I do next?"* by interpreting data from Bills, Upcoming, Debts, Bank Accounts, and Cash Flow. It is **not** a source-of-truth editor and **not** a ledger; it reads existing sources and does not create new data.
+
+### Next Actions (primary entry point, Phase 1)
+
+- **"Next Actions"** is the first / default sub-tab inside Planning and the primary entry point for users.
+- Action-first (no editing), short lists only (3–5 items per section).
+- The single payment path remains **Cash Flow → Quick Add**; Next Actions routes the user there (and to source pages) rather than duplicating detail.
+
+### Relationship to existing Planning tabs
+
+All current Planning sub-tabs stay as they are and are re-framed as **tools / deep dives**:
+
+- **Debts**, **Retirement**, **Purchase Sim**, **Debt Overview**, **Rolling Debt Payoff**
+
+Intended flow: **Next Actions → drill into these tabs**. No new top-level tabs; no new dashboards stacked on top of Planning.
+
+### Design principles
+
+- Do not add multiple new top-level tabs.
+- Do not overload Planning with dashboards.
+- Keep Next Actions simple (3–5 items per section).
+- Single payment path remains Quick Add.
+- Decision layer does not create new data; it reads existing sources.
+
+### Roadmap (intent only, no implementation yet)
+
+- **Phase 1 — Next Actions (v1)** — first landing surface inside Planning.
+- **Phase 2 — Cash Strategy** (later).
+- **Phase 3 — HELOC Advisor refinement** (later).
+
+See `ENHANCEMENTS.md` for the backlog entry and `SESSION_NOTES.md` for the shift summary.
+
 ## Overall system areas already in the app
 - Dashboard snapshot / overview
 - **Bills** (Cash Flow tab) — Internal two-view panel: **Due this period** (dated Pay / Skip cards) and **Manage bills** (table over **INPUT - Bills** with inline sort on **Payee** / **Due Day**, **Add bill**, and **Stop tracking** which sets **Active = No**). Server entry points: `addBillFromDashboard`, `deactivateBillFromDashboard` in `bills.js`. Category is a required field on Add bill.

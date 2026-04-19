@@ -1,3 +1,46 @@
+## Recent — Decision Layer framing + Next Actions entry point (docs only)
+
+Introducing a product framing shift — no code changes in this pass. The app now has two named layers:
+
+- **Input / execution layer** — Bills, Upcoming, Debts, Bank Accounts, Investments, House Values / Expenses, Donations, Cash Flow (Quick Add), LOG - Activity. These are the source-of-truth editors and ledger. This layer is now considered **complete and consistent** after the recent cleanup passes.
+- **Decision layer (Planning tab)** — answers *"what should I do next?"* by reading Bills, Upcoming, Debts, Bank Accounts, and Cash Flow. It is **not** a source-of-truth editor and **not** a ledger.
+
+### Next Actions (Phase 1)
+
+- **"Next Actions"** becomes the first / default sub-tab inside Planning and the primary entry point for users.
+- Action-first (no editing), short lists only (3–5 items per section).
+- Single payment path remains **Cash Flow → Quick Add**; Next Actions routes users there (and to source pages) rather than duplicating detail.
+
+### Existing Planning tabs — unchanged
+
+- **Debts**, **Retirement**, **Purchase Sim**, **Debt Overview**, **Rolling Debt Payoff** stay as they are and are re-framed as **tools / deep dives**.
+- Intended flow: **Next Actions → drill into these tabs**.
+- No new top-level tabs. No new dashboards stacked on top of Planning. No restructuring of existing tabs.
+
+### Design principles (guardrails)
+
+- Do not add multiple new top-level tabs.
+- Do not overload Planning with dashboards.
+- Keep Next Actions simple (3–5 items per section).
+- Single payment path remains Quick Add.
+- Decision layer does not create new data; it reads existing sources.
+
+### Roadmap (intent only)
+
+- **Phase 1 — Next Actions (v1)**
+- **Phase 2 — Cash Strategy** (later)
+- **Phase 3 — HELOC Advisor refinement** (later)
+
+### Files touched
+
+- `PROJECT_CONTEXT.md` — new "Decision Layer (product framing)" section.
+- `SESSION_NOTES.md` — this entry.
+- `ENHANCEMENTS.md` — new backlog item.
+
+No feature code, no existing feature descriptions changed.
+
+---
+
 ## Recent — upcoming_payment action label enrichment
 
 Tightened the Activity label for `upcoming_payment` rows so the list shows the paid amount (and remaining balance) inline instead of a flat "Payment applied". Scope is label clarity only — no event-structure changes, no new fields, Amount column still renders **—** so the dollars aren't double-counted against the paired `quick_pay` row.

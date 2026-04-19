@@ -67,6 +67,20 @@ The allocator, validators, and Phase 2 audit are fully implemented. The toggle i
 
 ### Tier 1 — Highest-value next improvements
 
+**Decision Layer — "Next Actions" entry point (Phase 1)**
+- Status: Proposed (next major feature, docs-only framing landed in `PROJECT_CONTEXT.md` / `SESSION_NOTES.md`)
+- Why it matters: The input / execution layer (Bills, Upcoming, Debts, Bank Accounts, Cash Flow, LOG) is complete and consistent. Users now need a single, low-noise entry point that answers *"what should I do next?"* without opening five tabs. Planning already owns the deep-dive tools (Debts, Retirement, Purchase Sim, Debt Overview, Rolling Debt Payoff); what's missing is the first screen that points at them.
+- Product framing: Planning **is** the Decision Layer. It interprets — not stores — data from Bills, Upcoming, Debts, Bank Accounts, and Cash Flow. "Next Actions" becomes the first / default sub-tab inside Planning; existing Planning tabs are re-framed as tools / deep dives. Flow: **Next Actions → drill into these tabs**.
+- Scope guardrails: action-first, no editing, short lists only (3–5 items per section). Single payment path remains Quick Add. No new data created; decision layer reads existing sources only. No new top-level tabs; no dashboards stacked on top of Planning; no restructuring of existing sub-tabs.
+- System touchpoints: new Planning sub-tab (reuses existing Planning include pattern), backend reader that aggregates top N candidates from existing sources (no new sheets / schema), reuse of `window.prefillQuickPayment` / `window.showPage` / `window.showTab` for routing.
+- Risk: **Low.** Read-only aggregation over already-canonical sheets; navigates to existing surfaces; no write path.
+- Timing: **Now** (Phase 1 of the Decision Layer roadmap).
+
+**Decision Layer roadmap (intent only — no implementation details yet)**
+- **Phase 1 — Next Actions (v1).** First landing surface inside Planning. Described above.
+- **Phase 2 — Cash Strategy.** Later. Intended to pair Next Actions with a forward-looking liquidity / deployment view. Not scoped yet.
+- **Phase 3 — HELOC Advisor refinement.** Later. Continues the existing advisor-anchored "What would change this?" pattern. Not scoped yet.
+
 **Confidence / assumptions layer**
 - Status: Proposed
 - Why it matters: The planner already internally distinguishes high- and low-confidence inputs (`credit_card_spend_confidence`, `irregular_income_flag`, `unmapped_card_risk_hold > 0`, HELOC realism flags). None of that reaches the Standard surface. Users can't tell when a recommendation is rock-solid vs pattern-matched.
