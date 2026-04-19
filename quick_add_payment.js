@@ -212,7 +212,7 @@ function quickAddPayment(payload) {
   const createIfMissing = !!payload.createIfMissing;
   // Validate up-front so a bad value can't land in the sheet. Blank is allowed
   // (legacy-compatible) and simply skips the Flow Source write below.
-  const flowSource = normalizeFlowSource_(payload.flowSource);
+  let flowSource = normalizeFlowSource_(payload.flowSource);
 
   if (!payee) throw new Error('Payee is required.');
   if (isNaN(entryDate.getTime())) throw new Error('Invalid date.');
@@ -231,10 +231,27 @@ function quickAddPayment(payload) {
 
   let rowInfo = findCashFlowRowByTypeAndPayee_(sheet, entryType, payee);
   let rowWasCreated = false;
+  // Track whether flowSource came from the caller vs. a server-side lookup.
+  // Only relevant when filling a blank Flow Source on an EXISTING row: we
+  // must not retroactively stamp a derived value onto a row the user already
+  // owns, so the fill-a-blank branch below stays gated on an explicit caller
+  // value even when a fallback was resolved for the newly created row.
+  const callerProvidedFlowSource = !!flowSource;
 
   if (!rowInfo) {
     if (!createIfMissing) {
       throw new Error('Payee row not found. Check "Create row if missing" to add it automatically.');
+    }
+    // Bills → Pay and similar flows can lose `flowSource` along the wire
+    // (stale cached client bundle on the deployed web app, alternate pay
+    // surfaces such as the sidebar, upcoming-expense auto-writes, etc.).
+    // Rather than trust every UI path to carry the value, derive it from
+    // INPUT - Bills (primary source of truth for the Payment Source field)
+    // and INPUT - Debts (Credit Card ⇒ CREDIT_CARD, else CASH) on the
+    // server whenever a brand-new Expense row is about to be created
+    // without one. Income rows and any non-matching payees keep blank.
+    if (!flowSource && entryType === 'Expense') {
+      flowSource = resolveFlowSourceFromBillOrDebt_(ss, payee);
     }
     rowInfo = insertCashFlowRow_(sheet, entryType, payee, flowSource);
     rowWasCreated = true;
@@ -250,10 +267,15 @@ function quickAddPayment(payload) {
   // Write Flow Source only when the column exists on this year's tab AND the
   // caller passed a value. For existing rows we only fill a blank cell — we
   // never overwrite a value the user (or a prior call) already set. New rows
-  // created by `insertCashFlowRow_` above already got the Flow Source seeded.
+  // created by `insertCashFlowRow_` above already got the Flow Source seeded
+  // (either from the caller or from the INPUT - Bills/Debts fallback above).
+  // Note: the INPUT - Bills/Debts fallback deliberately does NOT fire for
+  // existing rows — derived values only seed brand-new rows so we never
+  // silently stamp a fallback onto a row the user already owns.
   let flowSourceWritten = rowWasCreated && !!flowSource;
   if (
     flowSource &&
+    callerProvidedFlowSource &&
     !rowWasCreated &&
     headerMap.flowSourceColZero !== -1
   ) {
@@ -405,6 +427,117 @@ function adjustDebtsBalanceAfterQuickPayment_(ss, payee, entryType, paymentAmoun
 function isDebtTypeLoanOrHeloc_(typeStr) {
   const t = String(typeStr || '').trim().toLowerCase();
   return t === 'loan' || t === 'heloc';
+}
+
+/**
+ * Server-side Flow Source fallback for freshly-created Cash Flow Expense rows.
+ *
+ * Mirrors the Payment Source inference used by the Bills dashboard readers
+ * (`getInputBillsDueRows_` / `getDebtBillsDueRows_`) so a new row ends up with
+ * the same Flow Source the user would see on the Bills page:
+ *
+ *   1. INPUT - Bills: look up the row by normalized payee name and use its
+ *      `Payment Source` column if present and valid (CASH | CREDIT_CARD).
+ *   2. INPUT - Debts: look up the row by normalized Account Name and infer
+ *      CREDIT_CARD for `Type = Credit Card`, CASH otherwise.
+ *   3. No match: return '' so legacy behavior (blank Flow Source) is kept.
+ *
+ * Silent try/catch on each sheet read — this is a best-effort enrichment
+ * and must never block the primary Cash Flow write. A missing INPUT - Bills
+ * / INPUT - Debts sheet just falls through to the next step.
+ *
+ * Only called for `entryType === 'Expense'` AND only when we're about to
+ * create a brand-new Cash Flow row. Existing rows are never touched by this
+ * helper — that keeps this behavior additive and audit-friendly.
+ */
+function resolveFlowSourceFromBillOrDebt_(ss, payee) {
+  const normalizedPayee = normalizeBillName_(payee);
+  if (!normalizedPayee) return '';
+
+  // Case-insensitive header match — some workbooks ship `INPUT - Bills` with
+  // ALL-CAPS headers (e.g. "PAYMENT SOURCE") and a naive indexOf would miss
+  // the column, leaving Flow Source blank on every created Cash Flow row.
+  const findHeaderIdx = function (headers, label) {
+    const want = String(label || '').trim().toLowerCase();
+    for (let i = 0; i < headers.length; i++) {
+      if (String(headers[i] || '').trim().toLowerCase() === want) return i;
+    }
+    return -1;
+  };
+
+  try {
+    const billsSheet = getSheet_(ss, 'BILLS');
+    const display = billsSheet.getDataRange().getDisplayValues();
+    if (display && display.length >= 2) {
+      const headers = display[0] || [];
+      const payeeCol = findHeaderIdx(headers, 'Payee');
+      const sourceCol = findHeaderIdx(headers, 'Payment Source');
+      const activeCol = findHeaderIdx(headers, 'Active');
+
+      if (payeeCol !== -1 && sourceCol !== -1) {
+        // Prefer the first active match so deactivated rows don't bleed into
+        // a live payment; fall back to any match if no active row exists.
+        let activeMatch = '';
+        let anyMatch = '';
+
+        for (let r = 1; r < display.length; r++) {
+          const rowPayee = String(display[r][payeeCol] || '').trim();
+          if (!rowPayee) continue;
+          if (normalizeBillName_(rowPayee) !== normalizedPayee) continue;
+
+          const rawSource = String(display[r][sourceCol] || '').trim();
+          if (!rawSource) continue;
+
+          let canonical;
+          try {
+            canonical = normalizeFlowSource_(rawSource);
+          } catch (e) {
+            // Typo in the sheet — skip it rather than poison the Cash Flow row.
+            continue;
+          }
+          if (!canonical) continue;
+
+          const active = activeCol === -1 ? 'yes' : normalizeYesNo_(display[r][activeCol]);
+          if (active === 'yes' && !activeMatch) {
+            activeMatch = canonical;
+            break;
+          }
+          if (!anyMatch) anyMatch = canonical;
+        }
+
+        if (activeMatch) return activeMatch;
+        if (anyMatch) return anyMatch;
+      }
+    }
+  } catch (e) {
+    Logger.log('resolveFlowSourceFromBillOrDebt_ bills lookup: ' + e);
+  }
+
+  try {
+    const debtsSheet = getSheet_(ss, 'DEBTS');
+    const display = debtsSheet.getDataRange().getDisplayValues();
+    if (display && display.length >= 2) {
+      const headers = display[0] || [];
+      const nameCol = findHeaderIdx(headers, 'Account Name');
+      const typeCol = findHeaderIdx(headers, 'Type');
+
+      if (nameCol !== -1) {
+        for (let r = 1; r < display.length; r++) {
+          const rowName = String(display[r][nameCol] || '').trim();
+          if (!rowName) continue;
+          if (rowName.toUpperCase() === 'TOTAL DEBT') continue;
+          if (normalizeBillName_(rowName) !== normalizedPayee) continue;
+
+          const dType = typeCol === -1 ? '' : display[r][typeCol];
+          return isDebtCreditCardType_(dType) ? 'CREDIT_CARD' : 'CASH';
+        }
+      }
+    }
+  } catch (e) {
+    Logger.log('resolveFlowSourceFromBillOrDebt_ debts lookup: ' + e);
+  }
+
+  return '';
 }
 
 function findCashFlowRowByTypeAndPayee_(sheet, entryType, payee) {

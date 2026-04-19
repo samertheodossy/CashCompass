@@ -1,5 +1,5 @@
 /**
- * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, house expense, donations, upcoming add/status/cashflow, bank_account_add, …). Rows can be removed from the web UI for mistaken log lines only.
+ * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_deactivate, house expense, donations, upcoming add/status/cashflow, bank_account_add, …). Rows can be removed from the web UI for mistaken log lines only.
  * Complements OUT - History (planner-run snapshots). Tab: LOG - Activity.
  */
 
@@ -364,6 +364,8 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (etEarly === 'donation') return 'Donation';
   if (etEarly.indexOf('upcoming_') === 0) return 'Upcoming';
   if (etEarly === 'bank_account_add') return 'Bank';
+  if (etEarly === 'bill_add') return 'Bill';
+  if (etEarly === 'bill_deactivate') return 'Bill';
 
   var combined = pay + ' ' + cat;
   var blob = combined.toLowerCase();
@@ -392,6 +394,40 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (et === 'quick_pay' && dir === 'expense') return 'Bill';
   if (et === 'bill_skip' || et === 'bill_autopay') return 'Bill';
   return 'Other';
+}
+
+/**
+ * Display-only per-event label surfaced next to the broad "Type" pill so
+ * users can tell similar kinds apart at a glance (e.g. "Bill" covers both
+ * bill_add and bill_deactivate — but the row should still read "Bill added"
+ * vs "Tracking stopped").
+ *
+ * Returning '' means "no secondary label"; the pill alone is enough.
+ *
+ * Importantly, this does NOT replace `kindLabel` — the Type filter dropdown
+ * and sort still operate on the broad kindLabel, so filtering by "Bill"
+ * keeps surfacing every bill lifecycle event as it did before.
+ */
+function activityLogActionLabel_(eventType) {
+  var et = String(eventType || '').trim().toLowerCase();
+  switch (et) {
+    case 'bill_add': return 'Bill added';
+    case 'bill_deactivate': return 'Tracking stopped';
+    case 'bill_skip': return 'Bill skipped';
+    case 'bill_autopay': return 'Bill autopay';
+    case 'bank_account_add': return 'Account added';
+    default: return '';
+  }
+}
+
+/**
+ * Event types that represent lifecycle/metadata actions rather than a money
+ * movement. Activity UI renders these rows with a blank amount ("—") so we
+ * don't show a misleading $0.00.
+ */
+function activityLogIsNonMonetaryEvent_(eventType) {
+  var et = String(eventType || '').trim().toLowerCase();
+  return et === 'bill_deactivate' || et === 'bank_account_add';
 }
 
 function parseOptionalAmountFilter_(raw) {
@@ -510,7 +546,9 @@ function getActivityDashboardData(filters) {
         cashFlowMonth: String(r[9] || '').trim(),
         dedupeKey: String(r[10] || '').trim(),
         details: String(r[11] || '').trim(),
-        kindLabel: activityLogRowKind_(lookup, r)
+        kindLabel: activityLogRowKind_(lookup, r),
+        actionLabel: activityLogActionLabel_(eventType),
+        isNonMonetary: activityLogIsNonMonetaryEvent_(eventType)
       });
     }
 

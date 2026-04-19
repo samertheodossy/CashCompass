@@ -1,6 +1,90 @@
+/* -------------------------------------------------------------------------- */
+/*  Transient status (bills_due_status)                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The Bills page shares the global setStatus() helper, which leaves text in
+ * place until something overwrites it. For the Bills page that creates the
+ * "Stopped tracking 'FUN 123'." lingering effect after a refresh — the
+ * message reads like page content.
+ *
+ * Wrap setStatus locally so:
+ *   - Success messages auto-clear after a short delay (transient confirm).
+ *   - Error messages remain sticky until the next user action overwrites
+ *     them (matches the behavior users rely on elsewhere on the page).
+ *   - A single timer is tracked, so a new message cancels any pending clear.
+ */
+var __billsStatusClearTimer = null;
+var BILLS_STATUS_AUTOCLEAR_MS_ = 4000;
+
+function setBillsStatus_(msg, isError) {
+  if (__billsStatusClearTimer) {
+    try { clearTimeout(__billsStatusClearTimer); } catch (e) { /* ignore */ }
+    __billsStatusClearTimer = null;
+  }
+
+  setStatus('bills_due_status', msg, !!isError);
+
+  if (!isError && msg) {
+    __billsStatusClearTimer = setTimeout(function() {
+      setStatus('bills_due_status', '', false);
+      __billsStatusClearTimer = null;
+    }, BILLS_STATUS_AUTOCLEAR_MS_);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Internal Bills view switch                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The Bills page is one panel with two internal views:
+ *   - 'due'    → execution queue (Overdue / Next 7 / Recurring)
+ *   - 'manage' → full active list from INPUT - Bills + Add bill flow
+ *
+ * Only one view is visible at a time. Default is 'due' so users always land
+ * on "what to act on now" first; management is one click away in the same
+ * page (no extra tab, no separate URL).
+ *
+ * Data for both views still loads together in loadDashboardActionSections()
+ * so switching is instant and does not re-hit the backend.
+ */
+function setBillsView(view) {
+  var target = view === 'manage' ? 'manage' : 'due';
+
+  var dueSection = document.getElementById('bills_view_due');
+  var manageSection = document.getElementById('bills_view_manage');
+  var dueBtn = document.getElementById('bills_view_tab_due');
+  var manageBtn = document.getElementById('bills_view_tab_manage');
+
+  if (dueSection) dueSection.style.display = target === 'due' ? '' : 'none';
+  if (manageSection) manageSection.style.display = target === 'manage' ? '' : 'none';
+
+  if (dueBtn) {
+    dueBtn.classList.toggle('active', target === 'due');
+    dueBtn.setAttribute('aria-selected', target === 'due' ? 'true' : 'false');
+  }
+  if (manageBtn) {
+    manageBtn.classList.toggle('active', target === 'manage');
+    manageBtn.setAttribute('aria-selected', target === 'manage' ? 'true' : 'false');
+  }
+
+  // When switching away from Manage, auto-close the Add bill form so
+  // returning to Due doesn't leave a stale open form behind.
+  if (target === 'due') {
+    if (typeof closeBillsAddForm === 'function') closeBillsAddForm();
+  }
+
+  window.__billsActiveView = target;
+}
+
 function loadDashboardActionSections() {
+  // Both views load together: the execution queue always reflects the
+  // current period, and the management list stays ready so flipping to
+  // "Manage bills" is instant.
   loadBillsDueUi_();
   loadRecurringBillsUi_();
+  loadActiveBillsManagementUi_();
 }
 
 function loadBillsDueUi_() {
@@ -14,8 +98,10 @@ function loadBillsDueUi_() {
 
   google.script.run
     .withSuccessHandler(function(data) {
-      renderBillsList_('bd_overdueList', (data && data.overdue) || [], 'No overdue bills.');
-      renderBillsList_('bd_next7List', (data && data.next7) || [], 'No bills due soon.');
+      const overdue = (data && data.overdue) || [];
+      const next7 = (data && data.next7) || [];
+      renderBillsList_('bd_overdueList', overdue, 'No overdue bills.');
+      renderBillsList_('bd_next7List', next7, 'No bills due soon.');
       renderBillsDueSummary_(data || {});
     })
     .withFailureHandler(function(err) {
@@ -23,7 +109,7 @@ function loadBillsDueUi_() {
       renderBillsList_('bd_overdueList', [], msg);
       renderBillsList_('bd_next7List', [], msg);
       renderBillsDueSummary_({ overdue: [], next7: [] }, msg);
-      setStatus('bills_due_status', msg, true);
+      setBillsStatus_(msg, true);
     })
     .getBillsDueFromCashFlowForDashboard();
 }
@@ -101,6 +187,9 @@ function renderBillsList_(elementId, rows, emptyMsg) {
     return;
   }
 
+  // Execution cards are intentionally action-only: Pay / Skip. Lifecycle
+  // actions (Stop tracking) live in the management section below so this
+  // queue stays focused on "what to clear now".
   el.innerHTML = rows.map(function(r, idx) {
     const key = elementId + '::' + idx;
     window.__dashboardBills[key] = r;
@@ -124,35 +213,84 @@ function payBillFromDashboard(billKey) {
   const bill = store[billKey];
 
   if (!bill) {
-    setStatus('bills_due_status', 'Error: Bill not found.', true);
+    setBillsStatus_('Error: Bill not found.', true);
     return;
   }
 
+  // Carry the bill's Payment Source (from INPUT - Bills or the inferred
+  // debt default) through to Quick Add so a newly created Cash Flow row
+  // has its Flow Source column seeded correctly. Blank is tolerated
+  // (legacy rows) and simply skips the Flow Source write downstream.
   prefillQuickPayment({
     entryType: 'Expense',
     payee: bill.payee || bill.name || '',
     entryDate: bill.dueDate || '',
-    amount: bill.amount || 0
+    amount: bill.amount || 0,
+    flowSource: bill.paymentSource || ''
   });
 }
 
 function skipBillFromDashboard(skipKey) {
   if (!skipKey) {
-    setStatus('bills_due_status', 'Error: Missing bill key.', true);
+    setBillsStatus_('Error: Missing bill key.', true);
     return;
   }
 
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('bills_due_status', (res && res.message) || 'Skipped.', false);
+      setBillsStatus_((res && res.message) || 'Skipped.', false);
       loadDashboardActionSections();
       refreshSnapshot();
       loadPaymentPreview();
     })
     .withFailureHandler(function(err) {
-      setStatus('bills_due_status', 'Error: ' + (err.message || String(err)), true);
+      setBillsStatus_('Error: ' + (err.message || String(err)), true);
     })
     .skipDashboardBill(skipKey);
+}
+
+/**
+ * Stop tracking is driven from the management list only — the payload store
+ * is keyed by management-row index, never by execution-card index.
+ */
+function stopTrackingBillFromDashboard(billKey) {
+  const store = window.__dashboardActiveBills || {};
+  const bill = store[billKey];
+
+  if (!bill) {
+    setBillsStatus_('Error: Bill not found.', true);
+    return;
+  }
+
+  const sheetRow = Number(bill.inputBillsRow);
+  if (!isFinite(sheetRow) || sheetRow < 2) {
+    setBillsStatus_('Error: This bill cannot be stopped from here.', true);
+    return;
+  }
+
+  const payeeLabel = bill.payee || 'this bill';
+  const confirmed = window.confirm(
+    'Stop tracking "' + payeeLabel + '"?\n\n' +
+    'It will no longer appear in Bills, but the row stays in INPUT - Bills for history.'
+  );
+  if (!confirmed) return;
+
+  setStatusLoading('bills_due_status', 'Stopping tracking…');
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setBillsStatus_((res && res.message) || 'Stopped tracking.', false);
+      loadDashboardActionSections();
+      if (typeof refreshSnapshot === 'function') refreshSnapshot();
+      if (typeof loadPaymentPreview === 'function') loadPaymentPreview();
+    })
+    .withFailureHandler(function(err) {
+      setBillsStatus_('Error: ' + (err.message || String(err)), true);
+    })
+    .deactivateBillFromDashboard({
+      sheetRow: sheetRow,
+      payee: bill.payee || ''
+    });
 }
 
 function loadRecurringBillsUi_() {
@@ -161,7 +299,8 @@ function loadRecurringBillsUi_() {
 
   google.script.run
     .withSuccessHandler(function(data) {
-      renderRecurringBillsList_('bd_recurringList', data || [], 'No recurring bills pending.');
+      const rows = data || [];
+      renderRecurringBillsList_('bd_recurringList', rows, 'No recurring bills pending.');
     })
     .withFailureHandler(function(err) {
       renderRecurringBillsList_('bd_recurringList', [], 'Error: ' + (err.message || String(err)));
@@ -200,7 +339,7 @@ function renderRecurringBillsList_(elementId, rows, emptyMsg) {
 function payRecurringBill(key) {
   const bill = (window.__dashboardRecurring || {})[key];
   if (!bill) {
-    setStatus('bills_due_status', 'Error: Recurring bill not found.', true);
+    setBillsStatus_('Error: Recurring bill not found.', true);
     return;
   }
 
@@ -214,18 +353,527 @@ function payRecurringBill(key) {
 
 function skipRecurringBill(skipKey) {
   if (!skipKey) {
-    setStatus('bills_due_status', 'Error: Missing recurring bill key.', true);
+    setBillsStatus_('Error: Missing recurring bill key.', true);
     return;
   }
 
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('bills_due_status', (res && res.message) || 'Skipped.', false);
+      setBillsStatus_((res && res.message) || 'Skipped.', false);
       loadDashboardActionSections();
       refreshSnapshot();
     })
     .withFailureHandler(function(err) {
-      setStatus('bills_due_status', 'Error: ' + (err.message || String(err)), true);
+      setBillsStatus_('Error: ' + (err.message || String(err)), true);
     })
     .skipDashboardBill(skipKey);
+}
+
+/* -------------------------------------------------------------------------- */
+/*  All active bills (management section)                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Sort state for the All active bills table (presentation only — never
+ * writes back to INPUT - Bills). Default is Due Day ascending, with Payee
+ * ascending as a natural tie-breaker for rows that share a due day or
+ * whose due day is blank.
+ */
+var __billsManageSort = { column: 'dueDay', dir: 'asc' };
+var __billsManageRows = [];
+
+function loadActiveBillsManagementUi_() {
+  const el = document.getElementById('bills_manage_list');
+  if (!el) return;
+  el.innerHTML = loadingBlockHtml('Loading…');
+
+  google.script.run
+    .withSuccessHandler(function(rows) {
+      renderActiveBillsList_(Array.isArray(rows) ? rows : []);
+    })
+    .withFailureHandler(function(err) {
+      el.innerHTML =
+        '<div class="muted">Error loading active bills: ' +
+        escapeHtml(err && err.message ? err.message : String(err)) +
+        '</div>';
+    })
+    .getActiveBillsForManagementFromDashboard();
+}
+
+/**
+ * Toggle the active sort on the management table. If the user clicks the
+ * already-active column, direction flips; otherwise a new column becomes
+ * active and starts ascending. Re-renders from the cached rows so no extra
+ * backend round-trip is needed.
+ */
+function toggleBillsManageSort(column) {
+  if (column !== 'payee' && column !== 'dueDay') return;
+  if (__billsManageSort.column === column) {
+    __billsManageSort.dir = __billsManageSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    __billsManageSort.column = column;
+    __billsManageSort.dir = 'asc';
+  }
+  renderActiveBillsList_(__billsManageRows);
+}
+
+function sortBillsManageRows_(rows, sortState) {
+  const col = sortState && sortState.column ? sortState.column : 'dueDay';
+  const dir = sortState && sortState.dir === 'desc' ? -1 : 1;
+  const copy = rows.slice();
+
+  copy.sort(function(a, b) {
+    if (col === 'payee') {
+      const pa = String(a.payee || '').toLowerCase();
+      const pb = String(b.payee || '').toLowerCase();
+      if (pa < pb) return -1 * dir;
+      if (pa > pb) return 1 * dir;
+      return 0;
+    }
+
+    // dueDay: numeric when available; blanks always sink to the bottom
+    // regardless of direction so sorting never buries real data under —.
+    const aRaw = a.dueDay;
+    const bRaw = b.dueDay;
+    const aNum = Number(aRaw);
+    const bNum = Number(bRaw);
+    const aValid = aRaw !== '' && aRaw !== null && aRaw !== undefined && isFinite(aNum);
+    const bValid = bRaw !== '' && bRaw !== null && bRaw !== undefined && isFinite(bNum);
+
+    if (aValid && !bValid) return -1;
+    if (!aValid && bValid) return 1;
+    if (!aValid && !bValid) {
+      const pa = String(a.payee || '').toLowerCase();
+      const pb = String(b.payee || '').toLowerCase();
+      return pa < pb ? -1 : pa > pb ? 1 : 0;
+    }
+
+    if (aNum !== bNum) return (aNum - bNum) * dir;
+    const pa = String(a.payee || '').toLowerCase();
+    const pb = String(b.payee || '').toLowerCase();
+    return pa < pb ? -1 : pa > pb ? 1 : 0;
+  });
+
+  return copy;
+}
+
+function renderActiveBillsList_(rows) {
+  const el = document.getElementById('bills_manage_list');
+  if (!el) return;
+
+  // Cache the unsorted payload so re-sorts do not hit the backend.
+  __billsManageRows = Array.isArray(rows) ? rows.slice() : [];
+  window.__dashboardActiveBills = {};
+
+  if (!__billsManageRows.length) {
+    // Empty state doubles as the page-level onboarding CTA: when there are
+    // no active bills at all, this is the only Add bill surface the user
+    // needs to see.
+    el.innerHTML =
+      '<div class="bills-empty-state" style="padding:16px;border:1px dashed #d1d5db;border-radius:8px;background:#f9fafb;text-align:center;">' +
+        '<div class="muted" style="margin-bottom:10px;">No active bills yet.</div>' +
+        '<button type="button" class="small-btn primary" onclick="openBillsAddFormFromEmptyState()">+ Add bill</button>' +
+      '</div>';
+    return;
+  }
+
+  const sorted = sortBillsManageRows_(__billsManageRows, __billsManageSort);
+
+  const rowsHtml = sorted.map(function(r, idx) {
+    const key = 'mng::' + idx;
+    window.__dashboardActiveBills[key] = r;
+
+    const variesYes = String(r.varies || '').toLowerCase() === 'yes';
+    const defaultAmount = Number(r.defaultAmount || 0);
+    let amountStr;
+    if (defaultAmount > 0) {
+      amountStr = fmtCurrency(defaultAmount);
+    } else if (variesYes) {
+      amountStr = '<span class="muted">Varies</span>';
+    } else {
+      amountStr = '<span class="muted">—</span>';
+    }
+
+    const dueDayStr = r.dueDay === '' || r.dueDay === null || r.dueDay === undefined
+      ? '<span class="muted">—</span>'
+      : escapeHtml(String(r.dueDay));
+    const freqStr = r.frequency
+      ? escapeHtml(r.frequency)
+      : '<span class="muted">—</span>';
+    const sourceStr = r.paymentSource
+      ? escapeHtml(r.paymentSource)
+      : '<span class="muted">—</span>';
+    const categoryStr = r.category
+      ? escapeHtml(r.category)
+      : '<span class="muted">—</span>';
+    const autopayStr = String(r.autopay || '').toLowerCase() === 'yes' ? 'Yes' : 'No';
+    const variesStr = variesYes ? 'Yes' : 'No';
+
+    return (
+      '<tr>' +
+        '<td><strong>' + escapeHtml(r.payee || 'Bill') + '</strong></td>' +
+        '<td class="bills-manage-num">' + amountStr + '</td>' +
+        '<td class="bills-manage-num">' + dueDayStr + '</td>' +
+        '<td>' + freqStr + '</td>' +
+        '<td>' + sourceStr + '</td>' +
+        '<td>' + categoryStr + '</td>' +
+        '<td>' + autopayStr + '</td>' +
+        '<td>' + variesStr + '</td>' +
+        '<td class="bills-manage-actions">' +
+          '<button class="small-btn bill-stop-tracking-btn" ' +
+            'title="This bill will no longer appear, but remains in history" ' +
+            'onclick="stopTrackingBillFromDashboard(\'' + escapeJs(key) + '\')">' +
+            'Stop tracking' +
+          '</button>' +
+        '</td>' +
+      '</tr>'
+    );
+  }).join('');
+
+  const payeeHeader = buildBillsSortableHeader_('payee', 'Payee', '');
+  const dueDayHeader = buildBillsSortableHeader_('dueDay', 'Due day', 'bills-manage-num');
+
+  el.innerHTML =
+    '<div class="bills-manage-tablewrap">' +
+      '<table class="bills-manage-table">' +
+        '<thead><tr>' +
+          payeeHeader +
+          '<th scope="col" class="bills-manage-num">Default</th>' +
+          dueDayHeader +
+          '<th scope="col">Frequency</th>' +
+          '<th scope="col">Source</th>' +
+          '<th scope="col">Category</th>' +
+          '<th scope="col">Autopay</th>' +
+          '<th scope="col">Varies</th>' +
+          '<th scope="col" class="bills-manage-actions">Action</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody>' +
+      '</table>' +
+    '</div>';
+}
+
+function buildBillsSortableHeader_(column, label, extraClass) {
+  const isActive = __billsManageSort.column === column;
+  const dir = isActive ? __billsManageSort.dir : '';
+  const ariaSort = isActive
+    ? (dir === 'desc' ? 'descending' : 'ascending')
+    : 'none';
+  const activeClass = isActive ? ' is-sorted is-sorted-' + dir : '';
+  const classAttr = ('bills-manage-sortable' + activeClass + (extraClass ? ' ' + extraClass : '')).trim();
+  // Arrow glyphs are purely presentational; screen readers use aria-sort.
+  const indicator = isActive
+    ? '<span class="bills-sort-indicator" aria-hidden="true">' +
+        (dir === 'desc' ? '\u25BE' : '\u25B4') +
+      '</span>'
+    : '<span class="bills-sort-indicator bills-sort-indicator--idle" aria-hidden="true">\u2195</span>';
+
+  return (
+    '<th scope="col" class="' + classAttr + '" ' +
+      'aria-sort="' + ariaSort + '" ' +
+      'tabindex="0" role="button" ' +
+      'onclick="toggleBillsManageSort(\'' + column + '\')" ' +
+      'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();toggleBillsManageSort(\'' + column + '\');}">' +
+      '<span class="bills-sort-label">' + escapeHtml(label) + '</span>' +
+      indicator +
+    '</th>'
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Add bill (INPUT - Bills, v1)                                              */
+/* -------------------------------------------------------------------------- */
+
+function toggleBillsAddForm() {
+  const wrap = document.getElementById('bills_add_wrap');
+  const btn = document.getElementById('bills_add_toggle_btn');
+  if (!wrap || !btn) return;
+
+  const isOpen = wrap.style.display !== 'none';
+  if (isOpen) {
+    closeBillsAddForm();
+  } else {
+    openBillsAddForm_();
+  }
+}
+
+function openBillsAddForm_() {
+  const wrap = document.getElementById('bills_add_wrap');
+  const btn = document.getElementById('bills_add_toggle_btn');
+  if (!wrap || !btn) return;
+
+  wrap.style.display = 'block';
+  btn.setAttribute('aria-expanded', 'true');
+  btn.textContent = 'Hide add bill form';
+
+  loadBillCategoriesIntoForm_();
+
+  const payeeInput = document.getElementById('bills_add_payee');
+  if (payeeInput) {
+    try { payeeInput.focus(); } catch (e) { /* ignore focus errors */ }
+  }
+}
+
+function openBillsAddFormFromEmptyState() {
+  // The Add bill form only lives in the Manage bills view, so make sure
+  // that view is active before opening it — covers the case where this
+  // function is reached from any future surface outside Manage.
+  if (typeof setBillsView === 'function') setBillsView('manage');
+  openBillsAddForm_();
+  const wrap = document.getElementById('bills_add_wrap');
+  if (wrap && typeof wrap.scrollIntoView === 'function') {
+    try { wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) { /* ignore */ }
+  }
+}
+
+function closeBillsAddForm() {
+  const wrap = document.getElementById('bills_add_wrap');
+  const btn = document.getElementById('bills_add_toggle_btn');
+  if (wrap) wrap.style.display = 'none';
+  if (btn) {
+    btn.setAttribute('aria-expanded', 'false');
+    btn.textContent = '+ Add bill';
+  }
+}
+
+function resetBillsAddForm_() {
+  const textIds = [
+    'bills_add_payee',
+    'bills_add_due_day',
+    'bills_add_default_amount',
+    'bills_add_category_other',
+    'bills_add_notes',
+    'bills_add_start_month'
+  ];
+  textIds.forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+
+  const freq = document.getElementById('bills_add_frequency');
+  if (freq) freq.value = 'Monthly';
+
+  const src = document.getElementById('bills_add_payment_source');
+  if (src) src.value = 'CASH';
+
+  const category = document.getElementById('bills_add_category');
+  if (category) category.value = '';
+
+  const categoryOther = document.getElementById('bills_add_category_other');
+  if (categoryOther) categoryOther.style.display = 'none';
+
+  const autopay = document.getElementById('bills_add_autopay');
+  if (autopay) autopay.value = 'No';
+
+  const varies = document.getElementById('bills_add_varies');
+  if (varies) varies.value = 'No';
+
+  const active = document.getElementById('bills_add_active');
+  if (active) active.value = 'Yes';
+}
+
+/**
+ * Show/hide the free-text "Other…" input when the user picks __other__ from
+ * the category dropdown. No validation here — the final value is resolved at
+ * submit time.
+ */
+function onBillsAddCategoryChange() {
+  const select = document.getElementById('bills_add_category');
+  const other = document.getElementById('bills_add_category_other');
+  if (!select || !other) return;
+
+  if (select.value === '__other__') {
+    other.style.display = '';
+    try { other.focus(); } catch (e) { /* ignore focus errors */ }
+  } else {
+    other.style.display = 'none';
+    other.value = '';
+  }
+}
+
+/**
+ * Populate the category dropdown with distinct values from INPUT - Bills.
+ * Cached per page load so re-opening the form is instant. The cache is
+ * cleared on successful save so new categories surface immediately on the
+ * next open.
+ */
+function loadBillCategoriesIntoForm_() {
+  const select = document.getElementById('bills_add_category');
+  if (!select) return;
+
+  if (window.__billsCategoryOptionsLoaded) return;
+
+  google.script.run
+    .withSuccessHandler(function(categories) {
+      populateBillCategoryOptions_(Array.isArray(categories) ? categories : []);
+      window.__billsCategoryOptionsLoaded = true;
+    })
+    .withFailureHandler(function() {
+      // Soft failure: leave the dropdown with just the defaults (— none — and
+      // Other…) so the form is still usable. We don't block the user here.
+      window.__billsCategoryOptionsLoaded = true;
+    })
+    .getBillCategoriesFromDashboard();
+}
+
+function populateBillCategoryOptions_(categories) {
+  const select = document.getElementById('bills_add_category');
+  if (!select) return;
+
+  const previousValue = select.value || '';
+  select.innerHTML = '';
+
+  // Placeholder option: empty value so required-field validation rejects
+  // it. Label reads as a prompt ("Select a category") rather than "none",
+  // since Category is no longer optional.
+  const noneOpt = document.createElement('option');
+  noneOpt.value = '';
+  noneOpt.textContent = '— Select a category —';
+  select.appendChild(noneOpt);
+
+  categories.forEach(function(cat) {
+    if (!cat) return;
+    const opt = document.createElement('option');
+    opt.value = cat;
+    opt.textContent = cat;
+    select.appendChild(opt);
+  });
+
+  const otherOpt = document.createElement('option');
+  otherOpt.value = '__other__';
+  otherOpt.textContent = 'Other…';
+  select.appendChild(otherOpt);
+
+  if (previousValue) {
+    // Preserve a previously selected value if it still exists; otherwise
+    // fall back to "— none —" so the form starts in a clean state.
+    const found = Array.prototype.some.call(select.options, function(o) {
+      return o.value === previousValue;
+    });
+    select.value = found ? previousValue : '';
+  }
+}
+
+function submitNewBill() {
+  const payee = (document.getElementById('bills_add_payee').value || '').trim();
+  const dueDayRaw = (document.getElementById('bills_add_due_day').value || '').trim();
+  const frequency = (document.getElementById('bills_add_frequency').value || '').trim();
+  const paymentSource = (document.getElementById('bills_add_payment_source').value || '').trim();
+  const defaultAmountRaw = document.getElementById('bills_add_default_amount').value;
+  const notes = (document.getElementById('bills_add_notes').value || '').trim();
+
+  const categorySelect = document.getElementById('bills_add_category');
+  const categoryOther = document.getElementById('bills_add_category_other');
+  const categoryChoice = (categorySelect && categorySelect.value) || '';
+  // Category is mandatory. Two failure paths, both rejected below:
+  //   1. Dropdown is on "— none —" (empty value).
+  //   2. Dropdown is on "Other…" and the free-text input is blank.
+  // The backend also rejects an empty category, but catching it here
+  // keeps the round-trip short and the error message specific.
+  let category = '';
+  if (categoryChoice === '__other__') {
+    category = ((categoryOther && categoryOther.value) || '').trim();
+  } else {
+    category = categoryChoice.trim();
+  }
+
+  const autopay = (document.getElementById('bills_add_autopay').value || 'No').trim();
+  const varies = (document.getElementById('bills_add_varies').value || 'No').trim();
+  const active = (document.getElementById('bills_add_active').value || 'Yes').trim();
+  const startMonthRaw = (document.getElementById('bills_add_start_month').value || '').trim();
+
+  if (!payee) {
+    setBillsStatus_('Error: Payee is required.', true);
+    return;
+  }
+
+  const dueDayNum = Number(dueDayRaw);
+  if (!dueDayRaw || !isFinite(dueDayNum) || Math.floor(dueDayNum) !== dueDayNum || dueDayNum < 1 || dueDayNum > 31) {
+    setBillsStatus_('Error: Due Day must be an integer from 1 to 31.', true);
+    return;
+  }
+
+  const validFrequencies = {
+    'Monthly': true, 'Biweekly': true, 'Weekly': true,
+    'Bimonthly': true, 'Quarterly': true, 'Semi-annually': true, 'Yearly': true
+  };
+  if (!validFrequencies[frequency]) {
+    setBillsStatus_('Error: Pick a valid frequency.', true);
+    return;
+  }
+
+  if (paymentSource !== 'CASH' && paymentSource !== 'CREDIT_CARD') {
+    setBillsStatus_('Error: Payment Source must be CASH or CREDIT_CARD.', true);
+    return;
+  }
+
+  if (!category) {
+    if (categoryChoice === '__other__') {
+      setBillsStatus_('Error: Please enter a category in the "Other…" field.', true);
+      if (categoryOther && typeof categoryOther.focus === 'function') {
+        try { categoryOther.focus(); } catch (e) { /* ignore focus errors */ }
+      }
+    } else {
+      setBillsStatus_('Error: Category is required.', true);
+      if (categorySelect && typeof categorySelect.focus === 'function') {
+        try { categorySelect.focus(); } catch (e) { /* ignore focus errors */ }
+      }
+    }
+    return;
+  }
+
+  let defaultAmount = '';
+  if (String(defaultAmountRaw || '').trim() !== '') {
+    const n = toNumber(defaultAmountRaw);
+    if (!isFinite(n)) {
+      setBillsStatus_('Error: Default Amount must be a valid number.', true);
+      return;
+    }
+    defaultAmount = Math.abs(n);
+  }
+
+  let startMonth = '';
+  if (startMonthRaw !== '') {
+    const m = Number(startMonthRaw);
+    if (!isFinite(m) || Math.floor(m) !== m || m < 1 || m > 12) {
+      setBillsStatus_('Error: Start Month must be an integer from 1 to 12.', true);
+      return;
+    }
+    startMonth = m;
+  }
+
+  const payload = {
+    payee: payee,
+    dueDay: dueDayNum,
+    frequency: frequency,
+    paymentSource: paymentSource,
+    defaultAmount: defaultAmount,
+    category: category,
+    notes: notes,
+    autopay: autopay,
+    varies: varies,
+    active: active,
+    startMonth: startMonth
+  };
+
+  setStatusLoading('bills_due_status', 'Saving bill…');
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setBillsStatus_((res && res.message) || 'Bill added.', false);
+      resetBillsAddForm_();
+      closeBillsAddForm();
+      // Invalidate the category cache so a fresh "Other…" entry appears in
+      // the dropdown the next time the form opens.
+      window.__billsCategoryOptionsLoaded = false;
+      // loadDashboardActionSections already reloads both the execution
+      // queue and the management list in a single pass, so a new bill shows
+      // up in "All active bills" immediately — and in "Due this period"
+      // when its due date falls inside the overdue / next-7 window.
+      loadDashboardActionSections();
+      if (typeof refreshSnapshot === 'function') refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setBillsStatus_('Error: ' + (err.message || String(err)), true);
+    })
+    .addBillFromDashboard(payload);
 }

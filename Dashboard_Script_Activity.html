@@ -181,12 +181,32 @@ function renderActivityTable_(rows, options) {
         : typeof toNumber === 'function'
           ? toNumber(amt)
           : Number(amt);
-    var amtStr =
-      amt === '' || amt === null || amt === undefined || (isNaN(num) && String(amt).trim() === '')
+
+    // Lifecycle/metadata events (e.g. bill_deactivate, bank_account_add)
+    // carry 0 on the sheet but are not money movements — show an em dash
+    // instead of a misleading $0.00.
+    var isNonMonetary = !!row.isNonMonetary;
+    var amtStr = isNonMonetary
+      ? '—'
+      : (amt === '' || amt === null || amt === undefined || (isNaN(num) && String(amt).trim() === '')
         ? '—'
         : typeof fmtCurrency === 'function'
           ? fmtCurrency(num)
-          : String(amt);
+          : String(amt));
+
+    // Broad pill (Bill / Donation / Loan / …) is still the filterable Type;
+    // the smaller action line beneath it disambiguates same-kind events like
+    // "Bill added" vs "Tracking stopped" without changing filtering.
+    var actionLabel = String(row.actionLabel || '').trim();
+    var typeCellHtml =
+      '<span class="activity-kind-pill">' +
+      escapeHtml(String(row.kindLabel || '—')) +
+      '</span>' +
+      (actionLabel
+        ? '<div class="activity-action-label muted">' +
+          escapeHtml(actionLabel) +
+          '</div>'
+        : '');
 
     html +=
       '<tr>' +
@@ -196,9 +216,9 @@ function renderActivityTable_(rows, options) {
       '<td>' +
       escapeHtml(String(row.payee || '')) +
       '</td>' +
-      '<td><span class="activity-kind-pill">' +
-      escapeHtml(String(row.kindLabel || '—')) +
-      '</span></td>' +
+      '<td>' +
+      typeCellHtml +
+      '</td>' +
       '<td class="activity-num">' +
       escapeHtml(amtStr) +
       '</td>' +

@@ -143,7 +143,7 @@
           <div class="change-item" onclick="showPage('cashflow'); showTab('billsDue');" style="cursor:pointer;">
             <div class="change-label">Bills Next 7 Days</div>
             <div class="change-value" id="ov_bills_next7">—</div>
-            <div class="change-meta">Cash Flow &amp; INPUT Bills (same list as Bills Due)</div>
+            <div class="change-meta">Cash Flow &amp; INPUT Bills (same list as the Bills page)</div>
           </div>
           <div class="change-item" onclick="showTab('upcoming')" style="cursor:pointer;">
             <div class="change-label">Upcoming Next 7 Days</div>
@@ -197,7 +197,7 @@
 
     <div class="six-grid">
       <div class="card" onclick="showPage('cashflow'); showTab('billsDue');" style="cursor:pointer;">
-        <div class="card-title">Bills Due</div>
+        <div class="card-title">Bills</div>
 
         <div class="mini-grid">
           <div class="mini-card" id="ov_billsDueSoonCard">
@@ -210,8 +210,8 @@
           </div>
         </div>
 
-        <div class="ret-summary" id="ov_bills_summaryText">Open Bills Due</div>
-        <button onclick="event.stopPropagation(); showPage('cashflow'); showTab('billsDue');">Open Bills Due</button>
+        <div class="ret-summary" id="ov_bills_summaryText">Open Bills</div>
+        <button onclick="event.stopPropagation(); showPage('cashflow'); showTab('billsDue');">Open Bills</button>
       </div>
     </div>
 
@@ -376,7 +376,7 @@
       <button class="tab-btn active" data-tab="payments" onclick="showTab('payments')">Quick add</button>
       <button class="tab-btn" data-tab="upcoming" onclick="showTab('upcoming')">Upcoming</button>
       <button class="tab-btn" data-tab="donations" onclick="showTab('donations')">Donations</button>
-      <button class="tab-btn" data-tab="billsDue" onclick="showTab('billsDue')">Bills Due</button>
+      <button class="tab-btn" data-tab="billsDue" onclick="showTab('billsDue')">Bills</button>
     </div>
 
     <div id="payments" class="panel active">
@@ -531,38 +531,135 @@
 
     <div id="billsDue" class="panel">
       <div class="panel-head">
-        <h2>Bills Due</h2>
-        <div class="updated">Operational bills queue from Cash Flow + Debts minimums</div>
+        <h2>Bills</h2>
+        <div class="updated">Two views: what's due now and everything you track.</div>
       </div>
       <div id="bills_due_status" class="status"></div>
 
-      <div class="mini-grid">
-        <div class="mini-card" id="cf_bills_dueSoonCard">
-          <div class="mini-card-title">Due Soon</div>
-          <div class="mini-card-value" id="cf_bills_dueSoonCount">—</div>
+      <div class="bills-view-switch" role="tablist" aria-label="Bills view">
+        <button
+          type="button"
+          id="bills_view_tab_due"
+          class="bills-view-btn active"
+          role="tab"
+          aria-selected="true"
+          aria-controls="bills_view_due"
+          onclick="setBillsView('due')">Due this period</button>
+        <button
+          type="button"
+          id="bills_view_tab_manage"
+          class="bills-view-btn"
+          role="tab"
+          aria-selected="false"
+          aria-controls="bills_view_manage"
+          onclick="setBillsView('manage')">Manage bills</button>
+      </div>
+
+      <section id="bills_view_due" class="bills-section bills-view" role="tabpanel" aria-labelledby="bills_view_tab_due" style="margin:0;">
+        <p class="muted" style="margin:0 0 12px 0;">What needs attention now — use Pay or Skip to clear items.</p>
+
+        <div class="mini-grid">
+          <div class="mini-card" id="cf_bills_dueSoonCard">
+            <div class="mini-card-title">Due Soon</div>
+            <div class="mini-card-value" id="cf_bills_dueSoonCount">—</div>
+          </div>
+          <div class="mini-card" id="cf_bills_overdueCard">
+            <div class="mini-card-title">Overdue</div>
+            <div class="mini-card-value" id="cf_bills_overdueCount">—</div>
+          </div>
         </div>
-        <div class="mini-card" id="cf_bills_overdueCard">
-          <div class="mini-card-title">Overdue</div>
-          <div class="mini-card-value" id="cf_bills_overdueCount">—</div>
+
+        <div style="margin-bottom:20px;">
+          <div class="card-title" style="margin-top:0;">Overdue</div>
+          <div id="bd_overdueList" class="bills-grid"></div>
         </div>
-      </div>
 
-      <div style="margin-bottom:20px;">
-        <div class="card-title" style="margin-top:0;">Overdue</div>
-        <div id="bd_overdueList" class="bills-grid"></div>
-      </div>
+        <div style="margin-bottom:20px;">
+          <div class="card-title" style="margin-top:0;">Next 7 Days</div>
+          <div id="bd_next7List" class="bills-grid"></div>
+        </div>
 
-      <div style="margin-bottom:20px;">
-        <div class="card-title" style="margin-top:0;">Next 7 Days</div>
-        <div id="bd_next7List" class="bills-grid"></div>
-      </div>
+        <div>
+          <div class="card-title" style="margin-top:0;">Recurring Bills (No Due Date)</div>
+          <div id="bd_recurringList" class="bills-grid">
+            <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></div>
+          </div>
+        </div>
+      </section>
 
-      <div>
-        <div class="card-title" style="margin-top:0;">Recurring Bills (No Due Date)</div>
-        <div id="bd_recurringList" class="bills-grid">
+      <section id="bills_view_manage" class="bills-section bills-section--management bills-view" role="tabpanel" aria-labelledby="bills_view_tab_manage" style="margin:0;display:none;">
+        <div class="bills-management-head" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between;margin:0 0 12px 0;">
+          <div>
+            <p class="muted" style="margin:0;">Every recurring bill currently tracked on <strong>INPUT - Bills</strong>.</p>
+          </div>
+          <button type="button" id="bills_add_toggle_btn" class="small-btn primary" onclick="toggleBillsAddForm()" aria-expanded="false" aria-controls="bills_add_wrap">+ Add bill</button>
+        </div>
+
+        <div id="bills_add_wrap" class="bills-add-wrap" style="display:none;margin:0 0 20px 0;padding:14px 16px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;">
+          <div class="card-title" style="margin-top:0;">Add a recurring bill</div>
+          <p class="muted" style="margin:0 0 10px 0;">Saves to <strong>INPUT - Bills</strong>. Required fields are marked with <span aria-label="required" style="color:#b91c1c;">*</span>.</p>
+          <div class="grid-2">
+            <div>
+              <label>Payee <span aria-label="required" style="color:#b91c1c;">*</span></label>
+              <input type="text" id="bills_add_payee" maxlength="200" autocomplete="off">
+              <label>Due Day (1–31) <span aria-label="required" style="color:#b91c1c;">*</span></label>
+              <input type="number" id="bills_add_due_day" min="1" max="31" step="1" inputmode="numeric">
+              <label>Frequency <span aria-label="required" style="color:#b91c1c;">*</span></label>
+              <select id="bills_add_frequency">
+                <option value="Monthly" selected>Monthly</option>
+                <option value="Biweekly">Biweekly</option>
+                <option value="Weekly">Weekly</option>
+                <option value="Bimonthly">Bimonthly</option>
+                <option value="Quarterly">Quarterly</option>
+                <option value="Semi-annually">Semi-annually</option>
+                <option value="Yearly">Yearly</option>
+              </select>
+              <label>Payment Source <span aria-label="required" style="color:#b91c1c;">*</span></label>
+              <select id="bills_add_payment_source">
+                <option value="CASH" selected>CASH (pay from bank)</option>
+                <option value="CREDIT_CARD">CREDIT_CARD (pay on a card)</option>
+              </select>
+              <label>Start Month (1–12)</label>
+              <input type="number" id="bills_add_start_month" min="1" max="12" step="1" inputmode="numeric" placeholder="Defaults to current month">
+              <label>Active</label>
+              <select id="bills_add_active">
+                <option value="Yes" selected>Yes</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+            <div>
+              <label>Default Amount (optional)</label>
+              <input type="text" id="bills_add_default_amount" inputmode="decimal" onfocus="currencyFocus('bills_add_default_amount')" onblur="currencyBlur('bills_add_default_amount')">
+              <label>Category <span aria-hidden="true" style="color:#b91c1c;">*</span></label>
+              <select id="bills_add_category" required aria-required="true" onchange="onBillsAddCategoryChange()">
+                <option value="" selected>— Select a category —</option>
+                <option value="__other__">Other…</option>
+              </select>
+              <input type="text" id="bills_add_category_other" maxlength="200" autocomplete="off" placeholder="Enter a new category" style="display:none;margin-top:6px;">
+              <label>Notes (optional)</label>
+              <input type="text" id="bills_add_notes" maxlength="500" autocomplete="off">
+              <label>Autopay</label>
+              <select id="bills_add_autopay">
+                <option value="No" selected>No</option>
+                <option value="Yes">Yes</option>
+              </select>
+              <label>Varies month to month</label>
+              <select id="bills_add_varies">
+                <option value="No" selected>No</option>
+                <option value="Yes">Yes</option>
+              </select>
+              <div style="display:flex;gap:8px;margin-top:12px;">
+                <button type="button" class="small-btn primary" onclick="submitNewBill()">Save bill</button>
+                <button type="button" class="small-btn" onclick="closeBillsAddForm()">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="bills_manage_list" class="bills-manage-list">
           <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></div>
         </div>
-      </div>
+      </section>
     </div>
   </div>
 

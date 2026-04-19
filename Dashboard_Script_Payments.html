@@ -29,6 +29,19 @@ function applyQuickPaymentPriorMonth_(data) {
   }
 }
 
+/**
+ * Hidden prefill-only state: `window.__pendingQuickAddFlowSource` carries a
+ * suggested Flow Source value (e.g. from Bills → Pay) into the next
+ * Quick Add save. The Quick Add form has no visible Flow Source control, so
+ * this is the bridge that keeps Cash Flow Flow Source in sync with the
+ * originating bill's Payment Source without redesigning the UI.
+ *
+ * Lifecycle:
+ *   - prefillQuickPayment() sets it when the caller supplies a flowSource.
+ *   - savePayment() reads it, sends it to quickAddPayment(), and clears it
+ *     on success so a later manual save doesn't inherit a stale value.
+ *   - loadPaymentSection() clears it whenever the tab is loaded cold.
+ */
 function prefillQuickPayment(prefill) {
   if (!prefill) return;
 
@@ -78,11 +91,26 @@ function prefillQuickPayment(prefill) {
     document.getElementById('pay_amount').value = '';
   }
 
+  // Normalize and stash the optional flowSource so the next savePayment()
+  // call can include it in the quickAddPayment request. Any value other
+  // than CASH/CREDIT_CARD is ignored — backend validation would reject it
+  // anyway and we don't want a bad value lingering across saves.
+  var rawFlowSource = String(prefill.flowSource || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+  if (rawFlowSource === 'CASH' || rawFlowSource === 'CREDIT_CARD') {
+    window.__pendingQuickAddFlowSource = rawFlowSource;
+  } else {
+    window.__pendingQuickAddFlowSource = '';
+  }
+
   loadPaymentPreview();
 }
 
 function loadPaymentSection() {
   document.getElementById('pay_date').value = new Date().toISOString().slice(0, 10);
+  // Any pending prefill-only Flow Source value only makes sense inside the
+  // single save that immediately follows a prefill. Clear it on a cold
+  // tab load so a later manual Quick Add never inherits it.
+  window.__pendingQuickAddFlowSource = '';
   google.script.run
     .withSuccessHandler(function(data) {
       paymentPayees = data.payees || [];
@@ -166,6 +194,11 @@ function savePayment() {
     return;
   }
 
+  // Pull the prefill-only Flow Source hint (set by prefillQuickPayment() for
+  // flows like Bills → Pay). Consumed on this one save so a subsequent
+  // manual Quick Add never silently reuses the previous bill's source.
+  var pendingFlowSource = window.__pendingQuickAddFlowSource || '';
+
   google.script.run
     .withSuccessHandler(function(res) {
       setStatus('pay_status', res.message || 'Saved.', false);
@@ -175,6 +208,7 @@ function savePayment() {
         loadPaymentPreview();
       }
       document.getElementById('pay_amount').value = '';
+      window.__pendingQuickAddFlowSource = '';
       refreshSnapshot();
       loadUpcomingSection();
       loadDashboardActionSections();
@@ -188,6 +222,7 @@ function savePayment() {
       payee: currentPaymentPayee(),
       entryDate: document.getElementById('pay_date').value,
       amount: numericAmount,
-      createIfMissing: document.getElementById('pay_createIfMissing').checked
+      createIfMissing: document.getElementById('pay_createIfMissing').checked,
+      flowSource: pendingFlowSource
     });
 }

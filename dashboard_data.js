@@ -1435,6 +1435,14 @@ function getDebtBillsDueRows_(ss, today, tz) {
     const suggestedAmount = match.minimumPayment && match.minimumPayment > 0 ? match.minimumPayment : 0;
     if (!isDebtCreditCardType_(match.debtType) && !suggestedAmount) continue;
 
+    // Debt bills originate from INPUT - Debts, which has no Payment Source
+    // column. Infer the Cash Flow Flow Source from the debt Type: Credit
+    // Card payments come out of CREDIT_CARD (they reduce a CC balance);
+    // everything else (Loan, HELOC, etc.) defaults to CASH.
+    const debtPaymentSource = isDebtCreditCardType_(match.debtType)
+      ? 'CREDIT_CARD'
+      : 'CASH';
+
     rows.push({
       id: buildDashboardBillSkipKey_(payee, Utilities.formatDate(chosenDueDate, tz, 'yyyy-MM-dd')),
       payee: payee,
@@ -1445,6 +1453,7 @@ function getDebtBillsDueRows_(ss, today, tz) {
       debtType: match.debtType || '',
       matchedToDebt: true,
       minimumPayment: round2_(match.minimumPayment || 0),
+      paymentSource: debtPaymentSource,
       year: chosenYear,
       monthHeader: chosenMonthHeader
     });
@@ -1460,17 +1469,28 @@ function getInputBillsDueRows_(ss, today, tz) {
   if (display.length < 2) return [];
 
   const headers = display[0];
+  // Case-insensitive lookup: some workbooks ship with ALL-CAPS headers
+  // ("PAYMENT SOURCE" vs "Payment Source"), which a strict indexOf would miss
+  // and quietly drop the Payment Source → Flow Source propagation.
+  const findHeaderIdx = (label) => {
+    const want = String(label || '').trim().toLowerCase();
+    for (let i = 0; i < headers.length; i++) {
+      if (String(headers[i] || '').trim().toLowerCase() === want) return i;
+    }
+    return -1;
+  };
   const colMap = {
-    payee: headers.indexOf('Payee'),
-    category: headers.indexOf('Category'),
-    dueDay: headers.indexOf('Due Day'),
-    defaultAmount: headers.indexOf('Default Amount'),
-    varies: headers.indexOf('Varies'),
-    autopay: headers.indexOf('Autopay'),
-    active: headers.indexOf('Active'),
-    frequency: headers.indexOf('Frequency'),
-    startMonth: headers.indexOf('Start Month'),
-    notes: headers.indexOf('Notes')
+    payee: findHeaderIdx('Payee'),
+    category: findHeaderIdx('Category'),
+    dueDay: findHeaderIdx('Due Day'),
+    defaultAmount: findHeaderIdx('Default Amount'),
+    varies: findHeaderIdx('Varies'),
+    autopay: findHeaderIdx('Autopay'),
+    active: findHeaderIdx('Active'),
+    frequency: findHeaderIdx('Frequency'),
+    startMonth: findHeaderIdx('Start Month'),
+    notes: findHeaderIdx('Notes'),
+    paymentSource: findHeaderIdx('Payment Source')
   };
 
   if (colMap.payee === -1 || colMap.dueDay === -1 || colMap.defaultAmount === -1 || colMap.active === -1) {
@@ -1498,6 +1518,15 @@ function getInputBillsDueRows_(ss, today, tz) {
     const frequency = normalizeFrequency_(display[r][colMap.frequency]);
     const startMonth = colMap.startMonth === -1 ? 1 : (Number(values[r][colMap.startMonth]) || 1);
     const notes = colMap.notes === -1 ? '' : String(display[r][colMap.notes] || '').trim();
+    // Normalize to the same canonical form used by Flow Source writes
+    // (CASH | CREDIT_CARD). Empty is allowed — downstream callers treat a
+    // blank paymentSource as "don't seed Flow Source".
+    const paymentSourceRaw = colMap.paymentSource === -1
+      ? ''
+      : String(display[r][colMap.paymentSource] || '').trim();
+    const paymentSource = paymentSourceRaw
+      ? paymentSourceRaw.toUpperCase().replace(/[\s-]+/g, '_')
+      : '';
 
     const candidates = buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth);
 
@@ -1508,42 +1537,52 @@ function getInputBillsDueRows_(ss, today, tz) {
       const monthCol = rowMap.headers.indexOf(cand.monthHeader);
       if (monthCol === -1) continue;
 
+      // Bills without a matching Cash Flow row are treated as "unhandled" so
+      // freshly-added bills (or bills whose payee does not yet live in the
+      // Cash Flow grid) still appear in Overdue / Next 7 Days. The autopay
+      // write-back below stays gated on the Cash Flow row existing, since we
+      // cannot write into a nonexistent row.
       const rowInfo = rowMap.rowsByPayee[payee] || null;
-      if (!rowInfo) continue;
-      if (String(rowInfo.type || '').trim() !== 'Expense') continue;
+      const hasCashFlowRow =
+        !!rowInfo && String(rowInfo.type || '').trim() === 'Expense';
 
-      const cellRange = sheet.getRange(rowInfo.row, monthCol + 1);
-      const cellValue = cellRange.getValue();
-      const cellDisplay = cellRange.getDisplayValue();
+      let cellValue = '';
+      let cellDisplay = '';
 
-      const dueHasPassed = cand.dueDate.getTime() < todayOnly.getTime();
-      const canAutopay = autopay === 'yes' && varies !== 'yes';
+      if (hasCashFlowRow) {
+        const cellRange = sheet.getRange(rowInfo.row, monthCol + 1);
+        cellValue = cellRange.getValue();
+        cellDisplay = cellRange.getDisplayValue();
 
-      if (canAutopay && defaultAmount > 0 && dueHasPassed && !isCashFlowBillHandled_(cellValue, cellDisplay)) {
-        writeDashboardBillValuePreserveFormat_(sheet, rowInfo.row, monthCol + 1, -defaultAmount);
-        touchDashboardSourceUpdated_('cash_flow');
+        const dueHasPassed = cand.dueDate.getTime() < todayOnly.getTime();
+        const canAutopay = autopay === 'yes' && varies !== 'yes';
 
-        var autopayDedupe = buildBillAutopayDedupeKey_(payee, cand.monthHeader, cand.dueDate, defaultAmount);
-        appendActivityLog_(ss, {
-          eventType: 'bill_autopay',
-          entryDate: Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd'),
-          amount: defaultAmount,
-          direction: 'expense',
-          payee: payee,
-          category: category,
-          accountSource: '',
-          cashFlowSheet: sheet.getName(),
-          cashFlowMonth: cand.monthHeader,
-          dedupeKey: autopayDedupe,
-          details: JSON.stringify({ source: 'INPUT - Bills', autopay: true, varies: varies })
-        });
-      }
+        if (canAutopay && defaultAmount > 0 && dueHasPassed && !isCashFlowBillHandled_(cellValue, cellDisplay)) {
+          writeDashboardBillValuePreserveFormat_(sheet, rowInfo.row, monthCol + 1, -defaultAmount);
+          touchDashboardSourceUpdated_('cash_flow');
 
-      const refreshedValue = cellRange.getValue();
-      const refreshedDisplay = cellRange.getDisplayValue();
+          var autopayDedupe = buildBillAutopayDedupeKey_(payee, cand.monthHeader, cand.dueDate, defaultAmount);
+          appendActivityLog_(ss, {
+            eventType: 'bill_autopay',
+            entryDate: Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd'),
+            amount: defaultAmount,
+            direction: 'expense',
+            payee: payee,
+            category: category,
+            accountSource: '',
+            cashFlowSheet: sheet.getName(),
+            cashFlowMonth: cand.monthHeader,
+            dedupeKey: autopayDedupe,
+            details: JSON.stringify({ source: 'INPUT - Bills', autopay: true, varies: varies })
+          });
 
-      if (isCashFlowBillHandled_(refreshedValue, refreshedDisplay)) {
-        continue;
+          cellValue = cellRange.getValue();
+          cellDisplay = cellRange.getDisplayValue();
+        }
+
+        if (isCashFlowBillHandled_(cellValue, cellDisplay)) {
+          continue;
+        }
       }
 
       rows.push({
@@ -1557,9 +1596,17 @@ function getInputBillsDueRows_(ss, today, tz) {
         category: category,
         varies: varies === 'yes' ? 'Yes' : 'No',
         autopay: autopay === 'yes' ? 'Yes' : 'No',
+        // Frontend uses paymentSource to seed Flow Source when Quick Add
+        // creates a missing Cash Flow row via Bills → Pay.
+        paymentSource: paymentSource,
+        startMonth: startMonth,
         year: cand.year,
         monthHeader: cand.monthHeader,
-        notes: notes
+        notes: notes,
+        // 1-based INPUT - Bills sheet row — lets Stop tracking target this
+        // exact row without a fragile payee-based re-lookup on the server.
+        inputBillsRow: r + 1,
+        hasCashFlowRow: hasCashFlowRow
       });
 
       break;
@@ -1619,6 +1666,8 @@ function buildInputBillPlannerPaymentWindows_(today, tz, payNowWindowDays, paySo
 function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth) {
   const candidates = [];
   const monthOffsets = [0, 1];
+  const effectiveStart = Math.min(12, Math.max(1, Number(startMonth) || 1));
+  const todayYear = todayOnly.getFullYear();
 
   for (let i = 0; i < monthOffsets.length; i++) {
     const offset = monthOffsets[i];
@@ -1626,7 +1675,15 @@ function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth) 
     const year = d.getFullYear();
     const monthNumber = d.getMonth() + 1;
 
-    if (!billAppliesInMonth_(frequency, startMonth, monthNumber)) continue;
+    if (!billAppliesInMonth_(frequency, effectiveStart, monthNumber)) continue;
+
+    // Hard skip: never surface a candidate month earlier than the bill's
+    // Start Month inside the same calendar year as today. This keeps
+    // monthly/biweekly/weekly bills from reporting as "Due" — or being
+    // autopaid — in Jan/Feb/Mar for a bill whose Start Month is April.
+    // Candidate months that roll into a later calendar year are always
+    // eligible (once a bill has started, it keeps running).
+    if (year === todayYear && monthNumber < effectiveStart) continue;
 
     const dueDate = new Date(year, d.getMonth(), dueDay);
     if (isNaN(dueDate.getTime())) continue;
