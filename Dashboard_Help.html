@@ -64,9 +64,14 @@
 
         <h4>House Values</h4>
         <ul class="help-list">
-          <li>Edits go to <strong>INPUT - House Values</strong> for the selected month.</li>
-          <li>Running the planner refreshes <strong>SYS - House Assets → Current Value</strong> from the latest values in the current-year block.</li>
-          <li>Other SYS columns (such as <strong>Type</strong> and <strong>Loan Amount Left</strong>) are <em>not</em> overwritten by that sync.</li>
+          <li><strong>Update</strong> saves the valuation for the selected house on the selected month. Edits go to <strong>INPUT - House Values</strong>.</li>
+          <li><strong>Add new</strong> appends one row to <strong>INPUT - House Values</strong> (current calendar-year block), one row to <strong>SYS - House Assets</strong>, and creates a new <strong>HOUSES - {House}</strong> sheet with the canonical expense headers (<em>Item, Type, Date, Location, Cost, Service Fees Paid, Insurance covered, Payments Links, Notes</em>). The workbook must already have that Year block on <strong>INPUT - House Values</strong>.</li>
+          <li><strong>Required Add-new fields:</strong> House name, Property type, Current value, Loan amount left. <strong>Valuation date</strong> is optional and must fall in the current year when provided — the Current value is seeded into that month. Property type can be chosen from existing houses or typed as a new value.</li>
+          <li><strong>Loan Amount Left</strong> is written into column 2 of the new <strong>INPUT - House Values</strong> row; the matching <strong>SYS - House Assets</strong> row is created with the same Loan Amount Left and Current Value. Row formatting and column widths are copied from an existing HOUSES sheet so the new sheet visually matches.</li>
+          <li><strong>Duplicate names</strong> are rejected across <strong>INPUT - House Values</strong>, <strong>SYS - House Assets</strong>, and existing <strong>HOUSES - *</strong> tab names. Inline errors show next to the House name field and focus the input.</li>
+          <li><strong>Add new</strong> logs <strong>house_add</strong> to <strong>LOG - Activity</strong>. It does <em>not</em> re-run the full planner — use <strong>Run Planner + Refresh Snapshot</strong> when you want projections and Overview updated.</li>
+          <li>After a successful add, the House Values dropdown re-selects the new house, and the <strong>Properties → House Expenses</strong> selector refreshes so the house is immediately available there.</li>
+          <li>Running the planner refreshes <strong>SYS - House Assets → Current Value</strong> from the latest values in the current-year block. Other SYS columns (<strong>Type</strong>, <strong>Loan Amount Left</strong>) are <em>not</em> overwritten by that sync.</li>
         </ul>
 
         <h4>Bank Accounts</h4>
@@ -206,13 +211,14 @@
           <li><strong>donation</strong> — Save on <strong>Cash Flow → Donations</strong>. Activity <strong>Type</strong> shows <strong>Donation</strong>.</li>
           <li><strong>house_expense</strong> — Save on <strong>Add House Expense</strong>, covered above.</li>
           <li><strong>bank_account_add</strong> — Create an account from <strong>Assets → Bank Accounts → Add new</strong> (same event from the sidebar HTML).</li>
+          <li><strong>house_add</strong> — Create a house from <strong>Assets → House Values → Add new</strong>. Adds rows to <strong>INPUT - House Values</strong> and <strong>SYS - House Assets</strong> and creates the matching <strong>HOUSES - {House}</strong> sheet. Activity <strong>Type</strong> is <strong>House Expenses</strong>; <strong>Action</strong> sub-label is <strong>House added</strong>. <strong>Amount</strong> shows the house's initial Current Value.</li>
         </ul>
 
         <h4>Remove button</h4>
         <ul class="help-list">
           <li><strong>Enabled only for Donation</strong> rows until safe undo exists for other event types.</li>
           <li>For donations: after confirmation, the log line is removed; if <strong>INPUT - Donation</strong> still has a matching row (charity, date, amount, tax year, payment type, comments), that sheet row is removed too.</li>
-          <li>For other events (<strong>quick_pay</strong>, bill skip, house expense, …) the button is greyed out — delete those lines directly on <strong>LOG - Activity</strong> if needed.</li>
+          <li>For other events (<strong>quick_pay</strong>, bill skip, house expense, bank account add, <strong>house_add</strong>, …) the button is greyed out — delete those lines directly on <strong>LOG - Activity</strong> if needed.</li>
         </ul>
 
         <h4>Filters</h4>
@@ -320,7 +326,7 @@
       <section id="help-properties" class="help-section">
         <h3>Properties</h3>
         <ul class="help-list">
-          <li><strong>House Expenses</strong> — Adds rows to the per-property <strong>HOUSES - …</strong> tabs.</li>
+          <li><strong>House Expenses</strong> — Adds rows to the per-property <strong>HOUSES - …</strong> tabs. The house selector refreshes every time you open the tab, so houses created via <strong>Assets → House Values → Add new</strong> appear immediately (their <strong>HOUSES - {House}</strong> sheet is created automatically at add time).</li>
           <li><strong>Property performance</strong> — See the next section for rent, expenses, and how the <strong>Type</strong> column on <strong>SYS - House Assets</strong> ties them together.</li>
         </ul>
       </section>
@@ -353,7 +359,7 @@
 
         <h4>HOUSES sheet</h4>
         <ul class="help-list">
-          <li>There must be a <strong>HOUSES - …</strong> tab aligned with the SYS <strong>House</strong> name.</li>
+          <li>There must be a <strong>HOUSES - …</strong> tab aligned with the SYS <strong>House</strong> name. <strong>Assets → House Values → Add new</strong> creates this sheet automatically with the canonical header layout and column widths copied from an existing HOUSES tab.</li>
           <li>If no matching HOUSES sheet exists — or the name differs (e.g. <code>SD Condo</code> vs <code>San Diego House</code>) — expense totals stay <strong>$0</strong> until you add or rename the tab.</li>
         </ul>
 
@@ -565,13 +571,13 @@
 
         <h4>HOUSES sheets</h4>
         <ul class="help-list">
-          <li><strong>HOUSES - {House}</strong> — Expense detail per property. Name should match the SYS house for rollups.</li>
+          <li><strong>HOUSES - {House}</strong> — Expense detail per property. Name should match the SYS house for rollups. Created automatically by <strong>Assets → House Values → Add new</strong> with canonical headers (<em>Item, Type, Date, Location, Cost, Service Fees Paid, Insurance covered, Payments Links, Notes</em>) and column widths copied from an existing HOUSES sheet.</li>
         </ul>
 
         <h4>Output &amp; audit</h4>
         <ul class="help-list">
           <li><strong>OUT - History</strong> — Planner run snapshots (cash, debt, net worth).</li>
-          <li><strong>LOG - Activity</strong> — Audit log for <strong>quick_pay</strong>, bill skip / autopay / add / deactivate, house expense, donation, upcoming actions, and bank account add. Filter, sort, paginate, and remove (Donation-only) mistaken rows from the Activity page.</li>
+          <li><strong>LOG - Activity</strong> — Audit log for <strong>quick_pay</strong>, bill skip / autopay / add / deactivate, house expense, donation, upcoming actions, bank account add, and house add. Filter, sort, paginate, and remove (Donation-only) mistaken rows from the Activity page.</li>
         </ul>
       </section>
     </div>

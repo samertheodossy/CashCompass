@@ -85,6 +85,12 @@ function showTab(name) {
     if (name === 'propertyPerformance' && typeof loadPropertyPerformanceSection === 'function') {
       loadPropertyPerformanceSection();
     }
+    // Re-pull the House Expenses selector on every navigation to this tab so
+    // newly-added houses (created from Assets → House Values) appear without
+    // requiring a full page reload.
+    if (name === 'houseExpenses' && typeof loadHouseExpensesSection === 'function') {
+      loadHouseExpensesSection();
+    }
   } else if (
     name === 'debts' ||
     name === 'retirement' ||

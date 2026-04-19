@@ -40,6 +40,7 @@ Small HTML/docs/a11y tasks; check off when shipped. *(Unnumbered — pick in any
 - **Activity page UI** — Logged **date range** (from/to on one row in the toolbar), **Payee** contains, **Type** dropdown (options computed from all rows in **LOG - Activity**, same rules as the Type column), **Amount** min/max, sortable table, **20 rows per page** with Previous/Next (**500** matching rows max per Apply; summary notes if truncated). Backend: **`getActivityDashboardData`**.  
 - **Debt Planner email** — Short action block (overdue, pay‑now / pay‑soon line items), debts omitted when the current Cash Flow month is already “handled,” definitions in Help **Debt Planner email** (not repeated in the email body).  
 - **Assets → Bank Accounts — Add new** — **`addBankAccountFromDashboard`** (**`bank_accounts.js`**): rows on **INPUT - Bank Accounts** (current year block) + **SYS - Accounts**; **`bank_account_add`** on **LOG - Activity**; UI **Update \| Add new**; stable **Bank Accounts** heading; Help **Assets** subsection updated.
+- **Assets → House Values — Add new** — **`addHouseFromDashboard`** (**`house_values.js`**): rows on **INPUT - House Values** (Loan Amount Left in col 2) + **SYS - House Assets** (neighbor row formatting copied), plus auto-creation of **HOUSES - {House}** with canonical headers + column widths copied from an existing HOUSES sheet; transactional rollback on any write failure. **`house_add`** on **LOG - Activity** (Type: **House Expenses**, Action: **House added**). UI **Update \| Add new** on web + sidebar; inline **`.field-error`** under the House name field for duplicate/invalid names (focuses + selects). **Properties → House Expenses** selector refreshes on every tab nav (`Dashboard_Script_Render.html`), so new houses are usable immediately. Help **Assets → House Values**, **Activity log**, **Properties**, **HOUSES sheet**, and **Sheet names** sections updated.
 
 **Still open**  
 - **Phase 5 (optional)** — Correlate events to **OUT - History** / planner run.  
@@ -58,6 +59,8 @@ Small HTML/docs/a11y tasks; check off when shipped. *(Unnumbered — pick in any
 | Manage bills → Stop tracking | **Done** — `bill_deactivate` after **`deactivateBillFromDashboard`** (`bills.js`); sets **Active = No** on INPUT - Bills, shows **—** in Activity Amount. |
 | Upcoming expenses | **Done** — Phase 3: **`upcoming_add`** / **`upcoming_status`** / **`upcoming_cashflow`**; CF push uses **`suppressActivityLog`** (no duplicate **`quick_pay`**). |
 | House expenses | **Done** — **`addHouseExpense`** → `house_expense`; CF via **Quick add** + **`suppressActivityLog`**. |
+| Bank Accounts → Add new | **Done** — `bank_account_add` after **`addBankAccountFromDashboard`** (`bank_accounts.js`); INPUT + SYS rows; does not re-run full planner. |
+| House Values → Add new | **Done** — `house_add` after **`addHouseFromDashboard`** (`house_values.js`); INPUT + SYS rows + auto-created **HOUSES - {House}** sheet (canonical headers + column widths copied from an existing HOUSES tab); transactional rollback on partial failure. |
 
 **Phased rollout**  
 1. **Phase 1 — Quick add** (`quick_pay`) — **Done**  
@@ -383,6 +386,8 @@ Completed items kept for reference (original list numbers preserved).
 **Activity ledger / UI (unnumbered)** — `house_expense` logging; no double ledger row when House Expense also writes Cash Flow; Activity **Type** filter + **getActivityDashboardData**; 20-row paging; inline date fields; Debt Planner email + Help **Debt Planner email**; Pay now/soon respect Cash Flow “handled” for current month; **Phase 3 Upcoming** activity events + no duplicate **`quick_pay`** when pushing from Upcoming.
 
 **Bank Accounts (unnumbered)** — **Add new** path shipped (**`bank_accounts.js`**, dashboard + sidebar HTML/JS); **`bank_account_add`** activity; Help + panel title cleanup (see **Done (recent)** above for pointers).
+
+**House Values (unnumbered)** — **Add new house** path shipped (**`house_values.js`**, dashboard + sidebar HTML/JS). Writes **INPUT - House Values** + **SYS - House Assets** (neighbor row formatting copied) and auto-creates **HOUSES - {House}** with canonical expense headers + column widths cloned from an existing HOUSES tab. Transactional rollback on partial failure. **`house_add`** activity event (Type **House Expenses**, sub-label **House added**). Duplicate-name validation is inline with a **`.field-error`** block under the House name input and focuses + selects the field. **Properties → House Expenses** selector refreshes on every navigation (`Dashboard_Script_Render.html`) so new houses are immediately usable. See **SESSION_NOTES.md § Assets → House Values: Add new house + integration polish** and Help **Assets → House Values** / **Activity log** / **HOUSES sheets** / **Sheet names**.
 
 **5.** Fix SKIP issue in the Due Payments — adds 0 but does not refresh the screen (BUG). *(Marked done in prior testing; skip flow + UI refresh addressed.)*
 

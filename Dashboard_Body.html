@@ -238,30 +238,62 @@
 
     <div id="houses" class="panel active">
       <div class="panel-head">
-        <h2>Update House Value</h2>
+        <h2 id="house_panel_title">House Values</h2>
         <div class="updated">Last updated: <span id="house_updated">—</span></div>
       </div>
-      <div class="grid-2">
-        <div>
-          <label>House</label>
-          <select id="house_house" onchange="loadHouseData()"></select>
-          <label>Date</label>
-          <input type="date" id="house_date" onchange="loadHouseData()">
-          <label>Value</label>
-          <input type="text" id="house_value" inputmode="decimal" onfocus="currencyFocus('house_value')" onblur="currencyBlur('house_value')">
-          <button onclick="saveHouse()">Save House Value</button>
-          <div id="house_status" class="status"></div>
-        </div>
-        <div class="info">
-          <div><strong>Selected month:</strong> <span id="house_selectedMonth" class="muted">—</span></div>
-          <div><strong>Stored value for selected month:</strong> <span id="house_selectedMonthValue" class="muted">—</span></div>
-          <div><strong>Current House Assets value:</strong> <span id="house_currentAssetValue" class="muted">—</span></div>
-          <div><strong>Property type:</strong> <span id="house_propertyType" class="muted">—</span></div>
-          <div><strong>Loan amount left:</strong> <span id="house_loanAmountLeft" class="muted">—</span></div>
-          <div class="house-value-delta-sep" aria-hidden="true"></div>
-          <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="house_deltaPriorMonth" class="muted">—</span></div>
+      <div class="segmented" role="tablist" aria-label="House values mode">
+        <button type="button" id="house_mode_update_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setHousePanelMode('update')">Update</button>
+        <button type="button" id="house_mode_add_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setHousePanelMode('add')">Add new</button>
+      </div>
+
+      <div id="house_mode_update_wrap" class="bank-mode-wrap active">
+        <div class="grid-2">
+          <div>
+            <label>House</label>
+            <select id="house_house" onchange="loadHouseData()"></select>
+            <label>Date</label>
+            <input type="date" id="house_date" onchange="loadHouseData()">
+            <label>Value</label>
+            <input type="text" id="house_value" inputmode="decimal" onfocus="currencyFocus('house_value')" onblur="currencyBlur('house_value')">
+            <button onclick="saveHouse()">Save House Value</button>
+          </div>
+          <div class="info">
+            <div><strong>Selected month:</strong> <span id="house_selectedMonth" class="muted">—</span></div>
+            <div><strong>Stored value for selected month:</strong> <span id="house_selectedMonthValue" class="muted">—</span></div>
+            <div><strong>Current House Assets value:</strong> <span id="house_currentAssetValue" class="muted">—</span></div>
+            <div><strong>Property type:</strong> <span id="house_propertyType" class="muted">—</span></div>
+            <div><strong>Loan amount left:</strong> <span id="house_loanAmountLeft" class="muted">—</span></div>
+            <div class="house-value-delta-sep" aria-hidden="true"></div>
+            <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="house_deltaPriorMonth" class="muted">—</span></div>
+          </div>
         </div>
       </div>
+
+      <div id="house_mode_add_wrap" class="bank-mode-wrap">
+        <div class="grid-2">
+          <div>
+            <label>House name</label>
+            <input type="text" id="house_add_name" maxlength="120" autocomplete="off" oninput="if (typeof clearHouseAddNameError_==='function') clearHouseAddNameError_();">
+            <div id="house_add_name_error" class="field-error" role="alert" aria-live="polite"></div>
+            <label>Property type</label>
+            <input type="text" id="house_add_type" maxlength="80" list="house_add_type_list" autocomplete="off">
+            <datalist id="house_add_type_list"></datalist>
+            <label>Current value</label>
+            <input type="text" id="house_add_current_value" inputmode="decimal" onfocus="currencyFocus('house_add_current_value')" onblur="currencyBlur('house_add_current_value')">
+            <label>Loan amount left</label>
+            <input type="text" id="house_add_loan" inputmode="decimal" onfocus="currencyFocus('house_add_loan')" onblur="currencyBlur('house_add_loan')">
+            <label>Valuation date (optional)</label>
+            <input type="date" id="house_add_valuation_date">
+            <button onclick="createHouse()">Create house</button>
+          </div>
+          <div class="info muted">
+            <p style="margin-top:0;">Adds a row to <strong>INPUT - House Values</strong> (current year block), a row to <strong>SYS - House Assets</strong>, and creates a <strong>HOUSES - {House}</strong> sheet with the canonical expense-tracking headers.</p>
+            <p>Valuation date is optional. When provided it must fall in the current year and the Current value is seeded into that month. Property type can be chosen from existing houses or typed as a new value.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="house_status" class="status"></div>
     </div>
 
     <div id="bank" class="panel">

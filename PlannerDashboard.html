@@ -211,6 +211,25 @@
       white-space: pre-wrap;
     }
 
+    .field-error {
+      display: none;
+      margin-top: 6px;
+      margin-bottom: 4px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: #fde8e8;
+      border: 1px solid #f5c2c7;
+      color: #991b1b;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+    .field-error.active { display: block; }
+    input.field-error-input {
+      border-color: #dc2626 !important;
+      box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+    }
+
     .warning-danger {
       background: #fde8e8;
       border: 1px solid #f5c2c7;
@@ -239,28 +258,57 @@
 </div>
 
 <div id="houses" class="panel active">
-  <h3>Update House Value</h3>
+  <h3 id="house_panel_title">House Values</h3>
 
-  <label>House</label>
-  <select id="house_house" onchange="loadHouseData()"></select>
-
-  <label>Date</label>
-  <input type="date" id="house_date" onchange="loadHouseData()">
-
-  <div class="info">
-    <div><strong>Selected month:</strong> <span id="house_selectedMonth" class="muted">—</span></div>
-    <div><strong>Stored value for selected month:</strong> <span id="house_selectedMonthValue" class="muted">—</span></div>
-    <div><strong>Current House Assets value:</strong> <span id="house_currentAssetValue" class="muted">—</span></div>
-    <div><strong>Property type:</strong> <span id="house_propertyType" class="muted">—</span></div>
-    <div><strong>Loan amount left:</strong> <span id="house_loanAmountLeft" class="muted">—</span></div>
-    <div class="house-value-delta-sep" aria-hidden="true"></div>
-    <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="house_deltaPriorMonth" class="muted">—</span></div>
+  <div class="segmented" role="tablist" aria-label="House values mode">
+    <button type="button" id="house_mode_update_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setHousePanelMode('update')">Update</button>
+    <button type="button" id="house_mode_add_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setHousePanelMode('add')">Add new</button>
   </div>
 
-  <label>Value</label>
-  <input type="text" id="house_value" inputmode="decimal" onfocus="currencyFocus('house_value')" onblur="currencyBlur('house_value')">
+  <div id="house_mode_update_wrap" class="bank-mode-wrap active">
+    <label>House</label>
+    <select id="house_house" onchange="loadHouseData()"></select>
 
-  <button onclick="saveHouse()">Save House Value</button>
+    <label>Date</label>
+    <input type="date" id="house_date" onchange="loadHouseData()">
+
+    <div class="info">
+      <div><strong>Selected month:</strong> <span id="house_selectedMonth" class="muted">—</span></div>
+      <div><strong>Stored value for selected month:</strong> <span id="house_selectedMonthValue" class="muted">—</span></div>
+      <div><strong>Current House Assets value:</strong> <span id="house_currentAssetValue" class="muted">—</span></div>
+      <div><strong>Property type:</strong> <span id="house_propertyType" class="muted">—</span></div>
+      <div><strong>Loan amount left:</strong> <span id="house_loanAmountLeft" class="muted">—</span></div>
+      <div class="house-value-delta-sep" aria-hidden="true"></div>
+      <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="house_deltaPriorMonth" class="muted">—</span></div>
+    </div>
+
+    <label>Value</label>
+    <input type="text" id="house_value" inputmode="decimal" onfocus="currencyFocus('house_value')" onblur="currencyBlur('house_value')">
+
+    <button onclick="saveHouse()">Save House Value</button>
+  </div>
+
+  <div id="house_mode_add_wrap" class="bank-mode-wrap">
+    <label>House name</label>
+    <input type="text" id="house_add_name" maxlength="120" autocomplete="off" oninput="if (typeof clearHouseAddNameError_==='function') clearHouseAddNameError_();">
+    <div id="house_add_name_error" class="field-error" role="alert" aria-live="polite"></div>
+
+    <label>Property type</label>
+    <input type="text" id="house_add_type" maxlength="80" list="house_add_type_list" autocomplete="off">
+    <datalist id="house_add_type_list"></datalist>
+
+    <label>Current value</label>
+    <input type="text" id="house_add_current_value" inputmode="decimal" onfocus="currencyFocus('house_add_current_value')" onblur="currencyBlur('house_add_current_value')">
+
+    <label>Loan amount left</label>
+    <input type="text" id="house_add_loan" inputmode="decimal" onfocus="currencyFocus('house_add_loan')" onblur="currencyBlur('house_add_loan')">
+
+    <label>Valuation date (optional)</label>
+    <input type="date" id="house_add_valuation_date">
+
+    <button onclick="createHouse()">Create house</button>
+  </div>
+
   <div id="house_status" class="status"></div>
 </div>
 
@@ -514,19 +562,122 @@ function setWarning(id, message, level) {
 
 /* Houses */
 
+function fillHouseDropdownFromData_(data) {
+  const sel = document.getElementById('house_house');
+  if (!sel) return;
+  sel.innerHTML = '<option value=""></option>';
+  (data.houses || []).forEach(function(h) {
+    const opt = document.createElement('option');
+    opt.value = h;
+    opt.textContent = h;
+    sel.appendChild(opt);
+  });
+  populateHouseAddDatalists_(data);
+}
+
+function populateHouseAddDatalists_(data) {
+  const dl = document.getElementById('house_add_type_list');
+  if (!dl) return;
+  dl.innerHTML = '';
+  (data.propertyTypeOptions || []).forEach(function(t) {
+    const o = document.createElement('option');
+    o.value = t;
+    dl.appendChild(o);
+  });
+}
+
+function resetHouseAddForm_() {
+  const n = document.getElementById('house_add_name');
+  const t = document.getElementById('house_add_type');
+  const cv = document.getElementById('house_add_current_value');
+  const loan = document.getElementById('house_add_loan');
+  const vd = document.getElementById('house_add_valuation_date');
+  if (n) n.value = '';
+  if (t) t.value = '';
+  if (cv) cv.value = '';
+  if (loan) loan.value = '';
+  if (vd) vd.value = '';
+  clearHouseAddNameError_();
+}
+
+function clearHouseAddNameError_() {
+  const el = document.getElementById('house_add_name_error');
+  if (el) {
+    el.textContent = '';
+    el.classList.remove('active');
+  }
+  const n = document.getElementById('house_add_name');
+  if (n) n.classList.remove('field-error-input');
+}
+
+function showHouseAddNameError_(message) {
+  const el = document.getElementById('house_add_name_error');
+  if (el) {
+    el.textContent = message || 'Please fix the House name.';
+    el.classList.add('active');
+  }
+  const n = document.getElementById('house_add_name');
+  if (n) {
+    n.classList.add('field-error-input');
+    try { n.focus(); if (n.value) n.select(); } catch (e) {}
+  }
+}
+
+function isHouseNameRelatedError_(msg) {
+  const m = String(msg || '').toLowerCase();
+  return (
+    m.indexOf('house name') !== -1 ||
+    m.indexOf('already exists') !== -1 ||
+    m.indexOf('already used') !== -1 ||
+    m.indexOf('reserved') !== -1 ||
+    m.indexOf('illegal character') !== -1 ||
+    m.indexOf('sheet named') !== -1
+  );
+}
+
+function setHousePanelMode(mode) {
+  const isUpdate = mode === 'update';
+  const wrapU = document.getElementById('house_mode_update_wrap');
+  const wrapA = document.getElementById('house_mode_add_wrap');
+  const btnU = document.getElementById('house_mode_update_btn');
+  const btnA = document.getElementById('house_mode_add_btn');
+  if (wrapU) wrapU.classList.toggle('active', isUpdate);
+  if (wrapA) wrapA.classList.toggle('active', !isUpdate);
+  if (btnU) {
+    btnU.classList.toggle('active', isUpdate);
+    btnU.setAttribute('aria-selected', isUpdate ? 'true' : 'false');
+  }
+  if (btnA) {
+    btnA.classList.toggle('active', !isUpdate);
+    btnA.setAttribute('aria-selected', !isUpdate ? 'true' : 'false');
+  }
+  if (isUpdate) setStatus('house_status', '', false);
+}
+
 function loadHouseSection() {
   document.getElementById('house_date').value = new Date().toISOString().slice(0, 10);
 
   google.script.run
     .withSuccessHandler(function(data) {
+      fillHouseDropdownFromData_(data);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getHouseUiData();
+}
+
+function loadHouseSectionThenSelect_(houseName) {
+  document.getElementById('house_date').value =
+    document.getElementById('house_date').value || new Date().toISOString().slice(0, 10);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      fillHouseDropdownFromData_(data);
       const sel = document.getElementById('house_house');
-      sel.innerHTML = '<option value=""></option>';
-      (data.houses || []).forEach(function(h) {
-        const opt = document.createElement('option');
-        opt.value = h;
-        opt.textContent = h;
-        sel.appendChild(opt);
-      });
+      if (sel && houseName) {
+        sel.value = houseName;
+        loadHouseData();
+      }
     })
     .withFailureHandler(function(err) {
       setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
@@ -607,6 +758,78 @@ function saveHouse() {
       setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
     })
     .updateHouseValueByDate(payload);
+}
+
+function createHouse() {
+  clearHouseAddNameError_();
+
+  const name = document.getElementById('house_add_name').value.trim();
+  const typeStr = document.getElementById('house_add_type').value.trim();
+  const curRaw = document.getElementById('house_add_current_value').value;
+  const loanRaw = document.getElementById('house_add_loan').value;
+  const valDate = document.getElementById('house_add_valuation_date').value.trim();
+
+  if (!name) {
+    showHouseAddNameError_('House name is required.');
+    setStatus('house_status', 'Error: House name is required.', true);
+    return;
+  }
+  if (!typeStr) {
+    setStatus('house_status', 'Error: Property type is required.', true);
+    return;
+  }
+  if (!String(curRaw || '').trim()) {
+    setStatus('house_status', 'Error: Current value is required.', true);
+    return;
+  }
+  if (!String(loanRaw || '').trim()) {
+    setStatus('house_status', 'Error: Loan amount left is required.', true);
+    return;
+  }
+
+  const currentValue = toNumber(curRaw);
+  if (isNaN(currentValue)) {
+    setStatus('house_status', 'Error: Current value must be a valid number.', true);
+    return;
+  }
+  const loanAmountLeft = toNumber(loanRaw);
+  if (isNaN(loanAmountLeft)) {
+    setStatus('house_status', 'Error: Loan amount left must be a valid number.', true);
+    return;
+  }
+
+  const payload = {
+    houseName: name,
+    propertyType: typeStr,
+    currentValue: currentValue,
+    loanAmountLeft: loanAmountLeft
+  };
+  if (valDate) payload.valuationDate = valDate;
+
+  setStatus('house_status', 'Saving...', false);
+  google.script.run
+    .withSuccessHandler(function(res) {
+      const useDate = valDate || new Date().toISOString().slice(0, 10);
+      setStatus('house_status', res.message || 'Created.', false);
+      const createdName = res.houseName || name;
+      resetHouseAddForm_();
+      setHousePanelMode('update');
+      document.getElementById('house_date').value = useDate;
+      loadHouseSectionThenSelect_(createdName);
+      // Refresh the House Expenses selector so the new house is available
+      // there immediately (sidebar variant).
+      if (typeof loadHouseExpensesSection === 'function') {
+        try { loadHouseExpensesSection(); } catch (e) {}
+      }
+    })
+    .withFailureHandler(function(err) {
+      const msg = err && err.message ? err.message : String(err);
+      if (isHouseNameRelatedError_(msg)) {
+        showHouseAddNameError_(msg);
+      }
+      setStatus('house_status', 'Error: ' + msg, true);
+    })
+    .addHouseFromDashboard(payload);
 }
 
 /* Bank */

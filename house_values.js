@@ -1,7 +1,42 @@
 function getHouseUiData() {
+  var propertyTypeOpts = [];
+  try {
+    propertyTypeOpts = getHouseAssetsDistinctColumnValues_('Type');
+  } catch (e) {
+    Logger.log('getHouseUiData propertyType options: ' + e);
+  }
+
   return {
-    houses: getHousesFromHouseValues_()
+    houses: getHousesFromHouseValues_(),
+    propertyTypeOptions: propertyTypeOpts
   };
+}
+
+/**
+ * Distinct non-empty values from a column on SYS - House Assets.
+ * Used to populate the property-type datalist on the Add New House form.
+ * @param {string} headerLabel e.g. "Type"
+ * @returns {string[]}
+ */
+function getHouseAssetsDistinctColumnValues_(headerLabel) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = getSheet_(ss, 'HOUSE_ASSETS');
+  const display = sheet.getDataRange().getDisplayValues();
+  if (!display.length) return [];
+
+  const headers = display[0];
+  const idx = headers.indexOf(headerLabel);
+  if (idx === -1) return [];
+
+  const found = {};
+  for (let r = 1; r < display.length; r++) {
+    const cell = String(display[r][idx] || '').trim();
+    if (cell) found[cell] = true;
+  }
+
+  return Object.keys(found).sort(function(a, b) {
+    return a.localeCompare(b);
+  });
 }
 
 function getHousesFromHouseValues_() {
@@ -347,4 +382,521 @@ function getPriorMonthHouseValuesTotalFromHouseValuesInput_() {
   } catch (e) {
     return { total: null, label: '' };
   }
+}
+
+/**
+ * Validate a proposed new house name against canonical identifiers.
+ * Checks INPUT - House Values, SYS - House Assets, and the HOUSES - {House}
+ * sheet name so the three stay in lockstep.
+ *
+ * @param {string} raw
+ * @returns {string} trimmed name
+ */
+function validateNewHouseName_(raw) {
+  const name = String(raw || '').trim();
+  if (!name) throw new Error('House name is required.');
+  if (name.length > 120) throw new Error('House name is too long (max 120 characters).');
+
+  // Reject characters that cannot live in a sheet name ( : \ / ? * [ ] ).
+  if (/[:\\\/\?\*\[\]]/.test(name)) {
+    throw new Error('House name cannot contain any of these characters: : \\ / ? * [ ]');
+  }
+
+  // Guard against colliding with the reserved labels used by the
+  // INPUT - House Values scanner (these would be dropped by isHouseDataRowName_).
+  const reserved = {
+    'year': true,
+    'house': true,
+    'total values': true,
+    'house assets': true,
+    'account name': true,
+    'delta': true,
+    'total accounts': true,
+    'loan amount left': true
+  };
+  if (Object.prototype.hasOwnProperty.call(reserved, name.toLowerCase())) {
+    throw new Error('That house name is reserved; please pick a different name.');
+  }
+
+  const existingHouses = getHousesFromHouseValues_();
+  for (let i = 0; i < existingHouses.length; i++) {
+    if (existingHouses[i].toLowerCase() === name.toLowerCase()) {
+      throw new Error('A house named "' + existingHouses[i] + '" already exists on INPUT - House Values.');
+    }
+  }
+
+  if (houseExistsInHouseAssetsSheet_(name)) {
+    throw new Error('A house with that name already exists on SYS - House Assets.');
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss.getSheetByName('HOUSES - ' + name)) {
+    throw new Error('A sheet named "HOUSES - ' + name + '" already exists.');
+  }
+
+  return name;
+}
+
+function houseExistsInHouseAssetsSheet_(houseName) {
+  const target = String(houseName || '').trim();
+  if (!target) return false;
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = getSheet_(ss, 'HOUSE_ASSETS');
+  const display = sheet.getDataRange().getDisplayValues();
+  if (display.length < 2) return false;
+
+  const headerMap = getHouseAssetsHeaderMap_(sheet);
+  for (let r = 1; r < display.length; r++) {
+    if (String(display[r][headerMap.houseColZero] || '').trim().toLowerCase() === target.toLowerCase()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Last row in the INPUT - House Values year block whose column A is a real
+ * house name. Mirrors findLastBankAccountDataRowInBlock_.
+ * @returns {number} 1-based row, or -1 if none
+ */
+function findLastHouseDataRowInBlock_(sheet, block) {
+  let last = -1;
+  for (let row = block.dataStartRow; row <= block.dataEndRow; row++) {
+    const name = String(sheet.getRange(row, 1).getDisplayValue() || '').trim();
+    const sub = String(sheet.getRange(row, 2).getDisplayValue() || '').trim();
+    if (isHouseDataRowName_(name, sub)) last = row;
+  }
+  return last;
+}
+
+/**
+ * Inserts a new data row inside the year block, copying format from a sibling
+ * row so the new row inherits the same visual treatment. Mirrors
+ * insertNewBankAccountHistoryRow_.
+ *
+ * Writes:
+ *   - column 1 → houseName
+ *   - column 2 → Loan Amount Left (from loanAmountLeft)
+ *
+ * Month columns (firstMonthCol..) are left blank; month valuation seeding is
+ * handled separately by updateHouseValuesHistory_().
+ *
+ * @returns {number} 1-based row number of the new row
+ */
+function insertNewHouseHistoryRow_(sheet, block, houseName, loanAmountLeft) {
+  const lastCol = Math.max(sheet.getLastColumn(), 2);
+  const lastHouseRow = findLastHouseDataRowInBlock_(sheet, block);
+  let newRow;
+  let insertBeforeRow;
+  let templateRow;
+
+  if (lastHouseRow === -1) {
+    if (block.dataEndRow < block.dataStartRow) {
+      insertBeforeRow = block.dataStartRow;
+    } else {
+      insertBeforeRow = block.dataEndRow + 1;
+    }
+    sheet.insertRowBefore(insertBeforeRow);
+    newRow = insertBeforeRow;
+    templateRow = (newRow + 1 <= sheet.getLastRow()) ? (newRow + 1) : block.headerRow;
+  } else {
+    sheet.insertRowAfter(lastHouseRow);
+    newRow = lastHouseRow + 1;
+    templateRow = lastHouseRow;
+  }
+
+  sheet.getRange(templateRow, 1, 1, lastCol).copyTo(
+    sheet.getRange(newRow, 1, 1, lastCol),
+    SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+    false
+  );
+  sheet.getRange(newRow, 1, 1, lastCol).clearContent();
+  sheet.getRange(newRow, 1).setValue(houseName);
+
+  // Column 2 in INPUT - House Values is "Loan Amount Left" (firstMonthCol = 3).
+  // We always write it so the row is complete — callers pass 0 when unknown.
+  const loanNum = round2_(toNumber_(loanAmountLeft));
+  const loanCell = sheet.getRange(newRow, 2);
+  loanCell.setValue(isNaN(loanNum) ? 0 : loanNum);
+  // Only apply currency format if the template didn't already set one —
+  // the PASTE_FORMAT copy above normally inherits the right format already.
+  if (!String(loanCell.getNumberFormat() || '').match(/\$|#,##0/)) {
+    applyCurrencyFormat_(loanCell);
+  }
+
+  return newRow;
+}
+
+function appendHouseAssetsRowForNewHouse_(sheet, houseName, propertyType, loanAmountLeft, currentValue) {
+  const headerMap = getHouseAssetsHeaderMap_(sheet);
+  const lastCol = Math.max(sheet.getLastColumn(), headerMap.houseCol);
+
+  const row = [];
+  for (let c = 0; c < lastCol; c++) row[c] = '';
+
+  row[headerMap.houseColZero] = houseName;
+  if (headerMap.typeColZero !== -1) row[headerMap.typeColZero] = propertyType;
+  if (headerMap.loanColZero !== -1) row[headerMap.loanColZero] = round2_(toNumber_(loanAmountLeft));
+  if (headerMap.valueColZero !== -1) row[headerMap.valueColZero] = round2_(toNumber_(currentValue));
+
+  // Identify a neighboring existing data row BEFORE appending, so we can clone
+  // its visual treatment (borders, background, font, alignment, number
+  // formats) onto the new row without touching the freshly written values.
+  const templateRow = findHouseAssetsTemplateRow_(sheet, headerMap);
+
+  sheet.appendRow(row);
+  const appendedRow = sheet.getLastRow();
+
+  if (templateRow !== -1) {
+    try {
+      sheet.getRange(templateRow, 1, 1, lastCol).copyTo(
+        sheet.getRange(appendedRow, 1, 1, lastCol),
+        SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+        false
+      );
+      sheet.setRowHeight(appendedRow, sheet.getRowHeight(templateRow));
+    } catch (formatErr) {
+      Logger.log('appendHouseAssetsRowForNewHouse_ format copy failed: ' + formatErr);
+    }
+  }
+
+  // Explicitly guarantee currency formatting on the money columns in case the
+  // template row did not have one set.
+  if (headerMap.valueCol !== -1) {
+    const vc = sheet.getRange(appendedRow, headerMap.valueCol);
+    if (!String(vc.getNumberFormat() || '').match(/\$|#,##0/)) applyCurrencyFormat_(vc);
+  }
+  if (headerMap.loanCol !== -1) {
+    const lc = sheet.getRange(appendedRow, headerMap.loanCol);
+    if (!String(lc.getNumberFormat() || '').match(/\$|#,##0/)) applyCurrencyFormat_(lc);
+  }
+}
+
+/**
+ * Finds the last existing data row in SYS - House Assets whose "House" column
+ * is non-empty, to use as a formatting template for newly appended rows.
+ * @returns {number} 1-based row number, or -1 if none available.
+ */
+function findHouseAssetsTemplateRow_(sheet, headerMap) {
+  const display = sheet.getDataRange().getDisplayValues();
+  for (let r = display.length - 1; r >= 1; r--) {
+    const name = String(display[r][headerMap.houseColZero] || '').trim();
+    if (name) return r + 1;
+  }
+  return -1;
+}
+
+function deleteHouseAssetsRowByExactName_(sheet, houseName) {
+  const target = String(houseName || '').trim();
+  if (!target) return;
+
+  const headerMap = getHouseAssetsHeaderMap_(sheet);
+  const display = sheet.getDataRange().getDisplayValues();
+
+  for (let r = 1; r < display.length; r++) {
+    if (String(display[r][headerMap.houseColZero] || '').trim() === target) {
+      sheet.deleteRow(r + 1);
+      return;
+    }
+  }
+}
+
+/**
+ * Creates the HOUSES - {House} sheet with the canonical header structure that
+ * the rest of the app (house_expenses.js readers) expects:
+ *
+ *   Row 1:   Year | <currentYear>
+ *   Row 2:   Item | Type | Date | Location | Cost | Service Fees Paid |
+ *            Insurance covered | Payments Links | Notes
+ *
+ * If an existing HOUSES - * sheet is available in the workbook, the Year row
+ * and header row formatting is cloned from there so the new sheet visually
+ * matches existing house sheets. Otherwise the fallback background/weight
+ * already used by findOrCreateHouseExpenseYearBlock_ is applied.
+ *
+ * Safe to call when the sheet already exists (it's a no-op).
+ *
+ * @returns {{sheet: GoogleAppsScript.Spreadsheet.Sheet, created: boolean, templateSheetName: string}}
+ */
+function createHousesExpenseSheet_(ss, houseName) {
+  const sheetName = 'HOUSES - ' + houseName;
+  const existing = ss.getSheetByName(sheetName);
+  if (existing) {
+    return { sheet: existing, created: false, templateSheetName: '' };
+  }
+
+  const newSheet = ss.insertSheet(sheetName);
+  const currentYear = getCurrentYear_();
+  const canonicalHeaders = [
+    'Item', 'Type', 'Date', 'Location', 'Cost',
+    'Service Fees Paid', 'Insurance covered', 'Payments Links', 'Notes'
+  ];
+
+  newSheet.getRange(1, 1, 1, 2).setValues([['Year', currentYear]]);
+  newSheet.getRange(2, 1, 1, 9).setValues([canonicalHeaders]);
+
+  const template = findExistingHousesTemplateRows_(ss, sheetName);
+  if (template) {
+    try {
+      template.sheet.getRange(template.yearRow, 1, 1, 9)
+        .copyTo(newSheet.getRange(1, 1, 1, 9), { formatOnly: true });
+      template.sheet.getRange(template.headerRow, 1, 1, 9)
+        .copyTo(newSheet.getRange(2, 1, 1, 9), { formatOnly: true });
+      newSheet.setRowHeight(1, template.sheet.getRowHeight(template.yearRow));
+      newSheet.setRowHeight(2, template.sheet.getRowHeight(template.headerRow));
+
+      // Copy column widths so the new sheet visually matches existing houses.
+      copyHousesColumnWidths_(template.sheet, newSheet, 9);
+    } catch (e) {
+      // Formatting copy is best-effort; headers themselves are already correct.
+      Logger.log('createHousesExpenseSheet_ formatting copy failed: ' + e);
+      applyHousesYearRowFallbackFormat_(newSheet, 1);
+      applyHousesHeaderRowFallbackFormat_(newSheet, 2);
+    }
+  } else {
+    applyHousesYearRowFallbackFormat_(newSheet, 1);
+    applyHousesHeaderRowFallbackFormat_(newSheet, 2);
+  }
+
+  newSheet.setFrozenRows(2);
+  newSheet.getRange(1, 1).activate();
+
+  return {
+    sheet: newSheet,
+    created: true,
+    templateSheetName: template ? template.sheet.getName() : ''
+  };
+}
+
+/**
+ * Scans existing HOUSES - * sheets for a (Year row, Item/Type header row) pair
+ * and returns the first match. Skips the target sheet name so we don't clone
+ * a half-initialized sheet.
+ */
+function findExistingHousesTemplateRows_(ss, skipSheetName) {
+  const sheets = ss.getSheets();
+  for (let i = 0; i < sheets.length; i++) {
+    const sheet = sheets[i];
+    const name = String(sheet.getName() || '');
+    if (name === skipSheetName) continue;
+    if (name.toUpperCase().indexOf('HOUSES - ') !== 0) continue;
+
+    const lastRow = Math.max(sheet.getLastRow(), 1);
+    if (lastRow < 2) continue;
+
+    const scanRows = Math.min(lastRow, 50);
+    const values = sheet.getRange(1, 1, scanRows, 2).getDisplayValues();
+
+    let yearRow = -1;
+    for (let r = 0; r < scanRows; r++) {
+      const colA = String(values[r][0] || '').trim().toLowerCase();
+      if (colA === 'year') {
+        yearRow = r + 1;
+        break;
+      }
+    }
+    if (yearRow === -1) continue;
+
+    // Header row should be the next non-empty row with Item/Type.
+    let headerRow = -1;
+    for (let r = yearRow; r < scanRows; r++) {
+      const a = String(values[r][0] || '').trim().toLowerCase();
+      const b = String(values[r][1] || '').trim().toLowerCase();
+      if (a === 'item' && b === 'type') {
+        headerRow = r + 1;
+        break;
+      }
+    }
+    if (headerRow === -1) continue;
+
+    return { sheet: sheet, yearRow: yearRow, headerRow: headerRow };
+  }
+  return null;
+}
+
+/**
+ * Copies column widths (columns 1..numColumns) from a source HOUSES - * sheet
+ * onto a newly created HOUSES - * sheet so they visually match. Errors on any
+ * individual column are swallowed (width copying is best-effort).
+ */
+function copyHousesColumnWidths_(sourceSheet, targetSheet, numColumns) {
+  for (let col = 1; col <= numColumns; col++) {
+    try {
+      const w = sourceSheet.getColumnWidth(col);
+      if (w && w > 0) targetSheet.setColumnWidth(col, w);
+    } catch (e) {
+      Logger.log('copyHousesColumnWidths_ col ' + col + ' failed: ' + e);
+    }
+  }
+}
+
+function applyHousesYearRowFallbackFormat_(sheet, row) {
+  sheet.getRange(row, 1, 1, 9)
+    .setBackground('#f4a300')
+    .setFontWeight('bold')
+    .setFontColor('#000000');
+}
+
+function applyHousesHeaderRowFallbackFormat_(sheet, row) {
+  sheet.getRange(row, 1, 1, 9)
+    .setBackground('#fff200')
+    .setFontWeight('bold')
+    .setFontColor('#000000');
+}
+
+/**
+ * Canonical "add a new house" entry point used by the dashboard UI.
+ *
+ * Writes:
+ *   - INPUT - House Values:   new data row inside the current-year block,
+ *                             optionally seeded with currentValue for the
+ *                             month that valuationDate falls in.
+ *   - SYS - House Assets:     new row with House / Type / Loan Amount Left /
+ *                             Current Value.
+ *   - HOUSES - {House}:       new sheet with the canonical 9-column header
+ *                             (created only if it does not already exist).
+ *   - LOG - Activity:         a 'house_add' row.
+ *
+ * Does NOT touch:
+ *   - planner logic
+ *   - property-performance calculations
+ *   - existing house rows / expense sheets
+ *
+ * @param {{
+ *   houseName: string,
+ *   propertyType: string,
+ *   currentValue: number|string,
+ *   loanAmountLeft: number|string,
+ *   valuationDate?: string
+ * }} payload
+ */
+function addHouseFromDashboard(payload) {
+  validateRequired_(payload, ['houseName', 'propertyType', 'currentValue', 'loanAmountLeft']);
+
+  const houseName = validateNewHouseName_(payload.houseName);
+  const propertyType = String(payload.propertyType || '').trim();
+  if (!propertyType) throw new Error('Property type is required.');
+  if (propertyType.length > 80) throw new Error('Property type is too long (max 80 characters).');
+
+  const currentValueRaw = payload.currentValue;
+  const currentValue = round2_(toNumber_(currentValueRaw));
+  if (isNaN(currentValue)) throw new Error('Current value must be a valid number.');
+  if (currentValue < 0) throw new Error('Current value cannot be negative.');
+
+  const loanRaw = payload.loanAmountLeft;
+  const loanAmountLeft = round2_(toNumber_(loanRaw));
+  if (isNaN(loanAmountLeft)) throw new Error('Loan amount left must be a valid number.');
+  if (loanAmountLeft < 0) throw new Error('Loan amount left cannot be negative.');
+
+  const tz = Session.getScriptTimeZone();
+  const currentYear = getCurrentYear_();
+
+  let valuationDate = null;
+  const valuationDateStr = String(payload.valuationDate || '').trim();
+  if (valuationDateStr) {
+    valuationDate = parseIsoDateLocal_(valuationDateStr);
+    if (isNaN(valuationDate.getTime())) throw new Error('Invalid valuation date.');
+    if (valuationDate.getFullYear() !== currentYear) {
+      throw new Error('Valuation date must be in ' + currentYear +
+        ' (same year as the house block being extended).');
+    }
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const hvSheet = getSheet_(ss, 'HOUSE_VALUES');
+  const haSheet = getSheet_(ss, 'HOUSE_ASSETS');
+  const block = getHouseValuesYearBlock_(hvSheet, currentYear);
+
+  // 1) Insert the INPUT - House Values row. Column 2 ("Loan Amount Left") is
+  //    populated here so the row is complete before we move on to SYS.
+  let newHvRow = 0;
+  try {
+    newHvRow = insertNewHouseHistoryRow_(hvSheet, block, houseName, loanAmountLeft);
+  } catch (e) {
+    throw new Error('Could not insert INPUT - House Values row: ' + (e.message || e));
+  }
+
+  // 2) Append the SYS - House Assets row. Roll back HV row on failure.
+  try {
+    appendHouseAssetsRowForNewHouse_(haSheet, houseName, propertyType, loanAmountLeft, currentValue);
+  } catch (e2) {
+    hvSheet.deleteRow(newHvRow);
+    throw new Error('Could not add SYS - House Assets row (rolled back House Values row): ' +
+      (e2.message || e2));
+  }
+
+  // 3) Seed the month cell with currentValue when a valuation date was given,
+  //    then sync SYS - House Assets Current Value from the latest HV month.
+  let seededMonthLabel = '';
+  try {
+    if (valuationDate && currentValue !== 0) {
+      updateHouseValuesHistory_(houseName, currentYear, valuationDate, currentValue);
+      seededMonthLabel = Utilities.formatDate(valuationDate, tz, 'MMM-yy');
+    }
+    // Only copy Current Value for rows that actually have a latest month.
+    // Leaves Type and Loan Amount Left untouched on the new row.
+    syncAllHouseAssetsFromLatestCurrentYear_();
+    touchDashboardSourceUpdated_('house_values');
+  } catch (e3) {
+    deleteHouseAssetsRowByExactName_(haSheet, houseName);
+    hvSheet.deleteRow(newHvRow);
+    throw e3;
+  }
+
+  // 4) Create the HOUSES - {House} expense sheet (REQUIRED in this pass).
+  //    Sheet creation failures must not silently succeed — the whole add
+  //    operation is reverted so the user can retry cleanly.
+  let sheetCreationInfo = null;
+  try {
+    sheetCreationInfo = createHousesExpenseSheet_(ss, houseName);
+  } catch (e4) {
+    deleteHouseAssetsRowByExactName_(haSheet, houseName);
+    hvSheet.deleteRow(newHvRow);
+    throw new Error('Could not create HOUSES - ' + houseName + ' sheet (rolled back other writes): ' +
+      (e4.message || e4));
+  }
+
+  // 5) Log the activity event (best-effort; never block the user on a log failure).
+  try {
+    appendActivityLog_(ss, {
+      eventType: 'house_add',
+      entryDate: Utilities.formatDate(stripTime_(valuationDate || new Date()), tz, 'yyyy-MM-dd'),
+      amount: Math.abs(currentValue),
+      direction: 'expense',
+      payee: houseName,
+      category: propertyType,
+      accountSource: '',
+      cashFlowSheet: '',
+      cashFlowMonth: '',
+      dedupeKey: '',
+      details: JSON.stringify({
+        detailsVersion: 1,
+        year: currentYear,
+        propertyType: propertyType,
+        currentValue: currentValue,
+        loanAmountLeft: loanAmountLeft,
+        valuationDate: valuationDateStr,
+        seededMonthLabel: seededMonthLabel,
+        houseSheet: 'HOUSES - ' + houseName,
+        houseSheetCreated: sheetCreationInfo ? sheetCreationInfo.created : false,
+        houseSheetTemplate: sheetCreationInfo ? sheetCreationInfo.templateSheetName : ''
+      })
+    });
+  } catch (logErr) {
+    Logger.log('addHouseFromDashboard activity log: ' + logErr);
+  }
+
+  return {
+    ok: true,
+    houseName: houseName,
+    message:
+      'Created house "' + houseName + '":\n' +
+      '  • INPUT - House Values' + (seededMonthLabel ? ' (' + seededMonthLabel + ' seeded)' : '') + '\n' +
+      '  • SYS - House Assets\n' +
+      '  • ' + (sheetCreationInfo && sheetCreationInfo.created
+        ? 'HOUSES - ' + houseName + ' sheet created'
+        : 'HOUSES - ' + houseName + ' sheet already existed') + '\n' +
+      'Use Run Planner + Refresh Snapshot when you want projections and the overview snapshot updated.'
+  };
 }

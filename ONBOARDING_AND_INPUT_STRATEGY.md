@@ -220,13 +220,15 @@ A system that requires perfect setup to start
 
 ## Current Status
 
-- Bank Accounts → implemented
+- Bank Accounts → implemented (Assets → Bank Accounts → Add new; appends **INPUT - Bank Accounts** + **SYS - Accounts**; `bank_account_add` activity)
+- Houses → implemented (Assets → House Values → Add new; appends **INPUT - House Values** + **SYS - House Assets** and auto-creates **HOUSES - {House}** with canonical headers; `house_add` activity)
+- Bills → implemented (Cash Flow → Bills → Manage bills → Add bill; `bill_add` / `bill_deactivate` activity)
 - Planner → complete and polished
 - Payment execution → working
 - Navigation → consistent
 
 Remaining critical gap:
-- Bills input (recurring expenses)
+- Investments input (Assets → Investments Add new is still open)
 
 ---
 
