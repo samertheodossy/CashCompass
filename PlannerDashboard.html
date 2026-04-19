@@ -408,27 +408,58 @@
 </div>
 
 <div id="investments" class="panel">
-  <h3>Update Investment</h3>
+  <h3 id="inv_panel_title">Investments</h3>
 
-  <label>Investment Account</label>
-  <select id="inv_account" onchange="loadInvestmentData()"></select>
-
-  <label>Date</label>
-  <input type="date" id="inv_date" onchange="loadInvestmentData()">
-
-  <div class="info">
-    <div><strong>Selected month:</strong> <span id="inv_selectedMonth" class="muted">—</span></div>
-    <div><strong>Stored value for selected month:</strong> <span id="inv_selectedMonthValue" class="muted">—</span></div>
-    <div><strong>Current SYS - Assets balance:</strong> <span id="inv_currentBalance" class="muted">—</span></div>
-    <div><strong>Type:</strong> <span id="inv_type" class="muted">—</span></div>
-    <div class="house-value-delta-sep" aria-hidden="true"></div>
-    <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="inv_deltaPriorMonth" class="muted">—</span></div>
+  <div class="segmented" role="tablist" aria-label="Investment mode">
+    <button type="button" id="inv_mode_update_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setInvestmentPanelMode('update')">Update</button>
+    <button type="button" id="inv_mode_add_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setInvestmentPanelMode('add')">Add new</button>
   </div>
 
-  <label>Value</label>
-  <input type="text" id="inv_value" inputmode="decimal" onfocus="currencyFocus('inv_value')" onblur="currencyBlur('inv_value')">
+  <div id="inv_mode_update_wrap" class="bank-mode-wrap active">
+    <label>Investment Account</label>
+    <select id="inv_account" onchange="loadInvestmentData()"></select>
 
-  <button onclick="saveInvestment()">Save Investment</button>
+    <label>Date</label>
+    <input type="date" id="inv_date" onchange="loadInvestmentData()">
+
+    <div class="info">
+      <div><strong>Selected month:</strong> <span id="inv_selectedMonth" class="muted">—</span></div>
+      <div><strong>Stored value for selected month:</strong> <span id="inv_selectedMonthValue" class="muted">—</span></div>
+      <div><strong>Current SYS - Assets balance:</strong> <span id="inv_currentBalance" class="muted">—</span></div>
+      <div><strong>Type:</strong> <span id="inv_type" class="muted">—</span></div>
+      <div class="house-value-delta-sep" aria-hidden="true"></div>
+      <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="inv_deltaPriorMonth" class="muted">—</span></div>
+    </div>
+
+    <label>Value</label>
+    <input type="text" id="inv_value" inputmode="decimal" onfocus="currencyFocus('inv_value')" onblur="currencyBlur('inv_value')">
+
+    <div class="house-update-actions">
+      <button onclick="saveInvestment()">Save Investment</button>
+      <button type="button" class="small-btn" onclick="stopTrackingInvestment()" title="Mark this investment account inactive. History is preserved.">Stop tracking</button>
+    </div>
+  </div>
+
+  <div id="inv_mode_add_wrap" class="bank-mode-wrap">
+    <label>Account name</label>
+    <input type="text" id="inv_add_name" maxlength="120" autocomplete="off" oninput="if (typeof clearInvestmentAddNameError_==='function') clearInvestmentAddNameError_();">
+    <div id="inv_add_name_error" class="field-error" role="alert" aria-live="polite"></div>
+
+    <label>Type</label>
+    <select id="inv_add_type">
+      <option value="">— Select type —</option>
+    </select>
+    <div class="muted" style="margin-top:4px;font-size:12px;">Choose from existing investment types in SYS - Assets.</div>
+
+    <label>Starting value (optional)</label>
+    <input type="text" id="inv_add_starting_value" inputmode="decimal" onfocus="currencyFocus('inv_add_starting_value')" onblur="currencyBlur('inv_add_starting_value')">
+
+    <label>Starting value date (optional)</label>
+    <input type="date" id="inv_add_starting_date">
+
+    <button onclick="createInvestmentAccount()">Create account</button>
+  </div>
+
   <div id="inv_status" class="status"></div>
 </div>
 
@@ -1170,19 +1201,119 @@ function saveBank() {
 
 /* Investments */
 
+function fillInvestmentAccountDropdownFromData_(data) {
+  const sel = document.getElementById('inv_account');
+  if (!sel) return;
+  sel.innerHTML = '<option value=""></option>';
+  (data.accounts || []).forEach(function(a) {
+    const opt = document.createElement('option');
+    opt.value = a;
+    opt.textContent = a;
+    sel.appendChild(opt);
+  });
+  populateInvestmentAddDatalists_(data);
+}
+
+function populateInvestmentAddDatalists_(data) {
+  const sel = document.getElementById('inv_add_type');
+  if (!sel) return;
+  const currentValue = sel.value || '';
+  sel.innerHTML = '<option value="">— Select type —</option>';
+  (data.typeOptions || []).forEach(function(t) {
+    const o = document.createElement('option');
+    o.value = t;
+    o.textContent = t;
+    sel.appendChild(o);
+  });
+  if (currentValue && (data.typeOptions || []).indexOf(currentValue) !== -1) {
+    sel.value = currentValue;
+  }
+}
+
+function resetInvestmentAddForm_() {
+  ['inv_add_name','inv_add_type','inv_add_starting_value','inv_add_starting_date'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  clearInvestmentAddNameError_();
+}
+
+function clearInvestmentAddNameError_() {
+  const el = document.getElementById('inv_add_name_error');
+  if (el) {
+    el.textContent = '';
+    el.classList.remove('active');
+  }
+  const n = document.getElementById('inv_add_name');
+  if (n) n.classList.remove('field-error-input');
+}
+
+function showInvestmentAddNameError_(message) {
+  const el = document.getElementById('inv_add_name_error');
+  if (el) {
+    el.textContent = message || 'Please fix the Account name.';
+    el.classList.add('active');
+  }
+  const n = document.getElementById('inv_add_name');
+  if (n) {
+    n.classList.add('field-error-input');
+    try { n.focus(); if (n.value) n.select(); } catch (e) {}
+  }
+}
+
+function isInvestmentNameRelatedError_(msg) {
+  const m = String(msg || '').toLowerCase();
+  return (
+    m.indexOf('account name') !== -1 ||
+    m.indexOf('already exists') !== -1 ||
+    m.indexOf('reserved') !== -1 ||
+    m.indexOf('not allowed') !== -1
+  );
+}
+
+function setInvestmentPanelMode(mode) {
+  const isUpdate = mode === 'update';
+  const wrapU = document.getElementById('inv_mode_update_wrap');
+  const wrapA = document.getElementById('inv_mode_add_wrap');
+  const btnU = document.getElementById('inv_mode_update_btn');
+  const btnA = document.getElementById('inv_mode_add_btn');
+  if (wrapU) wrapU.classList.toggle('active', isUpdate);
+  if (wrapA) wrapA.classList.toggle('active', !isUpdate);
+  if (btnU) {
+    btnU.classList.toggle('active', isUpdate);
+    btnU.setAttribute('aria-selected', isUpdate ? 'true' : 'false');
+  }
+  if (btnA) {
+    btnA.classList.toggle('active', !isUpdate);
+    btnA.setAttribute('aria-selected', !isUpdate ? 'true' : 'false');
+  }
+  if (isUpdate) setStatus('inv_status', '', false);
+}
+
 function loadInvestmentSection() {
   document.getElementById('inv_date').value = new Date().toISOString().slice(0, 10);
 
   google.script.run
     .withSuccessHandler(function(data) {
+      fillInvestmentAccountDropdownFromData_(data);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getInvestmentUiData();
+}
+
+function loadInvestmentSectionThenSelect_(accountName) {
+  document.getElementById('inv_date').value =
+    document.getElementById('inv_date').value || new Date().toISOString().slice(0, 10);
+  google.script.run
+    .withSuccessHandler(function(data) {
+      fillInvestmentAccountDropdownFromData_(data);
       const sel = document.getElementById('inv_account');
-      sel.innerHTML = '<option value=""></option>';
-      (data.accounts || []).forEach(function(a) {
-        const opt = document.createElement('option');
-        opt.value = a;
-        opt.textContent = a;
-        sel.appendChild(opt);
-      });
+      if (sel && accountName) {
+        sel.value = accountName;
+        loadInvestmentData();
+      }
     })
     .withFailureHandler(function(err) {
       setStatus('inv_status', 'Error: ' + (err.message || String(err)), true);
@@ -1261,6 +1392,93 @@ function saveInvestment() {
       setStatus('inv_status', 'Error: ' + (err.message || String(err)), true);
     })
     .updateInvestmentValueByDate(payload);
+}
+
+function createInvestmentAccount() {
+  clearInvestmentAddNameError_();
+
+  const name = document.getElementById('inv_add_name').value.trim();
+  const typeStr = document.getElementById('inv_add_type').value.trim();
+  const startRaw = document.getElementById('inv_add_starting_value').value;
+  const startDate = document.getElementById('inv_add_starting_date').value.trim();
+  const hasAmt = String(startRaw || '').trim() !== '';
+  const hasDate = !!startDate;
+
+  if (!name) {
+    showInvestmentAddNameError_('Account name is required.');
+    setStatus('inv_status', 'Error: Account name is required.', true);
+    return;
+  }
+  if (!typeStr) {
+    setStatus('inv_status', 'Error: Type is required.', true);
+    return;
+  }
+  if (hasDate !== hasAmt) {
+    setStatus('inv_status', 'Error: For a starting value, enter both date and amount (or leave both blank).', true);
+    return;
+  }
+
+  const startNum = hasAmt ? toNumber(startRaw) : NaN;
+  if (hasAmt && isNaN(startNum)) {
+    setStatus('inv_status', 'Error: Starting value must be a valid number.', true);
+    return;
+  }
+
+  const payload = { accountName: name, type: typeStr };
+  if (hasDate && hasAmt) {
+    payload.startingBalanceDate = startDate;
+    payload.startingBalance = startNum;
+  }
+
+  setStatusLoading('inv_status', 'Creating investment account…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      const useDate = startDate || new Date().toISOString().slice(0, 10);
+      setStatus('inv_status', res.message || 'Created.', false);
+      const createdName = res.accountName || name;
+      resetInvestmentAddForm_();
+      setInvestmentPanelMode('update');
+      document.getElementById('inv_date').value = useDate;
+      loadInvestmentSectionThenSelect_(createdName);
+    })
+    .withFailureHandler(function(err) {
+      const msg = err && err.message ? err.message : String(err);
+      if (isInvestmentNameRelatedError_(msg)) {
+        showInvestmentAddNameError_(msg);
+      }
+      setStatus('inv_status', 'Error: ' + msg, true);
+    })
+    .addInvestmentAccountFromDashboard(payload);
+}
+
+function stopTrackingInvestment() {
+  const sel = document.getElementById('inv_account');
+  const account = sel ? String(sel.value || '').trim() : '';
+
+  if (!account) {
+    setStatus('inv_status', 'Error: Pick an investment account first.', true);
+    return;
+  }
+
+  const confirmed = window.confirm(
+    'Stop tracking "' + account + '"?\n\n' +
+    'The account will no longer appear in the Investment Account selector. ' +
+    'All history in INPUT - Investments and the SYS - Assets row stay in ' +
+    'place. You can still view past values for reporting.'
+  );
+  if (!confirmed) return;
+
+  setStatusLoading('inv_status', 'Stopping tracking…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('inv_status', (res && res.message) || 'Stopped tracking.', false);
+      loadInvestmentSection();
+      loadInvestmentData();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .deactivateInvestmentAccountFromDashboard({ accountName: account });
 }
 
 /* Payments */

@@ -380,29 +380,64 @@
 
     <div id="investments" class="panel">
       <div class="panel-head">
-        <h2>Update Investment</h2>
+        <h2 id="inv_panel_title">Investments</h2>
         <div class="updated">Last updated: <span id="inv_updated">—</span></div>
       </div>
-      <div class="grid-2">
-        <div>
-          <label>Investment Account</label>
-          <select id="inv_account" onchange="loadInvestmentData()"></select>
-          <label>Date</label>
-          <input type="date" id="inv_date" onchange="loadInvestmentData()">
-          <label>Value</label>
-          <input type="text" id="inv_value" inputmode="decimal" onfocus="currencyFocus('inv_value')" onblur="currencyBlur('inv_value')">
-          <button onclick="saveInvestment()">Save Investment</button>
-          <div id="inv_status" class="status"></div>
-        </div>
-        <div class="info">
-          <div><strong>Selected month:</strong> <span id="inv_selectedMonth" class="muted">—</span></div>
-          <div><strong>Stored value for selected month:</strong> <span id="inv_selectedMonthValue" class="muted">—</span></div>
-          <div><strong>Current SYS - Assets balance:</strong> <span id="inv_currentBalance" class="muted">—</span></div>
-          <div><strong>Type:</strong> <span id="inv_type" class="muted">—</span></div>
-          <div class="house-value-delta-sep" aria-hidden="true"></div>
-          <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="inv_deltaPriorMonth" class="muted">—</span></div>
+      <div class="segmented" role="tablist" aria-label="Investment mode">
+        <button type="button" id="inv_mode_update_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setInvestmentPanelMode('update')">Update</button>
+        <button type="button" id="inv_mode_add_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setInvestmentPanelMode('add')">Add new</button>
+      </div>
+
+      <div id="inv_mode_update_wrap" class="bank-mode-wrap active">
+        <div class="grid-2">
+          <div>
+            <label>Investment Account</label>
+            <select id="inv_account" onchange="loadInvestmentData()"></select>
+            <label>Date</label>
+            <input type="date" id="inv_date" onchange="loadInvestmentData()">
+            <label>Value</label>
+            <input type="text" id="inv_value" inputmode="decimal" onfocus="currencyFocus('inv_value')" onblur="currencyBlur('inv_value')">
+            <div class="house-update-actions">
+              <button onclick="saveInvestment()">Save Investment</button>
+              <button type="button" class="small-btn" onclick="stopTrackingInvestment()" title="Mark this investment account inactive. History is preserved.">Stop tracking</button>
+            </div>
+          </div>
+          <div class="info">
+            <div><strong>Selected month:</strong> <span id="inv_selectedMonth" class="muted">—</span></div>
+            <div><strong>Stored value for selected month:</strong> <span id="inv_selectedMonthValue" class="muted">—</span></div>
+            <div><strong>Current SYS - Assets balance:</strong> <span id="inv_currentBalance" class="muted">—</span></div>
+            <div><strong>Type:</strong> <span id="inv_type" class="muted">—</span></div>
+            <div class="house-value-delta-sep" aria-hidden="true"></div>
+            <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="inv_deltaPriorMonth" class="muted">—</span></div>
+          </div>
         </div>
       </div>
+
+      <div id="inv_mode_add_wrap" class="bank-mode-wrap">
+        <div class="grid-2">
+          <div>
+            <label>Account name</label>
+            <input type="text" id="inv_add_name" maxlength="120" autocomplete="off" oninput="if (typeof clearInvestmentAddNameError_==='function') clearInvestmentAddNameError_();">
+            <div id="inv_add_name_error" class="field-error" role="alert" aria-live="polite"></div>
+            <label>Type</label>
+            <select id="inv_add_type">
+              <option value="">— Select type —</option>
+            </select>
+            <div class="muted" style="margin-top:4px;font-size:12px;">Choose from existing investment types in SYS - Assets.</div>
+            <label>Starting value (optional)</label>
+            <input type="text" id="inv_add_starting_value" inputmode="decimal" onfocus="currencyFocus('inv_add_starting_value')" onblur="currencyBlur('inv_add_starting_value')">
+            <label>Starting value date (optional)</label>
+            <input type="date" id="inv_add_starting_date">
+            <button onclick="createInvestmentAccount()">Create account</button>
+          </div>
+          <div class="info muted">
+            <p style="margin-top:0;">Adds a row to <strong>INPUT - Investments</strong> (current year block) and a mirror row to <strong>SYS - Assets</strong>. The workbook must already have a <strong>Year</strong> block for the current calendar year.</p>
+            <p>If you provide a starting value, the date must fall in that same year and the amount is seeded into the matching month. Type can be chosen from existing accounts or typed as a new value.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="inv_status" class="status"></div>
     </div>
   </div>
 

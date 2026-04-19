@@ -102,7 +102,31 @@
 
         <h4>Investments</h4>
         <ul class="help-list">
-          <li>Edits go to the relevant INPUT sheets. SYS tabs reflect synced balances.</li>
+          <li><strong>Update</strong> saves the value for the selected investment account on the selected month. Edits go to <strong>INPUT - Investments</strong> (canonical) and <strong>SYS - Assets</strong> mirrors the latest current-year value as <strong>Current Balance</strong>.</li>
+          <li><strong>Add new</strong> appends one row to <strong>INPUT - Investments</strong> (current calendar-year block) and one row to <strong>SYS - Assets</strong>. The workbook must already have that Year block on <strong>INPUT - Investments</strong>.</li>
+          <li><strong>Required Add-new fields:</strong> Account name and Type. <strong>Starting value date</strong> and <strong>Starting value</strong> are optional but must be provided together; the date must fall in the current year and the amount is seeded into that month.</li>
+          <li><strong>Type</strong> is a controlled dropdown of existing investment types read from <strong>SYS - Assets</strong> (e.g. Brokerage, Retirement, Education). Pick one rather than typing free text; add new types directly in <strong>SYS - Assets</strong> if needed.</li>
+          <li><strong>Duplicate names</strong> are rejected across <strong>INPUT - Investments</strong> (all year blocks, including inactive) and <strong>SYS - Assets</strong>. Inline errors show next to the Account name field and focus the input.</li>
+          <li>Status text during <strong>Add new</strong> is <em>Creating investment account…</em>. After success, the panel flips back to <strong>Update</strong> and preselects the new account.</li>
+          <li><strong>Add new</strong> logs <strong>investment_add</strong> to <strong>LOG - Activity</strong>. Activity <strong>Type</strong> is <strong>Investment</strong>; <strong>Action</strong> sub-label is <strong>Account added</strong>. It does <em>not</em> re-run the full planner — use <strong>Run Planner + Refresh Snapshot</strong> when you want projections and Overview updated.</li>
+        </ul>
+
+        <h4>Investments — Stop tracking (soft deactivate)</h4>
+        <ul class="help-list">
+          <li><strong>Update</strong> mode shows a secondary <strong>Stop tracking</strong> button next to <strong>Save Investment</strong>. Use it when you close an investment account or otherwise want to retire it from active selectors without losing history.</li>
+          <li>Clicking it opens an inline confirmation. On confirm:
+            <ul class="help-list">
+              <li>Every row for that account in <strong>INPUT - Investments</strong> (across all year blocks) is flipped to <strong>Active = No</strong> — canonical source of truth.</li>
+              <li>The matching <strong>SYS - Assets</strong> row mirrors <strong>Active = No</strong>.</li>
+              <li>All month values, <strong>Current Balance</strong>, <strong>Type</strong>, and totals / delta rows are left untouched.</li>
+            </ul>
+          </li>
+          <li>Inactive investment accounts drop out of the <strong>Investment Account</strong> dropdown immediately. History stays in both sheets for audit / reporting.</li>
+          <li>Duplicate-name validation still blocks reuse of a stop-tracked account name when adding a new investment (names stay reserved).</li>
+          <li>Status text during the flow is <em>Stopping tracking…</em>.</li>
+          <li>Backward compatibility: rows with a blank / missing <strong>Active</strong> value are treated as active, so pre-existing data is unaffected until you explicitly stop tracking.</li>
+          <li>Logs <strong>investment_deactivate</strong> to <strong>LOG - Activity</strong>. Activity <strong>Type</strong> is <strong>Investment</strong>; <strong>Action</strong> sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong> because no money moved.</li>
+          <li>New <strong>Yes</strong> / <strong>No</strong> values written into the <strong>Active</strong> column inherit the row's text style so they visually match the rest of the row.</li>
         </ul>
       </section>
 
@@ -230,13 +254,15 @@
           <li><strong>bank_account_add</strong> — Create an account from <strong>Assets → Bank Accounts → Add new</strong> (same event from the sidebar HTML).</li>
           <li><strong>house_add</strong> — Create a house from <strong>Assets → House Values → Add new</strong>. Adds rows to <strong>INPUT - House Values</strong> and <strong>SYS - House Assets</strong> and creates the matching <strong>HOUSES - {House}</strong> sheet. Activity <strong>Type</strong> is <strong>House Expenses</strong>; <strong>Action</strong> sub-label is <strong>House added</strong>. <strong>Amount</strong> shows the house's initial Current Value.</li>
           <li><strong>house_deactivate</strong> — <strong>Stop tracking</strong> on a house from <strong>Assets → House Values → Update</strong>. Flips <strong>Active = No</strong> on every <strong>INPUT - House Values</strong> row for that house plus the mirror <strong>SYS - House Assets</strong> row; history and the <strong>HOUSES - {House}</strong> sheet stay in place. Activity <strong>Type</strong> is <strong>House Expenses</strong>; sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong>.</li>
+          <li><strong>investment_add</strong> — Create an investment account from <strong>Assets → Investments → Add new</strong>. Adds rows to <strong>INPUT - Investments</strong> (current year block) and <strong>SYS - Assets</strong>. Activity <strong>Type</strong> is <strong>Investment</strong>; <strong>Action</strong> sub-label is <strong>Account added</strong>. <strong>Amount</strong> shows the starting value (0 if no starting value was supplied).</li>
+          <li><strong>investment_deactivate</strong> — <strong>Stop tracking</strong> on an investment account from <strong>Assets → Investments → Update</strong>. Flips <strong>Active = No</strong> on every <strong>INPUT - Investments</strong> row for that account plus the mirror <strong>SYS - Assets</strong> row; month history stays in place. Activity <strong>Type</strong> is <strong>Investment</strong>; sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong>.</li>
         </ul>
 
         <h4>Remove button</h4>
         <ul class="help-list">
           <li><strong>Enabled only for Donation</strong> rows until safe undo exists for other event types.</li>
           <li>For donations: after confirmation, the log line is removed; if <strong>INPUT - Donation</strong> still has a matching row (charity, date, amount, tax year, payment type, comments), that sheet row is removed too.</li>
-          <li>For other events (<strong>quick_pay</strong>, bill skip, house expense, bank account add, <strong>house_add</strong>, <strong>house_deactivate</strong>, …) the button is greyed out — delete those lines directly on <strong>LOG - Activity</strong> if needed.</li>
+          <li>For other events (<strong>quick_pay</strong>, bill skip, house expense, bank account add, <strong>house_add</strong>, <strong>house_deactivate</strong>, <strong>investment_add</strong>, <strong>investment_deactivate</strong>, …) the button is greyed out — delete those lines directly on <strong>LOG - Activity</strong> if needed.</li>
         </ul>
 
         <h4>Filters</h4>
@@ -252,14 +278,14 @@
         <ul class="help-list">
           <li><strong>Logged at</strong> — When the script appended the row (browser locale).</li>
           <li><strong>Payee</strong> — The Cash Flow / bill payee for that action.</li>
-          <li><strong>Type</strong> — A short label derived for scanning: <strong>Loan</strong>, <strong>Bill</strong>, <strong>HOA</strong>, <strong>Tuition</strong>, <strong>Income</strong>, <strong>Donation</strong>, <strong>Upcoming</strong>, <strong>Bank</strong>, <strong>Repair</strong> / <strong>Maintenance</strong> / <strong>Utilities</strong> / <strong>Property Tax</strong> (from the House Expenses <strong>Type</strong>), <strong>House Expenses</strong> if that field was blank, or <strong>Other</strong>.
+          <li><strong>Type</strong> — A short label derived for scanning: <strong>Loan</strong>, <strong>Bill</strong>, <strong>HOA</strong>, <strong>Tuition</strong>, <strong>Income</strong>, <strong>Donation</strong>, <strong>Upcoming</strong>, <strong>Bank</strong>, <strong>Investment</strong>, <strong>Repair</strong> / <strong>Maintenance</strong> / <strong>Utilities</strong> / <strong>Property Tax</strong> (from the House Expenses <strong>Type</strong>), <strong>House Expenses</strong> if that field was blank, or <strong>Other</strong>.
             <ul class="help-list">
               <li>It is <em>derived</em>, not a column you edit. Payees are matched to <strong>INPUT - Debts</strong> (Account Name + Type) and <strong>INPUT - Bills</strong> (Payee + Category); keyword checks cover HOA and tuition; <strong>donation</strong> events map to <strong>Donation</strong>; <strong>house_expense</strong> events use the log <strong>Category</strong>.</li>
               <li>Under the pill, a small <strong>Action</strong> sub-label disambiguates events that share a Type (e.g. the <strong>Bill</strong> pill can show <strong>Bill added</strong>, <strong>Tracking stopped</strong>, <strong>Bill skipped</strong>, or <strong>Bill autopay</strong>).</li>
               <li>The <strong>Type</strong> filter operates on the broad pill, so filtering by <strong>Bill</strong> still surfaces every bill lifecycle event.</li>
             </ul>
           </li>
-          <li><strong>Amount</strong> — The amount stored for the event (payment amount, or 0 for a skip). Lifecycle events that do not move money — <strong>Tracking stopped</strong> (<strong>bill_deactivate</strong>) and <strong>Bank</strong> account creation — show <strong>—</strong> instead of <strong>$0.00</strong>.</li>
+          <li><strong>Amount</strong> — The amount stored for the event (payment amount, or 0 for a skip). Lifecycle events that do not move money — <strong>Tracking stopped</strong> (<strong>bill_deactivate</strong>, <strong>house_deactivate</strong>, <strong>investment_deactivate</strong>) and <strong>Bank</strong> account creation — show <strong>—</strong> instead of <strong>$0.00</strong>.</li>
           <li><strong>Bill due date</strong> — The obligation date for that cycle (from the log entry date). Not necessarily the day you clicked the button.</li>
         </ul>
 
@@ -586,12 +612,14 @@
           <li><strong>INPUT - Debts</strong> — Loan accounts; minimums can surface on the Bills page.</li>
           <li><strong>INPUT - Donation</strong> — Charitable giving log organized by tax-year blocks. Added from <strong>Cash Flow → Donations</strong>.</li>
           <li><strong>INPUT - Bank Accounts</strong> — Per-year balance blocks. Written by <strong>Assets → Bank Accounts</strong>.</li>
+          <li><strong>INPUT - Investments</strong> — Per-year balance blocks for investment accounts (Account Name, Type, Active, Jan..Dec, totals / delta). Canonical active/inactive state for investments. Written by <strong>Assets → Investments</strong>.</li>
         </ul>
 
         <h4>SYS sheets</h4>
         <ul class="help-list">
-          <li><strong>SYS - House Assets</strong> — One row per property: House, Type, Loan Amount Left, Current Value.</li>
+          <li><strong>SYS - House Assets</strong> — One row per property: House, Type, Loan Amount Left, Current Value, Active.</li>
           <li><strong>SYS - Accounts</strong> — Liquid accounts with use-policy flags; feeds the Safe-to-use liquidity model.</li>
+          <li><strong>SYS - Assets</strong> — One row per investment account: Account Name, Type, Current Balance, Active. Mirrors the latest current-year value from <strong>INPUT - Investments</strong>.</li>
         </ul>
 
         <h4>HOUSES sheets</h4>
@@ -602,7 +630,7 @@
         <h4>Output &amp; audit</h4>
         <ul class="help-list">
           <li><strong>OUT - History</strong> — Planner run snapshots (cash, debt, net worth).</li>
-          <li><strong>LOG - Activity</strong> — Audit log for <strong>quick_pay</strong>, bill skip / autopay / add / deactivate, house expense, donation, upcoming actions, bank account add, and house add. Filter, sort, paginate, and remove (Donation-only) mistaken rows from the Activity page.</li>
+          <li><strong>LOG - Activity</strong> — Audit log for <strong>quick_pay</strong>, bill skip / autopay / add / deactivate, house expense, donation, upcoming actions, bank account add, house add / deactivate, and investment add / deactivate. Filter, sort, paginate, and remove (Donation-only) mistaken rows from the Activity page.</li>
         </ul>
       </section>
     </div>
