@@ -93,11 +93,33 @@
 
         <h4>Bank Accounts</h4>
         <ul class="help-list">
-          <li><strong>Update</strong> saves the balance for the selected account.</li>
+          <li><strong>Update</strong> saves the balance for the selected account. Edits go to <strong>INPUT - Bank Accounts</strong> (canonical) and <strong>SYS - Accounts</strong> mirrors the latest current-year value as <strong>Current Balance</strong>.</li>
           <li><strong>Add new</strong> appends one row to <strong>INPUT - Bank Accounts</strong> (current calendar-year block) and one to <strong>SYS - Accounts</strong>. The workbook must already have that Year block.</li>
           <li>If you supply an opening balance, its date must fall in that same year.</li>
-          <li><strong>Type</strong> and <strong>Use policy</strong> can be chosen from existing accounts or typed as new values.</li>
-          <li><strong>Add new</strong> logs <strong>bank_account_add</strong> to <strong>LOG - Activity</strong>. It does <em>not</em> re-run the full planner — use <strong>Run Planner + Refresh Snapshot</strong> when you want projections and Overview updated.</li>
+          <li><strong>Type</strong> is a controlled dropdown of existing bank account types read from <strong>SYS - Accounts</strong> (e.g. Checking, Savings). Pick one rather than typing free text; add new types directly in <strong>SYS - Accounts</strong> if needed. <strong>Use policy</strong> keeps its existing datalist — pick from suggestions or type a new value.</li>
+          <li><strong>Priority</strong> is a whole number between <strong>1</strong> and <strong>99</strong> (default <strong>9</strong>). Lower values are drawn first within the same <strong>Use policy</strong> bucket when the planner routes cash (see <code>planner_core.js</code> → <code>normalizeAccounts_</code>). The value is written to the <strong>Priority</strong> column on <strong>SYS - Accounts</strong>.</li>
+          <li>New rows appended to <strong>SYS - Accounts</strong> copy formatting (borders, font, number formats, row height) from the last existing account row so they visually match neighbors.</li>
+          <li><strong>Duplicate names</strong> are rejected across <strong>INPUT - Bank Accounts</strong> (all year blocks, including inactive) and <strong>SYS - Accounts</strong>. Inline errors show next to the Account name field and focus the input.</li>
+          <li>Status text during <strong>Add new</strong> is <em>Creating bank account…</em>. After success, the panel flips back to <strong>Update</strong> and preselects the new account.</li>
+          <li><strong>Add new</strong> logs <strong>bank_account_add</strong> to <strong>LOG - Activity</strong>. <strong>Amount</strong> shows the opening balance when you supplied one, or <strong>$0.00</strong> when you did not. It does <em>not</em> re-run the full planner — use <strong>Run Planner + Refresh Snapshot</strong> when you want projections and Overview updated.</li>
+        </ul>
+
+        <h4>Bank Accounts — Stop tracking (soft deactivate)</h4>
+        <ul class="help-list">
+          <li><strong>Update</strong> mode shows a secondary <strong>Stop tracking</strong> button next to <strong>Save Bank Account</strong>. Use it when you close a bank account or otherwise want to retire it from active selectors without losing history.</li>
+          <li>Clicking it opens an inline confirmation. On confirm:
+            <ul class="help-list">
+              <li>Every row for that account in <strong>INPUT - Bank Accounts</strong> (across all year blocks) is flipped to <strong>Active = No</strong> — canonical source of truth.</li>
+              <li>The matching <strong>SYS - Accounts</strong> row mirrors <strong>Active = No</strong>.</li>
+              <li>All month values, <strong>Current Balance</strong>, <strong>Available Now</strong>, <strong>Min Buffer</strong>, <strong>Type</strong>, <strong>Use Policy</strong>, <strong>Priority</strong>, and totals / delta rows are left untouched.</li>
+            </ul>
+          </li>
+          <li>Inactive bank accounts drop out of the <strong>Bank Account</strong> dropdown immediately. History stays in both sheets for audit / reporting.</li>
+          <li>Duplicate-name validation still blocks reuse of a stop-tracked account name when adding a new bank account (names stay reserved).</li>
+          <li>Status text during the flow is <em>Stopping tracking…</em>.</li>
+          <li>Backward compatibility: rows with a blank / missing <strong>Active</strong> value are treated as active, so pre-existing data is unaffected until you explicitly stop tracking. The <strong>Active</strong> column is self-healed — the script adds it to <strong>INPUT - Bank Accounts</strong> year blocks and to <strong>SYS - Accounts</strong> automatically if missing.</li>
+          <li>Logs <strong>bank_account_deactivate</strong> to <strong>LOG - Activity</strong>. Activity <strong>Type</strong> is <strong>Bank</strong>; <strong>Action</strong> sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong> because no money moved.</li>
+          <li>New <strong>Yes</strong> / <strong>No</strong> values written into the <strong>Active</strong> column inherit the row's text style so they visually match the rest of the row.</li>
         </ul>
 
         <h4>Investments</h4>
@@ -251,7 +273,8 @@
           <li><strong>upcoming_add</strong> / <strong>upcoming_status</strong> / <strong>upcoming_cashflow</strong> — See <a href="#help-upcoming">Upcoming expenses</a>.</li>
           <li><strong>donation</strong> — Save on <strong>Cash Flow → Donations</strong>. Activity <strong>Type</strong> shows <strong>Donation</strong>.</li>
           <li><strong>house_expense</strong> — Save on <strong>Add House Expense</strong>, covered above.</li>
-          <li><strong>bank_account_add</strong> — Create an account from <strong>Assets → Bank Accounts → Add new</strong> (same event from the sidebar HTML).</li>
+          <li><strong>bank_account_add</strong> — Create an account from <strong>Assets → Bank Accounts → Add new</strong> (same event from the sidebar HTML). Activity <strong>Type</strong> is <strong>Bank</strong>; <strong>Action</strong> sub-label is <strong>Account added</strong>. <strong>Amount</strong> shows the supplied opening balance when one was provided (e.g. <strong>$150.00</strong>), or <strong>$0.00</strong> when the account was added without an opening amount.</li>
+          <li><strong>bank_account_deactivate</strong> — <strong>Stop tracking</strong> on a bank account from <strong>Assets → Bank Accounts → Update</strong>. Flips <strong>Active = No</strong> on every <strong>INPUT - Bank Accounts</strong> row for that account plus the mirror <strong>SYS - Accounts</strong> row; month history, <strong>Available Now</strong>, and <strong>Min Buffer</strong> stay in place. Activity <strong>Type</strong> is <strong>Bank</strong>; sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong>.</li>
           <li><strong>house_add</strong> — Create a house from <strong>Assets → House Values → Add new</strong>. Adds rows to <strong>INPUT - House Values</strong> and <strong>SYS - House Assets</strong> and creates the matching <strong>HOUSES - {House}</strong> sheet. Activity <strong>Type</strong> is <strong>House Expenses</strong>; <strong>Action</strong> sub-label is <strong>House added</strong>. <strong>Amount</strong> shows the house's initial Current Value.</li>
           <li><strong>house_deactivate</strong> — <strong>Stop tracking</strong> on a house from <strong>Assets → House Values → Update</strong>. Flips <strong>Active = No</strong> on every <strong>INPUT - House Values</strong> row for that house plus the mirror <strong>SYS - House Assets</strong> row; history and the <strong>HOUSES - {House}</strong> sheet stay in place. Activity <strong>Type</strong> is <strong>House Expenses</strong>; sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong>.</li>
           <li><strong>investment_add</strong> — Create an investment account from <strong>Assets → Investments → Add new</strong>. Adds rows to <strong>INPUT - Investments</strong> (current year block) and <strong>SYS - Assets</strong>. Activity <strong>Type</strong> is <strong>Investment</strong>; <strong>Action</strong> sub-label is <strong>Account added</strong>. <strong>Amount</strong> shows the starting value (0 if no starting value was supplied).</li>
@@ -262,7 +285,7 @@
         <ul class="help-list">
           <li><strong>Enabled only for Donation</strong> rows until safe undo exists for other event types.</li>
           <li>For donations: after confirmation, the log line is removed; if <strong>INPUT - Donation</strong> still has a matching row (charity, date, amount, tax year, payment type, comments), that sheet row is removed too.</li>
-          <li>For other events (<strong>quick_pay</strong>, bill skip, house expense, bank account add, <strong>house_add</strong>, <strong>house_deactivate</strong>, <strong>investment_add</strong>, <strong>investment_deactivate</strong>, …) the button is greyed out — delete those lines directly on <strong>LOG - Activity</strong> if needed.</li>
+          <li>For other events (<strong>quick_pay</strong>, bill skip, house expense, bank account add, <strong>bank_account_deactivate</strong>, <strong>house_add</strong>, <strong>house_deactivate</strong>, <strong>investment_add</strong>, <strong>investment_deactivate</strong>, …) the button is greyed out — delete those lines directly on <strong>LOG - Activity</strong> if needed.</li>
         </ul>
 
         <h4>Filters</h4>
@@ -285,7 +308,7 @@
               <li>The <strong>Type</strong> filter operates on the broad pill, so filtering by <strong>Bill</strong> still surfaces every bill lifecycle event.</li>
             </ul>
           </li>
-          <li><strong>Amount</strong> — The amount stored for the event (payment amount, or 0 for a skip). Lifecycle events that do not move money — <strong>Tracking stopped</strong> (<strong>bill_deactivate</strong>, <strong>house_deactivate</strong>, <strong>investment_deactivate</strong>) and <strong>Bank</strong> account creation — show <strong>—</strong> instead of <strong>$0.00</strong>.</li>
+          <li><strong>Amount</strong> — The amount stored for the event (payment amount, or 0 for a skip). Lifecycle events that do not move money — <strong>Tracking stopped</strong> (<strong>bill_deactivate</strong>, <strong>bank_account_deactivate</strong>, <strong>house_deactivate</strong>, <strong>investment_deactivate</strong>) — show <strong>—</strong> instead of <strong>$0.00</strong>. Account creation events (<strong>bank_account_add</strong>, <strong>investment_add</strong>, <strong>house_add</strong>) show the supplied opening / starting / current value, or <strong>$0.00</strong> when none was provided.</li>
           <li><strong>Bill due date</strong> — The obligation date for that cycle (from the log entry date). Not necessarily the day you clicked the button.</li>
         </ul>
 

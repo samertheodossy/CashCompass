@@ -327,7 +327,10 @@
               <input type="checkbox" id="bank_updateMinBuffer" onchange="evaluateBankBufferWarning()">
               <label for="bank_updateMinBuffer" style="margin:0;font-weight:normal;">Also update Min Buffer</label>
             </div>
-            <button onclick="saveBank()">Save Bank Account</button>
+            <div class="house-update-actions">
+              <button onclick="saveBank()">Save Bank Account</button>
+              <button type="button" class="small-btn" onclick="stopTrackingBank()" title="Mark this bank account inactive. History is preserved.">Stop tracking</button>
+            </div>
           </div>
           <div class="info">
             <div><strong>Selected month:</strong> <span id="bank_selectedMonth" class="muted">—</span></div>
@@ -347,13 +350,19 @@
         <div class="grid-2">
           <div>
             <label>Account name</label>
-            <input type="text" id="bank_add_name" maxlength="120" autocomplete="off">
+            <input type="text" id="bank_add_name" maxlength="120" autocomplete="off" oninput="if (typeof clearBankAddNameError_==='function') clearBankAddNameError_();">
+            <div id="bank_add_name_error" class="field-error" role="alert" aria-live="polite"></div>
             <label>Type</label>
-            <input type="text" id="bank_add_type" maxlength="80" list="bank_add_type_list" autocomplete="off">
-            <datalist id="bank_add_type_list"></datalist>
+            <select id="bank_add_type">
+              <option value="">— Select type —</option>
+            </select>
+            <div class="muted" style="margin-top:4px;font-size:12px;">Choose from existing bank account types in SYS - Accounts.</div>
             <label>Use policy</label>
             <input type="text" id="bank_add_policy" maxlength="120" list="bank_add_policy_list" autocomplete="off">
             <datalist id="bank_add_policy_list"></datalist>
+            <label>Priority</label>
+            <input type="number" id="bank_add_priority" min="1" max="99" step="1" value="9" inputmode="numeric">
+            <div class="muted" style="margin-top:4px;font-size:12px;">Lower number = used earlier within its Use policy bucket. Default 9.</div>
             <label>Opening balance date (optional)</label>
             <input type="date" id="bank_add_opening_date">
             <label>Opening balance amount (optional)</label>

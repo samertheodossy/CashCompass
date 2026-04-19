@@ -370,20 +370,30 @@
       <label for="bank_updateMinBuffer" style="margin:0;font-weight:normal;">Also update Min Buffer</label>
     </div>
 
-    <button onclick="saveBank()">Save Bank Account</button>
+    <div class="house-update-actions">
+      <button onclick="saveBank()">Save Bank Account</button>
+      <button type="button" class="small-btn" onclick="stopTrackingBank()" title="Mark this bank account inactive. History is preserved.">Stop tracking</button>
+    </div>
   </div>
 
   <div id="bank_mode_add_wrap" class="bank-mode-wrap">
     <label>Account name</label>
-    <input type="text" id="bank_add_name" maxlength="120" autocomplete="off">
+    <input type="text" id="bank_add_name" maxlength="120" autocomplete="off" oninput="if (typeof clearBankAddNameError_==='function') clearBankAddNameError_();">
+    <div id="bank_add_name_error" class="field-error" role="alert" aria-live="polite"></div>
 
     <label>Type</label>
-    <input type="text" id="bank_add_type" maxlength="80" list="bank_add_type_list" autocomplete="off">
-    <datalist id="bank_add_type_list"></datalist>
+    <select id="bank_add_type">
+      <option value="">— Select type —</option>
+    </select>
+    <div class="muted" style="margin-top:4px;font-size:12px;">Choose from existing bank account types in SYS - Accounts.</div>
 
     <label>Use policy</label>
     <input type="text" id="bank_add_policy" maxlength="120" list="bank_add_policy_list" autocomplete="off">
     <datalist id="bank_add_policy_list"></datalist>
+
+    <label>Priority</label>
+    <input type="number" id="bank_add_priority" min="1" max="99" step="1" value="9" inputmode="numeric">
+    <div class="muted" style="margin-top:4px;font-size:12px;">Lower number = used earlier within its Use policy bucket. Default 9.</div>
 
     <label>Opening balance date (optional)</label>
     <input type="date" id="bank_add_opening_date">
@@ -930,24 +940,37 @@ function fillBankAccountDropdownFromData_(data) {
 }
 
 function populateBankAddDatalists_(data) {
-  function fillList(listId, options) {
-    const dl = document.getElementById(listId);
-    if (!dl) return;
+  const sel = document.getElementById('bank_add_type');
+  if (sel) {
+    const currentValue = sel.value || '';
+    sel.innerHTML = '<option value="">— Select type —</option>';
+    (data.typeOptions || []).forEach(function(t) {
+      const o = document.createElement('option');
+      o.value = t;
+      o.textContent = t;
+      sel.appendChild(o);
+    });
+    if (currentValue && (data.typeOptions || []).indexOf(currentValue) !== -1) {
+      sel.value = currentValue;
+    }
+  }
+
+  const dl = document.getElementById('bank_add_policy_list');
+  if (dl) {
     dl.innerHTML = '';
-    (options || []).forEach(function(t) {
+    (data.policyOptions || []).forEach(function(t) {
       const o = document.createElement('option');
       o.value = t;
       dl.appendChild(o);
     });
   }
-  fillList('bank_add_type_list', data.typeOptions);
-  fillList('bank_add_policy_list', data.policyOptions);
 }
 
 function resetBankAddForm_() {
   const n = document.getElementById('bank_add_name');
   const t = document.getElementById('bank_add_type');
   const p = document.getElementById('bank_add_policy');
+  const pr = document.getElementById('bank_add_priority');
   const d = document.getElementById('bank_add_opening_date');
   const v = document.getElementById('bank_add_opening_value');
   const ca = document.getElementById('bank_add_set_available');
@@ -955,10 +978,45 @@ function resetBankAddForm_() {
   if (n) n.value = '';
   if (t) t.value = '';
   if (p) p.value = '';
+  if (pr) pr.value = '9';
   if (d) d.value = '';
   if (v) v.value = '';
   if (ca) ca.checked = true;
   if (cm) cm.checked = false;
+  clearBankAddNameError_();
+}
+
+function clearBankAddNameError_() {
+  const el = document.getElementById('bank_add_name_error');
+  if (el) {
+    el.textContent = '';
+    el.classList.remove('active');
+  }
+  const n = document.getElementById('bank_add_name');
+  if (n) n.classList.remove('field-error-input');
+}
+
+function showBankAddNameError_(message) {
+  const el = document.getElementById('bank_add_name_error');
+  if (el) {
+    el.textContent = message || 'Please fix the Account name.';
+    el.classList.add('active');
+  }
+  const n = document.getElementById('bank_add_name');
+  if (n) {
+    n.classList.add('field-error-input');
+    try { n.focus(); if (n.value) n.select(); } catch (e) {}
+  }
+}
+
+function isBankNameRelatedError_(msg) {
+  const m = String(msg || '').toLowerCase();
+  return (
+    m.indexOf('account name') !== -1 ||
+    m.indexOf('already exists') !== -1 ||
+    m.indexOf('reserved') !== -1 ||
+    m.indexOf('not allowed') !== -1
+  );
 }
 
 function setBankPanelMode(mode) {
@@ -1107,15 +1165,19 @@ function loadBankData() {
 }
 
 function createBankAccount() {
+  clearBankAddNameError_();
+
   const name = document.getElementById('bank_add_name').value.trim();
   const typeStr = document.getElementById('bank_add_type').value.trim();
   const policyStr = document.getElementById('bank_add_policy').value.trim();
+  const priRaw = document.getElementById('bank_add_priority').value;
   const openDate = document.getElementById('bank_add_opening_date').value.trim();
   const openRaw = document.getElementById('bank_add_opening_value').value;
   const hasDate = !!openDate;
   const hasAmt = String(openRaw || '').trim() !== '';
 
   if (!name) {
+    showBankAddNameError_('Account name is required.');
     setStatus('bank_status', 'Error: Account name is required.', true);
     return;
   }
@@ -1127,6 +1189,14 @@ function createBankAccount() {
     setStatus('bank_status', 'Error: Use policy is required.', true);
     return;
   }
+
+  const priStr = String(priRaw == null ? '' : priRaw).trim();
+  const priNum = priStr === '' ? 9 : parseInt(priStr, 10);
+  if (isNaN(priNum) || priNum < 1 || priNum > 99) {
+    setStatus('bank_status', 'Error: Priority must be a whole number between 1 and 99.', true);
+    return;
+  }
+
   if (hasDate !== hasAmt) {
     setStatus('bank_status', 'Error: For an opening balance, enter both date and amount (or leave both blank).', true);
     return;
@@ -1142,6 +1212,7 @@ function createBankAccount() {
     accountName: name,
     type: typeStr,
     usePolicy: policyStr,
+    priority: priNum,
     setAvailableFromOpening: document.getElementById('bank_add_set_available').checked,
     setMinBufferFromOpening: document.getElementById('bank_add_set_min_buffer').checked
   };
@@ -1150,7 +1221,7 @@ function createBankAccount() {
     payload.openingBalance = openNum;
   }
 
-  setStatusLoading('bank_status');
+  setStatusLoading('bank_status', 'Creating bank account…');
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -1164,9 +1235,45 @@ function createBankAccount() {
       loadBankSectionThenSelect_(createdName);
     })
     .withFailureHandler(function(err) {
-      setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
+      const msg = err && err.message ? err.message : String(err);
+      if (isBankNameRelatedError_(msg)) {
+        showBankAddNameError_(msg);
+      }
+      setStatus('bank_status', 'Error: ' + msg, true);
     })
     .addBankAccountFromDashboard(payload);
+}
+
+function stopTrackingBank() {
+  const sel = document.getElementById('bank_account');
+  const account = sel ? String(sel.value || '').trim() : '';
+
+  if (!account) {
+    setStatus('bank_status', 'Error: Pick a bank account first.', true);
+    return;
+  }
+
+  const confirmed = window.confirm(
+    'Stop tracking "' + account + '"?\n\n' +
+    'The account will no longer appear in the Bank Account selector. ' +
+    'All history in INPUT - Bank Accounts and the SYS - Accounts row stay in ' +
+    'place. You can still view past values for reporting.'
+  );
+  if (!confirmed) return;
+
+  setStatusLoading('bank_status', 'Stopping tracking…');
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('bank_status', (res && res.message) || 'Stopped tracking.', false);
+      loadBankSection();
+      loadBankData();
+      if (typeof refreshSnapshot === 'function') refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .deactivateBankAccountFromDashboard({ accountName: account });
 }
 
 function saveBank() {

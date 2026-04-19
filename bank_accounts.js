@@ -61,11 +61,55 @@ function getBankAccountUiData() {
     Logger.log('getBankAccountUiData type/policy options: ' + e);
   }
 
+  let inactive = Object.create(null);
+  try {
+    inactive = getInactiveBankAccountsSet_();
+  } catch (e) {
+    Logger.log('getBankAccountUiData inactive filter: ' + e);
+  }
+
+  const allAccounts = getBankAccountsFromHistory_();
+  const activeAccounts = allAccounts.filter(function(name) {
+    return !inactive[String(name || '').toLowerCase()];
+  });
+
   return {
-    accounts: getBankAccountsFromHistory_(),
+    accounts: activeAccounts,
     typeOptions: typeOpts,
     policyOptions: policyOpts
   };
+}
+
+/**
+ * Returns an object map keyed by lowercase account name for bank accounts
+ * whose Active column on SYS - Accounts is explicitly marked "No" / "n" /
+ * "false" / "inactive". Blank, missing, or unrecognized values are treated
+ * as active (backward compatibility for rows created before Active existed).
+ */
+function getInactiveBankAccountsSet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = getSheet_(ss, 'ACCOUNTS');
+  const display = sheet.getDataRange().getDisplayValues();
+  const inactive = Object.create(null);
+  if (display.length < 2) return inactive;
+
+  let headerMap;
+  try {
+    headerMap = getAccountsHeaderMap_(sheet);
+  } catch (e) {
+    return inactive;
+  }
+  if (headerMap.activeColZero === -1) return inactive;
+
+  for (let r = 1; r < display.length; r++) {
+    const name = String(display[r][headerMap.nameColZero] || '').trim();
+    if (!name) continue;
+    const raw = String(display[r][headerMap.activeColZero] || '').trim().toLowerCase();
+    if (raw === 'no' || raw === 'n' || raw === 'false' || raw === 'inactive') {
+      inactive[name.toLowerCase()] = true;
+    }
+  }
+  return inactive;
 }
 
 /**
@@ -156,7 +200,10 @@ function findLastBankAccountDataRowInBlock_(sheet, block) {
  * @returns {number} 1-based row number of the new row
  */
 function insertNewBankAccountHistoryRow_(sheet, block, accountName) {
-  const lastCol = Math.max(sheet.getLastColumn(), 2);
+  // Self-heal the Active column before computing lastCol so the inserted
+  // row's format copy covers it and we can stamp Active=Yes below.
+  const activeCol = ensureBankAccountsActiveColumnForBlock_(sheet, block);
+  const lastCol = Math.max(sheet.getLastColumn(), activeCol, 2);
   const lastAccountRow = findLastBankAccountDataRowInBlock_(sheet, block);
   let newRow;
   let insertBeforeRow;
@@ -189,12 +236,31 @@ function insertNewBankAccountHistoryRow_(sheet, block, accountName) {
   sheet.getRange(newRow, 1, 1, lastCol).clearContent();
   sheet.getRange(newRow, 1).setValue(accountName);
 
+  // New bank accounts are Active = Yes. Historical rows created before the
+  // Active column existed remain blank and are treated as active by readers.
+  writeActiveCellWithRowFormat_(sheet, newRow, activeCol, 'Yes');
+
   return newRow;
 }
 
-function appendAccountsRowForNewBank_(sheet, accountName, typeStr, policyStr) {
-  const headerMap = getAccountsHeaderMap_(sheet);
-  const lastCol = Math.max(sheet.getLastColumn(), headerMap.nameCol);
+/**
+ * Returns the 1-based row of the last existing data row in SYS - Accounts (one
+ * with a non-blank Account Name) so we can clone its formatting onto a newly
+ * appended row. Matches the pattern used by `findAssetsTemplateRow_` in
+ * investments.js.
+ */
+function findAccountsTemplateRow_(sheet, headerMap) {
+  const display = sheet.getDataRange().getDisplayValues();
+  for (let r = display.length - 1; r >= 1; r--) {
+    const name = String(display[r][headerMap.nameColZero] || '').trim();
+    if (name) return r + 1;
+  }
+  return -1;
+}
+
+function appendAccountsRowForNewBank_(sheet, accountName, typeStr, policyStr, priorityNum) {
+  const headerMap = ensureAccountsActiveColumn_(sheet);
+  const lastCol = Math.max(sheet.getLastColumn(), headerMap.nameCol, headerMap.activeCol);
 
   const row = [];
   for (let c = 0; c < lastCol; c++) {
@@ -207,18 +273,54 @@ function appendAccountsRowForNewBank_(sheet, accountName, typeStr, policyStr) {
   if (headerMap.bufferColZero !== -1) row[headerMap.bufferColZero] = 0;
   if (headerMap.typeColZero !== -1) row[headerMap.typeColZero] = typeStr;
   if (headerMap.policyColZero !== -1) row[headerMap.policyColZero] = policyStr;
+  if (headerMap.priorityColZero !== -1) {
+    const pri = parseInt(priorityNum, 10);
+    row[headerMap.priorityColZero] = isNaN(pri) ? 9 : pri;
+  }
+  if (headerMap.activeColZero !== -1) row[headerMap.activeColZero] = 'Yes';
+
+  // Identify a neighbor row BEFORE appending so we can clone visual
+  // treatment (borders, background, font, alignment, number formats, row
+  // height) onto the new row without touching the freshly written values.
+  const templateRow = findAccountsTemplateRow_(sheet, headerMap);
 
   sheet.appendRow(row);
   const appendedRow = sheet.getLastRow();
 
+  if (templateRow !== -1) {
+    try {
+      sheet.getRange(templateRow, 1, 1, lastCol).copyTo(
+        sheet.getRange(appendedRow, 1, 1, lastCol),
+        SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+        false
+      );
+      sheet.setRowHeight(appendedRow, sheet.getRowHeight(templateRow));
+    } catch (formatErr) {
+      Logger.log('appendAccountsRowForNewBank_ format copy failed: ' + formatErr);
+    }
+  }
+
+  // Re-assert currency number formats as a safety net: the whole-row
+  // PASTE_FORMAT above normally covers them, but older workbooks may have
+  // a trailing row without currency formatting.
   if (headerMap.balanceCol !== -1) {
-    applyCurrencyFormat_(sheet.getRange(appendedRow, headerMap.balanceCol));
+    const bc = sheet.getRange(appendedRow, headerMap.balanceCol);
+    if (!String(bc.getNumberFormat() || '').match(/\$|#,##0/)) applyCurrencyFormat_(bc);
   }
   if (headerMap.availableCol !== -1) {
-    applyCurrencyFormat_(sheet.getRange(appendedRow, headerMap.availableCol));
+    const ac = sheet.getRange(appendedRow, headerMap.availableCol);
+    if (!String(ac.getNumberFormat() || '').match(/\$|#,##0/)) applyCurrencyFormat_(ac);
   }
   if (headerMap.bufferCol !== -1) {
-    applyCurrencyFormat_(sheet.getRange(appendedRow, headerMap.bufferCol));
+    const mc = sheet.getRange(appendedRow, headerMap.bufferCol);
+    if (!String(mc.getNumberFormat() || '').match(/\$|#,##0/)) applyCurrencyFormat_(mc);
+  }
+
+  // Re-stamp Active with row-consistent formatting. The whole-row PASTE_FORMAT
+  // copy above inherits the template row's Active cell style, which may
+  // itself have defaulted to tiny text on older rows.
+  if (headerMap.activeCol !== -1) {
+    writeActiveCellWithRowFormat_(sheet, appendedRow, headerMap.activeCol, 'Yes');
   }
 }
 
@@ -244,6 +346,7 @@ function deleteAccountsRowByExactName_(sheet, accountName) {
  *   accountName: string,
  *   type: string,
  *   usePolicy: string,
+ *   priority?: number|string,
  *   openingBalanceDate?: string,
  *   openingBalance?: number|string,
  *   setAvailableFromOpening?: boolean,
@@ -261,6 +364,17 @@ function addBankAccountFromDashboard(payload) {
   if (!policyStr) throw new Error('Use policy is required.');
   if (typeStr.length > 80) throw new Error('Type is too long (max 80 characters).');
   if (policyStr.length > 120) throw new Error('Use policy is too long (max 120 characters).');
+
+  // Priority: canonical SYS - Accounts column read by planner_core.js
+  // (normalizeAccounts_). Default 9 to match the planner fallback.
+  let priorityNum = 9;
+  const priRaw = payload.priority;
+  if (priRaw !== null && priRaw !== undefined && String(priRaw).trim() !== '') {
+    const parsed = parseInt(String(priRaw).trim(), 10);
+    if (isNaN(parsed)) throw new Error('Priority must be a whole number.');
+    if (parsed < 1 || parsed > 99) throw new Error('Priority must be between 1 and 99.');
+    priorityNum = parsed;
+  }
 
   const openingDateStr = String(payload.openingBalanceDate || '').trim();
   const obRaw = payload.openingBalance;
@@ -303,7 +417,7 @@ function addBankAccountFromDashboard(payload) {
   }
 
   try {
-    appendAccountsRowForNewBank_(accountsSheet, accountName, typeStr, policyStr);
+    appendAccountsRowForNewBank_(accountsSheet, accountName, typeStr, policyStr, priorityNum);
   } catch (e2) {
     bankSheet.deleteRow(bankRowNum);
     throw new Error('Could not add SYS - Accounts row (rolled back bank sheet row): ' + (e2.message || e2));
@@ -348,6 +462,7 @@ function addBankAccountFromDashboard(payload) {
       details: JSON.stringify({
         detailsVersion: 1,
         year: currentYear,
+        priority: priorityNum,
         openingBalanceDate: openingDateStr,
         openingBalance: openingAmount,
         setAvailableFromOpening: setAvail,
@@ -617,6 +732,8 @@ function getAccountsHeaderMap_(sheet) {
   const bufferColZero = headers.indexOf('Min Buffer');
   const typeColZero = headers.indexOf('Type');
   const policyColZero = headers.indexOf('Use Policy');
+  const priorityColZero = headers.indexOf('Priority');
+  const activeColZero = headers.indexOf('Active');
 
   if (nameColZero === -1) {
     throw new Error('Accounts sheet must contain Account Name.');
@@ -629,13 +746,100 @@ function getAccountsHeaderMap_(sheet) {
     bufferColZero: bufferColZero,
     typeColZero: typeColZero,
     policyColZero: policyColZero,
+    priorityColZero: priorityColZero,
+    activeColZero: activeColZero,
     nameCol: nameColZero + 1,
     balanceCol: balanceColZero === -1 ? -1 : balanceColZero + 1,
     availableCol: availableColZero === -1 ? -1 : availableColZero + 1,
     bufferCol: bufferColZero === -1 ? -1 : bufferColZero + 1,
     typeCol: typeColZero === -1 ? -1 : typeColZero + 1,
-    policyCol: policyColZero === -1 ? -1 : policyColZero + 1
+    policyCol: policyColZero === -1 ? -1 : policyColZero + 1,
+    priorityCol: priorityColZero === -1 ? -1 : priorityColZero + 1,
+    activeCol: activeColZero === -1 ? -1 : activeColZero + 1
   };
+}
+
+/**
+ * Self-heals SYS - Accounts by ensuring an "Active" header exists. Appends
+ * "Active" to the first empty trailing header cell (or a new column if none
+ * are empty) without touching existing data rows. Returns a fresh header
+ * map. Blank Active in existing rows is treated as active.
+ */
+function ensureAccountsActiveColumn_(sheet) {
+  const headerMap = getAccountsHeaderMap_(sheet);
+  if (headerMap.activeColZero !== -1) return headerMap;
+
+  const lastCol = Math.max(sheet.getLastColumn(), 1);
+  const headerRowValues = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0] || [];
+
+  let targetCol = lastCol + 1;
+  for (let c = headerRowValues.length; c >= 1; c--) {
+    if (String(headerRowValues[c - 1] || '').trim() === '') {
+      targetCol = c;
+    } else {
+      break;
+    }
+  }
+
+  sheet.getRange(1, targetCol).setValue('Active');
+  return getAccountsHeaderMap_(sheet);
+}
+
+/**
+ * Iterates every Year block on INPUT - Bank Accounts. Callback receives the
+ * parsed block (same shape as getBankAccountsYearBlock_) and the integer year.
+ * Errors on individual blocks are swallowed so a malformed block can never
+ * break a multi-block write pass.
+ */
+function forEachBankAccountsYearBlock_(sheet, callback) {
+  const display = sheet.getDataRange().getDisplayValues();
+  for (let r = 0; r < display.length; r++) {
+    const colA = String(display[r][0] || '').trim();
+    const colB = String(display[r][1] || '').trim();
+    if (colA !== 'Year') continue;
+    const yearNum = parseInt(colB, 10);
+    if (isNaN(yearNum)) continue;
+
+    let block = null;
+    try {
+      block = getBankAccountsYearBlock_(sheet, yearNum);
+    } catch (blockErr) {
+      Logger.log('forEachBankAccountsYearBlock_ ' + yearNum + ': ' + blockErr);
+      continue;
+    }
+    callback(block, yearNum);
+  }
+}
+
+/**
+ * Self-heals a year block in INPUT - Bank Accounts by ensuring an "Active"
+ * header exists. Placed at column firstMonthCol + 12 (immediately after Dec)
+ * so existing month column logic — which assumes 12 contiguous months
+ * starting at firstMonthCol — is not disturbed. Returns the 1-based column
+ * of the Active header for this block.
+ */
+function ensureBankAccountsActiveColumnForBlock_(sheet, block) {
+  const afterDecCol = block.firstMonthCol + 12; // typically col 14 with firstMonthCol=2
+  const scanWidth = Math.max(sheet.getLastColumn(), afterDecCol + 4);
+  const headerVals = sheet.getRange(block.headerRow, 1, 1, scanWidth).getDisplayValues()[0] || [];
+
+  for (let c = 0; c < headerVals.length; c++) {
+    if (String(headerVals[c] || '').trim().toLowerCase() === 'active') {
+      return c + 1;
+    }
+  }
+
+  try {
+    sheet.getRange(block.headerRow, block.firstMonthCol + 11, 1, 1).copyTo(
+      sheet.getRange(block.headerRow, afterDecCol, 1, 1),
+      SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+      false
+    );
+  } catch (e) {
+    /* formatting is best-effort; the header value is what matters */
+  }
+  sheet.getRange(block.headerRow, afterDecCol).setValue('Active');
+  return afterDecCol;
 }
 
 /**
@@ -674,4 +878,150 @@ function getPriorMonthCashTotalFromBankInput_() {
   } catch (e) {
     return { total: null, label: '' };
   }
+}
+
+/**
+ * Writes an Active value on every data row in every year block of
+ * INPUT - Bank Accounts whose column A matches accountName (case-insensitive).
+ * Self-heals the Active column in each block before writing.
+ *
+ * @returns {{ found: boolean, rowsUpdated: number, blocksScanned: number }}
+ */
+function setBankAccountActiveInAllBlocks_(sheet, accountName, value) {
+  const target = String(accountName || '').trim().toLowerCase();
+  const writeValue = String(value == null ? '' : value);
+  let rowsUpdated = 0;
+  let found = false;
+  let blocksScanned = 0;
+
+  forEachBankAccountsYearBlock_(sheet, function(block) {
+    blocksScanned++;
+    const activeCol = ensureBankAccountsActiveColumnForBlock_(sheet, block);
+
+    for (let row = block.dataStartRow; row <= block.dataEndRow; row++) {
+      const name = String(sheet.getRange(row, 1).getDisplayValue() || '').trim();
+      if (!isBankAccountDataRowName_(name)) continue;
+      if (name.toLowerCase() !== target) continue;
+
+      found = true;
+      const cell = sheet.getRange(row, activeCol);
+      const current = String(cell.getDisplayValue() || '').trim().toLowerCase();
+      if (current !== writeValue.toLowerCase()) {
+        writeActiveCellWithRowFormat_(sheet, row, activeCol, writeValue);
+        rowsUpdated++;
+      }
+    }
+  });
+
+  return {
+    found: found,
+    rowsUpdated: rowsUpdated,
+    blocksScanned: blocksScanned
+  };
+}
+
+/**
+ * Writes an Active value on the matching SYS - Accounts row. Self-heals the
+ * Active column first so the write always lands in a real column.
+ *
+ * @returns {{ found: boolean, changed: boolean }}
+ */
+function setAccountsActiveValue_(sheet, accountName, value) {
+  const target = String(accountName || '').trim().toLowerCase();
+  const writeValue = String(value == null ? '' : value);
+
+  const headerMap = ensureAccountsActiveColumn_(sheet);
+  const display = sheet.getDataRange().getDisplayValues();
+
+  for (let r = 1; r < display.length; r++) {
+    const name = String(display[r][headerMap.nameColZero] || '').trim();
+    if (!name) continue;
+    if (name.toLowerCase() !== target) continue;
+
+    const rowNum = r + 1;
+    const cell = sheet.getRange(rowNum, headerMap.activeCol);
+    const current = String(cell.getDisplayValue() || '').trim().toLowerCase();
+    if (current === writeValue.toLowerCase()) {
+      return { found: true, changed: false };
+    }
+    writeActiveCellWithRowFormat_(sheet, rowNum, headerMap.activeCol, writeValue);
+    return { found: true, changed: true };
+  }
+
+  return { found: false, changed: false };
+}
+
+/**
+ * Stop tracking a bank account: flips Active=No on every matching
+ * INPUT - Bank Accounts row (across all year blocks) and on the mirror
+ * SYS - Accounts row. History (month values, Current Balance, Available Now,
+ * Min Buffer) is preserved; the row is not deleted or renamed, so the name
+ * stays reserved against reuse.
+ *
+ * @param {{ accountName: string }} payload
+ */
+function deactivateBankAccountFromDashboard(payload) {
+  validateRequired_(payload, ['accountName']);
+  const accountName = String(payload.accountName || '').trim();
+  if (!accountName) throw new Error('Account name is required.');
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const bankSheet = getSheet_(ss, 'BANK_ACCOUNTS');
+  const accountsSheet = getSheet_(ss, 'ACCOUNTS');
+
+  // 1) Canonical write across every year block.
+  const bankUpdate = setBankAccountActiveInAllBlocks_(bankSheet, accountName, 'No');
+  if (!bankUpdate.found) {
+    throw new Error('No rows found for "' + accountName + '" in INPUT - Bank Accounts.');
+  }
+
+  // 2) Mirror write on SYS - Accounts.
+  const accountsUpdate = setAccountsActiveValue_(accountsSheet, accountName, 'No');
+
+  const alreadyInactive = bankUpdate.rowsUpdated === 0 && !accountsUpdate.changed;
+
+  // 3) Activity log (best-effort).
+  try {
+    const tz = Session.getScriptTimeZone();
+    appendActivityLog_(ss, {
+      eventType: 'bank_account_deactivate',
+      entryDate: Utilities.formatDate(stripTime_(new Date()), tz, 'yyyy-MM-dd'),
+      amount: 0,
+      direction: 'expense',
+      payee: accountName,
+      category: '',
+      accountSource: '',
+      cashFlowSheet: '',
+      cashFlowMonth: '',
+      dedupeKey: '',
+      details: JSON.stringify({
+        detailsVersion: 1,
+        reason: 'stop_tracking',
+        bankRowsUpdated: bankUpdate.rowsUpdated,
+        bankBlocksScanned: bankUpdate.blocksScanned,
+        accountsRowFound: accountsUpdate.found,
+        alreadyInactive: alreadyInactive
+      })
+    });
+  } catch (logErr) {
+    Logger.log('deactivateBankAccountFromDashboard activity log: ' + logErr);
+  }
+
+  try {
+    touchDashboardSourceUpdated_('bank_accounts');
+  } catch (e) {
+    /* best-effort */
+  }
+
+  const message = alreadyInactive
+    ? '"' + accountName + '" was already marked inactive. History remains.'
+    : 'Stopped tracking "' + accountName + '". History in INPUT - Bank Accounts and the SYS - Accounts row remain.';
+
+  return {
+    ok: true,
+    message: message,
+    accountName: accountName,
+    alreadyInactive: alreadyInactive,
+    rowsUpdated: bankUpdate.rowsUpdated + (accountsUpdate.changed ? 1 : 0)
+  };
 }

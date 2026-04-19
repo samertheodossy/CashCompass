@@ -1,5 +1,5 @@
 /**
- * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_deactivate, house expense, house_add, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, investment_add, investment_deactivate, …). Rows can be removed from the web UI for mistaken log lines only.
+ * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_deactivate, house expense, house_add, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_deactivate, investment_add, investment_deactivate, …). Rows can be removed from the web UI for mistaken log lines only.
  * Complements OUT - History (planner-run snapshots). Tab: LOG - Activity.
  */
 
@@ -364,6 +364,7 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (etEarly === 'donation') return 'Donation';
   if (etEarly.indexOf('upcoming_') === 0) return 'Upcoming';
   if (etEarly === 'bank_account_add') return 'Bank';
+  if (etEarly === 'bank_account_deactivate') return 'Bank';
   if (etEarly === 'bill_add') return 'Bill';
   if (etEarly === 'bill_deactivate') return 'Bill';
   if (etEarly === 'house_add') return 'House Expenses';
@@ -420,6 +421,7 @@ function activityLogActionLabel_(eventType) {
     case 'bill_skip': return 'Bill skipped';
     case 'bill_autopay': return 'Bill autopay';
     case 'bank_account_add': return 'Account added';
+    case 'bank_account_deactivate': return 'Tracking stopped';
     case 'house_add': return 'House added';
     case 'house_deactivate': return 'Tracking stopped';
     case 'investment_add': return 'Account added';
@@ -437,7 +439,7 @@ function activityLogIsNonMonetaryEvent_(eventType) {
   var et = String(eventType || '').trim().toLowerCase();
   return (
     et === 'bill_deactivate' ||
-    et === 'bank_account_add' ||
+    et === 'bank_account_deactivate' ||
     et === 'house_deactivate' ||
     et === 'investment_deactivate'
   );
