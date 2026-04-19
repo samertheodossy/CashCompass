@@ -74,6 +74,23 @@
           <li>Running the planner refreshes <strong>SYS - House Assets → Current Value</strong> from the latest values in the current-year block. Other SYS columns (<strong>Type</strong>, <strong>Loan Amount Left</strong>) are <em>not</em> overwritten by that sync.</li>
         </ul>
 
+        <h4>House Values — Stop tracking (soft deactivate)</h4>
+        <ul class="help-list">
+          <li><strong>Update</strong> mode shows a secondary <strong>Stop tracking</strong> button next to <strong>Save House Value</strong>. Use it when you sell a house or otherwise want to retire it from active views without losing history.</li>
+          <li>Clicking it opens an inline confirmation. On confirm:
+            <ul class="help-list">
+              <li>Every row for that house in <strong>INPUT - House Values</strong> (across all year blocks) is flipped to <strong>Active = No</strong> — canonical source of truth.</li>
+              <li>The matching <strong>SYS - House Assets</strong> row mirrors <strong>Active = No</strong>.</li>
+              <li>Month values, <strong>Loan Amount Left</strong>, <strong>Current Value</strong>, <strong>Type</strong>, and the <strong>HOUSES - {House}</strong> sheet are left untouched.</li>
+            </ul>
+          </li>
+          <li>Inactive houses drop out of the <strong>Update House Value</strong> dropdown, the <strong>Properties → House Expenses</strong> selector, and the <strong>Properties → Property performance</strong> rows + portfolio cards. History stays in every sheet for audit / reporting.</li>
+          <li>The <strong>HOUSES - {House}</strong> sheet is <em>not</em> deleted or renamed. You can still open it directly on the workbook to review past expenses.</li>
+          <li>Duplicate-name validation still blocks reuse of a stop-tracked house name when adding a new house (names stay reserved).</li>
+          <li>Logs <strong>house_deactivate</strong> to <strong>LOG - Activity</strong>. Activity <strong>Type</strong> is <strong>House Expenses</strong>; <strong>Action</strong> sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong> because no money moved.</li>
+          <li>New <strong>Yes</strong> / <strong>No</strong> values written into the <strong>Active</strong> column inherit the row's text style so they visually match the rest of the row.</li>
+        </ul>
+
         <h4>Bank Accounts</h4>
         <ul class="help-list">
           <li><strong>Update</strong> saves the balance for the selected account.</li>
@@ -212,13 +229,14 @@
           <li><strong>house_expense</strong> — Save on <strong>Add House Expense</strong>, covered above.</li>
           <li><strong>bank_account_add</strong> — Create an account from <strong>Assets → Bank Accounts → Add new</strong> (same event from the sidebar HTML).</li>
           <li><strong>house_add</strong> — Create a house from <strong>Assets → House Values → Add new</strong>. Adds rows to <strong>INPUT - House Values</strong> and <strong>SYS - House Assets</strong> and creates the matching <strong>HOUSES - {House}</strong> sheet. Activity <strong>Type</strong> is <strong>House Expenses</strong>; <strong>Action</strong> sub-label is <strong>House added</strong>. <strong>Amount</strong> shows the house's initial Current Value.</li>
+          <li><strong>house_deactivate</strong> — <strong>Stop tracking</strong> on a house from <strong>Assets → House Values → Update</strong>. Flips <strong>Active = No</strong> on every <strong>INPUT - House Values</strong> row for that house plus the mirror <strong>SYS - House Assets</strong> row; history and the <strong>HOUSES - {House}</strong> sheet stay in place. Activity <strong>Type</strong> is <strong>House Expenses</strong>; sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong>.</li>
         </ul>
 
         <h4>Remove button</h4>
         <ul class="help-list">
           <li><strong>Enabled only for Donation</strong> rows until safe undo exists for other event types.</li>
           <li>For donations: after confirmation, the log line is removed; if <strong>INPUT - Donation</strong> still has a matching row (charity, date, amount, tax year, payment type, comments), that sheet row is removed too.</li>
-          <li>For other events (<strong>quick_pay</strong>, bill skip, house expense, bank account add, <strong>house_add</strong>, …) the button is greyed out — delete those lines directly on <strong>LOG - Activity</strong> if needed.</li>
+          <li>For other events (<strong>quick_pay</strong>, bill skip, house expense, bank account add, <strong>house_add</strong>, <strong>house_deactivate</strong>, …) the button is greyed out — delete those lines directly on <strong>LOG - Activity</strong> if needed.</li>
         </ul>
 
         <h4>Filters</h4>
@@ -336,6 +354,13 @@
       <!-- ================================================================ -->
       <section id="help-property-performance" class="help-section">
         <h3>Property performance (detail)</h3>
+
+        <h4>Active houses only</h4>
+        <ul class="help-list">
+          <li>The table and portfolio mini-cards show <strong>active houses only</strong> — houses whose <strong>SYS - House Assets → Active</strong> is blank (legacy) or anything other than <strong>No</strong> / <strong>n</strong> / <strong>false</strong> / <strong>inactive</strong>.</li>
+          <li>Stop-tracked houses drop out on the next load/refresh. Their <strong>INPUT - House Values</strong> rows, <strong>SYS - House Assets</strong> row, and <strong>HOUSES - {House}</strong> sheet are preserved; only the view is filtered.</li>
+          <li>Portfolio totals (<strong>Equity</strong>, <strong>Rent</strong>, <strong>Expenses</strong>, <strong>Net</strong>) are summed from the same filtered row set, so cards and rows always agree.</li>
+        </ul>
 
         <h4>Rent</h4>
         <ul class="help-list">

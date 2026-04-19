@@ -175,6 +175,44 @@ function loadHouseData() {
     .getHouseValueForDate(house, date);
 }
 
+function stopTrackingHouse() {
+  const sel = document.getElementById('house_house');
+  const house = sel ? String(sel.value || '').trim() : '';
+
+  if (!house) {
+    setStatus('house_status', 'Error: Pick a house first.', true);
+    return;
+  }
+
+  const confirmed = window.confirm(
+    'Stop tracking "' + house + '"?\n\n' +
+    'The house will no longer appear in the House Values or House Expenses ' +
+    'selectors. The HOUSES - ' + house + ' sheet and all history stay in ' +
+    'place. You can still view past values and expenses for reporting.'
+  );
+  if (!confirmed) return;
+
+  setStatusLoading('house_status', 'Stopping tracking…');
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('house_status', (res && res.message) || 'Stopped tracking.', false);
+      // Refresh Update dropdown so the sold house drops out of the list.
+      loadHouseSection();
+      // Clear the right-hand info panel since the house is no longer visible.
+      loadHouseData();
+      // Refresh House Expenses picker immediately (mirrors createHouse()).
+      if (typeof loadHouseExpensesSection === 'function') {
+        try { loadHouseExpensesSection(); } catch (e) {}
+      }
+      if (typeof refreshSnapshot === 'function') refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .deactivateHouseFromDashboard({ houseName: house });
+}
+
 function saveHouse() {
   const rawValue = document.getElementById('house_value').value;
   const numericValue = toNumber(rawValue);

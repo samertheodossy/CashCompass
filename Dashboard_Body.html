@@ -255,7 +255,10 @@
             <input type="date" id="house_date" onchange="loadHouseData()">
             <label>Value</label>
             <input type="text" id="house_value" inputmode="decimal" onfocus="currencyFocus('house_value')" onblur="currencyBlur('house_value')">
-            <button onclick="saveHouse()">Save House Value</button>
+            <div class="house-update-actions">
+              <button onclick="saveHouse()">Save House Value</button>
+              <button type="button" class="small-btn" onclick="stopTrackingHouse()" title="Mark this house inactive. History and the HOUSES sheet are preserved.">Stop tracking</button>
+            </div>
           </div>
           <div class="info">
             <div><strong>Selected month:</strong> <span id="house_selectedMonth" class="muted">—</span></div>

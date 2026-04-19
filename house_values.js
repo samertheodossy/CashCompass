@@ -6,10 +6,56 @@ function getHouseUiData() {
     Logger.log('getHouseUiData propertyType options: ' + e);
   }
 
+  let inactive = Object.create(null);
+  try {
+    inactive = getInactiveHousesSet_();
+  } catch (e) {
+    Logger.log('getHouseUiData inactive filter: ' + e);
+  }
+
+  // Selectors only surface currently-active houses. History storage
+  // (INPUT - House Values, SYS rows, HOUSES sheets) is untouched.
+  const allHouses = getHousesFromHouseValues_();
+  const activeHouses = allHouses.filter(function(name) {
+    return !inactive[String(name || '').toLowerCase()];
+  });
+
   return {
-    houses: getHousesFromHouseValues_(),
+    houses: activeHouses,
     propertyTypeOptions: propertyTypeOpts
   };
+}
+
+/**
+ * Returns an object map keyed by lowercase house name for houses whose
+ * Active column on SYS - House Assets is explicitly marked "No" / "n" /
+ * "false" / "inactive". Blank, missing, or unrecognized values are treated
+ * as active (backward compatibility for rows created before Active existed).
+ */
+function getInactiveHousesSet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = getSheet_(ss, 'HOUSE_ASSETS');
+  const display = sheet.getDataRange().getDisplayValues();
+  const inactive = Object.create(null);
+  if (display.length < 2) return inactive;
+
+  let headerMap;
+  try {
+    headerMap = getHouseAssetsHeaderMap_(sheet);
+  } catch (e) {
+    return inactive;
+  }
+  if (headerMap.activeColZero === -1) return inactive;
+
+  for (let r = 1; r < display.length; r++) {
+    const name = String(display[r][headerMap.houseColZero] || '').trim();
+    if (!name) continue;
+    const raw = String(display[r][headerMap.activeColZero] || '').trim().toLowerCase();
+    if (raw === 'no' || raw === 'n' || raw === 'false' || raw === 'inactive') {
+      inactive[name.toLowerCase()] = true;
+    }
+  }
+  return inactive;
 }
 
 /**
@@ -324,6 +370,7 @@ function getHouseAssetsHeaderMap_(sheet) {
   const typeColZero = headers.indexOf('Type');
   const loanColZero = headers.indexOf('Loan Amount Left');
   const valueColZero = headers.indexOf('Current Value');
+  const activeColZero = headers.indexOf('Active');
 
   if (houseColZero === -1) {
     throw new Error('House Assets must contain House header.');
@@ -338,11 +385,129 @@ function getHouseAssetsHeaderMap_(sheet) {
     typeColZero: typeColZero,
     loanColZero: loanColZero,
     valueColZero: valueColZero,
+    activeColZero: activeColZero,
     houseCol: houseColZero + 1,
     typeCol: typeColZero === -1 ? -1 : typeColZero + 1,
     loanCol: loanColZero === -1 ? -1 : loanColZero + 1,
-    valueCol: valueColZero + 1
+    valueCol: valueColZero + 1,
+    activeCol: activeColZero === -1 ? -1 : activeColZero + 1
   };
+}
+
+/**
+ * Self-heals SYS - House Assets by ensuring an "Active" header exists.
+ * Appends "Active" to the first empty trailing header cell (or a new column
+ * if none are empty) without touching any existing data rows. Returns a
+ * fresh header map. Blank Active in existing rows is treated as active.
+ */
+function ensureHouseAssetsActiveColumn_(sheet) {
+  const headerMap = getHouseAssetsHeaderMap_(sheet);
+  if (headerMap.activeColZero !== -1) return headerMap;
+
+  const lastCol = Math.max(sheet.getLastColumn(), 1);
+  const headerRowValues = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0] || [];
+
+  // Prefer reusing a blank trailing cell on the header row so we don't push
+  // the Active column far past the meaningful columns.
+  let targetCol = lastCol + 1;
+  for (let c = headerRowValues.length; c >= 1; c--) {
+    if (String(headerRowValues[c - 1] || '').trim() === '') {
+      targetCol = c;
+    } else {
+      break;
+    }
+  }
+
+  sheet.getRange(1, targetCol).setValue('Active');
+  return getHouseAssetsHeaderMap_(sheet);
+}
+
+/**
+ * Writes a Yes/No-style Active value into a cell while inheriting the row's
+ * text formatting (font size, color, alignment, vertical padding) from the
+ * house-name cell in column 1. Without this, Active cells default to the
+ * workbook's baseline tiny-text style and stick out next to the rest of
+ * the row. Used by both INPUT - House Values and SYS - House Assets writes.
+ */
+function writeActiveCellWithRowFormat_(sheet, row, col, value) {
+  const target = sheet.getRange(row, col);
+  try {
+    sheet.getRange(row, 1, 1, 1).copyTo(
+      target,
+      SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+      false
+    );
+  } catch (e) {
+    Logger.log('writeActiveCellWithRowFormat_ copyTo: ' + e);
+  }
+  try {
+    // Column 1 is usually a text cell, but force plain text on the Active
+    // cell so "Yes"/"No" are never coerced or re-formatted as currency.
+    target.setNumberFormat('@');
+  } catch (e) {
+    /* best-effort */
+  }
+  target.setValue(String(value == null ? '' : value));
+}
+
+/**
+ * Iterates every Year block on INPUT - House Values by scanning column A
+ * for "Year" header rows. The callback receives the parsed block object
+ * (same shape as getHouseValuesYearBlock_) and the integer year. Errors
+ * on individual blocks are swallowed so a malformed block cannot break
+ * a multi-block write pass.
+ */
+function forEachHouseValuesYearBlock_(sheet, callback) {
+  const display = sheet.getDataRange().getDisplayValues();
+  for (let r = 0; r < display.length; r++) {
+    const colA = String(display[r][0] || '').trim();
+    const colB = String(display[r][1] || '').trim();
+    if (colA !== 'Year') continue;
+    const yearNum = parseInt(colB, 10);
+    if (isNaN(yearNum)) continue;
+
+    let block = null;
+    try {
+      block = getHouseValuesYearBlock_(sheet, yearNum);
+    } catch (blockErr) {
+      Logger.log('forEachHouseValuesYearBlock_ ' + yearNum + ': ' + blockErr);
+      continue;
+    }
+    callback(block, yearNum);
+  }
+}
+
+/**
+ * Self-heals a year block in INPUT - House Values by ensuring an "Active"
+ * header exists. Placed at column firstMonthCol + 12 (immediately after the
+ * Dec month column) so existing month column logic — which assumes 12
+ * contiguous months starting at firstMonthCol — is not disturbed. Returns
+ * the 1-based column of the Active header for this block.
+ */
+function ensureHouseValuesActiveColumnForBlock_(sheet, block) {
+  const afterDecCol = block.firstMonthCol + 12; // typically col 15 with firstMonthCol=3
+  const scanWidth = Math.max(sheet.getLastColumn(), afterDecCol + 4);
+  const headerVals = sheet.getRange(block.headerRow, 1, 1, scanWidth).getDisplayValues()[0] || [];
+
+  for (let c = 0; c < headerVals.length; c++) {
+    if (String(headerVals[c] || '').trim().toLowerCase() === 'active') {
+      return c + 1;
+    }
+  }
+
+  // Best-effort: mirror the Dec-month header formatting onto the new Active
+  // cell so it looks consistent with neighboring column headers.
+  try {
+    sheet.getRange(block.headerRow, block.firstMonthCol + 11, 1, 1).copyTo(
+      sheet.getRange(block.headerRow, afterDecCol, 1, 1),
+      SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+      false
+    );
+  } catch (e) {
+    /* formatting is best-effort; the header value itself is what matters */
+  }
+  sheet.getRange(block.headerRow, afterDecCol).setValue('Active');
+  return afterDecCol;
 }
 
 /**
@@ -485,7 +650,10 @@ function findLastHouseDataRowInBlock_(sheet, block) {
  * @returns {number} 1-based row number of the new row
  */
 function insertNewHouseHistoryRow_(sheet, block, houseName, loanAmountLeft) {
-  const lastCol = Math.max(sheet.getLastColumn(), 2);
+  // Self-heal the Active column before computing lastCol so the inserted
+  // row's format copy covers it and we can stamp Active=Yes below.
+  const activeCol = ensureHouseValuesActiveColumnForBlock_(sheet, block);
+  const lastCol = Math.max(sheet.getLastColumn(), activeCol, 2);
   const lastHouseRow = findLastHouseDataRowInBlock_(sheet, block);
   let newRow;
   let insertBeforeRow;
@@ -525,12 +693,20 @@ function insertNewHouseHistoryRow_(sheet, block, houseName, loanAmountLeft) {
     applyCurrencyFormat_(loanCell);
   }
 
+  // New houses are Active = Yes. Historical rows created before the Active
+  // column existed remain blank and are treated as active by readers. The
+  // cell inherits the row's text formatting from col 1 so "Yes" doesn't
+  // render in the default tiny style next to the rest of the row.
+  writeActiveCellWithRowFormat_(sheet, newRow, activeCol, 'Yes');
+
   return newRow;
 }
 
 function appendHouseAssetsRowForNewHouse_(sheet, houseName, propertyType, loanAmountLeft, currentValue) {
-  const headerMap = getHouseAssetsHeaderMap_(sheet);
-  const lastCol = Math.max(sheet.getLastColumn(), headerMap.houseCol);
+  // Self-heal the Active column so new houses always record Active=Yes
+  // explicitly, while pre-existing blank rows stay blank (read as active).
+  const headerMap = ensureHouseAssetsActiveColumn_(sheet);
+  const lastCol = Math.max(sheet.getLastColumn(), headerMap.houseCol, headerMap.activeCol);
 
   const row = [];
   for (let c = 0; c < lastCol; c++) row[c] = '';
@@ -539,6 +715,7 @@ function appendHouseAssetsRowForNewHouse_(sheet, houseName, propertyType, loanAm
   if (headerMap.typeColZero !== -1) row[headerMap.typeColZero] = propertyType;
   if (headerMap.loanColZero !== -1) row[headerMap.loanColZero] = round2_(toNumber_(loanAmountLeft));
   if (headerMap.valueColZero !== -1) row[headerMap.valueColZero] = round2_(toNumber_(currentValue));
+  if (headerMap.activeColZero !== -1) row[headerMap.activeColZero] = 'Yes';
 
   // Identify a neighboring existing data row BEFORE appending, so we can clone
   // its visual treatment (borders, background, font, alignment, number
@@ -570,6 +747,14 @@ function appendHouseAssetsRowForNewHouse_(sheet, houseName, propertyType, loanAm
   if (headerMap.loanCol !== -1) {
     const lc = sheet.getRange(appendedRow, headerMap.loanCol);
     if (!String(lc.getNumberFormat() || '').match(/\$|#,##0/)) applyCurrencyFormat_(lc);
+  }
+
+  // Re-stamp Active with row-consistent formatting. The whole-row format
+  // copy above inherits the template row's Active cell style, which may
+  // itself have defaulted to tiny text on older rows. Forcing the house
+  // name column's style keeps "Yes" visually in line with the row.
+  if (headerMap.activeCol !== -1) {
+    writeActiveCellWithRowFormat_(sheet, appendedRow, headerMap.activeCol, 'Yes');
   }
 }
 
@@ -899,4 +1084,164 @@ function addHouseFromDashboard(payload) {
         : 'HOUSES - ' + houseName + ' sheet already existed') + '\n' +
       'Use Run Planner + Refresh Snapshot when you want projections and the overview snapshot updated.'
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Stop tracking (soft deactivate)                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Soft-delete entry point for houses. Flips Active = 'No' on every row for
+ * this house across all year blocks in INPUT - House Values (canonical) and
+ * on the matching SYS - House Assets row (mirror). Does not touch history,
+ * month values, loan amounts, or the HOUSES - {House} sheet.
+ *
+ * @param {{ houseName: string }} payload
+ * @returns {{ ok: boolean, message: string, houseName: string,
+ *             alreadyInactive: boolean, rowsUpdated: number }}
+ */
+function deactivateHouseFromDashboard(payload) {
+  validateRequired_(payload, ['houseName']);
+  const houseName = String(payload.houseName || '').trim();
+  if (!houseName) throw new Error('House name is required.');
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const hvSheet = getSheet_(ss, 'HOUSE_VALUES');
+  const haSheet = getSheet_(ss, 'HOUSE_ASSETS');
+
+  // 1) Canonical write: flip every matching row across all year blocks so
+  //    future reads see a consistent inactive state regardless of which
+  //    year block they query.
+  const hvUpdate = setHouseActiveInAllHouseValuesBlocks_(hvSheet, houseName, 'No');
+  if (!hvUpdate.found) {
+    throw new Error('No rows found for "' + houseName + '" in INPUT - House Values.');
+  }
+
+  // 2) Mirror write: SYS - House Assets carries one row per house. Writes
+  //    even if the row already reads "No" so row formatting is refreshed
+  //    consistently with the canonical rows.
+  const haUpdate = setHouseAssetsActiveValue_(haSheet, houseName, 'No');
+
+  const alreadyInactive = hvUpdate.rowsUpdated === 0 && !haUpdate.changed;
+
+  // 3) Activity log (best-effort; never block the user on a log failure).
+  try {
+    const tz = Session.getScriptTimeZone();
+    appendActivityLog_(ss, {
+      eventType: 'house_deactivate',
+      entryDate: Utilities.formatDate(stripTime_(new Date()), tz, 'yyyy-MM-dd'),
+      amount: 0,
+      direction: 'expense',
+      payee: houseName,
+      category: '',
+      accountSource: '',
+      cashFlowSheet: '',
+      cashFlowMonth: '',
+      dedupeKey: '',
+      details: JSON.stringify({
+        detailsVersion: 1,
+        reason: 'stop_tracking',
+        hvRowsUpdated: hvUpdate.rowsUpdated,
+        hvBlocksScanned: hvUpdate.blocksScanned,
+        haRowFound: haUpdate.found,
+        alreadyInactive: alreadyInactive
+      })
+    });
+  } catch (logErr) {
+    Logger.log('deactivateHouseFromDashboard activity log: ' + logErr);
+  }
+
+  try {
+    touchDashboardSourceUpdated_('house_values');
+  } catch (e) {
+    /* best-effort */
+  }
+
+  const message = alreadyInactive
+    ? '"' + houseName + '" was already marked inactive. History and HOUSES sheet remain.'
+    : 'Stopped tracking "' + houseName + '". The HOUSES - ' + houseName +
+      ' sheet and all history remain.';
+
+  return {
+    ok: true,
+    message: message,
+    houseName: houseName,
+    alreadyInactive: alreadyInactive,
+    rowsUpdated: hvUpdate.rowsUpdated + (haUpdate.changed ? 1 : 0)
+  };
+}
+
+/**
+ * Writes an Active value on every data row in every year block of
+ * INPUT - House Values whose column A matches houseName (case-insensitive).
+ * Self-heals the Active column in each block before writing.
+ *
+ * @returns {{ found: boolean, rowsUpdated: number, blocksScanned: number }}
+ */
+function setHouseActiveInAllHouseValuesBlocks_(sheet, houseName, value) {
+  const target = String(houseName || '').trim().toLowerCase();
+  const writeValue = String(value == null ? '' : value);
+  let rowsUpdated = 0;
+  let found = false;
+  let blocksScanned = 0;
+
+  forEachHouseValuesYearBlock_(sheet, function(block) {
+    blocksScanned++;
+    const activeCol = ensureHouseValuesActiveColumnForBlock_(sheet, block);
+
+    for (let row = block.dataStartRow; row <= block.dataEndRow; row++) {
+      const name = String(sheet.getRange(row, 1).getDisplayValue() || '').trim();
+      const sub = String(sheet.getRange(row, 2).getDisplayValue() || '').trim();
+      if (!isHouseDataRowName_(name, sub)) continue;
+      if (name.toLowerCase() !== target) continue;
+
+      found = true;
+      const cell = sheet.getRange(row, activeCol);
+      const current = String(cell.getDisplayValue() || '').trim().toLowerCase();
+      if (current !== writeValue.toLowerCase()) {
+        writeActiveCellWithRowFormat_(sheet, row, activeCol, writeValue);
+        rowsUpdated++;
+      }
+    }
+  });
+
+  return {
+    found: found,
+    rowsUpdated: rowsUpdated,
+    blocksScanned: blocksScanned
+  };
+}
+
+/**
+ * Writes an Active value on the matching SYS - House Assets row.
+ * Self-heals the Active column if missing. Case-insensitive name match.
+ *
+ * @returns {{ found: boolean, changed: boolean, row: number }}
+ */
+function setHouseAssetsActiveValue_(sheet, houseName, value) {
+  const target = String(houseName || '').trim().toLowerCase();
+  if (!target) return { found: false, changed: false, row: -1 };
+
+  const headerMap = ensureHouseAssetsActiveColumn_(sheet);
+  const display = sheet.getDataRange().getDisplayValues();
+  if (display.length < 2 || headerMap.activeCol === -1) {
+    return { found: false, changed: false, row: -1 };
+  }
+
+  for (let r = 1; r < display.length; r++) {
+    const rowHouse = String(display[r][headerMap.houseColZero] || '').trim();
+    if (!rowHouse) continue;
+    if (rowHouse.toLowerCase() !== target) continue;
+
+    const rowNum = r + 1;
+    const current = String(display[r][headerMap.activeColZero] || '').trim().toLowerCase();
+    const writeValue = String(value == null ? '' : value);
+    if (current === writeValue.toLowerCase()) {
+      return { found: true, changed: false, row: rowNum };
+    }
+    writeActiveCellWithRowFormat_(sheet, rowNum, headerMap.activeCol, writeValue);
+    return { found: true, changed: true, row: rowNum };
+  }
+
+  return { found: false, changed: false, row: -1 };
 }

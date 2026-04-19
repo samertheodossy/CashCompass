@@ -10,10 +10,22 @@ function buildHouseExpenseCashFlowPayee_(payload) {
 function getHouseExpenseUiData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
+  // HOUSES - * sheets stay forever (history). The picker only surfaces
+  // houses that are currently active per SYS - House Assets. Blank Active
+  // is treated as active for backward compatibility.
+  let inactive = Object.create(null);
+  try {
+    inactive = getInactiveHousesSet_();
+  } catch (e) {
+    Logger.log('getHouseExpenseUiData inactive filter: ' + e);
+  }
+
   const houseSheets = ss.getSheets()
     .map(function(sheet) { return sheet.getName(); })
     .filter(function(name) {
-      return String(name || '').toUpperCase().indexOf('HOUSES - ') === 0;
+      if (String(name || '').toUpperCase().indexOf('HOUSES - ') !== 0) return false;
+      const location = getHouseExpenseLocationName_(name);
+      return !inactive[String(location || '').toLowerCase()];
     })
     .sort();
 

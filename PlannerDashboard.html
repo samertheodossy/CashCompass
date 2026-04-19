@@ -230,6 +230,19 @@
       box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
     }
 
+    .house-update-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .house-update-actions > button:first-child { margin-top: 0; }
+    .small-btn {
+      width: auto;
+      padding: 8px 10px;
+      font-size: 12px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      color: #0f172a;
+      cursor: pointer;
+    }
+
     .warning-danger {
       background: #fde8e8;
       border: 1px solid #f5c2c7;
@@ -285,7 +298,10 @@
     <label>Value</label>
     <input type="text" id="house_value" inputmode="decimal" onfocus="currencyFocus('house_value')" onblur="currencyBlur('house_value')">
 
-    <button onclick="saveHouse()">Save House Value</button>
+    <div class="house-update-actions">
+      <button onclick="saveHouse()">Save House Value</button>
+      <button type="button" class="small-btn" onclick="stopTrackingHouse()" title="Mark this house inactive. History and the HOUSES sheet are preserved.">Stop tracking</button>
+    </div>
   </div>
 
   <div id="house_mode_add_wrap" class="bank-mode-wrap">
@@ -758,6 +774,41 @@ function saveHouse() {
       setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
     })
     .updateHouseValueByDate(payload);
+}
+
+function stopTrackingHouse() {
+  const sel = document.getElementById('house_house');
+  const house = sel ? String(sel.value || '').trim() : '';
+
+  if (!house) {
+    setStatus('house_status', 'Error: Pick a house first.', true);
+    return;
+  }
+
+  const confirmed = window.confirm(
+    'Stop tracking "' + house + '"?\n\n' +
+    'The house will no longer appear in the House Values or House Expenses ' +
+    'selectors. The HOUSES - ' + house + ' sheet and all history stay in ' +
+    'place. You can still view past values and expenses for reporting.'
+  );
+  if (!confirmed) return;
+
+  setStatus('house_status', 'Stopping tracking…', false);
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('house_status', (res && res.message) || 'Stopped tracking.', false);
+      if (typeof loadHouseSection === 'function') {
+        try { loadHouseSection(); } catch (e) {}
+      }
+      if (typeof loadHouseData === 'function') {
+        try { loadHouseData(); } catch (e) {}
+      }
+    })
+    .withFailureHandler(function(err) {
+      setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .deactivateHouseFromDashboard({ houseName: house });
 }
 
 function createHouse() {

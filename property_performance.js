@@ -88,11 +88,26 @@ function getHouseNamesFromHouseAssets_() {
   if (display.length < 2) return [];
 
   const headerMap = getHouseAssetsHeaderMap_(sheet);
-  const names = [];
 
+  // Property performance is an active-holdings view: reuse the shared
+  // inactive-house rule (explicit No/n/false/inactive = inactive; blank or
+  // unknown = active for backward compatibility with rows that predate the
+  // Active column). History in INPUT - House Values, SYS - House Assets,
+  // and HOUSES - {House} sheets is untouched — only the rows fed into the
+  // table/totals are filtered.
+  let inactive = Object.create(null);
+  try {
+    inactive = getInactiveHousesSet_();
+  } catch (e) {
+    Logger.log('getHouseNamesFromHouseAssets_ inactive filter: ' + e);
+  }
+
+  const names = [];
   for (let r = 1; r < display.length; r++) {
     const h = String(display[r][headerMap.houseColZero] || '').trim();
-    if (h) names.push(h);
+    if (!h) continue;
+    if (inactive[h.toLowerCase()]) continue;
+    names.push(h);
   }
 
   return names.sort();
