@@ -26,7 +26,6 @@ function appendUpcomingActivityStatus_(ss, row, colMap, upcomingId, previousStat
   const tz = Session.getScriptTimeZone();
   const entryDate = dueIso || Utilities.formatDate(stripTime_(new Date()), tz, 'yyyy-MM-dd');
   const payee = upcomingExpenseRowPayeeForLog_(row, colMap);
-  const amt = round2_(toNumber_(row[colMap['Amount']]));
   const base = upcomingExpenseBaseDetails_(row, colMap, upcomingId);
   base.previousStatus = String(previousStatus || '').trim();
   base.newStatus = String(newStatus || '').trim();
@@ -36,10 +35,50 @@ function appendUpcomingActivityStatus_(ss, row, colMap, upcomingId, previousStat
     });
   }
 
+  // Lifecycle-only event: Dismiss is the only writer of upcoming_status now
+  // (Paid transitions are handled by applyPaymentToUpcomingExpense via the
+  // upcoming_payment event). We write Amount = 0 on the sheet to match the
+  // *_deactivate convention, and the Activity UI renders upcoming_status
+  // rows as "—" via activityLogIsNonMonetaryEvent_.
   appendActivityLog_(ss, {
     eventType: 'upcoming_status',
     entryDate: entryDate,
-    amount: amt,
+    amount: 0,
+    direction: 'expense',
+    payee: payee,
+    category: String(row[colMap['Category']] || '').trim(),
+    accountSource: String(row[colMap['Account / Source']] || '').trim(),
+    cashFlowSheet: '',
+    cashFlowMonth: '',
+    dedupeKey: '',
+    details: JSON.stringify(base)
+  });
+}
+
+/**
+ * Payment-applied lifecycle event for an Upcoming row. Non-monetary on the
+ * Activity sheet (Amount = 0, rendered as "—"), because the actual money
+ * movement lands in INPUT - Cash Flow via the normal quickAddPayment path
+ * and is already logged there as a quick_pay row. The details JSON carries
+ * the paid amount, previous/new remaining balance, and whether this payment
+ * closed the item so the history stays reconstructable.
+ */
+function appendUpcomingActivityPayment_(ss, row, colMap, upcomingId, previousAmount, paidAmount, newRemaining, fullyPaid) {
+  const dueIso = upcomingExpenseDueIsoForLog_(row, colMap);
+  const tz = Session.getScriptTimeZone();
+  const entryDate = dueIso || Utilities.formatDate(stripTime_(new Date()), tz, 'yyyy-MM-dd');
+  const payee = upcomingExpenseRowPayeeForLog_(row, colMap);
+  const base = upcomingExpenseBaseDetails_(row, colMap, upcomingId);
+  base.previousAmount = round2_(toNumber_(previousAmount));
+  base.paidAmount = round2_(toNumber_(paidAmount));
+  base.remainingAfter = round2_(toNumber_(newRemaining));
+  base.fullyPaid = !!fullyPaid;
+  base.newStatus = fullyPaid ? 'Paid' : 'Planned';
+
+  appendActivityLog_(ss, {
+    eventType: 'upcoming_payment',
+    entryDate: entryDate,
+    amount: 0,
     direction: 'expense',
     payee: payee,
     category: String(row[colMap['Category']] || '').trim(),
@@ -211,14 +250,15 @@ function addUpcomingExpense(payload) {
   };
 }
 
-function updateUpcomingExpenseStatus(id, status) {
+/**
+ * Dismiss an Upcoming row — the soft-deactivate equivalent for Upcoming.
+ * Preserves the sheet row and logs a non-monetary lifecycle event. Legacy
+ * rows with Status = "Skipped" are treated as already-dismissed here so
+ * repeated dismisses on historical data are a no-op instead of an error.
+ */
+function dismissUpcomingExpense(id) {
   const targetId = String(id || '').trim();
-  const newStatus = String(status || '').trim();
-
   if (!targetId) throw new Error('Expense ID is required.');
-  if (['Planned', 'Paid', 'Skipped'].indexOf(newStatus) === -1) {
-    throw new Error('Status must be Planned, Paid, or Skipped.');
-  }
 
   const rowInfo = findUpcomingExpenseRowById_(targetId);
   if (!rowInfo) throw new Error('Upcoming expense not found: ' + targetId);
@@ -226,161 +266,133 @@ function updateUpcomingExpenseStatus(id, status) {
   const row = rowInfo.values;
   const colMap = rowInfo.colMap;
   const oldStatus = String(row[colMap['Status']] || '').trim() || 'Planned';
-  if (oldStatus === newStatus) {
+
+  if (oldStatus === 'Dismissed' || oldStatus === 'Skipped') {
     return {
       ok: true,
-      message: 'Status is already ' + newStatus + '.'
+      message: 'Already dismissed.'
     };
   }
 
-  if (newStatus === 'Paid') {
-    return markUpcomingExpensePaid_(rowInfo);
+  if (oldStatus === 'Paid') {
+    // Paid items are already off the active board; nothing to dismiss.
+    return {
+      ok: true,
+      message: 'Already marked Paid — no dismiss needed.'
+    };
   }
 
-  rowInfo.sheet.getRange(rowInfo.row, rowInfo.colMap['Status'] + 1).setValue(newStatus);
+  rowInfo.sheet.getRange(rowInfo.row, colMap['Status'] + 1).setValue('Dismissed');
   touchDashboardSourceUpdated_('upcoming_expenses');
 
   const ss = rowInfo.sheet.getParent();
-  appendUpcomingActivityStatus_(ss, row, colMap, String(row[colMap['ID']] || '').trim(), oldStatus, newStatus, {});
+  appendUpcomingActivityStatus_(ss, row, colMap, String(row[colMap['ID']] || '').trim(), oldStatus, 'Dismissed', {});
 
   return {
     ok: true,
-    message: 'Upcoming expense status updated to ' + newStatus + '.'
+    message: 'Upcoming expense dismissed.'
   };
 }
 
-function markUpcomingExpensePaid_(rowInfo) {
+/**
+ * Record a Quick Add payment against an Upcoming row. Subtracts paidAmount
+ * from the row's remaining Amount (clamped at 0) and flips Status to "Paid"
+ * when the row is fully covered, removing it from the active board. Partial
+ * payments keep the row visible with the reduced remaining balance.
+ *
+ * The money movement itself is recorded by the normal quickAddPayment path
+ * (quick_pay activity event). This function only updates Upcoming sheet
+ * state and emits a non-monetary upcoming_payment lifecycle event so the
+ * audit trail on the Activity sheet captures remaining-balance context
+ * without double-counting dollars.
+ */
+function applyPaymentToUpcomingExpense(id, paidAmount) {
+  const targetId = String(id || '').trim();
+  if (!targetId) throw new Error('Expense ID is required.');
+
+  const paid = round2_(toNumber_(paidAmount));
+  if (isNaN(paid) || paid <= 0) {
+    throw new Error('Paid amount must be greater than 0.');
+  }
+
+  const rowInfo = findUpcomingExpenseRowById_(targetId);
+  if (!rowInfo) throw new Error('Upcoming expense not found: ' + targetId);
+
   const row = rowInfo.values;
   const sheet = rowInfo.sheet;
   const colMap = rowInfo.colMap;
 
   const currentStatus = String(row[colMap['Status']] || '').trim() || 'Planned';
-  const addedToCashFlow = String(row[colMap['Added To Cash Flow']] || '').trim() || 'No';
-
-  if (currentStatus === 'Skipped') {
-    throw new Error('Skipped expense cannot be marked paid.');
-  }
-
-  if (currentStatus === 'Paid') {
+  if (currentStatus !== 'Planned') {
+    // Legacy Skipped / Dismissed / Paid rows should not be resurrected by a
+    // stray Quick Add callback. Return a benign no-op so the Quick Add save
+    // itself still completes cleanly.
     return {
       ok: true,
-      message: 'Already marked Paid.'
+      message: 'Upcoming row is not active (' + currentStatus + ') — no balance change.',
+      changed: false,
+      fullyPaid: currentStatus === 'Paid',
+      remainingAfter: round2_(toNumber_(row[colMap['Amount']]))
     };
   }
 
-  let cashFlowMessage = '';
-  let pushedToCashFlowThisAction = false;
+  const previousAmount = round2_(toNumber_(row[colMap['Amount']]));
+  let newRemaining = round2_(previousAmount - paid);
+  // Clamp sub-penny remainders to 0 so rounding drift can't leave a ghost
+  // balance that would keep the row on the active board indefinitely.
+  if (!isFinite(newRemaining) || newRemaining <= 0.005) newRemaining = 0;
 
-  if (addedToCashFlow !== 'Yes') {
-    const result = addUpcomingExpenseRowToCashFlow_(rowInfo);
-    cashFlowMessage = result && result.message ? result.message : '';
-    pushedToCashFlowThisAction = !!(result && result.wroteCashFlow);
-  }
+  const fullyPaid = newRemaining <= 0;
 
-  sheet.getRange(rowInfo.row, colMap['Status'] + 1).setValue('Paid');
-  touchDashboardSourceUpdated_('upcoming_expenses');
-
-  const ss = sheet.getParent();
-  appendUpcomingActivityStatus_(ss, row, colMap, String(row[colMap['ID']] || '').trim(), currentStatus, 'Paid', {
-    pushedToCashFlowThisAction: pushedToCashFlowThisAction
-  });
-
-  return {
-    ok: true,
-    message: cashFlowMessage
-      ? 'Upcoming expense marked Paid.\n' + cashFlowMessage
-      : 'Upcoming expense marked Paid.'
-  };
-}
-
-function addUpcomingExpenseToCashFlow(expenseId) {
-  const targetId = String(expenseId || '').trim();
-  if (!targetId) throw new Error('Expense ID is required.');
-
-  const rowInfo = findUpcomingExpenseRowById_(targetId);
-  if (!rowInfo) throw new Error('Upcoming expense not found: ' + targetId);
-
-  return addUpcomingExpenseRowToCashFlow_(rowInfo);
-}
-
-function addUpcomingExpenseRowToCashFlow_(rowInfo) {
-  const row = rowInfo.values;
-  const sheet = rowInfo.sheet;
-  const colMap = rowInfo.colMap;
-
-  const status = String(row[colMap['Status']] || '').trim() || 'Planned';
-  const payee = String(row[colMap['Payee']] || '').trim() || String(row[colMap['Expense Name']] || '').trim();
-  const dueDate = row[colMap['Due Date']];
-  const amount = round2_(toNumber_(row[colMap['Amount']]));
-  const addedToCashFlow = String(row[colMap['Added To Cash Flow']] || '').trim() || 'No';
-
-  if (!payee) throw new Error('Upcoming expense must have a Payee or Expense Name.');
-  if (status === 'Skipped') throw new Error('Skipped expense cannot be added to cash flow.');
-  if (addedToCashFlow === 'Yes') {
-    return {
-      ok: true,
-      message: 'Already added to cash flow.',
-      wroteCashFlow: false
-    };
-  }
-  if (!dueDate || isNaN(new Date(dueDate).getTime())) throw new Error('Upcoming expense has invalid Due Date.');
-  if (amount <= 0) throw new Error('Upcoming expense amount must be greater than 0.');
-
-  const ss = sheet.getParent();
-  const upcomingId = String(row[colMap['ID']] || '').trim();
-
-  const result = quickAddPayment({
-    entryType: 'Expense',
-    payee: payee,
-    entryDate: Utilities.formatDate(new Date(dueDate), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
-    amount: amount,
-    createIfMissing: true,
-    suppressActivityLog: true
-  });
-
-  const snap = result && result.activitySnapshot;
-  if (!snap) {
-    throw new Error('Quick add did not return activity data for the activity log.');
-  }
-
+  sheet.getRange(rowInfo.row, colMap['Amount'] + 1).setValue(newRemaining);
+  applyCurrencyFormat_(sheet.getRange(rowInfo.row, colMap['Amount'] + 1));
   sheet.getRange(rowInfo.row, colMap['Added To Cash Flow'] + 1).setValue('Yes');
+
+  if (fullyPaid) {
+    sheet.getRange(rowInfo.row, colMap['Status'] + 1).setValue('Paid');
+  }
+
   touchDashboardSourceUpdated_('upcoming_expenses');
 
-  if (typeof runDebtPlanner === 'function') runDebtPlanner();
-
-  const cfDetails = {
-    detailsVersion: 1,
-    upcomingId: upcomingId,
-    expenseName: String(row[colMap['Expense Name']] || '').trim(),
-    source: 'INPUT - Upcoming Expenses',
-    previousValue: snap.previousValue,
-    newValue: snap.newValue,
-    signedAmount: snap.signedAmount,
-    createIfMissing: snap.createIfMissing,
-    debtBalanceNote: snap.debtBalanceNote
-  };
-
-  appendActivityLog_(ss, {
-    eventType: 'upcoming_cashflow',
-    entryDate: snap.entryDate,
-    amount: snap.amount,
-    direction: 'expense',
-    payee: snap.payee,
-    category: String(row[colMap['Category']] || '').trim(),
-    accountSource: String(row[colMap['Account / Source']] || '').trim(),
-    cashFlowSheet: snap.cashFlowSheet,
-    cashFlowMonth: snap.cashFlowMonth,
-    dedupeKey: 'upcoming_cf::' + upcomingId + '::' + String(snap.entryDate || '').trim(),
-    details: JSON.stringify(cfDetails)
-  });
+  const ss = sheet.getParent();
+  appendUpcomingActivityPayment_(
+    ss,
+    row,
+    colMap,
+    String(row[colMap['ID']] || '').trim(),
+    previousAmount,
+    paid,
+    newRemaining,
+    fullyPaid
+  );
 
   return {
     ok: true,
-    message: 'Added to cash flow.\n' + (result && result.message ? result.message : ''),
-    wroteCashFlow: true
+    message: fullyPaid
+      ? 'Upcoming expense fully paid.'
+      : 'Partial payment applied. Remaining: ' + fmtMoneyForMessage_(newRemaining),
+    changed: true,
+    fullyPaid: fullyPaid,
+    remainingAfter: newRemaining,
+    previousAmount: previousAmount,
+    paidAmount: paid
   };
 }
 
+function fmtMoneyForMessage_(n) {
+  const v = round2_(toNumber_(n));
+  return '$' + (isNaN(v) ? '0.00' : v.toFixed(2));
+}
+
+/**
+ * Prefill bundle consumed by Quick Add when launching a payment from an
+ * Upcoming row. Includes the remaining balance as the suggested amount and
+ * the upcomingId so Quick Add's save handler can call back into
+ * applyPaymentToUpcomingExpense(). flowSource is only populated when the
+ * Account / Source cell is an exact CASH / CREDIT_CARD match — free-text
+ * source names are passed through as a display hint only (not a flowSource
+ * value the backend would accept).
+ */
 function getUpcomingExpenseForQuickPayment(id) {
   const targetId = String(id || '').trim();
   if (!targetId) throw new Error('Expense ID is required.');
@@ -395,13 +407,23 @@ function getUpcomingExpenseForQuickPayment(id) {
   const dueDate = row[colMap['Due Date']];
   const amount = round2_(toNumber_(row[colMap['Amount']]));
   const status = String(row[colMap['Status']] || '').trim() || 'Planned';
+  const accountSource = String(row[colMap['Account / Source']] || '').trim();
+
+  const normalizedSource = accountSource.toUpperCase().replace(/[\s-]+/g, '_');
+  const flowSource =
+    normalizedSource === 'CASH' ? 'CASH' :
+    normalizedSource === 'CREDIT_CARD' ? 'CREDIT_CARD' :
+    '';
 
   return {
     entryType: 'Expense',
     payee: payee,
     entryDate: dueDate ? Utilities.formatDate(new Date(dueDate), Session.getScriptTimeZone(), 'yyyy-MM-dd') : '',
     amount: amount,
-    sourceStatus: status
+    sourceStatus: status,
+    accountSource: accountSource,
+    flowSource: flowSource,
+    upcomingId: targetId
   };
 }
 
@@ -583,7 +605,8 @@ function getUpcomingExpenseDayBucket_(dueDateObj, status) {
 function getUpcomingStatusRank_(status) {
   if (status === 'Planned') return 0;
   if (status === 'Paid') return 1;
-  if (status === 'Skipped') return 2;
+  // Skipped is a legacy value; treat it identically to Dismissed for sort.
+  if (status === 'Dismissed' || status === 'Skipped') return 2;
   return 9;
 }
 
@@ -594,7 +617,7 @@ function getUpcomingBucketRank_(bucket) {
   if (bucket === 'This Month') return 3;
   if (bucket === 'Later') return 4;
   if (bucket === 'Paid') return 5;
-  if (bucket === 'Skipped') return 6;
+  if (bucket === 'Dismissed' || bucket === 'Skipped') return 6;
   return 9;
 }
 

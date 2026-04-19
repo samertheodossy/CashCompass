@@ -175,30 +175,45 @@
         <h4>What it does</h4>
         <ul class="help-list">
           <li>Reads and writes <strong>INPUT - Upcoming Expenses</strong>.</li>
-          <li>The tab shows mini-cards (<strong>Next 7 Days</strong>, <strong>Next 30 Days</strong>, <strong>Overdue</strong>, <strong>Total Planned</strong>) and a list of planned items with amount, due date, payee, category, and source.</li>
+          <li>Upcoming is an <strong>open-obligations board</strong>: each row is a planned expense with a <strong>remaining amount</strong>. The <em>Amount</em> column is the live remaining balance — partial payments reduce it and fully paid rows drop off the active list automatically.</li>
+          <li>The tab shows mini-cards (<strong>Next 7 Days</strong>, <strong>Next 30 Days</strong>, <strong>Overdue</strong>, <strong>Total Planned</strong>) and a list of items that are still actionable (<em>Planned</em> with remaining &gt; 0).</li>
         </ul>
 
         <h4>Actions</h4>
         <ul class="help-list">
-          <li><strong>Add Upcoming Expense</strong> — Saves a new row. The optional <strong>Auto Add To Cash Flow</strong> checkbox tells the backend to post the row to Cash Flow on save (per your script rules).</li>
-          <li><strong>Planned / Paid / Skipped</strong> — Updates the row’s status.</li>
-          <li><strong>Add to Cash Flow</strong> — Appears when the item is not skipped and not already marked added. Writes to Cash Flow directly.</li>
-          <li><strong>Open in Quick add</strong> — Pre-fills the Quick add form so you can edit before saving.</li>
+          <li><strong>Add Upcoming Expense</strong> — Saves a new row. <strong>Expense Name</strong>, <strong>Due Date</strong>, and <strong>Amount</strong> are required (Amount must be greater than 0); the other fields are optional. Required-field errors appear inline next to the offending field; the status line below the button carries the action-specific loading / error message.</li>
+          <li><strong>Quick add payment</strong> — Sends you to <strong>Cash Flow → Quick add</strong> pre-filled with this row’s payee, due date, and current <em>remaining</em> amount. This is the <strong>single payment path</strong> for Upcoming: edit the amount if you paid more or less, then save. Cash Flow records the money movement; Upcoming’s remaining balance is decremented automatically and the row is flipped to <em>Paid</em> when it reaches 0.</li>
+          <li><strong>Dismiss</strong> — Removes the row from the active board without recording a payment. Use this for obligations you no longer want to track. The sheet row is preserved with <em>Status = Dismissed</em> for history.</li>
+        </ul>
+
+        <h4>Lifecycle model</h4>
+        <ul class="help-list">
+          <li><strong>Status</strong> is a read-only label: <em>Planned</em> / <em>Paid</em> / <em>Dismissed</em> (and legacy <em>Skipped</em> rows are treated the same as <em>Dismissed</em> for filtering and sort). The old manual <em>Planned</em> / <em>Paid</em> / <em>Skipped</em> buttons and the direct <em>Add to Cash Flow</em> button have been retired in favor of Quick add + Dismiss.</li>
+          <li><strong>Partial payments:</strong> paying less than the remaining amount keeps the row on the active board with the reduced balance. The row’s <em>Added To Cash Flow</em> column is flipped to <em>Yes</em> the first time a payment is applied.</li>
+          <li><strong>Full payment:</strong> paying the full remaining amount (or more) clamps remaining to 0, flips Status to <em>Paid</em>, and removes the row from the active board. The sheet row is never deleted.</li>
+          <li>Cash Flow + Activity are the money/history trail — Upcoming does not maintain a parallel payment log.</li>
         </ul>
 
         <h4>Status messages</h4>
         <ul class="help-list">
-          <li>Save and list actions report under the form on the <strong>Upcoming</strong> tab.</li>
-          <li>After a successful <strong>Quick add</strong> save, the debt planner may run in the background. If that step fails, the error appears in <strong>Quick add’s</strong> status line — not next to Run Planner.</li>
+          <li>Action-specific text: <em>Saving upcoming expense…</em>, <em>Opening Quick Add…</em>, <em>Dismissing…</em>.</li>
+          <li>When Quick Add is launched from an Upcoming row, the Quick Add status line reports the Cash Flow save followed by the Upcoming remaining-balance update (e.g. <em>Partial payment applied. Remaining: $123.45</em> or <em>Upcoming expense fully paid.</em>).</li>
+        </ul>
+
+        <h4>Cross-panel refresh</h4>
+        <ul class="help-list">
+          <li>Every Upcoming write (add / dismiss / payment via Quick add) re-pulls the Upcoming list, the <strong>Bills Due</strong> execution queue, and the Overview snapshot so stale counts don’t linger.</li>
+          <li>Navigating to the <strong>Upcoming</strong> tab also re-loads the list, so new items added from another flow appear without a full page reload.</li>
         </ul>
 
         <h4>Activity log</h4>
         <ul class="help-list">
-          <li><strong>upcoming_add</strong> — new row saved on this tab.</li>
-          <li><strong>upcoming_status</strong> — status changed (Planned / Paid / Skipped).</li>
-          <li><strong>upcoming_cashflow</strong> — row pushed to Cash Flow via <strong>Add to Cash Flow</strong> or <strong>Paid</strong>.</li>
+          <li><strong>upcoming_add</strong> — new row saved on this tab. Amount is the originally planned amount.</li>
+          <li><strong>upcoming_payment</strong> — a Quick Add payment was applied to this row. Lifecycle-only; Amount renders as <strong>—</strong> so the dollars aren’t double-counted against the paired <em>quick_pay</em> row. The action label reads <em>Applied $500.00 (Remaining $250.00)</em> for a partial payment, <em>Applied $500.00 (Fully paid)</em> when the payment closes the item, and falls back to <em>Payment applied</em> for legacy rows without paid-amount details. Amount and remaining are read from the existing details JSON (<em>paidAmount</em>, <em>remainingAfter</em>, <em>fullyPaid</em>).</li>
+          <li><strong>upcoming_status</strong> — Dismiss event. Lifecycle-only; Amount renders as <strong>—</strong>.</li>
+          <li><strong>upcoming_cashflow</strong> — legacy event from the retired direct <em>Add to Cash Flow</em> path. Still rendered for historical rows; no new events of this type are written.</li>
         </ul>
-        <p class="muted"><strong>Notes:</strong> Pushing from Upcoming uses the same Cash Flow write as Quick add but logs <strong>upcoming_cashflow</strong> instead of a duplicate <strong>quick_pay</strong>. Opening <strong>Quick add</strong> from an upcoming row and saving there still records <strong>quick_pay</strong> like any manual Quick add.</p>
+        <p class="muted"><strong>Notes:</strong> The actual money movement from an Upcoming payment is the <strong>quick_pay</strong> row logged by the Quick Add save (same as any manual Quick Add). The paired <strong>upcoming_payment</strong> row is the Upcoming-side audit trail only.</p>
       </section>
 
       <!-- ================================================================ -->
@@ -270,7 +285,7 @@
 
         <h4>What gets logged — Upcoming, Donations, Property, Bank</h4>
         <ul class="help-list">
-          <li><strong>upcoming_add</strong> / <strong>upcoming_status</strong> / <strong>upcoming_cashflow</strong> — See <a href="#help-upcoming">Upcoming expenses</a>.</li>
+          <li><strong>upcoming_add</strong> / <strong>upcoming_payment</strong> / <strong>upcoming_status</strong> (Dismiss) / legacy <strong>upcoming_cashflow</strong> — See <a href="#help-upcoming">Upcoming expenses</a>.</li>
           <li><strong>donation</strong> — Save on <strong>Cash Flow → Donations</strong>. Activity <strong>Type</strong> shows <strong>Donation</strong>.</li>
           <li><strong>house_expense</strong> — Save on <strong>Add House Expense</strong>, covered above.</li>
           <li><strong>bank_account_add</strong> — Create an account from <strong>Assets → Bank Accounts → Add new</strong> (same event from the sidebar HTML). Activity <strong>Type</strong> is <strong>Bank</strong>; <strong>Action</strong> sub-label is <strong>Account added</strong>. <strong>Amount</strong> shows the supplied opening balance when one was provided (e.g. <strong>$150.00</strong>), or <strong>$0.00</strong> when the account was added without an opening amount.</li>

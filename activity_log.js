@@ -414,8 +414,13 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
  * Importantly, this does NOT replace `kindLabel` — the Type filter dropdown
  * and sort still operate on the broad kindLabel, so filtering by "Bill"
  * keeps surfacing every bill lifecycle event as it did before.
+ *
+ * The optional `detailsJson` second arg lets a handful of events enrich
+ * their label from existing details (e.g. upcoming_payment shows the paid
+ * amount and remaining balance). We deliberately do NOT change the Amount
+ * column rendering or add new fields — this is label-clarity only.
  */
-function activityLogActionLabel_(eventType) {
+function activityLogActionLabel_(eventType, detailsJson) {
   var et = String(eventType || '').trim().toLowerCase();
   switch (et) {
     case 'bill_add': return 'Bill added';
@@ -430,8 +435,80 @@ function activityLogActionLabel_(eventType) {
     case 'investment_deactivate': return 'Tracking stopped';
     case 'debt_add': return 'Account added';
     case 'debt_deactivate': return 'Tracking stopped';
+    case 'upcoming_add': return 'Upcoming added';
+    // upcoming_status is now only written by dismissUpcomingExpense() — the
+    // previous Planned/Paid/Skipped status toggle is gone. Keep the label
+    // tight so legacy rows and new Dismiss events both read cleanly.
+    case 'upcoming_status': return 'Dismissed';
+    // upcoming_payment is the non-monetary lifecycle event paired with a
+    // quick_pay money movement. Amount stays "—" (the dollars are on the
+    // quick_pay row) but we surface paid + remaining context in the label
+    // so the Activity list doesn't just read "Payment applied" with no
+    // numbers next to it. Falls back to the plain label for legacy rows
+    // that predate the detail fields.
+    case 'upcoming_payment':
+      return upcomingPaymentActionLabel_(detailsJson);
+    // Legacy: upcoming_cashflow is no longer emitted (direct "Add to Cash
+    // Flow" path removed), but historical rows still need a readable label.
+    case 'upcoming_cashflow': return 'Pushed to cash flow';
     default: return '';
   }
+}
+
+/**
+ * Build the upcoming_payment action label from the row's details JSON.
+ * Uses paidAmount + remainingAfter + fullyPaid that are already written
+ * by appendUpcomingActivityPayment_ — no schema changes.
+ *
+ *   "Applied $500.00 (Remaining $250.00)"   — partial payment
+ *   "Applied $500.00 (Fully paid)"          — terminal payment
+ *   "Applied $500.00"                       — amount only (missing remaining)
+ *   "Payment applied"                       — legacy row with no details
+ */
+function upcomingPaymentActionLabel_(detailsJson) {
+  var fallback = 'Payment applied';
+  var raw = String(detailsJson || '').trim();
+  if (!raw) return fallback;
+
+  var d;
+  try {
+    d = JSON.parse(raw);
+  } catch (e) {
+    return fallback;
+  }
+  if (!d || typeof d !== 'object') return fallback;
+
+  var paid = activityLogAsFiniteNumber_(d.paidAmount);
+  if (paid === null || paid <= 0) return fallback;
+
+  var label = 'Applied ' + activityLogFmtMoney_(paid);
+  var fullyPaid = d.fullyPaid === true;
+  var remaining = activityLogAsFiniteNumber_(d.remainingAfter);
+
+  if (fullyPaid) {
+    label += ' (Fully paid)';
+  } else if (remaining !== null && remaining >= 0) {
+    label += ' (Remaining ' + activityLogFmtMoney_(remaining) + ')';
+  }
+
+  return label;
+}
+
+function activityLogAsFiniteNumber_(v) {
+  if (v === null || v === undefined || v === '') return null;
+  var n = Number(v);
+  return isFinite(n) ? n : null;
+}
+
+function activityLogFmtMoney_(n) {
+  var v = Number(n) || 0;
+  var sign = v < 0 ? '-' : '';
+  var abs = Math.abs(v).toFixed(2);
+  // Thin thousands-separator formatter so we don't depend on Utilities/Intl
+  // in this server-side path.
+  var parts = abs.split('.');
+  var whole = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return sign + '$' + whole + '.' + parts[1];
 }
 
 /**
@@ -441,12 +518,18 @@ function activityLogActionLabel_(eventType) {
  */
 function activityLogIsNonMonetaryEvent_(eventType) {
   var et = String(eventType || '').trim().toLowerCase();
+  // upcoming_status is the Dismiss lifecycle event (Paid transitions now
+  // flow through upcoming_payment instead). upcoming_payment is the
+  // non-monetary partner of a quick_pay money-movement row — rendering
+  // both as "—" prevents double-counting the payment dollars.
   return (
     et === 'bill_deactivate' ||
     et === 'bank_account_deactivate' ||
     et === 'house_deactivate' ||
     et === 'investment_deactivate' ||
-    et === 'debt_deactivate'
+    et === 'debt_deactivate' ||
+    et === 'upcoming_status' ||
+    et === 'upcoming_payment'
   );
 }
 
@@ -567,7 +650,7 @@ function getActivityDashboardData(filters) {
         dedupeKey: String(r[10] || '').trim(),
         details: String(r[11] || '').trim(),
         kindLabel: activityLogRowKind_(lookup, r),
-        actionLabel: activityLogActionLabel_(eventType),
+        actionLabel: activityLogActionLabel_(eventType, String(r[11] || '').trim()),
         isNonMonetary: activityLogIsNonMonetaryEvent_(eventType)
       });
     }

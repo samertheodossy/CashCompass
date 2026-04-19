@@ -36,6 +36,12 @@ function applyQuickPaymentPriorMonth_(data) {
  * this is the bridge that keeps Cash Flow Flow Source in sync with the
  * originating bill's Payment Source without redesigning the UI.
  *
+ * Parallel channel: `window.__pendingUpcomingPaymentId` carries an Upcoming
+ * row ID when Quick Add was launched from the Upcoming board. savePayment()
+ * consumes it on a successful save and calls applyPaymentToUpcomingExpense()
+ * so the Upcoming row's remaining balance is decremented (and auto-flipped
+ * to Paid when it hits 0). Cleared on cold tab load or after a save.
+ *
  * Lifecycle:
  *   - prefillQuickPayment() sets it when the caller supplies a flowSource.
  *   - savePayment() reads it, sends it to quickAddPayment(), and clears it
@@ -102,6 +108,12 @@ function prefillQuickPayment(prefill) {
     window.__pendingQuickAddFlowSource = '';
   }
 
+  // Upcoming → Quick Add bridge: stash the originating Upcoming row id so
+  // savePayment()'s success handler can decrement the remaining balance and
+  // close out the row when fully paid. Non-Upcoming prefills clear it so a
+  // stray earlier value can't follow a later Quick Add save.
+  window.__pendingUpcomingPaymentId = String(prefill.upcomingId || '').trim();
+
   loadPaymentPreview();
 }
 
@@ -111,6 +123,7 @@ function loadPaymentSection() {
   // single save that immediately follows a prefill. Clear it on a cold
   // tab load so a later manual Quick Add never inherits it.
   window.__pendingQuickAddFlowSource = '';
+  window.__pendingUpcomingPaymentId = '';
   google.script.run
     .withSuccessHandler(function(data) {
       paymentPayees = data.payees || [];
@@ -198,6 +211,10 @@ function savePayment() {
   // flows like Bills → Pay). Consumed on this one save so a subsequent
   // manual Quick Add never silently reuses the previous bill's source.
   var pendingFlowSource = window.__pendingQuickAddFlowSource || '';
+  // Upcoming → Quick Add: capture then immediately clear the pending id so
+  // a late retry of this handler can't apply the payment twice.
+  var pendingUpcomingId = window.__pendingUpcomingPaymentId || '';
+  window.__pendingUpcomingPaymentId = '';
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -209,10 +226,42 @@ function savePayment() {
       }
       document.getElementById('pay_amount').value = '';
       window.__pendingQuickAddFlowSource = '';
-      refreshSnapshot();
-      loadUpcomingSection();
-      loadDashboardActionSections();
-      runDebtPlannerAfterQuickPayment_();
+
+      // Chain the Upcoming balance adjustment after the Quick Add row is
+      // safely written, then let the Upcoming / action-section refreshes
+      // run once at the end so we don't double-render.
+      if (pendingUpcomingId) {
+        google.script.run
+          .withSuccessHandler(function(upRes) {
+            if (upRes && upRes.message) {
+              setStatus('pay_status',
+                (res && res.message ? res.message + ' ' : '') + upRes.message,
+                false);
+            }
+            refreshSnapshot();
+            loadUpcomingSection();
+            loadDashboardActionSections();
+            runDebtPlannerAfterQuickPayment_();
+          })
+          .withFailureHandler(function(err) {
+            // The Cash Flow row is already saved at this point. Surface the
+            // follow-up error but still refresh the board so the user sees
+            // the current state.
+            setStatus('pay_status',
+              'Payment saved, but Upcoming update failed: ' + (err.message || String(err)),
+              true);
+            refreshSnapshot();
+            loadUpcomingSection();
+            loadDashboardActionSections();
+            runDebtPlannerAfterQuickPayment_();
+          })
+          .applyPaymentToUpcomingExpense(pendingUpcomingId, numericAmount);
+      } else {
+        refreshSnapshot();
+        loadUpcomingSection();
+        loadDashboardActionSections();
+        runDebtPlannerAfterQuickPayment_();
+      }
     })
     .withFailureHandler(function(err) {
       setStatus('pay_status', 'Error: ' + (err.message || String(err)), true);

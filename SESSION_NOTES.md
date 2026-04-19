@@ -1,3 +1,109 @@
+## Recent — upcoming_payment action label enrichment
+
+Tightened the Activity label for `upcoming_payment` rows so the list shows the paid amount (and remaining balance) inline instead of a flat "Payment applied". Scope is label clarity only — no event-structure changes, no new fields, Amount column still renders **—** so the dollars aren't double-counted against the paired `quick_pay` row.
+
+### Label format
+Pulled from the existing details JSON (`paidAmount`, `remainingAfter`, `fullyPaid`) written by `appendUpcomingActivityPayment_`:
+- `Applied $500.00 (Remaining $250.00)` — partial payment, row stays on the active board
+- `Applied $500.00 (Fully paid)` — terminal payment, row dropped from the active board
+- `Applied $500.00` — amount present but remaining missing (defensive fallback)
+- `Payment applied` — legacy rows that predate the paid-amount details
+
+### How it was wired
+- `activityLogActionLabel_` now accepts an optional `detailsJson` second arg; only `upcoming_payment` consumes it. Every other event type still returns its static label (default arg ignored), so no other activity type changed.
+- New private helpers in `activity_log.js`: `upcomingPaymentActionLabel_` (label builder), `activityLogAsFiniteNumber_` (safe coercion), `activityLogFmtMoney_` (server-side `$1,234.56` formatter, no Intl dependency).
+- Single caller updated: `getActivityDashboardData`'s row emission passes the raw details string (column 11) alongside the event type. `classifyActivityKind_`, the Type filter, and `activityLogIsNonMonetaryEvent_` are untouched — the Amount column keeps rendering **—**.
+
+### Files
+- `activity_log.js` — `activityLogActionLabel_` gains an optional `detailsJson` arg; new `upcomingPaymentActionLabel_` + two small helpers; row emission passes details into the label helper.
+- `Dashboard_Help.html` — Activity log section explains the new `upcoming_payment` label format and notes the fallback for legacy rows.
+
+---
+
+## Recent — Upcoming Expenses action-model cleanup
+
+Simplified Upcoming into a true open-obligations board. The old multi-button status model (Planned / Paid / Skipped + Add to Cash Flow + Open in Quick add) created an overlapping second payment system; replaced it with a single payment path (Quick Add) plus an explicit Dismiss. Quick Add now carries the remaining balance back to the Upcoming row so partial payments shrink it in place and a full payment retires it automatically.
+
+### New action model
+- **Status is display-only** — `Planned` / `Paid` / `Dismissed` (legacy `Skipped` rows render the same as `Dismissed` for filtering and sort, not rewritten). The status buttons are gone.
+- **Two action buttons** per row:
+  - **Quick add payment** — hands off to the normal Quick Add flow with payee, due date, remaining amount, and (when the Account/Source is literally `CASH` or `CREDIT_CARD`) a flow-source hint pre-filled.
+  - **Dismiss** — preserves the row and logs `upcoming_status` with `newStatus: Dismissed`. Legacy `Skipped` rows are treated as already-dismissed (idempotent no-op).
+- **Active board filter** — `renderUpcomingList` now shows only `status === 'Planned' && amount > 0.005`. Paid, Dismissed, and (legacy) Skipped rows drop off automatically; they stay in the sheet + Activity log for history.
+
+### Partial / full payment via Quick Add
+- `prefillQuickPayment` stashes `window.__pendingUpcomingPaymentId` when the prefill includes `upcomingId`. `loadPaymentSection()` clears it on cold tab load; `savePayment` captures-and-clears it before firing `quickAddPayment` so a retry can't double-apply.
+- On `quickAddPayment` success, `savePayment` chains `applyPaymentToUpcomingExpense(id, numericAmount)`. That backend call:
+  1. Reads the row's current `Amount` (the live remaining balance).
+  2. Subtracts the paid amount; clamps sub-penny results (`<= 0.005`) to 0 to avoid rounding-ghost balances.
+  3. Writes the new remaining back to the `Amount` column (reuses existing currency format).
+  4. Flips `Added To Cash Flow` → `Yes`.
+  5. If `newRemaining <= 0`, flips `Status` → `Paid`; otherwise leaves it `Planned` so the row stays on the active board.
+  6. Logs `upcoming_payment` with `paidAmount`, `remainingAfter`, and `fullyPaid` in details.
+- Non-Planned rows short-circuit to a benign no-op so a stray callback can't resurrect a Paid/Dismissed row.
+
+### Cash Flow + Activity are the only money trail
+- `upcoming_payment` is **non-monetary** on the Activity sheet (Amount = 0, rendered as "—"). The dollar movement is the paired `quick_pay` row written by `quickAddPayment`. This prevents double-counting.
+- Action labels (`activity_log.js → activityLogActionLabel_`):
+  - `upcoming_add` → `Upcoming added`
+  - `upcoming_payment` → `Payment applied`
+  - `upcoming_status` → `Dismissed` (Dismiss is now the only writer)
+  - `upcoming_cashflow` → `Pushed to cash flow` (legacy; no new rows emitted)
+- `activityLogIsNonMonetaryEvent_` includes both `upcoming_status` and `upcoming_payment`.
+
+### Removed / retired
+- `updateUpcomingExpenseStatus`, `markUpcomingExpensePaid_`, `addUpcomingExpenseToCashFlow`, `addUpcomingExpenseRowToCashFlow_` — the entire legacy status-toggle + direct-push-to-Cash-Flow path. Replaced by `dismissUpcomingExpense` + `applyPaymentToUpcomingExpense` + Quick Add.
+- Client-side `setUpcomingStatus`, `addUpcomingToCashFlow`, `openUpcomingInQuickPayment` — replaced by `dismissUpcoming` + `quickAddFromUpcoming`.
+- No new `upcoming_cashflow` events are written. Historical rows still label and classify correctly.
+
+### Not a change
+- Canonical sheet `INPUT - Upcoming Expenses` — 11 fixed headers unchanged. The `Amount` column is now explicitly the **live remaining** balance (documented in Help); no new columns added.
+- `getUpcomingExpenseMetrics_`, `getUpcomingBillsDueForDashboard`, `buildUpcomingExpensesSummary_`, and `rolling_debt_payoff.js` all filter on `status === 'Planned'` with `amount > 0.005`, so the auto-flip to Paid cleanly removes fully-paid rows from every downstream consumer without touching those readers.
+- Summary / mini-card math still runs over Planned rows from the full dataset, so the Next 7 / Next 30 / Overdue / Total Planned counters match the active-board filter.
+
+### Files
+- `upcoming_expenses.js` — new `dismissUpcomingExpense`, `applyPaymentToUpcomingExpense`, `appendUpcomingActivityPayment_`; removed `updateUpcomingExpenseStatus` / `markUpcomingExpensePaid_` / `addUpcomingExpenseToCashFlow` / `addUpcomingExpenseRowToCashFlow_`; `getUpcomingExpenseForQuickPayment` now returns `upcomingId` + normalized `flowSource` hint; status-rank helpers know `Dismissed`.
+- `activity_log.js` — `upcoming_payment` added to `activityLogIsNonMonetaryEvent_` and `activityLogActionLabel_`; `upcoming_status` label changed to `Dismissed` (only writer now).
+- `Dashboard_Script_CashFlowUpcoming.html` — list filters to `Planned && amount > 0`; two buttons only (`Quick add payment`, `Dismiss`); new `quickAddFromUpcoming` / `dismissUpcoming` handlers.
+- `Dashboard_Script_Payments.html` — `prefillQuickPayment` + `loadPaymentSection` manage `window.__pendingUpcomingPaymentId`; `savePayment` chains `applyPaymentToUpcomingExpense` after a successful Quick Add save originating from Upcoming.
+- `Dashboard_Help.html` — Upcoming section rewritten to cover the open-obligations model, partial / full payment behavior, Dismiss, and the new Activity log conventions.
+
+---
+
+## Recent — Upcoming Expenses consistency cleanup
+
+Tightened the Upcoming Expenses flow to match the canonical input-surface pattern now used by Bills / Debts / Houses / Investments / Bank Accounts — without expanding scope (no pulldowns from Accounts/Credit Cards yet, no schema changes). Focus: preserve the existing lifecycle model, close validation / loading-text / activity-log gaps.
+
+### Audit — what is canonical and what reads it
+- **Canonical sheet** — `INPUT - Upcoming Expenses` (11 fixed headers: `ID, Status, Expense Name, Category, Payee, Due Date, Amount, Account / Source, Auto Add To Cash Flow, Added To Cash Flow, Notes`). Self-heals via `getOrCreateUpcomingExpensesSheet_`.
+- **Lifecycle model** — intentionally **`Status` column** (`Planned` / `Paid` / `Skipped`) rather than `Active`. Skipped rows stay on the sheet so history + ID are reserved. This was explicitly preserved per the consistency pass ground rules: consistency of behavior, not forcing identical columns across unrelated domains.
+- **Backend writers** — `upcoming_expenses.js`: `addUpcomingExpense`, `updateUpcomingExpenseStatus`, `markUpcomingExpensePaid_`, `addUpcomingExpenseToCashFlow` / `addUpcomingExpenseRowToCashFlow_`. Cash Flow push goes through `quickAddPayment(..., suppressActivityLog: true)` so the `quick_pay` event is not duplicated alongside `upcoming_cashflow`.
+- **Backend readers** — `getUpcomingExpensesUiData` (Upcoming panel), `getUpcomingExpenseMetrics_` (Overview snapshot cards via `dashboard_data.js`), `getUpcomingBillsDueForDashboard` (Bills Due joined list), `rolling_debt_payoff.js` (planned-expenses impact on the HELOC / cash bridge).
+- **UI surfaces** — `Dashboard_Body.html` Upcoming panel (form + list + mini cards), Overview Next 7 / Next 30 / Overdue mini cards (same `summary` payload), Bills Due card. All are already tab-entry-refreshed (`billsDue`, `upcoming`) from a prior audit.
+
+### Gaps found and closed
+- **Validation was backend-only for Expense Name.** Empty name threw from the backend (`Expense Name is required.`) and surfaced as generic status text at the bottom of the form. Aligned to the Debts/Bills `field-error` pattern: `Dashboard_Body.html` gained `<div id="up_name_error" class="field-error" …>` and an `oninput` hook. `Dashboard_Script_CashFlowUpcoming.html` added `clearUpcomingAddNameError_` / `showUpcomingAddNameError_` / `isUpcomingNameRelatedError_` helpers. `saveUpcomingExpense` now validates Expense Name, Due Date, and Amount inline with focus-on-error before any `google.script.run` call, and name-related failures from the backend (e.g. future reservations) surface on the field-error div in addition to the status line.
+- **Generic loading text replaced with action-specific `setStatusLoading` calls.** Matches the Debts / Bills convention (spinner + labeled status). Labels: **Saving upcoming expense…**, **Updating status…**, **Adding to cash flow…**. `setUpcomingStatus` previously had **no** loading text at all — users now get immediate feedback while the status flip runs.
+- **Amount ≤ 0 guard moved to the client.** Backend still rejects, but users now see the inline error without a round-trip.
+- **`upcoming_status` events no longer render a misleading dollar amount.** This is a lifecycle-only event; the actual money movement (if any) is logged separately as `upcoming_cashflow` when the Paid flow pushes to Cash Flow. Two changes:
+  - `activity_log.js → activityLogIsNonMonetaryEvent_` now includes `upcoming_status`, so the Activity UI renders Amount as **—**, matching the `*_deactivate` convention used by every other input surface.
+  - `upcoming_expenses.js → appendUpcomingActivityStatus_` now writes `amount: 0` to the sheet for `upcoming_status` rows (instead of echoing the row's planned amount). The underlying planned amount is still captured in the details JSON for auditing.
+- **Activity action labels aligned.** `activity_log.js → activityLogActionLabel_` now returns `Upcoming added` / `Status changed` / `Pushed to cash flow` for `upcoming_add` / `upcoming_status` / `upcoming_cashflow` — previously blank. This is the same secondary-label pattern used by Bill / Debt / House / Investment / Bank events and makes same-kind events easy to disambiguate in the Activity list without touching the Type filter.
+
+### Not a gap (verified)
+- **Cross-panel refresh on Upcoming writes** — `saveUpcomingExpense`, `setUpcomingStatus`, and `addUpcomingToCashFlow` already call `loadUpcomingSection()`, `loadDashboardActionSections()`, and `refreshSnapshot()` on success. Tab-entry refresh for `upcoming` and `billsDue` is already wired in `Dashboard_Script_Render.html`. Debts / Debt Overview / Rolling Debt Payoff refresh on their own tab-entry (already in place), so a Cash Flow push from Upcoming that touches a debt balance via `quickAddPayment` → `adjustDebtsBalanceAfterQuickPayment_` is visible on navigation.
+- **Schema / sheet safety** — no header changes, no row deletions, no renames. Historical rows and the `Skipped` soft-deactivate behavior are untouched.
+- **React bundle** — Rolling Debt Payoff consumes `getUpcomingExpensesUiData` for planned-expense horizon classification. No changes needed; its input shape is unchanged.
+
+### Files
+- `upcoming_expenses.js` — `appendUpcomingActivityStatus_` logs `amount: 0` for lifecycle rows.
+- `activity_log.js` — `activityLogIsNonMonetaryEvent_` includes `upcoming_status`; `activityLogActionLabel_` adds labels for all three upcoming events.
+- `Dashboard_Body.html` — Expense Name field-error div + `oninput` clear hook.
+- `Dashboard_Script_CashFlowUpcoming.html` — inline validation helpers, required-field guards with focus-on-error, `setStatusLoading` with action-specific labels, name-related error routing from the backend.
+- `Dashboard_Help.html` — Upcoming expenses section rewritten to cover Lifecycle model, action-specific status messages, cross-panel refresh, and the non-monetary `upcoming_status` Activity convention.
+
+---
+
 ## Recent — Cross-panel refresh audit (post-Debt Add race fix)
 
 After fixing the Debts → Bills Due race condition, I swept the rest of the dashboard write paths looking for the same pattern — **a mutation in Panel A that affects data read by Panel B, where Panel B has its own loader that the write path doesn't call**. Two more gaps found and closed:

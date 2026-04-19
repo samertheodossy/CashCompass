@@ -19,6 +19,37 @@ function loadUpcomingSection() {
     .getUpcomingExpensesUiData();
 }
 
+// Inline field-error helpers for the Add-new Upcoming form. Matches the
+// pattern used in Debts / Bills so required-field failures surface next to
+// the offending input instead of as generic status text at the bottom.
+function clearUpcomingAddNameError_() {
+  const el = document.getElementById('up_name_error');
+  if (el) {
+    el.textContent = '';
+    el.classList.remove('active');
+  }
+  const n = document.getElementById('up_name');
+  if (n) n.classList.remove('field-error-input');
+}
+
+function showUpcomingAddNameError_(message) {
+  const el = document.getElementById('up_name_error');
+  if (el) {
+    el.textContent = message || 'Please fix the Expense Name.';
+    el.classList.add('active');
+  }
+  const n = document.getElementById('up_name');
+  if (n) {
+    n.classList.add('field-error-input');
+    try { n.focus(); if (n.value) n.select(); } catch (e) {}
+  }
+}
+
+function isUpcomingNameRelatedError_(msg) {
+  const m = String(msg || '').toLowerCase();
+  return m.indexOf('expense name') !== -1;
+}
+
 function renderUpcomingSummary(summary) {
   document.getElementById('upcoming_next7').textContent =
     (summary.next7Count || 0) + ' / ' + fmtCurrency(summary.next7Amount || 0);
@@ -45,16 +76,26 @@ function upcomingBucketClass(bucket) {
   return '';
 }
 
+// Upcoming is an open-obligations board: only actionable rows (Planned with
+// remaining > 0) live on it. Paid and Dismissed (or legacy Skipped) rows
+// stay in INPUT - Upcoming Expenses for history and in LOG - Activity for
+// the audit trail, but they drop off the active list once the remaining
+// balance hits 0 or the user explicitly dismisses them.
 function renderUpcomingList(rows) {
   const root = document.getElementById('upcoming_list');
 
-  if (!rows || !rows.length) {
-    root.innerHTML = '<div class="muted">No upcoming expenses yet.</div>';
+  const activeRows = (rows || []).filter(function(row) {
+    const status = String(row.status || '').trim();
+    const amt = Number(row.amount) || 0;
+    return status === 'Planned' && amt > 0.005;
+  });
+
+  if (!activeRows.length) {
+    root.innerHTML = '<div class="muted">No active upcoming expenses.</div>';
     return;
   }
 
-  root.innerHTML = rows.map(function(row) {
-    const canAddToCashFlow = row.status !== 'Skipped' && row.addedToCashFlow !== 'Yes';
+  root.innerHTML = activeRows.map(function(row) {
     return (
       '<div class="upcoming-item ' + upcomingBucketClass(row.dayBucket) + '">' +
         '<div class="upcoming-top">' +
@@ -65,19 +106,15 @@ function renderUpcomingList(rows) {
               'Due: ' + escapeHtml(row.dueDate || '—') + ' · ' + escapeHtml(row.dayBucket || '') + '<br>' +
               'Payee: ' + escapeHtml(row.payee || '—') + '<br>' +
               'Category: ' + escapeHtml(row.category || '—') + '<br>' +
-              'Source: ' + escapeHtml(row.accountSource || '—') + '<br>' +
-              'Added To Cash Flow: ' + escapeHtml(row.addedToCashFlow || 'No') +
+              'Source: ' + escapeHtml(row.accountSource || '—') +
               (row.notes ? '<br>Notes: ' + escapeHtml(row.notes) : '') +
             '</div>' +
           '</div>' +
           '<div class="upcoming-amount">' + fmtCurrency(row.amount) + '</div>' +
         '</div>' +
         '<div class="upcoming-actions">' +
-          '<button class="small-btn primary" onclick="setUpcomingStatus(\'' + escapeJs(row.id) + '\', \'Planned\')">Planned</button>' +
-          '<button class="small-btn" onclick="setUpcomingStatus(\'' + escapeJs(row.id) + '\', \'Paid\')">Paid</button>' +
-          '<button class="small-btn" onclick="setUpcomingStatus(\'' + escapeJs(row.id) + '\', \'Skipped\')">Skipped</button>' +
-          (canAddToCashFlow ? '<button class="small-btn" onclick="addUpcomingToCashFlow(\'' + escapeJs(row.id) + '\')">Add to Cash Flow</button>' : '') +
-          '<button class="small-btn" onclick="openUpcomingInQuickPayment(\'' + escapeJs(row.id) + '\')">Open in Quick add</button>' +
+          '<button class="small-btn primary" onclick="quickAddFromUpcoming(\'' + escapeJs(row.id) + '\')">Quick add payment</button>' +
+          '<button class="small-btn" onclick="dismissUpcoming(\'' + escapeJs(row.id) + '\')">Dismiss</button>' +
         '</div>' +
       '</div>'
     );
@@ -85,30 +122,56 @@ function renderUpcomingList(rows) {
 }
 
 function saveUpcomingExpense() {
-  const rawAmount = document.getElementById('up_amount').value;
-  const numericAmount = toNumber(rawAmount);
+  clearUpcomingAddNameError_();
 
-  if (String(rawAmount || '').trim() && isNaN(numericAmount)) {
+  const name = String(document.getElementById('up_name').value || '').trim();
+  const dueDate = String(document.getElementById('up_dueDate').value || '').trim();
+  const rawAmount = document.getElementById('up_amount').value;
+  const amountStr = String(rawAmount == null ? '' : rawAmount).trim();
+
+  if (!name) {
+    showUpcomingAddNameError_('Expense Name is required.');
+    setStatus('upcoming_status', 'Error: Expense Name is required.', true);
+    return;
+  }
+  if (!dueDate) {
+    setStatus('upcoming_status', 'Error: Due Date is required.', true);
+    try { document.getElementById('up_dueDate').focus(); } catch (e) {}
+    return;
+  }
+  if (amountStr === '') {
+    setStatus('upcoming_status', 'Error: Amount is required.', true);
+    try { document.getElementById('up_amount').focus(); } catch (e) {}
+    return;
+  }
+  const numericAmount = toNumber(amountStr);
+  if (isNaN(numericAmount)) {
     setStatus('upcoming_status', 'Error: Amount must be a valid number.', true);
+    try { document.getElementById('up_amount').focus(); } catch (e) {}
+    return;
+  }
+  if (numericAmount <= 0) {
+    setStatus('upcoming_status', 'Error: Amount must be greater than 0.', true);
+    try { document.getElementById('up_amount').focus(); } catch (e) {}
     return;
   }
 
   const payload = {
-    expenseName: document.getElementById('up_name').value,
+    expenseName: name,
     category: document.getElementById('up_category').value,
     payee: document.getElementById('up_payee').value,
-    dueDate: document.getElementById('up_dueDate').value,
+    dueDate: dueDate,
     amount: numericAmount,
     accountSource: document.getElementById('up_accountSource').value,
     autoAddToCashFlow: document.getElementById('up_autoAdd').checked,
     notes: document.getElementById('up_notes').value
   };
 
-  setStatus('upcoming_status', 'Saving...', false);
+  setStatusLoading('upcoming_status', 'Saving upcoming expense…');
 
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('upcoming_status', res.message || 'Saved.', false);
+      setStatus('upcoming_status', (res && res.message) || 'Upcoming expense added.', false);
       document.getElementById('up_name').value = '';
       document.getElementById('up_category').value = '';
       document.getElementById('up_payee').value = '';
@@ -116,52 +179,50 @@ function saveUpcomingExpense() {
       document.getElementById('up_accountSource').value = '';
       document.getElementById('up_notes').value = '';
       document.getElementById('up_autoAdd').checked = false;
+      clearUpcomingAddNameError_();
       loadUpcomingSection();
       loadDashboardActionSections();
       refreshSnapshot();
     })
     .withFailureHandler(function(err) {
-      setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
+      const msg = err && err.message ? err.message : String(err);
+      if (isUpcomingNameRelatedError_(msg)) {
+        showUpcomingAddNameError_(msg);
+      }
+      setStatus('upcoming_status', 'Error: ' + msg, true);
     })
     .addUpcomingExpense(payload);
 }
 
-function setUpcomingStatus(id, status) {
-  google.script.run
-    .withSuccessHandler(function(res) {
-      setStatus('upcoming_status', res.message || 'Updated.', false);
-      loadUpcomingSection();
-      loadDashboardActionSections();
-      refreshSnapshot();
-    })
-    .withFailureHandler(function(err) {
-      setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
-    })
-    .updateUpcomingExpenseStatus(id, status);
-}
-
-function addUpcomingToCashFlow(id) {
-  setStatus('upcoming_status', 'Adding to cash flow...', false);
-  google.script.run
-    .withSuccessHandler(function(res) {
-      setStatus('upcoming_status', res.message || 'Added to cash flow.', false);
-      loadUpcomingSection();
-      loadDashboardActionSections();
-      refreshSnapshot();
-    })
-    .withFailureHandler(function(err) {
-      setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
-    })
-    .addUpcomingExpenseToCashFlow(id);
-}
-
-function openUpcomingInQuickPayment(id) {
+// Quick add is the single payment path for Upcoming. Backend returns the
+// remaining balance as the prefill amount and the upcomingId, so after the
+// user posts the Quick Add the Upcoming row's remaining balance is updated
+// (and auto-flipped to Paid when fully covered) via the callback wired in
+// Dashboard_Script_Payments.html::savePayment().
+function quickAddFromUpcoming(id) {
+  setStatusLoading('upcoming_status', 'Opening Quick Add…');
   google.script.run
     .withSuccessHandler(function(prefill) {
+      setStatus('upcoming_status', '', false);
       prefillQuickPayment(prefill);
     })
     .withFailureHandler(function(err) {
       setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
     })
     .getUpcomingExpenseForQuickPayment(id);
+}
+
+function dismissUpcoming(id) {
+  setStatusLoading('upcoming_status', 'Dismissing…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('upcoming_status', (res && res.message) || 'Dismissed.', false);
+      loadUpcomingSection();
+      loadDashboardActionSections();
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .dismissUpcomingExpense(id);
 }
