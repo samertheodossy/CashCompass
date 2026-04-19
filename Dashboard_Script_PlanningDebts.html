@@ -22,6 +22,7 @@ function loadDebtSection() {
         fieldSel.appendChild(opt);
       });
 
+      populateDebtAddDatalists_(data);
       filterDebtAccounts();
 
       if (pendingFocus && pendingFocus.tab === 'debts') {
@@ -32,6 +33,160 @@ function loadDebtSection() {
       setStatus('debt_status', 'Error: ' + (err.message || String(err)), true);
     })
     .getDebtsUiData();
+}
+
+function loadDebtSectionThenSelect_(accountName) {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      allDebtRows = data.debts || [];
+      const typeSel = document.getElementById('debt_typeFilter');
+      typeSel.innerHTML = '';
+      (data.types || ['All']).forEach(function(t) {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        typeSel.appendChild(opt);
+      });
+      populateDebtAddDatalists_(data);
+      filterDebtAccounts();
+      const sel = document.getElementById('debt_account');
+      if (sel && accountName) {
+        sel.value = accountName;
+        loadDebtFieldValue();
+      }
+    })
+    .withFailureHandler(function(err) {
+      setStatus('debt_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .getDebtsUiData();
+}
+
+function populateDebtAddDatalists_(data) {
+  const sel = document.getElementById('debt_add_type');
+  if (!sel) return;
+  const prior = String(sel.value || '');
+  sel.innerHTML = '';
+
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Select a type…';
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  sel.appendChild(placeholder);
+
+  const seen = Object.create(null);
+  (data.typeOptions || []).forEach(function(t) {
+    const v = String(t == null ? '' : t).trim();
+    if (!v) return;
+    const key = v.toLowerCase();
+    if (seen[key]) return;
+    seen[key] = true;
+    const o = document.createElement('option');
+    o.value = v;
+    o.textContent = v;
+    sel.appendChild(o);
+  });
+
+  const other = document.createElement('option');
+  other.value = '__other__';
+  other.textContent = 'Other…';
+  sel.appendChild(other);
+
+  // Preserve prior selection when the datalist is repopulated (e.g. after a
+  // refresh). Fall back to the placeholder when the prior value is no longer
+  // in the list.
+  if (prior && prior !== '') {
+    const match = Array.prototype.find.call(sel.options, function(opt) {
+      return opt.value === prior;
+    });
+    if (match) sel.value = prior;
+  }
+  if (typeof onDebtAddTypeChange_ === 'function') onDebtAddTypeChange_();
+}
+
+function onDebtAddTypeChange_() {
+  const sel = document.getElementById('debt_add_type');
+  const wrap = document.getElementById('debt_add_type_other_wrap');
+  const other = document.getElementById('debt_add_type_other');
+  const isOther = sel && sel.value === '__other__';
+  if (wrap) wrap.style.display = isOther ? '' : 'none';
+  if (!isOther && other) other.value = '';
+}
+
+function setDebtPanelMode(mode) {
+  const isUpdate = mode === 'update';
+  const wrapU = document.getElementById('debt_mode_update_wrap');
+  const wrapA = document.getElementById('debt_mode_add_wrap');
+  const btnU = document.getElementById('debt_mode_update_btn');
+  const btnA = document.getElementById('debt_mode_add_btn');
+  if (wrapU) wrapU.classList.toggle('active', isUpdate);
+  if (wrapA) wrapA.classList.toggle('active', !isUpdate);
+  if (btnU) {
+    btnU.classList.toggle('active', isUpdate);
+    btnU.setAttribute('aria-selected', isUpdate ? 'true' : 'false');
+  }
+  if (btnA) {
+    btnA.classList.toggle('active', !isUpdate);
+    btnA.setAttribute('aria-selected', !isUpdate ? 'true' : 'false');
+  }
+  if (isUpdate) {
+    setStatus('debt_status', '', false);
+  }
+}
+
+function resetDebtAddForm_() {
+  const ids = [
+    'debt_add_name',
+    'debt_add_balance',
+    'debt_add_min_payment',
+    'debt_add_credit_limit',
+    'debt_add_int_rate',
+    'debt_add_due_day',
+    'debt_add_type_other'
+  ];
+  ids.forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const typeSel = document.getElementById('debt_add_type');
+  if (typeSel) {
+    typeSel.selectedIndex = 0; // placeholder
+    if (typeof onDebtAddTypeChange_ === 'function') onDebtAddTypeChange_();
+  }
+  clearDebtAddNameError_();
+}
+
+function clearDebtAddNameError_() {
+  const el = document.getElementById('debt_add_name_error');
+  if (el) {
+    el.textContent = '';
+    el.classList.remove('active');
+  }
+  const n = document.getElementById('debt_add_name');
+  if (n) n.classList.remove('field-error-input');
+}
+
+function showDebtAddNameError_(message) {
+  const el = document.getElementById('debt_add_name_error');
+  if (el) {
+    el.textContent = message || 'Please fix the Account name.';
+    el.classList.add('active');
+  }
+  const n = document.getElementById('debt_add_name');
+  if (n) {
+    n.classList.add('field-error-input');
+    try { n.focus(); if (n.value) n.select(); } catch (e) {}
+  }
+}
+
+function isDebtNameRelatedError_(msg) {
+  const m = String(msg || '').toLowerCase();
+  return (
+    m.indexOf('account name') !== -1 ||
+    m.indexOf('already exists') !== -1 ||
+    m.indexOf('reserved') !== -1 ||
+    m.indexOf('not allowed') !== -1
+  );
 }
 
 function filterDebtAccounts() {
@@ -132,4 +287,153 @@ function saveDebt() {
       fieldName: fieldName,
       value: value
     });
+}
+
+function createDebtAccount() {
+  clearDebtAddNameError_();
+
+  const name = document.getElementById('debt_add_name').value.trim();
+  const typeSel = document.getElementById('debt_add_type');
+  const rawType = typeSel ? String(typeSel.value || '').trim() : '';
+  const otherEl = document.getElementById('debt_add_type_other');
+  const otherType = otherEl ? String(otherEl.value || '').trim() : '';
+
+  let typeStr = '';
+  if (rawType === '__other__') {
+    if (!otherType) {
+      setStatus('debt_status', 'Error: Type is required. Enter a name for the new type.', true);
+      if (otherEl) { try { otherEl.focus(); } catch (e) {} }
+      return;
+    }
+    typeStr = otherType;
+  } else {
+    typeStr = rawType;
+  }
+
+  if (!name) {
+    showDebtAddNameError_('Account name is required.');
+    setStatus('debt_status', 'Error: Account name is required.', true);
+    return;
+  }
+  if (!typeStr) {
+    setStatus('debt_status', 'Error: Type is required.', true);
+    if (typeSel) { try { typeSel.focus(); } catch (e) {} }
+    return;
+  }
+
+  const balanceRaw = document.getElementById('debt_add_balance').value;
+  const minRaw = document.getElementById('debt_add_min_payment').value;
+  const limRaw = document.getElementById('debt_add_credit_limit').value;
+  const rateRaw = document.getElementById('debt_add_int_rate').value;
+  const dueRaw = document.getElementById('debt_add_due_day').value;
+
+  function requiredNum_(raw, label, id) {
+    const s = String(raw == null ? '' : raw).trim();
+    if (s === '') {
+      setStatus('debt_status', 'Error: ' + label + ' is required.', true);
+      if (id) { try { document.getElementById(id).focus(); } catch (e) {} }
+      return { ok: false };
+    }
+    const n = toNumber(s);
+    if (isNaN(n)) {
+      setStatus('debt_status', 'Error: ' + label + ' must be a valid number.', true);
+      if (id) { try { document.getElementById(id).focus(); } catch (e) {} }
+      return { ok: false };
+    }
+    return { ok: true, value: n };
+  }
+
+  const balance = requiredNum_(balanceRaw, 'Account balance', 'debt_add_balance');
+  if (!balance.ok) return;
+  const minPay = requiredNum_(minRaw, 'Minimum payment', 'debt_add_min_payment');
+  if (!minPay.ok) return;
+  const creditLimit = requiredNum_(limRaw, 'Credit limit', 'debt_add_credit_limit');
+  if (!creditLimit.ok) return;
+  const intRate = requiredNum_(rateRaw, 'Interest rate', 'debt_add_int_rate');
+  if (!intRate.ok) return;
+
+  const dueStr = String(dueRaw == null ? '' : dueRaw).trim();
+  if (dueStr === '') {
+    setStatus('debt_status', 'Error: Due day of month is required.', true);
+    try { document.getElementById('debt_add_due_day').focus(); } catch (e) {}
+    return;
+  }
+  const dueN = parseInt(dueStr, 10);
+  if (isNaN(dueN) || dueN < 1 || dueN > 31) {
+    setStatus('debt_status', 'Error: Due day must be a whole number between 1 and 31.', true);
+    try { document.getElementById('debt_add_due_day').focus(); } catch (e) {}
+    return;
+  }
+  const dueDay = dueN;
+
+  const payload = {
+    accountName: name,
+    type: typeStr,
+    balance: balance.value,
+    minimumPayment: minPay.value,
+    creditLimit: creditLimit.value,
+    intRate: intRate.value,
+    dueDay: dueDay
+  };
+
+  setStatusLoading('debt_status', 'Creating debt account…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('debt_status', (res && res.message) || 'Created.', false);
+      const createdName = (res && res.accountName) || name;
+      resetDebtAddForm_();
+      setDebtPanelMode('update');
+      loadDebtSectionThenSelect_(createdName);
+      if (typeof refreshSnapshot === 'function') refreshSnapshot();
+      // The new debt also seeds an Expense row on the current year's
+      // INPUT - Cash Flow tab, so Bills Due / Upcoming must be reloaded
+      // to pick it up without requiring a full app reload.
+      if (typeof loadDashboardActionSections === 'function') {
+        loadDashboardActionSections();
+      }
+    })
+    .withFailureHandler(function(err) {
+      const msg = err && err.message ? err.message : String(err);
+      if (isDebtNameRelatedError_(msg)) {
+        showDebtAddNameError_(msg);
+      }
+      setStatus('debt_status', 'Error: ' + msg, true);
+    })
+    .addDebtFromDashboard(payload);
+}
+
+function stopTrackingDebt() {
+  const sel = document.getElementById('debt_account');
+  const account = sel ? String(sel.value || '').trim() : '';
+
+  if (!account) {
+    setStatus('debt_status', 'Error: Pick a debt account first.', true);
+    return;
+  }
+
+  const confirmed = window.confirm(
+    'Stop tracking "' + account + '"?\n\n' +
+    'The debt will no longer appear in the Debt Account selector or planner ' +
+    'calculations. The INPUT - Debts row stays in place with all historical ' +
+    'fields so the account name stays reserved and Activity history remains.'
+  );
+  if (!confirmed) return;
+
+  setStatusLoading('debt_status', 'Stopping tracking…');
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('debt_status', (res && res.message) || 'Stopped tracking.', false);
+      loadDebtSection();
+      if (typeof refreshSnapshot === 'function') refreshSnapshot();
+      // Bills Due / Upcoming filter out inactive debts — reload so the
+      // stop-tracked debt drops out of the list right away.
+      if (typeof loadDashboardActionSections === 'function') {
+        loadDashboardActionSections();
+      }
+    })
+    .withFailureHandler(function(err) {
+      setStatus('debt_status', 'Error: ' + (err.message || String(err)), true);
+    })
+    .deactivateDebtFromDashboard({ accountName: account });
 }

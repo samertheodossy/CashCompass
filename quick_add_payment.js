@@ -396,6 +396,11 @@ function adjustDebtsBalanceAfterQuickPayment_(ss, payee, entryType, paymentAmoun
     if (!name || isDebtSummaryRowName_(name)) continue;
     if (normalizeBillName_(name) !== normPayee) continue;
 
+    // Skip debts that have been soft-deleted via Stop tracking. Using the
+    // shared row-level rule keeps legacy workbooks (no Active column) behaving
+    // like before via the balance/minimum-payment fallback.
+    if (isDebtRowInactive_(display[r], values[r], headerMap)) continue;
+
     const dType = String(display[r][headerMap.typeColZero] || '').trim();
     if (isDebtTypeLoanOrHeloc_(dType)) return null;
 
@@ -520,6 +525,7 @@ function resolveFlowSourceFromBillOrDebt_(ss, payee) {
       const headers = display[0] || [];
       const nameCol = findHeaderIdx(headers, 'Account Name');
       const typeCol = findHeaderIdx(headers, 'Type');
+      const activeColDebt = findHeaderIdx(headers, 'Active');
 
       if (nameCol !== -1) {
         for (let r = 1; r < display.length; r++) {
@@ -527,6 +533,18 @@ function resolveFlowSourceFromBillOrDebt_(ss, payee) {
           if (!rowName) continue;
           if (rowName.toUpperCase() === 'TOTAL DEBT') continue;
           if (normalizeBillName_(rowName) !== normalizedPayee) continue;
+
+          // Skip stop-tracked debts so inactive rows don't poison the
+          // Flow Source inference for live payments. Blank / missing Active
+          // still means active, matching the shared debt rule.
+          if (activeColDebt !== -1) {
+            const activeVal = String(display[r][activeColDebt] == null ? '' : display[r][activeColDebt])
+              .trim()
+              .toLowerCase();
+            if (activeVal === 'no' || activeVal === 'n' || activeVal === 'false' || activeVal === 'inactive') {
+              continue;
+            }
+          }
 
           const dType = typeCol === -1 ? '' : display[r][typeCol];
           return isDebtCreditCardType_(dType) ? 'CREDIT_CARD' : 'CASH';

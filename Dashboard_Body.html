@@ -984,28 +984,72 @@
 
     <div id="debts" class="panel active">
       <div class="panel-head">
-        <h2>Update Debt Field</h2>
+        <h2 id="debt_panel_title">Debt Accounts</h2>
         <div class="updated">Last updated: <span id="debt_updated">—</span></div>
       </div>
-      <div class="grid-2">
-        <div>
-          <label>Type Filter</label>
-          <select id="debt_typeFilter" onchange="filterDebtAccounts()"></select>
-          <label>Debt Account</label>
-          <select id="debt_account" onchange="loadDebtFieldValue()"></select>
-          <label>Field</label>
-          <select id="debt_field" onchange="loadDebtFieldValue()"></select>
-          <label>New Value</label>
-          <input type="text" id="debt_value" inputmode="decimal" onfocus="handleDebtValueFocus()" onblur="handleDebtValueBlur()">
-          <button onclick="saveDebt()">Save Debt Update</button>
-          <div id="debt_status" class="status"></div>
-        </div>
-        <div class="info">
-          <div><strong>Current value:</strong> <span id="debt_currentValue" class="muted">—</span></div>
-          <div><strong>Type:</strong> <span id="debt_type" class="muted">—</span></div>
-          <div><strong>Acct PCT Avail:</strong> <span id="debt_pctAvail" class="muted">—</span></div>
+      <div class="segmented" role="tablist" aria-label="Debt account mode">
+        <button type="button" id="debt_mode_update_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setDebtPanelMode('update')">Update</button>
+        <button type="button" id="debt_mode_add_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setDebtPanelMode('add')">Add new</button>
+      </div>
+
+      <div id="debt_mode_update_wrap" class="bank-mode-wrap active">
+        <div class="grid-2">
+          <div>
+            <label>Type Filter</label>
+            <select id="debt_typeFilter" onchange="filterDebtAccounts()"></select>
+            <label>Debt Account</label>
+            <select id="debt_account" onchange="loadDebtFieldValue()"></select>
+            <label>Field</label>
+            <select id="debt_field" onchange="loadDebtFieldValue()"></select>
+            <label>New Value</label>
+            <input type="text" id="debt_value" inputmode="decimal" onfocus="handleDebtValueFocus()" onblur="handleDebtValueBlur()">
+            <div class="house-update-actions">
+              <button onclick="saveDebt()">Save Debt Update</button>
+              <button type="button" class="small-btn" onclick="stopTrackingDebt()" title="Mark this debt inactive. History is preserved.">Stop tracking</button>
+            </div>
+          </div>
+          <div class="info">
+            <div><strong>Current value:</strong> <span id="debt_currentValue" class="muted">—</span></div>
+            <div><strong>Type:</strong> <span id="debt_type" class="muted">—</span></div>
+            <div><strong>Acct PCT Avail:</strong> <span id="debt_pctAvail" class="muted">—</span></div>
+          </div>
         </div>
       </div>
+
+      <div id="debt_mode_add_wrap" class="bank-mode-wrap">
+        <div class="grid-2">
+          <div>
+            <label>Account name</label>
+            <input type="text" id="debt_add_name" maxlength="120" autocomplete="off" oninput="if (typeof clearDebtAddNameError_==='function') clearDebtAddNameError_();">
+            <div id="debt_add_name_error" class="field-error" role="alert" aria-live="polite"></div>
+            <label>Type</label>
+            <select id="debt_add_type" onchange="if (typeof onDebtAddTypeChange_==='function') onDebtAddTypeChange_();"></select>
+            <div id="debt_add_type_other_wrap" style="margin-top:6px;display:none;">
+              <input type="text" id="debt_add_type_other" maxlength="80" autocomplete="off" placeholder="New type (e.g. Personal Loan)">
+            </div>
+            <div class="muted" style="margin-top:4px;font-size:12px;">Choose an existing type, or pick <strong>Other…</strong> to add a new one.</div>
+            <label>Account balance</label>
+            <input type="text" id="debt_add_balance" inputmode="decimal" onfocus="currencyFocus('debt_add_balance')" onblur="currencyBlur('debt_add_balance')">
+            <label>Minimum payment</label>
+            <input type="text" id="debt_add_min_payment" inputmode="decimal" onfocus="currencyFocus('debt_add_min_payment')" onblur="currencyBlur('debt_add_min_payment')">
+            <label>Credit limit</label>
+            <input type="text" id="debt_add_credit_limit" inputmode="decimal" onfocus="currencyFocus('debt_add_credit_limit')" onblur="currencyBlur('debt_add_credit_limit')">
+            <div class="muted" style="margin-top:-6px;font-size:12px;">Credit left is derived automatically (Credit limit − Account balance). Enter <strong>0</strong> for non-revolving accounts like Loans / HELOCs.</div>
+            <label>Interest rate %</label>
+            <input type="number" id="debt_add_int_rate" step="0.01" min="0" inputmode="decimal">
+            <label>Due day of month</label>
+            <input type="number" id="debt_add_due_day" min="1" max="31" step="1" inputmode="numeric">
+            <button onclick="createDebtAccount()">Create debt</button>
+          </div>
+          <div class="info muted">
+            <p style="margin-top:0;">Adds a row to <strong>INPUT - Debts</strong> with <strong>Active = Yes</strong>, inserted directly above the <strong>TOTAL DEBT</strong> summary. All fields are required — enter <strong>0</strong> where a value does not apply (for example, Credit limit on a Loan or HELOC).</p>
+            <p>Also seeds a matching <strong>Expense</strong> row on the current year's <strong>INPUT - Cash Flow</strong> (blank month cells) so the new debt shows up in <strong>Bills Due</strong> and <strong>Upcoming</strong> right away. Flow Source is inferred from Type — Credit Card → <strong>CREDIT_CARD</strong>, everything else → <strong>CASH</strong>. If an Expense row for the same payee already exists it is left alone.</p>
+            <p>Existing debts keep working. Stop tracking uses the Active column — rows are never deleted so history and the account name stay reserved.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="debt_status" class="status"></div>
     </div>
 
     <div id="retirement" class="panel">

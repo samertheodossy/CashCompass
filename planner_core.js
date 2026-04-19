@@ -239,6 +239,31 @@ function getAliasMap_() {
 }
 
 function normalizeDebts_(rows, aliasMap) {
+  // Explicit-wins-with-fallback active semantics for debts:
+  //   - If the sheet exposes an Active column (any row has the key), then
+  //     only an explicit 'No'/'n'/'false'/'inactive' marks a debt inactive.
+  //     Blank/missing on any individual row keeps that debt active so
+  //     existing workbooks with just the header added keep working.
+  //   - If no row exposes an Active column at all (legacy workbook), fall
+  //     back to the original implicit rule: active iff balance>0 or
+  //     minimumPayment>0. This preserves behavior for sheets that have not
+  //     been self-healed yet.
+  var hasActiveColumn = false;
+  for (var i = 0; i < rows.length; i++) {
+    if (
+      Object.prototype.hasOwnProperty.call(rows[i], 'Active') ||
+      Object.prototype.hasOwnProperty.call(rows[i], '__display__Active')
+    ) {
+      hasActiveColumn = true;
+      break;
+    }
+  }
+
+  function isExplicitInactive(v) {
+    var s = String(v == null ? '' : v).trim().toLowerCase();
+    return s === 'no' || s === 'n' || s === 'false' || s === 'inactive';
+  }
+
   return rows
     .filter(function(r) { return String(r['Account Name'] || '').trim() !== ''; })
     .filter(function(r) { return String(r['Account Name']).trim().toUpperCase() !== 'TOTAL DEBT'; })
@@ -256,6 +281,16 @@ function normalizeDebts_(rows, aliasMap) {
           ? 'LOW_RATE_KEEP_LAST'
           : 'STANDARD';
 
+      var active;
+      if (hasActiveColumn) {
+        var activeCell = Object.prototype.hasOwnProperty.call(r, '__display__Active')
+          ? r['__display__Active']
+          : r['Active'];
+        active = !isExplicitInactive(activeCell);
+      } else {
+        active = balance > 0 || minPayment > 0;
+      }
+
       return {
         name: normalizeName_(r['Account Name'], aliasMap),
         originalName: originalName,
@@ -266,7 +301,7 @@ function normalizeDebts_(rows, aliasMap) {
         creditLeft: round2_(creditLeft),
         minimumPayment: minPayment,
         interestRate: round2_(rate),
-        active: balance > 0 || minPayment > 0,
+        active: active,
         priorityClass: priorityClass
       };
     });

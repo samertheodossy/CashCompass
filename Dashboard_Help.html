@@ -279,13 +279,15 @@
           <li><strong>house_deactivate</strong> — <strong>Stop tracking</strong> on a house from <strong>Assets → House Values → Update</strong>. Flips <strong>Active = No</strong> on every <strong>INPUT - House Values</strong> row for that house plus the mirror <strong>SYS - House Assets</strong> row; history and the <strong>HOUSES - {House}</strong> sheet stay in place. Activity <strong>Type</strong> is <strong>House Expenses</strong>; sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong>.</li>
           <li><strong>investment_add</strong> — Create an investment account from <strong>Assets → Investments → Add new</strong>. Adds rows to <strong>INPUT - Investments</strong> (current year block) and <strong>SYS - Assets</strong>. Activity <strong>Type</strong> is <strong>Investment</strong>; <strong>Action</strong> sub-label is <strong>Account added</strong>. <strong>Amount</strong> shows the starting value (0 if no starting value was supplied).</li>
           <li><strong>investment_deactivate</strong> — <strong>Stop tracking</strong> on an investment account from <strong>Assets → Investments → Update</strong>. Flips <strong>Active = No</strong> on every <strong>INPUT - Investments</strong> row for that account plus the mirror <strong>SYS - Assets</strong> row; month history stays in place. Activity <strong>Type</strong> is <strong>Investment</strong>; sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong>.</li>
+          <li><strong>debt_add</strong> — Create a debt account from <strong>Planning → Debts → Add new</strong>. Adds one row to <strong>INPUT - Debts</strong> with <strong>Active = Yes</strong>. Activity <strong>Type</strong> is <strong>Debt</strong>; <strong>Action</strong> sub-label is <strong>Account added</strong>. <strong>Amount</strong> shows the required opening balance entered on the form (may be <strong>$0.00</strong>).</li>
+          <li><strong>debt_deactivate</strong> — <strong>Stop tracking</strong> on a debt from <strong>Planning → Debts → Update</strong>. Flips <strong>Active = No</strong> on the matching <strong>INPUT - Debts</strong> row (the row is kept for history). The debt drops out of the planner, Rolling Debt Payoff, Bills Due, and active selectors. Activity <strong>Type</strong> is <strong>Debt</strong>; sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong>.</li>
         </ul>
 
         <h4>Remove button</h4>
         <ul class="help-list">
           <li><strong>Enabled only for Donation</strong> rows until safe undo exists for other event types.</li>
           <li>For donations: after confirmation, the log line is removed; if <strong>INPUT - Donation</strong> still has a matching row (charity, date, amount, tax year, payment type, comments), that sheet row is removed too.</li>
-          <li>For other events (<strong>quick_pay</strong>, bill skip, house expense, bank account add, <strong>bank_account_deactivate</strong>, <strong>house_add</strong>, <strong>house_deactivate</strong>, <strong>investment_add</strong>, <strong>investment_deactivate</strong>, …) the button is greyed out — delete those lines directly on <strong>LOG - Activity</strong> if needed.</li>
+          <li>For other events (<strong>quick_pay</strong>, bill skip, house expense, bank account add, <strong>bank_account_deactivate</strong>, <strong>house_add</strong>, <strong>house_deactivate</strong>, <strong>investment_add</strong>, <strong>investment_deactivate</strong>, <strong>debt_add</strong>, <strong>debt_deactivate</strong>, …) the button is greyed out — delete those lines directly on <strong>LOG - Activity</strong> if needed.</li>
         </ul>
 
         <h4>Filters</h4>
@@ -308,7 +310,7 @@
               <li>The <strong>Type</strong> filter operates on the broad pill, so filtering by <strong>Bill</strong> still surfaces every bill lifecycle event.</li>
             </ul>
           </li>
-          <li><strong>Amount</strong> — The amount stored for the event (payment amount, or 0 for a skip). Lifecycle events that do not move money — <strong>Tracking stopped</strong> (<strong>bill_deactivate</strong>, <strong>bank_account_deactivate</strong>, <strong>house_deactivate</strong>, <strong>investment_deactivate</strong>) — show <strong>—</strong> instead of <strong>$0.00</strong>. Account creation events (<strong>bank_account_add</strong>, <strong>investment_add</strong>, <strong>house_add</strong>) show the supplied opening / starting / current value, or <strong>$0.00</strong> when none was provided.</li>
+          <li><strong>Amount</strong> — The amount stored for the event (payment amount, or 0 for a skip). Lifecycle events that do not move money — <strong>Tracking stopped</strong> (<strong>bill_deactivate</strong>, <strong>bank_account_deactivate</strong>, <strong>house_deactivate</strong>, <strong>investment_deactivate</strong>, <strong>debt_deactivate</strong>) — show <strong>—</strong> instead of <strong>$0.00</strong>. Account creation events (<strong>bank_account_add</strong>, <strong>investment_add</strong>, <strong>house_add</strong>, <strong>debt_add</strong>) show the supplied opening / starting / current value, or <strong>$0.00</strong> when none was provided.</li>
           <li><strong>Bill due date</strong> — The obligation date for that cycle (from the log entry date). Not necessarily the day you clicked the button.</li>
         </ul>
 
@@ -459,6 +461,30 @@
             </ul>
           </li>
         </ul>
+
+        <h4>Debts — Update / Add new / Stop tracking</h4>
+        <ul class="help-list">
+          <li><strong>Update</strong> saves a single field on the selected debt row in <strong>INPUT - Debts</strong> (Account Balance, Due Date, Credit Limit, Minimum Payment, Credit Left, Int Rate). Saving recomputes <strong>Acct PCT Avail</strong> and reruns the debt planner. The <strong>TOTAL DEBT</strong> summary row is always excluded from the selector.</li>
+          <li><strong>Add new</strong> inserts one row directly above the <strong>TOTAL DEBT</strong> summary on <strong>INPUT - Debts</strong> with <strong>Active = Yes</strong>. <em>All</em> fields are required: <strong>Account name</strong>, <strong>Type</strong>, <strong>Account balance</strong>, <strong>Minimum payment</strong>, <strong>Credit limit</strong>, <strong>Interest rate %</strong>, and <strong>Due day of month</strong>. Enter <strong>0</strong> for a field that does not apply (for example, Credit limit on a Loan or HELOC). <strong>Credit Left</strong> is <em>derived</em> (Credit limit − Account balance) — not a separate input — and <strong>Acct PCT Avail</strong> is recomputed from it.</li>
+          <li><strong>Type</strong> is a dropdown populated from the distinct <strong>Type</strong> values currently on <strong>INPUT - Debts</strong> (e.g. Credit Card, Loan, HELOC). Pick <strong>Other…</strong> to reveal a text input and add a new type on the fly — the typed value is written as-is to the new row's <strong>Type</strong> cell and becomes available in the dropdown for future adds.</li>
+          <li><strong>Cash Flow auto-seed</strong> — Also writes a matching <strong>Expense</strong> row on the current year's <strong>INPUT - Cash Flow</strong> tab so the new debt shows up in <strong>Bills Due</strong>, <strong>Upcoming</strong>, and the planner email without you editing the sheet. The row is inserted in the Expense block with <strong>Type = Expense</strong>, <strong>Payee = Account name</strong>, <strong>Active = YES</strong>, and <strong>Flow Source</strong> inferred from Type (<strong>Credit Card → CREDIT_CARD</strong>, everything else → <strong>CASH</strong>). <strong>All month cells are left blank</strong> — nothing has been paid yet. The first time you run <strong>Quick Add → Pay</strong> or <strong>Bills → Pay</strong> for this debt, that action fills the correct month cell; until then Bills Due treats the current cycle as unhandled. Idempotent: if an Expense row for the same payee already exists on that year tab (e.g. pre-seeded by hand, or the name was previously stop-tracked and re-added), the existing row is left untouched. If the current-year Cash Flow tab does not exist yet, the seed is skipped and the status line explains why.</li>
+          <li><strong>Duplicate names</strong> are rejected across every non-summary row on <strong>INPUT - Debts</strong>, <em>including rows you previously stop-tracked</em>, so names stay reserved. Reserved summary names (e.g. <strong>TOTAL DEBT</strong>) are always rejected. Inline errors show next to the Account name field and focus the input.</li>
+          <li>Status text during the flow is <em>Creating debt account…</em>. After success, the panel flips back to <strong>Update</strong> and preselects the new debt.</li>
+          <li><strong>Add new</strong> logs <strong>debt_add</strong> to <strong>LOG - Activity</strong>. Activity <strong>Type</strong> is <strong>Debt</strong>; <strong>Action</strong> sub-label is <strong>Account added</strong>. <strong>Amount</strong> shows the required opening balance (which may be <strong>$0.00</strong> if you entered 0). It does <em>not</em> re-run the full planner — use <strong>Run Planner + Refresh Snapshot</strong> when you want projections and Overview updated.</li>
+        </ul>
+
+        <h4>Debts — Stop tracking (soft deactivate)</h4>
+        <ul class="help-list">
+          <li><strong>Update</strong> mode shows a secondary <strong>Stop tracking</strong> button next to <strong>Save Debt Update</strong>. Use it when a debt is closed / paid off / no longer relevant without losing history.</li>
+          <li>Clicking it opens an inline confirmation. On confirm, the matching <strong>INPUT - Debts</strong> row is flipped to <strong>Active = No</strong>. The row is never deleted; balance, minimum payment, credit limit, interest rate, due day, and the name stay intact so historical <strong>quick_pay</strong> / bill matches still classify correctly.</li>
+          <li>Inactive debts drop out of the Planning Debts selector, Debt Overview, Rolling Debt Payoff (waterfall, HELOC gate, focus/next-debt selection, payment windows), Bills Due, Overdue / Next 7, and Quick add Flow Source inference. They are also excluded from Debt totals and high-utilization alerts.</li>
+          <li>Historical <strong>LOG - Activity</strong> classification is <em>not</em> filtered by Active — rows that used to hit a now-inactive debt still show the right <strong>Type</strong> and <strong>Kind</strong> so you can audit past payments.</li>
+          <li>Duplicate-name validation still blocks reuse of a stop-tracked debt name when adding a new debt (names stay reserved).</li>
+          <li>Status text during the flow is <em>Stopping tracking…</em>.</li>
+          <li><strong>Backward compatibility</strong>: If the <strong>Active</strong> column is missing on your workbook, the script self-heals — it adds the column automatically the first time you Add new or Stop tracking. Existing rows with blank <strong>Active</strong> are treated as active, and if no <strong>Active</strong> column exists at all the legacy fallback still applies (<strong>balance &gt; 0 || minimum payment &gt; 0</strong>).</li>
+          <li>Logs <strong>debt_deactivate</strong> to <strong>LOG - Activity</strong>. Activity <strong>Type</strong> is <strong>Debt</strong>; <strong>Action</strong> sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong> because no money moved.</li>
+          <li>New <strong>Yes</strong> / <strong>No</strong> values written into the <strong>Active</strong> column inherit the row's text style so they visually match the rest of the row.</li>
+        </ul>
       </section>
 
       <!-- ================================================================ -->
@@ -475,7 +501,7 @@
 
         <h4>Data sources</h4>
         <ul class="help-list">
-          <li><strong>Balances and minimums</strong> — From <strong>INPUT - Debts</strong>.</li>
+          <li><strong>Balances and minimums</strong> — From <strong>INPUT - Debts</strong> (<strong>Active = Yes</strong> rows only — stop-tracked debts are hidden from the bar chart, table, totals, and "longest payoff" callout).</li>
           <li><strong>CF paid</strong> — Sums <strong>Expense</strong> rows on <strong>INPUT - Cash Flow</strong> for the last two calendar years where the <strong>Payee</strong> matches the debt.</li>
         </ul>
 

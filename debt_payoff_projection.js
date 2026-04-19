@@ -48,22 +48,27 @@ function getDebtPayoffReadData() {
   const warnings = [];
   const missingCashFlowSheets = [];
 
-  const debtsOut = debts.map(function(d) {
-    const totalPaid = sumExpensePaymentsForDebtPayee_(ss, d.name, projectionYears, aliasMap, missingCashFlowSheets);
-    const est = estimateRoughPayoffMonths_(d.balance, d.minimumPayment, d.interestRate, d.type);
+  // Debt Overview is an active-debts-only view. Stop-tracked debts (Active=No)
+  // stay on INPUT - Debts for history + name reservation but should NOT appear
+  // in the bar chart, table, or "longest payoff" callout here.
+  const debtsOut = debts
+    .filter(function(d) { return d.active; })
+    .map(function(d) {
+      const totalPaid = sumExpensePaymentsForDebtPayee_(ss, d.name, projectionYears, aliasMap, missingCashFlowSheets);
+      const est = estimateRoughPayoffMonths_(d.balance, d.minimumPayment, d.interestRate, d.type);
 
-    return {
-      name: d.name,
-      type: d.type,
-      balance: d.balance,
-      minimumPayment: d.minimumPayment,
-      interestRate: d.interestRate,
-      active: d.active,
-      cashFlowPaid: totalPaid,
-      estimatedPayoffMonths: est,
-      payoffEstimateMethod: isLoanTypeForAmortization_(d.type) ? 'amortization' : 'simple'
-    };
-  });
+      return {
+        name: d.name,
+        type: d.type,
+        balance: d.balance,
+        minimumPayment: d.minimumPayment,
+        interestRate: d.interestRate,
+        active: d.active,
+        cashFlowPaid: totalPaid,
+        estimatedPayoffMonths: est,
+        payoffEstimateMethod: isLoanTypeForAmortization_(d.type) ? 'amortization' : 'simple'
+      };
+    });
 
   if (missingCashFlowSheets.length > 0) {
     warnings.push(
@@ -75,7 +80,7 @@ function getDebtPayoffReadData() {
 
   const totalDebtBalance = round2_(
     debts.filter(function(d) {
-      return d.balance > 0;
+      return d.active && d.balance > 0;
     }).reduce(function(s, d) {
       return s + d.balance;
     }, 0)

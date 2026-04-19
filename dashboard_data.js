@@ -844,6 +844,8 @@ function getHighUtilizationDebtIssues_(sheet, thresholdPct) {
   const balanceCol = headers.indexOf('Account Balance');
   const limitCol = headers.indexOf('Credit Limit');
   const typeCol = headers.indexOf('Type');
+  const activeCol = headers.indexOf('Active');
+  const minCol = headers.indexOf('Minimum Payment');
 
   if (nameCol === -1 || balanceCol === -1 || limitCol === -1) return [];
 
@@ -856,7 +858,10 @@ function getHighUtilizationDebtIssues_(sheet, thresholdPct) {
 
     const limit = toNumber_(values[r][limitCol]);
     const balance = toNumber_(values[r][balanceCol]);
+    const minPayment = minCol === -1 ? 0 : toNumber_(values[r][minCol]);
     const type = typeCol === -1 ? '' : String(display[r][typeCol] || '').trim();
+
+    if (isDebtSheetRowInactive_(display[r], activeCol, balance, minPayment)) continue;
 
     if (limit <= 0) continue;
 
@@ -1017,6 +1022,8 @@ function sumDebtBalances_(sheet) {
   const headers = display[0];
   const nameCol = headers.indexOf('Account Name');
   const balanceCol = headers.indexOf('Account Balance');
+  const activeCol = headers.indexOf('Active');
+  const minCol = headers.indexOf('Minimum Payment');
 
   if (nameCol === -1 || balanceCol === -1) {
     throw new Error('DEBTS must contain Account Name and Account Balance.');
@@ -1027,10 +1034,42 @@ function sumDebtBalances_(sheet) {
     const name = String(display[r][nameCol] || '').trim();
     if (!name) continue;
     if (name.toUpperCase() === 'TOTAL DEBT') continue;
-    total += toNumber_(values[r][balanceCol]);
+    const balance = toNumber_(values[r][balanceCol]);
+    const minPayment = minCol === -1 ? 0 : toNumber_(values[r][minCol]);
+    if (isDebtSheetRowInactive_(display[r], activeCol, balance, minPayment)) continue;
+    total += balance;
   }
 
   return round2_(total);
+}
+
+/**
+ * Shared explicit-only inactive test for direct INPUT - Debts sheet readers
+ * in dashboard_data.js (high-utilization issues, debt balance totals, debt
+ * bills due, payee map).
+ *
+ *   - Active column present (activeCol !== -1):
+ *       explicit 'no'/'n'/'false'/'inactive' → inactive;
+ *       blank / anything else              → active.
+ *   - Active column missing (legacy workbook):
+ *       never inactive — all rows are treated as active, matching
+ *       pre-Active-column dashboard behavior.
+ *
+ * The legacy `balance > 0 || minPayment > 0` fallback still lives in
+ * `planner_core.js → normalizeDebts_` for planner/waterfall purposes; it is
+ * intentionally NOT applied here so $0-balance debts keep showing up in
+ * dashboard aggregates and dropdowns on workbooks that haven't self-healed
+ * the Active column yet. `balance` / `minPayment` params are retained for
+ * signature compatibility with existing call sites.
+ *
+ * TOTAL DEBT summary-row handling is the caller's responsibility.
+ */
+function isDebtSheetRowInactive_(displayRow, activeCol, balance, minPayment) {
+  if (activeCol === -1) return false;
+  const v = String(displayRow[activeCol] == null ? '' : displayRow[activeCol])
+    .trim()
+    .toLowerCase();
+  return v === 'no' || v === 'n' || v === 'false' || v === 'inactive';
 }
 
 function getDebtPaymentBreakdownForDashboard() {
@@ -1351,6 +1390,8 @@ function getDebtBillsDueRows_(ss, today, tz) {
   const debtDueCol = debtHeaders.indexOf('Due Date');
   const debtTypeCol = debtHeaders.indexOf('Type');
   const debtMinCol = debtHeaders.indexOf('Minimum Payment');
+  const debtBalanceCol = debtHeaders.indexOf('Account Balance');
+  const debtActiveCol = debtHeaders.indexOf('Active');
 
   const debtMap = {};
 
@@ -1359,6 +1400,10 @@ function getDebtBillsDueRows_(ss, today, tz) {
       const rawName = String(debtDisplay[r][debtNameCol] || '').trim();
       if (!rawName) continue;
       if (rawName.toUpperCase() === 'TOTAL DEBT') continue;
+
+      const rowBalance = debtBalanceCol === -1 ? 0 : toNumber_(debtValues[r][debtBalanceCol]);
+      const rowMin = debtMinCol === -1 ? 0 : toNumber_(debtValues[r][debtMinCol]);
+      if (isDebtSheetRowInactive_(debtDisplay[r], debtActiveCol, rowBalance, rowMin)) continue;
 
       debtMap[normalizeBillName_(rawName)] = {
         dueDay: debtDueCol === -1 ? null : Number(debtValues[r][debtDueCol]) || null,
@@ -1731,10 +1776,14 @@ function getInputBillsPayeeMap_(ss) {
 function getDebtPayeeMap_(ss) {
   const sheet = getSheet_(ss, 'DEBTS');
   const display = sheet.getDataRange().getDisplayValues();
+  const values = sheet.getDataRange().getValues();
   if (display.length < 2) return {};
 
   const headers = display[0];
   const payeeCol = headers.indexOf('Account Name');
+  const activeCol = headers.indexOf('Active');
+  const balanceCol = headers.indexOf('Account Balance');
+  const minCol = headers.indexOf('Minimum Payment');
 
   const out = {};
   if (payeeCol === -1) return out;
@@ -1743,6 +1792,10 @@ function getDebtPayeeMap_(ss) {
     const payee = String(display[r][payeeCol] || '').trim();
     if (!payee) continue;
     if (payee.toUpperCase() === 'TOTAL DEBT') continue;
+
+    const balance = balanceCol === -1 ? 0 : toNumber_(values[r][balanceCol]);
+    const minPayment = minCol === -1 ? 0 : toNumber_(values[r][minCol]);
+    if (isDebtSheetRowInactive_(display[r], activeCol, balance, minPayment)) continue;
 
     out[normalizeBillName_(payee)] = true;
   }

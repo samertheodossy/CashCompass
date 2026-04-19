@@ -261,6 +261,17 @@ function saveHouseExpense() {
       loadRecentHouseExpenses();
       loadHouseExpenseSummaries();
       refreshSnapshot();
+      // When the "Also add to Cash Flow" checkbox was on, addHouseExpense
+      // writes a cell on INPUT - Cash Flow. Bills Due + Upcoming consume
+      // that sheet, so reload them too. Also safe when the checkbox was
+      // off — calling the loaders is cheap and avoids a stale Bills Due
+      // list if the user toggles views after saving.
+      if (typeof loadDashboardActionSections === 'function') {
+        try { loadDashboardActionSections(); } catch (e) {}
+      }
+      if (typeof loadUpcomingSection === 'function') {
+        try { loadUpcomingSection(); } catch (e) {}
+      }
     })
     .withFailureHandler(function(err) {
       setStatus('hx_status', 'Error: ' + (err.message || String(err)), true);

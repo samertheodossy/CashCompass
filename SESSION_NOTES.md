@@ -1,3 +1,124 @@
+## Recent — Cross-panel refresh audit (post-Debt Add race fix)
+
+After fixing the Debts → Bills Due race condition, I swept the rest of the dashboard write paths looking for the same pattern — **a mutation in Panel A that affects data read by Panel B, where Panel B has its own loader that the write path doesn't call**. Two more gaps found and closed:
+
+### Audit method
+- Listed every `load…Section` / `load…Ui_` loader (20+ total across `Dashboard_Script_*.html`).
+- Listed every `google.script.run.<mutator>` success handler in `Dashboard_Script_*.html` (add / deactivate / save / quickAddPayment / addBill / addHouseExpense / addDonation / addUpcomingExpense).
+- Cross-referenced which sheets each mutator touches against which loaders read those sheets, and checked whether the success handler triggers the right loaders.
+
+### Gap 1 — Quick Add payee dropdown stale after adding a debt or bill
+- **Symptom** — `loadPaymentSection` (Quick Add) calls `getQuickAddPaymentUiData`, which returns the joined active bills + active debts list. The function is called **once at init** and never again, so adding a new debt from Planning → Debts or a new bill from Bills → Add new left the Quick Add **payee dropdown stale until a full page reload.**
+- **Fix** — `Dashboard_Script_Render.html → showTab(name)` now calls `loadPaymentSection()` when `name === 'payments'`. Safe to call repeatedly: `loadPaymentSection` only resets the date field (to today) and clears the transient Flow Source prefill; it does not overwrite the Amount, Type, or Payee in-progress values the user may be editing. Same safety-net rationale as the `billsDue` / `upcoming` tab-entry refresh.
+
+### Gap 2 — `addHouseExpense` with "Also add to Cash Flow" didn't refresh Bills Due / Upcoming
+- **Symptom** — `house_expenses.js → addHouseExpense` writes a cell on the current year's **`INPUT - Cash Flow`** when the **Also add to Cash Flow** checkbox is on. Bills Due, Upcoming, and the Overview Next-7 sum all read that sheet — but the client-side `addHouseExpense` success handler (`Dashboard_Script_PropertiesHouseExpenses.html`) only called `loadRecentHouseExpenses`, `loadHouseExpenseSummaries`, and `refreshSnapshot`. Result: a house expense that *also* cleared an outstanding Cash Flow bill (e.g. Mortgage) would not drop off the **Bills Due → Next 7 Days** card until reload.
+- **Fix** — the success handler now also calls `loadDashboardActionSections()` (Bills Due / Recurring / Manage) and `loadUpcomingSection()`. Both are wrapped in `try/catch` and guarded by `typeof === 'function'` so they degrade silently if a future refactor drops the loaders. Always called (not gated on the checkbox) because the refresh is cheap and avoids any future regression if the write path ever starts touching Cash Flow unconditionally.
+
+### Debts tab safety net
+- `showTab('debts')` now also re-runs `loadDebtSection()` on tab entry. This is defense-in-depth for cross-workflow adds (e.g. sidebar adds, scripted adds) — the in-panel add flow already triggers its own reload.
+
+### Not a gap (verified)
+- `quickAddPayment` — already calls `refreshSnapshot`, `loadUpcomingSection`, `loadDashboardActionSections`, `runDebtPlannerAfterQuickPayment_`. Comprehensive.
+- `addBillFromDashboard` / `deactivateBillFromDashboard` — already call `loadDashboardActionSections` + `refreshSnapshot`. Quick Add is now covered by the tab-entry refresh.
+- `addBankAccountFromDashboard` / `deactivateBankAccountFromDashboard` — bank changes affect Overview (handled by `refreshSnapshot`) and the Bank panel (handled by its own reload). No Cash Flow / Bills Due dependency.
+- `addInvestmentAccountFromDashboard` / `deactivateInvestmentAccountFromDashboard` — same story.
+- `addHouseFromDashboard` / `deactivateHouseFromDashboard` — already refresh Assets House Values + House Expenses selector + Overview snapshot. Property Performance tab re-fetches on tab entry via the existing `propertyPerformance` branch.
+- `addDonation` — writes to `INPUT - Donations` only; no cross-panel dependency beyond Activity (which reloads on its own page entry).
+- `addUpcomingExpense` / `updateUpcomingExpenseStatus` / `addUpcomingToCashFlow` — already call `loadUpcomingSection`, `loadDashboardActionSections`, `refreshSnapshot`.
+
+### Files
+- `Dashboard_Script_Render.html` (tab-entry refresh for `payments` + `debts` added; `billsDue` + `upcoming` already added previously).
+- `Dashboard_Script_PropertiesHouseExpenses.html` (`addHouseExpense` success handler now reloads Bills Due + Upcoming).
+
+---
+
+## Recent — Debt Add/Stop now reloads Bills Due / Upcoming
+
+- **Gap** — Even after `addDebtFromDashboard` began auto-seeding a Cash Flow Expense row, the **Bills Due → Next 7 Days** card still did not show the new debt until the whole app was reloaded. Root cause: `createDebtAccount` in `Dashboard_Script_PlanningDebts.html` only called `refreshSnapshot()`, which refreshes the Overview snapshot (`getDashboardSnapshot`), not the Bills Due / Upcoming panels. Those panels have their own loader, `loadDashboardActionSections()`, that fetches `getBillsDueFromCashFlowForDashboard`, `getRecurringBillsWithoutDueDateForDashboard`, and active bills data. Payment/skip flows already call `loadDashboardActionSections()` after success — the debt add flow was the odd one out.
+- **Fix (action-side)** — `createDebtAccount` now calls `loadDashboardActionSections()` after `refreshSnapshot()` on success so the newly-seeded Cash Flow row appears in **Bills Due** and **Upcoming** immediately. `stopTrackingDebt` got the same treatment so deactivated debts drop out of the lists in the same render (they filter on Active).
+- **Fix (tab-entry safety net)** — `Dashboard_Script_Render.html → showTab(name)` now **re-runs the loader whenever the user navigates into a data-driven tab**, matching the existing pattern for `houseExpenses`, `donations`, `debtPayoff`, and `rollingDebtPayoff`:
+  - `name === 'billsDue'` → `loadDashboardActionSections()` (Bills Due / Upcoming fallback / Manage bills)
+  - `name === 'upcoming'` → `loadUpcomingSection()`
+  This means that even if a write path forgets to trigger a refresh (or a race in the success handler swallows it), simply clicking the tab pulls a fresh view. No more "refresh the whole app to see my new debt / bill."
+- **Files** — `Dashboard_Script_PlanningDebts.html` (add + stop success handlers), `Dashboard_Script_Render.html` (tab-entry refresh for `billsDue` / `upcoming`).
+
+---
+
+## Recent — Debt Add auto-seeds INPUT - Cash Flow Expense row
+
+- **Gap** — After the Debt consistency pass + form hardening, a freshly added debt with an Active flag and a Due day still did not appear on the **Bills Due → Next 7 Days** card. Root cause: `dashboard_data.js → getDebtBillsDueRows_` iterates **Expense rows on the current year's INPUT - Cash Flow tab** and joins back to `INPUT - Debts` by Payee. A new debt without a Cash Flow row has nothing to match against, so it never shows in Bills Due / Upcoming / overdue detection even though it is Active and has a Due day. (The planner email's Pay now / Pay soon block iterates `normalizeDebts_` directly, so it was already visible there — the dashboard card was the odd one out.)
+- **Fix — system seeds the Cash Flow row on the user's behalf** — `debts.js → addDebtFromDashboard` now, after writing the `INPUT - Debts` row, also:
+  - Resolves the current year's Cash Flow sheet via `tryGetCashFlowSheet_(ss, year)`; missing sheet → skip with a warning, never blocks the debt add.
+  - Idempotency: `findCashFlowRowByTypeAndPayee_(sheet, 'Expense', accountName)` — if an Expense row for that Payee already exists, leave it alone (don't duplicate history).
+  - Otherwise calls the existing `insertCashFlowRow_(sheet, 'Expense', accountName, flowSource)` helper. Flow Source is inferred the same way the Bills Due reader does it: `isDebtCreditCardType_(type)` → **`CREDIT_CARD`**, everything else (Loan / HELOC / Other) → **`CASH`**.
+  - **Month cells stay blank.** `insertCashFlowRow_` copies formatting from the row above, `clearContent()`s the whole new row, then only writes `Type`, `Payee`, `Flow Source`, and `Active = YES`. No month seeding, no `$0.00`, no dashes. Bills Due still treats the current cycle as unhandled until an actual Quick Add / Bills Pay fills the month cell.
+  - Never fatal: all Cash Flow seeding is wrapped in try/catch. On any failure the debt row itself is already on `INPUT - Debts` and the status line explains what happened.
+- **Status feedback** — Return payload now carries `cashFlowRowSeeded: boolean` and `cashFlowSeedWarning: string`. The status message appended to the dashboard banner reflects which branch fired ("Seeded an Expense row…" vs "…already exists — left untouched" vs missing year tab).
+- **Activity log** — `debt_add` Details JSON now includes `cashFlowRowSeeded` so the audit trail records whether the row was seeded, skipped as duplicate, or skipped because the year tab was missing.
+- **Docs** — `Dashboard_Help.html` → **Debts — Update / Add new / Stop tracking** gained a **Cash Flow auto-seed** bullet describing the new behavior (including the "month cells stay blank" guarantee and the idempotency / missing-year-tab rules). `Dashboard_Body.html` info panel echoes the same explanation.
+- **Files** — `debts.js` (`addDebtFromDashboard` Cash Flow seed + message + return payload), `Dashboard_Body.html` (info copy), `Dashboard_Help.html` (help bullet).
+
+---
+
+## Recent — Debt Add: all fields required + Type dropdown with "Other…"
+
+- **Form** — On **Planning → Debts → Add new**, every input is now required: Account name, Type, Account balance, Minimum payment, Credit limit, Interest rate %, Due day of month. Labels no longer say "(optional)." Users enter **0** where a value does not apply (for example, Credit limit on a Loan / HELOC); the hint under Credit limit mentions this explicitly.
+- **Type control** — Replaced the free-text input + `<datalist>` with a `<select>` populated from existing **INPUT - Debts** Type values (deduplicated, case-insensitive) plus a final **Other…** option. Selecting **Other…** reveals an inline text input (`debt_add_type_other`) for typing a brand-new type; the typed value is written as-is to the new row and will appear in the dropdown next time the panel refreshes.
+- **Client validation** (`Dashboard_Script_PlanningDebts.html`) — `createDebtAccount` now runs a `requiredNum_` helper per field (blank → inline error + focus), plus explicit required checks for the Type selection (including the **Other…** new-type field) and Due day of month. `resetDebtAddForm_` resets the Type select back to the placeholder and clears the Other-type input.
+- **Backend validation** (`debts.js → addDebtFromDashboard`) — `validateRequired_` now enforces `balance`, `minimumPayment`, `creditLimit`, `intRate`, `dueDay`; the old `parseOptional*` helpers were replaced with `parseRequiredNonNegative_`, `parseRequiredPercent_`, and `parseRequiredDueDay_` that throw field-specific "is required" errors on blank payloads. Credit Left is unconditionally derived as `round2_(creditLimit − balance)`; the row-writer no longer guards per-field `!== null` since every value is present.
+- **Activity log** — `debt_add` Amount always shows the supplied opening balance (may be `$0.00` if the user enters 0); the conditional `balance !== null ? balance : 0` fallback was removed.
+- **Docs** — Dashboard Help (**Debts — Update / Add new / Stop tracking** + **Activity → debt_add**) updated to describe required fields, the new Type dropdown + **Other…** behavior, and the clarified Amount semantics.
+- **Files** — `Dashboard_Body.html`, `Dashboard_Script_PlanningDebts.html`, `debts.js`, `Dashboard_Help.html`.
+
+---
+
+## Recent — Debt Overview now respects Active
+
+- **Regression** — Stop-tracked debts kept showing up on **Planning → Debt Overview** (bar chart + table) even though `normalizeDebts_` was correctly flagging them as inactive. Root cause: `getDebtPayoffReadData()` in `debt_payoff_projection.js` mapped `debtsOut` from *all* normalized debts without filtering by `d.active`, so inactive rows still made it onto the chart / table / "longest payoff" callout.
+- **Fix** — `debtsOut` now filters to `d.active === true` before the `.map`. `totalDebtBalance` also adds an `d.active` guard to the `balance > 0` filter so the summary lines up with the list. `findLongestRoughPayoff_` iterates `debtsOut` (already filtered) so "Longest estimated payoff" won't be an inactive debt either. Recommendations in `buildDebtPayoffRecommendations_` were already filtering by `d.active`, so no change there.
+- **Rolling Debt Payoff** — Unchanged. Its ~20 internal consumers (`rolling_debt_payoff.js`) already respect `d.active`, and `normalizeDebts_` correctly marks stop-tracked debts as inactive.
+- **Files** — `debt_payoff_projection.js` (`getDebtPayoffReadData()` filters `debtsOut` + tightened `totalDebtBalance`).
+
+---
+
+## Recent — Debt Add polish: insertion position + derived Credit Left + PCT calc bug
+
+- **Insert position** — New debts now land directly above the **TOTAL DEBT** summary instead of being appended at the bottom of the sheet (where they'd fall past the summary and any blank buffer rows). `findDebtTemplateRow_` now scans only rows above TOTAL DEBT so it correctly anchors the insert even when orphaned rows from earlier test inserts sit below the summary. `addDebtFromDashboard` switched from `sheet.appendRow(row)` to `sheet.insertRowAfter(templateRow)` + `setValues([row])`. The PASTE_FORMAT + row-height copy runs afterwards so the new row still inherits neighbor row formatting.
+- **Acct PCT Avail bug** — `recalcDebtPctAvailForRow_` was incorrectly taking the "Credit Left / Credit Limit" branch even when Credit Left was blank (because `toNumber_('')` returns **0**, not NaN, so `!isNaN(creditLeft)` was always true). Fix: look at the raw cell value — a truly blank / null / undefined Credit Left cell now triggers the derivation branch `(Credit Limit − Balance) / Credit Limit`. Cards that *do* have Credit Left filled in still use that value directly, matching legacy behavior.
+- **Credit Left is a derived field** — Removed the **Credit left (optional)** input from the Add form (both `Dashboard_Body.html` and `Dashboard_Script_PlanningDebts.html`): no more `debt_add_credit_left` field, no more `creditLeft` payload key, and a muted helper line under the Credit limit row ("Credit left is derived automatically (Credit limit − Account balance).") explains the new behavior. Backend `addDebtFromDashboard` now pre-populates Credit Left with `round2_(creditLimit − balance)` when both are provided so the new row reads like existing hand-entered rows; if either is blank, the cell is left blank and `recalcDebtPctAvailForRow_` falls back to the Credit Limit − Balance derivation. Help text for **Planning → Debts → Add new** updated to reflect the removed input.
+- **Files** — `debts.js` (`recalcDebtPctAvailForRow_` blank-cell detection; `addDebtFromDashboard` derives `creditLeft` + `insertRowAfter(templateRow)`; `findDebtTemplateRow_` scans only above TOTAL DEBT), `Dashboard_Body.html` (dropped Credit left input, added derivation hint), `Dashboard_Script_PlanningDebts.html` (removed `debt_add_credit_left` from reset / payload / validation), `Dashboard_Help.html` (Add new bullet updated).
+
+---
+
+## Recent — Debt dropdown regression fix (legacy workbooks with no Active column)
+
+- **Regression** — After the Debt Accounts consistency pass, the Planning → Debts dropdown only showed 8 of 22 credit cards on workbooks where the **Active** column hadn't been self-healed yet. Root cause: the new UI-read filter (`debts.js → isDebtRowInactive_`, `dashboard_data.js → isDebtSheetRowInactive_`) was applying the legacy `balance > 0 || minPayment > 0` fallback when the Active column was missing, which silently dropped every $0-balance / $0-min card. Pre-pass, `getDebtRows_()` did no active filtering at all — so this was a regression, not a preservation of prior behavior.
+- **Fix — UI readers are explicit-only** — `isDebtRowInactive_` and `isDebtSheetRowInactive_` no longer apply the balance-based fallback. If the Active column is missing, both helpers return **false** (every debt is treated as active). Only explicit `No / n / false / inactive` counts as inactive. This restores the pre-pass dropdown / dashboard-aggregate behavior for untouched workbooks while keeping the stop-tracking soft-delete behavior intact for workbooks that have self-healed the column.
+- **Planner still uses explicit-wins-with-fallback** — `planner_core.js → normalizeDebts_` is unchanged: when the Active column is missing it still derives `active = balance > 0 || minPayment > 0`. That's a planner/waterfall concern (skip dormant debts from rolling payoff math), not a dropdown-visibility concern, and it matches the pre-pass planner behavior exactly.
+- **`getInactiveDebtsSet_`** — Inherits the explicit-only rule via `isDebtRowInactive_`, so it returns an empty set on legacy workbooks. No call sites needed changes.
+- **`quick_add_payment.js → resolveFlowSourceFromBillOrDebt_`** — Already used an explicit-only inline check, so no change was needed there.
+- **Files** — `debts.js` (tightened `isDebtRowInactive_` to explicit-only; updated file docstring and `getInactiveDebtsSet_` comment), `dashboard_data.js` (tightened `isDebtSheetRowInactive_` to explicit-only with updated docstring).
+
+---
+
+## Recent — Debt Accounts consistency pass: Active + Add new + Stop tracking
+
+- **Canonical sheet, no mirror** — **INPUT - Debts** is the only debt sheet. There is no `SYS - Debts` mirror; the **Active** column is self-healed on the canonical sheet only. Unique key is **Account Name**; **TOTAL DEBT** is a reserved summary row that is never treated as a normal account and never stamped with Active.
+- **Active semantics — explicit wins, fallback preserved** — New shared rule drives every debt reader (centralized in `debts.js → isDebtRowInactive_` / `getInactiveDebtsSet_`, `dashboard_data.js → isDebtSheetRowInactive_`, `planner_core.js → normalizeDebts_`, and an inline check in `quick_add_payment.js → resolveFlowSourceFromBillOrDebt_`):
+  - If the **Active** column exists on the sheet (or any row exposes it via `readSheetAsObjects_`): explicit `No` / `n` / `false` / `inactive` (case-insensitive) → inactive; blank / unknown → active.
+  - If the column is missing (legacy workbook): fall back to the original implicit rule — active iff `balance > 0 || minimumPayment > 0`. This keeps untouched workbooks behaving exactly like before until the column is self-healed.
+- **Add new Debt Account** — New **Planning → Debts → Add new** segmented tab writes a row to **INPUT - Debts** with `Active = Yes`. Required: Account name + Type. Optional: Account Balance, Minimum Payment, Credit Limit, Credit Left, Int Rate, Due Date. Only canonical schema columns are written; no invented fields. Duplicate-name validation uses `getAllDebtAccountNamesIncludingInactive_` so stop-tracked names stay reserved; `TOTAL DEBT` is rejected as a reserved name. New rows inherit neighbor-row formatting (borders/font/number formats + row height) via `findDebtTemplateRow_` + `PASTE_FORMAT`; the **Active** cell is re-stamped with `writeActiveCellWithRowFormat_` (shared helper from `house_values.js`). `Acct PCT Avail` is recomputed immediately for the new row. Logs `debt_add` on **LOG - Activity** with Type **Debt**, Action **Account added**, Amount = opening balance (0 when none supplied).
+- **Stop tracking Debt Account** — `deactivateDebtFromDashboard({ accountName })` flips `Active = No` on the matching **INPUT - Debts** row only; no delete, no rename, no touch of the TOTAL DEBT row. Fields, formulas, row height, and borders are preserved. Logs `debt_deactivate` on **LOG - Activity** (Type **Debt**, Action **Tracking stopped**, Amount **—**; `activityLogIsNonMonetaryEvent_` now returns true for `debt_deactivate`).
+- **Filtered readers now respect Active** — `getDebtRows_` / `getDebtsUiData` (dashboard + sidebar dropdowns), `planner_core.js → normalizeDebts_` (drives Rolling Debt Payoff, debt projection, planner email, overdue / next 7), `dashboard_data.js → sumDebtBalances_`, `getHighUtilizationDebtIssues_`, `getDebtBillsDueRows_`, `getDebtPayeeMap_`, `quick_add_payment.js → adjustDebtsBalanceAfterQuickPayment_` and `resolveFlowSourceFromBillOrDebt_` all skip inactive debts via the shared rule. Intended side effect: inactive debts drop out of the waterfall, HELOC gate, focus/next-debt selection, payment windows, and liability summary — exactly what Stop tracking should do.
+- **Intentionally unfiltered** — `activity_log.js → buildActivityKindLookup_` still reads every debt row (including inactive) so historical **quick_pay** / bill-related activity rows keep classifying correctly even after a debt is stop-tracked.
+- **UI — parity with Bank Accounts / Investments / House Values** — `Dashboard_Body.html` Debts panel is now a segmented `Update` / `Add new` switch; Update has a secondary **Stop tracking** button next to **Save Debt Update**. Inline name-error slot (`debt_add_name_error`) + inline field validation (type, numeric fields, due day 1–31). Status text uses `Creating debt account…` and `Stopping tracking…`; success flips back to **Update** and preselects the newly created debt. The sidebar (`DebtsUI.html`) remains update-only (matching `BankAccountsUI.html` / `HouseValuesUI.html` / `InvestmentsUI.html`); inactive debts auto-drop from its dropdown via the now-filtered `getDebtsUiData`.
+- **Activity Log classification** — `classifyActivityKind_` maps `debt_add` / `debt_deactivate` → **Debt**. `activityLogActionLabel_` → `Account added` / `Tracking stopped`. Amount rendering: `debt_deactivate` is non-monetary (**—**); `debt_add` follows the bank/investment/house pattern (opening balance or $0.00).
+- **Backward compatibility** — Existing workbooks with no **Active** column keep working (legacy balance/minPayment fallback). The first `addDebtFromDashboard` / `deactivateDebtFromDashboard` call self-heals the column via `ensureDebtsActiveColumn_` (reusing a trailing empty header cell when possible). Existing rows keep blank **Active** and are treated as active until a user explicitly stop-tracks them.
+- **Files** — `debts.js` (rewritten: `ensureDebtsActiveColumn_`, `isExplicitInactive_` / `isDebtRowInactive_` / `getInactiveDebtsSet_`, `getAllDebtAccountNamesIncludingInactive_`, `validateNewDebtAccountName_`, `addDebtFromDashboard`, `deactivateDebtFromDashboard`, `findDebtTemplateRow_`, `getDebtDistinctColumnValues_`; extended `getDebtsHeaderMap_` with Active; `getDebtRows_` filters via shared rule; `getDebtsUiData` now also returns `typeOptions`), `planner_core.js → normalizeDebts_` (explicit-wins-with-fallback active), `dashboard_data.js` (shared `isDebtSheetRowInactive_` helper; `sumDebtBalances_` / `getHighUtilizationDebtIssues_` / `getDebtBillsDueRows_` / `getDebtPayeeMap_` filter inactive), `quick_add_payment.js` (`adjustDebtsBalanceAfterQuickPayment_` + `resolveFlowSourceFromBillOrDebt_` skip inactive), `activity_log.js` (`debt_add` / `debt_deactivate` classification, action labels, `debt_deactivate` non-monetary, updated file docstring), `Dashboard_Body.html` (segmented Debts panel + Add form + Stop tracking button), `Dashboard_Script_PlanningDebts.html` (`setDebtPanelMode`, `createDebtAccount`, `stopTrackingDebt`, inline name-error helpers, `populateDebtAddDatalists_`, `loadDebtSectionThenSelect_`, action-specific status text), `Dashboard_Help.html` (Planning → Debts subsection + `debt_add` / `debt_deactivate` Activity bullets + Amount / Remove-button updates), `PROJECT_CONTEXT.md`, `TODO.md`.
+
+---
+
 ## Recent — Bank Accounts final cleanup: SYS row formatting + Priority + activity Amount
 
 - **SYS - Accounts row formatting inheritance** — `appendAccountsRowForNewBank_` now mirrors the Investments pattern: a new `findAccountsTemplateRow_` helper locates the last non-blank account row, then after `appendRow` we copy its format across the full row with `PASTE_FORMAT` and also carry over the row height via `setRowHeight(appendedRow, getRowHeight(templateRow))`. Borders, background, font, alignment, and number formats now match neighbor rows immediately after create. Currency formats on **Current Balance / Available Now / Min Buffer** are re-asserted as a safety net for older workbooks whose template row lacks currency formatting. Active re-stamp via `writeActiveCellWithRowFormat_` is preserved.

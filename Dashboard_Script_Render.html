@@ -114,6 +114,39 @@ function showTab(name) {
   if (name === 'rollingDebtPayoff' && typeof loadRollingDebtPayoffSection === 'function') {
     loadRollingDebtPayoffSection();
   }
+
+  // Re-pull Bills Due / Upcoming / Manage bills on every navigation to the
+  // Bills tab so newly-added debts (which auto-seed a Cash Flow Expense row)
+  // or freshly-added / deactivated bills appear without requiring a full
+  // page reload. Matches the pattern used for House Expenses.
+  if (name === 'billsDue' && typeof loadDashboardActionSections === 'function') {
+    loadDashboardActionSections();
+  }
+
+  // Upcoming shares the same backing data (Cash Flow) so refresh it on
+  // navigation too.
+  if (name === 'upcoming' && typeof loadUpcomingSection === 'function') {
+    loadUpcomingSection();
+  }
+
+  // Quick Add's payee dropdown is built from the active bills + debts list.
+  // Re-pull on tab entry so a debt or bill added elsewhere immediately
+  // becomes a selectable payee here — otherwise the user has to reload the
+  // whole app to Quick Add against the new payee. Safe to call: the loader
+  // only resets the date field (to today) and the transient Flow Source
+  // prefill; it never clobbers in-progress form edits for amount/type/etc.
+  if (name === 'payments' && typeof loadPaymentSection === 'function') {
+    loadPaymentSection();
+  }
+
+  // Debts dropdown + type filter come from INPUT - Debts. Re-pull on tab
+  // entry so newly-added / stop-tracked debts from the sidebar or another
+  // workflow show up without a full reload. Safe: loadDebtSection only
+  // repopulates the dropdown and type filter — it does NOT auto-select a
+  // field value, so any in-progress edit of `debt_value` is preserved.
+  if (name === 'debts' && typeof loadDebtSection === 'function') {
+    loadDebtSection();
+  }
 }
 
 function toggleHealthExplainer() {
