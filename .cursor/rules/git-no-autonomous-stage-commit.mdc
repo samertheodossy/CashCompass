@@ -5,10 +5,21 @@ alwaysApply: true
 
 # Git — no autonomous staging or commits
 
-- **Never** run `git add`, `git commit`, `git push`, or anything that stages or commits **unless the user clearly and explicitly asks** in that conversation (e.g. “commit this”, “commit it”, “git commit”, “stage and commit”).  
+- **Never** run `git add`, `git commit`, or `git push` **unless the user clearly and explicitly asks** in that conversation (e.g. “commit this”, “commit it”, “git commit”, “stage and commit”).  
 - Do **not** commit “to be helpful”, after finishing a task, after tests pass, or because the work “should be saved”. **No commit without approval.**  
 - Finishing implementation, cleanup, SESSION_NOTES updates, or Help updates **does not** imply permission to stage or commit.  
 - If unsure, **leave the working tree unstaged** and tell the user what changed; they commit when ready.  
 - **Reverts** (`git reset`, `git revert`) only when the user asks to undo or fix history.
+
+## Push after an approved commit
+
+Once the user has explicitly asked to commit and that commit has succeeded, **also push it to `origin`** in the same action, so remote stays in sync with local `main`.
+
+- Only push the branch that was just committed on.
+- Only push when the branch has an upstream configured (`git rev-parse --verify --quiet "@{upstream}"` succeeds). If there is no upstream, tell the user and stop — do **not** guess a remote or create one.
+- Never use `--force` / `--force-with-lease` unless the user explicitly asks for it.
+- Never push to `main`/`master` with `--force` under any circumstance, even if asked, without warning the user first.
+- If the push fails (auth, non-fast-forward, protected branch, network), report the failure and stop — do not retry with force, do not rebase, do not reset.
+- The push is a consequence of the already-approved commit. A user asking “commit it” implies “commit and push”; the user does not need to say “and push” separately.
 
 See also **`COMMIT_RULES.md`** in the repo.

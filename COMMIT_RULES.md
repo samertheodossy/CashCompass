@@ -4,6 +4,8 @@
 
 **Do not run `git add`, `git commit`, or `git push` unless the user explicitly asks to commit in that conversation** (e.g. “commit this”, “commit it”, “stage and commit”). Finishing a task, fixing lints, or updating docs **does not** imply permission. If unsure, leave the working tree unstaged and summarize what changed.
 
+Once the user has approved a commit and the commit succeeded, **also push it to `origin`** on the branch that was just committed, in the same action, so `origin/main` stays in sync. Only push when the branch already has an upstream configured; never force-push without an explicit request; on any push failure, report it and stop (do not retry with `--force`, do not rebase, do not reset).
+
 ---
 
 1. Change the files needed.
@@ -14,4 +16,4 @@
 6. **Context docs:** When the change affects **high-level product shape** (features list, sheet roles, Activity behavior, Cash Flow naming), update **`PROJECT_CONTEXT.md`** and, if onboarding copy is affected, **`ONBOARDING_TODO.md`**, in the same effort—or leave an explicit note in **SESSION_NOTES.md** to sync next time.
 7. **Never commit without explicit approval** — same as the rule at the top; do not commit automatically as part of “done”.
 
-When the user **explicitly** asks to commit: `git add` (scoped files as appropriate) then `git commit -m "Comment on changes"`.
+When the user **explicitly** asks to commit: `git add` (scoped files as appropriate), then `git commit -m "Comment on changes"`, then `git push` to the configured upstream.
