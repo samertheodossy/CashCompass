@@ -119,7 +119,7 @@ function showTab(name) {
 
   if (name === 'houses' || name === 'bank' || name === 'investments') {
     showPage('assets');
-  } else if (name === 'payments' || name === 'upcoming' || name === 'donations' || name === 'billsDue') {
+  } else if (name === 'payments' || name === 'upcoming' || name === 'donations' || name === 'billsDue' || name === 'income') {
     showPage('cashflow');
   } else if (name === 'houseExpenses' || name === 'propertyPerformance') {
     showPage('properties');
@@ -194,6 +194,13 @@ function showTab(name) {
   // field value, so any in-progress edit of `debt_value` is preserved.
   if (name === 'debts' && typeof loadDebtSection === 'function') {
     loadDebtSection();
+  }
+
+  // Income sources list reflects the most recent Add / Stop tracking
+  // state on re-entry so cross-surface changes (or a stop-tracking from
+  // another device) surface without a full reload.
+  if (name === 'income' && typeof loadIncomeSourcesSection === 'function') {
+    loadIncomeSourcesSection();
   }
 }
 

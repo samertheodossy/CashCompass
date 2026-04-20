@@ -1,5 +1,5 @@
 /**
- * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_deactivate, house expense, house_add, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_deactivate, investment_add, investment_deactivate, debt_add, debt_deactivate, …). Rows can be removed from the web UI for mistaken log lines only.
+ * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_deactivate, house expense, house_add, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_deactivate, investment_add, investment_deactivate, debt_add, debt_deactivate, income_add, income_deactivate, …). Rows can be removed from the web UI for mistaken log lines only.
  * Complements OUT - History (planner-run snapshots). Tab: LOG - Activity.
  */
 
@@ -373,6 +373,15 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (etEarly === 'investment_deactivate') return 'Investment';
   if (etEarly === 'debt_add') return 'Debt';
   if (etEarly === 'debt_deactivate') return 'Debt';
+  // income_add / income_deactivate are the canonical event names after
+  // the refactor that made INPUT - Cash Flow <year> the source of truth
+  // for income. Legacy rows written by the old INPUT - Income Sources
+  // architecture (income_source_add / income_source_deactivate) still
+  // need a clean label so historical activity stays readable.
+  if (etEarly === 'income_add') return 'Income';
+  if (etEarly === 'income_deactivate') return 'Income';
+  if (etEarly === 'income_source_add') return 'Income';
+  if (etEarly === 'income_source_deactivate') return 'Income';
 
   var combined = pay + ' ' + cat;
   var blob = combined.toLowerCase();
@@ -435,6 +444,11 @@ function activityLogActionLabel_(eventType, detailsJson) {
     case 'investment_deactivate': return 'Tracking stopped';
     case 'debt_add': return 'Account added';
     case 'debt_deactivate': return 'Tracking stopped';
+    case 'income_add': return 'Income source added';
+    case 'income_deactivate': return 'Tracking stopped';
+    // Legacy rows from the old INPUT - Income Sources architecture.
+    case 'income_source_add': return 'Income source added';
+    case 'income_source_deactivate': return 'Tracking stopped';
     case 'upcoming_add': return 'Upcoming added';
     // upcoming_status is now only written by dismissUpcomingExpense() — the
     // previous Planned/Paid/Skipped status toggle is gone. Keep the label
@@ -528,6 +542,8 @@ function activityLogIsNonMonetaryEvent_(eventType) {
     et === 'house_deactivate' ||
     et === 'investment_deactivate' ||
     et === 'debt_deactivate' ||
+    et === 'income_deactivate' ||
+    et === 'income_source_deactivate' ||
     et === 'upcoming_status' ||
     et === 'upcoming_payment'
   );

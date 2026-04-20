@@ -456,6 +456,7 @@
       <button class="tab-btn" data-tab="upcoming" onclick="showTab('upcoming')">Upcoming</button>
       <button class="tab-btn" data-tab="donations" onclick="showTab('donations')">Donations</button>
       <button class="tab-btn" data-tab="billsDue" onclick="showTab('billsDue')">Bills</button>
+      <button class="tab-btn" data-tab="income" onclick="showTab('income')">Income</button>
     </div>
 
     <div id="payments" class="panel active">
@@ -740,6 +741,51 @@
           <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></div>
         </div>
       </section>
+    </div>
+
+    <div id="income" class="panel">
+      <div class="panel-head">
+        <h2>Income Sources</h2>
+        <div class="updated">Last updated: <span id="income_updated">—</span></div>
+      </div>
+      <p class="muted" style="margin:0 0 14px 0;">Track your income sources.</p>
+
+      <div id="income_status" class="status"></div>
+
+      <div class="income-management-head" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between;margin:0 0 12px 0;">
+        <div>
+          <p class="muted" style="margin:0;">Recurring income detected on the latest Cash Flow year.</p>
+        </div>
+        <button type="button" id="income_add_toggle_btn" class="small-btn primary" onclick="toggleIncomeAddForm()" aria-expanded="false" aria-controls="income_add_wrap">+ Add income source</button>
+      </div>
+
+      <div id="income_add_wrap" class="income-add-wrap" style="display:none;margin:0 0 20px 0;padding:14px 16px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;">
+        <div class="card-title" style="margin-top:0;">Add an income source</div>
+        <p class="muted" style="margin:0 0 10px 0;">Adds an Income row to the current year's Cash Flow and fills this month's cell. Required fields are marked with <span aria-label="required" style="color:#b91c1c;">*</span>.</p>
+
+        <label>Source name <span aria-label="required" style="color:#b91c1c;">*</span></label>
+        <input type="text" id="income_add_name" maxlength="160" autocomplete="off" oninput="if (typeof clearIncomeAddNameError_==='function') clearIncomeAddNameError_();">
+        <div id="income_add_name_error" class="field-error" role="alert" aria-live="polite"></div>
+
+        <label>Amount (this month) <span aria-label="required" style="color:#b91c1c;">*</span></label>
+        <input type="text" id="income_add_amount" inputmode="decimal" onfocus="currencyFocus('income_add_amount')" onblur="currencyBlur('income_add_amount')" placeholder="e.g. 5000">
+        <div id="income_add_amount_error" class="field-error" role="alert" aria-live="polite"></div>
+
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button type="button" class="small-btn primary" onclick="submitNewIncomeSource()">Save income source</button>
+          <button type="button" class="small-btn" onclick="closeIncomeAddForm()">Cancel</button>
+        </div>
+      </div>
+
+      <div id="income_manage_list" class="income-manage-list">
+        <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></div>
+      </div>
+
+      <!-- Reference-only: non-recurring / excluded candidates spotted in the
+           latest Cash Flow year. Populated by the Income Sources script
+           after the main list renders; empty-by-default so the panel stays
+           clean when nothing qualifies. -->
+      <div id="income_other_detected" class="income-other-detected" style="margin-top:20px;"></div>
     </div>
   </div>
 

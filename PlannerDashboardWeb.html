@@ -89,6 +89,10 @@
 </script>
 
 <script>
+  <?!= includeHtml_('Dashboard_Script_Income'); ?>
+</script>
+
+<script>
   try {
     function initDashboard() {
       refreshSnapshot();
@@ -103,6 +107,9 @@
       loadPurchaseSimulatorSection();
       if (typeof loadDashboardActionSections === 'function') {
         loadDashboardActionSections();
+      }
+      if (typeof loadIncomeSourcesSection === 'function') {
+        loadIncomeSourcesSection();
       }
     }
 
