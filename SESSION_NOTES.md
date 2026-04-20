@@ -1,3 +1,120 @@
+## Recent — Planning surface overlap cleanup
+
+Tightened the boundaries between the three Planning surfaces so each owns a distinct role and the app stops repeating itself. Minimal code edits, no backend logic changes, no UI redesign, no layout changes.
+
+### Clarified boundaries
+
+- **Next Actions** = *what to do* (prioritized action list; routes to source pages).
+- **Debt Overview** = *reference only* (read-only portfolio view of balances + minimums).
+- **Rolling Debt Payoff** = *strategy* (monthly decision engine; where extra-payment / HELOC decisions live).
+
+### What changed
+
+- **Removed recommendation content from Debt Overview.**
+  - `Dashboard_Body.html` — deleted the `<h3>Notes</h3>` header and the entire `#debt_payoff_read_recommendations` block (cash snapshot, safe-to-use vs minimums, projected cash flow, highest APR callout, longest payoff callout). Intro paragraph rewritten to position Debt Overview as read-only with a cross-link to Rolling Debt Payoff for this month's action plan.
+  - `Dashboard_Script_PlanningDebtPayoff.html` — `renderDebtPayoffReadData_` now emits only *Total debt balance* and *Minimum payments (about)*. Dropped the *Safe to use (before planned expenses)* and *Longest estimated payoff* bullets. Recommendations container is unconditionally cleared (`recEl.innerHTML = ''`) so stale decision content cannot leak back in.
+- **Simplified Next Actions wording (no APR / heuristic duplication).**
+  - `next_actions.js → nextActionsBuildExtraDebtAction_` — `pay_extra_debt` reason collapsed to `"Extra payment toward <debt>. Confirm in Rolling Debt Payoff."` in both `recommended` and `optimize` buckets. APR fragment and highest-APR heuristic narrative removed; Next Actions no longer restates Rolling Debt Payoff's focus-debt explanation.
+- **Removed HELOC from Next Actions (now owned by Rolling Debt Payoff).**
+  - `next_actions.js → getNextActionsData()` — the `review_heloc_strategy` action is no longer emitted; the HELOC target selection helper `nextActionsPickHelocTarget_()` was deleted. JSDoc `NextActionItem` narrowed: `'review_heloc_strategy'` dropped from `actionType`, `'heloc'` dropped from `sourceEntityType`. HELOC strategy continues to live on the Rolling Debt Payoff *HELOC strategy* card as before.
+- **Added cross-links between surfaces to prevent future duplication.**
+  - `Dashboard_Body.html` — Debt Overview intro links to Rolling Debt Payoff (*"For this month's action plan, see Rolling Debt Payoff"*); Rolling Debt Payoff panel head links back to Debt Overview (*"For portfolio-level balances and minimums, see Debt Overview"*). Both use the existing `showTab()` helper, no new navigation glue.
+- **Help copy (`Dashboard_Help.html`)** — `#help-next-actions` updated so the *Recommended* description matches the short `Confirm in Rolling Debt Payoff` reason and the *Optimize* description explicitly notes that HELOC strategy is **not** surfaced in Next Actions (it lives on the Rolling Debt Payoff HELOC strategy card).
+
+### Scope held
+
+- No backend logic changes beyond the HELOC action removal (no change to ranking, cash-gap detection, `getCashToUse()`, or `getRollingDebtPayoffPlan`).
+- No UI redesign, no layout changes, no new sheets or columns.
+- Rolling Debt Payoff itself was not edited other than the cross-link line in its panel head.
+- No changes to the single payment path (Cash Flow → Quick Add).
+
+### Files touched
+
+- `Dashboard_Body.html`
+- `Dashboard_Script_PlanningDebtPayoff.html`
+- `next_actions.js`
+- `Dashboard_Help.html`
+
+---
+
+## Recent — Queued product work captured (debug mode / income sources / onboarding) — docs only
+
+Docs-only pass. Captured three upcoming product surfaces so the intent does not drift while overlap cleanup and Next Actions stabilization finish. No code changes, no feature descriptions modified, no planner / Next Actions / Rolling Debt Payoff edits.
+
+### What was added
+
+- **`ENHANCEMENTS.md`** — new subsection **"Queued — post Next Actions stabilization"** inside § 4 Prioritized enhancement opportunities (directly after Tier 3, before § 5 Recommended next item). Contains three structured enhancement items and a pinned prioritization order:
+  - **Debug mode control** — single host-global `isDebugMode` flag that gates developer / internal surfaces (e.g. *Why this cash amount?* liquidity breakdown, planner diagnostics, raw JSON exports). Presentation-only, no backend changes. Low risk.
+  - **Income Sources (new input surface)** — structured income entry under **Assets → Income Sources** (primary) or **Cash Flow → Income Setup** (fallback). v1 fields: `source name`, `amount`, `frequency`, `active`. Explicit non-goals: no planner integration, no forecasting, no automatic Cash Flow posting. Adds `income_source_add` / `income_source_deactivate` to `LOG - Activity` under the usual Add / Update / Stop tracking pattern.
+  - **Onboarding (Phase 1)** — guided first-time setup walkthrough across Bank Accounts (with buffers + use policy), Debts, Bills, Upcoming, and (future) Income Sources. Explains `cash_to_use` and how Next Actions prioritizes actions in plain language. No advanced strategy (HELOC, optimization) in v1. Additive host surface over canonical inputs.
+  - **Prioritization order** — (1) finish overlap cleanup → (2) stabilize Next Actions → (3) debug mode → (4) income sources → (5) onboarding. Not to be reshuffled without an explicit product decision.
+
+- **`PROJECT_CONTEXT.md`** — added a short **"Queued product work (post Next Actions stabilization)"** block directly below the Decision Layer Roadmap. Three high-level bullets plus the prioritization order, with a pointer to the full spec in `ENHANCEMENTS.md`. No existing Decision Layer / Planning / Rolling Debt Payoff descriptions were touched.
+
+- **`SESSION_NOTES.md`** — this entry.
+
+### Scope held
+
+- Docs-only. No feature code, no help copy, no UI changes.
+- No existing feature descriptions modified in any file.
+- No new roadmap phases; these three items sit under the existing Planning / Decision Layer framing as queued product work, not new phases.
+- Prioritization is pinned but non-blocking: the overlap cleanup and Next Actions stabilization work already in flight are unaffected.
+
+### Files touched
+
+- `ENHANCEMENTS.md`
+- `PROJECT_CONTEXT.md`
+- `SESSION_NOTES.md` (this entry)
+
+---
+
+## Recent — Next Actions v1 finalization (preview → real feature)
+
+Removed all preview / temp / debug framing around Planning → Next Actions and promoted the surface to a real v1 feature. No backend logic changes in this pass (`getCashToUse()` and `getNextActionsData()` are untouched); no ranking, routing, or action-shape changes. Pure finalization / polish.
+
+### What changed
+
+- **Panel copy (`Dashboard_Body.html`)** — Dropped the `(preview)` suffix from the header, the `featured-preview` badge on the Planning entry point, and the long "Temporary developer preview of the Decision Layer backend" paragraph. New intro copy is one sentence: *"Your prioritized next steps across Bills, Upcoming, and Debts. Tap a card to open the related tool."* Updated the HTML comment blocks around the Planning hierarchy and the panel itself to describe the shipped surface instead of a temporary stepping stone.
+- **Panel script (`Dashboard_Script_PlanningNextActions.html`)** — Renamed the top-level entry points so identifiers stop implying "preview":
+  - `loadNextActionsPreview` → `loadNextActions`
+  - `renderNextActionsPreview_` → `renderNextActions_`
+  - `loadNextActionsLiquidityDebug_` → `loadNextActionsLiquidityDetails_`
+  - `renderNextActionsLiquidityDebug_` → `renderNextActionsLiquidityDetails_`
+  - Local `debugWrap` → `detailsWrap`
+  - DOM id `next_actions_liquidity_debug` → `next_actions_liquidity_details`
+  
+  Updated the file header, section comments, and loading/error copy accordingly. The "Why this cash amount?" disclosure replaces the old `Liquidity details (debug) — cash_to_use $X` label; it stays collapsed by default and is visually quieter than before but still exposes the full per-account `getCashToUse()` breakdown on demand.
+- **Render wiring (`Dashboard_Script_Render.html`)** — Updated the two `loadNextActionsPreview` callers (the Planning-page default-load guard and the per-tab-entry reloader) to the new `loadNextActions` name and cleaned the surrounding comments.
+- **Styles (`Dashboard_Styles.html`)** — Dropped the now-unused `.planning-next-actions-feature .featured-preview` rule and the "Decision Layer cleanup" framing from the surrounding comment.
+- **Backend header comment (`next_actions.js`)** — Replaced *"Decision Layer — v1 Next Actions aggregator (backend only)"* and the reference to "the temporary preview" with a plain *"Planning → Next Actions (v1) — backend aggregator"* header. Also trimmed the urgent-cap comment's "preview" wording.
+- **In-app Help (`Dashboard_Help.html`)** — Added a new top-level TOC entry and full **Next Actions** section (`#help-next-actions`) between Planning and Debt Overview. Documents: summary-row math, Urgent / Recommended / Optimize rules (including the grouped "Other bills due soon" tail and the hard debt-balance cap on `pay_extra_debt`), Open-link routing table (Bills / Upcoming / Payoff / Debts), "Why this cash amount?" disclosure, and guardrails (no writes, no forecasts, explainability rule). Updated the Planning section intro to position Next Actions as the landing view.
+- **Product docs (`PROJECT_CONTEXT.md`, `ENHANCEMENTS.md`)** — Flipped the Next Actions v1 and `cash_to_use` subsections from *"docs only; no code yet"* / *"Proposed"* to *"delivered"*, and updated the roadmap line (Phase 1 now ✅). Retained the design-note contract verbatim so the delivered spec is still grep-able.
+
+### Liquidity details — disposition
+
+Kept, not removed. The v1 surface now has a collapsed-by-default **Why this cash amount?** disclosure in place of the old debug panel. Rationale: `Cash to use` is the only figure in the summary row the user can't reproduce from other parts of the app (it's a conservative, buffer-respecting sum with explicit eligibility rules), and the per-account breakdown is how we explain *why* a given account was included or excluded. The disclosure is low-prominence (muted summary text, dashed top border, reduced opacity) so it does not compete with the primary actions.
+
+### Scope held
+
+- No changes to `getNextActionsData()`, `getCashToUse()`, or any ranking / cash-gap / extra-debt logic.
+- No changes to `targetTab` routing, the grouped-urgent UI behavior, or the clickable-card wiring.
+- No new actions, no new decision rules, no Planning-hierarchy redesign.
+- No Rolling Debt Payoff edits.
+
+### Files touched
+
+- `Dashboard_Body.html`
+- `Dashboard_Script_PlanningNextActions.html`
+- `Dashboard_Script_Render.html`
+- `Dashboard_Styles.html`
+- `next_actions.js` (comments only)
+- `Dashboard_Help.html`
+- `PROJECT_CONTEXT.md`
+- `ENHANCEMENTS.md`
+- `SESSION_NOTES.md` (this entry)
+
+---
+
 ## Recent — Liquidity model v1 (`cash_to_use`) design note (docs only)
 
 Locks the liquidity contract consumed by Planning → Next Actions v1. No code changes in this pass. Full spec lives in `PROJECT_CONTEXT.md → Decision Layer → Liquidity model v1 — cash_to_use`; this entry is a short pointer.

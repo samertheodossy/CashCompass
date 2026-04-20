@@ -9,10 +9,10 @@ The app has two layers. Do not conflate them:
 - **Input / execution layer** — source-of-truth editors and ledgers. Bills, Upcoming, Debts, Bank Accounts, Investments, House Values / Expenses, Donations, Cash Flow (Quick Add), LOG - Activity. These own the data; they are the only places that write canonical rows.
 - **Decision layer (Planning tab)** — answers *"what should I do next?"* by interpreting data from Bills, Upcoming, Debts, Bank Accounts, and Cash Flow. It is **not** a source-of-truth editor and **not** a ledger; it reads existing sources and does not create new data.
 
-### Next Actions (primary entry point, Phase 1)
+### Next Actions (primary entry point, v1 delivered)
 
-- **"Next Actions"** is the first / default sub-tab inside Planning and the primary entry point for users.
-- Action-first (no editing), short lists only (3–5 items per section).
+- **"Next Actions"** is the featured sub-tab inside Planning and the primary entry point for users. It is the default landing view inside Planning.
+- Action-first (no editing), short lists (3–5 items per section). Urgent is uncapped in the backend so `urgentTotal` always reconciles with the visible list; the UI groups the tail into a single "Other bills due soon" row for readability.
 - The single payment path remains **Cash Flow → Quick Add**; Next Actions routes the user there (and to source pages) rather than duplicating detail.
 
 ### Relationship to existing Planning tabs
@@ -31,17 +31,27 @@ Intended flow: **Next Actions → drill into these tabs**. No new top-level tabs
 - Single payment path remains Quick Add.
 - Decision layer does not create new data; it reads existing sources.
 
-### Roadmap (intent only, no implementation yet)
+### Roadmap
 
-- **Phase 1 — Next Actions (v1)** — first landing surface inside Planning.
+- **Phase 1 — Next Actions (v1)** ✅ Delivered as the featured Planning entry point.
 - **Phase 2 — Cash Strategy** (later).
 - **Phase 3 — HELOC Advisor refinement** (later).
 
-See `ENHANCEMENTS.md` for the backlog entry and `SESSION_NOTES.md` for the shift summary.
+See `ENHANCEMENTS.md` for the backlog entry and `SESSION_NOTES.md` for the shift summary. End-user documentation lives in the in-app Help page under **Planning → Next Actions** (`#help-next-actions`).
 
-### Next Actions v1 — design note (docs only; no code yet)
+### Queued product work (post Next Actions stabilization)
 
-Locks the backend decision logic and product rules before any UI is built.
+Captured-but-not-scheduled. Intent only — full specs live in `ENHANCEMENTS.md → § 4 → Queued — post Next Actions stabilization`:
+
+- **Debug mode control** — a single host-global `isDebugMode` flag that gates developer / internal surfaces (e.g. the *Why this cash amount?* liquidity breakdown, planner diagnostics) so the default UI reads as a product.
+- **Income Sources (new input surface)** — structured income entry under **Assets → Income Sources** (or **Cash Flow → Income Setup**) with `source name` / `amount` / `frequency` / `active`. No planner integration, no forecasting, no automatic Cash Flow posting in v1.
+- **Onboarding (Phase 1)** — guided first-time setup across Bank Accounts (buffers + use policy), Debts, Bills, Upcoming, and eventually Income Sources. Explains `cash_to_use` and how Next Actions prioritizes actions. No advanced strategy (HELOC, optimization) in v1.
+
+Intended order: **(1) finish overlap cleanup → (2) stabilize Next Actions → (3) debug mode → (4) income sources → (5) onboarding.** Do not reorder without an explicit product decision.
+
+### Next Actions v1 — decision logic (delivered)
+
+Locks the backend decision logic and product rules. Implemented by `next_actions.js::getNextActionsData()` and consumed by `Dashboard_Script_PlanningNextActions.html`.
 
 **1. Purpose**
 - Answers: *"What should I do next, in priority order?"*
@@ -97,7 +107,7 @@ Every emitted action must be explainable in **one sentence** built entirely from
 - Scenario / what-if planning
 - Automatic execution (Quick Add remains the single payment path; Next Actions only routes)
 
-### Liquidity model v1 — `cash_to_use` (docs only; no code yet)
+### Liquidity model v1 — `cash_to_use` (delivered)
 
 Defines the safe, conservative "how much can I actually act on right now" number consumed by Next Actions v1. This is an explicit contract, not a re-derivation of the Rolling Debt Payoff *Safe-to-use* math — Next Actions uses this simpler model directly.
 

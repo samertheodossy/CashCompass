@@ -10,28 +10,29 @@
  * No UI / planner integration in this pass. Backend-only, read-only.
  */
 
-/** Policy substrings that mark an account as clearly restricted / do-not-use.
- *  v1 is intentionally a small, conservative allowlist-of-denials: we only
- *  exclude an account when the Use Policy string explicitly indicates the
- *  account should not be touched. Ambiguous / typical policies (Emergency
- *  Reserve, Savings, Primary Checking, blank, etc.) are included because
- *  Min Buffer is already the buffer guard for those cases.
+/**
+ * v1 structured eligibility allow-lists.
  *
- *  Matching is case-insensitive substring match on the trimmed Use Policy
- *  value. Extend with care — every addition hides cash from Next Actions.
+ * SYS - Accounts carries two structured columns we rely on:
+ *   - Type      ∈ { Cash, Checking, Savings, Credit Card, … }
+ *   - Use Policy∈ { USE_FOR_BILLS, USE_FOR_DEBT, USE_WITH_CAUTION,
+ *                   DO_NOT_TOUCH }
+ *
+ * v1 is strict: we only count an account toward `cash_to_use` when BOTH the
+ * Type and the Use Policy land in an explicit allow-list below. Anything
+ * else (blank policy, "other" type, credit cards, DO_NOT_TOUCH, etc.) is
+ * excluded with a specific reason so the UI / debug preview can explain why.
+ *
+ * Matching is case-insensitive on the trimmed display value. Extend with
+ * care — every addition widens what counts as usable cash.
  */
-var CASH_TO_USE_RESTRICTED_POLICY_SUBSTRINGS_ = [
-  'do not use',
-  'do-not-use',
-  'donotuse',
-  'restricted',
-  'locked',
-  'frozen',
-  'no touch',
-  'no-touch',
-  'notouch',
-  'untouchable'
+var CASH_TO_USE_ALLOWED_TYPES_ = ['cash', 'checking', 'savings'];
+var CASH_TO_USE_ALLOWED_POLICIES_ = [
+  'use_for_bills',
+  'use_for_debt',
+  'use_with_caution'
 ];
+var CASH_TO_USE_DO_NOT_TOUCH_POLICY_ = 'do_not_touch';
 
 /**
  * Canonical v1 liquidity reader.
@@ -45,7 +46,10 @@ var CASH_TO_USE_RESTRICTED_POLICY_SUBSTRINGS_ = [
  *       minBuffer: number,            // 2dp, 0 when SYS - Accounts has no Min Buffer
  *       usable: number,               // max(0, balance - minBuffer), 0 when excluded
  *       included: boolean,            // true iff this account contributed to cashToUse
- *       excludedReason?: string       // 'inactive' | 'restricted_use_policy' (only when included=false)
+ *       excludedReason?: string       // 'inactive' | 'non_cash_type'
+ *                                     // | 'do_not_touch_policy'
+ *                                     // | 'unsupported_use_policy'
+ *                                     // (only when included=false)
  *     }>
  *   }
  *
@@ -60,6 +64,9 @@ var CASH_TO_USE_RESTRICTED_POLICY_SUBSTRINGS_ = [
  *     allowed to contribute negatively to the total.
  *   - Min Buffer is always respected; a missing Min Buffer column defaults
  *     to 0 (fall through to the balance itself being usable).
+ *   - Credit cards and any non-cash Type are excluded outright — they are
+ *     debts / payment instruments, not liquid cash.
+ *   - DO_NOT_TOUCH is excluded outright regardless of balance or buffer.
  *   - No credit lines, HELOC, investments, future income, or forecasts are
  *     considered. Bank Accounts only.
  *
@@ -71,7 +78,7 @@ function getCashToUse() {
   const sheet = getSheet_(ss, 'ACCOUNTS');
 
   const raw = sheet.getDataRange().getValues();       // numeric values for money
-  const display = sheet.getDataRange().getDisplayValues(); // strings for names/policy
+  const display = sheet.getDataRange().getDisplayValues(); // strings for names/type/policy
   const result = { cashToUse: 0, accounts: [] };
 
   if (display.length < 2) return result;
@@ -109,21 +116,36 @@ function getCashToUse() {
     const minBuffer = headerMap.bufferColZero === -1
       ? 0
       : round2_(toNumber_(raw[r][headerMap.bufferColZero]));
-    const usePolicy = headerMap.policyColZero === -1
+    const typeRaw = headerMap.typeColZero === -1
+      ? ''
+      : String(display[r][headerMap.typeColZero] || '').trim();
+    const usePolicyRaw = headerMap.policyColZero === -1
       ? ''
       : String(display[r][headerMap.policyColZero] || '').trim();
 
-    const isInactive = !!inactive[accountName.toLowerCase()];
-    const isRestricted = isRestrictedCashToUsePolicy_(usePolicy);
+    const typeKey = typeRaw.toLowerCase();
+    const policyKey = usePolicyRaw.toLowerCase();
 
+    // Eligibility is evaluated in priority order. The first matching exclude
+    // reason wins, so `excludedReason` stays stable and explainable even when
+    // multiple rules would fire (e.g. inactive + DO_NOT_TOUCH).
     let included = true;
     let excludedReason;
-    if (isInactive) {
+
+    if (inactive[accountName.toLowerCase()]) {
       included = false;
       excludedReason = 'inactive';
-    } else if (isRestricted) {
+    } else if (CASH_TO_USE_ALLOWED_TYPES_.indexOf(typeKey) === -1) {
+      // Covers Credit Card, blank/missing Type, and any other non-cash Type.
       included = false;
-      excludedReason = 'restricted_use_policy';
+      excludedReason = 'non_cash_type';
+    } else if (policyKey === CASH_TO_USE_DO_NOT_TOUCH_POLICY_) {
+      included = false;
+      excludedReason = 'do_not_touch_policy';
+    } else if (CASH_TO_USE_ALLOWED_POLICIES_.indexOf(policyKey) === -1) {
+      // Blank Use Policy or anything outside the v1 allow-list.
+      included = false;
+      excludedReason = 'unsupported_use_policy';
     }
 
     // max(0, balance - minBuffer). 2dp, number (not string). Zero when
@@ -146,20 +168,4 @@ function getCashToUse() {
 
   result.cashToUse = round2_(total);
   return result;
-}
-
-/**
- * @param {string} policy Trimmed Use Policy string (may be '').
- * @returns {boolean} true only when the policy contains an explicit
- *   "do not use" / restricted / locked / frozen / no-touch marker. Blank
- *   and typical policies (Emergency Reserve, Savings, Primary, etc.)
- *   return false — Min Buffer is the buffer guard for those.
- */
-function isRestrictedCashToUsePolicy_(policy) {
-  const p = String(policy || '').toLowerCase().trim();
-  if (!p) return false;
-  for (let i = 0; i < CASH_TO_USE_RESTRICTED_POLICY_SUBSTRINGS_.length; i++) {
-    if (p.indexOf(CASH_TO_USE_RESTRICTED_POLICY_SUBSTRINGS_[i]) !== -1) return true;
-  }
-  return false;
 }

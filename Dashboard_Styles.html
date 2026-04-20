@@ -485,19 +485,85 @@
     border-radius: 10px;
   }
   .tabs.properties-tabs { grid-template-columns: repeat(2, 1fr); }
-  /* Planning: sub-tabs (Debts, Retirement, Purchase Sim, Payoff Path, Rolling debt payoff) */
-  .tabs.planning-tabs {
+  /*
+    Planning hierarchy:
+      1) `.planning-next-actions-feature` = featured primary entry point.
+         Larger, filled-in, reads as "start here" even at rest.
+      2) `.tabs.planning-tools`           = quieter secondary row for the
+         existing deep-dive tools. Smaller padding, muted colors, lighter
+         weight so it doesn't compete with Next Actions.
+  */
+  .planning-next-actions-feature { margin: 0 0 12px 0; }
+  .planning-next-actions-feature .tab-btn {
+    width: 100%;
+    min-height: 56px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    background: #eef5ff;
+    color: #1f4e78;
+    border: 1px solid #bcd7f1;
+    box-shadow: 0 1px 3px rgba(31, 78, 120, 0.12);
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .planning-next-actions-feature .tab-btn:hover {
+    background: #e0edfb;
+    border-color: #a7caea;
+  }
+  .planning-next-actions-feature .tab-btn.active {
+    background: #1f4e78;
+    color: #ffffff;
+    border-color: #1f4e78;
+  }
+  .planning-next-actions-feature .featured-kicker {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+    opacity: 0.75;
+  }
+  .planning-next-actions-feature .featured-title {
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .planning-tools-wrap { margin: 0 0 16px 0; }
+  .planning-tools-label {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #64748b;
+    font-weight: 600;
+    margin: 0 0 6px 2px;
+  }
+  .tabs.planning-tools {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 8px;
+    gap: 6px;
+    margin-bottom: 0;
   }
-  .planning-tabs .tab-btn {
+  .planning-tools .tab-btn {
     width: 100%;
     min-width: 0;
-    padding: 12px 8px;
-    font-size: 13px;
-    font-weight: bold;
-    border-radius: 10px;
+    padding: 8px 6px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+  }
+  .planning-tools .tab-btn:hover {
+    background: #eef2f7;
+    color: #1f2937;
+  }
+  .planning-tools .tab-btn.active {
+    background: #1f4e78;
+    color: #ffffff;
+    border-color: #1f4e78;
   }
 
   .debt-payoff-summary .debt-payoff-overall-head {
@@ -1389,8 +1455,10 @@
     .snapshot-grid { grid-template-columns: 1fr 1fr; }
     .six-grid { grid-template-columns: 1fr; }
     .tabs.assets-tabs, .tabs.properties-tabs { grid-template-columns: 1fr 1fr; }
-    .tabs.planning-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-    .planning-tabs .tab-btn { padding: 10px 6px; font-size: 12px; }
+    .tabs.planning-tools { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .planning-tools .tab-btn { padding: 8px 4px; font-size: 11px; }
+    .planning-next-actions-feature .tab-btn { min-height: 52px; padding: 10px 12px; }
+    .planning-next-actions-feature .featured-title { font-size: 15px; }
     .grid-2, .grid-3, .health-row, .mini-grid, .sim-grid { grid-template-columns: 1fr; }
     .topbar { flex-direction: column; }
     .bills-grid { grid-template-columns: 1fr; }

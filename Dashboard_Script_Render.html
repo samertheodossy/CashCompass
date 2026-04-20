@@ -33,6 +33,21 @@ function showPage(name) {
   if (name === 'activity' && typeof loadActivitySection === 'function') {
     loadActivitySection();
   }
+
+  // Planning lands on the featured Next Actions entry point by default.
+  // If that panel is the currently active sub-tab, prime its loader so
+  // the user doesn't see an empty surface on first visit (showTab's
+  // loader only fires when the user clicks a sub-tab).
+  if (name === 'planning') {
+    var nextActionsPanel = document.getElementById('nextActions');
+    if (
+      nextActionsPanel &&
+      nextActionsPanel.classList.contains('active') &&
+      typeof loadNextActions === 'function'
+    ) {
+      loadNextActions();
+    }
+  }
 }
 
 function scrollHelpToSection(anchorId) {
@@ -96,7 +111,8 @@ function showTab(name) {
     name === 'retirement' ||
     name === 'purchase' ||
     name === 'debtPayoff' ||
-    name === 'rollingDebtPayoff'
+    name === 'rollingDebtPayoff' ||
+    name === 'nextActions'
   ) {
     showPage('planning');
   }
@@ -113,6 +129,12 @@ function showTab(name) {
 
   if (name === 'rollingDebtPayoff' && typeof loadRollingDebtPayoffSection === 'function') {
     loadRollingDebtPayoffSection();
+  }
+
+  // Reload on every tab entry so the Next Actions surface always
+  // reflects the latest Bills / Upcoming / Debts / SYS - Accounts state.
+  if (name === 'nextActions' && typeof loadNextActions === 'function') {
+    loadNextActions();
   }
 
   // Re-pull Bills Due / Upcoming / Manage bills on every navigation to the

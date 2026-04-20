@@ -1,0 +1,643 @@
+/*
+ * Planning → Next Actions panel script (v1).
+ *
+ * Renders the prioritized Next Actions surface inside Planning:
+ *   - Summary row (Cash to use, Due soon, Available after urgent)
+ *   - Urgent / Recommended / Optimize buckets from `getNextActionsData()`
+ *   - A collapsed "Why this cash amount?" disclosure backed by
+ *     `getCashToUse()` so the user can see *why* the liquidity total is
+ *     what it is without competing with the primary actions.
+ *
+ * Scope today (kept tight — Next Actions only routes, it does not move
+ * money):
+ *   - No write actions. Single payment path remains Cash Flow → Quick Add.
+ *   - Open links route via `targetTab` into existing workspace tabs.
+ *
+ * Backend contracts live in `PROJECT_CONTEXT.md → Decision Layer` and are
+ * implemented by `getNextActionsData()` / `getCashToUse()`.
+ */
+
+// One-shot style injection for the hover accent on clickable cards.
+// Inline styles can't express `:hover`, and touching Dashboard_Styles.html
+// would be a wider change than this pass needs — a tiny scoped <style>
+// gives the affordance without growing the CSS surface area.
+function ensureNextActionsClickableStyles_() {
+  if (document.getElementById('next-actions-clickable-styles')) return;
+  var s = document.createElement('style');
+  s.id = 'next-actions-clickable-styles';
+  s.textContent =
+    '[data-next-actions-clickable="1"]:hover{' +
+      'border-color:#2563eb;' +
+      'box-shadow:0 1px 4px rgba(37,99,235,0.15);' +
+    '}' +
+    '[data-next-actions-clickable="1"]:focus{' +
+      'outline:2px solid #2563eb;outline-offset:2px;' +
+    '}';
+  document.head.appendChild(s);
+}
+
+function loadNextActions() {
+  ensureNextActionsClickableStyles_();
+  var statusId = 'next_actions_status';
+  var mainWrap = document.getElementById('next_actions_output');
+  var detailsWrap = document.getElementById('next_actions_liquidity_details');
+
+  // Single loading indicator in the content area only. Previously we also
+  // called `setStatusLoading` into `#next_actions_status`, which stacked a
+  // second spinner above this one — keep the status banner reserved for
+  // error messages.
+  if (typeof setStatus === 'function') {
+    setStatus(statusId, '', false);
+  }
+
+  if (mainWrap) {
+    mainWrap.innerHTML =
+      typeof loadingIndicatorHtml === 'function'
+        ? loadingIndicatorHtml('Loading Next Actions…')
+        : '<p class="muted">Loading…</p>';
+  }
+  if (detailsWrap) {
+    detailsWrap.innerHTML = '';
+  }
+
+  google.script.run
+    .withSuccessHandler(function(payload) {
+      renderNextActions_(payload);
+      // Secondary: liquidity details. Loaded independently so a details
+      // failure cannot hide the primary Next Actions output.
+      loadNextActionsLiquidityDetails_();
+    })
+    .withFailureHandler(function(err) {
+      if (mainWrap) mainWrap.innerHTML = '';
+      var msg = err && err.message ? err.message : String(err);
+      if (typeof setStatus === 'function') {
+        setStatus(statusId, 'Error loading Next Actions: ' + msg, true);
+      } else if (mainWrap) {
+        mainWrap.innerHTML =
+          '<p style="color:#b00020;">Error loading Next Actions: ' +
+          escapeHtmlNextActions_(msg) +
+          '</p>';
+      }
+    })
+    .getNextActionsData();
+}
+
+/* =====================================================================
+ * Primary rendering — summary + three buckets
+ * ===================================================================== */
+
+function renderNextActions_(payload) {
+  var wrap = document.getElementById('next_actions_output');
+  if (!wrap) return;
+
+  if (!payload || typeof payload !== 'object') {
+    wrap.innerHTML =
+      '<p class="muted">No data returned from getNextActionsData().</p>';
+    return;
+  }
+
+  var summary = payload.summary || {};
+  var urgent = Array.isArray(payload.urgent) ? payload.urgent : [];
+  var recommended = Array.isArray(payload.recommended) ? payload.recommended : [];
+  var optimize = Array.isArray(payload.optimize) ? payload.optimize : [];
+
+  var html = '';
+  html += renderNextActionsSummaryHtml_(summary);
+  html += renderNextActionsUrgentBucketHtml_('Urgent', urgent, 'No urgent actions right now.');
+  html += renderNextActionsBucketHtml_('Recommended', recommended, 'No recommended actions right now.');
+  html += renderNextActionsBucketHtml_('Optimize', optimize, 'No optimize actions right now.');
+
+  wrap.innerHTML = html;
+}
+
+function renderNextActionsSummaryHtml_(summary) {
+  var cashToUse = typeof summary.cashToUse === 'number' ? summary.cashToUse : 0;
+  var urgentTotal = typeof summary.urgentTotal === 'number' ? summary.urgentTotal : 0;
+  var recommendedCapacity =
+    typeof summary.recommendedCapacity === 'number' ? summary.recommendedCapacity : 0;
+
+  var cardStyle =
+    'flex:1;min-width:160px;padding:10px 12px;border:1px solid #e2e8f0;' +
+    'border-radius:10px;background:#f8fafc;';
+  // Product-tone labels (sentence case, no uppercase tracking) — keeps
+  // the summary row reading as a primary surface, not a dashboard dump.
+  var labelStyle = 'font-size:12px;color:#64748b;';
+  var valueStyle = 'font-size:18px;font-weight:600;margin-top:2px;';
+
+  return (
+    '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px 0;">' +
+      '<div style="' + cardStyle + '">' +
+        '<div style="' + labelStyle + '">Cash to use</div>' +
+        '<div style="' + valueStyle + '">' + formatMoneyNextActions_(cashToUse) + '</div>' +
+      '</div>' +
+      '<div style="' + cardStyle + '">' +
+        '<div style="' + labelStyle + '">Due soon</div>' +
+        '<div style="' + valueStyle + '">' + formatMoneyNextActions_(urgentTotal) + '</div>' +
+      '</div>' +
+      '<div style="' + cardStyle + '">' +
+        '<div style="' + labelStyle + '">Available after urgent</div>' +
+        '<div style="' + valueStyle + '">' + formatMoneyNextActions_(recommendedCapacity) + '</div>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function renderNextActionsBucketHtml_(label, actions, emptyMsg) {
+  var headerStyle =
+    'display:flex;align-items:baseline;gap:8px;margin:0 0 8px 0;';
+  var countStyle =
+    'font-size:12px;color:#64748b;font-weight:normal;';
+
+  var bodyHtml;
+  if (!actions.length) {
+    bodyHtml =
+      '<p class="muted" style="margin:0 0 4px 0;font-size:13px;">' +
+      escapeHtmlNextActions_(emptyMsg) +
+      '</p>';
+  } else {
+    bodyHtml = '';
+    for (var i = 0; i < actions.length; i++) {
+      bodyHtml += renderNextActionsActionHtml_(actions[i] || {});
+    }
+  }
+
+  return (
+    '<section style="margin:0 0 18px 0;">' +
+      '<div style="' + headerStyle + '">' +
+        '<h3 style="margin:0;font-size:15px;">' + escapeHtmlNextActions_(label) + '</h3>' +
+        '<span style="' + countStyle + '">(' + actions.length + ')</span>' +
+      '</div>' +
+      bodyHtml +
+    '</section>'
+  );
+}
+
+// Max obligations (excluding the system cash-gap row) we render as
+// individual cards before collapsing the remainder into a single grouped
+// "Other bills due soon" row. The backend already sorts urgent by its
+// blended proximity+amount score, so the top N naturally surfaces the
+// most important items (large Upcoming obligations like Roof/Solar,
+// debt minimums, and the largest bills).
+var NEXT_ACTIONS_URGENT_EXPLICIT_MAX_ = 4;
+
+/**
+ * Urgent-specific bucket renderer: same shape as the generic bucket,
+ * but collapses tail obligations into one summary row so large items
+ * are easy to scan. Correctness rules:
+ *   - Always render the `review_cash_gap` system row (when present)
+ *     above individual obligations. It is context, not a bill, so it
+ *     is never grouped.
+ *   - Explicit cap applies to obligation rows only.
+ *   - A single trailing item is rendered as-is — a "(1 item)" group
+ *     row is noisier than just showing it.
+ *   - The grouped row shows the item count AND the summed amount, so
+ *     the visible totals still reconcile with `summary.urgentTotal`.
+ *   - Header count stays equal to the full urgent array length so the
+ *     "Urgent (N)" count matches the Due soon total.
+ */
+function renderNextActionsUrgentBucketHtml_(label, actions, emptyMsg) {
+  var headerStyle =
+    'display:flex;align-items:baseline;gap:8px;margin:0 0 8px 0;';
+  var countStyle =
+    'font-size:12px;color:#64748b;font-weight:normal;';
+
+  var bodyHtml;
+  if (!actions.length) {
+    bodyHtml =
+      '<p class="muted" style="margin:0 0 4px 0;font-size:13px;">' +
+      escapeHtmlNextActions_(emptyMsg) +
+      '</p>';
+  } else {
+    // Split out the cash-gap system row (always pinned above obligations).
+    var systemRows = [];
+    var obligationRows = [];
+    for (var i = 0; i < actions.length; i++) {
+      var a = actions[i] || {};
+      if (a.actionType === 'review_cash_gap') {
+        systemRows.push(a);
+      } else {
+        obligationRows.push(a);
+      }
+    }
+
+    var explicit = obligationRows.slice(0, NEXT_ACTIONS_URGENT_EXPLICIT_MAX_);
+    var grouped = obligationRows.slice(NEXT_ACTIONS_URGENT_EXPLICIT_MAX_);
+
+    // Don't collapse a single trailing item — a one-row summary adds more
+    // noise than it removes.
+    if (grouped.length === 1) {
+      explicit.push(grouped[0]);
+      grouped = [];
+    }
+
+    bodyHtml = '';
+    for (var s = 0; s < systemRows.length; s++) {
+      bodyHtml += renderNextActionsActionHtml_(systemRows[s]);
+    }
+    for (var e = 0; e < explicit.length; e++) {
+      bodyHtml += renderNextActionsActionHtml_(explicit[e]);
+    }
+    if (grouped.length) {
+      bodyHtml += renderNextActionsUrgentGroupedRowHtml_(grouped);
+    }
+  }
+
+  return (
+    '<section style="margin:0 0 18px 0;">' +
+      '<div style="' + headerStyle + '">' +
+        '<h3 style="margin:0;font-size:15px;">' + escapeHtmlNextActions_(label) + '</h3>' +
+        '<span style="' + countStyle + '">(' + actions.length + ')</span>' +
+      '</div>' +
+      bodyHtml +
+    '</section>'
+  );
+}
+
+/**
+ * Renders the collapsed "Other bills due soon (N items) — $X total" row.
+ * Mirrors the action-card look but uses a dashed/muted border so it
+ * reads as a secondary summary, not a primary action.
+ */
+function renderNextActionsUrgentGroupedRowHtml_(grouped) {
+  var total = 0;
+  var names = [];
+  var MAX_PREVIEW_NAMES = 6;
+  var uniqueTargets = {};
+  for (var i = 0; i < grouped.length; i++) {
+    var g = grouped[i] || {};
+    var amt = Number(g.amount);
+    if (isFinite(amt)) total += amt;
+    if (names.length < MAX_PREVIEW_NAMES) {
+      var nm = (g.sourceEntityName || '').toString().trim() ||
+               (g.title || '').toString().trim();
+      if (nm) names.push(nm);
+    }
+    if (g.targetTab) uniqueTargets[g.targetTab] = true;
+  }
+
+  var headRowStyle =
+    'display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;';
+  var titleStyle =
+    'flex:1 1 auto;min-width:0;font-size:14px;font-weight:600;color:#0f172a;';
+  var rightClusterStyle =
+    'display:flex;align-items:baseline;gap:10px;margin-left:auto;';
+  var amountStyle = 'font-size:14px;font-weight:600;color:#0f172a;white-space:nowrap;';
+  var reasonStyle = 'font-size:12px;color:#475569;margin-top:4px;line-height:1.4;';
+
+  var itemWord = grouped.length === 1 ? 'item' : 'items';
+  var title = 'Other bills due soon (' + grouped.length + ' ' + itemWord + ')';
+  var amountHtml = formatMoneyNextActions_(total) + ' total';
+
+  var reasonHtml = '';
+  if (names.length) {
+    var suffix = grouped.length > MAX_PREVIEW_NAMES ? ', …' : '';
+    reasonHtml =
+      '<div style="' + reasonStyle + '">' +
+      'Includes: ' + escapeHtmlNextActions_(names.join(', ') + suffix) +
+      '.</div>';
+  }
+
+  // Only wire Open when every grouped item routes to the same tab.
+  // Otherwise the card would silently favor one tab over the rest —
+  // better to leave it non-clickable than mislead.
+  var targetKeys = Object.keys(uniqueTargets);
+  var sharedTarget = targetKeys.length === 1 ? targetKeys[0] : '';
+  var sharedTargetInfo = sharedTarget ? NEXT_ACTIONS_OPEN_TARGETS_[sharedTarget] : null;
+  var clickable = !!sharedTargetInfo && sharedTarget !== 'nextActions';
+
+  var cardStyle =
+    'border:1px dashed #cbd5e1;border-radius:10px;padding:10px 12px;' +
+    'background:#f8fafc;margin:0 0 8px 0;' +
+    (clickable
+      ? 'cursor:pointer;transition:border-color 120ms ease,box-shadow 120ms ease;'
+      : '');
+
+  var openHintHtml = '';
+  var cardOpenAttrs = '';
+  if (clickable) {
+    var hintLabel = 'Open ' + sharedTargetInfo.label + ' →';
+    openHintHtml =
+      '<span class="next-actions-open-link" style="' +
+      NEXT_ACTIONS_OPEN_LINK_STYLE_ + '">' +
+      escapeHtmlNextActions_(hintLabel) +
+      '</span>';
+    cardOpenAttrs =
+      ' role="button" tabindex="0" data-next-actions-clickable="1"' +
+      ' aria-label="' + escapeHtmlNextActions_(hintLabel) + '"' +
+      " onclick=\"openNextActionTarget_('" + sharedTarget + "')\"" +
+      ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){' +
+        "event.preventDefault();openNextActionTarget_('" + sharedTarget + "');}\"";
+  }
+
+  return (
+    '<div style="' + cardStyle + '"' + cardOpenAttrs + '>' +
+      '<div style="' + headRowStyle + '">' +
+        '<div style="' + titleStyle + '">' + escapeHtmlNextActions_(title) + '</div>' +
+        '<div style="' + rightClusterStyle + '">' +
+          '<div style="' + amountStyle + '">' + escapeHtmlNextActions_(amountHtml) + '</div>' +
+          openHintHtml +
+        '</div>' +
+      '</div>' +
+      reasonHtml +
+    '</div>'
+  );
+}
+
+// Tabs we know `showTab()` can route to. Drives the "Open" affordance on
+// each action card — any targetTab outside this allowlist (or pointing at
+// the currently-visible nextActions panel) is rendered without an Open
+// link so the UI never promises a jump it can't deliver.
+//
+// Labels are intentionally short (used inline in the card title row) —
+// e.g. "Open Payoff →" reads cleaner than "Open Rolling Debt Payoff →"
+// in that tight context. Rolling Debt Payoff is still the destination.
+var NEXT_ACTIONS_OPEN_TARGETS_ = {
+  billsDue: { label: 'Bills' },
+  upcoming: { label: 'Upcoming' },
+  rollingDebtPayoff: { label: 'Payoff' },
+  debts: { label: 'Debts' },
+  nextActions: { label: 'Next Actions' }
+};
+
+// Shared link-style for the "Open X →" affordance. Transparent background,
+// no border, blue link text, tight vertical rhythm — deliberately lighter
+// than a pill button so it reads as a navigation link, not a primary CTA.
+var NEXT_ACTIONS_OPEN_LINK_STYLE_ =
+  'font-size:12px;padding:0;line-height:1.3;' +
+  'border:0;background:transparent;color:#2563eb;' +
+  'cursor:pointer;white-space:nowrap;font-weight:500;';
+
+/**
+ * Routes from an action card to the appropriate existing workspace tab
+ * via the shared `showTab()` function. No-op if the target is not in the
+ * allowlist, so malformed/unknown targetTab values never crash the page.
+ *
+ * Routing notes:
+ *   - `showTab()` already calls `showPage()` internally based on its
+ *     target (e.g. 'billsDue'/'upcoming' → Cash Flow page,
+ *     'rollingDebtPayoff'/'debts'/'nextActions' → Planning page), so a
+ *     single call is sufficient. Calling `showTab('planning')` first
+ *     would be a no-op (there is no panel named 'planning') and would
+ *     briefly deactivate every panel — flashing an empty workspace.
+ *   - We dispatch on the next tick so the originating click's render
+ *     finishes before the tab switch rerenders, which keeps the
+ *     transition visually clean on slower devices.
+ */
+function openNextActionTarget_(targetTab) {
+  if (!targetTab || !NEXT_ACTIONS_OPEN_TARGETS_[targetTab]) return;
+  if (typeof showTab !== 'function') return;
+  setTimeout(function() {
+    showTab(targetTab);
+  }, 0);
+}
+
+/**
+ * Card layout (product-tone, tight):
+ *   Row 1: Title ............... Amount  Open →
+ *   Row 2 (optional, small/muted): Due <date>
+ *   Row 3 (optional): Short reason text
+ *
+ * The whole card is clickable when the action routes somewhere useful;
+ * the "Open →" label on the right doubles as the visual affordance so
+ * the intent is obvious without a heavy button. Amount + link cluster
+ * together on the right via `margin-left:auto`, and the row wraps
+ * gracefully on narrow widths (title has flex:1, right cluster stays
+ * grouped).
+ */
+function renderNextActionsActionHtml_(action) {
+  var headRowStyle =
+    'display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;';
+  var titleStyle =
+    'flex:1 1 auto;min-width:0;font-size:14px;font-weight:600;color:#0f172a;';
+  var rightClusterStyle =
+    'display:flex;align-items:baseline;gap:10px;margin-left:auto;';
+  var amountStyle = 'font-size:14px;font-weight:600;color:#0f172a;white-space:nowrap;';
+  var dueStyle = 'font-size:11px;color:#64748b;margin-top:4px;';
+  var reasonStyle = 'font-size:12px;color:#475569;margin-top:4px;line-height:1.4;';
+
+  var title = escapeHtmlNextActions_(action.title || action.actionType || '(untitled)');
+  var reason = escapeHtmlNextActions_(action.reason || '');
+
+  var amountNum = Number(action.amount);
+  var amountDisplay =
+    isFinite(amountNum) && amountNum > 0.005
+      ? formatMoneyNextActions_(amountNum)
+      : '—';
+
+  // Skip click wiring when:
+  //   - targetTab is unknown or not routable
+  //   - the action targets the currently-visible nextActions panel
+  //     (review_cash_gap) — jumping back to the same panel is a no-op
+  //     for the user, and the reason line already explains the gap.
+  var targetTab = action.targetTab ? String(action.targetTab) : '';
+  var openTarget = NEXT_ACTIONS_OPEN_TARGETS_[targetTab];
+  var clickable = !!openTarget && targetTab !== 'nextActions';
+
+  // Card style. Use `cursor:pointer` + hover accent on clickable cards
+  // so the affordance is discoverable, but never introduce a full-width
+  // button — the "Open →" label on the right is the visible cue.
+  var cardStyle =
+    'border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;' +
+    'background:#ffffff;margin:0 0 8px 0;' +
+    (clickable
+      ? 'cursor:pointer;transition:border-color 120ms ease,box-shadow 120ms ease;'
+      : '');
+
+  var openHintHtml = '';
+  var cardOpenAttrs = '';
+  if (clickable) {
+    // All targetTab values are allowlisted via NEXT_ACTIONS_OPEN_TARGETS_,
+    // so using the raw key in a single-quoted onclick attribute is safe
+    // (no user input, no escaping needed). Single quotes inside the
+    // double-quoted attribute avoid the escaping bug the previous
+    // JSON.stringify approach hit.
+    var hintLabel = 'Open ' + openTarget.label + ' →';
+    openHintHtml =
+      '<span class="next-actions-open-link" style="' +
+      NEXT_ACTIONS_OPEN_LINK_STYLE_ + '">' +
+      escapeHtmlNextActions_(hintLabel) +
+      '</span>';
+    cardOpenAttrs =
+      ' role="button" tabindex="0" data-next-actions-clickable="1"' +
+      ' aria-label="' + escapeHtmlNextActions_(hintLabel) + '"' +
+      " onclick=\"openNextActionTarget_('" + targetTab + "')\"" +
+      ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){' +
+        "event.preventDefault();openNextActionTarget_('" + targetTab + "');}\"";
+  }
+
+  var dueHtml = '';
+  if (action.dueDate) {
+    dueHtml =
+      '<div style="' + dueStyle + '">Due ' +
+      escapeHtmlNextActions_(formatDueDateNextActions_(action.dueDate)) +
+      '</div>';
+  }
+
+  return (
+    '<div style="' + cardStyle + '"' + cardOpenAttrs + '>' +
+      '<div style="' + headRowStyle + '">' +
+        '<div style="' + titleStyle + '">' + title + '</div>' +
+        '<div style="' + rightClusterStyle + '">' +
+          '<div style="' + amountStyle + '">' + amountDisplay + '</div>' +
+          openHintHtml +
+        '</div>' +
+      '</div>' +
+      dueHtml +
+      (reason
+        ? '<div style="' + reasonStyle + '">' + reason + '</div>'
+        : '') +
+    '</div>'
+  );
+}
+
+/* =====================================================================
+ * Secondary rendering — "Why this cash amount?" liquidity details
+ *
+ * Collapsed-by-default disclosure that explains how `Cash to use` is
+ * computed (per-account balances, buffers, and include/exclude reasons).
+ * Quietly secondary to the primary buckets above; exists so the user can
+ * answer "why that number?" without leaving Next Actions.
+ * ===================================================================== */
+
+function loadNextActionsLiquidityDetails_() {
+  var detailsWrap = document.getElementById('next_actions_liquidity_details');
+  if (!detailsWrap) return;
+
+  detailsWrap.innerHTML =
+    '<p class="muted" style="font-size:12px;margin:0;">' +
+    'Loading cash details…</p>';
+
+  google.script.run
+    .withSuccessHandler(function(payload) {
+      renderNextActionsLiquidityDetails_(payload);
+    })
+    .withFailureHandler(function(err) {
+      var msg = err && err.message ? err.message : String(err);
+      detailsWrap.innerHTML =
+        '<p style="color:#b00020;font-size:12px;margin:0;">' +
+        'Error loading cash details: ' +
+        escapeHtmlNextActions_(msg) +
+        '</p>';
+    })
+    .getCashToUse();
+}
+
+function renderNextActionsLiquidityDetails_(payload) {
+  var wrap = document.getElementById('next_actions_liquidity_details');
+  if (!wrap) return;
+
+  var accounts =
+    payload && Array.isArray(payload.accounts) ? payload.accounts : [];
+  var total =
+    payload && typeof payload.cashToUse === 'number' ? payload.cashToUse : 0;
+
+  // Collapsed-by-default, muted, and clearly secondary. The summary row
+  // mirrors the headline "Cash to use" figure inline so the disclosure
+  // advertises what it unlocks without demanding the user open it.
+  var html = '';
+  html +=
+    '<details style="border-top:1px dashed #e2e8f0;padding-top:10px;' +
+    'margin-top:4px;opacity:0.9;">' +
+    '<summary style="cursor:pointer;font-size:12px;color:#64748b;">' +
+    'Why this cash amount? — Cash to use ' +
+    formatMoneyNextActions_(total) +
+    '</summary>' +
+    '<div style="margin-top:10px;">';
+
+  if (!accounts.length) {
+    html +=
+      '<p class="muted" style="font-size:12px;margin:0;">' +
+      'No bank accounts found in <code>SYS - Accounts</code>.</p>';
+  } else {
+    html +=
+      '<table class="simple-table" style="width:100%;border-collapse:collapse;font-size:12px;">' +
+      '<thead><tr>' +
+      '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid #ddd;">Account</th>' +
+      '<th style="text-align:right;padding:6px 8px;border-bottom:1px solid #ddd;">Balance</th>' +
+      '<th style="text-align:right;padding:6px 8px;border-bottom:1px solid #ddd;">Min buffer</th>' +
+      '<th style="text-align:right;padding:6px 8px;border-bottom:1px solid #ddd;">Usable</th>' +
+      '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid #ddd;">Included</th>' +
+      '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid #ddd;">Excluded reason</th>' +
+      '</tr></thead><tbody>';
+
+    for (var i = 0; i < accounts.length; i++) {
+      var a = accounts[i] || {};
+      var included = !!a.included;
+      var rowStyle = included ? '' : 'color:#888;';
+      html +=
+        '<tr style="' + rowStyle + '">' +
+        '<td style="padding:6px 8px;border-bottom:1px solid #f0f0f0;">' +
+        escapeHtmlNextActions_(a.accountName || '') +
+        '</td>' +
+        '<td style="padding:6px 8px;border-bottom:1px solid #f0f0f0;text-align:right;">' +
+        formatMoneyNextActions_(a.balance) +
+        '</td>' +
+        '<td style="padding:6px 8px;border-bottom:1px solid #f0f0f0;text-align:right;">' +
+        formatMoneyNextActions_(a.minBuffer) +
+        '</td>' +
+        '<td style="padding:6px 8px;border-bottom:1px solid #f0f0f0;text-align:right;">' +
+        formatMoneyNextActions_(a.usable) +
+        '</td>' +
+        '<td style="padding:6px 8px;border-bottom:1px solid #f0f0f0;">' +
+        (included ? 'Yes' : 'No') +
+        '</td>' +
+        '<td style="padding:6px 8px;border-bottom:1px solid #f0f0f0;">' +
+        escapeHtmlNextActions_(a.excludedReason || '') +
+        '</td>' +
+        '</tr>';
+    }
+
+    html += '</tbody></table>';
+  }
+
+  html += '</div></details>';
+  wrap.innerHTML = html;
+}
+
+/* =====================================================================
+ * Utilities
+ * ===================================================================== */
+
+function formatMoneyNextActions_(n) {
+  var v = typeof n === 'number' && isFinite(n) ? n : 0;
+  var sign = v < 0 ? '-' : '';
+  var abs = Math.abs(v);
+  var parts = abs.toFixed(2).split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return sign + '$' + parts.join('.');
+}
+
+/**
+ * Formats an ISO `YYYY-MM-DD` due date for display.
+ *   - Same year as today  → "Apr 20"
+ *   - Different year      → "Apr 20, 2027"
+ * Parses with an explicit local-midnight offset so the string doesn't drift
+ * by one day in negative-UTC timezones. Falls back to the raw string on any
+ * parse issue.
+ */
+function formatDueDateNextActions_(iso) {
+  if (!iso) return '';
+  var raw = String(iso);
+  var d = new Date(raw + 'T00:00:00');
+  if (isNaN(d.getTime())) return raw;
+  var sameYear = d.getFullYear() === new Date().getFullYear();
+  try {
+    return d.toLocaleDateString(
+      'en-US',
+      sameYear
+        ? { month: 'short', day: 'numeric' }
+        : { month: 'short', day: 'numeric', year: 'numeric' }
+    );
+  } catch (_e) {
+    return raw;
+  }
+}
+
+function escapeHtmlNextActions_(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}

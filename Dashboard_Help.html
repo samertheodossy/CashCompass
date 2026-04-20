@@ -22,6 +22,7 @@
         <a href="#help-properties">Properties</a>
         <a href="#help-property-performance">Property performance</a>
         <a href="#help-planning">Planning</a>
+        <a href="#help-next-actions">Next Actions</a>
         <a href="#help-payoff-path">Debt Overview</a>
         <a href="#help-rolling-debt-payoff">Rolling Debt Payoff</a>
         <a href="#help-debt-email">Debt Planner email</a>
@@ -466,7 +467,10 @@
       <!-- ================================================================ -->
       <section id="help-planning" class="help-section">
         <h3>Planning</h3>
+        <p>Planning is the <strong>decision layer</strong> — it answers <em>"what should I do next?"</em> by interpreting data from Bills, Upcoming, Debts, Bank Accounts, and Cash Flow. It does not store its own copies of those numbers and does not move money. The single payment path remains <strong>Cash Flow → Quick Add</strong>.</p>
+        <p>The landing view is <strong>Next Actions</strong> (featured at the top). Everything else is a <strong>Planning tool</strong> — deeper views you drill into from a Next Actions card:</p>
         <ul class="help-list">
+          <li><strong>Next Actions</strong> — Prioritized short lists of what to pay, finish, or review now. See the next section for details.</li>
           <li><strong>Debts</strong> — Edit <strong>INPUT - Debts</strong>; planner output uses the balances and minimums there.</li>
           <li><strong>Retirement</strong> and <strong>Purchase Sim</strong> — Use the latest snapshot plus your inputs. Details depend on sheet configuration.</li>
           <li><strong>Debt Overview</strong> vs <strong>Rolling Debt Payoff</strong>:
@@ -499,6 +503,55 @@
           <li><strong>Backward compatibility</strong>: If the <strong>Active</strong> column is missing on your workbook, the script self-heals — it adds the column automatically the first time you Add new or Stop tracking. Existing rows with blank <strong>Active</strong> are treated as active, and if no <strong>Active</strong> column exists at all the legacy fallback still applies (<strong>balance &gt; 0 || minimum payment &gt; 0</strong>).</li>
           <li>Logs <strong>debt_deactivate</strong> to <strong>LOG - Activity</strong>. Activity <strong>Type</strong> is <strong>Debt</strong>; <strong>Action</strong> sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong> because no money moved.</li>
           <li>New <strong>Yes</strong> / <strong>No</strong> values written into the <strong>Active</strong> column inherit the row's text style so they visually match the rest of the row.</li>
+        </ul>
+      </section>
+
+      <!-- ================================================================ -->
+      <!-- Next Actions                                                     -->
+      <!-- ================================================================ -->
+      <section id="help-next-actions" class="help-section">
+        <h3>Next Actions</h3>
+
+        <p>Your primary Planning entry point. Next Actions reads your existing data (Bills, Upcoming remaining balances, Debts, Bank Accounts) and returns a prioritized short list in three sections. It does not move money — each card is a pointer you can open to the relevant tool.</p>
+
+        <h4>What it shows</h4>
+        <ul class="help-list">
+          <li><strong>Summary row</strong> — three figures:
+            <ul class="help-list">
+              <li><strong>Cash to use</strong> — What's safely available right now. Sums <code>max(0, balance − minBuffer)</code> across eligible Bank Accounts (active, non-credit-card types like Cash / Checking / Savings, with a Use Policy of <strong>USE_FOR_BILLS</strong>, <strong>USE_FOR_DEBT</strong>, or <strong>USE_WITH_CAUTION</strong>). Accounts marked <strong>DO_NOT_TOUCH</strong>, credit cards, and inactive rows are excluded.</li>
+              <li><strong>Due soon</strong> — Sum of every Urgent item (overdue + due in the next 7 days).</li>
+              <li><strong>Available after urgent</strong> — <strong>Cash to use</strong> minus <strong>Due soon</strong>. This is what Next Actions is willing to suggest moving beyond your must-pays.</li>
+            </ul>
+          </li>
+          <li><strong>Urgent</strong> — Overdue items and anything due in the next 7 days across Bills, debt minimums, and Upcoming obligations. Sorted by overdue-first, then a blended score of due-date proximity + amount so large obligations (roof, solar, big tax payments) are never buried under tiny bills. If <strong>Cash to use</strong> is less than <strong>Due soon</strong>, a <em>Review cash gap</em> row appears at the top explaining the shortfall. The top obligations are shown individually; the remainder collapses into a single <em>Other bills due soon</em> row with a count and total so the visible amounts still reconcile with the summary.</li>
+          <li><strong>Recommended</strong> — Suggested next moves once Urgent is covered. Two kinds of suggestion:
+            <ul class="help-list">
+              <li>Non-urgent Upcoming items due 8–30 days out, ranked by a blended score (earlier date, larger remaining amount). "Pay now to keep it out of the urgent window."</li>
+              <li>One <em>Apply $X to &lt;debt&gt;</em> suggestion, sized from a soft-capped slice of <strong>Available after urgent</strong> and hard-capped by the debt's remaining balance. The target and APR details are confirmed on Rolling Debt Payoff — Next Actions keeps the reason short ("Confirm in Rolling Debt Payoff") to avoid duplicating that surface's Focus-debt narrative.</li>
+            </ul>
+          </li>
+          <li><strong>Optimize</strong> — Sparse by design. Only appears when there is genuine optimization signal (e.g. extra debt acceleration when no spare cash is available right now). Usually empty. HELOC strategy is not surfaced here — it lives on the Rolling Debt Payoff "HELOC strategy" card.</li>
+        </ul>
+
+        <h4>Open links — where each card routes</h4>
+        <p>Every card is clickable. The <em>Open …</em> link on the right (also the whole card's click target) routes to the deeper tool:</p>
+        <ul class="help-list">
+          <li><strong>Open Bills</strong> → Cash Flow → Bills Due</li>
+          <li><strong>Open Upcoming</strong> → Cash Flow → Upcoming</li>
+          <li><strong>Open Payoff</strong> → Planning → Rolling Debt Payoff</li>
+          <li><strong>Open Debts</strong> → Planning → Debts</li>
+        </ul>
+        <p class="muted">The <em>Review cash gap</em> row is informational and does not open anywhere — its reason line explains the shortfall.</p>
+
+        <h4>Why this cash amount?</h4>
+        <p>At the bottom of the panel, a collapsed <strong>Why this cash amount?</strong> disclosure shows the per-account breakdown behind <strong>Cash to use</strong> (balance, min buffer, usable, included/excluded with reason). Open it only when you want to audit the total; it stays out of the way by default.</p>
+
+        <h4>Guardrails (what Next Actions will not do)</h4>
+        <ul class="help-list">
+          <li>No writes. No payments. Quick Add remains the single payment path.</li>
+          <li>No forecasts. <strong>Cash to use</strong> is a conservative current-state number — it ignores future income, pending transfers, credit lines, and investments.</li>
+          <li>No recommended actions while a cash gap exists — must-pays come first.</li>
+          <li>Every suggestion is explainable in one sentence from current data.</li>
         </ul>
       </section>
 

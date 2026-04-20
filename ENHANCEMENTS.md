@@ -67,18 +67,16 @@ The allocator, validators, and Phase 2 audit are fully implemented. The toggle i
 
 ### Tier 1 — Highest-value next improvements
 
-**Decision Layer — "Next Actions" entry point (Phase 1)**
-- Status: Proposed (next major feature, docs-only framing landed in `PROJECT_CONTEXT.md` / `SESSION_NOTES.md`)
-- Why it matters: The input / execution layer (Bills, Upcoming, Debts, Bank Accounts, Cash Flow, LOG) is complete and consistent. Users now need a single, low-noise entry point that answers *"what should I do next?"* without opening five tabs. Planning already owns the deep-dive tools (Debts, Retirement, Purchase Sim, Debt Overview, Rolling Debt Payoff); what's missing is the first screen that points at them.
-- Product framing: Planning **is** the Decision Layer. It interprets — not stores — data from Bills, Upcoming, Debts, Bank Accounts, and Cash Flow. "Next Actions" becomes the first / default sub-tab inside Planning; existing Planning tabs are re-framed as tools / deep dives. Flow: **Next Actions → drill into these tabs**.
-- Scope guardrails: action-first, no editing, short lists only (3–5 items per section). Single payment path remains Quick Add. No new data created; decision layer reads existing sources only. No new top-level tabs; no dashboards stacked on top of Planning; no restructuring of existing sub-tabs.
-- System touchpoints: new Planning sub-tab (reuses existing Planning include pattern), backend reader that aggregates top N candidates from existing sources (no new sheets / schema), reuse of `window.prefillQuickPayment` / `window.showPage` / `window.showTab` for routing.
-- Risk: **Low.** Read-only aggregation over already-canonical sheets; navigates to existing surfaces; no write path.
-- Timing: **Now** (Phase 1 of the Decision Layer roadmap).
+**Decision Layer — "Next Actions" entry point (Phase 1) — DELIVERED (v1)**
+- Status: **Delivered.** Live as the featured Planning entry point. Backed by `getNextActionsData()` (backend aggregator) + `getCashToUse()` (conservative liquidity model). Help section `#help-next-actions` documents current behavior.
+- Why it matters: Previously the input / execution layer (Bills, Upcoming, Debts, Bank Accounts, Cash Flow, LOG) was complete but users still had to open five tabs to decide *"what should I do next?"* Next Actions v1 closes that gap with a single, low-noise entry point on top of Planning.
+- What v1 ships: compact summary row (Cash to use / Due soon / Available after urgent), Urgent / Recommended / Optimize buckets, grouped "Other bills due soon" tail row for urgent noise control, collapsed "Why this cash amount?" disclosure for liquidity auditability, and per-card "Open …" routing into the existing deep-dive tools via `showTab()`.
+- Guardrails held: action-first, no editing, short lists; single payment path remains Cash Flow → Quick Add; no new sheets / columns; Planning's existing deep-dive tools are untouched and accessible via the secondary "Planning tools" row.
+- Risk retained: **Low.** Still read-only aggregation over already-canonical sheets; no write path.
 
-**Next Actions — v1 decision-logic design (docs only; lock before UI)**
+**Next Actions — v1 decision-logic design (delivered; reference)**
 
-The full spec lives in `PROJECT_CONTEXT.md → Decision Layer → Next Actions v1 — design note`. Summarized here as the implementation contract:
+The full spec lives in `PROJECT_CONTEXT.md → Decision Layer → Next Actions v1 — design note`. Summarized here as the delivered implementation contract:
 
 - **Action object shape** — `priorityBucket` (`urgent` | `recommended` | `optimize`), `actionType`, `title`, `reason`, `amount`, `dueDate`, `sourceEntity {type, name}`, `target {page, tab}`.
 - **Priority buckets** —
@@ -91,11 +89,11 @@ The full spec lives in `PROJECT_CONTEXT.md → Decision Layer → Next Actions v
 - **Explainability rule** — every emitted action must be describable in **one sentence** from the current snapshot (amount / due date / remaining balance / bucket rule / Rolling-Debt-Payoff reason code). If not, it's not emitted.
 - **Non-goals (v1)** — retirement optimization, investment allocation advice, purchase simulation, scenario / what-if planning, automatic execution. Quick Add remains the single payment path; Next Actions only routes.
 
-Implementation order, when the code pass lands: backend aggregator (returns a typed list of action objects) → Planning sub-tab wrapper (renders the three bucket groups, reuses `window.prefillQuickPayment` / `window.showPage` / `window.showTab`) → help copy. No mapping-layer changes needed (the new backend is called directly from the Planning sub-tab, not from the Rolling Debt Payoff React bundle).
+Implementation order, as shipped: backend aggregator (`next_actions.js::getNextActionsData`) + liquidity reader (`cash_to_use.js::getCashToUse`) landed first, followed by the Planning → Next Actions panel (`Dashboard_Body.html` + `Dashboard_Script_PlanningNextActions.html`) rendering the three bucket groups, then help copy (`#help-next-actions`). No mapping-layer changes were needed — the panel calls the backend directly via `google.script.run`, not through the Rolling Debt Payoff React bundle.
 
-**Next Actions — v1 liquidity model (`cash_to_use`) — prerequisite (docs only)**
+**Next Actions — v1 liquidity model (`cash_to_use`) — delivered**
 
-Hard dependency for the Next Actions v1 implementation. Full spec lives in `PROJECT_CONTEXT.md → Decision Layer → Liquidity model v1 — cash_to_use`. Implementation contract:
+Foundation for Next Actions v1. Full spec lives in `PROJECT_CONTEXT.md → Decision Layer → Liquidity model v1 — cash_to_use`. Delivered contract:
 
 - **Scope** — conservative, buffer-respecting, current-state dollars **safely available right now**. Not the same as Rolling Debt Payoff's *Safe-to-use* (which folds in near-term holds, reserves, and unmapped card risk). Keep the two models separate.
 - **Inputs** — Bank Accounts only: `balance`, `minBuffer`, `active`, `usePolicy` from `INPUT - Bank Accounts` + `SYS - Accounts`. No new sheets, no new columns.
@@ -106,10 +104,10 @@ Hard dependency for the Next Actions v1 implementation. Full spec lives in `PROJ
 - **Guardrails** — never negative per account; buffers are sacred; no future-income, pending-transfer, or timing assumptions; no credit / HELOC / investments (HELOC is a separate advisor signal via `review_heloc_strategy`).
 - **Non-goals (v1)** — no forecasting, no time-based modeling, no cross-account optimization.
 
-Implementation order: this reader ships **before or alongside** the Next Actions aggregator, since the aggregator calls into it directly. Exposed as a single server entry point returning the output object above; no changes to Bank Account editors or the existing liquidity consumers (Rolling Debt Payoff keeps its richer model unchanged).
+Ship ordering held: the reader landed **before** the Next Actions aggregator and is called from it directly. Exposed as a single server entry point returning the output object above; no changes to Bank Account editors or the existing liquidity consumers (Rolling Debt Payoff keeps its richer model unchanged).
 
-**Decision Layer roadmap (intent only — no implementation details yet)**
-- **Phase 1 — Next Actions (v1).** First landing surface inside Planning. Described above.
+**Decision Layer roadmap**
+- **Phase 1 — Next Actions (v1).** ✅ Delivered. First landing surface inside Planning.
 - **Phase 2 — Cash Strategy.** Later. Intended to pair Next Actions with a forward-looking liquidity / deployment view. Not scoped yet.
 - **Phase 3 — HELOC Advisor refinement.** Later. Continues the existing advisor-anchored "What would change this?" pattern. Not scoped yet.
 
@@ -200,6 +198,71 @@ Implementation order: this reader ships **before or alongside** the Next Actions
 - System touchpoints: test runner (clasp-friendly), fixtures for `INPUT - *` tabs, snapshot assertions on payload shape.
 - Risk: **Medium.** Non-trivial setup; high long-term ROI.
 - Timing: **Later** (but pulled forward if engine changes become frequent).
+
+### Queued — post Next Actions stabilization
+
+Captured-but-not-scheduled product work. These items are *intent only* — structure and constraints are pinned here so they do not drift, but no implementation should start until overlap cleanup and Next Actions stabilization are complete (see **Prioritization order** at the end of this subsection).
+
+**Debug mode control**
+- Status: Proposed
+- Purpose: Hide developer / debug information from normal users so the default surface reads as a product, not a diagnostics page.
+- Concept: Introduce a single global `isDebugMode` flag (host-global, same pattern as `window.showTab` / `window.prefillQuickPayment`). No per-surface toggles.
+- Debug-only items (hidden by default; shown only when `isDebugMode` is true):
+  - "Why this cash amount?" liquidity breakdown on Next Actions.
+  - Any explicit debug / internal-reasoning labels surfaced in the current UI (planner diagnostics, allocation audit, cash-bridge audit on Rolling Debt Payoff when appropriate, etc. — inventory on implementation).
+  - Raw JSON exports where they don't aid a normal user.
+- User-facing mode shows: summary rows, action cards, decision cards, payment result, help text. Nothing that requires internal vocabulary to read.
+- Non-goals (v1): no user-visible toggle control is required in v1 — the flag can be a URL / query-string switch or a session-local key. Designing a "Developer mode" settings UI is a later pass.
+- System touchpoints: new host-global, a shared `isDebugMode()` helper consumed by the affected render functions; **no** backend changes; **no** new sheets.
+- Risk: **Low.** Pure presentation gating.
+- Timing: **After** Next Actions stabilization (see prioritization order below).
+
+**Income Sources (new input surface)**
+- Status: Proposed
+- Purpose: Give users a structured place to record income so future planning surfaces (forecast, Cash Strategy, onboarding) have a canonical read target. Replaces today's implicit "income = whatever shows up as Cash Flow inflow."
+- Proposed location: **Assets → Income Sources** (primary candidate) or **Cash Flow → Income Setup** (fallback). Decide on location during design; do not implement both.
+- Canonical fields (v1):
+  - `source name` (string)
+  - `amount` (number)
+  - `frequency` (enum: weekly / biweekly / semimonthly / monthly / quarterly / annual — pin the exact list at design time)
+  - `active` (boolean, same inactive rule as the rest of the app)
+- Non-goals (v1):
+  - No planner integration. Rolling Debt Payoff continues to derive income exactly as it does today (Cisco + configured recurring rent payees, variable-income 50/30/20 split). Income Sources is **not** read by the waterfall in v1.
+  - No forecasting. No 12-month projected income timeline from these rows.
+  - No automatic Cash Flow posting. Rows here do not mint `INPUT - Cash Flow` entries or LOG rows on their own. Quick Add stays the only write path.
+- System touchpoints: new `INPUT - Income Sources` sheet (columns match the v1 fields + `Active`); Apps Script reader following the existing reader patterns (`readSheetAsObjects_` + a small `normalizeIncomeSources_`); a new panel (location TBD) with the usual Add / Update / Stop tracking actions and a matching `income_source_add` / `income_source_deactivate` event type in `LOG - Activity`. No mapping layer or React bundle changes.
+- Risk: **Low–Medium.** New write surface, but it is isolated — nothing else reads these rows in v1.
+- Timing: **After** debug mode (see prioritization order).
+
+**Onboarding (Phase 1)**
+- Status: Proposed
+- Purpose: Guide a new household through first-time setup instead of handing them an empty workbook. Reduces the cliff between "I opened CashCompass" and "I can trust the numbers on Next Actions."
+- Scope (Phase 1 — what a new user sets up, in order):
+  - Bank accounts (with **Min Buffer** and **Use Policy**)
+  - Debts
+  - Bills
+  - Upcoming expenses
+  - *(future)* Income Sources — once that surface exists
+- Concepts the onboarding must explain in plain language:
+  - `cash_to_use` — what it is, what counts, what doesn't, why buffers are sacred.
+  - How Next Actions prioritizes work (Urgent / Recommended / Optimize; what `review_cash_gap` means; why the single payment path is Cash Flow → Quick Add).
+- Non-goals (v1):
+  - No advanced strategy content. HELOC advisor, Aggressive payoff strategy, Cash Strategy, and what-if tools are **not** part of v1 onboarding.
+  - No automated import. Users still enter / paste their own data — onboarding guides *where* and *in what order*, not *what* to type.
+  - No gamification, no progress bar persistence — Phase 1 is a walkthrough, not a state machine.
+- System touchpoints: new walkthrough component (host HTML / script, not React bundle) with step-by-step pointers into the existing input surfaces (`showTab` / `showPage` deep-links already exist); a small "completed" marker — scope-limited to a single `PROPERTIES`-style flag or a `SYS - Onboarding` sheet pinned at design time. Help copy (`Dashboard_Help.html`) gains a top-level Onboarding section.
+- Risk: **Low.** Additive surface over already-canonical inputs.
+- Timing: **After** income sources (see prioritization order).
+
+**Prioritization order (for the queued items above)**
+
+Do not shuffle without an explicit product decision:
+
+1. **Finish overlap cleanup.** The Next Actions / Debt Overview / Rolling Debt Payoff cleanup pass (duplicate decision content removed, cross-links added, Next Actions wording tightened) must land cleanly before any new surface work begins. This is the current in-flight work.
+2. **Stabilize Next Actions.** Let the v1 decision surface bake against real daily use: confirm urgent grouping, recommended sizing, routing, and "Why this cash amount?" disclosure all hold under normal household operation. No new queued items start while Next Actions is still being corrected.
+3. **Debug mode control.** First net-new item. Smallest scope, lowest risk, unblocks the rest by ensuring debug/internal content has a single gating pattern before more surfaces add their own.
+4. **Income Sources.** Structured income input. Can land without planner integration because debug mode already hides work-in-progress surfaces from normal users if needed.
+5. **Onboarding (Phase 1).** Last because it builds on the previous four — onboarding must be able to point to stable input surfaces (including Income Sources) and to an already-polished Next Actions.
 
 ---
 

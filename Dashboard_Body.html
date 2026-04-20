@@ -975,15 +975,37 @@
   </div>
 
   <div id="page_planning" class="workspace-page">
-    <div class="tabs planning-tabs">
-      <button class="tab-btn active" data-tab="debts" onclick="showTab('debts')">Debts</button>
-      <button class="tab-btn" data-tab="retirement" onclick="showTab('retirement')">Retirement</button>
-      <button class="tab-btn" data-tab="purchase" onclick="showTab('purchase')">Purchase Sim</button>
-      <button class="tab-btn" data-tab="debtPayoff" onclick="showTab('debtPayoff')">Debt Overview</button>
-      <button class="tab-btn" data-tab="rollingDebtPayoff" onclick="showTab('rollingDebtPayoff')">Rolling Debt Payoff</button>
+    <!--
+      Planning hierarchy:
+        1) Featured Next Actions entry point — visually prominent,
+           primary "what should I do next?" surface, default landing view.
+        2) Quieter "Planning tools" row — the existing deep-dive tools
+           (Debts, Debt Overview, Rolling Debt Payoff, Retirement,
+           Purchase Sim). Fully accessible, just visually secondary.
+      The Next Actions panel reads `getNextActionsData()` and routes to
+      these tools via `targetTab`; see PROJECT_CONTEXT.md → Decision Layer.
+    -->
+    <div class="planning-next-actions-feature">
+      <button class="tab-btn active"
+              data-tab="nextActions"
+              onclick="showTab('nextActions')"
+              title="Your primary Planning entry point — what should I do next?">
+        <span class="featured-kicker">Start here</span>
+        <span class="featured-title">Next Actions</span>
+      </button>
+    </div>
+    <div class="planning-tools-wrap">
+      <div class="planning-tools-label">Planning tools</div>
+      <div class="tabs planning-tools">
+        <button class="tab-btn" data-tab="debts" onclick="showTab('debts')">Debts</button>
+        <button class="tab-btn" data-tab="debtPayoff" onclick="showTab('debtPayoff')">Debt Overview</button>
+        <button class="tab-btn" data-tab="rollingDebtPayoff" onclick="showTab('rollingDebtPayoff')">Rolling Debt Payoff</button>
+        <button class="tab-btn" data-tab="retirement" onclick="showTab('retirement')">Retirement</button>
+        <button class="tab-btn" data-tab="purchase" onclick="showTab('purchase')">Purchase Sim</button>
+      </div>
     </div>
 
-    <div id="debts" class="panel active">
+    <div id="debts" class="panel">
       <div class="panel-head">
         <h2 id="debt_panel_title">Debt Accounts</h2>
         <div class="updated">Last updated: <span id="debt_updated">—</span></div>
@@ -1205,7 +1227,9 @@
             <span class="muted" style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-left:8px;padding:2px 8px;border:1px solid #cbd5e1;border-radius:999px;vertical-align:middle;">Reference</span>
           </h2>
           <p class="muted" style="margin:4px 0 0 0;font-size:13px;line-height:1.45;">
-            This view shows your overall debt structure based on current balances and minimum payments. For monthly action decisions, use the Rolling Debt Planner.
+            Read-only portfolio view of current balances and minimum payments.
+            For this month's action plan, see
+            <a href="#" onclick="showTab('rollingDebtPayoff');return false;">Rolling Debt Payoff</a>.
           </p>
         </div>
         <button type="button" onclick="loadDebtPayoffReadSection()">Refresh</button>
@@ -1233,15 +1257,25 @@
       <div id="debt_payoff_read_filter_note" class="muted" style="margin-bottom:8px;"></div>
       <div id="debt_payoff_read_chart_wrap" class="debt-payoff-chart-panel" aria-live="polite"></div>
       <div id="debt_payoff_read_table_wrap" class="activity-table-wrap"></div>
-      <div class="panel-head" style="margin-top:18px;">
-        <h3 style="margin:0;">Notes</h3>
-      </div>
-      <div id="debt_payoff_read_recommendations" class="info" style="margin-top:8px;"></div>
+      <!--
+        Decision-layer "Notes / recommendations" block intentionally removed.
+        Cash snapshot, safe-to-use vs minimums, projected cash flow, highest-APR
+        callouts and longest-payoff guidance now live on Next Actions (for
+        prioritized steps) and Rolling Debt Payoff (for the monthly plan).
+        The render function (renderDebtPayoffReadData_) still clears
+        #debt_payoff_read_recommendations defensively if it were re-added.
+      -->
     </div>
 
     <div id="rollingDebtPayoff" class="panel">
       <div class="panel-head">
-        <h2>Rolling Debt Payoff</h2>
+        <div>
+          <h2>Rolling Debt Payoff</h2>
+          <p class="muted" style="margin:4px 0 0 0;font-size:13px;line-height:1.45;">
+            Monthly debt-cash deployment plan. For portfolio-level balances and minimums, see
+            <a href="#" onclick="showTab('debtPayoff');return false;">Debt Overview</a>.
+          </p>
+        </div>
       </div>
       <div class="rolling-dp-controls-row">
         <div class="rolling-dp-controls-left">
@@ -1282,6 +1316,33 @@
         <p class="muted" style="margin:6px 0 8px 0;">Machine-readable plan payload (legacy trigger details omitted).</p>
         <pre id="rolling_debt_payoff_json" class="rolling-dp-json" aria-label="Rolling Debt Payoff JSON"></pre>
       </details>
+    </div>
+
+    <!--
+      Planning → Next Actions panel.
+
+      Primary Planning entry point. Renders `getNextActionsData()` as a
+      compact summary plus Urgent / Recommended / Optimize buckets, and
+      routes into the deeper tools via `targetTab`. A collapsed
+      "Why this cash amount?" disclosure below exposes the per-account
+      `getCashToUse()` breakdown without competing with the primary
+      actions. Read-only by design — the single payment path remains
+      Cash Flow → Quick Add.
+    -->
+    <div id="nextActions" class="panel active">
+      <div class="panel-head">
+        <h2>Next Actions</h2>
+      </div>
+      <p class="muted" style="margin:0 0 12px 0;">
+        Your prioritized next steps across Bills, Upcoming, and Debts.
+        Tap a card to open the related tool.
+      </p>
+      <div class="house-update-actions" style="margin:0 0 12px 0;">
+        <button type="button" onclick="loadNextActions()">Reload</button>
+      </div>
+      <div id="next_actions_status" class="status"></div>
+      <div id="next_actions_output" aria-live="polite"></div>
+      <div id="next_actions_liquidity_details" aria-live="polite" style="margin-top:20px;"></div>
     </div>
   </div>
 </div>

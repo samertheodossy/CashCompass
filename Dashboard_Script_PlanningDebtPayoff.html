@@ -342,6 +342,9 @@ function renderDebtPayoffReadData_(data) {
     metaEl.textContent += ' ' + data.warnings.join(' ');
   }
 
+  // Portfolio-structural stats only. Decision-style bullets (safe-to-use,
+  // longest payoff, cash snapshot, highest-APR callouts) live on Next Actions
+  // and Rolling Debt Payoff — Debt Overview is a reference surface.
   if (sumEl && data.summary) {
     var s = data.summary;
     var bullets = [];
@@ -353,20 +356,6 @@ function renderDebtPayoffReadData_(data) {
         fmtCurrency(s.totalMinimumPayments) +
         '/month</li>'
     );
-    bullets.push(
-      '<li>Safe to use (before planned expenses): ' +
-        fmtCurrency(s.usableCashAfterBuffers) +
-        '</li>'
-    );
-    if (s.longestRoughPayoff && s.longestRoughPayoff.months) {
-      bullets.push(
-        '<li>Longest estimated payoff at the sheet minimum: ' +
-          escapeHtml(s.longestRoughPayoff.accountName) +
-          ' (~' +
-          s.longestRoughPayoff.months +
-          ' mo)</li>'
-      );
-    }
     bullets.push(
       '<li class="muted"><strong>Loan</strong> &amp; <strong>HELOC</strong>: months use a monthly amortization loop (interest on remaining balance, then principal).</li>'
     );
@@ -384,14 +373,11 @@ function renderDebtPayoffReadData_(data) {
       '</ul></div>';
   }
 
-  if (recEl && data.recommendations && data.recommendations.length) {
-    var lis = data.recommendations
-      .map(function(line) {
-        return '<li>' + escapeHtml(line) + '</li>';
-      })
-      .join('');
-    recEl.innerHTML = '<ul class="help-list" style="margin:0;padding-left:1.2rem;">' + lis + '</ul>';
-  } else if (recEl) {
+  // Notes / recommendations block intentionally cleared — decision-style
+  // guidance (cash snapshot, safe-to-use vs minimums, projected cash flow,
+  // highest-APR callout, longest payoff) lives on Next Actions and
+  // Rolling Debt Payoff. Debt Overview is read-only reference.
+  if (recEl) {
     recEl.innerHTML = '';
   }
 
