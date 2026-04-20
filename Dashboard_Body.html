@@ -10,9 +10,28 @@
     <div class="top-actions">
       <div class="top-actions-buttons">
         <button type="button" class="btn-help-prominent" onclick="showPage('help')">Help</button>
+        <button type="button" class="btn-setup-topbar" onclick="showPage('onboarding')">Setup</button>
         <button type="button" class="btn-planner-run" onclick="runPlannerNow()">Run Planner + Refresh Snapshot</button>
       </div>
       <div id="planner_status" class="status"></div>
+    </div>
+  </div>
+
+  <!--
+    Setup editor handoff bar.
+
+    Only visible when body has class `setup-editor-mode`. That class is
+    toggled by enterSetupEditorMode()/exitSetupEditorMode() when a user
+    clicks "Open Bank Accounts editor" (or equivalent) from an
+    onboarding detail screen. It replaces the normal page nav while the
+    user is in that focused sub-flow and provides a reliable return
+    path to Setup. `data-return-view` is set by the helper so Back
+    knows exactly which onboarding view to restore.
+  -->
+  <div id="setup_editor_bar" class="setup-editor-bar" role="region" aria-label="Setup" hidden>
+    <div class="setup-editor-bar-inner">
+      <button type="button" class="btn-setup-back" onclick="exitSetupEditorMode()">&larr; Back to Setup</button>
+      <span class="setup-editor-bar-label">Setup: editing</span>
     </div>
   </div>
 
@@ -1390,6 +1409,163 @@
       <div id="next_actions_status" class="status"></div>
       <div id="next_actions_output" aria-live="polite"></div>
       <div id="next_actions_liquidity_details" aria-live="polite" style="margin-top:20px;"></div>
+    </div>
+  </div>
+
+  <!--
+    Onboarding Phase 1 — Setup page.
+
+    On-demand, read-only status review across Bank Accounts, Debts, Bills,
+    Upcoming, and Income. Existing users who never open this page see no
+    change. Test mode (URL ?onboarding=test) switches every probe to
+    TEST - * sheets via the server-side onboarding sheet resolver.
+  -->
+  <div id="page_onboarding" class="workspace-page">
+    <!--
+      TEST-MODE banner is shared across all Setup views (Welcome and the
+      status grid). Kept outside the view wrappers so it persists as the
+      user navigates forward within Setup.
+    -->
+    <div id="onboarding_test_banner" class="onboarding-test-banner" style="display:none;" role="status" aria-live="polite"></div>
+
+    <!--
+      View 1: Welcome screen. First thing the user sees when they open
+      Setup. Read-only. Clicking Continue advances to the status grid view.
+    -->
+    <div id="onboarding_view_welcome" class="onboarding-view onboarding-view-welcome">
+      <div class="onboarding-welcome-card">
+        <h2 class="onboarding-welcome-title">Welcome to CashCompass</h2>
+        <p class="onboarding-welcome-lede">
+          Setup helps you review your accounts, bills, debts, upcoming expenses, and income
+          &mdash; so you can see what cash is available and what needs attention next.
+        </p>
+        <p class="onboarding-welcome-reassurance">
+          Nothing changes just by viewing Setup. Changes only happen when you explicitly update something.
+        </p>
+        <p id="onboarding_welcome_test_note" class="onboarding-welcome-test-note" style="display:none;">
+          You're in TEST MODE &mdash; Setup will only read and write to TEST sheets.
+        </p>
+        <div class="onboarding-welcome-actions">
+          <button type="button" class="btn-primary" onclick="onboardingShowView('grid')">Continue</button>
+          <button type="button" class="btn-secondary" onclick="onboardingBackToDashboard()">Back to Dashboard</button>
+        </div>
+      </div>
+    </div>
+
+    <!--
+      View 2: Status grid. Shown after the user presses Continue. Read-only
+      status probes across every Setup area.
+    -->
+    <div id="onboarding_view_grid" class="onboarding-view onboarding-view-grid" style="display:none;">
+      <div class="onboarding-header">
+        <h2 class="onboarding-title">Setup</h2>
+        <p class="muted onboarding-subtitle">
+          Check your setup status across accounts, debts, bills, upcoming items, and income.
+          Opening this page does not change any data.
+        </p>
+      </div>
+
+      <div id="onboarding_status" class="status"></div>
+
+      <div class="onboarding-steps-grid">
+      <div class="onboarding-step-card onboarding-step-card-clickable" data-step="bank" id="onboarding_step_bank"
+           role="button" tabindex="0"
+           onclick="onboardingShowView('bank')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();onboardingShowView('bank');}">
+        <div class="onboarding-step-head">
+          <div class="onboarding-step-num">1</div>
+          <div class="onboarding-step-title">Bank Accounts</div>
+          <div class="onboarding-step-badge" data-badge="bank">…</div>
+        </div>
+        <div class="onboarding-step-body" data-body="bank">Loading…</div>
+        <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
+      </div>
+      <div class="onboarding-step-card" data-step="debts" id="onboarding_step_debts">
+        <div class="onboarding-step-head">
+          <div class="onboarding-step-num">2</div>
+          <div class="onboarding-step-title">Debts</div>
+          <div class="onboarding-step-badge" data-badge="debts">…</div>
+        </div>
+        <div class="onboarding-step-body" data-body="debts">Loading…</div>
+      </div>
+      <div class="onboarding-step-card" data-step="bills" id="onboarding_step_bills">
+        <div class="onboarding-step-head">
+          <div class="onboarding-step-num">3</div>
+          <div class="onboarding-step-title">Bills</div>
+          <div class="onboarding-step-badge" data-badge="bills">…</div>
+        </div>
+        <div class="onboarding-step-body" data-body="bills">Loading…</div>
+      </div>
+      <div class="onboarding-step-card" data-step="upcoming" id="onboarding_step_upcoming">
+        <div class="onboarding-step-head">
+          <div class="onboarding-step-num">4</div>
+          <div class="onboarding-step-title">Upcoming Expenses</div>
+          <div class="onboarding-step-badge" data-badge="upcoming">…</div>
+        </div>
+        <div class="onboarding-step-body" data-body="upcoming">Loading…</div>
+      </div>
+      <div class="onboarding-step-card" data-step="income" id="onboarding_step_income">
+        <div class="onboarding-step-head">
+          <div class="onboarding-step-num">5</div>
+          <div class="onboarding-step-title">Income</div>
+          <div class="onboarding-step-badge" data-badge="income">…</div>
+        </div>
+        <div class="onboarding-step-body" data-body="income">Loading…</div>
+      </div>
+      <div class="onboarding-step-card" data-step="finish">
+        <div class="onboarding-step-head">
+          <div class="onboarding-step-num">6</div>
+          <div class="onboarding-step-title">Finish</div>
+        </div>
+        <div class="onboarding-step-body">
+          <p id="onboarding_finish_body">Review the items marked <strong>Not set up</strong>, then use the matching screens to fill in details when you're ready. You can come back to Setup any time.</p>
+        </div>
+      </div>
+      </div>
+
+      <div class="onboarding-actions">
+        <button type="button" onclick="onboardingShowView('welcome')">Back</button>
+        <button type="button" onclick="onboardingLoadStatusGrid_()">Refresh status</button>
+        <button type="button" id="onboarding_create_test_sheets_btn" style="display:none;" onclick="onboardingCreateTestSheets()">Create missing TEST sheets</button>
+      </div>
+    </div>
+
+    <!--
+      View 3: Bank Accounts detail. Opened from the status grid when the
+      user clicks the Bank Accounts card. Read-only in this pass: it
+      displays what is currently tracked on INPUT - Bank Accounts (or
+      TEST - INPUT - Bank Accounts in test mode) and links out to the
+      existing Assets → Bank Accounts surface for edits. No writes from
+      this view, and it never touches SYS - Accounts.
+    -->
+    <div id="onboarding_view_bank" class="onboarding-view onboarding-view-detail" style="display:none;">
+      <div class="onboarding-detail-header">
+        <div class="onboarding-detail-step">Step 1 of 5</div>
+        <h2 class="onboarding-detail-title">Bank Accounts</h2>
+        <div id="onboarding_bank_badge" class="onboarding-detail-badge">…</div>
+      </div>
+
+      <div class="onboarding-detail-explainer">
+        <p>
+          Your bank accounts determine how much cash is available right now.
+          Some money may be reserved or protected as a buffer &mdash; that's
+          how CashCompass calculates your <strong>Cash to use</strong>.
+        </p>
+        <p class="muted">
+          This view is read-only. Edit account details from Assets &rarr; Bank Accounts.
+        </p>
+      </div>
+
+      <div id="onboarding_bank_status" class="status"></div>
+
+      <div id="onboarding_bank_body">
+        <p class="muted">Loading accounts&hellip;</p>
+      </div>
+
+      <div class="onboarding-actions">
+        <button type="button" onclick="onboardingShowView('grid')">Back</button>
+        <button type="button" class="btn-primary" onclick="onboardingOpenBankAccountsPage()">Open Bank Accounts editor</button>
+      </div>
     </div>
   </div>
 </div>

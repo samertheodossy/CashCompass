@@ -15,6 +15,7 @@ function onOpen() {
     .addItem('Open CashCompass (sidebar)', 'openPlannerDashboard')
     .addSeparator()
     .addItem('Open CashCompass Web', 'openPlannerDashboardWebLauncher')
+    .addItem('Open CashCompass Web (Test Setup)', 'openPlannerDashboardWebTestOnboardingLauncher')
     .addItem('Set CashCompass Web App URL', 'setPlannerDashboardWebAppUrl')
     .addToUi();
 }

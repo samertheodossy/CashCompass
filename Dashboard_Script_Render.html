@@ -56,8 +56,25 @@ function showPage(name) {
 
   window.scrollTo(0, 0);
 
+  // Setup is a focused flow: hide the main section tabs while inside it
+  // so the user isn't pulled back into the regular dashboard surfaces
+  // mid-flow. The `setup-mode` body class drives the CSS that hides
+  // `.page-nav`. Toggled strictly on page enter/leave; no other page
+  // behavior changes.
+  if (document.body) {
+    if (name === 'onboarding') {
+      document.body.classList.add('setup-mode');
+    } else {
+      document.body.classList.remove('setup-mode');
+    }
+  }
+
   if (name === 'activity' && typeof loadActivitySection === 'function') {
     loadActivitySection();
+  }
+
+  if (name === 'onboarding' && typeof loadOnboardingSection === 'function') {
+    loadOnboardingSection();
   }
 
   // Planning lands on the featured Next Actions entry point by default.

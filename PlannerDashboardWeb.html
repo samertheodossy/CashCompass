@@ -93,6 +93,10 @@
 </script>
 
 <script>
+  <?!= includeHtml_('Dashboard_Script_Onboarding'); ?>
+</script>
+
+<script>
   try {
     function initDashboard() {
       refreshSnapshot();
@@ -111,6 +115,12 @@
       if (typeof loadIncomeSourcesSection === 'function') {
         loadIncomeSourcesSection();
       }
+
+      try {
+        if (typeof onboardingMode === 'function' && onboardingMode() === 'test') {
+          if (typeof showPage === 'function') showPage('onboarding');
+        }
+      } catch (_e) { /* ignore */ }
     }
 
     initDashboard();

@@ -1462,5 +1462,361 @@
     .grid-2, .grid-3, .health-row, .mini-grid, .sim-grid { grid-template-columns: 1fr; }
     .topbar { flex-direction: column; }
     .bills-grid { grid-template-columns: 1fr; }
+    .onboarding-steps-grid { grid-template-columns: 1fr !important; }
   }
+
+  /* Onboarding (Setup) page ------------------------------------------------ */
+  /*
+   * Setup is a focused flow: once the user enters it we hide the main
+   * section tabs so the page feels like a dedicated onboarding
+   * experience rather than "another tab with a grid".
+   * Toggled by adding/removing `.setup-mode` on <body> in showPage().
+   */
+  body.setup-mode .page-nav { display: none !important; }
+
+  /*
+   * Also hide the top-right dashboard action controls while in Setup so the
+   * flow feels focused. Help intentionally stays visible — users may need it
+   * mid-onboarding. Run Planner + Refresh Snapshot and the Setup re-entry
+   * button are both irrelevant once the user is already inside Setup.
+   */
+  body.setup-mode .btn-setup-topbar,
+  body.setup-mode .btn-planner-run,
+  body.setup-mode #planner_status,
+  body.setup-editor-mode .btn-setup-topbar,
+  body.setup-editor-mode .btn-planner-run,
+  body.setup-editor-mode #planner_status { display: none !important; }
+
+  /*
+   * Setup editor mode — when the user opens an existing editor (e.g. Assets
+   * → Bank Accounts) *from within Setup*, we reuse the same real editor
+   * surface but hide the full-app shell so the handoff doesn't feel like
+   * leaving Setup. A slim "Back to Setup" bar provides the return path.
+   *
+   * This class is independent of `setup-mode` (which is only active on the
+   * onboarding page itself). Normal navigation to the same editor is
+   * completely unaffected.
+   */
+  body.setup-editor-mode .page-nav { display: none !important; }
+  /* Assets sub-tabs (House Values / Bank Accounts / Investments) are not
+   * useful in the setup handoff — the user is there to act on exactly one
+   * category. Scoped to .assets-tabs (not all `.tabs`) so future editor
+   * handoffs on other pages aren't accidentally affected without an
+   * explicit opt-in. */
+  body.setup-editor-mode .assets-tabs { display: none !important; }
+
+  .setup-editor-bar {
+    display: none;
+    background: #eff6ff;
+    border-bottom: 1px solid #bfdbfe;
+    padding: 10px 20px;
+  }
+  body.setup-editor-mode .setup-editor-bar { display: block; }
+  .setup-editor-bar-inner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .setup-editor-bar-label {
+    color: #1e3a8a;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .btn-setup-back {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid #2563eb;
+    background: #ffffff;
+    color: #1d4ed8;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .btn-setup-back:hover { background: #dbeafe; }
+
+  .btn-setup-topbar {
+    padding: 10px 16px;
+    border-radius: 10px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #1f2937;
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .btn-setup-topbar:hover { background: #f1f5f9; }
+  .onboarding-header { margin-bottom: 14px; }
+  .onboarding-title { margin: 0 0 6px 0; font-size: 22px; }
+  .onboarding-subtitle { margin: 0 0 4px 0; font-size: 13px; max-width: 640px; line-height: 1.5; }
+  .onboarding-test-banner {
+    margin: 10px 0 16px 0;
+    padding: 12px 14px;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-left: 4px solid #b45309;
+    border-radius: 8px;
+    color: #78350f;
+    font-weight: bold;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+  }
+  .onboarding-steps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .onboarding-step-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .onboarding-step-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .onboarding-step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #0f172a;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .onboarding-step-title {
+    font-weight: bold;
+    font-size: 15px;
+    flex-grow: 1;
+  }
+  .onboarding-step-badge {
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #475569;
+  }
+  .onboarding-step-badge.status-complete { background: #dcfce7; color: #166534; }
+  .onboarding-step-badge.status-partial { background: #fef3c7; color: #92400e; }
+  .onboarding-step-badge.status-missing { background: #fee2e2; color: #991b1b; }
+  .onboarding-step-body {
+    font-size: 13px;
+    line-height: 1.5;
+    color: #334155;
+  }
+  .onboarding-step-body .muted { color: #64748b; }
+  .onboarding-actions {
+    margin-top: 16px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .onboarding-actions button {
+    padding: 10px 16px;
+    border-radius: 10px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #1f2937;
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .onboarding-actions button:hover { background: #f1f5f9; }
+
+  /* Welcome view (first Setup screen) */
+  .onboarding-view-welcome {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 32px 16px 24px;
+  }
+  .onboarding-welcome-card {
+    max-width: 640px;
+    width: 100%;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 28px 28px 24px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+  .onboarding-welcome-title {
+    margin: 0 0 8px;
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: #0f172a;
+  }
+  .onboarding-welcome-lede {
+    margin: 0 0 12px;
+    color: #334155;
+    line-height: 1.5;
+  }
+  .onboarding-welcome-reassurance {
+    margin: 0 0 12px;
+    color: #475569;
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+  .onboarding-welcome-test-note {
+    margin: 12px 0 0;
+    padding: 10px 12px;
+    background: #fff7ed;
+    border: 1px solid #fdba74;
+    border-radius: 8px;
+    color: #9a3412;
+    font-size: 0.9rem;
+  }
+  .onboarding-welcome-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+  .onboarding-welcome-actions .btn-primary {
+    background: #2563eb;
+    color: #fff;
+    border: 1px solid #2563eb;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .onboarding-welcome-actions .btn-primary:hover { background: #1d4ed8; border-color: #1d4ed8; }
+  .onboarding-welcome-actions .btn-secondary {
+    background: #ffffff;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .onboarding-welcome-actions .btn-secondary:hover { background: #f1f5f9; }
+
+  /* Status grid: clickable step cards (drill-down to detail view) */
+  .onboarding-step-card-clickable {
+    cursor: pointer;
+    transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+    position: relative;
+  }
+  .onboarding-step-card-clickable:hover {
+    border-color: #94a3b8;
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
+    transform: translateY(-1px);
+  }
+  .onboarding-step-card-clickable:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+  }
+  .onboarding-step-cta {
+    margin-top: auto;
+    align-self: flex-end;
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  /* Step detail views (Bank Accounts, etc.) */
+  .onboarding-view-detail {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 24px 16px 32px;
+  }
+  .onboarding-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .onboarding-detail-step {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+  }
+  .onboarding-detail-title {
+    margin: 0;
+    font-size: 1.5rem;
+    color: #0f172a;
+    flex-grow: 1;
+  }
+  .onboarding-detail-badge {
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #475569;
+  }
+  .onboarding-detail-badge.status-complete { background: #dcfce7; color: #166534; }
+  .onboarding-detail-badge.status-partial  { background: #fef3c7; color: #92400e; }
+  .onboarding-detail-badge.status-missing  { background: #fee2e2; color: #991b1b; }
+  .onboarding-detail-explainer {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin: 8px 0 14px;
+    color: #334155;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .onboarding-detail-explainer p { margin: 0 0 6px; }
+  .onboarding-detail-explainer p:last-child { margin: 0; }
+  .onboarding-detail-empty {
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    padding: 18px;
+    color: #475569;
+    text-align: center;
+  }
+  .onboarding-account-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .onboarding-account-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+  }
+  .onboarding-account-name {
+    font-weight: 600;
+    color: #0f172a;
+  }
+  .onboarding-account-balance {
+    color: #334155;
+    font-variant-numeric: tabular-nums;
+  }
+  .onboarding-actions .btn-primary {
+    background: #2563eb;
+    color: #fff;
+    border: 1px solid #2563eb;
+  }
+  .onboarding-actions .btn-primary:hover { background: #1d4ed8; border-color: #1d4ed8; }
 </style>
