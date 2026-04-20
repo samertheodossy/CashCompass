@@ -1,3 +1,29 @@
+// --------------------------------------------------------------------------
+// Debug mode (single source of truth for the whole host dashboard).
+//
+// Flip `APP_DEBUG_MODE` to `true` to surface developer-only affordances
+// (e.g. the Next Actions "Why this cash amount?" liquidity breakdown). For
+// ad-hoc inspection without a code edit, append `?debug=1` to the deployed
+// web-app URL. Production users see a clean surface; this is a developer
+// aid, not a user-facing toggle.
+//
+// Keep this intentionally simple — no settings page, no persistence, no
+// per-surface fan-out. Renderers call `isDebugMode()` and branch.
+// --------------------------------------------------------------------------
+var APP_DEBUG_MODE = false;
+
+function isDebugMode() {
+  if (APP_DEBUG_MODE === true) return true;
+  try {
+    if (typeof window !== 'undefined' && window.location && window.location.search) {
+      // Accept `?debug=1` or `?debug=true`; anything else is falsy.
+      var q = window.location.search;
+      if (/[?&]debug=(1|true)\b/i.test(q)) return true;
+    }
+  } catch (_e) { /* fall through */ }
+  return false;
+}
+
 let bankCurrentData = null;
 let paymentPayees = [];
 let allDebtRows = [];

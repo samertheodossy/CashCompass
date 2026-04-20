@@ -1539,7 +1539,7 @@ function getInputBillsDueRows_(ss, today, tz) {
   };
 
   if (colMap.payee === -1 || colMap.dueDay === -1 || colMap.defaultAmount === -1 || colMap.active === -1) {
-    throw new Error('INPUT - Bills must contain Payee, Due Day, Default Amount, and Active headers.');
+    throw new Error('Bills sheet must contain Payee, Due Day, Default Amount, and Active headers.');
   }
 
   const rows = [];

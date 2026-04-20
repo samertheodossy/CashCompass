@@ -586,12 +586,12 @@ function validateNewHouseName_(raw) {
   const existingHouses = getHousesFromHouseValues_();
   for (let i = 0; i < existingHouses.length; i++) {
     if (existingHouses[i].toLowerCase() === name.toLowerCase()) {
-      throw new Error('A house named "' + existingHouses[i] + '" already exists on INPUT - House Values.');
+      throw new Error('A house named "' + existingHouses[i] + '" already exists.');
     }
   }
 
   if (houseExistsInHouseAssetsSheet_(name)) {
-    throw new Error('A house with that name already exists on SYS - House Assets.');
+    throw new Error('A house with that name already exists.');
   }
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -999,7 +999,7 @@ function addHouseFromDashboard(payload) {
   try {
     newHvRow = insertNewHouseHistoryRow_(hvSheet, block, houseName, loanAmountLeft);
   } catch (e) {
-    throw new Error('Could not insert INPUT - House Values row: ' + (e.message || e));
+    throw new Error('Could not insert House Values row: ' + (e.message || e));
   }
 
   // 2) Append the SYS - House Assets row. Roll back HV row on failure.
@@ -1007,7 +1007,7 @@ function addHouseFromDashboard(payload) {
     appendHouseAssetsRowForNewHouse_(haSheet, houseName, propertyType, loanAmountLeft, currentValue);
   } catch (e2) {
     hvSheet.deleteRow(newHvRow);
-    throw new Error('Could not add SYS - House Assets row (rolled back House Values row): ' +
+    throw new Error('Could not add House Assets row (rolled back House Values row): ' +
       (e2.message || e2));
   }
 
@@ -1077,11 +1077,11 @@ function addHouseFromDashboard(payload) {
     houseName: houseName,
     message:
       'Created house "' + houseName + '":\n' +
-      '  • INPUT - House Values' + (seededMonthLabel ? ' (' + seededMonthLabel + ' seeded)' : '') + '\n' +
-      '  • SYS - House Assets\n' +
+      '  • House Values updated' + (seededMonthLabel ? ' (' + seededMonthLabel + ' seeded)' : '') + '\n' +
+      '  • House asset recorded\n' +
       '  • ' + (sheetCreationInfo && sheetCreationInfo.created
-        ? 'HOUSES - ' + houseName + ' sheet created'
-        : 'HOUSES - ' + houseName + ' sheet already existed') + '\n' +
+        ? 'Expense sheet created'
+        : 'Expense sheet already existed') + '\n' +
       'Use Run Planner + Refresh Snapshot when you want projections and the overview snapshot updated.'
   };
 }
@@ -1114,7 +1114,7 @@ function deactivateHouseFromDashboard(payload) {
   //    year block they query.
   const hvUpdate = setHouseActiveInAllHouseValuesBlocks_(hvSheet, houseName, 'No');
   if (!hvUpdate.found) {
-    throw new Error('No rows found for "' + houseName + '" in INPUT - House Values.');
+    throw new Error('No rows found for "' + houseName + '" in House Values.');
   }
 
   // 2) Mirror write: SYS - House Assets carries one row per house. Writes

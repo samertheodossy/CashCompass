@@ -76,7 +76,7 @@ function loadDonationsSection() {
       if (!years.length) {
         const opt = document.createElement('option');
         opt.value = '';
-        opt.textContent = '— Add Year blocks on INPUT - Donation —';
+        opt.textContent = '— No tax years available —';
         sel.appendChild(opt);
       } else {
         years.forEach(function(y) {
@@ -130,7 +130,7 @@ function renderRecentDonations(rows) {
   var root = document.getElementById('don_recentList');
   if (!root) return;
   if (!rows || !rows.length) {
-    root.innerHTML = '<div class="muted">No donation rows found on INPUT - Donation yet.</div>';
+    root.innerHTML = '<div class="muted">No donations logged yet.</div>';
     return;
   }
   root.innerHTML = rows.map(function(r) {
@@ -182,7 +182,7 @@ function saveDonation() {
   paymentType = String(paymentType).trim();
 
   if (!taxYear) {
-    setStatus('donations_status', 'Select a tax year (add Year sections to INPUT - Donation if empty).', true);
+    setStatus('donations_status', 'Select a tax year (no tax years are available yet).', true);
     return;
   }
   if (!charity) {

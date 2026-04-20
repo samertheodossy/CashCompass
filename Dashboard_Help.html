@@ -518,16 +518,16 @@
         <ul class="help-list">
           <li><strong>Summary row</strong> — three figures:
             <ul class="help-list">
-              <li><strong>Cash to use</strong> — What's safely available right now. Sums <code>max(0, balance − minBuffer)</code> across eligible Bank Accounts (active, non-credit-card types like Cash / Checking / Savings, with a Use Policy of <strong>USE_FOR_BILLS</strong>, <strong>USE_FOR_DEBT</strong>, or <strong>USE_WITH_CAUTION</strong>). Accounts marked <strong>DO_NOT_TOUCH</strong>, credit cards, and inactive rows are excluded.</li>
+              <li><strong>Cash to use</strong> — What's safely available right now across eligible Bank Accounts, after each account's minimum buffer. Credit cards, accounts flagged do-not-touch, and inactive rows are excluded.</li>
               <li><strong>Due soon</strong> — Sum of every Urgent item (overdue + due in the next 7 days).</li>
-              <li><strong>Available after urgent</strong> — <strong>Cash to use</strong> minus <strong>Due soon</strong>. This is what Next Actions is willing to suggest moving beyond your must-pays.</li>
+              <li><strong>Available after urgent</strong> — <strong>Cash to use</strong> minus <strong>Due soon</strong>. This is what's left to suggest moving beyond your must-pays.</li>
             </ul>
           </li>
-          <li><strong>Urgent</strong> — Overdue items and anything due in the next 7 days across Bills, debt minimums, and Upcoming obligations. Sorted by overdue-first, then a blended score of due-date proximity + amount so large obligations (roof, solar, big tax payments) are never buried under tiny bills. If <strong>Cash to use</strong> is less than <strong>Due soon</strong>, a <em>Review cash gap</em> row appears at the top explaining the shortfall. The top obligations are shown individually; the remainder collapses into a single <em>Other bills due soon</em> row with a count and total so the visible amounts still reconcile with the summary.</li>
+          <li><strong>Urgent</strong> — Overdue items and anything due in the next 7 days across Bills, debt minimums, and Upcoming obligations. Overdue items come first; after that, larger near-term obligations (roof, solar, big tax payments) are ranked ahead of tiny bills so they are never buried. If <strong>Cash to use</strong> is less than <strong>Due soon</strong>, a <em>Review cash gap</em> row appears at the top explaining the shortfall. The top obligations are shown individually; the remainder collapses into a single <em>Other bills due soon</em> row with a count and total so the visible amounts still reconcile with the summary.</li>
           <li><strong>Recommended</strong> — Suggested next moves once Urgent is covered. Two kinds of suggestion:
             <ul class="help-list">
-              <li>Non-urgent Upcoming items due 8–30 days out, ranked by a blended score (earlier date, larger remaining amount). "Pay now to keep it out of the urgent window."</li>
-              <li>One <em>Apply $X to &lt;debt&gt;</em> suggestion, sized from a soft-capped slice of <strong>Available after urgent</strong> and hard-capped by the debt's remaining balance. The target and APR details are confirmed on Rolling Debt Payoff — Next Actions keeps the reason short ("Confirm in Rolling Debt Payoff") to avoid duplicating that surface's Focus-debt narrative.</li>
+              <li>Non-urgent Upcoming items due 8–30 days out, with earlier / larger items surfaced first. "Pay now to keep it out of the urgent window."</li>
+              <li>One <em>Apply $X to &lt;debt&gt;</em> suggestion, sized from a conservative slice of <strong>Available after urgent</strong> and capped at the debt's remaining balance. The target and APR details are confirmed on Rolling Debt Payoff — Next Actions keeps the reason short ("Confirm in Rolling Debt Payoff") to avoid duplicating that surface's Focus-debt narrative.</li>
             </ul>
           </li>
           <li><strong>Optimize</strong> — Sparse by design. Only appears when there is genuine optimization signal (e.g. extra debt acceleration when no spare cash is available right now). Usually empty. HELOC strategy is not surfaced here — it lives on the Rolling Debt Payoff "HELOC strategy" card.</li>
@@ -542,9 +542,6 @@
           <li><strong>Open Debts</strong> → Planning → Debts</li>
         </ul>
         <p class="muted">The <em>Review cash gap</em> row is informational and does not open anywhere — its reason line explains the shortfall.</p>
-
-        <h4>Why this cash amount?</h4>
-        <p>At the bottom of the panel, a collapsed <strong>Why this cash amount?</strong> disclosure shows the per-account breakdown behind <strong>Cash to use</strong> (balance, min buffer, usable, included/excluded with reason). Open it only when you want to audit the total; it stays out of the way by default.</p>
 
         <h4>Guardrails (what Next Actions will not do)</h4>
         <ul class="help-list">
@@ -563,14 +560,14 @@
 
         <h4>What it is</h4>
         <ul class="help-list">
-          <li>Reference view, <strong>not</strong> an action planner. Shows balances, minimums, APRs, and estimated payoff at current minimums.</li>
-          <li>For monthly action decisions, use the <strong>Rolling Debt Planner</strong> instead.</li>
+          <li>Read-only reference view of your debt structure: balances, minimums, APRs, and estimated payoff at current minimums.</li>
+          <li><strong>Not</strong> an action planner — no recommendations, no cash-flow notes, no decision content. For this month's action plan, use <strong>Rolling Debt Payoff</strong>. For what to do next across bills / upcoming / debts, start at <strong>Next Actions</strong>.</li>
         </ul>
 
         <h4>Data sources</h4>
         <ul class="help-list">
-          <li><strong>Balances and minimums</strong> — From <strong>INPUT - Debts</strong> (<strong>Active = Yes</strong> rows only — stop-tracked debts are hidden from the bar chart, table, totals, and "longest payoff" callout).</li>
-          <li><strong>CF paid</strong> — Sums <strong>Expense</strong> rows on <strong>INPUT - Cash Flow</strong> for the last two calendar years where the <strong>Payee</strong> matches the debt.</li>
+          <li><strong>Balances and minimums</strong> — From your <strong>Debts</strong> (active rows only — stop-tracked debts are hidden from the bar chart, table, and totals).</li>
+          <li><strong>CF paid</strong> — Sums expense rows on <strong>Cash Flow</strong> for the last two calendar years where the payee matches the debt.</li>
         </ul>
 
         <h4>Estimated payoff</h4>
@@ -580,8 +577,8 @@
           <li>If the minimum is not greater than monthly interest on a loan, payoff is shown as <strong>unavailable</strong>.</li>
         </ul>
 
-        <h4>Summary and notes</h4>
-        <p class="muted">The page’s summary/notes use <strong>SYS - Accounts</strong> cash and this month’s Cash Flow projection as descriptive context. Simulation / what-if is not part of this view.</p>
+        <h4>Summary</h4>
+        <p class="muted">The summary row shows only <strong>Total debt balance</strong> and <strong>Total monthly minimums</strong>. Decision-style context (safe-to-use cash, projected cash flow, highest-APR callouts, longest-payoff callouts) intentionally lives elsewhere — on Next Actions and Rolling Debt Payoff — so Debt Overview stays a pure reference view.</p>
       </section>
 
       <!-- ================================================================ -->
@@ -589,7 +586,7 @@
       <!-- ================================================================ -->
       <section id="help-rolling-debt-payoff" class="help-section">
         <h3>Rolling Debt Payoff</h3>
-        <p>This is the monthly <strong>decision engine</strong> — separate from Debt Overview (which is a read-only reference). The anchor month is the <strong>latest month column on INPUT - Cash Flow that has any Income/Expense data</strong> — not today’s calendar date.</p>
+        <p>This is the monthly <strong>decision engine</strong> — separate from Debt Overview (which is a read-only reference). The anchor month is the <strong>latest Cash Flow month that has any income or expense data</strong> — not today’s calendar date.</p>
 
         <h4>Standard view</h4>
         <p>The tab opens in a compact decision layout. Everything here is driven by the same planner JSON; the <strong>Show details</strong> toggle at the bottom expands the full forecasts, audits, and diagnostics.</p>
@@ -646,11 +643,11 @@
         </ul>
 
         <h4>Safe to use (liquidity model)</h4>
-        <p>Derived from <strong>SYS - Accounts</strong>. The legacy $100k / $100k hardcoded reserve and buffer constants are retained for audit only and no longer drive the numbers.</p>
+        <p>Derived from your Accounts. The legacy $100k / $100k hardcoded reserve and buffer constants are retained for audit only and no longer drive the numbers.</p>
         <ul class="help-list">
-          <li><strong>Total cash</strong> — Full liquid total from <strong>SYS - Accounts</strong> (all cash + checking + savings).</li>
-          <li><strong>Reserve</strong> — Sum of current balances for accounts flagged <code>DO_NOT_TOUCH</code>.</li>
-          <li><strong>Buffer</strong> — Sum of per-account <em>Min Buffer</em> for non-<code>DO_NOT_TOUCH</code>, policy-eligible accounts.</li>
+          <li><strong>Total cash</strong> — Full liquid total across your Accounts (all cash + checking + savings).</li>
+          <li><strong>Reserve</strong> — Sum of current balances for accounts flagged do-not-touch.</li>
+          <li><strong>Buffer</strong> — Sum of per-account minimum buffers for eligible, non-reserve accounts.</li>
           <li><strong>Cash available to use</strong> — Total cash − Reserve − Buffer, <em>before</em> subtracting holds.</li>
           <li><strong>Near-term planned hold</strong> — Cash reserved for upcoming planned expenses within 90 days. First driver behind <strong>Why not more?</strong>.</li>
           <li><strong>Unmapped card risk hold</strong> — Safety hold for card-funded planned expenses not yet mapped. Second <strong>Why not more?</strong> driver; when fed by Upcoming rows, the bullet exposes the same <strong>[View]</strong> action.</li>
@@ -663,7 +660,7 @@
         <h4>Show details — planner mechanics</h4>
         <p><strong>Show details</strong> expands the full output: cash-bridge audit, allocation audit (month 0), 12-month cash table, yearly projection, forecasts, diagnostics, and raw JSON. Click <strong>Hide details</strong> to collapse back.</p>
         <ul class="help-list">
-          <li><strong>Cash out vs minimums</strong> — Required cash out uses <strong>INPUT - Cash Flow</strong> expense lines. <strong>INPUT - Debts</strong> minimums appear as <em>reference only</em> in triggers and JSON; they are <strong>not</strong> double-counted on top of Cash Flow.</li>
+          <li><strong>Cash out vs minimums</strong> — Required cash out uses Cash Flow expense lines. Debt minimums appear as <em>reference only</em> in triggers and JSON; they are <strong>not</strong> double-counted on top of Cash Flow.</li>
           <li><strong>Income split</strong> — Stable income = <strong>Cisco</strong> (payee contains “Cisco”) plus the fixed recurring rent payees in product rules. Other income is variable; variable inflows use the <strong>50% / 30% / 20%</strong> split (debt / reserve+cash / flexible).</li>
           <li><strong>Forward months</strong> — After the anchor month, stable income uses trailing medians. Forward <strong>expenses</strong> use a <strong>recurring operating</strong> baseline only: expenses are bucketed (recurring operating / debt cleanup / irregular) and future months sum trailing medians (6 → 3 → 1 non-empty fallback per payee) for <strong>recurring_operating</strong> payees only — not total cash-out. High-volatility credit-card payees go to debt cleanup; taxes, repairs, and similar keywords go to irregular. Variable income in projections defaults to <strong>$0</strong> (conservative).</li>
           <li><strong>Debt ordering</strong> — Extra principal (after the reserve rule) goes to credit cards by <strong>highest APR first</strong>, then HELOC, Tahoe, San Diego, Missouri, and San Jose last. <strong>Loan Depot - San Jose House</strong> and any debt with APR ≤ <strong>2.25%</strong> get <code>LOW_RATE_KEEP_LAST</code> on the normalized debt row.</li>

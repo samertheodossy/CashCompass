@@ -168,12 +168,12 @@ function validateNewBankAccountName_(raw) {
   const existing = getBankAccountsFromHistory_();
   for (let i = 0; i < existing.length; i++) {
     if (existing[i] === name) {
-      throw new Error('An account with that name already exists on INPUT - Bank Accounts.');
+      throw new Error('An account with that name already exists.');
     }
   }
 
   if (accountExistsInAccountsSheet_(name)) {
-    throw new Error('An account with that name already exists on SYS - Accounts.');
+    throw new Error('An account with that name already exists.');
   }
 
   return name;
@@ -420,7 +420,7 @@ function addBankAccountFromDashboard(payload) {
     appendAccountsRowForNewBank_(accountsSheet, accountName, typeStr, policyStr, priorityNum);
   } catch (e2) {
     bankSheet.deleteRow(bankRowNum);
-    throw new Error('Could not add SYS - Accounts row (rolled back bank sheet row): ' + (e2.message || e2));
+    throw new Error('Could not add the account (rolled back the bank sheet row): ' + (e2.message || e2));
   }
 
   try {
@@ -479,7 +479,7 @@ function addBankAccountFromDashboard(payload) {
     message:
       'Created bank account "' +
       accountName +
-      '" on INPUT - Bank Accounts and SYS - Accounts.\n' +
+      '".\n' +
       'Use Run Planner + Refresh Snapshot when you want projections and the overview snapshot updated.'
   };
 }
@@ -972,7 +972,7 @@ function deactivateBankAccountFromDashboard(payload) {
   // 1) Canonical write across every year block.
   const bankUpdate = setBankAccountActiveInAllBlocks_(bankSheet, accountName, 'No');
   if (!bankUpdate.found) {
-    throw new Error('No rows found for "' + accountName + '" in INPUT - Bank Accounts.');
+    throw new Error('No rows found for "' + accountName + '" in Bank Accounts.');
   }
 
   // 2) Mirror write on SYS - Accounts.
@@ -1015,7 +1015,7 @@ function deactivateBankAccountFromDashboard(payload) {
 
   const message = alreadyInactive
     ? '"' + accountName + '" was already marked inactive. History remains.'
-    : 'Stopped tracking "' + accountName + '". History in INPUT - Bank Accounts and the SYS - Accounts row remain.';
+    : 'Stopped tracking "' + accountName + '". History is preserved.';
 
   return {
     ok: true,

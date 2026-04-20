@@ -78,7 +78,7 @@ Each action is a plain object with:
 **4. v1 priority buckets**
 - **Urgent** — overdue items, due soon, unpaid debt minimums for the current cycle, near-term obligations (next ~7 days), and any detected cash gap. Must be addressed before anything else is surfaced as money-movement.
 - **Recommended** — next best moves once urgent items are covered (typical case: extra payment toward the Rolling Debt Payoff focus debt; finishing a partially-paid Upcoming).
-- **Optimize** — optional improvements that only make sense once urgent items are safe (e.g. *review HELOC strategy* when the advisor flags a better draw posture).
+- **Optimize** — optional improvements that only make sense once urgent items are safe (sparse by design; usually empty). HELOC strategy is **not** surfaced here — it lives on the Rolling Debt Payoff *HELOC strategy* card.
 
 **5. v1 deterministic rules**
 - Build the **urgent obligations** list first, from Bills + Debts + Upcoming + near-term windows.
@@ -94,8 +94,9 @@ Each action is a plain object with:
 - `pay_upcoming` — Upcoming row with remaining > 0 and due within the urgent window.
 - `finish_upcoming` — partially-paid Upcoming row (remaining > 0, already touched) worth closing out.
 - `review_cash_gap` — informational; shown when obligations exceed cash-to-use.
-- `pay_extra_debt` — extra principal toward the Rolling Debt Payoff focus debt once urgent is clear.
-- `review_heloc_strategy` — informational; mirrors the existing HELOC advisor signal.
+- `pay_extra_debt` — extra principal toward the Rolling Debt Payoff focus debt once urgent is clear. Reason is intentionally short (*"Confirm in Rolling Debt Payoff"*) so Next Actions does not duplicate the Rolling Debt Payoff Focus-debt narrative.
+
+HELOC strategy is intentionally **not** a Next Actions action type. It lives on the Rolling Debt Payoff *HELOC strategy* card (single source of truth for HELOC recommendations).
 
 **7. Explainability rule**
 Every emitted action must be explainable in **one sentence** built entirely from current snapshot data (amount, due date, remaining balance, bucket rule, or Rolling Debt Payoff reason code). If an action can't be explained that way, it is not emitted.
@@ -147,7 +148,7 @@ Single object returned by the liquidity reader:
 - Never allow negative contributions from any single account (`max(0, …)` clamp).
 - Always respect `minBuffer` — buffer is sacred in v1.
 - No future-income assumptions, no pending transfers, no optimistic timing.
-- No credit lines, no investments, no HELOC draw counted as "cash_to_use" (HELOC is a separate advisor signal via `review_heloc_strategy`).
+- No credit lines, no investments, no HELOC draw counted as "cash_to_use". HELOC strategy is a separate surface (Rolling Debt Payoff *HELOC strategy* card), not a Next Actions signal.
 
 **8. Non-goals (v1)**
 - No forecasting (no 7-day / 30-day projection of cash).

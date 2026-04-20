@@ -4,9 +4,11 @@
  * Renders the prioritized Next Actions surface inside Planning:
  *   - Summary row (Cash to use, Due soon, Available after urgent)
  *   - Urgent / Recommended / Optimize buckets from `getNextActionsData()`
- *   - A collapsed "Why this cash amount?" disclosure backed by
- *     `getCashToUse()` so the user can see *why* the liquidity total is
- *     what it is without competing with the primary actions.
+ *   - (Debug mode only) A collapsed "Why this cash amount?" disclosure
+ *     backed by `getCashToUse()` so a developer can audit *why* the
+ *     liquidity total is what it is. Hidden from normal users — flip
+ *     `APP_DEBUG_MODE` (Dashboard_Script_Render.html) or use `?debug=1`
+ *     on the deployed URL to surface it.
  *
  * Scope today (kept tight — Next Actions only routes, it does not move
  * money):
@@ -63,9 +65,17 @@ function loadNextActions() {
   google.script.run
     .withSuccessHandler(function(payload) {
       renderNextActions_(payload);
-      // Secondary: liquidity details. Loaded independently so a details
-      // failure cannot hide the primary Next Actions output.
-      loadNextActionsLiquidityDetails_();
+      // Secondary (debug only): liquidity details. Loaded independently so
+      // a details failure cannot hide the primary Next Actions output.
+      // Gated behind `isDebugMode()` — the disclosure is a developer aid,
+      // not part of the default product surface.
+      if (typeof isDebugMode === 'function' && isDebugMode()) {
+        loadNextActionsLiquidityDetails_();
+      } else if (detailsWrap) {
+        // Defensive: ensure the slot is empty even if something earlier
+        // populated it during a session-lived debug-ON → debug-OFF flip.
+        detailsWrap.innerHTML = '';
+      }
     })
     .withFailureHandler(function(err) {
       if (mainWrap) mainWrap.innerHTML = '';
@@ -415,7 +425,9 @@ function renderNextActionsActionHtml_(action) {
   var dueStyle = 'font-size:11px;color:#64748b;margin-top:4px;';
   var reasonStyle = 'font-size:12px;color:#475569;margin-top:4px;line-height:1.4;';
 
-  var title = escapeHtmlNextActions_(action.title || action.actionType || '(untitled)');
+  // Title fallback is deliberately generic — never leak the internal
+  // `actionType` into user-facing copy if a backend row ever lacks `title`.
+  var title = escapeHtmlNextActions_(action.title || 'Next action');
   var reason = escapeHtmlNextActions_(action.reason || '');
 
   var amountNum = Number(action.amount);
@@ -493,13 +505,24 @@ function renderNextActionsActionHtml_(action) {
 /* =====================================================================
  * Secondary rendering — "Why this cash amount?" liquidity details
  *
- * Collapsed-by-default disclosure that explains how `Cash to use` is
- * computed (per-account balances, buffers, and include/exclude reasons).
- * Quietly secondary to the primary buckets above; exists so the user can
- * answer "why that number?" without leaving Next Actions.
+ * Debug-only. Collapsed-by-default disclosure that explains how
+ * `Cash to use` is computed (per-account balances, buffers, and
+ * include/exclude reasons). Exists so a developer can audit the total
+ * without leaving Next Actions. Hidden from normal users — see
+ * `APP_DEBUG_MODE` / `isDebugMode()` in Dashboard_Script_Render.html.
  * ===================================================================== */
 
 function loadNextActionsLiquidityDetails_() {
+  // Belt-and-suspenders: the caller in `loadNextActions()` already gates
+  // on `isDebugMode()`, but any future caller (or programmatic invocation)
+  // should see the same gate here so the disclosure cannot leak into the
+  // user surface by accident.
+  if (typeof isDebugMode === 'function' && !isDebugMode()) {
+    var wrap = document.getElementById('next_actions_liquidity_details');
+    if (wrap) wrap.innerHTML = '';
+    return;
+  }
+
   var detailsWrap = document.getElementById('next_actions_liquidity_details');
   if (!detailsWrap) return;
 

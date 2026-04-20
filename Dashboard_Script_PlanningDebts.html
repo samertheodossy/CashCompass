@@ -414,8 +414,8 @@ function stopTrackingDebt() {
   const confirmed = window.confirm(
     'Stop tracking "' + account + '"?\n\n' +
     'The debt will no longer appear in the Debt Account selector or planner ' +
-    'calculations. The INPUT - Debts row stays in place with all historical ' +
-    'fields so the account name stays reserved and Activity history remains.'
+    'calculations. History stays in place so the account name remains ' +
+    'reserved and past activity is preserved.'
   );
   if (!confirmed) return;
 

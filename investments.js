@@ -223,7 +223,7 @@ function updateInvestmentValueByDate(payload) {
 
   return {
     ok: true,
-    message: 'Investment value updated and SYS - Assets synced.'
+    message: 'Investment value updated.'
   };
 }
 
@@ -278,13 +278,13 @@ function getInvestmentsYearBlock_(sheet, year) {
   }
 
   if (yearRow === -1) {
-    throw new Error('Could not find Year block for ' + year + ' in INPUT - Investments.');
+    throw new Error('Could not find Year block for ' + year + ' in Investments.');
   }
 
   const headerRow = yearRow + 1;
   const headerName = String(sheet.getRange(headerRow, 1).getDisplayValue() || '').trim();
   if (headerName !== 'Account Name') {
-    throw new Error('Expected Account Name header row for Year ' + year + ' in INPUT - Investments.');
+    throw new Error('Expected Account Name header row for Year ' + year + ' in Investments.');
   }
 
   const dataStartRow = headerRow + 1;
@@ -335,11 +335,11 @@ function getAssetsHeaderMap_(sheet) {
   const activeColZero = headers.indexOf('Active');
 
   if (nameColZero === -1) {
-    throw new Error('SYS - Assets must contain Account Name.');
+    throw new Error('Assets sheet must contain Account Name.');
   }
 
   if (balanceColZero === -1) {
-    throw new Error('SYS - Assets must contain Current Balance.');
+    throw new Error('Assets sheet must contain Current Balance.');
   }
 
   return {
@@ -495,12 +495,12 @@ function validateNewInvestmentAccountName_(raw) {
   const existing = getInvestmentsFromHistory_();
   for (let i = 0; i < existing.length; i++) {
     if (existing[i].toLowerCase() === name.toLowerCase()) {
-      throw new Error('An investment account named "' + existing[i] + '" already exists on INPUT - Investments.');
+      throw new Error('An investment account named "' + existing[i] + '" already exists.');
     }
   }
 
   if (assetExistsInAssetsSheet_(name)) {
-    throw new Error('An investment account with that name already exists on SYS - Assets.');
+    throw new Error('An investment account with that name already exists.');
   }
 
   return name;
@@ -716,7 +716,7 @@ function addInvestmentAccountFromDashboard(payload) {
   try {
     invRowNum = insertNewInvestmentHistoryRow_(invSheet, block, accountName, typeStr);
   } catch (e) {
-    throw new Error('Could not insert INPUT - Investments row: ' + (e.message || e));
+    throw new Error('Could not insert investment row: ' + (e.message || e));
   }
 
   try {
@@ -728,7 +728,7 @@ function addInvestmentAccountFromDashboard(payload) {
     );
   } catch (e2) {
     invSheet.deleteRow(invRowNum);
-    throw new Error('Could not add SYS - Assets row (rolled back INPUT row): ' + (e2.message || e2));
+    throw new Error('Could not add asset record (rolled back the investment row): ' + (e2.message || e2));
   }
 
   try {
@@ -770,8 +770,7 @@ function addInvestmentAccountFromDashboard(payload) {
     ok: true,
     accountName: accountName,
     message:
-      'Created investment account "' + accountName +
-      '" on INPUT - Investments and SYS - Assets.'
+      'Created investment account "' + accountName + '".'
   };
 }
 
@@ -867,7 +866,7 @@ function deactivateInvestmentAccountFromDashboard(payload) {
   // 1) Canonical write across every year block.
   const invUpdate = setInvestmentActiveInAllBlocks_(invSheet, accountName, 'No');
   if (!invUpdate.found) {
-    throw new Error('No rows found for "' + accountName + '" in INPUT - Investments.');
+    throw new Error('No rows found for "' + accountName + '" in Investments.');
   }
 
   // 2) Mirror write on SYS - Assets.
@@ -910,7 +909,7 @@ function deactivateInvestmentAccountFromDashboard(payload) {
 
   const message = alreadyInactive
     ? '"' + accountName + '" was already marked inactive. History remains.'
-    : 'Stopped tracking "' + accountName + '". History in INPUT - Investments and the SYS - Assets row remain.';
+    : 'Stopped tracking "' + accountName + '". History is preserved.';
 
   return {
     ok: true,

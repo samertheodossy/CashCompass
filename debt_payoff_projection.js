@@ -216,7 +216,7 @@ function buildDebtPayoffRecommendations_(ctx) {
       fmtCurrency_(usable.totalBuffers) +
       ' in protected buffers, and ' +
       fmtCurrency_(u) +
-      ' safe to use before planned expenses (SYS - Accounts).'
+      ' safe to use before planned expenses.'
   );
 
   if (minTot > 0) {
@@ -277,7 +277,7 @@ function buildDebtPayoffRecommendations_(ctx) {
 
   if (yearsLabel) {
     lines.push(
-      'CF paid sums Expense rows on INPUT - Cash Flow for ' +
+      'CF paid sums expense rows on Cash Flow for ' +
         yearsLabel +
         ' where Payee matches the debt name (aliases apply).'
     );

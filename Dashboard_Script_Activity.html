@@ -240,7 +240,7 @@ function renderActivityTable_(rows, options) {
         }
         return (
           '<button type="button" class="btn-activity-delete btn-activity-delete--disabled" disabled ' +
-          'title="Remove is only enabled for Donation entries for now. Other types: delete the row on the LOG - Activity sheet, or wait until undo is implemented (see TODO).">' +
+          'title="Remove is only enabled for Donation entries for now. Other types: wait until undo is implemented.">' +
           'Remove</button>'
         );
       })() +
@@ -321,7 +321,7 @@ function activityDeleteClick_(ev) {
   if (!isFinite(row) || row < 2) return;
   if (
     !confirm(
-      'Remove this donation from LOG - Activity?\n\nIf INPUT - Donation still matches (charity, date, amount, tax year, payment type, comments), that sheet row is deleted too. Otherwise only the log line is removed.'
+      'Remove this donation from Activity?\n\nIf the matching donation record still exists (same charity, date, amount, tax year, payment type, comments), it is deleted too. Otherwise only the log line is removed.'
     )
   ) {
     return;
@@ -345,17 +345,17 @@ function activityDeleteClick_(ev) {
         var u = res.activityUndo || '';
         if (u === 'donation_sheet_deleted') {
           statusEl.textContent =
-            'Removed log entry and deleted the matching row on INPUT - Donation.';
+            'Removed log entry and deleted the matching donation record.';
         } else if (u === 'donation_skipped_mismatch') {
           statusEl.textContent =
-            'Log entry removed. INPUT - Donation was left unchanged (row no longer matches this log).';
+            'Log entry removed. Donation record was left unchanged (no longer matches this log).';
         } else if (u === 'donation_skipped_error') {
           statusEl.textContent =
             'Log entry removed.' +
-            (res.activityUndoDetail ? ' Donation sheet: ' + res.activityUndoDetail : '');
+            (res.activityUndoDetail ? ' Donation record: ' + res.activityUndoDetail : '');
         } else if (u === 'donation_skipped_no_undo') {
           statusEl.textContent =
-            'Log entry removed. Donation sheet was not changed (older log without row reference, or could not verify).';
+            'Log entry removed. Donation record was not changed (older log without a row reference, or could not verify).';
         } else {
           statusEl.textContent = '';
         }
@@ -419,7 +419,7 @@ function loadActivitySection() {
       window.__activityRows = rows;
       window.__activitySort = { key: 'loggedAt', dir: 'desc' };
 
-      var scanNote = res.scannedRows ? 'Scanned ' + res.scannedRows + ' row(s) in LOG - Activity.' : '';
+      var scanNote = res.scannedRows ? 'Scanned ' + res.scannedRows + ' activity entries.' : '';
       var truncNote = res.truncated ? ' Showing the first ' + (res.matchLimit || 500) + ' matches; narrow filters for older events.' : '';
 
       if (summaryEl) {

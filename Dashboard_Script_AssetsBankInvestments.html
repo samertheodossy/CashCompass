@@ -333,8 +333,7 @@ function stopTrackingBank() {
   const confirmed = window.confirm(
     'Stop tracking "' + account + '"?\n\n' +
     'The account will no longer appear in the Bank Account selector. ' +
-    'All history in INPUT - Bank Accounts and the SYS - Accounts row stay in ' +
-    'place. You can still view past values for reporting.'
+    'All history is preserved — you can still view past values for reporting.'
   );
   if (!confirmed) return;
 
@@ -651,8 +650,7 @@ function stopTrackingInvestment() {
   const confirmed = window.confirm(
     'Stop tracking "' + account + '"?\n\n' +
     'The account will no longer appear in the Investment Account selector. ' +
-    'All history in INPUT - Investments and the SYS - Assets row stay in ' +
-    'place. You can still view past values for reporting.'
+    'All history is preserved — you can still view past values for reporting.'
   );
   if (!confirmed) return;
 

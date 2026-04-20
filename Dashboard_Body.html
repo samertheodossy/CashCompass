@@ -290,7 +290,7 @@
             <button onclick="createHouse()">Create house</button>
           </div>
           <div class="info muted">
-            <p style="margin-top:0;">Adds a row to <strong>INPUT - House Values</strong> (current year block), a row to <strong>SYS - House Assets</strong>, and creates a <strong>HOUSES - {House}</strong> sheet with the canonical expense-tracking headers.</p>
+            <p style="margin-top:0;">Creates the house in the current year's House Values block and sets up a matching expense sheet with the standard expense-tracking columns.</p>
             <p>Valuation date is optional. When provided it must fall in the current year and the Current value is seeded into that month. Property type can be chosen from existing houses or typed as a new value.</p>
           </div>
         </div>
@@ -356,13 +356,13 @@
             <select id="bank_add_type">
               <option value="">— Select type —</option>
             </select>
-            <div class="muted" style="margin-top:4px;font-size:12px;">Choose from existing bank account types in SYS - Accounts.</div>
+            <div class="muted" style="margin-top:4px;font-size:12px;">Choose from your existing bank account types.</div>
             <label>Use policy</label>
             <input type="text" id="bank_add_policy" maxlength="120" list="bank_add_policy_list" autocomplete="off">
             <datalist id="bank_add_policy_list"></datalist>
             <label>Priority</label>
             <input type="number" id="bank_add_priority" min="1" max="99" step="1" value="9" inputmode="numeric">
-            <div class="muted" style="margin-top:4px;font-size:12px;">Lower number = used earlier within its Use policy bucket. Default 9.</div>
+            <div class="muted" style="margin-top:4px;font-size:12px;">Lower number = used earlier within the same Use policy group. Default 9.</div>
             <label>Opening balance date (optional)</label>
             <input type="date" id="bank_add_opening_date">
             <label>Opening balance amount (optional)</label>
@@ -378,7 +378,7 @@
             <button onclick="createBankAccount()">Create account</button>
           </div>
           <div class="info muted">
-            <p style="margin-top:0;">Adds a row to <strong>INPUT - Bank Accounts</strong> (current year block) and <strong>SYS - Accounts</strong>. The workbook must already have a <strong>Year</strong> block for the current calendar year.</p>
+            <p style="margin-top:0;">Creates the account in the current year's Bank Accounts block. A Year block for the current calendar year must already exist.</p>
             <p>If you use an opening balance, the date must fall in that same year. Type and Use policy can be chosen from existing accounts or typed as new values.</p>
           </div>
         </div>
@@ -414,7 +414,7 @@
           <div class="info">
             <div><strong>Selected month:</strong> <span id="inv_selectedMonth" class="muted">—</span></div>
             <div><strong>Stored value for selected month:</strong> <span id="inv_selectedMonthValue" class="muted">—</span></div>
-            <div><strong>Current SYS - Assets balance:</strong> <span id="inv_currentBalance" class="muted">—</span></div>
+            <div><strong>Current balance:</strong> <span id="inv_currentBalance" class="muted">—</span></div>
             <div><strong>Type:</strong> <span id="inv_type" class="muted">—</span></div>
             <div class="house-value-delta-sep" aria-hidden="true"></div>
             <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="inv_deltaPriorMonth" class="muted">—</span></div>
@@ -432,7 +432,7 @@
             <select id="inv_add_type">
               <option value="">— Select type —</option>
             </select>
-            <div class="muted" style="margin-top:4px;font-size:12px;">Choose from existing investment types in SYS - Assets.</div>
+            <div class="muted" style="margin-top:4px;font-size:12px;">Choose from your existing investment types.</div>
             <label>Starting value (optional)</label>
             <input type="text" id="inv_add_starting_value" inputmode="decimal" onfocus="currencyFocus('inv_add_starting_value')" onblur="currencyBlur('inv_add_starting_value')">
             <label>Starting value date (optional)</label>
@@ -440,7 +440,7 @@
             <button onclick="createInvestmentAccount()">Create account</button>
           </div>
           <div class="info muted">
-            <p style="margin-top:0;">Adds a row to <strong>INPUT - Investments</strong> (current year block) and a mirror row to <strong>SYS - Assets</strong>. The workbook must already have a <strong>Year</strong> block for the current calendar year.</p>
+            <p style="margin-top:0;">Creates the account in the current year's Investments block. A Year block for the current calendar year must already exist.</p>
             <p>If you provide a starting value, the date must fall in that same year and the amount is seeded into the matching month. Type can be chosen from existing accounts or typed as a new value.</p>
           </div>
         </div>
@@ -564,7 +564,7 @@
     <div id="donations" class="panel">
       <div class="panel-head">
         <h2>Donations</h2>
-        <div class="updated">Log giving to <strong>INPUT - Donation</strong> · Sheet data: <span id="don_recent_updated">—</span></div>
+        <div class="updated">Log charitable giving · Data updated: <span id="don_recent_updated">—</span></div>
       </div>
       <div class="grid-2">
         <div>
@@ -670,14 +670,14 @@
       <section id="bills_view_manage" class="bills-section bills-section--management bills-view" role="tabpanel" aria-labelledby="bills_view_tab_manage" style="margin:0;display:none;">
         <div class="bills-management-head" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between;margin:0 0 12px 0;">
           <div>
-            <p class="muted" style="margin:0;">Every recurring bill currently tracked on <strong>INPUT - Bills</strong>.</p>
+            <p class="muted" style="margin:0;">Every recurring bill you currently track.</p>
           </div>
           <button type="button" id="bills_add_toggle_btn" class="small-btn primary" onclick="toggleBillsAddForm()" aria-expanded="false" aria-controls="bills_add_wrap">+ Add bill</button>
         </div>
 
         <div id="bills_add_wrap" class="bills-add-wrap" style="display:none;margin:0 0 20px 0;padding:14px 16px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;">
           <div class="card-title" style="margin-top:0;">Add a recurring bill</div>
-          <p class="muted" style="margin:0 0 10px 0;">Saves to <strong>INPUT - Bills</strong>. Required fields are marked with <span aria-label="required" style="color:#b91c1c;">*</span>.</p>
+          <p class="muted" style="margin:0 0 10px 0;">Required fields are marked with <span aria-label="required" style="color:#b91c1c;">*</span>.</p>
           <div class="grid-2">
             <div>
               <label>Payee <span aria-label="required" style="color:#b91c1c;">*</span></label>
@@ -921,7 +921,7 @@
     <div id="propertyPerformance" class="panel">
       <div class="panel-head">
         <h2>Property performance</h2>
-        <div class="updated">SYS - House Assets + Cash Flow rent + HOUSES expenses</div>
+        <div class="updated">Houses + rental income + expense sheets</div>
       </div>
 
       <div class="grid-2">
@@ -1065,8 +1065,8 @@
             <button onclick="createDebtAccount()">Create debt</button>
           </div>
           <div class="info muted">
-            <p style="margin-top:0;">Adds a row to <strong>INPUT - Debts</strong> with <strong>Active = Yes</strong>, inserted directly above the <strong>TOTAL DEBT</strong> summary. All fields are required — enter <strong>0</strong> where a value does not apply (for example, Credit limit on a Loan or HELOC).</p>
-            <p>Also seeds a matching <strong>Expense</strong> row on the current year's <strong>INPUT - Cash Flow</strong> (blank month cells) so the new debt shows up in <strong>Bills Due</strong> and <strong>Upcoming</strong> right away. Flow Source is inferred from Type — Credit Card → <strong>CREDIT_CARD</strong>, everything else → <strong>CASH</strong>. If an Expense row for the same payee already exists it is left alone.</p>
+            <p style="margin-top:0;">Creates the debt as active. All fields are required — enter <strong>0</strong> where a value does not apply (for example, Credit limit on a Loan or HELOC).</p>
+            <p>A matching expense row is also seeded on the current year's Cash Flow so the new debt shows up in <strong>Bills Due</strong> and <strong>Upcoming</strong> right away. Flow Source is inferred from Type — Credit Card pays on a card, everything else pays from cash. If an expense row for the same payee already exists it is left alone.</p>
             <p>Existing debts keep working. Stop tracking uses the Active column — rows are never deleted so history and the account name stay reserved.</p>
           </div>
         </div>
@@ -1280,7 +1280,7 @@
       <div class="rolling-dp-controls-row">
         <div class="rolling-dp-controls-left">
           <div class="segmented-control planner-mode-segmented" role="tablist" aria-label="Rolling Debt Payoff view">
-            <button type="button" class="seg-planner active" role="tab" aria-selected="true" data-presentation="Standard" onclick="setRollingDebtPayoffSelectedPresentation('Standard')" title="Clean operator-facing dashboard. Toggle Advanced to see audit panels.">Standard</button>
+            <button type="button" class="seg-planner active" role="tab" aria-selected="true" data-presentation="Standard" onclick="setRollingDebtPayoffSelectedPresentation('Standard')" title="Clean decision view. Toggle Show details for audit panels.">Standard</button>
             <button type="button" class="seg-planner" role="tab" aria-selected="false" data-presentation="Automation" onclick="setRollingDebtPayoffSelectedPresentation('Automation')" title="Plain-text machine-readable blocks (for scripts / LLMs)">Automation</button>
           </div>
           <div id="rolling_debt_payoff_strategy_wrap" class="rolling-dp-strategy-wrap" style="display:none;">
@@ -1323,11 +1323,12 @@
 
       Primary Planning entry point. Renders `getNextActionsData()` as a
       compact summary plus Urgent / Recommended / Optimize buckets, and
-      routes into the deeper tools via `targetTab`. A collapsed
-      "Why this cash amount?" disclosure below exposes the per-account
-      `getCashToUse()` breakdown without competing with the primary
-      actions. Read-only by design — the single payment path remains
-      Cash Flow → Quick Add.
+      routes into the deeper tools via `targetTab`. The
+      `#next_actions_liquidity_details` slot below is a *debug-only*
+      "Why this cash amount?" disclosure (`getCashToUse()` breakdown) —
+      hidden from normal users and only rendered when `isDebugMode()` is
+      true (see Dashboard_Script_Render.html). Read-only by design — the
+      single payment path remains Cash Flow → Quick Add.
     -->
     <div id="nextActions" class="panel active">
       <div class="panel-head">

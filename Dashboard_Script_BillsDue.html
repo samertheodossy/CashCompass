@@ -271,7 +271,7 @@ function stopTrackingBillFromDashboard(billKey) {
   const payeeLabel = bill.payee || 'this bill';
   const confirmed = window.confirm(
     'Stop tracking "' + payeeLabel + '"?\n\n' +
-    'It will no longer appear in Bills, but the row stays in INPUT - Bills for history.'
+    'It will no longer appear in Bills. History is preserved.'
   );
   if (!confirmed) return;
 
@@ -326,7 +326,7 @@ function renderRecurringBillsList_(elementId, rows, emptyMsg) {
     return (
       '<div class="change-item bill-card-compact">' +
         '<div class="change-label">' + escapeHtml(r.name || 'Recurring Bill') + '</div>' +
-        '<div class="change-meta">Recurring · no due date in INPUT - Bills</div>' +
+        '<div class="change-meta">Recurring · no due date set</div>' +
         '<div class="bill-card-actions">' +
           '<button class="small-btn primary" onclick="payRecurringBill(\'' + escapeJs(key) + '\')">Pay</button>' +
           '<button class="small-btn" onclick="skipRecurringBill(\'' + escapeJs(r.id || '') + '\')">Skip</button>' +

@@ -83,7 +83,7 @@ The full spec lives in `PROJECT_CONTEXT.md → Decision Layer → Next Actions v
   - `urgent` = overdue / due soon / unpaid minimums / near-term obligations / cash gap.
   - `recommended` = next best moves once urgent is covered.
   - `optimize` = optional improvements only after urgent is safe.
-- **Action types (v1)** — `pay_bill`, `pay_debt_minimum`, `pay_upcoming`, `finish_upcoming`, `review_cash_gap`, `pay_extra_debt`, `review_heloc_strategy`.
+- **Action types (v1)** — `pay_bill`, `pay_debt_minimum`, `pay_upcoming`, `finish_upcoming`, `review_cash_gap`, `pay_extra_debt`. HELOC strategy is intentionally **not** a Next Actions action type; it lives on the Rolling Debt Payoff *HELOC strategy* card.
 - **Data sources (no new ones)** — `INPUT - Bills` (active), `INPUT - Upcoming Expenses` (remaining balance only), `INPUT - Debts` (active), bank / usable cash via the existing liquidity model (`SYS - Accounts` → Safe-to-use / Available Now / Min Buffer), and the existing `getRollingDebtPayoffPlan` output. No engine re-run.
 - **Deterministic rules** — build urgent obligations first; compare `sum(urgent)` vs cash-to-use; emit `review_cash_gap` at the top of `urgent` when obligations exceed cash and suppress `recommended` money-movement until resolved; the preferred extra-debt target is the Rolling Debt Payoff focus debt.
 - **Explainability rule** — every emitted action must be describable in **one sentence** from the current snapshot (amount / due date / remaining balance / bucket rule / Rolling-Debt-Payoff reason code). If not, it's not emitted.
@@ -101,7 +101,7 @@ Foundation for Next Actions v1. Full spec lives in `PROJECT_CONTEXT.md → Decis
 - **Eligibility** — active accounts only (shared inactive rule); exclude explicit restricted / do-not-use accounts; v1 Use Policy is a binary include/exclude (finer policies stay for Phase 2 Cash Strategy).
 - **Output** — `{ cashToUse, accounts: [{ name, balance, minBuffer, usable, included, excludedReason? }] }`. The per-account array is part of the contract so the UI can show the breakdown and any excluded-reason.
 - **Consumers in Next Actions** — compares `cashToUse` vs `sum(urgent)`, drives `review_cash_gap`, and feeds leftover to `pay_extra_debt`.
-- **Guardrails** — never negative per account; buffers are sacred; no future-income, pending-transfer, or timing assumptions; no credit / HELOC / investments (HELOC is a separate advisor signal via `review_heloc_strategy`).
+- **Guardrails** — never negative per account; buffers are sacred; no future-income, pending-transfer, or timing assumptions; no credit / HELOC / investments. HELOC strategy lives on the Rolling Debt Payoff *HELOC strategy* card, not in Next Actions.
 - **Non-goals (v1)** — no forecasting, no time-based modeling, no cross-account optimization.
 
 Ship ordering held: the reader landed **before** the Next Actions aggregator and is called from it directly. Exposed as a single server entry point returning the output object above; no changes to Bank Account editors or the existing liquidity consumers (Rolling Debt Payoff keeps its richer model unchanged).

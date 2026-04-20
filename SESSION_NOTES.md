@@ -1,3 +1,259 @@
+## Recent — App-wide user-facing text cleanup (extends Planning pass)
+
+Follow-up to the Planning-surface text cleanup below. Applies the same rule — never expose internal sheet names, schema field names, or technical terms in user-facing copy — to every other surface in the dashboard: Cash Flow (Quick add, Upcoming, Donations, Bills), Assets (Bank Accounts, Investments, House Values), Properties (Performance, House Expenses), Planning → Debts add/update flows, Activity, and the planner-driven strings that bubble up into Rolling Debt Payoff. No backend logic, ranking, or routing changed — text / label / status / confirm dialog / empty-state changes only.
+
+### What changed
+
+- **Add-panel descriptions — `Dashboard_Body.html`**
+  - Houses, Bank Accounts, Investments, Debts, and Bills Add-new info blocks rewritten to drop `INPUT - House Values` / `INPUT - Bank Accounts` / `SYS - Accounts` / `INPUT - Investments` / `SYS - Assets` / `INPUT - Debts` / `INPUT - Cash Flow` / `INPUT - Bills` and describe behavior in product terms (e.g. *"Creates the account in the current year's Bank Accounts block"*).
+  - Investment Update card label `Current SYS - Assets balance:` → `Current balance:`.
+  - Dropdown help copy for bank `Type` and investment `Type` no longer references `SYS - Accounts` / `SYS - Assets`.
+  - Donations panel subtitle `Log giving to INPUT - Donation …` → `Log charitable giving …`.
+  - Property performance subtitle `SYS - House Assets + Cash Flow rent + HOUSES expenses` → `Houses + rental income + expense sheets`.
+- **Assets → Bank / Investments — `Dashboard_Script_AssetsBankInvestments.html`**
+  - Stop-tracking confirm dialogs for bank and investment accounts no longer mention `INPUT - Bank Accounts`, `SYS - Accounts`, `INPUT - Investments`, `SYS - Assets`. Reworded to: *"All history is preserved — you can still view past values for reporting."*
+- **Cash Flow → Bills — `Dashboard_Script_BillsDue.html`**
+  - Stop-tracking confirm: `"the row stays in INPUT - Bills for history."` → `"History is preserved."`
+  - Recurring (no-due-date) card caption: `"Recurring · no due date in INPUT - Bills"` → `"Recurring · no due date set"`.
+- **Cash Flow → Donations — `Dashboard_Script_Donations.html`**
+  - Tax-year dropdown empty-state: `"— Add Year blocks on INPUT - Donation —"` → `"— No tax years available —"`.
+  - Recent donations empty-state: `"No donation rows found on INPUT - Donation yet."` → `"No donations logged yet."`
+  - Tax-year validation: `"add Year sections to INPUT - Donation if empty"` → `"no tax years are available yet"`.
+- **Activity — `Dashboard_Script_Activity.html`**
+  - Delete-confirm for donation log lines: `"LOG - Activity"` / `"INPUT - Donation"` replaced with `"Activity"` / `"matching donation record"`.
+  - Post-delete status messages rephrased in the same direction (`"deleted the matching donation record"`, `"Donation record was left unchanged"`, etc.).
+  - Disabled-row tooltip no longer says *"delete the row on the LOG - Activity sheet"*.
+  - Scan footer: `"Scanned N row(s) in LOG - Activity."` → `"Scanned N activity entries."`
+- **Properties → Performance — `Dashboard_Script_PropertyPerformance.html`**
+  - Empty-state: `"No houses in SYS - House Assets."` → `"No houses to show."`
+- **Backend success / error messages surfaced in the UI**
+  - `activity_log.js`: `"LOG - Activity not found."` → `"Activity log not found."`; `"No rows in LOG - Activity yet."` → `"No activity recorded yet."`; delete-guard copy drops the *"delete other lines directly on the LOG - Activity sheet"* suffix.
+  - `debts.js`: schema errors (`INPUT - Debts is empty` / `has no header row` / `must contain …`), duplicate-name message, stop-tracking message, Cash Flow seed warning/success, and "field not found" all rephrased without sheet-name references (e.g. `"Debts list is empty."`, `"Created debt \"X\".\nAdded a matching expense row to Cash Flow so Bills Due and Upcoming see it right away."`).
+  - `bank_accounts.js`: duplicate-name, rollback error, create-success, stop-tracking, and missing-rows messages no longer mention `INPUT - Bank Accounts` / `SYS - Accounts`.
+  - `investments.js`: success message (`"Investment value updated."`), year-block / schema throws, duplicate-name, insert/rollback throws, create-success, stop-tracking, and missing-rows messages cleaned the same way.
+  - `house_values.js`: duplicate-name, insert/rollback throws, create-success bullet list (now *"House Values updated"* / *"House asset recorded"* / *"Expense sheet created/already existed"*), and missing-rows message cleaned.
+  - `bills.js`: schema throws (`Bills sheet has no header row` / `is missing required header …`) cleaned.
+  - `dashboard_data.js`: schema throw (`Bills sheet must contain Payee, Due Day, Default Amount, and Active headers.`) cleaned.
+  - `quick_add_payment.js`: debt-balance change note no longer appends `" (INPUT - Debts)."`.
+- **Planner output strings surfaced in Rolling Debt Payoff — `rolling_debt_payoff.js`**
+  - Key warnings, context notes, info triggers, required-action `sheet` fields, execution long-term review hint, required-payments summary, and HELOC strict-gate fail reasons no longer leak `INPUT - Cash Flow` / `INPUT - Debts` / `INPUT - Upcoming Expenses` / `SYS - Accounts`.
+  - `planner_core.js` `reserve_source` metadata: `"DO_NOT_TOUCH accounts (SYS - Accounts current balances)"` → `"Do-not-touch accounts (current balances)"`, so the liquidity body in the React dashboard reads in plain English.
+- **Dead-but-present Debt Overview `recommendations` payload — `debt_payoff_projection.js`**
+  - Cash snapshot line no longer appends `"(SYS - Accounts)."`.
+  - CF-paid disclosure line no longer says `"Expense rows on INPUT - Cash Flow"`; now `"expense rows on Cash Flow"`.
+
+### Terms removed / replaced (user-facing only)
+
+- `INPUT - Bank Accounts` / `SYS - Accounts` → *Bank Accounts* / *Accounts* / removed
+- `INPUT - Investments` / `SYS - Assets` → *Investments* / *Assets* / removed
+- `INPUT - House Values` / `SYS - House Assets` / `HOUSES - *` → *House Values* / *house asset* / *expense sheet*
+- `INPUT - Bills` → *Bills* / removed
+- `INPUT - Debts` → *Debts* / removed
+- `INPUT - Cash Flow` / `INPUT - Cash Flow YYYY` → *Cash Flow* / *Cash Flow YYYY*
+- `INPUT - Donation` → *donation record* / removed
+- `INPUT - Upcoming Expenses` → *Upcoming*
+- `LOG - Activity` → *Activity* / *activity log*
+- `DO_NOT_TOUCH accounts (SYS - Accounts current balances)` → *Do-not-touch accounts (current balances)*
+
+### How descriptions were simplified
+
+- Add-new info blocks dropped the "adds a row to sheet X" phrasing and describe what the user actually achieves in-product (*"Creates the account …"*, *"Creates the house in the current year's House Values block"*).
+- Confirm dialogs for "stop tracking" were unified across bank / investment / bill / debt: all collapse to *"History is preserved"* / *"All history is preserved — you can still view past values for reporting."* instead of naming every sheet that stays in place.
+- Error / schema messages no longer require the reader to know which sheet / column is involved; they reference the concept (*"Bills sheet"*, *"Debts sheet"*, *"Cash Flow"*).
+- Rolling Debt Payoff caution / context / info strings were pruned to the behavior sentence and dropped the *"verify INPUT - Cash Flow Type column"*-style pointers that leaked schema details into the plan.
+
+### Deliberately out of scope
+
+- `Dashboard_Help.html` sections outside the Planning help (the Houses / Bank / Investments / Cash Flow / Bills / Donations / Activity / Sheets references, and the `debt_add` / `debt_deactivate` event descriptions) still spell out sheet names. These are documentation, not the dashboard's active UI — they describe how the workbook is structured on purpose. A separate, deliberate help rewrite should decide whether to keep that reference intact or abstract it.
+- `home.js` (HOME sheet generator) still groups workbook tabs by `INPUT - ` / `SYS - ` / `HOUSES - ` / `CARS - ` / `LOANS - ` prefix. That's the whole purpose of the HOME tab; renaming it would break the feature.
+- Sheet-name constants in `config.js`, `donations.js`, `activity_log.js`, `upcoming_expenses.js`, `retirement.js` are internal identifiers that match real sheet names — required for reads/writes to work.
+- Developer-only audit tables inside the Rolling Debt Payoff host `rollingThisMonthPlanHtml_` / `rollingRecurringBaselineAuditHtml_` branches (emitted only when `include_debug_details` is true) still mention sheet names. Same rationale as before — debug surfaces, not user-facing UI.
+- React bundle (`RollingDebtPayoffDashboardBundle.html`) wasn't rebuilt in this pass; the planner-string cleanups above reach it through the JSON payload, but any static strings hard-coded inside the React source would need a bundle rebuild. None of the strings touched here live inside the bundle.
+
+### Files touched
+
+Frontend:
+- `Dashboard_Body.html`
+- `Dashboard_Script_AssetsBankInvestments.html`
+- `Dashboard_Script_BillsDue.html`
+- `Dashboard_Script_Donations.html`
+- `Dashboard_Script_Activity.html`
+- `Dashboard_Script_PropertyPerformance.html`
+
+Backend:
+- `activity_log.js`
+- `debts.js`
+- `bank_accounts.js`
+- `investments.js`
+- `house_values.js`
+- `bills.js`
+- `dashboard_data.js`
+- `quick_add_payment.js`
+- `rolling_debt_payoff.js`
+- `planner_core.js`
+- `debt_payoff_projection.js`
+
+Docs:
+- `SESSION_NOTES.md`
+
+### Scope held
+
+- No backend logic changes. Ranking, routing, payment flows, balance math, and planner decisions all untouched — only the strings they emit.
+- No layout / feature changes. Every dialog, card, panel, and tab still looks the same; only the copy inside changed.
+- Sheet-name *constants* (the identifiers the code uses to read / write actual tabs) were left intact; only the strings shown to users were rephrased.
+
+---
+
+## Recent — Planning-surface user-facing text cleanup
+
+Presentation-only pass to remove internal sheet names, technical variable names, and verbose reasoning from the three Planning surfaces. No ranking, routing, or backend logic changed — only user-visible strings.
+
+### What changed
+
+- **Next Actions reason strings — `next_actions.js`**
+  - Cash-gap reason no longer leaks the internal `cash_to_use` identifier. Wording now reads `"Urgent obligations total $X but only $Y is available — short by $Z."`
+  - `nextActionsReasonForBillUrgent_()`: non-debt `"Bill due within 7 days."` → `"Due soon."` (overdue bill unchanged).
+  - `nextActionsReasonForUpcomingUrgent_()`: `"Upcoming obligation due within 7 days."` → `"Due soon."`; `"Overdue upcoming obligation."` → `"Overdue."`
+  - Debt-minimum and extra-debt reason copy was already short after the earlier overlap cleanup; left untouched.
+- **Next Actions card title fallback — `Dashboard_Script_PlanningNextActions.html`**
+  - Removed the `action.actionType` fallback on the card title. If a row ever arrives without a `title`, the card shows a generic `Next action` label instead of leaking the backend `actionType` enum.
+- **Debt Overview empty-state — `Dashboard_Script_PlanningDebtPayoff.html`**
+  - `"Update INPUT - Debts or refresh after you pay something down."` → `"Update your debts or refresh after you pay something down."`
+- **Planning → Debts stop-tracking confirm — `Dashboard_Script_PlanningDebts.html`**
+  - Confirm dialog no longer mentions `INPUT - Debts`. Reworded as `"History stays in place so the account name remains reserved and past activity is preserved."`
+- **Rolling Debt Payoff Standard-tab tooltip — `Dashboard_Body.html`**
+  - `"Clean operator-facing dashboard. Toggle Advanced to see audit panels."` → `"Clean decision view. Toggle Show details for audit panels."`
+- **Help copy — `Dashboard_Help.html`**
+  - `#help-next-actions`: replaced the `USE_FOR_BILLS / USE_FOR_DEBT / USE_WITH_CAUTION / DO_NOT_TOUCH` policy-code enumeration and the `max(0, balance − minBuffer)` formula snippet on the **Cash to use** bullet with a plain-English sentence. Reworded the **Urgent** and **Recommended** bullets to drop *"blended score"* in favor of *"earlier / larger items surfaced first"* and *"a conservative slice of ..."* (same behavior, readable language).
+  - `#help-payoff-path`: `INPUT - Debts` → `Debts`; `INPUT - Cash Flow` → `Cash Flow` on the **Data sources** bullets.
+  - `#help-rolling-debt-payoff`: anchor-month intro now reads `"latest Cash Flow month that has any income or expense data"` (was `INPUT - Cash Flow ... Income/Expense data`). **Safe to use** bullets no longer reference `SYS - Accounts` or the `DO_NOT_TOUCH` code. **Cash out vs minimums** bullet replaces `INPUT - Cash Flow` / `INPUT - Debts` with `Cash Flow` / `Debts`.
+  - `#help-sheets` reference section (*Sheet names (quick reference)*) intentionally left unchanged — it exists precisely to document the underlying workbook model for power users; not a Planning surface.
+
+### Terms removed / replaced (user-facing only)
+
+- `INPUT - Debts` → **Debts** (or the surrounding sentence reworded)
+- `INPUT - Cash Flow` → **Cash Flow**
+- `SYS - Accounts` → **Accounts**
+- `INPUT - Upcoming Expenses` → **Upcoming** (where it was in user-facing copy)
+- `cash_to_use` → `"available cash"` in the cash-gap reason line
+- `actionType` (card-title fallback) → `"Next action"`
+- `USE_FOR_BILLS`, `USE_FOR_DEBT`, `USE_WITH_CAUTION` enum values → dropped from help; replaced with `"eligible Bank Accounts"`
+- `DO_NOT_TOUCH` → `"accounts flagged do-not-touch"` / `"reserve"`
+- `max(0, balance − minBuffer)` formula snippet → `"after each account's minimum buffer"`
+- `"blended score of due-date proximity + amount"` → `"earlier / larger items surfaced first"`
+- `"Bill due within 7 days."` / `"Upcoming obligation due within 7 days."` → `"Due soon."`
+- `"Overdue upcoming obligation."` → `"Overdue."`
+
+### How descriptions were simplified
+
+- Urgent reason lines are now 1–3 words (`"Overdue."`, `"Due soon."`, `"Overdue bill."`, `"Overdue debt minimum."`, `"Debt minimum due soon."`). Amount and due date are already rendered as dedicated fields on the card, so the reason only has to answer *"why is this urgent?"*.
+- Cash-gap row's reason is still a complete sentence because it needs to explain the shortfall, but it no longer names the internal `cash_to_use` variable.
+- Help bullets trade formulas / enum codes for the concept they encode (`"minimum buffer"`, `"do-not-touch"`, `"eligible Bank Accounts"`), so the same guardrails are conveyed without requiring the reader to decode variable names.
+
+### Deliberately out of scope (flagged for a future pass)
+
+Sheet names still appear in user-visible copy on surfaces outside the three Planning tabs: Cash Flow → Bills Due (`Dashboard_Script_BillsDue.html`), Cash Flow → Donations (`Dashboard_Script_Donations.html`), Cash Flow → Activity (`Dashboard_Script_Activity.html`), Assets → Bank / Investments (`Dashboard_Script_AssetsBankInvestments.html`), Properties → Performance (`Dashboard_Script_PropertyPerformance.html`), Properties → House Expenses, and the detailed dialogs under Assets / Debts. These weren't touched because the user request scoped consistency to *Next Actions / Debt Overview / Rolling Debt Payoff*. Same approach will apply when those surfaces get a cleanup pass.
+
+Rolling Debt Payoff host-side developer tables (`rollingThisMonthPlanHtml_`, `rollingRecurringBaselineAuditHtml_`) still reference `INPUT - Upcoming Expenses` / `INPUT - Cash Flow` / `SYS - Accounts` — these live inside the `dbg` branch (reachable only via the programmatic `includeDebug=true` path) and are developer surfaces, so they remain as-is.
+
+### Files touched
+
+- `next_actions.js`
+- `Dashboard_Script_PlanningNextActions.html`
+- `Dashboard_Script_PlanningDebtPayoff.html`
+- `Dashboard_Script_PlanningDebts.html`
+- `Dashboard_Body.html`
+- `Dashboard_Help.html`
+- `SESSION_NOTES.md`
+
+### Scope held
+
+- No backend changes to `getCashToUse()`, `getNextActionsData()`, ranking, routing, or payment flows.
+- No layout / feature changes. Cards still show title, amount, due date, and a 1-line reason.
+- Help structure and anchor IDs unchanged.
+
+---
+
+## Recent — Debug-mode flag + Next Actions debug gating
+
+Small, presentation-only pass. Introduced a single app-wide debug flag and used it to hide the one remaining developer surface on the default Next Actions view. No backend logic changed (`getCashToUse()`, `getNextActionsData()`, routing, and Quick Add flows are untouched).
+
+### What changed
+
+- **Debug-mode flag (single source of truth) — `Dashboard_Script_Render.html`**
+  - Added `APP_DEBUG_MODE` (default `false`) and a `isDebugMode()` helper at the top of the host bootstrap script.
+  - `isDebugMode()` returns `true` when `APP_DEBUG_MODE === true` **or** the deployed web-app URL carries `?debug=1` / `?debug=true`. No persistence, no settings page, no per-surface fan-out — renderers just branch on the helper.
+- **Next Actions — `Dashboard_Script_PlanningNextActions.html`**
+  - The *"Why this cash amount?"* per-account `getCashToUse()` breakdown is now gated behind `isDebugMode()`. In the default (debug OFF) state, `loadNextActions()` skips the secondary `getCashToUse()` fetch and clears `#next_actions_liquidity_details` so the slot stays empty. In debug ON, the disclosure renders exactly as before.
+  - `loadNextActionsLiquidityDetails_()` also re-checks `isDebugMode()` defensively — any future / programmatic caller hits the same gate so the table cannot leak into the user surface by accident.
+  - File header + section comment updated to name this as a developer aid, not a user-facing feature.
+- **Host markup — `Dashboard_Body.html`**
+  - Comment on the `#nextActions` panel now explicitly labels `#next_actions_liquidity_details` as a *debug-only* slot.
+- **Help copy — `Dashboard_Help.html`**
+  - Removed the *"Why this cash amount?"* subsection from `#help-next-actions`. The disclosure is no longer part of the default product surface, so the help paragraph describing it would be misleading for normal users. Guardrails / summary / open-targets copy is unchanged.
+
+### Where debug mode is defined
+
+- `APP_DEBUG_MODE` constant + `isDebugMode()` helper in `Dashboard_Script_Render.html` (loaded first by `PlannerDashboardWeb.html`, so every downstream script sees the helper).
+
+### Which UI elements are hidden when debug is OFF
+
+- Next Actions → collapsed *"Why this cash amount?"* disclosure (per-account balance / min buffer / usable / included / excluded-reason table backed by `getCashToUse()`).
+
+### Remaining developer-only surfaces intentionally still visible
+
+- Rolling Debt Payoff React dashboard still renders the *"Show full policy bridge (debug)"* button and the *"Display plan validator (debug)"* section inside its `Show details` disclosure. Both live in the prebuilt React bundle (`components/RollingDebtPayoffDashboard.tsx` → `RollingDebtPayoffDashboardBundle.html`), so removing the `(debug)` suffixes or gating them on `isDebugMode()` requires a bundle rebuild (`npm run build:rolling-dashboard`). Deferred to a follow-up pass; they remain behind a collapsed *Show details* toggle today, so they don't bleed into the default surface.
+- Rolling Debt Payoff host script still supports a programmatic `includeDebug=true` path that emits a `DEBUG DETAILS` outer wrapper (`Dashboard_Script_RollingDebtPayoff.html`). The user-facing checkbox that enabled it was already removed, so this path is reachable only by developers calling the setter directly. Left as-is.
+
+### Scope held
+
+- No backend changes (`cash_to_use.js`, `next_actions.js`, `getNextActionsData()`, ranking, routing, payment flows untouched).
+- No new settings page, no profile/config surface, no layout redesign, no feature additions.
+- No changes to the primary Next Actions UI: summary cards, Urgent / Recommended / Optimize buckets, and the `Open X →` navigation links render exactly as before.
+
+### Files touched
+
+- `Dashboard_Script_Render.html`
+- `Dashboard_Script_PlanningNextActions.html`
+- `Dashboard_Body.html`
+- `Dashboard_Help.html`
+- `SESSION_NOTES.md` (this entry)
+
+---
+
+## Recent — Help + docs catch-up for Planning surface overlap cleanup
+
+Docs-only follow-up to the overlap cleanup. The overlap commit updated Help's Next Actions section inline but left a few current-state descriptions describing the pre-cleanup world. Swept them so the spec, the backlog entry, and the user-facing Help all match what the code actually emits.
+
+### What changed
+
+- **`Dashboard_Help.html` → Debt Overview (`#help-payoff-path`)**
+  - Dropped the *"longest payoff" callout* phrase from the stop-tracked-rows bullet (the callout no longer exists).
+  - Rewrote **What it is** to explicitly position Debt Overview as a read-only reference with no recommendations / no cash-flow notes / no decision content, and point users to Rolling Debt Payoff for this month's action plan and Next Actions for cross-surface prioritization.
+  - Renamed **Summary and notes** → **Summary**, trimmed to describe only *Total debt balance* + *Total monthly minimums*, and explicitly called out that decision-style context (safe-to-use, projected cash flow, highest-APR / longest-payoff callouts) lives on Next Actions / Rolling Debt Payoff by design.
+- **`PROJECT_CONTEXT.md` → Next Actions v1**
+  - Priority buckets: replaced the *"review HELOC strategy"* example in Optimize with a note that HELOC strategy is **not** surfaced on Next Actions (it lives on the Rolling Debt Payoff *HELOC strategy* card).
+  - v1 action types: removed `review_heloc_strategy`; added a short `pay_extra_debt` clarifier (*reason kept short — "Confirm in Rolling Debt Payoff" — to avoid duplicating the Focus-debt narrative*) and a single line stating HELOC strategy is intentionally not a Next Actions action type.
+  - `cash_to_use` guardrail: rephrased the HELOC line so it no longer references the deleted `review_heloc_strategy` signal.
+- **`ENHANCEMENTS.md` → Next Actions v1 contract**
+  - Action-types list: dropped `review_heloc_strategy`; same single-line HELOC-ownership clarifier.
+  - Liquidity-model guardrail: rephrased the HELOC line in the same way.
+
+### Scope held
+
+- No code changes. No backend contract changes (the action-type list reflects what `getNextActionsData()` has emitted since the overlap cleanup commit).
+- Historical SESSION_NOTES entries that describe the prior (pre-cleanup) state were **not** edited — they are point-in-time records and stay as written.
+- No changes to Rolling Debt Payoff help content, Next Actions help content beyond what shipped in the overlap commit, or any other Planning surface.
+
+### Files touched
+
+- `Dashboard_Help.html`
+- `PROJECT_CONTEXT.md`
+- `ENHANCEMENTS.md`
+- `SESSION_NOTES.md` (this entry)
+
+---
+
 ## Recent — Planning surface overlap cleanup
 
 Tightened the boundaries between the three Planning surfaces so each owns a distinct role and the app stops repeating itself. Minimal code edits, no backend logic changes, no UI redesign, no layout changes.

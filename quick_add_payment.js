@@ -354,7 +354,7 @@ function quickAddPayment(payload) {
       fmtCurrency_(debtBalanceNote.previousBalance) +
       ' → ' +
       fmtCurrency_(debtBalanceNote.newBalance) +
-      ' (INPUT - Debts).';
+      '.';
   }
 
   return {

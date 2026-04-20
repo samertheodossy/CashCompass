@@ -635,7 +635,7 @@ function buildAccountCashAvailabilityModel_(accounts, globalHolds) {
     calculated_buffer: calculatedBuffer,
     reserve_account_count: reserveAccountCount,
     buffer_account_count: bufferAccountCount,
-    reserve_source: 'DO_NOT_TOUCH accounts (SYS - Accounts current balances)',
+    reserve_source: 'Do-not-touch accounts (current balances)',
     buffer_source: 'per-account Min Buffer (non-DO_NOT_TOUCH policy-eligible accounts)',
     deployable_max_calculated: deployableMaxCalculated,
     reserve_hold: reserve,

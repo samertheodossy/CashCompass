@@ -1128,7 +1128,7 @@ function buildRollingPlannedExpenseImpactModel_(anchorDate, tz, debts, aliasMap)
     } else if (horizon === 'long_term') {
       execTreatMidLong = 'Future watch item; not subtracted from deployable cash today.';
     } else {
-      execTreatMidLong = 'Review due date and funding in INPUT - Upcoming Expenses.';
+      execTreatMidLong = 'Review due date and funding in Upcoming.';
     }
 
     out.display_lines.push({
@@ -2978,7 +2978,7 @@ function getRollingDebtPayoffPlan(options) {
   }
   if (minTot > 0.005 && (Math.abs(fwdStable) < 0.005 || Math.abs(fwdExpPos) < 0.005)) {
     keyWarnings.push(
-      'Debt minimums are non-zero but forward stable income or forward expenses are ~0 — verify INPUT - Cash Flow Type column (Income/Expense) and payee names.'
+      'Debt minimums are non-zero but forward stable income or forward expenses are ~0 — verify Cash Flow Type column (Income/Expense) and payee names.'
     );
   }
   keyWarnings.push(
@@ -2998,7 +2998,7 @@ function getRollingDebtPayoffPlan(options) {
   const plannedExpenseModel = buildRollingPlannedExpenseImpactModel_(anchorDate, tz, debts, aliasMap);
   if (plannedExpenseModel.has_mid_term) {
     keyWarnings.push(
-      'Upcoming planned expenses (INPUT - Upcoming Expenses, due within 90 days after anchor month-end) may reduce available cash in future months.'
+      'Upcoming planned expenses (due within 90 days after anchor month-end) may reduce available cash in future months.'
     );
   }
   if (plannedExpenseModel.has_unmapped_near_term_card) {
@@ -3225,7 +3225,7 @@ function getRollingDebtPayoffPlan(options) {
   );
   if (plannedExpenseModel.has_mid_term) {
     thisMonthPlan.context_notes = (thisMonthPlan.context_notes || []).concat([
-      'Mid-term planned expenses are due within 90 days after anchor month-end (INPUT - Upcoming Expenses) — they may reduce available cash for debt extras in upcoming months.'
+      'Mid-term planned expenses are due within 90 days after anchor month-end — they may reduce available cash for debt extras in upcoming months.'
     ]);
   }
   if (plannedExpenseModel.has_unmapped_near_term_card) {
@@ -4689,7 +4689,7 @@ function rollingHelocStrictExecutionPasses_(opts) {
     fail.push('ending cash is below reserve plus protected buffer');
   }
   if (!opts.capReached) fail.push('monthly cash deployment cap not fully used');
-  if (!opts.helocRefSim) fail.push('no HELOC line in INPUT - Debts');
+  if (!opts.helocRefSim) fail.push('no HELOC recorded in Debts');
   if (!opts.topCard) fail.push('no qualifying high-APR credit card with a balance');
   if (opts.plannedNearTermCardWithin30) {
     fail.push('card-funded planned expense due within 30 days of anchor month-end (bias against HELOC)');
@@ -4836,13 +4836,13 @@ function buildRollingMonthlyActionPlan_(next12, opts) {
 
     if (idx === 0 && row.planned_unmapped_near_term_card) {
       required.push(
-        'Map each near-term card-funded planned expense to a specific credit card in INPUT - Upcoming Expenses; until then it is held against deployable cash as cash risk (not free capacity).'
+        'Map each near-term card-funded planned expense to a specific credit card in Upcoming; until then it is held against deployable cash as cash risk (not free capacity).'
       );
       addItem(
         'required',
-        'Map planned card expense to a target credit card (sheet update)',
-        'Manual / sheet',
-        'INPUT - Upcoming Expenses',
+        'Map planned card expense to a target credit card',
+        'Manual update',
+        'Upcoming',
         0,
         'Unmapped items reduce extra-payment capacity like a liquidity hold until mapped.'
       );
@@ -6767,7 +6767,7 @@ function buildRollingTriggers_(history, debts, anchorNorm, ccMeta, sdSeries) {
     level: 'INFO',
     code: 'DEBT_MINS_REFERENCE',
     message:
-      'Sum of active minimum payments (INPUT - Debts): ' +
+      'Sum of active minimum payments: ' +
       fmtCurrency_(minTot) +
       ' — context only; Cash Flow drives realized cash out.'
   });
@@ -8196,7 +8196,7 @@ function buildThisMonthPlan_(row0, keyWarnings, reserve, planInvalid, lumpDebt, 
         ? 'Optional only with manual approval (strict gates passed in model)'
         : 'No',
     required_payments_summary:
-      'All contractual minimums on active debts that do not already show a payment in the anchor INPUT - Cash Flow month.',
+      'All contractual minimums on active debts that do not already show a payment in the anchor Cash Flow month.',
     recommended_extra_payments:
       belowReserve || execTotalNowPlan <= 0.005
         ? 'None beyond minimums until liquidity improves (executable-now total is $0).'

@@ -153,9 +153,9 @@ function getNextActionsData() {
       reason:
         'Urgent obligations total ' +
         nextActionsFmtMoney_(urgentTotal) +
-        ' but cash_to_use is only ' +
+        ' but only ' +
         nextActionsFmtMoney_(cashToUse) +
-        ' — short by ' +
+        ' is available — short by ' +
         nextActionsFmtMoney_(gap) +
         '.',
       amount: gap,
@@ -344,18 +344,16 @@ function nextActionsBillRowToItem_(r, isOverdue) {
 
 // Reasons intentionally skip the amount and due date — both are already
 // rendered as dedicated fields on the card, so the reason line only needs
-// to add the "why it's urgent" context.
+// to add the "why it's urgent" context in one short phrase.
 function nextActionsReasonForBillUrgent_(r, isOverdue, isDebtMin) {
   if (isDebtMin) {
     return isOverdue ? 'Overdue debt minimum.' : 'Debt minimum due soon.';
   }
-  return isOverdue ? 'Overdue bill.' : 'Bill due within 7 days.';
+  return isOverdue ? 'Overdue bill.' : 'Due soon.';
 }
 
 function nextActionsReasonForUpcomingUrgent_(row, isOverdue) {
-  return isOverdue
-    ? 'Overdue upcoming obligation.'
-    : 'Upcoming obligation due within 7 days.';
+  return isOverdue ? 'Overdue.' : 'Due soon.';
 }
 
 /**

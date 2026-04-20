@@ -162,7 +162,7 @@ function addBillFromDashboard(payload) {
 
   var headerDisplay = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0] || [];
   if (!headerDisplay || !headerDisplay.length) {
-    throw new Error('INPUT - Bills has no header row.');
+    throw new Error('Bills sheet has no header row.');
   }
 
   // Case-insensitive header map. Real-world INPUT - Bills sheets are sometimes
@@ -186,7 +186,7 @@ function addBillFromDashboard(payload) {
   var requiredHeaders = ['Payee', 'Due Day', 'Default Amount', 'Active'];
   for (var h = 0; h < requiredHeaders.length; h++) {
     if (headerIndex_(requiredHeaders[h]) === -1) {
-      throw new Error('INPUT - Bills is missing required header: ' + requiredHeaders[h] + '.');
+      throw new Error('Bills sheet is missing required header: ' + requiredHeaders[h] + '.');
     }
   }
 
@@ -354,10 +354,10 @@ function deactivateBillFromDashboard(payload) {
   }
 
   if (!Object.prototype.hasOwnProperty.call(headerMap, 'Payee')) {
-    throw new Error('INPUT - Bills is missing required header: Payee.');
+    throw new Error('Bills sheet is missing required header: Payee.');
   }
   if (!Object.prototype.hasOwnProperty.call(headerMap, 'Active')) {
-    throw new Error('INPUT - Bills is missing required header: Active.');
+    throw new Error('Bills sheet is missing required header: Active.');
   }
 
   var rowDisplay = sheet

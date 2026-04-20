@@ -225,7 +225,7 @@ function deleteActivityLogRow(row1Based) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sh = ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
     if (!sh) {
-      return { ok: false, error: 'LOG - Activity not found.' };
+      return { ok: false, error: 'Activity log not found.' };
     }
     var last = sh.getLastRow();
     if (row > last) {
@@ -238,7 +238,7 @@ function deleteActivityLogRow(row1Based) {
       return {
         ok: false,
         error:
-          'Remove from the dashboard is only enabled for Donation rows for now (other event types need safe undo before we enable them). You can delete other lines directly on the LOG - Activity sheet if needed.'
+          'Remove from the dashboard is only enabled for Donation rows for now (other event types need safe undo before we enable them).'
       };
     }
 
@@ -604,7 +604,7 @@ function getActivityDashboardData(filters) {
         kinds: [],
         scannedRows: 0,
         truncated: false,
-        message: 'No rows in LOG - Activity yet.'
+        message: 'No activity recorded yet.'
       };
     }
 

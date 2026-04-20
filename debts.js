@@ -132,7 +132,7 @@ function getDebtFieldValue(accountName, fieldName) {
   const values = sheet.getDataRange().getValues();
   const display = sheet.getDataRange().getDisplayValues();
 
-  if (display.length < 2) throw new Error('INPUT - Debts is empty.');
+  if (display.length < 2) throw new Error('Debts list is empty.');
 
   const headerMap = getDebtsHeaderMap_(sheet);
   const fieldColZero = getRequiredDebtFieldColZero_(sheet, fieldName);
@@ -163,7 +163,7 @@ function updateDebtField(payload) {
   const sheet = getSheet_(ss, 'DEBTS');
 
   const display = sheet.getDataRange().getDisplayValues();
-  if (display.length < 2) throw new Error('INPUT - Debts is empty.');
+  if (display.length < 2) throw new Error('Debts list is empty.');
 
   const headerMap = getDebtsHeaderMap_(sheet);
   const targetRow = findDebtRow_(sheet, accountName);
@@ -319,7 +319,7 @@ function validateNewDebtAccountName_(raw) {
   const existing = getAllDebtAccountNamesIncludingInactive_();
   for (let i = 0; i < existing.length; i++) {
     if (existing[i].toLowerCase() === name.toLowerCase()) {
-      throw new Error('A debt with that name already exists on INPUT - Debts.');
+      throw new Error('A debt with that name already exists.');
     }
   }
 
@@ -411,7 +411,7 @@ function addDebtFromDashboard(payload) {
 
   const headerDisplay = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0] || [];
   const numCols = headerDisplay.length;
-  if (!numCols) throw new Error('INPUT - Debts has no header row.');
+  if (!numCols) throw new Error('Debts sheet has no header row.');
 
   const row = new Array(numCols);
   for (let c = 0; c < numCols; c++) row[c] = '';
@@ -509,13 +509,13 @@ function addDebtFromDashboard(payload) {
     const cfSheet = tryGetCashFlowSheet_(ss, currentYear);
     if (!cfSheet) {
       cashFlowSeedWarning =
-        'INPUT - Cash Flow ' + currentYear + ' tab not found — skipped Cash Flow seed. Bills Due will pick the debt up once the year tab exists and has an Expense row with Payee="' + accountName + '".';
+        'Cash Flow ' + currentYear + ' not found — skipped Cash Flow seed. Bills Due will pick the debt up once a Cash Flow ' + currentYear + ' exists and has an expense row for "' + accountName + '".';
     } else {
       const existing = findCashFlowRowByTypeAndPayee_(cfSheet, 'Expense', accountName);
       if (existing) {
         cashFlowRowSeeded = false;
         cashFlowSeedWarning =
-          'An Expense row for "' + accountName + '" already exists on INPUT - Cash Flow ' + currentYear + ' — left untouched.';
+          'An expense row for "' + accountName + '" already exists on Cash Flow ' + currentYear + ' — left untouched.';
       } else {
         const inferredFlowSource = isDebtCreditCardType_(typeStr) ? 'CREDIT_CARD' : 'CASH';
         insertCashFlowRow_(cfSheet, 'Expense', accountName, inferredFlowSource);
@@ -561,10 +561,10 @@ function addDebtFromDashboard(payload) {
   }
 
   let message =
-    'Created debt "' + accountName + '" on INPUT - Debts.';
+    'Created debt "' + accountName + '".';
   if (cashFlowRowSeeded) {
     message +=
-      '\nSeeded an Expense row on INPUT - Cash Flow so Bills Due and Upcoming see it right away.';
+      '\nAdded a matching expense row to Cash Flow so Bills Due and Upcoming see it right away.';
   } else if (cashFlowSeedWarning) {
     message += '\n' + cashFlowSeedWarning;
   }
@@ -661,7 +661,7 @@ function deactivateDebtFromDashboard(payload) {
 
   const message = alreadyInactive
     ? '"' + accountName + '" was already marked inactive. History remains.'
-    : 'Stopped tracking "' + accountName + '". History in INPUT - Debts remains.';
+    : 'Stopped tracking "' + accountName + '". History is preserved.';
 
   return {
     ok: true,
@@ -689,8 +689,8 @@ function getDebtsHeaderMap_(sheet) {
   const pctAvailColZero = headers.indexOf('Acct PCT Avail');
   const activeColZero = headers.indexOf('Active');
 
-  if (nameColZero === -1) throw new Error('INPUT - Debts must contain Account Name.');
-  if (typeColZero === -1) throw new Error('INPUT - Debts must contain Type.');
+  if (nameColZero === -1) throw new Error('Debts sheet must contain Account Name.');
+  if (typeColZero === -1) throw new Error('Debts sheet must contain Type.');
 
   return {
     nameColZero: nameColZero,
@@ -790,7 +790,7 @@ function getRequiredDebtFieldColZero_(sheet, fieldName) {
   const headers = sheet.getDataRange().getDisplayValues()[0] || [];
   const colZero = headers.indexOf(fieldName);
   if (colZero === -1) {
-    throw new Error('Field not found in INPUT - Debts: ' + fieldName);
+    throw new Error('Field not found: ' + fieldName);
   }
   return colZero;
 }
