@@ -1813,6 +1813,31 @@
     color: #334155;
     font-variant-numeric: tabular-nums;
   }
+  /*
+   * Debt row variant. Re-uses .onboarding-account-row for the card
+   * frame and .onboarding-account-name for the label, but needs a
+   * three-column layout (name / balance / min-payment) instead of the
+   * two-column account layout. A responsive grid keeps the row legible
+   * on narrow viewports without overriding the shared row chrome.
+   */
+  .onboarding-debt-row {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+    align-items: baseline;
+    gap: 12px;
+  }
+  .onboarding-debt-balance,
+  .onboarding-debt-minpay {
+    color: #334155;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.95rem;
+  }
+  @media (max-width: 640px) {
+    .onboarding-debt-row {
+      grid-template-columns: 1fr;
+      gap: 4px;
+    }
+  }
   .onboarding-actions .btn-primary {
     background: #2563eb;
     color: #fff;

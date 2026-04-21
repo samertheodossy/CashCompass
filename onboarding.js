@@ -810,6 +810,203 @@ function getOnboardingBankAccountsFromDashboard(mode) {
 }
 
 /**
+ * Debts detail view for the onboarding Debts step.
+ *
+ * Read-only. Uses the shared resolver so TEST mode stays isolated to
+ * TEST - INPUT - Debts. Skips the reserved TOTAL DEBT summary row and
+ * any rows flagged explicitly inactive, matching the rest of the app's
+ * readers. Does NOT touch planning outputs or activity — this is
+ * pure inspection.
+ *
+ * Returns a flat shape the client can render without further parsing:
+ *   {
+ *     mode, sheetName, sheetExists,
+ *     debts: [ { name, balance, minPayment, type, hasBalance, hasMinPayment } ],
+ *     status,            // 'complete' | 'partial' | 'missing'
+ *     statusNote,
+ *     testBanner
+ *   }
+ */
+function getOnboardingDebtsFromDashboard(mode) {
+  var ctxMode = normalizeOnboardingMode_(mode);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetName = resolveOnboardingSheetName_(ctxMode, 'DEBTS');
+  var sheet = ss.getSheetByName(sheetName);
+
+  var base = {
+    mode: ctxMode,
+    sheetName: sheetName,
+    sheetExists: !!sheet,
+    debts: [],
+    status: 'missing',
+    statusNote: '',
+    testBanner: ctxMode === 'test' ? 'TEST MODE — using TEST sheets only' : ''
+  };
+
+  if (!sheet) {
+    base.statusNote = 'Debts sheet not found.';
+    return base;
+  }
+
+  var display;
+  try {
+    display = sheet.getDataRange().getDisplayValues();
+  } catch (e) {
+    base.statusNote = 'Could not read Debts sheet.';
+    return base;
+  }
+  if (display.length < 2) {
+    base.statusNote = 'Sheet exists but has no rows yet.';
+    return base;
+  }
+
+  var headerMap = buildHeaderIndex_(display[0]);
+  var nameIdx = headerIndexCI_(headerMap, 'Account Name');
+  var typeIdx = headerIndexCI_(headerMap, 'Type');
+  var balanceIdx = headerIndexCI_(headerMap, 'Account Balance');
+  var minPayIdx = headerIndexCI_(headerMap, 'Minimum Payment');
+  var activeIdx = headerIndexCI_(headerMap, 'Active');
+
+  if (nameIdx === -1) {
+    base.statusNote = 'Debts sheet is missing the Account Name column.';
+    return base;
+  }
+
+  var complete = 0;
+  var partial = 0;
+  var debts = [];
+  for (var r = 1; r < display.length; r++) {
+    var name = String(display[r][nameIdx] || '').trim();
+    if (!name) continue;
+    // Reserved summary row used on INPUT - Debts; never surface it as
+    // an account to the user.
+    if (name.toLowerCase() === 'total debt') continue;
+    if (activeIdx !== -1) {
+      var act = String(display[r][activeIdx] || '').trim();
+      if (act && normalizeYesNo_(act) === 'no') continue;
+    }
+
+    var balanceRaw = balanceIdx !== -1 ? String(display[r][balanceIdx] || '').trim() : '';
+    var minRaw = minPayIdx !== -1 ? String(display[r][minPayIdx] || '').trim() : '';
+    var typeRaw = typeIdx !== -1 ? String(display[r][typeIdx] || '').trim() : '';
+
+    var hasBalance = balanceRaw !== '';
+    var hasMinPayment = minRaw !== '';
+    if (hasBalance && hasMinPayment) complete++;
+    else partial++;
+
+    debts.push({
+      name: name,
+      type: typeRaw,
+      balance: balanceRaw,
+      minPayment: minRaw,
+      hasBalance: hasBalance,
+      hasMinPayment: hasMinPayment
+    });
+  }
+
+  base.debts = debts;
+  var total = debts.length;
+  if (total === 0) {
+    base.status = 'missing';
+    base.statusNote = 'No active debts tracked.';
+  } else {
+    base.status = partial === 0 ? 'complete' : 'partial';
+    base.statusNote = complete + ' with balance + min payment · ' + partial + ' with missing fields';
+  }
+  return base;
+}
+
+/**
+ * Ensure the live INPUT - Debts sheet exists before the user is handed
+ * off to the full Planning → Debts editor from onboarding.
+ *
+ * Localized safeguard, same contract as ensureOnboardingBankAccounts-
+ * SheetFromDashboard:
+ *   - Normal mode only. Test mode is a hard no-op.
+ *   - Never overwrites an existing sheet.
+ *   - If creating, the sheet is populated with the full canonical
+ *     schema recognized by the existing Debts readers (getDebtsHeader-
+ *     Map_ in debts.js and the probe in this file). Column order
+ *     mirrors addDebtFromDashboard so the new sheet is immediately
+ *     usable by the Planning → Debts Add / Manage surfaces.
+ *   - No data rows are seeded — no fake debts, no TOTAL DEBT summary,
+ *     no activity log entries.
+ *
+ * @param {string=} mode 'normal' (default) or 'test'
+ * @returns {{ ok: boolean, created: boolean, sheetName: string, mode: string, reason?: string }}
+ */
+function ensureOnboardingDebtsSheetFromDashboard(mode) {
+  var m = normalizeOnboardingMode_(mode);
+  var sheetName = resolveOnboardingSheetName_(m, 'DEBTS');
+
+  if (m === 'test') {
+    return {
+      ok: true,
+      created: false,
+      sheetName: sheetName,
+      mode: m,
+      reason: 'Test mode: use ensureOnboardingTestSheetsFromDashboard instead.'
+    };
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var existing = ss.getSheetByName(sheetName);
+  if (existing) {
+    return { ok: true, created: false, sheetName: sheetName, mode: m };
+  }
+
+  var sheet;
+  try {
+    sheet = ss.insertSheet(sheetName);
+  } catch (e) {
+    if (ss.getSheetByName(sheetName)) {
+      return { ok: true, created: false, sheetName: sheetName, mode: m };
+    }
+    throw e;
+  }
+
+  try {
+    // Header order mirrors the fields written by debts.js → addDebt-
+    // FromDashboard. `getDebtsHeaderMap_` only *requires* Account Name
+    // and Type; every other column is optional in the map but the Add
+    // form writes all of them, so we seed the full canonical layout.
+    // Active is included so self-heal in ensureDebtsActiveColumn_ is a
+    // no-op on freshly created sheets.
+    var headerRow = [
+      'Account Name',
+      'Type',
+      'Account Balance',
+      'Minimum Payment',
+      'Credit Limit',
+      'Credit Left',
+      'Int Rate',
+      'Due Date',
+      'Acct PCT Avail',
+      'Active'
+    ];
+    sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
+
+    try {
+      sheet.getRange(1, 1, 1, headerRow.length).setFontWeight('bold');
+      sheet.setFrozenRows(1);
+    } catch (_e) {
+      // Cosmetic only — never fail the ensure op on formatting hiccups.
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      created: true,
+      sheetName: sheetName,
+      mode: m,
+      reason: 'Sheet was created but structure write failed: ' + (e.message || e)
+    };
+  }
+
+  return { ok: true, created: true, sheetName: sheetName, mode: m };
+}
+
+/**
  * Local helper: reject reserved labels from the Bank Accounts block
  * structure so a "Total Accounts" / "Delta" / "Year" row never appears
  * as an account in the UI. Named `isOnboardingBankAccountNameRow_` to

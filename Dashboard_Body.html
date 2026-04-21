@@ -10,7 +10,7 @@
     <div class="top-actions">
       <div class="top-actions-buttons">
         <button type="button" class="btn-help-prominent" onclick="showPage('help')">Help</button>
-        <button type="button" class="btn-setup-topbar" onclick="showPage('onboarding')">Setup</button>
+        <button type="button" class="btn-setup-topbar" onclick="showPage('onboarding')">Setup / Review</button>
         <button type="button" class="btn-planner-run" onclick="runPlannerNow()">Run Planner + Refresh Snapshot</button>
       </div>
       <div id="planner_status" class="status"></div>
@@ -31,7 +31,6 @@
   <div id="setup_editor_bar" class="setup-editor-bar" role="region" aria-label="Setup" hidden>
     <div class="setup-editor-bar-inner">
       <button type="button" class="btn-setup-back" onclick="exitSetupEditorMode()">&larr; Back to Setup</button>
-      <span class="setup-editor-bar-label">Setup: editing</span>
     </div>
   </div>
 
@@ -1442,9 +1441,6 @@
         <p class="onboarding-welcome-reassurance">
           Nothing changes just by viewing Setup. Changes only happen when you explicitly update something.
         </p>
-        <p id="onboarding_welcome_test_note" class="onboarding-welcome-test-note" style="display:none;">
-          You're in TEST MODE &mdash; Setup will only read and write to TEST sheets.
-        </p>
         <div class="onboarding-welcome-actions">
           <button type="button" class="btn-primary" onclick="onboardingShowView('grid')">Continue</button>
           <button type="button" class="btn-secondary" onclick="onboardingBackToDashboard()">Back to Dashboard</button>
@@ -1480,13 +1476,17 @@
         <div class="onboarding-step-body" data-body="bank">Loading…</div>
         <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
       </div>
-      <div class="onboarding-step-card" data-step="debts" id="onboarding_step_debts">
+      <div class="onboarding-step-card onboarding-step-card-clickable" data-step="debts" id="onboarding_step_debts"
+           role="button" tabindex="0"
+           onclick="onboardingShowView('debts')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();onboardingShowView('debts');}">
         <div class="onboarding-step-head">
           <div class="onboarding-step-num">2</div>
           <div class="onboarding-step-title">Debts</div>
           <div class="onboarding-step-badge" data-badge="debts">…</div>
         </div>
         <div class="onboarding-step-body" data-body="debts">Loading…</div>
+        <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
       </div>
       <div class="onboarding-step-card" data-step="bills" id="onboarding_step_bills">
         <div class="onboarding-step-head">
@@ -1565,6 +1565,44 @@
       <div class="onboarding-actions">
         <button type="button" onclick="onboardingShowView('grid')">Back</button>
         <button type="button" class="btn-primary" onclick="onboardingOpenBankAccountsPage()">Open Bank Accounts editor</button>
+      </div>
+    </div>
+
+    <!--
+      View 4: Debts detail. Opened from the status grid when the user
+      clicks the Debts card. Read-only in this pass: it displays what is
+      currently tracked on INPUT - Debts (or TEST - INPUT - Debts in test
+      mode) and links out to the existing Planning → Debts surface for
+      edits. No writes from this view. Reuses the same setup-editor-mode
+      handoff pattern established for Bank Accounts.
+    -->
+    <div id="onboarding_view_debts" class="onboarding-view onboarding-view-detail" style="display:none;">
+      <div class="onboarding-detail-header">
+        <div class="onboarding-detail-step">Step 2 of 5</div>
+        <h2 class="onboarding-detail-title">Debts</h2>
+        <div id="onboarding_debts_badge" class="onboarding-detail-badge">…</div>
+      </div>
+
+      <div class="onboarding-detail-explainer">
+        <p>
+          Debts represent money you owe &mdash; credit cards, loans, HELOCs, and similar.
+          Their <strong>minimum payments</strong> must be covered each month, which affects
+          how much cash is actually available to use.
+        </p>
+        <p class="muted">
+          This view is read-only. Edit debt details from Planning &rarr; Debts.
+        </p>
+      </div>
+
+      <div id="onboarding_debts_status" class="status"></div>
+
+      <div id="onboarding_debts_body">
+        <p class="muted">Loading debts&hellip;</p>
+      </div>
+
+      <div class="onboarding-actions">
+        <button type="button" onclick="onboardingShowView('grid')">Back</button>
+        <button type="button" class="btn-primary" onclick="onboardingOpenDebtsPage()">Open Debts editor</button>
       </div>
     </div>
   </div>

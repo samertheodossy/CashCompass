@@ -19,29 +19,33 @@ function onboardingMode() {
   return 'normal';
 }
 
-// View switching inside Setup. Setup currently has three screens:
+// View switching inside Setup. Setup currently has four screens:
 //   'welcome' — introduction + Continue/Back buttons
 //   'grid'    — status review cards (overview of every Setup area)
-//   'bank'    — Bank Accounts detail (first step-card drill-down)
+//   'bank'    — Bank Accounts detail (step-card drill-down)
+//   'debts'   — Debts detail (step-card drill-down)
 // Simple DOM show/hide keeps this localized. Adding more detail views
-// later (Debts/Bills/Upcoming/Income) reuses this switch.
+// later (Bills/Upcoming/Income) reuses this switch.
 function onboardingShowView(view) {
   var views = {
     welcome: document.getElementById('onboarding_view_welcome'),
     grid:    document.getElementById('onboarding_view_grid'),
-    bank:    document.getElementById('onboarding_view_bank')
+    bank:    document.getElementById('onboarding_view_bank'),
+    debts:   document.getElementById('onboarding_view_debts')
   };
   // Guard: at minimum Welcome + Grid must exist. Missing detail views
   // should not break Setup.
   if (!views.welcome || !views.grid) return;
 
-  var target = (view === 'grid' || view === 'bank') ? view : 'welcome';
+  var target = (view === 'grid' || view === 'bank' || view === 'debts')
+    ? view : 'welcome';
   Object.keys(views).forEach(function(k) {
     if (views[k]) views[k].style.display = (k === target) ? '' : 'none';
   });
 
-  if (target === 'grid') onboardingLoadStatusGrid_();
-  if (target === 'bank') onboardingLoadBankDetail_();
+  if (target === 'grid')  onboardingLoadStatusGrid_();
+  if (target === 'bank')  onboardingLoadBankDetail_();
+  if (target === 'debts') onboardingLoadDebtDetail_();
 }
 
 // Back-to-Dashboard from the Welcome screen. Picks a safe default page.
@@ -116,7 +120,9 @@ function loadOnboardingSection() {
 
   var banner = document.getElementById('onboarding_test_banner');
   var createBtn = document.getElementById('onboarding_create_test_sheets_btn');
-  var welcomeTestNote = document.getElementById('onboarding_welcome_test_note');
+  // TEST mode deprecation (light pass): the welcome-screen TEST note was
+  // removed from the DOM. Routing still honors ?onboarding=test, but we
+  // no longer surface extra TEST-specific copy on Welcome.
 
   if (banner) {
     if (mode === 'test') {
@@ -126,9 +132,6 @@ function loadOnboardingSection() {
       banner.style.display = 'none';
       banner.textContent = '';
     }
-  }
-  if (welcomeTestNote) {
-    welcomeTestNote.style.display = (mode === 'test') ? '' : 'none';
   }
   if (createBtn) {
     createBtn.style.display = (mode === 'test') ? '' : 'none';
@@ -179,9 +182,10 @@ function onboardingLoadStatusGrid_() {
       // Match the user-facing labels used on each card: "Setup complete"
       // vs "Not set up". We keep partial/missing distinct on the server
       // but present a single "Not set up" bucket in the UI for now.
-      var summary = complete + ' complete · ' + notSetUp + ' not set up';
-      if (mode === 'test') summary += ' (TEST MODE)';
-      onboardingSetStatus_(summary, '');
+      // TEST mode deprecation (light): the shared banner already
+      // communicates test routing; we no longer append "(TEST MODE)" to
+      // the grid summary.
+      onboardingSetStatus_(complete + ' complete · ' + notSetUp + ' not set up', '');
     })
     .withFailureHandler(function(err) {
       onboardingSetStatus_(
@@ -294,11 +298,13 @@ function onboardingRenderBankDetail_(data) {
     badge.textContent = onboardingStatusLabel_(status);
   }
 
-  var summary = [];
   var count = (data.accounts && data.accounts.length) || 0;
-  summary.push(count + (count === 1 ? ' account tracked' : ' accounts tracked'));
-  if (data.mode === 'test') summary.push('TEST MODE');
-  onboardingBankSetStatus_(summary.join(' · '), '');
+  // TEST mode deprecation (light): shared banner already communicates
+  // test routing; we no longer append "TEST MODE" to per-detail status.
+  onboardingBankSetStatus_(
+    count + (count === 1 ? ' account tracked' : ' accounts tracked'),
+    ''
+  );
 
   var fragments = [];
 
@@ -408,6 +414,189 @@ function onboardingOpenBankAccountsPage() {
 }
 
 // --------------------------------------------------------------------------
+// Step detail: Debts
+//
+// Read-only. Mirrors the Bank Accounts pattern above:
+//   - Calls getOnboardingDebtsFromDashboard(mode) so live/test routing is
+//     handled on the server side.
+//   - Renders a simple list of debts (name, balance, minimum payment).
+//   - Offers a CTA into the existing Planning → Debts editor via the
+//     shared setup-editor-mode handoff.
+// No edits happen from this view.
+// --------------------------------------------------------------------------
+
+function onboardingDebtsSetStatus_(text, cls) {
+  var el = document.getElementById('onboarding_debts_status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+function onboardingLoadDebtDetail_() {
+  var mode = onboardingMode();
+  var body = document.getElementById('onboarding_debts_body');
+  var badge = document.getElementById('onboarding_debts_badge');
+
+  if (badge) {
+    badge.className = 'onboarding-detail-badge';
+    badge.textContent = '…';
+  }
+  if (body) {
+    body.innerHTML = '<p class="muted">Loading debts&hellip;</p>';
+  }
+  onboardingDebtsSetStatus_('Reading debts…', 'dash-status-loading');
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      onboardingRenderDebtDetail_(data);
+    })
+    .withFailureHandler(function(err) {
+      onboardingDebtsSetStatus_(
+        'Error reading debts: ' + (err && err.message ? err.message : String(err)),
+        'error'
+      );
+      if (body) body.innerHTML = '';
+    })
+    .getOnboardingDebtsFromDashboard(mode);
+}
+
+function onboardingRenderDebtDetail_(data) {
+  var body = document.getElementById('onboarding_debts_body');
+  var badge = document.getElementById('onboarding_debts_badge');
+  if (!body) return;
+
+  if (!data) {
+    onboardingDebtsSetStatus_('Could not read debts.', 'error');
+    body.innerHTML = '';
+    return;
+  }
+
+  var status = data.status || 'missing';
+  if (badge) {
+    badge.className = 'onboarding-detail-badge status-' + status;
+    badge.textContent = onboardingStatusLabel_(status);
+  }
+
+  var count = (data.debts && data.debts.length) || 0;
+  onboardingDebtsSetStatus_(
+    count + (count === 1 ? ' debt tracked' : ' debts tracked'),
+    ''
+  );
+
+  var fragments = [];
+  if (data.statusNote) {
+    fragments.push(
+      '<p class="muted">' + escapeOnboardingHtml_(data.statusNote) + '</p>'
+    );
+  }
+
+  // Empty-state path. Same product moment for "sheet missing" and "sheet
+  // exists but no debts": no debts are tracked yet. CTA routes through
+  // onboardingOpenDebtsPage() which runs the ensure-sheet safeguard
+  // first so the user always lands on a working editor.
+  if (!data.sheetExists || count === 0) {
+    var emptyHeadline = !data.sheetExists
+      ? 'No debts are set up yet.'
+      : 'No debts tracked yet.';
+
+    var ctaHtml = onboardingMode() === 'test'
+      ? '<p class="muted">Editing is not available in TEST MODE in this pass.</p>'
+      : '<button type="button" class="btn-primary" ' +
+        'onclick="onboardingOpenDebtsPage()">Add first debt</button>';
+
+    fragments.push(
+      '<div class="onboarding-detail-empty">' +
+        '<p>' + emptyHeadline + '</p>' +
+        '<p class="muted">Add your first debt to start tracking balances ' +
+          'and minimum payments.</p>' +
+        '<div style="margin-top:12px;">' + ctaHtml + '</div>' +
+      '</div>'
+    );
+    body.innerHTML = fragments.join('');
+    return;
+  }
+
+  // Render the list. Reuses the generic onboarding-account-* row styles
+  // so visuals stay consistent with Bank Accounts. A debt row shows
+  // Name / Balance / Min payment; empty fields are rendered with muted
+  // "—" placeholders so gaps in setup are obvious without being noisy.
+  var rows = data.debts.map(function(d) {
+    var balText = d.hasBalance
+      ? escapeOnboardingHtml_(d.balance)
+      : '<span class="muted">&mdash;</span>';
+    var minText = d.hasMinPayment
+      ? escapeOnboardingHtml_(d.minPayment)
+      : '<span class="muted">&mdash;</span>';
+    var nameHtml = escapeOnboardingHtml_(d.name);
+    if (d.type) {
+      nameHtml += ' <span class="muted">(' + escapeOnboardingHtml_(d.type) + ')</span>';
+    }
+    return (
+      '<div class="onboarding-account-row onboarding-debt-row">' +
+        '<div class="onboarding-account-name">' + nameHtml + '</div>' +
+        '<div class="onboarding-debt-balance">' +
+          '<span class="muted">Balance:</span> ' + balText +
+        '</div>' +
+        '<div class="onboarding-debt-minpay">' +
+          '<span class="muted">Min payment:</span> ' + minText +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+
+  fragments.push(
+    '<div class="onboarding-account-list" role="list">' + rows + '</div>'
+  );
+
+  body.innerHTML = fragments.join('');
+}
+
+// Jump into the existing Planning → Debts editor. Same contract as the
+// Bank Accounts handoff: normal mode only, run the ensure-sheet safe-
+// guard first so the editor never opens against a missing sheet, then
+// enter setup-editor-mode so the main shell collapses around the real
+// editor and the user gets a "Back to Setup" affordance.
+function onboardingOpenDebtsPage() {
+  if (onboardingMode() === 'test') {
+    onboardingDebtsSetStatus_(
+      'Editing is not available in TEST MODE in this pass.',
+      ''
+    );
+    return;
+  }
+
+  onboardingDebtsSetStatus_('Preparing Debts editor…', 'dash-status-loading');
+
+  var navigate = function() {
+    // Planning is the page that hosts the Debts sub-tab. 'debts' is
+    // the return-view for exitSetupEditorMode() so Back to Setup drops
+    // the user back onto this detail screen.
+    enterSetupEditorMode('planning', 'debts', 'debts');
+  };
+
+  google.script.run
+    .withSuccessHandler(function(resp) {
+      if (!resp || resp.ok === false) {
+        var reason = resp && resp.reason
+          ? resp.reason
+          : 'Could not prepare the Debts sheet.';
+        onboardingDebtsSetStatus_(reason, 'error');
+        return;
+      }
+      onboardingDebtsSetStatus_('', '');
+      navigate();
+    })
+    .withFailureHandler(function(err) {
+      onboardingDebtsSetStatus_(
+        'Could not prepare the Debts sheet: ' +
+          (err && err.message ? err.message : String(err)),
+        'error'
+      );
+    })
+    .ensureOnboardingDebtsSheetFromDashboard('normal');
+}
+
+// --------------------------------------------------------------------------
 // Setup editor handoff helpers
 // --------------------------------------------------------------------------
 // Reusable pattern: from an onboarding detail screen, open an existing
@@ -416,22 +605,21 @@ function onboardingOpenBankAccountsPage() {
 // provided by a single "Back to Setup" button.
 //
 //   enterSetupEditorMode(pageName, tabName, returnView)
-//     pageName    — the workspace page to show (e.g. 'assets')
-//     tabName     — the sub-tab to activate on that page (e.g. 'bank')
+//     pageName    — the workspace page to show (e.g. 'assets', 'planning')
+//     tabName     — the sub-tab to activate on that page (e.g. 'bank', 'debts')
 //     returnView  — which onboarding view to restore on Back
-//                   ('bank' | 'grid' | 'welcome')
+//                   ('bank' | 'debts' | 'grid' | 'welcome')
 //
-// Kept narrow on purpose: future Debts/Bills/Upcoming/Income handoffs
-// reuse exactly the same entry/exit points, with their own page+tab
+// Kept narrow on purpose: future Bills/Upcoming/Income handoffs reuse
+// exactly the same entry/exit points, with their own page+tab
 // arguments. No new navigation system is introduced.
 // --------------------------------------------------------------------------
 
 var ONBOARDING_EDITOR_RETURN_VIEW_ = null;
 
 function enterSetupEditorMode(pageName, tabName, returnView) {
-  ONBOARDING_EDITOR_RETURN_VIEW_ =
-    (returnView === 'bank' || returnView === 'grid' || returnView === 'welcome')
-      ? returnView : 'grid';
+  var allowedReturns = { bank: 1, debts: 1, grid: 1, welcome: 1 };
+  ONBOARDING_EDITOR_RETURN_VIEW_ = allowedReturns[returnView] ? returnView : 'grid';
 
   if (document.body) {
     // showPage() toggles `setup-mode` (the onboarding-page class) based on
