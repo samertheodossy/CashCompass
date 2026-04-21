@@ -115,12 +115,6 @@
       if (typeof loadIncomeSourcesSection === 'function') {
         loadIncomeSourcesSection();
       }
-
-      try {
-        if (typeof onboardingMode === 'function' && onboardingMode() === 'test') {
-          if (typeof showPage === 'function') showPage('onboarding');
-        }
-      } catch (_e) { /* ignore */ }
     }
 
     initDashboard();

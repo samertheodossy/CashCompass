@@ -1,23 +1,27 @@
 // --------------------------------------------------------------------------
-// Onboarding (Setup) — client-side controller.
+// Onboarding (Setup / Review) — client-side controller.
 //
 // Safe-to-load by default:
 //   - Nothing runs until the user opens the Setup page or a module calls
 //     loadOnboardingSection() explicitly.
-//   - Normal users get a read-only status review of live sheets.
-//   - Test mode is opt-in via `?onboarding=test` (exposed from the Apps
-//     Script menu as "Open CashCompass Web (Test Setup)"). In test mode
-//     the server-side resolver routes every read/write to TEST - * sheets.
+//   - All reads are read-only status probes against live INPUT sheets.
+//
+// The onboarding `mode` parameter on server endpoints is always sent as
+// 'normal'. The legacy `?onboarding=test` routing has been retired from
+// the user-facing flow; the resolver on the server still accepts a mode
+// argument so existing call sites keep working, but nothing in the UI
+// switches to test routing anymore.
 // --------------------------------------------------------------------------
 
-function onboardingMode() {
-  try {
-    if (typeof window !== 'undefined' && window.location && window.location.search) {
-      if (/[?&]onboarding=test\b/i.test(window.location.search)) return 'test';
-    }
-  } catch (_e) { /* ignore */ }
-  return 'normal';
-}
+// Constant kept so callers don't need to hardcode the literal. Changing
+// this to another string is unsupported by the backend resolver.
+var ONBOARDING_MODE_ = 'normal';
+
+// One-shot flag: when true, the next onboardingShowView('grid') call
+// will NOT auto-fetch the status payload. Used by loadOnboardingSection
+// to avoid a duplicate server round-trip when it already has a fresh
+// status snapshot in hand. Always resets to false after a single use.
+var ONBOARDING_SKIP_GRID_AUTOLOAD_ = false;
 
 // View switching inside Setup. Setup now has eight screens:
 //   'welcome'  — introduction + Continue/Back buttons
@@ -54,7 +58,13 @@ function onboardingShowView(view) {
     if (views[k]) views[k].style.display = (k === target) ? '' : 'none';
   });
 
-  if (target === 'grid')     onboardingLoadStatusGrid_();
+  if (target === 'grid') {
+    if (ONBOARDING_SKIP_GRID_AUTOLOAD_) {
+      ONBOARDING_SKIP_GRID_AUTOLOAD_ = false;
+    } else {
+      onboardingLoadStatusGrid_();
+    }
+  }
   if (target === 'bank')     onboardingLoadBankDetail_();
   if (target === 'debts')    onboardingLoadDebtDetail_();
   if (target === 'bills')    onboardingLoadBillsDetail_();
@@ -64,14 +74,7 @@ function onboardingShowView(view) {
 }
 
 // Back-to-Dashboard from the Welcome screen. Picks a safe default page.
-// In test mode we stay on onboarding (there's no real dashboard to go
-// back to in a meaningful way for a test session), but we still return
-// to Welcome for consistency.
 function onboardingBackToDashboard() {
-  if (onboardingMode() === 'test') {
-    onboardingShowView('welcome');
-    return;
-  }
   if (typeof showPage === 'function') {
     showPage('overview');
   }
@@ -126,47 +129,84 @@ function escapeOnboardingHtml_(s) {
     .replace(/'/g, '&#39;');
 }
 
-// Public entry. Called whenever the user lands on the Setup page. Keeps
-// state minimal: always reset to the Welcome screen, refresh the shared
-// TEST-mode banner, and only fetch grid data when the user explicitly
-// continues past Welcome (onboardingShowView('grid')).
+// Public entry. Called whenever the user lands on the Setup page.
+//
+// Welcome-screen gating:
+//   - Existing user (any step has status !== 'missing') → skip Welcome
+//     and land directly on the populated status grid.
+//   - Truly unconfigured user (all five core steps report 'missing')
+//     → show Welcome first; Continue advances to the grid.
+//
+// We only hit the server once here: the same status payload powers both
+// the routing decision and the grid render. If the call fails, we fall
+// back to the Welcome screen so the user is never stranded on a blank
+// view.
 function loadOnboardingSection() {
-  var mode = onboardingMode();
+  var welcome = document.getElementById('onboarding_view_welcome');
+  var grid = document.getElementById('onboarding_view_grid');
+  if (!welcome || !grid) return;
 
-  var banner = document.getElementById('onboarding_test_banner');
-  var createBtn = document.getElementById('onboarding_create_test_sheets_btn');
-  // TEST mode deprecation (light pass): the welcome-screen TEST note was
-  // removed from the DOM. Routing still honors ?onboarding=test, but we
-  // no longer surface extra TEST-specific copy on Welcome.
+  // Hide every onboarding view up front so there's no flash of a stale
+  // view (e.g. Finish) left over from the user's last visit while we
+  // wait for the status probe to return. onboardingShowView() will pick
+  // the right target once the fetch resolves.
+  var allViewIds = [
+    'onboarding_view_welcome',
+    'onboarding_view_grid',
+    'onboarding_view_bank',
+    'onboarding_view_debts',
+    'onboarding_view_bills',
+    'onboarding_view_upcoming',
+    'onboarding_view_income',
+    'onboarding_view_finish'
+  ];
+  allViewIds.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
 
-  if (banner) {
-    if (mode === 'test') {
-      banner.textContent = 'TEST MODE — using TEST sheets only';
-      banner.style.display = 'block';
-    } else {
-      banner.style.display = 'none';
-      banner.textContent = '';
-    }
-  }
-  if (createBtn) {
-    createBtn.style.display = (mode === 'test') ? '' : 'none';
-    createBtn.disabled = false;
-    createBtn.textContent = 'Create missing TEST sheets';
-  }
+  onboardingSetStatus_('Checking your setup…', 'dash-status-loading');
 
-  // Always start at Welcome whenever the user (re)enters Setup. This
-  // keeps the flow predictable and makes the status grid an explicit
-  // step rather than an automatic page-view.
-  onboardingShowView('welcome');
+  google.script.run
+    .withSuccessHandler(function(data) {
+      if (!data || !Array.isArray(data.steps)) {
+        // Safe fallback: can't tell if the user is new or populated,
+        // so show Welcome. Users with data can still press Continue.
+        onboardingSetStatus_('Could not read setup status.', 'error');
+        onboardingShowView('welcome');
+        return;
+      }
+
+      var anyTracked = data.steps.some(function(s) {
+        return s && s.status && s.status !== 'missing';
+      });
+
+      if (anyTracked) {
+        // We already have a fresh status snapshot, so tell showView to
+        // skip its auto-refetch — we'll apply the payload directly.
+        ONBOARDING_SKIP_GRID_AUTOLOAD_ = true;
+        onboardingShowView('grid');
+        onboardingApplyStatusGrid_(data);
+      } else {
+        onboardingShowView('welcome');
+      }
+    })
+    .withFailureHandler(function(err) {
+      onboardingSetStatus_(
+        'Error reading setup status: ' + (err && err.message ? err.message : String(err)),
+        'error'
+      );
+      onboardingShowView('welcome');
+    })
+    .getOnboardingStatusFromDashboard(ONBOARDING_MODE_);
 }
 
-// Internal: fetch and render the status grid. Triggered by the Continue
-// button on the Welcome screen or the Refresh button on the grid itself.
+// Internal: fetch the grid payload and hand off to the render helper.
+// Triggered by the Continue button on Welcome, the Refresh button on
+// the grid, and onboardingShowView('grid'). Separating fetch from
+// render lets loadOnboardingSection() reuse the gating fetch without
+// calling the server twice for the same page open.
 function onboardingLoadStatusGrid_() {
-  var mode = onboardingMode();
-  var banner = document.getElementById('onboarding_test_banner');
-  var createBtn = document.getElementById('onboarding_create_test_sheets_btn');
-
   onboardingSetStatus_('Reading status…', 'dash-status-loading');
 
   google.script.run
@@ -175,32 +215,7 @@ function onboardingLoadStatusGrid_() {
         onboardingSetStatus_('Could not read setup status.', 'error');
         return;
       }
-      data.steps.forEach(onboardingRenderStepCard_);
-
-      if (banner && data.testBanner) banner.textContent = data.testBanner;
-
-      if (mode === 'test' && createBtn) {
-        if (data.missingTestSheets && data.missingTestSheets.length > 0) {
-          createBtn.style.display = '';
-          createBtn.textContent = 'Create missing TEST sheets (' + data.missingTestSheets.length + ')';
-        } else {
-          createBtn.style.display = '';
-          createBtn.textContent = 'TEST sheets already present';
-          createBtn.disabled = true;
-        }
-      }
-
-      var total = data.steps.length;
-      var complete = data.steps.filter(function(s) { return s.status === 'complete'; }).length;
-      var notSetUp = total - complete;
-
-      // Match the user-facing labels used on each card: "Setup complete"
-      // vs "Not set up". We keep partial/missing distinct on the server
-      // but present a single "Not set up" bucket in the UI for now.
-      // TEST mode deprecation (light): the shared banner already
-      // communicates test routing; we no longer append "(TEST MODE)" to
-      // the grid summary.
-      onboardingSetStatus_(complete + ' complete · ' + notSetUp + ' not set up', '');
+      onboardingApplyStatusGrid_(data);
     })
     .withFailureHandler(function(err) {
       onboardingSetStatus_(
@@ -208,49 +223,25 @@ function onboardingLoadStatusGrid_() {
         'error'
       );
     })
-    .getOnboardingStatusFromDashboard(mode);
+    .getOnboardingStatusFromDashboard(ONBOARDING_MODE_);
 }
 
-function onboardingCreateTestSheets() {
-  if (onboardingMode() !== 'test') {
-    onboardingSetStatus_('Create TEST sheets is only available in TEST MODE.', 'error');
-    return;
-  }
-  var createBtn = document.getElementById('onboarding_create_test_sheets_btn');
-  if (createBtn) {
-    createBtn.disabled = true;
-    createBtn.textContent = 'Creating TEST sheets…';
-  }
-  onboardingSetStatus_('Creating any missing TEST sheets…', 'dash-status-loading');
+// Apply a status payload to the grid UI. Safe to call with stale data
+// (nothing here writes to sheets; badges / bodies simply reflect what
+// the server returned at the time of the call).
+function onboardingApplyStatusGrid_(data) {
+  if (!data || !Array.isArray(data.steps)) return;
 
-  google.script.run
-    .withSuccessHandler(function(res) {
-      if (createBtn) {
-        createBtn.disabled = false;
-        createBtn.textContent = 'Create missing TEST sheets';
-      }
-      if (!res || !res.ok) {
-        onboardingSetStatus_('Failed to create TEST sheets.', 'error');
-        return;
-      }
-      var parts = [];
-      if (res.created && res.created.length) parts.push('Created ' + res.created.length);
-      if (res.skipped && res.skipped.length) parts.push('Skipped ' + res.skipped.length);
-      if (res.missingSources && res.missingSources.length) parts.push('Unresolved: ' + res.missingSources.join(', '));
-      onboardingSetStatus_(parts.join(' · ') || 'Done.', '');
-      onboardingLoadStatusGrid_();
-    })
-    .withFailureHandler(function(err) {
-      if (createBtn) {
-        createBtn.disabled = false;
-        createBtn.textContent = 'Create missing TEST sheets';
-      }
-      onboardingSetStatus_(
-        'Error creating TEST sheets: ' + (err && err.message ? err.message : String(err)),
-        'error'
-      );
-    })
-    .ensureOnboardingTestSheetsFromDashboard();
+  data.steps.forEach(onboardingRenderStepCard_);
+
+  var total = data.steps.length;
+  var complete = data.steps.filter(function(s) { return s.status === 'complete'; }).length;
+  var notSetUp = total - complete;
+
+  // Match the user-facing labels used on each card: "Setup complete"
+  // vs "Not set up". We keep partial/missing distinct on the server
+  // but present a single "Not set up" bucket in the UI for now.
+  onboardingSetStatus_(complete + ' complete · ' + notSetUp + ' not set up', '');
 }
 
 // --------------------------------------------------------------------------
@@ -269,7 +260,7 @@ function onboardingBankSetStatus_(text, cls) {
 }
 
 function onboardingLoadBankDetail_() {
-  var mode = onboardingMode();
+  var mode = ONBOARDING_MODE_;
   var body = document.getElementById('onboarding_bank_body');
   var badge = document.getElementById('onboarding_bank_badge');
 
@@ -314,8 +305,6 @@ function onboardingRenderBankDetail_(data) {
   }
 
   var count = (data.accounts && data.accounts.length) || 0;
-  // TEST mode deprecation (light): shared banner already communicates
-  // test routing; we no longer append "TEST MODE" to per-detail status.
   onboardingBankSetStatus_(
     count + (count === 1 ? ' account tracked' : ' accounts tracked'),
     ''
@@ -341,10 +330,8 @@ function onboardingRenderBankDetail_(data) {
       : 'No bank accounts tracked yet' +
         (data.year ? ' for ' + escapeOnboardingHtml_(String(data.year)) : '') + '.';
 
-    var ctaHtml = onboardingMode() === 'test'
-      ? '<p class="muted">Editing is not available in TEST MODE in this pass.</p>'
-      : '<button type="button" class="btn-primary" ' +
-        'onclick="onboardingOpenBankAccountsPage()">Add first bank account</button>';
+    var ctaHtml = '<button type="button" class="btn-primary" ' +
+      'onclick="onboardingOpenBankAccountsPage()">Add first bank account</button>';
 
     fragments.push(
       '<div class="onboarding-detail-empty">' +
@@ -377,20 +364,9 @@ function onboardingRenderBankDetail_(data) {
   body.innerHTML = fragments.join('');
 }
 
-// Jump into the existing Bank Accounts management surface. In normal
-// mode this is the Assets page → Bank Accounts tab. In test mode there
-// is no equivalent destination (the main dashboard is not scoped to
-// TEST sheets), so we keep the user on this read-only view and surface
-// a status hint instead of silently leaving Setup.
+// Jump into the existing Bank Accounts management surface — the Assets
+// page → Bank Accounts tab.
 function onboardingOpenBankAccountsPage() {
-  if (onboardingMode() === 'test') {
-    onboardingBankSetStatus_(
-      'Editing is not available in TEST MODE in this pass.',
-      ''
-    );
-    return;
-  }
-
   // Safeguard: make sure INPUT - Bank Accounts exists *before* handing the
   // user off to the Assets → Bank Accounts editor. If it is missing, the
   // backend creates it with the minimum valid structure the rest of the
@@ -448,7 +424,7 @@ function onboardingDebtsSetStatus_(text, cls) {
 }
 
 function onboardingLoadDebtDetail_() {
-  var mode = onboardingMode();
+  var mode = ONBOARDING_MODE_;
   var body = document.getElementById('onboarding_debts_body');
   var badge = document.getElementById('onboarding_debts_badge');
 
@@ -514,10 +490,8 @@ function onboardingRenderDebtDetail_(data) {
       ? 'No debts are set up yet.'
       : 'No debts tracked yet.';
 
-    var ctaHtml = onboardingMode() === 'test'
-      ? '<p class="muted">Editing is not available in TEST MODE in this pass.</p>'
-      : '<button type="button" class="btn-primary" ' +
-        'onclick="onboardingOpenDebtsPage()">Add first debt</button>';
+    var ctaHtml = '<button type="button" class="btn-primary" ' +
+      'onclick="onboardingOpenDebtsPage()">Add first debt</button>';
 
     fragments.push(
       '<div class="onboarding-detail-empty">' +
@@ -567,19 +541,11 @@ function onboardingRenderDebtDetail_(data) {
 }
 
 // Jump into the existing Planning → Debts editor. Same contract as the
-// Bank Accounts handoff: normal mode only, run the ensure-sheet safe-
-// guard first so the editor never opens against a missing sheet, then
-// enter setup-editor-mode so the main shell collapses around the real
-// editor and the user gets a "Back to Setup" affordance.
+// Bank Accounts handoff: run the ensure-sheet safeguard first so the
+// editor never opens against a missing sheet, then enter setup-editor-
+// mode so the main shell collapses around the real editor and the user
+// gets a "Back to Setup" affordance.
 function onboardingOpenDebtsPage() {
-  if (onboardingMode() === 'test') {
-    onboardingDebtsSetStatus_(
-      'Editing is not available in TEST MODE in this pass.',
-      ''
-    );
-    return;
-  }
-
   onboardingDebtsSetStatus_('Preparing Debts editor…', 'dash-status-loading');
 
   var navigate = function() {
@@ -628,7 +594,7 @@ function onboardingBillsSetStatus_(text, cls) {
 }
 
 function onboardingLoadBillsDetail_() {
-  var mode = onboardingMode();
+  var mode = ONBOARDING_MODE_;
   var body = document.getElementById('onboarding_bills_body');
   var badge = document.getElementById('onboarding_bills_badge');
 
@@ -683,10 +649,8 @@ function onboardingRenderBillsDetail_(data) {
     var emptyHeadline = !data.sheetExists
       ? 'No bills are set up yet.'
       : 'No bills tracked yet.';
-    var ctaHtml = onboardingMode() === 'test'
-      ? '<p class="muted">Editing is not available in TEST MODE in this pass.</p>'
-      : '<button type="button" class="btn-primary" ' +
-        'onclick="onboardingOpenBillsPage()">Add first bill</button>';
+    var ctaHtml = '<button type="button" class="btn-primary" ' +
+      'onclick="onboardingOpenBillsPage()">Add first bill</button>';
 
     fragments.push(
       '<div class="onboarding-detail-empty">' +
@@ -736,13 +700,6 @@ function onboardingRenderBillsDetail_(data) {
 }
 
 function onboardingOpenBillsPage() {
-  if (onboardingMode() === 'test') {
-    onboardingBillsSetStatus_(
-      'Editing is not available in TEST MODE in this pass.',
-      ''
-    );
-    return;
-  }
   onboardingBillsSetStatus_('Preparing Bills editor…', 'dash-status-loading');
 
   var navigate = function() {
@@ -784,7 +741,7 @@ function onboardingUpcomingSetStatus_(text, cls) {
 }
 
 function onboardingLoadUpcomingDetail_() {
-  var mode = onboardingMode();
+  var mode = ONBOARDING_MODE_;
   var body = document.getElementById('onboarding_upcoming_body');
   var badge = document.getElementById('onboarding_upcoming_badge');
 
@@ -840,10 +797,8 @@ function onboardingRenderUpcomingDetail_(data) {
     var emptyHeadline = !data.sheetExists
       ? 'No upcoming expenses are set up yet.'
       : 'No planned upcoming expenses right now.';
-    var ctaHtml = onboardingMode() === 'test'
-      ? '<p class="muted">Editing is not available in TEST MODE in this pass.</p>'
-      : '<button type="button" class="btn-primary" ' +
-        'onclick="onboardingOpenUpcomingPage()">Add first upcoming expense</button>';
+    var ctaHtml = '<button type="button" class="btn-primary" ' +
+      'onclick="onboardingOpenUpcomingPage()">Add first upcoming expense</button>';
 
     fragments.push(
       '<div class="onboarding-detail-empty">' +
@@ -887,13 +842,6 @@ function onboardingRenderUpcomingDetail_(data) {
 }
 
 function onboardingOpenUpcomingPage() {
-  if (onboardingMode() === 'test') {
-    onboardingUpcomingSetStatus_(
-      'Editing is not available in TEST MODE in this pass.',
-      ''
-    );
-    return;
-  }
   onboardingUpcomingSetStatus_('Preparing Upcoming editor…', 'dash-status-loading');
 
   var navigate = function() {
@@ -943,7 +891,7 @@ function onboardingIncomeSetStatus_(text, cls) {
 }
 
 function onboardingLoadIncomeDetail_() {
-  var mode = onboardingMode();
+  var mode = ONBOARDING_MODE_;
   var body = document.getElementById('onboarding_income_body');
   var badge = document.getElementById('onboarding_income_badge');
 
@@ -1000,10 +948,8 @@ function onboardingRenderIncomeDetail_(data) {
   // that directly and route the user to the Cash Flow page so they
   // can create / populate the year sheet through the normal surface.
   if (!data.sheetExists) {
-    var ctaHtml = onboardingMode() === 'test'
-      ? '<p class="muted">Editing is not available in TEST MODE in this pass.</p>'
-      : '<button type="button" class="btn-primary" ' +
-        'onclick="onboardingOpenIncomePage()">Open Cash Flow</button>';
+    var ctaHtml = '<button type="button" class="btn-primary" ' +
+      'onclick="onboardingOpenIncomePage()">Open Cash Flow</button>';
     fragments.push(
       '<div class="onboarding-detail-empty">' +
         '<p>Cash Flow sheet for the current year is not available yet.</p>' +
@@ -1017,10 +963,8 @@ function onboardingRenderIncomeDetail_(data) {
   }
 
   if (recurring === 0 && other === 0) {
-    var emptyCta = onboardingMode() === 'test'
-      ? '<p class="muted">Editing is not available in TEST MODE in this pass.</p>'
-      : '<button type="button" class="btn-primary" ' +
-        'onclick="onboardingOpenIncomePage()">Open Income editor</button>';
+    var emptyCta = '<button type="button" class="btn-primary" ' +
+      'onclick="onboardingOpenIncomePage()">Open Income editor</button>';
     fragments.push(
       '<div class="onboarding-detail-empty">' +
         '<p>No income detected yet' +
@@ -1073,13 +1017,6 @@ function onboardingRenderIncomeDetail_(data) {
 }
 
 function onboardingOpenIncomePage() {
-  if (onboardingMode() === 'test') {
-    onboardingIncomeSetStatus_(
-      'Editing is not available in TEST MODE in this pass.',
-      ''
-    );
-    return;
-  }
   // Income has no onboarding-owned ensure-sheet step — the current
   // codebase has no safe helper to create a Cash Flow <year> sheet from
   // scratch. Navigate straight to the existing Cash Flow → Income tab,
@@ -1103,7 +1040,7 @@ function onboardingFinishSetStatus_(text, cls) {
 }
 
 function onboardingLoadFinishDetail_() {
-  var mode = onboardingMode();
+  var mode = ONBOARDING_MODE_;
   var body = document.getElementById('onboarding_finish_body');
   var badge = document.getElementById('onboarding_finish_badge');
 

@@ -1412,24 +1412,21 @@
   </div>
 
   <!--
-    Onboarding Phase 1 — Setup page.
+    Onboarding Phase 1 — Setup / Review page.
 
     On-demand, read-only status review across Bank Accounts, Debts, Bills,
     Upcoming, and Income. Existing users who never open this page see no
-    change. Test mode (URL ?onboarding=test) switches every probe to
-    TEST - * sheets via the server-side onboarding sheet resolver.
+    change. Entry routing picks Welcome (for users with no tracked data in
+    any step) or the status grid (for everyone else) based on the server
+    status probe — see loadOnboardingSection() in
+    Dashboard_Script_Onboarding.html.
   -->
   <div id="page_onboarding" class="workspace-page">
     <!--
-      TEST-MODE banner is shared across all Setup views (Welcome and the
-      status grid). Kept outside the view wrappers so it persists as the
-      user navigates forward within Setup.
-    -->
-    <div id="onboarding_test_banner" class="onboarding-test-banner" style="display:none;" role="status" aria-live="polite"></div>
-
-    <!--
-      View 1: Welcome screen. First thing the user sees when they open
-      Setup. Read-only. Clicking Continue advances to the status grid view.
+      View 1: Welcome screen. Shown as the initial view only when all five
+      setup steps (Bank Accounts / Debts / Bills / Upcoming / Income) are
+      empty. Returning / populated users skip straight to the grid view.
+      Read-only. Continue advances to the status grid view.
     -->
     <div id="onboarding_view_welcome" class="onboarding-view onboarding-view-welcome">
       <div class="onboarding-welcome-card">
@@ -1531,10 +1528,9 @@
         <div class="onboarding-step-head">
           <div class="onboarding-step-num">6</div>
           <div class="onboarding-step-title">Finish</div>
-          <div class="onboarding-step-badge" data-badge="finish">…</div>
         </div>
         <div class="onboarding-step-body" data-body="finish">
-          <p id="onboarding_finish_body">Review the items marked <strong>Not set up</strong>, then use the matching screens to fill in details when you're ready. You can come back to Setup any time.</p>
+          <p>Review the items marked <strong>Not set up</strong>, then use the matching screens to fill in details when you're ready. You can come back to Setup any time.</p>
         </div>
         <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
       </div>
@@ -1543,15 +1539,13 @@
       <div class="onboarding-actions">
         <button type="button" onclick="onboardingShowView('welcome')">Back</button>
         <button type="button" onclick="onboardingLoadStatusGrid_()">Refresh status</button>
-        <button type="button" id="onboarding_create_test_sheets_btn" style="display:none;" onclick="onboardingCreateTestSheets()">Create missing TEST sheets</button>
       </div>
     </div>
 
     <!--
       View 3: Bank Accounts detail. Opened from the status grid when the
-      user clicks the Bank Accounts card. Read-only in this pass: it
-      displays what is currently tracked on INPUT - Bank Accounts (or
-      TEST - INPUT - Bank Accounts in test mode) and links out to the
+      user clicks the Bank Accounts card. Read-only: shows what is
+      currently tracked on INPUT - Bank Accounts and links out to the
       existing Assets → Bank Accounts surface for edits. No writes from
       this view, and it never touches SYS - Accounts.
     -->
@@ -1587,11 +1581,10 @@
 
     <!--
       View 4: Debts detail. Opened from the status grid when the user
-      clicks the Debts card. Read-only in this pass: it displays what is
-      currently tracked on INPUT - Debts (or TEST - INPUT - Debts in test
-      mode) and links out to the existing Planning → Debts surface for
-      edits. No writes from this view. Reuses the same setup-editor-mode
-      handoff pattern established for Bank Accounts.
+      clicks the Debts card. Read-only: shows what is currently tracked
+      on INPUT - Debts and links out to the existing Planning → Debts
+      surface for edits. No writes from this view. Reuses the same
+      setup-editor-mode handoff pattern established for Bank Accounts.
     -->
     <div id="onboarding_view_debts" class="onboarding-view onboarding-view-detail" style="display:none;">
       <div class="onboarding-detail-header">
@@ -1624,10 +1617,9 @@
     </div>
 
     <!--
-      View 5: Bills detail. Read-only in this pass. Reads INPUT - Bills
-      (or TEST - INPUT - Bills in test mode) and routes edits to the
-      existing Cash Flow → Bills surface via the shared setup-editor-
-      mode handoff.
+      View 5: Bills detail. Read-only. Reads INPUT - Bills and routes
+      edits to the existing Cash Flow → Bills surface via the shared
+      setup-editor-mode handoff.
     -->
     <div id="onboarding_view_bills" class="onboarding-view onboarding-view-detail" style="display:none;">
       <div class="onboarding-detail-header">
