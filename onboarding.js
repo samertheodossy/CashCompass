@@ -32,6 +32,7 @@ var ONBOARDING_LIVE_SHEET_NAMES_ = {
   BILLS: 'INPUT - Bills',
   UPCOMING: 'INPUT - Upcoming Expenses',
   CASH_FLOW_PREFIX: 'INPUT - Cash Flow ',
+  HOUSE_VALUES: 'INPUT - House Values',
   ACTIVITY_LOG: 'LOG - Activity'
 };
 
@@ -1529,6 +1530,127 @@ function isOnboardingBankAccountNameRow_(value) {
   if (value === 'Delta') return false;
   if (value === 'Year') return false;
   return true;
+}
+
+/**
+ * Read-only Houses data for the onboarding Houses (optional) surface.
+ *
+ * Deliberately NOT wired into getOnboardingStatusFromDashboard: Houses
+ * is an optional/informational section and must not contribute to the
+ * "X of Y complete" completion count surfaced on Finish / the grid.
+ *
+ * Source of truth is the existing INPUT - House Values editor source.
+ * When SYS - House Assets is available we enrich each row with
+ * propertyType / currentValue / loanAmountLeft via the existing
+ * helper getHouseAssetRowData_. Both reads are wrapped so a missing
+ * sheet or a malformed block degrades to a clean empty state rather
+ * than throwing to the client.
+ *
+ * TEST mode is retired from the user-facing flow, but the backend
+ * still accepts a mode argument for symmetry with the other probes.
+ * In practice the client always passes 'normal'.
+ *
+ * Returns:
+ *   {
+ *     mode, sheetName, sheetExists,
+ *     houses: [ { name, propertyType, currentValue, loanAmountLeft, inactive } ],
+ *     statusNote,
+ *     testBanner
+ *   }
+ */
+function getOnboardingHousesFromDashboard(mode) {
+  var ctxMode = normalizeOnboardingMode_(mode);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetName = resolveOnboardingSheetName_(ctxMode, 'HOUSE_VALUES');
+  var sheet = ss.getSheetByName(sheetName);
+
+  var base = {
+    mode: ctxMode,
+    sheetName: sheetName,
+    sheetExists: !!sheet,
+    houses: [],
+    statusNote: '',
+    testBanner: ctxMode === 'test' ? 'TEST MODE — using TEST sheets only' : ''
+  };
+
+  if (!sheet) {
+    base.statusNote = 'House Values sheet not found.';
+    return base;
+  }
+
+  // Primary read: distinct house names from INPUT - House Values. The
+  // helper operates on the live sheet directly (no test-mode awareness),
+  // so we only call it when ctxMode is 'normal' to avoid leaking live
+  // house names into a test-mode payload.
+  var names = [];
+  if (ctxMode === 'normal') {
+    try {
+      names = getHousesFromHouseValues_();
+    } catch (e) {
+      base.statusNote = 'Could not read House Values sheet.';
+      return base;
+    }
+  } else {
+    // Minimal column-A scan for TEST sheets, since the shared helper
+    // always reads the live INPUT - House Values.
+    try {
+      var display = sheet.getDataRange().getDisplayValues();
+      var seen = Object.create(null);
+      for (var r = 0; r < display.length; r++) {
+        var nm = String(display[r][0] || '').trim();
+        var sub = String(display[r][1] || '').trim();
+        if (!nm) continue;
+        if (nm === 'Total Values' || nm === 'House Assets' || nm === 'Year') continue;
+        // Only treat a row as a house when column B ("Loan Amount Left")
+        // carries a numeric or blank signal — the same shape the live
+        // helper enforces via isHouseDataRowName_.
+        if (sub && !/^[0-9.,\-$ ]+$/.test(sub)) continue;
+        if (!seen[nm]) { seen[nm] = true; names.push(nm); }
+      }
+    } catch (e2) {
+      base.statusNote = 'Could not read House Values sheet.';
+      return base;
+    }
+  }
+
+  // Optional enrichment from SYS - House Assets. If unavailable, we
+  // still return the list of houses with blank financial fields so
+  // the UI can render a useful summary.
+  var inactiveSet = Object.create(null);
+  try {
+    if (ctxMode === 'normal') inactiveSet = getInactiveHousesSet_();
+  } catch (e3) {
+    inactiveSet = Object.create(null);
+  }
+
+  base.houses = names.map(function(name) {
+    var enriched = null;
+    if (ctxMode === 'normal') {
+      try {
+        enriched = getHouseAssetRowData_(name);
+      } catch (e4) {
+        enriched = null;
+      }
+    }
+    return {
+      name: name,
+      propertyType: enriched && enriched.propertyType ? enriched.propertyType : '',
+      currentValue: enriched && enriched.currentValue !== '' ? enriched.currentValue : '',
+      loanAmountLeft: enriched && enriched.loanAmountLeft !== '' ? enriched.loanAmountLeft : '',
+      inactive: !!inactiveSet[String(name || '').toLowerCase()]
+    };
+  });
+
+  if (base.houses.length === 0) {
+    base.statusNote = 'No properties tracked yet.';
+  } else {
+    var activeCount = base.houses.filter(function(h) { return !h.inactive; }).length;
+    base.statusNote = activeCount + ' tracked' +
+      (base.houses.length - activeCount > 0
+        ? ' · ' + (base.houses.length - activeCount) + ' inactive'
+        : '');
+  }
+  return base;
 }
 
 /* -------------------------------------------------------------------------- */

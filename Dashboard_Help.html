@@ -12,6 +12,7 @@
       <nav class="help-toc" aria-label="Help sections">
         <div class="help-toc-title">On this page</div>
         <a href="#help-intro">Introduction</a>
+        <a href="#help-status">Product status</a>
         <a href="#help-setup">Setup / Review</a>
         <a href="#help-overview">Overview</a>
         <a href="#help-assets">Assets</a>
@@ -40,7 +41,48 @@
         <h3>Introduction</h3>
         <p><strong>CashCompass</strong> reads and updates your Google Sheets (the <code>INPUT -</code> and <code>SYS -</code> tabs). The UI does not keep its own copy of balances — numbers always come from the sheets.</p>
         <p>Use <strong>Run Planner + Refresh Snapshot</strong> to sync the latest sheet values into Overview and re-run the debt planner.</p>
+        <p>New to the app? Open <strong>Setup / Review</strong> from the top-right. It is safe to open at any time — the flow is read-only until you explicitly open an editor.</p>
         <p class="muted">This page is organized in the same order as the top nav, followed by the two debt views (Debt Overview, Rolling Debt Payoff), the planner email, and a sheet-name quick reference.</p>
+      </section>
+
+      <!-- ================================================================ -->
+      <!-- Product status / Coming next                                     -->
+      <!-- ================================================================ -->
+      <section id="help-status" class="help-section">
+        <h3>Product status</h3>
+        <p class="muted">A short, user-facing snapshot of where the product is today and what's being polished next. Kept intentionally brief — detailed feature documentation lives in each section below.</p>
+
+        <h4>What's live today</h4>
+        <ul class="help-list">
+          <li><strong>Setup / Review</strong> — Welcome (new users only), status grid for Bank Accounts, Debts, Bills, Upcoming Expenses, and Income, plus a completion panel with <em>Go to Next Actions</em>.</li>
+          <li><strong>Optional: Houses</strong> — property tracking as a separate optional card. Not part of the Setup completion count.</li>
+          <li><strong>Setup-mode editor handoff</strong> — opening an editor from Setup uses a focused shell with a <strong>Back to Setup</strong> bar. Opening the same editor normally is unchanged.</li>
+          <li><strong>Planning</strong> — Next Actions, Debt Overview, Rolling Debt Payoff, and the Debt Planner email.</li>
+          <li><strong>Everyday surfaces</strong> — Overview, Assets, Cash Flow (Bills / Upcoming / Donations / Income), Activity, Properties.</li>
+        </ul>
+
+        <h4>Coming next</h4>
+        <ul class="help-list">
+          <li><strong>UI polish</strong> — lighter detail-screen explainers, quieter step-number styling, more consistent spacing between cards and panels.</li>
+          <li><strong>Copy polish</strong> — shorter lead text on detail screens; tighter wording on the Welcome and completion panel.</li>
+          <li><strong>Flow validation</strong> — continued testing of the new-user vs existing-user entry into Setup / Review, and of the completion-panel wording when setup is partial.</li>
+          <li><strong>Final cleanup</strong> — removing any remaining references to deprecated TEST-mode UI and tightening Help wording as surfaces change.</li>
+        </ul>
+
+        <h4>Not planned right now</h4>
+        <ul class="help-list">
+          <li>No income forecasting and no separate <code>INPUT - Income Sources</code> sheet — income is always read from the latest <strong>Cash Flow</strong> year sheet.</li>
+          <li>No new user-facing TEST-mode surfaces. Existing TEST-mode code remains in place but is not exposed from the UI.</li>
+          <li>No broad dashboard redesign in the near term — changes are scoped to polish and consistency.</li>
+        </ul>
+
+        <h4>Getting started (handoff)</h4>
+        <ul class="help-list">
+          <li>Open <strong>Setup / Review</strong> from the top-right. A new spreadsheet lands on Welcome; a populated one lands on the status grid.</li>
+          <li>Work each card (Bank Accounts, Debts, Bills, Upcoming, Income) from the grid. Opening an editor uses Setup mode with <strong>Back to Setup</strong>.</li>
+          <li>Use <strong>Go to Next Actions</strong> from the completion panel when you're ready to act on the current state.</li>
+          <li>Run <strong>Run Planner + Refresh Snapshot</strong> after major edits to refresh Overview and the debt planner.</li>
+        </ul>
       </section>
 
       <!-- ================================================================ -->
@@ -52,8 +94,9 @@
 
         <h4>Screen flow</h4>
         <ul class="help-list">
-          <li><strong>Welcome</strong> — short intro. Press <em>Continue</em> to open the status grid, or <em>Back to Dashboard</em> to leave.</li>
-          <li><strong>Status grid</strong> — one card per area (Bank Accounts, Debts, Bills, Upcoming Expenses, Income, Finish). Each card shows <em>Setup complete</em> or <em>Not set up</em> plus a short summary.</li>
+          <li><strong>Welcome</strong> — short intro shown only the first time you open Setup / Review with no data in any of the five core areas. Press <em>Continue</em> to open the status grid, or <em>Back to Dashboard</em> to leave. Once any core area has data, opening Setup / Review goes straight to the status grid.</li>
+          <li><strong>Status grid</strong> — one card per required area (Bank Accounts, Debts, Bills, Upcoming Expenses, Income). Each card shows <em>Setup complete</em> or <em>Not set up</em> plus a short summary. A separate <em>Optional</em> row below the grid holds <strong>Houses</strong>.</li>
+          <li><strong>Completion panel</strong> — sits under the grid with a readiness summary (<em>You're ready</em> when all five required areas are set up, otherwise <em>Almost there</em> with a short progress line). Primary action is <em>Go to Next Actions</em>; a secondary <em>See setup summary</em> link opens a per-area breakdown.</li>
           <li><strong>Detail screens</strong> — click any card to open a read-only detail view for that area. The detail view shows what is currently tracked and a primary action to open the matching editor.</li>
         </ul>
 
@@ -64,7 +107,11 @@
           <li><strong>Bills</strong> — reads active recurring bills (payee, amount, due day, frequency). Opens the <strong>Cash Flow → Bills</strong> editor in Setup mode. When empty, the CTA becomes <em>Add first bill</em>.</li>
           <li><strong>Upcoming Expenses</strong> — reads <em>Planned</em> rows only (Paid / Dismissed rows are treated as history). Opens the <strong>Cash Flow → Upcoming</strong> editor in Setup mode. When empty, the CTA becomes <em>Add first upcoming expense</em>.</li>
           <li><strong>Income</strong> — derived from the latest <strong>Cash Flow</strong> year sheet. Groups recurring income (seen in ≥3 months, not an excluded category such as Bonus / RSU / Refund) and shows other detected entries for reference. Opens the <strong>Cash Flow → Income</strong> tab in Setup mode. There is <strong>no</strong> separate income source sheet.</li>
-          <li><strong>Finish</strong> — summary of how many steps are complete. Use <em>Review</em> on any row to jump back to that detail screen, or <em>Go to Next Actions</em> to leave Setup and open Planning → Next Actions.</li>
+        </ul>
+
+        <h4>Optional</h4>
+        <ul class="help-list">
+          <li><strong>Houses</strong> — optional property tracking. Appears as an <em>Optional</em>-tagged card in its own row below the required steps. <strong>Not</strong> part of the Setup / Review completion count, not used for cash decisions, and not required to finish Setup. Opens the <strong>Assets → House Values</strong> editor in Setup mode. If you have no properties yet, the CTA becomes <em>Add first property</em>.</li>
         </ul>
 
         <h4>Setup-mode editor handoff</h4>

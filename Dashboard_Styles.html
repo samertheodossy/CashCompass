@@ -1588,16 +1588,21 @@
     gap: 10px;
   }
   .onboarding-step-num {
+    /*
+     * Deliberately quiet: the title should lead the card, not the step
+     * number. Light slate chip instead of a dark filled circle so the
+     * number reads as secondary metadata.
+     */
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: #0f172a;
-    color: #ffffff;
+    background: #e2e8f0;
+    color: #475569;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: bold;
-    font-size: 13px;
+    font-weight: 600;
+    font-size: 12px;
     flex-shrink: 0;
   }
   .onboarding-step-title {
@@ -1655,25 +1660,31 @@
     background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 12px;
-    padding: 28px 28px 24px;
+    /*
+     * Tightened padding so the welcome reads as a compact block rather
+     * than a tall page. Title / lede / reassurance spacing below is
+     * tuned to flow as one unit.
+     */
+    padding: 24px 24px 20px;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   }
   .onboarding-welcome-title {
-    margin: 0 0 8px;
-    font-size: 1.6rem;
+    margin: 0 0 4px;
+    font-size: 1.5rem;
     font-weight: 600;
     color: #0f172a;
+    line-height: 1.3;
   }
   .onboarding-welcome-lede {
-    margin: 0 0 12px;
+    margin: 0 0 8px;
     color: #334155;
-    line-height: 1.5;
+    line-height: 1.45;
   }
   .onboarding-welcome-reassurance {
-    margin: 0 0 12px;
+    margin: 0;
     color: #475569;
-    font-size: 0.95rem;
-    line-height: 1.5;
+    font-size: 0.9rem;
+    line-height: 1.45;
   }
   .onboarding-welcome-test-note {
     margin: 12px 0 0;
@@ -1687,7 +1698,7 @@
   .onboarding-welcome-actions {
     display: flex;
     gap: 10px;
-    margin-top: 20px;
+    margin-top: 16px;
     flex-wrap: wrap;
   }
   .onboarding-welcome-actions .btn-primary {
@@ -1774,17 +1785,21 @@
   .onboarding-detail-badge.status-partial  { background: #fef3c7; color: #92400e; }
   .onboarding-detail-badge.status-missing  { background: #fee2e2; color: #991b1b; }
   .onboarding-detail-explainer {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 12px 14px;
-    margin: 8px 0 14px;
-    color: #334155;
+    /*
+     * Previously a framed slate card. Flattened to plain muted text so
+     * the detail content (summary, list, empty state) leads the screen.
+     */
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 4px 0 14px;
+    color: #475569;
     font-size: 14px;
     line-height: 1.5;
   }
-  .onboarding-detail-explainer p { margin: 0 0 6px; }
+  .onboarding-detail-explainer p { margin: 0 0 4px; }
   .onboarding-detail-explainer p:last-child { margin: 0; }
+  .onboarding-detail-explainer .muted { font-size: 13px; }
   .onboarding-detail-empty {
     border: 1px dashed #cbd5e1;
     border-radius: 10px;
@@ -1952,4 +1967,160 @@
     border: 1px solid #2563eb;
   }
   .onboarding-actions .btn-primary:hover { background: #1d4ed8; border-color: #1d4ed8; }
+
+  /*
+   * Section headers ("Optional", "Finish"). Small muted labels that
+   * group the card blocks below them so the page reads as:
+   *   [Required steps grid]
+   *   Optional
+   *   [Houses card]
+   *   Finish
+   *   [Completion panel]
+   * The label is subdued so it orients without competing with the
+   * cards themselves.
+   */
+  .onboarding-section-header {
+    margin: 22px 0 8px;
+  }
+  .onboarding-section-header-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #64748b;
+  }
+  .onboarding-section-header-sub {
+    margin-top: 2px;
+    font-size: 12px;
+    color: #94a3b8;
+  }
+
+  /*
+   * Optional row (Houses). Rendered as a second .onboarding-steps-grid
+   * immediately below the required steps so the card width / gutters
+   * line up with the grid above. Houses is visually a full-weight card
+   * — the only visual differences from a required step are the missing
+   * step number (see .onboarding-step-num-placeholder) and the inline
+   * "Optional" tag on the right.
+   *
+   * auto-fill (not auto-fit) is used here so a single Houses card sits
+   * in one column at the grid's left edge instead of stretching to
+   * fill the full row.
+   */
+  .onboarding-steps-grid-optional {
+    margin-top: 0;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
+  .onboarding-step-num-placeholder {
+    /*
+     * Invisible spacer that occupies the same box as .onboarding-step-num
+     * so the Houses card's title aligns horizontally with the titles of
+     * the numbered required cards.
+     */
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+  }
+  .onboarding-optional-card .onboarding-step-title {
+    color: #0f172a;
+  }
+  .onboarding-optional-tag {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #475569;
+  }
+  /*
+   * Detail-view label variant for optional surfaces. Reuses
+   * .onboarding-detail-step spacing / weight but swaps the step-number
+   * feel for a muted "Optional" tag so the Houses detail doesn't read
+   * as "Step N of N".
+   */
+  .onboarding-detail-optional {
+    color: #64748b;
+  }
+
+  /*
+   * Completion panel. Sits below both grids (required + optional) and
+   * replaces the old "Finish" step card. Full-width, distinct from a
+   * step card, with the primary "Go to Next Actions" CTA. No step
+   * number, no status badge — intentionally not step-shaped so users
+   * read it as a readiness summary rather than as another checklist
+   * item.
+   */
+  .onboarding-finish-panel {
+    /*
+     * Completion panel uses card-consistent padding and border radius
+     * so it feels like a sibling to the setup cards above, not a
+     * separate footer band. Top margin is 0 because the "Finish"
+     * section header immediately above it handles vertical spacing.
+     */
+    margin-top: 0;
+    padding: 16px 16px;
+    border: 1px solid #dbeafe;
+    background: #f0f7ff;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .onboarding-finish-panel-text {
+    flex: 1 1 280px;
+    min-width: 0;
+  }
+  .onboarding-finish-panel-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #0f172a;
+    margin-bottom: 2px;
+    line-height: 1.3;
+  }
+  .onboarding-finish-panel-sub {
+    font-size: 13px;
+    color: #475569;
+    line-height: 1.45;
+  }
+  .onboarding-finish-panel-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  /*
+   * Secondary link sits quietly next to the primary CTA so the
+   * "Go to Next Actions" button clearly leads.
+   */
+  .onboarding-finish-panel-actions .btn-link-inline {
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: #475569;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .onboarding-finish-panel-actions .btn-link-inline:hover {
+    color: #0f172a;
+    text-decoration: underline;
+  }
+  .onboarding-finish-panel-actions .btn-primary {
+    padding: 9px 16px;
+    border-radius: 8px;
+    background: #2563eb;
+    color: #fff;
+    border: 1px solid #2563eb;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .onboarding-finish-panel-actions .btn-primary:hover {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+  }
 </style>

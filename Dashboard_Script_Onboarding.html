@@ -43,6 +43,7 @@ function onboardingShowView(view) {
     bills:    document.getElementById('onboarding_view_bills'),
     upcoming: document.getElementById('onboarding_view_upcoming'),
     income:   document.getElementById('onboarding_view_income'),
+    houses:   document.getElementById('onboarding_view_houses'),
     finish:   document.getElementById('onboarding_view_finish')
   };
   // Guard: at minimum Welcome + Grid must exist. Missing detail views
@@ -51,7 +52,7 @@ function onboardingShowView(view) {
 
   var allowed = {
     welcome: 1, grid: 1, bank: 1, debts: 1,
-    bills: 1, upcoming: 1, income: 1, finish: 1
+    bills: 1, upcoming: 1, income: 1, houses: 1, finish: 1
   };
   var target = allowed[view] ? view : 'welcome';
   Object.keys(views).forEach(function(k) {
@@ -70,6 +71,7 @@ function onboardingShowView(view) {
   if (target === 'bills')    onboardingLoadBillsDetail_();
   if (target === 'upcoming') onboardingLoadUpcomingDetail_();
   if (target === 'income')   onboardingLoadIncomeDetail_();
+  if (target === 'houses')   onboardingLoadHousesDetail_();
   if (target === 'finish')   onboardingLoadFinishDetail_();
 }
 
@@ -158,6 +160,7 @@ function loadOnboardingSection() {
     'onboarding_view_bills',
     'onboarding_view_upcoming',
     'onboarding_view_income',
+    'onboarding_view_houses',
     'onboarding_view_finish'
   ];
   allViewIds.forEach(function(id) {
@@ -242,6 +245,66 @@ function onboardingApplyStatusGrid_(data) {
   // vs "Not set up". We keep partial/missing distinct on the server
   // but present a single "Not set up" bucket in the UI for now.
   onboardingSetStatus_(complete + ' complete · ' + notSetUp + ' not set up', '');
+
+  onboardingApplyFinishPanel_(complete, total);
+
+  // Houses is optional and not part of the status payload, but the card
+  // lives in the same grid. Fetch its summary in parallel so users see
+  // "N tracked" / "None yet" on the card without opening the detail.
+  onboardingLoadHousesSummary_();
+}
+
+// Fetch a minimal Houses summary for the optional card on the grid.
+// Reuses the same endpoint that powers the Houses detail view; we only
+// consume the count here so the card body stays short.
+function onboardingLoadHousesSummary_() {
+  var body = document.querySelector('[data-body="houses"]');
+  if (!body) return;
+  // Calm placeholder: matches the other grid cards' initial `—` state
+  // so the row doesn't flash the word "Loading…" before summary text.
+  body.innerHTML = '<p class="muted">&mdash;</p>';
+
+  google.script.run
+    .withSuccessHandler(function(data) { onboardingRenderHousesSummary_(data); })
+    .withFailureHandler(function() {
+      var el = document.querySelector('[data-body="houses"]');
+      if (el) el.innerHTML = '<p class="muted">—</p>';
+    })
+    .getOnboardingHousesFromDashboard(ONBOARDING_MODE_);
+}
+
+function onboardingRenderHousesSummary_(data) {
+  var body = document.querySelector('[data-body="houses"]');
+  if (!body) return;
+
+  if (!data || !Array.isArray(data.houses)) {
+    body.innerHTML = '<p class="muted">—</p>';
+    return;
+  }
+
+  var active = data.houses.filter(function(h) { return !h.inactive; }).length;
+  var line = active > 0 ? (active + ' tracked') : 'None yet';
+  body.innerHTML = '<p class="muted">' + escapeOnboardingHtml_(line) + '</p>';
+}
+
+// Render the readiness / completion panel shown below the step grid.
+// The panel replaces the old "Finish" step card and is intentionally
+// not styled as a step: no number, no status badge, just a readiness
+// message plus the primary "Go to Next Actions" CTA.
+function onboardingApplyFinishPanel_(complete, total) {
+  var titleEl = document.getElementById('onboarding_finish_panel_title');
+  var subEl = document.getElementById('onboarding_finish_panel_sub');
+  if (!titleEl || !subEl) return;
+
+  var allDone = total > 0 && complete === total;
+  if (allDone) {
+    titleEl.textContent = "You're ready";
+    subEl.textContent = 'Your setup is ready. You can update anything anytime.';
+  } else {
+    titleEl.textContent = 'Almost there';
+    subEl.textContent =
+      complete + ' of ' + total + ' areas ready — you can fill in the rest anytime.';
+  }
 }
 
 // --------------------------------------------------------------------------
@@ -1025,6 +1088,171 @@ function onboardingOpenIncomePage() {
 }
 
 // --------------------------------------------------------------------------
+// Houses (optional) detail screen
+//
+// Houses is an OPTIONAL, informational surface. It is intentionally not
+// part of the Setup completion summary and is NOT routed through
+// getOnboardingStatusFromDashboard — it has its own read-only endpoint
+// (getOnboardingHousesFromDashboard). No sheet safeguard from
+// onboarding: creating INPUT - House Values from scratch requires the
+// same year-block conventions that already ship with the live Assets
+// → House Values surface, and there is no safe onboarding-owned
+// helper to create that structure today. If the sheet is missing we
+// report it and hand off to the normal editor.
+// --------------------------------------------------------------------------
+
+function onboardingHousesSetStatus_(text, cls) {
+  var el = document.getElementById('onboarding_houses_status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+function onboardingLoadHousesDetail_() {
+  var mode = ONBOARDING_MODE_;
+  var body = document.getElementById('onboarding_houses_body');
+  var badge = document.getElementById('onboarding_houses_badge');
+
+  if (badge) {
+    badge.className = 'onboarding-detail-badge';
+    badge.textContent = '…';
+  }
+  if (body) body.innerHTML = '<p class="muted">Loading properties&hellip;</p>';
+  onboardingHousesSetStatus_('Reading properties…', 'dash-status-loading');
+
+  google.script.run
+    .withSuccessHandler(function(data) { onboardingRenderHousesDetail_(data); })
+    .withFailureHandler(function(err) {
+      onboardingHousesSetStatus_(
+        'Error reading properties: ' + (err && err.message ? err.message : String(err)),
+        'error'
+      );
+      if (body) body.innerHTML = '';
+    })
+    .getOnboardingHousesFromDashboard(mode);
+}
+
+function onboardingRenderHousesDetail_(data) {
+  var body = document.getElementById('onboarding_houses_body');
+  var badge = document.getElementById('onboarding_houses_badge');
+  if (!body) return;
+
+  if (!data) {
+    onboardingHousesSetStatus_('Could not read properties.', 'error');
+    body.innerHTML = '';
+    return;
+  }
+
+  var houses = (data.houses && data.houses.length) ? data.houses : [];
+  var activeHouses = houses.filter(function(h) { return !h.inactive; });
+
+  // Neutral badge — Houses is optional, so we deliberately do NOT use
+  // the status-complete / status-missing color pills that imply the
+  // user still has required work to do.
+  if (badge) {
+    badge.className = 'onboarding-detail-badge';
+    badge.textContent = activeHouses.length > 0
+      ? activeHouses.length + ' tracked'
+      : 'None yet';
+  }
+  onboardingHousesSetStatus_(
+    activeHouses.length + ' tracked' +
+      (houses.length - activeHouses.length > 0
+        ? ' · ' + (houses.length - activeHouses.length) + ' inactive'
+        : ''),
+    ''
+  );
+
+  var fragments = [];
+  if (data.statusNote) {
+    fragments.push('<p class="muted">' + escapeOnboardingHtml_(data.statusNote) + '</p>');
+  }
+
+  // Sheet missing: the canonical House Values sheet does not exist.
+  // Route to the normal Houses editor rather than creating the sheet
+  // from onboarding — the existing Add New House flow on Assets →
+  // House Values is the supported path for bootstrapping this surface.
+  if (!data.sheetExists) {
+    var missingCta = '<button type="button" class="btn-primary" ' +
+      'onclick="onboardingOpenHousesPage()">Open Houses editor</button>';
+    fragments.push(
+      '<div class="onboarding-detail-empty">' +
+        '<p>Property tracking is optional.</p>' +
+        '<p class="muted">The House Values sheet is not available yet. ' +
+          'You can skip this section, or open the Houses editor to add your first property.</p>' +
+        '<div style="margin-top:12px;">' + missingCta + '</div>' +
+      '</div>'
+    );
+    body.innerHTML = fragments.join('');
+    return;
+  }
+
+  if (houses.length === 0) {
+    var emptyCta = '<button type="button" class="btn-primary" ' +
+      'onclick="onboardingOpenHousesPage()">Add first property</button>';
+    fragments.push(
+      '<div class="onboarding-detail-empty">' +
+        '<p>Property tracking is optional.</p>' +
+        '<p class="muted">You have not added any houses yet. ' +
+          'Adding a property lets CashCompass show its value alongside your other assets.</p>' +
+        '<div style="margin-top:12px;">' + emptyCta + '</div>' +
+      '</div>'
+    );
+    body.innerHTML = fragments.join('');
+    return;
+  }
+
+  function renderHouseRow(h) {
+    var parts = [];
+    parts.push(
+      '<div class="onboarding-account-name">' +
+        escapeOnboardingHtml_(h.name) +
+        (h.inactive ? ' <span class="muted">(inactive)</span>' : '') +
+      '</div>'
+    );
+    if (h.propertyType) {
+      parts.push(
+        '<div class="onboarding-account-meta"><span class="muted">Type:</span> ' +
+          escapeOnboardingHtml_(h.propertyType) +
+        '</div>'
+      );
+    }
+    if (h.currentValue !== '' && h.currentValue !== null && h.currentValue !== undefined) {
+      parts.push(
+        '<div class="onboarding-account-meta"><span class="muted">Current value:</span> ' +
+          escapeOnboardingHtml_(String(h.currentValue)) +
+        '</div>'
+      );
+    }
+    if (h.loanAmountLeft !== '' && h.loanAmountLeft !== null && h.loanAmountLeft !== undefined) {
+      parts.push(
+        '<div class="onboarding-account-meta"><span class="muted">Loan left:</span> ' +
+          escapeOnboardingHtml_(String(h.loanAmountLeft)) +
+        '</div>'
+      );
+    }
+    return '<div class="onboarding-account-row" role="listitem">' + parts.join('') + '</div>';
+  }
+
+  fragments.push('<h3 class="onboarding-subsection-title">Properties</h3>');
+  fragments.push(
+    '<div class="onboarding-account-list" role="list">' +
+      houses.map(renderHouseRow).join('') +
+    '</div>'
+  );
+
+  body.innerHTML = fragments.join('');
+}
+
+function onboardingOpenHousesPage() {
+  // Reuse the same setup-editor-mode handoff pattern as Bank Accounts.
+  // Returning to 'houses' puts the user back on the optional detail
+  // screen (not on the main grid) so Back to Setup feels consistent
+  // with the core step handoffs.
+  enterSetupEditorMode('assets', 'houses', 'houses');
+}
+
+// --------------------------------------------------------------------------
 // Finish screen
 //
 // Reuses the existing status probes (getOnboardingStatusFromDashboard)
@@ -1042,12 +1270,7 @@ function onboardingFinishSetStatus_(text, cls) {
 function onboardingLoadFinishDetail_() {
   var mode = ONBOARDING_MODE_;
   var body = document.getElementById('onboarding_finish_body');
-  var badge = document.getElementById('onboarding_finish_badge');
 
-  if (badge) {
-    badge.className = 'onboarding-detail-badge';
-    badge.textContent = '…';
-  }
   if (body) body.innerHTML = '<p class="muted">Loading summary&hellip;</p>';
   onboardingFinishSetStatus_('Reading setup status…', 'dash-status-loading');
 
@@ -1066,7 +1289,6 @@ function onboardingLoadFinishDetail_() {
 
 function onboardingRenderFinishDetail_(data) {
   var body = document.getElementById('onboarding_finish_body');
-  var badge = document.getElementById('onboarding_finish_badge');
   var intro = document.getElementById('onboarding_finish_intro');
   if (!body) return;
 
@@ -1081,20 +1303,15 @@ function onboardingRenderFinishDetail_(data) {
   var notSetUp = total - complete;
   var allDone = notSetUp === 0;
 
-  if (badge) {
-    badge.className = 'onboarding-detail-badge status-' + (allDone ? 'complete' : 'partial');
-    badge.textContent = allDone ? 'All set up' : (notSetUp + ' not set up');
-  }
-
   onboardingFinishSetStatus_(
-    complete + ' of ' + total + ' complete',
+    complete + ' of ' + total + ' ready',
     ''
   );
 
   if (intro) {
     intro.textContent = allDone
-      ? "You're all set. CashCompass now has the core information it needs to guide decisions."
-      : "You're making progress. Some areas still need details — finish them when you're ready, or continue with what's set up now.";
+      ? 'Your setup is ready. You can update anything anytime.'
+      : 'Your setup is usable. You can fill in the rest anytime.';
   }
 
   // Map step key → the onboarding view name used by onboardingShowView
@@ -1173,7 +1390,7 @@ var ONBOARDING_EDITOR_RETURN_VIEW_ = null;
 
 function enterSetupEditorMode(pageName, tabName, returnView) {
   var allowedReturns = {
-    bank: 1, debts: 1, bills: 1, upcoming: 1, income: 1,
+    bank: 1, debts: 1, bills: 1, upcoming: 1, income: 1, houses: 1,
     grid: 1, welcome: 1
   };
   ONBOARDING_EDITOR_RETURN_VIEW_ = allowedReturns[returnView] ? returnView : 'grid';

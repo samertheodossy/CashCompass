@@ -1451,7 +1451,7 @@
     -->
     <div id="onboarding_view_grid" class="onboarding-view onboarding-view-grid" style="display:none;">
       <div class="onboarding-header">
-        <h2 class="onboarding-title">Setup</h2>
+        <h2 class="onboarding-title">Setup / Review</h2>
         <p class="muted onboarding-subtitle">
           Check your setup status across accounts, debts, bills, upcoming items, and income.
           Opening this page does not change any data.
@@ -1470,7 +1470,7 @@
           <div class="onboarding-step-title">Bank Accounts</div>
           <div class="onboarding-step-badge" data-badge="bank">…</div>
         </div>
-        <div class="onboarding-step-body" data-body="bank">Loading…</div>
+        <div class="onboarding-step-body" data-body="bank"><p class="muted">&mdash;</p></div>
         <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
       </div>
       <div class="onboarding-step-card onboarding-step-card-clickable" data-step="debts" id="onboarding_step_debts"
@@ -1482,7 +1482,7 @@
           <div class="onboarding-step-title">Debts</div>
           <div class="onboarding-step-badge" data-badge="debts">…</div>
         </div>
-        <div class="onboarding-step-body" data-body="debts">Loading…</div>
+        <div class="onboarding-step-body" data-body="debts"><p class="muted">&mdash;</p></div>
         <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
       </div>
       <div class="onboarding-step-card onboarding-step-card-clickable" data-step="bills" id="onboarding_step_bills"
@@ -1494,7 +1494,7 @@
           <div class="onboarding-step-title">Bills</div>
           <div class="onboarding-step-badge" data-badge="bills">…</div>
         </div>
-        <div class="onboarding-step-body" data-body="bills">Loading…</div>
+        <div class="onboarding-step-body" data-body="bills"><p class="muted">&mdash;</p></div>
         <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
       </div>
       <div class="onboarding-step-card onboarding-step-card-clickable" data-step="upcoming" id="onboarding_step_upcoming"
@@ -1506,7 +1506,7 @@
           <div class="onboarding-step-title">Upcoming Expenses</div>
           <div class="onboarding-step-badge" data-badge="upcoming">…</div>
         </div>
-        <div class="onboarding-step-body" data-body="upcoming">Loading…</div>
+        <div class="onboarding-step-body" data-body="upcoming"><p class="muted">&mdash;</p></div>
         <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
       </div>
       <div class="onboarding-step-card onboarding-step-card-clickable" data-step="income" id="onboarding_step_income"
@@ -1518,22 +1518,61 @@
           <div class="onboarding-step-title">Income</div>
           <div class="onboarding-step-badge" data-badge="income">…</div>
         </div>
-        <div class="onboarding-step-body" data-body="income">Loading…</div>
+        <div class="onboarding-step-body" data-body="income"><p class="muted">&mdash;</p></div>
         <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
       </div>
-      <div class="onboarding-step-card onboarding-step-card-clickable" data-step="finish" id="onboarding_step_finish"
-           role="button" tabindex="0"
-           onclick="onboardingShowView('finish')"
-           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();onboardingShowView('finish');}">
-        <div class="onboarding-step-head">
-          <div class="onboarding-step-num">6</div>
-          <div class="onboarding-step-title">Finish</div>
-        </div>
-        <div class="onboarding-step-body" data-body="finish">
-          <p>Review the items marked <strong>Not set up</strong>, then use the matching screens to fill in details when you're ready. You can come back to Setup any time.</p>
-        </div>
-        <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
       </div>
+
+      <!--
+        Optional section. Houses is deliberately NOT part of the
+        setup-completion count, but is rendered as a same-size card in
+        its own grid so widths/gutters line up with the required steps
+        above. The grid uses auto-fill (not auto-fit) so a single card
+        does not stretch to full width.
+      -->
+      <div class="onboarding-section-header">
+        <div class="onboarding-section-header-label">Optional</div>
+        <div class="onboarding-section-header-sub">Not required for cash planning</div>
+      </div>
+      <div class="onboarding-steps-grid onboarding-steps-grid-optional"
+           id="onboarding_optional_section">
+        <div class="onboarding-step-card onboarding-step-card-clickable onboarding-optional-card"
+             data-step="houses" id="onboarding_step_houses"
+             role="button" tabindex="0"
+             onclick="onboardingShowView('houses')"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();onboardingShowView('houses');}">
+          <div class="onboarding-step-head">
+            <div class="onboarding-step-num onboarding-step-num-placeholder" aria-hidden="true"></div>
+            <div class="onboarding-step-title">Houses</div>
+            <span class="onboarding-optional-tag">Optional</span>
+          </div>
+          <div class="onboarding-step-body" data-body="houses"><p class="muted">&mdash;</p></div>
+          <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
+        </div>
+      </div>
+
+      <!--
+        Finish section. Completion panel replaces the old "Finish" step
+        card and renders as a readiness summary rather than a step.
+      -->
+      <div class="onboarding-section-header">
+        <div class="onboarding-section-header-label">Finish</div>
+      </div>
+      <div class="onboarding-finish-panel" id="onboarding_finish_panel">
+        <div class="onboarding-finish-panel-text">
+          <div class="onboarding-finish-panel-title"
+               id="onboarding_finish_panel_title">You're ready</div>
+          <div class="onboarding-finish-panel-sub"
+               id="onboarding_finish_panel_sub">
+            Your setup is ready. You can update anything anytime.
+          </div>
+        </div>
+        <div class="onboarding-finish-panel-actions">
+          <button type="button" class="btn-link-inline"
+                  onclick="onboardingShowView('finish')">See setup summary</button>
+          <button type="button" class="btn-primary"
+                  onclick="onboardingGoToNextActions()">Go to Next Actions</button>
+        </div>
       </div>
 
       <div class="onboarding-actions">
@@ -1557,11 +1596,7 @@
       </div>
 
       <div class="onboarding-detail-explainer">
-        <p>
-          Your bank accounts determine how much cash is available right now.
-          Some money may be reserved or protected as a buffer &mdash; that's
-          how CashCompass calculates your <strong>Cash to use</strong>.
-        </p>
+        <p>Bank accounts determine your available cash.</p>
         <p class="muted">
           This view is read-only. Edit account details from Assets &rarr; Bank Accounts.
         </p>
@@ -1594,11 +1629,7 @@
       </div>
 
       <div class="onboarding-detail-explainer">
-        <p>
-          Debts represent money you owe &mdash; credit cards, loans, HELOCs, and similar.
-          Their <strong>minimum payments</strong> must be covered each month, which affects
-          how much cash is actually available to use.
-        </p>
+        <p>Debts and their minimum payments reduce cash available each month.</p>
         <p class="muted">
           This view is read-only. Edit debt details from Planning &rarr; Debts.
         </p>
@@ -1629,11 +1660,7 @@
       </div>
 
       <div class="onboarding-detail-explainer">
-        <p>
-          Bills are recurring obligations &mdash; subscriptions, utilities, rent,
-          and similar. Tracking them helps CashCompass know what needs to be
-          covered each month.
-        </p>
+        <p>Bills are recurring obligations covered each month.</p>
         <p class="muted">
           This view is read-only. Edit bills from Cash Flow &rarr; Bills.
         </p>
@@ -1664,11 +1691,7 @@
       </div>
 
       <div class="onboarding-detail-explainer">
-        <p>
-          Upcoming expenses are known near-term costs that aren't monthly bills
-          &mdash; an annual premium, a planned trip, a one-time purchase.
-          Tracking them helps plan for money you'll need soon.
-        </p>
+        <p>Upcoming expenses are near-term costs you'll need cash for soon.</p>
         <p class="muted">
           This view is read-only. Edit upcoming expenses from Cash Flow &rarr; Upcoming.
         </p>
@@ -1703,13 +1726,9 @@
       </div>
 
       <div class="onboarding-detail-explainer">
-        <p>
-          Income is detected directly from your Cash Flow. This helps CashCompass
-          understand the money coming in each month.
-        </p>
+        <p>Income is detected from your latest Cash Flow.</p>
         <p class="muted">
-          New income is added through Cash Flow &rarr; Income. There is no separate
-          income source sheet.
+          Add or edit income from Cash Flow &rarr; Income.
         </p>
       </div>
 
@@ -1726,21 +1745,51 @@
     </div>
 
     <!--
+      Optional view: Houses detail. Not numbered because Houses is not
+      part of the required setup flow. Read-only summary from the
+      existing INPUT - House Values source, with a handoff to the real
+      Assets → House Values editor in setup-editor-mode.
+    -->
+    <div id="onboarding_view_houses" class="onboarding-view onboarding-view-detail" style="display:none;">
+      <div class="onboarding-detail-header">
+        <div class="onboarding-detail-step onboarding-detail-optional">Optional</div>
+        <h2 class="onboarding-detail-title">Houses</h2>
+        <div id="onboarding_houses_badge" class="onboarding-detail-badge">…</div>
+      </div>
+
+      <div class="onboarding-detail-explainer">
+        <p>Property tracking is optional and doesn't affect cash decisions.</p>
+        <p class="muted">
+          Not part of the Setup / Review completion count. You can skip this and add properties later.
+        </p>
+      </div>
+
+      <div id="onboarding_houses_status" class="status"></div>
+
+      <div id="onboarding_houses_body">
+        <p class="muted">Loading properties&hellip;</p>
+      </div>
+
+      <div class="onboarding-actions">
+        <button type="button" onclick="onboardingShowView('grid')">Back</button>
+        <button type="button" class="btn-primary" onclick="onboardingOpenHousesPage()">Open Houses editor</button>
+      </div>
+    </div>
+
+    <!--
       View 8: Finish. Summary of overall setup state across all five
       areas. Does not write anything; reuses the same status probes that
       power the grid so the summary is always in sync. CTAs route the
       user back to Setup or into Planning → Next Actions.
     -->
-    <div id="onboarding_view_finish" class="onboarding-view onboarding-view-detail" style="display:none;">
+    <div id="onboarding_view_finish" class="onboarding-view onboarding-view-detail onboarding-view-finish" style="display:none;">
       <div class="onboarding-detail-header">
-        <h2 class="onboarding-detail-title">Finish</h2>
-        <div id="onboarding_finish_badge" class="onboarding-detail-badge">…</div>
+        <h2 class="onboarding-detail-title">Setup summary</h2>
       </div>
 
       <div class="onboarding-detail-explainer">
         <p id="onboarding_finish_intro">
-          You're all set. CashCompass now has the core information it needs to
-          guide decisions.
+          Your setup is ready. You can update anything anytime.
         </p>
       </div>
 
