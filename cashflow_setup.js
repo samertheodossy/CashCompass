@@ -283,3 +283,199 @@ function columnToLetter_(column) {
 
   return letter;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Safe from-scratch Cash Flow year creator (zero-sheet onboarding)          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Canonical from-scratch creator for `INPUT - Cash Flow <year>`.
+ *
+ * Safety contract (non-negotiable):
+ *   - If the sheet already exists this function is a hard no-op. It
+ *     returns the existing sheet and NEVER rewrites headers, clears
+ *     cells, or inspects user data.
+ *   - Never deletes, renames, or replaces any sheet.
+ *   - Never touches other years' Cash Flow sheets, SYS sheets, or any
+ *     unrelated sheet.
+ *   - Only creates the sheet if it is missing.
+ *   - Idempotent and rerunnable.
+ *
+ * Canonical structure written on first creation (derived from existing
+ * readers / writers, not guessed):
+ *   Row 1 headers:
+ *     A = 'Type'         (required by getCashFlowHeaderMap_)
+ *     B = 'Flow Source'  (optional column, included up-front so Quick
+ *                         Add and bill-routing work without the self-
+ *                         heal column-inserter running later)
+ *     C = 'Payee'        (required by getCashFlowHeaderMap_)
+ *     D = 'Active'       (optional metadata; YES / NO / blank, blank is
+ *                         treated as YES by every consumer. Seeded so
+ *                         income detection and HELOC realism have the
+ *                         column available immediately)
+ *     E..P = 'Jan-YY' .. 'Dec-YY'  (MMM-YY pattern matched by
+ *                                   parseMonthHeader_; plain-text
+ *                                   formatted so Sheets does not
+ *                                   auto-parse them as dates)
+ *     Q = 'Total'        (optional total column, recognized by
+ *                         detectCashFlowLayout_ as the rightmost
+ *                         post-month column)
+ *
+ *   No data rows. No Summary row. Both the Summary row and any data
+ *   rows are written incrementally by Quick Add / createNextYearCash-
+ *   FlowSheet. Quick Add (insertCashFlowRow_) and
+ *   findCashFlowSummaryRow_ both already handle the absent-Summary-row
+ *   case gracefully by appending at the last row.
+ *
+ *   Frozen rows: 1. Month cells and Total column formatted as currency.
+ *
+ * @param {number|string=} year Defaults to the current calendar year.
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet} The (possibly newly
+ *     created) Cash Flow sheet.
+ * @throws {Error} If the resolved year is not a positive integer, or if
+ *     sheet insertion fails for a non-race reason.
+ */
+function ensureCashFlowYearSheet_(year) {
+  const yearNum = Number(
+    (year === undefined || year === null || year === '')
+      ? getCurrentYear_()
+      : year
+  );
+  if (!Number.isFinite(yearNum) || yearNum <= 0 || Math.floor(yearNum) !== yearNum) {
+    throw new Error('ensureCashFlowYearSheet_: invalid year: ' + String(year));
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetName = getCashFlowSheetName_(yearNum);
+
+  const existing = ss.getSheetByName(sheetName);
+  if (existing) {
+    return existing;
+  }
+
+  let sheet;
+  try {
+    sheet = ss.insertSheet(sheetName);
+  } catch (e) {
+    const raced = ss.getSheetByName(sheetName);
+    if (raced) return raced;
+    throw e;
+  }
+
+  // Header row: columns must match the canonical order the rest of the
+  // app uses. Column identities are resolved by header label everywhere
+  // (getCashFlowHeaderMap_ / detectCashFlowLayout_), so we are free to
+  // choose the order here — we deliberately mirror what a sheet cloned
+  // via createNextYearCashFlowSheet from a canonical prior year would
+  // look like.
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const suffix = String(yearNum).slice(-2);
+  const monthHeaders = monthNames.map(function(m) { return m + '-' + suffix; });
+
+  const headerRow = ['Type', 'Flow Source', 'Payee', 'Active']
+    .concat(monthHeaders)
+    .concat(['Total']);
+
+  try {
+    sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
+  } catch (e) {
+    // Surface the error rather than leaving a half-built sheet. We do
+    // NOT attempt to delete the sheet — the safety contract forbids
+    // deletes, and a manually-emptied sheet is recoverable.
+    throw new Error(
+      'Cash Flow sheet "' + sheetName +
+      '" was created but header write failed: ' + (e && e.message ? e.message : e)
+    );
+  }
+
+  // Pin month headers as plain text so Sheets does not auto-parse
+  // "Jan-26" into a Date. Must happen AFTER setValues so the string
+  // representation is stable.
+  const firstMonthCol1 = 5; // A=Type, B=Flow Source, C=Payee, D=Active, E=Jan
+  const lastMonthCol1 = firstMonthCol1 + monthHeaders.length - 1;
+  try {
+    for (let i = 0; i < monthHeaders.length; i++) {
+      const col1 = firstMonthCol1 + i;
+      const cell = sheet.getRange(1, col1);
+      cell.setNumberFormat('@STRING@');
+      cell.setValue(monthHeaders[i]);
+    }
+  } catch (e) {
+    // Plain-text pinning is defensive; losing it does not corrupt
+    // readers (they trim and regex-match). Do not fail the whole op.
+  }
+
+  // Currency format for the month columns and the Total column. Empty
+  // cells render as blank; numeric entries render as "$1,234.56".
+  try {
+    const totalCol1 = lastMonthCol1 + 1;
+    sheet.getRange(2, firstMonthCol1, sheet.getMaxRows() - 1, monthHeaders.length)
+      .setNumberFormat('$#,##0.00;-$#,##0.00');
+    sheet.getRange(2, totalCol1, sheet.getMaxRows() - 1, 1)
+      .setNumberFormat('$#,##0.00;-$#,##0.00');
+  } catch (e) {
+    // Number format is cosmetic; do not fail the ensure op.
+  }
+
+  // Cosmetic polish — never load-bearing.
+  try {
+    sheet.getRange(1, 1, 1, headerRow.length).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    sheet.autoResizeColumns(1, headerRow.length);
+  } catch (e) { /* cosmetic only */ }
+
+  return sheet;
+}
+
+/**
+ * Wrapper suitable for the centralized bootstrap registry. Keeps the
+ * same return shape as the other ensureOnboarding*SheetFromDashboard
+ * helpers so ensureBootstrapSheet_ can normalize results uniformly.
+ *
+ * Normal mode only — test Cash Flow sheets are cloned by
+ * ensureOnboardingTestSheetsFromDashboard and must not be routed
+ * through this path.
+ */
+function ensureOnboardingCashFlowYearSheetFromDashboard(mode) {
+  const m = (typeof normalizeOnboardingMode_ === 'function')
+    ? normalizeOnboardingMode_(mode)
+    : ((String(mode || '').toLowerCase() === 'test') ? 'test' : 'normal');
+  const year = getCurrentYear_();
+  const sheetName = getCashFlowSheetName_(year);
+
+  if (m === 'test') {
+    return {
+      ok: true,
+      created: false,
+      sheetName: sheetName,
+      mode: m,
+      reason: 'Test mode: use ensureOnboardingTestSheetsFromDashboard instead.'
+    };
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const existed = !!ss.getSheetByName(sheetName);
+  if (existed) {
+    return { ok: true, created: false, sheetName: sheetName, mode: m };
+  }
+
+  try {
+    ensureCashFlowYearSheet_(year);
+  } catch (e) {
+    return {
+      ok: false,
+      created: false,
+      sheetName: sheetName,
+      mode: m,
+      reason: 'Could not create Cash Flow sheet: ' + (e && e.message ? e.message : e)
+    };
+  }
+
+  return {
+    ok: true,
+    created: !!ss.getSheetByName(sheetName) && !existed,
+    sheetName: sheetName,
+    mode: m
+  };
+}
