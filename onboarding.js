@@ -1006,6 +1006,514 @@ function ensureOnboardingDebtsSheetFromDashboard(mode) {
   return { ok: true, created: true, sheetName: sheetName, mode: m };
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Bills — read-only detail + ensure-sheet                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Bills detail view for the onboarding Bills step.
+ *
+ * Read-only. Uses the shared resolver so TEST mode routes to
+ * TEST - INPUT - Bills. Skips any row whose Active column is explicitly
+ * No; blank/missing Active is treated as active for backward
+ * compatibility with older workbooks.
+ *
+ * Returns:
+ *   {
+ *     mode, sheetName, sheetExists,
+ *     bills: [ { payee, amount, dueDay, frequency, category,
+ *                hasAmount, hasDueDay, hasFrequency } ],
+ *     status, statusNote, testBanner
+ *   }
+ */
+function getOnboardingBillsFromDashboard(mode) {
+  var ctxMode = normalizeOnboardingMode_(mode);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetName = resolveOnboardingSheetName_(ctxMode, 'BILLS');
+  var sheet = ss.getSheetByName(sheetName);
+
+  var base = {
+    mode: ctxMode,
+    sheetName: sheetName,
+    sheetExists: !!sheet,
+    bills: [],
+    status: 'missing',
+    statusNote: '',
+    testBanner: ctxMode === 'test' ? 'TEST MODE — using TEST sheets only' : ''
+  };
+
+  if (!sheet) {
+    base.statusNote = 'Bills sheet not found.';
+    return base;
+  }
+
+  var display;
+  try {
+    display = sheet.getDataRange().getDisplayValues();
+  } catch (e) {
+    base.statusNote = 'Could not read Bills sheet.';
+    return base;
+  }
+  if (display.length < 2) {
+    base.statusNote = 'Sheet exists but has no rows yet.';
+    return base;
+  }
+
+  var headerMap = buildHeaderIndex_(display[0]);
+  var payeeIdx = headerIndexCI_(headerMap, 'Payee');
+  var amountIdx = headerIndexCI_(headerMap, 'Default Amount');
+  var dueDayIdx = headerIndexCI_(headerMap, 'Due Day');
+  var frequencyIdx = headerIndexCI_(headerMap, 'Frequency');
+  var categoryIdx = headerIndexCI_(headerMap, 'Category');
+  var activeIdx = headerIndexCI_(headerMap, 'Active');
+
+  if (payeeIdx === -1) {
+    base.statusNote = 'Bills sheet is missing the Payee column.';
+    return base;
+  }
+
+  var complete = 0;
+  var partial = 0;
+  var bills = [];
+  for (var r = 1; r < display.length; r++) {
+    var payee = String(display[r][payeeIdx] || '').trim();
+    if (!payee) continue;
+    if (activeIdx !== -1) {
+      var act = String(display[r][activeIdx] || '').trim();
+      if (act && normalizeYesNo_(act) === 'no') continue;
+    }
+
+    var amountRaw = amountIdx !== -1 ? String(display[r][amountIdx] || '').trim() : '';
+    var dueDayRaw = dueDayIdx !== -1 ? String(display[r][dueDayIdx] || '').trim() : '';
+    var frequencyRaw = frequencyIdx !== -1 ? String(display[r][frequencyIdx] || '').trim() : '';
+    var categoryRaw = categoryIdx !== -1 ? String(display[r][categoryIdx] || '').trim() : '';
+
+    var hasAmount = amountRaw !== '';
+    var hasDueDay = dueDayRaw !== '';
+    var hasFrequency = frequencyIdx === -1 || frequencyRaw !== '';
+    if (hasAmount && hasDueDay && hasFrequency) complete++;
+    else partial++;
+
+    bills.push({
+      payee: payee,
+      amount: amountRaw,
+      dueDay: dueDayRaw,
+      frequency: frequencyRaw,
+      category: categoryRaw,
+      hasAmount: hasAmount,
+      hasDueDay: hasDueDay,
+      hasFrequency: hasFrequency
+    });
+  }
+
+  base.bills = bills;
+  var total = bills.length;
+  if (total === 0) {
+    base.status = 'missing';
+    base.statusNote = 'No active bills tracked.';
+  } else {
+    base.status = partial === 0 ? 'complete' : 'partial';
+    base.statusNote = complete + ' with amount + due info · ' + partial + ' with missing fields';
+  }
+  return base;
+}
+
+/**
+ * Ensure INPUT - Bills exists before handing off to the Cash Flow →
+ * Bills editor from onboarding. Normal mode only.
+ *
+ * Full canonical header set matches the Add-form writer
+ * (addBillFromDashboard in bills.js) so the new sheet is immediately
+ * usable by every Bills reader. The self-heal logic in the Add form
+ * handles back-compat for existing workbooks, so we seed the most
+ * complete layout up front. No data rows are seeded.
+ */
+function ensureOnboardingBillsSheetFromDashboard(mode) {
+  var m = normalizeOnboardingMode_(mode);
+  var sheetName = resolveOnboardingSheetName_(m, 'BILLS');
+
+  if (m === 'test') {
+    return {
+      ok: true,
+      created: false,
+      sheetName: sheetName,
+      mode: m,
+      reason: 'Test mode: use ensureOnboardingTestSheetsFromDashboard instead.'
+    };
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var existing = ss.getSheetByName(sheetName);
+  if (existing) {
+    return { ok: true, created: false, sheetName: sheetName, mode: m };
+  }
+
+  var sheet;
+  try {
+    sheet = ss.insertSheet(sheetName);
+  } catch (e) {
+    if (ss.getSheetByName(sheetName)) {
+      return { ok: true, created: false, sheetName: sheetName, mode: m };
+    }
+    throw e;
+  }
+
+  try {
+    // Order mirrors the `setIfPresent` calls in addBillFromDashboard so
+    // the resulting sheet writes cleanly via that path without the
+    // self-heal column-inserter running.
+    var headerRow = [
+      'Payee',
+      'Category',
+      'Due Day',
+      'Default Amount',
+      'Varies',
+      'Autopay',
+      'Active',
+      'Payment Source',
+      'Frequency',
+      'Start Month',
+      'Notes'
+    ];
+    sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
+    try {
+      sheet.getRange(1, 1, 1, headerRow.length).setFontWeight('bold');
+      sheet.setFrozenRows(1);
+    } catch (_e) { /* cosmetic only */ }
+  } catch (e) {
+    return {
+      ok: false,
+      created: true,
+      sheetName: sheetName,
+      mode: m,
+      reason: 'Sheet was created but structure write failed: ' + (e.message || e)
+    };
+  }
+
+  return { ok: true, created: true, sheetName: sheetName, mode: m };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Upcoming Expenses — read-only detail + ensure-sheet                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Upcoming Expenses detail view. Read-only.
+ *
+ * Only Planned rows are surfaced to match the rest of the app's
+ * treatment of Upcoming history (Paid / Dismissed rows are historical).
+ *
+ * Returns:
+ *   {
+ *     mode, sheetName, sheetExists,
+ *     upcoming: [ { name, amount, dueDate, category,
+ *                   hasAmount, hasDueDate } ],
+ *     status, statusNote, testBanner
+ *   }
+ */
+function getOnboardingUpcomingFromDashboard(mode) {
+  var ctxMode = normalizeOnboardingMode_(mode);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetName = resolveOnboardingSheetName_(ctxMode, 'UPCOMING');
+  var sheet = ss.getSheetByName(sheetName);
+
+  var base = {
+    mode: ctxMode,
+    sheetName: sheetName,
+    sheetExists: !!sheet,
+    upcoming: [],
+    status: 'missing',
+    statusNote: '',
+    testBanner: ctxMode === 'test' ? 'TEST MODE — using TEST sheets only' : ''
+  };
+
+  if (!sheet) {
+    base.statusNote = 'Upcoming Expenses sheet not found.';
+    return base;
+  }
+
+  var display;
+  try {
+    display = sheet.getDataRange().getDisplayValues();
+  } catch (e) {
+    base.statusNote = 'Could not read Upcoming Expenses sheet.';
+    return base;
+  }
+  if (display.length < 2) {
+    base.statusNote = 'Sheet exists but has no rows yet.';
+    return base;
+  }
+
+  var headerMap = buildHeaderIndex_(display[0]);
+  var nameIdx = headerIndexCI_(headerMap, 'Expense Name');
+  var amountIdx = headerIndexCI_(headerMap, 'Amount');
+  var dueIdx = headerIndexCI_(headerMap, 'Due Date');
+  var statusIdx = headerIndexCI_(headerMap, 'Status');
+  var payeeIdx = headerIndexCI_(headerMap, 'Payee');
+  var categoryIdx = headerIndexCI_(headerMap, 'Category');
+
+  if (nameIdx === -1 && payeeIdx === -1) {
+    base.statusNote = 'Upcoming Expenses sheet is missing the Expense Name column.';
+    return base;
+  }
+
+  var complete = 0;
+  var partial = 0;
+  var rows = [];
+  for (var r = 1; r < display.length; r++) {
+    var rowStatus = statusIdx !== -1
+      ? String(display[r][statusIdx] || '').trim().toLowerCase()
+      : '';
+    if (rowStatus && rowStatus !== 'planned') continue;
+
+    var name = nameIdx !== -1 ? String(display[r][nameIdx] || '').trim() : '';
+    var payee = payeeIdx !== -1 ? String(display[r][payeeIdx] || '').trim() : '';
+    var label = name || payee;
+    if (!label) continue;
+
+    var amountRaw = amountIdx !== -1 ? String(display[r][amountIdx] || '').trim() : '';
+    var dueRaw = dueIdx !== -1 ? String(display[r][dueIdx] || '').trim() : '';
+    var categoryRaw = categoryIdx !== -1 ? String(display[r][categoryIdx] || '').trim() : '';
+
+    var hasAmount = amountRaw !== '';
+    var hasDueDate = dueRaw !== '';
+    if (hasAmount && hasDueDate) complete++;
+    else partial++;
+
+    rows.push({
+      name: label,
+      amount: amountRaw,
+      dueDate: dueRaw,
+      category: categoryRaw,
+      hasAmount: hasAmount,
+      hasDueDate: hasDueDate
+    });
+  }
+
+  base.upcoming = rows;
+  var total = rows.length;
+  if (total === 0) {
+    base.status = 'missing';
+    base.statusNote = 'No planned upcoming items.';
+  } else {
+    base.status = partial === 0 ? 'complete' : 'partial';
+    base.statusNote = complete + ' with amount + date · ' + partial + ' with missing fields';
+  }
+  return base;
+}
+
+/**
+ * Ensure INPUT - Upcoming Expenses exists before handing off to the
+ * Cash Flow → Upcoming editor. Normal mode only.
+ *
+ * Delegates creation to the canonical `getOrCreateUpcomingExpensesSheet_`
+ * helper in upcoming_expenses.js so the header row, number formats, and
+ * frozen-row behavior are identical to what the Add form already
+ * assumes. We intentionally avoid duplicating the schema here.
+ */
+function ensureOnboardingUpcomingSheetFromDashboard(mode) {
+  var m = normalizeOnboardingMode_(mode);
+  var sheetName = resolveOnboardingSheetName_(m, 'UPCOMING');
+
+  if (m === 'test') {
+    return {
+      ok: true,
+      created: false,
+      sheetName: sheetName,
+      mode: m,
+      reason: 'Test mode: use ensureOnboardingTestSheetsFromDashboard instead.'
+    };
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var existed = !!ss.getSheetByName(sheetName);
+  if (existed) {
+    return { ok: true, created: false, sheetName: sheetName, mode: m };
+  }
+
+  if (typeof getOrCreateUpcomingExpensesSheet_ !== 'function') {
+    return {
+      ok: false,
+      created: false,
+      sheetName: sheetName,
+      mode: m,
+      reason: 'Upcoming Expenses schema helper is unavailable; cannot create sheet safely.'
+    };
+  }
+
+  try {
+    getOrCreateUpcomingExpensesSheet_();
+  } catch (e) {
+    return {
+      ok: false,
+      created: false,
+      sheetName: sheetName,
+      mode: m,
+      reason: 'Could not create Upcoming Expenses sheet: ' + (e.message || e)
+    };
+  }
+
+  return {
+    ok: true,
+    created: !!ss.getSheetByName(sheetName) && !existed,
+    sheetName: sheetName,
+    mode: m
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Income — Cash Flow-derived detail                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Income detail for the onboarding Income step.
+ *
+ * Cash Flow-driven by design: the INPUT - Income Sources sheet does not
+ * exist anymore and must not be reintroduced. This reader reuses the
+ * same grouping / exclusion logic as probeIncomeStatus_ but returns
+ * per-group breakdowns so the UI can show:
+ *   - Recurring income groups (>= 3 months with positive amount and not
+ *     an excluded name like Bonus / RSU / Refund etc.)
+ *   - Other detected income groups (observed but not recurring-clean)
+ *
+ * Write-free. If the current year's sheet is missing, we walk back one
+ * year so users in January with a not-yet-created sheet still get a
+ * meaningful read. If no Cash Flow sheet is available at all, we
+ * surface that explicitly — we do NOT attempt year-sheet creation from
+ * onboarding (see sheetSafeguard in the docstring for this file).
+ *
+ * Returns:
+ *   {
+ *     mode, sheetName, sheetExists, year,
+ *     recurring: [ { name, months, avgAmount } ],
+ *     other:     [ { name, months, avgAmount, excludedReason } ],
+ *     status, statusNote, testBanner
+ *   }
+ */
+function getOnboardingIncomeFromDashboard(mode) {
+  var ctxMode = normalizeOnboardingMode_(mode);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var currentYear = getCurrentYear_();
+  var primaryName = resolveOnboardingSheetName_(ctxMode, 'CASH_FLOW_PREFIX', currentYear);
+  var sheet = ss.getSheetByName(primaryName);
+  var yearUsed = currentYear;
+
+  if (!sheet) {
+    var fallbackName = resolveOnboardingSheetName_(ctxMode, 'CASH_FLOW_PREFIX', currentYear - 1);
+    var fallbackSheet = ss.getSheetByName(fallbackName);
+    if (fallbackSheet) {
+      sheet = fallbackSheet;
+      yearUsed = currentYear - 1;
+    }
+  }
+
+  var base = {
+    mode: ctxMode,
+    sheetName: sheet ? sheet.getName() : primaryName,
+    sheetExists: !!sheet,
+    year: yearUsed,
+    recurring: [],
+    other: [],
+    status: 'missing',
+    statusNote: '',
+    testBanner: ctxMode === 'test' ? 'TEST MODE — using TEST sheets only' : ''
+  };
+
+  if (!sheet) {
+    base.statusNote = 'Cash Flow sheet for ' + currentYear + ' not found.';
+    return base;
+  }
+
+  var headerMap;
+  try {
+    headerMap = getCashFlowHeaderMap_(sheet);
+  } catch (e) {
+    base.statusNote = 'Cash Flow header row is malformed.';
+    return base;
+  }
+
+  var display = sheet.getDataRange().getDisplayValues();
+  var values = sheet.getDataRange().getValues();
+  if (!display || display.length < 2) {
+    base.statusNote = 'Cash Flow sheet has no rows yet.';
+    return base;
+  }
+
+  var monthCols = [];
+  for (var c = 0; c < display[0].length; c++) {
+    var hdr = String(display[0][c] || '').trim();
+    if (/^[A-Za-z]{3}-\d{2}$/.test(hdr)) monthCols.push(c);
+  }
+
+  // Group by normalized income name. Track max months seen in any row
+  // belonging to the group (matches the probe's rule) and accumulate
+  // non-zero amounts across contributing rows to compute a conservative
+  // per-group average (average of positive months seen in that group).
+  var groups = {};
+  for (var r = 1; r < values.length; r++) {
+    var typeRaw = String(values[r][headerMap.typeColZero] || '').trim().toLowerCase();
+    if (typeRaw !== 'income') continue;
+    if (headerMap.activeColZero !== -1) {
+      var act = String(values[r][headerMap.activeColZero] || '').trim();
+      if (act && normalizeYesNo_(act) === 'no') continue;
+    }
+    var payee = String(values[r][headerMap.payeeColZero] || '').trim();
+    if (!payee) continue;
+    var normalized = normalizeIncomeName_(payee);
+    var excluded = incomeIsExcludedName_(normalized);
+
+    var g = groups[normalized];
+    if (!g) {
+      g = { name: normalized, months: 0, positiveSum: 0, positiveCount: 0, excluded: excluded };
+      groups[normalized] = g;
+    }
+
+    var monthsHit = 0;
+    for (var m = 0; m < monthCols.length; m++) {
+      var v = toNumber_(values[r][monthCols[m]]);
+      if (isFinite(v) && v > 0) {
+        monthsHit++;
+        g.positiveSum += v;
+        g.positiveCount++;
+      }
+    }
+    if (monthsHit > g.months) g.months = monthsHit;
+  }
+
+  var recurring = [];
+  var other = [];
+  Object.keys(groups).forEach(function(name) {
+    var g = groups[name];
+    var avg = g.positiveCount > 0 ? g.positiveSum / g.positiveCount : 0;
+    var entry = {
+      name: g.name,
+      months: g.months,
+      avgAmount: Math.round(avg * 100) / 100
+    };
+    if (!g.excluded && g.months >= 3) {
+      recurring.push(entry);
+    } else if (g.months > 0) {
+      entry.excludedReason = g.excluded ? 'Non-recurring category' : 'Seen < 3 months';
+      other.push(entry);
+    }
+  });
+
+  recurring.sort(function(a, b) { return b.avgAmount - a.avgAmount; });
+  other.sort(function(a, b) { return b.avgAmount - a.avgAmount; });
+
+  base.recurring = recurring;
+  base.other = other;
+
+  if (recurring.length === 0 && other.length === 0) {
+    base.status = 'missing';
+    base.statusNote = 'No income detected on ' + sheet.getName() + '.';
+  } else {
+    base.status = recurring.length > 0 ? 'complete' : 'partial';
+    base.statusNote = recurring.length + ' recurring · ' + other.length + ' other detected';
+  }
+  return base;
+}
+
 /**
  * Local helper: reject reserved labels from the Bank Accounts block
  * structure so a "Total Accounts" / "Delta" / "Year" row never appears

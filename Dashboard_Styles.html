@@ -1498,12 +1498,27 @@
    * completely unaffected.
    */
   body.setup-editor-mode .page-nav { display: none !important; }
-  /* Assets sub-tabs (House Values / Bank Accounts / Investments) are not
-   * useful in the setup handoff — the user is there to act on exactly one
-   * category. Scoped to .assets-tabs (not all `.tabs`) so future editor
-   * handoffs on other pages aren't accidentally affected without an
-   * explicit opt-in. */
-  body.setup-editor-mode .assets-tabs { display: none !important; }
+  /*
+   * Sub-tab navigation is hidden across every page that onboarding hands
+   * off into, so each setup-mode editor feels the same: one focused
+   * surface plus a Back to Setup bar. Scoped to the specific sub-tab
+   * container classes (not all `.tabs`) so the rule is an explicit
+   * opt-in per handoff rather than a blanket hide. New onboarding
+   * handoffs should add their own container class here instead of
+   * widening the selector.
+   *
+   *   .assets-tabs             — Bank Accounts (Assets page)
+   *   .cashflow-tabs           — Bills / Upcoming / Income (Cash Flow page)
+   *   .planning-tools          — Debts (Planning page)
+   *   .planning-tools-wrap     — wrapper + "Planning tools" label
+   *   .planning-next-actions-feature
+   *                            — featured Next Actions entry tile on Planning
+   */
+  body.setup-editor-mode .assets-tabs,
+  body.setup-editor-mode .cashflow-tabs,
+  body.setup-editor-mode .planning-tools,
+  body.setup-editor-mode .planning-tools-wrap,
+  body.setup-editor-mode .planning-next-actions-feature { display: none !important; }
 
   .setup-editor-bar {
     display: none;
@@ -1838,6 +1853,111 @@
       gap: 4px;
     }
   }
+  /*
+   * Bills row variant. Four-column layout (name / amount / due / freq).
+   * Same card chrome as .onboarding-account-row; grid layout keeps each
+   * field aligned while still collapsing cleanly on narrow viewports.
+   */
+  .onboarding-bill-row {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+    align-items: baseline;
+    gap: 12px;
+  }
+  .onboarding-bill-amount,
+  .onboarding-bill-due,
+  .onboarding-bill-freq {
+    color: #334155;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.95rem;
+  }
+  @media (max-width: 640px) {
+    .onboarding-bill-row { grid-template-columns: 1fr; gap: 4px; }
+  }
+  /*
+   * Upcoming row variant. Three-column layout (name / amount / date).
+   */
+  .onboarding-upcoming-row {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+    align-items: baseline;
+    gap: 12px;
+  }
+  .onboarding-upcoming-amount,
+  .onboarding-upcoming-due {
+    color: #334155;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.95rem;
+  }
+  @media (max-width: 640px) {
+    .onboarding-upcoming-row { grid-template-columns: 1fr; gap: 4px; }
+  }
+  /*
+   * Income row variant. Three-column layout (name / avg amount /
+   * months seen). A secondary "other detected" variant dims slightly
+   * to signal reference-only rather than tracked.
+   */
+  .onboarding-income-row {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+    align-items: baseline;
+    gap: 12px;
+  }
+  .onboarding-income-avg,
+  .onboarding-income-months {
+    color: #334155;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.95rem;
+  }
+  .onboarding-income-row-other { opacity: 0.85; }
+  @media (max-width: 640px) {
+    .onboarding-income-row { grid-template-columns: 1fr; gap: 4px; }
+  }
+  /*
+   * Finish screen summary rows. Three-column layout (step name /
+   * status badge / review action).
+   */
+  .onboarding-finish-row {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+  }
+  .onboarding-finish-row .onboarding-detail-badge {
+    /* Override block layout so the badge sits inline in the row. */
+    display: inline-flex;
+    justify-content: center;
+  }
+  .onboarding-finish-action { text-align: right; }
+  @media (max-width: 640px) {
+    .onboarding-finish-row { grid-template-columns: 1fr; gap: 4px; }
+    .onboarding-finish-action { text-align: left; }
+  }
+  /*
+   * Subsection titles inside an onboarding detail view (used by
+   * Income for "Recurring" vs "Other detected").
+   */
+  .onboarding-subsection-title {
+    margin: 14px 0 6px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #0f172a;
+  }
+  /*
+   * Inline "Review" link-button used on the Finish summary rows. Kept
+   * visually lighter than the primary Open-editor CTAs so the summary
+   * feels like a review panel rather than a set of primary actions.
+   */
+  .btn-link-inline {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: #2563eb;
+    font: inherit;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .btn-link-inline:hover { color: #1d4ed8; }
   .onboarding-actions .btn-primary {
     background: #2563eb;
     color: #fff;

@@ -19,33 +19,48 @@ function onboardingMode() {
   return 'normal';
 }
 
-// View switching inside Setup. Setup currently has four screens:
-//   'welcome' — introduction + Continue/Back buttons
-//   'grid'    — status review cards (overview of every Setup area)
-//   'bank'    — Bank Accounts detail (step-card drill-down)
-//   'debts'   — Debts detail (step-card drill-down)
-// Simple DOM show/hide keeps this localized. Adding more detail views
-// later (Bills/Upcoming/Income) reuses this switch.
+// View switching inside Setup. Setup now has eight screens:
+//   'welcome'  — introduction + Continue/Back buttons
+//   'grid'     — status review cards (overview of every Setup area)
+//   'bank'     — Bank Accounts detail
+//   'debts'    — Debts detail
+//   'bills'    — Bills detail
+//   'upcoming' — Upcoming Expenses detail
+//   'income'   — Income detail (Cash Flow-derived)
+//   'finish'   — Setup summary + Go-to-Next-Actions CTA
+// Simple DOM show/hide keeps this localized. No router, no history state
+// — onboarding is a focused on-demand flow, not a routed SPA.
 function onboardingShowView(view) {
   var views = {
-    welcome: document.getElementById('onboarding_view_welcome'),
-    grid:    document.getElementById('onboarding_view_grid'),
-    bank:    document.getElementById('onboarding_view_bank'),
-    debts:   document.getElementById('onboarding_view_debts')
+    welcome:  document.getElementById('onboarding_view_welcome'),
+    grid:     document.getElementById('onboarding_view_grid'),
+    bank:     document.getElementById('onboarding_view_bank'),
+    debts:    document.getElementById('onboarding_view_debts'),
+    bills:    document.getElementById('onboarding_view_bills'),
+    upcoming: document.getElementById('onboarding_view_upcoming'),
+    income:   document.getElementById('onboarding_view_income'),
+    finish:   document.getElementById('onboarding_view_finish')
   };
   // Guard: at minimum Welcome + Grid must exist. Missing detail views
   // should not break Setup.
   if (!views.welcome || !views.grid) return;
 
-  var target = (view === 'grid' || view === 'bank' || view === 'debts')
-    ? view : 'welcome';
+  var allowed = {
+    welcome: 1, grid: 1, bank: 1, debts: 1,
+    bills: 1, upcoming: 1, income: 1, finish: 1
+  };
+  var target = allowed[view] ? view : 'welcome';
   Object.keys(views).forEach(function(k) {
     if (views[k]) views[k].style.display = (k === target) ? '' : 'none';
   });
 
-  if (target === 'grid')  onboardingLoadStatusGrid_();
-  if (target === 'bank')  onboardingLoadBankDetail_();
-  if (target === 'debts') onboardingLoadDebtDetail_();
+  if (target === 'grid')     onboardingLoadStatusGrid_();
+  if (target === 'bank')     onboardingLoadBankDetail_();
+  if (target === 'debts')    onboardingLoadDebtDetail_();
+  if (target === 'bills')    onboardingLoadBillsDetail_();
+  if (target === 'upcoming') onboardingLoadUpcomingDetail_();
+  if (target === 'income')   onboardingLoadIncomeDetail_();
+  if (target === 'finish')   onboardingLoadFinishDetail_();
 }
 
 // Back-to-Dashboard from the Welcome screen. Picks a safe default page.
@@ -597,6 +612,608 @@ function onboardingOpenDebtsPage() {
 }
 
 // --------------------------------------------------------------------------
+// Step detail: Bills
+//
+// Read-only. Mirrors the Bank Accounts / Debts pattern: fetch via
+// getOnboardingBillsFromDashboard, render a compact list with amount /
+// due day / frequency, and hand off to the existing Cash Flow → Bills
+// editor through enterSetupEditorMode.
+// --------------------------------------------------------------------------
+
+function onboardingBillsSetStatus_(text, cls) {
+  var el = document.getElementById('onboarding_bills_status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+function onboardingLoadBillsDetail_() {
+  var mode = onboardingMode();
+  var body = document.getElementById('onboarding_bills_body');
+  var badge = document.getElementById('onboarding_bills_badge');
+
+  if (badge) {
+    badge.className = 'onboarding-detail-badge';
+    badge.textContent = '…';
+  }
+  if (body) body.innerHTML = '<p class="muted">Loading bills&hellip;</p>';
+  onboardingBillsSetStatus_('Reading bills…', 'dash-status-loading');
+
+  google.script.run
+    .withSuccessHandler(function(data) { onboardingRenderBillsDetail_(data); })
+    .withFailureHandler(function(err) {
+      onboardingBillsSetStatus_(
+        'Error reading bills: ' + (err && err.message ? err.message : String(err)),
+        'error'
+      );
+      if (body) body.innerHTML = '';
+    })
+    .getOnboardingBillsFromDashboard(mode);
+}
+
+function onboardingRenderBillsDetail_(data) {
+  var body = document.getElementById('onboarding_bills_body');
+  var badge = document.getElementById('onboarding_bills_badge');
+  if (!body) return;
+
+  if (!data) {
+    onboardingBillsSetStatus_('Could not read bills.', 'error');
+    body.innerHTML = '';
+    return;
+  }
+
+  var status = data.status || 'missing';
+  if (badge) {
+    badge.className = 'onboarding-detail-badge status-' + status;
+    badge.textContent = onboardingStatusLabel_(status);
+  }
+
+  var count = (data.bills && data.bills.length) || 0;
+  onboardingBillsSetStatus_(
+    count + (count === 1 ? ' bill tracked' : ' bills tracked'),
+    ''
+  );
+
+  var fragments = [];
+  if (data.statusNote) {
+    fragments.push('<p class="muted">' + escapeOnboardingHtml_(data.statusNote) + '</p>');
+  }
+
+  if (!data.sheetExists || count === 0) {
+    var emptyHeadline = !data.sheetExists
+      ? 'No bills are set up yet.'
+      : 'No bills tracked yet.';
+    var ctaHtml = onboardingMode() === 'test'
+      ? '<p class="muted">Editing is not available in TEST MODE in this pass.</p>'
+      : '<button type="button" class="btn-primary" ' +
+        'onclick="onboardingOpenBillsPage()">Add first bill</button>';
+
+    fragments.push(
+      '<div class="onboarding-detail-empty">' +
+        '<p>' + emptyHeadline + '</p>' +
+        '<p class="muted">Add a recurring bill to start tracking monthly obligations.</p>' +
+        '<div style="margin-top:12px;">' + ctaHtml + '</div>' +
+      '</div>'
+    );
+    body.innerHTML = fragments.join('');
+    return;
+  }
+
+  var rows = data.bills.map(function(b) {
+    var nameHtml = escapeOnboardingHtml_(b.payee);
+    if (b.category) {
+      nameHtml += ' <span class="muted">(' + escapeOnboardingHtml_(b.category) + ')</span>';
+    }
+    var amtText = b.hasAmount
+      ? escapeOnboardingHtml_(b.amount)
+      : '<span class="muted">&mdash;</span>';
+    var dueText = b.hasDueDay
+      ? 'Day ' + escapeOnboardingHtml_(b.dueDay)
+      : '<span class="muted">&mdash;</span>';
+    var freqText = b.hasFrequency && b.frequency
+      ? escapeOnboardingHtml_(b.frequency)
+      : '<span class="muted">&mdash;</span>';
+    return (
+      '<div class="onboarding-account-row onboarding-bill-row">' +
+        '<div class="onboarding-account-name">' + nameHtml + '</div>' +
+        '<div class="onboarding-bill-amount">' +
+          '<span class="muted">Amount:</span> ' + amtText +
+        '</div>' +
+        '<div class="onboarding-bill-due">' +
+          '<span class="muted">Due:</span> ' + dueText +
+        '</div>' +
+        '<div class="onboarding-bill-freq">' +
+          '<span class="muted">Frequency:</span> ' + freqText +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+
+  fragments.push(
+    '<div class="onboarding-account-list" role="list">' + rows + '</div>'
+  );
+  body.innerHTML = fragments.join('');
+}
+
+function onboardingOpenBillsPage() {
+  if (onboardingMode() === 'test') {
+    onboardingBillsSetStatus_(
+      'Editing is not available in TEST MODE in this pass.',
+      ''
+    );
+    return;
+  }
+  onboardingBillsSetStatus_('Preparing Bills editor…', 'dash-status-loading');
+
+  var navigate = function() {
+    // Cash Flow hosts Bills under the 'billsDue' sub-tab. 'bills' is
+    // the return-view so Back to Setup returns to this detail screen.
+    enterSetupEditorMode('cashflow', 'billsDue', 'bills');
+  };
+
+  google.script.run
+    .withSuccessHandler(function(resp) {
+      if (!resp || resp.ok === false) {
+        var reason = resp && resp.reason
+          ? resp.reason : 'Could not prepare the Bills sheet.';
+        onboardingBillsSetStatus_(reason, 'error');
+        return;
+      }
+      onboardingBillsSetStatus_('', '');
+      navigate();
+    })
+    .withFailureHandler(function(err) {
+      onboardingBillsSetStatus_(
+        'Could not prepare the Bills sheet: ' +
+          (err && err.message ? err.message : String(err)),
+        'error'
+      );
+    })
+    .ensureOnboardingBillsSheetFromDashboard('normal');
+}
+
+// --------------------------------------------------------------------------
+// Step detail: Upcoming Expenses
+// --------------------------------------------------------------------------
+
+function onboardingUpcomingSetStatus_(text, cls) {
+  var el = document.getElementById('onboarding_upcoming_status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+function onboardingLoadUpcomingDetail_() {
+  var mode = onboardingMode();
+  var body = document.getElementById('onboarding_upcoming_body');
+  var badge = document.getElementById('onboarding_upcoming_badge');
+
+  if (badge) {
+    badge.className = 'onboarding-detail-badge';
+    badge.textContent = '…';
+  }
+  if (body) body.innerHTML = '<p class="muted">Loading upcoming expenses&hellip;</p>';
+  onboardingUpcomingSetStatus_('Reading upcoming expenses…', 'dash-status-loading');
+
+  google.script.run
+    .withSuccessHandler(function(data) { onboardingRenderUpcomingDetail_(data); })
+    .withFailureHandler(function(err) {
+      onboardingUpcomingSetStatus_(
+        'Error reading upcoming expenses: ' +
+          (err && err.message ? err.message : String(err)),
+        'error'
+      );
+      if (body) body.innerHTML = '';
+    })
+    .getOnboardingUpcomingFromDashboard(mode);
+}
+
+function onboardingRenderUpcomingDetail_(data) {
+  var body = document.getElementById('onboarding_upcoming_body');
+  var badge = document.getElementById('onboarding_upcoming_badge');
+  if (!body) return;
+
+  if (!data) {
+    onboardingUpcomingSetStatus_('Could not read upcoming expenses.', 'error');
+    body.innerHTML = '';
+    return;
+  }
+
+  var status = data.status || 'missing';
+  if (badge) {
+    badge.className = 'onboarding-detail-badge status-' + status;
+    badge.textContent = onboardingStatusLabel_(status);
+  }
+
+  var count = (data.upcoming && data.upcoming.length) || 0;
+  onboardingUpcomingSetStatus_(
+    count + (count === 1 ? ' planned item' : ' planned items'),
+    ''
+  );
+
+  var fragments = [];
+  if (data.statusNote) {
+    fragments.push('<p class="muted">' + escapeOnboardingHtml_(data.statusNote) + '</p>');
+  }
+
+  if (!data.sheetExists || count === 0) {
+    var emptyHeadline = !data.sheetExists
+      ? 'No upcoming expenses are set up yet.'
+      : 'No planned upcoming expenses right now.';
+    var ctaHtml = onboardingMode() === 'test'
+      ? '<p class="muted">Editing is not available in TEST MODE in this pass.</p>'
+      : '<button type="button" class="btn-primary" ' +
+        'onclick="onboardingOpenUpcomingPage()">Add first upcoming expense</button>';
+
+    fragments.push(
+      '<div class="onboarding-detail-empty">' +
+        '<p>' + emptyHeadline + '</p>' +
+        '<p class="muted">Add a known near-term cost to plan ahead.</p>' +
+        '<div style="margin-top:12px;">' + ctaHtml + '</div>' +
+      '</div>'
+    );
+    body.innerHTML = fragments.join('');
+    return;
+  }
+
+  var rows = data.upcoming.map(function(u) {
+    var nameHtml = escapeOnboardingHtml_(u.name);
+    if (u.category) {
+      nameHtml += ' <span class="muted">(' + escapeOnboardingHtml_(u.category) + ')</span>';
+    }
+    var amtText = u.hasAmount
+      ? escapeOnboardingHtml_(u.amount)
+      : '<span class="muted">&mdash;</span>';
+    var dueText = u.hasDueDate
+      ? escapeOnboardingHtml_(u.dueDate)
+      : '<span class="muted">&mdash;</span>';
+    return (
+      '<div class="onboarding-account-row onboarding-upcoming-row">' +
+        '<div class="onboarding-account-name">' + nameHtml + '</div>' +
+        '<div class="onboarding-upcoming-amount">' +
+          '<span class="muted">Amount:</span> ' + amtText +
+        '</div>' +
+        '<div class="onboarding-upcoming-due">' +
+          '<span class="muted">Due:</span> ' + dueText +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+
+  fragments.push(
+    '<div class="onboarding-account-list" role="list">' + rows + '</div>'
+  );
+  body.innerHTML = fragments.join('');
+}
+
+function onboardingOpenUpcomingPage() {
+  if (onboardingMode() === 'test') {
+    onboardingUpcomingSetStatus_(
+      'Editing is not available in TEST MODE in this pass.',
+      ''
+    );
+    return;
+  }
+  onboardingUpcomingSetStatus_('Preparing Upcoming editor…', 'dash-status-loading');
+
+  var navigate = function() {
+    enterSetupEditorMode('cashflow', 'upcoming', 'upcoming');
+  };
+
+  google.script.run
+    .withSuccessHandler(function(resp) {
+      if (!resp || resp.ok === false) {
+        var reason = resp && resp.reason
+          ? resp.reason
+          : 'Could not prepare the Upcoming Expenses sheet.';
+        onboardingUpcomingSetStatus_(reason, 'error');
+        return;
+      }
+      onboardingUpcomingSetStatus_('', '');
+      navigate();
+    })
+    .withFailureHandler(function(err) {
+      onboardingUpcomingSetStatus_(
+        'Could not prepare the Upcoming Expenses sheet: ' +
+          (err && err.message ? err.message : String(err)),
+        'error'
+      );
+    })
+    .ensureOnboardingUpcomingSheetFromDashboard('normal');
+}
+
+// --------------------------------------------------------------------------
+// Step detail: Income (Cash Flow-derived)
+//
+// Income is read directly from the latest INPUT - Cash Flow <year>.
+// There is NO INPUT - Income Sources sheet — the onboarding flow must
+// not reintroduce one. The detail screen surfaces two groups:
+//   - Recurring detected income (>=3 months, not an excluded category)
+//   - Other detected income (one-offs, non-recurring categories)
+// There is no ensure-sheet step for income: the current codebase has
+// no safe year-sheet creation helper, so if the Cash Flow sheet is
+// missing we tell the user explicitly rather than guessing at schema.
+// --------------------------------------------------------------------------
+
+function onboardingIncomeSetStatus_(text, cls) {
+  var el = document.getElementById('onboarding_income_status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+function onboardingLoadIncomeDetail_() {
+  var mode = onboardingMode();
+  var body = document.getElementById('onboarding_income_body');
+  var badge = document.getElementById('onboarding_income_badge');
+
+  if (badge) {
+    badge.className = 'onboarding-detail-badge';
+    badge.textContent = '…';
+  }
+  if (body) body.innerHTML = '<p class="muted">Reading income from Cash Flow&hellip;</p>';
+  onboardingIncomeSetStatus_('Reading income…', 'dash-status-loading');
+
+  google.script.run
+    .withSuccessHandler(function(data) { onboardingRenderIncomeDetail_(data); })
+    .withFailureHandler(function(err) {
+      onboardingIncomeSetStatus_(
+        'Error reading income: ' + (err && err.message ? err.message : String(err)),
+        'error'
+      );
+      if (body) body.innerHTML = '';
+    })
+    .getOnboardingIncomeFromDashboard(mode);
+}
+
+function onboardingRenderIncomeDetail_(data) {
+  var body = document.getElementById('onboarding_income_body');
+  var badge = document.getElementById('onboarding_income_badge');
+  if (!body) return;
+
+  if (!data) {
+    onboardingIncomeSetStatus_('Could not read income.', 'error');
+    body.innerHTML = '';
+    return;
+  }
+
+  var status = data.status || 'missing';
+  if (badge) {
+    badge.className = 'onboarding-detail-badge status-' + status;
+    badge.textContent = onboardingStatusLabel_(status);
+  }
+
+  var recurring = (data.recurring && data.recurring.length) || 0;
+  var other = (data.other && data.other.length) || 0;
+  onboardingIncomeSetStatus_(
+    recurring + ' recurring · ' + other + ' other detected',
+    ''
+  );
+
+  var fragments = [];
+  if (data.statusNote) {
+    fragments.push('<p class="muted">' + escapeOnboardingHtml_(data.statusNote) + '</p>');
+  }
+
+  // If the Cash Flow sheet itself is missing, we cannot show anything
+  // useful and we cannot safely create one from onboarding. Surface
+  // that directly and route the user to the Cash Flow page so they
+  // can create / populate the year sheet through the normal surface.
+  if (!data.sheetExists) {
+    var ctaHtml = onboardingMode() === 'test'
+      ? '<p class="muted">Editing is not available in TEST MODE in this pass.</p>'
+      : '<button type="button" class="btn-primary" ' +
+        'onclick="onboardingOpenIncomePage()">Open Cash Flow</button>';
+    fragments.push(
+      '<div class="onboarding-detail-empty">' +
+        '<p>Cash Flow sheet for the current year is not available yet.</p>' +
+        '<p class="muted">Create or populate the current year\'s Cash Flow sheet ' +
+          'before tracking income here.</p>' +
+        '<div style="margin-top:12px;">' + ctaHtml + '</div>' +
+      '</div>'
+    );
+    body.innerHTML = fragments.join('');
+    return;
+  }
+
+  if (recurring === 0 && other === 0) {
+    var emptyCta = onboardingMode() === 'test'
+      ? '<p class="muted">Editing is not available in TEST MODE in this pass.</p>'
+      : '<button type="button" class="btn-primary" ' +
+        'onclick="onboardingOpenIncomePage()">Open Income editor</button>';
+    fragments.push(
+      '<div class="onboarding-detail-empty">' +
+        '<p>No income detected yet' +
+          (data.year ? ' on Cash Flow ' + escapeOnboardingHtml_(String(data.year)) : '') + '.</p>' +
+        '<p class="muted">Add your first income row through Cash Flow &rarr; Income.</p>' +
+        '<div style="margin-top:12px;">' + emptyCta + '</div>' +
+      '</div>'
+    );
+    body.innerHTML = fragments.join('');
+    return;
+  }
+
+  function renderIncomeRow(item, extraClass) {
+    return (
+      '<div class="onboarding-account-row ' + (extraClass || '') + '">' +
+        '<div class="onboarding-account-name">' + escapeOnboardingHtml_(item.name) + '</div>' +
+        '<div class="onboarding-income-avg">' +
+          '<span class="muted">Avg:</span> ' +
+          escapeOnboardingHtml_(String(item.avgAmount || 0)) +
+        '</div>' +
+        '<div class="onboarding-income-months">' +
+          '<span class="muted">Months seen:</span> ' +
+          escapeOnboardingHtml_(String(item.months || 0)) +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  if (recurring > 0) {
+    fragments.push('<h3 class="onboarding-subsection-title">Recurring income</h3>');
+    fragments.push(
+      '<div class="onboarding-account-list" role="list">' +
+        data.recurring.map(function(i) { return renderIncomeRow(i, 'onboarding-income-row'); }).join('') +
+      '</div>'
+    );
+  }
+  if (other > 0) {
+    fragments.push('<h3 class="onboarding-subsection-title">Other detected income</h3>');
+    fragments.push(
+      '<p class="muted">Non-recurring or one-off entries detected in Cash Flow. For reference only.</p>'
+    );
+    fragments.push(
+      '<div class="onboarding-account-list" role="list">' +
+        data.other.map(function(i) { return renderIncomeRow(i, 'onboarding-income-row onboarding-income-row-other'); }).join('') +
+      '</div>'
+    );
+  }
+
+  body.innerHTML = fragments.join('');
+}
+
+function onboardingOpenIncomePage() {
+  if (onboardingMode() === 'test') {
+    onboardingIncomeSetStatus_(
+      'Editing is not available in TEST MODE in this pass.',
+      ''
+    );
+    return;
+  }
+  // Income has no onboarding-owned ensure-sheet step — the current
+  // codebase has no safe helper to create a Cash Flow <year> sheet from
+  // scratch. Navigate straight to the existing Cash Flow → Income tab,
+  // which is the canonical surface for adding income today.
+  enterSetupEditorMode('cashflow', 'income', 'income');
+}
+
+// --------------------------------------------------------------------------
+// Finish screen
+//
+// Reuses the existing status probes (getOnboardingStatusFromDashboard)
+// so the summary is always in sync with what the grid shows. No new
+// endpoints, no new writes, no new planning logic.
+// --------------------------------------------------------------------------
+
+function onboardingFinishSetStatus_(text, cls) {
+  var el = document.getElementById('onboarding_finish_status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+function onboardingLoadFinishDetail_() {
+  var mode = onboardingMode();
+  var body = document.getElementById('onboarding_finish_body');
+  var badge = document.getElementById('onboarding_finish_badge');
+
+  if (badge) {
+    badge.className = 'onboarding-detail-badge';
+    badge.textContent = '…';
+  }
+  if (body) body.innerHTML = '<p class="muted">Loading summary&hellip;</p>';
+  onboardingFinishSetStatus_('Reading setup status…', 'dash-status-loading');
+
+  google.script.run
+    .withSuccessHandler(function(data) { onboardingRenderFinishDetail_(data); })
+    .withFailureHandler(function(err) {
+      onboardingFinishSetStatus_(
+        'Error reading setup status: ' +
+          (err && err.message ? err.message : String(err)),
+        'error'
+      );
+      if (body) body.innerHTML = '';
+    })
+    .getOnboardingStatusFromDashboard(mode);
+}
+
+function onboardingRenderFinishDetail_(data) {
+  var body = document.getElementById('onboarding_finish_body');
+  var badge = document.getElementById('onboarding_finish_badge');
+  var intro = document.getElementById('onboarding_finish_intro');
+  if (!body) return;
+
+  if (!data || !Array.isArray(data.steps)) {
+    onboardingFinishSetStatus_('Could not read setup status.', 'error');
+    body.innerHTML = '';
+    return;
+  }
+
+  var total = data.steps.length;
+  var complete = data.steps.filter(function(s) { return s.status === 'complete'; }).length;
+  var notSetUp = total - complete;
+  var allDone = notSetUp === 0;
+
+  if (badge) {
+    badge.className = 'onboarding-detail-badge status-' + (allDone ? 'complete' : 'partial');
+    badge.textContent = allDone ? 'All set up' : (notSetUp + ' not set up');
+  }
+
+  onboardingFinishSetStatus_(
+    complete + ' of ' + total + ' complete',
+    ''
+  );
+
+  if (intro) {
+    intro.textContent = allDone
+      ? "You're all set. CashCompass now has the core information it needs to guide decisions."
+      : "You're making progress. Some areas still need details — finish them when you're ready, or continue with what's set up now.";
+  }
+
+  // Map step key → the onboarding view name used by onboardingShowView
+  // so a click on a pending row takes the user straight to that screen.
+  var viewForKey = {
+    bank: 'bank',
+    debts: 'debts',
+    bills: 'bills',
+    upcoming: 'upcoming',
+    income: 'income'
+  };
+
+  var rows = data.steps.map(function(step) {
+    var statusClass = 'status-' + (step.status || 'missing');
+    var label = onboardingStatusLabel_(step.status);
+    var view = viewForKey[step.key] || 'grid';
+    var cta = step.status === 'complete'
+      ? ''
+      : '<button type="button" class="btn-link-inline" onclick="onboardingShowView(\'' +
+          escapeOnboardingHtml_(view) + '\')">Review</button>';
+    return (
+      '<div class="onboarding-account-row onboarding-finish-row">' +
+        '<div class="onboarding-account-name">' + escapeOnboardingHtml_(step.label) + '</div>' +
+        '<div class="onboarding-detail-badge ' + statusClass + '">' +
+          escapeOnboardingHtml_(label) +
+        '</div>' +
+        '<div class="onboarding-finish-action">' + cta + '</div>' +
+      '</div>'
+    );
+  }).join('');
+
+  body.innerHTML =
+    '<div class="onboarding-account-list" role="list">' + rows + '</div>';
+}
+
+function onboardingGoToNextActions() {
+  // Leave Setup cleanly: drop setup-mode / setup-editor-mode if active,
+  // then hand off to Planning → Next Actions. Reusing showPage / showTab
+  // keeps the navigation identical to a normal tab click — no special
+  // onboarding plumbing in the planning surface.
+  try {
+    if (document.body) {
+      document.body.classList.remove('setup-mode');
+      document.body.classList.remove('setup-editor-mode');
+    }
+    var bar = document.getElementById('setup_editor_bar');
+    if (bar) bar.hidden = true;
+
+    if (typeof showPage === 'function') showPage('planning');
+    if (typeof showTab === 'function') showTab('nextActions');
+  } catch (_e) {
+    // Fall back to staying on Setup if navigation helpers are missing.
+  }
+}
+
+// --------------------------------------------------------------------------
 // Setup editor handoff helpers
 // --------------------------------------------------------------------------
 // Reusable pattern: from an onboarding detail screen, open an existing
@@ -618,7 +1235,10 @@ function onboardingOpenDebtsPage() {
 var ONBOARDING_EDITOR_RETURN_VIEW_ = null;
 
 function enterSetupEditorMode(pageName, tabName, returnView) {
-  var allowedReturns = { bank: 1, debts: 1, grid: 1, welcome: 1 };
+  var allowedReturns = {
+    bank: 1, debts: 1, bills: 1, upcoming: 1, income: 1,
+    grid: 1, welcome: 1
+  };
   ONBOARDING_EDITOR_RETURN_VIEW_ = allowedReturns[returnView] ? returnView : 'grid';
 
   if (document.body) {

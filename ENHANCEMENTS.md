@@ -235,24 +235,28 @@ Captured-but-not-scheduled product work. These items are *intent only* — struc
 - Timing: **After** debug mode (see prioritization order).
 
 **Onboarding (Phase 1)**
-- Status: Proposed
-- Purpose: Guide a new household through first-time setup instead of handing them an empty workbook. Reduces the cliff between "I opened CashCompass" and "I can trust the numbers on Next Actions."
-- Scope (Phase 1 — what a new user sets up, in order):
-  - Bank accounts (with **Min Buffer** and **Use Policy**)
-  - Debts
-  - Bills
-  - Upcoming expenses
-  - *(future)* Income Sources — once that surface exists
-- Concepts the onboarding must explain in plain language:
-  - `cash_to_use` — what it is, what counts, what doesn't, why buffers are sacred.
-  - How Next Actions prioritizes work (Urgent / Recommended / Optimize; what `review_cash_gap` means; why the single payment path is Cash Flow → Quick Add).
-- Non-goals (v1):
-  - No advanced strategy content. HELOC advisor, Aggressive payoff strategy, Cash Strategy, and what-if tools are **not** part of v1 onboarding.
-  - No automated import. Users still enter / paste their own data — onboarding guides *where* and *in what order*, not *what* to type.
-  - No gamification, no progress bar persistence — Phase 1 is a walkthrough, not a state machine.
-- System touchpoints: new walkthrough component (host HTML / script, not React bundle) with step-by-step pointers into the existing input surfaces (`showTab` / `showPage` deep-links already exist); a small "completed" marker — scope-limited to a single `PROPERTIES`-style flag or a `SYS - Onboarding` sheet pinned at design time. Help copy (`Dashboard_Help.html`) gains a top-level Onboarding section.
-- Risk: **Low.** Additive surface over already-canonical inputs.
-- Timing: **After** income sources (see prioritization order).
+- Status: **Delivered** as **Setup / Review** (top-right dashboard button).
+- Purpose: Guide a household through first-time setup instead of handing them an empty workbook. Reduces the cliff between "I opened CashCompass" and "I can trust the numbers on Next Actions."
+- Delivered scope (in order, as implemented):
+  - **Welcome** screen → **status grid** (card per step with *Setup complete* / *Not set up* badge and short summary).
+  - **Bank Accounts** detail — reads the current-year block on `INPUT - Bank Accounts`.
+  - **Debts** detail — reads active rows from `INPUT - Debts`.
+  - **Bills** detail — reads active rows from `INPUT - Bills`.
+  - **Upcoming Expenses** detail — reads *Planned* rows from `INPUT - Upcoming Expenses`.
+  - **Income** detail — derived from the latest `INPUT - Cash Flow <year>`; **no** `INPUT - Income Sources` sheet. Recurring detections are grouped conservatively; excluded categories (Bonus, RSU, ESPP, Refund, …) are surfaced as "Other detected income".
+  - **Finish** summary — per-step status list with *Review* deep-links and a *Go to Next Actions* CTA.
+- Editor handoff:
+  - Every per-step CTA opens the **existing** editor (Bank Accounts, Debts, Bills, Upcoming, Cash Flow → Income) in **Setup mode**: main top nav, page sub-tabs, *Setup / Review*, and *Run Planner + Refresh Snapshot* are hidden; a slim **Back to Setup** bar returns the user to the matching detail screen. Normal navigation to the same editor is unchanged.
+- Sheet safeguards:
+  - Setup creates `INPUT - Bank Accounts`, `INPUT - Debts`, `INPUT - Bills`, and `INPUT - Upcoming Expenses` with canonical headers when missing, reusing existing codebase schema (e.g. `getDebtsHeaderMap_`, `getOrCreateUpcomingExpensesSheet_`). It does **not** invent Cash Flow year sheets — if the latest year is missing, the Income step reports that explicitly.
+- Read-only guarantee:
+  - Viewing Setup never writes, never touches `SYS -` sheets, and never appends to `LOG - Activity`. Writes only happen through the underlying editors, which use the same save logic as the normal path.
+- Non-goals (still intentionally out of scope):
+  - No advanced strategy content (HELOC, Aggressive payoff, Cash Strategy, what-if tools).
+  - No automated import; Setup guides *where* and *in what order*, not *what* to type.
+  - No gamification or progress persistence — this is a walkthrough, not a state machine.
+- Documentation: Help copy lives in `Dashboard_Help.html → Setup / Review` (`#help-setup`). Product framing is in `PROJECT_CONTEXT.md → Setup / Review (Onboarding Phase 1, delivered)`.
+- Follow-ups (tracked in `PROJECT_CONTEXT.md`): retire `?onboarding=test` / `TEST -` fallbacks; consolidate the five per-step `*SetStatus_` / `*LoadDetail_` / `*RenderDetail_` / `*Open*Page` groups in `Dashboard_Script_Onboarding.html` into a shared factory once the flow has been exercised in real use.
 
 **Prioritization order (for the queued items above)**
 
@@ -262,7 +266,7 @@ Do not shuffle without an explicit product decision:
 2. **Stabilize Next Actions.** Let the v1 decision surface bake against real daily use: confirm urgent grouping, recommended sizing, routing, and "Why this cash amount?" disclosure all hold under normal household operation. No new queued items start while Next Actions is still being corrected.
 3. **Debug mode control.** First net-new item. Smallest scope, lowest risk, unblocks the rest by ensuring debug/internal content has a single gating pattern before more surfaces add their own.
 4. **Income Sources.** Structured income input. Can land without planner integration because debug mode already hides work-in-progress surfaces from normal users if needed.
-5. **Onboarding (Phase 1).** Last because it builds on the previous four — onboarding must be able to point to stable input surfaces (including Income Sources) and to an already-polished Next Actions.
+5. **Onboarding (Phase 1).** **Delivered** as *Setup / Review*. Built after debug mode and in place of a standalone Income Sources surface — income is now managed inside Setup from the latest `INPUT - Cash Flow <year>`. Remaining onboarding follow-ups are scoped to TEST-mode retirement and an internal factory refactor of the per-step client handlers; neither changes user-visible behavior.
 
 ---
 

@@ -1,3 +1,41 @@
+## Recent — Setup / Review (Onboarding Phase 1) shipped + docs catch-up
+
+Onboarding Phase 1 from the queued product backlog has landed as the **Setup / Review** flow (top-right dashboard button) and is now documented. This entry captures the final product shape plus the docs/help pass that caught `PROJECT_CONTEXT.md`, `ENHANCEMENTS.md`, and `Dashboard_Help.html` up to the implementation.
+
+### What shipped
+
+- **Entry point** — top-right `Setup / Review` button (renamed from `Setup`). Opens a focused flow: **Welcome → status grid → per-step detail → (optional) editor in Setup mode**.
+- **Five step detail screens**, each read-only, mode-aware, and pattern-consistent:
+  - **Bank Accounts** — reads the current-year block on `INPUT - Bank Accounts`.
+  - **Debts** — reads active rows from `INPUT - Debts`.
+  - **Bills** — reads active rows from `INPUT - Bills` (payee / amount / due day / frequency).
+  - **Upcoming Expenses** — reads *Planned* rows only from `INPUT - Upcoming Expenses`.
+  - **Income** — derived from the latest `INPUT - Cash Flow <year>`; groups recurring income conservatively (e.g. *Cisco Pay 1/2/3 → Cisco Salary*) and lists excluded categories (Bonus / RSU / ESPP / Refund / …) as "Other detected income". No `INPUT - Income Sources` sheet was reintroduced.
+- **Finish screen** — per-step summary list with *Review* deep-links back into each detail screen and a *Go to Next Actions* CTA that exits Setup cleanly.
+- **Setup-mode editor handoff (consistency pass)** — opening any editor from Setup hides the main top nav, page sub-tabs (`.assets-tabs`, `.cashflow-tabs`, `.planning-tools`, `.planning-tools-wrap`, `.planning-next-actions-feature`), the *Setup / Review* button, and *Run Planner + Refresh Snapshot*, and shows a slim **Back to Setup** bar. All five handoffs (Bank Accounts, Debts, Bills, Upcoming, Income) now share this behavior via a single `body.setup-editor-mode` CSS rule in `Dashboard_Styles.html`. Normal navigation to the same editor is unchanged.
+- **Sheet safeguards** — Setup ensures `INPUT - Bank Accounts`, `INPUT - Debts`, `INPUT - Bills`, and `INPUT - Upcoming Expenses` exist with the canonical headers before opening their editor, reusing existing schema definitions (`getDebtsHeaderMap_`, `getOrCreateUpcomingExpensesSheet_`, etc.). Cash Flow year sheets are **not** auto-created from Setup — if missing, the Income step says so explicitly.
+- **TEST mode deprecation (light)** — TEST messaging was removed from user-facing Setup copy. Existing `?onboarding=test` routing and `TEST -` fallbacks in `onboarding.js` still work but will not grow; full retirement is tracked as a follow-up.
+- **Read-only guarantee** — viewing Setup never writes, never touches `SYS -` sheets, and never appends to `LOG - Activity`. Writes only happen through the underlying editors, which use the same save logic as the normal path.
+
+### Docs catch-up
+
+- `PROJECT_CONTEXT.md`
+  - New **Setup / Review (Onboarding Phase 1, delivered)** section covering the flow, Setup-mode editor handoff, Income-from-Cash-Flow derivation, sheet safeguards, and the read-only guarantee.
+  - Queued-work list rewritten: Onboarding is now delivered; Income Sources is explicitly **superseded** (income lives in Setup via Cash Flow); TEST-mode retirement and the onboarding-factory refactor are the only onboarding-adjacent items still queued.
+  - Prioritization line updated to reflect the new ordering.
+- `ENHANCEMENTS.md → § 4 → Onboarding (Phase 1)`
+  - Status flipped to **Delivered** with the concrete screen flow, editor handoff behavior, sheet safeguards, read-only guarantee, and the two remaining follow-ups (TEST retirement, per-step factory refactor).
+  - Prioritization bullet #5 updated to note delivery and the Income Sources supersession.
+- `Dashboard_Help.html`
+  - New **Setup / Review** section (`#help-setup`) added between *Introduction* and *Overview*, with a matching TOC entry.
+  - Section covers: screen flow (Welcome / status grid / detail screens), per-step coverage, Setup-mode editor handoff, and safety rules (no writes, no `SYS -` touch, no Activity writes, editor parity with normal path).
+
+### Scope
+
+Docs-only follow-up to the delivered feature. No code changes in this pass. The Setup / Review flow itself was built in prior passes; this entry formalizes product framing and user-facing documentation.
+
+---
+
 ## Recent — App-wide user-facing text cleanup (extends Planning pass)
 
 Follow-up to the Planning-surface text cleanup below. Applies the same rule — never expose internal sheet names, schema field names, or technical terms in user-facing copy — to every other surface in the dashboard: Cash Flow (Quick add, Upcoming, Donations, Bills), Assets (Bank Accounts, Investments, House Values), Properties (Performance, House Expenses), Planning → Debts add/update flows, Activity, and the planner-driven strings that bubble up into Rolling Debt Payoff. No backend logic, ranking, or routing changed — text / label / status / confirm dialog / empty-state changes only.

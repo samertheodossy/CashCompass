@@ -1488,38 +1488,55 @@
         <div class="onboarding-step-body" data-body="debts">Loading…</div>
         <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
       </div>
-      <div class="onboarding-step-card" data-step="bills" id="onboarding_step_bills">
+      <div class="onboarding-step-card onboarding-step-card-clickable" data-step="bills" id="onboarding_step_bills"
+           role="button" tabindex="0"
+           onclick="onboardingShowView('bills')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();onboardingShowView('bills');}">
         <div class="onboarding-step-head">
           <div class="onboarding-step-num">3</div>
           <div class="onboarding-step-title">Bills</div>
           <div class="onboarding-step-badge" data-badge="bills">…</div>
         </div>
         <div class="onboarding-step-body" data-body="bills">Loading…</div>
+        <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
       </div>
-      <div class="onboarding-step-card" data-step="upcoming" id="onboarding_step_upcoming">
+      <div class="onboarding-step-card onboarding-step-card-clickable" data-step="upcoming" id="onboarding_step_upcoming"
+           role="button" tabindex="0"
+           onclick="onboardingShowView('upcoming')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();onboardingShowView('upcoming');}">
         <div class="onboarding-step-head">
           <div class="onboarding-step-num">4</div>
           <div class="onboarding-step-title">Upcoming Expenses</div>
           <div class="onboarding-step-badge" data-badge="upcoming">…</div>
         </div>
         <div class="onboarding-step-body" data-body="upcoming">Loading…</div>
+        <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
       </div>
-      <div class="onboarding-step-card" data-step="income" id="onboarding_step_income">
+      <div class="onboarding-step-card onboarding-step-card-clickable" data-step="income" id="onboarding_step_income"
+           role="button" tabindex="0"
+           onclick="onboardingShowView('income')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();onboardingShowView('income');}">
         <div class="onboarding-step-head">
           <div class="onboarding-step-num">5</div>
           <div class="onboarding-step-title">Income</div>
           <div class="onboarding-step-badge" data-badge="income">…</div>
         </div>
         <div class="onboarding-step-body" data-body="income">Loading…</div>
+        <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
       </div>
-      <div class="onboarding-step-card" data-step="finish">
+      <div class="onboarding-step-card onboarding-step-card-clickable" data-step="finish" id="onboarding_step_finish"
+           role="button" tabindex="0"
+           onclick="onboardingShowView('finish')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();onboardingShowView('finish');}">
         <div class="onboarding-step-head">
           <div class="onboarding-step-num">6</div>
           <div class="onboarding-step-title">Finish</div>
+          <div class="onboarding-step-badge" data-badge="finish">…</div>
         </div>
-        <div class="onboarding-step-body">
+        <div class="onboarding-step-body" data-body="finish">
           <p id="onboarding_finish_body">Review the items marked <strong>Not set up</strong>, then use the matching screens to fill in details when you're ready. You can come back to Setup any time.</p>
         </div>
+        <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
       </div>
       </div>
 
@@ -1603,6 +1620,147 @@
       <div class="onboarding-actions">
         <button type="button" onclick="onboardingShowView('grid')">Back</button>
         <button type="button" class="btn-primary" onclick="onboardingOpenDebtsPage()">Open Debts editor</button>
+      </div>
+    </div>
+
+    <!--
+      View 5: Bills detail. Read-only in this pass. Reads INPUT - Bills
+      (or TEST - INPUT - Bills in test mode) and routes edits to the
+      existing Cash Flow → Bills surface via the shared setup-editor-
+      mode handoff.
+    -->
+    <div id="onboarding_view_bills" class="onboarding-view onboarding-view-detail" style="display:none;">
+      <div class="onboarding-detail-header">
+        <div class="onboarding-detail-step">Step 3 of 5</div>
+        <h2 class="onboarding-detail-title">Bills</h2>
+        <div id="onboarding_bills_badge" class="onboarding-detail-badge">…</div>
+      </div>
+
+      <div class="onboarding-detail-explainer">
+        <p>
+          Bills are recurring obligations &mdash; subscriptions, utilities, rent,
+          and similar. Tracking them helps CashCompass know what needs to be
+          covered each month.
+        </p>
+        <p class="muted">
+          This view is read-only. Edit bills from Cash Flow &rarr; Bills.
+        </p>
+      </div>
+
+      <div id="onboarding_bills_status" class="status"></div>
+
+      <div id="onboarding_bills_body">
+        <p class="muted">Loading bills&hellip;</p>
+      </div>
+
+      <div class="onboarding-actions">
+        <button type="button" onclick="onboardingShowView('grid')">Back</button>
+        <button type="button" class="btn-primary" onclick="onboardingOpenBillsPage()">Open Bills editor</button>
+      </div>
+    </div>
+
+    <!--
+      View 6: Upcoming Expenses detail. Read-only. Surfaces Planned rows
+      only (Paid / Dismissed are treated as history by the rest of the
+      app). Edits route to Cash Flow → Upcoming via setup-editor-mode.
+    -->
+    <div id="onboarding_view_upcoming" class="onboarding-view onboarding-view-detail" style="display:none;">
+      <div class="onboarding-detail-header">
+        <div class="onboarding-detail-step">Step 4 of 5</div>
+        <h2 class="onboarding-detail-title">Upcoming Expenses</h2>
+        <div id="onboarding_upcoming_badge" class="onboarding-detail-badge">…</div>
+      </div>
+
+      <div class="onboarding-detail-explainer">
+        <p>
+          Upcoming expenses are known near-term costs that aren't monthly bills
+          &mdash; an annual premium, a planned trip, a one-time purchase.
+          Tracking them helps plan for money you'll need soon.
+        </p>
+        <p class="muted">
+          This view is read-only. Edit upcoming expenses from Cash Flow &rarr; Upcoming.
+        </p>
+      </div>
+
+      <div id="onboarding_upcoming_status" class="status"></div>
+
+      <div id="onboarding_upcoming_body">
+        <p class="muted">Loading upcoming expenses&hellip;</p>
+      </div>
+
+      <div class="onboarding-actions">
+        <button type="button" onclick="onboardingShowView('grid')">Back</button>
+        <button type="button" class="btn-primary" onclick="onboardingOpenUpcomingPage()">Open Upcoming editor</button>
+      </div>
+    </div>
+
+    <!--
+      View 7: Income detail. Read-only. Income is derived from the latest
+      INPUT - Cash Flow <year> (INPUT - Income Sources is deliberately
+      retired and must NOT be reintroduced). We surface recurring groups
+      vs. other detected groups using the same classification used by
+      probeIncomeStatus_. Editing routes to Cash Flow → Income, which is
+      the canonical surface for income management in the current
+      architecture.
+    -->
+    <div id="onboarding_view_income" class="onboarding-view onboarding-view-detail" style="display:none;">
+      <div class="onboarding-detail-header">
+        <div class="onboarding-detail-step">Step 5 of 5</div>
+        <h2 class="onboarding-detail-title">Income</h2>
+        <div id="onboarding_income_badge" class="onboarding-detail-badge">…</div>
+      </div>
+
+      <div class="onboarding-detail-explainer">
+        <p>
+          Income is detected directly from your Cash Flow. This helps CashCompass
+          understand the money coming in each month.
+        </p>
+        <p class="muted">
+          New income is added through Cash Flow &rarr; Income. There is no separate
+          income source sheet.
+        </p>
+      </div>
+
+      <div id="onboarding_income_status" class="status"></div>
+
+      <div id="onboarding_income_body">
+        <p class="muted">Reading income from Cash Flow&hellip;</p>
+      </div>
+
+      <div class="onboarding-actions">
+        <button type="button" onclick="onboardingShowView('grid')">Back</button>
+        <button type="button" class="btn-primary" onclick="onboardingOpenIncomePage()">Open Income editor</button>
+      </div>
+    </div>
+
+    <!--
+      View 8: Finish. Summary of overall setup state across all five
+      areas. Does not write anything; reuses the same status probes that
+      power the grid so the summary is always in sync. CTAs route the
+      user back to Setup or into Planning → Next Actions.
+    -->
+    <div id="onboarding_view_finish" class="onboarding-view onboarding-view-detail" style="display:none;">
+      <div class="onboarding-detail-header">
+        <h2 class="onboarding-detail-title">Finish</h2>
+        <div id="onboarding_finish_badge" class="onboarding-detail-badge">…</div>
+      </div>
+
+      <div class="onboarding-detail-explainer">
+        <p id="onboarding_finish_intro">
+          You're all set. CashCompass now has the core information it needs to
+          guide decisions.
+        </p>
+      </div>
+
+      <div id="onboarding_finish_status" class="status"></div>
+
+      <div id="onboarding_finish_body">
+        <p class="muted">Loading summary&hellip;</p>
+      </div>
+
+      <div class="onboarding-actions">
+        <button type="button" onclick="onboardingShowView('grid')">Back to Setup</button>
+        <button type="button" class="btn-primary" onclick="onboardingGoToNextActions()">Go to Next Actions</button>
       </div>
     </div>
   </div>

@@ -39,15 +39,26 @@ Intended flow: **Next Actions → drill into these tabs**. No new top-level tabs
 
 See `ENHANCEMENTS.md` for the backlog entry and `SESSION_NOTES.md` for the shift summary. End-user documentation lives in the in-app Help page under **Planning → Next Actions** (`#help-next-actions`).
 
+### Setup / Review (Onboarding Phase 1, delivered)
+
+- **"Setup / Review"** is the top-right entry in the dashboard header. It opens a focused, **read-only** walkthrough of the five input areas Next Actions reads: Bank Accounts, Debts, Bills, Upcoming Expenses, Income — plus a Finish summary.
+- Flow: **Welcome → status grid → per-step detail screen → (optional) editor in Setup mode**. Each step has a status badge (*Setup complete* / *Not set up*), a short product-language summary, and a primary action.
+- **Setup-mode editor handoff** — detail CTAs open the existing editor in a simplified shell: main top nav, page sub-tabs, *Setup / Review*, and *Run Planner + Refresh Snapshot* are hidden; a **Back to Setup** bar appears. Normal navigation to the same editor is unchanged.
+- **Income** is derived from the latest `INPUT - Cash Flow <year>` — there is **no** `INPUT - Income Sources` sheet. Recurring income is grouped conservatively (e.g. *Cisco Pay 1/2/3 → Cisco Salary*); excluded categories (Bonus, RSU, ESPP, Refund, …) are surfaced separately as "Other detected income".
+- **Sheet safeguards** — Setup ensures `INPUT - Bank Accounts`, `INPUT - Debts`, `INPUT - Bills`, and `INPUT - Upcoming Expenses` exist with the canonical headers before opening their editor. It does **not** create Cash Flow year sheets.
+- Read-only guarantee: viewing Setup never writes, never touches `SYS -` sheets, never writes to `LOG - Activity`.
+- End-user documentation lives in `Dashboard_Help.html` under **Setup / Review** (`#help-setup`). Full phase notes and remaining follow-ups are in `ENHANCEMENTS.md → § 4 → Onboarding (Phase 1)`.
+
 ### Queued product work (post Next Actions stabilization)
 
 Captured-but-not-scheduled. Intent only — full specs live in `ENHANCEMENTS.md → § 4 → Queued — post Next Actions stabilization`:
 
-- **Debug mode control** — a single host-global `isDebugMode` flag that gates developer / internal surfaces (e.g. the *Why this cash amount?* liquidity breakdown, planner diagnostics) so the default UI reads as a product.
-- **Income Sources (new input surface)** — structured income entry under **Assets → Income Sources** (or **Cash Flow → Income Setup**) with `source name` / `amount` / `frequency` / `active`. No planner integration, no forecasting, no automatic Cash Flow posting in v1.
-- **Onboarding (Phase 1)** — guided first-time setup across Bank Accounts (buffers + use policy), Debts, Bills, Upcoming, and eventually Income Sources. Explains `cash_to_use` and how Next Actions prioritizes actions. No advanced strategy (HELOC, optimization) in v1.
+- **Debug mode control** — delivered (see above). Retained here for historical priority ordering.
+- **Income Sources (new input surface)** — **superseded.** Income is now derived from the latest `INPUT - Cash Flow <year>` inside Setup / Review; no separate `INPUT - Income Sources` sheet will be reintroduced.
+- **TEST mode retirement** — the `?onboarding=test` path and `TEST -` sheet fallbacks in `onboarding.js` are in light deprecation. New work should target the live path only; existing TEST code stays until it is removed in a dedicated cleanup pass.
+- **Onboarding factory refactor** — consolidate the five per-step `*SetStatus_` / `*LoadDetail_` / `*RenderDetail_` / `*Open*Page` groups in `Dashboard_Script_Onboarding.html` into a shared factory once the flow has been exercised in real use.
 
-Intended order: **(1) finish overlap cleanup → (2) stabilize Next Actions → (3) debug mode → (4) income sources → (5) onboarding.** Do not reorder without an explicit product decision.
+Intended order: **(1) finish overlap cleanup → (2) stabilize Next Actions → (3) debug mode → (4) onboarding (delivered) → (5) TEST mode retirement → (6) onboarding factory refactor.** Do not reorder without an explicit product decision.
 
 ### Next Actions v1 — decision logic (delivered)
 
