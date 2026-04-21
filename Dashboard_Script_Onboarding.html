@@ -201,16 +201,34 @@ function escapeOnboardingHtml_(s) {
 
 // Public entry. Called whenever the user lands on the Setup page.
 //
-// Welcome-screen gating:
-//   - Existing user (any step has status !== 'missing') → skip Welcome
-//     and land directly on the populated status grid.
-//   - Truly unconfigured user (all five core steps report 'missing')
-//     → show Welcome first; Continue advances to the grid.
+// Welcome-screen gating (populated workbooks MUST NOT land on Welcome):
 //
-// We only hit the server once here: the same status payload powers both
-// the routing decision and the grid render. If the call fails, we fall
-// back to the Welcome screen so the user is never stranded on a blank
-// view.
+//   Primary signal — window.__cashCompassDashboardInited:
+//     This flag is set by initDashboard() in PlannerDashboardWeb.html,
+//     which only runs when the server-side startup router
+//     (getStartupRoutingFromDashboard → workbookHasAnyAppSheet_) has
+//     already classified the workbook as populated. If the user
+//     reached Setup / Review from the dashboard at all, this flag is
+//     therefore true, and we show the grid synchronously — Welcome
+//     literally cannot render for that session regardless of what the
+//     per-step probes report.
+//
+//   Secondary signal — per-step payload:
+//     Used only when the primary flag is NOT set (e.g. the startup
+//     gate routed straight to onboarding because the workbook was
+//     classified blank on page load). Here we double-check the probe:
+//     if any Setup-tracked sheet now exists (sheetExists === true) or
+//     any step reports a non-'missing' status, we still skip Welcome
+//     and land on the grid. Only when every signal says blank do we
+//     fall back to Welcome.
+//
+//   Probe failure / malformed payload:
+//     Fail closed to the grid. A populated user must never be trapped
+//     on Welcome because the status probe hiccuped; the grid has its
+//     own Refresh action and can surface read errors inline.
+//
+// We only hit the server once here: the same status payload powers
+// both the routing decision (when needed) and the grid render.
 function loadOnboardingSection() {
   var welcome = document.getElementById('onboarding_view_welcome');
   var grid = document.getElementById('onboarding_view_grid');
@@ -239,23 +257,55 @@ function loadOnboardingSection() {
 
   onboardingSetStatus_('Checking your setup…', 'dash-status-loading');
 
+  // Primary gate: startup already proved the workbook is populated.
+  // Render the grid synchronously so the user never sees Welcome — the
+  // payload probe below just fills in the cards. We set
+  // ONBOARDING_SKIP_GRID_AUTOLOAD_ so onboardingShowView('grid')
+  // doesn't double-fetch; the success handler feeds the same payload
+  // into onboardingApplyStatusGrid_() directly.
+  var workbookKnownPopulated = false;
+  try {
+    workbookKnownPopulated = !!window.__cashCompassDashboardInited;
+  } catch (_e) {
+    workbookKnownPopulated = false;
+  }
+  if (workbookKnownPopulated) {
+    ONBOARDING_SKIP_GRID_AUTOLOAD_ = true;
+    onboardingShowView('grid');
+  }
+
   google.script.run
     .withSuccessHandler(function(data) {
-      if (!data || !Array.isArray(data.steps)) {
-        // Safe fallback: can't tell if the user is new or populated,
-        // so show Welcome. Users with data can still press Continue.
-        onboardingSetStatus_('Could not read setup status.', 'error');
-        onboardingShowView('welcome');
+      var hasPayload = !!(data && Array.isArray(data.steps));
+
+      if (workbookKnownPopulated) {
+        // Grid already rendered; just apply the cards (or surface the
+        // read error) without ever touching Welcome.
+        if (hasPayload) {
+          onboardingApplyStatusGrid_(data);
+        } else {
+          onboardingSetStatus_('Could not read setup status.', 'error');
+        }
         return;
       }
 
-      var anyTracked = data.steps.some(function(s) {
-        return s && s.status && s.status !== 'missing';
+      if (!hasPayload) {
+        // Unknown startup state + malformed payload → fail closed to
+        // grid. The grid will be empty but Refresh is available, and
+        // this is strictly better than stranding the user on Welcome.
+        onboardingSetStatus_('Could not read setup status.', 'error');
+        onboardingShowView('grid');
+        return;
+      }
+
+      var workbookIsPopulated = data.steps.some(function(s) {
+        if (!s) return false;
+        if (s.sheetExists === true) return true;
+        if (s.status && s.status !== 'missing') return true;
+        return false;
       });
 
-      if (anyTracked) {
-        // We already have a fresh status snapshot, so tell showView to
-        // skip its auto-refetch — we'll apply the payload directly.
+      if (workbookIsPopulated) {
         ONBOARDING_SKIP_GRID_AUTOLOAD_ = true;
         onboardingShowView('grid');
         onboardingApplyStatusGrid_(data);
@@ -264,11 +314,17 @@ function loadOnboardingSection() {
       }
     })
     .withFailureHandler(function(err) {
+      // Fail closed: populated workbooks must never get stuck on
+      // Welcome because the status probe failed. If we already
+      // rendered the grid synchronously, just surface the error
+      // inline; otherwise switch to the grid now.
       onboardingSetStatus_(
         'Error reading setup status: ' + (err && err.message ? err.message : String(err)),
         'error'
       );
-      onboardingShowView('welcome');
+      if (!workbookKnownPopulated) {
+        onboardingShowView('grid');
+      }
     })
     .getOnboardingStatusFromDashboard(ONBOARDING_MODE_);
 }

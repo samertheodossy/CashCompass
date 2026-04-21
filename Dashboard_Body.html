@@ -1460,9 +1460,12 @@
   -->
   <div id="page_onboarding" class="workspace-page">
     <!--
-      View 1: Welcome screen. Shown as the initial view only when all five
-      setup steps (Bank Accounts / Debts / Bills / Upcoming / Income) are
-      empty. Returning / populated users skip straight to the grid view.
+      View 1: Welcome screen. Shown as the initial view only when the
+      workbook is truly blank for Setup purposes — no Setup-tracked sheet
+      exists yet (Bank Accounts / Debts / Bills / Upcoming / Cash Flow
+      income / Settings) AND every step reports status === 'missing'.
+      Populated workbooks skip straight to the grid view; see the gating
+      logic in loadOnboardingSection() (Dashboard_Script_Onboarding.html).
       Read-only. Continue advances to the status grid view.
     -->
     <div id="onboarding_view_welcome" class="onboarding-view onboarding-view-welcome">
@@ -1619,8 +1622,18 @@
         </div>
       </div>
 
+      <!--
+        Back leaves Setup / Review entirely — it does NOT route to
+        Welcome. Welcome is reserved for the truly blank-workbook
+        first-run flow; once the user is on the status grid (whether
+        they arrived from Welcome → Continue or straight from the
+        dashboard on a populated workbook), Back means "exit Setup",
+        which matches the behavior of the Back to Dashboard button on
+        the Welcome screen. onboardingBackToDashboard() hydrates the
+        overview if needed, then switches to the overview page.
+      -->
       <div class="onboarding-actions">
-        <button type="button" onclick="onboardingShowView('welcome')">Back</button>
+        <button type="button" onclick="onboardingBackToDashboard()">Back to Dashboard</button>
         <button type="button" onclick="onboardingLoadStatusGrid_()">Refresh status</button>
       </div>
     </div>

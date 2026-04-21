@@ -1,3 +1,93 @@
+## Recent — Setup / Review: Welcome gate hardening + grid Back button fix
+
+Follow-up to the first-run UX hardening batch. Two related regressions were surfacing on populated workbooks when opening **Setup / Review** from the dashboard:
+
+1. Opening Setup / Review could still land on **Welcome** even though the workbook was clearly populated, because the in-Setup Welcome gate only looked at per-step `status !== 'missing'`. A workbook with data in `INPUT - Investments` / `SYS - House Assets` / other sheets — but where `INPUT - Bank Accounts` / `INPUT - Debts` / `INPUT - Bills` / `INPUT - Upcoming Expenses` / `INPUT - Cash Flow <year>` / `INPUT - Settings` probes all returned `missing` — still flipped into Welcome.
+2. Even when the grid rendered correctly on entry, the **Back** button on the grid was hardcoded to `onboardingShowView('welcome')`, so "go back" from Setup sent populated users straight to Welcome. Every other detail view already routed Back to `grid`; only the grid's Back was wrong.
+
+### Welcome gate overhaul — `Dashboard_Script_Onboarding.html` → `loadOnboardingSection()`
+
+- **Primary signal: `window.__cashCompassDashboardInited`.** This flag is only ever set by `initDashboard()` (in `PlannerDashboardWeb.html`), which the startup router only invokes for workbooks that `workbookHasAnyAppSheet_` has already classified as populated. If the user reached Setup / Review from the dashboard at all, this flag is true — so `loadOnboardingSection()` now renders the grid **synchronously** (pre-setting `ONBOARDING_SKIP_GRID_AUTOLOAD_` so the subsequent payload fetch doesn't double-render) before `getOnboardingStatusFromDashboard` returns. Welcome is literally unreachable for that session.
+- **Secondary signal (only when primary flag is unset): per-step payload.** The existing payload gate now ORs two signals — any `sheetExists === true` or any `status !== 'missing'` → grid, else Welcome. This keeps the blank-workbook first-run flow working (`window.__cashCompassDashboardInited` stays unset when the startup router routed straight to onboarding, and every probe reports `sheetExists: false` for a truly fresh workbook).
+- **Probe failure / malformed payload fails closed to the grid.** Stranding a populated user on Welcome because the probe hiccuped is strictly worse than showing an empty grid with Refresh available.
+
+### Grid Back button — `Dashboard_Body.html`
+
+- The status-grid view's action row had `<button onclick="onboardingShowView('welcome')">Back</button>`. Changed to `<button onclick="onboardingBackToDashboard()">Back to Dashboard</button>` so Back exits Setup (same semantics as Welcome's own Back to Dashboard button: hydrate overview if needed, then switch to `overview`). Label updated to "Back to Dashboard" for consistency with Welcome. Detail views' Back buttons (bank/debts/bills/upcoming/income/profile/houses/finish → grid) and the setup-editor-mode "Back to Setup" button are unchanged.
+
+### Docs
+
+- `Dashboard_Help.html` → Setup / Review → Flow → Welcome bullet rewritten to describe the two-gate model (primary = `window.__cashCompassDashboardInited`; secondary = per-step payload with `sheetExists`/status; probe failures fail closed). Also documents that the grid's **Back to Dashboard** button exits Setup instead of bouncing back to Welcome.
+- `PROJECT_CONTEXT.md` → **Startup routing** bullet extended to cover the `loadOnboardingSection()` primary/secondary gates, the fail-closed behavior, and that both Welcome's and the grid's Back buttons call `onboardingBackToDashboard()`.
+
+### Safety
+
+- No server-side changes. No changes to `getStartupRoutingFromDashboard`, `getOnboardingStatusFromDashboard`, any step probe, `initDashboard`, or the setup-editor-mode flow.
+- No sheet-schema, planner, or update-mode changes.
+- Blank-workbook first-run flow preserved: truly new workbook still shows Welcome → Continue → grid; Back from grid now returns to dashboard (previously it bounced to Welcome), which is also acceptable for the first-run case and matches Welcome's own Back semantics.
+
+### What to verify
+
+- Populated workbook: Dashboard → **Setup / Review** → status grid renders immediately (no Welcome flash). Click **Back to Dashboard** on the grid → lands on overview. Re-open **Setup / Review** → grid again.
+- Truly blank workbook (no `INPUT -`/`SYS -`/`OUT -`/`LOG -` sheets): page load still routes to Welcome; Continue → grid; **Back to Dashboard** on the grid exits to overview.
+- Detail views (Bank / Debts / Bills / Upcoming / Income / Profile / Houses / Finish): Back still returns to the grid, never to Welcome.
+
+---
+
+## Recent — First-run UX hardening: startup routing + Bank / House / Investment add-form polish
+
+Second pass of first-run / blank-workbook hardening after Setup / Review shipped. Fixes a startup regression where populated workbooks were landing on Welcome and tightens the three asset add-new forms (Bank, House, Investment) so first-time users can't get stuck on ambiguous inputs.
+
+### Startup / onboarding
+
+- `sheet_bootstrap.js` — `getStartupRoutingFromDashboard` now classifies a workbook as blank only when it has **no** `INPUT -`, `SYS -`, `OUT -`, or `LOG -` sheets (new `STARTUP_APP_SHEET_PREFIXES_` + `workbookHasAnyAppSheet_`). Previously an existing populated workbook could be misclassified based on a narrower core-sheet probe and get stuck on Welcome. Fails closed: any probe error treats the workbook as populated.
+- `PlannerDashboardWeb.html` — `initDashboard()` is exposed on `window` and now sets `window.__cashCompassDashboardInited = true` the first time it runs.
+- `Dashboard_Script_Onboarding.html` — `onboardingBackToDashboard()` runs `window.initDashboard()` when it hasn't run yet, so **Back to Dashboard** from Welcome can't loop back into blank classification.
+- `onboarding.js` / `dashboard_data.js` — supporting first-run bootstrap + safe probes.
+
+### Bank Account add form — `Dashboard_Body.html`, `Dashboard_Script_AssetsBankInvestments.html`, `bank_accounts.js`
+
+- **Use policy** is now a real dropdown with canonical tokens — `DO_NOT_TOUCH`, `USE_FOR_BILLS`, `USE_FOR_DEBT`, `USE_WITH_CAUTION` — plus an **Other (custom)…** sentinel that reveals a free-text input and saves the typed string. Plain-English helper text explains each choice; unmapped custom values are treated like `DO_NOT_TOUCH` until mapped.
+- **Priority** replaced with a dropdown — *Use first (primary account)*, *Use after others*, *Use last (backup)* — defaulting to *Use last*. Saves numeric 1 / 5 / 9 to the canonical `SYS - Accounts → Priority` column the planner already reads.
+- **Opening balance** is required and prefilled to `0.00`; `0` is allowed but blank / invalid shows an error. Date remains required only when the amount is non-zero.
+- **Also set Min Buffer to opening amount** now defaults to checked (matches *Also set Available Now*), so a fresh account has sensible buffers from the first save.
+- `bank_accounts.js` — new `ensureSysAccountsSheet_` creates `SYS - Accounts` with canonical headers on blank workbooks (race-safe, never overwrites). Unblocks first-run add-bank-account from throwing *Missing sheet: SYS - Accounts*.
+
+### House add form — `Dashboard_Body.html`, `Dashboard_Script_AssetsHouseValues.html`, `house_values.js`
+
+- **Property type** replaced with a dropdown — *Primary Residence*, *Vacation Home*, *Rental* — merged with any existing workbook types (case-insensitive dedup, literal *Other* from server dropped so the sentinel stays last). **Other (custom)…** reveals a free-text input and saves the typed string. UX only; no schema or planner-logic change (the only `propertyType`-branching code in the app is `isHouseAssetsRentalForCashFlow_`, which keys on `"rental"`).
+- **Valuation date** stays optional in the UI but now defaults to today server-side (`addHouseFromDashboard`) so the Current value always lands in a real month column. Historical "empty month for 0" semantic is preserved: we still skip the month write when Current value is `0`. UI copy updated to say *"If left blank, the current month will be used."*
+
+### Investment add form — `Dashboard_Body.html`, `Dashboard_Script_AssetsBankInvestments.html`, `investments.js`
+
+- Mirrors the Bank hardening. **Starting value** is required, prefilled to `0.00`; `0` is allowed, blank / invalid shows an error. **Starting value date** stays optional — blank resolves to today server-side; non-blank must still be in the current year. The old both-or-neither coupling is gone (`addInvestmentAccountFromDashboard` now defaults amount to 0 and date to today independently), and month-cell writes are skipped when amount is 0 to preserve the historical "no data" convention.
+- **Type** dropdown merges existing `SYS - Assets` types with fallback options (*Brokerage*, *Retirement*, *Education*) plus an **Other (custom)…** sentinel that saves a user-typed string.
+
+### Other
+
+- `Dashboard_Script_BillsDue.html`, `Dashboard_Script_PlanningDebts.html`, `bills.js` — follow-on polish from the same first-run pass (sheet-name-free user copy, minor wiring).
+- No sheet schema changes. No planner-logic changes. No touches to already-saved rows. Update-mode for all three asset types is unchanged.
+
+### Docs
+
+- `Dashboard_Help.html`
+  - **Setup / Review → Flow**: Welcome bullet clarified to say populated workbooks never land on Welcome and **Back to Dashboard** routes to the real dashboard.
+  - **Assets → House Values → Add new**: Property type described as a dropdown with *Other (custom)…*; Valuation date described with the "current month when blank" behavior.
+  - **Assets → Bank Accounts → Add new**: Opening balance described as required / prefilled 0.00; Use policy dropdown + canonical tokens + Other; Priority dropdown (*Use first* / *Use after others* / *Use last*) with numeric 1/5/9 mapping; note that both *Available Now* and *Min Buffer* checkboxes default to checked.
+  - **Assets → Investments → Add new**: Starting value listed as required / prefilled 0.00; Starting value date described with the "current month when blank" behavior; Type dropdown with core + Other.
+  - **Activity log → `bank_account_add` / `investment_add`**: Amount text aligned with the new "required opening / starting value (may be $0.00)" model.
+- `PROJECT_CONTEXT.md`
+  - Bank Accounts and Investments system-area bullets rewritten to match the new add-form behavior (canonical Use Policy tokens + Other, Priority dropdown with 1/5/9 mapping, required opening / starting value, blank date → today, `ensureSysAccountsSheet_` first-run safety).
+  - Setup / Review section gains a **Startup routing** bullet naming `getStartupRoutingFromDashboard` / `workbookHasAnyAppSheet_` / `onboardingBackToDashboard` and the fail-closed behavior.
+
+### What to verify
+
+- Existing populated workbook opens on the normal dashboard (not Welcome).
+- Truly blank workbook still opens Welcome; **Back to Dashboard** routes to the dashboard and doesn't loop.
+- Bank / House / Investment Add-new forms reject blank required fields with the new inline errors; dropdowns honor the *Other (custom)…* flow; saves land in the expected month cell (today's month when the date is blank, skipping writes for `0`).
+
+---
+
 ## Recent — Setup / Review (Onboarding Phase 1) shipped + docs catch-up
 
 Onboarding Phase 1 from the queued product backlog has landed as the **Setup / Review** flow (top-right dashboard button) and is now documented. This entry captures the final product shape plus the docs/help pass that caught `PROJECT_CONTEXT.md`, `ENHANCEMENTS.md`, and `Dashboard_Help.html` up to the implementation.
