@@ -869,7 +869,26 @@ function normalizeHistoryValue_(value) {
 }
 
 function sendPlannerEmailIfConfigured_(summary) {
-  const userEmail = Session.getActiveUser().getEmail();
+  // Resolution order: INPUT - Settings → Email (user-configured from
+  // the onboarding Profile step), then Session.getActiveUser() as a
+  // fallback so existing workbooks keep getting emails even before the
+  // user opens the Profile editor. If neither is available we skip
+  // silently — sending to an empty address would fail at MailApp.
+  var userEmail = '';
+  try {
+    if (typeof getPlannerEmailRecipient_ === 'function') {
+      userEmail = getPlannerEmailRecipient_();
+    }
+  } catch (_e) {
+    userEmail = '';
+  }
+  if (!userEmail) {
+    try {
+      userEmail = String((Session.getActiveUser() && Session.getActiveUser().getEmail()) || '');
+    } catch (_e2) {
+      userEmail = '';
+    }
+  }
   if (!userEmail) return;
 
   const lines = [];

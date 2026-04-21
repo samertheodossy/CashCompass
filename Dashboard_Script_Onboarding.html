@@ -43,6 +43,7 @@ function onboardingShowView(view) {
     bills:    document.getElementById('onboarding_view_bills'),
     upcoming: document.getElementById('onboarding_view_upcoming'),
     income:   document.getElementById('onboarding_view_income'),
+    profile:  document.getElementById('onboarding_view_profile'),
     houses:   document.getElementById('onboarding_view_houses'),
     finish:   document.getElementById('onboarding_view_finish')
   };
@@ -52,7 +53,7 @@ function onboardingShowView(view) {
 
   var allowed = {
     welcome: 1, grid: 1, bank: 1, debts: 1,
-    bills: 1, upcoming: 1, income: 1, houses: 1, finish: 1
+    bills: 1, upcoming: 1, income: 1, profile: 1, houses: 1, finish: 1
   };
   var target = allowed[view] ? view : 'welcome';
   Object.keys(views).forEach(function(k) {
@@ -71,6 +72,7 @@ function onboardingShowView(view) {
   if (target === 'bills')    onboardingLoadBillsDetail_();
   if (target === 'upcoming') onboardingLoadUpcomingDetail_();
   if (target === 'income')   onboardingLoadIncomeDetail_();
+  if (target === 'profile')  onboardingLoadProfileDetail_();
   if (target === 'houses')   onboardingLoadHousesDetail_();
   if (target === 'finish')   onboardingLoadFinishDetail_();
 }
@@ -160,6 +162,7 @@ function loadOnboardingSection() {
     'onboarding_view_bills',
     'onboarding_view_upcoming',
     'onboarding_view_income',
+    'onboarding_view_profile',
     'onboarding_view_houses',
     'onboarding_view_finish'
   ];
@@ -298,12 +301,13 @@ function onboardingApplyFinishPanel_(complete, total) {
 
   var allDone = total > 0 && complete === total;
   if (allDone) {
-    titleEl.textContent = "You're ready";
-    subEl.textContent = 'Your setup is ready. You can update anything anytime.';
+    // Minimal copy per final polish: single affirmative line, no
+    // redundant sub-text.
+    titleEl.textContent = 'Your setup is ready.';
+    subEl.textContent = '';
   } else {
     titleEl.textContent = 'Almost there';
-    subEl.textContent =
-      complete + ' of ' + total + ' areas ready — you can fill in the rest anytime.';
+    subEl.textContent = complete + ' of ' + total + ' ready.';
   }
 }
 
@@ -1088,6 +1092,248 @@ function onboardingOpenIncomePage() {
 }
 
 // --------------------------------------------------------------------------
+// --------------------------------------------------------------------------
+// Step detail: Profile (Contact Info)
+//
+// Unlike the other steps, Profile uses an inline editor. There is no
+// standalone Settings page today, and the field set (Name, Email,
+// Phone, Address) is small enough that building one would be overkill.
+//
+// View mode vs edit mode are toggled via display-only JS inside the
+// existing onboarding_view_profile container. Writes go through
+// saveOnboardingProfileFromDashboard which stores the four keys on
+// INPUT - Settings and returns a fresh detail payload so we can
+// re-render without a second server round trip.
+// --------------------------------------------------------------------------
+
+function onboardingProfileSetStatus_(text, cls) {
+  var el = document.getElementById('onboarding_profile_status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+// Cache of the most recent server-rendered profile payload. Populated
+// by the load/save handlers and consumed by begin-edit so the form is
+// pre-filled without another fetch. Null before first load.
+var ONBOARDING_PROFILE_LAST_ = null;
+
+function onboardingLoadProfileDetail_() {
+  var body = document.getElementById('onboarding_profile_body');
+  var badge = document.getElementById('onboarding_profile_badge');
+
+  if (badge) {
+    badge.className = 'onboarding-detail-badge';
+    badge.textContent = '…';
+  }
+  if (body) body.innerHTML = '<p class="muted">Loading profile&hellip;</p>';
+  onboardingProfileSetStatus_('Reading profile…', 'dash-status-loading');
+
+  // Always land in view mode when the user opens the Profile step.
+  onboardingProfileHideEditor_();
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      onboardingRenderProfileDetail_(data);
+    })
+    .withFailureHandler(function(err) {
+      onboardingProfileSetStatus_(
+        'Error reading profile: ' + (err && err.message ? err.message : String(err)),
+        'error'
+      );
+      if (body) body.innerHTML = '';
+    })
+    .getOnboardingProfileFromDashboard(ONBOARDING_MODE_);
+}
+
+function onboardingRenderProfileDetail_(data) {
+  var body = document.getElementById('onboarding_profile_body');
+  var badge = document.getElementById('onboarding_profile_badge');
+  if (!body) return;
+
+  if (!data) {
+    onboardingProfileSetStatus_('Could not read profile.', 'error');
+    body.innerHTML = '';
+    return;
+  }
+
+  ONBOARDING_PROFILE_LAST_ = data;
+
+  var status = data.status || 'missing';
+  if (badge) {
+    badge.className = 'onboarding-detail-badge status-' + status;
+    badge.textContent = onboardingStatusLabel_(status);
+  }
+
+  var p = data.profile || {};
+  var hasName = !!(p.name && String(p.name).trim());
+  var hasEmail = !!(p.email && String(p.email).trim());
+
+  onboardingProfileSetStatus_(
+    (hasName && hasEmail) ? 'Profile set.' : '',
+    ''
+  );
+
+  if (!hasName || !hasEmail) {
+    // Empty state: no identifying info yet. The status line under the
+    // header is already clear ("Not set up"), so the body nudges the
+    // user to the inline editor via the primary CTA in the footer.
+    body.innerHTML =
+      '<div class="onboarding-detail-empty">' +
+        '<p>Add your name and email to continue.</p>' +
+        '<p class="muted">This info is used for emails and personalization. Phone and address are optional.</p>' +
+      '</div>';
+    return;
+  }
+
+  var rows = [];
+  rows.push(onboardingProfileRow_('Name', p.name));
+  rows.push(onboardingProfileRow_('Email', p.email));
+  if (p.phone && String(p.phone).trim()) {
+    rows.push(onboardingProfileRow_('Phone', p.phone));
+  }
+  if (p.address && String(p.address).trim()) {
+    rows.push(onboardingProfileRow_('Address', p.address));
+  }
+
+  body.innerHTML =
+    '<div class="onboarding-profile-view" role="list">' + rows.join('') + '</div>';
+}
+
+function onboardingProfileRow_(label, value) {
+  return (
+    '<div class="onboarding-profile-view-row" role="listitem">' +
+      '<div class="onboarding-profile-view-label">' + escapeOnboardingHtml_(label) + '</div>' +
+      '<div class="onboarding-profile-view-value">' + escapeOnboardingHtml_(value || '') + '</div>' +
+    '</div>'
+  );
+}
+
+function onboardingProfileBeginEdit_() {
+  var editor = document.getElementById('onboarding_profile_editor');
+  var body = document.getElementById('onboarding_profile_body');
+  var footer = document.getElementById('onboarding_profile_footer');
+  if (!editor) return;
+
+  // Populate form fields from the last server payload, or blanks if
+  // the user clicked Edit before the initial load resolved.
+  var p = (ONBOARDING_PROFILE_LAST_ && ONBOARDING_PROFILE_LAST_.profile) || {};
+  onboardingProfileSetField_('onboarding_profile_name', p.name || '');
+  onboardingProfileSetField_('onboarding_profile_email', p.email || '');
+  onboardingProfileSetField_('onboarding_profile_phone', p.phone || '');
+  onboardingProfileSetField_('onboarding_profile_address', p.address || '');
+  onboardingProfileClearErrors_();
+
+  if (body) body.style.display = 'none';
+  if (footer) footer.style.display = 'none';
+  editor.style.display = '';
+
+  var nameInput = document.getElementById('onboarding_profile_name');
+  if (nameInput && typeof nameInput.focus === 'function') {
+    try { nameInput.focus(); } catch (_e) { /* non-fatal */ }
+  }
+}
+
+function onboardingProfileCancelEdit_() {
+  onboardingProfileHideEditor_();
+  onboardingProfileSetStatus_('', '');
+}
+
+function onboardingProfileHideEditor_() {
+  var editor = document.getElementById('onboarding_profile_editor');
+  var body = document.getElementById('onboarding_profile_body');
+  var footer = document.getElementById('onboarding_profile_footer');
+  if (editor) editor.style.display = 'none';
+  if (body) body.style.display = '';
+  if (footer) footer.style.display = '';
+  onboardingProfileClearErrors_();
+}
+
+function onboardingProfileSetField_(id, value) {
+  var el = document.getElementById(id);
+  if (el) el.value = value == null ? '' : String(value);
+}
+
+function onboardingProfileGetField_(id) {
+  var el = document.getElementById(id);
+  return el ? String(el.value == null ? '' : el.value).trim() : '';
+}
+
+function onboardingProfileClearErrors_() {
+  ['name', 'email', 'phone', 'address'].forEach(function(field) {
+    var err = document.getElementById('onboarding_profile_' + field + '_error');
+    if (err) err.textContent = '';
+  });
+}
+
+function onboardingProfileShowErrors_(errors) {
+  ['name', 'email', 'phone', 'address'].forEach(function(field) {
+    var err = document.getElementById('onboarding_profile_' + field + '_error');
+    if (!err) return;
+    err.textContent = errors && errors[field] ? errors[field] : '';
+  });
+}
+
+// Lightweight client-side validation. The server re-validates, so this
+// is for UX responsiveness only — never relied on for correctness.
+function onboardingProfileValidateClient_(payload) {
+  var errors = {};
+  if (!payload.name) errors.name = 'Name is required.';
+  if (!payload.email) {
+    errors.email = 'Email is required.';
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
+    errors.email = 'Enter a valid email address.';
+  }
+  return errors;
+}
+
+function onboardingSaveProfile_() {
+  var btn = document.getElementById('onboarding_profile_save_btn');
+  var payload = {
+    name: onboardingProfileGetField_('onboarding_profile_name'),
+    email: onboardingProfileGetField_('onboarding_profile_email'),
+    phone: onboardingProfileGetField_('onboarding_profile_phone'),
+    address: onboardingProfileGetField_('onboarding_profile_address')
+  };
+
+  var clientErrors = onboardingProfileValidateClient_(payload);
+  if (Object.keys(clientErrors).length > 0) {
+    onboardingProfileShowErrors_(clientErrors);
+    onboardingProfileSetStatus_('Please fix the highlighted fields.', 'error');
+    return;
+  }
+
+  onboardingProfileClearErrors_();
+  onboardingProfileSetStatus_('Saving profile…', 'dash-status-loading');
+  if (btn) btn.disabled = true;
+
+  google.script.run
+    .withSuccessHandler(function(resp) {
+      if (btn) btn.disabled = false;
+      if (!resp || resp.ok === false) {
+        var errs = (resp && resp.errors) || {};
+        onboardingProfileShowErrors_(errs);
+        onboardingProfileSetStatus_(
+          'Could not save profile. Please check the form.',
+          'error'
+        );
+        return;
+      }
+      onboardingProfileSetStatus_(resp.message || 'Profile saved.', '');
+      onboardingProfileHideEditor_();
+      onboardingRenderProfileDetail_(resp);
+    })
+    .withFailureHandler(function(err) {
+      if (btn) btn.disabled = false;
+      onboardingProfileSetStatus_(
+        'Error saving profile: ' + (err && err.message ? err.message : String(err)),
+        'error'
+      );
+    })
+    .saveOnboardingProfileFromDashboard(payload);
+}
+
+// --------------------------------------------------------------------------
 // Houses (optional) detail screen
 //
 // Houses is an OPTIONAL, informational surface. It is intentionally not
@@ -1309,9 +1555,10 @@ function onboardingRenderFinishDetail_(data) {
   );
 
   if (intro) {
+    // Minimal copy per final polish: one short affirmative line.
     intro.textContent = allDone
-      ? 'Your setup is ready. You can update anything anytime.'
-      : 'Your setup is usable. You can fill in the rest anytime.';
+      ? 'Your setup is ready.'
+      : 'You can fill in the rest anytime.';
   }
 
   // Map step key → the onboarding view name used by onboardingShowView

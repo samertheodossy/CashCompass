@@ -617,13 +617,24 @@ function getOnboardingStatusFromDashboard(mode) {
   var bills = probeBillsStatus_(ss, ctxMode);
   var upcoming = probeUpcomingStatus_(ss, ctxMode);
   var income = probeIncomeStatus_(ss, ctxMode);
+  // Profile is Settings-sheet driven, not mode-routed. The probe lives
+  // in profile.js and is safe to call on every status fetch — it only
+  // reads a handful of Key/Value rows.
+  var profile = (typeof probeProfileStatus_ === 'function')
+    ? probeProfileStatus_()
+    : {
+        status: 'missing', count: 0, partialCount: 0,
+        sheetExists: false, sheetName: 'INPUT - Settings',
+        note: 'Profile module unavailable.'
+      };
 
   var steps = [
     { key: 'bank', label: 'Bank Accounts', state: bank },
     { key: 'debts', label: 'Debts', state: debts },
     { key: 'bills', label: 'Bills', state: bills },
     { key: 'upcoming', label: 'Upcoming Expenses', state: upcoming },
-    { key: 'income', label: 'Income', state: income }
+    { key: 'income', label: 'Income', state: income },
+    { key: 'profile', label: 'Profile', state: profile }
   ];
 
   var missingTestSheets = [];

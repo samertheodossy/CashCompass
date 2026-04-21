@@ -1452,10 +1452,7 @@
     <div id="onboarding_view_grid" class="onboarding-view onboarding-view-grid" style="display:none;">
       <div class="onboarding-header">
         <h2 class="onboarding-title">Setup / Review</h2>
-        <p class="muted onboarding-subtitle">
-          Check your setup status across accounts, debts, bills, upcoming items, and income.
-          Opening this page does not change any data.
-        </p>
+        <p class="muted onboarding-subtitle">Review your accounts, debts, bills, upcoming items, and income.</p>
       </div>
 
       <div id="onboarding_status" class="status"></div>
@@ -1521,6 +1518,18 @@
         <div class="onboarding-step-body" data-body="income"><p class="muted">&mdash;</p></div>
         <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
       </div>
+      <div class="onboarding-step-card onboarding-step-card-clickable" data-step="profile" id="onboarding_step_profile"
+           role="button" tabindex="0"
+           onclick="onboardingShowView('profile')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();onboardingShowView('profile');}">
+        <div class="onboarding-step-head">
+          <div class="onboarding-step-num">6</div>
+          <div class="onboarding-step-title">Profile</div>
+          <div class="onboarding-step-badge" data-badge="profile">…</div>
+        </div>
+        <div class="onboarding-step-body" data-body="profile"><p class="muted">&mdash;</p></div>
+        <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
+      </div>
       </div>
 
       <!--
@@ -1561,11 +1570,9 @@
       <div class="onboarding-finish-panel" id="onboarding_finish_panel">
         <div class="onboarding-finish-panel-text">
           <div class="onboarding-finish-panel-title"
-               id="onboarding_finish_panel_title">You're ready</div>
+               id="onboarding_finish_panel_title">Your setup is ready.</div>
           <div class="onboarding-finish-panel-sub"
-               id="onboarding_finish_panel_sub">
-            Your setup is ready. You can update anything anytime.
-          </div>
+               id="onboarding_finish_panel_sub"></div>
         </div>
         <div class="onboarding-finish-panel-actions">
           <button type="button" class="btn-link-inline"
@@ -1590,16 +1597,13 @@
     -->
     <div id="onboarding_view_bank" class="onboarding-view onboarding-view-detail" style="display:none;">
       <div class="onboarding-detail-header">
-        <div class="onboarding-detail-step">Step 1 of 5</div>
+        <div class="onboarding-detail-step">Step 1 of 6</div>
         <h2 class="onboarding-detail-title">Bank Accounts</h2>
         <div id="onboarding_bank_badge" class="onboarding-detail-badge">…</div>
       </div>
 
       <div class="onboarding-detail-explainer">
-        <p>Bank accounts determine your available cash.</p>
-        <p class="muted">
-          This view is read-only. Edit account details from Assets &rarr; Bank Accounts.
-        </p>
+        <p>Bank accounts determine available cash.</p>
       </div>
 
       <div id="onboarding_bank_status" class="status"></div>
@@ -1623,16 +1627,13 @@
     -->
     <div id="onboarding_view_debts" class="onboarding-view onboarding-view-detail" style="display:none;">
       <div class="onboarding-detail-header">
-        <div class="onboarding-detail-step">Step 2 of 5</div>
+        <div class="onboarding-detail-step">Step 2 of 6</div>
         <h2 class="onboarding-detail-title">Debts</h2>
         <div id="onboarding_debts_badge" class="onboarding-detail-badge">…</div>
       </div>
 
       <div class="onboarding-detail-explainer">
-        <p>Debts and their minimum payments reduce cash available each month.</p>
-        <p class="muted">
-          This view is read-only. Edit debt details from Planning &rarr; Debts.
-        </p>
+        <p>Debts define required payments.</p>
       </div>
 
       <div id="onboarding_debts_status" class="status"></div>
@@ -1654,16 +1655,13 @@
     -->
     <div id="onboarding_view_bills" class="onboarding-view onboarding-view-detail" style="display:none;">
       <div class="onboarding-detail-header">
-        <div class="onboarding-detail-step">Step 3 of 5</div>
+        <div class="onboarding-detail-step">Step 3 of 6</div>
         <h2 class="onboarding-detail-title">Bills</h2>
         <div id="onboarding_bills_badge" class="onboarding-detail-badge">…</div>
       </div>
 
       <div class="onboarding-detail-explainer">
-        <p>Bills are recurring obligations covered each month.</p>
-        <p class="muted">
-          This view is read-only. Edit bills from Cash Flow &rarr; Bills.
-        </p>
+        <p>Bills are recurring expenses to cover.</p>
       </div>
 
       <div id="onboarding_bills_status" class="status"></div>
@@ -1685,16 +1683,13 @@
     -->
     <div id="onboarding_view_upcoming" class="onboarding-view onboarding-view-detail" style="display:none;">
       <div class="onboarding-detail-header">
-        <div class="onboarding-detail-step">Step 4 of 5</div>
+        <div class="onboarding-detail-step">Step 4 of 6</div>
         <h2 class="onboarding-detail-title">Upcoming Expenses</h2>
         <div id="onboarding_upcoming_badge" class="onboarding-detail-badge">…</div>
       </div>
 
       <div class="onboarding-detail-explainer">
-        <p>Upcoming expenses are near-term costs you'll need cash for soon.</p>
-        <p class="muted">
-          This view is read-only. Edit upcoming expenses from Cash Flow &rarr; Upcoming.
-        </p>
+        <p>Upcoming expenses help you plan ahead.</p>
       </div>
 
       <div id="onboarding_upcoming_status" class="status"></div>
@@ -1720,16 +1715,13 @@
     -->
     <div id="onboarding_view_income" class="onboarding-view onboarding-view-detail" style="display:none;">
       <div class="onboarding-detail-header">
-        <div class="onboarding-detail-step">Step 5 of 5</div>
+        <div class="onboarding-detail-step">Step 5 of 6</div>
         <h2 class="onboarding-detail-title">Income</h2>
         <div id="onboarding_income_badge" class="onboarding-detail-badge">…</div>
       </div>
 
       <div class="onboarding-detail-explainer">
-        <p>Income is detected from your latest Cash Flow.</p>
-        <p class="muted">
-          Add or edit income from Cash Flow &rarr; Income.
-        </p>
+        <p>Income is detected from Cash Flow.</p>
       </div>
 
       <div id="onboarding_income_status" class="status"></div>
@@ -1741,6 +1733,73 @@
       <div class="onboarding-actions">
         <button type="button" onclick="onboardingShowView('grid')">Back</button>
         <button type="button" class="btn-primary" onclick="onboardingOpenIncomePage()">Open Income editor</button>
+      </div>
+    </div>
+
+    <!--
+      View 7: Profile detail. Unlike the other steps, Profile uses an
+      inline editor instead of a handoff to a separate page — there is
+      no standalone Settings editor today, and the field set is small
+      enough (Name, Email, Phone, Address) that surfacing a full page
+      would be overkill. Name and Email are required; Phone and Address
+      are optional.
+
+      The view toggles between "view mode" (shown values) and "edit
+      mode" (form) via display-only JS. Saving writes to INPUT - Settings
+      through saveOnboardingProfileFromDashboard and re-renders the
+      view-mode panel from the fresh server payload.
+    -->
+    <div id="onboarding_view_profile" class="onboarding-view onboarding-view-detail" style="display:none;">
+      <div class="onboarding-detail-header">
+        <div class="onboarding-detail-step">Step 6 of 6</div>
+        <h2 class="onboarding-detail-title">Profile</h2>
+        <div id="onboarding_profile_badge" class="onboarding-detail-badge">…</div>
+      </div>
+
+      <div class="onboarding-detail-explainer">
+        <p>Profile info is used for emails and personalization.</p>
+      </div>
+
+      <div id="onboarding_profile_status" class="status"></div>
+
+      <!-- View mode: rendered by the client from the server payload. -->
+      <div id="onboarding_profile_body">
+        <p class="muted">Loading profile&hellip;</p>
+      </div>
+
+      <!-- Edit mode: hidden by default, toggled on when the user clicks Edit. -->
+      <div id="onboarding_profile_editor" class="onboarding-profile-editor" style="display:none;">
+        <div class="onboarding-profile-field">
+          <label for="onboarding_profile_name">Name<span class="onboarding-profile-required" aria-hidden="true"> *</span></label>
+          <input type="text" id="onboarding_profile_name" maxlength="500" autocomplete="name" />
+          <div class="onboarding-profile-error" id="onboarding_profile_name_error"></div>
+        </div>
+        <div class="onboarding-profile-field">
+          <label for="onboarding_profile_email">Email<span class="onboarding-profile-required" aria-hidden="true"> *</span></label>
+          <input type="email" id="onboarding_profile_email" maxlength="500" autocomplete="email" />
+          <div class="onboarding-profile-error" id="onboarding_profile_email_error"></div>
+        </div>
+        <div class="onboarding-profile-field">
+          <label for="onboarding_profile_phone">Phone <span class="muted">(optional)</span></label>
+          <input type="tel" id="onboarding_profile_phone" maxlength="500" autocomplete="tel" />
+          <div class="onboarding-profile-error" id="onboarding_profile_phone_error"></div>
+        </div>
+        <div class="onboarding-profile-field">
+          <label for="onboarding_profile_address">Address <span class="muted">(optional)</span></label>
+          <textarea id="onboarding_profile_address" rows="2" maxlength="500" autocomplete="street-address"></textarea>
+          <div class="onboarding-profile-error" id="onboarding_profile_address_error"></div>
+        </div>
+        <div class="onboarding-profile-actions">
+          <button type="button" id="onboarding_profile_save_btn" class="btn-primary"
+                  onclick="onboardingSaveProfile_()">Save profile</button>
+          <button type="button" onclick="onboardingProfileCancelEdit_()">Cancel</button>
+        </div>
+      </div>
+
+      <div class="onboarding-actions" id="onboarding_profile_footer">
+        <button type="button" onclick="onboardingShowView('grid')">Back</button>
+        <button type="button" class="btn-primary" id="onboarding_profile_edit_btn"
+                onclick="onboardingProfileBeginEdit_()">Edit profile</button>
       </div>
     </div>
 
@@ -1758,10 +1817,7 @@
       </div>
 
       <div class="onboarding-detail-explainer">
-        <p>Property tracking is optional and doesn't affect cash decisions.</p>
-        <p class="muted">
-          Not part of the Setup / Review completion count. You can skip this and add properties later.
-        </p>
+        <p>Property tracking is optional.</p>
       </div>
 
       <div id="onboarding_houses_status" class="status"></div>
@@ -1788,9 +1844,7 @@
       </div>
 
       <div class="onboarding-detail-explainer">
-        <p id="onboarding_finish_intro">
-          Your setup is ready. You can update anything anytime.
-        </p>
+        <p id="onboarding_finish_intro">Your setup is ready.</p>
       </div>
 
       <div id="onboarding_finish_status" class="status"></div>

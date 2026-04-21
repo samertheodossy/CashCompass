@@ -1807,6 +1807,111 @@
     color: #475569;
     text-align: center;
   }
+  /*
+   * Profile detail — inline editor styles.
+   *
+   * View mode reuses .onboarding-account-row for rendered field rows
+   * so it matches the visual density of Bank/Debt lists. Edit mode
+   * provides a simple vertically-stacked form; no new form framework,
+   * just enough styling to look coherent with the rest of onboarding.
+   */
+  .onboarding-profile-view {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .onboarding-profile-view-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+  }
+  .onboarding-profile-view-label {
+    font-weight: 600;
+    color: #0f172a;
+    min-width: 96px;
+  }
+  .onboarding-profile-view-value {
+    color: #334155;
+    text-align: right;
+    word-break: break-word;
+  }
+  .onboarding-profile-view-value.muted { color: #64748b; }
+  .onboarding-profile-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 4px;
+    padding: 16px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #ffffff;
+  }
+  .onboarding-profile-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .onboarding-profile-field label {
+    font-weight: 600;
+    color: #0f172a;
+    font-size: 13px;
+  }
+  .onboarding-profile-field input,
+  .onboarding-profile-field textarea {
+    font: inherit;
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #0f172a;
+    resize: vertical;
+  }
+  .onboarding-profile-field input:focus,
+  .onboarding-profile-field textarea:focus {
+    outline: 2px solid #2563eb;
+    outline-offset: 1px;
+    border-color: #2563eb;
+  }
+  .onboarding-profile-required { color: #dc2626; }
+  .onboarding-profile-error {
+    color: #dc2626;
+    font-size: 12px;
+    min-height: 14px;
+  }
+  .onboarding-profile-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 4px;
+  }
+  .onboarding-profile-actions button {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #0f172a;
+    cursor: pointer;
+  }
+  .onboarding-profile-actions button:hover { background: #f1f5f9; }
+  .onboarding-profile-actions .btn-primary {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #2563eb;
+  }
+  .onboarding-profile-actions .btn-primary:hover {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+  }
+  .onboarding-profile-actions button[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
   .onboarding-account-list {
     display: flex;
     flex-direction: column;
