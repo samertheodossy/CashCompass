@@ -12,25 +12,114 @@ function fillHouseDropdownFromData_(data) {
   populateHouseAddDatalists_(data);
 }
 
+// Core first-run property-type choices for the Add new house form.
+// These always appear in the dropdown, even on a brand-new workbook
+// where no houses exist yet. Values are saved verbatim (no token
+// translation) so the existing HOUSE_ASSETS Type column, House
+// Values header logic, and property-performance consumers see the
+// same strings they always have.
+var HOUSE_ADD_TYPE_CORE_OPTIONS_ = [
+  'Primary Residence',
+  'Vacation Home',
+  'Rental',
+  'Other'
+];
+
+// Sentinel emitted by the "Other (custom)…" option. Must match the
+// option value rendered by populateHouseAddDatalists_() below and the
+// reader in createHouse(). Kept in sync with the bank Use Policy
+// pattern so the two forms feel identical.
+var HOUSE_ADD_TYPE_OTHER_SENTINEL_ = '__OTHER__';
+
+// Merge server-derived property-type values (distinct Type values
+// already used in HOUSE_ASSETS) with the four first-run defaults,
+// preserving order and de-duplicating case-insensitively. The four
+// core options always appear; any additional types already present in
+// the workbook are appended so existing workflows keep their previous
+// picklist too. "Other" is rendered separately as a trailing sentinel
+// option so it never collides with a real saved type.
 function populateHouseAddDatalists_(data) {
-  const dl = document.getElementById('house_add_type_list');
-  if (!dl) return;
-  dl.innerHTML = '';
-  (data.propertyTypeOptions || []).forEach(function(t) {
+  const sel = document.getElementById('house_add_type');
+  if (!sel) return;
+  const currentValue = sel.value || '';
+
+  const serverOpts = (data && Array.isArray(data.propertyTypeOptions))
+    ? data.propertyTypeOptions.slice()
+    : [];
+
+  const merged = [];
+  const seen = {};
+  function pushIfNew(raw) {
+    var s = String(raw == null ? '' : raw).trim();
+    if (!s) return;
+    // Skip the literal "Other" label from the core list when it also
+    // appears server-side; the sentinel handles Other separately, and
+    // any server-side "Other" row is folded into the same canonical
+    // core entry.
+    if (s.toLowerCase() === 'other') return;
+    var key = s.toLowerCase();
+    if (seen[key]) return;
+    seen[key] = true;
+    merged.push(s);
+  }
+  // Core first-run options first, so a brand-new workbook shows a
+  // sensible picklist immediately.
+  HOUSE_ADD_TYPE_CORE_OPTIONS_.forEach(function(t) {
+    if (t === 'Other') return; // Other is rendered from the sentinel below
+    pushIfNew(t);
+  });
+  serverOpts.forEach(pushIfNew);
+
+  sel.innerHTML = '<option value="">— Select type —</option>';
+  merged.forEach(function(t) {
     const o = document.createElement('option');
     o.value = t;
-    dl.appendChild(o);
+    o.textContent = t;
+    sel.appendChild(o);
   });
+  const otherOpt = document.createElement('option');
+  otherOpt.value = HOUSE_ADD_TYPE_OTHER_SENTINEL_;
+  otherOpt.textContent = 'Other (custom)…';
+  sel.appendChild(otherOpt);
+
+  // Preserve the user's in-progress selection across a refresh, as
+  // long as it still maps to one of the rendered options.
+  if (currentValue) {
+    if (
+      currentValue === HOUSE_ADD_TYPE_OTHER_SENTINEL_ ||
+      merged.indexOf(currentValue) !== -1
+    ) {
+      sel.value = currentValue;
+    }
+  }
+}
+
+// Reveal / hide the custom type text row based on the select value.
+// Pure UI — no server calls. Mirrors onBankAddPolicyChange_().
+function onHouseAddTypeChange_() {
+  const sel = document.getElementById('house_add_type');
+  const row = document.getElementById('house_add_type_custom_row');
+  const txt = document.getElementById('house_add_type_custom');
+  if (!sel || !row) return;
+  const showCustom = (sel.value === HOUSE_ADD_TYPE_OTHER_SENTINEL_);
+  row.style.display = showCustom ? '' : 'none';
+  if (!showCustom && txt) {
+    txt.value = '';
+  }
 }
 
 function resetHouseAddForm_() {
   const n = document.getElementById('house_add_name');
   const t = document.getElementById('house_add_type');
+  const tc = document.getElementById('house_add_type_custom');
+  const tcRow = document.getElementById('house_add_type_custom_row');
   const cv = document.getElementById('house_add_current_value');
   const loan = document.getElementById('house_add_loan');
   const vd = document.getElementById('house_add_valuation_date');
   if (n) n.value = '';
   if (t) t.value = '';
+  if (tc) tc.value = '';
+  if (tcRow) tcRow.style.display = 'none';
   if (cv) cv.value = '';
   if (loan) loan.value = '';
   if (vd) vd.value = '';
@@ -242,7 +331,24 @@ function createHouse() {
   clearHouseAddNameError_();
 
   const name = document.getElementById('house_add_name').value.trim();
-  const typeStr = document.getElementById('house_add_type').value.trim();
+
+  // Resolve Property type from the dropdown. Canonical choices ("Primary
+  // Residence", "Vacation Home", "Rental") and any server-merged
+  // existing types go through verbatim. Selecting the "Other" sentinel
+  // unlocks the custom text row whose trimmed value is forwarded to
+  // the backend exactly as the user typed it — addHouseFromDashboard
+  // already accepts any string up to 80 chars, and nothing server-side
+  // changes meaning based on the value.
+  const typeSelEl = document.getElementById('house_add_type');
+  const typeSelVal = typeSelEl ? String(typeSelEl.value || '').trim() : '';
+  let typeStr = '';
+  if (typeSelVal === HOUSE_ADD_TYPE_OTHER_SENTINEL_) {
+    const tcEl = document.getElementById('house_add_type_custom');
+    typeStr = tcEl ? String(tcEl.value || '').trim() : '';
+  } else {
+    typeStr = typeSelVal;
+  }
+
   const curRaw = document.getElementById('house_add_current_value').value;
   const loanRaw = document.getElementById('house_add_loan').value;
   const valDate = document.getElementById('house_add_valuation_date').value.trim();
@@ -252,8 +358,14 @@ function createHouse() {
     setStatus('house_status', 'Error: House name is required.', true);
     return;
   }
-  if (!typeStr) {
+  if (!typeSelVal) {
     setStatus('house_status', 'Error: Property type is required.', true);
+    return;
+  }
+  if (typeSelVal === HOUSE_ADD_TYPE_OTHER_SENTINEL_ && !typeStr) {
+    setStatus('house_status', 'Error: Enter a custom Property type or choose a preset.', true);
+    const tcEl = document.getElementById('house_add_type_custom');
+    if (tcEl) { try { tcEl.focus(); } catch (e) {} }
     return;
   }
   if (!String(curRaw || '').trim()) {

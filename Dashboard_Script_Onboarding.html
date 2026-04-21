@@ -23,6 +23,59 @@ var ONBOARDING_MODE_ = 'normal';
 // status snapshot in hand. Always resets to false after a single use.
 var ONBOARDING_SKIP_GRID_AUTOLOAD_ = false;
 
+// --------------------------------------------------------------------------
+// First-run editor-mode hints.
+//
+// Several onboarding handoffs open editors that default to an
+// "Update existing" mode. On a first-run workbook that moment is
+// wrong: there is nothing yet to update, and the user is handed an
+// Update form with an empty selector. The shared rule is:
+//
+//     no active tracked items for that surface → open the editor in
+//     its create / Add-new mode
+//     at least one active tracked item         → keep today's default
+//
+// These flags cache whether the most recent detail-screen render saw
+// any active items for the corresponding module. The editor-handoff
+// helpers read them to decide whether to flip the destination editor
+// into its creation-mode surface after navigation.
+//
+// Tri-state:
+//   null   — unknown (detail has not rendered yet for this session)
+//   true   — at least one active item exists
+//   false  — confirmed empty (sheet missing OR zero active items)
+//
+// Only `false` triggers a mode override. `null` and `true` fall back
+// to the editor's existing default, so populated workbooks — and any
+// race where handoff fires before the first detail render completes —
+// never regress relative to current behavior.
+// --------------------------------------------------------------------------
+var ONBOARDING_BANK_HAS_TRACKED_ = null;
+var ONBOARDING_DEBTS_HAS_TRACKED_ = null;
+var ONBOARDING_BILLS_HAS_TRACKED_ = null;
+var ONBOARDING_INCOME_HAS_TRACKED_ = null;
+var ONBOARDING_HOUSES_HAS_TRACKED_ = null;
+
+/**
+ * Shared helper for onboarding handoffs.
+ *
+ * Invokes `creationModeFn` iff the caller explicitly knows the
+ * destination surface is empty (`hasTracked === false`). Any other
+ * value — `null` (never rendered), `true` (at least one item), or any
+ * truthy/falsy edge state — is a no-op so populated workbooks keep
+ * the editor's current default mode.
+ *
+ * `creationModeFn` is wrapped in try/catch because the editor panel
+ * elements may not be in the DOM or may not have registered their
+ * handlers yet when the handoff runs. A missing helper must never
+ * break navigation.
+ */
+function onboardingApplyFirstRunEditorMode_(hasTracked, creationModeFn) {
+  if (hasTracked !== false) return;
+  if (typeof creationModeFn !== 'function') return;
+  try { creationModeFn(); } catch (_e) { /* editor may not be ready */ }
+}
+
 // View switching inside Setup. Setup now has eight screens:
 //   'welcome'  — introduction + Continue/Back buttons
 //   'grid'     — status review cards (overview of every Setup area)
@@ -78,7 +131,20 @@ function onboardingShowView(view) {
 }
 
 // Back-to-Dashboard from the Welcome screen. Picks a safe default page.
+//
+// If the startup gate routed the user straight to Welcome (because the
+// workbook looked blank at load time) it intentionally skipped
+// initDashboard(), so the overview's loaders were never kicked off.
+// In that case `window.__cashCompassDashboardInited` is falsy. We run
+// initDashboard() once here so clicking Back to Dashboard actually
+// hydrates the real dashboard instead of leaving the user on an empty
+// page that could bounce them straight back to Welcome.
 function onboardingBackToDashboard() {
+  try {
+    if (!window.__cashCompassDashboardInited && typeof window.initDashboard === 'function') {
+      window.initDashboard();
+    }
+  } catch (_e) { /* non-fatal: still navigate to overview */ }
   if (typeof showPage === 'function') {
     showPage('overview');
   }
@@ -372,6 +438,11 @@ function onboardingRenderBankDetail_(data) {
   }
 
   var count = (data.accounts && data.accounts.length) || 0;
+  // Cache first-run state for the Bank Accounts editor handoff so we
+  // can open it in Add mode when no accounts are tracked yet. Populated
+  // workbooks always reach this branch with count > 0 and therefore
+  // retain today's default Update mode.
+  ONBOARDING_BANK_HAS_TRACKED_ = !!(data.sheetExists && count > 0);
   onboardingBankSetStatus_(
     count + (count === 1 ? ' account tracked' : ' accounts tracked'),
     ''
@@ -447,6 +518,24 @@ function onboardingOpenBankAccountsPage() {
     // The 'bank' return-view tells exitSetupEditorMode() which onboarding
     // detail screen to restore when the user clicks "Back to Setup".
     enterSetupEditorMode('assets', 'bank', 'bank');
+
+    // On a blank workbook the normal dashboard init never ran, so the
+    // Bank Accounts selector + Add-form Type dropdown have never been
+    // populated. Trigger the standard loader here so the editor is
+    // usable on first run. `loadBankSection()` is idempotent, so
+    // populated workbooks just get a cheap re-fetch of the same data.
+    if (typeof loadBankSection === 'function') {
+      try { loadBankSection(); } catch (_e) { /* editor may not be ready */ }
+    }
+
+    // First-run editor mode: if the most recent detail render saw no
+    // tracked accounts, flip the Bank Accounts editor into Add mode.
+    onboardingApplyFirstRunEditorMode_(
+      ONBOARDING_BANK_HAS_TRACKED_,
+      function() {
+        if (typeof setBankPanelMode === 'function') setBankPanelMode('add');
+      }
+    );
   };
 
   google.script.run
@@ -536,6 +625,9 @@ function onboardingRenderDebtDetail_(data) {
   }
 
   var count = (data.debts && data.debts.length) || 0;
+  // Cache first-run state for the Debts editor handoff. Same contract
+  // as the Bank Accounts flag above.
+  ONBOARDING_DEBTS_HAS_TRACKED_ = !!(data.sheetExists && count > 0);
   onboardingDebtsSetStatus_(
     count + (count === 1 ? ' debt tracked' : ' debts tracked'),
     ''
@@ -620,6 +712,15 @@ function onboardingOpenDebtsPage() {
     // the return-view for exitSetupEditorMode() so Back to Setup drops
     // the user back onto this detail screen.
     enterSetupEditorMode('planning', 'debts', 'debts');
+
+    // Mirror the Bank Accounts first-run rule: open Debts in Add mode
+    // when the last detail render explicitly saw zero tracked debts.
+    onboardingApplyFirstRunEditorMode_(
+      ONBOARDING_DEBTS_HAS_TRACKED_,
+      function() {
+        if (typeof setDebtPanelMode === 'function') setDebtPanelMode('add');
+      }
+    );
   };
 
   google.script.run
@@ -702,6 +803,11 @@ function onboardingRenderBillsDetail_(data) {
   }
 
   var count = (data.bills && data.bills.length) || 0;
+  // Cache first-run state for the Bills editor handoff. The Bills
+  // editor uses a collapsed-Add-form pattern (not an Update/Add
+  // toggle), so the handoff invokes openBillsAddFormFromEmptyState()
+  // instead of a mode setter when this is false.
+  ONBOARDING_BILLS_HAS_TRACKED_ = !!(data.sheetExists && count > 0);
   onboardingBillsSetStatus_(
     count + (count === 1 ? ' bill tracked' : ' bills tracked'),
     ''
@@ -773,6 +879,20 @@ function onboardingOpenBillsPage() {
     // Cash Flow hosts Bills under the 'billsDue' sub-tab. 'bills' is
     // the return-view so Back to Setup returns to this detail screen.
     enterSetupEditorMode('cashflow', 'billsDue', 'bills');
+
+    // First-run Bills surface: the Bills tab defaults to "Due this
+    // period" with a collapsed Add form on the Manage view. When the
+    // last detail render explicitly saw zero bills, flip to Manage and
+    // pre-open the Add form. openBillsAddFormFromEmptyState() already
+    // handles both steps.
+    onboardingApplyFirstRunEditorMode_(
+      ONBOARDING_BILLS_HAS_TRACKED_,
+      function() {
+        if (typeof openBillsAddFormFromEmptyState === 'function') {
+          openBillsAddFormFromEmptyState();
+        }
+      }
+    );
   };
 
   google.script.run
@@ -1000,6 +1120,12 @@ function onboardingRenderIncomeDetail_(data) {
 
   var recurring = (data.recurring && data.recurring.length) || 0;
   var other = (data.other && data.other.length) || 0;
+  // Cache first-run state for the Income editor handoff. Income is
+  // derived from the current-year Cash Flow sheet; the editor lives
+  // on Cash Flow → Income and uses the same collapsed-Add-form
+  // pattern as Bills. We treat the surface as "empty" when neither
+  // recurring nor other income was detected on the latest year.
+  ONBOARDING_INCOME_HAS_TRACKED_ = !!(data.sheetExists && (recurring + other) > 0);
   onboardingIncomeSetStatus_(
     recurring + ' recurring · ' + other + ' other detected',
     ''
@@ -1089,6 +1215,27 @@ function onboardingOpenIncomePage() {
   // scratch. Navigate straight to the existing Cash Flow → Income tab,
   // which is the canonical surface for adding income today.
   enterSetupEditorMode('cashflow', 'income', 'income');
+
+  // First-run Income surface: the Income tab defaults to the
+  // recurring list with a collapsed "+ Add income source" button.
+  // When the last detail render explicitly saw no recurring or other
+  // detected income, expand that form so the user lands directly on
+  // the creation flow — same rule as Bills.
+  onboardingApplyFirstRunEditorMode_(
+    ONBOARDING_INCOME_HAS_TRACKED_,
+    function() {
+      // Prefer the public toggle if it closes an already-open form;
+      // fall back to the internal opener if only that is available.
+      var wrap = document.getElementById('income_add_wrap');
+      var alreadyOpen = wrap && wrap.style.display !== 'none';
+      if (alreadyOpen) return;
+      if (typeof openIncomeAddForm_ === 'function') {
+        openIncomeAddForm_();
+      } else if (typeof toggleIncomeAddForm === 'function') {
+        toggleIncomeAddForm();
+      }
+    }
+  );
 }
 
 // --------------------------------------------------------------------------
@@ -1391,6 +1538,12 @@ function onboardingRenderHousesDetail_(data) {
 
   var houses = (data.houses && data.houses.length) ? data.houses : [];
   var activeHouses = houses.filter(function(h) { return !h.inactive; });
+  // Cache first-run state for the Houses editor handoff. Houses is
+  // optional, but the Assets → Houses editor uses the same segmented
+  // Update/Add toggle as Bank / Debts, so applying the shared rule
+  // here keeps the handoff consistent: no active properties → Add
+  // new; at least one active property → today's Update default.
+  ONBOARDING_HOUSES_HAS_TRACKED_ = !!(data.sheetExists && activeHouses.length > 0);
 
   // Neutral badge — Houses is optional, so we deliberately do NOT use
   // the status-complete / status-missing color pills that imply the
@@ -1496,6 +1649,16 @@ function onboardingOpenHousesPage() {
   // screen (not on the main grid) so Back to Setup feels consistent
   // with the core step handoffs.
   enterSetupEditorMode('assets', 'houses', 'houses');
+
+  // First-run Houses surface: open the Assets → Houses editor in Add
+  // mode when the last detail render explicitly saw no active
+  // properties. Same shared rule as Bank Accounts and Debts.
+  onboardingApplyFirstRunEditorMode_(
+    ONBOARDING_HOUSES_HAS_TRACKED_,
+    function() {
+      if (typeof setHousePanelMode === 'function') setHousePanelMode('add');
+    }
+  );
 }
 
 // --------------------------------------------------------------------------
@@ -1682,7 +1845,30 @@ function exitSetupEditorMode() {
   ONBOARDING_EDITOR_RETURN_VIEW_ = null;
 
   try {
-    if (typeof showPage === 'function') showPage('onboarding');
+    // Return-from-editor must NOT re-run loadOnboardingSection()'s
+    // startup routing. loadOnboardingSection() is designed for first
+    // page-entry: it hides every view, then asynchronously decides
+    // Welcome vs Grid. When we already know the exact target view to
+    // restore (the detail the user came from, or 'grid'), letting that
+    // async probe land later briefly flashes Welcome / Grid on top of
+    // the target view. Instead, flip the page + setup-mode synchronously
+    // here and hand straight to onboardingShowView() so the user sees
+    // the target view immediately and it stays put.
+    if (document.body) {
+      document.body.classList.add('setup-mode');
+    }
+    document.querySelectorAll('.workspace-page').forEach(function(el) {
+      el.classList.remove('active');
+    });
+    document.querySelectorAll('.page-btn').forEach(function(el) {
+      el.classList.remove('active');
+    });
+    var onboardingPage = document.getElementById('page_onboarding');
+    if (onboardingPage) onboardingPage.classList.add('active');
+    var onboardingBtn = document.querySelector('.page-btn[data-page="onboarding"]');
+    if (onboardingBtn) onboardingBtn.classList.add('active');
+    window.scrollTo(0, 0);
+
     if (typeof onboardingShowView === 'function') onboardingShowView(target);
   } catch (_e) {
     // No-op: if navigation helpers are missing, at minimum the class has

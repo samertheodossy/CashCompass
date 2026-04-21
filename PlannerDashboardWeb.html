@@ -4,8 +4,41 @@
   <base target="_top">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <?!= includeHtml_('Dashboard_Styles'); ?>
+  <!--
+    First-run anti-flash rule.
+
+    Dashboard_Body.html hardcodes `page_overview` and the "Overview"
+    page-nav button as `active`, which means that on a blank workbook
+    the wrong page is briefly visible before the startup routing gate
+    resolves and flips over to Setup / Review. Keeping `startup-gated`
+    on <body> until the gate resolves hides that wrong-page flash for
+    every workbook (populated or blank) without touching layout or
+    changing the existing `.active` flow. The class is stripped the
+    moment routing picks a destination, so populated workbooks
+    continue to land on Overview exactly as before.
+  -->
+  <style>
+    /*
+      The top action buttons (Help, Setup / Review, Run Planner) live
+      outside `.workspace-page` so they weren't covered by the initial
+      anti-flash rule. On a blank workbook the setup-mode class is only
+      applied after the async startup routing probe resolves, so the
+      Setup / Review + Run Planner buttons briefly flashed into view
+      before being hidden. Extending the gate to the whole top-actions
+      container (including the Help button for a consistent feel) keeps
+      the onboarding landing clean without changing populated-workbook
+      behavior — the class is stripped the moment routing completes.
+    */
+    body.startup-gated .page-nav,
+    body.startup-gated .workspace-page,
+    body.startup-gated .workspace-page.active,
+    body.startup-gated .top-actions-buttons,
+    body.startup-gated #planner_status {
+      visibility: hidden;
+    }
+  </style>
 </head>
-<body>
+<body class="startup-gated">
   <?!= includeHtml_('Dashboard_Body'); ?>
   <?!= includeHtml_('Dashboard_Help'); ?>
 </div>
@@ -97,6 +130,24 @@
 </script>
 
 <script>
+  // --------------------------------------------------------------------
+  // First-run startup gate.
+  //
+  // On a truly blank workbook the normal dashboard loaders (Overview /
+  // Bank / Debt / Cash Flow / Next Actions / …) try to read sheets
+  // like `SYS - Accounts` and `INPUT - Cash Flow <year>` that don't
+  // exist yet, producing noisy "Missing sheet" errors before the user
+  // ever reaches onboarding.
+  //
+  // Before running initDashboard() we ask the server whether this is a
+  // blank workbook (none of the 6 core input sheets exist). If so we
+  // route directly to Setup / Review — loadOnboardingSection() will
+  // land the user on Welcome for a truly unconfigured workbook — and
+  // skip the normal dashboard load entirely.
+  //
+  // Populated workbooks, and any case where the probe fails, fall
+  // through to the existing init path so nothing regresses.
+  // --------------------------------------------------------------------
   try {
     function initDashboard() {
       refreshSnapshot();
@@ -115,10 +166,72 @@
       if (typeof loadIncomeSourcesSection === 'function') {
         loadIncomeSourcesSection();
       }
+      // Mark that the normal dashboard loaders have been kicked off at
+      // least once this session. onboardingBackToDashboard() uses this
+      // flag so that if the startup gate chose to skip initDashboard()
+      // (e.g. we routed to Welcome first), clicking Back to Dashboard
+      // still hydrates the overview instead of landing on an empty
+      // page that would re-trigger onboarding.
+      try { window.__cashCompassDashboardInited = true; } catch (_e) {}
+    }
+    // Expose so the onboarding Back-to-Dashboard handler can invoke it
+    // if the startup gate originally skipped the normal init path.
+    try { window.initDashboard = initDashboard; } catch (_e) {}
+
+    // Strip the anti-flash gate class once we have decided where to
+    // land. Called in every success/failure branch below so the UI
+    // never stays hidden if the probe fails or returns early.
+    function revealWorkspace_() {
+      if (document.body && document.body.classList) {
+        document.body.classList.remove('startup-gated');
+      }
     }
 
-    initDashboard();
+    function runStartupRouting_() {
+      // Defensive: if the probe endpoint isn't deployed yet for any
+      // reason, don't hang the page — fall back to the existing init.
+      if (!google || !google.script || !google.script.run) {
+        revealWorkspace_();
+        initDashboard();
+        return;
+      }
+
+      google.script.run
+        .withSuccessHandler(function(routing) {
+          if (routing && routing.ok && routing.isBlankWorkbook) {
+            // Blank workbook: switch the active page to onboarding
+            // BEFORE revealing so the user never sees the default
+            // Overview tab, then skip the normal dashboard load
+            // entirely so no loader tries to read a missing SYS /
+            // INPUT sheet. showPage('onboarding') triggers
+            // loadOnboardingSection(), which routes unconfigured
+            // workbooks to Welcome.
+            if (typeof showPage === 'function') {
+              showPage('onboarding');
+            }
+            revealWorkspace_();
+            return;
+          }
+          revealWorkspace_();
+          initDashboard();
+        })
+        .withFailureHandler(function() {
+          // Preserve today's behavior on any probe failure. Populated
+          // workbooks must never regress because of the startup gate.
+          revealWorkspace_();
+          initDashboard();
+        })
+        .getStartupRoutingFromDashboard();
+    }
+
+    runStartupRouting_();
   } catch (e) {
+    // Ensure the anti-flash gate is always lifted if anything above
+    // throws synchronously — otherwise the user would be left with a
+    // blank screen.
+    if (document.body && document.body.classList) {
+      document.body.classList.remove('startup-gated');
+    }
     var el = document.getElementById('planner_status');
     if (el) {
       el.textContent = 'Init Error: ' + (e && e.message ? e.message : String(e));

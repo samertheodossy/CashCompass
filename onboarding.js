@@ -999,9 +999,24 @@ function ensureOnboardingDebtsSheetFromDashboard(mode) {
     ];
     sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
 
+    // Cosmetic polish applied only to the fresh sheet. Readers identify
+    // columns by header label (getDebtsHeaderMap_), so number formats
+    // are pure visual polish and never load-bearing. Scope the currency
+    // format to just the four money columns (Account Balance,
+    // Minimum Payment, Credit Limit, Credit Left at positions 3–6) and
+    // leave Int Rate / Due Date / Acct PCT Avail as plain numbers so
+    // they match the values addDebtFromDashboard writes (round2_ numeric
+    // values stored without a percent-literal scale).
     try {
       sheet.getRange(1, 1, 1, headerRow.length).setFontWeight('bold');
       sheet.setFrozenRows(1);
+
+      var maxRows = sheet.getMaxRows();
+      if (maxRows > 1) {
+        sheet.getRange(2, 3, maxRows - 1, 4)
+          .setNumberFormat('$#,##0.00;-$#,##0.00');
+      }
+      sheet.autoResizeColumns(1, headerRow.length);
     } catch (_e) {
       // Cosmetic only — never fail the ensure op on formatting hiccups.
     }
@@ -1188,9 +1203,22 @@ function ensureOnboardingBillsSheetFromDashboard(mode) {
       'Notes'
     ];
     sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
+
+    // Cosmetic polish applied only to the fresh sheet. The only money
+    // column on INPUT - Bills is Default Amount (position 4); format
+    // with the same currency string used by Cash Flow / Upcoming so
+    // numeric entries render consistently workbook-wide. Readers use
+    // header-label lookups so this is pure visual polish.
     try {
       sheet.getRange(1, 1, 1, headerRow.length).setFontWeight('bold');
       sheet.setFrozenRows(1);
+
+      var maxRowsBills = sheet.getMaxRows();
+      if (maxRowsBills > 1) {
+        sheet.getRange(2, 4, maxRowsBills - 1, 1)
+          .setNumberFormat('$#,##0.00;-$#,##0.00');
+      }
+      sheet.autoResizeColumns(1, headerRow.length);
     } catch (_e) { /* cosmetic only */ }
   } catch (e) {
     return {
@@ -1849,9 +1877,35 @@ function ensureOnboardingBankAccountsSheetFromDashboard(mode) {
     var headerRow = ['Account Name'].concat(monthHeaders).concat(['Total']);
     sheet.getRange(2, 1, 1, headerRow.length).setValues([headerRow]);
 
+    // Cosmetic polish applied only to the fresh sheet. Year-block style
+    // — two "header" rows (row 1 = Year marker, row 2 = column labels)
+    // — so we freeze both. Month cells + the Total column get currency
+    // formatting so numbers typed later render consistently with
+    // INPUT - Cash Flow. Pin month headers as plain text so Sheets does
+    // not auto-parse "Jan-26" into a Date (mirrors the identical guard
+    // in ensureCashFlowYearSheet_).
     try {
       sheet.getRange(1, 1, 2, headerRow.length).setFontWeight('bold');
       sheet.setFrozenRows(2);
+
+      var firstMonthCol = 2; // A=Account Name, B=Jan
+      var lastMonthCol = firstMonthCol + monthHeaders.length - 1;
+      var totalCol = lastMonthCol + 1;
+
+      for (var mh = 0; mh < monthHeaders.length; mh++) {
+        var hdrCell = sheet.getRange(2, firstMonthCol + mh);
+        hdrCell.setNumberFormat('@STRING@');
+        hdrCell.setValue(monthHeaders[mh]);
+      }
+
+      var maxRowsBank = sheet.getMaxRows();
+      if (maxRowsBank > 2) {
+        sheet.getRange(3, firstMonthCol, maxRowsBank - 2, monthHeaders.length)
+          .setNumberFormat('$#,##0.00;-$#,##0.00');
+        sheet.getRange(3, totalCol, maxRowsBank - 2, 1)
+          .setNumberFormat('$#,##0.00;-$#,##0.00');
+      }
+      sheet.autoResizeColumns(1, headerRow.length);
     } catch (_e) {
       // Cosmetic only — never fail the ensure op on formatting hiccups.
     }

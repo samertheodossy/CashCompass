@@ -297,19 +297,26 @@
             <input type="text" id="house_add_name" maxlength="120" autocomplete="off" oninput="if (typeof clearHouseAddNameError_==='function') clearHouseAddNameError_();">
             <div id="house_add_name_error" class="field-error" role="alert" aria-live="polite"></div>
             <label>Property type</label>
-            <input type="text" id="house_add_type" maxlength="80" list="house_add_type_list" autocomplete="off">
-            <datalist id="house_add_type_list"></datalist>
+            <select id="house_add_type" onchange="onHouseAddTypeChange_()">
+              <option value="">— Select type —</option>
+            </select>
+            <div class="muted" style="margin-top:4px;font-size:12px;">Choose the role this property plays. Your existing property types (if any) are also listed.</div>
+            <div id="house_add_type_custom_row" style="display:none;margin-top:6px;">
+              <label for="house_add_type_custom">Custom property type</label>
+              <input type="text" id="house_add_type_custom" maxlength="80" autocomplete="off" placeholder="e.g. Land, Commercial">
+            </div>
             <label>Current value</label>
             <input type="text" id="house_add_current_value" inputmode="decimal" onfocus="currencyFocus('house_add_current_value')" onblur="currencyBlur('house_add_current_value')">
             <label>Loan amount left</label>
             <input type="text" id="house_add_loan" inputmode="decimal" onfocus="currencyFocus('house_add_loan')" onblur="currencyBlur('house_add_loan')">
             <label>Valuation date (optional)</label>
             <input type="date" id="house_add_valuation_date">
+            <div class="muted" style="margin-top:4px;font-size:12px;">If left blank, the current month will be used. Must be in the current calendar year when provided.</div>
             <button onclick="createHouse()">Create house</button>
           </div>
           <div class="info muted">
             <p style="margin-top:0;">Creates the house in the current year's House Values block and sets up a matching expense sheet with the standard expense-tracking columns.</p>
-            <p>Valuation date is optional. When provided it must fall in the current year and the Current value is seeded into that month. Property type can be chosen from existing houses or typed as a new value.</p>
+            <p>Valuation date is optional. When provided it must fall in the current year and the Current value is seeded into that month. <strong>If left blank, the current month is used automatically</strong> so the Current value always lands in a real month column. Property type is a dropdown of common roles plus any types already used in this workbook; pick <strong>Other</strong> to enter a custom label.</p>
           </div>
         </div>
       </div>
@@ -376,21 +383,45 @@
             </select>
             <div class="muted" style="margin-top:4px;font-size:12px;">Choose from your existing bank account types.</div>
             <label>Use policy</label>
-            <input type="text" id="bank_add_policy" maxlength="120" list="bank_add_policy_list" autocomplete="off">
-            <datalist id="bank_add_policy_list"></datalist>
+            <select id="bank_add_policy" onchange="onBankAddPolicyChange_()">
+              <option value="">— Select use policy —</option>
+              <option value="DO_NOT_TOUCH">Do not touch</option>
+              <option value="USE_FOR_BILLS">Use for bills</option>
+              <option value="USE_FOR_DEBT">Use for debt</option>
+              <option value="USE_WITH_CAUTION">Use with caution</option>
+              <option value="__OTHER__">Other (custom)…</option>
+            </select>
+            <div class="muted" style="margin-top:4px;font-size:12px;line-height:1.4;">
+              How the planner should use this account's balance.<br>
+              <strong>Do not touch</strong> — excluded from bills &amp; debt payoff (e.g. emergency fund).<br>
+              <strong>Use for bills</strong> — primary source for monthly bills.<br>
+              <strong>Use for debt</strong> — primary source for rolling debt payoff.<br>
+              <strong>Use with caution</strong> — tapped only if bills/debt accounts run short.<br>
+              <strong>Other</strong> — enter a custom label; the planner will treat it like Do not touch until you map it.
+            </div>
+            <div id="bank_add_policy_custom_row" style="display:none;margin-top:6px;">
+              <label for="bank_add_policy_custom">Custom use policy</label>
+              <input type="text" id="bank_add_policy_custom" maxlength="120" autocomplete="off" placeholder="e.g. RAINY_DAY">
+            </div>
             <label>Priority</label>
-            <input type="number" id="bank_add_priority" min="1" max="99" step="1" value="9" inputmode="numeric">
-            <div class="muted" style="margin-top:4px;font-size:12px;">Lower number = used earlier within the same Use policy group. Default 9.</div>
-            <label>Opening balance date (optional)</label>
+            <select id="bank_add_priority">
+              <option value="1">Use first (primary account)</option>
+              <option value="5">Use after others</option>
+              <option value="9" selected>Use last (backup)</option>
+            </select>
+            <div class="muted" style="margin-top:4px;font-size:12px;">Which account should be used first when multiple accounts are available.</div>
+            <label>Opening balance date</label>
             <input type="date" id="bank_add_opening_date">
-            <label>Opening balance amount (optional)</label>
-            <input type="text" id="bank_add_opening_value" inputmode="decimal" onfocus="currencyFocus('bank_add_opening_value')" onblur="currencyBlur('bank_add_opening_value')">
+            <div class="muted" style="margin-top:4px;font-size:12px;">Required if opening balance is non-zero. Leave blank if opening balance is 0.</div>
+            <label>Opening balance amount</label>
+            <input type="text" id="bank_add_opening_value" inputmode="decimal" value="0.00" onfocus="currencyFocus('bank_add_opening_value')" onblur="currencyBlur('bank_add_opening_value')">
+            <div class="muted" style="margin-top:4px;font-size:12px;">Enter <code>0</code> if unknown. Cannot be empty.</div>
             <div class="check-row">
               <input type="checkbox" id="bank_add_set_available" checked>
               <label for="bank_add_set_available" style="margin:0;font-weight:normal;">Also set Available Now to opening amount</label>
             </div>
             <div class="check-row">
-              <input type="checkbox" id="bank_add_set_min_buffer">
+              <input type="checkbox" id="bank_add_set_min_buffer" checked>
               <label for="bank_add_set_min_buffer" style="margin:0;font-weight:normal;">Also set Min Buffer to opening amount</label>
             </div>
             <button onclick="createBankAccount()">Create account</button>
@@ -447,19 +478,25 @@
             <input type="text" id="inv_add_name" maxlength="120" autocomplete="off" oninput="if (typeof clearInvestmentAddNameError_==='function') clearInvestmentAddNameError_();">
             <div id="inv_add_name_error" class="field-error" role="alert" aria-live="polite"></div>
             <label>Type</label>
-            <select id="inv_add_type">
+            <select id="inv_add_type" onchange="onInvAddTypeChange_()">
               <option value="">— Select type —</option>
             </select>
-            <div class="muted" style="margin-top:4px;font-size:12px;">Choose from your existing investment types.</div>
-            <label>Starting value (optional)</label>
-            <input type="text" id="inv_add_starting_value" inputmode="decimal" onfocus="currencyFocus('inv_add_starting_value')" onblur="currencyBlur('inv_add_starting_value')">
+            <div class="muted" style="margin-top:4px;font-size:12px;">Common investment roles plus any types already used in this workbook. Pick <strong>Other</strong> to enter a custom label.</div>
+            <div id="inv_add_type_custom_row" style="display:none;margin-top:6px;">
+              <label for="inv_add_type_custom">Custom type</label>
+              <input type="text" id="inv_add_type_custom" maxlength="80" autocomplete="off" placeholder="e.g. HSA, Crypto">
+            </div>
+            <label>Starting value</label>
+            <input type="text" id="inv_add_starting_value" inputmode="decimal" value="0.00" onfocus="currencyFocus('inv_add_starting_value')" onblur="currencyBlur('inv_add_starting_value')">
+            <div class="muted" style="margin-top:4px;font-size:12px;">Enter <code>0</code> if unknown. Cannot be empty.</div>
             <label>Starting value date (optional)</label>
             <input type="date" id="inv_add_starting_date">
+            <div class="muted" style="margin-top:4px;font-size:12px;">If left blank, the current month will be used. Must be in the current calendar year when provided.</div>
             <button onclick="createInvestmentAccount()">Create account</button>
           </div>
           <div class="info muted">
             <p style="margin-top:0;">Creates the account in the current year's Investments block. A Year block for the current calendar year must already exist.</p>
-            <p>If you provide a starting value, the date must fall in that same year and the amount is seeded into the matching month. Type can be chosen from existing accounts or typed as a new value.</p>
+            <p>Starting value is required (enter <code>0</code> if unknown). Starting value date is optional — <strong>if left blank, the current month is used automatically</strong> so the amount always lands in a real month column. Type is a dropdown of common investment roles plus any types already used in this workbook; pick <strong>Other</strong> to enter a custom label.</p>
           </div>
         </div>
       </div>

@@ -696,6 +696,26 @@ function onBillsAddCategoryChange() {
  * cleared on successful save so new categories surface immediately on the
  * next open.
  */
+/**
+ * Fallback category list used when the workbook has no existing Bills rows
+ * yet (first-run) or when the server lookup fails. Covers the common
+ * recurring-bill categories so new users get meaningful choices without any
+ * SYS/INPUT seeding. Once real categories exist in INPUT - Bills, the
+ * server list wins and this fallback is ignored.
+ */
+var BILL_ADD_CATEGORY_FALLBACK_OPTIONS_ = [
+  'Housing',
+  'Utilities',
+  'Internet & Phone',
+  'Insurance',
+  'Transportation',
+  'Subscriptions',
+  'Healthcare',
+  'Childcare',
+  'Loan Payment',
+  'Other'
+];
+
 function loadBillCategoriesIntoForm_() {
   const select = document.getElementById('bills_add_category');
   if (!select) return;
@@ -704,12 +724,16 @@ function loadBillCategoriesIntoForm_() {
 
   google.script.run
     .withSuccessHandler(function(categories) {
-      populateBillCategoryOptions_(Array.isArray(categories) ? categories : []);
+      var list = Array.isArray(categories) ? categories : [];
+      if (!list.length) list = BILL_ADD_CATEGORY_FALLBACK_OPTIONS_.slice();
+      populateBillCategoryOptions_(list);
       window.__billsCategoryOptionsLoaded = true;
     })
     .withFailureHandler(function() {
-      // Soft failure: leave the dropdown with just the defaults (— none — and
-      // Other…) so the form is still usable. We don't block the user here.
+      // Soft failure (e.g. INPUT - Bills hasn't been created yet on a blank
+      // workbook). Populate the form with the first-run fallback so the
+      // user still has meaningful choices.
+      populateBillCategoryOptions_(BILL_ADD_CATEGORY_FALLBACK_OPTIONS_.slice());
       window.__billsCategoryOptionsLoaded = true;
     })
     .getBillCategoriesFromDashboard();

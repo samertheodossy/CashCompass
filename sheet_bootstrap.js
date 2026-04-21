@@ -445,3 +445,122 @@ function getOnboardingBootstrapStatusFromDashboard() {
 
   return { mode: 'normal', sheets: sheets };
 }
+
+/* -------------------------------------------------------------------------- */
+/*  First-run startup routing probe                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Prefixes used to identify app-owned sheets in any existing workbook.
+ * Any sheet whose name begins with one of these — regardless of year,
+ * canonical naming, or current onboarding schema — counts as evidence
+ * that the workbook is NOT a first-run blank workbook.
+ *
+ * This is intentionally broader than BOOTSTRAP_CORE_KEYS_: we want the
+ * blank-detection rule to respect any prior CashCompass state, not
+ * just the specific canonical onboarding sheet names that happen to
+ * match the current version of the registry. A workbook created by an
+ * older build, or one that predates the Settings / Upcoming schema,
+ * can still have dozens of populated INPUT / SYS / OUT / LOG sheets
+ * and must not be treated as blank.
+ */
+var STARTUP_APP_SHEET_PREFIXES_ = ['INPUT - ', 'SYS - ', 'OUT - ', 'LOG - '];
+
+/**
+ * Returns true when the active spreadsheet contains any sheet whose
+ * name starts with one of the recognised app prefixes. Pure inspection
+ * — never writes. Uses the cheap `getSheets()` / `getName()` pair and
+ * short-circuits on the first match so even large workbooks resolve
+ * in a single pass.
+ */
+function workbookHasAnyAppSheet_(ss) {
+  try {
+    var sheets = ss.getSheets();
+    for (var i = 0; i < sheets.length; i++) {
+      var name = '';
+      try { name = sheets[i].getName() || ''; } catch (_e) { name = ''; }
+      for (var p = 0; p < STARTUP_APP_SHEET_PREFIXES_.length; p++) {
+        if (name.indexOf(STARTUP_APP_SHEET_PREFIXES_[p]) === 0) return true;
+      }
+    }
+  } catch (_err) {
+    // On any inspection error, fall through to the caller. The caller
+    // must fail closed (treat as populated) so a populated workbook
+    // never regresses onto Welcome because of a probe hiccup.
+  }
+  return false;
+}
+
+/**
+ * Read-only probe used by the web app client at startup to decide
+ * whether to load the normal dashboard or route the user directly to
+ * Setup / Review → Welcome.
+ *
+ * A workbook is considered "blank" for first-run purposes only when it
+ * contains NO recognised app sheets at all — i.e. no sheet whose name
+ * begins with `INPUT - `, `SYS - `, `OUT - `, or `LOG - `. This is a
+ * broader rule than checking the current onboarding canonical sheet
+ * set alone: older workbooks that predate today's Settings / Upcoming
+ * schema, or that use a past-year Cash Flow tab, still have real user
+ * data and must land on the normal dashboard instead of Welcome.
+ *
+ * Safety
+ *   - Pure inspection. Never creates, never modifies, never clears any
+ *     sheet. Safe to call unconditionally at page load.
+ *   - Fails closed: on any error we report not-blank so the caller
+ *     falls through to the normal dashboard init path. A populated
+ *     workbook must never be trapped on Welcome because of a probe
+ *     hiccup.
+ *
+ * Shape:
+ *   {
+ *     ok: boolean,                // true if the probe completed
+ *     isBlankWorkbook: boolean,   // true only when the workbook has no app sheets
+ *     mode: 'normal',
+ *     coreSheetCount: number,     // total core sheets probed
+ *     existingCoreSheetCount: number,
+ *     hasAnyAppSheet: boolean,    // broader populated-workbook signal
+ *     reason?: string             // populated only when ok === false
+ *   }
+ */
+function getStartupRoutingFromDashboard() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var status = getOnboardingBootstrapStatusFromDashboard();
+    var sheets = (status && Array.isArray(status.sheets)) ? status.sheets : [];
+    var existing = 0;
+    for (var i = 0; i < sheets.length; i++) {
+      if (sheets[i] && sheets[i].exists) existing++;
+    }
+
+    // Broader populated-workbook check: any INPUT/SYS/OUT/LOG sheet
+    // anywhere in the workbook counts as real user data, even if none
+    // of today's six canonical onboarding sheet names match. This is
+    // the load-bearing guard that prevents existing populated
+    // workbooks from being misclassified as first-run / blank.
+    var hasAnyAppSheet = workbookHasAnyAppSheet_(ss);
+
+    return {
+      ok: true,
+      isBlankWorkbook: (sheets.length > 0 && existing === 0 && !hasAnyAppSheet),
+      mode: 'normal',
+      coreSheetCount: sheets.length,
+      existingCoreSheetCount: existing,
+      hasAnyAppSheet: hasAnyAppSheet
+    };
+  } catch (e) {
+    // Fail closed: on any error, report not-blank so the client falls
+    // back to the existing dashboard init path. We would rather show
+    // the current (pre-gate) behavior than accidentally trap a
+    // populated workbook on the Welcome screen.
+    return {
+      ok: false,
+      isBlankWorkbook: false,
+      mode: 'normal',
+      coreSheetCount: 0,
+      existingCoreSheetCount: 0,
+      hasAnyAppSheet: false,
+      reason: 'Startup routing probe failed: ' + (e && e.message ? e.message : e)
+    };
+  }
+}

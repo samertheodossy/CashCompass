@@ -61,6 +61,16 @@ function loadDebtSectionThenSelect_(accountName) {
     .getDebtsUiData();
 }
 
+// First-run fallback for the Debt Type dropdown. Used only when the
+// workbook doesn't have any Type values yet (blank workbook, INPUT -
+// Debts missing or empty). Mirrors the Credit Card / Loan / HELOC
+// detection in isDebtCreditCardType_ + dashboard_data.js so the
+// dropdown always offers the product's canonical debt categories on
+// first run without writing anything into the workbook. As soon as
+// real Type values show up on INPUT - Debts, the live list is used
+// instead and these defaults drop away.
+var DEBT_ADD_TYPE_FALLBACK_OPTIONS_ = ['Credit Card', 'Loan', 'HELOC', 'Other'];
+
 function populateDebtAddDatalists_(data) {
   const sel = document.getElementById('debt_add_type');
   if (!sel) return;
@@ -74,8 +84,13 @@ function populateDebtAddDatalists_(data) {
   placeholder.selected = true;
   sel.appendChild(placeholder);
 
+  var serverTypes = (data && data.typeOptions) ? data.typeOptions : [];
+  var typeOpts = (serverTypes && serverTypes.length)
+    ? serverTypes
+    : DEBT_ADD_TYPE_FALLBACK_OPTIONS_.slice();
+
   const seen = Object.create(null);
-  (data.typeOptions || []).forEach(function(t) {
+  typeOpts.forEach(function(t) {
     const v = String(t == null ? '' : t).trim();
     if (!v) return;
     const key = v.toLowerCase();

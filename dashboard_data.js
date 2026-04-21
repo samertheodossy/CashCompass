@@ -1182,6 +1182,19 @@ function getBillsDueFromCashFlowForDashboard() {
   const today = new Date();
   const tz = Session.getScriptTimeZone();
 
+  // First-run safety: the Bills Due calculation reads from the current
+  // year's Cash Flow sheet. On a freshly-onboarded workbook that sheet
+  // may not exist yet, in which case getDebtBillsDueRows_ /
+  // getInputBillsDueRows_ would throw "Missing cash flow sheet: …" and
+  // the Bills page would surface a red error after saving the first
+  // bill. Creating it on demand via the centralized safe helper is a
+  // no-op if the sheet already exists (populated workbooks unchanged).
+  try {
+    if (typeof ensureCashFlowYearSheet_ === 'function') {
+      ensureCashFlowYearSheet_(today.getFullYear());
+    }
+  } catch (_e) { /* fall through; downstream will surface a clear error */ }
+
   const debtRows = getDebtBillsDueRows_(ss, today, tz);
   const inputBillRows = getInputBillsDueRows_(ss, today, tz);
 
@@ -1223,6 +1236,15 @@ function getRecurringBillsWithoutDueDateForDashboard() {
   const currentMonthIndex = today.getMonth();
   const nextDate = new Date(currentYear, currentMonthIndex + 1, 1);
 
+  // First-run safety: ensure the current-year Cash Flow sheet exists
+  // before any dependent reads run. Mirrors the guard at the top of
+  // getBillsDueFromCashFlowForDashboard — see the comment there.
+  try {
+    if (typeof ensureCashFlowYearSheet_ === 'function') {
+      ensureCashFlowYearSheet_(currentYear);
+    }
+  } catch (_e) { /* fall through; downstream will surface a clear error */ }
+
   const currentSheet = getCashFlowSheet_(ss, currentYear);
   const currentValues = currentSheet.getDataRange().getValues();
   const currentDisplay = currentSheet.getDataRange().getDisplayValues();
@@ -1237,12 +1259,19 @@ function getRecurringBillsWithoutDueDateForDashboard() {
   // Source") between them on the sheet does not silently mis-align reads.
   const currentHeaderMap = getCashFlowHeaderMap_(currentSheet);
 
-  const nextSheet = getCashFlowSheet_(ss, nextDate.getFullYear());
-  const nextValues = nextSheet.getDataRange().getValues();
-  const nextDisplay = nextSheet.getDataRange().getDisplayValues();
+  // Next-month read is best-effort: when today is in December, the
+  // following month lives in next year's Cash Flow sheet, which may
+  // not exist yet (especially on a blank workbook). tryGetCashFlowSheet_
+  // returns null instead of throwing so the recurring-bills list can
+  // still render the current-month portion without a red banner.
+  const nextSheet = typeof tryGetCashFlowSheet_ === 'function'
+    ? tryGetCashFlowSheet_(ss, nextDate.getFullYear())
+    : null;
+  const nextValues = nextSheet ? nextSheet.getDataRange().getValues() : [];
+  const nextDisplay = nextSheet ? nextSheet.getDataRange().getDisplayValues() : [];
   const nextHeaders = nextDisplay.length ? nextDisplay[0] : [];
   const nextMonthHeader = monthHeaderFromYearMonth_(nextDate.getFullYear(), nextDate.getMonth());
-  const nextMonthCol = nextHeaders.indexOf(nextMonthHeader);
+  const nextMonthCol = nextHeaders.length ? nextHeaders.indexOf(nextMonthHeader) : -1;
 
   const mappedBills = getInputBillsPayeeMap_(ss);
   const debtBills = getDebtPayeeMap_(ss);
@@ -1367,7 +1396,13 @@ function getDebtBillsDueRows_(ss, today, tz) {
       year: year,
       monthIndex: monthIndex,
       monthHeader: monthHeader,
-      sheet: getCashFlowSheet_(ss, year)
+      // Use tryGetCashFlowSheet_ so the next-month context (which can
+      // point into next year during December) doesn't throw when that
+      // sheet doesn't exist yet. A null sheet just means "no next-month
+      // preview"; the current-month read still drives the result.
+      sheet: typeof tryGetCashFlowSheet_ === 'function'
+        ? tryGetCashFlowSheet_(ss, year)
+        : ss.getSheetByName(getCashFlowSheetName_(year))
     };
   }
 
@@ -1380,7 +1415,11 @@ function getDebtBillsDueRows_(ss, today, tz) {
   const currentCtx = buildMonthContext_(today, 0);
   const nextCtx = buildMonthContext_(today, 1);
 
-  const debtSheet = getSheet_(ss, 'DEBTS');
+  // First-run safety: INPUT - Debts may be missing on a blank workbook.
+  // Treat missing as "no debt bills due" so the Bills page can render
+  // cleanly without a red "Missing sheet: INPUT - Debts" banner.
+  var debtSheet = ss.getSheetByName(getSheetNames_().DEBTS);
+  if (!debtSheet) return [];
   const debtValues = debtSheet.getDataRange().getValues();
   const debtDisplay = debtSheet.getDataRange().getDisplayValues();
   if (debtDisplay.length < 2) return [];
@@ -1413,6 +1452,11 @@ function getDebtBillsDueRows_(ss, today, tz) {
     }
   }
 
+  // First-run safety: current-year Cash Flow may be missing on a blank
+  // workbook. The caller (getBillsDueFromCashFlowForDashboard) tries to
+  // ensure it, but defensively bail out with no rows so the Bills page
+  // can still render instead of surfacing "Missing cash flow sheet".
+  if (!currentCtx.sheet) return [];
   const currentValues = currentCtx.sheet.getDataRange().getValues();
   const currentDisplay = currentCtx.sheet.getDataRange().getDisplayValues();
   if (currentDisplay.length < 2) return [];
@@ -1425,10 +1469,10 @@ function getDebtBillsDueRows_(ss, today, tz) {
   // once the Flow Source column is inserted between them on the sheet).
   const currentHeaderMap = getCashFlowHeaderMap_(currentCtx.sheet);
 
-  const nextValues = nextCtx.sheet.getDataRange().getValues();
-  const nextDisplay = nextCtx.sheet.getDataRange().getDisplayValues();
+  const nextValues = nextCtx.sheet ? nextCtx.sheet.getDataRange().getValues() : [];
+  const nextDisplay = nextCtx.sheet ? nextCtx.sheet.getDataRange().getDisplayValues() : [];
   const nextHeaders = nextDisplay.length ? nextDisplay[0] : [];
-  const nextMonthCol = nextHeaders.indexOf(nextCtx.monthHeader);
+  const nextMonthCol = nextHeaders.length ? nextHeaders.indexOf(nextCtx.monthHeader) : -1;
 
   const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const rows = [];
@@ -1508,7 +1552,11 @@ function getDebtBillsDueRows_(ss, today, tz) {
 }
 
 function getInputBillsDueRows_(ss, today, tz) {
-  const billsSheet = getSheet_(ss, 'BILLS');
+  // First-run safety: INPUT - Bills may be missing on a blank workbook.
+  // Treat missing as "no bills due" so the Bills page can render
+  // cleanly without a red "Missing sheet: INPUT - Bills" banner.
+  var billsSheet = ss.getSheetByName(getSheetNames_().BILLS);
+  if (!billsSheet) return [];
   const values = billsSheet.getDataRange().getValues();
   const display = billsSheet.getDataRange().getDisplayValues();
   if (display.length < 2) return [];
@@ -1749,7 +1797,11 @@ function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth) 
 }
 
 function getInputBillsPayeeMap_(ss) {
-  const sheet = getSheet_(ss, 'BILLS');
+  // First-run safety: INPUT - Bills may be missing on a blank workbook.
+  // Treat missing as "no mapped bills" so callers (recurring-bills
+  // fallback, cross-reference maps) don't throw during Bills first load.
+  var sheet = ss.getSheetByName(getSheetNames_().BILLS);
+  if (!sheet) return {};
   const display = sheet.getDataRange().getDisplayValues();
   if (display.length < 2) return {};
 
@@ -1774,7 +1826,11 @@ function getInputBillsPayeeMap_(ss) {
 }
 
 function getDebtPayeeMap_(ss) {
-  const sheet = getSheet_(ss, 'DEBTS');
+  // First-run safety: INPUT - Debts may be missing on a blank workbook.
+  // Treat missing as "no debt payees" so the recurring-bills fallback
+  // and cross-reference maps don't throw during Bills first load.
+  var sheet = ss.getSheetByName(getSheetNames_().DEBTS);
+  if (!sheet) return {};
   const display = sheet.getDataRange().getDisplayValues();
   const values = sheet.getDataRange().getValues();
   if (display.length < 2) return {};

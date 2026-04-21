@@ -12,37 +12,104 @@ function fillBankAccountDropdownFromData_(data) {
   populateBankAddDatalists_(data);
 }
 
+// First-run fallback used when the workbook has no Bank Account Type
+// values yet (e.g. blank workbook, SYS - Accounts missing or empty).
+// Keeps the "Add new" experience usable before any accounts exist
+// without writing anything into SYS sheets. As soon as real types
+// start showing up in the workbook, the live list is used instead.
+var BANK_ADD_TYPE_FALLBACK_OPTIONS_ = ['Checking', 'Savings', 'Other'];
+
+// Sentinel value emitted by the "Other (custom)…" option on the Use
+// Policy <select>. When this is the selected value the UI reveals the
+// custom-text row and createBankAccount() reads the raw user-supplied
+// string from there. Must stay in sync with Dashboard_Body.html.
+var BANK_ADD_POLICY_OTHER_SENTINEL_ = '__OTHER__';
+
+// Canonical Use Policy tokens that the planner already classifies in
+// planner_core.js (normalizeAccounts_ / distributeHoldAcrossPolicyPools_).
+// Kept here so createBankAccount() can defensively coerce user input
+// to a canonical token when it matches one of these, and so the set
+// of "recognized" values stays colocated with the dropdown it backs.
+var BANK_ADD_CANONICAL_POLICY_TOKENS_ = [
+  'DO_NOT_TOUCH',
+  'USE_FOR_BILLS',
+  'USE_FOR_DEBT',
+  'USE_WITH_CAUTION'
+];
+
+// Priority dropdown ↔ numeric-priority contract for the new-account
+// form (and any future Update-mode Priority editor). The planner
+// column on SYS - Accounts still stores a number 1–99 and continues
+// to be read verbatim by planner_core.js; nothing server-side or in
+// the writer changes. We expose the three human-readable buckets as
+// a UI-only convenience and always round-trip through these canonical
+// numeric anchors (1 / 5 / 9) when saving.
+//
+//   Use first (primary account) → 1
+//   Use after others             → 5
+//   Use last (backup)            → 9
+//
+// When reading an existing stored priority (e.g. for a future Update
+// panel that wants to show the dropdown for an already-persisted
+// account), bankPriorityNumberToDropdown_() collapses any legacy
+// numeric value into the nearest bucket without mutating storage:
+//   1–3   → 1 (Use first)
+//   4–7   → 5 (Use after others)
+//   8–99  → 9 (Use last)
+// Anything outside 1–99 or non-numeric falls back to the default 9
+// bucket so the UI never ends up with an unselected option.
+var BANK_ADD_PRIORITY_DEFAULT_ = 9;
+
+function bankPriorityNumberToDropdown_(raw) {
+  var n = parseInt(String(raw == null ? '' : raw).trim(), 10);
+  if (isNaN(n) || n < 1 || n > 99) return BANK_ADD_PRIORITY_DEFAULT_;
+  if (n <= 3) return 1;
+  if (n <= 7) return 5;
+  return 9;
+}
+
+function bankPriorityDropdownToNumber_(raw) {
+  var n = parseInt(String(raw == null ? '' : raw).trim(), 10);
+  if (n === 1 || n === 5 || n === 9) return n;
+  return BANK_ADD_PRIORITY_DEFAULT_;
+}
+
 function populateBankAddDatalists_(data) {
   const sel = document.getElementById('bank_add_type');
   if (sel) {
     const currentValue = sel.value || '';
     sel.innerHTML = '<option value="">— Select type —</option>';
-    (data.typeOptions || []).forEach(function(t) {
+    var serverTypes = (data && data.typeOptions) ? data.typeOptions : [];
+    var typeOpts = (serverTypes && serverTypes.length)
+      ? serverTypes
+      : BANK_ADD_TYPE_FALLBACK_OPTIONS_.slice();
+    typeOpts.forEach(function(t) {
       const o = document.createElement('option');
       o.value = t;
       o.textContent = t;
       sel.appendChild(o);
     });
-    if (currentValue && (data.typeOptions || []).indexOf(currentValue) !== -1) {
+    if (currentValue && typeOpts.indexOf(currentValue) !== -1) {
       sel.value = currentValue;
     }
   }
 
-  const dl = document.getElementById('bank_add_policy_list');
-  if (dl) {
-    dl.innerHTML = '';
-    (data.policyOptions || []).forEach(function(t) {
-      const o = document.createElement('option');
-      o.value = t;
-      dl.appendChild(o);
-    });
-  }
+  // The Use Policy control is now a fixed <select> in Dashboard_Body.html
+  // with the four canonical tokens + Other. We intentionally do NOT
+  // rebuild it from server data here: the canonical four are the
+  // complete set the planner recognises today, and the legacy
+  // `bank_add_policy_list` <datalist> was removed. Server-side
+  // `policyOptions` (if present) is ignored for the add-form dropdown
+  // on purpose so the first-run experience is a true dropdown, not a
+  // free-text suggestion list.
 }
 
 function resetBankAddForm_() {
   const n = document.getElementById('bank_add_name');
   const t = document.getElementById('bank_add_type');
   const p = document.getElementById('bank_add_policy');
+  const pc = document.getElementById('bank_add_policy_custom');
+  const pcRow = document.getElementById('bank_add_policy_custom_row');
   const pr = document.getElementById('bank_add_priority');
   const d = document.getElementById('bank_add_opening_date');
   const v = document.getElementById('bank_add_opening_value');
@@ -51,12 +118,39 @@ function resetBankAddForm_() {
   if (n) n.value = '';
   if (t) t.value = '';
   if (p) p.value = '';
+  if (pc) pc.value = '';
+  if (pcRow) pcRow.style.display = 'none';
   if (pr) pr.value = '9';
   if (d) d.value = '';
-  if (v) v.value = '';
+  // Opening balance is required; default 0.00 so the user can create
+  // an account without having a starting snapshot handy. Keep the
+  // currency-formatted display consistent with currencyBlur().
+  if (v) v.value = '0.00';
+  // Both "also set" checkboxes default to checked for the first-run
+  // flow: the safest behaviour for a brand-new account is to seed
+  // Available Now and Min Buffer from the opening amount so the
+  // planner has complete data on day one. User can uncheck either
+  // before saving.
   if (ca) ca.checked = true;
-  if (cm) cm.checked = false;
+  if (cm) cm.checked = true;
   clearBankAddNameError_();
+}
+
+// Reveal / hide the custom Use Policy text row based on the current
+// <select> value. Called from the select's onchange. Pure UI — no
+// server calls.
+function onBankAddPolicyChange_() {
+  const p = document.getElementById('bank_add_policy');
+  const pcRow = document.getElementById('bank_add_policy_custom_row');
+  const pc = document.getElementById('bank_add_policy_custom');
+  if (!p || !pcRow) return;
+  const showCustom = (p.value === BANK_ADD_POLICY_OTHER_SENTINEL_);
+  pcRow.style.display = showCustom ? '' : 'none';
+  if (!showCustom && pc) {
+    // Clear stale custom text when the user switches back to a
+    // canonical option so we never accidentally submit it later.
+    pc.value = '';
+  }
 }
 
 function clearBankAddNameError_() {
@@ -246,12 +340,27 @@ function createBankAccount() {
 
   const name = document.getElementById('bank_add_name').value.trim();
   const typeStr = document.getElementById('bank_add_type').value.trim();
-  const policyStr = document.getElementById('bank_add_policy').value.trim();
+
+  // Resolve Use Policy from the select. Canonical tokens are sent
+  // verbatim; the "Other" sentinel unlocks a custom text row whose
+  // trimmed value is forwarded as-is. The server accepts any string
+  // up to 120 chars (see addBankAccountFromDashboard) so custom
+  // values round-trip safely — the planner simply won't auto-classify
+  // them into a canonical pool until they are mapped.
+  const policySelectEl = document.getElementById('bank_add_policy');
+  const policySelectVal = policySelectEl ? String(policySelectEl.value || '').trim() : '';
+  let policyStr = '';
+  if (policySelectVal === BANK_ADD_POLICY_OTHER_SENTINEL_) {
+    const pcEl = document.getElementById('bank_add_policy_custom');
+    policyStr = pcEl ? String(pcEl.value || '').trim() : '';
+  } else {
+    policyStr = policySelectVal;
+  }
+
   const priRaw = document.getElementById('bank_add_priority').value;
   const openDate = document.getElementById('bank_add_opening_date').value.trim();
   const openRaw = document.getElementById('bank_add_opening_value').value;
   const hasDate = !!openDate;
-  const hasAmt = String(openRaw || '').trim() !== '';
 
   if (!name) {
     showBankAddNameError_('Account name is required.');
@@ -262,26 +371,54 @@ function createBankAccount() {
     setStatus('bank_status', 'Error: Type is required.', true);
     return;
   }
-  if (!policyStr) {
+  if (!policySelectVal) {
     setStatus('bank_status', 'Error: Use policy is required.', true);
     return;
   }
-
-  const priStr = String(priRaw == null ? '' : priRaw).trim();
-  const priNum = priStr === '' ? 9 : parseInt(priStr, 10);
-  if (isNaN(priNum) || priNum < 1 || priNum > 99) {
-    setStatus('bank_status', 'Error: Priority must be a whole number between 1 and 99.', true);
+  if (policySelectVal === BANK_ADD_POLICY_OTHER_SENTINEL_ && !policyStr) {
+    setStatus('bank_status', 'Error: Enter a custom Use policy label or choose a preset.', true);
+    const pcEl = document.getElementById('bank_add_policy_custom');
+    if (pcEl) { try { pcEl.focus(); } catch (e) {} }
     return;
   }
 
-  if (hasDate !== hasAmt) {
-    setStatus('bank_status', 'Error: For an opening balance, enter both date and amount (or leave both blank).', true);
+  // The Priority widget is now a fixed <select> with values 1 / 5 / 9
+  // (Use first / Use after others / Use last). Always funnel through
+  // the canonical helper so any stray value — e.g. a future Update
+  // panel feeding a legacy numeric value back into the same control
+  // — still lands on one of the three supported buckets before being
+  // sent to addBankAccountFromDashboard. The server-side 1–99 range
+  // check stays intact upstream.
+  const priNum = bankPriorityDropdownToNumber_(priRaw);
+
+  // Opening balance is no longer optional. Empty field is an error;
+  // zero is allowed. When the amount is zero AND no date is given we
+  // intentionally omit the opening-balance pair from the payload so
+  // the server's existing "both or neither" canonical rule still
+  // holds — this is equivalent to today's "leave both blank" path
+  // for the writer, but the UI now forces the user to think about it
+  // instead of silently skipping.
+  const openRawStr = String(openRaw == null ? '' : openRaw).trim();
+  if (!openRawStr) {
+    setStatus('bank_status', 'Error: Opening balance is required. Enter 0 if unknown.', true);
+    const vEl = document.getElementById('bank_add_opening_value');
+    if (vEl) { try { vEl.focus(); } catch (e) {} }
     return;
   }
-
-  const openNum = hasAmt ? toNumber(openRaw) : NaN;
-  if (hasAmt && isNaN(openNum)) {
+  const openNum = toNumber(openRawStr);
+  if (isNaN(openNum)) {
     setStatus('bank_status', 'Error: Opening balance must be a valid number.', true);
+    return;
+  }
+  const amountIsZero = (openNum === 0);
+
+  // Non-zero opening balance must be dated so the planner knows which
+  // month to anchor it in. Zero + no date is accepted (omit the pair);
+  // zero + date is accepted (records 0 at that date in history).
+  if (!amountIsZero && !hasDate) {
+    setStatus('bank_status', 'Error: Pick an opening balance date for the amount you entered (or set the amount to 0).', true);
+    const dEl = document.getElementById('bank_add_opening_date');
+    if (dEl) { try { dEl.focus(); } catch (e) {} }
     return;
   }
 
@@ -293,7 +430,10 @@ function createBankAccount() {
     setAvailableFromOpening: document.getElementById('bank_add_set_available').checked,
     setMinBufferFromOpening: document.getElementById('bank_add_set_min_buffer').checked
   };
-  if (hasDate && hasAmt) {
+  // Only forward opening-balance fields when we have BOTH date and a
+  // non-empty amount. Server requires the pair together; a zero-only
+  // "I don't know yet" case is represented by omitting both.
+  if (hasDate) {
     payload.openingBalanceDate = openDate;
     payload.openingBalance = openNum;
   }
@@ -394,30 +534,76 @@ function fillInvestmentAccountDropdownFromData_(data) {
   populateInvestmentAddDatalists_(data);
 }
 
+var INV_ADD_TYPE_CORE_OPTIONS_ = ['Brokerage', 'Retirement', 'Education', 'Other'];
+var INV_ADD_TYPE_OTHER_SENTINEL_ = '__OTHER__';
+
 function populateInvestmentAddDatalists_(data) {
   const sel = document.getElementById('inv_add_type');
   if (!sel) return;
   const currentValue = sel.value || '';
   sel.innerHTML = '<option value="">— Select type —</option>';
-  (data.typeOptions || []).forEach(function(t) {
+
+  const serverTypes = (data && data.typeOptions) ? data.typeOptions : [];
+  const seen = {};
+  const ordered = [];
+  function tryAdd(label) {
+    const v = String(label || '').trim();
+    if (!v) return;
+    const key = v.toLowerCase();
+    if (key === 'other') return; // keep the sentinel Other at the end
+    if (seen[key]) return;
+    seen[key] = true;
+    ordered.push(v);
+  }
+  serverTypes.forEach(tryAdd);
+  INV_ADD_TYPE_CORE_OPTIONS_.forEach(tryAdd);
+
+  ordered.forEach(function(t) {
     const o = document.createElement('option');
     o.value = t;
     o.textContent = t;
     sel.appendChild(o);
   });
-  if (currentValue && (data.typeOptions || []).indexOf(currentValue) !== -1) {
-    sel.value = currentValue;
+
+  const otherOpt = document.createElement('option');
+  otherOpt.value = INV_ADD_TYPE_OTHER_SENTINEL_;
+  otherOpt.textContent = 'Other (custom)…';
+  sel.appendChild(otherOpt);
+
+  if (currentValue && currentValue !== INV_ADD_TYPE_OTHER_SENTINEL_) {
+    let matched = false;
+    for (let i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === currentValue) { matched = true; break; }
+    }
+    if (matched) sel.value = currentValue;
+  }
+  onInvAddTypeChange_();
+}
+
+function onInvAddTypeChange_() {
+  const sel = document.getElementById('inv_add_type');
+  const row = document.getElementById('inv_add_type_custom_row');
+  if (!sel || !row) return;
+  const showCustom = sel.value === INV_ADD_TYPE_OTHER_SENTINEL_;
+  row.style.display = showCustom ? '' : 'none';
+  if (!showCustom) {
+    const custom = document.getElementById('inv_add_type_custom');
+    if (custom) custom.value = '';
   }
 }
 
 function resetInvestmentAddForm_() {
   const n = document.getElementById('inv_add_name');
   const t = document.getElementById('inv_add_type');
+  const tCustom = document.getElementById('inv_add_type_custom');
+  const tCustomRow = document.getElementById('inv_add_type_custom_row');
   const v = document.getElementById('inv_add_starting_value');
   const d = document.getElementById('inv_add_starting_date');
   if (n) n.value = '';
   if (t) t.value = '';
-  if (v) v.value = '';
+  if (tCustom) tCustom.value = '';
+  if (tCustomRow) tCustomRow.style.display = 'none';
+  if (v) v.value = '0.00';
   if (d) d.value = '';
   clearInvestmentAddNameError_();
 }
@@ -581,39 +767,49 @@ function createInvestmentAccount() {
   clearInvestmentAddNameError_();
 
   const name = document.getElementById('inv_add_name').value.trim();
-  const typeStr = document.getElementById('inv_add_type').value.trim();
+  const typeSelEl = document.getElementById('inv_add_type');
+  const typeSelVal = typeSelEl ? typeSelEl.value : '';
+  let typeStr = '';
+  if (typeSelVal === INV_ADD_TYPE_OTHER_SENTINEL_) {
+    const customEl = document.getElementById('inv_add_type_custom');
+    typeStr = customEl ? customEl.value.trim() : '';
+  } else {
+    typeStr = (typeSelVal || '').trim();
+  }
   const startRaw = document.getElementById('inv_add_starting_value').value;
   const startDate = document.getElementById('inv_add_starting_date').value.trim();
-  const hasAmt = String(startRaw || '').trim() !== '';
-  const hasDate = !!startDate;
 
   if (!name) {
     showInvestmentAddNameError_('Account name is required.');
     setStatus('inv_status', 'Error: Account name is required.', true);
     return;
   }
-  if (!typeStr) {
+  if (!typeSelVal) {
     setStatus('inv_status', 'Error: Type is required.', true);
     return;
   }
-  if (hasDate !== hasAmt) {
-    setStatus('inv_status', 'Error: For a starting value, enter both date and amount (or leave both blank).', true);
+  if (typeSelVal === INV_ADD_TYPE_OTHER_SENTINEL_ && !typeStr) {
+    setStatus('inv_status', 'Error: Enter a custom type or pick a different option.', true);
     return;
   }
 
-  const startNum = hasAmt ? toNumber(startRaw) : NaN;
-  if (hasAmt && isNaN(startNum)) {
+  if (String(startRaw || '').trim() === '') {
+    setStatus('inv_status', 'Error: Starting value is required (enter 0 if unknown).', true);
+    return;
+  }
+  const startNum = toNumber(startRaw);
+  if (isNaN(startNum)) {
     setStatus('inv_status', 'Error: Starting value must be a valid number.', true);
     return;
   }
 
   const payload = {
     accountName: name,
-    type: typeStr
+    type: typeStr,
+    startingBalance: startNum
   };
-  if (hasDate && hasAmt) {
+  if (startDate) {
     payload.startingBalanceDate = startDate;
-    payload.startingBalance = startNum;
   }
 
   setStatusLoading('inv_status', 'Creating investment account…');

@@ -977,15 +977,32 @@ function addHouseFromDashboard(payload) {
   const tz = Session.getScriptTimeZone();
   const currentYear = getCurrentYear_();
 
+  // Resolve a deterministic effective valuation date.
+  //   - If the user supplied a date, validate it and use it verbatim
+  //     (must be in the current-year block being extended).
+  //   - If the user left the field blank, default to today. This
+  //     guarantees every new-house write lands in a real month column
+  //     instead of leaving the month cell silently empty, which used
+  //     to create the ambiguity described in the UI copy update.
+  //
+  // `valuationDateWasProvided` preserves whether the UI supplied a
+  // date so the activity log can still record the raw user intent
+  // separately from the resolved date.
   let valuationDate = null;
   const valuationDateStr = String(payload.valuationDate || '').trim();
-  if (valuationDateStr) {
+  const valuationDateWasProvided = !!valuationDateStr;
+  if (valuationDateWasProvided) {
     valuationDate = parseIsoDateLocal_(valuationDateStr);
     if (isNaN(valuationDate.getTime())) throw new Error('Invalid valuation date.');
     if (valuationDate.getFullYear() !== currentYear) {
       throw new Error('Valuation date must be in ' + currentYear +
         ' (same year as the house block being extended).');
     }
+  } else {
+    // stripTime_ normalizes to the start of today so month extraction
+    // in updateHouseValuesHistory_ / Utilities.formatDate is stable
+    // regardless of script timezone drift.
+    valuationDate = stripTime_(new Date());
   }
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1011,11 +1028,19 @@ function addHouseFromDashboard(payload) {
       (e2.message || e2));
   }
 
-  // 3) Seed the month cell with currentValue when a valuation date was given,
-  //    then sync SYS - House Assets Current Value from the latest HV month.
+  // 3) Seed the month cell with currentValue using the resolved
+  //    valuation date (always non-null now — either the user-supplied
+  //    date or today when the field was left blank).
+  //    The `currentValue !== 0` guard is preserved from prior
+  //    behavior: writing an explicit 0 into a month cell is
+  //    indistinguishable from "no entry" in downstream readers, and
+  //    historically populated workbooks rely on that. New-house
+  //    creation still records the SYS - House Assets Current Value
+  //    directly in step 2, so the row is complete even when the
+  //    month cell is skipped.
   let seededMonthLabel = '';
   try {
-    if (valuationDate && currentValue !== 0) {
+    if (currentValue !== 0) {
       updateHouseValuesHistory_(houseName, currentYear, valuationDate, currentValue);
       seededMonthLabel = Utilities.formatDate(valuationDate, tz, 'MMM-yy');
     }

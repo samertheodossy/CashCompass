@@ -1,3 +1,83 @@
+/**
+ * First-run safe creator for SYS - Accounts.
+ *
+ * Safety contract:
+ *   - Never overwrites, clears, or reorders an existing sheet. If the
+ *     sheet is present under its canonical name we return it untouched,
+ *     even when its header row is empty. Existing-user workbooks are
+ *     therefore unaffected.
+ *   - Canonical headers (same labels getAccountsHeaderMap_ /
+ *     planner_core.js normalizeAccounts_ look up by string): Account
+ *     Name, Current Balance, Available Now, Min Buffer, Type, Use
+ *     Policy, Priority, Active. Writing all eight on create means the
+ *     bank-account add path doesn't have to self-heal anything on the
+ *     first save.
+ *   - Benign race-safe: if another caller wins the insertSheet race,
+ *     we treat the now-existing sheet as a no-op.
+ *
+ * Called from addBankAccountFromDashboard to unblock first-run bank
+ * creation on blank workbooks (previously threw "Missing sheet:
+ * SYS - Accounts" before the row could be written).
+ *
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet}
+ */
+function ensureSysAccountsSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var names = getSheetNames_();
+  var sheetName = names.ACCOUNTS;
+  var existing = ss.getSheetByName(sheetName);
+  if (existing) return existing;
+
+  var sheet;
+  try {
+    sheet = ss.insertSheet(sheetName);
+  } catch (e) {
+    existing = ss.getSheetByName(sheetName);
+    if (existing) return existing;
+    throw e;
+  }
+
+  var headers = [
+    'Account Name',
+    'Current Balance',
+    'Available Now',
+    'Min Buffer',
+    'Type',
+    'Use Policy',
+    'Priority',
+    'Active'
+  ];
+  try {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  } catch (_e) {
+    // Header paint is structural; re-throw to surface clearly.
+    throw _e;
+  }
+
+  // Cosmetic polish applied only to the fresh sheet: emphasize the
+  // header row, freeze it, and format the three currency columns so
+  // numeric entries render consistently with the rest of the workbook
+  // (Cash Flow / Upcoming Expenses use the same currency string). All
+  // wrapped in try/catch because formatting is never load-bearing —
+  // readers look up columns by header label, not cell format.
+  try {
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+
+    var currencyFormat = '$#,##0.00;-$#,##0.00';
+    var maxRows = sheet.getMaxRows();
+    // Current Balance (B), Available Now (C), Min Buffer (D) are all
+    // currency columns. Priority (G) stays as a plain integer.
+    if (maxRows > 1) {
+      sheet.getRange(2, 2, maxRows - 1, 3).setNumberFormat(currencyFormat);
+    }
+
+    sheet.autoResizeColumns(1, headers.length);
+  } catch (_fmt) { /* cosmetic only */ }
+
+  return sheet;
+}
+
 function syncAllAccountsFromLatestCurrentYear_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sourceSheet = getSheet_(ss, 'BANK_ACCOUNTS');
@@ -405,6 +485,12 @@ function addBankAccountFromDashboard(payload) {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const bankSheet = getSheet_(ss, 'BANK_ACCOUNTS');
+  // First-run safety: SYS - Accounts may not exist yet on a blank
+  // workbook. Create it on demand with the canonical headers before
+  // we try to append the account row. ensureSysAccountsSheet_ is a
+  // no-op when the sheet already exists, so populated workbooks are
+  // completely unaffected.
+  ensureSysAccountsSheet_();
   const accountsSheet = getSheet_(ss, 'ACCOUNTS');
   const currentYear = getCurrentYear_();
   const block = getBankAccountsYearBlock_(bankSheet, currentYear);

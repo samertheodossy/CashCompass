@@ -302,12 +302,68 @@ function addBillFromDashboard(payload) {
     Logger.log('addBillFromDashboard activity log: ' + logErr);
   }
 
+  // Seed a corresponding Expense row on the current year's INPUT - Cash Flow
+  // tab so the new bill is immediately visible on Bills Due / Upcoming /
+  // planner reads that match by Type=Expense + Payee. This mirrors the
+  // canonical pattern in addDebtFromDashboard — without it a freshly-added
+  // bill would be Active with a Due day but still not appear on the Bills
+  // Due card until the user manually added a Cash Flow row.
+  //
+  // - Flow Source comes straight from the user-supplied Payment Source
+  //   (CASH or CREDIT_CARD). This matches getInputBillsDueRows_'s
+  //   Payment Source → Flow Source propagation on the read path.
+  // - Idempotent: if an Expense row with the same Payee already exists on
+  //   the current-year sheet (user pre-seeded it by hand, or deactivate
+  //   + re-add), we leave it alone.
+  // - First-run safety: ensureCashFlowYearSheet_ creates the current-year
+  //   Cash Flow sheet on demand when the workbook is blank. No-op on
+  //   populated workbooks.
+  // - All failures here are non-fatal: the bill row itself is already
+  //   written to INPUT - Bills and the user can always add the Cash Flow
+  //   row manually.
+  var cashFlowRowSeeded = false;
+  var cashFlowSeedWarning = '';
+  try {
+    var currentYear = new Date().getFullYear();
+    if (typeof ensureCashFlowYearSheet_ === 'function') {
+      try { ensureCashFlowYearSheet_(currentYear); } catch (_ensureErr) { /* fall through */ }
+    }
+    var cfSheet = typeof tryGetCashFlowSheet_ === 'function'
+      ? tryGetCashFlowSheet_(ss, currentYear)
+      : null;
+    if (!cfSheet) {
+      cashFlowSeedWarning =
+        'Cash Flow ' + currentYear + ' not found — skipped Cash Flow seed. Bills Due will pick the bill up once a Cash Flow ' + currentYear + ' exists and has an expense row for "' + payee + '".';
+    } else {
+      var existing = findCashFlowRowByTypeAndPayee_(cfSheet, 'Expense', payee);
+      if (existing) {
+        cashFlowSeedWarning =
+          'An expense row for "' + payee + '" already exists on Cash Flow ' + currentYear + ' — left untouched.';
+      } else {
+        insertCashFlowRow_(cfSheet, 'Expense', payee, paymentSourceNorm);
+        cashFlowRowSeeded = true;
+      }
+    }
+  } catch (cfErr) {
+    Logger.log('addBillFromDashboard cash flow seed: ' + cfErr);
+    cashFlowSeedWarning =
+      'Cash Flow seed skipped: ' + (cfErr && cfErr.message ? cfErr.message : String(cfErr));
+  }
+
   touchDashboardSourceUpdated_('bills');
+
+  var message = 'Bill added.';
+  if (cashFlowRowSeeded) {
+    message += ' Added a matching expense row to Cash Flow so Bills Due sees it right away.';
+  } else if (cashFlowSeedWarning) {
+    message += ' ' + cashFlowSeedWarning;
+  }
 
   return {
     ok: true,
-    message: 'Bill added.',
-    payee: payee
+    message: message,
+    payee: payee,
+    cashFlowRowSeeded: cashFlowRowSeeded
   };
 }
 
@@ -436,7 +492,12 @@ function deactivateBillFromDashboard(payload) {
  */
 function getBillCategoriesFromDashboard() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = getSheet_(ss, 'BILLS');
+  // First-run safety: INPUT - Bills may be missing on a blank workbook.
+  // Return an empty list; the client has a canonical fallback (see
+  // BILL_ADD_CATEGORY_FALLBACK_OPTIONS_) that kicks in when the server
+  // returns none.
+  var sheet = ss.getSheetByName(getSheetNames_().BILLS);
+  if (!sheet) return [];
   var display = sheet.getDataRange().getDisplayValues();
   if (!display || display.length < 2) return [];
 
@@ -498,7 +559,11 @@ function getBillCategoriesFromDashboard() {
  */
 function getActiveBillsForManagementFromDashboard() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = getSheet_(ss, 'BILLS');
+  // First-run safety: INPUT - Bills may be missing on a blank workbook.
+  // Return an empty list so the Bills management section renders its
+  // "No active bills yet" empty state instead of throwing a red banner.
+  var sheet = ss.getSheetByName(getSheetNames_().BILLS);
+  if (!sheet) return [];
   var display = sheet.getDataRange().getDisplayValues();
   if (!display || display.length < 2) return [];
 

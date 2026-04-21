@@ -688,22 +688,25 @@ function addInvestmentAccountFromDashboard(payload) {
   const hasStartAmount =
     sbRaw !== '' && sbRaw !== null && sbRaw !== undefined && String(sbRaw).trim() !== '';
 
-  let startDate = null;
-  let startAmount = null;
-
-  if (hasStartDate || hasStartAmount) {
-    if (!hasStartDate || !hasStartAmount) {
-      throw new Error('For a starting value, provide both date and amount.');
-    }
-    startDate = parseIsoDateLocal_(startDateStr);
-    if (isNaN(startDate.getTime())) throw new Error('Invalid starting value date.');
+  // Starting amount: default to 0 when omitted (blank is treated as 0).
+  let startAmount = 0;
+  if (hasStartAmount) {
     startAmount = round2_(toNumber_(sbRaw));
     if (isNaN(startAmount)) throw new Error('Starting value must be a valid number.');
+  }
 
+  // Starting date: if provided, validate; if blank, default to today so the
+  // month column is always deterministic.
+  let startDate;
+  if (hasStartDate) {
+    startDate = parseIsoDateLocal_(startDateStr);
+    if (isNaN(startDate.getTime())) throw new Error('Invalid starting value date.');
     const cy = getCurrentYear_();
     if (startDate.getFullYear() !== cy) {
       throw new Error('Starting value date must be in ' + cy + ' (same year as the investment block you are extending).');
     }
+  } else {
+    startDate = stripTime_(new Date());
   }
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -724,7 +727,7 @@ function addInvestmentAccountFromDashboard(payload) {
       assetsSheet,
       accountName,
       typeStr,
-      startAmount !== null ? startAmount : 0
+      startAmount
     );
   } catch (e2) {
     invSheet.deleteRow(invRowNum);
@@ -732,7 +735,9 @@ function addInvestmentAccountFromDashboard(payload) {
   }
 
   try {
-    if (startDate && startAmount !== null) {
+    // Preserve historical "leave month empty for 0" semantic: only seed the
+    // month column when we actually have a non-zero amount.
+    if (startAmount !== 0) {
       updateInvestmentHistory_(accountName, currentYear, startDate, startAmount);
     }
     syncAllAssetsFromLatestCurrentYear_();
@@ -747,7 +752,7 @@ function addInvestmentAccountFromDashboard(payload) {
     appendActivityLog_(ss, {
       eventType: 'investment_add',
       entryDate: Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
-      amount: startAmount !== null ? Math.abs(startAmount) : 0,
+      amount: Math.abs(startAmount),
       direction: 'expense',
       payee: accountName,
       category: typeStr,
