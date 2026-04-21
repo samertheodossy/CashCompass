@@ -1,3 +1,378 @@
+## Recent — Targeted sheet-creation & consistency pass (F1, F2, F3, F4/F5, F6, F7)
+
+Implemented the high-value safe fixes from the prior new-sheet audit. Deliberately scoped: no schema changes, no broad refactor, no rebuild of existing sheets, no next-year rollover (F8), no sheet-name centralization (F9), no creator-return-shape standardization (F10). Every new helper is idempotent and a no-op on populated workbooks.
+
+### F1 — `LOG - Activity` dedupe read-range arity fix
+
+`activityLogDedupeKeyExists_` (`activity_log.js`) previously called:
+
+```
+sh.getRange(2, ACTIVITY_LOG_DEDUPE_COL, lastRow, ACTIVITY_LOG_DEDUPE_COL).getValues()
+```
+
+That passed `ACTIVITY_LOG_DEDUPE_COL` (11) as `numColumns`, reading a `lastRow × 11` block starting at column K. It only worked today because the loop read `values[i][0]`. The moment `sh.getMaxColumns()` dropped below K + 11 − 1 it would throw. Fixed to:
+
+```
+sh.getRange(2, ACTIVITY_LOG_DEDUPE_COL, lastRow - 1, 1).getValues()
+```
+
+Correct row count (excludes header) and exactly 1 column. Same behavior, no latent breakage.
+
+### F2 — Canonical from-scratch creators for `INPUT - Investments` and `INPUT - House Values`
+
+Two new idempotent helpers so a blank workbook can accept the very first "Add Investment" / "Add House" write without "Missing sheet" errors:
+
+- `ensureInputInvestmentsSheet_()` in `investments.js`. Seeds row 1 `Year | <currentYear>`, row 2 `Account Name | Type | Jan-YY … Dec-YY | Active` (cols 1..15, matches `firstMonthCol = 3` + `ensureInvestmentsActiveColumnForBlock_(firstMonthCol + 12)`). Applies `applyInvestmentsSheetStyling_`, `setFrozenRows(2)`, `autoResizeColumns`.
+- `ensureInputHouseValuesSheet_()` in `house_values.js`. Same layout but `House | Loan Amount Left | Jan-YY … Dec-YY | Active` (cols 1..15). Applies `applyHouseValuesSheetStyling_`, freeze, auto-resize.
+
+Both helpers intentionally do NOT seed aggregate rows (`Account Totals`, `Delta`, `Total Values`, `House Assets`). `refreshBlockSumAggregates_` only rewrites existing SUM formulas — it never creates them — so seeding empty aggregate labels would either be a no-op (no formulas) or produce `#REF!` (formulas pointing at zero data rows). Both block readers (`getInvestmentsYearBlock_`, `getHouseValuesYearBlock_`) gracefully fall back to `sheet.getLastRow()` when aggregate markers are absent; users who later want the block totals can add them manually and the existing refresh machinery will maintain them.
+
+Wired in at the very top of `addInvestmentAccountFromDashboard` and `addHouseFromDashboard`, before any `getSheet_('INVESTMENTS' | 'HOUSE_VALUES' | 'ASSETS' | 'HOUSE_ASSETS')` call. Each ensure call is wrapped in a user-actionable error ("Could not prepare INPUT - Investments: …") and followed by `SpreadsheetApp.flush()` so the stale-handle retry in `getSheet_` sees the fresh state.
+
+### F3 — Canonical from-scratch creators for `SYS - Assets` and `SYS - House Assets`
+
+Flat-table companions to F2:
+
+- `ensureSysAssetsSheet_()` in `investments.js`. Headers `Account Name | Type | Current Balance | Active`. Pre-formats Current Balance currency bounded to `sheet.getMaxRows() - 1` data rows, then `applyAssetsSheetStyling_` + `autoResizeColumns`.
+- `ensureSysHouseAssetsSheet_()` in `house_values.js`. Headers `House | Type | Loan Amount Left | Current Value | Active`. Pre-formats both currency columns bounded to data rows, then `applyHouseAssetsSheetStyling_` + `autoResizeColumns`.
+
+Also wired into `addInvestmentAccountFromDashboard` and `addHouseFromDashboard` alongside the F2 calls. Roll-back semantics in `addHouseFromDashboard` (delete HV row on HA failure) are unchanged.
+
+### F4 / F5 — `LOG - Activity` first-creation polish
+
+`getOrCreateActivityLogSheet_` (`activity_log.js`) now, only on the `insertSheet` branch:
+
+1. Bolds the header row (`ACTIVITY_LOG_HEADERS.length` cells, row 1).
+2. Auto-resizes all header columns once.
+
+Both wrapped in `try/catch` — purely cosmetic, never fails logging. The existing-sheet branch is untouched, so populated LOG sheets keep their current formatting exactly as-is.
+
+### F6 — Bounded `Upcoming Expenses` date/currency format ranges
+
+`getOrCreateUpcomingExpensesSheet_` (`upcoming_expenses.js`) replaced whole-column `F:F` / `G:G` `setNumberFormat` with bounded ranges:
+
+```
+sheet.getRange(2, 6, maxRowsUpcoming - 1, 1).setNumberFormat('yyyy-mm-dd')
+sheet.getRange(2, 7, maxRowsUpcoming - 1, 1).setNumberFormat('$#,##0.00;-$#,##0.00')
+```
+
+Same visible behavior (columns F and G still format identically across all existing rows) but now consistent with every other sheet creator in the codebase (`INPUT - Bank Accounts`, `SYS - Assets`, `SYS - House Assets`, cash flow blocks) which all avoid whole-column formatting.
+
+### F7 — Ensure-before-write guards for Debts and Bills
+
+Mirrored the Bank Accounts pattern from `addBankAccountFromDashboard`:
+
+- `addDebtFromDashboard` (`debts.js`) — calls `ensureOnboardingDebtsSheetFromDashboard('normal')` (existing idempotent helper in `onboarding.js`, seeds the canonical INPUT - Debts header) + `SpreadsheetApp.flush()` before the first `getSheet_(ss, 'DEBTS')`.
+- `addBillFromDashboard` (`bills.js`) — same, with `ensureOnboardingBillsSheetFromDashboard('normal')` before `getSheet_(ss, 'BILLS')`.
+
+Both ensure calls wrapped in a user-actionable "Could not prepare INPUT - …" error. No new sheet-building code in either module — just a call to the existing idempotent ensure helper.
+
+### Existing-user safety
+
+Every path is a check-then-create-if-missing:
+- F1 — behavioral parity; strictly a read-shape fix.
+- F2 / F3 / F7 — `ss.getSheetByName(…)` short-circuits the entire creator when the sheet already exists. No styling, no header rewrite, no data touch on populated workbooks.
+- F4 / F5 — wrapped inside the `insertSheet` branch of `getOrCreateActivityLogSheet_`. Populated LOG sheets skip that branch entirely.
+- F6 — narrowly a `setNumberFormat` scope change on an already-formatted column; visible cells render identically.
+
+No schema changes. No broad refactor. No touch to cash flow / bank accounts / onboarding / sheet_bootstrap.
+
+### Files changed
+
+`activity_log.js`, `upcoming_expenses.js`, `investments.js`, `house_values.js`, `debts.js`, `bills.js`, `SESSION_NOTES.md`.
+
+### What to test
+
+1. **Fresh workbook investment add** — brand-new spreadsheet, no `INPUT - Investments` or `SYS - Assets`, run Add Investment from dashboard. Both sheets appear with canonical headers + styling; the new account lands correctly.
+2. **Fresh workbook house add** — same scenario with `INPUT - House Values` / `SYS - House Assets`. Confirm roll-back still works (force a synthetic HA failure; HV row must be deleted).
+3. **Debt write guard** — fresh workbook, Add Debt from dashboard. `INPUT - Debts` is created with the canonical header and the new row lands.
+4. **Bill write guard** — same for `INPUT - Bills`.
+5. **Activity log creation** — delete `LOG - Activity`, trigger any logged action. New sheet appears with bold, auto-sized headers. Repeat on a populated workbook: existing LOG formatting is NOT touched.
+6. **Upcoming formatting sanity** — open `INPUT - Upcoming Expenses`. Columns F (date) and G (amount) still format as before across all existing rows; type a new date / amount below the last row — still formats correctly.
+7. **Existing populated workbook regression** — open a real user workbook. Confirm Add Investment / House / Debt / Bill flows still produce identical rows and formatting as before this pass.
+
+---
+
+## Recent — Aggregate-row SUM formulas: refresh on every add-row
+
+User asked to verify the total / sum rows were correct across the sheets we've been restyling. Audit surfaced a real correctness bug on the year-block aggregates.
+
+### The bug
+
+`INPUT - House Values` and `INPUT - Investments` year blocks use user-maintained aggregate rows (`Total Values`, `Account Totals`). These sheets have no programmatic formula writers — the user owns the formulas.
+
+When a new house / investment is added, `insertNewHouseHistoryRow_` and `insertNewInvestmentHistoryRow_` call `sheet.insertRowAfter(lastDataRow)` to place the new row immediately above the block's aggregate rows. Google Sheets' range-expansion rule is unambiguous here: inserting a row **strictly inside** a referenced range expands the range; inserting **at or past** the range's lower boundary is a no-op.
+
+So a user SUM like `=SUM(C4:C8)` with Total Values at row 9, after `insertRowAfter(8)`:
+- new row lands at row 9
+- Total Values moves to row 10
+- formula stays `=SUM(C4:C8)` — the new row is silently missing from the total
+
+Cash Flow's `Summary | Cash Flow Per Month` was already immune (programmatic `writeCashFlowSummaryFormulas_` rewrites bounded ranges after every row insert), but House Values and Investments were exposed.
+
+### The fix
+
+New conservative helper `refreshBlockSumAggregates_(sheet, dataStartRow, dataEndRow, afterRow, targetLabels)` in `cashflow_setup.js` (co-located with `columnToLetter_`, its one dependency, and the other Cash Flow bounded-range work).
+
+For each row in `[afterRow .. lastRow]` whose column A matches one of `targetLabels`, inspects each data-column cell and only rewrites cells whose formula matches EXACTLY `=SUM(<L><N>:<L><M>)` where both endpoints are on the same column letter AND that letter equals the cell's own column. Rewrites the endpoints to `dataStartRow:dataEndRow`. Stops the scan at the next `Year` marker so a different year's aggregate row is never touched.
+
+Deliberately leaves alone:
+- Compound formulas (`=SUM(C4:C8)+100`, `=SUM(C4:C8)-SUM(D4:D8)`, etc.)
+- Cross-sheet refs, named ranges, structured refs
+- Non-SUM aggregates (AVERAGE, SUMIF, IF, etc.)
+- `Delta` rows in Investments (YoY / period diffs, not block sums — callers don't pass 'Delta' in `targetLabels` anyway, but the strict regex would skip them regardless)
+- `House Assets` row in House Values (per-row snapshot, not a sum of data rows)
+- Blank cells, literal numbers, text
+
+All failures are swallowed — defense in depth only; never fails an add-row write.
+
+### Wire-up
+
+- `insertNewHouseHistoryRow_` → calls `refreshBlockSumAggregates_` with `targetLabels = ['Total Values']` right after the Active=Yes write, computing the new block's data range from the pre-insertion block + the inserted row.
+- `insertNewInvestmentHistoryRow_` → same, with `targetLabels = ['Account Totals']`.
+- `writeCashFlowSummaryFormulas_` (Cash Flow) — unchanged; already programmatic with bounded ranges, already refreshed on every `insertCashFlowRow_`.
+
+### Coverage matrix
+
+| Sheet | Aggregate row(s) | Formula source | Auto-refresh on add |
+| --- | --- | --- | --- |
+| `INPUT - Cash Flow YYYY` | Summary / Cash Flow Per Month | Programmatic | ✅ `writeCashFlowSummaryFormulas_` |
+| `INPUT - House Values` | Total Values (pink) | User-maintained | ✅ `refreshBlockSumAggregates_(['Total Values'])` |
+| `INPUT - House Values` | House Assets (green) | User-maintained per-row snapshot | Untouched by design |
+| `INPUT - Investments` | Account Totals (green) | User-maintained | ✅ `refreshBlockSumAggregates_(['Account Totals'])` |
+| `INPUT - Investments` | Delta (pink) | User-maintained YoY diff | Untouched by design |
+| `SYS - Assets` | — | n/a | n/a |
+| `SYS - House Assets` | — | n/a | n/a |
+
+Files changed: `cashflow_setup.js`, `house_values.js`, `investments.js`, `SESSION_NOTES.md`.
+
+What to test:
+1. On a sheet with existing `Total Values = SUM(C{start}:C{last})` per month, add a new house from the dashboard — confirm the Total Values row's formulas now reference `C{start}:C{newLast}` and the new house's contribution shows up.
+2. Same test on Investments Account Totals.
+3. Delta row on Investments is unchanged (its YoY formula should still reference the right cells because it was never a block sum).
+4. Cash Flow Summary still computes correctly after adding an income or expense.
+
+## Recent — SYS - House Assets canonical header styling
+
+User pasted the live `SYS - House Assets` layout. Flat 5-column table (no year blocks, no footer rows):
+
+- Row 1: `House | Type | Loan Amount Left | Current Value | Active` — yellow `#fff200`, bold black, centered, row height 32, solid-medium black bottom border
+- Rows 2…: one house per row. Append-only via `appendHouseAssetsRowForNewHouse_` — each new row inherits formatting from a neighbor template via `PASTE_FORMAT` so data-row treatment (currency formats, user's red-text conditional formatting on Loan Amount Left, Active cell styling) stays consistent without extra intervention.
+
+New helper `applyHouseAssetsSheetStyling_(sheet)` in `house_values.js`:
+
+- Asserts the header-row fill / bold / alignment / row height, plus a bottom border.
+- Freezes row 1 + column 1 so House stays pinned when scrolling.
+- Data rows and user conditional formatting deliberately never touched.
+- All writes wrapped in try/catch — cosmetic only, never blocks a House Assets write.
+
+Hooked into `appendHouseAssetsRowForNewHouse_` after the row append + Active=Yes write, so every Add-house flow re-asserts header styling. Idempotent — repeated adds don't flicker.
+
+Files changed: `house_values.js`, `SESSION_NOTES.md`.
+
+What to test: Add a new house — confirm `SYS - House Assets` row 1 shows bold yellow header with bottom separator, column 1 stays pinned when scrolling, and existing rows keep their currency formatting, red-text conditional formatting on Loan Amount Left, and Active text styling unchanged.
+
+## Recent — SYS - Assets canonical header styling
+
+User pasted the live `SYS - Assets` layout. Flat 4-column table (no year blocks, no footer rows):
+
+- Row 1: `Account Name | Type | Current Balance | Active` — yellow `#fff200`, bold black, centered, row height 32, solid-medium black bottom border
+- Rows 2…: one investment account per row. Append-only via `appendAssetsRowForNewInvestment_` — each new row inherits formatting from a neighbor template via `PASTE_FORMAT` so data-row treatment stays consistent without extra intervention.
+
+New helper `applyAssetsSheetStyling_(sheet)` in `investments.js`:
+
+- Asserts the header-row fill / bold / alignment / row height, plus a bottom border.
+- Freezes row 1 + column 1 so Account Name stays pinned when scrolling horizontally.
+- Data rows, number formats, and any user conditional formatting are deliberately never touched.
+- All writes wrapped in try/catch — cosmetic only, never blocks an Assets write.
+
+Hooked into `appendAssetsRowForNewInvestment_` after the row append + Active=Yes write, so every Add-investment flow re-asserts header styling. Idempotent — repeated adds don't flicker.
+
+Files changed: `investments.js`, `SESSION_NOTES.md`.
+
+What to test: Add a new investment account — confirm `SYS - Assets` row 1 shows bold yellow header with bottom separator, column 1 stays pinned when scrolling, and existing rows keep their currency formatting and Active text styling unchanged.
+
+## Recent — INPUT - Investments canonical block styling
+
+User pasted the live `INPUT - Investments` layout. Structure mirrors `INPUT - House Values` (year blocks repeating vertically) but with investments-specific banner labels:
+
+- `Year | | <year>` — orange `#f4a300`, bold black, row height 28
+- `Account Name | Type | Jan-YY … Dec-YY` — yellow `#fff200`, bold black, centered horizontal / middle vertical, row height 32
+- Data rows: one account per row (col A = account name, col B = type, C..N = monthly balances). Month cells carry the user's gain-green / loss-red conditional formatting.
+- `Account Totals | | …` — green `#b6d7a8`, bold black (per-column sum)
+- `Delta | | …` — pink `#f4cccc`, bold black (month-over-month change)
+
+New helper `applyInvestmentsSheetStyling_(sheet)` in `investments.js`:
+
+- Walks column A once via `getDisplayValues()` and dispatches on the four marker strings above, asserting fill / bold / alignment / row height per row.
+- Disambiguates the column-header row ("Account Name" only gets yellow-bannered when col B reads "Type") so a stray data row whose name happens to be literally "Account Name" won't be mis-styled.
+- Freezes columns A + B so account names and types stay pinned when scrolling horizontally across the 12 month columns.
+- Every `setBackground` / `setFontWeight` / `setRowHeight` wrapped in try/catch; cosmetic only, never fails an Investments write.
+
+Hooked into `insertNewInvestmentHistoryRow_` after the row insert + Active=Yes write, so every Add-investment-account flow re-asserts block styling across every year block in one pass. Idempotent — repeated adds don't flicker or accumulate cost.
+
+Data rows and their conditional formatting (gain/loss colors, any custom cell highlights) are deliberately never touched.
+
+Files changed: `investments.js`, `SESSION_NOTES.md`.
+
+What to test: Add a new investment account via the dashboard — confirm the new row inherits the data-row format from the neighbor template (unchanged behavior) AND the Year / Account Name / Account Totals / Delta banners across every year block stay the canonical colors. On a workbook with multiple year blocks, the helper updates all of them in one pass.
+
+## Recent — INPUT - House Values canonical block styling
+
+User pasted the live `INPUT - House Values` layout and asked the formatting to stay consistent across every year block. The sheet is user-maintained (no programmatic creator in the codebase — only `insertNewHouseHistoryRow_` appends data rows into existing blocks), so the goal is to *assert* the canonical banner-row look on every mutation rather than invent a schema.
+
+Each year block has four structural banner rows around the month-data grid:
+
+- `Year | <year>` — orange `#f4a300`, bold black, row height 28
+- `House | Loan Amount Left | Jan-YY … Dec-YY` — yellow `#fff200`, bold black, centered horizontal / middle vertical, row height 32
+- `Total Values | …` — pink `#f4cccc`, bold black (sums of each column including Loan Amount Left)
+- `House Assets | (blank) | …` — green `#b6d7a8`, bold black (Total Values – Loan Amount Left per month, col B intentionally blank)
+
+Data rows keep their user-applied conditional formatting (e.g. red text on Loan Amount Left) — the helper deliberately does not touch them.
+
+New helper `applyHouseValuesSheetStyling_(sheet)` in `house_values.js`:
+
+- Scans column A top-to-bottom once via `getDisplayValues()`.
+- Dispatches on the four marker strings above and asserts the canonical fill / bold / alignment / row height.
+- Disambiguates the column-header row ("House" with col B reading "Loan Amount Left") from a data row whose first cell just happens to be the word "House" — only the real header row gets styled.
+- Freezes column 1 so house names stay pinned when scrolling horizontally.
+- Every `setBackground` / `setFontWeight` / `setRowHeight` is wrapped in try/catch. Cosmetic only — a styling glitch must never fail an Add-house write.
+
+Hooked into `insertNewHouseHistoryRow_` after the row insert + Active=Yes write, so every Add-house flow re-asserts block styling. Idempotent — re-applying identical fills on existing cells is a visual no-op, so repeated adds don't flicker or accumulate cost.
+
+Files changed: `house_values.js`, `SESSION_NOTES.md`.
+
+What to test: Add a new house via the dashboard — confirm the new row inherits the data-row format from the neighbor template (unchanged behavior) AND the Year / House / Total Values / House Assets banners across every year block stay the canonical colors. On a workbook with multiple year blocks, the helper updates all of them in one pass. On a workbook with manually-tweaked banner colors, the helper re-asserts the canonical palette the next time any house is added.
+
+## Recent — Cash Flow sheet styling (warm-yellow header + light-gray Summary)
+
+User pasted a reference Cash Flow sheet (yellow bold header, clean column widths, crisp Summary row) and asked the planner's `INPUT - Cash Flow YYYY` sheets to match. Previous styling was limited to `setFontWeight('bold')` on row 1 plus `autoResizeColumns`, which left the header indistinguishable from the data body at a glance.
+
+Two new idempotent helpers in `cashflow_setup.js`:
+
+1. `applyCashFlowSheetStyling_(sheet, layout)` — header row gets `#fff2cc` (Google Sheets yellow-3) fill, bold black text, centered horizontal alignment, vertical middle, row height 32, a solid-medium black bottom border, and frozen at row 1. Per-column widths are set from the detected layout: Type 110, Flow Source 130, Payee 220, Active 80, each month column 90, Total 110. Layout-driven so workbooks missing optional columns (legacy sheets without Flow Source or Active) don't write widths to column -1.
+
+2. `applyCashFlowSummaryRowStyling_(sheet, summaryRow, layout)` — Summary row gets `#f3f3f3` (light-gray) fill, bold black text, a solid-medium black top border (visual separator from the Expense block above), and row height 28. Called both when Summary is freshly seeded and when `findCashFlowSummaryRow_` returns an existing row, so legacy sheets upgrade transparently the next time any Quick Add / debt seed / bill seed path runs.
+
+Entry points that apply the styling, in order of call:
+
+- `ensureCashFlowYearSheet_` (fresh sheet creation) — calls `applyCashFlowSheetStyling_` before the Summary-row seed so the first render of a brand-new year tab already matches the reference layout.
+- `ensureCashFlowSummaryRow_` (idempotent Summary seed) — calls `applyCashFlowSheetStyling_` up-front on every invocation, and `applyCashFlowSummaryRowStyling_` against either the freshly-created Summary row OR an existing one. This is the path Quick Add / debt seed / bill seed all funnel through, so any legacy sheet touched by those flows gets upgraded automatically.
+- `createNextYearCashFlowSheet` (year rollover) — layered on top of the existing `PASTE_FORMAT` copy so a new year tab cloned from a legacy unstyled source still reads like the reference layout.
+
+All styling calls are wrapped in try/catch and log a diagnostic on failure. The core contract — row writes, formula writes, Summary-row seeding — is never blocked by a styling glitch. Setting the same background / bold / width on the same range repeatedly is a visual no-op, so calling `applyCashFlowSheetStyling_` on every Quick Add doesn't accumulate cost or flicker.
+
+Files changed: `cashflow_setup.js`, `SESSION_NOTES.md`.
+
+What to test on a fresh workbook: Create a new debt / bill / income entry to seed `INPUT - Cash Flow <year>`. Confirm row 1 is warm yellow, bold, taller than data rows, with a solid bottom line. Confirm the Summary row near the bottom is light gray, bold, with a solid top line separating it from the Expense block. Column widths should accommodate Type / Flow Source / Payee / Active labels without truncation and each month column should be the same width. On an existing workbook: any add-row interaction picks up the new styling the next time `ensureCashFlowSummaryRow_` runs (i.e. the next Quick Add / debt seed / bill seed). For year rollover: run **Create Next Year Cash Flow** — the new year tab gets the canonical header / Summary styling even if the source year was a pre-styling legacy sheet.
+
+## Recent — Summary row math + dashboard tolerant of missing optional SYS sheets
+
+Two follow-ups after the previous polish pass that both reproduced on a fresh workbook once required Setup finished.
+
+1. **Cash Flow Summary row stayed at $0.00 even when Income / Expense rows had values.** First seen with one Income row (`TEST PAY`, Apr-26 = $200.00) above an Expense block: the Summary row's month cells all read `$0.00`. Root cause was the open-ended SUMIF pattern introduced in the prior pass — `=SUMIF($A$2:$A,"Income",E$2:E)+SUMIF($A$2:$A,"Expense",E$2:E)` — which in practice did not re-evaluate to include rows inserted above Summary after formula write-time. Two-argument open-ended ranges passed through `setFormula` appear to be frozen to the row count at write-time on some Apps Script runtimes; the `$A$2:$A` is accepted but the effective evaluation stops at whatever `getLastRow()` was on the first write. Fix:
+   - `cashflow_setup.js → writeCashFlowSummaryFormulas_` switched back to BOUNDED ranges `$A$2:$A$<summaryRow-1>` / `$<monthCol>$2:$<monthCol>$<summaryRow-1>`. The bound always covers every data row strictly above Summary (header at row 1, optional blank separator, then Income block + Expense block). Degenerate case (Summary at row 2, empty sheet) falls back to a single-cell range that evaluates to 0.
+   - `quick_add_payment.js → insertCashFlowRow_` now re-runs `writeCashFlowSummaryFormulas_` (wrapped in try/catch, best-effort) at the end of every row insert. Needed because `insertRowAfter(insertAfterRow)` shifts the Summary row DOWN by 1 but leaves the formula's upper bound at the pre-insert last-data-row — without the rewrite, the freshly-inserted row would sit outside the bounded range until the next sheet-level operation.
+   - `ensureCashFlowSummaryRow_` is unchanged semantically (it still writes formulas via `writeCashFlowSummaryFormulas_` on first seed), and picks up the bounded-range behavior transparently.
+
+2. **Red "Missing sheet (after retry+flush): SYS - Assets" banner on the Overview after Setup.** The user completed the five required Setup steps (Bank, Debts, Bills, Income, Profile), returned to the dashboard, and saw a red error strip above the KPI cards listing every sheet currently in the workbook MINUS the ones the snapshot unconditionally read. Root cause was `dashboard_data.js → buildDashboardSnapshot_` calling `sumColumnByHeader_(getSheet_(ss, 'ASSETS'), 'Current Balance')` / `getSheet_(ss, 'HOUSE_ASSETS')` directly. Those two SYS sheets are populated by the OPTIONAL Houses / Investments panels and are legitimately absent for users who only ran required Setup. The strict `getSheet_` helper threw `Missing sheet (after retry+flush): SYS - Assets` which the UI surfaces verbatim.
+   - New helper `sumColumnByHeaderForOptionalSheet_(ss, sheetKey, headerName)` does a name lookup via `ss.getSheetByName(getSheetNames_()[sheetKey])`. Missing sheet → return 0. Sheet present but empty / missing header → return 0 (wraps the strict helper in try/catch). Required-setup sheets (`ACCOUNTS`, `DEBTS`) continue to use the strict `getSheet_` + `sumColumnByHeader_` path — a missing sheet there is a genuine workbook-corruption signal and MUST surface.
+   - `buildDashboardSnapshot_` now routes `investments`, `houseValues`, and `houseLoans` through the optional helper. Everything downstream (deltas, attribution, issues) was already tolerant of the prior-month readers returning `null` via their own try/catch wrappers, so no other changes were needed.
+
+Files changed: `cashflow_setup.js`, `quick_add_payment.js`, `dashboard_data.js`, `SESSION_NOTES.md`.
+
+What to test on a fresh workbook: (a) After adding one Income row with a non-zero month amount, confirm the Summary row's corresponding month cell shows that amount (not $0.00) and the Total column shows the yearly sum. Add an Expense row in a different month — Summary for that month should show `Expense - 0` (negative or positive depending on your sign convention); Total sums across months. Adding more rows above Summary keeps the totals in sync without a manual refresh. (b) After completing only the five required Setup steps and skipping Houses / Investments, click **Back to Dashboard** — the Overview should render with $0 for Total Investments and Real Estate Value, no red banner. Health / Retirement / Buffer Runway cards render their standard empty states. Populated workbooks with real SYS - Assets / SYS - House Assets rows continue to render the real totals (the optional helper delegates to the strict sum when the sheet exists).
+
+## Recent — Polish pass: dropdown dedup, debt cash-flow seed, Cash Flow Summary row
+
+Five small fixes grouped into one pass after the first-run bank save landed. All five reproduced on a fresh workbook and were flagged together.
+
+1. **Debt type dropdown shows two "Other" rows.** `Dashboard_Script_PlanningDebts.html → populateDebtAddDatalists_` now filters `other` / `other…` / `__other__` (case-insensitive) out of the server list + fallback array before the terminal sentinel is appended. Previously the static fallback (`['Credit Card', 'Loan', 'HELOC', 'Other']`) plus the always-appended `Other…` sentinel produced two adjacent Other rows. Users can still pick the sentinel and type any label (including literally "Other") in the custom-text input.
+
+2. **Bill category dropdown shows two "Other" rows.** Same pattern, same fix: `Dashboard_Script_BillsDue.html → populateBillCategoryOptions_` now dedupes server + fallback category labels via a `seenCategories` map that also filters the Other/Other…/__other__ sentinels before appending the terminal sentinel. No behavior change for non-Other categories; the dedup map preserves first-seen casing on the rare chance a server-side category list has internal duplicates.
+
+3. **Adding a Debt did not seed an expense row on INPUT - Cash Flow YYYY.** `bills.js` had a belt-and-suspenders `ensureCashFlowYearSheet_(currentYear)` call right before `tryGetCashFlowSheet_` so first-run bills self-heal; `debts.js` was missing it. On a fresh workbook where `INPUT - Cash Flow 2026` did not exist at the moment of the debt save, `tryGetCashFlowSheet_` returned null and the seed was silently skipped with a warning. `addDebtFromDashboard` now runs the same ensure call first, mirroring the bills pattern exactly, so the Cash Flow tab is created on demand and the expense row is written in the same save. Populated workbooks are untouched (`ensureCashFlowYearSheet_` is a hard no-op when the sheet exists).
+
+4. **Cash Flow sheet had no Summary / "Cash Flow Per Month" totals row.** The user pasted a reference layout that wanted Income on top, Expenses below, and a trailing `Summary | Cash Flow Per Month | <per-month totals> | <yearly total>` row. `ensureCashFlowYearSheet_` now calls a new `ensureCashFlowSummaryRow_(sheet)` helper (added to `cashflow_setup.js` next to the existing summary helpers) after setting up the header row and currency formats. The helper is idempotent — returns the existing Summary row if present, otherwise appends a blank separator row + a Summary row with formulas two rows below the last data row. The Summary formulas switched from fixed ranges `$A$2:$A$<summaryRow-1>` to open-ended `$A$2:$A` / `<col>$2:<col>` so inserts above the Summary row auto-flow into the totals without needing to rewrite the formula (the SUMIF criteria `"Income"` + `"Expense"` naturally exclude the Summary row's own `Type="Summary"` even though the range now covers it).
+
+5. **New rows did not keep Income-on-top / Expense-above-Summary ordering.** `insertCashFlowRow_` (in `quick_add_payment.js`) used to fall through to `sheet.getLastRow()` whenever no row of the same type existed yet, which meant the very first Income row on a sheet that already had Expenses would land AT THE BOTTOM (after the Expense block) and interleave the two types. New placement rules:
+   - Same-type rows exist → stack immediately after the last one (unchanged).
+   - Income with no existing Income rows → insert right after the header row (row 1) so Income always precedes any Expense / Summary block.
+   - Anything else (Expense) → insert just above the Summary row, or append to the end on legacy sheets without a Summary row.
+   `insertCashFlowRow_` also calls `ensureCashFlowSummaryRow_` up-front so legacy sheets built before the Summary-row rollout self-heal on the next insert. The row-format copy step is skipped when the reference row is row 1 (the bold, frozen header) to keep data rows from inheriting header bold; font weight is explicitly reset to `normal` on the new row in that branch as belt-and-suspenders against Google Sheets' row-format inheritance.
+
+Files changed: `Dashboard_Script_PlanningDebts.html`, `Dashboard_Script_BillsDue.html`, `debts.js`, `cashflow_setup.js`, `quick_add_payment.js`, `SESSION_NOTES.md`.
+
+What to test on a fresh workbook: Add a Debt → confirm no duplicate "Other" in Type dropdown, confirm `INPUT - Cash Flow <year>` gets a new `Expense | <flow source> | <name> | YES` row AND a trailing Summary row with per-month + yearly total formulas. Add a Bill → confirm no duplicate "Other" in Category dropdown, confirm the bill lands as a second Expense row stacked right after the debt Expense row, still above Summary. Add Income (via Income Sources or Quick Add) → confirm it lands at the top (right below the header row), separated from the Expense block below. Scroll to the Summary row and confirm each month cell shows the running net (Income − Expense) and the Total column shows the yearly sum. Populated workbooks: no layout changes, existing Income/Expense ordering is preserved; the Summary row is appended at the bottom only if the sheet didn't already have one.
+
+## Recent — Stale-handle retry baked into getSheet_() itself
+
+Belt-and-suspenders hardening layered on top of the downstream save-path fix. Even with `syncAllAccountsFromLatestCurrentYear_()` and `updateAccountsSheetFields_()` routed through `ensureSysAccountsSheet_()`, a brand-new workbook could still throw `Missing sheet: SYS - Accounts` if the deployment was pinned to a pre-fix version. To make the issue impossible to re-introduce at any call site past *or* future, `getSheet_()` in `config.js` now retries once after a flush:
+
+1. First lookup via the passed-in `ss.getSheetByName(name)`. If found, return (zero behavior change for populated workbooks — this is the fast path).
+2. If missing, call `SpreadsheetApp.flush()` (best-effort, wrapped in try/catch) to commit any pending `insertSheet` structural writes from earlier in the same Apps Script execution.
+3. Re-fetch the Spreadsheet handle via `SpreadsheetApp.getActiveSpreadsheet()` and re-query `getSheetByName(name)`. Some Apps Script runtimes cache the sheet index on the original handle and only surface freshly-inserted sheets to a new handle post-flush.
+4. If the retry also returns null, throw the same `Missing sheet: <name>` error as before. Sheets that truly don't exist still surface the expected error.
+
+This means any future function that reads a sheet via `getSheet_()` right after an ensure call (or across an execution boundary where a sheet was just created) will self-heal, without every caller needing to know about the stale-handle quirk. It also closes the race window where a brand-new-workbook save path might accidentally read `SYS - Accounts` / `INPUT - Bank Accounts` / `INPUT - Debts` / etc. before the handle sees them. Existing-workbook performance is unchanged: populated workbooks always hit the fast-path return on the first lookup and never reach the flush or retry.
+
+Files changed: `config.js`, `SESSION_NOTES.md`.
+
+## Recent — First-run bank save follow-up: stale-handle fix for downstream SYS readers
+
+Even after the previous three-pronged hardening of `addBankAccountFromDashboard` (direct Sheet return from `ensureSysAccountsSheet_()`, `SpreadsheetApp.flush()`, fresh `ss` handle), a brand-new workbook still threw `Error: Missing sheet: SYS - Accounts` on the first Add-account click. The failure was happening *downstream* of my fix, inside `syncAllAccountsFromLatestCurrentYear_()` (called at the end of the save path) and `updateAccountsSheetFields_()` (called when setAvailableFromOpening / setMinBufferFromOpening are on). Both helpers independently did `SpreadsheetApp.getActiveSpreadsheet()` + `getSheet_(ss, 'ACCOUNTS')` with their own freshly-fetched handle — and on some Apps Script executions that lookup still returned null for a sheet that was inserted earlier in the same call, even after a flush.
+
+**Fix.** Both helpers now resolve the SYS - Accounts handle through the idempotent `ensureSysAccountsSheet_()` (which either returns the existing sheet or inserts the canonical structure and returns *that* Sheet object directly, so the lookup never goes through the stale cache):
+
+- `syncAllAccountsFromLatestCurrentYear_()`: replaced `const targetSheet = getSheet_(ss, 'ACCOUNTS')` with `const targetSheet = ensureSysAccountsSheet_()`. The `ss` handle is still fetched afterward for the (guaranteed-to-exist) `INPUT - Bank Accounts` lookup.
+- `updateAccountsSheetFields_()`: replaced `const sheet = getSheet_(ss, 'ACCOUNTS')` with `const sheet = ensureSysAccountsSheet_()`; the standalone `ss` variable is dropped since nothing else in the function used it.
+
+Both helpers are no-ops on populated workbooks (sheet exists → returned untouched), so the change is pure defensive hardening — no behavioral change for any existing CashCompass workbook. Other read-only SYS - Accounts helpers outside the save path (`getInactiveBankAccountsSet_`, `getAccountsDistinctColumnValues_`, `accountExistsInAccountsSheet_`, `dashboard_data.js` aggregates, `cash_to_use.js`) are intentionally untouched: they're called from non-save contexts where the sheet is either already guaranteed to exist or a missing-sheet error is the right thing to surface.
+
+Files changed: `bank_accounts.js`, `SESSION_NOTES.md`.
+
+What to test: fresh deployment → Setup / Review → Welcome → Continue → Assets → Bank Accounts → Add new (with opening balance). First attempt should create both `INPUT - Bank Accounts` and `SYS - Accounts`, append the opening-balance row, run the SYS sync, and (if Available Now / Min Buffer checkboxes are on) update those columns — all in a single call with no "Missing sheet" banner. Populated workbooks are unaffected.
+
+## Recent — Fresh-deployment fixes: Welcome gate inversion + first-run bank save
+
+Two regressions surfaced on a literally-fresh deployment (brand-new CashCompass workbook, no data in any sheet, tested by opening the published web-app URL for the first time):
+
+1. **Welcome screen never rendered.** The app landed directly on the Setup grid with "0 complete · 6 not set up" — no Welcome introduction. Ideal landing for a fresh deployment is Welcome; the grid is strictly a worse restatement of "nothing is set up yet" with no context on what Setup is.
+2. **Assets → Bank Accounts → Add new failed with `Missing sheet: INPUT - Bank Accounts`** on the first attempt, then `Missing sheet: SYS - Accounts` on the retry. Both sheets are first created on the very first save; `addBankAccountFromDashboard` had an `ensureSysAccountsSheet_()` call but nothing for `INPUT - Bank Accounts`, so `getSheet_(ss, 'BANK_ACCOUNTS')` two lines earlier threw before the ensure could run.
+
+### Welcome gate simplification — `Dashboard_Script_Onboarding.html` → `loadOnboardingSection()`
+
+Reverted the previous two-gate model (primary `window.__cashCompassDashboardInited` + secondary `sheetExists || status !== 'missing'`) to a single **payload-driven** gate, because both lenient signals were over-reporting "populated":
+
+- `window.__cashCompassDashboardInited` is set whenever `workbookHasAnyAppSheet_` finds *any* `INPUT - / SYS - / OUT - / LOG -` sheet. On a fresh deployment, `INPUT - Cash Flow <year>` and `INPUT - Upcoming Expenses` are typically already scaffolded (empty), so the flag is true even though Setup is genuinely empty.
+- `sheetExists === true` on a per-step probe has the same failure mode: the Upcoming and Income probes report `sheetExists: true, status: 'missing'` on those scaffold sheets.
+
+New rule: `loadOnboardingSection()` looks only at per-step `status`. If any step reports `status !== 'missing'` (complete or partial) → grid; else → Welcome. The loop risk the earlier two-gate model defended against is already gone: the grid's Back button routes to Dashboard (see below / prior session notes), so Welcome → Continue → grid or Welcome → Back to Dashboard → overview never cycles. Probe failures still fail closed to the grid (it surfaces the error inline and has Refresh + Back to Dashboard; Welcome has neither). `ONBOARDING_SKIP_GRID_AUTOLOAD_` is still set before `onboardingShowView('grid')` when we have the payload so `onboardingApplyStatusGrid_()` runs from the same fetch.
+
+### First-run bank account creation — `bank_accounts.js` → `addBankAccountFromDashboard`
+
+`addBankAccountFromDashboard` now calls `ensureOnboardingBankAccountsSheetFromDashboard('normal')` *and* `ensureSysAccountsSheet_()` **before** any sheet read, instead of only ensuring SYS. Both helpers are existing, tested, idempotent no-ops on populated workbooks (sheet exists → return untouched). For a fresh workbook:
+
+- The INPUT helper writes the canonical Year-block structure the very next line reads: `Year | <current year>` on row 1, `Account Name | Jan-YY … Dec-YY | Total` on row 2 — exactly what `getBankAccountsYearBlock_` parses.
+- The SYS helper writes the canonical column set `normalizeAccounts_` / `getAccountsHeaderMap_` look up by label: `Account Name, Current Balance, Available Now, Min Buffer, Type, Use Policy, Priority, Active`.
+
+**Stale-handle defense.** Initial version of this fix still threw `Missing sheet: SYS - Accounts` on the very first Add-account run because the outer `const ss = SpreadsheetApp.getActiveSpreadsheet()` was captured *before* the ensure helpers ran their `insertSheet` calls. In some Apps Script executions that handle does not surface sheets inserted later in the same call via `getSheetByName`, so `getSheet_(ss, 'ACCOUNTS')` right after the ensure still returned null. Hardened in three ways:
+
+1. `ensureSysAccountsSheet_()` already returns its Sheet object; `accountsSheet` is now taken directly from that return value instead of via `getSheet_(ss, 'ACCOUNTS')` — zero dependency on the outer handle seeing the fresh state.
+2. `SpreadsheetApp.flush()` runs after both ensures so the next `getSheetByName` lookup sees committed structural writes.
+3. The outer `const ss = SpreadsheetApp.getActiveSpreadsheet()` is declared *after* the ensures + flush, so the single remaining `getSheet_(ss, 'BANK_ACCOUNTS')` lookup is against a fresh handle. A defensive null check on the SYS return keeps the error message actionable if the helper ever returns no sheet (e.g. permissions failure swallowed upstream).
+
+Both ensure calls are wrapped in try/catch that re-surfaces user-facing "Could not prepare INPUT - Bank Accounts: …" / "Could not prepare SYS - Accounts: …" messages instead of the raw `Missing sheet: …` banner if creation itself fails. The existing rollback pattern (delete the bank row if SYS append fails) is unchanged.
+
+Files changed: `Dashboard_Script_Onboarding.html`, `bank_accounts.js`, `Dashboard_Help.html`, `PROJECT_CONTEXT.md`, `SESSION_NOTES.md`.
+
+What to test:
+
+- Fresh deployment (no prior data, even scaffold sheets): Setup / Review lands on **Welcome**. Continue → grid. Back to Dashboard → overview.
+- Fresh deployment (scaffold sheets only, e.g. empty `INPUT - Cash Flow 2026` + empty `INPUT - Upcoming Expenses`): same as above — still Welcome.
+- Populated workbook (any step complete/partial): Setup / Review lands directly on grid, no Welcome flash. Back to Dashboard on grid → overview (no Welcome loop).
+- Fresh deployment Assets → Bank Accounts → Add new account with opening balance: creates `INPUT - Bank Accounts` with Year block for current year and `SYS - Accounts` with canonical headers, then writes both rows + opening balance into the Jan-Dec block. Second add on the same fresh workbook reuses both sheets (no duplicate structure).
+
 ## Recent — Setup / Review: Welcome gate hardening + grid Back button fix
 
 Follow-up to the first-run UX hardening batch. Two related regressions were surfacing on populated workbooks when opening **Setup / Review** from the dashboard:

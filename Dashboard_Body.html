@@ -1534,24 +1534,12 @@
         <div class="onboarding-step-body" data-body="bills"><p class="muted">&mdash;</p></div>
         <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
       </div>
-      <div class="onboarding-step-card onboarding-step-card-clickable" data-step="upcoming" id="onboarding_step_upcoming"
-           role="button" tabindex="0"
-           onclick="onboardingShowView('upcoming')"
-           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();onboardingShowView('upcoming');}">
-        <div class="onboarding-step-head">
-          <div class="onboarding-step-num">4</div>
-          <div class="onboarding-step-title">Upcoming Expenses</div>
-          <div class="onboarding-step-badge" data-badge="upcoming">…</div>
-        </div>
-        <div class="onboarding-step-body" data-body="upcoming"><p class="muted">&mdash;</p></div>
-        <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
-      </div>
       <div class="onboarding-step-card onboarding-step-card-clickable" data-step="income" id="onboarding_step_income"
            role="button" tabindex="0"
            onclick="onboardingShowView('income')"
            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();onboardingShowView('income');}">
         <div class="onboarding-step-head">
-          <div class="onboarding-step-num">5</div>
+          <div class="onboarding-step-num">4</div>
           <div class="onboarding-step-title">Income</div>
           <div class="onboarding-step-badge" data-badge="income">…</div>
         </div>
@@ -1563,7 +1551,7 @@
            onclick="onboardingShowView('profile')"
            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();onboardingShowView('profile');}">
         <div class="onboarding-step-head">
-          <div class="onboarding-step-num">6</div>
+          <div class="onboarding-step-num">5</div>
           <div class="onboarding-step-title">Profile</div>
           <div class="onboarding-step-badge" data-badge="profile">…</div>
         </div>
@@ -1573,11 +1561,22 @@
       </div>
 
       <!--
-        Optional section. Houses is deliberately NOT part of the
-        setup-completion count, but is rendered as a same-size card in
-        its own grid so widths/gutters line up with the required steps
-        above. The grid uses auto-fill (not auto-fit) so a single card
-        does not stretch to full width.
+        Optional section. Houses and Upcoming Expenses are deliberately
+        NOT part of the setup-completion count (see
+        getOnboardingStatusFromDashboard in onboarding.js — upcoming is
+        intentionally omitted from the `steps` array). Each is rendered
+        as a same-size card in its own grid so widths/gutters line up
+        with the required steps above. The grid uses auto-fill (not
+        auto-fit) so a single card does not stretch to full width.
+
+        Both optional cards use the static "Optional" tag pattern —
+        they don't carry a status badge (no data-badge) because the
+        badge is reserved for required steps that contribute to the
+        "N complete · M not set up" summary line. Their card bodies
+        are populated by dedicated summary loaders
+        (onboardingLoadHousesSummary_, onboardingLoadUpcomingSummary_)
+        rather than by the shared onboardingRenderStepCard_ that
+        renders the required cards from the status payload.
       -->
       <div class="onboarding-section-header">
         <div class="onboarding-section-header-label">Optional</div>
@@ -1585,6 +1584,19 @@
       </div>
       <div class="onboarding-steps-grid onboarding-steps-grid-optional"
            id="onboarding_optional_section">
+        <div class="onboarding-step-card onboarding-step-card-clickable onboarding-optional-card"
+             data-step="upcoming" id="onboarding_step_upcoming"
+             role="button" tabindex="0"
+             onclick="onboardingShowView('upcoming')"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();onboardingShowView('upcoming');}">
+          <div class="onboarding-step-head">
+            <div class="onboarding-step-num onboarding-step-num-placeholder" aria-hidden="true"></div>
+            <div class="onboarding-step-title">Upcoming Expenses</div>
+            <span class="onboarding-optional-tag">Optional</span>
+          </div>
+          <div class="onboarding-step-body" data-body="upcoming"><p class="muted">&mdash;</p></div>
+          <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
+        </div>
         <div class="onboarding-step-card onboarding-step-card-clickable onboarding-optional-card"
              data-step="houses" id="onboarding_step_houses"
              role="button" tabindex="0"
@@ -1647,7 +1659,7 @@
     -->
     <div id="onboarding_view_bank" class="onboarding-view onboarding-view-detail" style="display:none;">
       <div class="onboarding-detail-header">
-        <div class="onboarding-detail-step">Step 1 of 6</div>
+        <div class="onboarding-detail-step">Step 1 of 5</div>
         <h2 class="onboarding-detail-title">Bank Accounts</h2>
         <div id="onboarding_bank_badge" class="onboarding-detail-badge">…</div>
       </div>
@@ -1677,7 +1689,7 @@
     -->
     <div id="onboarding_view_debts" class="onboarding-view onboarding-view-detail" style="display:none;">
       <div class="onboarding-detail-header">
-        <div class="onboarding-detail-step">Step 2 of 6</div>
+        <div class="onboarding-detail-step">Step 2 of 5</div>
         <h2 class="onboarding-detail-title">Debts</h2>
         <div id="onboarding_debts_badge" class="onboarding-detail-badge">…</div>
       </div>
@@ -1705,7 +1717,7 @@
     -->
     <div id="onboarding_view_bills" class="onboarding-view onboarding-view-detail" style="display:none;">
       <div class="onboarding-detail-header">
-        <div class="onboarding-detail-step">Step 3 of 6</div>
+        <div class="onboarding-detail-step">Step 3 of 5</div>
         <h2 class="onboarding-detail-title">Bills</h2>
         <div id="onboarding_bills_badge" class="onboarding-detail-badge">…</div>
       </div>
@@ -1733,13 +1745,13 @@
     -->
     <div id="onboarding_view_upcoming" class="onboarding-view onboarding-view-detail" style="display:none;">
       <div class="onboarding-detail-header">
-        <div class="onboarding-detail-step">Step 4 of 6</div>
+        <div class="onboarding-detail-step onboarding-detail-optional">Optional</div>
         <h2 class="onboarding-detail-title">Upcoming Expenses</h2>
         <div id="onboarding_upcoming_badge" class="onboarding-detail-badge">…</div>
       </div>
 
       <div class="onboarding-detail-explainer">
-        <p>Upcoming expenses help you plan ahead.</p>
+        <p>Upcoming expenses help you plan ahead. Optional — not required to finish setup.</p>
       </div>
 
       <div id="onboarding_upcoming_status" class="status"></div>
@@ -1765,7 +1777,7 @@
     -->
     <div id="onboarding_view_income" class="onboarding-view onboarding-view-detail" style="display:none;">
       <div class="onboarding-detail-header">
-        <div class="onboarding-detail-step">Step 5 of 6</div>
+        <div class="onboarding-detail-step">Step 4 of 5</div>
         <h2 class="onboarding-detail-title">Income</h2>
         <div id="onboarding_income_badge" class="onboarding-detail-badge">…</div>
       </div>
@@ -1801,7 +1813,7 @@
     -->
     <div id="onboarding_view_profile" class="onboarding-view onboarding-view-detail" style="display:none;">
       <div class="onboarding-detail-header">
-        <div class="onboarding-detail-step">Step 6 of 6</div>
+        <div class="onboarding-detail-step">Step 5 of 5</div>
         <h2 class="onboarding-detail-title">Profile</h2>
         <div id="onboarding_profile_badge" class="onboarding-detail-badge">…</div>
       </div>

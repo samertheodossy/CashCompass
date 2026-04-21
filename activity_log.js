@@ -60,6 +60,8 @@ function ensureActivityLogSheet_(ss) {
 function getOrCreateActivityLogSheet_(ss) {
   var sh = ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
   if (sh) {
+    // Self-heal an empty sheet only (blank A1). Do NOT touch populated
+    // sheets — existing rows keep whatever formatting the user had.
     if (sh.getLastRow() === 0 || String(sh.getRange(1, 1).getValue() || '').trim() === '') {
       sh.getRange(1, 1, 1, ACTIVITY_LOG_HEADERS.length).setValues([ACTIVITY_LOG_HEADERS]);
       sh.setFrozenRows(1);
@@ -69,6 +71,19 @@ function getOrCreateActivityLogSheet_(ss) {
   sh = ss.insertSheet(ACTIVITY_LOG_SHEET_NAME);
   sh.getRange(1, 1, 1, ACTIVITY_LOG_HEADERS.length).setValues([ACTIVITY_LOG_HEADERS]);
   sh.setFrozenRows(1);
+
+  // First-creation-only polish. All wrapped in try/catch — cosmetic
+  // only, must never fail a log write. Matches the bold-header +
+  // auto-resize convention used by every other creator in the
+  // workbook. Existing `LOG - Activity` sheets are skipped above, so
+  // this branch only runs on truly-new logs.
+  try {
+    sh.getRange(1, 1, 1, ACTIVITY_LOG_HEADERS.length).setFontWeight('bold');
+  } catch (_boldErr) { /* cosmetic only */ }
+  try {
+    sh.autoResizeColumns(1, ACTIVITY_LOG_HEADERS.length);
+  } catch (_resizeErr) { /* cosmetic only */ }
+
   return sh;
 }
 
@@ -85,7 +100,13 @@ function activityLogDedupeKeyExists_(ss, dedupeKey) {
   if (!sh || sh.getLastRow() < 2) return false;
 
   var lastRow = sh.getLastRow();
-  var values = sh.getRange(2, ACTIVITY_LOG_DEDUPE_COL, lastRow, ACTIVITY_LOG_DEDUPE_COL).getValues();
+  // Read exactly the dedupe-key column, rows 2..lastRow (one column only).
+  // Previously this passed `ACTIVITY_LOG_DEDUPE_COL` as the `numColumns`
+  // argument by mistake, reading a `lastRow × 11` block starting at
+  // col K; it only worked today because `values[i][0]` still pointed at
+  // the right column, but was wasteful and would throw the moment the
+  // sheet's max-columns dropped below K + 11 − 1.
+  var values = sh.getRange(2, ACTIVITY_LOG_DEDUPE_COL, lastRow - 1, 1).getValues();
   for (var i = 0; i < values.length; i++) {
     if (String(values[i][0] || '').trim() === key) return true;
   }

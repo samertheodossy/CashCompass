@@ -201,34 +201,41 @@ function escapeOnboardingHtml_(s) {
 
 // Public entry. Called whenever the user lands on the Setup page.
 //
-// Welcome-screen gating (populated workbooks MUST NOT land on Welcome):
+// Welcome-screen gating (payload-driven, single source of truth):
 //
-//   Primary signal — window.__cashCompassDashboardInited:
-//     This flag is set by initDashboard() in PlannerDashboardWeb.html,
-//     which only runs when the server-side startup router
-//     (getStartupRoutingFromDashboard → workbookHasAnyAppSheet_) has
-//     already classified the workbook as populated. If the user
-//     reached Setup / Review from the dashboard at all, this flag is
-//     therefore true, and we show the grid synchronously — Welcome
-//     literally cannot render for that session regardless of what the
-//     per-step probes report.
+//   The Setup / Review grid's job is to summarize exactly five required
+//   probes (Bank Accounts, Debts, Bills, Income, Profile). Upcoming
+//   Expenses and Houses are rendered as Optional cards on the grid but
+//   are intentionally absent from the status payload (see
+//   getOnboardingStatusFromDashboard in onboarding.js), so they don't
+//   participate in this gate. If every required probe reports
+//   status === 'missing', the grid would just say "0 complete · 5 not
+//   set up" — Welcome is a strictly better landing there, because
+//   Welcome explains what Setup is and offers Continue. That's true
+//   even when the server-side startup router classified the workbook
+//   as "populated" via workbookHasAnyAppSheet_: scaffold sheets like
+//   an empty INPUT - Cash Flow <year> or INPUT - Upcoming Expenses
+//   can exist without a single Setup step being real. We deliberately
+//   do NOT look at window.__cashCompassDashboardInited or at
+//   s.sheetExists here — both signals over-report "populated" on
+//   fresh deployments and would suppress Welcome for truly blank
+//   workbooks.
 //
-//   Secondary signal — per-step payload:
-//     Used only when the primary flag is NOT set (e.g. the startup
-//     gate routed straight to onboarding because the workbook was
-//     classified blank on page load). Here we double-check the probe:
-//     if any Setup-tracked sheet now exists (sheetExists === true) or
-//     any step reports a non-'missing' status, we still skip Welcome
-//     and land on the grid. Only when every signal says blank do we
-//     fall back to Welcome.
+//   Rule:
+//     - any step with status !== 'missing' → render the grid (skip Welcome)
+//     - every step status === 'missing'    → render Welcome
+//
+//   The grid's Back button routes to Dashboard (see Dashboard_Body.html
+//   comment on #onboarding_view_grid), so showing Welcome here is not
+//   a loop — Continue → grid, Back to Dashboard → overview.
 //
 //   Probe failure / malformed payload:
-//     Fail closed to the grid. A populated user must never be trapped
-//     on Welcome because the status probe hiccuped; the grid has its
-//     own Refresh action and can surface read errors inline.
+//     Fail closed to the grid. If we can't read the probes we surface
+//     the error inline on the grid (which has a Refresh action) rather
+//     than stranding the user on Welcome without a way forward.
 //
 // We only hit the server once here: the same status payload powers
-// both the routing decision (when needed) and the grid render.
+// both the routing decision and the grid render.
 function loadOnboardingSection() {
   var welcome = document.getElementById('onboarding_view_welcome');
   var grid = document.getElementById('onboarding_view_grid');
@@ -257,74 +264,47 @@ function loadOnboardingSection() {
 
   onboardingSetStatus_('Checking your setup…', 'dash-status-loading');
 
-  // Primary gate: startup already proved the workbook is populated.
-  // Render the grid synchronously so the user never sees Welcome — the
-  // payload probe below just fills in the cards. We set
-  // ONBOARDING_SKIP_GRID_AUTOLOAD_ so onboardingShowView('grid')
-  // doesn't double-fetch; the success handler feeds the same payload
-  // into onboardingApplyStatusGrid_() directly.
-  var workbookKnownPopulated = false;
-  try {
-    workbookKnownPopulated = !!window.__cashCompassDashboardInited;
-  } catch (_e) {
-    workbookKnownPopulated = false;
-  }
-  if (workbookKnownPopulated) {
-    ONBOARDING_SKIP_GRID_AUTOLOAD_ = true;
-    onboardingShowView('grid');
-  }
-
   google.script.run
     .withSuccessHandler(function(data) {
       var hasPayload = !!(data && Array.isArray(data.steps));
 
-      if (workbookKnownPopulated) {
-        // Grid already rendered; just apply the cards (or surface the
-        // read error) without ever touching Welcome.
-        if (hasPayload) {
-          onboardingApplyStatusGrid_(data);
-        } else {
-          onboardingSetStatus_('Could not read setup status.', 'error');
-        }
-        return;
-      }
-
       if (!hasPayload) {
-        // Unknown startup state + malformed payload → fail closed to
-        // grid. The grid will be empty but Refresh is available, and
-        // this is strictly better than stranding the user on Welcome.
+        // Malformed payload → fail closed to grid. The grid will be
+        // empty but Refresh is available, and this is strictly better
+        // than stranding the user on a Welcome screen that can't tell
+        // them anything useful.
         onboardingSetStatus_('Could not read setup status.', 'error');
         onboardingShowView('grid');
         return;
       }
 
-      var workbookIsPopulated = data.steps.some(function(s) {
-        if (!s) return false;
-        if (s.sheetExists === true) return true;
-        if (s.status && s.status !== 'missing') return true;
-        return false;
+      var anyTracked = data.steps.some(function(s) {
+        return s && s.status && s.status !== 'missing';
       });
 
-      if (workbookIsPopulated) {
+      if (anyTracked) {
+        // At least one step is complete or partial — land on the grid
+        // and reuse the payload we already fetched to render the cards
+        // without a second server round-trip.
         ONBOARDING_SKIP_GRID_AUTOLOAD_ = true;
         onboardingShowView('grid');
         onboardingApplyStatusGrid_(data);
       } else {
+        // All six steps report 'missing' → genuine first-run experience.
+        // Show Welcome; Continue advances to the grid, Back to Dashboard
+        // returns to overview.
         onboardingShowView('welcome');
       }
     })
     .withFailureHandler(function(err) {
-      // Fail closed: populated workbooks must never get stuck on
-      // Welcome because the status probe failed. If we already
-      // rendered the grid synchronously, just surface the error
-      // inline; otherwise switch to the grid now.
+      // Fail closed to the grid. A probe failure must never trap the
+      // user on Welcome: the grid surfaces the error inline and offers
+      // Refresh + Back to Dashboard, which Welcome does not.
       onboardingSetStatus_(
         'Error reading setup status: ' + (err && err.message ? err.message : String(err)),
         'error'
       );
-      if (!workbookKnownPopulated) {
-        onboardingShowView('grid');
-      }
+      onboardingShowView('grid');
     })
     .getOnboardingStatusFromDashboard(ONBOARDING_MODE_);
 }
@@ -373,9 +353,16 @@ function onboardingApplyStatusGrid_(data) {
 
   onboardingApplyFinishPanel_(complete, total);
 
-  // Houses is optional and not part of the status payload, but the card
-  // lives in the same grid. Fetch its summary in parallel so users see
-  // "N tracked" / "None yet" on the card without opening the detail.
+  // Optional cards (Upcoming Expenses, Houses) live in the same grid
+  // but are NOT part of the status payload that drives the completion
+  // count — see the comment in getOnboardingStatusFromDashboard
+  // (onboarding.js) for the rationale. Fetch their summaries in
+  // parallel so users see a short "N planned" / "N tracked" / "None
+  // yet" line on each card without having to open the detail view.
+  // Failures in either of these loaders fall back to a calm dash ("—")
+  // so the required-step cards never look broken because an optional
+  // fetch hiccupped.
+  onboardingLoadUpcomingSummary_();
   onboardingLoadHousesSummary_();
 }
 
@@ -409,6 +396,45 @@ function onboardingRenderHousesSummary_(data) {
 
   var active = data.houses.filter(function(h) { return !h.inactive; }).length;
   var line = active > 0 ? (active + ' tracked') : 'None yet';
+  body.innerHTML = '<p class="muted">' + escapeOnboardingHtml_(line) + '</p>';
+}
+
+// Fetch a minimal Upcoming Expenses summary for the optional card on
+// the grid. Parallels onboardingLoadHousesSummary_: we reuse the
+// Upcoming detail endpoint (getOnboardingUpcomingFromDashboard) since
+// it already returns Planned rows filtered the same way the Setup
+// detail view needs them, and we only consume the count for the card
+// body. Failure is non-fatal — the card falls back to the calm dash
+// placeholder rather than surfacing an error banner, matching Houses.
+function onboardingLoadUpcomingSummary_() {
+  var body = document.querySelector('[data-body="upcoming"]');
+  if (!body) return;
+  body.innerHTML = '<p class="muted">&mdash;</p>';
+
+  google.script.run
+    .withSuccessHandler(function(data) { onboardingRenderUpcomingSummary_(data); })
+    .withFailureHandler(function() {
+      var el = document.querySelector('[data-body="upcoming"]');
+      if (el) el.innerHTML = '<p class="muted">—</p>';
+    })
+    .getOnboardingUpcomingFromDashboard(ONBOARDING_MODE_);
+}
+
+function onboardingRenderUpcomingSummary_(data) {
+  var body = document.querySelector('[data-body="upcoming"]');
+  if (!body) return;
+
+  // getOnboardingUpcomingFromDashboard returns an `upcoming` array of
+  // Planned rows (Paid / Dismissed are treated as history elsewhere).
+  // Missing sheet / malformed payload → short fallback so the card
+  // still feels intentional rather than broken.
+  if (!data || !Array.isArray(data.upcoming)) {
+    body.innerHTML = '<p class="muted">—</p>';
+    return;
+  }
+
+  var planned = data.upcoming.length;
+  var line = planned > 0 ? (planned + ' planned') : 'None yet';
   body.innerHTML = '<p class="muted">' + escapeOnboardingHtml_(line) + '</p>';
 }
 
@@ -1118,9 +1144,17 @@ function onboardingOpenUpcomingPage() {
 //
 // Income is read directly from the latest INPUT - Cash Flow <year>.
 // There is NO INPUT - Income Sources sheet — the onboarding flow must
-// not reintroduce one. The detail screen surfaces two groups:
-//   - Recurring detected income (>=3 months, not an excluded category)
-//   - Other detected income (one-offs, non-recurring categories)
+// not reintroduce one. The detail screen surfaces two groups (rule
+// lives server-side in getOnboardingIncomeFromDashboard /
+// probeIncomeStatus_ in onboarding.js):
+//   - Recurring detected income (≥1 month with a positive amount and
+//     not an excluded payee). The "≥1 month" threshold keeps the
+//     Setup grid honest for users who just added their first income
+//     source via the dashboard — that write only fills the current
+//     month, so requiring ≥3 months here meant the Income card stayed
+//     yellow until the user hand-populated two more months.
+//   - Other detected income (excluded categories like Bonus, RSU,
+//     Tax Refund, Gift, …).
 // There is no ensure-sheet step for income: the current codebase has
 // no safe year-sheet creation helper, so if the Cash Flow sheet is
 // missing we tell the user explicitly rather than guessing at schema.

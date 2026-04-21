@@ -1,3 +1,172 @@
+/* -------------------------------------------------------------------------- */
+/*  Safe from-scratch creators (zero-sheet onboarding)                        */
+/*                                                                            */
+/*  Both helpers are idempotent no-ops when the sheet already exists —        */
+/*  they return the existing Sheet object untouched. They never rewrite       */
+/*  headers, clear data, or modify an existing sheet in any way. They         */
+/*  are safe to call on every invocation of the add-investment flow.          */
+/*                                                                            */
+/*  Schema is derived from the current readers/writers in this file, not      */
+/*  guessed:                                                                  */
+/*    - getInvestmentsYearBlock_ scans column A for "Year" + <year> on        */
+/*      row 1 and "Account Name" on row 2, uses firstMonthCol = 3, and        */
+/*      terminates the block at the next "Account Totals" / "Delta" /        */
+/*      "Year" row (or end of sheet). Month headers are MMM-YY (see          */
+/*      parseMonthHeader_ in planner_helpers.js) — the insert path uses       */
+/*      getMonthColumnByDate_ to match them.                                  */
+/*    - ensureInvestmentsActiveColumnForBlock_ places "Active" at             */
+/*      firstMonthCol + 12 (col O) when a new investment is added, so         */
+/*      the canonical 15-column layout is Account Name | Type | Jan-YY        */
+/*      … Dec-YY | Active.                                                   */
+/*    - getAssetsHeaderMap_ requires "Account Name" and "Current Balance".    */
+/*      "Type" and "Active" are optional in the reader but the add path       */
+/*      always writes them, so we seed all four.                              */
+/*                                                                            */
+/*  Aggregate rows (Account Totals / Delta) are intentionally NOT seeded:     */
+/*  current logic does not depend on them (getInvestmentsYearBlock_ falls     */
+/*  back to sheet.getLastRow() as dataEndRow when absent, the insert path     */
+/*  handles that case via the `dataEndRow < dataStartRow` branch, and         */
+/*  refreshBlockSumAggregates_ is a no-op with nothing to refresh). The       */
+/*  user can add them manually once they have data if they want totals —     */
+/*  this matches the user's instruction to only seed aggregate rows "if       */
+/*  current logic truly depends on them".                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Canonical from-scratch creator for `INPUT - Investments`.
+ *
+ * Safety contract:
+ *   - Idempotent: if the sheet already exists, returns it untouched. No
+ *     header rewrite, no re-styling of existing data.
+ *   - Never overwrites data on an existing sheet.
+ *   - Never deletes or renames any sheet.
+ *
+ * Canonical structure written only on first creation:
+ *   Row 1:   Year | <currentYear>                     (orange banner)
+ *   Row 2:   Account Name | Type | Jan-YY | Feb-YY |   (yellow banner)
+ *            … | Dec-YY | Active                     (cols 1..15)
+ *   Data:    (none — addInvestmentAccountFromDashboard inserts on write)
+ *
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet} the sheet (existing or new)
+ */
+function ensureInputInvestmentsSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const names = getSheetNames_();
+  const sheetName = names.INVESTMENTS;
+
+  const existing = ss.getSheetByName(sheetName);
+  if (existing) return existing;
+
+  let sheet;
+  try {
+    sheet = ss.insertSheet(sheetName);
+  } catch (e) {
+    // Race: another path may have just created it. Prefer the existing
+    // sheet over a new one so we never end up with "Sheet 2"-style dupes.
+    const racedSheet = ss.getSheetByName(sheetName);
+    if (racedSheet) return racedSheet;
+    throw e;
+  }
+
+  const year = (typeof getCurrentYear_ === 'function')
+    ? getCurrentYear_()
+    : new Date().getFullYear();
+  const yy = String(year).slice(-2);
+  const monthLabels = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+
+  // Row 1: Year banner.
+  sheet.getRange(1, 1, 1, 2).setValues([['Year', year]]);
+
+  // Row 2: column headers. Col 1 Account Name, col 2 Type, cols 3..14
+  // the 12 MMM-YY month columns (firstMonthCol = 3), col 15 Active —
+  // matches ensureInvestmentsActiveColumnForBlock_(block.firstMonthCol + 12).
+  const headers = ['Account Name', 'Type'];
+  for (let i = 0; i < monthLabels.length; i++) {
+    headers.push(monthLabels[i] + '-' + yy);
+  }
+  headers.push('Active');
+  sheet.getRange(2, 1, 1, headers.length).setValues([headers]);
+
+  // Cosmetic polish — cosmetic only, wrapped in try/catch so a formatting
+  // hiccup never fails the structural creation. Matches the existing
+  // applyInvestmentsSheetStyling_ pattern (warm orange Year banner,
+  // warm yellow Account Name header, frozen col A + col B).
+  try {
+    applyInvestmentsSheetStyling_(sheet);
+  } catch (_styleErr) { /* cosmetic only */ }
+
+  try {
+    sheet.setFrozenRows(2);
+  } catch (_frozenErr) { /* cosmetic only */ }
+
+  try {
+    sheet.autoResizeColumns(1, headers.length);
+  } catch (_resizeErr) { /* cosmetic only */ }
+
+  return sheet;
+}
+
+/**
+ * Canonical from-scratch creator for `SYS - Assets`.
+ *
+ * Flat 4-column table consumed by getAssetsHeaderMap_ (which requires
+ * "Account Name" + "Current Balance" and treats "Type" + "Active" as
+ * optional). The add path always writes all four, so we seed them all.
+ *
+ * Safety contract: idempotent no-op when the sheet already exists. Never
+ * overwrites or re-styles populated sheets.
+ *
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet}
+ */
+function ensureSysAssetsSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const names = getSheetNames_();
+  const sheetName = names.ASSETS;
+
+  const existing = ss.getSheetByName(sheetName);
+  if (existing) return existing;
+
+  let sheet;
+  try {
+    sheet = ss.insertSheet(sheetName);
+  } catch (e) {
+    const racedSheet = ss.getSheetByName(sheetName);
+    if (racedSheet) return racedSheet;
+    throw e;
+  }
+
+  // Header order mirrors what getAssetsHeaderMap_ looks up by label;
+  // positions are not load-bearing but we keep them consistent with the
+  // usual convention (identifier → categorization → money → state).
+  const headers = ['Account Name', 'Type', 'Current Balance', 'Active'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  // Pre-format the Current Balance column so the first currency value
+  // the add path writes renders correctly. Bounded to the sheet's
+  // current max rows — consistent with the rest of the workbook's
+  // creators (no whole-column formatting).
+  try {
+    const maxRowsAssets = sheet.getMaxRows();
+    if (maxRowsAssets > 1) {
+      sheet.getRange(2, 3, maxRowsAssets - 1, 1)
+        .setNumberFormat('$#,##0.00;-$#,##0.00');
+    }
+  } catch (_fmtErr) { /* cosmetic only */ }
+
+  try {
+    applyAssetsSheetStyling_(sheet);
+  } catch (_styleErr) { /* cosmetic only */ }
+
+  try {
+    sheet.autoResizeColumns(1, headers.length);
+  } catch (_resizeErr) { /* cosmetic only */ }
+
+  return sheet;
+}
+
 function syncAllAssetsFromLatestCurrentYear_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sourceSheet = getSheet_(ss, 'INVESTMENTS');
@@ -588,7 +757,121 @@ function insertNewInvestmentHistoryRow_(sheet, block, accountName, typeStr) {
   // Active column existed remain blank and are treated as active by readers.
   writeActiveCellWithRowFormat_(sheet, newRow, activeCol, 'Yes');
 
+  // Refresh the block's "Account Totals" simple SUM formulas to cover
+  // the new data row. See refreshBlockSumAggregates_ for rationale: a
+  // row inserted at the lower boundary of `=SUM(C{start}:C{lastAccount})`
+  // is NOT picked up by Google Sheets' auto-expansion, which would
+  // cause a newly-added account to silently drop out of the user's
+  // Account Totals.
+  //
+  // Delta is intentionally NOT in the target-label set. Delta rows in
+  // the user's Investments sheet are typically YoY or period diffs
+  // (e.g. `=N5-C5`), not sums of data rows, and the helper's strict
+  // `=SUM(<L><N>:<L><M>)` match would leave them alone anyway; we pass
+  // only ['Account Totals'] to make intent explicit.
+  const newDataStartRow = block.dataStartRow;
+  const newDataEndRow = Math.max(newRow, block.dataEndRow + 1);
+  try {
+    refreshBlockSumAggregates_(
+      sheet,
+      newDataStartRow,
+      newDataEndRow,
+      newDataEndRow + 1,
+      ['Account Totals']
+    );
+  } catch (_aggErr) { /* defense in depth only */ }
+
+  // Re-assert canonical banner styling on the whole sheet. Idempotent —
+  // repeated adds don't flicker or accumulate cost. Never load-bearing —
+  // failures are swallowed inside the helper.
+  try { applyInvestmentsSheetStyling_(sheet); } catch (_) { /* cosmetic only */ }
+
   return newRow;
+}
+
+/**
+ * Idempotent canonical styling for `INPUT - Investments`.
+ *
+ * Mirrors the year-block pattern used by INPUT - House Values, but with
+ * investments-specific banner labels. Walks the sheet top-to-bottom
+ * scanning column A for the four block markers and asserts the
+ * canonical fill / bold / row height the user's sheet already relies
+ * on, so new blocks / newly-inserted rows never drift from the
+ * canonical look:
+ *
+ *   - "Year"            → orange  #f4a300, bold black, row height 28
+ *   - "Account Name"    → yellow  #fff200, bold black, centered, row height 32
+ *                         (only when col B reads "Type" — disambiguates
+ *                          from any legitimate data row whose col A just
+ *                          happens to be the word "Account Name")
+ *   - "Account Totals"  → green   #b6d7a8, bold black
+ *   - "Delta"           → pink    #f4cccc, bold black
+ *
+ * Data rows (everything else) are deliberately left untouched so the
+ * user's own conditional formatting on month cells (gain-green /
+ * loss-red text) is preserved.
+ *
+ * All failures are swallowed — cosmetic only; must never fail an
+ * Investments write on a formatting glitch. Safe to call from every
+ * add-row / rollover path.
+ */
+function applyInvestmentsSheetStyling_(sheet) {
+  if (!sheet) return;
+
+  let lastCol = 1;
+  try { lastCol = Math.max(1, sheet.getLastColumn()); } catch (_) { return; }
+  let lastRow = 0;
+  try { lastRow = sheet.getLastRow(); } catch (_) { return; }
+  if (lastRow < 1) return;
+
+  let colA;
+  try {
+    colA = sheet.getRange(1, 1, lastRow, 1).getDisplayValues();
+  } catch (_) { return; }
+
+  for (let i = 0; i < colA.length; i++) {
+    const marker = String(colA[i][0] || '').trim();
+    if (!marker) continue;
+    const row1 = i + 1;
+    try {
+      if (marker === 'Year') {
+        sheet.getRange(row1, 1, 1, lastCol)
+          .setBackground('#f4a300')
+          .setFontWeight('bold')
+          .setFontColor('#000000');
+        try { sheet.setRowHeight(row1, 28); } catch (_) {}
+      } else if (marker === 'Account Name') {
+        let colB = '';
+        try {
+          colB = String(sheet.getRange(row1, 2).getDisplayValue() || '').trim();
+        } catch (_) { /* skip styling when col B cannot be read */ }
+        if (colB === 'Type') {
+          sheet.getRange(row1, 1, 1, lastCol)
+            .setBackground('#fff200')
+            .setFontWeight('bold')
+            .setFontColor('#000000')
+            .setHorizontalAlignment('center')
+            .setVerticalAlignment('middle');
+          try { sheet.setRowHeight(row1, 32); } catch (_) {}
+        }
+      } else if (marker === 'Account Totals') {
+        sheet.getRange(row1, 1, 1, lastCol)
+          .setBackground('#b6d7a8')
+          .setFontWeight('bold')
+          .setFontColor('#000000');
+      } else if (marker === 'Delta') {
+        sheet.getRange(row1, 1, 1, lastCol)
+          .setBackground('#f4cccc')
+          .setFontWeight('bold')
+          .setFontColor('#000000');
+      }
+    } catch (_styleErr) { /* cosmetic only */ }
+  }
+
+  // Freeze columns A (Account Name) and B (Type) so both stay pinned
+  // when scrolling across the 12 month columns. Idempotent — no-op
+  // when already frozen.
+  try { sheet.setFrozenColumns(2); } catch (_) { /* cosmetic */ }
 }
 
 function findAssetsTemplateRow_(sheet, headerMap) {
@@ -644,6 +927,59 @@ function appendAssetsRowForNewInvestment_(sheet, accountName, typeStr, currentBa
   if (headerMap.activeCol !== -1) {
     writeActiveCellWithRowFormat_(sheet, appendedRow, headerMap.activeCol, 'Yes');
   }
+
+  // Re-assert the canonical SYS - Assets header styling. Idempotent,
+  // cosmetic only; failures are swallowed inside the helper so an
+  // Assets write is never blocked by a formatting glitch.
+  try { applyAssetsSheetStyling_(sheet); } catch (_) { /* cosmetic */ }
+}
+
+/**
+ * Idempotent canonical styling for `SYS - Assets`.
+ *
+ * Flat 4-column table (Account Name / Type / Current Balance / Active)
+ * with no year blocks and no footer rows. Only row 1 needs styling —
+ * the data rows are append-only and each new row inherits formatting
+ * from a neighbor template via PASTE_FORMAT (see
+ * `appendAssetsRowForNewInvestment_` above), so their visual treatment
+ * is already consistent.
+ *
+ * Assertions:
+ *   - Header row (row 1) → yellow #fff200, bold black, centered
+ *     horizontal / middle vertical, row height 32.
+ *   - Solid-medium black bottom border under row 1 to separate header
+ *     from the data body.
+ *   - Frozen row 1 + frozen column 1 so Account Name stays pinned
+ *     when scrolling.
+ *
+ * Data rows, number formats, and any user cell highlights are
+ * deliberately never touched. Failures are swallowed — cosmetic only.
+ */
+function applyAssetsSheetStyling_(sheet) {
+  if (!sheet) return;
+  let lastCol = 1;
+  try { lastCol = Math.max(1, sheet.getLastColumn()); } catch (_) { return; }
+
+  try {
+    const headerRange = sheet.getRange(1, 1, 1, lastCol);
+    headerRange
+      .setBackground('#fff200')
+      .setFontWeight('bold')
+      .setFontColor('#000000')
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle');
+    try {
+      headerRange.setBorder(
+        null, null, true, null, null, null,
+        '#000000',
+        SpreadsheetApp.BorderStyle.SOLID_MEDIUM
+      );
+    } catch (_borderErr) { /* cosmetic */ }
+  } catch (_headerErr) { /* cosmetic */ }
+
+  try { sheet.setRowHeight(1, 32); } catch (_) {}
+  try { sheet.setFrozenRows(1); } catch (_) {}
+  try { sheet.setFrozenColumns(1); } catch (_) {}
 }
 
 function deleteAssetsRowByExactName_(sheet, accountName) {
@@ -708,6 +1044,34 @@ function addInvestmentAccountFromDashboard(payload) {
   } else {
     startDate = stripTime_(new Date());
   }
+
+  // Ensure-before-write guards. Both helpers are idempotent no-ops on
+  // populated workbooks (sheet exists → returned untouched). On a fresh
+  // workbook they write the canonical structure getInvestmentsYearBlock_
+  // and getAssetsHeaderMap_ expect on the very next line. Re-surface any
+  // failure as an actionable user-facing message instead of the raw
+  // "Missing sheet: …" banner. Matches the Bank Accounts pattern in
+  // addBankAccountFromDashboard → bank_accounts.js.
+  try {
+    ensureInputInvestmentsSheet_();
+  } catch (ensureErr) {
+    throw new Error(
+      'Could not prepare INPUT - Investments: ' +
+      (ensureErr && ensureErr.message ? ensureErr.message : ensureErr)
+    );
+  }
+  try {
+    ensureSysAssetsSheet_();
+  } catch (sysErr) {
+    throw new Error(
+      'Could not prepare SYS - Assets: ' +
+      (sysErr && sysErr.message ? sysErr.message : sysErr)
+    );
+  }
+  // Flush so the fresh Spreadsheet handle below sees the structural
+  // writes — without this, getSheet_ can still miss a just-inserted
+  // sheet on some Apps Script executions.
+  try { SpreadsheetApp.flush(); } catch (_flushErr) { /* best-effort */ }
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const invSheet = getSheet_(ss, 'INVESTMENTS');

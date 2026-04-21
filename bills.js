@@ -157,6 +157,20 @@ function addBillFromDashboard(payload) {
     startMonth = startNum;
   }
 
+  // Ensure-before-write guard. Idempotent no-op on populated workbooks;
+  // on fresh workbooks it seeds the canonical INPUT - Bills structure
+  // the header read a few lines below expects. Mirrors the Bank Accounts
+  // pattern in addBankAccountFromDashboard → bank_accounts.js.
+  try {
+    ensureOnboardingBillsSheetFromDashboard('normal');
+  } catch (ensureErr) {
+    throw new Error(
+      'Could not prepare INPUT - Bills: ' +
+      (ensureErr && ensureErr.message ? ensureErr.message : ensureErr)
+    );
+  }
+  try { SpreadsheetApp.flush(); } catch (_flushErr) { /* best-effort */ }
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = getSheet_(ss, 'BILLS');
 

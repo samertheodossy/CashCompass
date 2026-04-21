@@ -24,10 +24,19 @@ function buildDashboardSnapshot_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   ensureActivityLogSheet_(ss);
 
+  // Cash and Debt come from REQUIRED setup sheets (SYS - Accounts, INPUT -
+  // Debts), so a missing sheet here is a genuine workbook-corruption signal
+  // and should surface. Investments (SYS - Assets) and Houses (SYS - House
+  // Assets) are OPTIONAL categories in the onboarding flow — users who
+  // finish required setup without touching the optional Houses / Investments
+  // paths will not have those sheets. buildDashboardSnapshot_ MUST render
+  // $0 in those cases rather than throwing "Missing sheet (after
+  // retry+flush): SYS - Assets", which previously painted a red banner on
+  // the overview right after Setup completion.
   const cash = sumColumnByHeader_(getSheet_(ss, 'ACCOUNTS'), 'Current Balance');
-  const investments = sumColumnByHeader_(getSheet_(ss, 'ASSETS'), 'Current Balance');
-  const houseValues = sumColumnByHeader_(getSheet_(ss, 'HOUSE_ASSETS'), 'Current Value');
-  const houseLoans = sumColumnByHeader_(getSheet_(ss, 'HOUSE_ASSETS'), 'Loan Amount Left');
+  const investments = sumColumnByHeaderForOptionalSheet_(ss, 'ASSETS', 'Current Balance');
+  const houseValues = sumColumnByHeaderForOptionalSheet_(ss, 'HOUSE_ASSETS', 'Current Value');
+  const houseLoans = sumColumnByHeaderForOptionalSheet_(ss, 'HOUSE_ASSETS', 'Loan Amount Left');
   const houseEquity = round2_(houseValues - houseLoans);
   const totalDebt = sumDebtBalances_(getSheet_(ss, 'DEBTS'));
 
@@ -987,6 +996,41 @@ function getDashboardBaselineSnapshot_() {
     return parsed && typeof parsed === 'object' ? parsed : null;
   } catch (e) {
     return null;
+  }
+}
+
+/**
+ * Like `sumColumnByHeader_` but for OPTIONAL registry sheets (e.g. SYS -
+ * Assets, SYS - House Assets) that may legitimately not exist on a
+ * workbook whose user has only completed the required setup steps.
+ * Returns 0 in every "nothing to sum" case:
+ *
+ *   - sheet not present in the workbook (typical on fresh onboarding
+ *     where the user hasn't touched the optional Houses / Investments
+ *     panels yet)
+ *   - sheet present but empty (<2 rows) or the requested header is
+ *     missing — mirrors the strict helper's short-circuit so legacy
+ *     workbooks with partial SYS sheets don't throw
+ *
+ * Callers that need strict "sheet must exist" validation (required
+ * setup sheets, planner internals) MUST keep using the strict
+ * `sumColumnByHeader_(getSheet_(ss, KEY), header)` pattern.
+ */
+function sumColumnByHeaderForOptionalSheet_(ss, sheetKey, headerName) {
+  const names = getSheetNames_();
+  const sheetName = names[sheetKey];
+  if (!sheetName) return 0;
+
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return 0;
+
+  try {
+    return sumColumnByHeader_(sheet, headerName);
+  } catch (_missingHeaderErr) {
+    // Legacy or partially-initialized sheet that's missing the requested
+    // header — treat as "nothing to sum" rather than surfacing a red
+    // banner on the overview.
+    return 0;
   }
 }
 

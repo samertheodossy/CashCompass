@@ -103,6 +103,19 @@ function createNextYearCashFlowSheet() {
   newSheet.setFrozenRows(sourceSheet.getFrozenRows());
   newSheet.setFrozenColumns(sourceSheet.getFrozenColumns());
 
+  // Layer the canonical header/Summary styling on top of the copied
+  // formatting. PASTE_FORMAT above reproduces whatever was on the source
+  // sheet — when that source is a legacy sheet created before the
+  // styling pass the new year inherits the unstyled look. Applying
+  // the helpers here guarantees the new year reads like the reference
+  // layout regardless of source vintage.
+  try {
+    applyCashFlowSheetStyling_(newSheet, layout);
+    if (summaryRow > 0) {
+      applyCashFlowSummaryRowStyling_(newSheet, summaryRow, layout);
+    }
+  } catch (_styleErr) { /* cosmetic only */ }
+
   ss.setActiveSheet(newSheet);
   SpreadsheetApp.getUi().alert('Created clean sheet: ' + targetName);
 }
@@ -234,22 +247,34 @@ function findCashFlowSummaryRow_(sheet, numRows, layout) {
  *
  * The Flow Source column is intentionally ignored by these formulas — it's
  * metadata, not an amount.
+ *
+ * Ranges are BOUNDED to rows 2..(summaryRow-1) rather than open-ended
+ * ($A$2:$A). We tried the open-ended form first; in practice
+ * `setFormula($A$2:$A, ..., E$2:E)` produced $0.00 totals on freshly
+ * seeded sheets even when the data rows contained numeric values — the
+ * two-argument open-ended form appears to be evaluated against a range
+ * snapshotted at formula-write time, so subsequent row inserts above
+ * Summary did not flow into the totals. Callers MUST call
+ * `writeCashFlowSummaryFormulas_` again after inserting a new row so
+ * the bounded ranges expand to cover the new data row;
+ * `insertCashFlowRow_` does this unconditionally.
  */
 function writeCashFlowSummaryFormulas_(sheet, summaryRow, layout) {
-  const firstDataRow = 2;
-  const lastDataRow = summaryRow - 1;
   const typeColLetter = columnToLetter_(layout.typeCol1);
+  // Rows strictly above Summary hold every data row (header at row 1,
+  // optional blank separator at row 2, then Income/Expense block). When
+  // Summary sits at row 2 (empty sheet edge case) we fall back to a
+  // degenerate single-cell range which evaluates to 0 — correct.
+  const lastDataRow = Math.max(2, summaryRow - 1);
 
   for (let i = 0; i < layout.monthCol0s.length; i++) {
     const monthCol1 = layout.monthCol0s[i] + 1;
     const colLetter = columnToLetter_(monthCol1);
 
     const typeRange =
-      '$' + typeColLetter + '$' + firstDataRow +
-      ':$' + typeColLetter + '$' + lastDataRow;
+      '$' + typeColLetter + '$2:$' + typeColLetter + '$' + lastDataRow;
     const monthRange =
-      colLetter + '$' + firstDataRow +
-      ':' + colLetter + '$' + lastDataRow;
+      '$' + colLetter + '$2:$' + colLetter + '$' + lastDataRow;
 
     const formula =
       '=SUMIF(' + typeRange + ',"Income",' + monthRange + ')' +
@@ -282,6 +307,116 @@ function columnToLetter_(column) {
   }
 
   return letter;
+}
+
+/**
+ * Conservatively refreshes simple `=SUM(<L><N>:<L><M>)` column-range
+ * formulas on aggregate rows inside a year block. Used by the INPUT -
+ * House Values and INPUT - Investments add-row paths to keep the user's
+ * "Total Values" / "Account Totals" rows in sync when a new data row
+ * is inserted at the lower boundary of the existing SUM range.
+ *
+ * Why this helper exists
+ * ----------------------
+ * Google Sheets' automatic range-expansion rule is: inserting a row
+ * *strictly inside* a referenced range expands the range; inserting
+ * at or past the range's lower boundary does NOT. The add-row paths
+ * call `insertRowAfter(lastDataRow)` — that lands the new row at the
+ * lower edge of a typical `=SUM(C{dataStartRow}:C{lastDataRow})`
+ * formula, so the newly-added house / investment silently drops out
+ * of the user's total.
+ *
+ * What it does
+ * ------------
+ * For each aggregate row whose column A matches one of `targetLabels`,
+ * in the scan window `[afterRow .. lastRow]` (stops early at the next
+ * "Year" marker), inspects each data-column cell. Only rewrites cells
+ * whose formula matches EXACTLY `=SUM(<L>{start}:<L>{end})` with both
+ * endpoints on the same column letter AND that letter equal to the
+ * cell's own column. The rewrite binds the range to the current
+ * block's `dataStartRow:dataEndRow`.
+ *
+ * What it deliberately leaves alone
+ * ---------------------------------
+ *   - Compound formulas (`=SUM(C4:C8)+100`, `=SUM(C4:C8)-SUM(D4:D8)`)
+ *   - Cross-sheet refs, named ranges, structured refs
+ *   - Non-SUM aggregates (AVERAGE, SUMIF, IF, etc.)
+ *   - "Delta" rows (typically YoY diff, not a sum of data rows)
+ *   - "House Assets" row (per-row snapshot — not a sum of above)
+ *   - Blank cells / literal numbers / text
+ *
+ * All errors are swallowed — this helper is defense-in-depth only and
+ * must never fail an add-row write.
+ *
+ * @param {Sheet} sheet                 target sheet
+ * @param {number} dataStartRow         1-based first data row in the block
+ * @param {number} dataEndRow           1-based last data row in the block
+ *                                      (AFTER the new-row insertion)
+ * @param {number} afterRow             1-based row to start the aggregate
+ *                                      scan from (typically dataEndRow+1)
+ * @param {string[]} targetLabels       aggregate-row col-A labels to match
+ *                                      (e.g. ['Total Values'], ['Account Totals'])
+ */
+function refreshBlockSumAggregates_(sheet, dataStartRow, dataEndRow, afterRow, targetLabels) {
+  if (!sheet) return;
+  if (!targetLabels || !targetLabels.length) return;
+  if (!(dataStartRow > 0) || !(dataEndRow >= dataStartRow)) return;
+
+  const labelSet = Object.create(null);
+  for (let i = 0; i < targetLabels.length; i++) {
+    labelSet[String(targetLabels[i]).toLowerCase()] = true;
+  }
+
+  let lastRow = 0;
+  try { lastRow = sheet.getLastRow(); } catch (_) { return; }
+  if (lastRow < afterRow) return;
+
+  let lastCol = 1;
+  try { lastCol = Math.max(1, sheet.getLastColumn()); } catch (_) { return; }
+
+  for (let r = afterRow; r <= lastRow; r++) {
+    let marker = '';
+    try {
+      marker = String(sheet.getRange(r, 1).getDisplayValue() || '').trim();
+    } catch (_) { continue; }
+
+    // Bail at the next Year block — we must never rewrite formulas in
+    // a *different* year's aggregate row.
+    if (marker === 'Year') break;
+    if (!marker) continue;
+    if (!labelSet[marker.toLowerCase()]) continue;
+
+    let formulas = [];
+    try {
+      formulas = sheet.getRange(r, 1, 1, lastCol).getFormulas()[0] || [];
+    } catch (_) { continue; }
+
+    for (let c = 2; c <= lastCol; c++) {
+      const formula = String(formulas[c - 1] || '').trim();
+      if (!formula) continue;
+
+      // Strict: =SUM(<L><N>:<L><M>), case-insensitive, with optional $.
+      const m = formula.match(
+        /^=SUM\(\s*\$?([A-Z]+)\$?(\d+)\s*:\s*\$?([A-Z]+)\$?(\d+)\s*\)$/i
+      );
+      if (!m) continue;
+
+      const lhsLetter = m[1].toUpperCase();
+      const rhsLetter = m[3].toUpperCase();
+      if (lhsLetter !== rhsLetter) continue;
+
+      const cellLetter = columnToLetter_(c).toUpperCase();
+      if (lhsLetter !== cellLetter) continue;
+
+      const newFormula =
+        '=SUM(' + cellLetter + dataStartRow + ':' + cellLetter + dataEndRow + ')';
+      if (newFormula === formula) continue;
+
+      try {
+        sheet.getRange(r, c).setFormula(newFormula);
+      } catch (_setErr) { /* non-fatal */ }
+    }
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -418,14 +553,214 @@ function ensureCashFlowYearSheet_(year) {
     // Number format is cosmetic; do not fail the ensure op.
   }
 
-  // Cosmetic polish — never load-bearing.
+  // Cosmetic polish — never load-bearing. applyCashFlowSheetStyling_
+  // layers in the warm-yellow header fill, taller header row, bold
+  // black text, a bottom separator border, and per-column widths that
+  // match the reference layout the user pasted. Falls back silently on
+  // any error — a styling glitch must never fail the sheet-creation
+  // contract. Summary-row styling is applied separately by
+  // ensureCashFlowSummaryRow_ below.
   try {
-    sheet.getRange(1, 1, 1, headerRow.length).setFontWeight('bold');
-    sheet.setFrozenRows(1);
-    sheet.autoResizeColumns(1, headerRow.length);
+    const freshLayout = detectCashFlowLayout_(headerRow);
+    applyCashFlowSheetStyling_(sheet, freshLayout);
   } catch (e) { /* cosmetic only */ }
 
+  // Seed the canonical Summary row ("Summary | Cash Flow Per Month") with
+  // per-month SUMIF totals so users see running Income+Expense totals per
+  // column as soon as they start adding rows. Idempotent — no-op if the
+  // Summary row already exists (e.g. on a sheet that was cloned from a
+  // prior year via createNextYearCashFlowSheet). Any failure is cosmetic
+  // and MUST NOT fail the sheet-creation contract: Bills Due, debt seed,
+  // and income seed all still work without a Summary row present.
+  try {
+    if (typeof ensureCashFlowSummaryRow_ === 'function') {
+      ensureCashFlowSummaryRow_(sheet);
+    }
+  } catch (summaryErr) {
+    Logger.log('ensureCashFlowYearSheet_ summary seed failed: ' + summaryErr);
+  }
+
   return sheet;
+}
+
+/**
+ * Ensures the canonical Summary row ("Summary | Cash Flow Per Month")
+ * exists on the given Cash Flow sheet. Idempotent — returns the 1-based
+ * row of an existing Summary row if present, otherwise appends one near
+ * the bottom with per-month SUMIF formulas + a yearly Total formula.
+ *
+ * The Summary row is what users asked for so every month column shows
+ * its running Income+Expense net ("Cash Flow Per Month" in the template
+ * the user pasted). It's also what insertCashFlowRow_ uses as its
+ * anchor when deciding where to drop new Income / Expense rows
+ * (Income stacks above it, Expense stacks just before it), so seeding
+ * it early is what keeps Income and Expense from interleaving on a
+ * freshly created sheet.
+ *
+ * Safety: this function only ADDS a row — it never rewrites existing
+ * cells, never touches user data, and never moves other rows. When the
+ * Summary row is freshly created, one blank separator row is left
+ * between it and the last data row (or directly under the header on a
+ * brand-new sheet) so the block structure matches the reference
+ * layout the user pasted.
+ */
+function ensureCashFlowSummaryRow_(sheet) {
+  if (!sheet) throw new Error('ensureCashFlowSummaryRow_: sheet is required.');
+
+  const lastCol = Math.max(1, sheet.getLastColumn());
+  const headerValues = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0] || [];
+  const layout = detectCashFlowLayout_(headerValues);
+
+  // Refresh header + column-width styling on every call. Idempotent
+  // (setting the same background/bold/width a second time is a no-op
+  // visually), so repeated inserts don't accumulate cost, and legacy
+  // sheets created before the styling pass upgrade to the new look the
+  // next time Quick Add / debt seed / bill seed touches them.
+  try {
+    applyCashFlowSheetStyling_(sheet, layout);
+  } catch (styleErr) {
+    Logger.log('ensureCashFlowSummaryRow_ header styling failed: ' + styleErr);
+  }
+
+  const numRows = sheet.getLastRow();
+  const existing = findCashFlowSummaryRow_(sheet, numRows, layout);
+  if (existing > 0) {
+    // Re-apply summary-row styling on existing Summary rows too so
+    // legacy sheets pick up the light-gray fill / top border without
+    // needing a from-scratch rebuild.
+    try { applyCashFlowSummaryRowStyling_(sheet, existing, layout); } catch (_) { /* cosmetic */ }
+    return existing;
+  }
+
+  // Place Summary two rows below the last data row so there's always one
+  // blank separator row above it. On a fresh sheet (numRows === 1, just
+  // headers) this lands at row 3 with row 2 as the separator. On a sheet
+  // that already has data rows but no Summary, it lands past the last
+  // data row with one blank in between, matching the reference layout.
+  const summaryRow = numRows + 2;
+
+  // Apps Script sheets default to 1000 max rows; explicitly extend if the
+  // target row is beyond the current grid (defensive — very unlikely in
+  // practice but cheap to guard against).
+  const maxRows = sheet.getMaxRows();
+  if (summaryRow > maxRows) {
+    sheet.insertRowsAfter(maxRows, summaryRow - maxRows);
+  }
+
+  sheet.getRange(summaryRow, layout.typeCol1).setValue('Summary');
+  sheet.getRange(summaryRow, layout.payeeCol1).setValue('Cash Flow Per Month');
+
+  try {
+    writeCashFlowSummaryFormulas_(sheet, summaryRow, layout);
+  } catch (formulaErr) {
+    Logger.log('ensureCashFlowSummaryRow_ formula write failed: ' + formulaErr);
+  }
+
+  try {
+    applyCashFlowSummaryRowStyling_(sheet, summaryRow, layout);
+  } catch (e) { /* cosmetic only */ }
+
+  return summaryRow;
+}
+
+/**
+ * Apply the canonical Cash Flow header styling (warm-yellow fill, bold
+ * black text, taller row, bottom border) and reasonable column widths
+ * so every `INPUT - Cash Flow YYYY` sheet reads like the reference
+ * layout the user pasted. Idempotent — safe to call on every Quick Add
+ * / debt seed / summary seed path. Errors are swallowed (cosmetic
+ * only; never fail a row write on a styling glitch).
+ *
+ * Color is Google Sheets' yellow-3 (#fff2cc), matching the reference
+ * screenshot. Row height and column widths are set to values tuned to
+ * the canonical 4-metadata-columns + 12-month + total layout but
+ * adapt automatically if the workbook's layout differs (header style
+ * is applied to all columns returned by `detectCashFlowLayout_`).
+ */
+function applyCashFlowSheetStyling_(sheet, layout) {
+  if (!sheet || !layout) return;
+  const numCols = layout.numCols;
+
+  const headerRange = sheet.getRange(1, 1, 1, numCols);
+  headerRange
+    .setBackground('#fff2cc')
+    .setFontWeight('bold')
+    .setFontColor('#000000')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
+
+  // Solid bottom border below the header to visually separate the
+  // header from the data body. Top/left/right/interior left at default
+  // so existing user grid lines are preserved.
+  try {
+    headerRange.setBorder(
+      null,  // top
+      null,  // left
+      true,  // bottom
+      null,  // right
+      null,  // vertical (interior)
+      null,  // horizontal (interior)
+      '#000000',
+      SpreadsheetApp.BorderStyle.SOLID_MEDIUM
+    );
+  } catch (_borderErr) { /* cosmetic */ }
+
+  try { sheet.setRowHeight(1, 32); } catch (_rhErr) { /* cosmetic */ }
+  try { sheet.setFrozenRows(1); } catch (_frErr) { /* cosmetic */ }
+
+  // Column widths tuned to the canonical column identities. When a
+  // column is absent (e.g. legacy sheet without Flow Source or Active)
+  // the `*Col1 === -1` branch skips the set — no errant width write to
+  // column -1. Month columns share a single width so the block reads
+  // as a clean grid.
+  const widthByCol1 = [];
+  if (layout.typeCol1 > 0)        widthByCol1.push({ col: layout.typeCol1, width: 110 });
+  if (layout.flowSourceCol1 > 0)  widthByCol1.push({ col: layout.flowSourceCol1, width: 130 });
+  if (layout.payeeCol1 > 0)       widthByCol1.push({ col: layout.payeeCol1, width: 220 });
+  if (layout.activeCol1 > 0)      widthByCol1.push({ col: layout.activeCol1, width: 80 });
+  if (layout.totalCol1 > 0)       widthByCol1.push({ col: layout.totalCol1, width: 110 });
+
+  for (let i = 0; i < widthByCol1.length; i++) {
+    try { sheet.setColumnWidth(widthByCol1[i].col, widthByCol1[i].width); } catch (_) {}
+  }
+
+  for (let i = 0; i < layout.monthCol0s.length; i++) {
+    try { sheet.setColumnWidth(layout.monthCol0s[i] + 1, 90); } catch (_) {}
+  }
+}
+
+/**
+ * Apply the canonical Summary-row styling (light-gray fill, bold
+ * black text, solid top border). Called whenever Summary is seeded or
+ * found on an existing sheet so legacy sheets upgrade transparently.
+ * All failures are swallowed — cosmetic only.
+ */
+function applyCashFlowSummaryRowStyling_(sheet, summaryRow, layout) {
+  if (!sheet || !layout || !summaryRow || summaryRow < 2) return;
+
+  const range = sheet.getRange(summaryRow, 1, 1, layout.numCols);
+
+  try {
+    range
+      .setBackground('#f3f3f3')
+      .setFontWeight('bold')
+      .setFontColor('#000000');
+  } catch (_fillErr) { /* cosmetic */ }
+
+  try {
+    range.setBorder(
+      true,   // top (separates Summary from the data body)
+      null,
+      null,
+      null,
+      null,
+      null,
+      '#000000',
+      SpreadsheetApp.BorderStyle.SOLID_MEDIUM
+    );
+  } catch (_borderErr) { /* cosmetic */ }
+
+  try { sheet.setRowHeight(summaryRow, 28); } catch (_rhErr) { /* cosmetic */ }
 }
 
 /**

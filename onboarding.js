@@ -480,10 +480,31 @@ function probeUpcomingStatus_(ss, mode) {
 }
 
 /**
- * Income probe. Cash Flow-driven. Complete = at least one recurring
- * income group detected via the existing grouping logic. Partial = only
- * non-recurring / excluded income is visible. Missing = no Cash Flow
- * income rows at all.
+ * Income probe. Cash Flow-driven.
+ *
+ *   complete = at least one non-excluded income group has a positive
+ *              amount in at least 1 month of the current-year Cash Flow
+ *              sheet. Addition path from the dashboard
+ *              (addIncomeSourceFromDashboard in income_sources.js) only
+ *              writes the current-month cell, so requiring ≥3 months
+ *              here meant a freshly-added income always showed yellow
+ *              ("1 other detected · 1 need details") until the user
+ *              manually populated two more months. The 1-month rule
+ *              means the Setup grid reflects "I've told the app about
+ *              at least one income stream" and the user isn't punished
+ *              for not pre-filling forward months.
+ *   partial  = only excluded payees visible (Bonus, Tax Refund, Gift,
+ *              …) — those stay in the "other detected" bucket because
+ *              they're not the monthly recurring income the planner
+ *              relies on.
+ *   missing  = no Cash Flow income rows at all.
+ *
+ * Trade-off accepted: a one-off non-excluded Income row (a rare
+ * payee that slipped the exclude list) will now read as "recurring"
+ * after one month. That matches the Setup grid's mental model
+ * ("green means tracked") and downstream planner code still uses the
+ * heavier analyzeIncomeGroupsInSheet_ grouping, which has its own
+ * recurrence rules independent of this probe.
  */
 function probeIncomeStatus_(ss, mode) {
   var currentYear = getCurrentYear_();
@@ -567,7 +588,13 @@ function probeIncomeStatus_(ss, mode) {
   for (var gname in groupMonths) {
     if (!Object.prototype.hasOwnProperty.call(groupMonths, gname)) continue;
     var g = groupMonths[gname];
-    if (!g.excluded && g.months >= 3) {
+    // Non-excluded income with any positive month counts as recurring
+    // for the Setup grid. See function header for the rationale — the
+    // previous threshold of ≥3 months meant a freshly-added income
+    // source (which only fills the current month) always read as
+    // "other detected", leaving the Income card yellow even though the
+    // user had just finished Income setup.
+    if (!g.excluded && g.months >= 1) {
       recurringCount++;
       recurringNames[gname] = true;
     } else if (g.months > 0) {
@@ -615,7 +642,6 @@ function getOnboardingStatusFromDashboard(mode) {
   var bank = probeBankAccountsStatus_(ss, ctxMode);
   var debts = probeDebtsStatus_(ss, ctxMode);
   var bills = probeBillsStatus_(ss, ctxMode);
-  var upcoming = probeUpcomingStatus_(ss, ctxMode);
   var income = probeIncomeStatus_(ss, ctxMode);
   // Profile is Settings-sheet driven, not mode-routed. The probe lives
   // in profile.js and is safe to call on every status fetch — it only
@@ -628,11 +654,20 @@ function getOnboardingStatusFromDashboard(mode) {
         note: 'Profile module unavailable.'
       };
 
+  // Upcoming Expenses is intentionally NOT in this steps array — it was
+  // moved to the Optional section on the Setup / Review grid (alongside
+  // Houses) because it does not gate any downstream planner behavior.
+  // Its probe (probeUpcomingStatus_) and detail endpoint
+  // (getOnboardingUpcomingFromDashboard) are still called directly by
+  // the Setup client for the optional card's body copy and for the
+  // Upcoming detail view; we just don't let its state contribute to
+  // the "N complete · M not set up" summary that drives the Finish
+  // panel. Adding it back here would re-introduce it as a required
+  // step and flip the grid back to 6 cards.
   var steps = [
     { key: 'bank', label: 'Bank Accounts', state: bank },
     { key: 'debts', label: 'Debts', state: debts },
     { key: 'bills', label: 'Bills', state: bills },
-    { key: 'upcoming', label: 'Upcoming Expenses', state: upcoming },
     { key: 'income', label: 'Income', state: income },
     { key: 'profile', label: 'Profile', state: profile }
   ];
@@ -1412,9 +1447,11 @@ function ensureOnboardingUpcomingSheetFromDashboard(mode) {
  * exist anymore and must not be reintroduced. This reader reuses the
  * same grouping / exclusion logic as probeIncomeStatus_ but returns
  * per-group breakdowns so the UI can show:
- *   - Recurring income groups (>= 3 months with positive amount and not
- *     an excluded name like Bonus / RSU / Refund etc.)
- *   - Other detected income groups (observed but not recurring-clean)
+ *   - Recurring income groups (≥1 month with positive amount and not
+ *     an excluded name like Bonus / RSU / Refund etc. — kept in sync
+ *     with probeIncomeStatus_ so the grid badge and the detail page
+ *     never disagree about whether a group is recurring)
+ *   - Other detected income groups (excluded categories only)
  *
  * Write-free. If the current year's sheet is missing, we walk back one
  * year so users in January with a not-yet-created sheet still get a
@@ -1530,10 +1567,17 @@ function getOnboardingIncomeFromDashboard(mode) {
       months: g.months,
       avgAmount: Math.round(avg * 100) / 100
     };
-    if (!g.excluded && g.months >= 3) {
+    // Keep recurring / other buckets in lockstep with probeIncomeStatus_
+    // (see the matching branch there). Any non-excluded income group with
+    // at least one month of positive amount is recurring; only excluded
+    // categories (Bonus / RSU / Refund / Gift / …) stay in the "other
+    // detected" bucket. Without this parity the grid badge could say
+    // "Setup complete" while the detail page still listed the income
+    // under Other with reason "Seen < 3 months".
+    if (!g.excluded && g.months >= 1) {
       recurring.push(entry);
     } else if (g.months > 0) {
-      entry.excludedReason = g.excluded ? 'Non-recurring category' : 'Seen < 3 months';
+      entry.excludedReason = 'Non-recurring category';
       other.push(entry);
     }
   });

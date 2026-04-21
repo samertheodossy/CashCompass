@@ -1,3 +1,143 @@
+/* -------------------------------------------------------------------------- */
+/*  Safe from-scratch creators (zero-sheet onboarding)                        */
+/*                                                                            */
+/*  Mirrors the investments.js creators. Both helpers are idempotent          */
+/*  no-ops when the sheet already exists. Schema is derived from:             */
+/*                                                                            */
+/*    - getHouseValuesYearBlock_: Year | <year> on row 1, House header        */
+/*      on row 2, firstMonthCol = 3, block terminates at                      */
+/*      "Total Values" / "House Assets" / "Year".                             */
+/*    - ensureHouseValuesActiveColumnForBlock_: "Active" at col 15            */
+/*      (firstMonthCol + 12).                                                 */
+/*    - getHouseAssetsHeaderMap_: requires "House" + "Current Value".         */
+/*      "Type" / "Loan Amount Left" / "Active" are optional in the reader     */
+/*      but the add path writes all four.                                     */
+/*                                                                            */
+/*  As with the investments creator, aggregate rows ("Total Values",          */
+/*  "House Assets") are intentionally NOT seeded — current logic does         */
+/*  not require them.                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Canonical from-scratch creator for `INPUT - House Values`.
+ *
+ * Safety contract: idempotent no-op when the sheet already exists. Never
+ * overwrites or re-styles populated sheets.
+ *
+ * Canonical structure written only on first creation:
+ *   Row 1:   Year | <currentYear>                       (orange banner)
+ *   Row 2:   House | Loan Amount Left | Jan-YY | Feb-YY  (yellow banner)
+ *            | … | Dec-YY | Active                     (cols 1..15)
+ *   Data:    (none — addHouseFromDashboard inserts on write)
+ *
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet}
+ */
+function ensureInputHouseValuesSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const names = getSheetNames_();
+  const sheetName = names.HOUSE_VALUES;
+
+  const existing = ss.getSheetByName(sheetName);
+  if (existing) return existing;
+
+  let sheet;
+  try {
+    sheet = ss.insertSheet(sheetName);
+  } catch (e) {
+    const racedSheet = ss.getSheetByName(sheetName);
+    if (racedSheet) return racedSheet;
+    throw e;
+  }
+
+  const year = (typeof getCurrentYear_ === 'function')
+    ? getCurrentYear_()
+    : new Date().getFullYear();
+  const yy = String(year).slice(-2);
+  const monthLabels = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+
+  sheet.getRange(1, 1, 1, 2).setValues([['Year', year]]);
+
+  // Col 1 House, col 2 Loan Amount Left, cols 3..14 the 12 MMM-YY month
+  // columns (firstMonthCol = 3), col 15 Active.
+  const headers = ['House', 'Loan Amount Left'];
+  for (let i = 0; i < monthLabels.length; i++) {
+    headers.push(monthLabels[i] + '-' + yy);
+  }
+  headers.push('Active');
+  sheet.getRange(2, 1, 1, headers.length).setValues([headers]);
+
+  try {
+    applyHouseValuesSheetStyling_(sheet);
+  } catch (_styleErr) { /* cosmetic only */ }
+
+  try {
+    sheet.setFrozenRows(2);
+  } catch (_frozenErr) { /* cosmetic only */ }
+
+  try {
+    sheet.autoResizeColumns(1, headers.length);
+  } catch (_resizeErr) { /* cosmetic only */ }
+
+  return sheet;
+}
+
+/**
+ * Canonical from-scratch creator for `SYS - House Assets`.
+ *
+ * Flat 5-column table consumed by getHouseAssetsHeaderMap_ (requires
+ * "House" + "Current Value"; "Type" / "Loan Amount Left" / "Active" are
+ * optional in the reader but the add path writes all five).
+ *
+ * Safety contract: idempotent no-op when the sheet already exists.
+ *
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet}
+ */
+function ensureSysHouseAssetsSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const names = getSheetNames_();
+  const sheetName = names.HOUSE_ASSETS;
+
+  const existing = ss.getSheetByName(sheetName);
+  if (existing) return existing;
+
+  let sheet;
+  try {
+    sheet = ss.insertSheet(sheetName);
+  } catch (e) {
+    const racedSheet = ss.getSheetByName(sheetName);
+    if (racedSheet) return racedSheet;
+    throw e;
+  }
+
+  const headers = ['House', 'Type', 'Loan Amount Left', 'Current Value', 'Active'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  // Pre-format the two money columns on data rows only — bounded to
+  // sheet.getMaxRows(), consistent with the rest of the workbook.
+  try {
+    const maxRowsHA = sheet.getMaxRows();
+    if (maxRowsHA > 1) {
+      sheet.getRange(2, 3, maxRowsHA - 1, 1)
+        .setNumberFormat('$#,##0.00;-$#,##0.00');
+      sheet.getRange(2, 4, maxRowsHA - 1, 1)
+        .setNumberFormat('$#,##0.00;-$#,##0.00');
+    }
+  } catch (_fmtErr) { /* cosmetic only */ }
+
+  try {
+    applyHouseAssetsSheetStyling_(sheet);
+  } catch (_styleErr) { /* cosmetic only */ }
+
+  try {
+    sheet.autoResizeColumns(1, headers.length);
+  } catch (_resizeErr) { /* cosmetic only */ }
+
+  return sheet;
+}
+
 function getHouseUiData() {
   var propertyTypeOpts = [];
   try {
@@ -699,6 +839,37 @@ function insertNewHouseHistoryRow_(sheet, block, houseName, loanAmountLeft) {
   // render in the default tiny style next to the rest of the row.
   writeActiveCellWithRowFormat_(sheet, newRow, activeCol, 'Yes');
 
+  // Refresh the block's "Total Values" simple SUM formulas to cover the
+  // new data row. Google Sheets does NOT auto-expand ranges when a row
+  // is inserted at the lower boundary of the range (which is exactly
+  // what insertRowAfter(lastHouseRow) does when the block's aggregate
+  // rows sit immediately below the last house), so without this the
+  // newly added house silently drops out of the user's Total Values.
+  //
+  // Conservative: only simple `=SUM(<L><N>:<L><M>)` formulas whose
+  // column letter matches the cell's own column are rewritten. Delta-
+  // style YoY diffs, House Assets per-row snapshots, compound formulas,
+  // and non-SUM aggregates are all deliberately left alone.
+  const newDataStartRow = block.dataStartRow;
+  const newDataEndRow = Math.max(newRow, block.dataEndRow + 1);
+  try {
+    refreshBlockSumAggregates_(
+      sheet,
+      newDataStartRow,
+      newDataEndRow,
+      newDataEndRow + 1,
+      ['Total Values']
+    );
+  } catch (_aggErr) { /* defense in depth only */ }
+
+  // Re-assert canonical banner-row styling on the whole sheet. Row
+  // insertion above can subtly shift banner positions; re-applying is
+  // idempotent (setting the same background/bold on the same cells is
+  // a visual no-op) and keeps every Year / House / Total Values /
+  // House Assets row looking consistent even as blocks grow. Never
+  // load-bearing — failures are swallowed inside the helper.
+  try { applyHouseValuesSheetStyling_(sheet); } catch (_) { /* cosmetic only */ }
+
   return newRow;
 }
 
@@ -756,6 +927,60 @@ function appendHouseAssetsRowForNewHouse_(sheet, houseName, propertyType, loanAm
   if (headerMap.activeCol !== -1) {
     writeActiveCellWithRowFormat_(sheet, appendedRow, headerMap.activeCol, 'Yes');
   }
+
+  // Re-assert the canonical SYS - House Assets header styling.
+  // Idempotent, cosmetic only — failures are swallowed inside the
+  // helper so a House Assets write is never blocked by a formatting
+  // glitch.
+  try { applyHouseAssetsSheetStyling_(sheet); } catch (_) { /* cosmetic */ }
+}
+
+/**
+ * Idempotent canonical styling for `SYS - House Assets`.
+ *
+ * Flat 5-column table (House / Type / Loan Amount Left / Current Value /
+ * Active) with no year blocks and no footer rows. Mirrors the
+ * `SYS - Assets` styling pattern — only row 1 needs asserted styling,
+ * since data rows are append-only and each new row inherits formatting
+ * from a neighbor template via PASTE_FORMAT (see
+ * `appendHouseAssetsRowForNewHouse_` above).
+ *
+ * Assertions:
+ *   - Header row (row 1) → yellow #fff200, bold black, centered
+ *     horizontal / middle vertical, row height 32.
+ *   - Solid-medium black bottom border under row 1.
+ *   - Frozen row 1 + frozen column 1 so House stays pinned when
+ *     scrolling.
+ *
+ * Data rows, number formats, and any user cell highlights (including
+ * the red-text conditional formatting on Loan Amount Left) are
+ * deliberately never touched. Failures are swallowed — cosmetic only.
+ */
+function applyHouseAssetsSheetStyling_(sheet) {
+  if (!sheet) return;
+  let lastCol = 1;
+  try { lastCol = Math.max(1, sheet.getLastColumn()); } catch (_) { return; }
+
+  try {
+    const headerRange = sheet.getRange(1, 1, 1, lastCol);
+    headerRange
+      .setBackground('#fff200')
+      .setFontWeight('bold')
+      .setFontColor('#000000')
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle');
+    try {
+      headerRange.setBorder(
+        null, null, true, null, null, null,
+        '#000000',
+        SpreadsheetApp.BorderStyle.SOLID_MEDIUM
+      );
+    } catch (_borderErr) { /* cosmetic */ }
+  } catch (_headerErr) { /* cosmetic */ }
+
+  try { sheet.setRowHeight(1, 32); } catch (_) {}
+  try { sheet.setFrozenRows(1); } catch (_) {}
+  try { sheet.setFrozenColumns(1); } catch (_) {}
 }
 
 /**
@@ -931,6 +1156,91 @@ function applyHousesHeaderRowFallbackFormat_(sheet, row) {
 }
 
 /**
+ * Idempotent canonical styling for `INPUT - House Values`.
+ *
+ * Walks the sheet top-to-bottom scanning column A for the block markers
+ * ("Year", "House", "Total Values", "House Assets") and asserts the
+ * colors + font weight + row heights the user already relies on so new
+ * blocks / newly-inserted rows never drift from the canonical look:
+ *
+ *   - "Year | <year>"   → orange  #f4a300, bold black, row height 28
+ *   - "House | Loan…"   → yellow  #fff200, bold black, centered, row height 32
+ *   - "Total Values"    → pink    #f4cccc, bold black
+ *   - "House Assets"    → green   #b6d7a8, bold black
+ *
+ * Data rows (everything else) are deliberately left untouched so the
+ * user's own conditional formatting on "Loan Amount Left" (red text)
+ * is preserved. Column widths, frozen rows/columns, and number
+ * formats on money cells are also left alone — this helper only
+ * asserts the *banner* rows that make each block readable.
+ *
+ * All failures are swallowed — cosmetic only; must never fail a
+ * House Values write on a formatting glitch. Safe to call from every
+ * add-row / rollover path.
+ */
+function applyHouseValuesSheetStyling_(sheet) {
+  if (!sheet) return;
+  let lastCol = 1;
+  try { lastCol = Math.max(1, sheet.getLastColumn()); } catch (_) { return; }
+  let lastRow = 0;
+  try { lastRow = sheet.getLastRow(); } catch (_) { return; }
+  if (lastRow < 1) return;
+
+  let colA;
+  try {
+    colA = sheet.getRange(1, 1, lastRow, 1).getDisplayValues();
+  } catch (_) { return; }
+
+  for (let i = 0; i < colA.length; i++) {
+    const marker = String(colA[i][0] || '').trim();
+    if (!marker) continue;
+    const row1 = i + 1;
+    try {
+      if (marker === 'Year') {
+        sheet.getRange(row1, 1, 1, lastCol)
+          .setBackground('#f4a300')
+          .setFontWeight('bold')
+          .setFontColor('#000000');
+        try { sheet.setRowHeight(row1, 28); } catch (_) {}
+      } else if (marker === 'House') {
+        // Only style as the column-header row when col B reads
+        // "Loan Amount Left" — otherwise it's a data row whose first
+        // cell happens to be the word "House" (defensive; readers
+        // already filter these out via isHouseDataRowName_).
+        let colB = '';
+        try {
+          colB = String(sheet.getRange(row1, 2).getDisplayValue() || '').trim();
+        } catch (_) { /* leave colB blank and skip styling */ }
+        if (colB === 'Loan Amount Left') {
+          const range = sheet.getRange(row1, 1, 1, lastCol);
+          range
+            .setBackground('#fff200')
+            .setFontWeight('bold')
+            .setFontColor('#000000')
+            .setHorizontalAlignment('center')
+            .setVerticalAlignment('middle');
+          try { sheet.setRowHeight(row1, 32); } catch (_) {}
+        }
+      } else if (marker === 'Total Values') {
+        sheet.getRange(row1, 1, 1, lastCol)
+          .setBackground('#f4cccc')
+          .setFontWeight('bold')
+          .setFontColor('#000000');
+      } else if (marker === 'House Assets') {
+        sheet.getRange(row1, 1, 1, lastCol)
+          .setBackground('#b6d7a8')
+          .setFontWeight('bold')
+          .setFontColor('#000000');
+      }
+    } catch (_styleErr) { /* cosmetic only */ }
+  }
+
+  // Freeze column A so house names stay pinned when scrolling across
+  // the 12 month columns. Idempotent — no-op when already frozen.
+  try { sheet.setFrozenColumns(1); } catch (_) { /* cosmetic */ }
+}
+
+/**
  * Canonical "add a new house" entry point used by the dashboard UI.
  *
  * Writes:
@@ -1004,6 +1314,28 @@ function addHouseFromDashboard(payload) {
     // regardless of script timezone drift.
     valuationDate = stripTime_(new Date());
   }
+
+  // Ensure-before-write guards. Both helpers are idempotent no-ops on
+  // populated workbooks. On a fresh workbook they write the canonical
+  // structure getHouseValuesYearBlock_ and getHouseAssetsHeaderMap_
+  // expect on the very next line. Mirrors addInvestmentAccountFromDashboard.
+  try {
+    ensureInputHouseValuesSheet_();
+  } catch (ensureErr) {
+    throw new Error(
+      'Could not prepare INPUT - House Values: ' +
+      (ensureErr && ensureErr.message ? ensureErr.message : ensureErr)
+    );
+  }
+  try {
+    ensureSysHouseAssetsSheet_();
+  } catch (sysErr) {
+    throw new Error(
+      'Could not prepare SYS - House Assets: ' +
+      (sysErr && sysErr.message ? sysErr.message : sysErr)
+    );
+  }
+  try { SpreadsheetApp.flush(); } catch (_flushErr) { /* best-effort */ }
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const hvSheet = getSheet_(ss, 'HOUSE_VALUES');

@@ -95,6 +95,13 @@ function populateDebtAddDatalists_(data) {
     if (!v) return;
     const key = v.toLowerCase();
     if (seen[key]) return;
+    // The trailing "Other…" sentinel below renders the custom-type input.
+    // Skip any plain "Other" coming in from the server list or the
+    // fallback array so the dropdown does not show two adjacent "Other"
+    // rows (one as a data value, one as the sentinel) — picking the
+    // sentinel still writes a free-form value that can literally be
+    // "Other" if the user wants it.
+    if (key === 'other' || key === 'other…' || key === '__other__') return;
     seen[key] = true;
     const o = document.createElement('option');
     o.value = v;

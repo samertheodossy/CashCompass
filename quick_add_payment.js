@@ -586,14 +586,33 @@ function findCashFlowRowByTypeAndPayee_(sheet, entryType, payee) {
  * When the column isn't present on legacy year tabs we silently skip it.
  */
 function insertCashFlowRow_(sheet, entryType, payee, flowSource) {
-  const values = sheet.getDataRange().getDisplayValues();
-  if (!values.length) {
+  if (!sheet.getDataRange().getDisplayValues().length) {
     throw new Error('Cash Flow sheet is empty.');
   }
 
   const headerMap = getCashFlowHeaderMap_(sheet);
 
-  let insertAfterRow = -1;
+  // Seed the Summary row up-front so Income / Expense / Summary placement
+  // is deterministic. Idempotent — no-op when the row already exists, so
+  // this only does work on sheets that predate the Summary-row rollout.
+  // We deliberately call this BEFORE scanning for insertion anchors so
+  // the scan sees the freshly-seeded Summary row and Expense inserts land
+  // just above it. Any failure is non-fatal: the row write below is the
+  // contract and must succeed even if summary seeding does not.
+  try {
+    if (typeof ensureCashFlowSummaryRow_ === 'function') {
+      ensureCashFlowSummaryRow_(sheet);
+    }
+  } catch (summaryErr) {
+    Logger.log('insertCashFlowRow_ ensureCashFlowSummaryRow_ failed: ' + summaryErr);
+  }
+
+  // Re-read after the ensure call — the Summary row may have been added
+  // and the blank separator placed above it, both of which affect the
+  // scan below.
+  const values = sheet.getDataRange().getDisplayValues();
+
+  let lastSameTypeRow = -1;
   let summaryRow = -1;
 
   for (let r = 1; r < values.length; r++) {
@@ -606,29 +625,57 @@ function insertCashFlowRow_(sheet, entryType, payee, flowSource) {
     }
 
     if (rowType === entryType) {
-      insertAfterRow = r + 1;
+      lastSameTypeRow = r + 1;
     }
   }
 
-  if (insertAfterRow === -1) {
-    if (summaryRow > 0) {
-      insertAfterRow = summaryRow - 1;
-    } else {
-      insertAfterRow = sheet.getLastRow();
-    }
+  // Placement rules, matching the reference layout the user asked for
+  // (Income block on top, Expense block directly above Summary):
+  //   - Same-type rows exist: stack after the last one so adjacent rows
+  //     of the same type stay contiguous (existing behavior).
+  //   - Income with no existing Income rows: drop at the top (insert
+  //     after the header row) so Income always precedes any Expense /
+  //     Summary rows. Without this branch, first Income on a sheet that
+  //     already has Expenses would be appended AT THE BOTTOM after the
+  //     Expense block, interleaving the two types.
+  //   - Anything else: insert just above Summary (or append to the end
+  //     if no Summary row exists, e.g. legacy sheets pre-rollout).
+  let insertAfterRow;
+  if (lastSameTypeRow !== -1) {
+    insertAfterRow = lastSameTypeRow;
+  } else if (entryType === 'Income') {
+    insertAfterRow = 1; // right after the header row
+  } else if (summaryRow > 0) {
+    insertAfterRow = summaryRow - 1;
+  } else {
+    insertAfterRow = sheet.getLastRow();
   }
 
   sheet.insertRowAfter(insertAfterRow);
   const newRow = insertAfterRow + 1;
 
-  sheet.getRange(insertAfterRow, 1, 1, sheet.getLastColumn())
-    .copyTo(
-      sheet.getRange(newRow, 1, 1, sheet.getLastColumn()),
-      SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
-      false
-    );
+  // Row-format propagation: copy the reference row's formatting onto
+  // the new row UNLESS the reference is row 1 (the header). The header
+  // is bold and carries frozen-row context; copying it would paint data
+  // rows bold. In the insertAfterRow===1 branch we deliberately let the
+  // new row inherit the default data-row formatting from Apps Script's
+  // sheet-creation pass (currency format on month/total columns is
+  // already seeded there) and then reset font weight to 'normal' as
+  // belt-and-suspenders against Google Sheets' row-format inheritance.
+  if (insertAfterRow !== 1) {
+    sheet.getRange(insertAfterRow, 1, 1, sheet.getLastColumn())
+      .copyTo(
+        sheet.getRange(newRow, 1, 1, sheet.getLastColumn()),
+        SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+        false
+      );
+    sheet.getRange(newRow, 1, 1, sheet.getLastColumn()).clearContent();
+  } else {
+    try {
+      sheet.getRange(newRow, 1, 1, sheet.getLastColumn()).setFontWeight('normal');
+    } catch (_) { /* cosmetic */ }
+  }
 
-  sheet.getRange(newRow, 1, 1, sheet.getLastColumn()).clearContent();
   sheet.getRange(newRow, headerMap.typeCol).setValue(entryType);
   sheet.getRange(newRow, headerMap.payeeCol).setValue(payee);
 
@@ -643,6 +690,31 @@ function insertCashFlowRow_(sheet, entryType, payee, flowSource) {
   // user hasn't manually flagged anything as NO yet.
   if (headerMap.activeColZero !== -1) {
     sheet.getRange(newRow, headerMap.activeCol).setValue('YES');
+  }
+
+  // Re-write Summary-row formulas so their bounded range expands to
+  // include the newly-inserted data row. writeCashFlowSummaryFormulas_
+  // uses `$A$2:$A$<summaryRow-1>`-style bounded ranges (see the comment
+  // on that function for why open-ended ranges were abandoned), which
+  // means an insert ABOVE Summary shifts the formula cell down but the
+  // range upper bound is still the pre-insert last-data-row and won't
+  // cover the new row until we rewrite. Best-effort — any failure here
+  // is non-fatal; the caller's primary contract is the row write above.
+  try {
+    const headerValuesNow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0] || [];
+    if (
+      typeof detectCashFlowLayout_ === 'function' &&
+      typeof findCashFlowSummaryRow_ === 'function' &&
+      typeof writeCashFlowSummaryFormulas_ === 'function'
+    ) {
+      const layoutNow = detectCashFlowLayout_(headerValuesNow);
+      const summaryRowNow = findCashFlowSummaryRow_(sheet, sheet.getLastRow(), layoutNow);
+      if (summaryRowNow > 0) {
+        writeCashFlowSummaryFormulas_(sheet, summaryRowNow, layoutNow);
+      }
+    }
+  } catch (refreshErr) {
+    Logger.log('insertCashFlowRow_ summary formula refresh failed: ' + refreshErr);
   }
 
   return { row: newRow };

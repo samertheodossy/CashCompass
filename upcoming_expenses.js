@@ -495,8 +495,22 @@ function getOrCreateUpcomingExpensesSheet_() {
   sheet.getRange(1, 1, 1, headers[0].length).setValues(headers);
   sheet.getRange(1, 1, 1, headers[0].length).setFontWeight('bold');
   sheet.setFrozenRows(1);
-  sheet.getRange('F:F').setNumberFormat('yyyy-mm-dd');
-  sheet.getRange('G:G').setNumberFormat('$#,##0.00;-$#,##0.00');
+
+  // Bounded number formats consistent with the other creators in the
+  // workbook (Cash Flow, Bank Accounts, SYS - Accounts all scope
+  // currency/date formats to `rows 2..maxRows`). Previously this used
+  // whole-column `F:F` / `G:G` formats which produced the same visible
+  // result but diverged structurally from sibling sheets. Visible
+  // behavior is preserved because every row below the header gets the
+  // same format.
+  try {
+    var maxRowsUpcoming = sheet.getMaxRows();
+    if (maxRowsUpcoming > 1) {
+      // Col F = Due Date, Col G = Amount (see headers array above).
+      sheet.getRange(2, 6, maxRowsUpcoming - 1, 1).setNumberFormat('yyyy-mm-dd');
+      sheet.getRange(2, 7, maxRowsUpcoming - 1, 1).setNumberFormat('$#,##0.00;-$#,##0.00');
+    }
+  } catch (_fmtErr) { /* cosmetic only */ }
 
   try {
     sheet.autoResizeColumns(1, headers[0].length);

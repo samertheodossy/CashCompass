@@ -79,9 +79,17 @@ function ensureSysAccountsSheet_() {
 }
 
 function syncAllAccountsFromLatestCurrentYear_() {
+  // Use ensureSysAccountsSheet_() for the SYS - Accounts handle so this
+  // stays working on first-run saves where the sheet was just inserted
+  // earlier in the same Apps Script execution. Some runtimes do not
+  // surface a freshly inserted sheet via ss.getSheetByName(...) even
+  // after SpreadsheetApp.flush(), causing getSheet_(ss, 'ACCOUNTS') to
+  // throw "Missing sheet: SYS - Accounts". The ensure helper returns
+  // the actual Sheet object directly (and is a no-op when the sheet
+  // already exists, so populated workbooks are unaffected).
+  const targetSheet = ensureSysAccountsSheet_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sourceSheet = getSheet_(ss, 'BANK_ACCOUNTS');
-  const targetSheet = getSheet_(ss, 'ACCOUNTS');
 
   const targetDisplay = targetSheet.getDataRange().getDisplayValues();
   if (targetDisplay.length < 2) {
@@ -436,6 +444,62 @@ function deleteAccountsRowByExactName_(sheet, accountName) {
 function addBankAccountFromDashboard(payload) {
   validateRequired_(payload, ['accountName', 'type', 'usePolicy']);
 
+  // First-run safety: on a freshly deployed workbook neither
+  // INPUT - Bank Accounts nor SYS - Accounts may exist yet. These ensure
+  // calls MUST run before validateNewBankAccountName_ below, because
+  // that validator calls accountExistsInAccountsSheet_() and
+  // getBankAccountsFromHistory_(), both of which do getSheet_() reads
+  // that throw "Missing sheet: ..." on a blank workbook. Both helpers
+  // are no-ops when the sheet is already present, so populated
+  // workbooks are completely unaffected.
+  //
+  //   ensureOnboardingBankAccountsSheetFromDashboard('normal')
+  //     Live (non-test) INPUT - Bank Accounts with a Year block for the
+  //     current year (Row 1: Year | <year>, Row 2: Account Name | Jan-YY
+  //     ... Dec-YY | Total). Exact structure getBankAccountsYearBlock_()
+  //     expects a few lines below.
+  //   ensureSysAccountsSheet_()
+  //     Canonical SYS - Accounts (Account Name, Current Balance,
+  //     Available Now, Min Buffer, Type, Use Policy, Priority, Active).
+  //     Returns the Sheet object directly so we do not re-read via
+  //     getSheet_() on a potentially-stale Spreadsheet handle — some
+  //     Apps Script executions leave `ss.getSheetByName(...)` returning
+  //     null for a sheet that was inserted earlier in the same call.
+  try {
+    ensureOnboardingBankAccountsSheetFromDashboard('normal');
+  } catch (ensureErr) {
+    // Re-surface with a user-facing message so the dashboard banner
+    // is actionable rather than just "Missing sheet: ...".
+    throw new Error(
+      'Could not prepare INPUT - Bank Accounts: ' +
+      (ensureErr && ensureErr.message ? ensureErr.message : ensureErr)
+    );
+  }
+  var accountsSheet;
+  try {
+    accountsSheet = ensureSysAccountsSheet_();
+  } catch (sysErr) {
+    throw new Error(
+      'Could not prepare SYS - Accounts: ' +
+      (sysErr && sysErr.message ? sysErr.message : sysErr)
+    );
+  }
+  if (!accountsSheet) {
+    // Defensive fallback — should be unreachable, but we'd rather
+    // surface a clear actionable message than crash downstream.
+    throw new Error('Could not prepare SYS - Accounts (helper returned no sheet).');
+  }
+
+  // Force Apps Script to flush any pending structural writes from the
+  // two ensure helpers so the next getSheetByName() sees the fresh
+  // state. Without this, freshly-inserted sheets can be invisible to a
+  // Spreadsheet handle captured before the insert.
+  SpreadsheetApp.flush();
+
+  // Now that both sheets are guaranteed to exist, validation reads are
+  // safe. validateNewBankAccountName_ calls accountExistsInAccountsSheet_
+  // (reads SYS - Accounts) and getBankAccountsFromHistory_ (reads
+  // INPUT - Bank Accounts) so this MUST come after the ensure+flush.
   const accountName = validateNewBankAccountName_(payload.accountName);
   const typeStr = String(payload.type || '').trim();
   const policyStr = String(payload.usePolicy || '').trim();
@@ -483,15 +547,11 @@ function addBankAccountFromDashboard(payload) {
   const setAvail = !!payload.setAvailableFromOpening;
   const setMin = !!payload.setMinBufferFromOpening;
 
+  // Get a fresh Spreadsheet handle AFTER the inserts so bankSheet
+  // resolves reliably on a brand-new workbook. ensureSysAccountsSheet_
+  // already returned its sheet directly, so we do not re-fetch that one.
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const bankSheet = getSheet_(ss, 'BANK_ACCOUNTS');
-  // First-run safety: SYS - Accounts may not exist yet on a blank
-  // workbook. Create it on demand with the canonical headers before
-  // we try to append the account row. ensureSysAccountsSheet_ is a
-  // no-op when the sheet already exists, so populated workbooks are
-  // completely unaffected.
-  ensureSysAccountsSheet_();
-  const accountsSheet = getSheet_(ss, 'ACCOUNTS');
   const currentYear = getCurrentYear_();
   const block = getBankAccountsYearBlock_(bankSheet, currentYear);
 
@@ -717,8 +777,11 @@ function getAccountsRowData_(accountName) {
 }
 
 function updateAccountsSheetFields_(accountName, options) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = getSheet_(ss, 'ACCOUNTS');
+  // Match syncAllAccountsFromLatestCurrentYear_: use the idempotent
+  // ensure helper so first-run "Create account" does not fail with
+  // "Missing sheet: SYS - Accounts" when the sheet was just inserted
+  // upstream in the same execution. No-op for populated workbooks.
+  const sheet = ensureSysAccountsSheet_();
   const display = sheet.getDataRange().getDisplayValues();
   const headerMap = getAccountsHeaderMap_(sheet);
 

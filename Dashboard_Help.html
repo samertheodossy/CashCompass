@@ -51,10 +51,10 @@
         <h3>Getting started</h3>
         <ol class="help-list">
           <li>Open <strong>Setup / Review</strong> from the top-right.</li>
-          <li>Fill in the six required areas from the status grid: <strong>Bank Accounts</strong>, <strong>Debts</strong>, <strong>Bills</strong>, <strong>Upcoming Expenses</strong>, <strong>Income</strong>, and <strong>Profile</strong>.</li>
+          <li>Fill in the five required areas from the status grid: <strong>Bank Accounts</strong>, <strong>Debts</strong>, <strong>Bills</strong>, <strong>Income</strong>, and <strong>Profile</strong>.</li>
           <li>Open <strong>Next Actions</strong> (Planning) to see what to do next.</li>
         </ol>
-        <p class="muted">Setup / Review is read-only until you open an editor. Houses is optional and not counted toward completion.</p>
+        <p class="muted">Setup / Review is read-only until you open an editor. <strong>Upcoming Expenses</strong> and <strong>Houses</strong> are optional and do not count toward completion.</p>
       </section>
 
       <!-- ================================================================ -->
@@ -62,14 +62,15 @@
       <!-- ================================================================ -->
       <section id="help-setup" class="help-section">
         <h3>Setup / Review</h3>
-        <p>Top-right button. Opens a read-only walkthrough of the six core input areas.</p>
+        <p>Top-right button. Opens a read-only walkthrough of the five required input areas plus two optional ones.</p>
 
         <h4>Flow</h4>
         <ul class="help-list">
-          <li><strong>Welcome</strong> — shown only on a truly new / blank workbook. Two independent gates keep populated workbooks off Welcome: (1) the startup router in <code>sheet_bootstrap.js</code> treats any <code>INPUT -</code>, <code>SYS -</code>, <code>OUT -</code>, or <code>LOG -</code> sheet as evidence the workbook is populated and opens the normal dashboard directly (setting <code>window.__cashCompassDashboardInited = true</code> when <code>initDashboard()</code> runs); (2) when the user opens <strong>Setup / Review</strong>, <code>loadOnboardingSection()</code> in <code>Dashboard_Script_Onboarding.html</code> renders the status grid <em>synchronously</em> whenever that dashboard-init flag is set — Welcome cannot render for that session regardless of what the per-step probes report. Only when the flag is not set (e.g. the startup gate routed straight to onboarding for a fresh workbook) does the per-step payload decide: any Setup-tracked sheet existing or any step reporting a status other than <em>missing</em> still routes to the grid. Probe failures fail closed to the grid rather than stranding the user on Welcome. <strong>Back to Dashboard</strong> from either Welcome <em>or</em> the status grid routes to the real dashboard (the grid's Back button intentionally exits Setup rather than bouncing back to Welcome) without re-classifying the workbook.</li>
-          <li><strong>Status grid</strong> — one card per required area (Bank Accounts, Debts, Bills, Upcoming Expenses, Income, Profile). Each shows <em>Setup complete</em> or <em>Not set up</em> plus a short summary.</li>
+          <li><strong>Welcome</strong> — shown when Setup itself is genuinely empty. <code>loadOnboardingSection()</code> in <code>Dashboard_Script_Onboarding.html</code> asks the server for the same five required probes the grid renders (Bank Accounts, Debts, Bills, Income, Profile); if every step reports <code>status === 'missing'</code> the Welcome screen renders, otherwise the status grid renders directly. Upcoming Expenses and Houses are optional and deliberately omitted from this gate. That keeps Welcome available on a freshly deployed workbook even when the startup router already classified it "populated" from scaffold sheets alone (empty <code>INPUT - Cash Flow &lt;year&gt;</code>, empty <code>INPUT - Upcoming Expenses</code>, etc.) — the gate deliberately ignores <code>sheetExists</code> and the dashboard-init flag, because the grid would just repeat "0 complete · 5 not set up" and Welcome is a better explanation. Probe failures fail closed to the grid (with an inline error and a Refresh action) rather than stranding the user on Welcome. <strong>Back to Dashboard</strong> from either Welcome <em>or</em> the status grid routes to the real dashboard via <code>onboardingBackToDashboard()</code> (the grid's Back button intentionally exits Setup rather than bouncing back to Welcome), so showing Welcome on a genuinely empty workbook is never a loop — Continue advances, Back to Dashboard returns to overview.</li>
+          <li><strong>Status grid</strong> — one card per required area (Bank Accounts, Debts, Bills, Income, Profile). Each shows <em>Setup complete</em> or <em>Not set up</em> plus a short summary.</li>
+          <li><strong>Optional: Upcoming Expenses</strong> — planned expenses for cash-flow forecasting. Not part of the completion count; its card shows a planned-item count rather than a status badge.</li>
           <li><strong>Optional: Houses</strong> — property tracking. Not part of the completion count.</li>
-          <li><strong>Completion panel</strong> — <em>Your setup is ready.</em> when all six are complete, otherwise <em>Almost there</em> with a short progress line. Primary action: <em>Go to Next Actions</em>.</li>
+          <li><strong>Completion panel</strong> — <em>Your setup is ready.</em> when all five required areas are complete, otherwise <em>Almost there</em> with a short progress line. Primary action: <em>Go to Next Actions</em>.</li>
           <li><strong>Detail screens</strong> — click any card for a read-only view plus a link to the matching editor. Profile uses an inline editor right on its detail screen.</li>
         </ul>
 

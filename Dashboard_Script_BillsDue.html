@@ -754,11 +754,23 @@ function populateBillCategoryOptions_(categories) {
   noneOpt.textContent = '— Select a category —';
   select.appendChild(noneOpt);
 
+  const seenCategories = Object.create(null);
   categories.forEach(function(cat) {
     if (!cat) return;
+    const label = String(cat).trim();
+    if (!label) return;
+    const key = label.toLowerCase();
+    if (seenCategories[key]) return;
+    // The trailing "Other…" sentinel below toggles the custom-category
+    // text input. Skip any plain "Other" coming in from the server list
+    // or the fallback array so the dropdown does not show two adjacent
+    // "Other" rows (one as a data value, one as the sentinel). Users can
+    // still enter "Other" as a free-form label via the sentinel input.
+    if (key === 'other' || key === 'other…' || key === '__other__') return;
+    seenCategories[key] = true;
     const opt = document.createElement('option');
-    opt.value = cat;
-    opt.textContent = cat;
+    opt.value = label;
+    opt.textContent = label;
     select.appendChild(opt);
   });
 

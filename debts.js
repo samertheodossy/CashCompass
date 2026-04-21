@@ -405,6 +405,21 @@ function addDebtFromDashboard(payload) {
   // and Credit Left lands at 0 accordingly.
   const creditLeft = round2_(creditLimit - balance);
 
+  // Ensure-before-write guard. Idempotent no-op on populated workbooks;
+  // on fresh workbooks it seeds the canonical INPUT - Debts structure
+  // that getDebtsHeaderMap_ / ensureDebtsActiveColumn_ expect a few
+  // lines below. Mirrors the Bank Accounts pattern in
+  // addBankAccountFromDashboard → bank_accounts.js.
+  try {
+    ensureOnboardingDebtsSheetFromDashboard('normal');
+  } catch (ensureErr) {
+    throw new Error(
+      'Could not prepare INPUT - Debts: ' +
+      (ensureErr && ensureErr.message ? ensureErr.message : ensureErr)
+    );
+  }
+  try { SpreadsheetApp.flush(); } catch (_flushErr) { /* best-effort */ }
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = getSheet_(ss, 'DEBTS');
   const headerMap = ensureDebtsActiveColumn_(sheet);
@@ -506,6 +521,16 @@ function addDebtFromDashboard(payload) {
   let cashFlowSeedWarning = '';
   try {
     const currentYear = new Date().getFullYear();
+    // First-run safety: on a fresh workbook the current-year Cash Flow
+    // tab may not exist yet. ensureCashFlowYearSheet_ creates it with
+    // the canonical header row (Type / Flow Source / Payee / Active /
+    // Jan..Dec / Total) when missing and is a hard no-op when the sheet
+    // already exists, so populated workbooks are unaffected. Mirrors
+    // the same ensure call in bills.js; without it the seed below would
+    // silently skip with "Cash Flow YYYY not found — skipped ...".
+    if (typeof ensureCashFlowYearSheet_ === 'function') {
+      try { ensureCashFlowYearSheet_(currentYear); } catch (_ensureErr) { /* fall through */ }
+    }
     const cfSheet = tryGetCashFlowSheet_(ss, currentYear);
     if (!cfSheet) {
       cashFlowSeedWarning =
