@@ -3,24 +3,135 @@ function loadRetirementSection() {
   google.script.run
     .withSuccessHandler(function(data) {
       retirementUiData = data;
-      document.getElementById('ret_selectedScenario').value = data.selectedScenario || 'Base';
 
-      document.getElementById('ret_yourCurrentAge').value = data.household ? data.household.yourCurrentAge : '';
-      document.getElementById('ret_spouseCurrentAge').value = data.household ? data.household.spouseCurrentAge : '';
+      // The safe backend always returns a structured envelope with a
+      // `state` field. Branch on it before touching any of the scenario
+      // / info rendering helpers — those helpers assume `data.analysis`
+      // is populated, which only happens in the `ready` state.
+      var state = (data && data.state) ? data.state : 'ready';
 
-      fillRetirementScenarioInputs(data.selectedScenario || 'Base');
-      renderRetirementScenarioCards(data);
-      renderRetirementPanelInfo(data.analysis);
-      setStatus('retirement_status', '', false);
+      if (state === 'ready') {
+        hideRetirementEmptyState_();
+
+        document.getElementById('ret_selectedScenario').value = data.selectedScenario || 'Base';
+        document.getElementById('ret_yourCurrentAge').value = data.household ? data.household.yourCurrentAge : '';
+        document.getElementById('ret_spouseCurrentAge').value = data.household ? data.household.spouseCurrentAge : '';
+
+        fillRetirementScenarioInputs(data.selectedScenario || 'Base');
+        renderRetirementScenarioCards(data);
+        renderRetirementPanelInfo(data.analysis);
+        setStatus('retirement_status', '', false);
+      } else if (state === 'needsHouseholdBasics') {
+        showRetirementEmptyState_({
+          title: 'Tell us a little about your household to see your plan.',
+          body: (data && data.message) ||
+            'Add your age to see your retirement plan. Spouse age and target retirement age are optional but recommended.',
+          hint: 'Enter your details below and click "Save Selected Scenario" to begin.'
+        });
+
+        // Prefill whatever the retirement sheet already has (may be 0/blank).
+        document.getElementById('ret_selectedScenario').value = (data && data.selectedScenario) || 'Base';
+        document.getElementById('ret_yourCurrentAge').value =
+          data && data.household && data.household.yourCurrentAge > 0 ? data.household.yourCurrentAge : '';
+        document.getElementById('ret_spouseCurrentAge').value =
+          data && data.household && data.household.spouseCurrentAge > 0 ? data.household.spouseCurrentAge : '';
+
+        clearRetirementReadOnlyInfo_();
+        setStatus('retirement_status', '', false);
+      } else {
+        // state === 'error' — still not a red banner. We show the same
+        // calm inline card with wording that hints at a retry path.
+        showRetirementEmptyState_({
+          title: 'Retirement planner is unavailable right now.',
+          body: (data && data.message) ||
+            'Retirement planner could not load. Try again, or review your inputs below.',
+          hint: ''
+        });
+        clearRetirementReadOnlyInfo_();
+        setStatus('retirement_status', '', false);
+      }
 
       if (pendingFocus && pendingFocus.tab === 'retirement') {
         pendingFocus = null;
       }
     })
     .withFailureHandler(function(err) {
-      setStatus('retirement_status', 'Error: ' + (err.message || String(err)), true);
+      // The safe backend should not throw, but keep this path defensive
+      // for transport-level failures. Still show a calm banner rather
+      // than a red error string — consistent with the rest of the tab.
+      showRetirementEmptyState_({
+        title: 'Retirement planner is unavailable right now.',
+        body: 'Please try again in a moment.',
+        hint: (err && err.message) ? err.message : ''
+      });
+      clearRetirementReadOnlyInfo_();
+      setStatus('retirement_status', '', false);
     })
-    .getRetirementUiData();
+    .getRetirementUiDataSafe();
+}
+
+function showRetirementEmptyState_(content) {
+  var el = document.getElementById('ret_empty_state');
+  if (!el) return;
+
+  var title = (content && content.title) ? content.title : '';
+  var body = (content && content.body) ? content.body : '';
+  var hint = (content && content.hint) ? content.hint : '';
+
+  var html = '';
+  if (title) html += '<div class="retirement-empty-state-title">' + escapeHtml(title) + '</div>';
+  if (body) html += '<div>' + escapeHtml(body) + '</div>';
+  if (hint) html += '<div class="retirement-empty-state-hint">' + escapeHtml(hint) + '</div>';
+
+  el.innerHTML = html;
+  el.hidden = false;
+}
+
+function hideRetirementEmptyState_() {
+  var el = document.getElementById('ret_empty_state');
+  if (!el) return;
+  el.hidden = true;
+  el.innerHTML = '';
+}
+
+function clearRetirementReadOnlyInfo_() {
+  // Neutralize the right-column info panel so stale / placeholder values
+  // from a previous render never show up alongside the empty-state card.
+  var ids = [
+    'ret_info_scenario',
+    'ret_info_assets',
+    'ret_info_goal',
+    'ret_info_funded',
+    'ret_info_canRetireNow',
+    'ret_info_estAge',
+    'ret_info_years',
+    'ret_info_spouseAgeAtRetirement',
+    'ret_info_projectedAtTarget',
+    'ret_info_surplusShortfall',
+    'ret_info_depletionAge',
+    'ret_info_mc',
+    'ret_info_income',
+    'ret_info_maxSpendToday',
+    'ret_info_realReturn',
+    'ret_info_summary'
+  ];
+  for (var i = 0; i < ids.length; i++) {
+    var node = document.getElementById(ids[i]);
+    if (!node) continue;
+    node.textContent = '—';
+    node.style.color = '';
+    node.style.fontWeight = '';
+  }
+
+  // Scenario cards are also stale in non-ready states; blank them so we
+  // don't advertise numbers we don't have.
+  ['Conservative', 'Base', 'Aggressive'].forEach(function(name) {
+    var card = document.getElementById('scenario_card_' + name);
+    if (card) {
+      card.className = 'scenario-card';
+      card.innerHTML = '';
+    }
+  });
 }
 
 function onRetirementScenarioChange() {

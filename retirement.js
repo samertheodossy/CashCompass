@@ -52,6 +52,284 @@ function getRetirementSummary_() {
   return getRetirementModelData_(sheet);
 }
 
+/**
+ * Safe UI-facing retirement read for the Retirement tab.
+ *
+ * Never throws. Returns a structured envelope describing the current
+ * state so the client can render calm guidance instead of a red error
+ * banner when the workbook is brand-new, partially configured, or the
+ * retirement sheet has been cleared.
+ *
+ * Shape (current runtime, preserved for compatibility):
+ *   {
+ *     state: 'ready' | 'needsHouseholdBasics' | 'error',
+ *     message: string,                 // user-facing copy for non-ready states
+ *     missingFields: string[],         // which household fields are blank
+ *     settings: {                      // INPUT - Settings probe (read-only)
+ *       sheetExists: boolean,
+ *       household: {
+ *         yourAge: number | null,             // SUPERSEDED (see below)
+ *         partnered: boolean | null,
+ *         spouseAge: number | null,           // SUPERSEDED (see below)
+ *         targetRetirementAge: number | null  // SUPERSEDED (see below)
+ *       }
+ *     },
+ *     selectedScenario, household, scenarios, analyses, analysis
+ *   }
+ *
+ * Architecture note (updated after A2; see SESSION_NOTES.md Phase C):
+ *   INPUT - Settings is the home for people / household IDENTITY only.
+ *   Ages are NOT stored in INPUT - Settings; they are derived from DOB
+ *   when needed. TargetRetirementAge and every other retirement-scenario
+ *   assumption stay in the retirement workflow / `INPUT - Retirement`
+ *   sheet. Phase C will:
+ *     - introduce additive identity keys in INPUT - Settings:
+ *         `YourDOB`, `Partnered`, `SpouseName`, `SpouseDOB`
+ *     - replace the three `*Age` scaffold fields above with
+ *         `yourDOB: string | null`, `spouseName: string | null`,
+ *         `spouseDOB: string | null` (plus a derived `yourAge` /
+ *         `spouseAge` only at read time, computed from DOB).
+ *     - drop `targetRetirementAge` from this payload entirely; the
+ *       retirement tab already reads it from the scenario row of
+ *       `INPUT - Retirement`.
+ *   The current three `*Age` fields are kept as null placeholders only
+ *   to preserve the A1 runtime contract until Phase C formally swings
+ *   the shape; no code writes to them today.
+ *
+ * The compatibility-preserving `getRetirementUiData()` is unchanged and
+ * still available for any other caller. This function wraps it and also
+ * short-circuits to `needsHouseholdBasics` BEFORE invoking the throwing
+ * compute path, so a missing age (the common first-run case once the
+ * retirement sheet stops seeding hardcoded defaults in Phase D) renders
+ * a friendly empty state instead of surfacing `Error: Your Current Age
+ * must be greater than 0`.
+ *
+ * The `settings` block is populated from a pure-read probe of
+ * `INPUT - Settings`. The probe:
+ *   - never creates the sheet
+ *   - never writes the sheet
+ *   - does not require any forward-looking key to exist yet
+ * See `probeRetirementSettingsHousehold_` below for exactly which keys
+ * are recognized today and which are planned.
+ */
+function getRetirementUiDataSafe() {
+  const result = {
+    state: 'ready',
+    message: '',
+    missingFields: [],
+    settings: {
+      sheetExists: false,
+      household: {
+        yourAge: null,
+        partnered: null,
+        spouseAge: null,
+        targetRetirementAge: null
+      }
+    },
+    selectedScenario: 'Base',
+    household: null,
+    scenarios: null,
+    analyses: null,
+    analysis: null
+  };
+
+  try {
+    result.settings = probeRetirementSettingsHousehold_();
+  } catch (_settingsErr) {
+    // Defensive: probe is already try/catch'd internally, but double-guard
+    // so the UI never fails because of a transient Settings-read issue.
+  }
+
+  let sheet;
+  try {
+    sheet = getOrCreateRetirementSheet_();
+  } catch (e) {
+    result.state = 'error';
+    result.message = 'Retirement data could not be loaded. Try again, or add your basics to continue.';
+    return result;
+  }
+
+  const householdRead = readRetirementHouseholdSafe_(sheet);
+  result.household = householdRead.values;
+
+  // Decide state without triggering the throwing compute path.
+  //
+  // Today we only block on `yourCurrentAge` (read from the retirement
+  // sheet). spouseCurrentAge of 0 is legal for "not partnered" and is
+  // not treated as missing.
+  //
+  // Architecture note (see SESSION_NOTES.md Phase C): ages are being
+  // moved out of INPUT - Settings entirely. Phase C will add DOB-based
+  // identity keys (`YourDOB`, `Partnered`, `SpouseName`, `SpouseDOB`)
+  // to INPUT - Settings and derive the numeric age at read time. This
+  // function will then honor a blank age in the retirement sheet when
+  // a DOB is present in INPUT - Settings. Until Phase C ships, the
+  // retirement sheet remains the sole source of the age input.
+  if (!householdRead.values || !(householdRead.values.yourCurrentAge > 0)) {
+    result.state = 'needsHouseholdBasics';
+    result.missingFields = householdRead.missing;
+    result.message = 'Add your age to see your retirement plan. Spouse age and target retirement age are optional but recommended.';
+    return result;
+  }
+
+  try {
+    const data = getRetirementUiData();
+    result.selectedScenario = data.selectedScenario;
+    result.household = data.household;
+    result.scenarios = data.scenarios;
+    result.analyses = data.analyses;
+    result.analysis = data.analysis;
+    result.state = 'ready';
+    return result;
+  } catch (e) {
+    result.state = 'error';
+    result.message = 'Retirement planner could not load. Try again, or review your inputs below.';
+    return result;
+  }
+}
+
+/**
+ * Read `Your Current Age` / `Spouse Current Age` from INPUT - Retirement
+ * without triggering validation. `findLabelValueCell_` returns null for
+ * missing labels, so a malformed sheet yields a zeroed `values` object
+ * and a populated `missing` list rather than a throw.
+ */
+function readRetirementHouseholdSafe_(sheet) {
+  const out = { values: null, missing: [] };
+  let your = null;
+  let spouse = null;
+
+  try {
+    const yourCell = findLabelValueCell_(sheet, 'Your Current Age');
+    if (yourCell) your = toNumber_(yourCell.getValue());
+  } catch (_yourErr) { /* tolerate */ }
+
+  try {
+    const spouseCell = findLabelValueCell_(sheet, 'Spouse Current Age');
+    if (spouseCell) spouse = toNumber_(spouseCell.getValue());
+  } catch (_spouseErr) { /* tolerate */ }
+
+  if (!(Number(your) > 0)) out.missing.push('yourCurrentAge');
+  // spouseCurrentAge missing-ness is informational only; not a blocker.
+  if (spouse === null) out.missing.push('spouseCurrentAge');
+
+  out.values = {
+    yourCurrentAge: Number(your) > 0 ? Number(your) : 0,
+    spouseCurrentAge: Number(spouse) > 0 ? Number(spouse) : 0
+  };
+  return out;
+}
+
+/**
+ * Read-only probe of INPUT - Settings for household-identity keys.
+ *
+ * Tolerates the current 2-column Key/Value schema. Never creates the
+ * sheet, never writes, never renames columns. If the sheet does not
+ * exist, or any expected key is absent, the corresponding field stays
+ * null so the UI can treat it as "not set" without falling back to a
+ * guessed value.
+ *
+ * Architecture note (updated; see SESSION_NOTES.md Phase C):
+ *   INPUT - Settings is the home for people / household IDENTITY only.
+ *   Phase C will introduce additive identity keys:
+ *     - YourDOB      → string | null   (ISO date, e.g. '1972-04-15')
+ *     - Partnered    → true | false | null
+ *     - SpouseName   → string | null
+ *     - SpouseDOB    → string | null
+ *   Ages will then be DERIVED from DOB at read time. TargetRetirementAge
+ *   and every other retirement-scenario assumption remain in the
+ *   retirement workflow / `INPUT - Retirement` sheet — they are never
+ *   stored in INPUT - Settings.
+ *
+ * Keys currently recognized by this probe (legacy A1 scaffold, not
+ * written by any code today, preserved only to keep the A1 RPC shape
+ * stable until Phase C formally swings the implementation):
+ *   - YourAge              → number | null     SUPERSEDED by YourDOB
+ *   - Partnered            → true | false | null   (kept under Phase C)
+ *   - SpouseAge            → number | null     SUPERSEDED by SpouseDOB
+ *   - TargetRetirementAge  → number | null     REMOVED — moves fully
+ *                            to the retirement sheet; do not write it
+ *                            to INPUT - Settings.
+ *
+ * On a populated workbook today this probe returns all-null household
+ * values because none of the above keys exist in the sheet. The switch
+ * body below stays intact until Phase C replaces it; changing the
+ * parse list now would be a runtime contract change.
+ */
+function probeRetirementSettingsHousehold_() {
+  const out = {
+    sheetExists: false,
+    household: {
+      yourAge: null,
+      partnered: null,
+      spouseAge: null,
+      targetRetirementAge: null
+    }
+  };
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('INPUT - Settings');
+    if (!sheet) return out;
+    out.sheetExists = true;
+
+    const last = sheet.getLastRow();
+    if (last < 2) return out;
+
+    const values = sheet.getRange(2, 1, last - 1, 2).getValues();
+    for (let i = 0; i < values.length; i++) {
+      const key = String(values[i][0] == null ? '' : values[i][0]).trim();
+      if (!key) continue;
+      const raw = values[i][1];
+
+      switch (key) {
+        case 'YourAge':
+          out.household.yourAge = parseSettingsNumberOrNull_(raw);
+          break;
+        case 'Partnered':
+          out.household.partnered = normalizePartneredSetting_(raw);
+          break;
+        case 'SpouseAge':
+          out.household.spouseAge = parseSettingsNumberOrNull_(raw);
+          break;
+        case 'TargetRetirementAge':
+          out.household.targetRetirementAge = parseSettingsNumberOrNull_(raw);
+          break;
+        default:
+          // Unknown / existing keys (Name/Email/Phone/Address, etc.) are
+          // ignored here. This preserves every row on the sheet as-is.
+          break;
+      }
+    }
+  } catch (_e) {
+    // Never throw: a transient settings-read failure must not break the
+    // retirement tab. We return whatever we had (all-null by default).
+  }
+
+  return out;
+}
+
+function parseSettingsNumberOrNull_(raw) {
+  if (raw === '' || raw === null || raw === undefined) return null;
+  if (typeof raw === 'number') {
+    return isFinite(raw) ? raw : null;
+  }
+  const stripped = String(raw).replace(/[^0-9.\-]/g, '');
+  if (!stripped) return null;
+  const n = Number(stripped);
+  return isFinite(n) ? n : null;
+}
+
+function normalizePartneredSetting_(raw) {
+  if (raw === true) return true;
+  if (raw === false) return false;
+  const s = String(raw == null ? '' : raw).trim().toLowerCase();
+  if (!s) return null;
+  if (s === 'yes' || s === 'y' || s === 'true' || s === '1') return true;
+  if (s === 'no' || s === 'n' || s === 'false' || s === '0') return false;
+  return null;
+}
+
 function getRetirementSummarySafe_() {
   try {
     return getRetirementSummary_();

@@ -1,3 +1,101 @@
+## Active — Phase A: planner graceful degradation & readiness states
+
+We are moving from bug fixing to **product behavior + UX refinement**. The planner and dashboards must no longer throw red errors on fresh/blank/partially-set-up workbooks. They must degrade gracefully, use safe defaults, and surface a readiness state so the UI can show "needs more info" instead of error banners.
+
+Goal for the whole pass: graceful degradation, safe defaults, readiness states (`notSetUp` / `partial` / `ready`), and a minimal required onboarding (profile name+email, at least one bank account; everything else optional/progressive).
+
+### Core constraints (apply to every step in Phase A–E)
+
+- **One step at a time.** Each prompt implements exactly one phase step. No skipping ahead.
+- **No big refactors.** Prefer small additive helpers; preserve existing architecture.
+- **Do not break existing working sheets.** No destructive changes to layout, headers, data, or formatting.
+- **No new writes or new sheets** unless the step explicitly calls for it.
+- **Preserve existing populated-workbook behavior byte-for-byte** where the sheets are already set up.
+- **Every step must be tested on both:**
+  1. Fully populated workbook (regression check — behavior must be identical except any intentionally added additive fields/UI states).
+  2. Fresh / blank / partially set-up workbook (the target case for graceful degradation).
+- **Compatibility:** do not change existing snapshot/RPC field names or shapes; only add new fields.
+
+### Phased plan (A–E)
+
+| Phase | Purpose | Steps |
+| --- | --- | --- |
+| **A — Graceful degradation of core read paths** | Stop throwing on missing required sheets; surface readiness state instead of red banners. | **A1** Retirement tab safe RPC + calm empty state. **A2** `buildDashboardSnapshot_` tolerates missing `SYS - Accounts` / `INPUT - Debts`, adds `state` field. **A3** `getCashToUse()` tolerates missing `SYS - Accounts`. **A4** Remaining planner read paths (next actions, buffer runway, etc.) audited for the same pattern. |
+| **B — Minimal required onboarding + readiness rollup** | Define "ready" as profile name+email plus ≥1 bank account; add a single readiness rollup the UI can consume. | **B1** Add `getPlannerReadiness()` aggregating existing probes (`probeProfileStatus_`, `probeBankAccountsStatus_`) without touching onboarding internals. **B2** Wire readiness into the dashboard header as a neutral indicator. |
+| **C — Household identity in `INPUT - Settings` (DOB-based)** | Extend existing `INPUT - Settings` key/value store additively with **identity-only** keys: `YourDOB`, `Partnered`, `SpouseName`, `SpouseDOB`. Ages are derived from DOB at read time — never stored. `TargetRetirementAge` and every other retirement-scenario assumption (retirement spending, social security assumptions, contributions, expected return, inflation, safe withdrawal rate, etc.) stay in the retirement workflow / `INPUT - Retirement` sheet. See "Architecture decision" section below. | **C1** Read helpers for the DOB-based identity keys + age-from-DOB derivation. **C2** Write helpers + small UI form that saves identity only (DOB + partner + spouse name + spouse DOB). **C3** Retirement calc prefers derived `yourCurrentAge` / `spouseCurrentAge` from `INPUT - Settings` DOBs when present; falls back to the retirement sheet's age cells. `TargetRetirementAge` is never touched by Phase C; it remains a retirement-sheet field. |
+| **D — Retirement sheet without hardcoded fake values** | Stop seeding fake ages / dates in `INPUT - Retirement`. Blank-until-known; populated cases untouched. | **D1** Blank-safe creator. **D2** Migration path that only activates when `INPUT - Retirement` is clearly unmodified default. |
+| **E — UI "needs more info" everywhere** | Replace remaining red error banners with calm inline guidance cards across planner tabs. | **E1** Dashboard overview empty state. **E2** Next Actions empty state. **E3** Cash flow empty state. |
+
+### Architecture decision — `INPUT - Settings` vs retirement workflow
+
+Revised after A2 (supersedes the original A1 forward-looking plan):
+
+- **`INPUT - Settings` is for people / household IDENTITY only.** It holds data about *who* the user and their household are. It is not a dumping ground for retirement assumptions.
+- **Ages are never stored.** Any age needed by the planner is DERIVED from date of birth at read time. This keeps the sheet correct year-over-year without manual edits.
+- **Additive identity keys** that Phase C will introduce to `INPUT - Settings` (no existing key is touched):
+  - `YourDOB` — ISO date string
+  - `Partnered` — yes/no
+  - `SpouseName` — string
+  - `SpouseDOB` — ISO date string (blank when `Partnered=No`)
+- **Retirement workflow / `INPUT - Retirement` stays the home for every retirement ASSUMPTION**, including:
+  - `TargetRetirementAge`
+  - retirement spending
+  - social security assumptions
+  - contributions
+  - expected return
+  - inflation
+  - safe withdrawal rate
+  - any other retirement-scenario assumption
+- **What this corrects:** the original A1 forward-looking plan proposed storing `YourAge`, `SpouseAge`, and `TargetRetirementAge` directly in `INPUT - Settings`. That plan is withdrawn. Ages are now DOB-derived; `TargetRetirementAge` stays on the retirement sheet. This separation of concerns keeps the identity store stable across time and keeps all retirement modeling in one place.
+- **What still stands from A1:** the safe RPC (`getRetirementUiDataSafe`), the calm empty-state UI, and the read-only, non-destructive posture toward `INPUT - Settings` are all unchanged. Only the forward-looking key list is revised.
+
+### Current implementation status
+
+- ✅ **A1 complete** — `retirement.js` gained `getRetirementUiDataSafe()`, `readRetirementHouseholdSafe_()`, `probeRetirementSettingsHousehold_()`, `parseSettingsNumberOrNull_()`, `normalizePartneredSetting_()`. The new RPC never throws; returns `{ state: 'ready' | 'needsHouseholdBasics' | 'error', message, missingFields, settings, ... }`. The retirement probe reads `INPUT - Settings` read-only via `getSheetByName` — no writes, no creation, tolerates the current Name/Email/Phone/Address schema without requiring any additional keys. A1 shipped with a legacy forward-looking key list (`YourAge` / `Partnered` / `SpouseAge` / `TargetRetirementAge`) baked into the probe's switch + the `settings.household` RPC scaffold. **Under the revised architecture (see section below), that key list is superseded.** Those scaffold fields stay in place as null-only placeholders to keep the A1 RPC contract stable; Phase C will replace them with the DOB-based identity model and remove `TargetRetirementAge` from the settings payload entirely (it belongs in the retirement sheet, not `INPUT - Settings`). `Dashboard_Script_PlanningRetirement.html` switched to the safe RPC with new `showRetirementEmptyState_`, `hideRetirementEmptyState_`, `clearRetirementReadOnlyInfo_` helpers. `Dashboard_Body.html` added `<div id="ret_empty_state">`. `Dashboard_Styles.html` added `.retirement-empty-state` calm blue info card (distinct from error styling). Existing `getRetirementUiData()` left untouched for compatibility.
+- ✅ **A2 complete** — `dashboard_data.js` only. `buildDashboardSnapshot_()` now wraps `getSheet_(ss, 'ACCOUNTS')` and `getSheet_(ss, 'DEBTS')` each in its own `try/catch` → `accountsPresent` / `debtsPresent` booleans. Missing sheets fall back to `cash = 0` / `totalDebt = 0`. New additive field `state: 'ready' | 'partial' | 'notSetUp'` on the returned object (ready = both present, partial = one present, notSetUp = neither). `buildDashboardIssues_()` — called from the same pipeline — guards its `getSheet_(ss, 'ACCOUNTS')` and `getSheet_(ss, 'DEBTS')` calls the same way so the snapshot actually completes. No field renames, removals, or reshape. No UI changes. No new sheets, no writes. Populated-workbook behavior is identical except for the new `state: "ready"` field existing consumers can ignore.
+
+### Next exact step — **A3 only**
+
+**Make `getCashToUse()` tolerate a missing `SYS - Accounts` sheet without throwing.**
+
+- File: `cash_to_use.js`.
+- Symptom: `getCashToUse()` currently calls `getSheet_(ss, 'ACCOUNTS')` directly (~line 78) which throws `Missing sheet (after retry+flush): SYS - Accounts` on a blank workbook, red-banners the Next Actions panel.
+- Expected shape after A3: same return shape, with a `state` field (`notSetUp` / `partial` / `ready` — same vocabulary as A2) and zeroed numerics when the sheet is absent. Other field names and existing values when the sheet exists must be identical to today.
+- Sheet-safety rule: no sheet creation, no writes, no sheet layout changes, no modifications to `INPUT - Settings`, no onboarding changes. Read/logic only.
+- Scope: **only `cash_to_use.js`** (mirror the A2 pattern: narrow try/catch around the `getSheet_` call, derive state locally, return zero-valued numerics on absence). No UI changes unless absolutely required.
+
+### Testing expectations — apply to EVERY step in Phase A
+
+For each step, run both scenarios:
+
+**1. Fully populated workbook (regression):**
+- Open the planner dashboard on a real populated spreadsheet.
+- Verify the step's affected panel renders *identical* numbers and visuals as before.
+- Verify no new red banners, no new empty states, no layout shift.
+- Verify all pre-existing RPC fields are unchanged in name, order, and value. Any new field is purely additive.
+- Verify no existing sheet was modified, created, renamed, or reformatted.
+- Verify downstream consumers (planner run, history snapshot save, baseline snapshot save, etc.) still succeed.
+
+**2. Fresh / blank / partially set-up workbook (target case):**
+- Open a blank workbook bound to the same Apps Script project, or simulate "partial" by temporarily renaming a single required sheet (revert afterwards — never delete data).
+- Verify the step's affected panel renders a calm state (empty/guidance card or zeroed values) with **no red banner** and **no "Missing sheet (after retry+flush): …"** exception in the Apps Script logs.
+- Verify the new `state` field (or equivalent) matches reality: `notSetUp` when all required sheets absent, `partial` when some exist, `ready` when all exist.
+- Verify no new sheets were created by the failing call.
+- Verify the action panel is still usable — it just shows guidance instead of erroring.
+
+**3. No regressions to existing populated flows:**
+- Add an Investment / House / Debt / Bill / Bank Account / Upcoming Expense on a populated workbook. All flows work unchanged.
+- Run the planner. Snapshot saves, history writes, baselines write.
+- Retirement tab on a populated retirement workbook renders exactly as before A1.
+
+### Resume point
+
+**Next prompt target: Phase A3 only.** Make `getCashToUse()` tolerate a missing `SYS - Accounts` sheet without throwing; add additive `state` field using the same `notSetUp` / `partial` / `ready` vocabulary as A2. Only `cash_to_use.js`. No sheet writes. No UI changes. Test on both populated and blank workbooks.
+
+Do **not** start A4, B, C, D, or E until A3 is implemented, tested, and committed.
+
+---
+
 ## Recent — Targeted sheet-creation & consistency pass (F1, F2, F3, F4/F5, F6, F7)
 
 Implemented the high-value safe fixes from the prior new-sheet audit. Deliberately scoped: no schema changes, no broad refactor, no rebuild of existing sheets, no next-year rollover (F8), no sheet-name centralization (F9), no creator-return-shape standardization (F10). Every new helper is idempotent and a no-op on populated workbooks.

@@ -25,20 +25,48 @@ function buildDashboardSnapshot_() {
   ensureActivityLogSheet_(ss);
 
   // Cash and Debt come from REQUIRED setup sheets (SYS - Accounts, INPUT -
-  // Debts), so a missing sheet here is a genuine workbook-corruption signal
-  // and should surface. Investments (SYS - Assets) and Houses (SYS - House
-  // Assets) are OPTIONAL categories in the onboarding flow — users who
-  // finish required setup without touching the optional Houses / Investments
-  // paths will not have those sheets. buildDashboardSnapshot_ MUST render
-  // $0 in those cases rather than throwing "Missing sheet (after
-  // retry+flush): SYS - Assets", which previously painted a red banner on
-  // the overview right after Setup completion.
-  const cash = sumColumnByHeader_(getSheet_(ss, 'ACCOUNTS'), 'Current Balance');
+  // Debts). Historically, a missing sheet here threw "Missing sheet
+  // (after retry+flush): …" and painted a red banner on the overview for
+  // any brand-new / blank workbook that had not yet completed onboarding.
+  // Phase A2: treat absence as a not-yet-set-up signal and degrade to
+  // zero values, exposing the state via the new `state` field below.
+  // Investments (SYS - Assets) and Houses (SYS - House Assets) remain
+  // OPTIONAL and keep using sumColumnByHeaderForOptionalSheet_.
+  let accountsSheet = null;
+  let accountsPresent = false;
+  try {
+    accountsSheet = getSheet_(ss, 'ACCOUNTS');
+    accountsPresent = true;
+  } catch (_accountsMissingErr) {
+    // Fresh workbook before Bank Accounts onboarding: tolerate absence.
+  }
+
+  let debtsSheet = null;
+  let debtsPresent = false;
+  try {
+    debtsSheet = getSheet_(ss, 'DEBTS');
+    debtsPresent = true;
+  } catch (_debtsMissingErr) {
+    // Fresh workbook before Debts onboarding: tolerate absence.
+  }
+
+  const cash = accountsPresent
+    ? sumColumnByHeader_(accountsSheet, 'Current Balance')
+    : 0;
   const investments = sumColumnByHeaderForOptionalSheet_(ss, 'ASSETS', 'Current Balance');
   const houseValues = sumColumnByHeaderForOptionalSheet_(ss, 'HOUSE_ASSETS', 'Current Value');
   const houseLoans = sumColumnByHeaderForOptionalSheet_(ss, 'HOUSE_ASSETS', 'Loan Amount Left');
   const houseEquity = round2_(houseValues - houseLoans);
-  const totalDebt = sumDebtBalances_(getSheet_(ss, 'DEBTS'));
+  const totalDebt = debtsPresent ? sumDebtBalances_(debtsSheet) : 0;
+
+  let snapshotState;
+  if (accountsPresent && debtsPresent) {
+    snapshotState = 'ready';
+  } else if (accountsPresent || debtsPresent) {
+    snapshotState = 'partial';
+  } else {
+    snapshotState = 'notSetUp';
+  }
 
   const netWorth = round2_(cash + investments + houseValues - totalDebt);
 
@@ -186,6 +214,7 @@ function buildDashboardSnapshot_() {
     recentChanges: attribution && attribution.items ? attribution.items : [],
     suggestedActions: suggestedActions,
     retirement: retirement,
+    state: snapshotState,
     sourceUpdated: getDashboardSourceUpdatedMap_(),
     refreshedAt: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss')
   };
@@ -754,13 +783,25 @@ function buildFinancialHealthScore_(latestMetrics, upcoming) {
 function buildDashboardIssues_(ss, snapshot) {
   const out = [];
 
-  getAccountsBelowMinBufferIssues_(getSheet_(ss, 'ACCOUNTS')).forEach(function(issue) {
-    out.push(issue);
-  });
+  // Phase A2: required sheets (SYS - Accounts / INPUT - Debts) may be
+  // absent on a fresh / not-yet-set-up workbook. Skip the corresponding
+  // issue categories instead of letting "Missing sheet (after
+  // retry+flush)" bubble up and abort the whole snapshot.
+  try {
+    getAccountsBelowMinBufferIssues_(getSheet_(ss, 'ACCOUNTS')).forEach(function(issue) {
+      out.push(issue);
+    });
+  } catch (_accountsIssuesMissingErr) {
+    // No Accounts sheet yet → no bank-buffer issues to surface.
+  }
 
-  getHighUtilizationDebtIssues_(getSheet_(ss, 'DEBTS'), 80).forEach(function(issue) {
-    out.push(issue);
-  });
+  try {
+    getHighUtilizationDebtIssues_(getSheet_(ss, 'DEBTS'), 80).forEach(function(issue) {
+      out.push(issue);
+    });
+  } catch (_debtsIssuesMissingErr) {
+    // No Debts sheet yet → no utilization issues to surface.
+  }
 
   const upcoming = snapshot.upcoming || {};
   const upcomingRows = upcoming.rows || [];
