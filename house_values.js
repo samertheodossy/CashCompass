@@ -139,6 +139,16 @@ function ensureSysHouseAssetsSheet_() {
 }
 
 function getHouseUiData() {
+  // Blank-workbook safety: on a fresh sheet INPUT - House Values does
+  // not exist yet and getHousesFromHouseValues_() -> getSheet_() would
+  // throw a red banner on the House Values page. Return the same shape
+  // with empty lists so the page renders clean. The populated path
+  // below is unchanged.
+  const ssEarly = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ssEarly.getSheetByName(getSheetNames_().HOUSE_VALUES)) {
+    return { houses: [], propertyTypeOptions: [] };
+  }
+
   var propertyTypeOpts = [];
   try {
     propertyTypeOpts = getHouseAssetsDistinctColumnValues_('Type');

@@ -34,6 +34,26 @@ var DEBTS_RESERVED_ROW_NAMES_ = {
 /* -------------------------------------------------------------------------- */
 
 function getDebtsUiData() {
+  // Blank-workbook safety: on a fresh sheet INPUT - Debts does not exist
+  // yet and getDebtRows_() -> getSheet_() would throw a red banner. Return
+  // the same shape with empty lists so the Debts page renders clean. The
+  // populated path below is unchanged.
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss.getSheetByName(getSheetNames_().DEBTS)) {
+    return {
+      debts: [],
+      types: ['All'],
+      typeOptions: [],
+      editableFields: [
+        'Account Balance',
+        'Due Date',
+        'Credit Limit',
+        'Minimum Payment',
+        'Credit Left',
+        'Int Rate'
+      ]
+    };
+  }
   const debts = getDebtRows_();
   const typeSet = {};
 

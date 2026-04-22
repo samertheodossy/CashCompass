@@ -222,6 +222,16 @@ function getLatestInvestmentValuesForYear_(sheet, year) {
 }
 
 function getInvestmentUiData() {
+  // Blank-workbook safety: on a fresh sheet INPUT - Investments does
+  // not exist yet and getInvestmentsFromHistory_() -> getSheet_() would
+  // throw a red banner on the Investments page. Return the same shape
+  // with empty lists so the page renders clean. The populated path
+  // below is unchanged.
+  const ssEarly = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ssEarly.getSheetByName(getSheetNames_().INVESTMENTS)) {
+    return { accounts: [], typeOptions: [] };
+  }
+
   var typeOpts = [];
   try {
     typeOpts = getAssetsDistinctColumnValues_('Type');

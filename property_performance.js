@@ -16,6 +16,23 @@ function getPropertyPerformanceData(payload) {
   const year = getCurrentOrSelectedYear_(payload && payload.year);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
+  // Blank-workbook safety: on a fresh sheet SYS - House Assets does not
+  // exist yet and getHouseNamesFromHouseAssets_() -> getSheet_() would
+  // throw a red banner on Property Performance. Return the same shape
+  // with empty rows and zeroed portfolio totals so the page renders
+  // clean ("No houses to show."). The populated path below is
+  // unchanged.
+  if (!ss.getSheetByName(getSheetNames_().HOUSE_ASSETS)) {
+    const cyEarly = getCurrentYear_();
+    return {
+      year: year,
+      yearOptions: [cyEarly - 2, cyEarly - 1, cyEarly, cyEarly + 1],
+      rows: [],
+      portfolio: { equity: 0, rent: 0, expenses: 0, netCash: 0 },
+      message: ''
+    };
+  }
+
   const houseNames = getHouseNamesFromHouseAssets_();
   const cfSheet = tryGetCashFlowSheet_(ss, year);
   const message = cfSheet

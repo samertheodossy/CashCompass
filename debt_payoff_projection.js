@@ -20,6 +20,36 @@ function getDebtPayoffReadData() {
   const y = getCurrentYear_();
   const projectionYears = [y - 1, y];
 
+  // Blank-workbook safety: on a fresh sheet INPUT - Debts / SYS - Accounts
+  // don't exist yet and readSheetAsObjects_ -> getSheet_() would throw a
+  // red banner on Debt Overview. Return the same shape with empty rows
+  // and zeroed summary so the page renders clean. The populated path
+  // below is unchanged.
+  const sheetNames = getSheetNames_();
+  if (
+    !ss.getSheetByName(sheetNames.DEBTS) ||
+    !ss.getSheetByName(sheetNames.ACCOUNTS)
+  ) {
+    return {
+      projectionYears: projectionYears,
+      debts: [],
+      summary: {
+        totalDebtBalance: 0,
+        totalMinimumPayments: 0,
+        usableCashAfterBuffers: 0,
+        totalAvailableNow: 0,
+        totalBuffers: 0,
+        projectedMonthNetCashFlow: 0,
+        longestRoughPayoff: null,
+        payoffMethodNote:
+          'Loan & HELOC: estimated months use a monthly amortization loop (interest on remaining balance, then principal). Other types: balance ÷ minimum payment (rough). If payment ≤ monthly interest on a loan, payoff is shown as unavailable.'
+      },
+      recommendations: [],
+      warnings: [],
+      missingCashFlowSheets: []
+    };
+  }
+
   const debtRows = readSheetAsObjects_(ss, 'DEBTS');
   const accountRows = readSheetAsObjects_(ss, 'ACCOUNTS');
   const aliasMap = getAliasMap_();
