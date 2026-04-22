@@ -1,5 +1,8 @@
 # Going to production — honest read
 
+> **Reference document — release-readiness strategy.**
+> This note pre-dates the V1 trust baseline. Current status is captured in `PROJECT_CONTEXT.md → Current phase` and `SESSION_NOTES.md → V1 trust baseline — complete`; current scope discipline lives in `WORKING_RULES.md → Current phase`. The version label, goal-A / goal-B framing, and “three bars” interpretation below are still useful for thinking about what "1.0 for strangers" would take — update the position read only when the readiness story actually shifts.
+
 This note answers: **how far from a “productizable” product are we**, what **blocks** shipping to others, and what **version** label fits so you can build on it without kidding yourself.
 
 ---

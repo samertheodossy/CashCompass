@@ -1,5 +1,8 @@
 # ONBOARDING & INPUT STRATEGY
 
+> **Reference / future design — not active work.**
+> The core onboarding surface described here (a single **Setup / Review** flow that reuses existing editors) is already **shipped** and blank workbooks are stable under the V1 trust baseline. Live behavior lives in `Dashboard_Help.html → Setup / Review` and `PROJECT_CONTEXT.md → Setup / Review`. The sections below are kept as **durable strategy / design reference** behind those decisions — new onboarding work is not in scope for V1.1 unless explicitly approved (`WORKING_RULES.md → Current phase`).
+
 ## Purpose
 
 Define how users (including non-technical users like family members) will:

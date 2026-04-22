@@ -1,7 +1,7 @@
 # ONBOARDING INFRASTRUCTURE (LONG-TERM)
 
-This document describes future system-level onboarding and workbook initialization.
-It is not part of the current product onboarding flow.
+> **Reference / future design — not active work.**
+> The live onboarding surface is **Setup / Review** (shipped; documented in `Dashboard_Help.html → Setup / Review` and `PROJECT_CONTEXT.md → Setup / Review`). Blank workbooks are already stable under the V1 trust baseline. This document is a long-term wizard / template-product design sketch, **not** a V1.1 work item — do not pull items from it without an explicit product decision (see `ENHANCEMENTS.md → Current phase` and `TODO.md → Later`).
 
 ---
 

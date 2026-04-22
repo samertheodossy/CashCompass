@@ -2,6 +2,21 @@
 
 We are building **CashCompass** — a Google Apps Script web dashboard (and spreadsheet sidebar) for personal finance / property / debt planning. Tagline: *Guiding your money decisions.*
 
+## Current phase — V1.1 / controlled improvement mode
+
+The V1 trust baseline shipped. In this phase the app is no longer being stabilized — it is being **incrementally polished**. Concretely:
+
+- V1 trust baseline is complete.
+- Blank / fresh workbooks are stable end-to-end (dashboard, Setup / Review, Planning tabs, Assets, Cash Flow, Activity).
+- The major "Missing sheet …" and "(after retry+flush)" crashes across dashboard and planner modules are fixed.
+- Misleading zero / fake states were removed — panels either show real data, a calm empty state, or a setup-aware CTA to Setup / Review.
+- The planner email is properly gated: it sends only when the recipient is explicitly configured in `INPUT - Settings.Email` **and** the planner summary is meaningful (has at least one of: debts, assets, scheduled payments, or a recommendation). No more silent "owner got an email from a blank workbook" behavior.
+- The bounded UI copy consistency pass is complete (ellipses, error tone, calm exception messages, empty/setup wording, sheet-name leakage removed from user-facing strings).
+
+**Explicitly NOT in the V1 baseline — retirement profile integration.** V1 shipped retirement *trust / stability* fixes only. It did **not** add **DOB in Profile / Settings**, **deriving retirement age from DOB**, or **deeper profile → Retirement Basics integration**. Those are carried as a V1.1 candidate (see `TODO.md → Next phase / V1.1` and `ENHANCEMENTS.md → Explicitly NOT shipped in V1 — retirement profile integration`) and must preserve backward compatibility for populated workbooks when picked up.
+
+Working rules for this phase are locked in `WORKING_RULES.md → Current phase`. Completed items are captured chronologically in `SESSION_NOTES.md`. Forward-looking work lives under `TODO.md → Next phase / V1.1` and `ENHANCEMENTS.md → Next phase / V1.1`.
+
 ## Decision Layer (product framing)
 
 The app has two layers. Do not conflate them:

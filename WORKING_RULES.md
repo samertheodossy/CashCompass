@@ -1,5 +1,25 @@
 # Working Rules
 
+## Current phase — V1.1 / controlled improvement mode
+
+The V1 trust baseline is complete: blank workbooks are stable, the major missing-sheet crashes are fixed, misleading zero / fake states have been removed, the planner email is properly gated, and the bounded UI copy consistency pass has shipped. The project is no longer in blank-workbook stabilization mode.
+
+Every new change must follow these rules unless the user explicitly approves otherwise:
+
+- **One issue at a time.** Pick the single highest-value issue, ship it, lock it, then pick the next.
+- **No large refactors.** Additive, localized, minimal diffs only.
+- **No architecture changes unless explicitly approved.** `doGet`, `includeHtml_`, snapshot shape, planner decomposition, and sheet/module boundaries are frozen.
+- **No destructive sheet changes.** No header rewrites, no column removals, no reformatting of populated workbooks. New sheets created by helpers must stay idempotent no-ops on populated sheets.
+- **Preserve existing populated-workbook behavior.** A real user workbook must render byte-for-byte the same unless the change was explicitly intended.
+- **Always consider both workbook states:**
+  1. **Blank / fresh workbook** — must degrade calmly with clear guidance; no red banners, no "Missing sheet (after retry+flush): …" exceptions.
+  2. **Real populated workbook** — unchanged except for the intended polish; no regressions.
+- **Every fix must be minimal, localized, and safe.** Prefer client-side fixes when the payload already exposes what you need (e.g. `snapshot.state`). Touch backend only when strictly necessary.
+- **Favor small diffs.** Cursor / agent edits should not touch unrelated files.
+- **After each implementation step, include exact manual test steps** for both the blank workbook and the populated workbook. See `TESTING_PLAN.md` → *Blank + populated two-track manual checks* for the canonical checklist.
+
+Backlog candidates for V1.1 are tracked in `TODO.md → Next phase / V1.1`, product shape in `PROJECT_CONTEXT.md → Current phase`, and ship-by-ship history in `SESSION_NOTES.md`.
+
 ## HtmlService includes (`includeHtml_`)
 
 `includeHtml_` in `html_includes.js` returns **`getRawContent()`** from `HtmlService.createTemplateFromFile(filename)` — the file is read as a **plain string** and spliced into the **parent** template. It is **not** evaluated as its own template pass.

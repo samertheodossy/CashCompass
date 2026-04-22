@@ -9,6 +9,53 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ---
 
+## Current phase — V1.1 / controlled improvement mode
+
+The V1 trust baseline is complete. Blank workbooks are stable, the major "Missing sheet …" / "(after retry+flush)" crashes are fixed, misleading zero / fake states have been removed, the planner email is gated to an explicit `INPUT - Settings.Email` recipient + meaningful planner summary, and the bounded UI copy consistency pass has shipped. See `WORKING_RULES.md → Current phase` for the rules this phase runs under. See `SESSION_NOTES.md` for the chronological record of shipped V1 trust work.
+
+Open items below are either:
+
+- **Next phase / V1.1** — small, localized polish candidates (see section immediately below).
+- Existing backlog kept as-is for historical continuity. Do not pull from the old lists wholesale — each pick must still satisfy the V1.1 working rules (one issue at a time, minimal / localized / safe diff, blank + populated workbook manual test steps).
+
+---
+
+## V1.1 work queue — Active / Next / Later
+
+One flat queue, three buckets. Pull **one** item at a time under the V1.1 working rules (`WORKING_RULES.md → Current phase`). Completed items get moved into `## DONE (history)` at the bottom so this queue stays short.
+
+> **Note on retirement scope.** The V1 trust baseline included retirement *trust / stability* fixes (readiness states, no fake defaults, Overview Retirement Outlook setup-aware copy). It did **not** include **DOB in Profile / Settings**, deriving retirement age from DOB, or deeper profile → Retirement Basics integration. That work is parked in **Next (V1.1 candidates)** below.
+
+### Active now
+
+- *(none in flight — pick the next Active item from the candidates below before starting work.)*
+
+### Next (V1.1 candidates)
+
+Small, localized polish eligible under V1.1 rules. Must pass the blank + populated two-track manual checks in `TESTING_PLAN.md`.
+
+- **Retirement profile integration (not shipped in V1)** — add a **DOB** field to **Profile / Settings**, derive the user's current age for **Retirement Basics**, and reduce duplicate manual entry between Profile and the retirement scenario forms. Must preserve backward compatibility for populated workbooks (blank DOB leaves existing Retirement Basics values untouched; no forced migration).
+- **Copy & Help polish follow-ups** — any residual user-facing wording that still reads `"error:"` / `"please fix …"` / `"Missing sheet …"` / sheet-internal names should be normalized to the V1 trust-safe phrasing from the UI copy consistency pass.
+- **Blank-workbook empty-state consistency pass** — final sweep across any panel that still renders a blank table instead of the standard `No <things> yet.` / `Add your <things> in Setup / Review …` pattern.
+- **Planner email guardrails telemetry** — optional, informational only: surface a small neutral status line when the planner run was meaningful but email was skipped because no recipient is configured. No behavior change.
+- **Codebase cleanups (low-risk only)** — `status / planner_status` audit, Help cross-links, A11y tightening. See the historical `Codebase cleanups` subsection for detail. Anything touching `doGet`, `includeHtml_`, or snapshot shape is **Later**, not V1.1.
+
+### Later (post-V1.1 / future phase)
+
+Captured so the idea isn't lost; **not** in scope for V1.1. Requires an explicit product decision before being pulled up.
+
+- **Onboarding factory refactor** — consolidate the per-step Setup / Review helpers (see `PROJECT_CONTEXT.md → Queued product work`). Touches onboarding shape.
+- **Activity log — smart undo Phases 2–4** — Phase 1 (donation) is shipped. Phases 2 (`quick_pay`), 3 (`house_expense`), and 4 (bill skip / autopay) require logging upgrades first. See historical "Activity — Smart undo / reverse transaction" section below.
+- **Larger product work** — Cash Strategy, HELOC advisor refinement, Plaid-style bank / card / loan sync, car / vehicle expenses as a first-class dashboard surface, subscriptions, income / expense classification, tax workflow, credit-card segmentation, etc. See the historical body below for full design notes.
+- **Two dashboards unification** — `PlannerDashboard.html` (sidebar) vs `PlannerDashboardWeb.html` (web) shared-source strategy.
+- **Broader regression / test harness** — automated unit / integration tests per `TESTING_PLAN.md`.
+
+---
+
+## Historical backlog (pre-V1.1 context)
+
+Everything below this line is preserved as reference. Use it for background and rationale only — do not pull items directly from here without re-qualifying them against the V1.1 queue above.
+
 SAMER Financial Planner
 
 TO DO and issues I see in the testing

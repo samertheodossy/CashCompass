@@ -1,3 +1,28 @@
+## V1 trust baseline — complete
+
+The V1 trust baseline is shipped and locked. The project is now in **V1.1 / controlled improvement mode**. Working rules for this phase live in `WORKING_RULES.md → Current phase`; product framing lives in `PROJECT_CONTEXT.md → Current phase`. All prior phase notes below this header are preserved as-is for historical record.
+
+### Phase history — what V1 shipped
+
+Grouped summary of the work that closed out V1. Full per-change notes are in the dated sections further down in this file; do not condense them.
+
+- **Core stability** — blank / fresh workbook no longer throws `Missing sheet (after retry+flush): …` across Overview, Planning tabs, Assets, Cash Flow, Activity, Setup / Review. Missing-sheet paths degrade calmly to empty states or Setup / Review CTAs.
+- **Retirement trust fixes** — `needsHouseholdBasics` / `needsScenarioAssumptions` / `ready` states; incomplete scenarios treated as inactive; no fake defaults; Overview Retirement Outlook shows a calm setup hint when analysis is unavailable.
+- **Overview trust layer fixes** — Buffer Runway no longer reads "Growing / stable" on blank workbooks; Suggested Actions and Issues route to Setup / Review instead of falsely confident "No active issues detected." / "No suggested actions right now." copy.
+- **Planner / dashboard graceful degradation** — planner panels, Rolling Debt Payoff host, and Bills Due on blank workbooks render empty states or calm setup hints instead of red banners.
+- **Activity log race-condition fix** — concurrent writes to `LOG - Activity` during first-run flows no longer drop rows or double-log paired `quick_pay` events.
+- **Blank-workbook module fixes** — remaining module-by-module crashes fixed across Setup / Review, Bank Accounts, Investments, Debts, Upcoming, Donations, House Values / Expenses, Property Performance.
+- **Rolling Debt Payoff blank-workbook handling** — tab renders an empty / setup-aware state instead of throwing when `INPUT - Debts`, `SYS - Accounts`, or Cash Flow year sheets are missing.
+- **Quick Add load + submit safety** — prefill and submit no longer throw on a blank workbook; form loads with neutral empty state and guides users to Setup / Review when Bills / Debts / Accounts are missing.
+- **Planner email gating fix** — `sendPlannerEmailIfConfigured_` reads `INPUT - Settings.Email` strictly (no `Session.getActiveUser()` fallback), and also requires `isPlannerSummaryMeaningful_(summary)` before sending. Blank / not-set-up workbooks no longer silently email the owner; populated workbooks with a valid settings email are unaffected.
+- **UI copy consistency pass** — bounded pass across Dashboard HTML + standalone dialogs + user-facing backend messages: ellipsis normalization (`Saving…`), removal of user-facing `"Error:"` prefixes, calm exception messages (`Couldn't load — please try again.`), direct validation tone (`<Field> is required.`), standard empty / setup wording (`No <things> yet.`, `Add your <things> in Setup / Review to see <outcome>.`), `Open Setup / Review` CTA label preserved, and removal of internal sheet-name leakage from user-facing strings.
+
+---
+
+## Archive (historical notes)
+
+Everything below this line is preserved as-is for historical context. It captures the phase-by-phase stabilization, polish, and feature work that led up to the V1 trust baseline summarized above. Do **not** treat the status lines, TODO/open fragments, or "current" / "next step" text inside this archive as active — current status lives in the V1 trust baseline header, `PROJECT_CONTEXT.md → Current phase`, and `TODO.md → Next phase / V1.1`.
+
 ## Final Polish Phase
 
 Context:

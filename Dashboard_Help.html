@@ -78,7 +78,7 @@
         <ul class="help-list">
           <li><strong>Required</strong> — <strong>Name</strong> and <strong>Email</strong>. Used for planner emails and personalization.</li>
           <li><strong>Optional</strong> — <strong>Phone</strong> and <strong>Address</strong>. Add later if needed.</li>
-          <li><strong>Why email</strong> — Planner emails go to the Email entered here. Falls back to your Google account email if blank.</li>
+          <li><strong>Why email</strong> — Planner emails go to the Email entered here. If this field is blank, the planner will skip sending the email — there is no fallback to your Google account.</li>
           <li><strong>Edit</strong> — Open <strong>Setup / Review</strong> → Profile → <em>Edit profile</em>. Save writes immediately; Cancel discards edits.</li>
         </ul>
 
@@ -745,6 +745,13 @@
       <section id="help-debt-email" class="help-section">
         <h3>Debt Planner email</h3>
         <p>Running the debt planner may send a short email titled <strong>Debt Planner Update</strong>. It is a quick glance — bill buckets first, then a compact summary (stability, net worth, cash flow, extra-payoff hints). Full definitions live here, not in the email.</p>
+
+        <h4>When the email is sent</h4>
+        <ul class="help-list">
+          <li><strong>Recipient must be configured</strong> — the planner reads <strong>INPUT - Settings → Email</strong> directly. If that cell is blank, the email is skipped. There is no fallback to your Google account email.</li>
+          <li><strong>Planner summary must be meaningful</strong> — the email is also skipped when the current workbook has nothing substantive to report (for example: no active debts, no assets, no scheduled payments, and no recommendation). Populated workbooks with a valid recipient are unaffected.</li>
+          <li><strong>Where to change the recipient</strong> — open <strong>Setup / Review → Profile → Edit profile</strong> to update <strong>Email</strong>; it is stored in <strong>INPUT - Settings</strong>.</li>
+        </ul>
 
         <h4>What you see</h4>
         <ul class="help-list">

@@ -4,6 +4,42 @@ Durable product/engineering backlog for the financial planning system. Grounded 
 
 ---
 
+## 0. Current phase — V1.1 / controlled improvement mode
+
+The V1 trust baseline is complete and shipped. See `SESSION_NOTES.md → V1 trust baseline — complete` for the phase-history summary, `PROJECT_CONTEXT.md → Current phase` for the product framing, and `WORKING_RULES.md → Current phase` for the rules every V1.1 change runs under.
+
+Scope for this phase:
+
+- **In scope (V1.1):** small, localized polish that preserves existing populated-workbook behavior, and only after passing the blank + populated two-track manual checks in `TESTING_PLAN.md`. Candidates are pulled one at a time from `TODO.md → V1.1 work queue → Next (V1.1 candidates)`.
+- **Out of scope for V1.1 unless explicitly approved:** large refactors (Queued — post Next Actions stabilization, full `dashboard_data.js` split, onboarding factory refactor, broader regression/test harness), any change to `doGet` / `includeHtml_` / snapshot shape, destructive sheet changes, and any item listed under `TODO.md → Later (post-V1.1 / future phase)`.
+
+Items below that are fully delivered still carry their original "DELIVERED" tag so the rationale and history stay visible; they are not re-opened. Items tagged "DELIVERED" under a phase (1, 2, 3, …) are phase history, not V1.1 work.
+
+### Active / Next / Later at a glance
+
+Authoritative live queue lives in `TODO.md → V1.1 work queue`. Mirror here is short on purpose:
+
+- **Active now:** *(none in flight)*
+- **Next (V1.1 candidates):** retirement profile integration (DOB in Profile / Settings → derived age in Retirement Basics; preserve populated-workbook behavior), copy & Help polish follow-ups, blank-workbook empty-state consistency sweep, planner email guardrails telemetry (informational only), low-risk codebase cleanups.
+- **Later (post-V1.1 / future phase):** onboarding factory refactor, Activity smart-undo Phases 2–4, Cash Strategy, HELOC advisor refinement, Plaid-style sync, broader regression / test harness, two-dashboards unification, and the other big-product items captured below and in `TODO.md → Historical backlog`.
+
+### Explicitly NOT shipped in V1 — retirement profile integration (V1.1 candidate)
+
+The V1 trust baseline covered retirement *trust / stability* (readiness states, no fake defaults, Overview Retirement Outlook setup-aware copy). It did **not** include any of the following; they are carried as a V1.1 candidate, not as completed work:
+
+- **DOB in Profile / Settings** — no date-of-birth field is captured today.
+- **Derived age for Retirement Basics** — current age is still entered manually in Retirement Basics.
+- **Deeper profile → retirement integration** — Profile and retirement scenario forms do not share inputs, so age / name / email can diverge between surfaces.
+
+Desired V1.1 shape (small, localized, must preserve populated-workbook behavior):
+
+- Add a DOB field to Profile / Settings (stored in `INPUT - Settings`).
+- Derive current age from DOB and prefill / surface it in Retirement Basics.
+- Reduce duplicate manual entry between Profile and retirement forms.
+- **Backward compatibility required** — blank DOB must leave existing Retirement Basics values untouched; no forced migration of populated workbooks. Both tracks of the blank + populated manual checks (`TESTING_PLAN.md`) must pass.
+
+---
+
 ## 1. Current product state
 
 What is working well right now:

@@ -1,5 +1,7 @@
 # CashCompass — System Briefing
 
+> **Reference document.** Architecture-level narrative for onboarding a new contributor in one read. For the authoritative current-state architecture and tab-by-tab behavior, see `PROJECT_CONTEXT.md` (live source of truth). For the current phase / working rules, see `WORKING_RULES.md → Current phase`.
+
 A personal financial planning app built on top of Google Sheets. Two consumption surfaces today: a **web dashboard** (Apps Script `doGet`) and a **spreadsheet sidebar**. Product tagline: *Guiding your money decisions.*
 
 ---

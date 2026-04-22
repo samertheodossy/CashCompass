@@ -6,6 +6,37 @@ This complements `GoingToProduction.md`: validation/onboarding reduce user error
 
 ---
 
+## Current phase — V1.1 manual test discipline
+
+In V1.1 / controlled improvement mode there is still no automated harness. Every change must ship with **exact manual test steps for both a blank workbook and a real populated workbook**. See `WORKING_RULES.md → Current phase` for the rule; the canonical checklist is the two-track section below.
+
+### Blank + populated two-track manual checks
+
+Run both tracks after every change, however small.
+
+**Track A — Blank / fresh workbook (regression guardrail for V1 trust baseline)**
+
+1. Open the deployed web app against a workbook that has **no** `INPUT -`, `SYS -`, `OUT -`, or `LOG -` sheets (or only the scaffold sheets Setup creates).
+2. Confirm the dashboard loads without a red banner, without `Missing sheet (after retry+flush): …`, and without console exceptions.
+3. Click through each top nav page: **Overview, Cash Flow (Quick add, Upcoming, Donations, Bills), Assets (House Values, Bank Accounts, Investments), Properties (House Expenses, Property Performance), Planning (Next Actions, Debts, Debt Overview, Rolling Debt Payoff, Retirement, Purchase Sim), Activity**. Each panel must render a calm empty state or a setup-aware CTA — never a red error.
+4. Open **Setup / Review** from the header. Welcome should render when every probe is `missing`; otherwise the status grid renders. **Back to Dashboard** returns to Overview.
+5. Run **Run Planner + Refresh Snapshot**. The status line must show a readable result (no "(after retry+flush)" exception). Confirm **no planner email was sent** (planner email is gated on `INPUT - Settings.Email` + a meaningful summary).
+6. Save one happy-path write the change touches (e.g. Add bank account, Add bill, Quick add, Add donation) and confirm Activity shows exactly one expected row.
+7. Re-check any panel the change touched against the copy standard: `No <things> yet.`, `Add your <things> in Setup / Review to see <outcome>.`, no `"Error:"` prefixes, ellipses render as `…`, and no internal sheet names leak into user-facing messages.
+
+**Track B — Real populated workbook (regression guardrail for existing users)**
+
+1. Open the deployed web app against a populated workbook (the real household workbook or a recent copy).
+2. Confirm Overview KPIs, Bills Due, Upcoming Next 7/30, Net Worth, Buffer Runway, and Retirement Outlook render **unchanged** from the prior known-good baseline.
+3. Open every page the change touched and confirm the existing data still renders byte-for-byte the same (no reordering, no new dashes where values used to appear, no sheet-name leakage into success / error text).
+4. Run **Run Planner + Refresh Snapshot**. Confirm OUT - History snapshot still appends (or stays identical if snapshot is idempotent). If `INPUT - Settings.Email` is configured and the summary is meaningful, confirm the planner email still sends.
+5. Exercise one write the change touched (Add / Update / Stop tracking / Quick add / Pay bill). Confirm Activity logs the expected row and that Overview / side panels refresh without a hard reload.
+6. Spot-check **Rolling Debt Payoff** Standard mode: Decision card, HELOC card, Payment result table, and the `[Add payment]` → Cash Flow → Quick add prefill all still work.
+
+If either track fails, the change is not ready to ship — fix, then re-run both tracks.
+
+---
+
 ## Why this matters
 
 - The app is **large and interconnected** (Cash Flow, Debts, Bills Due, planner, dashboard). A small change in one helper can break another path.
