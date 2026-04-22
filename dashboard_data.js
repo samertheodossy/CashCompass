@@ -600,6 +600,31 @@ function getPriorMonthPlannerHistoryMetrics_() {
 }
 
 function buildBufferRunway_(latestMetrics, cash) {
+  // Truly-blank case: no planner history AND no live cash signal.
+  // Without this guard, `buildRunwayFromValues_(0, 0, 0)` returns a
+  // confident-sounding "Growing / stable · Projected monthly cash
+  // flow is non-negative." payload because `cf >= 0` is vacuously true
+  // when every input is zero. On a brand-new workbook that reads as
+  // the planner asserting things are fine before the user has entered
+  // a single number — the same "false confidence" class of bug we
+  // just removed from the Retirement tab + Overview Retirement card.
+  //
+  // `buildRunwayFromValues_` stays unchanged: its math contract is
+  // correct (zeros in → "non-negative" out) and other callers / the
+  // partial-cash branch below still rely on it. We fix the issue at
+  // the caller layer where we can still tell "no signal at all" from
+  // "legitimate zeros". Payload shape is preserved so the existing
+  // `renderBufferRunway` path renders it with no UI change.
+  const numericCash = Number(cash);
+  const hasLiveCashSignal = !isNaN(numericCash) && numericCash > 0;
+  if (!latestMetrics && !hasLiveCashSignal) {
+    return {
+      months: null,
+      label: '—',
+      detail: 'Run the planner to see how long your cash covers burn.',
+      monthsLine: null
+    };
+  }
   if (!latestMetrics) {
     return buildRunwayFromValues_(cash, 0, 0);
   }
