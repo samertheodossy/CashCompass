@@ -426,21 +426,31 @@ function getOrCreateRetirementSheet_() {
 
   sheet = ss.insertSheet(sheetName);
 
+  // Brand-new retirement sheets start with neutral data. Personal /
+  // financial seeds (ages, spending, social security, contributions)
+  // are left blank so nothing misleading is displayed before the user
+  // enters their own values via the Retirement Basics form or the full
+  // scenario form. Only true generic, non-personal defaults remain —
+  // expected return, inflation, safe withdrawal rate — which the user
+  // can still edit. Existing retirement sheets are NOT touched by this
+  // function (the `if (sheet) return sheet;` guard above short-circuits
+  // before we reach this seed array), so populated workbooks keep every
+  // value they already have.
   const rows = [
     ['Setting', 'Value', '', ''],
     ['Selected Scenario', 'Base', '', ''],
     ['', '', '', ''],
     ['Household Input', 'Value', '', ''],
-    ['Your Current Age', 53, '', ''],
-    ['Spouse Current Age', 47, '', ''],
+    ['Your Current Age', '', '', ''],
+    ['Spouse Current Age', '', '', ''],
     ['', '', '', ''],
     ['Scenario Input', 'Conservative', 'Base', 'Aggressive'],
     ['Target Retirement Age', 60, 60, 58],
-    ['Household Retirement Spending / Year', 180000, 180000, 180000],
-    ['Your Social Security / Year', 36000, 36000, 35000],
-    ['Spouse Social Security / Year', 20000, 20000, 18000],
+    ['Household Retirement Spending / Year', '', '', ''],
+    ['Your Social Security / Year', '', '', ''],
+    ['Spouse Social Security / Year', '', '', ''],
     ['Other Retirement Income / Year', 0, 0, 0],
-    ['Annual Contributions', 0, 50000, 60000],
+    ['Annual Contributions', '', '', ''],
     ['Expected Annual Return %', 4, 6, 8.5],
     ['Inflation %', 2.5, 2.5, 2.25],
     ['Safe Withdrawal Rate %', 4, 4, 4.25],
