@@ -60,17 +60,33 @@ function runDebtPlanner() {
   const today = new Date();
   const tz = Session.getScriptTimeZone();
 
-  syncAllHouseAssetsFromLatestCurrentYear_();
-  syncAllAccountsFromLatestCurrentYear_();
-  syncAllAssetsFromLatestCurrentYear_();
+  // Tolerate missing input/system sheets on blank or partially set up
+  // workbooks so "Run Planner + Refresh Snapshot" degrades gracefully
+  // instead of throwing a red "Missing sheet: ..." error. Only missing-
+  // sheet errors are swallowed here; any other error still propagates
+  // so real bugs remain visible. On a fully populated workbook every
+  // try block succeeds and behavior is identical to before.
+  runDebtPlannerSyncSafely_(syncAllHouseAssetsFromLatestCurrentYear_);
+  runDebtPlannerSyncSafely_(syncAllAccountsFromLatestCurrentYear_);
+  runDebtPlannerSyncSafely_(syncAllAssetsFromLatestCurrentYear_);
 
   const currentYear = today.getFullYear();
 
-  const cashFlowRows = readCashFlowSheetAsObjects_(ss, currentYear);
-  const debtRows = readSheetAsObjects_(ss, 'DEBTS');
-  const accountRows = readSheetAsObjects_(ss, 'ACCOUNTS');
-  const assetRows = readSheetAsObjects_(ss, 'ASSETS');
-  const houseAssetRows = readSheetAsObjects_(ss, 'HOUSE_ASSETS');
+  const cashFlowRows = runDebtPlannerReadSafely_(function() {
+    return readCashFlowSheetAsObjects_(ss, currentYear);
+  });
+  const debtRows = runDebtPlannerReadSafely_(function() {
+    return readSheetAsObjects_(ss, 'DEBTS');
+  });
+  const accountRows = runDebtPlannerReadSafely_(function() {
+    return readSheetAsObjects_(ss, 'ACCOUNTS');
+  });
+  const assetRows = runDebtPlannerReadSafely_(function() {
+    return readSheetAsObjects_(ss, 'ASSETS');
+  });
+  const houseAssetRows = runDebtPlannerReadSafely_(function() {
+    return readSheetAsObjects_(ss, 'HOUSE_ASSETS');
+  });
 
   const payNowWindowDays = 7;
   const paySoonWindowDays = 30;
@@ -379,4 +395,43 @@ function runDebtPlanner() {
   appendHistory_(ss, summary);
   writeRecommendations_(ss, summary);
   sendPlannerEmailIfConfigured_(summary);
+}
+
+// Returns true if `err` is the specific "sheet not found" error surfaced by
+// getSheet_ / getCashFlowSheet_. Only these errors are safe to swallow in
+// runDebtPlanner() — anything else should still propagate.
+function isMissingSheetError_(err) {
+  if (!err) return false;
+  var msg = String(err.message != null ? err.message : err);
+  return (
+    msg.indexOf('Missing sheet') === 0 ||
+    msg.indexOf('Missing cash flow sheet') === 0
+  );
+}
+
+// Invoke a planner pre-sync function. Sync helpers are side-effect-only
+// maintenance (propagating latest current-year balances into SYS - *).
+// If any of their required input/output sheets is missing, there is
+// nothing to sync, so we skip silently. Populated workbooks are
+// unaffected because the required sheets exist.
+function runDebtPlannerSyncSafely_(fn) {
+  try {
+    fn();
+  } catch (err) {
+    if (isMissingSheetError_(err)) return;
+    throw err;
+  }
+}
+
+// Invoke a planner data-read callback. If the backing sheet is missing,
+// return an empty array so downstream normalize*_ functions produce
+// empty/zero results (the planner run completes in a degraded way).
+// Any other error is re-thrown to preserve diagnostics.
+function runDebtPlannerReadSafely_(readerFn) {
+  try {
+    return readerFn();
+  } catch (err) {
+    if (isMissingSheetError_(err)) return [];
+    throw err;
+  }
 }
