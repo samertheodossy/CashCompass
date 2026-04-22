@@ -68,7 +68,24 @@ function getOrCreateActivityLogSheet_(ss) {
     }
     return sh;
   }
-  sh = ss.insertSheet(ACTIVITY_LOG_SHEET_NAME);
+  try {
+    sh = ss.insertSheet(ACTIVITY_LOG_SHEET_NAME);
+  } catch (insertErr) {
+    // On a truly blank workbook the dashboard fires several RPCs in
+    // parallel (buildDashboardSnapshot_, getBillsDueFromCashFlowForDashboard,
+    // etc.), each of which calls ensureActivityLogSheet_. The
+    // getSheetByName check above and this insertSheet call are not
+    // atomic across concurrent executions, so two threads can both
+    // observe "missing" and race. The loser's insertSheet call throws
+    // "A sheet with the name 'LOG - Activity' already exists." — that
+    // surfaces as a red banner on the Overview. Treat the collision as
+    // "the winner just created it" and return the now-existing sheet.
+    // Any other insert failure is re-thrown so genuine problems still
+    // surface clearly.
+    var existing = ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
+    if (existing) return existing;
+    throw insertErr;
+  }
   sh.getRange(1, 1, 1, ACTIVITY_LOG_HEADERS.length).setValues([ACTIVITY_LOG_HEADERS]);
   sh.setFrozenRows(1);
 
