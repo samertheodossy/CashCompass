@@ -156,7 +156,20 @@ function getBankAccountUiData() {
     Logger.log('getBankAccountUiData inactive filter: ' + e);
   }
 
-  const allAccounts = getBankAccountsFromHistory_();
+  // First-run safety: on a blank workbook INPUT - Bank Accounts does
+  // not exist yet, so getBankAccountsFromHistory_() would throw
+  // "Missing sheet: INPUT - Bank Accounts" and surface a red error in
+  // the Bank Accounts setup UI even though the flow is not actually
+  // blocked (the first save runs ensureInputBankAccountsSheet_ before
+  // writing). Treat missing as "no existing accounts yet" so the UI
+  // can render its empty/create state cleanly. Populated workbooks are
+  // unaffected because the sheet exists and the read succeeds.
+  let allAccounts = [];
+  try {
+    allAccounts = getBankAccountsFromHistory_();
+  } catch (e) {
+    Logger.log('getBankAccountUiData history read: ' + e);
+  }
   const activeAccounts = allAccounts.filter(function(name) {
     return !inactive[String(name || '').toLowerCase()];
   });
