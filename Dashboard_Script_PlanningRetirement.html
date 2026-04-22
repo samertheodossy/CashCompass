@@ -224,6 +224,7 @@ function saveRetirementBasicsFromUi_() {
       // basics are valid the state flips to 'ready' and the basics
       // form is hidden by the load branch above.
       loadRetirementSection();
+      refreshSnapshot();
     })
     .withFailureHandler(function(err) {
       setStatus('ret_basics_status', 'Error: ' + (err && err.message ? err.message : String(err)), true);
