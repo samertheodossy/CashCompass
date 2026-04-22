@@ -3,7 +3,15 @@ var RETIREMENT_SCENARIOS_ = ['Conservative', 'Base', 'Aggressive'];
 function getRetirementUiData() {
   const sheet = getOrCreateRetirementSheet_();
   const data = getRetirementModelData_(sheet);
-  writeRetirementOutputs_(sheet, data.analysis);
+  // `data.analysis` is null when the selected scenario is incomplete
+  // (see the skip logic in `getRetirementModelData_`). Skip the sheet
+  // write in that case rather than crashing `writeRetirementOutputs_`,
+  // which dereferences analysis fields with no null guards. The
+  // previously-written "Selected Scenario Output" values remain in the
+  // sheet untouched until a computable scenario is selected again.
+  if (data.analysis) {
+    writeRetirementOutputs_(sheet, data.analysis);
+  }
   return data;
 }
 
@@ -37,7 +45,14 @@ function saveRetirementInputs(payload) {
   setSelectedRetirementScenario_(sheet, selectedScenario);
 
   const data = getRetirementModelData_(sheet);
-  writeRetirementOutputs_(sheet, data.analysis);
+  // In practice `data.analysis` is always non-null here because
+  // `saveRetirementInputs` has just validated the selected scenario's
+  // inputs above and written them to the sheet. Guarding defensively
+  // so the save path is consistent with `getRetirementUiData` and
+  // tolerant of any future selection-vs-selected-payload drift.
+  if (data.analysis) {
+    writeRetirementOutputs_(sheet, data.analysis);
+  }
   touchDashboardSourceUpdated_('retirement');
 
   return {
@@ -114,7 +129,7 @@ function saveRetirementBasics(payload) {
  *
  * Shape (current runtime, preserved for compatibility):
  *   {
- *     state: 'ready' | 'needsHouseholdBasics' | 'error',
+ *     state: 'ready' | 'needsHouseholdBasics' | 'needsScenarioAssumptions' | 'error',
  *     message: string,                 // user-facing copy for non-ready states
  *     missingFields: string[],         // which household fields are blank
  *     settings: {                      // INPUT - Settings probe (read-only)
@@ -224,6 +239,61 @@ function getRetirementUiDataSafe() {
     return result;
   }
 
+  // Gate the compute path behind a "do we have enough scenario inputs
+  // to produce a meaningful plan?" check.
+  //
+  // Without this gate, a brand-new workbook where the user has only
+  // filled in Retirement Basics (age) will flip straight to the ready
+  // branch and render `calculateRetirementPlan_` output for every
+  // scenario using blank (=0) assumptions. The math dutifully returns
+  // Goal $0 → Funded 100% → "Can retire now: Yes" → MC success 100%,
+  // which reads as a confident "you're already set for retirement"
+  // story *before the user has entered a single dollar of spending,
+  // Social Security, or contributions*. That is the exact opposite of
+  // what we want the first retirement experience to say.
+  //
+  // Smallest safe gate: at least one scenario must have retirement
+  // spending > 0. Spending is the single most load-bearing scenario
+  // input — every downstream number (goal, funded %, Monte Carlo,
+  // summary string) flows from it. Blocking on spending alone avoids
+  // the misleading "already funded" story while letting users save
+  // partial scenario data (e.g. contributions + return assumptions
+  // first) without getting stuck in the guidance state.
+  //
+  // This is intentionally read-only and additive:
+  //   - reads scenarios via a tolerant helper that never throws
+  //   - does NOT run `calculateRetirementPlan_`
+  //   - does NOT change any retirement math
+  //   - does NOT write to any sheet
+  //   - populated workbooks (where every scenario already has spending
+  //     > 0) skip this branch entirely and land in the ready branch
+  //     below byte-identically to the prior contract.
+  let scenariosForGate = null;
+  let selectedForGate = 'Base';
+  try {
+    scenariosForGate = readRetirementScenariosSafe_(sheet);
+    selectedForGate = getSelectedRetirementScenario_(sheet);
+  } catch (_scenariosErr) {
+    // Tolerate any transient read issue; fall through to the compute
+    // path, which has its own try/catch envelope below.
+  }
+
+  if (scenariosForGate && !hasAnyMeaningfulRetirementScenarioAssumptions_(scenariosForGate)) {
+    result.state = 'needsScenarioAssumptions';
+    result.missingFields = [
+      'householdRetirementSpendingPerYear',
+      'targetRetirementAge'
+    ];
+    result.message =
+      'Add your retirement spending, Social Security, and contributions to see your plan.';
+    result.selectedScenario = selectedForGate;
+    result.household = householdRead.values;
+    result.scenarios = scenariosForGate;
+    // analyses / analysis intentionally null — we do not want any
+    // computed output to render in this state.
+    return result;
+  }
+
   try {
     const data = getRetirementUiData();
     result.selectedScenario = data.selectedScenario;
@@ -238,6 +308,91 @@ function getRetirementUiDataSafe() {
     result.message = 'Retirement planner could not load. Try again, or review your inputs below.';
     return result;
   }
+}
+
+/**
+ * Read every scenario's raw inputs without throwing on a malformed or
+ * partially-populated INPUT - Retirement sheet.
+ *
+ * Mirrors the tolerance contract of `readRetirementHouseholdSafe_`:
+ * any per-scenario read error (missing row label, unexpected layout)
+ * falls back to a zeroed scenario so the UI can still prefill input
+ * fields without surfacing a red error. Never creates the sheet,
+ * never writes.
+ *
+ * Returns `{ Conservative, Base, Aggressive }` — always the full set
+ * of scenario keys, each an inputs object with numeric fields (0 when
+ * blank).
+ */
+function readRetirementScenariosSafe_(sheet) {
+  const out = {};
+  RETIREMENT_SCENARIOS_.forEach(function(name) {
+    try {
+      out[name] = getRetirementScenarioInputs_(sheet, name);
+    } catch (_scenarioErr) {
+      out[name] = {
+        targetRetirementAge: 0,
+        householdRetirementSpendingPerYear: 0,
+        yourSocialSecurityPerYear: 0,
+        spouseSocialSecurityPerYear: 0,
+        otherRetirementIncomePerYear: 0,
+        annualContributions: 0,
+        expectedAnnualReturnPct: 0,
+        inflationPct: 0,
+        safeWithdrawalRatePct: 0,
+        oneTimeFutureCashNeeds: 0
+      };
+    }
+  });
+  return out;
+}
+
+/**
+ * Per-scenario predicate: does this scenario have enough data to be
+ * computed and rendered as a real retirement plan?
+ *
+ * Both fields must be jointly present on the same scenario:
+ *   - householdRetirementSpendingPerYear > 0
+ *     (otherwise `calculateRetirementPlan_` yields the misleading
+ *     "$0 goal, 100% funded, can retire now" story)
+ *   - targetRetirementAge > 0
+ *     (otherwise `validateRetirementScenarioInputs_` throws
+ *     "Target Retirement Age must be >= Your Current Age" once any
+ *     household age is set, which would fail the whole compute path)
+ *
+ * Other inputs (Social Security, contributions, returns, inflation,
+ * SWR, one-time needs) stay optional so users can enter values
+ * incrementally. Incomplete scenarios are treated as inactive — we
+ * skip calc + validation for them in `getRetirementModelData_`.
+ */
+function isRetirementScenarioComputable_(inputs) {
+  return !!(
+    inputs &&
+    Number(inputs.householdRetirementSpendingPerYear) > 0 &&
+    Number(inputs.targetRetirementAge) > 0
+  );
+}
+
+/**
+ * Readiness gate: is at least one scenario computable?
+ *
+ * This is the gate used by `getRetirementUiDataSafe` to decide between
+ * `needsScenarioAssumptions` (show guidance, no computed output) and
+ * `ready` (compute and render). Because incomplete scenarios are
+ * skipped inside `getRetirementModelData_`, a single computable
+ * scenario is sufficient for the ready path to run safely — users can
+ * fill in Base first and still get a valid result while Conservative
+ * and Aggressive remain blank.
+ */
+function hasAnyMeaningfulRetirementScenarioAssumptions_(scenarios) {
+  if (!scenarios) return false;
+  const names = RETIREMENT_SCENARIOS_;
+  for (let i = 0; i < names.length; i++) {
+    if (isRetirementScenarioComputable_(scenarios[names[i]])) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -403,10 +558,33 @@ function getRetirementModelData_(sheet) {
   const scenarios = {};
   const analyses = {};
 
+  // Treat incomplete scenarios as inactive rather than validating /
+  // calculating them. A scenario is "computable" only when it has BOTH
+  // targetRetirementAge > 0 and householdRetirementSpendingPerYear > 0
+  // (see `isRetirementScenarioComputable_`). Skipping the calc for
+  // incomplete scenarios prevents two failure modes without touching
+  // any calculation logic:
+  //
+  //   1. `validateRetirementScenarioInputs_` throwing because a blank
+  //      Target Retirement Age (= 0) is less than the household's
+  //      current age — which would flip the whole tab to the error
+  //      state even if another scenario was fully populated.
+  //   2. Rendering a misleading "$0 goal, 100% funded, can retire now"
+  //      story from a scenario that has no spending input.
+  //
+  // We still record the raw inputs in `scenarios[name]` so the UI can
+  // prefill the scenario form for editing; only `analyses[name]` is
+  // left null for incomplete scenarios. The client's render helpers
+  // (`renderRetirementScenarioCards`, `renderRetirementPanelInfo`,
+  // `onRetirementScenarioChange`) already null-guard on
+  // `analyses[name]`, so this degrades cleanly — the incomplete
+  // scenario's card and info panel simply don't paint.
   RETIREMENT_SCENARIOS_.forEach(function(name) {
     const inputs = getRetirementScenarioInputs_(sheet, name);
     scenarios[name] = inputs;
-    analyses[name] = calculateRetirementPlan_(household, inputs, name);
+    analyses[name] = isRetirementScenarioComputable_(inputs)
+      ? calculateRetirementPlan_(household, inputs, name)
+      : null;
   });
 
   return {
@@ -445,7 +623,7 @@ function getOrCreateRetirementSheet_() {
     ['Spouse Current Age', '', '', ''],
     ['', '', '', ''],
     ['Scenario Input', 'Conservative', 'Base', 'Aggressive'],
-    ['Target Retirement Age', 60, 60, 58],
+    ['Target Retirement Age', '', '', ''],
     ['Household Retirement Spending / Year', '', '', ''],
     ['Your Social Security / Year', '', '', ''],
     ['Spouse Social Security / Year', '', '', ''],

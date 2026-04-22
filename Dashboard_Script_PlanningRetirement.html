@@ -40,6 +40,46 @@ function loadRetirementSection() {
 
         clearRetirementReadOnlyInfo_();
         setStatus('retirement_status', '', false);
+      } else if (state === 'needsScenarioAssumptions') {
+        // Household basics are saved, but no scenario has meaningful
+        // assumptions yet (specifically: retirement spending > 0 on at
+        // least one scenario). Show a calm guidance card above the
+        // scenario input form so the user fills in spending / Social
+        // Security / contributions *before* any computed output is
+        // rendered — otherwise `calculateRetirementPlan_` would spin
+        // blanks into a confident "already funded / can retire now"
+        // story (see the matching gate in `getRetirementUiDataSafe`).
+        //
+        // The scenario input form itself is always in the DOM and is
+        // not hidden here — the user fills it in place.
+        showRetirementEmptyState_({
+          title: 'Add your retirement assumptions to see your plan.',
+          body: (data && data.message) ||
+            'Add your retirement spending, Social Security, and contributions to see your plan.',
+          hint: 'Fill in Household Retirement Spending / Year (and any other assumptions you know) below, then click "Save Selected Scenario".'
+        });
+        hideRetirementBasicsForm_();
+
+        // Prefill the readonly age fields and the selected scenario
+        // dropdown so the user sees context.
+        document.getElementById('ret_selectedScenario').value = (data && data.selectedScenario) || 'Base';
+        document.getElementById('ret_yourCurrentAge').value =
+          data && data.household && data.household.yourCurrentAge > 0 ? data.household.yourCurrentAge : '';
+        document.getElementById('ret_spouseCurrentAge').value =
+          data && data.household && data.household.spouseCurrentAge > 0 ? data.household.spouseCurrentAge : '';
+
+        // Prefill the scenario input form from whatever the retirement
+        // sheet already holds (mostly blank on a fresh workbook; may
+        // hold partial values on a partially edited one). Reuses the
+        // existing helper — `retirementUiData.scenarios[scenario]` was
+        // assigned at the top of this success handler.
+        var scenarioName = document.getElementById('ret_selectedScenario').value || 'Base';
+        fillRetirementScenarioInputs(scenarioName);
+
+        // Blanks out the scenario cards + right-hand info panel so no
+        // stale / derived numbers leak into this state.
+        clearRetirementReadOnlyInfo_();
+        setStatus('retirement_status', '', false);
       } else {
         // state === 'error' — still not a red banner. We show the same
         // calm inline card with wording that hints at a retry path.
