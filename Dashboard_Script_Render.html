@@ -423,12 +423,31 @@ function renderSuggestedActionsIssueHint(issues) {
     'Debt utilization and other alerts are listed in the Issues card below — not in this list.';
 }
 
-function renderActions(actions) {
+function renderActions(actions, state) {
   const root = document.getElementById('actions_list');
   if (!root) return;
 
   const items = actions || [];
   if (!items.length) {
+    // On a completely not-set-up workbook (no Bank Accounts, no Debts)
+    // `buildSuggestedActions_` legitimately returns []. Showing the
+    // muted "No suggested actions right now." in that case reads as
+    // "you're all caught up", which is the opposite of the truth —
+    // the real next step is Setup / Review. The snapshot already
+    // exposes `state` ('notSetUp' | 'partial' | 'ready'), so surface
+    // a single, calm fallback action in the notSetUp case only.
+    // Populated and partially-set-up workbooks still see the original
+    // muted empty message.
+    if (state === 'notSetUp') {
+      root.innerHTML =
+        '<button class="action-item severity-info" onclick="showPage(\'onboarding\')">' +
+          '<div class="action-title">Finish setting up your workbook</div>' +
+          '<div class="action-message">Add your bank accounts and debts so the dashboard can show real numbers.</div>' +
+          '<div class="action-cta">Open Setup / Review</div>' +
+        '</button>';
+      window.__dashboardActions = [];
+      return;
+    }
     root.innerHTML = '<div class="muted">No suggested actions right now.</div>';
     window.__dashboardActions = [];
     return;
@@ -610,7 +629,7 @@ function applySnapshot(snapshot) {
   renderHealth(snapshot.health || null);
   renderWeeklyAttribution(snapshot.attribution || null);
   renderBufferRunway(snapshot.bufferRunway || null);
-  renderActions(snapshot.suggestedActions || []);
+  renderActions(snapshot.suggestedActions || [], snapshot.state);
   renderRetirementSummary(snapshot.retirement || null);
 }
 
