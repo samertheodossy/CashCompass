@@ -737,6 +737,27 @@ function renderRollingDebtPayoff_(data) {
 
   setStatus('rolling_debt_payoff_status', 'Updated.', false);
 
+  // Blank-workbook safety: backend returns { not_set_up: true } when the
+  // prerequisite sheets (INPUT - Debts / SYS - Accounts) are missing. Render
+  // a calm setup message, skip React mount and demo fallback, and clear the
+  // debug JSON panel. Populated-workbook path below is unchanged.
+  if (data && data.not_set_up === true) {
+    var msg = (data.setup_message && String(data.setup_message)) ||
+      'Add your debts and cash accounts in Setup / Review to see your rolling debt payoff plan.';
+    var tablesElEmpty = document.getElementById('rolling_debt_payoff_tables');
+    if (tablesElEmpty) {
+      tablesElEmpty.innerHTML =
+        '<div class="rolling-dp-primary">' +
+        '<p class="muted">' + escapeHtml_(msg) + '</p>' +
+        '</div>';
+    }
+    var jsonElEmpty = document.getElementById('rolling_debt_payoff_json');
+    if (jsonElEmpty) jsonElEmpty.textContent = '';
+    var jsonWrapEmpty = document.querySelector('#rollingDebtPayoff .rolling-dp-json-wrap');
+    if (jsonWrapEmpty) jsonWrapEmpty.style.display = 'none';
+    return;
+  }
+
   var sum = data.summary || {};
   var diag = data.diagnostics || {};
   var conf = data.confidence || {};

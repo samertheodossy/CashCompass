@@ -2814,6 +2814,69 @@ function getRollingDebtPayoffPlan(options) {
     .trim();
   const executionPlanModesList = executionPlanMode.split(/[\s,|]+/).filter(Boolean);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Blank-workbook safety: on a fresh sheet INPUT - Debts and/or SYS - Accounts
+  // don't exist yet. The strict readSheetAsObjects_ / findRollingCashFlowAnchor_
+  // calls below would throw and surface as a red banner on Rolling Debt Payoff.
+  // Return a neutral "not set up" payload so the UI renders a calm empty state
+  // via a dedicated client-side branch. Populated path is unchanged.
+  const sheetNamesEarly = getSheetNames_();
+  if (
+    !ss.getSheetByName(sheetNamesEarly.DEBTS) ||
+    !ss.getSheetByName(sheetNamesEarly.ACCOUNTS)
+  ) {
+    return {
+      not_set_up: true,
+      setup_message:
+        'Add your debts and cash accounts in Setup / Review to see your rolling debt payoff plan.',
+      generated_at: new Date().toISOString(),
+      summary: {
+        plan_status: 'NOT_SET_UP',
+        overall_confidence: '—',
+        current_focus: '—',
+        anchor_month: '—',
+        starting_available_cash: 0,
+        reserve_target: 0,
+        starting_total_debt: 0,
+        projected_total_debt_84m: 0,
+        projected_debt_reduction_84m: 0,
+        execution_plan_mode: 'standard'
+      },
+      key_warnings: [],
+      default_output: '',
+      this_month_plan: {
+        liquidity: {},
+        anchor_month_minimum_schedule: { already_paid: [], pay_now: [] }
+      },
+      this_month_execution_plan: '',
+      rolling_dashboard_execution_row: {},
+      action_decision_box: {},
+      next_3_month_preview: [],
+      planned_expense_impact: {
+        near_term_cash_reserved: 0,
+        unmapped_card_funded_cash_risk: 0,
+        near_term_card_funded_mapped_total: 0,
+        display_lines: [],
+        has_mid_term: false,
+        has_long_term: false,
+        has_unmapped_near_term_card: false,
+        near_term_card_funded_within_30: false,
+        modeling_unmapped_card_assumption: '',
+        warnings: []
+      },
+      assumptions: {
+        reserve_target: 0,
+        lump_sum_split: { debt: 0, reserve: 0, flexible: 0 },
+        anchor_sheet_month_header: '',
+        cash_model: '',
+        cash_haircut: 1,
+        reserved_buckets_tracked: false
+      },
+      include_debug_details: false,
+      heloc_flow_source_debug: null
+    };
+  }
+
   const tz = Session.getScriptTimeZone();
   const aliasMap = getAliasMap_();
   const debtRows = readSheetAsObjects_(ss, 'DEBTS');
