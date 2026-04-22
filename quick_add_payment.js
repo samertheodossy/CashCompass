@@ -34,6 +34,23 @@ function normalizeFlowSource_(raw) {
 function getQuickAddPaymentUiData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const year = getCurrentYear_();
+
+  // Blank-workbook safety: on a fresh sheet INPUT - Cash Flow YYYY does not
+  // exist yet and getCashFlowSheetForYear_() -> getCashFlowSheet_() would
+  // throw "Missing cash flow sheet: …" and surface as a red banner on the
+  // Quick Add page. Return the same neutral payload shape the function's
+  // existing empty-sheet branch produces so the UI renders clean. The
+  // populated path below is unchanged.
+  if (!ss.getSheetByName(getCashFlowSheetName_(year))) {
+    return {
+      year: year,
+      payees: [],
+      types: ['Expense', 'Income'],
+      flowSources: FLOW_SOURCE_ALLOWED_VALUES_.slice(),
+      flowSourceColumnPresent: false
+    };
+  }
+
   const sheet = getCashFlowSheetForYear_(ss, year);
 
   const values = sheet.getDataRange().getDisplayValues();
@@ -384,6 +401,15 @@ function adjustDebtsBalanceAfterQuickPayment_(ss, payee, entryType, paymentAmoun
   if (entryType !== 'Expense') return null;
 
   const normPayee = normalizeBillName_(payee);
+
+  // Blank-workbook safety: on a fresh sheet INPUT - Debts does not exist yet
+  // and getSheet_() would throw "Missing sheet: INPUT - Debts" after a
+  // successful Cash Flow write. Returning null matches this function's
+  // existing "nothing to adjust" contract (no matching row / missing balance
+  // column / non-Expense), so the caller's optional debtBalanceNote branch
+  // is skipped cleanly. The populated path below is unchanged.
+  if (!ss.getSheetByName(getSheetNames_().DEBTS)) return null;
+
   const debtSheet = getSheet_(ss, 'DEBTS');
   const headerMap = getDebtsHeaderMap_(debtSheet);
   if (headerMap.balanceCol === -1) return null;
