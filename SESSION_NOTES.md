@@ -1,3 +1,137 @@
+## Final Polish Phase
+
+Context:
+- The system is now stable. Blank workbook no longer crashes, retirement flow is truthful and guided, Overview explains incomplete Retirement and Buffer Runway states, and Suggested Actions + Issues correctly route blank workbooks to Setup / Review.
+- Focus has shifted from stabilization to **UX, clarity, and consistency** polish.
+
+Working rules (apply to every polish step):
+- **One issue at a time.** Each prompt identifies and fixes exactly one highest-value issue.
+- **No large refactors.** Prefer small, localized, additive changes.
+- **No destructive sheet changes.** No schema / header / formatting changes to existing sheets; no rewrites of populated data.
+- **Test on both populated and blank workbooks.** Populated must be byte-for-byte unchanged except for intended polish; blank must degrade calmly with clear guidance.
+- **Prefer client-side fixes** when the payload already exposes what we need (e.g. `snapshot.state`). Touch backend only when strictly necessary.
+
+## Current Status
+
+- Retirement flow stabilized (needsHouseholdBasics / needsScenarioAssumptions / ready states; no fake defaults; incomplete scenarios treated as inactive).
+- Overview Retirement Outlook shows a calm setup hint when analysis is unavailable.
+- Buffer Runway corrected (blank workbook no longer shows "Growing / stable" false confidence).
+- Suggested Actions corrected (blank workbook routes to Setup / Review instead of "No suggested actions right now.").
+- Issues card corrected (blank workbook no longer shows "No active issues detected."; routes to Setup / Review instead).
+
+## Final Polish Checklist
+
+Reusable audit categories. Each bullet below is a concrete finding from the latest full-product audit — file + function references included so the next session can pick one and fix it without re-auditing.
+
+### Empty-State Consistency
+
+Every card on every tab should degrade calmly on a blank / not-set-up workbook. No falsely reassuring numbers or copy when there is literally no data to evaluate.
+
+- **Overview > Operations Snapshot KPIs show confident `$0.00` on blank workbooks.** Bills "Due Soon" / "Overdue" counts (`ov_bills_dueSoonCount`, `ov_bills_overdueCount`), "Bills Next 7 Days" amount (`ov_bills_next7`), "Upcoming Next 7 / Next 30" amounts (`ov_upcoming_next7`, `ov_upcoming_next30`), and "House Expenses This Month / YTD" show formatted zeros when the relevant sheets are missing or unpopulated. Reads as "all clear" when we've never looked. Files/functions: `Dashboard_Script_BillsDue.html::renderBillsDueSummary_`, `Dashboard_Script_CashFlowUpcoming.html::renderUpcomingSummary`, plus whichever renderer fills `ov_house_*` on Overview. **Impact: high.**
+- **Bills mini-card turns "bill-card-clear" green on blank workbooks.** `renderBillsDueSummary_` unconditionally adds `bill-card-clear` when `overdueCount === 0 && next7Count === 0`, so a not-set-up workbook visually signals "you're clear" in a positive color. Should stay neutral when no bills data exists. File: `Dashboard_Script_BillsDue.html::renderBillsDueSummary_`. **Impact: high.**
+- **Overview > Bills summary line says "No bills due right now." on blank workbooks.** Same class as Issues / Suggested Actions — reads as a checked result, not an unset state. File/function: `Dashboard_Script_BillsDue.html::renderBillsDueSummary_` (`ov_bills_summaryText` branch). **Impact: medium–high.**
+- **Cash Flow > Upcoming empty state is a dead end.** `renderUpcomingList` shows "No active upcoming expenses." with no CTA — a brand-new user has no path to "add your first one" without discovering the form below. File: `Dashboard_Script_CashFlowUpcoming.html::renderUpcomingList`. **Impact: medium.**
+- **Planning > Debts Payoff empty view lacks Setup CTA.** "No accounts with a balance > $0 to show. Update your debts or refresh after you pay something down." reads as "you're debt-free" on a not-set-up workbook. File: `Dashboard_Script_PlanningDebtPayoff.html` (payoff list renderer, near line 274). **Impact: medium.**
+- **Donations empty state has no CTA.** `"No donations logged yet."` is fine when intentionally empty but offers no guidance to brand-new users. File: `Dashboard_Script_Donations.html::loadDonationsSection` renderer. **Impact: low–medium.**
+- **Activity log empty state is terse.** `"No rows to show."` — no context for what Activity is or why it might be empty. File: `Dashboard_Script_Activity.html` (renderer around line 157). **Impact: low.**
+- **Bills management list empty state is muted but confident.** `"No active bills yet."` on blank workbook. File: `Dashboard_Script_BillsDue.html` (near line 474). **Impact: low.**
+
+### Partial-State Behavior
+
+When some inputs are filled and others are blank, downstream cards should stay truthful — incomplete inputs should be skipped or labeled, not treated as zeros that imply confidence.
+
+- **Weekly net worth change card behavior on partial workbooks is unverified.** `weekly_attrib_root` may show zeroed deltas (or an empty list) when accounts exist but there's no prior snapshot — check whether the copy distinguishes "no change" from "no baseline yet". File: Overview weekly attribution renderer in `Dashboard_Script_Render.html`. **Impact: medium.**
+- **Retirement Conservative / Aggressive scenario cards are blanked silently when only Base is filled.** The retirement fix correctly skips incomplete scenarios, but the hidden scenario cards give no signal to the user that they exist and are inactive — they may think the feature only supports one scenario. File: `Dashboard_Script_PlanningRetirement.html::renderRetirementScenarioCards` (and the blank-card branch in `clearRetirementReadOnlyInfo_`). **Impact: medium.**
+- **Asset totals can look confident when only one of bank / investments / houses exists.** Overview asset KPIs sum whatever is present; a partial setup (e.g. investments only) produces a number that looks like a complete net-worth total. File: `dashboard_data.js::buildDashboardSnapshot_` asset rollup + Overview Financial Health card. **Impact: medium.**
+- **Bills next-7 total mixes zero bills with "clear" messaging.** When bills sheet exists but has no rows in the next 7 days, we say "No bills due right now." — the same copy as the truly not-set-up case. File: `Dashboard_Script_BillsDue.html::renderBillsDueSummary_`. **Impact: low–medium.**
+
+### "What Should I Do Next" Clarity
+
+Every empty or partial surface should either show a next-step CTA or explain honestly why it's empty.
+
+- **Default landing page for a brand-new user is Overview, which is almost all dashes.** A first-time user sees a wall of `—` with a Setup / Review button in the top bar but no explicit "start here" signal on the canvas itself. Consider a dismissible "Finish setup" banner at the top of Overview when `state === 'notSetUp'`, or auto-route first loads to `onboarding`. File: `Dashboard_Body.html` + `Dashboard_Script_Render.html::applySnapshot`. **Impact: high.**
+- **Blank Bills, Upcoming, Debts, Donations tabs lack a "Open Setup / Review" row.** The same pattern we applied to Issues / Suggested Actions would work here: when the list is empty AND `state === 'notSetUp'`, show a single calm CTA pointing to onboarding. Files: `Dashboard_Script_BillsDue.html`, `Dashboard_Script_CashFlowUpcoming.html`, `Dashboard_Script_PlanningDebts.html` / `Dashboard_Script_PlanningDebtPayoff.html`, `Dashboard_Script_Donations.html`. **Impact: high.**
+- **Overview Operations Snapshot mini-cards have no "go here to fix" affordance.** When blank, the mini-cards just show zeros — they don't deep-link into Setup / Review or the Bills tab. Make the blank-state whole cards (not just the outer card) navigable and labeled. Files: `Dashboard_Body.html` Overview mini-cards + `Dashboard_Script_BillsDue.html::renderBillsDueSummary_`. **Impact: medium.**
+- **Next Actions "nothing to do" states are descriptive but not actionable.** "No urgent actions right now." / "No recommended actions right now." read as all-clear — fine on a populated workbook, misleading on a blank one. File: `Dashboard_Script_PlanningNextActions.html::renderNextActionsBucketHtml_` / `renderNextActionsUrgentBucketHtml_`. **Impact: medium.**
+
+### Copy / Language Consistency
+
+Similar states across cards should use similar wording and tone.
+
+- **Mixed "No X …" phrasing across empty states.** "No active issues detected." vs "No active upcoming expenses." vs "No recurring income detected yet." vs "No donations logged yet." vs "No bills due right now." — "detected" is developer-y, some end with periods and some with phrases, tone drifts between cards. Suggest a single house style, e.g. "Nothing to show yet." Files: all `Dashboard_Script_*.html` empty-state renderers. **Impact: medium.**
+- **Jargon leaks into user-facing copy.** "Run the planner to see how long your cash covers burn." (Buffer Runway detail), "snapshot", "execution plan" (Rolling Debt Payoff / Next Actions debug), "Planner run" in hint copy. File: `dashboard_data.js::buildBufferRunway_`, `Dashboard_Script_RollingDebtPayoff.html`, `Dashboard_Script_PlanningNextActions.html`. **Impact: medium.**
+- **Status message wording is inconsistent.** Some saves return `"Saved."`, some return server-provided messages, some prepend `"Error: "` for failures while others surface a raw exception string. No single convention. Files: all forms that call `setStatus(...)` after a save. **Impact: low–medium.**
+- **Button labels mix verb styles.** "Save House Value" (noun-heavy) vs "Quick add payment" vs "Dismiss" vs "Stop tracking". A one-pass copy review for the primary action buttons on each tab would tighten this. Files: all `Dashboard_Body.html` panels + their associated scripts. **Impact: low.**
+- **"Nothing to show" indicators mix "—" and blank.** Retirement info panel uses `—`, some list cells show empty strings, buffer runway now shows `—` plus detail — the system mostly converges on `—`, but a few stragglers (e.g. `—` vs blank in upcoming meta rows) remain. Files: Onboarding empty blocks, Upcoming meta rows, Rolling Debt placeholders. **Impact: low.**
+
+### Save + Refresh Behavior
+
+After a user saves, the relevant Overview cards and side panels must refresh without requiring a full reload.
+
+- **Income save does NOT call `refreshSnapshot()`.** Adding or stopping an income source reloads only the Income section; Overview Financial Health / Operations Snapshot / Suggested Actions / Next Actions can show stale values until the user hard-refreshes. File: `Dashboard_Script_Income.html::saveIncomeSource` (~line 367) and `stopTrackingIncomeSource` (~line 417). **Impact: high.**
+- **Donation save does NOT call `refreshSnapshot()`.** Adding a donation only reloads the Donations list. Donations feed into Cash Flow and YTD spending, so Overview and Cash Flow tabs are stale until reload. File: `Dashboard_Script_Donations.html::saveDonation` (~line 199). **Impact: high.**
+- **Retirement Basics save does NOT call `refreshSnapshot()`.** The scenario save (`saveRetirementInputs`) correctly calls `refreshSnapshot()`, but the Basics save (`saveRetirementBasicsFromUi_`) only reloads the Retirement section — Overview's Retirement Outlook card can stay in the old state until the user navigates away and back. File: `Dashboard_Script_PlanningRetirement.html::saveRetirementBasicsFromUi_` (~line 220). **Impact: medium–high.**
+- **No centralized "I just saved something" helper.** Each form implements its own save → refresh pattern, which is why `refreshSnapshot()` is missing in three places. A tiny helper (e.g. `afterSave_()` that logs status + calls `refreshSnapshot()` if defined) would make future regressions unlikely. Cross-cutting. **Impact: medium (preventive).**
+- **Saves show "Saved." but don't always confirm which Overview KPI moved.** Consider a brief "Updated Overview" or snapshot-diff toast after multi-card refreshes. Cross-cutting, nice-to-have. **Impact: low.**
+
+### Edge Cases
+
+Things that shouldn't crash or show a red banner even when data is weird.
+
+- **Year rollover (Jan 1) behavior is not documented.** `fiscalYear`, `taxYear`, recurring income `year`, upcoming `dueDate` across year boundaries — verify nothing assumes "current year" statically. Files: `income.js`, `donations.js`, `cash_flow.js`, `upcoming.js`. **Impact: medium–high (time-bomb).**
+- **Missing optional sheets (DONATIONS, UPCOMING, BILLS, HOUSES).** We hardened Accounts / Debts / Retirement; the other optional sheets should be audited the same way. Files: `dashboard_data.js`, individual renderers' server calls. **Impact: medium.**
+- **Deleted / stop-tracked accounts with historical rows.** Renderers should tolerate history that references an Active=NO account without crashing or double-counting. Files: `bank.js`, `debts.js`. **Impact: medium.**
+- **Zero-income / zero-expense months.** Buffer runway and Next Actions should not divide-by-zero or flip to infinity. File: `dashboard_data.js::buildBufferRunway_`, `next_actions.js`. **Impact: medium.**
+- **Duplicate account / debt / bill names.** Income has a duplicate-name guard; verify bank, debts, bills, donations all catch and surface it cleanly. Files: respective `add*FromDashboard` RPCs. **Impact: low–medium.**
+- **Long text overflow.** Bill / account / payee names longer than the card width — check CSS ellipsis vs wrap. Files: `Dashboard_Styles.html`. **Impact: low.**
+- **Non-USD locale formatting.** `fmtCurrency` hardcodes `$`; a non-USD user sees the wrong symbol. Files: dashboard `fmtCurrency` helper. **Impact: low (assumed US-only for now).**
+- **Debug toggle side effects.** `isDebugMode()` gates Next Actions liquidity details; verify that flipping debug OFF mid-session doesn't leave stale details rendered. File: `Dashboard_Script_PlanningNextActions.html` (already has a defensive clear, but worth a regression pass). **Impact: low.**
+
+### Navigation Flow
+
+Default landing tabs and back/close paths should make sense.
+
+- **No "start here" signal for first-time users on Overview.** See "What Should I Do Next" — Overview is the default page for everyone, including users with no data. **Impact: high (duplicated above).**
+- **Setup / Review handoff bar close path is untested end-to-end.** When a user is deep in an editor (e.g. editing a bank account) and clicks "Close" or "Back", verify they land on a sensible page, not a stale sub-view. File: `Dashboard_Script_Onboarding.html` handoff logic. **Impact: medium.**
+- **Overview card click-throughs aren't uniform.** Some Overview cards are fully clickable (`onclick="showPage(...)"` on the `.card`), some only have inner buttons, some have both (with `event.stopPropagation()` juggling). Inconsistent affordance for the user. File: `Dashboard_Body.html` Overview markup. **Impact: medium.**
+- **Retirement Outlook card has no click-through to the Retirement tab.** Other Overview cards link to their source tab; Retirement Outlook currently does not. File: `Dashboard_Body.html` Overview Retirement card + `Dashboard_Script_Render.html::renderRetirementSummary`. **Impact: medium.**
+- **Sub-tab deep-links (e.g. `showPage('cashflow'); showTab('billsDue')`) are fine but inline.** Repeated inline string pairs are copy-paste prone. A small `goTo('cashflow', 'billsDue')` helper would tighten this without refactoring. Cross-cutting. **Impact: low.**
+
+### Visual Trust Signals
+
+Consistent use of "—" for unknown values, calm colors for neutral empty states, severity colors reserved for actual urgency.
+
+- **`$0.00` used as a confident total on blank workbooks.** Covered above under Empty-State — this is the cross-cutting visual version of the issue. **Impact: high (duplicated above).**
+- **Green "clear" styling on Bills mini-card when nothing is tracked.** Covered above — `bill-card-clear` applied on `notSetUp`. **Impact: high (duplicated above).**
+- **"Last updated: —" is fine but could explain why.** Currently displays as an empty timestamp; a tooltip or subtle hint ("Will update after your first save") would build trust on blank workbooks. File: `Dashboard_Body.html` header + `Dashboard_Script_Render.html::renderSourceUpdated`. **Impact: low.**
+- **Severity colors currently honored, but audit new empty states.** When we add setup CTAs, make sure `severity-info` (blue/neutral) is used, never `severity-warning` or `severity-critical`. Cross-cutting on future fixes. **Impact: preventive.**
+- **Loading placeholders are inconsistent.** Some renderers show "Loading…" via `loadingBlockHtml`, some just leave the previous value in place, some show `…`. Files: all `load*` functions. **Impact: low.**
+
+## Next Priority Issues
+
+Top 3 highest-impact items to address first. Each is small, client-side, and consistent with fixes we've already shipped.
+
+1. **Overview Operations Snapshot shows confident `$0.00` KPIs (and green "clear" styling) on blank workbooks.** Same false-confidence class we already fixed for Issues, Suggested Actions, Retirement Outlook, and Buffer Runway — but the raw KPI tiles on Overview still display `$0.00`, `0`, and a green "clear" Bills mini-card when the workbook is `notSetUp`. Highest impact because the KPI row is the first thing a new user sees and it currently lies. Scope: `Dashboard_Script_BillsDue.html::renderBillsDueSummary_` (and the equivalent for `ov_upcoming_*` and `ov_house_*`) — gate KPI values and card styling on `snapshot.state` or equivalent, render `—` on `notSetUp`, and drop the `bill-card-clear` class until there's real data.
+
+2. **Income / Donation / Retirement Basics saves don't call `refreshSnapshot()` — Overview goes stale after save.** Breaks the "save = immediate feedback" contract. User adds income or donates and nothing changes on Overview until a full reload, which reads as "did my save work?". Three one-line fixes in three files. Scope: add `refreshSnapshot()` to `Dashboard_Script_Income.html::saveIncomeSource` / `stopTrackingIncomeSource`, `Dashboard_Script_Donations.html::saveDonation`, and `Dashboard_Script_PlanningRetirement.html::saveRetirementBasicsFromUi_` — guarded behind `typeof refreshSnapshot === 'function'` like existing callers.
+
+3. **Bills / Upcoming / Debts / Donations tabs show muted "No X …" messages on blank workbooks with no setup CTA.** Same class of issue as the Issues card we just fixed on Overview. Each tab shows developer-y "No active X detected / No X logged yet" text that reads as "audited and clean" instead of "never set up". Scope: in each tab's empty-list renderer, check the existing snapshot `state` (already fetched for the Overview) or a simple local readiness probe and, when `notSetUp`, render a single calm row that deep-links into `showPage('onboarding')` — exactly mirroring the Issues / Suggested Actions pattern in `Dashboard_Script_Render.html`.
+
+## How to Continue
+
+Keep the loop tight and honest:
+
+1. **Re-read this checklist** at the start of every session. Items move up/down in priority as we ship.
+2. **Pick ONE issue** — highest-impact first, or a quick win if we need momentum.
+3. **Plan the minimal fix** — smallest safe change, client-side when possible, respect `state` / snapshot shape.
+4. **Implement** — no large refactors, no architecture changes, no destructive sheet writes.
+5. **Test on both** a fully populated workbook (must be byte-for-byte unchanged except for the intended polish) and a blank / partially-set-up workbook (must degrade calmly with clear guidance).
+6. **Commit + push** when the user explicitly approves.
+7. **Update this file** — move the shipped item into "Current Status", mark any follow-ups discovered during the fix.
+8. **Repeat.**
+
+---
+
 ## Active — Phase A: planner graceful degradation & readiness states
 
 We are moving from bug fixing to **product behavior + UX refinement**. The planner and dashboards must no longer throw red errors on fresh/blank/partially-set-up workbooks. They must degrade gracefully, use safe defaults, and surface a readiness state so the UI can show "needs more info" instead of error banners.
