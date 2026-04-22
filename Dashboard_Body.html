@@ -1184,6 +1184,34 @@
 
       <div id="ret_empty_state" class="retirement-empty-state" hidden></div>
 
+      <div id="ret_basics_form" class="retirement-basics-form" hidden>
+        <div class="retirement-basics-title">Retirement Basics</div>
+        <div class="retirement-basics-hint">
+          Enter the minimum details below and save to unlock the full retirement planner.
+        </div>
+
+        <label for="ret_basics_yourAge">Your age</label>
+        <input type="number" id="ret_basics_yourAge" step="1" min="1" max="120">
+
+        <label>Partnered</label>
+        <div class="retirement-basics-radio-row">
+          <label class="retirement-basics-radio">
+            <input type="radio" name="ret_basics_partnered" id="ret_basics_partnered_yes" value="yes" onchange="onRetirementBasicsPartneredChange_()"> Yes
+          </label>
+          <label class="retirement-basics-radio">
+            <input type="radio" name="ret_basics_partnered" id="ret_basics_partnered_no" value="no" onchange="onRetirementBasicsPartneredChange_()"> No
+          </label>
+        </div>
+
+        <div id="ret_basics_spouse_row" hidden>
+          <label for="ret_basics_spouseAge">Spouse age</label>
+          <input type="number" id="ret_basics_spouseAge" step="1" min="0" max="120">
+        </div>
+
+        <button onclick="saveRetirementBasicsFromUi_()">Save Retirement Basics</button>
+        <div id="ret_basics_status" class="status"></div>
+      </div>
+
       <div class="grid-3" style="margin-bottom:14px;">
         <div class="scenario-card" id="scenario_card_Conservative"></div>
         <div class="scenario-card" id="scenario_card_Base"></div>

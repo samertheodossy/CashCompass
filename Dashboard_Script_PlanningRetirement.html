@@ -12,6 +12,7 @@ function loadRetirementSection() {
 
       if (state === 'ready') {
         hideRetirementEmptyState_();
+        hideRetirementBasicsForm_();
 
         document.getElementById('ret_selectedScenario').value = data.selectedScenario || 'Base';
         document.getElementById('ret_yourCurrentAge').value = data.household ? data.household.yourCurrentAge : '';
@@ -26,8 +27,9 @@ function loadRetirementSection() {
           title: 'Tell us a little about your household to see your plan.',
           body: (data && data.message) ||
             'Add your age to see your retirement plan. Spouse age and target retirement age are optional but recommended.',
-          hint: 'Enter your details below and click "Save Selected Scenario" to begin.'
+          hint: 'Fill in the Retirement Basics below and click "Save Retirement Basics" to continue.'
         });
+        showRetirementBasicsForm_(data);
 
         // Prefill whatever the retirement sheet already has (may be 0/blank).
         document.getElementById('ret_selectedScenario').value = (data && data.selectedScenario) || 'Base';
@@ -47,6 +49,7 @@ function loadRetirementSection() {
             'Retirement planner could not load. Try again, or review your inputs below.',
           hint: ''
         });
+        hideRetirementBasicsForm_();
         clearRetirementReadOnlyInfo_();
         setStatus('retirement_status', '', false);
       }
@@ -92,6 +95,104 @@ function hideRetirementEmptyState_() {
   if (!el) return;
   el.hidden = true;
   el.innerHTML = '';
+}
+
+function showRetirementBasicsForm_(data) {
+  var form = document.getElementById('ret_basics_form');
+  if (!form) return;
+  form.hidden = false;
+
+  // Prefill from whatever the retirement sheet already has. yourAge
+  // left blank when 0/missing so the placeholder nudges the user.
+  var yourAge = (data && data.household && data.household.yourCurrentAge > 0)
+    ? data.household.yourCurrentAge : '';
+  var spouseAge = (data && data.household && data.household.spouseCurrentAge > 0)
+    ? data.household.spouseCurrentAge : '';
+
+  var yourEl = document.getElementById('ret_basics_yourAge');
+  if (yourEl) yourEl.value = yourAge;
+
+  // Infer Partnered from spouse age convention (0 = not partnered).
+  // Default to Yes when we have a positive spouse age; otherwise leave
+  // both radios unselected so the user makes an explicit choice.
+  var yesEl = document.getElementById('ret_basics_partnered_yes');
+  var noEl = document.getElementById('ret_basics_partnered_no');
+  if (yesEl && noEl) {
+    if (spouseAge !== '') {
+      yesEl.checked = true;
+      noEl.checked = false;
+    } else {
+      yesEl.checked = false;
+      noEl.checked = false;
+    }
+  }
+
+  var spouseEl = document.getElementById('ret_basics_spouseAge');
+  if (spouseEl) spouseEl.value = spouseAge;
+
+  onRetirementBasicsPartneredChange_();
+  setStatus('ret_basics_status', '', false);
+}
+
+function hideRetirementBasicsForm_() {
+  var form = document.getElementById('ret_basics_form');
+  if (!form) return;
+  form.hidden = true;
+  setStatus('ret_basics_status', '', false);
+}
+
+function onRetirementBasicsPartneredChange_() {
+  var yesEl = document.getElementById('ret_basics_partnered_yes');
+  var row = document.getElementById('ret_basics_spouse_row');
+  if (!row) return;
+  row.hidden = !(yesEl && yesEl.checked);
+  if (row.hidden) {
+    var spouseEl = document.getElementById('ret_basics_spouseAge');
+    if (spouseEl) spouseEl.value = '';
+  }
+}
+
+function saveRetirementBasicsFromUi_() {
+  var yourAge = Number(document.getElementById('ret_basics_yourAge').value || 0);
+  var yesEl = document.getElementById('ret_basics_partnered_yes');
+  var noEl = document.getElementById('ret_basics_partnered_no');
+  var partneredChosen = (yesEl && yesEl.checked) || (noEl && noEl.checked);
+  var partnered = !!(yesEl && yesEl.checked);
+  var spouseAge = partnered
+    ? Number(document.getElementById('ret_basics_spouseAge').value || 0)
+    : 0;
+
+  if (!(yourAge > 0)) {
+    setStatus('ret_basics_status', 'Please enter your age (greater than 0).', true);
+    return;
+  }
+  if (!partneredChosen) {
+    setStatus('ret_basics_status', 'Please choose Yes or No for Partnered.', true);
+    return;
+  }
+  if (partnered && !(spouseAge > 0)) {
+    setStatus('ret_basics_status', 'Please enter your spouse\u2019s age.', true);
+    return;
+  }
+
+  setStatus('ret_basics_status', 'Saving...', false);
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('ret_basics_status', (res && res.message) || 'Saved.', false);
+      // Re-render the whole section from the returned envelope. When
+      // basics are valid the state flips to 'ready' and the basics
+      // form is hidden by the load branch above.
+      loadRetirementSection();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('ret_basics_status', 'Error: ' + (err && err.message ? err.message : String(err)), true);
+    })
+    .saveRetirementBasics({
+      yourCurrentAge: yourAge,
+      partnered: partnered,
+      spouseCurrentAge: spouseAge
+    });
 }
 
 function clearRetirementReadOnlyInfo_() {

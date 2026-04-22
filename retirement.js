@@ -53,6 +53,58 @@ function getRetirementSummary_() {
 }
 
 /**
+ * Minimal UI-facing save for the "Retirement Basics" input section on
+ * the Retirement tab. Writes ONLY the two household-identity cells
+ * already used by the planner (`Your Current Age`, `Spouse Current
+ * Age`) into the existing INPUT - Retirement sheet. Does NOT touch any
+ * scenario row, does NOT add columns, does NOT validate scenario
+ * inputs — those remain whatever the retirement sheet already holds
+ * (seeded defaults or the user's last `saveRetirementInputs`).
+ *
+ * Partnered convention: when `payload.partnered` is not truthy, we
+ * write `Spouse Current Age = 0`. This matches the documented
+ * "spouseCurrentAge of 0 is legal for 'not partnered'" sentinel
+ * already used by `getRetirementUiDataSafe` / `readRetirementHousehold
+ * Safe_` so downstream scenario math treats the household as single.
+ *
+ * Returns the same structured envelope as `getRetirementUiDataSafe()`
+ * so the client can re-render the tab in one round-trip.
+ */
+function saveRetirementBasics(payload) {
+  const sheet = getOrCreateRetirementSheet_();
+
+  const yourAge = toNumber_(payload && payload.yourCurrentAge);
+  const partnered = !!(payload && payload.partnered === true);
+  const spouseAgeRaw = toNumber_(payload && payload.spouseCurrentAge);
+  const spouseAge = partnered ? spouseAgeRaw : 0;
+
+  const household = {
+    yourCurrentAge: yourAge,
+    spouseCurrentAge: spouseAge
+  };
+
+  // Minimal validation for basics only. Scenario inputs are intentionally
+  // NOT validated here — this entry point exists so users can enter just
+  // enough to unblock the main retirement form, which still owns full
+  // scenario validation via saveRetirementInputs / validateRetirement*_.
+  if (!(household.yourCurrentAge > 0)) {
+    throw new Error('Your age must be greater than 0.');
+  }
+  if (household.spouseCurrentAge < 0) {
+    throw new Error('Spouse age cannot be negative.');
+  }
+
+  writeRetirementHouseholdInputs_(sheet, household);
+  touchDashboardSourceUpdated_('retirement');
+
+  return {
+    ok: true,
+    message: 'Retirement basics saved.',
+    data: getRetirementUiDataSafe()
+  };
+}
+
+/**
  * Safe UI-facing retirement read for the Retirement tab.
  *
  * Never throws. Returns a structured envelope describing the current
