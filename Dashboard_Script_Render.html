@@ -550,7 +550,21 @@ function renderRetirementSummary(retirement) {
   set('ret_assets', analysis ? fmtCurrency(analysis.currentInvestableAssets) : '—');
   set('ret_age', analysis && analysis.estimatedRetirementAge !== null ? analysis.estimatedRetirementAge : '—');
   set('ret_mc', analysis ? fmtPercent(analysis.monteCarloSuccessProbabilityPct) : '—');
-  set('ret_summary', analysis ? analysis.summary : '—');
+  // When the selected scenario is incomplete (and therefore
+  // `analysis` is null — see `getRetirementModelData_`'s
+  // skip-incomplete-scenarios gate), the five KPI fields above show
+  // dashes with no explanation. Replace the dash here with calm
+  // guidance so the Overview card tells the user *why* everything is
+  // blank and what to do next, mirroring the Retirement tab's
+  // `needsScenarioAssumptions` empty state. Pure copy tweak — no new
+  // UI, no payload change; the `analysis` path is untouched so
+  // populated-workbook behavior is byte-identical.
+  set(
+    'ret_summary',
+    analysis
+      ? analysis.summary
+      : 'Set up your retirement plan to see goal, funded %, and Monte Carlo success.'
+  );
 }
 
 function applySnapshot(snapshot) {
