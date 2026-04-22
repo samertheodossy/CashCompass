@@ -360,12 +360,31 @@ function renderSourceUpdated(sourceUpdated) {
   set('retirement_updated', sourceUpdated.retirement);
 }
 
-function renderIssues(issues) {
+function renderIssues(issues, state) {
   const root = document.getElementById('issues_root');
   if (!root) return;
 
   const items = issues || [];
   if (!items.length) {
+    // On a completely not-set-up workbook (no Bank Accounts, no Debts)
+    // there is genuinely nothing to check, so the muted "No active issues
+    // detected." reads as "we audited your data and it's clean" — which
+    // contradicts the Suggested Actions card telling the same user to
+    // finish setup. The snapshot already exposes `state`
+    // ('notSetUp' | 'partial' | 'ready'), so surface a single calm
+    // setup-oriented row in the notSetUp case only. Partial and ready
+    // workbooks keep the original muted empty message, because on those
+    // an empty issues list genuinely means "nothing is wrong".
+    if (state === 'notSetUp') {
+      root.innerHTML =
+        '<button class="action-item severity-info" onclick="showPage(\'onboarding\')">' +
+          '<div class="action-title">Issues will appear here after setup</div>' +
+          '<div class="action-message">Once you add your bank accounts and debts, we\'ll flag anything that needs attention.</div>' +
+          '<div class="action-cta">Open Setup / Review</div>' +
+        '</button>';
+      window.__dashboardIssues = [];
+      return;
+    }
     root.innerHTML = '<div class="muted">No active issues detected.</div>';
     window.__dashboardIssues = [];
     return;
@@ -624,7 +643,7 @@ function applySnapshot(snapshot) {
   );
 
   renderSourceUpdated(snapshot.sourceUpdated);
-  renderIssues(snapshot.issues || []);
+  renderIssues(snapshot.issues || [], snapshot.state);
   renderSuggestedActionsIssueHint(snapshot.issues || []);
   renderHealth(snapshot.health || null);
   renderWeeklyAttribution(snapshot.attribution || null);
