@@ -869,27 +869,20 @@ function normalizeHistoryValue_(value) {
 }
 
 function sendPlannerEmailIfConfigured_(summary) {
-  // Resolution order: INPUT - Settings → Email (user-configured from
-  // the onboarding Profile step), then Session.getActiveUser() as a
-  // fallback so existing workbooks keep getting emails even before the
-  // user opens the Profile editor. If neither is available we skip
-  // silently — sending to an empty address would fail at MailApp.
-  var userEmail = '';
-  try {
-    if (typeof getPlannerEmailRecipient_ === 'function') {
-      userEmail = getPlannerEmailRecipient_();
-    }
-  } catch (_e) {
-    userEmail = '';
-  }
-  if (!userEmail) {
-    try {
-      userEmail = String((Session.getActiveUser() && Session.getActiveUser().getEmail()) || '');
-    } catch (_e2) {
-      userEmail = '';
-    }
-  }
+  // Strict settings-only recipient resolution: read INPUT - Settings.Email
+  // directly without triggering sheet auto-creation and without falling
+  // back to Session.getActiveUser().getEmail(). The Session fallback was
+  // causing blank / not-set-up workbooks to silently email the owner even
+  // when the user never configured a recipient in Profile. Populated
+  // workbooks with a valid settings email are unaffected.
+  var userEmail = readPlannerEmailFromSettingsStrict_();
   if (!userEmail) return;
+
+  // Readiness gate: when the workbook has no meaningful planner signal
+  // (no liabilities, no assets, no scheduled payments, no recommendation)
+  // skip silently. All four values come from the existing summary object
+  // built by runDebtPlanner, so this check does not read any sheets.
+  if (!isPlannerSummaryMeaningful_(summary)) return;
 
   const lines = [];
   lines.push('Debt Planner Update');
@@ -905,4 +898,58 @@ function sendPlannerEmailIfConfigured_(summary) {
     subject: 'Debt Planner Update - ' + summary.monthHeader,
     body: lines.join('\n')
   });
+}
+
+// Non-throwing, non-creating read of INPUT - Settings.Email. Returns the
+// trimmed email only if the sheet exists and the cell holds a value that
+// passes PROFILE_EMAIL_REGEX_. Never falls back to Session.getActiveUser().
+function readPlannerEmailFromSettingsStrict_() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetName =
+      typeof PROFILE_SETTINGS_SHEET_NAME_ === 'string'
+        ? PROFILE_SETTINGS_SHEET_NAME_
+        : 'INPUT - Settings';
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return '';
+    var last = sheet.getLastRow();
+    if (last < 2) return '';
+    var values = sheet.getRange(2, 1, last - 1, 2).getValues();
+    var emailKey =
+      typeof PROFILE_KEYS_ === 'object' && PROFILE_KEYS_ && PROFILE_KEYS_.EMAIL
+        ? PROFILE_KEYS_.EMAIL
+        : 'Email';
+    for (var i = 0; i < values.length; i++) {
+      var key = String(values[i][0] || '').trim();
+      if (key !== emailKey) continue;
+      var raw = String(values[i][1] == null ? '' : values[i][1]).trim();
+      if (!raw) return '';
+      var regex =
+        typeof PROFILE_EMAIL_REGEX_ !== 'undefined'
+          ? PROFILE_EMAIL_REGEX_
+          : /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return regex.test(raw) ? raw : '';
+    }
+  } catch (_e) {
+    return '';
+  }
+  return '';
+}
+
+// Treat the summary as meaningful when at least one of the four planner
+// signals has real content. On a blank / not-set-up workbook all four are
+// empty/zero so we return false and the email send is skipped silently.
+function isPlannerSummaryMeaningful_(summary) {
+  if (!summary || typeof summary !== 'object') return false;
+  var liabilities =
+    summary.liabilitySummary && summary.liabilitySummary.totalLiabilities
+      ? Number(summary.liabilitySummary.totalLiabilities) || 0
+      : 0;
+  if (liabilities > 0) return true;
+  var assets = Number(summary.totalAssets) || 0;
+  if (assets > 0) return true;
+  if (Array.isArray(summary.payNow) && summary.payNow.length > 0) return true;
+  if (Array.isArray(summary.paySoon) && summary.paySoon.length > 0) return true;
+  if (summary.recommendation) return true;
+  return false;
 }
