@@ -165,8 +165,15 @@ function loadHouseExpenseSummaries() {
       const ovThisMonth = document.getElementById('ov_house_thisMonth');
       const ovYtd = document.getElementById('ov_house_ytd');
 
-      if (ovThisMonth) ovThisMonth.textContent = fmtCurrency(thisMonthTotal);
-      if (ovYtd) ovYtd.textContent = fmtCurrency(ytdTotal);
+      // On a truly not-set-up workbook the totals here are "we never
+      // looked", not "no house expenses". Mute just the Overview
+      // slots; the House Expenses tab itself already has per-section
+      // empty-state copy and stays unchanged.
+      const ovBlank =
+        typeof window !== 'undefined' && window.__dashboardState === 'notSetUp';
+
+      if (ovThisMonth) ovThisMonth.textContent = ovBlank ? '—' : fmtCurrency(thisMonthTotal);
+      if (ovYtd) ovYtd.textContent = ovBlank ? '—' : fmtCurrency(ytdTotal);
     })
     .withFailureHandler(function(err) {
       ['hx_summaryThisMonthByHouse', 'hx_summaryYtdByHouse', 'hx_summaryYtdByType'].forEach(function(id) {

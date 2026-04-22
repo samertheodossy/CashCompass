@@ -121,6 +121,15 @@ function renderBillsDueSummary_(data, errorMessage) {
   const overdueCount = overdue.length;
   const next7Count = next7.length;
 
+  // On a truly not-set-up workbook the zeros below are "we never
+  // looked", not "you're clear". applySnapshot() publishes
+  // `window.__dashboardState` precisely for this case. Only mute the
+  // Overview slots — the Cash Flow > Bills Due tab is a focused
+  // workspace where 0 is a meaningful answer, so it keeps its
+  // computed values and styling as before.
+  const ovBlank =
+    typeof window !== 'undefined' && window.__dashboardState === 'notSetUp';
+
   const ovDueSoon = document.getElementById('ov_bills_dueSoonCount');
   const ovOverdue = document.getElementById('ov_bills_overdueCount');
   const ovSummary = document.getElementById('ov_bills_summaryText');
@@ -133,14 +142,14 @@ function renderBillsDueSummary_(data, errorMessage) {
   const cfDueSoonCard = document.getElementById('cf_bills_dueSoonCard');
   const cfOverdueCard = document.getElementById('cf_bills_overdueCard');
 
-  if (ovDueSoon) ovDueSoon.textContent = String(next7Count);
-  if (ovOverdue) ovOverdue.textContent = String(overdueCount);
+  if (ovDueSoon) ovDueSoon.textContent = ovBlank ? '—' : String(next7Count);
+  if (ovOverdue) ovOverdue.textContent = ovBlank ? '—' : String(overdueCount);
   if (cfDueSoon) cfDueSoon.textContent = String(next7Count);
   if (cfOverdue) cfOverdue.textContent = String(overdueCount);
 
   const ovBillsNext7Amt = document.getElementById('ov_bills_next7');
   if (ovBillsNext7Amt) {
-    if (errorMessage) {
+    if (errorMessage || ovBlank) {
       ovBillsNext7Amt.textContent = '—';
     } else {
       let sumNext7 = 0;
@@ -154,6 +163,8 @@ function renderBillsDueSummary_(data, errorMessage) {
   if (ovSummary) {
     if (errorMessage) {
       ovSummary.textContent = errorMessage;
+    } else if (ovBlank) {
+      ovSummary.textContent = 'Add your bills in Setup / Review to see what\u2019s due.';
     } else if (overdueCount > 0) {
       ovSummary.textContent = overdueCount + ' overdue bill(s) need attention.';
     } else if (next7Count > 0) {
@@ -166,12 +177,17 @@ function renderBillsDueSummary_(data, errorMessage) {
   [ovDueSoonCard, cfDueSoonCard].forEach(function(card) {
     if (!card) return;
     card.classList.remove('bill-card-due', 'bill-card-clear');
+    // Leave the Overview card neutral on a not-set-up workbook so a
+    // reassuring green doesn't appear before the user has entered
+    // any bills. Cash Flow's card keeps its existing behavior.
+    if (ovBlank && card === ovDueSoonCard) return;
     card.classList.add(next7Count > 0 ? 'bill-card-due' : 'bill-card-clear');
   });
 
   [ovOverdueCard, cfOverdueCard].forEach(function(card) {
     if (!card) return;
     card.classList.remove('bill-card-overdue', 'bill-card-clear');
+    if (ovBlank && card === ovOverdueCard) return;
     card.classList.add(overdueCount > 0 ? 'bill-card-overdue' : 'bill-card-clear');
   });
 }

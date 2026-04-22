@@ -606,6 +606,14 @@ function renderRetirementSummary(retirement) {
 }
 
 function applySnapshot(snapshot) {
+  // Expose readiness state so sibling renderers (bills, upcoming, house
+  // expenses) can stay truthful on a truly blank workbook without each
+  // one needing to fetch the snapshot itself. The value is one of
+  // 'notSetUp' | 'partial' | 'ready' (see dashboard_data.js).
+  try {
+    window.__dashboardState = (snapshot && snapshot.state) ? snapshot.state : null;
+  } catch (_e) {}
+
   const deltas = snapshot.deltas || null;
   const baselineLabel = deltas && deltas.baselineLabel ? deltas.baselineLabel : '';
 
@@ -650,6 +658,28 @@ function applySnapshot(snapshot) {
   renderBufferRunway(snapshot.bufferRunway || null);
   renderActions(snapshot.suggestedActions || [], snapshot.state);
   renderRetirementSummary(snapshot.retirement || null);
+
+  // On a truly not-set-up workbook proactively blank the Operations
+  // Snapshot KPIs and the Bills mini-card styling on Overview. Sibling
+  // renderers (getBillsDueFromCashFlowForDashboard, upcoming summary,
+  // house-expense summary) run their own RPCs in parallel and can land
+  // confident-looking $0.00 / "clear" values before the snapshot does.
+  // This pass corrects those races as soon as the snapshot arrives.
+  // Populated and partial workbooks are untouched.
+  if (snapshot && snapshot.state === 'notSetUp') {
+    ['ov_bills_next7', 'ov_upcoming_next7', 'ov_upcoming_next30',
+     'ov_house_thisMonth', 'ov_house_ytd',
+     'ov_bills_dueSoonCount', 'ov_bills_overdueCount'].forEach(function(id) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '—';
+    });
+    const billsSum = document.getElementById('ov_bills_summaryText');
+    if (billsSum) billsSum.textContent = 'Add your bills in Setup / Review to see what\'s due.';
+    ['ov_billsDueSoonCard', 'ov_billsOverdueCard'].forEach(function(id) {
+      const card = document.getElementById(id);
+      if (card) card.classList.remove('bill-card-clear', 'bill-card-due', 'bill-card-overdue');
+    });
+  }
 }
 
 function refreshSnapshot() {

@@ -63,8 +63,15 @@ function renderUpcomingSummary(summary) {
   const ovNext7 = document.getElementById('ov_upcoming_next7');
   const ovNext30 = document.getElementById('ov_upcoming_next30');
 
-  if (ovNext7) ovNext7.textContent = fmtCurrency(summary.next7Amount || 0);
-  if (ovNext30) ovNext30.textContent = fmtCurrency(summary.next30Amount || 0);
+  // On a truly not-set-up workbook the zeros here are "we never
+  // looked", not "nothing upcoming". Mute the Overview slots only —
+  // the in-page Upcoming KPIs above stay numeric because that tab is
+  // a focused workspace where 0 is a meaningful answer.
+  const ovBlank =
+    typeof window !== 'undefined' && window.__dashboardState === 'notSetUp';
+
+  if (ovNext7) ovNext7.textContent = ovBlank ? '—' : fmtCurrency(summary.next7Amount || 0);
+  if (ovNext30) ovNext30.textContent = ovBlank ? '—' : fmtCurrency(summary.next30Amount || 0);
 }
 
 function upcomingBucketClass(bucket) {
