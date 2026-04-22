@@ -1333,7 +1333,7 @@ function addHouseFromDashboard(payload) {
     ensureInputHouseValuesSheet_();
   } catch (ensureErr) {
     throw new Error(
-      'Could not prepare INPUT - House Values: ' +
+      "Couldn't prepare house values: " +
       (ensureErr && ensureErr.message ? ensureErr.message : ensureErr)
     );
   }

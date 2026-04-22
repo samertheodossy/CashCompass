@@ -47,7 +47,7 @@ function loadPropertyPerformanceSection() {
 
       const rows = (data && data.rows) ? data.rows : [];
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="8" class="muted" style="padding:12px;">No houses to show.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="muted" style="padding:12px;">No houses yet.</td></tr>';
         return;
       }
 
@@ -68,7 +68,7 @@ function loadPropertyPerformanceSection() {
       }).join('');
     })
     .withFailureHandler(function(err) {
-      setStatus('pp_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('pp_status', (err.message || String(err)), true);
       const tbody = document.getElementById('pp_tbody');
       if (tbody) {
         tbody.innerHTML = '<tr><td colspan="8" class="muted" style="padding:12px;">Could not load.</td></tr>';

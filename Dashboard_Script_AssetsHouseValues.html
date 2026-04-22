@@ -139,7 +139,7 @@ function clearHouseAddNameError_() {
 function showHouseAddNameError_(message) {
   const el = document.getElementById('house_add_name_error');
   if (el) {
-    el.textContent = message || 'Please fix the House name.';
+    el.textContent = message || 'Fix the House name.';
     el.classList.add('active');
   }
   const n = document.getElementById('house_add_name');
@@ -189,7 +189,7 @@ function loadHouseSection() {
       fillHouseDropdownFromData_(data);
     })
     .withFailureHandler(function(err) {
-      setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('house_status', (err.message || String(err)), true);
     })
     .getHouseUiData();
 }
@@ -207,7 +207,7 @@ function loadHouseSectionThenSelect_(houseName) {
       }
     })
     .withFailureHandler(function(err) {
-      setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('house_status', (err.message || String(err)), true);
     })
     .getHouseUiData();
 }
@@ -259,7 +259,7 @@ function loadHouseData() {
       setStatus('house_status', '', false);
     })
     .withFailureHandler(function(err) {
-      setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('house_status', (err.message || String(err)), true);
     })
     .getHouseValueForDate(house, date);
 }
@@ -269,7 +269,7 @@ function stopTrackingHouse() {
   const house = sel ? String(sel.value || '').trim() : '';
 
   if (!house) {
-    setStatus('house_status', 'Error: Pick a house first.', true);
+    setStatus('house_status', 'Pick a house first.', true);
     return;
   }
 
@@ -297,7 +297,7 @@ function stopTrackingHouse() {
       if (typeof refreshSnapshot === 'function') refreshSnapshot();
     })
     .withFailureHandler(function(err) {
-      setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('house_status', (err.message || String(err)), true);
     })
     .deactivateHouseFromDashboard({ houseName: house });
 }
@@ -307,7 +307,7 @@ function saveHouse() {
   const numericValue = toNumber(rawValue);
 
   if (String(rawValue || '').trim() && isNaN(numericValue)) {
-    setStatus('house_status', 'Error: Value must be a valid number.', true);
+    setStatus('house_status', 'Value must be a valid number.', true);
     return;
   }
 
@@ -318,7 +318,7 @@ function saveHouse() {
       refreshSnapshot();
     })
     .withFailureHandler(function(err) {
-      setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('house_status', (err.message || String(err)), true);
     })
     .updateHouseValueByDate({
       house: document.getElementById('house_house').value,
@@ -355,36 +355,36 @@ function createHouse() {
 
   if (!name) {
     showHouseAddNameError_('House name is required.');
-    setStatus('house_status', 'Error: House name is required.', true);
+    setStatus('house_status', 'House name is required.', true);
     return;
   }
   if (!typeSelVal) {
-    setStatus('house_status', 'Error: Property type is required.', true);
+    setStatus('house_status', 'Property type is required.', true);
     return;
   }
   if (typeSelVal === HOUSE_ADD_TYPE_OTHER_SENTINEL_ && !typeStr) {
-    setStatus('house_status', 'Error: Enter a custom Property type or choose a preset.', true);
+    setStatus('house_status', 'Enter a custom Property type or choose a preset.', true);
     const tcEl = document.getElementById('house_add_type_custom');
     if (tcEl) { try { tcEl.focus(); } catch (e) {} }
     return;
   }
   if (!String(curRaw || '').trim()) {
-    setStatus('house_status', 'Error: Current value is required.', true);
+    setStatus('house_status', 'Current value is required.', true);
     return;
   }
   if (!String(loanRaw || '').trim()) {
-    setStatus('house_status', 'Error: Loan amount left is required.', true);
+    setStatus('house_status', 'Loan amount left is required.', true);
     return;
   }
 
   const currentValue = toNumber(curRaw);
   if (isNaN(currentValue)) {
-    setStatus('house_status', 'Error: Current value must be a valid number.', true);
+    setStatus('house_status', 'Current value must be a valid number.', true);
     return;
   }
   const loanAmountLeft = toNumber(loanRaw);
   if (isNaN(loanAmountLeft)) {
-    setStatus('house_status', 'Error: Loan amount left must be a valid number.', true);
+    setStatus('house_status', 'Loan amount left must be a valid number.', true);
     return;
   }
 
@@ -418,7 +418,7 @@ function createHouse() {
       if (isHouseNameRelatedError_(msg)) {
         showHouseAddNameError_(msg);
       }
-      setStatus('house_status', 'Error: ' + msg, true);
+      setStatus('house_status', msg, true);
     })
     .addHouseFromDashboard(payload);
 }

@@ -398,7 +398,7 @@ function addDonation(payload) {
   });
 
   return {
-    message: 'Donation saved to ' + DONATION_SHEET_NAME_ + '.',
+    message: 'Donation saved.',
     updated: Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss')
   };
 }

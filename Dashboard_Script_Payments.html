@@ -131,7 +131,7 @@ function loadPaymentSection() {
       loadPaymentPreview();
     })
     .withFailureHandler(function(err) {
-      setStatus('pay_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('pay_status', (err.message || String(err)), true);
     })
     .getQuickAddPaymentUiData();
 }
@@ -176,7 +176,7 @@ function loadPaymentPreview() {
       applyQuickPaymentPriorMonth_(data);
     })
     .withFailureHandler(function(err) {
-      setStatus('pay_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('pay_status', (err.message || String(err)), true);
     })
     .getQuickAddPreview(payload);
 }
@@ -193,7 +193,7 @@ function applyQuickAddPreviewFromResult_(data) {
 function runDebtPlannerAfterQuickPayment_() {
   google.script.run
     .withFailureHandler(function(err) {
-      setStatus('pay_status', 'Planner error: ' + (err.message || String(err)), true);
+      setStatus('pay_status', (err.message || String(err)), true);
     })
     .runDebtPlanner();
 }
@@ -203,7 +203,7 @@ function savePayment() {
   const numericAmount = toNumber(rawAmount);
 
   if (String(rawAmount || '').trim() && isNaN(numericAmount)) {
-    setStatus('pay_status', 'Error: Amount must be a valid number.', true);
+    setStatus('pay_status', 'Amount must be a valid number.', true);
     return;
   }
 
@@ -264,7 +264,7 @@ function savePayment() {
       }
     })
     .withFailureHandler(function(err) {
-      setStatus('pay_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('pay_status', (err.message || String(err)), true);
     })
     .quickAddPayment({
       entryType: document.getElementById('pay_type').value,

@@ -546,8 +546,8 @@ function onboardingRenderBankDetail_(data) {
   // two empty sub-cases they started from.
   if (!data.sheetExists || count === 0) {
     var emptyHeadline = !data.sheetExists
-      ? 'No bank accounts are set up yet.'
-      : 'No bank accounts tracked yet' +
+      ? 'No bank accounts yet.'
+      : 'No bank accounts yet' +
         (data.year ? ' for ' + escapeOnboardingHtml_(String(data.year)) : '') + '.';
 
     var ctaHtml = '<button type="button" class="btn-primary" ' +
@@ -728,8 +728,8 @@ function onboardingRenderDebtDetail_(data) {
   // first so the user always lands on a working editor.
   if (!data.sheetExists || count === 0) {
     var emptyHeadline = !data.sheetExists
-      ? 'No debts are set up yet.'
-      : 'No debts tracked yet.';
+      ? 'No debts yet.'
+      : 'No debts yet.';
 
     var ctaHtml = '<button type="button" class="btn-primary" ' +
       'onclick="onboardingOpenDebtsPage()">Add first debt</button>';
@@ -902,8 +902,8 @@ function onboardingRenderBillsDetail_(data) {
 
   if (!data.sheetExists || count === 0) {
     var emptyHeadline = !data.sheetExists
-      ? 'No bills are set up yet.'
-      : 'No bills tracked yet.';
+      ? 'No bills yet.'
+      : 'No bills yet.';
     var ctaHtml = '<button type="button" class="btn-primary" ' +
       'onclick="onboardingOpenBillsPage()">Add first bill</button>';
 
@@ -1064,8 +1064,8 @@ function onboardingRenderUpcomingDetail_(data) {
 
   if (!data.sheetExists || count === 0) {
     var emptyHeadline = !data.sheetExists
-      ? 'No upcoming expenses are set up yet.'
-      : 'No planned upcoming expenses right now.';
+      ? 'No upcoming expenses yet.'
+      : 'No upcoming expenses right now.';
     var ctaHtml = '<button type="button" class="btn-primary" ' +
       'onclick="onboardingOpenUpcomingPage()">Add first upcoming expense</button>';
 
@@ -1250,7 +1250,7 @@ function onboardingRenderIncomeDetail_(data) {
       'onclick="onboardingOpenIncomePage()">Open Income editor</button>';
     fragments.push(
       '<div class="onboarding-detail-empty">' +
-        '<p>No income detected yet' +
+        '<p>No income yet' +
           (data.year ? ' on Cash Flow ' + escapeOnboardingHtml_(String(data.year)) : '') + '.</p>' +
         '<p class="muted">Add your first income row through Cash Flow &rarr; Income.</p>' +
         '<div style="margin-top:12px;">' + emptyCta + '</div>' +
@@ -1536,7 +1536,7 @@ function onboardingSaveProfile_() {
   var clientErrors = onboardingProfileValidateClient_(payload);
   if (Object.keys(clientErrors).length > 0) {
     onboardingProfileShowErrors_(clientErrors);
-    onboardingProfileSetStatus_('Please fix the highlighted fields.', 'error');
+    onboardingProfileSetStatus_('Fix the highlighted fields.', 'error');
     return;
   }
 

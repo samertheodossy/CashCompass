@@ -214,7 +214,7 @@ function loadUiData() {
       loadPreview();
     })
     .withFailureHandler(function(err) {
-      setStatus('Error: ' + (err.message || String(err)), true);
+      setStatus((err.message || String(err)), true);
     })
     .getQuickAddPaymentUiData();
 }
@@ -244,7 +244,7 @@ function loadPreview() {
       applyPriorMonthPreview_(data);
     })
     .withFailureHandler(function(err) {
-      setStatus('Error: ' + (err.message || String(err)), true);
+      setStatus((err.message || String(err)), true);
     })
     .getQuickAddPreview(payload);
 }
@@ -263,7 +263,7 @@ function save() {
   const numericAmount = toNumber(rawAmount);
 
   if (String(rawAmount || '').trim() && isNaN(numericAmount)) {
-    setStatus('Error: Amount must be a valid number.', true);
+    setStatus('Amount must be a valid number.', true);
     return;
   }
 
@@ -275,7 +275,7 @@ function save() {
     createIfMissing: document.getElementById('createIfMissing').checked
   };
 
-  setStatus('Saving...', false);
+  setStatus('Saving…', false);
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -288,12 +288,12 @@ function save() {
       document.getElementById('amount').value = '';
       google.script.run
         .withFailureHandler(function(err) {
-          setStatus('Planner error: ' + (err.message || String(err)), true);
+          setStatus((err.message || String(err)), true);
         })
         .runDebtPlanner();
     })
     .withFailureHandler(function(err) {
-      setStatus('Error: ' + (err.message || String(err)), true);
+      setStatus((err.message || String(err)), true);
     })
     .quickAddPayment(payload);
 }

@@ -163,7 +163,7 @@ function loadInvestments() {
       });
     })
     .withFailureHandler(function(err) {
-      setStatus('Error: ' + (err.message || String(err)), true);
+      setStatus((err.message || String(err)), true);
     })
     .getInvestmentUiData();
 }
@@ -185,7 +185,7 @@ function loadSelectedInvestmentData() {
       setStatus('', false);
     })
     .withFailureHandler(function(err) {
-      setStatus('Error: ' + (err.message || String(err)), true);
+      setStatus((err.message || String(err)), true);
     })
     .getInvestmentValueForDate(account, date);
 }
@@ -195,7 +195,7 @@ function save() {
   const numericValue = toNumber(rawValue);
 
   if (String(rawValue || '').trim() && isNaN(numericValue)) {
-    setStatus('Error: Value must be a valid number.', true);
+    setStatus('Value must be a valid number.', true);
     return;
   }
 
@@ -205,7 +205,7 @@ function save() {
     currentValue: numericValue
   };
 
-  setStatus('Saving...', false);
+  setStatus('Saving…', false);
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -213,7 +213,7 @@ function save() {
       loadSelectedInvestmentData();
     })
     .withFailureHandler(function(err) {
-      setStatus('Error: ' + (err.message || String(err)), true);
+      setStatus((err.message || String(err)), true);
     })
     .updateInvestmentValueByDate(payload);
 }

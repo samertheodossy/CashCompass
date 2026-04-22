@@ -123,7 +123,7 @@ function loadUiData() {
       filterAccounts();
     })
     .withFailureHandler(function(err) {
-      setStatus('Error: ' + (err.message || String(err)), true);
+      setStatus((err.message || String(err)), true);
     })
     .getDebtsUiData();
 }
@@ -176,7 +176,7 @@ function loadFieldValue() {
       setStatus('', false);
     })
     .withFailureHandler(function(err) {
-      setStatus('Error: ' + (err.message || String(err)), true);
+      setStatus((err.message || String(err)), true);
     })
     .getDebtFieldValue(account, field);
 }
@@ -188,7 +188,7 @@ function save() {
     value: document.getElementById('value').value
   };
 
-  setStatus('Saving...', false);
+  setStatus('Saving…', false);
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -196,7 +196,7 @@ function save() {
       loadFieldValue();
     })
     .withFailureHandler(function(err) {
-      setStatus('Error: ' + (err.message || String(err)), true);
+      setStatus((err.message || String(err)), true);
     })
     .updateDebtField(payload);
 }

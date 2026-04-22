@@ -43,7 +43,7 @@ function loadHouseExpensesSection() {
       setStatus('hx_status', '', false);
     })
     .withFailureHandler(function(err) {
-      setStatus('hx_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('hx_status', (err.message || String(err)), true);
     })
     .getHouseExpenseUiData();
 }
@@ -60,7 +60,7 @@ function loadRecentHouseExpenses() {
     .withFailureHandler(function(err) {
       const root = document.getElementById('hx_recentList');
       if (root) {
-        root.innerHTML = '<div class="muted">Error loading recent house expenses: ' +
+        root.innerHTML = '<div class="muted">Couldn&rsquo;t load recent house expenses &mdash; ' +
           escapeHtml(err.message || String(err)) + '</div>';
       }
     })
@@ -179,7 +179,7 @@ function loadHouseExpenseSummaries() {
       ['hx_summaryThisMonthByHouse', 'hx_summaryYtdByHouse', 'hx_summaryYtdByType'].forEach(function(id) {
         const root = document.getElementById(id);
         if (root) {
-          root.innerHTML = '<div class="muted">Error loading summaries: ' +
+          root.innerHTML = '<div class="muted">Couldn&rsquo;t load summaries &mdash; ' +
             escapeHtml(err.message || String(err)) + '</div>';
         }
       });
@@ -216,12 +216,12 @@ function saveHouseExpense() {
   const serviceFees = toNumber(document.getElementById('hx_serviceFees').value);
 
   if (String(document.getElementById('hx_cost').value || '').trim() && isNaN(cost)) {
-    setStatus('hx_status', 'Error: Cost must be a valid number.', true);
+    setStatus('hx_status', 'Cost must be a valid number.', true);
     return;
   }
 
   if (String(document.getElementById('hx_serviceFees').value || '').trim() && isNaN(serviceFees)) {
-    setStatus('hx_status', 'Error: Service Fees Paid must be a valid number.', true);
+    setStatus('hx_status', 'Service Fees Paid must be a valid number.', true);
     return;
   }
 
@@ -240,19 +240,19 @@ function saveHouseExpense() {
   };
 
   if (!payload.house) {
-    setStatus('hx_status', 'Error: Please choose a house.', true);
+    setStatus('hx_status', 'Pick a house.', true);
     return;
   }
   if (!payload.date) {
-    setStatus('hx_status', 'Error: Please enter a date.', true);
+    setStatus('hx_status', 'Date is required.', true);
     return;
   }
   if (!payload.item) {
-    setStatus('hx_status', 'Error: Please enter an item.', true);
+    setStatus('hx_status', 'Item is required.', true);
     return;
   }
 
-  setStatus('hx_status', 'Saving...', false);
+  setStatus('hx_status', 'Saving…', false);
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -281,7 +281,7 @@ function saveHouseExpense() {
       }
     })
     .withFailureHandler(function(err) {
-      setStatus('hx_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('hx_status', (err.message || String(err)), true);
     })
     .addHouseExpense(payload);
 }

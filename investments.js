@@ -1066,7 +1066,7 @@ function addInvestmentAccountFromDashboard(payload) {
     ensureInputInvestmentsSheet_();
   } catch (ensureErr) {
     throw new Error(
-      'Could not prepare INPUT - Investments: ' +
+      "Couldn't prepare investments: " +
       (ensureErr && ensureErr.message ? ensureErr.message : ensureErr)
     );
   }

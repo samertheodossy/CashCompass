@@ -165,7 +165,7 @@ function addBillFromDashboard(payload) {
     ensureOnboardingBillsSheetFromDashboard('normal');
   } catch (ensureErr) {
     throw new Error(
-      'Could not prepare INPUT - Bills: ' +
+      "Couldn't prepare bills: " +
       (ensureErr && ensureErr.message ? ensureErr.message : ensureErr)
     );
   }

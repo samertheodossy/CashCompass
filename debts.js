@@ -434,7 +434,7 @@ function addDebtFromDashboard(payload) {
     ensureOnboardingDebtsSheetFromDashboard('normal');
   } catch (ensureErr) {
     throw new Error(
-      'Could not prepare INPUT - Debts: ' +
+      "Couldn't prepare debts: " +
       (ensureErr && ensureErr.message ? ensureErr.message : ensureErr)
     );
   }

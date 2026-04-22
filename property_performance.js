@@ -20,7 +20,7 @@ function getPropertyPerformanceData(payload) {
   // exist yet and getHouseNamesFromHouseAssets_() -> getSheet_() would
   // throw a red banner on Property Performance. Return the same shape
   // with empty rows and zeroed portfolio totals so the page renders
-  // clean ("No houses to show."). The populated path below is
+  // clean ("No houses yet."). The populated path below is
   // unchanged.
   if (!ss.getSheetByName(getSheetNames_().HOUSE_ASSETS)) {
     const cyEarly = getCurrentYear_();

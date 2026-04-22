@@ -105,7 +105,7 @@ function loadBillsDueUi_() {
       renderBillsDueSummary_(data || {});
     })
     .withFailureHandler(function(err) {
-      const msg = 'Error loading bills due: ' + (err.message || String(err));
+      const msg = "Couldn't load bills due — " + (err.message || String(err));
       renderBillsList_('bd_overdueList', [], msg);
       renderBillsList_('bd_next7List', [], msg);
       renderBillsDueSummary_({ overdue: [], next7: [] }, msg);
@@ -229,7 +229,7 @@ function payBillFromDashboard(billKey) {
   const bill = store[billKey];
 
   if (!bill) {
-    setBillsStatus_('Error: Bill not found.', true);
+    setBillsStatus_('Bill not found.', true);
     return;
   }
 
@@ -248,7 +248,7 @@ function payBillFromDashboard(billKey) {
 
 function skipBillFromDashboard(skipKey) {
   if (!skipKey) {
-    setBillsStatus_('Error: Missing bill key.', true);
+    setBillsStatus_('Missing bill key.', true);
     return;
   }
 
@@ -260,7 +260,7 @@ function skipBillFromDashboard(skipKey) {
       loadPaymentPreview();
     })
     .withFailureHandler(function(err) {
-      setBillsStatus_('Error: ' + (err.message || String(err)), true);
+      setBillsStatus_((err.message || String(err)), true);
     })
     .skipDashboardBill(skipKey);
 }
@@ -274,13 +274,13 @@ function stopTrackingBillFromDashboard(billKey) {
   const bill = store[billKey];
 
   if (!bill) {
-    setBillsStatus_('Error: Bill not found.', true);
+    setBillsStatus_('Bill not found.', true);
     return;
   }
 
   const sheetRow = Number(bill.inputBillsRow);
   if (!isFinite(sheetRow) || sheetRow < 2) {
-    setBillsStatus_('Error: This bill cannot be stopped from here.', true);
+    setBillsStatus_('This bill cannot be stopped from here.', true);
     return;
   }
 
@@ -301,7 +301,7 @@ function stopTrackingBillFromDashboard(billKey) {
       if (typeof loadPaymentPreview === 'function') loadPaymentPreview();
     })
     .withFailureHandler(function(err) {
-      setBillsStatus_('Error: ' + (err.message || String(err)), true);
+      setBillsStatus_((err.message || String(err)), true);
     })
     .deactivateBillFromDashboard({
       sheetRow: sheetRow,
@@ -319,7 +319,7 @@ function loadRecurringBillsUi_() {
       renderRecurringBillsList_('bd_recurringList', rows, 'No recurring bills pending.');
     })
     .withFailureHandler(function(err) {
-      renderRecurringBillsList_('bd_recurringList', [], 'Error: ' + (err.message || String(err)));
+      renderRecurringBillsList_('bd_recurringList', [], (err.message || String(err)));
     })
     .getRecurringBillsWithoutDueDateForDashboard();
 }
@@ -355,7 +355,7 @@ function renderRecurringBillsList_(elementId, rows, emptyMsg) {
 function payRecurringBill(key) {
   const bill = (window.__dashboardRecurring || {})[key];
   if (!bill) {
-    setBillsStatus_('Error: Recurring bill not found.', true);
+    setBillsStatus_('Recurring bill not found.', true);
     return;
   }
 
@@ -369,7 +369,7 @@ function payRecurringBill(key) {
 
 function skipRecurringBill(skipKey) {
   if (!skipKey) {
-    setBillsStatus_('Error: Missing recurring bill key.', true);
+    setBillsStatus_('Missing recurring bill key.', true);
     return;
   }
 
@@ -380,7 +380,7 @@ function skipRecurringBill(skipKey) {
       refreshSnapshot();
     })
     .withFailureHandler(function(err) {
-      setBillsStatus_('Error: ' + (err.message || String(err)), true);
+      setBillsStatus_((err.message || String(err)), true);
     })
     .skipDashboardBill(skipKey);
 }
@@ -409,7 +409,7 @@ function loadActiveBillsManagementUi_() {
     })
     .withFailureHandler(function(err) {
       el.innerHTML =
-        '<div class="muted">Error loading active bills: ' +
+        '<div class="muted">Couldn&rsquo;t load active bills &mdash; ' +
         escapeHtml(err && err.message ? err.message : String(err)) +
         '</div>';
     })
@@ -834,13 +834,13 @@ function submitNewBill() {
   const startMonthRaw = (document.getElementById('bills_add_start_month').value || '').trim();
 
   if (!payee) {
-    setBillsStatus_('Error: Payee is required.', true);
+    setBillsStatus_('Payee is required.', true);
     return;
   }
 
   const dueDayNum = Number(dueDayRaw);
   if (!dueDayRaw || !isFinite(dueDayNum) || Math.floor(dueDayNum) !== dueDayNum || dueDayNum < 1 || dueDayNum > 31) {
-    setBillsStatus_('Error: Due Day must be an integer from 1 to 31.', true);
+    setBillsStatus_('Due Day must be an integer from 1 to 31.', true);
     return;
   }
 
@@ -849,23 +849,23 @@ function submitNewBill() {
     'Bimonthly': true, 'Quarterly': true, 'Semi-annually': true, 'Yearly': true
   };
   if (!validFrequencies[frequency]) {
-    setBillsStatus_('Error: Pick a valid frequency.', true);
+    setBillsStatus_('Pick a valid frequency.', true);
     return;
   }
 
   if (paymentSource !== 'CASH' && paymentSource !== 'CREDIT_CARD') {
-    setBillsStatus_('Error: Payment Source must be CASH or CREDIT_CARD.', true);
+    setBillsStatus_('Payment Source must be CASH or CREDIT_CARD.', true);
     return;
   }
 
   if (!category) {
     if (categoryChoice === '__other__') {
-      setBillsStatus_('Error: Please enter a category in the "Other…" field.', true);
+      setBillsStatus_('Enter a category in the "Other…" field.', true);
       if (categoryOther && typeof categoryOther.focus === 'function') {
         try { categoryOther.focus(); } catch (e) { /* ignore focus errors */ }
       }
     } else {
-      setBillsStatus_('Error: Category is required.', true);
+      setBillsStatus_('Category is required.', true);
       if (categorySelect && typeof categorySelect.focus === 'function') {
         try { categorySelect.focus(); } catch (e) { /* ignore focus errors */ }
       }
@@ -877,7 +877,7 @@ function submitNewBill() {
   if (String(defaultAmountRaw || '').trim() !== '') {
     const n = toNumber(defaultAmountRaw);
     if (!isFinite(n)) {
-      setBillsStatus_('Error: Default Amount must be a valid number.', true);
+      setBillsStatus_('Default Amount must be a valid number.', true);
       return;
     }
     defaultAmount = Math.abs(n);
@@ -887,7 +887,7 @@ function submitNewBill() {
   if (startMonthRaw !== '') {
     const m = Number(startMonthRaw);
     if (!isFinite(m) || Math.floor(m) !== m || m < 1 || m > 12) {
-      setBillsStatus_('Error: Start Month must be an integer from 1 to 12.', true);
+      setBillsStatus_('Start Month must be an integer from 1 to 12.', true);
       return;
     }
     startMonth = m;
@@ -925,7 +925,7 @@ function submitNewBill() {
       if (typeof refreshSnapshot === 'function') refreshSnapshot();
     })
     .withFailureHandler(function(err) {
-      setBillsStatus_('Error: ' + (err.message || String(err)), true);
+      setBillsStatus_((err.message || String(err)), true);
     })
     .addBillFromDashboard(payload);
 }

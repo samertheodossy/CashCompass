@@ -168,7 +168,7 @@
           }
         })
         .withFailureHandler(function(err) {
-          setStatus('Error: ' + (err.message || String(err)), true);
+          setStatus((err.message || String(err)), true);
         })
         .getHouseExpenseUiData();
     }
@@ -190,19 +190,19 @@
       };
 
       if (!payload.house) {
-        setStatus('Please choose a house.', true);
+        setStatus('Pick a house.', true);
         return;
       }
       if (!payload.date) {
-        setStatus('Please enter a date.', true);
+        setStatus('Date is required.', true);
         return;
       }
       if (!payload.item) {
-        setStatus('Please enter an item.', true);
+        setStatus('Item is required.', true);
         return;
       }
 
-      setStatus('Saving...', false);
+      setStatus('Saving…', false);
 
       google.script.run
         .withSuccessHandler(function(res) {
@@ -216,7 +216,7 @@
           syncLocationFromHouse();
         })
         .withFailureHandler(function(err) {
-          setStatus('Error: ' + (err.message || String(err)), true);
+          setStatus((err.message || String(err)), true);
         })
         .addHouseExpense(payload);
     }

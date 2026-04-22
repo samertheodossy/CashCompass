@@ -154,7 +154,7 @@ function renderActivityTable_(rows, options) {
   if (!wrap) return;
 
   if (!rows || !rows.length) {
-    wrap.innerHTML = '<div class="muted">No rows to show.</div>';
+    wrap.innerHTML = '<div class="muted">No activity yet.</div>';
     return;
   }
 
@@ -405,7 +405,7 @@ function loadActivitySection() {
   google.script.run
     .withSuccessHandler(function(res) {
       if (!res || !res.ok) {
-        wrap.innerHTML = '<div class="muted">Could not load activity.</div>';
+        wrap.innerHTML = '<div class="muted">Couldn&rsquo;t load activity &mdash; please try again.</div>';
         if (statusEl) {
           statusEl.textContent = res && res.error ? res.error : 'Unknown error';
           statusEl.className = 'status error';
@@ -443,7 +443,7 @@ function loadActivitySection() {
       activityRenderCurrentPage_();
     })
     .withFailureHandler(function(err) {
-      wrap.innerHTML = '<div class="muted">Failed to load.</div>';
+      wrap.innerHTML = '<div class="muted">Couldn&rsquo;t load &mdash; please try again.</div>';
       if (statusEl) {
         statusEl.textContent = err && err.message ? err.message : String(err);
         statusEl.className = 'status error';

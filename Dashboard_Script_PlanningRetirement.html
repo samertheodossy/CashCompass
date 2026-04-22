@@ -104,7 +104,7 @@ function loadRetirementSection() {
       // than a red error string — consistent with the rest of the tab.
       showRetirementEmptyState_({
         title: 'Retirement planner is unavailable right now.',
-        body: 'Please try again in a moment.',
+        body: 'Try again in a moment.',
         hint: (err && err.message) ? err.message : ''
       });
       clearRetirementReadOnlyInfo_();
@@ -203,19 +203,19 @@ function saveRetirementBasicsFromUi_() {
     : 0;
 
   if (!(yourAge > 0)) {
-    setStatus('ret_basics_status', 'Please enter your age (greater than 0).', true);
+    setStatus('ret_basics_status', 'Your age is required (greater than 0).', true);
     return;
   }
   if (!partneredChosen) {
-    setStatus('ret_basics_status', 'Please choose Yes or No for Partnered.', true);
+    setStatus('ret_basics_status', 'Pick Yes or No for Partnered.', true);
     return;
   }
   if (partnered && !(spouseAge > 0)) {
-    setStatus('ret_basics_status', 'Please enter your spouse\u2019s age.', true);
+    setStatus('ret_basics_status', 'Spouse\u2019s age is required.', true);
     return;
   }
 
-  setStatus('ret_basics_status', 'Saving...', false);
+  setStatus('ret_basics_status', 'Saving…', false);
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -227,7 +227,7 @@ function saveRetirementBasicsFromUi_() {
       refreshSnapshot();
     })
     .withFailureHandler(function(err) {
-      setStatus('ret_basics_status', 'Error: ' + (err && err.message ? err.message : String(err)), true);
+      setStatus('ret_basics_status', (err && err.message ? err.message : String(err)), true);
     })
     .saveRetirementBasics({
       yourCurrentAge: yourAge,
@@ -392,7 +392,7 @@ function saveRetirement() {
     oneTimeFutureCashNeeds: toNumber(document.getElementById('ret_oneTimeFutureCashNeeds').value)
   };
 
-  setStatus('retirement_status', 'Saving...', false);
+  setStatus('retirement_status', 'Saving…', false);
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -406,7 +406,7 @@ function saveRetirement() {
       refreshSnapshot();
     })
     .withFailureHandler(function(err) {
-      setStatus('retirement_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('retirement_status', (err.message || String(err)), true);
     })
     .saveRetirementInputs(payload);
 }

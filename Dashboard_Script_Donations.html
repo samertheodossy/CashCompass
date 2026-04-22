@@ -121,7 +121,7 @@ function loadDonationsSection() {
       renderRecentDonations((data && data.recentDonations) || []);
     })
     .withFailureHandler(function(err) {
-      setStatus('donations_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('donations_status', (err.message || String(err)), true);
     })
     .getDonationsFormData();
 }
@@ -209,7 +209,7 @@ function saveDonation() {
       loadDonationsSection();
     })
     .withFailureHandler(function(err) {
-      setStatus('donations_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('donations_status', (err.message || String(err)), true);
     })
     .addDonation({
       charityName: charity,

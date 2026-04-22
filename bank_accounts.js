@@ -484,7 +484,7 @@ function addBankAccountFromDashboard(payload) {
     // Re-surface with a user-facing message so the dashboard banner
     // is actionable rather than just "Missing sheet: ...".
     throw new Error(
-      'Could not prepare INPUT - Bank Accounts: ' +
+      "Couldn't prepare bank accounts: " +
       (ensureErr && ensureErr.message ? ensureErr.message : ensureErr)
     );
   }

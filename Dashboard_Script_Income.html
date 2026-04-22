@@ -66,7 +66,7 @@ function loadIncomeSourcesSection() {
     })
     .withFailureHandler(function(err) {
       el.innerHTML =
-        '<div class="muted">Error loading income sources: ' +
+        '<div class="muted">Couldn&rsquo;t load income sources &mdash; ' +
         escapeHtml(err && err.message ? err.message : String(err)) +
         '</div>';
     })
@@ -87,7 +87,7 @@ function renderIncomeSourcesList_(rows) {
   if (!rows.length) {
     el.innerHTML =
       '<div class="income-empty-state" style="padding:16px;border:1px dashed #d1d5db;border-radius:8px;background:#f9fafb;text-align:center;">' +
-        '<div class="muted">No recurring income detected yet. Use <strong>+ Add income source</strong> above to log one on this year\'s Cash Flow.</div>' +
+        '<div class="muted">No recurring income yet. Use <strong>+ Add income source</strong> above to log one on this year\'s Cash Flow.</div>' +
       '</div>';
     return;
   }
@@ -379,7 +379,7 @@ function submitNewIncomeSource() {
         setIncomeAddNameError_(msg);
         setIncomeStatus_('', false);
       } else {
-        setIncomeStatus_('Error: ' + msg, true);
+        setIncomeStatus_(msg, true);
       }
     })
     .addIncomeSourceFromDashboard(payload);
@@ -393,14 +393,14 @@ function stopTrackingIncomeSource(key) {
   var store = window.__dashboardActiveIncomeSources || {};
   var src = store[key];
   if (!src) {
-    setIncomeStatus_('Error: Income source not found.', true);
+    setIncomeStatus_('Income source not found.', true);
     return;
   }
 
   var groupKey = String(src.groupKey || '').trim();
   var year = Number(src.year);
   if (!groupKey || !isFinite(year) || year < 2000) {
-    setIncomeStatus_('Error: This income source cannot be stopped from here.', true);
+    setIncomeStatus_('This income source cannot be stopped from here.', true);
     return;
   }
 
@@ -420,7 +420,7 @@ function stopTrackingIncomeSource(key) {
       loadIncomeSourcesSection();
     })
     .withFailureHandler(function(err) {
-      setIncomeStatus_('Error: ' + (err && err.message ? err.message : String(err)), true);
+      setIncomeStatus_((err && err.message ? err.message : String(err)), true);
     })
     .deactivateIncomeSourceFromDashboard({
       groupKey: groupKey,

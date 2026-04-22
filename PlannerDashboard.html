@@ -670,7 +670,7 @@ function clearHouseAddNameError_() {
 function showHouseAddNameError_(message) {
   const el = document.getElementById('house_add_name_error');
   if (el) {
-    el.textContent = message || 'Please fix the House name.';
+    el.textContent = message || 'Fix the House name.';
     el.classList.add('active');
   }
   const n = document.getElementById('house_add_name');
@@ -719,7 +719,7 @@ function loadHouseSection() {
       fillHouseDropdownFromData_(data);
     })
     .withFailureHandler(function(err) {
-      setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('house_status', (err.message || String(err)), true);
     })
     .getHouseUiData();
 }
@@ -737,7 +737,7 @@ function loadHouseSectionThenSelect_(houseName) {
       }
     })
     .withFailureHandler(function(err) {
-      setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('house_status', (err.message || String(err)), true);
     })
     .getHouseUiData();
 }
@@ -784,7 +784,7 @@ function loadHouseData() {
       setStatus('house_status', '', false);
     })
     .withFailureHandler(function(err) {
-      setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('house_status', (err.message || String(err)), true);
     })
     .getHouseValueForDate(house, date);
 }
@@ -794,7 +794,7 @@ function saveHouse() {
   const numericValue = toNumber(rawValue);
 
   if (String(rawValue || '').trim() && isNaN(numericValue)) {
-    setStatus('house_status', 'Error: Value must be a valid number.', true);
+    setStatus('house_status', 'Value must be a valid number.', true);
     return;
   }
 
@@ -804,7 +804,7 @@ function saveHouse() {
     currentValue: numericValue
   };
 
-  setStatus('house_status', 'Saving...', false);
+  setStatus('house_status', 'Saving…', false);
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -812,7 +812,7 @@ function saveHouse() {
       loadHouseData();
     })
     .withFailureHandler(function(err) {
-      setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('house_status', (err.message || String(err)), true);
     })
     .updateHouseValueByDate(payload);
 }
@@ -822,7 +822,7 @@ function stopTrackingHouse() {
   const house = sel ? String(sel.value || '').trim() : '';
 
   if (!house) {
-    setStatus('house_status', 'Error: Pick a house first.', true);
+    setStatus('house_status', 'Pick a house first.', true);
     return;
   }
 
@@ -847,7 +847,7 @@ function stopTrackingHouse() {
       }
     })
     .withFailureHandler(function(err) {
-      setStatus('house_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('house_status', (err.message || String(err)), true);
     })
     .deactivateHouseFromDashboard({ houseName: house });
 }
@@ -863,30 +863,30 @@ function createHouse() {
 
   if (!name) {
     showHouseAddNameError_('House name is required.');
-    setStatus('house_status', 'Error: House name is required.', true);
+    setStatus('house_status', 'House name is required.', true);
     return;
   }
   if (!typeStr) {
-    setStatus('house_status', 'Error: Property type is required.', true);
+    setStatus('house_status', 'Property type is required.', true);
     return;
   }
   if (!String(curRaw || '').trim()) {
-    setStatus('house_status', 'Error: Current value is required.', true);
+    setStatus('house_status', 'Current value is required.', true);
     return;
   }
   if (!String(loanRaw || '').trim()) {
-    setStatus('house_status', 'Error: Loan amount left is required.', true);
+    setStatus('house_status', 'Loan amount left is required.', true);
     return;
   }
 
   const currentValue = toNumber(curRaw);
   if (isNaN(currentValue)) {
-    setStatus('house_status', 'Error: Current value must be a valid number.', true);
+    setStatus('house_status', 'Current value must be a valid number.', true);
     return;
   }
   const loanAmountLeft = toNumber(loanRaw);
   if (isNaN(loanAmountLeft)) {
-    setStatus('house_status', 'Error: Loan amount left must be a valid number.', true);
+    setStatus('house_status', 'Loan amount left must be a valid number.', true);
     return;
   }
 
@@ -898,7 +898,7 @@ function createHouse() {
   };
   if (valDate) payload.valuationDate = valDate;
 
-  setStatus('house_status', 'Saving...', false);
+  setStatus('house_status', 'Saving…', false);
   google.script.run
     .withSuccessHandler(function(res) {
       const useDate = valDate || new Date().toISOString().slice(0, 10);
@@ -919,7 +919,7 @@ function createHouse() {
       if (isHouseNameRelatedError_(msg)) {
         showHouseAddNameError_(msg);
       }
-      setStatus('house_status', 'Error: ' + msg, true);
+      setStatus('house_status', msg, true);
     })
     .addHouseFromDashboard(payload);
 }
@@ -999,7 +999,7 @@ function clearBankAddNameError_() {
 function showBankAddNameError_(message) {
   const el = document.getElementById('bank_add_name_error');
   if (el) {
-    el.textContent = message || 'Please fix the Account name.';
+    el.textContent = message || 'Fix the Account name.';
     el.classList.add('active');
   }
   const n = document.getElementById('bank_add_name');
@@ -1048,7 +1048,7 @@ function loadBankSection() {
       fillBankAccountDropdownFromData_(data);
     })
     .withFailureHandler(function(err) {
-      setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('bank_status', (err.message || String(err)), true);
     })
     .getBankAccountUiData();
 }
@@ -1066,7 +1066,7 @@ function loadBankSectionThenSelect_(accountName) {
       }
     })
     .withFailureHandler(function(err) {
-      setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('bank_status', (err.message || String(err)), true);
     })
     .getBankAccountUiData();
 }
@@ -1159,7 +1159,7 @@ function loadBankData() {
       setStatus('bank_status', '', false);
     })
     .withFailureHandler(function(err) {
-      setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('bank_status', (err.message || String(err)), true);
     })
     .getBankAccountValueForDate(account, date);
 }
@@ -1178,33 +1178,33 @@ function createBankAccount() {
 
   if (!name) {
     showBankAddNameError_('Account name is required.');
-    setStatus('bank_status', 'Error: Account name is required.', true);
+    setStatus('bank_status', 'Account name is required.', true);
     return;
   }
   if (!typeStr) {
-    setStatus('bank_status', 'Error: Type is required.', true);
+    setStatus('bank_status', 'Type is required.', true);
     return;
   }
   if (!policyStr) {
-    setStatus('bank_status', 'Error: Use policy is required.', true);
+    setStatus('bank_status', 'Use policy is required.', true);
     return;
   }
 
   const priStr = String(priRaw == null ? '' : priRaw).trim();
   const priNum = priStr === '' ? 9 : parseInt(priStr, 10);
   if (isNaN(priNum) || priNum < 1 || priNum > 99) {
-    setStatus('bank_status', 'Error: Priority must be a whole number between 1 and 99.', true);
+    setStatus('bank_status', 'Priority must be a whole number between 1 and 99.', true);
     return;
   }
 
   if (hasDate !== hasAmt) {
-    setStatus('bank_status', 'Error: For an opening balance, enter both date and amount (or leave both blank).', true);
+    setStatus('bank_status', 'For an opening balance, enter both date and amount (or leave both blank).', true);
     return;
   }
 
   const openNum = hasAmt ? toNumber(openRaw) : NaN;
   if (hasAmt && isNaN(openNum)) {
-    setStatus('bank_status', 'Error: Opening balance must be a valid number.', true);
+    setStatus('bank_status', 'Opening balance must be a valid number.', true);
     return;
   }
 
@@ -1239,7 +1239,7 @@ function createBankAccount() {
       if (isBankNameRelatedError_(msg)) {
         showBankAddNameError_(msg);
       }
-      setStatus('bank_status', 'Error: ' + msg, true);
+      setStatus('bank_status', msg, true);
     })
     .addBankAccountFromDashboard(payload);
 }
@@ -1249,7 +1249,7 @@ function stopTrackingBank() {
   const account = sel ? String(sel.value || '').trim() : '';
 
   if (!account) {
-    setStatus('bank_status', 'Error: Pick a bank account first.', true);
+    setStatus('bank_status', 'Pick a bank account first.', true);
     return;
   }
 
@@ -1271,7 +1271,7 @@ function stopTrackingBank() {
       if (typeof refreshSnapshot === 'function') refreshSnapshot();
     })
     .withFailureHandler(function(err) {
-      setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('bank_status', (err.message || String(err)), true);
     })
     .deactivateBankAccountFromDashboard({ accountName: account });
 }
@@ -1281,7 +1281,7 @@ function saveBank() {
   const numericValue = toNumber(rawValue);
 
   if (String(rawValue || '').trim() && isNaN(numericValue)) {
-    setStatus('bank_status', 'Error: Value must be a valid number.', true);
+    setStatus('bank_status', 'Value must be a valid number.', true);
     return;
   }
 
@@ -1301,7 +1301,7 @@ function saveBank() {
       loadBankData();
     })
     .withFailureHandler(function(err) {
-      setStatus('bank_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('bank_status', (err.message || String(err)), true);
     })
     .updateBankAccountValueByDate(payload);
 }
@@ -1358,7 +1358,7 @@ function clearInvestmentAddNameError_() {
 function showInvestmentAddNameError_(message) {
   const el = document.getElementById('inv_add_name_error');
   if (el) {
-    el.textContent = message || 'Please fix the Account name.';
+    el.textContent = message || 'Fix the Account name.';
     el.classList.add('active');
   }
   const n = document.getElementById('inv_add_name');
@@ -1405,7 +1405,7 @@ function loadInvestmentSection() {
       fillInvestmentAccountDropdownFromData_(data);
     })
     .withFailureHandler(function(err) {
-      setStatus('inv_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('inv_status', (err.message || String(err)), true);
     })
     .getInvestmentUiData();
 }
@@ -1423,7 +1423,7 @@ function loadInvestmentSectionThenSelect_(accountName) {
       }
     })
     .withFailureHandler(function(err) {
-      setStatus('inv_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('inv_status', (err.message || String(err)), true);
     })
     .getInvestmentUiData();
 }
@@ -1468,7 +1468,7 @@ function loadInvestmentData() {
       setStatus('inv_status', '', false);
     })
     .withFailureHandler(function(err) {
-      setStatus('inv_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('inv_status', (err.message || String(err)), true);
     })
     .getInvestmentValueForDate(account, date);
 }
@@ -1478,7 +1478,7 @@ function saveInvestment() {
   const numericValue = toNumber(rawValue);
 
   if (String(rawValue || '').trim() && isNaN(numericValue)) {
-    setStatus('inv_status', 'Error: Value must be a valid number.', true);
+    setStatus('inv_status', 'Value must be a valid number.', true);
     return;
   }
 
@@ -1488,7 +1488,7 @@ function saveInvestment() {
     currentValue: numericValue
   };
 
-  setStatus('inv_status', 'Saving...', false);
+  setStatus('inv_status', 'Saving…', false);
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -1496,7 +1496,7 @@ function saveInvestment() {
       loadInvestmentData();
     })
     .withFailureHandler(function(err) {
-      setStatus('inv_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('inv_status', (err.message || String(err)), true);
     })
     .updateInvestmentValueByDate(payload);
 }
@@ -1513,21 +1513,21 @@ function createInvestmentAccount() {
 
   if (!name) {
     showInvestmentAddNameError_('Account name is required.');
-    setStatus('inv_status', 'Error: Account name is required.', true);
+    setStatus('inv_status', 'Account name is required.', true);
     return;
   }
   if (!typeStr) {
-    setStatus('inv_status', 'Error: Type is required.', true);
+    setStatus('inv_status', 'Type is required.', true);
     return;
   }
   if (hasDate !== hasAmt) {
-    setStatus('inv_status', 'Error: For a starting value, enter both date and amount (or leave both blank).', true);
+    setStatus('inv_status', 'For a starting value, enter both date and amount (or leave both blank).', true);
     return;
   }
 
   const startNum = hasAmt ? toNumber(startRaw) : NaN;
   if (hasAmt && isNaN(startNum)) {
-    setStatus('inv_status', 'Error: Starting value must be a valid number.', true);
+    setStatus('inv_status', 'Starting value must be a valid number.', true);
     return;
   }
 
@@ -1553,7 +1553,7 @@ function createInvestmentAccount() {
       if (isInvestmentNameRelatedError_(msg)) {
         showInvestmentAddNameError_(msg);
       }
-      setStatus('inv_status', 'Error: ' + msg, true);
+      setStatus('inv_status', msg, true);
     })
     .addInvestmentAccountFromDashboard(payload);
 }
@@ -1563,7 +1563,7 @@ function stopTrackingInvestment() {
   const account = sel ? String(sel.value || '').trim() : '';
 
   if (!account) {
-    setStatus('inv_status', 'Error: Pick an investment account first.', true);
+    setStatus('inv_status', 'Pick an investment account first.', true);
     return;
   }
 
@@ -1583,7 +1583,7 @@ function stopTrackingInvestment() {
       loadInvestmentData();
     })
     .withFailureHandler(function(err) {
-      setStatus('inv_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('inv_status', (err.message || String(err)), true);
     })
     .deactivateInvestmentAccountFromDashboard({ accountName: account });
 }
@@ -1611,7 +1611,7 @@ function loadPaymentSection() {
       loadPaymentPreview();
     })
     .withFailureHandler(function(err) {
-      setStatus('pay_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('pay_status', (err.message || String(err)), true);
     })
     .getQuickAddPaymentUiData();
 }
@@ -1676,7 +1676,7 @@ function loadPaymentPreview() {
       applyQuickPaymentPriorMonth_(data);
     })
     .withFailureHandler(function(err) {
-      setStatus('pay_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('pay_status', (err.message || String(err)), true);
     })
     .getQuickAddPreview(payload);
 }
@@ -1695,7 +1695,7 @@ function savePayment() {
   const numericAmount = toNumber(rawAmount);
 
   if (String(rawAmount || '').trim() && isNaN(numericAmount)) {
-    setStatus('pay_status', 'Error: Amount must be a valid number.', true);
+    setStatus('pay_status', 'Amount must be a valid number.', true);
     return;
   }
 
@@ -1707,7 +1707,7 @@ function savePayment() {
     createIfMissing: document.getElementById('pay_createIfMissing').checked
   };
 
-  setStatus('pay_status', 'Saving...', false);
+  setStatus('pay_status', 'Saving…', false);
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -1720,7 +1720,7 @@ function savePayment() {
       document.getElementById('pay_amount').value = '';
       google.script.run
         .withFailureHandler(function(err) {
-          const msg = 'Planner error: ' + (err.message || String(err));
+          const msg = (err.message || String(err));
           if (document.getElementById('planner_status')) {
             setStatus('planner_status', msg, true);
           } else {
@@ -1730,7 +1730,7 @@ function savePayment() {
         .runDebtPlanner();
     })
     .withFailureHandler(function(err) {
-      setStatus('pay_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('pay_status', (err.message || String(err)), true);
     })
     .quickAddPayment(payload);
 }

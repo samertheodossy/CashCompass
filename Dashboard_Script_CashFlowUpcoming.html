@@ -14,7 +14,7 @@ function loadUpcomingSection() {
       }
     })
     .withFailureHandler(function(err) {
-      setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('upcoming_status', (err.message || String(err)), true);
     })
     .getUpcomingExpensesUiData();
 }
@@ -35,7 +35,7 @@ function clearUpcomingAddNameError_() {
 function showUpcomingAddNameError_(message) {
   const el = document.getElementById('up_name_error');
   if (el) {
-    el.textContent = message || 'Please fix the Expense Name.';
+    el.textContent = message || 'Fix the Expense Name.';
     el.classList.add('active');
   }
   const n = document.getElementById('up_name');
@@ -138,27 +138,27 @@ function saveUpcomingExpense() {
 
   if (!name) {
     showUpcomingAddNameError_('Expense Name is required.');
-    setStatus('upcoming_status', 'Error: Expense Name is required.', true);
+    setStatus('upcoming_status', 'Expense Name is required.', true);
     return;
   }
   if (!dueDate) {
-    setStatus('upcoming_status', 'Error: Due Date is required.', true);
+    setStatus('upcoming_status', 'Due Date is required.', true);
     try { document.getElementById('up_dueDate').focus(); } catch (e) {}
     return;
   }
   if (amountStr === '') {
-    setStatus('upcoming_status', 'Error: Amount is required.', true);
+    setStatus('upcoming_status', 'Amount is required.', true);
     try { document.getElementById('up_amount').focus(); } catch (e) {}
     return;
   }
   const numericAmount = toNumber(amountStr);
   if (isNaN(numericAmount)) {
-    setStatus('upcoming_status', 'Error: Amount must be a valid number.', true);
+    setStatus('upcoming_status', 'Amount must be a valid number.', true);
     try { document.getElementById('up_amount').focus(); } catch (e) {}
     return;
   }
   if (numericAmount <= 0) {
-    setStatus('upcoming_status', 'Error: Amount must be greater than 0.', true);
+    setStatus('upcoming_status', 'Amount must be greater than 0.', true);
     try { document.getElementById('up_amount').focus(); } catch (e) {}
     return;
   }
@@ -196,7 +196,7 @@ function saveUpcomingExpense() {
       if (isUpcomingNameRelatedError_(msg)) {
         showUpcomingAddNameError_(msg);
       }
-      setStatus('upcoming_status', 'Error: ' + msg, true);
+      setStatus('upcoming_status', msg, true);
     })
     .addUpcomingExpense(payload);
 }
@@ -214,7 +214,7 @@ function quickAddFromUpcoming(id) {
       prefillQuickPayment(prefill);
     })
     .withFailureHandler(function(err) {
-      setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('upcoming_status', (err.message || String(err)), true);
     })
     .getUpcomingExpenseForQuickPayment(id);
 }
@@ -229,7 +229,7 @@ function dismissUpcoming(id) {
       refreshSnapshot();
     })
     .withFailureHandler(function(err) {
-      setStatus('upcoming_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('upcoming_status', (err.message || String(err)), true);
     })
     .dismissUpcomingExpense(id);
 }

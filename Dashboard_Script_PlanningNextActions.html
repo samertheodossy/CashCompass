@@ -81,10 +81,10 @@ function loadNextActions() {
       if (mainWrap) mainWrap.innerHTML = '';
       var msg = err && err.message ? err.message : String(err);
       if (typeof setStatus === 'function') {
-        setStatus(statusId, 'Error loading Next Actions: ' + msg, true);
+        setStatus(statusId, "Couldn't load Next Actions — " + msg, true);
       } else if (mainWrap) {
         mainWrap.innerHTML =
-          '<p style="color:#b00020;">Error loading Next Actions: ' +
+          '<p style="color:#b00020;">Couldn&rsquo;t load Next Actions &mdash; ' +
           escapeHtmlNextActions_(msg) +
           '</p>';
       }
@@ -538,7 +538,7 @@ function loadNextActionsLiquidityDetails_() {
       var msg = err && err.message ? err.message : String(err);
       detailsWrap.innerHTML =
         '<p style="color:#b00020;font-size:12px;margin:0;">' +
-        'Error loading cash details: ' +
+        'Couldn&rsquo;t load cash details &mdash; ' +
         escapeHtmlNextActions_(msg) +
         '</p>';
     })

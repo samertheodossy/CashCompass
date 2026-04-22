@@ -385,7 +385,7 @@ function renderIssues(issues, state) {
       window.__dashboardIssues = [];
       return;
     }
-    root.innerHTML = '<div class="muted">No active issues detected.</div>';
+    root.innerHTML = '<div class="muted">No issues right now.</div>';
     window.__dashboardIssues = [];
     return;
   }
@@ -674,7 +674,7 @@ function applySnapshot(snapshot) {
       if (el) el.textContent = '—';
     });
     const billsSum = document.getElementById('ov_bills_summaryText');
-    if (billsSum) billsSum.textContent = 'Add your bills in Setup / Review to see what\'s due.';
+    if (billsSum) billsSum.textContent = 'Add your bills in Setup / Review to see what\u2019s due.';
     ['ov_billsDueSoonCard', 'ov_billsOverdueCard'].forEach(function(id) {
       const card = document.getElementById(id);
       if (card) card.classList.remove('bill-card-clear', 'bill-card-due', 'bill-card-overdue');
@@ -688,7 +688,7 @@ function refreshSnapshot() {
       applySnapshot(data);
     })
     .withFailureHandler(function(err) {
-      setStatus('planner_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('planner_status', (err.message || String(err)), true);
     })
     .getDashboardSnapshot();
 }
@@ -701,7 +701,7 @@ function runPlannerNow() {
       if (res.snapshot) applySnapshot(res.snapshot);
     })
     .withFailureHandler(function(err) {
-      setStatus('planner_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('planner_status', (err.message || String(err)), true);
     })
     .runPlannerAndRefreshDashboard();
 }

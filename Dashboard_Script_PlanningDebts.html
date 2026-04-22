@@ -30,7 +30,7 @@ function loadDebtSection() {
       }
     })
     .withFailureHandler(function(err) {
-      setStatus('debt_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('debt_status', (err.message || String(err)), true);
     })
     .getDebtsUiData();
 }
@@ -56,7 +56,7 @@ function loadDebtSectionThenSelect_(accountName) {
       }
     })
     .withFailureHandler(function(err) {
-      setStatus('debt_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('debt_status', (err.message || String(err)), true);
     })
     .getDebtsUiData();
 }
@@ -191,7 +191,7 @@ function clearDebtAddNameError_() {
 function showDebtAddNameError_(message) {
   const el = document.getElementById('debt_add_name_error');
   if (el) {
-    el.textContent = message || 'Please fix the Account name.';
+    el.textContent = message || 'Fix the Account name.';
     el.classList.add('active');
   }
   const n = document.getElementById('debt_add_name');
@@ -277,7 +277,7 @@ function loadDebtFieldValue() {
       setStatus('debt_status', '', false);
     })
     .withFailureHandler(function(err) {
-      setStatus('debt_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('debt_status', (err.message || String(err)), true);
     })
     .getDebtFieldValue(accountName, fieldName);
 }
@@ -289,7 +289,7 @@ function saveDebt() {
   if (debtFieldTypes[fieldName] === 'currency') {
     const num = toNumber(value);
     if (String(value || '').trim() && isNaN(num)) {
-      setStatus('debt_status', 'Error: Value must be a valid number.', true);
+      setStatus('debt_status', 'Value must be a valid number.', true);
       return;
     }
     value = num;
@@ -302,7 +302,7 @@ function saveDebt() {
       refreshSnapshot();
     })
     .withFailureHandler(function(err) {
-      setStatus('debt_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('debt_status', (err.message || String(err)), true);
     })
     .updateDebtField({
       accountName: document.getElementById('debt_account').value,
@@ -323,7 +323,7 @@ function createDebtAccount() {
   let typeStr = '';
   if (rawType === '__other__') {
     if (!otherType) {
-      setStatus('debt_status', 'Error: Type is required. Enter a name for the new type.', true);
+      setStatus('debt_status', 'Type is required. Enter a name for the new type.', true);
       if (otherEl) { try { otherEl.focus(); } catch (e) {} }
       return;
     }
@@ -334,11 +334,11 @@ function createDebtAccount() {
 
   if (!name) {
     showDebtAddNameError_('Account name is required.');
-    setStatus('debt_status', 'Error: Account name is required.', true);
+    setStatus('debt_status', 'Account name is required.', true);
     return;
   }
   if (!typeStr) {
-    setStatus('debt_status', 'Error: Type is required.', true);
+    setStatus('debt_status', 'Type is required.', true);
     if (typeSel) { try { typeSel.focus(); } catch (e) {} }
     return;
   }
@@ -352,13 +352,13 @@ function createDebtAccount() {
   function requiredNum_(raw, label, id) {
     const s = String(raw == null ? '' : raw).trim();
     if (s === '') {
-      setStatus('debt_status', 'Error: ' + label + ' is required.', true);
+      setStatus('debt_status', label + ' is required.', true);
       if (id) { try { document.getElementById(id).focus(); } catch (e) {} }
       return { ok: false };
     }
     const n = toNumber(s);
     if (isNaN(n)) {
-      setStatus('debt_status', 'Error: ' + label + ' must be a valid number.', true);
+      setStatus('debt_status', label + ' must be a valid number.', true);
       if (id) { try { document.getElementById(id).focus(); } catch (e) {} }
       return { ok: false };
     }
@@ -376,13 +376,13 @@ function createDebtAccount() {
 
   const dueStr = String(dueRaw == null ? '' : dueRaw).trim();
   if (dueStr === '') {
-    setStatus('debt_status', 'Error: Due day of month is required.', true);
+    setStatus('debt_status', 'Due day of month is required.', true);
     try { document.getElementById('debt_add_due_day').focus(); } catch (e) {}
     return;
   }
   const dueN = parseInt(dueStr, 10);
   if (isNaN(dueN) || dueN < 1 || dueN > 31) {
-    setStatus('debt_status', 'Error: Due day must be a whole number between 1 and 31.', true);
+    setStatus('debt_status', 'Due day must be a whole number between 1 and 31.', true);
     try { document.getElementById('debt_add_due_day').focus(); } catch (e) {}
     return;
   }
@@ -419,7 +419,7 @@ function createDebtAccount() {
       if (isDebtNameRelatedError_(msg)) {
         showDebtAddNameError_(msg);
       }
-      setStatus('debt_status', 'Error: ' + msg, true);
+      setStatus('debt_status', msg, true);
     })
     .addDebtFromDashboard(payload);
 }
@@ -429,7 +429,7 @@ function stopTrackingDebt() {
   const account = sel ? String(sel.value || '').trim() : '';
 
   if (!account) {
-    setStatus('debt_status', 'Error: Pick a debt account first.', true);
+    setStatus('debt_status', 'Pick a debt account first.', true);
     return;
   }
 
@@ -455,7 +455,7 @@ function stopTrackingDebt() {
       }
     })
     .withFailureHandler(function(err) {
-      setStatus('debt_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('debt_status', (err.message || String(err)), true);
     })
     .deactivateDebtFromDashboard({ accountName: account });
 }

@@ -17,7 +17,7 @@ function loadPurchaseSimulatorSection() {
       togglePurchaseFields();
     })
     .withFailureHandler(function(err) {
-      setStatus('ps_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('ps_status', (err.message || String(err)), true);
     })
     .getPurchaseSimulatorUiData();
 }
@@ -34,7 +34,7 @@ function runPurchaseSimulationUi() {
     treatAsAsset: document.getElementById('ps_treatAsAsset').checked
   };
 
-  setStatus('ps_status', 'Running simulation...', false);
+  setStatus('ps_status', 'Running…', false);
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -60,7 +60,7 @@ function runPurchaseSimulationUi() {
       cf.className = Number(res.newProjectedCashFlow) < 0 ? 'accent-bad' : 'accent-good';
     })
     .withFailureHandler(function(err) {
-      setStatus('ps_status', 'Error: ' + (err.message || String(err)), true);
+      setStatus('ps_status', (err.message || String(err)), true);
     })
     .runPurchaseSimulation(payload);
 }
