@@ -313,12 +313,7 @@ function updateHouseValueByDate(payload) {
 
   return {
     ok: true,
-    message:
-      'House value updated.\n' +
-      'Year block: ' + year + '\n' +
-      'Month: ' + monthLabel + '\n' +
-      'History updated: ' + (historyUpdated ? 'Yes' : 'No') + '\n' +
-      'House Assets refreshed from latest available values for current year: Yes'
+    message: 'House value saved.'
   };
 }
 
@@ -1442,14 +1437,7 @@ function addHouseFromDashboard(payload) {
   return {
     ok: true,
     houseName: houseName,
-    message:
-      'Created house "' + houseName + '":\n' +
-      '  • House Values updated' + (seededMonthLabel ? ' (' + seededMonthLabel + ' seeded)' : '') + '\n' +
-      '  • House asset recorded\n' +
-      '  • ' + (sheetCreationInfo && sheetCreationInfo.created
-        ? 'Expense sheet created'
-        : 'Expense sheet already existed') + '\n' +
-      'Use Run Planner + Refresh Snapshot when you want projections and the overview snapshot updated.'
+    message: 'House added.'
   };
 }
 

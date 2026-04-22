@@ -352,27 +352,11 @@ function quickAddPayment(payload) {
 
   const priorPreview = computeQuickAddPriorMonthPreview_(ss, entryType, payee, entryDate);
 
-  let message =
-    'Saved to Cash Flow.\n' +
-    'Sheet: ' + sheet.getName() + '\n' +
-    'Month: ' + monthLabel + '\n' +
-    'Payee: ' + payee + '\n' +
-    'Previous value: ' + fmtCurrency_(previousValue) + '\n' +
-    'Change: ' + fmtCurrency_(signedAmount) + '\n' +
-    'New value: ' + fmtCurrency_(newValue);
-
-  if (flowSourceWritten) {
-    message += '\nFlow Source: ' + flowSource;
-  }
-
-  if (debtBalanceNote) {
-    message +=
-      '\nDebts: Account Balance ' +
-      fmtCurrency_(debtBalanceNote.previousBalance) +
-      ' → ' +
-      fmtCurrency_(debtBalanceNote.newBalance) +
-      '.';
-  }
+  // Keep the user-facing status line to a single short sentence. The detailed
+  // fields the old multi-line dump surfaced (sheet name, month, before/after
+  // values, flow source, debt balance delta) are still returned in
+  // `preview` and `activitySnapshot` for any caller that needs them.
+  const message = 'Saved to Cash Flow.';
 
   return {
     ok: true,

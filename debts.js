@@ -240,7 +240,7 @@ function updateDebtField(payload) {
 
   return {
     ok: true,
-    message: 'Debt updated and planner refreshed.'
+    message: 'Debt saved.'
   };
 }
 
@@ -605,16 +605,10 @@ function addDebtFromDashboard(payload) {
     Logger.log('addDebtFromDashboard activity log: ' + logErr);
   }
 
-  let message =
-    'Created debt "' + accountName + '".';
-  if (cashFlowRowSeeded) {
-    message +=
-      '\nAdded a matching expense row to Cash Flow so Bills Due and Upcoming see it right away.';
-  } else if (cashFlowSeedWarning) {
-    message += '\n' + cashFlowSeedWarning;
-  }
-  message +=
-    '\nUse Run Planner + Refresh Snapshot when you want projections refreshed.';
+  // Status line is one short sentence; the Cash-Flow-seed details remain
+  // available on the returned `cashFlowRowSeeded` / `cashFlowSeedWarning`
+  // fields for any caller that wants to surface them separately.
+  const message = 'Debt added.';
 
   return {
     ok: true,

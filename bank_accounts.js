@@ -635,11 +635,7 @@ function addBankAccountFromDashboard(payload) {
   return {
     ok: true,
     accountName: accountName,
-    message:
-      'Created bank account "' +
-      accountName +
-      '".\n' +
-      'Use Run Planner + Refresh Snapshot when you want projections and the overview snapshot updated.'
+    message: 'Bank account added.'
   };
 }
 
@@ -742,10 +738,7 @@ function updateBankAccountValueByDate(payload) {
 
   return {
     ok: true,
-    message:
-      'Bank account updated and synced.\n' +
-      'Available Now updated: ' + (updateAvailableNow ? 'Yes' : 'No') + '\n' +
-      'Min Buffer updated: ' + (updateMinBuffer ? 'Yes' : 'No')
+    message: 'Bank account saved.'
   };
 }
 

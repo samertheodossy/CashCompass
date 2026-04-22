@@ -402,7 +402,7 @@ function updateInvestmentValueByDate(payload) {
 
   return {
     ok: true,
-    message: 'Investment value updated.'
+    message: 'Investment value saved.'
   };
 }
 
@@ -1148,8 +1148,7 @@ function addInvestmentAccountFromDashboard(payload) {
   return {
     ok: true,
     accountName: accountName,
-    message:
-      'Created investment account "' + accountName + '".'
+    message: 'Investment account added.'
   };
 }
 
