@@ -1286,7 +1286,7 @@ function getUpcomingBillsDueForDashboard() {
 }
 
 
-function getBillsDueFromCashFlowForDashboard() {
+function getBillsDueFromCashFlowForDashboard(preloadedCurrentCashFlow) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   ensureActivityLogSheet_(ss);
   const today = new Date();
@@ -1305,7 +1305,23 @@ function getBillsDueFromCashFlowForDashboard() {
     }
   } catch (_e) { /* fall through; downstream will surface a clear error */ }
 
-  const debtRows = getDebtBillsDueRows_(ss, today, tz);
+  // Optional `preloadedCurrentCashFlow` is the raw snapshot returned by
+  // readCashFlowSheetRaw_ (shape: { year, sheet, values, display,
+  // headers }). When the caller has already fetched the current-year
+  // grid (e.g. runDebtPlanner reads it once up-front), we reuse those
+  // arrays in getDebtBillsDueRows_ instead of re-fetching them here.
+  // Existing callers (dashboard loader, Bills Due UI, next_actions, the
+  // email path when preload is unavailable) pass nothing and get the
+  // historical behavior. We only accept the preload when its year
+  // matches today's year — stale cross-year preloads are ignored.
+  const preloadForDebtRows =
+    preloadedCurrentCashFlow &&
+    preloadedCurrentCashFlow.values &&
+    preloadedCurrentCashFlow.year === today.getFullYear()
+      ? preloadedCurrentCashFlow
+      : null;
+
+  const debtRows = getDebtBillsDueRows_(ss, today, tz, preloadForDebtRows);
   const inputBillRows = getInputBillsDueRows_(ss, today, tz);
 
   const allRows = debtRows.concat(inputBillRows);
@@ -1494,25 +1510,41 @@ function isCashFlowBillHandled_(cellValue, cellDisplay) {
 }
 */
 
-function getDebtBillsDueRows_(ss, today, tz) {
+function getDebtBillsDueRows_(ss, today, tz, preloadedCurrentCashFlow) {
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  // Only honor the preload when it carries the exact current-year
+  // snapshot we would otherwise fetch. Nothing below treats a null
+  // preload specially — all reads fall through to the sheet as today.
+  const usablePreload =
+    preloadedCurrentCashFlow &&
+    preloadedCurrentCashFlow.values &&
+    preloadedCurrentCashFlow.display &&
+    preloadedCurrentCashFlow.headers &&
+    preloadedCurrentCashFlow.sheet &&
+    preloadedCurrentCashFlow.year === today.getFullYear()
+      ? preloadedCurrentCashFlow
+      : null;
 
   function buildMonthContext_(baseDate, offsetMonths) {
     const d = new Date(baseDate.getFullYear(), baseDate.getMonth() + offsetMonths, 1);
     const year = d.getFullYear();
     const monthIndex = d.getMonth();
     const monthHeader = monthNames[monthIndex] + '-' + String(year).slice(-2);
+    // Reuse the caller-provided sheet reference when the preload
+    // covers this context's year (current-month path only). Otherwise
+    // fall back to the existing lookup, which also handles the
+    // next-month context sheet (may live in next year's tab).
+    const sheet = usablePreload && usablePreload.year === year
+      ? usablePreload.sheet
+      : (typeof tryGetCashFlowSheet_ === 'function'
+        ? tryGetCashFlowSheet_(ss, year)
+        : ss.getSheetByName(getCashFlowSheetName_(year)));
     return {
       year: year,
       monthIndex: monthIndex,
       monthHeader: monthHeader,
-      // Use tryGetCashFlowSheet_ so the next-month context (which can
-      // point into next year during December) doesn't throw when that
-      // sheet doesn't exist yet. A null sheet just means "no next-month
-      // preview"; the current-month read still drives the result.
-      sheet: typeof tryGetCashFlowSheet_ === 'function'
-        ? tryGetCashFlowSheet_(ss, year)
-        : ss.getSheetByName(getCashFlowSheetName_(year))
+      sheet: sheet
     };
   }
 
@@ -1567,8 +1599,20 @@ function getDebtBillsDueRows_(ss, today, tz) {
   // ensure it, but defensively bail out with no rows so the Bills page
   // can still render instead of surfacing "Missing cash flow sheet".
   if (!currentCtx.sheet) return [];
-  const currentValues = currentCtx.sheet.getDataRange().getValues();
-  const currentDisplay = currentCtx.sheet.getDataRange().getDisplayValues();
+
+  // Prefer the caller-provided raw snapshot when it matches this
+  // context's year — it's the exact same data we would otherwise read
+  // here. When absent (no preload, or a mismatched year), fall back to
+  // the original getDataRange() path so every existing caller keeps
+  // behaving identically.
+  const currentValues =
+    usablePreload && usablePreload.year === currentCtx.year
+      ? usablePreload.values
+      : currentCtx.sheet.getDataRange().getValues();
+  const currentDisplay =
+    usablePreload && usablePreload.year === currentCtx.year
+      ? usablePreload.display
+      : currentCtx.sheet.getDataRange().getDisplayValues();
   if (currentDisplay.length < 2) return [];
 
   const currentHeaders = currentDisplay[0];

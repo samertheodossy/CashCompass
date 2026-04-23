@@ -31,27 +31,55 @@ function readSheetAsObjects_(ss, sheetKey) {
   });
 }
 
-function readCashFlowSheetAsObjects_(ss, year) {
+// Single raw read of the current-year Cash Flow sheet. Returns the
+// raw 2D values + display arrays plus the parsed header row, so
+// downstream consumers that need the full grid (readCashFlowSheetAs-
+// Objects_ for the planner; getDebtBillsDueRows_ for the overdue-bills
+// email pass) can share one getDataRange() fetch instead of each
+// function re-reading the whole sheet. Keep this helper side-effect
+// free and narrow — consumers add their own shape conversions on top.
+function readCashFlowSheetRaw_(ss, year) {
   const sheet = getCashFlowSheet_(ss, year);
-
   const range = sheet.getDataRange();
   const values = range.getValues();
-  const displayValues = range.getDisplayValues();
-
-  if (values.length < 2) return [];
-
-  const headers = displayValues[0].map(function(h) {
+  const display = range.getDisplayValues();
+  const headers = (display[0] || []).map(function(h) {
     return String(h || '').trim();
   });
+  return {
+    year: year,
+    sheet: sheet,
+    values: values,
+    display: display,
+    headers: headers
+  };
+}
 
+// Convert a raw Cash Flow snapshot (from readCashFlowSheetRaw_) into
+// the header-keyed objects the planner has historically consumed.
+// Preserves the exact output shape of readCashFlowSheetAsObjects_,
+// including the `__display__<header>` mirror fields so downstream
+// normalizers that rely on display strings keep working byte-for-byte.
+function cashFlowRawToObjects_(raw) {
+  if (!raw || !raw.values || raw.values.length < 2) return [];
+  const headers = raw.headers;
+  const values = raw.values;
+  const display = raw.display;
   return values.slice(1).map(function(row, rowIndex) {
     const obj = {};
     headers.forEach(function(h, i) {
       obj[h] = row[i];
-      obj['__display__' + h] = displayValues[rowIndex + 1][i];
+      obj['__display__' + h] = display[rowIndex + 1][i];
     });
     return obj;
   });
+}
+
+function readCashFlowSheetAsObjects_(ss, year) {
+  // Thin wrapper: preserve the long-standing external contract while
+  // sharing the raw read path with callers that also want the raw 2D
+  // arrays (see runDebtPlanner's single-read + bills-due reuse).
+  return cashFlowRawToObjects_(readCashFlowSheetRaw_(ss, year));
 }
 
 function getCurrentMonthHeader_(date, tz) {

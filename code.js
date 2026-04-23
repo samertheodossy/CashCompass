@@ -72,9 +72,29 @@ function runDebtPlanner() {
 
   const currentYear = today.getFullYear();
 
-  const cashFlowRows = runDebtPlannerReadSafely_(function() {
-    return readCashFlowSheetAsObjects_(ss, currentYear);
+  // Single raw read of the current-year Cash Flow sheet. We then both
+  // convert it into the header-keyed object form the planner has always
+  // consumed (cashFlowRows, below) AND hand the raw 2D arrays to
+  // getBillsDueFromCashFlowForDashboard further down, so it does not
+  // have to re-fetch the same getDataRange(). Previously the bills-due
+  // helper did its own getValues() + getDisplayValues() on the same
+  // sheet, effectively parsing the Cash Flow grid twice per planner
+  // run. readSafely returns null when the sheet is missing on a blank
+  // workbook; downstream normalize_/bills-due code then degrades to
+  // empty results exactly as before.
+  const cashFlowRawOrEmpty = runDebtPlannerReadSafely_(function() {
+    return readCashFlowSheetRaw_(ss, currentYear);
   });
+  // runDebtPlannerReadSafely_ returns [] on a missing-sheet error to
+  // keep downstream normalize_/object consumers happy. Normalize that
+  // back to null for the bills-due preload so the helper cleanly falls
+  // back to its own first-run ensure+read path instead of mistaking an
+  // empty array for a valid snapshot.
+  const cashFlowRaw =
+    cashFlowRawOrEmpty && cashFlowRawOrEmpty.values
+      ? cashFlowRawOrEmpty
+      : null;
+  const cashFlowRows = cashFlowRaw ? cashFlowRawToObjects_(cashFlowRaw) : [];
   const debtRows = runDebtPlannerReadSafely_(function() {
     return readSheetAsObjects_(ss, 'DEBTS');
   });
@@ -141,7 +161,11 @@ function runDebtPlanner() {
     billWindows.paySoon
   );
 
-  const overdueBillsForEmail = getBillsDueFromCashFlowForDashboard().overdue || [];
+  // Pass the already-fetched current-year Cash Flow raw snapshot so the
+  // bills-due helper can skip a duplicate getDataRange() of the same
+  // sheet. When the planner could not load the sheet (blank workbook),
+  // cashFlowRaw is null and the helper reads on its own as before.
+  const overdueBillsForEmail = getBillsDueFromCashFlowForDashboard(cashFlowRaw).overdue || [];
 
   const warnings = [];
   const notes = [];
