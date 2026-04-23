@@ -13,7 +13,19 @@ function writeRecommendations_(ss, summary) {
   const existingFilter = sheet.getFilter();
   if (existingFilter) existingFilter.remove();
 
-  removeAllCharts_(sheet);
+  // Previously we tore down every Dashboard chart here and rebuilt all
+  // six below on every planner run. `insertChart` is slow in Apps Script
+  // web-app contexts (often seconds per chart), so that made
+  // Run Planner Now unnecessarily long. The per-chart builders below
+  // now keep an existing chart in place when its bound range + title
+  // still match the desired chart — charts auto-repaint from the fresh
+  // setValues we write into their ranges, so no rebuild is needed when
+  // the range shape hasn't changed. When the range shape DID change
+  // (e.g. a new history row appended, new active credit cards), the
+  // specific stale chart is removed and re-inserted inside its builder.
+  // We intentionally no longer call removeAllCharts_(sheet) here so
+  // (a) the fast path skips all chart work, and (b) any chart the user
+  // manually added to the Dashboard sheet is preserved.
 
   const rows = [];
 
@@ -271,12 +283,76 @@ function writeDashboardSnapshotTables_(dashboardSheet, summary, startCol) {
   dashboardSheet.getRange(22, startCol, creditCardRows.length, 2).setValues(creditCardRows);
 }
 
+// --------------------------------------------------------------------------
+// Dashboard chart reuse helpers
+//
+// The six Dashboard chart builders below used to call insertChart() on
+// every planner run. insertChart() is slow in Apps Script web-app
+// contexts, so repeat runs paid that cost unnecessarily. We now key
+// existing charts by their configured title (each of the six has a
+// distinct, stable title) and compare their first bound range to the
+// range we would build fresh. When both match, the existing chart is
+// left in place — Apps Script auto-repaints it from the fresh
+// setValues() we write into its range, so values stay current without
+// any insertChart cost. When they differ (e.g. a new history row
+// extended the NetWorth/CashFlow range, or active-card count changed
+// for the Credit Card chart), the specific stale chart is removed and
+// a replacement is inserted.
+//
+// Only Dashboard charts use these helpers. buildHistoryCharts_ still
+// uses removeAllCharts_(historySheet) and is intentionally unchanged
+// in this pass.
+// --------------------------------------------------------------------------
+
+function findDashboardChartByTitle_(sheet, title) {
+  const target = String(title || '');
+  if (!target) return null;
+  const charts = sheet.getCharts();
+  for (let i = 0; i < charts.length; i++) {
+    let existingTitle = '';
+    try {
+      const opts = charts[i].getOptions();
+      existingTitle = opts ? String(opts.get('title') || '') : '';
+    } catch (_e) {
+      // Older charts may not expose options; treat as "no match" and
+      // fall through to rebuild rather than silently keep a wrong chart.
+    }
+    if (existingTitle === target) return charts[i];
+  }
+  return null;
+}
+
+function getDashboardChartFirstRangeA1_(chart) {
+  try {
+    const ranges = chart.getRanges();
+    if (!ranges || !ranges.length) return '';
+    return ranges[0].getA1Notation();
+  } catch (_e) {
+    return '';
+  }
+}
+
+function dashboardChartAlreadyMatches_(sheet, title, desiredRangeA1) {
+  const existing = findDashboardChartByTitle_(sheet, title);
+  if (!existing) return false;
+  return getDashboardChartFirstRangeA1_(existing) === desiredRangeA1;
+}
+
+function removeDashboardChartByTitle_(sheet, title) {
+  const existing = findDashboardChartByTitle_(sheet, title);
+  if (existing) sheet.removeChart(existing);
+}
+
 function buildDashboardNetWorthChart_(sheet, startCol, posRow) {
   const numRows = findLastNonEmptyRowInRange_(sheet, 1, startCol, 500);
+  const range = sheet.getRange(1, startCol, Math.max(2, numRows), 2);
+  const title = 'Net Worth by Run';
+  if (dashboardChartAlreadyMatches_(sheet, title, range.getA1Notation())) return;
+  removeDashboardChartByTitle_(sheet, title);
   const chart = sheet.newChart()
     .setChartType(Charts.ChartType.LINE)
-    .addRange(sheet.getRange(1, startCol, Math.max(2, numRows), 2))
-    .setOption('title', 'Net Worth by Run')
+    .addRange(range)
+    .setOption('title', title)
     .setOption('legend', { position: 'bottom' })
     .setOption('useFirstColumnAsDomain', true)
     .setOption('curveType', 'function')
@@ -287,10 +363,14 @@ function buildDashboardNetWorthChart_(sheet, startCol, posRow) {
 
 function buildDashboardCashFlowChart_(sheet, startCol, posRow) {
   const numRows = findLastNonEmptyRowInRange_(sheet, 1, startCol, 500);
+  const range = sheet.getRange(1, startCol, Math.max(2, numRows), 3);
+  const title = 'Cash Flow by Run (Blue=Projected, Red=Previous Month)';
+  if (dashboardChartAlreadyMatches_(sheet, title, range.getA1Notation())) return;
+  removeDashboardChartByTitle_(sheet, title);
   const chart = sheet.newChart()
     .setChartType(Charts.ChartType.LINE)
-    .addRange(sheet.getRange(1, startCol, Math.max(2, numRows), 3))
-    .setOption('title', 'Cash Flow by Run (Blue=Projected, Red=Previous Month)')
+    .addRange(range)
+    .setOption('title', title)
     .setOption('legend', { position: 'bottom' })
     .setOption('useFirstColumnAsDomain', true)
     .setOption('curveType', 'function')
@@ -300,10 +380,14 @@ function buildDashboardCashFlowChart_(sheet, startCol, posRow) {
 }
 
 function buildDashboardAssetsVsLiabilitiesChart_(sheet, startCol, posRow) {
+  const range = sheet.getRange(1, startCol, 4, 2);
+  const title = 'Assets vs Liabilities vs Net Worth';
+  if (dashboardChartAlreadyMatches_(sheet, title, range.getA1Notation())) return;
+  removeDashboardChartByTitle_(sheet, title);
   const chart = sheet.newChart()
     .setChartType(Charts.ChartType.COLUMN)
-    .addRange(sheet.getRange(1, startCol, 4, 2))
-    .setOption('title', 'Assets vs Liabilities vs Net Worth')
+    .addRange(range)
+    .setOption('title', title)
     .setOption('legend', { position: 'none' })
     .setPosition(posRow, 8, 0, 0)
     .build();
@@ -311,10 +395,14 @@ function buildDashboardAssetsVsLiabilitiesChart_(sheet, startCol, posRow) {
 }
 
 function buildDashboardAssetAllocationChart_(sheet, startCol, posRow) {
+  const range = sheet.getRange(8, startCol, 5, 2);
+  const title = 'Asset Allocation';
+  if (dashboardChartAlreadyMatches_(sheet, title, range.getA1Notation())) return;
+  removeDashboardChartByTitle_(sheet, title);
   const chart = sheet.newChart()
     .setChartType(Charts.ChartType.PIE)
-    .addRange(sheet.getRange(8, startCol, 5, 2))
-    .setOption('title', 'Asset Allocation')
+    .addRange(range)
+    .setOption('title', title)
     .setOption('legend', { position: 'right' })
     .setPosition(posRow, 8, 0, 0)
     .build();
@@ -322,10 +410,14 @@ function buildDashboardAssetAllocationChart_(sheet, startCol, posRow) {
 }
 
 function buildDashboardLiabilityBreakdownChart_(sheet, startCol, posRow) {
+  const range = sheet.getRange(15, startCol, 5, 2);
+  const title = 'Liability Breakdown';
+  if (dashboardChartAlreadyMatches_(sheet, title, range.getA1Notation())) return;
+  removeDashboardChartByTitle_(sheet, title);
   const chart = sheet.newChart()
     .setChartType(Charts.ChartType.PIE)
-    .addRange(sheet.getRange(15, startCol, 5, 2))
-    .setOption('title', 'Liability Breakdown')
+    .addRange(range)
+    .setOption('title', title)
     .setOption('legend', { position: 'right' })
     .setPosition(posRow, 8, 0, 0)
     .build();
@@ -335,11 +427,14 @@ function buildDashboardLiabilityBreakdownChart_(sheet, startCol, posRow) {
 function buildDashboardCreditCardPaydownChart_(sheet, startCol, posRow) {
   const lastRow = findLastNonEmptyRowInRange_(sheet, 22, startCol, 50);
   const numRows = Math.max(2, lastRow - 22 + 1);
-
+  const range = sheet.getRange(22, startCol, numRows, 2);
+  const title = 'Credit Card Balances';
+  if (dashboardChartAlreadyMatches_(sheet, title, range.getA1Notation())) return;
+  removeDashboardChartByTitle_(sheet, title);
   const chart = sheet.newChart()
     .setChartType(Charts.ChartType.BAR)
-    .addRange(sheet.getRange(22, startCol, numRows, 2))
-    .setOption('title', 'Credit Card Balances')
+    .addRange(range)
+    .setOption('title', title)
     .setOption('legend', { position: 'none' })
     .setPosition(posRow, 8, 0, 0)
     .build();
