@@ -19,10 +19,14 @@ function saveRetirementInputs(payload) {
   const sheet = getOrCreateRetirementSheet_();
 
   const selectedScenario = normalizeRetirementScenario_(payload.selectedScenario || 'Base');
-  const household = {
-    yourCurrentAge: toNumber_(payload.yourCurrentAge),
-    spouseCurrentAge: toNumber_(payload.spouseCurrentAge)
-  };
+
+  // Current ages are display-only in the Retirement tab and come ONLY
+  // from the Profile / Settings DOB fields. The client no longer sends
+  // `yourCurrentAge` / `spouseCurrentAge` in this payload, and this save
+  // path no longer accepts them even if a stale client did. Any ages
+  // previously written into INPUT - Retirement rows 5/6 are ignored —
+  // we do not fall back to them.
+  const household = getRetirementHouseholdFromProfile_();
 
   const scenarioInputs = {
     targetRetirementAge: toNumber_(payload.targetRetirementAge),
@@ -40,7 +44,8 @@ function saveRetirementInputs(payload) {
   validateRetirementHousehold_(household);
   validateRetirementScenarioInputs_(household, scenarioInputs);
 
-  writeRetirementHouseholdInputs_(sheet, household);
+  // Intentionally no `writeRetirementHouseholdInputs_` call: the age
+  // cells in INPUT - Retirement are vestigial and no longer written.
   writeRetirementScenarioInputs_(sheet, selectedScenario, scenarioInputs);
   setSelectedRetirementScenario_(sheet, selectedScenario);
 
@@ -68,55 +73,20 @@ function getRetirementSummary_() {
 }
 
 /**
- * Minimal UI-facing save for the "Retirement Basics" input section on
- * the Retirement tab. Writes ONLY the two household-identity cells
- * already used by the planner (`Your Current Age`, `Spouse Current
- * Age`) into the existing INPUT - Retirement sheet. Does NOT touch any
- * scenario row, does NOT add columns, does NOT validate scenario
- * inputs — those remain whatever the retirement sheet already holds
- * (seeded defaults or the user's last `saveRetirementInputs`).
+ * DEPRECATED — retained only as a stale-client guard.
  *
- * Partnered convention: when `payload.partnered` is not truthy, we
- * write `Spouse Current Age = 0`. This matches the documented
- * "spouseCurrentAge of 0 is legal for 'not partnered'" sentinel
- * already used by `getRetirementUiDataSafe` / `readRetirementHousehold
- * Safe_` so downstream scenario math treats the household as single.
+ * Retirement current ages are now display-only and derived exclusively
+ * from the Profile / Settings DOB fields ("Date of Birth" / "Spouse
+ * Date of Birth"). The Retirement Basics edit form has been removed
+ * from the UI and no active code path calls this function.
  *
- * Returns the same structured envelope as `getRetirementUiDataSafe()`
- * so the client can re-render the tab in one round-trip.
+ * If an older cached client still invokes `saveRetirementBasics(...)`,
+ * we throw a friendly error rather than silently writing stale age
+ * values into `INPUT - Retirement`. The sheet cells for `Your Current
+ * Age` / `Spouse Current Age` are no longer written by any code path.
  */
-function saveRetirementBasics(payload) {
-  const sheet = getOrCreateRetirementSheet_();
-
-  const yourAge = toNumber_(payload && payload.yourCurrentAge);
-  const partnered = !!(payload && payload.partnered === true);
-  const spouseAgeRaw = toNumber_(payload && payload.spouseCurrentAge);
-  const spouseAge = partnered ? spouseAgeRaw : 0;
-
-  const household = {
-    yourCurrentAge: yourAge,
-    spouseCurrentAge: spouseAge
-  };
-
-  // Minimal validation for basics only. Scenario inputs are intentionally
-  // NOT validated here — this entry point exists so users can enter just
-  // enough to unblock the main retirement form, which still owns full
-  // scenario validation via saveRetirementInputs / validateRetirement*_.
-  if (!(household.yourCurrentAge > 0)) {
-    throw new Error('Your age must be greater than 0.');
-  }
-  if (household.spouseCurrentAge < 0) {
-    throw new Error('Spouse age cannot be negative.');
-  }
-
-  writeRetirementHouseholdInputs_(sheet, household);
-  touchDashboardSourceUpdated_('retirement');
-
-  return {
-    ok: true,
-    message: 'Retirement basics saved.',
-    data: getRetirementUiDataSafe()
-  };
+function saveRetirementBasics(_payload) {
+  throw new Error('Retirement current ages now come from your Profile. Update your Date of Birth in Profile instead.');
 }
 
 /**
@@ -127,57 +97,38 @@ function saveRetirementBasics(payload) {
  * banner when the workbook is brand-new, partially configured, or the
  * retirement sheet has been cleared.
  *
- * Shape (current runtime, preserved for compatibility):
+ * Shape (current runtime):
  *   {
- *     state: 'ready' | 'needsHouseholdBasics' | 'needsScenarioAssumptions' | 'error',
+ *     state: 'ready' | 'needsProfileDob' | 'needsScenarioAssumptions' | 'error',
  *     message: string,                 // user-facing copy for non-ready states
  *     missingFields: string[],         // which household fields are blank
  *     settings: {                      // INPUT - Settings probe (read-only)
  *       sheetExists: boolean,
  *       household: {
- *         yourAge: number | null,             // SUPERSEDED (see below)
+ *         yourAge: number | null,             // legacy probe — superseded
  *         partnered: boolean | null,
- *         spouseAge: number | null,           // SUPERSEDED (see below)
- *         targetRetirementAge: number | null  // SUPERSEDED (see below)
+ *         spouseAge: number | null,           // legacy probe — superseded
+ *         targetRetirementAge: number | null  // legacy probe — superseded
  *       }
  *     },
+ *     derivedCurrentAge: number | null,
+ *     derivedSpouseCurrentAge: number | null,
  *     selectedScenario, household, scenarios, analyses, analysis
  *   }
  *
- * Architecture note (updated after A2; see SESSION_NOTES.md Phase C):
- *   INPUT - Settings is the home for people / household IDENTITY only.
- *   Ages are NOT stored in INPUT - Settings; they are derived from DOB
- *   when needed. TargetRetirementAge and every other retirement-scenario
- *   assumption stay in the retirement workflow / `INPUT - Retirement`
- *   sheet. Phase C will:
- *     - introduce additive identity keys in INPUT - Settings:
- *         `YourDOB`, `Partnered`, `SpouseName`, `SpouseDOB`
- *     - replace the three `*Age` scaffold fields above with
- *         `yourDOB: string | null`, `spouseName: string | null`,
- *         `spouseDOB: string | null` (plus a derived `yourAge` /
- *         `spouseAge` only at read time, computed from DOB).
- *     - drop `targetRetirementAge` from this payload entirely; the
- *       retirement tab already reads it from the scenario row of
- *       `INPUT - Retirement`.
- *   The current three `*Age` fields are kept as null placeholders only
- *   to preserve the A1 runtime contract until Phase C formally swings
- *   the shape; no code writes to them today.
+ * Current age architecture:
+ *   Retirement current ages come ONLY from Profile / Settings DOBs
+ *   ("Date of Birth" / "Spouse Date of Birth"). The retirement sheet's
+ *   `Your Current Age` / `Spouse Current Age` rows still exist for
+ *   backward compatibility but are no longer read or written by any
+ *   code path.
  *
- * The compatibility-preserving `getRetirementUiData()` is unchanged and
- * still available for any other caller. This function wraps it and also
- * short-circuits to `needsHouseholdBasics` BEFORE invoking the throwing
- * compute path, so a missing age (the common first-run case once the
- * retirement sheet stops seeding hardcoded defaults in Phase D) renders
- * a friendly empty state instead of surfacing `Error: Your Current Age
- * must be greater than 0`.
- *
- * The `settings` block is populated from a pure-read probe of
- * `INPUT - Settings`. The probe:
- *   - never creates the sheet
- *   - never writes the sheet
- *   - does not require any forward-looking key to exist yet
- * See `probeRetirementSettingsHousehold_` below for exactly which keys
- * are recognized today and which are planned.
+ *   - If the primary DOB is missing / invalid, this function returns
+ *     `state: 'needsProfileDob'` with copy that routes the user to
+ *     Profile. The compute path is NOT run.
+ *   - Spouse DOB is optional; a missing spouse DOB is treated as
+ *     `spouseCurrentAge = 0` (single household), matching the legacy
+ *     downstream convention consumed by `calculateRetirementPlan_`.
  */
 function getRetirementUiDataSafe() {
   const result = {
@@ -193,6 +144,14 @@ function getRetirementUiDataSafe() {
         targetRetirementAge: null
       }
     },
+    // Derived from Profile / Settings DOB keys ("Date of Birth" /
+    // "Spouse Date of Birth") in INPUT - Settings. Helper data only —
+    // the Retirement Basics manual age inputs remain the source of
+    // truth for every downstream calculation. Null whenever a DOB is
+    // absent, malformed, or in the future so the UI can treat "no
+    // hint" as the default without a separate flag.
+    derivedCurrentAge: null,
+    derivedSpouseCurrentAge: null,
     selectedScenario: 'Base',
     household: null,
     scenarios: null,
@@ -207,35 +166,37 @@ function getRetirementUiDataSafe() {
     // so the UI never fails because of a transient Settings-read issue.
   }
 
+  try {
+    const derived = readRetirementProfileDerivedAges_();
+    result.derivedCurrentAge = derived.derivedCurrentAge;
+    result.derivedSpouseCurrentAge = derived.derivedSpouseCurrentAge;
+  } catch (_derivedErr) {
+    // Keep the null defaults. A Settings-read or DOB-parse failure must
+    // never block the retirement tab from rendering.
+  }
+
   let sheet;
   try {
     sheet = getOrCreateRetirementSheet_();
   } catch (e) {
     result.state = 'error';
-    result.message = 'Retirement data could not be loaded. Try again, or add your basics to continue.';
+    result.message = 'Retirement data could not be loaded. Add your Date of Birth in Profile to continue.';
     return result;
   }
 
-  const householdRead = readRetirementHouseholdSafe_(sheet);
-  result.household = householdRead.values;
+  // Compose the household age object from Profile DOBs ONLY. We do not
+  // read `INPUT - Retirement` rows 5/6 here; any value previously
+  // written there is ignored. Spouse DOB is optional and coerces to 0
+  // ("not partnered" sentinel) when absent.
+  const household = getRetirementHouseholdFromProfile_();
+  result.household = household;
 
-  // Decide state without triggering the throwing compute path.
-  //
-  // Today we only block on `yourCurrentAge` (read from the retirement
-  // sheet). spouseCurrentAge of 0 is legal for "not partnered" and is
-  // not treated as missing.
-  //
-  // Architecture note (see SESSION_NOTES.md Phase C): ages are being
-  // moved out of INPUT - Settings entirely. Phase C will add DOB-based
-  // identity keys (`YourDOB`, `Partnered`, `SpouseName`, `SpouseDOB`)
-  // to INPUT - Settings and derive the numeric age at read time. This
-  // function will then honor a blank age in the retirement sheet when
-  // a DOB is present in INPUT - Settings. Until Phase C ships, the
-  // retirement sheet remains the sole source of the age input.
-  if (!householdRead.values || !(householdRead.values.yourCurrentAge > 0)) {
-    result.state = 'needsHouseholdBasics';
-    result.missingFields = householdRead.missing;
-    result.message = 'Add your age to see your retirement plan. Spouse age and target retirement age are optional but recommended.';
+  // Primary DOB missing or invalid → route to Profile instead of
+  // rendering an editable age input in the Retirement tab.
+  if (!(household.yourCurrentAge > 0)) {
+    result.state = 'needsProfileDob';
+    result.missingFields = ['yourCurrentAge'];
+    result.message = 'Add your Date of Birth in Profile to see your retirement plan.';
     return result;
   }
 
@@ -287,7 +248,7 @@ function getRetirementUiDataSafe() {
     result.message =
       'Add your retirement spending, Social Security, and contributions to see your plan.';
     result.selectedScenario = selectedForGate;
-    result.household = householdRead.values;
+    result.household = household;
     result.scenarios = scenariosForGate;
     // analyses / analysis intentionally null — we do not want any
     // computed output to render in this state.
@@ -537,6 +498,165 @@ function normalizePartneredSetting_(raw) {
   return null;
 }
 
+/**
+ * Build the retirement household age object from Profile DOBs only.
+ *
+ * Shape matches what the downstream calculation/validation helpers
+ * already expect: `{ yourCurrentAge, spouseCurrentAge }` with numeric
+ * values. A missing / invalid primary DOB yields `yourCurrentAge = 0`,
+ * which the readiness gate in `getRetirementUiDataSafe` treats as the
+ * signal to route the user to Profile. A missing spouse DOB yields
+ * `spouseCurrentAge = 0` — the legacy "not partnered" sentinel already
+ * understood by `calculateRetirementPlan_` / `validateRetirement*_`.
+ *
+ * This function is the single source of truth for retirement ages.
+ * The legacy `INPUT - Retirement` rows `Your Current Age` / `Spouse
+ * Current Age` are intentionally not read here and no code path writes
+ * to them.
+ */
+function getRetirementHouseholdFromProfile_() {
+  const derived = readRetirementProfileDerivedAges_();
+  const your = (typeof derived.derivedCurrentAge === 'number' && derived.derivedCurrentAge >= 0)
+    ? derived.derivedCurrentAge
+    : 0;
+  const spouse = (typeof derived.derivedSpouseCurrentAge === 'number' && derived.derivedSpouseCurrentAge >= 0)
+    ? derived.derivedSpouseCurrentAge
+    : 0;
+  return {
+    yourCurrentAge: your,
+    spouseCurrentAge: spouse
+  };
+}
+
+/**
+ * Read "Date of Birth" / "Spouse Date of Birth" from INPUT - Settings
+ * and derive whole-year ages for the Retirement Basics helper text.
+ *
+ * Additive, read-only probe:
+ *   - never creates the Settings sheet
+ *   - never writes the Settings sheet
+ *   - never writes or changes the INPUT - Retirement sheet
+ *   - does not touch any retirement-scenario input
+ *
+ * Returns `{ derivedCurrentAge, derivedSpouseCurrentAge }` where each
+ * field is either a non-negative integer age or `null` when the
+ * corresponding DOB is missing, malformed, in the future, or otherwise
+ * fails sanity checks. The UI treats `null` as "no hint" so a blank
+ * or brand-new workbook renders cleanly.
+ */
+function readRetirementProfileDerivedAges_() {
+  const out = { derivedCurrentAge: null, derivedSpouseCurrentAge: null };
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('INPUT - Settings');
+    if (!sheet) return out;
+
+    const last = sheet.getLastRow();
+    if (last < 2) return out;
+
+    const values = sheet.getRange(2, 1, last - 1, 2).getValues();
+    for (let i = 0; i < values.length; i++) {
+      const key = String(values[i][0] == null ? '' : values[i][0]).trim();
+      if (!key) continue;
+      // IMPORTANT: do NOT stringify before passing in. Google Sheets
+      // auto-parses values like "1972-10-15" into real Date objects,
+      // and `String(dateObj)` would produce a locale timestamp that no
+      // longer matches our canonical parser. computeAgeFromDob_ accepts
+      // Date objects, YYYY-MM-DD strings, and date-like strings.
+      const raw = values[i][1];
+
+      if (key === 'Date of Birth') {
+        out.derivedCurrentAge = computeAgeFromDob_(raw);
+      } else if (key === 'Spouse Date of Birth') {
+        out.derivedSpouseCurrentAge = computeAgeFromDob_(raw);
+      }
+    }
+  } catch (_e) {
+    // Never throw: helper text is optional. Any read error leaves both
+    // derived ages at null, which the UI renders as "no hint".
+  }
+  return out;
+}
+
+/**
+ * Convert a stored DOB value into a whole-year age as of today.
+ *
+ * Accepted input shapes (in priority order):
+ *   1. Real `Date` instance — how Google Sheets exposes any cell that
+ *      it auto-parsed as a date (the common case when a user types
+ *      "1972-10-15" directly into INPUT - Settings).
+ *   2. Canonical `YYYY-MM-DD` string — what the Profile editor writes
+ *      via `writeSetting_` when the cell stayed in plain-text form.
+ *   3. Any other date-like string parseable by JS `Date` — e.g.
+ *      "Sun Oct 15 1972 00:00:00 GMT-0700" (Date.toString() fallout),
+ *      ISO-with-time, or US-format "10/15/1972" that Sheets sometimes
+ *      echoes back for legacy cells.
+ *
+ * Returns `null` when:
+ *   - the input is empty / null / undefined
+ *   - the value can't be coerced to a real calendar date
+ *   - the calendar round-trip fails (e.g. Feb 31 would coerce to Mar 3)
+ *   - the resulting date is in the future
+ *   - the derived age is negative or implausibly large (> 150)
+ *
+ * All accepted inputs run through the same round-trip / future /
+ * sanity checks so widening the input surface does not widen what
+ * "valid DOB" means.
+ */
+function computeAgeFromDob_(dob) {
+  if (dob === null || dob === undefined || dob === '') return null;
+
+  let y, m, d;
+
+  if (dob instanceof Date) {
+    if (isNaN(dob.getTime())) return null;
+    y = dob.getFullYear();
+    m = dob.getMonth() + 1;
+    d = dob.getDate();
+  } else {
+    const s = String(dob).trim();
+    if (!s) return null;
+
+    const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) {
+      y = Number(iso[1]);
+      m = Number(iso[2]);
+      d = Number(iso[3]);
+    } else {
+      // Fallback: any date-like string the platform can parse. We
+      // pull Y/M/D from local-time components so the calendar
+      // round-trip check below still catches nonsense values.
+      const parsed = new Date(s);
+      if (isNaN(parsed.getTime())) return null;
+      y = parsed.getFullYear();
+      m = parsed.getMonth() + 1;
+      d = parsed.getDate();
+    }
+  }
+
+  if (!isFinite(y) || !isFinite(m) || !isFinite(d)) return null;
+
+  const dobDate = new Date(y, m - 1, d);
+  if (
+    dobDate.getFullYear() !== y ||
+    dobDate.getMonth() !== m - 1 ||
+    dobDate.getDate() !== d
+  ) {
+    return null;
+  }
+
+  const now = new Date();
+  if (dobDate.getTime() > now.getTime()) return null;
+
+  let age = now.getFullYear() - dobDate.getFullYear();
+  const monthDiff = now.getMonth() - dobDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dobDate.getDate())) {
+    age -= 1;
+  }
+  if (age < 0 || age > 150) return null;
+  return age;
+}
+
 function getRetirementSummarySafe_() {
   try {
     return getRetirementSummary_();
@@ -554,7 +674,10 @@ function getRetirementSummarySafe_() {
 
 function getRetirementModelData_(sheet) {
   const selectedScenario = getSelectedRetirementScenario_(sheet);
-  const household = getRetirementHouseholdInputs_(sheet);
+  // Current ages are sourced exclusively from Profile DOBs. The
+  // legacy `Your Current Age` / `Spouse Current Age` rows in
+  // INPUT - Retirement are intentionally not consulted.
+  const household = getRetirementHouseholdFromProfile_();
   const scenarios = {};
   const analyses = {};
 
@@ -605,22 +728,23 @@ function getOrCreateRetirementSheet_() {
   sheet = ss.insertSheet(sheetName);
 
   // Brand-new retirement sheets start with neutral data. Personal /
-  // financial seeds (ages, spending, social security, contributions)
-  // are left blank so nothing misleading is displayed before the user
-  // enters their own values via the Retirement Basics form or the full
-  // scenario form. Only true generic, non-personal defaults remain —
-  // expected return, inflation, safe withdrawal rate — which the user
-  // can still edit. Existing retirement sheets are NOT touched by this
-  // function (the `if (sheet) return sheet;` guard above short-circuits
-  // before we reach this seed array), so populated workbooks keep every
-  // value they already have.
+  // financial seeds (spending, social security, contributions) are
+  // left blank so nothing misleading is displayed before the user
+  // enters their own values via the scenario form. Only true generic,
+  // non-personal defaults remain — expected return, inflation, safe
+  // withdrawal rate — which the user can still edit. Existing
+  // retirement sheets are NOT touched by this function (the
+  // `if (sheet) return sheet;` guard above short-circuits before we
+  // reach this seed array), so populated workbooks keep every value
+  // they already have — including any legacy `Your Current Age` /
+  // `Spouse Current Age` rows, which are now inert and unused.
+  //
+  // Current ages are sourced exclusively from Profile DOB, so the
+  // former `Household Input` section (header + two age rows + trailing
+  // blank) is no longer seeded for new sheets.
   const rows = [
     ['Setting', 'Value', '', ''],
     ['Selected Scenario', 'Base', '', ''],
-    ['', '', '', ''],
-    ['Household Input', 'Value', '', ''],
-    ['Your Current Age', '', '', ''],
-    ['Spouse Current Age', '', '', ''],
     ['', '', '', ''],
     ['Scenario Input', 'Conservative', 'Base', 'Aggressive'],
     ['Target Retirement Age', '', '', ''],
@@ -657,36 +781,38 @@ function getOrCreateRetirementSheet_() {
   sheet.setFrozenRows(1);
   sheet.setColumnWidths(1, 4, 220);
 
+  // Section headers.
   sheet.getRange('A1:D1').setFontWeight('bold');
-  sheet.getRange('A4:B4').setFontWeight('bold');
-  sheet.getRange('A8:D8').setFontWeight('bold');
-  sheet.getRange('A20:B20').setFontWeight('bold');
+  sheet.getRange('A4:D4').setFontWeight('bold');   // Scenario Input header
+  sheet.getRange('A16:B16').setFontWeight('bold'); // Selected Scenario Output header
 
+  // Scenario Input block (rows 5–14).
+  applyCurrencyFormat_(sheet.getRange('B6:D6'));
+  applyCurrencyFormat_(sheet.getRange('B7:D7'));
+  applyCurrencyFormat_(sheet.getRange('B8:D8'));
+  applyCurrencyFormat_(sheet.getRange('B9:D9'));
   applyCurrencyFormat_(sheet.getRange('B10:D10'));
-  applyCurrencyFormat_(sheet.getRange('B11:D11'));
-  applyCurrencyFormat_(sheet.getRange('B12:D12'));
-  applyCurrencyFormat_(sheet.getRange('B13:D13'));
+  sheet.getRange('B11:D11').setNumberFormat('0.00');
+  sheet.getRange('B12:D12').setNumberFormat('0.00');
+  sheet.getRange('B13:D13').setNumberFormat('0.00');
   applyCurrencyFormat_(sheet.getRange('B14:D14'));
-  sheet.getRange('B15:D15').setNumberFormat('0.00');
-  sheet.getRange('B16:D16').setNumberFormat('0.00');
-  sheet.getRange('B17:D17').setNumberFormat('0.00');
-  applyCurrencyFormat_(sheet.getRange('B18:D18'));
 
-  applyCurrencyFormat_(sheet.getRange('B21'));
-  applyCurrencyFormat_(sheet.getRange('B22'));
-  sheet.getRange('B23').setNumberFormat('0.00%');
-  sheet.getRange('B24').setNumberFormat('@');
-  sheet.getRange('B25').setNumberFormat('0');
-  sheet.getRange('B26').setNumberFormat('0');
+  // Selected Scenario Output block (rows 17–32).
+  applyCurrencyFormat_(sheet.getRange('B17'));
+  applyCurrencyFormat_(sheet.getRange('B18'));
+  sheet.getRange('B19').setNumberFormat('0.00%');
+  sheet.getRange('B20').setNumberFormat('@');
+  sheet.getRange('B21').setNumberFormat('0');
+  sheet.getRange('B22').setNumberFormat('0');
+  applyCurrencyFormat_(sheet.getRange('B23'));
+  applyCurrencyFormat_(sheet.getRange('B24'));
+  applyCurrencyFormat_(sheet.getRange('B25'));
+  applyCurrencyFormat_(sheet.getRange('B26'));
   applyCurrencyFormat_(sheet.getRange('B27'));
-  applyCurrencyFormat_(sheet.getRange('B28'));
-  applyCurrencyFormat_(sheet.getRange('B29'));
-  applyCurrencyFormat_(sheet.getRange('B30'));
-  applyCurrencyFormat_(sheet.getRange('B31'));
-  sheet.getRange('B32').setNumberFormat('0');
-  sheet.getRange('B33').setNumberFormat('0.00%');
-  sheet.getRange('B34').setNumberFormat('@');
-  sheet.getRange('B35').setNumberFormat('0.00%');
+  sheet.getRange('B28').setNumberFormat('0');
+  sheet.getRange('B29').setNumberFormat('0.00%');
+  sheet.getRange('B30').setNumberFormat('@');
+  sheet.getRange('B31').setNumberFormat('0.00%');
 
   return sheet;
 }
@@ -804,8 +930,12 @@ function writeRetirementOutputs_(sheet, analysis) {
 }
 
 function validateRetirementHousehold_(household) {
-  if (household.yourCurrentAge <= 0) throw new Error('Your Current Age must be greater than 0.');
-  if (household.spouseCurrentAge < 0) throw new Error('Spouse Current Age cannot be negative.');
+  if (household.yourCurrentAge <= 0) {
+    throw new Error('Add your Date of Birth in Profile to save retirement scenarios.');
+  }
+  if (household.spouseCurrentAge < 0) {
+    throw new Error('Spouse Date of Birth in Profile is invalid.');
+  }
 }
 
 function validateRetirementScenarioInputs_(household, inputs) {

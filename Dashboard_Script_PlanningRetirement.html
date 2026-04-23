@@ -4,6 +4,12 @@ function loadRetirementSection() {
     .withSuccessHandler(function(data) {
       retirementUiData = data;
 
+      // Profile DOB → derived-age helper text. Called once up front so
+      // the hint stays consistent across every branch (ready /
+      // needsProfileDob / needsScenarioAssumptions / error) without
+      // per-branch plumbing. Ages are now exclusively DOB-derived.
+      updateRetirementDobHints_(data);
+
       // The safe backend always returns a structured envelope with a
       // `state` field. Branch on it before touching any of the scenario
       // / info rendering helpers — those helpers assume `data.analysis`
@@ -12,43 +18,47 @@ function loadRetirementSection() {
 
       if (state === 'ready') {
         hideRetirementEmptyState_();
-        hideRetirementBasicsForm_();
 
         document.getElementById('ret_selectedScenario').value = data.selectedScenario || 'Base';
-        document.getElementById('ret_yourCurrentAge').value = data.household ? data.household.yourCurrentAge : '';
-        document.getElementById('ret_spouseCurrentAge').value = data.household ? data.household.spouseCurrentAge : '';
+        // Current ages are display-only (plain divs, not inputs). Source
+        // of truth is Profile DOB, so we just surface the derived value
+        // via textContent. Spouse is blanked when the household is
+        // single (spouseCurrentAge == 0 sentinel from the backend).
+        document.getElementById('ret_yourCurrentAge').textContent =
+          data && data.household && data.household.yourCurrentAge > 0 ? String(data.household.yourCurrentAge) : '';
+        document.getElementById('ret_spouseCurrentAge').textContent =
+          data && data.household && data.household.spouseCurrentAge > 0 ? String(data.household.spouseCurrentAge) : '';
 
         fillRetirementScenarioInputs(data.selectedScenario || 'Base');
         renderRetirementScenarioCards(data);
         renderRetirementPanelInfo(data.analysis);
         setStatus('retirement_status', '', false);
-      } else if (state === 'needsHouseholdBasics') {
+      } else if (state === 'needsProfileDob') {
+        // Primary Date of Birth missing or invalid in Profile /
+        // Settings. Retirement current ages come exclusively from
+        // Profile, so we route the user there instead of offering any
+        // in-tab age editor. The scenario input form remains in the
+        // DOM but its save path will reject until DOB is set.
         showRetirementEmptyState_({
-          title: 'Tell us a little about your household to see your plan.',
+          title: 'Add your Date of Birth in Profile to see your retirement plan.',
           body: (data && data.message) ||
-            'Add your age to see your retirement plan. Spouse age and target retirement age are optional but recommended.',
-          hint: 'Fill in the Retirement Basics below and click "Save Retirement Basics" to continue.'
+            'Retirement current ages come from your Profile. Add your Date of Birth there to continue.',
+          cta: { label: 'Open Profile', page: 'onboarding' }
         });
-        showRetirementBasicsForm_(data);
 
-        // Prefill whatever the retirement sheet already has (may be 0/blank).
-        document.getElementById('ret_selectedScenario').value = (data && data.selectedScenario) || 'Base';
-        document.getElementById('ret_yourCurrentAge').value =
-          data && data.household && data.household.yourCurrentAge > 0 ? data.household.yourCurrentAge : '';
-        document.getElementById('ret_spouseCurrentAge').value =
-          data && data.household && data.household.spouseCurrentAge > 0 ? data.household.spouseCurrentAge : '';
+        document.getElementById('ret_yourCurrentAge').textContent = '';
+        document.getElementById('ret_spouseCurrentAge').textContent = '';
 
         clearRetirementReadOnlyInfo_();
         setStatus('retirement_status', '', false);
       } else if (state === 'needsScenarioAssumptions') {
-        // Household basics are saved, but no scenario has meaningful
-        // assumptions yet (specifically: retirement spending > 0 on at
-        // least one scenario). Show a calm guidance card above the
-        // scenario input form so the user fills in spending / Social
-        // Security / contributions *before* any computed output is
-        // rendered — otherwise `calculateRetirementPlan_` would spin
-        // blanks into a confident "already funded / can retire now"
-        // story (see the matching gate in `getRetirementUiDataSafe`).
+        // Household age (from Profile DOB) is known, but no scenario
+        // has meaningful assumptions yet (specifically: retirement
+        // spending > 0 on at least one scenario). Show a calm
+        // guidance card above the scenario input form — otherwise
+        // `calculateRetirementPlan_` would spin blanks into a
+        // confident "already funded / can retire now" story (see the
+        // matching gate in `getRetirementUiDataSafe`).
         //
         // The scenario input form itself is always in the DOM and is
         // not hidden here — the user fills it in place.
@@ -58,15 +68,14 @@ function loadRetirementSection() {
             'Add your retirement spending, Social Security, and contributions to see your plan.',
           hint: 'Fill in Household Retirement Spending / Year (and any other assumptions you know) below, then click "Save Selected Scenario".'
         });
-        hideRetirementBasicsForm_();
 
         // Prefill the readonly age fields and the selected scenario
         // dropdown so the user sees context.
         document.getElementById('ret_selectedScenario').value = (data && data.selectedScenario) || 'Base';
-        document.getElementById('ret_yourCurrentAge').value =
-          data && data.household && data.household.yourCurrentAge > 0 ? data.household.yourCurrentAge : '';
-        document.getElementById('ret_spouseCurrentAge').value =
-          data && data.household && data.household.spouseCurrentAge > 0 ? data.household.spouseCurrentAge : '';
+        document.getElementById('ret_yourCurrentAge').textContent =
+          data && data.household && data.household.yourCurrentAge > 0 ? String(data.household.yourCurrentAge) : '';
+        document.getElementById('ret_spouseCurrentAge').textContent =
+          data && data.household && data.household.spouseCurrentAge > 0 ? String(data.household.spouseCurrentAge) : '';
 
         // Prefill the scenario input form from whatever the retirement
         // sheet already holds (mostly blank on a fresh workbook; may
@@ -89,7 +98,6 @@ function loadRetirementSection() {
             'Retirement planner could not load. Try again, or review your inputs below.',
           hint: ''
         });
-        hideRetirementBasicsForm_();
         clearRetirementReadOnlyInfo_();
         setStatus('retirement_status', '', false);
       }
@@ -102,6 +110,7 @@ function loadRetirementSection() {
       // The safe backend should not throw, but keep this path defensive
       // for transport-level failures. Still show a calm banner rather
       // than a red error string — consistent with the rest of the tab.
+      updateRetirementDobHints_(null);
       showRetirementEmptyState_({
         title: 'Retirement planner is unavailable right now.',
         body: 'Try again in a moment.',
@@ -113,6 +122,32 @@ function loadRetirementSection() {
     .getRetirementUiDataSafe();
 }
 
+/**
+ * Render the derived-age helper text shown under each read-only age
+ * input on the Retirement tab. Hidden when the corresponding DOB is
+ * missing or invalid. The editable basics form has been removed, so
+ * only the two scenario-row readouts get a hint.
+ */
+function updateRetirementDobHints_(data) {
+  var primary = (data && typeof data.derivedCurrentAge === 'number') ? data.derivedCurrentAge : null;
+  var spouse = (data && typeof data.derivedSpouseCurrentAge === 'number') ? data.derivedSpouseCurrentAge : null;
+
+  setRetirementDobHint_('ret_yourCurrentAge_dobHint', primary, 'From profile DOB');
+  setRetirementDobHint_('ret_spouseCurrentAge_dobHint', spouse, 'From spouse DOB');
+}
+
+function setRetirementDobHint_(elId, age, label) {
+  var el = document.getElementById(elId);
+  if (!el) return;
+  if (typeof age === 'number' && isFinite(age) && age >= 0) {
+    el.textContent = label + ': ' + age;
+    el.hidden = false;
+  } else {
+    el.textContent = '';
+    el.hidden = true;
+  }
+}
+
 function showRetirementEmptyState_(content) {
   var el = document.getElementById('ret_empty_state');
   if (!el) return;
@@ -120,13 +155,42 @@ function showRetirementEmptyState_(content) {
   var title = (content && content.title) ? content.title : '';
   var body = (content && content.body) ? content.body : '';
   var hint = (content && content.hint) ? content.hint : '';
+  var cta = (content && content.cta) ? content.cta : null;
 
-  var html = '';
-  if (title) html += '<div class="retirement-empty-state-title">' + escapeHtml(title) + '</div>';
-  if (body) html += '<div>' + escapeHtml(body) + '</div>';
-  if (hint) html += '<div class="retirement-empty-state-hint">' + escapeHtml(hint) + '</div>';
+  // Build the card safely: title / body / hint are escaped, the CTA
+  // button is inserted via DOM API so its click handler cannot be
+  // influenced by message content.
+  el.innerHTML = '';
+  if (title) {
+    var titleEl = document.createElement('div');
+    titleEl.className = 'retirement-empty-state-title';
+    titleEl.textContent = title;
+    el.appendChild(titleEl);
+  }
+  if (body) {
+    var bodyEl = document.createElement('div');
+    bodyEl.textContent = body;
+    el.appendChild(bodyEl);
+  }
+  if (hint) {
+    var hintEl = document.createElement('div');
+    hintEl.className = 'retirement-empty-state-hint';
+    hintEl.textContent = hint;
+    el.appendChild(hintEl);
+  }
+  if (cta && cta.label && cta.page) {
+    var ctaRow = document.createElement('div');
+    ctaRow.className = 'retirement-empty-state-hint';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = cta.label;
+    btn.onclick = function() {
+      if (typeof showPage === 'function') showPage(cta.page);
+    };
+    ctaRow.appendChild(btn);
+    el.appendChild(ctaRow);
+  }
 
-  el.innerHTML = html;
   el.hidden = false;
 }
 
@@ -135,105 +199,6 @@ function hideRetirementEmptyState_() {
   if (!el) return;
   el.hidden = true;
   el.innerHTML = '';
-}
-
-function showRetirementBasicsForm_(data) {
-  var form = document.getElementById('ret_basics_form');
-  if (!form) return;
-  form.hidden = false;
-
-  // Prefill from whatever the retirement sheet already has. yourAge
-  // left blank when 0/missing so the placeholder nudges the user.
-  var yourAge = (data && data.household && data.household.yourCurrentAge > 0)
-    ? data.household.yourCurrentAge : '';
-  var spouseAge = (data && data.household && data.household.spouseCurrentAge > 0)
-    ? data.household.spouseCurrentAge : '';
-
-  var yourEl = document.getElementById('ret_basics_yourAge');
-  if (yourEl) yourEl.value = yourAge;
-
-  // Infer Partnered from spouse age convention (0 = not partnered).
-  // Default to Yes when we have a positive spouse age; otherwise leave
-  // both radios unselected so the user makes an explicit choice.
-  var yesEl = document.getElementById('ret_basics_partnered_yes');
-  var noEl = document.getElementById('ret_basics_partnered_no');
-  if (yesEl && noEl) {
-    if (spouseAge !== '') {
-      yesEl.checked = true;
-      noEl.checked = false;
-    } else {
-      yesEl.checked = false;
-      noEl.checked = false;
-    }
-  }
-
-  var spouseEl = document.getElementById('ret_basics_spouseAge');
-  if (spouseEl) spouseEl.value = spouseAge;
-
-  onRetirementBasicsPartneredChange_();
-  setStatus('ret_basics_status', '', false);
-}
-
-function hideRetirementBasicsForm_() {
-  var form = document.getElementById('ret_basics_form');
-  if (!form) return;
-  form.hidden = true;
-  setStatus('ret_basics_status', '', false);
-}
-
-function onRetirementBasicsPartneredChange_() {
-  var yesEl = document.getElementById('ret_basics_partnered_yes');
-  var row = document.getElementById('ret_basics_spouse_row');
-  if (!row) return;
-  row.hidden = !(yesEl && yesEl.checked);
-  if (row.hidden) {
-    var spouseEl = document.getElementById('ret_basics_spouseAge');
-    if (spouseEl) spouseEl.value = '';
-  }
-}
-
-function saveRetirementBasicsFromUi_() {
-  var yourAge = Number(document.getElementById('ret_basics_yourAge').value || 0);
-  var yesEl = document.getElementById('ret_basics_partnered_yes');
-  var noEl = document.getElementById('ret_basics_partnered_no');
-  var partneredChosen = (yesEl && yesEl.checked) || (noEl && noEl.checked);
-  var partnered = !!(yesEl && yesEl.checked);
-  var spouseAge = partnered
-    ? Number(document.getElementById('ret_basics_spouseAge').value || 0)
-    : 0;
-
-  if (!(yourAge > 0)) {
-    setStatus('ret_basics_status', 'Your age is required (greater than 0).', true);
-    return;
-  }
-  if (!partneredChosen) {
-    setStatus('ret_basics_status', 'Pick Yes or No for Partnered.', true);
-    return;
-  }
-  if (partnered && !(spouseAge > 0)) {
-    setStatus('ret_basics_status', 'Spouse\u2019s age is required.', true);
-    return;
-  }
-
-  setStatus('ret_basics_status', 'Saving…', false);
-
-  google.script.run
-    .withSuccessHandler(function(res) {
-      setStatus('ret_basics_status', (res && res.message) || 'Saved.', false);
-      // Re-render the whole section from the returned envelope. When
-      // basics are valid the state flips to 'ready' and the basics
-      // form is hidden by the load branch above.
-      loadRetirementSection();
-      refreshSnapshot();
-    })
-    .withFailureHandler(function(err) {
-      setStatus('ret_basics_status', (err && err.message ? err.message : String(err)), true);
-    })
-    .saveRetirementBasics({
-      yourCurrentAge: yourAge,
-      partnered: partnered,
-      spouseCurrentAge: spouseAge
-    });
 }
 
 function clearRetirementReadOnlyInfo_() {
@@ -376,10 +341,11 @@ function renderRetirementPanelInfo(analysis) {
 }
 
 function saveRetirement() {
+  // Current ages are no longer sent from the client. The backend
+  // builds the household age object from Profile DOBs and rejects the
+  // save if the primary DOB is missing.
   const payload = {
     selectedScenario: document.getElementById('ret_selectedScenario').value,
-    yourCurrentAge: Number(document.getElementById('ret_yourCurrentAge').value || 0),
-    spouseCurrentAge: Number(document.getElementById('ret_spouseCurrentAge').value || 0),
     targetRetirementAge: Number(document.getElementById('ret_targetRetirementAge').value || 0),
     householdRetirementSpendingPerYear: toNumber(document.getElementById('ret_householdRetirementSpendingPerYear').value),
     yourSocialSecurityPerYear: toNumber(document.getElementById('ret_yourSocialSecurityPerYear').value),
