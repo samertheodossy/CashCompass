@@ -11,6 +11,13 @@ function getSheetNames_() {
     HOUSE_ASSETS: 'SYS - House Assets',
     ASSETS: 'SYS - Assets',
 
+    // Bank Import scaffold (Step 1). Both sheets are created lazily by
+    // ensure helpers in bank_import.js and are not read by any existing
+    // consumer. Pending-rows-do-not-count is enforced by the fact that
+    // no other module looks up these keys.
+    IMPORT_STAGING_BANK: 'SYS - Import Staging — Bank Accounts',
+    IMPORT_IGNORED_BANK: 'SYS - Import Ignored — Bank Accounts',
+
     DASHBOARD: 'OUT - Dashboard',
     HISTORY: 'OUT - History'
   };
