@@ -1432,6 +1432,36 @@ function onboardingRenderProfileDetail_(data) {
   if (p.address && String(p.address).trim()) {
     rows.push(onboardingProfileRow_('Address', p.address));
   }
+  if (p.dateOfBirth && String(p.dateOfBirth).trim()) {
+    rows.push(onboardingProfileRow_('Date of birth', p.dateOfBirth));
+  }
+
+  // Spouse block rendered only if at least one spouse field is set, so a
+  // solo primary profile still looks exactly like it did pre-V1.1.
+  var hasSpouse =
+    (p.spouseName && String(p.spouseName).trim()) ||
+    (p.spouseEmail && String(p.spouseEmail).trim()) ||
+    (p.spousePhone && String(p.spousePhone).trim()) ||
+    (p.spouseAddress && String(p.spouseAddress).trim()) ||
+    (p.spouseDateOfBirth && String(p.spouseDateOfBirth).trim());
+
+  if (hasSpouse) {
+    if (p.spouseName && String(p.spouseName).trim()) {
+      rows.push(onboardingProfileRow_('Spouse name', p.spouseName));
+    }
+    if (p.spouseEmail && String(p.spouseEmail).trim()) {
+      rows.push(onboardingProfileRow_('Spouse email', p.spouseEmail));
+    }
+    if (p.spousePhone && String(p.spousePhone).trim()) {
+      rows.push(onboardingProfileRow_('Spouse phone', p.spousePhone));
+    }
+    if (p.spouseAddress && String(p.spouseAddress).trim()) {
+      rows.push(onboardingProfileRow_('Spouse address', p.spouseAddress));
+    }
+    if (p.spouseDateOfBirth && String(p.spouseDateOfBirth).trim()) {
+      rows.push(onboardingProfileRow_('Spouse date of birth', p.spouseDateOfBirth));
+    }
+  }
 
   body.innerHTML =
     '<div class="onboarding-profile-view" role="list">' + rows.join('') + '</div>';
@@ -1459,6 +1489,12 @@ function onboardingProfileBeginEdit_() {
   onboardingProfileSetField_('onboarding_profile_email', p.email || '');
   onboardingProfileSetField_('onboarding_profile_phone', p.phone || '');
   onboardingProfileSetField_('onboarding_profile_address', p.address || '');
+  onboardingProfileSetField_('onboarding_profile_dateOfBirth', p.dateOfBirth || '');
+  onboardingProfileSetField_('onboarding_profile_spouseName', p.spouseName || '');
+  onboardingProfileSetField_('onboarding_profile_spouseEmail', p.spouseEmail || '');
+  onboardingProfileSetField_('onboarding_profile_spousePhone', p.spousePhone || '');
+  onboardingProfileSetField_('onboarding_profile_spouseAddress', p.spouseAddress || '');
+  onboardingProfileSetField_('onboarding_profile_spouseDateOfBirth', p.spouseDateOfBirth || '');
   onboardingProfileClearErrors_();
 
   if (body) body.style.display = 'none';
@@ -1496,15 +1532,25 @@ function onboardingProfileGetField_(id) {
   return el ? String(el.value == null ? '' : el.value).trim() : '';
 }
 
+// All editable fields on the profile form. Each entry's key must match
+// the server-side error key (see `saveProfileSettings` in profile.js)
+// and the id segment used for both the `<input>` and its
+// `_error` sibling. Keeping one list means adding a new field later
+// only requires touching this array plus the HTML.
+var ONBOARDING_PROFILE_FIELDS_ = [
+  'name', 'email', 'phone', 'address', 'dateOfBirth',
+  'spouseName', 'spouseEmail', 'spousePhone', 'spouseAddress', 'spouseDateOfBirth'
+];
+
 function onboardingProfileClearErrors_() {
-  ['name', 'email', 'phone', 'address'].forEach(function(field) {
+  ONBOARDING_PROFILE_FIELDS_.forEach(function(field) {
     var err = document.getElementById('onboarding_profile_' + field + '_error');
     if (err) err.textContent = '';
   });
 }
 
 function onboardingProfileShowErrors_(errors) {
-  ['name', 'email', 'phone', 'address'].forEach(function(field) {
+  ONBOARDING_PROFILE_FIELDS_.forEach(function(field) {
     var err = document.getElementById('onboarding_profile_' + field + '_error');
     if (!err) return;
     err.textContent = errors && errors[field] ? errors[field] : '';
@@ -1513,13 +1559,29 @@ function onboardingProfileShowErrors_(errors) {
 
 // Lightweight client-side validation. The server re-validates, so this
 // is for UX responsiveness only — never relied on for correctness.
+// DOB + every spouse field is optional: we only flag format errors when
+// the trimmed value is non-empty. A fully blank spouse section always
+// clears the form with no errors.
 function onboardingProfileValidateClient_(payload) {
   var errors = {};
+  var emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  var dobRe = /^\d{4}-\d{2}-\d{2}$/;
+
   if (!payload.name) errors.name = 'Name is required.';
   if (!payload.email) {
     errors.email = 'Email is required.';
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
+  } else if (!emailRe.test(payload.email)) {
     errors.email = 'Enter a valid email address.';
+  }
+
+  if (payload.dateOfBirth && !dobRe.test(payload.dateOfBirth)) {
+    errors.dateOfBirth = 'Enter a valid date.';
+  }
+  if (payload.spouseEmail && !emailRe.test(payload.spouseEmail)) {
+    errors.spouseEmail = 'Enter a valid email address.';
+  }
+  if (payload.spouseDateOfBirth && !dobRe.test(payload.spouseDateOfBirth)) {
+    errors.spouseDateOfBirth = 'Enter a valid date.';
   }
   return errors;
 }
@@ -1530,7 +1592,13 @@ function onboardingSaveProfile_() {
     name: onboardingProfileGetField_('onboarding_profile_name'),
     email: onboardingProfileGetField_('onboarding_profile_email'),
     phone: onboardingProfileGetField_('onboarding_profile_phone'),
-    address: onboardingProfileGetField_('onboarding_profile_address')
+    address: onboardingProfileGetField_('onboarding_profile_address'),
+    dateOfBirth: onboardingProfileGetField_('onboarding_profile_dateOfBirth'),
+    spouseName: onboardingProfileGetField_('onboarding_profile_spouseName'),
+    spouseEmail: onboardingProfileGetField_('onboarding_profile_spouseEmail'),
+    spousePhone: onboardingProfileGetField_('onboarding_profile_spousePhone'),
+    spouseAddress: onboardingProfileGetField_('onboarding_profile_spouseAddress'),
+    spouseDateOfBirth: onboardingProfileGetField_('onboarding_profile_spouseDateOfBirth')
   };
 
   var clientErrors = onboardingProfileValidateClient_(payload);

@@ -1863,6 +1863,7 @@
 
       <!-- Edit mode: hidden by default, toggled on when the user clicks Edit. -->
       <div id="onboarding_profile_editor" class="onboarding-profile-editor" style="display:none;">
+        <div class="onboarding-profile-section onboarding-profile-section-first">Primary</div>
         <div class="onboarding-profile-field">
           <label for="onboarding_profile_name">Name<span class="onboarding-profile-required" aria-hidden="true"> *</span></label>
           <input type="text" id="onboarding_profile_name" maxlength="500" autocomplete="name" />
@@ -1883,6 +1884,39 @@
           <textarea id="onboarding_profile_address" rows="2" maxlength="500" autocomplete="street-address"></textarea>
           <div class="onboarding-profile-error" id="onboarding_profile_address_error"></div>
         </div>
+        <div class="onboarding-profile-field">
+          <label for="onboarding_profile_dateOfBirth">Date of birth <span class="muted">(optional)</span></label>
+          <input type="date" id="onboarding_profile_dateOfBirth" autocomplete="bday" />
+          <div class="onboarding-profile-error" id="onboarding_profile_dateOfBirth_error"></div>
+        </div>
+
+        <div class="onboarding-profile-section">Spouse / partner <span class="muted">(all optional)</span></div>
+        <div class="onboarding-profile-field">
+          <label for="onboarding_profile_spouseName">Spouse name</label>
+          <input type="text" id="onboarding_profile_spouseName" maxlength="500" autocomplete="name" />
+          <div class="onboarding-profile-error" id="onboarding_profile_spouseName_error"></div>
+        </div>
+        <div class="onboarding-profile-field">
+          <label for="onboarding_profile_spouseEmail">Spouse email</label>
+          <input type="email" id="onboarding_profile_spouseEmail" maxlength="500" autocomplete="email" />
+          <div class="onboarding-profile-error" id="onboarding_profile_spouseEmail_error"></div>
+        </div>
+        <div class="onboarding-profile-field">
+          <label for="onboarding_profile_spousePhone">Spouse phone</label>
+          <input type="tel" id="onboarding_profile_spousePhone" maxlength="500" autocomplete="tel" />
+          <div class="onboarding-profile-error" id="onboarding_profile_spousePhone_error"></div>
+        </div>
+        <div class="onboarding-profile-field">
+          <label for="onboarding_profile_spouseAddress">Spouse address</label>
+          <textarea id="onboarding_profile_spouseAddress" rows="2" maxlength="500" autocomplete="street-address"></textarea>
+          <div class="onboarding-profile-error" id="onboarding_profile_spouseAddress_error"></div>
+        </div>
+        <div class="onboarding-profile-field">
+          <label for="onboarding_profile_spouseDateOfBirth">Spouse date of birth</label>
+          <input type="date" id="onboarding_profile_spouseDateOfBirth" autocomplete="bday" />
+          <div class="onboarding-profile-error" id="onboarding_profile_spouseDateOfBirth_error"></div>
+        </div>
+
         <div class="onboarding-profile-actions">
           <button type="button" id="onboarding_profile_save_btn" class="btn-primary"
                   onclick="onboardingSaveProfile_()">Save profile</button>

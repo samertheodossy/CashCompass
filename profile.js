@@ -6,9 +6,10 @@
  *   - Storage is intentionally a simple Key/Value sheet so we can grow
  *     additional settings (preferences, notification flags, etc.) over
  *     time without reshaping the sheet.
- *   - Name + Email are required; Phone and Address are optional. The
- *     Settings sheet may hold other keys too; we only read/write the
- *     four profile keys from this module.
+ *   - Name + Email are required; Phone, Address, Date of Birth, and
+ *     every spouse field are optional. The Settings sheet may hold
+ *     other keys too; we only read/write the profile keys listed in
+ *     PROFILE_KEYS_ from this module.
  *   - Read-only onboarding conventions still apply to the status probe
  *     and the detail read. Writes happen exclusively through
  *     saveOnboardingProfileFromDashboard, which is only invoked by the
@@ -26,11 +27,21 @@ var PROFILE_SETTINGS_SHEET_NAME_ = 'INPUT - Settings';
 
 // Keys written by this module. Using a constant map keeps the canonical
 // spelling in one place and lets tests / future readers grep for them.
+// Primary (Name / Email / Phone / Address) has been here since V1.
+// DOB + Spouse fields were added in V1.1 as optional profile expansion;
+// none of them are required and they do not change the Setup completion
+// contract (which still only checks Name + Email).
 var PROFILE_KEYS_ = {
   NAME: 'Name',
   EMAIL: 'Email',
   PHONE: 'Phone',
-  ADDRESS: 'Address'
+  ADDRESS: 'Address',
+  DOB: 'Date of Birth',
+  SPOUSE_NAME: 'Spouse Name',
+  SPOUSE_EMAIL: 'Spouse Email',
+  SPOUSE_PHONE: 'Spouse Phone',
+  SPOUSE_ADDRESS: 'Spouse Address',
+  SPOUSE_DOB: 'Spouse Date of Birth'
 };
 
 // Upper bound enforced on saves so pathological paste-in data cannot
@@ -42,6 +53,38 @@ var PROFILE_MAX_LENGTH_ = 500;
 // this for obvious-typo rejection on the client; real delivery errors
 // surface when MailApp.sendEmail runs.
 var PROFILE_EMAIL_REGEX_ = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Date-of-birth strings are stored as plain YYYY-MM-DD text coming from
+// the HTML <input type="date"> picker. We validate shape here and also
+// round-trip through Date to reject calendar nonsense (e.g. 2025-02-31
+// that JS Date would coerce into 2025-03-03). Blank is allowed — the
+// field is optional — so the regex is only applied when the trimmed
+// value is non-empty.
+var PROFILE_DOB_REGEX_ = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidProfileDateString_(value) {
+  if (!value) return false;
+  if (!PROFILE_DOB_REGEX_.test(value)) return false;
+  var d = new Date(value + 'T00:00:00');
+  if (isNaN(d.getTime())) return false;
+  var yyyy = String(d.getFullYear()).padStart(4, '0');
+  var mm = String(d.getMonth() + 1).padStart(2, '0');
+  var dd = String(d.getDate()).padStart(2, '0');
+  return yyyy + '-' + mm + '-' + dd === value;
+}
+
+// Canonical empty profile — used as the fallback shape whenever a read
+// fails or no keys are set yet. Keeping this in one place means every
+// reader (including the error branch in getOnboardingProfileFromDashboard)
+// returns the same shape the UI expects.
+function emptyProfileShape_() {
+  return {
+    name: '', email: '', phone: '', address: '',
+    dateOfBirth: '',
+    spouseName: '', spouseEmail: '', spousePhone: '', spouseAddress: '',
+    spouseDateOfBirth: ''
+  };
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Settings sheet plumbing                                                   */
@@ -130,8 +173,10 @@ function writeSetting_(sheet, key, value) {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Return the current profile as a plain object. All four fields are
- * always present, defaulting to empty strings. Safe to call even if
+ * Return the current profile as a plain object. All profile fields
+ * (Name / Email / Phone / Address / Date of Birth / five spouse
+ * fields) are always present, defaulting to empty strings so the
+ * client can bind directly without null-guards. Safe to call even if
  * INPUT - Settings doesn't exist (it will be created on first read).
  */
 function getProfileSettings() {
@@ -140,7 +185,13 @@ function getProfileSettings() {
     name: map[PROFILE_KEYS_.NAME] || '',
     email: map[PROFILE_KEYS_.EMAIL] || '',
     phone: map[PROFILE_KEYS_.PHONE] || '',
-    address: map[PROFILE_KEYS_.ADDRESS] || ''
+    address: map[PROFILE_KEYS_.ADDRESS] || '',
+    dateOfBirth: map[PROFILE_KEYS_.DOB] || '',
+    spouseName: map[PROFILE_KEYS_.SPOUSE_NAME] || '',
+    spouseEmail: map[PROFILE_KEYS_.SPOUSE_EMAIL] || '',
+    spousePhone: map[PROFILE_KEYS_.SPOUSE_PHONE] || '',
+    spouseAddress: map[PROFILE_KEYS_.SPOUSE_ADDRESS] || '',
+    spouseDateOfBirth: map[PROFILE_KEYS_.SPOUSE_DOB] || ''
   };
 }
 
@@ -149,8 +200,17 @@ function getProfileSettings() {
  *   { ok: true,  profile, message }
  *   { ok: false, errors: { field: message } }
  *
- * Only the four profile keys are touched; unrelated rows on
- * INPUT - Settings are preserved.
+ * Only the profile keys managed by this module (Name / Email / Phone /
+ * Address / Date of Birth + the five spouse counterparts) are touched;
+ * any unrelated rows on INPUT - Settings are preserved.
+ *
+ * Contract:
+ *   - Name + Email are required (unchanged from V1).
+ *   - Phone, Address, Date of Birth, and every spouse field are
+ *     optional; blank trimmed values save cleanly and clear any
+ *     prior value.
+ *   - DOB fields, when non-empty, must be a valid calendar date in
+ *     YYYY-MM-DD form (matches the HTML <input type="date"> payload).
  */
 function saveProfileSettings(profile) {
   var errors = {};
@@ -160,6 +220,13 @@ function saveProfileSettings(profile) {
   var email = String(input.email || '').trim();
   var phone = String(input.phone || '').trim();
   var address = String(input.address || '').trim();
+  var dateOfBirth = String(input.dateOfBirth || '').trim();
+
+  var spouseName = String(input.spouseName || '').trim();
+  var spouseEmail = String(input.spouseEmail || '').trim();
+  var spousePhone = String(input.spousePhone || '').trim();
+  var spouseAddress = String(input.spouseAddress || '').trim();
+  var spouseDateOfBirth = String(input.spouseDateOfBirth || '').trim();
 
   if (!name) errors.name = 'Name is required.';
   if (name.length > PROFILE_MAX_LENGTH_) errors.name = 'Name is too long.';
@@ -175,6 +242,36 @@ function saveProfileSettings(profile) {
   if (phone.length > PROFILE_MAX_LENGTH_) errors.phone = 'Phone is too long.';
   if (address.length > PROFILE_MAX_LENGTH_) errors.address = 'Address is too long.';
 
+  // DOB + Spouse fields are all optional. We only validate them when the
+  // trimmed value is non-empty so a fully-blank spouse section always
+  // saves cleanly (including on a populated workbook where only the
+  // primary user is present).
+  if (dateOfBirth && !isValidProfileDateString_(dateOfBirth)) {
+    errors.dateOfBirth = 'Enter a valid date.';
+  }
+
+  if (spouseName.length > PROFILE_MAX_LENGTH_) {
+    errors.spouseName = 'Spouse name is too long.';
+  }
+
+  if (spouseEmail) {
+    if (!PROFILE_EMAIL_REGEX_.test(spouseEmail)) {
+      errors.spouseEmail = 'Enter a valid email address.';
+    } else if (spouseEmail.length > PROFILE_MAX_LENGTH_) {
+      errors.spouseEmail = 'Spouse email is too long.';
+    }
+  }
+
+  if (spousePhone.length > PROFILE_MAX_LENGTH_) {
+    errors.spousePhone = 'Spouse phone is too long.';
+  }
+  if (spouseAddress.length > PROFILE_MAX_LENGTH_) {
+    errors.spouseAddress = 'Spouse address is too long.';
+  }
+  if (spouseDateOfBirth && !isValidProfileDateString_(spouseDateOfBirth)) {
+    errors.spouseDateOfBirth = 'Enter a valid date.';
+  }
+
   if (Object.keys(errors).length > 0) {
     return { ok: false, errors: errors };
   }
@@ -184,10 +281,27 @@ function saveProfileSettings(profile) {
   writeSetting_(sheet, PROFILE_KEYS_.EMAIL, email);
   writeSetting_(sheet, PROFILE_KEYS_.PHONE, phone);
   writeSetting_(sheet, PROFILE_KEYS_.ADDRESS, address);
+  writeSetting_(sheet, PROFILE_KEYS_.DOB, dateOfBirth);
+  writeSetting_(sheet, PROFILE_KEYS_.SPOUSE_NAME, spouseName);
+  writeSetting_(sheet, PROFILE_KEYS_.SPOUSE_EMAIL, spouseEmail);
+  writeSetting_(sheet, PROFILE_KEYS_.SPOUSE_PHONE, spousePhone);
+  writeSetting_(sheet, PROFILE_KEYS_.SPOUSE_ADDRESS, spouseAddress);
+  writeSetting_(sheet, PROFILE_KEYS_.SPOUSE_DOB, spouseDateOfBirth);
 
   return {
     ok: true,
-    profile: { name: name, email: email, phone: phone, address: address },
+    profile: {
+      name: name,
+      email: email,
+      phone: phone,
+      address: address,
+      dateOfBirth: dateOfBirth,
+      spouseName: spouseName,
+      spouseEmail: spouseEmail,
+      spousePhone: spousePhone,
+      spouseAddress: spouseAddress,
+      spouseDateOfBirth: spouseDateOfBirth
+    },
     message: 'Profile saved.'
   };
 }
@@ -265,7 +379,7 @@ function getOnboardingProfileFromDashboard(_mode) {
       mode: 'normal',
       sheetName: PROFILE_SETTINGS_SHEET_NAME_,
       sheetExists: sheetExists,
-      profile: { name: '', email: '', phone: '', address: '' },
+      profile: emptyProfileShape_(),
       status: 'missing',
       statusNote: 'Could not read Settings sheet.'
     };
