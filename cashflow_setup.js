@@ -671,8 +671,10 @@ function ensureCashFlowSummaryRow_(sheet) {
  * / debt seed / summary seed path. Errors are swallowed (cosmetic
  * only; never fail a row write on a styling glitch).
  *
- * Color is Google Sheets' yellow-3 (#fff2cc), matching the reference
- * screenshot. Row height and column widths are set to values tuned to
+ * Color is Google Sheets' yellow-2 (#ffe599) — one shade down from the
+ * paler yellow-3, picked so the header band reads as clearly highlighted
+ * on both the dashboard's tinted chrome and the raw sheet. Row height
+ * and column widths are set to values tuned to
  * the canonical 4-metadata-columns + 12-month + total layout but
  * adapt automatically if the workbook's layout differs (header style
  * is applied to all columns returned by `detectCashFlowLayout_`).
@@ -683,7 +685,7 @@ function applyCashFlowSheetStyling_(sheet, layout) {
 
   const headerRange = sheet.getRange(1, 1, 1, numCols);
   headerRange
-    .setBackground('#fff2cc')
+    .setBackground('#ffe599')
     .setFontWeight('bold')
     .setFontColor('#000000')
     .setHorizontalAlignment('center')
@@ -720,12 +722,30 @@ function applyCashFlowSheetStyling_(sheet, layout) {
   if (layout.activeCol1 > 0)      widthByCol1.push({ col: layout.activeCol1, width: 80 });
   if (layout.totalCol1 > 0)       widthByCol1.push({ col: layout.totalCol1, width: 110 });
 
+  // Only widen — never shrink. Populated workbooks where the user has
+  // manually widened a column (e.g. Flow Source > 130 to fit
+  // "CREDIT_CARD", or month columns > 90 to fit long currency values)
+  // would otherwise be reset on every Quick Add / bill / debt seed,
+  // because ensureCashFlowSummaryRow_ calls this helper on every insert.
+  // Fresh sheets start below each target width (Google Sheets default
+  // ~100px) and still get widened on creation as before.
   for (let i = 0; i < widthByCol1.length; i++) {
-    try { sheet.setColumnWidth(widthByCol1[i].col, widthByCol1[i].width); } catch (_) {}
+    try {
+      const col1 = widthByCol1[i].col;
+      const target = widthByCol1[i].width;
+      if (sheet.getColumnWidth(col1) < target) {
+        sheet.setColumnWidth(col1, target);
+      }
+    } catch (_) {}
   }
 
   for (let i = 0; i < layout.monthCol0s.length; i++) {
-    try { sheet.setColumnWidth(layout.monthCol0s[i] + 1, 90); } catch (_) {}
+    try {
+      const monthCol1 = layout.monthCol0s[i] + 1;
+      if (sheet.getColumnWidth(monthCol1) < 90) {
+        sheet.setColumnWidth(monthCol1, 90);
+      }
+    } catch (_) {}
   }
 }
 
