@@ -1396,6 +1396,17 @@ function onboardingRenderProfileDetail_(data) {
 
   ONBOARDING_PROFILE_LAST_ = data;
 
+  // Race guard: if the user clicked "Edit profile" before this fetch
+  // resolved, the editor opened with blank inputs (ONBOARDING_PROFILE_-
+  // LAST_ was null and begin-edit fell back to {}). Now that the
+  // payload has arrived, re-run the same prefill against the open
+  // editor so every field (not just DOB) hydrates in place. The hidden
+  // detail body is re-rendered below as usual so nothing changes when
+  // the editor is NOT currently visible.
+  if (onboardingProfileEditorIsVisible_()) {
+    onboardingProfilePrefillEditor_(data.profile);
+  }
+
   var status = data.status || 'missing';
   if (badge) {
     badge.className = 'onboarding-detail-badge status-' + status;
@@ -1476,15 +1487,13 @@ function onboardingProfileRow_(label, value) {
   );
 }
 
-function onboardingProfileBeginEdit_() {
-  var editor = document.getElementById('onboarding_profile_editor');
-  var body = document.getElementById('onboarding_profile_body');
-  var footer = document.getElementById('onboarding_profile_footer');
-  if (!editor) return;
-
-  // Populate form fields from the last server payload, or blanks if
-  // the user clicked Edit before the initial load resolved.
-  var p = (ONBOARDING_PROFILE_LAST_ && ONBOARDING_PROFILE_LAST_.profile) || {};
+// Fill every Profile editor input from a profile payload. Defined as a
+// shared helper so the same field-mapping runs on click-Edit AND on
+// late-arriving detail fetches (see the race note in
+// onboardingRenderProfileDetail_ below). Safe to call with `undefined`
+// or a partial object — missing keys degrade to blank fields.
+function onboardingProfilePrefillEditor_(profile) {
+  var p = profile || {};
   onboardingProfileSetField_('onboarding_profile_name', p.name || '');
   onboardingProfileSetField_('onboarding_profile_email', p.email || '');
   onboardingProfileSetField_('onboarding_profile_phone', p.phone || '');
@@ -1495,6 +1504,30 @@ function onboardingProfileBeginEdit_() {
   onboardingProfileSetField_('onboarding_profile_spousePhone', p.spousePhone || '');
   onboardingProfileSetField_('onboarding_profile_spouseAddress', p.spouseAddress || '');
   onboardingProfileSetField_('onboarding_profile_spouseDateOfBirth', p.spouseDateOfBirth || '');
+}
+
+// True when the inline Profile editor is currently on-screen. Used by
+// the detail render to decide whether a late-arriving fetch should
+// re-hydrate an already-open editor.
+function onboardingProfileEditorIsVisible_() {
+  var editor = document.getElementById('onboarding_profile_editor');
+  if (!editor) return false;
+  return editor.style.display !== 'none';
+}
+
+function onboardingProfileBeginEdit_() {
+  var editor = document.getElementById('onboarding_profile_editor');
+  var body = document.getElementById('onboarding_profile_body');
+  var footer = document.getElementById('onboarding_profile_footer');
+  if (!editor) return;
+
+  // Populate form fields from the last server payload, or blanks if
+  // the user clicked Edit before the initial load resolved. When the
+  // late fetch arrives, onboardingRenderProfileDetail_ re-runs this
+  // same prefill against the now-populated cache so the open editor
+  // hydrates without the user having to cancel and reopen.
+  var p = (ONBOARDING_PROFILE_LAST_ && ONBOARDING_PROFILE_LAST_.profile) || {};
+  onboardingProfilePrefillEditor_(p);
   onboardingProfileClearErrors_();
 
   if (body) body.style.display = 'none';
@@ -1627,6 +1660,24 @@ function onboardingSaveProfile_() {
       onboardingProfileSetStatus_(resp.message || 'Profile saved.', '');
       onboardingProfileHideEditor_();
       onboardingRenderProfileDetail_(resp);
+
+      // Profile DOB (primary + spouse) feeds Retirement's derived ages.
+      // Retirement only (re-)fetches on initial page load or via the
+      // deep-link focus handoff, so without this nudge the Retirement
+      // tab would keep showing the previous session's ages until a full
+      // reload. Defensive `typeof` guard keeps the save flow safe on
+      // surfaces where the Retirement script isn't included (it is on
+      // the main web app, but a future narrower host shouldn't crash
+      // here). Intentionally narrow: Overview's snapshot-driven
+      // Retirement Outlook card is NOT refreshed in this step — see the
+      // session notes for the follow-up decision.
+      try {
+        if (typeof loadRetirementSection === 'function') {
+          loadRetirementSection();
+        }
+      } catch (_e) {
+        // Background refresh is best-effort; never fail the save UX.
+      }
     })
     .withFailureHandler(function(err) {
       if (btn) btn.disabled = false;

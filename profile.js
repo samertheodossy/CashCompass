@@ -54,23 +54,91 @@ var PROFILE_MAX_LENGTH_ = 500;
 // surface when MailApp.sendEmail runs.
 var PROFILE_EMAIL_REGEX_ = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Date-of-birth strings are stored as plain YYYY-MM-DD text coming from
-// the HTML <input type="date"> picker. We validate shape here and also
-// round-trip through Date to reject calendar nonsense (e.g. 2025-02-31
-// that JS Date would coerce into 2025-03-03). Blank is allowed — the
-// field is optional — so the regex is only applied when the trimmed
-// value is non-empty.
+// Date-of-birth values are canonically stored as YYYY-MM-DD text, which
+// is what the HTML <input type="date"> picker emits. Google Sheets,
+// however, auto-parses a cell like "1972-10-15" into a real Date, and
+// google.script.run can deliver that Date straight into the server
+// handler — so the save path must also accept Date objects and other
+// date-like strings (e.g. "Sun Oct 15 1972 ..." locale output, or US
+// "10/15/1972") that Sheets sometimes echoes back. This keeps Profile
+// DOB handling in sync with retirement.js `computeAgeFromDob_`, which
+// already accepts the same widened input surface.
+//
+// Blank is allowed — DOB is optional — and `null` is returned to signal
+// "non-empty but invalid" so callers can produce the right error.
 var PROFILE_DOB_REGEX_ = /^\d{4}-\d{2}-\d{2}$/;
 
+function formatProfileDobCanonical_(year, month, day) {
+  return String(year).padStart(4, '0') + '-' +
+         String(month).padStart(2, '0') + '-' +
+         String(day).padStart(2, '0');
+}
+
+/**
+ * Normalize a raw DOB value into its canonical YYYY-MM-DD string.
+ *
+ * Returns:
+ *   ''    → empty input (blank DOB is allowed — field is optional)
+ *   null  → non-empty input that could not be coerced to a valid date
+ *   'YYYY-MM-DD' → canonical form for a valid calendar date
+ *
+ * Accepted input shapes mirror retirement.js `computeAgeFromDob_`:
+ *   1. Real Date instance (e.g. Sheets-parsed cell delivered as-is)
+ *   2. Canonical YYYY-MM-DD string (HTML date picker output)
+ *   3. Any other date-like string the platform can parse
+ *
+ * All accepted inputs run through the same calendar round-trip check,
+ * so widening the input surface does not widen what "valid DOB" means.
+ */
+function normalizeProfileDobValue_(value) {
+  if (value === null || value === undefined) return '';
+
+  var y, m, d;
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return null;
+    y = value.getFullYear();
+    m = value.getMonth() + 1;
+    d = value.getDate();
+  } else {
+    var s = String(value).trim();
+    if (!s) return '';
+
+    var iso = s.match(PROFILE_DOB_REGEX_);
+    if (iso) {
+      y = Number(s.slice(0, 4));
+      m = Number(s.slice(5, 7));
+      d = Number(s.slice(8, 10));
+    } else {
+      var parsed = new Date(s);
+      if (isNaN(parsed.getTime())) return null;
+      y = parsed.getFullYear();
+      m = parsed.getMonth() + 1;
+      d = parsed.getDate();
+    }
+  }
+
+  if (!isFinite(y) || !isFinite(m) || !isFinite(d)) return null;
+
+  var probe = new Date(y, m - 1, d);
+  if (
+    probe.getFullYear() !== y ||
+    probe.getMonth() !== m - 1 ||
+    probe.getDate() !== d
+  ) {
+    return null;
+  }
+
+  return formatProfileDobCanonical_(y, m, d);
+}
+
+/**
+ * Thin wrapper retained for symmetry with earlier callers. A value is
+ * considered a "valid profile date" when it normalizes to a non-empty
+ * canonical YYYY-MM-DD string.
+ */
 function isValidProfileDateString_(value) {
-  if (!value) return false;
-  if (!PROFILE_DOB_REGEX_.test(value)) return false;
-  var d = new Date(value + 'T00:00:00');
-  if (isNaN(d.getTime())) return false;
-  var yyyy = String(d.getFullYear()).padStart(4, '0');
-  var mm = String(d.getMonth() + 1).padStart(2, '0');
-  var dd = String(d.getDate()).padStart(2, '0');
-  return yyyy + '-' + mm + '-' + dd === value;
+  var normalized = normalizeProfileDobValue_(value);
+  return typeof normalized === 'string' && normalized !== '';
 }
 
 // Canonical empty profile — used as the fallback shape whenever a read
@@ -173,25 +241,86 @@ function writeSetting_(sheet, key, value) {
 /* -------------------------------------------------------------------------- */
 
 /**
+ * Raw (non-stringified) DOB reader for the two Profile DOB keys.
+ *
+ * `readAllSettingsMap_` coerces every value to a trimmed string, which
+ * is fine for text fields but destroys type information for DOB cells
+ * that Google Sheets auto-parsed into real Date objects (the common
+ * case when a user types "1972-10-15" directly into INPUT - Settings).
+ * The date-picker input in the Profile editor only accepts
+ * `YYYY-MM-DD`, so a locale-formatted Date.toString() payload would
+ * silently blank the field on edit.
+ *
+ * This helper scans the Settings sheet once and returns the two DOB
+ * values with their original cell type intact (Date / string / blank).
+ * Normalization to canonical `YYYY-MM-DD` happens in the caller via
+ * `normalizeProfileDobValue_` so invalid or legacy values degrade to
+ * `''` rather than leaking locale strings to the client.
+ *
+ * Never throws: any read failure returns both slots as `''`.
+ */
+function readProfileDobRawValues_() {
+  var out = { dob: '', spouseDob: '' };
+  try {
+    var sheet = ensureInputSettingsSheet_();
+    var last = sheet.getLastRow();
+    if (last < 2) return out;
+    var values = sheet.getRange(2, 1, last - 1, 2).getValues();
+    for (var i = 0; i < values.length; i++) {
+      var key = String(values[i][0] == null ? '' : values[i][0]).trim();
+      if (!key) continue;
+      // IMPORTANT: do NOT stringify here — we need the raw Date object
+      // when Sheets auto-parsed the cell. The normalizer accepts Date,
+      // canonical YYYY-MM-DD, and other date-like strings.
+      var raw = values[i][1];
+      if (key === PROFILE_KEYS_.DOB) {
+        out.dob = raw == null ? '' : raw;
+      } else if (key === PROFILE_KEYS_.SPOUSE_DOB) {
+        out.spouseDob = raw == null ? '' : raw;
+      }
+    }
+  } catch (_e) {
+    // DOB hydration is best-effort. Any failure falls back to '' which
+    // the UI renders as "not set", matching blank-workbook behavior.
+  }
+  return out;
+}
+
+/**
  * Return the current profile as a plain object. All profile fields
  * (Name / Email / Phone / Address / Date of Birth / five spouse
  * fields) are always present, defaulting to empty strings so the
  * client can bind directly without null-guards. Safe to call even if
  * INPUT - Settings doesn't exist (it will be created on first read).
+ *
+ * DOB fields are normalized to canonical `YYYY-MM-DD` (or `''`) before
+ * leaving this function. This keeps the Profile edit form's
+ * `<input type="date">` inputs in sync with whatever is actually in
+ * INPUT - Settings — including cells that Google Sheets auto-parsed
+ * into Date objects, which would otherwise round-trip through the
+ * Settings map as unusable locale strings.
  */
 function getProfileSettings() {
   var map = readAllSettingsMap_();
+  var dobRaw = readProfileDobRawValues_();
+
+  var normalizedDob = normalizeProfileDobValue_(dobRaw.dob);
+  var normalizedSpouseDob = normalizeProfileDobValue_(dobRaw.spouseDob);
+
   return {
     name: map[PROFILE_KEYS_.NAME] || '',
     email: map[PROFILE_KEYS_.EMAIL] || '',
     phone: map[PROFILE_KEYS_.PHONE] || '',
     address: map[PROFILE_KEYS_.ADDRESS] || '',
-    dateOfBirth: map[PROFILE_KEYS_.DOB] || '',
+    // Coerce `null` (non-empty-but-invalid, e.g. a corrupted legacy
+    // value) back to '' so the UI sees "no DOB" instead of a raw
+    // locale blob it can't render into a date input.
+    dateOfBirth: normalizedDob || '',
     spouseName: map[PROFILE_KEYS_.SPOUSE_NAME] || '',
     spouseEmail: map[PROFILE_KEYS_.SPOUSE_EMAIL] || '',
     spousePhone: map[PROFILE_KEYS_.SPOUSE_PHONE] || '',
     spouseAddress: map[PROFILE_KEYS_.SPOUSE_ADDRESS] || '',
-    spouseDateOfBirth: map[PROFILE_KEYS_.SPOUSE_DOB] || ''
+    spouseDateOfBirth: normalizedSpouseDob || ''
   };
 }
 
@@ -220,13 +349,21 @@ function saveProfileSettings(profile) {
   var email = String(input.email || '').trim();
   var phone = String(input.phone || '').trim();
   var address = String(input.address || '').trim();
-  var dateOfBirth = String(input.dateOfBirth || '').trim();
 
   var spouseName = String(input.spouseName || '').trim();
   var spouseEmail = String(input.spouseEmail || '').trim();
   var spousePhone = String(input.spousePhone || '').trim();
   var spouseAddress = String(input.spouseAddress || '').trim();
-  var spouseDateOfBirth = String(input.spouseDateOfBirth || '').trim();
+
+  // DOB inputs are passed to the normalizer unstringified so that a Date
+  // object (from google.script.run / Sheets auto-parsing) reaches it
+  // intact. The normalizer returns '' for blank, null for invalid, and
+  // a canonical 'YYYY-MM-DD' string for any accepted shape.
+  var normalizedDob = normalizeProfileDobValue_(input.dateOfBirth);
+  var dateOfBirth = normalizedDob === null ? '' : normalizedDob;
+
+  var normalizedSpouseDob = normalizeProfileDobValue_(input.spouseDateOfBirth);
+  var spouseDateOfBirth = normalizedSpouseDob === null ? '' : normalizedSpouseDob;
 
   if (!name) errors.name = 'Name is required.';
   if (name.length > PROFILE_MAX_LENGTH_) errors.name = 'Name is too long.';
@@ -242,11 +379,12 @@ function saveProfileSettings(profile) {
   if (phone.length > PROFILE_MAX_LENGTH_) errors.phone = 'Phone is too long.';
   if (address.length > PROFILE_MAX_LENGTH_) errors.address = 'Address is too long.';
 
-  // DOB + Spouse fields are all optional. We only validate them when the
-  // trimmed value is non-empty so a fully-blank spouse section always
-  // saves cleanly (including on a populated workbook where only the
-  // primary user is present).
-  if (dateOfBirth && !isValidProfileDateString_(dateOfBirth)) {
+  // DOB + Spouse fields are all optional. We only surface a validation
+  // error when the caller provided a non-empty value that the
+  // normalizer could not resolve to a real calendar date. A fully-blank
+  // spouse section always saves cleanly (including on a populated
+  // workbook where only the primary user is present).
+  if (normalizedDob === null) {
     errors.dateOfBirth = 'Enter a valid date.';
   }
 
@@ -268,7 +406,7 @@ function saveProfileSettings(profile) {
   if (spouseAddress.length > PROFILE_MAX_LENGTH_) {
     errors.spouseAddress = 'Spouse address is too long.';
   }
-  if (spouseDateOfBirth && !isValidProfileDateString_(spouseDateOfBirth)) {
+  if (normalizedSpouseDob === null) {
     errors.spouseDateOfBirth = 'Enter a valid date.';
   }
 

@@ -4,6 +4,34 @@ function loadRetirementSection() {
     .withSuccessHandler(function(data) {
       retirementUiData = data;
 
+      // Keep the Overview Retirement Outlook card consistent with the
+      // Retirement tab whenever Retirement data is (re-)fetched. The
+      // Overview card is normally painted from `snapshot.retirement`
+      // via applySnapshot(), which is only rebuilt by a full dashboard
+      // snapshot refresh. Profile DOB edits already call this loader
+      // (see onboardingSaveProfile_ in Dashboard_Script_Onboarding.html),
+      // and the envelope returned by getRetirementUiDataSafe() exposes
+      // the same `analysis` shape renderRetirementSummary consumes —
+      // both paths go through getRetirementModelData_ /
+      // calculateRetirementPlan_ server-side. So we can repaint the
+      // Overview card from this fresh payload at zero extra RPC cost
+      // and avoid the otherwise-heavy getDashboardSnapshot() round
+      // trip. Guarded by typeof so this loader stays safe on any
+      // narrower host where the Overview render script isn't
+      // included. Must run BEFORE the state-branch below so every
+      // branch (ready / needsProfileDob / needsScenarioAssumptions /
+      // error) keeps the two views in sync — an empty-state payload
+      // has `analysis: null`, which renderRetirementSummary already
+      // handles by painting dashes and the setup hint.
+      try {
+        if (typeof renderRetirementSummary === 'function') {
+          renderRetirementSummary(data);
+        }
+      } catch (_e) {
+        // Best-effort cross-module repaint; never fail the Retirement
+        // tab load because of an Overview render glitch.
+      }
+
       // Profile DOB → derived-age helper text. Called once up front so
       // the hint stays consistent across every branch (ready /
       // needsProfileDob / needsScenarioAssumptions / error) without
