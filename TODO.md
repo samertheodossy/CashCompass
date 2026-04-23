@@ -28,7 +28,7 @@ One flat queue, three buckets. Pull **one** item at a time under the V1.2 workin
 
 ### Active now
 
-- *(none in flight — pick the next Active item from the V1.2 candidates below before starting work.)*
+- *(none in flight — pick the next Active item from the V1.2 candidates below before starting work. Bank Import Step 2a is queued and documented under `## Bank Import — status & resume plan` below.)*
 
 ### V1.2 candidates
 
@@ -74,6 +74,69 @@ Captured so the idea isn't lost; **not** in scope for V1.2. Requires an explicit
 - **Larger product work** — Cash Strategy, HELOC advisor refinement, Plaid-style bank / card / loan sync, car / vehicle expenses as a first-class dashboard surface, subscriptions, income / expense classification, tax workflow, credit-card segmentation, etc. See the historical body below for full design notes.
 - **Two dashboards unification** — `PlannerDashboard.html` (sidebar) vs `PlannerDashboardWeb.html` (web) shared-source strategy.
 - **Broader regression / test harness** — automated unit / integration tests per `TESTING_PLAN.md`.
+
+---
+
+## Bank Import — status & resume plan
+
+Captured so work can resume cleanly from a pause. This section is deliberately self-contained — read it first when returning to Bank Import work.
+
+### Bank Import — Step 1 Complete
+
+Scaffold shipped in commit `8ced838`:
+
+- **`SYS - Import Staging — Bank Accounts`** — ensure helper creates the sheet with the full 13-column staging header (bold, frozen, no data rows): `Staging Id | First Seen | Last Seen | External Account Id | External Institution | Display Name | Last 4 | Type | Currency | Latest Balance | Latest Balance As Of | Status | Pending Reason`.
+- **`SYS - Import Ignored — Bank Accounts`** — ensure helper creates the 7-column ignore registry (bold, frozen, no data rows): `External Account Id | Institution | Display Name | Last 4 | Ignored At | Ignored By | Scope`.
+- **`External Account Id` column on `SYS - Accounts`** — ensure helper appends the header flush to the last non-empty header cell. Never reorders existing columns. Never writes to data rows.
+
+What Step 1 explicitly **did not** ship:
+
+- No ingestion logic.
+- No UI.
+- No planner impact — the new sheets are inert and no existing module calls the helpers.
+
+### Next Step — Step 2a (not started)
+
+Ingestion pipeline only. Scope is intentionally narrow:
+
+- Exact-id auto-match against `SYS - Accounts.External Account Id`.
+- Ignored handling — **permanent only** (no until-changed logic yet, even if the `Scope` column exists for future compatibility).
+- Pending staging — unmatched accounts land in `SYS - Import Staging — Bank Accounts` with `Status = pending review`.
+- Activity logging for each ingestion outcome (events such as `bank_import_auto_matched`, `bank_import_pending`, `bank_import_ignored`).
+- Dev harness only for invocation (no menu, no dashboard button, no web UI).
+
+Explicitly **out of scope for Step 2a**:
+
+- No UI (review screen, suggestion scoring, edit flows, etc.).
+- No external sync (Plaid / Finicity / aggregator calls).
+- No planner integration — pending rows do not affect planner math; this is enforced by pending rows living only in the staging sheet, which no existing module reads.
+
+### Rules to resume work
+
+Apply to every Bank Import step from 2a onward. These are the V1.2 working rules with extra emphasis for this feature:
+
+- **One step at a time.** Do not bundle Step 2a with Step 2b, UI, or sync in a single pass.
+- **No bundling changes.** Each step must stand on its own and pass manual tests before the next one begins.
+- **Test before commit** — run the blank + populated workbook manual checks (see `TESTING_PLAN.md` and the Step 1 / 2a test checklist) before staging anything.
+- **No UI until ingestion logic is stable** and has shipped at least one clean test run against a real payload in the dev harness.
+- **No planner integration until a review system exists.** Pending rows stay invisible to planner math until a human-visible review surface has been added.
+- **Additive only.** No edits to existing module files unless strictly required; no reordering of existing sheet columns; no destructive migrations.
+
+### How to resume
+
+When the next session starts:
+
+1. *(Optional)* Run the scaffold ensure helpers from the Apps Script editor on the target workbook to confirm the schema is in place:
+   - `ensureImportStagingBankAccountsSheet_()`
+   - `ensureImportIgnoredBankAccountsSheet_()`
+   - `ensureAccountsExternalIdColumn_(SpreadsheetApp.getActiveSpreadsheet().getSheetByName('SYS - Accounts'))`
+2. Implement **Step 2a** exactly per the scope above. Do not broaden.
+3. Run the Step 2a manual test checklist (A–E) before committing:
+   - **A.** Exact-id auto-match against `SYS - Accounts.External Account Id` — incoming row matches, no staging row added, activity row logged, `SYS - Accounts` data rows untouched.
+   - **B.** New unknown account → pending row lands in `SYS - Import Staging — Bank Accounts` with `Status = pending review`; planner, overview, and cash flow unchanged.
+   - **C.** Ignored account (`External Account Id` present in `SYS - Import Ignored — Bank Accounts`) → no staging row written; activity row `bank_import_ignored` logged.
+   - **D.** Blank workbook — ensure helpers run clean on first call, idempotent on second call, no regressions in bootstrap or onboarding.
+   - **E.** Manual account flow unchanged — existing Bank Accounts Add new / Update / Stop tracking paths still work byte-for-byte.
 
 ---
 

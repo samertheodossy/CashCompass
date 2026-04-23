@@ -19,7 +19,7 @@ Items below that are fully delivered still carry their original "DELIVERED" tag 
 
 Authoritative live queue lives in `TODO.md → V1.2 work queue`. Mirror here is short on purpose:
 
-- **Active now:** *(none in flight)*
+- **Active now:** *(none in flight — Bank Import Step 2a is queued; see `TODO.md → Bank Import — status & resume plan`)*
 - **V1.2 candidates (A — immediate follow-ups, low risk):** Profile DOB parser symmetry (accept Date objects on save-side validation), Overview Retirement Outlook copy alignment with `needsProfileDob`, blank-workbook empty-state consistency sweep, copy/Help polish sweep.
 - **V1.2 candidates (B — product improvements):** Profile completeness indicator / badge, better Retirement setup guidance / linking to Profile, optional spouse UX clarity (single vs partnered).
 - **V1.2 candidates (C — future ideas, do not act yet):** legacy sheet cleanup tool (remove inert `Your Current Age` / `Spouse Current Age` rows on existing `INPUT - Retirement` sheets), Profile → other modules integration, notifications / SMS using the existing Profile phone field.
@@ -33,6 +33,16 @@ Shipped end-to-end in V1.1 (commits `92c8673` → `6d25c0e`). **Profile is now t
 - **Profile** gained **Date of Birth** plus a full spouse/partner block (`Spouse Name / Email / Phone / Address / Date of Birth`) in the flat `INPUT - Settings` store. Existing required fields (`Name`, `Email`) unchanged; all new fields optional.
 - **Retirement** derives current age exclusively from Profile DOB. The Retirement Basics edit form is removed; per-scenario age fields are display-only (plain divs, no spinner arrows). A new `needsProfileDob` readiness state routes users to **Open Profile** when DOB is missing. The DOB parser accepts both Date objects and `YYYY-MM-DD` strings, fixing the silent Sheets-auto-date coercion bug. New `INPUT - Retirement` sheets no longer seed the now-unused age rows.
 - **Backward compatibility preserved** — populated workbooks are untouched byte-for-byte. Legacy age rows on existing retirement sheets are left inert (no read, no write, no planner consumption). No forced migration.
+
+### Delivered — Bank Import Step 1 scaffold (V1.2 prep)
+
+**Bank Import — Step 1 Complete.** Scaffold shipped in commit `8ced838`. New file `bank_import.js` with three inert ensure helpers:
+
+- `ensureImportStagingBankAccountsSheet_()` creates `SYS - Import Staging — Bank Accounts` with the 13-column staging header (bold, frozen), no data rows.
+- `ensureImportIgnoredBankAccountsSheet_()` creates `SYS - Import Ignored — Bank Accounts` with the 7-column ignore registry (bold, frozen), no data rows.
+- `ensureAccountsExternalIdColumn_(accountsSheet)` appends the `External Account Id` column to `SYS - Accounts` flush to the last non-empty header cell. Never reorders existing columns. Never writes to data rows.
+
+What Step 1 explicitly **did not** ship: no ingestion logic, no UI, no planner impact. Existing modules do not call any of these helpers, so planner, overview, retirement, cash flow, and the manual bank account UI are unaffected on both populated and blank workbooks. Full scope, Step 2a plan, resume rules, and manual test checklist (A–E) live in `TODO.md → Bank Import — status & resume plan`.
 
 ---
 
