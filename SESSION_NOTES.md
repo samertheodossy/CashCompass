@@ -1,6 +1,6 @@
 ## V1 trust baseline — complete
 
-The V1 trust baseline is shipped and locked. The project is now in **V1.1 / controlled improvement mode**. Working rules for this phase live in `WORKING_RULES.md → Current phase`; product framing lives in `PROJECT_CONTEXT.md → Current phase`. All prior phase notes below this header are preserved as-is for historical record.
+The V1 trust baseline is shipped and locked, and V1.1 closed out with the retirement profile integration (see **V1.1 — Retirement Profile Integration (DOB Source of Truth)** section below). The project is now in **V1.2 / controlled improvement mode**. Working rules for this phase live in `WORKING_RULES.md → Current phase`; product framing lives in `PROJECT_CONTEXT.md → Current phase`. All prior phase notes below this header are preserved as-is for historical record.
 
 ### Phase history — what V1 shipped
 
@@ -19,9 +19,36 @@ Grouped summary of the work that closed out V1. Full per-change notes are in the
 
 ---
 
+## V1.1 — Retirement Profile Integration (DOB Source of Truth)
+
+V1.1 is closed. The headline V1.1 item — **Retirement profile integration** — shipped end-to-end. Profile is now the single source of truth for Date of Birth; Retirement derives current age from it and no longer edits or stores an age of its own. This note is the phase summary; detailed day-by-day entries are folded into the Archive below where applicable.
+
+**Shipped (commits `92c8673` → `6d25c0e`):**
+
+- **Profile expansion** — added **Date of Birth** plus a full spouse/partner block (`Spouse Name / Email / Phone / Address / Date of Birth`) to Profile, using the flat `INPUT - Settings` key-value store. Existing required fields (`Name`, `Email`) unchanged; all new fields optional; populated workbooks unaffected. Client-side validation + server-side round-trip in `profile.js`.
+- **Retirement DOB derivation** — added `readRetirementProfileDerivedAges_()` + `computeAgeFromDob_()` in `retirement.js`, and surfaced **derived age hints** in Retirement Basics as helper text (e.g. "From your Date of Birth in Profile: 53") without removing the manual inputs in the first pass.
+- **Current-age removal from Retirement** — converted the per-scenario age fields to **display-only** plain divs (no spinner arrows, no editable styling), removed the Retirement Basics edit form entirely, removed `saveRetirementBasicsFromUi_` and its helpers from the client, and dropped `yourCurrentAge` / `spouseCurrentAge` from the `saveRetirement` payload. The backend `saveRetirementBasics` entry point is now a friendly-error stub for any stale cached client.
+- **`needsProfileDob` readiness state** — new Retirement state replacing the old `needsHouseholdBasics` gate. When the primary DOB is missing, Retirement renders a clean empty-state card with an **Open Profile** CTA instead of an editable fallback. Missing spouse DOB does **not** block.
+- **DOB parsing bug fix** — `INPUT - Settings` DOB cells were being auto-coerced to `Date` objects by `getValues()`, then stringified to a non-ISO form, then rejected by the previous strict `YYYY-MM-DD` regex in `computeAgeFromDob_`. The parser was widened to accept Date objects, valid `YYYY-MM-DD` strings, and other date-like strings, while keeping all existing validation rules (calendar round-trip, future-date rejection, age cap, etc.).
+- **UI cleanup (no-spinner, display-only)** — `<input type="number" readonly>` replaced with plain `<div class="retirement-age-display">` for both "Your Current Age" and "Spouse Current Age" display rows. Matching client JS switched from `.value = …` to `.textContent = …` in every render branch (`ready`, `needsProfileDob`, `needsScenarioAssumptions`).
+- **Sheet model cleanup** — `getOrCreateRetirementSheet_` no longer seeds the `Household Input` header, `Your Current Age`, `Spouse Current Age`, or the trailing blank separator row on **new** `INPUT - Retirement` sheets. All downstream hardcoded formatting ranges were shifted −4 rows to match the new layout. Existing populated sheets are **left untouched** — legacy rows remain in place but are inert (no read, no write, no planner consumption).
+
+**Backward compatibility (explicit decision):**
+
+- **Do not hard-delete legacy age rows** from existing `INPUT - Retirement` sheets in this pass. Leaving them inert is strictly safer: no label-index shifts, no risk to populated workbooks, and a future opt-in "Legacy sheet cleanup tool" can sweep them with user confirmation later.
+- **No fallback to saved manual ages.** If Profile DOB is missing, Retirement shows setup guidance — it never silently resurrects old saved age values. This was a deliberate trade-off to keep DOB as the single source of truth.
+
+**Known V1.2 follow-ups (see `TODO.md → V1.2 candidates`):**
+
+- Profile DOB parser symmetry — `profile.js::isValidProfileDateString_` still assumes strict string format; widen it to match the retirement-side normalization.
+- Overview Retirement Outlook copy alignment with the new `needsProfileDob` language.
+- Dead-code prune — `readRetirementHouseholdSafe_`, `getRetirementHouseholdInputs_`, `writeRetirementHouseholdInputs_`, and the `saveRetirementBasics` stub are now unused; safe to remove in a future cleanup pass.
+
+---
+
 ## Archive (historical notes)
 
-Everything below this line is preserved as-is for historical context. It captures the phase-by-phase stabilization, polish, and feature work that led up to the V1 trust baseline summarized above. Do **not** treat the status lines, TODO/open fragments, or "current" / "next step" text inside this archive as active — current status lives in the V1 trust baseline header, `PROJECT_CONTEXT.md → Current phase`, and `TODO.md → Next phase / V1.1`.
+Everything below this line is preserved as-is for historical context. It captures the phase-by-phase stabilization, polish, and feature work that led up to the V1 trust baseline summarized above. Do **not** treat the status lines, TODO/open fragments, or "current" / "next step" text inside this archive as active — current status lives in the V1 trust baseline header, the V1.1 retirement profile integration note, `PROJECT_CONTEXT.md → Current phase`, and `TODO.md → V1.2 work queue`.
 
 ## Final Polish Phase
 

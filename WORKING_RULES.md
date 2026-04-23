@@ -1,8 +1,8 @@
 # Working Rules
 
-## Current phase — V1.1 / controlled improvement mode
+## Current phase — V1.2 / controlled improvement mode (V1.1 closed out)
 
-The V1 trust baseline is complete: blank workbooks are stable, the major missing-sheet crashes are fixed, misleading zero / fake states have been removed, the planner email is properly gated, and the bounded UI copy consistency pass has shipped. The project is no longer in blank-workbook stabilization mode.
+The V1 trust baseline is complete: blank workbooks are stable, the major missing-sheet crashes are fixed, misleading zero / fake states have been removed, the planner email is properly gated, and the bounded UI copy consistency pass has shipped. V1.1 closed with the retirement profile integration (Profile DOB → derived current age; manual age removed from Retirement; display-only UI; sheet seed cleanup; backward-compatible on populated workbooks). The project is no longer in blank-workbook stabilization mode. V1.2 rules below are identical to V1.1.
 
 Every new change must follow these rules unless the user explicitly approves otherwise:
 
@@ -18,7 +18,7 @@ Every new change must follow these rules unless the user explicitly approves oth
 - **Favor small diffs.** Cursor / agent edits should not touch unrelated files.
 - **After each implementation step, include exact manual test steps** for both the blank workbook and the populated workbook. See `TESTING_PLAN.md` → *Blank + populated two-track manual checks* for the canonical checklist.
 
-Backlog candidates for V1.1 are tracked in `TODO.md → Next phase / V1.1`, product shape in `PROJECT_CONTEXT.md → Current phase`, and ship-by-ship history in `SESSION_NOTES.md`.
+Backlog candidates for V1.2 are tracked in `TODO.md → V1.2 work queue`, product shape in `PROJECT_CONTEXT.md → Current phase`, and ship-by-ship history in `SESSION_NOTES.md` (including the V1.1 close-out).
 
 ## HtmlService includes (`includeHtml_`)
 

@@ -77,7 +77,9 @@
         <h4>Profile (Contact Info)</h4>
         <ul class="help-list">
           <li><strong>Required</strong> — <strong>Name</strong> and <strong>Email</strong>. Used for planner emails and personalization.</li>
-          <li><strong>Optional</strong> — <strong>Phone</strong> and <strong>Address</strong>. Add later if needed.</li>
+          <li><strong>Optional (primary)</strong> — <strong>Phone</strong>, <strong>Address</strong>, and <strong>Date of Birth</strong>. Add later if needed.</li>
+          <li><strong>Optional (spouse / partner)</strong> — <strong>Spouse Name</strong>, <strong>Spouse Email</strong>, <strong>Spouse Phone</strong>, <strong>Spouse Address</strong>, and <strong>Spouse Date of Birth</strong>. Fill in only what applies.</li>
+          <li><strong>Why Date of Birth</strong> — <strong>Date of Birth</strong> is the source of truth for the current age used in Retirement calculations (and the Overview Retirement Outlook card). Spouse DOB is optional and only used for partnered Retirement scenarios. If DOB is blank, Retirement shows a setup hint and an <em>Open Profile</em> link rather than calculating.</li>
           <li><strong>Why email</strong> — Planner emails go to the Email entered here. If this field is blank, the planner will skip sending the email — there is no fallback to your Google account.</li>
           <li><strong>Edit</strong> — Open <strong>Setup / Review</strong> → Profile → <em>Edit profile</em>. Save writes immediately; Cancel discards edits.</li>
         </ul>
@@ -104,6 +106,7 @@
           <li><strong>Shortcuts</strong> — Clicking a card jumps to the related workspace tab when a shortcut is available.</li>
           <li><strong>Suggested Actions</strong> — Proactive nudges (cash flow, buffer runway, retirement, etc.).</li>
           <li><strong>Issues</strong> — Full list of detected problems (utilization, buffers, upcoming overdue, …). Kept separate from Suggested Actions so items are not duplicated.</li>
+          <li><strong>Retirement Outlook</strong> — Summary of the active retirement scenario (goal, current investable assets, estimated retirement age, Monte Carlo success). When <strong>Date of Birth</strong> is missing from your Profile or the active scenario's assumptions are incomplete, the card shows a calm setup hint — open the <strong>Retirement</strong> tab or <strong>Setup / Review → Profile</strong> to finish the inputs. Current age is always derived from Profile DOB, never entered on Retirement directly.</li>
         </ul>
         <p class="muted"><strong>Note:</strong> A short line under Suggested Actions reminds you to scroll to Issues when alerts exist; it does not repeat the issue count.</p>
       </section>
@@ -525,7 +528,8 @@
         <ul class="help-list">
           <li><strong>Next Actions</strong> — Prioritized short lists of what to pay, finish, or review now. See the next section for details.</li>
           <li><strong>Debts</strong> — Edit <strong>INPUT - Debts</strong>; planner output uses the balances and minimums there.</li>
-          <li><strong>Retirement</strong> and <strong>Purchase Sim</strong> — Use the latest snapshot plus your inputs. Details depend on sheet configuration.</li>
+          <li><strong>Retirement</strong> — Uses the latest snapshot plus your inputs. <strong>Current age is no longer entered in Retirement</strong> — it is derived automatically from <strong>Date of Birth</strong> in your Profile (and <strong>Spouse Date of Birth</strong> for partnered scenarios). To use Retirement, open <strong>Setup / Review → Profile</strong> and add your Date of Birth. If Profile DOB is missing, the Retirement tab and the Overview Retirement Outlook card show a setup hint with an <em>Open Profile</em> shortcut instead of calculating. Scenario inputs (target retirement age, spending, expected return, etc.) still live on the Retirement tab.</li>
+          <li><strong>Purchase Sim</strong> — Uses the latest snapshot plus your inputs. Details depend on sheet configuration.</li>
           <li><strong>Debt Overview</strong> vs <strong>Rolling Debt Payoff</strong>:
             <ul class="help-list">
               <li><strong>Debt Overview</strong> — Read-only reference view of your debt structure.</li>

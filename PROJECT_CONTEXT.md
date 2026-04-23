@@ -2,9 +2,9 @@
 
 We are building **CashCompass** — a Google Apps Script web dashboard (and spreadsheet sidebar) for personal finance / property / debt planning. Tagline: *Guiding your money decisions.*
 
-## Current phase — V1.1 / controlled improvement mode
+## Current phase — V1.2 / controlled improvement mode (V1.1 closed out)
 
-The V1 trust baseline shipped. In this phase the app is no longer being stabilized — it is being **incrementally polished**. Concretely:
+The V1 trust baseline shipped, and V1.1 closed out with the retirement profile integration. In this phase the app is no longer being stabilized — it is being **incrementally polished**. Concretely:
 
 - V1 trust baseline is complete.
 - Blank / fresh workbooks are stable end-to-end (dashboard, Setup / Review, Planning tabs, Assets, Cash Flow, Activity).
@@ -13,9 +13,9 @@ The V1 trust baseline shipped. In this phase the app is no longer being stabiliz
 - The planner email is properly gated: it sends only when the recipient is explicitly configured in `INPUT - Settings.Email` **and** the planner summary is meaningful (has at least one of: debts, assets, scheduled payments, or a recommendation). No more silent "owner got an email from a blank workbook" behavior.
 - The bounded UI copy consistency pass is complete (ellipses, error tone, calm exception messages, empty/setup wording, sheet-name leakage removed from user-facing strings).
 
-**Explicitly NOT in the V1 baseline — retirement profile integration.** V1 shipped retirement *trust / stability* fixes only. It did **not** add **DOB in Profile / Settings**, **deriving retirement age from DOB**, or **deeper profile → Retirement Basics integration**. Those are carried as a V1.1 candidate (see `TODO.md → Next phase / V1.1` and `ENHANCEMENTS.md → Explicitly NOT shipped in V1 — retirement profile integration`) and must preserve backward compatibility for populated workbooks when picked up.
+**V1.1 shipped — retirement profile integration.** Profile is now the single source of truth for **Date of Birth**, and Retirement derives current age from it automatically. The Retirement Basics edit form was removed; per-scenario age fields are display-only. A new `needsProfileDob` readiness state routes users to **Open Profile** when DOB is missing, and the DOB parser accepts both Date objects and `YYYY-MM-DD` strings. Populated workbooks are preserved byte-for-byte — legacy age rows on existing retirement sheets are left inert. Full phase summary in `SESSION_NOTES.md → V1.1 — Retirement Profile Integration (DOB Source of Truth)`.
 
-Working rules for this phase are locked in `WORKING_RULES.md → Current phase`. Completed items are captured chronologically in `SESSION_NOTES.md`. Forward-looking work lives under `TODO.md → Next phase / V1.1` and `ENHANCEMENTS.md → Next phase / V1.1`.
+Working rules for this phase are locked in `WORKING_RULES.md → Current phase` (identical rules to V1.1). Completed items are captured chronologically in `SESSION_NOTES.md`. Forward-looking work lives under `TODO.md → V1.2 work queue → V1.2 candidates` and `ENHANCEMENTS.md → Active / Next / Later at a glance`.
 
 ## Decision Layer (product framing)
 

@@ -4,7 +4,7 @@ Short path from **zero** to **deployed web app + working Overview**. For archite
 
 **Audience:** You or another household with a **copy of a valid workbook** (or your existing bound sheet) and this Apps Script project.
 
-> Current phase: **V1.1 / controlled improvement mode.** The V1 trust baseline is complete — a **blank / fresh workbook is now stable end-to-end**. The dashboard, Setup / Review, Planning tabs, Assets, Cash Flow, and Activity all render calm empty states instead of `Missing sheet …` crashes, and the planner email only sends when a recipient is explicitly configured in `INPUT - Settings.Email` and the planner summary is meaningful. A known-good template copy is still the fastest path to useful numbers, but it is no longer required to avoid crashes.
+> Current phase: **V1.2 / controlled improvement mode (V1.1 closed out).** The V1 trust baseline is complete — a **blank / fresh workbook is stable end-to-end**. The dashboard, Setup / Review, Planning tabs, Assets, Cash Flow, and Activity all render calm empty states instead of `Missing sheet …` crashes, and the planner email only sends when a recipient is explicitly configured in `INPUT - Settings.Email` and the planner summary is meaningful. V1.1 closed out with the retirement profile integration — Profile is now the source of truth for **Date of Birth** and Retirement derives current age from it. A known-good template copy is still the fastest path to useful numbers, but it is no longer required to avoid crashes.
 >
 > For first-time users starting from scratch, see **`ONBOARDING_AND_INPUT_STRATEGY.md`** — and inside the app, **Setup / Review** (top-right of the header) walks you through the five input areas the dashboard needs.
 

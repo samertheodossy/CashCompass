@@ -6,9 +6,9 @@ This complements `GoingToProduction.md`: validation/onboarding reduce user error
 
 ---
 
-## Current phase — V1.1 manual test discipline
+## Current phase — V1.2 manual test discipline (same rules as V1.1)
 
-In V1.1 / controlled improvement mode there is still no automated harness. Every change must ship with **exact manual test steps for both a blank workbook and a real populated workbook**. See `WORKING_RULES.md → Current phase` for the rule; the canonical checklist is the two-track section below.
+In V1.2 / controlled improvement mode (V1.1 closed out) there is still no automated harness. Every change must ship with **exact manual test steps for both a blank workbook and a real populated workbook**. See `WORKING_RULES.md → Current phase` for the rule; the canonical checklist is the two-track section below. The rules carry over from V1.1 unchanged.
 
 ### Blank + populated two-track manual checks
 

@@ -8,10 +8,10 @@ This README is the entry point. It does not re-explain the app — it routes you
 
 ## Start here
 
-1. **Read `WORKING_RULES.md` first.** It defines the current phase (V1.1 / controlled improvement mode) and the rules every change must follow — one issue at a time, minimal/localized/safe, no large refactors or architecture changes without explicit approval, always consider both **blank** and **populated** workbooks.
+1. **Read `WORKING_RULES.md` first.** It defines the current phase (V1.2 / controlled improvement mode; V1.1 closed out) and the rules every change must follow — one issue at a time, minimal/localized/safe, no large refactors or architecture changes without explicit approval, always consider both **blank** and **populated** workbooks.
 2. **Then skim `PROJECT_CONTEXT.md → Current phase`** for the live product state and the canonical tab-by-tab behavior.
-3. **Before starting any change,** check `TODO.md → V1.1 work queue` to see what's Active, what's a V1.1 candidate, and what's explicitly Later / future phase.
-4. **After each implementation step,** run the blank + populated manual checks in `TESTING_PLAN.md → Current phase — V1.1 manual test discipline`.
+3. **Before starting any change,** check `TODO.md → V1.2 work queue` to see what's Active, what's a V1.2 candidate, and what's explicitly Later / future phase.
+4. **After each implementation step,** run the blank + populated manual checks in `TESTING_PLAN.md`.
 
 If you are onboarding a contributor (or yourself after a break), `INIT_PROMPT.md` is the minimal reading list; `FIRST_RUN.md` is the smoke check.
 
@@ -29,12 +29,12 @@ If you are onboarding a contributor (or yourself after a break), `INIT_PROMPT.md
 
 ### Planning (what's next)
 
-- `TODO.md` — V1.1 work queue (Active / Next / Later) + historical backlog.
+- `TODO.md` — V1.2 work queue (Active / Next / Later) + historical backlog.
 - `ENHANCEMENTS.md` — product-level rationale, phase history, Active / Next / Later mirror.
 
 ### History (what shipped)
 
-- `SESSION_NOTES.md` — V1 trust baseline summary at the top; older phase notes live under `## Archive (historical notes)`.
+- `SESSION_NOTES.md` — V1 trust baseline summary at the top, then the V1.1 retirement profile integration close-out; older phase notes live under `## Archive (historical notes)`.
 
 ### Reference (durable design / policy — not active work)
 
@@ -49,26 +49,29 @@ If you are onboarding a contributor (or yourself after a break), `INIT_PROMPT.md
 
 ## Current working mode
 
-**V1.1 / controlled improvement mode.** The V1 trust baseline is complete: blank workbook is stable, major missing-sheet crashes are fixed, misleading zero / fake states are gone, planner email sends only when a recipient is configured and the summary is meaningful, and the UI copy consistency pass is done.
+**V1.2 / controlled improvement mode (V1.1 closed out).** The V1 trust baseline is complete, and V1.1 shipped the retirement profile integration end-to-end (Profile DOB → derived current age, manual age removed from Retirement, DOB parser accepts Date objects + strings, display-only UI, cleaned sheet seed). Same rules apply to V1.2.
 
 Rules for every change in this phase:
 
 - One issue at a time. No large refactors. No architecture changes unless explicitly approved. No destructive sheet changes. Preserve existing populated-workbook behavior.
 - Every fix is minimal, localized, and safe. Favor small diffs.
 - Every fix is exercised against **both** a blank workbook and a populated workbook before being called done (see `TESTING_PLAN.md`).
-- New work is pulled from `TODO.md → V1.1 work queue → Next (V1.1 candidates)`. Items under **Later** require an explicit product decision to move up.
+- New work is pulled from `TODO.md → V1.2 work queue → V1.2 candidates`. Items under **Later** require an explicit product decision to move up.
 
 Authoritative sources for these rules: `WORKING_RULES.md → Current phase` and `ENHANCEMENTS.md → § 0. Current phase`.
 
 ---
 
-## Current V1.1 direction
+## Current V1.2 direction
 
-Short mirror of `TODO.md → V1.1 work queue`. The live queue in `TODO.md` is the source of truth.
+Short mirror of `TODO.md → V1.2 work queue`. The live queue in `TODO.md` is the source of truth.
 
 - **Active now:** nothing in flight — pick the next item from the candidates below.
-- **Next (V1.1 candidates):** retirement profile integration (DOB in Profile / Settings → derived age for Retirement Basics; preserve populated-workbook behavior), copy & Help polish follow-ups, blank-workbook empty-state consistency sweep, planner email guardrails telemetry (informational only), low-risk codebase cleanups.
-- **Later (post-V1.1 / future phase):** onboarding factory refactor, Activity smart-undo phases 2–4, Cash Strategy, HELOC advisor refinement, Plaid-style sync, broader regression / test harness, two-dashboards unification, and the larger product items captured in `TODO.md → Historical backlog`.
+- **V1.2 candidates (A — immediate follow-ups, low risk):** Profile DOB parser symmetry (accept Date objects on save-side validation), Overview Retirement Outlook copy alignment with `needsProfileDob`, blank-workbook empty-state consistency sweep, copy/Help polish sweep.
+- **V1.2 candidates (B — product improvements):** Profile completeness indicator / badge, better Retirement setup guidance / linking to Profile, optional spouse UX clarity (single vs partnered).
+- **V1.2 candidates (C — future ideas, do not act yet):** legacy sheet cleanup tool for inert retirement age rows, Profile → other modules integration, notifications / SMS using the existing Profile phone field.
+- **Deferred from V1.1:** planner email guardrails telemetry (informational only), low-risk codebase cleanups, dead-code prune for the retirement profile integration helpers.
+- **Later (post-V1.2 / future phase):** onboarding factory refactor, Activity smart-undo phases 2–4, Cash Strategy, HELOC advisor refinement, Plaid-style sync, broader regression / test harness, two-dashboards unification, and the larger product items captured in `TODO.md → Historical backlog`.
 
 ---
 
