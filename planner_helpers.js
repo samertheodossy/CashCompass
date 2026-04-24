@@ -91,6 +91,11 @@ function getPreviousMonthHeader_(date, tz) {
   return Utilities.formatDate(d, tz, 'MMM-yy');
 }
 
+function getNextMonthHeader_(date, tz) {
+  const d = new Date(date.getFullYear(), date.getMonth() + 1, 1);
+  return Utilities.formatDate(d, tz, 'MMM-yy');
+}
+
 function getNextDueDate_(today, dueDay) {
   const current = stripTime_(today);
   let due = new Date(current.getFullYear(), current.getMonth(), dueDay);

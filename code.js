@@ -114,6 +114,13 @@ function runDebtPlanner() {
   
   const monthHeader = getCurrentMonthHeader_(today, tz);
   const previousMonthHeader = getPreviousMonthHeader_(today, tz);
+  // Next month header lets the debt "handled this month" check anchor to
+  // each debt's actual next-due month instead of the run's calendar
+  // month. Without this, a debt whose Due Day has already passed (e.g.
+  // Due Day 1 on Apr 24) gets dropped from Pay now / Pay soon because
+  // April is filled, even though the real next payment is May 1 and the
+  // May cell is still empty. See buildUpcomingPayments_ in planner_core.js.
+  const nextMonthHeader = getNextMonthHeader_(today, tz);
   const aliasMap = getAliasMap_();
 
   const debts = normalizeDebts_(debtRows, aliasMap);
@@ -138,7 +145,7 @@ function runDebtPlanner() {
   );
 
   const thisMonthCashFlow = round2_(cashFlow.monthNet);
-  const debtMinimumHandledMap = buildDebtMinimumHandledMap_(cashFlowRows, monthHeader, aliasMap);
+  const debtMinimumHandledMap = buildDebtMinimumHandledMap_(cashFlowRows, [monthHeader, nextMonthHeader], aliasMap);
   const nextPayments = buildUpcomingPayments_(
     debts,
     today,

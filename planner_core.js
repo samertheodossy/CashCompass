@@ -679,27 +679,76 @@ function calculateUsableCash_(accounts) {
  * records both alias-canonical payee and normalizeBillName_(raw payee) so matching stays
  * aligned with dashboard getDebtBillsDueRows_.
  */
-function buildDebtMinimumHandledMap_(cashFlowRows, monthHeader, aliasMap) {
-  const map = Object.create(null);
+/**
+ * Builds a map of which debt payees have already been "handled" (have a
+ * non-empty current-month cell) on Cash Flow.
+ *
+ * `monthHeaders` may be either a single MMM-yy string (legacy behavior —
+ * returns a flat map { payee: true }) or an array of MMM-yy strings
+ * (preferred — returns a nested map { 'Apr-26': { payee: true }, … }).
+ *
+ * The nested shape lets consumers ask the correct question for each debt:
+ * "is this month handled for the debt's actual next-due month?" rather
+ * than always asking against the run's calendar month. This is what fixes
+ * the email bug where debts with Due Day already past (e.g. Due Day 1 on
+ * Apr 24) were skipped because their April cell was filled, even though
+ * the next due was really May 1 and the May cell was still empty.
+ */
+function buildDebtMinimumHandledMap_(cashFlowRows, monthHeaders, aliasMap) {
+  const headers = Array.isArray(monthHeaders) ? monthHeaders : [monthHeaders];
+  const nested = Object.create(null);
+  headers.forEach(function(h) {
+    if (h) nested[h] = Object.create(null);
+  });
+
   cashFlowRows.forEach(function(r) {
     if (String(r['Type'] || '').trim() !== 'Expense') return;
     const rawPayee = String(r['Payee'] || '').trim();
     const payee = normalizeName_(r['Payee'], aliasMap);
-    const cellValue = Object.prototype.hasOwnProperty.call(r, monthHeader) ? r[monthHeader] : '';
-    const cellDisplay = Object.prototype.hasOwnProperty.call(r, '__display__' + monthHeader)
-      ? r['__display__' + monthHeader]
-      : '';
-    if (!isCashFlowBillHandled_(cellValue, cellDisplay)) return;
-    map[payee] = true;
-    if (rawPayee) map[normalizeBillName_(rawPayee)] = true;
+    headers.forEach(function(h) {
+      if (!h) return;
+      const cellValue = Object.prototype.hasOwnProperty.call(r, h) ? r[h] : '';
+      const cellDisplay = Object.prototype.hasOwnProperty.call(r, '__display__' + h)
+        ? r['__display__' + h]
+        : '';
+      if (!isCashFlowBillHandled_(cellValue, cellDisplay)) return;
+      nested[h][payee] = true;
+      if (rawPayee) nested[h][normalizeBillName_(rawPayee)] = true;
+    });
   });
-  return map;
+
+  // Legacy single-header callers expect a flat map. Flatten by returning
+  // the inner bucket directly so existing signatures keep working without
+  // any change.
+  if (!Array.isArray(monthHeaders)) {
+    return nested[monthHeaders] || Object.create(null);
+  }
+  return nested;
 }
 
-function isDebtMinimumHandledThisMonth_(handledMap, debt) {
+/**
+ * Checks whether a debt's minimum has been handled for a given month.
+ *
+ * `handledMap` may be either the legacy flat map (just payee → bool) or
+ * the nested month-keyed map. When a `monthHeader` is provided and the
+ * map is nested, the per-month bucket is consulted. When the map is flat,
+ * `monthHeader` is ignored and behavior matches the original signature.
+ */
+function isDebtMinimumHandledThisMonth_(handledMap, debt, monthHeader) {
   if (!handledMap) return false;
-  if (handledMap[debt.name]) return true;
-  if (debt.originalName && handledMap[normalizeBillName_(debt.originalName)]) return true;
+
+  // Detect nested shape: any top-level value that itself is an object
+  // means the map is keyed by month header.
+  let lookup = handledMap;
+  if (monthHeader) {
+    const bucket = handledMap[monthHeader];
+    if (bucket && typeof bucket === 'object') {
+      lookup = bucket;
+    }
+  }
+
+  if (lookup[debt.name]) return true;
+  if (debt.originalName && lookup[normalizeBillName_(debt.originalName)]) return true;
   return false;
 }
 
@@ -710,9 +759,17 @@ function buildUpcomingPayments_(debts, today, tz, payNowWindowDays, paySoonWindo
   debts
     .filter(function(d) { return d.active && d.minimumPayment > 0; })
     .forEach(function(d) {
-      if (isDebtMinimumHandledThisMonth_(debtMinimumHandledMap, d)) return;
-
+      // Compute the debt's actual next due date FIRST. The handled-
+      // this-month check must be anchored to that due date's month, not
+      // to the planner's calendar month — otherwise a debt whose Due Day
+      // has already passed this month (April payment recorded) gets
+      // skipped even though the real next payment is next month (May)
+      // and that cell is still empty.
       const dueDate = getNextDueDate_(today, d.dueDay);
+      const dueMonthHeader = Utilities.formatDate(dueDate, tz, 'MMM-yy');
+
+      if (isDebtMinimumHandledThisMonth_(debtMinimumHandledMap, d, dueMonthHeader)) return;
+
       const daysUntilDue = daysBetween_(stripTime_(today), dueDate);
 
       const item = {
