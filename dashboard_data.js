@@ -1401,6 +1401,13 @@ function getRecurringBillsWithoutDueDateForDashboard() {
 
   const mappedBills = getInputBillsPayeeMap_(ss);
   const debtBills = getDebtPayeeMap_(ss);
+  // Names that appear in INPUT - Debts even when Active=No. Without this,
+  // deactivating a debt removes it from `debtBills` (which filters to
+  // active rows), and the still-present Cash Flow row would be promoted
+  // into this fallback list. See bug: "Laith VCS Account" appearing under
+  // Recurring Bills (No Due Date) despite INPUT - Debts Active=No.
+  const debtPayeesAllStatuses = getDebtPayeeMapAllStatuses_(ss);
+  const activeColZero = currentHeaderMap.activeColZero;
 
   const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const result = [];
@@ -1412,8 +1419,17 @@ function getRecurringBillsWithoutDueDateForDashboard() {
     if (type !== 'Expense') continue;
     if (!payee) continue;
 
+    // Honor explicit Active=No on the Cash Flow row. Blank is intentionally
+    // treated as active — that matches the documented convention on
+    // getCashFlowHeaderMap_ and how other consumers read this column.
+    if (activeColZero !== -1) {
+      const activeText = String(currentDisplay[r][activeColZero] || '').trim().toLowerCase();
+      if (activeText === 'no' || activeText === 'n' || activeText === 'false' || activeText === 'inactive') continue;
+    }
+
     if (mappedBills[normalizeBillName_(payee)]) continue;
     if (debtBills[normalizeBillName_(payee)]) continue;
+    if (debtPayeesAllStatuses[normalizeBillName_(payee)]) continue;
 
     /* hasHistory gate removed: show unmapped expenses even when only the current month has activity.
        Revert: require non-zero in some month column other than currentMonthCol before currentCellValue. */
@@ -2006,6 +2022,37 @@ function getDebtPayeeMap_(ss) {
     const balance = balanceCol === -1 ? 0 : toNumber_(values[r][balanceCol]);
     const minPayment = minCol === -1 ? 0 : toNumber_(values[r][minCol]);
     if (isDebtSheetRowInactive_(display[r], activeCol, balance, minPayment)) continue;
+
+    out[normalizeBillName_(payee)] = true;
+  }
+
+  return out;
+}
+
+/**
+ * Like getDebtPayeeMap_, but includes payees regardless of Active status.
+ * Used by the recurring-bills fallback so that deactivating a debt in
+ * INPUT - Debts does not cause its still-present Cash Flow row to be
+ * promoted into the "Recurring Bills (No Due Date)" list. This is a
+ * name-reservation check only — it does not affect planner math, totals,
+ * or any active/inactive filtering on the debts list itself.
+ */
+function getDebtPayeeMapAllStatuses_(ss) {
+  var sheet = ss.getSheetByName(getSheetNames_().DEBTS);
+  if (!sheet) return {};
+  const display = sheet.getDataRange().getDisplayValues();
+  if (display.length < 2) return {};
+
+  const headers = display[0];
+  const payeeCol = headers.indexOf('Account Name');
+
+  const out = {};
+  if (payeeCol === -1) return out;
+
+  for (let r = 1; r < display.length; r++) {
+    const payee = String(display[r][payeeCol] || '').trim();
+    if (!payee) continue;
+    if (payee.toUpperCase() === 'TOTAL DEBT') continue;
 
     out[normalizeBillName_(payee)] = true;
   }
