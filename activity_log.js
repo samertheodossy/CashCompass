@@ -1,5 +1,5 @@
 /**
- * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_deactivate, house expense, house_add, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_deactivate, investment_add, investment_deactivate, debt_add, debt_deactivate, income_add, income_deactivate, …). Rows can be removed from the web UI for mistaken log lines only.
+ * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_deactivate, house expense, house_add, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_deactivate, investment_add, investment_deactivate, debt_add, debt_deactivate, debt_update, income_add, income_deactivate, …). Rows can be removed from the web UI for mistaken log lines only.
  * Complements OUT - History (planner-run snapshots). Tab: LOG - Activity.
  */
 
@@ -411,6 +411,7 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (etEarly === 'investment_deactivate') return 'Investment';
   if (etEarly === 'debt_add') return 'Debt';
   if (etEarly === 'debt_deactivate') return 'Debt';
+  if (etEarly === 'debt_update') return 'Debt';
   // income_add / income_deactivate are the canonical event names after
   // the refactor that made INPUT - Cash Flow <year> the source of truth
   // for income. Legacy rows written by the old INPUT - Income Sources
@@ -482,6 +483,14 @@ function activityLogActionLabel_(eventType, detailsJson) {
     case 'investment_deactivate': return 'Tracking stopped';
     case 'debt_add': return 'Account added';
     case 'debt_deactivate': return 'Tracking stopped';
+    // debt_update is always non-monetary (Amount renders "—"), so the
+    // action label carries the new value inline — e.g.
+    //   "Updated Account Balance to $54,000.00"
+    //   "Updated Int Rate to 4.50%"
+    //   "Updated Due Date to 15"
+    // Falls back to a plain label for legacy rows with no details JSON.
+    case 'debt_update':
+      return debtUpdateActionLabel_(detailsJson);
     case 'income_add': return 'Income source added';
     case 'income_deactivate': return 'Tracking stopped';
     // Legacy rows from the old INPUT - Income Sources architecture.
@@ -546,6 +555,62 @@ function upcomingPaymentActionLabel_(detailsJson) {
   return label;
 }
 
+/**
+ * Build the debt_update action label from the row's details JSON written
+ * by debts.js::updateDebtField. Uses fieldName + fieldKind + newRaw (with
+ * newDisplay as a fallback) to format the new value with the right units.
+ * Kept intentionally defensive so a missing/partial details blob still
+ * renders a clean "Updated <Field>" label instead of blowing up.
+ *
+ *   currency → "Updated Account Balance to $54,000.00"
+ *   percent  → "Updated Int Rate to 4.50%"
+ *   integer  → "Updated Due Date to 15"
+ *   text     → "Updated <Field> to <newDisplay>" (or just "Updated <Field>")
+ *   legacy   → "Updated"
+ */
+function debtUpdateActionLabel_(detailsJson) {
+  var fallback = 'Updated';
+  var raw = String(detailsJson || '').trim();
+  if (!raw) return fallback;
+
+  var d;
+  try {
+    d = JSON.parse(raw);
+  } catch (e) {
+    return fallback;
+  }
+  if (!d || typeof d !== 'object') return fallback;
+
+  var fieldName = String(d.fieldName || '').trim();
+  if (!fieldName) return fallback;
+
+  var kind = String(d.fieldKind || '').trim().toLowerCase();
+  var label = 'Updated ' + fieldName;
+
+  var formattedNew = '';
+  if (kind === 'currency') {
+    var n = activityLogAsFiniteNumber_(d.newRaw);
+    if (n !== null) formattedNew = activityLogFmtMoney_(n);
+  } else if (kind === 'percent') {
+    var p = activityLogAsFiniteNumber_(d.newRaw);
+    if (p !== null) formattedNew = p.toFixed(2) + '%';
+  } else if (kind === 'integer') {
+    var i = activityLogAsFiniteNumber_(d.newRaw);
+    if (i !== null) formattedNew = String(Math.trunc(i));
+  } else {
+    // Text / unknown: prefer the display rendered by the client if present;
+    // otherwise coerce whatever raw value was logged.
+    var disp = String(d.newDisplay || '').trim();
+    if (disp) {
+      formattedNew = disp;
+    } else if (d.newRaw !== null && typeof d.newRaw !== 'undefined' && d.newRaw !== '') {
+      formattedNew = String(d.newRaw);
+    }
+  }
+
+  return formattedNew ? label + ' to ' + formattedNew : label;
+}
+
 function activityLogAsFiniteNumber_(v) {
   if (v === null || v === undefined || v === '') return null;
   var n = Number(v);
@@ -580,6 +645,10 @@ function activityLogIsNonMonetaryEvent_(eventType) {
     et === 'house_deactivate' ||
     et === 'investment_deactivate' ||
     et === 'debt_deactivate' ||
+    // debt_update rows carry the new value inside the action label (not
+    // the Amount column) so we don't double-count a config edit as money
+    // moved. See debtUpdateActionLabel_ for the rendered text.
+    et === 'debt_update' ||
     et === 'income_deactivate' ||
     et === 'income_source_deactivate' ||
     et === 'upcoming_status' ||

@@ -240,7 +240,11 @@ function handleDebtValueBlur() {
   currencyBlur('debt_value');
 }
 
-function loadDebtFieldValue() {
+// `quiet` lets the post-save refresh repaint the right-side info panel
+// without trampling the "Saved." status set by saveDebt(). The normal
+// user-triggered path (account/field dropdown change) calls this with
+// no argument and keeps the existing Loading… → '' status cycle.
+function loadDebtFieldValue(quiet) {
   const accountName = document.getElementById('debt_account').value;
   const fieldName = document.getElementById('debt_field').value;
 
@@ -252,7 +256,7 @@ function loadDebtFieldValue() {
     return;
   }
 
-  setStatusLoading('debt_status');
+  if (!quiet) setStatusLoading('debt_status');
   google.script.run
     .withSuccessHandler(function(data) {
       document.getElementById('debt_type').textContent = data.type || '—';
@@ -274,9 +278,11 @@ function loadDebtFieldValue() {
           data.value !== '' && data.value !== null ? data.value : '';
       }
 
-      setStatus('debt_status', '', false);
+      if (!quiet) setStatus('debt_status', '', false);
     })
     .withFailureHandler(function(err) {
+      // Even in quiet mode, surface failures so users aren't left with
+      // a stale info panel and no signal that something went wrong.
       setStatus('debt_status', (err.message || String(err)), true);
     })
     .getDebtFieldValue(accountName, fieldName);
@@ -295,11 +301,39 @@ function saveDebt() {
     value = num;
   }
 
+  setStatusLoading('debt_status', 'Saving…');
+
   google.script.run
     .withSuccessHandler(function(res) {
+      // Optimistically repaint the right-side "Current value" so the
+      // just-saved amount shows immediately, then fire a quiet server
+      // re-read to confirm and refresh derived fields like Acct PCT Avail.
+      try {
+        if (debtFieldTypes[fieldName] === 'currency' && typeof value === 'number' && !isNaN(value)) {
+          document.getElementById('debt_currentValue').textContent = fmtCurrency(value);
+        }
+      } catch (_e) {}
+
       setStatus('debt_status', res.message || 'Saved.', false);
-      loadDebtFieldValue();
+      loadDebtFieldValue(true);
       refreshSnapshot();
+
+      // Background planner refresh: the save itself no longer runs the debt
+      // planner (used to, which made "Saving…" hang for seconds). Fire it
+      // now as a silent follow-up so Rolling Debt Payoff and Overview KPIs
+      // still update shortly after save. No status change on success or
+      // failure — the save already succeeded and the Debts tab info panel
+      // is already fresh from the row-level recalc + loadDebtFieldValue.
+      try {
+        google.script.run
+          .withSuccessHandler(function(plannerRes) {
+            if (plannerRes && plannerRes.snapshot && typeof applySnapshot === 'function') {
+              applySnapshot(plannerRes.snapshot);
+            }
+          })
+          .withFailureHandler(function(_err) { /* silent */ })
+          .runPlannerAndRefreshDashboard();
+      } catch (_e) { /* silent */ }
     })
     .withFailureHandler(function(err) {
       setStatus('debt_status', (err.message || String(err)), true);

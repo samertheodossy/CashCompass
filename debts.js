@@ -209,23 +209,49 @@ function updateDebtField(payload) {
     'Due Date': true
   };
 
+  // Capture prior state BEFORE writing so the activity log can record the
+  // transition. previousDisplay is what the user saw on the sheet; previousRaw
+  // is the underlying value (number for currency/percent/integer, string
+  // otherwise). Both default to '' if the row/column can't be read safely.
+  let previousRaw = '';
+  let previousDisplay = '';
+  try {
+    previousRaw = cell.getValue();
+  } catch (_e) { /* best-effort */ }
+  try {
+    if (display[targetRow - 1] && typeof display[targetRow - 1][targetCol - 1] !== 'undefined') {
+      previousDisplay = String(display[targetRow - 1][targetCol - 1] || '');
+    }
+  } catch (_e) { /* best-effort */ }
+
+  let fieldKind = 'text';
+  let newRawForLog = rawValue;
+
   if (currencyFields[fieldName]) {
     const num = toNumber_(rawValue);
     setCurrencyCellPreserveRowFormat_(sheet, targetRow, targetCol, num, 1);
+    fieldKind = 'currency';
+    newRawForLog = num;
   } else if (percentFields[fieldName]) {
     const num = round2_(toNumber_(rawValue));
     copyNeighborFormatInRow_(sheet, targetRow, targetCol, 1);
     cell.setValue(num);
     cell.setNumberFormat('0.00');
+    fieldKind = 'percent';
+    newRawForLog = num;
   } else if (integerFields[fieldName]) {
     const num = parseInt(String(rawValue).trim(), 10);
     if (isNaN(num)) throw new Error(fieldName + ' must be a whole number.');
     copyNeighborFormatInRow_(sheet, targetRow, targetCol, 1);
     cell.setValue(num);
     cell.setNumberFormat('0');
+    fieldKind = 'integer';
+    newRawForLog = num;
   } else {
     copyNeighborFormatInRow_(sheet, targetRow, targetCol, 1);
     cell.setValue(rawValue);
+    fieldKind = 'text';
+    newRawForLog = rawValue;
   }
 
   recalcDebtPctAvailForRow_(sheet, targetRow, {
@@ -235,9 +261,48 @@ function updateDebtField(payload) {
     pctAvailCol: headerMap.pctAvailColZero
   });
 
-  touchDashboardSourceUpdated_('debts');
-  if (typeof runDebtPlanner === 'function') runDebtPlanner();
+  // Activity log: field-edit event. Non-monetary (Amount renders "—") —
+  // the action label carries the new value in context (e.g. "Updated
+  // Account Balance to $54,000.00"), so we don't double-count dollars
+  // against the Activity totals the way a real money-movement event would.
+  try {
+    const typeForLog = headerMap.typeColZero === -1
+      ? ''
+      : String((display[targetRow - 1] || [])[headerMap.typeColZero] || '').trim();
+    appendActivityLog_(ss, {
+      eventType: 'debt_update',
+      entryDate: Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+      amount: 0,
+      direction: '',
+      payee: accountName,
+      category: typeForLog,
+      accountSource: '',
+      cashFlowSheet: '',
+      cashFlowMonth: '',
+      dedupeKey: '',
+      details: JSON.stringify({
+        detailsVersion: 1,
+        fieldName: fieldName,
+        fieldKind: fieldKind,
+        previousRaw: previousRaw,
+        previousDisplay: previousDisplay,
+        newRaw: newRawForLog,
+        sheetRow: targetRow
+      })
+    });
+  } catch (logErr) {
+    Logger.log('updateDebtField activity log: ' + logErr);
+  }
 
+  touchDashboardSourceUpdated_('debts');
+
+  // NOTE: we intentionally do NOT call runDebtPlanner() here. The row-level
+  // write + Acct PCT Avail recalc + activity log + touch are all the user
+  // needs to see the new value reflected in the Debts tab. The Rolling Debt
+  // Payoff / Overview KPI refresh is handled by the client firing
+  // runPlannerAndRefreshDashboard() as a background RPC after this save
+  // returns — that way the "Saving…" status doesn't hang for the full
+  // planner duration. See Dashboard_Script_PlanningDebts.html::saveDebt().
   return {
     ok: true,
     message: 'Debt saved.'
