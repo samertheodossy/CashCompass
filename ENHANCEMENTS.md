@@ -75,6 +75,34 @@ Scope discipline: Upcoming Expenses (`upcoming_expenses.js:193`), Income Sources
 
 Help updated: `Dashboard_Help.html` → Cash Flow → Quick add now documents `$0` is a valid amount and describes the Saving… → Saved status feedback.
 
+### Delivered — Bills Due inactive filter fix (V1.2)
+
+**Bills Due — inactive debts and inactive Cash Flow rows no longer leak into the recurring fallback.** Shipped in commit `9bf3234`.
+
+Symptom: the **Recurring Bills (No Due Date)** section on the Bills Due page was surfacing debts that had been marked `Active = No` in `INPUT - Debts` (reproduced with *Laith VCS Account*). The Cash Flow row for the same payee also had `Active = NO` but was still being promoted into the fallback list.
+
+Root cause in `dashboard_data.js::getRecurringBillsWithoutDueDateForDashboard()`:
+
+- The function excluded payees only via `getInputBillsPayeeMap_` (INPUT - Bills, active-only) and `getDebtPayeeMap_` (INPUT - Debts, active-only).
+- It never read the Cash Flow row's own `Active` column.
+- Deactivating a debt therefore *removed* it from `debtBills`, and the still-present Cash Flow row fell through the guards and got pushed into the fallback list as if it were an unmapped recurring expense.
+
+Fix — two bounded guards inside the existing loop plus one new sibling helper:
+
+1. **Cash Flow `Active = No` guard.** Explicit `no / n / false / inactive` (case-insensitive) on the Cash Flow row short-circuits the iteration. Blank is still treated as active — that matches the documented convention on `getCashFlowHeaderMap_` and every other consumer of this column.
+2. **Debt name-reservation across all statuses.** New helper `getDebtPayeeMapAllStatuses_(ss)` returns all payee names in `INPUT - Debts` regardless of Active. Used only as a fallback exclusion set — it does *not* affect planner math, totals, or the Debts list's own active/inactive filtering (those still use `isDebtSheetRowInactive_`).
+
+Scope discipline: `dashboard_data.js` only. `getRecurringBillsWithoutDueDateForDashboard` has a single caller in the entire codebase — `Dashboard_Script_BillsDue.html:324` — so blast radius is strictly the "Recurring Bills (No Due Date)" section on Bills Due. Planner, Overview snapshot, Retirement, credit-card totals, Debts list, Bills Due (Next 7 / Overdue), Upcoming Expenses, and the email path are untouched.
+
+Edge cases verified:
+
+- **Legacy workbook without `Active` on Cash Flow** — `activeColZero === -1`, active-check block is skipped entirely, behavior matches pre-fix.
+- **Blank `Active` cell** — still treated as active. No regressions for the common case.
+- **Reactivated debt** — as soon as `INPUT - Debts` flips back to `Active = Yes`, the payee moves from the all-statuses name-reservation set into the normal active `debtBills` set. Either way it stays out of the fallback, and a valid Due Day resurfaces it in the proper Debts Due area.
+- **Blank workbook** — `getDebtPayeeMapAllStatuses_` returns `{}` when the sheet is missing or empty, same pattern as the active-only sibling.
+
+No Help or documentation changes required for this fix — the "Recurring Bills (No Due Date)" section is not separately called out in Help; the user-visible behavior now simply matches Help's existing Bills Due description (active items only).
+
 ---
 
 ## 1. Current product state
