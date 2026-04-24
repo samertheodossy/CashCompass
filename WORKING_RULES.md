@@ -44,3 +44,32 @@ Backlog candidates for V1.2 are tracked in `TODO.md → V1.2 work queue`, produc
 - Do not introduce duplicate doGet().
 - Do not introduce duplicate includeHtml_().
 - Be careful with dashboard_data.js (core logic).
+
+## Central App Transition Rules (apply when the Central App migration is approved)
+
+These rules apply **only when** the Central App migration has been explicitly pulled into a roadmap phase. Until then, the work is captured in `PROJECT_CONTEXT.md → Future architecture — Central App`, `ENHANCEMENTS.md → Future direction — Central App`, and `TODO.md → Future Phases — VNext Central App Migration` and is **not active work**.
+
+When the migration begins, every change must follow:
+
+- **Do not refactor the entire app at once.** No single-PR rewrite that swaps every `SpreadsheetApp.getActiveSpreadsheet()` call site. The migration must be staged.
+- **Migrate one module at a time.** Each pass converts a single backend module (e.g. dashboard, planner, debts, bills, retirement, activity log, bank import) to use the `getUserSpreadsheet_()` resolver. Each pass ships independently with its own manual test plan.
+- **Always support the existing bound-sheet mode during transition.** Until the resolver is wired everywhere, both modes must coexist without regression:
+  - existing bound-sheet users continue to work byte-for-byte unchanged,
+  - new central-app users go through the bootstrap flow.
+- **Test both flows on every migration pass:**
+  1. **Legacy workbook (bound-sheet mode)** — the touched module still resolves the active spreadsheet correctly and behaves identically to pre-migration.
+  2. **New user bootstrap flow** — a first-time user with no mapping lands on a freshly bootstrapped workbook, the touched module reads/writes against that workbook, and no admin-side or another user's data is touched.
+- **No destructive sheet changes** during migration. The bootstrap path may create new sheets in a *new* user's workbook; it must never reformat or rewrite an existing populated workbook.
+- Identity resolution lives in **one place** (the resolver helper). Modules must not call `Session.getEffectiveUser()` directly to look up workbooks.
+
+## Monetization Rules (apply when feature gating is approved)
+
+These rules apply **only when** the Monetization work has been explicitly pulled in. Until then, the plan is captured in `ENHANCEMENTS.md → Future direction — Monetization` and `TODO.md → Future Phases — VNext Monetization` and is **not active work**.
+
+When monetization begins, every gated change must follow:
+
+- **Never gate core functionality initially.** Cash Flow, Bills Due, Debts list, Quick Add, Activity log, planner email, and the existing dashboard surfaces stay free. Gating starts at the edges (e.g. bank import / sync, advanced planner features), not at the core.
+- **Gate advanced features only.** A feature is a candidate for gating only if (a) it is meaningfully optional for the core decision flow, and (b) it has a clear paid-tier value proposition.
+- **Always fail gracefully.** A failure in plan resolution (`getUserPlan_`, `isPaidUser_`, `SYS - Users` read errors, missing user record) must default to the free / unblocked path or a calm, user-visible "feature unavailable" state. **No crashes, no red banners, no exceptions surfaced to the user when plan lookup fails.**
+- Plan helpers must be **defensive by design** — wrap reads in try/catch and return `'free'` on any error rather than propagating exceptions into existing free-tier flows.
+- **Document each gate.** When a feature becomes gated, record the gate decision in `ENHANCEMENTS.md` (under the relevant phase) so the gating surface stays auditable.

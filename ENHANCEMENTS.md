@@ -105,6 +105,77 @@ No Help or documentation changes required for this fix — the "Recurring Bills 
 
 ---
 
+## Future direction — Central App (post-V1.2, not active work)
+
+Long-term architecture target. **Documented for durability — not on the V1.2 roadmap.** Pulling this in requires an explicit product decision and the migration discipline laid out in `WORKING_RULES.md → Central App Transition Rules`. Mirror of `PROJECT_CONTEXT.md → Future architecture — Central App (post-V1.2)`.
+
+### Central App Model
+
+- Move from a per-copy distribution to **one centralized Apps Script web app** that all users share.
+- Users access the app via a single deployment URL — no code copying, no script editor, no manual updates.
+- Each user gets their **own spreadsheet**, automatically created and bound to their identity on first run.
+- A single deployed script version drives every user's experience, so a fix shipped once reaches everyone immediately.
+
+### Core change
+
+- Replace direct `SpreadsheetApp.getActiveSpreadsheet()` usage across all backend modules with a single resolver: **`getUserSpreadsheet_()`**.
+- `getUserSpreadsheet_()` resolves the caller's identity (typically `Session.getEffectiveUser().getEmail()`), looks up their workbook, and returns the bound `Spreadsheet` object.
+- **Bootstrap on first run** — when a new user has no mapping, create a fresh workbook from a known-good template (or seed structure), record the mapping, and continue normally.
+- **User → sheet mapping** — stored in `PropertiesService.getUserProperties()` (per-user, lightweight) or a central registry sheet (e.g. `SYS - User Workbooks` in an admin spreadsheet); the choice is part of the migration design pass.
+
+### Benefits
+
+- **Instant updates for all users** — script version is the source of truth; no version drift across copies.
+- **No version drift / no copy-paste deploys** — every user is on the same code at the same time.
+- **Easier support and debugging** — a single canonical code path; user-specific issues isolate to data, not code.
+- **Foundation for monetization** — the user mapping registry is the natural anchor for plan / entitlement records (see *Future direction — Monetization* below).
+
+### Why this is documented now and not started
+
+- Active phase is V1.2 (controlled improvement mode). Architectural changes of this magnitude are explicitly out of scope per `WORKING_RULES.md → Current phase`.
+- This change touches `getActiveSpreadsheet()` call sites across nearly every backend module (planner, dashboard, debts, bills, accounts, retirement, activity log, bank import, etc.). It must be staged module by module behind the single resolver, not done in one pass.
+
+---
+
+## Future direction — Monetization (post-V1.2, not active work)
+
+Captured so the long-term plan is durable and aligned with the Central App migration. **Not on the V1.2 roadmap.** Mirror lives in `TODO.md → Future Phases — VNext Monetization`.
+
+### Monetization model
+
+- **Free + paid tiers.** Core financial planning functionality stays free; paid tiers unlock advanced / higher-cost features.
+- **Feature gating inside code** — gating decisions live next to the feature implementation, not in a separate authorization layer.
+- Per `WORKING_RULES.md → Monetization Rules`, gating must never block core functionality and must always fail gracefully (no crashes if plan lookup fails or the user record is missing).
+
+### Minimal implementation
+
+- **New sheet: `SYS - Users`** with columns: `Email | Plan | CreatedAt`.
+  - `Email` — canonical user identifier (matches the same identity resolver used by `getUserSpreadsheet_()`).
+  - `Plan` — short string (e.g. `free`, `paid`, `trial`); free is default and assumed when missing.
+  - `CreatedAt` — first-seen timestamp; useful for trial-window calculations later.
+- This sheet pairs naturally with the Central App user mapping; it can live alongside `SYS - User Workbooks` in the same admin spreadsheet, or in a per-user sheet when bound mode is still in use.
+
+### Code helpers
+
+- **`getUserPlan_(email)`** — returns the plan string for the given email; returns `'free'` when no record exists.
+- **`isPaidUser_()`** — convenience boolean built on top of `getUserPlan_()`. Wraps the plan check so call sites stay short and readable.
+- Both helpers must be defensive: any error reading `SYS - Users` returns the free / unblocked default, never an exception that would break a feature for an existing free-tier user.
+
+### Initial gated features (candidates only)
+
+These are **candidates**, not commitments. Final gating decisions happen when the work is pulled in.
+
+- **Bank import / sync** (the in-flight Bank Import work) — natural first paid feature; advanced data ingestion fits the paid tier shape.
+- **Advanced planner features** — e.g. multi-scenario retirement, advanced rolling debt payoff strategies, premium reports.
+- **Usage limits** — per-day / per-month caps on heavy operations (planner runs, sync refreshes) for the free tier.
+
+### Why this is documented now and not started
+
+- Same reason as Central App — this is post-V1.2 work and explicitly out of scope under current `WORKING_RULES.md → Current phase` rules.
+- Monetization is meaningful only after Central App migration; gating per-copy installs is not enforceable. Sequencing: **Central App migration → minimal `SYS - Users` schema → first gated feature** (in that order).
+
+---
+
 ## 1. Current product state
 
 What is working well right now:

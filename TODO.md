@@ -77,6 +77,48 @@ Captured so the idea isn't lost; **not** in scope for V1.2. Requires an explicit
 
 ---
 
+## Future Phases (VNext — not active work)
+
+Forward-looking phases captured so the long-term direction is durable. **None of this is on the V1.2 roadmap.** Pulling any of it in requires an explicit product decision and the migration discipline laid out in `WORKING_RULES.md → Central App Transition Rules` and `WORKING_RULES.md → Monetization Rules`. Full rationale lives in `PROJECT_CONTEXT.md → Future architecture — Central App` and `ENHANCEMENTS.md → Future direction — Central App / Future direction — Monetization`.
+
+### VNext — Central App Migration
+
+Goal: move from per-copy app to one centralized Apps Script web app, where users access a single deployed URL and each user gets their own bound spreadsheet on first run.
+
+- Implement **`getUserSpreadsheet_()`** as the single resolver that returns the caller's bound `Spreadsheet`. Identity comes from `Session.getEffectiveUser().getEmail()` (or equivalent).
+- Introduce **per-user sheet creation** on first run — bootstrap a fresh workbook from a known-good template / seed structure when a new user has no mapping.
+- Migrate key modules **one at a time** to use `getUserSpreadsheet_()` instead of `SpreadsheetApp.getActiveSpreadsheet()`. Order TBD when the work is approved; planner / dashboard / debts / bills / accounts / retirement / activity log / bank import are all affected.
+- **Maintain backward compatibility during transition.** Until the resolver is wired everywhere, both modes must coexist:
+  - existing bound-sheet users keep working unchanged,
+  - new central-app users go through the bootstrap flow.
+- Decide where the user → workbook mapping lives: `PropertiesService.getUserProperties()` or a central registry sheet (e.g. `SYS - User Workbooks`). Document the choice when the work begins.
+
+### VNext — Monetization
+
+Goal: introduce free + paid tiers with feature gating inside the codebase. Mirror of `ENHANCEMENTS.md → Future direction — Monetization`.
+
+- **Add `SYS - Users` sheet** with columns: `Email | Plan | CreatedAt`.
+  - `Email` — canonical user identifier (matches the Central App identity resolver).
+  - `Plan` — short string, e.g. `free`, `paid`, `trial`. Free is default and assumed when missing.
+  - `CreatedAt` — first-seen timestamp; useful for trial-window logic later.
+- **Implement plan checks** with two helpers:
+  - `getUserPlan_(email)` — returns the plan string; defaults to `'free'` when no record exists.
+  - `isPaidUser_()` — convenience boolean built on top of `getUserPlan_()`.
+  - Both helpers must be **defensive**: any error reading `SYS - Users` returns the free / unblocked default, never an exception that breaks an existing free-tier user.
+- **Gate the first feature: bank import.** Initial gating candidate is the in-flight Bank Import work — once Step 2a (and later steps) ship, the import / sync entry point becomes the first paid-tier feature.
+- Additional gating candidates (not commitments): advanced planner features (multi-scenario retirement, premium reports), usage limits on heavy operations.
+- Gating must follow `WORKING_RULES.md → Monetization Rules`: never gate core functionality, always fail gracefully, only paid-tier features may be gated.
+
+### Sequencing
+
+Monetization is meaningful only **after** the Central App migration is in place — gating per-copy installs is not enforceable. The intended order is:
+
+1. Central App migration lands (`getUserSpreadsheet_()` resolver, bootstrap flow, key modules migrated).
+2. `SYS - Users` schema + helpers (`getUserPlan_`, `isPaidUser_`) ship as additive scaffolding.
+3. Bank import becomes the first gated feature.
+
+---
+
 ## Bank Import — status & resume plan
 
 Captured so work can resume cleanly from a pause. This section is deliberately self-contained — read it first when returning to Bank Import work.

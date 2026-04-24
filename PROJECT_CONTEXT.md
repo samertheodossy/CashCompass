@@ -236,6 +236,37 @@ Single object returned by the liquidity reader:
 - donations.js = **INPUT - Donation** append (`getDonationsFormData`, `addDonation`)
 - other feature files exist for house, debts, payments, retirement, etc.
 
+## Future architecture — Central App (post-V1.2)
+
+Captured here so the long-term direction is durable and not implied. **This is not active work. It is a forward-looking architecture target that requires an explicit product decision before being pulled into a roadmap phase.** Today's app is bound to a single user spreadsheet via `SpreadsheetApp.getActiveSpreadsheet()`; every code update requires re-copying the script into each user's workbook. The Central App model is the planned escape from that.
+
+### Central App Model
+
+- Move from a per-copy distribution to **one centralized Apps Script web app** that all users share.
+- Users access the app via a single deployment URL — no code copying, no script editor, no manual updates.
+- Each user gets their **own spreadsheet**, automatically created and bound to their identity on first run.
+- A single deployed script version drives every user's experience, so a fix shipped once reaches everyone immediately.
+
+### Core change
+
+- Replace direct `SpreadsheetApp.getActiveSpreadsheet()` usage across all backend modules with a single resolver: **`getUserSpreadsheet_()`**.
+- `getUserSpreadsheet_()` resolves the caller's identity (e.g. via `Session.getEffectiveUser().getEmail()`), looks up their workbook, and returns the bound `Spreadsheet` object.
+- **Bootstrap on first run** — when a new user has no mapping, create a fresh workbook from a known-good template (or seed structure), record the mapping, and continue normally.
+- **User → sheet mapping** — stored either in `PropertiesService.getUserProperties()` (per-user, lightweight) or a central registry sheet (e.g. `SYS - User Workbooks` in an admin spreadsheet) — chosen during the migration design.
+
+### Benefits
+
+- **Instant updates for all users** — script version is the source of truth.
+- **No version drift** — every user is on the same code at the same time; no "which version of the script is in your workbook?" debugging.
+- **Easier support and debugging** — a single canonical code path; user-specific issues isolate to data, not code.
+- **Foundation for monetization** — the mapping registry is also the natural place to record per-user plan / entitlements (see `ENHANCEMENTS.md → Future direction — Monetization` and `TODO.md → Future Phases — VNext Monetization`).
+
+### Why this is documented now and not started
+
+- Active phase is V1.2 (controlled improvement mode). Architectural changes of this magnitude are explicitly out of scope per `WORKING_RULES.md → Current phase`.
+- This change touches `getActiveSpreadsheet()` call sites across the codebase (planner, dashboard, debts, bills, accounts, retirement, activity log, bank import, etc.). It must be staged module by module behind a single resolver, not done in one pass.
+- See `WORKING_RULES.md → Central App Transition Rules` for the migration discipline that will apply when the work is approved.
+
 ## Important resolved infra issues
 - Duplicate doGet() caused template problems before. Only keep one active doGet().
 - Duplicate includeHtml_() caused malformed HTML/script include problems before.

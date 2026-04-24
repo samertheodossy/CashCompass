@@ -80,3 +80,11 @@ Short mirror of `TODO.md → V1.2 work queue`. The live queue in `TODO.md` is th
 - Never commit or push unless explicitly asked (see `COMMIT_RULES.md` and the `git-no-autonomous-stage-commit` rule in `.cursor/rules/`).
 - Keep user-facing copy aligned with the V1 copy consistency pass: short, trust-safe, no internal sheet names, no "Error:" prefixes on already-styled errors.
 - When in doubt about scope, re-read `WORKING_RULES.md → Current phase` before writing code.
+
+---
+
+## Future Direction
+
+Long-term, CashCompass will evolve into a **centralized service**. Instead of each user copying the script into their own spreadsheet, users will access a single deployed web app and each user will get their own bound workbook automatically on first run. Users will not manage spreadsheets directly, and code updates will be **automatic** — a fix shipped once reaches everyone immediately, with no version drift across copies. A free + paid tier model will eventually layer on top of that, gating advanced features (e.g. bank import / sync) while keeping core planning free.
+
+This direction is documented for durability, **not active work**. The full plan lives in `PROJECT_CONTEXT.md → Future architecture — Central App`, `ENHANCEMENTS.md → Future direction — Central App / Monetization`, and `TODO.md → Future Phases (VNext)`. The migration discipline that will apply when the work is approved lives in `WORKING_RULES.md → Central App Transition Rules` and `WORKING_RULES.md → Monetization Rules`.
