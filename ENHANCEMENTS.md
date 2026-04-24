@@ -44,6 +44,37 @@ Shipped end-to-end in V1.1 (commits `92c8673` → `6d25c0e`). **Profile is now t
 
 What Step 1 explicitly **did not** ship: no ingestion logic, no UI, no planner impact. Existing modules do not call any of these helpers, so planner, overview, retirement, cash flow, and the manual bank account UI are unaffected on both populated and blank workbooks. Full scope, Step 2a plan, resume rules, and manual test checklist (A–E) live in `TODO.md → Bank Import — status & resume plan`.
 
+### Delivered — Debts fast save + activity log + background planner (V1.2)
+
+**Debts — Update field editing feels instant again.** Shipped in commit `c26c11c`. Planning → Debts → Update now shows a proper `Saving… → Saved.` status row, optimistically repaints the right-hand info panel with the saved value so users see the change without a server round-trip, refreshes the Overview snapshot (`refreshSnapshot()`), and fires `runPlannerAndRefreshDashboard()` as a **silent background RPC** so Rolling Debt Payoff and other planner-dependent cards catch up shortly after without blocking the save itself.
+
+The previous behavior ran the debt planner inline inside `updateDebtField`, which held the UI on `Saving…` for several seconds on large workbooks. That inline call is gone; the planner now runs only after the save completes, off the critical path.
+
+Every field edit is also written to `LOG - Activity` as a new **`debt_update`** event:
+
+- Classified as **Debt** kind (`activity_log.js::classifyActivityKind_`).
+- Dynamic action label from `debtUpdateActionLabel_()` — e.g. *Updated Account Balance to $54,000.00*, *Updated Int Rate to 7.50%*, *Updated Due Day to 15*, *Updated Credit Limit to $25,000.00*.
+- **Amount** renders `—` instead of `$0.00` (added to `activityLogIsNonMonetaryEvent_`) so field edits don’t double-count against Activity totals.
+- Previous + new raw + display values and the `fieldKind` (currency / percent / integer / text) are preserved in the event’s `details` JSON (`detailsVersion: 1`) for future undo tooling — no second lookup needed when a revert action is built later.
+
+User-facing Help was also updated: `Dashboard_Help.html` → *Planning → Debts → Update* (new flow description), Activity log (`debt_update` event), Amount column description (non-monetary list), and Remove button greyed-out list.
+
+### Delivered — Quick Add robust Saving… indicator + $0 amount allowed (V1.2)
+
+**Quick Add — reliable click→Saving…→Saved feedback, and $0 is now a legitimate amount.** Shipped in commits `098fef0` → `29f29a2`.
+
+Client-side (`Dashboard_Script_Payments.html::savePayment()`): the status row below **Add to Cash Flow** now layers plain-text `setStatus('pay_status', 'Saving…', false)` under `setStatusLoading(…)`. This mirrors the proven pattern from the legacy sidebar `PlannerDashboard.html::savePayment()` and ensures the label appears between click and `Saved to Cash Flow.` regardless of deploy timing or CSS state drift. On success, the status flips to the backend-supplied *Saved to Cash Flow.* message.
+
+Server-side (`quick_add_payment.js::quickAddPayment`): amount validator relaxed from `amount <= 0` to `isNaN(amount) || amount < 0`, with new error message *Amount must be a valid number.* `Math.abs()` already coerces the stored value, so the negative branch is defensive only. Users can now save $0 on Quick add to:
+
+- Zero out a month cell (e.g. reset a budget line).
+- Correct a prior bad entry down to 0.
+- Seed a placeholder payee row so it shows up in Bills Due / Upcoming selectors before the first real payment lands.
+
+Scope discipline: Upcoming Expenses (`upcoming_expenses.js:193`), Income Sources (`income_sources.js:382`), and the Purchase Simulator (`purchase_simulator.js:29`) still require `amount > 0`. Those are different forms with different semantics and were intentionally left alone.
+
+Help updated: `Dashboard_Help.html` → Cash Flow → Quick add now documents `$0` is a valid amount and describes the Saving… → Saved status feedback.
+
 ---
 
 ## 1. Current product state
