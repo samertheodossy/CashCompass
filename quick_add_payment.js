@@ -233,7 +233,11 @@ function quickAddPayment(payload) {
 
   if (!payee) throw new Error('Payee is required.');
   if (isNaN(entryDate.getTime())) throw new Error('Invalid date.');
-  if (amount <= 0) throw new Error('Amount must be greater than 0.');
+  // $0 is allowed — users may intentionally zero out a month cell, correct a
+  // bad entry, or log a placeholder row. Only reject values that aren't a
+  // valid number at all. Math.abs() guarantees amount is >= 0 here, so the
+  // negative branch is defensive only.
+  if (isNaN(amount) || amount < 0) throw new Error('Amount must be a valid number.');
   if (entryType !== 'Expense' && entryType !== 'Income') {
     throw new Error('Type must be Expense or Income.');
   }

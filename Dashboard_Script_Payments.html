@@ -216,10 +216,16 @@ function savePayment() {
   var pendingUpcomingId = window.__pendingUpcomingPaymentId || '';
   window.__pendingUpcomingPaymentId = '';
 
-  // Show a spinner immediately so the user has visible feedback during the
-  // server round-trip. Without this the button click looks like nothing
-  // happened until "Saved to Cash Flow." flashes on success.
-  setStatusLoading('pay_status', 'Saving…');
+  // Show plain-text "Saving…" feedback the user will always see even if a
+  // stale deploy or style override hides the richer spinner markup. The
+  // success handler below replaces this with "Saved to Cash Flow." — same
+  // pattern the legacy sidebar savePayment() has used reliably for ages.
+  // Layer the spinner version on top so browsers/deploys with the newer
+  // dash-loading CSS still get the animated indicator.
+  setStatus('pay_status', 'Saving…', false);
+  if (typeof setStatusLoading === 'function') {
+    try { setStatusLoading('pay_status', 'Saving…'); } catch (_e) {}
+  }
 
   google.script.run
     .withSuccessHandler(function(res) {
