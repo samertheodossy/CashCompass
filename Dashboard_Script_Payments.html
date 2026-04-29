@@ -191,11 +191,36 @@ function applyQuickAddPreviewFromResult_(data) {
 }
 
 function runDebtPlannerAfterQuickPayment_() {
-  google.script.run
-    .withFailureHandler(function(err) {
-      setStatus('pay_status', (err.message || String(err)), true);
-    })
-    .runDebtPlanner();
+  // Background planner refresh — same silent-follow-up pattern Planning →
+  // Debts uses on save (saveDebt() in Dashboard_Script_PlanningDebts.html).
+  // The Quick Add server function (quickAddPayment) deliberately does NOT
+  // run the debt planner inline so the user gets "Saved to Cash Flow."
+  // immediately, in well under a second; that's the same reason
+  // updateDebtField stopped running the planner inline. This call is the
+  // delayed catch-up so Rolling Debt Payoff and planner-derived KPIs still
+  // update shortly after save.
+  //
+  // Two behaviors we picked up from the Debts pattern:
+  //   1) runPlannerAndRefreshDashboard (not bare runDebtPlanner) so the
+  //      planner's freshly-rebuilt snapshot is returned and applied —
+  //      otherwise the dashboard would keep showing pre-planner data
+  //      until the user manually refreshed.
+  //   2) Failures are silent. The Cash Flow row + LOG - Activity row are
+  //      already saved on the sheet at this point and the user has seen
+  //      "Saved to Cash Flow.", so a planner glitch must not overwrite
+  //      that success message with a red error in `pay_status`. Persistent
+  //      planner failure surfaces clearly via the top-bar Run Planner Now
+  //      button, which is the explicit re-run path.
+  try {
+    google.script.run
+      .withSuccessHandler(function(plannerRes) {
+        if (plannerRes && plannerRes.snapshot && typeof applySnapshot === 'function') {
+          applySnapshot(plannerRes.snapshot);
+        }
+      })
+      .withFailureHandler(function(_err) { /* silent: see comment above */ })
+      .runPlannerAndRefreshDashboard();
+  } catch (_e) { /* silent */ }
 }
 
 function savePayment() {
@@ -237,6 +262,22 @@ function savePayment() {
       }
       document.getElementById('pay_amount').value = '';
       window.__pendingQuickAddFlowSource = '';
+
+      // Activity ledger refresh — fired immediately so the new row appears
+      // in the Activity tab within ~200ms instead of waiting on the
+      // background planner. The LOG - Activity row was appended
+      // synchronously inside quickAddPayment() (see appendActivityLog_ in
+      // quick_add_payment.js) so by the time this success handler runs the
+      // row is already on the sheet and getActivityDashboardData() will
+      // surface it. Deliberately fired BEFORE the upcoming chain and
+      // BEFORE runDebtPlannerAfterQuickPayment_ so it does not queue
+      // behind a slow planner run. typeof guard mirrors the defensive
+      // calls used elsewhere when crossing HTML-include boundaries — if
+      // the Activity script hasn't loaded yet the Quick Add save still
+      // completes cleanly.
+      if (typeof loadActivitySection === 'function') {
+        try { loadActivitySection(); } catch (_e) { /* non-fatal */ }
+      }
 
       // Chain the Upcoming balance adjustment after the Quick Add row is
       // safely written, then let the Upcoming / action-section refreshes
