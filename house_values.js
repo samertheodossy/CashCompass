@@ -139,28 +139,61 @@ function ensureSysHouseAssetsSheet_() {
 }
 
 function getHouseUiData() {
+  // Performance: previously this RPC made TWO full reads of
+  // SYS - House Assets in a row — once for the distinct Type values
+  // (getHouseAssetsDistinctColumnValues_) and once for the inactive
+  // set (getInactiveHousesSet_). On populated workbooks each read is
+  // a ~300–800ms round-trip. We now load SYS - House Assets ONCE and
+  // derive both from the same snapshot. The INPUT - House Values
+  // history read (1 round-trip) is unchanged.
   // Blank-workbook safety: on a fresh sheet INPUT - House Values does
   // not exist yet and getHousesFromHouseValues_() -> getSheet_() would
   // throw a red banner on the House Values page. Return the same shape
-  // with empty lists so the page renders clean. The populated path
-  // below is unchanged.
-  const ssEarly = SpreadsheetApp.getActiveSpreadsheet();
-  if (!ssEarly.getSheetByName(getSheetNames_().HOUSE_VALUES)) {
+  // with empty lists so the page renders clean.
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss.getSheetByName(getSheetNames_().HOUSE_VALUES)) {
     return { houses: [], propertyTypeOptions: [] };
   }
 
   var propertyTypeOpts = [];
-  try {
-    propertyTypeOpts = getHouseAssetsDistinctColumnValues_('Type');
-  } catch (e) {
-    Logger.log('getHouseUiData propertyType options: ' + e);
-  }
-
   let inactive = Object.create(null);
+
   try {
-    inactive = getInactiveHousesSet_();
+    const haSheet = ss.getSheetByName(getSheetNames_().HOUSE_ASSETS);
+    if (haSheet) {
+      const haDisplay = haSheet.getDataRange().getDisplayValues();
+      if (haDisplay.length >= 1) {
+        const headers = haDisplay[0] || [];
+        const houseIdx = headers.indexOf('House');
+        const typeIdx = headers.indexOf('Type');
+        const activeIdx = headers.indexOf('Active');
+
+        const typeSet = Object.create(null);
+
+        for (let r = 1; r < haDisplay.length; r++) {
+          const row = haDisplay[r] || [];
+
+          if (typeIdx !== -1) {
+            const t = String(row[typeIdx] || '').trim();
+            if (t) typeSet[t] = true;
+          }
+
+          if (houseIdx !== -1 && activeIdx !== -1) {
+            const name = String(row[houseIdx] || '').trim();
+            if (name) {
+              const raw = String(row[activeIdx] || '').trim().toLowerCase();
+              if (raw === 'no' || raw === 'n' || raw === 'false' || raw === 'inactive') {
+                inactive[name.toLowerCase()] = true;
+              }
+            }
+          }
+        }
+
+        propertyTypeOpts = Object.keys(typeSet).sort(function(a, b) { return a.localeCompare(b); });
+      }
+    }
   } catch (e) {
-    Logger.log('getHouseUiData inactive filter: ' + e);
+    Logger.log('getHouseUiData house-assets read: ' + e);
   }
 
   // Selectors only surface currently-active houses. History storage
@@ -259,8 +292,21 @@ function getHouseValueForDate(house, valuationDate) {
 
   const d = parseIsoDateLocal_(valuationDate);
 
+  // Performance: previously this RPC did 2 full reads of HOUSE_VALUES
+  // (one per month) plus a per-row range loop inside findHouseRowInBlock_
+  // each time, so picking a date triggered ~50+ Sheet round-trips on
+  // populated workbooks. Now we read HOUSE_VALUES once and share the
+  // snapshot across both months via the optionalDisplay parameter on
+  // the year-block + row-find helpers. The whole sheet (all year blocks)
+  // is in memory so the prior-month case crosses year boundaries cleanly.
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const hvSheet = getSheet_(ss, 'HOUSE_VALUES');
+  const hvDisplay = hvSheet.getDataRange().getDisplayValues();
+
   const year = d.getFullYear();
-  const monthValue = getHouseValueFromHistoryForMonth_(houseName, year, d);
+  const monthValue = getHouseValueFromHistoryForMonthFromDisplay_(
+    hvSheet, hvDisplay, houseName, year, d
+  );
   const assetsInfo = getHouseAssetRowData_(houseName);
 
   var previousMonthLabel = '';
@@ -268,7 +314,9 @@ function getHouseValueForDate(house, valuationDate) {
   try {
     const prior = new Date(d.getFullYear(), d.getMonth() - 1, 15);
     const priorYear = prior.getFullYear();
-    const previousMonthValue = getHouseValueFromHistoryForMonth_(houseName, priorYear, prior);
+    const previousMonthValue = getHouseValueFromHistoryForMonthFromDisplay_(
+      hvSheet, hvDisplay, houseName, priorYear, prior
+    );
     previousMonthLabel = Utilities.formatDate(prior, Session.getScriptTimeZone(), 'MMM-yy');
     const cur = Number(monthValue);
     const prev = Number(previousMonthValue);
@@ -289,6 +337,24 @@ function getHouseValueForDate(house, valuationDate) {
     previousMonthLabel: previousMonthLabel,
     deltaFromPreviousMonth: deltaFromPreviousMonth
   };
+}
+
+/**
+ * Internal twin of getHouseValueFromHistoryForMonth_ that takes a
+ * pre-loaded HOUSE_VALUES display-values snapshot so callers reading
+ * multiple months in a single RPC don't re-fetch the same sheet for
+ * each lookup. Used by getHouseValueForDate for the current+prior
+ * month delta panel; the monthly cell value itself is still read with
+ * sheet.getRange(...).getValue() so the rounding behavior is identical.
+ */
+function getHouseValueFromHistoryForMonthFromDisplay_(sheet, display, houseName, year, valuationDate) {
+  const block = getHouseValuesYearBlock_(sheet, year, display);
+  const houseRow = findHouseRowInBlock_(sheet, block, houseName, display);
+  if (houseRow === -1) {
+    throw new Error('Could not find house "' + houseName + '" inside Year ' + year + ' block.');
+  }
+  const monthCol = getMonthColumnByDate_(sheet, valuationDate, block.headerRow);
+  return round2_(toNumber_(sheet.getRange(houseRow, monthCol).getValue()));
 }
 
 function updateHouseValueByDate(payload) {
@@ -504,13 +570,22 @@ function getHouseAssetRowData_(house) {
   return null;
 }
 
-function getHouseValuesYearBlock_(sheet, year) {
-  const display = sheet.getDataRange().getDisplayValues();
+function getHouseValuesYearBlock_(sheet, year, optionalDisplay) {
+  // Performance: same fix as bank_accounts.js::getBankAccountsYearBlock_.
+  // Previously this helper read the full sheet, then re-fetched column A
+  // one cell at a time (sheet.getRange(row, 1).getDisplayValue()) just
+  // to find the dataEndRow boundary and validate the header row. We now
+  // reuse the loaded snapshot for everything, and accept an optional
+  // pre-loaded display from callers that already have it (e.g.
+  // getHouseValueForDate uses one snapshot for both current+prior month).
+  const display = (optionalDisplay && optionalDisplay.length)
+    ? optionalDisplay
+    : sheet.getDataRange().getDisplayValues();
 
   let yearRow = -1;
   for (let r = 0; r < display.length; r++) {
-    const colA = String(display[r][0] || '').trim();
-    const colB = String(display[r][1] || '').trim();
+    const colA = String((display[r] && display[r][0]) || '').trim();
+    const colB = String((display[r] && display[r][1]) || '').trim();
 
     if (colA === 'Year' && colB === String(year)) {
       yearRow = r + 1;
@@ -523,19 +598,20 @@ function getHouseValuesYearBlock_(sheet, year) {
   }
 
   const headerRow = yearRow + 1;
-  const headerName = String(sheet.getRange(headerRow, 1).getDisplayValue() || '').trim();
+  const headerName = String(
+    (display[headerRow - 1] && display[headerRow - 1][0]) || ''
+  ).trim();
   if (headerName !== 'House') {
     throw new Error('Expected House header row for Year ' + year + ' in House Values.');
   }
 
   const dataStartRow = headerRow + 1;
-  let dataEndRow = sheet.getLastRow();
+  let dataEndRow = display.length;
 
-  for (let row = dataStartRow; row <= sheet.getLastRow(); row++) {
-    const name = String(sheet.getRange(row, 1).getDisplayValue() || '').trim();
-
+  for (let r = dataStartRow - 1; r < display.length; r++) {
+    const name = String((display[r] && display[r][0]) || '').trim();
     if (name === 'Total Values' || name === 'House Assets' || name === 'Year') {
-      dataEndRow = row - 1;
+      dataEndRow = r; // r is the 0-based index, equal to (1-based row) - 1
       break;
     }
   }
@@ -549,13 +625,35 @@ function getHouseValuesYearBlock_(sheet, year) {
   };
 }
 
-function findHouseRowInBlock_(sheet, block, houseName) {
-  for (let row = block.dataStartRow; row <= block.dataEndRow; row++) {
-    const name = String(sheet.getRange(row, 1).getDisplayValue() || '').trim();
-    const sub = String(sheet.getRange(row, 2).getDisplayValue() || '').trim();
+function findHouseRowInBlock_(sheet, block, houseName, optionalDisplay) {
+  // Performance: same fix as bank_accounts.js::findBankAccountRowInBlock_.
+  // Replace the per-row getRange(row, 1).getDisplayValue() / getRange(row, 2)
+  // pair with a single batched range read of columns A:B over the block,
+  // or reuse the caller's already-loaded full-sheet display when given.
+  if (block.dataEndRow < block.dataStartRow) return -1;
 
+  let names;
+  let subs;
+  if (optionalDisplay && optionalDisplay.length) {
+    names = [];
+    subs = [];
+    for (let r = block.dataStartRow - 1; r <= block.dataEndRow - 1 && r < optionalDisplay.length; r++) {
+      const row = optionalDisplay[r] || [];
+      names.push(row[0] !== undefined ? row[0] : '');
+      subs.push(row[1] !== undefined ? row[1] : '');
+    }
+  } else {
+    const numRows = block.dataEndRow - block.dataStartRow + 1;
+    const slice = sheet.getRange(block.dataStartRow, 1, numRows, 2).getDisplayValues();
+    names = slice.map(function(row) { return row[0]; });
+    subs = slice.map(function(row) { return row[1]; });
+  }
+
+  for (let i = 0; i < names.length; i++) {
+    const name = String(names[i] || '').trim();
+    const sub = String(subs[i] || '').trim();
     if (!isHouseDataRowName_(name, sub)) continue;
-    if (name === houseName) return row;
+    if (name === houseName) return block.dataStartRow + i;
   }
   return -1;
 }
@@ -578,8 +676,13 @@ function isHouseDataRowName_(name, sub) {
   return true;
 }
 
-function getHouseAssetsHeaderMap_(sheet) {
-  const headers = sheet.getDataRange().getDisplayValues()[0] || [];
+function getHouseAssetsHeaderMap_(sheet, optionalDisplay) {
+  // Performance: when callers already loaded the SYS - House Assets
+  // display values, pass them in via optionalDisplay to skip the
+  // redundant header round-trip. Behavior unchanged when omitted.
+  const headers = (optionalDisplay && optionalDisplay.length)
+    ? (optionalDisplay[0] || [])
+    : (sheet.getDataRange().getDisplayValues()[0] || []);
 
   const houseColZero = headers.indexOf('House');
   const typeColZero = headers.indexOf('Type');

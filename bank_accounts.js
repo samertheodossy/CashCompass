@@ -140,20 +140,62 @@ function getLatestBankAccountValuesForYear_(sheet, year) {
 }
 
 function getBankAccountUiData() {
+  // Performance: the previous implementation read SYS - Accounts THREE
+  // times in a row — once for distinct Type values, once for distinct
+  // Use Policy values, and once for the inactive set. Each read is a
+  // ~300–800ms round-trip on populated workbooks, so opening the Bank
+  // Accounts tab spent ~1.5–2s before the page could even render. We
+  // now load SYS - Accounts once and derive all three from that single
+  // snapshot. Behavior is identical: same Type list, same Use Policy
+  // list, same inactive filter. The BANK_ACCOUNTS history read (1
+  // round-trip) is unchanged — that's already minimal.
   var typeOpts = [];
   var policyOpts = [];
-  try {
-    typeOpts = getAccountsDistinctColumnValues_('Type');
-    policyOpts = getAccountsDistinctColumnValues_('Use Policy');
-  } catch (e) {
-    Logger.log('getBankAccountUiData type/policy options: ' + e);
-  }
-
   let inactive = Object.create(null);
+
   try {
-    inactive = getInactiveBankAccountsSet_();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const accountsSheet = ss.getSheetByName(getSheetNames_().ACCOUNTS);
+    if (accountsSheet) {
+      const accountsDisplay = accountsSheet.getDataRange().getDisplayValues();
+      if (accountsDisplay.length >= 1) {
+        const headers = accountsDisplay[0] || [];
+        const typeIdx = headers.indexOf('Type');
+        const policyIdx = headers.indexOf('Use Policy');
+        const nameIdx = headers.indexOf('Account Name');
+        const activeIdx = headers.indexOf('Active');
+
+        const typeSet = Object.create(null);
+        const policySet = Object.create(null);
+
+        for (let r = 1; r < accountsDisplay.length; r++) {
+          const row = accountsDisplay[r] || [];
+
+          if (typeIdx !== -1) {
+            const t = String(row[typeIdx] || '').trim();
+            if (t) typeSet[t] = true;
+          }
+          if (policyIdx !== -1) {
+            const p = String(row[policyIdx] || '').trim();
+            if (p) policySet[p] = true;
+          }
+          if (nameIdx !== -1 && activeIdx !== -1) {
+            const name = String(row[nameIdx] || '').trim();
+            if (name) {
+              const raw = String(row[activeIdx] || '').trim().toLowerCase();
+              if (raw === 'no' || raw === 'n' || raw === 'false' || raw === 'inactive') {
+                inactive[name.toLowerCase()] = true;
+              }
+            }
+          }
+        }
+
+        typeOpts = Object.keys(typeSet).sort(function(a, b) { return a.localeCompare(b); });
+        policyOpts = Object.keys(policySet).sort(function(a, b) { return a.localeCompare(b); });
+      }
+    }
   } catch (e) {
-    Logger.log('getBankAccountUiData inactive filter: ' + e);
+    Logger.log('getBankAccountUiData accounts read: ' + e);
   }
 
   // First-run safety: on a blank workbook INPUT - Bank Accounts does
@@ -661,8 +703,28 @@ function getBankAccountValueForDate(accountName, balanceDate) {
 
   const d = parseIsoDateLocal_(balanceDate);
 
+  // Performance: previously this RPC ran getBankAccountHistoryValueForMonth_
+  // twice (current + prior month), and each call did a fresh full read of
+  // BANK_ACCOUNTS plus a per-row range read inside findBankAccountRowInBlock_.
+  // Plus getAccountsRowData_ did its own SYS - Accounts read. On populated
+  // workbooks that's ~6 round-trips for one account/date selection, making
+  // the right-side panel feel laggy on every dropdown change.
+  //
+  // We now load BANK_ACCOUNTS once up front and pass the snapshot into the
+  // year-block + row-find helpers so both months reuse it. The same year
+  // block usually serves both months; the prior-month case crosses a year
+  // boundary cleanly because the helpers accept the same display snapshot
+  // (the whole sheet, including all year blocks, is in memory). Behavior is
+  // identical for callers — the response shape, currency rounding, and
+  // error messages are unchanged.
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const bankSheet = getSheet_(ss, 'BANK_ACCOUNTS');
+  const bankDisplay = bankSheet.getDataRange().getDisplayValues();
+
   const year = d.getFullYear();
-  const monthValue = getBankAccountHistoryValueForMonth_(name, year, d);
+  const monthValue = getBankAccountHistoryValueForMonthFromDisplay_(
+    bankSheet, bankDisplay, name, year, d
+  );
   const accountInfo = getAccountsRowData_(name);
 
   var previousMonthLabel = '';
@@ -670,7 +732,9 @@ function getBankAccountValueForDate(accountName, balanceDate) {
   try {
     const prior = new Date(d.getFullYear(), d.getMonth() - 1, 15);
     const priorYear = prior.getFullYear();
-    const previousMonthValue = getBankAccountHistoryValueForMonth_(name, priorYear, prior);
+    const previousMonthValue = getBankAccountHistoryValueForMonthFromDisplay_(
+      bankSheet, bankDisplay, name, priorYear, prior
+    );
     previousMonthLabel = Utilities.formatDate(prior, Session.getScriptTimeZone(), 'MMM-yy');
     const cur = Number(monthValue);
     const prev = Number(previousMonthValue);
@@ -693,6 +757,26 @@ function getBankAccountValueForDate(accountName, balanceDate) {
     previousMonthLabel: previousMonthLabel,
     deltaFromPreviousMonth: deltaFromPreviousMonth
   };
+}
+
+/**
+ * Internal twin of getBankAccountHistoryValueForMonth_ that takes a
+ * pre-loaded BANK_ACCOUNTS display-values snapshot so callers reading
+ * multiple months in a single RPC don't re-fetch the same sheet for
+ * each lookup. Used by getBankAccountValueForDate for the
+ * current-month + prior-month delta panel; the monthly cell value
+ * itself is still read with sheet.getRange(...).getValue() so we
+ * preserve the exact numeric path the existing code was tested
+ * against (rounding behavior identical).
+ */
+function getBankAccountHistoryValueForMonthFromDisplay_(sheet, display, accountName, year, balanceDate) {
+  const block = getBankAccountsYearBlock_(sheet, year, display);
+  const accountRow = findBankAccountRowInBlock_(sheet, block, accountName, display);
+  if (accountRow === -1) {
+    throw new Error('Could not find account "' + accountName + '" inside Year ' + year + ' block.');
+  }
+  const monthCol = getMonthColumnByDate_(sheet, balanceDate, block.headerRow);
+  return round2_(toNumber_(sheet.getRange(accountRow, monthCol).getValue()));
 }
 
 function getBankAccountHistoryValueForMonth_(accountName, year, balanceDate) {
@@ -889,13 +973,22 @@ function updateAccountsSheetFields_(accountName, options) {
   throw new Error('Could not find account "' + accountName + '" in Accounts sheet.');
 }
 
-function getBankAccountsYearBlock_(sheet, year) {
-  const display = sheet.getDataRange().getDisplayValues();
+function getBankAccountsYearBlock_(sheet, year, optionalDisplay) {
+  // Performance: previously this helper read the full sheet display
+  // values, then re-read column A one cell at a time both to validate
+  // the header row and to find the dataEndRow boundary. The full read
+  // already contains all of column A — re-fetching per row was pure
+  // round-trip overhead. We now reuse that one snapshot. Callers that
+  // already loaded the full display (e.g. getBankAccountValueForDate)
+  // can pass it in via optionalDisplay so we don't re-read at all.
+  const display = (optionalDisplay && optionalDisplay.length)
+    ? optionalDisplay
+    : sheet.getDataRange().getDisplayValues();
 
   let yearRow = -1;
   for (let r = 0; r < display.length; r++) {
-    const colA = String(display[r][0] || '').trim();
-    const colB = String(display[r][1] || '').trim();
+    const colA = String((display[r] && display[r][0]) || '').trim();
+    const colB = String((display[r] && display[r][1]) || '').trim();
 
     if (colA === 'Year' && colB === String(year)) {
       yearRow = r + 1;
@@ -908,19 +1001,20 @@ function getBankAccountsYearBlock_(sheet, year) {
   }
 
   const headerRow = yearRow + 1;
-  const headerName = String(sheet.getRange(headerRow, 1).getDisplayValue() || '').trim();
+  const headerName = String(
+    (display[headerRow - 1] && display[headerRow - 1][0]) || ''
+  ).trim();
   if (headerName !== 'Account Name') {
     throw new Error('Expected Account Name header row for Year ' + year + ' in Bank Accounts.');
   }
 
   const dataStartRow = headerRow + 1;
-  let dataEndRow = sheet.getLastRow();
+  let dataEndRow = display.length; // last row of the loaded sheet snapshot
 
-  for (let row = dataStartRow; row <= sheet.getLastRow(); row++) {
-    const name = String(sheet.getRange(row, 1).getDisplayValue() || '').trim();
-
+  for (let r = dataStartRow - 1; r < display.length; r++) {
+    const name = String((display[r] && display[r][0]) || '').trim();
     if (name === 'Total Accounts' || name === 'Delta' || name === 'Year') {
-      dataEndRow = row - 1;
+      dataEndRow = r; // r is the 0-based index, which equals the 1-based row above
       break;
     }
   }
@@ -934,11 +1028,35 @@ function getBankAccountsYearBlock_(sheet, year) {
   };
 }
 
-function findBankAccountRowInBlock_(sheet, block, accountName) {
-  for (let row = block.dataStartRow; row <= block.dataEndRow; row++) {
-    const name = String(sheet.getRange(row, 1).getDisplayValue() || '').trim();
+function findBankAccountRowInBlock_(sheet, block, accountName, optionalDisplay) {
+  if (block.dataEndRow < block.dataStartRow) return -1;
+
+  // Performance: previously this helper did one
+  //   sheet.getRange(row, 1).getDisplayValue()
+  // call per row in the year block. With ~30 accounts that is ~30
+  // round-trips to Sheets — easily 0.5–1.5s before the read path could
+  // even compute a value. Batch into a single range read of column A
+  // across the block, or reuse the caller's already-loaded full-sheet
+  // display array when one is provided. Behavior is otherwise identical.
+  let names;
+  if (optionalDisplay && optionalDisplay.length) {
+    names = [];
+    for (let r = block.dataStartRow - 1; r <= block.dataEndRow - 1 && r < optionalDisplay.length; r++) {
+      names.push((optionalDisplay[r] && optionalDisplay[r][0] !== undefined)
+        ? optionalDisplay[r][0]
+        : '');
+    }
+  } else {
+    const numRows = block.dataEndRow - block.dataStartRow + 1;
+    names = sheet.getRange(block.dataStartRow, 1, numRows, 1).getDisplayValues().map(function(row) {
+      return row[0];
+    });
+  }
+
+  for (let i = 0; i < names.length; i++) {
+    const name = String(names[i] || '').trim();
     if (!isBankAccountDataRowName_(name)) continue;
-    if (name === accountName) return row;
+    if (name === accountName) return block.dataStartRow + i;
   }
   return -1;
 }
@@ -953,8 +1071,14 @@ function isBankAccountDataRowName_(name) {
   return true;
 }
 
-function getAccountsHeaderMap_(sheet) {
-  const headers = sheet.getDataRange().getDisplayValues()[0] || [];
+function getAccountsHeaderMap_(sheet, optionalDisplay) {
+  // Performance: when the caller has already loaded the SYS - Accounts
+  // sheet's full display values (e.g. getBankAccountUiData), pass that
+  // array in via optionalDisplay to avoid a second full-sheet read just
+  // to look up the header row. Behavior is unchanged when omitted.
+  const headers = (optionalDisplay && optionalDisplay.length)
+    ? (optionalDisplay[0] || [])
+    : (sheet.getDataRange().getDisplayValues()[0] || []);
 
   const nameColZero = headers.indexOf('Account Name');
   const balanceColZero = headers.indexOf('Current Balance');

@@ -277,7 +277,12 @@ function evaluateBankBufferWarning() {
   }
 }
 
-function loadBankData() {
+// `quiet` lets the post-save refresh repaint the right-side info panel
+// without trampling the "Bank account saved." status set by saveBank().
+// The normal user-triggered path (account/date dropdown change) calls
+// this with no argument and keeps the existing Loading… → '' status
+// cycle. Mirrors loadDebtFieldValue(quiet) on the Debts page.
+function loadBankData(quiet) {
   const account = document.getElementById('bank_account').value;
   const date = document.getElementById('bank_date').value;
 
@@ -297,7 +302,7 @@ function loadBankData() {
     return;
   }
 
-  setStatusLoading('bank_status');
+  if (!quiet) setStatusLoading('bank_status');
   google.script.run
     .withSuccessHandler(function(data) {
       bankCurrentData = data;
@@ -327,9 +332,11 @@ function loadBankData() {
       }
 
       evaluateBankBufferWarning();
-      setStatus('bank_status', '', false);
+      if (!quiet) setStatus('bank_status', '', false);
     })
     .withFailureHandler(function(err) {
+      // Even in quiet mode, surface failures so users aren't left
+      // with a stale info panel and no signal that something went wrong.
       setStatus('bank_status', (err.message || String(err)), true);
     })
     .getBankAccountValueForDate(account, date);
@@ -501,12 +508,15 @@ function saveBank() {
     return;
   }
 
-  setStatusLoading('bank_status');
+  setStatusLoading('bank_status', 'Saving…');
 
   google.script.run
     .withSuccessHandler(function(res) {
       setStatus('bank_status', res.message || 'Saved.', false);
-      loadBankData();
+      // Quiet refresh: repaint the right-side info panel from the
+      // server without overwriting the "Bank account saved." status.
+      // Same pattern as Debts saveDebt() → loadDebtFieldValue(true).
+      loadBankData(true);
       refreshSnapshot();
 
       // Background planner refresh — same silent-follow-up pattern
@@ -713,7 +723,10 @@ function loadInvestmentSectionThenSelect_(accountName) {
     .getInvestmentUiData();
 }
 
-function loadInvestmentData() {
+// `quiet` lets the post-save refresh repaint the right-side info panel
+// without trampling the "Investment value saved." status set by
+// saveInvestment(). Mirrors loadBankData(quiet) and loadDebtFieldValue.
+function loadInvestmentData(quiet) {
   const account = document.getElementById('inv_account').value;
   const date = document.getElementById('inv_date').value;
 
@@ -728,7 +741,7 @@ function loadInvestmentData() {
     return;
   }
 
-  setStatusLoading('inv_status');
+  if (!quiet) setStatusLoading('inv_status');
   google.script.run
     .withSuccessHandler(function(data) {
       document.getElementById('inv_selectedMonth').textContent = data.selectedMonth || '—';
@@ -751,9 +764,11 @@ function loadInvestmentData() {
         document.getElementById('inv_value').value = '';
       }
 
-      setStatus('inv_status', '', false);
+      if (!quiet) setStatus('inv_status', '', false);
     })
     .withFailureHandler(function(err) {
+      // Surface failures even in quiet mode so users aren't left with
+      // a stale info panel and no signal that something went wrong.
       setStatus('inv_status', (err.message || String(err)), true);
     })
     .getInvestmentValueForDate(account, date);
@@ -768,10 +783,15 @@ function saveInvestment() {
     return;
   }
 
+  setStatusLoading('inv_status', 'Saving…');
+
   google.script.run
     .withSuccessHandler(function(res) {
       setStatus('inv_status', res.message || 'Saved.', false);
-      loadInvestmentData();
+      // Quiet refresh: repaint right-side info panel without clobbering
+      // the "Investment value saved." status. Same pattern as Debts and
+      // Bank.
+      loadInvestmentData(true);
       refreshSnapshot();
 
       // Background planner refresh — see saveBank() above for the full

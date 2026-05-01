@@ -212,7 +212,10 @@ function loadHouseSectionThenSelect_(houseName) {
     .getHouseUiData();
 }
 
-function loadHouseData() {
+// `quiet` lets the post-save refresh repaint the right-side info panel
+// without trampling the "House value saved." status set by saveHouse().
+// Mirrors loadBankData(quiet) and loadDebtFieldValue(quiet).
+function loadHouseData(quiet) {
   const house = document.getElementById('house_house').value;
   const date = document.getElementById('house_date').value;
 
@@ -229,7 +232,7 @@ function loadHouseData() {
     return;
   }
 
-  setStatusLoading('house_status');
+  if (!quiet) setStatusLoading('house_status');
   google.script.run
     .withSuccessHandler(function(data) {
       document.getElementById('house_selectedMonth').textContent = data.selectedMonth || '—';
@@ -256,7 +259,7 @@ function loadHouseData() {
         document.getElementById('house_value').value = '';
       }
 
-      setStatus('house_status', '', false);
+      if (!quiet) setStatus('house_status', '', false);
     })
     .withFailureHandler(function(err) {
       setStatus('house_status', (err.message || String(err)), true);
@@ -311,10 +314,15 @@ function saveHouse() {
     return;
   }
 
+  setStatusLoading('house_status', 'Saving…');
+
   google.script.run
     .withSuccessHandler(function(res) {
       setStatus('house_status', res.message || 'Saved.', false);
-      loadHouseData();
+      // Quiet refresh: repaint the right-side info panel from the
+      // server without overwriting the "House value saved." status.
+      // Same pattern as Debts, Bank, and Investment saves.
+      loadHouseData(true);
       refreshSnapshot();
 
       // Background planner refresh — same silent-follow-up pattern

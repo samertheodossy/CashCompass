@@ -34,52 +34,115 @@ var DEBTS_RESERVED_ROW_NAMES_ = {
 /* -------------------------------------------------------------------------- */
 
 function getDebtsUiData() {
-  // Blank-workbook safety: on a fresh sheet INPUT - Debts does not exist
-  // yet and getDebtRows_() -> getSheet_() would throw a red banner. Return
-  // the same shape with empty lists so the Debts page renders clean. The
-  // populated path below is unchanged.
+  // Performance: previously this RPC made up to FOUR full reads of
+  // INPUT - Debts in a row — once for getValues(), once for
+  // getDisplayValues() inside getDebtRows_(), once more inside
+  // getDebtsHeaderMap_(), and a fourth time inside
+  // getDebtDistinctColumnValues_('Type'). On populated workbooks each
+  // sheet read is a ~300–800ms round-trip, so the Debts tab took
+  // ~1.5–3s just to open. We now load INPUT - Debts ONCE and derive
+  // both the active-row list AND the distinct Type options from that
+  // single snapshot. Behavior is identical: same rows, same sort
+  // order, same Type list, same active-filter rules. The legacy
+  // helpers (getDebtRows_, getDebtDistinctColumnValues_,
+  // getDebtsHeaderMap_) stay available for other callers and are not
+  // touched.
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss.getSheetByName(getSheetNames_().DEBTS)) {
+  const sheet = ss.getSheetByName(getSheetNames_().DEBTS);
+
+  const editableFields = [
+    'Account Balance',
+    'Due Date',
+    'Credit Limit',
+    'Minimum Payment',
+    'Credit Left',
+    'Int Rate'
+  ];
+
+  if (!sheet) {
     return {
       debts: [],
       types: ['All'],
       typeOptions: [],
-      editableFields: [
-        'Account Balance',
-        'Due Date',
-        'Credit Limit',
-        'Minimum Payment',
-        'Credit Left',
-        'Int Rate'
-      ]
+      editableFields: editableFields
     };
   }
-  const debts = getDebtRows_();
-  const typeSet = {};
 
-  debts.forEach(function(d) {
-    if (d.type) typeSet[d.type] = true;
-  });
-
-  let typeOptions = [];
+  let display = [];
+  let values = [];
   try {
-    typeOptions = getDebtDistinctColumnValues_('Type');
+    display = sheet.getDataRange().getDisplayValues();
+    values = sheet.getDataRange().getValues();
   } catch (e) {
-    Logger.log('getDebtsUiData type options: ' + e);
+    Logger.log('getDebtsUiData read: ' + e);
+    return {
+      debts: [],
+      types: ['All'],
+      typeOptions: [],
+      editableFields: editableFields
+    };
   }
+
+  if (display.length < 2) {
+    return {
+      debts: [],
+      types: ['All'],
+      typeOptions: [],
+      editableFields: editableFields
+    };
+  }
+
+  let headerMap;
+  try {
+    headerMap = getDebtsHeaderMap_(sheet, display);
+  } catch (e) {
+    Logger.log('getDebtsUiData header map: ' + e);
+    return {
+      debts: [],
+      types: ['All'],
+      typeOptions: [],
+      editableFields: editableFields
+    };
+  }
+
+  const debts = [];
+  const typeSet = Object.create(null);
+  const typeOptionSet = Object.create(null);
+
+  for (let r = 1; r < display.length; r++) {
+    const displayRow = display[r] || [];
+    const valueRow = values[r] || [];
+
+    const rawType = headerMap.typeColZero === -1
+      ? ''
+      : String(displayRow[headerMap.typeColZero] || '').trim();
+    if (rawType) typeOptionSet[rawType] = true;
+
+    const name = String(displayRow[headerMap.nameColZero] || '').trim();
+    if (!name) continue;
+    if (isDebtSummaryRowName_(name)) continue;
+    if (isDebtRowInactive_(displayRow, valueRow, headerMap)) continue;
+
+    if (rawType) typeSet[rawType] = true;
+
+    debts.push({
+      accountName: name,
+      type: rawType
+    });
+  }
+
+  debts.sort(function(a, b) {
+    if (a.type !== b.type) return a.type.localeCompare(b.type);
+    return a.accountName.localeCompare(b.accountName);
+  });
 
   return {
     debts: debts,
     types: ['All'].concat(Object.keys(typeSet).sort()),
-    typeOptions: typeOptions,
-    editableFields: [
-      'Account Balance',
-      'Due Date',
-      'Credit Limit',
-      'Minimum Payment',
-      'Credit Left',
-      'Int Rate'
-    ]
+    typeOptions: Object.keys(typeOptionSet).sort(function(a, b) {
+      return a.localeCompare(b);
+    }),
+    editableFields: editableFields
   };
 }
 
@@ -146,6 +209,14 @@ function getAllDebtAccountNamesIncludingInactive_(sheet) {
 }
 
 function getDebtFieldValue(accountName, fieldName) {
+  // Performance: this RPC is fired on every Debts dropdown change and
+  // every field-picker change, so a slow path here makes the page feel
+  // laggy on every interaction. The previous implementation read
+  // INPUT - Debts THREE times in a row (getValues + getDisplayValues +
+  // getDebtsHeaderMap) plus a separate findDebtRow_() lookup. We now
+  // load both snapshots once, derive the header map from the loaded
+  // display, and scan the loaded display for the account row in-memory
+  // instead of round-tripping again.
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = getSheet_(ss, 'DEBTS');
 
@@ -154,21 +225,31 @@ function getDebtFieldValue(accountName, fieldName) {
 
   if (display.length < 2) throw new Error('Debts list is empty.');
 
-  const headerMap = getDebtsHeaderMap_(sheet);
-  const fieldColZero = getRequiredDebtFieldColZero_(sheet, fieldName);
+  const headerMap = getDebtsHeaderMap_(sheet, display);
+  const fieldColZero = getRequiredDebtFieldColZero_(sheet, fieldName, display[0] || []);
 
-  const row = findDebtRow_(sheet, accountName);
-  if (row === -1) {
+  const target = String(accountName || '').trim();
+  let rowIdx = -1;
+  for (let r = 1; r < display.length; r++) {
+    const name = String((display[r] || [])[headerMap.nameColZero] || '').trim();
+    if (!name) continue;
+    if (isDebtSummaryRowName_(name)) continue;
+    if (name === target) {
+      rowIdx = r;
+      break;
+    }
+  }
+  if (rowIdx === -1) {
     throw new Error('Debt account not found: ' + accountName);
   }
 
   return {
     accountName: accountName,
     fieldName: fieldName,
-    value: values[row - 1][fieldColZero],
-    displayValue: display[row - 1][fieldColZero],
-    type: headerMap.typeColZero === -1 ? '' : String(display[row - 1][headerMap.typeColZero] || '').trim(),
-    pctAvail: headerMap.pctAvailColZero === -1 ? '' : String(display[row - 1][headerMap.pctAvailColZero] || '').trim()
+    value: values[rowIdx][fieldColZero],
+    displayValue: display[rowIdx][fieldColZero],
+    type: headerMap.typeColZero === -1 ? '' : String(display[rowIdx][headerMap.typeColZero] || '').trim(),
+    pctAvail: headerMap.pctAvailColZero === -1 ? '' : String(display[rowIdx][headerMap.pctAvailColZero] || '').trim()
   };
 }
 
@@ -779,8 +860,15 @@ function deactivateDebtFromDashboard(payload) {
 /*  Shared helpers                                                            */
 /* -------------------------------------------------------------------------- */
 
-function getDebtsHeaderMap_(sheet) {
-  const headers = sheet.getDataRange().getDisplayValues()[0] || [];
+function getDebtsHeaderMap_(sheet, optionalDisplay) {
+  // Performance: when callers (e.g. getDebtsUiData / getDebtFieldValue)
+  // have already loaded the full INPUT - Debts display values, pass that
+  // array in via optionalDisplay so we can read the header row from it
+  // instead of doing another full-sheet round-trip just to look up
+  // column indices. Behavior is identical when omitted.
+  const headers = (optionalDisplay && optionalDisplay.length)
+    ? (optionalDisplay[0] || [])
+    : (sheet.getDataRange().getDisplayValues()[0] || []);
 
   const nameColZero = headers.indexOf('Account Name');
   const typeColZero = headers.indexOf('Type');
@@ -890,8 +978,13 @@ function findDebtTemplateRow_(sheet, headerMap) {
   return -1;
 }
 
-function getRequiredDebtFieldColZero_(sheet, fieldName) {
-  const headers = sheet.getDataRange().getDisplayValues()[0] || [];
+function getRequiredDebtFieldColZero_(sheet, fieldName, optionalHeaders) {
+  // Performance: callers that already have the header row loaded can
+  // pass it in via optionalHeaders to avoid a redundant full-sheet read
+  // just for the header lookup. Behavior is unchanged when omitted.
+  const headers = (optionalHeaders && optionalHeaders.length)
+    ? optionalHeaders
+    : (sheet.getDataRange().getDisplayValues()[0] || []);
   const colZero = headers.indexOf(fieldName);
   if (colZero === -1) {
     throw new Error('Field not found: ' + fieldName);

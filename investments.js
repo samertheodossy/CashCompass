@@ -222,28 +222,59 @@ function getLatestInvestmentValuesForYear_(sheet, year) {
 }
 
 function getInvestmentUiData() {
-  // Blank-workbook safety: on a fresh sheet INPUT - Investments does
-  // not exist yet and getInvestmentsFromHistory_() -> getSheet_() would
-  // throw a red banner on the Investments page. Return the same shape
-  // with empty lists so the page renders clean. The populated path
-  // below is unchanged.
-  const ssEarly = SpreadsheetApp.getActiveSpreadsheet();
-  if (!ssEarly.getSheetByName(getSheetNames_().INVESTMENTS)) {
+  // Performance: previously this RPC made TWO full reads of SYS - Assets
+  // in a row — once for distinct Type values
+  // (getAssetsDistinctColumnValues_) and once for the inactive set
+  // (getInactiveInvestmentsSet_). Each is a ~300–800ms round-trip on
+  // populated workbooks. We now load SYS - Assets ONCE and derive both
+  // from the same snapshot. The INPUT - Investments history read (1
+  // round-trip) is unchanged.
+  // Blank-workbook safety preserved: if INPUT - Investments doesn't
+  // exist yet, return empty shape so the page renders clean.
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss.getSheetByName(getSheetNames_().INVESTMENTS)) {
     return { accounts: [], typeOptions: [] };
   }
 
   var typeOpts = [];
-  try {
-    typeOpts = getAssetsDistinctColumnValues_('Type');
-  } catch (e) {
-    Logger.log('getInvestmentUiData type options: ' + e);
-  }
-
   let inactive = Object.create(null);
+
   try {
-    inactive = getInactiveInvestmentsSet_();
+    const assetsSheet = ss.getSheetByName(getSheetNames_().ASSETS);
+    if (assetsSheet) {
+      const assetsDisplay = assetsSheet.getDataRange().getDisplayValues();
+      if (assetsDisplay.length >= 1) {
+        const headers = assetsDisplay[0] || [];
+        const nameIdx = headers.indexOf('Account Name');
+        const typeIdx = headers.indexOf('Type');
+        const activeIdx = headers.indexOf('Active');
+
+        const typeSet = Object.create(null);
+
+        for (let r = 1; r < assetsDisplay.length; r++) {
+          const row = assetsDisplay[r] || [];
+
+          if (typeIdx !== -1) {
+            const t = String(row[typeIdx] || '').trim();
+            if (t) typeSet[t] = true;
+          }
+
+          if (nameIdx !== -1 && activeIdx !== -1) {
+            const name = String(row[nameIdx] || '').trim();
+            if (name) {
+              const raw = String(row[activeIdx] || '').trim().toLowerCase();
+              if (raw === 'no' || raw === 'n' || raw === 'false' || raw === 'inactive') {
+                inactive[name.toLowerCase()] = true;
+              }
+            }
+          }
+        }
+
+        typeOpts = Object.keys(typeSet).sort(function(a, b) { return a.localeCompare(b); });
+      }
+    }
   } catch (e) {
-    Logger.log('getInvestmentUiData inactive filter: ' + e);
+    Logger.log('getInvestmentUiData assets read: ' + e);
   }
 
   const allAccounts = getInvestmentsFromHistory_();
@@ -338,8 +369,22 @@ function getInvestmentValueForDate(accountName, balanceDate) {
 
   const d = parseIsoDateLocal_(balanceDate);
 
+  // Performance: previously this RPC did 2 full reads of INVESTMENTS
+  // (one per month) plus a per-row range loop inside
+  // findInvestmentRowInBlock_ each time, so picking a date triggered
+  // ~50+ Sheet round-trips on populated workbooks. Now we read
+  // INVESTMENTS once and share the snapshot across both months via
+  // the optionalDisplay parameter on the year-block + row-find
+  // helpers. The whole sheet (all year blocks) is in memory so the
+  // prior-month case crosses year boundaries cleanly.
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const invSheet = getSheet_(ss, 'INVESTMENTS');
+  const invDisplay = invSheet.getDataRange().getDisplayValues();
+
   const year = d.getFullYear();
-  const monthValue = getInvestmentHistoryValueForMonth_(name, year, d);
+  const monthValue = getInvestmentHistoryValueForMonthFromDisplay_(
+    invSheet, invDisplay, name, year, d
+  );
   const assetInfo = getAssetRowData_(name);
 
   var previousMonthLabel = '';
@@ -347,7 +392,9 @@ function getInvestmentValueForDate(accountName, balanceDate) {
   try {
     const prior = new Date(d.getFullYear(), d.getMonth() - 1, 15);
     const priorYear = prior.getFullYear();
-    const previousMonthValue = getInvestmentHistoryValueForMonth_(name, priorYear, prior);
+    const previousMonthValue = getInvestmentHistoryValueForMonthFromDisplay_(
+      invSheet, invDisplay, name, priorYear, prior
+    );
     previousMonthLabel = Utilities.formatDate(prior, Session.getScriptTimeZone(), 'MMM-yy');
     const cur = Number(monthValue);
     const prev = Number(previousMonthValue);
@@ -379,6 +426,24 @@ function getInvestmentHistoryValueForMonth_(accountName, year, balanceDate) {
     throw new Error('Could not find investment "' + accountName + '" inside Year ' + year + ' block.');
   }
 
+  const monthCol = getMonthColumnByDate_(sheet, balanceDate, block.headerRow);
+  return round2_(toNumber_(sheet.getRange(accountRow, monthCol).getValue()));
+}
+
+/**
+ * Internal twin of getInvestmentHistoryValueForMonth_ that takes a
+ * pre-loaded INVESTMENTS display-values snapshot so callers reading
+ * multiple months in a single RPC don't re-fetch the same sheet for
+ * each lookup. Used by getInvestmentValueForDate for the current+prior
+ * month delta panel; the monthly cell value itself is still read via
+ * sheet.getRange(...).getValue() so rounding behavior is identical.
+ */
+function getInvestmentHistoryValueForMonthFromDisplay_(sheet, display, accountName, year, balanceDate) {
+  const block = getInvestmentsYearBlock_(sheet, year, display);
+  const accountRow = findInvestmentRowInBlock_(sheet, block, accountName, display);
+  if (accountRow === -1) {
+    throw new Error('Could not find investment "' + accountName + '" inside Year ' + year + ' block.');
+  }
   const monthCol = getMonthColumnByDate_(sheet, balanceDate, block.headerRow);
   return round2_(toNumber_(sheet.getRange(accountRow, monthCol).getValue()));
 }
@@ -513,13 +578,21 @@ function getAssetRowData_(accountName) {
   return null;
 }
 
-function getInvestmentsYearBlock_(sheet, year) {
-  const display = sheet.getDataRange().getDisplayValues();
+function getInvestmentsYearBlock_(sheet, year, optionalDisplay) {
+  // Performance: same fix as bank_accounts.js::getBankAccountsYearBlock_.
+  // Previously this helper read the full sheet then re-fetched column A
+  // one cell at a time (sheet.getRange(row, 1).getDisplayValue()) just
+  // to find the dataEndRow boundary and validate the header row. We now
+  // reuse the loaded snapshot for everything, and accept an optional
+  // pre-loaded display from callers that already have it.
+  const display = (optionalDisplay && optionalDisplay.length)
+    ? optionalDisplay
+    : sheet.getDataRange().getDisplayValues();
 
   let yearRow = -1;
   for (let r = 0; r < display.length; r++) {
-    const colA = String(display[r][0] || '').trim();
-    const colB = String(display[r][1] || '').trim();
+    const colA = String((display[r] && display[r][0]) || '').trim();
+    const colB = String((display[r] && display[r][1]) || '').trim();
     if (colA === 'Year' && colB === String(year)) {
       yearRow = r + 1;
       break;
@@ -531,18 +604,20 @@ function getInvestmentsYearBlock_(sheet, year) {
   }
 
   const headerRow = yearRow + 1;
-  const headerName = String(sheet.getRange(headerRow, 1).getDisplayValue() || '').trim();
+  const headerName = String(
+    (display[headerRow - 1] && display[headerRow - 1][0]) || ''
+  ).trim();
   if (headerName !== 'Account Name') {
     throw new Error('Expected Account Name header row for Year ' + year + ' in Investments.');
   }
 
   const dataStartRow = headerRow + 1;
-  let dataEndRow = sheet.getLastRow();
+  let dataEndRow = display.length;
 
-  for (let row = dataStartRow; row <= sheet.getLastRow(); row++) {
-    const name = String(sheet.getRange(row, 1).getDisplayValue() || '').trim();
+  for (let r = dataStartRow - 1; r < display.length; r++) {
+    const name = String((display[r] && display[r][0]) || '').trim();
     if (name === 'Account Totals' || name === 'Delta' || name === 'Year') {
-      dataEndRow = row - 1;
+      dataEndRow = r; // r is the 0-based index, equal to (1-based row) - 1
       break;
     }
   }
@@ -556,11 +631,32 @@ function getInvestmentsYearBlock_(sheet, year) {
   };
 }
 
-function findInvestmentRowInBlock_(sheet, block, accountName) {
-  for (let row = block.dataStartRow; row <= block.dataEndRow; row++) {
-    const name = String(sheet.getRange(row, 1).getDisplayValue() || '').trim();
+function findInvestmentRowInBlock_(sheet, block, accountName, optionalDisplay) {
+  // Performance: same fix as bank_accounts.js::findBankAccountRowInBlock_.
+  // Replace the per-row sheet.getRange(row, 1).getDisplayValue() loop with
+  // a single batched range read of column A across the block, or reuse
+  // the caller's already-loaded full-sheet display when given.
+  if (block.dataEndRow < block.dataStartRow) return -1;
+
+  let names;
+  if (optionalDisplay && optionalDisplay.length) {
+    names = [];
+    for (let r = block.dataStartRow - 1; r <= block.dataEndRow - 1 && r < optionalDisplay.length; r++) {
+      names.push((optionalDisplay[r] && optionalDisplay[r][0] !== undefined)
+        ? optionalDisplay[r][0]
+        : '');
+    }
+  } else {
+    const numRows = block.dataEndRow - block.dataStartRow + 1;
+    names = sheet.getRange(block.dataStartRow, 1, numRows, 1).getDisplayValues().map(function(row) {
+      return row[0];
+    });
+  }
+
+  for (let i = 0; i < names.length; i++) {
+    const name = String(names[i] || '').trim();
     if (!isInvestmentDataRowName_(name)) continue;
-    if (name === accountName) return row;
+    if (name === accountName) return block.dataStartRow + i;
   }
   return -1;
 }
@@ -575,8 +671,13 @@ function isInvestmentDataRowName_(name) {
   return true;
 }
 
-function getAssetsHeaderMap_(sheet) {
-  const headers = sheet.getDataRange().getDisplayValues()[0] || [];
+function getAssetsHeaderMap_(sheet, optionalDisplay) {
+  // Performance: when callers already loaded the SYS - Assets display
+  // values, pass them in via optionalDisplay to skip the redundant
+  // header round-trip. Behavior unchanged when omitted.
+  const headers = (optionalDisplay && optionalDisplay.length)
+    ? (optionalDisplay[0] || [])
+    : (sheet.getDataRange().getDisplayValues()[0] || []);
 
   const nameColZero = headers.indexOf('Account Name');
   const typeColZero = headers.indexOf('Type');
