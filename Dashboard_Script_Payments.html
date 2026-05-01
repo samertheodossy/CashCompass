@@ -1,12 +1,36 @@
+// Sentinel option appended to the Existing Payee dropdown so users can
+// explicitly say "I'm adding a brand-new payee not in this list."
+// Without it the only way to add a new payee was to ignore the visible
+// dropdown and just type in the second box, which is unclear UX. The
+// sentinel value is internal only — currentPaymentPayee + the save
+// path skip it, so the server only ever receives the typed payee text.
+// Mirrors the BANK_ADD_POLICY_OTHER_SENTINEL_ / INV_ADD_TYPE_OTHER_SENTINEL_
+// pattern used elsewhere in this file family.
+var QUICK_ADD_PAYEE_OTHER_SENTINEL_ = '__OTHER__';
+
 function currentPaymentPayee() {
   const typed = document.getElementById('pay_payeeInput').value.trim();
   if (typed) return typed;
-  return document.getElementById('pay_payeeSelect').value || '';
+  const sel = String(document.getElementById('pay_payeeSelect').value || '');
+  if (sel === QUICK_ADD_PAYEE_OTHER_SENTINEL_) return '';
+  return sel;
 }
 
 function syncPaymentPayeeInput() {
   const selected = document.getElementById('pay_payeeSelect').value || '';
-  document.getElementById('pay_payeeInput').value = selected;
+  const input = document.getElementById('pay_payeeInput');
+  if (!input) return;
+
+  if (selected === QUICK_ADD_PAYEE_OTHER_SENTINEL_) {
+    // User explicitly chose "Other (type new payee)" — clear the
+    // typed input and focus it so they can immediately type the new
+    // name. Don't copy the literal sentinel string into the input.
+    input.value = '';
+    try { input.focus(); } catch (_e) {}
+    return;
+  }
+
+  input.value = selected;
 }
 
 function applyQuickPaymentPriorMonth_(data) {
@@ -89,6 +113,19 @@ function prefillQuickPayment(prefill) {
     } else {
       input.value = wantedRaw;
     }
+
+    // Async-data race fix: when Quick Add hasn't been visited yet this
+    // session, paymentPayees is still [] at the moment prefill runs
+    // (showTab('payments') just fired loadPaymentSection() and its RPC
+    // hasn't returned). The match loop above runs against an empty
+    // dropdown and falls through to "input only", so the user sees
+    // the typed-text payee filled in but the Existing Payee dropdown
+    // stays blank. We stash the wanted payee here; loadPaymentSection's
+    // success handler reapplies the match once the dropdown is
+    // populated. Cleared on consume so a later manual save / cold tab
+    // load can't inherit a stale prefill. Same lifecycle pattern as
+    // window.__pendingQuickAddFlowSource / __pendingUpcomingPaymentId.
+    window.__pendingQuickAddPayee = wantedRaw;
   }
 
   if (prefill.amount !== null && prefill.amount !== undefined) {
@@ -124,16 +161,60 @@ function loadPaymentSection() {
   // tab load so a later manual Quick Add never inherits it.
   window.__pendingQuickAddFlowSource = '';
   window.__pendingUpcomingPaymentId = '';
+  // NOTE: do NOT clear window.__pendingQuickAddPayee here.
+  // prefillQuickPayment() sets that variable AFTER calling
+  // showTab('payments') (which triggers this function), so an entry-time
+  // clear would race-erase a freshly-set prefill. The success handler
+  // below consumes-and-clears it once the dropdown is populated.
   google.script.run
     .withSuccessHandler(function(data) {
       paymentPayees = data.payees || [];
       filterPaymentPayees();
+      consumePendingQuickAddPayeePrefill_();
       loadPaymentPreview();
     })
     .withFailureHandler(function(err) {
       setStatus('pay_status', (err.message || String(err)), true);
     })
     .getQuickAddPaymentUiData();
+}
+
+/**
+ * Reapplies a pending payee prefill (set by prefillQuickPayment) once
+ * the Existing Payee dropdown has been freshly populated. Without this,
+ * launching Quick Add from Bills → Pay on a cold tab leaves the
+ * dropdown blank because the synchronous match attempt in
+ * prefillQuickPayment ran before paymentPayees finished loading.
+ *
+ * Guards:
+ *   - Only re-applies if the typed-text input still equals the
+ *     originally-wanted payee (i.e. the user hasn't started editing it
+ *     in the brief window between prefill and data load). This avoids
+ *     clobbering a manual edit if the data lands very late.
+ *   - Always clears window.__pendingQuickAddPayee after consume so a
+ *     later manual save / future prefill can't inherit a stale value.
+ */
+function consumePendingQuickAddPayeePrefill_() {
+  const wantedRaw = String(window.__pendingQuickAddPayee || '').trim();
+  if (!wantedRaw) return;
+  window.__pendingQuickAddPayee = '';
+
+  const select = document.getElementById('pay_payeeSelect');
+  const input = document.getElementById('pay_payeeInput');
+  if (!select || !input) return;
+
+  // Don't override a user edit that happened during the async window.
+  if (String(input.value || '').trim() !== wantedRaw) return;
+
+  const wanted = wantedRaw.toLowerCase();
+  for (let i = 0; i < select.options.length; i++) {
+    const optValue = String(select.options[i].value || '').trim();
+    if (optValue.toLowerCase() === wanted) {
+      select.value = optValue;
+      input.value = optValue;
+      return;
+    }
+  }
 }
 
 function filterPaymentPayees() {
@@ -149,6 +230,16 @@ function filterPaymentPayees() {
     opt.textContent = p.payee;
     sel.appendChild(opt);
   });
+
+  // Always offer an explicit "Other" sentinel so users know they can
+  // confidently add a brand-new payee without wondering whether to
+  // ignore the dropdown. Selecting it clears+focuses the typed input
+  // via syncPaymentPayeeInput; currentPaymentPayee skips the sentinel
+  // so the save path always sees the typed value, not "__OTHER__".
+  const otherOpt = document.createElement('option');
+  otherOpt.value = QUICK_ADD_PAYEE_OTHER_SENTINEL_;
+  otherOpt.textContent = 'Other (type new payee)';
+  sel.appendChild(otherOpt);
 }
 
 function loadPaymentPreview() {
