@@ -1,5 +1,5 @@
 /**
- * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_deactivate, house expense, house_add, house_value_update, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_update, bank_account_deactivate, investment_add, investment_update, investment_deactivate, debt_add, debt_deactivate, debt_update, income_add, income_deactivate, …). Rows can be removed from the web UI for mistaken log lines only.
+ * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_deactivate, house expense, house_add, house_value_update, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_update, bank_account_deactivate, investment_add, investment_update, investment_deactivate, debt_add, debt_deactivate, debt_update, income_add, income_deactivate, planner_email_deferred, planner_email_sent, planner_email_invalid_recipient, …). Rows can be removed from the web UI for mistaken log lines only.
  * Complements OUT - History (planner-run snapshots). Tab: LOG - Activity.
  */
 
@@ -424,6 +424,13 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (etEarly === 'income_deactivate') return 'Income';
   if (etEarly === 'income_source_add') return 'Income';
   if (etEarly === 'income_source_deactivate') return 'Income';
+  // Planner email lifecycle events get their own kind so the user can
+  // filter them in (or out) from the Type dropdown without confusing
+  // them with the bill / debt / etc. categories. All three are
+  // non-monetary; see activityLogIsNonMonetaryEvent_.
+  if (etEarly === 'planner_email_deferred') return 'Planner';
+  if (etEarly === 'planner_email_sent') return 'Planner';
+  if (etEarly === 'planner_email_invalid_recipient') return 'Planner';
 
   var combined = pay + ' ' + cat;
   var blob = combined.toLowerCase();
@@ -532,8 +539,74 @@ function activityLogActionLabel_(eventType, detailsJson) {
     // Legacy: upcoming_cashflow is no longer emitted (direct "Add to Cash
     // Flow" path removed), but historical rows still need a readable label.
     case 'upcoming_cashflow': return 'Pushed to cash flow';
+    // Planner email lifecycle. All three are non-monetary (Amount = "—").
+    //   planner_email_deferred — a per-save background planner run
+    //     skipped the email and bumped the debounce queue. Many of
+    //     these accumulate during a heavy update session and resolve
+    //     into a single planner_email_sent row once the queue settles.
+    //   planner_email_sent — the actual email went out. Surfaces
+    //     recipient count from the row's details JSON when present.
+    //   planner_email_invalid_recipient — Profile had a value in
+    //     `Email` or `Spouse Email` that failed regex validation, so
+    //     that recipient was dropped. The bad address itself is
+    //     intentionally never logged; only the field name is.
+    case 'planner_email_deferred': return 'Email deferred';
+    case 'planner_email_sent': return plannerEmailSentActionLabel_(detailsJson);
+    case 'planner_email_invalid_recipient':
+      return plannerEmailInvalidRecipientActionLabel_(detailsJson);
     default: return '';
   }
+}
+
+/**
+ * Build the `planner_email_sent` action label from the row's details
+ * JSON. Surfaces recipient count when available so the user can tell
+ * at a glance whether spouse was included.
+ *
+ *   "Email sent to 2 recipients"   — primary + spouse
+ *   "Email sent to 1 recipient"    — primary only
+ *   "Email sent"                   — legacy row with no details
+ */
+function plannerEmailSentActionLabel_(detailsJson) {
+  var fallback = 'Email sent';
+  var raw = String(detailsJson || '').trim();
+  if (!raw) return fallback;
+  var d;
+  try {
+    d = JSON.parse(raw);
+  } catch (_e) {
+    return fallback;
+  }
+  if (!d || typeof d !== 'object') return fallback;
+  var n = Number(d.recipientCount);
+  if (!isFinite(n) || n <= 0) return fallback;
+  return 'Email sent to ' + n + ' recipient' + (n === 1 ? '' : 's');
+}
+
+/**
+ * Build the `planner_email_invalid_recipient` action label from the
+ * row's details JSON. The Profile field name (e.g. `Spouse Email`) is
+ * surfaced so the user knows which slot to fix; we deliberately never
+ * include the bad address itself.
+ *
+ *   "Invalid Spouse Email — skipped"
+ *   "Invalid Email — skipped"
+ *   "Invalid recipient — skipped"   — legacy row with no details
+ */
+function plannerEmailInvalidRecipientActionLabel_(detailsJson) {
+  var fallback = 'Invalid recipient — skipped';
+  var raw = String(detailsJson || '').trim();
+  if (!raw) return fallback;
+  var d;
+  try {
+    d = JSON.parse(raw);
+  } catch (_e) {
+    return fallback;
+  }
+  if (!d || typeof d !== 'object') return fallback;
+  var field = String(d.field || '').trim();
+  if (!field) return fallback;
+  return 'Invalid ' + field + ' — skipped';
 }
 
 /**
@@ -793,7 +866,14 @@ function activityLogIsNonMonetaryEvent_(eventType) {
     et === 'income_deactivate' ||
     et === 'income_source_deactivate' ||
     et === 'upcoming_status' ||
-    et === 'upcoming_payment'
+    et === 'upcoming_payment' ||
+    // Planner email lifecycle: these rows describe a notification
+    // event, not a money movement, so Amount renders "—" — otherwise
+    // a heavy update session would show ten "$0.00" Email deferred
+    // rows in Activity for no reason.
+    et === 'planner_email_deferred' ||
+    et === 'planner_email_sent' ||
+    et === 'planner_email_invalid_recipient'
   );
 }
 

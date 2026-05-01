@@ -310,7 +310,7 @@ function runDebtPlannerAfterQuickPayment_() {
         }
       })
       .withFailureHandler(function(_err) { /* silent: see comment above */ })
-      .runPlannerAndRefreshDashboard();
+      .runPlannerAndRefreshDashboardFromSave();
   } catch (_e) { /* silent */ }
 }
 

@@ -1,13 +1,62 @@
 function getDashboardSnapshot() {
+  // Idempotent first-run: make sure the planner-email debounce trigger
+  // exists. We hook this on the dashboard-load entry rather than on
+  // every `buildDashboardSnapshot_()` call so we don't pay
+  // ScriptApp.getProjectTriggers() round-trips on every per-save
+  // background planner run. Failures are swallowed inside
+  // ensureDebouncePlannerTrigger_ so dashboard loading never breaks
+  // because of trigger registration.
+  if (typeof ensureDebouncePlannerTrigger_ === 'function') {
+    ensureDebouncePlannerTrigger_();
+  }
   return buildDashboardSnapshot_();
 }
 
+/**
+ * Manual planner refresh — the "Run Planner + Refresh Snapshot"
+ * button. Sends the planner email immediately if the workbook has
+ * meaningful state and a recipient is configured.
+ */
 function runPlannerAndRefreshDashboard() {
   if (typeof runDebtPlanner !== 'function') {
     throw new Error('runDebtPlanner() is not available.');
   }
 
+  // No options arg: default emailMode === 'send'. Manual button users
+  // explicitly asked for an email so we honor that immediately.
   runDebtPlanner();
+  touchDashboardSourceUpdated_('planner');
+
+  const snapshot = buildDashboardSnapshot_();
+  saveDashboardBaselineSnapshot_(snapshot);
+
+  return {
+    ok: true,
+    message: 'Planner run complete.',
+    snapshot: snapshot
+  };
+}
+
+/**
+ * Save-flow planner refresh — fired as a silent background RPC after
+ * a save (debt update, bank balance update, investment update, house
+ * value update, quick-add payment). Defers the planner email through
+ * the debounce queue so a heavy update session (e.g. month-start)
+ * doesn't blast 20-50 emails. The background save returns to the UI
+ * immediately; the queued email goes out once the user has been
+ * quiet long enough (DEBOUNCE_QUIET_WINDOW_MS_) and the time trigger
+ * sweeps the queue.
+ *
+ * The snapshot is still rebuilt and the source-updated touch still
+ * fires, so Rolling Debt Payoff and other planner-derived dashboard
+ * panels refresh just like before — only the email is debounced.
+ */
+function runPlannerAndRefreshDashboardFromSave() {
+  if (typeof runDebtPlanner !== 'function') {
+    throw new Error('runDebtPlanner() is not available.');
+  }
+
+  runDebtPlanner({ emailMode: 'defer' });
   touchDashboardSourceUpdated_('planner');
 
   const snapshot = buildDashboardSnapshot_();

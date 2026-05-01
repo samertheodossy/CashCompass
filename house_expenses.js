@@ -159,7 +159,11 @@ function addHouseExpenseToCashFlow_(payload, cost, serviceFees) {
     flowSource: payload.flowSource
   });
 
-  if (typeof runDebtPlanner === 'function') runDebtPlanner();
+  // Per-save background planner run. emailMode === 'defer' batches
+  // the planner email through the debounce trigger so a heavy expense
+  // entry session (typical month-start use case) doesn't blast one
+  // email per add. See debounce_planner.js for the queue mechanics.
+  if (typeof runDebtPlanner === 'function') runDebtPlanner({ emailMode: 'defer' });
 
   return {
     message: 'Also added to Cash Flow as ' + entryType + ' for ' + fmtCurrency_(amount) + '.',

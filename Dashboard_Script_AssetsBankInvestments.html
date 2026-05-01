@@ -537,7 +537,7 @@ function saveBank() {
             }
           })
           .withFailureHandler(function(_err) { /* silent: see comment above */ })
-          .runPlannerAndRefreshDashboard();
+          .runPlannerAndRefreshDashboardFromSave();
       } catch (_e) { /* silent */ }
     })
     .withFailureHandler(function(err) {
@@ -808,7 +808,7 @@ function saveInvestment() {
             }
           })
           .withFailureHandler(function(_err) { /* silent */ })
-          .runPlannerAndRefreshDashboard();
+          .runPlannerAndRefreshDashboardFromSave();
       } catch (_e) { /* silent */ }
     })
     .withFailureHandler(function(err) {

@@ -963,21 +963,84 @@ function normalizeHistoryValue_(value) {
   return String(value).trim();
 }
 
-function sendPlannerEmailIfConfigured_(summary) {
-  // Strict settings-only recipient resolution: read INPUT - Settings.Email
-  // directly without triggering sheet auto-creation and without falling
-  // back to Session.getActiveUser().getEmail(). The Session fallback was
-  // causing blank / not-set-up workbooks to silently email the owner even
-  // when the user never configured a recipient in Profile. Populated
-  // workbooks with a valid settings email are unaffected.
-  var userEmail = readPlannerEmailFromSettingsStrict_();
-  if (!userEmail) return;
+/**
+ * Decide whether to send the planner email now or defer it via the
+ * debounce trigger.
+ *
+ * `options.emailMode`:
+ *   - `'defer'` — per-save background run. Bumps `LAST_SAVE_AT` so the
+ *     debounce trigger knows there is pending work, logs a
+ *     `planner_email_deferred` row, and returns without sending. The
+ *     debounce trigger will fire after the quiet window settles.
+ *   - `'send'` (default) — manual button or the debounce trigger
+ *     itself. Honors the meaningfulness gate, resolves all valid
+ *     recipients (primary + spouse), sends one email to all of them
+ *     joined on `To:`, and marks the debounce queue settled.
+ *
+ * The default `'send'` preserves byte-for-byte compatibility with
+ * legacy callers that don't pass options (e.g. the menu's "Run
+ * Planner" item, the legacy sidebar HTML callers).
+ */
+function sendPlannerEmailIfConfigured_(summary, options) {
+  options = options || {};
+  var emailMode = String(options.emailMode || 'send').toLowerCase();
 
+  if (emailMode === 'defer') {
+    // Per-save background run. Defer the email — the debounce trigger
+    // will eventually settle and send. Bump LAST_SAVE_AT so the trigger
+    // knows there's pending work, then log the deferral so the user
+    // can see in Activity why no email went out.
+    if (typeof bumpDebouncePlannerLastSaveAt_ === 'function') {
+      bumpDebouncePlannerLastSaveAt_();
+    }
+    appendPlannerEmailDeferredActivity_(summary);
+    return;
+  }
+
+  // emailMode === 'send' (or anything else falls through to send for
+  // safety — better to over-send than to silently drop the email).
+  //
   // Readiness gate: when the workbook has no meaningful planner signal
-  // (no liabilities, no assets, no scheduled payments, no recommendation)
-  // skip silently. All four values come from the existing summary object
-  // built by runDebtPlanner, so this check does not read any sheets.
-  if (!isPlannerSummaryMeaningful_(summary)) return;
+  // (no liabilities, no assets, no scheduled payments, no
+  // recommendation) skip silently. All four values come from the
+  // existing summary object built by runDebtPlanner, so this check
+  // does not read any sheets. Still mark the queue settled so the
+  // debounce trigger doesn't keep retrying every poll interval.
+  if (!isPlannerSummaryMeaningful_(summary)) {
+    if (typeof markDebouncePlannerEmailSettled_ === 'function') {
+      markDebouncePlannerEmailSettled_();
+    }
+    return;
+  }
+
+  // Strict settings-only recipient resolution: reads INPUT - Settings
+  // directly without triggering sheet auto-creation and without
+  // falling back to Session.getActiveUser().getEmail(). The Session
+  // fallback was causing blank / not-set-up workbooks to silently
+  // email the owner when the user never configured a recipient in
+  // Profile. Populated workbooks with a valid settings email are
+  // unaffected. Returns BOTH primary (`Email`) and spouse
+  // (`Spouse Email`) when configured — see Profile help.
+  var resolved = readPlannerEmailRecipientsStrict_();
+
+  // Surface invalid recipient fields so the user can tell *why* the
+  // expected address didn't get the email without reading code. We
+  // log the field name (e.g. `Spouse Email`) but never the bad value
+  // itself so we don't leak a typo'd address into Activity.
+  if (resolved.invalidFields && resolved.invalidFields.length) {
+    appendPlannerEmailInvalidRecipientActivity_(resolved.invalidFields);
+  }
+
+  if (!resolved.valid || !resolved.valid.length) {
+    // No valid recipients at all — same silent skip as before. Still
+    // mark the queue settled so the debounce trigger doesn't keep
+    // polling forever waiting to send to a recipient that doesn't
+    // exist (case 9 from the plan).
+    if (typeof markDebouncePlannerEmailSettled_ === 'function') {
+      markDebouncePlannerEmailSettled_();
+    }
+    return;
+  }
 
   const lines = [];
   lines.push('Debt Planner Update');
@@ -989,16 +1052,43 @@ function sendPlannerEmailIfConfigured_(summary) {
   summary.executiveSummary.forEach(function(line) { lines.push(line); });
 
   MailApp.sendEmail({
-    to: userEmail,
+    to: resolved.valid.join(','),
     subject: 'Debt Planner Update - ' + summary.monthHeader,
     body: lines.join('\n')
   });
+
+  appendPlannerEmailSentActivity_(resolved);
+  if (typeof markDebouncePlannerEmailSettled_ === 'function') {
+    markDebouncePlannerEmailSettled_();
+  }
 }
 
-// Non-throwing, non-creating read of INPUT - Settings.Email. Returns the
-// trimmed email only if the sheet exists and the cell holds a value that
-// passes PROFILE_EMAIL_REGEX_. Never falls back to Session.getActiveUser().
-function readPlannerEmailFromSettingsStrict_() {
+/**
+ * Non-throwing, non-creating read of INPUT - Settings to collect every
+ * configured planner email recipient — currently `Email` (primary)
+ * and `Spouse Email` from Profile. Each candidate is validated against
+ * `PROFILE_EMAIL_REGEX_` (the same regex Profile uses on save) before
+ * being included.
+ *
+ * Returns:
+ *   {
+ *     valid: string[],          // deduplicated list of valid addresses
+ *     fields: string[],         // Profile field names that contributed
+ *                               //   to `valid`, in the same order
+ *     invalidFields: string[]   // field names whose stored value was
+ *                               //   present but failed validation;
+ *                               //   surfaced via
+ *                               //   `planner_email_invalid_recipient`
+ *                               //   activity rows
+ *   }
+ *
+ * Never falls back to `Session.getActiveUser().getEmail()` (same hard
+ * rule as before — was the source of an old "silently emailed the
+ * owner of a blank workbook" bug).
+ */
+function readPlannerEmailRecipientsStrict_() {
+  var result = { valid: [], fields: [], invalidFields: [] };
+
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheetName =
@@ -1006,29 +1096,120 @@ function readPlannerEmailFromSettingsStrict_() {
         ? PROFILE_SETTINGS_SHEET_NAME_
         : 'INPUT - Settings';
     var sheet = ss.getSheetByName(sheetName);
-    if (!sheet) return '';
+    if (!sheet) return result;
+
     var last = sheet.getLastRow();
-    if (last < 2) return '';
+    if (last < 2) return result;
+
     var values = sheet.getRange(2, 1, last - 1, 2).getValues();
+
     var emailKey =
       typeof PROFILE_KEYS_ === 'object' && PROFILE_KEYS_ && PROFILE_KEYS_.EMAIL
         ? PROFILE_KEYS_.EMAIL
         : 'Email';
+    var spouseEmailKey =
+      typeof PROFILE_KEYS_ === 'object' && PROFILE_KEYS_ && PROFILE_KEYS_.SPOUSE_EMAIL
+        ? PROFILE_KEYS_.SPOUSE_EMAIL
+        : 'Spouse Email';
+
+    var regex =
+      typeof PROFILE_EMAIL_REGEX_ !== 'undefined'
+        ? PROFILE_EMAIL_REGEX_
+        : /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    var primaryRaw = '';
+    var spouseRaw = '';
     for (var i = 0; i < values.length; i++) {
       var key = String(values[i][0] || '').trim();
-      if (key !== emailKey) continue;
       var raw = String(values[i][1] == null ? '' : values[i][1]).trim();
-      if (!raw) return '';
-      var regex =
-        typeof PROFILE_EMAIL_REGEX_ !== 'undefined'
-          ? PROFILE_EMAIL_REGEX_
-          : /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      return regex.test(raw) ? raw : '';
+      if (key === emailKey) primaryRaw = raw;
+      else if (key === spouseEmailKey) spouseRaw = raw;
     }
+
+    var seen = {};
+    function consider(label, raw) {
+      if (!raw) return; // blank is allowed — silent omission
+      if (!regex.test(raw)) {
+        result.invalidFields.push(label);
+        return;
+      }
+      var normalized = raw.toLowerCase();
+      if (seen[normalized]) return; // dedup on case-insensitive match
+      seen[normalized] = true;
+      result.valid.push(raw);
+      result.fields.push(label);
+    }
+
+    consider(emailKey, primaryRaw);
+    consider(spouseEmailKey, spouseRaw);
   } catch (_e) {
-    return '';
+    // Defensive: leave whatever we collected so far and return.
+    return result;
   }
-  return '';
+
+  return result;
+}
+
+/**
+ * Append a `planner_email_deferred` row when a per-save background
+ * run skipped the email. Fully defensive — failures here must never
+ * break the save flow that triggered the planner.
+ */
+function appendPlannerEmailDeferredActivity_(summary) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (typeof appendActivityLog_ !== 'function') return;
+    var monthHeader = (summary && summary.monthHeader) ? String(summary.monthHeader) : '';
+    appendActivityLog_(ss, {
+      eventType: 'planner_email_deferred',
+      payee: 'Planner',
+      details: JSON.stringify({ monthHeader: monthHeader, detailsVersion: 1 })
+    });
+  } catch (_e) { /* defensive */ }
+}
+
+/**
+ * Append `planner_email_invalid_recipient` rows naming the Profile
+ * fields whose stored value failed regex validation. We deliberately
+ * never include the bad value itself — only the field name — so a
+ * typo doesn't leak into Activity.
+ */
+function appendPlannerEmailInvalidRecipientActivity_(invalidFields) {
+  try {
+    if (!invalidFields || !invalidFields.length) return;
+    if (typeof appendActivityLog_ !== 'function') return;
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    for (var i = 0; i < invalidFields.length; i++) {
+      var field = String(invalidFields[i] || '').trim();
+      if (!field) continue;
+      appendActivityLog_(ss, {
+        eventType: 'planner_email_invalid_recipient',
+        payee: 'Planner',
+        details: JSON.stringify({ field: field, detailsVersion: 1 })
+      });
+    }
+  } catch (_e) { /* defensive */ }
+}
+
+/**
+ * Append a `planner_email_sent` row when the email actually went out.
+ * Stores the recipient *count* and the contributing field *names*
+ * (e.g. ['Email', 'Spouse Email']) — never the addresses themselves.
+ */
+function appendPlannerEmailSentActivity_(resolved) {
+  try {
+    if (typeof appendActivityLog_ !== 'function') return;
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    appendActivityLog_(ss, {
+      eventType: 'planner_email_sent',
+      payee: 'Planner',
+      details: JSON.stringify({
+        recipientCount: (resolved && resolved.valid) ? resolved.valid.length : 0,
+        recipientFields: (resolved && resolved.fields) ? resolved.fields.slice() : [],
+        detailsVersion: 1
+      })
+    });
+  } catch (_e) { /* defensive */ }
 }
 
 // Treat the summary as meaningful when at least one of the four planner

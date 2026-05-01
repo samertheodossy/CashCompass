@@ -34,6 +34,62 @@ Shipped end-to-end in V1.1 (commits `92c8673` → `6d25c0e`). **Profile is now t
 - **Retirement** derives current age exclusively from Profile DOB. The Retirement Basics edit form is removed; per-scenario age fields are display-only (plain divs, no spinner arrows). A new `needsProfileDob` readiness state routes users to **Open Profile** when DOB is missing. The DOB parser accepts both Date objects and `YYYY-MM-DD` strings, fixing the silent Sheets-auto-date coercion bug. New `INPUT - Retirement` sheets no longer seed the now-unused age rows.
 - **Backward compatibility preserved** — populated workbooks are untouched byte-for-byte. Legacy age rows on existing retirement sheets are left inert (no read, no write, no planner consumption). No forced migration.
 
+### Delivered — Planner email debounce + multi-recipient (V1.2)
+
+**Planner email — debounce per-save runs + send to spouse too.** Shipped uncommitted alongside the asset-save sync fix. Two long-running pain points addressed in one pass.
+
+**Problem 1: 50 saves at month-start = 50 emails.** The user reported that during heavy update sessions (typical month-start reconciliation: bank balances, investment values, debts, quick-add payments) every save fired a fresh planner email, blasting their inbox with near-duplicate updates. The planner email itself was already gated by a meaningfulness check, but per-save background runs always sent immediately.
+
+**Problem 2: spouse never got the email.** Profile has long had a `Spouse Email` field, but only `Email` (primary) was wired into the planner email path. The legacy `readPlannerEmailFromSettingsStrict_()` only looked up the `Email` key.
+
+**Fix — Multi-recipient resolution.** New `readPlannerEmailRecipientsStrict_()` in `planner_output.js`:
+
+- Reads both `PROFILE_KEYS_.EMAIL` and `PROFILE_KEYS_.SPOUSE_EMAIL` from `INPUT - Settings` in a single sheet read.
+- Validates each value against `PROFILE_EMAIL_REGEX_` (the same regex Profile uses on save).
+- Deduplicates on case-insensitive match (so a user with the same address in both fields doesn't double-email themselves).
+- Returns `{ valid: string[], fields: string[], invalidFields: string[] }`. `valid` is what we send to; `fields` records which Profile keys contributed (for audit JSON); `invalidFields` records keys whose stored value failed regex (these get a `planner_email_invalid_recipient` activity row naming the field — never the bad value).
+
+`sendPlannerEmailIfConfigured_(summary, options)` was reworked to accept `options.emailMode` and dispatch on it:
+
+- `'send'` (default) — gates on meaningfulness, resolves recipients, joins them on the `To:` line in a single `MailApp.sendEmail` call so spouse always gets the same copy as primary, then logs `planner_email_sent` (with `recipientCount` + `recipientFields` in details JSON) and marks the debounce queue settled.
+- `'defer'` — bumps `LAST_SAVE_AT` and logs `planner_email_deferred`. Returns without sending.
+
+**Fix — Debounce.** New file `debounce_planner.js` owns the queue mechanics. Constants: `DEBOUNCE_QUIET_WINDOW_MS_ = 10 * 60 * 1000` (10 min), `DEBOUNCE_TRIGGER_INTERVAL_MIN_ = 5`. State is stored in `DocumentProperties` (per-spreadsheet, not script-global — keeps the design correct under future Central App / multi-tenant deployment).
+
+Time-driven trigger `debouncePlannerEmailRun` is registered idempotently from `getDashboardSnapshot()` via `ensureDebouncePlannerTrigger_()` so first dashboard load wires it up; if a user manually deletes the trigger from the Apps Script Triggers UI, the next dashboard load re-installs it. The handler reads `LAST_SAVE_AT`, returns immediately if no work is pending or if the quiet window hasn't elapsed, and otherwise runs `runDebtPlanner({ emailMode: 'send' })` once. `markDebouncePlannerEmailSettled_()` is called from inside `sendPlannerEmailIfConfigured_` whenever a `'send'` run completes — even when the meaningfulness gate or no-recipients gate skipped actual mail — so the trigger doesn't keep polling forever in those cases.
+
+`runDebtPlanner(options)` in `code.js` was extended to accept and forward `options` to `sendPlannerEmailIfConfigured_(summary, options)`. Default behavior is `emailMode === 'send'`, preserving byte-for-byte compatibility with legacy callers (menu's "Run Planner" item, the legacy sidebar HTML callers).
+
+**Routing — manual vs background.** Two separate RPCs in `dashboard_data.js`:
+
+- `runPlannerAndRefreshDashboard()` — manual button (`Run Planner + Refresh Snapshot`). Calls `runDebtPlanner()` with no args → emails immediately. **Unchanged.**
+- `runPlannerAndRefreshDashboardFromSave()` — new save-flow RPC. Calls `runDebtPlanner({ emailMode: 'defer' })` → defers email through the queue.
+
+Five client save sites were switched from `.runPlannerAndRefreshDashboard()` to `.runPlannerAndRefreshDashboardFromSave()`:
+
+- `Dashboard_Script_AssetsBankInvestments.html` — bank balance update + investment update
+- `Dashboard_Script_AssetsHouseValues.html` — house value update
+- `Dashboard_Script_PlanningDebts.html` — debt field update
+- `Dashboard_Script_Payments.html` — quick-add payment
+
+The server-side direct caller in `house_expenses.js` (after a house expense add) was switched from `runDebtPlanner()` to `runDebtPlanner({ emailMode: 'defer' })`.
+
+**Activity log.** Three new event types in `activity_log.js`, all classified as **Planner** kind, all in `activityLogIsNonMonetaryEvent_` (Amount = "—"), all ineligible for the dashboard Remove button:
+
+- `planner_email_deferred` — per-save background run skipped immediate send. Sub-label: *Email deferred*.
+- `planner_email_sent` — actual email went out. Sub-label includes recipient count: *Email sent to 2 recipients*. Details JSON has `recipientCount` and `recipientFields` (field names like `['Email', 'Spouse Email']`); the addresses themselves are deliberately never logged so a typo can't leak into Activity.
+- `planner_email_invalid_recipient` — Profile had a value in `Email` or `Spouse Email` that failed regex validation, so that recipient was dropped. Sub-label names the field: *Invalid Spouse Email — skipped*. Details JSON has only `field` (no value).
+
+**Worst-case latency.** Email arrives ~10–15 minutes after the user's final save (10 min quiet window + up to 5 min until the next trigger fire). Acceptable for a daily summary; users who want it now click the manual button.
+
+**Failure modes.**
+
+- Trigger creation failure → swallowed in `ensureDebouncePlannerTrigger_`, logged via `console.error`. Dashboard still loads; emails fall back to legacy "send on every run" behavior (less efficient but no missed emails).
+- Activity log failure during defer/send → swallowed by the `appendPlannerEmail*Activity_` wrappers. Email itself still sends; only the audit row is missed.
+- `DocumentProperties` failure during defer → bump silently swallowed. The deferred email never gets debounced; next manual click or next save with working DocumentProperties resets the queue. Conservative failure mode (no missed emails, just less consolidation).
+
+Help updated: `Dashboard_Help.html` → Debt Planner email section gained "Who gets the email" and "When the email is sent (debounce)" subsections; Activity log gained the three new event descriptions; Remove-button greyed list extended.
+
 ### Delivered — Bank Import Step 1 scaffold (V1.2 prep)
 
 **Bank Import — Step 1 Complete.** Scaffold shipped in commit `8ced838`. New file `bank_import.js` with three inert ensure helpers:

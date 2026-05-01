@@ -332,7 +332,7 @@ function saveDebt() {
             }
           })
           .withFailureHandler(function(_err) { /* silent */ })
-          .runPlannerAndRefreshDashboard();
+          .runPlannerAndRefreshDashboardFromSave();
       } catch (_e) { /* silent */ }
     })
     .withFailureHandler(function(err) {

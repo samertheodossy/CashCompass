@@ -55,7 +55,28 @@ function showQuickAddPaymentSidebar() {
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
-function runDebtPlanner() {
+/**
+ * Main planner entry. `options.emailMode` controls how the planner
+ * email is dispatched:
+ *
+ *   - `'send'` (default) — meaningful summary emails the configured
+ *     recipients (primary + spouse) immediately. Used by the manual
+ *     "Run Planner + Refresh Snapshot" button, the menu item, the
+ *     debounce time trigger, and any other "user explicitly asked"
+ *     entry point.
+ *
+ *   - `'defer'` — per-save background runs. Skips the immediate email
+ *     and instead bumps the debounce queue (LAST_SAVE_AT). The
+ *     time-driven `debouncePlannerEmailRun` trigger sweeps the queue
+ *     after the quiet window settles and sends a single email with
+ *     the latest state. See debounce_planner.js.
+ *
+ * Calling without an arg (`runDebtPlanner()`) defaults to `'send'`,
+ * preserving the legacy behavior expected by the menu / sidebar /
+ * `runPlannerAndRefreshDashboard()` callers.
+ */
+function runDebtPlanner(options) {
+  options = options || {};
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const today = new Date();
   const tz = Session.getScriptTimeZone();
@@ -425,7 +446,7 @@ function runDebtPlanner() {
 
   appendHistory_(ss, summary);
   writeRecommendations_(ss, summary);
-  sendPlannerEmailIfConfigured_(summary);
+  sendPlannerEmailIfConfigured_(summary, options);
 }
 
 // Returns true if `err` is the specific "sheet not found" error surfaced by
