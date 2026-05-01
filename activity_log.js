@@ -1,5 +1,5 @@
 /**
- * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_deactivate, house expense, house_add, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_deactivate, investment_add, investment_deactivate, debt_add, debt_deactivate, debt_update, income_add, income_deactivate, …). Rows can be removed from the web UI for mistaken log lines only.
+ * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_deactivate, house expense, house_add, house_value_update, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_update, bank_account_deactivate, investment_add, investment_update, investment_deactivate, debt_add, debt_deactivate, debt_update, income_add, income_deactivate, …). Rows can be removed from the web UI for mistaken log lines only.
  * Complements OUT - History (planner-run snapshots). Tab: LOG - Activity.
  */
 
@@ -402,12 +402,15 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (etEarly === 'donation') return 'Donation';
   if (etEarly.indexOf('upcoming_') === 0) return 'Upcoming';
   if (etEarly === 'bank_account_add') return 'Bank';
+  if (etEarly === 'bank_account_update') return 'Bank';
   if (etEarly === 'bank_account_deactivate') return 'Bank';
   if (etEarly === 'bill_add') return 'Bill';
   if (etEarly === 'bill_deactivate') return 'Bill';
   if (etEarly === 'house_add') return 'House Expenses';
+  if (etEarly === 'house_value_update') return 'House Expenses';
   if (etEarly === 'house_deactivate') return 'House Expenses';
   if (etEarly === 'investment_add') return 'Investment';
+  if (etEarly === 'investment_update') return 'Investment';
   if (etEarly === 'investment_deactivate') return 'Investment';
   if (etEarly === 'debt_add') return 'Debt';
   if (etEarly === 'debt_deactivate') return 'Debt';
@@ -476,10 +479,27 @@ function activityLogActionLabel_(eventType, detailsJson) {
     case 'bill_skip': return 'Bill skipped';
     case 'bill_autopay': return 'Bill autopay';
     case 'bank_account_add': return 'Account added';
+    // bank_account_update is non-monetary (Amount renders "—") because the
+    // user is recording a balance snapshot, not a money movement. The
+    // action label inlines the month + new balance — e.g.
+    //   "Updated May-26 balance to $1,234.56"
+    // Falls back to "Balance updated" for legacy rows that predate the
+    // details JSON. See bankAccountUpdateActionLabel_ for formatting rules.
+    case 'bank_account_update':
+      return bankAccountUpdateActionLabel_(detailsJson);
     case 'bank_account_deactivate': return 'Tracking stopped';
     case 'house_add': return 'House added';
+    // house_value_update is non-monetary — see houseValueUpdateActionLabel_.
+    // Renders e.g. "Updated May-26 value to $850,000.00" so the user can
+    // tell which month's valuation moved without opening details.
+    case 'house_value_update':
+      return houseValueUpdateActionLabel_(detailsJson);
     case 'house_deactivate': return 'Tracking stopped';
     case 'investment_add': return 'Account added';
+    // investment_update is non-monetary — see investmentUpdateActionLabel_.
+    // Renders e.g. "Updated May-26 balance to $25,432.10".
+    case 'investment_update':
+      return investmentUpdateActionLabel_(detailsJson);
     case 'investment_deactivate': return 'Tracking stopped';
     case 'debt_add': return 'Account added';
     case 'debt_deactivate': return 'Tracking stopped';
@@ -611,6 +631,118 @@ function debtUpdateActionLabel_(detailsJson) {
   return formattedNew ? label + ' to ' + formattedNew : label;
 }
 
+/**
+ * Build the bank_account_update action label from the row's details JSON
+ * written by bank_accounts.js::updateBankAccountValueByDate. Uses
+ * monthLabel + newRaw (currency) to format the label so the user can tell
+ * which month's balance was changed without opening the row, e.g.
+ *
+ *   "Updated May-26 balance to $1,234.56"   — typical case
+ *   "Updated balance to $1,234.56"          — missing monthLabel fallback
+ *   "Balance updated"                       — legacy / malformed details
+ *
+ * Mirrors debtUpdateActionLabel_'s defensive style: a missing/partial
+ * details blob still renders a clean label instead of throwing. Side
+ * updates (Available Now / Min Buffer) are deliberately not surfaced in
+ * the label — they live in details JSON and would clutter the row.
+ */
+function bankAccountUpdateActionLabel_(detailsJson) {
+  var fallback = 'Balance updated';
+  var raw = String(detailsJson || '').trim();
+  if (!raw) return fallback;
+
+  var d;
+  try {
+    d = JSON.parse(raw);
+  } catch (e) {
+    return fallback;
+  }
+  if (!d || typeof d !== 'object') return fallback;
+
+  var newRawNum = activityLogAsFiniteNumber_(d.newRaw);
+  if (newRawNum === null) return fallback;
+  var formattedNew = activityLogFmtMoney_(newRawNum);
+
+  var monthLabel = String(d.monthLabel || '').trim();
+  if (monthLabel) {
+    return 'Updated ' + monthLabel + ' balance to ' + formattedNew;
+  }
+  return 'Updated balance to ' + formattedNew;
+}
+
+/**
+ * Build the house_value_update action label from the row's details JSON
+ * written by house_values.js::updateHouseValueByDate. Same shape as
+ * bankAccountUpdateActionLabel_ but uses "value" instead of "balance"
+ * because INPUT - House Values stores property valuations, not bank
+ * balances. Defensive against missing/partial details — a malformed
+ * row still renders a clean fallback instead of throwing.
+ *
+ *   "Updated May-26 value to $850,000.00"   — typical case
+ *   "Updated value to $850,000.00"          — missing monthLabel fallback
+ *   "Value updated"                         — legacy / malformed details
+ */
+function houseValueUpdateActionLabel_(detailsJson) {
+  var fallback = 'Value updated';
+  var raw = String(detailsJson || '').trim();
+  if (!raw) return fallback;
+
+  var d;
+  try {
+    d = JSON.parse(raw);
+  } catch (e) {
+    return fallback;
+  }
+  if (!d || typeof d !== 'object') return fallback;
+
+  var newRawNum = activityLogAsFiniteNumber_(d.newRaw);
+  if (newRawNum === null) return fallback;
+  var formattedNew = activityLogFmtMoney_(newRawNum);
+
+  var monthLabel = String(d.monthLabel || '').trim();
+  if (monthLabel) {
+    return 'Updated ' + monthLabel + ' value to ' + formattedNew;
+  }
+  return 'Updated value to ' + formattedNew;
+}
+
+/**
+ * Build the investment_update action label from the row's details JSON
+ * written by investments.js::updateInvestmentValueByDate. Identical
+ * formatting to bankAccountUpdateActionLabel_ — investment accounts
+ * also store balance snapshots month-to-month — but kept as its own
+ * function so the event-type → label mapping in activityLogActionLabel_
+ * stays one-to-one (easier to audit and adjust per-event wording later
+ * without affecting the others).
+ *
+ *   "Updated May-26 balance to $25,432.10"   — typical case
+ *   "Updated balance to $25,432.10"          — missing monthLabel fallback
+ *   "Balance updated"                        — legacy / malformed details
+ */
+function investmentUpdateActionLabel_(detailsJson) {
+  var fallback = 'Balance updated';
+  var raw = String(detailsJson || '').trim();
+  if (!raw) return fallback;
+
+  var d;
+  try {
+    d = JSON.parse(raw);
+  } catch (e) {
+    return fallback;
+  }
+  if (!d || typeof d !== 'object') return fallback;
+
+  var newRawNum = activityLogAsFiniteNumber_(d.newRaw);
+  if (newRawNum === null) return fallback;
+  var formattedNew = activityLogFmtMoney_(newRawNum);
+
+  var monthLabel = String(d.monthLabel || '').trim();
+  if (monthLabel) {
+    return 'Updated ' + monthLabel + ' balance to ' + formattedNew;
+  }
+  return 'Updated balance to ' + formattedNew;
+}
+
 function activityLogAsFiniteNumber_(v) {
   if (v === null || v === undefined || v === '') return null;
   var n = Number(v);
@@ -642,6 +774,15 @@ function activityLogIsNonMonetaryEvent_(eventType) {
   return (
     et === 'bill_deactivate' ||
     et === 'bank_account_deactivate' ||
+    // bank_account_update / house_value_update / investment_update all
+    // log a snapshot edit, not a money movement. Rendering the dollar
+    // value in Amount would double-count it against the Activity totals;
+    // the new balance/value is shown inline in the action label instead
+    // (see bankAccountUpdateActionLabel_ / houseValueUpdateActionLabel_ /
+    // investmentUpdateActionLabel_).
+    et === 'bank_account_update' ||
+    et === 'house_value_update' ||
+    et === 'investment_update' ||
     et === 'house_deactivate' ||
     et === 'investment_deactivate' ||
     et === 'debt_deactivate' ||

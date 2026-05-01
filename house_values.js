@@ -303,14 +303,84 @@ function updateHouseValueByDate(payload) {
 
   const year = valuationDate.getFullYear();
   const monthLabel = Utilities.formatDate(valuationDate, Session.getScriptTimeZone(), 'MMM-yy');
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Capture the prior month-cell value BEFORE the overwrite so the activity
+  // log row can show both the previous and new valuation. Best-effort —
+  // a failed read here just leaves previousRaw null and the action label
+  // falls back to a value-only form. Mirrors the read-then-write pattern
+  // bank_accounts.js::updateBankAccountValueByDate uses for its activity
+  // log; the duplicate block/row/col lookup is intentionally local so
+  // updateHouseValuesHistory_'s contract stays unchanged for the
+  // addHouseFromDashboard caller.
+  let previousRaw = null;
+  let previousDisplay = '';
+  try {
+    const prevSheet = getSheet_(ss, 'HOUSE_VALUES');
+    const prevBlock = getHouseValuesYearBlock_(prevSheet, year);
+    const prevRow = findHouseRowInBlock_(prevSheet, prevBlock, house);
+    if (prevRow !== -1) {
+      const prevCol = getMonthColumnByDate_(prevSheet, valuationDate, prevBlock.headerRow);
+      const prevCell = prevSheet.getRange(prevRow, prevCol);
+      previousRaw = round2_(toNumber_(prevCell.getValue()));
+      previousDisplay = String(prevCell.getDisplayValue() || '').trim();
+    }
+  } catch (prevErr) {
+    Logger.log('updateHouseValueByDate previous-read: ' + prevErr);
+  }
 
   const historyUpdated = updateHouseValuesHistory_(house, year, valuationDate, currentValue);
 
   syncAllHouseAssetsFromLatestCurrentYear_();
   touchDashboardSourceUpdated_('house_values');
 
-  if (typeof runDebtPlanner === 'function') runDebtPlanner();
+  // Activity log: house-value snapshot edit. Mirrors bank_account_update /
+  // debt_update — non-monetary (Amount renders "—") because this is a
+  // valuation snapshot, not a money movement; the action label carries
+  // the month + new value for context, e.g.
+  //   "Updated May-26 value to $850,000.00".
+  // Logged BEFORE runDebtPlanner so the row is captured even if the
+  // planner trips on bad data downstream.
+  try {
+    const tz = Session.getScriptTimeZone();
+    const newRaw = round2_(toNumber_(currentValue));
+    appendActivityLog_(ss, {
+      eventType: 'house_value_update',
+      entryDate: Utilities.formatDate(stripTime_(new Date()), tz, 'yyyy-MM-dd'),
+      amount: 0,
+      direction: '',
+      payee: house,
+      category: '',
+      accountSource: '',
+      cashFlowSheet: '',
+      cashFlowMonth: '',
+      dedupeKey: '',
+      details: JSON.stringify({
+        detailsVersion: 1,
+        fieldName: 'Value',
+        fieldKind: 'currency',
+        monthLabel: monthLabel,
+        valuationDate: Utilities.formatDate(valuationDate, tz, 'yyyy-MM-dd'),
+        previousRaw: previousRaw,
+        previousDisplay: previousDisplay,
+        newRaw: newRaw,
+        historyUpdated: !!historyUpdated
+      })
+    });
+  } catch (logErr) {
+    Logger.log('updateHouseValueByDate activity log: ' + logErr);
+  }
 
+  // NOTE: we intentionally do NOT call runDebtPlanner() here. The sheet
+  // write + SYS - House Assets sync + activity log row are everything
+  // the user needs to see the new value reflected. Planner-derived
+  // panels (Rolling Debt Payoff, Net Worth trend, etc.) are refreshed
+  // by the main dashboard firing runPlannerAndRefreshDashboard() as a
+  // silent background RPC after this save returns — same pattern
+  // Planning → Debts (saveDebt), Quick Add (savePayment), and bank
+  // balance updates use, so the UI doesn't hang on "Saving…" while the
+  // planner runs for several seconds on big workbooks. See
+  // Dashboard_Script_AssetsHouseValues.html::saveHouse().
   return {
     ok: true,
     message: 'House value saved.'

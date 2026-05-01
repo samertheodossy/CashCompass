@@ -722,6 +722,32 @@ function updateBankAccountValueByDate(payload) {
   if (!accountName) throw new Error('Account name is required.');
 
   const year = balanceDate.getFullYear();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Capture the prior month-cell value BEFORE the overwrite so the activity
+  // log row can show both the previous and new balance. Best-effort — a
+  // failed read here (missing year block, malformed sheet, etc.) just
+  // leaves previousRaw null and the action label falls back to a balance-
+  // only form ("Updated May-26 balance to $1,234.56" without the delta).
+  // The duplicated lookup against block / row / month col is intentionally
+  // local to this function so updateBankAccountsHistory_'s contract stays
+  // unchanged for the other callers (addBankAccountFromDashboard,
+  // bankImportApplyAutoMatchWrite_) — neither needs a prior-value read.
+  let previousRaw = null;
+  let previousDisplay = '';
+  try {
+    const prevSheet = getSheet_(ss, 'BANK_ACCOUNTS');
+    const prevBlock = getBankAccountsYearBlock_(prevSheet, year);
+    const prevRow = findBankAccountRowInBlock_(prevSheet, prevBlock, accountName);
+    if (prevRow !== -1) {
+      const prevCol = getMonthColumnByDate_(prevSheet, balanceDate, prevBlock.headerRow);
+      const prevCell = prevSheet.getRange(prevRow, prevCol);
+      previousRaw = round2_(toNumber_(prevCell.getValue()));
+      previousDisplay = String(prevCell.getDisplayValue() || '').trim();
+    }
+  } catch (prevErr) {
+    Logger.log('updateBankAccountValueByDate previous-read: ' + prevErr);
+  }
 
   updateBankAccountsHistory_(accountName, year, balanceDate, currentValue);
   syncAllAccountsFromLatestCurrentYear_();
@@ -734,8 +760,57 @@ function updateBankAccountValueByDate(payload) {
     });
   }
 
-  if (typeof runDebtPlanner === 'function') runDebtPlanner();
+  // Activity log: balance-update event. Mirrors the debt_update pattern
+  // (debts.js::updateDebtField) — non-monetary (Amount renders "—") so a
+  // balance snapshot doesn't double-count as a money movement against the
+  // Activity totals; the action label carries the month + new balance for
+  // context, e.g. "Updated May-26 balance to $1,234.56". Side updates
+  // (Available Now / Min Buffer) ride along on the same row's details
+  // JSON rather than spawning extra log lines for one user action.
+  // Logged BEFORE runDebtPlanner so the row is still captured if the
+  // planner trips on bad data downstream.
+  try {
+    const tz = Session.getScriptTimeZone();
+    const monthLabel = Utilities.formatDate(balanceDate, tz, 'MMM-yy');
+    const newRaw = round2_(toNumber_(currentValue));
+    appendActivityLog_(ss, {
+      eventType: 'bank_account_update',
+      entryDate: Utilities.formatDate(stripTime_(new Date()), tz, 'yyyy-MM-dd'),
+      amount: 0,
+      direction: '',
+      payee: accountName,
+      category: '',
+      accountSource: '',
+      cashFlowSheet: '',
+      cashFlowMonth: '',
+      dedupeKey: '',
+      details: JSON.stringify({
+        detailsVersion: 1,
+        fieldName: 'Balance',
+        fieldKind: 'currency',
+        monthLabel: monthLabel,
+        balanceDate: Utilities.formatDate(balanceDate, tz, 'yyyy-MM-dd'),
+        previousRaw: previousRaw,
+        previousDisplay: previousDisplay,
+        newRaw: newRaw,
+        availableNowSet: updateAvailableNow,
+        minBufferSet: updateMinBuffer
+      })
+    });
+  } catch (logErr) {
+    Logger.log('updateBankAccountValueByDate activity log: ' + logErr);
+  }
 
+  // NOTE: we intentionally do NOT call runDebtPlanner() here. The
+  // sheet write + SYS - Accounts sync + activity log row are everything
+  // the user needs to see the new balance reflected. Rolling Debt Payoff
+  // and other planner-derived dashboard panels are refreshed by the main
+  // dashboard firing runPlannerAndRefreshDashboard() as a silent
+  // background RPC after this save returns — same pattern Planning →
+  // Debts (saveDebt) and Quick Add (savePayment) already use, so the UI
+  // doesn't hang on "Saving…" while the planner runs for several seconds
+  // on big workbooks. See Dashboard_Script_AssetsBankInvestments.html::
+  // saveBank().
   return {
     ok: true,
     message: 'Bank account saved.'

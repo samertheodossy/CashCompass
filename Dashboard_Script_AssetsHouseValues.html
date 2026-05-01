@@ -316,6 +316,26 @@ function saveHouse() {
       setStatus('house_status', res.message || 'Saved.', false);
       loadHouseData();
       refreshSnapshot();
+
+      // Background planner refresh — same silent-follow-up pattern
+      // Planning → Debts (saveDebt), Quick Add (savePayment), bank
+      // balance updates, and investment updates use.
+      // updateHouseValueByDate no longer runs the debt planner inline;
+      // this call brings Rolling Debt Payoff / Net Worth / Overview
+      // KPIs up to date shortly after save. Failures stay silent so a
+      // transient planner glitch doesn't overwrite the already-shown
+      // "House value saved." status — persistent planner trouble
+      // surfaces clearly via the top-bar Run Planner Now button.
+      try {
+        google.script.run
+          .withSuccessHandler(function(plannerRes) {
+            if (plannerRes && plannerRes.snapshot && typeof applySnapshot === 'function') {
+              applySnapshot(plannerRes.snapshot);
+            }
+          })
+          .withFailureHandler(function(_err) { /* silent */ })
+          .runPlannerAndRefreshDashboard();
+      } catch (_e) { /* silent */ }
     })
     .withFailureHandler(function(err) {
       setStatus('house_status', (err.message || String(err)), true);

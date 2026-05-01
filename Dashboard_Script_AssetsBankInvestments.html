@@ -508,6 +508,27 @@ function saveBank() {
       setStatus('bank_status', res.message || 'Saved.', false);
       loadBankData();
       refreshSnapshot();
+
+      // Background planner refresh — same silent-follow-up pattern
+      // Planning → Debts (saveDebt) and Quick Add (savePayment) use.
+      // updateBankAccountValueByDate no longer runs the debt planner
+      // inline so "Saving…" doesn't hang for the full planner duration;
+      // this call brings Rolling Debt Payoff and Overview KPIs up to
+      // date shortly after save. Apply the snapshot on success;
+      // failures stay silent so a transient planner glitch never
+      // overwrites the already-shown "Bank account saved." status —
+      // persistent planner trouble surfaces clearly via the top-bar
+      // Run Planner Now button.
+      try {
+        google.script.run
+          .withSuccessHandler(function(plannerRes) {
+            if (plannerRes && plannerRes.snapshot && typeof applySnapshot === 'function') {
+              applySnapshot(plannerRes.snapshot);
+            }
+          })
+          .withFailureHandler(function(_err) { /* silent: see comment above */ })
+          .runPlannerAndRefreshDashboard();
+      } catch (_e) { /* silent */ }
     })
     .withFailureHandler(function(err) {
       setStatus('bank_status', (err.message || String(err)), true);
@@ -752,6 +773,23 @@ function saveInvestment() {
       setStatus('inv_status', res.message || 'Saved.', false);
       loadInvestmentData();
       refreshSnapshot();
+
+      // Background planner refresh — see saveBank() above for the full
+      // rationale. updateInvestmentValueByDate no longer runs the debt
+      // planner inline; this silent follow-up brings planner-derived
+      // dashboard panels up to date without blocking the save. Failures
+      // stay silent so a transient planner glitch doesn't overwrite the
+      // already-shown "Investment value saved." status.
+      try {
+        google.script.run
+          .withSuccessHandler(function(plannerRes) {
+            if (plannerRes && plannerRes.snapshot && typeof applySnapshot === 'function') {
+              applySnapshot(plannerRes.snapshot);
+            }
+          })
+          .withFailureHandler(function(_err) { /* silent */ })
+          .runPlannerAndRefreshDashboard();
+      } catch (_e) { /* silent */ }
     })
     .withFailureHandler(function(err) {
       setStatus('inv_status', (err.message || String(err)), true);
