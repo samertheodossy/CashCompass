@@ -75,6 +75,97 @@ Scope discipline: Upcoming Expenses (`upcoming_expenses.js:193`), Income Sources
 
 Help updated: `Dashboard_Help.html` → Cash Flow → Quick add now documents `$0` is a valid amount and describes the Saving… → Saved status feedback.
 
+### Delivered — Asset save sync: stop hanging on every save (V1.2)
+
+**Investment / Bank Account / House Value saves no longer hold the UI on `Saving…` for tens of seconds.** Uncommitted at the time of writing; sibling commits `f13d928` (asset activity logs + fast save) and `6c0953d` (collapse repeat reads + Saving label) shipped earlier in the session and removed the inline planner run from these saves, but a deeper bottleneck remained.
+
+Root cause: after a value write, the save still called `syncAllAssetsFromLatestCurrentYear_()` (and the matching `syncAllAccountsFromLatestCurrentYear_()` / `syncAllHouseAssetsFromLatestCurrentYear_()`) to mirror the latest current-year value into SYS. That sync was doing two slow things on every save:
+
+1. **`getLatest*ValuesForYear_` made ~4 Sheets API round-trips per row** in the year block (per-row display lookup + `getLatestNonEmptyMonthColumnForRow_`'s header read + value-row read + matched-cell read). On a workbook with ~15–20 investments that's 60–80 round-trips at 200–800 ms each.
+2. **The SYS write loops re-wrote every row** through the format-preserving `setCurrencyCellPreserveRowFormat_`, even when the value hadn't changed. Two to three more round-trips per row.
+
+Fix in `investments.js`, `bank_accounts.js`, `house_values.js`:
+
+- **Batched read.** Each `getLatest*ValuesForYear_` now does **2 round-trips total** — one full-sheet `getDisplayValues()` (also reused for `getXxxYearBlock_` via the existing optional `display` parameter) and one batched `getRange(dataStartRow, 1, numRows, lastCol).getValues()`. The "find latest non-empty month for this row" loop is now pure in-memory work using `parseMonthHeader_` against the already-loaded header row.
+- **Skip-if-unchanged.** The `syncAll*FromLatestCurrentYear_` write loops now compare the new value against the existing `targetRaw[r][balanceColZero]` (rounded to 2dp on both sides to avoid floating-point noise) and **skip the format-preserving write when unchanged**. In the common case where the user only changed one account, this collapses N writes to 1.
+- **Header-map reuse.** The sync functions now pass the already-loaded display to `getAccountsHeaderMap_` / `getAssetsHeaderMap_` / `getHouseAssetsHeaderMap_` instead of letting them re-read the header row.
+
+Behavior preservation: same latest-value math, same writes when something actually changed, same activity logging (`bank_account_update` / `investment_update` / `house_value_update`), planner still runs in the background as a silent RPC. The only observable difference is that `Saved.` arrives in a second or two on populated workbooks where it used to take tens of seconds. Bank Account and House Value saves benefit from the same fix as defense-in-depth even though only Investments was reported.
+
+### Delivered — Asset updates: activity log + fast save without waiting on planner (V1.2)
+
+**Bank Account, House Value, and Investment balance updates now feel instant and produce an audit row.** Shipped in commit `f13d928`.
+
+Two issues fixed in one pass:
+
+1. **No activity log entry.** Manual balance updates on Assets → Bank Accounts / House Values / Investments wrote to the canonical sheet (`INPUT - Bank Accounts` / `INPUT - House Values` / `INPUT - Investments`) and mirrored into SYS, but produced no `LOG - Activity` row. New events: `bank_account_update` / `house_value_update` / `investment_update`. Classified as **Bank** / **House Expenses** / **Investment** kind respectively. Action label includes the month and new balance (e.g. *Updated May-26 balance to $1,234.56*). **Amount** renders `—` (added to `activityLogIsNonMonetaryEvent_`) so balance updates don't double-count against Activity totals; previous + new raw values are preserved in the event's `details` JSON for future undo tooling.
+
+2. **UI hung waiting for the planner.** `updateBankAccountValueByDate` / `updateHouseValueByDate` / `updateInvestmentValueByDate` previously ran `runDebtPlanner()` inline before returning, holding the UI on `Saving…` for several seconds on populated workbooks. The inline call is gone. Client-side save handlers in `Dashboard_Script_AssetsBankInvestments.html` and `Dashboard_Script_AssetsHouseValues.html` now call `runPlannerAndRefreshDashboard()` as a **silent background RPC** after the save returns, so Rolling Debt Payoff and Overview snapshot still catch up shortly after — just without blocking the save.
+
+Help updated: `Dashboard_Help.html` → Bank Accounts, House Values, Investments (status feedback paragraph + activity log entries) and the Activity log Bank / House / Investment list (`bank_account_update`, `house_value_update`, `investment_update` event descriptions, Remove-button greyed-out list).
+
+### Delivered — Asset pages: collapse repeat sheet reads + show "Saving…" instead of "Loading…" (V1.2)
+
+**Page loads, dropdown selection RPCs, and the post-save status flip on Bank Accounts / Investments / House Values / Debts are noticeably snappier and the `Saved.` message no longer gets clobbered.** Shipped in commit `6c0953d`.
+
+Two related fixes in one pass:
+
+1. **Performance — collapse repeat sheet reads.** The page-load RPCs (`getBankAccountUiData` / `getInvestmentUiData` / `getHouseUiData` / `getDebtsUiData`) and the per-selection field RPCs each made 2–4 full-sheet `getDataRange().getValues()` / `getDisplayValues()` calls — one for Type options, one for the inactive set, one for the header map, etc. Each read is a 300–800 ms round-trip on populated workbooks. Consolidated to a single `getDisplayValues()` per RPC and threaded into helpers via new **optional `display` / `headers` parameters** so older callers stay byte-for-byte compatible. The block helpers (`getBankAccountsYearBlock_` / `getHouseValuesYearBlock_` / `getInvestmentsYearBlock_`) and header-map helpers (`getAccountsHeaderMap_` / `getHouseAssetsHeaderMap_` / `getAssetsHeaderMap_` / `getDebtsHeaderMap_`) all gained the optional pre-loaded array parameter. The row-finder helpers (`findBankAccountRowInBlock_` / `findHouseRowInBlock_` / `findInvestmentRowInBlock_`) replaced their per-row `getRange(row, col).getDisplayValue()` loops with single batched range reads of column A across the block.
+
+2. **UX — "Saving…" stays "Saving…".** After the asset fast-save fix landed, the post-save quiet refresh would re-trigger `setStatusLoading()` inside the load helpers and overwrite the `Saved.` message with the default `Loading…` label. Two-part fix: save handlers (`saveBank`, `saveInvestment`, `saveHouse`) now pass an explicit `'Saving…'` label to `setStatusLoading()`, and `loadBankData / loadHouseData / loadInvestmentData` accept a new `quiet` parameter (default `false`) that skips both the leading `setStatusLoading()` and the trailing `setStatus('', false)` so the `Saved.` message survives the post-save refresh.
+
+### Delivered — Quick Add: instant Activity ledger refresh + background planner (V1.2)
+
+**Quick Add payments now show up on the Activity tab immediately instead of after the full planner run.** Shipped in commit `d743458`.
+
+`Dashboard_Script_Payments.html::savePayment()` success handler now calls `loadActivitySection()` immediately so the new `quick_pay` row appears on the Activity tab without waiting for the planner, and the planner is fired as a silent background RPC (`runPlannerAndRefreshDashboard()`) — same pattern as the Debts save from `c26c11c`. The previous flow held the UI on the success state for several seconds while the planner ran inline before the Activity tab reflected the new row.
+
+### Delivered — Quick Add: Bill Pay prefill race + explicit Other payee option (V1.2)
+
+**Two related Quick Add fixes.** Shipped in commit `1305c40`.
+
+1. **Bill Pay prefill race.** Launching Quick Add from a bill on a cold tab (Bills → Pay) failed to populate the **Existing Payee** dropdown because `prefillQuickPayment` ran synchronously before `paymentPayees` finished loading. The typed payee input had the right value, but the dropdown was blank. Fix stashes the wanted payee in `window.__pendingQuickAddPayee` and applies it via a new `consumePendingQuickAddPayeePrefill_()` helper called from `loadPaymentSection`'s success handler — *after* the dropdown is populated. A guard checks the typed input first, so a user edit is never overwritten.
+
+2. **Explicit "Other (type new payee)" option.** Previously the only way to add a payee that wasn't in the dropdown was to ignore the dropdown and type into the free-text input below it — which felt invisible to new users. Added a sentinel option (`QUICK_ADD_PAYEE_OTHER_SENTINEL_ = '__OTHER__'`) at the bottom of the Existing Payee dropdown labeled **Other (type new payee)**. `syncPaymentPayeeInput()` clears + focuses the typed input when the sentinel is selected; `currentPaymentPayee()` treats the sentinel as no-selection so the typed value wins.
+
+Help updated: `Dashboard_Help.html` → Cash Flow → Quick add documents the Other payee option and the bill-pay prefill behavior.
+
+### Delivered — Bank Import: Step 2a ingestion pipeline (V1.2)
+
+**First server-side ingestion built on the Step 1 scaffold.** Shipped in commit `03d2c4a`. Continues the multi-step Bank Import plan documented in `TODO.md → Bank Import — status & resume plan`.
+
+`processBankImportBatch_(payload)` handles, in order:
+
+- **Ignored check (permanent only).** If the incoming row matches a row in `SYS - Import Ignored — Bank Accounts` by exact non-blank `External Account Id` (or by composite `institution + displayName + last4` when external id is blank), the row is dropped and a `bank_import_ignored_hit` event is logged. Blank or unknown `Scope` is treated as `permanent` — `until_changed` logic is intentionally **not** implemented yet even though the column exists for future compatibility.
+- **Exact-id auto-match.** Auto-match only when **all** of: incoming `externalAccountId` is non-empty; exactly one active `SYS - Accounts` row has matching `External Account Id`; currency is exactly `USD`; incoming type does not conflict with a non-blank existing type. On match: write the balance through the existing proven bank-account history/update path, sync current balances through the existing sync path, log `bank_import_auto_matched` with the balance fingerprint as `dedupeKey`, leave **Available Now / Min Buffer / Use Policy / Priority / Active** untouched. Per-row `runDebtPlanner` is intentionally **not** called from auto-match — left to the user's manual Run Planner trigger.
+- **Pending staging.** Everything not ignored or auto-matched lands in `SYS - Import Staging — Bank Accounts` with `Status = pending` and a Pending Reason from the fixed enum (`no_exact_id_match`, `currency_mismatch`, `type_conflict`, `inactive_match`, `ambiguous_external_id`, `stale_balance`). Stable `Staging Id` keyed from `externalAccountId` + `YYYY-MM(balanceAsOf)` allows upserts (insert if new, update `Last Seen` + latest payload fields if pending row already exists — no duplicate pending rows).
+- **Balance fingerprint dedupe.** Fingerprint is `externalAccountId + YYYY-MM(balanceAsOf) + balance + balanceAsOf`. If the same fingerprint already exists in recent `LOG - Activity` for `bank_import_auto_matched`, do nothing — no extra log row, no extra writes.
+
+Strict deviations from the approved Step 2a checklist, recorded for the resume plan:
+
+1. **Currency must be exactly `USD` for auto-match.** A blank `currency` is treated as `currency_mismatch` and routed to pending, per the literal interpretation of the requirement.
+2. **Stale-balance threshold defined as 90 days (or any future date).** New constant `BANK_IMPORT_STALE_BALANCE_DAYS = 90`. Future-dated `balanceAsOf` is always stale.
+3. **Per-row `runDebtPlanner` is deliberately not called from auto-match.** The underlying helper functions are called directly to keep batch runs fast; the planner run is left to the user's manual trigger.
+
+Dev/test harness only — no UI, no external sync, no menu, no dashboard button. `_devRunBankImportSample()` runs a representative payload; `_devRunBankImportCustom_(payload)` accepts arbitrary input. Pending rows live only in the staging sheet, which no existing module reads, so planner / overview / cash flow / retirement / debts are all unaffected on both populated and blank workbooks.
+
+### Delivered — Planner email: handled-this-month check now uses each debt's next-due month (V1.2)
+
+**Loan payments due in the next calendar month no longer drop out of the Debt Planner email's *Pay now* / *Pay soon* sections.** Shipped in commit `bae82c9`.
+
+Symptom (reproduced on a workbook with mortgage payments due May 1 while the email ran on April 24): generic recurring bills appeared in *Pay now* / *Pay soon* but loan payments did not — every loan payment was silently filtered out.
+
+Root cause in `runDebtPlanner.js::buildUpcomingPayments_`: the function checked whether each debt was "handled this month" against the current calendar month's Cash Flow cell, even when the payment's `nextDueDate` fell in a different month. If the user had already paid April for a debt whose May payment was now in the upcoming window, the May payment was incorrectly filtered out as "handled".
+
+Fix:
+
+- `buildDebtMinimumHandledMap_` rewritten to return a **month-keyed nested map** (`{ monthHeader → { debtKey → handledFlag } }`) so the planner can check handled status per month, not just for the current month.
+- `isDebtMinimumHandledThisMonth_` signature widened to accept a `monthHeader` parameter that selects which month's handled map to consult.
+- `buildUpcomingPayments_` now computes `dueDate` and resolves the correct `dueMonthHeader` (via `getMonthHeaderForDate_`, with a new `getNextMonthHeader_` helper) for each upcoming payment before checking handled status.
+- `runDebtPlanner` passes `[currentMonthHeader, nextMonthHeader]` to `buildDebtMinimumHandledMap_` so both months are pre-built; the bills (non-debt) path was already correct and is unchanged.
+
+Edge cases verified: same-month payments still filter the same way; debts whose `nextDueDate` is more than 1 month out still resolve to the right month header (the helper map lookups gracefully return "not handled" for months that weren't pre-built, which is the correct conservative answer for the email).
+
 ### Delivered — Bills Due inactive filter fix (V1.2)
 
 **Bills Due — inactive debts and inactive Cash Flow rows no longer leak into the recurring fallback.** Shipped in commit `9bf3234`.

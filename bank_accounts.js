@@ -87,52 +87,94 @@ function syncAllAccountsFromLatestCurrentYear_() {
   // throw "Missing sheet: SYS - Accounts". The ensure helper returns
   // the actual Sheet object directly (and is a no-op when the sheet
   // already exists, so populated workbooks are unaffected).
+  //
+  // Performance: previously this function did ~4 sheet round-trips PER
+  // BANK ACCOUNT inside getLatestBankAccountValuesForYear_, then ~2-3
+  // more round-trips PER SYS - Accounts ROW writing through
+  // setCurrencyCellPreserveRowFormat_ even when the value hadn't
+  // changed. Now we (1) compute the latest map with 2 round-trips total
+  // via a batched read and (2) skip the format-preserving write when
+  // the new value equals the existing value.
   const targetSheet = ensureSysAccountsSheet_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sourceSheet = getSheet_(ss, 'BANK_ACCOUNTS');
 
   const targetDisplay = targetSheet.getDataRange().getDisplayValues();
+  const targetRaw = targetSheet.getDataRange().getValues();
   if (targetDisplay.length < 2) {
     throw new Error('Accounts sheet is empty.');
   }
 
-  const targetHeaderMap = getAccountsHeaderMap_(targetSheet);
+  const targetHeaderMap = getAccountsHeaderMap_(targetSheet, targetDisplay);
   const latestMap = getLatestBankAccountValuesForYear_(sourceSheet, getCurrentYear_());
 
   for (let r = 1; r < targetDisplay.length; r++) {
     const name = String(targetDisplay[r][targetHeaderMap.nameColZero] || '').trim();
     if (!name) continue;
+    if (!Object.prototype.hasOwnProperty.call(latestMap, name)) continue;
 
-    if (Object.prototype.hasOwnProperty.call(latestMap, name)) {
-      setCurrencyCellPreserveRowFormat_(
-        targetSheet,
-        r + 1,
-        targetHeaderMap.balanceCol,
-        latestMap[name],
-        1
-      );
-    }
+    const newValue = latestMap[name];
+    const existing = targetHeaderMap.balanceColZero === -1
+      ? null
+      : round2_(toNumber_(targetRaw[r][targetHeaderMap.balanceColZero]));
+    if (existing !== null && existing === round2_(toNumber_(newValue))) continue;
+
+    setCurrencyCellPreserveRowFormat_(
+      targetSheet,
+      r + 1,
+      targetHeaderMap.balanceCol,
+      newValue,
+      1
+    );
   }
 }
 
 function getLatestBankAccountValuesForYear_(sheet, year) {
-  const block = getBankAccountsYearBlock_(sheet, year);
+  // Performance: same fix as getLatestInvestmentValuesForYear_. Read
+  // the year block in 2 batched calls (display once, values once) and
+  // resolve the latest non-empty month entirely in memory instead of
+  // calling getRange() per row.
+  const display = sheet.getDataRange().getDisplayValues();
+  const block = getBankAccountsYearBlock_(sheet, year, display);
   const result = {};
 
-  for (let row = block.dataStartRow; row <= block.dataEndRow; row++) {
-    const name = String(sheet.getRange(row, 1).getDisplayValue() || '').trim();
+  if (block.dataEndRow < block.dataStartRow) return result;
+
+  const headerRow = display[block.headerRow - 1] || [];
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < block.firstMonthCol) return result;
+
+  const numRows = block.dataEndRow - block.dataStartRow + 1;
+  const values = sheet.getRange(block.dataStartRow, 1, numRows, lastCol).getValues();
+
+  const yearNum = Number(year);
+  const headerLen = headerRow.length;
+
+  for (let i = 0; i < values.length; i++) {
+    const dispRow = display[block.dataStartRow - 1 + i] || [];
+    const name = String(dispRow[0] || '').trim();
     if (!isBankAccountDataRowName_(name)) continue;
 
-    const latestCol = getLatestNonEmptyMonthColumnForRow_(
-      sheet,
-      row,
-      year,
-      block.firstMonthCol,
-      block.headerRow
-    );
+    let bestColIdx = -1;
+    let bestTime = -1;
 
-    if (latestCol !== -1) {
-      result[name] = round2_(toNumber_(sheet.getRange(row, latestCol).getValue()));
+    for (let c = block.firstMonthCol - 1; c < lastCol && c < headerLen; c++) {
+      const parsed = parseMonthHeader_(headerRow[c]);
+      if (!parsed) continue;
+      if (parsed.getFullYear() !== yearNum) continue;
+
+      const v = values[i][c];
+      if (v === '' || v === null || v === undefined) continue;
+
+      const time = parsed.getTime();
+      if (time > bestTime) {
+        bestTime = time;
+        bestColIdx = c;
+      }
+    }
+
+    if (bestColIdx !== -1) {
+      result[name] = round2_(toNumber_(values[i][bestColIdx]));
     }
   }
 

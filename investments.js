@@ -168,6 +168,18 @@ function ensureSysAssetsSheet_() {
 }
 
 function syncAllAssetsFromLatestCurrentYear_() {
+  // Performance: previously this function did ~4 sheet round-trips PER
+  // INVESTMENT inside getLatestInvestmentValuesForYear_ (per-row display
+  // read + getLatestNonEmptyMonthColumnForRow_'s 2 reads + the matched
+  // cell read), then ~2-3 more round-trips PER SYS - Assets ROW writing
+  // through setCurrencyCellPreserveRowFormat_ even when the value
+  // hadn't changed. On populated workbooks (~20 investments) that
+  // produced 100+ Sheets API round-trips on every save and made the
+  // user-visible "Saving…" status hang for tens of seconds. We now
+  // (1) compute the latest-value map with 2 round-trips total via
+  // a batched read, and (2) skip the format-preserving write when
+  // the new value equals the existing value, which is the common case
+  // because the user only changed one account in this save.
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sourceSheet = getSheet_(ss, 'INVESTMENTS');
   const targetSheet = getSheet_(ss, 'ASSETS');
@@ -177,7 +189,9 @@ function syncAllAssetsFromLatestCurrentYear_() {
 
   if (targetRaw.length < 2) throw new Error('Assets sheet is empty.');
 
-  const targetHeaderMap = getAssetsHeaderMap_(targetSheet);
+  // Reuse the loaded display for the header map so we don't re-fetch
+  // the SYS - Assets header row.
+  const targetHeaderMap = getAssetsHeaderMap_(targetSheet, targetDisplay);
   const currentYear = getCurrentYear_();
   const latestMap = getLatestInvestmentValuesForYear_(sourceSheet, currentYear);
 
@@ -185,36 +199,76 @@ function syncAllAssetsFromLatestCurrentYear_() {
     const accountName = String(targetDisplay[r][targetHeaderMap.nameColZero] || '').trim();
     if (!accountName) continue;
 
-    if (Object.prototype.hasOwnProperty.call(latestMap, accountName)) {
-      setCurrencyCellPreserveRowFormat_(
-        targetSheet,
-        r + 1,
-        targetHeaderMap.balanceCol,
-        latestMap[accountName],
-        1
-      );
-    }
+    if (!Object.prototype.hasOwnProperty.call(latestMap, accountName)) continue;
+
+    const newValue = latestMap[accountName];
+    // Skip-if-unchanged: round both sides to 2dp before comparing so
+    // floating-point noise from earlier round2_ calls doesn't trigger
+    // a needless write. round2_(toNumber_(...)) matches the rounding
+    // applied when the latestMap was computed.
+    const existing = targetHeaderMap.balanceColZero === -1
+      ? null
+      : round2_(toNumber_(targetRaw[r][targetHeaderMap.balanceColZero]));
+    if (existing !== null && existing === round2_(toNumber_(newValue))) continue;
+
+    setCurrencyCellPreserveRowFormat_(
+      targetSheet,
+      r + 1,
+      targetHeaderMap.balanceCol,
+      newValue,
+      1
+    );
   }
 }
 
 function getLatestInvestmentValuesForYear_(sheet, year) {
-  const block = getInvestmentsYearBlock_(sheet, year);
+  // Performance: previously this loop made ~4 round-trips per row
+  // (display lookup + getLatestNonEmptyMonthColumnForRow_'s header
+  // read + value-row read + matched-cell read). For a 12-investment
+  // year block that's ~50 round-trips. We now read the whole sheet's
+  // display values + the year block's data values in 2 batched calls
+  // and resolve the latest month entirely in memory.
+  const display = sheet.getDataRange().getDisplayValues();
+  const block = getInvestmentsYearBlock_(sheet, year, display);
   const result = {};
 
-  for (let row = block.dataStartRow; row <= block.dataEndRow; row++) {
-    const name = String(sheet.getRange(row, 1).getDisplayValue() || '').trim();
+  if (block.dataEndRow < block.dataStartRow) return result;
+
+  const headerRow = display[block.headerRow - 1] || [];
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < block.firstMonthCol) return result;
+
+  const numRows = block.dataEndRow - block.dataStartRow + 1;
+  const values = sheet.getRange(block.dataStartRow, 1, numRows, lastCol).getValues();
+
+  const yearNum = Number(year);
+  const headerLen = headerRow.length;
+
+  for (let i = 0; i < values.length; i++) {
+    const dispRow = display[block.dataStartRow - 1 + i] || [];
+    const name = String(dispRow[0] || '').trim();
     if (!isInvestmentDataRowName_(name)) continue;
 
-    const latestCol = getLatestNonEmptyMonthColumnForRow_(
-      sheet,
-      row,
-      year,
-      block.firstMonthCol,
-      block.headerRow
-    );
+    let bestColIdx = -1;
+    let bestTime = -1;
 
-    if (latestCol !== -1) {
-      result[name] = round2_(toNumber_(sheet.getRange(row, latestCol).getValue()));
+    for (let c = block.firstMonthCol - 1; c < lastCol && c < headerLen; c++) {
+      const parsed = parseMonthHeader_(headerRow[c]);
+      if (!parsed) continue;
+      if (parsed.getFullYear() !== yearNum) continue;
+
+      const v = values[i][c];
+      if (v === '' || v === null || v === undefined) continue;
+
+      const time = parsed.getTime();
+      if (time > bestTime) {
+        bestTime = time;
+        bestColIdx = c;
+      }
+    }
+
+    if (bestColIdx !== -1) {
+      result[name] = round2_(toNumber_(values[i][bestColIdx]));
     }
   }
 

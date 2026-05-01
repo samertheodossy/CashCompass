@@ -487,6 +487,13 @@ function getHouseValueFromHistoryForMonth_(house, year, valuationDate) {
  * Other columns (Type, Loan Amount Left) are left unchanged.
  */
 function syncAllHouseAssetsFromLatestCurrentYear_() {
+  // Performance: previously this function did ~4 sheet round-trips PER
+  // HOUSE inside getLatestHouseValuesForYear_, then ~2-3 more
+  // round-trips PER SYS - House Assets ROW writing through
+  // setCurrencyCellPreserveRowFormat_ even when the value hadn't
+  // changed. Now we (1) compute the latest map with 2 round-trips
+  // total via a batched read and (2) skip the format-preserving write
+  // when the new value equals the existing value.
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const hvSheet = getSheet_(ss, 'HOUSE_VALUES');
   const haSheet = getSheet_(ss, 'HOUSE_ASSETS');
@@ -496,46 +503,78 @@ function syncAllHouseAssetsFromLatestCurrentYear_() {
 
   if (haRaw.length < 2) throw new Error('House Assets sheet is empty.');
 
-  const haHeaderMap = getHouseAssetsHeaderMap_(haSheet);
+  const haHeaderMap = getHouseAssetsHeaderMap_(haSheet, haDisplay);
   const currentYear = getCurrentYear_();
   const latestMap = getLatestHouseValuesForYear_(hvSheet, currentYear);
 
   for (let r = 1; r < haRaw.length; r++) {
     const house = String(haDisplay[r][haHeaderMap.houseColZero] || '').trim();
     if (!house) continue;
+    if (!Object.prototype.hasOwnProperty.call(latestMap, house)) continue;
 
-    if (Object.prototype.hasOwnProperty.call(latestMap, house)) {
-      setCurrencyCellPreserveRowFormat_(
-        haSheet,
-        r + 1,
-        haHeaderMap.valueCol,
-        latestMap[house],
-        1
-      );
-    }
+    const newValue = latestMap[house];
+    const existing = haHeaderMap.valueColZero === -1
+      ? null
+      : round2_(toNumber_(haRaw[r][haHeaderMap.valueColZero]));
+    if (existing !== null && existing === round2_(toNumber_(newValue))) continue;
+
+    setCurrencyCellPreserveRowFormat_(
+      haSheet,
+      r + 1,
+      haHeaderMap.valueCol,
+      newValue,
+      1
+    );
   }
 }
 
 function getLatestHouseValuesForYear_(sheet, year) {
-  const block = getHouseValuesYearBlock_(sheet, year);
+  // Performance: same fix as getLatestInvestmentValuesForYear_. Read
+  // the year block in 2 batched calls (display once, values once) and
+  // resolve the latest non-empty month entirely in memory instead of
+  // calling getRange() per row.
+  const display = sheet.getDataRange().getDisplayValues();
+  const block = getHouseValuesYearBlock_(sheet, year, display);
   const result = {};
 
-  for (let row = block.dataStartRow; row <= block.dataEndRow; row++) {
-    const name = String(sheet.getRange(row, 1).getDisplayValue() || '').trim();
-    const sub = String(sheet.getRange(row, 2).getDisplayValue() || '').trim();
+  if (block.dataEndRow < block.dataStartRow) return result;
 
+  const headerRow = display[block.headerRow - 1] || [];
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < block.firstMonthCol) return result;
+
+  const numRows = block.dataEndRow - block.dataStartRow + 1;
+  const values = sheet.getRange(block.dataStartRow, 1, numRows, lastCol).getValues();
+
+  const yearNum = Number(year);
+  const headerLen = headerRow.length;
+
+  for (let i = 0; i < values.length; i++) {
+    const dispRow = display[block.dataStartRow - 1 + i] || [];
+    const name = String(dispRow[0] || '').trim();
+    const sub = String(dispRow[1] || '').trim();
     if (!isHouseDataRowName_(name, sub)) continue;
 
-    const latestCol = getLatestNonEmptyMonthColumnForRow_(
-      sheet,
-      row,
-      year,
-      block.firstMonthCol,
-      block.headerRow
-    );
+    let bestColIdx = -1;
+    let bestTime = -1;
 
-    if (latestCol !== -1) {
-      result[name] = round2_(toNumber_(sheet.getRange(row, latestCol).getValue()));
+    for (let c = block.firstMonthCol - 1; c < lastCol && c < headerLen; c++) {
+      const parsed = parseMonthHeader_(headerRow[c]);
+      if (!parsed) continue;
+      if (parsed.getFullYear() !== yearNum) continue;
+
+      const v = values[i][c];
+      if (v === '' || v === null || v === undefined) continue;
+
+      const time = parsed.getTime();
+      if (time > bestTime) {
+        bestTime = time;
+        bestColIdx = c;
+      }
+    }
+
+    if (bestColIdx !== -1) {
+      result[name] = round2_(toNumber_(values[i][bestColIdx]));
     }
   }
 
