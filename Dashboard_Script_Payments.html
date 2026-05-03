@@ -354,20 +354,35 @@ function savePayment() {
       document.getElementById('pay_amount').value = '';
       window.__pendingQuickAddFlowSource = '';
 
-      // Activity ledger refresh — fired immediately so the new row appears
-      // in the Activity tab within ~200ms instead of waiting on the
-      // background planner. The LOG - Activity row was appended
-      // synchronously inside quickAddPayment() (see appendActivityLog_ in
-      // quick_add_payment.js) so by the time this success handler runs the
-      // row is already on the sheet and getActivityDashboardData() will
-      // surface it. Deliberately fired BEFORE the upcoming chain and
-      // BEFORE runDebtPlannerAfterQuickPayment_ so it does not queue
-      // behind a slow planner run. typeof guard mirrors the defensive
-      // calls used elsewhere when crossing HTML-include boundaries — if
-      // the Activity script hasn't loaded yet the Quick Add save still
-      // completes cleanly.
+      // Activity ledger refresh — two-step optimistic update so the new
+      // row appears INSTANTLY (no RPC) and survives the background
+      // server reconcile.
+      //
+      // Step 1: prepend the row directly from `res.activitySnapshot`,
+      // which `quickAddPayment` already returned with every field we
+      // need (entry type, payee, amount, dates, sheet, month label).
+      // The user sees the new row at the top of the Activity table
+      // before the next animation frame — even on slow networks.
+      //
+      // Step 2: fire `loadActivitySection({ quiet: true })` to reconcile
+      // with the authoritative server list. `quiet: true` skips the
+      // "Loading activity…" placeholder so the optimistic row stays
+      // visible during the reconcile (which can take seconds when the
+      // user just kicked off 4 other RPCs including the planner). When
+      // the server returns, `window.__activityRows` is replaced with
+      // the real list (which contains the same event) and the table
+      // re-renders. Net effect: row visible instantly, no flicker.
+      //
+      // Both calls use typeof guards because the Activity script lives
+      // in a separate HTML include — if it hasn't loaded yet the Quick
+      // Add save still completes cleanly.
+      if (typeof prependOptimisticQuickPayActivityRow_ === 'function') {
+        try {
+          prependOptimisticQuickPayActivityRow_(res && res.activitySnapshot);
+        } catch (_e) { /* non-fatal */ }
+      }
       if (typeof loadActivitySection === 'function') {
-        try { loadActivitySection(); } catch (_e) { /* non-fatal */ }
+        try { loadActivitySection({ quiet: true }); } catch (_e) { /* non-fatal */ }
       }
 
       // Chain the Upcoming balance adjustment after the Quick Add row is

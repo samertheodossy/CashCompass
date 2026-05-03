@@ -34,6 +34,28 @@ Shipped end-to-end in V1.1 (commits `92c8673` → `6d25c0e`). **Profile is now t
 - **Retirement** derives current age exclusively from Profile DOB. The Retirement Basics edit form is removed; per-scenario age fields are display-only (plain divs, no spinner arrows). A new `needsProfileDob` readiness state routes users to **Open Profile** when DOB is missing. The DOB parser accepts both Date objects and `YYYY-MM-DD` strings, fixing the silent Sheets-auto-date coercion bug. New `INPUT - Retirement` sheets no longer seed the now-unused age rows.
 - **Backward compatibility preserved** — populated workbooks are untouched byte-for-byte. Legacy age rows on existing retirement sheets are left inert (no read, no write, no planner consumption). No forced migration.
 
+### Delivered — Quick Add: optimistic Activity row prepend (V1.2)
+
+**Quick Add payments now appear in the Activity table instantly via an optimistic client-side prepend, with a quiet background reconcile.** Shipped uncommitted alongside the planner-email debounce.
+
+User-visible problem: saving an income via Quick Add appeared to take "forever" to show in the Activity ledger — visibly only after the full planner run finished. Root cause was UI, not server. The success handler in `Dashboard_Script_Payments.html::savePayment()` kicks off five concurrent `google.script.run` RPCs (`loadActivitySection`, `refreshSnapshot`, `loadUpcomingSection`, `loadDashboardActionSections`, `runPlannerAndRefreshDashboardFromSave`) and meanwhile blanked the activity table with a `Loading activity…` placeholder. Whenever the planner queued ahead of the activity reload — or just dominated the shared client/network budget — the table sat on `Loading…` for the full duration of the planner run.
+
+Fix has two parts:
+
+1. **Optimistic prepend.** New helper `prependOptimisticQuickPayActivityRow_(snapshot)` in `Dashboard_Script_Activity.html` constructs an Activity row from `res.activitySnapshot` (which `quickAddPayment` already returns with every field we need: `entryType`, `payee`, `entryDate`, `amount`, `cashFlowSheet`, `cashFlowMonth`) and prepends it to `window.__activityRows`, then re-renders the current page. The user sees the new row at the top before the next animation frame — even on slow connections. The optimistic row carries `optimistic: true` and `sheetRow: 0` (Remove button stays disabled, which matches `quick_pay` policy anyway).
+
+2. **Quiet reconcile mode.** `loadActivitySection(opts)` now accepts `opts.quiet`; when `true`, skips the `Loading activity…` placeholder write, status reset, summary clear, page reset, and pager hide. The optimistic row stays visible while the server reload is in flight. When the server returns, `window.__activityRows` is replaced with the authoritative list (which contains the same event at the top from `appendActivityLog_` written synchronously inside `quickAddPayment()`), so the user perceives no flicker — same row, slightly different timestamp granularity (sub-second).
+
+Other callers of `loadActivitySection()` keep the original placeholder behavior because `opts.quiet` defaults to false:
+
+- `Dashboard_Script_Render.html` tab navigation handler (`name === 'activity'`)
+- `Dashboard_Body.html` Apply filter button
+- `Dashboard_Script_Activity.html` post-delete reload
+
+Behavior preservation: same server-side logic for `getActivityDashboardData`, same audit row written by `appendActivityLog_`, same kindLabel / actionLabel / non-monetary classification. The optimistic kindLabel for `quick_pay` mirrors `classifyActivityKind_`'s common-case mapping (`income` → `Income`, `expense` → `Bill`); edge cases (HOA / Tuition / debt-typed payees) get reclassified by the reload — for the typical row there is no observable diff. If `activitySnapshot` is missing or the activity wrap isn't yet rendered, the helper is a no-op and the user falls through to the existing reload path (defensive — no save flow can break because of a missing optimistic update).
+
+Help updated: `Dashboard_Help.html` → Cash Flow → Quick Add → Activity tab refresh paragraph rewritten to note "instantly via the server's save response" and "quiet background reconcile".
+
 ### Delivered — Planner email debounce + multi-recipient (V1.2)
 
 **Planner email — debounce per-save runs + send to spouse too.** Shipped uncommitted alongside the asset-save sync fix. Two long-running pain points addressed in one pass.

@@ -372,7 +372,107 @@ function activityDeleteClick_(ev) {
     .deleteActivityLogRow(row);
 }
 
-function loadActivitySection() {
+/**
+ * Format a Date as `YYYY-MM-DD HH:mm:ss` in the user's local timezone —
+ * matches the format the server writes for `loggedAt` on
+ * `LOG - Activity` rows. Used for optimistic prepended rows so they
+ * sort and display the same way as authoritative rows once the server
+ * reload reconciles. Falls back to ISO if anything goes wrong.
+ */
+function activityFormatLoggedAtNow_() {
+  try {
+    var d = new Date();
+    var pad = function(n) { return (n < 10 ? '0' : '') + n; };
+    return (
+      d.getFullYear() + '-' +
+      pad(d.getMonth() + 1) + '-' +
+      pad(d.getDate()) + ' ' +
+      pad(d.getHours()) + ':' +
+      pad(d.getMinutes()) + ':' +
+      pad(d.getSeconds())
+    );
+  } catch (_e) {
+    return new Date().toISOString().replace('T', ' ').slice(0, 19);
+  }
+}
+
+/**
+ * Optimistically prepend a Quick Add row to the Activity table so the
+ * user sees their save reflected in the ledger in <100ms — no RPC
+ * round-trip needed. The row is constructed from the
+ * `activitySnapshot` object the server returns from `quickAddPayment`,
+ * which already contains every field we need (entry type, payee,
+ * amount, dates, sheet, month label).
+ *
+ * The optimistic row gets `sheetRow: 0` so the Remove button stays
+ * disabled — quick_pay rows aren't removable from the UI anyway, but
+ * this also guards against a misclick before the server reload
+ * arrives with the real `sheetRow`.
+ *
+ * The matching `loadActivitySection({ quiet: true })` call from the
+ * Quick Add success handler reconciles within a few seconds, replacing
+ * `window.__activityRows` with the authoritative server list. The
+ * optimistic row is dropped at that point but the visible row at the
+ * top of the table is the same event, so the user perceives no
+ * flicker.
+ *
+ * Defensive: if the snapshot is missing or the activity wrap is not
+ * yet rendered, this is a no-op. The user still gets the eventual
+ * server reload via `loadActivitySection`.
+ */
+function prependOptimisticQuickPayActivityRow_(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return;
+  var wrap = document.getElementById('act_tableWrap');
+  if (!wrap) return;
+
+  var entryType = String(snapshot.entryType || '').trim();
+  var direction = entryType === 'Expense' ? 'expense' : 'income';
+  // Mirrors classifyActivityKind_ for the common quick_pay case. Edge
+  // cases (HOA / Tuition / debt-typed payees) get reclassified by the
+  // server reload; for the common Bill / Income payee the optimistic
+  // kind already matches what the reload returns.
+  var kindLabel = direction === 'income' ? 'Income' : 'Bill';
+
+  var amount = Number(snapshot.amount);
+  if (!isFinite(amount)) amount = 0;
+
+  var optimistic = {
+    sheetRow: 0,
+    loggedAt: activityFormatLoggedAtNow_(),
+    eventType: 'quick_pay',
+    entryDate: String(snapshot.entryDate || '').trim(),
+    amount: amount,
+    amountNum: amount,
+    direction: direction,
+    payee: String(snapshot.payee || '').trim(),
+    category: '',
+    accountSource: '',
+    cashFlowSheet: String(snapshot.cashFlowSheet || '').trim(),
+    cashFlowMonth: String(snapshot.cashFlowMonth || '').trim(),
+    dedupeKey: '',
+    details: '',
+    kindLabel: kindLabel,
+    actionLabel: '',
+    isNonMonetary: false,
+    optimistic: true
+  };
+
+  var existing = window.__activityRows || [];
+  window.__activityRows = [optimistic].concat(existing);
+  window.__activityPage = 0;
+
+  // Re-render the current page so the new row shows immediately. The
+  // pager / summary text is updated lazily by the next server reload;
+  // showing a slightly stale "Showing N events" line for ~1s is far
+  // better than the user staring at "Loading…" until the planner
+  // queue drains.
+  try { activityRenderCurrentPage_(); } catch (_e) { /* defensive */ }
+}
+
+function loadActivitySection(opts) {
+  opts = opts || {};
+  var quiet = !!opts.quiet;
+
   var wrap = document.getElementById('act_tableWrap');
   var statusEl = document.getElementById('act_status');
   var summaryEl = document.getElementById('act_summary');
@@ -389,18 +489,28 @@ function loadActivitySection() {
   var amountMin = amountMinEl ? String(amountMinEl.value || '').trim() : '';
   var amountMax = amountMaxEl ? String(amountMaxEl.value || '').trim() : '';
 
-  if (statusEl) {
-    statusEl.textContent = '';
-    statusEl.className = 'status';
+  // In quiet mode we skip the "Loading activity…" placeholder + status
+  // resets so an optimistic row prepended just before this call stays
+  // visible while the server reconciles. Used by the Quick Add success
+  // handler — the user has already seen their row land at the top via
+  // prependOptimisticQuickPayActivityRow_, and we don't want to wipe
+  // that row to "Loading…" while the server reload is in flight.
+  // Default (quiet=false) preserves the original placeholder behavior
+  // for first-page-load and Apply.
+  if (!quiet) {
+    if (statusEl) {
+      statusEl.textContent = '';
+      statusEl.className = 'status';
+    }
+    if (summaryEl) summaryEl.textContent = '';
+
+    var pager = document.getElementById('act_pager');
+    if (pager) pager.hidden = true;
+
+    wrap.innerHTML = loadingBlockHtml('Loading activity…', true);
+
+    window.__activityPage = 0;
   }
-  if (summaryEl) summaryEl.textContent = '';
-
-  var pager = document.getElementById('act_pager');
-  if (pager) pager.hidden = true;
-
-  wrap.innerHTML = loadingBlockHtml('Loading activity…', true);
-
-  window.__activityPage = 0;
 
   google.script.run
     .withSuccessHandler(function(res) {
