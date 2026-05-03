@@ -274,14 +274,32 @@ function addBillFromDashboard(payload) {
   setIfPresent('Start Month', startMonth);
   setIfPresent('Notes', notes);
 
-  // Capture the last data row BEFORE the append so we can copy its formatting
-  // onto the new row afterwards (values-only append, then paint the format).
-  var previousLastRow = sheet.getLastRow();
+  // Sorted insert: place the new bill row above the first existing row whose
+  // Due Day is strictly greater so INPUT - Bills stays ordered by due date,
+  // matching how the Manage Bills table sorts on the dashboard. All other
+  // code paths look up bills by Payee name (`findRowByName_`,
+  // `getInputBillsDueRows_`, `lookupRowByName_` in cash flow), so shifting
+  // rows around is safe — there are no row-number references to update.
+  // Falls back to appendRow when the new bill belongs at the bottom (highest
+  // Due Day, or the sheet has no data yet).
+  var dueDayCol1Based = headerIndex_('Due Day') + 1;
+  var sortedInsertRow = findBillsSortedInsertRow_(sheet, dueDayCol1Based, dueDayNum);
 
-  sheet.appendRow(row);
-
-  var newRow = sheet.getLastRow();
-  copyBillsRowFormattingFromPreviousRow_(sheet, newRow, previousLastRow);
+  var newRow;
+  if (sortedInsertRow === -1) {
+    var previousLastRow = sheet.getLastRow();
+    sheet.appendRow(row);
+    newRow = sheet.getLastRow();
+    copyBillsRowFormattingFromPreviousRow_(sheet, newRow, previousLastRow);
+  } else {
+    // insertRowBefore creates a blank row at sortedInsertRow and shifts the
+    // previous occupant down. We then write values directly and paint the
+    // formatting from the closest visual sibling (see helper for choice).
+    sheet.insertRowBefore(sortedInsertRow);
+    newRow = sortedInsertRow;
+    sheet.getRange(newRow, 1, 1, row.length).setValues([row]);
+    copyBillsRowFormattingFromInsertSiblingRow_(sheet, newRow);
+  }
 
   try {
     appendActivityLog_(ss, {
@@ -688,5 +706,90 @@ function copyBillsRowFormattingFromPreviousRow_(sheet, newRow, previousLastRow) 
       );
   } catch (e) {
     Logger.log('copyBillsRowFormattingFromPreviousRow_: ' + e);
+  }
+}
+
+/**
+ * Find the 1-based row number BEFORE which a new bill row with `newDueDay`
+ * should be inserted to keep INPUT - Bills sorted by Due Day ascending.
+ *
+ * Rules:
+ *   - Insert before the first existing data row whose Due Day is strictly
+ *     greater than `newDueDay`.
+ *   - Same-day ties land AFTER existing same-day rows (newest at the
+ *     bottom of the same-day group), matching the dashboard's stable
+ *     sort behavior in sortBillsManageRows_.
+ *   - Blank Due Day rows (legacy or hand-edited bills) sink to the bottom
+ *     — numeric Due Day rows are inserted above the first blank row we
+ *     encounter so the visible ordering stays predictable.
+ *   - Returns -1 to signal "append at end" when no strictly-greater row
+ *     exists and there are no blanks to displace, or when the sheet has
+ *     no data yet. Caller falls back to `sheet.appendRow(row)`.
+ *
+ * Performance: one bounded `getRange().getValues()` over a single column.
+ * Typical workbook has < 100 bills so this is well under one frame.
+ *
+ * @param {Sheet} sheet            INPUT - Bills sheet.
+ * @param {number} dueDayCol1Based 1-based column index of "Due Day".
+ * @param {number} newDueDay       Validated Due Day of the new bill (1..31).
+ * @returns {number}               1-based row number to insertBefore, or -1.
+ */
+function findBillsSortedInsertRow_(sheet, dueDayCol1Based, newDueDay) {
+  if (!sheet || !dueDayCol1Based || dueDayCol1Based < 1) return -1;
+  if (!isFinite(newDueDay)) return -1;
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1; // header-only sheet → caller appends.
+
+  var values = sheet.getRange(2, dueDayCol1Based, lastRow - 1, 1).getValues();
+  for (var i = 0; i < values.length; i++) {
+    var raw = values[i][0];
+    var hasValue = (raw !== '' && raw !== null && raw !== undefined);
+    var n = hasValue ? Number(raw) : NaN;
+    var hasNumeric = hasValue && isFinite(n);
+    if (!hasNumeric) {
+      // Blank or unparseable Due Day — insert numeric row here so blanks
+      // stay sunken at the bottom.
+      return i + 2;
+    }
+    if (n > newDueDay) {
+      return i + 2;
+    }
+  }
+  return -1; // every existing row has Due Day <= newDueDay → append at end.
+}
+
+/**
+ * Sister of copyBillsRowFormattingFromPreviousRow_ but for the sorted-insert
+ * path. After `insertRowBefore(insertRow)` the row that was formerly at
+ * `insertRow` is now at `insertRow + 1`, so it's the closest already-styled
+ * sibling — copy its formatting onto the new blank row at `insertRow`.
+ *
+ * Falls back to the row above (`newRow - 1`) when the new row is now the
+ * last data row and there is no styled row below to mirror. We never copy
+ * from row 1 (the header) because that would inherit bold/header styling.
+ *
+ * Values are NOT overwritten — PASTE_FORMAT only.
+ */
+function copyBillsRowFormattingFromInsertSiblingRow_(sheet, newRow) {
+  if (!sheet || !newRow || newRow < 2) return;
+  var lastRow = sheet.getLastRow();
+  // Prefer the row immediately below (originally at newRow before insert).
+  var sourceRow = (newRow + 1) <= lastRow ? (newRow + 1) : (newRow - 1);
+  if (sourceRow < 2 || sourceRow === newRow) return;
+
+  var numCols = sheet.getLastColumn();
+  if (numCols < 1) return;
+
+  try {
+    sheet
+      .getRange(sourceRow, 1, 1, numCols)
+      .copyTo(
+        sheet.getRange(newRow, 1, 1, numCols),
+        SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+        false
+      );
+  } catch (e) {
+    Logger.log('copyBillsRowFormattingFromInsertSiblingRow_: ' + e);
   }
 }

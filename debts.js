@@ -614,28 +614,69 @@ function addDebtFromDashboard(payload) {
 
   const templateRow = findDebtTemplateRow_(sheet, headerMap);
 
-  // Insert the new row directly after the last non-summary data row so it
-  // lands above the blank buffer + TOTAL DEBT summary (and any stop-tracked
-  // rows below the summary). Fall back to appendRow when the sheet has no
-  // existing data rows yet.
+  // Sorted insert by Due Day within the active region (rows 2..templateRow)
+  // so the new debt lands in due-date order alongside its peers above the
+  // TOTAL DEBT summary. Stop-tracked rows below the summary are
+  // intentionally NOT considered — they're soft-deleted and shouldn't
+  // influence active-region ordering. All debt lookups elsewhere are by
+  // account name (`getDebtsHeaderMap_` / `findRowByName_` callers /
+  // `normalizeDebts_`), so shifting active rows around is safe — there are
+  // no row-number references to update.
+  //
+  // sortedInsertRow contract:
+  //   * 1-based row number to `insertRowBefore()` so the new row lands
+  //     ahead of the first existing same-day-or-greater row (with blanks
+  //     sunk to the bottom of the active region).
+  //   * `templateRow + 1` when the new debt belongs at the end of the
+  //     active region (its Due Day is >= all existing rows), which keeps
+  //     the legacy "insertRowAfter(templateRow)" placement and so leaves
+  //     TOTAL DEBT and any stop-tracked rows below it untouched.
+  //   * -1 when the sheet has no existing data rows above TOTAL DEBT
+  //     (templateRow === -1) — caller falls back to appendRow.
+  const sortedInsertRow = findDebtsSortedInsertRow_(sheet, headerMap, templateRow, dueDay);
+
   let appendedRow;
-  if (templateRow !== -1) {
-    sheet.insertRowAfter(templateRow);
-    appendedRow = templateRow + 1;
-    sheet.getRange(appendedRow, 1, 1, numCols).setValues([row]);
-  } else {
+  let formatSourceRow = -1;
+  if (sortedInsertRow === -1) {
     sheet.appendRow(row);
     appendedRow = sheet.getLastRow();
+    // No prior data row means there's nothing styled to copy from — leave
+    // the row with default formatting. The Active cell write below still
+    // re-stamps row-consistent format on that one cell.
+  } else {
+    sheet.insertRowBefore(sortedInsertRow);
+    appendedRow = sortedInsertRow;
+    sheet.getRange(appendedRow, 1, 1, numCols).setValues([row]);
+    // Pick the closest already-styled sibling. Prefer the row immediately
+    // below (it was at `appendedRow` before the insert and thus was
+    // already styled like the rest of the active region). Fall back to the
+    // row above when the new row was inserted at the very end of the
+    // active region (templateRow + 1) and the row below would now be the
+    // blank buffer / TOTAL DEBT row. Never copy from row 1 (header).
+    const lastRow = sheet.getLastRow();
+    let candidateBelow = appendedRow + 1;
+    let candidateAbove = appendedRow - 1;
+    if (sortedInsertRow === templateRow + 1) {
+      // We're at the end of the active region — the row below is buffer
+      // or TOTAL DEBT. Prefer the row above (which is the legacy
+      // templateRow's previous occupant, now shifted up by 0 since insert
+      // happened below it) for an active-row style match.
+      formatSourceRow = candidateAbove >= 2 ? candidateAbove : -1;
+    } else {
+      formatSourceRow =
+        candidateBelow <= lastRow ? candidateBelow :
+        (candidateAbove >= 2 ? candidateAbove : -1);
+    }
   }
 
-  if (templateRow !== -1 && templateRow !== appendedRow) {
+  if (formatSourceRow !== -1 && formatSourceRow !== appendedRow) {
     try {
-      sheet.getRange(templateRow, 1, 1, numCols).copyTo(
+      sheet.getRange(formatSourceRow, 1, 1, numCols).copyTo(
         sheet.getRange(appendedRow, 1, 1, numCols),
         SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
         false
       );
-      sheet.setRowHeight(appendedRow, sheet.getRowHeight(templateRow));
+      sheet.setRowHeight(appendedRow, sheet.getRowHeight(formatSourceRow));
     } catch (formatErr) {
       Logger.log('addDebtFromDashboard format copy failed: ' + formatErr);
     }
@@ -976,6 +1017,87 @@ function findDebtTemplateRow_(sheet, headerMap) {
     return r + 1;
   }
   return -1;
+}
+
+/**
+ * Find the 1-based row number BEFORE which a new debt row with `newDueDay`
+ * should be inserted to keep INPUT - Debts sorted by Due Day ascending
+ * within the active region above TOTAL DEBT.
+ *
+ * Active region = rows 2..templateRow (inclusive), where templateRow is
+ * the last non-summary, non-empty data row above TOTAL DEBT. Stop-tracked
+ * rows that sit BELOW TOTAL DEBT are intentionally skipped — they're
+ * soft-deleted and shouldn't influence the ordering users see in the
+ * Debts dropdowns / dashboard tables.
+ *
+ * Rules mirror findBillsSortedInsertRow_:
+ *   - Insert before the first active-region row whose Due Day is strictly
+ *     greater than `newDueDay`.
+ *   - Same-day ties land AFTER existing same-day rows.
+ *   - Blank Due Day rows in the active region (legacy / hand-edited)
+ *     sink to the bottom of the active region — numeric rows are
+ *     inserted above the first blank we encounter.
+ *   - When no strictly-greater row exists, return `templateRow + 1`
+ *     (the legacy "insert at end of active region" slot — keeps the
+ *     blank buffer + TOTAL DEBT untouched).
+ *   - Returns -1 when templateRow === -1 (no active region yet) so the
+ *     caller falls back to appendRow.
+ *
+ * Reads INPUT - Debts once (a single bounded getValues over the active
+ * region). Typical debt counts are < 30 so this is well under one frame.
+ *
+ * @param {Sheet} sheet         INPUT - Debts sheet.
+ * @param {Object} headerMap    Output of getDebtsHeaderMap_.
+ * @param {number} templateRow  Output of findDebtTemplateRow_.
+ * @param {number} newDueDay    Validated Due Day of the new debt (1..31).
+ * @returns {number}            1-based row number to insertBefore, or -1.
+ */
+function findDebtsSortedInsertRow_(sheet, headerMap, templateRow, newDueDay) {
+  if (!sheet || !headerMap) return -1;
+  if (templateRow === -1) return -1;
+  // Defensive: when the workbook is missing the "Due Date" column we can't
+  // sort by it — fall back to the legacy "append at end of active region"
+  // slot. setAt_(headerMap.dueDateColZero, ...) silently no-ops in this
+  // case so existing data isn't touched either.
+  if (headerMap.dueDateColZero === -1) return templateRow + 1;
+  // Defensive: a non-numeric Due Day should never reach here (the caller
+  // validates 1..31), but if it ever does we fall back to "append at end
+  // of active region" rather than crashing or scrambling existing order.
+  if (!isFinite(Number(newDueDay))) return templateRow + 1;
+
+  const startRow = 2;
+  const endRow = templateRow;
+  if (endRow < startRow) return templateRow + 1;
+
+  const numCols = sheet.getLastColumn();
+  if (numCols < 1) return templateRow + 1;
+
+  const values = sheet
+    .getRange(startRow, 1, endRow - startRow + 1, numCols)
+    .getValues();
+
+  for (let i = 0; i < values.length; i++) {
+    const name = String(values[i][headerMap.nameColZero] || '').trim();
+    // Skip empty-name buffer rows and any TOTAL DEBT summary row that
+    // somehow leaks into the active region — we don't want to insert
+    // ahead of a deliberate gap or the summary anchor.
+    if (!name) continue;
+    if (isDebtSummaryRowName_(name)) continue;
+
+    const raw = values[i][headerMap.dueDateColZero];
+    const hasValue = (raw !== '' && raw !== null && raw !== undefined);
+    const n = hasValue ? Number(raw) : NaN;
+    const hasNumeric = hasValue && isFinite(n);
+    if (!hasNumeric) {
+      // Blank Due Day row in the active region — insert numeric row here
+      // so blanks stay sunken at the bottom of the active region.
+      return startRow + i;
+    }
+    if (n > newDueDay) {
+      return startRow + i;
+    }
+  }
+  return templateRow + 1;
 }
 
 function getRequiredDebtFieldColZero_(sheet, fieldName, optionalHeaders) {
