@@ -579,6 +579,13 @@
 
       <div class="grid-2">
         <div>
+          <!-- Edit mode banner. Hidden by default; the client toggles it
+               via display:'' / 'none' when entering / leaving edit mode
+               (see enterUpcomingEditMode_ / resetUpcomingFormToAddMode_
+               in Dashboard_Script_CashFlowUpcoming.html). Reuses the
+               existing `.muted` style so no new CSS is needed. -->
+          <div id="up_form_mode" class="muted" style="display:none;margin-bottom:8px;"></div>
+
           <label>Expense Name</label>
           <input type="text" id="up_name" maxlength="160" autocomplete="off" oninput="if (typeof clearUpcomingAddNameError_==='function') clearUpcomingAddNameError_();">
           <div id="up_name_error" class="field-error" role="alert" aria-live="polite"></div>
@@ -606,7 +613,11 @@
           <label>Notes</label>
           <textarea id="up_notes"></textarea>
 
-          <button onclick="saveUpcomingExpense()">Add Upcoming Expense</button>
+          <!-- Save button is the same control in Add and Edit modes; the
+               client flips its label between "Add Upcoming Expense" and
+               "Save changes". Cancel-edit is hidden in Add mode. -->
+          <button id="up_save_btn" onclick="saveUpcomingExpense()">Add Upcoming Expense</button>
+          <button id="up_cancel_btn" type="button" class="small-btn" onclick="cancelUpcomingEdit()" hidden>Cancel edit</button>
           <div id="upcoming_status" class="status"></div>
         </div>
 

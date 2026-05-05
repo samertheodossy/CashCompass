@@ -121,6 +121,7 @@ function renderUpcomingList(rows) {
         '</div>' +
         '<div class="upcoming-actions">' +
           '<button class="small-btn primary" onclick="quickAddFromUpcoming(\'' + escapeJs(row.id) + '\')">Quick add payment</button>' +
+          '<button class="small-btn" onclick="editUpcoming(\'' + escapeJs(row.id) + '\')">Edit</button>' +
           '<button class="small-btn" onclick="dismissUpcoming(\'' + escapeJs(row.id) + '\')">Dismiss</button>' +
         '</div>' +
       '</div>'
@@ -128,8 +129,130 @@ function renderUpcomingList(rows) {
   }).join('');
 }
 
+// Module-level edit state for the Upcoming form. `null` means the form
+// is in Add mode (the original behavior); a non-empty string means the
+// form is currently editing the row with that upcomingId. Saved here
+// rather than as a DOM data attribute so it's straightforward to query
+// from the dual-mode saveUpcomingExpense() branch below.
+var __upcomingEditingId = null;
+
+// Flip the existing Add Upcoming Expense form into Edit mode for the
+// in-memory row object returned by getUpcomingExpensesUiData. We deliberately
+// reuse the same form (no modal, no inline editor) so there's only one
+// validation + status surface to maintain. See HTML edits in
+// Dashboard_Body.html for the new #up_form_mode banner + #up_save_btn /
+// #up_cancel_btn controls this function drives.
+function enterUpcomingEditMode_(row) {
+  __upcomingEditingId = String(row.id || '').trim();
+
+  document.getElementById('up_name').value = row.expenseName || '';
+  document.getElementById('up_category').value = row.category || '';
+  document.getElementById('up_payee').value = row.payee || '';
+  document.getElementById('up_dueDate').value = row.dueDate || '';
+  // Match the Add form's currency-friendly text input by stamping a
+  // 2-decimal-place string. The currencyBlur wiring on the input will
+  // re-format on next blur, but pre-stamping avoids a blank flash on
+  // open and means the form value already round-trips through toNumber().
+  var amountInput = document.getElementById('up_amount');
+  if (amountInput) {
+    var amt = Number(row.amount);
+    amountInput.value = isFinite(amt) ? amt.toFixed(2) : '';
+  }
+  document.getElementById('up_accountSource').value = row.accountSource || '';
+  document.getElementById('up_autoAdd').checked =
+    String(row.autoAddToCashFlow || '').toLowerCase() === 'yes';
+  document.getElementById('up_notes').value = row.notes || '';
+
+  var saveBtn = document.getElementById('up_save_btn');
+  if (saveBtn) saveBtn.textContent = 'Save changes';
+  var cancelBtn = document.getElementById('up_cancel_btn');
+  if (cancelBtn) cancelBtn.hidden = false;
+  var modeEl = document.getElementById('up_form_mode');
+  if (modeEl) {
+    modeEl.textContent = 'Editing: ' + (row.expenseName || 'Unnamed Expense');
+    modeEl.style.display = '';
+  }
+
+  clearUpcomingAddNameError_();
+  setStatus('upcoming_status', '', false);
+
+  // Scroll the form into view and focus the first input so the user
+  // sees what they're about to change without hunting up the page.
+  try {
+    var firstInput = document.getElementById('up_name');
+    if (firstInput && typeof firstInput.scrollIntoView === 'function') {
+      firstInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    if (firstInput) firstInput.focus();
+  } catch (_e) { /* defensive: scroll/focus is cosmetic */ }
+}
+
+function resetUpcomingFormToAddMode_() {
+  __upcomingEditingId = null;
+
+  document.getElementById('up_name').value = '';
+  document.getElementById('up_category').value = '';
+  document.getElementById('up_payee').value = '';
+  // Note: up_dueDate is intentionally left as-is — the Add success
+  // handler did not reset it either, and loadUpcomingSection's first
+  // line re-stamps it to today on the next list refresh.
+  document.getElementById('up_amount').value = '';
+  document.getElementById('up_accountSource').value = '';
+  document.getElementById('up_notes').value = '';
+  document.getElementById('up_autoAdd').checked = false;
+
+  var saveBtn = document.getElementById('up_save_btn');
+  if (saveBtn) saveBtn.textContent = 'Add Upcoming Expense';
+  var cancelBtn = document.getElementById('up_cancel_btn');
+  if (cancelBtn) cancelBtn.hidden = true;
+  var modeEl = document.getElementById('up_form_mode');
+  if (modeEl) {
+    modeEl.textContent = '';
+    modeEl.style.display = 'none';
+  }
+
+  clearUpcomingAddNameError_();
+}
+
+// Per-card "Edit" button handler. Pulls the row out of the in-memory
+// list refreshed by the most recent loadUpcomingSection() — avoids a
+// separate RPC and matches what the user just saw on the card. If the
+// list is somehow stale (row dismissed in another tab, sheet edited
+// directly), the server-side updateUpcomingExpenseFromDashboard call
+// will still refuse with a clean error message on Save.
+function editUpcoming(id) {
+  var targetId = String(id || '').trim();
+  if (!targetId) return;
+
+  var rows = (typeof upcomingExpenses !== 'undefined' && Array.isArray(upcomingExpenses))
+    ? upcomingExpenses : [];
+  var match = null;
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].id || '').trim() === targetId) { match = rows[i]; break; }
+  }
+  if (!match) {
+    setStatus('upcoming_status', 'Upcoming expense not found — refresh and try again.', true);
+    return;
+  }
+  if (String(match.status || '').trim() !== 'Planned') {
+    setStatus('upcoming_status', 'Only active (Planned) upcoming expenses can be edited.', true);
+    return;
+  }
+  enterUpcomingEditMode_(match);
+}
+
+function cancelUpcomingEdit() {
+  resetUpcomingFormToAddMode_();
+  setStatus('upcoming_status', '', false);
+}
+
 function saveUpcomingExpense() {
   clearUpcomingAddNameError_();
+
+  // Capture the editing ID up front so a click during the in-flight RPC
+  // can't change behavior mid-save.
+  const editingId = __upcomingEditingId;
+  const isEdit = !!editingId;
 
   const name = String(document.getElementById('up_name').value || '').trim();
   const dueDate = String(document.getElementById('up_dueDate').value || '').trim();
@@ -173,8 +296,34 @@ function saveUpcomingExpense() {
     autoAddToCashFlow: document.getElementById('up_autoAdd').checked,
     notes: document.getElementById('up_notes').value
   };
+  if (isEdit) payload.id = editingId;
 
-  setStatusLoading('upcoming_status', 'Saving upcoming expense…');
+  setStatusLoading(
+    'upcoming_status',
+    isEdit ? 'Saving changes…' : 'Saving upcoming expense…'
+  );
+
+  if (isEdit) {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        setStatus('upcoming_status', (res && res.message) || 'Upcoming expense updated.', false);
+        // Reset the form back to Add mode regardless of whether anything
+        // actually changed (no-changes save returns ok with the "No
+        // changes." message). The list reload below picks up any
+        // concurrent edits made elsewhere.
+        resetUpcomingFormToAddMode_();
+        loadUpcomingSection();
+      })
+      .withFailureHandler(function(err) {
+        const msg = err && err.message ? err.message : String(err);
+        if (isUpcomingNameRelatedError_(msg)) {
+          showUpcomingAddNameError_(msg);
+        }
+        setStatus('upcoming_status', msg, true);
+      })
+      .updateUpcomingExpenseFromDashboard(payload);
+    return;
+  }
 
   google.script.run
     .withSuccessHandler(function(res) {

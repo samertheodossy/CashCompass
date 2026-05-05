@@ -536,6 +536,13 @@ function activityLogActionLabel_(eventType, detailsJson) {
     // that predate the detail fields.
     case 'upcoming_payment':
       return upcomingPaymentActionLabel_(detailsJson);
+    // upcoming_update is the field-level edit lifecycle event written
+    // by upcoming_expenses.js::updateUpcomingExpenseFromDashboard. Non-
+    // monetary; the action label inlines the new value when a single
+    // field changed (Due Date or Amount get specialized formatting).
+    // See upcomingUpdateActionLabel_ for the rendered text.
+    case 'upcoming_update':
+      return upcomingUpdateActionLabel_(detailsJson);
     // Legacy: upcoming_cashflow is no longer emitted (direct "Add to Cash
     // Flow" path removed), but historical rows still need a readable label.
     case 'upcoming_cashflow': return 'Pushed to cash flow';
@@ -646,6 +653,77 @@ function upcomingPaymentActionLabel_(detailsJson) {
   }
 
   return label;
+}
+
+/**
+ * Build the upcoming_update action label from the row's details JSON
+ * written by upcoming_expenses.js::updateUpcomingExpenseFromDashboard.
+ * Uses the explicit `changedFields` list so we don't have to re-diff
+ * `previous` vs `new` here. Defensive against missing/partial details
+ * — falls back to a plain "Updated" label rather than throwing.
+ *
+ *   one field, dueDate    → "Updated Due Date to 2026-05-19"
+ *   one field, amount     → "Updated Amount to $9,500.00"
+ *   one field, other      → "Updated <Display Name>"
+ *   multiple fields       → "Updated 3 fields"
+ *   legacy / no details   → "Updated"
+ */
+function upcomingUpdateActionLabel_(detailsJson) {
+  var fallback = 'Updated';
+  var raw = String(detailsJson || '').trim();
+  if (!raw) return fallback;
+  var d;
+  try {
+    d = JSON.parse(raw);
+  } catch (_e) {
+    return fallback;
+  }
+  if (!d || typeof d !== 'object') return fallback;
+
+  var changed = (d.changedFields && d.changedFields.length) ? d.changedFields : [];
+  if (!changed.length) return fallback;
+
+  if (changed.length > 1) {
+    return 'Updated ' + changed.length + ' fields';
+  }
+
+  var field = String(changed[0] || '').trim();
+  if (!field) return fallback;
+
+  // Read `new` defensively — `new` is a reserved word in some contexts so
+  // we always go through bracket access.
+  var newVals = (d['new'] && typeof d['new'] === 'object') ? d['new'] : null;
+  var newVal = newVals ? newVals[field] : null;
+
+  if (field === 'dueDate') {
+    var iso = String(newVal || '').trim();
+    return iso ? 'Updated Due Date to ' + iso : 'Updated Due Date';
+  }
+  if (field === 'amount') {
+    var n = activityLogAsFiniteNumber_(newVal);
+    return n !== null ? 'Updated Amount to ' + activityLogFmtMoney_(n) : 'Updated Amount';
+  }
+  return 'Updated ' + upcomingUpdateFieldDisplayName_(field);
+}
+
+/**
+ * Map an upcoming_update field key (matches the JSON keys written by
+ * appendUpcomingActivityUpdate_) to the user-facing display name shown
+ * in the action label. Unknown keys fall through to the raw key so a
+ * future field added without a label doesn't crash the activity row.
+ */
+function upcomingUpdateFieldDisplayName_(key) {
+  switch (String(key || '').trim()) {
+    case 'expenseName': return 'Expense Name';
+    case 'category': return 'Category';
+    case 'payee': return 'Payee';
+    case 'dueDate': return 'Due Date';
+    case 'amount': return 'Amount';
+    case 'accountSource': return 'Account / Source';
+    case 'autoAddToCashFlow': return 'Auto Add To Cash Flow';
+    case 'notes': return 'Notes';
+    default: return key || 'Field';
+  }
 }
 
 /**
@@ -867,6 +945,10 @@ function activityLogIsNonMonetaryEvent_(eventType) {
     et === 'income_source_deactivate' ||
     et === 'upcoming_status' ||
     et === 'upcoming_payment' ||
+    // upcoming_update rows carry the new value inline in the action
+    // label (see upcomingUpdateActionLabel_) so we render Amount as
+    // "—" — otherwise a Due Date / Notes edit would appear as $0.00.
+    et === 'upcoming_update' ||
     // Planner email lifecycle: these rows describe a notification
     // event, not a money movement, so Amount renders "—" — otherwise
     // a heavy update session would show ten "$0.00" Email deferred

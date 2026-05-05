@@ -379,6 +379,212 @@ function applyPaymentToUpcomingExpense(id, paidAmount) {
   };
 }
 
+/**
+ * Edit a Planned Upcoming Expense from the dashboard. Mirrors
+ * addUpcomingExpense's input contract but locates an existing row by ID
+ * and only writes the 8 user-input columns. ID, Status, and Added To
+ * Cash Flow are preserved verbatim so the existing payment-applied /
+ * dismissed history stays consistent with the upcoming_payment /
+ * upcoming_status lifecycle events.
+ *
+ * Refusal cases:
+ *   - Missing ID / row not found → throws.
+ *   - Status !== 'Planned'        → throws (Paid / Dismissed / Skipped
+ *     rows are not editable; use the lifecycle paths to change them, or
+ *     re-add a fresh upcoming row).
+ *   - Validation failures (missing name / due date / amount, amount <= 0)
+ *     mirror the messages addUpcomingExpense uses.
+ *
+ * No-change case:
+ *   - When all 8 editable fields equal their existing values (after
+ *     normalization), we return ok without writing the sheet, without
+ *     bumping touchDashboardSourceUpdated_, and without adding a row to
+ *     LOG - Activity. Saves an audit row + downstream consumer churn
+ *     when the user opens Edit and clicks Save without changing
+ *     anything.
+ */
+function updateUpcomingExpenseFromDashboard(payload) {
+  validateRequired_(payload, ['id', 'expenseName', 'dueDate', 'amount']);
+
+  const targetId = String(payload.id || '').trim();
+  if (!targetId) throw new Error('Expense ID is required.');
+
+  const expenseName = String(payload.expenseName || '').trim();
+  if (!expenseName) throw new Error('Expense Name is required.');
+
+  // Reuse the same parser the Add path uses so legacy / hand-edited
+  // dueDate values still round-trip cleanly.
+  const dueDateObj = parseIsoDateLocal_(payload.dueDate);
+
+  const amount = round2_(toNumber_(payload.amount));
+  if (isNaN(amount) || amount <= 0) {
+    throw new Error('Amount must be greater than 0.');
+  }
+
+  const category = String(payload.category || '').trim();
+  const payee = String(payload.payee || '').trim();
+  const accountSource = String(payload.accountSource || '').trim();
+  const notes = String(payload.notes || '').trim();
+  const autoAddToCashFlow = payload.autoAddToCashFlow ? 'Yes' : 'No';
+
+  const rowInfo = findUpcomingExpenseRowById_(targetId);
+  if (!rowInfo) throw new Error('Upcoming expense not found: ' + targetId);
+
+  const row = rowInfo.values;
+  const sheet = rowInfo.sheet;
+  const colMap = rowInfo.colMap;
+
+  const currentStatus = String(row[colMap['Status']] || '').trim() || 'Planned';
+  if (currentStatus !== 'Planned') {
+    throw new Error('Only active (Planned) upcoming expenses can be edited.');
+  }
+
+  // Snapshot previous values BEFORE we mutate. Due Date is normalized to
+  // ISO so before/after string comparisons stay byte-stable regardless
+  // of whether the sheet stored a Date object or a string.
+  const previous = {
+    expenseName: String(row[colMap['Expense Name']] || '').trim(),
+    category: String(row[colMap['Category']] || '').trim(),
+    payee: String(row[colMap['Payee']] || '').trim(),
+    dueDate: parseSheetDateToIso_(row[colMap['Due Date']]),
+    amount: round2_(toNumber_(row[colMap['Amount']])),
+    accountSource: String(row[colMap['Account / Source']] || '').trim(),
+    autoAddToCashFlow: String(row[colMap['Auto Add To Cash Flow']] || '').trim() || 'No',
+    notes: String(row[colMap['Notes']] || '').trim()
+  };
+
+  const newDueDateIso = Utilities.formatDate(
+    stripTime_(dueDateObj),
+    Session.getScriptTimeZone(),
+    'yyyy-MM-dd'
+  );
+
+  const next = {
+    expenseName: expenseName,
+    category: category,
+    payee: payee,
+    dueDate: newDueDateIso,
+    amount: amount,
+    accountSource: accountSource,
+    autoAddToCashFlow: autoAddToCashFlow,
+    notes: notes
+  };
+
+  const changedFields = [];
+  if (previous.expenseName !== next.expenseName) changedFields.push('expenseName');
+  if (previous.category !== next.category) changedFields.push('category');
+  if (previous.payee !== next.payee) changedFields.push('payee');
+  if (previous.dueDate !== next.dueDate) changedFields.push('dueDate');
+  if (previous.amount !== next.amount) changedFields.push('amount');
+  if (previous.accountSource !== next.accountSource) changedFields.push('accountSource');
+  if (previous.autoAddToCashFlow !== next.autoAddToCashFlow) changedFields.push('autoAddToCashFlow');
+  if (previous.notes !== next.notes) changedFields.push('notes');
+
+  if (changedFields.length === 0) {
+    return {
+      ok: true,
+      message: 'No changes.',
+      changedFields: []
+    };
+  }
+
+  // Per-cell writes for the 8 editable columns. Each setValue is one
+  // round-trip; for the typical 1-2 changed-field edit this is cheaper
+  // than re-writing all 11 columns and avoids touching cells that didn't
+  // change. ID / Status / Added To Cash Flow are intentionally never
+  // written — they stay under the lifecycle paths' control.
+  const sheetRow = rowInfo.row;
+  if (previous.expenseName !== next.expenseName) {
+    sheet.getRange(sheetRow, colMap['Expense Name'] + 1).setValue(next.expenseName);
+  }
+  if (previous.category !== next.category) {
+    sheet.getRange(sheetRow, colMap['Category'] + 1).setValue(next.category);
+  }
+  if (previous.payee !== next.payee) {
+    sheet.getRange(sheetRow, colMap['Payee'] + 1).setValue(next.payee);
+  }
+  if (previous.dueDate !== next.dueDate) {
+    const dueRange = sheet.getRange(sheetRow, colMap['Due Date'] + 1);
+    dueRange.setValue(stripTime_(dueDateObj));
+    dueRange.setNumberFormat('yyyy-mm-dd');
+  }
+  if (previous.amount !== next.amount) {
+    const amtRange = sheet.getRange(sheetRow, colMap['Amount'] + 1);
+    amtRange.setValue(next.amount);
+    applyCurrencyFormat_(amtRange);
+  }
+  if (previous.accountSource !== next.accountSource) {
+    sheet.getRange(sheetRow, colMap['Account / Source'] + 1).setValue(next.accountSource);
+  }
+  if (previous.autoAddToCashFlow !== next.autoAddToCashFlow) {
+    sheet.getRange(sheetRow, colMap['Auto Add To Cash Flow'] + 1).setValue(next.autoAddToCashFlow);
+  }
+  if (previous.notes !== next.notes) {
+    sheet.getRange(sheetRow, colMap['Notes'] + 1).setValue(next.notes);
+  }
+
+  touchDashboardSourceUpdated_('upcoming_expenses');
+
+  appendUpcomingActivityUpdate_(
+    sheet.getParent(),
+    targetId,
+    previous,
+    next,
+    changedFields
+  );
+
+  return {
+    ok: true,
+    message: 'Upcoming expense updated.',
+    changedFields: changedFields
+  };
+}
+
+/**
+ * Field-level edit lifecycle event for an Upcoming row. Non-monetary
+ * (Amount = 0; Activity UI renders "—" via activityLogIsNonMonetaryEvent_)
+ * because the edit doesn't move money — it only changes metadata on the
+ * obligation. The previous + new snapshots cover all 8 editable fields
+ * regardless of which actually changed, so a future undo tool can
+ * reconstruct the prior state without re-deriving it from earlier rows.
+ */
+function appendUpcomingActivityUpdate_(ss, upcomingId, previous, next, changedFields) {
+  // entryDate uses the new (post-edit) due date so the activity row
+  // sorts alongside the edited obligation, mirroring addUpcomingExpense
+  // / appendUpcomingActivityPayment_'s convention.
+  const entryDate = String(next.dueDate || '').trim() ||
+    Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  // payee on the activity row reflects the new value (or new Expense
+  // Name as fallback) so the row's payee column matches what the user
+  // just saved, not the pre-edit value.
+  const payeeForLog =
+    String(next.payee || '').trim() || String(next.expenseName || '').trim();
+
+  const details = {
+    detailsVersion: 1,
+    upcomingId: String(upcomingId || '').trim(),
+    expenseName: next.expenseName,
+    payee: next.payee,
+    changedFields: changedFields.slice(),
+    previous: previous,
+    new: next
+  };
+
+  appendActivityLog_(ss, {
+    eventType: 'upcoming_update',
+    entryDate: entryDate,
+    amount: 0,
+    direction: 'expense',
+    payee: payeeForLog,
+    category: next.category,
+    accountSource: next.accountSource,
+    cashFlowSheet: '',
+    cashFlowMonth: '',
+    dedupeKey: '',
+    details: JSON.stringify(details)
+  });
+}
+
 function fmtMoneyForMessage_(n) {
   const v = round2_(toNumber_(n));
   return '$' + (isNaN(v) ? '0.00' : v.toFixed(2));
