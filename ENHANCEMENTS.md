@@ -34,9 +34,44 @@ Shipped end-to-end in V1.1 (commits `92c8673` → `6d25c0e`). **Profile is now t
 - **Retirement** derives current age exclusively from Profile DOB. The Retirement Basics edit form is removed; per-scenario age fields are display-only (plain divs, no spinner arrows). A new `needsProfileDob` readiness state routes users to **Open Profile** when DOB is missing. The DOB parser accepts both Date objects and `YYYY-MM-DD` strings, fixing the silent Sheets-auto-date coercion bug. New `INPUT - Retirement` sheets no longer seed the now-unused age rows.
 - **Backward compatibility preserved** — populated workbooks are untouched byte-for-byte. Legacy age rows on existing retirement sheets are left inert (no read, no write, no planner consumption). No forced migration.
 
+### Delivered — Bills + Debts: insert new rows sorted by Due Day (V1.2)
+
+**New bills and new debts are now inserted into their underlying sheets in Due-Day-ascending order instead of always landing at the bottom.** Shipped in `484db5c`.
+
+User-visible problem: the dashboard's Manage Bills table and Debts dropdown both sort by Due Day for display, but the underlying `INPUT - Bills` and `INPUT - Debts` sheets drifted out of order over time because every new add was appended at the end (or, for debts, parked just above `TOTAL DEBT` regardless of Due Day). Anyone scrolling the raw sheet to find a freshly added row had to hunt for it. User asked: "when adding a new bill to the table can we make sure it is inserted sorted based on the due date? same applies for debts."
+
+Insertion rule (mirrored across both files):
+
+- Scan existing rows top-down, insert **before** the first row whose Due Day is strictly greater than the new row's.
+- Same-day ties land **after** existing same-day rows (newest at the bottom of the same-day group), matching the dashboard's stable sort.
+- Legacy rows with a blank Due Day sink to the bottom — numeric rows are inserted above the first blank row encountered.
+- When no row has a strictly greater Due Day and there are no blanks to displace, fall through to append at the end.
+
+Bills (`bills.js → addBillFromDashboard`):
+
+- New helper `findBillsSortedInsertRow_(sheet, dueDayCol1Based, newDueDay)` does one bounded `getValues()` over the Due Day column and returns the 1-based row to `insertRowBefore()`, or `-1` to append.
+- New helper `copyBillsRowFormattingFromInsertSiblingRow_(sheet, newRow)` paints PASTE_FORMAT from the closest already-styled sibling — prefers the row immediately below the insert (it was at the insert position before the shift), falls back to the row above when the insert lands at the very last data row. Never copies row 1 (the header) so we don't inherit bold/header styling.
+- The append fallback continues to use the existing `copyBillsRowFormattingFromPreviousRow_` so first-time-add and end-of-sheet cases are byte-for-byte unchanged.
+
+Debts (`debts.js → addDebtFromDashboard`):
+
+- New helper `findDebtsSortedInsertRow_(sheet, headerMap, templateRow, newDueDay)` constrains the scan to the **active region** (rows 2..templateRow) above `TOTAL DEBT`. Stop-tracked rows below the summary are intentionally not considered — they're soft-deleted and shouldn't influence active-region ordering.
+- When the new debt belongs at the end of the active region (its Due Day is greater than every existing active row), the helper returns `templateRow + 1`, preserving the legacy "insert just above TOTAL DEBT" placement and so leaving the blank buffer + `TOTAL DEBT` + any stop-tracked rows untouched.
+- Format-copy logic is sibling-aware: prefer the row immediately below the insert when the insert lands mid-region; prefer the row above when the insert lands at `templateRow + 1` (where the row below would now be buffer / `TOTAL DEBT`).
+- The existing `findDebtTemplateRow_` is left unchanged.
+
+Defensive guards in both helpers:
+
+- Missing Due Day / Due Date header → fall back to legacy append behavior rather than scrambling the sheet.
+- Non-numeric Due Day input (which the form validators already reject upstream) → also falls back rather than misbehaving.
+
+Safe diff — every read path elsewhere joins by name (`findRowByName_`, `getInputBillsDueRows_`, `lookupRowByName_`, `getDebtsHeaderMap_`, `normalizeDebts_`, `getDebtBillsDueRows_`, planner readers, Cash Flow lookups), so shifting row positions has no row-number-keyed callers to update. Populated workbooks are unchanged unless the user adds a new row, and even then the only difference is *where* the new row lands in the sheet. Activity logs (`bill_add` / `debt_add`), Cash Flow auto-seed for debts, Acct PCT Avail recompute, Active cell stamping, snapshot refresh, and the silent background planner run all continue unchanged on the new row.
+
+Help updated: `Dashboard_Help.html` → Cash Flow → Add bill (notes the sorted-insert rule), Activity log → `bill_add` and `debt_add` (mention Due-Day order), Planning → Debts → Add new (explains active-region insert + legacy end-of-region placement when Due Day exceeds existing).
+
 ### Delivered — Quick Add: optimistic Activity row prepend (V1.2)
 
-**Quick Add payments now appear in the Activity table instantly via an optimistic client-side prepend, with a quiet background reconcile.** Shipped uncommitted alongside the planner-email debounce.
+**Quick Add payments now appear in the Activity table instantly via an optimistic client-side prepend, with a quiet background reconcile.** Shipped in `f66bed4` alongside the planner-email debounce.
 
 User-visible problem: saving an income via Quick Add appeared to take "forever" to show in the Activity ledger — visibly only after the full planner run finished. Root cause was UI, not server. The success handler in `Dashboard_Script_Payments.html::savePayment()` kicks off five concurrent `google.script.run` RPCs (`loadActivitySection`, `refreshSnapshot`, `loadUpcomingSection`, `loadDashboardActionSections`, `runPlannerAndRefreshDashboardFromSave`) and meanwhile blanked the activity table with a `Loading activity…` placeholder. Whenever the planner queued ahead of the activity reload — or just dominated the shared client/network budget — the table sat on `Loading…` for the full duration of the planner run.
 
@@ -58,7 +93,7 @@ Help updated: `Dashboard_Help.html` → Cash Flow → Quick Add → Activity tab
 
 ### Delivered — Planner email debounce + multi-recipient (V1.2)
 
-**Planner email — debounce per-save runs + send to spouse too.** Shipped uncommitted alongside the asset-save sync fix. Two long-running pain points addressed in one pass.
+**Planner email — debounce per-save runs + send to spouse too.** Shipped in `82c52f7` alongside the asset-save sync fix. Two long-running pain points addressed in one pass.
 
 **Problem 1: 50 saves at month-start = 50 emails.** The user reported that during heavy update sessions (typical month-start reconciliation: bank balances, investment values, debts, quick-add payments) every save fired a fresh planner email, blasting their inbox with near-duplicate updates. The planner email itself was already gated by a meaningfulness check, but per-save background runs always sent immediately.
 
@@ -155,7 +190,7 @@ Help updated: `Dashboard_Help.html` → Cash Flow → Quick add now documents `$
 
 ### Delivered — Asset save sync: stop hanging on every save (V1.2)
 
-**Investment / Bank Account / House Value saves no longer hold the UI on `Saving…` for tens of seconds.** Uncommitted at the time of writing; sibling commits `f13d928` (asset activity logs + fast save) and `6c0953d` (collapse repeat reads + Saving label) shipped earlier in the session and removed the inline planner run from these saves, but a deeper bottleneck remained.
+**Investment / Bank Account / House Value saves no longer hold the UI on `Saving…` for tens of seconds.** Shipped in `fe02299`; sibling commits `f13d928` (asset activity logs + fast save) and `6c0953d` (collapse repeat reads + Saving label) shipped earlier in the session and removed the inline planner run from these saves, but a deeper bottleneck remained.
 
 Root cause: after a value write, the save still called `syncAllAssetsFromLatestCurrentYear_()` (and the matching `syncAllAccountsFromLatestCurrentYear_()` / `syncAllHouseAssetsFromLatestCurrentYear_()`) to mirror the latest current-year value into SYS. That sync was doing two slow things on every save:
 
