@@ -187,23 +187,39 @@ function isBankNameRelatedError_(msg) {
 }
 
 function setBankPanelMode(mode) {
-  const isUpdate = mode === 'update';
+  // Three modes share the Bank panel: update existing balance, add a
+  // brand-new account, or review pending imported bank accounts. The
+  // segmented control owns visual state; the wraps own the panel
+  // bodies. Switching to "review" lazy-loads the staged list so the
+  // user always sees the latest pending rows on each entry.
+  const m = mode === 'add' ? 'add' : (mode === 'review' ? 'review' : 'update');
   const wrapU = document.getElementById('bank_mode_update_wrap');
   const wrapA = document.getElementById('bank_mode_add_wrap');
+  const wrapR = document.getElementById('bank_mode_review_wrap');
   const btnU = document.getElementById('bank_mode_update_btn');
   const btnA = document.getElementById('bank_mode_add_btn');
-  if (wrapU) wrapU.classList.toggle('active', isUpdate);
-  if (wrapA) wrapA.classList.toggle('active', !isUpdate);
+  const btnR = document.getElementById('bank_mode_review_btn');
+  if (wrapU) wrapU.classList.toggle('active', m === 'update');
+  if (wrapA) wrapA.classList.toggle('active', m === 'add');
+  if (wrapR) wrapR.classList.toggle('active', m === 'review');
   if (btnU) {
-    btnU.classList.toggle('active', isUpdate);
-    btnU.setAttribute('aria-selected', isUpdate ? 'true' : 'false');
+    btnU.classList.toggle('active', m === 'update');
+    btnU.setAttribute('aria-selected', m === 'update' ? 'true' : 'false');
   }
   if (btnA) {
-    btnA.classList.toggle('active', !isUpdate);
-    btnA.setAttribute('aria-selected', !isUpdate ? 'true' : 'false');
+    btnA.classList.toggle('active', m === 'add');
+    btnA.setAttribute('aria-selected', m === 'add' ? 'true' : 'false');
   }
-  if (isUpdate) {
+  if (btnR) {
+    btnR.classList.toggle('active', m === 'review');
+    btnR.setAttribute('aria-selected', m === 'review' ? 'true' : 'false');
+  }
+  if (m === 'update') {
     setStatus('bank_status', '', false);
+  }
+  if (m === 'review') {
+    setStatus('bank_status', '', false);
+    if (typeof loadBankImportReviewSection === 'function') loadBankImportReviewSection();
   }
 }
 
@@ -921,4 +937,563 @@ function stopTrackingInvestment() {
       setStatus('inv_status', (err.message || String(err)), true);
     })
     .deactivateInvestmentAccountFromDashboard({ accountName: account });
+}
+
+/* =============================================================
+ * Bank Import — Review imports (third Bank panel segment)
+ * -------------------------------------------------------------
+ * Reads pending staged bank accounts from getBankImportReviewData()
+ * and lets the user resolve each row via Add as new / Match to
+ * existing / Ignore. Each card opens an inline form for the chosen
+ * action so the user never leaves the panel. Pending rows do not
+ * affect the planner, overview, or balances until reviewed.
+ * ============================================================= */
+
+var __bankImportReviewState = {
+  rows: [],
+  existingAccounts: [],
+  expandedStagingId: null,
+  expandedAction: null
+};
+
+function loadBankImportReviewSection() {
+  const wrap = document.getElementById('bank_mode_review_wrap');
+  if (!wrap) return;
+  const list = document.getElementById('bank_import_review_list');
+  if (list) list.innerHTML = '<div class="muted" style="padding:12px 0;">Loading bank import review…</div>';
+  google.script.run
+    .withSuccessHandler(function(data) {
+      const rows = (data && Array.isArray(data.pending)) ? data.pending : [];
+      const existing = (data && Array.isArray(data.existingAccounts)) ? data.existingAccounts : [];
+      __bankImportReviewState.rows = rows;
+      __bankImportReviewState.existingAccounts = existing;
+      updateBankImportReviewBadge_(rows.length);
+      renderBankImportReviewList_();
+    })
+    .withFailureHandler(function(err) {
+      __bankImportReviewState.rows = [];
+      __bankImportReviewState.existingAccounts = [];
+      updateBankImportReviewBadge_(0);
+      const msg = err && err.message ? err.message : String(err);
+      if (list) {
+        list.innerHTML =
+          '<div class="muted" style="padding:12px 0;">Could not load review list: ' +
+          escapeHtml(msg) +
+          '</div>';
+      }
+      setStatus('bank_status', msg, true);
+    })
+    .getBankImportReviewData();
+}
+
+function updateBankImportReviewBadge_(count) {
+  const badge = document.getElementById('bank_mode_review_badge');
+  if (!badge) return;
+  const n = Number(count) || 0;
+  if (n > 0) {
+    badge.textContent = '(' + n + ')';
+    badge.style.display = '';
+  } else {
+    badge.textContent = '';
+    badge.style.display = 'none';
+  }
+}
+
+function renderBankImportReviewList_() {
+  const root = document.getElementById('bank_import_review_list');
+  if (!root) return;
+  const rows = __bankImportReviewState.rows || [];
+  if (rows.length === 0) {
+    root.innerHTML =
+      '<div class="muted" style="padding:12px 0;">No bank accounts pending review.</div>';
+    return;
+  }
+  root.innerHTML = rows.map(renderBankImportReviewCard_).join('');
+}
+
+function renderBankImportReviewCard_(row) {
+  const sid = String(row.stagingId || '');
+  const sidJs = escapeJs(sid);
+  const isExpanded = (__bankImportReviewState.expandedStagingId === sid);
+  const expandedAction = isExpanded ? __bankImportReviewState.expandedAction : null;
+  const last4 = row.last4 ? '••••' + escapeHtml(row.last4) : '';
+  const inst = row.institution ? escapeHtml(row.institution) : '';
+  const disp = row.displayName ? escapeHtml(row.displayName) : '<span class="muted">(no display name)</span>';
+  const headerLine =
+    '<strong>' + (inst ? inst + ' · ' : '') + disp + (last4 ? ' · ' + last4 : '') + '</strong>';
+  const subLine =
+    '<div class="muted" style="font-size:12px;margin-top:2px;">' +
+    [
+      row.type ? escapeHtml(row.type) : '',
+      row.currency ? escapeHtml(row.currency) : '',
+      row.balanceAsOf ? 'as of ' + escapeHtml(row.balanceAsOf) : '',
+      row.pendingReason ? escapeHtml(row.pendingReason) : ''
+    ].filter(Boolean).join(' · ') +
+    '</div>';
+  const balanceLine =
+    '<div style="margin-top:4px;font-size:13px;"><strong>Latest balance:</strong> ' +
+    escapeHtml(fmtCurrency(row.balance)) + '</div>';
+
+  // Step 2d: action buttons depend on link state.
+  //   unlinked        → Add / Match / Ignore  (still need to link)
+  //   auto_pending    → Apply / Ignore         (already linked at ingestion)
+  //   linked_added    → Apply / Ignore         (just-Added, awaits Apply)
+  //   linked_matched  → Apply / Ignore         (just-Matched, awaits Apply)
+  // Apply is rendered disabled when applyAllowed is false; the
+  // applyBlockedReason carries the user-facing explanation.
+  const linkState = String(row.linkState || 'unlinked');
+  let linkedLine = '';
+  if (linkState !== 'unlinked' && row.linkedAccountName) {
+    const linkedSuffix = (linkState === 'linked_added') ? ' (added today)'
+      : (linkState === 'linked_matched') ? ' (linked today)'
+      : ' (already linked)';
+    linkedLine =
+      '<div style="margin-top:4px;font-size:13px;color:#1f5fa6;">' +
+      'Linked to <strong>' + escapeHtml(row.linkedAccountName) + '</strong>' +
+      escapeHtml(linkedSuffix) + '.' +
+      '</div>';
+  }
+  let blockedLine = '';
+  if (linkState !== 'unlinked' && !row.applyAllowed && row.applyBlockedReason) {
+    blockedLine =
+      '<div style="margin-top:4px;font-size:12px;color:#a64419;">' +
+      escapeHtml(row.applyBlockedReason) +
+      '</div>';
+  }
+
+  let actionsRow;
+  if (linkState === 'unlinked') {
+    actionsRow =
+      '<div class="upcoming-actions" style="margin-top:8px;">' +
+        '<button class="small-btn primary" onclick="toggleBankImportReviewAction_(\'' + sidJs + '\',\'add_new\')">Add as new</button>' +
+        '<button class="small-btn" onclick="toggleBankImportReviewAction_(\'' + sidJs + '\',\'match\')">Match to existing</button>' +
+        '<button class="small-btn" onclick="toggleBankImportReviewAction_(\'' + sidJs + '\',\'ignore\')">Ignore</button>' +
+      '</div>';
+  } else {
+    const applyBtn = row.applyAllowed
+      ? '<button class="small-btn primary" onclick="toggleBankImportReviewAction_(\'' + sidJs + '\',\'apply\')">Apply balance</button>'
+      : '<button class="small-btn primary" disabled title="' + escapeHtml(row.applyBlockedReason || '') + '">Apply balance</button>';
+    // Change match (Unlink) is offered ONLY on linked_matched rows.
+    // linked_added rows created their own SYS - Accounts row + history
+    // row, so unwinding them is not a simple cell-clear; that cleanup
+    // is owned by Apply or Ignore. auto_pending rows were linked at
+    // ingestion (the user never picked the target via Match), so
+    // letting Unlink wipe the External Id off a pre-existing user-
+    // owned row would be a foot-gun.
+    const unmatchBtn = (linkState === 'linked_matched')
+      ? '<button class="small-btn" onclick="toggleBankImportReviewAction_(\'' + sidJs + '\',\'unmatch\')">Change match</button>'
+      : '';
+    actionsRow =
+      '<div class="upcoming-actions" style="margin-top:8px;">' +
+        applyBtn +
+        unmatchBtn +
+        '<button class="small-btn" onclick="toggleBankImportReviewAction_(\'' + sidJs + '\',\'ignore\')">Ignore</button>' +
+      '</div>';
+  }
+
+  let inlineForm = '';
+  if (isExpanded && expandedAction === 'add_new') {
+    inlineForm = renderBankImportReviewAddForm_(row);
+  } else if (isExpanded && expandedAction === 'match') {
+    inlineForm = renderBankImportReviewMatchForm_(row);
+  } else if (isExpanded && expandedAction === 'ignore') {
+    inlineForm = renderBankImportReviewIgnoreForm_(row);
+  } else if (isExpanded && expandedAction === 'apply') {
+    inlineForm = renderBankImportReviewApplyForm_(row);
+  } else if (isExpanded && expandedAction === 'unmatch') {
+    inlineForm = renderBankImportReviewUnmatchForm_(row);
+  }
+
+  return (
+    '<div class="upcoming-item" style="border:1px solid #e3e3e3;border-radius:6px;padding:10px;margin-bottom:8px;">' +
+      headerLine + subLine + balanceLine + linkedLine + blockedLine + actionsRow + inlineForm +
+    '</div>'
+  );
+}
+
+function toggleBankImportReviewAction_(stagingId, action) {
+  if (__bankImportReviewState.expandedStagingId === stagingId &&
+      __bankImportReviewState.expandedAction === action) {
+    __bankImportReviewState.expandedStagingId = null;
+    __bankImportReviewState.expandedAction = null;
+  } else {
+    __bankImportReviewState.expandedStagingId = stagingId;
+    __bankImportReviewState.expandedAction = action;
+  }
+  renderBankImportReviewList_();
+}
+
+function renderBankImportReviewAddForm_(row) {
+  const sid = escapeJs(String(row.stagingId || ''));
+  const defaultName = escapeHtml(row.displayName || '');
+  const defaultType = escapeHtml(row.type || '');
+  // Use Policy options mirror Add new form; Other (custom) reuses
+  // the same sentinel + custom-text reveal pattern via a tiny inline
+  // toggle that runs on change.
+  const policyOpts =
+    '<option value="">— Select use policy —</option>' +
+    '<option value="DO_NOT_TOUCH">Do not touch</option>' +
+    '<option value="USE_FOR_BILLS">Use for bills</option>' +
+    '<option value="USE_FOR_DEBT">Use for debt</option>' +
+    '<option value="USE_WITH_CAUTION">Use with caution</option>' +
+    '<option value="' + escapeHtml(BANK_ADD_POLICY_OTHER_SENTINEL_) + '">Other (custom)…</option>';
+
+  return (
+    '<div style="margin-top:10px;padding:10px;background:#f8f8f8;border-radius:6px;">' +
+      '<div style="margin-bottom:6px;"><strong>Add as new account (link only)</strong></div>' +
+      '<label>Account name</label>' +
+      '<input type="text" id="brv_add_name_' + sid + '" maxlength="120" autocomplete="off" value="' + defaultName + '">' +
+      '<label>Type</label>' +
+      '<input type="text" id="brv_add_type_' + sid + '" maxlength="80" autocomplete="off" value="' + defaultType + '">' +
+      '<label>Use policy</label>' +
+      '<select id="brv_add_policy_' + sid + '" onchange="onBankImportReviewAddPolicyChange_(\'' + sid + '\')">' + policyOpts + '</select>' +
+      '<div id="brv_add_policy_custom_row_' + sid + '" style="display:none;margin-top:6px;">' +
+        '<label>Custom use policy</label>' +
+        '<input type="text" id="brv_add_policy_custom_' + sid + '" maxlength="120" autocomplete="off" placeholder="e.g. RAINY_DAY">' +
+      '</div>' +
+      '<label>Priority</label>' +
+      '<select id="brv_add_priority_' + sid + '">' +
+        '<option value="1">Use first (primary account)</option>' +
+        '<option value="5">Use after others</option>' +
+        '<option value="9" selected>Use last (backup)</option>' +
+      '</select>' +
+      '<div class="muted" style="margin-top:8px;font-size:12px;">' +
+        'This creates the account on SYS&nbsp;-&nbsp;Accounts and a row in the current Year block on INPUT&nbsp;-&nbsp;Bank Accounts, then stamps the External Account Id so future imports auto-link.' +
+        ' <strong>The imported balance is not written here.</strong> After saving, click <em>Apply balance</em> on the same staged row to write the snapshot.' +
+      '</div>' +
+      '<div style="margin-top:8px;">' +
+        '<button class="small-btn primary" onclick="confirmBankImportReviewAddNew_(\'' + sid + '\')">Save</button>' +
+        '<button class="small-btn" onclick="toggleBankImportReviewAction_(\'' + sid + '\',\'add_new\')" style="margin-left:6px;">Cancel</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function onBankImportReviewAddPolicyChange_(sid) {
+  const sel = document.getElementById('brv_add_policy_' + sid);
+  const wrap = document.getElementById('brv_add_policy_custom_row_' + sid);
+  if (!sel || !wrap) return;
+  wrap.style.display = (sel.value === BANK_ADD_POLICY_OTHER_SENTINEL_) ? '' : 'none';
+}
+
+function renderBankImportReviewMatchForm_(row) {
+  const sid = escapeJs(String(row.stagingId || ''));
+  const accounts = __bankImportReviewState.existingAccounts || [];
+  let opts = '<option value="">— Select existing account —</option>';
+  for (let i = 0; i < accounts.length; i++) {
+    const a = accounts[i];
+    const flag = a.hasExternalId ? ' (already linked)' : '';
+    opts += '<option value="' + escapeHtml(a.accountName) + '">' +
+      escapeHtml(a.accountName) +
+      (a.type ? ' — ' + escapeHtml(a.type) : '') +
+      flag +
+      '</option>';
+  }
+  return (
+    '<div style="margin-top:10px;padding:10px;background:#f8f8f8;border-radius:6px;">' +
+      '<div style="margin-bottom:6px;"><strong>Match to existing account (link only)</strong></div>' +
+      '<label>Existing account</label>' +
+      '<select id="brv_match_account_' + sid + '">' + opts + '</select>' +
+      '<div class="muted" style="margin-top:6px;font-size:12px;">' +
+        'This writes the External Account Id onto the selected SYS&nbsp;-&nbsp;Accounts row. Balances and planner fields are not touched. If the account is already linked to a different external id, the match is refused.' +
+        ' <strong>The imported balance is not written here.</strong> After saving, click <em>Apply balance</em> on the same staged row to write the snapshot.' +
+      '</div>' +
+      '<div style="margin-top:8px;">' +
+        '<button class="small-btn primary" onclick="confirmBankImportReviewMatch_(\'' + sid + '\')">Save</button>' +
+        '<button class="small-btn" onclick="toggleBankImportReviewAction_(\'' + sid + '\',\'match\')" style="margin-left:6px;">Cancel</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function renderBankImportReviewApplyForm_(row) {
+  // Step 2d: explicit Apply preview. The user has already clicked
+  // Apply balance — this inline form shows the cell delta they're
+  // approving (Linked account · MMM-YY cell goes from <prev> → <new>)
+  // and a Confirm button. Apply is only rendered when the server
+  // marked applyAllowed === true on this row, but we still gate on
+  // applyAllowed here so any stale UI snapshot can't confirm a
+  // blocked Apply.
+  const sid = escapeJs(String(row.stagingId || ''));
+  if (!row.applyAllowed) {
+    return (
+      '<div style="margin-top:10px;padding:10px;background:#fff4e5;border-radius:6px;border:1px solid #f1c40f;">' +
+        '<div style="font-size:13px;color:#a64419;">' +
+          escapeHtml(row.applyBlockedReason || 'Apply is currently blocked for this row.') +
+        '</div>' +
+      '</div>'
+    );
+  }
+  // Best-effort month label from the YYYY-MM-DD string. The server
+  // uses the same MMM-yy format for the activity row, so this stays
+  // consistent.
+  let monthLabel = '';
+  const asOf = String(row.balanceAsOf || '');
+  const m = asOf.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const yr = m[1].slice(2);
+    const mo = months[Number(m[2]) - 1] || m[2];
+    if (mo) monthLabel = mo + '-' + yr;
+  }
+  const account = escapeHtml(row.linkedAccountName || '(unknown)');
+  const balanceDisp = escapeHtml(fmtCurrency(row.balance));
+  const monthLine = monthLabel ? escapeHtml(monthLabel) + ' cell' : 'the matching month cell';
+  return (
+    '<div style="margin-top:10px;padding:10px;background:#f8f8f8;border-radius:6px;">' +
+      '<div style="margin-bottom:6px;"><strong>Apply imported balance</strong></div>' +
+      '<div style="font-size:13px;line-height:1.5;">' +
+        'About to write <strong>' + balanceDisp + '</strong> to <strong>' + account + '</strong>.' +
+        '<br>INPUT&nbsp;-&nbsp;Bank Accounts ' + monthLine + ' will be updated for ' +
+        '<strong>' + escapeHtml(row.balanceAsOf || '—') + '</strong>.' +
+        '<br>Other months are not touched. Available Now / Min Buffer / Use Policy / Priority / Active are not touched.' +
+      '</div>' +
+      '<div style="margin-top:8px;">' +
+        '<button class="small-btn primary" onclick="confirmBankImportReviewApplyBalance_(\'' + sid + '\')">Apply</button>' +
+        '<button class="small-btn" onclick="toggleBankImportReviewAction_(\'' + sid + '\',\'apply\')" style="margin-left:6px;">Cancel</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function renderBankImportReviewUnmatchForm_(row) {
+  // Inline confirm for Change match. Mirrors the Ignore form shape so
+  // the Review imports panel feels consistent. We deliberately do NOT
+  // ask the user to pick a new account here: the action's job is to
+  // get the staged row back to vanilla unlinked state so the standard
+  // Match flow can take over. Picking a different match becomes the
+  // user's next click, with the existing Match form.
+  const sid = escapeJs(String(row.stagingId || ''));
+  const linkedTo = row.linkedAccountName ? escapeHtml(row.linkedAccountName) : '(unknown)';
+  return (
+    '<div style="margin-top:10px;padding:10px;background:#f8f8f8;border-radius:6px;">' +
+      '<div style="margin-bottom:6px;"><strong>Change match (unlink)</strong></div>' +
+      '<div style="font-size:13px;line-height:1.5;">' +
+        'Clears the External Account Id from <strong>' + linkedTo + '</strong> on ' +
+        'SYS&nbsp;-&nbsp;Accounts and returns this staged row to <em>pending</em>. ' +
+        'Balances on INPUT&nbsp;-&nbsp;Bank Accounts and every other column ' +
+        'on the SYS&nbsp;-&nbsp;Accounts row are not touched.' +
+      '</div>' +
+      '<div class="muted" style="margin-top:6px;font-size:12px;">' +
+        'After unlink you can pick a different account via Match, Add as new, or Ignore.' +
+      '</div>' +
+      '<div style="margin-top:8px;">' +
+        '<button class="small-btn primary" onclick="confirmBankImportReviewUnmatch_(\'' + sid + '\')">Unlink</button>' +
+        '<button class="small-btn" onclick="toggleBankImportReviewAction_(\'' + sid + '\',\'unmatch\')" style="margin-left:6px;">Cancel</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function renderBankImportReviewIgnoreForm_(row) {
+  const sid = escapeJs(String(row.stagingId || ''));
+  return (
+    '<div style="margin-top:10px;padding:10px;background:#f8f8f8;border-radius:6px;">' +
+      '<div style="margin-bottom:6px;"><strong>Ignore this bank account</strong></div>' +
+      '<div class="muted" style="font-size:12px;">' +
+        'Future imports for this external account will skip the staging step (permanent ignore). You can remove the entry from <em>SYS&nbsp;-&nbsp;Import Ignored — Bank Accounts</em> later if needed.' +
+      '</div>' +
+      '<div style="margin-top:8px;">' +
+        '<button class="small-btn primary" onclick="confirmBankImportReviewIgnore_(\'' + sid + '\')">Ignore</button>' +
+        '<button class="small-btn" onclick="toggleBankImportReviewAction_(\'' + sid + '\',\'ignore\')" style="margin-left:6px;">Cancel</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function confirmBankImportReviewAddNew_(sid) {
+  const stagingId = String(sid || '');
+  if (!stagingId) return;
+  const nameEl = document.getElementById('brv_add_name_' + stagingId);
+  const typeEl = document.getElementById('brv_add_type_' + stagingId);
+  const policyEl = document.getElementById('brv_add_policy_' + stagingId);
+  const policyCustomEl = document.getElementById('brv_add_policy_custom_' + stagingId);
+  const priorityEl = document.getElementById('brv_add_priority_' + stagingId);
+
+  const name = nameEl ? String(nameEl.value || '').trim() : '';
+  const typeStr = typeEl ? String(typeEl.value || '').trim() : '';
+  const policyVal = policyEl ? String(policyEl.value || '').trim() : '';
+  let policyStr = policyVal;
+  if (policyVal === BANK_ADD_POLICY_OTHER_SENTINEL_) {
+    policyStr = policyCustomEl ? String(policyCustomEl.value || '').trim() : '';
+  }
+  const priorityNum = priorityEl ? bankPriorityDropdownToNumber_(priorityEl.value) : BANK_ADD_PRIORITY_DEFAULT_;
+
+  if (!name) { setStatus('bank_status', 'Account name is required.', true); return; }
+  if (!typeStr) { setStatus('bank_status', 'Type is required.', true); return; }
+  if (!policyVal) { setStatus('bank_status', 'Use policy is required.', true); return; }
+  if (policyVal === BANK_ADD_POLICY_OTHER_SENTINEL_ && !policyStr) {
+    setStatus('bank_status', 'Enter a custom Use policy label or choose a preset.', true);
+    return;
+  }
+
+  // Step 2d: link-only payload. No setAvailableFromOpening /
+  // setMinBufferFromOpening fields — there is no opening balance to
+  // mirror. The imported balance is applied separately via the
+  // Apply balance action, which doesn't touch Available Now / Min
+  // Buffer either.
+  const payload = {
+    stagingId: stagingId,
+    accountName: name,
+    type: typeStr,
+    usePolicy: policyStr,
+    priority: priorityNum
+  };
+
+  setStatusLoading('bank_status', 'Linking new account from import…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('bank_status', (res && res.message) || 'Account linked.', false);
+      __bankImportReviewState.expandedStagingId = null;
+      __bankImportReviewState.expandedAction = null;
+      loadBankImportReviewSection();
+      // The new account needs to surface in the Update-mode dropdown.
+      if (typeof loadBankSection === 'function') loadBankSection();
+      // No refreshSnapshot here — Step 2d Add does not write a
+      // balance, so planner / overview have nothing new to show until
+      // the user clicks Apply balance. refreshSnapshot is fired from
+      // confirmBankImportReviewApplyBalance_ instead.
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', (err && err.message ? err.message : String(err)), true);
+    })
+    .addStagedBankAccountAsNew(payload);
+}
+
+function confirmBankImportReviewMatch_(sid) {
+  const stagingId = String(sid || '');
+  if (!stagingId) return;
+  const sel = document.getElementById('brv_match_account_' + stagingId);
+  const accountName = sel ? String(sel.value || '').trim() : '';
+  if (!accountName) {
+    setStatus('bank_status', 'Pick an existing account to match.', true);
+    return;
+  }
+  setStatusLoading('bank_status', 'Linking external account…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('bank_status', (res && res.message) || 'Linked.', false);
+      __bankImportReviewState.expandedStagingId = null;
+      __bankImportReviewState.expandedAction = null;
+      loadBankImportReviewSection();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', (err && err.message ? err.message : String(err)), true);
+    })
+    .matchStagedBankAccountToExisting({ stagingId: stagingId, accountName: accountName });
+}
+
+function confirmBankImportReviewIgnore_(sid) {
+  const stagingId = String(sid || '');
+  if (!stagingId) return;
+  setStatusLoading('bank_status', 'Ignoring…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('bank_status', (res && res.message) || 'Ignored.', false);
+      __bankImportReviewState.expandedStagingId = null;
+      __bankImportReviewState.expandedAction = null;
+      loadBankImportReviewSection();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', (err && err.message ? err.message : String(err)), true);
+    })
+    .ignoreStagedBankAccount({ stagingId: stagingId });
+}
+
+function confirmBankImportReviewUnmatch_(sid) {
+  // Change match. Server clears External Account Id on the linked
+  // SYS - Accounts row and flips this staged row back to pending.
+  // No balances are written, so we do NOT call refreshSnapshot /
+  // loadBankSection — only the review list needs to re-render.
+  //
+  // We refresh the review list on BOTH success and failure: a refusal
+  // (e.g., "Could not find a SYS - Accounts row with this External
+  // Account Id to unlink") usually means another user/tab already
+  // mutated the SYS row, so the cached card we're showing is stale.
+  // Re-pulling the list reconciles the UI to truth.
+  const stagingId = String(sid || '');
+  if (!stagingId) return;
+  setStatusLoading('bank_status', 'Unlinking…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('bank_status', (res && res.message) || 'Unlinked.', false);
+      __bankImportReviewState.expandedStagingId = null;
+      __bankImportReviewState.expandedAction = null;
+      loadBankImportReviewSection();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', (err && err.message ? err.message : String(err)), true);
+      __bankImportReviewState.expandedStagingId = null;
+      __bankImportReviewState.expandedAction = null;
+      loadBankImportReviewSection();
+    })
+    .unlinkMatchedStagedBankAccount({ stagingId: stagingId });
+}
+
+function confirmBankImportReviewApplyBalance_(sid) {
+  // Step 2d Apply. Calls applyStagedBankAccountBalance, which writes
+  // the linked SYS - Accounts row's matching INPUT - Bank Accounts
+  // month cell, mirrors Current Balance via syncAllAccounts..., and
+  // flips the staging row Status to resolved_applied. On success we
+  // refresh the review list (the row drops out of pending) AND
+  // refresh the Update-mode dropdown / snapshot so the new balance
+  // surfaces in the rest of the dashboard immediately.
+  const stagingId = String(sid || '');
+  if (!stagingId) return;
+  setStatusLoading('bank_status', 'Applying imported balance…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('bank_status', (res && res.message) || 'Applied.', false);
+      __bankImportReviewState.expandedStagingId = null;
+      __bankImportReviewState.expandedAction = null;
+      loadBankImportReviewSection();
+      // Apply DID write a balance; rest of the dashboard needs to
+      // reflect it. Same refresh pattern manual Bank → Update uses.
+      if (typeof loadBankSection === 'function') loadBankSection();
+      if (typeof refreshSnapshot === 'function') refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', (err && err.message ? err.message : String(err)), true);
+    })
+    .applyStagedBankAccountBalance({ stagingId: stagingId });
+}
+
+/**
+ * Step 2c — UI-driven sample import trigger.
+ *
+ * Calls the dashboard wrapper devRunBankImportSampleFromDashboard()
+ * which forwards to the underscore-prefixed dev harness. Reuses the
+ * shared #bank_status row for feedback and refreshes the review list
+ * (and the segment count badge inside it) after success so the seeded
+ * rows appear immediately. Stays on the Review imports panel — does
+ * not flip modes or trigger refreshSnapshot() because pending rows
+ * still don't affect planner / overview / balances. Idempotent in the
+ * Step 2a sense: re-clicking the button updates Last Seen on the same
+ * Staging Ids instead of duplicating rows (the upsert path already
+ * keys on Staging Id).
+ */
+function loadBankImportSampleData_() {
+  setStatusLoading('bank_status', 'Loading sample import data…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      const summary = res && typeof res === 'object' ? res : null;
+      const processed = summary && Number(summary.processed || 0);
+      const pending = summary && Number(summary.pending || 0);
+      const auto = summary && Number(summary.autoMatched || 0);
+      let msg = 'Sample import data loaded.';
+      if (summary) {
+        msg += ' Processed ' + processed +
+          ' (pending ' + pending + ', auto-matched ' + auto + ').';
+      }
+      setStatus('bank_status', msg, false);
+      // Reload pending list + count badge from the authoritative
+      // source. The dev harness writes through processBankImportBatch_
+      // which already produced any LOG - Activity rows, so no extra
+      // logging is needed here.
+      loadBankImportReviewSection();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', (err && err.message ? err.message : String(err)), true);
+    })
+    .devRunBankImportSampleFromDashboard();
 }

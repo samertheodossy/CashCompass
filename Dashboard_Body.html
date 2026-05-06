@@ -332,6 +332,7 @@
       <div class="segmented" role="tablist" aria-label="Bank account mode">
         <button type="button" id="bank_mode_update_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setBankPanelMode('update')">Update</button>
         <button type="button" id="bank_mode_add_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setBankPanelMode('add')">Add new</button>
+        <button type="button" id="bank_mode_review_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setBankPanelMode('review')">Review imports<span id="bank_mode_review_badge" class="muted" style="margin-left:6px;display:none;"></span></button>
       </div>
 
       <div id="bank_mode_update_wrap" class="bank-mode-wrap active">
@@ -431,6 +432,19 @@
             <p>If you use an opening balance, the date must fall in that same year. Type and Use policy can be chosen from existing accounts or typed as new values.</p>
           </div>
         </div>
+      </div>
+
+      <div id="bank_mode_review_wrap" class="bank-mode-wrap">
+        <div class="muted" style="margin-bottom:8px;font-size:13px;line-height:1.4;">
+          Pending bank accounts from imported snapshots. Pending rows never change balances, planner, or overview on their own. Review is a <strong>two-step</strong> approval flow: first <em>link</em> the staged row to a SYS&nbsp;-&nbsp;Accounts row (<strong>Add as new</strong> or <strong>Match</strong>), then click <strong>Apply balance</strong> to write the snapshot to INPUT&nbsp;-&nbsp;Bank Accounts. Use <strong>Ignore</strong> to permanently skip future snapshots from the same external account.
+        </div>
+        <div style="margin-bottom:10px;padding:8px 10px;background:#fff8e1;border:1px dashed #d6b656;border-radius:6px;font-size:12px;line-height:1.4;">
+          <strong>Dev / sample data only.</strong> No real bank connection or external sync. The button below re-runs the built-in demo harness, which seeds two staged rows (<code>Demo Checking</code> · <code>Demo Savings</code>) so you can exercise <em>Add as new</em> / <em>Match</em> / <em>Apply balance</em> / <em>Ignore</em> without leaving the dashboard.
+          <div style="margin-top:6px;">
+            <button type="button" class="small-btn" onclick="loadBankImportSampleData_()">Load sample import data (dev)</button>
+          </div>
+        </div>
+        <div id="bank_import_review_list"></div>
       </div>
 
       <div id="bank_status" class="status"></div>

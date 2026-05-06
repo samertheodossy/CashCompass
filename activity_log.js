@@ -431,6 +431,13 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (etEarly === 'planner_email_deferred') return 'Planner';
   if (etEarly === 'planner_email_sent') return 'Planner';
   if (etEarly === 'planner_email_invalid_recipient') return 'Planner';
+  // Bank Import lifecycle events. Covers Step 2a ingestion outcomes
+  // (bank_import_auto_matched / _pending / _ignored_hit / _row_error)
+  // and Step 2b review actions (bank_import_review_add_new / _match /
+  // _ignore) under one filterable kind so the user can pull the whole
+  // import audit trail with a single Type filter without confusing it
+  // with the bill / debt / bank balance categories.
+  if (etEarly.indexOf('bank_import_') === 0) return 'Bank Import';
 
   var combined = pay + ' ' + cat;
   var blob = combined.toLowerCase();
@@ -561,6 +568,21 @@ function activityLogActionLabel_(eventType, detailsJson) {
     case 'planner_email_sent': return plannerEmailSentActionLabel_(detailsJson);
     case 'planner_email_invalid_recipient':
       return plannerEmailInvalidRecipientActionLabel_(detailsJson);
+    // Bank Import — Step 2b review actions. All three are non-monetary
+    // (Amount renders "—") so the review decision lives entirely in
+    // the action label. See activityLogIsNonMonetaryEvent_. Add /
+    // Match are link-only as of Step 2d — the imported balance is
+    // applied separately by bank_import_apply_balance below.
+    case 'bank_import_review_add_new': return 'Linked new account from import';
+    case 'bank_import_review_match': return 'Linked to existing account';
+    case 'bank_import_review_unlink_match': return 'Unlinked match';
+    case 'bank_import_review_ignore': return 'Ignored bank import';
+    // Bank Import — Step 2d Apply. The user explicitly approved
+    // writing the staged snapshot to INPUT - Bank Accounts; this row
+    // is the audit trail for that approval. Non-monetary so the
+    // snapshot doesn't double-count against Activity totals (the
+    // snapshot is a balance, not a money movement).
+    case 'bank_import_apply_balance': return 'Applied imported balance';
     default: return '';
   }
 }
@@ -955,7 +977,17 @@ function activityLogIsNonMonetaryEvent_(eventType) {
     // rows in Activity for no reason.
     et === 'planner_email_deferred' ||
     et === 'planner_email_sent' ||
-    et === 'planner_email_invalid_recipient'
+    et === 'planner_email_invalid_recipient' ||
+    // Bank Import — Step 2b review actions + Step 2d Apply. The
+    // dollars on apply represent a balance snapshot, not a money
+    // movement; rendering Amount here would double-count it against
+    // the Activity totals. The action label carries the month + new
+    // balance for context.
+    et === 'bank_import_review_add_new' ||
+    et === 'bank_import_review_match' ||
+    et === 'bank_import_review_unlink_match' ||
+    et === 'bank_import_review_ignore' ||
+    et === 'bank_import_apply_balance'
   );
 }
 
