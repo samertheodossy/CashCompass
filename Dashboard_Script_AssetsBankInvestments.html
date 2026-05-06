@@ -25,6 +25,20 @@ var BANK_ADD_TYPE_FALLBACK_OPTIONS_ = ['Checking', 'Savings', 'Other'];
 // string from there. Must stay in sync with Dashboard_Body.html.
 var BANK_ADD_POLICY_OTHER_SENTINEL_ = '__OTHER__';
 
+// Hides the yellow "Dev / sample data only" callout + Load sample
+// import data button on the Bank → Review imports panel. Default is
+// false so production users never see the harness button. Flip to
+// true locally to surface it for manual end-to-end testing of the
+// import → link → apply flow.
+//
+// This is a UI-only flag. The backend harness (
+// devRunBankImportSampleFromDashboard / _devRunBankImportSample /
+// _devRunBankImportCustom_) is intentionally left wired up so an
+// Apps Script editor user can still run the sample data path even
+// when the button is hidden, and so flipping this flag back to
+// true requires no other change.
+var BANK_IMPORT_DEV_TOOLS_ENABLED = false;
+
 // Canonical Use Policy tokens that the planner already classifies in
 // planner_core.js (normalizeAccounts_ / distributeHoldAcrossPolicyPools_).
 // Kept here so createBankAccount() can defensively coerce user input
@@ -959,6 +973,13 @@ var __bankImportReviewState = {
 function loadBankImportReviewSection() {
   const wrap = document.getElementById('bank_mode_review_wrap');
   if (!wrap) return;
+  // Reconcile dev callout visibility every time the panel opens.
+  // The callout's HTML default is display:none, so flag=false is a
+  // pure no-op write here (cheap; once per panel entry).
+  const devCallout = document.getElementById('bank_import_dev_callout');
+  if (devCallout) {
+    devCallout.style.display = BANK_IMPORT_DEV_TOOLS_ENABLED ? '' : 'none';
+  }
   const list = document.getElementById('bank_import_review_list');
   if (list) list.innerHTML = '<div class="muted" style="padding:12px 0;">Loading bank import review…</div>';
   google.script.run
