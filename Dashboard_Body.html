@@ -333,6 +333,7 @@
         <button type="button" id="bank_mode_update_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setBankPanelMode('update')">Update</button>
         <button type="button" id="bank_mode_add_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setBankPanelMode('add')">Add new</button>
         <button type="button" id="bank_mode_review_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setBankPanelMode('review')">Review imports<span id="bank_mode_review_badge" class="muted" style="margin-left:6px;display:none;"></span></button>
+        <button type="button" id="bank_mode_import_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setBankPanelMode('import')" style="display:none;">Import</button>
       </div>
 
       <div id="bank_mode_update_wrap" class="bank-mode-wrap active">
@@ -445,6 +446,35 @@
           </div>
         </div>
         <div id="bank_import_review_list"></div>
+      </div>
+
+      <div id="bank_mode_import_wrap" class="bank-mode-wrap" style="display:none;">
+        <div class="muted" style="margin-bottom:8px;font-size:13px;line-height:1.4;">
+          Paste a CSV of bank-account balance snapshots. Nothing is written to any account until you Apply in Review imports.
+        </div>
+        <details style="margin-bottom:10px;font-size:12px;line-height:1.4;">
+          <summary style="cursor:pointer;">Show CSV template</summary>
+          <div style="margin-top:6px;padding:8px;background:#f8f8f8;border-radius:4px;">
+            <div style="font-family:monospace;white-space:pre-wrap;word-break:break-all;">displayName,balance,balanceAsOf,externalAccountId,institution,last4,type,currency
+Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,0123,CHECKING,USD</div>
+            <div style="margin-top:6px;">
+              <button type="button" class="small-btn" onclick="copyBankImportCsvTemplateToClipboard_()">Copy template</button>
+              <span id="bank_import_csv_template_copy_status" class="muted" style="margin-left:8px;font-size:12px;"></span>
+            </div>
+            <div class="muted" style="margin-top:6px;font-size:11px;">
+              Required columns: <strong>displayName</strong> (or any other identifier), <strong>balance</strong>, <strong>balanceAsOf</strong> (YYYY-MM-DD). Numbers must use <code>.</code> for decimals; commas and <code>$</code> are stripped. Up to 200 rows per paste.
+            </div>
+          </div>
+        </details>
+        <textarea id="bank_import_csv_paste" rows="10" placeholder="Paste CSV text here. First row must be a header row." style="width:100%;font-family:monospace;font-size:12px;box-sizing:border-box;"></textarea>
+        <div style="margin-top:8px;">
+          <button type="button" id="bank_import_csv_preview_btn" class="small-btn primary" onclick="bankImportCsvPastePreview_()">Preview</button>
+          <button type="button" class="small-btn" onclick="clearBankImportCsvPaste_()" style="margin-left:6px;">Clear</button>
+        </div>
+        <div id="bank_import_csv_preview" style="margin-top:10px;"></div>
+        <div id="bank_import_csv_stage_row" style="margin-top:10px;display:none;">
+          <button type="button" id="bank_import_csv_stage_btn" class="small-btn primary" onclick="confirmBankImportCsvPasteStage_()" disabled>Stage rows for review</button>
+        </div>
       </div>
 
       <div id="bank_status" class="status"></div>

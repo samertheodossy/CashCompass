@@ -39,6 +39,34 @@ var BANK_ADD_POLICY_OTHER_SENTINEL_ = '__OTHER__';
 // true requires no other change.
 var BANK_IMPORT_DEV_TOOLS_ENABLED = false;
 
+// Hides the Bank → Import segment (4th segment, CSV paste). Default
+// is false so production users do not see it while we runtime-test
+// the paste → preview → stage → review → apply flow end-to-end. Flip
+// to true locally to surface the segment.
+//
+// This is a UI-only flag. The backend wrapper
+// stageBankImportPasteRows() remains callable from Apps Script /
+// google.script.run when the flag is false, so flipping the flag
+// requires no other change to ship the feature.
+var BANK_IMPORT_CSV_PASTE_ENABLED = false;
+
+// Mirror of the server-side BANK_IMPORT_CSV_PASTE_MAX_ROWS_ in
+// bank_import.js. Kept here so the preview can block a >200 paste
+// before any RPC is made. The server enforces the same cap as a
+// second line of defense.
+var BANK_IMPORT_CSV_PASTE_MAX_ROWS_ = 200;
+
+// Module-level state for the Import segment, populated by
+// bankImportCsvPastePreview_ and consumed by
+// confirmBankImportCsvPasteStage_. Reset when the user leaves the
+// Import segment, clicks Clear, or after a successful stage.
+var __bankImportPasteState = {
+  okRows: [],          // rows that passed client-side validation, ready to forward
+  rowCount: 0,         // total parsed rows including errored ones
+  errorCount: 0,
+  blockingError: ''    // non-empty when staging is hard-blocked at the batch level
+};
+
 // Canonical Use Policy tokens that the planner already classifies in
 // planner_core.js (normalizeAccounts_ / distributeHoldAcrossPolicyPools_).
 // Kept here so createBankAccount() can defensively coerce user input
@@ -201,21 +229,43 @@ function isBankNameRelatedError_(msg) {
 }
 
 function setBankPanelMode(mode) {
-  // Three modes share the Bank panel: update existing balance, add a
-  // brand-new account, or review pending imported bank accounts. The
+  // Up to four modes share the Bank panel: update existing balance,
+  // add a brand-new account, review pending imported bank accounts,
+  // or paste a CSV import. Import is feature-flag-gated; setBankPanelMode
+  // is tolerant of it being requested whether or not the flag is on
+  // (the segment button only shows when the flag is true). The
   // segmented control owns visual state; the wraps own the panel
-  // bodies. Switching to "review" lazy-loads the staged list so the
-  // user always sees the latest pending rows on each entry.
-  const m = mode === 'add' ? 'add' : (mode === 'review' ? 'review' : 'update');
+  // bodies.
+  let m;
+  if (mode === 'add') m = 'add';
+  else if (mode === 'review') m = 'review';
+  else if (mode === 'import') m = 'import';
+  else m = 'update';
   const wrapU = document.getElementById('bank_mode_update_wrap');
   const wrapA = document.getElementById('bank_mode_add_wrap');
   const wrapR = document.getElementById('bank_mode_review_wrap');
+  const wrapI = document.getElementById('bank_mode_import_wrap');
   const btnU = document.getElementById('bank_mode_update_btn');
   const btnA = document.getElementById('bank_mode_add_btn');
   const btnR = document.getElementById('bank_mode_review_btn');
+  const btnI = document.getElementById('bank_mode_import_btn');
   if (wrapU) wrapU.classList.toggle('active', m === 'update');
   if (wrapA) wrapA.classList.toggle('active', m === 'add');
   if (wrapR) wrapR.classList.toggle('active', m === 'review');
+  // The Import wrap inherits .bank-mode-wrap CSS (display:none unless
+  // .active) BUT also has inline display:none from Body so it stays
+  // hidden when the flag is off even before any class toggling. We
+  // toggle .active here for parity with the other three; the inline
+  // style has to be cleared when revealed and re-applied when the
+  // segment is left so this wrap continues to obey the flag.
+  if (wrapI) {
+    wrapI.classList.toggle('active', m === 'import');
+    if (m === 'import' && BANK_IMPORT_CSV_PASTE_ENABLED) {
+      wrapI.style.display = '';
+    } else {
+      wrapI.style.display = 'none';
+    }
+  }
   if (btnU) {
     btnU.classList.toggle('active', m === 'update');
     btnU.setAttribute('aria-selected', m === 'update' ? 'true' : 'false');
@@ -228,6 +278,10 @@ function setBankPanelMode(mode) {
     btnR.classList.toggle('active', m === 'review');
     btnR.setAttribute('aria-selected', m === 'review' ? 'true' : 'false');
   }
+  if (btnI) {
+    btnI.classList.toggle('active', m === 'import');
+    btnI.setAttribute('aria-selected', m === 'import' ? 'true' : 'false');
+  }
   if (m === 'update') {
     setStatus('bank_status', '', false);
   }
@@ -235,10 +289,32 @@ function setBankPanelMode(mode) {
     setStatus('bank_status', '', false);
     if (typeof loadBankImportReviewSection === 'function') loadBankImportReviewSection();
   }
+  if (m === 'import') {
+    setStatus('bank_status', '', false);
+    // No auto-load. Textarea content + preview are driven entirely
+    // by the user's paste + Preview click. We deliberately do NOT
+    // reset state here so a user who clicks Review imports to peek
+    // at staged rows can come back to Import and see their previous
+    // preview unchanged. resetBankImportCsvPasteState_ is called only
+    // by Clear or by a successful stage.
+  } else {
+    // Leaving Import: clear preview rendering but preserve textarea +
+    // parsed state. (Keeps the "I started a paste, switched tabs to
+    // verify something, came back" workflow zero-cost.)
+  }
 }
 
 function loadBankSection() {
   document.getElementById('bank_date').value = new Date().toISOString().slice(0, 10);
+  // Reconcile Import segment-button visibility on every Bank tab
+  // entry. Earlier reveals (in loadBankImportReviewSection) only fire
+  // when the user actually navigates to Review imports; doing it here
+  // covers the "user opens Bank for the first time and goes straight
+  // to Import" path too. Cheap; the helper short-circuits when the
+  // flag is false.
+  if (typeof applyBankImportCsvPasteVisibility_ === 'function') {
+    applyBankImportCsvPasteVisibility_();
+  }
   google.script.run
     .withSuccessHandler(function(data) {
       fillBankAccountDropdownFromData_(data);
@@ -967,7 +1043,17 @@ var __bankImportReviewState = {
   rows: [],
   existingAccounts: [],
   expandedStagingId: null,
-  expandedAction: null
+  expandedAction: null,
+  // Step 3b: rebuilt every renderBankImportReviewList_ call from
+  // existingAccounts. { byLast4: { '1234': [accountSummary, ...] } }.
+  last4Index: null,
+  // Step 3b: { stagingId: suggestedAccountName } captured during
+  // render so the inline Match-suggested click handler does NOT need
+  // to ferry the account name through an onclick attribute. This
+  // avoids HTML/attribute-quoting hazards for names containing
+  // double quotes (or any other character that would break the
+  // attribute). Reset at the start of every list render.
+  suggestionByStagingId: null
 };
 
 function loadBankImportReviewSection() {
@@ -980,6 +1066,12 @@ function loadBankImportReviewSection() {
   if (devCallout) {
     devCallout.style.display = BANK_IMPORT_DEV_TOOLS_ENABLED ? '' : 'none';
   }
+  // Reconcile Import segment-button visibility on the same trigger.
+  // The button's HTML default is display:none, so the false branch
+  // is a pure no-op. Done here (instead of on script init) because
+  // the Bank panel is the only place the button lives, and entering
+  // any Bank mode is the natural moment to check.
+  applyBankImportCsvPasteVisibility_();
   const list = document.getElementById('bank_import_review_list');
   if (list) list.innerHTML = '<div class="muted" style="padding:12px 0;">Loading bank import review…</div>';
   google.script.run
@@ -1025,11 +1117,146 @@ function renderBankImportReviewList_() {
   if (!root) return;
   const rows = __bankImportReviewState.rows || [];
   if (rows.length === 0) {
+    __bankImportReviewState.last4Index = null;
+    __bankImportReviewState.suggestionByStagingId = null;
     root.innerHTML =
       '<div class="muted" style="padding:12px 0;">No bank accounts pending review.</div>';
     return;
   }
+  // Step 3b: build the last4 → candidate-account index once per render
+  // so per-card suggestion lookups are O(1). The index is rebuilt
+  // every time loadBankImportReviewSection() round-trips so it can
+  // never go stale relative to existingAccounts.
+  __bankImportReviewState.last4Index = bankImportBuildLast4Index_(
+    __bankImportReviewState.existingAccounts || []
+  );
+  // Step 3b: reset the per-render suggestion lookup; cards populate
+  // it as they render so the click handler can resolve the suggested
+  // account name without it riding through an inline onclick.
+  __bankImportReviewState.suggestionByStagingId = Object.create(null);
   root.innerHTML = rows.map(renderBankImportReviewCard_).join('');
+}
+
+/* ---------------------------------------------------------------------------
+ * Step 3b — Suggested matching by last4
+ * ---------------------------------------------------------------------------
+ * Pure client-side suggestion layer over data getBankImportReviewData
+ * already returns. Suggests at most one candidate per unlinked staged
+ * row when the staged last4 (exactly 4 digits) appears as a digit-
+ * boundary-bounded run inside exactly one active SYS - Accounts row's
+ * Account Name and that account is not already linked.
+ *
+ * Suggesting is read-only. Confirming reuses the existing server
+ * function matchStagedBankAccountToExisting() byte-for-byte; no new
+ * write path. Step 2d strict approval is preserved (the row flips to
+ * linked_matched and waits for explicit Apply).
+ * ------------------------------------------------------------------------- */
+
+// Matches a 4-digit run that is NOT adjacent to other digits on either
+// side (so '2024' inside 'Joint Savings 2024' counts, but not '1234'
+// inside 'Acct12345'). Built once and reused.
+var BANK_IMPORT_LAST4_BOUNDARY_RX_ = /(^|\D)(\d{4})(?=$|\D)/g;
+
+/**
+ * Returns { byLast4: { '1234': [accountName, ...] } } from an array
+ * of existingAccounts entries (already filtered to active rows by
+ * getBankImportReviewData). An account name with multiple boundary-
+ * bounded 4-digit runs is added to every relevant bucket.
+ */
+function bankImportBuildLast4Index_(existingAccounts) {
+  const byLast4 = Object.create(null);
+  if (!Array.isArray(existingAccounts)) return { byLast4: byLast4 };
+  for (let i = 0; i < existingAccounts.length; i++) {
+    const a = existingAccounts[i] || {};
+    const name = String(a.accountName || '');
+    if (!name) continue;
+    BANK_IMPORT_LAST4_BOUNDARY_RX_.lastIndex = 0;
+    let m;
+    const seenForThisAccount = Object.create(null);
+    while ((m = BANK_IMPORT_LAST4_BOUNDARY_RX_.exec(name)) !== null) {
+      const four = m[2];
+      if (seenForThisAccount[four]) continue;
+      seenForThisAccount[four] = true;
+      if (!byLast4[four]) byLast4[four] = [];
+      byLast4[four].push(a);
+    }
+  }
+  return { byLast4: byLast4 };
+}
+
+/**
+ * Returns { accountName: '...' } when the staged row qualifies for a
+ * suggested match by last4 under the Step 3b rules; null otherwise.
+ *
+ * Caller is expected to gate this on linkState === 'unlinked' before
+ * invoking — we double-check defensively but this function deliberately
+ * does not surface a suggestion for any other link state.
+ */
+function bankImportSuggestMatch_(row, index) {
+  if (!row || !index || !index.byLast4) return null;
+  // 1. unlinked-only.
+  if (String(row.linkState || 'unlinked') !== 'unlinked') return null;
+  // 2. must have an external id (matchStagedBankAccountToExisting
+  //    refuses without one — no point suggesting).
+  if (!row.externalAccountId) return null;
+  // 3. exactly 4 ASCII digits.
+  const last4 = String(row.last4 || '').trim();
+  if (!/^\d{4}$/.test(last4)) return null;
+  // 4. exactly one active candidate.
+  const bucket = index.byLast4[last4];
+  if (!Array.isArray(bucket) || bucket.length !== 1) return null;
+  const cand = bucket[0];
+  // 5. candidate not already linked to any external id.
+  if (!cand || cand.hasExternalId) return null;
+  // 6. type compatibility — when both sides have a non-blank type
+  //    they must match case-insensitively. Blank on either side is OK.
+  const stagedType = String(row.type || '').trim().toLowerCase();
+  const candType = String(cand.type || '').trim().toLowerCase();
+  if (stagedType && candType && stagedType !== candType) return null;
+  return { accountName: String(cand.accountName || '') };
+}
+
+/**
+ * One-click confirm of a suggested match. Identical refresh + status
+ * pattern as confirmBankImportReviewMatch_, but the accountName is
+ * resolved from __bankImportReviewState.suggestionByStagingId (stashed
+ * during render) rather than being passed through the inline onclick
+ * attribute. This avoids attribute-quoting hazards for account names
+ * that contain double quotes (or any other character that would
+ * break the attribute). No new server function — the existing
+ * matchStagedBankAccountToExisting takes care of locking, conflict
+ * guards, status flip to linked_matched, and the
+ * bank_import_review_match activity log row.
+ */
+function confirmBankImportReviewMatchSuggested_(sid) {
+  const stagingId = String(sid || '');
+  const map = __bankImportReviewState.suggestionByStagingId || {};
+  const target = String(map[stagingId] || '').trim();
+  if (!stagingId || !target) {
+    // Lost suggestion almost always means the list refreshed between
+    // render and click (rare). Reload so the user sees the current
+    // state rather than a confusing error.
+    setStatus('bank_status', 'Suggestion is no longer available — refreshing.', true);
+    loadBankImportReviewSection();
+    return;
+  }
+  setStatusLoading('bank_status', 'Linking external account…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('bank_status', (res && res.message) || 'Linked.', false);
+      __bankImportReviewState.expandedStagingId = null;
+      __bankImportReviewState.expandedAction = null;
+      loadBankImportReviewSection();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', (err && err.message ? err.message : String(err)), true);
+      // Refresh on failure too: a refusal usually means the world
+      // changed (another tab linked the candidate to a different
+      // external id, account was deactivated, etc.) and the cached
+      // suggestion is now stale.
+      loadBankImportReviewSection();
+    })
+    .matchStagedBankAccountToExisting({ stagingId: stagingId, accountName: target });
 }
 
 function renderBankImportReviewCard_(row) {
@@ -1083,13 +1310,49 @@ function renderBankImportReviewCard_(row) {
   }
 
   let actionsRow;
+  // Step 3b: surface a single-click "Match to <suggested account>"
+  // button when the row is unlinked AND last4 uniquely identifies an
+  // active, not-already-linked SYS account whose type doesn't conflict
+  // with the staged type. Suggestion is purely a UX accelerator — the
+  // server's match function still runs the same lock + conflict guard.
+  let suggestionLine = '';
+  let suggestion = null;
   if (linkState === 'unlinked') {
-    actionsRow =
-      '<div class="upcoming-actions" style="margin-top:8px;">' +
-        '<button class="small-btn primary" onclick="toggleBankImportReviewAction_(\'' + sidJs + '\',\'add_new\')">Add as new</button>' +
-        '<button class="small-btn" onclick="toggleBankImportReviewAction_(\'' + sidJs + '\',\'match\')">Match to existing</button>' +
-        '<button class="small-btn" onclick="toggleBankImportReviewAction_(\'' + sidJs + '\',\'ignore\')">Ignore</button>' +
-      '</div>';
+    suggestion = bankImportSuggestMatch_(row, __bankImportReviewState.last4Index);
+    if (suggestion) {
+      // Record the suggested account name keyed by stagingId so the
+      // click handler can resolve it from state instead of receiving
+      // it through an HTML attribute. Defensive guard in case the
+      // map was not initialised by the list renderer for any reason.
+      if (!__bankImportReviewState.suggestionByStagingId) {
+        __bankImportReviewState.suggestionByStagingId = Object.create(null);
+      }
+      __bankImportReviewState.suggestionByStagingId[sid] = suggestion.accountName;
+      suggestionLine =
+        '<div class="muted" style="margin-top:4px;font-size:13px;color:#1f5fa6;">' +
+          'Suggested match: <strong>' + escapeHtml(suggestion.accountName) + '</strong>' +
+        '</div>';
+    }
+  }
+  if (linkState === 'unlinked') {
+    if (suggestion) {
+      const suggestedNameHtml = escapeHtml(suggestion.accountName);
+      actionsRow =
+        '<div class="upcoming-actions" style="margin-top:8px;">' +
+          '<button class="small-btn primary" onclick="confirmBankImportReviewMatchSuggested_(\'' +
+            sidJs + '\')">Match to ' + suggestedNameHtml + '</button>' +
+          '<button class="small-btn" onclick="toggleBankImportReviewAction_(\'' + sidJs + '\',\'match\')">Match to a different account</button>' +
+          '<button class="small-btn" onclick="toggleBankImportReviewAction_(\'' + sidJs + '\',\'add_new\')">Add as new</button>' +
+          '<button class="small-btn" onclick="toggleBankImportReviewAction_(\'' + sidJs + '\',\'ignore\')">Ignore</button>' +
+        '</div>';
+    } else {
+      actionsRow =
+        '<div class="upcoming-actions" style="margin-top:8px;">' +
+          '<button class="small-btn primary" onclick="toggleBankImportReviewAction_(\'' + sidJs + '\',\'add_new\')">Add as new</button>' +
+          '<button class="small-btn" onclick="toggleBankImportReviewAction_(\'' + sidJs + '\',\'match\')">Match to existing</button>' +
+          '<button class="small-btn" onclick="toggleBankImportReviewAction_(\'' + sidJs + '\',\'ignore\')">Ignore</button>' +
+        '</div>';
+    }
   } else {
     const applyBtn = row.applyAllowed
       ? '<button class="small-btn primary" onclick="toggleBankImportReviewAction_(\'' + sidJs + '\',\'apply\')">Apply balance</button>'
@@ -1127,7 +1390,7 @@ function renderBankImportReviewCard_(row) {
 
   return (
     '<div class="upcoming-item" style="border:1px solid #e3e3e3;border-radius:6px;padding:10px;margin-bottom:8px;">' +
-      headerLine + subLine + balanceLine + linkedLine + blockedLine + actionsRow + inlineForm +
+      headerLine + subLine + balanceLine + linkedLine + blockedLine + suggestionLine + actionsRow + inlineForm +
     '</div>'
   );
 }
@@ -1517,4 +1780,646 @@ function loadBankImportSampleData_() {
       setStatus('bank_status', (err && err.message ? err.message : String(err)), true);
     })
     .devRunBankImportSampleFromDashboard();
+}
+
+/* ---------------------------------------------------------------------------
+ * Step 3a — Bank Import CSV paste segment
+ * ---------------------------------------------------------------------------
+ * Entirely client-side parsing + preview. Sends a normalized
+ * { rows: [...] } payload to stageBankImportPasteRows() which
+ * forwards verbatim to processBankImportBatch_. No new ingestion
+ * pipeline; no balance ever lands without an explicit Apply click in
+ * Review imports (Step 2d guarantee preserved).
+ *
+ * Hidden by default behind BANK_IMPORT_CSV_PASTE_ENABLED. Both the
+ * segment button and the wrap div carry inline display:none in
+ * Dashboard_Body.html, so the false branch of every reveal site is a
+ * pure no-op.
+ * ------------------------------------------------------------------------- */
+
+function applyBankImportCsvPasteVisibility_() {
+  const btn = document.getElementById('bank_mode_import_btn');
+  if (btn) {
+    btn.style.display = BANK_IMPORT_CSV_PASTE_ENABLED ? '' : 'none';
+  }
+  // The wrap's display is also driven by setBankPanelMode (it has
+  // both the .bank-mode-wrap class AND inline display, so we keep
+  // both in sync). When the flag is false, force display:none even
+  // if some other code path toggled .active onto it.
+  const wrap = document.getElementById('bank_mode_import_wrap');
+  if (wrap && !BANK_IMPORT_CSV_PASTE_ENABLED) {
+    wrap.style.display = 'none';
+    wrap.classList.remove('active');
+  }
+}
+
+function resetBankImportCsvPasteState_() {
+  __bankImportPasteState = {
+    okRows: [],
+    rowCount: 0,
+    errorCount: 0,
+    blockingError: ''
+  };
+}
+
+function clearBankImportCsvPaste_() {
+  const ta = document.getElementById('bank_import_csv_paste');
+  if (ta) ta.value = '';
+  const preview = document.getElementById('bank_import_csv_preview');
+  if (preview) preview.innerHTML = '';
+  const stageRow = document.getElementById('bank_import_csv_stage_row');
+  if (stageRow) stageRow.style.display = 'none';
+  const stageBtn = document.getElementById('bank_import_csv_stage_btn');
+  if (stageBtn) {
+    stageBtn.disabled = true;
+    stageBtn.textContent = 'Stage rows for review';
+  }
+  resetBankImportCsvPasteState_();
+  setStatus('bank_status', '', false);
+}
+
+function copyBankImportCsvTemplateToClipboard_() {
+  const template =
+    'displayName,balance,balanceAsOf,externalAccountId,institution,last4,type,currency\n' +
+    'Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,0123,CHECKING,USD\n';
+  const statusEl = document.getElementById('bank_import_csv_template_copy_status');
+  function flashCopied(ok) {
+    if (!statusEl) return;
+    statusEl.textContent = ok ? 'Copied.' : 'Copy failed — select the text manually.';
+    setTimeout(function() { if (statusEl) statusEl.textContent = ''; }, 3000);
+  }
+  if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(template).then(
+      function() { flashCopied(true); },
+      function() { flashCopied(false); }
+    );
+    return;
+  }
+  // Legacy fallback for sandboxed iframes that block clipboard API.
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = template;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand && document.execCommand('copy');
+    document.body.removeChild(ta);
+    flashCopied(!!ok);
+  } catch (_e) {
+    flashCopied(false);
+  }
+}
+
+/**
+ * RFC4180-lite CSV parser. Handles double-quoted fields with
+ * embedded commas / quotes / newlines, strips a leading BOM, and
+ * skips blank lines. Returns an array-of-arrays. Throws on a UTF-16
+ * NUL-byte after BOM strip so the caller can surface a friendly
+ * "Save as UTF-8" message.
+ */
+function bankImportCsvPasteSplitRows_(text) {
+  let s = String(text == null ? '' : text);
+  if (s.charCodeAt(0) === 0xFEFF) s = s.slice(1);
+  if (s.indexOf('\u0000') !== -1) {
+    throw new Error('CSV looks like UTF-16. Save your CSV as UTF-8.');
+  }
+  const rows = [];
+  let cur = [];
+  let cell = '';
+  let inQuotes = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s.charAt(i);
+    if (inQuotes) {
+      if (ch === '"') {
+        // Escaped quote inside quoted field?
+        if (i + 1 < s.length && s.charAt(i + 1) === '"') {
+          cell += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cell += ch;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inQuotes = true;
+      continue;
+    }
+    if (ch === ',') {
+      cur.push(cell);
+      cell = '';
+      continue;
+    }
+    if (ch === '\r') {
+      // Treat \r\n and bare \r as one line ending.
+      if (i + 1 < s.length && s.charAt(i + 1) === '\n') i++;
+      cur.push(cell);
+      rows.push(cur);
+      cur = [];
+      cell = '';
+      continue;
+    }
+    if (ch === '\n') {
+      cur.push(cell);
+      rows.push(cur);
+      cur = [];
+      cell = '';
+      continue;
+    }
+    cell += ch;
+  }
+  // Trailing field / final row (no terminating newline).
+  if (cell.length > 0 || cur.length > 0) {
+    cur.push(cell);
+    rows.push(cur);
+  }
+  // Drop fully-blank rows (every cell empty after trim).
+  const filtered = [];
+  for (let r = 0; r < rows.length; r++) {
+    let allBlank = true;
+    for (let c = 0; c < rows[r].length; c++) {
+      if (String(rows[r][c]).trim() !== '') { allBlank = false; break; }
+    }
+    if (!allBlank) filtered.push(rows[r]);
+  }
+  return { rows: filtered, blankCount: rows.length - filtered.length };
+}
+
+// Headers we accept. Lookup is case-insensitive + trimmed.
+var BANK_IMPORT_CSV_KNOWN_HEADERS_ = [
+  'externalAccountId',
+  'institution',
+  'displayName',
+  'last4',
+  'type',
+  'currency',
+  'balance',
+  'balanceAsOf'
+];
+
+function bankImportCsvPasteHeaderMap_(headerCells) {
+  const map = {};
+  const unknown = [];
+  const seen = {};
+  for (let i = 0; i < headerCells.length; i++) {
+    const raw = String(headerCells[i] || '').trim();
+    if (!raw) continue;
+    const lower = raw.toLowerCase();
+    if (seen[lower]) continue; // first occurrence wins; duplicates ignored
+    seen[lower] = true;
+    let matched = '';
+    for (let k = 0; k < BANK_IMPORT_CSV_KNOWN_HEADERS_.length; k++) {
+      if (BANK_IMPORT_CSV_KNOWN_HEADERS_[k].toLowerCase() === lower) {
+        matched = BANK_IMPORT_CSV_KNOWN_HEADERS_[k];
+        break;
+      }
+    }
+    if (matched) {
+      map[matched] = i;
+    } else {
+      unknown.push(raw);
+    }
+  }
+  return { map: map, unknown: unknown };
+}
+
+function bankImportCsvPasteHeadersLookLikeTransactions_(headerCells) {
+  const lower = {};
+  for (let i = 0; i < headerCells.length; i++) {
+    const k = String(headerCells[i] || '').trim().toLowerCase();
+    if (k) lower[k] = true;
+  }
+  const txnSignals = ['transaction_id', 'posted_date', 'description', 'category'];
+  let hits = 0;
+  for (let i = 0; i < txnSignals.length; i++) {
+    if (lower[txnSignals[i]]) hits++;
+  }
+  // Require ≥1 transaction-flavored header AND no balance column.
+  return hits >= 1 && !lower['balance'];
+}
+
+var BANK_IMPORT_CSV_BALANCE_AS_OF_RX_ = /^\d{4}-\d{2}-\d{2}$/;
+
+function bankImportCsvPasteParseBalance_(raw) {
+  if (raw == null) return { ok: false, error: 'balance must be a number' };
+  let s = String(raw).trim();
+  if (!s) return { ok: false, error: 'balance must be a number' };
+  // Strip leading $ and any thousands commas. We deliberately do NOT
+  // accept comma as decimal separator (locale-specific); user must
+  // use '.' for decimals.
+  s = s.replace(/^\$/, '').replace(/,/g, '').trim();
+  if (!s) return { ok: false, error: 'balance must be a number' };
+  // Only allow simple decimal numbers, optional leading minus.
+  if (!/^-?\d+(\.\d+)?$/.test(s)) {
+    return { ok: false, error: 'balance must be a number' };
+  }
+  const n = parseFloat(s);
+  if (!isFinite(n)) {
+    return { ok: false, error: 'balance must be a finite number' };
+  }
+  return { ok: true, value: Math.round(n * 100) / 100 };
+}
+
+function bankImportCsvPasteIsRealIsoDate_(s) {
+  if (!BANK_IMPORT_CSV_BALANCE_AS_OF_RX_.test(s)) return false;
+  const parts = s.split('-');
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  if (!(y >= 1900 && y <= 2999)) return false;
+  if (!(m >= 1 && m <= 12)) return false;
+  if (!(d >= 1 && d <= 31)) return false;
+  // Round-trip through Date to catch e.g. 2026-02-31.
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && (dt.getMonth() + 1) === m && dt.getDate() === d;
+}
+
+function bankImportCsvPasteToday_() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function bankImportCsvPasteParseRow_(cells, headerMap, expectedFieldCount) {
+  if (cells.length !== expectedFieldCount) {
+    return {
+      ok: false,
+      raw: { displayName: '' },
+      error: 'Wrong number of fields (expected ' + expectedFieldCount +
+        ', got ' + cells.length + ')'
+    };
+  }
+  const get = function(name) {
+    const idx = headerMap[name];
+    if (idx == null) return '';
+    return String(cells[idx] || '').trim();
+  };
+  const externalAccountId = get('externalAccountId');
+  const institution = get('institution');
+  const displayName = get('displayName');
+  const last4 = get('last4');
+  const type = get('type');
+  const currency = get('currency');
+  const balanceRaw = get('balance');
+  const balanceAsOf = get('balanceAsOf');
+
+  if (!externalAccountId && !institution && !displayName && !last4) {
+    return {
+      ok: false,
+      raw: { displayName: '', balanceRaw: balanceRaw, balanceAsOf: balanceAsOf },
+      error: 'Need at least one of externalAccountId, displayName, institution, or last4'
+    };
+  }
+  if (!balanceAsOf) {
+    return {
+      ok: false,
+      raw: { displayName: displayName, balanceRaw: balanceRaw, balanceAsOf: '' },
+      error: 'balanceAsOf is required (YYYY-MM-DD)'
+    };
+  }
+  if (!BANK_IMPORT_CSV_BALANCE_AS_OF_RX_.test(balanceAsOf)) {
+    return {
+      ok: false,
+      raw: { displayName: displayName, balanceRaw: balanceRaw, balanceAsOf: balanceAsOf },
+      error: 'balanceAsOf must be YYYY-MM-DD'
+    };
+  }
+  if (!bankImportCsvPasteIsRealIsoDate_(balanceAsOf)) {
+    return {
+      ok: false,
+      raw: { displayName: displayName, balanceRaw: balanceRaw, balanceAsOf: balanceAsOf },
+      error: 'balanceAsOf is not a valid date'
+    };
+  }
+  const balParse = bankImportCsvPasteParseBalance_(balanceRaw);
+  if (!balParse.ok) {
+    return {
+      ok: false,
+      raw: { displayName: displayName, balanceRaw: balanceRaw, balanceAsOf: balanceAsOf, currency: currency, externalAccountId: externalAccountId },
+      error: balParse.error
+    };
+  }
+
+  // Soft hints (informational; do not block staging).
+  const hints = [];
+  const currencyUpper = currency.toUpperCase();
+  if (!externalAccountId) hints.push('will stage for manual match');
+  if (currencyUpper && currencyUpper !== 'USD') hints.push('will stage as currency mismatch');
+  if (!currencyUpper) hints.push('will stage as currency mismatch');
+  // Stale / future check (90-day window matches BANK_IMPORT_STALE_BALANCE_DAYS).
+  const today = bankImportCsvPasteToday_();
+  const parts = balanceAsOf.split('-');
+  const asOf = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  asOf.setHours(0, 0, 0, 0);
+  if (asOf.getTime() > today.getTime()) {
+    hints.push('will stage as stale balance (future-dated)');
+  } else {
+    const ageDays = Math.floor((today.getTime() - asOf.getTime()) / (1000 * 60 * 60 * 24));
+    if (ageDays > 90) hints.push('will stage as stale balance (over 90 days old)');
+  }
+
+  return {
+    ok: true,
+    raw: {
+      externalAccountId: externalAccountId,
+      institution: institution,
+      displayName: displayName,
+      last4: last4,
+      type: type,
+      currency: currency,
+      balance: balParse.value,
+      balanceAsOf: balanceAsOf
+    },
+    hints: hints
+  };
+}
+
+/**
+ * Pure parse + validate. Returns
+ *   {
+ *     blockingError: string,         // when truthy, table is suppressed
+ *     warnings: [string],            // soft warnings shown above table
+ *     headerCount: number,
+ *     headersUnknown: [string],
+ *     rowCount: number,              // total non-blank data rows parsed
+ *     blankCount: number,
+ *     okRows: [{ raw, hints }],
+ *     errorRows: [{ rowNumber, raw, error }]
+ *   }
+ */
+function bankImportCsvPasteParse_(text) {
+  const empty = String(text || '').trim() === '';
+  if (empty) {
+    return {
+      blockingError: 'Paste a CSV first.',
+      warnings: [],
+      headerCount: 0,
+      headersUnknown: [],
+      rowCount: 0,
+      blankCount: 0,
+      okRows: [],
+      errorRows: []
+    };
+  }
+  let split;
+  try {
+    split = bankImportCsvPasteSplitRows_(text);
+  } catch (parseErr) {
+    return {
+      blockingError: parseErr && parseErr.message ? parseErr.message : 'Could not parse CSV.',
+      warnings: [],
+      headerCount: 0,
+      headersUnknown: [],
+      rowCount: 0,
+      blankCount: 0,
+      okRows: [],
+      errorRows: []
+    };
+  }
+  if (split.rows.length === 0) {
+    return {
+      blockingError: 'CSV is empty after stripping blank lines.',
+      warnings: [],
+      headerCount: 0,
+      headersUnknown: [],
+      rowCount: 0,
+      blankCount: split.blankCount,
+      okRows: [],
+      errorRows: []
+    };
+  }
+  const headerCells = split.rows[0];
+  if (bankImportCsvPasteHeadersLookLikeTransactions_(headerCells)) {
+    return {
+      blockingError: 'This looks like a transaction export. Bank Import only accepts balance snapshots — see the template.',
+      warnings: [],
+      headerCount: headerCells.length,
+      headersUnknown: [],
+      rowCount: 0,
+      blankCount: split.blankCount,
+      okRows: [],
+      errorRows: []
+    };
+  }
+  const headerLookup = bankImportCsvPasteHeaderMap_(headerCells);
+  const map = headerLookup.map;
+  const headersUnknown = headerLookup.unknown;
+  // Required headers: balance + balanceAsOf + ≥1 identifier.
+  const missing = [];
+  if (map['balance'] == null) missing.push('balance');
+  if (map['balanceAsOf'] == null) missing.push('balanceAsOf');
+  const hasIdentifier =
+    map['externalAccountId'] != null ||
+    map['displayName'] != null ||
+    map['institution'] != null ||
+    map['last4'] != null;
+  if (!hasIdentifier) missing.push('one of externalAccountId/displayName/institution/last4');
+  if (missing.length) {
+    return {
+      blockingError: 'Required column missing: ' + missing.join(', ') + '.',
+      warnings: [],
+      headerCount: headerCells.length,
+      headersUnknown: headersUnknown,
+      rowCount: 0,
+      blankCount: split.blankCount,
+      okRows: [],
+      errorRows: []
+    };
+  }
+  const dataRows = split.rows.slice(1);
+  if (dataRows.length > BANK_IMPORT_CSV_PASTE_MAX_ROWS_) {
+    return {
+      blockingError: 'Paste up to ' + BANK_IMPORT_CSV_PASTE_MAX_ROWS_ +
+        ' rows at a time. You pasted ' + dataRows.length + '.',
+      warnings: [],
+      headerCount: headerCells.length,
+      headersUnknown: headersUnknown,
+      rowCount: dataRows.length,
+      blankCount: split.blankCount,
+      okRows: [],
+      errorRows: []
+    };
+  }
+  const warnings = [];
+  if (headersUnknown.length) {
+    warnings.push('Ignoring unknown columns: ' + headersUnknown.join(', '));
+  }
+  const okRows = [];
+  const errorRows = [];
+  for (let r = 0; r < dataRows.length; r++) {
+    const result = bankImportCsvPasteParseRow_(dataRows[r], map, headerCells.length);
+    if (result.ok) {
+      okRows.push({ rowNumber: r + 2, raw: result.raw, hints: result.hints || [] });
+    } else {
+      errorRows.push({ rowNumber: r + 2, raw: result.raw || {}, error: result.error });
+    }
+  }
+  return {
+    blockingError: '',
+    warnings: warnings,
+    headerCount: headerCells.length,
+    headersUnknown: headersUnknown,
+    rowCount: dataRows.length,
+    blankCount: split.blankCount,
+    okRows: okRows,
+    errorRows: errorRows
+  };
+}
+
+function renderBankImportCsvPasteTable_(parseResult) {
+  const root = document.getElementById('bank_import_csv_preview');
+  const stageRow = document.getElementById('bank_import_csv_stage_row');
+  const stageBtn = document.getElementById('bank_import_csv_stage_btn');
+  if (!root) return;
+
+  if (parseResult.blockingError) {
+    root.innerHTML =
+      '<div class="field-error" style="padding:8px;background:#fde2e2;border-radius:4px;color:#7a1f1f;">' +
+        escapeHtml(parseResult.blockingError) +
+      '</div>';
+    if (stageRow) stageRow.style.display = 'none';
+    if (stageBtn) {
+      stageBtn.disabled = true;
+      stageBtn.textContent = 'Stage rows for review';
+    }
+    return;
+  }
+
+  let html = '';
+  if (parseResult.warnings && parseResult.warnings.length) {
+    html += '<div class="muted" style="margin-bottom:6px;font-size:12px;">' +
+      parseResult.warnings.map(escapeHtml).join('<br>') +
+      '</div>';
+  }
+
+  const okCount = parseResult.okRows.length;
+  const errCount = parseResult.errorRows.length;
+  const blankCount = parseResult.blankCount || 0;
+  html += '<div class="muted" style="margin-bottom:6px;font-size:12px;">' +
+    okCount + ' rows OK · ' + errCount + ' errors';
+  if (blankCount) html += ' · ' + blankCount + ' blank skipped';
+  html += '</div>';
+
+  // Combined table sorted by rowNumber so users see context in source order.
+  const allRows = parseResult.okRows
+    .map(function(r) { return { rowNumber: r.rowNumber, raw: r.raw, error: '', hints: r.hints || [] }; })
+    .concat(parseResult.errorRows.map(function(r) {
+      return { rowNumber: r.rowNumber, raw: r.raw || {}, error: r.error, hints: [] };
+    }));
+  allRows.sort(function(a, b) { return a.rowNumber - b.rowNumber; });
+
+  html += '<div style="max-height:280px;overflow-y:auto;border:1px solid #ddd;border-radius:4px;">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  html += '<thead><tr style="background:#f0f0f0;">' +
+    '<th style="text-align:left;padding:4px 6px;">#</th>' +
+    '<th style="text-align:left;padding:4px 6px;">displayName</th>' +
+    '<th style="text-align:right;padding:4px 6px;">balance</th>' +
+    '<th style="text-align:left;padding:4px 6px;">balanceAsOf</th>' +
+    '<th style="text-align:left;padding:4px 6px;">currency</th>' +
+    '<th style="text-align:left;padding:4px 6px;">externalAccountId</th>' +
+    '<th style="text-align:left;padding:4px 6px;">notes</th>' +
+    '</tr></thead><tbody>';
+  for (let i = 0; i < allRows.length; i++) {
+    const r = allRows[i];
+    const bg = r.error ? 'background:#fde2e2;' : '';
+    const balanceDisplay = (r.raw && typeof r.raw.balance === 'number')
+      ? '$' + r.raw.balance.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+      : (r.raw && r.raw.balanceRaw != null ? escapeHtml(String(r.raw.balanceRaw)) : '');
+    const ext = r.raw && r.raw.externalAccountId ? String(r.raw.externalAccountId) : '';
+    const extDisplay = ext.length > 14 ? escapeHtml(ext.slice(0, 12)) + '…' : escapeHtml(ext);
+    const currencyDisplay = r.raw && r.raw.currency
+      ? escapeHtml(r.raw.currency)
+      : '<span class="muted">(blank)</span>';
+    const notes = r.error
+      ? '<span style="color:#7a1f1f;">' + escapeHtml(r.error) + '</span>'
+      : (r.hints && r.hints.length
+          ? '<span class="muted">' + escapeHtml(r.hints.join('; ')) + '</span>'
+          : '<span class="muted">OK</span>');
+    html += '<tr style="' + bg + '">' +
+      '<td style="padding:4px 6px;">' + r.rowNumber + '</td>' +
+      '<td style="padding:4px 6px;">' + escapeHtml(String((r.raw && r.raw.displayName) || '')) + '</td>' +
+      '<td style="padding:4px 6px;text-align:right;">' + balanceDisplay + '</td>' +
+      '<td style="padding:4px 6px;">' + escapeHtml(String((r.raw && r.raw.balanceAsOf) || '')) + '</td>' +
+      '<td style="padding:4px 6px;">' + currencyDisplay + '</td>' +
+      '<td style="padding:4px 6px;font-family:monospace;">' + extDisplay + '</td>' +
+      '<td style="padding:4px 6px;">' + notes + '</td>' +
+      '</tr>';
+  }
+  html += '</tbody></table></div>';
+  root.innerHTML = html;
+
+  // Per Q4 in the design plan, if any row has an error we hard-block
+  // staging — no skip-errors checkbox in 3a.
+  const canStage = okCount > 0 && errCount === 0;
+  if (stageRow) stageRow.style.display = '';
+  if (stageBtn) {
+    stageBtn.disabled = !canStage;
+    stageBtn.textContent = canStage
+      ? 'Stage ' + okCount + ' rows for review'
+      : (errCount > 0
+          ? 'Fix ' + errCount + ' error' + (errCount === 1 ? '' : 's') + ' before staging'
+          : 'Stage rows for review');
+  }
+}
+
+function bankImportCsvPastePreview_() {
+  const ta = document.getElementById('bank_import_csv_paste');
+  if (!ta) return;
+  const parseResult = bankImportCsvPasteParse_(ta.value);
+  __bankImportPasteState = {
+    okRows: parseResult.okRows.map(function(r) { return r.raw; }),
+    rowCount: parseResult.rowCount,
+    errorCount: parseResult.errorRows.length,
+    blockingError: parseResult.blockingError || ''
+  };
+  renderBankImportCsvPasteTable_(parseResult);
+}
+
+function confirmBankImportCsvPasteStage_() {
+  const okRows = __bankImportPasteState && __bankImportPasteState.okRows;
+  if (!Array.isArray(okRows) || okRows.length === 0) {
+    setStatus('bank_status', 'Nothing to stage. Click Preview after pasting a CSV.', true);
+    return;
+  }
+  if (__bankImportPasteState.errorCount > 0) {
+    setStatus('bank_status', 'Fix the errored rows before staging.', true);
+    return;
+  }
+  if (__bankImportPasteState.blockingError) {
+    setStatus('bank_status', __bankImportPasteState.blockingError, true);
+    return;
+  }
+  setStatusLoading('bank_status', 'Staging ' + okRows.length + ' rows…');
+  google.script.run
+    .withSuccessHandler(function(summary) {
+      const s = summary && typeof summary === 'object' ? summary : {};
+      const processed = Number(s.processed || 0);
+      const pending = Number(s.pending || 0);
+      const dedupe = Number(s.dedupeNoop || 0);
+      const ignored = Number(s.ignored || 0);
+      const errors = Number(s.errors || 0);
+      const parts = ['pending ' + pending];
+      if (dedupe) parts.push('dedupe ' + dedupe);
+      if (ignored) parts.push('ignored ' + ignored);
+      if (errors) parts.push('errors ' + errors);
+      const msg = 'Staged ' + processed + ' (' + parts.join(', ') + ').';
+      // Clear paste UI and flip to Review imports so the user's next
+      // click is the link → apply flow on the rows we just staged.
+      // Order matters: clearBankImportCsvPaste_ AND setBankPanelMode
+      // both blank #bank_status, so the success message has to be
+      // written LAST.
+      clearBankImportCsvPaste_();
+      setBankPanelMode('review');
+      setStatus('bank_status', msg, errors > 0);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', (err && err.message ? err.message : String(err)), true);
+    })
+    .stageBankImportPasteRows({
+      source: 'csv_paste_v1',
+      rows: okRows
+    });
 }

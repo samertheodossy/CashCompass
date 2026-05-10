@@ -2055,6 +2055,94 @@ function devRunBankImportSampleFromDashboard() {
 }
 
 /* ---------------------------------------------------------------------------
+ * Step 3a — CSV / manual paste ingestion entry point
+ * ---------------------------------------------------------------------------
+ * Public wrapper called from the new Bank → Import segment. The client
+ * parses pasted CSV text into the same row shape processBankImportBatch_
+ * already accepts and forwards a { source, rows } payload here. We do
+ * NOTHING new on the ingestion side — every staged row still flows
+ * through bankImportNormalizeRow_ → bankImportRouteToPending_ /
+ * auto-match-awaiting-apply / dedupe / ignored / activity logging
+ * exactly as Step 2a + Step 2d defined.
+ *
+ * Step 2d guarantees auto_matched count is always 0 from this entry
+ * point: every row lands either as pending (awaiting link + apply),
+ * dedupe_noop, ignored_hit, or row_error. No CSV paste can ever write
+ * a balance to INPUT - Bank Accounts without a subsequent explicit
+ * Apply balance click in Review imports.
+ *
+ * Hard cap: BANK_IMPORT_CSV_PASTE_MAX_ROWS_ rows per call. The client
+ * enforces the same cap for instant feedback; this is the second line
+ * of defense.
+ * ------------------------------------------------------------------------- */
+
+var BANK_IMPORT_CSV_PASTE_MAX_ROWS_ = 200;
+var BANK_IMPORT_CSV_PASTE_SOURCE_ = 'csv_paste_v1';
+
+function stageBankImportPasteRows(payload) {
+  var sanitized = bankImportSanitizePastePayload_(payload);
+  return processBankImportBatch_({
+    source: BANK_IMPORT_CSV_PASTE_SOURCE_,
+    rows: sanitized.rows
+  });
+}
+
+/**
+ * Validates the shape of the paste payload coming off google.script.run
+ * and returns a clean { rows } object ready to forward verbatim to
+ * processBankImportBatch_. Strips unknown per-row keys so a malicious
+ * or just sloppy client can't inject extra fields into the staging
+ * sheet. Throws friendly errors that bubble up through
+ * .withFailureHandler in the UI.
+ */
+function bankImportSanitizePastePayload_(payload) {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Missing import payload.');
+  }
+  var rows = payload.rows;
+  if (!Array.isArray(rows)) {
+    throw new Error('Import payload is missing the rows array.');
+  }
+  if (rows.length === 0) {
+    throw new Error('No rows to stage.');
+  }
+  if (rows.length > BANK_IMPORT_CSV_PASTE_MAX_ROWS_) {
+    throw new Error(
+      'Paste up to ' + BANK_IMPORT_CSV_PASTE_MAX_ROWS_ +
+      ' rows at a time. You sent ' + rows.length + '.'
+    );
+  }
+
+  var sanitized = [];
+  for (var i = 0; i < rows.length; i++) {
+    var raw = rows[i];
+    if (!raw || typeof raw !== 'object') {
+      throw new Error('Row ' + (i + 1) + ' is not an object.');
+    }
+    // Allow-list known fields. bankImportNormalizeRow_ is the
+    // authoritative validator; this filter just makes sure we never
+    // forward a stray "transaction_id" / "amount" / etc. into the
+    // pipeline where it could be misread by a future change.
+    sanitized.push({
+      externalAccountId: bankImportTrimString_(raw.externalAccountId),
+      institution:       bankImportTrimString_(raw.institution),
+      displayName:       bankImportTrimString_(raw.displayName),
+      last4:             bankImportTrimString_(raw.last4),
+      type:              bankImportTrimString_(raw.type),
+      currency:          bankImportTrimString_(raw.currency),
+      balance:           raw.balance,
+      balanceAsOf:       bankImportTrimString_(raw.balanceAsOf)
+    });
+  }
+  return { rows: sanitized };
+}
+
+function bankImportTrimString_(v) {
+  if (v === null || v === undefined) return '';
+  return String(v).trim();
+}
+
+/* ---------------------------------------------------------------------------
  * Dev / test harness
  * ---------------------------------------------------------------------------
  * These functions are intentionally underscore-prefixed and named with
