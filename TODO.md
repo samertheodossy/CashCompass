@@ -119,6 +119,70 @@ Monetization is meaningful only **after** the Central App migration is in place 
 
 ---
 
+## Future Enhancements (Post-Core)
+
+Forward-looking product ideas captured in prioritized tiers so the long-term direction is durable. **None of this is on the current roadmap** and all of it is **lower priority than the in-flight Bank Import completion and the ongoing Bills / planner / Cash Flow accuracy work.** Pulling any item up requires an explicit product decision under `WORKING_RULES.md → Current phase`.
+
+### Tier 1 — High Impact (do after Bank Import + Bills)
+
+Highest-value next moves once the current priorities are stable. Pull in **after** Bank Import is fully delivered and Bills / planner / Cash Flow accuracy is locked.
+
+1. **Auto-reconciliation view.** Side-by-side imported bank balance vs current planned balance per active account, with a clear per-account delta. Read-only; reuses the Step 2d staged + Apply state.
+2. **Cash safety alerts.** Proactive warnings for low buffer, upcoming bill pressure exceeding available cash, and a single safe / at-risk state indicator. Derived from existing planner + Cash Flow data; no new sheets.
+3. **Bulk "Apply all" flow.** Apply multiple already-linked staged balances for the same month in one click. Still respects Step 2d strict approval — never auto-applies unlinked or blocked rows.
+4. **"What changed?" insights.** Explain the difference between the latest import and the prior import per account; highlight the biggest drivers (bills paid, large transfers, large new charges).
+
+### Tier 2 — UX / Insight Improvements
+
+Bigger product-shape changes once Tier 1 is stable.
+
+5. **Account grouping.** Group accounts on Bank Accounts / Overview by type (Checking / Savings / etc.) and optional user-defined groups. UI only; canonical sheets unchanged.
+6. **Scenario / simulation mode.** Read-only "what if" overlay (extra debt payment, paused income, larger expense) that runs against a copy of the planner inputs without writing back.
+7. **Historical trends (lightweight).** Per-account balance history line / sparkline derived from the year-block month columns already on `INPUT - Bank Accounts`. No new storage.
+
+### Tier 3 — Advanced / AI / Future
+
+Reserved for after Tier 1 + Tier 2 ship cleanly. All items in this tier are strictly read-only and must respect the same constraints as the Chat-based Finance Assistant subsection below.
+
+8. **Chat-based Finance Assistant.** Natural-language read-only assistant. See the **Chat-based Finance Assistant** subsection below for the full constraints and phased rollout — not duplicated here.
+9. **Explain my finances (narrative insights).** Plain-language summary of the current state (e.g. *"You're safe because cash covers bills through next month"*, *"Cash dropped because of the property-tax payment on May 1"*). Generated from existing planner outputs; strictly read-only.
+10. **Root-cause queries.** Targeted answers to questions like *"Why is my balance lower?"* by diffing recent Cash Flow + Activity rows against the prior reference point. Read-only, deterministic in v1.
+11. **Guided suggestions.** Recommend next actions (e.g. *"Move $X from Savings to Checking"*) without auto-execution. Quick Add stays the only write path.
+
+### Chat-based Finance Assistant
+
+Goal: let users ask natural-language questions about their finances directly inside the app (e.g. *"How much cash do I have available?"*, *"What bills are due this month?"*, *"What are my account balances?"*) without leaving the dashboard.
+
+**Hard constraints (apply to every phase)**
+
+- **Strict read-only.** The assistant must never write or modify financial data, never mutate any `INPUT - *` / `SYS - *` / `LOG - *` sheet, and never bypass the existing Quick Add / Setup / Review write paths.
+- **Reuses existing data sources only.** `SYS - Accounts`, `INPUT - Bank Accounts`, Cash Flow / Bills, planner outputs. No new sheets, no shadow stores, no caching that can drift from the canonical workbook.
+- **Tool-based access only (no raw spreadsheet exposure).** When AI is involved, the model must talk to a curated set of read helpers (the same ones the dashboard reads from) — never receive raw sheet content as context.
+- **Respect privacy and cost.** Any external API call must be opt-in, scoped, and rate-limited; no PII / account numbers / balances may leave the workbook without an explicit design + privacy pass.
+
+**Phased approach** (each phase ships standalone; later phases can be skipped without breaking earlier ones)
+
+1. **Phase 1 — Deterministic queries (no AI).** Predefined / keyword-based questions wired to the existing read helpers — e.g. `getCashToUse`, `getBillsDueFromCashFlowForDashboard`, `getNextActionsData`, `getRollingDebtPayoffPlan`, `getDashboardSnapshot`. Demonstrates the surface end-to-end with zero external dependencies and zero LLM cost.
+2. **Phase 2 — Natural-language parser.** Map free-text input → the known queries from Phase 1. Still no external API; the parser can live entirely in Apps Script (regex / keyword extraction) or in a small bundled NLU module. Same read-only surface.
+3. **Phase 3 — AI-assisted chat (optional).** External LLM (e.g. OpenAI) called from a small backend / Apps Script proxy holding the API key in `PropertiesService.getScriptProperties()` — never on the client. Strictly **tool-based**: the model issues calls to the curated read helpers; it does **not** see raw sheet content. Still strictly read-only and still subject to all of the constraints above.
+
+**Sequencing / non-goals**
+
+- **Lower priority than Bank Import + Bills / planner / Cash Flow accuracy.** Do not pull this in while those tracks are open.
+- **No money-movement actions.** Even with future write paths, the assistant must not be the surface that initiates a payment, status change, or planner mutation. Quick Add stays the only payment path.
+- **No automatic posting.** The assistant does not append rows to Cash Flow / Activity / Bills / Upcoming.
+- **Privacy-by-default.** Phase 3 requires its own product + privacy review before implementation begins, including a written list of fields permitted to leave the workbook (none of which can be account numbers or raw balances tied to identity).
+
+### Product Direction Ideas (optional)
+
+Captured for future product conversations; not committed work and not slotted into a tier.
+
+12. **Financial state indicator.** Single-glance label on Overview — *Stable / Tight / Risk* — backed by the same signals as the Tier 1 Cash safety alerts.
+13. **Weekly snapshot email.** Opt-in weekly summary covering balances, bills due, and any active alerts. Reuses the planner-email multi-recipient + debounce pipeline.
+14. **Account health score.** Per-account composite score from volatility, buffer usage, and trend direction. Visualized as a small badge on Bank Accounts.
+
+---
+
 ## Bank Import — status & resume plan
 
 Captured so work can resume cleanly from a pause. This section is deliberately self-contained — read it first when returning to Bank Import work.
