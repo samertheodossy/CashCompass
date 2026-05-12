@@ -1445,6 +1445,16 @@ function applyStagedBankAccountBalance(payload) {
     // cell value for the activity log.
     var bankSheet = getSheet_(ss, 'BANK_ACCOUNTS');
     var year = balanceAsOfDate.getFullYear();
+    // Safety net: if the linked account exists on SYS - Accounts and
+    // the year block exists on INPUT - Bank Accounts but there is no
+    // per-account row inside it yet, insert a blank row so the
+    // subsequent month-cell write has somewhere to land. Idempotent:
+    // when the row already exists this is a no-op. Year block missing
+    // is intentionally left to the pre-check so the existing friendly
+    // refusal still fires.
+    var autoCreatedInputRow = bankImportEnsureInputRowForApply_(
+      bankSheet, linkedAccount.accountName, year
+    );
     var preCheck = bankImportPreCheckMonthCell_(bankSheet, linkedAccount.accountName, year, balanceAsOfDate);
     if (!preCheck.ok) {
       throw new Error(preCheck.error);
@@ -1468,7 +1478,8 @@ function applyStagedBankAccountBalance(payload) {
       previousDisplay: preCheck.previousDisplay,
       newRaw: newRaw,
       pendingReasonAtApply: reasonKey,
-      linkStateAtApply: stagedRow.status
+      linkStateAtApply: stagedRow.status,
+      autoCreatedInputRow: !!autoCreatedInputRow
     }, fingerprint);
 
     return {
@@ -1477,6 +1488,9 @@ function applyStagedBankAccountBalance(payload) {
         'Applied ' + fmtCurrency_(newRaw) +
         ' to ' + linkedAccount.accountName +
         ' (' + monthLabel + ').' +
+        (autoCreatedInputRow
+          ? ' Created INPUT - Bank Accounts row for ' + year + '.'
+          : '') +
         (preCheck.previousDisplay
           ? ' Previous: ' + preCheck.previousDisplay + '.'
           : ''),
@@ -1484,7 +1498,8 @@ function applyStagedBankAccountBalance(payload) {
       stagingId: stagingId,
       monthLabel: monthLabel,
       previousRaw: preCheck.previousRaw,
-      newRaw: newRaw
+      newRaw: newRaw,
+      autoCreatedInputRow: !!autoCreatedInputRow
     };
   } finally {
     try { lock.releaseLock(); } catch (_e) { /* best-effort */ }
@@ -1537,6 +1552,63 @@ function bankImportPreCheckMonthCell_(bankSheet, accountName, year, balanceAsOfD
   }
 
   return { ok: true, previousRaw: prevRaw, previousDisplay: prevDisplay };
+}
+
+/**
+ * Bank Import Step 2d safety net.
+ *
+ * When Apply targets a SYS - Accounts row that has been linked
+ * but the INPUT - Bank Accounts year block exists with no row for
+ * this account, insert a blank account row (same path as the
+ * manual Add Bank Account flow) so the subsequent month-cell write
+ * has somewhere to land.
+ *
+ * Strict scope:
+ *  - Only acts when both block exists AND row missing.
+ *  - Year block missing → returns false, letting
+ *    bankImportPreCheckMonthCell_ raise the existing friendly
+ *    "no year block" refusal. We do NOT auto-create year blocks.
+ *  - Never creates a SYS - Accounts row.
+ *  - Never writes a balance, Available Now, Min Buffer, Use
+ *    Policy, Priority, or any other-month cell. insertNewBank-
+ *    AccountHistoryRow_ stamps only Account Name on column A and
+ *    Active=Yes on the Active column; everything else is cleared.
+ *  - Idempotent: re-calling once the row exists is a no-op.
+ *  - Defensive: any throw inside getBankAccountsYearBlock_,
+ *    findBankAccountRowInBlock_, or insertNewBankAccountHistoryRow_
+ *    collapses to false so Apply falls through to the same
+ *    friendly error paths it had before.
+ *
+ * @returns {boolean} true iff a new row was just inserted.
+ */
+function bankImportEnsureInputRowForApply_(bankSheet, accountName, year) {
+  if (!bankSheet) return false;
+  var name = String(accountName || '').trim();
+  if (!name) return false;
+  if (!isFinite(year) || year <= 0) return false;
+
+  var block;
+  try {
+    block = getBankAccountsYearBlock_(bankSheet, year);
+  } catch (_blockErr) {
+    return false;
+  }
+  if (!block) return false;
+
+  var rowNum;
+  try {
+    rowNum = findBankAccountRowInBlock_(bankSheet, block, name);
+  } catch (_findErr) {
+    return false;
+  }
+  if (rowNum !== -1) return false;
+
+  try {
+    insertNewBankAccountHistoryRow_(bankSheet, block, name);
+    return true;
+  } catch (_insertErr) {
+    return false;
+  }
 }
 
 /**
