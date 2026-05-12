@@ -787,7 +787,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         </div>
 
         <div id="bills_add_wrap" class="bills-add-wrap" style="display:none;margin:0 0 20px 0;padding:14px 16px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;">
-          <div class="card-title" style="margin-top:0;">Add a recurring bill</div>
+          <div id="bills_form_title" class="card-title" style="margin-top:0;">Add a recurring bill</div>
           <p class="muted" style="margin:0 0 10px 0;">Required fields are marked with <span aria-label="required" style="color:#b91c1c;">*</span>.</p>
           <div class="grid-2">
             <div>
@@ -840,8 +840,8 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                 <option value="Yes">Yes</option>
               </select>
               <div style="display:flex;gap:8px;margin-top:12px;">
-                <button type="button" class="small-btn primary" onclick="submitNewBill()">Save bill</button>
-                <button type="button" class="small-btn" onclick="closeBillsAddForm()">Cancel</button>
+                <button type="button" id="bills_form_save_btn" class="small-btn primary" onclick="submitBillsForm()">Save bill</button>
+                <button type="button" id="bills_form_cancel_btn" class="small-btn" onclick="cancelBillsForm()">Cancel</button>
               </div>
             </div>
           </div>

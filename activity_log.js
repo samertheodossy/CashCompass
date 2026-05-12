@@ -1,5 +1,5 @@
 /**
- * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_deactivate, house expense, house_add, house_value_update, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_update, bank_account_deactivate, investment_add, investment_update, investment_deactivate, debt_add, debt_deactivate, debt_update, income_add, income_deactivate, planner_email_deferred, planner_email_sent, planner_email_invalid_recipient, …). Rows can be removed from the web UI for mistaken log lines only.
+ * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_update, bill_deactivate, house expense, house_add, house_value_update, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_update, bank_account_deactivate, investment_add, investment_update, investment_deactivate, debt_add, debt_deactivate, debt_update, income_add, income_deactivate, planner_email_deferred, planner_email_sent, planner_email_invalid_recipient, …). Rows can be removed from the web UI for mistaken log lines only.
  * Complements OUT - History (planner-run snapshots). Tab: LOG - Activity.
  */
 
@@ -405,6 +405,7 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (etEarly === 'bank_account_update') return 'Bank';
   if (etEarly === 'bank_account_deactivate') return 'Bank';
   if (etEarly === 'bill_add') return 'Bill';
+  if (etEarly === 'bill_update') return 'Bill';
   if (etEarly === 'bill_deactivate') return 'Bill';
   if (etEarly === 'house_add') return 'House Expenses';
   if (etEarly === 'house_value_update') return 'House Expenses';
@@ -489,6 +490,13 @@ function activityLogActionLabel_(eventType, detailsJson) {
   var et = String(eventType || '').trim().toLowerCase();
   switch (et) {
     case 'bill_add': return 'Bill added';
+    // bill_update is non-monetary (Amount renders "—") because a
+    // field edit on a tracked bill doesn't move money. The action
+    // label inlines the field name + new value for single-field
+    // edits, or "Updated N fields" for multi-field edits — see
+    // billUpdateActionLabel_ for formatting rules.
+    case 'bill_update':
+      return billUpdateActionLabel_(detailsJson);
     case 'bill_deactivate': return 'Tracking stopped';
     case 'bill_skip': return 'Bill skipped';
     case 'bill_autopay': return 'Bill autopay';
@@ -762,6 +770,101 @@ function upcomingUpdateFieldDisplayName_(key) {
 }
 
 /**
+ * Build the bill_update action label from the row's details JSON
+ * written by bills.js::updateTrackedBillFromDashboard.
+ *
+ * Mirrors upcomingUpdateActionLabel_'s shape so single-field edits
+ * inline the new value while multi-field edits collapse to a
+ * compact count:
+ *
+ *   "Updated Default Amount to $126.00"
+ *   "Updated Due Day to 15"
+ *   "Updated Autopay to Yes"
+ *   "Updated Payee"            (no inlined value — names get long)
+ *   "Updated 3 fields"         (multi-field)
+ *   "Updated bill"             (legacy / malformed details)
+ *
+ * Defensive: a missing/partial details blob still produces a clean
+ * label rather than throwing.
+ */
+function billUpdateActionLabel_(detailsJson) {
+  var fallback = 'Updated bill';
+  var raw = String(detailsJson || '').trim();
+  if (!raw) return fallback;
+
+  var d;
+  try {
+    d = JSON.parse(raw);
+  } catch (_e) {
+    return fallback;
+  }
+  if (!d || typeof d !== 'object') return fallback;
+
+  var changed = (d.changedFields && d.changedFields.length) ? d.changedFields : [];
+  if (!changed.length) return fallback;
+
+  if (changed.length > 1) {
+    return 'Updated ' + changed.length + ' fields';
+  }
+
+  var field = String(changed[0] || '').trim();
+  if (!field) return fallback;
+
+  // Read `new` defensively — keyword in some contexts so always go
+  // through bracket access.
+  var newVals = (d['new'] && typeof d['new'] === 'object') ? d['new'] : null;
+  var newVal = newVals ? newVals[field] : null;
+
+  if (field === 'defaultAmount') {
+    var n = activityLogAsFiniteNumber_(newVal);
+    return n !== null
+      ? 'Updated Default Amount to ' + activityLogFmtMoney_(n)
+      : 'Updated Default Amount';
+  }
+  if (field === 'dueDay') {
+    var i = activityLogAsFiniteNumber_(newVal);
+    return i !== null
+      ? 'Updated Due Day to ' + String(Math.trunc(i))
+      : 'Updated Due Day';
+  }
+
+  var displayName = billUpdateFieldDisplayName_(field);
+  // Payee renames can be long ("Acme Pest Control of Northern …") so
+  // we deliberately suppress the " to <value>" suffix; the previous
+  // and new values live in the details JSON for audit.
+  if (field === 'payee' || field === 'notes') {
+    return 'Updated ' + displayName;
+  }
+
+  var asString = '';
+  if (newVal !== null && typeof newVal !== 'undefined' && newVal !== '') {
+    asString = String(newVal).trim();
+  }
+  return asString ? 'Updated ' + displayName + ' to ' + asString : 'Updated ' + displayName;
+}
+
+/**
+ * Map a bill_update field key (the JSON keys written by
+ * updateTrackedBillFromDashboard) to the user-facing display name
+ * shown in the action label. Unknown keys fall through to the raw
+ * key so a future field added without a label still renders.
+ */
+function billUpdateFieldDisplayName_(key) {
+  switch (String(key || '').trim()) {
+    case 'payee': return 'Payee';
+    case 'defaultAmount': return 'Default Amount';
+    case 'dueDay': return 'Due Day';
+    case 'frequency': return 'Frequency';
+    case 'paymentSource': return 'Payment Source';
+    case 'category': return 'Category';
+    case 'autopay': return 'Autopay';
+    case 'varies': return 'Varies';
+    case 'notes': return 'Notes';
+    default: return key || 'Field';
+  }
+}
+
+/**
  * Build the debt_update action label from the row's details JSON written
  * by debts.js::updateDebtField. Uses fieldName + fieldKind + newRaw (with
  * newDisplay as a fallback) to format the new value with the right units.
@@ -959,6 +1062,12 @@ function activityLogIsNonMonetaryEvent_(eventType) {
   // both as "—" prevents double-counting the payment dollars.
   return (
     et === 'bill_deactivate' ||
+    // bill_update is non-monetary — a field edit on a tracked bill
+    // (Payee / Default Amount / Due Day / etc.) doesn't move money.
+    // The action label inlines the field + new value so the
+    // Activity row stays informative without filling the Amount
+    // column with a misleading $0.00. See billUpdateActionLabel_.
+    et === 'bill_update' ||
     et === 'bank_account_deactivate' ||
     // bank_account_update / house_value_update / investment_update all
     // log a snapshot edit, not a money movement. Rendering the dollar

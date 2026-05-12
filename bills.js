@@ -9,14 +9,18 @@
  * v1 scope (per ONBOARDING_AND_INPUT_STRATEGY.md):
  *   - Add
  *   - Stop tracking (soft delete via Active=No)
+ *   - Edit (in-place field updates on the selected active row;
+ *     never moves the row, never touches Cash Flow rows generated
+ *     at Add time)
  *   - Distinct-category suggestions for the Add form
  *
  * Explicitly out of scope for v1:
- *   - Edit
  *   - Hard delete
  *   - Onboarding / Overview integration
  *   - Cash Flow auto-row creation
  *   - Alias mapping repair
+ *   - Re-sorting INPUT - Bills on Due Day edit (Manage table sorts
+ *     client-side; sheet stays in place until the next Add)
  */
 
 var BILLS_SUPPORTED_FREQUENCY_LABELS_ = {
@@ -400,6 +404,350 @@ function addBillFromDashboard(payload) {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Edit tracked bill (in-place update)                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * In-place edit of a single active INPUT - Bills row. Mirrors the
+ * Add bill validation contract so the same form HTML can drive both
+ * code paths from the dashboard.
+ *
+ * Bounded scope (v1):
+ *  - Updates ONLY the columns whose value actually changed.
+ *  - Never moves the row (no re-sort by Due Day in this step — the
+ *    Manage table already sorts client-side, so display order stays
+ *    correct).
+ *  - Never touches Active / Start Month (lifecycle is owned by Stop
+ *    tracking; Start Month is a v1 add-only field).
+ *  - Never touches Cash Flow rows generated at Add time, even on a
+ *    Payee rename (existing history is left intact by design).
+ *  - Refuses inactive bills — Stop tracking is the canonical
+ *    lifecycle path; re-adding is the way to revive history.
+ *  - No-op save (no field actually changed) returns
+ *    { ok:true, message:'No changes.' } WITHOUT writing, logging, or
+ *    touching dashboard freshness state.
+ *
+ * @param {Object} payload
+ *   Required:
+ *     - sheetRow       {number}  1-based row index in INPUT - Bills.
+ *     - expectedPayee  {string}  current Payee on that row; used as a
+ *                                stale-payload guard so a row-shift
+ *                                between load and save cannot
+ *                                clobber the wrong bill.
+ *     - payee          {string}  new Payee value (may equal expected).
+ *     - dueDay         {number}  integer 1..31.
+ *     - frequency      {string}  one of the supported labels.
+ *     - paymentSource  {string}  'CASH' or 'CREDIT_CARD'.
+ *     - category       {string}  non-empty after trim.
+ *   Optional (treated as "no change" if header missing):
+ *     - defaultAmount  {number|string} non-negative; blank → 0.
+ *     - notes          {string}  trimmed; ≤ 500 chars.
+ *     - autopay        {string}  'Yes' | 'No' (default 'No').
+ *     - varies         {string}  'Yes' | 'No' (default 'No').
+ *
+ * @returns {{ok:boolean, message:string, payee:string, changedFields:string[]}}
+ */
+function updateTrackedBillFromDashboard(payload) {
+  validateRequired_(payload, [
+    'sheetRow', 'expectedPayee', 'payee',
+    'dueDay', 'frequency', 'paymentSource', 'category'
+  ]);
+
+  var targetRow = Math.round(Number(payload.sheetRow));
+  if (!isFinite(targetRow) || targetRow < 2) {
+    throw new Error('Invalid bill row reference.');
+  }
+
+  var expectedPayee = String(payload.expectedPayee || '').trim();
+  if (!expectedPayee) throw new Error('Expected payee is required.');
+
+  // ---- Validate new values using Add's rules (parity is intentional). ----
+
+  var payee = String(payload.payee || '').trim();
+  if (!payee) throw new Error('Payee is required.');
+  if (payee.length > 200) throw new Error('Payee is too long (max 200 characters).');
+
+  var dueDayNum = Math.round(Number(payload.dueDay));
+  if (!isFinite(dueDayNum) || dueDayNum < 1 || dueDayNum > 31) {
+    throw new Error('Due Day must be an integer from 1 to 31.');
+  }
+
+  var frequencyRaw = String(payload.frequency || '').trim();
+  var frequencyLower = frequencyRaw.toLowerCase().replace(/\s+/g, ' ');
+  if (!BILLS_ACCEPTED_FREQUENCY_RAW_[frequencyLower]) {
+    throw new Error(
+      'Frequency must be Monthly, Biweekly, Weekly, Bimonthly, Quarterly, ' +
+      'Semi-annually, or Yearly.'
+    );
+  }
+  var frequencyLabel = BILLS_SUPPORTED_FREQUENCY_LABELS_[normalizeFrequency_(frequencyRaw)];
+  if (!frequencyLabel) {
+    throw new Error('Frequency is not supported.');
+  }
+
+  var paymentSourceNorm = String(payload.paymentSource || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
+  if (paymentSourceNorm !== 'CASH' && paymentSourceNorm !== 'CREDIT_CARD') {
+    throw new Error('Payment Source must be CASH or CREDIT_CARD.');
+  }
+
+  var category = String(payload.category || '').trim();
+  if (!category) throw new Error('Category is required.');
+  if (category.length > 200) category = category.slice(0, 200);
+
+  var notes = String(payload.notes || '').trim();
+  if (notes.length > 500) notes = notes.slice(0, 500);
+
+  var defaultAmount = 0;
+  var defaultAmountRaw = payload.defaultAmount;
+  var hasAmount =
+    defaultAmountRaw !== undefined &&
+    defaultAmountRaw !== null &&
+    String(defaultAmountRaw).trim() !== '';
+  if (hasAmount) {
+    var parsedAmount = toNumber_(defaultAmountRaw);
+    if (!isFinite(parsedAmount)) {
+      throw new Error('Default Amount must be a valid number.');
+    }
+    defaultAmount = round2_(Math.abs(parsedAmount));
+  }
+
+  var autopayLabel = billsNormalizeYesNoLabel_(payload.autopay, 'No');
+  var variesLabel = billsNormalizeYesNoLabel_(payload.varies, 'No');
+
+  // ---- Open sheet + verify the row hasn't shifted under us. ----
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = getSheet_(ss, 'BILLS');
+
+  if (targetRow > sheet.getLastRow()) {
+    throw new Error('Bill row is out of range. The sheet may have been edited; please refresh.');
+  }
+
+  var lastCol = sheet.getLastColumn();
+  var headerDisplay = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0] || [];
+  if (!headerDisplay || !headerDisplay.length) {
+    throw new Error('Bills sheet has no header row.');
+  }
+
+  var headerMap = {};
+  for (var i = 0; i < headerDisplay.length; i++) {
+    var label = String(headerDisplay[i] || '').trim();
+    if (label) headerMap[label.toLowerCase()] = i;
+  }
+  function headerIndex_(name) {
+    var key = String(name || '').trim().toLowerCase();
+    return Object.prototype.hasOwnProperty.call(headerMap, key) ? headerMap[key] : -1;
+  }
+
+  // Same contract Add enforces — Payee / Due Day / Default Amount / Active
+  // are mandatory column anchors. We deliberately do NOT self-heal the
+  // optional columns here (Add owns that responsibility on first write).
+  // Optional columns that genuinely don't exist are treated as "no
+  // change" so editing an old-template workbook still saves the
+  // changes the user can actually see.
+  var requiredHeaders = ['Payee', 'Due Day', 'Default Amount', 'Active'];
+  for (var h = 0; h < requiredHeaders.length; h++) {
+    if (headerIndex_(requiredHeaders[h]) === -1) {
+      throw new Error('Bills sheet is missing required header: ' + requiredHeaders[h] + '.');
+    }
+  }
+
+  // Read the row twice: raw (numbers stay numbers) for numeric
+  // comparison + display (formatted) for the stale-payload check.
+  var rowRaw = sheet.getRange(targetRow, 1, 1, lastCol).getValues()[0] || [];
+  var rowDisplay = sheet.getRange(targetRow, 1, 1, lastCol).getDisplayValues()[0] || [];
+
+  var actualPayee = String(rowDisplay[headerIndex_('Payee')] || '').trim();
+  if (!actualPayee) {
+    throw new Error('No bill found on the selected row; please refresh.');
+  }
+  if (actualPayee !== expectedPayee) {
+    throw new Error(
+      'Bill has moved on the sheet (expected "' + expectedPayee +
+      '", found "' + actualPayee + '"). Please refresh and try again.'
+    );
+  }
+
+  var activeIdx = headerIndex_('Active');
+  var currentActive = activeIdx === -1 ? 'yes' : normalizeYesNo_(rowDisplay[activeIdx]);
+  if (currentActive === 'no') {
+    throw new Error('Bill is inactive. Use Add bill to re-add it.');
+  }
+
+  // ---- Build a per-field diff against the row's current sheet values. ----
+
+  // Each entry is { field, header, kind, currentVal, newVal, currentDisplay, newDisplay }
+  // - kind 'text'    → trimmed string equality.
+  // - kind 'integer' → numeric equality after Math.round(Number()).
+  // - kind 'currency'→ numeric equality after round2_(Math.abs(toNumber_())).
+  // - kind 'yesno'   → normalized 'Yes'/'No' label equality.
+  function readTextCell_(header) {
+    var idx = headerIndex_(header);
+    if (idx === -1) return null;
+    return String(rowDisplay[idx] == null ? '' : rowDisplay[idx]).trim();
+  }
+  function readIntCell_(header) {
+    var idx = headerIndex_(header);
+    if (idx === -1) return null;
+    var raw = rowRaw[idx];
+    if (raw === '' || raw === null || raw === undefined) return null;
+    var n = Number(raw);
+    return isFinite(n) ? Math.round(n) : null;
+  }
+  function readCurrencyCell_(header) {
+    var idx = headerIndex_(header);
+    if (idx === -1) return null;
+    var raw = rowRaw[idx];
+    if (raw === '' || raw === null || raw === undefined) return 0;
+    var n = toNumber_(raw);
+    return isFinite(n) ? round2_(Math.abs(n)) : 0;
+  }
+  function readYesNoCell_(header, fallback) {
+    var idx = headerIndex_(header);
+    if (idx === -1) return null;
+    return billsNormalizeYesNoLabel_(rowDisplay[idx], fallback || 'No');
+  }
+
+  var changedFields = [];
+  var oldValues = {};
+  var newValues = {};
+
+  function recordChange_(field, header, newVal, currentDisplay, newDisplay) {
+    var idx = headerIndex_(header);
+    if (idx === -1) return; // optional column missing → silently skip.
+    changedFields.push(field);
+    oldValues[field] = currentDisplay;
+    newValues[field] = newDisplay;
+    sheet.getRange(targetRow, idx + 1).setValue(newVal);
+  }
+
+  // Payee
+  if (payee !== actualPayee) {
+    recordChange_('payee', 'Payee', payee, actualPayee, payee);
+  }
+
+  // Due Day (numeric)
+  var currentDueDay = readIntCell_('Due Day');
+  if (currentDueDay !== dueDayNum) {
+    recordChange_(
+      'dueDay', 'Due Day',
+      dueDayNum,
+      currentDueDay === null ? '' : String(currentDueDay),
+      String(dueDayNum)
+    );
+  }
+
+  // Frequency (text label)
+  var currentFrequency = readTextCell_('Frequency');
+  if (currentFrequency !== null && currentFrequency !== frequencyLabel) {
+    recordChange_('frequency', 'Frequency', frequencyLabel, currentFrequency, frequencyLabel);
+  }
+
+  // Payment Source (text label, uppercased)
+  var currentPaymentSource = readTextCell_('Payment Source');
+  if (currentPaymentSource !== null && currentPaymentSource !== paymentSourceNorm) {
+    recordChange_(
+      'paymentSource', 'Payment Source',
+      paymentSourceNorm, currentPaymentSource, paymentSourceNorm
+    );
+  }
+
+  // Category (text)
+  var currentCategory = readTextCell_('Category');
+  if (currentCategory !== null && currentCategory !== category) {
+    recordChange_('category', 'Category', category, currentCategory, category);
+  }
+
+  // Default Amount (currency)
+  var currentDefaultAmount = readCurrencyCell_('Default Amount');
+  if (currentDefaultAmount !== null && currentDefaultAmount !== defaultAmount) {
+    recordChange_(
+      'defaultAmount', 'Default Amount',
+      defaultAmount,
+      String(currentDefaultAmount.toFixed(2)),
+      String(defaultAmount.toFixed(2))
+    );
+  }
+
+  // Autopay (Yes/No)
+  var currentAutopay = readYesNoCell_('Autopay', 'No');
+  if (currentAutopay !== null && currentAutopay !== autopayLabel) {
+    recordChange_('autopay', 'Autopay', autopayLabel, currentAutopay, autopayLabel);
+  }
+
+  // Varies (Yes/No)
+  var currentVaries = readYesNoCell_('Varies', 'No');
+  if (currentVaries !== null && currentVaries !== variesLabel) {
+    recordChange_('varies', 'Varies', variesLabel, currentVaries, variesLabel);
+  }
+
+  // Notes (text)
+  var currentNotes = readTextCell_('Notes');
+  if (currentNotes !== null && currentNotes !== notes) {
+    recordChange_('notes', 'Notes', notes, currentNotes, notes);
+  }
+
+  // ---- No-op save → return cleanly, no write/log/dirty marker. ----
+
+  if (!changedFields.length) {
+    return {
+      ok: true,
+      message: 'No changes.',
+      payee: actualPayee,
+      changedFields: []
+    };
+  }
+
+  // ---- Activity log + dashboard freshness. ----
+
+  try {
+    appendActivityLog_(ss, {
+      eventType: 'bill_update',
+      entryDate: Utilities.formatDate(
+        stripTime_(new Date()),
+        Session.getScriptTimeZone(),
+        'yyyy-MM-dd'
+      ),
+      amount: 0,
+      direction: '',
+      payee: payee, // new payee — keeps Activity readable on a Payee rename
+      category: category,
+      accountSource: paymentSourceNorm,
+      cashFlowSheet: '',
+      cashFlowMonth: '',
+      dedupeKey: '',
+      details: JSON.stringify({
+        detailsVersion: 1,
+        sheetRow: targetRow,
+        payeeBefore: actualPayee,
+        payeeAfter: payee,
+        changedFields: changedFields,
+        'old': oldValues,
+        'new': newValues
+      })
+    });
+  } catch (logErr) {
+    Logger.log('updateTrackedBillFromDashboard activity log: ' + logErr);
+  }
+
+  touchDashboardSourceUpdated_('bills');
+
+  var summary = changedFields.length === 1
+    ? '1 field updated.'
+    : changedFields.length + ' fields updated.';
+
+  return {
+    ok: true,
+    message: 'Bill updated. ' + summary,
+    payee: payee,
+    changedFields: changedFields
+  };
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Stop tracking (deactivate)                                                */
 /* -------------------------------------------------------------------------- */
 
@@ -577,6 +925,10 @@ function getBillCategoriesFromDashboard() {
  * Each row carries `inputBillsRow` (1-based sheet row) so the frontend's
  * Stop tracking action can target the exact row without a second lookup.
  *
+ * `notes` is included so the Manage Edit form can pre-fill the
+ * Notes field without a separate fetch — without it, opening Edit
+ * would silently clear an existing Notes cell on save.
+ *
  * @returns {Array<{
  *   inputBillsRow:number,
  *   payee:string,
@@ -586,7 +938,8 @@ function getBillCategoriesFromDashboard() {
  *   paymentSource:string,
  *   defaultAmount:number,
  *   autopay:string,
- *   varies:string
+ *   varies:string,
+ *   notes:string
  * }>}
  */
 function getActiveBillsForManagementFromDashboard() {
@@ -653,7 +1006,8 @@ function getActiveBillsForManagementFromDashboard() {
         : 'No',
       varies: idx.Varies !== undefined
         ? billsNormalizeYesNoLabel_(row[idx.Varies], 'No')
-        : 'No'
+        : 'No',
+      notes: idx.Notes !== undefined ? String(row[idx.Notes] || '').trim() : ''
     });
   }
 

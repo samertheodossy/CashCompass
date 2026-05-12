@@ -536,6 +536,12 @@ function renderActiveBillsList_(rows) {
         '<td>' + autopayStr + '</td>' +
         '<td>' + variesStr + '</td>' +
         '<td class="bills-manage-actions">' +
+          '<button class="small-btn bill-edit-btn" ' +
+            'title="Edit this bill" ' +
+            'onclick="openBillEditForm(\'' + escapeJs(key) + '\')" ' +
+            'style="margin-right:6px;">' +
+            'Edit' +
+          '</button>' +
           '<button class="small-btn bill-stop-tracking-btn" ' +
             'title="This bill will no longer appear, but remains in history" ' +
             'onclick="stopTrackingBillFromDashboard(\'' + escapeJs(key) + '\')">' +
@@ -617,6 +623,11 @@ function openBillsAddForm_() {
   const btn = document.getElementById('bills_add_toggle_btn');
   if (!wrap || !btn) return;
 
+  // Always land in Add mode when this entrypoint runs — covers the
+  // case where the user was halfway through an Edit, clicked the
+  // top + Add bill button, and now expects a clean Add form.
+  setBillsFormModeToAdd_();
+
   wrap.style.display = 'block';
   btn.setAttribute('aria-expanded', 'true');
   btn.textContent = 'Hide add bill form';
@@ -649,6 +660,10 @@ function closeBillsAddForm() {
     btn.setAttribute('aria-expanded', 'false');
     btn.textContent = '+ Add bill';
   }
+  // The Add form is shared with Edit mode; reset the title/save
+  // label and re-show Start Month / Active so the next open is a
+  // clean Add. Idempotent when we're already in Add mode.
+  setBillsFormModeToAdd_();
 }
 
 function resetBillsAddForm_() {
@@ -928,4 +943,344 @@ function submitNewBill() {
       setBillsStatus_((err.message || String(err)), true);
     })
     .addBillFromDashboard(payload);
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Edit bill (dual-mode reuse of the Add form)                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The Add bill form is reused as an Edit form for tracked bills.
+ * The single source of truth for which mode the form is currently in
+ * lives here. Add is the default — every code path that opens the
+ * form fresh routes through setBillsFormModeToAdd_ first.
+ *
+ * editing carries the original bill's sheet row + Payee so the
+ * backend can stale-check it on save; it's null in Add mode.
+ */
+var __billsFormMode = { mode: 'add', editing: null };
+
+function setBillsFormModeToAdd_() {
+  __billsFormMode = { mode: 'add', editing: null };
+  applyBillsFormModeUi_();
+}
+
+function setBillsFormModeToEdit_(editing) {
+  __billsFormMode = { mode: 'edit', editing: editing || null };
+  applyBillsFormModeUi_();
+}
+
+/**
+ * Reflect __billsFormMode in the shared form chrome — title text,
+ * primary save button label, and visibility of Start Month + Active
+ * (both are Add-only fields; Stop tracking is the canonical
+ * Active=No path).
+ */
+function applyBillsFormModeUi_() {
+  const isEdit = __billsFormMode.mode === 'edit';
+  const title = document.getElementById('bills_form_title');
+  if (title) {
+    title.textContent = isEdit ? 'Edit bill' : 'Add a recurring bill';
+  }
+  const saveBtn = document.getElementById('bills_form_save_btn');
+  if (saveBtn) {
+    saveBtn.textContent = isEdit ? 'Save changes' : 'Save bill';
+  }
+  const cancelBtn = document.getElementById('bills_form_cancel_btn');
+  if (cancelBtn) {
+    cancelBtn.textContent = isEdit ? 'Cancel edit' : 'Cancel';
+  }
+  setBillFieldVisibilityForEdit_('bills_add_start_month', isEdit);
+  setBillFieldVisibilityForEdit_('bills_add_active', isEdit);
+}
+
+/**
+ * Hide (in edit mode) or show (in add mode) the given input and its
+ * immediately preceding <label> sibling. Used only for Start Month
+ * and Active in v1 — both are intentionally not editable from the
+ * Manage view.
+ */
+function setBillFieldVisibilityForEdit_(inputId, hideForEdit) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  input.style.display = hideForEdit ? 'none' : '';
+  const prev = input.previousElementSibling;
+  if (prev && prev.tagName === 'LABEL') {
+    prev.style.display = hideForEdit ? 'none' : '';
+  }
+}
+
+/**
+ * Open the Add bill form in Edit mode and pre-fill it from the
+ * cached management row. The row was rendered with a key in
+ * __dashboardActiveBills so a stale UI never targets the wrong
+ * sheet row.
+ *
+ * v1 contract:
+ *  - Switches to the Manage view if needed (Edit only lives there).
+ *  - Pre-fills every editable field; the Category dropdown
+ *    populates async, so we install the value when it arrives.
+ *  - Hides Start Month + Active.
+ *  - Sets __billsFormMode.editing.payee = the bill's current Payee
+ *    for the backend's stale-payload check.
+ */
+function openBillEditForm(billKey) {
+  const store = window.__dashboardActiveBills || {};
+  const bill = store[billKey];
+
+  if (!bill) {
+    setBillsStatus_('Bill not found. Please refresh and try again.', true);
+    return;
+  }
+
+  const sheetRow = Number(bill.inputBillsRow);
+  if (!isFinite(sheetRow) || sheetRow < 2) {
+    setBillsStatus_('This bill cannot be edited from here.', true);
+    return;
+  }
+
+  if (typeof setBillsView === 'function') setBillsView('manage');
+
+  const wrap = document.getElementById('bills_add_wrap');
+  const toggleBtn = document.getElementById('bills_add_toggle_btn');
+  if (wrap) wrap.style.display = 'block';
+  if (toggleBtn) {
+    toggleBtn.setAttribute('aria-expanded', 'true');
+    toggleBtn.textContent = 'Hide edit bill form';
+  }
+
+  setBillsFormModeToEdit_({
+    sheetRow: sheetRow,
+    payee: bill.payee || ''
+  });
+
+  // Text + numeric + select fields all set via id. Defaults match
+  // the Add form's defaults so a missing field on the row reads as
+  // the same baseline a fresh Add would.
+  setInputValue_('bills_add_payee', bill.payee || '');
+  setInputValue_('bills_add_due_day', bill.dueDay === '' || bill.dueDay == null ? '' : String(bill.dueDay));
+  setSelectValue_('bills_add_frequency', bill.frequency || 'Monthly');
+  setSelectValue_('bills_add_payment_source', bill.paymentSource || 'CASH');
+  setSelectValue_('bills_add_autopay', bill.autopay || 'No');
+  setSelectValue_('bills_add_varies', bill.varies || 'No');
+  setInputValue_('bills_add_notes', bill.notes || '');
+
+  // Default Amount: pre-fill with the raw 2-decimal number so
+  // currencyBlur formats it identically to a brand-new entry. Blank
+  // when the bill has no default (Varies-style bills).
+  const amt = Number(bill.defaultAmount || 0);
+  const amtInput = document.getElementById('bills_add_default_amount');
+  if (amtInput) {
+    amtInput.value = amt > 0 ? amt.toFixed(2) : '';
+    try { if (typeof currencyBlur === 'function') currencyBlur('bills_add_default_amount'); } catch (_e) { /* ignore */ }
+  }
+
+  // Category dropdown population is async on first open. The helper
+  // installs the value when the option list arrives.
+  prefillBillCategoryForEdit_(bill.category || '');
+
+  // Focus the first editable field and scroll into view.
+  const payeeInput = document.getElementById('bills_add_payee');
+  if (payeeInput) {
+    try { payeeInput.focus(); } catch (_e) { /* ignore focus errors */ }
+  }
+  if (wrap && typeof wrap.scrollIntoView === 'function') {
+    try { wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (_e) { /* ignore */ }
+  }
+}
+
+function setInputValue_(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = value == null ? '' : String(value);
+}
+
+function setSelectValue_(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const want = String(value == null ? '' : value);
+  const matched = Array.prototype.some.call(el.options, function(o) { return o.value === want; });
+  el.value = matched ? want : (el.options[0] ? el.options[0].value : '');
+}
+
+/**
+ * Set the Category dropdown to `category`, loading the options
+ * asynchronously when the cache hasn't been warmed yet. Falls back
+ * to the __other__ sentinel + free-text input when the bill's
+ * stored category isn't present in the dropdown (covers historical
+ * categories no longer offered as suggestions, and "Other…" values
+ * the user entered manually on Add).
+ */
+function prefillBillCategoryForEdit_(category) {
+  const target = String(category == null ? '' : category).trim();
+
+  function applyCategory() {
+    const select = document.getElementById('bills_add_category');
+    const other = document.getElementById('bills_add_category_other');
+    if (!select) return;
+    const optExists = Array.prototype.some.call(select.options, function(o) {
+      return o.value === target;
+    });
+    if (optExists && target) {
+      select.value = target;
+      if (other) { other.style.display = 'none'; other.value = ''; }
+    } else if (target) {
+      select.value = '__other__';
+      if (other) {
+        other.style.display = '';
+        other.value = target;
+      }
+    } else {
+      select.value = '';
+      if (other) { other.style.display = 'none'; other.value = ''; }
+    }
+  }
+
+  if (window.__billsCategoryOptionsLoaded) {
+    applyCategory();
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(categories) {
+      let list = Array.isArray(categories) ? categories : [];
+      if (!list.length) list = BILL_ADD_CATEGORY_FALLBACK_OPTIONS_.slice();
+      populateBillCategoryOptions_(list);
+      window.__billsCategoryOptionsLoaded = true;
+      applyCategory();
+    })
+    .withFailureHandler(function() {
+      populateBillCategoryOptions_(BILL_ADD_CATEGORY_FALLBACK_OPTIONS_.slice());
+      window.__billsCategoryOptionsLoaded = true;
+      applyCategory();
+    })
+    .getBillCategoriesFromDashboard();
+}
+
+/**
+ * Replace the form's Save button onclick. Dispatches to the
+ * appropriate save path based on __billsFormMode.mode. Add path is
+ * unchanged from before — submitNewBill() still drives it.
+ */
+function submitBillsForm() {
+  if (__billsFormMode.mode === 'edit') {
+    submitBillEdit_();
+    return;
+  }
+  submitNewBill();
+}
+
+function cancelBillsForm() {
+  closeBillsAddForm();
+}
+
+function submitBillEdit_() {
+  const editing = __billsFormMode.editing || {};
+  const sheetRow = Number(editing.sheetRow);
+  const expectedPayee = String(editing.payee || '').trim();
+  if (!isFinite(sheetRow) || sheetRow < 2 || !expectedPayee) {
+    setBillsStatus_('This edit is missing its bill reference. Please refresh and try again.', true);
+    return;
+  }
+
+  const payee = (document.getElementById('bills_add_payee').value || '').trim();
+  const dueDayRaw = (document.getElementById('bills_add_due_day').value || '').trim();
+  const frequency = (document.getElementById('bills_add_frequency').value || '').trim();
+  const paymentSource = (document.getElementById('bills_add_payment_source').value || '').trim();
+  const defaultAmountRaw = document.getElementById('bills_add_default_amount').value;
+  const notes = (document.getElementById('bills_add_notes').value || '').trim();
+
+  const categorySelect = document.getElementById('bills_add_category');
+  const categoryOther = document.getElementById('bills_add_category_other');
+  const categoryChoice = (categorySelect && categorySelect.value) || '';
+  let category = '';
+  if (categoryChoice === '__other__') {
+    category = ((categoryOther && categoryOther.value) || '').trim();
+  } else {
+    category = categoryChoice.trim();
+  }
+
+  const autopay = (document.getElementById('bills_add_autopay').value || 'No').trim();
+  const varies = (document.getElementById('bills_add_varies').value || 'No').trim();
+
+  // Same validation rules the Add path runs — kept inline so we
+  // don't have to refactor submitNewBill into shared helpers.
+  if (!payee) {
+    setBillsStatus_('Payee is required.', true);
+    return;
+  }
+  const dueDayNum = Number(dueDayRaw);
+  if (!dueDayRaw || !isFinite(dueDayNum) || Math.floor(dueDayNum) !== dueDayNum || dueDayNum < 1 || dueDayNum > 31) {
+    setBillsStatus_('Due Day must be an integer from 1 to 31.', true);
+    return;
+  }
+  const validFrequencies = {
+    'Monthly': true, 'Biweekly': true, 'Weekly': true,
+    'Bimonthly': true, 'Quarterly': true, 'Semi-annually': true, 'Yearly': true
+  };
+  if (!validFrequencies[frequency]) {
+    setBillsStatus_('Pick a valid frequency.', true);
+    return;
+  }
+  if (paymentSource !== 'CASH' && paymentSource !== 'CREDIT_CARD') {
+    setBillsStatus_('Payment Source must be CASH or CREDIT_CARD.', true);
+    return;
+  }
+  if (!category) {
+    if (categoryChoice === '__other__') {
+      setBillsStatus_('Enter a category in the "Other…" field.', true);
+      if (categoryOther && typeof categoryOther.focus === 'function') {
+        try { categoryOther.focus(); } catch (_e) { /* ignore */ }
+      }
+    } else {
+      setBillsStatus_('Category is required.', true);
+      if (categorySelect && typeof categorySelect.focus === 'function') {
+        try { categorySelect.focus(); } catch (_e) { /* ignore */ }
+      }
+    }
+    return;
+  }
+
+  let defaultAmount = '';
+  if (String(defaultAmountRaw || '').trim() !== '') {
+    const n = toNumber(defaultAmountRaw);
+    if (!isFinite(n)) {
+      setBillsStatus_('Default Amount must be a valid number.', true);
+      return;
+    }
+    defaultAmount = Math.abs(n);
+  }
+
+  const payload = {
+    sheetRow: sheetRow,
+    expectedPayee: expectedPayee,
+    payee: payee,
+    dueDay: dueDayNum,
+    frequency: frequency,
+    paymentSource: paymentSource,
+    defaultAmount: defaultAmount,
+    category: category,
+    notes: notes,
+    autopay: autopay,
+    varies: varies
+  };
+
+  setStatusLoading('bills_due_status', 'Saving changes…');
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setBillsStatus_((res && res.message) || 'Bill updated.', false);
+      resetBillsAddForm_();
+      closeBillsAddForm();
+      // Invalidate the category cache so a freshly entered "Other…"
+      // category appears in the dropdown the next time the form
+      // opens — same invalidation Add does.
+      window.__billsCategoryOptionsLoaded = false;
+      loadDashboardActionSections();
+      if (typeof refreshSnapshot === 'function') refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setBillsStatus_((err.message || String(err)), true);
+    })
+    .updateTrackedBillFromDashboard(payload);
 }
