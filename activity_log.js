@@ -554,10 +554,13 @@ function activityLogActionLabel_(eventType, detailsJson) {
     // Flow" path removed), but historical rows still need a readable label.
     case 'upcoming_cashflow': return 'Pushed to cash flow';
     // Planner email lifecycle. All three are non-monetary (Amount = "—").
-    //   planner_email_deferred — a per-save background planner run
-    //     skipped the email and bumped the debounce queue. Many of
-    //     these accumulate during a heavy update session and resolve
-    //     into a single planner_email_sent row once the queue settles.
+    //   planner_email_deferred — LEGACY. New per-save defers no longer
+    //     write this row (a heavy month-start session was producing
+    //     20-50 redundant rows that crowded out real money events).
+    //     The deferred count is now rolled up onto the eventual
+    //     planner_email_sent row's action label as "(N saves
+    //     batched)". This case stays so existing historical rows in
+    //     LOG - Activity still render correctly.
     //   planner_email_sent — the actual email went out. Surfaces
     //     recipient count from the row's details JSON when present.
     //   planner_email_invalid_recipient — Profile had a value in
@@ -592,9 +595,14 @@ function activityLogActionLabel_(eventType, detailsJson) {
  * JSON. Surfaces recipient count when available so the user can tell
  * at a glance whether spouse was included.
  *
- *   "Email sent to 2 recipients"   — primary + spouse
- *   "Email sent to 1 recipient"    — primary only
- *   "Email sent"                   — legacy row with no details
+ *   "Email sent to 2 recipients"                          — primary + spouse, immediate send
+ *   "Email sent to 2 recipients (12 saves batched)"       — primary + spouse, after a debounced burst
+ *   "Email sent to 1 recipient"                           — primary only, immediate send
+ *   "Email sent to 1 recipient (1 save batched)"          — primary only, one save deferred then sent
+ *   "Email sent"                                          — legacy row with no details
+ *
+ * `deferredSaveCount` is omitted when 0 or missing so manual Run
+ * Planner runs (which always bypass debounce) read clean.
  */
 function plannerEmailSentActionLabel_(detailsJson) {
   var fallback = 'Email sent';
@@ -609,7 +617,12 @@ function plannerEmailSentActionLabel_(detailsJson) {
   if (!d || typeof d !== 'object') return fallback;
   var n = Number(d.recipientCount);
   if (!isFinite(n) || n <= 0) return fallback;
-  return 'Email sent to ' + n + ' recipient' + (n === 1 ? '' : 's');
+  var label = 'Email sent to ' + n + ' recipient' + (n === 1 ? '' : 's');
+  var deferred = Number(d.deferredSaveCount);
+  if (isFinite(deferred) && deferred >= 1) {
+    label += ' (' + deferred + ' save' + (deferred === 1 ? '' : 's') + ' batched)';
+  }
+  return label;
 }
 
 /**

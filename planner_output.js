@@ -987,13 +987,20 @@ function sendPlannerEmailIfConfigured_(summary, options) {
 
   if (emailMode === 'defer') {
     // Per-save background run. Defer the email — the debounce trigger
-    // will eventually settle and send. Bump LAST_SAVE_AT so the trigger
-    // knows there's pending work, then log the deferral so the user
-    // can see in Activity why no email went out.
+    // will eventually settle and send. Bump LAST_SAVE_AT so the
+    // trigger knows there's pending work, AND increment the deferred-
+    // save counter so the eventual planner_email_sent row can show
+    // (N saves batched). We deliberately do NOT write a
+    // planner_email_deferred activity row any more: a heavy update
+    // session was producing 20-50 redundant rows that crowded out
+    // real money events in the Activity ledger. The audit lives on
+    // the one row that matters — the actual send.
     if (typeof bumpDebouncePlannerLastSaveAt_ === 'function') {
       bumpDebouncePlannerLastSaveAt_();
     }
-    appendPlannerEmailDeferredActivity_(summary);
+    if (typeof bumpDebouncePlannerDeferredCount_ === 'function') {
+      bumpDebouncePlannerDeferredCount_();
+    }
     return;
   }
 
@@ -1151,21 +1158,20 @@ function readPlannerEmailRecipientsStrict_() {
 }
 
 /**
- * Append a `planner_email_deferred` row when a per-save background
- * run skipped the email. Fully defensive — failures here must never
- * break the save flow that triggered the planner.
+ * Deprecated: kept as a no-op so any unexpected caller (legacy code
+ * path, future refactor, etc.) doesn't crash. Per-save defers no
+ * longer write a `planner_email_deferred` row — the count is rolled
+ * up onto the eventual `planner_email_sent` row instead. See the
+ * defer branch in sendPlannerEmailIfConfigured_ and the
+ * `deferredSaveCount` field on the sent row's details JSON.
+ *
+ * Existing `planner_email_deferred` rows already on LOG - Activity
+ * are intentionally left untouched — `activity_log.js` still classifies
+ * them as Planner / "Email deferred" / non-monetary so historical rows
+ * remain readable in the Activity table.
  */
-function appendPlannerEmailDeferredActivity_(summary) {
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    if (typeof appendActivityLog_ !== 'function') return;
-    var monthHeader = (summary && summary.monthHeader) ? String(summary.monthHeader) : '';
-    appendActivityLog_(ss, {
-      eventType: 'planner_email_deferred',
-      payee: 'Planner',
-      details: JSON.stringify({ monthHeader: monthHeader, detailsVersion: 1 })
-    });
-  } catch (_e) { /* defensive */ }
+function appendPlannerEmailDeferredActivity_(_summary) {
+  // Intentionally a no-op. See doc comment above.
 }
 
 /**
@@ -1195,17 +1201,29 @@ function appendPlannerEmailInvalidRecipientActivity_(invalidFields) {
  * Append a `planner_email_sent` row when the email actually went out.
  * Stores the recipient *count* and the contributing field *names*
  * (e.g. ['Email', 'Spouse Email']) — never the addresses themselves.
+ *
+ * Also reads the deferred-save counter from DocumentProperties and
+ * stamps it onto the row as `deferredSaveCount` so the action label
+ * can render "(N saves batched)". The counter is read here (not
+ * reset); `markDebouncePlannerEmailSettled_` clears it right after
+ * this function returns. Manual Run Planner runs that had no prior
+ * defers see count 0 → no suffix on the label.
  */
 function appendPlannerEmailSentActivity_(resolved) {
   try {
     if (typeof appendActivityLog_ !== 'function') return;
     var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var deferredSaveCount = 0;
+    if (typeof readDebouncePlannerDeferredCount_ === 'function') {
+      deferredSaveCount = readDebouncePlannerDeferredCount_() || 0;
+    }
     appendActivityLog_(ss, {
       eventType: 'planner_email_sent',
       payee: 'Planner',
       details: JSON.stringify({
         recipientCount: (resolved && resolved.valid) ? resolved.valid.length : 0,
         recipientFields: (resolved && resolved.fields) ? resolved.fields.slice() : [],
+        deferredSaveCount: deferredSaveCount,
         detailsVersion: 1
       })
     });

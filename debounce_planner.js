@@ -12,8 +12,13 @@
  * - Each per-save background planner run is invoked with
  *   `runDebtPlanner({ emailMode: 'defer' })`. The planner still runs
  *   (so the snapshot stays fresh), but `sendPlannerEmailIfConfigured_`
- *   short-circuits: it bumps `LAST_SAVE_AT` in DocumentProperties,
- *   logs a `planner_email_deferred` row, and returns without sending.
+ *   short-circuits: it bumps `LAST_SAVE_AT` AND increments
+ *   `DEFERRED_COUNT` in DocumentProperties, then returns without
+ *   sending. No `planner_email_deferred` activity row is written —
+ *   the count is surfaced on the eventual `planner_email_sent` row
+ *   as `(N saves batched)` so the audit lives on the single row that
+ *   represents what the user actually cares about (the email that
+ *   went out).
  *
  * - A time-driven trigger (`debouncePlannerEmailRun`) fires every
  *   DEBOUNCE_TRIGGER_INTERVAL_MIN_ minutes. When it fires it checks
@@ -49,6 +54,10 @@ var DEBOUNCE_TRIGGER_INTERVAL_MIN_ = 5;
 // DocumentProperties keys.
 var DEBOUNCE_LAST_SAVE_KEY_ = 'PLANNER_DEBOUNCE_LAST_SAVE_AT';
 var DEBOUNCE_LAST_EMAIL_KEY_ = 'PLANNER_DEBOUNCE_LAST_EMAIL_AT';
+// Number of background saves deferred since the last settle. Read by
+// the eventual `planner_email_sent` row so the user sees how many
+// saves contributed. Cleared by markDebouncePlannerEmailSettled_.
+var DEBOUNCE_DEFERRED_COUNT_KEY_ = 'PLANNER_DEBOUNCE_DEFERRED_COUNT';
 
 // Trigger handler name. Must match the function name below exactly so
 // `ScriptApp.newTrigger(...)` can find it on the project. Time triggers
@@ -78,6 +87,49 @@ function bumpDebouncePlannerLastSaveAt_() {
 }
 
 /**
+ * Increments the deferred-save counter by one. Called from
+ * `sendPlannerEmailIfConfigured_` whenever a per-save background run
+ * arrives with `emailMode: 'defer'`. The counter is consumed (read
+ * + reset) when the eventual `planner_email_sent` row is written so
+ * the user sees how many saves were batched into the email.
+ *
+ * Not strictly atomic — two concurrent saves could read N then both
+ * write N+1, losing one count. Acceptable: this is telemetry, not
+ * money, and a 50-save session that reports 48 or 49 still tells
+ * exactly the story we want it to.
+ *
+ * Defensive: never throws.
+ */
+function bumpDebouncePlannerDeferredCount_() {
+  try {
+    var props = PropertiesService.getDocumentProperties();
+    var raw = props.getProperty(DEBOUNCE_DEFERRED_COUNT_KEY_);
+    var n = Number(raw);
+    if (!isFinite(n) || n < 0) n = 0;
+    props.setProperty(DEBOUNCE_DEFERRED_COUNT_KEY_, String(n + 1));
+  } catch (_e) { /* defensive */ }
+}
+
+/**
+ * Reads the deferred-save counter without resetting it (the reset is
+ * `markDebouncePlannerEmailSettled_`'s job). Returns 0 on any failure
+ * so the caller can render cleanly even when DocumentProperties is
+ * unavailable.
+ */
+function readDebouncePlannerDeferredCount_() {
+  try {
+    var raw = PropertiesService
+      .getDocumentProperties()
+      .getProperty(DEBOUNCE_DEFERRED_COUNT_KEY_);
+    var n = Number(raw);
+    if (!isFinite(n) || n < 0) return 0;
+    return Math.floor(n);
+  } catch (_e) {
+    return 0;
+  }
+}
+
+/**
  * Marks "we just settled the email queue" — called after any
  * `emailMode: 'send'` run finishes, regardless of whether an email
  * actually went out (e.g. the meaningfulness gate may have skipped
@@ -85,15 +137,17 @@ function bumpDebouncePlannerLastSaveAt_() {
  * test plan would have the trigger keep polling every 5 min forever
  * because `LAST_SAVE_AT > LAST_PLANNER_EMAIL_AT` would never resolve.
  *
- * We bump `LAST_PLANNER_EMAIL_AT` to now AND clear `LAST_SAVE_AT` so
- * the trigger considers the queue empty until the next save bumps it
- * again.
+ * We bump `LAST_PLANNER_EMAIL_AT` to now, clear `LAST_SAVE_AT`, and
+ * clear the deferred-save counter so a misconfigured recipient (or
+ * meaningfulness skip) doesn't accumulate a phantom count into the
+ * next valid send.
  */
 function markDebouncePlannerEmailSettled_() {
   try {
     var props = PropertiesService.getDocumentProperties();
     props.setProperty(DEBOUNCE_LAST_EMAIL_KEY_, String(Date.now()));
     props.deleteProperty(DEBOUNCE_LAST_SAVE_KEY_);
+    props.deleteProperty(DEBOUNCE_DEFERRED_COUNT_KEY_);
   } catch (_e) { /* defensive */ }
 }
 
