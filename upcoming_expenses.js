@@ -246,7 +246,7 @@ function addUpcomingExpense(payload) {
 
   return {
     ok: true,
-    message: 'Upcoming expense added.'
+    message: 'Upcoming expense added'
   };
 }
 
@@ -270,7 +270,7 @@ function dismissUpcomingExpense(id) {
   if (oldStatus === 'Dismissed' || oldStatus === 'Skipped') {
     return {
       ok: true,
-      message: 'Already dismissed.'
+      message: 'Already dismissed — no changes made'
     };
   }
 
@@ -278,7 +278,7 @@ function dismissUpcomingExpense(id) {
     // Paid items are already off the active board; nothing to dismiss.
     return {
       ok: true,
-      message: 'Already marked Paid — no dismiss needed.'
+      message: 'Already paid — no changes made'
     };
   }
 
@@ -290,7 +290,7 @@ function dismissUpcomingExpense(id) {
 
   return {
     ok: true,
-    message: 'Upcoming expense dismissed.'
+    message: 'Upcoming expense dismissed'
   };
 }
 
@@ -329,7 +329,7 @@ function applyPaymentToUpcomingExpense(id, paidAmount) {
     // itself still completes cleanly.
     return {
       ok: true,
-      message: 'Upcoming row is not active (' + currentStatus + ') — no balance change.',
+      message: 'Already ' + String(currentStatus || '').toLowerCase() + ' — no changes made',
       changed: false,
       fullyPaid: currentStatus === 'Paid',
       remainingAfter: round2_(toNumber_(row[colMap['Amount']]))
@@ -369,8 +369,8 @@ function applyPaymentToUpcomingExpense(id, paidAmount) {
   return {
     ok: true,
     message: fullyPaid
-      ? 'Upcoming expense fully paid.'
-      : 'Partial payment applied. Remaining: ' + fmtMoneyForMessage_(newRemaining),
+      ? 'Payment recorded — upcoming expense paid'
+      : 'Partial payment recorded — ' + fmtMoneyForMessage_(newRemaining) + ' remaining',
     changed: true,
     fullyPaid: fullyPaid,
     remainingAfter: newRemaining,
@@ -483,7 +483,7 @@ function updateUpcomingExpenseFromDashboard(payload) {
   if (changedFields.length === 0) {
     return {
       ok: true,
-      message: 'No changes.',
+      message: 'No changes made',
       changedFields: []
     };
   }
@@ -535,7 +535,7 @@ function updateUpcomingExpenseFromDashboard(payload) {
 
   return {
     ok: true,
-    message: 'Upcoming expense updated.',
+    message: 'Changes saved — upcoming expense updated',
     changedFields: changedFields
   };
 }

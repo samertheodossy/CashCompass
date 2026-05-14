@@ -360,7 +360,7 @@ function quickAddPayment(payload) {
   // fields the old multi-line dump surfaced (sheet name, month, before/after
   // values, flow source, debt balance delta) are still returned in
   // `preview` and `activitySnapshot` for any caller that needs them.
-  const message = 'Saved to Cash Flow.';
+  const message = 'Payment recorded — ' + monthLabel + ' cash flow updated';
 
   return {
     ok: true,

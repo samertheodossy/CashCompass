@@ -231,11 +231,11 @@ function editUpcoming(id) {
     if (String(rows[i].id || '').trim() === targetId) { match = rows[i]; break; }
   }
   if (!match) {
-    setStatus('upcoming_status', 'Upcoming expense not found — refresh and try again.', true);
+    setStatus('upcoming_status', 'Upcoming expense not found — please refresh', true);
     return;
   }
   if (String(match.status || '').trim() !== 'Planned') {
-    setStatus('upcoming_status', 'Only active (Planned) upcoming expenses can be edited.', true);
+    setStatus('upcoming_status', 'Only planned expenses can be edited', true);
     return;
   }
   enterUpcomingEditMode_(match);
@@ -306,7 +306,7 @@ function saveUpcomingExpense() {
   if (isEdit) {
     google.script.run
       .withSuccessHandler(function(res) {
-        setStatus('upcoming_status', (res && res.message) || 'Upcoming expense updated.', false);
+        setStatus('upcoming_status', (res && res.message) || 'Changes saved — upcoming expense updated', false);
         // Reset the form back to Add mode regardless of whether anything
         // actually changed (no-changes save returns ok with the "No
         // changes." message). The list reload below picks up any
@@ -327,7 +327,7 @@ function saveUpcomingExpense() {
 
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('upcoming_status', (res && res.message) || 'Upcoming expense added.', false);
+      setStatus('upcoming_status', (res && res.message) || 'Upcoming expense added', false);
       document.getElementById('up_name').value = '';
       document.getElementById('up_category').value = '';
       document.getElementById('up_payee').value = '';
@@ -372,7 +372,7 @@ function dismissUpcoming(id) {
   setStatusLoading('upcoming_status', 'Dismissing…');
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('upcoming_status', (res && res.message) || 'Dismissed.', false);
+      setStatus('upcoming_status', (res && res.message) || 'Upcoming expense dismissed', false);
       loadUpcomingSection();
       loadDashboardActionSections();
       refreshSnapshot();

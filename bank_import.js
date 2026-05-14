@@ -1092,10 +1092,10 @@ function addStagedBankAccountAsNew(payload) {
       linkExternalIdError: linkErr ? String(linkErr && linkErr.message || linkErr) : ''
     });
 
-    var msg = 'Account created from import. Click Apply balance to write the snapshot.';
+    var msg = 'Account linked — ready to apply balance';
     if (linkErr) {
-      msg += ' Note: could not stamp external id (' +
-        String(linkErr && linkErr.message || linkErr) + ').';
+      msg += ' — note: external id stamp failed (' +
+        String(linkErr && linkErr.message || linkErr) + ')';
     }
     return {
       ok: true,
@@ -1169,7 +1169,7 @@ function matchStagedBankAccountToExisting(payload) {
 
     return {
       ok: true,
-      message: 'Linked to ' + accountName + '. Click Apply balance to write the snapshot.',
+      message: 'Linked to ' + accountName + ' — ready to apply balance',
       accountName: accountName,
       stagingId: stagingId,
       linkState: BANK_IMPORT_STATUS_LINKED_MATCHED
@@ -1264,7 +1264,7 @@ function unlinkMatchedStagedBankAccount(payload) {
       ok: true,
       message:
         'Unlinked from ' + clearedAccountName +
-        '. Pick a different match, Add as new, or Ignore.',
+        ' — pick a new option',
       previousAccountName: clearedAccountName,
       stagingId: stagingId
     };
@@ -1325,7 +1325,7 @@ function ignoreStagedBankAccount(payload) {
 
     return {
       ok: true,
-      message: alreadyIgnored ? 'Already ignored. Marked staged row resolved.' : 'Ignored.',
+      message: alreadyIgnored ? 'Already ignored — resolved' : 'Import ignored',
       stagingId: stagingId
     };
   } finally {
@@ -1485,14 +1485,10 @@ function applyStagedBankAccountBalance(payload) {
     return {
       ok: true,
       message:
-        'Applied ' + fmtCurrency_(newRaw) +
-        ' to ' + linkedAccount.accountName +
-        ' (' + monthLabel + ').' +
-        (autoCreatedInputRow
-          ? ' Created INPUT - Bank Accounts row for ' + year + '.'
-          : '') +
+        'Balance applied — ' + linkedAccount.accountName +
+        ' ' + monthLabel + ' updated to ' + fmtCurrency_(newRaw) +
         (preCheck.previousDisplay
-          ? ' Previous: ' + preCheck.previousDisplay + '.'
+          ? ' (was ' + preCheck.previousDisplay + ')'
           : ''),
       accountName: linkedAccount.accountName,
       stagingId: stagingId,

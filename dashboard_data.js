@@ -32,7 +32,7 @@ function runPlannerAndRefreshDashboard() {
 
   return {
     ok: true,
-    message: 'Planner run complete.',
+    message: 'Plan refreshed — your outlook is updated',
     snapshot: snapshot
   };
 }
@@ -64,7 +64,7 @@ function runPlannerAndRefreshDashboardFromSave() {
 
   return {
     ok: true,
-    message: 'Planner run complete.',
+    message: 'Plan refreshed — your outlook is updated',
     snapshot: snapshot
   };
 }
@@ -2430,13 +2430,13 @@ function skipDashboardBill(skipKey) {
 
     return {
       ok: true,
-      message: 'Bill skipped for this cycle. Wrote 0 into Cash Flow.'
+      message: 'Bill skipped — recorded as $0 this month'
     };
   }
 
   return {
     ok: true,
-    message: 'Cash Flow already has a value, so it was left unchanged.'
+    message: 'Already paid — no changes made'
   };
 }
 

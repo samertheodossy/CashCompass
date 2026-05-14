@@ -695,7 +695,7 @@ function updateTrackedBillFromDashboard(payload) {
   if (!changedFields.length) {
     return {
       ok: true,
-      message: 'No changes.',
+      message: 'No changes made',
       payee: actualPayee,
       changedFields: []
     };
@@ -736,12 +736,12 @@ function updateTrackedBillFromDashboard(payload) {
   touchDashboardSourceUpdated_('bills');
 
   var summary = changedFields.length === 1
-    ? '1 field updated.'
-    : changedFields.length + ' fields updated.';
+    ? '1 field updated'
+    : changedFields.length + ' fields updated';
 
   return {
     ok: true,
-    message: 'Bill updated. ' + summary,
+    message: 'Changes saved — ' + summary,
     payee: payee,
     changedFields: changedFields
   };
@@ -815,7 +815,7 @@ function deactivateBillFromDashboard(payload) {
   if (currentActive === 'no') {
     return {
       ok: true,
-      message: 'Bill was already inactive.',
+      message: 'Already not tracked',
       payee: actualPayee
     };
   }
@@ -855,7 +855,7 @@ function deactivateBillFromDashboard(payload) {
 
   return {
     ok: true,
-    message: 'Stopped tracking "' + actualPayee + '".',
+    message: 'Tracking stopped — ' + actualPayee + ' removed from bills',
     payee: actualPayee
   };
 }

@@ -1243,7 +1243,7 @@ function confirmBankImportReviewMatchSuggested_(sid) {
   setStatusLoading('bank_status', 'Linking external account…');
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('bank_status', (res && res.message) || 'Linked.', false);
+      setStatus('bank_status', (res && res.message) || 'Account linked — ready to apply balance', false);
       __bankImportReviewState.expandedStagingId = null;
       __bankImportReviewState.expandedAction = null;
       loadBankImportReviewSection();
@@ -1627,7 +1627,7 @@ function confirmBankImportReviewAddNew_(sid) {
   setStatusLoading('bank_status', 'Linking new account from import…');
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('bank_status', (res && res.message) || 'Account linked.', false);
+      setStatus('bank_status', (res && res.message) || 'Account linked — ready to apply balance', false);
       __bankImportReviewState.expandedStagingId = null;
       __bankImportReviewState.expandedAction = null;
       loadBankImportReviewSection();
@@ -1656,7 +1656,7 @@ function confirmBankImportReviewMatch_(sid) {
   setStatusLoading('bank_status', 'Linking external account…');
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('bank_status', (res && res.message) || 'Linked.', false);
+      setStatus('bank_status', (res && res.message) || 'Match linked — ready to apply balance', false);
       __bankImportReviewState.expandedStagingId = null;
       __bankImportReviewState.expandedAction = null;
       loadBankImportReviewSection();
@@ -1673,7 +1673,7 @@ function confirmBankImportReviewIgnore_(sid) {
   setStatusLoading('bank_status', 'Ignoring…');
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('bank_status', (res && res.message) || 'Ignored.', false);
+      setStatus('bank_status', (res && res.message) || 'Import ignored', false);
       __bankImportReviewState.expandedStagingId = null;
       __bankImportReviewState.expandedAction = null;
       loadBankImportReviewSection();
@@ -1700,7 +1700,7 @@ function confirmBankImportReviewUnmatch_(sid) {
   setStatusLoading('bank_status', 'Unlinking…');
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('bank_status', (res && res.message) || 'Unlinked.', false);
+      setStatus('bank_status', (res && res.message) || 'Match removed — pick a new option', false);
       __bankImportReviewState.expandedStagingId = null;
       __bankImportReviewState.expandedAction = null;
       loadBankImportReviewSection();
@@ -1727,7 +1727,7 @@ function confirmBankImportReviewApplyBalance_(sid) {
   setStatusLoading('bank_status', 'Applying imported balance…');
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('bank_status', (res && res.message) || 'Applied.', false);
+      setStatus('bank_status', (res && res.message) || 'Balance applied — month updated', false);
       __bankImportReviewState.expandedStagingId = null;
       __bankImportReviewState.expandedAction = null;
       loadBankImportReviewSection();
@@ -2381,7 +2381,7 @@ function bankImportCsvPastePreview_() {
 function confirmBankImportCsvPasteStage_() {
   const okRows = __bankImportPasteState && __bankImportPasteState.okRows;
   if (!Array.isArray(okRows) || okRows.length === 0) {
-    setStatus('bank_status', 'Nothing to stage. Click Preview after pasting a CSV.', true);
+    setStatus('bank_status', 'Nothing to stage — paste a CSV first', true);
     return;
   }
   if (__bankImportPasteState.errorCount > 0) {

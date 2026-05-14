@@ -229,7 +229,7 @@ function payBillFromDashboard(billKey) {
   const bill = store[billKey];
 
   if (!bill) {
-    setBillsStatus_('Bill not found.', true);
+    setBillsStatus_('Bill not found — please refresh', true);
     return;
   }
 
@@ -248,13 +248,13 @@ function payBillFromDashboard(billKey) {
 
 function skipBillFromDashboard(skipKey) {
   if (!skipKey) {
-    setBillsStatus_('Missing bill key.', true);
+    setBillsStatus_("Couldn't identify this bill — please refresh", true);
     return;
   }
 
   google.script.run
     .withSuccessHandler(function(res) {
-      setBillsStatus_((res && res.message) || 'Skipped.', false);
+      setBillsStatus_((res && res.message) || 'Bill skipped — $0 recorded for this month', false);
       loadDashboardActionSections();
       refreshSnapshot();
       loadPaymentPreview();
@@ -274,7 +274,7 @@ function stopTrackingBillFromDashboard(billKey) {
   const bill = store[billKey];
 
   if (!bill) {
-    setBillsStatus_('Bill not found.', true);
+    setBillsStatus_('Bill not found — please refresh', true);
     return;
   }
 
@@ -295,7 +295,7 @@ function stopTrackingBillFromDashboard(billKey) {
 
   google.script.run
     .withSuccessHandler(function(res) {
-      setBillsStatus_((res && res.message) || 'Stopped tracking.', false);
+      setBillsStatus_((res && res.message) || 'Tracking stopped', false);
       loadDashboardActionSections();
       if (typeof refreshSnapshot === 'function') refreshSnapshot();
       if (typeof loadPaymentPreview === 'function') loadPaymentPreview();
@@ -355,7 +355,7 @@ function renderRecurringBillsList_(elementId, rows, emptyMsg) {
 function payRecurringBill(key) {
   const bill = (window.__dashboardRecurring || {})[key];
   if (!bill) {
-    setBillsStatus_('Recurring bill not found.', true);
+    setBillsStatus_('Bill not found — please refresh', true);
     return;
   }
 
@@ -369,13 +369,13 @@ function payRecurringBill(key) {
 
 function skipRecurringBill(skipKey) {
   if (!skipKey) {
-    setBillsStatus_('Missing recurring bill key.', true);
+    setBillsStatus_("Couldn't identify this bill — please refresh", true);
     return;
   }
 
   google.script.run
     .withSuccessHandler(function(res) {
-      setBillsStatus_((res && res.message) || 'Skipped.', false);
+      setBillsStatus_((res && res.message) || 'Bill skipped — $0 recorded for this month', false);
       loadDashboardActionSections();
       refreshSnapshot();
     })
@@ -869,7 +869,7 @@ function submitNewBill() {
   }
 
   if (paymentSource !== 'CASH' && paymentSource !== 'CREDIT_CARD') {
-    setBillsStatus_('Payment Source must be CASH or CREDIT_CARD.', true);
+    setBillsStatus_('Payment Source must be Cash or Credit Card', true);
     return;
   }
 
@@ -926,7 +926,7 @@ function submitNewBill() {
 
   google.script.run
     .withSuccessHandler(function(res) {
-      setBillsStatus_((res && res.message) || 'Bill added.', false);
+      setBillsStatus_((res && res.message) || 'Bill added — tracking started', false);
       resetBillsAddForm_();
       closeBillsAddForm();
       // Invalidate the category cache so a fresh "Other…" entry appears in
@@ -1029,7 +1029,7 @@ function openBillEditForm(billKey) {
   const bill = store[billKey];
 
   if (!bill) {
-    setBillsStatus_('Bill not found. Please refresh and try again.', true);
+    setBillsStatus_('Bill not found — please refresh', true);
     return;
   }
 
@@ -1179,7 +1179,7 @@ function submitBillEdit_() {
   const sheetRow = Number(editing.sheetRow);
   const expectedPayee = String(editing.payee || '').trim();
   if (!isFinite(sheetRow) || sheetRow < 2 || !expectedPayee) {
-    setBillsStatus_('This edit is missing its bill reference. Please refresh and try again.', true);
+    setBillsStatus_('Edit reference lost — please refresh', true);
     return;
   }
 
@@ -1223,7 +1223,7 @@ function submitBillEdit_() {
     return;
   }
   if (paymentSource !== 'CASH' && paymentSource !== 'CREDIT_CARD') {
-    setBillsStatus_('Payment Source must be CASH or CREDIT_CARD.', true);
+    setBillsStatus_('Payment Source must be Cash or Credit Card', true);
     return;
   }
   if (!category) {
@@ -1269,7 +1269,7 @@ function submitBillEdit_() {
 
   google.script.run
     .withSuccessHandler(function(res) {
-      setBillsStatus_((res && res.message) || 'Bill updated.', false);
+      setBillsStatus_((res && res.message) || 'Changes saved', false);
       resetBillsAddForm_();
       closeBillsAddForm();
       // Invalidate the category cache so a freshly entered "Other…"

@@ -694,10 +694,10 @@ function refreshSnapshot() {
 }
 
 function runPlannerNow() {
-  setStatusLoading('planner_status', 'Running planner…');
+  setStatusLoading('planner_status', 'Refreshing plan…');
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('planner_status', res.message || 'Planner run complete.', false);
+      setStatus('planner_status', res.message || 'Plan refreshed — your outlook is updated', false);
       if (res.snapshot) applySnapshot(res.snapshot);
     })
     .withFailureHandler(function(err) {
