@@ -1696,6 +1696,39 @@ function getDebtBillsDueRows_(ss, today, tz, preloadedCurrentCashFlow) {
   const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const rows = [];
 
+  // Pre-aggregate "any Expense row whose payee normalizes to this name
+  // is handled for the current / next month?" so a payment that landed
+  // on a variant-text row (case / whitespace drift, or a duplicate row
+  // introduced over time) suppresses the empty variant's emission.
+  // Uses the same row-aligned `nextValues`/`nextDisplay` lookup the
+  // legacy single-row check used at line ~1735, so no new alignment
+  // assumptions are introduced for the December-rollover case.
+  const handledByNorm = {};
+  for (let p = 1; p < currentValues.length; p++) {
+    const ptype = String(currentDisplay[p][currentHeaderMap.typeColZero] || '').trim();
+    if (ptype !== 'Expense') continue;
+    const ppayee = String(currentDisplay[p][currentHeaderMap.payeeColZero] || '').trim();
+    if (!ppayee) continue;
+    const pnorm = normalizeBillName_(ppayee);
+    if (!pnorm) continue;
+    if (!handledByNorm[pnorm]) handledByNorm[pnorm] = { current: false, next: false };
+
+    if (!handledByNorm[pnorm].current &&
+        isCashFlowBillHandled_(currentValues[p][currentMonthCol], currentDisplay[p][currentMonthCol])) {
+      handledByNorm[pnorm].current = true;
+    }
+    if (!handledByNorm[pnorm].next &&
+        nextMonthCol !== -1 &&
+        nextValues[p] && nextDisplay[p] &&
+        isCashFlowBillHandled_(nextValues[p][nextMonthCol], nextDisplay[p][nextMonthCol])) {
+      handledByNorm[pnorm].next = true;
+    }
+  }
+
+  // Collapse duplicate normalized payees so a debt that has BOTH a paid
+  // row and an empty variant row only emits at most one entry.
+  const payeesEmittedNormalized = {};
+
   for (let r = 1; r < currentValues.length; r++) {
     const type = String(currentDisplay[r][currentHeaderMap.typeColZero] || '').trim();
     const payee = String(currentDisplay[r][currentHeaderMap.payeeColZero] || '').trim();
@@ -1703,42 +1736,58 @@ function getDebtBillsDueRows_(ss, today, tz, preloadedCurrentCashFlow) {
     if (type !== 'Expense') continue;
     if (!payee) continue;
 
-    const match = debtMap[normalizeBillName_(payee)] || null;
+    const norm = normalizeBillName_(payee);
+    if (!norm) continue;
+    if (payeesEmittedNormalized[norm]) continue;
+
+    const match = debtMap[norm] || null;
     if (!match || !match.dueDay) continue;
 
     const currentDueDate = buildDueDate_(currentCtx, match.dueDay);
     const nextDueDate = buildDueDate_(nextCtx, match.dueDay);
+    const agg = handledByNorm[norm] || { current: false, next: false };
 
     let chosenDueDate = null;
     let chosenYear = null;
     let chosenMonthHeader = '';
-    let cellValue = '';
-    let cellDisplay = '';
 
     if (currentDueDate) {
       if (currentDueDate.getTime() >= todayOnly.getTime()) {
+        // Future-due (or due today). Original behavior: pick current
+        // and let the post-loop "is handled?" check skip the row
+        // entirely when paid. We preserve that: paid → drop this debt
+        // from this pass without cascading to next month, which keeps
+        // the Bills Due bucket from growing a Jun emission for a May
+        // bill that was already paid (the outer 7-day filter would
+        // typically drop it anyway, but this matches the legacy intent).
+        if (!agg.current) {
+          chosenDueDate = currentDueDate;
+          chosenYear = currentCtx.year;
+          chosenMonthHeader = currentCtx.monthHeader;
+        } else {
+          // Already paid this month — don't surface, don't try next.
+          payeesEmittedNormalized[norm] = true;
+          continue;
+        }
+      } else if (!agg.current) {
+        // Current due has passed and nothing is paid yet → overdue.
         chosenDueDate = currentDueDate;
         chosenYear = currentCtx.year;
         chosenMonthHeader = currentCtx.monthHeader;
-        cellValue = currentValues[r][currentMonthCol];
-        cellDisplay = currentDisplay[r][currentMonthCol];
-      } else if (!isCashFlowBillHandled_(currentValues[r][currentMonthCol], currentDisplay[r][currentMonthCol])) {
-        chosenDueDate = currentDueDate;
-        chosenYear = currentCtx.year;
-        chosenMonthHeader = currentCtx.monthHeader;
-        cellValue = currentValues[r][currentMonthCol];
-        cellDisplay = currentDisplay[r][currentMonthCol];
-      } else if (nextDueDate && nextMonthCol !== -1) {
+      } else if (nextDueDate && nextMonthCol !== -1 && !agg.next) {
+        // Current month handled, next month still open → surface next.
         chosenDueDate = nextDueDate;
         chosenYear = nextCtx.year;
         chosenMonthHeader = nextCtx.monthHeader;
-        cellValue = nextValues[r] ? nextValues[r][nextMonthCol] : '';
-        cellDisplay = nextDisplay[r] ? nextDisplay[r][nextMonthCol] : '';
       }
     }
 
-    if (!chosenDueDate) continue;
-    if (isCashFlowBillHandled_(cellValue, cellDisplay)) continue;
+    if (!chosenDueDate) {
+      // Either no due date at all, or both candidate months already
+      // handled. Mark emitted so subsequent variant rows don't retry.
+      if (currentDueDate) payeesEmittedNormalized[norm] = true;
+      continue;
+    }
 
     const suggestedAmount = match.minimumPayment && match.minimumPayment > 0 ? match.minimumPayment : 0;
     if (!isDebtCreditCardType_(match.debtType) && !suggestedAmount) continue;
@@ -1765,6 +1814,8 @@ function getDebtBillsDueRows_(ss, today, tz, preloadedCurrentCashFlow) {
       year: chosenYear,
       monthHeader: chosenMonthHeader
     });
+
+    payeesEmittedNormalized[norm] = true;
   }
 
   return rows;
@@ -1841,6 +1892,7 @@ function getInputBillsDueRows_(ss, today, tz) {
       : '';
 
     const candidates = buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth);
+    const normPayee = normalizeBillName_(payee);
 
     for (let i = 0; i < candidates.length; i++) {
       const cand = candidates[i];
@@ -1849,26 +1901,52 @@ function getInputBillsDueRows_(ss, today, tz) {
       const monthCol = rowMap.headers.indexOf(cand.monthHeader);
       if (monthCol === -1) continue;
 
-      // Bills without a matching Cash Flow row are treated as "unhandled" so
-      // freshly-added bills (or bills whose payee does not yet live in the
-      // Cash Flow grid) still appear in Overdue / Next 7 Days. The autopay
-      // write-back below stays gated on the Cash Flow row existing, since we
-      // cannot write into a nonexistent row.
+      // Canonical (exact-text) row: still used for the autopay write-back
+      // because we can't write into a row that doesn't exist, and we
+      // don't want to fabricate a write target out of a variant. Bills
+      // without a matching exact-text Cash Flow row keep their existing
+      // "show as due until paid" behavior (freshly-added bills, or bills
+      // whose payee text hasn't been mirrored onto the Cash Flow grid).
       const rowInfo = rowMap.rowsByPayee[payee] || null;
       const hasCashFlowRow =
         !!rowInfo && String(rowInfo.type || '').trim() === 'Expense';
 
-      let cellValue = '';
-      let cellDisplay = '';
+      // All Expense rows whose payee normalizes to this bill's payee.
+      // Used for the "is this candidate already paid?" decision so a
+      // variant payee text (case / whitespace / punctuation drift) on
+      // a Cash Flow row that carries the actual payment isn't ignored.
+      // Falls back to an empty list when no normalized matches exist,
+      // which preserves the freshly-added-bill code path below.
+      const expenseMatches =
+        (normPayee && rowMap.rowsByNormalizedPayee && rowMap.rowsByNormalizedPayee[normPayee])
+          ? rowMap.rowsByNormalizedPayee[normPayee].filter(function(m) {
+              return String(m.type || '').trim() === 'Expense';
+            })
+          : [];
+
+      // Scan every matching Expense row's candidate-month cell for a
+      // populated value. Live `getRange()` reads (not a cached array)
+      // so the autopay write-back below is reflected on the same pass.
+      const anyMatchingRowHandled_ = function() {
+        for (var k = 0; k < expenseMatches.length; k++) {
+          var cr = sheet.getRange(expenseMatches[k].row, monthCol + 1);
+          if (isCashFlowBillHandled_(cr.getValue(), cr.getDisplayValue())) return true;
+        }
+        return false;
+      };
 
       if (hasCashFlowRow) {
         const cellRange = sheet.getRange(rowInfo.row, monthCol + 1);
-        cellValue = cellRange.getValue();
-        cellDisplay = cellRange.getDisplayValue();
+        let cellValue = cellRange.getValue();
+        let cellDisplay = cellRange.getDisplayValue();
 
         const dueHasPassed = cand.dueDate.getTime() < todayOnly.getTime();
         const canAutopay = autopay === 'yes' && varies !== 'yes';
 
+        // Autopay pre-check is intentionally still keyed off the
+        // canonical row's cell. Expanding the pre-check to all variants
+        // would let a paid variant suppress the write-back into the
+        // canonical row (which is the row autopay must populate).
         if (canAutopay && defaultAmount > 0 && dueHasPassed && !isCashFlowBillHandled_(cellValue, cellDisplay)) {
           writeDashboardBillValuePreserveFormat_(sheet, rowInfo.row, monthCol + 1, -defaultAmount);
           touchDashboardSourceUpdated_('cash_flow');
@@ -1891,10 +1969,17 @@ function getInputBillsDueRows_(ss, today, tz) {
           cellValue = cellRange.getValue();
           cellDisplay = cellRange.getDisplayValue();
         }
+      }
 
-        if (isCashFlowBillHandled_(cellValue, cellDisplay)) {
-          continue;
-        }
+      // Final "is this candidate handled?" decision considers every
+      // Cash Flow row whose normalized payee matches the bill. Covers
+      // the payee-text-drift case where the user paid via Quick Add on
+      // a variant row (case / whitespace) while INPUT - Bills carries
+      // the canonical spelling. When no matching rows exist, this
+      // returns false and the bill falls through to the push below —
+      // preserving the documented freshly-added-bill behavior.
+      if (anyMatchingRowHandled_()) {
+        continue;
       }
 
       rows.push({
@@ -2112,7 +2197,7 @@ function getDebtPayeeMapAllStatuses_(ss) {
 function getCashFlowRowMap_(sheet) {
   const display = sheet.getDataRange().getDisplayValues();
   if (display.length < 2) {
-    return { headers: [], rowsByPayee: {} };
+    return { headers: [], rowsByPayee: {}, rowsByNormalizedPayee: {} };
   }
 
   const headers = display[0];
@@ -2123,20 +2208,40 @@ function getCashFlowRowMap_(sheet) {
     throw new Error('Cash Flow sheet must contain Type and Payee.');
   }
 
+  // `rowsByPayee` keeps its existing strict (case-sensitive, trimmed)
+  // semantics so any callers depending on exact-text lookup behave the
+  // same. `rowsByNormalizedPayee` is the additive index used by the
+  // Bills Due "is this candidate already paid?" check to absorb payee
+  // text drift (whitespace / case / punctuation) between INPUT - Bills
+  // and the Cash Flow grid — same `normalizeBillName_` used by the
+  // debt path elsewhere in this file.
   const rowsByPayee = {};
+  const rowsByNormalizedPayee = {};
   for (let r = 1; r < display.length; r++) {
     const payee = String(display[r][payeeCol] || '').trim();
     if (!payee) continue;
 
+    const type = String(display[r][typeCol] || '').trim();
+
     rowsByPayee[payee] = {
       row: r + 1,
-      type: String(display[r][typeCol] || '').trim()
+      type: type
     };
+
+    const norm = normalizeBillName_(payee);
+    if (!norm) continue;
+    if (!rowsByNormalizedPayee[norm]) rowsByNormalizedPayee[norm] = [];
+    rowsByNormalizedPayee[norm].push({
+      row: r + 1,
+      type: type,
+      payee: payee
+    });
   }
 
   return {
     headers: headers,
-    rowsByPayee: rowsByPayee
+    rowsByPayee: rowsByPayee,
+    rowsByNormalizedPayee: rowsByNormalizedPayee
   };
 }
 
