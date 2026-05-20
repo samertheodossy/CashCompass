@@ -34,6 +34,56 @@ Shipped end-to-end in V1.1 (commits `92c8673` → `6d25c0e`). **Profile is now t
 - **Retirement** derives current age exclusively from Profile DOB. The Retirement Basics edit form is removed; per-scenario age fields are display-only (plain divs, no spinner arrows). A new `needsProfileDob` readiness state routes users to **Open Profile** when DOB is missing. The DOB parser accepts both Date objects and `YYYY-MM-DD` strings, fixing the silent Sheets-auto-date coercion bug. New `INPUT - Retirement` sheets no longer seed the now-unused age rows.
 - **Backward compatibility preserved** — populated workbooks are untouched byte-for-byte. Legacy age rows on existing retirement sheets are left inert (no read, no write, no planner consumption). No forced migration.
 
+### Delivered — Upcoming Expenses: Account / Source dropdown + Loan / Financing excluded from Rolling Debt Payoff cash reserve (V1.2)
+
+**`Account / Source` on the Upcoming Expenses Add+Edit form is now a controlled dropdown, and Loan / Financing rows no longer reduce Rolling Debt Payoff "Safe to use" by the financed purchase price.** Shipped in `115943b`.
+
+User-visible problem: a planned Lexus TX 500h purchase (Amount `$90,000`, Source `loan`, Due Date set) was reducing Rolling Debt Payoff "Safe to use" by the full $90k, dragging the deployable-cash recommendation from ~$141k down to ~$51k. The intent of a loan / financing row is "I'm going to take on debt to buy this" — the financed purchase price *should not* hit cash reserves today, and it *should not* be modeled as a card balance either. Two root causes:
+
+1. **Free-text `Account / Source` input** — there was no canonical vocabulary, so users typed whatever was on hand (`loan`, `Chase Sapphire`, `wells fargo cd account`, house names, blank). The Rolling Debt Payoff classifier had to guess from substrings.
+2. **`rollingClassifyPlannedExpenseFunding_` had no loan branch** — the classifier in `rolling_debt_payoff.js` only checked for credit-card and cash keywords. The string `loan` matched neither, so it fell through to the generic fallback at the bottom of the function (treat as **cash**), which then funneled the full $90k into `near_term_cash_total` via `buildRollingPlannedExpenseImpactModel_`.
+
+Design decisions:
+
+- **Controlled dropdown for the canonical funding cases.** The Add+Edit form's `Account / Source` input becomes a `<select>` with five canonical options (**Cash**, **Credit Card**, **Cash + Credit Card**, **Loan / Financing**, **Other / Unknown**) plus an **Other (custom)…** sentinel that toggles a sibling text input. This mirrors the existing **Bank Accounts → Use Policy** "Other (custom)…" pattern users already know from `Dashboard_Script_AssetsBankInvestments.html`. Legacy free-text values (existing rows) hydrate cleanly: any value that isn't one of the five canonical options falls through to **Other (custom)…** with the original string preserved in the text input, so an edit-save round-trip is a no-op for legacy rows. **No schema change** — the underlying `INPUT - Upcoming Expenses → Account / Source` column stays a single free-text cell; the dropdown only constrains *new* input.
+- **Five canonical options, deliberately chosen.** Cash, Credit Card, Cash + Credit Card, Loan / Financing, Other / Unknown. The first four are the dominant real-world funding modes; **Other / Unknown** is the explicit "I don't know yet / doesn't matter" option that maps to the conservative cash fallback. The split between **Cash + Credit Card** and pure **Credit Card** exists because in v1 we don't model split-funding — both route through the card branch, but **Cash + Credit Card** signals user intent (some cash is involved) which a future split-funding feature can build on without breaking back-compat. **Loan / Financing** is the new option that fixes the bug.
+- **Classifier gains a `'loan'` branch that runs before cash/card checks.** `rollingClassifyPlannedExpenseFunding_` in `rolling_debt_payoff.js` now matches `loan`, `financing`, `financed`, `auto loan`, and `car loan` substrings (case-insensitive, post-trim) **before** falling through to the existing credit-card and cash branches. Ordering matters: a string like `auto loan` would otherwise match the cash fallback. The loan-funded amount is excluded from both `near_term_cash_total` (so it doesn't reduce deployable cash) and `unmapped_card_funded_cash_risk_total` (so it isn't treated as a card-risk hold either) — it's tracked separately in a new `loan_funded_near_term_total` aggregate for visibility in the Why-not-more breakdown.
+- **Other funding-type behavior preserved.** **Cash** still subtracts from deployable cash via the near-term hold. **Credit Card** still maps to a specific card debt via `rollingResolveCcDebtNameForPlannedExpense_` when a match exists, otherwise reserves the amount as an unmapped card-risk hold. **Cash + Credit Card** still routes through the card branch (conservative; no split-funding in v1). **Other / Unknown** and blank still fall back to the cash branch. None of these branches changed math — only the classifier ordering / loan branch is new.
+- **No new debt creation. No amortization. No payment schedule.** A loan / financing row is purely a "don't reduce cash for this" signal in v1. We don't auto-create a debt in **INPUT - Debts** for the financed amount, we don't model the monthly payment, we don't subtract a down payment. If the user wants to track the down payment, the Help copy tells them to enter it as a separate **Cash** Upcoming Expense — explicit, user-controlled, no surprises.
+- **UI hint only on Loan / Financing.** A muted-text hint below the dropdown reads *"Loan / financing: the financed purchase price won't reduce cash today and isn't modeled as a card balance. Enter any down payment as a separate Cash upcoming expense."* It shows only when **Loan / Financing** is selected, to keep the Add form quiet for the default Cash case. Same pattern as the existing per-section hints in the Add form.
+
+Client-side wiring:
+
+- Three new helpers in `Dashboard_Script_CashFlowUpcoming.html` own the dropdown ↔ custom-input bookkeeping: `syncUpcomingAccountSourceCustom_` (toggles the custom-input row and the loan hint based on the dropdown's current value), `getUpcomingAccountSourceValue_` (returns the effective value — the dropdown's value unless it's the **Other (custom)…** sentinel, in which case the custom input's trimmed value), and `setUpcomingAccountSourceValue_` (sets the dropdown + custom-input pair from a single string — picks the canonical option if the value matches, otherwise falls back to **Other (custom)…** with the original string in the text input).
+- All four direct touchpoints to `up_accountSource.value` were routed through the helpers: edit-mode hydration in `enterUpcomingEditMode_`, Add-mode reset in `resetUpcomingFormToAddMode_`, save-payload construction in `saveUpcomingExpense`, and post-success reset in `saveUpcomingExpense`. No other client-side code reads or writes `up_accountSource` directly anymore.
+- The dropdown fires `change` to call `syncUpcomingAccountSourceCustom_` so toggling visibility is immediate and doesn't wait for re-render.
+
+Server-side:
+
+- No write-path change. `addUpcomingExpense` and `updateUpcomingExpenseFromDashboard` in `upcoming_expenses.js` continue to write the `Account / Source` field as a free-text string, exactly as before — the value just happens to come from a constrained set now (or from the custom input). **No new Activity event type**; loan rows still log `upcoming_add` / `upcoming_update` like any other Upcoming row.
+- The only server-side change is in `rolling_debt_payoff.js`: `rollingClassifyPlannedExpenseFunding_` gains the new `'loan'` branch, and `buildRollingPlannedExpenseImpactModel_` gains a near-term loan branch that aggregates `loan_funded_near_term_total` and explicitly skips the cash and card-risk holds for loan rows.
+
+Runtime validation:
+
+- Test case: planned Lexus TX 500h Upcoming row, Amount `$90,000`, Due Date set ~6 weeks out, original Source `loan` (free text).
+- **Before classification fix**: Rolling Debt Payoff "Safe to use" ≈ `$51,000`. `unmapped_card_funded_cash_risk_total` ≈ `$120,500` (the Lexus row was being lumped into the cash-risk reserve via the fallback).
+- **After**: the Lexus row's Source was changed to **Loan / Financing** via the new dropdown; the planner re-ran; `unmapped_card_funded_cash_risk_total` dropped to ≈ `$30,500` (the remaining unmapped card-funded Upcoming rows); `loan_funded_near_term_total` registered ≈ `$90,000` separately; **Safe to use** recovered to ≈ `$141,000`. The cash-funded Solar Addition (`$9,500`) still reserved correctly; the credit-card Roof Replacement still behaved as before. A clean ~$90k delta matching the row amount, with no math change for any other funding type.
+
+What was intentionally **not** done:
+
+- **No Central App migration files were touched.** `central_resolver.js`, `cash_to_use.js`, and every `CENTRAL_APP_*.md` are untouched by this pass — the Phase 1 resolver seam shipped in `b2798a7` remains the only Central App change in the codebase.
+- **No schema change to `INPUT - Upcoming Expenses`.** The `Account / Source` column stays free-text.
+- **No new Activity event types.** Loan rows generate `upcoming_add` / `upcoming_update` like any other Upcoming row.
+- **No split-funding model.** **Cash + Credit Card** still routes entirely through the card branch in v1.
+- **No new debt creation, no amortization, no payment-schedule modeling.** A loan / financing row is purely a "don't reduce cash for this" signal.
+
+Files touched:
+
+- `Dashboard_Body.html` — replaced the `Account / Source` text input with a `<select>` (5 canonical options + **Other (custom)…** sentinel), a hidden sibling text input row, and a hidden Loan / Financing hint.
+- `Dashboard_Script_CashFlowUpcoming.html` — added `syncUpcomingAccountSourceCustom_` / `getUpcomingAccountSourceValue_` / `setUpcomingAccountSourceValue_` helpers and routed the four `up_accountSource.value` touchpoints (edit hydration, Add-mode reset, save payload, post-success reset) through them.
+- `rolling_debt_payoff.js` — added the `'loan'` branch to `rollingClassifyPlannedExpenseFunding_` (runs before cash/card checks), added the loan branch to `buildRollingPlannedExpenseImpactModel_` with the new `loan_funded_near_term_total` aggregate, and explicitly excluded loan rows from `near_term_cash_total` and `unmapped_card_funded_cash_risk_total`.
+- `Dashboard_Help.html` — expanded the **Add Upcoming Expense** bullet under **Upcoming expenses → Actions** to enumerate the five canonical funding options and what each one does to the Rolling Debt Payoff cash reserves.
+
 ### Delivered — Bank Import: Step 2b Review UI for staged bank accounts (V1.2)
 
 **Cash Flow → Bank Accounts now has a third "Review imports" segment for resolving pending imported bank accounts.** Uncommitted at the time of writing.
