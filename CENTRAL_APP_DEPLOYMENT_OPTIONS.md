@@ -233,6 +233,14 @@ Options A (Execute as developer) and C (Hybrid) stay in this document as live al
 - No implementation begins on the basis of this preference. The Decision Pending items in §8 must still be answered in writing before any centralized-app code is written. Per `CENTRAL_APP_DESIGN.md → §9 Guardrails`: *"No implementation until design decisions are documented."*
 - No deployment settings change. The active deployment remains `executeAs: USER_DEPLOYING`, `access: MYSELF` (single-user / household mode) until the migration is explicitly approved and pulled into a roadmap phase.
 
+### Backward compatibility note
+
+The preferred direction must coexist with bound-sheet mode through the entire migration. Per `CENTRAL_APP_DESIGN.md → §6 Backward compatibility as a primary requirement` and `§11 Operational mindset`:
+
+- Selecting `executeAs: USER_ACCESSING` as the target does **not** authorize switching the active deployment away from the current `executeAs: USER_DEPLOYING`. The current deployment stays in place until the Central App migration is approved, the resolver is in place, the bootstrap path is in place, and bound-sheet mode has been verified to continue working byte-for-byte against the new execution mode.
+- Existing user workflows — planner, Bills Due, Cash Flow, Debts, Retirement, Donations, Setup / Review, Activity log — must remain functional throughout. None of them are rewritten as part of selecting this direction.
+- The migration is judged by what it preserves, not by what it changes. The preferred direction is a target shape, not a date.
+
 ---
 
 ## 8. Open questions

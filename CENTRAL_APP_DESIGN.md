@@ -179,6 +179,35 @@ For a brand-new user with no existing CashCompass workbook:
 
 How we get from bound-sheet mode to Central App mode without breaking existing users.
 
+### Backward compatibility as a primary requirement
+
+Backward compatibility is a **first-class architectural requirement**, not an afterthought of the migration. It carries the same weight as user-data isolation and additive-only upgrades.
+
+- **Existing bound-workbook functionality must continue working** during every phase of the migration. No phase is allowed to ship if it breaks bound mode, even temporarily.
+- **The Central App migration must not break existing user workflows.** Existing calculations (planner, Bills Due, Cash Flow, Debts, Retirement, Donations), dashboards (Overview, Bills, Cash Flow, Planning, Assets, Activity), onboarding flows (Setup / Review), additive bootstrap behavior, and activity logging must all be preserved unless they are intentionally replaced through their own product decision recorded elsewhere.
+- **"Preserved" means identical behavior.** The existing code paths continue to execute, return identical outputs against identical inputs, and produce identical UI. Refactoring is not preservation.
+- **Migration replaces the resolution layer, not module behavior.** A per-module migration pass is allowed to swap the spreadsheet-resolution layer underneath a module; it is **not** allowed to rewrite the module's logic, refactor its helpers, or change its outputs in the same pass.
+
+### Migration philosophy
+
+- **Centralization is an infrastructure migration, not a product rewrite.** The Central App migration changes who runs the code and which spreadsheet the code runs against. It does not change what the code does.
+- **Layer abstraction gradually over proven systems.** Each module receives a thin abstraction (the resolver) inserted underneath. The existing implementation is left alone above it.
+- **Preserve existing logic paths initially wherever possible.** When in doubt, leave a working code path untouched and route it through the resolver, rather than reimplementing it. Cleanup passes belong to their own future phase, not to the migration.
+
+### Incremental abstraction strategy
+
+Early migration work focuses on three things, in priority order:
+
+1. **Spreadsheet resolution abstraction.** Replace direct `SpreadsheetApp.getActiveSpreadsheet()` assumptions with a single resolver. In bound mode, the resolver returns the active spreadsheet; in central mode, it returns the user's mapped spreadsheet. This is the *only* change made in the resolver-introduction pass.
+2. **Centralized entry points.** Identify the small set of entry points (web app `doGet`, dashboard handlers, planner trigger, time-driven triggers) that should call the resolver first. These become the canonical place where identity → spreadsheet resolution happens. Inner modules are unchanged.
+3. **Preserve existing module behavior underneath.** Modules continue to use the same helpers (`getSheet_`, header lookups, ensure-\* helpers, write paths) against the spreadsheet the resolver returns. The resolver is added; nothing else moves.
+
+Conceptual shape (description only — no implementation):
+
+> Where today a module begins by obtaining the spreadsheet via the active-spreadsheet API, the migrated version begins by obtaining it from the resolver. The remainder of the module is byte-for-byte unchanged. The resolver internally decides whether to return the active spreadsheet (bound mode) or open the user's mapped spreadsheet by ID (central mode).
+
+That is the entirety of a "module migrated" change. No reformatting, no logic edits, no helper renames, no opportunistic cleanup, no improvement-on-the-side. The pass either swaps the resolution call or it is not yet ready to ship.
+
 ### Staging principle
 
 - **No big-bang migration.** A single PR that rewrites every `getActiveSpreadsheet()` call site is explicitly forbidden by `WORKING_RULES.md → Central App Transition Rules`.
@@ -210,6 +239,11 @@ Every module migration pass must validate **both modes** before being considered
 ### Regression discipline
 
 - **Bound-sheet mode must not regress at any point during the migration.** If a migration pass would force bound-sheet users to change anything about their setup, the pass is wrong and must be redesigned.
+- **No module migration without regression testing.** Each pass must validate that the touched module behaves identically in bound mode against a populated reference workbook, and that the new-user bootstrap flow works against a fresh workbook. Both flows must pass before the migration pass is considered done.
+- **Fallback behavior exists during transition.** Until the resolver is wired everywhere, every untouched module continues to call `SpreadsheetApp.getActiveSpreadsheet()` and behaves as it does today. The transition leaves a working app at every intermediate point, not just at the end.
+- **Bound mode stays protected until Central App mode is stable.** Bound mode is not deprecated or removed until the Central App mode has been exercised against real user workflows long enough to trust. There is no "flip the switch" date in this design.
+- **Migration is reversible where practical.** A resolver-introduction pass can be reverted by removing the resolver call and restoring the active-spreadsheet call. Per-module passes that follow this shape are inherently reversible. Passes that would not be reversible require an explicit product decision.
+- **No broad rewrites during early migration phases.** The first migration phases insert the resolver and the bootstrap path. They do not touch unrelated modules, do not refactor adjacent code, and do not bundle improvements with infrastructure changes.
 - **No destructive sheet changes during migration.** Bootstrap may create new sheets in a new user's workbook; it must never reformat or rewrite an existing populated workbook.
 - **No identity resolution outside the resolver.** Modules must not start calling `Session.getEffectiveUser()` directly for workbook lookup; doing so spreads identity logic and breaks the single-point-of-resolution rule.
 
@@ -387,6 +421,17 @@ Final checklist of unresolved architectural questions. Each must be resolved (in
 
 ### Two-dashboards drift — Decision Pending (cross-reference)
 - `PlannerDashboard.html` (sidebar) and `PlannerDashboardWeb.html` (web) are separate today (`ENHANCEMENTS.md → Larger workflow unification`). The Central App migration effectively retires the sidebar (or forces it to also call the resolver). Sequencing of unification vs central-app migration is not pinned.
+
+---
+
+## 11. Operational mindset
+
+A short statement of stance that governs every decision in this document.
+
+- **Continuity first, migration second.** Migrating the architecture is valuable. Keeping the app working for existing users is more valuable. When the two pull against each other, continuity wins.
+- **Stability and user trust outweigh migration speed.** There is no calendar pressure on this migration. Shipping a smaller, safer pass next month is preferable to shipping a larger, riskier pass next week.
+- **The migration is judged by what it preserves, not by what it changes.** A successful migration phase is one where bound-sheet users notice nothing and central-app users get the new path. Both halves of that test apply to every pass.
+- **When in doubt, defer.** If a question is not answered in this document or its companions (`CENTRAL_APP_DEPLOYMENT_OPTIONS.md`, `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md`), the answer is to stop and document it before writing code.
 
 ---
 
