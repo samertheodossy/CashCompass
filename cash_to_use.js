@@ -74,7 +74,7 @@ var CASH_TO_USE_DO_NOT_TOUCH_POLICY_ = 'do_not_touch';
  * `excludedReason`) so the UI / debugging can show why a number is what it is.
  */
 function getCashToUse() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'ACCOUNTS');
 
   const raw = sheet.getDataRange().getValues();       // numeric values for money
