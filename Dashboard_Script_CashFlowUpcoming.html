@@ -136,6 +136,77 @@ function renderUpcomingList(rows) {
 // from the dual-mode saveUpcomingExpense() branch below.
 var __upcomingEditingId = null;
 
+// Canonical Account / Source options surfaced in the dropdown. Kept in
+// one place so the hydration helper below can recognize them. Any value
+// outside this list is treated as a "custom" string and round-trips via
+// the visible custom-text input (mirrors the Bank Accounts Use Policy
+// "Other (custom)…" sentinel pattern). The classifier in
+// rolling_debt_payoff.js → rollingClassifyPlannedExpenseFunding_ does
+// the actual cash / card / loan routing on the server.
+var UPCOMING_ACCOUNT_SOURCE_OPTIONS_ = [
+  'Cash',
+  'Credit Card',
+  'Cash + Credit Card',
+  'Loan / Financing',
+  'Other / Unknown'
+];
+
+function syncUpcomingAccountSourceCustom_() {
+  var sel = document.getElementById('up_accountSource');
+  if (!sel) return;
+  var cust = document.getElementById('up_accountSourceCustom');
+  var hint = document.getElementById('up_accountSourceHint');
+  if (cust) {
+    if (sel.value === '__custom__') {
+      cust.style.display = '';
+      try { cust.focus(); } catch (_e) {}
+    } else {
+      cust.style.display = 'none';
+      cust.value = '';
+    }
+  }
+  if (hint) {
+    hint.style.display = (sel.value === 'Loan / Financing') ? '' : 'none';
+  }
+}
+
+function getUpcomingAccountSourceValue_() {
+  var sel = document.getElementById('up_accountSource');
+  if (!sel) return '';
+  if (sel.value === '__custom__') {
+    var cust = document.getElementById('up_accountSourceCustom');
+    return cust ? String(cust.value || '').trim() : '';
+  }
+  return String(sel.value || '').trim();
+}
+
+function setUpcomingAccountSourceValue_(value) {
+  var sel = document.getElementById('up_accountSource');
+  if (!sel) return;
+  var cust = document.getElementById('up_accountSourceCustom');
+  var hint = document.getElementById('up_accountSourceHint');
+  var v = String(value == null ? '' : value).trim();
+  if (!v) {
+    sel.value = '';
+  } else if (UPCOMING_ACCOUNT_SOURCE_OPTIONS_.indexOf(v) >= 0) {
+    sel.value = v;
+  } else {
+    sel.value = '__custom__';
+  }
+  if (cust) {
+    if (sel.value === '__custom__') {
+      cust.style.display = '';
+      cust.value = v;
+    } else {
+      cust.style.display = 'none';
+      cust.value = '';
+    }
+  }
+  if (hint) {
+    hint.style.display = (sel.value === 'Loan / Financing') ? '' : 'none';
+  }
+}
+
 // Flip the existing Add Upcoming Expense form into Edit mode for the
 // in-memory row object returned by getUpcomingExpensesUiData. We deliberately
 // reuse the same form (no modal, no inline editor) so there's only one
@@ -158,7 +229,7 @@ function enterUpcomingEditMode_(row) {
     var amt = Number(row.amount);
     amountInput.value = isFinite(amt) ? amt.toFixed(2) : '';
   }
-  document.getElementById('up_accountSource').value = row.accountSource || '';
+  setUpcomingAccountSourceValue_(row.accountSource || '');
   document.getElementById('up_autoAdd').checked =
     String(row.autoAddToCashFlow || '').toLowerCase() === 'yes';
   document.getElementById('up_notes').value = row.notes || '';
@@ -197,7 +268,7 @@ function resetUpcomingFormToAddMode_() {
   // handler did not reset it either, and loadUpcomingSection's first
   // line re-stamps it to today on the next list refresh.
   document.getElementById('up_amount').value = '';
-  document.getElementById('up_accountSource').value = '';
+  setUpcomingAccountSourceValue_('');
   document.getElementById('up_notes').value = '';
   document.getElementById('up_autoAdd').checked = false;
 
@@ -292,7 +363,7 @@ function saveUpcomingExpense() {
     payee: document.getElementById('up_payee').value,
     dueDate: dueDate,
     amount: numericAmount,
-    accountSource: document.getElementById('up_accountSource').value,
+    accountSource: getUpcomingAccountSourceValue_(),
     autoAddToCashFlow: document.getElementById('up_autoAdd').checked,
     notes: document.getElementById('up_notes').value
   };
@@ -332,7 +403,7 @@ function saveUpcomingExpense() {
       document.getElementById('up_category').value = '';
       document.getElementById('up_payee').value = '';
       document.getElementById('up_amount').value = '';
-      document.getElementById('up_accountSource').value = '';
+      setUpcomingAccountSourceValue_('');
       document.getElementById('up_notes').value = '';
       document.getElementById('up_autoAdd').checked = false;
       clearUpcomingAddNameError_();

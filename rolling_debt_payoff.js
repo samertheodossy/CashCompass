@@ -939,9 +939,32 @@ function rollingClassifyPlannedExpenseFunding_(accountSource, debts, aliasMap) {
   const raw = String(accountSource || '').trim();
   const low = raw.toLowerCase();
   if (!raw) return 'cash';
+  // Loan / financing detection must run before card/cash so strings like
+  // "auto loan" or "Loan / Financing" do not fall through to the generic
+  // "no debt match → cash" branch at the bottom. A loan-funded purchase
+  // does not draw the full purchase price from deployable cash today,
+  // and is not modeled as a card balance either; the planner downstream
+  // treats funding === 'loan' as a pure exclusion from near-term holds.
+  // Any down payment is expected to be entered as a separate Cash
+  // upcoming expense.
+  if (
+    low === 'loan' ||
+    low === 'financing' ||
+    low === 'financed' ||
+    low === 'loan / financing' ||
+    low.indexOf('loan') >= 0 ||
+    low.indexOf('financing') >= 0 ||
+    low.indexOf('financed') >= 0
+  ) {
+    return 'loan';
+  }
   if (low === 'cash' || low.indexOf('checking') >= 0 || low.indexOf('savings') >= 0 || low.indexOf('operating') >= 0) {
     return 'cash';
   }
+  // "Cash + Credit Card" and other mixed-funding strings contain "card",
+  // so they route through the credit_card branch. That's intentional in
+  // v1 — the planner stays conservative on mixed sources rather than
+  // trying to split the amount across pools.
   if (low.indexOf('credit') >= 0 || low.indexOf('card') >= 0) return 'credit_card';
   const norm = normalizeName_(raw, aliasMap);
   const ccDebts = (debts || []).filter(function(d) {
@@ -1008,6 +1031,12 @@ function buildRollingPlannedExpenseImpactModel_(anchorDate, tz, debts, aliasMap)
     near_term_cash_total: 0,
     unmapped_card_funded_cash_risk_total: 0,
     near_term_card_funded_mapped_total: 0,
+    // New in this pass: face-value sum of near-term loan/financing-funded
+    // upcoming expenses. Surfaced for visibility but intentionally NOT
+    // added to plannedLiquidityHolds — a financed purchase does not draw
+    // the full purchase price from deployable cash today. The user is
+    // expected to enter any down payment as a separate Cash row.
+    loan_funded_near_term_total: 0,
     debts_for_sim: debts.map(function(d) {
       return JSON.parse(JSON.stringify(d));
     }),
@@ -1052,6 +1081,22 @@ function buildRollingPlannedExpenseImpactModel_(anchorDate, tz, debts, aliasMap)
 
     let impactTag = '';
     if (horizon === 'near_term') {
+      if (funding === 'loan') {
+        out.loan_funded_near_term_total = round2_(out.loan_funded_near_term_total + amt);
+        impactTag = 'loan / financing — excluded from cash reserve';
+        out.display_lines.push({
+          title: title,
+          due_label: dueLabel,
+          amount: amt,
+          impact_tag: impactTag,
+          horizon: horizon,
+          execution_treatment:
+            'Loan / financing: the financed purchase price does not reduce deployable cash today and is not modeled as a card balance. Enter any down payment as a separate Cash upcoming expense.',
+          is_unmapped_card: false,
+          mapped_card_name: ''
+        });
+        return;
+      }
       if (funding === 'credit_card') {
         if (dueObj && stripTime_(dueObj).getTime() <= anchorPlus30.getTime()) {
           out.near_term_card_funded_within_30 = true;
@@ -1145,6 +1190,7 @@ function buildRollingPlannedExpenseImpactModel_(anchorDate, tz, debts, aliasMap)
   out.near_term_cash_total = round2_(out.near_term_cash_total);
   out.unmapped_card_funded_cash_risk_total = round2_(out.unmapped_card_funded_cash_risk_total);
   out.near_term_card_funded_mapped_total = round2_(out.near_term_card_funded_mapped_total);
+  out.loan_funded_near_term_total = round2_(out.loan_funded_near_term_total);
   out.debt_start_adjusted = round2_(
     out.debts_for_sim.reduce(function(s, d) {
       return s + Math.max(0, d.balance);

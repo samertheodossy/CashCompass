@@ -647,7 +647,19 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <input type="text" id="up_amount" inputmode="decimal" onfocus="currencyFocus('up_amount')" onblur="currencyBlur('up_amount')">
 
           <label>Account / Source</label>
-          <input type="text" id="up_accountSource">
+          <select id="up_accountSource" onchange="syncUpcomingAccountSourceCustom_()">
+            <option value="">— Select source —</option>
+            <option value="Cash">Cash</option>
+            <option value="Credit Card">Credit Card</option>
+            <option value="Cash + Credit Card">Cash + Credit Card</option>
+            <option value="Loan / Financing">Loan / Financing</option>
+            <option value="Other / Unknown">Other / Unknown</option>
+            <option value="__custom__">Other (custom)…</option>
+          </select>
+          <input type="text" id="up_accountSourceCustom" placeholder="Custom source (e.g. bank name, card name)" style="display:none;margin-top:4px;">
+          <div id="up_accountSourceHint" class="muted" style="display:none;margin-top:4px;font-size:12px;">
+            Loan / Financing: the financed purchase price is excluded from near-term cash reserves on Rolling Debt Payoff. Add any down payment as a separate <em>Cash</em> upcoming expense.
+          </div>
 
           <div class="check-row">
             <input type="checkbox" id="up_autoAdd">
