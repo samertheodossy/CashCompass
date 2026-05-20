@@ -2,6 +2,8 @@
 
 Audit of current bound-workbook assumptions in the CashCompass codebase.
 
+> **Update — Phase 1 shipped in `b2798a7`.** Of the ~135 production call sites of `SpreadsheetApp.getActiveSpreadsheet()` catalogued below, exactly **one** has been migrated through the new resolver: `getCashToUse()` in `cash_to_use.js:77` now calls `getUserSpreadsheet_()` (defined in the new `central_resolver.js` as a one-line pass-through). The remaining **134** call sites are intentionally unchanged. The §3 inventory below is preserved as the original audit; updated counts after Phase 1 are: `cash_to_use.js` now has 0 occurrences (was 1), `central_resolver.js` is new and contains the canonical 1 occurrence inside the resolver body. No other counts change. See `CENTRAL_APP_FIRST_RESOLVER_SEAM.md` for the design and `CENTRAL_APP_IMPLEMENTATION_PLAN.md → §5 step 1` for status.
+
 This document is an **audit only**. No Apps Script code, no HTML/JS, no deployment settings, no implementation. Its purpose is to inform the first Central App migration step by surfacing where the codebase assumes the active spreadsheet, which helpers are already migration-ready, and which modules carry the largest blast radius if migrated carelessly.
 
 Cross-references:

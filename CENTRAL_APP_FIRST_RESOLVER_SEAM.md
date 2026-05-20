@@ -1,5 +1,7 @@
 # CENTRAL_APP_FIRST_RESOLVER_SEAM.md
 
+> **Status — shipped in `b2798a7` (Phase 1).** The design below is preserved as a historical record of what was decided before implementation. The actual landed seam matches this design exactly: `getUserSpreadsheet_()` lives in `central_resolver.js` as a one-line pass-through to `SpreadsheetApp.getActiveSpreadsheet()`, and `cash_to_use.js:77` is the single migrated call site. All other 134 `SpreadsheetApp.getActiveSpreadsheet()` call sites remain intentionally unchanged. No central-mode behavior, no `PropertiesService`, no `openById`, no user mapping, no deployment change. Manual smoke test in the bound workbook passed; the dashboard Bills "Recurring Bills (No Due Date)" empty-state concern raised during testing was investigated separately and found to be unrelated to the seam (data-state and date-timing driven). The text below records the design as authored; it has not been retroactively rewritten.
+
 Design analysis for the **first** Central App resolver introduction. Analysis only. No code changes, no HTML/JS changes, no deployment changes, no implementation.
 
 This document is the bridge between the audit (`CENTRAL_APP_DEPENDENCY_AUDIT.md`) and the eventual first implementation prompt. Its purpose is to make the smallest possible first step concrete enough to execute confidently — and reversible enough to abandon at the first sign of trouble.

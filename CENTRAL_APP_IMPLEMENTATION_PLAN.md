@@ -113,7 +113,7 @@ This is intentional. The first phase establishes the shape of the abstraction; l
 
 Cautious ordering. Each step in the list is a separate future implementation pass with its own Cursor prompt and its own regression-testing pass. **The order is a proposal; it can be re-sequenced when each step is actually planned.**
 
-1. **Resolver abstraction.** Introduce the resolver in bound-mode-only form. Apply it to one or two low-risk module entry points (likely the dashboard snapshot read path, since it is high-traffic but read-only). Validate that the app's behavior is byte-for-byte unchanged.
+1. **Resolver abstraction.** Introduce the resolver in bound-mode-only form. Apply it to one or two low-risk module entry points (likely the dashboard snapshot read path, since it is high-traffic but read-only). Validate that the app's behavior is byte-for-byte unchanged. **(Phase 1 — shipped in `b2798a7`.)** Helper `getUserSpreadsheet_()` lives in the new `central_resolver.js` file as a one-line pass-through to `SpreadsheetApp.getActiveSpreadsheet()`. First and only migrated call site is `getCashToUse()` in `cash_to_use.js:77` (read-only, single call site, hardened with `state` field — see `CENTRAL_APP_FIRST_RESOLVER_SEAM.md → §6`). The 134 other `SpreadsheetApp.getActiveSpreadsheet()` call sites remain unchanged. Smoke test against the bound workbook passed; the dashboard Bills "Recurring Bills (No Due Date)" empty-state concern raised during testing was investigated separately and found unrelated to the seam. No deployment change, no `PropertiesService`, no `openById`, no user mapping.
 2. **Bootstrap and ensure-\* paths.** Route the existing ensure-\* helpers (`ensureOnboardingBankAccountsSheetFromDashboard`, `ensureOnboardingBillsSheetFromDashboard`, `ensureOnboardingDebtsSheetFromDashboard`, `ensureSysAccountsSheet_`, etc.) through the resolver. No new bootstrap behavior — only re-route the existing additive helpers through the abstraction. Bound mode continues to use the active spreadsheet under the hood.
 3. **Read-only dashboard paths.** Migrate the remaining dashboard read paths (Overview snapshot, Bills Due, Cash Flow read, Debts read, Retirement read, Activity log read, Donations read) to the resolver. One module per pass; each pass ships independently with its own regression suite.
 4. **Low-risk write paths.** Migrate Quick Add Payment, Donations save, Income save, Profile save, Upcoming Expenses add/edit/dismiss, House Values save, and similar contained write surfaces. Each pass migrates a single module; behavior is unchanged.
@@ -174,9 +174,9 @@ If a proposed implementation step would do any of the above, the step is out of 
 
 The items below are still open and must be resolved (in writing) before the corresponding implementation step is run. This is a sequencing-level checklist; the deeper Decision Pending lists live in `CENTRAL_APP_DESIGN.md → §10`, `CENTRAL_APP_DEPLOYMENT_OPTIONS.md → §8`, and `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md → §11`.
 
-### Exact resolver name and signature — Decision Pending
-- The architecture docs use `getUserSpreadsheet_()` as the canonical name. Whether the implementation uses that exact name (and what its return signature is — `Spreadsheet` handle only, or a wrapper struct with metadata) is **Decision Pending**.
-- Whether the resolver accepts arguments (e.g. an override for testing) or is strictly nullary is also pending.
+### Exact resolver name and signature — Resolved (Phase 1)
+- Resolver is named **`getUserSpreadsheet_()`** in `central_resolver.js`. Returns a bare `Spreadsheet` handle (not a wrapper struct). Nullary signature — no parameters in Phase 1.
+- A future test-mode override (optional argument) is still possible but is intentionally deferred until a phase needs it. Phase 1's invariant is that the resolver is a one-line pass-through to `SpreadsheetApp.getActiveSpreadsheet()` with no parameters and no behavior beyond that.
 
 ### Mapping storage — Decision Pending
 - `PropertiesService.getUserProperties()` vs central registry sheet (`SYS - User Workbooks`). Likely first approach is `UserProperties` per `CENTRAL_APP_DESIGN.md → §4`. The final choice gates the resolver's central-mode implementation (step 7 in §5).
