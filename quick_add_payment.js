@@ -32,7 +32,7 @@ function normalizeFlowSource_(raw) {
 }
 
 function getQuickAddPaymentUiData() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const year = getCurrentYear_();
 
   // Blank-workbook safety: on a fresh sheet INPUT - Cash Flow YYYY does not
