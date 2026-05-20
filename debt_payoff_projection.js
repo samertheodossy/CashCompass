@@ -14,7 +14,7 @@
  * }}
  */
 function getDebtPayoffReadData() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const tz = Session.getScriptTimeZone();
   const today = new Date();
   const y = getCurrentYear_();
