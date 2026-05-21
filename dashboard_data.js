@@ -1232,7 +1232,7 @@ function isDebtSheetRowInactive_(displayRow, activeCol, balance, minPayment) {
 }
 
 function getDebtPaymentBreakdownForDashboard() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const today = new Date();
   const tz = Session.getScriptTimeZone();
 
