@@ -586,11 +586,13 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <div id="pay_status" class="status"></div>
         </div>
         <div class="info">
-          <div><strong>Sheet:</strong> <span id="pay_sheetName" class="muted">—</span></div>
-          <div><strong>Month:</strong> <span id="pay_monthName" class="muted">—</span></div>
-          <div><strong>Current value in cell:</strong> <span id="pay_currentValue" class="muted">—</span></div>
-          <div><strong>Existing row:</strong> <span id="pay_rowExists" class="muted">—</span></div>
+          <div style="display:none;"><span id="pay_sheetName" class="muted">—</span></div>
+          <div style="display:none;"><span id="pay_rowExists" class="muted">—</span></div>
+          <div>Entries are added to your current-year Cash Flow.</div>
+          <div style="margin-top:6px;">Existing entries for the same item and month may be updated automatically.</div>
           <div class="house-value-delta-sep" aria-hidden="true"></div>
+          <div><strong>Month:</strong> <span id="pay_monthName" class="muted">—</span></div>
+          <div><strong>Already recorded this month:</strong> <span id="pay_currentValue" class="muted">—</span></div>
           <div class="house-value-delta-row"><strong>Previous month (<span id="pay_priorMonthLabel">—</span>):</strong> <span id="pay_priorMonthPayment" class="muted">—</span></div>
         </div>
       </div>
