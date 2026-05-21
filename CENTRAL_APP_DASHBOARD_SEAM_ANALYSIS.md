@@ -2,6 +2,8 @@
 
 Dashboard-layer (`dashboard_data.js`) seam analysis for the next round of Central App resolver migrations. **Analysis/design only.** No Apps Script code, no HTML/JS, no deployment changes, no implementation.
 
+> **Status — Phase 4 shipped in `99bcf37`.** The recommended next dashboard seam in §9 (`getDebtPaymentBreakdownForDashboard()` at `dashboard_data.js:1235`) was migrated to `getUserSpreadsheet_()` in one line. The resolver body remained the same one-line pass-through (no central mode, no `PropertiesService`, no `openById`, no user mapping, no deployment change). Bills Due dashboard surface stayed stable through smoke testing; the Overview load-time slowdown observed during the post-implementation reload was investigated and **traced to Apps Script web-app cold-start / transient platform latency, not to the seam** — `getDebtPaymentBreakdownForDashboard()` is not on the initial Overview load path (see §11 below). After Phase 4: **4 production call sites migrated / 131 remaining** across 26 modules. `dashboard_data.js` now has **9** production `SpreadsheetApp.getActiveSpreadsheet()` call sites remaining (was 10). All Steps B–F in §6 remain deferred and intentionally untouched, including every ensure-\* helper and `buildDashboardSnapshot_()`.
+
 Cross-references:
 - `CENTRAL_APP_DESIGN.md` — overall migration architecture.
 - `CENTRAL_APP_DEPLOYMENT_OPTIONS.md` — preferred deployment direction.
@@ -69,7 +71,7 @@ When a Phase 4 design prompt arrives later, it picks one candidate from this doc
 ### 2.6 `getDebtPaymentBreakdownForDashboard()` — line 1235
 
 - **Behavior class:** READ-only. Reads `INPUT - Debts` via `readSheetAsObjects_(ss, 'DEBTS')`. **No ensure-\* call.** No writes. No blank-workbook short-circuit before the `readSheetAsObjects_` call — but the broader Bills Due / Overview pipeline that consumes this function already guards on `snapshotState` before drawing the cards, so a missing `INPUT - Debts` on this path would propagate as a normal "missing sheet" error and surface as a banner rather than a wrong value.
-- **User-visible surface:** **public dashboard entry** (the `ForDashboard` naming convention is the project's marker for server functions called via `google.script.run` or via in-process snapshot composition). Today the function is consumed by `getUpcomingBillsDueForDashboard()` at line 1294 of the same file and by `next_actions.js`. It feeds the **payNow / paySoon** debt-payment breakdown card on the Bills Due tab.
+- **User-visible surface:** **public dashboard entry** (the `ForDashboard` naming convention is the project's marker for server functions exposed to the dashboard layer). **Call-graph correction (post-Phase 4 verification):** the function's only caller in the codebase is `getUpcomingBillsDueForDashboard()` at line 1294 of the same file. It is **not** invoked from `next_actions.js` (the prior version of this analysis incorrectly listed `next_actions.js` as a consumer — verified via repo-wide grep on `2026-05-21`; no `next_actions.js` reference exists). `getUpcomingBillsDueForDashboard()` itself currently has no callers (no `google.script.run.getUpcomingBillsDueForDashboard(…)` from any HTML client; no server-side caller in any other `.js`). That makes the function reachable only through its sibling wrapper — historically the **payNow / paySoon** debt-payment breakdown card on the Bills Due tab — so its present-day blast radius is genuinely minimal. This call-graph fact is **the reason the observed Overview slowdown after the Phase 4 implementation was not a regression** — see the status banner above and §11.
 - **Downstream helpers called:** `readSheetAsObjects_(ss, 'DEBTS')`, `normalizeDebts_(rows, aliasMap)`, `buildUpcomingPayments_(debts, today, tz, 7, 30)`.
 
 ### 2.7 `getBillsDueFromCashFlowForDashboard(preloadedCurrentCashFlow)` — line 1339
@@ -320,6 +322,60 @@ When that prompt eventually arrives, it should:
 - add a Current State bullet to `SESSION_NOTES.md`.
 
 Until then, the dashboard module remains entirely on the platform call. The resolver continues to be a one-line pass-through. No central mode, no `PropertiesService`, no `openById`, no identity helper, no user mapping, no deployment change.
+
+---
+
+## 11. Phase 4 outcome (retroactive)
+
+This section records the actual Phase 4 shipment to keep the analysis honest about what landed and what was tested.
+
+### What shipped
+
+- **Commit:** `99bcf37`.
+- **Migrated function:** `getDebtPaymentBreakdownForDashboard()`.
+- **File / line:** `dashboard_data.js:1235`.
+- **Change:** `const ss = SpreadsheetApp.getActiveSpreadsheet();` → `const ss = getUserSpreadsheet_();`. Single line, one-line reversible.
+- **Resolver body:** unchanged. Still the one-line pass-through that returns `SpreadsheetApp.getActiveSpreadsheet()`.
+
+### What did not ship (intentional)
+
+- **No ensure-\* helper migration.** `ensureActivityLogSheet_` and `ensureCashFlowYearSheet_` still call `SpreadsheetApp.getActiveSpreadsheet()` directly inside their own bodies; routing them through the resolver is `CENTRAL_APP_IMPLEMENTATION_PLAN.md → §5 step 2` and remains deferred.
+- **No `buildDashboardSnapshot_()` migration.** The canonical dashboard entry at `dashboard_data.js:73` still calls `SpreadsheetApp.getActiveSpreadsheet()` directly. Per §6 Step E it migrates last among the read entries, after Steps B / C / D have proven the pattern.
+- **No write-path migration.** `skipDashboardBill` (§2.10) was not touched.
+- **No other `dashboard_data.js` migration.** Lines 73, 273, 374, 578, 618, 1339, 1406, 2023, and 2369 all still call the platform directly.
+- **No central-mode behavior.** No `PropertiesService`, no `openById`, no identity helper, no user mapping, no `Session.getActiveUser()` plumbing.
+- **No deployment / `appsscript.json` / HTML / schema / Activity event change.**
+
+### Runtime validation outcome
+
+- **Bills Due surface stable.** The payNow / paySoon debt-payment breakdown card rendered the same rows in the same order against the bound developer workbook. No banner. No regression.
+- **Overview load remained stable on subsequent reloads.** Overview KPIs (Cash, Investments, House Equity, Total Debt, Net Worth, the four weekly-delta arrows, buffer runway, financial health score, suggested actions, issues list) all matched the pre-change baseline. `Usable cash after buffers` unchanged (Phase 1 invariant preserved). Cash Flow → Quick Add payee dropdown unchanged (Phase 2 invariant preserved). Debt Overview unchanged (Phase 3 invariant preserved).
+- **No new Activity rows from reads.** `LOG - Activity` row count unchanged after the dashboard load. The §7 critical post-pass invariant ("no `quick_pay`, `bill_skip`, `bank_import_*`, or `donation` rows written by the read pass") held.
+- **No deployment change.** `appsscript.json` not touched. Deployment posture remains `executeAs: USER_DEPLOYING`, `access: MYSELF`.
+
+### Slowdown investigation outcome
+
+Immediately after the implementation pass, the Overview rendered an extended empty-placeholder state on the first reload and then filled in normally. This was investigated as a possible regression with the following findings:
+
+- **`getDebtPaymentBreakdownForDashboard()` is not invoked during the initial Overview load.** The initial Overview load fires `google.script.run.getDashboardSnapshot()` from `Dashboard_Script_Render.html:693`, which dispatches to `getDashboardSnapshot()` → `buildDashboardSnapshot_()` at `dashboard_data.js:72`. `buildDashboardSnapshot_()` does **not** call `getDebtPaymentBreakdownForDashboard()` anywhere in its body, and no helper it transitively calls does either. The function's only caller is `getUpcomingBillsDueForDashboard()` (line 1294), which itself is not invoked from any HTML client or any other server `.js`.
+- **One extra pass-through call cannot account for the observed delay.** `getUserSpreadsheet_()` is a one-line wrapper around `SpreadsheetApp.getActiveSpreadsheet()`. Adding one V8 stack frame is sub-microsecond. Even if the function had been on the Overview load path, the body change at line 1235 cannot produce a multi-second empty-state.
+- **Likely root cause: Apps Script web-app cold start / transient platform latency.** First load after a deploy or extended idle triggers a fresh V8 isolate, OAuth scope handshake, and Spreadsheet open — routinely 5–15 s, with the dashboard sitting on the empty placeholder until the single `getDashboardSnapshot()` round-trip completes. Subsequent reloads were normal speed.
+- **Recommendation honored: commit (not revert).** The Phase 4 line was left in place and committed in `99bcf37`. No additional patches, no broadening of scope, no other function touched.
+
+### Counts after Phase 4
+
+- **Migrated production call sites:** 4 (Phase 1 `cash_to_use.js:77`, Phase 2 `quick_add_payment.js:35`, Phase 3 `debt_payoff_projection.js:17`, Phase 4 `dashboard_data.js:1235`).
+- **Remaining production call sites:** 131 across 26 modules (was 132 before Phase 4).
+- **`dashboard_data.js` residual call sites:** 9 (was 10). The seven read entries listed in §6 Steps B–E remain, plus the two ensure-backed reads (§2.7, §2.8) and the one write entry (§2.10).
+- **Fully resolver-routed production modules:** still **1** (`debt_payoff_projection.js`, achieved in Phase 3). `dashboard_data.js` is not yet a fully resolver-routed module — 9 platform calls remain in the file.
+
+### Architectural boundaries reaffirmed
+
+- The resolver remains a **one-line pass-through** to `SpreadsheetApp.getActiveSpreadsheet()`. Body unchanged since Phase 1 (`b2798a7`).
+- **No central mode** in any phase yet. The migration is exclusively about routing call sites through one abstraction, not about resolving identity to a workbook.
+- **No `PropertiesService`, no `openById`, no identity helper, no user mapping, no deployment change** anywhere in the migration to date.
+- **No write-path migrations yet.** `skipDashboardBill` and every other write entry across the codebase stay on the platform call until the §5 step 4 / step 5 phases.
+- **Ensure-\* helpers stay intentionally deferred.** `ensureActivityLogSheet_`, `ensureCashFlowYearSheet_`, and the various `ensureOnboarding…` helpers are out of scope for any dashboard seam pass; they migrate together in `CENTRAL_APP_IMPLEMENTATION_PLAN.md → §5 step 2`.
 
 ---
 
