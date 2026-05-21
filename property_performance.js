@@ -14,7 +14,7 @@ function isHouseAssetsRentalForCashFlow_(typeStr) {
 
 function getPropertyPerformanceData(payload) {
   const year = getCurrentOrSelectedYear_(payload && payload.year);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
 
   // Blank-workbook safety: on a fresh sheet SYS - House Assets does not
   // exist yet and getHouseNamesFromHouseAssets_() -> getSheet_() would
