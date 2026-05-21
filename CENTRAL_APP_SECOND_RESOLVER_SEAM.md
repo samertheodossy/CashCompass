@@ -1,5 +1,7 @@
 # CENTRAL_APP_SECOND_RESOLVER_SEAM.md
 
+> **Status — shipped in `1b68c71` (Phase 2).** The design below is preserved as a historical record of what was decided before implementation. The actual landed seam matches this design exactly: `getQuickAddPaymentUiData()` in `quick_add_payment.js:35` was migrated by replacing `const ss = SpreadsheetApp.getActiveSpreadsheet();` with `const ss = getUserSpreadsheet_();`. Single line changed, one-line reversible, no other file touched. Lines 185 and 248 in the same file (the Quick Add **write** entries) were intentionally left unchanged, as the design specified. No central-mode behavior, no `PropertiesService`, no `openById`, no user mapping, no deployment change. Manual smoke test in the bound workbook passed: Quick Add payee dropdown matched the baseline, Type and Flow Source dropdowns unchanged, a Quick Add save still wrote to Cash Flow + `LOG - Activity` correctly, and the Phase 1 invariant (`Usable cash after buffers`) was preserved. After Phase 2: 2 production call sites migrated / 133 remaining. Phase 3 has since landed (`72d82b1`); this banner was added retroactively as part of that Phase 3 documentation pass. The text below records the design as authored; it has not been retroactively rewritten.
+
 Design analysis for the **second** Central App resolver seam — the next read-only call site to migrate through `getUserSpreadsheet_()` after Phase 1 shipped in `b2798a7`.
 
 **Analysis/design only.** No Apps Script code, no HTML/JS, no deployment changes, no implementation.
