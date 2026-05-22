@@ -4,6 +4,25 @@ Design analysis for the **smallest possible Central App proof-of-concept** that 
 
 **Analysis/design only.** No Apps Script code, no HTML/JS, no deployment changes, no implementation. Implementation requires its own Cursor prompt with explicit user approval per `CENTRAL_APP_IMPLEMENTATION_PLAN.md → §9` and `CENTRAL_APP_DESIGN.md → §9 Guardrails`.
 
+---
+
+> **Status — REVISED. Manual developer-created beta workbook (original §5 Approach A) is REJECTED for family beta readiness.**
+>
+> By explicit product decision, the original recommendation — *developer pre-creates the beta workbook and the resolver hardcodes a one-user identity branch* (former §5 / §4.1 Approach A) — is **rejected as the family beta path**. The reasoning, captured in §5.bis below, is straightforward:
+>
+> - It does **not** validate the real onboarding experience. Family beta exists precisely to surface whatever breaks during a first-time user's first-run flow. Pre-creating the workbook skips that flow.
+> - It does **not** scale even to friends and family. Each new beta user would require another manual developer-side setup step.
+> - It creates unacceptable operational burden — the developer is on the hook for every workbook creation, every share grant, every recovery event.
+> - It pushes the actual onboarding work outside the proof, so the proof teaches nothing about whether the onboarding works.
+>
+> Approach A may still be acceptable as an **internal platform spike** the developer runs against a second Google account for the explicit and narrow purpose of testing the `executeAs: USER_ACCESSING` deployment posture in isolation, **but not as the family beta readiness gate**.
+>
+> The revised recommendation in §5.bis is an **onboarding-first proof**: the family beta user must arrive at the central app URL with zero CashCompass infrastructure, authenticate, and watch the app create or initialize their own workbook through real bootstrap code paths. Approach D (Drive-API workbook creation on first run + per-user mapping store) is the new family beta direction.
+>
+> §10 is updated accordingly. The recommended next implementation work is **not** to ship Approach A. It is to run an analysis-only pass to audit the existing ensure-\* bootstrap coverage and identify what would still be missing for a real first-run flow.
+>
+> §1–§4 below are preserved for historical context (the candidate analysis is still valid; only the *pick* changes). §5, §6, §9, §10, and §11 are revised. §7 (deferred) and §8 (risks) are augmented with onboarding-first additions. §2 constraints remain in force.
+
 Cross-references:
 - `CENTRAL_APP_DESIGN.md` — migration architecture, abstraction point, guardrails.
 - `CENTRAL_APP_DEPLOYMENT_OPTIONS.md` — preferred direction (Option B: `executeAs: USER_ACCESSING` + user-owned spreadsheets).
@@ -53,31 +72,28 @@ The minimal proof must honor every constraint that has governed Phases 1–6:
 
 ---
 
-## 3. Minimum viable proof definition
+## 3. Minimum viable proof definition (REVISED)
 
-The smallest successful outcome that would count as proof. **All** of the following must hold, but no more:
+The smallest successful outcome that would count as a family beta proof, after the product decision rejecting the manual shortcut. **All** of the following must hold:
 
 1. **Beta user opens a single URL.** A URL the developer shares with one trusted family member. Not a Marketplace listing. Not a publicly discoverable address.
-2. **Beta user authenticates with Google.** Standard Google OAuth consent surface. Beta user grants whatever minimum scopes the deployment requires. No invitation system, no separate sign-up form.
-3. **A spreadsheet for the beta user is resolved.** One of:
-   - the user previously had a CashCompass-shaped workbook the developer already shared with them, and a hardcoded or manual mapping points at it; **or**
-   - a fresh workbook is created in (or shared with) the user during the proof setup, by means that need not be elegant (developer creates it in advance; developer shares it; user-side Drive API is not required for the very first proof).
-4. **The dashboard loads.** Overview renders with the data from the beta user's workbook, even if some surfaces show "no data yet" because the workbook is fresh. No red banners. No "Sheet not found" exceptions. Phase 1–6 resolver seams route to that workbook for the migrated entry points; every other entry point keeps its bound-mode behavior (in this proof, "bound mode" means whatever spreadsheet the current execution context resolves to, with the minimal central-mode hack layered on top — see §5).
-5. **No Apps Script source is copied into the user's workbook.** The beta user's workbook is a data spreadsheet only. The script lives in the central deployment. This is the defining success criterion of the proof — it is what makes it a *central* app.
-6. **Existing bound mode still works for the developer's workbook.** The developer continues to use the bound editor or the existing bound deployment without regression. The minimal proof either runs alongside the existing bound deployment or temporarily replaces it with a one-toggle revert path.
+2. **Beta user authenticates with Google.** Standard Google OAuth consent surface. Beta user grants the minimum scopes the deployment requires — including whatever Drive scope is needed to create their workbook. No invitation system, no separate sign-up form.
+3. **The app creates or initializes the beta user's workbook automatically.** On first arrival with no mapping for the beta user, the app calls Drive (under user identity) and creates a fresh workbook in the user's Drive. The developer does **not** pre-create the workbook. The developer does **not** share a hand-curated workbook. The Apps Script project is **not** copied into the user's workbook. This is the defining property the product decision pins: the family beta validates real onboarding, not a curated stand-in.
+4. **A per-user mapping survives across sessions.** After bootstrap, the mapping (likely `PropertiesService.getUserProperties()` key `cashCompassWorkbookId`) records the beta user's workbook ID. The next page load resolves the same workbook, not a new one. Refreshes do not bootstrap again.
+5. **Additive ensure-\* helpers create canonical structure on demand.** As the beta user touches features (Setup / Review, Quick Add, Bills, Debts, etc.), the existing ensure-\* helpers create the canonical sheets and headers additively against the freshly created workbook. No new bootstrap content is invented for the proof.
+6. **The dashboard loads against the freshly bootstrapped workbook with no red banners.** Overview renders. Every other tab opens with valid `state` semantics — empty surfaces show calm "no data yet" copy, not exceptions or broken layouts.
+7. **The beta user can complete first writes end-to-end.** First Quick Add Payment, first Bill add, first Debt add, first Bank Account add — each exercises a different ensure-\* helper and completes against the user's own workbook with the activity log recording correctly.
+8. **No Apps Script source is copied into the beta user's workbook.** The script lives in the central deployment only. The beta user never opens the Apps Script editor, never runs `clasp push`, never binds anything.
+9. **Existing bound mode still works for the developer.** The developer continues using their existing bound deployment / editor without regression. The family beta deployment is a **separate deployment** from the developer's daily-use bound deployment per `CENTRAL_APP_FAMILY_BETA_PLAN.md → §5`.
 
-A "minimum viable proof" run that **does not** include any of the items below is still a success:
+The following deliberately remain out of scope even under the revised stance (they belong to later phases):
 
-- No user-driven workbook creation flow. The developer may create the beta user's workbook by hand and hand them a link.
-- No `PropertiesService` mapping store. The proof may use a hardcoded mapping for one email → one spreadsheet ID.
-- No "connect existing workbook" UI. The mapping is set by the developer outside the app.
-- No first-run wizard. The beta user lands directly on the dashboard.
-- No `SpreadsheetApp.openById()` *for the developer's workbook* — only for the beta user's workbook, behind a runtime check.
-- No Drive API call from inside the script — the workbook exists before the proof runs.
-- No multi-user support — the proof works for one beta user, period.
-- No support tooling — debugging is verbal/screen-share with the beta user, plus existing `Logger.log` output.
+- No "connect existing workbook" flow. The first family beta user has no pre-existing CashCompass workbook to connect; the proof only exercises the create-fresh path. Per `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md → §4`, the connect-existing path is a documented future option but is not required for the first family beta proof.
+- No multi-user support. The proof is for one user.
+- No monetization, no feature gating, no admin tooling, no public listing — see §7.
+- No advanced support tooling beyond the basic recovery surfaces in §6.7.
 
-This minimal definition deliberately violates many of the eventual lifecycle contracts in `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md` — specifically, the proof skips bootstrap, validation, mapping store, recovery flows, and revocation. Those layers are deferred to §6; they are not part of the *first* experiment.
+This revised definition aligns with `CENTRAL_APP_FAMILY_BETA_PLAN.md → §2 Beta success definition` and `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md → §3 New user onboarding`. The family beta proof does not violate the lifecycle contracts; it exercises the central path of each one.
 
 ---
 
@@ -102,7 +118,8 @@ Five candidate shapes for the first experiment, ordered from most-manual to most
   - No path to more than one beta user without another code change.
   - Identity check inside the resolver pulls `Session.getEffectiveUser()` for the first time in the codebase. That call is new architectural surface.
   - Forces the deployment-settings change to ship at the same time as a code change. Two-variable rollback.
-- **Verdict:** Strong candidate. Smallest credible scope. Best fit for the "one trusted family member" criterion.
+- **Verdict (original):** ~~Strong candidate. Smallest credible scope. Best fit for the "one trusted family member" criterion.~~
+- **Verdict (REVISED):** **REJECTED for family beta readiness.** Acceptable only as an internal platform spike the developer runs against a second Google account to test the deployment posture in isolation. Does not validate real onboarding, does not scale, and forces ongoing manual operational burden. See top-of-document banner and §5.bis.
 
 ### 4.2 Approach B — Manual mapping in a developer-owned `SYS - User Workbooks` sheet
 
@@ -147,10 +164,11 @@ Five candidate shapes for the first experiment, ordered from most-manual to most
 - **Pros:**
   - This is the actual target state of `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md → §3`.
 - **Cons:**
-  - Way too much surface area for a *minimum* proof. Adds: Drive API integration, scope-discipline decision, folder placement decision, filename decision, partial-bootstrap recovery, consent denial handling.
+  - Significant surface area. Adds: Drive API integration, scope-discipline decision, folder placement decision, filename decision, partial-bootstrap recovery, consent denial handling.
   - Almost every Decision Pending item from the lifecycle doc has to be resolved before this approach can ship.
   - Higher rollback cost than any of A / B / C.
-- **Verdict:** Out of scope for the minimal proof. This is the second-or-third experiment after the minimal proof confirms the end-to-end shape works.
+- **Verdict (original):** ~~Out of scope for the minimal proof. This is the second-or-third experiment after the minimal proof confirms the end-to-end shape works.~~
+- **Verdict (REVISED):** **RECOMMENDED for family beta readiness.** The added surface area is exactly what family beta needs to validate. Skipping it produces a proof that teaches nothing about real first-run behavior, which is precisely the failure mode the user's product decision rejects. The Decision Pending items below (§5.bis) must be answered before any Approach D implementation prompt — those decisions are the substance of the proof, not preconditions to it. See §5.bis for the proof shape and §6 for the layered implementation roadmap.
 
 ### 4.5 Approach E — Don't ship code; manually verify "in principle"
 
@@ -159,74 +177,147 @@ Five candidate shapes for the first experiment, ordered from most-manual to most
 
 ---
 
-## 5. Recommended first experiment
+## 5. Recommended first experiment (RETRACTED)
 
-**Approach A — Hardcoded one-user mapping in the resolver.**
+> **RETRACTED.** The original recommendation in this section selected Approach A — hardcoded one-user mapping in the resolver, with the developer pre-creating the beta workbook. That recommendation is rejected for family beta readiness by explicit product decision. See §5.bis for the active recommendation. The original analysis is preserved below for the audit trail and to keep the trade-off visible.
 
-This is intentionally tiny. It is not the elegant Central App. It is the smallest possible thing that demonstrates the end-to-end shape works for one real user.
+### Original recommendation (no longer in force)
 
-### What the proof actually does
+The original §5 selected **Approach A — Hardcoded one-user mapping in the resolver.** The reasoning was:
 
-- The developer creates a fresh workbook in their own Drive ahead of time (call it the "beta workbook"). The developer can either: (a) share the beta workbook with the beta user at read+write, leaving developer-owned per `CENTRAL_APP_DEPLOYMENT_OPTIONS.md → Option A1`, or (b) transfer ownership to the beta user so the beta workbook lives in their Drive per Option B. Choice **(b)** is the preferred direction; choice **(a)** is acceptable for the first proof and is the simpler setup. **Decision pending for the implementation prompt.**
-- The developer extends the resolver, additively, with a runtime check that returns the beta workbook for the one beta user and continues to pass through for everyone else (specifically: for the developer).
-- The deployment is updated to `executeAs: USER_ACCESSING` and an access scope that lets the beta user reach the URL. The exact `access:` value (`DOMAIN` vs `ANYONE`) depends on whether developer and beta user share a Google Workspace domain — **Decision Pending for the implementation prompt**.
-- The beta user receives the URL, completes Google OAuth consent, and lands on the dashboard reading their beta workbook.
-- The developer continues using their existing bound deployment / editor. If the deployment is shared between developer and beta user, the developer's identity falls through the new resolver check and gets `SpreadsheetApp.getActiveSpreadsheet()` — which under `USER_ACCESSING` returns whatever spreadsheet the developer last had open, or the deployment's bound spreadsheet, depending on Apps Script semantics. If this turns out to be flaky in practice, the resolver branch is widened to give the developer an explicit hardcoded workbook ID too — same shape, two entries in the conditional.
+- Smallest credible code change (one resolver branch).
+- Smallest deployment toggle.
+- One-line reversible per change.
+- Preserves the developer's bound experience.
 
-### Why this is the right first experiment
+### Why the original recommendation is rejected
 
-- **Smallest credible scope.** The resolver is the only code change. The deployment-settings change is one toggle. The mapping is two constants (email + spreadsheet ID).
-- **Resolver remains a pass-through for the developer.** The Phase 1–6 invariant ("resolver body unchanged since Phase 1") evolves into a more nuanced statement: *resolver body is a pass-through for all callers except the one branch that handles the beta user*. The Phase 1–6 callers route through unchanged.
-- **Honors `executeAs: USER_ACCESSING` posture.** Per `CENTRAL_APP_DEPLOYMENT_OPTIONS.md → §7`. The proof does not require the developer-as-runtime-identity model. It explicitly chooses the preferred direction.
-- **No `SpreadsheetApp.openById` for the developer.** The proof introduces `openById` *only* on the beta-user branch. The developer's branch remains on `getActiveSpreadsheet()`. This keeps the developer's code path identical to today.
-- **No `PropertiesService`.** The mapping is in source. `PropertiesService` is the *second* experiment.
-- **No Drive API.** The workbook exists before the proof runs.
-- **No bootstrap.** The workbook is hand-curated.
-- **No first-run UI.** The beta user lands on the dashboard.
-- **Reversible.** Two diffs: the resolver branch, and the deployment settings. Either one can be reverted independently.
+The original recommendation optimized for *smallest diff*. Family beta optimizes for *real onboarding fidelity*. Those goals are in direct conflict, and the product decision is that fidelity wins:
 
-### What the first proof must measure
+- **Approach A does not validate first-run flow.** The defining purpose of family beta is to surface whatever breaks during a first-time user's first-run flow. A hand-created beta workbook is a steady-state setup, not a first-run flow. Approach A could pass cleanly while the actual onboarding the next user hits remains entirely unproven.
+- **Approach A does not scale even to friends and family.** Every additional beta user requires another developer-side workbook creation, another share grant, another resolver code edit (under Approach A's hardcoded model), and a redeploy. That is operationally untenable for even five users.
+- **Approach A pushes onboarding work outside the proof.** The Drive-API integration, scope-discipline decision, folder placement, filename convention, partial-bootstrap recovery, consent denial handling — all the items that genuinely *can* break for a real user — sit outside the experiment. A passing Approach A proof gives the team no information about any of them.
+- **Approach A puts the developer in the support critical path.** Every workbook creation, every share grant, every "I can't access my workbook" recovery event becomes a developer task. The product can't move forward under that operational model.
 
-- **Does the dashboard load for the beta user without red banners?**
-- **Are the Phase 1–6 resolver seams routing to the beta workbook?** Smoke-test the five resolver-routed entry points (Overview cash-to-use card, Quick Add, Debt Overview, Bills Due debt-payment breakdown, Property Performance) — they should read from the beta workbook for the beta user, and the developer workbook for the developer.
-- **Does the existing dashboard work for the developer at the same URL?** This is what the §3 success criterion ("bound mode still works for the developer") tests under the central deployment.
-- **What latency does first-render show?** Cold-start under `USER_ACCESSING` is unknown; the only way to measure is to run the proof. Per the Phase 4 cold-start investigation pattern.
-- **What happens to non-resolver-routed entry points?** Most modules still call `SpreadsheetApp.getActiveSpreadsheet()` directly. Under the new deployment, that returns whatever the platform decides — which is a behavior we genuinely do not know without running the experiment. This is the **single most important observation the proof produces**, and is the reason the proof is worth running before more resolver seams ship.
+### Where Approach A is still acceptable
+
+Approach A may be appropriate as an **internal platform spike** — a narrow, time-boxed test the developer runs against their own second Google account, for the sole purpose of confirming that `executeAs: USER_ACCESSING` deployments behave the way the design docs assume. Specifically:
+
+- It can confirm the new deployment posture loads at all.
+- It can confirm the Phase 1–6 resolver seams route correctly under `USER_ACCESSING`.
+- It can surface what the 129 remaining direct `SpreadsheetApp.getActiveSpreadsheet()` call sites do under the new posture.
+
+Used in that narrow scope, Approach A is a **deployment posture test**, not a family beta readiness test. The platform spike does not constitute family beta readiness and does not authorize inviting an external user. If the spike runs and produces clean results, the team still needs the §5.bis proof before any family beta user is invited.
+
+---
+
+## 5.bis Revised recommendation — onboarding-first proof (ACTIVE)
+
+**The family beta proof must validate the real onboarding flow end-to-end.** The recommended shape is **Approach D — Drive-API workbook creation on first run + per-user mapping store**, scoped to one family beta user.
+
+This is intentionally larger than Approach A. It is the smallest credible shape that demonstrates a real user can become a CashCompass user without the developer touching their workbook or their machine.
+
+### What the family beta proof actually does
+
+1. **Beta user opens the central app URL.** Single deployment URL, shared 1:1 with the beta user, not publicly listed.
+2. **Beta user authenticates with Google.** Standard OAuth consent surface. The deployment requests the **minimum** scopes required for the first-run flow: a Sheets scope for read/write of the user's own workbook, and a Drive scope sufficient to create one new file in the user's Drive. Specific scope set is **Decision Pending** for the implementation prompt.
+3. **Resolver detects no mapping.** Inside `getUserSpreadsheet_()`, after the resolver reads the caller's identity, it checks the per-user mapping store. For a first-time user, no mapping exists. The resolver hands off to a bootstrap helper (see §6).
+4. **Bootstrap creates a workbook in the user's own Drive.** Drive API is called under the user's identity (`executeAs: USER_ACCESSING`). The workbook is created in the user's Drive (location and filename are **Decision Pending**). The mapping is written to the per-user mapping store as soon as the workbook exists.
+5. **Additive ensure-\* helpers run against the fresh workbook.** The existing `ensureOnboardingBankAccountsSheetFromDashboard`, `ensureOnboardingBillsSheetFromDashboard`, `ensureOnboardingDebtsSheetFromDashboard`, `ensureSysAccountsSheet_`, etc., create the canonical structure lazily as features touch it — same contract as bound mode today. **No new bootstrap code is invented for the proof.** Whatever ensure-\* coverage exists is what runs.
+6. **Beta user lands on Setup / Review (already delivered).** Read-only walkthrough of the input areas. The user understands what the app expects them to enter.
+7. **Beta user reaches the dashboard.** Overview renders. All other tabs (Bills, Cash Flow, Planning, Assets, Activity) open without red banners against the freshly bootstrapped workbook. The `state` field correctly identifies "notSetUp" surfaces.
+8. **Beta user adds first real data.** The first Quick Add Payment, first Bill add, first Debt add, first Bank Account add all complete end-to-end. Each one exercises a different ensure-\* helper. The activity log records each entry.
+9. **No Apps Script source is in the beta user's workbook.** The script lives in the central deployment only. The beta user never sees the Apps Script editor.
+10. **Developer's bound experience is unchanged.** Per §2 constraint set, the developer continues to use their existing bound deployment. The beta proof runs on a separate Apps Script deployment, not the developer's daily-use deployment.
+
+### Why this is the right family beta proof
+
+- **It validates the real product path.** Every step the next non-developer user will take is exercised. Whatever breaks for the beta user breaks for the next user; whatever works, works.
+- **It exercises the actual onboarding code.** Drive API call, mapping write, ensure-\* helper chain, blank-workbook resilience, Setup / Review handoff — all live code paths, not pre-curated state.
+- **It produces a meaningful "is this product real?" signal.** A passing proof means CashCompass can take a brand-new user through onboarding without the developer in the loop. That is the difference between "we have a developer tool" and "we have a product."
+- **It surfaces operational issues early, not at scale.** Drive quota failures, consent denials, partial-bootstrap recovery, scope-discipline mistakes — all of these appear during the one-user proof, when the developer can iterate on them in real time. They do *not* appear after five users are stuck.
+- **It is still a private beta.** One user, URL shared out of band, no public discovery, no monetization, no marketplace. The fidelity gain does not require launching publicly.
+
+### What the family beta proof must measure
+
+- **Does the entire first-run flow work end-to-end, hands-off?** From URL click to dashboard render, with zero developer intervention. This is the critical pass/fail.
+- **Are all required sheets created additively as the user touches features?** Specifically: when the user opens Bank Accounts → Add new for the first time, does the ensure-helper chain create `INPUT - Bank Accounts`, `SYS - Accounts`, the canonical year block, and the LOG sheet — all without throwing? Each ensure-\* helper exercised in real-world conditions counts as a separate observation.
+- **Does the user-to-workbook mapping survive a refresh?** The next page load must find the same workbook, not bootstrap a new one. This is the test that `PropertiesService` (or the chosen mapping store) is actually working.
+- **What happens under each recovery scenario?** (a) User denies OAuth scope. (b) Drive quota is exhausted. (c) User accidentally deletes the workbook from their Drive between sessions. (d) Bootstrap is interrupted mid-flow. Each scenario must produce a calm, recoverable surface.
+- **How long does first-run feel?** Drive workbook creation is not instant. The bootstrap latency, observed end-to-end, sets the bar for what loading-state UX must cover.
+
+### Why this is bigger than Approach A — and why that is the right size
+
+Approach D is unambiguously more work than Approach A. It introduces Drive API, the mapping store, and the bootstrap orchestration in one experiment. The product decision is that the additional work is the *point* of the experiment — not a cost paid to reach it.
+
+The §6 "Required future implementation layers" section is updated accordingly: layers the original §5 deferred (mapping store, Drive-API workbook creation, first-run UI, partial-bootstrap recovery) are now in scope for the family beta proof. Layers that remain out of scope are listed in §7.
 
 ---
 
 ## 6. Required future implementation layers
 
-Even the minimal proof in §5 requires real additive scaffolding. The list below is intentionally complete: it is the floor of what must exist before *any* version of the central flow runs end-to-end, even the tiniest one.
+The onboarding-first proof in §5.bis requires substantial additive scaffolding. The list below is intentionally complete: it is the floor of what must exist before the family beta proof can run end-to-end. Each layer is its own implementation prompt (or small group of prompts); none is implemented yet.
 
 ### 6.1 Spreadsheet resolution
-- **Already exists (additively):** `getUserSpreadsheet_()` in `central_resolver.js`. Used by six call sites.
-- **Still missing for the minimal proof:** the identity branch — a small extension to `getUserSpreadsheet_()` that calls `Session.getEffectiveUser().getEmail()` and routes the beta user to a different workbook. This is the only code change for the minimal proof.
-- **Still missing for any real version:** a generalized mapping resolution (per-user mapping store, fallback to active spreadsheet for bound users, recovery semantics when the mapping breaks).
+- **Already exists (additively):** `getUserSpreadsheet_()` in `central_resolver.js`. Used by six call sites. Resolver body is the one-line pass-through, unchanged since Phase 1 `b2798a7`.
+- **Required for the family beta proof:** a generalized resolution path inside `getUserSpreadsheet_()`. On bound deployments the resolver continues to pass through to `SpreadsheetApp.getActiveSpreadsheet()`. On the central deployment, the resolver consults the per-user mapping store; if no mapping exists, it invokes bootstrap (6.3); if a mapping exists, it opens the workbook by ID and returns it. The bound-mode path remains the default for the developer's deployment.
+- **Decision Pending:** whether the resolver detects "central mode" by deployment ID, by `Session.getEffectiveUser()` shape, by an `appsscript.json` flag, or by an environment-style script property. The detection mechanism must be one of these — not multiple — to keep identity logic concentrated.
 
-### 6.2 Spreadsheet ownership model
-- **Already decided in principle:** user-owned spreadsheets in the user's Drive per `CENTRAL_APP_DEPLOYMENT_OPTIONS.md → §7`.
-- **Still missing for the minimal proof:** the actual ownership decision for the beta user's workbook. Per §5, this is a Decision Pending for the implementation prompt — developer-owned-and-shared is acceptable for the first proof; transferred-to-user is preferred but adds steps.
-- **Still missing for any real version:** Drive API call surface, folder placement, filename convention, sharing defaults.
+### 6.2 User-to-workbook mapping store
+- **Required for the family beta proof.** This is a new layer with no current code.
+- **Preferred mechanism:** `PropertiesService.getUserProperties()`, key `cashCompassWorkbookId`, value = spreadsheet ID. Per-user, naturally scoped, no admin-spreadsheet leak. Documented as the likely first approach in `CENTRAL_APP_DESIGN.md → §4` and `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md → §5`.
+- **Decision Pending:** confirmation of `PropertiesService.getUserProperties()` over the central-registry alternative. The trade-off is recorded in `CENTRAL_APP_DEPLOYMENT_OPTIONS.md → §3` (central registry leaks plan/identity data under `USER_ACCESSING` unless a bridge or library is involved — which is itself a much larger scope).
+- **Decision Pending:** recovery semantics when the mapping points to a deleted or inaccessible workbook. Three options sketched in `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md → §7` ("Spreadsheet deleted" — create new / link existing / cancel). One must be picked for the family beta proof; the other two can be deferred.
 
-### 6.3 Onboarding / create-or-connect flow
-- **Already decided in principle:** additive bootstrap via existing ensure-\* helpers per `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md → §3`.
-- **Still missing for the minimal proof:** none. The proof skips user-driven onboarding entirely. The developer hand-bootstraps.
-- **Still missing for the second experiment (post-minimal-proof):** a "Link existing workbook" helper, or an automatic create-on-first-run path.
+### 6.3 Spreadsheet bootstrap (Drive-API workbook creation)
+- **Required for the family beta proof.** Largest single new layer.
+- **What it must do:** under `executeAs: USER_ACCESSING`, call the Drive API (or `SpreadsheetApp.create()` if its semantics suffice under user identity) to create a fresh workbook in the user's Drive. Write the spreadsheet ID into the mapping store before returning. Surface a calm loading state during creation (latency is not instant).
+- **Decision Pending:** Drive API surface vs `SpreadsheetApp.create()`. Both are options under user identity; the Drive API path is more flexible (folder placement, sharing defaults) but requires Drive scope and more setup.
+- **Decision Pending:** where in the user's Drive the workbook lives (Drive root, a dedicated "CashCompass" folder, user-chosen). Per `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md → §11`.
+- **Decision Pending:** filename convention (`CashCompass Workbook`, `CashCompass — <email>`, user-customizable).
+- **Decision Pending:** default sharing on creation (likely: not shared with anyone; the user is the sole owner).
+- **Failure handling required:** Drive quota exhausted, scope denied, transient Drive API error, mapping write failure after creation. Each must produce a recoverable surface, not a red banner.
 
-### 6.4 Deployment / auth settings
-- **Already decided in principle:** `executeAs: USER_ACCESSING`, `access:` to be chosen per `CENTRAL_APP_DEPLOYMENT_OPTIONS.md → §8` (Decision Pending).
-- **Still missing for the minimal proof:** the actual deployment-settings change in `appsscript.json` (or in the Apps Script deployment UI). The proof is unrunnable without it.
-- **Still missing for any real version:** OAuth scope discipline (only what each feature needs); scope versioning and re-consent handling; verified OAuth (for any deployment broader than family).
+### 6.4 Additive ensure-\* helper chain on a fresh workbook
+- **Already exists (largely).** This is the project's most valuable existing asset for the central app proof. Phases of CashCompass have already shipped: `ensureOnboardingBankAccountsSheetFromDashboard`, `ensureOnboardingBillsSheetFromDashboard`, `ensureOnboardingDebtsSheetFromDashboard`, `ensureSysAccountsSheet_`, the Cash Flow year-sheet stylers, and many more. Each first-write surface defensively creates the sheet it needs.
+- **Required for the family beta proof:** confidence that the ensure-\* coverage is *complete enough* that a freshly bootstrapped workbook reaches Setup / Review and the dashboard without a red banner, and that every core flow in `CENTRAL_APP_FAMILY_BETA_PLAN.md → §4` can complete its first write without exception.
+- **Unknown:** whether the existing ensure-\* coverage is in fact complete. This is the **recommended next analysis pass** — see §10.
+- **No new ensure-\* helpers should be invented for the proof.** If the audit (§10) surfaces a gap, that gap is its own implementation prompt under the existing ensure-\* pattern, not part of the proof itself.
 
-### 6.5 Basic failure handling
-- **Already decided in principle:** every read path returns a `state` field; ensure-\* helpers are idempotent; no red banners. Per `CENTRAL_APP_DESIGN.md → §2` and `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md → §6`.
-- **Still missing for the minimal proof:** none. The proof's failure modes are: workbook not shared (visible immediately to the developer), OAuth scope denial (visible to the beta user), Apps Script execution error (visible in `Logger.log`). All are debuggable verbally.
-- **Still missing for any real version:** structured error surface for "workbook gone," "OAuth revoked," "Drive scope denied," etc. per `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md → §7`.
+### 6.5 Deployment / auth settings
+- **Required for the family beta proof.** Separate deployment from the developer's bound deployment.
+- **What it must do:** stand up an Apps Script web app deployment with `executeAs: USER_ACCESSING` and an `access:` scope sufficient for the beta user to reach the URL (likely `ANYONE_WITH_GOOGLE`, possibly `DOMAIN` if developer and beta user share a Workspace domain). The bound developer deployment is untouched.
+- **Decision Pending:** OAuth scope list — minimum required for first-run (Sheets + Drive create), plus whatever the existing app already requires. Scope discipline matters because every additional scope is something the beta user must consent to.
+- **Decision Pending:** whether the proof deployment is a copy of the production script project or the same project with a second deployment. The "same project, two deployments" path is simpler and is the preferred direction unless something blocks it.
 
-### 6.6 Fallback / rollback
-- **Still missing for the minimal proof:** a documented rollback procedure. The minimal proof's rollback is: (a) revert the resolver branch, (b) revert the deployment settings to the prior `executeAs: USER_DEPLOYING` / `access: MYSELF`. Both reverts are one-step. The proof should not run until that procedure is written down — possibly inline in the implementation prompt that authorizes the proof.
-- **Still missing for any real version:** automated tests for the rollback path; clear "is the central deployment up?" health check; a way for the beta user to fall back to a bound copy if the central deployment breaks during the proof window.
+### 6.6 First-run UI
+- **Already exists (partial):** Setup / Review (`Dashboard_Script_Onboarding.html`) is delivered and is the natural landing surface once the workbook exists.
+- **Required for the family beta proof:** a calm "creating your CashCompass workbook…" intermediate surface displayed during bootstrap latency. Either a dedicated loading screen, or a Setup / Review pre-state. **Decision Pending** which.
+- **Required:** OAuth consent surface (controlled by Google, not by the app) plus a clear "this is what we need access to" plain-language note before the user clicks consent. The note's wording is **Decision Pending** for the implementation prompt.
+
+### 6.7 Basic failure handling
+- **Already exists (philosophy):** every read path returns a `state` field; ensure-\* helpers are idempotent; no red banners. Per `CENTRAL_APP_DESIGN.md → §2`.
+- **Required for the family beta proof:** wire structured user-facing surfaces for the four critical first-run failures — (a) OAuth scope denied, (b) Drive quota exhausted, (c) Drive API transient error, (d) mapping read succeeded but workbook is gone. Each produces a calm message and a clear next action per `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md → §7`.
+- **Decision Pending:** wording for each surface (the design doc describes the response semantics; the actual user-visible copy is not yet written).
+
+### 6.8 Fallback / rollback
+- **Required for the family beta proof:** a documented rollback procedure before the deployment goes live to the beta user. At minimum: (a) revert the deployment to its prior posture (or take down the central deployment URL), (b) ensure the developer's bound deployment is untouched so the developer continues working, (c) define what happens to the beta user's already-created workbook (the user keeps it in their Drive — the script no longer touches it).
+- **Required:** a known-good fallback path for the beta user if the central deployment breaks during the proof — "you can keep using the workbook in your Drive directly, even without CashCompass" is the minimum truthful statement, and is true under the user-owned model.
+
+### Layered implementation order
+
+The §6 layers are not all built in a single pass. The recommended sequence (subject to its own per-layer implementation prompts) is:
+
+1. **§10 audit pass (next step).** Identify ensure-\* coverage gaps and decisions to pin before any code is written.
+2. **§6.5 — Stand up the proof deployment** (`USER_ACCESSING`, restricted access) as a separate deployment from the developer's bound deployment. Confirm the deployment loads against the developer's own second Google account. This is the internal platform spike (former Approach A scope) used as a deployment-posture smoke test, not as the family beta gate.
+3. **§6.2 — Add the per-user mapping store** with a "no mapping → return null" stub. Confirm reads under `USER_ACCESSING`.
+4. **§6.3 — Add the bootstrap helper** that creates the workbook in the user's Drive and writes the mapping. Confirm against the developer's second Google account first.
+5. **§6.4 — Confirm the ensure-\* chain** carries the freshly bootstrapped workbook all the way to the dashboard, against the developer's second Google account. Iterate on any audit gaps surfaced in step 1.
+6. **§6.6 / §6.7 — Wire the first-run loading UX and recovery surfaces.** Confirm each recovery state against the developer's second Google account.
+7. **§6.8 — Document the rollback procedure.** Verify the developer's bound deployment is unaffected.
+8. **Family beta proof itself.** Invite the family beta user. Per `CENTRAL_APP_FAMILY_BETA_PLAN.md → §5`.
+
+Each step is its own implementation prompt. The audit in step 1 is the next implementation-or-analysis pass; nothing past step 1 is authorized until the audit completes.
 
 ---
 
@@ -245,13 +336,22 @@ The list of things that absolutely should **not** be in the minimal proof, even 
 - **Large-scale migration of existing users.** No "connect existing workbook" wizard for the family or anyone else. The minimal proof is *one* user with *one* pre-shared workbook.
 - **Full write-path migration.** Per `CENTRAL_APP_IMPLEMENTATION_PLAN.md → §5 steps 4–5`. Quick Add Payment writes, planner output writes, Bills/Debts/Assets/Property writes — all stay on the platform call. The minimal proof works because writes go to whichever spreadsheet the platform routes them to, which in this case is the beta workbook (the only workbook the beta user's session sees under `USER_ACCESSING`).
 
-### Soft-deferred (not in this proof, but plausibly in the next experiment)
+### In scope for the family beta proof (no longer "soft-deferred")
 
-- **`PropertiesService` mapping store** (Approach C). The natural follow-up experiment.
-- **Drive API workbook creation on first run** (Approach D). The third experiment after the mapping store is proven.
-- **Recovery flows** ("workbook deleted," "OAuth revoked," "scope denied"). Designed in `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md → §7`; implementable as a layered set of additive ensure-\*-like recovery helpers after the minimal proof has demonstrated the steady-state flow works.
-- **Multi-user support.** Approach A's hardcoded mapping is for one user. The first time more than one user reaches the URL, the mapping store has to land (Approach C minimum).
-- **Bound-mode → central-mode migration helper.** For the developer themselves, plus any family member who already has a bound copy. The minimal proof side-steps this because the beta user has no bound copy.
+The product decision moves the following items into the proof itself. They are listed here so the §7 deferred boundary is unambiguous:
+
+- **`PropertiesService` mapping store** (formerly Approach C). Required — §6.2.
+- **Drive API workbook creation on first run** (formerly Approach D). Required — §6.3.
+- **First-run UX (loading state during bootstrap + post-bootstrap landing on Setup / Review).** Required — §6.6.
+- **Recovery surfaces for the four critical first-run failures** (scope denied, Drive quota, transient Drive error, missing-workbook recovery). Required — §6.7.
+
+### Still soft-deferred (not in this proof)
+
+- **Multi-user support.** Family beta proof is one user. The mapping store is per-user from day one, so adding more users later is a coordination problem, not an architectural one — but it is explicitly not part of the first proof.
+- **"Connect existing workbook" flow.** The first beta user has no pre-existing CashCompass workbook to connect; the proof exercises only the create-fresh path. The connect-existing path is documented in `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md → §4` for later phases.
+- **Bound-mode → central-mode migration helper.** For the developer themselves, plus any family member who already has a bound copy. The first family beta proof side-steps this because the beta user has no bound copy.
+- **Advanced recovery flows beyond the four critical first-run failures.** Examples: a user moving the workbook to a Shared Drive, a user accidentally re-running the bootstrap and producing two workbooks. Designed in `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md → §7`; out of scope for the first proof.
+- **Verified OAuth / Workspace Marketplace publication.** Required only when the deployment is broadened beyond the immediate family. Out of scope here.
 
 ---
 
@@ -350,61 +450,83 @@ The codebase itself is closer to ready than the design docs suggest — Phases 1
 
 ## 10. Recommended next implementation category
 
-Now that the minimal proof is scoped, the implementation team has a real choice about where to spend the next pass: continue widening resolver coverage, or pivot to the proof.
+The original §10 recommended pivoting to a small Approach A experiment. That recommendation is retracted along with §5. The revised next step is **analysis-only**, not implementation.
 
-### 10.1 Option — More resolver seams
+### 10.1 Options reviewed
 
-- **Next candidate (per Phase 6 design):** `nextActionsPickRollingDebtTarget_()` in `next_actions.js` — would make `next_actions.js` the third fully resolver-routed module.
-- **Pros:** continues the pattern that has worked. Every seam shipped reduces the risk surface that the minimal proof might surface in §8.3. Module coverage widens.
-- **Cons:** seams in isolation cannot prove the central flow works. The flip-the-deployment moment is still required at some point.
+- **More resolver seams** (e.g., Phase 7 against `nextActionsPickRollingDebtTarget_`). Still safe to ship in parallel with the next analysis pass; no longer the primary work, but no longer blocked either.
+- **Approach A platform spike** (former §5 recommendation). Acceptable only as a deployment-posture smoke test against the developer's second Google account; explicitly not a family beta gate.
+- **Approach C mapping-store implementation** (Decision Pending: `PropertiesService` vs central registry). Cannot land cleanly until the audit in §10.2 confirms what ensure-\* coverage exists for the workbook the mapping points at.
+- **Approach D family beta proof implementation.** Cannot land cleanly until the audit in §10.2 plus the §6 Decision Pending items are answered.
 
-### 10.2 Option — Minimal beta proof (this document)
+### 10.2 Recommended next step — ensure-\* bootstrap audit (analysis only)
 
-- **Action:** ship the §5 experiment with the family beta user.
-- **Pros:** converts the migration from "we have seams" to "we have an end-to-end flow." Produces a real risk register (which call sites break under `USER_ACCESSING`). Unblocks every subsequent monetization / lifecycle question by establishing the platform actually works.
-- **Cons:** higher coordination cost (involves a real human family member). Requires three Decision Pending items decided up front. Surfaces unknown platform behaviors with no advance warning.
+**The next pass should be an analysis-only audit of existing ensure-\* bootstrap coverage.** Specifically, a new design doc that answers:
 
-### 10.3 Option — Mapping store proof (Approach C)
+1. **Which sheets does the existing codebase create automatically today?** For each entry point (Quick Add, Bill add, Bills Due render, Debt add, Bank Account add, House Values add, Investments add, Cash Flow Upcoming add, Donations add, Setup / Review, Property Performance, Retirement save, Profile save), enumerate which ensure-\* helper runs and which sheet(s) it creates on a blank workbook.
+2. **Which required sheets are missing from automatic bootstrap?** Specifically: are there sheets the dashboard expects to read but that no ensure-\* helper creates? If yes, what is the user-visible behavior today on a blank workbook (state field, calm empty surface, red banner)?
+3. **What blank-workbook path already works end-to-end?** Map the journey a brand-new user takes through the dashboard against a fully empty workbook: which tabs render cleanly, which tabs render a calm "no data yet," which tabs surface anything resembling an error.
+4. **What would the first-run Central App bootstrap need to add on top of what already exists?** Specifically: with the existing ensure-\* coverage as the floor, what additional bootstrap step (if any) is required so that a freshly created workbook reaches Setup / Review without intermediate state?
+5. **Which Decision Pending items from `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md` are actually blocking?** The lifecycle doc has many Decision Pending items; the audit should classify them as (a) blocking the first family beta proof, (b) deferrable to a later phase. The list of "blocking" items becomes the input to the implementation prompts that follow.
 
-- **Action:** build the `PropertiesService` "link my workbook" helper before running the URL proof.
-- **Pros:** establishes the next architectural layer.
-- **Cons:** premature. The §5 minimal proof has not yet confirmed the end-to-end shape works at all. Building the mapping store before knowing whether the end-to-end shape works is the wrong order.
+The audit should produce a new document — proposed name `CENTRAL_APP_BOOTSTRAP_COVERAGE_AUDIT.md` — that mirrors the structure of `CENTRAL_APP_DEPENDENCY_AUDIT.md`. Like the dependency audit, it is **inventory + analysis**, not implementation.
 
-### 10.4 Option — Onboarding / bootstrap proof (Approach D)
+### 10.3 Why analysis comes before implementation here
 
-- **Action:** build a Drive-API-backed automatic workbook creation flow.
-- **Pros:** would be the most "elegant" demonstration.
-- **Cons:** way premature. Requires every Decision Pending item from `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md` to be resolved. Not the right next step.
+- **The family beta proof's foundation is the ensure-\* chain.** The product decision is that family beta validates real onboarding. Real onboarding rides on the existing ensure-\* coverage. We do not actually know today whether that coverage is sufficient.
+- **The audit is fast and reversible.** A document pass produces no code change, no deployment change, no risk to the developer's bound experience. It establishes the floor we are building from.
+- **Implementation prompts that follow the audit will be smaller and safer.** Once we know exactly which ensure-\* helpers exist and which gaps remain, each gap can be its own narrow ensure-\* helper implementation prompt — same shape as the existing helpers, with the same additive contract. That is a smaller, more reversible series of implementation prompts than "build the bootstrap path" as a single large pass.
+- **The Decision Pending items in §6 are answered with better information after the audit.** Specifically: §6.4 ("ensure-\* coverage on a fresh workbook") goes from speculation to known state. §6.7 ("recovery surfaces") gets concrete examples to design against. §6.8 ("rollback") gets a concrete fallback path: "if the central deployment breaks, the beta user still has a workbook in their Drive with the canonical structure already created."
 
-### 10.5 Recommendation
+### 10.4 What happens if the audit finds significant gaps
 
-**Pivot to the minimal beta proof.** Specifically:
+- **Each gap becomes its own implementation prompt under the existing ensure-\* pattern.** No new architectural surface, no new helpers invented for the proof; just extensions of the additive coverage that already exists. Each prompt is small, reversible, and testable against the developer's bound workbook before it ever touches the central deployment.
+- **Gaps are filled before the family beta proof, not during it.** The proof is not the place to discover that Bills Due crashes on a workbook without `INPUT - Bills`. That has to be ensure-\*-covered first.
 
-- The next implementation prompt should authorize the §5 experiment, not the next resolver seam.
-- The Phase 7 resolver seam (Candidate B from `CENTRAL_APP_SIXTH_RESOLVER_SEAM.md → §8`) is **not blocked** by this pivot — it can ship in parallel with no interaction. But it is no longer the highest-value next step.
-- The reason: the resolver seam program is producing strong, reproducible results. The minimal proof is producing zero results because it has not been attempted. Every additional resolver seam past Phase 6 produces incrementally smaller marginal value than the very first attempted central-mode experiment.
-- **The biggest open question of the whole migration is: does the platform actually behave the way we think it does under `executeAs: USER_ACCESSING`?** No amount of resolver seam work answers that. Only the minimal proof does.
+### 10.5 What happens in parallel
 
-If the minimal proof succeeds, the implementation roadmap re-converges on the order in `CENTRAL_APP_DESIGN.md → §8` (central app stable → monetization → first gate). If it fails, the resolver seam program inherits a precise list of "things that broke under `USER_ACCESSING` that need a seam before we try again."
+- **Phase 7 resolver seams remain valid and parallel-shippable.** Per `CENTRAL_APP_SIXTH_RESOLVER_SEAM.md → §8`, Candidate B (`nextActionsPickRollingDebtTarget_`) is the next resolver-seam candidate. It does not interact with the bootstrap audit; both can be in flight simultaneously without conflict. Whether to prioritize a Phase 7 seam in parallel with the audit is a separate scheduling question for the next implementation prompt.
+- **No deployment-settings change happens during the audit.** The developer's bound deployment stays exactly as it is today. The audit is paper only.
 
-Either outcome is more useful than another resolver seam in isolation.
+### 10.6 Summary of revised stance
+
+- **Approach A (manual hardcoded shortcut):** rejected for family beta. Acceptable as a deployment-posture spike against the developer's second Google account, narrowly scoped.
+- **Approach D (Drive-API workbook creation + per-user mapping store + ensure-\* chain):** recommended direction for family beta proof. Implementation is layered (§6 sequence), not single-pass.
+- **Next implementation-or-analysis pass:** ensure-\* bootstrap coverage audit (§10.2). Analysis only. No code.
+- **After the audit:** decisions in §6 are pinned; gaps are filled with narrow additive ensure-\* implementation prompts; the proof deployment is stood up; the family beta proof runs.
 
 ---
 
-## 11. Architectural boundaries reaffirmed for the minimal proof
+## 11. Architectural boundaries reaffirmed for the revised proof
 
-- **Resolver body becomes:** pass-through + a single hardcoded identity branch for the beta user. The pass-through behavior is unchanged for every non-beta caller, including the developer. The Phase 1–6 invariant ("resolver body is a one-line pass-through") evolves to "resolver body is a pass-through plus exactly one identity branch, and the resolver is the only code in the project that calls `SpreadsheetApp.openById(...)`."
-- **No `PropertiesService`** at any point in the minimal proof.
+### Now in scope (no longer prohibited) for the family beta proof
+
+- **Resolver body extension.** The Phase 1–6 invariant ("resolver body is a one-line pass-through") evolves to "resolver body is a pass-through on bound deployments; on the central deployment, it consults the per-user mapping and invokes bootstrap when needed." The bound deployment's behavior is unchanged. The central deployment's resolver path is new.
+- **`PropertiesService.getUserProperties()`.** Required for the mapping store (§6.2). The resolver is the only code in the project that reads `cashCompassWorkbookId`; the bootstrap helper is the only code that writes it.
+- **`Session.getEffectiveUser()`.** Required by the resolver to identify the caller before consulting the mapping. Identity logic stays concentrated in the resolver — no module calls `Session.getEffectiveUser()` directly for workbook lookup. Per `CENTRAL_APP_DESIGN.md → §3`.
+- **`SpreadsheetApp.openById(...)`.** Required by the resolver to open the user's workbook by ID once the mapping is resolved. The resolver remains the only code in the project that calls `openById`.
+- **Drive API** (or `SpreadsheetApp.create()` if its semantics under user identity suffice). Required by the bootstrap helper (§6.3) to create the workbook in the user's Drive.
+- **`appsscript.json` change for the central deployment.** Required to set `executeAs: USER_ACCESSING` and the appropriate `access:` scope, plus declare the OAuth scopes the bootstrap needs. Per `CENTRAL_APP_DEPLOYMENT_OPTIONS.md → §7`. The developer's bound deployment is **not** touched.
+- **First-run UI surfaces.** A loading state during bootstrap latency, plus the recovery surfaces for the four critical first-run failures (§6.7). HTML changes are in scope for these surfaces.
+
+### Still out of scope for the family beta proof
+
+- **No ensure-\* helper migration to the resolver.** The ensure-\* helpers continue to call `SpreadsheetApp.getActiveSpreadsheet()` directly inside their own bodies. Under `executeAs: USER_ACCESSING`, this returns the workbook the resolver just opened by ID (because that becomes the "active" spreadsheet in the request context). If the audit in §10.2 surfaces ensure-\* helpers that misbehave under this assumption, that becomes a separate per-helper implementation prompt.
+- **No write-path migration to the resolver.** Quick Add Payment writes, planner output writes, Bills / Debts / Assets / Property writes — all stay on the platform call. Same reasoning as above: they run against whatever workbook the request resolved to.
+- **No `buildDashboardSnapshot_()` migration.** Deferred per `CENTRAL_APP_DASHBOARD_SEAM_ANALYSIS.md → §6 Step E`.
+- **No `LOG - Activity` write inside the resolver.** The resolver's logging is `Logger.log` only. The activity log is reserved for user-visible events.
 - **No `Session.getActiveUser()`** — only `Session.getEffectiveUser()`, which under `USER_ACCESSING` returns the calling user's email.
-- **No user mapping store.** The mapping is two constants in source.
-- **No Drive API.**
-- **No ensure-\* helper migration.**
-- **No write-path migration.**
-- **No `buildDashboardSnapshot_()` migration.**
-- **No `appsscript.json` change** until the implementation prompt for the minimal proof explicitly authorizes it.
-- **No HTML / CSS / schema change.**
-- **No `LOG - Activity` write inside the resolver.** The proof's logging is `Logger.log` only.
-- **No published privacy policy, no terms of service.** The beta user is briefed verbally.
+- **No central mode for the developer's deployment.** The developer's bound deployment remains `executeAs: USER_DEPLOYING`, `access: MYSELF`. The family beta deployment is a separate Apps Script deployment that runs in central mode.
+- **No published privacy policy or terms of service.** The beta user is briefed verbally and 1:1. Public publication is a later phase.
+- **No `SYS - Users` schema, no `getUserPlan_`, no `isPaidUser_`, no monetization scaffolding of any kind.** Per §7.
+
+### Invariants that survive the revision
+
+- **Bound mode is preserved byte-for-byte for the developer.** The product decision does not change this. The family beta proof runs on a separate deployment; the developer's daily-use deployment is untouched.
+- **One module per pass for resolver seam work.** Phase 7+ resolver seams (e.g., `nextActionsPickRollingDebtTarget_`) remain valid and parallel-shippable; they are independent of the family beta proof scope.
+- **Identity resolution lives in one place.** The resolver. Modules do not call `Session.getEffectiveUser()` for workbook lookup.
+- **Additive-only bootstrap.** Ensure-\* helpers create what is missing; they never rewrite what is present. The bootstrap helper that creates the workbook never reformats an existing workbook.
+- **Blank-workbook resilience.** Every read path returns a `state` field; no red banners on a fresh workbook.
 
 ---
 
@@ -412,18 +534,22 @@ Either outcome is more useful than another resolver seam in isolation.
 
 This document does **not** authorize implementation.
 
-The next Cursor prompt to act on this document should be the implementation prompt for the §5 minimal proof, which must:
+The next Cursor prompt to act on this document is **analysis only** — the ensure-\* bootstrap coverage audit described in §10.2. That audit produces a new doc (proposed name `CENTRAL_APP_BOOTSTRAP_COVERAGE_AUDIT.md`) inventorying which sheets the existing ensure-\* chain creates, which gaps remain, and which Decision Pending items in `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md` are actually blocking the family beta proof.
 
-- pin the three Decision Pending items (ownership model, `access:` value, rollback procedure),
-- name the additive resolver changes precisely,
-- specify the `appsscript.json` change precisely,
-- specify the smoke-test checklist precisely,
-- explicitly mark the rollback path,
-- and reaffirm the constraint set in §2 of this document.
+The audit must be complete before any implementation prompt is written for the family beta proof. Specifically: §6's Decision Pending items (mapping store mechanism, Drive API surface, folder placement, filename convention, default sharing, scope list, recovery wording) are pinned in writing by the audit and its follow-up decision pass — not improvised during implementation.
 
-Until then, the migration remains design work. The resolver body still contains exactly the pass-through it had at the end of Phase 1 `b2798a7`. No central mode. No `PropertiesService`. No `openById`. No identity helper. No user mapping. No deployment change.
+After the audit:
 
-The minimal proof is **possible** today. Whether it is **right** today is the question the next implementation prompt answers.
+1. The Decision Pending items pinned by the audit drive a small set of additive ensure-\* implementation prompts for any coverage gaps. Each is narrow, reversible, and testable against the developer's bound workbook before touching the central deployment.
+2. A separate Apps Script deployment is stood up with `executeAs: USER_ACCESSING` and the agreed `access:` scope. This is the "internal platform spike" the developer runs against their own second Google account to confirm the deployment posture works. Approach A's hardcoded mapping is acceptable inside this spike only as a temporary scaffold; it is removed before the family beta user is invited.
+3. The mapping store (§6.2) and bootstrap helper (§6.3) are implemented as their own prompts. Each is tested against the developer's second Google account.
+4. First-run UX (§6.6) and recovery surfaces (§6.7) are wired and tested.
+5. The rollback procedure (§6.8) is documented before the deployment is shared with the family beta user.
+6. The family beta user is invited per `CENTRAL_APP_FAMILY_BETA_PLAN.md → §6 Phase 5`.
+
+Until the audit is run, the migration remains design work. The resolver body still contains exactly the pass-through it had at the end of Phase 1 `b2798a7`. No central mode. No `PropertiesService`. No `openById`. No identity helper. No user mapping. No deployment change.
+
+The family beta proof is **possible**. It is **not small**. The product decision is that real onboarding fidelity is worth the additional scope — and the audit in §10.2 is the cheapest way to scope it accurately before any code is written.
 
 ---
 

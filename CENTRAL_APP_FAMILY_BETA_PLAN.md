@@ -4,6 +4,10 @@ Private family beta plan for CashCompass Central App.
 
 This document defines the minimum safe path to make CashCompass usable by **one trusted family beta user** (the first external user) while preserving existing bound-workbook functionality. It is **planning only**. No Apps Script code, no HTML/JS, no deployment changes, no implementation. All open items are marked **Decision Pending**.
 
+---
+
+> **Reaffirmed — onboarding-first family beta.** A shortcut proof in which the developer manually pre-creates the beta workbook and the resolver hardcodes a one-user identity mapping (the original recommendation in `CENTRAL_APP_MINIMAL_BETA_PROOF.md → §5`) is **rejected** as the family beta readiness path. Family beta must validate the real first-run flow — Drive-API workbook creation under user identity, per-user mapping store, additive ensure-\* chain on a fresh workbook — and reach the dashboard hands-off. The success criteria in §2 below and the Phase 3 bootstrap requirement in §6 already encode this stance; the rejection is captured durably in `CENTRAL_APP_MINIMAL_BETA_PROOF.md → top-of-document Status banner and §5.bis`. The next implementation-or-analysis pass is the ensure-\* bootstrap coverage audit recommended in `CENTRAL_APP_MINIMAL_BETA_PROOF.md → §10.2`.
+
 Cross-references:
 - `CENTRAL_APP_DESIGN.md` — migration architecture, abstraction point, guardrails, operational mindset.
 - `CENTRAL_APP_DEPLOYMENT_OPTIONS.md` — preferred direction: centralized code + user-owned spreadsheets + `executeAs: USER_ACCESSING`.

@@ -4,6 +4,8 @@ First safe implementation sequence for the Central App migration.
 
 This document converts the existing Central App architecture documents into a staged implementation roadmap. It is **planning only**. No Apps Script code, no HTML/JS, no deployment changes, no implementation. This document **does not by itself authorize implementation**. Any actual code change requires its own Cursor implementation prompt with explicit user approval, per the gate in §9.
 
+> **Stance reaffirmed — family beta is onboarding-first.** A manual shortcut in which the developer pre-creates the beta workbook and hardcodes a one-user identity mapping is **rejected** as the family beta readiness path per `CENTRAL_APP_FAMILY_BETA_PLAN.md → top-of-document banner` and `CENTRAL_APP_MINIMAL_BETA_PROOF.md → §5.bis`. The roadmap below is unchanged in structure — resolver seam first, ensure-\* migration second, central mode third — but the *family beta gate* between "central mode ready" and "first external user invited" requires a real first-run flow (Drive-API workbook creation under user identity, per-user mapping store, additive ensure-\* chain), not the shortcut. The recommended next analysis pass is the ensure-\* bootstrap coverage audit described in `CENTRAL_APP_MINIMAL_BETA_PROOF.md → §10.2`.
+
 Cross-references:
 - `CENTRAL_APP_DESIGN.md` — migration architecture, abstraction point, guardrails, operational mindset.
 - `CENTRAL_APP_DEPLOYMENT_OPTIONS.md` — preferred direction: centralized code + user-owned spreadsheets + `executeAs: USER_ACCESSING`.
