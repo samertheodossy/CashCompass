@@ -99,7 +99,7 @@ function getPropertyPerformanceData(payload) {
 }
 
 function getHouseNamesFromHouseAssets_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'HOUSE_ASSETS');
   const display = sheet.getDataRange().getDisplayValues();
   if (display.length < 2) return [];
