@@ -187,8 +187,10 @@ For each major surface, classified as:
 - **Lazy-bootstraps.** Add path calls `ensureSysAssetsSheet_` and `ensureInputInvestmentsSheet_` before writing. Dashboard read uses `sumColumnByHeaderForOptionalSheet_` (no throw on missing).
 
 ### 4.9 House Values (Assets → Houses)
-- **Lazy-bootstraps for the canonical sheets.** `ensureSysHouseAssetsSheet_` and `ensureInputHouseValuesSheet_` are called from the add path.
-- **Does not bootstrap per-house sheets.** A `HOUSES - <Name>` sheet has **no automatic creator**. `addHouseExpense` throws `'House sheet not found: ' + payload.house` (`house_expenses.js:49`).
+- **Static analysis said: Lazy-bootstraps for the canonical sheets** (`ensureSysHouseAssetsSheet_` + `ensureInputHouseValuesSheet_` are present at `house_values.js:1539–1554`).
+- **Runtime test (`CENTRAL_APP_BLANK_WORKBOOK_RUNTIME_REPORT.md → §4.9.2`) FAILED on this surface.** On a blank workbook, Setup / Review → Houses → "Open Houses editor" → Create house throws `Missing sheet (after retry+flush): INPUT - House Values` and aborts before any sheet is created. **The ensure-before-write guards in `addHouseFromDashboard` are unreachable on a blank workbook** because `validateNewHouseName_(payload.houseName)` runs on line 1489 — before the ensure block on lines 1539–1555 — and `validateNewHouseName_` (line 943) calls `getHousesFromHouseValues_()` → strict `getSheet_(ss, 'HOUSE_VALUES')` which throws when `INPUT - House Values` is missing. The static analysis missed this because the ensure guards looked correct at the surface; the pre-validation read path was not traced.
+- **Reclassified:** confirmed gap §5.6 below. `getHouseUiData` (page read path at `house_values.js:154`) remains defensive — the gap is specific to the **write path's pre-validation strict read**, not the page render.
+- **Does not bootstrap per-house sheets.** A `HOUSES - <Name>` sheet has **no automatic creator**. `addHouseExpense` throws `'House sheet not found: ' + payload.house` (`house_expenses.js:49`). Separate gap §5.2.
 
 ### 4.10 House Expenses
 - **Does not work on a blank workbook without manual setup.** Requires a `HOUSES - <Name>` sheet per house, and there is no `ensureHousesSheet_` helper. Listing surface (`getHouseExpenseUiData`, `house_expenses.js:10`) tolerates missing house tabs (returns empty list), but any write throws.
@@ -250,6 +252,14 @@ The following canonical sheets / surfaces are referenced by the app but have **n
 - **Confirmed coverage exists** via `ensureOnboardingCashFlowYearSheetFromDashboard` / `ensureCashFlowYearSheet_`. The historical "no from-scratch creator" gap mentioned in `sheet_bootstrap.js:42` (now superseded) is closed.
 - **Open question:** on a fresh workbook created mid-year, the current-year sheet is created on demand. On a fresh workbook created on the first day of a new year, the current-year sheet is created on demand and `createNextYearCashFlowSheet` (clone-from-previous-year) is irrelevant. No gap, but worth runtime confirmation.
 
+### 5.6 House Values write path — pre-validation read throws on blank workbook — **confirmed runtime gap**
+- **Owning module:** `house_values.js`.
+- **Behavior on blank workbook:** Setup / Review → Houses → "Open Houses editor" → Create house throws `Missing sheet (after retry+flush): INPUT - House Values`. Confirmed via `CENTRAL_APP_BLANK_WORKBOOK_RUNTIME_REPORT.md → §4.9.2`.
+- **Root cause:** `addHouseFromDashboard` (line 1486) has ensure-before-write guards (lines 1539–1555), but those guards run **after** `validateNewHouseName_(payload.houseName)` on line 1489. `validateNewHouseName_` (line 943) calls `getHousesFromHouseValues_()` (line 271) which strictly calls `getSheet_(ss, 'HOUSE_VALUES')` and throws on the missing sheet. The ensure guards never execute.
+- **Why the audit missed it:** static analysis traced the explicit ensure-before-write block but did not trace the pre-validation read path. The audit's §7.3 risk class ("Modules that assume existing sheets") covers this shape of bug in principle but did not surface this specific instance.
+- **Recommended fix (for a separate Pass 2 implementation prompt — NOT authorized by this audit update):** move the ensure block from lines 1539–1555 to the top of `addHouseFromDashboard`, before `validateNewHouseName_` is called. The simpler ordering — ensure → validate → write — also matches the order used in the additive contract pattern. As a defense-in-depth follow-up, consider making `validateNewHouseName_` tolerate a missing `INPUT - House Values` (treat it as "no existing houses" since the sheet's absence proves there cannot be a duplicate name) — this would mirror the defensive read pattern already used in `getHouseUiData` at `house_values.js:154`.
+- **Audit follow-up:** the runtime test should now explicitly check every other Add path for the same shape — does any pre-validation step read a sheet strictly before the ensure block runs? Specifically inspect `addBankAccountFromDashboard`, `addDebtFromDashboard`, `addInvestmentAccountFromDashboard`. (Likely safe per `bank_accounts.js:81–90` which captures the ensure return value directly, but not verified.)
+
 ### 5.5 No version marker / canonical schema fingerprint
 - **No `SYS - Version` or equivalent sheet exists** to record the schema version of the workbook. This is a deferred concern for `CENTRAL_APP_ONBOARDING_AND_LIFECYCLE.md → §6 Schema migration`, but it would be valuable as part of a first-run bootstrap: the bootstrap chain could write the schema version it bootstrapped against, and future runs could detect drift.
 - Not blocking the first family beta proof; flagged as a Decision Pending for the post-audit pass.
@@ -294,8 +304,10 @@ A central-mode first-run bootstrap, layered on top of the existing additive ensu
 **Still needed for hands-off zero-sheet onboarding:**
 - `ensureInputDonationSheet_` — gap §5.1. Small, additive, mirrors existing creators.
 - `ensureHousesSheetForName_(name)` — gap §5.2. Larger; needs a canonical from-scratch creator for the per-house year-block layout.
+- **Reorder `addHouseFromDashboard` ensure block to precede `validateNewHouseName_` — gap §5.6.** Smallest fix: move the ensure block from lines 1539–1555 to the top of the function. Defense-in-depth follow-up: make `validateNewHouseName_` defensive against the missing sheet.
 - (Optional, Decision Pending) `ensureSysVersionSheet_` or equivalent schema-version marker — gap §5.5.
 - Runtime confirmation of Rolling Debt Payoff / Debt Payoff Projection on a fully blank workbook — gap §5.3.
+- **Static recheck of every other Add path** for the same shape (pre-validation strict read before ensure block) — `addBankAccountFromDashboard`, `addDebtFromDashboard`, `addInvestmentAccountFromDashboard`. Per §5.6 audit follow-up.
 
 **Out of scope for the first family beta proof:**
 - Bank Import pipeline — explicit non-goal in `CENTRAL_APP_FAMILY_BETA_PLAN.md → §3`.
@@ -468,12 +480,13 @@ To prevent the Pass 1 runtime test and the Pass 2 gap fills from drifting into a
 
 ## 11. Summary
 
-- **Blank-workbook readiness today:** moderately strong. 16 of the ~20 major surfaces in §4 already work or lazy-bootstrap calmly. The six canonical core sheets are covered by `sheet_bootstrap.js`'s registry. Dashboard Overview, Setup / Review, Quick Add, Cash Flow, Bills, Debts (read), Bank Accounts, Investments, House Values, Property Performance, Retirement, Upcoming Expenses, Activity Log, and Property Performance all handle blank state correctly.
-- **Confirmed gaps:** two — `INPUT - Donation` (no ensure helper, throws on missing) and `HOUSES - <Name>` per-house tabs (no ensure helper, throws on house-expense add).
+- **Blank-workbook readiness today:** moderately strong but with one runtime-confirmed regression in the Houses path. Most major surfaces work or lazy-bootstrap calmly; the six canonical core sheets are covered by `sheet_bootstrap.js`'s registry. Dashboard Overview, Setup / Review, Quick Add, Cash Flow, Bills (read), Debts (read), Bank Accounts, Investments, Property Performance, Retirement, Upcoming Expenses, and Activity Log all handle blank state correctly per static analysis. House Values write path fails on a blank workbook (gap §5.6).
+- **Confirmed gaps:** three — (§5.1) `INPUT - Donation` no ensure helper, (§5.2) `HOUSES - <Name>` per-house tabs no canonical creator, **(§5.6) House Values write path's pre-validation strict read runs before its ensure-before-write guard — confirmed via runtime test `CENTRAL_APP_BLANK_WORKBOOK_RUNTIME_REPORT.md → §4.9.2`**.
 - **Unknown:** one — Rolling Debt Payoff / Debt Payoff Projection blank-workbook behavior. Runtime check needed.
 - **Optional:** one — schema-version marker. Not blocking.
-- **Recommended next step:** Pass 1 — runtime blank-workbook test matrix in bound mode against a fresh empty workbook, output to a new `CENTRAL_APP_BLANK_WORKBOOK_RUNTIME_REPORT.md`. Pass 2 — narrow additive ensure-\* prompts per confirmed gap.
-- **Family beta proof readiness:** after Pass 1 and Pass 2, the additive ensure-\* chain is sufficient for a hands-off first-run flow against a user-created workbook. The remaining layers needed for the family beta proof (Drive API workbook creation, per-user mapping store, central deployment posture, first-run UX, recovery surfaces, rollback procedure) are documented in `CENTRAL_APP_MINIMAL_BETA_PROOF.md → §6` and are independent of this audit's conclusions.
+- **Static-analysis miss surfaced by runtime test:** the audit's §4.9 originally classified House Values onboarding as "Lazy-bootstraps." The runtime test in `CENTRAL_APP_BLANK_WORKBOOK_RUNTIME_REPORT.md → §4.9.2` falsified that classification. Root cause traced to a pre-validation read path the static trace did not follow (§5.6). This is exactly the value the runtime test was designed to produce — static analysis catches structural gaps, runtime catches ordering and execution-path gaps. The runtime test should be re-extended to explicitly check every other Add-path for the same shape.
+- **Recommended next step:** Pass 2 — narrow additive ensure-\* / reorder prompts per confirmed gap (§5.1, §5.2, §5.6). Each is a separate Cursor implementation prompt requiring explicit user approval. Plus a small static recheck of every other Add path (`addBankAccountFromDashboard`, `addDebtFromDashboard`, `addInvestmentAccountFromDashboard`) for the same pre-validation-before-ensure pattern, before the family beta proof runs.
+- **Family beta proof readiness:** after Pass 2 closes the three confirmed gaps, the additive ensure-\* chain is sufficient for a hands-off first-run flow against a user-created workbook. The remaining layers needed for the family beta proof (Drive API workbook creation, per-user mapping store, central deployment posture, first-run UX, recovery surfaces, rollback procedure) are documented in `CENTRAL_APP_MINIMAL_BETA_PROOF.md → §6` and are independent of this audit's conclusions.
 
 ---
 
