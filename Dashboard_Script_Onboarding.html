@@ -1859,6 +1859,20 @@ function onboardingOpenHousesPage() {
   // with the core step handoffs.
   enterSetupEditorMode('assets', 'houses', 'houses');
 
+  // On a blank workbook the normal dashboard init never ran, so the
+  // Houses selector + Add-form Property type dropdown have never been
+  // populated. Trigger the standard loader here so the editor is
+  // usable on first run — populateHouseAddDatalists_() always merges
+  // the canonical core property types (Primary Residence, Vacation
+  // Home, Rental, Other) into the dropdown so the picklist is never
+  // empty even when getHouseUiData() returns no server options on a
+  // brand-new workbook. loadHouseSection() is idempotent, so populated
+  // workbooks just get a cheap re-fetch of the same data. Mirrors the
+  // Bank Accounts handoff above.
+  if (typeof loadHouseSection === 'function') {
+    try { loadHouseSection(); } catch (_e) { /* editor may not be ready */ }
+  }
+
   // First-run Houses surface: open the Assets → Houses editor in Add
   // mode when the last detail render explicitly saw no active
   // properties. Same shared rule as Bank Accounts and Debts.

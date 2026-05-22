@@ -1486,6 +1486,34 @@ function applyHouseValuesSheetStyling_(sheet) {
 function addHouseFromDashboard(payload) {
   validateRequired_(payload, ['houseName', 'propertyType', 'currentValue', 'loanAmountLeft']);
 
+  // Ensure-before-write guards. Both helpers are idempotent no-ops on
+  // populated workbooks. On a fresh workbook they write the canonical
+  // structure that getHouseValuesYearBlock_ / getHouseAssetsHeaderMap_
+  // expect further down. They MUST also run before
+  // validateNewHouseName_ below, because that validator calls
+  // getHouseAssetsHistorical_ / getSheet_ on HOUSE_VALUES /
+  // HOUSE_ASSETS, both of which throw "Missing sheet: ..." on a blank
+  // workbook before these ensure calls would otherwise run. Mirrors
+  // the ensure-before-validate pattern in
+  // addBankAccountFromDashboard → bank_accounts.js.
+  try {
+    ensureInputHouseValuesSheet_();
+  } catch (ensureErr) {
+    throw new Error(
+      "Couldn't prepare house values: " +
+      (ensureErr && ensureErr.message ? ensureErr.message : ensureErr)
+    );
+  }
+  try {
+    ensureSysHouseAssetsSheet_();
+  } catch (sysErr) {
+    throw new Error(
+      'Could not prepare SYS - House Assets: ' +
+      (sysErr && sysErr.message ? sysErr.message : sysErr)
+    );
+  }
+  try { SpreadsheetApp.flush(); } catch (_flushErr) { /* best-effort */ }
+
   const houseName = validateNewHouseName_(payload.houseName);
   const propertyType = String(payload.propertyType || '').trim();
   if (!propertyType) throw new Error('Property type is required.');
@@ -1531,28 +1559,6 @@ function addHouseFromDashboard(payload) {
     // regardless of script timezone drift.
     valuationDate = stripTime_(new Date());
   }
-
-  // Ensure-before-write guards. Both helpers are idempotent no-ops on
-  // populated workbooks. On a fresh workbook they write the canonical
-  // structure getHouseValuesYearBlock_ and getHouseAssetsHeaderMap_
-  // expect on the very next line. Mirrors addInvestmentAccountFromDashboard.
-  try {
-    ensureInputHouseValuesSheet_();
-  } catch (ensureErr) {
-    throw new Error(
-      "Couldn't prepare house values: " +
-      (ensureErr && ensureErr.message ? ensureErr.message : ensureErr)
-    );
-  }
-  try {
-    ensureSysHouseAssetsSheet_();
-  } catch (sysErr) {
-    throw new Error(
-      'Could not prepare SYS - House Assets: ' +
-      (sysErr && sysErr.message ? sysErr.message : sysErr)
-    );
-  }
-  try { SpreadsheetApp.flush(); } catch (_flushErr) { /* best-effort */ }
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const hvSheet = getSheet_(ss, 'HOUSE_VALUES');
