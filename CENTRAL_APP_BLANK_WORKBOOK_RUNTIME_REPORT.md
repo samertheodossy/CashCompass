@@ -285,6 +285,126 @@ Result codes:
 
 ---
 
+## 4A. Addendum (2026-05-22) — Resolve planner-page blank-workbook unknowns
+
+**Purpose of this addendum.** §4.15 (Rolling Debt Payoff) and §4.16 (Debt Payoff Projection) were both classified "Unknown / likely partial" by the static audit (`CENTRAL_APP_BOOTSTRAP_COVERAGE_AUDIT.md → §5.3`). After the §5.6 fix shipped in commit `4e6af6d` and the §5.2 reclassification, these two are the only remaining runtime unknowns on the family beta first-run path per `CENTRAL_APP_FAMILY_BETA_READINESS_CHECKPOINT.md → §4.2 / §6.1`. This addendum makes the next runtime session deterministic: it lists the exact navigation steps, the prerequisite state, the expected behavior, the PASS / PARTIAL / FAIL criteria, the red-banner expectations, the sheet-creation expectations, the planner-execution expectations, and the evidence that clears the unknown status. **No code change is authorized by this addendum** — it is a test plan only.
+
+### 4A.1 Why these two pages need a runtime check
+
+Both modules have explicit blank-workbook defensive short-circuits in the server-side entry point and a calm not-set-up branch in the client renderer. Specifically:
+
+- **Rolling Debt Payoff** (`rolling_debt_payoff.js:2862–2924`, function `getRollingDebtPayoffPlan`) checks `ss.getSheetByName(sheetNamesEarly.DEBTS)` and `ss.getSheetByName(sheetNamesEarly.ACCOUNTS)` at the top. If either is missing, the function returns a neutral `{ not_set_up: true, setup_message: 'Add your debts and cash accounts in Setup / Review to see your rolling debt payoff plan.', summary: { plan_status: 'NOT_SET_UP', … }, … }` envelope. The client renderer at `Dashboard_Script_RollingDebtPayoff.html:744–759` reads `data.not_set_up === true` and renders a `<p class="muted">` setup-message card, skipping React mount and demo fallback and hiding the debug JSON panel.
+- **Debt Payoff Projection** (`debt_payoff_projection.js:16–51`, function `getDebtPayoffReadData`) performs the same `ss.getSheetByName(sheetNames.DEBTS) / .ACCOUNTS` guard at the top and returns a zeroed envelope `{ projectionYears, debts: [], summary: { totalDebtBalance: 0, … }, recommendations: [], warnings: [], missingCashFlowSheets: [] }`. The page renders the empty / zeroed state via its existing renderer.
+
+Both short-circuits are static-analyzed but unverified on a real blank workbook. The runtime test answers three concrete questions:
+1. Does the page load cleanly when **both** `INPUT - Debts` and `SYS - Accounts` are absent?
+2. Does the page load cleanly when **`INPUT - Debts` exists** (the bootstrap registry seeds it eagerly via `ensureOnboardingCoreSheetsFromDashboard`) but `SYS - Accounts` does not yet (which only appears after the user adds their first bank account)?
+3. Does the page load cleanly after both prerequisites exist but no Cash Flow data has been entered yet?
+
+State (2) is the most interesting one because it is the realistic state of a workbook after Setup / Review's first pass: `INPUT - Debts` is one of the six core bootstrap sheets, so it exists from the very first Setup / Review interaction, but `SYS - Accounts` does not appear until the user adds their first bank account. If either guard fails to handle this intermediate state, the user hits a red banner during Setup / Review.
+
+### 4A.2 Prerequisites for the addendum runtime session
+
+- A disposable, blank, throwaway workbook bound to a non-production deployment. **The §0 safety preamble of this report applies in full.** If the prior runtime session's workbook still exists and is still disposable, reuse it; otherwise create a new one per §2.
+- The script project must include commit `4e6af6d` or later (the House onboarding fix). Verify by inspecting `house_values.js → addHouseFromDashboard` and confirming the ensure block precedes `validateNewHouseName_`. If the deployment predates the fix, redeploy or push the latest before running this addendum.
+- The runtime session can run independently of the §4 main matrix. The Rolling Debt Payoff and Debt Payoff Projection pages do not write any sheet on read, so observations are non-destructive and rerunnable.
+
+### 4A.3 State-1 test — fully blank workbook, no Setup / Review interaction yet
+
+Both prerequisite sheets are absent. This is the cold-start path.
+
+| # | Action | Expected | Observed | Sheets created (delta) | Banners | Activity Log delta | Result | Notes |
+|---|---|---|---|---|---|---|---|---|
+| 4A.3.1 | On a brand-new workbook (only `Sheet1` plus whatever `INPUT - Settings` / `LOG - Activity` the first dashboard load creates), open Planning → **Rolling Debt Payoff** directly via the main nav (without going through Setup / Review first). | Calm setup message card: `<p class="muted">Add your debts and cash accounts in Setup / Review to see your rolling debt payoff plan.</p>`. Status row reads `Updated.` once the RPC resolves. No React mount. No debug JSON panel. **No red banner. No sheet writes.** No Activity Log entries from this read. | | none expected | **none** | (none — page is read-only) | | Confirms `getRollingDebtPayoffPlan` short-circuit branch fires when both `INPUT - Debts` and `SYS - Accounts` are missing. |
+| 4A.3.2 | On the same workbook, open Planning → **Debt Payoff Projection** directly. | Calm zeroed envelope: per-debt table is empty (`No active debts.` / equivalent zero-state copy); summary card shows `$0.00` for `totalDebtBalance` / `totalMinimumPayments` / `usableCashAfterBuffers` / `totalAvailableNow` / `totalBuffers`; recommendations and warnings lists empty. **No red banner. No sheet writes.** No Activity Log entries from this read. | | none expected | **none** | (none — page is read-only) | | Confirms `getDebtPayoffReadData` short-circuit branch fires when both prerequisites are missing. |
+
+### 4A.4 State-2 test — partial Setup / Review state (`INPUT - Debts` exists, `SYS - Accounts` does not)
+
+This is the **realistic intermediate state** after Setup / Review's first pass and is the highest-value state to verify.
+
+| # | Action | Expected | Observed | Sheets created (delta) | Banners | Activity Log delta | Result | Notes |
+|---|---|---|---|---|---|---|---|---|
+| 4A.4.1 | From State-1, navigate Setup / Review → Bills (or any step that triggers `ensureOnboardingCoreSheetsFromDashboard`). Confirm `INPUT - Debts` now exists in the workbook tab strip. **Do not** add any bank account yet — `SYS - Accounts` must remain absent. | `INPUT - Debts` present; `SYS - Accounts` absent. | | `INPUT - Debts` (if not already) | none | | | Prerequisite step for §4A.4.2 / §4A.4.3 — not itself the test. |
+| 4A.4.2 | Open Planning → **Rolling Debt Payoff**. | **Still the calm setup message** — because the guard checks both sheets and either being absent triggers the short-circuit. **No red banner.** No React mount. | | none | **none** | (none) | | Verifies the `||` guard ordering and that `SYS - Accounts`-absence alone is sufficient to trigger the not-set-up branch. |
+| 4A.4.3 | Open Planning → **Debt Payoff Projection**. | Still the calm zeroed envelope. **No red banner.** | | none | **none** | (none) | | Verifies the equivalent guard in `getDebtPayoffReadData`. |
+
+### 4A.5 State-3 test — both prerequisites exist, no Cash Flow data yet
+
+This is the state immediately after the user adds their first bank account and their first debt via Setup / Review. The strict short-circuits no longer apply; the populated path runs.
+
+| # | Action | Expected | Observed | Sheets created (delta) | Banners | Activity Log delta | Result | Notes |
+|---|---|---|---|---|---|---|---|---|
+| 4A.5.1 | From State-2, complete Setup / Review → Bank Accounts → Add a single test account (e.g. *Test Checking*, Type: Bank, Use Policy: Standard, Priority: 9, no opening balance). | `SYS - Accounts` and a populated `INPUT - Bank Accounts` Year block now exist. One `bank_account_add` activity entry. | | `SYS - Accounts`, `INPUT - Bank Accounts` (Year block populated) | none | one `bank_account_add` | | Prerequisite for §4A.5.2 / §4A.5.3. |
+| 4A.5.2 | From State-3 (still no debt rows; `INPUT - Debts` exists from §4A.4.1 but is empty), open Planning → **Rolling Debt Payoff**. | The populated path runs. The page renders **a calm "no active debts" state** (zero rows, zero totals, no plan output). `findRollingCashFlowAnchor_(ss)` may surface a `current_focus: '—'` / `anchor_month: '—'` set on the summary card because no current-year Cash Flow rows exist yet. **No red banner**, but a calm advisory message (e.g. `No active debts.`) is acceptable. **No sheet writes.** No Activity Log entries. | | none expected | none expected | (none) | | This is the realistic transition state. Acceptable to see a calm "no data" envelope; **not** acceptable to see `Missing sheet: …` or any other error banner. |
+| 4A.5.3 | Open Planning → **Debt Payoff Projection**. | Same shape — empty `debts` array, zeroed summary, no recommendations, no warnings. **No red banner.** **No sheet writes.** | | none expected | none expected | (none) | | The `try` / `catch` around `readCashFlowSheetAsObjects_` at lines 69–76 swallows missing Cash Flow year sheets — confirm no banner leaks from that path. |
+| 4A.5.4 | Add a single test debt via Setup / Review → Debts → Add a credit card row (e.g. *Test Card*, Type: Credit Card, Balance $500, Min $25, Credit Limit $1000, Int Rate 18%, Due Day 15). | `INPUT - Debts` gains one row; one `debt_add` activity entry. | | `INPUT - Debts` (gains row) | none | one `debt_add` | | Prerequisite for §4A.5.5 / §4A.5.6. |
+| 4A.5.5 | Open Planning → **Rolling Debt Payoff**. | Page renders the one debt; plan output reflects the one debt and the one zero-balance bank account; `current_focus` resolves to *Test Card* (or its alias); `anchor_month` resolves to the current calendar month; `default_output` populates. **No red banner.** **No sheet writes.** | | none expected | none expected | (none — read-only) | | Closes §4.15.2 from the main matrix. |
+| 4A.5.6 | Open Planning → **Debt Payoff Projection**. | Page renders the one debt with rough-payoff estimate; summary card shows non-zero `totalDebtBalance` and `totalMinimumPayments`. **No red banner.** **No sheet writes.** | | none expected | none expected | (none — read-only) | | Closes §4.16.2 from the main matrix. |
+
+### 4A.6 PASS / PARTIAL / FAIL criteria
+
+For each row in §4A.3 / §4A.4 / §4A.5, the result column is filled in using the following rubric:
+
+- **PASS** — Every expectation in the row's *Expected* column was observed verbatim. Specifically: (a) no red banner, (b) the documented calm copy or populated render appeared, (c) no unexpected sheet was created, (d) no Activity Log entry was written by the read path, (e) the page status row reached `Updated.` (Rolling) or its equivalent (Projection) without spinning indefinitely.
+- **PARTIAL** — The page loaded without a red banner **but** at least one secondary expectation was not met. Acceptable PARTIAL outcomes include: (a) the calm copy text drifted from the verbatim setup message (cosmetic only), (b) an unexpected-but-additive sheet was created (e.g. the page triggered an upstream lazy ensure that materialized a non-blocking sheet), (c) an Activity Log entry was written by the read path (this would be a regression worth tracking but not a hard failure). PARTIAL rows must be recorded with a verbatim description of what diverged.
+- **FAIL** — Any of: (a) a red banner appears, (b) the page never resolves (infinite spinner), (c) an Apps Script execution exception surfaces in the dashboard status row or developer console, (d) an unexpected destructive write occurs (e.g. an `OUT - *` sheet is rebuilt by a planner run that should not have fired). FAIL must be reported with verbatim banner text, the sheets present at the moment of failure, and a screenshot if practical. A FAIL on any of §4A.3 / §4A.4 / §4A.5 promotes the corresponding surface back to a confirmed gap in the audit.
+
+### 4A.7 Red-banner expectations
+
+**On every row in §4A.3, §4A.4, §4A.5**: the expected red-banner count is **zero**. The Rolling Debt Payoff and Debt Payoff Projection pages have explicit not-set-up branches and zeroed envelopes; the read paths do not throw on missing prerequisites. The only acceptable error path on these pages is an Apps Script platform error (cold start timeout, deployment misconfiguration), which is not a code-level regression.
+
+If a red banner appears that mentions `Missing sheet`, `getSheet_`, `readSheetAsObjects_`, or any sheet-name string from `getSheetNames_()`, that is a FAIL and a confirmed gap. Record the banner verbatim and add a row to §6.
+
+### 4A.8 Sheet-creation expectations
+
+- **§4A.3 (State-1, no prerequisites):** zero new sheets from opening either page. Both functions are read-only and the short-circuit branch does not write.
+- **§4A.4 (State-2, only `INPUT - Debts` exists):** zero new sheets from opening either page. Same reason — the short-circuit branch is reached and does not write.
+- **§4A.5 (State-3, both prerequisites exist):** zero new sheets from opening either page. The populated path is read-only; no `ensureCashFlowYearSheet_` / no `OUT - Dashboard` / no `OUT - History` is created by these RPCs. The Cash Flow year sheet is lazy-created only on Quick Add / Bill Pay write paths. The `OUT - *` sheets are created only by `runDebtPlanner` (Run Planner Now), not by the Rolling Debt Payoff page load.
+
+If a new sheet appears as a side effect of opening either page on a blank workbook, that is at least a PARTIAL and worth investigating before final PASS.
+
+### 4A.9 Planner-execution expectations
+
+- **Rolling Debt Payoff (`getRollingDebtPayoffPlan`)** does **not** invoke `runDebtPlanner`. It reads `INPUT - Debts` / `SYS - Accounts` and any present Cash Flow year sheets, runs its own deterministic waterfall projection in-memory, and returns a payload. The planner-run pipeline (`OUT - Dashboard` / `OUT - History` writes, email send, debounce trigger) is **not** triggered by this page load.
+- **Debt Payoff Projection (`getDebtPayoffReadData`)** is read-only and similarly does not invoke `runDebtPlanner`. It reads `INPUT - Debts`, `SYS - Accounts`, and the current-year Cash Flow sheet (defensively, inside a `try` / `catch`), and computes rough payoff months in-memory.
+- The only planner-execution path on these pages is the **manual "Run Planner + Refresh Snapshot" button** elsewhere in the UI. That button is covered separately by §4.20 of this report and is **out of scope** for this addendum.
+
+If the runtime observation shows `OUT - Dashboard` or `OUT - History` materializing as a side effect of opening either page, that is a FAIL (unauthorized destructive write on a read path).
+
+### 4A.10 Evidence that clears the unknown status
+
+The addendum is **fully resolved** when:
+
+- Every row in §4A.3 is filled in with PASS, OR
+- Every row in §4A.4 is filled in with PASS, OR
+- Every row in §4A.5 (specifically §4A.5.2, §4A.5.3, §4A.5.5, §4A.5.6) is filled in with PASS.
+
+The minimum sufficient evidence is **§4A.3 + §4A.4 PASS rows for both surfaces** — those two states cover the only realistically reachable blank-workbook states a first-run family beta user would hit. §4A.5 is a nice-to-have that closes the matrix's §4.15.2 / §4.16.2 rows.
+
+If any FAIL surfaces, the addendum is **not resolved** and the corresponding surface is reclassified as a confirmed gap. A new row is added to §6 with:
+- Verbatim banner text.
+- Sheets present at the moment of failure.
+- State (1 / 2 / 3) where the failure surfaced.
+- Suggested smallest additive fix (likely: extend the existing `||` guard, OR add a `try` / `catch` around the strict-read call, mirroring the pattern already present in `getDebtPayoffReadData`'s Cash Flow read at lines 69–76).
+
+Once §4A is fully resolved with PASS rows:
+1. Update `CENTRAL_APP_BOOTSTRAP_COVERAGE_AUDIT.md → §5.3` to reclassify Rolling Debt Payoff / Debt Payoff Projection from "Unknown / likely partial" to "Runtime-confirmed working on blank workbook."
+2. Update `CENTRAL_APP_BOOTSTRAP_COVERAGE_AUDIT.md → §11` summary to remove the "Unknown: one" line.
+3. Update `CENTRAL_APP_FAMILY_BETA_READINESS_CHECKPOINT.md → §4.2` to mark the planner-page unknown as resolved.
+4. The remaining true onboarding blocker list collapses to **§5.1 Donations only**, clearing the path for the next deliberate choice (Option A or Option C per the checkpoint's §7 framing).
+
+### 4A.11 Estimated session cost
+
+- **Setup:** 5 minutes (reuse the disposable workbook from the prior session, or create a fresh one).
+- **State-1 (§4A.3):** 5 minutes (two page opens, two observations).
+- **State-2 (§4A.4):** 5 minutes (one Setup / Review step to seed `INPUT - Debts`, then two page opens).
+- **State-3 (§4A.5):** 10 minutes (add one bank account, two page opens, add one debt, two page opens).
+- **Doc updates after the session:** 10 minutes (fill in the observation columns, update audit / readiness-checkpoint cross-references).
+
+**Total: ~35 minutes** for the full addendum, or ~15 minutes if only §4A.3 + §4A.4 are run (the minimum sufficient evidence).
+
+---
+
 ## 5. Aggregate observations
 
 To be filled in after §4 is complete.
