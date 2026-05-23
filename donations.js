@@ -14,17 +14,71 @@ var DONATION_REQUIRED_HEADERS_ = [
   'Payment type'
 ];
 
-function getDonationsSheet_() {
+/**
+ * Canonical from-scratch creator for `INPUT - Donation`.
+ *
+ * Seeds the canonical year-block layout that `getDonationsFormData`,
+ * `addDonation`, and the activity-undo path all expect:
+ *
+ *   Row 1: A1 = "Year", B1 = <current calendar year>
+ *   Row 2: canonical header row matching DONATION_REQUIRED_HEADERS_
+ *          ("Name of Charity", "Date", "Amount", "Tax Year",
+ *          "Comments", "Payment type") so that
+ *          `readDonationBlockAtYearRow_` -> `mapHeaders_` resolves
+ *          every required column on the first save.
+ *
+ * Additive contract: idempotent no-op when the sheet already exists
+ * (returns the existing handle). When the sheet does not exist, the
+ * race-safe insert pattern from `ensureSysAccountsSheet_` /
+ * `ensureInputHouseValuesSheet_` handles the concurrent-creation case.
+ *
+ * Mirrors the canonical seed pattern used by
+ * `ensureInputHouseValuesSheet_` and `ensureInputInvestmentsSheet_` —
+ * one current-year banner row + one header row — so that on a blank
+ * workbook the Donations form has at least one Tax Year option in its
+ * dropdown and a successful first-save can resolve a Year block via
+ * `findDonationBlockForTaxYear_`.
+ *
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet}
+ */
+function ensureInputDonationSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName(DONATION_SHEET_NAME_);
-  if (!sh) {
-    throw new Error(
-      'Missing sheet "' +
-        DONATION_SHEET_NAME_ +
-        '". Add it to this spreadsheet with Year sections (see Help → Donations).'
-    );
+  const existing = ss.getSheetByName(DONATION_SHEET_NAME_);
+  if (existing) return existing;
+
+  let sheet;
+  try {
+    sheet = ss.insertSheet(DONATION_SHEET_NAME_);
+  } catch (e) {
+    const racedSheet = ss.getSheetByName(DONATION_SHEET_NAME_);
+    if (racedSheet) return racedSheet;
+    throw e;
   }
-  return sh;
+
+  const year = (typeof getCurrentYear_ === 'function')
+    ? getCurrentYear_()
+    : new Date().getFullYear();
+
+  sheet.getRange(1, 1, 1, 2).setValues([['Year', year]]);
+  sheet.getRange(2, 1, 1, DONATION_REQUIRED_HEADERS_.length)
+    .setValues([DONATION_REQUIRED_HEADERS_.slice()]);
+
+  try {
+    sheet.setFrozenRows(2);
+  } catch (_frozenErr) { /* cosmetic only */ }
+
+  try {
+    sheet.autoResizeColumns(1, DONATION_REQUIRED_HEADERS_.length);
+  } catch (_resizeErr) { /* cosmetic only */ }
+
+  return sheet;
+}
+
+function getDonationsSheet_() {
+  // Lazy-create on first read so a blank workbook can open the
+  // Donations form without surfacing a red banner. Idempotent on
+  // populated workbooks (returns the existing handle byte-for-byte).
+  return ensureInputDonationSheet_();
 }
 
 /**
