@@ -1,6 +1,8 @@
 # CENTRAL_APP_FAMILY_BETA_READINESS_CHECKPOINT.md
 
-A synthesis checkpoint taken **after** the first blank-workbook runtime matrix and the House onboarding fix (`4e6af6d`, 2026-05-22) shipped. The purpose of this doc is to make the next category decision deliberately — closing the Donations bootstrap gap, running the remaining runtime checks, or beginning true central-mode workbook creation + mapping — rather than reflexively picking up the next fix.
+A synthesis checkpoint taken **after** the first blank-workbook runtime matrix, the House onboarding fix (`4e6af6d`, 2026-05-22), and the planner-page runtime closure (2026-05-23) that resolved the last remaining runtime unknown. The purpose of this doc is to make the next category decision deliberately — closing the Donations bootstrap gap or beginning true central-mode workbook creation + mapping — rather than reflexively picking up the next fix.
+
+> **Update (2026-05-23): Option B is complete.** The §4.2 planner-page runtime unknown (Rolling Debt Payoff / Debt Payoff Projection) has been resolved by runtime evidence per `CENTRAL_APP_BLANK_WORKBOOK_RUNTIME_REPORT.md → §4A.12`. Both pages are now runtime-confirmed working on a blank workbook across three reachable states. The blank-workbook runtime matrix is effectively complete. The recommendation in §7 collapses to Option A first, then Option C. Historical Option B framing is preserved below.
 
 **Documentation only.** No code change, no HTML change, no schema change, no deployment change. This checkpoint authorizes no work; it only records what we now know and frames the choice.
 
@@ -84,6 +86,8 @@ Confirmed on the blank-workbook retest after the fix:
 - **Quick Add** — payee dropdown, type / flow source dropdowns, and the $0 / negative-rejection rules all behave as designed; no race conditions surfaced.
 - **Bills Due** — empty calm state on a fresh workbook; recurring-fallback path correctly excludes inactive debts.
 - **Purchase Simulator, Next Actions** — calm empty states on a fresh workbook; no red banners.
+- **Rolling Debt Payoff** (added 2026-05-23) — explicit not-set-up envelope with calm setup-message card when `INPUT - Debts` or `SYS - Accounts` is missing; populated path renders with no red banner once data exists. Runtime-confirmed across three reachable blank-workbook states per `CENTRAL_APP_BLANK_WORKBOOK_RUNTIME_REPORT.md → §4A.12`.
+- **Debt Payoff Projection** (added 2026-05-23) — calm zeroed envelope when prerequisites are missing; populated path renders with rough-payoff estimates and non-zero summary card once data exists. Cash Flow read is wrapped in `try` / `catch` so missing Cash Flow year sheets do not leak a banner. Runtime-confirmed across three reachable blank-workbook states per `CENTRAL_APP_BLANK_WORKBOOK_RUNTIME_REPORT.md → §4A.12`.
 
 ---
 
@@ -141,13 +145,17 @@ A "blocker" here means: a first-time user on a blank workbook, following the doc
 - **Recommended fix:** add `ensureInputDonationSheet_` in `donations.js`, register under a new key in `sheet_bootstrap.js`, and replace `getDonationsSheet_`'s throw with a lazy create. Year sections appear as the user adds rows; only the header row pattern needs seeding.
 - **Severity:** medium — Donations is optional for most users, but the throw is loud and the help text leaks an internal sheet name (`INPUT - Donation`). Not life-or-death for the family beta proof, but the only remaining surface that produces a red banner on first run.
 
-### 4.2 Rolling Debt Payoff / Debt Payoff Projection — blank-workbook behavior unknown
+### 4.2 Rolling Debt Payoff / Debt Payoff Projection — ✅ **resolved (was the last runtime unknown)**
 
-- **Surface:** Planning → Rolling Debt Payoff, Planning → Debt Payoff Projection.
-- **Why this is here:** both modules read `INPUT - Debts` and Cash Flow year sheets. The bootstrap registry seeds `INPUT - Debts` eagerly, so behavior **should** be calm — but this has not been verified end-to-end on a fully blank workbook.
-- **Why it matters for the readiness call:** static analysis cannot prove these are safe (the audit explicitly marked them "Unknown / likely partial" at §5.3). The cheapest path to certainty is a runtime check, not a code change.
-- **Recommended action:** add `§4.15.1`, `§4.15.2`, `§4.16.1`, `§4.16.2` to the next runtime test pass and fill in the result column. If either surface throws, file as a new gap; otherwise mark as Works.
-- **Severity:** unknown — could be zero (calm empty state), could surface a red banner. The lifetime-runtime cost to find out is small (≤15 minutes on the existing blank workbook).
+- **Status (2026-05-23):** ✅ runtime-confirmed working on a blank workbook. Both pages were verified across three reachable states (fully blank, partial Setup / Review, both prerequisites present) per `CENTRAL_APP_BLANK_WORKBOOK_RUNTIME_REPORT.md → §4A.3 / §4A.4 / §4A.5`. Closure record at `CENTRAL_APP_BLANK_WORKBOOK_RUNTIME_REPORT.md → §4A.12`. No code change required; the defensive guards in `rolling_debt_payoff.js:2862–2924` and `debt_payoff_projection.js:16–51` already cover every blank-workbook state. No red banner, no sheet writes from the page-open paths, no planner execution side-effect.
+- **Severity reclassification:** unknown → **zero**. The static analysis hypothesis (calm empty state) was confirmed by runtime evidence.
+- **Original wording (preserved verbatim):**
+  - **Surface:** Planning → Rolling Debt Payoff, Planning → Debt Payoff Projection.
+  - **Why this is here:** both modules read `INPUT - Debts` and Cash Flow year sheets. The bootstrap registry seeds `INPUT - Debts` eagerly, so behavior **should** be calm — but this has not been verified end-to-end on a fully blank workbook.
+  - **Why it matters for the readiness call:** static analysis cannot prove these are safe (the audit explicitly marked them "Unknown / likely partial" at §5.3). The cheapest path to certainty is a runtime check, not a code change.
+  - **Recommended action:** add `§4.15.1`, `§4.15.2`, `§4.16.1`, `§4.16.2` to the next runtime test pass and fill in the result column. If either surface throws, file as a new gap; otherwise mark as Works.
+  - **Severity:** unknown — could be zero (calm empty state), could surface a red banner. The lifetime-runtime cost to find out is small (≤15 minutes on the existing blank workbook).
+  - _Predicted outcome (above) was observed; result is Works._
 
 ### 4.3 Anything else?
 
@@ -207,30 +215,38 @@ Each item below is real but does **not** block the family beta proof and should 
 
 ### 6.1 Direct answer
 
-**What blocks the family beta proof today:**
-1. The Donations bootstrap gap (§4.1) is the only confirmed red banner a first-run user can hit on the documented Setup / Review path. **Severity: medium.** Small additive ensure helper closes it.
-2. Rolling Debt Payoff / Debt Payoff Projection blank-workbook behavior (§4.2) is unknown. **Severity: unknown.** A 15-minute runtime check resolves it.
+**What blocks the family beta proof today (post-2026-05-23 closure of §4.2):**
+1. The Donations bootstrap gap (§4.1) is the **only** confirmed red banner a first-run user can hit on the documented Setup / Review path. **Severity: medium.** Small additive ensure helper closes it.
+
+There are **no remaining runtime unknowns** on the family beta first-run path. The §4.2 planner-page unknown was resolved on 2026-05-23 by runtime evidence per `CENTRAL_APP_BLANK_WORKBOOK_RUNTIME_REPORT.md → §4A.12` — both pages render calm zero-states on a blank workbook and require no code change.
 
 **What does not block the family beta proof today:**
 - Every surface that has shipped, lazy-bootstraps, or has been runtime-confirmed (§2).
 - Every item in §5 (cosmetic, defense-in-depth, legacy, performance, polish, Bank Import).
 - The previously-confirmed §5.6 House Values pre-validation gap (fixed in `4e6af6d`).
 - The previously-confirmed §5.2 per-house tab gap (reclassified — `createHousesExpenseSheet_` already covers it, runtime-confirmed).
+- The previously-unknown §4.2 planner-page surfaces (resolved by runtime evidence on 2026-05-23 — no code change needed).
 
 **Is the onboarding architecture proven enough to move toward central-mode workbook creation + mapping?**
 
-**Yes, conditionally.** The additive bootstrap chain (`ensureOnboardingCoreSheetsFromDashboard` for the six core sheets, plus per-domain lazy-create helpers for everything else, plus `createHousesExpenseSheet_` for per-house tabs) is now demonstrated to materialize a complete, usable workbook from a blank `Sheet1`-only starting point **without manual developer intervention** — except for the Donations surface and the two untested planner surfaces.
+**Yes — broadly proven, with one narrow remaining gap.** The additive bootstrap chain (`ensureOnboardingCoreSheetsFromDashboard` for the six core sheets, plus per-domain lazy-create helpers for everything else, plus `createHousesExpenseSheet_` for per-house tabs, plus the per-module blank-workbook short-circuits on Rolling Debt Payoff and Debt Payoff Projection) is now demonstrated to materialize a complete, usable workbook from a blank `Sheet1`-only starting point **without manual developer intervention** on every surface in scope for the family beta first-run path — except for the Donations surface (§4.1), which is one small additive ensure helper away from closure.
 
-The "conditionally" qualifier is honest: until the Donations gap is closed and the two planner surfaces are runtime-checked, there is at least one known and at least one possible red-banner surface that a beta tester could hit. Closing those — or accepting them as known limitations with clear messaging — is the minimum bar before turning the lights on for a second user.
+Pre-runtime-test the qualifier was "yes, conditionally — with one open gap and one unknown." Post-runtime-test (2026-05-23) the qualifier is "yes — broadly proven, with one narrow remaining gap (§4.1 Donations)." The path forward is deterministic: close §4.1 with the additive Donations ensure helper, then begin central-mode planning (Option C) from a confirmed-zero-blocker baseline.
 
-Compared to the pre-runtime-test belief that **three** confirmed gaps stood between us and a family beta proof, the post-runtime-test picture is:
+Compared to the pre-runtime-test belief that **three** confirmed gaps stood between us and a family beta proof, the post-runtime-test picture (now also incorporating the 2026-05-23 planner-page closure) is:
 - Original confirmed gaps: 3 (§5.1, §5.2, §5.6).
-- Now closed: 1 (§5.6, shipped in `4e6af6d`).
+- Now closed by code fix: 1 (§5.6, shipped in `4e6af6d`).
 - Now reclassified, no fix needed: 1 (§5.2, reframed by runtime evidence).
+- Now resolved by runtime evidence: 1 (§4.2 / audit §5.3, runtime-confirmed working 2026-05-23 — no code change required).
 - Still open: 1 (§5.1 Donations).
-- Plus 1 runtime unknown to resolve (§4.2 planner surfaces).
 
-That is the cheapest possible delta between "moderately strong" and "proven enough" — one small ensure helper and one short runtime check.
+That is the cheapest possible delta between "moderately strong" and "proven enough" — one small ensure helper.
+
+### 6.4 Additive bootstrap contract validation (added 2026-05-23)
+
+The 2026-05-23 planner-page runtime closure also validates the additive bootstrap contract at the level it most matters: **reading dashboard pages on a blank workbook does not trigger sheet creation, does not leak red banners, and does not invoke the planner.** Every surface in scope for the family beta first-run path now has an observed (or already-shipped-and-tested) calm zero-state. The dashboard's `notSetUp` / `partial` / `ready` semantics, combined with the per-domain ensure helpers, combined with the per-module blank-workbook short-circuits on the planner pages, materialize a complete usable workbook from zero sheets without manual developer intervention on every surface except Donations.
+
+The contract holds.
 
 ### 6.2 Confidence in the onboarding contract
 
@@ -240,42 +256,50 @@ The two static-analysis misses surfaced by the runtime test (§3.5) were both **
 
 ### 6.3 What the runtime test changed about our belief
 
-Before the runtime test, the audit estimated blank-workbook readiness as "moderately strong with three confirmed gaps." After the runtime test:
+Before the runtime test, the audit estimated blank-workbook readiness as "moderately strong with three confirmed gaps and one unknown." After the runtime test (initial session 2026-05-22 + planner-page closure 2026-05-23):
 
-- **Strength is higher than the audit suggested.** Most surfaces lazy-bootstrap calmly. The dashboard's `notSetUp` / `partial` / `ready` semantics, combined with the per-domain ensure helpers, materialize a usable workbook from zero sheets without a developer's intervention.
-- **The shape of the remaining gaps is narrower.** Three gaps became one open + one reclassified + one fixed. The remaining open gap (Donations) is small and additive.
-- **The static-audit method itself has known blind spots.** Cross-line ordering and cross-module integration are not reliably caught by static trace. Runtime test is required for these. That lesson is recorded in the audit's §11.
+- **Strength is higher than the audit suggested.** Most surfaces lazy-bootstrap calmly. The dashboard's `notSetUp` / `partial` / `ready` semantics, combined with the per-domain ensure helpers and the per-module blank-workbook short-circuits, materialize a usable workbook from zero sheets without a developer's intervention.
+- **The shape of the remaining gaps is narrower.** Three confirmed gaps + one unknown became one open + one reclassified + one fixed + one runtime-confirmed. The remaining open gap (Donations) is small and additive.
+- **The static-audit method itself has known blind spots.** Cross-line ordering and cross-module integration are not reliably caught by static trace. Runtime test is required for these — both to falsify incorrect "lazy-bootstraps" classifications (the §5.6 / §5.2 lesson) and to confirm correct defensive-short-circuit hypotheses (the §5.3 lesson). That lesson is recorded in the audit's §11.
 
-The headline finding: **the onboarding architecture was already much closer to family-beta-ready than we believed.** The runtime test was cheap and high-value; the fixes that fell out of it were small and reversible.
+The headline finding: **the onboarding architecture was already much closer to family-beta-ready than we believed, and the 2026-05-23 closure confirmed there are no remaining runtime unknowns.** The runtime test was cheap and high-value; the fixes that fell out of it were small and reversible; the remaining open work is one additive helper away.
 
 ---
 
 ## 7. Recommended next category
+
+> **Update (2026-05-23): Option B is complete.** The §4.2 planner-page runtime unknown was resolved on 2026-05-23. The original three-option framing is preserved verbatim below for historical record; the active recommendation collapses to "Option A first, then Option C." See §7.5 for the revised recommendation.
 
 Three candidate next steps, evaluated against (a) cost, (b) impact on the family beta readiness call, and (c) compounding effect on the remaining roadmap.
 
 ### 7.1 Option A — close the Donations bootstrap gap (`§5.1`)
 
 - **Cost:** small. One ensure helper (`ensureInputDonationSheet_`), one bootstrap registry entry, one throw → lazy create swap in `getDonationsSheet_`. One Cursor prompt; one commit; matches the canonical creator pattern already used for `INPUT - Cash Flow <year>`.
-- **Impact on the family beta readiness call:** closes the only remaining confirmed red-banner surface. After this, the only remaining open question is the planner runtime check.
-- **Compounding effect:** removes one of the two "before central-mode" prerequisites. Does not unlock any new architectural work on its own.
+- **Impact on the family beta readiness call:** closes the only remaining confirmed red-banner surface. After this, the family beta first-run path has zero confirmed blockers and the next deliberate step is Option C.
+- **Compounding effect:** removes the last "before central-mode" prerequisite. Does not unlock any new architectural work on its own, but it converts the readiness call from "broadly proven, with one narrow remaining gap" to "fully proven, no remaining gaps."
 - **Risk:** very low. Strictly additive. Reversible. No schema change.
 
-### 7.2 Option B — run the remaining runtime checks for Rolling Debt Payoff / Debt Payoff Projection (`§4.2`)
+### 7.2 Option B — run the remaining runtime checks for Rolling Debt Payoff / Debt Payoff Projection (`§4.2`) — ✅ **complete (2026-05-23)**
 
-- **Cost:** minimal. The disposable blank workbook from the previous session can be reused (or recreated cheaply). Add four rows to the runtime test matrix (§4.15.1, §4.15.2, §4.16.1, §4.16.2) and fill in observations. Estimated 15 minutes of clicks + 15 minutes of doc updates.
-- **Impact on the family beta readiness call:** resolves the only remaining runtime unknown. Either both surfaces are calm (most likely), in which case the readiness picture is "Donations only" and the path to family beta clarifies; or one surfaces a new gap, in which case the gap list grows by one before any central-mode work begins.
-- **Compounding effect:** in either outcome, the readiness call becomes deterministic instead of conditional. This unlocks a confident decision about whether to begin central-mode work or close one more gap first.
-- **Risk:** none — it is observation-only.
+- **Status:** ✅ done. The runtime checks were executed against a disposable blank workbook on 2026-05-23 per `CENTRAL_APP_BLANK_WORKBOOK_RUNTIME_REPORT.md → §4A.12`. Both surfaces resolved PASS across all three reachable states. No code change required; both pages render calm zero-states. The §4A addendum predicted the most-likely outcome ("both surfaces are calm"); that prediction was confirmed.
+- **Original framing (preserved verbatim):**
+  - **Cost:** minimal. The disposable blank workbook from the previous session can be reused (or recreated cheaply). Add four rows to the runtime test matrix (§4.15.1, §4.15.2, §4.16.1, §4.16.2) and fill in observations. Estimated 15 minutes of clicks + 15 minutes of doc updates.
+  - **Impact on the family beta readiness call:** resolves the only remaining runtime unknown. Either both surfaces are calm (most likely), in which case the readiness picture is "Donations only" and the path to family beta clarifies; or one surfaces a new gap, in which case the gap list grows by one before any central-mode work begins.
+  - **Compounding effect:** in either outcome, the readiness call becomes deterministic instead of conditional. This unlocks a confident decision about whether to begin central-mode work or close one more gap first.
+  - **Risk:** none — it is observation-only.
+- **Actual outcome:** the predicted "both surfaces are calm" outcome was observed. The readiness picture is now "Donations only" as predicted; the path to family beta is correspondingly clarified.
 
 ### 7.3 Option C — begin planning true central-mode workbook creation + mapping
 
 - **Cost:** large. Per `CENTRAL_APP_MINIMAL_BETA_PROOF.md → §6`, this means Drive API workbook creation, per-user mapping store via `PropertiesService.getUserProperties()`, deployment posture change (`executeAs: USER_ACCESSING`, OAuth Drive scope), first-run UX surfaces, recovery surfaces, rollback procedure. Each is its own Cursor prompt; the chain is multi-week, not single-session.
-- **Impact on the family beta readiness call:** this is the actual family beta proof work, but it presupposes the onboarding architecture is proven enough to support a hands-off first-run. With one open gap (Donations) and one runtime unknown, that presupposition is "conditionally yes." Starting central-mode planning here is defensible — but riskier than closing the cheap remaining items first.
-- **Compounding effect:** unblocks every downstream Central App phase (resolver migration of write paths, deployment posture spike, family beta proof itself). However, premature start risks discovering mid-implementation that the Donations gap or a planner runtime gap is more serious than expected, forcing a context switch.
+- **Impact on the family beta readiness call (revised 2026-05-23):** this is the actual family beta proof work. After Option B's closure (done) and Option A's closure (recommended next), the onboarding architecture will have zero confirmed blockers, and the presupposition that Option C requires ("the onboarding architecture is proven enough to support a hands-off first-run") will hold without qualification. Starting Option C from a confirmed zero-blocker baseline is strictly safer than starting it from a "broadly proven, with one narrow remaining gap" baseline.
+- **Compounding effect:** unblocks every downstream Central App phase (resolver migration of write paths, deployment posture spike, family beta proof itself). After Option A ships, premature-start risk collapses to near-zero.
 - **Risk:** moderate. The risk is rework / context switching, not data loss — the additive contract still holds, and any central-mode work continues to run against a developer-owned workbook until the family beta is explicitly turned on.
+- **Original framing (preserved verbatim):** "this is the actual family beta proof work, but it presupposes the onboarding architecture is proven enough to support a hands-off first-run. With one open gap (Donations) and one runtime unknown, that presupposition is 'conditionally yes.' Starting central-mode planning here is defensible — but riskier than closing the cheap remaining items first." — The runtime unknown is now resolved; the "conditionally yes" qualifier has been removed for everything except the Donations surface.
 
-### 7.4 Recommendation
+### 7.4 Recommendation (original — superseded 2026-05-23)
+
+> **Superseded by §7.5.** The original recommendation called for Option B → A → C in that order. Option B is now complete (2026-05-23). The original wording is preserved below.
 
 **Run Option B first, then Option A, then Option C — in that order, ideally in a single session.**
 
@@ -287,6 +311,19 @@ Rationale:
 The pragmatic next session: a single Cursor session that (1) extends the runtime test matrix to cover the two planner surfaces, (2) reports findings, (3) if the result is calm, queues the Donations ensure helper as the next narrow implementation prompt, (4) updates `CENTRAL_APP_BOOTSTRAP_COVERAGE_AUDIT.md` and the runtime report once Donations ships, and (5) explicitly transitions to central-mode planning per `CENTRAL_APP_MINIMAL_BETA_PROOF.md → §6` with a clean baseline.
 
 **If forced to pick exactly one of A / B / C as the very next category, pick B** — it is the cheapest, lowest-risk, most-information-per-minute step on the board, and it is the only step that strictly precedes the others.
+
+### 7.5 Recommendation (active, 2026-05-23)
+
+With Option B complete and step (1)–(2) of the §7.4 pragmatic next session already done, the active recommendation collapses to two steps:
+
+**Run Option A first, then Option C.**
+
+Rationale:
+- **Option A is the smallest additive fix remaining on the roadmap and the last confirmed onboarding blocker.** One ensure helper (`ensureInputDonationSheet_`), one bootstrap registry entry, one throw → lazy create swap in `getDonationsSheet_`. Strictly additive, reversible, no schema change. After Option A ships, the family beta first-run path has zero confirmed blockers.
+- **Option C is the actual family beta proof work** and now starts from a confirmed-zero-blocker baseline. Beginning central-mode planning at this point is strictly less risky than beginning it before Option A — the Donations gap would be exactly the kind of mid-implementation context switch the original §7.4 framing warned against.
+- **Both options share a single pragmatic next session:** (1) close Donations as a narrow Cursor prompt, (2) update the audit and runtime report to mark §5.1 resolved, (3) transition explicitly to central-mode planning per `CENTRAL_APP_MINIMAL_BETA_PROOF.md → §6`.
+
+**If forced to pick exactly one of A / C as the very next category, pick A** — it is now the cheapest, lowest-risk, smallest-additive step on the board, and it is the only confirmed blocker between the current state and the central-mode work.
 
 ---
 

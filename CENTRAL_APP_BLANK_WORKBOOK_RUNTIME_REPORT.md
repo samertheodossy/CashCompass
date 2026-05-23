@@ -244,17 +244,21 @@ Result codes:
 
 ### 4.15 Rolling Debt Payoff (Planning page)
 
+> **✅ Status (2026-05-23): runtime-confirmed working on blank workbook.** Both rows resolved PASS by the §4A addendum runtime session. Original "Unknown per audit §5.3." framing preserved verbatim below for historical record. See §4A closure for the detailed evidence.
+
 | # | Action | Expected | Observed | Sheets created (delta) | Banners | Activity Log delta | Result | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 4.15.1 | Open the Rolling Debt Payoff page on a fresh workbook (before §4.6.2). | **Unknown per audit §5.3.** Expected: calm empty state. Possible: red banner if `INPUT - Debts` read is strict. Confirm. | | none | | | | |
-| 4.15.2 | After §4.6.2, reload Rolling Debt Payoff. | Page renders with the one debt. Plan output reflects it. | | none | | | | |
+| 4.15.1 | Open the Rolling Debt Payoff page on a fresh workbook (before §4.6.2). | **Unknown per audit §5.3.** Expected: calm empty state. Possible: red banner if `INPUT - Debts` read is strict. Confirm. | Page opens cleanly. Calm not-set-up card renders with the documented setup-message copy. No React mount. | none | **none** | (none — read-only) | **✅ PASS** | Resolved 2026-05-23 by §4A.3.1 + §4A.4.2. Confirms the `getRollingDebtPayoffPlan` short-circuit branch fires correctly with prerequisites absent. |
+| 4.15.2 | After §4.6.2, reload Rolling Debt Payoff. | Page renders with the one debt. Plan output reflects it. | Populated path renders the one debt; plan output reflects it. No red banner. No sheet writes. | none | none | (none — read-only) | **✅ PASS** | Resolved 2026-05-23 by §4A.5.5. |
 
 ### 4.16 Debt Payoff Projection (Planning page)
 
+> **✅ Status (2026-05-23): runtime-confirmed working on blank workbook.** Both rows resolved PASS by the §4A addendum runtime session. Original "Unknown per audit §5.3." framing preserved verbatim below for historical record. See §4A closure for the detailed evidence.
+
 | # | Action | Expected | Observed | Sheets created (delta) | Banners | Activity Log delta | Result | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 4.16.1 | Open Debt Payoff Projection on a fresh workbook (before §4.6.2). | **Unknown per audit §5.3.** Expected: calm empty state. Possible: red banner. Confirm. | | none | | | | |
-| 4.16.2 | After §4.6.2, reload Debt Payoff Projection. | Page renders with the one debt. Projection output reflects it. | | none | | | | |
+| 4.16.1 | Open Debt Payoff Projection on a fresh workbook (before §4.6.2). | **Unknown per audit §5.3.** Expected: calm empty state. Possible: red banner. Confirm. | Page opens cleanly. Calm zeroed envelope renders; per-debt table empty; summary card shows `$0.00`. No red banner. | none | **none** | (none — read-only) | **✅ PASS** | Resolved 2026-05-23 by §4A.3.2 + §4A.4.3. Confirms the `getDebtPayoffReadData` short-circuit branch fires correctly with prerequisites absent. |
+| 4.16.2 | After §4.6.2, reload Debt Payoff Projection. | Page renders with the one debt. Projection output reflects it. | Populated path renders the one debt with rough-payoff estimate; summary card shows non-zero totals. No red banner. No sheet writes. | none | none | (none — read-only) | **✅ PASS** | Resolved 2026-05-23 by §4A.5.6. |
 
 ### 4.17 Purchase Simulator (Planning page)
 
@@ -403,6 +407,43 @@ Once §4A is fully resolved with PASS rows:
 
 **Total: ~35 minutes** for the full addendum, or ~15 minutes if only §4A.3 + §4A.4 are run (the minimum sufficient evidence).
 
+### 4A.12 Closure — runtime evidence (2026-05-23)
+
+**Status: ✅ ADDENDUM FULLY RESOLVED.** The §4A runtime session was executed on a disposable blank workbook against a deployment containing commit `d489824` (which includes the §5.6 House onboarding fixes from `4e6af6d` per the prerequisite in §4A.2). The two planner-page surfaces previously classified "Unknown / likely partial" by `CENTRAL_APP_BOOTSTRAP_COVERAGE_AUDIT.md → §5.3` are now **runtime-confirmed working on blank workbook**. No new onboarding gap was discovered; no red banner surfaced on any row; no unexpected sheet creation; no planner execution side-effect. The §4.15 / §4.16 rows in the main matrix are updated accordingly with the PASS results and link back to this closure.
+
+**Observed results (summary):**
+
+- **§4A.3 (State-1 — fully blank, no Setup / Review interaction):** PASS for both pages. Calm not-set-up card on Rolling; calm zeroed envelope on Projection. No red banner. No sheet writes. No Activity Log entries from the read paths.
+- **§4A.4 (State-2 — `INPUT - Debts` exists from bootstrap registry, `SYS - Accounts` still absent):** PASS for both pages. The `||` guard fires correctly when only one prerequisite is missing; the short-circuit branch is reached and the calm copy / zeroed envelope render exactly as in State-1.
+- **§4A.5 (State-3 — both prerequisites present; populated path runs):** PASS for both pages. With zero debts, both surfaces render their calm zero-state. With one debt added (the credit-card test row per §4A.5.4), both surfaces render the populated state — Rolling resolves `current_focus` to the test card and `anchor_month` to the current calendar month; Projection shows the per-debt row with its rough-payoff estimate; summary card shows non-zero `totalDebtBalance` / `totalMinimumPayments`. No red banner. No sheet writes.
+
+**Behavior confirmed against the runtime-evidence rubric in §4A.6 / §4A.7 / §4A.8 / §4A.9:**
+
+- **Red banners (§4A.7):** zero on every row. No banner mentioned `Missing sheet`, `getSheet_`, `readSheetAsObjects_`, or any `getSheetNames_()` value.
+- **Sheet creation (§4A.8):** zero new sheets from opening either page in any of the three states. The only sheets created during the addendum session were the expected prerequisites added by Setup / Review itself (`INPUT - Debts` via the bootstrap registry, then `SYS - Accounts` + `INPUT - Bank Accounts` via `addBankAccountFromDashboard`) — none were caused by opening the planner pages.
+- **Planner execution (§4A.9):** zero `OUT - Dashboard` / `OUT - History` materializations from the page-open paths. Neither page invokes `runDebtPlanner`; both run their in-memory projection only.
+- **Activity Log:** zero entries from page-open reads. Activity entries only appeared for the explicit user-action prerequisites (`bank_account_add`, `debt_add`).
+- **Dependency guidance (§4A.1 questions 1 / 2 / 3):** Each of the three reachable states (no prerequisites, partial prerequisites, full prerequisites) renders cleanly. The setup-message copy on the not-set-up card is understandable and actionable — points the user back to Setup / Review without leaking internal sheet names or implementation details.
+- **Planner assumptions explained correctly:** the Rolling Debt Payoff card's `current_focus: '—'` / `anchor_month: '—'` placeholders during the zero-debt populated state (§4A.5.2) are calmly explained by the existing UI — no error, just a "nothing yet" rendering.
+
+**Documentation cross-references updated as a result of this closure:**
+
+- This report's §4.15 / §4.16 main-matrix rows now carry the PASS results and the historical-Unknown banner.
+- `CENTRAL_APP_BOOTSTRAP_COVERAGE_AUDIT.md → §5.3` reclassified from "unknown" to "runtime-confirmed working on blank workbook" (with the original wording preserved verbatim and the resolution annotated).
+- `CENTRAL_APP_BOOTSTRAP_COVERAGE_AUDIT.md → §11` summary updated to remove the "Unknown: one" line and reclassify the runtime-matrix status as complete.
+- `CENTRAL_APP_FAMILY_BETA_READINESS_CHECKPOINT.md → §4.2 / §6.1 / §7` updated to reflect that Option B is now complete and the next deliberate choice collapses to Option A (Donations bootstrap gap) or Option C (begin central-mode planning).
+- `SESSION_NOTES.md` updated with the closure milestone.
+
+**What the addendum did not change:**
+
+- No code change. No HTML change. No deployment-setting change. No schema change. No new ensure helper. No new sheet name. No new activity event type.
+- The latent pre-validation-before-ensure shape in `addDebtFromDashboard` / `addInvestmentAccountFromDashboard` (runtime-report §6 row 5) is still latent — not surfaced by this runtime session and not in scope for the addendum.
+- The cosmetic House Values / House Assets first-create polish (runtime-report §6 row 4) is still optional and still tracked.
+- The legacy / edge-case `addHouseExpense` lazy-create concern (runtime-report §6 row 2 reframed) is still optional and still tracked.
+- `INPUT - Donation` bootstrap gap (audit §5.1) is still open — now the **only** remaining confirmed onboarding blocker on the family beta first-run path.
+
+**Net effect on blank-workbook onboarding readiness.** The blank-workbook runtime matrix is **effectively complete**. Every surface that has been deemed in-scope for the family beta first-run path is either runtime-confirmed working, runtime-confirmed lazy-bootstrapping calmly, runtime-confirmed degrading gracefully via a calm zero-state, or a confirmed gap with a known smallest-fix. The remaining "true onboarding blocker" list is **one item**: Donations (§5.1). Everything else is either optional defense-in-depth, optional cosmetic polish, deferred non-goal, or future central-mode work.
+
 ---
 
 ## 5. Aggregate observations
@@ -469,9 +510,11 @@ After §4 and §5 are filled in, summarize the runtime gaps here. Each row becom
 
 | Audit §4 row | Pre-test classification | Post-test classification | Step that resolved it |
 |---|---|---|---|
-| 4.15 Rolling Debt Payoff | Unknown | (fill in: Works / Partial / Fails) | §4.15.1 |
-| 4.16 Debt Payoff Projection | Unknown | (fill in: Works / Partial / Fails) | §4.16.1 |
-| (others) | | | |
+| 4.15 Rolling Debt Payoff | Unknown | **Works (PASS) — runtime-confirmed 2026-05-23** | §4A.3.1 + §4A.4.2 + §4A.5.5 |
+| 4.16 Debt Payoff Projection | Unknown | **Works (PASS) — runtime-confirmed 2026-05-23** | §4A.3.2 + §4A.4.3 + §4A.5.6 |
+| (others) | — | — | — |
+
+After 2026-05-23 there are **no remaining Unknown rows** in the runtime matrix for the family beta first-run path.
 
 ### 6.2 Notes for the next implementation prompt set
 
