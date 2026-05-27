@@ -1492,6 +1492,15 @@ function getRecurringBillsWithoutDueDateForDashboard() {
     if (!currentHandled) {
       result.push({
         id: 'fallback::' + payee + '::' + currentMonthHeader,
+        // Server-resolvable skip key. `id` is a client-side render/dedupe
+        // key with a `fallback::` prefix that getDashboardBillByKey_ does
+        // not parse, so the Skip button must send this dashboard_recurring_skip::
+        // shape instead. Built via buildDashboardRecurringSkipKey_ so this row
+        // round-trips through resolveDashboardBillSkipTarget_ -> the same
+        // Cash Flow cell skip path the dated bill cards already use. See
+        // bug: "Could not resolve bill skip target" when skipping a row
+        // under "Recurring Bills (No Due Date)".
+        skipKey: buildDashboardRecurringSkipKey_(payee, currentYear, currentMonthHeader),
         payee: payee,
         name: payee,
         amount: 0,
@@ -1522,6 +1531,11 @@ function getRecurringBillsWithoutDueDateForDashboard() {
     if (diffDays <= 7) {
       result.push({
         id: 'fallback::' + payee + '::' + nextMonthHeader,
+        // Server-resolvable skip key for the next-month branch — same
+        // rationale as the current-month branch above. Year is sourced from
+        // nextDate so December -> January rollover targets the correct
+        // Cash Flow year sheet.
+        skipKey: buildDashboardRecurringSkipKey_(payee, nextDate.getFullYear(), nextMonthHeader),
         payee: payee,
         name: payee,
         amount: 0,

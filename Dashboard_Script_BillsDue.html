@@ -345,7 +345,7 @@ function renderRecurringBillsList_(elementId, rows, emptyMsg) {
         '<div class="change-meta">Recurring · no due date set</div>' +
         '<div class="bill-card-actions">' +
           '<button class="small-btn primary" onclick="payRecurringBill(\'' + escapeJs(key) + '\')">Pay</button>' +
-          '<button class="small-btn" onclick="skipRecurringBill(\'' + escapeJs(r.id || '') + '\')">Skip</button>' +
+          '<button class="small-btn" onclick="skipRecurringBill(\'' + escapeJs(r.skipKey || r.id || '') + '\')">Skip</button>' +
         '</div>' +
       '</div>'
     );
