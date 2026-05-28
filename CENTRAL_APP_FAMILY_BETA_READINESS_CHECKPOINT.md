@@ -314,6 +314,8 @@ The pragmatic next session: a single Cursor session that (1) extends the runtime
 
 ### 7.5 Recommendation (active, 2026-05-23)
 
+> **Superseded by §7.6 (2026-05-28).** Option A shipped in `8b399f6` (Donations bootstrap closure) and Option C's first slice has shipped and been runtime-confirmed; the active recommendation now lives in §7.6. The §7.5 wording is preserved verbatim below as the recommendation that authorized the work that has now closed.
+
 With Option B complete and step (1)–(2) of the §7.4 pragmatic next session already done, the active recommendation collapses to two steps:
 
 **Run Option A first, then Option C.**
@@ -324,6 +326,31 @@ Rationale:
 - **Both options share a single pragmatic next session:** (1) close Donations as a narrow Cursor prompt, (2) update the audit and runtime report to mark §5.1 resolved, (3) transition explicitly to central-mode planning per `CENTRAL_APP_MINIMAL_BETA_PROOF.md → §6`.
 
 **If forced to pick exactly one of A / C as the very next category, pick A** — it is now the cheapest, lowest-risk, smallest-additive step on the board, and it is the only confirmed blocker between the current state and the central-mode work.
+
+### 7.6 Recommendation (active, 2026-05-28) — Option A shipped, Option C first slice runtime-proven
+
+Both options identified in §7.5 have advanced to runtime-confirmed state:
+
+- **Option A — Donations bootstrap closure: ✅ shipped (`8b399f6`).** `ensureInputDonationSheet_` lazy-creates the canonical `INPUT - Donation` sheet; the strict throw in `getDonationsSheet_` was replaced with a lazy-create path. The §4.1 confirmed onboarding blocker is closed; the family beta first-run path has zero confirmed bound-mode blockers.
+- **Option C — central-mode workbook creation + mapping: ✅ first slice shipped and runtime-proven (`d952dfa`, 2026-05-28).** Sequence: planning (`4b02ff8` → `cdd73c7` → `f0a5b04` → `e7e5317`), manifest preparation (`e2ebbbd`), implementation (`d952dfa`), runtime proof against the developer's primary account on the `CashCompass — Central Beta (Slice 1)` deployment. Outcome: a separate `CashCompass — samertheodossy@gmail.com` workbook was provisioned in the developer's Drive with `INPUT - Settings` bootstrapped; the `mapping::<sha256(samertheodossy@gmail.com)>` entry persists in script properties; the original bound workbook is untouched and continues to serve the live data path via the bound deployment, which stays pinned to a pre-central-mode script version. Detailed evidence in `CENTRAL_APP_WORKBOOK_CREATION_FIRST_SLICE_PLAN.md → §15`.
+
+**Current two-mode operating model** (also summarized in `CENTRAL_APP_NEXT_STEP_BASELINE.md → §7.bis.2`):
+
+- **Bound mode** = active live data + ongoing bound-spreadsheet development. Served by the existing bound deployment URL pinned to a pre-central-mode script version. `getUserSpreadsheet_()` returns `getActiveSpreadsheet()` for the developer's bound workbook; the allow-list gate is not reached because the pinned `doGet` predates it.
+- **Central mode** = new-user provisioning sandbox + future family beta. Served by the `CashCompass — Central Beta (Slice 1)` deployment on the latest script version. The allow-list gate enforces `FAMILY_BETA_ALLOWLIST` membership; the resolver routes to `getOrProvisionUserSpreadsheet_` when `CENTRAL_MODE=true`; per-user workbooks live in each calling user's own Drive.
+
+Both modes share the same underlying script project; the boundary is mechanical (deployment pinning) + flag-controlled (`CENTRAL_MODE`). Rollback to a single-mode (bound-only) posture is tier-1 immediate (flip `CENTRAL_MODE` to `false`); no user-owned workbook is deleted under any rollback path.
+
+**Active recommendation for the next session:** exercise the four hardening tests pinned in `CENTRAL_APP_WORKBOOK_CREATION_FIRST_SLICE_PLAN.md → §15.5`, in order:
+
+1. **Disposable-account provisioning** — confirm a separate user-owned workbook is provisioned for a non-developer Google account, with its own mapping entry, without affecting the developer's workbook.
+2. **Unauthorized-account rejection** — confirm `renderAllowlistRejection_()` HTML renders for an account not on `FAMILY_BETA_ALLOWLIST`, with zero Drive.Files.create, zero mapping write, zero spreadsheet data access.
+3. **Stale mapping behavior** — trash the developer's central workbook from Drive, re-hit the URL, confirm `handleStaleMapping_` throws `StaleMappingError` with a clear human-readable message, confirm no auto-reprovision, confirm manual recovery via `clearMappingForUser_(email)` from the Apps Script Run dialog.
+4. **Return-to-existing-mapping** — sign in again from the developer's account with a restored mapping, confirm `lookupSpreadsheetIdForUser_` returns the persisted ID, `SpreadsheetApp.openById` succeeds, and no second `Drive.Files.create` call occurs.
+
+Each is observation-only; no code change is required. Each closes one §15.5 row in the first-slice plan. After all four pass, the slice's §11.4 acceptance criteria converts from PARTIAL PASS to full PASS, and the family beta can broaden the allow-list with confidence.
+
+**If forced to pick exactly one as the very next session, pick test 1 (disposable-account provisioning)** — it is the highest-information test, it directly validates the multi-user-workbook claim that the entire central-mode architecture rests on, and it sets up the test-account state that tests 2–4 build on.
 
 ---
 

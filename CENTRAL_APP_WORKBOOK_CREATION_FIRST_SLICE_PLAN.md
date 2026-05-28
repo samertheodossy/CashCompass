@@ -525,4 +525,64 @@ The implementation may proceed in sub-slices (e.g., `appsscript.json` change fir
 
 This is the final planning layer before the first central-mode implementation slice. Every decision the implementation prompt would have to make on the fly is pinned here. The next artifact is an implementation prompt, not another planning doc.
 
+---
+
+## 15. Runtime evidence — first central-mode provisioning milestone (2026-05-28)
+
+> **Status update — partial PASS, developer-account path only.** The first central-mode provisioning flow has been runtime-confirmed end-to-end against the developer's primary Google account on the `CashCompass — Central Beta (Slice 1)` deployment. The disposable-account, unauthorized-account, stale-mapping, and return-to-existing-mapping rows from §11.2 remain to be exercised; they are the next hardening tests (see §15.5).
+
+### 15.1 Test conditions
+
+- Implementation slice committed in `d952dfa` (resolver + workbook provisioning, code + docs).
+- Manifest from `e2ebbbd` (`executeAs: USER_ACCESSING`, `access: ANYONE`, explicit `oauthScopes`, Drive v3 advanced service) live on the central deployment.
+- Script properties set manually in the Apps Script editor:
+  - `CENTRAL_MODE` = `true`
+  - `FAMILY_BETA_ALLOWLIST` = `samertheodossy@gmail.com` (developer's primary account)
+  - `BETA_CONTACT_EMAIL` = developer's contact email
+- Central deployment URL opened in the developer's primary browser session.
+
+### 15.2 Observed behavior (rows mapped to §11.2)
+
+| §11.2 row | Step (as written) | Observed result |
+|---|---|---|
+| 1 | OAuth consent on first hit | Consent screen appeared, listed the §3.1 scopes; accepted cleanly |
+| 2 | Page loads to Setup / Review | Loaded without a red banner |
+| 3 | New workbook in caller's Drive | `CashCompass — samertheodossy@gmail.com` created in the developer's Drive root, owned by the developer, containing exactly one sheet: `INPUT - Settings` (Key / Value header row) |
+| 4 | Walk Setup / Review on the central account | Not yet exercised — pending hardening session |
+| 5 | Close browser | Not exercised |
+| 6 | Re-open next day | Not exercised — covered by hardening test §15.5 row 4 (return-to-existing-mapping) |
+| 7 | Apps Script editor → Script Properties shows `mapping::<hash>` | Confirmed: a `mapping::<sha256(samertheodossy@gmail.com)>` entry exists, value is the new workbook's spreadsheet ID |
+| 8 | Developer's primary account sees a workbook | Confirmed (this was the test session itself) |
+| 9 | Third (unauthorized) Google account → rejection | Not yet exercised — covered by hardening test §15.5 row 2 |
+| 10 | Bound deployment still works exactly as before | Confirmed: the developer's existing bound deployment continues to serve the bound workbook unchanged. No central-mode artifacts leaked into the bound workbook. No new sheets, rows, or data changes in the bound workbook. |
+
+### 15.3 What was proven
+
+- The `appsscript.json` posture from `e2ebbbd` (`USER_ACCESSING` + `ANYONE` + explicit scopes + Drive v3) is accepted by the platform end-to-end.
+- The allow-list gate in `webapp.js → doGet` admits an allow-listed caller and reaches the dashboard render.
+- The resolver branch in `central_resolver.js → getUserSpreadsheet_()` correctly routes to `getOrProvisionUserSpreadsheet_()` when `CENTRAL_MODE=true`.
+- `Drive.Files.create` runs under the calling user's identity and creates the workbook in their Drive root (user-owned ownership model from §9 is validated for the developer-as-user case).
+- `runMinimalBootstrap_(ss)` correctly bootstraps the new workbook with `INPUT - Settings` only, with no other ensure helper executed (additive bootstrap discipline from §7.3 holds).
+- `writeSpreadsheetIdForUser_` persists the mapping under the SHA-256 hashed key shape from §6.4; raw emails do not appear as property keys.
+- The bound deployment, pinned to a pre-central-mode script version, continues to serve the developer's bound workbook with byte-for-byte legacy behavior. Two-mode coexistence works.
+
+### 15.4 What was not exercised in this milestone
+
+- Disposable-account first-run (separate Google account, separate Drive).
+- Unauthorized-account rejection (`renderAllowlistRejection_` HTML render).
+- Stale-mapping behavior (`StaleMappingError` surface, manual recovery via `clearMappingForUser_`).
+- Return-to-existing-mapping (second-session open via `lookupSpreadsheetIdForUser_` + `SpreadsheetApp.openById`).
+- Setup / Review walkthrough on the central-mode workbook to confirm lazy creation of `INPUT - Bank Accounts`, `INPUT - Debts`, etc., against a user-owned workbook context.
+
+### 15.5 Next hardening tests (in suggested order)
+
+Each is its own discrete runtime session and its own SESSION_NOTES entry when complete. None require code changes; all are observation-only against the deployed slice.
+
+1. **Disposable-account provisioning.** Add a disposable second Google account to `FAMILY_BETA_ALLOWLIST`. Sign in to the central deployment URL from that account in a clean browser profile. Expected: a separate `CashCompass — <disposable email>` workbook is created in the disposable account's Drive, owned by the disposable account; `INPUT - Settings` is created; a second `mapping::<sha256>` entry appears in script properties; the developer's `CashCompass — samertheodossy@gmail.com` workbook is unaffected.
+2. **Unauthorized-account rejection.** Sign in from a third Google account that is **not** on `FAMILY_BETA_ALLOWLIST`. Expected: the static private-beta HTML from `renderAllowlistRejection_()` renders; no workbook is created in that account's Drive; no script property is written; no `Drive.Files.create` call appears in the Executions log; no spreadsheet data access happens.
+3. **Stale mapping behavior.** Manually trash (soft delete via Drive UI) the developer's `CashCompass — samertheodossy@gmail.com` workbook. Re-hit the central deployment URL from the developer's primary account. Expected: `handleStaleMapping_` throws `StaleMappingError` with the mapped ID and underlying error message visible; **no** auto-reprovision occurs (the mapping is preserved); the developer manually clears the mapping by running `clearMappingForUser_('samertheodossy@gmail.com')` from the Apps Script editor's Run dialog; a subsequent hit then re-provisions cleanly via the §15.2 row-3 path.
+4. **Return-to-existing-mapping.** After the developer's mapping is restored (either by undoing the trash from test 3 or by re-provisioning), close the browser and re-hit the central deployment URL the next day from the same developer account. Expected: `lookupSpreadsheetIdForUser_` returns the persisted ID; `SpreadsheetApp.openById` succeeds; no new workbook is created; no second `Drive.Files.create` call appears in the Executions log; the dashboard renders against the existing workbook.
+
+The slice §11.4 pass / fail criteria evolves to: **PARTIAL PASS (developer-account row only) as of 2026-05-28; full PASS pending the four §15.5 hardening tests.**
+
 End of document.

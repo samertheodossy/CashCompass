@@ -1,5 +1,7 @@
 # CENTRAL_APP_NEXT_STEP_BASELINE.md
 
+> **Status update (2026-05-28): the central-mode milestone has shipped its first runtime-proven slice.** The "next major milestone" framing below is the **pre-milestone** state of the document, preserved verbatim as the authorization record. The first central-mode resolver + workbook provisioning slice has been implemented (commit `d952dfa`), deployed to the `CashCompass — Central Beta (Slice 1)` deployment, and runtime-confirmed against the developer's primary Google account: a separate `CashCompass — samertheodossy@gmail.com` workbook was provisioned in the developer's Drive, `INPUT - Settings` was bootstrapped, the SHA-256 mapping persisted, and the original bound workbook remains untouched and continues to serve the live data path. The two-mode operating model is now in effect — see §7 for the post-milestone summary and `CENTRAL_APP_WORKBOOK_CREATION_FIRST_SLICE_PLAN.md → §15` for the runtime evidence.
+
 A short baseline doc that establishes a single fact: **bound-mode onboarding is now sufficiently proven, and the next major Central App milestone is central-mode workbook creation + mapping.**
 
 This doc is the connective tissue between the work that just closed (bound-mode onboarding runtime matrix, blank-workbook bootstrap coverage, planner runtime unknowns, the recurring-bill skip bug, the generated-sheet formatting polish workstream split) and the work that comes next (centrally-hosted code that creates and tracks per-user workbooks). It is deliberately concise — the supporting evidence lives in the docs cross-referenced from each section.
@@ -167,8 +169,54 @@ This planning doc, once written and approved, is the gate to the first central-m
 
 ## 7. Baseline conclusion
 
+> **Original conclusion (preserved verbatim — superseded 2026-05-28 by §7.bis):**
+
 Bound-mode onboarding has been runtime-validated end-to-end on a brand-new, zero-sheet Google Sheets workbook with no developer intervention. The only remaining items are decoratively scoped (formatting polish), defense-in-depth (Debts/Investments reorder, addHouseExpense), or out of scope (Bank Import). None of them block central-mode work.
 
 The next major Central App milestone is **central-mode workbook creation + per-user mapping**, and the next deliberate step toward that milestone is writing `CENTRAL_APP_WORKBOOK_CREATION_AND_MAPPING_PLAN.md` — not code.
+
+---
+
+## 7.bis Updated conclusion (2026-05-28) — first central-mode milestone runtime-proven
+
+The "next major milestone" identified in §7 (now superseded) has shipped its first runtime-proven slice and is in production-shape on a private deployment.
+
+### 7.bis.1 What shipped between §7's authorization and today
+
+In sequence:
+1. `CENTRAL_APP_WORKBOOK_CREATION_AND_MAPPING_PLAN.md` (commit `4b02ff8`) — the planning doc §7 authorized.
+2. `CENTRAL_APP_WORKBOOK_CREATION_FIRST_SLICE_PLAN.md` (commit `cdd73c7`) — the architecture-side first-slice plan, pinning manifest, allow-list, resolver function inventory, locking, ownership, and rollback decisions.
+3. `CENTRAL_APP_DEPLOYMENT_PREPARATION_PLAN.md` (commit `f0a5b04`) — the platform-layer plan for manifest, OAuth scopes, advanced services, and deployment isolation.
+4. `CENTRAL_APP_RESOLVER_PROVISIONING_IMPLEMENTATION_PROMPT.md` (commit `e7e5317`) — the code-level implementation spec.
+5. Manifest preparation (commit `e2ebbbd`) — `appsscript.json` only: `executeAs: USER_ACCESSING`, `access: ANYONE`, explicit `oauthScopes`, Drive v3 advanced service. Validated against clasp's manifest validator (which rejects `ANYONE_WITH_GOOGLE_ACCOUNT` — `ANYONE` is the correct enum for "any signed-in Google account"; the planning-doc wording was corrected in the same wave per the §15 SESSION_NOTES entry).
+6. Resolver + workbook provisioning implementation slice (commit `d952dfa`) — `central_provisioning.js` (new), `central_resolver.js`, `webapp.js`, `profile.js`, plus the five planning-doc access-enum wording corrections.
+7. First runtime proof (2026-05-28, developer's primary account): central deployment URL hit, allow-list gate admitted the developer, `Drive.Files.create` created `CashCompass — samertheodossy@gmail.com` in the developer's Drive, `INPUT - Settings` was bootstrapped, the `mapping::<sha256>` entry persisted, the original bound workbook was untouched, and the bound deployment continues to serve the live data path because it stays pinned to a pre-central-mode script version. Detailed evidence in `CENTRAL_APP_WORKBOOK_CREATION_FIRST_SLICE_PLAN.md → §15`.
+
+### 7.bis.2 Current two-mode operating model
+
+| Mode | Deployment | Workbook | Resolver routing | Allow-list | Use |
+|---|---|---|---|---|---|
+| Bound | Existing bound deployment URL, **pinned to pre-central-mode script version** | Developer's bound workbook (the historical production workbook) | `getActiveSpreadsheet()` (legacy code in the pinned version) | Not reached (legacy `doGet` predates the gate) | **Active live data + ongoing bound-spreadsheet development** |
+| Central | `CashCompass — Central Beta (Slice 1)` deployment URL, on the latest script version | One user-owned `CashCompass — <user email>` workbook per allow-listed Google account | `getUserSpreadsheet_() → getOrProvisionUserSpreadsheet_()` when `CENTRAL_MODE=true` | Enforced in `doGet` against `FAMILY_BETA_ALLOWLIST`; unauthorized callers get `renderAllowlistRejection_()` HTML and never reach the resolver | **New-user provisioning sandbox + future family beta**; currently only the developer's own account has been provisioned |
+
+Boundary enforcement is mechanical and double-layered: **deployment pinning** keeps the bound deployment running an older script version (so its `doGet` predates the allow-list gate and the resolver still pass-throughs), and the **`CENTRAL_MODE` script property** controls whether the central deployment's resolver routes to provisioning or to legacy pass-through. The two modes coexist in the same script project but never collide because they read different code (bound deployment) or different flag state (central deployment).
+
+### 7.bis.3 Rollback posture (unchanged from the implementation spec)
+
+- **Tier 1 — immediate, no redeploy:** flip `CENTRAL_MODE` script property from `true` to `false`. The central deployment's `getUserSpreadsheet_()` instantly reverts to legacy `SpreadsheetApp.getActiveSpreadsheet()` pass-through on the next request. No user-owned workbook is deleted; the `mapping::<sha256>` entries remain in script properties; re-enable is one property flip.
+- **Tier 2 — archive central deployment:** Manage Deployments → archive the `CashCompass — Central Beta (Slice 1)` entry. The URL stops responding; the bound deployment is unaffected because it stays pinned.
+- **Tier 3 — git revert:** revert `d952dfa` to remove `central_provisioning.js`, the resolver router, the allow-list gate, and the `ensureInputSettingsSheet_(ss)` refactor. The bound deployment continues working from its pinned version; subsequent re-deploys from `main` would restore the original posture.
+- **Tier 4 — per-user manual cleanup:** `clearMappingForUser_(email)` from the Apps Script editor's Run dialog deletes the `mapping::<sha256(email)>` property for a single user. The user's workbook is preserved in their Drive (no hard delete — the only file-modifying call in the slice is `setTrashed(true)`, which moves files to the user's Drive Trash where they can be recovered).
+
+### 7.bis.4 Next deliberate steps
+
+In order:
+1. **Disposable-account provisioning test** — `CENTRAL_APP_WORKBOOK_CREATION_FIRST_SLICE_PLAN.md → §15.5 row 1`.
+2. **Unauthorized-account rejection test** — `§15.5 row 2`.
+3. **Stale mapping behavior test** — `§15.5 row 3`.
+4. **Return-to-existing-mapping test** — `§15.5 row 4`.
+5. After all four hardening tests pass, decide whether to broaden the family beta allow-list or to spend a slice on Setup / Review walkthrough validation against a user-owned workbook (currently the central-mode workbook only has `INPUT - Settings`; lazy creation of the other canonical sheets needs runtime confirmation under the new ownership context).
+
+What is **not** in scope for the next deliberate steps: any code change (the slice is implemented and proven for the developer-account row); any `appsscript.json` or deployment change; any UI redesign; any new ensure helper; any Bank Import re-enablement; any monetization or admin-portal work. All of these stay deferred per the §12 non-goals in the first-slice plan.
 
 End of document.
