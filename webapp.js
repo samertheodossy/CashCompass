@@ -1,4 +1,23 @@
 function doGet() {
+  // Allow-list gate: rejects any caller not in FAMILY_BETA_ALLOWLIST.
+  // Runs unconditionally — does not check CENTRAL_MODE — so the
+  // central deployment URL is never reachable by anonymous Google
+  // accounts. The existing bound deployment remains safe only because
+  // it is pinned to a prior script version that predates this gate;
+  // if the bound deployment is ever redeployed to head, the developer
+  // MUST be in FAMILY_BETA_ALLOWLIST for the bound URL to continue
+  // serving the dashboard (the platform-level access:MYSELF check
+  // admits the developer to doGet, but does not bypass the in-doGet
+  // allow-list).
+  //
+  // See:
+  //   - CENTRAL_APP_RESOLVER_PROVISIONING_IMPLEMENTATION_PROMPT.md
+  //   - central_provisioning.js (isAllowlistedUser_,
+  //     renderAllowlistRejection_)
+  if (!isAllowlistedUser_()) {
+    return renderAllowlistRejection_();
+  }
+
   return HtmlService.createTemplateFromFile('PlannerDashboardWeb')
     .evaluate()
     .setTitle('CashCompass')

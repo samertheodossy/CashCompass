@@ -402,9 +402,9 @@ The current manifest declares no `oauthScopes`. Apps Script auto-detects scopes 
 ### 9.4 Deployment visibility
 
 - **Current state:** `access: MYSELF`. Only the developer can invoke the deployment.
-- **Required for family beta:** `access: ANYONE_WITH_GOOGLE_ACCOUNT`. The deployment is invokable by any Google-account holder.
+- **Required for family beta:** `access: ANYONE` (manifest enum; deployment UI label: "Anyone with a Google account"). The deployment is invokable by any signed-in Google-account holder. Clasp's manifest validator only accepts `[UNKNOWN_ACCESS, DOMAIN, ANYONE, ANYONE_ANONYMOUS, MYSELF]` for `webapp.access`; `ANYONE_WITH_GOOGLE_ACCOUNT` (which appears in some Apps Script docs surfaces) is rejected at push time.
 - **Required gating:** Application-level allow-list. The web app's `doGet`/`doPost` entry points should check `Session.getEffectiveUser().getEmail()` against an allow-list (e.g., a script property `FAMILY_BETA_ALLOWLIST` = comma-separated emails) and reject everyone else with a clear "CashCompass is in private beta" message.
-- This combination — `ANYONE_WITH_GOOGLE_ACCOUNT` at the platform layer + email allow-list at the app layer — is the family-beta posture.
+- This combination — `access: ANYONE` at the platform layer + email allow-list at the app layer — is the family-beta posture.
 
 ### 9.5 Private family beta posture
 
@@ -420,7 +420,7 @@ Intentionally tiny. One disposable beta account, one created workbook, one persi
 
 ### 10.1 Slice scope
 
-1. Flip `appsscript.json` to `executeAs: USER_ACCESSING`, `access: ANYONE_WITH_GOOGLE_ACCOUNT`, with explicit `oauthScopes` declared (§9.2).
+1. Flip `appsscript.json` to `executeAs: USER_ACCESSING`, `access: ANYONE` (manifest enum; deployment UI label: "Anyone with a Google account"), with explicit `oauthScopes` declared (§9.2).
 2. Add allow-list gate on `doGet` — reject everyone except the developer's primary account and one disposable beta account (held in a script property).
 3. Add `isCentralModeEnabled_()` feature flag reading a script property; default off so bound-mode dev continues unchanged.
 4. Extend `getUserSpreadsheet_()` to the §6.3 / §6.4 shape **behind the feature flag**.

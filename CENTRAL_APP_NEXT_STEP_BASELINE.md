@@ -127,7 +127,7 @@ These are the open questions the next planning doc must answer before any code i
 
 ### 5.5 Deployment / auth posture
 - `executeAs: USER_ACCESSING` vs `executeAs: USER_DEPLOYING` — central mode requires `USER_ACCESSING` so each user's invocations run with their own Drive scope and the workbook is created in their Drive. This decision has implications already documented in `CENTRAL_APP_DEPLOYMENT_OPTIONS.md`; the planning doc should re-affirm it.
-- `access: ANYONE_WITH_GOOGLE_ACCOUNT` vs allow-list. Family beta wants allow-list only.
+- `access: ANYONE` (manifest enum; deployment UI label: "Anyone with a Google account") vs allow-list. Family beta wants allow-list only at the app layer; the manifest enum `ANYONE_WITH_GOOGLE_ACCOUNT` referenced in earlier drafts is **not** a valid clasp manifest token — the accepted set is `[UNKNOWN_ACCESS, DOMAIN, ANYONE, ANYONE_ANONYMOUS, MYSELF]`, and `ANYONE` is the correct token (sign-in required, but any Google account).
 - What OAuth scopes are required in `appsscript.json` for Drive API workbook creation? (Likely `https://www.googleapis.com/auth/drive.file` or `drive`.)
 - Consent prompts: which first-sign-in user sees what? Test on a fresh non-developer Google account.
 

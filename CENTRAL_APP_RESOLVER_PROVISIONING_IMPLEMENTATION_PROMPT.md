@@ -7,7 +7,7 @@ The exact, implementation-ready prompt specification for the **second** central-
 Cross-references (commit hashes are the current state at authoring):
 - `CENTRAL_APP_WORKBOOK_CREATION_FIRST_SLICE_PLAN.md` @ `cdd73c7` — architecture-side resolver / provisioning decisions; this prompt is the implementation translation of its §6–§11.
 - `CENTRAL_APP_DEPLOYMENT_PREPARATION_PLAN.md` @ `f0a5b04` — manifest preparation prerequisite.
-- `e2ebbbd` — the manifest commit (`USER_ACCESSING`, `ANYONE_WITH_GOOGLE_ACCOUNT`, explicit `oauthScopes`, Drive v3 advanced service). **Required before this slice may ship.**
+- `e2ebbbd` — the manifest commit (`executeAs: USER_ACCESSING`, `access: ANYONE` — manifest enum; deployment UI label is "Anyone with a Google account" — explicit `oauthScopes`, Drive v3 advanced service). **Required before this slice may ship.** Note: clasp's manifest validator rejects the string `ANYONE_WITH_GOOGLE_ACCOUNT` with `Invalid manifest: Expected one of [UNKNOWN_ACCESS, DOMAIN, ANYONE, ANYONE_ANONYMOUS, MYSELF] for webapp.access.` — the correct manifest enum for the family-beta posture is `ANYONE` (sign-in required, but any Google account; the app-layer allow-list does the actual gating).
 - `central_resolver.js` — currently a 1-line `SpreadsheetApp.getActiveSpreadsheet()` pass-through. This slice extends it.
 - `webapp.js` — currently a 6-line `doGet` that renders `PlannerDashboardWeb.html`. This slice adds an allow-list gate ahead of the render.
 - `profile.js` — owns `ensureInputSettingsSheet_()`, the single bootstrap helper called during provisioning. **Refactor required (§4.4) so the helper accepts a spreadsheet handle.**
@@ -37,7 +37,7 @@ Each prerequisite must be verified before the implementation prompt runs. If any
 | # | Prerequisite | How to verify |
 |---|---|---|
 | P1 | Manifest commit `e2ebbbd` is on `main` | `git log --oneline | grep e2ebbbd` |
-| P2 | `appsscript.json` has `executeAs: USER_ACCESSING` and `access: ANYONE_WITH_GOOGLE_ACCOUNT` | Read file; confirm exact values |
+| P2 | `appsscript.json` has `executeAs: USER_ACCESSING` and `access: ANYONE` (manifest enum; deployment UI label: "Anyone with a Google account") | Read file; confirm exact values |
 | P3 | `appsscript.json` declares Drive v3 advanced service in `dependencies.enabledAdvancedServices` | Read file |
 | P4 | `appsscript.json` declares the six `oauthScopes` from prep-plan §3.4 | Read file |
 | P5 | `clasp push` has been executed against the script project after the manifest commit | Apps Script editor → Project Settings → confirm Drive advanced service is listed under Services |

@@ -162,9 +162,20 @@ function emptyProfileShape_() {
  * Ensure INPUT - Settings exists with a Key / Value header row.
  * Creates the sheet on first call; subsequent calls are no-ops.
  * Returns the sheet.
+ *
+ * The optional `ss` parameter lets callers operate against a
+ * spreadsheet handle other than the active one. The central-mode
+ * provisioning flow (see central_provisioning.js → runMinimalBootstrap_)
+ * passes the just-created user-owned workbook directly, because
+ * SpreadsheetApp.openById() does not change the active spreadsheet
+ * and under USER_ACCESSING web-app execution
+ * SpreadsheetApp.getActiveSpreadsheet() may return null. When `ss`
+ * is omitted, behavior is byte-for-byte identical to the
+ * pre-central-mode version (every existing caller in this file is
+ * unchanged).
  */
-function ensureInputSettingsSheet_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+function ensureInputSettingsSheet_(ss) {
+  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(PROFILE_SETTINGS_SHEET_NAME_);
   if (sheet) {
     // Self-heal a legitimately empty sheet: if somebody manually cleared

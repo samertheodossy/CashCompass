@@ -63,7 +63,7 @@ The exact `appsscript.json` shape required for the first slice.
 ### 3.1 Pinned manifest fields
 
 - **`executeAs`** = `USER_ACCESSING`. Required so `Session.getEffectiveUser()` returns the calling user and so `Drive.Files.create()` creates the file in the calling user's Drive.
-- **`access`** = `ANYONE_WITH_GOOGLE_ACCOUNT`. Required so the disposable second account can invoke the deployment without the developer pre-sharing access. **App-layer allow-list (§5) is what actually gates use.**
+- **`access`** = `ANYONE` (manifest enum; deployment UI label: "Anyone with a Google account"). Clasp's manifest validator rejects `ANYONE_WITH_GOOGLE_ACCOUNT` — the accepted enum set is `[UNKNOWN_ACCESS, DOMAIN, ANYONE, ANYONE_ANONYMOUS, MYSELF]`, so `ANYONE` is the correct token for the "any signed-in Google account" posture (`ANYONE_ANONYMOUS` would additionally allow truly anonymous unauthenticated hits, which is not what we want). Required so the disposable second account can invoke the deployment without the developer pre-sharing access. **App-layer allow-list (§5) is what actually gates use.**
 - **`oauthScopes`** explicitly declared. The implementation prompt must add:
   - `https://www.googleapis.com/auth/spreadsheets` — read/write user's spreadsheet (already used implicitly).
   - `https://www.googleapis.com/auth/drive.file` — minimum-permission scope for creating new files in user's Drive and accessing only files the app created. **Preferred over `drive`** because the consent screen is much friendlier ("access files this app creates" vs "access all your Drive files").
@@ -94,7 +94,7 @@ The exact `appsscript.json` shape required for the first slice.
 | Field | Current (bound) | First slice (central) |
 |---|---|---|
 | `executeAs` | `USER_DEPLOYING` | `USER_ACCESSING` |
-| `access` | `MYSELF` | `ANYONE_WITH_GOOGLE_ACCOUNT` |
+| `access` | `MYSELF` | `ANYONE` (UI: "Anyone with a Google account") |
 | `oauthScopes` | (auto-detected) | explicitly declared (§3.1) |
 | Drive advanced service | not enabled | **enabled v3** |
 | Deployment | existing | **new, dedicated** |
@@ -122,7 +122,7 @@ The single mechanism by which central-mode code is enabled or rolled back withou
 - `isCentralModeEnabled_()` returns `false`.
 - `getUserSpreadsheet_()` returns `SpreadsheetApp.getActiveSpreadsheet()`, byte-for-byte identical to today.
 - All other central-mode functions (`provisionWorkbookForUser_`, etc.) exist in the codebase but are never reached.
-- The allow-list gate on `doGet` (§5) **still runs** even when `CENTRAL_MODE=false`, because the new deployment is `ANYONE_WITH_GOOGLE_ACCOUNT` and we don't want anonymous Google accounts hitting the URL even in a degraded state. (The bound deployment is unaffected — its `access: MYSELF` still gates it.)
+- The allow-list gate on `doGet` (§5) **still runs** even when `CENTRAL_MODE=false`, because the new deployment is `access: ANYONE` (UI: "Anyone with a Google account") and we don't want non-allow-listed Google accounts hitting the URL even in a degraded state. (The bound deployment is unaffected — its `access: MYSELF` still gates it.)
 
 ### 4.4 Behavior when `true`
 
@@ -140,7 +140,7 @@ The single mechanism by which central-mode code is enabled or rolled back withou
 
 ## 5. Allow-list strategy
 
-How the deployment enforces "only these two emails may use it" while the manifest is `ANYONE_WITH_GOOGLE_ACCOUNT`.
+How the deployment enforces "only these two emails may use it" while the manifest is `access: ANYONE` (UI: "Anyone with a Google account").
 
 ### 5.1 Allowed beta-user emails
 

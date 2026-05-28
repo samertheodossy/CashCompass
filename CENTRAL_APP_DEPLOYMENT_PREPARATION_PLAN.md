@@ -96,7 +96,7 @@ What is **not** in the codebase today:
 ### 2.6 Current lack of explicit manifest scopes
 
 - No `oauthScopes` array exists in `appsscript.json`. Apps Script's auto-detection has been the sole source of truth for what the deployment requests.
-- Consequence: the developer has never explicitly seen the full scope list, and the consent text shown to non-developer users is whatever Apps Script decides to render for the inferred scopes. This is acceptable under `access: MYSELF` (only the developer ever sees the consent screen) but is **not acceptable** under `ANYONE_WITH_GOOGLE_ACCOUNT` because the wording the disposable account sees would be left to inference. Explicit declaration is therefore a **prerequisite** for the central-mode deployment, independent of any new scope we want to add.
+- Consequence: the developer has never explicitly seen the full scope list, and the consent text shown to non-developer users is whatever Apps Script decides to render for the inferred scopes. This is acceptable under `access: MYSELF` (only the developer ever sees the consent screen) but is **not acceptable** under `access: ANYONE` (deployment UI label: "Anyone with a Google account") because the wording the disposable account sees would be left to inference. Explicit declaration is therefore a **prerequisite** for the central-mode deployment, independent of any new scope we want to add.
 
 ### 2.7 Current Drive Advanced Service state
 
@@ -126,7 +126,7 @@ The target `appsscript.json` after this slice (additions in context):
   "runtimeVersion": "V8",
   "webapp": {
     "executeAs": "USER_ACCESSING",
-    "access": "ANYONE_WITH_GOOGLE_ACCOUNT"
+    "access": "ANYONE"
   },
   "oauthScopes": [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -149,9 +149,9 @@ Each field's rationale appears below. The exact final `oauthScopes` array must b
 
 ### 3.3 `access` change
 
-- **From** `MYSELF` → **to** `ANYONE_WITH_GOOGLE_ACCOUNT`.
-- Required so a Google account other than the developer's can hit the deployment URL. The app-layer `FAMILY_BETA_ALLOWLIST` gate (`CENTRAL_APP_WORKBOOK_CREATION_FIRST_SLICE_PLAN.md` §5) is what actually restricts who may use the deployment. Without `ANYONE_WITH_GOOGLE_ACCOUNT`, the disposable account is rejected by the platform before the allow-list code ever runs.
-- Side effect: any Google account on the planet can reach the URL. The private-beta rejection message is therefore the **first thing** any unauthorized visitor sees. There is no longer any platform-level protection — the allow-list is the only barrier.
+- **From** `MYSELF` → **to** `ANYONE` (manifest enum). Deployment UI label: "Anyone with a Google account". Note: clasp's manifest validator only accepts `[UNKNOWN_ACCESS, DOMAIN, ANYONE, ANYONE_ANONYMOUS, MYSELF]` for `webapp.access`; the string `ANYONE_WITH_GOOGLE_ACCOUNT` (which appears in some Apps Script documentation surfaces and in earlier drafts of this plan) is **not** a valid manifest token and was rejected by clasp at push time. `ANYONE` is the correct manifest enum for "any signed-in Google account"; `ANYONE_ANONYMOUS` would additionally allow truly anonymous access without sign-in (not what we want).
+- Required so a Google account other than the developer's can hit the deployment URL. The app-layer `FAMILY_BETA_ALLOWLIST` gate (`CENTRAL_APP_WORKBOOK_CREATION_FIRST_SLICE_PLAN.md` §5) is what actually restricts who may use the deployment. Without `access: ANYONE`, the disposable account is rejected by the platform before the allow-list code ever runs.
+- Side effect: any Google-signed-in user on the planet can reach the URL. The private-beta rejection message is therefore the **first thing** any unauthorized visitor sees. There is no longer any platform-level account-restriction — the allow-list is the only barrier (Google sign-in is still enforced by the platform under `ANYONE`).
 
 ### 3.4 Explicit `oauthScopes`
 
@@ -190,7 +190,7 @@ The central-mode flip happens on a **new dedicated web-app deployment**. The exi
 
 - New deployment name: `CashCompass — Central Beta (Slice 1)`.
 - New deployment URL: distinct `/exec` from any prior deployment.
-- The new deployment is created with the central-mode manifest values (`USER_ACCESSING`, `ANYONE_WITH_GOOGLE_ACCOUNT`, explicit scopes, Drive v3) at deploy time. The manifest changes in `appsscript.json` apply to **all** deployments of the project from this version forward; the existing deployment must be evaluated as well (§6.2).
+- The new deployment is created with the central-mode manifest values (`executeAs: USER_ACCESSING`, `access: ANYONE` — UI label "Anyone with a Google account" — explicit scopes, Drive v3) at deploy time. The manifest changes in `appsscript.json` apply to **all** deployments of the project from this version forward; the existing deployment must be evaluated as well (§6.2).
 - The existing bound launcher (`openPlannerDashboardWebLauncher` via `PLANNER_DASHBOARD_WEBAPP_URL`) continues to point at whichever URL the developer last stored — almost certainly the existing dev deployment. Switching the launcher to the central URL is a later (developer-choice) action; it does not happen in this preparation slice.
 - Rationale: a new deployment lets the central slice be reverted by archiving it without touching the bound deployment, isolates the OAuth grant to a single URL (one consent dance to revoke), and lets developer dogfooding alternate between the two URLs during validation.
 
@@ -199,7 +199,7 @@ The central-mode flip happens on a **new dedicated web-app deployment**. The exi
 | Field | Current (bound) | After this slice (central) |
 |---|---|---|
 | `executeAs` | `USER_DEPLOYING` | `USER_ACCESSING` |
-| `access` | `MYSELF` | `ANYONE_WITH_GOOGLE_ACCOUNT` |
+| `access` | `MYSELF` | `ANYONE` (UI: "Anyone with a Google account") |
 | `oauthScopes` | auto-detected | **explicit array (§3.4)** |
 | `dependencies.enabledAdvancedServices` | `[]` / absent | `[{Drive v3}]` |
 | Deployment | existing only | **new dedicated** (existing unchanged) |
@@ -320,7 +320,7 @@ Expected outcome in this preparation slice: the disposable account reaches `doGe
 | Where | Effect |
 |---|---|
 | Existing bound deployment (`access: MYSELF`) | One-time re-consent on next hit (additive scopes). Then normal operation. |
-| New central deployment (`access: ANYONE_WITH_GOOGLE_ACCOUNT`) | Full consent flow on first hit (new URL, new grant). Then normal operation. |
+| New central deployment (`access: ANYONE` — UI: "Anyone with a Google account") | Full consent flow on first hit (new URL, new grant). Then normal operation. |
 | `openPlannerDashboardWebLauncher` from the bound spreadsheet editor | Continues to open the URL stored in `PLANNER_DASHBOARD_WEBAPP_URL` (probably the dev deployment). No automatic switch. |
 | `MailApp.sendEmail` from `planner_output.js` | **Now sends as the developer** on the bound deployment (unchanged), but on the central deployment will send as **the calling user**. |
 
@@ -369,7 +369,7 @@ The platform-layer failure modes this slice intentionally surfaces in isolation.
 
 ### 6.4 Apps Script auth quirks
 
-- **Risk:** under `USER_ACCESSING` with `access: ANYONE_WITH_GOOGLE_ACCOUNT`, `Session.getActiveUser().getEmail()` returns an empty string for accounts outside the script owner's Workspace domain — only `Session.getEffectiveUser().getEmail()` is reliable (and only with the `userinfo.email` scope).
+- **Risk:** under `USER_ACCESSING` with `access: ANYONE` (UI: "Anyone with a Google account"), `Session.getActiveUser().getEmail()` returns an empty string for accounts outside the script owner's Workspace domain — only `Session.getEffectiveUser().getEmail()` is reliable (and only with the `userinfo.email` scope).
 - **Detection:** the resolver slice depends on `getEffectiveUser`, not `getActiveUser`. This preparation slice doesn't read user identity at all. The risk surfaces only in the resolver slice.
 - **Mitigation:** the first-slice plan already pins `getCurrentUserEmail_()` to use `Session.getEffectiveUser().getEmail()`. Reaffirmed here.
 - **Related quirk:** Apps Script web apps cache the OAuth grant per `(account, deployment URL)` tuple. If the developer signs out / signs in, the grant persists. To force a clean re-consent for testing, revoke the grant at https://myaccount.google.com/permissions before re-testing.
