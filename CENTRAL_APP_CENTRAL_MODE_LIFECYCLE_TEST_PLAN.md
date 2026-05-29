@@ -383,18 +383,27 @@ for each session.
 
 | Group | Date run | Result | PASS rows | FAIL rows | SESSION_NOTES entry |
 |---|---|---|---|---|---|
-| 1 — Return mapped user | | | | | |
-| 2 — Disposable provisioning | | | | | |
-| 3 — Unauthorized rejection | | | | | |
-| 4 — Rollback `CENTRAL_MODE=false` | | | | | |
-| 5 — Stale mapping | | | | | |
-| 6 — Mapping inspection | | | | | |
-| 7 — Drive ownership | | | | | |
-| 8 — Bound separation | cross-group | | | | multiple |
+| 1 — Return mapped user | 2026-05-28 | **PARTIAL PASS** | A3: return visit, no re-provision, no duplicate | — | SESSION_NOTES: Standalone Central App Phase A/B entry |
+| 2 — Disposable provisioning | 2026-05-28 | **PASS** (+ P3 observation) | B1–B6 all pass; Welcome correct; no data leak; mapping written; bound safe | P3: duplicate workbook (orphan; not a FAIL — provisioning/isolation/routing proven correct) | SESSION_NOTES: Standalone Central App Phase A/B entry |
+| 3 — Unauthorized rejection | | Pending | | | |
+| 4 — Rollback `CENTRAL_MODE=false` | | N/A for standalone project; redesign needed | | | |
+| 5 — Stale mapping | | Pending | | | |
+| 6 — Mapping inspection | | Pending | | | |
+| 7 — Drive ownership | 2026-05-28 | **PASS** | B2: disposable workbook owned by `cashcompass2026@gmail.com`; A2: developer workbook owned by developer | — | SESSION_NOTES: Standalone Central App Phase A/B entry |
+| 8 — Bound separation | 2026-05-28 | **PASS** | A4 + B6: bound URL loads correctly throughout; no contamination | — | SESSION_NOTES: Standalone Central App Phase A/B entry |
 
-**Slice §11.4 status:**
-- PARTIAL PASS (developer-account path only) as of 2026-05-28.
-- Full PASS requires Groups 1–8 with no FAIL rows.
+**Standalone Central App project status (as of 2026-05-28):**
+- Phase A (developer provisioning): **PASS**
+- Phase B (disposable provisioning): **PASS** — one P3 observation (duplicate workbook; not a blocker; remediated by manually trashing orphan)
+- Phase C (unauthorized rejection): **Pending**
+- Phase D (return-visit mapping reuse by disposable): **Pending**
+- Phase E (bound smoke test formal sign-off): **Pending**
+
+**Note on Group 4 (`CENTRAL_MODE=false` rollback):** the standalone Central App project has no `CENTRAL_MODE` flag — the resolver unconditionally routes to `getOrProvisionUserSpreadsheet_()`. Group 4 as written applies only to the shared-project experiment. In the standalone project, the equivalent rollback is archiving the central deployment or removing an account from `FAMILY_BETA_ALLOWLIST`. This group should be redesigned for the standalone model before the Phase C session.
+
+**Slice §11.4 status (standalone project):**
+- PARTIAL PASS — Groups 2, 7, 8 confirmed; Group 1 partial; Groups 3, 5, 6 pending; Group 4 redesign needed.
+- Full PASS requires Groups 1 (full return-visit), 3, 5, 6 with no FAIL rows, and Group 4 redesigned for standalone model.
 
 ---
 

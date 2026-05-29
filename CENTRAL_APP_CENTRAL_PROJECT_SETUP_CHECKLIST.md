@@ -570,3 +570,76 @@ The prompt is explicitly scoped to: temporary branch → per-project edits → p
 ---
 
 End of checklist.
+
+---
+
+## 13. Runtime Evidence — Phase A and Phase B (2026-05-28)
+
+Recorded after execution. No code changes, no deployment changes, no `appsscript.json` changes. Documentation only.
+
+### 13.1 Standalone project setup (completed)
+
+| Item | Status | Notes |
+|---|---|---|
+| Standalone Apps Script project created | ✅ Done | Script ID: `153TEsXfVu4fwwToMj1-CvdOScj_vNJKBLTgSTejHZSTOUI89xHzgHt4_` |
+| `.clasp-central.json` created and committed | ✅ Done | Committed to `main`; bound `.clasp.json` unchanged |
+| `push-central.sh` created and committed | ✅ Done | Committed to `main` |
+| Temporary branch `central-project-push` created | ✅ Done | Used for per-project edits; discarded after push |
+| Per-project edits applied (§6.2 A/B/C) | ✅ Done | `central_resolver.js` unconditional; `central_provisioning.js` `CENTRAL_MODE_KEY_` removed; `webapp.js` `doGet(e)` |
+| Tier 1 startup-routing fixes applied (§6.3) | ✅ Done | `sheet_bootstrap.js`, `dashboard_data.js`, `config.js`, `onboarding.js`, `profile.js`, `house_values.js` |
+| Codebase pushed to central project | ✅ Done | `clasp push --force --project .clasp-central.json`; 68 files pushed |
+| Temporary branch discarded | ✅ Done | `main` branch clean |
+| Script properties set (§7) | ✅ Done | `FAMILY_BETA_ALLOWLIST`, `BETA_CONTACT_EMAIL` set in central project only |
+| Drive API enabled in central GCP project | ✅ Done | Manual step completed in GCP Console |
+| Web app deployment created (§8) | ✅ Done | Deployment ID: `AKfycbyq_OGiupdGO79GMOImkIgYv19hqlN1JuJfieuDlkXH6Rp637MhZc6jz9uRW2ZxANBlPA`; URL: `https://script.google.com/macros/s/AKfycbyq_OGiupdGO79GMOImkIgYv19hqlN1JuJfieuDlkXH6Rp637MhZc6jz9uRW2ZxANBlPA/exec` |
+
+### 13.2 Phase A — Developer provisioning (PASS)
+
+Executed against `samertheodossy@gmail.com` in the primary browser.
+
+| Step | Result |
+|---|---|
+| A1 — First access + OAuth consent | **PASS** — consent granted; no interstitial errors |
+| A2 — Workbook provisioned | **PASS** — `CashCompass — samertheodossy@gmail.com` created in developer's Drive; owned by developer; `INPUT - Settings` present; Welcome screen appeared |
+| A3 — Return visit (mapping reuse) | **PASS** — reload found existing mapping; no re-provisioning; no duplicate workbook |
+| A4 — Bound workbook untouched | **PASS** — original personal workbook and bound deployment URL unaffected |
+
+**Phase A gate: PASS. Proceeded to Phase B.**
+
+### 13.3 Phase B — Disposable account provisioning (PASS with one P3 observation)
+
+Executed against `cashcompass2026@gmail.com` in a clean private/incognito window.
+
+| Step | Result |
+|---|---|
+| B1 — First access + OAuth consent | **PASS** — consent granted; allow-list gate admitted the account |
+| B2 — Workbook provisioned | **PASS** — `CashCompass — cashcompass2026@gmail.com` created in disposable account's Drive; owned by `cashcompass2026@gmail.com`; `INPUT - Settings` present; Welcome/Setup screen appeared |
+| B3 — No developer data visible | **PASS** — no Samer Theodossy name, no developer house/upcoming counts, no developer profile data visible on the Setup screen |
+| B4 — Mapping written | **PASS** — `mapping::<sha256(cashcompass2026@gmail.com)>` written to central project script properties |
+| B5 — Developer mapping unchanged | **PASS** — developer's mapping entry value unchanged |
+| B6 — Bound workbook untouched | **PASS** — bound deployment URL still loads developer personal data correctly |
+
+**Phase B gate: PASS.**
+
+### 13.4 P3 observation — Duplicate workbook for `cashcompass2026@gmail.com`
+
+| Item | Detail |
+|---|---|
+| Observed | Two workbooks named `CashCompass — cashcompass2026@gmail.com` exist in the disposable account's Drive |
+| Root cause (most likely) | Two separate page-load sessions both reached `getStartupRoutingFromDashboard()` before the first mapping was written; `LockService.getUserLock()` double-check may have seen stale null from PropertiesService propagation delay, OR the mapping was manually cleared between test runs |
+| Severity | **P3 — hardening** (not a beta blocker; core provisioning, isolation, and data-separation are proven correct) |
+| Immediate remediation | Manually trash the orphan workbook (Drive file whose ID does not match the current `mapping::<hash>` value); do not hard-delete |
+| Code fix needed | Second-slice: add Drive filename deduplication lookup in `provisionWorkbookForUser_()` before `Drive.Files.create()` — if a file matching `buildWorkbookName_(email)` already exists and is owned by the caller, map it instead of creating a new one |
+| When to fix | Before inviting additional family beta users; not required for Phase C–E validation |
+
+### 13.5 Remaining checklist items
+
+| Item | Status |
+|---|---|
+| Phase C — unauthorized account rejection | ⬜ Pending |
+| Phase D — return-visit by disposable account | ⬜ Pending |
+| Phase E — bound project formal smoke test | ⬜ Pending |
+| Tier 2 `getActiveSpreadsheet()` migration (full dashboard) | ⬜ Deferred (separate prompt) |
+| Bound project `appsscript.json` revert to `USER_DEPLOYING`/`MYSELF` | ⬜ Deferred (per `CENTRAL_APP_SEPARATE_PROJECT_MIGRATION_PLAN.md §10.2`) |
+| `CENTRAL_MODE` flag cleanup from bound `central_resolver.js` | ⬜ Deferred (per `CENTRAL_APP_SEPARATE_PROJECT_MIGRATION_PLAN.md §9 Phase 6`) |
+| Duplicate workbook hardening (P3 — Drive dedup in provisioning) | ⬜ Deferred (second slice) |
