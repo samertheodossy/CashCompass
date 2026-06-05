@@ -47,7 +47,7 @@ function getDebtsUiData() {
   // helpers (getDebtRows_, getDebtDistinctColumnValues_,
   // getDebtsHeaderMap_) stay available for other callers and are not
   // touched.
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = ss.getSheetByName(getSheetNames_().DEBTS);
 
   const editableFields = [
@@ -151,7 +151,7 @@ function getDebtsUiData() {
  * debts are filtered out via the shared explicit-wins-with-fallback rule.
  */
 function getDebtRows_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'DEBTS');
 
   const values = sheet.getDataRange().getValues();
@@ -217,7 +217,7 @@ function getDebtFieldValue(accountName, fieldName) {
   // load both snapshots once, derive the header map from the loaded
   // display, and scan the loaded display for the account row in-memory
   // instead of round-tripping again.
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'DEBTS');
 
   const values = sheet.getDataRange().getValues();
@@ -445,7 +445,7 @@ function recalcDebtPctAvailForRow_(sheet, row, cols) {
  * datalists / selectors). Skips the TOTAL DEBT summary row.
  */
 function getDebtDistinctColumnValues_(headerLabel) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'DEBTS');
   const display = sheet.getDataRange().getDisplayValues();
   if (!display.length) return [];
@@ -1171,7 +1171,7 @@ function isDebtRowInactive_(displayRow, valueRow, headerMap) {
  */
 function getInactiveDebtsSet_() {
   const inactive = Object.create(null);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   let sheet;
   try {
     sheet = getSheet_(ss, 'DEBTS');

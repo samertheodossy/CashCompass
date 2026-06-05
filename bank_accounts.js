@@ -22,7 +22,7 @@
  * @returns {GoogleAppsScript.Spreadsheet.Sheet}
  */
 function ensureSysAccountsSheet_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var names = getSheetNames_();
   var sheetName = names.ACCOUNTS;
   var existing = ss.getSheetByName(sheetName);
@@ -96,7 +96,7 @@ function syncAllAccountsFromLatestCurrentYear_() {
   // via a batched read and (2) skip the format-preserving write when
   // the new value equals the existing value.
   const targetSheet = ensureSysAccountsSheet_();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sourceSheet = getSheet_(ss, 'BANK_ACCOUNTS');
 
   const targetDisplay = targetSheet.getDataRange().getDisplayValues();
@@ -196,7 +196,7 @@ function getBankAccountUiData() {
   let inactive = Object.create(null);
 
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getUserSpreadsheet_();
     const accountsSheet = ss.getSheetByName(getSheetNames_().ACCOUNTS);
     if (accountsSheet) {
       const accountsDisplay = accountsSheet.getDataRange().getDisplayValues();
@@ -272,7 +272,7 @@ function getBankAccountUiData() {
  * as active (backward compatibility for rows created before Active existed).
  */
 function getInactiveBankAccountsSet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'ACCOUNTS');
   const display = sheet.getDataRange().getDisplayValues();
   const inactive = Object.create(null);
@@ -303,7 +303,7 @@ function getInactiveBankAccountsSet_() {
  * @returns {string[]}
  */
 function getAccountsDistinctColumnValues_(headerLabel) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'ACCOUNTS');
   const display = sheet.getDataRange().getDisplayValues();
   if (!display.length) return [];
@@ -327,7 +327,7 @@ function accountExistsInAccountsSheet_(accountName) {
   const name = String(accountName || '').trim();
   if (!name) return false;
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'ACCOUNTS');
   const display = sheet.getDataRange().getDisplayValues();
   const headerMap = getAccountsHeaderMap_(sheet);
@@ -647,7 +647,7 @@ function addBankAccountFromDashboard(payload) {
   // Get a fresh Spreadsheet handle AFTER the inserts so bankSheet
   // resolves reliably on a brand-new workbook. ensureSysAccountsSheet_
   // already returned its sheet directly, so we do not re-fetch that one.
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const bankSheet = getSheet_(ss, 'BANK_ACCOUNTS');
   const currentYear = getCurrentYear_();
   const block = getBankAccountsYearBlock_(bankSheet, currentYear);
@@ -724,7 +724,7 @@ function addBankAccountFromDashboard(payload) {
 }
 
 function getBankAccountsFromHistory_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'BANK_ACCOUNTS');
 
   const values = sheet.getDataRange().getDisplayValues();
@@ -759,7 +759,7 @@ function getBankAccountValueForDate(accountName, balanceDate) {
   // (the whole sheet, including all year blocks, is in memory). Behavior is
   // identical for callers — the response shape, currency rounding, and
   // error messages are unchanged.
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const bankSheet = getSheet_(ss, 'BANK_ACCOUNTS');
   const bankDisplay = bankSheet.getDataRange().getDisplayValues();
 
@@ -822,7 +822,7 @@ function getBankAccountHistoryValueForMonthFromDisplay_(sheet, display, accountN
 }
 
 function getBankAccountHistoryValueForMonth_(accountName, year, balanceDate) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'BANK_ACCOUNTS');
   const block = getBankAccountsYearBlock_(sheet, year);
 
@@ -848,7 +848,7 @@ function updateBankAccountValueByDate(payload) {
   if (!accountName) throw new Error('Account name is required.');
 
   const year = balanceDate.getFullYear();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
 
   // Capture the prior month-cell value BEFORE the overwrite so the activity
   // log row can show both the previous and new balance. Best-effort — a
@@ -944,7 +944,7 @@ function updateBankAccountValueByDate(payload) {
 }
 
 function updateBankAccountsHistory_(accountName, year, balanceDate, currentValue) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'BANK_ACCOUNTS');
   const block = getBankAccountsYearBlock_(sheet, year);
 
@@ -958,7 +958,7 @@ function updateBankAccountsHistory_(accountName, year, balanceDate, currentValue
 }
 
 function getAccountsRowData_(accountName) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'ACCOUNTS');
 
   const values = sheet.getDataRange().getValues();
@@ -1258,7 +1258,7 @@ function getPriorMonthCashTotalFromBankInput_() {
   const year = prevY;
 
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getUserSpreadsheet_();
     const sheet = getSheet_(ss, 'BANK_ACCOUNTS');
     const block = getBankAccountsYearBlock_(sheet, year);
     const refDate = new Date(year, monthIndexZero, 15);
@@ -1361,7 +1361,7 @@ function deactivateBankAccountFromDashboard(payload) {
   const accountName = String(payload.accountName || '').trim();
   if (!accountName) throw new Error('Account name is required.');
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const bankSheet = getSheet_(ss, 'BANK_ACCOUNTS');
   const accountsSheet = getSheet_(ss, 'ACCOUNTS');
 

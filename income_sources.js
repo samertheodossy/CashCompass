@@ -300,7 +300,7 @@ function incomeGroupQualifiesAsRecurring_(group) {
  * }>}
  */
 function getActiveIncomeSourcesForManagementFromDashboard() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var year = findLatestCashFlowYearWithIncome_(ss);
   if (year == null) return [];
 
@@ -678,7 +678,7 @@ function deactivateIncomeSourceFromDashboard(payload) {
  * }}
  */
 function getOtherDetectedIncomeFromLatestCashFlowFromDashboard() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var year = findLatestCashFlowYearWithIncome_(ss);
   if (year == null) return { year: null, items: [] };
 

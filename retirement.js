@@ -436,7 +436,7 @@ function probeRetirementSettingsHousehold_() {
   };
 
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getUserSpreadsheet_();
     const sheet = ss.getSheetByName('INPUT - Settings');
     if (!sheet) return out;
     out.sheetExists = true;
@@ -547,7 +547,7 @@ function getRetirementHouseholdFromProfile_() {
 function readRetirementProfileDerivedAges_() {
   const out = { derivedCurrentAge: null, derivedSpouseCurrentAge: null };
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getUserSpreadsheet_();
     const sheet = ss.getSheetByName('INPUT - Settings');
     if (!sheet) return out;
 
@@ -720,7 +720,7 @@ function getRetirementModelData_(sheet) {
 }
 
 function getOrCreateRetirementSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheetName = 'INPUT - Retirement';
   let sheet = ss.getSheetByName(sheetName);
   if (sheet) return sheet;
@@ -1114,7 +1114,7 @@ function randomNormal_(mean, stdDev) {
 }
 
 function getCurrentInvestableAssetsForRetirement_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'ASSETS');
   return sumColumnByHeader_(sheet, 'Current Balance');
 }

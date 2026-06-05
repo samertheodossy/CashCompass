@@ -422,7 +422,19 @@ function ensureOnboardingCoreSheetsFromDashboard(mode) {
  *   }
  */
 function getOnboardingBootstrapStatusFromDashboard() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  // Central App seam: resolve the caller's own workbook. getUserSpreadsheet_()
+  // returns SpreadsheetApp.getActiveSpreadsheet() in bound mode (byte-for-byte
+  // unchanged behavior) and the user's provisioned workbook in central mode.
+  // Calling getActiveSpreadsheet() directly here returned null in a standalone
+  // Central deployment, which made the ss.getSheetByName(...) below throw
+  // "Cannot read properties of null (reading 'getSheetByName')".
+  var ss = getUserSpreadsheet_();
+  if (!ss) {
+    // Fail with a clear, explicit message rather than a null dereference.
+    // getStartupRoutingFromDashboard()'s catch turns this into a clean
+    // ok:false result instead of an opaque TypeError.
+    throw new Error('Bootstrap status probe: no spreadsheet resolved (getUserSpreadsheet_ returned null).');
+  }
   var registry = getBootstrapSheetRegistry_();
   var sheets = [];
 
@@ -467,11 +479,28 @@ function getOnboardingBootstrapStatusFromDashboard() {
 var STARTUP_APP_SHEET_PREFIXES_ = ['INPUT - ', 'SYS - ', 'OUT - ', 'LOG - '];
 
 /**
- * Returns true when the active spreadsheet contains any sheet whose
- * name starts with one of the recognised app prefixes. Pure inspection
- * — never writes. Uses the cheap `getSheets()` / `getName()` pair and
- * short-circuits on the first match so even large workbooks resolve
- * in a single pass.
+ * Sheet names that, on their own, must NOT mark a workbook as populated.
+ *
+ * A freshly provisioned Central App workbook is seeded with the settings
+ * sheet (INPUT - Settings) before any real financial data exists. Because
+ * that name matches the `INPUT - ` prefix above, it would otherwise be
+ * treated as evidence of a populated workbook and trap the user on the
+ * normal dashboard (Overview) instead of routing to Welcome / Setup.
+ *
+ * Every other INPUT-/SYS-/OUT-/LOG- sheet (Cash Flow, Bank Accounts,
+ * Debts, Bills, Upcoming Expenses, snapshots, logs, ...) still counts as
+ * real user data, so a genuine bound/production workbook continues to be
+ * classified as populated and lands on Overview.
+ */
+var STARTUP_IGNORED_APP_SHEET_NAMES_ = ['INPUT - Settings'];
+
+/**
+ * Returns true when the spreadsheet contains any sheet whose name starts
+ * with one of the recognised app prefixes, EXCLUDING the names listed in
+ * STARTUP_IGNORED_APP_SHEET_NAMES_ (currently just the seed-only
+ * INPUT - Settings sheet). Pure inspection — never writes. Uses the cheap
+ * `getSheets()` / `getName()` pair and short-circuits on the first match
+ * so even large workbooks resolve in a single pass.
  */
 function workbookHasAnyAppSheet_(ss) {
   try {
@@ -479,6 +508,7 @@ function workbookHasAnyAppSheet_(ss) {
     for (var i = 0; i < sheets.length; i++) {
       var name = '';
       try { name = sheets[i].getName() || ''; } catch (_e) { name = ''; }
+      if (STARTUP_IGNORED_APP_SHEET_NAMES_.indexOf(name) !== -1) continue;
       for (var p = 0; p < STARTUP_APP_SHEET_PREFIXES_.length; p++) {
         if (name.indexOf(STARTUP_APP_SHEET_PREFIXES_[p]) === 0) return true;
       }
@@ -525,7 +555,26 @@ function workbookHasAnyAppSheet_(ss) {
  */
 function getStartupRoutingFromDashboard() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    // Central App seam: resolve the caller's own workbook (central mode) or
+    // the active bound spreadsheet (bound mode). Previously this used
+    // SpreadsheetApp.getActiveSpreadsheet() directly, which is null in a
+    // standalone Central deployment and made the downstream probe throw.
+    var ss = getUserSpreadsheet_();
+    if (!ss) {
+      // No resolvable workbook (e.g., a standalone Central deployment with
+      // no mapping yet). Fail closed to the normal dashboard rather than
+      // dereferencing null, matching this probe's existing safety posture.
+      return {
+        ok: false,
+        isBlankWorkbook: false,
+        mode: 'normal',
+        coreSheetCount: 0,
+        existingCoreSheetCount: 0,
+        hasAnyAppSheet: false,
+        reason: 'Startup routing probe failed: getUserSpreadsheet_ returned null.'
+      };
+    }
+
     var status = getOnboardingBootstrapStatusFromDashboard();
     var sheets = (status && Array.isArray(status.sheets)) ? status.sheets : [];
     var existing = 0;
@@ -538,11 +587,24 @@ function getStartupRoutingFromDashboard() {
     // of today's six canonical onboarding sheet names match. This is
     // the load-bearing guard that prevents existing populated
     // workbooks from being misclassified as first-run / blank.
+    //
+    // NOTE: workbookHasAnyAppSheet_ deliberately ignores the seed-only
+    // INPUT - Settings sheet (see STARTUP_IGNORED_APP_SHEET_NAMES_), so a
+    // freshly provisioned Central workbook whose only app sheet is Settings
+    // reports hasAnyAppSheet === false and is correctly classified blank.
     var hasAnyAppSheet = workbookHasAnyAppSheet_(ss);
 
     return {
       ok: true,
-      isBlankWorkbook: (sheets.length > 0 && existing === 0 && !hasAnyAppSheet),
+      // Blank == no real app data sheets. We key off hasAnyAppSheet (which
+      // already excludes the seed-only Settings sheet) rather than the
+      // narrow core-sheet `existing === 0` count, because that count treats
+      // INPUT - Settings as an existing core sheet and would otherwise keep
+      // a fresh Settings-only Central workbook off Welcome. A real bound /
+      // production workbook always has at least one non-Settings app sheet
+      // (e.g. INPUT - Cash Flow <year>), so it still reports not-blank and
+      // routes to Overview.
+      isBlankWorkbook: (sheets.length > 0 && !hasAnyAppSheet),
       mode: 'normal',
       coreSheetCount: sheets.length,
       existingCoreSheetCount: existing,

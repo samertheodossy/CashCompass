@@ -637,7 +637,7 @@ function probeIncomeStatus_(ss, mode) {
  */
 function getOnboardingStatusFromDashboard(mode) {
   var ctxMode = normalizeOnboardingMode_(mode);
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
 
   var bank = probeBankAccountsStatus_(ss, ctxMode);
   var debts = probeDebtsStatus_(ss, ctxMode);
@@ -732,7 +732,7 @@ function getOnboardingStatusFromDashboard(mode) {
  */
 function getOnboardingBankAccountsFromDashboard(mode) {
   var ctxMode = normalizeOnboardingMode_(mode);
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var sheetName = resolveOnboardingSheetName_(ctxMode, 'BANK_ACCOUNTS');
   var sheet = ss.getSheetByName(sheetName);
   var currentYear = getCurrentYear_();
@@ -876,7 +876,7 @@ function getOnboardingBankAccountsFromDashboard(mode) {
  */
 function getOnboardingDebtsFromDashboard(mode) {
   var ctxMode = normalizeOnboardingMode_(mode);
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var sheetName = resolveOnboardingSheetName_(ctxMode, 'DEBTS');
   var sheet = ss.getSheetByName(sheetName);
 
@@ -997,7 +997,7 @@ function ensureOnboardingDebtsSheetFromDashboard(mode) {
     };
   }
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var existing = ss.getSheetByName(sheetName);
   if (existing) {
     return { ok: true, created: false, sheetName: sheetName, mode: m };
@@ -1090,7 +1090,7 @@ function ensureOnboardingDebtsSheetFromDashboard(mode) {
  */
 function getOnboardingBillsFromDashboard(mode) {
   var ctxMode = normalizeOnboardingMode_(mode);
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var sheetName = resolveOnboardingSheetName_(ctxMode, 'BILLS');
   var sheet = ss.getSheetByName(sheetName);
 
@@ -1204,7 +1204,7 @@ function ensureOnboardingBillsSheetFromDashboard(mode) {
     };
   }
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var existing = ss.getSheetByName(sheetName);
   if (existing) {
     return { ok: true, created: false, sheetName: sheetName, mode: m };
@@ -1288,7 +1288,7 @@ function ensureOnboardingBillsSheetFromDashboard(mode) {
  */
 function getOnboardingUpcomingFromDashboard(mode) {
   var ctxMode = normalizeOnboardingMode_(mode);
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var sheetName = resolveOnboardingSheetName_(ctxMode, 'UPCOMING');
   var sheet = ss.getSheetByName(sheetName);
 
@@ -1400,7 +1400,7 @@ function ensureOnboardingUpcomingSheetFromDashboard(mode) {
     };
   }
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var existed = !!ss.getSheetByName(sheetName);
   if (existed) {
     return { ok: true, created: false, sheetName: sheetName, mode: m };
@@ -1469,7 +1469,7 @@ function ensureOnboardingUpcomingSheetFromDashboard(mode) {
  */
 function getOnboardingIncomeFromDashboard(mode) {
   var ctxMode = normalizeOnboardingMode_(mode);
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var currentYear = getCurrentYear_();
   var primaryName = resolveOnboardingSheetName_(ctxMode, 'CASH_FLOW_PREFIX', currentYear);
   var sheet = ss.getSheetByName(primaryName);
@@ -1643,7 +1643,7 @@ function isOnboardingBankAccountNameRow_(value) {
  */
 function getOnboardingHousesFromDashboard(mode) {
   var ctxMode = normalizeOnboardingMode_(mode);
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var sheetName = resolveOnboardingSheetName_(ctxMode, 'HOUSE_VALUES');
   var sheet = ss.getSheetByName(sheetName);
 
@@ -1886,7 +1886,7 @@ function ensureOnboardingBankAccountsSheetFromDashboard(mode) {
     };
   }
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var existing = ss.getSheetByName(sheetName);
   if (existing) {
     return { ok: true, created: false, sheetName: sheetName, mode: m };

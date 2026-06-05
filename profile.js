@@ -514,7 +514,7 @@ function probeProfileStatus_() {
 function getOnboardingProfileFromDashboard(_mode) {
   var sheetExists;
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getUserSpreadsheet_();
     sheetExists = !!ss.getSheetByName(PROFILE_SETTINGS_SHEET_NAME_);
   } catch (e) {
     sheetExists = false;

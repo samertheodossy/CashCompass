@@ -70,7 +70,7 @@ function runPlannerAndRefreshDashboardFromSave() {
 }
 
 function buildDashboardSnapshot_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   ensureActivityLogSheet_(ss);
 
   // Cash and Debt come from REQUIRED setup sheets (SYS - Accounts, INPUT -
@@ -270,7 +270,7 @@ function buildDashboardSnapshot_() {
 }
 
 function getLatestHistorySnapshots_(count) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = ss.getSheetByName('OUT - History');
   if (!sheet) return [];
 
@@ -371,7 +371,7 @@ function parseHistoryRunDate_(cellValue, displayValue) {
 }
 
 function getAllHistorySnapshotRows_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = ss.getSheetByName('OUT - History');
   if (!sheet) return [];
 
@@ -575,7 +575,7 @@ function readPlannerHistoryMetricsRow_(values, display, r) {
 }
 
 function getPlannerHistoryMetricsByOffset_(offsetFromLatest) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = ss.getSheetByName('OUT - History');
   if (!sheet) return null;
 
@@ -615,7 +615,7 @@ function getPriorMonthPlannerHistoryMetrics_() {
   }
   const targetMonthIndex = prevM - 1;
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = ss.getSheetByName('OUT - History');
   if (!sheet) return { metrics: null, label: '' };
 
@@ -1336,7 +1336,7 @@ function getUpcomingBillsDueForDashboard() {
 
 
 function getBillsDueFromCashFlowForDashboard(preloadedCurrentCashFlow) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   ensureActivityLogSheet_(ss);
   const today = new Date();
   const tz = Session.getScriptTimeZone();
@@ -1403,7 +1403,7 @@ function getBillsDueFromCashFlowForDashboard(preloadedCurrentCashFlow) {
 
 
 function getRecurringBillsWithoutDueDateForDashboard() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const today = new Date();
   const tz = Session.getScriptTimeZone();
 
@@ -2034,7 +2034,7 @@ function getInputBillsDueRows_(ss, today, tz) {
  * in the email Overdue section from getBillsDueFromCashFlowForDashboard.
  */
 function buildInputBillPlannerPaymentWindows_(today, tz, payNowWindowDays, paySoonWindowDays) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const rows = getInputBillsDueRows_(ss, today, tz);
   const todayOnly = stripTime_(today);
   const payNow = [];
@@ -2379,6 +2379,51 @@ function buildDashboardRecurringSkipKey_(payee, year, monthHeader) {
   return 'dashboard_recurring_skip::' + String(payee || '').trim() + '::' + String(year || '') + '::' + String(monthHeader || '').trim();
 }
 
+/**
+ * Copies the cell formatting (font color, number format, alignment,
+ * background, etc.) of the nearest month cell in `row` that already holds
+ * a numeric value onto (row, targetCol). Searches left first — for an
+ * active bill the prior month is populated and correctly styled — then
+ * right. Returns true when a populated sibling was found and its format
+ * copied, false otherwise so the caller can apply a sensible default.
+ *
+ * This is what keeps a skipped bill's freshly-written $0 looking identical
+ * to the rest of its row: expense amounts are styled red, so the sibling
+ * carries that red over, instead of the blank cell's unstyled black/General
+ * default. Income rows copy their own (default-colored) styling the same
+ * way. Best-effort and defensive — any read/copy failure returns false.
+ */
+function copyNearestAmountFormatInRow_(sheet, row, targetCol) {
+  try {
+    const lastCol = sheet.getLastColumn();
+    if (lastCol < 1) return false;
+
+    const rowValues = sheet.getRange(row, 1, 1, lastCol).getValues()[0];
+
+    let sourceCol = -1;
+    for (let c = targetCol - 1; c >= 1; c--) {
+      const v = rowValues[c - 1];
+      if (typeof v === 'number' && isFinite(v)) { sourceCol = c; break; }
+    }
+    if (sourceCol === -1) {
+      for (let c = targetCol + 1; c <= lastCol; c++) {
+        const v = rowValues[c - 1];
+        if (typeof v === 'number' && isFinite(v)) { sourceCol = c; break; }
+      }
+    }
+    if (sourceCol === -1) return false;
+
+    sheet.getRange(row, sourceCol).copyTo(
+      sheet.getRange(row, targetCol),
+      SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+      false
+    );
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 function skipDashboardBill(skipKey) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const info = resolveDashboardBillSkipTarget_(ss, skipKey);
@@ -2398,32 +2443,22 @@ function skipDashboardBill(skipKey) {
     currentDisplay === '';
 
   if (isBlank) {
-    const fontColor = cell.getFontColor();
-    const fontSize = cell.getFontSize();
-    const fontWeight = cell.getFontWeight();
-    const fontStyle = cell.getFontStyle();
-    const fontLine = cell.getFontLine();
-    const fontFamily = cell.getFontFamily();
-    const background = cell.getBackground();
-    const numberFormat = cell.getNumberFormat();
-    const horizontalAlignment = cell.getHorizontalAlignment();
-    const verticalAlignment = cell.getVerticalAlignment();
-    const wrap = cell.getWrap();
-
     cell.setValue(0);
 
-    cell
-      .setFontColor(fontColor)
-      .setFontSize(fontSize)
-      .setFontWeight(fontWeight)
-      .setFontStyle(fontStyle)
-      .setFontLine(fontLine)
-      .setFontFamily(fontFamily)
-      .setBackground(background)
-      .setNumberFormat(numberFormat)
-      .setHorizontalAlignment(horizontalAlignment)
-      .setVerticalAlignment(verticalAlignment)
-      .setWrap(wrap);
+    // Make the freshly-written $0 look identical to the rest of its row.
+    // A blank month cell carries the sheet's default "General"/black
+    // formatting, so preserving *its* look produced a bare, unstyled "0".
+    // Expense rows style their amounts in red (income rows use the default
+    // color), and every amount cell uses the sheet's currency number
+    // format — all of which live on the row's *populated* cells, not the
+    // blank one. Copy the format of the nearest month cell in this row that
+    // already holds a numeric value (typically the prior month) so the
+    // skipped $0 inherits the row's red/currency styling. Fall back to the
+    // canonical currency format only when the row has no populated sibling
+    // yet (e.g. a brand-new row).
+    if (!copyNearestAmountFormatInRow_(info.sheet, info.row, info.col)) {
+      cell.setNumberFormat('$#,##0.00;-$#,##0.00');
+    }
 
     var bill = getDashboardBillByKey_(ss, skipKey);
     var monthHdr = bill && bill.monthHeader ? bill.monthHeader : activityLogMonthHeaderFromCell_(info.sheet, info.col);

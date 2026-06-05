@@ -150,7 +150,7 @@ function getHouseUiData() {
   // not exist yet and getHousesFromHouseValues_() -> getSheet_() would
   // throw a red banner on the House Values page. Return the same shape
   // with empty lists so the page renders clean.
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   if (!ss.getSheetByName(getSheetNames_().HOUSE_VALUES)) {
     return { houses: [], propertyTypeOptions: [] };
   }
@@ -216,7 +216,7 @@ function getHouseUiData() {
  * as active (backward compatibility for rows created before Active existed).
  */
 function getInactiveHousesSet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'HOUSE_ASSETS');
   const display = sheet.getDataRange().getDisplayValues();
   const inactive = Object.create(null);
@@ -248,7 +248,7 @@ function getInactiveHousesSet_() {
  * @returns {string[]}
  */
 function getHouseAssetsDistinctColumnValues_(headerLabel) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'HOUSE_ASSETS');
   const display = sheet.getDataRange().getDisplayValues();
   if (!display.length) return [];
@@ -269,7 +269,7 @@ function getHouseAssetsDistinctColumnValues_(headerLabel) {
 }
 
 function getHousesFromHouseValues_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'HOUSE_VALUES');
 
   const values = sheet.getDataRange().getDisplayValues();
@@ -299,7 +299,7 @@ function getHouseValueForDate(house, valuationDate) {
   // snapshot across both months via the optionalDisplay parameter on
   // the year-block + row-find helpers. The whole sheet (all year blocks)
   // is in memory so the prior-month case crosses year boundaries cleanly.
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const hvSheet = getSheet_(ss, 'HOUSE_VALUES');
   const hvDisplay = hvSheet.getDataRange().getDisplayValues();
 
@@ -469,7 +469,7 @@ function updateHouseValuesHistory_(house, year, valuationDate, currentValue) {
 }
 
 function getHouseValueFromHistoryForMonth_(house, year, valuationDate) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'HOUSE_VALUES');
   const block = getHouseValuesYearBlock_(sheet, year);
 
@@ -582,7 +582,7 @@ function getLatestHouseValuesForYear_(sheet, year) {
 }
 
 function getHouseAssetRowData_(house) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'HOUSE_ASSETS');
 
   const values = sheet.getDataRange().getValues();
@@ -887,7 +887,7 @@ function getPriorMonthHouseValuesTotalFromHouseValuesInput_() {
   const year = prevY;
 
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getUserSpreadsheet_();
     const sheet = getSheet_(ss, 'HOUSE_VALUES');
     const block = getHouseValuesYearBlock_(sheet, year);
     const refDate = new Date(year, monthIndexZero, 15);

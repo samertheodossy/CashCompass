@@ -285,7 +285,7 @@ function getInvestmentUiData() {
   // round-trip) is unchanged.
   // Blank-workbook safety preserved: if INPUT - Investments doesn't
   // exist yet, return empty shape so the page renders clean.
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   if (!ss.getSheetByName(getSheetNames_().INVESTMENTS)) {
     return { accounts: [], typeOptions: [] };
   }
@@ -343,7 +343,7 @@ function getInvestmentUiData() {
 }
 
 function getInvestmentsFromHistory_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'INVESTMENTS');
 
   const values = sheet.getDataRange().getDisplayValues();
@@ -365,7 +365,7 @@ function getInvestmentsFromHistory_() {
  * (backward compatibility for rows created before Active existed).
  */
 function getInactiveInvestmentsSet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'ASSETS');
   const display = sheet.getDataRange().getDisplayValues();
   const inactive = Object.create(null);
@@ -397,7 +397,7 @@ function getInactiveInvestmentsSet_() {
  * @returns {string[]}
  */
 function getAssetsDistinctColumnValues_(headerLabel) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'ASSETS');
   const display = sheet.getDataRange().getDisplayValues();
   if (!display.length) return [];
@@ -431,7 +431,7 @@ function getInvestmentValueForDate(accountName, balanceDate) {
   // the optionalDisplay parameter on the year-block + row-find
   // helpers. The whole sheet (all year blocks) is in memory so the
   // prior-month case crosses year boundaries cleanly.
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const invSheet = getSheet_(ss, 'INVESTMENTS');
   const invDisplay = invSheet.getDataRange().getDisplayValues();
 
@@ -471,7 +471,7 @@ function getInvestmentValueForDate(accountName, balanceDate) {
 }
 
 function getInvestmentHistoryValueForMonth_(accountName, year, balanceDate) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'INVESTMENTS');
   const block = getInvestmentsYearBlock_(sheet, year);
 
@@ -610,7 +610,7 @@ function updateInvestmentHistory_(accountName, year, balanceDate, currentValue) 
 }
 
 function getAssetRowData_(accountName) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'ASSETS');
 
   const values = sheet.getDataRange().getValues();
@@ -779,7 +779,7 @@ function getPriorMonthInvestmentsTotalFromInput_() {
   const year = prevY;
 
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getUserSpreadsheet_();
     const sheet = getSheet_(ss, 'INVESTMENTS');
     const block = getInvestmentsYearBlock_(sheet, year);
     const refDate = new Date(year, monthIndexZero, 15);

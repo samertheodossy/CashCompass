@@ -871,7 +871,7 @@ function deactivateBillFromDashboard(payload) {
  * @returns {string[]}
  */
 function getBillCategoriesFromDashboard() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   // First-run safety: INPUT - Bills may be missing on a blank workbook.
   // Return an empty list; the client has a canonical fallback (see
   // BILL_ADD_CATEGORY_FALLBACK_OPTIONS_) that kicks in when the server
@@ -943,7 +943,7 @@ function getBillCategoriesFromDashboard() {
  * }>}
  */
 function getActiveBillsForManagementFromDashboard() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   // First-run safety: INPUT - Bills may be missing on a blank workbook.
   // Return an empty list so the Bills management section renders its
   // "No active bills yet" empty state instead of throwing a red banner.
