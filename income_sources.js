@@ -382,7 +382,7 @@ function addIncomeSourceFromDashboard(payload) {
   if (amountNum <= 0) throw new Error('Amount must be greater than zero.');
   amountNum = round2_(amountNum);
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var year = getCurrentYear_();
   var sheet;
   try {
@@ -563,7 +563,7 @@ function deactivateIncomeSourceFromDashboard(payload) {
     throw new Error('Invalid year for income source.');
   }
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var sheet;
   try {
     sheet = getCashFlowSheet_(ss, year);

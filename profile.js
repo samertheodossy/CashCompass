@@ -170,12 +170,14 @@ function emptyProfileShape_() {
  * SpreadsheetApp.openById() does not change the active spreadsheet
  * and under USER_ACCESSING web-app execution
  * SpreadsheetApp.getActiveSpreadsheet() may return null. When `ss`
- * is omitted, behavior is byte-for-byte identical to the
- * pre-central-mode version (every existing caller in this file is
- * unchanged).
+ * is omitted, it now resolves through getUserSpreadsheet_(), which
+ * returns the active spreadsheet in the Bound model (byte-for-byte
+ * identical to the pre-central behavior) and the caller's user-owned
+ * workbook in Central mode — so Settings reads/writes never fall back
+ * to a null active spreadsheet in the standalone Central App.
  */
 function ensureInputSettingsSheet_(ss) {
-  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  ss = ss || getUserSpreadsheet_();
   var sheet = ss.getSheetByName(PROFILE_SETTINGS_SHEET_NAME_);
   if (sheet) {
     // Self-heal a legitimately empty sheet: if somebody manually cleared
@@ -207,8 +209,8 @@ function ensureInputSettingsSheet_(ss) {
  * map. Values are trimmed strings. Duplicate keys keep the last value
  * written (matches spreadsheet-intuitive "last cell wins").
  */
-function readAllSettingsMap_() {
-  var sheet = ensureInputSettingsSheet_();
+function readAllSettingsMap_(ss) {
+  var sheet = ensureInputSettingsSheet_(ss);
   var map = {};
   var last = sheet.getLastRow();
   if (last < 2) return map;
@@ -270,10 +272,10 @@ function writeSetting_(sheet, key, value) {
  *
  * Never throws: any read failure returns both slots as `''`.
  */
-function readProfileDobRawValues_() {
+function readProfileDobRawValues_(ss) {
   var out = { dob: '', spouseDob: '' };
   try {
-    var sheet = ensureInputSettingsSheet_();
+    var sheet = ensureInputSettingsSheet_(ss);
     var last = sheet.getLastRow();
     if (last < 2) return out;
     var values = sheet.getRange(2, 1, last - 1, 2).getValues();
@@ -311,9 +313,10 @@ function readProfileDobRawValues_() {
  * into Date objects, which would otherwise round-trip through the
  * Settings map as unusable locale strings.
  */
-function getProfileSettings() {
-  var map = readAllSettingsMap_();
-  var dobRaw = readProfileDobRawValues_();
+function getProfileSettings(ss) {
+  ss = ss || getUserSpreadsheet_();
+  var map = readAllSettingsMap_(ss);
+  var dobRaw = readProfileDobRawValues_(ss);
 
   var normalizedDob = normalizeProfileDobValue_(dobRaw.dob);
   var normalizedSpouseDob = normalizeProfileDobValue_(dobRaw.spouseDob);
@@ -425,7 +428,7 @@ function saveProfileSettings(profile) {
     return { ok: false, errors: errors };
   }
 
-  var sheet = ensureInputSettingsSheet_();
+  var sheet = ensureInputSettingsSheet_(getUserSpreadsheet_());
   writeSetting_(sheet, PROFILE_KEYS_.NAME, name);
   writeSetting_(sheet, PROFILE_KEYS_.EMAIL, email);
   writeSetting_(sheet, PROFILE_KEYS_.PHONE, phone);
@@ -522,7 +525,7 @@ function getOnboardingProfileFromDashboard(_mode) {
 
   var profile;
   try {
-    profile = getProfileSettings();
+    profile = getProfileSettings(ss);
   } catch (e) {
     return {
       mode: 'normal',

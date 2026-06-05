@@ -175,7 +175,7 @@ function addBillFromDashboard(payload) {
   }
   try { SpreadsheetApp.flush(); } catch (_flushErr) { /* best-effort */ }
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var sheet = getSheet_(ss, 'BILLS');
 
   var headerDisplay = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0] || [];
@@ -519,7 +519,7 @@ function updateTrackedBillFromDashboard(payload) {
 
   // ---- Open sheet + verify the row hasn't shifted under us. ----
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var sheet = getSheet_(ss, 'BILLS');
 
   if (targetRow > sheet.getLastRow()) {
@@ -775,7 +775,7 @@ function deactivateBillFromDashboard(payload) {
   var expectedPayee = String(payload.payee || '').trim();
   if (!expectedPayee) throw new Error('Payee is required.');
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   var sheet = getSheet_(ss, 'BILLS');
 
   if (targetRow > sheet.getLastRow()) {

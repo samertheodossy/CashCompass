@@ -676,7 +676,7 @@ function getUpcomingExpenseMetrics_() {
 }
 
 function getOrCreateUpcomingExpensesSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheetName = 'INPUT - Upcoming Expenses';
   let sheet = ss.getSheetByName(sheetName);
 

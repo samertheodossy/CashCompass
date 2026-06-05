@@ -193,7 +193,7 @@ function getDebtAccounts_() {
  * reserved against reuse.
  */
 function getAllDebtAccountNamesIncludingInactive_(sheet) {
-  const s = sheet || getSheet_(SpreadsheetApp.getActiveSpreadsheet(), 'DEBTS');
+  const s = sheet || getSheet_(getUserSpreadsheet_(), 'DEBTS');
   const display = s.getDataRange().getDisplayValues();
   if (display.length < 2) return [];
 
@@ -260,7 +260,7 @@ function updateDebtField(payload) {
   const fieldName = String(payload.fieldName || '').trim();
   const rawValue = payload.value;
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'DEBTS');
 
   const display = sheet.getDataRange().getDisplayValues();
@@ -586,7 +586,7 @@ function addDebtFromDashboard(payload) {
   }
   try { SpreadsheetApp.flush(); } catch (_flushErr) { /* best-effort */ }
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'DEBTS');
   const headerMap = ensureDebtsActiveColumn_(sheet);
 
@@ -827,7 +827,7 @@ function deactivateDebtFromDashboard(payload) {
     throw new Error('Cannot stop tracking the reserved "' + accountName + '" row.');
   }
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'DEBTS');
   const headerMap = ensureDebtsActiveColumn_(sheet);
 
