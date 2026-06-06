@@ -33,7 +33,7 @@
  * @returns {GoogleAppsScript.Spreadsheet.Sheet}
  */
 function ensureInputHouseValuesSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const names = getSheetNames_();
   const sheetName = names.HOUSE_VALUES;
 
@@ -96,7 +96,7 @@ function ensureInputHouseValuesSheet_() {
  * @returns {GoogleAppsScript.Spreadsheet.Sheet}
  */
 function ensureSysHouseAssetsSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const names = getSheetNames_();
   const sheetName = names.HOUSE_ASSETS;
 
@@ -369,7 +369,7 @@ function updateHouseValueByDate(payload) {
 
   const year = valuationDate.getFullYear();
   const monthLabel = Utilities.formatDate(valuationDate, Session.getScriptTimeZone(), 'MMM-yy');
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
 
   // Capture the prior month-cell value BEFORE the overwrite so the activity
   // log row can show both the previous and new valuation. Best-effort —
@@ -454,7 +454,7 @@ function updateHouseValueByDate(payload) {
 }
 
 function updateHouseValuesHistory_(house, year, valuationDate, currentValue) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'HOUSE_VALUES');
   const block = getHouseValuesYearBlock_(sheet, year);
 
@@ -951,7 +951,7 @@ function validateNewHouseName_(raw) {
     throw new Error('A house with that name already exists.');
   }
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   if (ss.getSheetByName('HOUSES - ' + name)) {
     throw new Error('A sheet named "HOUSES - ' + name + '" already exists.');
   }
@@ -963,7 +963,7 @@ function houseExistsInHouseAssetsSheet_(houseName) {
   const target = String(houseName || '').trim();
   if (!target) return false;
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'HOUSE_ASSETS');
   const display = sheet.getDataRange().getDisplayValues();
   if (display.length < 2) return false;
@@ -1560,7 +1560,7 @@ function addHouseFromDashboard(payload) {
     valuationDate = stripTime_(new Date());
   }
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const hvSheet = getSheet_(ss, 'HOUSE_VALUES');
   const haSheet = getSheet_(ss, 'HOUSE_ASSETS');
   const block = getHouseValuesYearBlock_(hvSheet, currentYear);
@@ -1678,7 +1678,7 @@ function deactivateHouseFromDashboard(payload) {
   const houseName = String(payload.houseName || '').trim();
   if (!houseName) throw new Error('House name is required.');
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const hvSheet = getSheet_(ss, 'HOUSE_VALUES');
   const haSheet = getSheet_(ss, 'HOUSE_ASSETS');
 
