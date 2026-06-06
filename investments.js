@@ -180,7 +180,7 @@ function syncAllAssetsFromLatestCurrentYear_() {
   // a batched read, and (2) skip the format-preserving write when
   // the new value equals the existing value, which is the common case
   // because the user only changed one account in this save.
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sourceSheet = getSheet_(ss, 'INVESTMENTS');
   const targetSheet = getSheet_(ss, 'ASSETS');
 

@@ -384,6 +384,16 @@ function addIncomeSourceFromDashboard(payload) {
 
   var ss = getUserSpreadsheet_();
   var year = getCurrentYear_();
+
+  // First-run safety: income rows are written into the current year's Cash
+  // Flow sheet, which may not exist yet on a freshly-onboarded workbook.
+  // Create it on demand via the centralized safe helper (no-op if it
+  // already exists) so adding income "just works" rather than dead-ending
+  // with "create the sheet first". Mirrors the bill/debt seed paths.
+  if (typeof ensureCashFlowYearSheet_ === 'function') {
+    try { ensureCashFlowYearSheet_(year); } catch (_ensureErr) { /* fall through; read below surfaces a clear error */ }
+  }
+
   var sheet;
   try {
     sheet = getCashFlowSheet_(ss, year);

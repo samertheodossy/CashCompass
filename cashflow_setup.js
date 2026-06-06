@@ -11,7 +11,7 @@
  */
 
 function createNextYearCashFlowSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const currentYear = new Date().getFullYear();
   const nextYear = currentYear + 1;
 
@@ -480,7 +480,7 @@ function ensureCashFlowYearSheet_(year) {
     throw new Error('ensureCashFlowYearSheet_: invalid year: ' + String(year));
   }
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheetName = getCashFlowSheetName_(yearNum);
 
   const existing = ss.getSheetByName(sheetName);
@@ -809,7 +809,7 @@ function ensureOnboardingCashFlowYearSheetFromDashboard(mode) {
     };
   }
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const existed = !!ss.getSheetByName(sheetName);
   if (existed) {
     return { ok: true, created: false, sheetName: sheetName, mode: m };

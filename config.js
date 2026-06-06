@@ -49,7 +49,16 @@ function getSheet_(ss, key) {
   } catch (_flushErr) {
     // Flush is best-effort; fall through to the retry regardless.
   }
-  const freshSs = SpreadsheetApp.getActiveSpreadsheet();
+  // Central-safe re-resolve. In a standalone Central App deployment
+  // SpreadsheetApp.getActiveSpreadsheet() is null, which would make the
+  // retry below throw "Cannot read properties of null (reading
+  // 'getSheetByName')" instead of the intended, safely-handled "Missing
+  // sheet ..." error. Re-resolve through the user-scoped seam (which
+  // returns getActiveSpreadsheet() in bound mode — unchanged behavior),
+  // and fall back to the already-valid passed handle so freshSs is never
+  // null.
+  const freshSs =
+    ((typeof getUserSpreadsheet_ === 'function') ? getUserSpreadsheet_() : null) || ss;
   sheet = freshSs.getSheetByName(name);
   if (sheet) return sheet;
 

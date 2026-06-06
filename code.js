@@ -77,7 +77,7 @@ function showQuickAddPaymentSidebar() {
  */
 function runDebtPlanner(options) {
   options = options || {};
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const today = new Date();
   const tz = Session.getScriptTimeZone();
 

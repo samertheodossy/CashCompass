@@ -494,7 +494,7 @@ function syncAllHouseAssetsFromLatestCurrentYear_() {
   // changed. Now we (1) compute the latest map with 2 round-trips
   // total via a batched read and (2) skip the format-preserving write
   // when the new value equals the existing value.
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const hvSheet = getSheet_(ss, 'HOUSE_VALUES');
   const haSheet = getSheet_(ss, 'HOUSE_ASSETS');
 
