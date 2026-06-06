@@ -1962,7 +1962,26 @@ function getInputBillsDueRows_(ss, today, tz) {
         // would let a paid variant suppress the write-back into the
         // canonical row (which is the row autopay must populate).
         if (canAutopay && defaultAmount > 0 && dueHasPassed && !isCashFlowBillHandled_(cellValue, cellDisplay)) {
+          // Capture blank-ness BEFORE the write. A blank month cell carries
+          // the sheet's default "General"/black format with no currency
+          // mask, so writeDashboardBillValuePreserveFormat_ (which preserves
+          // the *target* cell's own look) renders a bare "-3" instead of the
+          // row's red "-$3.00". Mirror the skip path: after writing, if the
+          // cell started blank, copy the nearest populated month cell's
+          // format (red/currency), falling back to the canonical currency
+          // format only when the row has no populated sibling yet.
+          const autopayCellWasBlank =
+            cellValue === '' ||
+            cellValue === null ||
+            typeof cellValue === 'undefined' ||
+            String(cellDisplay || '').trim() === '';
+
           writeDashboardBillValuePreserveFormat_(sheet, rowInfo.row, monthCol + 1, -defaultAmount);
+          if (autopayCellWasBlank) {
+            if (!copyNearestAmountFormatInRow_(sheet, rowInfo.row, monthCol + 1)) {
+              sheet.getRange(rowInfo.row, monthCol + 1).setNumberFormat('$#,##0.00;-$#,##0.00');
+            }
+          }
           touchDashboardSourceUpdated_('cash_flow');
 
           var autopayDedupe = buildBillAutopayDedupeKey_(payee, cand.monthHeader, cand.dueDate, defaultAmount);
