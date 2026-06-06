@@ -255,7 +255,12 @@ function getOrProvisionUserSpreadsheet_() {
   var mappedId = lookupSpreadsheetIdForUser_(email);
   if (mappedId) {
     try {
-      return SpreadsheetApp.openById(mappedId);
+      var mappedSs = SpreadsheetApp.openById(mappedId);
+      // Existing mapped workbook: a manually reset/emptied workbook can
+      // still carry the default blank "Sheet1". This branch skips
+      // runMinimalBootstrap_, so reuse the same non-fatal cleanup here.
+      cleanupDefaultSheet1_(mappedSs);
+      return mappedSs;
     } catch (openErr) {
       return handleStaleMapping_(email, mappedId, openErr);
     }
@@ -300,7 +305,12 @@ function provisionWorkbookForUser_(email) {
     // provisioned while we were waiting.
     var existingId = lookupSpreadsheetIdForUser_(email);
     if (existingId) {
-      return SpreadsheetApp.openById(existingId);
+      var existingSs = SpreadsheetApp.openById(existingId);
+      // Same non-fatal cleanup as the pre-lock branch: a workbook
+      // provisioned by the winning execution (or a manually reset one)
+      // may still carry the default blank "Sheet1".
+      cleanupDefaultSheet1_(existingSs);
+      return existingSs;
     }
 
     var fileId = null;
@@ -384,6 +394,94 @@ function runMinimalBootstrap_(ss) {
     throw new Error('runMinimalBootstrap_ requires a spreadsheet handle.');
   }
   ensureInputSettingsSheet_(ss);
+
+  // Drive.Files.create seeds every new spreadsheet with an empty default
+  // "Sheet1" tab. Now that INPUT - Settings exists we can safely drop that
+  // leftover so the provisioned workbook does not lead with a stray blank
+  // tab. Strictly cleanup — wrapped non-fatally so a removal hiccup never
+  // aborts provisioning (the workbook is already usable without it).
+  cleanupDefaultSheet1_(ss);
+}
+
+/**
+ * Removes the default empty "Sheet1" left by Drive.Files.create from a
+ * Central workbook. Called on both the fresh-provision path
+ * (runMinimalBootstrap_) and the existing-mapping open path
+ * (getOrProvisionUserSpreadsheet_) so a workbook that was manually
+ * reset/emptied and re-enters onboarding also sheds its stray blank tab.
+ * Intentionally conservative — it only ever removes a sheet that is
+ * unmistakably the untouched Google default:
+ *
+ *   - named exactly "Sheet1" (case-sensitive),
+ *   - not the only sheet in the workbook (never delete the last sheet),
+ *   - has no meaningful content — every cell in getDataRange() is a blank
+ *     value, a blank formula, and a blank note. We do NOT rely on
+ *     getLastRow()/getLastColumn() here: a brand-new blank Google sheet
+ *     reports those as 1 (the always-present A1 cell), not 0, so the old
+ *     numeric check skipped deletion. The content scan below treats a
+ *     single-empty-cell grid as deletable while still refusing to drop a
+ *     tab that holds any value, formula, or note.
+ *
+ * All failures are swallowed: this runs only during Central provisioning
+ * bootstrap, the workbook is already functional without the cleanup, and
+ * an aborted provision would be a far worse outcome than a leftover blank
+ * tab. Operates on the passed-in `ss` directly (the user→workbook mapping
+ * is not written yet at this point, so the user-scoped resolver cannot be
+ * used here).
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ */
+function cleanupDefaultSheet1_(ss) {
+  try {
+    if (!ss) return;
+
+    var sheet = ss.getSheetByName('Sheet1');
+    if (!sheet) return;
+
+    // Never delete the last remaining sheet (Apps Script forbids it and we
+    // must always leave at least INPUT - Settings behind).
+    if (ss.getSheets().length <= 1) return;
+
+    // Content-based emptiness check. A blank Google default sheet reports
+    // getLastRow()/getLastColumn() as 1 (cell A1 always exists), so a
+    // numeric "=== 0" guard never fires. Instead, scan the data range and
+    // bail if ANY cell carries a value, a formula, or a note.
+    var dataRange = sheet.getDataRange();
+    if (!sheetDataRangeIsBlank_(dataRange)) return;
+
+    ss.deleteSheet(sheet);
+  } catch (_cleanupErr) {
+    // Cleanup only — leftover Sheet1 is harmless, an aborted provision is not.
+  }
+}
+
+/**
+ * Returns true only when every cell in the given data range is blank —
+ * no value, no formula, and no note. Used by
+ * cleanupDefaultSheet1_ to decide whether a "Sheet1" tab is
+ * the untouched Google default (safe to delete) versus a tab that holds
+ * real content (must be preserved). Conservative: any single non-blank
+ * value/formula/note returns false.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Range} range
+ * @returns {boolean}
+ */
+function sheetDataRangeIsBlank_(range) {
+  if (!range) return false;
+
+  var grids = [range.getValues(), range.getFormulas(), range.getNotes()];
+  for (var g = 0; g < grids.length; g++) {
+    var grid = grids[g];
+    for (var r = 0; r < grid.length; r++) {
+      var row = grid[r];
+      for (var c = 0; c < row.length; c++) {
+        if (String(row[c] == null ? '' : row[c]).trim() !== '') {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
 }
 
 /* -------------------------------------------------------------------------- */
