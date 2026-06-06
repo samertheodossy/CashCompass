@@ -260,7 +260,7 @@ function deleteActivityLogRow(row1Based) {
     if (!isFinite(row) || row !== Math.floor(row) || row < 2) {
       return { ok: false, error: 'Invalid row.' };
     }
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getUserSpreadsheet_();
     var sh = ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
     if (!sh) {
       return { ok: false, error: 'Activity log not found.' };
@@ -1175,7 +1175,7 @@ function activityLogRowMatchesDashboardFilters_(r, dateFrom, dateTo, payeeSearch
 function getActivityDashboardData(filters) {
   filters = filters || {};
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getUserSpreadsheet_();
     var sh = ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
     if (!sh || sh.getLastRow() < 2) {
       return {
