@@ -50,7 +50,7 @@
  * @returns {GoogleAppsScript.Spreadsheet.Sheet} the sheet (existing or new)
  */
 function ensureInputInvestmentsSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const names = getSheetNames_();
   const sheetName = names.INVESTMENTS;
 
@@ -122,7 +122,7 @@ function ensureInputInvestmentsSheet_() {
  * @returns {GoogleAppsScript.Spreadsheet.Sheet}
  */
 function ensureSysAssetsSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const names = getSheetNames_();
   const sheetName = names.ASSETS;
 
@@ -512,7 +512,7 @@ function updateInvestmentValueByDate(payload) {
   if (!accountName) throw new Error('Account name is required.');
 
   const year = balanceDate.getFullYear();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
 
   // Capture the prior month-cell value BEFORE the overwrite so the activity
   // log row can show both the previous and new balance. Best-effort —
@@ -596,7 +596,7 @@ function updateInvestmentValueByDate(payload) {
 }
 
 function updateInvestmentHistory_(accountName, year, balanceDate, currentValue) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'INVESTMENTS');
   const block = getInvestmentsYearBlock_(sheet, year);
 
@@ -914,7 +914,7 @@ function assetExistsInAssetsSheet_(accountName) {
   const target = String(accountName || '').trim();
   if (!target) return false;
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'ASSETS');
   const display = sheet.getDataRange().getDisplayValues();
   if (display.length < 2) return false;
@@ -1248,6 +1248,36 @@ function deleteAssetsRowByExactName_(sheet, accountName) {
 function addInvestmentAccountFromDashboard(payload) {
   validateRequired_(payload, ['accountName', 'type']);
 
+  // Ensure-before-validate guards. Both helpers are idempotent no-ops on
+  // populated workbooks (sheet exists → returned untouched). On a fresh
+  // workbook they write the canonical structure the duplicate-name
+  // validation (getInvestmentsFromHistory_ / assetExistsInAssetsSheet_)
+  // and the writes further down depend on. They MUST run BEFORE
+  // validateNewInvestmentAccountName_ below, because that validator reads
+  // INPUT - Investments / SYS - Assets and would otherwise throw
+  // "Missing sheet: …" on a brand-new workbook. Mirrors the
+  // ensure-before-validate ordering in addHouseFromDashboard.
+  try {
+    ensureInputInvestmentsSheet_();
+  } catch (ensureErr) {
+    throw new Error(
+      "Couldn't prepare investments: " +
+      (ensureErr && ensureErr.message ? ensureErr.message : ensureErr)
+    );
+  }
+  try {
+    ensureSysAssetsSheet_();
+  } catch (sysErr) {
+    throw new Error(
+      'Could not prepare SYS - Assets: ' +
+      (sysErr && sysErr.message ? sysErr.message : sysErr)
+    );
+  }
+  // Flush so subsequent reads (validation + the writes below) see the
+  // just-inserted sheets — without this, getSheet_ can still miss a
+  // freshly-created sheet on some Apps Script executions.
+  try { SpreadsheetApp.flush(); } catch (_flushErr) { /* best-effort */ }
+
   const accountName = validateNewInvestmentAccountName_(payload.accountName);
   const typeStr = String(payload.type || '').trim();
   if (!typeStr) throw new Error('Type is required.');
@@ -1280,35 +1310,7 @@ function addInvestmentAccountFromDashboard(payload) {
     startDate = stripTime_(new Date());
   }
 
-  // Ensure-before-write guards. Both helpers are idempotent no-ops on
-  // populated workbooks (sheet exists → returned untouched). On a fresh
-  // workbook they write the canonical structure getInvestmentsYearBlock_
-  // and getAssetsHeaderMap_ expect on the very next line. Re-surface any
-  // failure as an actionable user-facing message instead of the raw
-  // "Missing sheet: …" banner. Matches the Bank Accounts pattern in
-  // addBankAccountFromDashboard → bank_accounts.js.
-  try {
-    ensureInputInvestmentsSheet_();
-  } catch (ensureErr) {
-    throw new Error(
-      "Couldn't prepare investments: " +
-      (ensureErr && ensureErr.message ? ensureErr.message : ensureErr)
-    );
-  }
-  try {
-    ensureSysAssetsSheet_();
-  } catch (sysErr) {
-    throw new Error(
-      'Could not prepare SYS - Assets: ' +
-      (sysErr && sysErr.message ? sysErr.message : sysErr)
-    );
-  }
-  // Flush so the fresh Spreadsheet handle below sees the structural
-  // writes — without this, getSheet_ can still miss a just-inserted
-  // sheet on some Apps Script executions.
-  try { SpreadsheetApp.flush(); } catch (_flushErr) { /* best-effort */ }
-
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const invSheet = getSheet_(ss, 'INVESTMENTS');
   const assetsSheet = getSheet_(ss, 'ASSETS');
   const currentYear = getCurrentYear_();
@@ -1462,7 +1464,7 @@ function deactivateInvestmentAccountFromDashboard(payload) {
   const accountName = String(payload.accountName || '').trim();
   if (!accountName) throw new Error('Account name is required.');
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const invSheet = getSheet_(ss, 'INVESTMENTS');
   const assetsSheet = getSheet_(ss, 'ASSETS');
 
