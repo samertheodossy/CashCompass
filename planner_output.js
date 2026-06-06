@@ -1097,7 +1097,7 @@ function readPlannerEmailRecipientsStrict_() {
   var result = { valid: [], fields: [], invalidFields: [] };
 
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getUserSpreadsheet_();
     var sheetName =
       typeof PROFILE_SETTINGS_SHEET_NAME_ === 'string'
         ? PROFILE_SETTINGS_SHEET_NAME_
@@ -1184,7 +1184,7 @@ function appendPlannerEmailInvalidRecipientActivity_(invalidFields) {
   try {
     if (!invalidFields || !invalidFields.length) return;
     if (typeof appendActivityLog_ !== 'function') return;
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getUserSpreadsheet_();
     for (var i = 0; i < invalidFields.length; i++) {
       var field = String(invalidFields[i] || '').trim();
       if (!field) continue;
@@ -1212,7 +1212,7 @@ function appendPlannerEmailInvalidRecipientActivity_(invalidFields) {
 function appendPlannerEmailSentActivity_(resolved) {
   try {
     if (typeof appendActivityLog_ !== 'function') return;
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getUserSpreadsheet_();
     var deferredSaveCount = 0;
     if (typeof readDebouncePlannerDeferredCount_ === 'function') {
       deferredSaveCount = readDebouncePlannerDeferredCount_() || 0;
