@@ -8,7 +8,7 @@ function buildHouseExpenseCashFlowPayee_(payload) {
 }
 
 function getHouseExpenseUiData() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
 
   // HOUSES - * sheets stay forever (history). The picker only surfaces
   // houses that are currently active per SYS - House Assets. Blank Active
@@ -44,7 +44,7 @@ function addHouseExpense(payload) {
   if (!payload.date) throw new Error('Date is required.');
   if (!payload.item) throw new Error('Item is required.');
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = ss.getSheetByName(payload.house);
   if (!sheet) throw new Error('House sheet not found: ' + payload.house);
 
@@ -226,7 +226,7 @@ function getHouseExpenseSummaryData() {
 }
 
 function getAllHouseExpenseRows_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const houseSheets = ss.getSheets().filter(function(sheet) {
     return String(sheet.getName() || '').toUpperCase().indexOf('HOUSES - ') === 0;
   });
