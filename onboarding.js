@@ -1950,6 +1950,15 @@ function ensureOnboardingBankAccountsSheetFromDashboard(mode) {
           .setNumberFormat('$#,##0.00;-$#,##0.00');
       }
       sheet.autoResizeColumns(1, headerRow.length);
+
+      // Canonical Bank Accounts year-block coloring (orange Year row,
+      // yellow Account Name header row, plus green/tan Total Accounts/Delta
+      // rows only if present) + widen-only readable column widths. Mirrors
+      // the production workbook and applyInvestmentsSheetStyling_. First-
+      // create only: this branch runs after insertSheet, which a populated
+      // workbook never reaches (it returns at the `if (existing)` guard
+      // above), so existing/bound workbooks are never restyled.
+      applyBankAccountsSheetStyling_(sheet);
     } catch (_e) {
       // Cosmetic only — never fail the ensure op on formatting hiccups.
     }

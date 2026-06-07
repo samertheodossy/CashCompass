@@ -394,6 +394,13 @@ function insertNewBankAccountHistoryRow_(sheet, block, accountName) {
   let insertBeforeRow;
   let templateRow;
 
+  // When the only candidate template is the year-block header row (an empty
+  // block getting its very first account), cloning its format would stamp the
+  // yellow header look (bg, bold, 16pt) onto the data row. We detect that case
+  // and stamp a clean data-row style instead of cloning. Cloning a REAL
+  // account row (the common case) is unchanged.
+  let templateIsHeader = false;
+
   if (lastAccountRow === -1) {
     if (block.dataEndRow < block.dataStartRow) {
       insertBeforeRow = block.dataStartRow;
@@ -406,6 +413,7 @@ function insertNewBankAccountHistoryRow_(sheet, block, accountName) {
       templateRow = newRow + 1;
     } else {
       templateRow = block.headerRow;
+      templateIsHeader = true;
     }
   } else {
     sheet.insertRowAfter(lastAccountRow);
@@ -413,11 +421,34 @@ function insertNewBankAccountHistoryRow_(sheet, block, accountName) {
     templateRow = lastAccountRow;
   }
 
-  sheet.getRange(templateRow, 1, 1, lastCol).copyTo(
-    sheet.getRange(newRow, 1, 1, lastCol),
-    SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
-    false
-  );
+  if (templateIsHeader) {
+    // Empty-block first account: do NOT inherit the header's styling. Stamp
+    // the canonical data-row look (white, normal weight, 14pt) and re-apply
+    // currency formats to the month + Total columns, matching the format the
+    // onboarding creator set on the data region. The Active cell is corrected
+    // to plain text by writeActiveCellWithRowFormat_ below. Cosmetic only —
+    // a failure here must not block adding the account.
+    try {
+      sheet.getRange(newRow, 1, 1, lastCol)
+        .setBackground('#ffffff')
+        .setFontWeight('normal')
+        .setFontColor('#000000')
+        .setFontSize(14);
+      const firstMonthCol = block.firstMonthCol || 2;
+      if (lastCol >= firstMonthCol) {
+        sheet.getRange(newRow, firstMonthCol, 1, lastCol - firstMonthCol + 1)
+          .setNumberFormat('$#,##0.00;-$#,##0.00');
+      }
+    } catch (_stampErr) {
+      Logger.log('insertNewBankAccountHistoryRow_ data-row stamp: ' + _stampErr);
+    }
+  } else {
+    sheet.getRange(templateRow, 1, 1, lastCol).copyTo(
+      sheet.getRange(newRow, 1, 1, lastCol),
+      SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+      false
+    );
+  }
   sheet.getRange(newRow, 1, 1, lastCol).clearContent();
   sheet.getRange(newRow, 1).setValue(accountName);
 
@@ -1111,6 +1142,138 @@ function isBankAccountDataRowName_(name) {
   if (value === 'Total Accounts') return false;
   if (value === 'Delta') return false;
   return true;
+}
+
+/**
+ * First-create cosmetic styling for INPUT - Bank Accounts year blocks,
+ * implementing the revised Family Beta workbook styling standard. The
+ * priority is readability over color: a single header fill, a clean white
+ * year separator, and a calm white body, with hierarchy carried by
+ * typography (size) rather than competing fills.
+ *
+ *   - body (all cells)  → white background, font size 14 (calm, legible)
+ *   - "Year" row        → gray #d9d9d9 banner, bottom border #999999, bold,
+ *                         font size 16, row height 34
+ *   - "Account Name"    → warm yellow #ffe599, bold, font size 16,
+ *                         left-aligned, vertical-middle, row height 40
+ *   - "Total Accounts"  → green #b6d7a8, bold   (ONLY if the row exists)
+ *   - "Delta"           → tan   #fce5cd, bold   (ONLY if the row exists)
+ *
+ * The body wash runs FIRST so the marker rows (year/header/total/delta)
+ * re-applied afterward always win — that keeps Total/Delta green/tan even
+ * though they sit inside the washed range.
+ *
+ * IMPORTANT: this helper NEVER creates Total Accounts / Delta rows, never
+ * writes formulas, and never changes headers/schema. No code generates
+ * those rows today; they are colored only when already present so a
+ * workbook that has them authored picks up the canonical look. Existing
+ * number/currency formats applied by the creator are preserved (only
+ * background + font size are touched on the body).
+ *
+ * Column widths are widen-only (never shrink a user's manual widening):
+ * Account Name 260, month columns 110, Total 120.
+ *
+ * All failures are swallowed — cosmetic only; must never fail an ensure
+ * op on a formatting glitch.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ */
+function applyBankAccountsSheetStyling_(sheet) {
+  if (!sheet) return;
+
+  let lastCol = 1;
+  try { lastCol = Math.max(1, sheet.getLastColumn()); } catch (_) { return; }
+  let lastRow = 0;
+  try { lastRow = sheet.getLastRow(); } catch (_) { return; }
+  if (lastRow < 1) return;
+
+  // Body wash FIRST: calm white background + size 14 across the whole
+  // sheet grid. Marker rows below re-apply their own background + sizes,
+  // so this never clobbers the header/year/total/delta styling. Number
+  // and currency formats are untouched (we only set background + size).
+  try {
+    const maxRows = sheet.getMaxRows();
+    sheet.getRange(1, 1, maxRows, lastCol)
+      .setBackground('#ffffff')
+      .setFontSize(14);
+  } catch (_bodyErr) { /* cosmetic only */ }
+
+  let colA;
+  try {
+    colA = sheet.getRange(1, 1, lastRow, 1).getDisplayValues();
+  } catch (_) { return; }
+
+  for (let i = 0; i < colA.length; i++) {
+    const marker = String(colA[i][0] || '').trim();
+    if (!marker) continue;
+    const row1 = i + 1;
+    try {
+      if (marker === 'Year') {
+        // Subtle neutral-gray banner separates the year section from the
+        // white body without competing chromatically with the warm-yellow
+        // header. A bottom border does the crisp section-divider work so the
+        // fill itself stays understated. Hierarchy: bold + size 16.
+        const yearRange = sheet.getRange(row1, 1, 1, lastCol);
+        yearRange
+          .setBackground('#d9d9d9')
+          .setFontWeight('bold')
+          .setFontColor('#000000')
+          .setFontSize(16);
+        try {
+          yearRange.setBorder(
+            false, false, true, false, false, false,
+            '#999999', SpreadsheetApp.BorderStyle.SOLID
+          );
+        } catch (_) {}
+        try { sheet.setRowHeight(row1, 34); } catch (_) {}
+      } else if (marker === 'Account Name') {
+        // The one filled row: warm yellow, bold, large. Production header
+        // rows are LEFT-aligned, so horizontal alignment is left at its
+        // default; vertical-middle pairs with the taller row height.
+        sheet.getRange(row1, 1, 1, lastCol)
+          .setBackground('#ffe599')
+          .setFontWeight('bold')
+          .setFontColor('#000000')
+          .setFontSize(16)
+          .setVerticalAlignment('middle');
+        try { sheet.setRowHeight(row1, 40); } catch (_) {}
+      } else if (marker === 'Total Accounts') {
+        // Defensive: only fires if such a row already exists. Not created here.
+        sheet.getRange(row1, 1, 1, lastCol)
+          .setBackground('#b6d7a8')
+          .setFontWeight('bold')
+          .setFontColor('#000000');
+      } else if (marker === 'Delta') {
+        // Defensive: only fires if such a row already exists. Not created here.
+        sheet.getRange(row1, 1, 1, lastCol)
+          .setBackground('#fce5cd')
+          .setFontWeight('bold')
+          .setFontColor('#000000');
+      }
+    } catch (_styleErr) { /* cosmetic only */ }
+  }
+
+  // Widen-only column widths. Account Name is col 1, Total is the last
+  // column, month columns are everything in between. Never shrink a column
+  // the user widened manually (matches applyCashFlowSheetStyling_).
+  try {
+    if (sheet.getColumnWidth(1) < 260) sheet.setColumnWidth(1, 260);
+  } catch (_) {}
+  for (let c = 2; c < lastCol; c++) {
+    try {
+      if (sheet.getColumnWidth(c) < 110) sheet.setColumnWidth(c, 110);
+    } catch (_) {}
+  }
+  if (lastCol >= 2) {
+    try {
+      if (sheet.getColumnWidth(lastCol) < 120) sheet.setColumnWidth(lastCol, 120);
+    } catch (_) {}
+  }
+
+  // Pin the two header rows (Year + Account Name) and the Account Name
+  // column when scrolling across the 12 month columns. Idempotent.
+  try { sheet.setFrozenRows(2); } catch (_) {}
+  try { sheet.setFrozenColumns(1); } catch (_) {}
 }
 
 function getAccountsHeaderMap_(sheet, optionalDisplay) {
