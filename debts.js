@@ -1129,6 +1129,102 @@ function isDebtReservedName_(name) {
 }
 
 /**
+ * First-create cosmetic styling for INPUT - Debts (Family Beta standard).
+ *
+ * INPUT - Debts is a FLAT table — a single header row (row 1) followed by
+ * debt data rows — so unlike Bank Accounts there is no "Year" separator and
+ * no Delta row. Styling is therefore: a warm-yellow header, a calm white
+ * body carried by typography (size 14), and a green TOTAL DEBT summary band
+ * ONLY when such a row already exists.
+ *
+ *   - body (all cells) → white background, font size 14
+ *   - header (row 1)   → yellow #ffe599, bold, black, font size 16,
+ *                        vertical-middle, row height 40
+ *   - "TOTAL DEBT" row → green #b6d7a8, bold   (ONLY if already present)
+ *
+ * The body wash runs FIRST so the header (and any TOTAL DEBT band) re-applied
+ * afterward always wins. This helper NEVER creates a TOTAL DEBT row, never
+ * writes formulas, and never changes headers/schema. Existing currency
+ * formats applied by the creator are preserved (only background + font size
+ * are touched on the body).
+ *
+ * Column widths are widen-only (never shrink a user's manual widening).
+ *
+ * All failures are swallowed — cosmetic only; must never fail an ensure op on
+ * a formatting glitch. Idempotent: safe to re-run on the same sheet.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ */
+function applyDebtsSheetStyling_(sheet) {
+  if (!sheet) return;
+
+  let lastCol = 1;
+  try { lastCol = Math.max(1, sheet.getLastColumn()); } catch (_) { return; }
+  let lastRow = 0;
+  try { lastRow = sheet.getLastRow(); } catch (_) { return; }
+  if (lastRow < 1) return;
+
+  // Body wash FIRST: calm white background + size 14 across the whole grid.
+  // The header row below re-applies its own background + size, so this never
+  // clobbers the header styling. Number/currency formats are untouched (we
+  // only set background + size).
+  try {
+    const maxRows = sheet.getMaxRows();
+    sheet.getRange(1, 1, maxRows, lastCol)
+      .setBackground('#ffffff')
+      .setFontSize(14);
+  } catch (_bodyErr) { /* cosmetic only */ }
+
+  // Header row (row 1): warm yellow, bold, large, vertically centered to
+  // pair with the taller row height. Production header rows are left-aligned,
+  // so horizontal alignment is left at its default.
+  try {
+    sheet.getRange(1, 1, 1, lastCol)
+      .setBackground('#ffe599')
+      .setFontWeight('bold')
+      .setFontColor('#000000')
+      .setFontSize(16)
+      .setVerticalAlignment('middle');
+    try { sheet.setRowHeight(1, 40); } catch (_) {}
+  } catch (_headerErr) { /* cosmetic only */ }
+
+  // TOTAL DEBT summary band — defensive only. Colored if such a row already
+  // exists; NEVER created here. Column A carries the row name.
+  try {
+    const colA = sheet.getRange(1, 1, lastRow, 1).getDisplayValues();
+    for (let i = 1; i < colA.length; i++) { // skip header row 1 (i=0)
+      const name = String(colA[i][0] || '').trim();
+      if (!name) continue;
+      if (isDebtSummaryRowName_(name)) {
+        try {
+          sheet.getRange(i + 1, 1, 1, lastCol)
+            .setBackground('#b6d7a8')
+            .setFontWeight('bold')
+            .setFontColor('#000000');
+        } catch (_totErr) { /* cosmetic only */ }
+      }
+    }
+  } catch (_scanErr) { /* cosmetic only */ }
+
+  // Widen-only column widths (never shrink a column the user widened). Keyed
+  // by canonical column position from the creator's header layout:
+  // 1 Account Name | 2 Type | 3 Account Balance | 4 Minimum Payment |
+  // 5 Credit Limit | 6 Credit Left | 7 Int Rate | 8 Due Date |
+  // 9 Acct PCT Avail | 10 Active.
+  const widthMins = [220, 130, 190, 200, 150, 140, 110, 110, 190, 90];
+  for (let c = 1; c <= lastCol && c <= widthMins.length; c++) {
+    try {
+      if (sheet.getColumnWidth(c) < widthMins[c - 1]) {
+        sheet.setColumnWidth(c, widthMins[c - 1]);
+      }
+    } catch (_) {}
+  }
+
+  // Pin the header row when scrolling. Idempotent.
+  try { sheet.setFrozenRows(1); } catch (_) {}
+}
+
+/**
  * Explicit inactive test: 'no' / 'n' / 'false' / 'inactive' (case-insensitive)
  * only. Blank / missing / unknown → NOT inactive (i.e., active). Shared with
  * getInactiveDebtsSet_ and every other Debt reader so backward compatibility
