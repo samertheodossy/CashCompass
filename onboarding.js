@@ -1983,6 +1983,18 @@ function ensureOnboardingBankAccountsSheetFromDashboard(mode) {
       }
       sheet.autoResizeColumns(1, headerRow.length);
 
+      // Seed the canonical label-only "Total Accounts" summary row (money
+      // cells left blank — the gross =SUM formulas are materialized by
+      // refreshBankAccountsTotalAccountsRow_ once the first account row
+      // exists, which avoids a self-referential SUM on an empty block).
+      // First-create only and idempotent; runs before styling so
+      // applyBankAccountsSheetStyling_ colors the row's green summary band.
+      try {
+        seedBankAccountsTotalAccountsRow_(sheet);
+      } catch (_seedErr) {
+        Logger.log('ensureOnboardingBankAccountsSheetFromDashboard seed Total Accounts: ' + _seedErr);
+      }
+
       // Canonical Bank Accounts year-block coloring (orange Year row,
       // yellow Account Name header row, plus green/tan Total Accounts/Delta
       // rows only if present) + widen-only readable column widths. Mirrors

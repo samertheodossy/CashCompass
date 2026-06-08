@@ -395,18 +395,28 @@ function refreshBlockSumAggregates_(sheet, dataStartRow, dataEndRow, afterRow, t
       const formula = String(formulas[c - 1] || '').trim();
       if (!formula) continue;
 
-      // Strict: =SUM(<L><N>:<L><M>), case-insensitive, with optional $.
+      const cellLetter = columnToLetter_(c).toUpperCase();
+
+      // Accept two shapes, both of which must reference this cell's own column:
+      //   1. strict range  =SUM(<L><N>:<L><M>)  (both ends the same column)
+      //   2. single cell   =SUM(<L><N>)         (the Google-Sheets-normalized /
+      //      row-insert-shifted form of a former single-row range — Sheets
+      //      collapses =SUM(C2:C2) to =SUM(C2) and a later insert shifts it to
+      //      =SUM(C3); see the Phase 3.1 refreshDebtsTotalRow_ fix). Without
+      //      (2) a one-row aggregate freezes forever.
+      // Compound, cross-sheet, non-SUM, and Delta-style formulas match neither
+      // and are left untouched.
       const m = formula.match(
         /^=SUM\(\s*\$?([A-Z]+)\$?(\d+)\s*:\s*\$?([A-Z]+)\$?(\d+)\s*\)$/i
       );
-      if (!m) continue;
-
-      const lhsLetter = m[1].toUpperCase();
-      const rhsLetter = m[3].toUpperCase();
-      if (lhsLetter !== rhsLetter) continue;
-
-      const cellLetter = columnToLetter_(c).toUpperCase();
-      if (lhsLetter !== cellLetter) continue;
+      if (m) {
+        if (m[1].toUpperCase() !== m[3].toUpperCase()) continue;
+        if (m[1].toUpperCase() !== cellLetter) continue;
+      } else {
+        const s = formula.match(/^=SUM\(\s*\$?([A-Z]+)\$?(\d+)\s*\)$/i);
+        if (!s) continue;
+        if (s[1].toUpperCase() !== cellLetter) continue;
+      }
 
       const newFormula =
         '=SUM(' + cellLetter + dataStartRow + ':' + cellLetter + dataEndRow + ')';

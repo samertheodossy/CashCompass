@@ -411,6 +411,15 @@ function insertNewBankAccountHistoryRow_(sheet, block, accountName) {
     newRow = insertBeforeRow;
     if (newRow + 1 <= sheet.getLastRow()) {
       templateRow = newRow + 1;
+      // If the row directly below is a reserved aggregate/marker row (e.g. a
+      // seeded "Total Accounts" / "Delta"), cloning its format would stamp the
+      // green/tan summary band onto a data row. Fall back to the clean
+      // data-row stamp used for the header-only case instead.
+      const belowName = String(sheet.getRange(templateRow, 1).getDisplayValue() || '').trim();
+      if (!isBankAccountDataRowName_(belowName)) {
+        templateRow = block.headerRow;
+        templateIsHeader = true;
+      }
     } else {
       templateRow = block.headerRow;
       templateIsHeader = true;
@@ -719,6 +728,18 @@ function addBankAccountFromDashboard(payload) {
     deleteAccountsRowByExactName_(accountsSheet, accountName);
     bankSheet.deleteRow(bankRowNum);
     throw e3;
+  }
+
+  // Keep the current-year "Total Accounts" summary row's gross =SUM ranges
+  // covering the newly inserted account row (handles the SUM lower-boundary
+  // case + the single-row normalization). No-op when the block has no Total
+  // Accounts row, exact-shape guarded so it never clobbers a hand-authored
+  // summary, and scoped to the current year block. Best-effort — a failure
+  // here must never undo an account that is already saved.
+  try {
+    refreshBankAccountsTotalAccountsRow_(bankSheet, currentYear);
+  } catch (totalErr) {
+    Logger.log('addBankAccountFromDashboard refreshBankAccountsTotalAccountsRow_: ' + totalErr);
   }
 
   try {
@@ -1142,6 +1163,156 @@ function isBankAccountDataRowName_(name) {
   if (value === 'Total Accounts') return false;
   if (value === 'Delta') return false;
   return true;
+}
+
+/**
+ * First-create seed of a label-only "Total Accounts" summary row.
+ *
+ * Writes the literal "Total Accounts" in column A on the row immediately
+ * after the last content row and leaves every money cell BLANK — the gross
+ * =SUM formulas are materialized later by refreshBankAccountsTotalAccountsRow_
+ * once at least one account row exists. Seeding a formula on an empty block
+ * would be self-referential (the SUM would sit inside its own range), so the
+ * blank-then-refresh split is deliberate (mirrors seedDebtsTotalRow_).
+ *
+ * Idempotent: if any "Total Accounts" row already exists this is a no-op and
+ * returns its 1-based row. Intended for FIRST-CREATE only (callers gate on a
+ * freshly created sheet); never clears or rewrites existing rows.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @returns {number} 1-based row of the Total Accounts row, or -1 on failure
+ */
+function seedBankAccountsTotalAccountsRow_(sheet) {
+  if (!sheet) return -1;
+
+  const lastRow = Math.max(1, sheet.getLastRow());
+  const colA = sheet.getRange(1, 1, lastRow, 1).getDisplayValues();
+  for (let i = 0; i < colA.length; i++) {
+    if (String(colA[i][0] || '').trim() === 'Total Accounts') return i + 1;
+  }
+
+  const totalRow = sheet.getLastRow() + 1;
+  sheet.getRange(totalRow, 1).setValue('Total Accounts');
+
+  // Currency-format the (currently blank) money cells so the cells — and the
+  // =SUM formulas refreshBankAccountsTotalAccountsRow_ writes later — render
+  // consistently with the data rows. On a fresh sheet the last column is the
+  // "Total" column (no Active column yet), so cols 2..lastCol are exactly the
+  // month columns + Total. Cosmetic only; never load-bearing.
+  try {
+    const lastCol = sheet.getLastColumn();
+    if (lastCol >= 2) {
+      sheet.getRange(totalRow, 2, 1, lastCol - 1)
+        .setNumberFormat('$#,##0.00;-$#,##0.00');
+    }
+  } catch (_fmtErr) { /* cosmetic only */ }
+
+  return totalRow;
+}
+
+/**
+ * Maintains the current-year block's "Total Accounts" summary row so each
+ * money column's gross =SUM range covers every account data row above the
+ * summary. Gross by design — inactive accounts still count, matching a plain
+ * hand-authored =SUM (mirrors the Phase 3.1 TOTAL DEBT decision).
+ *
+ * Why a Bank-local helper instead of refreshBlockSumAggregates_:
+ *   - The seeded Total Accounts row starts BLANK; the shared helper only
+ *     rewrites cells that ALREADY hold a simple SUM and never fills blanks.
+ *   - The block can carry an "Active" column whose Total Accounts cell must
+ *     NOT receive a currency =SUM. We therefore scope strictly to columns
+ *     whose header is a MMM-YY month (parseMonthHeader_) or the literal
+ *     "Total" column, resolved by header label — never positional.
+ *
+ * Bound-mode safety (exact-shape guard, mirrors refreshDebtsTotalRow_):
+ *   - Acts only when a Total Accounts row already exists; NEVER creates one.
+ *   - Fills a money cell only when it is truly BLANK (the seeded state) or it
+ *     already holds a strict simple =SUM(<L>n:<L>m) / single-cell =SUM(<L>n)
+ *     on its OWN column. Literals and any compound / cross-sheet / non-SUM /
+ *     Delta-style formula are left untouched.
+ *   - Scoped to a single Year block (bails at the next "Year" marker), so
+ *     other years' summary rows are never modified.
+ *
+ * Best-effort: all failures are swallowed; must never block an account save.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {number|string} year  the Year block to refresh (e.g. current year)
+ */
+function refreshBankAccountsTotalAccountsRow_(sheet, year) {
+  try {
+    if (!sheet) return;
+
+    const display = sheet.getDataRange().getDisplayValues();
+    const block = getBankAccountsYearBlock_(sheet, year, display);
+
+    const dataStart = block.dataStartRow;
+    const dataEnd = findLastBankAccountDataRowInBlock_(sheet, block);
+    if (dataEnd === -1 || dataEnd < dataStart) return; // no account rows yet
+
+    // Locate THIS block's Total Accounts row: the first such labelled row at
+    // or after the header, bailing at the next Year marker so we never touch
+    // a different year's summary.
+    let totalRow = -1;
+    for (let r = block.headerRow; r < display.length; r++) {
+      const name = String((display[r] && display[r][0]) || '').trim();
+      if (r + 1 > block.headerRow && name === 'Year') break;
+      if (name === 'Total Accounts') { totalRow = r + 1; break; }
+    }
+    if (totalRow === -1) return; // no summary row — never create one here
+
+    const headerRowVals = display[block.headerRow - 1] || [];
+    const lastCol = sheet.getLastColumn();
+    const currency = '$#,##0.00;-$#,##0.00';
+    const simpleSum = /^=SUM\(\s*\$?([A-Z]+)\$?(\d+)\s*:\s*\$?([A-Z]+)\$?(\d+)\s*\)$/i;
+    const singleCellSum = /^=SUM\(\s*\$?([A-Z]+)\$?(\d+)\s*\)$/i;
+
+    for (let c = block.firstMonthCol; c <= lastCol; c++) {
+      const header = String((headerRowVals[c - 1] !== undefined ? headerRowVals[c - 1] : '')).trim();
+      const isMonth = !!parseMonthHeader_(header);
+      const isTotal = /^total$/i.test(header);
+      if (!isMonth && !isTotal) continue; // skip Active / unrelated columns
+
+      const letter = columnToLetter_(c).toUpperCase();
+      const canonical = '=SUM(' + letter + dataStart + ':' + letter + dataEnd + ')';
+      const cell = sheet.getRange(totalRow, c);
+
+      let formula = '';
+      try { formula = String(cell.getFormula() || '').trim(); } catch (_) { continue; }
+
+      if (formula === '') {
+        // No formula present. Only fill a truly blank cell — a literal value
+        // (possible in a hand-authored bound workbook) is left alone.
+        let val = '';
+        try { val = cell.getValue(); } catch (_) { continue; }
+        const isBlank = (val === '' || val === null || val === undefined);
+        if (!isBlank) continue;
+        try {
+          cell.setFormula(canonical);
+          cell.setNumberFormat(currency);
+        } catch (_setErr) { /* non-fatal */ }
+        continue;
+      }
+
+      // A formula is present — accept only a SUM we own on this column, in
+      // either the range or single-cell (normalized/shifted) shape.
+      const m = formula.match(simpleSum);
+      if (m) {
+        if (m[1].toUpperCase() !== m[3].toUpperCase()) continue;
+        if (m[1].toUpperCase() !== letter) continue;
+      } else {
+        const s = formula.match(singleCellSum);
+        if (!s) continue;
+        if (s[1].toUpperCase() !== letter) continue;
+      }
+      if (formula === canonical) continue;
+      try {
+        cell.setFormula(canonical);
+        cell.setNumberFormat(currency);
+      } catch (_setErr2) { /* non-fatal */ }
+    }
+  } catch (e) {
+    Logger.log('refreshBankAccountsTotalAccountsRow_: ' + e);
+  }
 }
 
 /**
