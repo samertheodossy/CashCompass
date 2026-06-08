@@ -1261,6 +1261,13 @@ function ensureOnboardingBillsSheetFromDashboard(mode) {
           .setNumberFormat('$#,##0.00;-$#,##0.00');
       }
       sheet.autoResizeColumns(1, headerRow.length);
+
+      // Canonical Bills Family Beta styling (yellow header, white body) +
+      // widen-only readable column widths. First-create only: this branch
+      // runs after insertSheet, which a populated workbook never reaches (it
+      // returns at the `if (existing)` guard above), so existing/bound
+      // workbooks are never restyled.
+      applyBillsSheetStyling_(sheet);
     } catch (_e) { /* cosmetic only */ }
   } catch (e) {
     return {

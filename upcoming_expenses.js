@@ -722,7 +722,81 @@ function getOrCreateUpcomingExpensesSheet_() {
     sheet.autoResizeColumns(1, headers[0].length);
   } catch (e) {}
 
+  // Canonical Upcoming Expenses Family Beta styling (yellow header, white
+  // body) + widen-only readable column widths. First-create only: this runs
+  // after insertSheet, below the `if (sheet) return sheet;` get-branch guard
+  // above, so existing/bound workbooks are never restyled.
+  applyUpcomingExpensesSheetStyling_(sheet);
+
   return sheet;
+}
+
+/**
+ * First-create cosmetic styling for INPUT - Upcoming Expenses (Family Beta).
+ *
+ * Flat table — a single header row (row 1) followed by expense data rows;
+ * no section/year rows, no totals, no delta rows. Styling:
+ *
+ *   - body (all cells) → white background, font size 14
+ *   - header (row 1)   → yellow #ffe599, bold, black, font size 16,
+ *                        vertical-middle, row height 40
+ *
+ * The body wash runs FIRST so the header re-applied afterward always wins.
+ * NEVER writes formulas, creates rows, or changes headers/schema. Existing
+ * number formats applied by the creator (Due Date yyyy-mm-dd, Amount
+ * currency) are preserved — only background + font size are touched on the
+ * body. Column widths are widen-only.
+ *
+ * All failures are swallowed — cosmetic only. Idempotent.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ */
+function applyUpcomingExpensesSheetStyling_(sheet) {
+  if (!sheet) return;
+
+  let lastCol = 1;
+  try { lastCol = Math.max(1, sheet.getLastColumn()); } catch (_) { return; }
+  let lastRow = 0;
+  try { lastRow = sheet.getLastRow(); } catch (_) { return; }
+  if (lastRow < 1) return;
+
+  // Body wash FIRST: white background + size 14 across the whole grid. The
+  // header re-applies its own background + size below. Number/currency/date
+  // formats are untouched (we only set background + size).
+  try {
+    const maxRows = sheet.getMaxRows();
+    sheet.getRange(1, 1, maxRows, lastCol)
+      .setBackground('#ffffff')
+      .setFontSize(14);
+  } catch (_bodyErr) { /* cosmetic only */ }
+
+  // Header row (row 1): warm yellow, bold, large, vertically centered.
+  try {
+    sheet.getRange(1, 1, 1, lastCol)
+      .setBackground('#ffe599')
+      .setFontWeight('bold')
+      .setFontColor('#000000')
+      .setFontSize(16)
+      .setVerticalAlignment('middle');
+    try { sheet.setRowHeight(1, 40); } catch (_) {}
+  } catch (_headerErr) { /* cosmetic only */ }
+
+  // Widen-only column widths (never shrink a column the user widened). Keyed
+  // by canonical column position from the creator's header layout:
+  // 1 ID | 2 Status | 3 Expense Name | 4 Category | 5 Payee | 6 Due Date |
+  // 7 Amount | 8 Account / Source | 9 Auto Add To Cash Flow |
+  // 10 Added To Cash Flow | 11 Notes.
+  const widthMins = [120, 100, 200, 150, 180, 120, 130, 200, 260, 235, 240];
+  for (let c = 1; c <= lastCol && c <= widthMins.length; c++) {
+    try {
+      if (sheet.getColumnWidth(c) < widthMins[c - 1]) {
+        sheet.setColumnWidth(c, widthMins[c - 1]);
+      }
+    } catch (_) {}
+  }
+
+  // Pin the header row when scrolling. Idempotent.
+  try { sheet.setFrozenRows(1); } catch (_) {}
 }
 
 function findUpcomingExpenseRowById_(id) {

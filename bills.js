@@ -1147,3 +1147,77 @@ function copyBillsRowFormattingFromInsertSiblingRow_(sheet, newRow) {
     Logger.log('copyBillsRowFormattingFromInsertSiblingRow_: ' + e);
   }
 }
+
+/**
+ * First-create cosmetic styling for INPUT - Bills (Family Beta standard).
+ *
+ * INPUT - Bills is a FLAT table — a single header row (row 1) followed by
+ * bill data rows — with no section/year rows, no totals, and no delta rows.
+ * Styling is therefore: a warm-yellow header and a calm white body carried
+ * by typography (size 14).
+ *
+ *   - body (all cells) → white background, font size 14
+ *   - header (row 1)   → yellow #ffe599, bold, black, font size 16,
+ *                        vertical-middle, row height 40
+ *
+ * The body wash runs FIRST so the header re-applied afterward always wins.
+ * This helper NEVER writes formulas, creates rows, or changes headers/schema.
+ * Existing number formats applied by the creator (Default Amount currency)
+ * are preserved — only background + font size are touched on the body.
+ *
+ * Column widths are widen-only (never shrink a user's manual widening).
+ *
+ * All failures are swallowed — cosmetic only; must never fail an ensure op on
+ * a formatting glitch. Idempotent: safe to re-run on the same sheet.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ */
+function applyBillsSheetStyling_(sheet) {
+  if (!sheet) return;
+
+  var lastCol = 1;
+  try { lastCol = Math.max(1, sheet.getLastColumn()); } catch (_) { return; }
+  var lastRow = 0;
+  try { lastRow = sheet.getLastRow(); } catch (_) { return; }
+  if (lastRow < 1) return;
+
+  // Body wash FIRST: calm white background + size 14 across the whole grid.
+  // The header row below re-applies its own background + size, so this never
+  // clobbers the header styling. Number/currency formats are untouched (we
+  // only set background + size).
+  try {
+    var maxRows = sheet.getMaxRows();
+    sheet.getRange(1, 1, maxRows, lastCol)
+      .setBackground('#ffffff')
+      .setFontSize(14);
+  } catch (_bodyErr) { /* cosmetic only */ }
+
+  // Header row (row 1): warm yellow, bold, large, vertically centered to
+  // pair with the taller row height. Left horizontal alignment (default).
+  try {
+    sheet.getRange(1, 1, 1, lastCol)
+      .setBackground('#ffe599')
+      .setFontWeight('bold')
+      .setFontColor('#000000')
+      .setFontSize(16)
+      .setVerticalAlignment('middle');
+    try { sheet.setRowHeight(1, 40); } catch (_) {}
+  } catch (_headerErr) { /* cosmetic only */ }
+
+  // Widen-only column widths (never shrink a column the user widened). Keyed
+  // by canonical column position from the creator's header layout:
+  // 1 Payee | 2 Category | 3 Due Day | 4 Default Amount | 5 Varies |
+  // 6 Autopay | 7 Active | 8 Payment Source | 9 Frequency | 10 Start Month |
+  // 11 Notes.
+  var widthMins = [200, 150, 100, 175, 100, 110, 90, 190, 130, 130, 240];
+  for (var c = 1; c <= lastCol && c <= widthMins.length; c++) {
+    try {
+      if (sheet.getColumnWidth(c) < widthMins[c - 1]) {
+        sheet.setColumnWidth(c, widthMins[c - 1]);
+      }
+    } catch (_) {}
+  }
+
+  // Pin the header row when scrolling. Idempotent.
+  try { sheet.setFrozenRows(1); } catch (_) {}
+}
