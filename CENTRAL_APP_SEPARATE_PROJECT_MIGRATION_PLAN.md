@@ -1,5 +1,13 @@
 # CENTRAL_APP_SEPARATE_PROJECT_MIGRATION_PLAN.md
 
+> **Superseded / Historical — Central App migration document.**
+>
+> The Central App architecture described here is **now live** — the two-project central deployment has shipped and is in family-beta use. This file is retained as a historical migration record and is **not** the current source of truth. Specific internal details below (commit hashes, "one-line pass-through" resolver descriptions, and "planned/next" framing) reflect the state at the time of authoring and may be out of date.
+>
+> **Current sources of truth:** `PROJECT_CONTEXT.md` · `TODO.md` · `README.md` · `WORKING_RULES.md`
+>
+> _Banner added in the Documentation Archive Preparation pass; the document body below is unchanged._
+
 Long-term architecture plan for separating the CashCompass bound/dev workflow from the Central App multi-user web application into two independent Apps Script projects.
 
 **Documentation/planning only.** No Apps Script code change. No HTML change. No `appsscript.json` change. No deployment change. No implementation. This document gates the *decision* to proceed with a two-project architecture and defines every setup, migration, and operation detail required before any project-creation steps begin.

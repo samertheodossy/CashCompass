@@ -1,5 +1,13 @@
 # Central-Mode Startup Routing — Diagnostic Plan
 
+> **Superseded / Historical — Central App migration document.**
+>
+> The Central App architecture described here is **now live** — the two-project central deployment has shipped and is in family-beta use, and the startup-routing issue this plan diagnosed has been resolved. This file is retained as a historical migration record and is **not** the current source of truth. Specific internal details below (commit hashes, "one-line pass-through" resolver descriptions, and "planned/next" framing) reflect the state at the time of authoring and may be out of date.
+>
+> **Current sources of truth:** `PROJECT_CONTEXT.md` · `TODO.md` · `README.md` · `WORKING_RULES.md`
+>
+> _Banner added in the Documentation Archive Preparation pass; the document body below is unchanged._
+
 **Status:** Diagnostic planning only — no code changes yet  
 **Prepared:** 2026-05-28  
 **Precondition:** All uncommitted routing fixes reverted. Working tree is clean at `d952dfa`.

@@ -1,5 +1,13 @@
 # CENTRAL_APP_RESOLVER_PROVISIONING_IMPLEMENTATION_PROMPT.md
 
+> **Superseded / Historical — Central App migration document.**
+>
+> The Central App architecture described here is **now live** — the two-project central deployment has shipped and is in family-beta use. This file is retained as a historical migration record and is **not** the current source of truth. Specific internal details below (commit hashes, "one-line pass-through" resolver descriptions, and "planned/next" framing) reflect the state at the time of authoring and may be out of date.
+>
+> **Current sources of truth:** `PROJECT_CONTEXT.md` · `TODO.md` · `README.md` · `WORKING_RULES.md`
+>
+> _Banner added in the Documentation Archive Preparation pass; the document body below is unchanged._
+
 The exact, implementation-ready prompt specification for the **second** central-mode implementation slice: the resolver branch, the allow-list gate, and the workbook provisioning sequence. This document is a prompt spec — it pins every concrete decision the implementation prompt must follow so the implementor produces a mechanical translation of this doc into code, not a fresh design pass.
 
 **Planning only.** No Apps Script change, no HTML change, no `appsscript.json` change, no deployment change. This document is the implementation gate; the implementation prompt itself **may not run** until this spec is reviewed and committed.

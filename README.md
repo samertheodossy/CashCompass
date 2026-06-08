@@ -8,9 +8,9 @@ This README is the entry point. It does not re-explain the app — it routes you
 
 ## Start here
 
-1. **Read `WORKING_RULES.md` first.** It defines the current phase (V1.2 / controlled improvement mode; V1.1 closed out) and the rules every change must follow — one issue at a time, minimal/localized/safe, no large refactors or architecture changes without explicit approval, always consider both **blank** and **populated** workbooks.
+1. **Read `WORKING_RULES.md` first.** It defines the current phase (Central App live + Family Beta readiness) and the rules every change must follow — one issue at a time, minimal/localized/safe, no `doGet`/`includeHtml_`/snapshot-shape or destructive sheet changes without explicit approval, always consider both **blank** and **populated** workbooks, and (for Central App work) the active Central App Transition Rules.
 2. **Then skim `PROJECT_CONTEXT.md → Current phase`** for the live product state and the canonical tab-by-tab behavior.
-3. **Before starting any change,** check `TODO.md → V1.2 work queue` to see what's Active, what's a V1.2 candidate, and what's explicitly Later / future phase.
+3. **Before starting any change,** check `TODO.md → Launch Readiness Roadmap` for the active phase, and `TODO.md → V1.2 polish backlog` for small-polish picks.
 4. **After each implementation step,** run the blank + populated manual checks in `TESTING_PLAN.md`.
 
 If you are onboarding a contributor (or yourself after a break), `INIT_PROMPT.md` is the minimal reading list; `FIRST_RUN.md` is the smoke check.
@@ -29,7 +29,7 @@ If you are onboarding a contributor (or yourself after a break), `INIT_PROMPT.md
 
 ### Planning (what's next)
 
-- `TODO.md` — V1.2 work queue (Active / Next / Later) + historical backlog.
+- `TODO.md` — Launch Readiness Roadmap (Phase 1–7) + V1.2 polish backlog + historical backlog.
 - `ENHANCEMENTS.md` — product-level rationale, phase history, Active / Next / Later mirror.
 
 ### History (what shipped)
@@ -47,31 +47,45 @@ If you are onboarding a contributor (or yourself after a break), `INIT_PROMPT.md
 
 ---
 
-## Current working mode
+## Current Product Status (June 2026)
 
-**V1.2 / controlled improvement mode (V1.1 closed out).** The V1 trust baseline is complete, and V1.1 shipped the retirement profile integration end-to-end (Profile DOB → derived current age, manual age removed from Retirement, DOB parser accepts Date objects + strings, display-only UI, cleaned sheet seed). Same rules apply to V1.2.
+- **Architecture:** Central App operational.
+- **Family Beta readiness:** ~95%+.
+- **Completed (working in central mode):** Provisioning, Workbook Mapping, Dashboard, Planner, Assets, Properties, Cash Flow, Bills, Debts, Income, Activity, Email.
+- **Current focus:** Family Beta Hardening, Workbook Totals Project, Chat Assistant planning, External Beta preparation.
 
-Rules for every change in this phase:
-
-- One issue at a time. No large refactors. No architecture changes unless explicitly approved. No destructive sheet changes. Preserve existing populated-workbook behavior.
-- Every fix is minimal, localized, and safe. Favor small diffs.
-- Every fix is exercised against **both** a blank workbook and a populated workbook before being called done (see `TESTING_PLAN.md`).
-- New work is pulled from `TODO.md → V1.2 work queue → V1.2 candidates`. Items under **Later** require an explicit product decision to move up.
-
-Authoritative sources for these rules: `WORKING_RULES.md → Current phase` and `ENHANCEMENTS.md → § 0. Current phase`.
+Full picture: `PROJECT_CONTEXT.md → Current Product Status (June 2026)`. Roadmap: `TODO.md → Launch Readiness Roadmap`.
 
 ---
 
-## Current V1.2 direction
+## Current working mode
 
-Short mirror of `TODO.md → V1.2 work queue`. The live queue in `TODO.md` is the source of truth.
+**Central App live + Family Beta readiness.** The Central App architecture is operational — `getUserSpreadsheet_()` is a real resolver that, in central mode (`CENTRAL_MODE`), provisions each allow-listed user their own Drive-owned workbook on first access (runtime-validated). Family Beta styling has shipped for Bank Accounts, Debts, Bills, and Upcoming Expenses. The V1 trust baseline and V1.1 retirement profile integration remain the stable foundation.
 
-- **Active now:** nothing in flight — pick the next item from the candidates below.
-- **V1.2 candidates (A — immediate follow-ups, low risk):** Profile DOB parser symmetry (accept Date objects on save-side validation), Overview Retirement Outlook copy alignment with `needsProfileDob`, blank-workbook empty-state consistency sweep, copy/Help polish sweep.
-- **V1.2 candidates (B — product improvements):** Profile completeness indicator / badge, better Retirement setup guidance / linking to Profile, optional spouse UX clarity (single vs partnered).
-- **V1.2 candidates (C — future ideas, do not act yet):** legacy sheet cleanup tool for inert retirement age rows, Profile → other modules integration, notifications / SMS using the existing Profile phone field.
-- **Deferred from V1.1:** planner email guardrails telemetry (informational only), low-risk codebase cleanups, dead-code prune for the retirement profile integration helpers.
-- **Later (post-V1.2 / future phase):** onboarding factory refactor, Activity smart-undo phases 2–4, Cash Strategy, HELOC advisor refinement, Plaid-style sync, broader regression / test harness, two-dashboards unification, and the larger product items captured in `TODO.md → Historical backlog`.
+The V1.2 change discipline still applies to every edit, plus the now-active Central App migration discipline:
+
+- One issue at a time. No large refactors. No `doGet` / `includeHtml_` / snapshot-shape changes unless explicitly approved. No destructive sheet changes. Preserve existing populated-workbook behavior.
+- Central App changes follow `WORKING_RULES.md → Central App Transition Rules` (active): one module at a time, bound + central modes coexist, no reformatting of existing workbooks.
+- Every fix is minimal, localized, safe, and exercised against **both** a blank and a populated workbook (see `TESTING_PLAN.md`).
+- New work is pulled from `TODO.md → Launch Readiness Roadmap`.
+
+Authoritative sources: `WORKING_RULES.md → Current phase` + `→ Central App Transition Rules`, `PROJECT_CONTEXT.md → Current architecture — Central App (live)`, and `ENHANCEMENTS.md → § 0. Current phase`.
+
+---
+
+## Launch Readiness Roadmap
+
+Detailed source of truth: `TODO.md → Launch Readiness Roadmap` (objective, why it matters, deliverables, dependencies, priority per phase). High-level summary: `PROJECT_CONTEXT.md → Launch Readiness Roadmap (high-level)`. Short mirror:
+
+- **Phase 1 — Documentation Cleanup** *(in progress, P0)* — sync all docs with live Central architecture; record Family Beta styling + deployment model.
+- **Phase 2 — Family Beta Hardening** *(P1)* — duplicate/orphan workbook detection, mapping inspector, recovery tools, stale-mapping recovery UX, provisioning + admin diagnostics, rollout checklist.
+- **Phase 3 — Workbook Totals Project** *(P1–P2)* — TOTAL DEBT, Total Accounts, Delta (+ formula strategy, insert/update behavior, reader compatibility).
+- **Phase 4 — Chat Assistant v1** *(P2)* — read-only assistant (spending/debt/retirement/cash-flow questions, planner + dashboard explanations). Write-capable assistant is future.
+- **Phase 5 — Web App UX Improvements** *(P2)* — onboarding, empty-states, error handling, user guidance/help, dashboard + planner polish, help text & content cleanup (reduce cognitive load) (+ residual V1.2 polish backlog).
+- **Phase 6 — External Beta Readiness** *(P3)* — support workflow, feedback collection, onboarding, recovery flows, diagnostics, beta-user management.
+- **Phase 7 — Paid Product Readiness** *(P4)* — pricing/subscription model, entitlements + plan enforcement, privacy policy, terms of service, support process, operational monitoring.
+
+Small-polish picks (Profile DOB parser symmetry, empty-state sweeps, etc.) are retained in `TODO.md → V1.2 polish backlog` and fold into Phase 5.
 
 ---
 
@@ -83,8 +97,10 @@ Short mirror of `TODO.md → V1.2 work queue`. The live queue in `TODO.md` is th
 
 ---
 
-## Future Direction
+## Architecture direction (Central App — live)
 
-Long-term, CashCompass will evolve into a **centralized service**. Instead of each user copying the script into their own spreadsheet, users will access a single deployed web app and each user will get their own bound workbook automatically on first run. Users will not manage spreadsheets directly, and code updates will be **automatic** — a fix shipped once reaches everyone immediately, with no version drift across copies. A free + paid tier model will eventually layer on top of that, gating advanced features (e.g. bank import / sync) while keeping core planning free.
+CashCompass now runs as a **centralized service** alongside the legacy bound mode. In central mode, users access a single deployed web app and each allow-listed user gets their own Drive-owned workbook provisioned automatically on first run — no script copying, automatic updates, no version drift. This is **operational and runtime-validated**, not a future aspiration. The two modes coexist via the `CENTRAL_MODE` flag and deployment-pinning.
 
-This direction is documented for durability, **not active work**. The full plan lives in `PROJECT_CONTEXT.md → Future architecture — Central App`, `ENHANCEMENTS.md → Future direction — Central App / Monetization`, and `TODO.md → Future Phases (VNext)`. The migration discipline that will apply when the work is approved lives in `WORKING_RULES.md → Central App Transition Rules` and `WORKING_RULES.md → Monetization Rules`.
+Current description: `PROJECT_CONTEXT.md → Current architecture — Central App (live)`. Per-slice history: `SESSION_NOTES.md → Current State — Post V1.2 Prep` and the `CENTRAL_APP_*.md` docs. The migration discipline is now the **active** policy in `WORKING_RULES.md → Central App Transition Rules`.
+
+A free + paid tier model (gating advanced features like bank import / sync while keeping core planning free) remains **future** — scheduled as **Phase 7 — Paid Product Readiness**. See `ENHANCEMENTS.md → Future direction — Monetization` and `WORKING_RULES.md → Monetization Rules`.

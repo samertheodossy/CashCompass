@@ -1,5 +1,13 @@
 # CENTRAL_APP_SIXTH_RESOLVER_SEAM.md
 
+> **Superseded / Historical — Central App migration document.**
+>
+> The Central App architecture described here is **now live** — the two-project central deployment has shipped and is in family-beta use. This file is retained as a historical migration record and is **not** the current source of truth. Specific internal details below (commit hashes, "one-line pass-through" resolver descriptions, and "planned/next" framing) reflect the state at the time of authoring and may be out of date.
+>
+> **Current sources of truth:** `PROJECT_CONTEXT.md` · `TODO.md` · `README.md` · `WORKING_RULES.md`
+>
+> _Banner added in the Documentation Archive Preparation pass; the document body below is unchanged._
+
 Design analysis for the next Central App resolver seam (Phase 6). **Analysis/design only.** No Apps Script code, no HTML/JS, no deployment changes, no implementation. Implementation requires its own Cursor prompt with explicit user approval per `CENTRAL_APP_IMPLEMENTATION_PLAN.md → §9`.
 
 Cross-references:

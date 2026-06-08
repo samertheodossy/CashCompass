@@ -1,5 +1,13 @@
 # CENTRAL_APP_CENTRAL_PROJECT_SETUP_CHECKLIST.md
 
+> **Superseded / Historical — Central App migration document.**
+>
+> The Central App architecture described here is **now live** — the two-project central deployment has shipped and is in family-beta use. This file is retained as a historical migration record (reusable if the central project is ever re-provisioned) and is **not** the current source of truth. Specific internal details below (commit hashes, "one-line pass-through" resolver descriptions, and "planned/next" framing) reflect the state at the time of authoring and may be out of date.
+>
+> **Current sources of truth:** `PROJECT_CONTEXT.md` · `TODO.md` · `README.md` · `WORKING_RULES.md`
+>
+> _Banner added in the Documentation Archive Preparation pass; the document body below is unchanged._
+
 Operational checklist for creating and validating the standalone CashCompass Central App Apps Script project. This is the action-level companion to `CENTRAL_APP_SEPARATE_PROJECT_MIGRATION_PLAN.md`, which records the architectural decision. This checklist is what you follow when actually executing the setup.
 
 **Documentation/planning only.** No code changes, no deployment actions, no file creation are authorized by this document alone. Each numbered action step is a gate; complete it and record the result before advancing.

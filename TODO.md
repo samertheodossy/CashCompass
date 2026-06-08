@@ -9,26 +9,95 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ---
 
-## Current phase — V1.2 / controlled improvement mode (V1.1 closed out)
+## Current phase — Central App live + Family Beta readiness
 
-V1.1 is closed. The headline V1.1 item — **Retirement profile integration** — shipped end-to-end (Profile DOB → derived current age; manual age removed from Retirement; DOB parser accepts Date objects + strings; display-only UI with no spinner arrows; new-sheet seed cleaned). The V1 trust baseline (blank-workbook stability, no fake states, gated planner email, UI copy consistency pass) remains the foundation the project builds on.
+The app has moved past "V1.2 / controlled improvement mode." **The Central App architecture is live and operational** (CENTRAL_MODE routing, per-user workbook provisioning, workbook mapping — all runtime-validated), and four input sheets now carry Family Beta styling. The authoritative forward plan is **`## Launch Readiness Roadmap`** immediately below (7 phases, the source of truth for the next 6–12 months).
 
-Working rules for V1.2 are the same as V1.1 (`WORKING_RULES.md → Current phase`): one issue at a time, minimal / localized / safe diff, blank + populated workbook manual test steps. See `SESSION_NOTES.md` for the chronological record.
+The V1 trust baseline (blank-workbook stability, no fake states, gated planner email, UI copy consistency pass) and the V1.1 retirement profile integration remain the stable foundation. The **V1.2 change discipline still applies to every edit** (`WORKING_RULES.md → Current phase`): one issue at a time, minimal / localized / safe diff, blank + populated workbook manual test steps. The Central App migration additionally follows `WORKING_RULES.md → Central App Transition Rules`, which is now the **active** governing policy (not future). See `SESSION_NOTES.md → Current State — Post V1.2 Prep` for the chronological migration record.
 
-Open items below are either:
-
-- **V1.2 candidates** — small, localized polish + product improvements (see section immediately below).
-- Existing backlog kept as-is for historical continuity. Do not pull from the old lists wholesale — each pick must still satisfy the V1.2 working rules.
+The older "V1.2 work queue" candidates are retained below under `## V1.2 polish backlog` — they are still valid small-polish picks, but they are no longer *the* roadmap.
 
 ---
 
-## V1.2 work queue — Active / Next / Later
+## Launch Readiness Roadmap
 
-One flat queue, three buckets. Pull **one** item at a time under the V1.2 working rules (`WORKING_RULES.md → Current phase`). Completed items get moved into `## DONE (history)` at the bottom so this queue stays short.
+**Authoritative, detailed roadmap for the next 6–12 months — single source of truth.** `PROJECT_CONTEXT.md → Launch Readiness Roadmap (high-level)` carries only phase names, objectives, and priorities and points here for detail; to avoid drift, the full per-phase detail (deliverables, dependencies) lives **only** in this section. Every phase runs under `WORKING_RULES.md → Current phase` and, for central-mode work, `→ Central App Transition Rules` (active).
 
-### Active now
+**Priority scale:** P0 = now / in progress · P1 = next, gates family beta · P2 = high, needed before external beta · P3 = gates external beta · P4 = post-beta / longest horizon. Phases are roughly sequential; where noted, some can overlap.
 
-- *(none in flight — pick the next Active item from the V1.2 candidates below before starting work. Bank Import Step 2a is queued and documented under `## Bank Import — status & resume plan` below.)*
+### Phase 1 — Documentation Cleanup *(in progress)*
+
+- **Objective:** Make `PROJECT_CONTEXT.md` + `TODO.md` the single authoritative, current source of truth for architecture, status, and roadmap.
+- **Why it matters:** The docs had drifted far behind the code (Central App described as "future / not active," resolver as a "pass-through"). Stale docs cause re-derivation, wrong assumptions, and risky changes — and they block safe onboarding of contributors and beta support. Accurate docs are the prerequisite for everything after.
+- **Major deliverables:** Bring all docs in sync with the live Central architecture; archive completed migration work (history preserved in `SESSION_NOTES.md` + `CENTRAL_APP_*.md`); record Family Beta styling status; record current architecture + deployment model (two projects / `CENTRAL_MODE` / provisioning / mapping); this Launch Readiness Roadmap.
+- **Dependencies:** None — foundation phase.
+- **Estimated priority:** **P0** (in progress, nearly complete).
+
+### Phase 2 — Family Beta Hardening
+
+- **Objective:** Make per-user provisioning robust, recoverable, and observable enough to safely onboard a small family beta.
+- **Why it matters:** Provisioning works, but known edge cases exist (duplicate workbook from concurrent first-load, stale mappings when a mapped workbook is trashed). Without detection, recovery, and diagnostics, a single edge case becomes a blind support fire. This phase converts "works in testing" into "safe with real users."
+- **Major deliverables:** Duplicate workbook detection; orphan workbook detection; workbook mapping inspector; workbook recovery tools; stale mapping recovery UX; provisioning diagnostics; admin diagnostics dashboard; family beta rollout checklist.
+- **Dependencies:** Phase 1 (accurate architecture docs); live provisioning + mapping (done).
+- **Estimated priority:** **P1** — gates the family beta; the immediate next phase.
+
+### Phase 3 — Workbook Totals Project
+
+- **Objective:** Bring newly provisioned workbooks to visual + functional parity with the production workbook by generating canonical summary rows on first-create.
+- **Why it matters:** Fresh workbooks currently lack the `TOTAL DEBT` / `Total Accounts` / `Delta` rows users expect and that some readers/UX assume. Parity reduces confusion and support load, and makes the beta experience feel finished.
+- **Major deliverables:** `TOTAL DEBT`; `Total Accounts`; `Delta`; any additional summary rows; **formula strategy** (insert-proof `SUM`/`INDEX`-anchored formulas, not fixed ranges); **insert/update behavior** (new rows route above the totals band; totals never overwritten); **reader compatibility** (existing total/delta skip logic in dashboard + planner readers preserved — no double-counting).
+- **Dependencies:** Phase 1; the Family Beta styling helpers (done) to style the generated rows. Best landed before broad beta so workbooks are consistent; can overlap with Phase 2.
+- **Estimated priority:** **P1–P2** — high; can run alongside Phase 2.
+
+### Phase 4 — Chat Assistant v1
+
+- **Objective:** Ship a **read-only** natural-language assistant over the existing canonical read models.
+- **Why it matters:** A differentiator that reduces "where do I find X / what does this mean" friction. Read-only keeps it safe (no write-path risk) and aligns with the decision-layer principle (reads existing sources, never creates data).
+- **Major deliverables (read-only v1):** Spending questions; debt questions; retirement questions; cash-flow questions; planner explanations; dashboard explanations. Routes to existing pages; never a write surface. (Constraints + phased rollout already drafted in `ENHANCEMENTS.md → Chat-based Finance Assistant (detailed)`.)
+- **Future (explicitly out of v1):** Write-capable assistant; goal creation; bill creation; cash-flow updates — all deferred until the read-only assistant is trusted and the write-path safety model is designed.
+- **Dependencies:** Stable read helpers (done); accurate docs (Phase 1). Independent of Phases 2/3 but lower launch-criticality.
+- **Estimated priority:** **P2** — valuable, not a beta blocker; can slot flexibly.
+
+### Phase 5 — Web App UX Improvements
+
+- **Objective:** Polish the central web-app experience for both first-time (freshly provisioned) and ongoing users, and cut the text/messaging down to a calm, low-cognitive-load surface.
+- **Why it matters:** Provisioned users land in an empty workbook; onboarding, empty-states, and error handling decide whether a beta user succeeds or churns on day one. This is where hardening (Phase 2) becomes a good user experience. Verbose, duplicated instructional copy is a major source of cognitive load that competes with the actual data.
+- **Major deliverables:** Onboarding improvements; empty-state improvements; error-handling improvements; user guidance / help; dashboard polish; planner polish; **Help Text & Content Cleanup** (see below). (Absorbs the residual `## V1.2 polish backlog` items below.)
+- **Help Text & Content Cleanup:**
+  - Remove verbose instructional text.
+  - Remove duplicated explanations (same guidance repeated across panels/help).
+  - Simplify onboarding language (Setup / Review, Welcome gate).
+  - Simplify dashboard messaging (Overview cards, status lines).
+  - Simplify planner messaging (Next Actions, Rolling Debt Payoff, Debt Overview).
+  - Improve empty states (standard `No <things> yet.` / `Add your <things> …` pattern everywhere).
+  - Standardize success messages (consistent tone + wording across all save paths).
+  - Standardize error messages (calm, trust-safe phrasing; no `Error:` prefixes or internal sheet names).
+  - Move advanced explanations behind help / info links instead of inline blocks.
+  - Reduce cognitive load (fewer words on screen; progressive disclosure; let the data lead).
+- **Dependencies:** Phase 2 (provisioning + recovery flows feed onboarding/error UX); Phase 1. Help/content cleanup builds on the V1 UI copy consistency pass and the `UX_POLISH_AUDIT.md` backlog.
+- **Estimated priority:** **P2** — important before external beta.
+
+### Phase 6 — External Beta Readiness
+
+- **Objective:** Move from a small family beta to a wider invited external beta.
+- **Why it matters:** External users need support, feedback channels, smooth onboarding, recovery flows, diagnostics, and user management. Without these, scaling beyond a handful of trusted users is unmanageable and reputationally risky.
+- **Major deliverables:** Support workflow; feedback collection; user onboarding (allow-list → invite flow); recovery flows; diagnostics; beta-user management (add/remove, status, mapping health at scale).
+- **Dependencies:** Phases 2 & 5 (hardening + UX); Phase 1. Benefits from Phase 3 parity.
+- **Estimated priority:** **P3** — gates the external (public-ish) beta.
+
+### Phase 7 — Paid Product Readiness
+
+- **Objective:** Prepare to monetize (free + paid tiers) with the legal and operational readiness a paid product requires.
+- **Why it matters:** Monetization is only enforceable on the central model (now live). Before charging, the product needs entitlements, plan enforcement that fails open, legal docs, a real support process, and operational monitoring — gating per-copy installs was never possible, but charging without these would be premature.
+- **Major deliverables:** Pricing model; subscription model; entitlements (`SYS - Users` schema, `getUserPlan_` / `isPaidUser_` helpers); plan enforcement (gate advanced features only, fail open per `WORKING_RULES.md → Monetization Rules`); privacy policy; terms of service; support process; operational monitoring.
+- **Dependencies:** Phase 6 (stable external beta + support/monitoring baseline). Follows `WORKING_RULES.md → Monetization Rules`.
+- **Estimated priority:** **P4** — last; longest horizon (6–12 months out).
+
+---
+
+## V1.2 polish backlog — small picks (not the roadmap)
+
+These are still-valid small-polish items, retained for continuity. They are **not** the current roadmap (see `## Launch Readiness Roadmap` above) — most fold naturally into **Phase 5 — Web App UX Improvements**. Pull **one** at a time under the V1.2 working rules (`WORKING_RULES.md → Current phase`). Completed items move into `## DONE (history)` at the bottom.
 
 ### V1.2 candidates
 
@@ -77,25 +146,25 @@ Captured so the idea isn't lost; **not** in scope for V1.2. Requires an explicit
 
 ---
 
-## Future Phases (VNext — not active work)
+## Future Phases (VNext)
 
-Forward-looking phases captured so the long-term direction is durable. **None of this is on the V1.2 roadmap.** Pulling any of it in requires an explicit product decision and the migration discipline laid out in `WORKING_RULES.md → Central App Transition Rules` and `WORKING_RULES.md → Monetization Rules`. Full rationale lives in `PROJECT_CONTEXT.md → Future architecture — Central App` and `ENHANCEMENTS.md → Future direction — Central App / Future direction — Monetization`.
+Forward-looking phases captured so the long-term direction is durable. The Central App migration that used to live here is **no longer future work** — it is live (see `## Launch Readiness Roadmap` above and `PROJECT_CONTEXT.md → Current architecture — Central App (live)`). Monetization remains future and is captured below. Pulling future work in requires the migration discipline in `WORKING_RULES.md → Central App Transition Rules` (now active) and `WORKING_RULES.md → Monetization Rules`.
 
-### VNext — Central App Migration
+### Central App Migration — DELIVERED (history)
 
-Goal: move from per-copy app to one centralized Apps Script web app, where users access a single deployed URL and each user gets their own bound spreadsheet on first run.
+> **Status: live.** Implemented and runtime-validated; this entry is kept for continuity. The original goal — move from a per-copy app to one centralized Apps Script web app where each user gets their own provisioned workbook — has been achieved.
+>
+> - **`getUserSpreadsheet_()`** is a real resolver (`central_resolver.js`): bound mode returns `getActiveSpreadsheet()`; central mode (via the `CENTRAL_MODE` flag) routes to `getOrProvisionUserSpreadsheet_()`. Identity via `Session.getEffectiveUser().getEmail()`.
+> - **Per-user provisioning** (`central_provisioning.js`) creates a Drive-owned `CashCompass — <email>` workbook on first access, bootstraps `INPUT - Settings`, and writes the mapping — runtime-validated Phase A (developer) + Phase B (disposable account).
+> - **Module migration** of startup/onboarding + many read/write paths to the resolver is done (Tier 1 complete; Tier 2 full-dashboard migration tracked under Phase 2/Phase 6).
+> - **Backward compatibility preserved** — bound users run unchanged with `CENTRAL_MODE` off.
+> - **Mapping location decided** — `mapping::<sha256(email)>` in the central project's script properties (raw emails never stored).
+>
+> Remaining hardening (duplicate-workbook protection, stale-mapping recovery, admin diagnostics, Tier 2 migration) is scheduled as **Phase 2 — Family Beta Hardening** and **Phase 6 — External Beta Readiness** in the roadmap above. Full history: `SESSION_NOTES.md → Current State — Post V1.2 Prep` and the `CENTRAL_APP_*.md` docs.
 
-- Implement **`getUserSpreadsheet_()`** as the single resolver that returns the caller's bound `Spreadsheet`. Identity comes from `Session.getEffectiveUser().getEmail()` (or equivalent).
-- Introduce **per-user sheet creation** on first run — bootstrap a fresh workbook from a known-good template / seed structure when a new user has no mapping.
-- Migrate key modules **one at a time** to use `getUserSpreadsheet_()` instead of `SpreadsheetApp.getActiveSpreadsheet()`. Order TBD when the work is approved; planner / dashboard / debts / bills / accounts / retirement / activity log / bank import are all affected.
-- **Maintain backward compatibility during transition.** Until the resolver is wired everywhere, both modes must coexist:
-  - existing bound-sheet users keep working unchanged,
-  - new central-app users go through the bootstrap flow.
-- Decide where the user → workbook mapping lives: `PropertiesService.getUserProperties()` or a central registry sheet (e.g. `SYS - User Workbooks`). Document the choice when the work begins.
+### Monetization (future)
 
-### VNext — Monetization
-
-Goal: introduce free + paid tiers with feature gating inside the codebase. Mirror of `ENHANCEMENTS.md → Future direction — Monetization`.
+Goal: introduce free + paid tiers with feature gating inside the codebase. Scheduled as **Phase 7 — Paid Product Readiness**. Mirror of `ENHANCEMENTS.md → Future direction — Monetization`.
 
 - **Add `SYS - Users` sheet** with columns: `Email | Plan | CreatedAt`.
   - `Email` — canonical user identifier (matches the Central App identity resolver).
@@ -111,11 +180,11 @@ Goal: introduce free + paid tiers with feature gating inside the codebase. Mirro
 
 ### Sequencing
 
-Monetization is meaningful only **after** the Central App migration is in place — gating per-copy installs is not enforceable. The intended order is:
+Monetization is meaningful only **after** the Central App migration is in place — gating per-copy installs is not enforceable. The Central App migration has now landed, so the remaining order is:
 
-1. Central App migration lands (`getUserSpreadsheet_()` resolver, bootstrap flow, key modules migrated).
-2. `SYS - Users` schema + helpers (`getUserPlan_`, `isPaidUser_`) ship as additive scaffolding.
-3. Bank import becomes the first gated feature.
+1. ~~Central App migration lands (`getUserSpreadsheet_()` resolver, bootstrap flow, key modules migrated).~~ **Done** — see *Central App Migration — DELIVERED* above.
+2. `SYS - Users` schema + helpers (`getUserPlan_`, `isPaidUser_`) ship as additive scaffolding (Phase 7).
+3. Bank import becomes the first gated feature (Phase 7).
 
 ---
 

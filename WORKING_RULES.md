@@ -1,8 +1,10 @@
 # Working Rules
 
-## Current phase — V1.2 / controlled improvement mode (V1.1 closed out)
+## Current phase — Central App live + Family Beta readiness
 
-The V1 trust baseline is complete: blank workbooks are stable, the major missing-sheet crashes are fixed, misleading zero / fake states have been removed, the planner email is properly gated, and the bounded UI copy consistency pass has shipped. V1.1 closed with the retirement profile integration (Profile DOB → derived current age; manual age removed from Retirement; display-only UI; sheet seed cleanup; backward-compatible on populated workbooks). The project is no longer in blank-workbook stabilization mode. V1.2 rules below are identical to V1.1.
+The Central App architecture is **live**: `getUserSpreadsheet_()` is a real resolver that, in central mode (`CENTRAL_MODE`), provisions each allow-listed user their own Drive-owned workbook (runtime-validated), and Family Beta styling has shipped for four input sheets. The V1 trust baseline (blank-workbook stability, no fake states, gated planner email, UI copy consistency) and V1.1 retirement profile integration remain the stable foundation. The forward plan is `TODO.md → Launch Readiness Roadmap` (high-level summary in `PROJECT_CONTEXT.md`); the live architecture is `PROJECT_CONTEXT.md → Current architecture — Central App (live)`.
+
+The change discipline below (carried from V1.2) still governs **every** edit. For Central App work, the **`## Central App Transition Rules`** section is now the **active** governing policy (it is no longer conditional / future).
 
 Every new change must follow these rules unless the user explicitly approves otherwise:
 
@@ -18,7 +20,7 @@ Every new change must follow these rules unless the user explicitly approves oth
 - **Favor small diffs.** Cursor / agent edits should not touch unrelated files.
 - **After each implementation step, include exact manual test steps** for both the blank workbook and the populated workbook. See `TESTING_PLAN.md` → *Blank + populated two-track manual checks* for the canonical checklist.
 
-Backlog candidates for V1.2 are tracked in `TODO.md → V1.2 work queue`, product shape in `PROJECT_CONTEXT.md → Current phase`, and ship-by-ship history in `SESSION_NOTES.md` (including the V1.1 close-out).
+The forward plan is `TODO.md → Launch Readiness Roadmap`; small-polish picks are in `TODO.md → V1.2 polish backlog`; product shape is in `PROJECT_CONTEXT.md → Current phase`; ship-by-ship history is in `SESSION_NOTES.md`.
 
 ## HtmlService includes (`includeHtml_`)
 
@@ -45,11 +47,11 @@ Backlog candidates for V1.2 are tracked in `TODO.md → V1.2 work queue`, produc
 - Do not introduce duplicate includeHtml_().
 - Be careful with dashboard_data.js (core logic).
 
-## Central App Transition Rules (apply when the Central App migration is approved)
+## Central App Transition Rules (ACTIVE — the migration is live)
 
-These rules apply **only when** the Central App migration has been explicitly pulled into a roadmap phase. Until then, the work is captured in `PROJECT_CONTEXT.md → Future architecture — Central App`, `ENHANCEMENTS.md → Future direction — Central App`, and `TODO.md → Future Phases — VNext Central App Migration` and is **not active work**.
+These rules are **active**. The Central App migration has landed (live resolver + provisioning + mapping; see `PROJECT_CONTEXT.md → Current architecture — Central App (live)`). The remaining tail — Tier 2 full-dashboard `getActiveSpreadsheet()` migration and the hardening items in `TODO.md → Launch Readiness Roadmap` (Phase 2 — Family Beta Hardening; Phase 6 — External Beta Readiness) — must continue to follow this discipline.
 
-When the migration begins, every change must follow:
+Every Central App change must follow:
 
 - **Do not refactor the entire app at once.** No single-PR rewrite that swaps every `SpreadsheetApp.getActiveSpreadsheet()` call site. The migration must be staged.
 - **Migrate one module at a time.** Each pass converts a single backend module (e.g. dashboard, planner, debts, bills, retirement, activity log, bank import) to use the `getUserSpreadsheet_()` resolver. Each pass ships independently with its own manual test plan.
@@ -64,7 +66,7 @@ When the migration begins, every change must follow:
 
 ## Monetization Rules (apply when feature gating is approved)
 
-These rules apply **only when** the Monetization work has been explicitly pulled in. Until then, the plan is captured in `ENHANCEMENTS.md → Future direction — Monetization` and `TODO.md → Future Phases — VNext Monetization` and is **not active work**.
+These rules apply **only when** the Monetization work has been explicitly pulled in (scheduled as **Phase 7 — Paid Product Readiness**). Until then, the plan is captured in `ENHANCEMENTS.md → Future direction — Monetization` and `TODO.md → Monetization (future)` and is **not active work**.
 
 When monetization begins, every gated change must follow:
 

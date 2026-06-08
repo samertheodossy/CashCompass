@@ -2,9 +2,46 @@
 
 We are building **CashCompass** — a Google Apps Script web dashboard (and spreadsheet sidebar) for personal finance / property / debt planning. Tagline: *Guiding your money decisions.*
 
-## Current phase — V1.2 / controlled improvement mode (V1.1 closed out)
+## Current Product Status (June 2026)
 
-The V1 trust baseline shipped, and V1.1 closed out with the retirement profile integration. In this phase the app is no longer being stabilized — it is being **incrementally polished**. Concretely:
+- **Architecture:** Central App operational.
+- **Family Beta readiness:** ~95%+.
+- **Completed (working in central mode):** Provisioning, Workbook Mapping, Dashboard, Planner, Assets, Properties, Cash Flow, Bills, Debts, Income, Activity, Email.
+- **Current focus:** Family Beta Hardening, Workbook Totals Project, Chat Assistant planning, External Beta preparation.
+
+Roadmap: `## Launch Readiness Roadmap (high-level)` below (detail in `TODO.md → Launch Readiness Roadmap`). Live architecture: `## Current architecture — Central App (live)` below.
+
+## Launch Readiness Roadmap (high-level)
+
+High-level view of the next 6–12 months. **The authoritative, detailed roadmap lives in `TODO.md → Launch Readiness Roadmap`** (objective, why it matters, major deliverables, dependencies, and priority per phase) — this is the single source to avoid drift. The summary below carries phase names, objectives, and priorities only. Every phase runs under `WORKING_RULES.md → Current phase` and, for central-mode work, `→ Central App Transition Rules` (active).
+
+**Priority scale:** P0 = now / in progress · P1 = next, gates family beta · P2 = high, needed before external beta · P3 = gates external beta · P4 = post-beta / longest horizon.
+
+- **Phase 1 — Documentation Cleanup** *(P0, in progress)* — make `PROJECT_CONTEXT.md` + `TODO.md` the single authoritative source of truth for architecture, status, and roadmap.
+- **Phase 2 — Family Beta Hardening** *(P1)* — make per-user provisioning robust, recoverable, and observable enough to safely onboard a small family beta.
+- **Phase 3 — Workbook Totals Project** *(P1–P2)* — bring newly provisioned workbooks to visual + functional parity with production via canonical summary rows (TOTAL DEBT / Total Accounts / Delta).
+- **Phase 4 — Chat Assistant v1** *(P2)* — ship a read-only natural-language assistant over the existing canonical read models (write-capable assistant is future).
+- **Phase 5 — Web App UX Improvements** *(P2)* — polish the central web-app experience (onboarding, empty-states, error handling, guidance, dashboard + planner polish) and cut help text / content to reduce cognitive load.
+- **Phase 6 — External Beta Readiness** *(P3)* — move from family beta to a wider invited external beta (support, feedback, onboarding, recovery, diagnostics, beta-user management).
+- **Phase 7 — Paid Product Readiness** *(P4)* — prepare to monetize (pricing/subscription, entitlements, plan enforcement, privacy policy, ToS, support, monitoring).
+
+## Current phase — Central App live + Family Beta readiness
+
+The app has moved beyond the V1.2 "controlled improvement" framing. **The Central App architecture is live**, and the active work is hardening it toward a Family Beta. Two foundations carry forward from earlier phases (V1 trust baseline, V1.1 retirement profile integration) and remain true, but they are no longer the headline.
+
+**What is live now (see `## Current architecture — Central App (live)` below for the full picture):**
+
+- **Central App is operational.** `getUserSpreadsheet_()` is a real resolver (not a pass-through). It branches on the `CENTRAL_MODE` script property and, in central mode, routes to per-user workbook provisioning in `central_provisioning.js`.
+- **Per-user workbook provisioning works** end-to-end — runtime-validated against the developer account (Phase A) and a disposable second account (Phase B). Each allow-listed user gets their own Drive-owned `CashCompass — <email>` workbook on first access.
+- **Workbook mapping works** — `mapping::<sha256(email)>` keys in the central project's script properties (raw emails never stored).
+- **Family Beta styling shipped** for four input sheets — Bank Accounts, Debts, Bills, Upcoming Expenses (see `## Family Beta workbook styling` below).
+- The high-level roadmap is in `## Launch Readiness Roadmap (high-level)` above; the detailed roadmap is authoritative in `TODO.md → Launch Readiness Roadmap`. The forward queue is no longer "V1.2 candidates."
+
+Full migration history (per-slice, with commit/run evidence) lives in `SESSION_NOTES.md → Current State — Post V1.2 Prep` and the `CENTRAL_APP_*.md` planning docs. The legacy V1 / V1.1 narrative below is preserved as the stability foundation the Central App builds on.
+
+### Foundation — V1 trust baseline + V1.1 (preserved history)
+
+The V1 trust baseline shipped, and V1.1 closed out with the retirement profile integration. These are complete and stable. Concretely:
 
 - V1 trust baseline is complete.
 - Blank / fresh workbooks are stable end-to-end (dashboard, Setup / Review, Planning tabs, Assets, Cash Flow, Activity).
@@ -15,7 +52,7 @@ The V1 trust baseline shipped, and V1.1 closed out with the retirement profile i
 
 **V1.1 shipped — retirement profile integration.** Profile is now the single source of truth for **Date of Birth**, and Retirement derives current age from it automatically. The Retirement Basics edit form was removed; per-scenario age fields are display-only. A new `needsProfileDob` readiness state routes users to **Open Profile** when DOB is missing, and the DOB parser accepts both Date objects and `YYYY-MM-DD` strings. Populated workbooks are preserved byte-for-byte — legacy age rows on existing retirement sheets are left inert. Full phase summary in `SESSION_NOTES.md → V1.1 — Retirement Profile Integration (DOB Source of Truth)`.
 
-Working rules for this phase are locked in `WORKING_RULES.md → Current phase` (identical rules to V1.1). Completed items are captured chronologically in `SESSION_NOTES.md`. Forward-looking work lives under `TODO.md → V1.2 work queue → V1.2 candidates` and `ENHANCEMENTS.md → Active / Next / Later at a glance`.
+Working rules are in `WORKING_RULES.md → Current phase` (the V1.2 change discipline still applies — one issue at a time, minimal/localized/safe, both workbook states), plus `WORKING_RULES.md → Central App Transition Rules` which is now the **active** policy governing the migration. Completed items are captured chronologically in `SESSION_NOTES.md`. Forward-looking work lives under `## Launch Readiness Roadmap (high-level)` above, with full detail in `TODO.md → Launch Readiness Roadmap`.
 
 ## Decision Layer (product framing)
 
@@ -227,7 +264,8 @@ Single object returned by the liquidity reader:
 ### Backend files
 - webapp.js = main doGet()
 - html_includes.js = `includeHtml_()` — **raw** file content only; nested `<?!= … ?>` inside included files does **not** run (see `WORKING_RULES.md` § HtmlService includes).
-- central_resolver.js = Central App resolver seam. Defines `getUserSpreadsheet_()` as a one-line pass-through to `SpreadsheetApp.getActiveSpreadsheet()`. Body unchanged since Phase 1 (`b2798a7`). **Four consumers today**: `getCashToUse()` in `cash_to_use.js:77` (Phase 1, `b2798a7`), `getQuickAddPaymentUiData()` in `quick_add_payment.js:35` (Phase 2, `1b68c71`), `getDebtPayoffReadData()` in `debt_payoff_projection.js:17` (Phase 3, `72d82b1`), and `getDebtPaymentBreakdownForDashboard()` in `dashboard_data.js:1235` (Phase 4, `99bcf37` — **first dashboard resolver seam**). The other **131** `SpreadsheetApp.getActiveSpreadsheet()` call sites across 26 modules are intentionally unchanged and will migrate one at a time. Phase 3 produced the project's first **fully resolver-routed production module** — `debt_payoff_projection.js` had exactly one production call site and is completely behind the seam. Phase 4 opened the dashboard module to the migration: `dashboard_data.js` still has 9 residual platform calls (the snapshot wrapper at line 73, four history readers, two ensure-backed reads, the planner-email helper, and the `skipDashboardBill` write entry) — all intentionally deferred per `CENTRAL_APP_DASHBOARD_SEAM_ANALYSIS.md → §6`. The resolver itself remains bound-mode only — no `PropertiesService`, no `openById`, no identity helper, no user mapping, no deployment change. No ensure-\* helper has been routed through the resolver yet; that is `CENTRAL_APP_IMPLEMENTATION_PLAN.md → §5 step 2` and remains deferred. Future Central App phases extend the body of this one function. See `CENTRAL_APP_DESIGN.md`, `CENTRAL_APP_FIRST_RESOLVER_SEAM.md`, `CENTRAL_APP_SECOND_RESOLVER_SEAM.md`, `CENTRAL_APP_THIRD_RESOLVER_SEAM.md`, `CENTRAL_APP_DASHBOARD_SEAM_ANALYSIS.md`, `CENTRAL_APP_IMPLEMENTATION_PLAN.md`.
+- central_resolver.js = Central App resolver seam (**live — no longer a pass-through**). `getUserSpreadsheet_()` branches on `isCentralModeEnabled_()` (the `CENTRAL_MODE` script property): when off (default, bound mode) it returns `SpreadsheetApp.getActiveSpreadsheet()` byte-for-byte; when on (central mode) it routes to `getOrProvisionUserSpreadsheet_()` in `central_provisioning.js`. The file also owns `isCentralModeEnabled_()` (fail-closed script-property read) and `getCurrentUserEmail_()` (identity via `Session.getEffectiveUser()` — `getActiveUser()` is deliberately avoided because it returns empty for non-Workspace users under `USER_ACCESSING`). Provisioning logic lives in `central_provisioning.js`, not here — this file stays small and seam-like. See `## Current architecture — Central App (live)` below. Historical per-slice migration detail (Phases 1–4 resolver seams, the standalone-project build, runtime evidence) is preserved in `SESSION_NOTES.md → Current State — Post V1.2 Prep` and the `CENTRAL_APP_*.md` planning docs.
+- central_provisioning.js = Central App provisioning + mapping (the workbook lifecycle behind the resolver). Allow-list (`FAMILY_BETA_ALLOWLIST`), mapping store (`mapping::<sha256(email)>` script-property keys), `getOrProvisionUserSpreadsheet_`, `provisionWorkbookForUser_` (creates `CashCompass — <email>` in the caller's Drive via `Drive.Files.create` under `LockService`, bootstraps `INPUT - Settings`, writes the mapping), `handleStaleMapping_` (throws `StaleMappingError`, never auto-reprovisions), and `clearMappingForUser_` (manual recovery). Soft-delete (`setTrashed`) is the only file-modifying action ever taken on a user-owned workbook, and only before the mapping write.
 - dashboard_data.js = main dashboard snapshot + bills due backend (case/whitespace-tolerant `INPUT - Bills` header lookup in `getInputBillsDueRows_`)
 - activity_log.js = LOG - Activity (`appendActivityLog_`, `deleteActivityLogRow` donation-only from web UI, dedupe keys for bill autopay, `getActivityDashboardData` / `getActivityLogForDashboard`, house expense + suppress duplicate **`quick_pay`** when CF is posted from the same save, `bill_add` / `bill_update` / `bill_deactivate` / `house_add` / `house_deactivate` / `investment_add` / `investment_deactivate` / `bank_account_deactivate` classification; `bill_update`, `bill_deactivate`, `house_deactivate`, `investment_deactivate`, and `bank_account_deactivate` marked non-monetary so Amount renders as **—**. `bill_update` carries an inline label (`Updated Default Amount to $X.XX` / `Updated Due Day to N` / `Updated <Field>` / `Updated N fields`) via `billUpdateActionLabel_`. `bank_account_add` is monetary — Amount shows the supplied opening balance, or 0 when none was provided.)
 - investments.js = `addInvestmentAccountFromDashboard`, `deactivateInvestmentAccountFromDashboard`, `getInvestmentUiData` (active-only accounts + Type dropdown options). Self-heals the **Active** column on every **INPUT - Investments** year block and on **SYS - Assets**; preserves totals / delta rows when inserting new account rows.
@@ -239,38 +277,59 @@ Single object returned by the liquidity reader:
 - donations.js = **INPUT - Donation** append (`getDonationsFormData`, `addDonation`)
 - other feature files exist for house, debts, payments, retirement, etc.
 
-## Future architecture — Central App (post-V1.2)
+## Current architecture — Central App (live)
 
-Captured here so the long-term direction is durable and not implied. **This is not active work. It is a forward-looking architecture target that requires an explicit product decision before being pulled into a roadmap phase.** Today's app is bound to a single user spreadsheet via `SpreadsheetApp.getActiveSpreadsheet()`; every code update requires re-copying the script into each user's workbook. The Central App model is the planned escape from that.
+CashCompass now runs in **two coexisting shapes** that share one codebase. The boundary is enforced by the `CENTRAL_MODE` script property and by deployment-pinning. The Central App is no longer a "future direction" — it is operational and runtime-validated; the migration discipline in `WORKING_RULES.md → Central App Transition Rules` is the **active** governing policy.
 
-> **Phases 1–4 seam landed (`b2798a7` → `1b68c71` → `72d82b1` → `99bcf37`).** The smallest possible incremental shape of the migration is alive in code. `central_resolver.js` defines `getUserSpreadsheet_()` as a one-line pass-through to `SpreadsheetApp.getActiveSpreadsheet()`; the body has not changed since Phase 1. Four consumers route through it today: `getCashToUse()` (Phase 1, `cash_to_use.js:77`), `getQuickAddPaymentUiData()` (Phase 2, `quick_add_payment.js:35`), `getDebtPayoffReadData()` (Phase 3, `debt_payoff_projection.js:17`), and `getDebtPaymentBreakdownForDashboard()` (Phase 4, `dashboard_data.js:1235` — **first dashboard resolver seam**). Phase 3 produced the **first fully resolver-routed module** (`debt_payoff_projection.js`). Phase 4 opened the dashboard module to the migration; `dashboard_data.js` still has 9 residual platform calls (the snapshot wrapper, four history readers, two ensure-backed reads, the planner-email helper, and one write entry), all intentionally deferred per `CENTRAL_APP_DASHBOARD_SEAM_ANALYSIS.md → §6`. Bound-mode behavior is byte-for-byte preserved across all four phases — dashboard Overview `Usable cash after buffers`, Cash Flow → Quick Add hydration, Debt Overview reads, and the Bills Due payNow / paySoon breakdown all match their pre-seam baselines. The post-Phase 4 Overview load-time slowdown observed on the first reload was investigated and traced to **Apps Script web-app cold start / transient platform latency**, not the seam — `getDebtPaymentBreakdownForDashboard()` is not on the initial Overview load path (`getDashboardSnapshot()` → `buildDashboardSnapshot_()` is still on the platform call by design). The remaining **131** call sites across 26 modules are intentionally untouched and will migrate one at a time in subsequent phases. **No central-mode behavior, no `PropertiesService`, no `openById`, no identity helper, no user mapping, no deployment change, no ensure-\* helper routed through the resolver, no `buildDashboardSnapshot_()` migration exists yet.** See `CENTRAL_APP_FIRST_RESOLVER_SEAM.md` / `CENTRAL_APP_SECOND_RESOLVER_SEAM.md` / `CENTRAL_APP_THIRD_RESOLVER_SEAM.md` / `CENTRAL_APP_DASHBOARD_SEAM_ANALYSIS.md` for the per-phase designs and `CENTRAL_APP_IMPLEMENTATION_PLAN.md → §5 step 1` for status.
+### Two projects / two modes
 
-### Central App Model
+- **Bound Project (legacy / developer data path).** The original Apps Script project bound to the developer's personal workbook. With `CENTRAL_MODE` unset/off (the default), `getUserSpreadsheet_()` returns `SpreadsheetApp.getActiveSpreadsheet()` byte-for-byte — existing bound behavior is fully preserved. Its deployment is pinned to a pre-central script version so the developer's live data keeps working unchanged.
+- **Central App Project (standalone).** A separate Apps Script project, `CashCompass — Central App` (not bound to any spreadsheet), with its own deployment URL. It **always runs central mode** as a structural invariant (no flag branch in that project's resolver). Each allow-listed Google account that opens the deployment gets its own Drive-owned workbook provisioned on first access.
 
-- Move from a per-copy distribution to **one centralized Apps Script web app** that all users share.
-- Users access the app via a single deployment URL — no code copying, no script editor, no manual updates.
-- Each user gets their **own spreadsheet**, automatically created and bound to their identity on first run.
-- A single deployed script version drives every user's experience, so a fix shipped once reaches everyone immediately.
+### CENTRAL_MODE
 
-### Core change
+- Script property read by `isCentralModeEnabled_()` in `central_resolver.js`. Only the literal string `"true"` enables central mode; anything else (including unset) is bound mode. Reads fail closed (any error → off).
+- In the bound project the flag is the live switch between legacy and central behavior; in the standalone central project central mode is unconditional.
+- **Rollback is tier-1 immediate:** flipping `CENTRAL_MODE` back to off reverts the resolver to the legacy `getActiveSpreadsheet()` pass-through across every execution context, no redeploy required, no user workbook deleted.
 
-- Replace direct `SpreadsheetApp.getActiveSpreadsheet()` usage across all backend modules with a single resolver: **`getUserSpreadsheet_()`**.
-- `getUserSpreadsheet_()` resolves the caller's identity (e.g. via `Session.getEffectiveUser().getEmail()`), looks up their workbook, and returns the bound `Spreadsheet` object.
-- **Bootstrap on first run** — when a new user has no mapping, create a fresh workbook from a known-good template (or seed structure), record the mapping, and continue normally.
-- **User → sheet mapping** — stored either in `PropertiesService.getUserProperties()` (per-user, lightweight) or a central registry sheet (e.g. `SYS - User Workbooks` in an admin spreadsheet) — chosen during the migration design.
+### Provisioning
 
-### Benefits
+- Lives in `central_provisioning.js`, behind `getOrProvisionUserSpreadsheet_()`.
+- `doGet` enforces the **allow-list gate** (`FAMILY_BETA_ALLOWLIST`, CSV of emails; empty = nobody → fail closed) before render; unauthorized callers see `renderAllowlistRejection_()` with no Drive create, no mapping write, no data access.
+- First access with no mapping → `provisionWorkbookForUser_(email)` acquires `LockService.getUserLock().tryLock(30000)`, double-checks inside the lock, then `Drive.Files.create({ name: 'CashCompass — <email>', mimeType: 'application/vnd.google-apps.spreadsheet' })` in the caller's Drive root, `SpreadsheetApp.openById(fileId)`, `runMinimalBootstrap_(ss)` (creates the canonical `INPUT - Settings` tab; all other sheets are created lazily on dashboard render), then `writeSpreadsheetIdForUser_(email, fileId)`. Any failure before the mapping write soft-deletes the orphan file (`setTrashed`) — **never a hard delete** of a user-owned workbook.
+- **Stale mapping** (mapped workbook trashed/unreachable) → `handleStaleMapping_` throws `StaleMappingError` with a human-readable message; **no auto-reprovision**. Manual recovery is `clearMappingForUser_(email)`.
 
-- **Instant updates for all users** — script version is the source of truth.
-- **No version drift** — every user is on the same code at the same time; no "which version of the script is in your workbook?" debugging.
-- **Easier support and debugging** — a single canonical code path; user-specific issues isolate to data, not code.
-- **Foundation for monetization** — the mapping registry is also the natural place to record per-user plan / entitlements (see `ENHANCEMENTS.md → Future direction — Monetization` and `TODO.md → Future Phases — VNext Monetization`).
+### Workbook mapping
 
-### Why this is documented now and not started
+- Stored as `mapping::<sha256(email)>` keys in the **central project's** script properties (raw emails are never stored). Bound mode does not use the mapping store.
 
-- Active phase is V1.2 (controlled improvement mode). Architectural changes of this magnitude are explicitly out of scope per `WORKING_RULES.md → Current phase`.
-- This change touches `getActiveSpreadsheet()` call sites across the codebase (planner, dashboard, debts, bills, accounts, retirement, activity log, bank import, etc.). It must be staged module by module behind a single resolver, not done in one pass.
-- See `WORKING_RULES.md → Central App Transition Rules` for the migration discipline that will apply when the work is approved.
+### Family Beta readiness
+
+- Provisioning runtime-validated: **Phase A** (developer account) and **Phase B** (disposable second account) both PASS — separate user-owned workbooks, `INPUT - Settings` bootstrapped, mappings written, no cross-user data leakage, bound deployment unaffected.
+- **Known hardening items (Phase 2 — Family Beta Hardening, see `TODO.md → Roadmap`):** duplicate-workbook protection (idempotent filename dedup in `provisionWorkbookForUser_`), stale-mapping recovery UX, admin diagnostics. Also remaining: Tier 2 `getActiveSpreadsheet()` migration of the full dashboard, and the bound project's manifest revert once central is primary.
+- Full per-slice migration history (manifest prep, resolver/provisioning slice, standalone project build, runtime evidence) is in `SESSION_NOTES.md → Current State — Post V1.2 Prep` and the `CENTRAL_APP_*.md` planning docs (`CENTRAL_APP_DESIGN.md`, `CENTRAL_APP_CENTRAL_PROJECT_SETUP_CHECKLIST.md`, `CENTRAL_APP_WORKBOOK_CREATION_FIRST_SLICE_PLAN.md`, `CENTRAL_APP_FAMILY_BETA_READINESS_CHECKPOINT.md`, others).
+
+### Benefits (now being realized)
+
+- **Instant updates for all users** — the deployed script version is the single source of truth; no per-copy redeploys.
+- **No version drift** — every central user runs the same code at the same time.
+- **Easier support** — one canonical code path; user-specific issues isolate to data, not code.
+- **Foundation for monetization** — the mapping store is the natural anchor for per-user plan / entitlement records (see `ENHANCEMENTS.md → Future direction — Monetization` and `TODO.md → Monetization`).
+
+## Family Beta workbook styling
+
+Newly provisioned (and first-create) workbooks are styled to a shared **Family Beta** standard so they visually match the production/bound workbook. Styling is **first-create-only** and uses **widen-only** column logic, so it never reformats or shrinks an existing populated sheet (honors `WORKING_RULES.md → No destructive sheet changes`).
+
+**Family Beta standard:** yellow header band (`#ffe599`, bold, 16pt, ~40px height, vertical-middle); white body (14pt); subtle gray section/year rows (`#d9d9d9` with a `#999999` bottom border); defensive green totals (`#b6d7a8`, applied only if a total row is present); defensive tan delta (`#fce5cd`); frozen header/year rows + first column; widen-only widths tuned for the 16pt header.
+
+**Completed (helpers + first-create wiring):**
+
+- **Bank Accounts** — `applyBankAccountsSheetStyling_` (bank_accounts.js). Gray Year banner, yellow header, white data rows; includes the empty-block **first-account-row** fix in `insertNewBankAccountHistoryRow_` (the first account in a fresh block no longer inherits header styling).
+- **Debts** — `applyDebtsSheetStyling_` (debts.js). Yellow header, white body, tuned widths, defensive green `TOTAL DEBT` band when present.
+- **Bills** — `applyBillsSheetStyling_` (bills.js). Yellow header, white body, tuned widths.
+- **Upcoming Expenses** — `applyUpcomingExpensesSheetStyling_` (upcoming_expenses.js), wired in `getOrCreateUpcomingExpensesSheet_`'s create branch.
+
+**Pending (later phases):** Investments, House Values, and Cash Flow palette migration (their existing styling helpers run on bound-mode write paths, so they must be gated to first-create only); Retirement bespoke section-aware styling; an optional shared `applyReadableColumnWidths_` helper. Detailed plans live in `CENTRAL_APP_FAMILY_BETA_PLAN.md` and `GENERATED_SHEET_FORMATTING_POLISH_PLAN.md`. The **Workbook Totals Project** (TOTAL DEBT / Total Accounts / Delta row generation) is Phase 3 in `TODO.md → Roadmap`.
 
 ## Important resolved infra issues
 - Duplicate doGet() caused template problems before. Only keep one active doGet().

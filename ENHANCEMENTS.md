@@ -4,22 +4,25 @@ Durable product/engineering backlog for the financial planning system. Grounded 
 
 ---
 
-## 0. Current phase — V1.2 / controlled improvement mode (V1.1 closed out)
+## 0. Current phase — Central App live + Family Beta readiness
 
-V1.1 is closed. See `SESSION_NOTES.md → V1 trust baseline — complete` and `SESSION_NOTES.md → V1.1 — Retirement Profile Integration (DOB Source of Truth)` for the phase-history summaries, `PROJECT_CONTEXT.md → Current phase` for the product framing, and `WORKING_RULES.md → Current phase` for the rules every V1.2 change runs under (identical rules to V1.1).
+The app has moved past "V1.2 / controlled improvement mode." **The Central App architecture is live** (CENTRAL_MODE routing, per-user workbook provisioning, workbook mapping), and Family Beta styling shipped for four input sheets. The authoritative forward plan is the detailed **`Launch Readiness Roadmap`** in `TODO.md` (7 phases; a high-level summary lives in `PROJECT_CONTEXT.md`); product framing is in `PROJECT_CONTEXT.md → Current architecture — Central App (live)` and `PROJECT_CONTEXT.md → Family Beta workbook styling`.
 
-Scope for this phase:
+The V1 trust baseline and V1.1 retirement profile integration remain the stable foundation (`SESSION_NOTES.md → V1 trust baseline — complete` / `→ V1.1 — Retirement Profile Integration`). The full per-slice migration history is in `SESSION_NOTES.md → Current State — Post V1.2 Prep` and the `CENTRAL_APP_*.md` docs.
 
-- **In scope (V1.2):** small, localized polish that preserves existing populated-workbook behavior, and only after passing the blank + populated two-track manual checks in `TESTING_PLAN.md`. Candidates are pulled one at a time from `TODO.md → V1.2 work queue → V1.2 candidates`.
-- **Out of scope for V1.2 unless explicitly approved:** large refactors (Queued — post Next Actions stabilization, full `dashboard_data.js` split, onboarding factory refactor, broader regression/test harness), any change to `doGet` / `includeHtml_` / snapshot shape, destructive sheet changes, and any item listed under `TODO.md → Later (post-V1.2 / future phase)`.
+Change discipline for every edit (unchanged from V1.2):
 
-Items below that are fully delivered still carry their original "DELIVERED" tag so the rationale and history stay visible; they are not re-opened. Items tagged "DELIVERED" under a phase (1, 2, 3, …) are phase history, not V1.2 work.
+- **In scope:** small, localized changes that preserve existing populated-workbook behavior, after passing the blank + populated two-track manual checks in `TESTING_PLAN.md`. Central App changes additionally follow `WORKING_RULES.md → Central App Transition Rules` (now active): one module at a time, both modes coexist, no destructive sheet changes.
+- **Out of scope unless explicitly approved:** large refactors (full `dashboard_data.js` split, onboarding factory refactor, broader regression/test harness), any change to `doGet` / `includeHtml_` / snapshot shape, and destructive sheet changes.
+
+Items below that are fully delivered still carry their original "DELIVERED" tag so the rationale and history stay visible; they are not re-opened.
 
 ### Active / Next / Later at a glance
 
-Authoritative live queue lives in `TODO.md → V1.2 work queue`. Mirror here is short on purpose:
+Authoritative roadmap lives in `TODO.md → Launch Readiness Roadmap` (high-level summary in `PROJECT_CONTEXT.md`). Mirror here is short on purpose:
 
-- **Active now:** *(none in flight — Bank Import Step 2a is queued; see `TODO.md → Bank Import — status & resume plan`)*
+- **Active now:** Phase 1 — Documentation Cleanup (this pass). Next up: Phase 2 — Family Beta Hardening (duplicate-workbook protection, stale-mapping recovery, admin diagnostics).
+- **Delivered (headline):** Central App migration (resolver + provisioning + mapping, live), Family Beta styling for Bank Accounts / Debts / Bills / Upcoming Expenses.
 - **V1.2 candidates (A — immediate follow-ups, low risk):** Profile DOB parser symmetry (accept Date objects on save-side validation), Overview Retirement Outlook copy alignment with `needsProfileDob`, blank-workbook empty-state consistency sweep, copy/Help polish sweep.
 - **V1.2 candidates (B — product improvements):** Profile completeness indicator / badge, better Retirement setup guidance / linking to Profile, optional spouse UX clarity (single vs partnered).
 - **V1.2 candidates (C — future ideas, do not act yet):** legacy sheet cleanup tool (remove inert `Your Current Age` / `Spouse Current Age` rows on existing `INPUT - Retirement` sheets), Profile → other modules integration, notifications / SMS using the existing Profile phone field.
@@ -71,7 +74,7 @@ Runtime validation:
 
 What was intentionally **not** done:
 
-- **No Central App migration files were touched.** `central_resolver.js`, `cash_to_use.js`, and every `CENTRAL_APP_*.md` are untouched by this pass — the Phase 1 resolver seam shipped in `b2798a7` remains the only Central App change in the codebase.
+- **No Central App migration files were touched** *(by this Upcoming Expenses pass; statement was accurate at the time of that commit)*. `central_resolver.js`, `cash_to_use.js`, and every `CENTRAL_APP_*.md` were untouched by this pass. **Superseded note:** the "Phase 1 resolver seam … remains the only Central App change" framing is no longer true — the Central App migration has since landed in full (live resolver + provisioning + mapping). See `PROJECT_CONTEXT.md → Current architecture — Central App (live)`.
 - **No schema change to `INPUT - Upcoming Expenses`.** The `Account / Source` column stays free-text.
 - **No new Activity event types.** Loan rows generate `upcoming_add` / `upcoming_update` like any other Upcoming row.
 - **No split-funding model.** **Cash + Credit Card** still routes entirely through the card branch in v1.
@@ -430,9 +433,9 @@ No Help or documentation changes required for this fix — the "Recurring Bills 
 
 ---
 
-## Future direction — Central App (post-V1.2, not active work)
+## Central App — DELIVERED (architecture history)
 
-Long-term architecture target. **Documented for durability — not on the V1.2 roadmap.** Pulling this in requires an explicit product decision and the migration discipline laid out in `WORKING_RULES.md → Central App Transition Rules`. Mirror of `PROJECT_CONTEXT.md → Future architecture — Central App (post-V1.2)`.
+> **Status: live.** This section is retained as the design rationale; the architecture it describes is now implemented and runtime-validated. The current, authoritative description is `PROJECT_CONTEXT.md → Current architecture — Central App (live)`. Remaining hardening is scheduled as Phase 2 (Family Beta Hardening) / Phase 6 (External Beta Readiness) in the `Launch Readiness Roadmap` (`TODO.md` / `PROJECT_CONTEXT.md`). The migration discipline in `WORKING_RULES.md → Central App Transition Rules` is now the **active** governing policy. Full per-slice history: `SESSION_NOTES.md → Current State — Post V1.2 Prep`.
 
 ### Central App Model
 
@@ -455,16 +458,15 @@ Long-term architecture target. **Documented for durability — not on the V1.2 r
 - **Easier support and debugging** — a single canonical code path; user-specific issues isolate to data, not code.
 - **Foundation for monetization** — the user mapping registry is the natural anchor for plan / entitlement records (see *Future direction — Monetization* below).
 
-### Why this is documented now and not started
+### How it was staged (delivered)
 
-- Active phase is V1.2 (controlled improvement mode). Architectural changes of this magnitude are explicitly out of scope per `WORKING_RULES.md → Current phase`.
-- This change touches `getActiveSpreadsheet()` call sites across nearly every backend module (planner, dashboard, debts, bills, accounts, retirement, activity log, bank import, etc.). It must be staged module by module behind the single resolver, not done in one pass.
+- The migration was staged module by module behind the single resolver (not done in one pass), exactly as the discipline required: manifest/deployment prep → resolver + provisioning slice → standalone central project → Tier 1 startup/onboarding migration → runtime validation (Phase A/B). Tier 2 full-dashboard `getActiveSpreadsheet()` migration is the remaining tail (Phase 2 / Phase 6).
 
 ---
 
-## Future direction — Monetization (post-V1.2, not active work)
+## Future direction — Monetization (future — Phase 7)
 
-Captured so the long-term plan is durable and aligned with the Central App migration. **Not on the V1.2 roadmap.** Mirror lives in `TODO.md → Future Phases — VNext Monetization`.
+Captured so the long-term plan is durable and aligned with the (now-delivered) Central App migration. Scheduled as **Phase 7 — Paid Product Readiness** (`Launch Readiness Roadmap` in `TODO.md` / `PROJECT_CONTEXT.md`). Mirror lives in `TODO.md → Monetization (future)`.
 
 ### Monetization model
 
@@ -496,8 +498,8 @@ These are **candidates**, not commitments. Final gating decisions happen when th
 
 ### Why this is documented now and not started
 
-- Same reason as Central App — this is post-V1.2 work and explicitly out of scope under current `WORKING_RULES.md → Current phase` rules.
-- Monetization is meaningful only after Central App migration; gating per-copy installs is not enforceable. Sequencing: **Central App migration → minimal `SYS - Users` schema → first gated feature** (in that order).
+- Monetization is meaningful only **after** the Central App migration — which has now landed. Gating per-copy installs was never enforceable; with central provisioning live, the mapping store is the natural anchor for plan/entitlement records.
+- Remaining sequencing: **minimal `SYS - Users` schema → first gated feature** (Phase 7). Follow `WORKING_RULES.md → Monetization Rules` when the work is pulled in.
 
 ---
 

@@ -1,5 +1,13 @@
 # CENTRAL_APP_WORKBOOK_CREATION_AND_MAPPING_PLAN.md
 
+> **Superseded / Historical — Central App migration document.**
+>
+> The Central App architecture described here is **now live** — the two-project central deployment has shipped and is in family-beta use. This file is retained as a historical migration record and is **not** the current source of truth. Specific internal details below (commit hashes, "one-line pass-through" resolver descriptions, and "planned/next" framing) reflect the state at the time of authoring and may be out of date.
+>
+> **Current sources of truth:** `PROJECT_CONTEXT.md` · `TODO.md` · `README.md` · `WORKING_RULES.md`
+>
+> _Banner added in the Documentation Archive Preparation pass; the document body below is unchanged._
+
 The first focused architecture plan specifically for **central-mode workbook creation + user-to-workbook mapping**. Establishes preferred directions for the open decisions identified in `CENTRAL_APP_NEXT_STEP_BASELINE.md § 5`, and proposes the smallest end-to-end implementation slice that proves the design without committing to multi-tenant or GA-grade infrastructure.
 
 **Documentation only.** No Apps Script change, no HTML change, no `appsscript.json` change, no deployment change, no OAuth scope change, no implementation. This doc gates the next implementation prompt; it does not authorize one.

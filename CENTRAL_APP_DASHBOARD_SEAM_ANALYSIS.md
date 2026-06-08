@@ -1,5 +1,13 @@
 # CENTRAL_APP_DASHBOARD_SEAM_ANALYSIS.md
 
+> **Superseded / Historical — Central App migration document.**
+>
+> The Central App architecture described here is **now live** — the two-project central deployment has shipped and is in family-beta use. This file is retained as a historical migration record and is **not** the current source of truth. Specific internal details below (commit hashes, "one-line pass-through" resolver descriptions, and "planned/next" framing) reflect the state at the time of authoring and may be out of date.
+>
+> **Current sources of truth:** `PROJECT_CONTEXT.md` · `TODO.md` · `README.md` · `WORKING_RULES.md`
+>
+> _Banner added in the Documentation Archive Preparation pass; the document body below is unchanged._
+
 Dashboard-layer (`dashboard_data.js`) seam analysis for the next round of Central App resolver migrations. **Analysis/design only.** No Apps Script code, no HTML/JS, no deployment changes, no implementation.
 
 > **Status — Phase 4 shipped in `99bcf37`.** The recommended next dashboard seam in §9 (`getDebtPaymentBreakdownForDashboard()` at `dashboard_data.js:1235`) was migrated to `getUserSpreadsheet_()` in one line. The resolver body remained the same one-line pass-through (no central mode, no `PropertiesService`, no `openById`, no user mapping, no deployment change). Bills Due dashboard surface stayed stable through smoke testing; the Overview load-time slowdown observed during the post-implementation reload was investigated and **traced to Apps Script web-app cold-start / transient platform latency, not to the seam** — `getDebtPaymentBreakdownForDashboard()` is not on the initial Overview load path (see §11 below). After Phase 4: **4 production call sites migrated / 131 remaining** across 26 modules. `dashboard_data.js` now has **9** production `SpreadsheetApp.getActiveSpreadsheet()` call sites remaining (was 10). All Steps B–F in §6 remain deferred and intentionally untouched, including every ensure-\* helper and `buildDashboardSnapshot_()`.

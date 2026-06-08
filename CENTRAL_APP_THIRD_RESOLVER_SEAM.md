@@ -1,5 +1,13 @@
 # CENTRAL_APP_THIRD_RESOLVER_SEAM.md
 
+> **Superseded / Historical — Central App migration document.**
+>
+> The Central App architecture described here is **now live** — the two-project central deployment has shipped and is in family-beta use. This file is retained as a historical migration record and is **not** the current source of truth. Specific internal details below (commit hashes, "one-line pass-through" resolver descriptions, and "planned/next" framing) reflect the state at the time of authoring and may be out of date.
+>
+> **Current sources of truth:** `PROJECT_CONTEXT.md` · `TODO.md` · `README.md` · `WORKING_RULES.md`
+>
+> _Banner added in the Documentation Archive Preparation pass; the document body below is unchanged._
+
 > **Status — shipped in `72d82b1` (Phase 3).** The design below is preserved as a historical record of what was decided before implementation. The actual landed seam matches this design exactly: `getDebtPayoffReadData()` in `debt_payoff_projection.js:17` was migrated by replacing `const ss = SpreadsheetApp.getActiveSpreadsheet();` with `const ss = getUserSpreadsheet_();`. Single line changed, one-line reversible, no other file touched. The migration also produced the project's **first fully resolver-routed production module** — `debt_payoff_projection.js` had exactly one production `SpreadsheetApp.getActiveSpreadsheet()` call site, so after Phase 3 the file is completely behind the seam. No central-mode behavior, no `PropertiesService`, no `openById`, no user mapping, no deployment change. Manual smoke test in the bound workbook passed: Debt Overview's per-debt table, summary block, recommendations list, and warnings unchanged; Phase 1 invariant (`Usable cash after buffers`) and Phase 2 invariant (Quick Add payee dropdown / Type / Flow Source) both preserved. After Phase 3: 3 production call sites migrated / 132 remaining. The text below records the design as authored; it has not been retroactively rewritten.
 
 Design analysis for the **third** Central App resolver seam — the next read-only, non-dashboard call site to migrate through `getUserSpreadsheet_()` after Phases 1 and 2 shipped.
