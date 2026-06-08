@@ -638,11 +638,49 @@ function addDebtFromDashboard(payload) {
   let appendedRow;
   let formatSourceRow = -1;
   if (sortedInsertRow === -1) {
-    sheet.appendRow(row);
-    appendedRow = sheet.getLastRow();
-    // No prior data row means there's nothing styled to copy from — leave
-    // the row with default formatting. The Active cell write below still
-    // re-stamps row-consistent format on that one cell.
+    // No existing data rows in the active region. If a TOTAL DEBT summary
+    // row is present (Central / seeded workbooks) we must insert ABOVE it so
+    // the new debt never lands below the summary; otherwise fall back to the
+    // legacy appendRow (legacy / bound workbooks that have no summary row).
+    const totalDebtRow = findDebtTotalRow_(sheet, headerMap);
+    if (totalDebtRow !== -1) {
+      sheet.insertRowBefore(totalDebtRow);
+      appendedRow = totalDebtRow;
+      sheet.getRange(appendedRow, 1, 1, numCols).setValues([row]);
+      // No sibling data row exists to copy formatting from, and copying the
+      // green TOTAL DEBT band would be wrong — stamp a clean data-row style
+      // (white, normal weight, size 14) and re-assert currency formats on the
+      // four money columns. Cosmetic only; a failure must not block the add.
+      try {
+        sheet.getRange(appendedRow, 1, 1, numCols)
+          .setBackground('#ffffff')
+          .setFontWeight('normal')
+          .setFontColor('#000000')
+          .setFontSize(14);
+        const moneyColsForFmt = [
+          headerMap.balanceCol,
+          headerMap.minimumPaymentCol,
+          headerMap.creditLimitCol,
+          headerMap.creditLeftCol
+        ];
+        for (let mc = 0; mc < moneyColsForFmt.length; mc++) {
+          if (moneyColsForFmt[mc] !== -1) {
+            sheet.getRange(appendedRow, moneyColsForFmt[mc])
+              .setNumberFormat('$#,##0.00;-$#,##0.00');
+          }
+        }
+      } catch (_stampErr) {
+        Logger.log('addDebtFromDashboard empty-region stamp: ' + _stampErr);
+      }
+      // formatSourceRow stays -1 — we stamped directly, so the format-copy
+      // block below is skipped for this path.
+    } else {
+      sheet.appendRow(row);
+      appendedRow = sheet.getLastRow();
+      // No prior data row and no summary row: nothing styled to copy from —
+      // leave default formatting. The Active cell write below still re-stamps
+      // row-consistent format on that one cell.
+    }
   } else {
     sheet.insertRowBefore(sortedInsertRow);
     appendedRow = sortedInsertRow;
@@ -699,6 +737,17 @@ function addDebtFromDashboard(payload) {
     });
   } catch (pctErr) {
     Logger.log('addDebtFromDashboard recalcDebtPctAvailForRow_: ' + pctErr);
+  }
+
+  // Keep the TOTAL DEBT summary row's gross =SUM ranges covering the newly
+  // inserted data row (handles the SUM lower-boundary case when the new debt
+  // lands at the end of the active region). No-op when the sheet has no
+  // TOTAL DEBT row, and exact-shape guarded so it never clobbers a
+  // hand-authored summary formula. Best-effort.
+  try {
+    refreshDebtsTotalRow_(sheet, headerMap);
+  } catch (totalErr) {
+    Logger.log('addDebtFromDashboard refreshDebtsTotalRow_: ' + totalErr);
   }
 
   try {
@@ -1020,6 +1069,176 @@ function findDebtTemplateRow_(sheet, headerMap) {
 }
 
 /**
+ * Returns the 1-based row of the TOTAL DEBT summary row, or -1 if absent.
+ * Scans the Account Name column by name using the shared summary-row
+ * predicate. The header row (row 1) is never matched.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {Object=} headerMap  optional getDebtsHeaderMap_ result
+ * @returns {number} 1-based row, or -1
+ */
+function findDebtTotalRow_(sheet, headerMap) {
+  const hm = headerMap || getDebtsHeaderMap_(sheet);
+  const lastRow = Math.max(1, sheet.getLastRow());
+  const colA = sheet.getRange(1, hm.nameCol, lastRow, 1).getDisplayValues();
+  for (let i = 1; i < colA.length; i++) { // skip header row 1 (i=0)
+    const name = String(colA[i][0] || '').trim();
+    if (isDebtSummaryRowName_(name)) return i + 1;
+  }
+  return -1;
+}
+
+/**
+ * First-create seed of the canonical TOTAL DEBT summary row. Writes the
+ * literal label "TOTAL DEBT" in the Account Name column and leaves every
+ * other cell (including the four money columns) BLANK — the gross =SUM
+ * formulas are materialized later by refreshDebtsTotalRow_ once at least one
+ * debt data row exists. Seeding a formula on an empty sheet would be
+ * self-referential (the SUM cell would sit inside its own range), so the
+ * blank-then-refresh split is deliberate.
+ *
+ * Idempotent: if a TOTAL DEBT row already exists this is a no-op and returns
+ * its 1-based row. Intended for first-create only (callers gate on a freshly
+ * created sheet); it never clears or rewrites existing rows.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {Object=} headerMap  optional getDebtsHeaderMap_ result
+ * @returns {number} 1-based row of the TOTAL DEBT row, or -1 on failure
+ */
+function seedDebtsTotalRow_(sheet, headerMap) {
+  if (!sheet) return -1;
+  const hm = headerMap || getDebtsHeaderMap_(sheet);
+
+  const existing = findDebtTotalRow_(sheet, hm);
+  if (existing !== -1) return existing;
+
+  const numCols = Math.max(sheet.getLastColumn(), hm.nameCol);
+  const row = new Array(numCols);
+  for (let c = 0; c < numCols; c++) row[c] = '';
+  row[hm.nameColZero] = 'TOTAL DEBT';
+
+  sheet.appendRow(row);
+  const totalRow = sheet.getLastRow();
+
+  // Currency format on the four (currently blank) money cells so the cells —
+  // and the =SUM formulas refreshDebtsTotalRow_ writes later — render
+  // consistently with the data rows. Cosmetic only; never load-bearing.
+  try {
+    const moneyCols = [hm.balanceCol, hm.minimumPaymentCol, hm.creditLimitCol, hm.creditLeftCol];
+    for (let i = 0; i < moneyCols.length; i++) {
+      if (moneyCols[i] !== -1) {
+        sheet.getRange(totalRow, moneyCols[i]).setNumberFormat('$#,##0.00;-$#,##0.00');
+      }
+    }
+  } catch (_fmtErr) { /* cosmetic only */ }
+
+  return totalRow;
+}
+
+/**
+ * Maintains the TOTAL DEBT summary row's gross =SUM ranges so they cover
+ * every debt data row above the summary (rows 2..T-1). Gross by design —
+ * inactive / stop-tracked rows still count, matching a plain hand-authored
+ * =SUM (Phase 3.1 decision: "TOTAL DEBT = SUM of all rows above it").
+ *
+ * Bound-mode safety (exact-shape guard, mirrors refreshBlockSumAggregates_):
+ *   - Acts only when a TOTAL DEBT row already exists; NEVER creates one here.
+ *   - Touches only the four money columns (Account Balance, Minimum Payment,
+ *     Credit Limit, Credit Left), resolved by header label.
+ *   - Fills a money cell only when it is truly BLANK (the seeded state) or
+ *     already a strict simple =SUM(<L>n:<L>m) on its own column. A literal
+ *     value or any compound / cross-sheet / non-SUM formula is left
+ *     untouched, so a hand-authored production summary is never clobbered.
+ *
+ * Best-effort: all failures are swallowed; must never block a debt save.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {Object=} headerMap        optional getDebtsHeaderMap_ result
+ * @param {number=} optionalTotalRow optional precomputed TOTAL DEBT row
+ */
+function refreshDebtsTotalRow_(sheet, headerMap, optionalTotalRow) {
+  try {
+    if (!sheet) return;
+    const hm = headerMap || getDebtsHeaderMap_(sheet);
+    const totalRow = (optionalTotalRow && optionalTotalRow > 0)
+      ? optionalTotalRow
+      : findDebtTotalRow_(sheet, hm);
+    if (totalRow === -1) return; // no summary row — never create one here
+
+    const dataStartRow = 2;
+    const dataEndRow = totalRow - 1;
+    if (dataEndRow < dataStartRow) return; // no data rows — leave blanks blank
+
+    const currency = '$#,##0.00;-$#,##0.00';
+    const simpleSum = /^=SUM\(\s*\$?([A-Z]+)\$?(\d+)\s*:\s*\$?([A-Z]+)\$?(\d+)\s*\)$/i;
+    // Single-cell SUM, e.g. =SUM(C3). Google Sheets normalizes the degenerate
+    // single-row range =SUM(C2:C2) (which refresh writes for the first debt)
+    // down to =SUM(C2); a later row insert above then shifts it to =SUM(C3).
+    // We must recognize this collapsed/shifted form so the second debt expands
+    // it back to a real range — otherwise the simpleSum (colon-only) matcher
+    // never matches and the total freezes at one cell.
+    const singleCellSum = /^=SUM\(\s*\$?([A-Z]+)\$?(\d+)\s*\)$/i;
+    const moneyCols = [
+      hm.balanceCol,
+      hm.minimumPaymentCol,
+      hm.creditLimitCol,
+      hm.creditLeftCol
+    ];
+
+    for (let i = 0; i < moneyCols.length; i++) {
+      const col = moneyCols[i];
+      if (col === -1) continue;
+
+      const letter = columnToLetter_(col).toUpperCase();
+      const canonical = '=SUM(' + letter + dataStartRow + ':' + letter + dataEndRow + ')';
+      const cell = sheet.getRange(totalRow, col);
+
+      let formula = '';
+      try { formula = String(cell.getFormula() || '').trim(); } catch (_) { continue; }
+
+      if (formula === '') {
+        // No formula present. Only fill when the cell is truly blank — a
+        // literal value (possible in a hand-authored bound workbook) is
+        // intentionally left alone.
+        let val = '';
+        try { val = cell.getValue(); } catch (_) { continue; }
+        const isBlank = (val === '' || val === null || val === undefined);
+        if (!isBlank) continue;
+        try {
+          cell.setFormula(canonical);
+          cell.setNumberFormat(currency);
+        } catch (_setErr) { /* non-fatal */ }
+        continue;
+      }
+
+      // A formula is present — only rewrite a SUM we recognize as owning this
+      // cell's own column; leave compound / cross-sheet / non-SUM formulas
+      // untouched. Two accepted shapes:
+      //   1. strict simple range  =SUM(<L>n:<L>m)  (both ends same column)
+      //   2. single cell          =SUM(<L>n)       (the Sheets-normalized /
+      //      insert-shifted form of a former single-row range)
+      // Anything else is left alone.
+      const m = formula.match(simpleSum);
+      if (m) {
+        if (m[1].toUpperCase() !== m[3].toUpperCase()) continue;
+        if (m[1].toUpperCase() !== letter) continue;
+      } else {
+        const s = formula.match(singleCellSum);
+        if (!s) continue;
+        if (s[1].toUpperCase() !== letter) continue;
+      }
+      if (formula === canonical) continue;
+      try {
+        cell.setFormula(canonical);
+        cell.setNumberFormat(currency);
+      } catch (_setErr2) { /* non-fatal */ }
+    }
+  } catch (e) {
+    Logger.log('refreshDebtsTotalRow_: ' + e);
+  }
+}
+
+/**
  * Find the 1-based row number BEFORE which a new debt row with `newDueDay`
  * should be inserted to keep INPUT - Debts sorted by Due Day ascending
  * within the active region above TOTAL DEBT.
@@ -1207,11 +1426,12 @@ function applyDebtsSheetStyling_(sheet) {
   } catch (_scanErr) { /* cosmetic only */ }
 
   // Widen-only column widths (never shrink a column the user widened). Keyed
-  // by canonical column position from the creator's header layout:
-  // 1 Account Name | 2 Type | 3 Account Balance | 4 Minimum Payment |
-  // 5 Credit Limit | 6 Credit Left | 7 Int Rate | 8 Due Date |
+  // by canonical column position from the creator's header layout (production
+  // order):
+  // 1 Account Name | 2 Type | 3 Account Balance | 4 Due Date |
+  // 5 Credit Limit | 6 Minimum Payment | 7 Credit Left | 8 Int Rate |
   // 9 Acct PCT Avail | 10 Active.
-  const widthMins = [220, 130, 190, 200, 150, 140, 110, 110, 190, 90];
+  const widthMins = [220, 130, 190, 110, 150, 200, 140, 110, 190, 90];
   for (let c = 1; c <= lastCol && c <= widthMins.length; c++) {
     try {
       if (sheet.getColumnWidth(c) < widthMins[c - 1]) {

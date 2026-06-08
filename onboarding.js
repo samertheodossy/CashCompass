@@ -1024,11 +1024,11 @@ function ensureOnboardingDebtsSheetFromDashboard(mode) {
       'Account Name',
       'Type',
       'Account Balance',
-      'Minimum Payment',
+      'Due Date',
       'Credit Limit',
+      'Minimum Payment',
       'Credit Left',
       'Int Rate',
-      'Due Date',
       'Acct PCT Avail',
       'Active'
     ];
@@ -1036,22 +1036,40 @@ function ensureOnboardingDebtsSheetFromDashboard(mode) {
 
     // Cosmetic polish applied only to the fresh sheet. Readers identify
     // columns by header label (getDebtsHeaderMap_), so number formats
-    // are pure visual polish and never load-bearing. Scope the currency
-    // format to just the four money columns (Account Balance,
-    // Minimum Payment, Credit Limit, Credit Left at positions 3–6) and
-    // leave Int Rate / Due Date / Acct PCT Avail as plain numbers so
-    // they match the values addDebtFromDashboard writes (round2_ numeric
-    // values stored without a percent-literal scale).
+    // are pure visual polish and never load-bearing. After matching the
+    // production column order the four currency columns are no longer one
+    // contiguous block: Account Balance is at position 3, while Credit
+    // Limit / Minimum Payment / Credit Left are at positions 5–7 (Due Date
+    // sits between them at position 4). Format Account Balance and the 5–7
+    // block as currency and leave Due Date / Int Rate / Acct PCT Avail as
+    // plain numbers so they match the values addDebtFromDashboard writes
+    // (round2_ numeric values stored without a percent-literal scale).
     try {
       sheet.getRange(1, 1, 1, headerRow.length).setFontWeight('bold');
       sheet.setFrozenRows(1);
 
       var maxRows = sheet.getMaxRows();
       if (maxRows > 1) {
-        sheet.getRange(2, 3, maxRows - 1, 4)
+        // Account Balance (col 3).
+        sheet.getRange(2, 3, maxRows - 1, 1)
+          .setNumberFormat('$#,##0.00;-$#,##0.00');
+        // Credit Limit / Minimum Payment / Credit Left (cols 5–7).
+        sheet.getRange(2, 5, maxRows - 1, 3)
           .setNumberFormat('$#,##0.00;-$#,##0.00');
       }
       sheet.autoResizeColumns(1, headerRow.length);
+
+      // Seed the canonical TOTAL DEBT summary row (label only; money cells
+      // left blank — the gross =SUM formulas are materialized by
+      // refreshDebtsTotalRow_ once the first debt row exists, which avoids a
+      // self-referential SUM on an empty sheet). First-create only and
+      // idempotent; runs before styling so applyDebtsSheetStyling_ colors the
+      // row's green summary band.
+      try {
+        seedDebtsTotalRow_(sheet);
+      } catch (_seedErr) {
+        Logger.log('ensureOnboardingDebtsSheetFromDashboard seed TOTAL DEBT: ' + _seedErr);
+      }
 
       // Canonical Debts Family Beta styling (yellow header, white body, green
       // TOTAL DEBT band only if present) + widen-only readable column widths.
