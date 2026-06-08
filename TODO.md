@@ -36,10 +36,33 @@ The older "V1.2 work queue" candidates are retained below under `## V1.2 polish 
 ### Phase 2 — Family Beta Hardening
 
 - **Objective:** Make per-user provisioning robust, recoverable, and observable enough to safely onboard a small family beta.
-- **Why it matters:** Provisioning works, but known edge cases exist (duplicate workbook from concurrent first-load, stale mappings when a mapped workbook is trashed). Without detection, recovery, and diagnostics, a single edge case becomes a blind support fire. This phase converts "works in testing" into "safe with real users."
-- **Major deliverables:** Duplicate workbook detection; orphan workbook detection; workbook mapping inspector; workbook recovery tools; stale mapping recovery UX; provisioning diagnostics; admin diagnostics dashboard; family beta rollout checklist.
+- **Why it matters:** Provisioning works, but known edge cases exist (duplicate workbooks when a mapping is lost/cleared or not carried across the two-project migration, stale mappings when a mapped workbook is trashed). Without detection, recovery, and diagnostics, a single edge case becomes a blind support fire. This phase converts "works in testing" into "safe with real users."
+- **Detailed design:** `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md` — Phase 2A diagnostics design in full; Phase 2B recovery scope recorded in its `§10`.
 - **Dependencies:** Phase 1 (accurate architecture docs); live provisioning + mapping (done).
 - **Estimated priority:** **P1** — gates the family beta; the immediate next phase.
+
+This phase splits into two sub-phases — **2A (diagnostics, read-only)** ships first; **2B (recovery)** builds on its evidence.
+
+#### Phase 2A — Workbook Diagnostics
+
+Read-only detection and classification of Central App per-user workbooks. No repair, no auto-adopt, no writes to user Drive. Full design: `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`.
+
+- **Workbook Diagnostics**
+  - **Candidate workbook detection** — `findCandidateWorkbooks_` (marker + name fallback; `drive.file`-visible only).
+  - **Workbook classification** — `classifyUserWorkbooks_` → `OK` / `NO_WORKBOOK` / `UNMAPPED_SINGLE` / `UNMAPPED_MULTIPLE` / `STALE_MAPPING` / `ORPHANS_PRESENT` / `NAME_MISMATCH` / `NOT_OWNED`.
+  - **Mapping audit** — `adminAuditUserWorkbook` / `adminAuditAllAllowlisted` (mapping present? opens? trashed? owned by caller? name match?).
+  - **Orphan workbook audit** — candidates that are not the active/mapped workbook.
+  - **Duplicate workbook visibility** — report (never destroy) when ≥2 candidates exist for one user.
+- Supporting: `appProperties` marker strategy (read-now / write-later), `adminDiagnosticsSelfTest`, and rollout 2A.0 (zero writes) → 2A.1 (create-path marker) → 2A.2 (lazy backfill). All detail in `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`.
+
+#### Phase 2B — Workbook Recovery (deferred)
+
+Explicit, admin-driven repair built on 2A's evidence. Design intent only — see `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md → §10`.
+
+- Safe **auto-adopt** of a single strict candidate (flag-gated, default off; creates/deletes nothing).
+- **Provisioning-time gate** (0 candidates → create; 1 → adopt; ≥2 → stop + admin-log).
+- **Admin repair tools** — `adminAdoptWorkbook`, `clearMappingForUser_`, `adminTrashOrphan` (soft delete only, id-in-hand, never bulk).
+- **Stale-mapping recovery UX**, provisioning diagnostics, admin diagnostics surface, and the **family beta rollout checklist**.
 
 ### Phase 3 — Workbook Totals Project
 
@@ -160,7 +183,7 @@ Forward-looking phases captured so the long-term direction is durable. The Centr
 > - **Backward compatibility preserved** — bound users run unchanged with `CENTRAL_MODE` off.
 > - **Mapping location decided** — `mapping::<sha256(email)>` in the central project's script properties (raw emails never stored).
 >
-> Remaining hardening (duplicate-workbook protection, stale-mapping recovery, admin diagnostics, Tier 2 migration) is scheduled as **Phase 2 — Family Beta Hardening** and **Phase 6 — External Beta Readiness** in the roadmap above. Full history: `SESSION_NOTES.md → Current State — Post V1.2 Prep` and the `CENTRAL_APP_*.md` docs.
+> Remaining hardening (duplicate-workbook protection, stale-mapping recovery, admin diagnostics, Tier 2 migration) is scheduled as **Phase 2 — Family Beta Hardening** (split into **2A — Workbook Diagnostics** and **2B — Workbook Recovery**; design in `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`) and **Phase 6 — External Beta Readiness** in the roadmap above. Full history: `SESSION_NOTES.md → Current State — Post V1.2 Prep` and the `CENTRAL_APP_*.md` docs.
 
 ### Monetization (future)
 

@@ -21,7 +21,7 @@ Items below that are fully delivered still carry their original "DELIVERED" tag 
 
 Authoritative roadmap lives in `TODO.md → Launch Readiness Roadmap` (high-level summary in `PROJECT_CONTEXT.md`). Mirror here is short on purpose:
 
-- **Active now:** Phase 1 — Documentation Cleanup (this pass). Next up: Phase 2 — Family Beta Hardening (duplicate-workbook protection, stale-mapping recovery, admin diagnostics).
+- **Active now:** Phase 1 — Documentation Cleanup (this pass). Next up: Phase 2 — Family Beta Hardening — **2A Workbook Diagnostics** (read-only duplicate / orphan / stale detection, classification, mapping audit) then **2B Workbook Recovery** (auto-adopt, repair tools, stale-mapping recovery UX). Design: `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`.
 - **Delivered (headline):** Central App migration (resolver + provisioning + mapping, live), Family Beta styling for Bank Accounts / Debts / Bills / Upcoming Expenses.
 - **V1.2 candidates (A — immediate follow-ups, low risk):** Profile DOB parser symmetry (accept Date objects on save-side validation), Overview Retirement Outlook copy alignment with `needsProfileDob`, blank-workbook empty-state consistency sweep, copy/Help polish sweep.
 - **V1.2 candidates (B — product improvements):** Profile completeness indicator / badge, better Retirement setup guidance / linking to Profile, optional spouse UX clarity (single vs partnered).

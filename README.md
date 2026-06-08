@@ -31,6 +31,7 @@ If you are onboarding a contributor (or yourself after a break), `INIT_PROMPT.md
 
 - `TODO.md` — Launch Readiness Roadmap (Phase 1–7) + V1.2 polish backlog + historical backlog.
 - `ENHANCEMENTS.md` — product-level rationale, phase history, Active / Next / Later mirror.
+- `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md` — active Phase 2 design: read-only duplicate / orphan / stale workbook detection, classification, and admin audit (Phase 2A), with Phase 2B recovery scope in its `§10`.
 
 ### History (what shipped)
 
@@ -78,7 +79,7 @@ Authoritative sources: `WORKING_RULES.md → Current phase` + `→ Central App T
 Detailed source of truth: `TODO.md → Launch Readiness Roadmap` (objective, why it matters, deliverables, dependencies, priority per phase). High-level summary: `PROJECT_CONTEXT.md → Launch Readiness Roadmap (high-level)`. Short mirror:
 
 - **Phase 1 — Documentation Cleanup** *(in progress, P0)* — sync all docs with live Central architecture; record Family Beta styling + deployment model.
-- **Phase 2 — Family Beta Hardening** *(P1)* — duplicate/orphan workbook detection, mapping inspector, recovery tools, stale-mapping recovery UX, provisioning + admin diagnostics, rollout checklist.
+- **Phase 2 — Family Beta Hardening** *(P1)* — **2A Workbook Diagnostics** (candidate detection, classification, mapping audit, orphan audit, duplicate visibility — read-only) then **2B Workbook Recovery** (auto-adopt, recovery/repair tools, stale-mapping recovery UX, rollout checklist). Design: `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`.
 - **Phase 3 — Workbook Totals Project** *(P1–P2)* — TOTAL DEBT, Total Accounts, Delta (+ formula strategy, insert/update behavior, reader compatibility).
 - **Phase 4 — Chat Assistant v1** *(P2)* — read-only assistant (spending/debt/retirement/cash-flow questions, planner + dashboard explanations). Write-capable assistant is future.
 - **Phase 5 — Web App UX Improvements** *(P2)* — onboarding, empty-states, error handling, user guidance/help, dashboard + planner polish, help text & content cleanup (reduce cognitive load) (+ residual V1.2 polish backlog).

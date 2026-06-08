@@ -18,7 +18,7 @@ High-level view of the next 6–12 months. **The authoritative, detailed roadmap
 **Priority scale:** P0 = now / in progress · P1 = next, gates family beta · P2 = high, needed before external beta · P3 = gates external beta · P4 = post-beta / longest horizon.
 
 - **Phase 1 — Documentation Cleanup** *(P0, in progress)* — make `PROJECT_CONTEXT.md` + `TODO.md` the single authoritative source of truth for architecture, status, and roadmap.
-- **Phase 2 — Family Beta Hardening** *(P1)* — make per-user provisioning robust, recoverable, and observable enough to safely onboard a small family beta.
+- **Phase 2 — Family Beta Hardening** *(P1)* — make per-user provisioning robust, recoverable, and observable enough to safely onboard a small family beta. Splits into **2A — Workbook Diagnostics** (read-only detection/classification/audit) and **2B — Workbook Recovery** (explicit admin-driven repair); design in `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`.
 - **Phase 3 — Workbook Totals Project** *(P1–P2)* — bring newly provisioned workbooks to visual + functional parity with production via canonical summary rows (TOTAL DEBT / Total Accounts / Delta).
 - **Phase 4 — Chat Assistant v1** *(P2)* — ship a read-only natural-language assistant over the existing canonical read models (write-capable assistant is future).
 - **Phase 5 — Web App UX Improvements** *(P2)* — polish the central web-app experience (onboarding, empty-states, error handling, guidance, dashboard + planner polish) and cut help text / content to reduce cognitive load.
@@ -306,8 +306,9 @@ CashCompass now runs in **two coexisting shapes** that share one codebase. The b
 ### Family Beta readiness
 
 - Provisioning runtime-validated: **Phase A** (developer account) and **Phase B** (disposable second account) both PASS — separate user-owned workbooks, `INPUT - Settings` bootstrapped, mappings written, no cross-user data leakage, bound deployment unaffected.
-- **Known hardening items (Phase 2 — Family Beta Hardening, see `TODO.md → Roadmap`):** duplicate-workbook protection (idempotent filename dedup in `provisionWorkbookForUser_`), stale-mapping recovery UX, admin diagnostics. Also remaining: Tier 2 `getActiveSpreadsheet()` migration of the full dashboard, and the bound project's manifest revert once central is primary.
+- **Known hardening items (Phase 2 — Family Beta Hardening, see `TODO.md → Roadmap` and `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`):** duplicate / orphan workbook detection + classification + mapping audit (Phase 2A — read-only diagnostics), then duplicate-workbook protection / auto-adopt, stale-mapping recovery UX, and admin repair tooling (Phase 2B — recovery). Also remaining: Tier 2 `getActiveSpreadsheet()` migration of the full dashboard, and the bound project's manifest revert once central is primary.
 - Full per-slice migration history (manifest prep, resolver/provisioning slice, standalone project build, runtime evidence) is in `SESSION_NOTES.md → Current State — Post V1.2 Prep` and the `CENTRAL_APP_*.md` planning docs (`CENTRAL_APP_DESIGN.md`, `CENTRAL_APP_CENTRAL_PROJECT_SETUP_CHECKLIST.md`, `CENTRAL_APP_WORKBOOK_CREATION_FIRST_SLICE_PLAN.md`, `CENTRAL_APP_FAMILY_BETA_READINESS_CHECKPOINT.md`, others).
+- **Active Phase 2 design:** `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md` — read-only duplicate / orphan / stale workbook detection, classification, marker strategy, and admin audit functions (Phase 2A), with Phase 2B recovery scope recorded in its `§10`.
 
 ### Benefits (now being realized)
 
