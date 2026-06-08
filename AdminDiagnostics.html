@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_top">
+  <title>CashCompass — Admin Diagnostics</title>
+  <style>
+    body {
+      font-family: -apple-system, Arial, sans-serif;
+      color: #1f2933;
+      margin: 0;
+      padding: 24px;
+      background: #f5f7fa;
+      line-height: 1.5;
+    }
+    h1 { font-size: 20px; margin: 0 0 4px 0; }
+    h2 { font-size: 15px; margin: 24px 0 8px 0; }
+    .sub { color: #52606d; font-size: 13px; margin: 0 0 16px 0; }
+    .banner {
+      background: #fff4d6;
+      border: 1px solid #f0c200;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin: 0 0 16px 0;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e1e5ea;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 0 0 16px 0;
+    }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th, td {
+      text-align: left;
+      padding: 7px 10px;
+      border-bottom: 1px solid #eceff2;
+      vertical-align: top;
+    }
+    th { color: #52606d; font-weight: 600; background: #fafbfc; }
+    code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+    .pill {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .sev-ok { background: #def7ec; color: #03543f; }
+    .sev-info { background: #e1effe; color: #1e429f; }
+    .sev-warn { background: #fdf6b2; color: #723b13; }
+    .sev-action_needed { background: #fde8e8; color: #9b1c1c; }
+    .ok-yes { color: #03543f; font-weight: 600; }
+    .ok-no { color: #9b1c1c; font-weight: 600; }
+    .muted { color: #9aa5b1; }
+    .err {
+      background: #fde8e8; border: 1px solid #f8b4b4; color: #9b1c1c;
+      border-radius: 6px; padding: 10px 14px; font-size: 13px;
+    }
+    .totals span { margin-right: 14px; font-size: 13px; }
+    .footnote { color: #9aa5b1; font-size: 12px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>CashCompass — Admin Diagnostics</h1>
+  <p class="sub">Read-only. No repair, adopt, or write actions are available on this page.</p>
+
+  <div class="banner">
+    <strong>Coverage: app_visible_only — not a complete Drive audit.</strong>
+    Drive-side fields are only accurate for the row matching the operator
+    running this page; other users show mapping state plus the operator's
+    Drive view.
+  </div>
+
+  <div class="card">
+    <h2>Self-test</h2>
+    <div id="selftest-status" class="muted">Loading…</div>
+    <table id="selftest-table" style="display:none; margin-top:8px;">
+      <thead><tr><th>Check</th><th>OK</th><th>Detail</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div id="selftest-failures" class="footnote"></div>
+  </div>
+
+  <div class="card">
+    <h2>Allow-list workbook audit</h2>
+    <div id="audit-meta" class="muted">Loading…</div>
+    <div id="audit-totals" class="totals" style="margin:8px 0;"></div>
+    <table id="audit-table" style="display:none;">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Status</th>
+          <th>Severity</th>
+          <th>Active workbook</th>
+          <th>Candidates</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    function el(tag, text, className) {
+      var n = document.createElement(tag);
+      if (text != null) n.textContent = String(text);
+      if (className) n.className = className;
+      return n;
+    }
+
+    function okCell(ok) {
+      return el('span', ok ? 'yes' : 'no', ok ? 'ok-yes' : 'ok-no');
+    }
+
+    function sevPill(sev) {
+      var p = el('span', sev || '-', 'pill sev-' + (sev || 'info'));
+      return p;
+    }
+
+    function renderSelfTest(data) {
+      var status = document.getElementById('selftest-status');
+      status.textContent = data.ok
+        ? 'PASS — all critical checks OK'
+        : 'FAIL — one or more checks failed';
+      status.className = data.ok ? 'ok-yes' : 'ok-no';
+
+      var tbl = document.getElementById('selftest-table');
+      var body = tbl.querySelector('tbody');
+      body.textContent = '';
+      (data.rows || []).forEach(function(r) {
+        var tr = document.createElement('tr');
+        tr.appendChild(el('td', r.label));
+        var td = document.createElement('td');
+        td.appendChild(okCell(r.ok));
+        tr.appendChild(td);
+        tr.appendChild(el('td', r.detail || '-'));
+        body.appendChild(tr);
+      });
+      tbl.style.display = 'table';
+
+      var f = document.getElementById('selftest-failures');
+      if (data.failures && data.failures.length) {
+        f.textContent = 'Failures: ' + data.failures.join(' | ');
+      } else {
+        f.textContent = '';
+      }
+    }
+
+    function renderAudit(data) {
+      var meta = document.getElementById('audit-meta');
+      meta.textContent =
+        'Generated ' + (data.generatedAt || '?') +
+        ' · operator ' + (data.executingUser || '?') +
+        ' · ' + (data.allowlistCount || 0) + ' allow-listed' +
+        ' · errors ' + (data.errors || 0) +
+        ' · coverage ' + (data.coverage || '?');
+      meta.className = '';
+
+      var totals = document.getElementById('audit-totals');
+      totals.textContent = '';
+      var t = data.totals || {};
+      Object.keys(t).forEach(function(k) {
+        if (t[k] > 0) {
+          totals.appendChild(el('span', k + ': ' + t[k]));
+        }
+      });
+
+      var tbl = document.getElementById('audit-table');
+      var body = tbl.querySelector('tbody');
+      body.textContent = '';
+      (data.rows || []).forEach(function(r) {
+        var tr = document.createElement('tr');
+        tr.appendChild(el('td', r.user || '-'));
+        tr.appendChild(el('td', r.status || '-'));
+        var sevTd = document.createElement('td');
+        sevTd.appendChild(sevPill(r.severity));
+        tr.appendChild(sevTd);
+        var idTd = document.createElement('td');
+        idTd.appendChild(el('code', r.activeIdTrunc || '-'));
+        if (!r.driveAccurate) {
+          idTd.appendChild(el('span', ' (drive=operator)', 'muted'));
+        }
+        tr.appendChild(idTd);
+        tr.appendChild(el('td', String(r.candidateCount)));
+        tr.appendChild(el('td', r.notes || '-'));
+        body.appendChild(tr);
+      });
+      tbl.style.display = 'table';
+    }
+
+    function showError(containerId, msg) {
+      var c = document.getElementById(containerId);
+      c.textContent = '';
+      c.className = '';
+      c.appendChild(el('div', msg || 'Failed to load.', 'err'));
+    }
+
+    google.script.run
+      .withSuccessHandler(renderSelfTest)
+      .withFailureHandler(function(err) {
+        showError('selftest-status', 'Self-test failed to load.');
+      })
+      .adminUiGetSelfTest();
+
+    google.script.run
+      .withSuccessHandler(renderAudit)
+      .withFailureHandler(function(err) {
+        showError('audit-meta', 'Audit failed to load.');
+      })
+      .adminUiGetWorkbookAudit();
+  </script>
+</body>
+</html>

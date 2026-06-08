@@ -1,4 +1,4 @@
-function doGet() {
+function doGet(e) {
   // Allow-list gate: rejects any caller not in FAMILY_BETA_ALLOWLIST.
   // Runs unconditionally — does not check CENTRAL_MODE — so the
   // central deployment URL is never reachable by anonymous Google
@@ -16,6 +16,18 @@ function doGet() {
   //     renderAllowlistRejection_)
   if (!isAllowlistedUser_()) {
     return renderAllowlistRejection_();
+  }
+
+  // Admin diagnostics route: /exec?view=admin. Read-only, admin-gated.
+  // Non-admins silently fall through to the normal dashboard so the admin
+  // route's existence is never disclosed (no distinct rejection, no error).
+  var view = (e && e.parameter && e.parameter.view)
+    ? String(e.parameter.view) : '';
+  if (view === 'admin' && isAdminUser_()) {
+    return HtmlService.createTemplateFromFile('AdminDiagnostics')
+      .evaluate()
+      .setTitle('CashCompass — Admin Diagnostics')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
   return HtmlService.createTemplateFromFile('PlannerDashboardWeb')
