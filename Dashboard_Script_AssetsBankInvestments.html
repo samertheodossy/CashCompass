@@ -121,17 +121,31 @@ function populateBankAddDatalists_(data) {
   if (sel) {
     const currentValue = sel.value || '';
     sel.innerHTML = '<option value="">— Select type —</option>';
+    // Merge (not replace): always include the canonical types AND any types
+    // already in use on the workbook. The old either/or used the canonical
+    // list only when the server list was empty, so after the first account
+    // was added the dropdown collapsed to that single in-use type. Concatenate
+    // server (in-use) + canonical and dedup case-insensitively, mirroring the
+    // safe union in populateInvestmentAddDatalists_. The Bank Type select uses
+    // a plain "Other" option (the __OTHER__ sentinel here is for Use Policy
+    // only), so "Other" stays a normal selectable value.
     var serverTypes = (data && data.typeOptions) ? data.typeOptions : [];
-    var typeOpts = (serverTypes && serverTypes.length)
-      ? serverTypes
-      : BANK_ADD_TYPE_FALLBACK_OPTIONS_.slice();
+    var typeOpts = serverTypes.concat(BANK_ADD_TYPE_FALLBACK_OPTIONS_);
+    const seen = Object.create(null);
+    const ordered = [];
     typeOpts.forEach(function(t) {
+      const v = String(t == null ? '' : t).trim();
+      if (!v) return;
+      const key = v.toLowerCase();
+      if (seen[key]) return;
+      seen[key] = true;
+      ordered.push(v);
       const o = document.createElement('option');
-      o.value = t;
-      o.textContent = t;
+      o.value = v;
+      o.textContent = v;
       sel.appendChild(o);
     });
-    if (currentValue && typeOpts.indexOf(currentValue) !== -1) {
+    if (currentValue && ordered.indexOf(currentValue) !== -1) {
       sel.value = currentValue;
     }
   }

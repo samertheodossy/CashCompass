@@ -85,9 +85,14 @@ function populateDebtAddDatalists_(data) {
   sel.appendChild(placeholder);
 
   var serverTypes = (data && data.typeOptions) ? data.typeOptions : [];
-  var typeOpts = (serverTypes && serverTypes.length)
-    ? serverTypes
-    : DEBT_ADD_TYPE_FALLBACK_OPTIONS_.slice();
+  // Merge (not replace): always include the canonical debt categories AND any
+  // types already in use on the workbook. The old either/or used the canonical
+  // list only when the server list was empty, so after the first debt was
+  // added the dropdown collapsed to that single in-use type. Concatenating
+  // server + canonical and letting the dedup loop below (keyed by `seen`)
+  // remove duplicates — with the trailing "Other…" sentinel still appended —
+  // mirrors the safe union in populateInvestmentAddDatalists_.
+  var typeOpts = serverTypes.concat(DEBT_ADD_TYPE_FALLBACK_OPTIONS_);
 
   const seen = Object.create(null);
   typeOpts.forEach(function(t) {
