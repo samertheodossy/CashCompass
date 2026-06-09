@@ -4,12 +4,20 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
 
 ## Current Product Status (June 2026)
 
-- **Architecture:** Central App operational.
-- **Family Beta readiness:** ~95%+.
+- **Architecture:** Central App operational — **stable, family-beta capable**. The production / bound workbook remains protected (bound mode unchanged); the central architecture is operational and runtime-validated.
 - **Completed (working in central mode):** Provisioning, Workbook Mapping, Dashboard, Planner, Assets, Properties, Cash Flow, Bills, Debts, Income, Activity, Email.
-- **Current focus:** Family Beta Hardening, Workbook Totals Project, Chat Assistant planning, External Beta preparation.
+- **Recently completed (this initiative):**
+  - **Diagnostics** — Phase 2A Admin Diagnostics (read-only workbook detection / classification / mapping + orphan audit, admin-gated).
+  - **Debt parity** — Phase 3.1 TOTAL DEBT summary row.
+  - **Bank Accounts parity** — Phase 3.2a Total Accounts row + Phase 3.2b Delta row.
+  - **Add-New dropdown fix** — Bank Accounts / Debts Type dropdowns now merge canonical + server-provided options (no longer collapse after an add).
+  - **Identity markers** — Phase 6A Workbook Identity & Recovery design + Phase 6B Workbook Identity Markers (durable identity markers + reverse index + `SYS - Meta`, with admin marker diagnostics; no provisioning/resolution behavior change).
+- **Current focus — Workbook Identity & Recovery track:** Phase 6C Adopt-Before-Create → Phase 6D Recovery UX → Phase 6E Admin Repair Tools.
+- **Future:** External beta readiness / hardening, family-beta expansion + user-lifecycle handling, Chat Assistant, Paid Product framework.
 
-Roadmap: `## Launch Readiness Roadmap (high-level)` below (detail in `TODO.md → Launch Readiness Roadmap`). Live architecture: `## Current architecture — Central App (live)` below.
+Roadmap: `## Launch Readiness Roadmap (high-level)` below (detail in `TODO.md → Launch Readiness Roadmap`). Live architecture: `## Current architecture — Central App (live)` below. Workbook recovery summary: `## Workbook Identity & Recovery (live + roadmap)` below.
+
+> **Roadmap-label note (disambiguation):** the **Workbook Identity & Recovery** sub-series uses working labels **Phase 6A–6E**. These are the detailed expansion of the macro roadmap's **Phase 2 — Family Beta Hardening → 2B Workbook Recovery**, and are **not** the same as the macro **"Phase 6 — External Beta Readiness."** Where this doc says "Phase 6A/6B/6C…" it means the Identity & Recovery track.
 
 ## Launch Readiness Roadmap (high-level)
 
@@ -17,13 +25,21 @@ High-level view of the next 6–12 months. **The authoritative, detailed roadmap
 
 **Priority scale:** P0 = now / in progress · P1 = next, gates family beta · P2 = high, needed before external beta · P3 = gates external beta · P4 = post-beta / longest horizon.
 
-- **Phase 1 — Documentation Cleanup** *(P0, in progress)* — make `PROJECT_CONTEXT.md` + `TODO.md` the single authoritative source of truth for architecture, status, and roadmap.
-- **Phase 2 — Family Beta Hardening** *(P1)* — make per-user provisioning robust, recoverable, and observable enough to safely onboard a small family beta. Splits into **2A — Workbook Diagnostics** (read-only detection/classification/audit) and **2B — Workbook Recovery** (explicit admin-driven repair); design in `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`.
-- **Phase 3 — Workbook Totals Project** *(P1–P2)* — bring newly provisioned workbooks to visual + functional parity with production via canonical summary rows (TOTAL DEBT / Total Accounts / Delta).
-- **Phase 4 — Chat Assistant v1** *(P2)* — ship a read-only natural-language assistant over the existing canonical read models (write-capable assistant is future).
+- **Phase 1 — Documentation Cleanup** *(P0, ✅ complete)* — `PROJECT_CONTEXT.md` + `TODO.md` are the single authoritative source of truth for architecture, status, and roadmap (kept current by ongoing doc passes).
+- **Phase 2 — Family Beta Hardening** *(P1, in progress)* — make per-user provisioning robust, recoverable, and observable enough to safely onboard a small family beta. **2A — Workbook Diagnostics** (read-only detection/classification/audit) is ✅ complete. **2B — Workbook Recovery** is the active track, now expanded as the **Workbook Identity & Recovery** series (6A design ✅, 6B identity markers ✅, 6C/6D/6E in progress — see `## Workbook Identity & Recovery (live + roadmap)`). Design in `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`.
+- **Phase 3 — Workbook Totals Project** *(P1–P2, ✅ complete for current scope)* — newly provisioned workbooks reach visual + functional parity with production via canonical summary rows: TOTAL DEBT (3.1), Bank Accounts Total Accounts (3.2a), Bank Accounts Delta (3.2b). Investments / House Values summary parity remains a later follow-up if needed.
+- **Phase 4 — Chat Assistant v1** *(P2, future)* — ship a read-only natural-language assistant over the existing canonical read models (write-capable assistant is future).
 - **Phase 5 — Web App UX Improvements** *(P2)* — polish the central web-app experience (onboarding, empty-states, error handling, guidance, dashboard + planner polish) and cut help text / content to reduce cognitive load.
-- **Phase 6 — External Beta Readiness** *(P3)* — move from family beta to a wider invited external beta (support, feedback, onboarding, recovery, diagnostics, beta-user management).
-- **Phase 7 — Paid Product Readiness** *(P4)* — prepare to monetize (pricing/subscription, entitlements, plan enforcement, privacy policy, ToS, support, monitoring).
+- **Phase 6 — External Beta Readiness** *(P3, future)* — move from family beta to a wider invited external beta (support, feedback, onboarding, recovery, diagnostics, beta-user management). *(Distinct from the Identity & Recovery "6A–6E" labels — see the disambiguation note above.)*
+- **Phase 7 — Paid Product Readiness** *(P4, future)* — prepare to monetize (pricing/subscription, entitlements, plan enforcement, privacy policy, ToS, support, monitoring).
+
+**Workbook Identity & Recovery (6A–6E) — expansion of Phase 2B, the active near-term track:**
+
+- **6A — Workbook Identity & Recovery design** *(✅ complete)* — identity-marker model, adopt-before-create decision tree, recovery UX, admin-repair safeguards, and migration strategy.
+- **6B — Workbook Identity Markers** *(✅ complete)* — durable identity markers + reverse index + `SYS - Meta`, lazy backfill, admin marker diagnostics. **No provisioning/resolution behavior change.**
+- **6C — Adopt-Before-Create** *(next, P1)* — when a mapping is lost but exactly one strict candidate workbook exists, adopt it instead of silently creating a duplicate.
+- **6D — Recovery UX** *(P1–P2)* — user-facing self-service recovery for stale mappings / lost workbooks.
+- **6E — Admin Repair Tools** *(P2)* — admin-driven adopt / remap / orphan soft-delete with confirmations and audit logging.
 
 ## Current phase — Central App live + Family Beta readiness
 
@@ -306,7 +322,8 @@ CashCompass now runs in **two coexisting shapes** that share one codebase. The b
 ### Family Beta readiness
 
 - Provisioning runtime-validated: **Phase A** (developer account) and **Phase B** (disposable second account) both PASS — separate user-owned workbooks, `INPUT - Settings` bootstrapped, mappings written, no cross-user data leakage, bound deployment unaffected.
-- **Known hardening items (Phase 2 — Family Beta Hardening, see `TODO.md → Roadmap` and `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`):** duplicate / orphan workbook detection + classification + mapping audit (Phase 2A — read-only diagnostics), then duplicate-workbook protection / auto-adopt, stale-mapping recovery UX, and admin repair tooling (Phase 2B — recovery). Also remaining: Tier 2 `getActiveSpreadsheet()` migration of the full dashboard, and the bound project's manifest revert once central is primary.
+- Current maturity: **stable and family-beta capable.** Read-only admin diagnostics (Phase 2A) and durable workbook identity markers (Phase 6B) are live; the production / bound workbook stays protected throughout.
+- **Known hardening items (Phase 2 — Family Beta Hardening, see `TODO.md → Roadmap` and `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`):** read-only diagnostics (Phase 2A) ✅ and identity markers (Phase 6B) ✅ are done; the active track is **Workbook Identity & Recovery** — duplicate-workbook protection / adopt-before-create (6C), stale-mapping recovery UX (6D), and admin repair tooling (6E). Also remaining: Tier 2 `getActiveSpreadsheet()` migration of the full dashboard, and the bound project's manifest revert once central is primary.
 - Full per-slice migration history (manifest prep, resolver/provisioning slice, standalone project build, runtime evidence) is in `SESSION_NOTES.md → Current State — Post V1.2 Prep` and the `CENTRAL_APP_*.md` planning docs (`CENTRAL_APP_DESIGN.md`, `CENTRAL_APP_CENTRAL_PROJECT_SETUP_CHECKLIST.md`, `CENTRAL_APP_WORKBOOK_CREATION_FIRST_SLICE_PLAN.md`, `CENTRAL_APP_FAMILY_BETA_READINESS_CHECKPOINT.md`, others).
 - **Active Phase 2 design:** `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md` — read-only duplicate / orphan / stale workbook detection, classification, marker strategy, and admin audit functions (Phase 2A), with Phase 2B recovery scope recorded in its `§10`.
 
@@ -316,6 +333,25 @@ CashCompass now runs in **two coexisting shapes** that share one codebase. The b
 - **No version drift** — every central user runs the same code at the same time.
 - **Easier support** — one canonical code path; user-specific issues isolate to data, not code.
 - **Foundation for monetization** — the mapping store is the natural anchor for per-user plan / entitlement records (see `ENHANCEMENTS.md → Future direction — Monetization` and `TODO.md → Monetization`).
+
+## Workbook Identity & Recovery (live + roadmap)
+
+The Central App can lose track of a user's workbook (cleared/lost mapping, trashed workbook, two-project migration, manual edits). To make recovery safe and prevent silent duplicate provisioning, each workbook now carries **durable identity markers** and the central project keeps a **reverse index**. This section is intentionally high-level — implementation detail lives in `central_provisioning.js`, `central_diagnostics.js`, and `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md` so it does not go stale here.
+
+**What's live (Phase 6B — markers only, no behavior change):**
+
+- **Identity markers** — a workbook is stamped with a durable identity marker at create time, with **lazy backfill** when a mapped workbook opens without one. The markers let diagnostics and (future) recovery confidently confirm "this workbook belongs to this user."
+- **Reverse index** — the central project keeps a `spreadsheetId → user` index so a found workbook can be traced back to its owner without opening it as that user.
+- **`SYS - Meta` sheet** — a lightweight, hidden in-workbook marker sheet that survives Drive-level metadata loss (e.g. file copy), as a secondary identity signal.
+- **Admin marker diagnostics** — read-only, admin-gated visibility into which markers are present / matching for a given user.
+
+Provisioning and resolution behavior is **unchanged** by Phase 6B — markers are written and read, but no adoption, repair, or auto-recovery happens yet.
+
+**Recovery roadmap (Workbook Identity & Recovery 6C–6E):**
+
+- **6C — Adopt-Before-Create** — when a mapping is missing but exactly one strict, marker-verified candidate workbook exists, adopt it instead of creating a duplicate (flag-gated, creates/deletes nothing).
+- **6D — Recovery UX** — user-facing, self-service recovery for stale mappings and lost workbooks (clear messaging + safe actions instead of a hard error).
+- **6E — Admin Repair Tools** — admin-driven adopt / remap / orphan soft-delete, each with explicit confirmation and audit logging (never bulk, soft-delete only).
 
 ## Family Beta workbook styling
 

@@ -50,12 +50,15 @@ If you are onboarding a contributor (or yourself after a break), `INIT_PROMPT.md
 
 ## Current Product Status (June 2026)
 
-- **Architecture:** Central App operational.
-- **Family Beta readiness:** ~95%+.
+- **Architecture:** Central App operational — **stable, family-beta capable**; production / bound workbook remains protected.
 - **Completed (working in central mode):** Provisioning, Workbook Mapping, Dashboard, Planner, Assets, Properties, Cash Flow, Bills, Debts, Income, Activity, Email.
-- **Current focus:** Family Beta Hardening, Workbook Totals Project, Chat Assistant planning, External Beta preparation.
+- **Recently completed:** Diagnostics (Phase 2A Admin Diagnostics), Debt parity (Phase 3.1 TOTAL DEBT), Bank Accounts parity (Phase 3.2a Total Accounts + Phase 3.2b Delta), Bank/Debts Add-New dropdown fix, Identity markers (Phase 6A design + Phase 6B Workbook Identity Markers).
+- **Current focus (Workbook Identity & Recovery track):** Phase 6C Adopt-Before-Create → Phase 6D Recovery UX → Phase 6E Admin Repair Tools.
+- **Future:** External beta readiness/hardening, family-beta expansion + user-lifecycle handling, Chat Assistant, Paid Product framework.
 
-Full picture: `PROJECT_CONTEXT.md → Current Product Status (June 2026)`. Roadmap: `TODO.md → Launch Readiness Roadmap`.
+Full picture: `PROJECT_CONTEXT.md → Current Product Status (June 2026)` and `→ Workbook Identity & Recovery (live + roadmap)`. Roadmap: `TODO.md → Launch Readiness Roadmap`.
+
+> **Roadmap-label note:** the Identity & Recovery sub-series **Phase 6A–6E** is the detailed expansion of the macro roadmap's **Phase 2B — Workbook Recovery** — it is *not* the macro **"Phase 6 — External Beta Readiness."**
 
 ---
 
@@ -78,13 +81,18 @@ Authoritative sources: `WORKING_RULES.md → Current phase` + `→ Central App T
 
 Detailed source of truth: `TODO.md → Launch Readiness Roadmap` (objective, why it matters, deliverables, dependencies, priority per phase). High-level summary: `PROJECT_CONTEXT.md → Launch Readiness Roadmap (high-level)`. Short mirror:
 
-- **Phase 1 — Documentation Cleanup** *(in progress, P0)* — sync all docs with live Central architecture; record Family Beta styling + deployment model.
-- **Phase 2 — Family Beta Hardening** *(P1)* — **2A Workbook Diagnostics** (candidate detection, classification, mapping audit, orphan audit, duplicate visibility — read-only) then **2B Workbook Recovery** (auto-adopt, recovery/repair tools, stale-mapping recovery UX, rollout checklist). Design: `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`.
-- **Phase 3 — Workbook Totals Project** *(P1–P2)* — TOTAL DEBT, Total Accounts, Delta (+ formula strategy, insert/update behavior, reader compatibility).
-- **Phase 4 — Chat Assistant v1** *(P2)* — read-only assistant (spending/debt/retirement/cash-flow questions, planner + dashboard explanations). Write-capable assistant is future.
+- **Phase 1 — Documentation Cleanup** *(✅ complete, P0)* — docs synced with live Central architecture; Family Beta styling + deployment model recorded; kept current by ongoing doc passes.
+- **Phase 2 — Family Beta Hardening** *(P1, in progress)* — **2A Workbook Diagnostics** ✅ (read-only candidate detection, classification, mapping/orphan audit, duplicate visibility). **2B Workbook Recovery** is the active track, now expanded as the **Workbook Identity & Recovery** series (see below). Design: `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`.
+- **Phase 3 — Workbook Totals Project** *(✅ complete for current scope, P1–P2)* — TOTAL DEBT (3.1), Bank Accounts Total Accounts (3.2a), Bank Accounts Delta (3.2b). Investments / House Values parity is a later follow-up if needed.
+- **Phase 4 — Chat Assistant v1** *(P2, future)* — read-only assistant (spending/debt/retirement/cash-flow questions, planner + dashboard explanations). Write-capable assistant is future.
 - **Phase 5 — Web App UX Improvements** *(P2)* — onboarding, empty-states, error handling, user guidance/help, dashboard + planner polish, help text & content cleanup (reduce cognitive load) (+ residual V1.2 polish backlog).
-- **Phase 6 — External Beta Readiness** *(P3)* — support workflow, feedback collection, onboarding, recovery flows, diagnostics, beta-user management.
-- **Phase 7 — Paid Product Readiness** *(P4)* — pricing/subscription model, entitlements + plan enforcement, privacy policy, terms of service, support process, operational monitoring.
+- **Phase 6 — External Beta Readiness** *(P3, future)* — support workflow, feedback collection, onboarding, recovery flows, diagnostics, beta-user management.
+- **Phase 7 — Paid Product Readiness** *(P4, future)* — pricing/subscription model, entitlements + plan enforcement, privacy policy, terms of service, support process, operational monitoring.
+
+**Workbook Identity & Recovery (6A–6E) — active near-term track, expansion of Phase 2B:**
+
+- **6A — Identity & Recovery design** *(✅)* and **6B — Workbook Identity Markers** *(✅, markers only, no behavior change)*.
+- **6C — Adopt-Before-Create** *(next, P1)*, **6D — Recovery UX** *(P1–P2)*, **6E — Admin Repair Tools** *(P2)*.
 
 Small-polish picks (Profile DOB parser symmetry, empty-state sweeps, etc.) are retained in `TODO.md → V1.2 polish backlog` and fold into Phase 5.
 

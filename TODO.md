@@ -11,7 +11,7 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current phase — Central App live + Family Beta readiness
 
-The app has moved past "V1.2 / controlled improvement mode." **The Central App architecture is live and operational** (CENTRAL_MODE routing, per-user workbook provisioning, workbook mapping — all runtime-validated), and four input sheets now carry Family Beta styling. The authoritative forward plan is **`## Launch Readiness Roadmap`** immediately below (7 phases, the source of truth for the next 6–12 months).
+The app has moved past "V1.2 / controlled improvement mode." **The Central App architecture is live and operational** (CENTRAL_MODE routing, per-user workbook provisioning, workbook mapping — all runtime-validated), it is **stable and family-beta capable**, and four input sheets now carry Family Beta styling. Recently completed: read-only admin diagnostics (Phase 2A), Workbook Totals parity (TOTAL DEBT 3.1, Bank Accounts Total Accounts 3.2a + Delta 3.2b), the Bank/Debts Add-New dropdown fix, and Workbook Identity markers (Phase 6A design + 6B markers). The active near-term track is **Workbook Identity & Recovery (6C Adopt-Before-Create → 6D Recovery UX → 6E Admin Repair Tools)**. The authoritative forward plan is **`## Launch Readiness Roadmap`** immediately below; the ranked next efforts are in **`## Known priorities (ranked)`**.
 
 The V1 trust baseline (blank-workbook stability, no fake states, gated planner email, UI copy consistency pass) and the V1.1 retirement profile integration remain the stable foundation. The **V1.2 change discipline still applies to every edit** (`WORKING_RULES.md → Current phase`): one issue at a time, minimal / localized / safe diff, blank + populated workbook manual test steps. The Central App migration additionally follows `WORKING_RULES.md → Central App Transition Rules`, which is now the **active** governing policy (not future). See `SESSION_NOTES.md → Current State — Post V1.2 Prep` for the chronological migration record.
 
@@ -25,13 +25,14 @@ The older "V1.2 work queue" candidates are retained below under `## V1.2 polish 
 
 **Priority scale:** P0 = now / in progress · P1 = next, gates family beta · P2 = high, needed before external beta · P3 = gates external beta · P4 = post-beta / longest horizon. Phases are roughly sequential; where noted, some can overlap.
 
-### Phase 1 — Documentation Cleanup *(in progress)*
+### Phase 1 — Documentation Cleanup *(✅ complete)*
 
 - **Objective:** Make `PROJECT_CONTEXT.md` + `TODO.md` the single authoritative, current source of truth for architecture, status, and roadmap.
 - **Why it matters:** The docs had drifted far behind the code (Central App described as "future / not active," resolver as a "pass-through"). Stale docs cause re-derivation, wrong assumptions, and risky changes — and they block safe onboarding of contributors and beta support. Accurate docs are the prerequisite for everything after.
 - **Major deliverables:** Bring all docs in sync with the live Central architecture; archive completed migration work (history preserved in `SESSION_NOTES.md` + `CENTRAL_APP_*.md`); record Family Beta styling status; record current architecture + deployment model (two projects / `CENTRAL_MODE` / provisioning / mapping); this Launch Readiness Roadmap.
+- **Status:** ✅ Complete. Kept current by ongoing documentation passes (most recent: the June 2026 status + roadmap update reflecting Phase 2A / 3.1 / 3.2a / 3.2b / 6A / 6B completion).
 - **Dependencies:** None — foundation phase.
-- **Estimated priority:** **P0** (in progress, nearly complete).
+- **Estimated priority:** **P0** (complete).
 
 ### Phase 2 — Family Beta Hardening
 
@@ -43,9 +44,9 @@ The older "V1.2 work queue" candidates are retained below under `## V1.2 polish 
 
 This phase splits into two sub-phases — **2A (diagnostics, read-only)** ships first; **2B (recovery)** builds on its evidence.
 
-#### Phase 2A — Workbook Diagnostics
+#### Phase 2A — Workbook Diagnostics *(✅ complete)*
 
-Read-only detection and classification of Central App per-user workbooks. No repair, no auto-adopt, no writes to user Drive. Full design: `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`.
+Read-only detection and classification of Central App per-user workbooks. No repair, no auto-adopt, no writes to user Drive. Full design: `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`. **Shipped** as admin-gated diagnostics: candidate detection, classification (incl. cross-user `MAPPING_PRESENT_UNVERIFIABLE` / `NO_MAPPING_UNVERIFIABLE`), mapping + orphan audit, and the admin diagnostics UI.
 
 - **Workbook Diagnostics**
   - **Candidate workbook detection** — `findCandidateWorkbooks_` (marker + name fallback; `drive.file`-visible only).
@@ -55,22 +56,31 @@ Read-only detection and classification of Central App per-user workbooks. No rep
   - **Duplicate workbook visibility** — report (never destroy) when ≥2 candidates exist for one user.
 - Supporting: `appProperties` marker strategy (read-now / write-later), `adminDiagnosticsSelfTest`, and rollout 2A.0 (zero writes) → 2A.1 (create-path marker) → 2A.2 (lazy backfill). All detail in `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`.
 
-#### Phase 2B — Workbook Recovery (deferred)
+#### Phase 2B — Workbook Recovery → expanded as **Workbook Identity & Recovery (6A–6E)**
 
-Explicit, admin-driven repair built on 2A's evidence. Design intent only — see `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md → §10`.
+Explicit, admin-driven and self-service repair built on 2A's evidence. This is the **active near-term track**; it was designed in detail (Phase 6A) and now carries finer-grained working labels **6A–6E**. Design intent: `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md → §10` plus the Phase 6A design pass.
 
-- Safe **auto-adopt** of a single strict candidate (flag-gated, default off; creates/deletes nothing).
-- **Provisioning-time gate** (0 candidates → create; 1 → adopt; ≥2 → stop + admin-log).
-- **Admin repair tools** — `adminAdoptWorkbook`, `clearMappingForUser_`, `adminTrashOrphan` (soft delete only, id-in-hand, never bulk).
-- **Stale-mapping recovery UX**, provisioning diagnostics, admin diagnostics surface, and the **family beta rollout checklist**.
+> **Label note:** "Phase 6A–6E" here is the detailed expansion of **2B Workbook Recovery**. It is **not** the macro **Phase 6 — External Beta Readiness** below. The two "6"s mean different things; resolve by reading the surrounding context (Identity & Recovery vs External Beta).
 
-### Phase 3 — Workbook Totals Project
+- **6A — Workbook Identity & Recovery design** *(✅ complete)* — identity-marker model (primary Drive `appProperties`, secondary in-workbook `SYS - Meta`, Script-Properties reverse index), adopt-before-create decision tree + confidence/safety rules, recovery UX, admin-repair safeguards + audit logging, and existing-workbook migration strategy.
+- **6B — Workbook Identity Markers** *(✅ complete)* — durable identity markers stamped at create + lazy backfill on mapped-open, reverse index (`wbid::<spreadsheetId> → user`), hidden `SYS - Meta` marker sheet, and read-only admin marker diagnostics. **No provisioning/resolution behavior change.**
+- **6C — Adopt-Before-Create** *(next, P1)* — when a mapping is missing but exactly one strict, marker-verified candidate exists, adopt it instead of silently creating a duplicate. Flag-gated, default off; creates/deletes nothing. Provisioning-time gate: 0 candidates → create; 1 strict → adopt; ≥2 → stop + admin-log.
+- **6D — Recovery UX** *(P1–P2)* — user-facing, self-service recovery for stale mappings / lost workbooks (clear messaging + safe actions instead of a hard error); provisioning diagnostics surfaced to the user where appropriate.
+- **6E — Admin Repair Tools** *(P2)* — `adminAdoptWorkbook`, `clearMappingForUser_`, `adminTrashOrphan` (soft delete only, id-in-hand, never bulk), each with explicit confirmation + audit logging; admin diagnostics surface; **family beta rollout checklist**.
+
+### Phase 3 — Workbook Totals Project *(✅ complete for current scope)*
 
 - **Objective:** Bring newly provisioned workbooks to visual + functional parity with the production workbook by generating canonical summary rows on first-create.
-- **Why it matters:** Fresh workbooks currently lack the `TOTAL DEBT` / `Total Accounts` / `Delta` rows users expect and that some readers/UX assume. Parity reduces confusion and support load, and makes the beta experience feel finished.
-- **Major deliverables:** `TOTAL DEBT`; `Total Accounts`; `Delta`; any additional summary rows; **formula strategy** (insert-proof `SUM`/`INDEX`-anchored formulas, not fixed ranges); **insert/update behavior** (new rows route above the totals band; totals never overwritten); **reader compatibility** (existing total/delta skip logic in dashboard + planner readers preserved — no double-counting).
-- **Dependencies:** Phase 1; the Family Beta styling helpers (done) to style the generated rows. Best landed before broad beta so workbooks are consistent; can overlap with Phase 2.
-- **Estimated priority:** **P1–P2** — high; can run alongside Phase 2.
+- **Why it matters:** Fresh workbooks previously lacked the `TOTAL DEBT` / `Total Accounts` / `Delta` rows users expect and that some readers/UX assume. Parity reduces confusion and support load, and makes the beta experience feel finished.
+- **Delivered:**
+  - **3.1 — TOTAL DEBT** ✅ — summary row on `INPUT - Debts` that sums the financial columns; matcher fix so single-cell `=SUM(C2)` (auto-normalized by Sheets) refreshes correctly.
+  - **3.2a — Bank Accounts Total Accounts** ✅ — per-year-block per-month + Total-column SUM row on `INPUT - Bank Accounts`.
+  - **3.2b — Bank Accounts Delta** ✅ — month-over-month change row (display-only; January blank/0 logic with cross-year chaining; Total column sums the month cells).
+  - Bank/Debts **Add-New dropdown fix** ✅ — Type dropdowns merge canonical + server options (deduped union) so they don't collapse after an add.
+- **Formula strategy / insert behavior / reader compatibility** preserved — insert-proof SUM formulas, new rows route above the totals band, existing total/delta skip logic in dashboard + planner readers preserved (no double-counting).
+- **Later follow-up (if needed):** Investments / House Values summary-row parity (not yet required by readers).
+- **Dependencies:** Phase 1; the Family Beta styling helpers (done) to style the generated rows.
+- **Estimated priority:** **P1–P2** — complete for the current scope.
 
 ### Phase 4 — Chat Assistant v1
 
@@ -102,6 +112,8 @@ Explicit, admin-driven repair built on 2A's evidence. Design intent only — see
 
 ### Phase 6 — External Beta Readiness
 
+> **Label note:** this macro **Phase 6** is the **External Beta** phase. It is distinct from the **Workbook Identity & Recovery "6A–6E"** working labels under Phase 2B above (those expand 2B Workbook Recovery, not this phase).
+
 - **Objective:** Move from a small family beta to a wider invited external beta.
 - **Why it matters:** External users need support, feedback channels, smooth onboarding, recovery flows, diagnostics, and user management. Without these, scaling beyond a handful of trusted users is unmanageable and reputationally risky.
 - **Major deliverables:** Support workflow; feedback collection; user onboarding (allow-list → invite flow); recovery flows; diagnostics; beta-user management (add/remove, status, mapping health at scale).
@@ -115,6 +127,20 @@ Explicit, admin-driven repair built on 2A's evidence. Design intent only — see
 - **Major deliverables:** Pricing model; subscription model; entitlements (`SYS - Users` schema, `getUserPlan_` / `isPaidUser_` helpers); plan enforcement (gate advanced features only, fail open per `WORKING_RULES.md → Monetization Rules`); privacy policy; terms of service; support process; operational monitoring.
 - **Dependencies:** Phase 6 (stable external beta + support/monitoring baseline). Follows `WORKING_RULES.md → Monetization Rules`.
 - **Estimated priority:** **P4** — last; longest horizon (6–12 months out).
+
+---
+
+## Known priorities (ranked)
+
+The next major efforts, ranked. This is the at-a-glance "what's next" view; the per-phase detail lives in `## Launch Readiness Roadmap` above. Diagnostics, Debt parity, Bank Accounts parity, and Identity markers are **already complete** and are not in this list.
+
+1. **Adopt-Before-Create** *(6C)* — stop silent duplicate provisioning; adopt a single marker-verified candidate when a mapping is lost.
+2. **Recovery UX** *(6D)* — self-service recovery for stale mappings / lost workbooks.
+3. **Admin Repair Actions** *(6E)* — admin adopt / remap / orphan soft-delete with confirmations + audit logging.
+4. **External Beta Hardening** *(macro Phase 6)* — support, feedback, onboarding, beta-user management for a wider invited beta.
+5. **User Lifecycle Handling** — onboarding/offboarding, ownership changes, re-provisioning, removal from the allow-list, and mapping health at scale.
+6. **Chat Assistant** *(macro Phase 4)* — read-only natural-language assistant over the canonical read models.
+7. **Paid Product Readiness** *(macro Phase 7)* — pricing/subscription, entitlements, plan enforcement (fail open), legal docs, support, monitoring.
 
 ---
 
