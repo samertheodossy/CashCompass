@@ -11,7 +11,7 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current phase — Central App live + Family Beta readiness
 
-The app has moved past "V1.2 / controlled improvement mode." **The Central App architecture is live and operational** (CENTRAL_MODE routing, per-user workbook provisioning, workbook mapping — all runtime-validated), it is **stable and family-beta capable**, and four input sheets now carry Family Beta styling. Recently completed: read-only admin diagnostics (Phase 2A), Workbook Totals parity (TOTAL DEBT 3.1, Bank Accounts Total Accounts 3.2a + Delta 3.2b), the Bank/Debts Add-New dropdown fix, and Workbook Identity markers (Phase 6A design + 6B markers). The active near-term track is **Workbook Identity & Recovery (6C Adopt-Before-Create → 6D Recovery UX → 6E Admin Repair Tools)**. The authoritative forward plan is **`## Launch Readiness Roadmap`** immediately below; the ranked next efforts are in **`## Known priorities (ranked)`**.
+The app has moved past "V1.2 / controlled improvement mode." **The Central App architecture is live and operational** (CENTRAL_MODE routing, per-user workbook provisioning, workbook mapping — all runtime-validated), it is **stable and family-beta capable**, and four input sheets now carry Family Beta styling. Recently completed: read-only admin diagnostics (Phase 2A), Workbook Totals parity (TOTAL DEBT 3.1, Bank Accounts Total Accounts 3.2a + Delta 3.2b), the Bank/Debts Add-New dropdown fix, and Workbook Identity markers (Phase 6A design + 6B markers). The **recovery stack (6C.1 Adopt-Before-Create, 6D.1 Recovery Page, 6D.2a Reconnect, 6E.1 Admin Inspect + Clear Mapping) is implemented and committed but flag-gated OFF (`CENTRAL_AUTO_ADOPT`, `CENTRAL_RECOVERY_ACTIONS`, `CENTRAL_ADMIN_REPAIR` — see `## Flag Registry`).** It is **healthy-path validated (2026-06-09)** — dashboard loads normally with recovery + admin-repair flags ON and auto-adopt OFF, no recovery page, no regression, Admin Diagnostics + Repair Toolkit + Inspect/preview/confirm UI all work — but the **destructive/edge paths are not yet validated**. The active near-term step is **Recovery Validation (6F)** — the destructive/edge-path test pass, then flags OFF; remaining slices are 6D.2b Create New Workbook and 6E.2 Admin Set Mapping. The authoritative forward plan is **`## Launch Readiness Roadmap`** immediately below; the ranked next efforts are in **`## Known priorities (ranked)`**; untested features are in **`## Open testing inventory`**.
 
 The V1 trust baseline (blank-workbook stability, no fake states, gated planner email, UI copy consistency pass) and the V1.1 retirement profile integration remain the stable foundation. The **V1.2 change discipline still applies to every edit** (`WORKING_RULES.md → Current phase`): one issue at a time, minimal / localized / safe diff, blank + populated workbook manual test steps. The Central App migration additionally follows `WORKING_RULES.md → Central App Transition Rules`, which is now the **active** governing policy (not future). See `SESSION_NOTES.md → Current State — Post V1.2 Prep` for the chronological migration record.
 
@@ -30,7 +30,7 @@ The older "V1.2 work queue" candidates are retained below under `## V1.2 polish 
 - **Objective:** Make `PROJECT_CONTEXT.md` + `TODO.md` the single authoritative, current source of truth for architecture, status, and roadmap.
 - **Why it matters:** The docs had drifted far behind the code (Central App described as "future / not active," resolver as a "pass-through"). Stale docs cause re-derivation, wrong assumptions, and risky changes — and they block safe onboarding of contributors and beta support. Accurate docs are the prerequisite for everything after.
 - **Major deliverables:** Bring all docs in sync with the live Central architecture; archive completed migration work (history preserved in `SESSION_NOTES.md` + `CENTRAL_APP_*.md`); record Family Beta styling status; record current architecture + deployment model (two projects / `CENTRAL_MODE` / provisioning / mapping); this Launch Readiness Roadmap.
-- **Status:** ✅ Complete. Kept current by ongoing documentation passes (most recent: the June 2026 status + roadmap update reflecting Phase 2A / 3.1 / 3.2a / 3.2b / 6A / 6B completion).
+- **Status:** ✅ Complete. Kept current by ongoing documentation passes (most recent: the June 2026 Documentation Sync reflecting Phase 2A / 3.1 / 3.2a / 3.2b / 6A / 6B / 6C.1 / 6D.1 / 6D.2a / 6E.1 completion + Flag Registry).
 - **Dependencies:** None — foundation phase.
 - **Estimated priority:** **P0** (complete).
 
@@ -56,17 +56,21 @@ Read-only detection and classification of Central App per-user workbooks. No rep
   - **Duplicate workbook visibility** — report (never destroy) when ≥2 candidates exist for one user.
 - Supporting: `appProperties` marker strategy (read-now / write-later), `adminDiagnosticsSelfTest`, and rollout 2A.0 (zero writes) → 2A.1 (create-path marker) → 2A.2 (lazy backfill). All detail in `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`.
 
-#### Phase 2B — Workbook Recovery → expanded as **Workbook Identity & Recovery (6A–6E)**
+#### Phase 2B — Workbook Recovery → expanded as **Workbook Identity & Recovery (6A–6F)**
 
-Explicit, admin-driven and self-service repair built on 2A's evidence. This is the **active near-term track**; it was designed in detail (Phase 6A) and now carries finer-grained working labels **6A–6E**. Design intent: `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md → §10` plus the Phase 6A design pass.
+Explicit, admin-driven and self-service repair built on 2A's evidence. This is the **active near-term track**; it was designed in detail (Phase 6A) and now carries finer-grained working labels **6A–6F**. The recovery stack (6C.1 / 6D.1 / 6D.2a / 6E.1) is **implemented and committed, flag-gated OFF, and healthy-path validated (2026-06-09) — destructive/edge-path validation is 6F**. Design intent: `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md → §10` plus the Phase 6A design pass. Flags: see `## Flag Registry`.
 
-> **Label note:** "Phase 6A–6E" here is the detailed expansion of **2B Workbook Recovery**. It is **not** the macro **Phase 6 — External Beta Readiness** below. The two "6"s mean different things; resolve by reading the surrounding context (Identity & Recovery vs External Beta).
+> **Label note:** "Phase 6A–6F" here is the detailed expansion of **2B Workbook Recovery**. It is **not** the macro **Phase 6 — External Beta Readiness** below. The two "6"s mean different things; resolve by reading the surrounding context (Identity & Recovery vs External Beta).
 
 - **6A — Workbook Identity & Recovery design** *(✅ complete)* — identity-marker model (primary Drive `appProperties`, secondary in-workbook `SYS - Meta`, Script-Properties reverse index), adopt-before-create decision tree + confidence/safety rules, recovery UX, admin-repair safeguards + audit logging, and existing-workbook migration strategy.
 - **6B — Workbook Identity Markers** *(✅ complete)* — durable identity markers stamped at create + lazy backfill on mapped-open, reverse index (`wbid::<spreadsheetId> → user`), hidden `SYS - Meta` marker sheet, and read-only admin marker diagnostics. **No provisioning/resolution behavior change.**
-- **6C — Adopt-Before-Create** *(next, P1)* — when a mapping is missing but exactly one strict, marker-verified candidate exists, adopt it instead of silently creating a duplicate. Flag-gated, default off; creates/deletes nothing. Provisioning-time gate: 0 candidates → create; 1 strict → adopt; ≥2 → stop + admin-log.
-- **6D — Recovery UX** *(P1–P2)* — user-facing, self-service recovery for stale mappings / lost workbooks (clear messaging + safe actions instead of a hard error); provisioning diagnostics surfaced to the user where appropriate.
-- **6E — Admin Repair Tools** *(P2)* — `adminAdoptWorkbook`, `clearMappingForUser_`, `adminTrashOrphan` (soft delete only, id-in-hand, never bulk), each with explicit confirmation + audit logging; admin diagnostics surface; **family beta rollout checklist**.
+- **6C.1 — Adopt-Before-Create** *(✅ implemented; flag `CENTRAL_AUTO_ADOPT`, default OFF; not yet validated — flag was OFF during the 2026-06-09 pass)* — at provisioning time with no mapping (inside the per-user lock, after the double-check, before create): 0 candidates → create; exactly 1 strict (HIGH or MEDIUM) candidate → adopt (relink mapping + reverse index, no Drive create/delete); ≥2 → throw `AmbiguousWorkbookError`. Availability-first: detection failures log and fall through to create. Adopt path mirrors mapped-open (`cleanupDefaultSheet1_`, `ensureWorkbookIdentityMarkers_`). Functions: `isAutoAdoptEnabled_`, `tryAdoptWorkbookBeforeCreate_`, `relinkSingleCandidate_`, `buildAmbiguousWorkbookError_`.
+- **6D.1 — Recovery Page** *(✅ implemented; not flag-gated; partially validated — does not trigger on healthy path; real-failure render pending 6F)* — display-only recovery screen for `StaleMappingError` / `AmbiguousWorkbookError` / generic provisioning failure, routed from the startup gate instead of a raw error. No self-service actions, no writes. Functions: `buildRecoveryRouting_` (in `sheet_bootstrap.js`), `showRecoveryPage` / `recoveryReload` (client), `#page_recovery` (Dashboard_Body.html).
+- **6D.2a — Reconnect** *(✅ implemented; flag `CENTRAL_RECOVERY_ACTIONS`, default OFF; partially validated — flag-on UI load OK; executed relink pending 6F)* — self-scoped, user-initiated relink to a single existing candidate (reuses `relinkSingleCandidate_`); ambiguous/none/error handled in UI; no Drive create. Functions: `isRecoveryActionsEnabled_`, `recoveryReconnectSelf`, client `recoveryReconnect`.
+- **6E.1 — Admin Inspect + Clear Mapping** *(✅ implemented; flag `CENTRAL_ADMIN_REPAIR`, default OFF; healthy-path validated — Inspect/preview/reverse-index/confirm UI work; executed clear pending 6F)* — admin-gated read-only `adminInspectUser` (full for self, mapping-only for others — `drive.file` scope limits cross-user Drive reads) + guarded, audited `adminClearMapping` (deletes mapping + reverse-index property only; **no Drive writes, no file deletion**). Bounded admin audit ring buffer (`appendAdminAudit_` / `adminGetAuditLog`, hashed/truncated). Functions in `central_diagnostics.js` + `clearReverseIndexForWorkbook_` in `central_provisioning.js`.
+- **6F — Recovery Validation** *(current, P1)* — healthy-path load validated 2026-06-09; remaining = destructive/edge-path validation on a disposable account (adopt with flag ON → real stale-mapping recovery page → executed reconnect → executed admin clear → ambiguous handling → audit log), then **flags OFF**. No new code expected unless a defect is found. See `## Open testing inventory`.
+- **6D.2b — Create New Workbook** *(remaining, P1; designed, not implemented)* — self-service "start fresh" recovery action; separate flag, explicit confirm, duplicate-avoidance-first, self-scoped.
+- **6E.2 — Admin Set Mapping** *(remaining, P2; designed, not implemented)* — guarded admin remap to an admin-supplied spreadsheet ID (preview-before-write, audited). Future admin tooling also: `adminAdoptWorkbook`, `adminTrashOrphan` (soft delete only, id-in-hand, never bulk) + family-beta rollout checklist.
 
 ### Phase 3 — Workbook Totals Project *(✅ complete for current scope)*
 
@@ -132,15 +136,69 @@ Explicit, admin-driven and self-service repair built on 2A's evidence. This is t
 
 ## Known priorities (ranked)
 
-The next major efforts, ranked. This is the at-a-glance "what's next" view; the per-phase detail lives in `## Launch Readiness Roadmap` above. Diagnostics, Debt parity, Bank Accounts parity, and Identity markers are **already complete** and are not in this list.
+The next major efforts, ranked. This is the at-a-glance "what's next" view; the per-phase detail lives in `## Launch Readiness Roadmap` above. Diagnostics, Debt parity, Bank Accounts parity, and Identity markers are **already complete** and are not in this list. The recovery stack (6C.1 / 6D.1 / 6D.2a / 6E.1) is **built and healthy-path validated (2026-06-09) but destructive-path unvalidated** — so finishing validation, not more building, is the top priority.
 
-1. **Adopt-Before-Create** *(6C)* — stop silent duplicate provisioning; adopt a single marker-verified candidate when a mapping is lost.
-2. **Recovery UX** *(6D)* — self-service recovery for stale mappings / lost workbooks.
-3. **Admin Repair Actions** *(6E)* — admin adopt / remap / orphan soft-delete with confirmations + audit logging.
+1. **Recovery Validation** *(6F)* — destructive/edge-path test pass of the already-shipped recovery stack (adopt with flag ON → real stale-mapping recovery → executed reconnect → executed admin clear → ambiguous handling → audit), then flags OFF. **Top priority — healthy-path proven, destructive paths still need evidence.**
+2. **Create New Workbook recovery action** *(6D.2b)* — self-service "start fresh" when reconnect can't help (designed, not implemented).
+3. **Admin Set Mapping** *(6E.2)* — guarded admin remap to a supplied ID, preview-before-write + audited (designed, not implemented).
 4. **External Beta Hardening** *(macro Phase 6)* — support, feedback, onboarding, beta-user management for a wider invited beta.
 5. **User Lifecycle Handling** — onboarding/offboarding, ownership changes, re-provisioning, removal from the allow-list, and mapping health at scale.
 6. **Chat Assistant** *(macro Phase 4)* — read-only natural-language assistant over the canonical read models.
 7. **Paid Product Readiness** *(macro Phase 7)* — pricing/subscription, entitlements, plan enforcement (fail open), legal docs, support, monitoring.
+
+---
+
+## Flag Registry
+
+Central-project **script properties** (`PropertiesService`), read at runtime, **default OFF**, **fail closed** (absent/unparseable → OFF). They let the recovery stack ship dark; enable only for validation, then disable. Set to `true` (string) to enable. Authoritative copy: `PROJECT_CONTEXT.md → Flag Registry`.
+
+| Flag | Default | Status | Risk | Gates | When OFF |
+| --- | --- | --- | --- | --- | --- |
+| `CENTRAL_AUTO_ADOPT` | OFF | Implemented, not fully validated | High | 6C.1 Adopt-Before-Create (`tryAdoptWorkbookBeforeCreate_`) | No adoption; provisioning creates a new workbook. |
+| `CENTRAL_RECOVERY_ACTIONS` | OFF | Implemented, healthy-path validated | Medium | 6D.2a Reconnect action (`recoveryReconnectSelf`) | Recovery page stays display-only; Reconnect button hidden. |
+| `CENTRAL_ADMIN_REPAIR` | OFF | Implemented, healthy-path validated | Medium | 6E.1 admin Inspect + Clear Mapping (`adminInspectUser` / `adminClearMapping`) | Admin repair endpoints disabled / no-op. |
+
+**Recommended usage:** `CENTRAL_AUTO_ADOPT` — keep OFF until 6F validates adopt + ambiguous handling (High risk: only flag that changes the create/relink path). `CENTRAL_RECOVERY_ACTIONS` / `CENTRAL_ADMIN_REPAIR` — safe to enable for controlled testing (healthy-path load validated 2026-06-09); run the actual reconnect-relink and an executed admin clear only against a disposable test user before family-beta reliance.
+
+**Healthy-path validation (2026-06-09):** dashboard loaded with `CENTRAL_RECOVERY_ACTIONS=true` + `CENTRAL_ADMIN_REPAIR=true` + `CENTRAL_AUTO_ADOPT=false` — existing workbook resolved, no recovery page, no regression; Admin Diagnostics + Repair Toolkit + Inspect/mapping-preview/reverse-index/confirm-before-clear UI all worked. Destructive/edge paths still pending — see `## Open testing inventory`.
+
+- Independent of `CENTRAL_MODE`, `FAMILY_BETA_ALLOWLIST`, and `ADMIN_EMAILS`.
+- The **Recovery Page (6D.1)** is **not** flag-gated — it always replaces a raw error with a friendly screen; only the Reconnect action on it is gated.
+- All three are **OFF in the committed state**, so the recovery stack is inert until deliberately enabled; after the 6F destructive-path pass, return flags OFF for steady state.
+
+---
+
+## Open testing inventory
+
+Validation status per recovery capability. A **healthy-path** pass ran 2026-06-09 (flags `CENTRAL_RECOVERY_ACTIONS` + `CENTRAL_ADMIN_REPAIR` ON, `CENTRAL_AUTO_ADOPT` OFF). The remaining gap is the **destructive/edge paths**; the 6F pass below closes it. Authoritative copy: `PROJECT_CONTEXT.md → Recovery Validation Inventory`.
+
+**Implemented + tested (validated):**
+
+| Item | Flag | Risk | Status / timing |
+| --- | --- | --- | --- |
+| Identity markers (6B) | — | Low | Validated (in use since 6B). |
+| Admin Inspect User — read-only (6E.1) | `CENTRAL_ADMIN_REPAIR` | Low | Validated — Diagnostics + Repair Toolkit load, Inspect + mapping preview + reverse-index visibility work. |
+| Recovery flags healthy-path load | recovery + admin-repair ON | Low | Validated — dashboard loads, existing workbook resolves, no recovery page, no regression. |
+| Confirm-before-clear UI (6E.1) | `CENTRAL_ADMIN_REPAIR` | Low | Validated (prompt renders; clear not executed). |
+
+**Implemented + partially tested:**
+
+| Item | Flag | Risk | Status / timing |
+| --- | --- | --- | --- |
+| Recovery Page (6D.1) | — | Medium | Code present, doesn't trigger on healthy path; not yet triggered by a real failure → 6F. |
+| Reconnect action (6D.2a) | `CENTRAL_RECOVERY_ACTIONS` | Medium | Button/flag wired + visible; actual relink not executed live → 6F. |
+
+**Implemented + not yet tested:**
+
+| Item | Flag | Risk | Status / timing |
+| --- | --- | --- | --- |
+| Adopt-Before-Create with flag ON (6C.1) | `CENTRAL_AUTO_ADOPT` | High | Not tested (flag OFF during validation) → 6F, isolated, disposable account. |
+| Recovery stale-mapping flow (end-to-end) | — | Medium–High | Not tested; no failure induced yet → 6F (clear only the test user's mapping). |
+| Ambiguous handling (≥2 → `AmbiguousWorkbookError`) | `CENTRAL_AUTO_ADOPT` | Medium | Not tested → 6F. |
+| Admin Clear Mapping — executed (6E.1) | `CENTRAL_ADMIN_REPAIR` | Medium | UI validated; executed clear not run → 6F, disposable test user. |
+| Admin audit ring buffer (append/read, hashed) | `CENTRAL_ADMIN_REPAIR` | Low | Not exercised end-to-end → 6F. |
+
+**6F — Recovery Validation pass (P1, do first):** on a **disposable** account, exercise the partial + untested rows above (enable `CENTRAL_AUTO_ADOPT` only in isolation) → confirm expected behavior, no cross-user leakage, bound deployment unaffected → **set all flags OFF** → record evidence in `SESSION_NOTES.md`. No production/bound workbook involved. Triggering a safe `StaleMappingError` for the recovery-page test: clear only the test user's mapping via `clearMappingForUser_` (mapping store only; data untouched).
 
 ---
 

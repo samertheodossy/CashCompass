@@ -53,12 +53,15 @@ If you are onboarding a contributor (or yourself after a break), `INIT_PROMPT.md
 - **Architecture:** Central App operational — **stable, family-beta capable**; production / bound workbook remains protected.
 - **Completed (working in central mode):** Provisioning, Workbook Mapping, Dashboard, Planner, Assets, Properties, Cash Flow, Bills, Debts, Income, Activity, Email.
 - **Recently completed:** Diagnostics (Phase 2A Admin Diagnostics), Debt parity (Phase 3.1 TOTAL DEBT), Bank Accounts parity (Phase 3.2a Total Accounts + Phase 3.2b Delta), Bank/Debts Add-New dropdown fix, Identity markers (Phase 6A design + Phase 6B Workbook Identity Markers).
-- **Current focus (Workbook Identity & Recovery track):** Phase 6C Adopt-Before-Create → Phase 6D Recovery UX → Phase 6E Admin Repair Tools.
+- **Recovery stack (shipped behind flags, default OFF; healthy-path validated 2026-06-09, destructive paths pending):** Phase 6C.1 Adopt-Before-Create (`CENTRAL_AUTO_ADOPT` — implemented, not fully validated), Phase 6D.1 Recovery Page, Phase 6D.2a Reconnect (`CENTRAL_RECOVERY_ACTIONS` — healthy-path validated), Phase 6E.1 Admin Inspect + Clear Mapping (`CENTRAL_ADMIN_REPAIR` — healthy-path validated). See `PROJECT_CONTEXT.md → Flag Registry` + `→ Recovery Validation Inventory`.
+- **Current focus — Recovery Validation (6F):** destructive/edge-path test pass (adopt ON, real stale-mapping recovery, executed reconnect + admin clear, ambiguous handling) on a disposable account, then flags OFF. Remaining slices: 6D.2b Create New Workbook, 6E.2 Admin Set Mapping.
+- **Status snapshot (2026-06-09):** Central Architecture ~95%+ · Recovery Architecture ~85–90% implemented · Recovery Validation partial · Family Beta Readiness improving · External Beta Readiness dependent on recovery validation.
+- **Bound safety:** **SAFE TO PUSH TO BOUND** — recovery code is `CENTRAL_MODE`-gated and fail-closed; bound workbook unaffected. Precondition: verify allow-list + bound deployment config before any future bound deploy. See `PROJECT_CONTEXT.md → Bound Project Safety`.
 - **Future:** External beta readiness/hardening, family-beta expansion + user-lifecycle handling, Chat Assistant, Paid Product framework.
 
-Full picture: `PROJECT_CONTEXT.md → Current Product Status (June 2026)` and `→ Workbook Identity & Recovery (live + roadmap)`. Roadmap: `TODO.md → Launch Readiness Roadmap`.
+Full picture: `PROJECT_CONTEXT.md → Current Product Status (June 2026)`, `→ Workbook Identity & Recovery (live + roadmap)`, `→ Flag Registry`, `→ Recovery Validation Inventory`, and `→ Bound Project Safety`. Roadmap: `TODO.md → Launch Readiness Roadmap`.
 
-> **Roadmap-label note:** the Identity & Recovery sub-series **Phase 6A–6E** is the detailed expansion of the macro roadmap's **Phase 2B — Workbook Recovery** — it is *not* the macro **"Phase 6 — External Beta Readiness."**
+> **Roadmap-label note:** the Identity & Recovery sub-series **Phase 6A–6F** is the detailed expansion of the macro roadmap's **Phase 2B — Workbook Recovery** — it is *not* the macro **"Phase 6 — External Beta Readiness."**
 
 ---
 
@@ -82,17 +85,19 @@ Authoritative sources: `WORKING_RULES.md → Current phase` + `→ Central App T
 Detailed source of truth: `TODO.md → Launch Readiness Roadmap` (objective, why it matters, deliverables, dependencies, priority per phase). High-level summary: `PROJECT_CONTEXT.md → Launch Readiness Roadmap (high-level)`. Short mirror:
 
 - **Phase 1 — Documentation Cleanup** *(✅ complete, P0)* — docs synced with live Central architecture; Family Beta styling + deployment model recorded; kept current by ongoing doc passes.
-- **Phase 2 — Family Beta Hardening** *(P1, in progress)* — **2A Workbook Diagnostics** ✅ (read-only candidate detection, classification, mapping/orphan audit, duplicate visibility). **2B Workbook Recovery** is the active track, now expanded as the **Workbook Identity & Recovery** series (see below). Design: `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`.
+- **Phase 2 — Family Beta Hardening** *(P1, in progress)* — **2A Workbook Diagnostics** ✅ (read-only candidate detection, classification, mapping/orphan audit, duplicate visibility). **2B Workbook Recovery** is expanded as the **Workbook Identity & Recovery** series — the recovery stack (6C.1/6D.1/6D.2a/6E.1) is **implemented and committed, flag-gated OFF, and healthy-path validated (2026-06-09) — destructive/edge paths pending**; the active step is **Recovery Validation (6F)** (see below). Design: `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`.
 - **Phase 3 — Workbook Totals Project** *(✅ complete for current scope, P1–P2)* — TOTAL DEBT (3.1), Bank Accounts Total Accounts (3.2a), Bank Accounts Delta (3.2b). Investments / House Values parity is a later follow-up if needed.
 - **Phase 4 — Chat Assistant v1** *(P2, future)* — read-only assistant (spending/debt/retirement/cash-flow questions, planner + dashboard explanations). Write-capable assistant is future.
 - **Phase 5 — Web App UX Improvements** *(P2)* — onboarding, empty-states, error handling, user guidance/help, dashboard + planner polish, help text & content cleanup (reduce cognitive load) (+ residual V1.2 polish backlog).
 - **Phase 6 — External Beta Readiness** *(P3, future)* — support workflow, feedback collection, onboarding, recovery flows, diagnostics, beta-user management.
 - **Phase 7 — Paid Product Readiness** *(P4, future)* — pricing/subscription model, entitlements + plan enforcement, privacy policy, terms of service, support process, operational monitoring.
 
-**Workbook Identity & Recovery (6A–6E) — active near-term track, expansion of Phase 2B:**
+**Workbook Identity & Recovery (6A–6F) — active near-term track, expansion of Phase 2B:**
 
 - **6A — Identity & Recovery design** *(✅)* and **6B — Workbook Identity Markers** *(✅, markers only, no behavior change)*.
-- **6C — Adopt-Before-Create** *(next, P1)*, **6D — Recovery UX** *(P1–P2)*, **6E — Admin Repair Tools** *(P2)*.
+- **6C.1 — Adopt-Before-Create** *(✅, `CENTRAL_AUTO_ADOPT` OFF)*, **6D.1 — Recovery Page** *(✅)*, **6D.2a — Reconnect** *(✅, `CENTRAL_RECOVERY_ACTIONS` OFF)*, **6E.1 — Admin Inspect + Clear Mapping** *(✅, `CENTRAL_ADMIN_REPAIR` OFF)*. All **implemented, flag-gated OFF; healthy-path validated (2026-06-09), destructive/edge paths pending**.
+- **6F — Recovery Validation** *(current, P1)* — healthy-path load validated; remaining = destructive/edge-path test pass, then flags OFF. Remaining slices: **6D.2b — Create New Workbook** *(P1, designed)*, **6E.2 — Admin Set Mapping** *(P2, designed)*.
+- Flags: see `PROJECT_CONTEXT.md → Flag Registry` (`CENTRAL_AUTO_ADOPT`, `CENTRAL_RECOVERY_ACTIONS`, `CENTRAL_ADMIN_REPAIR` — all default OFF).
 
 Small-polish picks (Profile DOB parser symmetry, empty-state sweeps, etc.) are retained in `TODO.md → V1.2 polish backlog` and fold into Phase 5.
 
