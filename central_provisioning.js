@@ -47,6 +47,25 @@ var BETA_CONTACT_EMAIL_KEY_ = 'BETA_CONTACT_EMAIL';
 var MAPPING_KEY_PREFIX_ = 'mapping::';
 
 /**
+ * Reverse-index key prefix (Phase 6B). Maps a spreadsheet ID back to the
+ * owning user's email hash: `wbid::<spreadsheetId>` -> <email_hash>. This is
+ * a SUPPLEMENTARY trace aid only — the forward `mapping::` store remains the
+ * single source of truth for "which workbook is active". The reverse index is
+ * written best-effort and its absence never affects resolution.
+ */
+var REVERSE_INDEX_KEY_PREFIX_ = 'wbid::';
+
+/**
+ * Name of the hidden in-workbook identity marker sheet (Phase 6B). Holds a
+ * small key/value copy of the durable identity fields so identity survives
+ * even if Drive file-level appProperties are stripped, and so a Drive "Make a
+ * copy" (which copies sheet content but NOT appProperties) can later be
+ * recognized as a duplicate. Follows the existing `SYS - …` reserved-sheet
+ * convention. Cosmetic/metadata only — no reader depends on it.
+ */
+var SYS_META_SHEET_NAME_ = 'SYS - Meta';
+
+/**
  * Lock semantics. 30 seconds is long enough for a single provisioning
  * pass (Drive create + openById + ensureInputSettingsSheet_ +
  * properties write); short enough that a stuck lock surfaces fast.
@@ -232,6 +251,173 @@ function clearMappingForUser_(email) {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Reverse index (Phase 6B — supplementary trace, never authoritative)       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Builds the reverse-index script-property key for a spreadsheet ID.
+ * Throws on empty id (always a programmer error).
+ *
+ * @param {string} spreadsheetId
+ * @returns {string} `wbid::<spreadsheetId>`
+ */
+function buildReverseIndexKey_(spreadsheetId) {
+  if (!spreadsheetId) {
+    throw new Error('buildReverseIndexKey_ requires a non-empty spreadsheet id.');
+  }
+  return REVERSE_INDEX_KEY_PREFIX_ + String(spreadsheetId);
+}
+
+/**
+ * Reads the reverse-index entry (email hash) for a spreadsheet ID, or null.
+ * Never throws.
+ *
+ * @param {string} spreadsheetId
+ * @returns {?string} email hash, or null when no entry exists.
+ */
+function lookupReverseIndex_(spreadsheetId) {
+  try {
+    return PropertiesService.getScriptProperties()
+      .getProperty(buildReverseIndexKey_(spreadsheetId)) || null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+/**
+ * Writes the reverse-index entry `wbid::<id>` -> <email_hash> if absent.
+ * Idempotent (no-op when already present). Best-effort: never throws — the
+ * reverse index is supplementary and must never break provisioning or
+ * resolution.
+ *
+ * @param {string} spreadsheetId
+ * @param {string} email
+ * @returns {boolean} true if a new entry was written, false on no-op/failure.
+ */
+function ensureReverseIndexForWorkbook_(spreadsheetId, email) {
+  try {
+    if (!spreadsheetId || !email) return false;
+    var key = buildReverseIndexKey_(spreadsheetId);
+    var props = PropertiesService.getScriptProperties();
+    if (props.getProperty(key)) return false;
+    var hash = buildMappingKey_(email).slice(MAPPING_KEY_PREFIX_.length);
+    props.setProperty(key, hash);
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Workbook identity markers (Phase 6B — additive, best-effort, idempotent)  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Stamps the durable Drive file-level appProperties identity marker
+ * (buildWorkbookAppProperties_) if it is not already present. Idempotent: a
+ * file that already carries `cashcompass_email_hash` is left untouched.
+ *
+ * Drive v3 appProperties writes MERGE — only the provided keys are set, so any
+ * other appProperties on the file are preserved. Best-effort: never throws.
+ *
+ * @param {string} fileId
+ * @param {string} email
+ * @param {string=} nowIso Shared timestamp (so all markers agree).
+ * @returns {boolean} true if newly stamped, false on no-op/failure.
+ */
+function ensureWorkbookAppPropertiesMarker_(fileId, email, nowIso) {
+  try {
+    if (!fileId || !email) return false;
+    var existing = {};
+    try {
+      var meta = Drive.Files.get(fileId, { fields: 'appProperties' });
+      existing = (meta && meta.appProperties) ? meta.appProperties : {};
+    } catch (_getErr) {
+      existing = {};
+    }
+    if (existing.cashcompass_email_hash) return false; // already marked
+    var marker = buildWorkbookAppProperties_(email, nowIso);
+    Drive.Files.update({ appProperties: marker }, fileId);
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+
+/**
+ * Writes the hidden in-workbook `SYS - Meta` identity marker if absent.
+ * Idempotent: if the sheet already carries a `cashcompass_email_hash` row this
+ * is a no-op. Reuses buildWorkbookAppProperties_ so the in-sheet values match
+ * the Drive marker exactly. Best-effort: never throws.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @param {string} email
+ * @param {string=} nowIso Shared timestamp (so all markers agree).
+ * @returns {boolean} true if newly written, false on no-op/failure.
+ */
+function ensureSysMetaMarker_(ss, email, nowIso) {
+  try {
+    if (!ss || !email) return false;
+
+    var sheet = ss.getSheetByName(SYS_META_SHEET_NAME_);
+    if (sheet) {
+      try {
+        var lastRow = Math.max(1, sheet.getLastRow());
+        var colA = sheet.getRange(1, 1, lastRow, 1).getDisplayValues();
+        for (var i = 0; i < colA.length; i++) {
+          if (String(colA[i][0] || '').trim() === 'cashcompass_email_hash') {
+            return false; // already marked
+          }
+        }
+      } catch (_scanErr) { /* fall through and (re)write */ }
+    } else {
+      // Append at the end so we never disturb sheet ordering the user sees.
+      sheet = ss.insertSheet(SYS_META_SHEET_NAME_, ss.getNumSheets());
+    }
+
+    var marker = buildWorkbookAppProperties_(email, nowIso);
+    var rows = [
+      ['cashcompass_role', marker.cashcompass_role],
+      ['cashcompass_email_hash', marker.cashcompass_email_hash],
+      ['cashcompass_schema', marker.cashcompass_schema],
+      ['cashcompass_project', marker.cashcompass_project],
+      ['cashcompass_provisioned_at', marker.cashcompass_provisioned_at]
+    ];
+    sheet.getRange(1, 1, rows.length, 2).setValues(rows);
+    try { sheet.hideSheet(); } catch (_hideErr) { /* cosmetic */ }
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+
+/**
+ * Idempotent, best-effort orchestrator: ensures all three Phase 6B identity
+ * markers are present on a workbook — Drive appProperties, the in-sheet
+ * SYS - Meta marker, and the reverse index. Used by BOTH the fresh-provision
+ * path (stamp at create) and the mapped-open path (lazy backfill). A shared
+ * `nowIso` keeps the timestamps consistent across markers.
+ *
+ * Each marker is independently wrapped: one marker failing never blocks the
+ * others, and the whole call is non-fatal — it must never change provisioning
+ * or resolution behavior.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @param {string} fileId
+ * @param {string} email
+ * @returns {{appProperties: boolean, sysMeta: boolean, reverseIndex: boolean}}
+ *   Which markers were newly written this call (false = already present/failed).
+ */
+function ensureWorkbookIdentityMarkers_(ss, fileId, email) {
+  var result = { appProperties: false, sysMeta: false, reverseIndex: false };
+  var nowIso = new Date().toISOString();
+  try { result.appProperties = ensureWorkbookAppPropertiesMarker_(fileId, email, nowIso); } catch (_a) {}
+  try { result.sysMeta = ensureSysMetaMarker_(ss, email, nowIso); } catch (_s) {}
+  try { result.reverseIndex = ensureReverseIndexForWorkbook_(fileId, email); } catch (_r) {}
+  return result;
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Resolver branch                                                           */
 /* -------------------------------------------------------------------------- */
 
@@ -260,6 +446,11 @@ function getOrProvisionUserSpreadsheet_() {
       // still carry the default blank "Sheet1". This branch skips
       // runMinimalBootstrap_, so reuse the same non-fatal cleanup here.
       cleanupDefaultSheet1_(mappedSs);
+      // Phase 6B lazy backfill: stamp identity markers if missing. Best-effort
+      // and idempotent — does NOT change which workbook is resolved or any
+      // observable behavior; pre-marker beta workbooks pick up identity on
+      // their next open.
+      try { ensureWorkbookIdentityMarkers_(mappedSs, mappedId, email); } catch (_bf) {}
       return mappedSs;
     } catch (openErr) {
       return handleStaleMapping_(email, mappedId, openErr);
@@ -310,6 +501,8 @@ function provisionWorkbookForUser_(email) {
       // provisioned by the winning execution (or a manually reset one)
       // may still carry the default blank "Sheet1".
       cleanupDefaultSheet1_(existingSs);
+      // Phase 6B lazy backfill (race branch): idempotent + best-effort.
+      try { ensureWorkbookIdentityMarkers_(existingSs, existingId, email); } catch (_bf) {}
       return existingSs;
     }
 
@@ -358,6 +551,13 @@ function provisionWorkbookForUser_(email) {
         (mapErr && mapErr.message ? mapErr.message : mapErr)
       );
     }
+
+    // Phase 6B: stamp identity markers on the freshly mapped workbook. Runs
+    // AFTER the mapping write so it is outside the rollback window — the
+    // workbook is already live and authoritative, and marker stamping is
+    // supplementary. Best-effort + idempotent: a failure here never aborts a
+    // successful provision (lazy backfill will complete it on the next open).
+    try { ensureWorkbookIdentityMarkers_(ss, fileId, email); } catch (_mk) {}
 
     return ss;
   } finally {

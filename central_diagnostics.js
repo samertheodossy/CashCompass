@@ -1188,6 +1188,122 @@ function adminUiGetUserReport(email) {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Identity marker visibility (Phase 6B — read-only)                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Read-only: reports whether the Phase 6B identity markers are present for a
+ * user's mapped workbook — the Drive appProperties marker, the in-workbook
+ * SYS - Meta marker, and the reverse index — plus whether each hash matches
+ * the expected email hash. Pure-read; writes nothing.
+ *
+ * Coverage caveat: under executeAs USER_ACCESSING + drive.file, the Drive /
+ * Sheets reads (appProperties, SYS - Meta) are only accurate for the row
+ * matching the EXECUTING operator. The reverse-index check is a script-property
+ * read and is accurate for any user. Drive/Sheets read failures are reported as
+ * "not present/readable" rather than thrown.
+ *
+ * @param {string} email
+ * @returns {!Object} presence/match flags (all primitives).
+ */
+function describeWorkbookIdentityMarkers_(email) {
+  var emailLower = String(email == null ? '' : email).trim().toLowerCase();
+  var out = {
+    email: emailLower,
+    mappingPresent: false,
+    mappedIdTrunc: '-',
+    appPropertiesMarkerPresent: false,
+    appPropertiesHashMatches: false,
+    sysMetaMarkerPresent: false,
+    sysMetaHashMatches: false,
+    reverseIndexPresent: false,
+    reverseIndexHashMatches: false,
+    note: ''
+  };
+  if (!emailLower) { out.note = 'empty email'; return out; }
+
+  var expectedHash = buildMappingKey_(emailLower).slice(MAPPING_KEY_PREFIX_.length);
+  var mappedId = lookupSpreadsheetIdForUser_(emailLower);
+  if (!mappedId) { out.note = 'no mapping'; return out; }
+  out.mappingPresent = true;
+  out.mappedIdTrunc = truncateId_(mappedId);
+
+  // Reverse index — pure property read (accurate for any user).
+  var rev = lookupReverseIndex_(mappedId);
+  out.reverseIndexPresent = !!rev;
+  out.reverseIndexHashMatches = !!(rev && rev === expectedHash);
+
+  // appProperties — operator-self accurate only.
+  try {
+    var meta = Drive.Files.get(mappedId, { fields: 'appProperties' });
+    var ap = (meta && meta.appProperties) ? meta.appProperties : {};
+    out.appPropertiesMarkerPresent = !!ap.cashcompass_email_hash;
+    out.appPropertiesHashMatches =
+      !!(ap.cashcompass_email_hash && ap.cashcompass_email_hash === expectedHash);
+  } catch (_apErr) {
+    out.note += (out.note ? '; ' : '') + 'appProperties not readable';
+  }
+
+  // In-sheet SYS - Meta — operator-self accurate only.
+  try {
+    var ss = SpreadsheetApp.openById(mappedId);
+    var sheet = ss.getSheetByName(SYS_META_SHEET_NAME_);
+    if (sheet) {
+      var lastRow = Math.max(1, sheet.getLastRow());
+      var vals = sheet.getRange(1, 1, lastRow, 2).getDisplayValues();
+      for (var i = 0; i < vals.length; i++) {
+        if (String(vals[i][0] || '').trim() === 'cashcompass_email_hash') {
+          out.sysMetaMarkerPresent = true;
+          out.sysMetaHashMatches = (String(vals[i][1] || '').trim() === expectedHash);
+          break;
+        }
+      }
+    }
+  } catch (_smErr) {
+    out.note += (out.note ? '; ' : '') + 'sys-meta not readable';
+  }
+
+  if (!out.note) out.note = '-';
+  return out;
+}
+
+/**
+ * Admin-gated, read-only marker check for a single user. Logs a readable
+ * summary and returns the primitive flags from describeWorkbookIdentityMarkers_.
+ * Requires an explicit email (same rationale as adminAuditUserWorkbook: Drive
+ * reads run as the operator, so be deliberate about whose state is inspected).
+ *
+ * @param {string} email
+ * @returns {!Object}
+ */
+function adminCheckWorkbookMarkers(email) {
+  assertAdmin_();
+  var emailLower = String(email == null ? '' : email).trim().toLowerCase();
+  if (!emailLower) {
+    throw new Error(
+      'adminCheckWorkbookMarkers requires an explicit email argument, e.g. ' +
+      'adminCheckWorkbookMarkers("user@example.com").'
+    );
+  }
+  var d = describeWorkbookIdentityMarkers_(emailLower);
+  var lines = [];
+  lines.push('CashCompass Identity Markers — ' + emailLower +
+    ' — ' + new Date().toISOString());
+  lines.push('Coverage: ' + CANDIDATE_COVERAGE_ +
+    ' (appProperties/SYS-Meta accurate for operator-self only)');
+  lines.push('Mapping: present=' + d.mappingPresent + ' id=' + d.mappedIdTrunc);
+  lines.push('appProperties: present=' + d.appPropertiesMarkerPresent +
+    ' hashMatch=' + d.appPropertiesHashMatches);
+  lines.push('SYS - Meta:    present=' + d.sysMetaMarkerPresent +
+    ' hashMatch=' + d.sysMetaHashMatches);
+  lines.push('Reverse index: present=' + d.reverseIndexPresent +
+    ' hashMatch=' + d.reverseIndexHashMatches);
+  lines.push('Note: ' + d.note);
+  Logger.log(lines.join('\n'));
+  return d;
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Logger helpers (read-only formatting)                                      */
 /* -------------------------------------------------------------------------- */
 
