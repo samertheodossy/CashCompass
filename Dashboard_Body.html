@@ -1550,8 +1550,16 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <p class="onboarding-welcome-lede" id="recovery_message"></p>
         <p class="onboarding-welcome-reassurance" id="recovery_contact" style="display:none;"></p>
         <div class="onboarding-welcome-actions">
+          <!--
+            Phase 6D.2a — self-service reconnect. Hidden by default; revealed by
+            showRecoveryPage() only when the recovery descriptor reports
+            actionsEnabled (CENTRAL_RECOVERY_ACTIONS = true). When the flag is
+            off, the page stays display-only (6D.1) and only "Try again" shows.
+          -->
+          <button type="button" class="btn-primary" id="recovery_reconnect_btn" style="display:none;" onclick="recoveryReconnect()">Reconnect existing workbook</button>
           <button type="button" class="btn-primary" onclick="recoveryReload()">Try again</button>
         </div>
+        <p class="onboarding-welcome-reassurance" id="recovery_action_status" style="display:none;"></p>
       </div>
     </div>
   </div>

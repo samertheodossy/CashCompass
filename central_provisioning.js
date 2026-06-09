@@ -60,6 +60,20 @@ var MAPPING_KEY_PREFIX_ = 'mapping::';
 var CENTRAL_AUTO_ADOPT_KEY_ = 'CENTRAL_AUTO_ADOPT';
 
 /**
+ * Recovery actions flag (Phase 6D.2a). Gates the user-initiated, self-scoped
+ * "Reconnect existing workbook" action on the recovery page. Independent of
+ * CENTRAL_AUTO_ADOPT: that flag governs automatic adoption during provisioning;
+ * this one governs the manual reconnect a user can trigger after a resolution
+ * failure. Read by isRecoveryActionsEnabled_().
+ *
+ * Fail-closed, exactly like CENTRAL_MODE / CENTRAL_AUTO_ADOPT: only the literal
+ * string "true" enables it; unset / anything else = OFF. While OFF, the recovery
+ * page stays display-only (Phase 6D.1 behavior) and the reconnect endpoint
+ * refuses — dark until flipped on a test account.
+ */
+var CENTRAL_RECOVERY_ACTIONS_KEY_ = 'CENTRAL_RECOVERY_ACTIONS';
+
+/**
  * Reverse-index key prefix (Phase 6B). Maps a spreadsheet ID back to the
  * owning user's email hash: `wbid::<spreadsheetId>` -> <email_hash>. This is
  * a SUPPLEMENTARY trace aid only — the forward `mapping::` store remains the
@@ -452,6 +466,24 @@ function isAutoAdoptEnabled_() {
 }
 
 /**
+ * Returns true only when the CENTRAL_RECOVERY_ACTIONS script property is the
+ * literal string "true" (Phase 6D.2a). Any other value (including unset)
+ * returns false. Never throws — read failures fail closed (recovery actions
+ * off), so the recovery page stays display-only and the reconnect endpoint
+ * refuses.
+ *
+ * @returns {boolean}
+ */
+function isRecoveryActionsEnabled_() {
+  try {
+    return PropertiesService.getScriptProperties()
+      .getProperty(CENTRAL_RECOVERY_ACTIONS_KEY_) === 'true';
+  } catch (_e) {
+    return false;
+  }
+}
+
+/**
  * Builds a name-tagged Error for the ambiguous case (≥2 strict candidates for
  * one user with no mapping). Tagged `name = 'AmbiguousWorkbookError'` — mirrors
  * handleStaleMapping_'s StaleMappingError — so a later recovery surface (Phase
@@ -528,30 +560,161 @@ function tryAdoptWorkbookBeforeCreate_(email) {
     throw buildAmbiguousWorkbookError_(ids);
   }
 
-  // Exactly one strict candidate.
+  // Exactly one strict candidate. Relink via the shared helper, which mirrors
+  // the mapped-open post-steps exactly (verify open → cleanupDefaultSheet1_ →
+  // writeSpreadsheetIdForUser_ → ensureWorkbookIdentityMarkers_).
   var cand = merged[0];
-  var confidence = (cand.matchedBy === 'name') ? 'MEDIUM' : 'HIGH';
+  var relink = relinkSingleCandidate_(email, cand);
+  if (!relink.ok) {
+    // Re-verify failed (e.g. trashed between list and adopt) → create instead.
+    Logger.log('[6C] candidate re-verify openById failed; falling through to ' +
+      'create. id=' + truncateId_(cand.id));
+    return null;
+  }
+
+  Logger.log('[6C] adopted workbook id=' + truncateId_(cand.id) +
+    ' confidence=' + relink.confidence + ' matchedBy=' + relink.matchedBy);
+  return relink.ss;
+}
+
+/**
+ * Shared single-candidate relink core (extracted in Phase 6D.2a so both the
+ * automatic adopt path (tryAdoptWorkbookBeforeCreate_) and the user-initiated
+ * reconnect endpoint (recoveryReconnectSelf) use one verified-relink routine).
+ *
+ * Mirrors the mapped-open post-steps exactly and nothing else: re-verify the
+ * candidate still opens, run the non-fatal default-Sheet1 cleanup, write the
+ * caller's mapping to the candidate, and stamp identity markers (best-effort).
+ * The candidate holds the user's real data — it is never bootstrapped or
+ * rewritten. Performs NO Drive create and NO hard delete.
+ *
+ * Pure with respect to logging: callers emit their own context logs.
+ *
+ * @param {string} email Caller email (already validated non-empty by caller).
+ * @param {?Object} cand Candidate descriptor from findCandidateWorkbooks_.
+ * @returns {{ok: boolean, ss: ?GoogleAppsScript.Spreadsheet.Spreadsheet,
+ *            confidence: string, matchedBy: string, reason: string}}
+ *   ok=true with the opened Spreadsheet on success; ok=false (reason
+ *   'no_candidate' | 'verify_failed') when the candidate is missing or no
+ *   longer openable. Never throws for the expected verify-failure case.
+ */
+function relinkSingleCandidate_(email, cand) {
+  var confidence = (cand && cand.matchedBy === 'name') ? 'MEDIUM' : 'HIGH';
+  var matchedBy = (cand && cand.matchedBy) ? cand.matchedBy : '-';
+
+  if (!cand || !cand.id) {
+    return { ok: false, ss: null, confidence: confidence, matchedBy: matchedBy,
+             reason: 'no_candidate' };
+  }
 
   var ss;
   try {
     ss = SpreadsheetApp.openById(cand.id);
   } catch (openErr) {
-    // Re-verify failed (e.g. trashed between list and adopt) → create instead.
-    Logger.log('[6C] candidate re-verify openById failed; falling through to ' +
-      'create. id=' + truncateId_(cand.id) + ' err=' +
-      (openErr && openErr.message ? openErr.message : String(openErr)));
-    return null;
+    return { ok: false, ss: null, confidence: confidence, matchedBy: matchedBy,
+             reason: 'verify_failed' };
   }
 
-  // Mirror the mapped-open post-steps exactly — nothing else. The candidate
-  // holds the user's real data; do NOT bootstrap/rewrite it.
   cleanupDefaultSheet1_(ss);
   writeSpreadsheetIdForUser_(email, cand.id);
   try { ensureWorkbookIdentityMarkers_(ss, cand.id, email); } catch (_mk) {}
 
-  Logger.log('[6C] adopted workbook id=' + truncateId_(cand.id) +
-    ' confidence=' + confidence + ' matchedBy=' + (cand.matchedBy || '-'));
-  return ss;
+  return { ok: true, ss: ss, confidence: confidence, matchedBy: matchedBy,
+           reason: 'ok' };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Recovery actions (Phase 6D.2a — self-scoped, flag-gated, default OFF)      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * User-initiated "Reconnect existing workbook" recovery action (Phase 6D.2a).
+ *
+ * Strictly self-scoped: the target user is derived from getCurrentUserEmail_()
+ * — there is NO email parameter and NO spreadsheet-ID parameter, so a caller
+ * can only ever relink their OWN mapping to a workbook they OWN (candidate
+ * detection is owner-constrained and non-trashed by construction). This is the
+ * IDOR guard; the bound/production workbook is unreachable from here.
+ *
+ * Gated by central mode AND CENTRAL_RECOVERY_ACTIONS (both fail closed). Runs
+ * under the per-user lock to serialize against any concurrent resolve/provision.
+ *
+ * Returns ONLY primitives — never raw exceptions, spreadsheet IDs, email
+ * addresses, or internal error names:
+ *   - { status: 'reconnected' } : exactly one candidate, verified + relinked.
+ *   - { status: 'ambiguous' }   : ≥2 candidates; never auto-picks.
+ *   - { status: 'none' }        : no candidate to reconnect to.
+ *   - { status: 'disabled' }    : central mode off or flag off.
+ *   - { status: 'error' }       : no identified user, lock busy, detection
+ *                                 failure, verify failure, or anything
+ *                                 unexpected.
+ *
+ * Writes nothing but the caller's own mapping (via relinkSingleCandidate_).
+ * Creates no workbook, clears no mapping directly, deletes nothing.
+ *
+ * @returns {{status: string}}
+ */
+function recoveryReconnectSelf() {
+  try {
+    if (!isCentralModeEnabled_()) {
+      return { status: 'disabled' };
+    }
+    if (!isRecoveryActionsEnabled_()) {
+      return { status: 'disabled' };
+    }
+
+    var email = getCurrentUserEmail_();
+    if (!email) {
+      return { status: 'error' };
+    }
+
+    var lock = LockService.getUserLock();
+    var acquired = false;
+    try {
+      acquired = lock.tryLock(PROVISIONING_LOCK_TIMEOUT_MS_);
+    } catch (_lockErr) {
+      acquired = false;
+    }
+    if (!acquired) {
+      return { status: 'error' };
+    }
+
+    try {
+      var found;
+      try {
+        found = findCandidateWorkbooks_(email);
+      } catch (_detectErr) {
+        Logger.log('[6D2a] reconnect detection failed.');
+        return { status: 'error' };
+      }
+
+      var merged = (found && found.merged) ? found.merged : [];
+
+      if (merged.length === 0) {
+        return { status: 'none' };
+      }
+      if (merged.length >= 2) {
+        Logger.log('[6D2a] reconnect ambiguous: ' + merged.length +
+          ' candidates; relinking none.');
+        return { status: 'ambiguous' };
+      }
+
+      var relink = relinkSingleCandidate_(email, merged[0]);
+      if (!relink.ok) {
+        Logger.log('[6D2a] reconnect candidate re-verify failed.');
+        return { status: 'error' };
+      }
+
+      Logger.log('[6D2a] reconnected workbook confidence=' + relink.confidence +
+        ' matchedBy=' + relink.matchedBy);
+      return { status: 'reconnected' };
+    } finally {
+      try { lock.releaseLock(); } catch (_releaseErr) {}
+    }
+  } catch (_e) {
+    Logger.log('[6D2a] reconnect unexpected failure.');
+    return { status: 'error' };
+  }
 }
 
 /* -------------------------------------------------------------------------- */

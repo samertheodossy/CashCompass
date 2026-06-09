@@ -680,13 +680,26 @@ function buildRecoveryRouting_(err) {
     contactEmail = '';
   }
 
+  // Phase 6D.2a: whether self-service recovery actions (currently just
+  // "Reconnect existing workbook") should render. Driven by the
+  // CENTRAL_RECOVERY_ACTIONS flag, read defensively — when OFF (or the reader
+  // is unavailable, e.g. bound project), the recovery page stays display-only.
+  var actionsEnabled = false;
+  try {
+    actionsEnabled = (typeof isRecoveryActionsEnabled_ === 'function') &&
+      isRecoveryActionsEnabled_();
+  } catch (_a) {
+    actionsEnabled = false;
+  }
+
   return {
     ok: false,
     isBlankWorkbook: false,
     mode: 'recovery',
     recovery: {
       type: type,
-      contactEmail: contactEmail
+      contactEmail: contactEmail,
+      actionsEnabled: actionsEnabled
     }
   };
 }

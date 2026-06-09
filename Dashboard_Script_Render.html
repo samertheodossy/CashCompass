@@ -147,9 +147,76 @@ function showRecoveryPage(recovery) {
     }
   }
 
+  // Phase 6D.2a — reveal the self-service reconnect action only when the
+  // server reports actionsEnabled (CENTRAL_RECOVERY_ACTIONS = true). Reset
+  // any prior disabled/status state so the screen is clean on re-entry.
+  var reconnectBtn = document.getElementById('recovery_reconnect_btn');
+  if (reconnectBtn) {
+    reconnectBtn.style.display = rec.actionsEnabled ? '' : 'none';
+    reconnectBtn.disabled = false;
+  }
+  var actionStatusEl = document.getElementById('recovery_action_status');
+  if (actionStatusEl) {
+    actionStatusEl.textContent = '';
+    actionStatusEl.style.display = 'none';
+  }
+
   if (typeof showPage === 'function') {
     showPage('recovery');
   }
+}
+
+// --------------------------------------------------------------------
+// Phase 6D.2a — self-service reconnect action.
+//
+// Calls the self-scoped server endpoint recoveryReconnectSelf() (no
+// client-supplied email or spreadsheet ID). On success the page reloads
+// so the startup gate re-resolves the now-relinked workbook. All other
+// outcomes keep the user on the recovery page with calm, non-technical
+// guidance — no IDs, stack traces, or internal error names.
+// --------------------------------------------------------------------
+function recoveryReconnect() {
+  var btn = document.getElementById('recovery_reconnect_btn');
+  var statusEl = document.getElementById('recovery_action_status');
+
+  function setActionStatus(text) {
+    if (!statusEl) return;
+    statusEl.textContent = text || '';
+    statusEl.style.display = text ? '' : 'none';
+  }
+
+  if (btn) btn.disabled = true;
+  setActionStatus('Reconnecting\u2026');
+
+  if (!google || !google.script || !google.script.run) {
+    if (btn) btn.disabled = false;
+    setActionStatus('Something went wrong while reconnecting. Please try again in a moment.');
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      var status = (res && res.status) ? res.status : 'error';
+      if (status === 'reconnected') {
+        setActionStatus('Reconnected. Loading your workbook\u2026');
+        recoveryReload();
+        return;
+      }
+      if (btn) btn.disabled = false;
+      if (status === 'ambiguous' || status === 'none') {
+        setActionStatus('We couldn\u2019t automatically reconnect your workbook. ' +
+          'Please contact support and we\u2019ll help connect the right one.');
+      } else {
+        setActionStatus('Something went wrong while reconnecting. ' +
+          'Please try again in a moment.');
+      }
+    })
+    .withFailureHandler(function() {
+      if (btn) btn.disabled = false;
+      setActionStatus('Something went wrong while reconnecting. ' +
+        'Please try again in a moment.');
+    })
+    .recoveryReconnectSelf();
 }
 
 function recoveryReload() {
