@@ -65,7 +65,7 @@
 </head>
 <body>
   <h1>CashCompass — Admin Diagnostics</h1>
-  <p class="sub">Read-only. No repair, adopt, or write actions are available on this page.</p>
+  <p class="sub">Read-only diagnostics plus a guarded mapping-repair toolkit (admin + flag gated, preview &rarr; confirm). No Drive files are ever modified or deleted.</p>
 
   <div class="banner">
     <strong>Coverage: app_visible_only — not a complete Drive audit.</strong>
@@ -97,6 +97,49 @@
           <th>Active workbook</th>
           <th>Candidates</th>
           <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!--
+    Phase 6E.1 — Repair toolkit. Inspect (preview) is read-only and available to
+    any admin; Clear mapping is a guarded WRITE (admin + CENTRAL_ADMIN_REPAIR
+    flag + explicit confirm). Mapping-store only — no Drive file is ever changed
+    or deleted. The Clear zone only appears after a successful Inspect and is
+    bound to that inspected email (preview-before-write).
+  -->
+  <div class="card">
+    <h2>Repair toolkit</h2>
+    <p class="sub">Inspect a user, then optionally clear a stale mapping. Mapping-store only — the workbook itself is never deleted.</p>
+    <div style="margin:8px 0;">
+      <input id="repair-email" type="email" placeholder="user@example.com"
+             style="padding:7px 10px; border:1px solid #cbd2d9; border-radius:6px; font-size:13px; min-width:260px;">
+      <button id="repair-inspect-btn" onclick="repairInspect()"
+              style="padding:7px 14px; margin-left:6px; border:1px solid #cbd2d9; border-radius:6px; background:#fff; cursor:pointer; font-size:13px;">Inspect</button>
+    </div>
+    <div id="repair-result" class="muted">Enter a user email and choose Inspect.</div>
+
+    <div id="repair-clear-zone" style="display:none; margin-top:14px; border-top:1px solid #eceff2; padding-top:12px;">
+      <label style="font-size:13px; display:block; margin-bottom:8px;">
+        <input id="repair-confirm" type="checkbox" onchange="repairSyncClearBtn()">
+        I confirm clearing the mapping for <code id="repair-confirm-email">-</code>. The workbook itself is not deleted.
+      </label>
+      <button id="repair-clear-btn" onclick="repairClear()" disabled
+              style="padding:7px 14px; border:1px solid #f8b4b4; border-radius:6px; background:#fde8e8; color:#9b1c1c; cursor:pointer; font-size:13px;">Clear mapping</button>
+      <span id="repair-clear-status" class="muted" style="margin-left:8px;"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Repair audit history</h2>
+    <div id="audit-history-status" class="muted">Loading…</div>
+    <table id="audit-history-table" style="display:none; margin-top:8px;">
+      <thead>
+        <tr>
+          <th>Time</th><th>Admin</th><th>Target</th>
+          <th>Action</th><th>Result</th><th>Detail</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -211,6 +254,169 @@
         showError('audit-meta', 'Audit failed to load.');
       })
       .adminUiGetWorkbookAudit();
+
+    // ----------------------------------------------------------------
+    // Phase 6E.1 — Repair toolkit (Inspect preview + guarded Clear).
+    // ----------------------------------------------------------------
+    var repairInspectedEmail = '';
+
+    function repairResetClearZone() {
+      repairInspectedEmail = '';
+      var zone = document.getElementById('repair-clear-zone');
+      if (zone) zone.style.display = 'none';
+      var cb = document.getElementById('repair-confirm');
+      if (cb) cb.checked = false;
+      var btn = document.getElementById('repair-clear-btn');
+      if (btn) btn.disabled = true;
+      var st = document.getElementById('repair-clear-status');
+      if (st) { st.textContent = ''; st.className = 'muted'; }
+    }
+
+    function repairSyncClearBtn() {
+      var cb = document.getElementById('repair-confirm');
+      var btn = document.getElementById('repair-clear-btn');
+      if (btn) btn.disabled = !(cb && cb.checked);
+    }
+
+    function repairRenderInspect(data) {
+      var c = document.getElementById('repair-result');
+      c.className = '';
+      c.textContent = '';
+
+      c.appendChild(el('div', 'User: ' + (data.user || '-') +
+        (data.isSelf ? ' (self)' : '')));
+
+      var mapLine = 'Mapping: ' + (data.mappingPresent ? 'present' : 'none');
+      if (data.mappingPresent) mapLine += ' · id ' + (data.mappedIdTrunc || '-');
+      c.appendChild(el('div', mapLine));
+
+      c.appendChild(el('div', 'Reverse index: ' +
+        (data.reverseIndexPresent
+          ? ('present' + (data.reverseIndexHashMatches ? ' (match)' : ' (MISMATCH)'))
+          : 'none')));
+
+      var statusDiv = el('div');
+      statusDiv.appendChild(document.createTextNode('Status: '));
+      statusDiv.appendChild(sevPill(data.severity));
+      statusDiv.appendChild(document.createTextNode(' ' + (data.status || '-')));
+      c.appendChild(statusDiv);
+
+      if (data.isSelf) {
+        c.appendChild(el('div', 'Candidates: ' + data.candidateCount +
+          ' · orphans: ' + data.orphanCount));
+        var m = data.markers || {};
+        c.appendChild(el('div', 'Markers: appProps=' +
+          (m.appPropertiesMarkerPresent ? 'yes' : 'no') +
+          ' · sysMeta=' + (m.sysMetaMarkerPresent ? 'yes' : 'no')));
+      }
+      if (data.note) c.appendChild(el('div', data.note, 'footnote'));
+
+      // Reveal the Clear zone bound to THIS inspected email — but only when a
+      // mapping actually exists to clear (preview-before-write).
+      repairInspectedEmail = data.user || '';
+      var cemail = document.getElementById('repair-confirm-email');
+      if (cemail) cemail.textContent = repairInspectedEmail || '-';
+      var cb = document.getElementById('repair-confirm');
+      if (cb) cb.checked = false;
+      var btn = document.getElementById('repair-clear-btn');
+      if (btn) btn.disabled = true;
+      var zone = document.getElementById('repair-clear-zone');
+      if (zone) zone.style.display = data.mappingPresent ? 'block' : 'none';
+    }
+
+    function repairInspect() {
+      var input = document.getElementById('repair-email');
+      var email = (input && input.value ? input.value : '').trim();
+      var c = document.getElementById('repair-result');
+      repairResetClearZone();
+      if (!email) { c.className = ''; c.textContent = 'Enter a user email.'; return; }
+      c.className = 'muted';
+      c.textContent = 'Inspecting…';
+      google.script.run
+        .withSuccessHandler(repairRenderInspect)
+        .withFailureHandler(function(err) {
+          showError('repair-result', (err && err.message) ? err.message : 'Inspect failed.');
+        })
+        .adminInspectUser(email);
+    }
+
+    function repairClear() {
+      var btn = document.getElementById('repair-clear-btn');
+      var st = document.getElementById('repair-clear-status');
+      if (!repairInspectedEmail) return;
+      if (btn) btn.disabled = true;
+      if (st) { st.className = 'muted'; st.textContent = 'Clearing…'; }
+      google.script.run
+        .withSuccessHandler(function(res) {
+          var status = (res && res.status) ? res.status : 'error';
+          if (st) {
+            st.className = (status === 'cleared' || status === 'noop') ? 'ok-yes' : 'ok-no';
+            if (status === 'cleared') {
+              st.textContent = 'Mapping cleared (' + (res.mappedIdTrunc || '-') + ').';
+            } else if (status === 'noop') {
+              st.textContent = 'No mapping to clear.';
+            } else if (status === 'disabled') {
+              st.textContent = 'Repair is disabled (flag off).';
+            } else {
+              st.textContent = 'Clear failed.';
+            }
+          }
+          loadAuditHistory();
+        })
+        .withFailureHandler(function(err) {
+          if (btn) btn.disabled = false;
+          if (st) {
+            st.className = 'ok-no';
+            st.textContent = (err && err.message) ? err.message : 'Clear failed.';
+          }
+        })
+        .adminClearMapping(repairInspectedEmail, 'CONFIRM');
+    }
+
+    function renderAuditHistory(data) {
+      var status = document.getElementById('audit-history-status');
+      var tbl = document.getElementById('audit-history-table');
+      var body = tbl.querySelector('tbody');
+      body.textContent = '';
+      var entries = (data && data.entries) ? data.entries : [];
+      if (!entries.length) {
+        status.textContent = 'No repair actions recorded yet.';
+        status.className = 'muted';
+        tbl.style.display = 'none';
+        return;
+      }
+      status.textContent = entries.length + ' recorded (most recent first, max ' +
+        (data.max || 50) + ').';
+      status.className = '';
+      entries.forEach(function(e) {
+        var tr = document.createElement('tr');
+        tr.appendChild(el('td', e.ts || '-'));
+        tr.appendChild(el('td', e.adminHash || '-'));
+        tr.appendChild(el('td', e.targetHash || '-'));
+        tr.appendChild(el('td', e.action || '-'));
+        tr.appendChild(el('td', e.result || '-'));
+        tr.appendChild(el('td', e.detail || '-'));
+        body.appendChild(tr);
+      });
+      tbl.style.display = 'table';
+    }
+
+    function loadAuditHistory() {
+      google.script.run
+        .withSuccessHandler(renderAuditHistory)
+        .withFailureHandler(function() {
+          showError('audit-history-status', 'Audit history failed to load.');
+        })
+        .adminGetAuditLog();
+    }
+
+    // A changed email after a preview forces a fresh Inspect before any Clear.
+    (function bindRepairEmailInput() {
+      var input = document.getElementById('repair-email');
+      if (input) input.addEventListener('input', repairResetClearZone);
+    })();
+
+    loadAuditHistory();
   </script>
 </body>
 </html>

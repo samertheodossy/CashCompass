@@ -74,6 +74,19 @@ var CENTRAL_AUTO_ADOPT_KEY_ = 'CENTRAL_AUTO_ADOPT';
 var CENTRAL_RECOVERY_ACTIONS_KEY_ = 'CENTRAL_RECOVERY_ACTIONS';
 
 /**
+ * Admin repair flag (Phase 6E.1). Gates admin-initiated repair WRITES (clearing
+ * a stale mapping). Independent of every other flag: admin read-only inspection
+ * is governed only by isAdminUser_; this flag adds a second, separately
+ * flippable gate in front of the mutating action.
+ *
+ * Fail-closed, exactly like the other central flags: only the literal string
+ * "true" enables it; unset / anything else = OFF. While OFF, adminClearMapping
+ * refuses and the repair card stays preview-only — dark until flipped on a test
+ * deployment.
+ */
+var CENTRAL_ADMIN_REPAIR_KEY_ = 'CENTRAL_ADMIN_REPAIR';
+
+/**
  * Reverse-index key prefix (Phase 6B). Maps a spreadsheet ID back to the
  * owning user's email hash: `wbid::<spreadsheetId>` -> <email_hash>. This is
  * a SUPPLEMENTARY trace aid only — the forward `mapping::` store remains the
@@ -335,6 +348,28 @@ function ensureReverseIndexForWorkbook_(spreadsheetId, email) {
   }
 }
 
+/**
+ * Deletes the reverse-index entry `wbid::<id>` if present (Phase 6E.1). Pairs
+ * with clearMappingForUser_ so an admin clearing a stale mapping can also remove
+ * the supplementary reverse-index trace. Touches only a script property — no
+ * Drive access, no file mutation. Never throws.
+ *
+ * @param {string} spreadsheetId
+ * @returns {boolean} true if an entry was deleted, false on no-op/failure.
+ */
+function clearReverseIndexForWorkbook_(spreadsheetId) {
+  try {
+    if (!spreadsheetId) return false;
+    var key = buildReverseIndexKey_(spreadsheetId);
+    var props = PropertiesService.getScriptProperties();
+    if (!props.getProperty(key)) return false;
+    props.deleteProperty(key);
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Workbook identity markers (Phase 6B — additive, best-effort, idempotent)  */
 /* -------------------------------------------------------------------------- */
@@ -478,6 +513,23 @@ function isRecoveryActionsEnabled_() {
   try {
     return PropertiesService.getScriptProperties()
       .getProperty(CENTRAL_RECOVERY_ACTIONS_KEY_) === 'true';
+  } catch (_e) {
+    return false;
+  }
+}
+
+/**
+ * Returns true only when the CENTRAL_ADMIN_REPAIR script property is the literal
+ * string "true" (Phase 6E.1). Any other value (including unset) returns false.
+ * Never throws — read failures fail closed (admin repair writes off), so a
+ * failed read keeps the toolkit preview-only.
+ *
+ * @returns {boolean}
+ */
+function isAdminRepairEnabled_() {
+  try {
+    return PropertiesService.getScriptProperties()
+      .getProperty(CENTRAL_ADMIN_REPAIR_KEY_) === 'true';
   } catch (_e) {
     return false;
   }

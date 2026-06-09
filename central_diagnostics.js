@@ -1304,6 +1304,270 @@ function adminCheckWorkbookMarkers(email) {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Admin repair toolkit (Phase 6E.1 — admin + flag gated, mapping-store only) */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Script-property key holding the bounded admin audit ring buffer (a JSON array,
+ * newest-first, capped at ADMIN_AUDIT_MAX_ENTRIES_). Lightweight + durable; no
+ * workbook or Drive storage involved.
+ */
+var ADMIN_AUDIT_KEY_ = 'adminlog::entries';
+var ADMIN_AUDIT_MAX_ENTRIES_ = 50;
+
+/**
+ * Truncated email hash for audit/inspection output. Derives the SHA-256 email
+ * hash (same as the mapping key) and truncates it. Never emits a raw email.
+ *
+ * @param {string} email
+ * @returns {string} truncated hash, or '-' when empty/unavailable.
+ */
+function adminAuditHashTrunc_(email) {
+  var e = String(email == null ? '' : email).trim().toLowerCase();
+  if (!e) return '-';
+  try {
+    return truncateId_(buildMappingKey_(e).slice(MAPPING_KEY_PREFIX_.length));
+  } catch (_e) {
+    return '-';
+  }
+}
+
+/**
+ * Appends one entry to the bounded admin audit ring buffer (Phase 6E.1). Best-
+ * effort: never throws and never blocks the calling action — on any failure it
+ * falls back to Logger only. Stores ONLY non-sensitive primitives: timestamp,
+ * truncated admin hash, truncated target hash, action, result, and an optional
+ * already-truncated detail string (never a raw ID or email).
+ *
+ * @param {string} action e.g. 'clear_mapping'.
+ * @param {string} targetEmail Target user email (hashed+truncated before store).
+ * @param {string} result e.g. 'cleared' | 'noop' | 'error'.
+ * @param {string=} detail Optional already-truncated detail (e.g. mapped id trunc).
+ */
+function appendAdminAudit_(action, targetEmail, result, detail) {
+  try {
+    var operatorEmail = '';
+    try { operatorEmail = getCurrentUserEmail_(); } catch (_o) { operatorEmail = ''; }
+
+    var entry = {
+      ts: new Date().toISOString(),
+      adminHash: adminAuditHashTrunc_(operatorEmail),
+      targetHash: adminAuditHashTrunc_(targetEmail),
+      action: String(action || ''),
+      result: String(result || ''),
+      detail: String(detail || '')
+    };
+
+    var props = PropertiesService.getScriptProperties();
+    var arr = [];
+    try {
+      var raw = props.getProperty(ADMIN_AUDIT_KEY_);
+      if (raw) arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) arr = [];
+    } catch (_p) {
+      arr = [];
+    }
+    arr.unshift(entry);
+    if (arr.length > ADMIN_AUDIT_MAX_ENTRIES_) {
+      arr = arr.slice(0, ADMIN_AUDIT_MAX_ENTRIES_);
+    }
+    props.setProperty(ADMIN_AUDIT_KEY_, JSON.stringify(arr));
+
+    Logger.log('[6E1] audit ' + entry.action + ' result=' + entry.result +
+      ' admin=' + entry.adminHash + ' target=' + entry.targetHash +
+      (entry.detail ? ' detail=' + entry.detail : ''));
+  } catch (e) {
+    try {
+      Logger.log('[6E1] audit append failed: ' +
+        (e && e.message ? e.message : String(e)));
+    } catch (_l) { /* swallow */ }
+  }
+}
+
+/**
+ * Admin-gated, read-only accessor for the audit ring buffer (Phase 6E.1).
+ * Returns primitives only (already truncated hashes / details).
+ *
+ * @returns {{entries: !Array<Object>, max: number}}
+ */
+function adminGetAuditLog() {
+  assertAdmin_();
+  var props = PropertiesService.getScriptProperties();
+  var arr = [];
+  try {
+    var raw = props.getProperty(ADMIN_AUDIT_KEY_);
+    if (raw) arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) arr = [];
+  } catch (_p) {
+    arr = [];
+  }
+  var out = [];
+  for (var i = 0; i < arr.length; i++) {
+    var e = arr[i] || {};
+    out.push({
+      ts: String(e.ts || ''),
+      adminHash: String(e.adminHash || '-'),
+      targetHash: String(e.targetHash || '-'),
+      action: String(e.action || ''),
+      result: String(e.result || ''),
+      detail: String(e.detail || '')
+    });
+  }
+  return { entries: out, max: ADMIN_AUDIT_MAX_ENTRIES_ };
+}
+
+/**
+ * Admin-gated, read-only inspection of a user's mapping/recovery state
+ * (Phase 6E.1). The mandatory preview before any clear.
+ *
+ * Self (operator IS the target): full Drive-accurate classification (status,
+ * severity, candidate/orphan counts) plus identity-marker flags.
+ *
+ * Other user: mapping presence + truncated mapped ID + reverse-index
+ * consistency only — all pure script-property reads. Deliberately does NOT
+ * openById the workbook or enumerate the operator's Drive on their behalf
+ * (cross-user Drive access is impossible under drive.file and would mislead).
+ *
+ * Returns primitives only — no raw spreadsheet IDs, no candidate objects.
+ *
+ * @param {string} email
+ * @returns {!Object}
+ */
+function adminInspectUser(email) {
+  assertAdmin_();
+  var emailLower = String(email == null ? '' : email).trim().toLowerCase();
+  if (!emailLower) {
+    throw new Error('A user email is required.');
+  }
+
+  var selfEmail = '';
+  try { selfEmail = getCurrentUserEmail_(); } catch (_s) { selfEmail = ''; }
+  var isSelf = !!selfEmail && (selfEmail === emailLower);
+
+  var out = {
+    user: emailLower,
+    isSelf: isSelf,
+    mappingPresent: false,
+    mappedIdTrunc: '-',
+    reverseIndexPresent: false,
+    reverseIndexHashMatches: false,
+    status: '',
+    severity: '',
+    candidateCount: 0,
+    orphanCount: 0,
+    markers: {
+      appPropertiesMarkerPresent: false,
+      appPropertiesHashMatches: false,
+      sysMetaMarkerPresent: false,
+      sysMetaHashMatches: false
+    },
+    coverage: CANDIDATE_COVERAGE_,
+    note: '',
+    generatedAt: new Date().toISOString()
+  };
+
+  // Mapping + reverse index are pure script-property reads — accurate for ANY
+  // user and never touch Drive.
+  var expectedHash = buildMappingKey_(emailLower).slice(MAPPING_KEY_PREFIX_.length);
+  var mappedId = lookupSpreadsheetIdForUser_(emailLower);
+  out.mappingPresent = !!mappedId;
+  if (mappedId) {
+    out.mappedIdTrunc = truncateId_(mappedId);
+    var rev = lookupReverseIndex_(mappedId);
+    out.reverseIndexPresent = !!rev;
+    out.reverseIndexHashMatches = !!(rev && rev === expectedHash);
+  }
+
+  if (isSelf) {
+    try {
+      var rep = classifyUserWorkbooks_(emailLower);
+      out.status = String(rep.status || '');
+      out.severity = String(rep.severity || '');
+      out.candidateCount = (rep.candidates && rep.candidates.length) || 0;
+      out.orphanCount = (rep.orphans && rep.orphans.length) || 0;
+    } catch (_cErr) {
+      out.note = 'self classification unavailable';
+    }
+    try {
+      var m = describeWorkbookIdentityMarkers_(emailLower);
+      out.markers.appPropertiesMarkerPresent = !!m.appPropertiesMarkerPresent;
+      out.markers.appPropertiesHashMatches = !!m.appPropertiesHashMatches;
+      out.markers.sysMetaMarkerPresent = !!m.sysMetaMarkerPresent;
+      out.markers.sysMetaHashMatches = !!m.sysMetaHashMatches;
+    } catch (_mErr) { /* leave marker flags false */ }
+  } else {
+    var rep2 = classifyNonSelfMappingOnly_(emailLower);
+    out.status = String(rep2.status || '');
+    out.severity = String(rep2.severity || '');
+    out.note = 'cross-user: Drive not inspected (drive.file scope)';
+  }
+
+  return out;
+}
+
+/**
+ * Admin-gated, flag-gated, confirm-gated repair WRITE (Phase 6E.1): clears a
+ * user's mapping (and its supplementary reverse-index trace). Mapping-store
+ * ONLY — it deletes script properties and performs NO Drive access, NO file
+ * deletion, and NO workbook modification. The workbook (if any) remains intact
+ * in the owner's Drive; clearing the mapping merely lets the user's next open
+ * re-provision/adopt (per flags) or reach the recovery page.
+ *
+ * assertAdmin_ runs first and throws for non-admins (consistent with the other
+ * admin endpoints). Everything else returns primitive status values:
+ *   - { status: 'cleared', mappedIdTrunc } : a mapping existed and was removed.
+ *   - { status: 'noop' }                   : no mapping to clear.
+ *   - { status: 'disabled' }               : central mode off or repair flag off.
+ *   - { status: 'error' }                  : empty email, missing confirm, or
+ *                                            unexpected failure.
+ *
+ * @param {string} email Target user email (admin-typed; never client-trusted
+ *   for authorization — authorization is assertAdmin_).
+ * @param {string} confirm Must equal the literal 'CONFIRM'.
+ * @returns {{status: string, mappedIdTrunc: (string|undefined)}}
+ */
+function adminClearMapping(email, confirm) {
+  assertAdmin_();
+  try {
+    if (!isCentralModeEnabled_()) {
+      return { status: 'disabled' };
+    }
+    if (!isAdminRepairEnabled_()) {
+      return { status: 'disabled' };
+    }
+
+    var emailLower = String(email == null ? '' : email).trim().toLowerCase();
+    if (!emailLower) {
+      return { status: 'error' };
+    }
+
+    // Explicit confirm token required — a stray or accidental call cannot mutate.
+    if (String(confirm) !== 'CONFIRM') {
+      return { status: 'error' };
+    }
+
+    var mappedId = lookupSpreadsheetIdForUser_(emailLower);
+    if (!mappedId) {
+      appendAdminAudit_('clear_mapping', emailLower, 'noop', 'no-map');
+      return { status: 'noop' };
+    }
+
+    var mappedIdTrunc = truncateId_(mappedId);
+
+    // Mapping-store only: forward mapping + supplementary reverse-index trace.
+    clearMappingForUser_(emailLower);
+    var revCleared = clearReverseIndexForWorkbook_(mappedId);
+
+    appendAdminAudit_('clear_mapping', emailLower, 'cleared',
+      mappedIdTrunc + (revCleared ? '+rev' : ''));
+    return { status: 'cleared', mappedIdTrunc: mappedIdTrunc };
+  } catch (e) {
+    try { appendAdminAudit_('clear_mapping', email, 'error', ''); } catch (_a) {}
+    return { status: 'error' };
+  }
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Logger helpers (read-only formatting)                                      */
 /* -------------------------------------------------------------------------- */
 
