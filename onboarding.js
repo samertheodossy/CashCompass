@@ -1995,6 +1995,18 @@ function ensureOnboardingBankAccountsSheetFromDashboard(mode) {
         Logger.log('ensureOnboardingBankAccountsSheetFromDashboard seed Total Accounts: ' + _seedErr);
       }
 
+      // Seed the canonical "Delta" month-over-month change row directly below
+      // Total Accounts (production parity). Seed-only: its formulas reference
+      // the Total Accounts row by fixed cells and the Total cell is a same-row
+      // horizontal SUM, so account inserts self-adjust without a refresh hook.
+      // Must run AFTER the Total Accounts seed (Delta depends on it) and
+      // BEFORE styling so applyBankAccountsSheetStyling_ colors the tan band.
+      try {
+        seedBankAccountsDeltaRow_(sheet);
+      } catch (_deltaSeedErr) {
+        Logger.log('ensureOnboardingBankAccountsSheetFromDashboard seed Delta: ' + _deltaSeedErr);
+      }
+
       // Canonical Bank Accounts year-block coloring (orange Year row,
       // yellow Account Name header row, plus green/tan Total Accounts/Delta
       // rows only if present) + widen-only readable column widths. Mirrors

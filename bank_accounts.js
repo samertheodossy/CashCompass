@@ -1211,6 +1211,201 @@ function seedBankAccountsTotalAccountsRow_(sheet) {
 }
 
 /**
+ * Read-only: locate the December "Total Accounts" cell of a given year block
+ * so a subsequent year's January Delta can chain across the year boundary.
+ *
+ * Operates on a pre-loaded full-sheet display snapshot (no Sheets reads).
+ * Returns { row, col } (both 1-based) for the prior block's Total Accounts
+ * row × its Dec-YY column, or null when the year banner, its Account Name
+ * header, its Dec month column, or its Total Accounts row is not found.
+ * Columns are resolved by header label (parseMonthHeader_), never by
+ * position, so an Active column never confuses the Dec lookup.
+ *
+ * @param {string[][]} display  getDataRange().getDisplayValues() snapshot
+ * @param {number} year         the block year to locate (e.g. blockYear - 1)
+ * @returns {{row:number, col:number}|null}
+ */
+function findBankAccountsDecTotalAccountsCell_(display, year) {
+  let yearRow = -1;
+  for (let r = 0; r < display.length; r++) {
+    const a = String((display[r] && display[r][0]) || '').trim();
+    const b = String((display[r] && display[r][1]) || '').trim();
+    if (a === 'Year' && b === String(year)) { yearRow = r + 1; break; }
+  }
+  if (yearRow === -1) return null;
+
+  const headerRow = yearRow + 1;
+  if (String((display[headerRow - 1] && display[headerRow - 1][0]) || '').trim() !== 'Account Name') {
+    return null;
+  }
+
+  // Dec column from THIS block's header row (by label).
+  const headerVals = display[headerRow - 1] || [];
+  let decCol = -1;
+  for (let c = 2; c <= headerVals.length; c++) {
+    const d = parseMonthHeader_(String(headerVals[c - 1] || '').trim());
+    if (d && d.getMonth() === 11) { decCol = c; break; }
+  }
+  if (decCol === -1) return null;
+
+  // Total Accounts row within this block (stop at the next Year banner).
+  let taRow = -1;
+  for (let r = headerRow; r < display.length; r++) {
+    const name = String((display[r] && display[r][0]) || '').trim();
+    if (r + 1 > headerRow && name === 'Year') break;
+    if (name === 'Total Accounts') { taRow = r + 1; break; }
+  }
+  if (taRow === -1) return null;
+
+  return { row: taRow, col: decCol };
+}
+
+/**
+ * First-create seed of the "Delta" month-over-month change row, placed
+ * directly below the "Total Accounts" summary row of the same year block.
+ *
+ * Production parity (confirmed against the live workbook):
+ *   - Jan of the FIRST year block     → literal 0
+ *   - Jan of a SUBSEQUENT year block  → Jan Total Accounts − prior-year Dec
+ *                                       Total Accounts (cross-block)
+ *   - Feb … Dec                       → this month's Total Accounts −
+ *                                       previous month's Total Accounts
+ *   - Total column                    → SUM of this Delta row's month cells
+ *                                       (telescopes to the net change for the
+ *                                       year)
+ *
+ * Seed-only by design — NO refresh hook is required:
+ *   - The Jan / Feb…Dec formulas reference the Total Accounts row by fixed
+ *     cells. When a new account row is inserted above Total Accounts, Sheets
+ *     shifts the Total Accounts + Delta rows down together and auto-adjusts
+ *     those references. There is no data-row RANGE to grow (unlike the Total
+ *     Accounts gross =SUM), so nothing can freeze stale.
+ *   - The Total cell is a HORIZONTAL same-row =SUM(<firstMonth>:<Dec>) — row
+ *     inserts never alter a same-row column range, and it can never collapse
+ *     to the single-cell shape that forced the Total Accounts matcher fix.
+ *
+ * Idempotent: if any "Delta" row already exists this is a no-op and returns
+ * its 1-based row. Requires a "Total Accounts" row to exist first; returns -1
+ * when none is present (Delta is meaningless without it). Columns resolved by
+ * HEADER LABEL (parseMonthHeader_ for MMM-YY, /^total$/i for the roll-up),
+ * never positionally, so an Active column is skipped. Best-effort: month/
+ * Total writes are wrapped so a formatting hiccup never blocks creation.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @returns {number} 1-based row of the Delta row, or -1 on no-op-miss/failure
+ */
+function seedBankAccountsDeltaRow_(sheet) {
+  if (!sheet) return -1;
+
+  const display = sheet.getDataRange().getDisplayValues();
+
+  // Idempotent: any existing Delta row → no-op.
+  for (let i = 0; i < display.length; i++) {
+    if (String((display[i] && display[i][0]) || '').trim() === 'Delta') return i + 1;
+  }
+
+  // Delta sits directly below the first Total Accounts row; never create one
+  // without it.
+  let totalRow = -1;
+  for (let i = 0; i < display.length; i++) {
+    if (String((display[i] && display[i][0]) || '').trim() === 'Total Accounts') {
+      totalRow = i + 1;
+      break;
+    }
+  }
+  if (totalRow === -1) return -1;
+
+  // Header row = nearest "Account Name" above Total Accounts (read its month
+  // headers + derive the block year from the Jan-YY header).
+  let headerRow = -1;
+  for (let r = totalRow - 1; r >= 1; r--) {
+    const name = String((display[r - 1] && display[r - 1][0]) || '').trim();
+    if (name === 'Account Name') { headerRow = r; break; }
+    if (name === 'Year') break;
+  }
+  if (headerRow === -1) return -1;
+
+  const headerVals = display[headerRow - 1] || [];
+  const lastCol = sheet.getLastColumn();
+
+  // Catalog month columns (by label) + the Total column; derive the block
+  // year from the January header so we can chain across years.
+  const months = []; // { col, monthIndex }  monthIndex: 0=Jan … 11=Dec
+  let totalCol = -1;
+  let blockYear = -1;
+  for (let c = 2; c <= lastCol; c++) {
+    const header = String(headerVals[c - 1] !== undefined ? headerVals[c - 1] : '').trim();
+    if (!header) continue;
+    if (/^total$/i.test(header)) { totalCol = c; continue; }
+    const d = parseMonthHeader_(header);
+    if (!d) continue; // skip Active / unrelated columns
+    months.push({ col: c, monthIndex: d.getMonth() });
+    if (d.getMonth() === 0) blockYear = d.getFullYear();
+  }
+  if (months.length === 0) return -1;
+  months.sort(function(a, b) { return a.col - b.col; });
+
+  // Prior-year Dec Total Accounts (pre-insert coordinates); null → first-year
+  // semantics (Jan = 0).
+  let priorDec = (blockYear > 0)
+    ? findBankAccountsDecTotalAccountsCell_(display, blockYear - 1)
+    : null;
+
+  // Place Delta directly below Total Accounts. Insert a physical row only when
+  // content follows (e.g. another year block) so nothing is overwritten;
+  // append when Total Accounts is the last row (the fresh-create case).
+  let deltaRow = totalRow + 1;
+  const inserted = totalRow < sheet.getLastRow();
+  if (inserted) {
+    sheet.insertRowAfter(totalRow);
+    deltaRow = totalRow + 1;
+    // A prior block sitting BELOW the insertion point shifts down by one.
+    if (priorDec && priorDec.row > totalRow) priorDec.row += 1;
+  }
+  sheet.getRange(deltaRow, 1).setValue('Delta');
+
+  const currency = '$#,##0.00;-$#,##0.00';
+  const firstMonthCol = months[0].col;
+  const lastMonthCol = months[months.length - 1].col;
+
+  for (let idx = 0; idx < months.length; idx++) {
+    const m = months[idx];
+    const letter = columnToLetter_(m.col).toUpperCase();
+    let formula = null;
+    if (idx === 0) {
+      // Leftmost month of the block (January in the canonical layout).
+      if (m.monthIndex === 0 && priorDec) {
+        formula = '=' + letter + totalRow + '-' +
+          columnToLetter_(priorDec.col).toUpperCase() + priorDec.row;
+      }
+      // else: first-year Jan (or no prior block) → literal 0 below.
+    } else {
+      const prevLetter = columnToLetter_(months[idx - 1].col).toUpperCase();
+      formula = '=' + letter + totalRow + '-' + prevLetter + totalRow;
+    }
+    try {
+      const cell = sheet.getRange(deltaRow, m.col);
+      if (formula) cell.setFormula(formula);
+      else cell.setValue(0);
+      cell.setNumberFormat(currency);
+    } catch (_mErr) { /* non-fatal */ }
+  }
+
+  // Total column = SUM of this Delta row's own month cells.
+  if (totalCol !== -1) {
+    try {
+      const fL = columnToLetter_(firstMonthCol).toUpperCase();
+      const lL = columnToLetter_(lastMonthCol).toUpperCase();
+      const cell = sheet.getRange(deltaRow, totalCol);
+      cell.setFormula('=SUM(' + fL + deltaRow + ':' + lL + deltaRow + ')');
+      cell.setNumberFormat(currency);
+    } catch (_tErr) { /* non-fatal */ }
+  }
+
+  return deltaRow;
+}
+
+/**
  * Maintains the current-year block's "Total Accounts" summary row so each
  * money column's gross =SUM range covers every account data row above the
  * summary. Gross by design — inactive accounts still count, matching a plain
