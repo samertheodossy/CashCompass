@@ -554,12 +554,25 @@ function workbookHasAnyAppSheet_(ss) {
  *   }
  */
 function getStartupRoutingFromDashboard() {
+  // Central App seam: resolve the caller's own workbook (central mode) or
+  // the active bound spreadsheet (bound mode). Previously this used
+  // SpreadsheetApp.getActiveSpreadsheet() directly, which is null in a
+  // standalone Central deployment and made the downstream probe throw.
+  //
+  // Phase 6D.1: workbook resolution is wrapped in its own try/catch so a
+  // known recovery state (stale mapping / ambiguous workbook / generic
+  // unavailable) returns a recovery descriptor the client can render as a
+  // calm, non-technical recovery screen — instead of being swallowed into
+  // the normal fail-closed path, where the dashboard loaders would then
+  // fire against an unresolved workbook and leak raw errors into the UI.
+  var ss;
   try {
-    // Central App seam: resolve the caller's own workbook (central mode) or
-    // the active bound spreadsheet (bound mode). Previously this used
-    // SpreadsheetApp.getActiveSpreadsheet() directly, which is null in a
-    // standalone Central deployment and made the downstream probe throw.
-    var ss = getUserSpreadsheet_();
+    ss = getUserSpreadsheet_();
+  } catch (resolveErr) {
+    return buildRecoveryRouting_(resolveErr);
+  }
+
+  try {
     if (!ss) {
       // No resolvable workbook (e.g., a standalone Central deployment with
       // no mapping yet). Fail closed to the normal dashboard rather than
@@ -625,4 +638,55 @@ function getStartupRoutingFromDashboard() {
       reason: 'Startup routing probe failed: ' + (e && e.message ? e.message : e)
     };
   }
+}
+
+/**
+ * Phase 6D.1 — builds the recovery routing descriptor returned by
+ * getStartupRoutingFromDashboard() when central-mode workbook resolution
+ * fails. The client maps `recovery.type` to a calm, non-technical screen
+ * and never renders raw spreadsheet IDs, stack traces, or internal error
+ * names.
+ *
+ * Recovery types:
+ *   - 'stale'       : a mapped workbook could not be opened
+ *                     (StaleMappingError).
+ *   - 'ambiguous'   : multiple candidate workbooks and none linked; we
+ *                     refused to auto-pick (AmbiguousWorkbookError).
+ *                     Only reachable when CENTRAL_AUTO_ADOPT is on.
+ *   - 'unavailable' : any other resolution/provisioning failure
+ *                     (e.g., no identified user, transient Drive error).
+ *
+ * The optional BETA_CONTACT_EMAIL script property is included so the
+ * recovery screen can offer a support contact; it is read defensively and
+ * defaults to empty (the client simply hides the contact line). This is a
+ * read-only classifier — it performs no mapping writes and no Drive writes.
+ */
+function buildRecoveryRouting_(err) {
+  var name = (err && err.name) ? String(err.name) : '';
+  var type;
+  if (name === 'StaleMappingError') {
+    type = 'stale';
+  } else if (name === 'AmbiguousWorkbookError') {
+    type = 'ambiguous';
+  } else {
+    type = 'unavailable';
+  }
+
+  var contactEmail = '';
+  try {
+    contactEmail = String(PropertiesService.getScriptProperties()
+      .getProperty('BETA_CONTACT_EMAIL') || '').trim();
+  } catch (_e) {
+    contactEmail = '';
+  }
+
+  return {
+    ok: false,
+    isBlankWorkbook: false,
+    mode: 'recovery',
+    recovery: {
+      type: type,
+      contactEmail: contactEmail
+    }
+  };
 }

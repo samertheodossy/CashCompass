@@ -1533,6 +1533,29 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
     status probe — see loadOnboardingSection() in
     Dashboard_Script_Onboarding.html.
   -->
+  <!--
+    Phase 6D.1 — Recovery page. Hidden by default; revealed by the startup
+    routing gate (PlannerDashboardWeb) only when central-mode workbook
+    resolution fails (stale mapping / ambiguous workbook / generic
+    unavailable). It deliberately reuses the onboarding welcome-card styling
+    so no new CSS is needed. Copy is set at runtime by showRecoveryPage()
+    and stays non-technical — no spreadsheet IDs, stack traces, or internal
+    error names are ever shown. Display-only: no reconnect / create / admin
+    actions and no writes.
+  -->
+  <div id="page_recovery" class="workspace-page">
+    <div class="onboarding-view onboarding-view-welcome">
+      <div class="onboarding-welcome-card">
+        <h2 class="onboarding-welcome-title" id="recovery_title">We couldn&rsquo;t open your workbook</h2>
+        <p class="onboarding-welcome-lede" id="recovery_message"></p>
+        <p class="onboarding-welcome-reassurance" id="recovery_contact" style="display:none;"></p>
+        <div class="onboarding-welcome-actions">
+          <button type="button" class="btn-primary" onclick="recoveryReload()">Try again</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="page_onboarding" class="workspace-page">
     <!--
       View 1: Welcome screen. Shown as the initial view only when the

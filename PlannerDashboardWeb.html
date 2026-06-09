@@ -198,6 +198,15 @@
 
       google.script.run
         .withSuccessHandler(function(routing) {
+          // Phase 6D.1 recovery gate. If workbook resolution failed with a
+          // known recovery state, show the calm recovery page and STOP —
+          // do not call initDashboard(), so the normal loaders never fire
+          // against an unresolved workbook (which would leak raw errors).
+          if (routing && routing.recovery && typeof showRecoveryPage === 'function') {
+            showRecoveryPage(routing.recovery);
+            revealWorkspace_();
+            return;
+          }
           if (routing && routing.ok && routing.isBlankWorkbook) {
             // Blank workbook: switch the active page to onboarding
             // BEFORE revealing so the user never sees the default

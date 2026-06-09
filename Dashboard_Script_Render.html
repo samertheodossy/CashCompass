@@ -62,7 +62,10 @@ function showPage(name) {
   // `.page-nav`. Toggled strictly on page enter/leave; no other page
   // behavior changes.
   if (document.body) {
-    if (name === 'onboarding') {
+    // 'recovery' (Phase 6D.1) is a focused dead-end like 'onboarding':
+    // hide the section nav so the user isn't pulled into dashboard
+    // surfaces that can't load until the workbook is reconnected.
+    if (name === 'onboarding' || name === 'recovery') {
       document.body.classList.add('setup-mode');
     } else {
       document.body.classList.remove('setup-mode');
@@ -90,6 +93,72 @@ function showPage(name) {
     ) {
       loadNextActions();
     }
+  }
+}
+
+// --------------------------------------------------------------------
+// Phase 6D.1 — recovery screen.
+//
+// Called by the startup routing gate (PlannerDashboardWeb) when the
+// server reports a workbook-resolution failure. Renders calm,
+// non-technical copy keyed off recovery.type and routes to the
+// hidden page_recovery surface. Display-only: the single action is a
+// "Try again" reload plus an optional support contact. No spreadsheet
+// IDs, stack traces, or internal error names are ever shown.
+// --------------------------------------------------------------------
+function showRecoveryPage(recovery) {
+  var rec = recovery || {};
+  var type = rec.type || 'unavailable';
+
+  var message;
+  if (type === 'ambiguous') {
+    message = 'We found more than one CashCompass workbook for your account, ' +
+      'so we paused instead of opening the wrong one. Reach out and we\u2019ll ' +
+      'connect you to the right one.';
+  } else if (type === 'stale') {
+    message = 'We couldn\u2019t open your CashCompass workbook right now. This ' +
+      'can happen if it was moved, renamed, or its sharing changed. Please ' +
+      'try again in a moment.';
+  } else {
+    message = 'We couldn\u2019t open your CashCompass workbook right now. ' +
+      'Please try again in a moment.';
+  }
+
+  var titleEl = document.getElementById('recovery_title');
+  var msgEl = document.getElementById('recovery_message');
+  var contactEl = document.getElementById('recovery_contact');
+
+  if (titleEl) titleEl.textContent = 'We couldn\u2019t open your workbook';
+  if (msgEl) msgEl.textContent = message;
+
+  if (contactEl) {
+    // Reset any prior render, then build the contact line via DOM nodes
+    // (not innerHTML) so the admin-set email can never inject markup.
+    contactEl.textContent = '';
+    contactEl.style.display = 'none';
+    var email = (rec.contactEmail || '').trim();
+    if (email) {
+      contactEl.appendChild(document.createTextNode('Need a hand? Contact '));
+      var a = document.createElement('a');
+      a.href = 'mailto:' + email;
+      a.textContent = email;
+      contactEl.appendChild(a);
+      contactEl.style.display = '';
+    }
+  }
+
+  if (typeof showPage === 'function') {
+    showPage('recovery');
+  }
+}
+
+function recoveryReload() {
+  // Reload the web-app content to re-run the startup routing gate, which
+  // re-attempts workbook resolution. Guarded for the HtmlService sandbox.
+  try {
+    window.location.reload();
+  } catch (e) {
+    try { window.top.location.reload(); } catch (_e) {}
   }
 }
 
