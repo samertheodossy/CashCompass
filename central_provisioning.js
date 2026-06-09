@@ -47,6 +47,19 @@ var BETA_CONTACT_EMAIL_KEY_ = 'BETA_CONTACT_EMAIL';
 var MAPPING_KEY_PREFIX_ = 'mapping::';
 
 /**
+ * Adopt-before-create flag (Phase 6C). When a caller has NO mapping but a
+ * single strict candidate workbook already exists in their Drive, central mode
+ * can adopt that workbook (write the mapping to it) instead of creating a
+ * duplicate. Read by isAutoAdoptEnabled_().
+ *
+ * Fail-closed, exactly like CENTRAL_MODE: only the literal string "true"
+ * enables it; unset / anything else = OFF. While OFF, provisioning behaves
+ * byte-for-byte as before (always create) — Phase 6C is dark until this flag
+ * is flipped on a test account.
+ */
+var CENTRAL_AUTO_ADOPT_KEY_ = 'CENTRAL_AUTO_ADOPT';
+
+/**
  * Reverse-index key prefix (Phase 6B). Maps a spreadsheet ID back to the
  * owning user's email hash: `wbid::<spreadsheetId>` -> <email_hash>. This is
  * a SUPPLEMENTARY trace aid only — the forward `mapping::` store remains the
@@ -418,6 +431,130 @@ function ensureWorkbookIdentityMarkers_(ss, fileId, email) {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Adopt-before-create (Phase 6C — flag-gated, default OFF)                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Returns true only when the CENTRAL_AUTO_ADOPT script property is the literal
+ * string "true". Any other value (including unset) returns false. Never throws
+ * — read failures fail closed (adoption off), the safest posture: a failed
+ * read simply means "behave as before and create".
+ *
+ * @returns {boolean}
+ */
+function isAutoAdoptEnabled_() {
+  try {
+    return PropertiesService.getScriptProperties()
+      .getProperty(CENTRAL_AUTO_ADOPT_KEY_) === 'true';
+  } catch (_e) {
+    return false;
+  }
+}
+
+/**
+ * Builds a name-tagged Error for the ambiguous case (≥2 strict candidates for
+ * one user with no mapping). Tagged `name = 'AmbiguousWorkbookError'` — mirrors
+ * handleStaleMapping_'s StaleMappingError — so a later recovery surface (Phase
+ * 6D) can detect and render it specially. Adoption is impossible here because
+ * "which workbook holds the real data?" is a human decision; we deliberately
+ * create nothing and trash nothing.
+ *
+ * @param {!Array<string>} candidateIds Full candidate IDs (for the message).
+ * @returns {!Error}
+ */
+function buildAmbiguousWorkbookError_(candidateIds) {
+  var ids = (candidateIds || []).map(function(id) { return truncateId_(id); });
+  var err = new Error(
+    'Multiple CashCompass workbooks were found for your account and none is ' +
+    'currently linked. To avoid picking the wrong one automatically, ' +
+    'CashCompass stopped instead of creating another copy. Contact the ' +
+    'project owner to choose the correct workbook. Candidates: ' +
+    ids.join(', ')
+  );
+  err.name = 'AmbiguousWorkbookError';
+  return err;
+}
+
+/**
+ * Adopt-before-create core (Phase 6C). Called ONLY from inside
+ * provisionWorkbookForUser_, inside the user lock, after the mapping
+ * double-check has confirmed there is no mapping, and only when
+ * isAutoAdoptEnabled_() is true.
+ *
+ * Behavior (approved decision tree):
+ *   - Detection failure (Drive list throws) → availability-first: log and
+ *     return null so the caller falls through to create. A rare transient
+ *     failure may create a duplicate, but that is recoverable later; blocking
+ *     provisioning entirely is not.
+ *   - 0 candidates → return null → caller creates (current behavior).
+ *   - exactly 1 strict candidate (HIGH = marker-hash match, or MEDIUM =
+ *     exact-name match; both already owned-by-caller + non-trashed by
+ *     construction in findCandidateWorkbooks_) → re-verify openById, write the
+ *     mapping, mirror the mapped-open post-steps (cleanupDefaultSheet1_ +
+ *     ensureWorkbookIdentityMarkers_), and return the adopted Spreadsheet. If
+ *     the re-verify open fails → log and return null → caller creates.
+ *   - ≥2 candidates → throw AmbiguousWorkbookError (adopt/create nothing).
+ *
+ * LOW-confidence files cannot appear here: findCandidateWorkbooks_ only matches
+ * the exact marker hash or the exact workbook name, constrained to the caller's
+ * own non-trashed spreadsheets, so every merged candidate is HIGH or MEDIUM.
+ *
+ * @param {string} email Caller email (already validated non-empty by caller).
+ * @returns {?GoogleAppsScript.Spreadsheet.Spreadsheet} Adopted workbook, or
+ *   null when the caller should create a new workbook.
+ */
+function tryAdoptWorkbookBeforeCreate_(email) {
+  var found;
+  try {
+    found = findCandidateWorkbooks_(email);
+  } catch (detectErr) {
+    // Availability-first: never let a Drive list hiccup block provisioning.
+    Logger.log('[6C] adopt detection failed; falling through to create: ' +
+      (detectErr && detectErr.message ? detectErr.message : String(detectErr)));
+    return null;
+  }
+
+  var merged = (found && found.merged) ? found.merged : [];
+
+  if (merged.length === 0) {
+    return null; // no candidate → create (current behavior)
+  }
+
+  if (merged.length >= 2) {
+    var ids = merged.map(function(c) { return c.id; });
+    Logger.log('[6C] ambiguous: ' + merged.length +
+      ' candidates, adopting none. ids=' +
+      ids.map(function(id) { return truncateId_(id); }).join(','));
+    throw buildAmbiguousWorkbookError_(ids);
+  }
+
+  // Exactly one strict candidate.
+  var cand = merged[0];
+  var confidence = (cand.matchedBy === 'name') ? 'MEDIUM' : 'HIGH';
+
+  var ss;
+  try {
+    ss = SpreadsheetApp.openById(cand.id);
+  } catch (openErr) {
+    // Re-verify failed (e.g. trashed between list and adopt) → create instead.
+    Logger.log('[6C] candidate re-verify openById failed; falling through to ' +
+      'create. id=' + truncateId_(cand.id) + ' err=' +
+      (openErr && openErr.message ? openErr.message : String(openErr)));
+    return null;
+  }
+
+  // Mirror the mapped-open post-steps exactly — nothing else. The candidate
+  // holds the user's real data; do NOT bootstrap/rewrite it.
+  cleanupDefaultSheet1_(ss);
+  writeSpreadsheetIdForUser_(email, cand.id);
+  try { ensureWorkbookIdentityMarkers_(ss, cand.id, email); } catch (_mk) {}
+
+  Logger.log('[6C] adopted workbook id=' + truncateId_(cand.id) +
+    ' confidence=' + confidence + ' matchedBy=' + (cand.matchedBy || '-'));
+  return ss;
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Resolver branch                                                           */
 /* -------------------------------------------------------------------------- */
 
@@ -504,6 +641,19 @@ function provisionWorkbookForUser_(email) {
       // Phase 6B lazy backfill (race branch): idempotent + best-effort.
       try { ensureWorkbookIdentityMarkers_(existingSs, existingId, email); } catch (_bf) {}
       return existingSs;
+    }
+
+    // Phase 6C adopt-before-create: with no mapping, prefer adopting a single
+    // strict pre-existing candidate over creating a duplicate. Flag-gated
+    // (default OFF → skipped entirely, current behavior preserved). Runs INSIDE
+    // the lock, AFTER the mapping double-check. May return a Spreadsheet (adopt
+    // → done), null (fall through to create), or throw AmbiguousWorkbookError
+    // (≥2 candidates → create nothing).
+    if (isAutoAdoptEnabled_()) {
+      var adopted = tryAdoptWorkbookBeforeCreate_(email);
+      if (adopted) {
+        return adopted;
+      }
     }
 
     var fileId = null;
