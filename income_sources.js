@@ -496,8 +496,10 @@ function addIncomeSourceFromDashboard(payload) {
   // Authoritative write — this is the income amount for the current
   // month, not a quick-pay increment. We overwrite any pre-existing
   // value in the cell so the totals reflect exactly what the user just
-  // entered.
-  setCurrencyCellPreserveRowFormat_(sheet, targetRow, monthCol, amountNum, 3);
+  // entered. Uses the Cash-Flow money format (red negatives) to keep the
+  // month column consistent with auto-entered expense cells; income is
+  // positive so the negative section is inert here.
+  setCashFlowMoneyCellPreserveRowFormat_(sheet, targetRow, monthCol, amountNum, 3);
 
   var monthLabel = Utilities.formatDate(today, Session.getScriptTimeZone(), 'MMM-yy');
   var todayIso = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyy-MM-dd');

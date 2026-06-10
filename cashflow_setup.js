@@ -92,7 +92,7 @@ function createNextYearCashFlowSheet() {
   for (let i = 0; i < layout.monthCol0s.length; i++) {
     const col1 = layout.monthCol0s[i] + 1;
     newSheet.getRange(2, col1, Math.max(1, numRows - 1), 1)
-      .setNumberFormat('$#,##0.00;-$#,##0.00');
+      .setNumberFormat('$#,##0.00;[Red]-$#,##0.00');
   }
 
   const summaryRow = findCashFlowSummaryRow_(newSheet, numRows, layout);
@@ -282,7 +282,7 @@ function writeCashFlowSummaryFormulas_(sheet, summaryRow, layout) {
 
     const cell = sheet.getRange(summaryRow, monthCol1);
     cell.setFormula(formula);
-    cell.setNumberFormat('$#,##0.00;-$#,##0.00');
+    cell.setNumberFormat('$#,##0.00;[Red]-$#,##0.00');
   }
 
   if (layout.totalCol0 !== -1) {
@@ -292,7 +292,7 @@ function writeCashFlowSummaryFormulas_(sheet, summaryRow, layout) {
     totalCell.setFormula(
       '=SUM(' + firstMonthLetter + summaryRow + ':' + lastMonthLetter + summaryRow + ')'
     );
-    totalCell.setNumberFormat('$#,##0.00;-$#,##0.00');
+    totalCell.setNumberFormat('$#,##0.00;[Red]-$#,##0.00');
   }
 }
 
@@ -556,9 +556,9 @@ function ensureCashFlowYearSheet_(year) {
   try {
     const totalCol1 = lastMonthCol1 + 1;
     sheet.getRange(2, firstMonthCol1, sheet.getMaxRows() - 1, monthHeaders.length)
-      .setNumberFormat('$#,##0.00;-$#,##0.00');
+      .setNumberFormat('$#,##0.00;[Red]-$#,##0.00');
     sheet.getRange(2, totalCol1, sheet.getMaxRows() - 1, 1)
-      .setNumberFormat('$#,##0.00;-$#,##0.00');
+      .setNumberFormat('$#,##0.00;[Red]-$#,##0.00');
   } catch (e) {
     // Number format is cosmetic; do not fail the ensure op.
   }

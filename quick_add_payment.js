@@ -281,7 +281,10 @@ function quickAddPayment(payload) {
   const targetCell = sheet.getRange(rowInfo.row, monthCol);
   const previousValue = round2_(toNumber_(targetCell.getValue()));
 
-  addCurrencyToCellPreserveRowFormat_(sheet, rowInfo.row, monthCol, signedAmount, 3);
+  // Cash Flow month cells use the red-negative money format so auto-entered
+  // expenses match the surrounding expense cells. Value is unchanged — only
+  // the number format differs from the shared (black-negative) helper.
+  addCashFlowMoneyToCellPreserveRowFormat_(sheet, rowInfo.row, monthCol, signedAmount, 3);
 
   const newValue = round2_(toNumber_(sheet.getRange(rowInfo.row, monthCol).getValue()));
 

@@ -357,6 +357,41 @@ function addCurrencyToCellPreserveRowFormat_(sheet, row, col, amount, firstDataC
   addCurrencyToCell_(sheet.getRange(row, col), amount);
 }
 
+/*
+ * Cash-Flow-scoped money formatting.
+ *
+ * Cash Flow month/total cells render negatives in RED so auto-entered
+ * expenses match the surrounding (manually formatted) expense cells in
+ * the bound workbook. This is intentionally SEPARATE from
+ * applyCurrencyFormat_ (black negatives) so Debts, Bank Accounts,
+ * Investments, House Values, etc. keep their existing currency format
+ * unchanged — only the INPUT - Cash Flow write paths use these helpers.
+ *
+ * The numeric value is preserved exactly (round2_ only); only the
+ * number format differs from the shared helpers.
+ */
+var CASH_FLOW_MONEY_FORMAT_ = '$#,##0.00;[Red]-$#,##0.00';
+
+function applyCashFlowMoneyFormat_(range) {
+  range.setNumberFormat(CASH_FLOW_MONEY_FORMAT_);
+}
+
+function setCashFlowMoneyCellPreserveRowFormat_(sheet, row, col, value, firstDataCol) {
+  copyNeighborFormatInRow_(sheet, row, col, firstDataCol || col);
+  const cell = sheet.getRange(row, col);
+  cell.setValue(round2_(value));
+  applyCashFlowMoneyFormat_(cell);
+}
+
+function addCashFlowMoneyToCellPreserveRowFormat_(sheet, row, col, amount, firstDataCol) {
+  copyNeighborFormatInRow_(sheet, row, col, firstDataCol || col);
+  const cell = sheet.getRange(row, col);
+  const currentValue = toNumber_(cell.getValue());
+  const addValue = toNumber_(amount);
+  cell.setValue(round2_(currentValue + addValue));
+  applyCashFlowMoneyFormat_(cell);
+}
+
 function getLatestMonthColumnIndexFromHeaders_(headers, year) {
   const targetYear = Number(year);
   let bestIdx = -1;
