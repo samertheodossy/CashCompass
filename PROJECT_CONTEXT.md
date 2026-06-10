@@ -401,7 +401,7 @@ Notes:
 
 ## Recovery Validation Inventory
 
-Tracks how far each recovery-stack capability has actually been **runtime-validated** (vs merely implemented). As of **2026-06-09** a healthy-path validation pass ran with `CENTRAL_RECOVERY_ACTIONS=true` + `CENTRAL_ADMIN_REPAIR=true` + `CENTRAL_AUTO_ADOPT=false`. The remaining work is the destructive/edge-path pass (**6F**). Risk = blast radius if the path misbehaves.
+Tracks how far each recovery-stack capability has actually been **runtime-validated** (vs merely implemented). As of **2026-06-09** a healthy-path validation pass ran with `CENTRAL_RECOVERY_ACTIONS=true` + `CENTRAL_ADMIN_REPAIR=true` + `CENTRAL_AUTO_ADOPT=false`. **6F Part 2 (2026-06-10)** additionally validated the **Admin Repair disabled-path** (all flags OFF → clicked Clear returns "Repair is disabled (flag off)." with no writes). The remaining work is the destructive/edge-path pass with flags ON (**6F**). Risk = blast radius if the path misbehaves.
 
 **Implemented + tested (validated):**
 
@@ -409,6 +409,7 @@ Tracks how far each recovery-stack capability has actually been **runtime-valida
 - **Admin Inspect User (6E.1, read-only)** — Status: validated — Diagnostics page + Repair Toolkit load, Inspect User works, mapping preview + reverse-index visibility render. Risk: Low (read-only, admin-gated). Timing: done.
 - **Recovery flags healthy-path load** — Status: validated — dashboard loads normally with recovery + admin-repair flags ON and auto-adopt OFF; existing workbook resolves; no recovery page; no regression. Risk: Low. Timing: done.
 - **Confirm-before-clear UI (6E.1)** — Status: validated — the confirmation UI renders (the *prompt*, not an executed clear). Risk: Low (UI only). Timing: done.
+- **Admin Repair disabled-path enforcement (6E.1)** — Status: validated (6F Part 2, 2026-06-10) — with `CENTRAL_ADMIN_REPAIR=false`, Inspect/preview work but a clicked **Clear Mapping** returns "Repair is disabled (flag off)." with **no** mapping / reverse-index / workbook change. Confirms the server-side flag gate fails closed. Risk: Low. Timing: done.
 
 **Implemented + partially tested:**
 
@@ -420,7 +421,7 @@ Tracks how far each recovery-stack capability has actually been **runtime-valida
 - **Adopt-Before-Create with `CENTRAL_AUTO_ADOPT=true` (6C.1)** — Status: not tested (flag was OFF during validation). Risk: **High** (changes the provisioning/create path; can auto-relink). Timing: 6F, isolated, disposable account only.
 - **Recovery stale-mapping flow (end-to-end)** — Status: not tested (no failure has been induced). Risk: Medium–High. Timing: 6F — induce a safe stale mapping (clear only the test user's mapping via `clearMappingForUser_`, data untouched).
 - **Ambiguous-candidate handling (≥2 → `AmbiguousWorkbookError`)** — Status: not tested. Risk: Medium. Timing: 6F.
-- **Admin Clear Mapping action (executed) (6E.1)** — Status: UI validated, the **executed clear** not run. Risk: Medium (mapping-store write; wrong target forces re-provision/recovery). Timing: 6F, disposable test user only.
+- **Admin Clear Mapping action (executed with flag ON) (6E.1)** — Status: UI + **disabled-path enforcement** validated (6F Part 2); the **executed clear with `CENTRAL_ADMIN_REPAIR=true`** has not been run. Risk: Medium (mapping-store write; wrong target forces re-provision/recovery). Timing: 6F, disposable test user only.
 
 ## Bound Project Safety
 

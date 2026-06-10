@@ -170,7 +170,7 @@ Central-project **script properties** (`PropertiesService`), read at runtime, **
 
 ## Open testing inventory
 
-Validation status per recovery capability. A **healthy-path** pass ran 2026-06-09 (flags `CENTRAL_RECOVERY_ACTIONS` + `CENTRAL_ADMIN_REPAIR` ON, `CENTRAL_AUTO_ADOPT` OFF). The remaining gap is the **destructive/edge paths**; the 6F pass below closes it. Authoritative copy: `PROJECT_CONTEXT.md → Recovery Validation Inventory`.
+Validation status per recovery capability. A **healthy-path** pass ran 2026-06-09 (flags `CENTRAL_RECOVERY_ACTIONS` + `CENTRAL_ADMIN_REPAIR` ON, `CENTRAL_AUTO_ADOPT` OFF); **6F Part 2 (2026-06-10)** added the **Admin Repair disabled-path** (all flags OFF → clicked Clear is a no-op with the "Repair is disabled (flag off)." message). The remaining gap is the **destructive/edge paths with flags ON**; the 6F pass below closes it. Authoritative copy: `PROJECT_CONTEXT.md → Recovery Validation Inventory`.
 
 **Implemented + tested (validated):**
 
@@ -180,6 +180,7 @@ Validation status per recovery capability. A **healthy-path** pass ran 2026-06-0
 | Admin Inspect User — read-only (6E.1) | `CENTRAL_ADMIN_REPAIR` | Low | Validated — Diagnostics + Repair Toolkit load, Inspect + mapping preview + reverse-index visibility work. |
 | Recovery flags healthy-path load | recovery + admin-repair ON | Low | Validated — dashboard loads, existing workbook resolves, no recovery page, no regression. |
 | Confirm-before-clear UI (6E.1) | `CENTRAL_ADMIN_REPAIR` | Low | Validated (prompt renders; clear not executed). |
+| Admin Repair disabled-path enforcement (6E.1) | `CENTRAL_ADMIN_REPAIR`=OFF | Low | Validated (6F Part 2, 2026-06-10) — clicked Clear returns "Repair is disabled (flag off)."; no mapping/reverse-index/workbook change. Server-side gate fails closed. |
 
 **Implemented + partially tested:**
 
@@ -195,7 +196,7 @@ Validation status per recovery capability. A **healthy-path** pass ran 2026-06-0
 | Adopt-Before-Create with flag ON (6C.1) | `CENTRAL_AUTO_ADOPT` | High | Not tested (flag OFF during validation) → 6F, isolated, disposable account. |
 | Recovery stale-mapping flow (end-to-end) | — | Medium–High | Not tested; no failure induced yet → 6F (clear only the test user's mapping). |
 | Ambiguous handling (≥2 → `AmbiguousWorkbookError`) | `CENTRAL_AUTO_ADOPT` | Medium | Not tested → 6F. |
-| Admin Clear Mapping — executed (6E.1) | `CENTRAL_ADMIN_REPAIR` | Medium | UI validated; executed clear not run → 6F, disposable test user. |
+| Admin Clear Mapping — executed with flag ON (6E.1) | `CENTRAL_ADMIN_REPAIR` | Medium | UI + disabled-path enforcement validated (6F Part 2); executed clear with flag ON not run → 6F, disposable test user. |
 | Admin audit ring buffer (append/read, hashed) | `CENTRAL_ADMIN_REPAIR` | Low | Not exercised end-to-end → 6F. |
 
 **6F — Recovery Validation pass (P1, do first):** on a **disposable** account, exercise the partial + untested rows above (enable `CENTRAL_AUTO_ADOPT` only in isolation) → confirm expected behavior, no cross-user leakage, bound deployment unaffected → **set all flags OFF** → record evidence in `SESSION_NOTES.md`. No production/bound workbook involved. Triggering a safe `StaleMappingError` for the recovery-page test: clear only the test user's mapping via `clearMappingForUser_` (mapping store only; data untouched).
