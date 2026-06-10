@@ -21,6 +21,58 @@ Roadmap: `## Launch Readiness Roadmap (high-level)` below (detail in `TODO.md �
 
 > **Roadmap-label note (disambiguation):** the **Workbook Identity & Recovery** sub-series uses working labels **Phase 6A–6E**. These are the detailed expansion of the macro roadmap's **Phase 2 — Family Beta Hardening → 2B Workbook Recovery**, and are **not** the same as the macro **"Phase 6 — External Beta Readiness."** Where this doc says "Phase 6A/6B/6C…" it means the Identity & Recovery track.
 
+## Domain Completion Matrix (snapshot 2026-06-10)
+
+A high-level management/status dashboard. Percentages are rough completion estimates, not precise metrics. This is the at-a-glance view only — roadmap detail lives in `## Launch Readiness Roadmap (high-level)` below and `TODO.md`.
+
+### Core Finance Functionality — ~97%
+
+Dashboard, planner, assets, properties, cash flow, bills, debts, income, activity, and email all work in central mode at production parity.
+
+- Minor generated-sheet parity / formatting fixes
+- Edge-case testing
+
+### Central Architecture — ~96%
+
+Central App operational and runtime-validated — per-user provisioning, workbook mapping, resolver routing, and allow-list gating are live; the bound / production workbook stays protected.
+
+- Tier-2 `getActiveSpreadsheet()` migration cleanup (full dashboard)
+- Bound deployment cleanup / manifest revert once central is primary
+- Optional optimization
+
+### Workbook Identity & Recovery — ~90% implemented
+
+Identity markers + reverse index + the recovery stack (adopt-before-create, recovery page, reconnect, admin inspect + clear) are implemented and committed behind flags; healthy-path and disabled-path enforcement are validated.
+
+- 6D.2b Create New Workbook (designed, not implemented)
+- 6E.2 Admin Set Mapping (designed, not implemented)
+- 6F Recovery Validation — destructive/edge paths with flags ON
+
+### Family Beta Readiness — ~90%
+
+Stable and family-beta capable; provisioning proven across multiple accounts; the recovery stack is in place behind flags.
+
+- Recovery validation (destructive paths)
+- Additional beta users
+- Onboarding polish
+
+### External Beta Readiness — ~75%
+
+Architecture and recovery are largely built but not yet proven under real failure, and operational support is thin.
+
+- Recovery proven under failure conditions
+- User-lifecycle handling
+- Support workflows
+
+### Paid Product Readiness — ~15–20%
+
+Early stage — no monetization infrastructure exists yet.
+
+- Billing
+- Plans / subscriptions
+- Legal (privacy policy, ToS)
+- Support operations
+
 ## Launch Readiness Roadmap (high-level)
 
 High-level view of the next 6–12 months. **The authoritative, detailed roadmap lives in `TODO.md → Launch Readiness Roadmap`** (objective, why it matters, major deliverables, dependencies, and priority per phase) — this is the single source to avoid drift. The summary below carries phase names, objectives, and priorities only. Every phase runs under `WORKING_RULES.md → Current phase` and, for central-mode work, `→ Central App Transition Rules` (active).
