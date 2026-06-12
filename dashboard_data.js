@@ -2095,6 +2095,19 @@ function getInputBillsDueRows_(ss, today, tz) {
           continue;
         }
 
+        // Honor an explicit per-occurrence Skip. skipDashboardBill logs
+        // 'bill_skip::' + buildDashboardBillSkipKey_(payee, <yyyy-MM-dd>) keyed
+        // to this exact occurrence date, and writes $0 (adds nothing) into the
+        // month cell. So a skipped occurrence must not show a card and must not
+        // be autopaid/accumulated. It is intentionally NOT counted toward
+        // monthApplied because a $0 skip adds nothing to the running autopay
+        // total (the manual-protection math below stays correct).
+        const occDueIso = Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd');
+        const occSkipKey = 'bill_skip::' + buildDashboardBillSkipKey_(payee, occDueIso);
+        if (activityLogDedupeKeyExists_(ss, occSkipKey)) {
+          continue;
+        }
+
         const dueHasPassed = cand.dueDate.getTime() < todayOnly.getTime();
         const canAutopay = autopay === 'yes' && varies !== 'yes';
 
@@ -2626,6 +2639,9 @@ function skipDashboardBill(skipKey) {
     typeof currentValue === 'undefined' ||
     currentDisplay === '';
 
+  // The $0 cell write stays guarded by isBlank: we only stamp a $0 into a
+  // genuinely empty month cell so we never clobber a real (manual or
+  // accumulated) amount.
   if (isBlank) {
     cell.setValue(0);
 
@@ -2643,39 +2659,46 @@ function skipDashboardBill(skipKey) {
     if (!copyNearestAmountFormatInRow_(info.sheet, info.row, info.col)) {
       cell.setNumberFormat('$#,##0.00;-$#,##0.00');
     }
-
-    var bill = getDashboardBillByKey_(ss, skipKey);
-    var monthHdr = bill && bill.monthHeader ? bill.monthHeader : activityLogMonthHeaderFromCell_(info.sheet, info.col);
-    var payeeName = bill ? bill.payee : activityLogFallbackPayeeFromSkipKey_(skipKey);
-    appendActivityLog_(ss, {
-      eventType: 'bill_skip',
-      entryDate: bill ? activityLogEntryDateFromSkipBill_(bill) : '',
-      amount: 0,
-      direction: 'skip',
-      payee: payeeName || '(unknown)',
-      category: '',
-      accountSource: '',
-      cashFlowSheet: info.sheet.getName(),
-      cashFlowMonth: monthHdr,
-      dedupeKey: 'bill_skip::' + String(skipKey || '').trim(),
-      details: JSON.stringify({ skipKey: skipKey, wroteZero: true, billResolved: !!bill })
-    });
-
-    return {
-      ok: true,
-      message: 'Bill skipped — recorded as $0 this month'
-    };
   }
+
+  // Record the bill_skip event regardless of whether the cell was blank.
+  // The expanded (weekly/biweekly) recurrence branch suppresses a skipped
+  // occurrence by looking up this exact dedupe key — and for those bills the
+  // shared monthly Cash Flow cell is frequently already non-blank, so gating
+  // the log write on isBlank meant skipped occurrences were never recorded
+  // and kept reappearing. appendActivityLog_'s own dedupe means repeated Skip
+  // clicks won't create duplicate rows.
+  const bill = getDashboardBillByKey_(ss, skipKey);
+  const monthHdr = bill && bill.monthHeader ? bill.monthHeader : activityLogMonthHeaderFromCell_(info.sheet, info.col);
+  const payeeName = bill ? bill.payee : activityLogFallbackPayeeFromSkipKey_(skipKey);
+  const skipDedupeKey = 'bill_skip::' + String(skipKey || '').trim();
+  appendActivityLog_(ss, {
+    eventType: 'bill_skip',
+    entryDate: bill ? activityLogEntryDateFromSkipBill_(bill) : '',
+    amount: 0,
+    direction: 'skip',
+    payee: payeeName || '(unknown)',
+    category: '',
+    accountSource: '',
+    cashFlowSheet: info.sheet.getName(),
+    cashFlowMonth: monthHdr,
+    dedupeKey: skipDedupeKey,
+    details: JSON.stringify({ skipKey: skipKey, wroteZero: isBlank, billResolved: !!bill })
+  });
 
   return {
     ok: true,
-    message: 'Already paid — no changes made'
+    message: isBlank
+      ? 'Bill skipped — recorded as $0 this month'
+      : 'Bill skipped — occurrence recorded'
   };
 }
 
 function resolveDashboardBillSkipTarget_(ss, skipKey) {
   const bill = getDashboardBillByKey_(ss, skipKey);
-  if (!bill) return null;
+  if (!bill) {
+    return null;
+  }
 
   const year = Number(bill.year);
   const monthHeader = bill.monthHeader;
@@ -2684,7 +2707,9 @@ function resolveDashboardBillSkipTarget_(ss, skipKey) {
   const sheet = getCashFlowSheet_(ss, year);
   const display = sheet.getDataRange().getDisplayValues();
 
-  if (display.length < 2) return null;
+  if (display.length < 2) {
+    return null;
+  }
 
   const headers = display[0];
   const payeeCol = headers.indexOf('Payee');
@@ -2693,6 +2718,15 @@ function resolveDashboardBillSkipTarget_(ss, skipKey) {
   if (payeeCol === -1 || monthCol === -1) {
     throw new Error('Could not find Payee or month column in Cash Flow.');
   }
+
+  // Exact-text match wins. If none is found, fall back to a normalized payee
+  // match (same normalization the Bills Due display/filter uses) so a Skip
+  // still resolves when the Cash Flow row payee has case/whitespace drift from
+  // INPUT - Bills. We do NOT create a row here — if nothing matches even after
+  // the normalized pass, the caller keeps its existing "could not resolve"
+  // error behavior.
+  const normTarget = normalizeBillName_(payee);
+  let fallbackRow = -1;
 
   for (let r = 1; r < display.length; r++) {
     const rowPayee = String(display[r][payeeCol] || '').trim();
@@ -2703,6 +2737,17 @@ function resolveDashboardBillSkipTarget_(ss, skipKey) {
         col: monthCol + 1
       };
     }
+    if (fallbackRow === -1 && normTarget && normalizeBillName_(rowPayee) === normTarget) {
+      fallbackRow = r + 1;
+    }
+  }
+
+  if (fallbackRow !== -1) {
+    return {
+      sheet: sheet,
+      row: fallbackRow,
+      col: monthCol + 1
+    };
   }
 
   return null;
