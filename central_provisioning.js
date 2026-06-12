@@ -669,7 +669,16 @@ function relinkSingleCandidate_(email, cand) {
 
   cleanupDefaultSheet1_(ss);
   writeSpreadsheetIdForUser_(email, cand.id);
-  try { ensureWorkbookIdentityMarkers_(ss, cand.id, email); } catch (_mk) {}
+  Logger.log('[relink] mapping write OK id=' + truncateId_(cand.id) +
+    ' matchedBy=' + matchedBy + ' confidence=' + confidence);
+  try {
+    ensureWorkbookIdentityMarkers_(ss, cand.id, email);
+    Logger.log('[relink] marker stamping attempted (best-effort) id=' +
+      truncateId_(cand.id));
+  } catch (_mk) {
+    Logger.log('[relink] marker stamping failed (non-fatal) id=' +
+      truncateId_(cand.id));
+  }
 
   return { ok: true, ss: ss, confidence: confidence, matchedBy: matchedBy,
            reason: 'ok' };
@@ -709,14 +718,17 @@ function relinkSingleCandidate_(email, cand) {
 function recoveryReconnectSelf() {
   try {
     if (!isCentralModeEnabled_()) {
+      Logger.log('[6D2a] reconnect disabled: central mode off → status=disabled');
       return { status: 'disabled' };
     }
     if (!isRecoveryActionsEnabled_()) {
+      Logger.log('[6D2a] reconnect disabled: CENTRAL_RECOVERY_ACTIONS off → status=disabled');
       return { status: 'disabled' };
     }
 
     var email = getCurrentUserEmail_();
     if (!email) {
+      Logger.log('[6D2a] reconnect no identified user → status=error');
       return { status: 'error' };
     }
 
@@ -728,6 +740,7 @@ function recoveryReconnectSelf() {
       acquired = false;
     }
     if (!acquired) {
+      Logger.log('[6D2a] reconnect lock busy → status=error');
       return { status: 'error' };
     }
 
@@ -741,24 +754,28 @@ function recoveryReconnectSelf() {
       }
 
       var merged = (found && found.merged) ? found.merged : [];
+      Logger.log('[6D2a] reconnect candidates=' + merged.length +
+        ' matchedBy=' + (merged[0] && merged[0].matchedBy ? merged[0].matchedBy : '-'));
 
       if (merged.length === 0) {
+        Logger.log('[6D2a] reconnect candidates=0 → status=none');
         return { status: 'none' };
       }
       if (merged.length >= 2) {
         Logger.log('[6D2a] reconnect ambiguous: ' + merged.length +
-          ' candidates; relinking none.');
+          ' candidates; relinking none. → status=ambiguous');
         return { status: 'ambiguous' };
       }
 
       var relink = relinkSingleCandidate_(email, merged[0]);
       if (!relink.ok) {
-        Logger.log('[6D2a] reconnect candidate re-verify failed.');
+        Logger.log('[6D2a] reconnect candidate re-verify failed (reason=' +
+          (relink.reason || '-') + ') → status=error');
         return { status: 'error' };
       }
 
       Logger.log('[6D2a] reconnected workbook confidence=' + relink.confidence +
-        ' matchedBy=' + relink.matchedBy);
+        ' matchedBy=' + relink.matchedBy + ' → status=reconnected');
       return { status: 'reconnected' };
     } finally {
       try { lock.releaseLock(); } catch (_releaseErr) {}

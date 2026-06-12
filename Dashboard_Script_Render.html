@@ -194,8 +194,22 @@ function recoveryReconnect() {
     return;
   }
 
+  // Client-side timeout / terminal state: if the call neither succeeds nor
+  // fails within the window, restore a clear message and re-enable the
+  // button instead of leaving the user on a spinner or a blank screen.
+  var settled = false;
+  var timer = setTimeout(function() {
+    if (settled) return;
+    settled = true;
+    if (btn) btn.disabled = false;
+    setActionStatus('This is taking longer than expected. Please try again in a moment.');
+  }, 30000);
+
   google.script.run
     .withSuccessHandler(function(res) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       var status = (res && res.status) ? res.status : 'error';
       if (status === 'reconnected') {
         setActionStatus('Reconnected. Loading your workbook\u2026');
@@ -212,6 +226,9 @@ function recoveryReconnect() {
       }
     })
     .withFailureHandler(function() {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       if (btn) btn.disabled = false;
       setActionStatus('Something went wrong while reconnecting. ' +
         'Please try again in a moment.');
@@ -220,13 +237,64 @@ function recoveryReconnect() {
 }
 
 function recoveryReload() {
-  // Reload the web-app content to re-run the startup routing gate, which
-  // re-attempts workbook resolution. Guarded for the HtmlService sandbox.
-  try {
-    window.location.reload();
-  } catch (e) {
-    try { window.top.location.reload(); } catch (_e) {}
+  // Re-run the server startup routing IN-APP instead of a raw iframe reload.
+  // window.location.reload() / window.top.location.reload() reload the
+  // HtmlService sandbox iframe URL (a one-time googleusercontent.com URL),
+  // which commonly renders a BLANK page. Re-resolving the workbook here keeps
+  // everything inside the app:
+  //   - still unresolved -> re-render the recovery page (no blank)
+  //   - blank workbook   -> route to onboarding
+  //   - resolved         -> leave recovery and load the dashboard in place
+  var statusEl = document.getElementById('recovery_action_status');
+  function setReloadStatus(text) {
+    if (!statusEl) return;
+    statusEl.textContent = text || '';
+    statusEl.style.display = text ? '' : 'none';
   }
+
+  if (!google || !google.script || !google.script.run) {
+    setReloadStatus('Please refresh the page to continue.');
+    return;
+  }
+
+  setReloadStatus('Loading\u2026');
+
+  var settled = false;
+  var timer = setTimeout(function() {
+    if (settled) return;
+    settled = true;
+    setReloadStatus('This is taking longer than expected. Please try again in a moment.');
+  }, 30000);
+
+  google.script.run
+    .withSuccessHandler(function(routing) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (routing && routing.recovery && typeof showRecoveryPage === 'function') {
+        // Still unresolved — re-render the recovery page rather than blank.
+        showRecoveryPage(routing.recovery);
+        return;
+      }
+      if (routing && routing.ok && routing.isBlankWorkbook) {
+        if (typeof showPage === 'function') showPage('onboarding');
+        return;
+      }
+      // Resolved — leave the recovery surface and load the dashboard in place.
+      if (typeof showPage === 'function') showPage('overview');
+      if (typeof window.initDashboard === 'function') {
+        window.initDashboard();
+      } else {
+        setReloadStatus('Loaded. Please refresh if your workbook doesn\u2019t appear.');
+      }
+    })
+    .withFailureHandler(function() {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      setReloadStatus('Something went wrong while loading. Please try again in a moment.');
+    })
+    .getStartupRoutingFromDashboard();
 }
 
 function scrollHelpToSection(anchorId) {
