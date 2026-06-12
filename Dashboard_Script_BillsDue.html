@@ -206,12 +206,32 @@ function renderBillsList_(elementId, rows, emptyMsg) {
   // Execution cards are intentionally action-only: Pay / Skip. Lifecycle
   // actions (Stop tracking) live in the management section below so this
   // queue stays focused on "what to clear now".
+  // Cards in the Overdue section get a subtle light-red treatment so overdue
+  // bills read as urgent without being alarming. Next 7 Days cards stay white.
+  // Presentation-only: keyed off the target list element, no data/logic change.
+  const isOverdueSection = elementId === 'bd_overdueList';
+
   el.innerHTML = rows.map(function(r, idx) {
     const key = elementId + '::' + idx;
     window.__dashboardBills[key] = r;
 
+    // Gold AutoPay marker (right side of the card). Display-only: it reflects
+    // the bill's eligibility and changes no recurrence/payment/Cash-Flow logic.
+    // Only eligible when Autopay = Yes AND Varies is not Yes. Rows here are
+    // already filtered to active bills server-side, so Active is implied.
+    const isAutopayEligible =
+      String(r.autopay || '').trim().toLowerCase() === 'yes' &&
+      String(r.varies || '').trim().toLowerCase() !== 'yes';
+    const autopayStarHtml = isAutopayEligible
+      ? '<span class="bill-autopay-star" role="img" aria-label="AutoPay" title="AutoPay">&#9733;</span>'
+      : '';
+
+    const cardClass = 'change-item bill-card-compact' +
+      (isOverdueSection ? ' bill-card-overdue-item' : '');
+
     return (
-      '<div class="change-item bill-card-compact">' +
+      '<div class="' + cardClass + '">' +
+        autopayStarHtml +
         '<div class="change-label">' + escapeHtml(r.name || 'Bill') + '</div>' +
         '<div class="change-value">' + fmtCurrency(r.amount || 0) + '</div>' +
         '<div class="change-meta">Due ' + escapeHtml(r.dueDate || '—') + '</div>' +

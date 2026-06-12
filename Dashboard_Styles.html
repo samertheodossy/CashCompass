@@ -466,7 +466,13 @@
   .change-value { font-size: 16px; font-weight: bold; color: #0f172a; }
   .change-meta { margin-top: 4px; font-size: 12px; color: #64748b; }
   .bill-card-compact .change-value { margin-top: 2px; }
+  .bill-card-compact .change-label { padding-right: 30px; }
   .bill-card-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+  /* AutoPay marker: anchored to the card's top-right, clear of the name text. */
+  .bill-card-compact { position: relative; }
+  .bill-autopay-star { position: absolute; top: 8px; right: 12px; color: #ffbf00; font-size: 26px; line-height: 1; pointer-events: none; text-shadow: 0 0 3px rgba(255, 191, 0, 0.55), 0 1px 1px rgba(0, 0, 0, 0.15); }
+  /* Overdue cards only: subtle light-red background + border. */
+  .bill-card-overdue-item { background: #fff5f5; border-color: #f5c2c7; }
 
   .tabs { display: grid; gap: 8px; margin-bottom: 16px; }
   .tabs.assets-tabs { grid-template-columns: repeat(3, 1fr); }
