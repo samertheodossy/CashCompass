@@ -127,3 +127,11 @@ A free + paid tier model (gating advanced features like bank import / sync while
 A strategic, post-beta product direction that extends the existing Bank Import infrastructure (account matching/linking, External ID support, balance-snapshot application, import staging). **Vision:** Phase 1 — connect bank/credit-card accounts, auto-discover accounts, refresh balances; Phase 2 — import + categorize transactions, suggest Cash Flow entries, detect recurring bills; Phase 3 — CashCompass as the primary financial aggregation layer (automated monthly updates, spending analysis, budget insights, net-worth automation).
 
 **Status:** concept validated, partially scaffolded, **not actively in development.** **Priority:** Post-Recovery Validation, Post-Family Beta, before Paid Product scaling. **Not a blocker** for Recovery Validation, Family Beta, or External Beta. Full detail: `PROJECT_CONTEXT.md → Future Initiative — Account Aggregation & Transaction Import` and `TODO.md → Future Initiative — Account Aggregation & Transaction Import`.
+
+---
+
+## Future Enhancement — Weekly/Biweekly Weekday Recurrence Support
+
+Current Weekly/Biweekly recurrence is generated from the **Due Day anchor model** (Due Day-of-month + 7/14-day steps within the month) — it is **not weekday-aware** (no "every Sunday"). Future goal: an optional **`Repeat Day`** field (blank/Sun–Sat) so selected Weekly/Biweekly bills recur on a specific weekday (every weekday for Weekly, every other for Biweekly); blank preserves current behavior; Monthly/Quarterly/Yearly unchanged. Requires a new `INPUT - Bills` column plus provisioning/header-repair review.
+
+**Status:** documented, **not implemented.** **Priority:** Post-Family Beta, Post-Recovery Validation. **UX enhancement, not a blocker.** Full detail: `PROJECT_CONTEXT.md → Future Enhancement — Weekly/Biweekly Weekday Recurrence Support` and `TODO.md → Future Enhancement — Weekly/Biweekly Weekday Recurrence Support`.

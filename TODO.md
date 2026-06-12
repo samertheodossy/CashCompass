@@ -308,6 +308,27 @@ Strategic product direction that builds on the existing Bank Import infrastructu
 
 ---
 
+### Future Enhancement — Weekly/Biweekly Weekday Recurrence Support (future)
+
+Authoritative copy: `PROJECT_CONTEXT.md → Future Enhancement — Weekly/Biweekly Weekday Recurrence Support`. **Status:** documented, **not implemented.** **UX enhancement, not a blocker** for Recovery Validation, Family Beta, or External Beta.
+
+**Background:** Weekly/Biweekly occurrences are currently generated from the **Due Day anchor model** (Due Day-of-month + 7/14-day steps within the month). It is not weekday-aware — it cannot produce "every Sunday," and two identically-configured weekly bills only align when they share a Due Day.
+
+**Future goal:** let selected Weekly/Biweekly bills recur on a specific weekday.
+
+**Proposed design:**
+
+- **Data model:** optional `Repeat Day` field on `INPUT - Bills` (blank, Sunday … Saturday).
+- **Behavior:** Weekly + Repeat Day → every selected weekday; Biweekly + Repeat Day → every other selected weekday; blank → current Due Day behavior (backward compatible); Monthly/Quarterly/Yearly/Semi-annually/Bimonthly → unchanged.
+- **UI:** show `Repeat Day` dropdown only when Frequency = Weekly or Biweekly (Add + Edit Bill); hide for other frequencies.
+- **Migration:** existing workbooks remain valid; existing bills unchanged; new `INPUT - Bills` column/header may be required; **provisioning/header-repair must be reviewed before implementation.**
+
+**Areas affected:** Bills UI; `INPUT - Bills` schema; `dashboard_data.js` recurrence expansion (`buildInputBillDueCandidates_`); Bills Due generation (`getInputBillsDueRows_`); Cash Flow autopay accumulation (weekly/biweekly branch); Activity Log dedupe validation (`buildBillAutopayDedupeKey_` already encodes the exact occurrence date).
+
+**Priority:** Post-Family Beta, Post-Recovery Validation.
+
+---
+
 ## Future Enhancements (Post-Core)
 
 Forward-looking product ideas captured in prioritized tiers so the long-term direction is durable. **None of this is on the current roadmap** and all of it is **lower priority than the in-flight Bank Import completion and the ongoing Bills / planner / Cash Flow accuracy work.** Pulling any item up requires an explicit product decision under `WORKING_RULES.md → Current phase`.

@@ -118,6 +118,35 @@ A strategic, post-beta product direction captured here so it is not lost behind 
 
 **Explicit note:** this is a strategic product initiative and is **NOT a current blocker** for **Recovery Validation (6F)**, **Family Beta**, or **External Beta**. Those tracks proceed independently.
 
+## Future Enhancement — Weekly/Biweekly Weekday Recurrence Support
+
+Authoritative copy lives here; `README.md` and `TODO.md` mirror it. **UX enhancement, not a blocker.** No implementation at this time.
+
+**Background:** The current Weekly/Biweekly implementation generates occurrences using the existing **Due Day anchor model** (first occurrence each month = Due Day-of-month, then +7 / +14 days within the same month). This works for Family Beta but is **not weekday-aware** — it does not generate "every Sunday." It is not ideal for recurring items that are conceptually tied to a specific weekday (allowances, transfers, investments, etc.). Two identically-configured weekly bills will line up only when they share the same Due Day, and the occurrences will not land on a chosen weekday.
+
+**Future goal:** Allow selected Weekly/Biweekly bills to recur on a specific weekday.
+
+**Proposed design:**
+
+- **Data model** — add an optional `Repeat Day` field on `INPUT - Bills`. Values: blank, Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday.
+- **Behavior:**
+  - *Weekly + Repeat Day* → occurs every selected weekday.
+  - *Biweekly + Repeat Day* → occurs every other selected weekday.
+  - *Blank Repeat Day* → preserve current Due Day anchor behavior (backward compatible).
+  - *Monthly / Quarterly / Yearly / Semi-annually / Bimonthly* → unchanged.
+- **UI:**
+  - Add Bill screen: show the `Repeat Day` dropdown only when Frequency = Weekly or Biweekly.
+  - Edit Bill screen: allow `Repeat Day` updates.
+  - Hide the field for all other frequencies.
+- **Migration:**
+  - Existing workbooks remain valid; existing bills continue working unchanged.
+  - A new column/header may be required in `INPUT - Bills`.
+  - **Workbook provisioning / header repair must be reviewed before implementation** (new-header seeding for fresh workbooks + repair for existing ones).
+
+**Areas affected:** Bills UI; `INPUT - Bills` schema; `dashboard_data.js` recurrence expansion (`buildInputBillDueCandidates_`); Bills Due generation (`getInputBillsDueRows_`); Cash Flow autopay accumulation (weekly/biweekly branch); Activity Log dedupe validation (`buildBillAutopayDedupeKey_` already encodes the exact occurrence date, so it stays correct under weekday anchoring).
+
+**Priority:** Post-Family Beta, Post-Recovery Validation. **UX enhancement, not a blocker.**
+
 ## Current phase — Central App live + Family Beta readiness
 
 The app has moved beyond the V1.2 "controlled improvement" framing. **The Central App architecture is live**, and the active work is hardening it toward a Family Beta. Two foundations carry forward from earlier phases (V1 trust baseline, V1.1 retirement profile integration) and remain true, but they are no longer the headline.

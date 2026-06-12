@@ -523,6 +523,7 @@ Bigger product-shape changes once Tier 1 is stable.
 5. **Account grouping.** Group accounts on Bank Accounts / Overview by type (Checking / Savings / etc.) and optional user-defined groups. UI only; canonical sheets unchanged.
 6. **Scenario / simulation mode.** Read-only "what if" overlay (extra debt payment, paused income, larger expense) running against a copy of the planner inputs without writing back.
 7. **Historical trends (lightweight).** Per-account balance history line / sparkline derived from the year-block month columns already on `INPUT - Bank Accounts`. No new storage.
+8. **Weekly/Biweekly weekday recurrence.** Optional `Repeat Day` field (blank/Sun–Sat) so selected Weekly/Biweekly bills recur on a specific weekday (every weekday for Weekly, every other for Biweekly) instead of the current **Due Day-of-month anchor** model. Blank preserves current behavior; Monthly/Quarterly/Yearly unchanged. Requires a new `INPUT - Bills` column plus provisioning/header-repair review. Authoritative copy: `PROJECT_CONTEXT.md → Future Enhancement — Weekly/Biweekly Weekday Recurrence Support`. **UX enhancement, not a blocker.**
 
 ### Tier 3 — Advanced / AI / Future
 
