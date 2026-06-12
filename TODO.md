@@ -290,6 +290,22 @@ Monetization is meaningful only **after** the Central App migration is in place 
 2. `SYS - Users` schema + helpers (`getUserPlan_`, `isPaidUser_`) ship as additive scaffolding (Phase 7).
 3. Bank import becomes the first gated feature (Phase 7).
 
+### Future Initiative — Account Aggregation & Transaction Import (future)
+
+Strategic product direction that builds on the existing Bank Import infrastructure. Authoritative copy: `PROJECT_CONTEXT.md → Future Initiative — Account Aggregation & Transaction Import`. **Status:** concept validated, partially scaffolded, **not actively in development.** **This is NOT a current blocker for Recovery Validation, Family Beta, or External Beta.**
+
+**Existing foundation (already in the codebase):** Bank Import workflow, account matching/linking, External ID support, balance-snapshot application, and import-staging concepts (`bank_import.js`; see `## Bank Import — status & resume plan` below).
+
+**Long-term vision:**
+
+- **Phase 1 — Connectivity & balances:** connect bank and credit-card accounts; discover accounts automatically; refresh balances; reduce manual account maintenance.
+- **Phase 2 — Transactions:** import transactions; categorize transactions; suggest Cash Flow entries; detect recurring bills/subscriptions.
+- **Phase 3 — Aggregation layer:** CashCompass becomes the primary financial aggregation layer — automated monthly updates, spending analysis, budget insights, net-worth automation.
+
+**Priority:** Post-Recovery Validation, Post-Family Beta, **before Paid Product scaling** (the connectivity/import surface is the natural first paid-tier feature — see *Monetization (future)* above, "Gate the first feature: bank import").
+
+**Related existing items to link here (not new work):** the in-flight Bank Import steps (`## Bank Import — status & resume plan`) and Tier 1 "Auto-reconciliation view" / "What changed? insights" (`## Future Enhancements (Post-Core)`) are precursors that feed this initiative.
+
 ---
 
 ## Future Enhancements (Post-Core)

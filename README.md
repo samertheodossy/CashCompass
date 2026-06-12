@@ -119,3 +119,11 @@ CashCompass now runs as a **centralized service** alongside the legacy bound mod
 Current description: `PROJECT_CONTEXT.md → Current architecture — Central App (live)`. Per-slice history: `SESSION_NOTES.md → Current State — Post V1.2 Prep` and the `CENTRAL_APP_*.md` docs. The migration discipline is now the **active** policy in `WORKING_RULES.md → Central App Transition Rules`.
 
 A free + paid tier model (gating advanced features like bank import / sync while keeping core planning free) remains **future** — scheduled as **Phase 7 — Paid Product Readiness**. See `ENHANCEMENTS.md → Future direction — Monetization` and `WORKING_RULES.md → Monetization Rules`.
+
+---
+
+## Future Initiative — Account Aggregation & Transaction Import
+
+A strategic, post-beta product direction that extends the existing Bank Import infrastructure (account matching/linking, External ID support, balance-snapshot application, import staging). **Vision:** Phase 1 — connect bank/credit-card accounts, auto-discover accounts, refresh balances; Phase 2 — import + categorize transactions, suggest Cash Flow entries, detect recurring bills; Phase 3 — CashCompass as the primary financial aggregation layer (automated monthly updates, spending analysis, budget insights, net-worth automation).
+
+**Status:** concept validated, partially scaffolded, **not actively in development.** **Priority:** Post-Recovery Validation, Post-Family Beta, before Paid Product scaling. **Not a blocker** for Recovery Validation, Family Beta, or External Beta. Full detail: `PROJECT_CONTEXT.md → Future Initiative — Account Aggregation & Transaction Import` and `TODO.md → Future Initiative — Account Aggregation & Transaction Import`.

@@ -100,6 +100,24 @@ High-level view of the next 6–12 months. **The authoritative, detailed roadmap
 - **6D.2b — Create New Workbook** *(remaining, P1)* — self-service "start fresh" recovery action (designed; not implemented).
 - **6E.2 — Admin Set Mapping** *(remaining, P2)* — guarded admin remap (designed; not implemented).
 
+## Future Initiative — Account Aggregation & Transaction Import
+
+A strategic, post-beta product direction captured here so it is not lost behind the current Recovery Validation work. **It is a future product capability, not a current blocker** — see the explicit note at the end of this section. Authoritative copy lives here; `README.md` and `TODO.md` mirror it.
+
+**Foundational import infrastructure already in the codebase** (so this is an extension, not a green-field build): a **Bank Import workflow**, **account matching / linking**, **External ID support**, **balance-snapshot application**, and **import-staging concepts** (`bank_import.js`; review/Apply surface under Assets → Bank Accounts; see `TODO.md → Bank Import — status & resume plan`).
+
+**Long-term vision (phased):**
+
+- **Phase 1 — Connectivity & balances:** connect bank and credit-card accounts; discover accounts automatically; refresh balances; reduce manual account maintenance.
+- **Phase 2 — Transactions:** import transactions; categorize transactions; suggest Cash Flow entries; detect recurring bills / subscriptions.
+- **Phase 3 — Aggregation layer:** CashCompass becomes the primary financial aggregation layer — automated monthly updates, spending analysis, budget insights, net-worth automation.
+
+**Status:** Concept validated. Partially scaffolded (Bank Import infrastructure exists). **Not actively in development.**
+
+**Priority:** Post-Recovery Validation, Post-Family Beta, and **before Paid Product scaling** — the connectivity / import surface is the natural first paid-tier feature (see `ENHANCEMENTS.md → Future direction — Monetization` and `TODO.md → Monetization (future)`).
+
+**Explicit note:** this is a strategic product initiative and is **NOT a current blocker** for **Recovery Validation (6F)**, **Family Beta**, or **External Beta**. Those tracks proceed independently.
+
 ## Current phase — Central App live + Family Beta readiness
 
 The app has moved beyond the V1.2 "controlled improvement" framing. **The Central App architecture is live**, and the active work is hardening it toward a Family Beta. Two foundations carry forward from earlier phases (V1 trust baseline, V1.1 retirement profile integration) and remain true, but they are no longer the headline.
