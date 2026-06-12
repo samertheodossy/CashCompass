@@ -1908,7 +1908,14 @@ function getInputBillsDueRows_(ss, today, tz) {
     const candidates = buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth);
     const normPayee = normalizeBillName_(payee);
 
-    for (let i = 0; i < candidates.length; i++) {
+    // The proven monthly path below assumes exactly ONE occurrence per month
+    // and treats "the month cell is non-empty" as the handled signal. Weekly /
+    // biweekly bills expand into several occurrences that share a single month
+    // cell, so they get a dedicated per-occurrence branch (the else after this
+    // loop) instead. All other frequencies keep the original behavior verbatim.
+    const isExpandedFreq = (frequency === 'weekly' || frequency === 'biweekly');
+
+    if (!isExpandedFreq) for (let i = 0; i < candidates.length; i++) {
       const cand = candidates[i];
       const sheet = getCashFlowSheet_(ss, cand.year);
       const rowMap = getCashFlowRowMap_(sheet);
@@ -2041,6 +2048,131 @@ function getInputBillsDueRows_(ss, today, tz) {
 
       break;
     }
+    else {
+      // ---- Weekly / biweekly: per-occurrence display + accumulating autopay ----
+      // The Cash Flow grid stores ONE cell per payee per month, so we cannot
+      // give each weekly occurrence its own cell. Instead:
+      //   • Bills Due shows each occurrence as its own card at the normal
+      //     (per-occurrence) amount — no monthly-burden averaging.
+      //   • Autopay ADDS each past-due occurrence's amount into the single
+      //     month cell as it becomes due, guarded per-occurrence by the
+      //     activity-log dedupe key (which already encodes the occurrence
+      //     date), so multiple weekly payments in one month never collapse
+      //     into one and are never double-applied across refreshes.
+      //   • Manual protection: we only accumulate when the month cell is blank
+      //     (first occurrence) or exactly equals the running autopay total this
+      //     pass has applied for that month. Any other (manual) value is left
+      //     untouched and the occurrence is surfaced as a card to reconcile.
+      const cfByYear = {};
+      const monthApplied = {}; // stateKey -> count of occurrences applied to the month cell so far
+
+      for (let i = 0; i < candidates.length; i++) {
+        const cand = candidates[i];
+
+        if (!cfByYear[cand.year]) {
+          const sh = getCashFlowSheet_(ss, cand.year);
+          cfByYear[cand.year] = { sheet: sh, rowMap: getCashFlowRowMap_(sh) };
+        }
+        const sheet = cfByYear[cand.year].sheet;
+        const rowMap = cfByYear[cand.year].rowMap;
+        const monthCol = rowMap.headers.indexOf(cand.monthHeader);
+        if (monthCol === -1) continue;
+
+        const rowInfo = rowMap.rowsByPayee[payee] || null;
+        const hasCashFlowRow = !!rowInfo && String(rowInfo.type || '').trim() === 'Expense';
+
+        const stateKey = cand.year + '|' + cand.monthHeader;
+        if (typeof monthApplied[stateKey] !== 'number') monthApplied[stateKey] = 0;
+
+        const occDedupeKey = buildBillAutopayDedupeKey_(payee, cand.monthHeader, cand.dueDate, defaultAmount);
+        const alreadyAutopaid = activityLogDedupeKeyExists_(ss, occDedupeKey);
+
+        // Occurrence already auto-applied on an earlier pass: it lives in the
+        // Cash Flow cell, so don't re-show it, and count it toward the month's
+        // applied total (keeps the manual-protection math below correct).
+        if (alreadyAutopaid) {
+          monthApplied[stateKey]++;
+          continue;
+        }
+
+        const dueHasPassed = cand.dueDate.getTime() < todayOnly.getTime();
+        const canAutopay = autopay === 'yes' && varies !== 'yes';
+
+        if (hasCashFlowRow && canAutopay && defaultAmount > 0 && dueHasPassed) {
+          const cellRange = sheet.getRange(rowInfo.row, monthCol + 1);
+          const cellValue = cellRange.getValue();
+          const cellDisplay = cellRange.getDisplayValue();
+          const cellBlank =
+            cellValue === '' ||
+            cellValue === null ||
+            typeof cellValue === 'undefined' ||
+            String(cellDisplay || '').trim() === '';
+          const cellNum = toNumber_(cellValue);
+          // Expense amounts are stored negative; expected running autopay total
+          // for this month so far = -(applied count) * per-occurrence amount.
+          const expectedPriorAutopay = round2_(-1 * monthApplied[stateKey] * defaultAmount);
+
+          const safeToAccumulate = cellBlank
+            ? monthApplied[stateKey] === 0
+            : Math.abs(cellNum - expectedPriorAutopay) < 0.005;
+
+          if (safeToAccumulate) {
+            const wasBlank = cellBlank;
+            // Accumulate (add) this occurrence into the single month cell.
+            addCashFlowMoneyToCellPreserveRowFormat_(sheet, rowInfo.row, monthCol + 1, -defaultAmount);
+            if (wasBlank) {
+              // Match the monthly path: a freshly-populated blank cell should
+              // pick up the row's red/currency look, not General/black.
+              if (!copyNearestAmountFormatInRow_(sheet, rowInfo.row, monthCol + 1)) {
+                sheet.getRange(rowInfo.row, monthCol + 1).setNumberFormat('$#,##0.00;-$#,##0.00');
+              }
+            }
+            touchDashboardSourceUpdated_('cash_flow');
+
+            appendActivityLog_(ss, {
+              eventType: 'bill_autopay',
+              entryDate: Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd'),
+              amount: defaultAmount,
+              direction: 'expense',
+              payee: payee,
+              category: category,
+              accountSource: '',
+              cashFlowSheet: sheet.getName(),
+              cashFlowMonth: cand.monthHeader,
+              dedupeKey: occDedupeKey,
+              details: JSON.stringify({ source: 'INPUT - Bills', autopay: true, varies: varies, frequency: frequency, occurrence: true })
+            });
+
+            monthApplied[stateKey]++;
+            continue; // applied → don't also show as a due card
+          }
+          // Not safe to accumulate (manual/unexpected value present): leave the
+          // cell alone and fall through to show the occurrence as a card.
+        }
+
+        // Show this occurrence as its own Bills Due card at the normal amount.
+        rows.push({
+          id: buildDashboardBillSkipKey_(payee, Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd')),
+          payee: payee,
+          name: payee,
+          amount: defaultAmount,
+          dueDate: Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd'),
+          sourceType: 'input_bill',
+          sourceLabel: 'INPUT - Bills',
+          category: category,
+          varies: varies === 'yes' ? 'Yes' : 'No',
+          autopay: autopay === 'yes' ? 'Yes' : 'No',
+          paymentSource: paymentSource,
+          startMonth: startMonth,
+          year: cand.year,
+          monthHeader: cand.monthHeader,
+          notes: notes,
+          inputBillsRow: r + 1,
+          hasCashFlowRow: hasCashFlowRow
+        });
+        // No break: weekly/biweekly surface one card per occurrence.
+      }
+    }
   }
 
   return rows;
@@ -2099,11 +2231,24 @@ function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth) 
   const effectiveStart = Math.min(12, Math.max(1, Number(startMonth) || 1));
   const todayYear = todayOnly.getFullYear();
 
+  // Weekly/biweekly bills genuinely recur multiple times inside a single
+  // calendar month, so we expand them into one candidate PER OCCURRENCE
+  // (true expansion — each occurrence carries the bill's normal amount; this
+  // is NOT a monthly-burden average). Due Day is the anchor day-of-month for
+  // the first occurrence in each month; subsequent occurrences step forward by
+  // 7 days (weekly) or 14 days (biweekly) while they remain in the same month.
+  // All other frequencies emit exactly one occurrence per applicable month
+  // (unchanged behavior).
+  let stepDays = 0;
+  if (frequency === 'weekly') stepDays = 7;
+  else if (frequency === 'biweekly') stepDays = 14;
+
   for (let i = 0; i < monthOffsets.length; i++) {
     const offset = monthOffsets[i];
     const d = new Date(todayOnly.getFullYear(), todayOnly.getMonth() + offset, 1);
     const year = d.getFullYear();
-    const monthNumber = d.getMonth() + 1;
+    const monthIndex = d.getMonth();
+    const monthNumber = monthIndex + 1;
 
     if (!billAppliesInMonth_(frequency, effectiveStart, monthNumber)) continue;
 
@@ -2115,13 +2260,33 @@ function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth) 
     // eligible (once a bill has started, it keeps running).
     if (year === todayYear && monthNumber < effectiveStart) continue;
 
-    const dueDate = new Date(year, d.getMonth(), dueDay);
+    if (stepDays > 0) {
+      // Clamp the anchor day to the month length so a high Due Day (e.g. 30)
+      // never rolls the very first occurrence into the next month and drops
+      // the whole month's expansion.
+      const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+      const anchorDay = Math.min(Math.max(1, dueDay), daysInMonth);
+
+      let occDay = anchorDay;
+      while (occDay <= daysInMonth) {
+        candidates.push({
+          year: year,
+          monthIndex: monthIndex,
+          monthHeader: monthHeaderFromYearMonth_(year, monthIndex),
+          dueDate: new Date(year, monthIndex, occDay)
+        });
+        occDay += stepDays;
+      }
+      continue;
+    }
+
+    const dueDate = new Date(year, monthIndex, dueDay);
     if (isNaN(dueDate.getTime())) continue;
 
     candidates.push({
       year: year,
-      monthIndex: d.getMonth(),
-      monthHeader: monthHeaderFromYearMonth_(year, d.getMonth()),
+      monthIndex: monthIndex,
+      monthHeader: monthHeaderFromYearMonth_(year, monthIndex),
       dueDate: dueDate
     });
   }
