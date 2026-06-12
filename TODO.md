@@ -19,6 +19,21 @@ The older "V1.2 work queue" candidates are retained below under `## V1.2 polish 
 
 ---
 
+## Next Session — Recommended Starting Point
+
+Clean restart point after the 2026-06-12 Bills Due recurrence overhaul (Weekly/Biweekly occurrence expansion, AutoPay star, Overdue styling, Weekly/Biweekly Skip fix — all shipped + validated against the family beta workbook). The Bills Due work is done; the next focus returns to **closing out 6F Recovery Validation** (currently ~80–85%). Recommended priority order:
+
+1. **Admin Clear Mapping validation** — execute Clear Mapping with `CENTRAL_ADMIN_REPAIR=true` on the disposable account; confirm the mapping is cleared and the next load routes to recovery/onboarding. (Flag OFF again afterward.)
+2. **Audit Log validation** — confirm admin repair actions (Inspect, Clear Mapping) write the expected audit entries.
+3. **Adopt-Before-Create validation** — with `CENTRAL_AUTO_ADOPT=true`, confirm HIGH/MEDIUM single-candidate adoption attaches the existing workbook instead of provisioning a duplicate. (Flag OFF afterward.)
+4. **Ambiguous Workbook handling validation** — confirm multiple-candidate detection raises `AmbiguousWorkbookError` and routes to recovery rather than guessing.
+5. **Reassess Recovery Validation percentage** — update the 6F completion estimate and the Domain Completion Matrix once the above are validated.
+6. **Family Beta readiness review** — with recovery validated, do a go/no-go pass for onboarding the first family beta users.
+
+(Validation-surface reminder: the Script Properties UI may lag runtime mapping changes during testing — **Admin Diagnostics is authoritative**. All `CENTRAL_*` flags return OFF in steady state.)
+
+---
+
 ## Launch Readiness Roadmap
 
 **Authoritative, detailed roadmap for the next 6–12 months — single source of truth.** `PROJECT_CONTEXT.md → Launch Readiness Roadmap (high-level)` carries only phase names, objectives, and priorities and points here for detail; to avoid drift, the full per-phase detail (deliverables, dependencies) lives **only** in this section. Every phase runs under `WORKING_RULES.md → Current phase` and, for central-mode work, `→ Central App Transition Rules` (active).
