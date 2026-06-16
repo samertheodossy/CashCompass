@@ -141,24 +141,446 @@ function onDebtAddTypeChange_() {
 }
 
 function setDebtPanelMode(mode) {
-  const isUpdate = mode === 'update';
-  const wrapU = document.getElementById('debt_mode_update_wrap');
-  const wrapA = document.getElementById('debt_mode_add_wrap');
-  const btnU = document.getElementById('debt_mode_update_btn');
-  const btnA = document.getElementById('debt_mode_add_btn');
-  if (wrapU) wrapU.classList.toggle('active', isUpdate);
-  if (wrapA) wrapA.classList.toggle('active', !isUpdate);
-  if (btnU) {
-    btnU.classList.toggle('active', isUpdate);
-    btnU.setAttribute('aria-selected', isUpdate ? 'true' : 'false');
-  }
-  if (btnA) {
-    btnA.classList.toggle('active', !isUpdate);
-    btnA.setAttribute('aria-selected', !isUpdate ? 'true' : 'false');
-  }
-  if (isUpdate) {
+  const modes = ['update', 'add', 'manage'];
+  if (modes.indexOf(mode) === -1) mode = 'update';
+
+  const wraps = {
+    update: document.getElementById('debt_mode_update_wrap'),
+    add: document.getElementById('debt_mode_add_wrap'),
+    manage: document.getElementById('debt_mode_manage_wrap')
+  };
+  const btns = {
+    update: document.getElementById('debt_mode_update_btn'),
+    add: document.getElementById('debt_mode_add_btn'),
+    manage: document.getElementById('debt_mode_manage_btn')
+  };
+
+  modes.forEach(function(m) {
+    if (wraps[m]) wraps[m].classList.toggle('active', m === mode);
+    if (btns[m]) {
+      btns[m].classList.toggle('active', m === mode);
+      btns[m].setAttribute('aria-selected', m === mode ? 'true' : 'false');
+    }
+  });
+
+  if (mode === 'update') {
     setStatus('debt_status', '', false);
   }
+  if (mode === 'manage') {
+    // Always close any open edit form and (re)load the table when entering
+    // the Manage view so the list reflects the latest sheet state.
+    if (typeof closeDebtEditForm_ === 'function') closeDebtEditForm_();
+    if (typeof loadActiveDebtsManagementUi_ === 'function') loadActiveDebtsManagementUi_();
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Manage Debts (Phase 1) — table + in-place multi-field edit + stop track   */
+/*  Mirrors the Bills "Manage bills" pattern (Dashboard_Script_BillsDue.html) */
+/* -------------------------------------------------------------------------- */
+
+var __debtManageRows = [];
+var __debtManageSort = { column: 'accountName', dir: 'asc' };
+var __debtEditing = null; // { sheetRow, accountName }
+
+function loadActiveDebtsManagementUi_() {
+  const host = document.getElementById('debt_manage_list');
+  if (host) {
+    host.innerHTML =
+      '<div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></div>';
+  }
+  google.script.run
+    .withSuccessHandler(function(rows) {
+      __debtManageRows = Array.isArray(rows) ? rows : [];
+      renderActiveDebtsList_(__debtManageRows);
+    })
+    .withFailureHandler(function(err) {
+      if (host) host.innerHTML = '<p class="muted">Couldn\u2019t load debts — please try again.</p>';
+      setStatus('debt_status', (err.message || String(err)), true);
+    })
+    .getActiveDebtsForManagementFromDashboard();
+}
+
+function debtManageMoney_(v) {
+  if (v === '' || v === null || typeof v === 'undefined') return '<span class="muted">—</span>';
+  const n = Number(v);
+  if (!isFinite(n)) return '<span class="muted">—</span>';
+  return (typeof fmtCurrency === 'function') ? fmtCurrency(n) : String(n);
+}
+
+function toggleDebtManageSort(column) {
+  if (column !== 'accountName' && column !== 'type' && column !== 'accountBalance') return;
+  if (__debtManageSort.column === column) {
+    __debtManageSort.dir = __debtManageSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    __debtManageSort.column = column;
+    __debtManageSort.dir = 'asc';
+  }
+  renderActiveDebtsList_(__debtManageRows);
+}
+
+function sortDebtManageRows_(rows, sortState) {
+  const col = sortState && sortState.column ? sortState.column : 'accountName';
+  const dir = sortState && sortState.dir === 'desc' ? -1 : 1;
+  const copy = rows.slice();
+
+  copy.sort(function(a, b) {
+    if (col === 'accountBalance') {
+      const aRaw = a.accountBalance;
+      const bRaw = b.accountBalance;
+      const aNum = Number(aRaw);
+      const bNum = Number(bRaw);
+      const aValid = aRaw !== '' && aRaw !== null && aRaw !== undefined && isFinite(aNum);
+      const bValid = bRaw !== '' && bRaw !== null && bRaw !== undefined && isFinite(bNum);
+      if (aValid && !bValid) return -1;
+      if (!aValid && bValid) return 1;
+      if (aValid && bValid && aNum !== bNum) return (aNum - bNum) * dir;
+      // fall through to name tiebreak
+    } else if (col === 'type') {
+      const ta = String(a.type || '').toLowerCase();
+      const tb = String(b.type || '').toLowerCase();
+      if (ta !== tb) return ta < tb ? -1 * dir : 1 * dir;
+      // fall through to name tiebreak
+    }
+    const na = String(a.accountName || '').toLowerCase();
+    const nb = String(b.accountName || '').toLowerCase();
+    if (na < nb) return col === 'accountName' ? -1 * dir : -1;
+    if (na > nb) return col === 'accountName' ? 1 * dir : 1;
+    return 0;
+  });
+
+  return copy;
+}
+
+function buildDebtSortableHeader_(column, label, extraClass) {
+  const isActive = __debtManageSort.column === column;
+  const dir = isActive ? __debtManageSort.dir : '';
+  const ariaSort = isActive ? (dir === 'desc' ? 'descending' : 'ascending') : 'none';
+  const activeClass = isActive ? ' is-sorted is-sorted-' + dir : '';
+  const classAttr = ('bills-manage-sortable' + activeClass + (extraClass ? ' ' + extraClass : '')).trim();
+  const indicator = isActive
+    ? '<span class="bills-sort-indicator" aria-hidden="true">' + (dir === 'desc' ? '\u25BE' : '\u25B4') + '</span>'
+    : '<span class="bills-sort-indicator bills-sort-indicator--idle" aria-hidden="true">\u2195</span>';
+
+  return (
+    '<th scope="col" class="' + classAttr + '" ' +
+      'aria-sort="' + ariaSort + '" tabindex="0" role="button" ' +
+      'onclick="toggleDebtManageSort(\'' + column + '\')" ' +
+      'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();toggleDebtManageSort(\'' + column + '\');}">' +
+      '<span class="bills-sort-label">' + escapeHtml(label) + '</span>' + indicator +
+    '</th>'
+  );
+}
+
+function renderActiveDebtsList_(rows) {
+  const host = document.getElementById('debt_manage_list');
+  if (!host) return;
+
+  __debtManageRows = Array.isArray(rows) ? rows.slice() : [];
+  window.__dashboardManageDebts = {};
+
+  if (!__debtManageRows.length) {
+    host.innerHTML =
+      '<div class="bills-empty-state" style="padding:16px;border:1px dashed #d1d5db;border-radius:8px;background:#f9fafb;text-align:center;">' +
+        '<div class="muted" style="margin-bottom:10px;">No tracked debts yet.</div>' +
+        '<button type="button" class="small-btn primary" onclick="setDebtPanelMode(\'add\')">+ Add a debt</button>' +
+      '</div>';
+    return;
+  }
+
+  const sorted = sortDebtManageRows_(__debtManageRows, __debtManageSort);
+
+  const rowsHtml = sorted.map(function(r, idx) {
+    const key = 'dmng::' + idx;
+    window.__dashboardManageDebts[key] = r;
+
+    const typeStr = r.type ? escapeHtml(r.type) : '<span class="muted">—</span>';
+    const intRateStr = (r.intRate !== '' && r.intRate !== null && typeof r.intRate !== 'undefined')
+      ? escapeHtml(String(r.intRate))
+      : '<span class="muted">—</span>';
+    const pctStr = r.acctPctAvail ? escapeHtml(String(r.acctPctAvail)) : '<span class="muted">—</span>';
+
+    return (
+      '<tr>' +
+        '<td><strong>' + escapeHtml(r.accountName || 'Debt') + '</strong></td>' +
+        '<td>' + typeStr + '</td>' +
+        '<td class="bills-manage-num">' + debtManageMoney_(r.accountBalance) + '</td>' +
+        '<td class="bills-manage-num">' + debtManageMoney_(r.minimumPayment) + '</td>' +
+        '<td class="bills-manage-num">' + intRateStr + '</td>' +
+        '<td class="bills-manage-num">' + pctStr + '</td>' +
+        '<td class="bills-manage-actions">' +
+          '<button class="small-btn bill-edit-btn" title="Edit this debt" ' +
+            'onclick="openDebtEditForm(\'' + escapeJs(key) + '\')" style="margin-right:6px;">Edit</button>' +
+          '<button class="small-btn bill-stop-tracking-btn" ' +
+            'title="This debt will no longer appear, but remains in history" ' +
+            'onclick="stopTrackingDebtFromManage_(\'' + escapeJs(key) + '\')">Stop tracking</button>' +
+        '</td>' +
+      '</tr>'
+    );
+  }).join('');
+
+  host.innerHTML =
+    '<div class="bills-manage-tablewrap">' +
+      '<table class="bills-manage-table">' +
+        '<thead><tr>' +
+          buildDebtSortableHeader_('accountName', 'Account Name', '') +
+          buildDebtSortableHeader_('type', 'Type', '') +
+          buildDebtSortableHeader_('accountBalance', 'Balance', 'bills-manage-num') +
+          '<th scope="col" class="bills-manage-num">Min Payment</th>' +
+          '<th scope="col" class="bills-manage-num">Int Rate</th>' +
+          '<th scope="col" class="bills-manage-num">Pct Avail</th>' +
+          '<th scope="col" class="bills-manage-actions">Actions</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody>' +
+      '</table>' +
+    '</div>';
+}
+
+var DEBT_EDIT_TYPE_FALLBACK_OPTIONS_ = ['Credit Card', 'Loan', 'HELOC', 'Other'];
+
+function populateDebtEditTypeOptions_(currentType) {
+  const sel = document.getElementById('debt_edit_type');
+  if (!sel) return;
+  sel.innerHTML = '';
+
+  // Union of: the current row's type, every type seen in the manage list, and
+  // the canonical fallback categories — deduped — plus an "Other…" sentinel.
+  const seenTypes = [];
+  if (currentType) seenTypes.push(currentType);
+  (__debtManageRows || []).forEach(function(r) {
+    if (r && r.type) seenTypes.push(r.type);
+  });
+  DEBT_EDIT_TYPE_FALLBACK_OPTIONS_.forEach(function(t) { seenTypes.push(t); });
+
+  const seen = Object.create(null);
+  seenTypes.forEach(function(t) {
+    const v = String(t == null ? '' : t).trim();
+    if (!v) return;
+    const k = v.toLowerCase();
+    if (seen[k]) return;
+    if (k === 'other' || k === 'other…' || k === '__other__') return;
+    seen[k] = true;
+    const o = document.createElement('option');
+    o.value = v;
+    o.textContent = v;
+    sel.appendChild(o);
+  });
+
+  const other = document.createElement('option');
+  other.value = '__other__';
+  other.textContent = 'Other…';
+  sel.appendChild(other);
+
+  if (currentType) sel.value = currentType;
+  onDebtEditTypeChange_();
+}
+
+function onDebtEditTypeChange_() {
+  const sel = document.getElementById('debt_edit_type');
+  const wrap = document.getElementById('debt_edit_type_other_wrap');
+  const other = document.getElementById('debt_edit_type_other');
+  const isOther = sel && sel.value === '__other__';
+  if (wrap) wrap.style.display = isOther ? '' : 'none';
+  if (!isOther && other) other.value = '';
+}
+
+function openDebtEditForm(key) {
+  const row = (window.__dashboardManageDebts || {})[key];
+  if (!row) {
+    setStatus('debt_status', 'Couldn\u2019t open that debt — please refresh.', true);
+    return;
+  }
+
+  __debtEditing = {
+    sheetRow: row.inputDebtsRow,
+    accountName: row.accountName || ''
+  };
+
+  const setVal = function(id, v) {
+    const el = document.getElementById(id);
+    if (el) el.value = (v === '' || v === null || typeof v === 'undefined') ? '' : v;
+  };
+
+  setVal('debt_edit_name', row.accountName || '');
+  populateDebtEditTypeOptions_(row.type || '');
+
+  // Currency fields: prefill formatted (e.g. $4,250.00) using the same helper
+  // the Update view uses, so they match the rest of the app; blank stays blank.
+  const setMoney = function(id, v) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (v === '' || v === null || typeof v === 'undefined' || isNaN(Number(v))) {
+      el.value = '';
+    } else if (typeof setCurrencyInputValue === 'function') {
+      setCurrencyInputValue(id, Number(v));
+    } else {
+      el.value = String(v);
+    }
+  };
+  setMoney('debt_edit_balance', row.accountBalance);
+  setMoney('debt_edit_credit_limit', row.creditLimit);
+  setMoney('debt_edit_credit_left', row.creditLeft);
+  setMoney('debt_edit_min_payment', row.minimumPayment);
+  setVal('debt_edit_due_date', (row.dueDate === '' ? '' : row.dueDate));
+  setVal('debt_edit_int_rate', (row.intRate === '' ? '' : row.intRate));
+
+  const pctEl = document.getElementById('debt_edit_pct_avail');
+  if (pctEl) pctEl.textContent = row.acctPctAvail ? row.acctPctAvail : '—';
+
+  const titleEl = document.getElementById('debt_edit_title');
+  if (titleEl) titleEl.textContent = 'Edit debt — ' + (row.accountName || '');
+
+  const wrap = document.getElementById('debt_edit_wrap');
+  if (wrap) {
+    wrap.style.display = '';
+    try { wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
+  }
+}
+
+function closeDebtEditForm_() {
+  __debtEditing = null;
+  const wrap = document.getElementById('debt_edit_wrap');
+  if (wrap) wrap.style.display = 'none';
+}
+
+function cancelDebtEdit_() {
+  closeDebtEditForm_();
+  setStatus('debt_status', '', false);
+}
+
+function submitDebtEdit_() {
+  if (!__debtEditing || !__debtEditing.sheetRow) {
+    setStatus('debt_status', 'No debt selected to edit. Please refresh.', true);
+    return;
+  }
+
+  // Resolve Type (supports the "Other…" free-text path).
+  const typeSel = document.getElementById('debt_edit_type');
+  const rawType = typeSel ? String(typeSel.value || '').trim() : '';
+  const otherEl = document.getElementById('debt_edit_type_other');
+  const otherType = otherEl ? String(otherEl.value || '').trim() : '';
+  let typeStr;
+  if (rawType === '__other__') {
+    if (!otherType) {
+      setStatus('debt_status', 'Type is required. Enter a name for the new type.', true);
+      if (otherEl) { try { otherEl.focus(); } catch (e) {} }
+      return;
+    }
+    typeStr = otherType;
+  } else {
+    typeStr = rawType;
+  }
+
+  const numFromInput = function(id) {
+    const el = document.getElementById(id);
+    const raw = el ? String(el.value || '').trim() : '';
+    if (raw === '') return '';
+    const n = (typeof toNumber === 'function') ? toNumber(raw) : Number(raw);
+    return isNaN(n) ? NaN : n;
+  };
+
+  const balance = numFromInput('debt_edit_balance');
+  const creditLimit = numFromInput('debt_edit_credit_limit');
+  const creditLeft = numFromInput('debt_edit_credit_left');
+  const minPayment = numFromInput('debt_edit_min_payment');
+  const intRate = numFromInput('debt_edit_int_rate');
+
+  const numericChecks = [
+    { v: balance, label: 'Account Balance' },
+    { v: creditLimit, label: 'Credit Limit' },
+    { v: creditLeft, label: 'Credit Left' },
+    { v: minPayment, label: 'Minimum Payment' },
+    { v: intRate, label: 'Interest Rate' }
+  ];
+  for (let i = 0; i < numericChecks.length; i++) {
+    if (typeof numericChecks[i].v === 'number' && isNaN(numericChecks[i].v)) {
+      setStatus('debt_status', numericChecks[i].label + ' must be a valid number.', true);
+      return;
+    }
+  }
+
+  const dueRaw = (function() {
+    const el = document.getElementById('debt_edit_due_date');
+    return el ? String(el.value || '').trim() : '';
+  })();
+  if (dueRaw !== '') {
+    const dueN = parseInt(dueRaw, 10);
+    if (isNaN(dueN) || dueN < 1 || dueN > 31) {
+      setStatus('debt_status', 'Due Date must be a whole number between 1 and 31.', true);
+      return;
+    }
+  }
+
+  const payload = {
+    sheetRow: __debtEditing.sheetRow,
+    expectedAccountName: __debtEditing.accountName,
+    type: typeStr,
+    accountBalance: balance,
+    dueDate: dueRaw,
+    creditLimit: creditLimit,
+    creditLeft: creditLeft,
+    minimumPayment: minPayment,
+    intRate: intRate
+  };
+
+  setStatusLoading('debt_status', 'Saving…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('debt_status', (res && res.message) || 'Saved.', false);
+      closeDebtEditForm_();
+      loadActiveDebtsManagementUi_();
+      if (typeof refreshSnapshot === 'function') refreshSnapshot();
+      // Keep the legacy Update view's dropdowns/values in sync.
+      if (typeof loadDebtSection === 'function') loadDebtSection();
+      // Background planner refresh so Overview / Rolling Debt Payoff KPIs
+      // reflect edited balances/minimums without blocking the save.
+      try {
+        google.script.run
+          .withSuccessHandler(function(plannerRes) {
+            if (plannerRes && plannerRes.snapshot && typeof applySnapshot === 'function') {
+              applySnapshot(plannerRes.snapshot);
+            }
+          })
+          .withFailureHandler(function(_err) { /* silent */ })
+          .runPlannerAndRefreshDashboardFromSave();
+      } catch (_e) { /* silent */ }
+    })
+    .withFailureHandler(function(err) {
+      setStatus('debt_status', (err.message || String(err)), true);
+    })
+    .updateTrackedDebtFromDashboard(payload);
+}
+
+function stopTrackingDebtFromManage_(key) {
+  const row = (window.__dashboardManageDebts || {})[key];
+  const account = row ? String(row.accountName || '').trim() : '';
+  if (!account) {
+    setStatus('debt_status', 'Couldn\u2019t resolve that debt — please refresh.', true);
+    return;
+  }
+
+  const confirmed = window.confirm(
+    'Stop tracking "' + account + '"?\n\n' +
+    'The debt will no longer appear in the Debt Account selector, the Manage ' +
+    'list, or planner calculations. History stays in place so the account ' +
+    'name remains reserved and past activity is preserved.'
+  );
+  if (!confirmed) return;
+
+  setStatusLoading('debt_status', 'Stopping tracking…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('debt_status', (res && res.message) || 'Stopped tracking.', false);
+      closeDebtEditForm_();
+      loadActiveDebtsManagementUi_();
+      if (typeof loadDebtSection === 'function') loadDebtSection();
+      if (typeof refreshSnapshot === 'function') refreshSnapshot();
+      if (typeof loadDashboardActionSections === 'function') loadDashboardActionSections();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('debt_status', (err.message || String(err)), true);
+    })
+    .deactivateDebtFromDashboard({ accountName: account });
 }
 
 function resetDebtAddForm_() {

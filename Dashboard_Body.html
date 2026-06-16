@@ -1183,6 +1183,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div class="segmented" role="tablist" aria-label="Debt account mode">
         <button type="button" id="debt_mode_update_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setDebtPanelMode('update')">Update</button>
         <button type="button" id="debt_mode_add_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setDebtPanelMode('add')">Add new</button>
+        <button type="button" id="debt_mode_manage_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setDebtPanelMode('manage')">Manage Debts</button>
       </div>
 
       <div id="debt_mode_update_wrap" class="bank-mode-wrap active">
@@ -1239,6 +1240,56 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <p>A matching expense row is also seeded on the current year's Cash Flow so the new debt shows up in <strong>Bills Due</strong> and <strong>Upcoming</strong> right away. Flow Source is inferred from Type — Credit Card pays on a card, everything else pays from cash. If an expense row for the same payee already exists it is left alone.</p>
             <p>Existing debts keep working. Stop tracking uses the Active column — rows are never deleted so history and the account name stay reserved.</p>
           </div>
+        </div>
+      </div>
+
+      <div id="debt_mode_manage_wrap" class="bank-mode-wrap">
+        <div class="bills-management-head" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between;margin:0 0 12px 0;">
+          <div>
+            <p class="muted" style="margin:0;">Every debt account you currently track. Use <strong>Edit</strong> to update details, or <strong>Stop tracking</strong> to deactivate (history is preserved).</p>
+          </div>
+        </div>
+
+        <div id="debt_edit_wrap" class="bills-add-wrap" style="display:none;margin:0 0 20px 0;padding:14px 16px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;">
+          <div id="debt_edit_title" class="card-title" style="margin-top:0;">Edit debt</div>
+          <p class="muted" style="margin:0 0 10px 0;">Update this debt's details. Account Name can't be changed yet — <span style="color:#475569;">renaming coming in a later update</span>.</p>
+          <div class="grid-2">
+            <div>
+              <label>Account Name</label>
+              <input type="text" id="debt_edit_name" readonly aria-readonly="true" tabindex="-1" style="background:#eef2f7;color:#475569;cursor:not-allowed;">
+              <div class="muted" style="margin-top:4px;font-size:12px;">Renaming coming in a later update.</div>
+              <label>Type</label>
+              <select id="debt_edit_type" onchange="onDebtEditTypeChange_()"></select>
+              <div id="debt_edit_type_other_wrap" style="margin-top:6px;display:none;">
+                <input type="text" id="debt_edit_type_other" maxlength="80" autocomplete="off" placeholder="New type (e.g. Personal Loan)">
+              </div>
+              <label>Account Balance</label>
+              <input type="text" id="debt_edit_balance" inputmode="decimal" onfocus="currencyFocus('debt_edit_balance')" onblur="currencyBlur('debt_edit_balance')">
+              <label>Due Date (day of month)</label>
+              <input type="number" id="debt_edit_due_date" min="1" max="31" step="1" inputmode="numeric">
+            </div>
+            <div>
+              <label>Credit Limit</label>
+              <input type="text" id="debt_edit_credit_limit" inputmode="decimal" onfocus="currencyFocus('debt_edit_credit_limit')" onblur="currencyBlur('debt_edit_credit_limit')">
+              <label>Credit Left</label>
+              <input type="text" id="debt_edit_credit_left" inputmode="decimal" onfocus="currencyFocus('debt_edit_credit_left')" onblur="currencyBlur('debt_edit_credit_left')">
+              <label>Minimum Payment</label>
+              <input type="text" id="debt_edit_min_payment" inputmode="decimal" onfocus="currencyFocus('debt_edit_min_payment')" onblur="currencyBlur('debt_edit_min_payment')">
+              <label>Interest Rate %</label>
+              <input type="number" id="debt_edit_int_rate" step="0.01" min="0" inputmode="decimal">
+              <label>Acct PCT Avail</label>
+              <div id="debt_edit_pct_avail" class="muted" style="padding:8px 10px;background:#f1f5f9;border-radius:6px;">—</div>
+              <div class="muted" style="margin-top:4px;font-size:12px;">Calculated automatically from Credit Limit, Credit Left and Balance.</div>
+              <div style="display:flex;gap:8px;margin-top:12px;">
+                <button type="button" id="debt_edit_save_btn" class="small-btn primary" onclick="submitDebtEdit_()">Save changes</button>
+                <button type="button" class="small-btn" onclick="cancelDebtEdit_()">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="debt_manage_list" class="bills-manage-list">
+          <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></div>
         </div>
       </div>
 

@@ -891,7 +891,16 @@ function debtUpdateActionLabel_(detailsJson) {
   if (!d || typeof d !== 'object') return fallback;
 
   var fieldName = String(d.fieldName || '').trim();
-  if (!fieldName) return fallback;
+  if (!fieldName) {
+    // Consolidated multi-field edit (Manage Debts): no single fieldName, but a
+    // changedFields list. Render a compact "Updated N field(s)" summary.
+    if (d.changedFields && d.changedFields.length) {
+      var n = d.changedFields.length;
+      if (n === 1) return 'Updated ' + String(d.changedFields[0]);
+      return 'Updated ' + n + ' fields';
+    }
+    return fallback;
+  }
 
   var kind = String(d.fieldKind || '').trim().toLowerCase();
   var label = 'Updated ' + fieldName;

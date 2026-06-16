@@ -147,6 +147,290 @@ function getDebtsUiData() {
 }
 
 /**
+ * Manage Debts (Phase 1) — returns every ACTIVE, non-summary debt with the
+ * full set of fields the Manage table + Edit form need. Mirrors
+ * getActiveBillsForManagementFromDashboard(): one read of INPUT - Debts,
+ * excludes the TOTAL DEBT summary row and inactive rows, and returns the
+ * 1-based `inputDebtsRow` so the client can pass it back for stale-row
+ * protection on edit. Currency fields are returned as numbers (blank cells
+ * become '' so the UI can show — instead of $0.00); Int Rate / Acct PCT Avail
+ * are returned as display strings.
+ */
+function getActiveDebtsForManagementFromDashboard() {
+  const ss = getUserSpreadsheet_();
+  const sheet = ss.getSheetByName(getSheetNames_().DEBTS);
+  if (!sheet) return [];
+
+  let display = [];
+  let values = [];
+  try {
+    display = sheet.getDataRange().getDisplayValues();
+    values = sheet.getDataRange().getValues();
+  } catch (e) {
+    Logger.log('getActiveDebtsForManagementFromDashboard read: ' + e);
+    return [];
+  }
+  if (display.length < 2) return [];
+
+  let headerMap;
+  try {
+    headerMap = getDebtsHeaderMap_(sheet, display);
+  } catch (e) {
+    Logger.log('getActiveDebtsForManagementFromDashboard header map: ' + e);
+    return [];
+  }
+
+  const out = [];
+  for (let r = 1; r < display.length; r++) {
+    const displayRow = display[r] || [];
+    const valueRow = values[r] || [];
+
+    const name = String(displayRow[headerMap.nameColZero] || '').trim();
+    if (!name) continue;
+    if (isDebtSummaryRowName_(name)) continue;
+    if (isDebtRowInactive_(displayRow, valueRow, headerMap)) continue;
+
+    const disp = function(colZero) {
+      return colZero === -1 ? '' : String(displayRow[colZero] || '').trim();
+    };
+    // Number when the cell shows something; '' when blank so the UI renders —.
+    const numOrBlank = function(colZero) {
+      if (colZero === -1) return '';
+      if (disp(colZero) === '') return '';
+      return toNumber_(valueRow[colZero]);
+    };
+
+    out.push({
+      inputDebtsRow: r + 1,
+      accountName: name,
+      type: disp(headerMap.typeColZero),
+      accountBalance: numOrBlank(headerMap.balanceColZero),
+      dueDate: disp(headerMap.dueDateColZero),
+      creditLimit: numOrBlank(headerMap.creditLimitColZero),
+      creditLeft: numOrBlank(headerMap.creditLeftColZero),
+      minimumPayment: numOrBlank(headerMap.minimumPaymentColZero),
+      intRate: disp(headerMap.intRateColZero),
+      acctPctAvail: disp(headerMap.pctAvailColZero),
+      active: disp(headerMap.activeColZero) || 'Yes'
+    });
+  }
+
+  out.sort(function(a, b) {
+    if (a.type !== b.type) return a.type.localeCompare(b.type);
+    return a.accountName.localeCompare(b.accountName);
+  });
+
+  return out;
+}
+
+/**
+ * Maps a Manage-Debts field label to the activity-log fieldKind so a
+ * single-field edit still renders the rich "Updated <field> to <value>"
+ * label via debtUpdateActionLabel_().
+ */
+function debtFieldKindForLabel_(label) {
+  switch (label) {
+    case 'Account Balance':
+    case 'Credit Limit':
+    case 'Credit Left':
+    case 'Minimum Payment':
+      return 'currency';
+    case 'Int Rate':
+      return 'percent';
+    case 'Due Date':
+      return 'integer';
+    default:
+      return 'text';
+  }
+}
+
+/**
+ * Manage Debts (Phase 1) — in-place multi-field edit of a single debt row.
+ * Mirrors updateTrackedBillFromDashboard():
+ *   - identifies the row by 1-based `sheetRow` + `expectedAccountName`
+ *     stale-check (refuses to write if the row moved/renamed underneath),
+ *   - writes ONLY changed cells,
+ *   - recomputes the derived Acct PCT Avail ONCE after all edits,
+ *   - writes ONE consolidated debt_update activity row,
+ *   - never touches Account Name (rename is deferred to Phase 2) and never
+ *     touches Cash Flow.
+ * Payload: { sheetRow, expectedAccountName, type?, accountBalance?, dueDate?,
+ *            creditLimit?, creditLeft?, minimumPayment?, intRate? }
+ */
+function updateTrackedDebtFromDashboard(payload) {
+  validateRequired_(payload, ['sheetRow', 'expectedAccountName']);
+
+  const sheetRow = parseInt(String(payload.sheetRow), 10);
+  if (isNaN(sheetRow) || sheetRow < 2) {
+    throw new Error('Invalid debt row. Please refresh and try again.');
+  }
+  const expectedAccountName = String(payload.expectedAccountName || '').trim();
+  if (!expectedAccountName) {
+    throw new Error('Missing debt account. Please refresh and try again.');
+  }
+
+  const ss = getUserSpreadsheet_();
+  const sheet = getSheet_(ss, 'DEBTS');
+  const headerMap = getDebtsHeaderMap_(sheet);
+
+  const lastCol = Math.max(sheet.getLastColumn(), 1);
+  const lastRow = Math.max(sheet.getLastRow(), 1);
+  if (sheetRow > lastRow) {
+    throw new Error('Debt has moved on the sheet. Please refresh and try again.');
+  }
+
+  const rowValues = sheet.getRange(sheetRow, 1, 1, lastCol).getValues()[0];
+  const rowDisplay = sheet.getRange(sheetRow, 1, 1, lastCol).getDisplayValues()[0];
+
+  const actualName = String(rowDisplay[headerMap.nameColZero] || '').trim();
+  if (isDebtSummaryRowName_(actualName)) {
+    throw new Error('Cannot edit the reserved "' + actualName + '" row.');
+  }
+  if (actualName !== expectedAccountName) {
+    throw new Error(
+      'Debt has moved on the sheet (expected "' + expectedAccountName +
+      '", found "' + actualName + '"). Please refresh and try again.'
+    );
+  }
+  if (headerMap.activeColZero !== -1 && isExplicitInactive_(rowDisplay[headerMap.activeColZero])) {
+    throw new Error('This debt is not currently tracked. Restore it before editing.');
+  }
+
+  const changedFields = [];
+  const previous = {};
+  const next = {};
+
+  // Currency fields: blank → 0 (matches the Add form "enter 0" convention).
+  const currencyChange = function(field, label, colZero) {
+    if (colZero === -1 || typeof payload[field] === 'undefined') return;
+    const raw = payload[field];
+    const newNum = round2_(toNumber_(raw === '' || raw === null ? 0 : raw));
+    const curNum = round2_(toNumber_(rowValues[colZero]));
+    if (newNum === curNum) return;
+    setCurrencyCellPreserveRowFormat_(sheet, sheetRow, colZero + 1, newNum, 1);
+    changedFields.push(label);
+    previous[label] = String(rowDisplay[colZero] || '');
+    next[label] = newNum;
+  };
+
+  const textChange = function(field, label, colZero) {
+    if (colZero === -1 || typeof payload[field] === 'undefined') return;
+    const newVal = String(payload[field] == null ? '' : payload[field]).trim();
+    const curVal = String(rowDisplay[colZero] || '').trim();
+    if (newVal === curVal) return;
+    if (label === 'Type' && !newVal) return; // never blank out Type
+    copyNeighborFormatInRow_(sheet, sheetRow, colZero + 1, 1);
+    sheet.getRange(sheetRow, colZero + 1).setValue(newVal);
+    changedFields.push(label);
+    previous[label] = curVal;
+    next[label] = newVal;
+  };
+
+  const intChange = function(field, label, colZero) {
+    if (colZero === -1 || typeof payload[field] === 'undefined') return;
+    const s = String(payload[field] == null ? '' : payload[field]).trim();
+    if (s === '') return; // leave unchanged when blank
+    const newNum = parseInt(s, 10);
+    if (isNaN(newNum)) throw new Error(label + ' must be a whole number.');
+    const curNum = parseInt(String(rowDisplay[colZero] || '').trim(), 10);
+    if (!isNaN(curNum) && curNum === newNum) return;
+    copyNeighborFormatInRow_(sheet, sheetRow, colZero + 1, 1);
+    const cell = sheet.getRange(sheetRow, colZero + 1);
+    cell.setValue(newNum);
+    cell.setNumberFormat('0');
+    changedFields.push(label);
+    previous[label] = String(rowDisplay[colZero] || '');
+    next[label] = newNum;
+  };
+
+  const percentChange = function(field, label, colZero) {
+    if (colZero === -1 || typeof payload[field] === 'undefined') return;
+    const s = String(payload[field] == null ? '' : payload[field]).trim();
+    if (s === '') return;
+    const newNum = round2_(toNumber_(s));
+    const curNum = round2_(toNumber_(rowValues[colZero]));
+    if (newNum === curNum) return;
+    copyNeighborFormatInRow_(sheet, sheetRow, colZero + 1, 1);
+    const cell = sheet.getRange(sheetRow, colZero + 1);
+    cell.setValue(newNum);
+    cell.setNumberFormat('0.00');
+    changedFields.push(label);
+    previous[label] = String(rowDisplay[colZero] || '');
+    next[label] = newNum;
+  };
+
+  // Account Name is intentionally NOT editable (Phase 2 rename).
+  textChange('type', 'Type', headerMap.typeColZero);
+  currencyChange('accountBalance', 'Account Balance', headerMap.balanceColZero);
+  intChange('dueDate', 'Due Date', headerMap.dueDateColZero);
+  currencyChange('creditLimit', 'Credit Limit', headerMap.creditLimitColZero);
+  currencyChange('creditLeft', 'Credit Left', headerMap.creditLeftColZero);
+  currencyChange('minimumPayment', 'Minimum Payment', headerMap.minimumPaymentColZero);
+  percentChange('intRate', 'Int Rate', headerMap.intRateColZero);
+
+  if (changedFields.length === 0) {
+    return { ok: true, message: 'No changes made', accountName: actualName, changedFields: [] };
+  }
+
+  // Recompute the derived Acct PCT Avail once, after all field writes.
+  recalcDebtPctAvailForRow_(sheet, sheetRow, {
+    creditLimitCol: headerMap.creditLimitColZero,
+    creditLeftCol: headerMap.creditLeftColZero,
+    balanceCol: headerMap.balanceColZero,
+    pctAvailCol: headerMap.pctAvailColZero
+  });
+
+  // One consolidated debt_update activity row. When exactly one field
+  // changed we also include the single-field keys so debtUpdateActionLabel_
+  // renders the rich "Updated <field> to <value>" label; multi-field edits
+  // render as "Updated N fields" (see debtUpdateActionLabel_).
+  try {
+    const typeForLog = headerMap.typeColZero === -1
+      ? ''
+      : String(rowDisplay[headerMap.typeColZero] || '').trim();
+    const detailsObj = {
+      detailsVersion: 1,
+      changedFields: changedFields,
+      previous: previous,
+      next: next,
+      sheetRow: sheetRow
+    };
+    if (changedFields.length === 1) {
+      const only = changedFields[0];
+      detailsObj.fieldName = only;
+      detailsObj.fieldKind = debtFieldKindForLabel_(only);
+      detailsObj.newRaw = next[only];
+      detailsObj.newDisplay = String(next[only]);
+    }
+    appendActivityLog_(ss, {
+      eventType: 'debt_update',
+      entryDate: Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+      amount: 0,
+      direction: '',
+      payee: actualName,
+      category: typeForLog,
+      accountSource: '',
+      cashFlowSheet: '',
+      cashFlowMonth: '',
+      dedupeKey: '',
+      details: JSON.stringify(detailsObj)
+    });
+  } catch (logErr) {
+    Logger.log('updateTrackedDebtFromDashboard activity log: ' + logErr);
+  }
+
+  touchDashboardSourceUpdated_('debts');
+
+  return {
+    ok: true,
+    message: 'Changes saved — ' + changedFields.length + ' field' +
+      (changedFields.length === 1 ? '' : 's') + ' updated',
+    accountName: actualName,
+    changedFields: changedFields
+  };
+}
+
+/**
  * Returns active, non-summary debts for dropdowns / UI consumers. Inactive
  * debts are filtered out via the shared explicit-wins-with-fallback rule.
  */
