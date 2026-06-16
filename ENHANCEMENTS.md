@@ -27,7 +27,13 @@ Authoritative roadmap lives in `TODO.md → Launch Readiness Roadmap` (high-leve
 - **V1.2 candidates (B — product improvements):** Profile completeness indicator / badge, better Retirement setup guidance / linking to Profile, optional spouse UX clarity (single vs partnered).
 - **V1.2 candidates (C — future ideas, do not act yet):** legacy sheet cleanup tool (remove inert `Your Current Age` / `Spouse Current Age` rows on existing `INPUT - Retirement` sheets), Profile → other modules integration, notifications / SMS using the existing Profile phone field.
 - **Deferred from V1.1 (re-qualify before pulling):** planner email guardrails telemetry (informational only), low-risk codebase cleanups, dead-code prune for the retirement profile integration (`readRetirementHouseholdSafe_`, `getRetirementHouseholdInputs_`, `writeRetirementHouseholdInputs_`, `saveRetirementBasics` stub).
-- **Later (post-V1.2 / future phase):** onboarding factory refactor, Activity smart-undo Phases 2–4, Cash Strategy, HELOC advisor refinement, Plaid-style sync, broader regression / test harness, two-dashboards unification, and the other big-product items captured below and in `TODO.md → Historical backlog`.
+- **Later (post-V1.2 / future phase):** onboarding factory refactor, Activity smart-undo Phases 2–4, Cash Strategy, HELOC advisor refinement, Plaid-style sync, broader regression / test harness, two-dashboards unification, **Merge Debt Accounts** (see below), and the other big-product items captured below and in `TODO.md → Historical backlog`.
+
+### Future — Merge Debt Accounts (post-Family Beta)
+
+Authoritative copy: `TODO.md → Future Enhancement — Merge Debt Accounts`. **Status:** documented, **not implemented.** Follow-on to **Manage Debts Phase 1.5 (Rename Debt)**, which is delivered.
+
+Rename is deliberately **block-on-duplicate** — renaming a debt onto an existing active/inactive name is rejected. Merge is the *separate, opt-in* workflow for intentionally combining two real accounts into one (e.g. `Credit Card - Marriott` + `Marriott Bonvoy Visa`). It is multi-decision and lossy where Rename is a pure relabel: which `INPUT - Debts` row survives, how Account Balance / Minimum Payment / Interest Rate / Credit Limit / Due Date are resolved, how the two Cash Flow Expense payees are **coalesced per year tab** (including same-month value combination — a value change, unlike Rename), and a new `debt_merge` Activity row (history under both old names preserved, never rewritten). It can **reuse** the Phase 1.5 rename infrastructure (LockService, stale-row guard, cross-year Cash Flow payee scan, best-effort revert) plus a coalescing/conflict-resolution step. UX enhancement, not a blocker.
 
 ### Delivered — retirement profile integration (V1.1 close-out)
 

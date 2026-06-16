@@ -21,7 +21,7 @@ The older "V1.2 work queue" candidates are retained below under `## V1.2 polish 
 
 ## Next Session — Recommended Starting Point
 
-Clean restart point after the 2026-06-12 Bills Due recurrence overhaul (Weekly/Biweekly occurrence expansion, AutoPay star, Overdue styling, Weekly/Biweekly Skip fix — all shipped + validated against the family beta workbook). The Bills Due work is done; the next focus returns to **closing out 6F Recovery Validation** (currently ~80–85%). Recommended priority order:
+Clean restart point after the **Manage Debts** work (2026-06-15/16): **Phase 1** (Manage Debts table + multi-field Edit + Stop tracking) and **Phase 1.5 — Rename Debt** (coordinated rename of `INPUT - Debts` + matching Cash Flow Expense payee across all year sheets, with **duplicate-name protection**, TOTAL-DEBT guard, stale-row protection, `debt_rename` Activity Log, best-effort revert) are both **shipped + runtime-validated**, and the earlier 2026-06-12 Bills Due recurrence overhaul (Weekly/Biweekly occurrence expansion, AutoPay star, Overdue styling, Skip fix) is done + validated. **Merge Debt Accounts** is recorded as a separate **future** enhancement (see below). The next focus returns to **closing out 6F Recovery Validation** (currently ~80–85%). Recommended priority order:
 
 1. **Admin Clear Mapping validation** — execute Clear Mapping with `CENTRAL_ADMIN_REPAIR=true` on the disposable account; confirm the mapping is cleared and the next load routes to recovery/onboarding. (Flag OFF again afterward.)
 2. **Audit Log validation** — confirm admin repair actions (Inspect, Clear Mapping) write the expected audit entries.
@@ -341,6 +341,25 @@ Authoritative copy: `PROJECT_CONTEXT.md → Future Enhancement — Weekly/Biweek
 **Areas affected:** Bills UI; `INPUT - Bills` schema; `dashboard_data.js` recurrence expansion (`buildInputBillDueCandidates_`); Bills Due generation (`getInputBillsDueRows_`); Cash Flow autopay accumulation (weekly/biweekly branch); Activity Log dedupe validation (`buildBillAutopayDedupeKey_` already encodes the exact occurrence date).
 
 **Priority:** Post-Family Beta, Post-Recovery Validation.
+
+---
+
+### Future Enhancement — Merge Debt Accounts (future)
+
+**Status:** documented, **not implemented.** Follow-on to **Manage Debts Phase 1.5 (Rename Debt)**, which is delivered. Rename is intentionally **block-on-duplicate** (a rename onto an existing active/inactive name is rejected) — Merge is the separate, opt-in workflow for *intentionally* combining two accounts (e.g. `Credit Card - Marriott` + `Marriott Bonvoy Visa` → one account).
+
+**Why it is a separate feature (not part of Rename):** Merge is multi-decision and lossy, where Rename is a pure relabel. Each of these needs an explicit rule before it is safe:
+
+- **Surviving row:** which `INPUT - Debts` row is kept vs. retired (likely user-chosen "merge into").
+- **Account Balance:** keep target, keep source, or sum? (Summing is usually wrong for the same real-world debt seen twice.)
+- **Minimum Payment / Interest Rate / Credit Limit / Due Date:** which row's values win.
+- **Cash Flow Expense rows:** the two payees must be **coalesced** per year tab — and if both have a value in the same month cell, the month values may need to be combined (a value change, unlike Rename which never touches month values).
+- **Activity Log:** history under both old names is preserved (no rewrite), plus one new `debt_merge` audit row.
+- **Downstream:** Debt Overview, Rolling Debt Payoff, Bills Due, and Planner must re-link to the surviving name afterward.
+
+**Reuse opportunity:** Merge can reuse the Phase 1.5 rename infrastructure — `LockService`, stale-row guard, the cross-year Cash Flow payee scan, and best-effort revert — but adds a coalescing/conflict-resolution step and a `debt_merge` activity kind.
+
+**Priority:** Post-Family Beta. UX enhancement, not a blocker.
 
 ---
 
