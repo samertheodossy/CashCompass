@@ -1288,6 +1288,27 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           </div>
         </div>
 
+        <div id="debt_rename_wrap" class="bills-add-wrap" style="display:none;margin:0 0 20px 0;padding:14px 16px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;">
+          <div id="debt_rename_title" class="card-title" style="margin-top:0;">Rename debt</div>
+          <p class="muted" style="margin:0 0 10px 0;">Renaming updates linked debt references (Cash Flow rows). Activity history keeps original names.</p>
+          <div class="grid-2">
+            <div>
+              <label>Current Account Name</label>
+              <input type="text" id="debt_rename_current" readonly aria-readonly="true" tabindex="-1" style="background:#eef2f7;color:#475569;cursor:not-allowed;">
+              <label>New Account Name</label>
+              <input type="text" id="debt_rename_new" maxlength="120" autocomplete="off" placeholder="Enter the new account name">
+              <div style="display:flex;gap:8px;margin-top:12px;">
+                <button type="button" id="debt_rename_save_btn" class="small-btn primary" onclick="submitDebtRename_()">Rename Debt</button>
+                <button type="button" class="small-btn" onclick="cancelDebtRename_()">Cancel</button>
+              </div>
+            </div>
+            <div class="info muted">
+              <p style="margin-top:0;">This renames the debt on <strong>INPUT - Debts</strong> and its matching Expense rows on every <strong>Cash Flow</strong> year tab. Month values and formulas are not changed.</p>
+              <p>Past <strong>Activity Log</strong> entries keep the original name on purpose, so history stays accurate.</p>
+            </div>
+          </div>
+        </div>
+
         <div id="debt_manage_list" class="bills-manage-list">
           <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></div>
         </div>

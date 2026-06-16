@@ -431,6 +431,238 @@ function updateTrackedDebtFromDashboard(payload) {
 }
 
 /**
+ * Manage Debts Phase 1.5 — validate a prospective NEW name for a RENAME.
+ * Like validateNewDebtAccountName_ but EXCLUDES the row being renamed (matched
+ * by its old name, case-insensitively) so a pure case/spacing fix on the same
+ * row is allowed, while any collision with another active OR inactive debt
+ * (case-insensitive) is blocked. Never allows the reserved TOTAL DEBT name.
+ * @returns {string} trimmed, validated new name
+ */
+function validateRenamedDebtAccountName_(rawNew, oldName) {
+  const name = String(rawNew || '').trim();
+  const old = String(oldName || '').trim();
+  if (!name) throw new Error('New account name is required.');
+  if (name.length > 120) throw new Error('Account name is too long (max 120 characters).');
+  if (isDebtReservedName_(name)) {
+    throw new Error('That account name is reserved and cannot be used.');
+  }
+
+  const existing = getAllDebtAccountNamesIncludingInactive_();
+  for (let i = 0; i < existing.length; i++) {
+    const cand = String(existing[i] || '').trim();
+    // Skip the single row being renamed (match the old name case-insensitively).
+    if (cand.toLowerCase() === old.toLowerCase()) continue;
+    if (cand.toLowerCase() === name.toLowerCase()) {
+      throw new Error('Another debt account already uses this name. Rename was not completed.');
+    }
+  }
+
+  return name;
+}
+
+/**
+ * Returns every INPUT - Cash Flow YYYY sheet in the workbook (name starts with
+ * the Cash Flow prefix and ends in a 4-digit year). Used by the coordinated
+ * debt rename to update Expense Payee cells across all years.
+ */
+function getAllCashFlowYearSheets_(ss) {
+  const prefix = getSheetNames_().CASH_FLOW_PREFIX;
+  const all = ss.getSheets();
+  const out = [];
+  for (let i = 0; i < all.length; i++) {
+    const nm = all[i].getName();
+    if (nm.indexOf(prefix) === 0 && /^\d{4}$/.test(nm.slice(prefix.length))) {
+      out.push(all[i]);
+    }
+  }
+  return out;
+}
+
+/**
+ * Manage Debts Phase 1.5 — coordinated debt Account Name rename.
+ *
+ * Renames the INPUT - Debts row AND every matching Expense Payee cell across
+ * ALL INPUT - Cash Flow YYYY sheets (Payee cell only — month values, totals and
+ * formulas are never touched), then logs ONE debt_rename activity row. The row
+ * is identified by sheetRow + expectedAccountName (stale guard). Duplicates are
+ * blocked (active + inactive, case-insensitive) as is the reserved TOTAL DEBT
+ * row. Serialized via LockService.getDocumentLock(). On a partial failure the
+ * already-applied writes are best-effort reverted.
+ *
+ * Out of scope (by design): merging accounts, alias-map edits, Activity Log
+ * history rewrites, and any Cash Flow value/formula changes.
+ *
+ * @param {{ sheetRow:(number|string), expectedAccountName:string, newAccountName:string }} payload
+ * @returns {{ ok:boolean, message:string, oldAccountName:string, newAccountName:string,
+ *             debtRowUpdated:boolean, cashFlowSheetsUpdated:Array, cashFlowRowsUpdated:number,
+ *             cashFlowMatched:boolean }}
+ */
+function renameDebtFromDashboard(payload) {
+  validateRequired_(payload, ['sheetRow', 'expectedAccountName', 'newAccountName']);
+
+  const sheetRow = parseInt(String(payload.sheetRow), 10);
+  if (isNaN(sheetRow) || sheetRow < 2) {
+    throw new Error('Invalid debt row. Please refresh and try again.');
+  }
+  const expectedAccountName = String(payload.expectedAccountName || '').trim();
+  if (!expectedAccountName) {
+    throw new Error('Missing debt account. Please refresh and try again.');
+  }
+
+  const lock = LockService.getDocumentLock();
+  try {
+    lock.waitLock(30000);
+  } catch (lockErr) {
+    throw new Error('Could not acquire document lock: ' + (lockErr && lockErr.message || lockErr));
+  }
+
+  try {
+    const ss = getUserSpreadsheet_();
+    const sheet = getSheet_(ss, 'DEBTS');
+    const headerMap = getDebtsHeaderMap_(sheet);
+
+    const lastRow = Math.max(sheet.getLastRow(), 1);
+    if (sheetRow > lastRow) {
+      throw new Error('Debt has moved on the sheet. Please refresh and try again.');
+    }
+
+    // Stale-row guard: the name on the target row must still match.
+    const actualName = String(sheet.getRange(sheetRow, headerMap.nameCol).getDisplayValue() || '').trim();
+    if (!actualName) {
+      throw new Error('Debt has moved on the sheet. Please refresh and try again.');
+    }
+    if (isDebtSummaryRowName_(actualName)) {
+      throw new Error('Cannot rename the reserved "' + actualName + '" row.');
+    }
+    if (actualName !== expectedAccountName) {
+      throw new Error(
+        'Debt has moved on the sheet (expected "' + expectedAccountName +
+        '", found "' + actualName + '"). Please refresh and try again.'
+      );
+    }
+
+    // Validate the new name. Throws the canonical duplicate/reserved messages.
+    const newName = validateRenamedDebtAccountName_(payload.newAccountName, actualName);
+    if (newName === actualName) {
+      return {
+        ok: true,
+        message: 'No changes made — the name is unchanged.',
+        oldAccountName: actualName,
+        newAccountName: actualName,
+        debtRowUpdated: false,
+        cashFlowSheetsUpdated: [],
+        cashFlowRowsUpdated: 0,
+        cashFlowMatched: false
+      };
+    }
+
+    // --- Apply: Debts row first, then Cash Flow rows. Track for revert. ---
+    let debtRenamed = false;
+    const cfApplied = []; // { sheet, row, col } for best-effort revert
+    const cashFlowSheetsUpdated = [];
+
+    try {
+      // 1) Rename the INPUT - Debts Account Name cell.
+      sheet.getRange(sheetRow, headerMap.nameCol).setValue(newName);
+      debtRenamed = true;
+
+      // 2) Rename matching Expense Payee cells across ALL year sheets. Only the
+      //    Payee cell is written — month values, totals and formulas untouched.
+      const cfSheets = getAllCashFlowYearSheets_(ss);
+      for (let s = 0; s < cfSheets.length; s++) {
+        const cfSheet = cfSheets[s];
+        let cfHeader;
+        try {
+          cfHeader = getCashFlowHeaderMap_(cfSheet);
+        } catch (hdrErr) {
+          continue; // sheet without Type/Payee headers — skip safely
+        }
+        const display = cfSheet.getDataRange().getDisplayValues();
+        let rowsHere = 0;
+        for (let r = 1; r < display.length; r++) {
+          const rowType = String(display[r][cfHeader.typeColZero] || '').trim();
+          const rowPayee = String(display[r][cfHeader.payeeColZero] || '').trim();
+          if (rowType === 'Expense' && rowPayee === actualName) {
+            cfSheet.getRange(r + 1, cfHeader.payeeCol).setValue(newName);
+            cfApplied.push({ sheet: cfSheet, row: r + 1, col: cfHeader.payeeCol });
+            rowsHere++;
+          }
+        }
+        if (rowsHere > 0) {
+          cashFlowSheetsUpdated.push({ sheet: cfSheet.getName(), rows: rowsHere });
+        }
+      }
+    } catch (applyErr) {
+      // Best-effort revert of everything written so far (no cross-sheet
+      // transaction is available in Apps Script).
+      try {
+        for (let i = 0; i < cfApplied.length; i++) {
+          cfApplied[i].sheet.getRange(cfApplied[i].row, cfApplied[i].col).setValue(actualName);
+        }
+      } catch (_revCf) { /* best-effort */ }
+      if (debtRenamed) {
+        try { sheet.getRange(sheetRow, headerMap.nameCol).setValue(actualName); } catch (_revDebt) {}
+      }
+      throw new Error('Rename failed and was rolled back: ' + (applyErr && applyErr.message || applyErr));
+    }
+
+    const cfRowsUpdated = cfApplied.length;
+    const cashFlowMatched = cfRowsUpdated > 0;
+
+    try { touchDashboardSourceUpdated_('debts'); } catch (_e) {}
+    try { touchDashboardSourceUpdated_('cash_flow'); } catch (_e) {}
+
+    // One consolidated debt_rename activity row. History is never rewritten.
+    try {
+      const typeForLog = headerMap.typeColZero === -1
+        ? ''
+        : String(sheet.getRange(sheetRow, headerMap.typeCol).getDisplayValue() || '').trim();
+      appendActivityLog_(ss, {
+        eventType: 'debt_rename',
+        entryDate: Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+        amount: 0,
+        direction: '',
+        payee: newName,
+        category: typeForLog,
+        accountSource: '',
+        cashFlowSheet: '',
+        cashFlowMonth: '',
+        dedupeKey: '',
+        details: JSON.stringify({
+          detailsVersion: 1,
+          oldName: actualName,
+          newName: newName,
+          cashFlowRowsUpdated: cfRowsUpdated,
+          cashFlowSheetsUpdated: cashFlowSheetsUpdated,
+          sheetRow: sheetRow
+        })
+      });
+    } catch (logErr) {
+      Logger.log('renameDebtFromDashboard activity log: ' + logErr);
+    }
+
+    const message = cashFlowMatched
+      ? 'Renamed "' + actualName + '" to "' + newName + '" (updated ' + cfRowsUpdated +
+        ' Cash Flow row' + (cfRowsUpdated === 1 ? '' : 's') + ' across ' +
+        cashFlowSheetsUpdated.length + ' year' + (cashFlowSheetsUpdated.length === 1 ? '' : 's') + ').'
+      : 'Renamed "' + actualName + '" to "' + newName + '". No linked Cash Flow row was found.';
+
+    return {
+      ok: true,
+      message: message,
+      oldAccountName: actualName,
+      newAccountName: newName,
+      debtRowUpdated: true,
+      cashFlowSheetsUpdated: cashFlowSheetsUpdated,
+      cashFlowRowsUpdated: cfRowsUpdated,
+      cashFlowMatched: cashFlowMatched
+    };
+  } finally {
+    try { lock.releaseLock(); } catch (_e) {}
+  }
+}
+
+/**
  * Returns active, non-summary debts for dropdowns / UI consumers. Inactive
  * debts are filtered out via the shared explicit-wins-with-fallback rule.
  */

@@ -416,6 +416,7 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (etEarly === 'debt_add') return 'Debt';
   if (etEarly === 'debt_deactivate') return 'Debt';
   if (etEarly === 'debt_update') return 'Debt';
+  if (etEarly === 'debt_rename') return 'Debt';
   // income_add / income_deactivate are the canonical event names after
   // the refactor that made INPUT - Cash Flow <year> the source of truth
   // for income. Legacy rows written by the old INPUT - Income Sources
@@ -533,6 +534,10 @@ function activityLogActionLabel_(eventType, detailsJson) {
     // Falls back to a plain label for legacy rows with no details JSON.
     case 'debt_update':
       return debtUpdateActionLabel_(detailsJson);
+    // debt_rename is non-monetary; the label carries old → new inline, e.g.
+    //   "Renamed Credit Card - Marriott → Marriott Bonvoy Visa"
+    case 'debt_rename':
+      return debtRenameActionLabel_(detailsJson);
     case 'income_add': return 'Income source added';
     case 'income_deactivate': return 'Tracking stopped';
     // Legacy rows from the old INPUT - Income Sources architecture.
@@ -877,6 +882,24 @@ function billUpdateFieldDisplayName_(key) {
  *   text     → "Updated <Field> to <newDisplay>" (or just "Updated <Field>")
  *   legacy   → "Updated"
  */
+function debtRenameActionLabel_(detailsJson) {
+  var fallback = 'Renamed account';
+  var raw = String(detailsJson || '').trim();
+  if (!raw) return fallback;
+  var d;
+  try {
+    d = JSON.parse(raw);
+  } catch (e) {
+    return fallback;
+  }
+  if (!d || typeof d !== 'object') return fallback;
+  var oldName = String(d.oldName || '').trim();
+  var newName = String(d.newName || '').trim();
+  if (oldName && newName) return 'Renamed ' + oldName + ' \u2192 ' + newName;
+  if (newName) return 'Renamed to ' + newName;
+  return fallback;
+}
+
 function debtUpdateActionLabel_(detailsJson) {
   var fallback = 'Updated';
   var raw = String(detailsJson || '').trim();

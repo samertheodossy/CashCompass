@@ -167,9 +167,10 @@ function setDebtPanelMode(mode) {
     setStatus('debt_status', '', false);
   }
   if (mode === 'manage') {
-    // Always close any open edit form and (re)load the table when entering
-    // the Manage view so the list reflects the latest sheet state.
+    // Always close any open edit/rename form and (re)load the table when
+    // entering the Manage view so the list reflects the latest sheet state.
     if (typeof closeDebtEditForm_ === 'function') closeDebtEditForm_();
+    if (typeof closeDebtRenameForm_ === 'function') closeDebtRenameForm_();
     if (typeof loadActiveDebtsManagementUi_ === 'function') loadActiveDebtsManagementUi_();
   }
 }
@@ -311,6 +312,8 @@ function renderActiveDebtsList_(rows) {
         '<td class="bills-manage-actions">' +
           '<button class="small-btn bill-edit-btn" title="Edit this debt" ' +
             'onclick="openDebtEditForm(\'' + escapeJs(key) + '\')" style="margin-right:6px;">Edit</button>' +
+          '<button class="small-btn bill-rename-btn" title="Rename this debt account" ' +
+            'onclick="openDebtRenameForm(\'' + escapeJs(key) + '\')" style="margin-right:6px;">Rename</button>' +
           '<button class="small-btn bill-stop-tracking-btn" ' +
             'title="This debt will no longer appear, but remains in history" ' +
             'onclick="stopTrackingDebtFromManage_(\'' + escapeJs(key) + '\')">Stop tracking</button>' +
@@ -390,6 +393,9 @@ function openDebtEditForm(key) {
     setStatus('debt_status', 'Couldn\u2019t open that debt — please refresh.', true);
     return;
   }
+
+  // Edit and Rename share the Manage view but are mutually exclusive.
+  if (typeof closeDebtRenameForm_ === 'function') closeDebtRenameForm_();
 
   __debtEditing = {
     sheetRow: row.inputDebtsRow,
@@ -572,6 +578,7 @@ function stopTrackingDebtFromManage_(key) {
     .withSuccessHandler(function(res) {
       setStatus('debt_status', (res && res.message) || 'Stopped tracking.', false);
       closeDebtEditForm_();
+      if (typeof closeDebtRenameForm_ === 'function') closeDebtRenameForm_();
       loadActiveDebtsManagementUi_();
       if (typeof loadDebtSection === 'function') loadDebtSection();
       if (typeof refreshSnapshot === 'function') refreshSnapshot();
@@ -581,6 +588,111 @@ function stopTrackingDebtFromManage_(key) {
       setStatus('debt_status', (err.message || String(err)), true);
     })
     .deactivateDebtFromDashboard({ accountName: account });
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Manage Debts Phase 1.5 — Rename (separate from Edit)                       */
+/* -------------------------------------------------------------------------- */
+
+var __debtRenaming = null; // { sheetRow, accountName }
+
+function openDebtRenameForm(key) {
+  const row = (window.__dashboardManageDebts || {})[key];
+  if (!row) {
+    setStatus('debt_status', 'Couldn\u2019t open that debt — please refresh.', true);
+    return;
+  }
+
+  // Edit and Rename are mutually exclusive within the Manage view.
+  if (typeof closeDebtEditForm_ === 'function') closeDebtEditForm_();
+
+  __debtRenaming = {
+    sheetRow: row.inputDebtsRow,
+    accountName: row.accountName || ''
+  };
+
+  const cur = document.getElementById('debt_rename_current');
+  if (cur) cur.value = row.accountName || '';
+  const next = document.getElementById('debt_rename_new');
+  if (next) next.value = row.accountName || '';
+
+  const titleEl = document.getElementById('debt_rename_title');
+  if (titleEl) titleEl.textContent = 'Rename debt — ' + (row.accountName || '');
+
+  const wrap = document.getElementById('debt_rename_wrap');
+  if (wrap) {
+    wrap.style.display = '';
+    try { wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
+  }
+  if (next) { try { next.focus(); next.select(); } catch (e) {} }
+}
+
+function closeDebtRenameForm_() {
+  __debtRenaming = null;
+  const wrap = document.getElementById('debt_rename_wrap');
+  if (wrap) wrap.style.display = 'none';
+}
+
+function cancelDebtRename_() {
+  closeDebtRenameForm_();
+  setStatus('debt_status', '', false);
+}
+
+function submitDebtRename_() {
+  if (!__debtRenaming || !__debtRenaming.sheetRow) {
+    setStatus('debt_status', 'No debt selected to rename. Please refresh.', true);
+    return;
+  }
+
+  const newEl = document.getElementById('debt_rename_new');
+  const newName = newEl ? String(newEl.value || '').trim() : '';
+  if (!newName) {
+    setStatus('debt_status', 'New account name is required.', true);
+    if (newEl) { try { newEl.focus(); } catch (e) {} }
+    return;
+  }
+  if (newName.length > 120) {
+    setStatus('debt_status', 'Account name is too long (max 120 characters).', true);
+    return;
+  }
+  if (newName === __debtRenaming.accountName) {
+    setStatus('debt_status', 'That is already the account name. No changes made.', false);
+    return;
+  }
+
+  const payload = {
+    sheetRow: __debtRenaming.sheetRow,
+    expectedAccountName: __debtRenaming.accountName,
+    newAccountName: newName
+  };
+
+  setStatusLoading('debt_status', 'Renaming…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('debt_status', (res && res.message) || 'Renamed.', false);
+      closeDebtRenameForm_();
+      loadActiveDebtsManagementUi_();
+      if (typeof loadDebtSection === 'function') loadDebtSection();
+      if (typeof refreshSnapshot === 'function') refreshSnapshot();
+      // Bills Due / Upcoming join debts to Cash Flow by name — reload so the
+      // renamed debt keeps showing without a full app reload.
+      if (typeof loadDashboardActionSections === 'function') loadDashboardActionSections();
+      // Background planner refresh so Overview / Rolling Debt Payoff re-link.
+      try {
+        google.script.run
+          .withSuccessHandler(function(plannerRes) {
+            if (plannerRes && plannerRes.snapshot && typeof applySnapshot === 'function') {
+              applySnapshot(plannerRes.snapshot);
+            }
+          })
+          .withFailureHandler(function(_err) { /* silent */ })
+          .runPlannerAndRefreshDashboardFromSave();
+      } catch (_e) { /* silent */ }
+    })
+    .withFailureHandler(function(err) {
+      setStatus('debt_status', (err.message || String(err)), true);
+    })
+    .renameDebtFromDashboard(payload);
 }
 
 function resetDebtAddForm_() {
