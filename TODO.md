@@ -363,6 +363,36 @@ Authoritative copy: `PROJECT_CONTEXT.md → Future Enhancement — Weekly/Biweek
 
 ---
 
+## Future UI Standardization — Manage Pattern Rollout
+
+**Status:** documented, **not implemented** (authoritative copy; high-level mirror in `PROJECT_CONTEXT.md`, backlog entry in `ENHANCEMENTS.md`). **Current status: Bills = complete · Debts = complete · Bank Accounts = next likely candidate.**
+
+**Background.** Bills and Debts now have dedicated management workflows — **Manage Bills** and **Manage Debts** — which have proven significantly more user-friendly than direct sheet editing. They establish the **preferred long-term UI pattern** for module maintenance, and each major module should eventually adopt it.
+
+**Standard pattern.** Each major module exposes a `[Primary View] [Manage]` toggle:
+
+- **Primary View** — daily usage, dashboard actions, updates, monitoring.
+- **Manage View** — edit, rename, stop tracking, archive, maintenance, configuration.
+
+**Completed:**
+
+- ✅ **Bills** — Manage Bills, Edit Bill, Stop Tracking, Add Bill.
+- ✅ **Debts** — Manage Debts, Edit Debt, Rename Debt, Stop Tracking.
+
+**Planned candidates (no work scheduled):**
+
+1. **Bank Accounts — Priority: High.** Future: Manage Accounts, Rename Account, Edit Institution, Edit Type, Edit Credit Limit, Stop Tracking. *Reason:* currently still relies heavily on backend sheet maintenance — the exact same pain that Manage Debts removed (rename account, change institution, change type, fix account metadata, stop tracking). **Recommended as the next Manage rollout** — much lower risk than Recovery changes, so a good feature stream once recovery work is closed.
+2. **Income Sources — Priority: Medium.** Future: Manage Income, Edit Source, Rename Source, Frequency Changes, Stop Tracking.
+3. **Investments — Priority: Medium.** Future: Manage Investments, Rename Account, Edit Type, Stop Tracking.
+4. **Properties — Priority: Medium.** Future: Manage Properties, Rename Property, Edit Ownership, Edit Property Metadata, Stop Tracking.
+5. **Donations — Priority: Lower.** Future: Manage Donations, Edit Donation Source, Stop Tracking.
+
+**Future framework opportunity.** After at least **three** modules use the pattern (Bills, Debts, Bank Accounts), investigate extracting a reusable management framework: shared table component, shared edit-form pattern, shared stop-tracking workflow, shared stale-row protection, shared activity logging. **Do not implement now** — extract only once three real consumers exist so the abstraction is grounded.
+
+**Priority:** Sequenced **after** 6F Recovery Validation closes; Bank Accounts first. UX enhancement, not a blocker.
+
+---
+
 ## Future Enhancements (Post-Core)
 
 Forward-looking product ideas captured in prioritized tiers so the long-term direction is durable. **None of this is on the current roadmap** and all of it is **lower priority than the in-flight Bank Import completion and the ongoing Bills / planner / Cash Flow accuracy work.** Pulling any item up requires an explicit product decision under `WORKING_RULES.md → Current phase`.

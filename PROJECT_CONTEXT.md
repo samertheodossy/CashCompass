@@ -149,6 +149,18 @@ Authoritative copy lives here; `README.md` and `TODO.md` mirror it. **UX enhance
 
 **Priority:** Post-Family Beta, Post-Recovery Validation. **UX enhancement, not a blocker.**
 
+## Future UI Standardization — Manage Pattern Rollout
+
+High-level mirror; **authoritative copy lives in `TODO.md → Future UI Standardization — Manage Pattern Rollout`** (backlog entry in `ENHANCEMENTS.md`). **Status: Bills = complete · Debts = complete · Bank Accounts = next likely candidate.** No implementation at this time.
+
+**Pattern:** each major module exposes `[Primary View] [Manage]` — Primary View for daily usage / dashboard actions / updates / monitoring; Manage View for edit / rename / stop tracking / archive / maintenance / configuration. Manage Bills and Manage Debts proved this is far more user-friendly than direct sheet editing, so it is the preferred long-term UI pattern for module maintenance.
+
+- **Completed:** ✅ Bills (Manage Bills, Edit, Stop Tracking, Add) · ✅ Debts (Manage Debts, Edit, Rename, Stop Tracking).
+- **Planned candidates:** **Bank Accounts (High — next likely rollout;** still relies on backend sheet maintenance: rename account, change institution, change type, fix metadata, stop tracking), Income Sources (Medium), Investments (Medium), Properties (Medium), Donations (Lower).
+- **Framework opportunity:** after ≥3 modules use the pattern (Bills, Debts, Bank Accounts), investigate extracting a reusable management framework (shared table, edit-form, stop-tracking, stale-row protection, activity logging). Do not extract before three real consumers exist.
+
+**Priority:** sequenced after 6F Recovery Validation closes; Bank Accounts first. UX enhancement, not a blocker.
+
 ## Current phase — Central App live + Family Beta readiness
 
 The app has moved beyond the V1.2 "controlled improvement" framing. **The Central App architecture is live**, and the active work is hardening it toward a Family Beta. Two foundations carry forward from earlier phases (V1 trust baseline, V1.1 retirement profile integration) and remain true, but they are no longer the headline.
