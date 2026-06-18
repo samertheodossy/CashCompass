@@ -481,18 +481,29 @@ var STARTUP_APP_SHEET_PREFIXES_ = ['INPUT - ', 'SYS - ', 'OUT - ', 'LOG - '];
 /**
  * Sheet names that, on their own, must NOT mark a workbook as populated.
  *
- * A freshly provisioned Central App workbook is seeded with the settings
- * sheet (INPUT - Settings) before any real financial data exists. Because
- * that name matches the `INPUT - ` prefix above, it would otherwise be
- * treated as evidence of a populated workbook and trap the user on the
- * normal dashboard (Overview) instead of routing to Welcome / Setup.
+ * A freshly provisioned Central App workbook is seeded with two scaffolding
+ * sheets before any real financial data exists:
+ *   - INPUT - Settings  (seed-only settings sheet)
+ *   - SYS - Meta        (Phase 6B workbook identity marker)
+ * Both names match an app-sheet prefix above (`INPUT - ` / `SYS - `), so
+ * without this exclusion they would be treated as evidence of a populated
+ * workbook and trap a brand-new user on the normal dashboard (Overview)
+ * instead of routing to Welcome / Setup.
+ *
+ * SYS - Meta in particular is an identity marker stamped during provisioning
+ * (ensureWorkbookIdentityMarkers_), not user app data, so it must never on
+ * its own count as a populated workbook. The literal name is used here
+ * rather than the SYS_META_SHEET_NAME_ constant because this is a top-level
+ * var initialized at load time and that constant lives in another file
+ * (central_provisioning.js); referencing it here would create a cross-file
+ * load-order dependency.
  *
  * Every other INPUT-/SYS-/OUT-/LOG- sheet (Cash Flow, Bank Accounts,
  * Debts, Bills, Upcoming Expenses, snapshots, logs, ...) still counts as
  * real user data, so a genuine bound/production workbook continues to be
  * classified as populated and lands on Overview.
  */
-var STARTUP_IGNORED_APP_SHEET_NAMES_ = ['INPUT - Settings'];
+var STARTUP_IGNORED_APP_SHEET_NAMES_ = ['INPUT - Settings', 'SYS - Meta'];
 
 /**
  * Returns true when the spreadsheet contains any sheet whose name starts
