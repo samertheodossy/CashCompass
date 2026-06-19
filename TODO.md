@@ -393,6 +393,36 @@ Authoritative copy: `PROJECT_CONTEXT.md → Future Enhancement — Weekly/Biweek
 
 ---
 
+## Future Feature — Income Expected / Due Workflow
+
+**Status:** documented, **not implemented** (authoritative copy; high-level mirrors in `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md`).
+
+**Need.** Income should support **expected recurring income**, symmetrical to **Bills Due**. Today income exists mostly as Cash Flow rows / sources, so users have no clear view of what income is *expected*, *when it is due*, and *whether it has been recorded yet*.
+
+**Desired behavior.**
+
+- Track income sources with **frequency / date rules** (same recurrence vocabulary as bills: Weekly / Biweekly / Monthly / Quarterly / Yearly, Due Day anchor — reuse the Bills Due expansion logic where possible).
+- Show **expected income items** on the dashboard, similar to expenses / Bills Due (Overdue / Next 7 days style sections).
+- Let the user **record / confirm** income when received, writing the **actual amount** to Cash Flow (Income row for that month).
+- Support recurring income: paycheck, rent, reimbursements, child support, transfers, investment distributions, etc.
+- Handle **variable income** where expected ≠ actual (mirror the Bills `Varies` treatment — show expected, record actual).
+- **Avoid double-counting:** if income already exists in Cash Flow for that month/date, suppress or reconcile the expected item (mirror the Bills Due handled-cell + `bill_skip`/dedupe suppression model, e.g. an `income_received` dedupe key per source + occurrence date).
+
+**Possible UI (Cash Flow → Income).**
+
+- **Manage Income Sources** (fits the `[Primary View] [Manage]` Manage Pattern Rollout — see above; this is the same "Income Sources — Medium" candidate, expanded).
+- **Income Expected / Due** (the new dashboard surface, mirroring Bills Due).
+- **Record Income** (confirm received → write actual to Cash Flow + Activity Log).
+- **Skip / Not received / Delay** — optional, later.
+
+**Areas likely affected (for later investigation, not commitments).** Income source schema (`INPUT - Income` / equivalent — may need frequency / Due Day / Varies columns + provisioning/header-repair review), `dashboard_data.js` recurrence expansion (reuse Bills Due occurrence logic), a new Income Due generation path, Cash Flow income write + double-count suppression, Activity Log (`income_received` / dedupe), and the Income section UI.
+
+**Priority:** **Medium-high**, sequenced **after current Central stabilization** — it improves day-to-day cash planning and makes income symmetrical with bills/expenses.
+
+**Out of scope (for now):** bank import automation, payroll integrations, advanced forecasting.
+
+---
+
 ## Future Enhancements (Post-Core)
 
 Forward-looking product ideas captured in prioritized tiers so the long-term direction is durable. **None of this is on the current roadmap** and all of it is **lower priority than the in-flight Bank Import completion and the ongoing Bills / planner / Cash Flow accuracy work.** Pulling any item up requires an explicit product decision under `WORKING_RULES.md → Current phase`.
@@ -533,6 +563,22 @@ TO DO and issues I see in the testing
 ---
 
 ## Open items (not done)
+
+### Open — Central debounce trigger noise (`debouncePlannerEmailRun`) — fix reverted, revisit
+
+**Status:** **OPEN.** Investigated + a fix was implemented and then **reverted** (2026-06-19) — code is back to the committed baseline; **we will get back to it.** No fix is currently in place.
+
+**Symptom.** The CashCompass Central App **Executions** page accumulates many `debouncePlannerEmailRun` (Time-Driven) runs that **fail instantly (0s)**; some complete; "View Trigger" shows **No results** for the developer.
+
+**Root cause (confirmed from code).** The planner-email debounce was designed for the **bound, single-user** model. In Central App mode the web app runs `executeAs USER_ACCESSING`, and `getDashboardSnapshot()` (`dashboard_data.js`) calls `ensureDebouncePlannerTrigger_()` (`debounce_planner.js`) **unconditionally**. So every beta user who loads the dashboard mints their **own** 5-minute `debouncePlannerEmailRun` trigger on the Central project. Those per-user triggers (a) fail instantly with an authorization error when the owner hasn't authorized the current Central scope set, and (b) read debounce state from `PropertiesService.getDocumentProperties()`, which is **null in a standalone project** — so the feature is **inert in Central** regardless. `ScriptApp.getProjectTriggers()` only returns the caller's own triggers, so the existence check never dedupes across users (duplicates accumulate, one per user).
+
+**Why a code change alone won't quiet the live noise.** The noise comes from triggers **already created** on the Central project. Removing/disabling the create path stops *new* triggers but does not delete existing ones — those only drain when each owning user reloads the app (after a fix is deployed), via manual deletion in the **Triggers UI** (developer's own only — you can't delete other users' triggers), or via Apps Script **auto-disabling** triggers that keep failing.
+
+**Reverted fix (for reference when we resume).** The implemented-then-reverted approach was: in `ensureDebouncePlannerTrigger_()`, when `isCentralModeEnabled_()` is true, **delete the caller's own** `debouncePlannerEmailRun` triggers and **do not create** a new one (self-healing as each user returns); plus a null-guard in `debouncePlannerEmailRun()` so any still-firing standalone trigger no-ops cleanly. Bound-mode behavior unchanged.
+
+**Out of scope (deferred to a real Central design later):** a proper Central planner-email debounce — e.g. `ScriptProperties` (or per-user-email) state instead of `DocumentProperties`, and/or a single owner-owned fan-out timer that iterates mapped users — rather than per-user triggers.
+
+**Next time:** decide between (a) re-applying the reverted self-heal fix + deploying, then deleting/draining existing triggers, or (b) removing the `ensureDebouncePlannerTrigger_()` call from the snapshot path entirely in Central and shipping the real Central debounce design. Either way, plan a one-time cleanup of existing triggers (Triggers UI for owned ones; user revisits / auto-disable for the rest). **Affects family beta:** no data impact; the debounced batched email simply does not function in Central today, and execution-log noise scales with beta-user count.
 
 ### Easy wins (quick fixes)
 

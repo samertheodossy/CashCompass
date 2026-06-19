@@ -161,6 +161,12 @@ High-level mirror; **authoritative copy lives in `TODO.md → Future UI Standard
 
 **Priority:** sequenced after 6F Recovery Validation closes; Bank Accounts first. UX enhancement, not a blocker.
 
+## Future Feature — Income Expected / Due Workflow
+
+High-level mirror; **authoritative copy lives in `TODO.md → Future Feature — Income Expected / Due Workflow`** (backlog entry in `ENHANCEMENTS.md`). **Status: documented, not implemented. Priority: Medium-high, after current Central stabilization.**
+
+Make income **symmetrical with Bills Due**: track income sources with frequency/date rules, surface **expected income** on the dashboard (Overdue / Next-7-days style), let the user **record/confirm** receipt (writing the *actual* amount to Cash Flow), and handle **variable income** (expected ≠ actual). Must **avoid double-counting** when income already exists in Cash Flow for that month/date — reuse the Bills Due handled-cell + dedupe-suppression model. Reuses the Bills Due recurrence-expansion logic and the `[Primary View] [Manage]` Manage Pattern (absorbs the "Income Sources — Medium" Manage candidate). Possible UI under Cash Flow → Income: **Manage Income Sources**, **Income Expected / Due**, **Record Income**, and later **Skip / Not received / Delay**. **Out of scope for now:** bank import automation, payroll integrations, advanced forecasting.
+
 ## Current phase — Central App live + Family Beta readiness
 
 The app has moved beyond the V1.2 "controlled improvement" framing. **The Central App architecture is live**, and the active work is hardening it toward a Family Beta. Two foundations carry forward from earlier phases (V1 trust baseline, V1.1 retirement profile integration) and remain true, but they are no longer the headline.
