@@ -564,6 +564,18 @@ TO DO and issues I see in the testing
 
 ## Open items (not done)
 
+### Open — Autopay: should it create a missing exact-text Cash Flow Expense row? (investigate, higher risk)
+
+**Status:** **OPEN — investigate.** Separate, higher-risk follow-on to the **weekly/biweekly manual-Pay suppression fix (2026-06-23, Fix B)**, which is implemented.
+
+**Background.** Autopay write-back in `getInputBillsDueRows_` (`dashboard_data.js`) only fires when the bill already has a matching **exact-text Cash Flow Expense row** (`hasCashFlowRow`). For a freshly-added autopay bill — or one whose payee text hasn't been mirrored onto the Cash Flow grid — autopay silently does nothing and the occurrence just shows as a due card until paid manually. This is the most likely reason the Robinhood 2026-06-18 occurrence did not auto-record.
+
+**Question.** Should autopay **create** the missing Expense row (the way Quick Add does) for an eligible autopay bill (`Autopay = Yes`, `Varies ≠ Yes`, `Active`, amount > 0, due has passed) and then write into it, instead of skipping?
+
+**Why it's higher risk / separate:** creating Cash Flow rows is a write/structural change (vs. the suppression fix, which only reads/marks). It must respect row insertion ordering, Flow Source seeding, formatting, the monthly vs. weekly accumulation paths, and must not fabricate rows from payee-text drift (could create a duplicate of an existing variant row). Also intersects the lazy-autopay timing (no scheduled job) and the due-today (`<` strict) edge.
+
+**Out of scope of the 2026-06-23 fix; do not bundle.** Decide separately whether the create-row behavior is worth the risk or whether the current "show as card until manually paid" is acceptable for unmirrored autopay bills.
+
 ### Open — Central debounce trigger noise (`debouncePlannerEmailRun`) — fix reverted, revisit
 
 **Status:** **OPEN.** Investigated + a fix was implemented and then **reverted** (2026-06-19) — code is back to the committed baseline; **we will get back to it.** No fix is currently in place.

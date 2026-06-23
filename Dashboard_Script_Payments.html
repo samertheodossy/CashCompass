@@ -161,6 +161,10 @@ function loadPaymentSection() {
   // tab load so a later manual Quick Add never inherits it.
   window.__pendingQuickAddFlowSource = '';
   window.__pendingUpcomingPaymentId = '';
+  // Bills Due → Pay occurrence marker only makes sense for the single save that
+  // immediately follows a Pay click. Clear it on a cold tab load so a later
+  // manual Quick Add never records a stale bill_paid marker.
+  window.__pendingBillOccurrencePaid = null;
   // NOTE: do NOT clear window.__pendingQuickAddPayee here.
   // prefillQuickPayment() sets that variable AFTER calling
   // showTab('payments') (which triggers this function), so an entry-time
@@ -331,6 +335,12 @@ function savePayment() {
   // a late retry of this handler can't apply the payment twice.
   var pendingUpcomingId = window.__pendingUpcomingPaymentId || '';
   window.__pendingUpcomingPaymentId = '';
+  // Bills Due → Pay: capture then immediately clear the per-occurrence marker
+  // context (set by payBillFromDashboard for weekly/biweekly cards) so a late
+  // retry can't double-record it. Recorded after the save so the exact
+  // occurrence is suppressed on the next Bills Due load.
+  var pendingBillOccurrence = window.__pendingBillOccurrencePaid || null;
+  window.__pendingBillOccurrencePaid = null;
 
   // Show plain-text "Saving…" feedback the user will always see even if a
   // stale deploy or style override hides the richer spinner markup. The
@@ -414,6 +424,30 @@ function savePayment() {
             runDebtPlannerAfterQuickPayment_();
           })
           .applyPaymentToUpcomingExpense(pendingUpcomingId, numericAmount);
+      } else if (pendingBillOccurrence) {
+        // Bills Due → Pay on a weekly/biweekly occurrence: record the
+        // per-occurrence bill_paid marker BEFORE refreshing Bills Due so the
+        // reload (loadDashboardActionSections) sees the marker and suppresses
+        // this exact occurrence. The Cash Flow row is already saved at this
+        // point, so a marker failure is non-fatal — surface it but still
+        // refresh the board.
+        google.script.run
+          .withSuccessHandler(function() {
+            refreshSnapshot();
+            loadUpcomingSection();
+            loadDashboardActionSections();
+            runDebtPlannerAfterQuickPayment_();
+          })
+          .withFailureHandler(function(err) {
+            setStatus('pay_status',
+              'Payment saved, but marking the occurrence paid failed: ' + (err.message || String(err)),
+              true);
+            refreshSnapshot();
+            loadUpcomingSection();
+            loadDashboardActionSections();
+            runDebtPlannerAfterQuickPayment_();
+          })
+          .markDashboardBillOccurrencePaid(pendingBillOccurrence);
       } else {
         refreshSnapshot();
         loadUpcomingSection();

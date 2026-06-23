@@ -253,6 +253,24 @@ function payBillFromDashboard(billKey) {
     return;
   }
 
+  // Weekly/biweekly expanded occurrences share a single monthly Cash Flow
+  // cell, so paying one occurrence can't be detected from the cell value.
+  // Stash this exact occurrence (payee + dueDate + month + amount) so the
+  // Quick Add save records a per-occurrence bill_paid marker, which Bills Due
+  // uses to suppress this occurrence on reload (mirrors the __pending* bridges
+  // used for Flow Source and Upcoming). Monthly bills omit isExpandedRecurrence
+  // and keep their existing cell-based handled behavior — nothing stashed.
+  if (bill.isExpandedRecurrence && bill.dueDate) {
+    window.__pendingBillOccurrencePaid = {
+      payee: bill.payee || bill.name || '',
+      dueDate: bill.dueDate || '',
+      monthHeader: bill.monthHeader || '',
+      amount: bill.amount || 0
+    };
+  } else {
+    window.__pendingBillOccurrencePaid = null;
+  }
+
   // Carry the bill's Payment Source (from INPUT - Bills or the inferred
   // debt default) through to Quick Add so a newly created Cash Flow row
   // has its Flow Source column seeded correctly. Blank is tolerated

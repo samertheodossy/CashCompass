@@ -466,7 +466,7 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   var dir = String(direction || '').toLowerCase();
   if (et === 'quick_pay' && dir === 'income') return 'Income';
   if (et === 'quick_pay' && dir === 'expense') return 'Bill';
-  if (et === 'bill_skip' || et === 'bill_autopay') return 'Bill';
+  if (et === 'bill_skip' || et === 'bill_autopay' || et === 'bill_paid') return 'Bill';
   return 'Other';
 }
 
@@ -501,6 +501,10 @@ function activityLogActionLabel_(eventType, detailsJson) {
     case 'bill_deactivate': return 'Tracking stopped';
     case 'bill_skip': return 'Bill skipped';
     case 'bill_autopay': return 'Bill autopay';
+    // Per-occurrence "handled by manual pay" marker for weekly/biweekly bills.
+    // The money lives on the partner quick_pay row; this row only records that
+    // the specific occurrence was paid so Bills Due suppresses it (Amount "—").
+    case 'bill_paid': return 'Bill paid';
     case 'bank_account_add': return 'Account added';
     // bank_account_update is non-monetary (Amount renders "—") because the
     // user is recording a balance snapshot, not a money movement. The
@@ -1094,6 +1098,12 @@ function activityLogIsNonMonetaryEvent_(eventType) {
   // both as "—" prevents double-counting the payment dollars.
   return (
     et === 'bill_deactivate' ||
+    // bill_paid is the non-monetary partner of a quick_pay money-movement
+    // row (Bills Due → Pay on a weekly/biweekly occurrence). The dollars are
+    // recorded on the quick_pay row; this marker only flags the occurrence as
+    // handled so Bills Due suppresses it. Rendering Amount as "—" prevents
+    // double-counting the same payment.
+    et === 'bill_paid' ||
     // bill_update is non-monetary — a field edit on a tracked bill
     // (Payee / Default Amount / Due Day / etc.) doesn't move money.
     // The action label inlines the field + new value so the

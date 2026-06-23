@@ -2108,6 +2108,22 @@ function getInputBillsDueRows_(ss, today, tz) {
           continue;
         }
 
+        // Honor an explicit per-occurrence manual Pay. The Bills Due → Pay flow
+        // records 'bill_paid::' + buildDashboardBillPaidKey_(payee, <yyyy-MM-dd>)
+        // for the exact occurrence after the Quick Add save. Unlike the monthly
+        // branch, the weekly branch cannot infer "paid" from the shared month
+        // cell (it holds a running sum across occurrences), so this per-occurrence
+        // marker is the handled signal. A manually-paid occurrence must not show
+        // a card and must not be autopaid/accumulated. It is intentionally NOT
+        // counted toward monthApplied: the manual amount already sits in the cell
+        // but it is not an autopay-applied amount, so a later autopay occurrence
+        // correctly sees the cell as a manual (unexpected) value and backs off
+        // rather than auto-adding on top of it.
+        const occPaidKey = 'bill_paid::' + buildDashboardBillPaidKey_(payee, occDueIso);
+        if (activityLogDedupeKeyExists_(ss, occPaidKey)) {
+          continue;
+        }
+
         const dueHasPassed = cand.dueDate.getTime() < todayOnly.getTime();
         const canAutopay = autopay === 'yes' && varies !== 'yes';
 
@@ -2181,7 +2197,13 @@ function getInputBillsDueRows_(ss, today, tz) {
           monthHeader: cand.monthHeader,
           notes: notes,
           inputBillsRow: r + 1,
-          hasCashFlowRow: hasCashFlowRow
+          hasCashFlowRow: hasCashFlowRow,
+          // Tells the Bills Due → Pay client flow to record a per-occurrence
+          // bill_paid marker after the manual Quick Add save, so this exact
+          // occurrence is suppressed on reload (the shared month cell can't
+          // identify which weekly occurrence was paid). Monthly cards omit this
+          // flag and keep their existing cell-based handled behavior.
+          isExpandedRecurrence: true
         });
         // No break: weekly/biweekly surface one card per occurrence.
       }
@@ -2570,6 +2592,70 @@ function normalizeBillName_(name) {
 
 function buildDashboardBillSkipKey_(payee, dueDate) {
   return 'dashboard_bill_skip::' + String(payee || '').trim() + '::' + String(dueDate || '').trim();
+}
+
+/**
+ * Per-occurrence "handled by manual pay" key for weekly/biweekly bills.
+ * Mirrors buildDashboardBillSkipKey_ (payee + occurrence dueDate) so the
+ * expanded-recurrence branch of getInputBillsDueRows_ can suppress an
+ * occurrence the user paid manually from the Bills Due card, the same way it
+ * already honors a per-occurrence Skip. We deliberately key on payee + dueDate
+ * (not the shared monthly Cash Flow cell) because several weekly occurrences
+ * share one month cell and the cell holds a running sum, so it cannot identify
+ * which specific occurrence was paid.
+ */
+function buildDashboardBillPaidKey_(payee, dueDate) {
+  return 'dashboard_bill_paid::' + String(payee || '').trim() + '::' + String(dueDate || '').trim();
+}
+
+/**
+ * Records a per-occurrence "manually paid" marker for a weekly/biweekly Bills
+ * Due occurrence. Called from the Bills Due → Pay client flow after the Quick
+ * Add save completes, so the exact occurrence (payee + dueDate) is suppressed
+ * on the next Bills Due load and is never autopaid afterward.
+ *
+ * The dollar movement is already recorded on the Quick Add `quick_pay` row;
+ * this is a non-monetary handled marker (Amount renders "—"). appendActivityLog_
+ * dedupe on the same key means repeated Pay clicks won't create duplicate rows.
+ *
+ * Uses SpreadsheetApp.getActiveSpreadsheet() to match the proven skip path
+ * (skipDashboardBill) exactly, so suppression behaves identically.
+ *
+ * @param {{ payee: string, dueDate: string, monthHeader?: string, amount?: number }} payload
+ * @returns {{ ok: boolean, message?: string }}
+ */
+function markDashboardBillOccurrencePaid(payload) {
+  payload = payload || {};
+  var payee = String(payload.payee || '').trim();
+  var dueDate = String(payload.dueDate || '').trim();
+  if (!payee || !dueDate) {
+    return { ok: false, message: 'Missing payee or due date for paid marker.' };
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) {
+    return { ok: false, message: 'No active workbook for paid marker.' };
+  }
+
+  var monthHeader = String(payload.monthHeader || '').trim();
+  var amount = round2_(Math.abs(toNumber_(payload.amount)));
+  var paidDedupeKey = 'bill_paid::' + buildDashboardBillPaidKey_(payee, dueDate);
+
+  appendActivityLog_(ss, {
+    eventType: 'bill_paid',
+    entryDate: dueDate,
+    amount: 0,
+    direction: 'paid',
+    payee: payee,
+    category: '',
+    accountSource: '',
+    cashFlowSheet: '',
+    cashFlowMonth: monthHeader,
+    dedupeKey: paidDedupeKey,
+    details: JSON.stringify({ source: 'bills_due_pay', occurrence: true, dueDate: dueDate, amount: amount })
+  });
+
+  return { ok: true, message: 'Occurrence marked paid.' };
 }
 
 function buildDashboardRecurringSkipKey_(payee, year, monthHeader) {
