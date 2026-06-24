@@ -1034,6 +1034,26 @@ function addDebtFromDashboard(payload) {
     'dueDay'
   ]);
 
+  // Ensure-before-validate guard. Idempotent no-op on populated workbooks;
+  // on fresh workbooks it seeds the canonical INPUT - Debts structure that
+  // validateNewDebtAccountName_ (which strict-reads INPUT - Debts for the
+  // duplicate-name check) plus the header read / writes further below all
+  // depend on. It MUST run BEFORE validateNewDebtAccountName_, because that
+  // validator would otherwise throw "Missing sheet (after retry+flush):
+  // INPUT - Debts" on a brand-new (e.g. Central-provisioned) workbook reached
+  // via the main-menu Add path before any Setup step created the sheet.
+  // Mirrors the ensure-before-validate ordering in addBankAccountFromDashboard
+  // / addInvestmentAccountFromDashboard / addHouseFromDashboard.
+  try {
+    ensureOnboardingDebtsSheetFromDashboard('normal');
+  } catch (ensureErr) {
+    throw new Error(
+      "Couldn't prepare debts: " +
+      (ensureErr && ensureErr.message ? ensureErr.message : ensureErr)
+    );
+  }
+  try { SpreadsheetApp.flush(); } catch (_flushErr) { /* best-effort */ }
+
   const accountName = validateNewDebtAccountName_(payload.accountName);
   const typeStr = String(payload.type || '').trim();
   if (!typeStr) throw new Error('Type is required.');
@@ -1086,21 +1106,6 @@ function addDebtFromDashboard(payload) {
   // value. For non-revolving accounts (Loan / HELOC) users enter 0 / 0
   // and Credit Left lands at 0 accordingly.
   const creditLeft = round2_(creditLimit - balance);
-
-  // Ensure-before-write guard. Idempotent no-op on populated workbooks;
-  // on fresh workbooks it seeds the canonical INPUT - Debts structure
-  // that getDebtsHeaderMap_ / ensureDebtsActiveColumn_ expect a few
-  // lines below. Mirrors the Bank Accounts pattern in
-  // addBankAccountFromDashboard → bank_accounts.js.
-  try {
-    ensureOnboardingDebtsSheetFromDashboard('normal');
-  } catch (ensureErr) {
-    throw new Error(
-      "Couldn't prepare debts: " +
-      (ensureErr && ensureErr.message ? ensureErr.message : ensureErr)
-    );
-  }
-  try { SpreadsheetApp.flush(); } catch (_flushErr) { /* best-effort */ }
 
   const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'DEBTS');

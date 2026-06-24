@@ -2618,8 +2618,13 @@ function buildDashboardBillPaidKey_(payee, dueDate) {
  * this is a non-monetary handled marker (Amount renders "—"). appendActivityLog_
  * dedupe on the same key means repeated Pay clicks won't create duplicate rows.
  *
- * Uses SpreadsheetApp.getActiveSpreadsheet() to match the proven skip path
- * (skipDashboardBill) exactly, so suppression behaves identically.
+ * Resolves the workbook through getUserSpreadsheet_() (the Central seam),
+ * which returns the provisioned user workbook in Central App mode and
+ * getActiveSpreadsheet() in bound mode (unchanged bound behavior). A direct
+ * getActiveSpreadsheet() returns null in a standalone Central deployment,
+ * which silently no-op'd this marker there and left weekly/biweekly paid
+ * occurrences un-suppressed; resolving via the seam restores suppression in
+ * Central while behaving identically in bound mode (same as skipDashboardBill).
  *
  * @param {{ payee: string, dueDate: string, monthHeader?: string, amount?: number }} payload
  * @returns {{ ok: boolean, message?: string }}
@@ -2632,7 +2637,7 @@ function markDashboardBillOccurrencePaid(payload) {
     return { ok: false, message: 'Missing payee or due date for paid marker.' };
   }
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
   if (!ss) {
     return { ok: false, message: 'No active workbook for paid marker.' };
   }
@@ -2708,7 +2713,17 @@ function copyNearestAmountFormatInRow_(sheet, row, targetCol) {
 }
 
 function skipDashboardBill(skipKey) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  // Central-safe workbook resolution. getUserSpreadsheet_() returns the
+  // provisioned user workbook in Central App mode and getActiveSpreadsheet()
+  // in bound mode (unchanged bound behavior). A direct getActiveSpreadsheet()
+  // here returns null in a standalone Central deployment, which previously
+  // propagated down to ss.getSheetByName(...) and threw
+  // "Cannot read properties of null (reading 'getSheetByName')" on every
+  // Bills Due Skip (debt/regular/weekly/biweekly/monthly).
+  const ss = getUserSpreadsheet_();
+  if (!ss) {
+    throw new Error('Could not resolve workbook for bill skip.');
+  }
   const info = resolveDashboardBillSkipTarget_(ss, skipKey);
 
   if (!info || !info.sheet || !info.row || !info.col) {
