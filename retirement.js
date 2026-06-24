@@ -558,12 +558,22 @@ function readRetirementProfileDerivedAges_() {
     for (let i = 0; i < values.length; i++) {
       const key = String(values[i][0] == null ? '' : values[i][0]).trim();
       if (!key) continue;
-      // IMPORTANT: do NOT stringify before passing in. Google Sheets
-      // auto-parses values like "1972-10-15" into real Date objects,
-      // and `String(dateObj)` would produce a locale timestamp that no
-      // longer matches our canonical parser. computeAgeFromDob_ accepts
-      // Date objects, YYYY-MM-DD strings, and date-like strings.
-      const raw = values[i][1];
+      // When Sheets auto-parsed the cell into a real Date, decode it back to
+      // a calendar date using the WORKBOOK timezone (the one getValue() used
+      // to interpret the date cell) before handing it to computeAgeFromDob_.
+      // computeAgeFromDob_ otherwise decomposes a Date with local
+      // getFullYear()/getDate(), which evaluate in the SCRIPT project timezone
+      // — and in Central App mode the standalone script timezone can differ
+      // from the provisioned workbook timezone, shifting the day by one and
+      // throwing the derived age off near a birthday. In bound mode the
+      // workbook timezone matches today's behavior, so this is unchanged.
+      // Non-Date cells (canonical / legacy strings) pass through untouched.
+      let raw = values[i][1];
+      if (raw instanceof Date) {
+        raw = isNaN(raw.getTime())
+          ? ''
+          : Utilities.formatDate(raw, ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+      }
 
       if (key === 'Date of Birth') {
         out.derivedCurrentAge = computeAgeFromDob_(raw);

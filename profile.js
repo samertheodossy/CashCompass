@@ -229,23 +229,42 @@ function readAllSettingsMap_(ss) {
  * strings so downstream readers can distinguish "intentionally
  * cleared" from "never set".
  */
-function writeSetting_(sheet, key, value) {
+function writeSetting_(sheet, key, value, asPlainText) {
   var k = String(key || '').trim();
   if (!k) return false;
   var v = value == null ? '' : String(value);
 
+  var targetRow = -1;
   var last = sheet.getLastRow();
   if (last >= 2) {
     var existing = sheet.getRange(2, 1, last - 1, 2).getValues();
     for (var i = 0; i < existing.length; i++) {
       var row = String(existing[i][0] || '').trim();
       if (row === k) {
-        sheet.getRange(i + 2, 2).setValue(v);
-        return true;
+        targetRow = i + 2;
+        break;
       }
     }
   }
-  sheet.appendRow([k, v]);
+
+  if (targetRow === -1) {
+    sheet.appendRow([k, '']);
+    targetRow = sheet.getLastRow();
+  }
+
+  var valueCell = sheet.getRange(targetRow, 2);
+  // Date-only fields (DOB) pass asPlainText=true so we force the value cell to
+  // plain-text format BEFORE writing. Otherwise Google Sheets auto-coerces a
+  // YYYY-MM-DD string into a real Date cell, which on readback (decoded in the
+  // workbook timezone, then decomposed in the script timezone) can shift the
+  // day by one in Central App mode. Forcing text keeps the stored value an
+  // exact date-only string and self-heals a previously-coerced cell on the
+  // next save. Setting the format also repairs cells that Sheets already
+  // turned into Dates. Other (free-text) settings are unaffected.
+  if (asPlainText) {
+    try { valueCell.setNumberFormat('@'); } catch (_fmtErr) { /* best-effort */ }
+  }
+  valueCell.setValue(v);
   return true;
 }
 
@@ -282,10 +301,26 @@ function readProfileDobRawValues_(ss) {
     for (var i = 0; i < values.length; i++) {
       var key = String(values[i][0] == null ? '' : values[i][0]).trim();
       if (!key) continue;
-      // IMPORTANT: do NOT stringify here — we need the raw Date object
-      // when Sheets auto-parsed the cell. The normalizer accepts Date,
-      // canonical YYYY-MM-DD, and other date-like strings.
+      // IMPORTANT: when Sheets auto-parsed the cell into a real Date, decode
+      // it back to a calendar date using the WORKBOOK's timezone — that is
+      // the timezone getValue() used to interpret the date cell. Decomposing
+      // the Date with local getFullYear()/getDate() (which the normalizer and
+      // computeAgeFromDob_ do) evaluates it in the SCRIPT project's timezone
+      // instead, and in Central App mode the standalone script timezone can
+      // differ from the provisioned workbook timezone, shifting the day by one
+      // (e.g. 2006-07-10 displayed as 2006-07-09). Converting here with
+      // ss.getSpreadsheetTimeZone() yields the exact stored calendar date, and
+      // in bound mode the workbook timezone is the same one used today, so
+      // behavior is unchanged. Non-Date cells (canonical strings / legacy
+      // locale strings) are passed through untouched for the normalizer.
       var raw = values[i][1];
+      if (raw instanceof Date) {
+        if (isNaN(raw.getTime())) {
+          raw = '';
+        } else {
+          raw = Utilities.formatDate(raw, ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+        }
+      }
       if (key === PROFILE_KEYS_.DOB) {
         out.dob = raw == null ? '' : raw;
       } else if (key === PROFILE_KEYS_.SPOUSE_DOB) {
@@ -433,12 +468,12 @@ function saveProfileSettings(profile) {
   writeSetting_(sheet, PROFILE_KEYS_.EMAIL, email);
   writeSetting_(sheet, PROFILE_KEYS_.PHONE, phone);
   writeSetting_(sheet, PROFILE_KEYS_.ADDRESS, address);
-  writeSetting_(sheet, PROFILE_KEYS_.DOB, dateOfBirth);
+  writeSetting_(sheet, PROFILE_KEYS_.DOB, dateOfBirth, true);
   writeSetting_(sheet, PROFILE_KEYS_.SPOUSE_NAME, spouseName);
   writeSetting_(sheet, PROFILE_KEYS_.SPOUSE_EMAIL, spouseEmail);
   writeSetting_(sheet, PROFILE_KEYS_.SPOUSE_PHONE, spousePhone);
   writeSetting_(sheet, PROFILE_KEYS_.SPOUSE_ADDRESS, spouseAddress);
-  writeSetting_(sheet, PROFILE_KEYS_.SPOUSE_DOB, spouseDateOfBirth);
+  writeSetting_(sheet, PROFILE_KEYS_.SPOUSE_DOB, spouseDateOfBirth, true);
 
   return {
     ok: true,
