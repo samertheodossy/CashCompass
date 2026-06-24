@@ -423,6 +423,52 @@ Authoritative copy: `PROJECT_CONTEXT.md → Future Enhancement — Weekly/Biweek
 
 ---
 
+## Future Feature — Money Plan (Income Allocation) Page
+
+**Status:** **Phase 1 dashboard card implemented** (10/70/20 summary card — in working tree, not yet committed); **Phase 2 Money Plan page = documented design direction, not implemented** (authoritative copy; high-level mirrors in `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md`). **Phase 2 implementation requires separate approval.**
+
+**Concept.** A simple "Money Plan" that shows users how their monthly income should be allocated and how their actuals compare. Default strategy is **10/70/20** — Save 10%, Living 70%, Debt Payoff 20%.
+
+### Phase 1 — Dashboard summary card *(implemented; pending commit)*
+
+A read-only dashboard card ("10/70/20 Plan") that reads the current month's income from Cash Flow and shows the Save / Living / Debt **targets** (income × 10% / 70% / 20%), with a calm "Add income to see your 10/70/20 plan." empty state. Server: `buildIncomeAllocation_(ss)` + `incomeAllocation` on the dashboard snapshot (`dashboard_data.js`); client: `renderIncomeAllocation` (`Dashboard_Script_Render.html`) + card markup (`Dashboard_Body.html`). Income basis: current calendar month's active Income, falling back to the most recent month with income. Read-only — no writes.
+
+### Decision (this direction)
+
+- Create a **dedicated top-level Money Plan page** (nav item: **Money Plan**), not an expanded dashboard panel.
+- Keep the dashboard 10/70/20 card as a **summary only** — Income, Save target, Living target, Debt target, Status, and an **"Open Money Plan"** button (`showPage('moneyPlan')`).
+- **Do not** expand detailed actuals directly on the dashboard.
+- The Money Plan page is **read-only and fully derived from existing data** — no new sheets, no writes, no auto-created transfers / payments / debt actions.
+
+### Phase 2 — Money Plan page (initial calculation model)
+
+- **Income** — same month basis as the dashboard allocation card (`buildIncomeAllocation_` / `listActiveIncomeMonthlyTotals_`).
+- **Plan (targets):** Save = income × 10% · Living = income × 70% · Debt = income × 20%.
+- **Debt actual** — Cash Flow Expense rows that match active debt accounts, **reusing the existing debt-attribution logic** where possible (`buildAnchorMonthCfPaidByDebtName_` + `expensePayeeMapFromRawRows_` in `rolling_debt_payoff.js` — normalized payee matching, alias maps, loan-merge groups).
+- **Living actual** — total Cash Flow expenses for the month **minus** debt actual.
+- **Savings actual (headline)** — **residual**: `income − living actual − debt actual`.
+  - **Do NOT** use investment-account movement as the headline savings number yet — market changes distort it. (An "estimated saved" secondary metric from investments / savings-account deltas may be considered later.)
+
+### Page should eventually show
+
+1. Current month **plan vs actual**.
+2. **Save / Living / Debt** cards (each with plan, actual, variance, progress).
+3. **Status badge:** on track / warning / off track.
+4. **Recommendations** (e.g. "add ~$X to the highest-APR debt to hit 20%" — reuse rolling-debt avalanche; "trim living to 70%"; "set aside $Y to reach 10% save").
+5. **Month history table** (trailing months, derived per month from Cash Flow).
+6. **Future strategy settings:** selectable allocation model — **10/70/20**, **50/30/20**, or **custom** (custom percentages are a later sub-phase; Phase 2 ships 10/70/20 only).
+
+### Architecture notes (for later investigation, not commitments)
+
+- New top-level page `page_moneyPlan` + a `.page-btn[data-page="moneyPlan"]` nav button + a `showPage` loader hook (mirrors `activity` / `onboarding`). One read-only RPC `getMoneyPlan(monthHeader?)` returning `{ monthHeader, income, plan{…}, actual{…}, status{…}, recommendations[], history[] }`.
+- Reuses: income scan (`dashboard_data.js`), debt attribution (`rolling_debt_payoff.js`), debt list (`readSheetAsObjects_(ss,'DEBTS')`), Cash Flow header/month parsing (`getCashFlowHeaderMap_`, `parseMonthHeader_`). Central-safe via `getUserSpreadsheet_()`; bound behavior unchanged.
+
+**Open design question (resolve before Phase 2 build):** confirm the **Savings actual** definition — residual is the agreed Phase 2 headline; explicit savings/transfer detection is a later enhancement (ties into the Income Expected / Due workflow).
+
+**Out of scope (for now):** custom-percentage editor, explicit savings/transfer detection, any writes, transfers, or debt/payment automation.
+
+---
+
 ## Future Enhancements (Post-Core)
 
 Forward-looking product ideas captured in prioritized tiers so the long-term direction is durable. **None of this is on the current roadmap** and all of it is **lower priority than the in-flight Bank Import completion and the ongoing Bills / planner / Cash Flow accuracy work.** Pulling any item up requires an explicit product decision under `WORKING_RULES.md → Current phase`.

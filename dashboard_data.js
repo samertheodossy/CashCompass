@@ -263,10 +263,177 @@ function buildDashboardSnapshot_() {
     recentChanges: attribution && attribution.items ? attribution.items : [],
     suggestedActions: suggestedActions,
     retirement: retirement,
+    incomeAllocation: buildIncomeAllocation_(ss),
     state: snapshotState,
     sourceUpdated: getDashboardSourceUpdatedMap_(),
     refreshedAt: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss')
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  10/70/20 Income Allocation (Phase 1 — dashboard visibility only)          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Build the "10/70/20 Plan" payload for the dashboard snapshot. Pure read —
+ * never writes transfers, payments, budget rows, or debt payments.
+ *
+ * Income definition (per product decision): the CURRENT calendar month's
+ * income summed from the current year's Cash Flow sheet (active Income rows).
+ * If the current month is still $0 (e.g. before payday), fall back to the most
+ * recent month that had positive active income — including a prior-year Cash
+ * Flow sheet when the current year has no income yet.
+ *
+ * Reuses the same Cash Flow scan primitives the Income screen uses
+ * (getCashFlowHeaderMap_ / parseMonthHeader_ / normalizeYesNo_), so the
+ * monthly figure matches what users already see there. Central-safe: operates
+ * on the passed user-scoped `ss`. Degrades to an empty (hasIncome=false)
+ * payload on any missing-sheet / read error so a blank workbook renders the
+ * calm "add income" state instead of a banner.
+ *
+ * @param {Spreadsheet} ss user-scoped workbook handle
+ * @returns {{ income:number, savingsTarget:number, livingTarget:number,
+ *             debtTarget:number, monthLabel:string, hasIncome:boolean }}
+ */
+function buildIncomeAllocation_(ss) {
+  var empty = {
+    income: 0,
+    savingsTarget: 0,
+    livingTarget: 0,
+    debtTarget: 0,
+    monthLabel: '',
+    hasIncome: false
+  };
+
+  try {
+    var today = new Date();
+    var curYear = today.getFullYear();
+    var curMonth = today.getMonth();
+
+    // Candidate sheets: the current year (for current-month income) plus, when
+    // different, the latest year that actually has income so the fallback can
+    // reach back into a prior year if the current year is still empty.
+    var sheets = [];
+    var curSheet = null;
+    try { curSheet = getCashFlowSheet_(ss, curYear); } catch (_curErr) { curSheet = null; }
+    if (curSheet) sheets.push(curSheet);
+
+    var latestYear = (typeof findLatestCashFlowYearWithIncome_ === 'function')
+      ? findLatestCashFlowYearWithIncome_(ss)
+      : null;
+    if (latestYear != null && latestYear !== curYear) {
+      try {
+        var latestSheet = getCashFlowSheet_(ss, latestYear);
+        if (latestSheet) sheets.push(latestSheet);
+      } catch (_latestErr) { /* ignore */ }
+    }
+
+    if (!sheets.length) return empty;
+
+    // 1) Preferred: the current calendar month's income.
+    if (curSheet) {
+      var curMonths = listActiveIncomeMonthlyTotals_(curSheet);
+      for (var i = 0; i < curMonths.length; i++) {
+        var cm = curMonths[i];
+        if (
+          cm.total > 0 &&
+          cm.date.getFullYear() === curYear &&
+          cm.date.getMonth() === curMonth
+        ) {
+          return finalizeIncomeAllocation_(cm.total, cm.label);
+        }
+      }
+    }
+
+    // 2) Fallback: most recent month (by month date) with positive active
+    //    income across the candidate sheets.
+    var best = null;
+    for (var s = 0; s < sheets.length; s++) {
+      var months = listActiveIncomeMonthlyTotals_(sheets[s]);
+      for (var j = 0; j < months.length; j++) {
+        var m = months[j];
+        if (m.total > 0 && (!best || m.date.getTime() > best.date.getTime())) {
+          best = m;
+        }
+      }
+    }
+    if (best) return finalizeIncomeAllocation_(best.total, best.label);
+
+    return empty;
+  } catch (_err) {
+    return empty;
+  }
+}
+
+/**
+ * Derive the four 10/70/20 figures from a monthly income value.
+ */
+function finalizeIncomeAllocation_(income, monthLabel) {
+  var inc = round2_(income);
+  return {
+    income: inc,
+    savingsTarget: round2_(inc * 0.10),
+    livingTarget: round2_(inc * 0.70),
+    debtTarget: round2_(inc * 0.20),
+    monthLabel: monthLabel || '',
+    hasIncome: inc > 0
+  };
+}
+
+/**
+ * Return per-month combined totals of ACTIVE Income rows for one Cash Flow
+ * sheet. Mirrors the active-Income scan in analyzeIncomeGroupsInSheet_
+ * (income_sources.js) but keyed by month column instead of payee group.
+ *
+ * @returns {Array<{ col:number, label:string, date:Date, total:number }>}
+ */
+function listActiveIncomeMonthlyTotals_(sheet) {
+  var out = [];
+  if (!sheet) return out;
+
+  var headerMap;
+  try { headerMap = getCashFlowHeaderMap_(sheet); } catch (_e) { return out; }
+
+  var display = sheet.getDataRange().getDisplayValues();
+  if (!display || display.length < 2) return out;
+
+  var headers = display[0] || [];
+  var monthCols = [];
+  for (var c = 0; c < headers.length; c++) {
+    var d = parseMonthHeader_(headers[c]);
+    if (d) monthCols.push({ col: c, label: String(headers[c] || '').trim(), date: d });
+  }
+  if (!monthCols.length) return out;
+
+  var typeCol = headerMap.typeColZero;
+  var activeCol = headerMap.activeColZero;
+
+  var totals = [];
+  for (var t0 = 0; t0 < monthCols.length; t0++) totals.push(0);
+
+  for (var r = 1; r < display.length; r++) {
+    var row = display[r] || [];
+    var typeVal = String(row[typeCol] || '').trim().toLowerCase();
+    if (typeVal !== 'income') continue;
+    if (activeCol !== -1) {
+      var rawActive = String(row[activeCol] || '').trim();
+      if (rawActive && normalizeYesNo_(rawActive) === 'no') continue;
+    }
+    for (var mi = 0; mi < monthCols.length; mi++) {
+      var val = toNumber_(row[monthCols[mi].col]);
+      if (isFinite(val)) totals[mi] += val;
+    }
+  }
+
+  for (var k = 0; k < monthCols.length; k++) {
+    out.push({
+      col: monthCols[k].col,
+      label: monthCols[k].label,
+      date: monthCols[k].date,
+      total: round2_(totals[k])
+    });
+  }
+  return out;
 }
 
 function getLatestHistorySnapshots_(count) {

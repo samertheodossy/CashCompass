@@ -725,6 +725,39 @@ function renderWeeklyAttribution(attribution) {
       .join('');
 }
 
+function renderIncomeAllocation(alloc) {
+  var body = document.getElementById('incomeAlloc_body');
+  var empty = document.getElementById('incomeAlloc_empty');
+  var hasIncome = !!(alloc && alloc.hasIncome);
+
+  if (body) body.hidden = !hasIncome;
+  if (empty) empty.hidden = hasIncome;
+
+  if (!hasIncome) {
+    ['incomeAlloc_income', 'incomeAlloc_save', 'incomeAlloc_living', 'incomeAlloc_debt'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = '—';
+    });
+    var monthEmpty = document.getElementById('incomeAlloc_month');
+    if (monthEmpty) monthEmpty.textContent = '';
+    return;
+  }
+
+  var setTxt = function(id, value) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+  setTxt('incomeAlloc_income', fmtCurrency(alloc.income));
+  setTxt('incomeAlloc_save', fmtCurrency(alloc.savingsTarget));
+  setTxt('incomeAlloc_living', fmtCurrency(alloc.livingTarget));
+  setTxt('incomeAlloc_debt', fmtCurrency(alloc.debtTarget));
+
+  var monthEl = document.getElementById('incomeAlloc_month');
+  if (monthEl) {
+    monthEl.textContent = alloc.monthLabel ? ('Based on ' + alloc.monthLabel + ' income') : '';
+  }
+}
+
 function renderBufferRunway(bufferRunway) {
   const label = document.getElementById('runway_label');
   const detail = document.getElementById('runway_detail');
@@ -860,6 +893,7 @@ function applySnapshot(snapshot) {
   renderHealth(snapshot.health || null);
   renderWeeklyAttribution(snapshot.attribution || null);
   renderBufferRunway(snapshot.bufferRunway || null);
+  renderIncomeAllocation(snapshot.incomeAllocation || null);
   renderActions(snapshot.suggestedActions || [], snapshot.state);
   renderRetirementSummary(snapshot.retirement || null);
 
