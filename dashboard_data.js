@@ -1601,6 +1601,15 @@ function getRecurringBillsWithoutDueDateForDashboard() {
   // Source") between them on the sheet does not silently mis-align reads.
   const currentHeaderMap = getCashFlowHeaderMap_(currentSheet);
 
+  // Zero-based indices of every month column on the current-year sheet
+  // (e.g. "Jan-26" … "Dec-26"), used by the recurrence-evidence gate below.
+  // Matches the exact header shape produced by monthHeaderFromYearMonth_.
+  const monthColsZero = [];
+  const monthHeaderRe = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2}$/;
+  for (let c = 0; c < currentHeaders.length; c++) {
+    if (monthHeaderRe.test(String(currentHeaders[c] || '').trim())) monthColsZero.push(c);
+  }
+
   // Next-month read is best-effort: when today is in December, the
   // following month lives in next year's Cash Flow sheet, which may
   // not exist yet (especially on a blank workbook). tryGetCashFlowSheet_
@@ -1623,6 +1632,12 @@ function getRecurringBillsWithoutDueDateForDashboard() {
   // into this fallback list. See bug: "Laith VCS Account" appearing under
   // Recurring Bills (No Due Date) despite INPUT - Debts Active=No.
   const debtPayeesAllStatuses = getDebtPayeeMapAllStatuses_(ss);
+  // Payees managed in INPUT - Upcoming Expenses (any status). Upcoming
+  // Expenses is the designated home for one-time / multi-installment project
+  // spend, so such a payee is never a recurring-bill candidate — even a
+  // completed two-installment project (e.g. "JD Electric") that otherwise has
+  // >=2 populated Cash Flow months and would pass the recurrence gate below.
+  const upcomingPayees = getUpcomingExpensePayeeMap_(ss);
   const activeColZero = currentHeaderMap.activeColZero;
 
   const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -1646,9 +1661,28 @@ function getRecurringBillsWithoutDueDateForDashboard() {
     if (mappedBills[normalizeBillName_(payee)]) continue;
     if (debtBills[normalizeBillName_(payee)]) continue;
     if (debtPayeesAllStatuses[normalizeBillName_(payee)]) continue;
+    if (upcomingPayees[normalizeBillName_(payee)]) continue;
 
-    /* hasHistory gate removed: show unmapped expenses even when only the current month has activity.
-       Revert: require non-zero in some month column other than currentMonthCol before currentCellValue. */
+    // Recurrence-evidence gate (Option A). This fallback is intended for
+    // unmapped *recurring* Cash Flow expenses (so they aren't forgotten
+    // before being migrated into INPUT - Bills) — NOT one-time Upcoming
+    // Expense / project rows. A one-time expense (e.g. "JD Electric") has a
+    // single paid month; every later month's cell is blank, which the
+    // current-month branch below would otherwise read as "due" and re-surface
+    // forever. Requiring history in at least two distinct months (i.e.
+    // evidence beyond a single paid month, outside the current month being
+    // evaluated) keeps genuinely recurring rows visible while excluding
+    // single-payment one-time expenses. No schema columns, no Activity Log
+    // reads, no writes.
+    let handledMonthCount = 0;
+    for (let mc = 0; mc < monthColsZero.length; mc++) {
+      const col = monthColsZero[mc];
+      if (isCashFlowBillHandled_(currentValues[r][col], currentDisplay[r][col])) {
+        handledMonthCount++;
+        if (handledMonthCount >= 2) break;
+      }
+    }
+    if (handledMonthCount < 2) continue;
 
     const currentCellValue = currentValues[r][currentMonthCol];
     const currentCellDisplay = currentDisplay[r][currentMonthCol];
@@ -2589,6 +2623,46 @@ function getDebtPayeeMapAllStatuses_(ss) {
     if (payee.toUpperCase() === 'TOTAL DEBT') continue;
 
     out[normalizeBillName_(payee)] = true;
+  }
+
+  return out;
+}
+
+/**
+ * Normalized-name set of every payee managed in INPUT - Upcoming Expenses,
+ * regardless of Status. Used by the recurring-bills fallback so one-time /
+ * multi-installment project expenses (which the user explicitly tracks in
+ * Upcoming Expenses) are never promoted into "Recurring Bills (No Due Date)"
+ * — even completed projects that have >=2 populated Cash Flow months.
+ *
+ * Read-only and side-effect-free: uses getSheetByName (NOT
+ * getOrCreateUpcomingExpensesSheet_) so it never creates the sheet, and
+ * returns {} when the sheet is absent (blank-workbook safe). At payment time
+ * the Cash Flow payee is set to `Payee || Expense Name`
+ * (getUpcomingExpenseForQuickPayment), so both columns are added to the set to
+ * match whichever became the Cash Flow row's payee. No writes, no Activity
+ * Log reads.
+ */
+function getUpcomingExpensePayeeMap_(ss) {
+  var sheet = ss.getSheetByName('INPUT - Upcoming Expenses');
+  if (!sheet) return {};
+  const display = sheet.getDataRange().getDisplayValues();
+  if (display.length < 2) return {};
+
+  const headers = display[0];
+  const payeeCol = headers.indexOf('Payee');
+  const expenseNameCol = headers.indexOf('Expense Name');
+
+  const out = {};
+  for (let r = 1; r < display.length; r++) {
+    if (payeeCol !== -1) {
+      const payee = String(display[r][payeeCol] || '').trim();
+      if (payee) out[normalizeBillName_(payee)] = true;
+    }
+    if (expenseNameCol !== -1) {
+      const name = String(display[r][expenseNameCol] || '').trim();
+      if (name) out[normalizeBillName_(name)] = true;
+    }
   }
 
   return out;
