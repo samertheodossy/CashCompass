@@ -311,7 +311,13 @@ function quickAddPayment(payload) {
     }
   }
 
-  const debtBalanceNote = adjustDebtsBalanceAfterQuickPayment_(ss, payee, entryType, amount);
+  const debtAdjustResult = adjustDebtsBalanceAfterQuickPayment_(ss, payee, entryType, amount);
+  // Preserve existing debtBalanceNote semantics: it represents an ACTUAL
+  // balance change ({previousBalance,newBalance}) or null. A Loan/HELOC match
+  // returns an info-only marker that must NOT be logged as a balance change —
+  // it is surfaced to the user as a UX notice only (no balance was reduced).
+  const loanOrHelocNotice = !!(debtAdjustResult && debtAdjustResult.loanOrHelocSkipped);
+  const debtBalanceNote = loanOrHelocNotice ? null : debtAdjustResult;
 
   touchDashboardSourceUpdated_('quick_payment');
   touchDashboardSourceUpdated_('cash_flow');
@@ -363,7 +369,18 @@ function quickAddPayment(payload) {
   // fields the old multi-line dump surfaced (sheet name, month, before/after
   // values, flow source, debt balance delta) are still returned in
   // `preview` and `activitySnapshot` for any caller that needs them.
-  const message = 'Payment recorded — ' + monthLabel + ' cash flow updated';
+  let message = 'Payment recorded — ' + monthLabel + ' cash flow updated';
+  // Non-blocking, info-only nudge for Loan/HELOC payments. The balance was
+  // intentionally not auto-reduced; explain why and point users to Manage
+  // Debts for a manual update. Appended to the normal success message so it
+  // reuses the existing pay_status notification and clears with it. Shown only
+  // for Loan/HELOC matches — never for credit cards or other revolving debt.
+  if (loanOrHelocNotice) {
+    message += ' — Loan and HELOC balances are not automatically reduced because '
+      + 'payments may include interest or fees. Update the balance in Manage Debts '
+      + 'after your statement if you want the tracked principal balance to reflect '
+      + 'the latest amount.';
+  }
 
   return {
     ok: true,
@@ -379,6 +396,7 @@ function quickAddPayment(payload) {
       priorMonthUnavailableMessage: priorPreview.priorMonthUnavailableMessage
     },
     message: message,
+    loanOrHelocNotice: loanOrHelocNotice,
     activitySnapshot: activitySnapshot
   };
 }
@@ -419,7 +437,14 @@ function adjustDebtsBalanceAfterQuickPayment_(ss, payee, entryType, paymentAmoun
     if (isDebtRowInactive_(display[r], values[r], headerMap)) continue;
 
     const dType = String(display[r][headerMap.typeColZero] || '').trim();
-    if (isDebtTypeLoanOrHeloc_(dType)) return null;
+    if (isDebtTypeLoanOrHeloc_(dType)) {
+      // Matched a tracked Loan/HELOC. We intentionally do NOT touch the
+      // balance here (Loan/HELOC payments may include interest, escrow, or
+      // fees, so the payment amount is not a clean principal reduction).
+      // Return an info-only marker — no balance write, no INPUT - Debts
+      // mutation — so the caller can surface a one-time UX explanation.
+      return { loanOrHelocSkipped: true, debtType: dType };
+    }
 
     const curBal = round2_(toNumber_(values[r][headerMap.balanceColZero]));
     const newBal = Math.max(0, round2_(curBal - paymentAmount));

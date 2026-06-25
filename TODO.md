@@ -400,6 +400,46 @@ Authoritative copy: `PROJECT_CONTEXT.md → Future Enhancement — Weekly/Biweek
 
 ---
 
+### Future Enhancement — Debt Payee Aliases (future)
+
+Authoritative copy lives here; `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md` mirror it. **Status:** documented, **not implemented.** **Long-term enhancement — not part of the current Central stabilization work. No implementation at this time.**
+
+**Problem:** Automatic debt payment detection currently requires the Cash Flow payee name to **normalize-match the tracked debt Account Name exactly** (via `normalizeBillName_`). When the real payment payee differs from the canonical account name, the payment cannot be attributed to the debt.
+
+- **Tracked debt:** `Meriwest Credit Union Loan`
+- **Real payment payee:** `Meriwest`
+
+These do not match today, so automatic debt detection (the Loan/HELOC balance-adjustment messaging shipped via `adjustDebtsBalanceAfterQuickPayment_`, and any future automation) cannot identify the payment. (This is the exact mismatch observed during the Meriwest HELOC investigation — the payee `"Meriwest"` never reached the matched-debt branch.)
+
+**Future goal:** Allow each tracked debt to have **one or more optional payment aliases** used only for payment recognition and reporting.
+
+- **Account Name:** `Meriwest Credit Union Loan`
+- **Aliases:** `Meriwest`, `Meriwest CU`, `Meriwest HELOC`
+
+**Potential future uses:**
+
+- Debt payment recognition.
+- Loan/HELOC informational messaging.
+- Future principal-payment workflow.
+- Rolling Debt payoff attribution.
+- Money Plan debt-actual calculations.
+- Imported bank transaction matching.
+- Future bank import reconciliation.
+
+**Design notes:**
+
+- **Account Name remains the canonical identifier.** Aliases never replace it; they are an additional match surface.
+- **Aliases are optional.** Preserve existing behavior exactly when no aliases are configured.
+- **Matching stays deterministic** — no fuzzy / AI matching. Prefer **normalized exact alias matching** (reuse `normalizeBillName_`), checking the canonical name first, then the alias set.
+- **Multiple aliases per debt** must be supported.
+- **Data model (to be reviewed):** likely an optional `Aliases` column on `INPUT - Debts` (delimited list) or a small mapping store; **workbook provisioning / header repair must be reviewed before implementation** (new-header seeding for fresh workbooks + repair for existing ones).
+
+**Areas likely affected (for later investigation, not commitments):** `INPUT - Debts` schema; debt payee matching helpers (`adjustDebtsBalanceAfterQuickPayment_`, `getDebtPayeeMap*` builders in `dashboard_data.js`); Rolling Debt payoff attribution; Money Plan debt-actual attribution; bank import reconciliation matching; Manage Debts UI (configure aliases).
+
+**Priority:** Long-term enhancement. Post-Central stabilization. UX enhancement, not a blocker.
+
+---
+
 ## Future UI Standardization — Manage Pattern Rollout
 
 **Status:** documented, **not implemented** (authoritative copy; high-level mirror in `PROJECT_CONTEXT.md`, backlog entry in `ENHANCEMENTS.md`). **Current status: Bills = complete · Debts = complete · Bank Accounts = next likely candidate.**
