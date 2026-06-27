@@ -440,6 +440,26 @@ These do not match today, so automatic debt detection (the Loan/HELOC balance-ad
 
 ---
 
+### Future UX Enhancement — Google Sheets Refresh Awareness (future)
+
+Authoritative copy lives here; `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md` mirror it. **Status:** documented, **not implemented.** **Priority: Low. UX enhancement only — not a Central architecture blocker and not a data-integrity issue.**
+
+**Observed:** When CashCompass writes successfully to the workbook via Apps Script (e.g. House Expenses, Quick Add, Bills Due, AutoPay), an **already-open Google Sheets browser tab** may not immediately display the updated row/cell. The data is written correctly — refreshing the Google Sheets tab shows the change right away.
+
+**Current assessment:** This looks like **Google Sheets client/UI caching**, not a CashCompass write failure. The web app and server-side reads return the correct values; only a separately-open native Sheets tab lags until reloaded.
+
+**Future enhancement ideas (none committed):**
+
+- Investigate whether `SpreadsheetApp.flush()` or existing flush timing can improve live visibility in an open Sheets tab.
+- Investigate whether `SpreadsheetApp.toast()` (or another Sheets-side notification) is appropriate to signal a write landed.
+- Consider a lightweight post-write message in the web app, e.g. *"Saved successfully. If your Google Sheet is already open, you may need to refresh it to see the latest changes."*
+- Investigate whether any write paths can better trigger a Google Sheets client refresh without a full browser reload.
+- **Do not** introduce artificial delays or repeated flushes unless a measurable benefit is demonstrated.
+
+**Priority:** Low. Pursue only after Central stabilization and broader beta testing. UX enhancement, not a blocker.
+
+---
+
 ## Future UI Standardization — Manage Pattern Rollout
 
 **Status:** documented, **not implemented** (authoritative copy; high-level mirror in `PROJECT_CONTEXT.md`, backlog entry in `ENHANCEMENTS.md`). **Current status: Bills = complete · Debts = complete · Bank Accounts = next likely candidate.**
