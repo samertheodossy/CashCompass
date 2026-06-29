@@ -4,6 +4,7 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
 
 ## Current Product Status (June 2026)
 
+- **Stage:** **Stage 2 — Product Hardening (current).** Maturity (estimated): **Family Beta Readiness ~96–97% · External / Public Beta Readiness ~90–92%**. Remaining work is primarily **financial integrity, validation, recovery hardening, regression prevention, and UX polish — not major feature development.** Authoritative stage roadmap (Stage 1–5) + Current Engineering Priorities + Beta Gate live in `TODO.md → Product Maturity Stages`; a high-level mirror is in `## Product Maturity Stages (high-level)` below.
 - **Architecture:** Central App operational — **stable, family-beta capable**. The production / bound workbook remains protected (bound mode unchanged); the central architecture is operational and runtime-validated.
 - **Completed (working in central mode):** Provisioning, Workbook Mapping, Dashboard, Planner, Assets, Properties, Cash Flow, Bills, Debts, Income, Activity, Email.
 - **Recently completed (this initiative):**
@@ -51,17 +52,18 @@ Identity markers + reverse index + the recovery stack (adopt-before-create, reco
 - 6D.2b Create New Workbook (designed, not implemented)
 - 6E.2 Admin Set Mapping (designed, not implemented)
 
-### Family Beta Readiness — ~90%
+### Family Beta Readiness — ~96–97%
 
-Stable and family-beta capable; provisioning proven across multiple accounts; the recovery stack is in place behind flags.
+Stable and family-beta capable; provisioning proven across multiple accounts; the recovery stack is in place behind flags; core + lifecycle workflows shipped. Remaining work is hardening, not features.
 
+- Financial Integrity reconciliation
 - Recovery validation (destructive paths)
 - Additional beta users
 - Onboarding polish
 
-### External Beta Readiness — ~75%
+### External / Public Beta Readiness — ~90–92%
 
-Architecture and recovery are largely built but not yet proven under real failure, and operational support is thin.
+Architecture, recovery, and core/lifecycle workflows are built; remaining gaps are validation depth (recovery proven under real failure), regression prevention, and operational support.
 
 - Recovery proven under failure conditions
 - User-lifecycle handling
@@ -76,9 +78,25 @@ Early stage — no monetization infrastructure exists yet.
 - Legal (privacy policy, ToS)
 - Support operations
 
+## Product Maturity Stages (high-level)
+
+High-level mirror; **authoritative copy lives in `TODO.md → Product Maturity Stages`** (with `## Current Engineering Priorities`, `## Shared Lifecycle Framework`, and `## Beta Gate`). The Stage model is the at-a-glance roadmap; the `## Launch Readiness Roadmap (high-level)` below is the detailed Phase 1–7 expansion that maps onto these stages.
+
+- **Stage 1 — Core Platform** *(✅ complete)* — Central App architecture, provisioning, workbook mapping, Dashboard, Planner, Bills, Debt Management, House Expenses, Upcoming Expenses, Activity Log, Retirement, Money Plan Phase 1, Debt Lifecycle (Stop Tracking / Reactivate), Admin Diagnostics foundation.
+- **Stage 2 — Product Hardening** *(current)* — (1) Financial Integrity (reconcile Dashboard / Planner / source sheets; eliminate aggregation inconsistencies; reconciliation diagnostics), (2) Recovery Validation (Clear Mapping, Adopt Existing Workbook, Ambiguous Mapping, stale-mapping validation), (3) Runtime Validation (regression + workflow + edge-case), (4) UX polish (consistency, lifecycle workflows, messaging, admin diagnostics).
+- **Stage 3 — Beta Readiness** *(next)* — Validation Agent, automated regression detection, deployment checklist, financial integrity gate, release readiness, documentation + onboarding review. Goal: **Family Beta Release Candidate.**
+- **Stage 4 — Family Beta** — limited trusted users: collect usability feedback, identify workflow gaps + missing diagnostics, stabilize production workflows.
+- **Stage 5 — External Beta** — broader audience: scalability, support workflows, billing readiness, onboarding automation, operational monitoring.
+
+**Current Engineering Priorities (ranked):** 1) Financial Integrity reconciliation *(highest)* · 2) Recovery Validation completion · 3) Validation Agent · 4) Shared Lifecycle Framework (Debt Lifecycle as reference) · 5) Remaining UX polish.
+
+**Beta Gate (release-readiness target):** before broader beta every release should eventually pass **Financial Integrity**, **Recovery Validation**, **Validation Agent**, and a **runtime regression checklist** before deployment.
+
+**Shared Lifecycle Framework:** the Debt Lifecycle (`Create → Edit → Rename → Stop Tracking → Inactive → Reactivate`) is now the reference implementation; long-term goal is to share it across Debts, Bank Accounts, Investments, Houses, Bills, and Income Sources (detail: `## Future Feature — Shared Entity Lifecycle Framework`).
+
 ## Launch Readiness Roadmap (high-level)
 
-High-level view of the next 6–12 months. **The authoritative, detailed roadmap lives in `TODO.md → Launch Readiness Roadmap`** (objective, why it matters, major deliverables, dependencies, and priority per phase) — this is the single source to avoid drift. The summary below carries phase names, objectives, and priorities only. Every phase runs under `WORKING_RULES.md → Current phase` and, for central-mode work, `→ Central App Transition Rules` (active).
+High-level view of the next 6–12 months — the **detailed Phase 1–7 expansion under the Stage model above**. **The authoritative, detailed roadmap lives in `TODO.md → Launch Readiness Roadmap`** (objective, why it matters, major deliverables, dependencies, and priority per phase) — this is the single source to avoid drift. The summary below carries phase names, objectives, and priorities only. Every phase runs under `WORKING_RULES.md → Current phase` and, for central-mode work, `→ Central App Transition Rules` (active).
 
 **Priority scale:** P0 = now / in progress · P1 = next, gates family beta · P2 = high, needed before external beta · P3 = gates external beta · P4 = post-beta / longest horizon.
 

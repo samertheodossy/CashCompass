@@ -10,7 +10,7 @@ This README is the entry point. It does not re-explain the app — it routes you
 
 1. **Read `WORKING_RULES.md` first.** It defines the current phase (Central App live + Family Beta readiness) and the rules every change must follow — one issue at a time, minimal/localized/safe, no `doGet`/`includeHtml_`/snapshot-shape or destructive sheet changes without explicit approval, always consider both **blank** and **populated** workbooks, and (for Central App work) the active Central App Transition Rules.
 2. **Then skim `PROJECT_CONTEXT.md → Current phase`** for the live product state and the canonical tab-by-tab behavior.
-3. **Before starting any change,** check `TODO.md → Launch Readiness Roadmap` for the active phase, and `TODO.md → V1.2 polish backlog` for small-polish picks.
+3. **Before starting any change,** check `TODO.md → Product Maturity Stages` for the current stage + engineering priorities (detailed phases in `→ Launch Readiness Roadmap`), and `TODO.md → V1.2 polish backlog` for small-polish picks.
 4. **After each implementation step,** run the blank + populated manual checks in `TESTING_PLAN.md`.
 
 If you are onboarding a contributor (or yourself after a break), `INIT_PROMPT.md` is the minimal reading list; `FIRST_RUN.md` is the smoke check.
@@ -29,7 +29,7 @@ If you are onboarding a contributor (or yourself after a break), `INIT_PROMPT.md
 
 ### Planning (what's next)
 
-- `TODO.md` — Launch Readiness Roadmap (Phase 1–7) + V1.2 polish backlog + historical backlog.
+- `TODO.md` — Product Maturity Stages (authoritative Stage 1–5 roadmap + Current Engineering Priorities + Beta Gate) → Launch Readiness Roadmap (detailed Phase 1–7 expansion) + V1.2 polish backlog + historical backlog.
 - `ENHANCEMENTS.md` — product-level rationale, phase history, Active / Next / Later mirror.
 - `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md` — active Phase 2 design: read-only duplicate / orphan / stale workbook detection, classification, and admin audit (Phase 2A), with Phase 2B recovery scope in its `§10`.
 
@@ -50,6 +50,7 @@ If you are onboarding a contributor (or yourself after a break), `INIT_PROMPT.md
 
 ## Current Product Status (June 2026)
 
+- **Stage:** **Stage 2 — Product Hardening (current).** Maturity (estimated): **Family Beta Readiness ~96–97% · External / Public Beta Readiness ~90–92%**. Remaining work is primarily financial integrity, validation, recovery hardening, regression prevention, and UX polish — not major feature development. Authoritative stage roadmap: `TODO.md → Product Maturity Stages` (mirror in `PROJECT_CONTEXT.md`).
 - **Architecture:** Central App operational — **stable, family-beta capable**; production / bound workbook remains protected.
 - **Completed (working in central mode):** Provisioning, Workbook Mapping, Dashboard, Planner, Assets, Properties, Cash Flow, Bills, Debts, Income, Activity, Email.
 - **Recently completed:** Diagnostics (Phase 2A Admin Diagnostics), Debt parity (Phase 3.1 TOTAL DEBT), Bank Accounts parity (Phase 3.2a Total Accounts + Phase 3.2b Delta), Bank/Debts Add-New dropdown fix, Identity markers (Phase 6A design + Phase 6B Workbook Identity Markers).

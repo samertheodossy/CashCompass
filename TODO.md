@@ -9,13 +9,107 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ---
 
-## Current phase — Central App live + Family Beta readiness
+## Current stage — Stage 2: Product Hardening
+
+**Maturity (estimated):** Family Beta Readiness **~96–97%** · External / Public Beta Readiness **~90–92%**. The remaining work is primarily **financial integrity, validation, recovery hardening, regression prevention, and UX polish — not major feature development.** Core platform capabilities are built; the focus now is making them provably correct and recoverable.
+
+The **authoritative roadmap is the `## Product Maturity Stages` section immediately below** (Stage 1–5), which carries the at-a-glance framing, `## Current Engineering Priorities`, the `## Shared Lifecycle Framework` direction, and the `## Beta Gate`. The older `## Launch Readiness Roadmap` (Phase 1–7) is retained below it as the **detailed phase expansion** that sits under these stages (it maps onto the stages — see the mapping note in that section). `PROJECT_CONTEXT.md` and `README.md` carry high-level mirrors of the stage roadmap.
 
 The app has moved past "V1.2 / controlled improvement mode." **The Central App architecture is live and operational** (CENTRAL_MODE routing, per-user workbook provisioning, workbook mapping — all runtime-validated), it is **stable and family-beta capable**, and four input sheets now carry Family Beta styling. Recently completed: read-only admin diagnostics (Phase 2A), Workbook Totals parity (TOTAL DEBT 3.1, Bank Accounts Total Accounts 3.2a + Delta 3.2b), the Bank/Debts Add-New dropdown fix, and Workbook Identity markers (Phase 6A design + 6B markers). The **recovery stack (6C.1 Adopt-Before-Create, 6D.1 Recovery Page, 6D.2a Reconnect, 6E.1 Admin Inspect + Clear Mapping) is implemented and committed but flag-gated OFF (`CENTRAL_AUTO_ADOPT`, `CENTRAL_RECOVERY_ACTIONS`, `CENTRAL_ADMIN_REPAIR` — see `## Flag Registry`).** It is **healthy-path validated (2026-06-09)** and **reconnect-validated end-to-end (2026-06-11)** — a real stale mapping was induced, the recovery page rendered and blocked the dashboard, Reconnect executed and the dashboard reloaded (the blank-iframe reconnect reload bug was fixed; Admin Diagnostics confirmed the live mapping). The **remaining destructive/edge paths** (executed admin clear + audit log, adopt-before-create, ambiguous handling) **are not yet validated**. The active near-term step is **Recovery Validation (6F, ~90–92%)** — the remaining destructive/edge-path pass, then flags OFF; remaining slices are 6D.2b Create New Workbook and 6E.2 Admin Set Mapping. (Validation-surface note: the Script Properties UI may lag runtime changes during testing — **Admin Diagnostics is authoritative**.) The authoritative forward plan is **`## Launch Readiness Roadmap`** immediately below; the ranked next efforts are in **`## Known priorities (ranked)`**; untested features are in **`## Open testing inventory`**.
 
 The V1 trust baseline (blank-workbook stability, no fake states, gated planner email, UI copy consistency pass) and the V1.1 retirement profile integration remain the stable foundation. The **V1.2 change discipline still applies to every edit** (`WORKING_RULES.md → Current phase`): one issue at a time, minimal / localized / safe diff, blank + populated workbook manual test steps. The Central App migration additionally follows `WORKING_RULES.md → Central App Transition Rules`, which is now the **active** governing policy (not future). See `SESSION_NOTES.md → Current State — Post V1.2 Prep` for the chronological migration record.
 
 The older "V1.2 work queue" candidates are retained below under `## V1.2 polish backlog` — they are still valid small-polish picks, but they are no longer *the* roadmap.
+
+---
+
+## Product Maturity Stages
+
+**Authoritative roadmap.** This is the single at-a-glance source of truth for where CashCompass is and where it is going. The detailed per-phase deliverables live in `## Launch Readiness Roadmap` below (which now maps onto these stages — see the mapping note there). `PROJECT_CONTEXT.md` and `README.md` carry high-level mirrors.
+
+**Maturity (estimated):** Family Beta Readiness **~96–97%** · External / Public Beta Readiness **~90–92%**. Remaining work is primarily **financial integrity, validation, recovery hardening, regression prevention, and UX polish — not major feature development.**
+
+### Stage 1 — Core Platform *(✅ complete)*
+
+Completed architecture and core capabilities:
+
+- Central App architecture · Provisioning · Workbook mapping
+- Dashboard · Planner · Bills · Debt Management · House Expenses · Upcoming Expenses · Activity Log · Retirement
+- Money Plan Phase 1 (10/70/20 dashboard card)
+- Debt Lifecycle (Stop Tracking / Reactivate)
+- Admin Diagnostics foundation
+
+**Status:** Complete.
+
+### Stage 2 — Product Hardening *(current stage)*
+
+The primary development stage. Make the built capabilities provably correct and recoverable. Primary goals:
+
+1. **Financial Integrity** — reconcile Dashboard / Planner / source sheets; eliminate aggregation inconsistencies; financial reconciliation diagnostics.
+2. **Recovery Validation** — Clear Mapping; Adopt Existing Workbook; Ambiguous Mapping; stale-mapping validation.
+3. **Runtime Validation** — regression testing; workflow validation; edge-case verification.
+4. **UX polish** — consistency; lifecycle workflows; messaging; admin diagnostics.
+
+### Stage 3 — Beta Readiness *(next)*
+
+After Product Hardening completes. Focus:
+
+- Validation Agent · automated regression detection · deployment checklist · financial integrity gate · release readiness · documentation review · onboarding review.
+
+**Goal:** Family Beta Release Candidate.
+
+### Stage 4 — Family Beta
+
+Limited trusted users. Objectives:
+
+- Collect usability feedback · identify workflow gaps · identify missing diagnostics · stabilize production workflows.
+
+### Stage 5 — External Beta
+
+Broader audience. Objectives:
+
+- Scalability · support workflows · billing readiness · onboarding automation · operational monitoring.
+
+---
+
+## Current Engineering Priorities
+
+Ranked, current. (Granular ranked execution items remain in `## Known priorities (ranked)` below; this is the strategic ordering.)
+
+1. **Financial Integrity reconciliation** — *(highest priority)* reconcile Dashboard / Planner / source-sheet totals; eliminate aggregation inconsistencies; permanent reconciliation diagnostic.
+2. **Recovery Validation completion** — executed Clear Mapping + audit log, Adopt-Before-Create, Ambiguous Mapping, stale-mapping validation (6F).
+3. **Validation Agent** — automated regression detection + a runtime regression checklist gating deployment.
+4. **Shared Lifecycle Framework** — using the Debt Lifecycle as the reference implementation (see `## Shared Lifecycle Framework` below and `## Future Feature — Shared Entity Lifecycle Framework`).
+5. **Remaining UX polish** — consistency, lifecycle workflows, messaging, admin diagnostics.
+
+---
+
+## Shared Lifecycle Framework
+
+The **Debt Lifecycle is now the reference implementation** (shipped 2026-06-29, commit `893d50d`). Detailed design + migration plan: `## Future Feature — Shared Entity Lifecycle Framework` below.
+
+**Long-term goal:** all tracked entities eventually share the same lifecycle:
+
+```
+Create → Edit → Rename → Stop Tracking → Inactive → Reactivate
+```
+
+**Modules to migrate later:** Debts (reference) · Bank Accounts · Investments · Houses · Bills · Income Sources.
+
+This is a **long-term architecture goal**, sequenced after Financial Integrity reconciliation and before broader external beta if time allows. Not a blocker.
+
+---
+
+## Beta Gate
+
+Before broader beta, **every release should eventually pass** the following before deployment:
+
+- **Financial Integrity** — Dashboard / Planner / active source-sheet totals reconcile within $0.01.
+- **Recovery Validation** — recovery stack validated (Clear Mapping, Adopt, Ambiguous, stale mapping).
+- **Validation Agent** — automated regression detection passes.
+- **Runtime regression checklist** — core workflows + edge cases verified.
+
+This gate is the release-readiness target for Stage 3 (Beta Readiness) and beyond.
 
 ---
 
@@ -36,7 +130,9 @@ Clean restart point after the **Manage Debts** work (2026-06-15/16): **Phase 1**
 
 ## Launch Readiness Roadmap
 
-**Authoritative, detailed roadmap for the next 6–12 months — single source of truth.** `PROJECT_CONTEXT.md → Launch Readiness Roadmap (high-level)` carries only phase names, objectives, and priorities and points here for detail; to avoid drift, the full per-phase detail (deliverables, dependencies) lives **only** in this section. Every phase runs under `WORKING_RULES.md → Current phase` and, for central-mode work, `→ Central App Transition Rules` (active).
+**Detailed phase expansion (Phase 1–7) — sits under the `## Product Maturity Stages` model above.** The Stage model is the at-a-glance authoritative roadmap; this section holds the full per-phase detail (objective, why it matters, deliverables, dependencies, priority). `PROJECT_CONTEXT.md → Launch Readiness Roadmap (high-level)` carries only phase names, objectives, and priorities and points here for detail; to avoid drift, the full per-phase detail lives **only** in this section. Every phase runs under `WORKING_RULES.md → Current phase` and, for central-mode work, `→ Central App Transition Rules` (active).
+
+**Stage ↔ Phase mapping:** **Stage 1 — Core Platform** = Phase 1 (Documentation Cleanup) + Phase 3 (Workbook Totals) + the shipped core/Manage/lifecycle work. **Stage 2 — Product Hardening (current)** = Phase 2 (Family Beta Hardening, incl. the Workbook Identity & Recovery 6A–6F track) + Phase 5 (Web App UX Improvements) + Financial Integrity reconciliation. **Stage 3 — Beta Readiness** = the Beta Gate (Financial Integrity · Recovery Validation · Validation Agent · runtime regression checklist) + release-readiness review. **Stage 4 — Family Beta** ≈ entry into Phase 6 (External Beta Readiness) scope at family scale. **Stage 5 — External Beta** = Phase 6 (External Beta Readiness) + Phase 7 (Paid Product Readiness). Phase 4 (Chat Assistant) is a parallel feature track, not a gating stage.
 
 **Priority scale:** P0 = now / in progress · P1 = next, gates family beta · P2 = high, needed before external beta · P3 = gates external beta · P4 = post-beta / longest horizon. Phases are roughly sequential; where noted, some can overlap.
 
