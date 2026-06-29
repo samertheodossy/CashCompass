@@ -490,6 +490,37 @@ Authoritative copy lives here; `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md` mirror
 
 ---
 
+## Future Feature — Shared Entity Lifecycle Framework
+
+**Status:** documented, **not implemented** (authoritative copy; high-level mirror in `PROJECT_CONTEXT.md`, backlog entry in `ENHANCEMENTS.md`). **Reference implementation: the Debt lifecycle** (`Active → Stop Tracking → Inactive → Reactivate`), shipped in commit `893d50d`.
+
+**Related (do not duplicate):** this is the **lifecycle** companion to `## Future UI Standardization — Manage Pattern Rollout` (the *Manage view* pattern) and its "Future framework opportunity" note. Manage Pattern Rollout covers the management surface (table + edit form); this item covers the **active/inactive lifecycle** (stop/reactivate, danger zone, inactive section, lifecycle activity events, server guardrails). They should be extracted together once enough consumers exist.
+
+**Context.** The Debt lifecycle flow is now the desired product pattern and should eventually be **consistent across long-lived CashCompass entities**: Debts, Bank Accounts, Investments, House / Real Estate values, Bills, Income Sources, Properties, and any future recurring or tracked financial object.
+
+**Goal.** Avoid each module reinventing its own lifecycle UI, labels, colors, confirm dialogs, activity logging, and server guardrails. Build shared, reusable lifecycle utilities/components so future changes apply everywhere.
+
+**Possible shared pieces:**
+
+1. **Shared UI language** — Active section, Inactive section, "Show inactive" toggle with count, Reactivate button, Danger Zone, Stop Tracking button, common empty state ("No inactive *<entities>*."), common helper text.
+2. **Shared button styles** — Edit = neutral · Rename = neutral/secondary · Reactivate = positive (green) · Stop Tracking = destructive (red). (Already realized as `.small-btn.success` / `.small-btn.danger` + `.debt-danger-zone` / `.debt-inactive-section` in `Dashboard_Styles.html` — generalize the class names when extracting.)
+3. **Shared confirmation copy pattern** — Stop Tracking must clearly state: the item **remains in history**, is **excluded from live calculations**, and **can be restored** from the Inactive section.
+4. **Shared server lifecycle helpers** — reusable pattern to: deactivate an existing row, reactivate an existing row, block duplicate **active** names, preserve all historical data, **prevent direct editing of `Active` via generic update endpoints** (allow-list guard), and emit activity-log events. (Debt reference: `deactivateDebtFromDashboard`, `reactivateDebtFromDashboard`, `getInactiveDebtsForManagementFromDashboard`, and the `updateDebtField` allow-list in `debts.js`.)
+5. **Shared activity event pattern** — consistent event names `<entity>_deactivate` / `<entity>_reactivate`; consistent labels **"Tracking stopped" / "Tracking resumed"**; consistent JSON details: `previousActive`, `newActive`, `sheetRow`, `entityName`/`accountName`/`payee`/`propertyName`, `reason`. (Debt reference: `debt_deactivate` / `debt_reactivate` classified in `activity_log.js`.)
+6. **Shared audit / diagnostics** — Admin Diagnostics should eventually surface lifecycle exceptions: inactive-with-balance, duplicate active names, entities with inconsistent `Active` values, and lifecycle audit-trail gaps.
+
+**Migration strategy (phased — do not refactor everything at once):**
+
+- **Phase 1** — Document the **Debt lifecycle as the reference implementation** (this entry).
+- **Phase 2** — Inventory existing lifecycle behavior in Bank Accounts, Investments, Houses, Bills, Income Sources.
+- **Phase 3** — Extract common CSS / UI copy / button styles.
+- **Phase 4** — Extract common server helper patterns where safe.
+- **Phase 5** — Migrate one module at a time, each with runtime validation.
+
+**Priority:** **Medium.** Do **after** Financial Integrity reconciliation and **before** broader external beta if time allows. **Not a blocker** for the current debt lifecycle commit.
+
+---
+
 ## Future Feature — Income Expected / Due Workflow
 
 **Status:** documented, **not implemented** (authoritative copy; high-level mirrors in `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md`).

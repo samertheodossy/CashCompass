@@ -161,6 +161,14 @@ High-level mirror; **authoritative copy lives in `TODO.md → Future UI Standard
 
 **Priority:** sequenced after 6F Recovery Validation closes; Bank Accounts first. UX enhancement, not a blocker.
 
+## Future Feature — Shared Entity Lifecycle Framework
+
+High-level mirror; **authoritative copy lives in `TODO.md → Future Feature — Shared Entity Lifecycle Framework`** (backlog entry in `ENHANCEMENTS.md`). **Status: documented, not implemented. Reference implementation: the Debt lifecycle (`Active → Stop Tracking → Inactive → Reactivate`, commit `893d50d`).**
+
+The **lifecycle** companion to Manage Pattern Rollout above. Make the active/inactive lifecycle consistent across long-lived entities (Debts, Bank Accounts, Investments, Houses, Bills, Income Sources, Properties) by extracting shared pieces: UI language (Active/Inactive sections, "Show inactive" toggle with count, Danger Zone, common empty state), button styles (Edit/Rename neutral, Reactivate positive, Stop Tracking destructive), confirmation copy, server lifecycle helpers (deactivate/reactivate existing row, block duplicate active names, preserve history, allow-list guard on generic update endpoints), activity events (`<entity>_deactivate` / `<entity>_reactivate` → "Tracking stopped" / "Tracking resumed"), and lifecycle diagnostics. Phased: document Debt as reference → inventory other modules → extract CSS/copy → extract server helpers → migrate one module at a time with validation.
+
+**Priority:** Medium — after Financial Integrity reconciliation, before broader external beta if time allows. Not a blocker.
+
 ## Future Feature — Income Expected / Due Workflow
 
 High-level mirror; **authoritative copy lives in `TODO.md → Future Feature — Income Expected / Due Workflow`** (backlog entry in `ENHANCEMENTS.md`). **Status: documented, not implemented. Priority: Medium-high, after current Central stabilization.**
