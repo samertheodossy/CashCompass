@@ -1,5 +1,5 @@
 /**
- * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_update, bill_deactivate, house expense, house_add, house_value_update, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_update, bank_account_deactivate, investment_add, investment_update, investment_deactivate, debt_add, debt_deactivate, debt_update, income_add, income_deactivate, planner_email_deferred, planner_email_sent, planner_email_invalid_recipient, …). Rows can be removed from the web UI for mistaken log lines only.
+ * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_update, bill_deactivate, house expense, house_add, house_value_update, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_update, bank_account_deactivate, investment_add, investment_update, investment_deactivate, debt_add, debt_deactivate, debt_reactivate, debt_update, income_add, income_deactivate, planner_email_deferred, planner_email_sent, planner_email_invalid_recipient, …). Rows can be removed from the web UI for mistaken log lines only.
  * Complements OUT - History (planner-run snapshots). Tab: LOG - Activity.
  */
 
@@ -415,6 +415,7 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (etEarly === 'investment_deactivate') return 'Investment';
   if (etEarly === 'debt_add') return 'Debt';
   if (etEarly === 'debt_deactivate') return 'Debt';
+  if (etEarly === 'debt_reactivate') return 'Debt';
   if (etEarly === 'debt_update') return 'Debt';
   if (etEarly === 'debt_rename') return 'Debt';
   // income_add / income_deactivate are the canonical event names after
@@ -530,6 +531,7 @@ function activityLogActionLabel_(eventType, detailsJson) {
     case 'investment_deactivate': return 'Tracking stopped';
     case 'debt_add': return 'Account added';
     case 'debt_deactivate': return 'Tracking stopped';
+    case 'debt_reactivate': return 'Tracking resumed';
     // debt_update is always non-monetary (Amount renders "—"), so the
     // action label carries the new value inline — e.g.
     //   "Updated Account Balance to $54,000.00"
@@ -1123,6 +1125,7 @@ function activityLogIsNonMonetaryEvent_(eventType) {
     et === 'house_deactivate' ||
     et === 'investment_deactivate' ||
     et === 'debt_deactivate' ||
+    et === 'debt_reactivate' ||
     // debt_update rows carry the new value inside the action label (not
     // the Amount column) so we don't double-count a config edit as money
     // moved. See debtUpdateActionLabel_ for the rendered text.

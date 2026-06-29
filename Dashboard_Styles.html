@@ -1135,6 +1135,45 @@
     color: #1f2937;
   }
   .small-btn.primary { background: #1f4e78; color: #ffffff; border-color: #1f4e78; }
+  /* Positive action (e.g. Reactivate) — green, distinct from the blue primary. */
+  .small-btn.success { background: #15803d; color: #ffffff; border-color: #15803d; }
+  .small-btn.success:hover { background: #166534; border-color: #166534; }
+  /* Destructive action (e.g. Stop tracking) — quiet red outline, not a filled
+     alarm. Communicates "careful" without dominating neutral Edit/Rename. */
+  .small-btn.danger { background: #ffffff; color: #b91c1c; border-color: #f0c2c2; }
+  .small-btn.danger:hover { background: #fef5f5; border-color: #e3a3a3; }
+
+  /* Debt "Danger Zone" — a quiet, neutral card. The destructive intent is
+     carried by the red Stop tracking button, not by loud borders/backgrounds,
+     so the primary Save action above stays visually dominant. */
+  .debt-danger-zone {
+    margin-top: 28px;
+    border: 1px solid #e5e7eb;
+    background: #fafafa;
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .debt-danger-zone .danger-zone-title {
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    margin-bottom: 6px;
+  }
+  .debt-danger-zone p { margin: 0 0 12px 0; }
+
+  /* Inactive (stopped-tracking) debts — clearly separated from the active
+     table and collapsible via the toggle. */
+  .debt-inactive-section {
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e7eb;
+  }
+  .debt-inactive-section .card-title { margin-top: 0; }
+  .debt-inactive-empty { margin: 0; color: #64748b; }
+  /* Caret affordance on the show/hide inactive toggle. */
+  .debt-inactive-toggle .debt-caret { display: inline-block; margin-right: 6px; font-size: 11px; }
 
   .scenario-card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; background: #ffffff; }
   .scenario-card.active { border-color: #1f4e78; box-shadow: inset 0 0 0 1px #1f4e78; }

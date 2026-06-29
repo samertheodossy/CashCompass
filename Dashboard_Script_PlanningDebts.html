@@ -171,7 +171,17 @@ function setDebtPanelMode(mode) {
     // entering the Manage view so the list reflects the latest sheet state.
     if (typeof closeDebtEditForm_ === 'function') closeDebtEditForm_();
     if (typeof closeDebtRenameForm_ === 'function') closeDebtRenameForm_();
+    // Reset the inactive-debts view to collapsed on (re)entry so its state is
+    // predictable; the user re-opens it via "Show inactive debts".
+    __debtInactiveVisible = false;
+    __debtInactiveLoaded = false;
+    const inactiveWrap = document.getElementById('debt_inactive_wrap');
+    if (inactiveWrap) inactiveWrap.style.display = 'none';
+    if (typeof updateInactiveToggleLabel_ === 'function') updateInactiveToggleLabel_();
     if (typeof loadActiveDebtsManagementUi_ === 'function') loadActiveDebtsManagementUi_();
+    // Eager-load the inactive list (kept collapsed) so the toggle can show the
+    // count, e.g. "Show inactive debts (2)".
+    if (typeof refreshInactiveDebts_ === 'function') refreshInactiveDebts_();
   }
 }
 
@@ -314,8 +324,9 @@ function renderActiveDebtsList_(rows) {
             'onclick="openDebtEditForm(\'' + escapeJs(key) + '\')" style="margin-right:6px;">Edit</button>' +
           '<button class="small-btn bill-rename-btn" title="Rename this debt account" ' +
             'onclick="openDebtRenameForm(\'' + escapeJs(key) + '\')" style="margin-right:6px;">Rename</button>' +
-          '<button class="small-btn bill-stop-tracking-btn" ' +
-            'title="This debt will no longer appear, but remains in history" ' +
+          '<button class="small-btn danger bill-stop-tracking-btn" ' +
+            'style="margin-left:14px;" ' +
+            'title="Danger: stop tracking this debt (removes it from totals; history is kept)" ' +
             'onclick="stopTrackingDebtFromManage_(\'' + escapeJs(key) + '\')">Stop tracking</button>' +
         '</td>' +
       '</tr>'
@@ -567,19 +578,27 @@ function stopTrackingDebtFromManage_(key) {
 
   const confirmed = window.confirm(
     'Stop tracking "' + account + '"?\n\n' +
-    'The debt will no longer appear in the Debt Account selector, the Manage ' +
-    'list, or planner calculations. History stays in place so the account ' +
-    'name remains reserved and past activity is preserved.'
+    'This debt will:\n' +
+    '\u2022 remain in your history\n' +
+    '\u2022 no longer affect Dashboard totals\n' +
+    '\u2022 no longer affect Net Worth\n' +
+    '\u2022 no longer affect Planning\n\n' +
+    'You can restore it later from\n' +
+    'Manage Debts \u2192 Show inactive debts.'
   );
   if (!confirmed) return;
 
   setStatusLoading('debt_status', 'Stopping tracking…');
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('debt_status', (res && res.message) || 'Stopped tracking.', false);
+      const msg = (res && res.alreadyInactive)
+        ? account + ' is already inactive.'
+        : account + ' is now inactive. History has been preserved.';
+      setStatus('debt_status', msg, false);
       closeDebtEditForm_();
       if (typeof closeDebtRenameForm_ === 'function') closeDebtRenameForm_();
       loadActiveDebtsManagementUi_();
+      refreshInactiveDebts_();
       if (typeof loadDebtSection === 'function') loadDebtSection();
       if (typeof refreshSnapshot === 'function') refreshSnapshot();
       if (typeof loadDashboardActionSections === 'function') loadDashboardActionSections();
@@ -588,6 +607,146 @@ function stopTrackingDebtFromManage_(key) {
       setStatus('debt_status', (err.message || String(err)), true);
     })
     .deactivateDebtFromDashboard({ accountName: account });
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Manage Debts — Inactive debts view + Reactivate                           */
+/* -------------------------------------------------------------------------- */
+
+var __debtInactiveRows = [];
+var __debtInactiveVisible = false;
+var __debtInactiveLoaded = false;
+
+// Caret + label + count for the collapsible toggle, e.g.
+//   "▸ Show inactive debts (2)"  /  "▾ Hide inactive debts (2)"
+// Count shows once the inactive list has loaded; before then the label is
+// shown without a count so the control never flashes a misleading "(0)".
+function updateInactiveToggleLabel_() {
+  const btn = document.getElementById('debt_show_inactive_btn');
+  if (!btn) return;
+  const caret = __debtInactiveVisible ? '\u25BE' : '\u25B8'; // ▾ / ▸
+  const verb = __debtInactiveVisible ? 'Hide inactive debts' : 'Show inactive debts';
+  const count = __debtInactiveLoaded ? ' (' + __debtInactiveRows.length + ')' : '';
+  btn.innerHTML = '<span class="debt-caret" aria-hidden="true">' + caret + '</span>' + verb + count;
+  btn.setAttribute('aria-expanded', __debtInactiveVisible ? 'true' : 'false');
+}
+
+function toggleInactiveDebtsView_() {
+  const wrap = document.getElementById('debt_inactive_wrap');
+  __debtInactiveVisible = !__debtInactiveVisible;
+  if (wrap) wrap.style.display = __debtInactiveVisible ? 'block' : 'none';
+  updateInactiveToggleLabel_();
+  // Lazy-load the list contents the first time it's opened; otherwise the
+  // eager count-load on entering Manage already populated it.
+  if (__debtInactiveVisible && !__debtInactiveLoaded) refreshInactiveDebts_();
+}
+
+// Fetch + render the inactive list and refresh the toggle count. Visibility is
+// left untouched so this can be called eagerly (to populate the count while the
+// section stays collapsed) or on demand.
+function refreshInactiveDebts_() {
+  const host = document.getElementById('debt_inactive_list');
+  if (host) {
+    host.innerHTML =
+      '<div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></div>';
+  }
+  google.script.run
+    .withSuccessHandler(function(rows) {
+      __debtInactiveRows = Array.isArray(rows) ? rows : [];
+      __debtInactiveLoaded = true;
+      renderInactiveDebtsList_(__debtInactiveRows);
+      updateInactiveToggleLabel_();
+    })
+    .withFailureHandler(function(err) {
+      if (host) host.innerHTML = '<p class="debt-inactive-empty">Couldn\u2019t load inactive debts — please try again.</p>';
+      setStatus('debt_status', (err.message || String(err)), true);
+    })
+    .getInactiveDebtsForManagementFromDashboard();
+}
+
+function renderInactiveDebtsList_(rows) {
+  const host = document.getElementById('debt_inactive_list');
+  if (!host) return;
+
+  __debtInactiveRows = Array.isArray(rows) ? rows.slice() : [];
+  window.__dashboardInactiveDebts = {};
+
+  if (!__debtInactiveRows.length) {
+    host.innerHTML = '<p class="debt-inactive-empty">No inactive debts.</p>';
+    return;
+  }
+
+  const rowsHtml = __debtInactiveRows.map(function(r, idx) {
+    const key = 'dinact::' + idx;
+    window.__dashboardInactiveDebts[key] = r;
+
+    const typeStr = r.type ? escapeHtml(r.type) : '<span class="muted">—</span>';
+
+    // Inactive rows are NOT editable — only Reactivate is offered.
+    return (
+      '<tr>' +
+        '<td><strong>' + escapeHtml(r.accountName || 'Debt') + '</strong></td>' +
+        '<td>' + typeStr + '</td>' +
+        '<td class="bills-manage-num">' + debtManageMoney_(r.accountBalance) + '</td>' +
+        '<td class="bills-manage-actions">' +
+          '<button class="small-btn success bill-reactivate-btn" ' +
+            'title="Restore this debt — sets Active = Yes on the existing row" ' +
+            'onclick="reactivateDebtFromManage_(\'' + escapeJs(key) + '\')">Reactivate</button>' +
+        '</td>' +
+      '</tr>'
+    );
+  }).join('');
+
+  host.innerHTML =
+    '<div class="bills-manage-tablewrap">' +
+      '<table class="bills-manage-table">' +
+        '<thead><tr>' +
+          '<th scope="col">Account Name</th>' +
+          '<th scope="col">Type</th>' +
+          '<th scope="col" class="bills-manage-num">Balance</th>' +
+          '<th scope="col" class="bills-manage-actions">Actions</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody>' +
+      '</table>' +
+    '</div>';
+}
+
+function reactivateDebtFromManage_(key) {
+  const row = (window.__dashboardInactiveDebts || {})[key];
+  const account = row ? String(row.accountName || '').trim() : '';
+  if (!account) {
+    setStatus('debt_status', 'Couldn\u2019t resolve that debt — please refresh.', true);
+    return;
+  }
+
+  const confirmed = window.confirm(
+    'Reactivate "' + account + '"?\n\n' +
+    'This restores the existing debt row (Active = Yes). Balance, due date, ' +
+    'type, credit limit, minimum payment, interest rate, and Cash Flow history ' +
+    'are unchanged. The debt will be tracked again and counted in totals and ' +
+    'the planner.'
+  );
+  if (!confirmed) return;
+
+  setStatusLoading('debt_status', 'Reactivating…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      const msg = (res && res.alreadyActive)
+        ? account + ' is already active.'
+        : account + ' has been reactivated.';
+      setStatus('debt_status', msg, false);
+      // Refresh both lists so the row moves from inactive → active, plus the
+      // snapshot / dashboard sections that filter on Active.
+      loadActiveDebtsManagementUi_();
+      refreshInactiveDebts_();
+      if (typeof loadDebtSection === 'function') loadDebtSection();
+      if (typeof refreshSnapshot === 'function') refreshSnapshot();
+      if (typeof loadDashboardActionSections === 'function') loadDashboardActionSections();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('debt_status', (err.message || String(err)), true);
+    })
+    .reactivateDebtFromDashboard({ accountName: account });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1008,9 +1167,13 @@ function stopTrackingDebt() {
 
   const confirmed = window.confirm(
     'Stop tracking "' + account + '"?\n\n' +
-    'The debt will no longer appear in the Debt Account selector or planner ' +
-    'calculations. History stays in place so the account name remains ' +
-    'reserved and past activity is preserved.'
+    'This debt will:\n' +
+    '\u2022 remain in your history\n' +
+    '\u2022 no longer affect Dashboard totals\n' +
+    '\u2022 no longer affect Net Worth\n' +
+    '\u2022 no longer affect Planning\n\n' +
+    'You can restore it later from\n' +
+    'Manage Debts \u2192 Show inactive debts.'
   );
   if (!confirmed) return;
 
@@ -1018,7 +1181,10 @@ function stopTrackingDebt() {
 
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('debt_status', (res && res.message) || 'Stopped tracking.', false);
+      const msg = (res && res.alreadyInactive)
+        ? account + ' is already inactive.'
+        : account + ' is now inactive. History has been preserved.';
+      setStatus('debt_status', msg, false);
       loadDebtSection();
       if (typeof refreshSnapshot === 'function') refreshSnapshot();
       // Bills Due / Upcoming filter out inactive debts — reload so the

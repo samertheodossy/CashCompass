@@ -29,6 +29,26 @@ var DEBTS_RESERVED_ROW_NAMES_ = {
   'TOTAL DEBT': true
 };
 
+/**
+ * Canonical allow-list of the ONLY INPUT - Debts columns that the generic
+ * field editor (updateDebtField) and the Update-view field picker
+ * (getDebtsUiData.editableFields) are permitted to write.
+ *
+ * Account Name (rename has its own coordinated flow) and Active (lifecycle is
+ * owned exclusively by deactivateDebtFromDashboard / reactivateDebtFromDashboard)
+ * are deliberately EXCLUDED so a generic field write can never silently flip a
+ * debt's tracking state or rename it. Derived columns (Acct PCT Avail) are
+ * recomputed server-side and never user-written.
+ */
+var DEBT_EDITABLE_FIELDS_ = [
+  'Account Balance',
+  'Due Date',
+  'Credit Limit',
+  'Minimum Payment',
+  'Credit Left',
+  'Int Rate'
+];
+
 /* -------------------------------------------------------------------------- */
 /*  Read paths                                                                */
 /* -------------------------------------------------------------------------- */
@@ -50,14 +70,7 @@ function getDebtsUiData() {
   const ss = getUserSpreadsheet_();
   const sheet = ss.getSheetByName(getSheetNames_().DEBTS);
 
-  const editableFields = [
-    'Account Balance',
-    'Due Date',
-    'Credit Limit',
-    'Minimum Payment',
-    'Credit Left',
-    'Int Rate'
-  ];
+  const editableFields = DEBT_EDITABLE_FIELDS_.slice();
 
   if (!sheet) {
     return {
@@ -212,6 +225,86 @@ function getActiveDebtsForManagementFromDashboard() {
       intRate: disp(headerMap.intRateColZero),
       acctPctAvail: disp(headerMap.pctAvailColZero),
       active: disp(headerMap.activeColZero) || 'Yes'
+    });
+  }
+
+  out.sort(function(a, b) {
+    if (a.type !== b.type) return a.type.localeCompare(b.type);
+    return a.accountName.localeCompare(b.accountName);
+  });
+
+  return out;
+}
+
+/**
+ * Manage Debts — returns every INACTIVE (stop-tracked), non-summary debt with
+ * the same field shape as getActiveDebtsForManagementFromDashboard so the
+ * client can render an "Inactive debts" table with a Reactivate action. The
+ * 1-based `inputDebtsRow` is returned for parity (the reactivate flow matches
+ * by account name, not row, but keeping the shape identical lets the client
+ * reuse the same row-card renderer).
+ *
+ * Returns [] when there is no Active column (nothing can be explicitly
+ * inactive in that case) or no inactive rows.
+ */
+function getInactiveDebtsForManagementFromDashboard() {
+  const ss = getUserSpreadsheet_();
+  const sheet = ss.getSheetByName(getSheetNames_().DEBTS);
+  if (!sheet) return [];
+
+  let display = [];
+  let values = [];
+  try {
+    display = sheet.getDataRange().getDisplayValues();
+    values = sheet.getDataRange().getValues();
+  } catch (e) {
+    Logger.log('getInactiveDebtsForManagementFromDashboard read: ' + e);
+    return [];
+  }
+  if (display.length < 2) return [];
+
+  let headerMap;
+  try {
+    headerMap = getDebtsHeaderMap_(sheet, display);
+  } catch (e) {
+    Logger.log('getInactiveDebtsForManagementFromDashboard header map: ' + e);
+    return [];
+  }
+
+  // No Active column → nothing is explicitly inactive (legacy-workbook rule).
+  if (headerMap.activeColZero === -1) return [];
+
+  const out = [];
+  for (let r = 1; r < display.length; r++) {
+    const displayRow = display[r] || [];
+    const valueRow = values[r] || [];
+
+    const name = String(displayRow[headerMap.nameColZero] || '').trim();
+    if (!name) continue;
+    if (isDebtSummaryRowName_(name)) continue;
+    if (!isDebtRowInactive_(displayRow, valueRow, headerMap)) continue;
+
+    const disp = function(colZero) {
+      return colZero === -1 ? '' : String(displayRow[colZero] || '').trim();
+    };
+    const numOrBlank = function(colZero) {
+      if (colZero === -1) return '';
+      if (disp(colZero) === '') return '';
+      return toNumber_(valueRow[colZero]);
+    };
+
+    out.push({
+      inputDebtsRow: r + 1,
+      accountName: name,
+      type: disp(headerMap.typeColZero),
+      accountBalance: numOrBlank(headerMap.balanceColZero),
+      dueDate: disp(headerMap.dueDateColZero),
+      creditLimit: numOrBlank(headerMap.creditLimitColZero),
+      creditLeft: numOrBlank(headerMap.creditLeftColZero),
+      minimumPayment: numOrBlank(headerMap.minimumPaymentColZero),
+      intRate: disp(headerMap.intRateColZero),
+      acctPctAvail: disp(headerMap.pctAvailColZero),
+      active: disp(headerMap.activeColZero) || 'No'
     });
   }
 
@@ -775,6 +868,22 @@ function updateDebtField(payload) {
   const accountName = String(payload.accountName || '').trim();
   const fieldName = String(payload.fieldName || '').trim();
   const rawValue = payload.value;
+
+  // Allow-list guard: the generic field editor may ONLY write the approved
+  // editable columns. Active is owned by deactivate/reactivate; Account Name
+  // by the rename flow; derived columns are computed server-side. This blocks
+  // a crafted/stale call (e.g. fieldName:'Active') from silently flipping a
+  // debt's tracking state through the generic path.
+  if (DEBT_EDITABLE_FIELDS_.indexOf(fieldName) === -1) {
+    if (fieldName === 'Active') {
+      throw new Error('Use Stop Tracking / Reactivate to change Active.');
+    }
+    if (fieldName === 'Account Name') {
+      throw new Error('Use Rename Debt to change Account Name.');
+    }
+    // Derived / calculated columns (e.g. Acct PCT Avail) and anything else.
+    throw new Error('This field cannot be edited here: ' + (fieldName || '(blank)'));
+  }
 
   const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'DEBTS');
@@ -1464,6 +1573,132 @@ function deactivateDebtFromDashboard(payload) {
     message: message,
     accountName: accountName,
     alreadyInactive: alreadyInactive
+  };
+}
+
+/**
+ * Reactivate (un-stop-track) a debt: restore Active=Yes on the EXISTING
+ * INPUT - Debts row. The inverse of deactivateDebtFromDashboard. This never
+ * creates a new row and never touches Account Balance, Due Date, Type,
+ * Credit Limit, Credit Left, Minimum Payment, Int Rate, or any Cash Flow
+ * history — it only flips the Active cell back to Yes.
+ *
+ * Guardrail: if ANOTHER row already carries the same Account Name and is
+ * currently active, reactivation is blocked (we never want two active debts
+ * sharing a name — that would double-count balances and confuse every reader
+ * that joins by Payee/Account Name).
+ *
+ * Logs `debt_reactivate` with details { previousActive, newActive, sheetRow,
+ * accountName }.
+ *
+ * Payload: { accountName }
+ */
+function reactivateDebtFromDashboard(payload) {
+  validateRequired_(payload, ['accountName']);
+  const accountName = String(payload.accountName || '').trim();
+  if (!accountName) throw new Error('Account name is required.');
+  if (isDebtReservedName_(accountName)) {
+    throw new Error('Cannot reactivate the reserved "' + accountName + '" row.');
+  }
+
+  const ss = getUserSpreadsheet_();
+  const sheet = getSheet_(ss, 'DEBTS');
+  const headerMap = ensureDebtsActiveColumn_(sheet);
+
+  const display = sheet.getDataRange().getDisplayValues();
+  const values = sheet.getDataRange().getValues();
+
+  // Scan all rows with this name. Deterministically prefer the FIRST inactive
+  // row as the one to restore, and independently detect whether ANY row with
+  // the same name is already active (the duplicate-active guardrail) regardless
+  // of row order.
+  let inactiveRow = -1;
+  let inactiveActiveDisplay = '';
+  let anyMatchingRow = false;
+  let activeTwinExists = false;
+  for (let r = 1; r < display.length; r++) {
+    const name = String(display[r][headerMap.nameColZero] || '').trim();
+    if (!name) continue;
+    if (isDebtSummaryRowName_(name)) continue;
+    if (name.toLowerCase() !== accountName.toLowerCase()) continue;
+
+    anyMatchingRow = true;
+    const rowInactive = isDebtRowInactive_(display[r], values[r], headerMap);
+    if (rowInactive) {
+      if (inactiveRow === -1) {
+        inactiveRow = r + 1;
+        inactiveActiveDisplay = headerMap.activeColZero === -1
+          ? ''
+          : String(display[r][headerMap.activeColZero] || '').trim();
+      }
+    } else {
+      activeTwinExists = true;
+    }
+  }
+
+  if (!anyMatchingRow) {
+    throw new Error('Debt account not found: ' + accountName);
+  }
+
+  // Nothing inactive to restore — there is already an active row with this name.
+  if (inactiveRow === -1) {
+    return {
+      ok: true,
+      message: '"' + accountName + '" is already active.',
+      accountName: accountName,
+      alreadyActive: true
+    };
+  }
+
+  // Guardrail: never end up with two active debts sharing a name.
+  if (activeTwinExists) {
+    throw new Error(
+      'Another active debt already uses the name "' + accountName +
+      '". Rename or stop tracking that one before reactivating this row.'
+    );
+  }
+
+  const targetRow = inactiveRow;
+  const currentActiveDisplay = inactiveActiveDisplay;
+
+  writeActiveCellWithRowFormat_(sheet, targetRow, headerMap.activeCol, 'Yes');
+
+  try {
+    touchDashboardSourceUpdated_('debts');
+  } catch (e) { /* best-effort */ }
+
+  try {
+    appendActivityLog_(ss, {
+      eventType: 'debt_reactivate',
+      entryDate: Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+      amount: 0,
+      direction: '',
+      payee: accountName,
+      category: headerMap.typeColZero === -1
+        ? ''
+        : String(display[targetRow - 1][headerMap.typeColZero] || '').trim(),
+      accountSource: '',
+      cashFlowSheet: '',
+      cashFlowMonth: '',
+      dedupeKey: '',
+      details: JSON.stringify({
+        detailsVersion: 1,
+        reason: 'reactivate',
+        previousActive: currentActiveDisplay || 'No',
+        newActive: 'Yes',
+        sheetRow: targetRow,
+        accountName: accountName
+      })
+    });
+  } catch (logErr) {
+    Logger.log('reactivateDebtFromDashboard activity log: ' + logErr);
+  }
+
+  return {
+    ok: true,
+    message: 'Reactivated "' + accountName + '". It is tracked again.',
+    accountName: accountName,
+    alreadyActive: false
   };
 }
 

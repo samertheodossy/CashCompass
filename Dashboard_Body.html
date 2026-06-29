@@ -1224,7 +1224,6 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <input type="text" id="debt_value" inputmode="decimal" onfocus="handleDebtValueFocus()" onblur="handleDebtValueBlur()">
             <div class="house-update-actions">
               <button onclick="saveDebt()">Save Debt Update</button>
-              <button type="button" class="small-btn" onclick="stopTrackingDebt()" title="Mark this debt inactive. History is preserved.">Stop tracking</button>
             </div>
           </div>
           <div class="info">
@@ -1232,6 +1231,12 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <div><strong>Type:</strong> <span id="debt_type" class="muted">—</span></div>
             <div><strong>Acct PCT Avail:</strong> <span id="debt_pctAvail" class="muted">—</span></div>
           </div>
+        </div>
+
+        <div class="debt-danger-zone">
+          <div class="danger-zone-title">Danger Zone</div>
+          <p class="muted">Stop tracking removes this debt from active financial calculations. It can be restored later from Inactive Debts.</p>
+          <button type="button" class="small-btn danger" onclick="stopTrackingDebt()">Stop tracking this debt</button>
         </div>
       </div>
 
@@ -1272,6 +1277,9 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <div class="bills-management-head" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between;margin:0 0 12px 0;">
           <div>
             <p class="muted" style="margin:0;">Every debt account you currently track. Use <strong>Edit</strong> to update details, or <strong>Stop tracking</strong> to deactivate (history is preserved).</p>
+          </div>
+          <div>
+            <button type="button" id="debt_show_inactive_btn" class="small-btn debt-inactive-toggle" onclick="toggleInactiveDebtsView_()" aria-expanded="false" aria-controls="debt_inactive_wrap"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive debts</button>
           </div>
         </div>
 
@@ -1336,6 +1344,12 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
         <div id="debt_manage_list" class="bills-manage-list">
           <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></div>
+        </div>
+
+        <div id="debt_inactive_wrap" class="debt-inactive-section" style="display:none;">
+          <div class="card-title">Inactive Debts</div>
+          <p class="muted" style="margin:0 0 12px 0;">These debts are no longer included in Dashboard totals, Net Worth, or Planning. The original debt and all history are preserved. Reactivate restores the existing debt without changing balances, due dates, Cash Flow history, or Activity history.</p>
+          <div id="debt_inactive_list" class="bills-manage-list"></div>
         </div>
       </div>
 
