@@ -2265,7 +2265,6 @@ function getInputBillsDueRows_(ss, today, tz) {
       //     pass has applied for that month. Any other (manual) value is left
       //     untouched and the occurrence is surfaced as a card to reconcile.
       const cfByYear = {};
-      const monthApplied = {}; // stateKey -> count of occurrences applied to the month cell so far
 
       for (let i = 0; i < candidates.length; i++) {
         const cand = candidates[i];
@@ -2282,17 +2281,15 @@ function getInputBillsDueRows_(ss, today, tz) {
         const rowInfo = rowMap.rowsByPayee[payee] || null;
         const hasCashFlowRow = !!rowInfo && String(rowInfo.type || '').trim() === 'Expense';
 
-        const stateKey = cand.year + '|' + cand.monthHeader;
-        if (typeof monthApplied[stateKey] !== 'number') monthApplied[stateKey] = 0;
-
         const occDedupeKey = buildBillAutopayDedupeKey_(payee, cand.monthHeader, cand.dueDate, defaultAmount);
         const alreadyAutopaid = activityLogDedupeKeyExists_(ss, occDedupeKey);
 
-        // Occurrence already auto-applied on an earlier pass: it lives in the
-        // Cash Flow cell, so don't re-show it, and count it toward the month's
-        // applied total (keeps the manual-protection math below correct).
+        // Occurrence already auto-applied on an earlier pass: its amount is
+        // already in the Cash Flow cell and its per-occurrence bill_autopay
+        // marker exists, so don't re-show it and (critically) don't re-add it.
+        // This dedupe-key check — NOT the month cell value — is what guarantees
+        // exactly-once accumulation across refreshes.
         if (alreadyAutopaid) {
-          monthApplied[stateKey]++;
           continue;
         }
 
@@ -2300,9 +2297,7 @@ function getInputBillsDueRows_(ss, today, tz) {
         // 'bill_skip::' + buildDashboardBillSkipKey_(payee, <yyyy-MM-dd>) keyed
         // to this exact occurrence date, and writes $0 (adds nothing) into the
         // month cell. So a skipped occurrence must not show a card and must not
-        // be autopaid/accumulated. It is intentionally NOT counted toward
-        // monthApplied because a $0 skip adds nothing to the running autopay
-        // total (the manual-protection math below stays correct).
+        // be autopaid/accumulated — this marker check suppresses it.
         const occDueIso = Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd');
         const occSkipKey = 'bill_skip::' + buildDashboardBillSkipKey_(payee, occDueIso);
         if (activityLogDedupeKeyExists_(ss, occSkipKey)) {
@@ -2315,11 +2310,8 @@ function getInputBillsDueRows_(ss, today, tz) {
         // branch, the weekly branch cannot infer "paid" from the shared month
         // cell (it holds a running sum across occurrences), so this per-occurrence
         // marker is the handled signal. A manually-paid occurrence must not show
-        // a card and must not be autopaid/accumulated. It is intentionally NOT
-        // counted toward monthApplied: the manual amount already sits in the cell
-        // but it is not an autopay-applied amount, so a later autopay occurrence
-        // correctly sees the cell as a manual (unexpected) value and backs off
-        // rather than auto-adding on top of it.
+        // a card and must not be autopaid — this marker check suppresses it so a
+        // later AutoPay pass does not also add the amount on top of the manual one.
         const occPaidKey = 'bill_paid::' + buildDashboardBillPaidKey_(payee, occDueIso);
         if (activityLogDedupeKeyExists_(ss, occPaidKey)) {
           continue;
@@ -2329,55 +2321,53 @@ function getInputBillsDueRows_(ss, today, tz) {
         const canAutopay = autopay === 'yes' && varies !== 'yes';
 
         if (hasCashFlowRow && canAutopay && defaultAmount > 0 && dueHasPassed) {
+          // Reaching here means this occurrence has NO bill_autopay / bill_paid /
+          // bill_skip marker yet (each of the three checks above `continue`s), so
+          // it has never been auto-applied, manually paid, or skipped. Accumulate
+          // this occurrence's amount onto WHATEVER the month cell currently holds
+          // — manual, legacy, or prior-autopay values are all fine. Exactly-once
+          // safety comes solely from the per-occurrence bill_autopay dedupe key
+          // (the `alreadyAutopaid` guard at the top of the loop): once this write
+          // logs its marker, the next refresh short-circuits before re-adding.
+          // This intentionally replaces the older `safeToAccumulate` equality
+          // guard, which refused to add whenever the cell carried a value it
+          // didn't itself place and left valid AutoPay occurrences stuck as
+          // cards (e.g. Robinhood weekly with a manual/legacy month total).
           const cellRange = sheet.getRange(rowInfo.row, monthCol + 1);
           const cellValue = cellRange.getValue();
           const cellDisplay = cellRange.getDisplayValue();
-          const cellBlank =
+          const wasBlank =
             cellValue === '' ||
             cellValue === null ||
             typeof cellValue === 'undefined' ||
             String(cellDisplay || '').trim() === '';
-          const cellNum = toNumber_(cellValue);
-          // Expense amounts are stored negative; expected running autopay total
-          // for this month so far = -(applied count) * per-occurrence amount.
-          const expectedPriorAutopay = round2_(-1 * monthApplied[stateKey] * defaultAmount);
 
-          const safeToAccumulate = cellBlank
-            ? monthApplied[stateKey] === 0
-            : Math.abs(cellNum - expectedPriorAutopay) < 0.005;
-
-          if (safeToAccumulate) {
-            const wasBlank = cellBlank;
-            // Accumulate (add) this occurrence into the single month cell.
-            addCashFlowMoneyToCellPreserveRowFormat_(sheet, rowInfo.row, monthCol + 1, -defaultAmount);
-            if (wasBlank) {
-              // Match the monthly path: a freshly-populated blank cell should
-              // pick up the row's red/currency look, not General/black.
-              if (!copyNearestAmountFormatInRow_(sheet, rowInfo.row, monthCol + 1)) {
-                sheet.getRange(rowInfo.row, monthCol + 1).setNumberFormat('$#,##0.00;-$#,##0.00');
-              }
+          // Accumulate (add) this occurrence into the single month cell.
+          addCashFlowMoneyToCellPreserveRowFormat_(sheet, rowInfo.row, monthCol + 1, -defaultAmount);
+          if (wasBlank) {
+            // Match the monthly path: a freshly-populated blank cell should
+            // pick up the row's red/currency look, not General/black.
+            if (!copyNearestAmountFormatInRow_(sheet, rowInfo.row, monthCol + 1)) {
+              sheet.getRange(rowInfo.row, monthCol + 1).setNumberFormat('$#,##0.00;-$#,##0.00');
             }
-            touchDashboardSourceUpdated_('cash_flow');
-
-            appendActivityLog_(ss, {
-              eventType: 'bill_autopay',
-              entryDate: Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd'),
-              amount: defaultAmount,
-              direction: 'expense',
-              payee: payee,
-              category: category,
-              accountSource: '',
-              cashFlowSheet: sheet.getName(),
-              cashFlowMonth: cand.monthHeader,
-              dedupeKey: occDedupeKey,
-              details: JSON.stringify({ source: 'INPUT - Bills', autopay: true, varies: varies, frequency: frequency, occurrence: true })
-            });
-
-            monthApplied[stateKey]++;
-            continue; // applied → don't also show as a due card
           }
-          // Not safe to accumulate (manual/unexpected value present): leave the
-          // cell alone and fall through to show the occurrence as a card.
+          touchDashboardSourceUpdated_('cash_flow');
+
+          appendActivityLog_(ss, {
+            eventType: 'bill_autopay',
+            entryDate: Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd'),
+            amount: defaultAmount,
+            direction: 'expense',
+            payee: payee,
+            category: category,
+            accountSource: '',
+            cashFlowSheet: sheet.getName(),
+            cashFlowMonth: cand.monthHeader,
+            dedupeKey: occDedupeKey,
+            details: JSON.stringify({ source: 'INPUT - Bills', autopay: true, varies: varies, frequency: frequency, occurrence: true })
+          });
+
+          continue; // applied → don't also show as a due card
         }
 
         // Show this occurrence as its own Bills Due card at the normal amount.
