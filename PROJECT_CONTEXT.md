@@ -187,6 +187,12 @@ The **lifecycle** companion to Manage Pattern Rollout above. Make the active/ina
 
 **Priority:** Medium — after Financial Integrity reconciliation, before broader external beta if time allows. Not a blocker.
 
+## Future Feature — Shared Sheet Write Utilities
+
+High-level mirror; **authoritative copy lives in `TODO.md → Future Feature — Shared Sheet Write Utilities`** (backlog summary in `ENHANCEMENTS.md`). **Status: documented, not implemented. Priority: Medium — after Financial Integrity, Recovery Validation, and the Validation Agent; before broader public beta. Not a blocker.**
+
+The **data-write** companion to the Shared Entity Lifecycle Framework above (same Shared Component direction, applied to the sheet-write path). Many modules write back to Google Sheets — Bills, Debt updates, Bank Accounts, Investments, Houses, House Expenses, Cash Flow, Planner outputs — and each re-implements its own value+format write logic, so formatting-preservation bugs recur (e.g. the Debt Credit Limit cell losing its green font from a row-neighbor format paste; blank Cash Flow autopay cells rendering `-3` instead of red `-$3.00`). **Goal:** a shared Sheet Write utility layer (`writeCellPreserveFormatting_`, `writeRangePreserveFormatting_`, `updateCurrencyCell_`, `updatePercentCell_`, `updateDateCell_`) that preserves number format / font color / weight / alignment / borders / background and formulas, centralizes currency + percentage formatting, and reduces duplicated write logic so a formatting fix made once applies everywhere. **Architectural principle:** business logic decides *what* value to write; shared helpers decide *how* — with "preserve the cell's own look" (per-column, e.g. Debts) vs "match the row" (row-uniform, e.g. Cash Flow) as explicit named behaviors. **Phased, not an immediate refactor:** inventory write helpers → identify duplication → introduce shared helper(s) → migrate modules one at a time as they are touched, each with runtime validation.
+
 ## Future Feature — Income Expected / Due Workflow
 
 High-level mirror; **authoritative copy lives in `TODO.md → Future Feature — Income Expected / Due Workflow`** (backlog entry in `ENHANCEMENTS.md`). **Status: documented, not implemented. Priority: Medium-high, after current Central stabilization.**

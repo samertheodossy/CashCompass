@@ -617,6 +617,48 @@ Authoritative copy lives here; `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md` mirror
 
 ---
 
+## Future Feature — Shared Sheet Write Utilities
+
+**Status:** documented, **not implemented** (authoritative copy; high-level architectural note in `PROJECT_CONTEXT.md`, backlog summary in `ENHANCEMENTS.md`).
+
+**Related (do not duplicate):** this is the **data-write** companion to `## Future Feature — Shared Entity Lifecycle Framework` and `## Future UI Standardization — Manage Pattern Rollout`. Lifecycle/Manage standardize *workflow and UI*; this item standardizes *how values land in the sheet*. It aligns with the broader Shared Lifecycle / Shared Component direction — same principle (extract a reusable layer once enough real consumers exist), applied to the write path.
+
+**Context.** Many modules now write values back into Google Sheets — Bills, Debt updates, Bank Accounts, Investments, Houses, House Expenses, Cash Flow, and Planner outputs. Formatting-preservation bugs have recurred across several of these modules over time (most recently the Debt **Credit Limit** cell losing its green font because the write path pasted a row neighbor's format via `copyNeighborFormatInRow_`; earlier, blank Cash Flow autopay cells rendering `-3` instead of red `-$3.00`). The root problem: each module re-implements its own "set value + fix formatting" logic, so a formatting fix in one place doesn't propagate, and the wrong helper is easy to reach for (e.g. the row-uniform Cash Flow neighbor-copy is wrong for the per-column Debts sheet).
+
+**Goal.** Introduce a shared **Sheet Write utility layer** so all writes behave consistently, and a formatting fix made once applies everywhere.
+
+**Potential shared helpers:**
+
+- `writeCellPreserveFormatting_()` — set a value while preserving the cell's own format.
+- `writeRangePreserveFormatting_()` — range equivalent.
+- `updateCurrencyCell_()` — centralized currency write + format.
+- `updatePercentCell_()` — centralized percentage write + format.
+- `updateDateCell_()` — centralized date/integer-date write + format.
+
+**Responsibilities:**
+
+- Preserve: **number format, font color, font weight, alignment, borders**, and **background where appropriate**.
+- Preserve **formulas** when not intentionally replacing them.
+- Centralize **currency** formatting.
+- Centralize **percentage** formatting.
+- Reduce duplicated write logic.
+- Make formatting fixes apply everywhere.
+
+**Design principles.** **Business logic decides WHAT value to write; shared write helpers decide HOW it is written.** Avoid every module implementing its own formatting logic. Distinguish "preserve the cell's own look" (the Debts/per-column case) from "match the row" (the Cash Flow/row-uniform case) as explicit, named behaviors rather than a single ambiguous helper.
+
+**Current write helpers to inventory / rationalize (starting set, not exhaustive):** `applyCurrencyFormat_`, `setCurrencyPreserveFormat_`, `setCurrencyCellPreserveRowFormat_`, `copyNeighborFormatInRow_`, `copyNearestAmountFormatInRow_`, `setCashFlowMoneyCellPreserveRowFormat_` / `addCashFlowMoneyToCellPreserveRowFormat_` / `applyCashFlowMoneyFormat_` (all `planner_helpers.js`), `writeDashboardBillValuePreserveFormat_` (`dashboard_data.js`), and the `PASTE_FORMAT` template-row copy in `bank_accounts.js` (`findAccountsTemplateRow_`). Note the two distinct number-format conventions (black negatives for Debts/etc. vs `[Red]` negatives for Cash Flow) that the shared layer must keep separable.
+
+**Migration strategy (phased — do NOT refactor immediately):**
+
+- **Phase 1** — Inventory all current write helpers (list above is the seed).
+- **Phase 2** — Identify duplicated formatting code and the distinct format conventions.
+- **Phase 3** — Introduce shared helper(s) with the responsibilities above.
+- **Phase 4** — Gradually migrate modules one at a time, **as they are touched**, each with runtime validation.
+
+**Priority:** **Medium.** After **Financial Integrity**, **Recovery Validation**, and the **Validation Agent**; before broader public beta. **Not a blocker.**
+
+---
+
 ## Future Feature — Income Expected / Due Workflow
 
 **Status:** documented, **not implemented** (authoritative copy; high-level mirrors in `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md`).
