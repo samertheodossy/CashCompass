@@ -251,6 +251,7 @@
     function fiaStatusSeverity(status) {
       if (status === 'FAIL') return 'action_needed';
       if (status === 'PASS_WITH_OBSERVATIONS') return 'warn';
+      if (status === 'NOT_INITIALIZED') return 'info';
       return 'ok';
     }
 
@@ -280,6 +281,17 @@
       var host = document.getElementById('fia-modules');
       host.textContent = '';
 
+      // Informational, non-error state (bootstrap/blank workbook). Show the
+      // message calmly and skip the (empty) module detail.
+      if (data.status === 'NOT_INITIALIZED') {
+        var info = el('div', data.message || 'This workbook has not been initialized yet.');
+        info.style.whiteSpace = 'pre-line';
+        info.style.marginTop = '10px';
+        info.style.color = '#1e429f';
+        host.appendChild(info);
+        return;
+      }
+
       (data.modules || []).forEach(function(m) {
         var wrap = document.createElement('div');
         wrap.style.marginTop = '14px';
@@ -290,6 +302,14 @@
         head.appendChild(sevPill(fiaStatusSeverity(m.status)));
         head.appendChild(el('span', ' ' + (m.status || '') + ' · v' + (m.version || 0), 'muted'));
         wrap.appendChild(head);
+
+        if (m.message) {
+          var mMsg = el('div', m.message);
+          mMsg.style.whiteSpace = 'pre-line';
+          mMsg.style.marginTop = '4px';
+          mMsg.style.color = '#1e429f';
+          wrap.appendChild(mMsg);
+        }
 
         var metrics = m.metrics || {};
 

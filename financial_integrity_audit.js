@@ -35,8 +35,19 @@ var FINANCIAL_AUDIT_TOLERANCE_USD_ = 0.01;
 var FINANCIAL_AUDIT_STATUS_ = {
   PASS: 'PASS',
   PASS_WITH_OBSERVATIONS: 'PASS_WITH_OBSERVATIONS',
+  // Informational, non-error state: the workbook is still in bootstrap/blank
+  // state (no financial sheets) so there is nothing to audit. This is NOT a
+  // failure — nothing is wrong, the workbook simply hasn't been set up.
+  NOT_INITIALIZED: 'NOT_INITIALIZED',
   FAIL: 'FAIL'
 };
+
+/**
+ * Informational message shown when the workbook has not been initialized.
+ */
+var FINANCIAL_AUDIT_NOT_INITIALIZED_MESSAGE_ =
+  'This workbook has not been initialized yet.\n' +
+  'Financial Integrity Audit requires a completed CashCompass workbook.';
 
 /**
  * Numeric precedence for status escalation. A result can only ever move to a
@@ -127,6 +138,34 @@ function auditSetMetric_(result, key, value) {
   result.metrics[key] = value;
 }
 
+/**
+ * Marks a result as NOT_INITIALIZED (informational, non-error) and attaches a
+ * human-readable message. Callers should return immediately after this.
+ */
+function auditMarkNotInitialized_(result, message) {
+  result.status = FINANCIAL_AUDIT_STATUS_.NOT_INITIALIZED;
+  result.message = String(message == null ? '' : message);
+}
+
+/**
+ * True when the workbook has real financial/app sheets to audit. Read-only.
+ * Reuses the app's canonical blank-workbook detector (workbookHasAnyAppSheet_,
+ * sheet_bootstrap.js), which ignores the seed-only INPUT - Settings / SYS -
+ * Meta scaffolding. Fails closed to "initialized" (true) so a real, populated
+ * workbook is never mislabeled as uninitialized because of a probe hiccup.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @returns {boolean}
+ */
+function financialAuditWorkbookInitialized_(ss) {
+  try {
+    if (!ss) return true;
+    return !!workbookHasAnyAppSheet_(ss);
+  } catch (_e) {
+    return true;
+  }
+}
+
 /** Signed money delta a - b, rounded to cents. */
 function auditDelta_(a, b) {
   return round2_(toNumber_(a) - toNumber_(b));
@@ -179,6 +218,24 @@ function getFinancialAuditModules_() {
  * @returns {!Object} aggregated audit report (see file header / design doc)
  */
 function runFinancialIntegrityAudit() {
+  // Early informational short-circuit: if the caller's workbook is still in
+  // bootstrap/blank state (no financial sheets), there is nothing to audit.
+  // Report NOT_INITIALIZED rather than letting each module FAIL on missing
+  // sheets. Read-only; if the workbook can't be resolved we skip this check
+  // and let the modules run (they surface a genuine FAIL).
+  var ssForInit = null;
+  try { ssForInit = getUserSpreadsheet_(); } catch (_e) { ssForInit = null; }
+  if (ssForInit && !financialAuditWorkbookInitialized_(ssForInit)) {
+    return {
+      status: FINANCIAL_AUDIT_STATUS_.NOT_INITIALIZED,
+      generatedAt: new Date().toISOString(),
+      toleranceUsd: FINANCIAL_AUDIT_TOLERANCE_USD_,
+      message: FINANCIAL_AUDIT_NOT_INITIALIZED_MESSAGE_,
+      summary: { moduleCount: 0, warningCount: 0, failureCount: 0 },
+      modules: []
+    };
+  }
+
   var modules = getFinancialAuditModules_()
     .filter(function(m) { return m && m.enabled; })
     .sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
@@ -217,6 +274,7 @@ function runFinancialIntegrityAudit() {
       version: m.version,
       name: moduleResult.name,
       status: moduleResult.status,
+      message: moduleResult.message || '',
       checks: moduleResult.checks,
       warnings: moduleResult.warnings,
       failures: moduleResult.failures,
@@ -224,7 +282,10 @@ function runFinancialIntegrityAudit() {
     });
   });
 
-  return {
+  // Defensive: if every module independently reported NOT_INITIALIZED (e.g. the
+  // early short-circuit was skipped because the workbook couldn't be resolved
+  // there), surface NOT_INITIALIZED overall rather than a misleading PASS.
+  var report = {
     status: overall,
     generatedAt: new Date().toISOString(),
     toleranceUsd: FINANCIAL_AUDIT_TOLERANCE_USD_,
@@ -235,6 +296,14 @@ function runFinancialIntegrityAudit() {
     },
     modules: results
   };
+
+  if (results.length > 0 &&
+      results.every(function(r) { return r.status === FINANCIAL_AUDIT_STATUS_.NOT_INITIALIZED; })) {
+    report.status = FINANCIAL_AUDIT_STATUS_.NOT_INITIALIZED;
+    report.message = FINANCIAL_AUDIT_NOT_INITIALIZED_MESSAGE_;
+  }
+
+  return report;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -272,6 +341,14 @@ function runDebtAudit() {
   }
   if (!ss) {
     auditAddFailure_(result, 'NO_SPREADSHEET', 'No active workbook available.');
+    return result;
+  }
+
+  // Bootstrap/blank workbook: nothing to audit. Report the informational
+  // NOT_INITIALIZED state instead of FAILing on the missing INPUT - Debts
+  // sheet. Read-only; no sheet creation, no onboarding.
+  if (!financialAuditWorkbookInitialized_(ss)) {
+    auditMarkNotInitialized_(result, FINANCIAL_AUDIT_NOT_INITIALIZED_MESSAGE_);
     return result;
   }
 
