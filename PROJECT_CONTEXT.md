@@ -2,9 +2,9 @@
 
 We are building **CashCompass** — a Google Apps Script web dashboard (and spreadsheet sidebar) for personal finance / property / debt planning. Tagline: *Guiding your money decisions.*
 
-## Current Product Status (June 2026)
+## Current Product Status (July 2026)
 
-- **Stage:** **Stage 2 — Product Hardening (current).** Maturity (estimated): **Family Beta Readiness ~96–97% · External / Public Beta Readiness ~90–92%**. Remaining work is primarily **financial integrity, validation, recovery hardening, regression prevention, and UX polish — not major feature development.** Authoritative stage roadmap (Stage 1–5) + Current Engineering Priorities + Beta Gate live in `TODO.md → Product Maturity Stages`; a high-level mirror is in `## Product Maturity Stages (high-level)` below.
+- **Stage:** **Stage 3 — Beta Readiness (current).** **Stage 1 (Core Platform) and Stage 2 (Product Hardening) are complete.** Maturity (estimated): **Family Beta Readiness ~97–98% · External / Public Beta Readiness ~92%**. The remaining pre-beta work is the **Beta Gate** — the **Validation Agent** (automated release gate), **Financial Integrity convergence**, and the remaining **Recovery adoption-path validation** — plus onboarding/UX polish; not major feature development. Authoritative stage roadmap (Stage 1–6) + Current Engineering Priorities + Beta Gate live in `TODO.md → Product Maturity Stages`; a high-level mirror is in `## Product Maturity Stages (high-level)` below.
 - **Architecture:** Central App operational — **stable, family-beta capable**. The production / bound workbook remains protected (bound mode unchanged); the central architecture is operational and runtime-validated.
 - **Completed (working in central mode):** Provisioning, Workbook Mapping, Dashboard, Planner, Assets, Properties, Cash Flow, Bills, Debts, Income, Activity, Email.
 - **Recently completed (this initiative):**
@@ -16,8 +16,12 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
   - **Recovery stack (shipped behind flags, default OFF):** Phase 6C.1 Adopt-Before-Create, Phase 6D.1 Recovery Page, Phase 6D.2a Reconnect, Phase 6E.1 Admin Inspect + Clear Mapping. All committed; **healthy-path validated (2026-06-09)** and **reconnect end-to-end validated (2026-06-11)** — a real stale mapping was induced, the recovery page rendered and blocked the dashboard, **Reconnect Existing Workbook executed and the dashboard reloaded successfully**, and Admin Diagnostics confirmed the live mapping + reverse index + real workbook. The blank-iframe reconnect reload bug was fixed (startup routing now re-runs in-app). The **executed Admin Clear Mapping** path was **validated end-to-end (2026-07-02)** — mapping removal, reverse-index removal, repair audit history, bootstrap reprovision after clear, Welcome routing, dashboard empty-state, Financial Integrity `NOT_INITIALIZED` handling, Central admin routing, and `ADMIN_EMAILS`. **Remaining recovery-validation paths** (Auto-Adopt, Ambiguous recovery, Name-only adoption, Orphan workbook) **still pending** — see `## Flag Registry`, `## Recovery Validation Inventory`, and `TODO.md → Open testing inventory`.
   - **Bills Due recurrence overhaul (2026-06-12, shipped + family-beta validated):** Weekly/Biweekly bills now use **true occurrence expansion** (individual occurrences at their normal per-occurrence amount on the Due Day anchor + 7/14-day steps; the rejected monthly-burden averaging was reverted), with **per-occurrence autopay accumulation/dedupe** into the single monthly Cash Flow cell (manual-protection preserved). **Skip suppression for expanded recurrence completed** — `skipDashboardBill` now logs the `bill_skip` event regardless of cell state (the `$0` write stays blank-guarded), so a skipped Weekly/Biweekly occurrence clears and stays gone while future occurrences remain. **AutoPay + overdue visual indicators completed** — gold ⭐ star on AutoPay cards, light-red styling on overdue cards. Weekday-based recurrence ("Repeat Day") remains a documented **future** enhancement, not implemented.
   - **Manage Debts (2026-06-15/16, shipped + runtime-validated):** A user-friendly debt-maintenance experience under Planning → Debts (mirrors Manage Bills) so users don't hand-edit the protected `INPUT - Debts` sheet. **Phase 1** — `[Update] [Add new] [Manage Debts]` toggle; sortable debt table; inline multi-field **Edit** (Type / Balance / Due Date / Credit Limit / Credit Left / Minimum Payment / Interest Rate; Account Name read-only; Acct PCT Avail recalculated server-side; one consolidated `debt_update` log); **Stop tracking** reuses `deactivateDebtFromDashboard`. **Phase 1.5 — Rename Debt** — a separate Rename modal performs a coordinated, lock-guarded rename of the `INPUT - Debts` row **and** the matching `Type = Expense` Payee cell across **all** `INPUT - Cash Flow YYYY` sheets (Payee cell only; month values/formulas untouched), with stale-row protection, **duplicate-name protection** (active + inactive, case-insensitive → *"Another debt account already uses this name. Rename was not completed."*), a TOTAL-DEBT/reserved guard, one `debt_rename` Activity Log row (no history rewrite), and best-effort revert on partial failure. No schema changes. **Merge Debt Accounts** is documented as a separate **future** enhancement (deliberately distinct from block-on-duplicate Rename).
-- **Current focus — Recovery Validation (6F, ~94–96%):** reconnect + recovery-page render + executed admin clear (+ mapping/reverse-index removal, repair audit history, bootstrap reprovision) are validated; remaining = Auto-Adopt + Ambiguous recovery + Name-only adoption + Orphan workbook validation on a disposable account, then flags back OFF. Remaining recovery slices: 6D.2b Create New Workbook, 6E.2 Admin Set Mapping.
-- **Status snapshot (2026-07-02):** Central Architecture ~95%+; Recovery Architecture ~90% implemented; Recovery Validation ~94–96% (healthy path + reconnect + recovery-page render done; **executed admin clear + mapping/reverse-index removal + repair audit history + bootstrap reprovision + Welcome routing + dashboard empty-state + Financial Integrity `NOT_INITIALIZED` + Central admin routing + `ADMIN_EMAILS` validated 2026-07-02**; Auto-Adopt / ambiguous / name-only adoption / orphan workbook pending); Family Beta Readiness improving (unchanged — not tied to the remaining adoption-path testing); External Beta Readiness dependent on recovery validation.
+- **Completed this stage (Stage 2 — Product Hardening, 2026-07-02):**
+  - **Recovery (destructive/admin paths):** executed **Admin Clear** + mapping removal + reverse-index removal + repair audit history + bootstrap reprovision + Welcome routing + dashboard empty-state + recovery routing + Reconnect + **Central admin validation** + **`ADMIN_EMAILS` validation**. *(Recovery validation completed today.)*
+  - **Financial Integrity (foundation):** **Audit Framework** (read-only, admin-gated) + **Debt Audit** + **shared debt Active helper (Phase 2)** + **`NOT_INITIALIZED`** state.
+  - **Performance:** **Bills Due performance optimization (~51s → ~5.6s)** (per-request Cash Flow row-map + Activity Log dedupe caching).
+- **Current focus — Stage 3 Beta Readiness (the Beta Gate):** (1) **Validation Agent** — the automated release gate (highest-priority build); (2) **Financial Integrity convergence** — canonical basis + Planner/Dashboard/Rolling convergence to $0.01 + Asset/Planner/Dashboard audit modules; (3) **Recovery Validation — remaining adoption paths** (Auto-Adopt + Ambiguous + Name-only adoption + Orphan on a disposable account, then flags OFF). Remaining recovery slices (Stage 4): 6D.2b Create New Workbook, 6E.2 Admin Set Mapping.
+- **Status snapshot (2026-07-02):** Central Architecture ~95%+; Recovery Architecture ~90% implemented; **Recovery destructive/admin paths validated** (only Auto-Adopt / Ambiguous / Name-only adoption / Orphan remaining); **Financial Integrity foundation shipped** (Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`; convergence remaining); **Validation Agent not started** (highest-priority Stage 3 build); Family Beta Readiness ~97–98%; External Beta Readiness ~92%.
 - **Validation-surface note:** the Apps Script **Script Properties UI may not immediately reflect runtime mapping changes during active testing**; **Admin Diagnostics is the authoritative validation surface** for mapping/reverse-index state.
 - **Future:** External beta readiness / hardening, family-beta expansion + user-lifecycle handling, Chat Assistant, Paid Product framework.
 
@@ -25,9 +29,9 @@ Roadmap: `## Launch Readiness Roadmap (high-level)` below (detail in `TODO.md �
 
 > **Roadmap-label note (disambiguation):** the **Workbook Identity & Recovery** sub-series uses working labels **Phase 6A–6E**. These are the detailed expansion of the macro roadmap's **Phase 2 — Family Beta Hardening → 2B Workbook Recovery**, and are **not** the same as the macro **"Phase 6 — External Beta Readiness."** Where this doc says "Phase 6A/6B/6C…" it means the Identity & Recovery track.
 
-## Domain Completion Matrix (snapshot 2026-06-11)
+## Domain Completion Matrix (snapshot 2026-07-02)
 
-A high-level management/status dashboard. Percentages are rough completion estimates, not precise metrics. This is the at-a-glance view only — roadmap detail lives in `## Launch Readiness Roadmap (high-level)` below and `TODO.md`.
+A high-level management/status dashboard. Percentages are rough completion estimates, not precise metrics. This is the at-a-glance view only — roadmap detail lives in `## Product Maturity Stages (high-level)` below and `TODO.md → Product Maturity Stages`.
 
 ### Core Finance Functionality — ~97%
 
@@ -44,30 +48,38 @@ Central App operational and runtime-validated — per-user provisioning, workboo
 - Bound deployment cleanup / manifest revert once central is primary
 - Optional optimization
 
-### Workbook Identity & Recovery — ~90% implemented · validation ~90–92%
+### Financial Integrity — foundation shipped · convergence remaining
 
-Identity markers + reverse index + the recovery stack (adopt-before-create, recovery page, reconnect, admin inspect + clear) are implemented and committed behind flags. Validated: healthy-path load, disabled-path enforcement, **recovery-page render from a real stale mapping, and an executed Reconnect** (2026-06-11, dashboard reloaded successfully; reconnect reload bug fixed).
+Read-only, admin-gated **Audit Framework** + **Debt Audit** + **shared debt Active helper (Phase 2)** + the **`NOT_INITIALIZED`** state are shipped. The framework observes calc-basis differences neutrally; the convergence work (declaring a canonical basis and reconciling to it) is the remaining Beta-Gate item.
 
-- 6F Recovery Validation — remaining: Auto-Adopt, Ambiguous recovery, Name-only adoption, Orphan workbook *(executed admin clear + audit log validated 2026-07-02)*
+- Canonical financial basis (declare the authoritative model)
+- Planner / Dashboard / Rolling Debt convergence to $0.01
+- Asset audit · Planner audit · Dashboard audit modules
+
+### Workbook Identity & Recovery — ~90% implemented · destructive/admin paths validated
+
+Identity markers + reverse index + the recovery stack (adopt-before-create, recovery page, reconnect, admin inspect + clear) are implemented and committed behind flags. Validated: healthy-path load, disabled-path enforcement, recovery-page render from a real stale mapping, executed Reconnect (2026-06-11), and **executed Admin Clear + mapping/reverse-index removal + repair audit history + bootstrap reprovision + Welcome routing + empty-dashboard + Central admin routing + `ADMIN_EMAILS` (2026-07-02).**
+
+- 6F Recovery Validation — remaining: Auto-Adopt, Ambiguous recovery, Name-only adoption, Orphan workbook *(destructive/admin paths validated 2026-07-02)*
 - 6D.2b Create New Workbook (designed, not implemented)
 - 6E.2 Admin Set Mapping (designed, not implemented)
 
-### Family Beta Readiness — ~96–97%
+### Family Beta Readiness — ~97–98%
 
-Stable and family-beta capable; provisioning proven across multiple accounts; the recovery stack is in place behind flags; core + lifecycle workflows shipped. Remaining work is hardening, not features.
+Stable and family-beta capable; provisioning proven across multiple accounts; the recovery destructive/admin paths are validated; core + lifecycle workflows + Bills Due performance shipped. Remaining work is the Beta Gate, not features.
 
-- Financial Integrity reconciliation
-- Recovery validation (destructive paths)
-- Additional beta users
-- Onboarding polish
+- Validation Agent (automated release gate)
+- Financial Integrity convergence
+- Remaining recovery adoption-path validation
+- Onboarding polish + additional beta users
 
-### External / Public Beta Readiness — ~90–92%
+### External / Public Beta Readiness — ~92%
 
-Architecture, recovery, and core/lifecycle workflows are built; remaining gaps are validation depth (recovery proven under real failure), regression prevention, and operational support.
+Architecture, recovery, and core/lifecycle workflows are built; remaining gaps are the Validation Agent, regression prevention, user-lifecycle handling, and operational support.
 
-- Recovery proven under failure conditions
-- User-lifecycle handling
-- Support workflows
+- Validation Agent + regression prevention
+- User-lifecycle handling + invite flow
+- Support workflows + operational monitoring
 
 ### Paid Product Readiness — ~15–20%
 
@@ -82,31 +94,32 @@ Early stage — no monetization infrastructure exists yet.
 
 High-level mirror; **authoritative copy lives in `TODO.md → Product Maturity Stages`** (with `## Current Engineering Priorities`, `## Shared Lifecycle Framework`, and `## Beta Gate`). The Stage model is the at-a-glance roadmap; the `## Launch Readiness Roadmap (high-level)` below is the detailed Phase 1–7 expansion that maps onto these stages.
 
-- **Stage 1 — Core Platform** *(✅ complete)* — Central App architecture, provisioning, workbook mapping, Dashboard, Planner, Bills, Debt Management, House Expenses, Upcoming Expenses, Activity Log, Retirement, Money Plan Phase 1, Debt Lifecycle (Stop Tracking / Reactivate), Admin Diagnostics foundation.
-- **Stage 2 — Product Hardening** *(current)* — (1) Financial Integrity (reconcile Dashboard / Planner / source sheets; eliminate aggregation inconsistencies; reconciliation diagnostics), (2) Recovery Validation (Clear Mapping, Adopt Existing Workbook, Ambiguous Mapping, stale-mapping validation), (3) Runtime Validation (regression + workflow + edge-case), (4) UX polish (consistency, lifecycle workflows, messaging, admin diagnostics).
-- **Stage 3 — Beta Readiness** *(next)* — Validation Agent, automated regression detection, deployment checklist, financial integrity gate, release readiness, documentation + onboarding review. Goal: **Family Beta Release Candidate.**
-- **Stage 4 — Family Beta** — limited trusted users: collect usability feedback, identify workflow gaps + missing diagnostics, stabilize production workflows.
-- **Stage 5 — External Beta** — broader audience: scalability, support workflows, billing readiness, onboarding automation, operational monitoring.
+- **Stage 1 — Core Platform** *(✅ complete)* — Central App architecture, provisioning, workbook mapping, Dashboard, Planner, Bills, Debt Management (incl. lifecycle + Rename), House Expenses, Upcoming Expenses, Activity Log, Retirement, Money Plan Phase 1, Admin Diagnostics foundation, Bills Due recurrence overhaul + **Bills Due performance optimization (~51s → ~5.6s)**.
+- **Stage 2 — Product Hardening** *(✅ complete)* — **Recovery destructive/admin paths validated** (Admin Clear + mapping/reverse-index removal + repair audit + bootstrap reprovision + Welcome routing + empty-dashboard + recovery routing + Reconnect + Central admin + `ADMIN_EMAILS`); **Financial Integrity foundation** (Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`); Bills Due performance. *(Convergence + remaining recovery adoption paths carried into Stage 3.)*
+- **Stage 3 — Beta Readiness** *(current)* — the **Beta Gate**: (1) **Validation Agent** (automated release gate — highest priority), (2) **Financial Integrity convergence** (canonical basis + Planner/Dashboard/Rolling convergence + Asset/Planner/Dashboard audit modules), (3) **Recovery Validation — remaining adoption paths** (Auto-Adopt / Ambiguous / Name-only / Orphan), (4) release + onboarding review. Goal: **Family Beta Release Candidate.**
+- **Stage 4 — Family Beta** — limited trusted users: go/no-go, Web App UX polish, recovery slices (6D.2b / 6E.2), Shared Lifecycle rollout (Bank Accounts), collect feedback, stabilize workflows.
+- **Stage 5 — External Beta** — broader invited audience: support workflows, feedback, invite flow, user-lifecycle handling, scalability, remaining Shared Lifecycle rollout (Investments / Houses / Income Sources), Shared Sheet Write Utilities, Tier-2 migration cleanup.
+- **Stage 6 — Version 2 / Future Platform** — Chat / Assistant, Operations Dashboard, operational metrics, monitoring, analytics, Paid Product readiness, Account Aggregation & Transaction Import. **None required for Family or External Beta.**
 
-**Current Engineering Priorities (ranked):** 1) Financial Integrity reconciliation *(highest)* · 2) Recovery Validation completion · 3) Validation Agent · 4) Shared Lifecycle Framework (Debt Lifecycle as reference) · 5) Remaining UX polish.
+**Current Engineering Priorities (ranked):** 1) **Validation Agent** *(highest — automated release gate)* · 2) **Financial Integrity convergence** (foundation shipped) · 3) **Recovery Validation — remaining adoption paths** · 4) **Shared Lifecycle Framework rollout** (Debt reference → Bank Accounts → Investments → Houses → Income Sources) · 5) Remaining UX polish.
 
-**Beta Gate (release-readiness target):** before broader beta every release should eventually pass **Financial Integrity**, **Recovery Validation**, **Validation Agent**, and a **runtime regression checklist** before deployment.
+**Beta Gate (release-readiness target):** before broader beta every release must pass **Financial Integrity** (foundation shipped; convergence remaining), **Recovery Validation** (destructive/admin done; adoption paths remaining), the **Validation Agent** (not started), and a **runtime regression checklist** before deployment.
 
 **Shared Lifecycle Framework:** the Debt Lifecycle (`Create → Edit → Rename → Stop Tracking → Inactive → Reactivate`) is now the reference implementation; long-term goal is to share it across Debts, Bank Accounts, Investments, Houses, Bills, and Income Sources (detail: `## Future Feature — Shared Entity Lifecycle Framework`).
 
 ## Launch Readiness Roadmap (high-level)
 
-High-level view of the next 6–12 months — the **detailed Phase 1–7 expansion under the Stage model above**. **The authoritative, detailed roadmap lives in `TODO.md → Launch Readiness Roadmap`** (objective, why it matters, major deliverables, dependencies, and priority per phase) — this is the single source to avoid drift. The summary below carries phase names, objectives, and priorities only. Every phase runs under `WORKING_RULES.md → Current phase` and, for central-mode work, `→ Central App Transition Rules` (active).
+**Historical phase view — superseded by `## Product Maturity Stages (high-level)` above.** The Stage model (Stage 1–6) is the authoritative roadmap; **where a Phase statement conflicts with it, the Stage model wins.** Retained for the per-phase rationale. Full historical detail: `TODO.md → Launch Readiness Roadmap`. Every phase ran under `WORKING_RULES.md → Current phase` and, for central-mode work, `→ Central App Transition Rules` (active).
 
 **Priority scale:** P0 = now / in progress · P1 = next, gates family beta · P2 = high, needed before external beta · P3 = gates external beta · P4 = post-beta / longest horizon.
 
 - **Phase 1 — Documentation Cleanup** *(P0, ✅ complete)* — `PROJECT_CONTEXT.md` + `TODO.md` are the single authoritative source of truth for architecture, status, and roadmap (kept current by ongoing doc passes).
-- **Phase 2 — Family Beta Hardening** *(P1, in progress)* — make per-user provisioning robust, recoverable, and observable enough to safely onboard a small family beta. **2A — Workbook Diagnostics** (read-only detection/classification/audit) is ✅ complete. **2B — Workbook Recovery** is expanded as the **Workbook Identity & Recovery** series: 6A design ✅, 6B markers ✅, and the **recovery stack (6C.1 / 6D.1 / 6D.2a / 6E.1) is implemented and committed, flag-gated OFF, healthy-path validated (2026-06-09), reconnect-validated (2026-06-11), and executed-Admin-Clear-validated (2026-07-02) — Auto-Adopt / ambiguous / name-only adoption / orphan workbook still pending**. The active step is **Recovery Validation (6F)** (remaining adoption/ambiguous/orphan pass); remaining slices are 6D.2b + 6E.2 — see `## Workbook Identity & Recovery (live + roadmap)`. Design in `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`.
-- **Phase 3 — Workbook Totals Project** *(P1–P2, ✅ complete for current scope)* — newly provisioned workbooks reach visual + functional parity with production via canonical summary rows: TOTAL DEBT (3.1), Bank Accounts Total Accounts (3.2a), Bank Accounts Delta (3.2b). Investments / House Values summary parity remains a later follow-up if needed.
-- **Phase 4 — Chat Assistant v1** *(P2, future)* — ship a read-only natural-language assistant over the existing canonical read models (write-capable assistant is future).
-- **Phase 5 — Web App UX Improvements** *(P2)* — polish the central web-app experience (onboarding, empty-states, error handling, guidance, dashboard + planner polish) and cut help text / content to reduce cognitive load.
-- **Phase 6 — External Beta Readiness** *(P3, future)* — move from family beta to a wider invited external beta (support, feedback, onboarding, recovery, diagnostics, beta-user management). *(Distinct from the Identity & Recovery "6A–6E" labels — see the disambiguation note above.)*
-- **Phase 7 — Paid Product Readiness** *(P4, future)* — prepare to monetize (pricing/subscription, entitlements, plan enforcement, privacy policy, ToS, support, monitoring).
+- **Phase 2 — Family Beta Hardening** *(✅ complete — Stage 2)* — per-user provisioning made robust, recoverable, and observable. **2A — Workbook Diagnostics** ✅. **2B — Workbook Recovery** (Workbook Identity & Recovery series): 6A design ✅, 6B markers ✅, recovery stack (6C.1 / 6D.1 / 6D.2a / 6E.1) implemented + flag-gated OFF, with **destructive/admin paths validated** (healthy-path 2026-06-09, reconnect 2026-06-11, executed Admin Clear + audit + reprovision 2026-07-02). Remaining adoption-path validation (Auto-Adopt / Ambiguous / Name-only / Orphan) is a **Stage 3** Beta-Gate item; remaining slices 6D.2b + 6E.2 are **Stage 4**. Design in `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`.
+- **Phase 3 — Workbook Totals Project** *(✅ complete for current scope — Stage 1)* — canonical summary rows: TOTAL DEBT (3.1), Bank Accounts Total Accounts (3.2a), Bank Accounts Delta (3.2b). Investments / House Values summary parity is a later follow-up if needed.
+- **Phase 4 — Chat Assistant v1** *(→ Stage 6 — Version 2)* — read-only NL assistant over canonical read models (write-capable is later). **Not required for Family or External Beta.**
+- **Phase 5 — Web App UX Improvements** *(Stage 4)* — onboarding, empty-states, error handling, guidance, dashboard + planner polish, and help/content cleanup to reduce cognitive load.
+- **Phase 6 — External Beta Readiness** *(Stage 5)* — wider invited external beta (support, feedback, invite onboarding, recovery, diagnostics, beta-user management). *(Distinct from the Identity & Recovery "6A–6E" labels.)*
+- **Phase 7 — Paid Product Readiness** *(Stage 6 — Version 2)* — monetize (pricing/subscription, entitlements, plan enforcement, privacy policy, ToS, support, monitoring).
 
 **Workbook Identity & Recovery (6A–6F) — expansion of Phase 2B, the active near-term track:**
 

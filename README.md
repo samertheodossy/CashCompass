@@ -29,7 +29,7 @@ If you are onboarding a contributor (or yourself after a break), `INIT_PROMPT.md
 
 ### Planning (what's next)
 
-- `TODO.md` — Product Maturity Stages (authoritative Stage 1–5 roadmap + Current Engineering Priorities + Beta Gate) → Launch Readiness Roadmap (detailed Phase 1–7 expansion) + V1.2 polish backlog + historical backlog.
+- `TODO.md` — Product Maturity Stages (authoritative **Stage 1–6** roadmap + Current Engineering Priorities + Beta Gate) → Launch Readiness Roadmap (historical Phase 1–7 detail) + V1.2 polish backlog + historical backlog.
 - `ENHANCEMENTS.md` — product-level rationale, phase history, Active / Next / Later mirror.
 - `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md` — active Phase 2 design: read-only duplicate / orphan / stale workbook detection, classification, and admin audit (Phase 2A), with Phase 2B recovery scope in its `§10`.
 
@@ -48,23 +48,24 @@ If you are onboarding a contributor (or yourself after a break), `INIT_PROMPT.md
 
 ---
 
-## Current Product Status (June 2026)
+## Current Product Status (July 2026)
 
-- **Stage:** **Stage 2 — Product Hardening (current).** Maturity (estimated): **Family Beta Readiness ~96–97% · External / Public Beta Readiness ~90–92%**. Remaining work is primarily financial integrity, validation, recovery hardening, regression prevention, and UX polish — not major feature development. Authoritative stage roadmap: `TODO.md → Product Maturity Stages` (mirror in `PROJECT_CONTEXT.md`).
+- **Stage:** **Stage 3 — Beta Readiness (current).** **Stage 1 (Core Platform) and Stage 2 (Product Hardening) are complete.** Maturity (estimated): **Family Beta Readiness ~97–98% · External / Public Beta Readiness ~92%**. The remaining pre-beta work is the **Beta Gate** — the **Validation Agent** (automated release gate), **Financial Integrity convergence**, and the remaining **Recovery adoption-path validation** — plus onboarding/UX polish. Authoritative stage roadmap: `TODO.md → Product Maturity Stages` (Stage 1–6; mirror in `PROJECT_CONTEXT.md`).
 - **Architecture:** Central App operational — **stable, family-beta capable**; production / bound workbook remains protected.
 - **Completed (working in central mode):** Provisioning, Workbook Mapping, Dashboard, Planner, Assets, Properties, Cash Flow, Bills, Debts, Income, Activity, Email.
-- **Recently completed:** Diagnostics (Phase 2A Admin Diagnostics), Debt parity (Phase 3.1 TOTAL DEBT), Bank Accounts parity (Phase 3.2a Total Accounts + Phase 3.2b Delta), Bank/Debts Add-New dropdown fix, Identity markers (Phase 6A design + Phase 6B Workbook Identity Markers).
-- **Bills Due recurrence overhaul (2026-06-12, shipped + family-beta validated):** Weekly/Biweekly bills generate **individual occurrences** at their normal per-occurrence amount (Due Day anchor + 7/14-day steps; the monthly-burden averaging approach was rejected and reverted), with per-occurrence autopay accumulation into the single monthly Cash Flow cell (manual-protection preserved). **Skip now works for expanded recurrence** — it removes only that occurrence and stays gone on refresh while future occurrences remain (`bill_skip` is now logged regardless of cell state; the `$0` write stays blank-guarded). Visual indicators added: gold ⭐ AutoPay star, light-red overdue cards. Weekday-based ("Repeat Day") recurrence remains a documented future enhancement (not implemented).
-- **Recovery stack (shipped behind flags, default OFF; healthy-path validated 2026-06-09, reconnect + recovery-page render validated 2026-06-11):** Phase 6C.1 Adopt-Before-Create (`CENTRAL_AUTO_ADOPT` — implemented, not fully validated), Phase 6D.1 Recovery Page (real-failure render validated), Phase 6D.2a Reconnect (`CENTRAL_RECOVERY_ACTIONS` — validated end-to-end), Phase 6E.1 Admin Inspect + Clear Mapping (`CENTRAL_ADMIN_REPAIR` — healthy-path + disabled-path validated, executed clear pending). See `PROJECT_CONTEXT.md → Flag Registry` + `→ Recovery Validation Inventory`.
-- **Current focus — Recovery Validation (6F, ~90–92%):** reconnect + recovery-page render validated; remaining = executed admin clear + audit log + adopt + ambiguous handling on a disposable account, then flags OFF. Remaining slices: 6D.2b Create New Workbook, 6E.2 Admin Set Mapping.
-- **Status snapshot (2026-06-24):** Central Architecture ~95%+ · Recovery Architecture ~90% implemented · Recovery Validation ~90–92% (Admin Diagnostics + inspection + feature-flag enforcement re-confirmed 2026-06-24) · Family Beta Readiness improving (unchanged) · External Beta Readiness dependent on recovery validation.
+- **Completed this stage (Stage 2 — Product Hardening, 2026-07-02):**
+  - **Recovery — destructive/admin paths validated:** executed **Admin Clear**, **mapping removal**, **reverse-index removal**, **repair audit history**, **bootstrap reprovision**, **Welcome routing**, **empty-dashboard validation**, **recovery routing**, **Reconnect**, **Central admin validation**, **`ADMIN_EMAILS` validation**. *(Recovery validation completed today.)*
+  - **Financial Integrity — foundation:** **Audit Framework** (read-only, admin-gated) + **Debt Audit** + **shared debt Active helper (Phase 2)** + **`NOT_INITIALIZED`** state.
+  - **Performance:** **Bills Due performance optimization (~51s → ~5.6s)**.
+- **Earlier completed:** Diagnostics (Phase 2A), Debt parity (3.1 TOTAL DEBT), Bank Accounts parity (3.2a Total Accounts + 3.2b Delta), Add-New dropdown fix, Identity markers (6A/6B), Bills Due recurrence overhaul (Weekly/Biweekly occurrence expansion, AutoPay star, overdue styling, skip fix).
+- **Current focus — Stage 3 Beta Gate:** (1) **Validation Agent** (highest-priority build — the automated release gate), (2) **Financial Integrity convergence** (canonical basis + Planner/Dashboard/Rolling convergence to $0.01 + Asset/Planner/Dashboard audit modules), (3) **Recovery Validation — remaining adoption paths** (Auto-Adopt / Ambiguous / Name-only adoption / Orphan, then flags OFF). Remaining recovery slices (Stage 4): 6D.2b Create New Workbook, 6E.2 Admin Set Mapping.
 - **Validation-surface note:** the Script Properties UI may lag runtime mapping changes during active testing; **Admin Diagnostics is the authoritative validation surface**.
 - **Bound safety:** **SAFE TO PUSH TO BOUND** — recovery code is `CENTRAL_MODE`-gated and fail-closed; bound workbook unaffected. Precondition: verify allow-list + bound deployment config before any future bound deploy. See `PROJECT_CONTEXT.md → Bound Project Safety`.
-- **Future:** External beta readiness/hardening, family-beta expansion + user-lifecycle handling, Chat Assistant, Paid Product framework.
+- **Version 2 / Future Platform (Stage 6, not required for beta):** Chat / Assistant, Operations Dashboard, operational metrics, monitoring, analytics, Paid Product framework.
 
-Full picture: `PROJECT_CONTEXT.md → Current Product Status (June 2026)`, `→ Workbook Identity & Recovery (live + roadmap)`, `→ Flag Registry`, `→ Recovery Validation Inventory`, and `→ Bound Project Safety`. Roadmap: `TODO.md → Launch Readiness Roadmap`.
+Full picture: `PROJECT_CONTEXT.md → Current Product Status (July 2026)`, `→ Workbook Identity & Recovery (live + roadmap)`, `→ Flag Registry`, `→ Recovery Validation Inventory`, and `→ Bound Project Safety`. Roadmap: `TODO.md → Product Maturity Stages`.
 
-> **Roadmap-label note:** the Identity & Recovery sub-series **Phase 6A–6F** is the detailed expansion of the macro roadmap's **Phase 2B — Workbook Recovery** — it is *not* the macro **"Phase 6 — External Beta Readiness."**
+> **Roadmap-label note:** the Identity & Recovery sub-series **Phase 6A–6F** is the detailed expansion of the macro roadmap's **Phase 2B — Workbook Recovery** — it is *not* the macro **"Phase 6 — External Beta Readiness"** (now Stage 5).
 
 ---
 
@@ -83,26 +84,18 @@ Authoritative sources: `WORKING_RULES.md → Current phase` + `→ Central App T
 
 ---
 
-## Launch Readiness Roadmap
+## Roadmap (Stage model — authoritative)
 
-Detailed source of truth: `TODO.md → Launch Readiness Roadmap` (objective, why it matters, deliverables, dependencies, priority per phase). High-level summary: `PROJECT_CONTEXT.md → Launch Readiness Roadmap (high-level)`. Short mirror:
+Authoritative source: `TODO.md → Product Maturity Stages` (Stage 1–6, with per-stage remaining work, priority, dependencies, effort). High-level mirror: `PROJECT_CONTEXT.md → Product Maturity Stages (high-level)`. Short mirror:
 
-- **Phase 1 — Documentation Cleanup** *(✅ complete, P0)* — docs synced with live Central architecture; Family Beta styling + deployment model recorded; kept current by ongoing doc passes.
-- **Phase 2 — Family Beta Hardening** *(P1, in progress)* — **2A Workbook Diagnostics** ✅ (read-only candidate detection, classification, mapping/orphan audit, duplicate visibility). **2B Workbook Recovery** is expanded as the **Workbook Identity & Recovery** series — the recovery stack (6C.1/6D.1/6D.2a/6E.1) is **implemented and committed, flag-gated OFF, and healthy-path validated (2026-06-09) — destructive/edge paths pending**; the active step is **Recovery Validation (6F)** (see below). Design: `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md`.
-- **Phase 3 — Workbook Totals Project** *(✅ complete for current scope, P1–P2)* — TOTAL DEBT (3.1), Bank Accounts Total Accounts (3.2a), Bank Accounts Delta (3.2b). Investments / House Values parity is a later follow-up if needed.
-- **Phase 4 — Chat Assistant v1** *(P2, future)* — read-only assistant (spending/debt/retirement/cash-flow questions, planner + dashboard explanations). Write-capable assistant is future.
-- **Phase 5 — Web App UX Improvements** *(P2)* — onboarding, empty-states, error handling, user guidance/help, dashboard + planner polish, help text & content cleanup (reduce cognitive load) (+ residual V1.2 polish backlog).
-- **Phase 6 — External Beta Readiness** *(P3, future)* — support workflow, feedback collection, onboarding, recovery flows, diagnostics, beta-user management.
-- **Phase 7 — Paid Product Readiness** *(P4, future)* — pricing/subscription model, entitlements + plan enforcement, privacy policy, terms of service, support process, operational monitoring.
+- **Stage 1 — Core Platform** *(✅ complete)* — Central App, provisioning, mapping, all core modules + lifecycle, Bills Due recurrence + **performance (~51s → ~5.6s)**.
+- **Stage 2 — Product Hardening** *(✅ complete)* — Recovery destructive/admin paths validated (Admin Clear + mapping/reverse-index removal + repair audit + bootstrap reprovision + Welcome routing + empty-dashboard + recovery routing + Reconnect + Central admin + `ADMIN_EMAILS`); Financial Integrity foundation (Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`).
+- **Stage 3 — Beta Readiness** *(current)* — the **Beta Gate**: **Validation Agent** (automated release gate, highest priority), **Financial Integrity convergence** (canonical basis + Planner/Dashboard/Rolling convergence + Asset/Planner/Dashboard audit modules), **Recovery Validation — remaining adoption paths** (Auto-Adopt / Ambiguous / Name-only / Orphan), release + onboarding review. Goal: **Family Beta Release Candidate.**
+- **Stage 4 — Family Beta** — go/no-go, Web App UX polish, recovery slices (6D.2b / 6E.2), Shared Lifecycle rollout (Bank Accounts), feedback, workflow stabilization.
+- **Stage 5 — External Beta** — support, feedback, invite onboarding, user-lifecycle handling, scalability, remaining Shared Lifecycle rollout (Investments / Houses / Income Sources), Shared Sheet Write Utilities, Tier-2 migration cleanup.
+- **Stage 6 — Version 2 / Future Platform** — Chat / Assistant, Operations Dashboard, operational metrics, monitoring, analytics, Paid Product readiness, Account Aggregation. **None required for Family or External Beta.**
 
-**Workbook Identity & Recovery (6A–6F) — active near-term track, expansion of Phase 2B:**
-
-- **6A — Identity & Recovery design** *(✅)* and **6B — Workbook Identity Markers** *(✅, markers only, no behavior change)*.
-- **6C.1 — Adopt-Before-Create** *(✅, `CENTRAL_AUTO_ADOPT` OFF)*, **6D.1 — Recovery Page** *(✅, real-failure render validated)*, **6D.2a — Reconnect** *(✅, `CENTRAL_RECOVERY_ACTIONS` OFF; validated end-to-end 2026-06-11)*, **6E.1 — Admin Inspect + Clear Mapping** *(✅, `CENTRAL_ADMIN_REPAIR` OFF)*. All **implemented, flag-gated OFF; healthy-path validated (2026-06-09), reconnect + recovery-page render validated (2026-06-11), remaining destructive paths pending**.
-- **6F — Recovery Validation** *(current, P1, ~90–92%)* — healthy-path + reconnect + recovery-page render validated; remaining = executed admin clear + audit log + adopt + ambiguous handling, then flags OFF. Remaining slices: **6D.2b — Create New Workbook** *(P1, designed)*, **6E.2 — Admin Set Mapping** *(P2, designed)*.
-- Flags: see `PROJECT_CONTEXT.md → Flag Registry` (`CENTRAL_AUTO_ADOPT`, `CENTRAL_RECOVERY_ACTIONS`, `CENTRAL_ADMIN_REPAIR` — all default OFF).
-
-Small-polish picks (Profile DOB parser symmetry, empty-state sweeps, etc.) are retained in `TODO.md → V1.2 polish backlog` and fold into Phase 5.
+**Recovery flags:** `CENTRAL_AUTO_ADOPT`, `CENTRAL_RECOVERY_ACTIONS`, `CENTRAL_ADMIN_REPAIR` — all default OFF (see `PROJECT_CONTEXT.md → Flag Registry`). Small-polish picks are retained in `TODO.md → V1.2 polish backlog` and fold into Stage 4 UX polish.
 
 ---
 
