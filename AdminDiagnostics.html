@@ -104,6 +104,20 @@
   </div>
 
   <!--
+    Financial Integrity Audit (Stage 2 Product Hardening). Read-only, admin-
+    gated. Surfaces differences between financial calculation bases WITHOUT
+    declaring any basis canonical. Divergences render as neutral observations,
+    not errors. Generic renderer: any future audit module appears automatically
+    as another sub-section from the modules[] array.
+  -->
+  <div class="card">
+    <h2>Financial Integrity Audit</h2>
+    <p class="sub">Read-only. Reports differences between financial bases; it does not declare any basis correct.</p>
+    <div id="fia-status" class="muted">Loading…</div>
+    <div id="fia-modules" style="margin-top:8px;"></div>
+  </div>
+
+  <!--
     Phase 6E.1 — Repair toolkit. Inspect (preview) is read-only and available to
     any admin; Clear mapping is a guarded WRITE (admin + CENTRAL_ADMIN_REPAIR
     flag + explicit confirm). Mapping-store only — no Drive file is ever changed
@@ -234,6 +248,118 @@
       tbl.style.display = 'table';
     }
 
+    function fiaStatusSeverity(status) {
+      if (status === 'FAIL') return 'action_needed';
+      if (status === 'PASS_WITH_OBSERVATIONS') return 'warn';
+      return 'ok';
+    }
+
+    function fiaFmtMoney(v) {
+      if (v === null || v === undefined || v === '') return '—';
+      var n = Number(v);
+      if (isNaN(n)) return String(v);
+      return (n < 0 ? '-$' : '$') +
+        Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    // Generic renderer: iterates modules[] so future audit modules render with
+    // no extra plumbing. Divergences are shown as neutral observations.
+    function renderFinancialAudit(data) {
+      var status = document.getElementById('fia-status');
+      status.textContent = '';
+      status.className = '';
+      status.appendChild(sevPill(fiaStatusSeverity(data.status)));
+      status.appendChild(el('span',
+        ' ' + (data.status || '?') +
+        ' · generated ' + (data.generatedAt || '?') +
+        ' · tolerance ' + fiaFmtMoney(data.toleranceUsd) +
+        ' · observations ' + ((data.summary && data.summary.warningCount) || 0) +
+        ' · failures ' + ((data.summary && data.summary.failureCount) || 0),
+        'muted'));
+
+      var host = document.getElementById('fia-modules');
+      host.textContent = '';
+
+      (data.modules || []).forEach(function(m) {
+        var wrap = document.createElement('div');
+        wrap.style.marginTop = '14px';
+
+        var head = document.createElement('div');
+        head.appendChild(el('strong', (m.title || m.id || 'Module')));
+        head.appendChild(document.createTextNode(' '));
+        head.appendChild(sevPill(fiaStatusSeverity(m.status)));
+        head.appendChild(el('span', ' ' + (m.status || '') + ' · v' + (m.version || 0), 'muted'));
+        wrap.appendChild(head);
+
+        var metrics = m.metrics || {};
+
+        // Bases table (only known money bases; rendered when present).
+        var baseRows = [
+          ['Dashboard debt total (active-only)', metrics.dashboardDebtTotal],
+          ['Planner liability total (all rows)', metrics.plannerLiabilityTotal],
+          ['Sheet TOTAL DEBT row (gross)', metrics.sheetTotalDebtRow]
+        ].filter(function(r) { return r[1] !== undefined; });
+
+        if (baseRows.length) {
+          var bt = document.createElement('table');
+          bt.style.marginTop = '6px';
+          var btb = document.createElement('tbody');
+          baseRows.forEach(function(r) {
+            var tr = document.createElement('tr');
+            tr.appendChild(el('td', r[0]));
+            tr.appendChild(el('td', fiaFmtMoney(r[1])));
+            btb.appendChild(tr);
+          });
+          bt.appendChild(btb);
+          wrap.appendChild(bt);
+        }
+
+        // Counts line.
+        if (metrics.activeDebtCount !== undefined ||
+            metrics.inactiveDebtCount !== undefined ||
+            metrics.activeRule) {
+          var counts = 'Active: ' + (metrics.activeDebtCount != null ? metrics.activeDebtCount : '—') +
+            ' · Inactive: ' + (metrics.inactiveDebtCount != null ? metrics.inactiveDebtCount : '—');
+          if (metrics.activeRule) {
+            counts += ' · Active column: ' + (metrics.activeRule.hasActiveColumn ? 'yes' : 'no');
+            if (metrics.activeRule.legacyFallbackInEffect) counts += ' (legacy fallback)';
+          }
+          wrap.appendChild(el('div', counts, 'muted'));
+        }
+
+        // Deltas.
+        if (metrics.deltas && Object.keys(metrics.deltas).length) {
+          var dwrap = el('div', 'Deltas: ', 'footnote');
+          Object.keys(metrics.deltas).forEach(function(k) {
+            dwrap.appendChild(el('span', k + ' ' + fiaFmtMoney(metrics.deltas[k]) + '   '));
+          });
+          wrap.appendChild(dwrap);
+        }
+
+        // Inactive-with-balance detail.
+        if (metrics.inactiveWithBalance && metrics.inactiveWithBalance.length) {
+          var iwb = metrics.inactiveWithBalance.map(function(d) {
+            return d.name + ' ' + fiaFmtMoney(d.balance);
+          }).join(' · ');
+          wrap.appendChild(el('div', 'Inactive w/ balance: ' + iwb, 'footnote'));
+        }
+
+        // Observations (warnings) — neutral styling.
+        (m.warnings || []).forEach(function(w) {
+          var line = el('div', '⚠ ' + (w.message || w.code || 'observation'), 'footnote');
+          line.style.color = '#723b13';
+          wrap.appendChild(line);
+        });
+
+        // Failures — error styling (execution problems only).
+        (m.failures || []).forEach(function(f) {
+          wrap.appendChild(el('div', 'Failure: ' + (f.message || f.code || ''), 'err'));
+        });
+
+        host.appendChild(wrap);
+      });
+    }
+
     function showError(containerId, msg) {
       var c = document.getElementById(containerId);
       c.textContent = '';
@@ -254,6 +380,13 @@
         showError('audit-meta', 'Audit failed to load.');
       })
       .adminUiGetWorkbookAudit();
+
+    google.script.run
+      .withSuccessHandler(renderFinancialAudit)
+      .withFailureHandler(function(err) {
+        showError('fia-status', 'Financial Integrity Audit failed to load.');
+      })
+      .adminUiGetFinancialIntegrityAudit();
 
     // ----------------------------------------------------------------
     // Phase 6E.1 — Repair toolkit (Inspect preview + guarded Clear).
