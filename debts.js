@@ -933,14 +933,23 @@ function updateDebtField(payload) {
   let fieldKind = 'text';
   let newRawForLog = rawValue;
 
+  // Formatting note (all branches below): we intentionally do NOT use
+  // copyNeighborFormatInRow_ / setCurrencyCellPreserveRowFormat_ here. Those
+  // paste a horizontally-adjacent cell's full format, which is correct for the
+  // row-uniform Cash Flow grid but WRONG for the Debts sheet, where each money
+  // column has its own canonical look (e.g. the green "Credit Limit" column).
+  // setValue + setNumberFormat leave the cell's own font color, weight,
+  // alignment, and background untouched, so we only re-apply the canonical
+  // number format for the field type. This keeps Credit Limit (and every other
+  // edited column) looking identical to its neighbors after an update.
   if (currencyFields[fieldName]) {
     const num = toNumber_(rawValue);
-    setCurrencyCellPreserveRowFormat_(sheet, targetRow, targetCol, num, 1);
+    cell.setValue(round2_(num));
+    applyCurrencyFormat_(cell);
     fieldKind = 'currency';
     newRawForLog = num;
   } else if (percentFields[fieldName]) {
     const num = round2_(toNumber_(rawValue));
-    copyNeighborFormatInRow_(sheet, targetRow, targetCol, 1);
     cell.setValue(num);
     cell.setNumberFormat('0.00');
     fieldKind = 'percent';
@@ -948,13 +957,11 @@ function updateDebtField(payload) {
   } else if (integerFields[fieldName]) {
     const num = parseInt(String(rawValue).trim(), 10);
     if (isNaN(num)) throw new Error(fieldName + ' must be a whole number.');
-    copyNeighborFormatInRow_(sheet, targetRow, targetCol, 1);
     cell.setValue(num);
     cell.setNumberFormat('0');
     fieldKind = 'integer';
     newRawForLog = num;
   } else {
-    copyNeighborFormatInRow_(sheet, targetRow, targetCol, 1);
     cell.setValue(rawValue);
     fieldKind = 'text';
     newRawForLog = rawValue;
