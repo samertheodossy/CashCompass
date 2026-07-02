@@ -1388,14 +1388,19 @@ function sumDebtBalances_(sheet) {
  * the Active column yet. `balance` / `minPayment` params are retained for
  * signature compatibility with existing call sites.
  *
+ * Financial Integrity Phase 2: this now delegates to the canonical
+ * isDebtInactive_ (debts.js) with ALWAYS_ACTIVE legacy mode — behavior is
+ * unchanged; the explicit-inactive string test is no longer duplicated here.
+ *
  * TOTAL DEBT summary-row handling is the caller's responsibility.
  */
 function isDebtSheetRowInactive_(displayRow, activeCol, balance, minPayment) {
-  if (activeCol === -1) return false;
-  const v = String(displayRow[activeCol] == null ? '' : displayRow[activeCol])
-    .trim()
-    .toLowerCase();
-  return v === 'no' || v === 'n' || v === 'false' || v === 'inactive';
+  const hasActiveColumn = activeCol !== -1;
+  return isDebtInactive_({
+    hasActiveColumn: hasActiveColumn,
+    activeCellRaw: hasActiveColumn ? displayRow[activeCol] : '',
+    legacyFallback: DEBT_LEGACY_FALLBACK_.ALWAYS_ACTIVE
+  });
 }
 
 function getDebtPaymentBreakdownForDashboard() {

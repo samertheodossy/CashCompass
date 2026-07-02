@@ -578,14 +578,15 @@ function resolveFlowSourceFromBillOrDebt_(ss, payee) {
 
           // Skip stop-tracked debts so inactive rows don't poison the
           // Flow Source inference for live payments. Blank / missing Active
-          // still means active, matching the shared debt rule.
-          if (activeColDebt !== -1) {
-            const activeVal = String(display[r][activeColDebt] == null ? '' : display[r][activeColDebt])
-              .trim()
-              .toLowerCase();
-            if (activeVal === 'no' || activeVal === 'n' || activeVal === 'false' || activeVal === 'inactive') {
-              continue;
-            }
+          // still means active, matching the shared debt rule. Routes through
+          // the canonical isDebtInactive_ (ALWAYS_ACTIVE legacy mode) —
+          // behavior-identical to the previous inline explicit check.
+          if (isDebtInactive_({
+            hasActiveColumn: activeColDebt !== -1,
+            activeCellRaw: activeColDebt !== -1 ? display[r][activeColDebt] : '',
+            legacyFallback: DEBT_LEGACY_FALLBACK_.ALWAYS_ACTIVE
+          })) {
+            continue;
           }
 
           const dType = typeCol === -1 ? '' : display[r][typeCol];

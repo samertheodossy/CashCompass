@@ -248,6 +248,11 @@ function normalizeDebts_(rows, aliasMap) {
   //     back to the original implicit rule: active iff balance>0 or
   //     minimumPayment>0. This preserves behavior for sheets that have not
   //     been self-healed yet.
+  //
+  // Financial Integrity Phase 2: the active/inactive decision now routes
+  // through the canonical isDebtInactive_ (debts.js) with BALANCE_OR_MIN legacy
+  // mode. Behavior is identical to the previous inline logic; the duplicated
+  // explicit-inactive string test has been removed.
   var hasActiveColumn = false;
   for (var i = 0; i < rows.length; i++) {
     if (
@@ -257,11 +262,6 @@ function normalizeDebts_(rows, aliasMap) {
       hasActiveColumn = true;
       break;
     }
-  }
-
-  function isExplicitInactive(v) {
-    var s = String(v == null ? '' : v).trim().toLowerCase();
-    return s === 'no' || s === 'n' || s === 'false' || s === 'inactive';
   }
 
   return rows
@@ -281,15 +281,18 @@ function normalizeDebts_(rows, aliasMap) {
           ? 'LOW_RATE_KEEP_LAST'
           : 'STANDARD';
 
-      var active;
-      if (hasActiveColumn) {
-        var activeCell = Object.prototype.hasOwnProperty.call(r, '__display__Active')
-          ? r['__display__Active']
-          : r['Active'];
-        active = !isExplicitInactive(activeCell);
-      } else {
-        active = balance > 0 || minPayment > 0;
-      }
+      var activeCell = hasActiveColumn
+        ? (Object.prototype.hasOwnProperty.call(r, '__display__Active')
+            ? r['__display__Active']
+            : r['Active'])
+        : '';
+      var active = !isDebtInactive_({
+        hasActiveColumn: hasActiveColumn,
+        activeCellRaw: activeCell,
+        balance: balance,
+        minPayment: minPayment,
+        legacyFallback: DEBT_LEGACY_FALLBACK_.BALANCE_OR_MIN
+      });
 
       return {
         name: normalizeName_(r['Account Name'], aliasMap),

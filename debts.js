@@ -2219,6 +2219,52 @@ function isExplicitInactive_(rawValue) {
 }
 
 /**
+ * Legacy-fallback modes for isDebtInactive_ — the ONE place the intentional
+ * difference between the dashboard/debts and planner "no Active column"
+ * behaviors is expressed. See isDebtInactive_.
+ */
+var DEBT_LEGACY_FALLBACK_ = {
+  // Dashboard + Debts-UI legacy behavior: a workbook with no Active column
+  // treats every debt row as active (nothing is inactive).
+  ALWAYS_ACTIVE: 'ALWAYS_ACTIVE',
+  // Planner/waterfall legacy behavior: with no Active column, a debt is active
+  // iff balance>0 or minimumPayment>0 (so $0/$0 debts drop out of planning).
+  BALANCE_OR_MIN: 'BALANCE_OR_MIN'
+};
+
+/**
+ * Canonical debt Active/Inactive determination. Read-only; no sheet writes, no
+ * migration, no self-healing. Every debt reader routes through this so the
+ * "is this debt inactive?" question is asked identically everywhere.
+ *
+ * Semantics (behavior-preserving — Financial Integrity Phase 2):
+ *   - Active column present (hasActiveColumn === true):
+ *       explicit 'no'/'n'/'false'/'inactive' → inactive; blank/anything → active.
+ *       This path is identical across all call sites.
+ *   - Active column absent (legacy workbook): governed by `legacyFallback`,
+ *       which preserves each caller's existing behavior verbatim:
+ *         ALWAYS_ACTIVE  → never inactive (dashboard + debts UI)
+ *         BALANCE_OR_MIN → inactive iff NOT (balance>0 || minPayment>0) (planner)
+ *
+ * The legacy divergence is intentionally NOT collapsed here; unifying the
+ * financial basis is a later phase.
+ *
+ * @param {{hasActiveColumn: boolean, activeCellRaw: *, balance: *,
+ *          minPayment: *, legacyFallback: string}} params
+ * @returns {boolean} true if the debt row is inactive
+ */
+function isDebtInactive_(params) {
+  params = params || {};
+  if (params.hasActiveColumn) {
+    return isExplicitInactive_(params.activeCellRaw);
+  }
+  if (params.legacyFallback === DEBT_LEGACY_FALLBACK_.BALANCE_OR_MIN) {
+    return !(toNumber_(params.balance) > 0 || toNumber_(params.minPayment) > 0);
+  }
+  return false; // ALWAYS_ACTIVE (default)
+}
+
+/**
  * Row-level inactive test for direct sheet readers (UI dropdowns, dashboard
  * aggregates, Cash Flow inference). Uses the EXPLICIT-ONLY rule so legacy
  * workbooks with no Active column keep showing every debt — matching
@@ -2239,8 +2285,12 @@ function isExplicitInactive_(rawValue) {
  * @param {Object} headerMap  getDebtsHeaderMap_(sheet) result
  */
 function isDebtRowInactive_(displayRow, valueRow, headerMap) {
-  if (headerMap.activeColZero === -1) return false;
-  return isExplicitInactive_(displayRow[headerMap.activeColZero]);
+  var hasActiveColumn = headerMap.activeColZero !== -1;
+  return isDebtInactive_({
+    hasActiveColumn: hasActiveColumn,
+    activeCellRaw: hasActiveColumn ? displayRow[headerMap.activeColZero] : '',
+    legacyFallback: DEBT_LEGACY_FALLBACK_.ALWAYS_ACTIVE
+  });
 }
 
 /**
