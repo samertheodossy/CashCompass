@@ -1510,6 +1510,15 @@ function getUpcomingBillsDueForDashboard() {
 function getBillsDueFromCashFlowForDashboard(preloadedCurrentCashFlow) {
   const ss = getUserSpreadsheet_();
   ensureActivityLogSheet_(ss);
+
+  // Phase 1B perf: activate the request-scoped Activity Log dedupe-key cache
+  // for the duration of this RPC. While active, activityLogDedupeKeyExists_()
+  // answers from an in-memory Set built once (instead of re-reading the
+  // dedupe-key column on every call), and appendActivityLog_() keeps that Set
+  // current for same-pass writes. Cleared before every return below so it
+  // never affects any other code path in this execution.
+  __billsDueDedupeCache_ = { keys: null };
+
   const today = new Date();
   const tz = Session.getScriptTimeZone();
 
@@ -1566,6 +1575,9 @@ function getBillsDueFromCashFlowForDashboard(preloadedCurrentCashFlow) {
 
   overdue.sort(compareBillsByDueDate_);
   next7.sort(compareBillsByDueDate_);
+
+  // Phase 1B perf: deactivate the request-scoped dedupe cache.
+  __billsDueDedupeCache_ = null;
 
   return {
     overdue: overdue,
@@ -2083,6 +2095,25 @@ function getInputBillsDueRows_(ss, today, tz) {
   const rows = [];
   const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
+  // Phase 1A perf: build each candidate year's Cash Flow row map at most once
+  // per request and share it across every bill (monthly and weekly/biweekly).
+  // getCashFlowRowMap_ does a full-sheet getDisplayValues() read, and nearly
+  // all candidates resolve to the same current-year sheet, so caching removes
+  // the repeated per-bill × per-candidate re-reads. The row map is structural
+  // (headers + payee→row/type indices) and is only ever read, never mutated —
+  // and autopay writes change cell *values*, not row positions/headers — so a
+  // single shared instance stays correct across the whole pass. Errors are not
+  // cached here: each branch keeps its own existing sheet-resolution semantics
+  // (monthly lets a malformed-sheet getCashFlowRowMap_ throw propagate; weekly
+  // catches and caches null per year), so only the successful build is memoized.
+  const cfRowMapByYear = {};
+  function cfRowMapForYear_(year, sheet) {
+    if (!(year in cfRowMapByYear)) {
+      cfRowMapByYear[year] = getCashFlowRowMap_(sheet);
+    }
+    return cfRowMapByYear[year];
+  }
+
   for (let r = 1; r < values.length; r++) {
     const payee = String(display[r][colMap.payee] || '').trim();
     if (!payee) continue;
@@ -2135,7 +2166,10 @@ function getInputBillsDueRows_(ss, today, tz) {
       } catch (e) {
         continue;
       }
-      const rowMap = getCashFlowRowMap_(sheet);
+      // Phase 1A perf: shared per-year row-map cache (built once per year).
+      // Behavior preserved — a malformed-sheet getCashFlowRowMap_ throw still
+      // propagates here exactly as before (errors are not cached).
+      const rowMap = cfRowMapForYear_(cand.year, sheet);
       const monthCol = rowMap.headers.indexOf(cand.monthHeader);
       if (monthCol === -1) continue;
 
@@ -2312,7 +2346,10 @@ function getInputBillsDueRows_(ss, today, tz) {
           // skipped rather than crashing the Bills page.
           try {
             const sh = getCashFlowSheet_(ss, cand.year);
-            cfByYear[cand.year] = { sheet: sh, rowMap: getCashFlowRowMap_(sh) };
+            // Phase 1A perf: reuse the shared per-year row-map cache so a year
+            // already built by the monthly branch (or a prior occurrence) is
+            // not re-read. Null-on-failure semantics for this branch preserved.
+            cfByYear[cand.year] = { sheet: sh, rowMap: cfRowMapForYear_(cand.year, sh) };
           } catch (e) {
             cfByYear[cand.year] = null;
           }

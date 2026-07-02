@@ -109,9 +109,51 @@ function getOrCreateActivityLogSheet_(ss) {
  * @param {string} dedupeKey
  * @returns {boolean}
  */
+/**
+ * Phase 1B (Bills Due perf): request-scoped Activity Log dedupe-key cache.
+ *
+ * Non-null only while getBillsDueFromCashFlowForDashboard() is executing (it
+ * sets/clears this). When active, activityLogDedupeKeyExists_() consults an
+ * in-memory Set built once from the dedupe-key column instead of re-reading
+ * that column on every call, and appendActivityLog_() adds any key it writes
+ * so same-pass idempotency is preserved. Outside the Bills Due RPC this stays
+ * null and every caller keeps the original per-call read behavior unchanged.
+ *
+ * Shape: { keys: Set<string>|null } — the Set is built lazily on first check.
+ */
+var __billsDueDedupeCache_ = null;
+
+/**
+ * Build a Set of every existing dedupe key (trimmed), matching the exact
+ * read + trim semantics activityLogDedupeKeyExists_() uses for comparison.
+ */
+function buildActivityLogDedupeKeySet_(ss) {
+  var set = new Set();
+  var sh = ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
+  if (!sh || sh.getLastRow() < 2) return set;
+  var lastRow = sh.getLastRow();
+  var values = sh.getRange(2, ACTIVITY_LOG_DEDUPE_COL, lastRow - 1, 1).getValues();
+  for (var i = 0; i < values.length; i++) {
+    var k = String(values[i][0] || '').trim();
+    if (k) set.add(k);
+  }
+  return set;
+}
+
 function activityLogDedupeKeyExists_(ss, dedupeKey) {
   var key = String(dedupeKey || '').trim();
   if (!key) return false;
+
+  // Phase 1B: when the Bills Due request cache is active, answer from the
+  // in-memory Set (built once, lazily) instead of re-reading the column.
+  // Semantics are identical to the fallback loop below because the Set is
+  // built with the same trim rules and kept current on same-pass appends.
+  if (__billsDueDedupeCache_) {
+    if (!__billsDueDedupeCache_.keys) {
+      __billsDueDedupeCache_.keys = buildActivityLogDedupeKeySet_(ss);
+    }
+    return __billsDueDedupeCache_.keys.has(key);
+  }
 
   var sh = ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
   if (!sh || sh.getLastRow() < 2) return false;
@@ -242,6 +284,16 @@ function appendActivityLog_(ss, payload) {
     ];
 
     sh.appendRow(row);
+
+    // Phase 1B: keep the request-scoped Bills Due dedupe cache current so a
+    // marker written during this same pass (e.g. a fresh bill_autopay) is
+    // treated as already-existing by later checks in the same request. Only
+    // needed when the Set has already been built; if it hasn't, a later check
+    // will build it from the sheet, which now includes this appended row.
+    if (dedupe && __billsDueDedupeCache_ && __billsDueDedupeCache_.keys) {
+      __billsDueDedupeCache_.keys.add(dedupe);
+    }
+
     return true;
   } catch (e) {
     Logger.log('appendActivityLog_ failed: ' + e);
