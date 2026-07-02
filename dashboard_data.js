@@ -2118,7 +2118,18 @@ function getInputBillsDueRows_(ss, today, tz) {
 
     if (!isExpandedFreq) for (let i = 0; i < candidates.length; i++) {
       const cand = candidates[i];
-      const sheet = getCashFlowSheet_(ss, cand.year);
+      // The prior-month look-back can land in a calendar year whose Cash Flow
+      // sheet doesn't exist (e.g. a January refresh looking back to December of
+      // a year that was never set up). getCashFlowSheet_ throws on a missing
+      // sheet, so guard it: a year with no sheet has nothing to process or
+      // suppress against — skip that candidate instead of blanking the whole
+      // Bills page.
+      let sheet;
+      try {
+        sheet = getCashFlowSheet_(ss, cand.year);
+      } catch (e) {
+        continue;
+      }
       const rowMap = getCashFlowRowMap_(sheet);
       const monthCol = rowMap.headers.indexOf(cand.monthHeader);
       if (monthCol === -1) continue;
@@ -2156,6 +2167,26 @@ function getInputBillsDueRows_(ss, today, tz) {
         }
         return false;
       };
+
+      // Prior-month (look-back) resolution guard — MONTHLY ONLY.
+      // A monthly bill has exactly ONE occurrence per month, so a handled month
+      // cell on ANY matching Cash Flow row (canonical spelling or a payee-text
+      // variant) — whether it got there by manual entry, Quick Add, or a prior
+      // autopay — is conclusive proof this occurrence was already processed. For
+      // a look-back month, treat that as resolved WITHOUT requiring a
+      // bill_autopay marker, and bail out BEFORE the autopay block so we never
+      // back-fill (double-pay) a month that was already settled manually — the
+      // regression that duplicated a paid month on the 1st of the next month.
+      // Scope notes: this runs only for months earlier than the current one, so
+      // current/next-month autopay is unchanged; weekly/biweekly is a separate
+      // branch and still relies on per-occurrence markers (many occurrences
+      // share one cell there, so a handled cell is NOT per-occurrence proof).
+      const isLookbackMonth =
+        new Date(cand.year, cand.monthIndex, 1).getTime() <
+        new Date(todayOnly.getFullYear(), todayOnly.getMonth(), 1).getTime();
+      if (isLookbackMonth && anyMatchingRowHandled_()) {
+        continue;
+      }
 
       if (hasCashFlowRow) {
         const cellRange = sheet.getRange(rowInfo.row, monthCol + 1);
@@ -2269,10 +2300,19 @@ function getInputBillsDueRows_(ss, today, tz) {
       for (let i = 0; i < candidates.length; i++) {
         const cand = candidates[i];
 
-        if (!cfByYear[cand.year]) {
-          const sh = getCashFlowSheet_(ss, cand.year);
-          cfByYear[cand.year] = { sheet: sh, rowMap: getCashFlowRowMap_(sh) };
+        if (!(cand.year in cfByYear)) {
+          // Same prior-month look-back guard as the monthly path: a candidate
+          // year without a Cash Flow sheet is cached as null (so we don't retry
+          // the throwing lookup for every occurrence) and its occurrences are
+          // skipped rather than crashing the Bills page.
+          try {
+            const sh = getCashFlowSheet_(ss, cand.year);
+            cfByYear[cand.year] = { sheet: sh, rowMap: getCashFlowRowMap_(sh) };
+          } catch (e) {
+            cfByYear[cand.year] = null;
+          }
         }
+        if (!cfByYear[cand.year]) continue;
         const sheet = cfByYear[cand.year].sheet;
         const rowMap = cfByYear[cand.year].rowMap;
         const monthCol = rowMap.headers.indexOf(cand.monthHeader);
@@ -2453,7 +2493,17 @@ function buildInputBillPlannerPaymentWindows_(today, tz, payNowWindowDays, paySo
 
 function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth) {
   const candidates = [];
-  const monthOffsets = [0, 1];
+  // Prior-month look-back (-1) keeps an UNRESOLVED recurring occurrence visible
+  // after the calendar rolls into a new month. The window used to be only
+  // [current, next]; on the 1st of a month the just-passed prior-month
+  // occurrence stopped being generated, and because the next occurrence can be
+  // more than 7 days out (and is then dropped by the next-7 filter), the bill
+  // vanished entirely even though nobody paid, skipped, or autopaid it.
+  // Generating the prior month lets that occurrence surface as Overdue until it
+  // is actually resolved. Resolution is decided downstream, per occurrence: a
+  // bill_autopay / bill_paid / bill_skip marker, or a handled Cash Flow cell
+  // value, is the source of truth for "resolved" — NOT the mere passage of time.
+  const monthOffsets = [-1, 0, 1];
   const effectiveStart = Math.min(12, Math.max(1, Number(startMonth) || 1));
   const todayYear = todayOnly.getFullYear();
 
