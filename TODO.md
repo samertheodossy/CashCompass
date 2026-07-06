@@ -33,6 +33,8 @@ The older "V1.2 work queue" candidates are retained below under `## V1.2 polish 
 
 **Authoritative roadmap — the single source of truth for where CashCompass is and where it is going.** Stages are sequential. Each stage below lists **remaining work** with **Priority** (P0 = now/current · P1 = next, gates the following stage · P2 = high · P3 = gates external beta · P4 = V2/future), **Dependencies**, and **Estimated effort** (XS `<0.5d` · S `0.5–1d` · M `1–3d` · L `3–5d` · XL `>5d`). Completed stages list what closed them. `PROJECT_CONTEXT.md` and `README.md` carry high-level mirrors.
 
+> **Companion: `## UX Backlog (Version 1)`** (below) is the permanent home for small product-quality improvements (polish, loading, empty-states, consistency, wording). It is cross-referenced from Stage 3–5 so these items **never disappear during a roadmap reorganization**. Review it before every Family Beta milestone and before External Beta.
+
 **Maturity (estimated):** Family Beta Readiness **~97–98%** · External / Public Beta Readiness **~92%**. Remaining pre-beta work is Financial Integrity convergence, remaining Recovery adoption-path validation, and the Validation Agent — **not major feature development.**
 
 ### Stage 1 — Core Platform *(✅ Complete)*
@@ -84,14 +86,27 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | Financial-integrity gate wiring into release | P1 | FI convergence | S |
 | Deployment checklist | P2 | — | S |
 
-**D. Release readiness**
+**D. Workbook Formatting & Visual Parity** *(first-class Family Beta quality objective — not minor polish; full inventory in `## UX Backlog (Version 1)`)*
+
+> **Goal:** a **newly provisioned workbook is visually indistinguishable from the mature production workbook.** This is one of the highest-impact Family Beta items — a beta user's first impression is the workbook itself.
+
+| Item | Priority | Dependencies | Effort |
+|---|---|---|---|
+| Full workbook visual-parity pass — sheet styling, column widths, row heights, freeze rows, hidden helper columns, colors, fonts, conditional formatting, number formats, total rows, notes, filters, sheet ordering | P1 | Provisioning ✓ · styling helpers ✓ | L |
+| Retirement sheet styling parity | P1 | Parity pass | (incl. in L) |
+| Investments styling parity | P1 | Parity pass | (incl. in L) |
+| House Values styling parity | P1 | Parity pass | (incl. in L) |
+| Cash Flow styling parity (palette, negatives, headers) | P1 | Parity pass | (incl. in L) |
+| Any remaining workbook visual-parity gaps vs production | P1 | Parity pass | (incl. in L) |
+
+**E. Release readiness**
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
 | Beta Gate assembly (FI · Recovery · Validation Agent · regression checklist) | P1 | A–C | Dependent |
 | Documentation + onboarding review | P2 | — | S |
 
-**Goal:** Family Beta Release Candidate.
+**Goal:** Family Beta Release Candidate — **provably correct, recoverable, and visually production-grade.**
 
 ### Stage 4 — Family Beta
 
@@ -99,21 +114,25 @@ Limited trusted users; stabilize real-world workflows. Remaining work:
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
-| Family Beta go/no-go pass | P1 | Beta Gate (Stage 3) | S |
+| Family Beta go/no-go pass *(includes a `## UX Backlog (Version 1)` review — required before every Family Beta milestone)* | P1 | Beta Gate (Stage 3) | S |
 | Onboard trusted users · collect usability feedback | P1 | Go/no-go | Ongoing |
 | Identify workflow gaps + missing diagnostics | P2 | Beta usage | M |
 | 6D.2b Create New Workbook (self-service "start fresh") | P1 | 6F closed | M |
 | 6E.2 Admin Set Mapping (guarded remap, preview + audit) | P2 | 6F closed | M |
-| Web App UX polish (onboarding, empty-states, error handling, Help/content cleanup) | P2 | — | M–L |
-| Remaining Family Beta styling (Investments · House Values · Cash Flow palette · Retirement · shared widths) | P2 | Styling helpers ✓ | M |
+| Web App UX polish (onboarding, empty-states, error handling, Help/content cleanup) — *see `## UX Backlog (Version 1)`* | P2 | — | M–L |
+| Loading-experience polish pass (unify spinner/labels, Overview + Admin loading states) — *`## UX Backlog → Loading Experience Standardization`* | P2 | — | M |
 | Shared Lifecycle rollout — **Bank Accounts** (Manage pattern + lifecycle) | P2 | Debt reference ✓ | M |
+
+*(Workbook Formatting & Visual Parity was elevated to Stage 3 — it is a Family Beta quality gate, not a follow-up. The full opportunistic UX list lives in `## UX Backlog (Version 1)`, reviewed before this milestone.)*
 
 ### Stage 5 — External Beta
 
-Broader invited audience; operate many users safely. Remaining work:
+Broader invited audience; operate many users safely. **Review `## UX Backlog (Version 1)` before entering this stage** (required before External Beta). Remaining work:
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
+| **Money Plan Phase 2** — long-term planning, goal planning, recommendation engine, cash-allocation guidance, retirement integration, forecasting, long-term financial insights *(major differentiator; Version 1 objective; Phase 1 10/70/20 card shipped; also in `## UX Backlog`)* | P2 | Money Plan Phase 1 ✓ · retirement model ✓ | L–XL |
+| **Income Expected / Due Workflow** — income symmetry with Bills Due (expected income surfaced, record/confirm receipt, variable income, no double-count) *(product differentiator; restored)* | P2 | Bills Due recurrence ✓ | L |
 | Support workflow (intake, triage, runbooks) | P3 | — | M |
 | Feedback collection | P3 | — | S–M |
 | User onboarding: allow-list → invite flow | P3 | User lifecycle | M |
@@ -139,7 +158,9 @@ Differentiators and platform/operations maturity. **None of these are required f
 | **Analytics** (product / usage analytics) | P4 | — | M |
 | **Paid product readiness** (pricing, subscription, entitlements, plan enforcement fail-open, ToS, privacy, support ops, billing) | P4 | Stable external beta | XL |
 | Account Aggregation & Transaction Import (Plaid-style) | P4 | Paid tier | XL |
-| Income Expected/Due · Money Plan Phase 2 page · Weekday recurrence · Merge Debt Accounts · Debt Payee Aliases · Sheets refresh awareness | P4 | — | S–L each |
+| Weekday (Repeat Day) recurrence · Merge Debt Accounts · Debt Payee Aliases · Google Sheets refresh awareness | P4 | — | S–L each |
+
+*(Money Plan Phase 2 and the Income Expected/Due Workflow were elevated to Stage 5 — they are Version 1 differentiators, not Version 2 platform work.)*
 
 ---
 
@@ -147,11 +168,13 @@ Differentiators and platform/operations maturity. **None of these are required f
 
 Ranked, current. (Granular ranked execution items remain in `## Known priorities (ranked)` below; this is the strategic ordering.)
 
-1. **Validation Agent** — *(highest priority — next major engineering project)* the automated regression-detection **release gate**. Every deploy passes it before shipping. Interim: a runtime regression checklist.
+1. **Validation Agent** — *(highest engineering priority — next major engineering project)* the automated regression-detection **release gate**. Every deploy passes it before shipping. Interim: a runtime regression checklist.
 2. **Financial Integrity — convergence** — declare the **canonical financial basis**, then converge **Planner / Dashboard / Rolling Debt** to within $0.01, and add the **Asset / Planner / Dashboard audit modules**. *(The Audit Framework, Debt Audit, shared Active helper, and `NOT_INITIALIZED` are already shipped.)*
-3. **Recovery Validation — remaining adoption paths** — Auto-Adopt validation, Ambiguous validation, Name-only adoption decision, Orphan validation (6F). *(Admin Clear, recovery routing, and admin validation are already done.)*
-4. **Shared Lifecycle Framework rollout** — Debt is the reference implementation; roll out to **Bank Accounts → Investments → Houses → Income Sources** (see `## Shared Lifecycle Framework` below).
-5. **Remaining UX polish** — onboarding, empty-states, messaging, Help/content cleanup.
+3. **Workbook Formatting & Visual Parity** — *(highest UX/quality priority for Family Beta)* a newly provisioned workbook must be **visually indistinguishable from production** (styling, widths, freezes, conditional formats, number formats, totals, notes, filters, sheet order; Retirement / Investments / House Values / Cash Flow parity). Stage 3, P1, L.
+4. **Recovery Validation — remaining adoption paths** — Auto-Adopt validation, Ambiguous validation, Name-only adoption decision, Orphan validation (6F). *(Admin Clear, recovery routing, and admin validation are already done.)*
+5. **Shared Lifecycle Framework rollout** — Debt is the reference implementation; roll out to **Bank Accounts → Investments → Houses → Income Sources** (see `## Shared Lifecycle Framework` below).
+6. **Product differentiators (Version 1, External Beta)** — **Money Plan Phase 2** (long-term/goal planning, recommendations, forecasting, retirement integration) and the **Income Expected/Due Workflow** (income symmetry with Bills Due).
+7. **Remaining UX polish** — onboarding, empty-states, loading-experience consistency, messaging, Help/content cleanup.
 
 ---
 
@@ -181,6 +204,71 @@ Before broader beta, **every release must pass** the following before deployment
 - **Runtime regression checklist** — core workflows + edge cases verified. *(Interim manual gate until the Validation Agent exists.)*
 
 This gate is the release-readiness target for **Stage 3 (Beta Readiness, current)**.
+
+---
+
+## UX Backlog (Version 1)
+
+**Purpose.** A permanent home for small product-quality improvements — polish, consistency, loading, empty-states, wording — that are **too small for the main Stage roadmap but too important to lose.** They increase *perceived* quality and are **intentionally separated from engineering priorities**: they are completed **opportunistically** (whenever a related file is already open), not scheduled in strict order.
+
+**This section is permanent.** It is cross-referenced from the Stage roadmap (Stage 3 → Stage 5) so these items survive any future roadmap reorganization. New polish opportunities discovered during investigations should be **appended here** rather than dropped.
+
+> **Note on the two P1 items below (Workbook Formatting & Visual Parity, Money Plan Phase 2):** these are *also* first-class Stage roadmap items — Visual Parity is **Stage 3 → D** (P1, L) and Money Plan Phase 2 is **Stage 5** (P2, L–XL). They are listed here too so the UX Backlog is a complete quality inventory; the Stage roadmap remains their authoritative scheduling home.
+
+### Current UX Backlog
+
+#### Loading Experience Standardization — **P1 · effort S–M**
+
+From the 2026-07-02 loading-experience audit (`SESSION_NOTES.md`). Unify every async surface on the shared `dash-loading` spinner + one wording standard.
+
+- Overview snapshot loading indicator (`refreshSnapshot()` currently loads silently)
+- Bills Due descriptive loading text (instead of generic "Loading…")
+- Replace generic `Loading…` with contextual `Loading <thing>…`
+- Remove raw `...` placeholders (e.g. `ov_bills_next7`)
+- Remove `&hellip;` HTML-entity variants (onboarding)
+- Standardize loading wording (one pattern, real Unicode ellipsis)
+- Admin Diagnostics loading spinner (currently 4 bare muted "Loading…")
+- Planner loading consistency (migrate `muted "Loading…"` slots → `loadingBlockHtml()`)
+- Bank / Investment / House / Debt picker loading indicators (currently load with no indicator)
+- Onboarding loading consistency (accounts / debts / bills / upcoming)
+
+#### Empty State Standardization — **P2 · effort S–M**
+
+One standard styled empty box + consistent wording (`No <things> yet.` / `Add your <things> …`) everywhere.
+
+- No Bank Accounts · No Bills · No Investments · No Donations
+- Empty Dashboard · Empty Retirement · Empty Planner
+- Standard "couldn't load — try again" fallback in the same slot
+
+#### UX Consistency Framework — **P2 · effort M**
+
+A shared vocabulary + spacing/typography pass so every surface feels the same.
+
+- Success messages · Error wording · Empty-state wording · Loading wording
+- Toast consistency · Button spacing · Typography · Dialog widths · Card spacing · Badge styling
+
+#### Workbook Formatting & Visual Parity — **P1 · effort L** *(also Stage 3 → D)*
+
+**Goal:** freshly provisioned workbooks are **visually indistinguishable from the mature production workbook.**
+
+- Formatting · widths · heights · colors · conditional formatting · sheet ordering · totals · notes · hidden helper columns · filters · freeze rows · number formats
+- Retirement styling · Investments styling · House Values styling · Cash Flow styling
+
+#### Money Plan — Phase 2 — **P2 · effort L–XL** *(also Stage 5)*
+
+Long-term planning · goal planning · recommendation engine · cash-allocation guidance · retirement integration · forecasting · long-term financial insights. *(Phase 1 10/70/20 dashboard card ✓ complete.)*
+
+### General Rules
+
+The UX Backlog is:
+
+- **not required to be completed in order** — pick items opportunistically;
+- **intended for opportunistic improvements** — do a backlog item when you're already in the relevant file;
+- **reviewed before every Family Beta milestone**;
+- **reviewed before External Beta**;
+- **allowed to accumulate throughout development** — appending is expected, not a sign of drift.
+
+New UX/polish/consistency/loading/empty-state/wording findings go **here** (append), and any that grow large enough get promoted to a Stage in `## Product Maturity Stages`.
 
 ---
 
@@ -324,25 +412,27 @@ The next major efforts, ranked, aligned to the Stage model above (Stage 3 first)
 
 1. **Validation Agent** — automated regression-detection **release gate** (next major engineering project); interim runtime regression checklist. *(P0)*
 2. **Financial Integrity — convergence** — canonical basis → Planner/Dashboard/Rolling convergence to $0.01 → Asset/Planner/Dashboard audit modules. Foundation shipped. *(P0–P1)*
-3. **Recovery Validation — remaining adoption paths** *(6F)* — Auto-Adopt → Ambiguous → Name-only adoption decision → Orphan, then flags OFF. *(P0–P1)*
+3. **Workbook Formatting & Visual Parity** — newly provisioned workbook visually indistinguishable from production (Retirement / Investments / House Values / Cash Flow + all visual attributes). *(P1, L — Family Beta quality gate)*
+4. **Recovery Validation — remaining adoption paths** *(6F)* — Auto-Adopt → Ambiguous → Name-only adoption decision → Orphan, then flags OFF. *(P0–P1)*
 
 **Stage 4 — Family Beta:**
 
-4. **Family Beta go/no-go + Web App UX polish** — onboarding, empty-states, Help/content cleanup.
-5. **Create New Workbook recovery action** *(6D.2b)* + **Admin Set Mapping** *(6E.2)* — designed, not implemented.
-6. **Shared Lifecycle rollout — Bank Accounts** (Manage pattern + lifecycle).
+5. **Family Beta go/no-go + Web App UX polish** — onboarding, empty-states, loading-experience consistency, Help/content cleanup.
+6. **Create New Workbook recovery action** *(6D.2b)* + **Admin Set Mapping** *(6E.2)* — designed, not implemented.
+7. **Shared Lifecycle rollout — Bank Accounts** (Manage pattern + lifecycle).
 
 **Stage 5 — External Beta:**
 
-7. **External Beta Hardening** — support, feedback, onboarding invite flow, beta-user management at scale.
-8. **User Lifecycle Handling** — onboarding/offboarding, ownership changes, re-provisioning, allow-list removal, mapping health at scale.
-9. **Shared Lifecycle rollout — Investments · Houses · Income Sources**; Shared Sheet Write Utilities; Tier-2 `getActiveSpreadsheet()` cleanup.
+8. **Money Plan Phase 2** *(major V1 differentiator)* + **Income Expected/Due Workflow** *(product symmetry with Bills Due)*.
+9. **External Beta Hardening** — support, feedback, onboarding invite flow, beta-user management at scale.
+10. **User Lifecycle Handling** — onboarding/offboarding, ownership changes, re-provisioning, allow-list removal, mapping health at scale.
+11. **Shared Lifecycle rollout — Investments · Houses · Income Sources**; Shared Sheet Write Utilities; Tier-2 `getActiveSpreadsheet()` cleanup.
 
 **Stage 6 — Version 2 / Future Platform:**
 
-10. **Chat / Assistant** (read-only v1 → write-capable later).
-11. **Operations Dashboard · operational metrics · monitoring · analytics**.
-12. **Paid Product Readiness** — pricing/subscription, entitlements, plan enforcement (fail open), legal docs, support, monitoring; then Account Aggregation & Transaction Import.
+12. **Chat / Assistant** (read-only v1 → write-capable later).
+13. **Operations Dashboard · operational metrics · monitoring · analytics**.
+14. **Paid Product Readiness** — pricing/subscription, entitlements, plan enforcement (fail open), legal docs, support, monitoring; then Account Aggregation & Transaction Import.
 
 ---
 
