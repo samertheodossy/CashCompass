@@ -1,5 +1,7 @@
 # GENERATED_SHEET_FORMATTING_POLISH_PLAN.md
 
+> **Superseded (2026-07-06) for framing/status by the Golden Workbook initiative.** The visual source of truth is now the production workbook ("the Golden Workbook") — see **`GOLDEN_WORKBOOK.md`** and the per-sheet **`WORKBOOK_PARITY_CHECKLIST.md`**. Parts of this doc are stale (e.g., it states Bank Accounts / Debts / Bills have "no styling helper" — they now do). This doc is retained for its additive-implementation strategy (§6) and non-goals (§5); use the checklist for current per-sheet status and the **Golden Workbook Audit** as the first task before any styling code changes.
+
 A dedicated tracking doc for the generated-sheet formatting / readability polish workstream that fell out of the blank-workbook onboarding runtime test. Onboarding correctness is now broadly proven (see `CENTRAL_APP_FAMILY_BETA_READINESS_CHECKPOINT.md`); the remaining first-create rough edges are cosmetic / UX concerns, not onboarding blockers, and deserve their own scoped surface so they do not get smuggled into onboarding, schema, or central-app prompts.
 
 **Documentation only.** No Apps Script code change, no HTML change, no schema change, no formula change, no deployment change. This doc authorizes no implementation; it scopes a future implementation pass.

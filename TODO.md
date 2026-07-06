@@ -88,11 +88,14 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 
 **D. Workbook Formatting & Visual Parity** *(first-class Family Beta quality objective — not minor polish; full inventory in `## UX Backlog (Version 1)`)*
 
-> **Goal:** a **newly provisioned workbook is visually indistinguishable from the mature production workbook.** This is one of the highest-impact Family Beta items — a beta user's first impression is the workbook itself.
+> **Goal:** a **newly provisioned workbook is visually indistinguishable from the mature production workbook.** This is one of the highest-impact Family Beta items — a beta user's first impression is the workbook itself. The **production workbook is the visual source of truth (the "Golden Workbook")** — see `GOLDEN_WORKBOOK.md`; per-sheet status + gaps live in `WORKBOOK_PARITY_CHECKLIST.md`.
+
+> **First task (before any styling code changes): the Golden Workbook Audit.** Capture the required screenshots of the production workbook and record concrete attribute values, then resolve each sheet in `WORKBOOK_PARITY_CHECKLIST.md` out of **UNKNOWN**. Styling must be **observed from the Golden Workbook, not inferred from code.** No convergence pass is written for a sheet until its checklist row is no longer UNKNOWN.
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
-| Full workbook visual-parity pass — sheet styling, column widths, row heights, freeze rows, hidden helper columns, colors, fonts, conditional formatting, number formats, total rows, notes, filters, sheet ordering | P1 | Provisioning ✓ · styling helpers ✓ | L |
+| **Golden Workbook Audit** — production screenshots + attribute capture; resolve `WORKBOOK_PARITY_CHECKLIST.md` rows out of UNKNOWN *(gates all styling work below)* | P1 | — | S |
+| Full workbook visual-parity pass — sheet styling, column widths, row heights, freeze rows, hidden helper columns, colors, fonts, conditional formatting, number formats, total rows, notes, filters, sheet ordering | P1 | Golden Workbook Audit · Provisioning ✓ · styling helpers ✓ | L |
 | Retirement sheet styling parity | P1 | Parity pass | (incl. in L) |
 | Investments styling parity | P1 | Parity pass | (incl. in L) |
 | House Values styling parity | P1 | Parity pass | (incl. in L) |
@@ -249,7 +252,7 @@ A shared vocabulary + spacing/typography pass so every surface feels the same.
 
 #### Workbook Formatting & Visual Parity — **P1 · effort L** *(also Stage 3 → D)*
 
-**Goal:** freshly provisioned workbooks are **visually indistinguishable from the mature production workbook.**
+**Goal:** freshly provisioned workbooks are **visually indistinguishable from the mature production workbook** — the **Golden Workbook** (visual source of truth). Spec: `GOLDEN_WORKBOOK.md`. Engineering checklist + per-sheet status: `WORKBOOK_PARITY_CHECKLIST.md`. **First task: the Golden Workbook Audit** (production screenshots) before any styling code changes.
 
 - Formatting · widths · heights · colors · conditional formatting · sheet ordering · totals · notes · hidden helper columns · filters · freeze rows · number formats
 - Retirement styling · Investments styling · House Values styling · Cash Flow styling
