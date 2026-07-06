@@ -86,21 +86,22 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | Financial-integrity gate wiring into release | P1 | FI convergence | S |
 | Deployment checklist | P2 | — | S |
 
-**D. Workbook Formatting & Visual Parity** *(first-class Family Beta quality objective — not minor polish; full inventory in `## UX Backlog (Version 1)`)*
+**D. Golden Workbook Convergence** *(first-class Family Beta quality objective — a **convergence project, not a redesign**; full inventory in `## UX Backlog (Version 1)`)*
 
-> **Goal:** a **newly provisioned workbook is visually indistinguishable from the mature production workbook.** This is one of the highest-impact Family Beta items — a beta user's first impression is the workbook itself. The **production workbook is the visual source of truth (the "Golden Workbook")** — see `GOLDEN_WORKBOOK.md`; per-sheet status + gaps live in `WORKBOOK_PARITY_CHECKLIST.md`.
+> **Goal:** a **freshly provisioned workbook converges toward the Golden Workbook visual standard** until it is visually indistinguishable from the mature production workbook. This is one of the highest-impact Family Beta items — a beta user's first impression is the workbook itself. The **production workbook is the visual source of truth (the "Golden Workbook")** — see `GOLDEN_WORKBOOK.md`; per-sheet status + gaps live in `WORKBOOK_PARITY_CHECKLIST.md`.
 
-> **First task (before any styling code changes): the Golden Workbook Audit.** Capture the required screenshots of the production workbook and record concrete attribute values, then resolve each sheet in `WORKBOOK_PARITY_CHECKLIST.md` out of **UNKNOWN**. Styling must be **observed from the Golden Workbook, not inferred from code.** No convergence pass is written for a sheet until its checklist row is no longer UNKNOWN.
+> **First audit complete (2026-07-06).** The Golden Workbook Audit verified ten core user-facing sheets against the bound production workbook and organized them into **four design families**: **Financial Ledger** (Cash Flow, Bank Accounts, Investments, House Values) and **Operational** (Debts, Bills) are **★★★★★ Golden Reference**; **Operational Planning** (Upcoming Expenses, Donations) and **Analytical / Configuration** (Retirement, Settings) are **★★★★☆ Production Ready**. The families are intentional visual languages — the goal is not to make every sheet identical. Styling is **observed from the Golden Workbook, not inferred from code**; no convergence pass is written for a sheet until its checklist row is out of **UNKNOWN**.
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
-| **Golden Workbook Audit** — production screenshots + attribute capture; resolve `WORKBOOK_PARITY_CHECKLIST.md` rows out of UNKNOWN *(gates all styling work below)* | P1 | — | S |
-| Full workbook visual-parity pass — sheet styling, column widths, row heights, freeze rows, hidden helper columns, colors, fonts, conditional formatting, number formats, total rows, notes, filters, sheet ordering | P1 | Golden Workbook Audit · Provisioning ✓ · styling helpers ✓ | L |
-| Retirement sheet styling parity | P1 | Parity pass | (incl. in L) |
-| Investments styling parity | P1 | Parity pass | (incl. in L) |
-| House Values styling parity | P1 | Parity pass | (incl. in L) |
-| Cash Flow styling parity (palette, negatives, headers) | P1 | Parity pass | (incl. in L) |
-| Any remaining workbook visual-parity gaps vs production | P1 | Parity pass | (incl. in L) |
+| **Golden Workbook Audit — first pass** ✓ *(2026-07-06)* — ten core sheets verified + rated by design family in `WORKBOOK_PARITY_CHECKLIST.md` | P1 | — | Done |
+| Golden Workbook Audit — remaining sheets (HOUSES, LOG - Activity, OUT sheets, SYS backing, cross-cutting items) out of UNKNOWN | P1 | — | S |
+| Golden Workbook Convergence pass — converge fresh provisioning toward each audited family standard (widths, row heights, freeze rows, hidden helper columns, colors, fonts, conditional formatting, number formats, totals, notes, filters, sheet ordering) | P1 | Audit rows resolved · Provisioning ✓ · styling helpers ✓ | L |
+| Retirement convergence (Analytical / Configuration family) | P1 | Convergence pass | (incl. in L) |
+| Investments convergence (Financial Ledger family) | P1 | Convergence pass | (incl. in L) |
+| House Values convergence (Financial Ledger family) | P1 | Convergence pass | (incl. in L) |
+| Cash Flow convergence (Financial Ledger family — palette, negatives, headers) | P1 | Convergence pass | (incl. in L) |
+| Any remaining convergence gaps vs the Golden Workbook | P1 | Convergence pass | (incl. in L) |
 
 **E. Release readiness**
 
@@ -126,7 +127,7 @@ Limited trusted users; stabilize real-world workflows. Remaining work:
 | Loading-experience polish pass (unify spinner/labels, Overview + Admin loading states) — *`## UX Backlog → Loading Experience Standardization`* | P2 | — | M |
 | Shared Lifecycle rollout — **Bank Accounts** (Manage pattern + lifecycle) | P2 | Debt reference ✓ | M |
 
-*(Workbook Formatting & Visual Parity was elevated to Stage 3 — it is a Family Beta quality gate, not a follow-up. The full opportunistic UX list lives in `## UX Backlog (Version 1)`, reviewed before this milestone.)*
+*(Golden Workbook Convergence was elevated to Stage 3 — it is a Family Beta quality gate, not a follow-up. The full opportunistic UX list lives in `## UX Backlog (Version 1)`, reviewed before this milestone.)*
 
 ### Stage 5 — External Beta
 
@@ -173,7 +174,7 @@ Ranked, current. (Granular ranked execution items remain in `## Known priorities
 
 1. **Validation Agent** — *(highest engineering priority — next major engineering project)* the automated regression-detection **release gate**. Every deploy passes it before shipping. Interim: a runtime regression checklist.
 2. **Financial Integrity — convergence** — declare the **canonical financial basis**, then converge **Planner / Dashboard / Rolling Debt** to within $0.01, and add the **Asset / Planner / Dashboard audit modules**. *(The Audit Framework, Debt Audit, shared Active helper, and `NOT_INITIALIZED` are already shipped.)*
-3. **Workbook Formatting & Visual Parity** — *(highest UX/quality priority for Family Beta)* a newly provisioned workbook must be **visually indistinguishable from production** (styling, widths, freezes, conditional formats, number formats, totals, notes, filters, sheet order; Retirement / Investments / House Values / Cash Flow parity). Stage 3, P1, L.
+3. **Golden Workbook Convergence** — *(highest UX/quality priority for Family Beta)* a newly provisioned workbook must **converge toward the Golden Workbook** until it is **visually indistinguishable from production** (styling, widths, freezes, conditional formats, number formats, totals, notes, filters, sheet order; Retirement / Investments / House Values / Cash Flow). First audit complete (2026-07-06, ten core sheets rated by design family); a convergence project, not a redesign. Stage 3, P1, L.
 4. **Recovery Validation — remaining adoption paths** — Auto-Adopt validation, Ambiguous validation, Name-only adoption decision, Orphan validation (6F). *(Admin Clear, recovery routing, and admin validation are already done.)*
 5. **Shared Lifecycle Framework rollout** — Debt is the reference implementation; roll out to **Bank Accounts → Investments → Houses → Income Sources** (see `## Shared Lifecycle Framework` below).
 6. **Product differentiators (Version 1, External Beta)** — **Money Plan Phase 2** (long-term/goal planning, recommendations, forecasting, retirement integration) and the **Income Expected/Due Workflow** (income symmetry with Bills Due).
@@ -216,7 +217,7 @@ This gate is the release-readiness target for **Stage 3 (Beta Readiness, current
 
 **This section is permanent.** It is cross-referenced from the Stage roadmap (Stage 3 → Stage 5) so these items survive any future roadmap reorganization. New polish opportunities discovered during investigations should be **appended here** rather than dropped.
 
-> **Note on the two P1 items below (Workbook Formatting & Visual Parity, Money Plan Phase 2):** these are *also* first-class Stage roadmap items — Visual Parity is **Stage 3 → D** (P1, L) and Money Plan Phase 2 is **Stage 5** (P2, L–XL). They are listed here too so the UX Backlog is a complete quality inventory; the Stage roadmap remains their authoritative scheduling home.
+> **Note on the two P1 items below (Golden Workbook Convergence, Money Plan Phase 2):** these are *also* first-class Stage roadmap items — Golden Workbook Convergence is **Stage 3 → D** (P1, L) and Money Plan Phase 2 is **Stage 5** (P2, L–XL). They are listed here too so the UX Backlog is a complete quality inventory; the Stage roadmap remains their authoritative scheduling home.
 
 ### Current UX Backlog
 
@@ -250,12 +251,12 @@ A shared vocabulary + spacing/typography pass so every surface feels the same.
 - Success messages · Error wording · Empty-state wording · Loading wording
 - Toast consistency · Button spacing · Typography · Dialog widths · Card spacing · Badge styling
 
-#### Workbook Formatting & Visual Parity — **P1 · effort L** *(also Stage 3 → D)*
+#### Golden Workbook Convergence — **P1 · effort L** *(also Stage 3 → D)*
 
-**Goal:** freshly provisioned workbooks are **visually indistinguishable from the mature production workbook** — the **Golden Workbook** (visual source of truth). Spec: `GOLDEN_WORKBOOK.md`. Engineering checklist + per-sheet status: `WORKBOOK_PARITY_CHECKLIST.md`. **First task: the Golden Workbook Audit** (production screenshots) before any styling code changes.
+**Goal:** freshly provisioned workbooks **converge toward the Golden Workbook** (the production workbook — visual source of truth) until they are visually indistinguishable from it. A **convergence project, not a redesign.** Spec: `GOLDEN_WORKBOOK.md` (incl. the four **design families**). Engineering checklist + per-sheet status: `WORKBOOK_PARITY_CHECKLIST.md`. **First audit complete (2026-07-06)** — ten core sheets rated by family; remaining sheets audited before their convergence pass.
 
 - Formatting · widths · heights · colors · conditional formatting · sheet ordering · totals · notes · hidden helper columns · filters · freeze rows · number formats
-- Retirement styling · Investments styling · House Values styling · Cash Flow styling
+- Retirement · Investments · House Values · Cash Flow convergence (each toward its design-family standard)
 
 #### Money Plan — Phase 2 — **P2 · effort L–XL** *(also Stage 5)*
 
@@ -415,7 +416,7 @@ The next major efforts, ranked, aligned to the Stage model above (Stage 3 first)
 
 1. **Validation Agent** — automated regression-detection **release gate** (next major engineering project); interim runtime regression checklist. *(P0)*
 2. **Financial Integrity — convergence** — canonical basis → Planner/Dashboard/Rolling convergence to $0.01 → Asset/Planner/Dashboard audit modules. Foundation shipped. *(P0–P1)*
-3. **Workbook Formatting & Visual Parity** — newly provisioned workbook visually indistinguishable from production (Retirement / Investments / House Values / Cash Flow + all visual attributes). *(P1, L — Family Beta quality gate)*
+3. **Golden Workbook Convergence** — newly provisioned workbook converges toward the Golden Workbook until visually indistinguishable from production (Retirement / Investments / House Values / Cash Flow + all visual attributes). First audit complete (2026-07-06, ten core sheets by design family). *(P1, L — Family Beta quality gate; convergence, not redesign)*
 4. **Recovery Validation — remaining adoption paths** *(6F)* — Auto-Adopt → Ambiguous → Name-only adoption decision → Orphan, then flags OFF. *(P0–P1)*
 
 **Stage 4 — Family Beta:**

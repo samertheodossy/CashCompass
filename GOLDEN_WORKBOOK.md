@@ -2,7 +2,9 @@
 
 *The permanent visual specification for every CashCompass workbook.*
 
-**Status:** Documentation only. This document defines a standard and a process; it authorizes no code changes. Implementation of visual parity is scheduled as **Stage 3 → D — Workbook Formatting & Visual Parity (P1)**, and its **first task is the Golden Workbook Audit** (see §8) — no styling code changes before that audit is complete.
+**Status:** Documentation only. This document defines a standard and a process; it authorizes no code changes. The initiative is **Golden Workbook Convergence** — scheduled as **Stage 3 → D (P1)**.
+
+**Audit progress:** The **first Golden Workbook Audit was completed on 2026-07-06** against the actual bound production workbook. Ten core user-facing sheets have been visually verified and rated (see the **Design families** section below and `WORKBOOK_PARITY_CHECKLIST.md`); they are no longer **UNKNOWN**. Remaining sheets (HOUSES, LOG - Activity, OUT sheets, SYS backing sheets, and the workbook-level cross-cutting items) stay **UNKNOWN** until audited. Convergence code for a sheet may only be written once that sheet's row is resolved out of UNKNOWN.
 
 ---
 
@@ -51,6 +53,43 @@ Newly provisioned (and first-create) workbooks should be styled so that, for eac
 
 Convergence is **directional and incremental**: sheets are brought to parity one at a time, highest-visibility first, without ever restyling an existing populated workbook (see §6 guardrails).
 
+This is explicitly a **convergence project, not a redesign project.** The Golden Workbook already defines the target look. The work is bringing freshly provisioned sheets *toward* that established standard — not inventing new formatting.
+
+## Design families
+
+The 2026-07-06 Golden Workbook Audit revealed that the production workbook is **not one uniform look** — it is organized into **four deliberate design families**, each an intentional visual language suited to how that group of sheets is used. They share one consistent CashCompass visual identity (common palette, typography, and header conventions) while differing in density, structure, and emphasis.
+
+> **These families are intentional. The goal is not to make every sheet look identical** — it is for a freshly provisioned sheet to match the *appropriate family* for its purpose, so the whole workbook reads as one coherent product with the right tool for each job.
+
+Rating scale (audit quality of the production sheet as a reference):
+
+- **★★★★★ Golden Reference** — the sheet is a fully mature exemplar; it *defines* the standard for its family.
+- **★★★★☆ Production Ready** — the sheet is polished and shippable; it sets the family standard with only minor room for future refinement.
+
+### 1. Financial Ledger family — ★★★★★ Golden Reference
+
+**Sheets:** Cash Flow · Bank Accounts · Investments · House Values.
+
+**Purpose:** track balances and money flows *across time*. These are the dense, columnar, year-blocked ledgers at the heart of the workbook. Visual language: year banners/bands, month columns, currency-heavy number formats, total/delta rows, freeze panes for headers and label columns, and high scannability across long time ranges. This family is the most mature and sets the visual bar for the whole workbook.
+
+### 2. Operational family — ★★★★★ Golden Reference
+
+**Sheets:** Debts · Bills.
+
+**Purpose:** the working lists the user actively *maintains and acts on*. Row-per-obligation, status- and action-oriented, with header emphasis, notes/tooltips on non-obvious columns, and clear totals where relevant (e.g., TOTAL DEBT). Visual language favors legibility of individual records and quick action over time-series density.
+
+### 3. Operational Planning family — ★★★★☆ Production Ready
+
+**Sheets:** Upcoming Expenses · Donations.
+
+**Purpose:** forward-looking planning lists that *feed the plan*. Lighter and more entry-oriented than the ledgers — date + amount capture for expected/planned items. Visual language is a cleaner, simpler list that signals "things you are planning" rather than "history you are tracking."
+
+### 4. Analytical / Configuration family — ★★★★☆ Production Ready
+
+**Sheets:** Retirement · Settings.
+
+**Purpose:** structured inputs, long-horizon analysis, and configuration surfaces. Visual language uses section shading/structure, scenario or key/value blocks, and percent/number formats appropriate to parameters and projections. These sheets read as "settings and assumptions" rather than day-to-day ledgers.
+
 ## 4. How future formatting decisions are made
 
 1. **Observe, don't invent.** A styling decision is made by looking at how the production (Golden) workbook does it — not by inventing a new look or inferring intent from code.
@@ -85,19 +124,21 @@ The Golden Workbook is the *target*; the provisioning and `apply*SheetStyling_` 
 
 ## 8. First implementation task — the Golden Workbook Audit
 
-**No styling code changes until this audit is complete.** The audit produces the observed, screenshot-backed record of the Golden Workbook that `WORKBOOK_PARITY_CHECKLIST.md` needs to move sheets out of **UNKNOWN**.
+**No styling-convergence code for a sheet until that sheet is audited.** The audit produces the observed, screenshot-backed record of the Golden Workbook that `WORKBOOK_PARITY_CHECKLIST.md` needs to move sheets out of **UNKNOWN**.
 
-The audit:
+**First audit complete (2026-07-06).** The first pass audited ten core user-facing sheets against the bound production workbook and rated them by design family (see **Design families** above): the **Financial Ledger** and **Operational** families are **★★★★★ Golden Reference**; the **Operational Planning** and **Analytical / Configuration** families are **★★★★☆ Production Ready**. Those rows are resolved in `WORKBOOK_PARITY_CHECKLIST.md`.
+
+The audit process, for any sheet:
 1. Captures the required screenshots of the production (Golden) workbook — see `WORKBOOK_PARITY_CHECKLIST.md → Validation — Required screenshots`.
 2. Records the concrete attribute values per sheet (exact hex colors, column widths, row heights, freeze counts, number-format strings, border styles, conditional-format rules, notes, filters, tab order/colors).
-3. Updates each sheet's row in `WORKBOOK_PARITY_CHECKLIST.md` from **UNKNOWN** to **COMPLETE / MINOR / MAJOR** based on the observed comparison against a freshly provisioned workbook.
+3. Updates each sheet's row in `WORKBOOK_PARITY_CHECKLIST.md` from **UNKNOWN** to a verified status (**★★★★★ Golden Reference / ★★★★☆ Production Ready**, or the finer **COMPLETE / MINOR / MAJOR** convergence gap where relevant).
 
-Only after a sheet's row is resolved (no longer UNKNOWN) may a styling-convergence pass be written for that sheet.
+**Remaining to audit:** HOUSES - `<Name>`, LOG - Activity, OUT - Dashboard, OUT - History, the SYS backing sheets, and the workbook-level cross-cutting items. Only after a sheet's row is resolved (no longer UNKNOWN) may a convergence pass be written for that sheet.
 
 ## 9. Related documents
 
 - **`WORKBOOK_PARITY_CHECKLIST.md`** — the engineering checklist: per-sheet status, gaps, effort, priority, and the required-screenshots list.
 - **`GENERATED_SHEET_FORMATTING_POLISH_PLAN.md`** — the earlier (2026-05-23) polish plan; **superseded** by this initiative for framing/status (parts are stale — e.g., Bank Accounts / Debts / Bills now have styling helpers). Retained for its additive-implementation strategy and non-goals.
 - **`PROJECT_CONTEXT.md → Workbook styling`** — the current first-create styling contract in code.
-- **`TODO.md → Product Maturity Stages → Stage 3 → D. Workbook Formatting & Visual Parity`** — roadmap home (P1).
+- **`TODO.md → Product Maturity Stages → Stage 3 → D. Golden Workbook Convergence`** — roadmap home (P1).
 - **`PRODUCT_VISION.md`** — why ownership and a trustworthy, polished workbook matter.
