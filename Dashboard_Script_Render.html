@@ -842,6 +842,24 @@ function renderRetirementSummary(retirement) {
   );
 }
 
+// Presentation-only: render the refresh timestamp as a friendly 12-hour
+// time (e.g. "5:44 PM"). The source string is the server-formatted
+// "yyyy-MM-dd HH:mm:ss" value (script timezone). We extract the time
+// components directly rather than constructing a Date, so the displayed
+// time exactly matches the server timezone without any re-parsing drift.
+function formatRefreshedTime_(refreshedAt) {
+  const raw = String(refreshedAt == null ? '' : refreshedAt).trim();
+  const m = raw.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return '';
+  let hours = parseInt(m[1], 10);
+  const minutes = m[2];
+  if (isNaN(hours)) return '';
+  const period = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  if (hours === 0) hours = 12;
+  return hours + ':' + minutes + ' ' + period;
+}
+
 function applySnapshot(snapshot) {
   // Expose readiness state so sibling renderers (bills, upcoming, house
   // expenses) can stay truthful on a truly blank workbook without each
@@ -864,7 +882,16 @@ function applySnapshot(snapshot) {
   set('snap_houseEquity', fmtCurrency(snapshot.houseValues !== undefined ? snapshot.houseValues : snapshot.houseEquity));
   set('snap_debt', fmtCurrency(snapshot.debt));
   set('snap_netWorth', fmtCurrency(snapshot.netWorth));
-  set('snap_refreshedAt', snapshot.refreshedAt || '—');
+  // Publish the "last updated" state on the refresh status line below the
+  // main button (relocated out of the Net Worth card). This fires on every
+  // snapshot application — initial load, post-edit refresh, and planner run —
+  // matching the previous update cadence with cleaner, non-technical wording.
+  const refreshedTime = formatRefreshedTime_(snapshot.refreshedAt);
+  setStatus(
+    'planner_status',
+    refreshedTime ? ('Last updated ' + refreshedTime) : 'Last updated',
+    false
+  );
 
   set(
     'snap_delta_cash',
@@ -921,6 +948,10 @@ function applySnapshot(snapshot) {
 }
 
 function refreshSnapshot() {
+  // Show the shared "Refreshing…" indicator on the refresh status line below
+  // the main button while the snapshot RPC is in flight. applySnapshot()
+  // replaces it with the "Dashboard updated <time>" state on success.
+  setStatusLoading('planner_status', 'Refreshing…');
   google.script.run
     .withSuccessHandler(function(data) {
       applySnapshot(data);
@@ -932,11 +963,16 @@ function refreshSnapshot() {
 }
 
 function runPlannerNow() {
-  setStatusLoading('planner_status', 'Refreshing plan…');
+  setStatusLoading('planner_status', 'Refreshing…');
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('planner_status', res.message || 'Plan refreshed — your outlook is updated', false);
-      if (res.snapshot) applySnapshot(res.snapshot);
+      // applySnapshot() sets the "Dashboard updated <time>" status. Fall back
+      // to a generic confirmation if the response carried no snapshot.
+      if (res && res.snapshot) {
+        applySnapshot(res.snapshot);
+      } else {
+        setStatus('planner_status', 'Last updated', false);
+      }
     })
     .withFailureHandler(function(err) {
       setStatus('planner_status', (err.message || String(err)), true);

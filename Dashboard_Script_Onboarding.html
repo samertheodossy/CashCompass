@@ -481,10 +481,10 @@ function onboardingLoadBankDetail_() {
 
   if (badge) {
     badge.className = 'onboarding-detail-badge';
-    badge.textContent = '…';
+    badge.textContent = 'Loading';
   }
   if (body) {
-    body.innerHTML = '<p class="muted">Loading accounts&hellip;</p>';
+    body.innerHTML = loadingBlockHtml('Loading accounts…');
   }
   onboardingBankSetStatus_('Reading accounts…', 'dash-status-loading');
 
@@ -668,10 +668,10 @@ function onboardingLoadDebtDetail_() {
 
   if (badge) {
     badge.className = 'onboarding-detail-badge';
-    badge.textContent = '…';
+    badge.textContent = 'Loading';
   }
   if (body) {
-    body.innerHTML = '<p class="muted">Loading debts&hellip;</p>';
+    body.innerHTML = loadingBlockHtml('Loading debts…');
   }
   onboardingDebtsSetStatus_('Reading debts…', 'dash-status-loading');
 
@@ -850,9 +850,9 @@ function onboardingLoadBillsDetail_() {
 
   if (badge) {
     badge.className = 'onboarding-detail-badge';
-    badge.textContent = '…';
+    badge.textContent = 'Loading';
   }
-  if (body) body.innerHTML = '<p class="muted">Loading bills&hellip;</p>';
+  if (body) body.innerHTML = loadingBlockHtml('Loading bills…');
   onboardingBillsSetStatus_('Reading bills…', 'dash-status-loading');
 
   google.script.run
@@ -1016,9 +1016,9 @@ function onboardingLoadUpcomingDetail_() {
 
   if (badge) {
     badge.className = 'onboarding-detail-badge';
-    badge.textContent = '…';
+    badge.textContent = 'Loading';
   }
-  if (body) body.innerHTML = '<p class="muted">Loading upcoming expenses&hellip;</p>';
+  if (body) body.innerHTML = loadingBlockHtml('Loading upcoming expenses…');
   onboardingUpcomingSetStatus_('Reading upcoming expenses…', 'dash-status-loading');
 
   google.script.run
@@ -1174,9 +1174,9 @@ function onboardingLoadIncomeDetail_() {
 
   if (badge) {
     badge.className = 'onboarding-detail-badge';
-    badge.textContent = '…';
+    badge.textContent = 'Loading';
   }
-  if (body) body.innerHTML = '<p class="muted">Reading income from Cash Flow&hellip;</p>';
+  if (body) body.innerHTML = loadingBlockHtml('Reading income from Cash Flow…');
   onboardingIncomeSetStatus_('Reading income…', 'dash-status-loading');
 
   google.script.run
@@ -1361,9 +1361,9 @@ function onboardingLoadProfileDetail_() {
 
   if (badge) {
     badge.className = 'onboarding-detail-badge';
-    badge.textContent = '…';
+    badge.textContent = 'Loading';
   }
-  if (body) body.innerHTML = '<p class="muted">Loading profile&hellip;</p>';
+  if (body) body.innerHTML = loadingBlockHtml('Loading profile…');
   onboardingProfileSetStatus_('Reading profile…', 'dash-status-loading');
 
   // Always land in view mode when the user opens the Profile step.
@@ -1717,9 +1717,9 @@ function onboardingLoadHousesDetail_() {
 
   if (badge) {
     badge.className = 'onboarding-detail-badge';
-    badge.textContent = '…';
+    badge.textContent = 'Loading';
   }
-  if (body) body.innerHTML = '<p class="muted">Loading properties&hellip;</p>';
+  if (body) body.innerHTML = loadingBlockHtml('Loading properties…');
   onboardingHousesSetStatus_('Reading properties…', 'dash-status-loading');
 
   google.script.run
@@ -1903,7 +1903,7 @@ function onboardingLoadFinishDetail_() {
   var mode = ONBOARDING_MODE_;
   var body = document.getElementById('onboarding_finish_body');
 
-  if (body) body.innerHTML = '<p class="muted">Loading summary&hellip;</p>';
+  if (body) body.innerHTML = loadingBlockHtml('Loading summary…');
   onboardingFinishSetStatus_('Reading setup status…', 'dash-status-loading');
 
   google.script.run

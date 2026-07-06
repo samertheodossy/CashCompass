@@ -55,6 +55,29 @@
     .ok-yes { color: #03543f; font-weight: 600; }
     .ok-no { color: #9b1c1c; font-weight: 600; }
     .muted { color: #9aa5b1; }
+    /* Shared loading spinner — matches Dashboard_Styles .dash-loading. */
+    .dash-loading {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      vertical-align: middle;
+    }
+    .dash-loading-spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid #e2e8f0;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: dash-loading-spin 0.72s linear infinite;
+      flex-shrink: 0;
+      box-sizing: border-box;
+    }
+    .dash-loading-label { font-size: 13px; color: #64748b; }
+    .dash-loading--block { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+    @keyframes dash-loading-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .dash-loading-spinner { animation: none; border-color: #cbd5e1; border-top-color: #2563eb; }
+    }
     .err {
       background: #fde8e8; border: 1px solid #f8b4b4; color: #9b1c1c;
       border-radius: 6px; padding: 10px 14px; font-size: 13px;
@@ -76,7 +99,7 @@
 
   <div class="card">
     <h2>Self-test</h2>
-    <div id="selftest-status" class="muted">Loading…</div>
+    <div id="selftest-status" class="muted"><span class="dash-loading" role="status" aria-live="polite"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></span></div>
     <table id="selftest-table" style="display:none; margin-top:8px;">
       <thead><tr><th>Check</th><th>OK</th><th>Detail</th></tr></thead>
       <tbody></tbody>
@@ -86,7 +109,7 @@
 
   <div class="card">
     <h2>Allow-list workbook audit</h2>
-    <div id="audit-meta" class="muted">Loading…</div>
+    <div id="audit-meta" class="muted"><span class="dash-loading" role="status" aria-live="polite"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></span></div>
     <div id="audit-totals" class="totals" style="margin:8px 0;"></div>
     <table id="audit-table" style="display:none;">
       <thead>
@@ -113,7 +136,7 @@
   <div class="card">
     <h2>Financial Integrity Audit</h2>
     <p class="sub">Read-only. Reports differences between financial bases; it does not declare any basis correct.</p>
-    <div id="fia-status" class="muted">Loading…</div>
+    <div id="fia-status" class="muted"><span class="dash-loading" role="status" aria-live="polite"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></span></div>
     <div id="fia-modules" style="margin-top:8px;"></div>
   </div>
 
@@ -148,7 +171,7 @@
 
   <div class="card">
     <h2>Repair audit history</h2>
-    <div id="audit-history-status" class="muted">Loading…</div>
+    <div id="audit-history-status" class="muted"><span class="dash-loading" role="status" aria-live="polite"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></span></div>
     <table id="audit-history-table" style="display:none; margin-top:8px;">
       <thead>
         <tr>

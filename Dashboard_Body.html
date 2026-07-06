@@ -11,7 +11,7 @@
       <div class="top-actions-buttons">
         <button type="button" class="btn-help-prominent" onclick="showPage('help')">Help</button>
         <button type="button" class="btn-setup-topbar" onclick="showPage('onboarding')">Setup / Review</button>
-        <button type="button" class="btn-planner-run" onclick="runPlannerNow()">Run Planner + Refresh Snapshot</button>
+        <button type="button" class="btn-planner-run" onclick="runPlannerNow()">Refresh Financial Plan</button>
       </div>
       <div id="planner_status" class="status"></div>
     </div>
@@ -69,7 +69,6 @@
         <div class="snapshot-label">Net Worth</div>
         <div class="snapshot-value" id="snap_netWorth">—</div>
         <div class="snapshot-delta" id="snap_delta_netWorth">—</div>
-        <div class="snapshot-meta">Snapshot refreshed: <span id="snap_refreshedAt">—</span></div>
       </div>
     </div>
 
@@ -1722,7 +1721,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <div class="onboarding-step-head">
           <div class="onboarding-step-num">1</div>
           <div class="onboarding-step-title">Bank Accounts</div>
-          <div class="onboarding-step-badge" data-badge="bank">…</div>
+          <div class="onboarding-step-badge" data-badge="bank">Loading</div>
         </div>
         <div class="onboarding-step-body" data-body="bank"><p class="muted">&mdash;</p></div>
         <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
@@ -1734,7 +1733,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <div class="onboarding-step-head">
           <div class="onboarding-step-num">2</div>
           <div class="onboarding-step-title">Debts</div>
-          <div class="onboarding-step-badge" data-badge="debts">…</div>
+          <div class="onboarding-step-badge" data-badge="debts">Loading</div>
         </div>
         <div class="onboarding-step-body" data-body="debts"><p class="muted">&mdash;</p></div>
         <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
@@ -1746,7 +1745,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <div class="onboarding-step-head">
           <div class="onboarding-step-num">3</div>
           <div class="onboarding-step-title">Bills</div>
-          <div class="onboarding-step-badge" data-badge="bills">…</div>
+          <div class="onboarding-step-badge" data-badge="bills">Loading</div>
         </div>
         <div class="onboarding-step-body" data-body="bills"><p class="muted">&mdash;</p></div>
         <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
@@ -1758,7 +1757,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <div class="onboarding-step-head">
           <div class="onboarding-step-num">4</div>
           <div class="onboarding-step-title">Income</div>
-          <div class="onboarding-step-badge" data-badge="income">…</div>
+          <div class="onboarding-step-badge" data-badge="income">Loading</div>
         </div>
         <div class="onboarding-step-body" data-body="income"><p class="muted">&mdash;</p></div>
         <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
@@ -1770,7 +1769,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <div class="onboarding-step-head">
           <div class="onboarding-step-num">5</div>
           <div class="onboarding-step-title">Profile</div>
-          <div class="onboarding-step-badge" data-badge="profile">…</div>
+          <div class="onboarding-step-badge" data-badge="profile">Loading</div>
         </div>
         <div class="onboarding-step-body" data-body="profile"><p class="muted">&mdash;</p></div>
         <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
@@ -1878,7 +1877,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div class="onboarding-detail-header">
         <div class="onboarding-detail-step">Step 1 of 5</div>
         <h2 class="onboarding-detail-title">Bank Accounts</h2>
-        <div id="onboarding_bank_badge" class="onboarding-detail-badge">…</div>
+        <div id="onboarding_bank_badge" class="onboarding-detail-badge">Loading</div>
       </div>
 
       <div class="onboarding-detail-explainer">
@@ -1888,7 +1887,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div id="onboarding_bank_status" class="status"></div>
 
       <div id="onboarding_bank_body">
-        <p class="muted">Loading accounts&hellip;</p>
+        <div class="dash-loading dash-loading--block" role="status" aria-live="polite"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading accounts…</span></div>
       </div>
 
       <div class="onboarding-actions">
@@ -1908,7 +1907,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div class="onboarding-detail-header">
         <div class="onboarding-detail-step">Step 2 of 5</div>
         <h2 class="onboarding-detail-title">Debts</h2>
-        <div id="onboarding_debts_badge" class="onboarding-detail-badge">…</div>
+        <div id="onboarding_debts_badge" class="onboarding-detail-badge">Loading</div>
       </div>
 
       <div class="onboarding-detail-explainer">
@@ -1918,7 +1917,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div id="onboarding_debts_status" class="status"></div>
 
       <div id="onboarding_debts_body">
-        <p class="muted">Loading debts&hellip;</p>
+        <div class="dash-loading dash-loading--block" role="status" aria-live="polite"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading debts…</span></div>
       </div>
 
       <div class="onboarding-actions">
@@ -1936,7 +1935,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div class="onboarding-detail-header">
         <div class="onboarding-detail-step">Step 3 of 5</div>
         <h2 class="onboarding-detail-title">Bills</h2>
-        <div id="onboarding_bills_badge" class="onboarding-detail-badge">…</div>
+        <div id="onboarding_bills_badge" class="onboarding-detail-badge">Loading</div>
       </div>
 
       <div class="onboarding-detail-explainer">
@@ -1946,7 +1945,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div id="onboarding_bills_status" class="status"></div>
 
       <div id="onboarding_bills_body">
-        <p class="muted">Loading bills&hellip;</p>
+        <div class="dash-loading dash-loading--block" role="status" aria-live="polite"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading bills…</span></div>
       </div>
 
       <div class="onboarding-actions">
@@ -1964,7 +1963,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div class="onboarding-detail-header">
         <div class="onboarding-detail-step onboarding-detail-optional">Optional</div>
         <h2 class="onboarding-detail-title">Upcoming Expenses</h2>
-        <div id="onboarding_upcoming_badge" class="onboarding-detail-badge">…</div>
+        <div id="onboarding_upcoming_badge" class="onboarding-detail-badge">Loading</div>
       </div>
 
       <div class="onboarding-detail-explainer">
@@ -1974,7 +1973,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div id="onboarding_upcoming_status" class="status"></div>
 
       <div id="onboarding_upcoming_body">
-        <p class="muted">Loading upcoming expenses&hellip;</p>
+        <div class="dash-loading dash-loading--block" role="status" aria-live="polite"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading upcoming expenses…</span></div>
       </div>
 
       <div class="onboarding-actions">
@@ -1996,7 +1995,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div class="onboarding-detail-header">
         <div class="onboarding-detail-step">Step 4 of 5</div>
         <h2 class="onboarding-detail-title">Income</h2>
-        <div id="onboarding_income_badge" class="onboarding-detail-badge">…</div>
+        <div id="onboarding_income_badge" class="onboarding-detail-badge">Loading</div>
       </div>
 
       <div class="onboarding-detail-explainer">
@@ -2006,7 +2005,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div id="onboarding_income_status" class="status"></div>
 
       <div id="onboarding_income_body">
-        <p class="muted">Reading income from Cash Flow&hellip;</p>
+        <div class="dash-loading dash-loading--block" role="status" aria-live="polite"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Reading income from Cash Flow…</span></div>
       </div>
 
       <div class="onboarding-actions">
@@ -2032,7 +2031,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div class="onboarding-detail-header">
         <div class="onboarding-detail-step">Step 5 of 5</div>
         <h2 class="onboarding-detail-title">Profile</h2>
-        <div id="onboarding_profile_badge" class="onboarding-detail-badge">…</div>
+        <div id="onboarding_profile_badge" class="onboarding-detail-badge">Loading</div>
       </div>
 
       <div class="onboarding-detail-explainer">
@@ -2043,7 +2042,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
       <!-- View mode: rendered by the client from the server payload. -->
       <div id="onboarding_profile_body">
-        <p class="muted">Loading profile&hellip;</p>
+        <div class="dash-loading dash-loading--block" role="status" aria-live="polite"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading profile…</span></div>
       </div>
 
       <!-- Edit mode: hidden by default, toggled on when the user clicks Edit. -->
@@ -2126,7 +2125,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div class="onboarding-detail-header">
         <div class="onboarding-detail-step onboarding-detail-optional">Optional</div>
         <h2 class="onboarding-detail-title">Houses</h2>
-        <div id="onboarding_houses_badge" class="onboarding-detail-badge">…</div>
+        <div id="onboarding_houses_badge" class="onboarding-detail-badge">Loading</div>
       </div>
 
       <div class="onboarding-detail-explainer">
@@ -2136,7 +2135,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div id="onboarding_houses_status" class="status"></div>
 
       <div id="onboarding_houses_body">
-        <p class="muted">Loading properties&hellip;</p>
+        <div class="dash-loading dash-loading--block" role="status" aria-live="polite"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading properties…</span></div>
       </div>
 
       <div class="onboarding-actions">
@@ -2163,7 +2162,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div id="onboarding_finish_status" class="status"></div>
 
       <div id="onboarding_finish_body">
-        <p class="muted">Loading summary&hellip;</p>
+        <div class="dash-loading dash-loading--block" role="status" aria-live="polite"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading summary…</span></div>
       </div>
 
       <div class="onboarding-actions">
