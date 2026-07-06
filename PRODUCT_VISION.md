@@ -177,3 +177,17 @@ We will consider CashCompass successful when it has earned a place in how people
 - **Users remain in control.** They keep ownership of their data and understanding of their finances; the product amplifies their control rather than replacing it.
 
 Success is ultimately a feeling as much as a metric: a person opening CashCompass and thinking *I understand my money, I trust these numbers, and I know what to do next.* Everything in this document exists to make that sentence true.
+
+---
+
+## 11. Version 1 Guiding Conclusions
+
+Strategic conclusions from the Version 1 Readiness Review (2026-07-06). These are the principles that decide sequencing and trade-offs on the road to Version 1 — the *why* behind the current Stage 3 priority order. They are deliberately few and strategic; the detailed roadmap lives in `TODO.md → Product Maturity Stages → Stage 3`.
+
+- **Trust before features.** Version 1 is defined by trustworthiness of the core, not breadth. Every interesting feature (chat, aggregation, monetization) waits until the core is provably trustworthy.
+- **The numbers must reconcile.** The product's central promise is a single financial picture that agrees across Dashboard, Planner, and the underlying sheets to the cent. Financial Integrity convergence (Phase 3) is the item on which Version 1 credibility rests.
+- **Converge the workbook before broadening Family Beta.** A beta user's first impression is the workbook itself; a freshly provisioned workbook should converge toward the Golden Workbook (the visual source of truth) before more families see it. This is why Golden Workbook Convergence leads Stage 3.
+- **The Validation Agent protects trust.** Correctness must be *enforced*, not hoped for. The Validation Agent turns reconciliation and regression checks into an automated release gate — and reduces reliance on a single person's manual pass.
+- **Recovery must not create silent duplicates.** Ownership is only meaningful if the link to the data is durable; the remaining recovery adoption paths must be validated and their default posture chosen before real families depend on it.
+- **Product differentiation depends on Decision Support.** Ownership and transparency get CashCompass in the door; the lasting differentiation is helping people *decide* — which is why Money Plan (long-term planning and guided allocation) is a Version 1 objective, not a Version 2 nicety.
+- **Version 1 is a horizon, not a single date.** Version 1 spans Family Beta and External Beta. "Family Beta Release Candidate" and "Version 1 complete" are different milestones; sequencing honors that distinction.

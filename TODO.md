@@ -11,7 +11,7 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current stage — Stage 3: Beta Readiness
 
-**Maturity (estimated):** Family Beta Readiness **~97–98%** · External / Public Beta Readiness **~92%**. **Stage 1 (Core Platform) and Stage 2 (Product Hardening) are complete.** The remaining work before family beta is the **Beta Gate** — Financial Integrity convergence, the remaining Recovery adoption-path validation, and the **Validation Agent** (the automated release gate) — plus onboarding/UX polish. This is no longer major feature development.
+**Maturity (estimated):** Family Beta Readiness **~97–98%** · External / Public Beta Readiness **~92%**. **Stage 1 (Core Platform) and Stage 2 (Product Hardening) are complete.** The remaining work before family beta is the **Beta Gate** — in agreed order: **Golden Workbook Convergence, Financial Integrity Phase 3 (convergence), the Validation Agent** (the automated release gate), **Recovery completion**, and **Workbook/UX polish**. This is no longer major feature development.
 
 The **authoritative roadmap is the `## Product Maturity Stages` section immediately below** (Stage 1–6), which carries the at-a-glance framing, `## Current Engineering Priorities`, the `## Shared Lifecycle Framework` direction, and the `## Beta Gate`. `PROJECT_CONTEXT.md` and `README.md` carry high-level mirrors of the stage roadmap. The older `## Launch Readiness Roadmap` (Phase 1–7) is retained further below as detailed historical phase expansion; **where any Phase statement conflicts with the Stage model above, the Stage model wins.**
 
@@ -35,7 +35,7 @@ The older "V1.2 work queue" candidates are retained below under `## V1.2 polish 
 
 > **Companion: `## UX Backlog (Version 1)`** (below) is the permanent home for small product-quality improvements (polish, loading, empty-states, consistency, wording). It is cross-referenced from Stage 3–5 so these items **never disappear during a roadmap reorganization**. Review it before every Family Beta milestone and before External Beta.
 
-**Maturity (estimated):** Family Beta Readiness **~97–98%** · External / Public Beta Readiness **~92%**. Remaining pre-beta work is Financial Integrity convergence, remaining Recovery adoption-path validation, and the Validation Agent — **not major feature development.**
+**Maturity (estimated):** Family Beta Readiness **~97–98%** · External / Public Beta Readiness **~92%**. Remaining pre-beta work is the Beta Gate in agreed order — Golden Workbook Convergence, Financial Integrity Phase 3, the Validation Agent, Recovery completion, Workbook/UX polish — **not major feature development.**
 
 ### Stage 1 — Core Platform *(✅ Complete)*
 
@@ -55,9 +55,30 @@ Made the built capabilities provably correct and recoverable. **Completed this s
 
 ### Stage 3 — Beta Readiness *(current stage)*
 
-Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remaining work:
+Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remaining work.
 
-**A. Financial Integrity — convergence** *(foundation shipped in Stage 2)*
+> **Agreed Stage 3 priority order (Version 1 Alignment):** **1) Golden Workbook Convergence · 2) Financial Integrity Phase 3 (convergence) · 3) Validation Agent · 4) Recovery completion (Auto-Adopt / Ambiguous / Name-only / Orphan) · 5) Workbook / UX polish.** The lettered sections below follow this order. Strategic rationale: *trust before features; the numbers must reconcile; converge the workbook before broadening Family Beta; the Validation Agent protects trust* (see `PRODUCT_VISION.md → §11 Version 1 Guiding Conclusions`).
+
+**A. Golden Workbook Convergence** *(Stage 3 priority #1 — a **convergence project, not a redesign**; the production workbook is the **visual source of truth**; full inventory in `## UX Backlog (Version 1)`)*
+
+> **Goal:** a **freshly provisioned workbook converges toward the Golden Workbook visual standard** until it is visually indistinguishable from the mature production workbook. This is one of the highest-impact Family Beta items — a beta user's first impression is the workbook itself. The **production workbook is the visual source of truth (the "Golden Workbook")** and defines the design language — see `GOLDEN_WORKBOOK.md`; per-sheet status + gaps live in `WORKBOOK_PARITY_CHECKLIST.md`.
+
+> **First audit complete (2026-07-06).** The Golden Workbook Audit verified ten core user-facing sheets against the bound production workbook and organized them into **four design families**: **Financial Ledger** (Cash Flow, Bank Accounts, Investments, House Values) and **Operational** (Debts, Bills) are **★★★★★ Golden Reference**; **Operational Planning** (Upcoming Expenses, Donations) and **Analytical / Configuration** (Retirement, Settings) are **★★★★☆ Production Ready**. The families are intentional visual languages — the goal is not to make every sheet identical. Styling is **observed from the Golden Workbook, not inferred from code**; no convergence pass is written for a sheet until its checklist row is out of **UNKNOWN**.
+
+| Item | Priority | Dependencies | Effort |
+|---|---|---|---|
+| **Golden Workbook Audit — first pass** ✓ *(2026-07-06)* — ten core sheets verified + rated by design family in `WORKBOOK_PARITY_CHECKLIST.md` | P0 | — | Done |
+| Golden Workbook Audit — remaining sheets (HOUSES, LOG - Activity, OUT sheets, SYS backing, cross-cutting items) out of UNKNOWN | P0 | — | S |
+| Golden Workbook Convergence pass — converge fresh provisioning toward each audited family standard (widths, row heights, freeze rows, hidden helper columns, colors, fonts, conditional formatting, number formats, totals, notes, filters, sheet ordering) | P0 | Audit rows resolved · Provisioning ✓ · styling helpers ✓ | L |
+| Cash Flow convergence (Financial Ledger family — palette, negatives, headers) | P0 | Convergence pass | (incl. in L) |
+| Investments convergence (Financial Ledger family) | P0 | Convergence pass | (incl. in L) |
+| House Values convergence (Financial Ledger family) | P0 | Convergence pass | (incl. in L) |
+| Retirement convergence (Analytical / Configuration family) | P1 | Convergence pass | (incl. in L) |
+| Any remaining convergence gaps vs the Golden Workbook | P1 | Convergence pass | (incl. in L) |
+
+**B. Financial Integrity — Phase 3 (convergence)** *(Stage 3 priority #2 — foundation shipped in Stage 2: Audit Framework · Debt Audit · shared Active helper · `NOT_INITIALIZED`)*
+
+> **Completed (Phase 1–2):** Audit Framework (read-only, admin-gated) · Debt Audit · shared debt Active helper · `NOT_INITIALIZED` state. **Remaining (Phase 3):** the canonical basis, cross-surface convergence, and the Asset / Planner / Dashboard audit modules below. Strategic anchor: *the numbers must reconcile* — this is the product's core trust claim.
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
@@ -68,7 +89,16 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | Dashboard audit module (`runDashboardAudit`) | P1 | Framework ✓ | M |
 | Permanent reconciliation diagnostic wired into release | P1 | Convergence + audit modules | M |
 
-**B. Recovery Validation — remaining adoption paths** *(gates Family Beta; destructive/admin paths already validated)*
+**C. Validation Agent — the automated release gate** *(Stage 3 priority #3 — protects the reconciled numbers; the automated guardian of trust)*
+
+| Item | Priority | Dependencies | Effort |
+|---|---|---|---|
+| Validation Agent / automated regression detection (release gate) | P0 | Stable read models ✓ | L–XL |
+| Runtime regression checklist (interim manual gate) | P1 | — | M |
+| Financial-integrity gate wiring into release | P1 | FI Phase 3 convergence | S |
+| Deployment checklist | P2 | — | S |
+
+**D. Recovery completion — remaining adoption paths** *(Stage 3 priority #4 — gates Family Beta; destructive/admin paths already validated)*
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
@@ -77,37 +107,19 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | Name-only adoption decision (MEDIUM-confidence single candidate) | P1 | Auto-Adopt pass | S |
 | Orphan validation (`ORPHANS_PRESENT` surfaced + cleanup doc) | P1 | Auto-Adopt pass | XS–S |
 
-**C. Validation Agent — the automated release gate** *(next major engineering project)*
+**E. Workbook / UX polish** *(Stage 3 priority #5 — loading, empty-states, consistency, onboarding; opportunistic — see `## UX Backlog (Version 1)`)*
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
-| Validation Agent / automated regression detection (release gate) | P0 | Stable read models ✓ | L–XL |
-| Runtime regression checklist (interim manual gate) | P1 | — | M |
-| Financial-integrity gate wiring into release | P1 | FI convergence | S |
-| Deployment checklist | P2 | — | S |
+| Loading Experience Standardization (remaining slots — Planner, pickers, onboarding) | P2 | — | S–M |
+| Empty State Standardization (one styled box + consistent wording) | P2 | — | S–M |
+| UX Consistency Framework (wording / spacing / typography) | P2 | — | M |
 
-**D. Golden Workbook Convergence** *(first-class Family Beta quality objective — a **convergence project, not a redesign**; full inventory in `## UX Backlog (Version 1)`)*
-
-> **Goal:** a **freshly provisioned workbook converges toward the Golden Workbook visual standard** until it is visually indistinguishable from the mature production workbook. This is one of the highest-impact Family Beta items — a beta user's first impression is the workbook itself. The **production workbook is the visual source of truth (the "Golden Workbook")** — see `GOLDEN_WORKBOOK.md`; per-sheet status + gaps live in `WORKBOOK_PARITY_CHECKLIST.md`.
-
-> **First audit complete (2026-07-06).** The Golden Workbook Audit verified ten core user-facing sheets against the bound production workbook and organized them into **four design families**: **Financial Ledger** (Cash Flow, Bank Accounts, Investments, House Values) and **Operational** (Debts, Bills) are **★★★★★ Golden Reference**; **Operational Planning** (Upcoming Expenses, Donations) and **Analytical / Configuration** (Retirement, Settings) are **★★★★☆ Production Ready**. The families are intentional visual languages — the goal is not to make every sheet identical. Styling is **observed from the Golden Workbook, not inferred from code**; no convergence pass is written for a sheet until its checklist row is out of **UNKNOWN**.
+**F. Release readiness**
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
-| **Golden Workbook Audit — first pass** ✓ *(2026-07-06)* — ten core sheets verified + rated by design family in `WORKBOOK_PARITY_CHECKLIST.md` | P1 | — | Done |
-| Golden Workbook Audit — remaining sheets (HOUSES, LOG - Activity, OUT sheets, SYS backing, cross-cutting items) out of UNKNOWN | P1 | — | S |
-| Golden Workbook Convergence pass — converge fresh provisioning toward each audited family standard (widths, row heights, freeze rows, hidden helper columns, colors, fonts, conditional formatting, number formats, totals, notes, filters, sheet ordering) | P1 | Audit rows resolved · Provisioning ✓ · styling helpers ✓ | L |
-| Retirement convergence (Analytical / Configuration family) | P1 | Convergence pass | (incl. in L) |
-| Investments convergence (Financial Ledger family) | P1 | Convergence pass | (incl. in L) |
-| House Values convergence (Financial Ledger family) | P1 | Convergence pass | (incl. in L) |
-| Cash Flow convergence (Financial Ledger family — palette, negatives, headers) | P1 | Convergence pass | (incl. in L) |
-| Any remaining convergence gaps vs the Golden Workbook | P1 | Convergence pass | (incl. in L) |
-
-**E. Release readiness**
-
-| Item | Priority | Dependencies | Effort |
-|---|---|---|---|
-| Beta Gate assembly (FI · Recovery · Validation Agent · regression checklist) | P1 | A–C | Dependent |
+| Beta Gate assembly (Golden Workbook · FI Phase 3 · Validation Agent · Recovery · regression checklist) | P1 | A–D | Dependent |
 | Documentation + onboarding review | P2 | — | S |
 
 **Goal:** Family Beta Release Candidate — **provably correct, recoverable, and visually production-grade.**
@@ -172,13 +184,13 @@ Differentiators and platform/operations maturity. **None of these are required f
 
 Ranked, current. (Granular ranked execution items remain in `## Known priorities (ranked)` below; this is the strategic ordering.)
 
-1. **Validation Agent** — *(highest engineering priority — next major engineering project)* the automated regression-detection **release gate**. Every deploy passes it before shipping. Interim: a runtime regression checklist.
-2. **Financial Integrity — convergence** — declare the **canonical financial basis**, then converge **Planner / Dashboard / Rolling Debt** to within $0.01, and add the **Asset / Planner / Dashboard audit modules**. *(The Audit Framework, Debt Audit, shared Active helper, and `NOT_INITIALIZED` are already shipped.)*
-3. **Golden Workbook Convergence** — *(highest UX/quality priority for Family Beta)* a newly provisioned workbook must **converge toward the Golden Workbook** until it is **visually indistinguishable from production** (styling, widths, freezes, conditional formats, number formats, totals, notes, filters, sheet order; Retirement / Investments / House Values / Cash Flow). First audit complete (2026-07-06, ten core sheets rated by design family); a convergence project, not a redesign. Stage 3, P1, L.
-4. **Recovery Validation — remaining adoption paths** — Auto-Adopt validation, Ambiguous validation, Name-only adoption decision, Orphan validation (6F). *(Admin Clear, recovery routing, and admin validation are already done.)*
-5. **Shared Lifecycle Framework rollout** — Debt is the reference implementation; roll out to **Bank Accounts → Investments → Houses → Income Sources** (see `## Shared Lifecycle Framework` below).
-6. **Product differentiators (Version 1, External Beta)** — **Money Plan Phase 2** (long-term/goal planning, recommendations, forecasting, retirement integration) and the **Income Expected/Due Workflow** (income symmetry with Bills Due).
-7. **Remaining UX polish** — onboarding, empty-states, loading-experience consistency, messaging, Help/content cleanup.
+1. **Golden Workbook Convergence** — *(Stage 3 priority #1)* a newly provisioned workbook must **converge toward the Golden Workbook** (the **visual source of truth** — the production workbook defines the design language) until it is **visually indistinguishable from production** (styling, widths, freezes, conditional formats, number formats, totals, notes, filters, sheet order; Cash Flow / Investments / House Values / Retirement). A **convergence project, not a redesign.** First audit complete (2026-07-06, ten core sheets rated across four design families). Stage 3, P0/P1, L.
+2. **Financial Integrity — Phase 3 (convergence)** — declare the **canonical financial basis**, then converge **Planner / Dashboard / Rolling Debt** to within $0.01, and add the **Asset / Planner / Dashboard audit modules**. *(Completed foundation: Audit Framework, Debt Audit, shared Active helper, `NOT_INITIALIZED`.)* Strategic anchor: **the numbers must reconcile** — the product's core trust claim.
+3. **Validation Agent** — *(next major engineering project)* the automated regression-detection **release gate** that **protects the reconciled numbers**. Every deploy passes it before shipping. Interim: a runtime regression checklist.
+4. **Recovery completion — remaining adoption paths** — Auto-Adopt validation, Ambiguous validation, Name-only adoption decision, Orphan validation (6F). *(Admin Clear, recovery routing, and admin validation are already done.)*
+5. **Workbook / UX polish** — onboarding, empty-states, loading-experience consistency, messaging, Help/content cleanup (see `## UX Backlog (Version 1)`).
+6. **Shared Lifecycle Framework rollout** — Debt is the reference implementation; roll out to **Bank Accounts → Investments → Houses → Income Sources** (see `## Shared Lifecycle Framework` below).
+7. **Product differentiators (Version 1, External Beta)** — **Money Plan Phase 2** (long-term/goal planning, recommendations, forecasting, retirement integration) and the **Income Expected/Due Workflow** (income symmetry with Bills Due).
 
 ---
 
@@ -200,11 +212,12 @@ This is a **long-term architecture goal**, sequenced after the Beta Gate and bef
 
 ## Beta Gate
 
-Before broader beta, **every release must pass** the following before deployment:
+Before broader beta, **every release must pass** the following before deployment (listed as gate criteria; Stage 3 build order is Golden Workbook → FI Phase 3 → Validation Agent → Recovery → UX polish):
 
-- **Financial Integrity** — Dashboard / Planner / active source-sheet totals reconcile within $0.01. *(Audit Framework + Debt Audit shipped; canonical basis + Planner/Dashboard/Rolling convergence + Asset/Planner/Dashboard audit modules remaining.)*
+- **Golden Workbook Convergence** — freshly provisioned workbook is visually convergent with the Golden Workbook for the core sheets. *(First audit complete; convergence passes remaining for Cash Flow / Investments / House Values / Retirement.)*
+- **Financial Integrity** — Dashboard / Planner / active source-sheet totals reconcile within $0.01. *(Audit Framework + Debt Audit shipped; canonical basis + Planner/Dashboard/Rolling convergence + Asset/Planner/Dashboard audit modules remaining — Phase 3.)*
+- **Validation Agent** — automated regression detection passes. *(Not started — becomes the automated release gate that protects the reconciled numbers.)*
 - **Recovery Validation** — recovery stack validated. *(Admin Clear / recovery routing / Reconnect / admin validation done; Auto-Adopt / Ambiguous / Name-only / Orphan remaining.)*
-- **Validation Agent** — automated regression detection passes. *(Not started — the highest-priority Stage 3 build; it becomes the automated release gate.)*
 - **Runtime regression checklist** — core workflows + edge cases verified. *(Interim manual gate until the Validation Agent exists.)*
 
 This gate is the release-readiness target for **Stage 3 (Beta Readiness, current)**.
@@ -278,12 +291,13 @@ New UX/polish/consistency/loading/empty-state/wording findings go **here** (appe
 
 ## Next Session — Recommended Starting Point
 
-We are in **Stage 3 — Beta Readiness**. Stage 1 (Core Platform) and Stage 2 (Product Hardening) are complete: the recovery destructive/admin paths, the Financial Integrity Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`, and the Bills Due performance optimization (~51s → ~5.6s) all shipped. The Beta Gate is what remains. Recommended order (see `## Product Maturity Stages → Stage 3` for the full table with priorities/effort):
+We are in **Stage 3 — Beta Readiness**. Stage 1 (Core Platform) and Stage 2 (Product Hardening) are complete: the recovery destructive/admin paths, the Financial Integrity Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`, and the Bills Due performance optimization (~51s → ~5.6s) all shipped. The Beta Gate is what remains. Recommended order (agreed Version 1 Alignment order; see `## Product Maturity Stages → Stage 3` for the full table with priorities/effort):
 
-1. **Validation Agent (start here)** — stand up automated regression detection as the **release gate** (P0, next major engineering project). Ship a runtime regression checklist as the interim gate.
-2. **Financial Integrity convergence** — declare the **canonical financial basis**, converge **Planner / Dashboard / Rolling Debt** to $0.01, then add the **Asset / Planner / Dashboard** audit modules (P0–P1). Foundation (framework + Debt audit) is done.
-3. **Recovery Validation — remaining adoption paths** — Auto-Adopt (`CENTRAL_AUTO_ADOPT=true`, disposable account) → Ambiguous → Name-only adoption decision → Orphan (P0–P1); flags OFF afterward.
-4. **Beta Gate assembly + Family Beta go/no-go** — once 1–3 are green, do the release-readiness review and the Stage 4 go/no-go pass.
+1. **Golden Workbook Convergence (start here)** — converge fresh provisioning toward the Golden Workbook (visual source of truth); first audit is complete, so write the additive first-create passes for the diverging sheets (Cash Flow / Investments / House Values / Retirement) (P0/P1, L). *Converge the workbook before broadening Family Beta.*
+2. **Financial Integrity — Phase 3 (convergence)** — declare the **canonical financial basis**, converge **Planner / Dashboard / Rolling Debt** to $0.01, then add the **Asset / Planner / Dashboard** audit modules (P0–P1). Foundation (framework + Debt audit) is done. *The numbers must reconcile.*
+3. **Validation Agent** — stand up automated regression detection as the **release gate** that protects the reconciled numbers (P0, major engineering project). Ship a runtime regression checklist as the interim gate.
+4. **Recovery completion — remaining adoption paths** — Auto-Adopt (`CENTRAL_AUTO_ADOPT=true`, disposable account) → Ambiguous → Name-only adoption decision → Orphan (P0–P1); flags OFF afterward.
+5. **Workbook / UX polish + Beta Gate assembly + Family Beta go/no-go** — once 1–4 are green, do the UX polish sweep, the release-readiness review, and the Stage 4 go/no-go pass.
 
 (Validation-surface reminder: the Script Properties UI may lag runtime mapping changes during testing — **Admin Diagnostics is authoritative**. All `CENTRAL_*` flags return OFF in steady state.)
 
@@ -293,7 +307,7 @@ We are in **Stage 3 — Beta Readiness**. Stage 1 (Core Platform) and Stage 2 (P
 
 **Historical phase detail (Phase 1–7) — superseded by the `## Product Maturity Stages` model above.** The Stage model (Stage 1–6) is the at-a-glance authoritative roadmap; **where any statement here conflicts with it, the Stage model wins.** This section is retained for the per-phase rationale (objective, why it matters, deliverables, dependencies) that shaped the current state. Every phase runs under `WORKING_RULES.md → Current phase` and, for central-mode work, `→ Central App Transition Rules` (active).
 
-**Stage ↔ Phase mapping:** **Stage 1 — Core Platform** *(✅ complete)* = Phase 1 (Documentation Cleanup) + Phase 3 (Workbook Totals) + shipped core/Manage/lifecycle + Bills Due performance. **Stage 2 — Product Hardening** *(✅ complete)* = Phase 2 (Family Beta Hardening incl. the recovery stack + destructive/admin validation) + the Financial Integrity foundation (Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`). **Stage 3 — Beta Readiness** *(current)* = the Beta Gate (Validation Agent · Financial Integrity convergence · remaining Recovery adoption paths · runtime regression checklist) + release-readiness review. **Stage 4 — Family Beta** = go/no-go + Phase 5 (Web App UX) + recovery slices 6D.2b / 6E.2 + Shared Lifecycle (Bank Accounts). **Stage 5 — External Beta** = Phase 6 (External Beta Readiness) + user-lifecycle + remaining Shared Lifecycle rollout. **Stage 6 — Version 2 / Future Platform** = Phase 4 (Chat Assistant) + Phase 7 (Paid Product) + Operations Dashboard / metrics / monitoring / analytics.
+**Stage ↔ Phase mapping:** **Stage 1 — Core Platform** *(✅ complete)* = Phase 1 (Documentation Cleanup) + Phase 3 (Workbook Totals) + shipped core/Manage/lifecycle + Bills Due performance. **Stage 2 — Product Hardening** *(✅ complete)* = Phase 2 (Family Beta Hardening incl. the recovery stack + destructive/admin validation) + the Financial Integrity foundation (Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`). **Stage 3 — Beta Readiness** *(current)* = the Beta Gate (Golden Workbook Convergence · Financial Integrity Phase 3 · Validation Agent · remaining Recovery adoption paths · Workbook/UX polish · runtime regression checklist) + release-readiness review. **Stage 4 — Family Beta** = go/no-go + Phase 5 (Web App UX) + recovery slices 6D.2b / 6E.2 + Shared Lifecycle (Bank Accounts). **Stage 5 — External Beta** = Phase 6 (External Beta Readiness) + user-lifecycle + remaining Shared Lifecycle rollout. **Stage 6 — Version 2 / Future Platform** = Phase 4 (Chat Assistant) + Phase 7 (Paid Product) + Operations Dashboard / metrics / monitoring / analytics.
 
 **Priority scale:** P0 = now / in progress · P1 = next, gates family beta · P2 = high, needed before external beta · P3 = gates external beta · P4 = post-beta / longest horizon. Phases are roughly sequential; where noted, some can overlap.
 
@@ -412,12 +426,13 @@ Explicit, admin-driven and self-service repair built on 2A's evidence. This is t
 
 The next major efforts, ranked, aligned to the Stage model above (Stage 3 first). Diagnostics, Debt parity, Bank Accounts parity, Identity markers, the recovery destructive/admin paths, the Financial Integrity Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`, and the Bills Due performance optimization are **already complete** and are not in this list.
 
-**Stage 3 — Beta Readiness (current):**
+**Stage 3 — Beta Readiness (current):** *(agreed priority order — Version 1 Alignment)*
 
-1. **Validation Agent** — automated regression-detection **release gate** (next major engineering project); interim runtime regression checklist. *(P0)*
-2. **Financial Integrity — convergence** — canonical basis → Planner/Dashboard/Rolling convergence to $0.01 → Asset/Planner/Dashboard audit modules. Foundation shipped. *(P0–P1)*
-3. **Golden Workbook Convergence** — newly provisioned workbook converges toward the Golden Workbook until visually indistinguishable from production (Retirement / Investments / House Values / Cash Flow + all visual attributes). First audit complete (2026-07-06, ten core sheets by design family). *(P1, L — Family Beta quality gate; convergence, not redesign)*
-4. **Recovery Validation — remaining adoption paths** *(6F)* — Auto-Adopt → Ambiguous → Name-only adoption decision → Orphan, then flags OFF. *(P0–P1)*
+1. **Golden Workbook Convergence** — newly provisioned workbook converges toward the Golden Workbook (visual source of truth) until visually indistinguishable from production (Cash Flow / Investments / House Values / Retirement + all visual attributes). First audit complete (2026-07-06, ten core sheets across four design families). *(P0/P1, L — Family Beta quality gate; convergence, not redesign)*
+2. **Financial Integrity — Phase 3 (convergence)** — canonical basis → Planner/Dashboard/Rolling convergence to $0.01 → Asset/Planner/Dashboard audit modules. Foundation shipped (Audit Framework · Debt Audit · shared Active helper · `NOT_INITIALIZED`). *(P0–P1)*
+3. **Validation Agent** — automated regression-detection **release gate** that protects the reconciled numbers (next major engineering project); interim runtime regression checklist. *(P0)*
+4. **Recovery completion — remaining adoption paths** *(6F)* — Auto-Adopt → Ambiguous → Name-only adoption decision → Orphan, then flags OFF. *(P0–P1)*
+5. **Workbook / UX polish** — loading-experience consistency, empty-state standardization, UX consistency, onboarding (see `## UX Backlog (Version 1)`). *(P2)*
 
 **Stage 4 — Family Beta:**
 
