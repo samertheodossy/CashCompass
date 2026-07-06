@@ -19,8 +19,20 @@ If you are onboarding a contributor (or yourself after a break), `INIT_PROMPT.md
 
 ## Documentation map
 
+### Primary documentation hierarchy
+
+These four documents are the project's top-level reference set. Read them top-down: vision → sequencing → current work → current state.
+
+- **`PRODUCT_VISION.md`** — defines the **long-term product**: why CashCompass exists, where it is going, its differentiators, principles, and the Version 1 vs Version 2 boundary. The highest-level product document.
+- **`TODO.md → Product Maturity Stages`** — the **roadmap**: defines implementation order (Stage 1–6, priorities, dependencies, effort).
+- **`TODO.md`** (current work + backlog) — defines the **current engineering work**.
+- **`PROJECT_CONTEXT.md`** — defines the **current technical state** (live architecture, tab behavior, phase).
+
+`PRODUCT_VISION` explains *why*; the roadmap explains *what order*; `TODO` is *what we're building now*; `PROJECT_CONTEXT` is *where things stand technically*. Together they are the primary documentation hierarchy; everything below adds detail.
+
 ### Core (read these; they reflect the current state)
 
+- `PRODUCT_VISION.md` — long-term product vision, positioning, principles, Version 1 definition.
 - `WORKING_RULES.md` — working rules + current phase.
 - `PROJECT_CONTEXT.md` — live architecture, tab behavior, current phase.
 - `TESTING_PLAN.md` — manual test discipline (blank + populated two-track).
