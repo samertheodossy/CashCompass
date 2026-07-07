@@ -100,12 +100,17 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 
 **D. Recovery completion — remaining adoption paths** *(Stage 3 priority #4 — gates Family Beta; destructive/admin paths already validated)*
 
+> **Implementation specification:** `CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md` is the **ratified Version 1 Recovery Architecture** (decision tree, unconditional candidate detection, `CENTRAL_AUTO_ADOPT` repurposed to auto-adopt-single vs prompt, failure branches → Unavailable, testing matrix). All items in this section are implemented against that document. Core rule: *recovery must never create silent duplicates.*
+
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
 | Auto-Adopt validation (`CENTRAL_AUTO_ADOPT=true`, disposable account) | P0 | Disposable account | S |
 | Ambiguous validation (≥2 candidates → `AmbiguousWorkbookError`) | P0 | Auto-Adopt pass | S |
 | Name-only adoption decision (MEDIUM-confidence single candidate) | P1 | Auto-Adopt pass | S |
 | Orphan validation (`ORPHANS_PRESENT` surfaced + cleanup doc) | P1 | Auto-Adopt pass | XS–S |
+| **Provision-after-recovery duplicate guard** — detect existing candidate CashCompass workbooks before creating a new one after a **mapping clear / stale-mapping recovery**, and offer adopt/reconnect instead of silently creating a second workbook *(confirmed gap — 2026-07-07)* | P0 | Auto-Adopt + Ambiguous paths | S–M |
+
+> **Confirmed recovery/adoption gap (2026-07-07, `cashcompass2026`).** During Golden Workbook Convergence testing, **clearing a stale mapping let Central provision a *second* workbook even though another CashCompass workbook still existed in the user's Drive** — a silent duplicate. Today the create-after-clear path (`provisionWorkbookForUser_`) only runs adopt-before-create when `CENTRAL_AUTO_ADOPT` is ON (default OFF), so with the flag off it creates unconditionally. This is **not caused by the Investments convergence work**; the test simply reproduced the exact risk the four adoption paths above are meant to handle. Fix belongs with Recovery completion: before create-after-clear / stale recovery, detect candidates and route to adopt/reconnect (or `AmbiguousWorkbookError` when ≥2), never a silent duplicate. Ties to **Auto-Adopt validation, Ambiguous recovery, Name-only adoption, and Orphan workbook handling**. No implementation yet.
 
 **E. Workbook / UX polish** *(Stage 3 priority #5 — loading, empty-states, consistency, onboarding; opportunistic — see `## UX Backlog (Version 1)`)*
 
