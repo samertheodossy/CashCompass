@@ -2008,8 +2008,9 @@ function ensureOnboardingBankAccountsSheetFromDashboard(mode) {
       }
 
       // Canonical Bank Accounts year-block coloring (orange Year row,
-      // yellow Account Name header row, plus green/tan Total Accounts/Delta
-      // rows only if present) + widen-only readable column widths. Mirrors
+      // bright-yellow Account Name header row, plus green/pink Total
+      // Accounts/Delta rows only if present) + widen-only readable column
+      // widths. Converged to the Financial Ledger family palette shared with
       // the production workbook and applyInvestmentsSheetStyling_. First-
       // create only: this branch runs after insertSheet, which a populated
       // workbook never reaches (it returns at the `if (existing)` guard

@@ -1511,22 +1511,29 @@ function refreshBankAccountsTotalAccountsRow_(sheet, year) {
 }
 
 /**
- * First-create cosmetic styling for INPUT - Bank Accounts year blocks,
- * implementing the revised Family Beta workbook styling standard. The
- * priority is readability over color: a single header fill, a clean white
- * year separator, and a calm white body, with hierarchy carried by
- * typography (size) rather than competing fills.
+ * First-create cosmetic styling for INPUT - Bank Accounts year blocks.
+ *
+ * Golden Workbook Convergence (2026-07-06): Bank Accounts belongs to the
+ * Financial Ledger design family (Cash Flow, Bank Accounts, Investments,
+ * House Values). The production/Golden reference — encoded in the sibling
+ * helpers applyInvestmentsSheetStyling_ / applyHouseValuesSheetStyling_ —
+ * uses a shared warm palette (orange Year banner, bright-yellow header,
+ * green totals, pink delta). This helper previously applied a divergent
+ * gray/muted "Family Beta" palette; the marker colors below are converged
+ * to the Financial Ledger family standard so a freshly provisioned
+ * workbook matches the Golden Workbook. Readable typography (size 16
+ * header/year, size 14 body) and the widen-only widths are retained.
  *
  *   - body (all cells)  → white background, font size 14 (calm, legible)
- *   - "Year" row        → gray #d9d9d9 banner, bottom border #999999, bold,
+ *   - "Year" row        → orange #f4a300 banner, bottom border #999999, bold,
  *                         font size 16, row height 34
- *   - "Account Name"    → warm yellow #ffe599, bold, font size 16,
+ *   - "Account Name"    → bright yellow #fff200, bold, font size 16,
  *                         left-aligned, vertical-middle, row height 40
  *   - "Total Accounts"  → green #b6d7a8, bold   (ONLY if the row exists)
- *   - "Delta"           → tan   #fce5cd, bold   (ONLY if the row exists)
+ *   - "Delta"           → pink  #f4cccc, bold   (ONLY if the row exists)
  *
  * The body wash runs FIRST so the marker rows (year/header/total/delta)
- * re-applied afterward always win — that keeps Total/Delta green/tan even
+ * re-applied afterward always win — that keeps Total/Delta green/pink even
  * though they sit inside the washed range.
  *
  * IMPORTANT: this helper NEVER creates Total Accounts / Delta rows, never
@@ -1575,13 +1582,13 @@ function applyBankAccountsSheetStyling_(sheet) {
     const row1 = i + 1;
     try {
       if (marker === 'Year') {
-        // Subtle neutral-gray banner separates the year section from the
-        // white body without competing chromatically with the warm-yellow
-        // header. A bottom border does the crisp section-divider work so the
-        // fill itself stays understated. Hierarchy: bold + size 16.
+        // Financial Ledger family Year banner: warm orange (#f4a300) matches
+        // the production Investments / House Values year rows. A #999999
+        // bottom border keeps the crisp section-divider. Hierarchy: bold +
+        // size 16 (Bank Accounts' larger, more legible header typography).
         const yearRange = sheet.getRange(row1, 1, 1, lastCol);
         yearRange
-          .setBackground('#d9d9d9')
+          .setBackground('#f4a300')
           .setFontWeight('bold')
           .setFontColor('#000000')
           .setFontSize(16);
@@ -1593,11 +1600,12 @@ function applyBankAccountsSheetStyling_(sheet) {
         } catch (_) {}
         try { sheet.setRowHeight(row1, 34); } catch (_) {}
       } else if (marker === 'Account Name') {
-        // The one filled row: warm yellow, bold, large. Production header
-        // rows are LEFT-aligned, so horizontal alignment is left at its
-        // default; vertical-middle pairs with the taller row height.
+        // Financial Ledger family header: bright yellow (#fff200) matches the
+        // production Investments / House Values header rows. Bank Accounts
+        // header rows are LEFT-aligned, so horizontal alignment is left at
+        // its default; vertical-middle pairs with the taller row height.
         sheet.getRange(row1, 1, 1, lastCol)
-          .setBackground('#ffe599')
+          .setBackground('#fff200')
           .setFontWeight('bold')
           .setFontColor('#000000')
           .setFontSize(16)
@@ -1610,9 +1618,11 @@ function applyBankAccountsSheetStyling_(sheet) {
           .setFontWeight('bold')
           .setFontColor('#000000');
       } else if (marker === 'Delta') {
-        // Defensive: only fires if such a row already exists. Not created here.
+        // Financial Ledger family Delta band: pink (#f4cccc) matches the
+        // production Investments / House Values delta rows. Defensive: only
+        // fires if such a row already exists. Not created here.
         sheet.getRange(row1, 1, 1, lastCol)
-          .setBackground('#fce5cd')
+          .setBackground('#f4cccc')
           .setFontWeight('bold')
           .setFontColor('#000000');
       }
