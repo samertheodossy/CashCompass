@@ -211,41 +211,11 @@ function addBillFromDashboard(payload) {
   // Self-heal optional columns introduced in later phases. Older workbooks can
   // be missing these headers, which would cause the writes below to silently
   // drop the values — and in the Payment Source case that leaves freshly-paid
-  // bills with a blank Flow Source on the Cash Flow row because the
-  // server-side fallback (`resolveFlowSourceFromBillOrDebt_`) has nothing to
-  // read. Case-insensitive check: we only add the column if it genuinely
-  // doesn't exist under any casing (so "PAYMENT SOURCE" counts as present).
-  var selfHealHeaders = ['Payment Source', 'Category', 'Frequency', 'Start Month', 'Notes'];
-  var selfHealAnchors = {
-    'Payment Source': 'Active',
-    'Category': 'Payee',
-    'Frequency': 'Payment Source',
-    'Start Month': 'Frequency',
-    'Notes': 'Start Month'
-  };
-  var headerChanged = false;
-  for (var sh = 0; sh < selfHealHeaders.length; sh++) {
-    var needed = selfHealHeaders[sh];
-    if (headerIndex_(needed) !== -1) continue;
-
-    var anchor = selfHealAnchors[needed];
-    var anchorIdx = anchor ? headerIndex_(anchor) : -1;
-    var insertIndex = anchorIdx !== -1 ? anchorIdx + 2 : sheet.getLastColumn() + 1;
-
-    try {
-      if (insertIndex > sheet.getLastColumn()) {
-        sheet.insertColumnAfter(sheet.getLastColumn());
-      } else {
-        sheet.insertColumnBefore(insertIndex);
-      }
-    } catch (colErr) {
-      sheet.insertColumnAfter(sheet.getLastColumn());
-      insertIndex = sheet.getLastColumn();
-    }
-    sheet.getRange(1, insertIndex).setValue(needed);
-    Logger.log('addBillFromDashboard: auto-added missing INPUT - Bills column "' + needed + '" at index ' + insertIndex);
-    headerChanged = true;
-  }
+  // bills with a blank Flow Source on the Cash Flow row. The append-only heal
+  // logic now lives in the shared ensureBillsSheetSchema_ helper (same headers,
+  // anchors, and insert strategy as before) so every Bills entry point can
+  // converge an older workbook, not just the add path.
+  var headerChanged = ensureBillsSheetSchema_(sheet);
 
   if (headerChanged) {
     headerDisplay = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0] || [];
@@ -949,6 +919,20 @@ function getActiveBillsForManagementFromDashboard() {
   // "No active bills yet" empty state instead of throwing a red banner.
   var sheet = ss.getSheetByName(getSheetNames_().BILLS);
   if (!sheet) return [];
+
+  // Converge older workbooks to the current Bills schema (append-only) the
+  // first time the user opens the Bills module — no need to add a bill. This
+  // is a user-initiated, infrequent read (NOT the Bills Due hot path), so a
+  // one-time idempotent header heal is cheap. Best-effort: if the heal can't
+  // write (read-only share / drive.file / lock), log and keep loading the list
+  // — the reader below already tolerates missing optional columns.
+  try {
+    ensureBillsSheetSchema_(sheet);
+  } catch (schemaErr) {
+    Logger.log('getActiveBillsForManagementFromDashboard: Bills schema self-heal failed (continuing with existing columns): ' +
+      (schemaErr && schemaErr.message ? schemaErr.message : schemaErr));
+  }
+
   var display = sheet.getDataRange().getDisplayValues();
   if (!display || display.length < 2) return [];
 
@@ -1021,6 +1005,99 @@ function getActiveBillsForManagementFromDashboard() {
 /* -------------------------------------------------------------------------- */
 /*  Helpers                                                                   */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * Idempotent, append-only INPUT - Bills schema self-heal.
+ *
+ * Ensures every optional column the app relies on exists on the given Bills
+ * sheet WITHOUT rewriting data or moving existing columns. Older workbooks
+ * (provisioned before a column was introduced) converge to the current schema
+ * the first time any caller runs this, so it is safe to call on every use of
+ * the Bills module — not just when a bill is added. Guarantees:
+ *
+ *   - idempotent            : a column present under ANY casing is left alone
+ *   - append-only           : missing columns are inserted after their canonical
+ *                             anchor (falling back to the end), never over data
+ *   - case-insensitive      : "PAYMENT SOURCE" counts as "Payment Source"
+ *   - preserves order        : canonical order Payee … Notes → Weekday → Anchor
+ *                             Date (trailing new columns append at the end)
+ *   - never rewrites rows    : only the header row (row 1) is ever written
+ *
+ * Self-healed columns and why:
+ *   - Payment Source : older sheets missing it silently drop Flow Source on the
+ *                      Cash Flow row (resolveFlowSourceFromBillOrDebt_ has
+ *                      nothing to read).
+ *   - Category / Frequency / Start Month / Notes : optional metadata columns.
+ *   - Weekday / Anchor Date : Phase 2 additive scheduling columns. Nothing
+ *                      writes a value into them yet, and a blank Weekday means
+ *                      "behave exactly like today" (Due Day anchor). They stay
+ *                      LAST in the list so their 'Notes' / 'Weekday' anchors
+ *                      resolve consistently on older sheets.
+ *
+ * This is the extraction of the self-heal block that previously lived inline in
+ * addBillFromDashboard; behavior is identical (same headers, anchors, insert
+ * strategy, and single pre-heal header map).
+ *
+ * @param {Sheet} sheet  the INPUT - Bills sheet
+ * @returns {boolean} true if any column was appended (header row changed)
+ */
+function ensureBillsSheetSchema_(sheet) {
+  var headerDisplay = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0] || [];
+  if (!headerDisplay || !headerDisplay.length) {
+    throw new Error('Bills sheet has no header row.');
+  }
+
+  // Case-insensitive header map. Real-world INPUT - Bills sheets are sometimes
+  // shipped with ALL-CAPS headers (e.g. "PAYMENT SOURCE"), which a naive
+  // indexOf would miss and re-add as a duplicate. Built once from the pre-heal
+  // header (anchors resolve against this map; trailing columns append at the
+  // end, preserving canonical order).
+  var headerMap = {};
+  for (var i = 0; i < headerDisplay.length; i++) {
+    var label = String(headerDisplay[i] || '').trim();
+    if (label) headerMap[label.toLowerCase()] = i;
+  }
+  function headerIndex_(name) {
+    var key = String(name || '').trim().toLowerCase();
+    return Object.prototype.hasOwnProperty.call(headerMap, key) ? headerMap[key] : -1;
+  }
+
+  var selfHealHeaders = ['Payment Source', 'Category', 'Frequency', 'Start Month', 'Notes', 'Weekday', 'Anchor Date'];
+  var selfHealAnchors = {
+    'Payment Source': 'Active',
+    'Category': 'Payee',
+    'Frequency': 'Payment Source',
+    'Start Month': 'Frequency',
+    'Notes': 'Start Month',
+    'Weekday': 'Notes',
+    'Anchor Date': 'Weekday'
+  };
+  var headerChanged = false;
+  for (var sh = 0; sh < selfHealHeaders.length; sh++) {
+    var needed = selfHealHeaders[sh];
+    if (headerIndex_(needed) !== -1) continue;
+
+    var anchor = selfHealAnchors[needed];
+    var anchorIdx = anchor ? headerIndex_(anchor) : -1;
+    var insertIndex = anchorIdx !== -1 ? anchorIdx + 2 : sheet.getLastColumn() + 1;
+
+    try {
+      if (insertIndex > sheet.getLastColumn()) {
+        sheet.insertColumnAfter(sheet.getLastColumn());
+      } else {
+        sheet.insertColumnBefore(insertIndex);
+      }
+    } catch (colErr) {
+      sheet.insertColumnAfter(sheet.getLastColumn());
+      insertIndex = sheet.getLastColumn();
+    }
+    sheet.getRange(1, insertIndex).setValue(needed);
+    Logger.log('ensureBillsSheetSchema_: auto-added missing INPUT - Bills column "' + needed + '" at index ' + insertIndex);
+    headerChanged = true;
+  }
+
+  return headerChanged;
+}
 
 /**
  * Normalize a Yes/No-ish user input into the canonical sheet label.
@@ -1208,8 +1285,8 @@ function applyBillsSheetStyling_(sheet) {
   // by canonical column position from the creator's header layout:
   // 1 Payee | 2 Category | 3 Due Day | 4 Default Amount | 5 Varies |
   // 6 Autopay | 7 Active | 8 Payment Source | 9 Frequency | 10 Start Month |
-  // 11 Notes.
-  var widthMins = [200, 150, 100, 175, 100, 110, 90, 190, 130, 130, 240];
+  // 11 Notes | 12 Weekday | 13 Anchor Date.
+  var widthMins = [200, 150, 100, 175, 100, 110, 90, 190, 130, 130, 240, 110, 120];
   for (var c = 1; c <= lastCol && c <= widthMins.length; c++) {
     try {
       if (sheet.getColumnWidth(c) < widthMins[c - 1]) {

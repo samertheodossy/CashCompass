@@ -1260,7 +1260,13 @@ function ensureOnboardingBillsSheetFromDashboard(mode) {
       'Payment Source',
       'Frequency',
       'Start Month',
-      'Notes'
+      'Notes',
+      // Optional, additive scheduling columns (Phase 2, schema-only). Appended
+      // AFTER every existing column so Due Day and all prior columns keep their
+      // positions. Provisioned blank; no reader/writer populates them yet, and
+      // a blank Weekday means "behave exactly like today" (Due Day anchor).
+      'Weekday',
+      'Anchor Date'
     ];
     sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
 
