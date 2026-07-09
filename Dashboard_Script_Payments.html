@@ -151,6 +151,15 @@ function prefillQuickPayment(prefill) {
   // stray earlier value can't follow a later Quick Add save.
   window.__pendingUpcomingPaymentId = String(prefill.upcomingId || '').trim();
 
+  // Bills Due → Pay bridge: carry the exact weekly/biweekly occurrence context
+  // (payee + dueDate + month + amount) so savePayment() can record a
+  // per-occurrence bill_paid marker after the save. This MUST be set here —
+  // after the showTab('payments') above already fired loadPaymentSection(),
+  // which clears window.__pendingBillOccurrencePaid — so the fresh value
+  // survives to Save instead of being wiped by that cold-load clear. Non-Bills
+  // prefills clear it so a stray earlier occurrence can't follow a later save.
+  window.__pendingBillOccurrencePaid = prefill.billOccurrencePaid || null;
+
   loadPaymentPreview();
 }
 
