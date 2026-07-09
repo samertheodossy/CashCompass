@@ -255,21 +255,25 @@ function payBillFromDashboard(billKey) {
 
   // Weekly/biweekly expanded occurrences share a single monthly Cash Flow
   // cell, so paying one occurrence can't be detected from the cell value.
-  // Stash this exact occurrence (payee + dueDate + month + amount) so the
-  // Quick Add save records a per-occurrence bill_paid marker, which Bills Due
-  // uses to suppress this occurrence on reload (mirrors the __pending* bridges
-  // used for Flow Source and Upcoming). Monthly bills omit isExpandedRecurrence
-  // and keep their existing cell-based handled behavior — nothing stashed.
-  if (bill.isExpandedRecurrence && bill.dueDate) {
-    window.__pendingBillOccurrencePaid = {
-      payee: bill.payee || bill.name || '',
-      dueDate: bill.dueDate || '',
-      monthHeader: bill.monthHeader || '',
-      amount: bill.amount || 0
-    };
-  } else {
-    window.__pendingBillOccurrencePaid = null;
-  }
+  // Pass this exact occurrence (payee + dueDate + month + amount) THROUGH
+  // prefillQuickPayment so the Quick Add save records a per-occurrence
+  // bill_paid marker, which Bills Due uses to suppress this occurrence on
+  // reload (mirrors the __pending* bridges used for Flow Source and Upcoming).
+  // It must NOT be assigned to window.__pendingBillOccurrencePaid here:
+  // prefillQuickPayment() calls showTab('payments'), which fires
+  // loadPaymentSection() and clears window.__pendingBillOccurrencePaid — so a
+  // value set before the prefill would be wiped before Save. prefillQuickPayment
+  // sets the pending marker AFTER that clear, alongside the other bridges.
+  // Monthly bills omit isExpandedRecurrence and keep their existing cell-based
+  // handled behavior — nothing carried.
+  var billOccurrencePaid = (bill.isExpandedRecurrence && bill.dueDate)
+    ? {
+        payee: bill.payee || bill.name || '',
+        dueDate: bill.dueDate || '',
+        monthHeader: bill.monthHeader || '',
+        amount: bill.amount || 0
+      }
+    : null;
 
   // Carry the bill's Payment Source (from INPUT - Bills or the inferred
   // debt default) through to Quick Add so a newly created Cash Flow row
@@ -280,7 +284,8 @@ function payBillFromDashboard(billKey) {
     payee: bill.payee || bill.name || '',
     entryDate: bill.dueDate || '',
     amount: bill.amount || 0,
-    flowSource: bill.paymentSource || ''
+    flowSource: bill.paymentSource || '',
+    billOccurrencePaid: billOccurrencePaid
   });
 }
 
@@ -738,6 +743,13 @@ function resetBillsAddForm_() {
 
   const active = document.getElementById('bills_add_active');
   if (active) active.value = 'Yes';
+
+  // Phase 4: reset Weekday to the blank "Legacy (Due Day)" option and hide the
+  // field (frequency resets to Monthly above, so Weekday is not applicable).
+  const weekday = document.getElementById('bills_add_weekday');
+  if (weekday) weekday.value = '';
+  const weekdayField = document.getElementById('bills_add_weekday_field');
+  if (weekdayField) weekdayField.style.display = 'none';
 }
 
 /**
@@ -756,6 +768,26 @@ function onBillsAddCategoryChange() {
   } else {
     other.style.display = 'none';
     other.value = '';
+  }
+}
+
+/**
+ * Phase 4: Weekday scheduling visibility for the shared Add/Edit bill form.
+ * The Weekday field only applies to Weekly bills, so it is shown when
+ * Frequency == Weekly and hidden for every other frequency. When hidden the
+ * control is reset to the blank "Legacy (Due Day)" option so a stale value is
+ * never submitted. Called on frequency change and whenever the form is opened
+ * or pre-filled for edit. UI-only — no recurrence/Cash Flow/AutoPay changes.
+ */
+function onBillsFrequencyChange() {
+  const freqEl = document.getElementById('bills_add_frequency');
+  const field = document.getElementById('bills_add_weekday_field');
+  if (!field) return;
+  const isWeekly = !!freqEl && (freqEl.value || '').trim() === 'Weekly';
+  field.style.display = isWeekly ? '' : 'none';
+  if (!isWeekly) {
+    const wd = document.getElementById('bills_add_weekday');
+    if (wd) wd.value = '';
   }
 }
 
@@ -946,6 +978,12 @@ function submitNewBill() {
     startMonth = m;
   }
 
+  // Phase 4: Weekday only travels with Weekly bills; blank for every other
+  // frequency so the backend never stores a stale weekday. Backend also gates.
+  const weekday = frequency === 'Weekly'
+    ? (((document.getElementById('bills_add_weekday') || {}).value) || '').trim()
+    : '';
+
   const payload = {
     payee: payee,
     dueDay: dueDayNum,
@@ -957,7 +995,8 @@ function submitNewBill() {
     autopay: autopay,
     varies: varies,
     active: active,
-    startMonth: startMonth
+    startMonth: startMonth,
+    weekday: weekday
   };
 
   setStatusLoading('bills_due_status', 'Saving bill…');
@@ -1030,6 +1069,11 @@ function applyBillsFormModeUi_() {
   }
   setBillFieldVisibilityForEdit_('bills_add_start_month', isEdit);
   setBillFieldVisibilityForEdit_('bills_add_active', isEdit);
+
+  // Phase 4: keep Weekday visibility in sync with the current frequency
+  // whenever the shared form opens in either mode. openBillEditForm calls this
+  // again after pre-filling frequency/weekday, so the edit case stays correct.
+  if (typeof onBillsFrequencyChange === 'function') onBillsFrequencyChange();
 }
 
 /**
@@ -1102,6 +1146,11 @@ function openBillEditForm(billKey) {
   setSelectValue_('bills_add_autopay', bill.autopay || 'No');
   setSelectValue_('bills_add_varies', bill.varies || 'No');
   setInputValue_('bills_add_notes', bill.notes || '');
+
+  // Phase 4: load the existing Weekday value (blank → "Legacy (Due Day)") and
+  // apply Weekly-only visibility to match the bill's frequency.
+  setSelectValue_('bills_add_weekday', bill.weekday || '');
+  onBillsFrequencyChange();
 
   // Default Amount: pre-fill with the raw 2-decimal number so
   // currencyBlur formats it identically to a brand-new entry. Blank
@@ -1289,6 +1338,13 @@ function submitBillEdit_() {
     defaultAmount = Math.abs(n);
   }
 
+  // Phase 4: Weekday only travels with Weekly bills; blank for every other
+  // frequency so switching away from Weekly clears any prior weekday. The
+  // backend also gates on frequency as defense-in-depth.
+  const weekday = frequency === 'Weekly'
+    ? (((document.getElementById('bills_add_weekday') || {}).value) || '').trim()
+    : '';
+
   const payload = {
     sheetRow: sheetRow,
     expectedPayee: expectedPayee,
@@ -1300,7 +1356,8 @@ function submitBillEdit_() {
     category: category,
     notes: notes,
     autopay: autopay,
-    varies: varies
+    varies: varies,
+    weekday: weekday
   };
 
   setStatusLoading('bills_due_status', 'Saving changes…');

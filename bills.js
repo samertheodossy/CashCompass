@@ -81,6 +81,35 @@ var BILLS_ACCEPTED_FREQUENCY_RAW_ = {
  *
  * @returns {{ok:boolean, message:string, payee:string}}
  */
+/**
+ * Normalize a raw Weekday value to a canonical full-name label
+ * ('Sunday'..'Saturday'), or '' when blank / unrecognized.
+ *
+ * The stored label is what parseBillWeekday_ (dashboard_data.js) reads back on
+ * the recurrence path, and full names round-trip through that parser. A blank /
+ * unrecognized value returns '' so the bill stays on legacy Due Day scheduling.
+ * Phase 4 is UI data-binding only: this does not change recurrence generation —
+ * it just canonicalizes what the Weekday cell stores so the engine sees a value
+ * it already understands.
+ *
+ * @param {string} value
+ * @returns {string} '' or one of 'Sunday'..'Saturday'
+ */
+function billsNormalizeWeekdayLabel_(value) {
+  var v = String(value == null ? '' : value).trim().toLowerCase();
+  if (!v) return '';
+  var map = {
+    'sunday': 'Sunday', 'sun': 'Sunday',
+    'monday': 'Monday', 'mon': 'Monday',
+    'tuesday': 'Tuesday', 'tue': 'Tuesday', 'tues': 'Tuesday',
+    'wednesday': 'Wednesday', 'wed': 'Wednesday', 'weds': 'Wednesday',
+    'thursday': 'Thursday', 'thu': 'Thursday', 'thur': 'Thursday', 'thurs': 'Thursday',
+    'friday': 'Friday', 'fri': 'Friday',
+    'saturday': 'Saturday', 'sat': 'Saturday'
+  };
+  return Object.prototype.hasOwnProperty.call(map, v) ? map[v] : '';
+}
+
 function addBillFromDashboard(payload) {
   // Category is also required — enforced below with a user-friendly
   // "Category is required." message rather than the generic
@@ -146,6 +175,13 @@ function addBillFromDashboard(payload) {
   var autopayLabel = billsNormalizeYesNoLabel_(payload.autopay, 'No');
   var variesLabel = billsNormalizeYesNoLabel_(payload.varies, 'No');
   var activeLabel = billsNormalizeYesNoLabel_(payload.active, 'Yes');
+
+  // Phase 4: Weekday is only meaningful for Weekly bills. For every other
+  // frequency we persist '' so a bill that switches away from Weekly never
+  // carries a stale weekday. Blank keeps the bill on legacy Due Day scheduling.
+  var weekdayLabel = (frequencyNormalized === 'weekly')
+    ? billsNormalizeWeekdayLabel_(payload.weekday)
+    : '';
 
   var nowMonth = new Date().getMonth() + 1;
   var startMonth = nowMonth;
@@ -247,6 +283,7 @@ function addBillFromDashboard(payload) {
   setIfPresent('Frequency', frequencyLabel);
   setIfPresent('Start Month', startMonth);
   setIfPresent('Notes', notes);
+  setIfPresent('Weekday', weekdayLabel);
 
   // Sorted insert: place the new bill row above the first existing row whose
   // Due Day is strictly greater so INPUT - Bills stays ordered by due date,
@@ -487,6 +524,14 @@ function updateTrackedBillFromDashboard(payload) {
   var autopayLabel = billsNormalizeYesNoLabel_(payload.autopay, 'No');
   var variesLabel = billsNormalizeYesNoLabel_(payload.varies, 'No');
 
+  // Phase 4: Weekday is only meaningful for Weekly bills. Switching a bill to a
+  // non-Weekly frequency clears any prior weekday (recordChange_ below only
+  // writes when the value actually differs). Blank keeps legacy Due Day
+  // scheduling. Purely data-binding — recurrence generation is unchanged.
+  var weekdayLabel = (normalizeFrequency_(frequencyRaw) === 'weekly')
+    ? billsNormalizeWeekdayLabel_(payload.weekday)
+    : '';
+
   // ---- Open sheet + verify the row hasn't shifted under us. ----
 
   var ss = getUserSpreadsheet_();
@@ -660,6 +705,14 @@ function updateTrackedBillFromDashboard(payload) {
     recordChange_('notes', 'Notes', notes, currentNotes, notes);
   }
 
+  // Weekday (text label) — Phase 4. readTextCell_ returns null when the column
+  // is absent (older workbook not yet self-healed), in which case recordChange_
+  // silently skips, so editing an old-template bill still saves everything else.
+  var currentWeekday = readTextCell_('Weekday');
+  if (currentWeekday !== null && currentWeekday !== weekdayLabel) {
+    recordChange_('weekday', 'Weekday', weekdayLabel, currentWeekday, weekdayLabel);
+  }
+
   // ---- No-op save → return cleanly, no write/log/dirty marker. ----
 
   if (!changedFields.length) {
@@ -669,6 +722,31 @@ function updateTrackedBillFromDashboard(payload) {
       payee: actualPayee,
       changedFields: []
     };
+  }
+
+  // ---- Phase 5B: prospective schedule changes. ----
+  // If any scheduling field actually changed (Frequency / Due Day / Weekday;
+  // future: Anchor Date), stamp Schedule Effective Date = today (script tz) so
+  // recurrence generation clamps occurrences to on/after this date — the change
+  // affects only future occurrences. Historical Cash Flow / Activity Log /
+  // markers are never rewritten. Written directly (not via recordChange_) so it
+  // does not inflate the user-facing "fields updated" count; still surfaced in
+  // the bill_update details for audit. Skipped when no scheduling field changed
+  // or the column is absent (older workbook not yet self-healed) → in both cases
+  // the effective date stays blank = legacy behavior.
+  var SCHEDULING_FIELDS_ = { frequency: true, dueDay: true, weekday: true };
+  var schedulingChanged = changedFields.some(function(f) {
+    return Object.prototype.hasOwnProperty.call(SCHEDULING_FIELDS_, f);
+  });
+  var scheduleEffectiveDateWritten = '';
+  if (schedulingChanged) {
+    var schedEffIdx = headerIndex_('Schedule Effective Date');
+    if (schedEffIdx !== -1) {
+      scheduleEffectiveDateWritten = Utilities.formatDate(
+        stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'
+      );
+      sheet.getRange(targetRow, schedEffIdx + 1).setValue(scheduleEffectiveDateWritten);
+    }
   }
 
   // ---- Activity log + dashboard freshness. ----
@@ -696,7 +774,9 @@ function updateTrackedBillFromDashboard(payload) {
         payeeAfter: payee,
         changedFields: changedFields,
         'old': oldValues,
-        'new': newValues
+        'new': newValues,
+        // Phase 5B: present only when a scheduling change stamped a new floor.
+        scheduleEffectiveDate: scheduleEffectiveDateWritten
       })
     });
   } catch (logErr) {
@@ -991,7 +1071,11 @@ function getActiveBillsForManagementFromDashboard() {
       varies: idx.Varies !== undefined
         ? billsNormalizeYesNoLabel_(row[idx.Varies], 'No')
         : 'No',
-      notes: idx.Notes !== undefined ? String(row[idx.Notes] || '').trim() : ''
+      notes: idx.Notes !== undefined ? String(row[idx.Notes] || '').trim() : '',
+      // Phase 4: raw Weekday label so the edit form can prefill the dropdown.
+      // Blank when the column is absent (older workbook) or the cell is empty →
+      // the form shows the "Legacy (Due Day)" placeholder.
+      weekday: idx.Weekday !== undefined ? String(row[idx.Weekday] || '').trim() : ''
     });
   }
 
@@ -1033,6 +1117,9 @@ function getActiveBillsForManagementFromDashboard() {
  *                      "behave exactly like today" (Due Day anchor). They stay
  *                      LAST in the list so their 'Notes' / 'Weekday' anchors
  *                      resolve consistently on older sheets.
+ *   - Schedule Effective Date : Phase 5A additive column (schema-only). Blank
+ *                      means "no clamp / legacy behavior"; no reader/writer
+ *                      populates it yet. Anchored after 'Anchor Date'.
  *
  * This is the extraction of the self-heal block that previously lived inline in
  * addBillFromDashboard; behavior is identical (same headers, anchors, insert
@@ -1062,7 +1149,7 @@ function ensureBillsSheetSchema_(sheet) {
     return Object.prototype.hasOwnProperty.call(headerMap, key) ? headerMap[key] : -1;
   }
 
-  var selfHealHeaders = ['Payment Source', 'Category', 'Frequency', 'Start Month', 'Notes', 'Weekday', 'Anchor Date'];
+  var selfHealHeaders = ['Payment Source', 'Category', 'Frequency', 'Start Month', 'Notes', 'Weekday', 'Anchor Date', 'Schedule Effective Date'];
   var selfHealAnchors = {
     'Payment Source': 'Active',
     'Category': 'Payee',
@@ -1070,7 +1157,10 @@ function ensureBillsSheetSchema_(sheet) {
     'Start Month': 'Frequency',
     'Notes': 'Start Month',
     'Weekday': 'Notes',
-    'Anchor Date': 'Weekday'
+    'Anchor Date': 'Weekday',
+    // Phase 5A (schema-only): appended AFTER 'Anchor Date'. Blank means
+    // "no clamp / legacy behavior" — no recurrence/AutoPay/UI change yet.
+    'Schedule Effective Date': 'Anchor Date'
   };
   var headerChanged = false;
   for (var sh = 0; sh < selfHealHeaders.length; sh++) {
@@ -1092,6 +1182,18 @@ function ensureBillsSheetSchema_(sheet) {
       insertIndex = sheet.getLastColumn();
     }
     sheet.getRange(1, insertIndex).setValue(needed);
+
+    // Formatting parity: a freshly inserted column otherwise carries Sheets'
+    // default look. Inherit the neighboring (anchor) column's canonical Bills
+    // formatting — font family/size/color, alignment, background, header band —
+    // then apply the canonical width for the scheduling columns so the column
+    // looks identical to how first-create provisioning would render it. Cosmetic
+    // only: PASTE_FORMAT writes no values and no other column/row is touched.
+    copyBillsColumnFormatFromNeighbor_(sheet, insertIndex, insertIndex - 1);
+    if (Object.prototype.hasOwnProperty.call(BILLS_SCHEDULING_COLUMN_WIDTHS_, needed)) {
+      try { sheet.setColumnWidth(insertIndex, BILLS_SCHEDULING_COLUMN_WIDTHS_[needed]); } catch (_wErr) { /* cosmetic */ }
+    }
+
     Logger.log('ensureBillsSheetSchema_: auto-added missing INPUT - Bills column "' + needed + '" at index ' + insertIndex);
     headerChanged = true;
   }
@@ -1225,6 +1327,42 @@ function copyBillsRowFormattingFromInsertSiblingRow_(sheet, newRow) {
   }
 }
 
+// Canonical widen widths (px) for the additive scheduling columns, shared by
+// first-create styling (applyBillsSheetStyling_) and the schema self-heal so a
+// column looks identical however it was added. Keep in sync with the trailing
+// positions of widthMins in applyBillsSheetStyling_.
+var BILLS_SCHEDULING_COLUMN_WIDTHS_ = {
+  'Weekday': 110,
+  'Anchor Date': 120,
+  'Schedule Effective Date': 160
+};
+
+/**
+ * Copy an entire column's cell FORMATTING (font family/size/color, alignment,
+ * background, number format — header + body) from a source column onto a
+ * newly-inserted column so the new column visually inherits its neighbor's
+ * canonical Bills look instead of Sheets' default. Uses PASTE_FORMAT only, so
+ * NO cell values are written and no data is modified. Cosmetic-only: all
+ * failures are swallowed. No-op when source/target are invalid or identical.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {number} targetCol  1-based index of the newly inserted column
+ * @param {number} sourceCol  1-based index of the neighboring column to inherit
+ */
+function copyBillsColumnFormatFromNeighbor_(sheet, targetCol, sourceCol) {
+  if (!sheet || targetCol < 1 || sourceCol < 1 || targetCol === sourceCol) return;
+  try {
+    var maxRows = sheet.getMaxRows();
+    sheet.getRange(1, sourceCol, maxRows, 1).copyTo(
+      sheet.getRange(1, targetCol, maxRows, 1),
+      SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+      false
+    );
+  } catch (e) {
+    Logger.log('copyBillsColumnFormatFromNeighbor_: ' + e);
+  }
+}
+
 /**
  * First-create cosmetic styling for INPUT - Bills (Family Beta standard).
  *
@@ -1285,8 +1423,10 @@ function applyBillsSheetStyling_(sheet) {
   // by canonical column position from the creator's header layout:
   // 1 Payee | 2 Category | 3 Due Day | 4 Default Amount | 5 Varies |
   // 6 Autopay | 7 Active | 8 Payment Source | 9 Frequency | 10 Start Month |
-  // 11 Notes | 12 Weekday | 13 Anchor Date.
-  var widthMins = [200, 150, 100, 175, 100, 110, 90, 190, 130, 130, 240, 110, 120];
+  // 11 Notes | 12 Weekday | 13 Anchor Date | 14 Schedule Effective Date.
+  // Trailing scheduling widths mirror BILLS_SCHEDULING_COLUMN_WIDTHS_ so the
+  // self-heal path (older workbooks) matches first-create widths.
+  var widthMins = [200, 150, 100, 175, 100, 110, 90, 190, 130, 130, 240, 110, 120, 160];
   for (var c = 1; c <= lastCol && c <= widthMins.length; c++) {
     try {
       if (sheet.getColumnWidth(c) < widthMins[c - 1]) {

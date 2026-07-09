@@ -1266,7 +1266,12 @@ function ensureOnboardingBillsSheetFromDashboard(mode) {
       // positions. Provisioned blank; no reader/writer populates them yet, and
       // a blank Weekday means "behave exactly like today" (Due Day anchor).
       'Weekday',
-      'Anchor Date'
+      'Anchor Date',
+      // Phase 5A (schema-only): prospective-only recurrence effective floor.
+      // Provisioned blank; a blank value means "no clamp / legacy behavior"
+      // (occurrences are generated exactly as today). No reader/writer
+      // populates it yet — recurrence, AutoPay, and UI are unchanged.
+      'Schedule Effective Date'
     ];
     sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
 

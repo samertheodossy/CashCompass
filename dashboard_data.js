@@ -2096,7 +2096,11 @@ function getInputBillsDueRows_(ss, today, tz) {
     // Phase 3 additive scheduling column. Optional: absent on older workbooks
     // (findHeaderIdx returns -1), in which case every bill is treated as blank
     // Weekday → legacy Due Day behavior, exactly as before.
-    weekday: findHeaderIdx('Weekday')
+    weekday: findHeaderIdx('Weekday'),
+    // Phase 5 prospective-schedule floor. Optional: absent / blank → no clamp
+    // (legacy behavior). When present, occurrences before this date are dropped
+    // so a schedule change only affects future occurrences.
+    scheduleEffectiveDate: findHeaderIdx('Schedule Effective Date')
   };
 
   if (colMap.payee === -1 || colMap.dueDay === -1 || colMap.defaultAmount === -1 || colMap.active === -1) {
@@ -2176,6 +2180,25 @@ function getInputBillsDueRows_(ss, today, tz) {
     // value → treated as no weekday, i.e. legacy Due Day behavior. Only Weekly
     // bills honor it; parsing/decisions happen in buildRuleFromBillRow_.
     const weekday = colMap.weekday === -1 ? '' : String(display[r][colMap.weekday] || '').trim();
+    // Phase 5 prospective-schedule floor. Read RAW (values, not display) so both
+    // a real date cell (Date object) and a yyyy-MM-dd text value resolve without
+    // locale-format ambiguity. Blank / missing column / unparseable → null =
+    // no clamp, i.e. legacy behavior (occurrences generated exactly as before).
+    let scheduleEffectiveDate = null;
+    if (colMap.scheduleEffectiveDate !== -1) {
+      const rawEff = values[r][colMap.scheduleEffectiveDate];
+      if (rawEff instanceof Date && !isNaN(rawEff.getTime())) {
+        scheduleEffectiveDate = new Date(rawEff.getFullYear(), rawEff.getMonth(), rawEff.getDate());
+      } else {
+        const effStr = String(rawEff == null ? '' : rawEff).trim();
+        if (effStr) {
+          const parsedEff = parseIsoDateAtLocal_(effStr);
+          if (parsedEff && !isNaN(parsedEff.getTime())) {
+            scheduleEffectiveDate = new Date(parsedEff.getFullYear(), parsedEff.getMonth(), parsedEff.getDate());
+          }
+        }
+      }
+    }
     const notes = colMap.notes === -1 ? '' : String(display[r][colMap.notes] || '').trim();
     // Normalize to the same canonical form used by Flow Source writes
     // (CASH | CREDIT_CARD). Empty is allowed — downstream callers treat a
@@ -2187,7 +2210,7 @@ function getInputBillsDueRows_(ss, today, tz) {
       ? paymentSourceRaw.toUpperCase().replace(/[\s-]+/g, '_')
       : '';
 
-    const candidates = buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth, weekday);
+    const candidates = buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth, weekday, scheduleEffectiveDate);
     const normPayee = normalizeBillName_(payee);
 
     // The proven monthly path below assumes exactly ONE occurrence per month
@@ -2684,9 +2707,11 @@ function parseBillWeekday_(value) {
  *
  * @param {{ frequency: string, dueDay: number, startMonth: number, stepDays: number, weekday: (number|null) }} rule
  * @param {Date} todayOnly  date-only "today" (the window anchor)
+ * @param {Date} [effectiveDate]  Phase 5 prospective floor: occurrences before
+ *   this date are dropped. null/invalid → no clamp (legacy behavior).
  * @returns {Array<{ year: number, monthIndex: number, monthHeader: string, dueDate: Date }>}
  */
-function generateOccurrences_(rule, todayOnly) {
+function generateOccurrences_(rule, todayOnly, effectiveDate) {
   const candidates = [];
   // Prior-month look-back (-1) keeps an UNRESOLVED recurring occurrence visible
   // after the calendar rolls into a new month. The window used to be only
@@ -2790,6 +2815,20 @@ function generateOccurrences_(rule, todayOnly) {
     return a.dueDate.getTime() - b.dueDate.getTime();
   });
 
+  // Phase 5 prospective-schedule floor. When a Schedule Effective Date is set,
+  // drop every occurrence whose due date is BEFORE it, so a schedule change only
+  // affects future occurrences (the first surviving occurrence is the first on
+  // or after the effective date). A null/invalid effectiveDate means "no clamp"
+  // → legacy behavior (all generated occurrences returned unchanged). This is a
+  // pure post-filter: generation, stepping, and sort are untouched, so blank
+  // Weekday / Monthly / Biweekly behavior is byte-for-byte identical.
+  if (effectiveDate instanceof Date && !isNaN(effectiveDate.getTime())) {
+    const floorMs = effectiveDate.getTime();
+    return candidates.filter(function(c) {
+      return c.dueDate.getTime() >= floorMs;
+    });
+  }
+
   return candidates;
 }
 
@@ -2807,10 +2846,11 @@ function generateOccurrences_(rule, todayOnly) {
  * @param {string} frequency
  * @param {number|string} startMonth
  * @param {string} [weekday]  raw Weekday cell value (optional; blank/unknown → legacy)
+ * @param {Date} [effectiveDate]  Phase 5 prospective floor (optional; null → no clamp)
  */
-function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth, weekday) {
+function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth, weekday, effectiveDate) {
   const rule = buildRuleFromBillRow_(dueDay, frequency, startMonth, weekday);
-  return generateOccurrences_(rule, todayOnly);
+  return generateOccurrences_(rule, todayOnly, effectiveDate);
 }
 
 function getInputBillsPayeeMap_(ss) {

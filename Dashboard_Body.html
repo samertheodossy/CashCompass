@@ -834,7 +834,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
               <label>Due Day (1–31) <span aria-label="required" style="color:#b91c1c;">*</span></label>
               <input type="number" id="bills_add_due_day" min="1" max="31" step="1" inputmode="numeric">
               <label>Frequency <span aria-label="required" style="color:#b91c1c;">*</span></label>
-              <select id="bills_add_frequency">
+              <select id="bills_add_frequency" onchange="onBillsFrequencyChange()">
                 <option value="Monthly" selected>Monthly</option>
                 <option value="Biweekly">Biweekly</option>
                 <option value="Weekly">Weekly</option>
@@ -843,6 +843,23 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                 <option value="Semi-annually">Semi-annually</option>
                 <option value="Yearly">Yearly</option>
               </select>
+              <!-- Phase 4: Weekday only applies to Weekly bills. Hidden for every
+                   other frequency (toggled by onBillsFrequencyChange). Blank keeps
+                   the bill on legacy Due Day scheduling. -->
+              <div id="bills_add_weekday_field" style="display:none;">
+                <label>Weekday</label>
+                <select id="bills_add_weekday">
+                  <option value="" selected>Legacy (Due Day)</option>
+                  <option value="Sunday">Sunday</option>
+                  <option value="Monday">Monday</option>
+                  <option value="Tuesday">Tuesday</option>
+                  <option value="Wednesday">Wednesday</option>
+                  <option value="Thursday">Thursday</option>
+                  <option value="Friday">Friday</option>
+                  <option value="Saturday">Saturday</option>
+                </select>
+                <p class="muted" style="margin:4px 0 0 0;font-size:12px;">Schedule changes apply going forward only. Previous payments and history are preserved.</p>
+              </div>
               <label>Payment Source <span aria-label="required" style="color:#b91c1c;">*</span></label>
               <select id="bills_add_payment_source">
                 <option value="CASH" selected>CASH (pay from bank)</option>
