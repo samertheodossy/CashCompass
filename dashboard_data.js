@@ -2533,7 +2533,59 @@ function buildInputBillPlannerPaymentWindows_(today, tz, payNowWindowDays, paySo
   return { payNow: payNow, paySoon: paySoon };
 }
 
-function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth) {
+/**
+ * Recurrence rule derived from an INPUT - Bills row.
+ *
+ * Phase 1 recurrence seam: PURE DATA, no behavior. It models exactly the
+ * inputs today's occurrence generator already consumes so that generation is
+ * byte-for-byte identical to the prior inline implementation:
+ *   - frequency  : normalized frequency string (normalizeFrequency_ output)
+ *   - dueDay     : raw Due Day (day-of-month anchor), unchanged
+ *   - startMonth : effective Start Month, clamped to 1..12
+ *   - stepDays   : 7 (weekly) / 14 (biweekly) / 0 (all other frequencies)
+ *
+ * Intentionally has NO Weekday / Anchor Date fields yet — those arrive in a
+ * later phase. This helper only re-expresses the current model.
+ *
+ * @param {number} dueDay
+ * @param {string} frequency  normalizeFrequency_ output
+ * @param {number|string} startMonth
+ * @returns {{ frequency: string, dueDay: number, startMonth: number, stepDays: number }}
+ */
+function buildRuleFromBillRow_(dueDay, frequency, startMonth) {
+  // Mirrors the legacy stepDays derivation exactly (weekly 7 / biweekly 14 /
+  // every other frequency 0 = one occurrence per applicable month).
+  var stepDays = 0;
+  if (frequency === 'weekly') stepDays = 7;
+  else if (frequency === 'biweekly') stepDays = 14;
+
+  return {
+    frequency: frequency,
+    dueDay: dueDay,
+    // Same clamp the legacy code applied to Start Month.
+    startMonth: Math.min(12, Math.max(1, Number(startMonth) || 1)),
+    stepDays: stepDays
+  };
+}
+
+/**
+ * Generate the Bills Due occurrence candidates for a recurrence rule over the
+ * standard prior/current/next-month window relative to `todayOnly`.
+ *
+ * Phase 1 recurrence seam: this is a VERBATIM relocation of the former
+ * buildInputBillDueCandidates_ body. Same [-1, 0, +1] month offsets, same
+ * billAppliesInMonth_ gating, same Start-Month current-year guard, same
+ * weekly/biweekly within-month anchor stepping, same monthly single-occurrence
+ * path, and the same final ascending sort. No business logic lives here — it
+ * only produces occurrence dates; Bills Due / AutoPay / Cash Flow / marker
+ * handling remain in getInputBillsDueRows_ exactly as before. Output is
+ * byte-for-byte identical to the prior implementation.
+ *
+ * @param {{ frequency: string, dueDay: number, startMonth: number, stepDays: number }} rule
+ * @param {Date} todayOnly  date-only "today" (the window anchor)
+ * @returns {Array<{ year: number, monthIndex: number, monthHeader: string, dueDate: Date }>}
+ */
+function generateOccurrences_(rule, todayOnly) {
   const candidates = [];
   // Prior-month look-back (-1) keeps an UNRESOLVED recurring occurrence visible
   // after the calendar rolls into a new month. The window used to be only
@@ -2546,7 +2598,7 @@ function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth) 
   // bill_autopay / bill_paid / bill_skip marker, or a handled Cash Flow cell
   // value, is the source of truth for "resolved" — NOT the mere passage of time.
   const monthOffsets = [-1, 0, 1];
-  const effectiveStart = Math.min(12, Math.max(1, Number(startMonth) || 1));
+  const effectiveStart = rule.startMonth;
   const todayYear = todayOnly.getFullYear();
 
   // Weekly/biweekly bills genuinely recur multiple times inside a single
@@ -2557,9 +2609,9 @@ function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth) 
   // 7 days (weekly) or 14 days (biweekly) while they remain in the same month.
   // All other frequencies emit exactly one occurrence per applicable month
   // (unchanged behavior).
-  let stepDays = 0;
-  if (frequency === 'weekly') stepDays = 7;
-  else if (frequency === 'biweekly') stepDays = 14;
+  const stepDays = rule.stepDays;
+  const frequency = rule.frequency;
+  const dueDay = rule.dueDay;
 
   for (let i = 0; i < monthOffsets.length; i++) {
     const offset = monthOffsets[i];
@@ -2614,6 +2666,20 @@ function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth) 
   });
 
   return candidates;
+}
+
+/**
+ * Thin adapter kept for its existing call site in getInputBillsDueRows_.
+ *
+ * Phase 1 recurrence refactor: occurrence generation now flows through the
+ * pure rule -> occurrences seam (buildRuleFromBillRow_ + generateOccurrences_).
+ * Behavior is byte-for-byte identical to the previous inline implementation
+ * (same window, gating, stepping, and sort). Signature is unchanged so no
+ * caller needs to change.
+ */
+function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth) {
+  const rule = buildRuleFromBillRow_(dueDay, frequency, startMonth);
+  return generateOccurrences_(rule, todayOnly);
 }
 
 function getInputBillsPayeeMap_(ss) {
