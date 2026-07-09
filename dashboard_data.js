@@ -1519,6 +1519,11 @@ function getBillsDueFromCashFlowForDashboard(preloadedCurrentCashFlow) {
   // never affects any other code path in this execution.
   __billsDueDedupeCache_ = { keys: null };
 
+  // Phase 3A: wrap the remainder so the request-scoped dedupe cache is ALWAYS
+  // torn down in the finally below — on the normal return and on any thrown
+  // error — so a stale cache is never left behind on a warm GAS instance for
+  // the next execution.
+  try {
   const today = new Date();
   const tz = Session.getScriptTimeZone();
 
@@ -1576,13 +1581,15 @@ function getBillsDueFromCashFlowForDashboard(preloadedCurrentCashFlow) {
   overdue.sort(compareBillsByDueDate_);
   next7.sort(compareBillsByDueDate_);
 
-  // Phase 1B perf: deactivate the request-scoped dedupe cache.
-  __billsDueDedupeCache_ = null;
-
   return {
     overdue: overdue,
     next7: next7
   };
+  } finally {
+    // Phase 1B perf: deactivate the request-scoped dedupe cache (Phase 3A: moved
+    // into a finally so it runs on the normal return AND on any thrown error).
+    __billsDueDedupeCache_ = null;
+  }
 }
 
 
@@ -2085,7 +2092,11 @@ function getInputBillsDueRows_(ss, today, tz) {
     frequency: findHeaderIdx('Frequency'),
     startMonth: findHeaderIdx('Start Month'),
     notes: findHeaderIdx('Notes'),
-    paymentSource: findHeaderIdx('Payment Source')
+    paymentSource: findHeaderIdx('Payment Source'),
+    // Phase 3 additive scheduling column. Optional: absent on older workbooks
+    // (findHeaderIdx returns -1), in which case every bill is treated as blank
+    // Weekday → legacy Due Day behavior, exactly as before.
+    weekday: findHeaderIdx('Weekday')
   };
 
   if (colMap.payee === -1 || colMap.dueDay === -1 || colMap.defaultAmount === -1 || colMap.active === -1) {
@@ -2114,6 +2125,36 @@ function getInputBillsDueRows_(ss, today, tz) {
     return cfRowMapByYear[year];
   }
 
+  // Phase 3A: serialize AutoPay MUTATION for THIS user across overlapping
+  // executions. This function both READS (display) and, for past-due autopay
+  // bills, WRITES (Cash Flow cell accumulation + a bill_autopay marker). Two
+  // overlapping executions by the same user — e.g. a foreground Bills Due load
+  // and the background dashboard/planner refresh (both entry points route
+  // through here) — could each read "not autopaid yet" and both write,
+  // producing duplicate bill_autopay markers and double Cash Flow accumulation.
+  // A per-user lock makes the check->write atomic.
+  //
+  // We deliberately DO NOT block the dashboard: tryLock with a short timeout.
+  // If the lock cannot be acquired, autopayWritesAllowed stays false, every
+  // autopay write below is skipped, and the occurrence simply surfaces as a due
+  // card — it will be autopaid on a later load that does hold the lock. The
+  // read/display output is identical either way, so display data always loads.
+  var autopayLock = null;
+  var autopayWritesAllowed = false;
+  try {
+    autopayLock = LockService.getUserLock();
+    // Short timeout: this is a frequently-called read RPC. Prefer deferring
+    // AutoPay to the next load over stalling the dashboard under contention.
+    autopayWritesAllowed = autopayLock.tryLock(2000);
+  } catch (lockErr) {
+    autopayLock = null;
+    autopayWritesAllowed = false;
+  }
+  if (!autopayWritesAllowed) {
+    Logger.log('getInputBillsDueRows_: AutoPay writes SKIPPED this pass — user lock unavailable/contended. Bills Due display data still returned; unresolved occurrences will autopay on a later load.');
+  }
+
+  try {
   for (let r = 1; r < values.length; r++) {
     const payee = String(display[r][colMap.payee] || '').trim();
     if (!payee) continue;
@@ -2131,6 +2172,10 @@ function getInputBillsDueRows_(ss, today, tz) {
     const autopay = normalizeYesNo_(colMap.autopay === -1 ? '' : display[r][colMap.autopay]);
     const frequency = normalizeFrequency_(display[r][colMap.frequency]);
     const startMonth = colMap.startMonth === -1 ? 1 : (Number(values[r][colMap.startMonth]) || 1);
+    // Optional weekday anchor (Phase 3). Blank / missing column / unrecognized
+    // value → treated as no weekday, i.e. legacy Due Day behavior. Only Weekly
+    // bills honor it; parsing/decisions happen in buildRuleFromBillRow_.
+    const weekday = colMap.weekday === -1 ? '' : String(display[r][colMap.weekday] || '').trim();
     const notes = colMap.notes === -1 ? '' : String(display[r][colMap.notes] || '').trim();
     // Normalize to the same canonical form used by Flow Source writes
     // (CASH | CREDIT_CARD). Empty is allowed — downstream callers treat a
@@ -2142,7 +2187,7 @@ function getInputBillsDueRows_(ss, today, tz) {
       ? paymentSourceRaw.toUpperCase().replace(/[\s-]+/g, '_')
       : '';
 
-    const candidates = buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth);
+    const candidates = buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth, weekday);
     const normPayee = normalizeBillName_(payee);
 
     // The proven monthly path below assumes exactly ONE occurrence per month
@@ -2239,7 +2284,7 @@ function getInputBillsDueRows_(ss, today, tz) {
         // canonical row's cell. Expanding the pre-check to all variants
         // would let a paid variant suppress the write-back into the
         // canonical row (which is the row autopay must populate).
-        if (canAutopay && defaultAmount > 0 && dueHasPassed && !isCashFlowBillHandled_(cellValue, cellDisplay)) {
+        if (autopayWritesAllowed && canAutopay && defaultAmount > 0 && dueHasPassed && !isCashFlowBillHandled_(cellValue, cellDisplay)) {
           // Capture blank-ness BEFORE the write. A blank month cell carries
           // the sheet's default "General"/black format with no currency
           // mask, so writeDashboardBillValuePreserveFormat_ (which preserves
@@ -2402,7 +2447,7 @@ function getInputBillsDueRows_(ss, today, tz) {
         const dueHasPassed = cand.dueDate.getTime() < todayOnly.getTime();
         const canAutopay = autopay === 'yes' && varies !== 'yes';
 
-        if (hasCashFlowRow && canAutopay && defaultAmount > 0 && dueHasPassed) {
+        if (autopayWritesAllowed && hasCashFlowRow && canAutopay && defaultAmount > 0 && dueHasPassed) {
           // Reaching here means this occurrence has NO bill_autopay / bill_paid /
           // bill_skip marker yet (each of the three checks above `continue`s), so
           // it has never been auto-applied, manually paid, or skipped. Accumulate
@@ -2484,6 +2529,13 @@ function getInputBillsDueRows_(ss, today, tz) {
   }
 
   return rows;
+  } finally {
+    // Phase 3A: release the per-user AutoPay lock only if we actually acquired
+    // it. Best-effort — a failed release must never surface as a Bills Due error.
+    if (autopayLock && autopayWritesAllowed) {
+      try { autopayLock.releaseLock(); } catch (_relErr) { /* best-effort */ }
+    }
+  }
 }
 
 /**
@@ -2543,45 +2595,94 @@ function buildInputBillPlannerPaymentWindows_(today, tz, payNowWindowDays, paySo
  *   - dueDay     : raw Due Day (day-of-month anchor), unchanged
  *   - startMonth : effective Start Month, clamped to 1..12
  *   - stepDays   : 7 (weekly) / 14 (biweekly) / 0 (all other frequencies)
+ *   - weekday    : Phase 3 weekday anchor (Sun=0..Sat=6) or null. Populated
+ *                  ONLY for Weekly bills with a recognized Weekday value; null
+ *                  for everything else, which preserves legacy Due Day behavior.
  *
- * Intentionally has NO Weekday / Anchor Date fields yet — those arrive in a
- * later phase. This helper only re-expresses the current model.
+ * Biweekly weekday parity (Anchor Date) is intentionally NOT implemented yet:
+ * biweekly always resolves to weekday=null here, so it stays legacy Due-Day
+ * anchored even when a Weekday is set.
  *
  * @param {number} dueDay
  * @param {string} frequency  normalizeFrequency_ output
  * @param {number|string} startMonth
- * @returns {{ frequency: string, dueDay: number, startMonth: number, stepDays: number }}
+ * @param {string} [weekday]  raw Weekday cell value (optional; blank/unknown → null)
+ * @returns {{ frequency: string, dueDay: number, startMonth: number, stepDays: number, weekday: (number|null) }}
  */
-function buildRuleFromBillRow_(dueDay, frequency, startMonth) {
+function buildRuleFromBillRow_(dueDay, frequency, startMonth, weekday) {
   // Mirrors the legacy stepDays derivation exactly (weekly 7 / biweekly 14 /
   // every other frequency 0 = one occurrence per applicable month).
   var stepDays = 0;
   if (frequency === 'weekly') stepDays = 7;
   else if (frequency === 'biweekly') stepDays = 14;
 
+  // Only Weekly honors a weekday this phase. parseBillWeekday_ returns null for
+  // blank / missing / unrecognized values, so any of those fall through to the
+  // legacy Due Day anchor — byte-for-byte identical to pre-Phase-3 behavior.
+  var weekdayIndex = (frequency === 'weekly') ? parseBillWeekday_(weekday) : null;
+
   return {
     frequency: frequency,
     dueDay: dueDay,
     // Same clamp the legacy code applied to Start Month.
     startMonth: Math.min(12, Math.max(1, Number(startMonth) || 1)),
-    stepDays: stepDays
+    stepDays: stepDays,
+    weekday: weekdayIndex
   };
+}
+
+/**
+ * Parse a Weekday cell value into a JS day-of-week index (Sunday=0 .. Saturday=6),
+ * or null when the value is blank / unrecognized.
+ *
+ * Accepts full names and common abbreviations, case-insensitively
+ * (e.g. "Monday", "mon", "TUES", "Thurs"). Deliberately does NOT accept numeric
+ * input to avoid 0-vs-1 indexing ambiguity — anything unrecognized returns null
+ * so the bill safely falls back to legacy Due Day behavior.
+ *
+ * @param {string} value
+ * @returns {number|null}
+ */
+function parseBillWeekday_(value) {
+  var v = String(value == null ? '' : value).trim().toLowerCase();
+  if (!v) return null;
+  var map = {
+    'sunday': 0, 'sun': 0,
+    'monday': 1, 'mon': 1,
+    'tuesday': 2, 'tue': 2, 'tues': 2,
+    'wednesday': 3, 'wed': 3, 'weds': 3,
+    'thursday': 4, 'thu': 4, 'thur': 4, 'thurs': 4,
+    'friday': 5, 'fri': 5,
+    'saturday': 6, 'sat': 6
+  };
+  return Object.prototype.hasOwnProperty.call(map, v) ? map[v] : null;
 }
 
 /**
  * Generate the Bills Due occurrence candidates for a recurrence rule over the
  * standard prior/current/next-month window relative to `todayOnly`.
  *
- * Phase 1 recurrence seam: this is a VERBATIM relocation of the former
- * buildInputBillDueCandidates_ body. Same [-1, 0, +1] month offsets, same
- * billAppliesInMonth_ gating, same Start-Month current-year guard, same
- * weekly/biweekly within-month anchor stepping, same monthly single-occurrence
- * path, and the same final ascending sort. No business logic lives here — it
- * only produces occurrence dates; Bills Due / AutoPay / Cash Flow / marker
- * handling remain in getInputBillsDueRows_ exactly as before. Output is
- * byte-for-byte identical to the prior implementation.
+ * Same [-1, 0, +1] month offsets, same billAppliesInMonth_ gating, same
+ * Start-Month current-year guard, and the same final ascending sort as the
+ * original inline implementation. No business logic lives here — it only
+ * produces occurrence dates; Bills Due / AutoPay / Cash Flow / marker handling
+ * remain in getInputBillsDueRows_ exactly as before.
  *
- * @param {{ frequency: string, dueDay: number, startMonth: number, stepDays: number }} rule
+ * Three date-generation modes, selected per applicable month:
+ *   1. Weekday-anchored Weekly (rule.weekday != null): emit every occurrence of
+ *      the target weekday that lands in the month. Because a weekday recurs
+ *      every 7 days, per-month generation produces a CONTINUOUS cadence with no
+ *      month-boundary gap (last Monday of June + 7 = first Monday of July) and
+ *      no duplicates. Due Day is ignored in this mode. (Phase 3)
+ *   2. Legacy weekly/biweekly (rule.weekday == null, stepDays > 0): Due Day
+ *      month-anchor + 7/14-day stepping within the month. Unchanged.
+ *   3. All other frequencies (stepDays == 0): one Due Day occurrence per
+ *      applicable month. Unchanged.
+ *
+ * Blank/absent Weekday keeps rule.weekday == null, so modes 2 and 3 are
+ * byte-for-byte identical to the pre-Phase-3 output.
+ *
+ * @param {{ frequency: string, dueDay: number, startMonth: number, stepDays: number, weekday: (number|null) }} rule
  * @param {Date} todayOnly  date-only "today" (the window anchor)
  * @returns {Array<{ year: number, monthIndex: number, monthHeader: string, dueDate: Date }>}
  */
@@ -2630,6 +2731,30 @@ function generateOccurrences_(rule, todayOnly) {
     // eligible (once a bill has started, it keeps running).
     if (year === todayYear && monthNumber < effectiveStart) continue;
 
+    // Phase 3 — weekday-anchored Weekly. Emit every occurrence of the target
+    // weekday that falls within this month. A weekday recurs every 7 days, so
+    // generating per-month yields a continuous weekly cadence across month
+    // boundaries with no gap and no duplicates (each weekday date belongs to
+    // exactly one month). Due Day is intentionally NOT used in this mode.
+    // rule.weekday is only ever non-null for Weekly bills with a recognized
+    // Weekday (see buildRuleFromBillRow_), so this branch never affects legacy
+    // bills, biweekly, or any other frequency.
+    if (rule.weekday != null) {
+      const daysInMonthWk = new Date(year, monthIndex + 1, 0).getDate();
+      const firstDow = new Date(year, monthIndex, 1).getDay();
+      let occDayWk = 1 + ((rule.weekday - firstDow + 7) % 7);
+      while (occDayWk <= daysInMonthWk) {
+        candidates.push({
+          year: year,
+          monthIndex: monthIndex,
+          monthHeader: monthHeaderFromYearMonth_(year, monthIndex),
+          dueDate: new Date(year, monthIndex, occDayWk)
+        });
+        occDayWk += 7;
+      }
+      continue;
+    }
+
     if (stepDays > 0) {
       // Clamp the anchor day to the month length so a high Due Day (e.g. 30)
       // never rolls the very first occurrence into the next month and drops
@@ -2671,14 +2796,20 @@ function generateOccurrences_(rule, todayOnly) {
 /**
  * Thin adapter kept for its existing call site in getInputBillsDueRows_.
  *
- * Phase 1 recurrence refactor: occurrence generation now flows through the
- * pure rule -> occurrences seam (buildRuleFromBillRow_ + generateOccurrences_).
- * Behavior is byte-for-byte identical to the previous inline implementation
- * (same window, gating, stepping, and sort). Signature is unchanged so no
- * caller needs to change.
+ * Occurrence generation flows through the pure rule -> occurrences seam
+ * (buildRuleFromBillRow_ + generateOccurrences_). For bills with a blank /
+ * absent Weekday the output is byte-for-byte identical to the pre-Phase-3
+ * implementation (same window, gating, stepping, and sort). When a Weekly bill
+ * has a recognized Weekday, generation switches to the weekday-anchored mode.
+ *
+ * @param {Date} todayOnly
+ * @param {number} dueDay
+ * @param {string} frequency
+ * @param {number|string} startMonth
+ * @param {string} [weekday]  raw Weekday cell value (optional; blank/unknown → legacy)
  */
-function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth) {
-  const rule = buildRuleFromBillRow_(dueDay, frequency, startMonth);
+function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth, weekday) {
+  const rule = buildRuleFromBillRow_(dueDay, frequency, startMonth, weekday);
   return generateOccurrences_(rule, todayOnly);
 }
 
