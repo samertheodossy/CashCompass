@@ -2097,6 +2097,11 @@ function getInputBillsDueRows_(ss, today, tz) {
     // (findHeaderIdx returns -1), in which case every bill is treated as blank
     // Weekday → legacy Due Day behavior, exactly as before.
     weekday: findHeaderIdx('Weekday'),
+    // Phase 6A additive scheduling column. Optional: absent on older workbooks
+    // (findHeaderIdx returns -1). Only Biweekly bills honor it, and only when a
+    // valid Weekday is also present; otherwise every bill is treated as blank
+    // Anchor Date → legacy Due Day behavior, exactly as before.
+    anchorDate: findHeaderIdx('Anchor Date'),
     // Phase 5 prospective-schedule floor. Optional: absent / blank → no clamp
     // (legacy behavior). When present, occurrences before this date are dropped
     // so a schedule change only affects future occurrences.
@@ -2180,6 +2185,27 @@ function getInputBillsDueRows_(ss, today, tz) {
     // value → treated as no weekday, i.e. legacy Due Day behavior. Only Weekly
     // bills honor it; parsing/decisions happen in buildRuleFromBillRow_.
     const weekday = colMap.weekday === -1 ? '' : String(display[r][colMap.weekday] || '').trim();
+    // Phase 6A biweekly anchor. Read RAW (values, not display) so both a real
+    // Date cell and a yyyy-MM-dd text value resolve without locale ambiguity —
+    // identical strategy to Schedule Effective Date below. Blank / missing
+    // column / unparseable → null. Biweekly weekday cadence only activates when
+    // BOTH a valid Weekday and a valid Anchor Date exist (see
+    // buildRuleFromBillRow_); anything else stays legacy Due Day behavior.
+    let anchorDate = null;
+    if (colMap.anchorDate !== -1) {
+      const rawAnchor = values[r][colMap.anchorDate];
+      if (rawAnchor instanceof Date && !isNaN(rawAnchor.getTime())) {
+        anchorDate = new Date(rawAnchor.getFullYear(), rawAnchor.getMonth(), rawAnchor.getDate());
+      } else {
+        const anchorStr = String(rawAnchor == null ? '' : rawAnchor).trim();
+        if (anchorStr) {
+          const parsedAnchor = parseIsoDateAtLocal_(anchorStr);
+          if (parsedAnchor && !isNaN(parsedAnchor.getTime())) {
+            anchorDate = new Date(parsedAnchor.getFullYear(), parsedAnchor.getMonth(), parsedAnchor.getDate());
+          }
+        }
+      }
+    }
     // Phase 5 prospective-schedule floor. Read RAW (values, not display) so both
     // a real date cell (Date object) and a yyyy-MM-dd text value resolve without
     // locale-format ambiguity. Blank / missing column / unparseable → null =
@@ -2210,7 +2236,7 @@ function getInputBillsDueRows_(ss, today, tz) {
       ? paymentSourceRaw.toUpperCase().replace(/[\s-]+/g, '_')
       : '';
 
-    const candidates = buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth, weekday, scheduleEffectiveDate);
+    const candidates = buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth, weekday, scheduleEffectiveDate, anchorDate);
     const normPayee = normalizeBillName_(payee);
 
     // The proven monthly path below assumes exactly ONE occurrence per month
@@ -2618,31 +2644,63 @@ function buildInputBillPlannerPaymentWindows_(today, tz, payNowWindowDays, paySo
  *   - dueDay     : raw Due Day (day-of-month anchor), unchanged
  *   - startMonth : effective Start Month, clamped to 1..12
  *   - stepDays   : 7 (weekly) / 14 (biweekly) / 0 (all other frequencies)
- *   - weekday    : Phase 3 weekday anchor (Sun=0..Sat=6) or null. Populated
- *                  ONLY for Weekly bills with a recognized Weekday value; null
- *                  for everything else, which preserves legacy Due Day behavior.
+ *   - weekday    : weekday anchor (Sun=0..Sat=6) or null. Populated for Weekly
+ *                  bills with a recognized Weekday (Phase 3), and for Biweekly
+ *                  bills that have BOTH a recognized Weekday and a valid Anchor
+ *                  Date (Phase 6A). Null for everything else, which preserves
+ *                  legacy Due Day behavior.
+ *   - anchorDate : Phase 6A biweekly parity origin (date-only Date) or null.
+ *                  Non-null ONLY for Biweekly bills whose Weekday + Anchor Date
+ *                  are both present AND consistent (the anchor lands on the
+ *                  chosen weekday, per isAnchorDateValidForWeekday_). Its
+ *                  presence is what switches biweekly into anchor-driven,
+ *                  cross-month, cross-year 14-day cadence in generateOccurrences_.
  *
- * Biweekly weekday parity (Anchor Date) is intentionally NOT implemented yet:
- * biweekly always resolves to weekday=null here, so it stays legacy Due-Day
- * anchored even when a Weekday is set.
+ * Biweekly activation is strict and non-destructive: if the Weekday is blank /
+ * unrecognized, the Anchor Date is missing / unparseable, OR the anchor does not
+ * fall on the weekday (invalid config — NO silent snapping), biweekly resolves
+ * to weekday=null + anchorDate=null and stays legacy Due-Day anchored exactly as
+ * before. Weekly behavior is completely unchanged by this phase.
  *
  * @param {number} dueDay
  * @param {string} frequency  normalizeFrequency_ output
  * @param {number|string} startMonth
  * @param {string} [weekday]  raw Weekday cell value (optional; blank/unknown → null)
- * @returns {{ frequency: string, dueDay: number, startMonth: number, stepDays: number, weekday: (number|null) }}
+ * @param {Date} [anchorDate]  Phase 6A date-only Anchor Date (optional; biweekly only)
+ * @returns {{ frequency: string, dueDay: number, startMonth: number, stepDays: number, weekday: (number|null), anchorDate: (Date|null) }}
  */
-function buildRuleFromBillRow_(dueDay, frequency, startMonth, weekday) {
+function buildRuleFromBillRow_(dueDay, frequency, startMonth, weekday, anchorDate) {
   // Mirrors the legacy stepDays derivation exactly (weekly 7 / biweekly 14 /
   // every other frequency 0 = one occurrence per applicable month).
   var stepDays = 0;
   if (frequency === 'weekly') stepDays = 7;
   else if (frequency === 'biweekly') stepDays = 14;
 
-  // Only Weekly honors a weekday this phase. parseBillWeekday_ returns null for
-  // blank / missing / unrecognized values, so any of those fall through to the
-  // legacy Due Day anchor — byte-for-byte identical to pre-Phase-3 behavior.
-  var weekdayIndex = (frequency === 'weekly') ? parseBillWeekday_(weekday) : null;
+  // Weekly honors a weekday (Phase 3). parseBillWeekday_ returns null for blank
+  // / missing / unrecognized values, so any of those fall through to the legacy
+  // Due Day anchor — byte-for-byte identical to pre-Phase-3 behavior.
+  var weekdayIndex = null;
+  var anchorOut = null;
+
+  if (frequency === 'weekly') {
+    weekdayIndex = parseBillWeekday_(weekday);
+  } else if (frequency === 'biweekly') {
+    // Phase 6A: biweekly weekday cadence activates ONLY when a recognized
+    // Weekday AND a valid Anchor Date are both present, and the anchor lands on
+    // that weekday. Any failure → legacy Due Day behavior (weekday/anchor null),
+    // so backward compatibility is guaranteed for every existing biweekly bill.
+    var biweeklyWeekday = parseBillWeekday_(weekday);
+    var validAnchor =
+      anchorDate instanceof Date &&
+      !isNaN(anchorDate.getTime());
+    if (biweeklyWeekday != null && validAnchor &&
+        isAnchorDateValidForWeekday_(anchorDate, biweeklyWeekday)) {
+      weekdayIndex = biweeklyWeekday;
+      // Normalize to a date-only copy so downstream stepping is DST-safe and
+      // free of any time-of-day component.
+      anchorOut = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), anchorDate.getDate());
+    }
+  }
 
   return {
     frequency: frequency,
@@ -2650,8 +2708,27 @@ function buildRuleFromBillRow_(dueDay, frequency, startMonth, weekday) {
     // Same clamp the legacy code applied to Start Month.
     startMonth: Math.min(12, Math.max(1, Number(startMonth) || 1)),
     stepDays: stepDays,
-    weekday: weekdayIndex
+    weekday: weekdayIndex,
+    anchorDate: anchorOut
   };
+}
+
+/**
+ * Phase 6A validation: does the given Anchor Date fall on the given weekday?
+ *
+ * Used to gate biweekly weekday cadence. Deliberately does NOT correct or snap
+ * a mismatched anchor — a Weekday=Monday / Anchor=Tuesday configuration is
+ * treated as invalid and the caller falls back to legacy Due Day behavior. This
+ * keeps recurrence deterministic and never silently moves a user's chosen date.
+ *
+ * @param {Date} anchorDate  date-only Anchor Date
+ * @param {number} weekday   target day-of-week index (Sunday=0 .. Saturday=6)
+ * @returns {boolean} true only when anchorDate is a valid Date landing on weekday
+ */
+function isAnchorDateValidForWeekday_(anchorDate, weekday) {
+  if (!(anchorDate instanceof Date) || isNaN(anchorDate.getTime())) return false;
+  if (weekday == null) return false;
+  return anchorDate.getDay() === weekday;
 }
 
 /**
@@ -2691,21 +2768,27 @@ function parseBillWeekday_(value) {
  * produces occurrence dates; Bills Due / AutoPay / Cash Flow / marker handling
  * remain in getInputBillsDueRows_ exactly as before.
  *
- * Three date-generation modes, selected per applicable month:
- *   1. Weekday-anchored Weekly (rule.weekday != null): emit every occurrence of
- *      the target weekday that lands in the month. Because a weekday recurs
- *      every 7 days, per-month generation produces a CONTINUOUS cadence with no
- *      month-boundary gap (last Monday of June + 7 = first Monday of July) and
- *      no duplicates. Due Day is ignored in this mode. (Phase 3)
+ * Date-generation modes:
+ *   0. Anchor-driven Biweekly (rule.anchorDate != null): a true 14-day cadence
+ *      seeded from the Anchor Date parity origin — Anchor, +14d, +14d, … — NOT
+ *      re-anchored per month. This spans month AND year boundaries with stable
+ *      parity and no duplicates. Occurrences before the Anchor Date are never
+ *      emitted. This branch bypasses the per-month loop entirely. (Phase 6A)
+ *   1. Weekday-anchored Weekly (rule.weekday != null && anchorDate == null):
+ *      emit every occurrence of the target weekday that lands in the month.
+ *      Because a weekday recurs every 7 days, per-month generation produces a
+ *      CONTINUOUS cadence with no month-boundary gap (last Monday of June + 7 =
+ *      first Monday of July) and no duplicates. Due Day is ignored. (Phase 3)
  *   2. Legacy weekly/biweekly (rule.weekday == null, stepDays > 0): Due Day
  *      month-anchor + 7/14-day stepping within the month. Unchanged.
  *   3. All other frequencies (stepDays == 0): one Due Day occurrence per
  *      applicable month. Unchanged.
  *
- * Blank/absent Weekday keeps rule.weekday == null, so modes 2 and 3 are
- * byte-for-byte identical to the pre-Phase-3 output.
+ * Blank/absent Weekday keeps rule.weekday == null (and biweekly keeps
+ * anchorDate == null unless Weekday+Anchor Date are both valid), so modes 2 and
+ * 3 are byte-for-byte identical to the pre-Phase-3 output.
  *
- * @param {{ frequency: string, dueDay: number, startMonth: number, stepDays: number, weekday: (number|null) }} rule
+ * @param {{ frequency: string, dueDay: number, startMonth: number, stepDays: number, weekday: (number|null), anchorDate: (Date|null) }} rule
  * @param {Date} todayOnly  date-only "today" (the window anchor)
  * @param {Date} [effectiveDate]  Phase 5 prospective floor: occurrences before
  *   this date are dropped. null/invalid → no clamp (legacy behavior).
@@ -2739,6 +2822,46 @@ function generateOccurrences_(rule, todayOnly, effectiveDate) {
   const frequency = rule.frequency;
   const dueDay = rule.dueDay;
 
+  // Phase 6A — anchor-driven Biweekly. When a valid Anchor Date is present
+  // (biweekly only; see buildRuleFromBillRow_), the cadence is a true 14-day
+  // step seeded from the Anchor Date parity origin, NOT re-anchored per month.
+  // This is what makes "every other Monday" hold its parity across month AND
+  // year boundaries. We generate over the same [-1, 0, +1] month window (so a
+  // just-passed unresolved occurrence still surfaces as Overdue), never emit an
+  // occurrence before the Anchor Date, and apply the same Start-Month same-year
+  // guard as the monthly loop. This branch fully replaces the per-month loop for
+  // these bills; the shared sort + Schedule Effective Date clamp below still run.
+  if (rule.anchorDate instanceof Date && !isNaN(rule.anchorDate.getTime())) {
+    // Window bounds: first day of the -1 month .. last day of the +1 month.
+    const winStart = new Date(todayOnly.getFullYear(), todayOnly.getMonth() - 1, 1);
+    const winEnd = new Date(todayOnly.getFullYear(), todayOnly.getMonth() + 2, 0);
+
+    // Step in whole calendar days (new Date(y, m, d + 14)) rather than by fixed
+    // millisecond arithmetic so the cadence is DST-safe and never drifts an hour
+    // across spring-forward / fall-back. Start at the Anchor Date itself: the
+    // anchor is both the parity origin and the earliest possible occurrence, so
+    // we never emit anything before it. Advance in 14-day hops until the first
+    // occurrence lands within the window (bounded: the anchor is at most a few
+    // years back, ~26 hops/year — negligible).
+    let occ = new Date(rule.anchorDate.getFullYear(), rule.anchorDate.getMonth(), rule.anchorDate.getDate());
+    while (occ.getTime() < winStart.getTime()) {
+      occ = new Date(occ.getFullYear(), occ.getMonth(), occ.getDate() + 14);
+    }
+    while (occ.getTime() <= winEnd.getTime()) {
+      const y = occ.getFullYear();
+      const mi = occ.getMonth();
+      // Same Start-Month same-year guard as the monthly loop below.
+      if (!(y === todayYear && (mi + 1) < effectiveStart)) {
+        candidates.push({
+          year: y,
+          monthIndex: mi,
+          monthHeader: monthHeaderFromYearMonth_(y, mi),
+          dueDate: new Date(y, mi, occ.getDate())
+        });
+      }
+      occ = new Date(occ.getFullYear(), occ.getMonth(), occ.getDate() + 14);
+    }
+  } else
   for (let i = 0; i < monthOffsets.length; i++) {
     const offset = monthOffsets[i];
     const d = new Date(todayOnly.getFullYear(), todayOnly.getMonth() + offset, 1);
@@ -2761,9 +2884,11 @@ function generateOccurrences_(rule, todayOnly, effectiveDate) {
     // generating per-month yields a continuous weekly cadence across month
     // boundaries with no gap and no duplicates (each weekday date belongs to
     // exactly one month). Due Day is intentionally NOT used in this mode.
-    // rule.weekday is only ever non-null for Weekly bills with a recognized
-    // Weekday (see buildRuleFromBillRow_), so this branch never affects legacy
-    // bills, biweekly, or any other frequency.
+    // Reaching this loop requires rule.anchorDate == null (biweekly weekday
+    // takes the anchor-driven branch above), so here rule.weekday != null only
+    // ever means a Weekly bill with a recognized Weekday (see
+    // buildRuleFromBillRow_) — legacy bills, legacy biweekly, and every other
+    // frequency are unaffected.
     if (rule.weekday != null) {
       const daysInMonthWk = new Date(year, monthIndex + 1, 0).getDate();
       const firstDow = new Date(year, monthIndex, 1).getDay();
@@ -2839,7 +2964,9 @@ function generateOccurrences_(rule, todayOnly, effectiveDate) {
  * (buildRuleFromBillRow_ + generateOccurrences_). For bills with a blank /
  * absent Weekday the output is byte-for-byte identical to the pre-Phase-3
  * implementation (same window, gating, stepping, and sort). When a Weekly bill
- * has a recognized Weekday, generation switches to the weekday-anchored mode.
+ * has a recognized Weekday, generation switches to the weekday-anchored mode;
+ * when a Biweekly bill has a recognized Weekday AND a valid Anchor Date,
+ * generation switches to the Phase 6A anchor-driven 14-day cadence.
  *
  * @param {Date} todayOnly
  * @param {number} dueDay
@@ -2847,9 +2974,10 @@ function generateOccurrences_(rule, todayOnly, effectiveDate) {
  * @param {number|string} startMonth
  * @param {string} [weekday]  raw Weekday cell value (optional; blank/unknown → legacy)
  * @param {Date} [effectiveDate]  Phase 5 prospective floor (optional; null → no clamp)
+ * @param {Date} [anchorDate]  Phase 6A date-only Anchor Date (optional; biweekly only)
  */
-function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth, weekday, effectiveDate) {
-  const rule = buildRuleFromBillRow_(dueDay, frequency, startMonth, weekday);
+function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth, weekday, effectiveDate, anchorDate) {
+  const rule = buildRuleFromBillRow_(dueDay, frequency, startMonth, weekday, anchorDate);
   return generateOccurrences_(rule, todayOnly, effectiveDate);
 }
 

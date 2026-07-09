@@ -843,12 +843,13 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                 <option value="Semi-annually">Semi-annually</option>
                 <option value="Yearly">Yearly</option>
               </select>
-              <!-- Phase 4: Weekday only applies to Weekly bills. Hidden for every
-                   other frequency (toggled by onBillsFrequencyChange). Blank keeps
-                   the bill on legacy Due Day scheduling. -->
+              <!-- Phase 4 / 6B: Weekday applies to Weekly and Biweekly bills.
+                   Hidden for every other frequency (toggled by
+                   onBillsFrequencyChange). Blank keeps the bill on legacy Due Day
+                   scheduling. -->
               <div id="bills_add_weekday_field" style="display:none;">
                 <label>Weekday</label>
-                <select id="bills_add_weekday">
+                <select id="bills_add_weekday" onchange="onBillsWeekdayChange()">
                   <option value="" selected>Legacy (Due Day)</option>
                   <option value="Sunday">Sunday</option>
                   <option value="Monday">Monday</option>
@@ -859,6 +860,17 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                   <option value="Saturday">Saturday</option>
                 </select>
                 <p class="muted" style="margin:4px 0 0 0;font-size:12px;">Schedule changes apply going forward only. Previous payments and history are preserved.</p>
+              </div>
+              <!-- Phase 6B: Anchor Date only applies to Biweekly bills. It sets the
+                   every-other-week parity (the first occurrence and cadence origin).
+                   Hidden for every other frequency (toggled by
+                   onBillsFrequencyChange). Blank keeps the bill on legacy Due Day
+                   scheduling. Must fall on the selected Weekday (validated on save;
+                   never auto-corrected). -->
+              <div id="bills_add_anchor_date_field" style="display:none;">
+                <label>Anchor Date</label>
+                <input type="date" id="bills_add_anchor_date">
+                <p class="muted" style="margin:4px 0 0 0;font-size:12px;">Defines the recurring 2-week cadence. Must fall on the selected weekday.</p>
               </div>
               <label>Payment Source <span aria-label="required" style="color:#b91c1c;">*</span></label>
               <select id="bills_add_payment_source">

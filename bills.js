@@ -110,6 +110,81 @@ function billsNormalizeWeekdayLabel_(value) {
   return Object.prototype.hasOwnProperty.call(map, v) ? map[v] : '';
 }
 
+/**
+ * Normalize a raw Anchor Date value to a canonical 'yyyy-MM-dd' string, or ''
+ * when blank / unparseable. Accepts a Date, a 'yyyy-MM-dd' string, or common
+ * date strings; anything else returns '' so the bill stays on legacy Due Day
+ * scheduling. The stored string round-trips through the recurrence read path
+ * (getInputBillsDueRows_ parses both Date cells and yyyy-MM-dd text). Phase 6B
+ * is UI data-binding only — this does not change recurrence generation.
+ *
+ * @param {*} value
+ * @returns {string} '' or 'yyyy-MM-dd'
+ */
+function billsNormalizeAnchorDateLabel_(value) {
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return '';
+    return billsFormatYmd_(value);
+  }
+  var s = String(value == null ? '' : value).trim();
+  if (!s) return '';
+  // Fast path: already yyyy-MM-dd. Build a local date to validate the calendar
+  // day (rejects e.g. 2026-02-30) and re-emit canonically.
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (m) {
+    var y = Number(m[1]), mo = Number(m[2]), da = Number(m[3]);
+    var d0 = new Date(y, mo - 1, da);
+    if (d0.getFullYear() === y && d0.getMonth() === (mo - 1) && d0.getDate() === da) {
+      return billsFormatYmd_(d0);
+    }
+    return '';
+  }
+  var d = new Date(s);
+  if (isNaN(d.getTime())) return '';
+  return billsFormatYmd_(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
+}
+
+/**
+ * Format a Date as a local yyyy-MM-dd string (no timezone shift).
+ * @param {Date} d
+ * @returns {string}
+ */
+function billsFormatYmd_(d) {
+  var y = d.getFullYear();
+  var mo = ('0' + (d.getMonth() + 1)).slice(-2);
+  var da = ('0' + d.getDate()).slice(-2);
+  return y + '-' + mo + '-' + da;
+}
+
+/**
+ * Weekday label ('Sunday'..'Saturday') -> JS day-of-week index (Sunday=0). Used
+ * to validate that a Biweekly Anchor Date lands on the selected weekday.
+ */
+var BILLS_WEEKDAY_LABEL_INDEX_ = {
+  'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3,
+  'Thursday': 4, 'Friday': 5, 'Saturday': 6
+};
+
+/**
+ * Backend consistency check mirroring isAnchorDateValidForWeekday_
+ * (dashboard_data.js): does the canonical Anchor Date fall on the given Weekday
+ * label? Returns true only when BOTH are present and consistent. Blank values
+ * pass (legacy behavior). Never corrects the date — callers reject on false.
+ *
+ * @param {string} anchorYmd    canonical 'yyyy-MM-dd' (billsNormalizeAnchorDateLabel_)
+ * @param {string} weekdayLabel canonical weekday (billsNormalizeWeekdayLabel_)
+ * @returns {boolean}
+ */
+function billsAnchorMatchesWeekday_(anchorYmd, weekdayLabel) {
+  var idx = BILLS_WEEKDAY_LABEL_INDEX_[String(weekdayLabel || '').trim()];
+  if (typeof idx !== 'number') return true;
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(anchorYmd || '').trim());
+  if (!m) return true;
+  var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (isNaN(d.getTime())) return true;
+  return d.getDay() === idx;
+}
+
 function addBillFromDashboard(payload) {
   // Category is also required — enforced below with a user-friendly
   // "Category is required." message rather than the generic
@@ -176,12 +251,24 @@ function addBillFromDashboard(payload) {
   var variesLabel = billsNormalizeYesNoLabel_(payload.varies, 'No');
   var activeLabel = billsNormalizeYesNoLabel_(payload.active, 'Yes');
 
-  // Phase 4: Weekday is only meaningful for Weekly bills. For every other
-  // frequency we persist '' so a bill that switches away from Weekly never
-  // carries a stale weekday. Blank keeps the bill on legacy Due Day scheduling.
-  var weekdayLabel = (frequencyNormalized === 'weekly')
+  // Phase 4 / 6B: Weekday is meaningful for Weekly and Biweekly bills. For every
+  // other frequency we persist '' so a bill that switches away never carries a
+  // stale weekday. Blank keeps the bill on legacy Due Day scheduling.
+  var weekdayLabel = (frequencyNormalized === 'weekly' || frequencyNormalized === 'biweekly')
     ? billsNormalizeWeekdayLabel_(payload.weekday)
     : '';
+
+  // Phase 6B: Anchor Date is only meaningful for Biweekly bills; '' otherwise.
+  var anchorLabel = (frequencyNormalized === 'biweekly')
+    ? billsNormalizeAnchorDateLabel_(payload.anchorDate)
+    : '';
+
+  // Phase 6B: reject an inconsistent Biweekly Weekday + Anchor Date rather than
+  // silently correcting it (mirrors isAnchorDateValidForWeekday_ on the engine).
+  if (frequencyNormalized === 'biweekly' && weekdayLabel && anchorLabel &&
+      !billsAnchorMatchesWeekday_(anchorLabel, weekdayLabel)) {
+    throw new Error('Anchor Date must fall on the selected weekday.');
+  }
 
   var nowMonth = new Date().getMonth() + 1;
   var startMonth = nowMonth;
@@ -284,6 +371,7 @@ function addBillFromDashboard(payload) {
   setIfPresent('Start Month', startMonth);
   setIfPresent('Notes', notes);
   setIfPresent('Weekday', weekdayLabel);
+  setIfPresent('Anchor Date', anchorLabel);
 
   // Sorted insert: place the new bill row above the first existing row whose
   // Due Day is strictly greater so INPUT - Bills stays ordered by due date,
@@ -524,13 +612,27 @@ function updateTrackedBillFromDashboard(payload) {
   var autopayLabel = billsNormalizeYesNoLabel_(payload.autopay, 'No');
   var variesLabel = billsNormalizeYesNoLabel_(payload.varies, 'No');
 
-  // Phase 4: Weekday is only meaningful for Weekly bills. Switching a bill to a
-  // non-Weekly frequency clears any prior weekday (recordChange_ below only
-  // writes when the value actually differs). Blank keeps legacy Due Day
+  // Phase 4 / 6B: Weekday is meaningful for Weekly and Biweekly bills. Switching
+  // a bill to any other frequency clears any prior weekday (recordChange_ below
+  // only writes when the value actually differs). Blank keeps legacy Due Day
   // scheduling. Purely data-binding — recurrence generation is unchanged.
-  var weekdayLabel = (normalizeFrequency_(frequencyRaw) === 'weekly')
+  var frequencyNormalizedForSchedule = normalizeFrequency_(frequencyRaw);
+  var weekdayLabel = (frequencyNormalizedForSchedule === 'weekly' || frequencyNormalizedForSchedule === 'biweekly')
     ? billsNormalizeWeekdayLabel_(payload.weekday)
     : '';
+
+  // Phase 6B: Anchor Date is only meaningful for Biweekly bills; cleared when the
+  // bill switches away from Biweekly (recordChange_ only writes on a real diff).
+  var anchorLabel = (frequencyNormalizedForSchedule === 'biweekly')
+    ? billsNormalizeAnchorDateLabel_(payload.anchorDate)
+    : '';
+
+  // Phase 6B: reject an inconsistent Biweekly Weekday + Anchor Date rather than
+  // silently correcting it (mirrors isAnchorDateValidForWeekday_ on the engine).
+  if (frequencyNormalizedForSchedule === 'biweekly' && weekdayLabel && anchorLabel &&
+      !billsAnchorMatchesWeekday_(anchorLabel, weekdayLabel)) {
+    throw new Error('Anchor Date must fall on the selected weekday.');
+  }
 
   // ---- Open sheet + verify the row hasn't shifted under us. ----
 
@@ -713,6 +815,18 @@ function updateTrackedBillFromDashboard(payload) {
     recordChange_('weekday', 'Weekday', weekdayLabel, currentWeekday, weekdayLabel);
   }
 
+  // Anchor Date (canonical yyyy-MM-dd text) — Phase 6B. readTextCell_ returns
+  // null when the column is absent (older workbook not yet self-healed) so
+  // recordChange_ skips and the rest of the edit still saves. Compared as the
+  // canonical yyyy-MM-dd string so a Date cell vs. text cell never false-diffs.
+  var currentAnchorRaw = readTextCell_('Anchor Date');
+  if (currentAnchorRaw !== null) {
+    var currentAnchor = billsNormalizeAnchorDateLabel_(currentAnchorRaw);
+    if (currentAnchor !== anchorLabel) {
+      recordChange_('anchorDate', 'Anchor Date', anchorLabel, currentAnchor, anchorLabel);
+    }
+  }
+
   // ---- No-op save → return cleanly, no write/log/dirty marker. ----
 
   if (!changedFields.length) {
@@ -725,8 +839,8 @@ function updateTrackedBillFromDashboard(payload) {
   }
 
   // ---- Phase 5B: prospective schedule changes. ----
-  // If any scheduling field actually changed (Frequency / Due Day / Weekday;
-  // future: Anchor Date), stamp Schedule Effective Date = today (script tz) so
+  // If any scheduling field actually changed (Frequency / Due Day / Weekday /
+  // Anchor Date), stamp Schedule Effective Date = today (script tz) so
   // recurrence generation clamps occurrences to on/after this date — the change
   // affects only future occurrences. Historical Cash Flow / Activity Log /
   // markers are never rewritten. Written directly (not via recordChange_) so it
@@ -734,7 +848,7 @@ function updateTrackedBillFromDashboard(payload) {
   // the bill_update details for audit. Skipped when no scheduling field changed
   // or the column is absent (older workbook not yet self-healed) → in both cases
   // the effective date stays blank = legacy behavior.
-  var SCHEDULING_FIELDS_ = { frequency: true, dueDay: true, weekday: true };
+  var SCHEDULING_FIELDS_ = { frequency: true, dueDay: true, weekday: true, anchorDate: true };
   var schedulingChanged = changedFields.some(function(f) {
     return Object.prototype.hasOwnProperty.call(SCHEDULING_FIELDS_, f);
   });
@@ -1075,7 +1189,14 @@ function getActiveBillsForManagementFromDashboard() {
       // Phase 4: raw Weekday label so the edit form can prefill the dropdown.
       // Blank when the column is absent (older workbook) or the cell is empty →
       // the form shows the "Legacy (Due Day)" placeholder.
-      weekday: idx.Weekday !== undefined ? String(row[idx.Weekday] || '').trim() : ''
+      weekday: idx.Weekday !== undefined ? String(row[idx.Weekday] || '').trim() : '',
+      // Phase 6B: canonical yyyy-MM-dd Anchor Date so the edit form can prefill
+      // the <input type="date">. Normalized (handles our yyyy-MM-dd writes and
+      // legacy locale-formatted Date cells); blank when absent/empty/unparseable
+      // → the form shows an empty Anchor Date.
+      anchorDate: idx['Anchor Date'] !== undefined
+        ? billsNormalizeAnchorDateLabel_(row[idx['Anchor Date']])
+        : ''
     });
   }
 

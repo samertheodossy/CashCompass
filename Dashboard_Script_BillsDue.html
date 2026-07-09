@@ -750,6 +750,13 @@ function resetBillsAddForm_() {
   if (weekday) weekday.value = '';
   const weekdayField = document.getElementById('bills_add_weekday_field');
   if (weekdayField) weekdayField.style.display = 'none';
+
+  // Phase 6B: reset Anchor Date to blank and hide the field (only Biweekly uses
+  // it; frequency resets to Monthly above).
+  const anchor = document.getElementById('bills_add_anchor_date');
+  if (anchor) anchor.value = '';
+  const anchorField = document.getElementById('bills_add_anchor_date_field');
+  if (anchorField) anchorField.style.display = 'none';
 }
 
 /**
@@ -772,23 +779,122 @@ function onBillsAddCategoryChange() {
 }
 
 /**
- * Phase 4: Weekday scheduling visibility for the shared Add/Edit bill form.
- * The Weekday field only applies to Weekly bills, so it is shown when
- * Frequency == Weekly and hidden for every other frequency. When hidden the
- * control is reset to the blank "Legacy (Due Day)" option so a stale value is
- * never submitted. Called on frequency change and whenever the form is opened
- * or pre-filled for edit. UI-only — no recurrence/Cash Flow/AutoPay changes.
+ * Weekday name -> JS day-of-week index (Sunday=0 .. Saturday=6). Mirrors the
+ * canonical labels emitted by the Weekday dropdown; used for the Biweekly Anchor
+ * Date prefill convenience and client-side save validation. Kept in sync with
+ * the backend parseBillWeekday_ (full names only).
+ */
+var BILLS_WEEKDAY_INDEX_ = {
+  'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3,
+  'Thursday': 4, 'Friday': 5, 'Saturday': 6
+};
+
+/**
+ * Format a Date as a local yyyy-MM-dd string suitable for <input type="date">.
+ * Uses local components (not toISOString, which shifts by timezone).
+ */
+function billsFormatDateInputValue_(d) {
+  if (!(d instanceof Date) || isNaN(d.getTime())) return '';
+  var y = d.getFullYear();
+  var m = ('0' + (d.getMonth() + 1)).slice(-2);
+  var day = ('0' + d.getDate()).slice(-2);
+  return y + '-' + m + '-' + day;
+}
+
+/**
+ * Parse a yyyy-MM-dd value from <input type="date"> into a local date-only Date,
+ * or null when blank/invalid. Parses components explicitly so there is no UTC
+ * shift (new Date('yyyy-MM-dd') would parse as UTC midnight).
+ */
+function billsParseDateInputValue_(value) {
+  var v = String(value == null ? '' : value).trim();
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!m) return null;
+  var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * First date on or after `from` (default: today) that lands on `weekdayIndex`.
+ * Used for the Biweekly Anchor Date prefill convenience only.
+ */
+function billsFirstWeekdayOnOrAfter_(weekdayIndex, from) {
+  var base = (from instanceof Date && !isNaN(from.getTime())) ? from : new Date();
+  var d = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+  var delta = ((weekdayIndex - d.getDay()) + 7) % 7;
+  d.setDate(d.getDate() + delta);
+  return d;
+}
+
+/**
+ * Phase 4 / 6B: scheduling-field visibility for the shared Add/Edit bill form.
+ *   - Weekly   : show Weekday, hide Anchor Date.
+ *   - Biweekly : show Weekday AND Anchor Date.
+ *   - Others   : hide both.
+ * When a field is hidden its control is reset to blank so a stale value is never
+ * submitted (submit also guards on frequency, but this keeps the DOM clean).
+ *
+ * Convenience: when Biweekly is active, a Weekday is selected, and Anchor Date is
+ * blank, prefill Anchor Date with the first matching weekday on or after today.
+ * This is UI-only — the user may edit it before saving, and it is never
+ * auto-corrected. Called on frequency change, weekday change, and whenever the
+ * form is opened or pre-filled for edit. No recurrence/Cash Flow/AutoPay changes.
  */
 function onBillsFrequencyChange() {
   const freqEl = document.getElementById('bills_add_frequency');
-  const field = document.getElementById('bills_add_weekday_field');
-  if (!field) return;
-  const isWeekly = !!freqEl && (freqEl.value || '').trim() === 'Weekly';
-  field.style.display = isWeekly ? '' : 'none';
-  if (!isWeekly) {
-    const wd = document.getElementById('bills_add_weekday');
-    if (wd) wd.value = '';
+  const weekdayField = document.getElementById('bills_add_weekday_field');
+  const anchorField = document.getElementById('bills_add_anchor_date_field');
+  const freq = !!freqEl ? (freqEl.value || '').trim() : '';
+  const isWeekly = freq === 'Weekly';
+  const isBiweekly = freq === 'Biweekly';
+
+  if (weekdayField) weekdayField.style.display = (isWeekly || isBiweekly) ? '' : 'none';
+  if (anchorField) anchorField.style.display = isBiweekly ? '' : 'none';
+
+  const wd = document.getElementById('bills_add_weekday');
+  const anchor = document.getElementById('bills_add_anchor_date');
+
+  // Reset controls that no longer apply so stale values are never submitted.
+  if (!isWeekly && !isBiweekly && wd) wd.value = '';
+  if (!isBiweekly && anchor) anchor.value = '';
+
+  // Biweekly Anchor Date prefill convenience (only when a Weekday is chosen and
+  // Anchor Date is still blank). Never overwrites an existing Anchor Date.
+  if (isBiweekly && wd && anchor && !anchor.value) {
+    var idx = BILLS_WEEKDAY_INDEX_[(wd.value || '').trim()];
+    if (typeof idx === 'number') {
+      anchor.value = billsFormatDateInputValue_(billsFirstWeekdayOnOrAfter_(idx, new Date()));
+    }
   }
+}
+
+/**
+ * Phase 6B: re-run the Anchor Date prefill/visibility logic when the Weekday
+ * changes (wired via the Weekday <select> onchange). Delegates to
+ * onBillsFrequencyChange so all show/hide + prefill rules live in one place.
+ */
+function onBillsWeekdayChange() {
+  onBillsFrequencyChange();
+}
+
+/**
+ * Phase 6B: client-side guard mirroring the backend isAnchorDateValidForWeekday_.
+ * Returns an error string when the current Biweekly Weekday + Anchor Date are
+ * inconsistent (anchor does not fall on the selected weekday), otherwise ''.
+ * Only enforced for Biweekly with BOTH a Weekday and an Anchor Date present —
+ * blank values are legacy Due Day behavior and pass. Never auto-corrects.
+ */
+function billsValidateAnchorForWeekday_(frequency, weekdayLabel, anchorValue) {
+  if ((frequency || '').trim() !== 'Biweekly') return '';
+  var wd = (weekdayLabel || '').trim();
+  var anchorStr = (anchorValue || '').trim();
+  if (!wd || !anchorStr) return '';
+  var idx = BILLS_WEEKDAY_INDEX_[wd];
+  if (typeof idx !== 'number') return '';
+  var d = billsParseDateInputValue_(anchorStr);
+  if (!d) return 'Anchor Date must be a valid date.';
+  if (d.getDay() !== idx) return 'Anchor Date must fall on the selected weekday.';
+  return '';
 }
 
 /**
@@ -978,11 +1084,28 @@ function submitNewBill() {
     startMonth = m;
   }
 
-  // Phase 4: Weekday only travels with Weekly bills; blank for every other
-  // frequency so the backend never stores a stale weekday. Backend also gates.
-  const weekday = frequency === 'Weekly'
+  // Phase 4 / 6B: Weekday travels with Weekly AND Biweekly bills; blank for every
+  // other frequency so the backend never stores a stale weekday. Backend gates.
+  const weekday = (frequency === 'Weekly' || frequency === 'Biweekly')
     ? (((document.getElementById('bills_add_weekday') || {}).value) || '').trim()
     : '';
+
+  // Phase 6B: Anchor Date only travels with Biweekly bills; blank otherwise.
+  const anchorDate = frequency === 'Biweekly'
+    ? (((document.getElementById('bills_add_anchor_date') || {}).value) || '').trim()
+    : '';
+
+  // Phase 6B: reject an inconsistent Biweekly Weekday + Anchor Date rather than
+  // silently correcting it (mirrors backend isAnchorDateValidForWeekday_).
+  const anchorErr = billsValidateAnchorForWeekday_(frequency, weekday, anchorDate);
+  if (anchorErr) {
+    setBillsStatus_(anchorErr, true);
+    const anchorEl = document.getElementById('bills_add_anchor_date');
+    if (anchorEl && typeof anchorEl.focus === 'function') {
+      try { anchorEl.focus(); } catch (e) { /* ignore focus errors */ }
+    }
+    return;
+  }
 
   const payload = {
     payee: payee,
@@ -996,7 +1119,8 @@ function submitNewBill() {
     varies: varies,
     active: active,
     startMonth: startMonth,
-    weekday: weekday
+    weekday: weekday,
+    anchorDate: anchorDate
   };
 
   setStatusLoading('bills_due_status', 'Saving bill…');
@@ -1147,9 +1271,13 @@ function openBillEditForm(billKey) {
   setSelectValue_('bills_add_varies', bill.varies || 'No');
   setInputValue_('bills_add_notes', bill.notes || '');
 
-  // Phase 4: load the existing Weekday value (blank → "Legacy (Due Day)") and
-  // apply Weekly-only visibility to match the bill's frequency.
+  // Phase 4 / 6B: load the existing Weekday value (blank → "Legacy (Due Day)")
+  // and Anchor Date (blank loads blank) BEFORE calling onBillsFrequencyChange so
+  // the visibility/prefill logic sees the loaded values. onBillsFrequencyChange
+  // applies the frequency-appropriate show/hide; because Anchor Date is already
+  // populated, the prefill convenience never overwrites the saved value.
   setSelectValue_('bills_add_weekday', bill.weekday || '');
+  setInputValue_('bills_add_anchor_date', bill.anchorDate || '');
   onBillsFrequencyChange();
 
   // Default Amount: pre-fill with the raw 2-decimal number so
@@ -1338,12 +1466,30 @@ function submitBillEdit_() {
     defaultAmount = Math.abs(n);
   }
 
-  // Phase 4: Weekday only travels with Weekly bills; blank for every other
-  // frequency so switching away from Weekly clears any prior weekday. The
-  // backend also gates on frequency as defense-in-depth.
-  const weekday = frequency === 'Weekly'
+  // Phase 4 / 6B: Weekday travels with Weekly AND Biweekly bills; blank for every
+  // other frequency so switching away clears any prior weekday. The backend also
+  // gates on frequency as defense-in-depth.
+  const weekday = (frequency === 'Weekly' || frequency === 'Biweekly')
     ? (((document.getElementById('bills_add_weekday') || {}).value) || '').trim()
     : '';
+
+  // Phase 6B: Anchor Date only travels with Biweekly bills; blank otherwise so
+  // switching away from Biweekly clears any prior anchor.
+  const anchorDate = frequency === 'Biweekly'
+    ? (((document.getElementById('bills_add_anchor_date') || {}).value) || '').trim()
+    : '';
+
+  // Phase 6B: reject an inconsistent Biweekly Weekday + Anchor Date rather than
+  // silently correcting it (mirrors backend isAnchorDateValidForWeekday_).
+  const anchorErr = billsValidateAnchorForWeekday_(frequency, weekday, anchorDate);
+  if (anchorErr) {
+    setBillsStatus_(anchorErr, true);
+    const anchorEl = document.getElementById('bills_add_anchor_date');
+    if (anchorEl && typeof anchorEl.focus === 'function') {
+      try { anchorEl.focus(); } catch (_e) { /* ignore */ }
+    }
+    return;
+  }
 
   const payload = {
     sheetRow: sheetRow,
@@ -1357,7 +1503,8 @@ function submitBillEdit_() {
     notes: notes,
     autopay: autopay,
     varies: varies,
-    weekday: weekday
+    weekday: weekday,
+    anchorDate: anchorDate
   };
 
   setStatusLoading('bills_due_status', 'Saving changes…');
