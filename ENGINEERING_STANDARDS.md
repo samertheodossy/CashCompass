@@ -74,6 +74,48 @@ Prefer, in order:
 
 …over re-applying cosmetic formatting on every normal write. Repeated cosmetic reassertion mutates existing user workbooks on routine actions, can clobber intentional first-create styling, and risks unintended visual changes. Minimize mutations to existing user workbooks.
 
+### 10. Runtime Helpers Must Not Style
+
+Runtime helper functions (those invoked during normal application operation — e.g. row inserters, summary/formula maintainers, seed helpers called on every Quick Add / bill / debt / income write) should:
+
+- update **data**,
+- update **formulas**,
+- perform **correctness** operations.
+
+They should **not** perform cosmetic styling (backgrounds, borders, fonts, font sizes, row heights, column widths, alignment, banding) **except** during:
+
+- **first-create**,
+- **explicit repair** (a deliberate, reviewed, idempotent re-converge operation), or
+- **approved schema evolution** (styling only the newly added columns/rows, additively).
+
+This complements the Styling Reassertion Rule (§9): §9 says *reassert only correctness-critical styling*; §10 says *runtime helpers should not be the place cosmetic styling lives at all*. Cosmetic styling belongs to the creation/repair/evolution paths, not to the routine write path.
+
+---
+
+## Cash Flow Data Semantics — Actuals vs Projection
+
+`INPUT - Cash Flow <year>` is an **actuals ledger**, not a forecast. Two concepts must be kept strictly separate; conflating them corrupts trust in the numbers.
+
+### Actuals (what exists today)
+
+- **Adding a bill** (`addBillFromDashboard`) seeds only a **blank** Cash Flow Expense row (Type / Payee / Flow Source). It writes **no monthly amounts**.
+- **AutoPay** (`getInputBillsDueRows_`, on the Bills Due read) is the *only* thing that writes bill amounts, and it is an **actuals** mechanism. It writes `-amount` into a month cell **only when all of these hold**: AutoPay enabled, the occurrence is inside the Bills Due rolling window (`generateOccurrences_` → `monthOffsets = [-1, 0, +1]`), the **due date has passed**, and the occurrence is **not already handled** (marker or populated cell). Each write carries a `bill_autopay` dedupe marker.
+- **`Start Month`** controls **recurrence eligibility** (occurrences before it in the current year are suppressed). It does **not** populate Cash Flow months. This is intentional.
+- Consequence: current Cash Flow represents **settled / actual** activity, never projected activity. A monthly bill with `Start Month = 1` added mid-year correctly shows amounts only for months that have already come due — not January→December.
+
+### Projection (future feature — see `TODO.md → Future Feature — Cash Flow Forward Projection`)
+
+Forward projection is a **separate, explicit product feature**, not unfinished actuals behavior. If/when built, it must:
+
+- be **explicit / opt-in** — never triggered implicitly on a read;
+- be **forward-only** — never back-fill past months (that rewrites financial history);
+- **never overwrite a populated cell** (manual protection);
+- **skip `Varies = Yes`** bills (no fixed amount to project);
+- write **no `bill_autopay` markers** and never suppress the Bills Due card;
+- be **visually distinguishable** from actuals so projected values are never mistaken for settled payments.
+
+**Rule:** Projection must **never reuse the AutoPay pipeline.** AutoPay settles actuals; projection forecasts. Do not "fix" the actuals behavior above by making AutoPay fill the year — that is by design.
+
 ---
 
 ## Canonical Row Styling Standard

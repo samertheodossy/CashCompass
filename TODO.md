@@ -183,8 +183,23 @@ Differentiators and platform/operations maturity. **None of these are required f
 | **Paid product readiness** (pricing, subscription, entitlements, plan enforcement fail-open, ToS, privacy, support ops, billing) | P4 | Stable external beta | XL |
 | Account Aggregation & Transaction Import (Plaid-style) | P4 | Paid tier | XL |
 | Merge Debt Accounts · Debt Payee Aliases · Google Sheets refresh awareness | P4 | — | S–L each |
+| **Cash Flow Forward Projection** — explicit forward-only bill projection, separate from AutoPay actuals *(future product feature, not unfinished work — see `## Future Feature — Cash Flow Forward Projection` below)* | P4 | — | M–L |
 
 *(Money Plan Phase 2 and the Income Expected/Due Workflow were elevated to Stage 5 — they are Version 1 differentiators, not Version 2 platform work.)*
+
+#### Future Feature — Cash Flow Forward Projection
+
+> **This is a future product feature, NOT unfinished functionality.** Today's Cash Flow behavior is **working as designed**: it is an **actuals** ledger (AutoPay settles occurrences as they come due; adding a bill seeds the row only; `Start Month` controls recurrence eligibility, not month population). See `ENGINEERING_STANDARDS.md → Cash Flow Data Semantics — Actuals vs Projection`, `PROJECT_CONTEXT.md → Cash Flow Semantics — Actuals, not Projection`, and `GOLDEN_WORKBOOK.md → Financial Ledger family`. **Do not "fix" the actuals behavior into a projection.**
+
+Proposed behavior for a *future* projection feature (forecasting-adjacent; relates to Money Plan Phase 2 forecasting but is independently scopable):
+
+- **Explicit feature** — user-triggered/opt-in; never triggered implicitly on a dashboard read.
+- **Not AutoPay** — must **never reuse the AutoPay pipeline**. AutoPay settles actuals; projection forecasts. These are separate concepts.
+- **Forward-only** — never back-fill history (writing past months rewrites financial history and inflates past spending).
+- **Never overwrite populated cells** — manual protection; only ever fill blank future month cells.
+- **Skip `Varies = Yes`** — no fixed amount to project.
+- **Separate from actuals** — projected values carry **no `bill_autopay` markers** and never suppress the Bills Due card.
+- **Visually distinguished** — projected values must be visibly distinct from settled/actual values so they are never mistaken for real payments.
 
 ---
 

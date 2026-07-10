@@ -114,6 +114,18 @@ function createNextYearCashFlowSheet() {
     if (summaryRow > 0) {
       applyCashFlowSummaryRowStyling_(newSheet, summaryRow, layout);
     }
+    // Canonical body font (FIRST-CREATE clone). This sheet is brand-new this
+    // run (not an existing user workbook), so washing body font to the
+    // canonical 14pt is safe and guarantees canonical typography regardless
+    // of the source year's vintage. Row heights are intentionally left as
+    // copied from the source above — Phase A does not restyle clone heights.
+    const maxRowsClone = newSheet.getMaxRows();
+    if (maxRowsClone > 1) {
+      newSheet.getRange(2, 1, maxRowsClone - 1, numCols).setFontSize(14);
+    }
+    // Golden Workbook row-type text colors (FIRST-CREATE clone): Income
+    // green, Expense red, via conditional formatting on the new sheet.
+    applyCashFlowRowTypeColorRules_(newSheet, layout);
   } catch (_styleErr) { /* cosmetic only */ }
 
   ss.setActiveSheet(newSheet);
@@ -261,10 +273,12 @@ function findCashFlowSummaryRow_(sheet, numRows, layout) {
  */
 function writeCashFlowSummaryFormulas_(sheet, summaryRow, layout) {
   const typeColLetter = columnToLetter_(layout.typeCol1);
-  // Rows strictly above Summary hold every data row (header at row 1,
-  // optional blank separator at row 2, then Income/Expense block). When
-  // Summary sits at row 2 (empty sheet edge case) we fall back to a
-  // degenerate single-cell range which evaluates to 0 — correct.
+  // Rows strictly above Summary hold every data row plus blank separator
+  // rows (header at row 1, then Income block, 2 blanks, Expense block, 2
+  // blanks). Blank separator rows carry no Type value so the SUMIF("Income")
+  // / SUMIF("Expense") terms simply ignore them. When Summary sits at row 2
+  // (empty sheet edge case) we fall back to a degenerate single-cell range
+  // which evaluates to 0 — correct.
   const lastDataRow = Math.max(2, summaryRow - 1);
 
   for (let i = 0; i < layout.monthCol0s.length; i++) {
@@ -575,6 +589,29 @@ function ensureCashFlowYearSheet_(year) {
     applyCashFlowSheetStyling_(sheet, freshLayout);
   } catch (e) { /* cosmetic only */ }
 
+  // Canonical body font + readable body row height (FIRST-CREATE ONLY).
+  // The sheet was just inserted and holds no data rows, so washing the body
+  // is safe here and never runs for an existing populated workbook (the
+  // guard at the top returns early). Body cells render at the canonical 14pt
+  // and empty data rows get a readable 24px height, so future Quick Add /
+  // seed rows inherit comfortable spacing (insertCashFlowRow_ propagates the
+  // neighbor/default row format). Header font (16) is applied by
+  // applyCashFlowSheetStyling_ above.
+  try {
+    const maxRowsCF = sheet.getMaxRows();
+    if (maxRowsCF > 1) {
+      sheet.getRange(2, 1, maxRowsCF - 1, headerRow.length).setFontSize(14);
+      sheet.setRowHeights(2, maxRowsCF - 1, 24);
+    }
+  } catch (_bodyErr) { /* cosmetic only */ }
+
+  // Golden Workbook row-type text colors (FIRST-CREATE ONLY): Income green,
+  // Expense red, applied via conditional formatting keyed off the Type
+  // column so new rows auto-color without any runtime restyling.
+  try {
+    applyCashFlowRowTypeColorRules_(sheet, detectCashFlowLayout_(headerRow));
+  } catch (_cfErr) { /* cosmetic only */ }
+
   // Seed the canonical Summary row ("Summary | Cash Flow Per Month") with
   // per-month SUMIF totals so users see running Income+Expense totals per
   // column as soon as they start adding rows. Idempotent — no-op if the
@@ -609,10 +646,12 @@ function ensureCashFlowYearSheet_(year) {
  *
  * Safety: this function only ADDS a row — it never rewrites existing
  * cells, never touches user data, and never moves other rows. When the
- * Summary row is freshly created, one blank separator row is left
+ * Summary row is freshly created, TWO blank separator rows are left
  * between it and the last data row (or directly under the header on a
- * brand-new sheet) so the block structure matches the reference
- * layout the user pasted.
+ * brand-new sheet) so the block structure matches the Golden Workbook
+ * layout (Income → 2 blanks → Expense → 2 blanks → Summary). Existing
+ * sheets that already have a Summary row return early and are never
+ * reflowed, so populated workbooks keep their current spacing untouched.
  */
 function ensureCashFlowSummaryRow_(sheet) {
   if (!sheet) throw new Error('ensureCashFlowSummaryRow_: sheet is required.');
@@ -621,33 +660,36 @@ function ensureCashFlowSummaryRow_(sheet) {
   const headerValues = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0] || [];
   const layout = detectCashFlowLayout_(headerValues);
 
-  // Refresh header + column-width styling on every call. Idempotent
-  // (setting the same background/bold/width a second time is a no-op
-  // visually), so repeated inserts don't accumulate cost, and legacy
-  // sheets created before the styling pass upgrade to the new look the
-  // next time Quick Add / debt seed / bill seed touches them.
-  try {
-    applyCashFlowSheetStyling_(sheet, layout);
-  } catch (styleErr) {
-    Logger.log('ensureCashFlowSummaryRow_ header styling failed: ' + styleErr);
-  }
+  // Runtime Helpers Must Not Style (ENGINEERING_STANDARDS.md §9-10). This
+  // helper runs on EVERY Quick Add / bill seed / debt seed / income seed, so
+  // it must only establish the Summary row's DATA + FORMULAS (correctness) —
+  // it must NOT re-wash cosmetic header/width/row-height styling on an
+  // existing sheet. (It previously called applyCashFlowSheetStyling_ and
+  // re-styled the existing Summary row on every insert, mutating populated
+  // user workbooks on routine writes.) Header/body/width styling now lives
+  // only in first-create (ensureCashFlowYearSheet_ / createNextYearCash-
+  // FlowSheet). Summary-row cosmetic styling is applied once — only when
+  // THIS call is the one that creates the Summary row (first-create of that
+  // row), never on an already-present Summary row.
 
   const numRows = sheet.getLastRow();
   const existing = findCashFlowSummaryRow_(sheet, numRows, layout);
   if (existing > 0) {
-    // Re-apply summary-row styling on existing Summary rows too so
-    // legacy sheets pick up the light-gray fill / top border without
-    // needing a from-scratch rebuild.
-    try { applyCashFlowSummaryRowStyling_(sheet, existing, layout); } catch (_) { /* cosmetic */ }
+    // Summary row already present: nothing cosmetic to do here. Formula
+    // maintenance on insert is a correctness operation handled by
+    // writeCashFlowSummaryFormulas_ (invoked from insertCashFlowRow_).
     return existing;
   }
 
-  // Place Summary two rows below the last data row so there's always one
-  // blank separator row above it. On a fresh sheet (numRows === 1, just
-  // headers) this lands at row 3 with row 2 as the separator. On a sheet
-  // that already has data rows but no Summary, it lands past the last
-  // data row with one blank in between, matching the reference layout.
-  const summaryRow = numRows + 2;
+  // Place Summary three rows below the last data row so there are always TWO
+  // blank separator rows above it (Golden Workbook layout:
+  // Income → 2 blanks → Expense → 2 blanks → Summary). On a fresh sheet
+  // (numRows === 1, just headers) this lands at row 4 with rows 2-3 as the
+  // separators. On a sheet that has data rows but no Summary yet it lands
+  // past the last data row with two blanks in between. This only runs on the
+  // first-create of the Summary row; existing sheets that already have one
+  // return early above, so populated workbooks keep their spacing untouched.
+  const summaryRow = numRows + 3;
 
   // Apps Script sheets default to 1000 max rows; explicitly extend if the
   // target row is beyond the current grid (defensive — very unlikely in
@@ -675,11 +717,17 @@ function ensureCashFlowSummaryRow_(sheet) {
 
 /**
  * Apply the canonical Cash Flow header styling (warm-yellow fill, bold
- * black text, taller row, bottom border) and reasonable column widths
- * so every `INPUT - Cash Flow YYYY` sheet reads like the reference
- * layout the user pasted. Idempotent — safe to call on every Quick Add
- * / debt seed / summary seed path. Errors are swallowed (cosmetic
- * only; never fail a row write on a styling glitch).
+ * black text at the canonical 16pt header size, taller row, bottom border)
+ * and reasonable column widths so every `INPUT - Cash Flow YYYY` sheet reads
+ * like the reference layout.
+ *
+ * FIRST-CREATE ONLY. Per Runtime Helpers Must Not Style / the Styling
+ * Reassertion Rule (ENGINEERING_STANDARDS.md §9-10) this helper is called
+ * exclusively from the sheet-creation paths (ensureCashFlowYearSheet_ and
+ * createNextYearCashFlowSheet) — it is NOT called on the routine Quick Add /
+ * debt seed / income seed write path anymore, so it never re-washes an
+ * existing populated sheet. Errors are swallowed (cosmetic only; never fail
+ * a row write on a styling glitch).
  *
  * Color is Google Sheets' yellow-2 (#ffe599) — one shade down from the
  * paler yellow-3, picked so the header band reads as clearly highlighted
@@ -697,6 +745,7 @@ function applyCashFlowSheetStyling_(sheet, layout) {
   headerRange
     .setBackground('#ffe599')
     .setFontWeight('bold')
+    .setFontSize(16)
     .setFontColor('#000000')
     .setHorizontalAlignment('center')
     .setVerticalAlignment('middle');
@@ -720,50 +769,64 @@ function applyCashFlowSheetStyling_(sheet, layout) {
   try { sheet.setRowHeight(1, 32); } catch (_rhErr) { /* cosmetic */ }
   try { sheet.setFrozenRows(1); } catch (_frErr) { /* cosmetic */ }
 
-  // Column widths tuned to the canonical column identities. When a
-  // column is absent (e.g. legacy sheet without Flow Source or Active)
-  // the `*Col1 === -1` branch skips the set — no errant width write to
-  // column -1. Month columns share a single width so the block reads
-  // as a clean grid.
-  const widthByCol1 = [];
-  if (layout.typeCol1 > 0)        widthByCol1.push({ col: layout.typeCol1, width: 110 });
-  if (layout.flowSourceCol1 > 0)  widthByCol1.push({ col: layout.flowSourceCol1, width: 130 });
-  if (layout.payeeCol1 > 0)       widthByCol1.push({ col: layout.payeeCol1, width: 220 });
-  if (layout.activeCol1 > 0)      widthByCol1.push({ col: layout.activeCol1, width: 80 });
-  if (layout.totalCol1 > 0)       widthByCol1.push({ col: layout.totalCol1, width: 110 });
+  // Column widths tuned to the canonical column identities so a freshly
+  // created sheet never needs manual resizing (Readability Standard). All
+  // sets are widen-only; absent optional columns are skipped safely.
+  // Header-addressable columns get canonical widen-only widths from the shared
+  // helper (applyCanonicalColumnWidthsByHeader_), so Cash Flow uses the same
+  // width mechanism as Bills and future sheets instead of bespoke logic. Type &
+  // Payee are guaranteed present; Flow Source & Active are optional (the helper
+  // skips missing headers safely, matching the old `*Col1 > 0` guards). Widths
+  // fit each 16pt-bold header AND its largest realistic body value:
+  //   Type 110 · Flow Source 160 (fits "CREDIT_CARD") · Payee 220 · Active 90.
+  try {
+    applyCanonicalColumnWidthsByHeader_(sheet, 1, {
+      'Type': 110,
+      'Flow Source': 160,
+      'Payee': 220,
+      'Active': 90
+    });
+  } catch (_cfWidthErr) { /* cosmetic only */ }
 
-  // Only widen — never shrink. Populated workbooks where the user has
-  // manually widened a column (e.g. Flow Source > 130 to fit
-  // "CREDIT_CARD", or month columns > 90 to fit long currency values)
-  // would otherwise be reset on every Quick Add / bill / debt seed,
-  // because ensureCashFlowSummaryRow_ calls this helper on every insert.
-  // Fresh sheets start below each target width (Google Sheets default
-  // ~100px) and still get widened on creation as before.
-  for (let i = 0; i < widthByCol1.length; i++) {
+  // Total is identified POSITIONALLY (the last column after the month block),
+  // not by a fixed header, so it stays on the layout-index widen-only path
+  // rather than the header-addressed helper. Widen-only preserves any manual
+  // widening; fresh sheets start at ~100px and get the canonical 120.
+  if (layout.totalCol1 > 0) {
     try {
-      const col1 = widthByCol1[i].col;
-      const target = widthByCol1[i].width;
-      if (sheet.getColumnWidth(col1) < target) {
-        sheet.setColumnWidth(col1, target);
+      if (sheet.getColumnWidth(layout.totalCol1) < 120) {
+        sheet.setColumnWidth(layout.totalCol1, 120);
       }
     } catch (_) {}
   }
 
+  // Month columns share one canonical width. 100px fits typical currency
+  // values ("$12,345.67") at the 14pt body size and the "MMM-YY" header at
+  // 16pt bold without clipping.
   for (let i = 0; i < layout.monthCol0s.length; i++) {
     try {
       const monthCol1 = layout.monthCol0s[i] + 1;
-      if (sheet.getColumnWidth(monthCol1) < 90) {
-        sheet.setColumnWidth(monthCol1, 90);
+      if (sheet.getColumnWidth(monthCol1) < 100) {
+        sheet.setColumnWidth(monthCol1, 100);
       }
     } catch (_) {}
   }
 }
 
 /**
- * Apply the canonical Summary-row styling (light-gray fill, bold
- * black text, solid top border). Called whenever Summary is seeded or
- * found on an existing sheet so legacy sheets upgrade transparently.
- * All failures are swallowed — cosmetic only.
+ * Apply the canonical Summary-row styling (light-gray fill, bold black text
+ * at the canonical 14pt body size, solid top border).
+ *
+ * FIRST-CREATE / repair only. Per Runtime Helpers Must Not Style
+ * (ENGINEERING_STANDARDS.md §10) this is applied only when the Summary row
+ * is first created (fresh sheet or next-year clone) — NOT re-applied to an
+ * already-present Summary row on every insert. All failures are swallowed —
+ * cosmetic only.
+ *
+ * Note: the light-gray fill (#f3f3f3) is the pre-existing treatment and is
+ * intentionally left unchanged in Phase A; the Summary-row COLOR remains a
+ * Phase B item pending a Golden Workbook observation. Phase A only adds the
+ * canonical font size.
  */
 function applyCashFlowSummaryRowStyling_(sheet, summaryRow, layout) {
   if (!sheet || !layout || !summaryRow || summaryRow < 2) return;
@@ -774,6 +837,7 @@ function applyCashFlowSummaryRowStyling_(sheet, summaryRow, layout) {
     range
       .setBackground('#f3f3f3')
       .setFontWeight('bold')
+      .setFontSize(14)
       .setFontColor('#000000');
   } catch (_fillErr) { /* cosmetic */ }
 
@@ -791,6 +855,64 @@ function applyCashFlowSummaryRowStyling_(sheet, summaryRow, layout) {
   } catch (_borderErr) { /* cosmetic */ }
 
   try { sheet.setRowHeight(summaryRow, 28); } catch (_rhErr) { /* cosmetic */ }
+}
+
+/**
+ * Apply the Golden Workbook row-type text colors — Income → green, Expense
+ * → red — via CONDITIONAL FORMATTING keyed off the Type column.
+ *
+ * FIRST-CREATE ONLY. The rules are added once, on a WHOLE-COLUMN range, so
+ * Google Sheets then colors any Income / Expense row automatically based on
+ * its Type cell, and NO runtime helper ever restyles a row (Runtime Helpers
+ * Must Not Style, ENGINEERING_STANDARDS.md §10). Rows whose Type is not
+ * Income / Expense (the Summary row, the blank spacer rows, the header) keep
+ * their default font color. Existing populated sheets never receive these
+ * rules — this runs only from the creation paths — so no existing workbook is
+ * recolored.
+ *
+ * Why a WHOLE-COLUMN range (A:Q) instead of a bounded row range: a bounded
+ * range (rows 2..maxRows) DRIFTS when a row is inserted at its top boundary
+ * (row 2, directly under the header) — the same insert-at-the-edge quirk this
+ * file documents for SUM ranges (see refreshBlockSumAggregates_). That drift
+ * left freshly inserted Income/Expense rows OUTSIDE the conditional-format
+ * range, so they rendered black. A whole-column range covers every current
+ * AND future row and is immune to row-insert drift. The formula is anchored
+ * at row 1 (the range's top-left) with the Type column $-locked, so each row
+ * evaluates its own Type cell.
+ *
+ * Rules are APPENDED to any rules already on the sheet (never clobbering
+ * user/other rules). Colors use the standard Google Sheets palette shades
+ * (dark green #38761d / dark red #cc0000). All failures are swallowed —
+ * cosmetic only; a conditional-format glitch must never fail sheet creation.
+ */
+function applyCashFlowRowTypeColorRules_(sheet, layout) {
+  if (!sheet || !layout) return;
+  try {
+    const typeLetter = columnToLetter_(layout.typeCol1);
+    const firstColLetter = columnToLetter_(1);
+    const lastColLetter = columnToLetter_(layout.numCols);
+
+    // Whole-column range, e.g. "A:Q" (all canonical columns, every row). Its
+    // top-left is row 1, so the custom formula is anchored at row 1.
+    const range = sheet.getRange(firstColLetter + ':' + lastColLetter);
+
+    const incomeRule = SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=$' + typeLetter + '1="Income"')
+      .setFontColor('#38761d')
+      .setRanges([range])
+      .build();
+
+    const expenseRule = SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=$' + typeLetter + '1="Expense"')
+      .setFontColor('#cc0000')
+      .setRanges([range])
+      .build();
+
+    const rules = sheet.getConditionalFormatRules() || [];
+    rules.push(incomeRule);
+    rules.push(expenseRule);
+    sheet.setConditionalFormatRules(rules);
+  } catch (_cfErr) { /* cosmetic only */ }
 }
 
 /**

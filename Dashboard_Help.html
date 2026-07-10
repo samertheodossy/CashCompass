@@ -543,6 +543,15 @@
         <ul class="help-list">
           <li>When a bill has AutoPay turned on, CashCompass records each occurrence <strong>only once</strong>.</li>
           <li>Even if the dashboard refreshes several times, a due occurrence won't be paid twice — <strong>duplicate payments are prevented automatically</strong>.</li>
+          <li>AutoPay records <strong>actual activity</strong>: it writes an amount only when the bill is due, the due date has <strong>passed</strong>, AutoPay is on, and that occurrence hasn't already been handled. It does <strong>not</strong> fill in future months ahead of time.</li>
+        </ul>
+
+        <h4>Cash Flow shows actual activity, not a forecast</h4>
+        <ul class="help-list">
+          <li>Adding a bill creates its <strong>Cash Flow row</strong> so the bill is tracked — but it does <strong>not</strong> fill in a dollar amount for every month.</li>
+          <li>CashCompass does <strong>not</strong> project a recurring bill across the whole year. Amounts appear as occurrences actually come due (and AutoPay settles them), so your Cash Flow reflects <strong>what has happened</strong>, not a forecast of what will.</li>
+          <li><strong>Start Month</strong> controls <strong>when a bill becomes eligible to recur</strong> — it does not pre-fill Cash Flow months. A monthly bill with Start Month = 1 does not put an amount in January through December up front; each month fills in as it comes due. This is intentional.</li>
+          <li>Forward-looking projection is a planned future feature and is kept separate from this actual-activity view.</li>
         </ul>
 
         <h4>Legacy bills</h4>

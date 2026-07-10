@@ -1311,12 +1311,19 @@ function ensureBillsSheetSchema_(sheet) {
     // looks identical to how first-create provisioning would render it. Cosmetic
     // only: PASTE_FORMAT writes no values and no other column/row is touched.
     copyBillsColumnFormatFromNeighbor_(sheet, insertIndex, insertIndex - 1);
-    if (Object.prototype.hasOwnProperty.call(BILLS_SCHEDULING_COLUMN_WIDTHS_, needed)) {
-      try { sheet.setColumnWidth(insertIndex, BILLS_SCHEDULING_COLUMN_WIDTHS_[needed]); } catch (_wErr) { /* cosmetic */ }
-    }
 
     Logger.log('ensureBillsSheetSchema_: auto-added missing INPUT - Bills column "' + needed + '" at index ' + insertIndex);
     headerChanged = true;
+  }
+
+  // Canonical widen-only widths for any scheduling columns just added, via the
+  // shared header-addressed helper (same widths first-create uses). Guarded by
+  // headerChanged so this runs ONLY on a real schema-evolution event, never on
+  // the plain read path — see ENGINEERING_STANDARDS.md §9/§10.
+  if (headerChanged) {
+    try {
+      applyCanonicalColumnWidthsByHeader_(sheet, 1, BILLS_SCHEDULING_COLUMN_WIDTHS_);
+    } catch (_wErr) { /* cosmetic */ }
   }
 
   return headerChanged;
@@ -1452,10 +1459,14 @@ function copyBillsRowFormattingFromInsertSiblingRow_(sheet, newRow) {
 // first-create styling (applyBillsSheetStyling_) and the schema self-heal so a
 // column looks identical however it was added. Keep in sync with the trailing
 // positions of widthMins in applyBillsSheetStyling_.
+// Sized so each 16pt-bold header AND its body value fit without clipping and
+// with comfortable padding (Readability Standard): "Weekday" + weekday names,
+// "Anchor Date" (11-char header, was clipped at 120), and the long
+// "Schedule Effective Date" header (23 chars, was badly clipped at 160).
 var BILLS_SCHEDULING_COLUMN_WIDTHS_ = {
-  'Weekday': 110,
-  'Anchor Date': 120,
-  'Schedule Effective Date': 160
+  'Weekday': 120,
+  'Anchor Date': 160,
+  'Schedule Effective Date': 280
 };
 
 /**
@@ -1544,10 +1555,10 @@ function applyBillsSheetStyling_(sheet) {
   // by canonical column position from the creator's header layout:
   // 1 Payee | 2 Category | 3 Due Day | 4 Default Amount | 5 Varies |
   // 6 Autopay | 7 Active | 8 Payment Source | 9 Frequency | 10 Start Month |
-  // 11 Notes | 12 Weekday | 13 Anchor Date | 14 Schedule Effective Date.
-  // Trailing scheduling widths mirror BILLS_SCHEDULING_COLUMN_WIDTHS_ so the
-  // self-heal path (older workbooks) matches first-create widths.
-  var widthMins = [200, 150, 100, 175, 100, 110, 90, 190, 130, 130, 240, 110, 120, 160];
+  // 11 Notes. The three trailing scheduling columns (Weekday, Anchor Date,
+  // Schedule Effective Date) are widened separately below via the shared
+  // header-addressed helper so first-create and self-heal share ONE source.
+  var widthMins = [200, 150, 100, 175, 100, 110, 90, 190, 130, 130, 240];
   for (var c = 1; c <= lastCol && c <= widthMins.length; c++) {
     try {
       if (sheet.getColumnWidth(c) < widthMins[c - 1]) {
@@ -1555,6 +1566,13 @@ function applyBillsSheetStyling_(sheet) {
       }
     } catch (_) {}
   }
+
+  // Scheduling columns: canonical widen-only widths from the single shared
+  // source (BILLS_SCHEDULING_COLUMN_WIDTHS_), applied by header name so
+  // first-create matches the self-heal path exactly.
+  try {
+    applyCanonicalColumnWidthsByHeader_(sheet, 1, BILLS_SCHEDULING_COLUMN_WIDTHS_);
+  } catch (_schedWidthErr) { /* cosmetic only */ }
 
   // Pin the header row when scrolling. Idempotent.
   try { sheet.setFrozenRows(1); } catch (_) {}

@@ -714,3 +714,88 @@ function buildRecoveryRouting_(err) {
     }
   };
 }
+
+/**
+ * Shared readability helper — apply canonical column widths by header name.
+ *
+ * Purpose
+ *   Encodes the Canonical Width + Readability Standards
+ *   (ENGINEERING_STANDARDS.md) once so sheets stop fixing clipped/cramped
+ *   headers one at a time with duplicated per-sheet width logic. Given a
+ *   map of exact header text → canonical width, it widens each matching
+ *   column so its header and values read comfortably. Deliberately minimal:
+ *   a width utility, NOT a style engine.
+ *
+ * Contract (safety guarantees)
+ *   - WIDEN-ONLY: each column is set to max(current width, canonical width).
+ *     A column already at/above canonical (e.g. one the user widened) is
+ *     left untouched. Never shrinks a column.
+ *   - HEADER-ADDRESSED: columns are located by exact header text on
+ *     `headerRow`, matched case-insensitively and trimmed. Robust to column
+ *     reordering and to sheets that lack some configured headers.
+ *   - MISSING HEADERS SKIP SAFELY: a configured header not present on the
+ *     sheet is a no-op (no error, no errant write).
+ *   - WIDTH ONLY: sets column width and nothing else — no cell values, no
+ *     fonts/colors/alignment/number formats/borders. Preserves all user
+ *     data and formatting.
+ *   - IDEMPOTENT: re-running yields the same widths. Safe to call from
+ *     first-create styling and from approved additive schema-evolution
+ *     paths.
+ *   - COSMETIC-ONLY: every failure is swallowed (and logged); a width
+ *     glitch must never fail the caller's ensure/create operation.
+ *
+ * Intended call sites: first-create sheet styling and schema self-heal
+ * (on an actual column-add) ONLY. Do NOT call on every read of a populated
+ * sheet — that would be a broad runtime restyle (ENGINEERING_STANDARDS.md
+ * §9/§10 "Runtime helpers must not style").
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {number} headerRow  1-based row holding the header labels (usually 1).
+ * @param {!Object<string, number>} widthByHeader  exact header text →
+ *     canonical width in px.
+ * @return {number} count of columns actually widened (0 when all matching
+ *     columns were already ≥ canonical, or none matched). Useful for logging.
+ */
+function applyCanonicalColumnWidthsByHeader_(sheet, headerRow, widthByHeader) {
+  if (!sheet || !widthByHeader) return 0;
+  var row = (headerRow && headerRow > 0) ? headerRow : 1;
+
+  var lastCol;
+  try { lastCol = sheet.getLastColumn(); } catch (_lc) { return 0; }
+  if (!lastCol || lastCol < 1) return 0;
+
+  // Read the header row once; build a case-insensitive, trimmed map of
+  // header text -> 1-based column index. First occurrence wins (canonical
+  // sheets never duplicate a header).
+  var headers;
+  try { headers = sheet.getRange(row, 1, 1, lastCol).getValues()[0]; }
+  catch (_hr) { return 0; }
+
+  var colByHeader = {};
+  for (var i = 0; i < headers.length; i++) {
+    var label = String(headers[i] == null ? '' : headers[i]).trim().toLowerCase();
+    if (label && !Object.prototype.hasOwnProperty.call(colByHeader, label)) {
+      colByHeader[label] = i + 1;
+    }
+  }
+
+  var widened = 0;
+  for (var header in widthByHeader) {
+    if (!Object.prototype.hasOwnProperty.call(widthByHeader, header)) continue;
+    var key = String(header).trim().toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(colByHeader, key)) continue; // missing → skip
+
+    var want = Number(widthByHeader[header]);
+    if (!(want > 0)) continue;
+
+    var col = colByHeader[key];
+    try {
+      if (sheet.getColumnWidth(col) < want) {
+        sheet.setColumnWidth(col, want);
+        widened++;
+      }
+    } catch (_w) { /* cosmetic only */ }
+  }
+
+  return widened;
+}

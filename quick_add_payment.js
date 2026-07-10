@@ -601,17 +601,29 @@ function resolveFlowSourceFromBillOrDebt_(ss, payee) {
   return '';
 }
 
+/**
+ * Locate an existing Cash Flow row by the CANONICAL uniqueness key —
+ * Type + Payee — comparing case-insensitively and trimmed. Flow Source is
+ * deliberately NOT part of the key: it is per-row metadata (CASH /
+ * CREDIT_CARD), so "Rent" must resolve to a single Expense row regardless of
+ * its Flow Source, and "Robinhood" / "robinhood" / "Robinhood " must all
+ * resolve to the same row rather than spawning duplicates. Returns
+ * `{ row }` (1-based) or null. This is the shared finder used by Quick Add,
+ * Bills, Debts, and the insert choke point.
+ */
 function findCashFlowRowByTypeAndPayee_(sheet, entryType, payee) {
   const values = sheet.getDataRange().getDisplayValues();
   if (values.length < 2) return null;
 
   const headerMap = getCashFlowHeaderMap_(sheet);
+  const wantType = String(entryType == null ? '' : entryType).trim().toLowerCase();
+  const wantPayee = String(payee == null ? '' : payee).trim().toLowerCase();
 
   for (let r = 1; r < values.length; r++) {
-    const rowType = String(values[r][headerMap.typeColZero] || '').trim();
-    const rowPayee = String(values[r][headerMap.payeeColZero] || '').trim();
+    const rowType = String(values[r][headerMap.typeColZero] || '').trim().toLowerCase();
+    const rowPayee = String(values[r][headerMap.payeeColZero] || '').trim().toLowerCase();
 
-    if (rowType === entryType && rowPayee === payee) {
+    if (rowType === wantType && rowPayee === wantPayee) {
       return { row: r + 1 };
     }
   }
@@ -620,17 +632,131 @@ function findCashFlowRowByTypeAndPayee_(sheet, entryType, payee) {
 }
 
 /**
+ * Stamp a clean canonical body-row format onto a freshly inserted Cash Flow
+ * row. Used when a row is inserted directly under the header (first Income),
+ * where Google Sheets would otherwise copy the header's yellow fill, bold
+ * weight, 16pt font and @STRING@ month formats onto the data row.
+ *
+ * It resets fill to white, weight to normal and font size to the canonical
+ * 14pt body size, resets the inherited header CENTER alignment to Golden
+ * ledger alignment (metadata/text columns LEFT — so "Flow Source" values like
+ * CREDIT_CARD sit left — and month + Total currency columns RIGHT), and
+ * re-applies the currency number format to the month + Total columns so
+ * entered amounts stay NUMERIC (a text-formatted month cell would silently
+ * drop out of the Summary SUMIFs). Row text color (Income green / Expense red)
+ * is left to the sheet's Type-keyed conditional-format rules, so no font color
+ * is set here. All operations are best-effort — a cosmetic failure must never
+ * break the row write.
+ */
+function stampCashFlowBodyRowFormat_(sheet, row) {
+  const lastCol = sheet.getLastColumn();
+  const range = sheet.getRange(row, 1, 1, lastCol);
+  try { range.setBackground(null); } catch (_) { /* cosmetic */ }
+  try { range.setFontWeight('normal'); } catch (_) { /* cosmetic */ }
+  try { range.setFontSize(14); } catch (_) { /* cosmetic */ }
+
+  let layout = null;
+  try {
+    if (typeof detectCashFlowLayout_ === 'function') {
+      const headerValues = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0] || [];
+      layout = detectCashFlowLayout_(headerValues);
+    }
+  } catch (_layoutErr) { layout = null; }
+
+  // Alignment: a row inserted directly under the header inherits the header's
+  // CENTER alignment. Reset to Golden ledger alignment — text columns left,
+  // currency (month + Total) columns right.
+  try {
+    range.setHorizontalAlignment('left');
+    if (layout && layout.monthCol0s && layout.monthCol0s.length) {
+      for (let i = 0; i < layout.monthCol0s.length; i++) {
+        sheet.getRange(row, layout.monthCol0s[i] + 1).setHorizontalAlignment('right');
+      }
+      if (layout.totalCol0 !== -1) {
+        sheet.getRange(row, layout.totalCol0 + 1).setHorizontalAlignment('right');
+      }
+    }
+  } catch (_alignErr) { /* cosmetic */ }
+
+  // Re-apply currency to month + Total columns (correctness, not cosmetic:
+  // the inherited header @STRING@ format would turn amounts into text).
+  try {
+    if (layout && layout.monthCol0s && layout.monthCol0s.length) {
+      for (let i = 0; i < layout.monthCol0s.length; i++) {
+        sheet.getRange(row, layout.monthCol0s[i] + 1)
+          .setNumberFormat('$#,##0.00;[Red]-$#,##0.00');
+      }
+      if (layout.totalCol0 !== -1) {
+        sheet.getRange(row, layout.totalCol0 + 1)
+          .setNumberFormat('$#,##0.00;[Red]-$#,##0.00');
+      }
+    }
+  } catch (fmtErr) {
+    Logger.log('stampCashFlowBodyRowFormat_ number-format reapply failed: ' + fmtErr);
+  }
+}
+
+/**
  * Insert a new row into the cash-flow sheet for the given Type + Payee, seeded
- * with an optional Flow Source value. The row is placed immediately after the
- * last existing row of the same Type (or just before the Summary row if there
- * is no prior row of that Type), and inherits the formatting of the row above.
+ * with an optional Flow Source value. Placement maintains the Golden Workbook
+ * block structure automatically:
+ *
+ *     Income block  →  2 blank rows  →  Expense block  →  2 blank rows  →  Summary
+ *
+ *   - Rows of the same Type stack contiguously (insert after the last one).
+ *   - The first Income drops directly under the header row; because Google
+ *     Sheets copies the row-above format onto an inserted row, that new row
+ *     would inherit the header's yellow fill / bold / 16pt / @STRING@ month
+ *     formats — so we DO NOT copy formatting there and instead stamp a clean
+ *     canonical body format (white, normal, 14pt, currency month/total cols).
+ *     Data rows therefore never inherit header formatting, and month cells
+ *     stay numeric so the Summary SUMIFs pick them up.
+ *   - The first Expense lands above Summary and we guarantee two blank rows
+ *     between it and Summary so the block structure is preserved.
+ *   - Income / Expense text color (green / red) is applied by the first-create
+ *     conditional-format rules keyed off the Type column, so new rows color
+ *     themselves without any per-row restyling here.
  *
  * `flowSource` is already validated/normalized by the caller (empty allowed).
  * When the column isn't present on legacy year tabs we silently skip it.
+ *
+ * Choke-point guarantees (every Cash Flow row-creation path funnels through
+ * here — Quick Add, Bills, Debts, Income sources):
+ *   - VALIDATION (never create incomplete rows): entryType must be exactly
+ *     "Income" or "Expense" and Payee must be non-empty. Callers already
+ *     validate upstream; this is the last line of defense so no edge path can
+ *     drop a blank/incomplete row onto the sheet.
+ *   - UNIQUENESS (never create duplicates): the canonical key is Type + Payee
+ *     (case-insensitive, trimmed; Flow Source is metadata, not identity). If a
+ *     matching row already exists we RETURN it instead of inserting, making
+ *     row creation idempotent on the canonical key regardless of caller.
  */
 function insertCashFlowRow_(sheet, entryType, payee, flowSource) {
   if (!sheet.getDataRange().getDisplayValues().length) {
     throw new Error('Cash Flow sheet is empty.');
+  }
+
+  // Normalize + validate BEFORE any sheet mutation (Issue 3: no blank /
+  // incomplete rows). Reassign the params so the rest of the function writes
+  // the trimmed values.
+  entryType = String(entryType == null ? '' : entryType).trim();
+  payee = String(payee == null ? '' : payee).trim();
+  if (entryType !== 'Income' && entryType !== 'Expense') {
+    throw new Error(
+      'insertCashFlowRow_: entryType must be "Income" or "Expense" (got "' + entryType + '").'
+    );
+  }
+  if (!payee) {
+    throw new Error('insertCashFlowRow_: a non-empty Payee is required to create a Cash Flow row.');
+  }
+
+  // Canonical uniqueness guard (Issue 2): if a Type + Payee row already exists
+  // (case-insensitive), return it instead of inserting a duplicate. This makes
+  // insertion idempotent at the single choke point, so no caller can create a
+  // duplicate Income/Expense row. Existing data is never modified here.
+  const existingCanonical = findCashFlowRowByTypeAndPayee_(sheet, entryType, payee);
+  if (existingCanonical) {
+    return existingCanonical;
   }
 
   const headerMap = getCashFlowHeaderMap_(sheet);
@@ -672,24 +798,29 @@ function insertCashFlowRow_(sheet, entryType, payee, flowSource) {
     }
   }
 
-  // Placement rules, matching the reference layout the user asked for
-  // (Income block on top, Expense block directly above Summary):
+  // Placement rules, maintaining the Golden Workbook block structure
+  // (Income → 2 blanks → Expense → 2 blanks → Summary):
   //   - Same-type rows exist: stack after the last one so adjacent rows
-  //     of the same type stay contiguous (existing behavior).
+  //     of the same type stay contiguous (pushes the blanks + Summary
+  //     below down together, preserving the gaps).
   //   - Income with no existing Income rows: drop at the top (insert
   //     after the header row) so Income always precedes any Expense /
   //     Summary rows. Without this branch, first Income on a sheet that
   //     already has Expenses would be appended AT THE BOTTOM after the
   //     Expense block, interleaving the two types.
-  //   - Anything else: insert just above Summary (or append to the end
-  //     if no Summary row exists, e.g. legacy sheets pre-rollout).
+  //   - First Expense with a Summary present: land just above Summary,
+  //     then guarantee two blank separator rows between it and Summary
+  //     (ensureTwoBlanksBeforeSummary below).
+  //   - Anything else: append to the end (legacy sheets pre-Summary).
   let insertAfterRow;
+  let ensureTwoBlanksBeforeSummary = false;
   if (lastSameTypeRow !== -1) {
     insertAfterRow = lastSameTypeRow;
   } else if (entryType === 'Income') {
     insertAfterRow = 1; // right after the header row
   } else if (summaryRow > 0) {
     insertAfterRow = summaryRow - 1;
+    ensureTwoBlanksBeforeSummary = true;
   } else {
     insertAfterRow = sheet.getLastRow();
   }
@@ -697,14 +828,18 @@ function insertCashFlowRow_(sheet, entryType, payee, flowSource) {
   sheet.insertRowAfter(insertAfterRow);
   const newRow = insertAfterRow + 1;
 
-  // Row-format propagation: copy the reference row's formatting onto
-  // the new row UNLESS the reference is row 1 (the header). The header
-  // is bold and carries frozen-row context; copying it would paint data
-  // rows bold. In the insertAfterRow===1 branch we deliberately let the
-  // new row inherit the default data-row formatting from Apps Script's
-  // sheet-creation pass (currency format on month/total columns is
-  // already seeded there) and then reset font weight to 'normal' as
-  // belt-and-suspenders against Google Sheets' row-format inheritance.
+  // Row-format propagation. Two cases:
+  //   - Inserted after a data / blank row: copy that row's formatting
+  //     (white body, normal weight, 14pt, currency on month/total cols),
+  //     then clear its content. Google Sheets also copies the row-above
+  //     format automatically, but the explicit copyTo keeps behavior
+  //     deterministic across insert positions.
+  //   - Inserted after the header row (first Income): the header carries
+  //     the yellow fill, bold weight, 16pt font AND @STRING@ month formats.
+  //     Copying any of that onto a data row is wrong (bold/yellow look) and
+  //     the @STRING@ month format would turn entered amounts into text and
+  //     silently break the Summary SUMIFs. Stamp a clean canonical body
+  //     format instead so data rows NEVER inherit header formatting.
   if (insertAfterRow !== 1) {
     sheet.getRange(insertAfterRow, 1, 1, sheet.getLastColumn())
       .copyTo(
@@ -714,9 +849,20 @@ function insertCashFlowRow_(sheet, entryType, payee, flowSource) {
       );
     sheet.getRange(newRow, 1, 1, sheet.getLastColumn()).clearContent();
   } else {
+    stampCashFlowBodyRowFormat_(sheet, newRow);
+  }
+
+  // Guarantee two blank separator rows between the first Expense and the
+  // Summary row so the block structure matches the Golden Workbook. This is
+  // purely additive (inserts blank rows; never moves or rewrites existing
+  // data). The trailing Summary-formula refresh below re-locates Summary by
+  // label, so shifting it down here is safe.
+  if (ensureTwoBlanksBeforeSummary) {
     try {
-      sheet.getRange(newRow, 1, 1, sheet.getLastColumn()).setFontWeight('normal');
-    } catch (_) { /* cosmetic */ }
+      sheet.insertRowsAfter(newRow, 2);
+    } catch (blankErr) {
+      Logger.log('insertCashFlowRow_ blank-separator insert failed: ' + blankErr);
+    }
   }
 
   sheet.getRange(newRow, headerMap.typeCol).setValue(entryType);

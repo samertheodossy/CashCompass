@@ -60,9 +60,9 @@ The canonical `INPUT - Bills` sheet **ends with three trailing scheduling column
 
 | # | Column (exact header) | Purpose | Blank default | Canonical formatting |
 |---|---|---|---|---|
-| 1 | **Weekday** | Weekday a Weekly/Biweekly bill recurs on (`Sunday`…`Saturday`). Ignored for other frequencies. | Blank → legacy Due-Day behavior | Text; inherits adjacent Bills column styling (font/alignment/background). Width **110**. |
-| 2 | **Anchor Date** | Biweekly only: a date on the selected Weekday that sets the two-week cadence; must fall on that weekday (no silent correction). | Blank → no biweekly anchor | Date, canonical `yyyy-MM-dd`; inherits adjacent Bills column styling. Width **120**. |
-| 3 | **Schedule Effective Date** | Auto-set to *today* when a scheduling field changes so changes apply going forward only; not user-edited. | Blank → no prospective change (full history applies) | Date, canonical `yyyy-MM-dd`; inherits adjacent Bills column styling. Width **160**. |
+| 1 | **Weekday** | Weekday a Weekly/Biweekly bill recurs on (`Sunday`…`Saturday`). Ignored for other frequencies. | Blank → legacy Due-Day behavior | Text; inherits adjacent Bills column styling (font/alignment/background). Width **120**. |
+| 2 | **Anchor Date** | Biweekly only: a date on the selected Weekday that sets the two-week cadence; must fall on that weekday (no silent correction). | Blank → no biweekly anchor | Date, canonical `yyyy-MM-dd`; inherits adjacent Bills column styling. Width **160**. |
+| 3 | **Schedule Effective Date** | Auto-set to *today* when a scheduling field changes so changes apply going forward only; not user-edited. | Blank → no prospective change (full history applies) | Date, canonical `yyyy-MM-dd`; inherits adjacent Bills column styling. Width **280** (widest header on the sheet). |
 
 **Canonical Bills styling:** **body font size 14** on white (`#ffffff`); **header row font size 16**, bold, black (`#000000`) on the yellow Bills header (`#ffe599`), vertically centered, header row frozen. The three scheduling columns use this exact styling — header cell size 16 on `#ffe599`, body cells size 14 on white.
 

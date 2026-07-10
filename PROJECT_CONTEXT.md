@@ -245,6 +245,15 @@ A strategic, post-beta product direction captured here so it is not lost behind 
 
 **Remaining follow-ups (small, non-blocking):** field-order polish in the Bills edit dialog · inline Anchor Date validation · derived Schedule column evaluation · helper-text review · formatting parity review — tracked in `TODO.md → UX Backlog (Version 1) → Bills Scheduling UX`.
 
+## Cash Flow Semantics — Actuals, not Projection (by design)
+
+`INPUT - Cash Flow <year>` is an **actuals ledger**, not a forecast. This is **intentional and working as designed** — do not "fix" it into a projection. Authoritative detail: `ENGINEERING_STANDARDS.md → Cash Flow Data Semantics — Actuals vs Projection`.
+
+- **Adding a bill** creates the **Cash Flow row only** (`addBillFromDashboard` → blank Expense row). **No monthly amounts are seeded** at creation.
+- **AutoPay is an actuals mechanism** (`getInputBillsDueRows_`): it writes an amount only when AutoPay is enabled, the occurrence is inside the Bills Due rolling window (`generateOccurrences_` → `[-1, 0, +1]` months), the **due date has passed**, and the occurrence is **not already handled**. So a mid-year monthly bill shows amounts only for months already come due (e.g. Jun/Jul on a July load) — **not** Jan→Dec.
+- **`Start Month`** controls **recurrence eligibility**, not month population — it does **not** pre-fill Cash Flow months. Intentional.
+- **Forward projection** (fill future months from a schedule) is a **planned future product feature**, kept strictly separate from actuals and from the AutoPay pipeline — see `TODO.md → Future Feature — Cash Flow Forward Projection`. It is a *future feature*, not unfinished functionality.
+
 ## Future UI Standardization — Manage Pattern Rollout
 
 High-level mirror; **authoritative copy lives in `TODO.md → Future UI Standardization — Manage Pattern Rollout`** (backlog entry in `ENHANCEMENTS.md`). **Status: Bills = complete · Debts = complete · Bank Accounts = next likely candidate.** No implementation at this time.

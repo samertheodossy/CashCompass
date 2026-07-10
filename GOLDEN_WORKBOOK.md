@@ -72,6 +72,8 @@ Rating scale (audit quality of the production sheet as a reference):
 
 **Purpose:** track balances and money flows *across time*. These are the dense, columnar, year-blocked ledgers at the heart of the workbook. Visual language: year banners/bands, month columns, currency-heavy number formats, total/delta rows, freeze panes for headers and label columns, and high scannability across long time ranges. This family is the most mature and sets the visual bar for the whole workbook.
 
+> **`INPUT - Cash Flow <year>` is an actuals ledger, not a forecast (by design).** Its month cells record **what has actually happened** — settled activity — not a projection of what will. Adding a bill creates its Cash Flow row only; it does **not** seed monthly amounts. Amounts appear as occurrences come due and **AutoPay** (an *actuals* mechanism) settles them. **`Start Month`** governs recurrence eligibility, **not** month population, so a monthly bill with `Start Month = 1` does not pre-fill Jan→Dec. Forward-looking projection is a **planned future feature**, kept separate from actuals — see `TODO.md → Future Feature — Cash Flow Forward Projection` and `ENGINEERING_STANDARDS.md → Cash Flow Data Semantics — Actuals vs Projection`.
+
 ### 2. Operational family — ★★★★★ Golden Reference
 
 **Sheets:** Debts · Bills.
@@ -84,9 +86,9 @@ The canonical `INPUT - Bills` sheet **ends with three trailing scheduling column
 
 | Column (in order) | Purpose | Blank default | Canonical formatting |
 |---|---|---|---|
-| **Weekday** | The weekday a **Weekly** or **Biweekly** bill recurs on (`Sunday`…`Saturday`). Blank = legacy Due-Day behavior. Ignored for Monthly/Quarterly/Semiannual/Yearly. | **Blank** (legacy Due-Day behavior) | Text; inherits the neighboring Bills column's font, alignment, and background. Canonical width **110**. |
-| **Anchor Date** | For **Biweekly** bills only: a real date on the selected weekday that establishes the recurring two-week cadence. Must fall on the chosen Weekday (never silently corrected). | **Blank** (no biweekly anchor set) | Date, stored as canonical `yyyy-MM-dd`; inherits the neighboring Bills column's font/alignment/background. Canonical width **120**. |
-| **Schedule Effective Date** | The date a scheduling change takes effect. Set automatically to *today* when a scheduling field (Frequency, Due Day, Weekday, Anchor Date) changes, so changes apply going forward only. Not user-edited. | **Blank** (no prospective change recorded; full history applies) | Date, stored as canonical `yyyy-MM-dd`; inherits the neighboring Bills column's font/alignment/background. Canonical width **160**. |
+| **Weekday** | The weekday a **Weekly** or **Biweekly** bill recurs on (`Sunday`…`Saturday`). Blank = legacy Due-Day behavior. Ignored for Monthly/Quarterly/Semiannual/Yearly. | **Blank** (legacy Due-Day behavior) | Text; inherits the neighboring Bills column's font, alignment, and background. Canonical width **120**. |
+| **Anchor Date** | For **Biweekly** bills only: a real date on the selected weekday that establishes the recurring two-week cadence. Must fall on the chosen Weekday (never silently corrected). | **Blank** (no biweekly anchor set) | Date, stored as canonical `yyyy-MM-dd`; inherits the neighboring Bills column's font/alignment/background. Canonical width **160** (fits the 11-char header). |
+| **Schedule Effective Date** | The date a scheduling change takes effect. Set automatically to *today* when a scheduling field (Frequency, Due Day, Weekday, Anchor Date) changes, so changes apply going forward only. Not user-edited. | **Blank** (no prospective change recorded; full history applies) | Date, stored as canonical `yyyy-MM-dd`; inherits the neighboring Bills column's font/alignment/background. Canonical width **280** (fits the 23-char header — widest on the sheet). |
 
 **Canonical Bills styling (applies to these columns and the whole sheet):** **body font size 14** on white (`#ffffff`); **header row (row 1) font size 16**, bold, black (`#000000`) text on the yellow Bills header (`#ffe599`), vertically centered; header row frozen. The three scheduling columns follow this exact styling — header cell size 16 on `#ffe599`, body cells size 14 on white.
 

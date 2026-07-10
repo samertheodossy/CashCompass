@@ -931,8 +931,15 @@ function loadBillCategoriesIntoForm_() {
 
   google.script.run
     .withSuccessHandler(function(categories) {
-      var list = Array.isArray(categories) ? categories : [];
-      if (!list.length) list = BILL_ADD_CATEGORY_FALLBACK_OPTIONS_.slice();
+      var serverList = Array.isArray(categories) ? categories : [];
+      // ALWAYS offer the full canonical category list, then union in any
+      // custom categories already used in INPUT - Bills. Previously the
+      // server's DISTINCT list REPLACED the fallback whenever any bill
+      // existed, so after adding a single "Utilities" bill the dropdown
+      // collapsed to just "Utilities" + "Other…" on the next open.
+      // populateBillCategoryOptions_ de-dupes case-insensitively, so the
+      // canonical entries and any custom ones coexist without duplicates.
+      var list = BILL_ADD_CATEGORY_FALLBACK_OPTIONS_.concat(serverList);
       populateBillCategoryOptions_(list);
       window.__billsCategoryOptionsLoaded = true;
     })
@@ -1358,8 +1365,11 @@ function prefillBillCategoryForEdit_(category) {
 
   google.script.run
     .withSuccessHandler(function(categories) {
-      let list = Array.isArray(categories) ? categories : [];
-      if (!list.length) list = BILL_ADD_CATEGORY_FALLBACK_OPTIONS_.slice();
+      // Same union as loadBillCategoriesIntoForm_: always show the full
+      // canonical list plus any custom categories from INPUT - Bills, so the
+      // edit form's dropdown stays complete regardless of how many bills exist.
+      let serverList = Array.isArray(categories) ? categories : [];
+      let list = BILL_ADD_CATEGORY_FALLBACK_OPTIONS_.concat(serverList);
       populateBillCategoryOptions_(list);
       window.__billsCategoryOptionsLoaded = true;
       applyCategory();
