@@ -22,14 +22,15 @@
 /*      "Type" and "Active" are optional in the reader but the add path       */
 /*      always writes them, so we seed all four.                              */
 /*                                                                            */
-/*  Aggregate rows (Account Totals / Delta) are intentionally NOT seeded:     */
-/*  current logic does not depend on them (getInvestmentsYearBlock_ falls     */
-/*  back to sheet.getLastRow() as dataEndRow when absent, the insert path     */
-/*  handles that case via the `dataEndRow < dataStartRow` branch, and         */
-/*  refreshBlockSumAggregates_ is a no-op with nothing to refresh). The       */
-/*  user can add them manually once they have data if they want totals —     */
-/*  this matches the user's instruction to only seed aggregate rows "if       */
-/*  current logic truly depends on them".                                     */
+/*  Aggregate rows (Account Totals / Delta) ARE seeded on first-create for    */
+/*  Golden Workbook parity (Investments Pass 2). Account Totals is seeded      */
+/*  label-only with a BLANK, currency-formatted money row; its gross per-      */
+/*  month =SUM is materialized and maintained by                              */
+/*  refreshInvestmentsAccountTotalsRow_ (a blank-fill + range-maintain helper, */
+/*  required because the shared refreshBlockSumAggregates_ never fills blanks  */
+/*  and seeded SUMs do not auto-expand at the insert-above-footer boundary).   */
+/*  Delta is seeded with immediate month-over-month formulas. Both are FIRST-  */
+/*  CREATE only + idempotent; populated workbooks are never migrated.          */
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -45,7 +46,16 @@
  *   Row 1:   Year | <currentYear>                     (orange banner)
  *   Row 2:   Account Name | Type | Jan-YY | Feb-YY |   (yellow banner)
  *            … | Dec-YY | Active                     (cols 1..15)
- *   Data:    (none — addInvestmentAccountFromDashboard inserts on write)
+ *   Footer:  Account Totals (green, blank =SUM until first account) +
+ *            Delta (pink, month-over-month formulas) — seeded here for
+ *            Golden Workbook parity; see seedInvestments*Row_ helpers.
+ *   Data:    (none — addInvestmentAccountFromDashboard inserts above the
+ *            footer on write)
+ *
+ * First-create cosmetic convergence toward the Golden Workbook (Financial
+ * Ledger family): month headers pinned as text, month columns currency-
+ * formatted, and widen-only readable column widths. All cosmetic-only and
+ * first-create only — populated workbooks return at the `existing` guard.
  *
  * @returns {GoogleAppsScript.Spreadsheet.Sheet} the sheet (existing or new)
  */
@@ -90,13 +100,74 @@ function ensureInputInvestmentsSheet_() {
   headers.push('Active');
   sheet.getRange(2, 1, 1, headers.length).setValues([headers]);
 
-  // Cosmetic polish — cosmetic only, wrapped in try/catch so a formatting
-  // hiccup never fails the structural creation. Matches the existing
-  // applyInvestmentsSheetStyling_ pattern (warm orange Year banner,
-  // warm yellow Account Name header, frozen col A + col B).
+  // Column geometry: A=Account Name, B=Type, C..N = the 12 MMM-YY month
+  // columns (firstMonthCol = 3), O = Active. Used by the cosmetic blocks
+  // below and mirrors ensureInvestmentsActiveColumnForBlock_.
+  const firstMonthCol = 3;
+  const lastMonthCol = firstMonthCol + monthLabels.length - 1; // 14 (Dec)
+  const activeCol = lastMonthCol + 1;                          // 15 (Active)
+
+  // Golden Workbook Convergence (Phase 2): bring the freshly provisioned
+  // month columns to Financial Ledger family parity with the validated
+  // Bank Accounts creator — (1) pin the month headers as literal text so
+  // Sheets never auto-parses "Jan-26" into a Date, and (2) currency-format
+  // the 12 month columns so the first value typed renders like Cash Flow /
+  // Bank Accounts. Bounded to current max rows; data rows begin at row 3.
+  // Cosmetic only and first-create only (populated sheets return above).
+  try {
+    for (let mh = 0; mh < monthLabels.length; mh++) {
+      const hdrCell = sheet.getRange(2, firstMonthCol + mh);
+      hdrCell.setNumberFormat('@STRING@');
+      hdrCell.setValue(monthLabels[mh] + '-' + yy);
+    }
+    const maxRowsInv = sheet.getMaxRows();
+    if (maxRowsInv > 2) {
+      sheet.getRange(3, firstMonthCol, maxRowsInv - 2, monthLabels.length)
+        .setNumberFormat('$#,##0.00;-$#,##0.00');
+    }
+  } catch (_fmtErr) { /* cosmetic only */ }
+
+  // Golden Workbook Convergence (Investments Pass 2): seed the canonical
+  // per-year-block footer — "Account Totals" then "Delta" directly below the
+  // (currently empty) account region — so a freshly provisioned workbook
+  // matches production. Account Totals is seeded label-only with BLANK money
+  // cells (its gross =SUM is materialized by refreshInvestmentsAccountTotalsRow_
+  // once the first account exists — a SUM on an empty block is self-
+  // referential); Delta is seeded with immediate month-over-month formulas
+  // that reference Account Totals by fixed cell and shift correctly when the
+  // first account row is inserted above them. FIRST-CREATE ONLY (populated
+  // workbooks return at the `existing` guard above and never reach here).
+  // Seeded BEFORE styling so applyInvestmentsSheetStyling_ colors the green
+  // Account Totals / pink Delta bands.
+  try {
+    seedInvestmentsAccountTotalsRow_(sheet);
+    seedInvestmentsDeltaRow_(sheet);
+  } catch (_seedErr) { /* cosmetic/structural best-effort */ }
+
+  // Canonical banner coloring — cosmetic only, wrapped in try/catch so a
+  // formatting hiccup never fails the structural creation. Matches the
+  // existing applyInvestmentsSheetStyling_ pattern (warm orange Year
+  // banner, bright-yellow Account Name header, frozen col A + col B).
   try {
     applyInvestmentsSheetStyling_(sheet);
   } catch (_styleErr) { /* cosmetic only */ }
+
+  // Golden Workbook font-size parity (Financial Ledger family) — FIRST-CREATE
+  // ONLY. A fresh Apps Script sheet defaults to size 10; the bound Golden
+  // Workbook uses Year 20 / header 16 / body 14. Wash the ENTIRE sheet to the
+  // canonical body size (14) so every row — data rows, Account Totals, Delta,
+  // and any future inserted row — defaults to 14, then raise row 1 (Year
+  // banner) to 20 and row 2 (Account Name header) to 16. Applied HERE and not
+  // in applyInvestmentsSheetStyling_ (which also runs on populated workbooks on
+  // every add) so an existing user's sheet is never body-restyled. Cosmetic
+  // only; failures are swallowed.
+  try {
+    const maxRowsFont = sheet.getMaxRows();
+    const lastColFont = Math.max(1, sheet.getLastColumn());
+    sheet.getRange(1, 1, maxRowsFont, lastColFont).setFontSize(14);
+    sheet.getRange(1, 1, 1, lastColFont).setFontSize(20); // Year banner
+    sheet.getRange(2, 1, 1, lastColFont).setFontSize(16); // Account Name header
+  } catch (_fontErr) { /* cosmetic only */ }
 
   try {
     sheet.setFrozenRows(2);
@@ -105,6 +176,23 @@ function ensureInputInvestmentsSheet_() {
   try {
     sheet.autoResizeColumns(1, headers.length);
   } catch (_resizeErr) { /* cosmetic only */ }
+
+  // Widen-only readable column widths, applied HERE in the first-create
+  // path only — never inside applyInvestmentsSheetStyling_, which also runs
+  // on populated workbooks (insertNewInvestmentHistoryRow_) and must not
+  // resize a user's columns. Converges a fresh sheet toward the Golden
+  // Workbook's readable widths without ever shrinking a manually widened
+  // column. Account Name (260) and the month columns (110) mirror the
+  // validated Financial Ledger family standard from Bank Accounts; Type
+  // (140) and Active (90) are readable defaults pending Golden confirmation.
+  try {
+    if (sheet.getColumnWidth(1) < 260) sheet.setColumnWidth(1, 260);
+    if (sheet.getColumnWidth(2) < 140) sheet.setColumnWidth(2, 140);
+    for (let c = firstMonthCol; c <= lastMonthCol; c++) {
+      if (sheet.getColumnWidth(c) < 110) sheet.setColumnWidth(c, 110);
+    }
+    if (sheet.getColumnWidth(activeCol) < 90) sheet.setColumnWidth(activeCol, 90);
+  } catch (_widthErr) { /* cosmetic only */ }
 
   return sheet;
 }
@@ -963,6 +1051,16 @@ function insertNewInvestmentHistoryRow_(sheet, block, accountName, typeStr) {
   let insertBeforeRow;
   let templateRow;
 
+  // When the only candidate template is the year-block header row (an empty
+  // block getting its very first account) — or a reserved aggregate/marker
+  // row directly below (a seeded "Account Totals" / "Delta") — cloning its
+  // format would stamp the bright-yellow header band (or the green/pink
+  // summary band) onto a data row. We detect that case and stamp a clean
+  // data-row style instead of cloning. Cloning a REAL account row (the
+  // common case) is unchanged. Mirrors bank_accounts.js::
+  // insertNewBankAccountHistoryRow_.
+  let templateIsHeader = false;
+
   if (lastAccountRow === -1) {
     if (block.dataEndRow < block.dataStartRow) {
       insertBeforeRow = block.dataStartRow;
@@ -971,18 +1069,59 @@ function insertNewInvestmentHistoryRow_(sheet, block, accountName, typeStr) {
     }
     sheet.insertRowBefore(insertBeforeRow);
     newRow = insertBeforeRow;
-    templateRow = (newRow + 1 <= sheet.getLastRow()) ? (newRow + 1) : block.headerRow;
+    if (newRow + 1 <= sheet.getLastRow()) {
+      templateRow = newRow + 1;
+      const belowName = String(sheet.getRange(templateRow, 1).getDisplayValue() || '').trim();
+      if (!isInvestmentDataRowName_(belowName)) {
+        templateRow = block.headerRow;
+        templateIsHeader = true;
+      }
+    } else {
+      templateRow = block.headerRow;
+      templateIsHeader = true;
+    }
   } else {
     sheet.insertRowAfter(lastAccountRow);
     newRow = lastAccountRow + 1;
     templateRow = lastAccountRow;
   }
 
-  sheet.getRange(templateRow, 1, 1, lastCol).copyTo(
-    sheet.getRange(newRow, 1, 1, lastCol),
-    SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
-    false
-  );
+  if (templateIsHeader) {
+    // Empty-block first account: do NOT inherit the header's styling. Stamp
+    // the canonical Golden Workbook body-row look — white background, normal
+    // weight, black text, canonical body font size 14 (Financial Ledger
+    // parity — the freshly inserted row can otherwise inherit the size-16
+    // header row above it), left-aligned identifiers (Account Name / Type),
+    // right-aligned currency month cells, default vertical alignment — and
+    // re-apply currency formats to the 12 month columns. The Active cell is
+    // corrected by writeActiveCellWithRowFormat_ below. Cosmetic only — a
+    // failure here must not block adding the account.
+    try {
+      sheet.getRange(newRow, 1, 1, lastCol)
+        .setBackground('#ffffff')
+        .setFontWeight('normal')
+        .setFontColor('#000000')
+        .setFontSize(14)
+        .setVerticalAlignment('bottom');
+      const firstMonthCol = block.firstMonthCol || 3;
+      sheet.getRange(newRow, 1, 1, Math.min(2, lastCol))
+        .setHorizontalAlignment('left');
+      if (lastCol >= firstMonthCol) {
+        const monthSpan = Math.min(firstMonthCol + 11, lastCol) - firstMonthCol + 1;
+        sheet.getRange(newRow, firstMonthCol, 1, monthSpan)
+          .setHorizontalAlignment('right')
+          .setNumberFormat('$#,##0.00;-$#,##0.00');
+      }
+    } catch (_stampErr) {
+      Logger.log('insertNewInvestmentHistoryRow_ data-row stamp: ' + _stampErr);
+    }
+  } else {
+    sheet.getRange(templateRow, 1, 1, lastCol).copyTo(
+      sheet.getRange(newRow, 1, 1, lastCol),
+      SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+      false
+    );
+  }
   sheet.getRange(newRow, 1, 1, lastCol).clearContent();
   sheet.getRange(newRow, 1).setValue(accountName);
   // Column 2 in INPUT - Investments is "Type" (firstMonthCol = 3).
@@ -992,29 +1131,12 @@ function insertNewInvestmentHistoryRow_(sheet, block, accountName, typeStr) {
   // Active column existed remain blank and are treated as active by readers.
   writeActiveCellWithRowFormat_(sheet, newRow, activeCol, 'Yes');
 
-  // Refresh the block's "Account Totals" simple SUM formulas to cover
-  // the new data row. See refreshBlockSumAggregates_ for rationale: a
-  // row inserted at the lower boundary of `=SUM(C{start}:C{lastAccount})`
-  // is NOT picked up by Google Sheets' auto-expansion, which would
-  // cause a newly-added account to silently drop out of the user's
-  // Account Totals.
-  //
-  // Delta is intentionally NOT in the target-label set. Delta rows in
-  // the user's Investments sheet are typically YoY or period diffs
-  // (e.g. `=N5-C5`), not sums of data rows, and the helper's strict
-  // `=SUM(<L><N>:<L><M>)` match would leave them alone anyway; we pass
-  // only ['Account Totals'] to make intent explicit.
-  const newDataStartRow = block.dataStartRow;
-  const newDataEndRow = Math.max(newRow, block.dataEndRow + 1);
-  try {
-    refreshBlockSumAggregates_(
-      sheet,
-      newDataStartRow,
-      newDataEndRow,
-      newDataEndRow + 1,
-      ['Account Totals']
-    );
-  } catch (_aggErr) { /* defense in depth only */ }
+  // NOTE: the "Account Totals" gross =SUM is maintained by the caller
+  // (addInvestmentAccountFromDashboard → refreshInvestmentsAccountTotalsRow_),
+  // which both fills the seeded blank row on the first account and rewrites the
+  // range on later inserts (the insert-above-footer case hits the Sheets
+  // lower-boundary where =SUM does not auto-expand). Delta needs no refresh —
+  // its fixed-cell references shift correctly when this row is inserted above.
 
   // Re-assert canonical banner styling on the whole sheet. Idempotent —
   // repeated adds don't flicker or accumulate cost. Never load-bearing —
@@ -1107,6 +1229,363 @@ function applyInvestmentsSheetStyling_(sheet) {
   // when scrolling across the 12 month columns. Idempotent — no-op
   // when already frozen.
   try { sheet.setFrozenColumns(2); } catch (_) { /* cosmetic */ }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Financial Ledger footer rows — Account Totals + Delta                     */
+/*                                                                            */
+/*  Golden Workbook Convergence (Investments Pass 2). Production parity for    */
+/*  the per-year-block footer, confirmed against the bound workbook:          */
+/*                                                                            */
+/*    <investment account rows>                                              */
+/*    Account Totals   ← per-month gross =SUM of the account rows            */
+/*    Delta            ← month-over-month change of Account Totals           */
+/*    <blank spacer row>                                                     */
+/*    Year …           ← next year block                                    */
+/*                                                                            */
+/*  The Investments layout has NO "Total" roll-up column (Account Name |      */
+/*  Type | Jan-YY … Dec-YY | Active), so — unlike Bank Accounts — the Delta   */
+/*  row has no horizontal Total cell and none is invented.                    */
+/*                                                                            */
+/*  These mirror the proven, live-workbook-confirmed Bank Accounts helpers    */
+/*  (seedBankAccountsTotalAccountsRow_ / seedBankAccountsDeltaRow_ /          */
+/*  refreshBankAccountsTotalAccountsRow_) but use the Investments label       */
+/*  "Account Totals" (Bank Accounts / House Values use "Total Accounts").     */
+/*  All are FIRST-CREATE only + idempotent — a populated workbook returns at  */
+/*  the `existing` guard in ensureInputInvestmentsSheet_ and never reaches    */
+/*  the seeders, so existing sheets are never migrated or restyled.           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * First-create seed of a label-only "Account Totals" summary row.
+ *
+ * Writes the literal "Account Totals" in column A on the row immediately
+ * after the last content row and leaves every money cell BLANK — the gross
+ * =SUM formulas are materialized by refreshInvestmentsAccountTotalsRow_ once
+ * at least one account row exists (seeding a SUM on an empty block would be
+ * self-referential; the blank-then-refresh split is deliberate and mirrors
+ * seedBankAccountsTotalAccountsRow_ / seedDebtsTotalRow_).
+ *
+ * Only the 12 MMM-YY month columns are currency-pre-formatted (resolved by
+ * header label via parseMonthHeader_), so the Type (col 2) and Active
+ * columns are never touched — unlike Bank Accounts, whose fresh sheet had no
+ * Active column and could blanket-format cols 2..lastCol.
+ *
+ * Idempotent: if an "Account Totals" row already exists this is a no-op and
+ * returns its 1-based row. FIRST-CREATE only.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @returns {number} 1-based row of the Account Totals row, or -1 on failure
+ */
+function seedInvestmentsAccountTotalsRow_(sheet) {
+  if (!sheet) return -1;
+
+  const lastRow = Math.max(1, sheet.getLastRow());
+  const colA = sheet.getRange(1, 1, lastRow, 1).getDisplayValues();
+  for (let i = 0; i < colA.length; i++) {
+    if (String(colA[i][0] || '').trim() === 'Account Totals') return i + 1;
+  }
+
+  const totalRow = sheet.getLastRow() + 1;
+  sheet.getRange(totalRow, 1).setValue('Account Totals');
+
+  // Currency-format only the month columns of the (currently blank) row so the
+  // =SUM formulas filled later render consistently. Month columns resolved by
+  // header label from the nearest "Account Name" header above — never the Type
+  // or Active columns. Cosmetic only; never load-bearing.
+  try {
+    let headerRow = -1;
+    for (let r = totalRow - 1; r >= 1; r--) {
+      const name = String((colA[r - 1] && colA[r - 1][0]) || '').trim();
+      if (name === 'Account Name') { headerRow = r; break; }
+      if (name === 'Year') break;
+    }
+    if (headerRow !== -1) {
+      const lastCol = sheet.getLastColumn();
+      const headerVals = sheet.getRange(headerRow, 1, 1, lastCol).getDisplayValues()[0] || [];
+      for (let c = 2; c <= lastCol; c++) {
+        if (parseMonthHeader_(String(headerVals[c - 1] || '').trim())) {
+          sheet.getRange(totalRow, c).setNumberFormat('$#,##0.00;-$#,##0.00');
+        }
+      }
+    }
+  } catch (_fmtErr) { /* cosmetic only */ }
+
+  return totalRow;
+}
+
+/**
+ * Read-only: locate the December "Account Totals" cell of a given year block
+ * so a subsequent year's January Delta can chain across the year boundary
+ * (Jan Delta = current-year Jan Account Totals − prior-year Dec Account
+ * Totals, e.g. the confirmed `C36 - N15`).
+ *
+ * Operates on a pre-loaded full-sheet display snapshot (no Sheets reads).
+ * Columns resolved by header label (parseMonthHeader_), never by position,
+ * so the Active column never confuses the Dec lookup. Mirrors
+ * findBankAccountsDecTotalAccountsCell_ with the Investments label.
+ *
+ * @param {string[][]} display  getDataRange().getDisplayValues() snapshot
+ * @param {number} year         the block year to locate (e.g. blockYear - 1)
+ * @returns {{row:number, col:number}|null}
+ */
+function findInvestmentsDecAccountTotalsCell_(display, year) {
+  let yearRow = -1;
+  for (let r = 0; r < display.length; r++) {
+    const a = String((display[r] && display[r][0]) || '').trim();
+    const b = String((display[r] && display[r][1]) || '').trim();
+    if (a === 'Year' && b === String(year)) { yearRow = r + 1; break; }
+  }
+  if (yearRow === -1) return null;
+
+  const headerRow = yearRow + 1;
+  if (String((display[headerRow - 1] && display[headerRow - 1][0]) || '').trim() !== 'Account Name') {
+    return null;
+  }
+
+  const headerVals = display[headerRow - 1] || [];
+  let decCol = -1;
+  for (let c = 2; c <= headerVals.length; c++) {
+    const d = parseMonthHeader_(String(headerVals[c - 1] || '').trim());
+    if (d && d.getMonth() === 11) { decCol = c; break; }
+  }
+  if (decCol === -1) return null;
+
+  let taRow = -1;
+  for (let r = headerRow; r < display.length; r++) {
+    const name = String((display[r] && display[r][0]) || '').trim();
+    if (r + 1 > headerRow && name === 'Year') break;
+    if (name === 'Account Totals') { taRow = r + 1; break; }
+  }
+  if (taRow === -1) return null;
+
+  return { row: taRow, col: decCol };
+}
+
+/**
+ * First-create seed of the "Delta" month-over-month change row, placed
+ * directly below the "Account Totals" summary row of the same year block.
+ *
+ * Production parity (confirmed against the live workbook):
+ *   - Jan of the FIRST year block     → literal 0
+ *   - Jan of a SUBSEQUENT year block  → Jan Account Totals − prior-year Dec
+ *                                       Account Totals (cross-block, e.g. C36−N15)
+ *   - Feb … Dec                       → this month's Account Totals −
+ *                                       previous month's Account Totals (e.g. D36−C36)
+ *
+ * The Investments layout has no "Total" column, so no horizontal Delta total
+ * is written (requirement: do not invent one). A /^total$/i scan finds no
+ * such column and is naturally skipped.
+ *
+ * Seed-only by design — NO refresh hook required: the Jan / Feb…Dec formulas
+ * reference the Account Totals row by fixed cell. When a new account row is
+ * inserted above Account Totals, Sheets shifts the Account Totals + Delta rows
+ * down together and auto-adjusts those references. There is no data-row RANGE
+ * to grow (unlike the Account Totals gross =SUM), so nothing freezes stale.
+ *
+ * Idempotent: if any "Delta" row already exists this is a no-op and returns
+ * its 1-based row. Requires an "Account Totals" row first; returns -1 when
+ * none is present. FIRST-CREATE only. Mirrors seedBankAccountsDeltaRow_.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @returns {number} 1-based row of the Delta row, or -1 on no-op-miss/failure
+ */
+function seedInvestmentsDeltaRow_(sheet) {
+  if (!sheet) return -1;
+
+  const display = sheet.getDataRange().getDisplayValues();
+
+  // Idempotent: any existing Delta row → no-op.
+  for (let i = 0; i < display.length; i++) {
+    if (String((display[i] && display[i][0]) || '').trim() === 'Delta') return i + 1;
+  }
+
+  // Delta sits directly below the first Account Totals row; never create one
+  // without it.
+  let totalRow = -1;
+  for (let i = 0; i < display.length; i++) {
+    if (String((display[i] && display[i][0]) || '').trim() === 'Account Totals') {
+      totalRow = i + 1;
+      break;
+    }
+  }
+  if (totalRow === -1) return -1;
+
+  // Header row = nearest "Account Name" above Account Totals.
+  let headerRow = -1;
+  for (let r = totalRow - 1; r >= 1; r--) {
+    const name = String((display[r - 1] && display[r - 1][0]) || '').trim();
+    if (name === 'Account Name') { headerRow = r; break; }
+    if (name === 'Year') break;
+  }
+  if (headerRow === -1) return -1;
+
+  const headerVals = display[headerRow - 1] || [];
+  const lastCol = sheet.getLastColumn();
+
+  // Catalog month columns (by label); derive the block year from the January
+  // header so we can chain across years. No Total column exists in this model.
+  const months = []; // { col, monthIndex }  monthIndex: 0=Jan … 11=Dec
+  let blockYear = -1;
+  for (let c = 2; c <= lastCol; c++) {
+    const header = String(headerVals[c - 1] !== undefined ? headerVals[c - 1] : '').trim();
+    if (!header) continue;
+    const d = parseMonthHeader_(header);
+    if (!d) continue; // skip Type / Active / unrelated columns
+    months.push({ col: c, monthIndex: d.getMonth() });
+    if (d.getMonth() === 0) blockYear = d.getFullYear();
+  }
+  if (months.length === 0) return -1;
+  months.sort(function(a, b) { return a.col - b.col; });
+
+  // Prior-year Dec Account Totals (pre-insert coordinates); null → first-year
+  // semantics (Jan = 0).
+  let priorDec = (blockYear > 0)
+    ? findInvestmentsDecAccountTotalsCell_(display, blockYear - 1)
+    : null;
+
+  // Place Delta directly below Account Totals. Insert a physical row only when
+  // content follows (e.g. another year block) so nothing is overwritten;
+  // append when Account Totals is the last row (the fresh-create case).
+  let deltaRow = totalRow + 1;
+  const inserted = totalRow < sheet.getLastRow();
+  if (inserted) {
+    sheet.insertRowAfter(totalRow);
+    deltaRow = totalRow + 1;
+    if (priorDec && priorDec.row > totalRow) priorDec.row += 1;
+  }
+  sheet.getRange(deltaRow, 1).setValue('Delta');
+
+  const currency = '$#,##0.00;-$#,##0.00';
+
+  for (let idx = 0; idx < months.length; idx++) {
+    const m = months[idx];
+    const letter = columnToLetter_(m.col).toUpperCase();
+    let formula = null;
+    if (idx === 0) {
+      // Leftmost month of the block (January in the canonical layout).
+      if (m.monthIndex === 0 && priorDec) {
+        formula = '=' + letter + totalRow + '-' +
+          columnToLetter_(priorDec.col).toUpperCase() + priorDec.row;
+      }
+      // else: first-year Jan (or no prior block) → literal 0 below.
+    } else {
+      const prevLetter = columnToLetter_(months[idx - 1].col).toUpperCase();
+      formula = '=' + letter + totalRow + '-' + prevLetter + totalRow;
+    }
+    try {
+      const cell = sheet.getRange(deltaRow, m.col);
+      if (formula) cell.setFormula(formula);
+      else cell.setValue(0);
+      cell.setNumberFormat(currency);
+    } catch (_mErr) { /* non-fatal */ }
+  }
+
+  return deltaRow;
+}
+
+/**
+ * Maintains a year block's "Account Totals" summary row so each month column's
+ * gross =SUM range covers every account data row above the summary. Gross by
+ * design — inactive accounts still count, matching a hand-authored =SUM.
+ *
+ * Required (not optional) because:
+ *   - The seeded Account Totals row starts BLANK; the shared
+ *     refreshBlockSumAggregates_ only rewrites cells that ALREADY hold a
+ *     simple SUM and never fills blanks (see cashflow_setup.js) — so it can
+ *     never materialize the first fill.
+ *   - Inserting a new account row directly above Account Totals hits the
+ *     Sheets lower-boundary case where =SUM does NOT auto-expand, so seeded
+ *     formulas alone would silently drop the newest account.
+ *
+ * Bound-mode safety (exact-shape guard):
+ *   - Acts only when an Account Totals row already exists; NEVER creates one.
+ *   - Scoped strictly to MMM-YY month columns (parseMonthHeader_); the Type
+ *     and Active columns are never given a currency =SUM. No Total column
+ *     exists in this model.
+ *   - Fills a money cell only when it is truly BLANK (the seeded state) or it
+ *     already holds a strict simple =SUM on its OWN column (range or the
+ *     Sheets-normalized single-cell shape). Literals / compound / cross-sheet
+ *     / Delta-style formulas are left untouched.
+ *   - Scoped to a single Year block (bails at the next "Year" marker).
+ *
+ * Best-effort: all failures are swallowed; must never block an account save.
+ * Mirrors refreshBankAccountsTotalAccountsRow_.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {number|string} year  the Year block to refresh (e.g. current year)
+ */
+function refreshInvestmentsAccountTotalsRow_(sheet, year) {
+  try {
+    if (!sheet) return;
+
+    const display = sheet.getDataRange().getDisplayValues();
+    const block = getInvestmentsYearBlock_(sheet, year, display);
+
+    const dataStart = block.dataStartRow;
+    const dataEnd = findLastInvestmentDataRowInBlock_(sheet, block);
+    if (dataEnd === -1 || dataEnd < dataStart) return; // no account rows yet
+
+    // Locate THIS block's Account Totals row, bailing at the next Year marker.
+    let totalRow = -1;
+    for (let r = block.headerRow; r < display.length; r++) {
+      const name = String((display[r] && display[r][0]) || '').trim();
+      if (r + 1 > block.headerRow && name === 'Year') break;
+      if (name === 'Account Totals') { totalRow = r + 1; break; }
+    }
+    if (totalRow === -1) return; // no summary row — never create one here
+
+    const headerRowVals = display[block.headerRow - 1] || [];
+    const lastCol = sheet.getLastColumn();
+    const currency = '$#,##0.00;-$#,##0.00';
+    const simpleSum = /^=SUM\(\s*\$?([A-Z]+)\$?(\d+)\s*:\s*\$?([A-Z]+)\$?(\d+)\s*\)$/i;
+    const singleCellSum = /^=SUM\(\s*\$?([A-Z]+)\$?(\d+)\s*\)$/i;
+
+    for (let c = block.firstMonthCol; c <= lastCol; c++) {
+      const header = String((headerRowVals[c - 1] !== undefined ? headerRowVals[c - 1] : '')).trim();
+      if (!parseMonthHeader_(header)) continue; // month columns only (skip Active)
+
+      const letter = columnToLetter_(c).toUpperCase();
+      const canonical = '=SUM(' + letter + dataStart + ':' + letter + dataEnd + ')';
+      const cell = sheet.getRange(totalRow, c);
+
+      let formula = '';
+      try { formula = String(cell.getFormula() || '').trim(); } catch (_) { continue; }
+
+      if (formula === '') {
+        // No formula present. Only fill a truly blank cell — a literal value
+        // (possible in a hand-authored bound workbook) is left alone.
+        let val = '';
+        try { val = cell.getValue(); } catch (_) { continue; }
+        const isBlank = (val === '' || val === null || val === undefined);
+        if (!isBlank) continue;
+        try {
+          cell.setFormula(canonical);
+          cell.setNumberFormat(currency);
+        } catch (_setErr) { /* non-fatal */ }
+        continue;
+      }
+
+      // A formula is present — accept only a SUM we own on this column, in
+      // either the range or single-cell (normalized/shifted) shape.
+      const m = formula.match(simpleSum);
+      if (m) {
+        if (m[1].toUpperCase() !== m[3].toUpperCase()) continue;
+        if (m[1].toUpperCase() !== letter) continue;
+      } else {
+        const s = formula.match(singleCellSum);
+        if (!s) continue;
+        if (s[1].toUpperCase() !== letter) continue;
+      }
+      if (formula === canonical) continue;
+      try {
+        cell.setFormula(canonical);
+        cell.setNumberFormat(currency);
+      } catch (_setErr2) { /* non-fatal */ }
+    }
+  } catch (e) {
+    Logger.log('refreshInvestmentsAccountTotalsRow_: ' + e);
+  }
 }
 
 function findAssetsTemplateRow_(sheet, headerMap) {
@@ -1321,6 +1800,17 @@ function addInvestmentAccountFromDashboard(payload) {
     invRowNum = insertNewInvestmentHistoryRow_(invSheet, block, accountName, typeStr);
   } catch (e) {
     throw new Error('Could not insert investment row: ' + (e.message || e));
+  }
+
+  // Materialize / maintain the current-year "Account Totals" gross =SUM so it
+  // covers the just-inserted account row: fills the seeded blank row on the
+  // first account and rewrites the range on later inserts (insert-above-footer
+  // lower-boundary case). Best-effort — a failure here must never undo an
+  // account that is already saved. Mirrors addBankAccountFromDashboard.
+  try {
+    refreshInvestmentsAccountTotalsRow_(invSheet, currentYear);
+  } catch (totalErr) {
+    Logger.log('addInvestmentAccountFromDashboard refreshInvestmentsAccountTotalsRow_: ' + totalErr);
   }
 
   try {

@@ -29,6 +29,66 @@ Roadmap: `## Launch Readiness Roadmap (high-level)` below (detail in `TODO.md �
 
 > **Roadmap-label note (disambiguation):** the **Workbook Identity & Recovery** sub-series uses working labels **Phase 6A–6E**. These are the detailed expansion of the macro roadmap's **Phase 2 — Family Beta Hardening → 2B Workbook Recovery**, and are **not** the same as the macro **"Phase 6 — External Beta Readiness."** Where this doc says "Phase 6A/6B/6C…" it means the Identity & Recovery track.
 
+## Deployment & Push Workflows
+
+> **Authoritative deployment reference.** There are **two completely separate Apps Script targets** — the **bound** project (local/production workbook development + runtime validation) and the **Central** app (the multi-user web app). **Keep them separate.** Choose the workflow deliberately; never mix them. **Never push or deploy to a target that was not explicitly requested**, and **never risk the bound/production app while testing Central.**
+
+### Bound Development Workflow
+
+Use for **local/bound project development and runtime validation** when that is **explicitly intended**. This targets the **bound Apps Script project**.
+
+```bash
+clasp push
+```
+
+**Warnings:**
+
+- **Do NOT use this when testing Central** — it targets the bound project, not Central.
+- This affects the bound/production-workbook Apps Script project only.
+
+### Central App Workflow
+
+Use **only when Central testing/deployment is explicitly requested.**
+
+**Push (Central):**
+
+```bash
+./push-central.sh
+```
+
+**Deploy (Central):**
+
+```bash
+clasp deploy \
+  --project .clasp-central.json \
+  --deploymentId AKfycbyq_OGiupdGO79GMOImkIgYv19hqlN1JuJfieuDlkXH6Rp637MhZc6jz9uRW2ZxANBlPA \
+  --description "Beta - <short description>"
+```
+
+**Example:**
+
+```bash
+clasp deploy \
+  --project .clasp-central.json \
+  --deploymentId AKfycbyq_OGiupdGO79GMOImkIgYv19hqlN1JuJfieuDlkXH6Rp637MhZc6jz9uRW2ZxANBlPA \
+  --description "Beta - Investments convergence"
+```
+
+**Central Beta URL:**
+
+```text
+https://script.google.com/macros/s/AKfycbyq_OGiupdGO79GMOImkIgYv19hqlN1JuJfieuDlkXH6Rp637MhZc6jz9uRW2ZxANBlPA/exec
+```
+
+**Warnings:**
+
+- **Do NOT** run `clasp setting scriptId ...` to switch projects.
+- **Do NOT** push/deploy Central unless **explicitly approved**.
+- Use **`./push-central.sh`** for the Central push.
+- Use **`.clasp-central.json`** for the Central deploy.
+- Keep the **bound** and **Central** workflows **separate**.
+- **Never risk the bounded/production app when testing Central.**
+
 ## Domain Completion Matrix (snapshot 2026-07-02)
 
 A high-level management/status dashboard. Percentages are rough completion estimates, not precise metrics. This is the at-a-glance view only — roadmap detail lives in `## Product Maturity Stages (high-level)` below and `TODO.md → Product Maturity Stages`.

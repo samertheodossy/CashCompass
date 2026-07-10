@@ -64,7 +64,9 @@ The canonical `INPUT - Bills` sheet **ends with three trailing scheduling column
 | 2 | **Anchor Date** | Biweekly only: a date on the selected Weekday that sets the two-week cadence; must fall on that weekday (no silent correction). | Blank → no biweekly anchor | Date, canonical `yyyy-MM-dd`; inherits adjacent Bills column styling. Width **120**. |
 | 3 | **Schedule Effective Date** | Auto-set to *today* when a scheduling field changes so changes apply going forward only; not user-edited. | Blank → no prospective change (full history applies) | Date, canonical `yyyy-MM-dd`; inherits adjacent Bills column styling. Width **160**. |
 
-**Convergence rule:** on first-create and self-heal, these columns inherit the standard Bills column formatting (copied from an adjacent Bills column) plus the canonical widths above, so they are visually indistinguishable from the rest of the Bills row. Headers must match exactly: `Weekday`, `Anchor Date`, `Schedule Effective Date`. Order is fixed and append-only (right of `Notes`).
+**Canonical Bills styling:** **body font size 14** on white (`#ffffff`); **header row font size 16**, bold, black (`#000000`) on the yellow Bills header (`#ffe599`), vertically centered, header row frozen. The three scheduling columns use this exact styling — header cell size 16 on `#ffe599`, body cells size 14 on white.
+
+**Convergence rule:** on first-create the columns receive the canonical Bills styling above; on self-heal they inherit the standard Bills column formatting copied from an adjacent Bills column (identical result) plus the canonical widths above, so they are visually indistinguishable from the rest of the Bills row. Headers must match exactly: `Weekday`, `Anchor Date`, `Schedule Effective Date`. Order is fixed and append-only (right of `Notes`).
 
 ## Checklist — system / backing sheets (secondary)
 
