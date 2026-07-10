@@ -89,6 +89,10 @@ https://script.google.com/macros/s/AKfycbyq_OGiupdGO79GMOImkIgYv19hqlN1JuJfieuDl
 - Keep the **bound** and **Central** workflows **separate**.
 - **Never risk the bounded/production app when testing Central.**
 
+## CashCompass Engineering Standards
+
+The engineering standards that guide **all** future development live in their own authoritative document: **[`ENGINEERING_STANDARDS.md`](./ENGINEERING_STANDARDS.md)**. It covers the core safety/quality standards, the Canonical Row Styling Standard, the Canonical Readability and Width Standards, and the Styling Reassertion Rule. Golden Workbook specifics live in `GOLDEN_WORKBOOK.md` and `WORKBOOK_PARITY_CHECKLIST.md`. Unless a task explicitly overrides them, follow those standards and default to the more conservative option.
+
 ## Domain Completion Matrix (snapshot 2026-07-02)
 
 A high-level management/status dashboard. Percentages are rough completion estimates, not precise metrics. This is the at-a-glance view only — roadmap detail lives in `## Product Maturity Stages (high-level)` below and `TODO.md → Product Maturity Stages`.

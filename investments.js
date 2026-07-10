@@ -204,8 +204,14 @@ function ensureInputInvestmentsSheet_() {
  * "Account Name" + "Current Balance" and treats "Type" + "Active" as
  * optional). The add path always writes all four, so we seed them all.
  *
+ * First-create applies Golden Workbook parity: canonical fonts (header 20,
+ * body 14), deterministic canonical column widths (Account Name 280 / Type
+ * 150 / Current Balance 220 / Active 110), a spacious 44px header row, and
+ * readable 26px body rows.
+ *
  * Safety contract: idempotent no-op when the sheet already exists. Never
- * overwrites or re-styles populated sheets.
+ * overwrites or re-styles populated sheets — the font wash and width logic
+ * below run only on the freshly inserted, empty sheet.
  *
  * @returns {GoogleAppsScript.Spreadsheet.Sheet}
  */
@@ -248,9 +254,57 @@ function ensureSysAssetsSheet_() {
     applyAssetsSheetStyling_(sheet);
   } catch (_styleErr) { /* cosmetic only */ }
 
+  // Golden Workbook font parity (FIRST-CREATE ONLY). The sheet was just
+  // inserted and holds no user data or formatting, so a whole-sheet wash
+  // is safe here — this path is never reached for an existing populated
+  // workbook (the guard above returns early). Body rows land at the
+  // canonical 14; the header row is raised to 20. Every future appended
+  // row inherits 14 from these washed empty rows.
   try {
-    sheet.autoResizeColumns(1, headers.length);
-  } catch (_resizeErr) { /* cosmetic only */ }
+    const maxRowsFont = sheet.getMaxRows();
+    const maxColsFont = sheet.getMaxColumns();
+    sheet.getRange(1, 1, maxRowsFont, maxColsFont).setFontSize(14);
+    sheet.getRange(1, 1, 1, maxColsFont).setFontSize(20);
+  } catch (_fontErr) { /* cosmetic only */ }
+
+  // Golden Workbook canonical column widths (FIRST-CREATE ONLY).
+  //
+  // We deliberately do NOT drive widths off autoResizeColumns: on a fresh
+  // sheet it fits each column tightly to the 20pt bold header with minimal
+  // padding, which reads as the "crowded / compressed" look (Current Balance
+  // jammed against Active). The Golden Workbook uses comfortable, deliberate
+  // widths, so canonical widths are the authority here. The header labels are
+  // fixed and short, and these values are sized to hold the 20pt headers plus
+  // currency values with breathing room, so nothing clips. Widen-only against
+  // the current width preserves the "never shrink a user's column" rule (moot
+  // on a brand-new sheet, but kept for consistency and safety).
+  //   Account Name | Type | Current Balance | Active
+  try {
+    const canonicalWidths = [280, 150, 220, 110];
+    for (let c = 0; c < canonicalWidths.length; c++) {
+      const col = c + 1;
+      let curWidth = 0;
+      try { curWidth = sheet.getColumnWidth(col); } catch (_gw) {}
+      if (canonicalWidths[c] > curWidth) sheet.setColumnWidth(col, canonicalWidths[c]);
+    }
+  } catch (_widthErr) { /* cosmetic only */ }
+
+  // Comfortable header row height for the 20pt header (FIRST-CREATE ONLY).
+  // applyAssetsSheetStyling_ no longer forces a header height (see Styling
+  // Reassertion Rule), so this first-create value now survives the first
+  // add. Existing workbooks keep their current header height untouched.
+  try { sheet.setRowHeight(1, 44); } catch (_rhErr) { /* cosmetic only */ }
+
+  // Canonical body row height (FIRST-CREATE ONLY). Default sheet rows are
+  // ~21px, which reads cramped at 14pt body text. Raise the empty data rows
+  // to a spacious, readable 26px so appended rows land at a comfortable
+  // height. Safe: the sheet was just inserted and holds no user rows — this
+  // never runs for an existing populated workbook (the guard at the top
+  // returns early).
+  try {
+    const maxRowsBody = sheet.getMaxRows();
+    if (maxRowsBody > 1) sheet.setRowHeights(2, maxRowsBody - 1, 26);
+  } catch (_bodyRhErr) { /* cosmetic only */ }
 
   return sheet;
 }
@@ -1628,6 +1682,19 @@ function appendAssetsRowForNewInvestment_(sheet, accountName, typeStr, currentBa
     } catch (formatErr) {
       Logger.log('appendAssetsRowForNewInvestment_ format copy failed: ' + formatErr);
     }
+  } else {
+    // No existing data row to clone from (freshly created sheet, or a
+    // header-only body). Stamp the canonical Golden body font AND row
+    // height on JUST the row we appended so it never lands at the Apps
+    // Script defaults (10pt / ~21px). Additive and narrowly scoped:
+    // touches only the new row, never any existing row's formatting,
+    // width, or height.
+    try {
+      sheet.getRange(appendedRow, 1, 1, lastCol).setFontSize(14);
+      sheet.setRowHeight(appendedRow, 26);
+    } catch (bodyStampErr) {
+      Logger.log('appendAssetsRowForNewInvestment_ body stamp failed: ' + bodyStampErr);
+    }
   }
 
   if (headerMap.balanceCol !== -1) {
@@ -1660,11 +1727,19 @@ function appendAssetsRowForNewInvestment_(sheet, accountName, typeStr, currentBa
  *
  * Assertions:
  *   - Header row (row 1) → yellow #fff200, bold black, centered
- *     horizontal / middle vertical, row height 32.
+ *     horizontal / middle vertical.
  *   - Solid-medium black bottom border under row 1 to separate header
  *     from the data body.
  *   - Frozen row 1 + frozen column 1 so Account Name stays pinned
  *     when scrolling.
+ *
+ * Header ROW HEIGHT is deliberately NOT set here. Per the Styling
+ * Reassertion Rule (ENGINEERING_STANDARDS.md §9), runtime helpers must not
+ * repeatedly force cosmetic row heights on every write — doing so clobbered
+ * the taller first-create header height in the same add flow, and mutated
+ * existing user sheets on routine actions. Header height is established once
+ * on first-create in `ensureSysAssetsSheet_`; existing sheets keep whatever
+ * height they already have.
  *
  * Data rows, number formats, and any user cell highlights are
  * deliberately never touched. Failures are swallowed — cosmetic only.
@@ -1691,7 +1766,9 @@ function applyAssetsSheetStyling_(sheet) {
     } catch (_borderErr) { /* cosmetic */ }
   } catch (_headerErr) { /* cosmetic */ }
 
-  try { sheet.setRowHeight(1, 32); } catch (_) {}
+  // Freeze panes are asserted here because the app relies on the pinned
+  // header row / first column for correctness. Row height is intentionally
+  // omitted (see docstring / Styling Reassertion Rule).
   try { sheet.setFrozenRows(1); } catch (_) {}
   try { sheet.setFrozenColumns(1); } catch (_) {}
 }
