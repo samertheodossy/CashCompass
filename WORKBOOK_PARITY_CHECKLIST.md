@@ -44,7 +44,7 @@ Columns: **Sheet** · **Design family** · **Audit status** · **Convergence foc
 | **INPUT - Investments** | Financial Ledger | ★★★★★ Golden Reference | Converge toward Golden: year/header/total/delta colors, **month-column currency pre-format on create**, freeze rows/cols, widths | S | P1 |
 | **INPUT - House Values** | Financial Ledger | ★★★★★ Golden Reference | Converge toward Golden: year-banner contrast, money-column formats on create, widths (empty-column collapse), freeze | S–M | P1 |
 | **INPUT - Debts** | Operational | ★★★★★ Golden Reference | Converge toward Golden: header color, TOTAL DEBT band, column widths, currency formats on empty range, notes/tooltips, conditional formatting | S | P1 |
-| **INPUT - Bills** | Operational | ★★★★★ Golden Reference | Converge toward Golden: header color, widths, notes on non-obvious columns (use-policy/autopay), number formats, conditional formatting | S | P1 |
+| **INPUT - Bills** | Operational | ★★★★★ Golden Reference | Converge toward Golden: header color, widths, notes on non-obvious columns (use-policy/autopay), number formats, conditional formatting. **Canonical schema now ends with `Weekday` · `Anchor Date` · `Schedule Effective Date` — see "Canonical schema — INPUT - Bills scheduling columns" below.** | S | P1 |
 | **INPUT - Upcoming Expenses** | Operational Planning | ★★★★☆ Production Ready | Converge toward Golden: header color, widths, date/amount formats on empty range, banding | S | P1 |
 | **INPUT - Donation** | Operational Planning | ★★★★☆ Production Ready | Converge toward Golden: header styling/colors/widths/number formats (fresh sheet currently minimal) | M | P1 |
 | **INPUT - Retirement** | Analytical / Configuration | ★★★★☆ Production Ready | Converge toward Golden: section shading/structure, borders between scenario blocks, widths, number/percent formats | M | P1 |
@@ -53,6 +53,18 @@ Columns: **Sheet** · **Design family** · **Audit status** · **Convergence foc
 | **LOG - Activity** | Operational | UNKNOWN | Audit first: header background, column widths (wide text columns), amount/date number formats | S | P2 |
 | **OUT - Dashboard** | Analytical / Configuration | UNKNOWN | Audit first: planner rebuilds formatting each run — confirm the planner-produced look matches production | S | P2 |
 | **OUT - History** | Analytical / Configuration | UNKNOWN | Audit first: header styling, widths, number formats vs production | S | P2 |
+
+### Canonical schema — INPUT - Bills scheduling columns
+
+The canonical `INPUT - Bills` sheet **ends with three trailing scheduling columns**, in this order, immediately after `Notes` (Recurrence Engine V2 — now part of the Golden Workbook standard). They are **provisioned on new workbooks** and **added append-only by schema self-heal** on older workbooks. **Structure only — never seed example data; all three are blank by default.**
+
+| # | Column (exact header) | Purpose | Blank default | Canonical formatting |
+|---|---|---|---|---|
+| 1 | **Weekday** | Weekday a Weekly/Biweekly bill recurs on (`Sunday`…`Saturday`). Ignored for other frequencies. | Blank → legacy Due-Day behavior | Text; inherits adjacent Bills column styling (font/alignment/background). Width **110**. |
+| 2 | **Anchor Date** | Biweekly only: a date on the selected Weekday that sets the two-week cadence; must fall on that weekday (no silent correction). | Blank → no biweekly anchor | Date, canonical `yyyy-MM-dd`; inherits adjacent Bills column styling. Width **120**. |
+| 3 | **Schedule Effective Date** | Auto-set to *today* when a scheduling field changes so changes apply going forward only; not user-edited. | Blank → no prospective change (full history applies) | Date, canonical `yyyy-MM-dd`; inherits adjacent Bills column styling. Width **160**. |
+
+**Convergence rule:** on first-create and self-heal, these columns inherit the standard Bills column formatting (copied from an adjacent Bills column) plus the canonical widths above, so they are visually indistinguishable from the rest of the Bills row. Headers must match exactly: `Weekday`, `Anchor Date`, `Schedule Effective Date`. Order is fixed and append-only (right of `Notes`).
 
 ## Checklist — system / backing sheets (secondary)
 

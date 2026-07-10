@@ -11,7 +11,7 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current stage — Stage 3: Beta Readiness
 
-**Maturity (estimated):** Family Beta Readiness **~97–98%** · External / Public Beta Readiness **~92%**. **Stage 1 (Core Platform) and Stage 2 (Product Hardening) are complete.** The remaining work before family beta is the **Beta Gate** — in agreed order: **Golden Workbook Convergence, Financial Integrity Phase 3 (convergence), the Validation Agent** (the automated release gate), **Recovery completion**, and **Workbook/UX polish**. This is no longer major feature development.
+**Maturity (estimated):** Family Beta Readiness **~97–98%** · External / Public Beta Readiness **~92%**. **Stage 1 (Core Platform) and Stage 2 (Product Hardening) are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** The remaining work before family beta is the **Beta Gate**, sequenced by the **confirmed execution order (2026-07-09): Bills Due Pay runtime validation → Investments cleanup → Recovery completion → Validation Agent → Golden Workbook polish → Family Beta polish** (Financial Integrity Phase 3 is a Beta-Gate requirement sequenced alongside Recovery / Validation Agent). This is no longer major feature development.
 
 The **authoritative roadmap is the `## Product Maturity Stages` section immediately below** (Stage 1–6), which carries the at-a-glance framing, `## Current Engineering Priorities`, the `## Shared Lifecycle Framework` direction, and the `## Beta Gate`. `PROJECT_CONTEXT.md` and `README.md` carry high-level mirrors of the stage roadmap. The older `## Launch Readiness Roadmap` (Phase 1–7) is retained further below as detailed historical phase expansion; **where any Phase statement conflicts with the Stage model above, the Stage model wins.**
 
@@ -20,6 +20,7 @@ The **authoritative roadmap is the `## Product Maturity Stages` section immediat
 - **Recovery — destructive/admin paths validated:** executed **Admin Clear**, **mapping removal**, **reverse-index removal**, **repair audit history**, **bootstrap reprovision**, **Welcome routing**, **empty-dashboard validation**, **recovery routing**, **Reconnect**, **Central admin validation**, **`ADMIN_EMAILS` validation**. (Recovery validation completed today.)
 - **Financial Integrity — foundation shipped:** **Financial Integrity Audit Framework** (read-only, admin-gated), **Debt Audit**, **shared debt Active helper (Phase 2)**, and the **`NOT_INITIALIZED`** state.
 - **Performance:** **Bills Due performance optimization (~51s → ~5.6s)** (per-request Cash Flow row-map + Activity Log dedupe caching).
+- **Recurrence Engine V2 — Weekday & Biweekly scheduling (✅ shipped 2026-07-09):** pure recurrence refactor (`buildRuleFromBillRow_` + `generateOccurrences_` seam) · **Weekly weekday** scheduling · **Biweekly weekday** anchor-driven 14-day cadence · **Weekday UI** · **Anchor Date** (schema + UI + validation, no silent correction) · **Schedule Effective Date** (prospective-only schedule changes) · **AutoPay concurrency hardening** (`LockService`) · **Bills schema evolution** (Weekday / Anchor Date / Schedule Effective Date columns + self-heal + formatting parity). Runtime validated (Laith, Lutfi, M1, Robinhood, San Jose House Cleaning). Legacy Weekly/Biweekly/Monthly behavior preserved.
 
 The **only remaining recovery-validation paths** are Auto-Adopt, Ambiguous, Name-only adoption, and Orphan — tracked in Stage 3 below. The **remaining Financial Integrity work** is the canonical basis + Planner/Dashboard/Rolling convergence + the Asset/Planner/Dashboard audit modules — also Stage 3. (Validation-surface note: the Script Properties UI may lag runtime changes during testing — **Admin Diagnostics is authoritative**.)
 
@@ -57,9 +58,11 @@ Made the built capabilities provably correct and recoverable. **Completed this s
 
 Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remaining work.
 
-> **Agreed Stage 3 priority order (Version 1 Alignment):** **1) Golden Workbook Convergence · 2) Financial Integrity Phase 3 (convergence) · 3) Validation Agent · 4) Recovery completion (Auto-Adopt / Ambiguous / Name-only / Orphan) · 5) Workbook / UX polish.** The lettered sections below follow this order. Strategic rationale: *trust before features; the numbers must reconcile; converge the workbook before broadening Family Beta; the Validation Agent protects trust* (see `PRODUCT_VISION.md → §11 Version 1 Guiding Conclusions`).
+> **Current execution order (confirmed 2026-07-09):** **1) Bills Due Pay runtime validation · 2) Investments cleanup · 3) Recovery implementation · 4) Validation Agent · 5) Golden Workbook polish · 6) Family Beta.** This is the operative near-term sequence — finish the in-flight trust items (Bills Due Pay, Investments) first, then build Recovery and the Validation Agent, then converge the Golden Workbook, then Family Beta. It is the single source of truth for *what to do next*.
+>
+> **Beta-Gate workstreams (lettered A–F below) are organized by workstream, not execution order.** All of them must be satisfied before Family Beta; the execution order above sequences them. **Financial Integrity — Phase 3 (workstream B)** stays a Beta-Gate requirement even though it is not a numbered slot in the near-term queue — *the numbers must reconcile* before Family Beta broadens. Strategic rationale: *trust before features; the numbers must reconcile; converge the workbook before broadening Family Beta; the Validation Agent protects trust* (see `PRODUCT_VISION.md → §11 Version 1 Guiding Conclusions`).
 
-**A. Golden Workbook Convergence** *(Stage 3 priority #1 — a **convergence project, not a redesign**; the production workbook is the **visual source of truth**; full inventory in `## UX Backlog (Version 1)`)*
+**A. Golden Workbook Convergence** *(Beta-Gate workstream · execution item #5 — a **convergence project, not a redesign**; the production workbook is the **visual source of truth**; full inventory in `## UX Backlog (Version 1)`)*
 
 > **Goal:** a **freshly provisioned workbook converges toward the Golden Workbook visual standard** until it is visually indistinguishable from the mature production workbook. This is one of the highest-impact Family Beta items — a beta user's first impression is the workbook itself. The **production workbook is the visual source of truth (the "Golden Workbook")** and defines the design language — see `GOLDEN_WORKBOOK.md`; per-sheet status + gaps live in `WORKBOOK_PARITY_CHECKLIST.md`.
 
@@ -76,7 +79,7 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | Retirement convergence (Analytical / Configuration family) | P1 | Convergence pass | (incl. in L) |
 | Any remaining convergence gaps vs the Golden Workbook | P1 | Convergence pass | (incl. in L) |
 
-**B. Financial Integrity — Phase 3 (convergence)** *(Stage 3 priority #2 — foundation shipped in Stage 2: Audit Framework · Debt Audit · shared Active helper · `NOT_INITIALIZED`)*
+**B. Financial Integrity — Phase 3 (convergence)** *(Beta-Gate workstream · sequenced alongside execution items #3–5 — foundation shipped in Stage 2: Audit Framework · Debt Audit · shared Active helper · `NOT_INITIALIZED`)*
 
 > **Completed (Phase 1–2):** Audit Framework (read-only, admin-gated) · Debt Audit · shared debt Active helper · `NOT_INITIALIZED` state. **Remaining (Phase 3):** the canonical basis, cross-surface convergence, and the Asset / Planner / Dashboard audit modules below. Strategic anchor: *the numbers must reconcile* — this is the product's core trust claim.
 
@@ -89,7 +92,7 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | Dashboard audit module (`runDashboardAudit`) | P1 | Framework ✓ | M |
 | Permanent reconciliation diagnostic wired into release | P1 | Convergence + audit modules | M |
 
-**C. Validation Agent — the automated release gate** *(Stage 3 priority #3 — protects the reconciled numbers; the automated guardian of trust)*
+**C. Validation Agent — the automated release gate** *(Beta-Gate workstream · execution item #4 — protects the reconciled numbers; the automated guardian of trust)*
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
@@ -98,7 +101,7 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | Financial-integrity gate wiring into release | P1 | FI Phase 3 convergence | S |
 | Deployment checklist | P2 | — | S |
 
-**D. Recovery completion — remaining adoption paths** *(Stage 3 priority #4 — gates Family Beta; destructive/admin paths already validated)*
+**D. Recovery completion — remaining adoption paths** *(Beta-Gate workstream · execution item #3 — gates Family Beta; destructive/admin paths already validated)*
 
 > **Implementation specification:** `CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md` is the **ratified Version 1 Recovery Architecture** (decision tree, unconditional candidate detection, `CENTRAL_AUTO_ADOPT` repurposed to auto-adopt-single vs prompt, failure branches → Unavailable, testing matrix). All items in this section are implemented against that document. Core rule: *recovery must never create silent duplicates.*
 
@@ -112,7 +115,7 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 
 > **Confirmed recovery/adoption gap (2026-07-07, `cashcompass2026`).** During Golden Workbook Convergence testing, **clearing a stale mapping let Central provision a *second* workbook even though another CashCompass workbook still existed in the user's Drive** — a silent duplicate. Today the create-after-clear path (`provisionWorkbookForUser_`) only runs adopt-before-create when `CENTRAL_AUTO_ADOPT` is ON (default OFF), so with the flag off it creates unconditionally. This is **not caused by the Investments convergence work**; the test simply reproduced the exact risk the four adoption paths above are meant to handle. Fix belongs with Recovery completion: before create-after-clear / stale recovery, detect candidates and route to adopt/reconnect (or `AmbiguousWorkbookError` when ≥2), never a silent duplicate. Ties to **Auto-Adopt validation, Ambiguous recovery, Name-only adoption, and Orphan workbook handling**. No implementation yet.
 
-**E. Workbook / UX polish** *(Stage 3 priority #5 — loading, empty-states, consistency, onboarding; opportunistic — see `## UX Backlog (Version 1)`)*
+**E. Workbook / UX polish** *(Beta-Gate workstream · execution item #6 / Family Beta polish — loading, empty-states, consistency, onboarding; opportunistic — see `## UX Backlog (Version 1)`)*
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
@@ -179,7 +182,7 @@ Differentiators and platform/operations maturity. **None of these are required f
 | **Analytics** (product / usage analytics) | P4 | — | M |
 | **Paid product readiness** (pricing, subscription, entitlements, plan enforcement fail-open, ToS, privacy, support ops, billing) | P4 | Stable external beta | XL |
 | Account Aggregation & Transaction Import (Plaid-style) | P4 | Paid tier | XL |
-| Weekday (Repeat Day) recurrence · Merge Debt Accounts · Debt Payee Aliases · Google Sheets refresh awareness | P4 | — | S–L each |
+| Merge Debt Accounts · Debt Payee Aliases · Google Sheets refresh awareness | P4 | — | S–L each |
 
 *(Money Plan Phase 2 and the Income Expected/Due Workflow were elevated to Stage 5 — they are Version 1 differentiators, not Version 2 platform work.)*
 
@@ -187,15 +190,21 @@ Differentiators and platform/operations maturity. **None of these are required f
 
 ## Current Engineering Priorities
 
-Ranked, current. (Granular ranked execution items remain in `## Known priorities (ranked)` below; this is the strategic ordering.)
+Ranked, current — the **confirmed near-term execution order (2026-07-09)**. (Granular ranked execution items remain in `## Known priorities (ranked)` below.) The Beta-Gate *criteria* are unordered requirements listed in `## Beta Gate`; this list sequences the work.
 
-1. **Golden Workbook Convergence** — *(Stage 3 priority #1)* a newly provisioned workbook must **converge toward the Golden Workbook** (the **visual source of truth** — the production workbook defines the design language) until it is **visually indistinguishable from production** (styling, widths, freezes, conditional formats, number formats, totals, notes, filters, sheet order; Cash Flow / Investments / House Values / Retirement). A **convergence project, not a redesign.** First audit complete (2026-07-06, ten core sheets rated across four design families). Stage 3, P0/P1, L.
-2. **Financial Integrity — Phase 3 (convergence)** — declare the **canonical financial basis**, then converge **Planner / Dashboard / Rolling Debt** to within $0.01, and add the **Asset / Planner / Dashboard audit modules**. *(Completed foundation: Audit Framework, Debt Audit, shared Active helper, `NOT_INITIALIZED`.)* Strategic anchor: **the numbers must reconcile** — the product's core trust claim.
-3. **Validation Agent** — *(next major engineering project)* the automated regression-detection **release gate** that **protects the reconciled numbers**. Every deploy passes it before shipping. Interim: a runtime regression checklist.
-4. **Recovery completion — remaining adoption paths** — Auto-Adopt validation, Ambiguous validation, Name-only adoption decision, Orphan validation (6F). *(Admin Clear, recovery routing, and admin validation are already done.)*
-5. **Workbook / UX polish** — onboarding, empty-states, loading-experience consistency, messaging, Help/content cleanup (see `## UX Backlog (Version 1)`).
-6. **Shared Lifecycle Framework rollout** — Debt is the reference implementation; roll out to **Bank Accounts → Investments → Houses → Income Sources** (see `## Shared Lifecycle Framework` below).
-7. **Product differentiators (Version 1, External Beta)** — **Money Plan Phase 2** (long-term/goal planning, recommendations, forecasting, retirement integration) and the **Income Expected/Due Workflow** (income symmetry with Bills Due).
+1. **Bills Due Pay runtime validation** — confirm the shipped Bills Due → Pay occurrence bridge on the next genuine bill paid through Bills Due (marker written, occurrence disappears, future occurrences remain, no duplicates), then commit. Code-path already reviewed. *(In-flight; XS)*
+2. **Investments cleanup** — finish the in-flight Investments Golden Workbook convergence (first-create styling; footer `Account Totals` / `Delta` seeding follow-up), runtime-validate, then commit the local `investments.js` WIP. *(In-flight; S–M)*
+3. **Recovery completion — remaining adoption paths** — implement the ratified Recovery Architecture (`CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md`): unconditional candidate detection + Auto-Adopt / Ambiguous / Name-only / Orphan + provision-after-recovery duplicate guard, then validate on a disposable account (flags OFF afterward). *Recovery must never create silent duplicates.* *(P0; S–M)*
+4. **Validation Agent** — *(next major engineering project)* the automated regression-detection **release gate** that **protects the reconciled numbers**. Every deploy passes it before shipping. Interim: a runtime regression checklist. *(P0; L–XL)*
+5. **Golden Workbook polish** — a newly provisioned workbook must **converge toward the Golden Workbook** (the **visual source of truth**) until **visually indistinguishable from production** (styling, widths, freezes, conditional formats, number formats, totals, notes, filters, sheet order; Cash Flow / Investments / House Values / Retirement). A **convergence project, not a redesign.** First audit complete (2026-07-06, ten core sheets across four design families). *(P0/P1; L)*
+6. **Family Beta polish** — Workbook / UX polish sweep (onboarding, empty-states, loading-experience consistency, messaging, Help/content cleanup — see `## UX Backlog (Version 1)`), Beta Gate assembly, release-readiness review, Stage 4 go/no-go.
+
+> **Also a Beta-Gate requirement (not in the numbered execution queue above): Financial Integrity — Phase 3 (convergence)** — declare the **canonical financial basis**, converge **Planner / Dashboard / Rolling Debt** to within $0.01, add the **Asset / Planner / Dashboard audit modules**. *(Completed foundation: Audit Framework, Debt Audit, shared Active helper, `NOT_INITIALIZED`.)* Strategic anchor: **the numbers must reconcile** — the product's core trust claim. It must be satisfied before Family Beta broadens; sequence it alongside items 3–5.
+
+**Longer-horizon (post-Beta-Gate, not near-term):**
+
+- **Shared Lifecycle Framework rollout** — Debt is the reference implementation; roll out to **Bank Accounts → Investments → Houses → Income Sources** (see `## Shared Lifecycle Framework` below).
+- **Product differentiators (Version 1, External Beta)** — **Money Plan Phase 2** (long-term/goal planning, recommendations, forecasting, retirement integration) and the **Income Expected/Due Workflow** (income symmetry with Bills Due).
 
 ---
 
@@ -217,7 +226,7 @@ This is a **long-term architecture goal**, sequenced after the Beta Gate and bef
 
 ## Beta Gate
 
-Before broader beta, **every release must pass** the following before deployment (listed as gate criteria; Stage 3 build order is Golden Workbook → FI Phase 3 → Validation Agent → Recovery → UX polish):
+Before broader beta, **every release must pass** the following before deployment. These are **unordered gate criteria** — all must be satisfied. The **execution order** that sequences them is the confirmed near-term queue: Bills Due Pay validation → Investments cleanup → Recovery → Validation Agent → Golden Workbook polish → Family Beta (with Financial Integrity Phase 3 sequenced alongside Recovery/Validation Agent). Criteria:
 
 - **Golden Workbook Convergence** — freshly provisioned workbook is visually convergent with the Golden Workbook for the core sheets. *(First audit complete; convergence passes remaining for Cash Flow / Investments / House Values / Retirement.)*
 - **Financial Integrity** — Dashboard / Planner / active source-sheet totals reconcile within $0.01. *(Audit Framework + Debt Audit shipped; canonical basis + Planner/Dashboard/Rolling convergence + Asset/Planner/Dashboard audit modules remaining — Phase 3.)*
@@ -280,6 +289,16 @@ A shared vocabulary + spacing/typography pass so every surface feels the same.
 
 Long-term planning · goal planning · recommendation engine · cash-allocation guidance · retirement integration · forecasting · long-term financial insights. *(Phase 1 10/70/20 dashboard card ✓ complete.)*
 
+#### Bills Scheduling UX — **P2/P3 · effort S–M** *(follow-ups to Recurrence Engine V2, shipped 2026-07-09)*
+
+Opportunistic polish for the Weekday / Biweekly scheduling feature. None are blockers — the feature is shipped and runtime-validated.
+
+- **Reorder scheduling fields in the Bills edit dialog** — group Frequency → Due Day → Weekday → Anchor Date in a natural reading order.
+- **Inline Anchor Date validation** — surface the "Anchor Date must fall on the selected weekday" check as live inline feedback (not only on save).
+- **Derived Schedule column evaluation** — evaluate a single read-only "Schedule" summary column (e.g. "Every other Monday from 7/6") derived from Frequency / Weekday / Anchor Date, for at-a-glance clarity.
+- **Helper-text review** — review the Weekday / Anchor Date / schedule-change helper copy for consistency and clarity.
+- **Formatting parity review** — re-verify Weekday / Anchor Date / Schedule Effective Date column formatting matches neighboring Bills columns on both new provisioning and self-heal.
+
 ### General Rules
 
 The UX Backlog is:
@@ -296,13 +315,16 @@ New UX/polish/consistency/loading/empty-state/wording findings go **here** (appe
 
 ## Next Session — Recommended Starting Point
 
-We are in **Stage 3 — Beta Readiness**. Stage 1 (Core Platform) and Stage 2 (Product Hardening) are complete: the recovery destructive/admin paths, the Financial Integrity Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`, and the Bills Due performance optimization (~51s → ~5.6s) all shipped. The Beta Gate is what remains. Recommended order (agreed Version 1 Alignment order; see `## Product Maturity Stages → Stage 3` for the full table with priorities/effort):
+We are in **Stage 3 — Beta Readiness**. Stage 1 (Core Platform) and Stage 2 (Product Hardening) are complete, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09**. The Beta Gate is what remains. **Current active-work queue** (near-term order; the full Stage 3 Beta-Gate detail — including Financial Integrity Phase 3 — lives in `## Product Maturity Stages → Stage 3`):
 
-1. **Golden Workbook Convergence (start here)** — converge fresh provisioning toward the Golden Workbook (visual source of truth); first audit is complete, so write the additive first-create passes for the diverging sheets (Cash Flow / Investments / House Values / Retirement) (P0/P1, L). *Converge the workbook before broadening Family Beta.*
-2. **Financial Integrity — Phase 3 (convergence)** — declare the **canonical financial basis**, converge **Planner / Dashboard / Rolling Debt** to $0.01, then add the **Asset / Planner / Dashboard** audit modules (P0–P1). Foundation (framework + Debt audit) is done. *The numbers must reconcile.*
-3. **Validation Agent** — stand up automated regression detection as the **release gate** that protects the reconciled numbers (P0, major engineering project). Ship a runtime regression checklist as the interim gate.
-4. **Recovery completion — remaining adoption paths** — Auto-Adopt (`CENTRAL_AUTO_ADOPT=true`, disposable account) → Ambiguous → Name-only adoption decision → Orphan (P0–P1); flags OFF afterward.
-5. **Workbook / UX polish + Beta Gate assembly + Family Beta go/no-go** — once 1–4 are green, do the UX polish sweep, the release-readiness review, and the Stage 4 go/no-go pass.
+1. **Bills Due Pay runtime validation** — confirm the shipped Bills Due → Pay occurrence bridge on the next genuine bill paid through Bills Due: `bill_paid` marker written, occurrence disappears, future occurrences remain, no duplicate markers. *(No fake data — validate on a real payable occurrence; code-path already reviewed end-to-end.)*
+2. **Investments cleanup** — finish the in-flight Investments convergence work (first-create styling; footer `Account Totals` / `Delta` seeding follow-up) and clear the local WIP in `investments.js`.
+3. **Recovery implementation** — build the ratified Version 1 Recovery Architecture (`CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md`): unconditional candidate detection, Auto-Adopt / Ambiguous / Name-only / Orphan, provision-after-recovery duplicate guard. *Recovery must never create silent duplicates.*
+4. **Validation Agent** — stand up automated regression detection as the **release gate** (P0, major engineering project); ship a runtime regression checklist as the interim gate.
+5. **Golden Workbook polish** — converge fresh provisioning toward the Golden Workbook (visual source of truth); first audit complete (ten sheets, four design families), so write the additive first-create passes for the diverging sheets.
+6. **Family Beta** — once 1–5 are green, do the UX polish sweep (incl. `## UX Backlog (Version 1)` review), Beta Gate assembly, release-readiness review, and the Stage 4 go/no-go pass.
+
+> **Note:** **Financial Integrity Phase 3** (canonical basis · Planner/Dashboard/Rolling convergence to $0.01 · Asset/Planner/Dashboard audit modules) remains a **Beta Gate requirement** (`Stage 3 → B`) even though it is not in the immediate active queue above — *the numbers must reconcile* before Family Beta broadens.
 
 (Validation-surface reminder: the Script Properties UI may lag runtime mapping changes during testing — **Admin Diagnostics is authoritative**. All `CENTRAL_*` flags return OFF in steady state.)
 
@@ -431,13 +453,16 @@ Explicit, admin-driven and self-service repair built on 2A's evidence. This is t
 
 The next major efforts, ranked, aligned to the Stage model above (Stage 3 first). Diagnostics, Debt parity, Bank Accounts parity, Identity markers, the recovery destructive/admin paths, the Financial Integrity Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`, and the Bills Due performance optimization are **already complete** and are not in this list.
 
-**Stage 3 — Beta Readiness (current):** *(agreed priority order — Version 1 Alignment)*
+**Stage 3 — Beta Readiness (current):** *(confirmed near-term execution order — 2026-07-09)*
 
-1. **Golden Workbook Convergence** — newly provisioned workbook converges toward the Golden Workbook (visual source of truth) until visually indistinguishable from production (Cash Flow / Investments / House Values / Retirement + all visual attributes). First audit complete (2026-07-06, ten core sheets across four design families). *(P0/P1, L — Family Beta quality gate; convergence, not redesign)*
-2. **Financial Integrity — Phase 3 (convergence)** — canonical basis → Planner/Dashboard/Rolling convergence to $0.01 → Asset/Planner/Dashboard audit modules. Foundation shipped (Audit Framework · Debt Audit · shared Active helper · `NOT_INITIALIZED`). *(P0–P1)*
-3. **Validation Agent** — automated regression-detection **release gate** that protects the reconciled numbers (next major engineering project); interim runtime regression checklist. *(P0)*
-4. **Recovery completion — remaining adoption paths** *(6F)* — Auto-Adopt → Ambiguous → Name-only adoption decision → Orphan, then flags OFF. *(P0–P1)*
-5. **Workbook / UX polish** — loading-experience consistency, empty-state standardization, UX consistency, onboarding (see `## UX Backlog (Version 1)`). *(P2)*
+1. **Bills Due Pay runtime validation** — confirm the shipped Pay occurrence bridge on the next genuine paid bill, then commit. *(In-flight; XS)*
+2. **Investments cleanup** — finish in-flight Investments convergence + runtime-validate + commit `investments.js` WIP. *(In-flight; S–M)*
+3. **Recovery completion — remaining adoption paths** *(6F)* — ratified Recovery Architecture: unconditional candidate detection → Auto-Adopt → Ambiguous → Name-only adoption decision → Orphan + provision-after-recovery duplicate guard, then flags OFF. *(P0–P1)*
+4. **Validation Agent** — automated regression-detection **release gate** that protects the reconciled numbers (next major engineering project); interim runtime regression checklist. *(P0)*
+5. **Golden Workbook polish (Convergence)** — newly provisioned workbook converges toward the Golden Workbook (visual source of truth) until visually indistinguishable from production (Cash Flow / Investments / House Values / Retirement + all visual attributes). First audit complete (2026-07-06). *(P0/P1, L — convergence, not redesign)*
+6. **Family Beta polish** — Workbook / UX polish sweep (loading-experience consistency, empty-state standardization, UX consistency, onboarding — see `## UX Backlog (Version 1)`) + Beta Gate assembly + go/no-go. *(P2)*
+
+> **Beta-Gate requirement, sequenced alongside items 3–5 (not a numbered slot above): Financial Integrity — Phase 3 (convergence)** — canonical basis → Planner/Dashboard/Rolling convergence to $0.01 → Asset/Planner/Dashboard audit modules. Foundation shipped (Audit Framework · Debt Audit · shared Active helper · `NOT_INITIALIZED`). *The numbers must reconcile* before Family Beta broadens. *(P0–P1)*
 
 **Stage 4 — Family Beta:**
 
@@ -676,24 +701,28 @@ Strategic product direction that builds on the existing Bank Import infrastructu
 
 ---
 
-### Future Enhancement — Weekly/Biweekly Weekday Recurrence Support (future)
+### Weekly/Biweekly Weekday Recurrence Support — ✅ DELIVERED (2026-07-09)
 
-Authoritative copy: `PROJECT_CONTEXT.md → Future Enhancement — Weekly/Biweekly Weekday Recurrence Support`. **Status:** documented, **not implemented.** **UX enhancement, not a blocker** for Recovery Validation, Family Beta, or External Beta.
+**Status:** **shipped and runtime-validated** (was: documented / not implemented). Delivered as **Recurrence Engine V2**. The original proposal (an optional `Repeat Day` field) was implemented as separate **`Weekday`** + **`Anchor Date`** columns plus a **`Schedule Effective Date`** column for prospective-only changes.
 
-**Background:** Weekly/Biweekly occurrences are currently generated from the **Due Day anchor model** (Due Day-of-month + 7/14-day steps within the month). It is not weekday-aware — it cannot produce "every Sunday," and two identically-configured weekly bills only align when they share a Due Day.
+**Background:** Weekly/Biweekly occurrences were generated from the **Due Day anchor model** (Due Day-of-month + 7/14-day steps within the month) — not weekday-aware. Recurrence Engine V2 adds true weekday scheduling while preserving that legacy model as the default.
 
-**Future goal:** let selected Weekly/Biweekly bills recur on a specific weekday.
+**What shipped:**
 
-**Proposed design:**
+- **Recurrence refactor:** extracted `buildRuleFromBillRow_` + `generateOccurrences_` (pure rule → occurrences seam).
+- **Weekly weekday:** continuous 7-day cadence across month boundaries when a `Weekday` is set.
+- **Biweekly weekday:** anchor-driven true 14-day cadence (`Anchor Date` + 14-day steps, cross-month/cross-year, no monthly re-anchoring).
+- **Data model:** `Weekday`, `Anchor Date`, and `Schedule Effective Date` columns on `INPUT - Bills` — provisioned for new workbooks and back-filled by schema self-heal (`ensureBillsSheetSchema_`) with formatting parity.
+- **UI:** `Weekday` shown for Weekly + Biweekly; `Anchor Date` shown for Biweekly only; hidden for other frequencies; Anchor Date convenience prefill.
+- **Validation:** client + server enforce that the Anchor Date falls on the selected Weekday — **no silent correction** (`isAnchorDateValidForWeekday_`).
+- **Prospective schedule changes:** editing a scheduling field stamps `Schedule Effective Date = today`; occurrences before it are never generated/autopaid (no retroactive Cash Flow accumulation, no history rewrite).
+- **AutoPay concurrency hardening:** `LockService` guards autopay writes (exactly-once accumulation).
 
-- **Data model:** optional `Repeat Day` field on `INPUT - Bills` (blank, Sunday … Saturday).
-- **Behavior:** Weekly + Repeat Day → every selected weekday; Biweekly + Repeat Day → every other selected weekday; blank → current Due Day behavior (backward compatible); Monthly/Quarterly/Yearly/Semi-annually/Bimonthly → unchanged.
-- **UI:** show `Repeat Day` dropdown only when Frequency = Weekly or Biweekly (Add + Edit Bill); hide for other frequencies.
-- **Migration:** existing workbooks remain valid; existing bills unchanged; new `INPUT - Bills` column/header may be required; **provisioning/header-repair must be reviewed before implementation.**
+**Backward compatibility:** blank `Weekday` / `Anchor Date` → legacy Due Day behavior. Monthly, Weekly (legacy), and all other frequencies unchanged.
 
-**Areas affected:** Bills UI; `INPUT - Bills` schema; `dashboard_data.js` recurrence expansion (`buildInputBillDueCandidates_`); Bills Due generation (`getInputBillsDueRows_`); Cash Flow autopay accumulation (weekly/biweekly branch); Activity Log dedupe validation (`buildBillAutopayDedupeKey_` already encodes the exact occurrence date).
+**Files:** `dashboard_data.js`, `bills.js`, `onboarding.js`, `Dashboard_Body.html`, `Dashboard_Script_BillsDue.html` (commit *Add biweekly weekday scheduling*).
 
-**Priority:** Post-Family Beta, Post-Recovery Validation.
+**Remaining (small, tracked in `## UX Backlog (Version 1) → Bills Scheduling UX`):** field-order polish in the edit dialog, inline Anchor Date validation, derived Schedule column evaluation, helper-text review, formatting parity review. **Not a blocker** for Family Beta or External Beta.
 
 ---
 

@@ -78,6 +78,18 @@ Rating scale (audit quality of the production sheet as a reference):
 
 **Purpose:** the working lists the user actively *maintains and acts on*. Row-per-obligation, status- and action-oriented, with header emphasis, notes/tooltips on non-obvious columns, and clear totals where relevant (e.g., TOTAL DEBT). Visual language favors legibility of individual records and quick action over time-series density.
 
+#### `INPUT - Bills` — canonical scheduling columns *(part of the Golden Workbook standard)*
+
+The canonical `INPUT - Bills` sheet **ends with three trailing scheduling columns**, in this exact order, immediately after `Notes`. They were introduced with Recurrence Engine V2 (Weekday & Biweekly scheduling) and are now a permanent part of the Golden Workbook standard — a newly provisioned workbook must include them, and older workbooks self-heal to add them (append-only, right of `Notes`).
+
+| Column (in order) | Purpose | Blank default | Canonical formatting |
+|---|---|---|---|
+| **Weekday** | The weekday a **Weekly** or **Biweekly** bill recurs on (`Sunday`…`Saturday`). Blank = legacy Due-Day behavior. Ignored for Monthly/Quarterly/Semiannual/Yearly. | **Blank** (legacy Due-Day behavior) | Text; inherits the neighboring Bills column's font, alignment, and background. Canonical width **110**. |
+| **Anchor Date** | For **Biweekly** bills only: a real date on the selected weekday that establishes the recurring two-week cadence. Must fall on the chosen Weekday (never silently corrected). | **Blank** (no biweekly anchor set) | Date, stored as canonical `yyyy-MM-dd`; inherits the neighboring Bills column's font/alignment/background. Canonical width **120**. |
+| **Schedule Effective Date** | The date a scheduling change takes effect. Set automatically to *today* when a scheduling field (Frequency, Due Day, Weekday, Anchor Date) changes, so changes apply going forward only. Not user-edited. | **Blank** (no prospective change recorded; full history applies) | Date, stored as canonical `yyyy-MM-dd`; inherits the neighboring Bills column's font/alignment/background. Canonical width **160**. |
+
+**Convergence rules:** all three are **append-only** and **blank by default** — no example data is ever seeded. On first-create and on self-heal they take the standard Bills column styling (copied from an adjacent Bills column: font family/size/color, alignment, background, number format) plus the canonical widths above, so they are visually indistinguishable from the rest of the Bills row. Header text must match exactly: `Weekday`, `Anchor Date`, `Schedule Effective Date`.
+
 ### 3. Operational Planning family — ★★★★☆ Production Ready
 
 **Sheets:** Upcoming Expenses · Donations.

@@ -396,7 +396,7 @@
           <li><strong>bill_skip</strong> — <strong>Skip</strong> records the skipped occurrence (deduplicated per occurrence). It also writes <strong>0</strong> into the Cash Flow cell for that cycle when the cell is empty; if the cell already holds a value the amount is preserved, but the skip is still logged so the occurrence is removed from Bills Due (this is what lets Weekly/Biweekly occurrences be skipped individually).</li>
           <li><strong>bill_autopay</strong> — Autopay writes the default amount for a due, eligible bill. Deduplicated so dashboard refreshes do not create duplicates.</li>
           <li><strong>bill_add</strong> — New recurring bill saved via <strong>Cash Flow → Bills → Add bill</strong>. The new row is inserted into <strong>INPUT - Bills</strong> in <strong>Due Day</strong> order — it lands just above the first existing bill whose Due Day is greater, with same-day ties going below the existing same-day rows. Activity <strong>Type</strong> is <strong>Bill</strong>; <strong>Action</strong> sub-label is <strong>Bill added</strong>.</li>
-          <li><strong>bill_update</strong> — Field-level edit on a tracked bill from <strong>Cash Flow → Bills → Manage bills → Edit</strong> (Payee, Default Amount, Due Day, Frequency, Payment Source, Category, Autopay, Varies, Notes). Activity <strong>Type</strong> is <strong>Bill</strong>; the <strong>Action</strong> sub-label inlines the new value for single-field saves (e.g. <em>Updated Default Amount to $126.00</em>, <em>Updated Due Day to 15</em>) and collapses to <em>Updated N fields</em> for multi-field saves. <strong>Amount</strong> shows <strong>—</strong> because a field edit does not move money; the previous and new values are preserved in the event&rsquo;s <strong>details</strong> JSON (<em>payeeBefore</em>, <em>payeeAfter</em>, <em>changedFields</em>, <em>old</em>, <em>new</em>). The bill row stays in place in <strong>INPUT - Bills</strong> (no re-sort) and existing Cash Flow rows are <strong>not</strong> retroactively renamed.</li>
+          <li><strong>bill_update</strong> — Field-level edit on a tracked bill from <strong>Cash Flow → Bills → Manage bills → Edit</strong> (Payee, Default Amount, Due Day, Frequency, Weekday, Anchor Date, Payment Source, Category, Autopay, Varies, Notes). Scheduling edits (Frequency, Due Day, Weekday, Anchor Date) apply <strong>going forward only</strong> — past payments, Cash Flow history, and earlier Activity entries are never changed. Activity <strong>Type</strong> is <strong>Bill</strong>; the <strong>Action</strong> sub-label inlines the new value for single-field saves (e.g. <em>Updated Default Amount to $126.00</em>, <em>Updated Due Day to 15</em>) and collapses to <em>Updated N fields</em> for multi-field saves. <strong>Amount</strong> shows <strong>—</strong> because a field edit does not move money; the previous and new values are preserved in the event&rsquo;s <strong>details</strong> JSON (<em>payeeBefore</em>, <em>payeeAfter</em>, <em>changedFields</em>, <em>old</em>, <em>new</em>). The bill row stays in place in <strong>INPUT - Bills</strong> (no re-sort) and existing Cash Flow rows are <strong>not</strong> retroactively renamed.</li>
           <li><strong>bill_deactivate</strong> — <strong>Stop tracking</strong> on a recurring bill (sets <strong>Active = No</strong>; the row is kept for history, no payments are reversed). Activity <strong>Type</strong> is <strong>Bill</strong>; sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong> because no money moved.</li>
         </ul>
 
@@ -476,6 +476,13 @@
         <h3>Bills</h3>
         <p>The Bills page (on Cash Flow) has two internal views: <strong>Due this period</strong> for execution, and <strong>Manage bills</strong> for the underlying list on <strong>INPUT - Bills</strong>.</p>
 
+        <h4>Recurring bills — an overview</h4>
+        <ul class="help-list">
+          <li>CashCompass supports these repeat schedules: <strong>Monthly</strong>, <strong>Weekly</strong>, <strong>Biweekly</strong> (every other week), <strong>Quarterly</strong>, <strong>Semiannual</strong>, and <strong>Yearly</strong>.</li>
+          <li>Every recurring bill creates <strong>individual occurrences</strong> — one for each time the bill is actually due. A weekly bill, for example, shows up several times a month, each on its own date and at its own amount, instead of as one lumped total.</li>
+          <li>Each occurrence is tracked on its own, so you can <strong>Pay</strong> or <strong>Skip</strong> a single date without affecting the others.</li>
+        </ul>
+
         <h4>Due this period</h4>
         <ul class="help-list">
           <li>Three groups: <strong>Overdue</strong>, <strong>Next 7 Days</strong>, and <strong>Recurring Bills (No Due Date)</strong>.</li>
@@ -498,11 +505,58 @@
           <li><strong>Skip</strong> — Marks that bill <strong>occurrence</strong> as intentionally skipped, removes it from Bills Due, and records the skip on <strong>LOG - Activity</strong>. If the matching Cash Flow cell for that cycle is empty it also writes <strong>0</strong>; if the cell already holds a value the cell is left untouched but the skip is still recorded. For <strong>Weekly/Biweekly</strong> bills, Skip applies <em>only to that specific occurrence</em> — future occurrences stay on the list.</li>
         </ul>
 
-        <h4>Weekly/Biweekly bills</h4>
+        <h4>Weekly bills</h4>
         <ul class="help-list">
-          <li>Weekly and Biweekly bills generate <strong>individual occurrences</strong> within the month rather than a single lumped entry — each occurrence shows at its own normal amount.</li>
-          <li>Skipping (or paying) one occurrence does <strong>not</strong> remove the others — remaining occurrences stay visible.</li>
-          <li>Recurrence currently uses the <strong>Due Day anchor</strong> model (first occurrence on the Due Day, then every 7 / 14 days). Weekday-based recurrence (a “Repeat Day” such as every Sunday) is <strong>documented as a future enhancement but not yet implemented</strong>.</li>
+          <li>Weekly bills can now repeat on a <strong>weekday you choose</strong> — for example <em>every Sunday</em>, <em>every Monday</em>, or <em>every Friday</em>.</li>
+          <li>When you set up a Weekly bill, pick the <strong>Weekday</strong> it should fall on. CashCompass then creates one occurrence on that weekday, every week.</li>
+          <li>Older Weekly bills that don't have a Weekday selected keep working the way they always have (based on their <strong>Due Day</strong>). They switch to weekday scheduling only when you choose a Weekday for them.</li>
+        </ul>
+
+        <h4>Biweekly bills</h4>
+        <ul class="help-list">
+          <li>Biweekly bills repeat <strong>every other week</strong>. You set two things: the <strong>Weekday</strong> and an <strong>Anchor Date</strong>.</li>
+          <li>The <strong>Anchor Date</strong> is simply a real date when the bill occurs — it establishes the every-two-week rhythm. The Anchor Date must land on the weekday you picked.</li>
+          <li>Example — <strong>Monday</strong>, Anchor Date <strong>July 6</strong>:
+            <ul class="help-list">
+              <li>July 6 → July 20 → August 3 → August 17 … (every other Monday, continuing cleanly across months).</li>
+            </ul>
+          </li>
+          <li>If you enter an Anchor Date that isn't on the selected weekday, CashCompass asks you to fix it rather than quietly changing it.</li>
+        </ul>
+
+        <h4>Schedule changes</h4>
+        <ul class="help-list">
+          <li>When you change a bill's schedule (its frequency, weekday, day, or anchor date), the change applies <strong>going forward only</strong>.</li>
+          <li>Changing a schedule does <strong>not</strong> rewrite past payments, does <strong>not</strong> rewrite your Cash Flow history, and does <strong>not</strong> delete anything from your Activity history.</li>
+          <li>Everything you've already recorded stays exactly as it was. Only <strong>future</strong> occurrences follow the new schedule.</li>
+          <li>Changes apply going forward only. The next valid occurrence becomes active automatically. No manual cleanup is required.</li>
+        </ul>
+
+        <h4>Paying and skipping occurrences</h4>
+        <ul class="help-list">
+          <li>Bills Due tracks each occurrence separately. Any occurrence can be <strong>Paid</strong> or <strong>Skipped</strong> on its own.</li>
+          <li><strong>Paying</strong> one occurrence does not affect future ones. <strong>Skipping</strong> one occurrence does not affect future ones.</li>
+          <li>So you can pay this week's occurrence, skip next week's, and leave the following week untouched — each is independent.</li>
+        </ul>
+
+        <h4>AutoPay</h4>
+        <ul class="help-list">
+          <li>When a bill has AutoPay turned on, CashCompass records each occurrence <strong>only once</strong>.</li>
+          <li>Even if the dashboard refreshes several times, a due occurrence won't be paid twice — <strong>duplicate payments are prevented automatically</strong>.</li>
+        </ul>
+
+        <h4>Legacy bills</h4>
+        <ul class="help-list">
+          <li>Existing bills continue working <strong>exactly as before</strong>. Nothing about your current bills changes on its own.</li>
+          <li>Weekday and Biweekly scheduling are <strong>opt-in</strong>: a bill only uses them once you choose a Weekday (and, for Biweekly, an Anchor Date).</li>
+          <li>You can upgrade any bill to weekday scheduling whenever you like — there's no rush and no migration to run.</li>
+        </ul>
+
+        <h4>Examples</h4>
+        <ul class="help-list">
+          <li><strong>Kids allowance</strong> — Weekly, Weekday <em>Sunday</em>. Pays out every Sunday.</li>
+          <li><strong>House cleaning</strong> — Biweekly, Weekday <em>Monday</em>, Anchor Date <em>July 6</em>. Occurs July 6, July 20, August 3, and so on — every other Monday.</li>
+          <li><strong>Mortgage</strong> — Monthly, Due Day <em>1</em>. Occurs on the 1st of each month.</li>
         </ul>
 
         <h4>Where amounts come from</h4>
@@ -534,6 +588,7 @@
         <h4>Add bill</h4>
         <ul class="help-list">
           <li>Inserts a row into <strong>INPUT - Bills</strong> in <strong>Due Day</strong> order so the sheet stays sorted as you add new bills. The new row lands just above the first existing bill with a higher Due Day; same-day ties go to the bottom of the same-day group, and any legacy rows with a blank Due Day stay at the bottom.</li>
+          <li>Pick a <strong>Frequency</strong> (Monthly, Weekly, Biweekly, Quarterly, Semiannual, or Yearly). For <strong>Weekly</strong> and <strong>Biweekly</strong> bills a <strong>Weekday</strong> field appears; <strong>Biweekly</strong> also shows an <strong>Anchor Date</strong> field that sets the every-other-week rhythm (it must fall on the chosen weekday). See <em>Weekly bills</em> and <em>Biweekly bills</em> above.</li>
           <li><strong>Category</strong> is required (both client and server side).</li>
           <li>Logs <strong>bill_add</strong> on <strong>LOG - Activity</strong>.</li>
         </ul>
@@ -541,7 +596,8 @@
         <h4>Edit a tracked bill</h4>
         <ul class="help-list">
           <li>Each row in Manage bills has an <strong>Edit</strong> action that reuses the <strong>Add bill</strong> form in edit mode. The form heading and primary button switch to <strong>Edit bill</strong> / <strong>Save changes</strong>; <strong>Start Month</strong> and <strong>Active</strong> are hidden because they are Add-only fields (use <strong>Stop tracking</strong> to deactivate a bill).</li>
-          <li>Editable fields: <strong>Payee</strong>, <strong>Default Amount</strong>, <strong>Due Day</strong>, <strong>Frequency</strong>, <strong>Payment Source</strong>, <strong>Category</strong>, <strong>Autopay</strong>, <strong>Varies</strong>, <strong>Notes</strong>. Validation rules match <strong>Add bill</strong>. Only the columns that actually changed are written.</li>
+          <li>Editable fields: <strong>Payee</strong>, <strong>Default Amount</strong>, <strong>Due Day</strong>, <strong>Frequency</strong>, <strong>Weekday</strong> (shown for Weekly and Biweekly), <strong>Anchor Date</strong> (shown for Biweekly), <strong>Payment Source</strong>, <strong>Category</strong>, <strong>Autopay</strong>, <strong>Varies</strong>, <strong>Notes</strong>. Validation rules match <strong>Add bill</strong>. Only the columns that actually changed are written.</li>
+          <li>The <strong>Weekday</strong> and <strong>Anchor Date</strong> fields appear only when they apply: Weekday for Weekly and Biweekly bills, Anchor Date for Biweekly bills. They stay hidden for Monthly, Quarterly, Semiannual, and Yearly bills. Changing any scheduling field applies <strong>going forward only</strong> (see <em>Schedule changes</em> above).</li>
           <li>The bill row is updated <em>in place</em> — its position in <strong>INPUT - Bills</strong> does not change, even on a Due Day edit. The Manage table sorts client-side so the displayed order stays correct.</li>
           <li>Existing <strong>Cash Flow</strong> rows generated when the bill was first added are <strong>not</strong> retroactively renamed or reclassified, even on a <strong>Payee</strong> rename. History is preserved on purpose; future bill matches use the new values from the next Add / payment.</li>
           <li>Inactive bills cannot be edited — re-add the bill or restore it later. A <strong>save with no changes</strong> returns <em>No changes.</em> and is <strong>not</strong> logged.</li>
