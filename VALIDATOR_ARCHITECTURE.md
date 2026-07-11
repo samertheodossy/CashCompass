@@ -262,10 +262,11 @@ The Validator must never enter the hot path:
   first Validator module (`validator_core.js`, `validator_snapshot.js`,
   `validator_format_compare.js`, `validator_report.js`); exposed the single
   guarded entry point `validateGoldenParityReport()`; removed `dev-tools/`.
-- **Phase 2 — planned.** Add `validator_rules.js` (required-sheets + headers,
-  **sourced from the existing canonical constants** used by provisioning) and
-  `validator_checks.js` (`checkRequiredSheets_`, `checkHeaders_`); expose
-  `validateActiveWorkbook()` behind `assertValidatorAllowed_()`.
+- **Phase 2 — Provisioning Validation — planned.** Add `validator_rules.js`
+  (required-sheets + headers, **sourced from the existing canonical constants**
+  used by provisioning) and `validator_checks.js` (`checkRequiredSheets_`,
+  `checkHeaders_`); expose `validateActiveWorkbook()` behind
+  `assertValidatorAllowed_()`. See the **Phase 2 milestone** detail below.
 - **Phase 3 — planned.** Add `checkSchema_` (column order/types / canonical schema
   evolution), `checkFormulas_` (expected `=SUM` totals and Delta chains), and
   `checkFormatting_` (snapshot vs rule expectations).
@@ -273,6 +274,64 @@ The Validator must never enter the hot path:
   run validators without the editor.
 
 At every phase: read-only, guarded, default-off, and covered by the CI guards.
+
+### Phase 2 milestone — Provisioning Validation *(planned; do not start yet)*
+
+> **Status:** Documented milestone, **not started.** This work intentionally
+> begins **only after Golden Workbook convergence is complete** (see
+> `TODO.md → Stage 3` and `GOLDEN_WORKBOOK.md`). Captured here so the next major
+> Validator milestone is not forgotten while convergence finishes.
+
+**Goal.** After Central provisions a workbook, run a **read-only** validation that
+verifies the workbook matches the canonical CashCompass architecture.
+
+**Design principle (non-negotiable).**
+
+- The Validator **validates** provisioning.
+- The Validator **never performs** provisioning.
+- The Validator **remains read-only.**
+
+**Scope (future validation should include):**
+
+- Required sheets
+- Optional sheets based on enabled modules
+- Sheet schema
+- Headers
+- Frozen panes
+- Canonical column widths
+- Typography
+- Family styling
+- Named ranges
+- Key formulas
+- Hidden / protected support structures
+- Metadata sheets
+- Workbook version compatibility
+- Cross-sheet integrity
+- Regression detection
+
+**Architecture notes.**
+
+- The Validator **derives expectations from canonical constants and shared
+  helpers** — the same source provisioning uses.
+- The Validator **does not duplicate provisioning rules.**
+- Provisioning and the Validator **must always share the same source of truth.**
+
+**Future workflow.**
+
+```
+Provision Workbook
+        ↓
+   Run Validator
+        ↓
+  PASS   or   Actionable Report
+                    ↓
+                   Fix
+                    ↓
+          Run Validator Again
+```
+
+**Note.** This work intentionally begins after Golden Workbook convergence is
+complete. **Do not begin implementation now.**
 
 ---
 

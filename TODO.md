@@ -97,9 +97,12 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
 | Validation Agent / automated regression detection (release gate) | P0 | Stable read models ✓ | L–XL |
+| **Validator Phase 2 — Provisioning Validation** — read-only validation that a freshly provisioned workbook matches the canonical CashCompass architecture (see note + `VALIDATOR_ARCHITECTURE.md §10`) | P1 | Golden Workbook convergence complete | L |
 | Runtime regression checklist (interim manual gate) | P1 | — | M |
 | Financial-integrity gate wiring into release | P1 | FI Phase 3 convergence | S |
 | Deployment checklist | P2 | — | S |
+
+> **Validator Phase 2 — Provisioning Validation (planned; do not start yet).** After Central provisions a workbook, run a **read-only** validation that verifies the workbook matches the canonical CashCompass architecture. **Design principle: the Validator *validates* provisioning; it never *performs* provisioning, and it stays read-only.** Scope (future): required sheets · optional sheets per enabled module · sheet schema · headers · frozen panes · canonical column widths · typography · family styling · named ranges · key formulas · hidden/protected support structures · metadata sheets · workbook version compatibility · cross-sheet integrity · regression detection. **Architecture:** the Validator derives expectations from the **same canonical constants and shared helpers** provisioning uses — it must never duplicate provisioning rules; provisioning and Validator always share one source of truth. **Workflow:** Provision Workbook → Run Validator → PASS *or* actionable report → Fix → Run Validator again. **This work intentionally begins only after Golden Workbook convergence is complete.** Full milestone detail lives in `VALIDATOR_ARCHITECTURE.md §10 → Phase 2`.
 
 **D. Recovery completion — remaining adoption paths** *(Beta-Gate workstream · execution item #3 — gates Family Beta; destructive/admin paths already validated)*
 
