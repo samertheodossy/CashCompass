@@ -335,12 +335,13 @@
             <input type="text" id="house_add_loan" inputmode="decimal" onfocus="currencyFocus('house_add_loan')" onblur="currencyBlur('house_add_loan')">
             <label>Valuation date (optional)</label>
             <input type="date" id="house_add_valuation_date">
-            <div class="muted" style="margin-top:4px;font-size:12px;">If left blank, the current month will be used. Must be in the current calendar year when provided.</div>
+            <div class="muted" style="margin-top:4px;font-size:12px;">If left blank, the current month is used. Historical dates are allowed; the current value is recorded in the current year block.</div>
             <button onclick="createHouse()">Create house</button>
           </div>
           <div class="info muted">
-            <p style="margin-top:0;">Creates the house in the current year's House Values block and sets up a matching expense sheet with the standard expense-tracking columns.</p>
-            <p>Valuation date is optional. When provided it must fall in the current year and the Current value is seeded into that month. <strong>If left blank, the current month is used automatically</strong> so the Current value always lands in a real month column. Property type is a dropdown of common roles plus any types already used in this workbook; pick <strong>Other</strong> to enter a custom label.</p>
+            <p style="margin-top:0;">Creates a House Values record and a matching property expense sheet.</p>
+            <p>Current Value is recorded in the current year's House Values sheet.</p>
+            <p>Historical valuation dates are allowed.</p>
           </div>
         </div>
       </div>

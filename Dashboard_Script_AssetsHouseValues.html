@@ -1,4 +1,12 @@
 /* Assets — House Values tab */
+
+// Guards against double-submit of Create house. A rapid double-click (or an
+// impatient second click before the RPC returns) would otherwise fire two
+// addHouseFromDashboard calls; the server document lock now blocks the second
+// from writing, but this flag also spares the user a confusing second "already
+// exists" round-trip. Reset in BOTH the success and failure handlers.
+var houseCreateInFlight_ = false;
+
 function fillHouseDropdownFromData_(data) {
   const sel = document.getElementById('house_house');
   if (!sel) return;
@@ -10,6 +18,18 @@ function fillHouseDropdownFromData_(data) {
     sel.appendChild(opt);
   });
   populateHouseAddDatalists_(data);
+
+  // Deterministic default-tab rule (Issue 1): once REAL data has loaded, an
+  // empty House Values workbook must land on "Add new" — there is nothing to
+  // Update. This runs on every entry path that repopulates the dropdown
+  // (loadHouseSection, loadHouseSectionThenSelect_, stop-tracking refresh), so
+  // the tab is decided by actual data rather than a cached onboarding flag or
+  // async load timing. When houses exist we deliberately leave the current
+  // mode untouched: the HTML default (Update) stays for normal navigation, and
+  // an intentional Add (e.g. adding a second house) is preserved.
+  if (!(data.houses && data.houses.length) && typeof setHousePanelMode === 'function') {
+    setHousePanelMode('add');
+  }
 }
 
 // Core first-run property-type choices for the Add new house form.
@@ -424,9 +444,16 @@ function createHouse() {
   };
   if (valDate) payload.valuationDate = valDate;
 
+  // Ignore a second submit while the first is still in flight (double-click /
+  // impatient re-click). All the synchronous validation above has already
+  // passed, so it is safe to short-circuit here.
+  if (houseCreateInFlight_) return;
+  houseCreateInFlight_ = true;
+
   setStatusLoading('house_status');
   google.script.run
     .withSuccessHandler(function(res) {
+      houseCreateInFlight_ = false;
       const useDate = valDate || new Date().toISOString().slice(0, 10);
       setStatus('house_status', res.message || 'Created.', false);
       const createdName = res.houseName || name;
@@ -442,6 +469,7 @@ function createHouse() {
       refreshSnapshot();
     })
     .withFailureHandler(function(err) {
+      houseCreateInFlight_ = false;
       const msg = err && err.message ? err.message : String(err);
       if (isHouseNameRelatedError_(msg)) {
         showHouseAddNameError_(msg);

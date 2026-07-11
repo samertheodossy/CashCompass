@@ -69,9 +69,57 @@ function ensureInputHouseValuesSheet_() {
   headers.push('Active');
   sheet.getRange(2, 1, 1, headers.length).setValues([headers]);
 
+  // Column geometry: A=House, B=Loan Amount Left, C..N = the 12 MMM-YY month
+  // columns (firstMonthCol = 3), O = Active. Mirrors
+  // ensureHouseValuesActiveColumnForBlock_(block.firstMonthCol + 12).
+  const firstMonthCol = 3;
+  const lastMonthCol = firstMonthCol + monthLabels.length - 1; // 14 (Dec)
+  const activeCol = lastMonthCol + 1;                          // 15 (Active)
+
+  // Golden Workbook Convergence (Financial Ledger parity, mirrors the validated
+  // Investments / Bank Accounts creators) — (1) pin the month headers as literal
+  // text so Sheets never auto-parses "Jan-26" into a Date, and (2) currency-
+  // format the money columns (Loan Amount Left + the 12 month columns) so the
+  // first value typed renders like Cash Flow / Investments. Bounded to current
+  // max rows; data rows begin at row 3. Cosmetic and FIRST-CREATE only
+  // (populated sheets return at the `existing` guard above).
+  try {
+    for (let mh = 0; mh < monthLabels.length; mh++) {
+      const hdrCell = sheet.getRange(2, firstMonthCol + mh);
+      hdrCell.setNumberFormat('@STRING@');
+      hdrCell.setValue(monthLabels[mh] + '-' + yy);
+    }
+    const maxRowsHv = sheet.getMaxRows();
+    if (maxRowsHv > 2) {
+      // Loan Amount Left (col 2) + the 12 month columns are money.
+      sheet.getRange(3, 2, maxRowsHv - 2, (lastMonthCol - 2) + 1)
+        .setNumberFormat('$#,##0.00;-$#,##0.00');
+    }
+  } catch (_fmtErr) { /* cosmetic only */ }
+
+  // Canonical banner coloring (orange Year, yellow header, green Total Values /
+  // pink House Assets footer bands, frozen cols) — cosmetic only, wrapped so a
+  // formatting hiccup never fails structural creation.
   try {
     applyHouseValuesSheetStyling_(sheet);
   } catch (_styleErr) { /* cosmetic only */ }
+
+  // Golden Workbook font-size parity (Financial Ledger family) — FIRST-CREATE
+  // ONLY. A fresh Apps Script sheet defaults to size 10; the bound Golden
+  // Workbook uses Year 20 / header 16 / body 14. Wash the ENTIRE sheet to the
+  // canonical body size (14) so every row — data rows, Total Values, House
+  // Assets, and any future inserted row — defaults to 14, then raise row 1
+  // (Year banner) to 20 and row 2 (House header) to 16. Applied HERE and not in
+  // applyHouseValuesSheetStyling_ (which also runs on populated workbooks on
+  // every add) so an existing user's sheet is never body-restyled. Cosmetic
+  // only; failures are swallowed.
+  try {
+    const maxRowsFont = sheet.getMaxRows();
+    const lastColFont = Math.max(1, sheet.getLastColumn());
+    sheet.getRange(1, 1, maxRowsFont, lastColFont).setFontSize(14);
+    sheet.getRange(1, 1, 1, lastColFont).setFontSize(20); // Year banner
+    sheet.getRange(2, 1, 1, lastColFont).setFontSize(16); // House header
+  } catch (_fontErr) { /* cosmetic only */ }
 
   try {
     sheet.setFrozenRows(2);
@@ -80,6 +128,27 @@ function ensureInputHouseValuesSheet_() {
   try {
     sheet.autoResizeColumns(1, headers.length);
   } catch (_resizeErr) { /* cosmetic only */ }
+
+  // Widen-only readable column widths, applied HERE in the first-create path
+  // only — never inside applyHouseValuesSheetStyling_, which also runs on
+  // populated workbooks (insertNewHouseHistoryRow_) and must not resize a
+  // user's columns. Converges a fresh sheet toward the Golden Workbook's
+  // readable widths without ever shrinking a manually widened column. House
+  // (260) mirrors the Financial Ledger family standard from Bank Accounts /
+  // Investments; the month columns (140) are widened beyond the 110 family
+  // default because property valuations are far larger than typical account
+  // balances — a 7-figure value like $1,000,000.00 (and headroom for
+  // $10,000,000.00) reads cleanly with breathing room instead of touching the
+  // column edge; Loan Amount Left (210) gives the 16-char header (16pt bold)
+  // comfortable spacing plus large loan values; Active (90) is readable.
+  try {
+    if (sheet.getColumnWidth(1) < 260) sheet.setColumnWidth(1, 260);
+    if (sheet.getColumnWidth(2) < 210) sheet.setColumnWidth(2, 210);
+    for (let c = firstMonthCol; c <= lastMonthCol; c++) {
+      if (sheet.getColumnWidth(c) < 140) sheet.setColumnWidth(c, 140);
+    }
+    if (sheet.getColumnWidth(activeCol) < 90) sheet.setColumnWidth(activeCol, 90);
+  } catch (_widthErr) { /* cosmetic only */ }
 
   return sheet;
 }
@@ -95,13 +164,40 @@ function ensureInputHouseValuesSheet_() {
  *
  * @returns {GoogleAppsScript.Spreadsheet.Sheet}
  */
+/**
+ * Canonical column widths for SYS - House Assets, addressed by exact header
+ * name. Single source of truth for both first-create styling and the safe
+ * widen-only self-heal applied to existing sheets. Readability-first values
+ * comparable to SYS - Assets (Type is wider than SYS - Assets because property
+ * types — e.g. "Primary Residence" — are longer than investment types).
+ */
+var SYS_HOUSE_ASSETS_CANONICAL_WIDTHS_ = {
+  'House': 280,
+  'Type': 200,
+  'Loan Amount Left': 240,
+  'Current Value': 230,
+  'Active': 110
+};
+
 function ensureSysHouseAssetsSheet_() {
   const ss = getUserSpreadsheet_();
   const names = getSheetNames_();
   const sheetName = names.HOUSE_ASSETS;
 
   const existing = ss.getSheetByName(sheetName);
-  if (existing) return existing;
+  if (existing) {
+    // Safe widen-only self-heal for existing populated sheets: converge column
+    // widths toward the canonical readable values WITHOUT ever shrinking a
+    // user-widened column, moving/renaming columns, or touching data, fonts,
+    // heights, or formulas. applyCanonicalColumnWidthsByHeader_ locates columns
+    // by header name, sets max(current, canonical), and swallows all failures —
+    // an approved additive convergence per ENGINEERING_STANDARDS.md (width-only,
+    // idempotent). This is the one explicitly-approved existing-sheet change.
+    try {
+      applyCanonicalColumnWidthsByHeader_(existing, 1, SYS_HOUSE_ASSETS_CANONICAL_WIDTHS_);
+    } catch (_selfHealErr) { /* cosmetic only */ }
+    return existing;
+  }
 
   let sheet;
   try {
@@ -131,9 +227,47 @@ function ensureSysHouseAssetsSheet_() {
     applyHouseAssetsSheetStyling_(sheet);
   } catch (_styleErr) { /* cosmetic only */ }
 
+  // Golden Workbook font parity (FIRST-CREATE ONLY) — mirrors ensureSysAssetsSheet_.
+  // The sheet was just inserted and holds no user data or formatting, so a
+  // whole-sheet wash is safe here — this path is never reached for an existing
+  // populated workbook (the `existing` guard above returns early). Body rows
+  // land at the canonical 14; the flat-SYS-sheet header row is raised to 20
+  // (ENGINEERING_STANDARDS: flat SYS sheets use a 20pt header, matching
+  // SYS - Assets). Every future appended row inherits 14 from these washed
+  // empty rows.
   try {
-    sheet.autoResizeColumns(1, headers.length);
-  } catch (_resizeErr) { /* cosmetic only */ }
+    const maxRowsFont = sheet.getMaxRows();
+    const maxColsFont = sheet.getMaxColumns();
+    sheet.getRange(1, 1, maxRowsFont, maxColsFont).setFontSize(14);
+    sheet.getRange(1, 1, 1, maxColsFont).setFontSize(20);
+  } catch (_fontErr) { /* cosmetic only */ }
+
+  // Golden Workbook canonical column widths (FIRST-CREATE) — mirrors
+  // ensureSysAssetsSheet_. We deliberately do NOT drive widths off
+  // autoResizeColumns: on a fresh sheet it fits each column tightly to the 20pt
+  // bold header with minimal padding, which reads as the "crowded / compressed"
+  // look. Canonical widths (the shared SYS_HOUSE_ASSETS_CANONICAL_WIDTHS_ map,
+  // same values used by the existing-sheet self-heal above) are the authority;
+  // they hold the 20pt headers plus currency values with breathing room.
+  // applyCanonicalColumnWidthsByHeader_ is widen-only, so it never shrinks a
+  // column (moot on a brand-new sheet, kept for consistency and safety).
+  try {
+    applyCanonicalColumnWidthsByHeader_(sheet, 1, SYS_HOUSE_ASSETS_CANONICAL_WIDTHS_);
+  } catch (_widthErr) { /* cosmetic only */ }
+
+  // Comfortable header row height for the 20pt header (FIRST-CREATE ONLY).
+  // applyHouseAssetsSheetStyling_ no longer forces a header height (Styling
+  // Reassertion Rule), so this first-create value survives the first add.
+  try { sheet.setRowHeight(1, 44); } catch (_rhErr) { /* cosmetic only */ }
+
+  // Canonical body row height (FIRST-CREATE ONLY). Default sheet rows are
+  // ~21px, which reads cramped at 14pt body text. Raise the empty data rows to
+  // a spacious, readable 26px so appended rows land at a comfortable height.
+  // Safe: the sheet was just inserted and holds no user rows.
+  try {
+    const maxRowsBody = sheet.getMaxRows();
+    if (maxRowsBody > 1) sheet.setRowHeights(2, maxRowsBody - 1, 26);
+  } catch (_bodyRhErr) { /* cosmetic only */ }
 
   return sheet;
 }
@@ -303,16 +437,29 @@ function getHouseValueForDate(house, valuationDate) {
   const hvSheet = getSheet_(ss, 'HOUSE_VALUES');
   const hvDisplay = hvSheet.getDataRange().getDisplayValues();
 
-  const year = d.getFullYear();
+  // Preview must mirror the SAVE path (updateHouseValueByDate): the house
+  // lives in the CURRENT-year block, and an out-of-year selected date (e.g.
+  // 02/10/2020) resolves to a safe month in that block via the shared
+  // resolveHouseValuesSeedDate_ helper — never searching for or creating a
+  // historical year block. seedDate drives the block/month lookup and the
+  // displayed "selectedMonth"; the raw selected date `d` is untouched and is
+  // still what the client sends back to updateHouseValueByDate on save (which
+  // preserves it verbatim in the activity log).
+  const currentYear = getCurrentYear_();
+  const seedDate = resolveHouseValuesSeedDate_(d, currentYear);
   const monthValue = getHouseValueFromHistoryForMonthFromDisplay_(
-    hvSheet, hvDisplay, houseName, year, d
+    hvSheet, hvDisplay, houseName, currentYear, seedDate
   );
   const assetsInfo = getHouseAssetRowData_(houseName);
 
   var previousMonthLabel = '';
   var deltaFromPreviousMonth = null;
   try {
-    const prior = new Date(d.getFullYear(), d.getMonth() - 1, 15);
+    // Prior month is derived from the resolved seed month so it stays within
+    // the current-year block. When seedDate is January the prior month is Dec
+    // of the previous year, whose block may not exist — that lookup throws and
+    // is swallowed below (no delta), matching prior behavior.
+    const prior = new Date(seedDate.getFullYear(), seedDate.getMonth() - 1, 15);
     const priorYear = prior.getFullYear();
     const previousMonthValue = getHouseValueFromHistoryForMonthFromDisplay_(
       hvSheet, hvDisplay, houseName, priorYear, prior
@@ -329,7 +476,7 @@ function getHouseValueForDate(house, valuationDate) {
 
   return {
     house: houseName,
-    selectedMonth: Utilities.formatDate(d, Session.getScriptTimeZone(), 'MMM-yy'),
+    selectedMonth: Utilities.formatDate(seedDate, Session.getScriptTimeZone(), 'MMM-yy'),
     selectedMonthValue: monthValue,
     currentAssetValue: assetsInfo ? assetsInfo.currentValue : '',
     propertyType: assetsInfo ? assetsInfo.propertyType : '',
@@ -357,6 +504,31 @@ function getHouseValueFromHistoryForMonthFromDisplay_(sheet, display, houseName,
   return round2_(toNumber_(sheet.getRange(houseRow, monthCol).getValue()));
 }
 
+/**
+ * Canonical month-seed date resolver for House Values writes (Add + Update).
+ *
+ * A house row always lives in the CURRENT-year block; this returns the date
+ * used ONLY to choose which month column of that block receives the value.
+ * When the entered date already falls in the block year we honor its month;
+ * when it is historical or in the future (out-of-block-year) we fall back to
+ * today — always inside the block year, since getCurrentYear_() is the
+ * calendar year — so the month-column lookup, which keys on month AND year
+ * ("MMM-yy"), resolves instead of throwing "Could not find month column".
+ *
+ * Never creates, searches, or backfills historical year blocks. The caller is
+ * responsible for preserving the user's raw entered date in any log/detail.
+ *
+ * @param {!Date} valuationDate  parsed, validated entered date
+ * @param {number} blockYear     the current-year block being written
+ * @returns {!Date} a date guaranteed to fall inside blockYear
+ */
+function resolveHouseValuesSeedDate_(valuationDate, blockYear) {
+  if (valuationDate && valuationDate.getFullYear() === blockYear) {
+    return valuationDate;
+  }
+  return stripTime_(new Date());
+}
+
 function updateHouseValueByDate(payload) {
   validateRequired_(payload, ['house', 'valuationDate', 'currentValue']);
 
@@ -365,10 +537,19 @@ function updateHouseValueByDate(payload) {
   const currentValue = toNumber_(payload.currentValue);
 
   if (!house) throw new Error('House is required.');
+  if (isNaN(valuationDate.getTime())) throw new Error('Invalid valuation date.');
   if (currentValue <= 0) throw new Error('Current value must be greater than 0.');
 
-  const year = valuationDate.getFullYear();
-  const monthLabel = Utilities.formatDate(valuationDate, Session.getScriptTimeZone(), 'MMM-yy');
+  // Update mirrors Add: the destination is ALWAYS the current-year block.
+  // Historical dates express user intent only; the entered date is preserved
+  // in the activity log below, but the block/month resolution uses the same
+  // canonical seed-date logic as addHouseFromDashboard so an out-of-year date
+  // (e.g. 02/10/2020) seeds a safe month in the current block instead of
+  // searching for a nonexistent 2020 block.
+  const currentYear = getCurrentYear_();
+  const seedDate = resolveHouseValuesSeedDate_(valuationDate, currentYear);
+  const year = currentYear;
+  const monthLabel = Utilities.formatDate(seedDate, Session.getScriptTimeZone(), 'MMM-yy');
   const ss = getUserSpreadsheet_();
 
   // Capture the prior month-cell value BEFORE the overwrite so the activity
@@ -386,7 +567,7 @@ function updateHouseValueByDate(payload) {
     const prevBlock = getHouseValuesYearBlock_(prevSheet, year);
     const prevRow = findHouseRowInBlock_(prevSheet, prevBlock, house);
     if (prevRow !== -1) {
-      const prevCol = getMonthColumnByDate_(prevSheet, valuationDate, prevBlock.headerRow);
+      const prevCol = getMonthColumnByDate_(prevSheet, seedDate, prevBlock.headerRow);
       const prevCell = prevSheet.getRange(prevRow, prevCol);
       previousRaw = round2_(toNumber_(prevCell.getValue()));
       previousDisplay = String(prevCell.getDisplayValue() || '').trim();
@@ -395,7 +576,7 @@ function updateHouseValueByDate(payload) {
     Logger.log('updateHouseValueByDate previous-read: ' + prevErr);
   }
 
-  const historyUpdated = updateHouseValuesHistory_(house, year, valuationDate, currentValue);
+  const historyUpdated = updateHouseValuesHistory_(house, year, seedDate, currentValue);
 
   syncAllHouseAssetsFromLatestCurrentYear_();
   touchDashboardSourceUpdated_('house_values');
@@ -1016,6 +1197,15 @@ function insertNewHouseHistoryRow_(sheet, block, houseName, loanAmountLeft) {
   let insertBeforeRow;
   let templateRow;
 
+  // When the only candidate template is the year-block header row (an empty
+  // block getting its very first house) — or a reserved aggregate/marker row
+  // directly below (a "Total Values" / "House Assets" footer) — cloning its
+  // format would stamp the bright-yellow header band (or a green/pink summary
+  // band) onto a data row. We detect that case and stamp a clean data-row
+  // style instead of cloning. Cloning a REAL house row (the common case) is
+  // unchanged. Mirrors investments.js::insertNewInvestmentHistoryRow_.
+  let templateIsHeader = false;
+
   if (lastHouseRow === -1) {
     if (block.dataEndRow < block.dataStartRow) {
       insertBeforeRow = block.dataStartRow;
@@ -1024,18 +1214,59 @@ function insertNewHouseHistoryRow_(sheet, block, houseName, loanAmountLeft) {
     }
     sheet.insertRowBefore(insertBeforeRow);
     newRow = insertBeforeRow;
-    templateRow = (newRow + 1 <= sheet.getLastRow()) ? (newRow + 1) : block.headerRow;
+    if (newRow + 1 <= sheet.getLastRow()) {
+      templateRow = newRow + 1;
+      const belowName = String(sheet.getRange(templateRow, 1).getDisplayValue() || '').trim();
+      if (!isHouseDataRowName_(belowName)) {
+        templateRow = block.headerRow;
+        templateIsHeader = true;
+      }
+    } else {
+      templateRow = block.headerRow;
+      templateIsHeader = true;
+    }
   } else {
     sheet.insertRowAfter(lastHouseRow);
     newRow = lastHouseRow + 1;
     templateRow = lastHouseRow;
   }
 
-  sheet.getRange(templateRow, 1, 1, lastCol).copyTo(
-    sheet.getRange(newRow, 1, 1, lastCol),
-    SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
-    false
-  );
+  if (templateIsHeader) {
+    // Empty-block first house: do NOT inherit the header's styling. Stamp the
+    // canonical Golden Workbook body-row look — white background, normal
+    // weight, black text, canonical body font size 14 (Financial Ledger
+    // parity — the freshly inserted row can otherwise inherit the size-16
+    // header row above it), left-aligned House name, right-aligned currency for
+    // the money columns (Loan Amount Left + the 12 month columns). The Active
+    // cell is corrected by writeActiveCellWithRowFormat_ below. Cosmetic only —
+    // a failure here must not block adding the house.
+    try {
+      sheet.getRange(newRow, 1, 1, lastCol)
+        .setBackground('#ffffff')
+        .setFontWeight('normal')
+        .setFontColor('#000000')
+        .setFontSize(14)
+        .setVerticalAlignment('bottom');
+      const firstMonthCol = block.firstMonthCol || 3;
+      const lastMonthCol = firstMonthCol + 11;
+      sheet.getRange(newRow, 1).setHorizontalAlignment('left'); // House name
+      // Loan Amount Left (col 2) through the last month column are currency.
+      const moneyEndCol = Math.min(lastMonthCol, lastCol);
+      if (moneyEndCol >= 2) {
+        sheet.getRange(newRow, 2, 1, moneyEndCol - 2 + 1)
+          .setHorizontalAlignment('right')
+          .setNumberFormat('$#,##0.00;-$#,##0.00');
+      }
+    } catch (_stampErr) {
+      Logger.log('insertNewHouseHistoryRow_ data-row stamp: ' + _stampErr);
+    }
+  } else {
+    sheet.getRange(templateRow, 1, 1, lastCol).copyTo(
+      sheet.getRange(newRow, 1, 1, lastCol),
+      SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+      false
+    );
+  }
   sheet.getRange(newRow, 1, 1, lastCol).clearContent();
   sheet.getRange(newRow, 1).setValue(houseName);
 
@@ -1124,6 +1355,19 @@ function appendHouseAssetsRowForNewHouse_(sheet, houseName, propertyType, loanAm
     } catch (formatErr) {
       Logger.log('appendHouseAssetsRowForNewHouse_ format copy failed: ' + formatErr);
     }
+  } else {
+    // No existing data row to clone from (freshly created sheet, or a
+    // header-only body). Stamp the canonical Golden body font AND row height on
+    // JUST the row we appended so it never lands at the Apps Script defaults
+    // (10pt / ~21px). Additive and narrowly scoped: touches only the new row,
+    // never any existing row's formatting, width, or height. Mirrors
+    // appendAssetsRowForNewInvestment_.
+    try {
+      sheet.getRange(appendedRow, 1, 1, lastCol).setFontSize(14);
+      sheet.setRowHeight(appendedRow, 26);
+    } catch (bodyStampErr) {
+      Logger.log('appendHouseAssetsRowForNewHouse_ body stamp failed: ' + bodyStampErr);
+    }
   }
 
   // Explicitly guarantee currency formatting on the money columns in case the
@@ -1145,11 +1389,15 @@ function appendHouseAssetsRowForNewHouse_(sheet, houseName, propertyType, loanAm
     writeActiveCellWithRowFormat_(sheet, appendedRow, headerMap.activeCol, 'Yes');
   }
 
-  // Re-assert the canonical SYS - House Assets header styling.
-  // Idempotent, cosmetic only — failures are swallowed inside the
-  // helper so a House Assets write is never blocked by a formatting
-  // glitch.
-  try { applyHouseAssetsSheetStyling_(sheet); } catch (_) { /* cosmetic */ }
+  // NOTE: intentionally NO applyHouseAssetsSheetStyling_ reassert here.
+  // Per ENGINEERING_STANDARDS.md §9 (Styling Reassertion Rule) and §10
+  // (Runtime Helpers Must Not Style), runtime writes must not re-apply
+  // cosmetic formatting. Appending a body row cannot disturb the header
+  // band or the frozen panes (both are established at first-create in
+  // ensureSysHouseAssetsSheet_ and persist across row inserts), so there is
+  // nothing correctness-related to reassert. Header/freeze styling for a
+  // fresh sheet lives in first-create; existing populated sheets are left
+  // exactly as the user has them.
 }
 
 /**
@@ -1162,16 +1410,24 @@ function appendHouseAssetsRowForNewHouse_(sheet, houseName, propertyType, loanAm
  * from a neighbor template via PASTE_FORMAT (see
  * `appendHouseAssetsRowForNewHouse_` above).
  *
+ * FIRST-CREATE / REPAIR ONLY. Per ENGINEERING_STANDARDS.md §9/§10 this is
+ * NOT called on normal writes (appendHouseAssetsRowForNewHouse_ no longer
+ * reasserts it) — appending a body row cannot disturb the header band or
+ * frozen panes. Font sizes, column widths, and row heights are applied by
+ * the first-create block in ensureSysHouseAssetsSheet_, not here.
+ *
  * Assertions:
  *   - Header row (row 1) → yellow #fff200, bold black, centered
- *     horizontal / middle vertical, row height 32.
+ *     horizontal / middle vertical.
  *   - Solid-medium black bottom border under row 1.
  *   - Frozen row 1 + frozen column 1 so House stays pinned when
  *     scrolling.
  *
- * Data rows, number formats, and any user cell highlights (including
- * the red-text conditional formatting on Loan Amount Left) are
- * deliberately never touched. Failures are swallowed — cosmetic only.
+ * Header row height is intentionally NOT set here (Styling Reassertion
+ * Rule) — the first-create 44px survives. Data rows, number formats, and
+ * any user cell highlights (including the red-text conditional formatting
+ * on Loan Amount Left) are deliberately never touched. Failures are
+ * swallowed — cosmetic only.
  */
 function applyHouseAssetsSheetStyling_(sheet) {
   if (!sheet) return;
@@ -1195,7 +1451,11 @@ function applyHouseAssetsSheetStyling_(sheet) {
     } catch (_borderErr) { /* cosmetic */ }
   } catch (_headerErr) { /* cosmetic */ }
 
-  try { sheet.setRowHeight(1, 32); } catch (_) {}
+  // Freeze panes are asserted here because the app relies on the pinned header
+  // row / first column for correctness. Header row height is intentionally NOT
+  // reasserted (Styling Reassertion Rule) — the first-create 44px set in
+  // ensureSysHouseAssetsSheet_ survives, and existing workbooks keep their own
+  // header height untouched.
   try { sheet.setFrozenRows(1); } catch (_) {}
   try { sheet.setFrozenColumns(1); } catch (_) {}
 }
@@ -1253,7 +1513,19 @@ function createHousesExpenseSheet_(ss, houseName) {
     return { sheet: existing, created: false, templateSheetName: '' };
   }
 
-  const newSheet = ss.insertSheet(sheetName);
+  // Defense-in-depth: addHouseFromDashboard holds a document lock so the
+  // existence check above and this insert are effectively atomic. Should a
+  // concurrent path ever create this exact sheet in between, treat the
+  // existing sheet as the idempotent result instead of surfacing the native
+  // "A sheet with the name '...' already exists" error to the user.
+  let newSheet;
+  try {
+    newSheet = ss.insertSheet(sheetName);
+  } catch (insertErr) {
+    const raced = ss.getSheetByName(sheetName);
+    if (raced) return { sheet: raced, created: false, templateSheetName: '' };
+    throw insertErr;
+  }
   const currentYear = getCurrentYear_();
   const canonicalHeaders = [
     'Item', 'Type', 'Date', 'Location', 'Cost',
@@ -1263,113 +1535,114 @@ function createHousesExpenseSheet_(ss, houseName) {
   newSheet.getRange(1, 1, 1, 2).setValues([['Year', currentYear]]);
   newSheet.getRange(2, 1, 1, 9).setValues([canonicalHeaders]);
 
-  const template = findExistingHousesTemplateRows_(ss, sheetName);
-  if (template) {
-    try {
-      template.sheet.getRange(template.yearRow, 1, 1, 9)
-        .copyTo(newSheet.getRange(1, 1, 1, 9), { formatOnly: true });
-      template.sheet.getRange(template.headerRow, 1, 1, 9)
-        .copyTo(newSheet.getRange(2, 1, 1, 9), { formatOnly: true });
-      newSheet.setRowHeight(1, template.sheet.getRowHeight(template.yearRow));
-      newSheet.setRowHeight(2, template.sheet.getRowHeight(template.headerRow));
-
-      // Copy column widths so the new sheet visually matches existing houses.
-      copyHousesColumnWidths_(template.sheet, newSheet, 9);
-    } catch (e) {
-      // Formatting copy is best-effort; headers themselves are already correct.
-      Logger.log('createHousesExpenseSheet_ formatting copy failed: ' + e);
-      applyHousesYearRowFallbackFormat_(newSheet, 1);
-      applyHousesHeaderRowFallbackFormat_(newSheet, 2);
-    }
-  } else {
-    applyHousesYearRowFallbackFormat_(newSheet, 1);
-    applyHousesHeaderRowFallbackFormat_(newSheet, 2);
-  }
-
-  newSheet.setFrozenRows(2);
+  // Apply canonical Golden Workbook (Financial Ledger family) styling DIRECTLY
+  // to the freshly created sheet. Deterministic — every new HOUSES tab is fully
+  // readable immediately (fonts, widths, row heights, currency/date formats,
+  // freeze panes), independent of any earlier (possibly unpolished) HOUSES
+  // sheet. This intentionally supersedes the old clone-from-template path,
+  // which propagated the rough first-create fallback look to later houses.
+  // Existing populated HOUSES sheets are never touched (first-create only).
+  applyHousesExpenseSheetStyling_(newSheet);
   newSheet.getRange(1, 1).activate();
 
   return {
     sheet: newSheet,
     created: true,
-    templateSheetName: template ? template.sheet.getName() : ''
+    templateSheetName: ''
   };
 }
 
 /**
- * Scans existing HOUSES - * sheets for a (Year row, Item/Type header row) pair
- * and returns the first match. Skips the target sheet name so we don't clone
- * a half-initialized sheet.
+ * First-create canonical (Golden Workbook, Financial Ledger family) styling for
+ * a HOUSES - <Property> expense sheet. Applied to the freshly created sheet
+ * ONLY — never to existing/populated HOUSES sheets. See ENGINEERING_STANDARDS.md
+ * → Canonical Row Styling / Width / Readability.
+ *
+ * Layout: row 1 = Year banner, row 2 = 9-column header, rows 3+ = expense body.
+ * Columns: Item | Type | Date | Location | Cost | Service Fees Paid |
+ *          Insurance covered | Payments Links | Notes
+ *
+ * All calls are wrapped best-effort: cosmetic styling must never fail the
+ * caller's create transaction.
  */
-function findExistingHousesTemplateRows_(ss, skipSheetName) {
-  const sheets = ss.getSheets();
-  for (let i = 0; i < sheets.length; i++) {
-    const sheet = sheets[i];
-    const name = String(sheet.getName() || '');
-    if (name === skipSheetName) continue;
-    if (name.toUpperCase().indexOf('HOUSES - ') !== 0) continue;
+function applyHousesExpenseSheetStyling_(sheet) {
+  const NUM_COLS = 9;
+  const maxRows = sheet.getMaxRows();
 
-    const lastRow = Math.max(sheet.getLastRow(), 1);
-    if (lastRow < 2) continue;
+  // Body baseline font (14) across the whole sheet; banner rows overridden below.
+  try { sheet.getRange(1, 1, maxRows, NUM_COLS).setFontSize(14); } catch (_f) { /* cosmetic */ }
 
-    const scanRows = Math.min(lastRow, 50);
-    const values = sheet.getRange(1, 1, scanRows, 2).getDisplayValues();
+  // Row 1 — Year banner: canonical Financial Ledger orange, bold black, 20pt.
+  try {
+    sheet.getRange(1, 1, 1, NUM_COLS)
+      .setBackground('#f4a300')
+      .setFontWeight('bold')
+      .setFontColor('#000000')
+      .setFontSize(20)
+      .setVerticalAlignment('middle');
+    sheet.setRowHeight(1, 30);
+  } catch (_y) { /* cosmetic */ }
 
-    let yearRow = -1;
-    for (let r = 0; r < scanRows; r++) {
-      const colA = String(values[r][0] || '').trim().toLowerCase();
-      if (colA === 'year') {
-        yearRow = r + 1;
-        break;
-      }
+  // Row 2 — column header: canonical yellow, bold black, 16pt, centered,
+  // bottom border. Wrap off so labels never wrap; widths below prevent clipping.
+  try {
+    sheet.getRange(2, 1, 1, NUM_COLS)
+      .setBackground('#fff200')
+      .setFontWeight('bold')
+      .setFontColor('#000000')
+      .setFontSize(16)
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle')
+      .setWrap(false)
+      .setBorder(false, false, true, false, false, false);
+    sheet.setRowHeight(2, 32);
+  } catch (_h) { /* cosmetic */ }
+
+  // Rows 3+ — body: 14pt normal weight, white, readable height.
+  try {
+    if (maxRows > 2) {
+      sheet.getRange(3, 1, maxRows - 2, NUM_COLS)
+        .setFontWeight('normal')
+        .setFontColor('#000000')
+        .setBackground('#ffffff')
+        .setVerticalAlignment('middle');
+      sheet.setRowHeights(3, maxRows - 2, 26);
     }
-    if (yearRow === -1) continue;
+  } catch (_b) { /* cosmetic */ }
 
-    // Header row should be the next non-empty row with Item/Type.
-    let headerRow = -1;
-    for (let r = yearRow; r < scanRows; r++) {
-      const a = String(values[r][0] || '').trim().toLowerCase();
-      const b = String(values[r][1] || '').trim().toLowerCase();
-      if (a === 'item' && b === 'type') {
-        headerRow = r + 1;
-        break;
-      }
-    }
-    if (headerRow === -1) continue;
+  // Number formats on the body so future entries inherit them. Date = col 3;
+  // currency = Cost (5) / Service Fees Paid (6) / Insurance covered (7). Number
+  // formats on text cells are harmless.
+  try {
+    const bodyRows = Math.max(maxRows - 2, 1);
+    sheet.getRange(3, 3, bodyRows, 1).setNumberFormat('M/d/yyyy');
+    sheet.getRange(3, 5, bodyRows, 1).setNumberFormat('$#,##0.00;-$#,##0.00');
+    sheet.getRange(3, 6, bodyRows, 1).setNumberFormat('$#,##0.00;-$#,##0.00');
+    sheet.getRange(3, 7, bodyRows, 1).setNumberFormat('$#,##0.00;-$#,##0.00');
+  } catch (_n) { /* cosmetic */ }
 
-    return { sheet: sheet, yearRow: yearRow, headerRow: headerRow };
+  // Canonical column widths — readable, no clipped bold-16pt headers.
+  // (Prior default ~100px clipped "Service Fees Paid" / "Insurance covered" /
+  // "Payments Links" / "Notes".)
+  const widths = [
+    160, // Item
+    130, // Type
+    120, // Date
+    180, // Location
+    130, // Cost
+    210, // Service Fees Paid  (bold 16pt header needs more room)
+    220, // Insurance covered  (bold 16pt header needs more room)
+    190, // Payments Links     (bold 16pt header needs more room)
+    240  // Notes
+  ];
+  for (let c = 0; c < widths.length; c++) {
+    try { sheet.setColumnWidth(c + 1, widths[c]); } catch (_w) { /* cosmetic */ }
   }
-  return null;
-}
 
-/**
- * Copies column widths (columns 1..numColumns) from a source HOUSES - * sheet
- * onto a newly created HOUSES - * sheet so they visually match. Errors on any
- * individual column are swallowed (width copying is best-effort).
- */
-function copyHousesColumnWidths_(sourceSheet, targetSheet, numColumns) {
-  for (let col = 1; col <= numColumns; col++) {
-    try {
-      const w = sourceSheet.getColumnWidth(col);
-      if (w && w > 0) targetSheet.setColumnWidth(col, w);
-    } catch (e) {
-      Logger.log('copyHousesColumnWidths_ col ' + col + ' failed: ' + e);
-    }
-  }
-}
-
-function applyHousesYearRowFallbackFormat_(sheet, row) {
-  sheet.getRange(row, 1, 1, 9)
-    .setBackground('#f4a300')
-    .setFontWeight('bold')
-    .setFontColor('#000000');
-}
-
-function applyHousesHeaderRowFallbackFormat_(sheet, row) {
-  sheet.getRange(row, 1, 1, 9)
-    .setBackground('#fff200')
-    .setFontWeight('bold')
-    .setFontColor('#000000');
+  // Freeze the Year + header rows and the Item column so context stays visible
+  // while scrolling the expense log.
+  try { sheet.setFrozenRows(2); } catch (_fr) { /* cosmetic */ }
+  try { sheet.setFrozenColumns(1); } catch (_fc) { /* cosmetic */ }
 }
 
 /**
@@ -1382,8 +1655,15 @@ function applyHousesHeaderRowFallbackFormat_(sheet, row) {
  *
  *   - "Year | <year>"   → orange  #f4a300, bold black, row height 28
  *   - "House | Loan…"   → yellow  #fff200, bold black, centered, row height 32
- *   - "Total Values"    → pink    #f4cccc, bold black
- *   - "House Assets"    → green   #b6d7a8, bold black
+ *   - "Total Values"    → green   #b6d7a8, bold black  (Aggregate/Total role)
+ *   - "House Assets"    → pink    #f4cccc, bold black  (secondary summary role)
+ *
+ * Footer color roles follow the Financial Ledger family standard
+ * (ENGINEERING_STANDARDS.md → Canonical Row Styling): the Aggregate/Total row
+ * is GREEN and the secondary summary row is PINK — matching Investments
+ * (Account Totals = green, Delta = pink). "Total Values" is the per-month SUM
+ * aggregate → green; "House Assets" is the secondary summary → pink. (Prior
+ * builds had these two swapped.)
  *
  * Data rows (everything else) are deliberately left untouched so the
  * user's own conditional formatting on "Loan Amount Left" (red text)
@@ -1439,22 +1719,26 @@ function applyHouseValuesSheetStyling_(sheet) {
           try { sheet.setRowHeight(row1, 32); } catch (_) {}
         }
       } else if (marker === 'Total Values') {
+        // Aggregate / Total row → GREEN (Financial Ledger canonical role).
         sheet.getRange(row1, 1, 1, lastCol)
-          .setBackground('#f4cccc')
+          .setBackground('#b6d7a8')
           .setFontWeight('bold')
           .setFontColor('#000000');
       } else if (marker === 'House Assets') {
+        // Secondary summary row → PINK (Financial Ledger canonical role).
         sheet.getRange(row1, 1, 1, lastCol)
-          .setBackground('#b6d7a8')
+          .setBackground('#f4cccc')
           .setFontWeight('bold')
           .setFontColor('#000000');
       }
     } catch (_styleErr) { /* cosmetic only */ }
   }
 
-  // Freeze column A so house names stay pinned when scrolling across
-  // the 12 month columns. Idempotent — no-op when already frozen.
-  try { sheet.setFrozenColumns(1); } catch (_) { /* cosmetic */ }
+  // Freeze the two pre-month columns (House + Loan Amount Left) so house
+  // names and loan context stay pinned when scrolling across the 12 month
+  // columns — matches the Financial Ledger family (Investments freezes
+  // Account Name + Type). Idempotent — no-op when already frozen.
+  try { sheet.setFrozenColumns(2); } catch (_) { /* cosmetic */ }
 }
 
 /**
@@ -1484,6 +1768,56 @@ function applyHouseValuesSheetStyling_(sheet) {
  * }} payload
  */
 function addHouseFromDashboard(payload) {
+  // Serialize house creation per user so concurrent or double submits can never
+  // race the check-then-write in addHouseFromDashboardLocked_ below. Without
+  // this, two overlapping creates could either (a) both pass
+  // validateNewHouseName_ before either committed and write DUPLICATE INPUT/SYS
+  // rows, or (b) collide on ss.insertSheet() and surface the scary "Could not
+  // create HOUSES - X sheet (rolled back other writes): ... already exists"
+  // rollback error.
+  //
+  // Uses getUserLock() — NOT getDocumentLock(). getDocumentLock() returns null
+  // in the Central web-app context (standalone script with no bound document),
+  // which made lock.waitLock() throw immediately and surface the contention
+  // message on EVERY normal single create. getUserLock() is valid in both bound
+  // (sidebar) and Central (web app) modes and serializes per accessing user —
+  // exactly the scope we need (a single user must not run two overlapping
+  // creates; different users operate on different workbooks and never contend).
+  // Mirrors central_provisioning.js / dashboard_data.js autopay.
+  var lock = null;
+  try { lock = LockService.getUserLock(); } catch (_lockGetErr) { lock = null; }
+
+  var acquired = false;
+  if (lock) {
+    try { acquired = lock.tryLock(20000); } catch (_lockErr) { acquired = false; }
+    if (!acquired) {
+      throw new Error('Another change is in progress. Please try again in a moment.');
+    }
+  }
+  // If no lock is available (no user context — e.g. a trigger), proceed WITHOUT
+  // serialization rather than failing the create: validateNewHouseName_ (pre-
+  // mutation) and the idempotent HOUSES-sheet create still guard the common
+  // cases, and blocking a normal create would be worse UX.
+
+  try {
+    return addHouseFromDashboardLocked_(payload);
+  } finally {
+    if (acquired) {
+      // Commit pending writes before releasing so the NEXT queued create sees
+      // this house in validateNewHouseName_ (read-your-write across the lock).
+      try { SpreadsheetApp.flush(); } catch (_flushErr) { /* best-effort */ }
+      try { lock.releaseLock(); } catch (_relErr) { /* best-effort */ }
+    }
+  }
+}
+
+/**
+ * Locked body of addHouseFromDashboard. Must only be called while the
+ * document lock is held (see addHouseFromDashboard). Kept as a private helper
+ * so the create sequence keeps its original indentation while the public entry
+ * point owns the serialization / flush / release lifecycle.
+ */
+function addHouseFromDashboardLocked_(payload) {
   validateRequired_(payload, ['houseName', 'propertyType', 'currentValue', 'loanAmountLeft']);
 
   // Ensure-before-write guards. Both helpers are idempotent no-ops on
@@ -1532,33 +1866,34 @@ function addHouseFromDashboard(payload) {
   const tz = Session.getScriptTimeZone();
   const currentYear = getCurrentYear_();
 
-  // Resolve a deterministic effective valuation date.
-  //   - If the user supplied a date, validate it and use it verbatim
-  //     (must be in the current-year block being extended).
-  //   - If the user left the field blank, default to today. This
-  //     guarantees every new-house write lands in a real month column
-  //     instead of leaving the month cell silently empty, which used
-  //     to create the ambiguity described in the UI copy update.
+  // Resolve the user-entered valuation date (preserved for the activity log).
+  //   - If the user supplied a date, validate it is a real date and keep it
+  //     verbatim — HISTORICAL dates are allowed (buying a house years ago and
+  //     recording it in the current workbook is a normal scenario).
+  //   - If the user left the field blank, default to today so month extraction
+  //     in updateHouseValuesHistory_ / Utilities.formatDate is stable
+  //     regardless of script timezone drift.
   //
-  // `valuationDateWasProvided` preserves whether the UI supplied a
-  // date so the activity log can still record the raw user intent
-  // separately from the resolved date.
+  // `valuationDateWasProvided` preserves whether the UI supplied a date so the
+  // activity log can still record the raw user intent (details.valuationDate).
   let valuationDate = null;
   const valuationDateStr = String(payload.valuationDate || '').trim();
   const valuationDateWasProvided = !!valuationDateStr;
   if (valuationDateWasProvided) {
     valuationDate = parseIsoDateLocal_(valuationDateStr);
     if (isNaN(valuationDate.getTime())) throw new Error('Invalid valuation date.');
-    if (valuationDate.getFullYear() !== currentYear) {
-      throw new Error('Valuation date must be in ' + currentYear +
-        ' (same year as the house block being extended).');
-    }
   } else {
-    // stripTime_ normalizes to the start of today so month extraction
-    // in updateHouseValuesHistory_ / Utilities.formatDate is stable
-    // regardless of script timezone drift.
     valuationDate = stripTime_(new Date());
   }
+
+  // Resolve the month-seed date used ONLY to choose which month column of the
+  // current-year block receives the Current Value. The house is ALWAYS created
+  // in the current-year block; an out-of-year entered date (e.g. 02/10/2018)
+  // seeds a safe month in the current block instead of throwing. Shared with
+  // updateHouseValueByDate via resolveHouseValuesSeedDate_ so Add and Update
+  // behave identically. The user's raw entered date is preserved in the
+  // activity log below (details.valuationDate).
+  const seedDate = resolveHouseValuesSeedDate_(valuationDate, currentYear);
 
   const ss = getUserSpreadsheet_();
   const hvSheet = getSheet_(ss, 'HOUSE_VALUES');
@@ -1596,8 +1931,8 @@ function addHouseFromDashboard(payload) {
   let seededMonthLabel = '';
   try {
     if (currentValue !== 0) {
-      updateHouseValuesHistory_(houseName, currentYear, valuationDate, currentValue);
-      seededMonthLabel = Utilities.formatDate(valuationDate, tz, 'MMM-yy');
+      updateHouseValuesHistory_(houseName, currentYear, seedDate, currentValue);
+      seededMonthLabel = Utilities.formatDate(seedDate, tz, 'MMM-yy');
     }
     // Only copy Current Value for rows that actually have a latest month.
     // Leaves Type and Loan Amount Left untouched on the new row.
@@ -1626,7 +1961,10 @@ function addHouseFromDashboard(payload) {
   try {
     appendActivityLog_(ss, {
       eventType: 'house_add',
-      entryDate: Utilities.formatDate(stripTime_(valuationDate || new Date()), tz, 'yyyy-MM-dd'),
+      // entryDate reflects the in-block month the value was seeded into (today
+      // when the entered date is historical/out-of-year). The raw user-entered
+      // date is preserved verbatim below in details.valuationDate.
+      entryDate: Utilities.formatDate(stripTime_(seedDate || new Date()), tz, 'yyyy-MM-dd'),
       amount: Math.abs(currentValue),
       direction: 'expense',
       payee: houseName,

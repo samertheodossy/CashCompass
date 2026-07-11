@@ -630,6 +630,15 @@ function fillHouseDropdownFromData_(data) {
     sel.appendChild(opt);
   });
   populateHouseAddDatalists_(data);
+
+  // Deterministic default-tab rule (Issue 1): once REAL data has loaded, an
+  // empty House Values workbook must land on "Add new" — there is nothing to
+  // Update. When houses exist we leave the current mode untouched so the HTML
+  // default (Update) stays for normal navigation and an intentional Add is
+  // preserved. Kept in sync with Dashboard_Script_AssetsHouseValues.html.
+  if (!(data.houses && data.houses.length) && typeof setHousePanelMode === 'function') {
+    setHousePanelMode('add');
+  }
 }
 
 function populateHouseAddDatalists_(data) {
@@ -852,6 +861,10 @@ function stopTrackingHouse() {
     .deactivateHouseFromDashboard({ houseName: house });
 }
 
+// Guards against double-submit of Create house (sidebar variant). Kept in
+// sync with Dashboard_Script_AssetsHouseValues.html. Reset in both handlers.
+var houseCreateInFlight_ = false;
+
 function createHouse() {
   clearHouseAddNameError_();
 
@@ -898,9 +911,14 @@ function createHouse() {
   };
   if (valDate) payload.valuationDate = valDate;
 
+  // Ignore a second submit while the first is still in flight (double-click).
+  if (houseCreateInFlight_) return;
+  houseCreateInFlight_ = true;
+
   setStatus('house_status', 'Saving…', false);
   google.script.run
     .withSuccessHandler(function(res) {
+      houseCreateInFlight_ = false;
       const useDate = valDate || new Date().toISOString().slice(0, 10);
       setStatus('house_status', res.message || 'Created.', false);
       const createdName = res.houseName || name;
@@ -915,6 +933,7 @@ function createHouse() {
       }
     })
     .withFailureHandler(function(err) {
+      houseCreateInFlight_ = false;
       const msg = err && err.message ? err.message : String(err);
       if (isHouseNameRelatedError_(msg)) {
         showHouseAddNameError_(msg);
