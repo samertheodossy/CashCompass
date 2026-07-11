@@ -732,6 +732,34 @@ function getOrCreateUpcomingExpensesSheet_() {
 }
 
 /**
+ * Canonical Golden Workbook column widths for INPUT - Upcoming Expenses,
+ * keyed by exact header text. These are the Validator-approved **AdoptGolden**
+ * widths — the five columns where the mature Golden Workbook is the agreed
+ * source of truth. Applied header-driven (not positional) and widen-only via
+ * applyCanonicalColumnWidthsByHeader_ during FIRST-CREATE ONLY.
+ *
+ * Only the AdoptGolden columns live here. The remaining columns are
+ * **KeepCentral** (Category, Payee, Amount, Auto Add To Cash Flow, Added To
+ * Cash Flow, Notes) and intentionally stay on the existing widen-only
+ * `widthMins` values in applyUpcomingExpensesSheetStyling_. Header background
+ * (#ffff00 vs #ffe599), row heights, typography, alignment, number formats,
+ * and frozen panes are ProductDecision/KeepCentral and are NOT touched here.
+ */
+const UPCOMING_EXPENSES_CANONICAL_WIDTHS_ = {
+  // Product-decision override (NOT Golden parity). Golden's ID width is 165 at a
+  // 12pt body font; Central intentionally uses a larger 14pt body font, which
+  // leaves the 16-char generated IDs ('UE-' + 13-digit epoch ms, e.g.
+  // UE-1752248400000) visually cramped at 165. We keep the 14pt font and widen
+  // ID to 190 so IDs display comfortably. Validator will show this as a
+  // KeepCentral width difference, which is expected.
+  'ID': 190,
+  'Status': 111,
+  'Expense Name': 282,
+  'Due Date': 123,
+  'Account / Source': 226
+};
+
+/**
  * First-create cosmetic styling for INPUT - Upcoming Expenses.
  *
  * Flat table — a single header row (row 1) followed by expense data rows; no
@@ -779,6 +807,15 @@ function applyUpcomingExpensesSheetStyling_(sheet) {
       }
     } catch (_) {}
   }
+
+  // Validator-approved AdoptGolden widths (ID, Status, Expense Name, Due Date,
+  // Account / Source). Header-driven + widen-only, so this only ever widens
+  // these five columns toward their canonical Golden values on top of the
+  // widthMins baseline above; the KeepCentral columns are left untouched. Same
+  // architectural pattern as LOG - Activity's first-create canonical widths.
+  try {
+    applyCanonicalColumnWidthsByHeader_(sheet, 1, UPCOMING_EXPENSES_CANONICAL_WIDTHS_);
+  } catch (_) {}
   // Header freeze is handled by applyOperationalFlatSheetStyling_ above.
 }
 

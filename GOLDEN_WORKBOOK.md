@@ -102,6 +102,14 @@ The canonical `INPUT - Bills` sheet **ends with three trailing scheduling column
 
 **Purpose:** forward-looking planning lists that *feed the plan*. Lighter and more entry-oriented than the ledgers — date + amount capture for expected/planned items. Visual language is a cleaner, simpler list that signals "things you are planning" rather than "history you are tracking."
 
+**Ratified product decision — Upcoming Expenses (2026-07-11).** After Operational Validator convergence, two attributes on `INPUT - Upcoming Expenses` are **intentional, ratified deviations** from the older Golden workbook state — **readability is preferred over preserving historical compactness**:
+
+- **Body font remains 14pt** (the canonical body size). The historical Golden workbook used 12pt body text, which allowed a narrower ID column; the Canonical workbook has since been updated to 14pt so the two agree.
+- **ID column width is 190px.** At 14pt the generated 16-character IDs (`UE-` + 13-digit epoch ms) were cramped at the historical 165px, so ID is widened to **190px** for comfortable display. This is a **product decision, not Golden parity** — the Canonical workbook's ID width is aligned to 190 to match.
+- **Header background is an unresolved ProductDecision:** Canonical `#ffff00` vs Central `#ffe599`. This is a deliberate open design choice, not a convergence gap; it is tracked until a single hex is chosen for both sides.
+
+These are expected to surface in the Validator as **KeepCentral** (ID width, body font) / **ProductDecision** (header background) — never **AdoptGolden**. See `ENGINEERING_STANDARDS.md → Canonical Width Standard`.
+
 ### 4. Analytical / Configuration family — ★★★★☆ Production Ready
 
 **Sheets:** Retirement · Settings.

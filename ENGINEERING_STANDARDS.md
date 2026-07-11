@@ -197,3 +197,9 @@ Whenever creating a sheet:
 - Never intentionally create clipped headers.
 - Never intentionally create clipped values.
 - **Golden Workbook appearance takes precedence over auto-resize** if auto-resize produces a poorer (tighter) result. Auto-resize fits text tightly with minimal padding; canonical widths provide deliberate breathing room and are authoritative.
+
+### Ratified product decisions (deliberate deviations from historical Golden)
+
+Where readability requires it, a canonical width or attribute may **intentionally differ** from the older Golden workbook state. Such deviations are ratified, documented, and expected to appear in the Validator as **KeepCentral**/**ProductDecision** (never AdoptGolden). Current entries:
+
+- **`INPUT - Upcoming Expenses` — body font 14pt + ID width 190px (2026-07-11).** The body font is the canonical **14pt** (the historical Golden used 12pt, which allowed a narrower ID column). Because the generated 16-character IDs (`UE-` + 13-digit epoch ms) are cramped at 14pt, the **ID column is 190px** (historical Golden was 165px). **Readability is preferred over preserving historical compactness.** Implemented widen-only, first-create-only via `UPCOMING_EXPENSES_CANONICAL_WIDTHS_` in `upcoming_expenses.js`; the Canonical workbook's ID width is aligned to 190 so the two agree. The **header background remains an unresolved ProductDecision** (Canonical `#ffff00` vs Central `#ffe599`) until a single hex is chosen for both sides. See `GOLDEN_WORKBOOK.md → Operational Planning family`.
