@@ -1570,79 +1570,34 @@ function applyBankAccountsSheetStyling_(sheet) {
   try { lastRow = sheet.getLastRow(); } catch (_) { return; }
   if (lastRow < 1) return;
 
-  // Body wash FIRST: calm white background + size 14 across the whole
-  // sheet grid. Marker rows below re-apply their own background + sizes,
-  // so this never clobbers the header/year/total/delta styling. Number
-  // and currency formats are untouched (we only set background + size).
-  try {
-    const maxRows = sheet.getMaxRows();
-    sheet.getRange(1, 1, maxRows, lastCol)
-      .setBackground('#ffffff')
-      .setFontSize(CANON_FONT_BODY_);
-    // Canonical body row height (FIRST-CREATE ONLY — this styler is reached only
-    // via the post-insertSheet onboarding branch, never for populated workbooks).
-    // Year/header rows are raised to 40 in the marker loop below.
-    try { sheet.setRowHeights(1, maxRows, CANON_ROW_HEIGHT_BODY_); } catch (_) {}
-  } catch (_bodyErr) { /* cosmetic only */ }
+  // FIRST-CREATE styler — this helper is reached only via the post-insertSheet
+  // onboarding branch (guarded by `if (existing) return existing`), never for a
+  // populated workbook, so applying full geometry here is safe. Delegates to the
+  // shared Financial Ledger walker in firstCreate mode:
+  //   - bodyWash  → white background + 14pt + 26px across the whole grid
+  //   - geometry  → Year banner 20pt/40px/middle; header 16pt/40px/centered/
+  //                 thin black bottom border (year/header rows override the wash)
+  //   - markers   → Year=orange, "Account Name"=yellow, "Total Accounts"=green
+  //                 (defensive), "Delta"=pink (defensive)
+  //   - freeze    → rows 2 (Year + Account Name) + column 1 (Account Name)
+  // Bank Accounts is single-year today and has NO runtime color reassert path;
+  // if a future year-block rollover is added, it should call this same helper in
+  // 'runtime' mode (color+freeze only) — see the report / ENGINEERING_STANDARDS.
+  applyFinancialLedgerBaseStyle_(sheet, {
+    mode: 'firstCreate',
+    headerMarkerLabel: 'Account Name',
+    headerRequireColB: null,
+    totalMarkerLabel: 'Total Accounts',
+    deltaMarkerLabel: 'Delta',
+    freezeRows: 2,
+    freezeColumns: 1,
+    firstCreate: { bodyWash: true, geometry: true }
+  });
 
-  let colA;
-  try {
-    colA = sheet.getRange(1, 1, lastRow, 1).getDisplayValues();
-  } catch (_) { return; }
-
-  for (let i = 0; i < colA.length; i++) {
-    const marker = String(colA[i][0] || '').trim();
-    if (!marker) continue;
-    const row1 = i + 1;
-    try {
-      if (marker === 'Year') {
-        // Financial Ledger family Year banner: warm orange (#f4a300) matches
-        // the production Investments / House Values year rows. Canonical
-        // geometry: height 40, vertical middle, and NO bottom border (the color
-        // band is the section divider) — see ENGINEERING_STANDARDS.md.
-        const yearRange = sheet.getRange(row1, 1, 1, lastCol);
-        yearRange
-          .setBackground('#f4a300')
-          .setFontWeight('bold')
-          .setFontColor('#000000')
-          .setFontSize(CANON_FONT_YEAR_BANNER_)
-          .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_);
-        try { sheet.setRowHeight(row1, CANON_ROW_HEIGHT_YEAR_); } catch (_) {}
-      } else if (marker === 'Account Name') {
-        // Financial Ledger family header: bright yellow (#fff200) matches the
-        // production Investments / House Values header rows. Canonical geometry:
-        // horizontally centered, vertical middle, height 40, thin black bottom
-        // border.
-        sheet.getRange(row1, 1, 1, lastCol)
-          .setBackground('#fff200')
-          .setFontWeight('bold')
-          .setFontColor('#000000')
-          .setFontSize(CANON_FONT_HEADER_)
-          .setHorizontalAlignment('center')
-          .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_)
-          .setBorder(false, false, true, false, false, false, '#000000', SpreadsheetApp.BorderStyle.SOLID);
-        try { sheet.setRowHeight(row1, CANON_ROW_HEIGHT_HEADER_); } catch (_) {}
-      } else if (marker === 'Total Accounts') {
-        // Defensive: only fires if such a row already exists. Not created here.
-        sheet.getRange(row1, 1, 1, lastCol)
-          .setBackground('#b6d7a8')
-          .setFontWeight('bold')
-          .setFontColor('#000000');
-      } else if (marker === 'Delta') {
-        // Financial Ledger family Delta band: pink (#f4cccc) matches the
-        // production Investments / House Values delta rows. Defensive: only
-        // fires if such a row already exists. Not created here.
-        sheet.getRange(row1, 1, 1, lastCol)
-          .setBackground('#f4cccc')
-          .setFontWeight('bold')
-          .setFontColor('#000000');
-      }
-    } catch (_styleErr) { /* cosmetic only */ }
-  }
-
-  // Widen-only column widths. Account Name is col 1, Total is the last
-  // column, month columns are everything in between. Never shrink a column
-  // the user widened manually (matches applyCashFlowSheetStyling_).
+  // Bespoke widen-only column widths (NOT part of the shared palette helper).
+  // Account Name is col 1, Total is the last column, month columns are
+  // everything in between. Never shrink a column the user widened manually
+  // (matches applyCashFlowSheetStyling_).
   try {
     if (sheet.getColumnWidth(1) < 260) sheet.setColumnWidth(1, 260);
   } catch (_) {}
@@ -1656,11 +1611,6 @@ function applyBankAccountsSheetStyling_(sheet) {
       if (sheet.getColumnWidth(lastCol) < 120) sheet.setColumnWidth(lastCol, 120);
     } catch (_) {}
   }
-
-  // Pin the two header rows (Year + Account Name) and the Account Name
-  // column when scrolling across the 12 month columns. Idempotent.
-  try { sheet.setFrozenRows(2); } catch (_) {}
-  try { sheet.setFrozenColumns(1); } catch (_) {}
 }
 
 function getAccountsHeaderMap_(sheet, optionalDisplay) {

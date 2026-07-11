@@ -990,3 +990,151 @@ function applySysSheetBaseStyle_(sheet, widthByHeader) {
   try { sheet.setFrozenRows(1); } catch (_) {}
   try { sheet.setFrozenColumns(1); } catch (_) {}
 }
+
+/**
+ * Canonical FINANCIAL LEDGER (year-block) base presentation — the single
+ * marker-driven walker shared by the year-block ledger sheets:
+ *   - INPUT - Investments   (applyInvestmentsSheetStyling_)
+ *   - INPUT - House Values  (applyHouseValuesSheetStyling_)
+ *   - INPUT - Bank Accounts (applyBankAccountsSheetStyling_)
+ *
+ * These sheets repeat a Year banner + column-header + optional Totals/Delta
+ * footer per year block down column A, so the walker scans column A for the
+ * four semantic marker rows and applies the shared Financial Ledger palette:
+ *   - Year banner : #f4a300 (orange)
+ *   - Column header: #fff200 (yellow)
+ *   - Totals/aggregate: #b6d7a8 (green)
+ *   - Delta/secondary summary: #f4cccc (pink)
+ *
+ * NOTE: HOUSES - <Property> expense sheets share this palette but use a FIXED
+ * 2-row header (row 1 Year, row 2 header) rather than repeated markers, so they
+ * intentionally keep their own `applyHousesExpenseSheetStyling_` and do NOT
+ * route through this walker.
+ *
+ * TWO EXPLICIT MODES (ENGINEERING_STANDARDS §9 / §10):
+ *   - mode 'runtime'    : marker COLORS (background + bold + black) + freeze
+ *                         ONLY. Never sets fonts, row heights, borders,
+ *                         alignment, widths, or number formats. Safe to call on
+ *                         populated workbooks (e.g. after inserting a data row /
+ *                         a new year block) — it only reasserts the semantic
+ *                         band colors so new blocks match the family.
+ *   - mode 'firstCreate': marker colors + freeze + canonical geometry
+ *                         (fonts / heights / vertical-middle / centered header /
+ *                         thin header border) + optional whole-grid body wash.
+ *                         MUST only be called from a post-insertSheet first-create
+ *                         path (guarded by an `existing`/get-branch return) so a
+ *                         populated workbook is never reshaped.
+ *
+ * Marker labels vary per sheet, so they are passed in via options — the palette
+ * and the safety contract are the shared, non-negotiable parts.
+ *
+ * Cosmetic only: every operation is wrapped so a formatting glitch never blocks
+ * a write. Idempotent.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {{
+ *   mode: ('runtime'|'firstCreate'),
+ *   headerMarkerLabel?: string,   // default 'Account Name'
+ *   headerRequireColB?: (string|null), // only style header when col B equals this; null = always
+ *   totalMarkerLabel?: (string|null),  // e.g. 'Account Totals' / 'Total Values' / 'Total Accounts'
+ *   deltaMarkerLabel?: (string|null),  // e.g. 'Delta' / 'House Assets'
+ *   freezeRows?: number,          // applied only when > 0
+ *   freezeColumns?: number,       // applied only when > 0
+ *   firstCreate?: { bodyWash?: boolean, geometry?: boolean } // ignored unless mode==='firstCreate'
+ * }} options
+ */
+function applyFinancialLedgerBaseStyle_(sheet, options) {
+  if (!sheet) return;
+  options = options || {};
+  var isFirstCreate = options.mode === 'firstCreate';
+
+  var YEAR_BG = '#f4a300';
+  var HEADER_BG = '#fff200';
+  var TOTAL_BG = '#b6d7a8';
+  var DELTA_BG = '#f4cccc';
+
+  var headerLabel = options.headerMarkerLabel || 'Account Name';
+  var headerRequireColB = (options.headerRequireColB == null) ? null : options.headerRequireColB;
+  var totalLabel = options.totalMarkerLabel || null;
+  var deltaLabel = options.deltaMarkerLabel || null;
+  var fc = (isFirstCreate && options.firstCreate) ? options.firstCreate : {};
+
+  var lastCol = 1;
+  try { lastCol = Math.max(1, sheet.getLastColumn()); } catch (_) { return; }
+  var lastRow = 0;
+  try { lastRow = sheet.getLastRow(); } catch (_) { return; }
+  if (lastRow < 1) return;
+
+  // FIRST-CREATE ONLY: optional whole-grid body wash BEFORE the marker rows so
+  // year/header rows below override it. Runtime mode never touches the body.
+  if (isFirstCreate && fc.bodyWash) {
+    try {
+      var maxRows = sheet.getMaxRows();
+      sheet.getRange(1, 1, maxRows, lastCol)
+        .setBackground('#ffffff')
+        .setFontSize(CANON_FONT_BODY_);
+      try { sheet.setRowHeights(1, maxRows, CANON_ROW_HEIGHT_BODY_); } catch (_) {}
+    } catch (_bw) { /* cosmetic only */ }
+  }
+
+  var colA = null;
+  try { colA = sheet.getRange(1, 1, lastRow, 1).getDisplayValues(); } catch (_) { colA = null; }
+
+  if (colA) {
+    for (var i = 0; i < colA.length; i++) {
+      var marker = String(colA[i][0] || '').trim();
+      if (!marker) continue;
+      var row1 = i + 1;
+      try {
+        if (marker === 'Year') {
+          var yr = sheet.getRange(row1, 1, 1, lastCol)
+            .setBackground(YEAR_BG)
+            .setFontWeight('bold')
+            .setFontColor('#000000');
+          if (isFirstCreate && fc.geometry) {
+            yr.setFontSize(CANON_FONT_YEAR_BANNER_)
+              .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_);
+            try { sheet.setRowHeight(row1, CANON_ROW_HEIGHT_YEAR_); } catch (_) {}
+          }
+        } else if (marker === headerLabel) {
+          var okHeader = true;
+          if (headerRequireColB) {
+            var colB = '';
+            try { colB = String(sheet.getRange(row1, 2).getDisplayValue() || '').trim(); }
+            catch (_) { okHeader = false; }
+            if (colB !== headerRequireColB) okHeader = false;
+          }
+          if (okHeader) {
+            var hd = sheet.getRange(row1, 1, 1, lastCol)
+              .setBackground(HEADER_BG)
+              .setFontWeight('bold')
+              .setFontColor('#000000');
+            if (isFirstCreate && fc.geometry) {
+              hd.setFontSize(CANON_FONT_HEADER_)
+                .setHorizontalAlignment('center')
+                .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_)
+                .setBorder(false, false, true, false, false, false, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+              try { sheet.setRowHeight(row1, CANON_ROW_HEIGHT_HEADER_); } catch (_) {}
+            }
+          }
+        } else if (totalLabel && marker === totalLabel) {
+          sheet.getRange(row1, 1, 1, lastCol)
+            .setBackground(TOTAL_BG)
+            .setFontWeight('bold')
+            .setFontColor('#000000');
+        } else if (deltaLabel && marker === deltaLabel) {
+          sheet.getRange(row1, 1, 1, lastCol)
+            .setBackground(DELTA_BG)
+            .setFontWeight('bold')
+            .setFontColor('#000000');
+        }
+      } catch (_styleErr) { /* cosmetic only */ }
+    }
+  }
+
+  // Freeze panes (both modes) — the app relies on pinned header rows/columns
+  // for correctness. Only asserted when requested (> 0) so we never change a
+  // sheet's existing freeze contract.
+  if (options.freezeRows) { try { sheet.setFrozenRows(options.freezeRows); } catch (_) {} }
+  if (options.freezeColumns) { try { sheet.setFrozenColumns(options.freezeColumns); } catch (_) {} }
+}

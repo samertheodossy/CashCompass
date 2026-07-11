@@ -1207,63 +1207,21 @@ function insertNewInvestmentHistoryRow_(sheet, block, accountName, typeStr) {
  * add-row / rollover path.
  */
 function applyInvestmentsSheetStyling_(sheet) {
-  if (!sheet) return;
-
-  let lastCol = 1;
-  try { lastCol = Math.max(1, sheet.getLastColumn()); } catch (_) { return; }
-  let lastRow = 0;
-  try { lastRow = sheet.getLastRow(); } catch (_) { return; }
-  if (lastRow < 1) return;
-
-  let colA;
-  try {
-    colA = sheet.getRange(1, 1, lastRow, 1).getDisplayValues();
-  } catch (_) { return; }
-
-  for (let i = 0; i < colA.length; i++) {
-    const marker = String(colA[i][0] || '').trim();
-    if (!marker) continue;
-    const row1 = i + 1;
-    try {
-      if (marker === 'Year') {
-        // Runtime = COLOR only (ENGINEERING_STANDARDS §9/§10). Row height and
-        // vertical alignment are canonical geometry, set at first-create in
-        // ensureInputInvestmentsSheet_ — never reshaped here on populated sheets.
-        sheet.getRange(row1, 1, 1, lastCol)
-          .setBackground('#f4a300')
-          .setFontWeight('bold')
-          .setFontColor('#000000');
-      } else if (marker === 'Account Name') {
-        let colB = '';
-        try {
-          colB = String(sheet.getRange(row1, 2).getDisplayValue() || '').trim();
-        } catch (_) { /* skip styling when col B cannot be read */ }
-        if (colB === 'Type') {
-          // Runtime = COLOR only. Height / alignment / border are canonical
-          // geometry set at first-create (see §9/§10); not reasserted here.
-          sheet.getRange(row1, 1, 1, lastCol)
-            .setBackground('#fff200')
-            .setFontWeight('bold')
-            .setFontColor('#000000');
-        }
-      } else if (marker === 'Account Totals') {
-        sheet.getRange(row1, 1, 1, lastCol)
-          .setBackground('#b6d7a8')
-          .setFontWeight('bold')
-          .setFontColor('#000000');
-      } else if (marker === 'Delta') {
-        sheet.getRange(row1, 1, 1, lastCol)
-          .setBackground('#f4cccc')
-          .setFontWeight('bold')
-          .setFontColor('#000000');
-      }
-    } catch (_styleErr) { /* cosmetic only */ }
-  }
-
-  // Freeze columns A (Account Name) and B (Type) so both stay pinned
-  // when scrolling across the 12 month columns. Idempotent — no-op
-  // when already frozen.
-  try { sheet.setFrozenColumns(2); } catch (_) { /* cosmetic */ }
+  // RUNTIME styler — delegates to the shared Financial Ledger walker in
+  // color+freeze-only mode (ENGINEERING_STANDARDS §9/§10). Canonical geometry
+  // (year/header fonts, heights, alignment, border, body row heights) is set at
+  // first-create in ensureInputInvestmentsSheet_ and is NEVER reasserted here,
+  // so populated workbooks are never reshaped on routine adds. Marker set:
+  //   Year → orange · "Account Name" (only when col B = "Type") → yellow ·
+  //   "Account Totals" → green · "Delta" → pink. Freeze Account Name + Type.
+  applyFinancialLedgerBaseStyle_(sheet, {
+    mode: 'runtime',
+    headerMarkerLabel: 'Account Name',
+    headerRequireColB: 'Type',
+    totalMarkerLabel: 'Account Totals',
+    deltaMarkerLabel: 'Delta',
+    freezeColumns: 2
+  });
 }
 
 /* -------------------------------------------------------------------------- */

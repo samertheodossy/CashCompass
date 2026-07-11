@@ -1653,70 +1653,22 @@ function applyHousesExpenseSheetStyling_(sheet) {
  * add-row / rollover path.
  */
 function applyHouseValuesSheetStyling_(sheet) {
-  if (!sheet) return;
-  let lastCol = 1;
-  try { lastCol = Math.max(1, sheet.getLastColumn()); } catch (_) { return; }
-  let lastRow = 0;
-  try { lastRow = sheet.getLastRow(); } catch (_) { return; }
-  if (lastRow < 1) return;
-
-  let colA;
-  try {
-    colA = sheet.getRange(1, 1, lastRow, 1).getDisplayValues();
-  } catch (_) { return; }
-
-  for (let i = 0; i < colA.length; i++) {
-    const marker = String(colA[i][0] || '').trim();
-    if (!marker) continue;
-    const row1 = i + 1;
-    try {
-      if (marker === 'Year') {
-        // Runtime = COLOR only (ENGINEERING_STANDARDS §9/§10). Height + vertical
-        // alignment are canonical geometry set at first-create in
-        // ensureInputHouseValuesSheet_ — not reshaped here on populated sheets.
-        sheet.getRange(row1, 1, 1, lastCol)
-          .setBackground('#f4a300')
-          .setFontWeight('bold')
-          .setFontColor('#000000');
-      } else if (marker === 'House') {
-        // Only style as the column-header row when col B reads
-        // "Loan Amount Left" — otherwise it's a data row whose first
-        // cell happens to be the word "House" (defensive; readers
-        // already filter these out via isHouseDataRowName_).
-        let colB = '';
-        try {
-          colB = String(sheet.getRange(row1, 2).getDisplayValue() || '').trim();
-        } catch (_) { /* leave colB blank and skip styling */ }
-        if (colB === 'Loan Amount Left') {
-          // Runtime = COLOR only. Height / alignment / border are canonical
-          // geometry set at first-create (see §9/§10); not reasserted here.
-          const range = sheet.getRange(row1, 1, 1, lastCol);
-          range
-            .setBackground('#fff200')
-            .setFontWeight('bold')
-            .setFontColor('#000000');
-        }
-      } else if (marker === 'Total Values') {
-        // Aggregate / Total row → GREEN (Financial Ledger canonical role).
-        sheet.getRange(row1, 1, 1, lastCol)
-          .setBackground('#b6d7a8')
-          .setFontWeight('bold')
-          .setFontColor('#000000');
-      } else if (marker === 'House Assets') {
-        // Secondary summary row → PINK (Financial Ledger canonical role).
-        sheet.getRange(row1, 1, 1, lastCol)
-          .setBackground('#f4cccc')
-          .setFontWeight('bold')
-          .setFontColor('#000000');
-      }
-    } catch (_styleErr) { /* cosmetic only */ }
-  }
-
-  // Freeze the two pre-month columns (House + Loan Amount Left) so house
-  // names and loan context stay pinned when scrolling across the 12 month
-  // columns — matches the Financial Ledger family (Investments freezes
-  // Account Name + Type). Idempotent — no-op when already frozen.
-  try { sheet.setFrozenColumns(2); } catch (_) { /* cosmetic */ }
+  // RUNTIME styler — delegates to the shared Financial Ledger walker in
+  // color+freeze-only mode (ENGINEERING_STANDARDS §9/§10). Canonical geometry
+  // (year/header fonts, heights, alignment, border) is set at first-create in
+  // ensureInputHouseValuesSheet_ and is NEVER reasserted here, so populated
+  // workbooks are never reshaped on routine adds. Marker set:
+  //   Year → orange · "House" (only when col B = "Loan Amount Left") → yellow ·
+  //   "Total Values" (aggregate) → green · "House Assets" (secondary summary) →
+  //   pink. Freeze House + Loan Amount Left columns.
+  applyFinancialLedgerBaseStyle_(sheet, {
+    mode: 'runtime',
+    headerMarkerLabel: 'House',
+    headerRequireColB: 'Loan Amount Left',
+    totalMarkerLabel: 'Total Values',
+    deltaMarkerLabel: 'House Assets',
+    freezeColumns: 2
+  });
 }
 
 /**
