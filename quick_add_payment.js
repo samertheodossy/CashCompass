@@ -653,7 +653,7 @@ function stampCashFlowBodyRowFormat_(sheet, row) {
   const range = sheet.getRange(row, 1, 1, lastCol);
   try { range.setBackground(null); } catch (_) { /* cosmetic */ }
   try { range.setFontWeight('normal'); } catch (_) { /* cosmetic */ }
-  try { range.setFontSize(14); } catch (_) { /* cosmetic */ }
+  try { range.setFontSize(CANON_FONT_BODY_); } catch (_) { /* cosmetic */ }
 
   let layout = null;
   try {

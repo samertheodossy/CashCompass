@@ -47,6 +47,63 @@
  */
 
 /* -------------------------------------------------------------------------- */
+/*  Canonical typography (single source of truth)                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Product-wide canonical font sizes. See ENGINEERING_STANDARDS.md → Canonical
+ * Row Styling Standard. Defined once here so every sheet styling helper reads
+ * the same values and families can never silently drift apart (e.g. Bank
+ * Accounts' Year banner was 16pt while Investments' was 20pt before this was
+ * unified). Weight (bold/normal) and color remain per-family/per-role and are
+ * set at each call site — these constants govern SIZE only.
+ *
+ *   Year / Banner rows .......... 24pt (bold)
+ *   Column Header rows .......... 20pt (bold)  — same on year-block and flat sheets
+ *   Body rows ................... 14pt (normal)
+ *   Totals / Summary / Delta .... 14pt (bold)
+ *
+ * These are global (Apps Script shares one namespace); they are only READ
+ * inside styling functions, which run after all top-level code has loaded.
+ */
+// Canonical typography. NOTE (Stop-Global-Visual-Drift, 2026-07-10): a single
+// global 24/20 header standard clipped Financial Ledger + Operational sheets
+// whose column widths were tuned for 16pt (headers grew, widths did not). We
+// reverted to the last visually-good sizes and made the ONE genuine per-family
+// difference explicit: flat SYS sheets (few, wide columns) read well at a 20pt
+// header, while year-block/Operational grids want 16pt. Prioritize readable
+// sheets over one global font rule.
+var CANON_FONT_YEAR_BANNER_ = 20;   // Financial Ledger year banner
+var CANON_FONT_HEADER_ = 16;        // Financial Ledger + Operational column header
+var CANON_FONT_HEADER_SYS_ = 20;    // Flat SYS sheets (SYS - Assets / House Assets / Accounts)
+var CANON_FONT_BODY_ = 14;
+var CANON_FONT_TOTAL_ = 14; // Totals / Summary / Delta (bold applied at call site)
+
+/**
+ * Product-wide canonical row geometry (heights + vertical alignment). See
+ * ENGINEERING_STANDARDS.md → Canonical Row Styling Standard. Same rationale as
+ * the CANON_FONT_* block: define geometry once so every family reads the same
+ * values and never drifts (Year heights were 28/30/34, Header heights 32/40/44,
+ * Body heights ~21/24/26 before this was unified). These govern **geometry
+ * only** — colors/backgrounds/borders-color stay per-family at each call site.
+ *
+ *   Year / Banner row height ......... 40
+ *   Column Header row height ......... 40
+ *   Body row height .................. 26
+ *   Totals / Summary / Delta height .. 28
+ *   Vertical alignment (all roles) ... 'middle'
+ *
+ * SAFETY: geometry is applied at **first-create** (and approved additive schema
+ * evolution / explicit repair) only. Runtime styling helpers must NOT reshape
+ * populated workbooks with these values (ENGINEERING_STANDARDS §9 / §10).
+ */
+var CANON_ROW_HEIGHT_YEAR_ = 40;
+var CANON_ROW_HEIGHT_HEADER_ = 40;
+var CANON_ROW_HEIGHT_BODY_ = 26;
+var CANON_ROW_HEIGHT_TOTAL_ = 28; // Totals / Summary / Delta
+var CANON_VERTICAL_ALIGNMENT_ = 'middle';
+
+/* -------------------------------------------------------------------------- */
 /*  Registry                                                                  */
 /* -------------------------------------------------------------------------- */
 
@@ -798,4 +855,138 @@ function applyCanonicalColumnWidthsByHeader_(sheet, headerRow, widthByHeader) {
   }
 
   return widened;
+}
+
+/**
+ * Canonical Operational-family FLAT-sheet header + body presentation — the ONE
+ * source of truth shared by INPUT - Bills, INPUT - Debts and INPUT - Upcoming
+ * Expenses. Previously each of those had its own hand-maintained copy of this
+ * block, which is exactly how they drifted apart (alignment / border / height /
+ * font differences). Routing all three through this helper makes the family
+ * look identical and impossible to diverge.
+ *
+ * (INPUT - Cash Flow keeps its own styler because it additionally lays out a
+ * Summary row and Income/Expense conditional colors; its header geometry is
+ * kept in lock-step with the values below.)
+ *
+ * Applies to a flat sheet whose row 1 is the only header row:
+ *   - body wash:  white background, canonical body font (14), body row height 26
+ *   - header row: Operational yellow (#ffe599), bold black, canonical header
+ *                 font (20), horizontally CENTERED, vertical middle, height 40,
+ *                 thin black bottom border
+ *   - freeze row 1
+ *
+ * SAFETY: geometry + color here are FIRST-CREATE ONLY. Callers invoke this
+ * exclusively from their post-insertSheet creators (guarded by a get-branch
+ * return above), so populated workbooks are never reshaped (ENGINEERING_STANDARDS
+ * §9 / §10). Column widths are the caller's responsibility (per-sheet layouts
+ * differ). Cosmetic only — every failure is swallowed; idempotent.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ */
+function applyOperationalFlatSheetStyling_(sheet) {
+  if (!sheet) return;
+
+  var lastCol = 1;
+  try { lastCol = Math.max(1, sheet.getLastColumn()); } catch (_) { return; }
+  var lastRow = 0;
+  try { lastRow = sheet.getLastRow(); } catch (_) { return; }
+  if (lastRow < 1) return;
+
+  // Body wash FIRST: white background + canonical body font + body row height
+  // across the whole grid. The header row below re-applies its own styling, so
+  // this never clobbers it. Number/currency/date formats are untouched.
+  try {
+    var maxRows = sheet.getMaxRows();
+    sheet.getRange(1, 1, maxRows, lastCol)
+      .setBackground('#ffffff')
+      .setFontSize(CANON_FONT_BODY_);
+    if (maxRows > 1) {
+      try { sheet.setRowHeights(2, maxRows - 1, CANON_ROW_HEIGHT_BODY_); } catch (_) {}
+    }
+  } catch (_bodyErr) { /* cosmetic only */ }
+
+  // Header row (row 1): canonical Operational-family presentation.
+  try {
+    sheet.getRange(1, 1, 1, lastCol)
+      .setBackground('#ffe599')
+      .setFontWeight('bold')
+      .setFontColor('#000000')
+      .setFontSize(CANON_FONT_HEADER_)
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_)
+      .setBorder(false, false, true, false, false, false, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+    try { sheet.setRowHeight(1, CANON_ROW_HEIGHT_HEADER_); } catch (_) {}
+  } catch (_headerErr) { /* cosmetic only */ }
+
+  // Pin the header row when scrolling. Idempotent.
+  try { sheet.setFrozenRows(1); } catch (_) {}
+}
+
+/**
+ * Canonical SYS-family FLAT-sheet base presentation — the ONE source of truth
+ * shared by SYS - Assets, SYS - House Assets and SYS - Accounts. Flat SYS sheets
+ * (a single header row over a short, wide table) read well at a 20pt header, so
+ * they use CANON_FONT_HEADER_SYS_ (20) rather than the 16pt used by the crowded
+ * year-block / Operational grids.
+ *
+ * Applies (row 1 = the only header row):
+ *   - body wash:  white background, canonical body font (14), body row height 26
+ *   - header row: SYS yellow (#fff200), bold black, SYS header font (20),
+ *                 horizontally CENTERED, vertical middle, height 40, thin black
+ *                 bottom border
+ *   - canonical widths by header name (widen-only) when a width map is supplied
+ *   - freeze row 1 + column 1
+ *
+ * SAFETY: geometry + color here are FIRST-CREATE ONLY (callers invoke this from
+ * their post-insertSheet creators, guarded by a get-branch return, so populated
+ * workbooks are never reshaped — ENGINEERING_STANDARDS §9 / §10). Number formats
+ * are the caller's responsibility. Cosmetic only; every failure swallowed;
+ * idempotent.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {Object<string,number>} [widthByHeader] canonical widths keyed by header
+ */
+function applySysSheetBaseStyle_(sheet, widthByHeader) {
+  if (!sheet) return;
+
+  var lastCol = 1;
+  try { lastCol = Math.max(1, sheet.getLastColumn()); } catch (_) { return; }
+  var lastRow = 0;
+  try { lastRow = sheet.getLastRow(); } catch (_) { return; }
+  if (lastRow < 1) return;
+
+  // Body wash FIRST: white background + canonical body font + body row height.
+  try {
+    var maxRows = sheet.getMaxRows();
+    sheet.getRange(1, 1, maxRows, lastCol)
+      .setBackground('#ffffff')
+      .setFontSize(CANON_FONT_BODY_);
+    if (maxRows > 1) {
+      try { sheet.setRowHeights(2, maxRows - 1, CANON_ROW_HEIGHT_BODY_); } catch (_) {}
+    }
+  } catch (_bodyErr) { /* cosmetic only */ }
+
+  // Header row (row 1): canonical SYS-family presentation.
+  try {
+    sheet.getRange(1, 1, 1, lastCol)
+      .setBackground('#fff200')
+      .setFontWeight('bold')
+      .setFontColor('#000000')
+      .setFontSize(CANON_FONT_HEADER_SYS_)
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_)
+      .setBorder(false, false, true, false, false, false, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+    try { sheet.setRowHeight(1, CANON_ROW_HEIGHT_HEADER_); } catch (_) {}
+  } catch (_headerErr) { /* cosmetic only */ }
+
+  // Canonical widen-only widths by header name (no autoResize — it fits columns
+  // too tightly to the bold header and reads crowded).
+  if (widthByHeader) {
+    try { applyCanonicalColumnWidthsByHeader_(sheet, 1, widthByHeader); } catch (_) {}
+  }
+
+  // Pin the header row + first column when scrolling. Idempotent.
+  try { sheet.setFrozenRows(1); } catch (_) {}
+  try { sheet.setFrozenColumns(1); } catch (_) {}
 }

@@ -122,30 +122,63 @@ Forward projection is a **separate, explicit product feature**, not unfinished a
 
 All app-created sheets derive their appearance from the **semantic purpose of the row**, not from implementation details or Apps Script defaults. Every row in every app-owned sheet should belong to one of the categories below.
 
+### Canonical typography (single source of truth)
+
+Font **sizes** are defined once in code as constants in `sheet_bootstrap.js` (`CANON_FONT_YEAR_BANNER_`, `CANON_FONT_HEADER_`, `CANON_FONT_HEADER_SYS_`, `CANON_FONT_BODY_`, `CANON_FONT_TOTAL_`). Every styling helper reads these constants so families can never silently drift apart again. Weight (bold/normal) and **color** remain per-family/per-role and are set at each call site — the constants govern **size only**.
+
+> **History (Stop-Global-Visual-Drift, 2026-07-10):** a single global 24/20 header standard was tried and reverted — it clipped Financial Ledger + Operational grids whose column widths were tuned for 16pt (fonts grew, widths did not). The corrected standard below keeps **one** genuine per-family difference: **flat SYS sheets read at a 20pt header** (few, wide columns), while **year-block + Operational grids use 16pt**. Readability wins over a single global font number.
+
+| Row role | Size | Weight | Row height | V-align | Border |
+| --- | --- | --- | --- | --- | --- |
+| Year / Banner | **20 pt** | Bold | **40** | middle | **none** (color band separates) |
+| Column Header (Ledger + Operational) | **16 pt** | Bold | **40** | middle | thin **black** SOLID bottom |
+| Column Header (flat SYS sheets) | **20 pt** | Bold | **40** | middle | thin **black** SOLID bottom |
+| Body | **14 pt** | Normal | **26** | middle | none |
+| Totals / Summary / Delta | **14 pt** | Bold | **28** | middle | none / existing summary divider |
+
+Column Header is **16 pt** on year-block (Financial Ledger) and Operational sheets, and **20 pt** on flat `SYS -` sheets (`CANON_FONT_HEADER_SYS_`). **Column Header horizontal alignment is CENTER** on all data families. Body and Totals horizontal alignment stay canonical-per-column (labels left, currency right).
+
+### Canonical geometry (single source of truth)
+
+Font **sizes** live in the `CANON_FONT_*` constants; row **geometry** (heights + vertical alignment) lives in the matching constants in `sheet_bootstrap.js`: `CANON_ROW_HEIGHT_YEAR_` (40), `CANON_ROW_HEIGHT_HEADER_` (40), `CANON_ROW_HEIGHT_BODY_` (26), `CANON_ROW_HEIGHT_TOTAL_` (28), `CANON_VERTICAL_ALIGNMENT_` (`'middle'`). Colors/backgrounds/border-color stay per-family; the constants govern size + geometry only.
+
+**Application boundary (safety):** geometry is applied at **first-create** (and approved additive schema evolution / explicit repair) **only**. Runtime styling helpers must **not** reshape populated workbooks with these values — they may reassert colors/freeze for correctness but must not set heights/alignment/borders on every write (see §9 and §10 below). Bringing already-populated workbooks up to the new geometry is an **explicit repair**, tracked separately.
+
+**Shared family stylers (no duplicate implementations):** each sheet family routes its header + body presentation through **one** shared helper in `sheet_bootstrap.js`, then layers only its own schema-specific widths/formats. Do not hand-copy the header/body block into per-sheet stylers (that is exactly how the family drifted).
+- **Operational (flat)** — Bills, Debts, Upcoming Expenses → `applyOperationalFlatSheetStyling_(sheet)` (`#ffe599`, 16pt header).
+- **SYS (flat)** — SYS - Assets, SYS - House Assets, SYS - Accounts → `applySysSheetBaseStyle_(sheet, widthByHeader)` (`#fff200`, 20pt header, canonical widths, freeze row+col).
+- **Financial Ledger (year-block)** — Investments, House Values, Bank Accounts, HOUSES → share the canonical constants today; a dedicated `applyFinancialLedgerBaseStyle_` composer is a tracked follow-up (multi-year marker rows make it larger; deferred, not blocking).
+- **Cash Flow** keeps its own styler (Summary row + Income/Expense conditional colors) but sources header size/geometry from the shared constants.
+
 ### Year / Banner Rows
 Purpose: separate year blocks.
-- Font size **20**, **bold**, canonical **Year** background, **centered**, consistent row height.
+- Font size **20** (`CANON_FONT_YEAR_BANNER_`), **bold**, canonical **Year** background, height **40** (`CANON_ROW_HEIGHT_YEAR_`), vertical **middle** (`CANON_VERTICAL_ALIGNMENT_`), **no bottom border** (the color band is the separator).
 
 ### Column Header Rows
 Purpose: column labels.
-- Font size: **16** on year-block sheets, **20** on flat `SYS -` sheets.
-- **Bold**, canonical **yellow** background, **black** text, **centered**, consistent row height, bottom border where appropriate.
+- Font size **16** (`CANON_FONT_HEADER_`) on year-block (Financial Ledger) + Operational sheets; **20** (`CANON_FONT_HEADER_SYS_`) on flat SYS sheets.
+- **Bold**, canonical **yellow** background, **black** text, **horizontally centered**, height **40** (`CANON_ROW_HEIGHT_HEADER_`), vertical **middle**, thin **black** SOLID bottom border.
 
 ### Body Rows
 Purpose: normal editable data.
-- Font size **14**, **normal** weight, **white** background, canonical alignment, readable spacing.
+- Font size **14** (`CANON_FONT_BODY_`), **normal** weight, **white** background, height **26** (`CANON_ROW_HEIGHT_BODY_`), vertical **middle**, canonical per-column horizontal alignment (labels left, currency right).
 
 ### Aggregate / Total Rows
 Purpose: summaries.
-- Font size **14**, **bold**, canonical **green** background, currency formatting where appropriate.
+- Font size **14** (`CANON_FONT_TOTAL_`), **bold**, canonical **green** background, height **28** (`CANON_ROW_HEIGHT_TOTAL_`), currency formatting where appropriate.
 
 ### Delta / Change Rows
 Purpose: month-over-month or change calculations.
-- Font size **14**, **bold**, canonical **pink** background.
+- Font size **14** (`CANON_FONT_TOTAL_`), **bold**, canonical **pink** background, height **28** (`CANON_ROW_HEIGHT_TOTAL_`).
 
 ### Spacer Rows
 Purpose: visual separation only.
 - No special styling beyond the canonical sheet defaults.
+
+### Intentional typography exceptions
+These sheets deliberately use a **different visual language** and are **out of scope** for the ledger typography above. Do not auto-convert them:
+- **Planner / OUT sheets** (e.g. `OUT - Debt Planner Dashboard`, `planner_output.js`): report/dashboard layout with its own dark-blue title banner and section-header sizing. Audit before changing.
+- **`HOME` landing sheet** (`home.js`): marketing/landing title sizing, not a data grid.
 
 ---
 

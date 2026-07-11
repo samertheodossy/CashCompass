@@ -116,10 +116,28 @@ function ensureInputHouseValuesSheet_() {
   try {
     const maxRowsFont = sheet.getMaxRows();
     const lastColFont = Math.max(1, sheet.getLastColumn());
-    sheet.getRange(1, 1, maxRowsFont, lastColFont).setFontSize(14);
-    sheet.getRange(1, 1, 1, lastColFont).setFontSize(20); // Year banner
-    sheet.getRange(2, 1, 1, lastColFont).setFontSize(16); // House header
+    sheet.getRange(1, 1, maxRowsFont, lastColFont).setFontSize(CANON_FONT_BODY_);
+    sheet.getRange(1, 1, 1, lastColFont).setFontSize(CANON_FONT_YEAR_BANNER_); // Year banner (20)
+    sheet.getRange(2, 1, 1, lastColFont).setFontSize(CANON_FONT_HEADER_); // House header (16)
   } catch (_fontErr) { /* cosmetic only */ }
+
+  // Canonical row GEOMETRY (FIRST-CREATE ONLY). Year banner + header at 40px,
+  // vertical-middle; header horizontally centered with a thin black bottom
+  // border; body rows at 26px. Applied HERE — never in applyHouseValuesSheetStyling_,
+  // which runs on populated workbooks on every add — so existing users' sheets
+  // are never reshaped (ENGINEERING_STANDARDS §9/§10). Cosmetic only.
+  try {
+    const lastColGeo = Math.max(1, sheet.getLastColumn());
+    const maxRowsGeo = sheet.getMaxRows();
+    sheet.setRowHeight(1, CANON_ROW_HEIGHT_YEAR_);
+    sheet.getRange(1, 1, 1, lastColGeo).setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_);
+    sheet.setRowHeight(2, CANON_ROW_HEIGHT_HEADER_);
+    sheet.getRange(2, 1, 1, lastColGeo)
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_)
+      .setBorder(false, false, true, false, false, false, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+    if (maxRowsGeo > 2) sheet.setRowHeights(3, maxRowsGeo - 2, CANON_ROW_HEIGHT_BODY_);
+  } catch (_geoErr) { /* cosmetic only */ }
 
   try {
     sheet.setFrozenRows(2);
@@ -227,47 +245,14 @@ function ensureSysHouseAssetsSheet_() {
     applyHouseAssetsSheetStyling_(sheet);
   } catch (_styleErr) { /* cosmetic only */ }
 
-  // Golden Workbook font parity (FIRST-CREATE ONLY) — mirrors ensureSysAssetsSheet_.
-  // The sheet was just inserted and holds no user data or formatting, so a
-  // whole-sheet wash is safe here — this path is never reached for an existing
-  // populated workbook (the `existing` guard above returns early). Body rows
-  // land at the canonical 14; the flat-SYS-sheet header row is raised to 20
-  // (ENGINEERING_STANDARDS: flat SYS sheets use a 20pt header, matching
-  // SYS - Assets). Every future appended row inherits 14 from these washed
-  // empty rows.
-  try {
-    const maxRowsFont = sheet.getMaxRows();
-    const maxColsFont = sheet.getMaxColumns();
-    sheet.getRange(1, 1, maxRowsFont, maxColsFont).setFontSize(14);
-    sheet.getRange(1, 1, 1, maxColsFont).setFontSize(20);
-  } catch (_fontErr) { /* cosmetic only */ }
-
-  // Golden Workbook canonical column widths (FIRST-CREATE) — mirrors
-  // ensureSysAssetsSheet_. We deliberately do NOT drive widths off
-  // autoResizeColumns: on a fresh sheet it fits each column tightly to the 20pt
-  // bold header with minimal padding, which reads as the "crowded / compressed"
-  // look. Canonical widths (the shared SYS_HOUSE_ASSETS_CANONICAL_WIDTHS_ map,
-  // same values used by the existing-sheet self-heal above) are the authority;
-  // they hold the 20pt headers plus currency values with breathing room.
-  // applyCanonicalColumnWidthsByHeader_ is widen-only, so it never shrinks a
-  // column (moot on a brand-new sheet, kept for consistency and safety).
-  try {
-    applyCanonicalColumnWidthsByHeader_(sheet, 1, SYS_HOUSE_ASSETS_CANONICAL_WIDTHS_);
-  } catch (_widthErr) { /* cosmetic only */ }
-
-  // Comfortable header row height for the 20pt header (FIRST-CREATE ONLY).
-  // applyHouseAssetsSheetStyling_ no longer forces a header height (Styling
-  // Reassertion Rule), so this first-create value survives the first add.
-  try { sheet.setRowHeight(1, 44); } catch (_rhErr) { /* cosmetic only */ }
-
-  // Canonical body row height (FIRST-CREATE ONLY). Default sheet rows are
-  // ~21px, which reads cramped at 14pt body text. Raise the empty data rows to
-  // a spacious, readable 26px so appended rows land at a comfortable height.
-  // Safe: the sheet was just inserted and holds no user rows.
-  try {
-    const maxRowsBody = sheet.getMaxRows();
-    if (maxRowsBody > 1) sheet.setRowHeights(2, maxRowsBody - 1, 26);
-  } catch (_bodyRhErr) { /* cosmetic only */ }
+  // Canonical SYS-family base presentation (FIRST-CREATE ONLY) via the shared
+  // helper — identical to SYS - Assets / SYS - Accounts. Yellow #fff200 header
+  // at the SYS 20pt size, centered + thin black bottom border, height 40; white
+  // body at 14pt, 26px rows; canonical widths (widen-only, from the shared
+  // SYS_HOUSE_ASSETS_CANONICAL_WIDTHS_ map — same values as the existing-sheet
+  // self-heal above); frozen header row + first column. Safe: the sheet was
+  // just inserted and this path is never reached for a populated workbook.
+  applySysSheetBaseStyle_(sheet, SYS_HOUSE_ASSETS_CANONICAL_WIDTHS_);
 
   return sheet;
 }
@@ -1245,7 +1230,7 @@ function insertNewHouseHistoryRow_(sheet, block, houseName, loanAmountLeft) {
         .setBackground('#ffffff')
         .setFontWeight('normal')
         .setFontColor('#000000')
-        .setFontSize(14)
+        .setFontSize(CANON_FONT_BODY_)
         .setVerticalAlignment('bottom');
       const firstMonthCol = block.firstMonthCol || 3;
       const lastMonthCol = firstMonthCol + 11;
@@ -1363,7 +1348,7 @@ function appendHouseAssetsRowForNewHouse_(sheet, houseName, propertyType, loanAm
     // never any existing row's formatting, width, or height. Mirrors
     // appendAssetsRowForNewInvestment_.
     try {
-      sheet.getRange(appendedRow, 1, 1, lastCol).setFontSize(14);
+      sheet.getRange(appendedRow, 1, 1, lastCol).setFontSize(CANON_FONT_BODY_);
       sheet.setRowHeight(appendedRow, 26);
     } catch (bodyStampErr) {
       Logger.log('appendHouseAssetsRowForNewHouse_ body stamp failed: ' + bodyStampErr);
@@ -1434,28 +1419,19 @@ function applyHouseAssetsSheetStyling_(sheet) {
   let lastCol = 1;
   try { lastCol = Math.max(1, sheet.getLastColumn()); } catch (_) { return; }
 
+  // Runtime = COLOR only (ENGINEERING_STANDARDS §9/§10). Header alignment,
+  // vertical alignment, row height, and the thin black bottom border are
+  // canonical GEOMETRY set at first-create in ensureSysHouseAssetsSheet_ —
+  // never reasserted here so populated workbooks are never reshaped.
   try {
-    const headerRange = sheet.getRange(1, 1, 1, lastCol);
-    headerRange
+    sheet.getRange(1, 1, 1, lastCol)
       .setBackground('#fff200')
       .setFontWeight('bold')
-      .setFontColor('#000000')
-      .setHorizontalAlignment('center')
-      .setVerticalAlignment('middle');
-    try {
-      headerRange.setBorder(
-        null, null, true, null, null, null,
-        '#000000',
-        SpreadsheetApp.BorderStyle.SOLID_MEDIUM
-      );
-    } catch (_borderErr) { /* cosmetic */ }
+      .setFontColor('#000000');
   } catch (_headerErr) { /* cosmetic */ }
 
   // Freeze panes are asserted here because the app relies on the pinned header
-  // row / first column for correctness. Header row height is intentionally NOT
-  // reasserted (Styling Reassertion Rule) — the first-create 44px set in
-  // ensureSysHouseAssetsSheet_ survives, and existing workbooks keep their own
-  // header height untouched.
+  // row / first column for correctness.
   try { sheet.setFrozenRows(1); } catch (_) {}
   try { sheet.setFrozenColumns(1); } catch (_) {}
 }
@@ -1569,33 +1545,34 @@ function applyHousesExpenseSheetStyling_(sheet) {
   const NUM_COLS = 9;
   const maxRows = sheet.getMaxRows();
 
-  // Body baseline font (14) across the whole sheet; banner rows overridden below.
-  try { sheet.getRange(1, 1, maxRows, NUM_COLS).setFontSize(14); } catch (_f) { /* cosmetic */ }
+  // Body baseline font across the whole sheet; banner rows overridden below.
+  try { sheet.getRange(1, 1, maxRows, NUM_COLS).setFontSize(CANON_FONT_BODY_); } catch (_f) { /* cosmetic */ }
 
-  // Row 1 — Year banner: canonical Financial Ledger orange, bold black, 20pt.
+  // Row 1 — Year banner: canonical Financial Ledger orange, bold black, 24pt.
   try {
     sheet.getRange(1, 1, 1, NUM_COLS)
       .setBackground('#f4a300')
       .setFontWeight('bold')
       .setFontColor('#000000')
-      .setFontSize(20)
-      .setVerticalAlignment('middle');
-    sheet.setRowHeight(1, 30);
+      .setFontSize(CANON_FONT_YEAR_BANNER_)
+      .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_);
+    sheet.setRowHeight(1, CANON_ROW_HEIGHT_YEAR_);
   } catch (_y) { /* cosmetic */ }
 
-  // Row 2 — column header: canonical yellow, bold black, 16pt, centered,
-  // bottom border. Wrap off so labels never wrap; widths below prevent clipping.
+  // Row 2 — column header: canonical yellow, bold black, 20pt, centered,
+  // thin black bottom border. Wrap off so labels never wrap; widths below
+  // prevent clipping.
   try {
     sheet.getRange(2, 1, 1, NUM_COLS)
       .setBackground('#fff200')
       .setFontWeight('bold')
       .setFontColor('#000000')
-      .setFontSize(16)
+      .setFontSize(CANON_FONT_HEADER_)
       .setHorizontalAlignment('center')
-      .setVerticalAlignment('middle')
+      .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_)
       .setWrap(false)
-      .setBorder(false, false, true, false, false, false);
-    sheet.setRowHeight(2, 32);
+      .setBorder(false, false, true, false, false, false, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+    sheet.setRowHeight(2, CANON_ROW_HEIGHT_HEADER_);
   } catch (_h) { /* cosmetic */ }
 
   // Rows 3+ — body: 14pt normal weight, white, readable height.
@@ -1605,8 +1582,8 @@ function applyHousesExpenseSheetStyling_(sheet) {
         .setFontWeight('normal')
         .setFontColor('#000000')
         .setBackground('#ffffff')
-        .setVerticalAlignment('middle');
-      sheet.setRowHeights(3, maxRows - 2, 26);
+        .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_);
+      sheet.setRowHeights(3, maxRows - 2, CANON_ROW_HEIGHT_BODY_);
     }
   } catch (_b) { /* cosmetic */ }
 
@@ -1694,11 +1671,13 @@ function applyHouseValuesSheetStyling_(sheet) {
     const row1 = i + 1;
     try {
       if (marker === 'Year') {
+        // Runtime = COLOR only (ENGINEERING_STANDARDS §9/§10). Height + vertical
+        // alignment are canonical geometry set at first-create in
+        // ensureInputHouseValuesSheet_ — not reshaped here on populated sheets.
         sheet.getRange(row1, 1, 1, lastCol)
           .setBackground('#f4a300')
           .setFontWeight('bold')
           .setFontColor('#000000');
-        try { sheet.setRowHeight(row1, 28); } catch (_) {}
       } else if (marker === 'House') {
         // Only style as the column-header row when col B reads
         // "Loan Amount Left" — otherwise it's a data row whose first
@@ -1709,14 +1688,13 @@ function applyHouseValuesSheetStyling_(sheet) {
           colB = String(sheet.getRange(row1, 2).getDisplayValue() || '').trim();
         } catch (_) { /* leave colB blank and skip styling */ }
         if (colB === 'Loan Amount Left') {
+          // Runtime = COLOR only. Height / alignment / border are canonical
+          // geometry set at first-create (see §9/§10); not reasserted here.
           const range = sheet.getRange(row1, 1, 1, lastCol);
           range
             .setBackground('#fff200')
             .setFontWeight('bold')
-            .setFontColor('#000000')
-            .setHorizontalAlignment('center')
-            .setVerticalAlignment('middle');
-          try { sheet.setRowHeight(row1, 32); } catch (_) {}
+            .setFontColor('#000000');
         }
       } else if (marker === 'Total Values') {
         // Aggregate / Total row → GREEN (Financial Ledger canonical role).

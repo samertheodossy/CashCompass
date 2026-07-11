@@ -54,26 +54,36 @@ function ensureSysAccountsSheet_() {
     throw _e;
   }
 
-  // Cosmetic polish applied only to the fresh sheet: emphasize the
-  // header row, freeze it, and format the three currency columns so
-  // numeric entries render consistently with the rest of the workbook
-  // (Cash Flow / Upcoming Expenses use the same currency string). All
-  // wrapped in try/catch because formatting is never load-bearing —
-  // readers look up columns by header label, not cell format.
+  // Currency number formats (data rows only), bounded to the sheet's max rows —
+  // consistent with the rest of the workbook's creators. Applied before the
+  // shared styler so a freshly created sheet renders money correctly.
   try {
-    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
-    sheet.setFrozenRows(1);
-
     var currencyFormat = '$#,##0.00;-$#,##0.00';
-    var maxRows = sheet.getMaxRows();
-    // Current Balance (B), Available Now (C), Min Buffer (D) are all
-    // currency columns. Priority (G) stays as a plain integer.
-    if (maxRows > 1) {
-      sheet.getRange(2, 2, maxRows - 1, 3).setNumberFormat(currencyFormat);
+    var maxRowsFmt = sheet.getMaxRows();
+    if (maxRowsFmt > 1) {
+      // Current Balance (B), Available Now (C), Min Buffer (D) are currency.
+      // Priority (G) stays a plain integer.
+      sheet.getRange(2, 2, maxRowsFmt - 1, 3).setNumberFormat(currencyFormat);
     }
-
-    sheet.autoResizeColumns(1, headers.length);
   } catch (_fmt) { /* cosmetic only */ }
+
+  // Canonical SYS-family base presentation (FIRST-CREATE ONLY — guarded by the
+  // `if (existing) return existing` above). This is what previously diverged:
+  // SYS - Accounts had no canonical yellow header and used autoResize instead
+  // of canonical widths. The shared helper now gives it the SAME look as
+  // SYS - Assets / SYS - House Assets: yellow #fff200 header at 20pt, centered +
+  // thin black bottom border, height 40; white body at 14pt, 26px rows; canonical
+  // widths (widen-only, no autoResize); frozen header row + first column.
+  applySysSheetBaseStyle_(sheet, {
+    'Account Name': 240,
+    'Current Balance': 220,
+    'Available Now': 190,
+    'Min Buffer': 160,
+    'Type': 150,
+    'Use Policy': 170,
+    'Priority': 120,
+    'Active': 110
+  });
 
   return sheet;
 }
@@ -442,7 +452,7 @@ function insertNewBankAccountHistoryRow_(sheet, block, accountName) {
         .setBackground('#ffffff')
         .setFontWeight('normal')
         .setFontColor('#000000')
-        .setFontSize(14);
+        .setFontSize(CANON_FONT_BODY_);
       const firstMonthCol = block.firstMonthCol || 2;
       if (lastCol >= firstMonthCol) {
         sheet.getRange(newRow, firstMonthCol, 1, lastCol - firstMonthCol + 1)
@@ -1568,7 +1578,11 @@ function applyBankAccountsSheetStyling_(sheet) {
     const maxRows = sheet.getMaxRows();
     sheet.getRange(1, 1, maxRows, lastCol)
       .setBackground('#ffffff')
-      .setFontSize(14);
+      .setFontSize(CANON_FONT_BODY_);
+    // Canonical body row height (FIRST-CREATE ONLY — this styler is reached only
+    // via the post-insertSheet onboarding branch, never for populated workbooks).
+    // Year/header rows are raised to 40 in the marker loop below.
+    try { sheet.setRowHeights(1, maxRows, CANON_ROW_HEIGHT_BODY_); } catch (_) {}
   } catch (_bodyErr) { /* cosmetic only */ }
 
   let colA;
@@ -1583,34 +1597,31 @@ function applyBankAccountsSheetStyling_(sheet) {
     try {
       if (marker === 'Year') {
         // Financial Ledger family Year banner: warm orange (#f4a300) matches
-        // the production Investments / House Values year rows. A #999999
-        // bottom border keeps the crisp section-divider. Hierarchy: bold +
-        // size 16 (Bank Accounts' larger, more legible header typography).
+        // the production Investments / House Values year rows. Canonical
+        // geometry: height 40, vertical middle, and NO bottom border (the color
+        // band is the section divider) — see ENGINEERING_STANDARDS.md.
         const yearRange = sheet.getRange(row1, 1, 1, lastCol);
         yearRange
           .setBackground('#f4a300')
           .setFontWeight('bold')
           .setFontColor('#000000')
-          .setFontSize(16);
-        try {
-          yearRange.setBorder(
-            false, false, true, false, false, false,
-            '#999999', SpreadsheetApp.BorderStyle.SOLID
-          );
-        } catch (_) {}
-        try { sheet.setRowHeight(row1, 34); } catch (_) {}
+          .setFontSize(CANON_FONT_YEAR_BANNER_)
+          .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_);
+        try { sheet.setRowHeight(row1, CANON_ROW_HEIGHT_YEAR_); } catch (_) {}
       } else if (marker === 'Account Name') {
         // Financial Ledger family header: bright yellow (#fff200) matches the
-        // production Investments / House Values header rows. Bank Accounts
-        // header rows are LEFT-aligned, so horizontal alignment is left at
-        // its default; vertical-middle pairs with the taller row height.
+        // production Investments / House Values header rows. Canonical geometry:
+        // horizontally centered, vertical middle, height 40, thin black bottom
+        // border.
         sheet.getRange(row1, 1, 1, lastCol)
           .setBackground('#fff200')
           .setFontWeight('bold')
           .setFontColor('#000000')
-          .setFontSize(16)
-          .setVerticalAlignment('middle');
-        try { sheet.setRowHeight(row1, 40); } catch (_) {}
+          .setFontSize(CANON_FONT_HEADER_)
+          .setHorizontalAlignment('center')
+          .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_)
+          .setBorder(false, false, true, false, false, false, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+        try { sheet.setRowHeight(row1, CANON_ROW_HEIGHT_HEADER_); } catch (_) {}
       } else if (marker === 'Total Accounts') {
         // Defensive: only fires if such a row already exists. Not created here.
         sheet.getRange(row1, 1, 1, lastCol)

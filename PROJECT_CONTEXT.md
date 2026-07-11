@@ -706,7 +706,9 @@ Tracks how far each recovery-stack capability has actually been **runtime-valida
 
 Newly provisioned (and first-create) workbooks are styled to a shared **Family Beta** standard so they visually match the production/bound workbook. Styling is **first-create-only** and uses **widen-only** column logic, so it never reformats or shrinks an existing populated sheet (honors `WORKING_RULES.md → No destructive sheet changes`).
 
-**Family Beta standard:** yellow header band (`#ffe599`, bold, 16pt, ~40px height, vertical-middle); white body (14pt); subtle gray section/year rows (`#d9d9d9` with a `#999999` bottom border); defensive green totals (`#b6d7a8`, applied only if a total row is present); defensive tan delta (`#fce5cd`); frozen header/year rows + first column; widen-only widths tuned for the 16pt header.
+**Family Beta standard:** yellow header band (`#ffe599`, bold, **16pt**, ~40px height, vertical-middle); white body (14pt); subtle gray section/year rows (`#d9d9d9` with a `#999999` bottom border); defensive green totals (`#b6d7a8`, applied only if a total row is present); defensive tan delta (`#fce5cd`); frozen header/year rows + first column; widen-only widths tuned for the 16pt header.
+
+> **Canonical typography (product-wide).** Font **sizes** are defined once as constants in `sheet_bootstrap.js` (`CANON_FONT_YEAR_BANNER_`, `CANON_FONT_HEADER_`, `CANON_FONT_HEADER_SYS_`, `CANON_FONT_BODY_`, `CANON_FONT_TOTAL_`): **Year banner 20pt bold · Column header 16pt bold (Financial Ledger + Operational) · Column header 20pt bold (flat SYS sheets) · Body 14pt normal · Totals/Summary/Delta 14pt bold.** Colors/weights stay per-family; the constants govern size only. A brief experiment with a single global 24/20 header (2026-07-10) was reverted — larger headers clipped grids whose widths were tuned for 16pt; flat SYS sheets keep the wider 20pt header because their columns are few and wide. Authoritative spec: `ENGINEERING_STANDARDS.md → Canonical Row Styling Standard`. Intentional exceptions (not converted): Planner/OUT report sheets and the HOME landing sheet.
 
 **Completed (helpers + first-create wiring):**
 

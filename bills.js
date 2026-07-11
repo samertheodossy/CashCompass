@@ -1528,28 +1528,11 @@ function applyBillsSheetStyling_(sheet) {
   try { lastRow = sheet.getLastRow(); } catch (_) { return; }
   if (lastRow < 1) return;
 
-  // Body wash FIRST: calm white background + size 14 across the whole grid.
-  // The header row below re-applies its own background + size, so this never
-  // clobbers the header styling. Number/currency formats are untouched (we
-  // only set background + size).
-  try {
-    var maxRows = sheet.getMaxRows();
-    sheet.getRange(1, 1, maxRows, lastCol)
-      .setBackground('#ffffff')
-      .setFontSize(14);
-  } catch (_bodyErr) { /* cosmetic only */ }
-
-  // Header row (row 1): warm yellow, bold, large, vertically centered to
-  // pair with the taller row height. Left horizontal alignment (default).
-  try {
-    sheet.getRange(1, 1, 1, lastCol)
-      .setBackground('#ffe599')
-      .setFontWeight('bold')
-      .setFontColor('#000000')
-      .setFontSize(16)
-      .setVerticalAlignment('middle');
-    try { sheet.setRowHeight(1, 40); } catch (_) {}
-  } catch (_headerErr) { /* cosmetic only */ }
+  // Shared Operational-family header + body presentation (ONE source of truth
+  // in sheet_bootstrap.js — identical to Debts / Upcoming Expenses / Cash Flow).
+  // Handles the white body wash, body row height, the yellow centered header
+  // with thin black bottom border, and the frozen header row.
+  applyOperationalFlatSheetStyling_(sheet);
 
   // Widen-only column widths (never shrink a column the user widened). Keyed
   // by canonical column position from the creator's header layout:
@@ -1573,7 +1556,5 @@ function applyBillsSheetStyling_(sheet) {
   try {
     applyCanonicalColumnWidthsByHeader_(sheet, 1, BILLS_SCHEDULING_COLUMN_WIDTHS_);
   } catch (_schedWidthErr) { /* cosmetic only */ }
-
-  // Pin the header row when scrolling. Idempotent.
-  try { sheet.setFrozenRows(1); } catch (_) {}
+  // Header freeze is handled by applyOperationalFlatSheetStyling_ above.
 }

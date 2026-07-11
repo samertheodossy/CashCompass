@@ -121,7 +121,7 @@ function createNextYearCashFlowSheet() {
     // copied from the source above — Phase A does not restyle clone heights.
     const maxRowsClone = newSheet.getMaxRows();
     if (maxRowsClone > 1) {
-      newSheet.getRange(2, 1, maxRowsClone - 1, numCols).setFontSize(14);
+      newSheet.getRange(2, 1, maxRowsClone - 1, numCols).setFontSize(CANON_FONT_BODY_);
     }
     // Golden Workbook row-type text colors (FIRST-CREATE clone): Income
     // green, Expense red, via conditional formatting on the new sheet.
@@ -595,13 +595,13 @@ function ensureCashFlowYearSheet_(year) {
   // guard at the top returns early). Body cells render at the canonical 14pt
   // and empty data rows get a readable 24px height, so future Quick Add /
   // seed rows inherit comfortable spacing (insertCashFlowRow_ propagates the
-  // neighbor/default row format). Header font (16) is applied by
+  // neighbor/default row format). Header font (canonical 20) is applied by
   // applyCashFlowSheetStyling_ above.
   try {
     const maxRowsCF = sheet.getMaxRows();
     if (maxRowsCF > 1) {
-      sheet.getRange(2, 1, maxRowsCF - 1, headerRow.length).setFontSize(14);
-      sheet.setRowHeights(2, maxRowsCF - 1, 24);
+      sheet.getRange(2, 1, maxRowsCF - 1, headerRow.length).setFontSize(CANON_FONT_BODY_);
+      sheet.setRowHeights(2, maxRowsCF - 1, CANON_ROW_HEIGHT_BODY_);
     }
   } catch (_bodyErr) { /* cosmetic only */ }
 
@@ -745,7 +745,7 @@ function applyCashFlowSheetStyling_(sheet, layout) {
   headerRange
     .setBackground('#ffe599')
     .setFontWeight('bold')
-    .setFontSize(16)
+    .setFontSize(CANON_FONT_HEADER_)
     .setFontColor('#000000')
     .setHorizontalAlignment('center')
     .setVerticalAlignment('middle');
@@ -762,11 +762,11 @@ function applyCashFlowSheetStyling_(sheet, layout) {
       null,  // vertical (interior)
       null,  // horizontal (interior)
       '#000000',
-      SpreadsheetApp.BorderStyle.SOLID_MEDIUM
+      SpreadsheetApp.BorderStyle.SOLID  // canonical thin black header border
     );
   } catch (_borderErr) { /* cosmetic */ }
 
-  try { sheet.setRowHeight(1, 32); } catch (_rhErr) { /* cosmetic */ }
+  try { sheet.setRowHeight(1, CANON_ROW_HEIGHT_HEADER_); } catch (_rhErr) { /* cosmetic */ }
   try { sheet.setFrozenRows(1); } catch (_frErr) { /* cosmetic */ }
 
   // Column widths tuned to the canonical column identities so a freshly
@@ -837,7 +837,7 @@ function applyCashFlowSummaryRowStyling_(sheet, summaryRow, layout) {
     range
       .setBackground('#f3f3f3')
       .setFontWeight('bold')
-      .setFontSize(14)
+      .setFontSize(CANON_FONT_TOTAL_)
       .setFontColor('#000000');
   } catch (_fillErr) { /* cosmetic */ }
 

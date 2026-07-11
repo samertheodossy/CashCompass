@@ -732,22 +732,21 @@ function getOrCreateUpcomingExpensesSheet_() {
 }
 
 /**
- * First-create cosmetic styling for INPUT - Upcoming Expenses (Family Beta).
+ * First-create cosmetic styling for INPUT - Upcoming Expenses.
  *
- * Flat table — a single header row (row 1) followed by expense data rows;
- * no section/year rows, no totals, no delta rows. Styling:
+ * Flat table — a single header row (row 1) followed by expense data rows; no
+ * section/year rows, no totals, no delta rows. The canonical header + body
+ * presentation (white body wash, 26px body rows, yellow #ffe599 centered header
+ * at 20pt with a thin black bottom border, height 40, frozen header) comes from
+ * the SHARED Operational-family helper applyOperationalFlatSheetStyling_ so
+ * Upcoming Expenses is byte-for-byte identical to Bills and Debts and can never
+ * drift. This function only adds the per-sheet widen-only column widths.
  *
- *   - body (all cells) → white background, font size 14
- *   - header (row 1)   → yellow #ffe599, bold, black, font size 16,
- *                        vertical-middle, row height 40
- *
- * The body wash runs FIRST so the header re-applied afterward always wins.
  * NEVER writes formulas, creates rows, or changes headers/schema. Existing
- * number formats applied by the creator (Due Date yyyy-mm-dd, Amount
- * currency) are preserved — only background + font size are touched on the
- * body. Column widths are widen-only.
- *
- * All failures are swallowed — cosmetic only. Idempotent.
+ * number formats applied by the creator (Due Date yyyy-mm-dd, Amount currency)
+ * are preserved. FIRST-CREATE ONLY — invoked from the post-insertSheet branch of
+ * getOrCreateUpcomingExpensesSheet_, never on populated workbooks. All failures
+ * are swallowed — cosmetic only. Idempotent.
  *
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
  */
@@ -760,26 +759,12 @@ function applyUpcomingExpensesSheetStyling_(sheet) {
   try { lastRow = sheet.getLastRow(); } catch (_) { return; }
   if (lastRow < 1) return;
 
-  // Body wash FIRST: white background + size 14 across the whole grid. The
-  // header re-applies its own background + size below. Number/currency/date
-  // formats are untouched (we only set background + size).
-  try {
-    const maxRows = sheet.getMaxRows();
-    sheet.getRange(1, 1, maxRows, lastCol)
-      .setBackground('#ffffff')
-      .setFontSize(14);
-  } catch (_bodyErr) { /* cosmetic only */ }
-
-  // Header row (row 1): warm yellow, bold, large, vertically centered.
-  try {
-    sheet.getRange(1, 1, 1, lastCol)
-      .setBackground('#ffe599')
-      .setFontWeight('bold')
-      .setFontColor('#000000')
-      .setFontSize(16)
-      .setVerticalAlignment('middle');
-    try { sheet.setRowHeight(1, 40); } catch (_) {}
-  } catch (_headerErr) { /* cosmetic only */ }
+  // Shared Operational-family header + body presentation (ONE source of truth
+  // in sheet_bootstrap.js — identical to Bills / Debts / Cash Flow). Handles the
+  // white body wash, body row height, the yellow centered header with thin black
+  // bottom border, and the frozen header row. This is what makes Upcoming
+  // Expenses feel like the rest of the Operational family.
+  applyOperationalFlatSheetStyling_(sheet);
 
   // Widen-only column widths (never shrink a column the user widened). Keyed
   // by canonical column position from the creator's header layout:
@@ -794,9 +779,7 @@ function applyUpcomingExpensesSheetStyling_(sheet) {
       }
     } catch (_) {}
   }
-
-  // Pin the header row when scrolling. Idempotent.
-  try { sheet.setFrozenRows(1); } catch (_) {}
+  // Header freeze is handled by applyOperationalFlatSheetStyling_ above.
 }
 
 function findUpcomingExpenseRowById_(id) {

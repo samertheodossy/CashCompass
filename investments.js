@@ -164,10 +164,28 @@ function ensureInputInvestmentsSheet_() {
   try {
     const maxRowsFont = sheet.getMaxRows();
     const lastColFont = Math.max(1, sheet.getLastColumn());
-    sheet.getRange(1, 1, maxRowsFont, lastColFont).setFontSize(14);
-    sheet.getRange(1, 1, 1, lastColFont).setFontSize(20); // Year banner
-    sheet.getRange(2, 1, 1, lastColFont).setFontSize(16); // Account Name header
+    sheet.getRange(1, 1, maxRowsFont, lastColFont).setFontSize(CANON_FONT_BODY_);
+    sheet.getRange(1, 1, 1, lastColFont).setFontSize(CANON_FONT_YEAR_BANNER_); // Year banner (20)
+    sheet.getRange(2, 1, 1, lastColFont).setFontSize(CANON_FONT_HEADER_); // Account Name header (16)
   } catch (_fontErr) { /* cosmetic only */ }
+
+  // Canonical row GEOMETRY (FIRST-CREATE ONLY). Year banner + header at 40px,
+  // vertical-middle; header horizontally centered with a thin black bottom
+  // border; body rows at 26px. Applied HERE — never in applyInvestmentsSheetStyling_,
+  // which runs on populated workbooks on every add — so existing users' sheets
+  // are never reshaped (ENGINEERING_STANDARDS §9/§10). Cosmetic only.
+  try {
+    const lastColGeo = Math.max(1, sheet.getLastColumn());
+    const maxRowsGeo = sheet.getMaxRows();
+    sheet.setRowHeight(1, CANON_ROW_HEIGHT_YEAR_);
+    sheet.getRange(1, 1, 1, lastColGeo).setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_);
+    sheet.setRowHeight(2, CANON_ROW_HEIGHT_HEADER_);
+    sheet.getRange(2, 1, 1, lastColGeo)
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_)
+      .setBorder(false, false, true, false, false, false, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+    if (maxRowsGeo > 2) sheet.setRowHeights(3, maxRowsGeo - 2, CANON_ROW_HEIGHT_BODY_);
+  } catch (_geoErr) { /* cosmetic only */ }
 
   try {
     sheet.setFrozenRows(2);
@@ -254,57 +272,19 @@ function ensureSysAssetsSheet_() {
     applyAssetsSheetStyling_(sheet);
   } catch (_styleErr) { /* cosmetic only */ }
 
-  // Golden Workbook font parity (FIRST-CREATE ONLY). The sheet was just
-  // inserted and holds no user data or formatting, so a whole-sheet wash
-  // is safe here — this path is never reached for an existing populated
-  // workbook (the guard above returns early). Body rows land at the
-  // canonical 14; the header row is raised to 20. Every future appended
-  // row inherits 14 from these washed empty rows.
-  try {
-    const maxRowsFont = sheet.getMaxRows();
-    const maxColsFont = sheet.getMaxColumns();
-    sheet.getRange(1, 1, maxRowsFont, maxColsFont).setFontSize(14);
-    sheet.getRange(1, 1, 1, maxColsFont).setFontSize(20);
-  } catch (_fontErr) { /* cosmetic only */ }
-
-  // Golden Workbook canonical column widths (FIRST-CREATE ONLY).
-  //
-  // We deliberately do NOT drive widths off autoResizeColumns: on a fresh
-  // sheet it fits each column tightly to the 20pt bold header with minimal
-  // padding, which reads as the "crowded / compressed" look (Current Balance
-  // jammed against Active). The Golden Workbook uses comfortable, deliberate
-  // widths, so canonical widths are the authority here. The header labels are
-  // fixed and short, and these values are sized to hold the 20pt headers plus
-  // currency values with breathing room, so nothing clips. Widen-only against
-  // the current width preserves the "never shrink a user's column" rule (moot
-  // on a brand-new sheet, but kept for consistency and safety).
-  //   Account Name | Type | Current Balance | Active
-  try {
-    const canonicalWidths = [280, 150, 220, 110];
-    for (let c = 0; c < canonicalWidths.length; c++) {
-      const col = c + 1;
-      let curWidth = 0;
-      try { curWidth = sheet.getColumnWidth(col); } catch (_gw) {}
-      if (canonicalWidths[c] > curWidth) sheet.setColumnWidth(col, canonicalWidths[c]);
-    }
-  } catch (_widthErr) { /* cosmetic only */ }
-
-  // Comfortable header row height for the 20pt header (FIRST-CREATE ONLY).
-  // applyAssetsSheetStyling_ no longer forces a header height (see Styling
-  // Reassertion Rule), so this first-create value now survives the first
-  // add. Existing workbooks keep their current header height untouched.
-  try { sheet.setRowHeight(1, 44); } catch (_rhErr) { /* cosmetic only */ }
-
-  // Canonical body row height (FIRST-CREATE ONLY). Default sheet rows are
-  // ~21px, which reads cramped at 14pt body text. Raise the empty data rows
-  // to a spacious, readable 26px so appended rows land at a comfortable
-  // height. Safe: the sheet was just inserted and holds no user rows — this
-  // never runs for an existing populated workbook (the guard at the top
-  // returns early).
-  try {
-    const maxRowsBody = sheet.getMaxRows();
-    if (maxRowsBody > 1) sheet.setRowHeights(2, maxRowsBody - 1, 26);
-  } catch (_bodyRhErr) { /* cosmetic only */ }
+  // Canonical SYS-family base presentation (FIRST-CREATE ONLY) via the shared
+  // helper — yellow #fff200 header at the SYS 20pt size, centered + thin black
+  // bottom border, height 40; white body at 14pt, 26px rows; canonical widths
+  // (widen-only); frozen header row + first column. Shared with SYS - House
+  // Assets and SYS - Accounts so the SYS family can never drift. Safe here: the
+  // sheet was just inserted and this path is never reached for a populated
+  // workbook (the `existing` guard above returns early).
+  applySysSheetBaseStyle_(sheet, {
+    'Account Name': 280,
+    'Type': 150,
+    'Current Balance': 220,
+    'Active': 110
+  });
 
   return sheet;
 }
@@ -1155,7 +1135,7 @@ function insertNewInvestmentHistoryRow_(sheet, block, accountName, typeStr) {
         .setBackground('#ffffff')
         .setFontWeight('normal')
         .setFontColor('#000000')
-        .setFontSize(14)
+        .setFontSize(CANON_FONT_BODY_)
         .setVerticalAlignment('bottom');
       const firstMonthCol = block.firstMonthCol || 3;
       sheet.getRange(newRow, 1, 1, Math.min(2, lastCol))
@@ -1246,24 +1226,25 @@ function applyInvestmentsSheetStyling_(sheet) {
     const row1 = i + 1;
     try {
       if (marker === 'Year') {
+        // Runtime = COLOR only (ENGINEERING_STANDARDS §9/§10). Row height and
+        // vertical alignment are canonical geometry, set at first-create in
+        // ensureInputInvestmentsSheet_ — never reshaped here on populated sheets.
         sheet.getRange(row1, 1, 1, lastCol)
           .setBackground('#f4a300')
           .setFontWeight('bold')
           .setFontColor('#000000');
-        try { sheet.setRowHeight(row1, 28); } catch (_) {}
       } else if (marker === 'Account Name') {
         let colB = '';
         try {
           colB = String(sheet.getRange(row1, 2).getDisplayValue() || '').trim();
         } catch (_) { /* skip styling when col B cannot be read */ }
         if (colB === 'Type') {
+          // Runtime = COLOR only. Height / alignment / border are canonical
+          // geometry set at first-create (see §9/§10); not reasserted here.
           sheet.getRange(row1, 1, 1, lastCol)
             .setBackground('#fff200')
             .setFontWeight('bold')
-            .setFontColor('#000000')
-            .setHorizontalAlignment('center')
-            .setVerticalAlignment('middle');
-          try { sheet.setRowHeight(row1, 32); } catch (_) {}
+            .setFontColor('#000000');
         }
       } else if (marker === 'Account Totals') {
         sheet.getRange(row1, 1, 1, lastCol)
@@ -1690,7 +1671,7 @@ function appendAssetsRowForNewInvestment_(sheet, accountName, typeStr, currentBa
     // touches only the new row, never any existing row's formatting,
     // width, or height.
     try {
-      sheet.getRange(appendedRow, 1, 1, lastCol).setFontSize(14);
+      sheet.getRange(appendedRow, 1, 1, lastCol).setFontSize(CANON_FONT_BODY_);
       sheet.setRowHeight(appendedRow, 26);
     } catch (bodyStampErr) {
       Logger.log('appendAssetsRowForNewInvestment_ body stamp failed: ' + bodyStampErr);
@@ -1749,26 +1730,19 @@ function applyAssetsSheetStyling_(sheet) {
   let lastCol = 1;
   try { lastCol = Math.max(1, sheet.getLastColumn()); } catch (_) { return; }
 
+  // Runtime = COLOR only (ENGINEERING_STANDARDS §9/§10). Header alignment,
+  // vertical alignment, row height, and the thin black bottom border are
+  // canonical GEOMETRY set at first-create in ensureSysAssetsSheet_ — never
+  // reasserted here so populated workbooks are never reshaped.
   try {
-    const headerRange = sheet.getRange(1, 1, 1, lastCol);
-    headerRange
+    sheet.getRange(1, 1, 1, lastCol)
       .setBackground('#fff200')
       .setFontWeight('bold')
-      .setFontColor('#000000')
-      .setHorizontalAlignment('center')
-      .setVerticalAlignment('middle');
-    try {
-      headerRange.setBorder(
-        null, null, true, null, null, null,
-        '#000000',
-        SpreadsheetApp.BorderStyle.SOLID_MEDIUM
-      );
-    } catch (_borderErr) { /* cosmetic */ }
+      .setFontColor('#000000');
   } catch (_headerErr) { /* cosmetic */ }
 
   // Freeze panes are asserted here because the app relies on the pinned
-  // header row / first column for correctness. Row height is intentionally
-  // omitted (see docstring / Styling Reassertion Rule).
+  // header row / first column for correctness.
   try { sheet.setFrozenRows(1); } catch (_) {}
   try { sheet.setFrozenColumns(1); } catch (_) {}
 }
