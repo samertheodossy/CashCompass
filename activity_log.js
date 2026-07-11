@@ -24,6 +24,36 @@ var ACTIVITY_LOG_HEADERS = [
 var ACTIVITY_LOG_DEDUPE_COL = 11;
 
 /**
+ * Canonical first-create column widths (px), keyed by exact header text.
+ *
+ * Source: Golden Workbook parity (Validator "AdoptGolden" — LOG - Activity
+ * column widths, 2026-07-11). The prior first-create polish called
+ * autoResizeColumns() on the empty, header-only sheet, which fit columns to the
+ * header text alone and produced extremely narrow columns (e.g. Payee 42px,
+ * Dedupe Key 76px) vs the mature Golden layout. These are the Golden widths.
+ *
+ * Applied via the shared widen-only, header-addressed helper
+ * applyCanonicalColumnWidthsByHeader_ (sheet_bootstrap.js) at FIRST CREATE ONLY.
+ * Widen-only: a column already ≥ its canonical width is left untouched, so this
+ * never shrinks a sheet a user has widened. Header-addressed: robust to column
+ * reordering; missing headers are skipped safely.
+ */
+var ACTIVITY_LOG_CANONICAL_WIDTHS_ = {
+  'Logged At': 162,
+  'Event Type': 100,
+  'Entry Date': 100,
+  'Amount': 100,
+  'Direction': 127,
+  'Payee': 332,
+  'Category': 116,
+  'Account / Source': 214,
+  'Cash Flow Sheet': 177,
+  'Cash Flow Month': 144,
+  'Dedupe Key': 601,
+  'Details': 100
+};
+
+/**
  * LOG - Activity "Entry Date" is often a real date cell: getValues() returns a Date, not the yyyy-MM-dd string we wrote.
  * Donation undo fingerprint must compare using the same calendar day as INPUT - Donation.
  * @param {*} cellVal
@@ -90,15 +120,18 @@ function getOrCreateActivityLogSheet_(ss) {
   sh.setFrozenRows(1);
 
   // First-creation-only polish. All wrapped in try/catch — cosmetic
-  // only, must never fail a log write. Matches the bold-header +
-  // auto-resize convention used by every other creator in the
-  // workbook. Existing `LOG - Activity` sheets are skipped above, so
-  // this branch only runs on truly-new logs.
+  // only, must never fail a log write. Existing `LOG - Activity` sheets
+  // are skipped above (get / self-heal branches return early), so this
+  // block runs exclusively on truly-new logs (first-create only).
   try {
     sh.getRange(1, 1, 1, ACTIVITY_LOG_HEADERS.length).setFontWeight('bold');
   } catch (_boldErr) { /* cosmetic only */ }
+  // Golden-parity column widths. Replaces the previous autoResizeColumns()
+  // call, which fit an empty header-only sheet and produced far-too-narrow
+  // columns. Uses the shared widen-only, header-addressed helper so it never
+  // shrinks a user-widened column and is safe if a header ever moves.
   try {
-    sh.autoResizeColumns(1, ACTIVITY_LOG_HEADERS.length);
+    applyCanonicalColumnWidthsByHeader_(sh, 1, ACTIVITY_LOG_CANONICAL_WIDTHS_);
   } catch (_resizeErr) { /* cosmetic only */ }
 
   return sh;
