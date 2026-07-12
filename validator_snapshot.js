@@ -240,7 +240,7 @@ function validatorSuggestedHelper_(name) {
   if (name === 'LOG - Activity') return 'getOrCreateActivityLogSheet_ (activity_log.js)';
   // Previously "unknown" owners — completed 2026-07-10.
   if (name === 'INPUT - Settings') return 'ensureInputSettingsSheet_ (profile.js)';
-  if (name === 'INPUT - Donation') return 'ensureInputDonationSheet_ (donations.js)';
+  if (name === 'INPUT - Donation') return 'applyDonationSheetStyling_ / ensureInputDonationSheet_ (donations.js)';
   if (name === 'INPUT - House Taxes') return 'legacy sheet — no active canonical creator (house taxes)';
   if (name.indexOf('INPUT - Income/Expenses') === 0) {
     return 'legacy income architecture — superseded by INPUT - Cash Flow (no active creator)';

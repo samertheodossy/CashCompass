@@ -962,7 +962,8 @@ function applyOperationalFlatSheetStyling_(sheet) {
  *
  * Applies (row 1 = the only header row):
  *   - body wash:  white background, canonical body font (14), body row height 26
- *   - header row: SYS yellow (#fff200), bold black, SYS header font (20),
+ *   - header row: canonical header yellow (#ffe599, CANON_HEADER_YELLOW_),
+ *                 bold black, SYS header font (20),
  *                 horizontally CENTERED, vertical middle, height 40, thin black
  *                 bottom border
  *   - canonical widths by header name (widen-only) when a width map is supplied
@@ -1032,7 +1033,7 @@ function applySysSheetBaseStyle_(sheet, widthByHeader) {
  * footer per year block down column A, so the walker scans column A for the
  * four semantic marker rows and applies the shared Financial Ledger palette:
  *   - Year banner : #f4a300 (orange)
- *   - Column header: #fff200 (yellow)
+ *   - Column header: #ffe599 (CANON_HEADER_YELLOW_)
  *   - Totals/aggregate: #b6d7a8 (green)
  *   - Delta/secondary summary: #f4cccc (pink)
  *

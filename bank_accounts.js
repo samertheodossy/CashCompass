@@ -97,7 +97,7 @@ function ensureSysAccountsSheet_() {
   // `if (existing) return existing` above). This is what previously diverged:
   // SYS - Accounts had no canonical yellow header and used autoResize instead
   // of canonical widths. The shared helper now gives it the SAME look as
-  // SYS - Assets / SYS - House Assets: yellow #fff200 header at 20pt, centered +
+  // SYS - Assets / SYS - House Assets: yellow #ffe599 header at 20pt, centered +
   // thin black bottom border, height 40; white body at 14pt, 26px rows; canonical
   // widths (widen-only, no autoResize); frozen header row + first column.
   applySysSheetBaseStyle_(sheet, {
@@ -1572,7 +1572,7 @@ function refreshBankAccountsTotalAccountsRow_(sheet, year) {
  *   - body (all cells)  → white background, font size 14 (calm, legible)
  *   - "Year" row        → orange #f4a300 banner, bottom border #999999, bold,
  *                         font size 16, row height 34
- *   - "Account Name"    → bright yellow #fff200, bold, font size 16,
+ *   - "Account Name"    → canonical header yellow #ffe599, bold, font size 16,
  *                         left-aligned, vertical-middle, row height 40
  *   - "Total Accounts"  → green #b6d7a8, bold   (ONLY if the row exists)
  *   - "Delta"           → pink  #f4cccc, bold   (ONLY if the row exists)

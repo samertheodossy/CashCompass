@@ -246,7 +246,7 @@ function ensureSysHouseAssetsSheet_() {
   } catch (_styleErr) { /* cosmetic only */ }
 
   // Canonical SYS-family base presentation (FIRST-CREATE ONLY) via the shared
-  // helper — identical to SYS - Assets / SYS - Accounts. Yellow #fff200 header
+  // helper — identical to SYS - Assets / SYS - Accounts. Yellow #ffe599 header
   // at the SYS 20pt size, centered + thin black bottom border, height 40; white
   // body at 14pt, 26px rows; canonical widths (widen-only, from the shared
   // SYS_HOUSE_ASSETS_CANONICAL_WIDTHS_ map — same values as the existing-sheet
@@ -1402,7 +1402,7 @@ function appendHouseAssetsRowForNewHouse_(sheet, houseName, propertyType, loanAm
  * the first-create block in ensureSysHouseAssetsSheet_, not here.
  *
  * Assertions:
- *   - Header row (row 1) → yellow #fff200, bold black, centered
+ *   - Header row (row 1) → yellow #ffe599, bold black, centered
  *     horizontal / middle vertical.
  *   - Solid-medium black bottom border under row 1.
  *   - Frozen row 1 + frozen column 1 so House stays pinned when
@@ -1631,7 +1631,7 @@ function applyHousesExpenseSheetStyling_(sheet) {
  * blocks / newly-inserted rows never drift from the canonical look:
  *
  *   - "Year | <year>"   → orange  #f4a300, bold black, row height 28
- *   - "House | Loan…"   → yellow  #fff200, bold black, centered, row height 32
+ *   - "House | Loan…"   → yellow  #ffe599, bold black, centered, row height 32
  *   - "Total Values"    → green   #b6d7a8, bold black  (Aggregate/Total role)
  *   - "House Assets"    → pink    #f4cccc, bold black  (secondary summary role)
  *

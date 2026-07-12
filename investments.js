@@ -273,7 +273,7 @@ function ensureSysAssetsSheet_() {
   } catch (_styleErr) { /* cosmetic only */ }
 
   // Canonical SYS-family base presentation (FIRST-CREATE ONLY) via the shared
-  // helper — yellow #fff200 header at the SYS 20pt size, centered + thin black
+  // helper — yellow #ffe599 header at the SYS 20pt size, centered + thin black
   // bottom border, height 40; white body at 14pt, 26px rows; canonical widths
   // (widen-only); frozen header row + first column. Shared with SYS - House
   // Assets and SYS - Accounts so the SYS family can never drift. Safe here: the
@@ -1191,7 +1191,7 @@ function insertNewInvestmentHistoryRow_(sheet, block, accountName, typeStr) {
  * canonical look:
  *
  *   - "Year"            → orange  #f4a300, bold black, row height 28
- *   - "Account Name"    → yellow  #fff200, bold black, centered, row height 32
+ *   - "Account Name"    → yellow  #ffe599, bold black, centered, row height 32
  *                         (only when col B reads "Type" — disambiguates
  *                          from any legitimate data row whose col A just
  *                          happens to be the word "Account Name")
@@ -1665,7 +1665,7 @@ function appendAssetsRowForNewInvestment_(sheet, accountName, typeStr, currentBa
  * is already consistent.
  *
  * Assertions:
- *   - Header row (row 1) → yellow #fff200, bold black, centered
+ *   - Header row (row 1) → yellow #ffe599, bold black, centered
  *     horizontal / middle vertical.
  *   - Solid-medium black bottom border under row 1 to separate header
  *     from the data body.
