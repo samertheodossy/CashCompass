@@ -103,6 +103,31 @@ var CANON_ROW_HEIGHT_BODY_ = 26;
 var CANON_ROW_HEIGHT_TOTAL_ = 28; // Totals / Summary / Delta
 var CANON_VERTICAL_ALIGNMENT_ = 'middle';
 
+/**
+ * THE single canonical HEADER YELLOW for every CashCompass sheet family
+ * (ratified product decision 2026-07-11). This is the softer Google Sheets
+ * "yellow-2" — NOT the brighter legacy header yellows (#ffff00 / #fff200).
+ *
+ * USED BY ALL HEADER ROWS: Operational flat (applyOperationalFlatSheetStyling_),
+ * INPUT - Settings (profile.js), the flat SYS family (SYS - Assets / House
+ * Assets / Accounts via applySysSheetBaseStyle_ + the SYS - Assets / House
+ * Assets runtime reasserts), the Financial Ledger year-block family
+ * (Investments / House Values / Bank Accounts via applyFinancialLedgerBaseStyle_
+ * in BOTH first-create and runtime modes), and HOUSES - <Property>
+ * (applyHousesExpenseSheetStyling_ + the year-block header fallback).
+ *
+ * DELIBERATE PRODUCT MIGRATION: because the SYS / Ledger / HOUSES families
+ * reassert their header color at runtime, existing populated workbooks recolor
+ * their header band from the old #fff200 to #ffe599 on the next write. This is
+ * an intentional, accepted convergence — not accidental restyling.
+ *
+ * NON-HEADER SEMANTIC COLORS ARE PRESERVED (separate constants/literals, never
+ * touched here): Financial Ledger year banner orange (#f4a300), totals green
+ * (#b6d7a8), delta tan/pink (#fce5cd / #f4cccc), planner/output theme colors,
+ * and Cash Flow Income/Expense/Summary semantic colors.
+ */
+var CANON_HEADER_YELLOW_ = '#ffe599';
+
 /* -------------------------------------------------------------------------- */
 /*  Registry                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -310,7 +335,12 @@ function ensureBootstrapSheet_(key, mode) {
     };
   }
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  // Central-safe workbook resolution (matches the migrated startup RPCs in this
+  // file). getActiveSpreadsheet() is null in the standalone Central project;
+  // getUserSpreadsheet_() returns the bound spreadsheet in bound mode and the
+  // caller's resolved workbook in Central mode. This is the remaining
+  // bootstrap-registry straggler flagged in CENTRAL_APP_STARTUP_ROUTING_DIAGNOSTIC_PLAN.md.
+  var ss = getUserSpreadsheet_();
   if (ss.getSheetByName(sheetName)) {
     // Sheet already exists — hands-off no-op. This is the load-bearing
     // safety guarantee: existing users get zero side effects.
@@ -909,7 +939,7 @@ function applyOperationalFlatSheetStyling_(sheet) {
   // Header row (row 1): canonical Operational-family presentation.
   try {
     sheet.getRange(1, 1, 1, lastCol)
-      .setBackground('#ffe599')
+      .setBackground(CANON_HEADER_YELLOW_)
       .setFontWeight('bold')
       .setFontColor('#000000')
       .setFontSize(CANON_FONT_HEADER_)
@@ -970,7 +1000,7 @@ function applySysSheetBaseStyle_(sheet, widthByHeader) {
   // Header row (row 1): canonical SYS-family presentation.
   try {
     sheet.getRange(1, 1, 1, lastCol)
-      .setBackground('#fff200')
+      .setBackground(CANON_HEADER_YELLOW_)
       .setFontWeight('bold')
       .setFontColor('#000000')
       .setFontSize(CANON_FONT_HEADER_SYS_)
@@ -1049,7 +1079,7 @@ function applyFinancialLedgerBaseStyle_(sheet, options) {
   var isFirstCreate = options.mode === 'firstCreate';
 
   var YEAR_BG = '#f4a300';
-  var HEADER_BG = '#fff200';
+  var HEADER_BG = CANON_HEADER_YELLOW_;
   var TOTAL_BG = '#b6d7a8';
   var DELTA_BG = '#f4cccc';
 

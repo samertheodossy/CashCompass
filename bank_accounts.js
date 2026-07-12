@@ -1,4 +1,30 @@
 /**
+ * Canonical Golden Workbook column widths for SYS - Accounts, keyed by exact
+ * header text. These are the Validator-approved **AdoptGolden** widths — the
+ * seven columns where the Canonical (Golden) Workbook is the agreed source of
+ * truth (live Validator run: Canonical vs fresh Central-provisioned workbook).
+ * Applied header-driven (not positional) and widen-only via
+ * applyCanonicalColumnWidthsByHeader_ during FIRST-CREATE ONLY, on top of the
+ * existing base widths passed to applySysSheetBaseStyle_ (both widen-only, so
+ * the larger Golden values win for these seven columns).
+ *
+ * `Active` is intentionally ABSENT — it is a Validator **KeepCentral** width and
+ * keeps its existing base value. Frozen panes, row heights, header/vertical
+ * alignment, and number formats are also KeepCentral; header background and
+ * header font size are ProductDecision. None of those are touched here. Same
+ * architectural pattern as LOG - Activity / Upcoming Expenses / Cash Flow.
+ */
+const SYS_ACCOUNTS_CANONICAL_WIDTHS_ = {
+  'Account Name': 288,
+  'Current Balance': 245,
+  'Available Now': 224,
+  'Min Buffer': 233,
+  'Type': 194,
+  'Use Policy': 223,
+  'Priority': 245
+};
+
+/**
  * First-run safe creator for SYS - Accounts.
  *
  * Safety contract:
@@ -84,6 +110,15 @@ function ensureSysAccountsSheet_() {
     'Priority': 120,
     'Active': 110
   });
+
+  // Validator-approved AdoptGolden widths for the seven SYS - Accounts columns
+  // where the Canonical Workbook is the source of truth. Header-driven +
+  // widen-only, layered on top of the base widths above (Active stays at its
+  // KeepCentral base width). First-create only — this whole function returns
+  // early for existing sheets, so populated workbooks are never restyled.
+  try {
+    applyCanonicalColumnWidthsByHeader_(sheet, 1, SYS_ACCOUNTS_CANONICAL_WIDTHS_);
+  } catch (_sysWidthErr) { /* cosmetic only */ }
 
   return sheet;
 }

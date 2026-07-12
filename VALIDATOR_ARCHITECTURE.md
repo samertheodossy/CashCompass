@@ -303,6 +303,8 @@ verifies the workbook matches the canonical CashCompass architecture.
 - Family styling
 - Named ranges
 - Key formulas
+- **Conditional-format rules** *(see "Future capability — conditional-format
+  validation" below)*
 - Hidden / protected support structures
 - Metadata sheets
 - Workbook version compatibility
@@ -315,6 +317,37 @@ verifies the workbook matches the canonical CashCompass architecture.
   helpers** — the same source provisioning uses.
 - The Validator **does not duplicate provisioning rules.**
 - Provisioning and the Validator **must always share the same source of truth.**
+
+**Future capability — conditional-format validation.**
+
+Today the Validator captures **rendered cell styles and number formats**, but it
+does **not** capture **conditional-format rules**. This is a real blind spot:
+some visual behavior — especially positive/negative coloring and Income/Expense
+row coloring — is driven by conditional formatting or by number-format color
+sections (e.g. `[Red]`/`[Green]`), which the current snapshot cannot fully
+attribute or verify. Without conditional-format capture the Validator cannot
+fully verify this class of visual parity.
+
+- **Capability:** snapshot conditional-format rules per sheet and compare them
+  between Canonical and Central.
+- **Scope of comparison:**
+  - Rule ranges (the cells/columns each rule targets).
+  - Formula conditions (e.g. `=$A1="Income"`).
+  - Text / background / font color settings applied by each rule.
+  - Ordering / priority where relevant (which rule wins when several match).
+- **Use cases:**
+  - Cash Flow **Income/Expense row colors** (`applyCashFlowRowTypeColorRules_`).
+  - Cash Flow **Summary row positive/negative visual behavior**.
+  - Future **financial-health color cues** (e.g. green-positive / red-negative
+    nets).
+- **Safety (unchanged from the rest of the Validator):**
+  - **Read-only only** — snapshot and compare, never write.
+  - **No repair / no mutation** of rules on either workbook.
+  - **Reports differences only** — the report is advisory; humans decide.
+- **Note:** the current Cash Flow Summary-row positive/negative behavior remains
+  a **ProductDecision**, not a code change. This capability would only *detect
+  and report* such differences; whether to change the behavior is a separate
+  deliberate design call.
 
 **Future workflow.**
 

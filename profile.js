@@ -198,8 +198,15 @@ function ensureInputSettingsSheet_(ss) {
   try {
     sheet.getRange(1, 1, 1, 2).setFontWeight('bold');
     sheet.setFrozenRows(1);
-    sheet.setColumnWidth(1, 160);
-    sheet.setColumnWidth(2, 360);
+    // Validator-approved AdoptGolden convergence (FIRST-CREATE ONLY — this
+    // branch runs only on the insertSheet path, so existing populated Settings
+    // sheets are never restyled): Key 160→240, Value 360→385, and the ratified
+    // softer Operational header yellow #ffe599 (NOT the brighter legacy
+    // #ffff00 / #fff200). Fonts are intentionally left unchanged (header/body
+    // font size remains a ProductDecision, deferred this pass).
+    sheet.setColumnWidth(1, 240);
+    sheet.setColumnWidth(2, 385);
+    sheet.getRange(1, 1, 1, 2).setBackground(CANON_HEADER_YELLOW_);
   } catch (_e) { /* cosmetic */ }
   return sheet;
 }

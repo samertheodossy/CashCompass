@@ -1425,7 +1425,7 @@ function applyHouseAssetsSheetStyling_(sheet) {
   // never reasserted here so populated workbooks are never reshaped.
   try {
     sheet.getRange(1, 1, 1, lastCol)
-      .setBackground('#fff200')
+      .setBackground(CANON_HEADER_YELLOW_)
       .setFontWeight('bold')
       .setFontColor('#000000');
   } catch (_headerErr) { /* cosmetic */ }
@@ -1564,7 +1564,7 @@ function applyHousesExpenseSheetStyling_(sheet) {
   // prevent clipping.
   try {
     sheet.getRange(2, 1, 1, NUM_COLS)
-      .setBackground('#fff200')
+      .setBackground(CANON_HEADER_YELLOW_)
       .setFontWeight('bold')
       .setFontColor('#000000')
       .setFontSize(CANON_FONT_HEADER_)

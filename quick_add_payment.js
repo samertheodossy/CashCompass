@@ -182,7 +182,7 @@ function getQuickAddPreview(payload) {
   }
 
   const year = entryDate.getFullYear();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getCashFlowSheetForYear_(ss, year);
   const monthCol = getMonthColumnByDate_(sheet, entryDate, 1);
   const headerMap = getCashFlowHeaderMap_(sheet);
@@ -245,7 +245,7 @@ function quickAddPayment(payload) {
   const signedAmount = entryType === 'Expense' ? -amount : amount;
   const year = entryDate.getFullYear();
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheet = getCashFlowSheetForYear_(ss, year);
   const monthCol = getMonthColumnByDate_(sheet, entryDate, 1);
   const headerMap = getCashFlowHeaderMap_(sheet);

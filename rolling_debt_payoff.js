@@ -2859,7 +2859,10 @@ function getRollingDebtPayoffPlan(options) {
     .toLowerCase()
     .trim();
   const executionPlanModesList = executionPlanMode.split(/[\s,|]+/).filter(Boolean);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  // Central-safe: getActiveSpreadsheet() is null in the standalone Central
+  // project. getUserSpreadsheet_() resolves the caller's workbook in Central and
+  // is byte-for-byte identical (returns getActiveSpreadsheet()) in bound mode.
+  const ss = getUserSpreadsheet_();
 
   // Blank-workbook safety: on a fresh sheet INPUT - Debts and/or SYS - Accounts
   // don't exist yet. The strict readSheetAsObjects_ / findRollingCashFlowAnchor_
@@ -3758,7 +3761,7 @@ function buildRollingCfHistory_(ss, anchorDate, monthsBack, aliasMap) {
     const d = addMonthsFirst_(anchorDate, k);
     const y = d.getFullYear();
     const hdr = formatCfMonthHeader_(d, tz);
-    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(getCashFlowSheetName_(y));
+    const sh = getUserSpreadsheet_().getSheetByName(getCashFlowSheetName_(y));
     if (!sh) continue;
     let rows;
     try {

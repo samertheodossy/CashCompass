@@ -14,6 +14,21 @@ var DONATION_REQUIRED_HEADERS_ = [
   'Payment type'
 ];
 
+// Canonical widen-only column widths for INPUT - Donation, keyed by header name
+// (matched case-insensitively by applyCanonicalColumnWidthsByHeader_). Chosen for
+// readability of the year-block layout: charity names + comments get wide columns,
+// Date/Amount are sized to their number formats, Tax Year stays compact. Applied
+// FIRST-CREATE ONLY and widen-only, so a user who narrows/widens a column later is
+// never overridden.
+var DONATION_CANONICAL_WIDTHS_ = {
+  'Name of Charity': 260,
+  'Date': 110,
+  'Amount': 130,
+  'Tax Year': 90,
+  'Comments': 300,
+  'Payment type': 150
+};
+
 /**
  * Canonical from-scratch creator for `INPUT - Donation`.
  *
@@ -42,7 +57,15 @@ var DONATION_REQUIRED_HEADERS_ = [
  * @returns {GoogleAppsScript.Spreadsheet.Sheet}
  */
 function ensureInputDonationSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  // Central-aware workbook resolution. In the standalone Central project there
+  // is no bound/active spreadsheet, so SpreadsheetApp.getActiveSpreadsheet()
+  // returns null and every downstream ss.getSheetByName(...) threw
+  // "Cannot read properties of null (reading 'getSheetByName')" on the
+  // Donations page. getUserSpreadsheet_() returns the bound spreadsheet in
+  // bound mode and resolves/provisions the caller's own workbook in Central
+  // mode. It throws a clear error if the user cannot be resolved, so genuine
+  // Central resolution failures are surfaced rather than masked.
+  const ss = getUserSpreadsheet_();
   const existing = ss.getSheetByName(DONATION_SHEET_NAME_);
   if (existing) return existing;
 
@@ -63,15 +86,64 @@ function ensureInputDonationSheet_() {
   sheet.getRange(2, 1, 1, DONATION_REQUIRED_HEADERS_.length)
     .setValues([DONATION_REQUIRED_HEADERS_.slice()]);
 
-  try {
-    sheet.setFrozenRows(2);
-  } catch (_frozenErr) { /* cosmetic only */ }
-
-  try {
-    sheet.autoResizeColumns(1, DONATION_REQUIRED_HEADERS_.length);
-  } catch (_resizeErr) { /* cosmetic only */ }
+  // Canonical year-block presentation (FIRST-CREATE ONLY — guarded by the
+  // `if (existing) return existing` above, so populated workbooks are never
+  // restyled). Donation is structurally a Financial-Ledger year-block sheet
+  // (row 1 Year banner, row 2 column header, rows 3+ data, additional tax years
+  // stacked as more blocks), so it reuses the shared year-block walker rather
+  // than the flat Operational helper.
+  applyDonationSheetStyling_(sheet);
 
   return sheet;
+}
+
+/**
+ * Canonical FIRST-CREATE styling for INPUT - Donation.
+ *
+ * Donation shares the Financial-Ledger year-block structure (Year banner in
+ * row 1, column header in row 2, data below, additional tax years stacked as
+ * more Year blocks), so it routes through the shared marker-driven walker
+ * `applyFinancialLedgerBaseStyle_` — the SAME source of truth used by
+ * Investments / House Values / Bank Accounts — instead of the flat Operational
+ * helper (which would wrongly paint the Year banner as the column header).
+ *
+ * Produces the canonical appearance:
+ *   - Year banner (row 1): #f4a300, bold black, 20pt, 40px, vertical-middle
+ *   - Header row (row 2):  #ffe599, bold black, 16pt, centered, vertical-middle,
+ *                          40px, thin black bottom border
+ *   - Body rows (3+):      white background, 14pt, 26px
+ *   - Freeze rows 2 + column 1
+ *   - Widen-only header-keyed widths (DONATION_CANONICAL_WIDTHS_)
+ *
+ * Donation has no Totals/Delta bands, so those markers are null. Number formats
+ * (Amount / Date) are owned by the write path and intentionally left untouched.
+ *
+ * SAFETY: FIRST-CREATE ONLY. Callers must invoke this only from the
+ * post-insertSheet path (guarded by the `if (existing) return existing;` return
+ * in ensureInputDonationSheet_), so populated Donation workbooks are never
+ * reshaped. Cosmetic only; idempotent.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ */
+function applyDonationSheetStyling_(sheet) {
+  if (!sheet) return;
+
+  applyFinancialLedgerBaseStyle_(sheet, {
+    mode: 'firstCreate',
+    headerMarkerLabel: 'Name of Charity',
+    headerRequireColB: null,
+    totalMarkerLabel: null,
+    deltaMarkerLabel: null,
+    freezeRows: 2,
+    freezeColumns: 1,
+    firstCreate: { bodyWash: true, geometry: true }
+  });
+
+  // Canonical widen-only column widths by header name (replaces the old
+  // autoResizeColumns, which fit columns too tightly to the bold header).
+  try {
+    applyCanonicalColumnWidthsByHeader_(sheet, 2, DONATION_CANONICAL_WIDTHS_);
+  } catch (_widthErr) { /* cosmetic only */ }
 }
 
 function getDonationsSheet_() {

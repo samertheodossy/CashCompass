@@ -414,7 +414,10 @@ function nextActionsCompareUrgentSortKeys_(a, b) {
  */
 function nextActionsPickRollingDebtTarget_() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    // Central-safe: getActiveSpreadsheet() is null in the standalone Central
+    // project. getUserSpreadsheet_() resolves the caller's workbook (identical
+    // to getActiveSpreadsheet() in bound mode).
+    var ss = getUserSpreadsheet_();
     var rows = readSheetAsObjects_(ss, 'DEBTS');
     var debts = normalizeDebts_(rows, getAliasMap_()).filter(function(d) {
       return d.active && d.balance > 0.005;

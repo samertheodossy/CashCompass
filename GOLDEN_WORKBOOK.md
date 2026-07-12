@@ -74,6 +74,15 @@ Rating scale (audit quality of the production sheet as a reference):
 
 > **`INPUT - Cash Flow <year>` is an actuals ledger, not a forecast (by design).** Its month cells record **what has actually happened** — settled activity — not a projection of what will. Adding a bill creates its Cash Flow row only; it does **not** seed monthly amounts. Amounts appear as occurrences come due and **AutoPay** (an *actuals* mechanism) settles them. **`Start Month`** governs recurrence eligibility, **not** month population, so a monthly bill with `Start Month = 1` does not pre-fill Jan→Dec. Forward-looking projection is a **planned future feature**, kept separate from actuals — see `TODO.md → Future Feature — Cash Flow Forward Projection` and `ENGINEERING_STANDARDS.md → Cash Flow Data Semantics — Actuals vs Projection`.
 
+**Ratified product decision — Cash Flow Summary row financial-health coloring (2026-07-11).** The `Summary | Cash Flow Per Month` row communicates **financial health** through its net values:
+
+- **Positive → green**, **negative → red**, **zero → neutral black** (`$0.00`).
+- Implemented via **number format, not conditional formatting**: `[Green]$#,##0.00;[Red]-$#,##0.00;$#,##0.00`.
+
+**Rationale:** positive cash flow should read as healthy at a glance; a number format is simpler and safer than conditional formatting, is **inspectable by the current Validator today** (which snapshots number formats but not conditional-format rules), and extends the negative-red format already used on these cells. Conditional-format validation remains a **future Validator Phase 2 capability** (`VALIDATOR_ARCHITECTURE.md §10`).
+
+**Scope:** applies **only** to the Summary row's month values and Total. It does **not** change Income/Expense row formatting, and does **not** change formulas, widths, row heights, borders, background, or typography. Implemented in `writeCashFlowSummaryFormulas_` (`CASH_FLOW_SUMMARY_HEALTH_NUMBER_FORMAT_`, `cashflow_setup.js`). **Existing workbooks self-heal narrowly** the next time `writeCashFlowSummaryFormulas_` runs (every Quick Add) — allowed because that function already rewrites the Summary formulas/formats and touches only the Summary value cells. See `ENGINEERING_STANDARDS.md → Ratified product decisions`.
+
 ### 2. Operational family — ★★★★★ Golden Reference
 
 **Sheets:** Debts · Bills.

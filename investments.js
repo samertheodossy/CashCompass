@@ -1694,7 +1694,7 @@ function applyAssetsSheetStyling_(sheet) {
   // reasserted here so populated workbooks are never reshaped.
   try {
     sheet.getRange(1, 1, 1, lastCol)
-      .setBackground('#fff200')
+      .setBackground(CANON_HEADER_YELLOW_)
       .setFontWeight('bold')
       .setFontColor('#000000');
   } catch (_headerErr) { /* cosmetic */ }

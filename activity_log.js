@@ -44,7 +44,7 @@ var ACTIVITY_LOG_CANONICAL_WIDTHS_ = {
   'Entry Date': 100,
   'Amount': 100,
   'Direction': 127,
-  'Payee': 332,
+  'Payee': 392,
   'Category': 116,
   'Account / Source': 214,
   'Cash Flow Sheet': 177,

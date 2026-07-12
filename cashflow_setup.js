@@ -252,6 +252,32 @@ function findCashFlowSummaryRow_(sheet, numRows, layout) {
 }
 
 /**
+ * Cash Flow "financial health" text colors — the Golden Workbook color language
+ * shared by BOTH Income/Expense row coloring (applyCashFlowRowTypeColorRules_)
+ * AND the Summary-row net coloring (applyCashFlowSummaryHealthColorRules_), so
+ * there is ONE definition of each color. Dark green / dark red (Google's palette
+ * shades). Applied via CONDITIONAL FORMATTING font color — NOT number-format
+ * color codes, whose bright [Green]/[Red] primaries cannot match these hexes.
+ */
+const CASH_FLOW_HEALTH_COLOR_POSITIVE_ = '#38761d'; // Income rows + positive net
+const CASH_FLOW_HEALTH_COLOR_NEGATIVE_ = '#cc0000'; // Expense rows + negative net
+
+/**
+ * Cash Flow Summary-row number format — NEUTRAL currency only (ratified
+ * ProductDecision 2026-07-11; refined to CF-based coloring 2026-07-11). The net
+ * COLOR of the "Summary | Cash Flow Per Month" values (positive green, negative
+ * red, zero neutral black) is applied by CONDITIONAL FORMATTING
+ * (applyCashFlowSummaryHealthColorRules_) so it EXACTLY matches the Income/
+ * Expense color language (#38761d / #cc0000). The number format therefore
+ * carries NO color codes — it only formats currency and the negative sign. Three
+ * sections keep positive / negative / zero visually identical apart from the CF
+ * color, and zero (no CF match) shows the cell's default black. Income/Expense
+ * DATA rows keep the sheet-wide `$#,##0.00;[Red]-$#,##0.00` set in
+ * ensureCashFlowYearSheet_.
+ */
+const CASH_FLOW_SUMMARY_HEALTH_NUMBER_FORMAT_ = '$#,##0.00;-$#,##0.00;$#,##0.00';
+
+/**
  * Write the Summary-row formulas:
  *   - one SUMIF("Income") + SUMIF("Expense") per month column, keyed off the
  *     DETECTED Type column letter (not hardcoded "$A").
@@ -296,7 +322,7 @@ function writeCashFlowSummaryFormulas_(sheet, summaryRow, layout) {
 
     const cell = sheet.getRange(summaryRow, monthCol1);
     cell.setFormula(formula);
-    cell.setNumberFormat('$#,##0.00;[Red]-$#,##0.00');
+    cell.setNumberFormat(CASH_FLOW_SUMMARY_HEALTH_NUMBER_FORMAT_);
   }
 
   if (layout.totalCol0 !== -1) {
@@ -306,8 +332,19 @@ function writeCashFlowSummaryFormulas_(sheet, summaryRow, layout) {
     totalCell.setFormula(
       '=SUM(' + firstMonthLetter + summaryRow + ':' + lastMonthLetter + summaryRow + ')'
     );
-    totalCell.setNumberFormat('$#,##0.00;[Red]-$#,##0.00');
+    totalCell.setNumberFormat(CASH_FLOW_SUMMARY_HEALTH_NUMBER_FORMAT_);
   }
+
+  // Financial-health COLOR for the Summary net values lives in conditional
+  // formatting (not the neutral number format above), so it matches the
+  // Income/Expense color language exactly (#38761d / #cc0000). Applied here
+  // because this function runs in every Summary path — first-create, next-year
+  // clone, and every insert — which is also what lets existing workbooks
+  // self-heal narrowly onto the new colors. Idempotent: never duplicates rules,
+  // touches only Summary-scoped CF rules and Summary money cells.
+  try {
+    applyCashFlowSummaryHealthColorRules_(sheet, layout);
+  } catch (_healthErr) { /* cosmetic only */ }
 }
 
 function columnToLetter_(column) {
@@ -716,6 +753,27 @@ function ensureCashFlowSummaryRow_(sheet) {
 }
 
 /**
+ * Canonical Golden Workbook column widths for INPUT - Cash Flow YYYY, keyed by
+ * exact header text. These are the Validator-approved **AdoptGolden** widths —
+ * the four metadata columns where the Canonical (Golden) Workbook is the agreed
+ * source of truth (Validator run: Canonical vs fresh Central-provisioned
+ * workbook). Applied header-driven (not positional) and widen-only via
+ * applyCanonicalColumnWidthsByHeader_ during FIRST-CREATE ONLY (fresh year
+ * sheet + next-year clone), so populated sheets are never restyled.
+ *
+ * Only the four AdoptGolden metadata columns live here. The positional Total
+ * and month-column widths stay on their layout-index widen-only paths below,
+ * and colors / typography / row heights / alignment / formulas are unchanged
+ * (those are KeepCentral / ProductDecision / IgnoreNoise per the Validator).
+ */
+const CASH_FLOW_CANONICAL_WIDTHS_ = {
+  'Type': 189,
+  'Flow Source': 255,
+  'Payee': 439,
+  'Active': 147
+};
+
+/**
  * Apply the canonical Cash Flow header styling (warm-yellow fill, bold
  * black text at the canonical 16pt header size, taller row, bottom border)
  * and reasonable column widths so every `INPUT - Cash Flow YYYY` sheet reads
@@ -772,20 +830,16 @@ function applyCashFlowSheetStyling_(sheet, layout) {
   // Column widths tuned to the canonical column identities so a freshly
   // created sheet never needs manual resizing (Readability Standard). All
   // sets are widen-only; absent optional columns are skipped safely.
-  // Header-addressable columns get canonical widen-only widths from the shared
-  // helper (applyCanonicalColumnWidthsByHeader_), so Cash Flow uses the same
-  // width mechanism as Bills and future sheets instead of bespoke logic. Type &
-  // Payee are guaranteed present; Flow Source & Active are optional (the helper
-  // skips missing headers safely, matching the old `*Col1 > 0` guards). Widths
-  // fit each 16pt-bold header AND its largest realistic body value:
-  //   Type 110 · Flow Source 160 (fits "CREDIT_CARD") · Payee 220 · Active 90.
+  // Header-addressable columns get the Validator-approved AdoptGolden widen-only
+  // widths from the shared helper (applyCanonicalColumnWidthsByHeader_), so Cash
+  // Flow uses the same width mechanism as LOG - Activity and Upcoming Expenses
+  // instead of bespoke logic. Type & Payee are guaranteed present; Flow Source &
+  // Active are optional (the helper skips missing headers safely, matching the
+  // old `*Col1 > 0` guards). Values are the canonical Golden widths — see
+  // CASH_FLOW_CANONICAL_WIDTHS_ above (Type 189 · Flow Source 255 · Payee 439 ·
+  // Active 147).
   try {
-    applyCanonicalColumnWidthsByHeader_(sheet, 1, {
-      'Type': 110,
-      'Flow Source': 160,
-      'Payee': 220,
-      'Active': 90
-    });
+    applyCanonicalColumnWidthsByHeader_(sheet, 1, CASH_FLOW_CANONICAL_WIDTHS_);
   } catch (_cfWidthErr) { /* cosmetic only */ }
 
   // Total is identified POSITIONALLY (the last column after the month block),
@@ -898,13 +952,13 @@ function applyCashFlowRowTypeColorRules_(sheet, layout) {
 
     const incomeRule = SpreadsheetApp.newConditionalFormatRule()
       .whenFormulaSatisfied('=$' + typeLetter + '1="Income"')
-      .setFontColor('#38761d')
+      .setFontColor(CASH_FLOW_HEALTH_COLOR_POSITIVE_)
       .setRanges([range])
       .build();
 
     const expenseRule = SpreadsheetApp.newConditionalFormatRule()
       .whenFormulaSatisfied('=$' + typeLetter + '1="Expense"')
-      .setFontColor('#cc0000')
+      .setFontColor(CASH_FLOW_HEALTH_COLOR_NEGATIVE_)
       .setRanges([range])
       .build();
 
@@ -912,6 +966,85 @@ function applyCashFlowRowTypeColorRules_(sheet, layout) {
     rules.push(incomeRule);
     rules.push(expenseRule);
     sheet.setConditionalFormatRules(rules);
+  } catch (_cfErr) { /* cosmetic only */ }
+}
+
+/**
+ * Apply the Summary-row financial-health text colors — positive net → green,
+ * negative net → red, zero → neutral (default black) — via CONDITIONAL
+ * FORMATTING, matching the Income/Expense color language EXACTLY (shared
+ * CASH_FLOW_HEALTH_COLOR_* constants).
+ *
+ * Scope: the MONEY columns of the Summary row ONLY. Two rules over the
+ * first-month-column..Total whole-column range, each gated on BOTH
+ * `Type="Summary"` AND the cell's own sign, so only Summary-row money cells are
+ * colored and Type/Payee text is untouched. Using a WHOLE-COLUMN range plus a
+ * Type-keyed formula makes the rules immune to row-insert drift — the same
+ * drift-proof pattern as applyCashFlowRowTypeColorRules_. The formula is
+ * anchored at row 1 (the range's top-left): the `$Type` column is $-locked while
+ * its row and the money-cell reference are relative, so each cell evaluates its
+ * own row's Type and its own value. Zero matches neither rule and keeps the
+ * cell's default black font.
+ *
+ * IDEMPOTENT / no duplicates: any pre-existing Summary-health rules (identified
+ * by a custom formula containing `="Summary"`) are removed first, then exactly
+ * two fresh rules are appended. Income/Expense rules (keyed off "Income" /
+ * "Expense") and any unrelated user rules are preserved untouched. Because it is
+ * idempotent it is safe to call on every insert, which is what lets existing
+ * workbooks self-heal narrowly onto the new colors on their next Quick Add
+ * WITHOUT accumulating duplicate rules. All failures swallowed — cosmetic only.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {Object} layout  detectCashFlowLayout_ result
+ */
+function applyCashFlowSummaryHealthColorRules_(sheet, layout) {
+  if (!sheet || !layout) return;
+  if (!(layout.firstMonthCol1 > 0)) return;
+  try {
+    const typeLetter = columnToLetter_(layout.typeCol1);
+    // Money columns are contiguous: first month column → Total (or the last
+    // month column when a sheet has no Total column).
+    const lastMoneyCol1 = (layout.totalCol1 > 0) ? layout.totalCol1 : layout.lastMonthCol1;
+    const firstMoneyLetter = columnToLetter_(layout.firstMonthCol1);
+    const lastMoneyLetter = columnToLetter_(lastMoneyCol1);
+
+    // Whole-column range over the money columns only; top-left is row 1, so the
+    // relative money-cell reference in the formula is <firstMoney>1.
+    const range = sheet.getRange(firstMoneyLetter + ':' + lastMoneyLetter);
+
+    const positiveRule = SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=AND($' + typeLetter + '1="Summary", ' + firstMoneyLetter + '1>0)')
+      .setFontColor(CASH_FLOW_HEALTH_COLOR_POSITIVE_)
+      .setRanges([range])
+      .build();
+
+    const negativeRule = SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=AND($' + typeLetter + '1="Summary", ' + firstMoneyLetter + '1<0)')
+      .setFontColor(CASH_FLOW_HEALTH_COLOR_NEGATIVE_)
+      .setRanges([range])
+      .build();
+
+    // Dedupe: drop any prior Summary-health rules (custom formula that mentions
+    // `="Summary"`), keep everything else (Income/Expense + user rules), then
+    // append the two fresh rules. Running repeatedly always yields exactly two.
+    const existing = sheet.getConditionalFormatRules() || [];
+    const kept = [];
+    for (let i = 0; i < existing.length; i++) {
+      let isSummaryHealth = false;
+      try {
+        const bc = existing[i].getBooleanCondition();
+        if (bc) {
+          const vals = bc.getCriteriaValues() || [];
+          for (let v = 0; v < vals.length; v++) {
+            if (String(vals[v]).indexOf('="Summary"') !== -1) { isSummaryHealth = true; break; }
+          }
+        }
+      } catch (_inspectErr) { /* uninspectable → leave the rule in place */ }
+      if (!isSummaryHealth) kept.push(existing[i]);
+    }
+    kept.push(positiveRule);
+    kept.push(negativeRule);
+    sheet.setConditionalFormatRules(kept);
   } catch (_cfErr) { /* cosmetic only */ }
 }
 

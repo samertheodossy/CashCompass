@@ -27,8 +27,16 @@
  *     can never break a sheet create that otherwise succeeded.
  */
 
+// Central-safety note: every workbook handle in this Bank Import module is
+// acquired via getUserSpreadsheet_() (not SpreadsheetApp.getActiveSpreadsheet()).
+// getActiveSpreadsheet() returns null in the standalone Central project, which
+// crashed page-action RPCs with "Cannot read properties of null" (the same class
+// of bug that was fixed in donations.js). getUserSpreadsheet_() returns the bound
+// spreadsheet in bound mode (byte-for-byte identical) and the caller's resolved
+// workbook in Central mode, and throws a clear error rather than masking a
+// resolver failure.
 function ensureImportStagingBankAccountsSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheetName = getSheetNames_().IMPORT_STAGING_BANK;
 
   const existing = ss.getSheetByName(sheetName);
@@ -73,7 +81,7 @@ function ensureImportStagingBankAccountsSheet_() {
 }
 
 function ensureImportIgnoredBankAccountsSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getUserSpreadsheet_();
   const sheetName = getSheetNames_().IMPORT_IGNORED_BANK;
 
   const existing = ss.getSheetByName(sheetName);
@@ -296,7 +304,7 @@ function processBankImportBatch_(payload) {
   };
 
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getUserSpreadsheet_();
 
     // Idempotent ensure of all Step-1 scaffold pieces. Cheap on populated
     // workbooks; required so the first dev-harness run on a fresh
@@ -974,7 +982,7 @@ var BANK_IMPORT_APPLY_FRIENDLY_INVALID_DATE_ =
  * additive ensure helpers (cheap on populated workbooks).
  */
 function getBankImportReviewData() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getUserSpreadsheet_();
 
   ensureImportStagingBankAccountsSheet_();
   ensureImportIgnoredBankAccountsSheet_();
@@ -1033,7 +1041,7 @@ function addStagedBankAccountAsNew(payload) {
     var stagingId = String(payload.stagingId || '').trim();
     if (!stagingId) throw new Error('stagingId is required.');
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getUserSpreadsheet_();
     ensureImportStagingBankAccountsSheet_();
     var accountsSheet = ensureSysAccountsSheet_();
     ensureAccountsExternalIdColumn_(accountsSheet);
@@ -1133,7 +1141,7 @@ function matchStagedBankAccountToExisting(payload) {
     if (!stagingId) throw new Error('stagingId is required.');
     if (!accountName) throw new Error('accountName is required.');
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getUserSpreadsheet_();
     ensureImportStagingBankAccountsSheet_();
     var accountsSheet = ensureSysAccountsSheet_();
     ensureAccountsExternalIdColumn_(accountsSheet);
@@ -1208,7 +1216,7 @@ function unlinkMatchedStagedBankAccount(payload) {
     var stagingId = String(payload.stagingId || '').trim();
     if (!stagingId) throw new Error('stagingId is required.');
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getUserSpreadsheet_();
     ensureImportStagingBankAccountsSheet_();
     var accountsSheet = ensureSysAccountsSheet_();
     ensureAccountsExternalIdColumn_(accountsSheet);
@@ -1295,7 +1303,7 @@ function ignoreStagedBankAccount(payload) {
     var stagingId = String(payload.stagingId || '').trim();
     if (!stagingId) throw new Error('stagingId is required.');
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getUserSpreadsheet_();
     ensureImportStagingBankAccountsSheet_();
     var ignoredSheet = ensureImportIgnoredBankAccountsSheet_();
 
@@ -1385,7 +1393,7 @@ function applyStagedBankAccountBalance(payload) {
     var stagingId = String(payload.stagingId || '').trim();
     if (!stagingId) throw new Error('stagingId is required.');
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getUserSpreadsheet_();
     ensureImportStagingBankAccountsSheet_();
     var accountsSheet = ensureSysAccountsSheet_();
     ensureAccountsExternalIdColumn_(accountsSheet);

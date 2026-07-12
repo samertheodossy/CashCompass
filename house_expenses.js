@@ -545,7 +545,7 @@ function formatHouseExpenseYearRowFallback_(sheet, row) {
 
 function formatHouseExpenseHeaderRowFallback_(sheet, row) {
   sheet.getRange(row, 1, 1, 9)
-    .setBackground('#fff200')
+    .setBackground(CANON_HEADER_YELLOW_)
     .setFontWeight('bold')
     .setFontColor('#000000');
 }

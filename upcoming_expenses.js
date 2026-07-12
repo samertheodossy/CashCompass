@@ -746,17 +746,20 @@ function getOrCreateUpcomingExpensesSheet_() {
  * and frozen panes are ProductDecision/KeepCentral and are NOT touched here.
  */
 const UPCOMING_EXPENSES_CANONICAL_WIDTHS_ = {
-  // Product-decision override (NOT Golden parity). Golden's ID width is 165 at a
-  // 12pt body font; Central intentionally uses a larger 14pt body font, which
-  // leaves the 16-char generated IDs ('UE-' + 13-digit epoch ms, e.g.
-  // UE-1752248400000) visually cramped at 165. We keep the 14pt font and widen
-  // ID to 190 so IDs display comfortably. Validator will show this as a
-  // KeepCentral width difference, which is expected.
-  'ID': 190,
+  // Canonical (Golden-parity) widen-only widths, header-keyed. The Canonical
+  // workbook was updated to a 14pt body font and a widened ID column, so ID 197
+  // is now genuine AdoptGolden parity (previously a 190 product-decision override
+  // against the older 12pt/165 Golden state). Widths below match the current
+  // Canonical workbook; KeepCentral columns (Category, Amount, Notes) are
+  // intentionally omitted so they are never widened.
+  'ID': 197,
   'Status': 111,
   'Expense Name': 282,
-  'Due Date': 123,
-  'Account / Source': 226
+  'Due Date': 133,
+  'Payee': 272,
+  'Account / Source': 226,
+  'Auto Add To Cash Flow': 264,
+  'Added To Cash Flow': 241
 };
 
 /**

@@ -232,7 +232,7 @@ function validatorRunGoldenParity() {
 var VALIDATOR_SCOPE_FINANCIAL_LEDGER_ = ['INPUT - Bank Accounts', 'INPUT - Cash Flow 2026'];
 var VALIDATOR_SCOPE_OPERATIONAL_ = ['INPUT - Upcoming Expenses', 'LOG - Activity'];
 var VALIDATOR_SCOPE_SYS_ = ['SYS - Accounts'];
-var VALIDATOR_SCOPE_SPECIAL_ = ['INPUT - Settings'];
+var VALIDATOR_SCOPE_SPECIAL_ = ['INPUT - Settings', 'INPUT - Donation'];
 
 /**
  * Internal — run a Golden parity comparison scoped to an explicit set of exact
@@ -270,7 +270,7 @@ function validatorRunGoldenParitySys() {
   return validatorRunGoldenParityScoped_(VALIDATOR_SCOPE_SYS_);
 }
 
-/** DEVELOPER RUNNER — Special scope (INPUT - Settings). */
+/** DEVELOPER RUNNER — Special scope (INPUT - Settings, INPUT - Donation). */
 function validatorRunGoldenParitySpecial() {
   return validatorRunGoldenParityScoped_(VALIDATOR_SCOPE_SPECIAL_);
 }
