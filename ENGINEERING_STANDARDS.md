@@ -98,11 +98,12 @@ Once a milestone has started, **finish it before beginning another.**
 - **Do not jump to unrelated improvements** just because they were discovered mid-milestone.
 - **The only exceptions are:**
   - the user explicitly changes priorities, **or**
-  - a **production bug / blocker** is discovered.
-- **ProductDecision items** discovered mid-milestone are **recorded and deferred** (in the relevant doc — `GOLDEN_WORKBOOK.md` / `WORKBOOK_PARITY_CHECKLIST.md` / this file's *Ratified product decisions*) **unless they block completion** of the current milestone.
-- **Engineering convergence should be completed before expanding architecture** — converge what exists to the canonical standard before adding new subsystems.
+  - a **production bug blocks progress.**
+- **Record discoveries in the roadmap** (`TODO.md`, or the relevant `GOLDEN_WORKBOOK.md` / `WORKBOOK_PARITY_CHECKLIST.md` / *Ratified product decisions* entry) **instead of implementing them immediately.**
+- **ProductDecision items** discovered mid-milestone are **recorded and deferred** **unless they block completion** of the current milestone.
+- **Close milestones cleanly before opening new ones** — engineering convergence should be completed before expanding architecture (converge what exists to the canonical standard before adding new subsystems).
 
-**Purpose:** keep work focused, reduce context switching, and finish and close milestones cleanly. This pairs with the Validator-driven workflow (implement → run Validator → fix `AdoptGolden` → repeat → commit): the milestone is *done* when `AdoptGolden = 0` for its scope and the remaining diffs are intentional (KeepCentral / ProductDecision / IgnoreNoise).
+**Purpose:** maintain focus, reduce context switching, and increase completion rate. This pairs with the Validator-driven workflow (implement → run Validator → fix `AdoptGolden` → repeat → commit): the milestone is *done* when `AdoptGolden = 0` for its scope and the remaining diffs are intentional (KeepCentral / ProductDecision / IgnoreNoise).
 
 ---
 
