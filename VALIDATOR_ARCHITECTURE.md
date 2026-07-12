@@ -1,6 +1,8 @@
 # CashCompass Validator Architecture
 
-*The read-only Validator subsystem: architecture, current state, and roadmap.*
+*The read-only Validator subsystem: architecture, current state, and roadmap —
+plus the developer-only **Test Harness / Regression Runner**, the writer
+counterpart that drives scenarios and calls the Validator to judge health (§12).*
 
 **Status:** Documentation. **Phase 1 is complete** — the Golden Workbook parity
 comparison + recommendation engine + scoped family runners are implemented in the
@@ -11,6 +13,13 @@ editor. Phase 1 drove the **2026-07 Golden Workbook convergence milestone**
 `WORKBOOK_PARITY_CHECKLIST.md`). Remaining capabilities (single-workbook
 rules-based validators, conditional-format capture, provisioning validation) are
 **Phase 2+ future work** — see §10.
+
+**Phase 2 — architecture designed (2026-07-12), not implemented.** Phase 2 shifts
+the Validator from **two-workbook Canonical comparison** to **single-workbook
+Workbook Health validation** (does *this* workbook match the canonical rules?).
+Its full module architecture, execution order, report format, phased plan, risks,
+and recommended first implementation are specified in **§10 → Phase 2
+architecture**. No Phase 2 code exists yet; the design is documentation only.
 
 **Related docs:** `GOLDEN_WORKBOOK.md` (visual source of truth + design
 families), `WORKBOOK_PARITY_CHECKLIST.md` (per-sheet convergence status),
@@ -113,12 +122,38 @@ validator_format_compare.js  # Golden ↔ Central parity diff, grouped by family
 validator_report.js          # log / JSON report shaping
 ```
 
-### Planned (single-workbook, rules-based validators)
+### Planned (Phase 2 — single-workbook, rules-based Workbook Health validators)
 
 ```
-validator_rules.js    # canonical rule definitions (required sheets, headers,
-                      #   schema, formula + formatting expectations)
-validator_checks.js   # pure read-only check functions (one per capability)
+validator_rules.js    # the CANONICAL MODEL: required/optional sheets, header
+                      #   schemas, canonical widths/typography, expected formula
+                      #   shapes, expected conditional-format signatures, expected
+                      #   named ranges — all DERIVED FROM the same constants and
+                      #   ensure*/apply*/write* helpers provisioning already uses
+                      #   (references, never copies — see §10)
+validator_checks.js   # pure read-only check functions, one per module:
+                      #   checkRequiredSheets_, checkHeaders_/checkSchema_,
+                      #   checkFormulas_, checkConditionalFormats_, checkNamedRanges_
+validator_health.js   # Workbook Health orchestrator + scoring + report shaping
+                      #   (validateActiveWorkbook / runWorkbookHealth_)
+```
+
+Phase 2 also **extends `validator_snapshot.js`** with read-only capture of
+conditional-format rules, named ranges, and targeted formula reads (see §10).
+
+### Planned (Test Harness / Regression Runner — a *separate* writer subsystem)
+
+The Test Harness is **not** part of the Validator — it is the **writer/mutator**
+counterpart that drives scenarios and calls the read-only Validator to judge the
+result (see §12). It lives in its own `test_harness_*` files so the read-only
+guarantee of `validator_*` is never blurred:
+
+```
+test_harness_core.js       # guard + disposable-workbook lifecycle + run loop
+test_harness_scenarios.js  # declarative scenario packs (setup + actions + expected health)
+test_harness_data.js       # synthetic fixture-data generators (incl. historical-bug repro data)
+test_harness_report.js     # Release Readiness report aggregation
+validator_health.js        # (Validator, §10) the read-only health entry the harness calls
 ```
 
 > `dev-tools/` (the earlier standalone parity project) has been **removed**; the
@@ -176,14 +211,25 @@ from Script Properties, and runs read-only (`redactValues: true`, `outputMode: '
   `validatorCmpScalar_`, `validatorPushDiff_`, `validatorGroupBy_`, `validatorUniqueSorted_` — compare.
 - `validatorLogChunked_`, `validatorLogComparisonReport_` — report.
 
-### Planned
+### Planned (Phase 2)
 
 **Public (guarded)**
-- `validateActiveWorkbook(options)` — validate the caller's resolved workbook against the rules.
+- `validateActiveWorkbook(options)` — the single new public entry point: run the
+  Workbook Health checks against the caller's **resolved** workbook
+  (`getUserSpreadsheet_()` — no `openById`) and return/log a Workbook Health
+  report. Guarded by `assertValidatorAllowed_()` (flag + admin), read-only,
+  `redactValues` defaults to `true`.
+- `validatorRunWorkbookHealth()` — optional no-arg developer runner (editor Run
+  dropdown), delegating to `validateActiveWorkbook`.
 
 **Internal**
-- `runValidators_`, `getValidatorRules_`, `checkRequiredSheets_`, `checkHeaders_`,
-  `checkSchema_`, `checkFormulas_`, `checkFormatting_`.
+- Orchestration/scoring (`validator_health.js`): `runWorkbookHealth_`,
+  `aggregateFindings_`, `computeHealthScore_`, `getValidatorRules_`.
+- Checks (`validator_checks.js`): `checkRequiredSheets_`, `checkHeaders_` /
+  `checkSchema_`, `checkFormulas_`, `checkConditionalFormats_`, `checkNamedRanges_`,
+  plus normalizers `normalizeFormulaShape_`, `normalizeCfRule_`.
+- Snapshot extensions (`validator_snapshot.js`): `snapshotConditionalFormatRules_`,
+  `snapshotNamedRanges_`, targeted-formula reads.
 
 ---
 
@@ -318,109 +364,315 @@ The Validator must never enter the hot path:
   four scoped family runners); added the **recommendation engine** (§1a); removed
   `dev-tools/`. Phase 1 drove the **2026-07 Golden Workbook convergence
   milestone** to `AdoptGolden = 0` for the audited families.
-- **Phase 2 — Provisioning Validation — planned.** Add `validator_rules.js`
-  (required-sheets + headers, **sourced from the existing canonical constants**
-  used by provisioning) and `validator_checks.js` (`checkRequiredSheets_`,
-  `checkHeaders_`); expose `validateActiveWorkbook()` behind
-  `assertValidatorAllowed_()`. See the **Phase 2 milestone** detail below.
-- **Phase 3 — planned.** Add `checkSchema_` (column order/types / canonical schema
-  evolution), `checkFormulas_` (expected `=SUM` totals and Delta chains), and
-  `checkFormatting_` (snapshot vs rule expectations).
+- **Phase 2 — Workbook Health validation — architecture designed (2026-07-12),
+  not implemented.** Single-workbook, rules-based validation across six modules
+  (Provisioning · Schema · Formula · Conditional Formatting · Named Range ·
+  Workbook Health report). Adds `validator_rules.js` (the canonical model),
+  `validator_checks.js`, and `validator_health.js`; extends `validator_snapshot.js`;
+  exposes `validateActiveWorkbook()` behind `assertValidatorAllowed_()`. Full
+  architecture, execution order, report format, phased plan, risks, and
+  recommended first implementation are in **§10 → Phase 2 architecture** below.
 - **Phase 4 — planned (optional).** An admin-gated Admin Diagnostics UI action to
-  run validators without the editor.
+  run validators without the editor (the user-facing **Workbook Health** workflow,
+  §10).
 
 At every phase: read-only, guarded, default-off, and covered by the CI guards.
 
-### Phase 2 milestone — Provisioning Validation *(planned; do not start yet)*
+### Phase 2 architecture — Workbook Health validation *(designed 2026-07-12; not implemented)*
 
-> **Status:** Documented milestone, **not started.** This work intentionally
-> begins **only after Golden Workbook convergence is complete** (see
-> `TODO.md → Stage 3` and `GOLDEN_WORKBOOK.md`). Captured here so the next major
-> Validator milestone is not forgotten while convergence finishes.
+> **Status:** **Architecture only.** Golden Workbook convergence is complete, so
+> Phase 2 is now unblocked, but **no Phase 2 code exists yet.** This section is the
+> design of record; implementation is a separate, later step.
 
-**Goal.** After Central provisions a workbook, run a **read-only** validation that
-verifies the workbook matches the canonical CashCompass architecture.
+**Goal.** After Central provisions (or self-heals) a workbook, run a **read-only**
+validation that verifies *this one* workbook matches the **canonical CashCompass
+architecture** — and produce a **Workbook Health** report. This is the pivot from
+Phase 1's *two-workbook Canonical comparison* to Phase 2's *single-workbook,
+rules-based Workbook Health* (the "single-workbook, rules-based" column of the §2
+table).
 
-**Design principle (non-negotiable).**
+**Design principles (non-negotiable).**
 
-- The Validator **validates** provisioning.
-- The Validator **never performs** provisioning.
-- The Validator **remains read-only.**
+- The Validator **validates** provisioning; it **never performs** provisioning.
+- The Validator **remains read-only** (getters only; §7).
+- **One source of truth.** The canonical model **derives its expectations from the
+  same constants and `ensure*/apply*/write*` helpers provisioning already uses** —
+  it **references, never copies**. Provisioning and the Validator must never drift.
+- Same guard, scope, and CI posture as Phase 1 (flag + admin, no new OAuth scope,
+  no hot-path wiring, default-off).
 
-**Scope (future validation should include):**
+#### 10.0 Shared foundation — the Canonical Model (`validator_rules.js`)
 
-- Required sheets
-- Optional sheets based on enabled modules
-- Sheet schema
-- Headers
-- Frozen panes
-- Canonical column widths
-- Typography
-- Family styling
-- Named ranges
-- Key formulas
-- **Conditional-format rules** *(see "Future capability — conditional-format
-  validation" below)*
-- Hidden / protected support structures
-- Metadata sheets
-- Workbook version compatibility
-- Cross-sheet integrity
-- Regression detection
+The keystone of Phase 2. A single in-code description of "what a correct workbook
+looks like," expressed **per sheet** and derived from existing sources of truth:
 
-**Architecture notes.**
+| Canonical fact | Existing source of truth (reuse, do not duplicate) |
+|---|---|
+| Required / optional sheets + who creates them | `sheet_bootstrap.js` registry (delegates to `ensure*Sheet_`; already flags `unsupported`), `central_provisioning.js → runMinimalBootstrap_` |
+| Header schema (text + order) | the `*_REQUIRED_HEADERS_` constants (e.g. `DONATION_REQUIRED_HEADERS_`) + the header lists passed to `mapHeaders_` |
+| Canonical column widths | the `*_CANONICAL_WIDTHS_` header-keyed maps (Cash Flow, SYS Accounts, Upcoming Expenses, Donation, Activity Log, SYS House Assets) |
+| Typography / geometry | the canonical font-size + row-height constants in `sheet_bootstrap.js` (single source) |
+| Family styling (header yellow, banners) | `CANON_HEADER_YELLOW_` + the `apply*Style_` helpers (`applyFinancialLedgerBaseStyle_`, `applyOperationalFlatSheetStyling_`, `applySysSheetBaseStyle_`) |
+| Conditional-format signatures | `applyCashFlowRowTypeColorRules_`, `applyCashFlowSummaryHealthColorRules_` + shared color constants (`CASH_FLOW_HEALTH_COLOR_POSITIVE_/NEGATIVE_`) |
+| Expected formula shapes | the `write*Formulas_` functions (e.g. `writeCashFlowSummaryFormulas_`, Delta writers) |
+| Named ranges | **none today** — the app defines no named ranges (see Module 5) |
 
-- The Validator **derives expectations from canonical constants and shared
-  helpers** — the same source provisioning uses.
-- The Validator **does not duplicate provisioning rules.**
-- Provisioning and the Validator **must always share the same source of truth.**
+> **Key architectural decision (and the biggest risk — see Risks):** several
+> canonical facts are currently expressed **inline** (e.g. header lists inside
+> `mapHeaders_(...)` calls). To honor "one source of truth," Phase 2 begins by
+> **extracting those inline definitions into named constants** (as `Donation`
+> already does with `DONATION_REQUIRED_HEADERS_`) so both provisioning **and**
+> `validator_rules.js` read the *same* symbol. `validator_rules.js` must contain
+> **references/adapters**, not copied literals.
 
-**Future capability — conditional-format validation.**
+#### 10.1 Module 1 — Provisioning Validation
 
-Today the Validator captures **rendered cell styles and number formats**, but it
-does **not** capture **conditional-format rules**. This is a real blind spot:
-some visual behavior — especially positive/negative coloring and Income/Expense
-row coloring — is driven by conditional formatting or by number-format color
-sections (e.g. `[Red]`/`[Green]`), which the current snapshot cannot fully
-attribute or verify. Without conditional-format capture the Validator cannot
-fully verify this class of visual parity.
+- **Purpose:** verify the workbook has the correct **set of sheets** — every
+  required sheet present, module-conditional sheets present iff their module is
+  enabled, and no unexpected/misnamed core sheets.
+- **Responsibilities:** enumerate actual sheets; resolve the *expected* set
+  (required + module-conditional); classify each sheet `present | missing |
+  unexpected | optional-absent`; know which sheets have **no canonical creator**
+  (e.g. `INPUT - Cash Flow <year>` is clone-only) and report accordingly rather
+  than flagging a false defect.
+- **Inputs:** resolved workbook (`getUserSpreadsheet_()`), canonical required/optional
+  sheet set (from the `sheet_bootstrap` registry), module-enablement signals.
+- **Outputs:** per-sheet presence findings + a required-sheet coverage summary.
+- **Public entry points:** none of its own — invoked by the Workbook Health runner (Module 6).
+- **Internal helpers:** `checkRequiredSheets_`, `resolveExpectedSheetSet_`, `classifySheetPresence_`.
+- **Dependencies:** `getUserSpreadsheet_`, `sheet_bootstrap.js` registry, `validator_rules.js`.
+- **Reuse:** the bootstrap registry **already** maps entity → canonical creator and
+  flags `unsupported`; Module 1 mirrors that list instead of re-listing sheets.
 
-- **Capability:** snapshot conditional-format rules per sheet and compare them
-  between Canonical and Central.
-- **Scope of comparison:**
-  - Rule ranges (the cells/columns each rule targets).
-  - Formula conditions (e.g. `=$A1="Income"`).
-  - Text / background / font color settings applied by each rule.
-  - Ordering / priority where relevant (which rule wins when several match).
-- **Use cases:**
-  - Cash Flow **Income/Expense row colors** (`applyCashFlowRowTypeColorRules_`).
-  - Cash Flow **Summary row positive/negative visual behavior**.
-  - Future **financial-health color cues** (e.g. green-positive / red-negative
-    nets).
-- **Safety (unchanged from the rest of the Validator):**
-  - **Read-only only** — snapshot and compare, never write.
-  - **No repair / no mutation** of rules on either workbook.
-  - **Reports differences only** — the report is advisory; humans decide.
-- **Note:** the current Cash Flow Summary-row positive/negative behavior remains
-  a **ProductDecision**, not a code change. This capability would only *detect
-  and report* such differences; whether to change the behavior is a separate
-  deliberate design call.
+#### 10.2 Module 2 — Schema Validation
 
-**Future workflow.**
+- **Purpose:** verify each present sheet's **header row** matches the canonical
+  header schema (text, order, position); flag missing / extra / reordered / renamed
+  columns.
+- **Responsibilities:** read the header row; diff against the canonical header
+  vector; be tolerant of **schema-evolution columns** added by self-heal (e.g.
+  Bills `Weekday` / `Anchor Date` / `Schedule Effective Date`) by expressing them
+  in the canonical model as expected-added; optionally advise on body column
+  data-type expectations (currency/date) as low severity.
+- **Inputs:** the snapshot (it **already captures** `headerRowNum` + `headerLabels`
+  per sheet), canonical header lists.
+- **Outputs:** per-sheet header diff `{ missing, extra, misordered, renamed }`.
+- **Public entry points:** none — invoked by Module 6.
+- **Internal helpers:** `checkHeaders_` / `checkSchema_`, `compareHeaderVectors_`.
+- **Dependencies:** `validator_snapshot.js` (header capture), `validator_rules.js`,
+  the `mapHeaders_` header lists.
+- **Reuse:** `mapHeaders_` is the existing header-mapping primitive; the snapshot
+  already classifies the header row (`validatorClassifyRowType_`). Highest-value,
+  lowest-cost module because the data is already captured.
+
+#### 10.3 Module 3 — Formula Validation
+
+- **Purpose:** verify key cells still contain the **expected formula shapes**
+  (`=SUM` totals, Delta chains, Cash Flow Summary formulas) and were not
+  overwritten by static values.
+- **Responsibilities:** read formulas at canonical **anchor cells**; normalize to a
+  structural shape (strip absolute markers / concrete row indices) so A1 drift
+  doesn't cause noise; classify `ok | missing | altered | hardcoded-over-formula`.
+- **Inputs:** targeted `getFormula(s)` reads (read-only) at anchor ranges; canonical
+  formula templates.
+- **Outputs:** per-target `{ expected pattern, actual, status }`.
+- **Public entry points:** none — invoked by Module 6.
+- **Internal helpers:** `checkFormulas_`, `normalizeFormulaShape_`, `expectedFormulaTargets_`.
+- **Dependencies:** canonical formula definitions derived from the `write*Formulas_`
+  functions; a small **snapshot extension** for targeted formula reads (the current
+  80×40 value snapshot is not formula-aware).
+- **Reuse:** the formula-writing functions are the source of truth for the expected
+  shapes — extract patterns from them rather than hardcoding strings.
+
+#### 10.4 Module 4 — Conditional Formatting Validation
+
+- **Purpose:** close the **current Validator blind spot** — the snapshot captures
+  rendered styles + number formats but **not conditional-format rules**, so
+  CF-driven visuals (positive/negative coloring, Income/Expense row colors) cannot
+  be attributed or verified today.
+- **Responsibilities:** snapshot `getConditionalFormatRules()` per sheet; normalize
+  each rule to a comparable **signature** — ranges (A1), boolean condition
+  type/criteria/formula (e.g. `=$A1="Income"`), font/background color, and
+  ordering/priority where it matters; diff against the canonical CF rule set;
+  report `missing | extra | altered` rules.
+- **Inputs:** `sheet.getConditionalFormatRules()` (a getter), canonical CF signatures.
+- **Outputs:** per-sheet CF diff — especially Cash Flow Income/Expense/Summary
+  health colors.
+- **Public entry points:** none — invoked by Module 6.
+- **Internal helpers:** `snapshotConditionalFormatRules_` (snapshot extension),
+  `normalizeCfRule_`, `checkConditionalFormats_`.
+- **Dependencies:** `validator_snapshot.js` extension; canonical CF definitions from
+  `applyCashFlowRowTypeColorRules_` / `applyCashFlowSummaryHealthColorRules_` and
+  their shared color constants.
+- **Reuse:** the CF-creating helpers + color constants are the source of truth.
+  **Bonus:** capturing CF rules also **upgrades Phase 1 parity** so it can finally
+  verify CF-driven visual parity between Canonical and Central.
+- **Safety:** `getConditionalFormatRules()` is read-only; this module **detects and
+  reports only** — the Cash Flow Summary positive/negative behavior remains a
+  ratified **ProductDecision**, never auto-changed.
+
+#### 10.5 Module 5 — Named Range Validation
+
+- **Purpose:** verify named ranges match the canonical set.
+- **Reality check:** the app **defines no named ranges today** (no `addNamedRange` /
+  `getRangeByName` anywhere). So the near-term job is (a) confirm **no unexpected**
+  named ranges have crept in (manual edits, imports), and (b) provide the seam for
+  future named-range adoption. **Lowest ROI — sequence last.**
+- **Responsibilities:** enumerate `ss.getNamedRanges()`; diff against the canonical
+  named-range set (empty today); report `unexpected` (advisory/low severity now) and,
+  once named ranges are adopted, `missing | misscoped` (higher severity).
+- **Inputs:** `ss.getNamedRanges()` (getter: `getName`, `getRange().getA1Notation()`).
+- **Outputs:** `{ expected, present, unexpected, missing }`.
+- **Public entry points:** none — invoked by Module 6.
+- **Internal helpers:** `checkNamedRanges_`, `snapshotNamedRanges_`.
+- **Dependencies:** `validator_rules.js` (canonical list — empty today), snapshot extension.
+- **Reuse:** minimal; deliberately deferred to avoid over-building an unused capability.
+
+#### 10.6 Module 6 — Workbook Health report
+
+- **Purpose:** orchestrate Modules 1–5 into a **single read-only Workbook Health
+  report + score** for one workbook. The only module with a public entry point.
+- **Responsibilities:** resolve the workbook; run the enabled checks **in execution
+  order**; aggregate `Finding`s by module + severity; compute a **health
+  score/grade** and a `PASS | WARN | FAIL` gate; shape log/JSON output.
+- **Inputs:** resolved workbook, `options { modules?, outputMode, redactValues,
+  sheetNames? }`.
+- **Outputs:** a `WorkbookHealthReport` (see report format below).
+- **Public entry points:** `validateActiveWorkbook(options)` (guarded) + optional
+  no-arg `validatorRunWorkbookHealth()` dev runner.
+- **Internal helpers:** `runWorkbookHealth_`, `aggregateFindings_`, `computeHealthScore_`.
+- **Dependencies:** all modules, `validator_core.js` guard, `validator_report.js`
+  (reused chunked log/JSON shaping), `getUserSpreadsheet_` (**single workbook — no
+  `openById`**).
+- **Reuse:** the guard (`assertValidatorAllowed_`), `validator_report.js`, and the
+  recommendation-style vocabulary/severity model from Phase 1.
+
+#### 10.7 Execution order
+
+Foundational/cheap → dependent/expensive, short-circuiting per sheet when a
+prerequisite fails:
 
 ```
-Provision Workbook
+1. Provisioning (required sheets)   ← everything depends on sheets existing
+2. Schema / Headers                 ← needs sheets present; anchors later checks
+3. Formulas                         ← needs headers to locate anchor columns
+4. Conditional Formatting           ← needs sheets; independent of formulas
+5. Named Ranges                     ← workbook-level, cheap, independent (low priority)
+6. Workbook Health aggregation      ← always last; consumes all findings + scores
+```
+
+#### 10.8 Report format
+
+Every check emits a uniform **`Finding`**:
+
+```
+Finding {
+  module,        // 'provisioning' | 'schema' | 'formula' | 'cf' | 'namedRange'
+  sheet,         // sheet name or '(workbook)'
+  target,        // header / cell / rule id (redaction-safe)
+  severity,      // 'INFO' | 'WARN' | 'ERROR'
+  code,          // stable machine code, e.g. 'SHEET_MISSING'
+  message,       // human summary
+  expected, actual,   // redacted by default (redactValues: true)
+  recommendation      // advisory next step (never auto-applied)
+}
+```
+
+The **`WorkbookHealthReport`** shapes findings into sections:
+
+```
+Workbook Health — <workbook name>
+  Health Summary   : score N/100 · grade · PASS|WARN|FAIL · counts by severity
+  Provisioning     : required-sheet coverage; missing / unexpected
+  Schema           : per-sheet header diffs
+  Formulas         : altered / missing / hardcoded anchors
+  Conditional Fmt  : missing / extra / altered CF rules
+  Named Ranges     : unexpected (today) / missing (future)
+  Per-sheet rollup : one line per sheet, worst severity
+```
+
+Score model: weighted, ERROR-heavy (a missing required sheet outweighs a cosmetic
+INFO). `FAIL` on any ERROR, `WARN` on WARN-only, `PASS` when clean. Reuses
+`validator_report.js` chunked logging; `outputMode` `'log' | 'json' | 'both'` like
+Phase 1; **`redactValues` defaults to `true`**.
+
+#### 10.9 Future user-facing Workbook Health workflow
+
+Today: admin/editor only. Future (optional **Phase 4** UI): an **admin-gated Admin
+Diagnostics** action — "Check Workbook Health" — that runs `validateActiveWorkbook`
+and renders a **read-only report card** (score + top issues + an "advisory only"
+banner). It **never repairs**; if the user wants to fix issues, a separate button
+invokes the **existing provisioning / self-heal** code (not the Validator),
+preserving the "validate ≠ provision" boundary:
+
+```
+Provision / Self-heal Workbook
         ↓
-   Run Validator
+   Workbook Health Check   (read-only)
         ↓
   PASS   or   Actionable Report
                     ↓
-                   Fix
+       Fix via existing provisioning / self-heal
                     ↓
-          Run Validator Again
+       Re-run Workbook Health Check
 ```
 
-**Note.** This work intentionally begins after Golden Workbook convergence is
-complete. **Do not begin implementation now.**
+#### 10.10 Phased implementation plan (sub-phases within Phase 2)
+
+- **2A — Foundation.** Stand up `validator_rules.js` (the canonical model seam) +
+  **extract inline header lists into `*_REQUIRED_HEADERS_` constants**; define the
+  `Finding` / severity model; scaffold `validateActiveWorkbook` + `validator_health.js`
+  behind the guard, reusing `validator_report.js`. No checks beyond wiring.
+- **2B — Provisioning + Schema (Modules 1–2).** Highest value, lowest cost — Module 2
+  reuses the snapshot's already-captured headers; Module 1 reuses the bootstrap
+  registry. Ship the first real Workbook Health report here.
+- **2C — Conditional Formatting (Module 4).** Add `snapshotConditionalFormatRules_`;
+  closes the known blind spot and **upgrades Phase 1 parity** as a bonus.
+- **2D — Formulas (Module 3).** Add targeted formula reads + `normalizeFormulaShape_`.
+- **2E — Named Ranges (Module 5) + Health scoring polish (Module 6) + optional
+  Admin Diagnostics UI (Phase 4).**
+
+> The **Release Readiness gate** referenced above is not a Validator feature — it is
+> realized by the **Test Harness / Regression Runner (§12)**, which drives scenarios
+> against disposable workbooks and calls `validator_health.js` to judge each one.
+> The Validator judges; the Harness writes. Their boundary is spelled out in §12.
+
+#### 10.11 Risks
+
+- **Source-of-truth duplication (highest).** If `validator_rules.js` copies schemas
+  instead of referencing shared constants, drift returns. *Mitigation:* extract
+  inline definitions to constants first (2A); a CI guard can assert the rules module
+  references those constants rather than string literals.
+- **6-minute execution limit** on mature workbooks. *Mitigation:* single-workbook
+  scope, `sheetNames` scoping, targeted reads, and the existing 80×40 snapshot cap.
+- **Read-only enforcement for new getters.** `getConditionalFormatRules`,
+  `getFormulas`, `getNamedRanges` are getters (safe); keep the CI no-write deny-list
+  (§8) current and confirm no setter creeps in.
+- **Module-conditional false positives.** Optional modules (Houses, Investments,
+  Donation) must not be reported as "missing." *Mitigation:* a reliable
+  enablement/`data-present` signal in `resolveExpectedSheetSet_`.
+- **Schema-evolution columns.** Self-heal-added columns (Bills Weekday, etc.) must be
+  expressed in the canonical model or they read as "extra." *Mitigation:* model them
+  as expected-added.
+- **CF normalization noise.** Rule ordering/priority + whole-column ranges can make
+  diffs noisy. *Mitigation:* start at signature level, tolerant; refine later.
+- **Over-building Named Ranges** (currently unused). *Mitigation:* sequence last;
+  keep it a thin "no unexpected ranges" check until named ranges are actually adopted.
+
+#### 10.12 Recommended first implementation
+
+**Do 2A + 2B: Provisioning + Schema validation, built on existing infrastructure.**
+Concretely, start with **required-sheet validation sourced from the `sheet_bootstrap`
+registry** and **header/schema validation that reuses the snapshot's
+already-captured header labels**. This is the highest value (directly answers "does
+this provisioned workbook match the canonical architecture?"), the lowest risk, and
+the greatest reuse (snapshot header capture + bootstrap registry already exist).
+**Defer** Conditional Formatting (needs a snapshot extension), Formulas (needs
+targeted reads), and Named Ranges (currently unused). The one prerequisite refactor
+to do first: **extract inline header lists into `*_REQUIRED_HEADERS_` constants** so
+provisioning and the Validator share one definition.
+
+**Note.** Architecture only. **Do not begin implementation now.**
 
 ---
 
@@ -442,3 +694,58 @@ The earlier rule that *two-workbook parity must stay in a separate `dev-tools/`
 project* is **retired**. Parity now lives in the guarded in-app Validator; the
 `openById` capability is made safe by the layered guard (§5) rather than by
 physical separation, and `dev-tools/` has been removed.
+
+---
+
+## 12. Test Harness / Regression Runner *(planned — the writer counterpart; architecture only)*
+
+> **Status:** **Architecture only, not implemented.** Sequenced in the roadmap
+> **after** the Validator Phase 2 foundation (`ROADMAP.md → P1`): (1) Validator
+> Phase 2A/2B → (2) Test Harness foundation → (3) Scenario packs → (4) Release
+> Readiness gate.
+
+### 12.1 The boundary (why this is a separate subsystem)
+
+The Validator is a **read-only judge**. The Test Harness is the **writer/mutator**.
+Keeping them separate is the whole point:
+
+| | **Validator** (`validator_*`) | **Test Harness** (`test_harness_*`) |
+|---|---|---|
+| Role | **Judges** workbook health | **Creates** and **exercises** disposable workbooks |
+| Writes? | **Never** (getters only, §7) | **Yes — but only to disposable test workbooks it created** |
+| Provisions? | Never | Yes (into disposable workbooks, via the *real* production helpers) |
+| Repairs / mutates? | Never | Only disposable workbooks |
+| Target workbooks | Any the admin can read | **Only** disposable, test-marked workbooks |
+| Relationship | Called *by* the Harness | Calls the Validator after each scenario |
+
+The Harness **creates disposable test workbooks, runs real workflows, reproduces
+historical bugs, and then asks the Validator to confirm nothing broke.** The
+Validator never gains write power; the Harness never touches the Canonical or any
+real user workbook.
+
+### 12.2 Goal
+
+A **developer-only regression system** runnable **before major changes and before
+beta releases**: provision fresh workbooks, drive each family's workflows through
+the **real production code paths**, reproduce known historical bugs, and have the
+Validator health-check the result — aggregated into a single **Release Readiness**
+go/no-go report.
+
+### 12.3 Full design → `TEST_HARNESS_ARCHITECTURE.md`
+
+The **implementation-ready** Test Harness design — lifecycle, workbook management
+(naming / metadata / labeling / fail-closed `assertDisposableTarget_` / cleanup /
+concurrency), the scenario model + categories (SMOKE / REGRESSION / RECOVERY /
+STRESS), scenario packs, the guard model, file layout, reuse map, implementation
+order, and risks — now lives in its own document so this Validator doc stays about
+the read-only judge:
+
+- **`TEST_HARNESS_ARCHITECTURE.md`** — the runner's architecture (design of record).
+- **`REGRESSION_SCENARIOS.md`** — the historical-bug registry (permanent project
+  memory): every fixed production bug becomes a permanent `REG-###` scenario.
+- **`RELEASE_READINESS.md`** — the pre-release go/no-go report format + workflow
+  (`Release Readiness gate = Harness × Validator`).
+
+**What the Validator provides to the Harness:** the read-only single-workbook
+health entry `validator_health.js` (§10). The Harness writes; the Validator judges;
+neither crosses that line.

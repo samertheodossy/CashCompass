@@ -12,6 +12,17 @@
 
 ---
 
+## Ratified product decisions during convergence (index)
+
+These are the **deliberate deviations from the older hand-tuned Golden state** ratified during the 2026-07 convergence milestone — cases where readability or a product decision improved on history and the Canonical workbook was updated to the new standard. Each is detailed in-line under its design family below and in `ENGINEERING_STANDARDS.md → Ratified product decisions`.
+
+- **Canonical header yellow — `#ffe599` everywhere (2026-07-12).** A single canonical header yellow for **all** header bands (Operational, Financial Ledger, SYS, HOUSES, Special). Supersedes the brighter legacy `#ffff00` / `#fff200`; runtime header-color reassertions were intentionally allowed to repaint to `#ffe599` (a deliberate product migration). Non-header semantic colors (year-banner orange, totals green, delta pink/tan, Cash Flow income/expense/summary) are preserved. → see *Financial Ledger* / *Special* families below and line-referenced note.
+- **Cash Flow Summary row financial-health coloring (2026-07-11).** Summary net values color green (`#38761d`) positive / red (`#cc0000`) negative / black zero via narrowly-scoped conditional formatting; Summary number format reverted to neutral currency. → see *Financial Ledger* family below.
+- **Donation year-block styling (2026-07-12).** `INPUT - Donation` migrated to the shared Financial-Ledger year-block styling engine (`applyDonationSheetStyling_` → `applyFinancialLedgerBaseStyle_`), first-create only. → see *Financial Ledger* family below.
+- **Upcoming Expenses typography (2026-07-11).** 14pt body font retained (vs Golden's historical 12pt) with `ID` widened for readability; surfaces as **KeepCentral**, never **AdoptGolden**. → see *Operational Planning* family below.
+
+---
+
 ## The core principle
 
 > **The production workbook is the visual source of truth.**

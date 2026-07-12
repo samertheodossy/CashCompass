@@ -10,8 +10,9 @@ This README is the entry point. It does not re-explain the app — it routes you
 
 1. **Read `WORKING_RULES.md` first.** It defines the current phase (Central App live + Family Beta readiness) and the rules every change must follow — one issue at a time, minimal/localized/safe, no `doGet`/`includeHtml_`/snapshot-shape or destructive sheet changes without explicit approval, always consider both **blank** and **populated** workbooks, and (for Central App work) the active Central App Transition Rules.
 2. **Then skim `PROJECT_CONTEXT.md → Current phase`** for the live product state and the canonical tab-by-tab behavior.
-3. **Before starting any change,** check `TODO.md → Product Maturity Stages` for the current stage + engineering priorities (detailed phases in `→ Launch Readiness Roadmap`), and `TODO.md → V1.2 polish backlog` for small-polish picks.
+3. **Before starting any change,** check `ROADMAP.md` for the current priority stack (P0–P4), then `TODO.md → Product Maturity Stages` for the detailed stage + engineering priorities (detailed phases in `→ Launch Readiness Roadmap`), and `TODO.md → V1.2 polish backlog` for small-polish picks.
 4. **After each implementation step,** run the blank + populated manual checks in `TESTING_PLAN.md`.
+5. **Work one milestone at a time** — see **Milestone Discipline** (`ENGINEERING_STANDARDS.md → §11`): finish the current milestone before starting the next; record discoveries in `ROADMAP.md` instead of implementing them immediately.
 
 If you are onboarding a contributor (or yourself after a break), `INIT_PROMPT.md` is the minimal reading list; `FIRST_RUN.md` is the smoke check.
 
@@ -24,11 +25,12 @@ If you are onboarding a contributor (or yourself after a break), `INIT_PROMPT.md
 These four documents are the project's top-level reference set. Read them top-down: vision → sequencing → current work → current state.
 
 - **`PRODUCT_VISION.md`** — defines the **long-term product**: why CashCompass exists, where it is going, its differentiators, principles, and the Version 1 vs Version 2 boundary. The highest-level product document.
-- **`TODO.md → Product Maturity Stages`** — the **roadmap**: defines implementation order (Stage 1–6, priorities, dependencies, effort).
+- **`ROADMAP.md`** — the **priority stack (P0–P4)**: the authoritative view of what comes next and in what order.
+- **`TODO.md → Product Maturity Stages`** — the detailed **stage roadmap**: implementation order (Stage 1–6, priorities, dependencies, effort).
 - **`TODO.md`** (current work + backlog) — defines the **current engineering work**.
 - **`PROJECT_CONTEXT.md`** — defines the **current technical state** (live architecture, tab behavior, phase).
 
-`PRODUCT_VISION` explains *why*; the roadmap explains *what order*; `TODO` is *what we're building now*; `PROJECT_CONTEXT` is *where things stand technically*. Together they are the primary documentation hierarchy; everything below adds detail.
+`PRODUCT_VISION` explains *why*; `ROADMAP.md` explains *priority*; the stage roadmap explains *what order in detail*; `TODO` is *what we're building now*; `PROJECT_CONTEXT` is *where things stand technically*. Together they are the primary documentation hierarchy; everything below adds detail.
 
 ### Core (read these; they reflect the current state)
 
@@ -41,11 +43,15 @@ These four documents are the project's top-level reference set. Read them top-do
 
 ### Planning (what's next)
 
-- `TODO.md` — **Priority-Ranked Roadmap (P0–P4)** (current at-a-glance priority stack, post-convergence) + Product Maturity Stages (authoritative **Stage 1–6** roadmap + Current Engineering Priorities + Beta Gate) → **UX Backlog (Version 1)** (permanent home for opportunistic product-quality polish) → Launch Readiness Roadmap (historical Phase 1–7 detail) + V1.2 polish backlog + historical backlog.
+- `ROADMAP.md` — **the authoritative at-a-glance priority stack (P0–P4)**: P0 Project stabilization → P1 Validator Phase 2 → P2 Financial Model Accuracy (**House Financial Accuracy**) → P3 Performance → P4 Future features. Sets **priority and sequence**; carries the full House Financial Accuracy spec.
+- `TODO.md` — Product Maturity Stages (detailed **Stage 1–6** roadmap + Current Engineering Priorities + Beta Gate) → **UX Backlog (Version 1)** (permanent home for opportunistic product-quality polish) → Launch Readiness Roadmap (historical Phase 1–7 detail) + V1.2 polish backlog + historical backlog. (Priority ordering: see `ROADMAP.md`.)
 - `ENHANCEMENTS.md` — product-level rationale, phase history, Active / Next / Later mirror.
 - `GOLDEN_WORKBOOK.md` — the **Golden Workbook** standard: the production workbook is the visual source of truth; the four **design families**; how convergence decisions are made and maintained.
 - `WORKBOOK_PARITY_CHECKLIST.md` — per-sheet **Golden Workbook Convergence** status (audit ratings ★★★★★ Golden Reference / ★★★★☆ Production Ready, plus COMPLETE / MINOR / MAJOR / UNKNOWN), design family, gaps, effort, priority, and the Golden Workbook Audit screenshot list. First audit complete 2026-07-06 (ten core sheets); Validator-driven engineering convergence complete for the Operational / Financial Ledger / SYS / Special families (2026-07-12). Supersedes the (stale) `GENERATED_SHEET_FORMATTING_POLISH_PLAN.md`.
-- `VALIDATOR_ARCHITECTURE.md` — the read-only **Validator** subsystem (admin-gated, default-off): Golden↔Central formatting parity, the **recommendation engine** (AdoptGolden / KeepCentral / ProductDecision / IgnoreNoise), the scoped family runners, and the Phase 2+ roadmap. Phase 1 complete; it drove the convergence milestone.
+- `VALIDATOR_ARCHITECTURE.md` — the read-only **Validator** subsystem (admin-gated, default-off): Golden↔Central formatting parity, the **recommendation engine** (AdoptGolden / KeepCentral / ProductDecision / IgnoreNoise), the scoped family runners, the Phase 1→2 roadmap, and the designed **Phase 2 Workbook Health** architecture (§10). Phase 1 complete; it drove the convergence milestone.
+- `TEST_HARNESS_ARCHITECTURE.md` — the developer-only **Test Harness / Regression Runner** (the writer counterpart; planned, default-off): disposable-workbook lifecycle, fail-closed target guard, the scenario model (SMOKE / REGRESSION / RECOVERY / STRESS), packs, and implementation order. Drives scenarios and calls the read-only Validator to judge health.
+- `REGRESSION_SCENARIOS.md` — the **historical-bug registry** (permanent project memory): every fixed production bug becomes a permanent `REG-###` regression scenario.
+- `RELEASE_READINESS.md` — the pre-release **go/no-go report** format + workflow (`Release Readiness gate = Harness × Validator`).
 - `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md` — active Phase 2 design: read-only duplicate / orphan / stale workbook detection, classification, and admin audit (Phase 2A), with Phase 2B recovery scope in its `§10`.
 
 ### History (what shipped)

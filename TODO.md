@@ -30,74 +30,11 @@ The older "V1.2 work queue" candidates are retained below under `## V1.2 polish 
 
 ---
 
-## Priority-Ranked Roadmap (P0–P4) — current (post-convergence, 2026-07-12)
+## Priority-Ranked Roadmap (P0–P4) → see `ROADMAP.md`
 
-**The current at-a-glance priority stack**, set after the Validator-driven Golden/Canonical convergence milestone closed. This is the priority *lens*; the `## Product Maturity Stages` section below remains the detailed Stage 1–6 roadmap (they describe the same work — where they conflict on ordering, this priority stack reflects the latest intent). Follow **Milestone Discipline** (`ENGINEERING_STANDARDS.md → §11`): finish the current milestone before starting the next.
+**The current at-a-glance priority stack now lives in its own document: `ROADMAP.md`** (created 2026-07-12, after the Validator-driven Golden/Canonical convergence milestone closed). `ROADMAP.md` is the authoritative **priority and sequence** view (P0 Project stabilization → P1 Validator Phase 2 → P2 Financial Model Accuracy / **House Financial Accuracy** → P3 Performance → P4 Future features) and carries the full **House Financial Accuracy** spec.
 
-### Priority 0 — Release stabilization
-
-- **Final documentation cleanup** — close the doc-sync pass (architecture docs, roadmap, standards reflect current state).
-- **Central migration verification** — confirm all user-facing paths resolve the correct workbook in Central mode (no `getActiveSpreadsheet()` null bugs); close the Tier-2 sweep of remaining non-critical paths.
-- **Remaining product decisions** — record and resolve the deferred **ProductDecision** items (e.g. Settings header/body font size) tracked in `GOLDEN_WORKBOOK.md` / `WORKBOOK_PARITY_CHECKLIST.md` / `ENGINEERING_STANDARDS.md → Ratified product decisions`.
-- **Beta readiness review** — onboarding polish, error handling, empty-state / UX consistency, and a runtime regression pass before release.
-
-### Priority 1 — Validator Phase 2
-
-- Provisioning Validation *(required sheets / headers / schema match the canonical architecture — `VALIDATOR_ARCHITECTURE.md → §10 Phase 2`)*
-- Conditional-format validation *(the current Validator blind spot — `VALIDATOR_ARCHITECTURE.md → Future capability`)*
-- Formula validation
-- Schema validation
-- Named-range validation
-- Workbook Health *(workbook health scoring / diagnostics surface)*
-- Release Readiness gate
-
-### Priority 2 — Financial Model Accuracy
-
-The next **product-model** milestone (after Validator Phase 2, before major new user features). Detailed below in **`## House Financial Accuracy`**.
-
-- **House Financial Accuracy** — rental-property cash-flow accuracy, including financing costs (mortgage/loan payments), with a shared house cash-flow calculation model reconciled across all house-related sheets.
-
-### Priority 3 — Performance and scalability
-
-- Provisioning + dashboard/planner latency, bulk-API and caching passes where measured; scale toward more users/workbooks.
-
-### Priority 4 — Future features
-
-- Money Plan Phase 2, Account Aggregation & Transaction Import, Chat / Assistant, Paid Product framework, and other post-beta product direction (`PRODUCT_VISION.md`, `ENHANCEMENTS.md`).
-
----
-
-## House Financial Accuracy
-
-**Roadmap milestone — Financial Model Accuracy (Priority 2 / High).** Sequenced **immediately after Validator Phase 2 and before major new user features.**
-
-> **This is a financial-model improvement, not a UI enhancement.**
-
-**Goal.** Improve the financial accuracy of rental-property cash-flow calculations.
-
-**Motivation.** Current property profitability does **not** include financing costs, producing an **optimistic** monthly cash-flow picture. Including mortgage/loan payments gives a truthful net-cash-flow view per property.
-
-**Planned work.**
-
-- Include **mortgage / loan payments** in recurring monthly property expenses.
-- **Separate** expense classes:
-  - **Operating Expenses**
-  - **Financing Expenses**
-- **Calculate**:
-  - **Operating Cash Flow**
-  - **Financing Cash Flow**
-  - **Net Property Cash Flow**
-- Ensure **Property Performance**, **House Values**, **House Expenses**, **Planner**, and **Cash Flow** all use **one shared calculation model**.
-
-**Future-proof the design for:** escrow · HOA · refinancing · variable-rate loans · interest-vs-principal reporting · multiple loans per property.
-
-**Engineering goals.**
-
-- **One shared house cash-flow calculation helper.**
-- **No duplicated mortgage calculations.**
-- **Validator checks** that property totals **reconcile across all house-related sheets**.
-
-*(Related existing work to build on / reconcile: `property_performance.js` (Property Performance module + `getInactiveHousesSet_`), the `HOUSES - <Property>` expense sheets, House Values year-block ledgers, and the Upcoming Expenses "Loan / Financing excluded from cash reserve" behavior in `rolling_debt_payoff.js`. This milestone unifies the financing model rather than adding another one.)*
+The `## Product Maturity Stages` section below remains the detailed **Stage 1–6** roadmap (per-item effort, dependencies, history, Beta Gate). `ROADMAP.md` and the Stage model describe the same work — where they conflict on **ordering**, `ROADMAP.md` reflects the latest intent. Follow **Milestone Discipline** (`ENGINEERING_STANDARDS.md → §11`): finish the current milestone before starting the next.
 
 ---
 
