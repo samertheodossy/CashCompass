@@ -30,6 +30,42 @@ The older "V1.2 work queue" candidates are retained below under `## V1.2 polish 
 
 ---
 
+## Priority-Ranked Roadmap (P0–P4) — current (post-convergence, 2026-07-12)
+
+**The current at-a-glance priority stack**, set after the Validator-driven Golden/Canonical convergence milestone closed. This is the priority *lens*; the `## Product Maturity Stages` section below remains the detailed Stage 1–6 roadmap (they describe the same work — where they conflict on ordering, this priority stack reflects the latest intent). Follow **Milestone Discipline** (`ENGINEERING_STANDARDS.md → §11`): finish the current milestone before starting the next.
+
+### Priority 0 — Release blockers
+
+- **Central migration verification** — confirm all user-facing paths resolve the correct workbook in Central mode (no `getActiveSpreadsheet()` null bugs); close the Tier-2 sweep of remaining non-critical paths.
+- **Validator Phase 2 (Provisioning Validation)** — the P0 slice of Validator Phase 2: after Central provisions a workbook, run a read-only check that required sheets/headers/schema match the canonical architecture (`VALIDATOR_ARCHITECTURE.md → §10 Phase 2`). *(The remaining Validator Phase 2 capabilities are P2 below.)*
+- **Regression framework** — an automated (or disciplined manual) regression gate so convergence + reconciliation cannot silently break before a release.
+
+### Priority 1 — Beta readiness
+
+- **Onboarding polish** — first-run / Setup-Review / empty-state flow refinement.
+- **Error handling** — consistent, trust-safe error surfaces across the dashboard and server paths.
+- **Diagnostics / Workbook Health** — surface workbook state to the user/admin (builds toward the P2 workbook health score).
+
+### Priority 2 — Validator Phase 2 (full)
+
+- Provisioning validation *(P0 slice above; remaining depth here)*
+- Conditional-format validation *(the current Validator blind spot — see `VALIDATOR_ARCHITECTURE.md → Future capability`)*
+- Formula validation
+- Schema validation
+- Named-range validation
+- Workbook health scoring
+- Release gate
+
+### Priority 3 — Performance
+
+- Provisioning + dashboard/planner latency, bulk-API and caching passes where measured.
+
+### Priority 4 — Future features
+
+- Money Plan Phase 2, Account Aggregation & Transaction Import, Chat / Assistant, Paid Product framework, and other post-beta product direction (`PRODUCT_VISION.md`, `ENHANCEMENTS.md`).
+
+---
+
 ## Product Maturity Stages
 
 **Authoritative roadmap — the single source of truth for where CashCompass is and where it is going.** Stages are sequential. Each stage below lists **remaining work** with **Priority** (P0 = now/current · P1 = next, gates the following stage · P2 = high · P3 = gates external beta · P4 = V2/future), **Dependencies**, and **Estimated effort** (XS `<0.5d` · S `0.5–1d` · M `1–3d` · L `3–5d` · XL `>5d`). Completed stages list what closed them. `PROJECT_CONTEXT.md` and `README.md` carry high-level mirrors.
@@ -246,9 +282,9 @@ This is a **long-term architecture goal**, sequenced after the Beta Gate and bef
 
 Before broader beta, **every release must pass** the following before deployment. These are **unordered gate criteria** — all must be satisfied. The **execution order** that sequences them is the confirmed near-term queue: Bills Due Pay validation → Investments cleanup → Recovery → Validation Agent → Golden Workbook polish → Family Beta (with Financial Integrity Phase 3 sequenced alongside Recovery/Validation Agent). Criteria:
 
-- **Golden Workbook Convergence** — freshly provisioned workbook is visually convergent with the Golden Workbook for the core sheets. *(First audit complete; convergence passes remaining for Cash Flow / Investments / House Values / Retirement.)*
+- **Golden Workbook Convergence** — freshly provisioned workbook is visually convergent with the Golden/Canonical Workbook for the core sheets. *(First audit complete; **Validator-driven engineering convergence complete for the Operational / Financial Ledger / SYS / Special families incl. Cash Flow, 2026-07-12** — remaining diffs are KeepCentral/ProductDecision/IgnoreNoise; convergence passes remaining for Investments / House Values / Retirement + the unaudited sheets. See `VALIDATOR_ARCHITECTURE.md`.)*
 - **Financial Integrity** — Dashboard / Planner / active source-sheet totals reconcile within $0.01. *(Audit Framework + Debt Audit shipped; canonical basis + Planner/Dashboard/Rolling convergence + Asset/Planner/Dashboard audit modules remaining — Phase 3.)*
-- **Validation Agent** — automated regression detection passes. *(Not started — becomes the automated release gate that protects the reconciled numbers.)*
+- **Validation Agent** — automated regression detection passes. *(Read-only **Validator Phase 1 complete** — Golden Workbook parity + recommendation engine + scoped family runners, admin-gated/default-off; Phase 2 provisioning validation and the numbers-reconciliation release gate still planned. See `VALIDATOR_ARCHITECTURE.md`.)*
 - **Recovery Validation** — recovery stack validated. *(Admin Clear / recovery routing / Reconnect / admin validation done; Auto-Adopt / Ambiguous / Name-only / Orphan remaining.)*
 - **Runtime regression checklist** — core workflows + edge cases verified. *(Interim manual gate until the Validation Agent exists.)*
 

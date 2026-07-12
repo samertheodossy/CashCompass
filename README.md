@@ -41,10 +41,11 @@ These four documents are the project's top-level reference set. Read them top-do
 
 ### Planning (what's next)
 
-- `TODO.md` — Product Maturity Stages (authoritative **Stage 1–6** roadmap + Current Engineering Priorities + Beta Gate) → **UX Backlog (Version 1)** (permanent home for opportunistic product-quality polish) → Launch Readiness Roadmap (historical Phase 1–7 detail) + V1.2 polish backlog + historical backlog.
+- `TODO.md` — **Priority-Ranked Roadmap (P0–P4)** (current at-a-glance priority stack, post-convergence) + Product Maturity Stages (authoritative **Stage 1–6** roadmap + Current Engineering Priorities + Beta Gate) → **UX Backlog (Version 1)** (permanent home for opportunistic product-quality polish) → Launch Readiness Roadmap (historical Phase 1–7 detail) + V1.2 polish backlog + historical backlog.
 - `ENHANCEMENTS.md` — product-level rationale, phase history, Active / Next / Later mirror.
 - `GOLDEN_WORKBOOK.md` — the **Golden Workbook** standard: the production workbook is the visual source of truth; the four **design families**; how convergence decisions are made and maintained.
-- `WORKBOOK_PARITY_CHECKLIST.md` — per-sheet **Golden Workbook Convergence** status (audit ratings ★★★★★ Golden Reference / ★★★★☆ Production Ready, plus COMPLETE / MINOR / MAJOR / UNKNOWN), design family, gaps, effort, priority, and the Golden Workbook Audit screenshot list. First audit complete 2026-07-06 (ten core sheets). Supersedes the (stale) `GENERATED_SHEET_FORMATTING_POLISH_PLAN.md`.
+- `WORKBOOK_PARITY_CHECKLIST.md` — per-sheet **Golden Workbook Convergence** status (audit ratings ★★★★★ Golden Reference / ★★★★☆ Production Ready, plus COMPLETE / MINOR / MAJOR / UNKNOWN), design family, gaps, effort, priority, and the Golden Workbook Audit screenshot list. First audit complete 2026-07-06 (ten core sheets); Validator-driven engineering convergence complete for the Operational / Financial Ledger / SYS / Special families (2026-07-12). Supersedes the (stale) `GENERATED_SHEET_FORMATTING_POLISH_PLAN.md`.
+- `VALIDATOR_ARCHITECTURE.md` — the read-only **Validator** subsystem (admin-gated, default-off): Golden↔Central formatting parity, the **recommendation engine** (AdoptGolden / KeepCentral / ProductDecision / IgnoreNoise), the scoped family runners, and the Phase 2+ roadmap. Phase 1 complete; it drove the convergence milestone.
 - `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md` — active Phase 2 design: read-only duplicate / orphan / stale workbook detection, classification, and admin audit (Phase 2A), with Phase 2B recovery scope in its `§10`.
 
 ### History (what shipped)
@@ -86,7 +87,7 @@ Full picture: `PROJECT_CONTEXT.md → Current Product Status (July 2026)`, `→ 
 
 ## Current working mode
 
-**Central App live + Family Beta readiness.** The Central App architecture is operational — `getUserSpreadsheet_()` is a real resolver that, in central mode (`CENTRAL_MODE`), provisions each allow-listed user their own Drive-owned workbook on first access (runtime-validated). Family Beta styling has shipped for Bank Accounts, Debts, Bills, and Upcoming Expenses. The V1 trust baseline and V1.1 retirement profile integration remain the stable foundation.
+**Central App live + Family Beta readiness.** The Central App architecture is operational — `getUserSpreadsheet_()` is a real resolver that, in central mode (`CENTRAL_MODE`), provisions each allow-listed user their own Drive-owned workbook on first access (runtime-validated). Family Beta styling has shipped across the audited families — Bank Accounts, Debts, Bills, Upcoming Expenses, Cash Flow, SYS - Accounts, Settings, Donation, LOG - Activity — via the **Validator-driven Golden Workbook convergence milestone** (2026-07-12; see `VALIDATOR_ARCHITECTURE.md` + `WORKBOOK_PARITY_CHECKLIST.md`). The V1 trust baseline and V1.1 retirement profile integration remain the stable foundation.
 
 The V1.2 change discipline still applies to every edit, plus the now-active Central App migration discipline:
 

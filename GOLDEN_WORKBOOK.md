@@ -1,10 +1,14 @@
-# Golden Workbook
+# Golden Workbook *(the Canonical Workbook)*
 
 *The permanent visual specification for every CashCompass workbook.*
 
+> **Terminology:** the reference workbook is called both the **Golden Workbook** (historical name, used throughout this doc and in `VALIDATOR_GOLDEN_WORKBOOK_ID` / "AdoptGolden") and the **Canonical Workbook** (the term used in code, Validator output, and `ENGINEERING_STANDARDS.md`). They are the **same living reference**; "Canonical" emphasizes that it is an **evolving standard**, not a frozen historical snapshot (see the full note under *The core principle*).
+
 **Status:** Documentation only. This document defines a standard and a process; it authorizes no code changes. The initiative is **Golden Workbook Convergence** — scheduled as **Stage 3 → D (P1)**.
 
-**Audit progress:** The **first Golden Workbook Audit was completed on 2026-07-06** against the actual bound production workbook. Ten core user-facing sheets have been visually verified and rated (see the **Design families** section below and `WORKBOOK_PARITY_CHECKLIST.md`); they are no longer **UNKNOWN**. Remaining sheets (HOUSES, LOG - Activity, OUT sheets, SYS backing sheets, and the workbook-level cross-cutting items) stay **UNKNOWN** until audited. Convergence code for a sheet may only be written once that sheet's row is resolved out of UNKNOWN.
+**Convergence progress (2026-07-12): engineering convergence complete for the audited families.** Driven by the **Validator** (`VALIDATOR_ARCHITECTURE.md`), the **Operational** (Bills · Debts · Upcoming Expenses · LOG - Activity), **Financial Ledger** (Cash Flow · Bank Accounts), **SYS** (SYS - Accounts), and **Special** (Settings · Donation) families have completed their engineering `AdoptGolden` convergence — all remaining Validator differences for these are intentionally classified **KeepCentral**, **ProductDecision**, or **IgnoreNoise**. Per-sheet status lives in `WORKBOOK_PARITY_CHECKLIST.md`. Still open: full audit + convergence for the remaining **UNKNOWN** sheets (HOUSES, OUT sheets, some SYS backing sheets) and the workbook-level cross-cutting items; a handful of **ProductDecision** items pending a manual Canonical-workbook update (see below).
+
+**Audit progress:** The **first Golden Workbook Audit was completed on 2026-07-06** against the actual bound production workbook. Ten core user-facing sheets have been visually verified and rated (see the **Design families** section below and `WORKBOOK_PARITY_CHECKLIST.md`); they are no longer **UNKNOWN**. Remaining sheets (HOUSES, OUT sheets, some SYS backing sheets, and the workbook-level cross-cutting items) stay **UNKNOWN** until audited. Convergence code for a sheet may only be written once that sheet's row is resolved out of UNKNOWN.
 
 ---
 
@@ -17,6 +21,8 @@ CashCompass is built on a real Google Sheets workbook that the user owns and can
 We now elevate that workbook to a named standard: **the Golden Workbook.** Every newly provisioned workbook should **converge toward the Golden Workbook** until a freshly provisioned workbook is *visually indistinguishable* from it.
 
 When code and the Golden Workbook disagree, **the Golden Workbook wins** and the provisioning/styling code is what changes.
+
+> **Terminology — "Golden" ↔ "Canonical".** The reference workbook is increasingly called the **Canonical workbook** in code and Validator output (e.g. `VALIDATOR_GOLDEN_WORKBOOK_ID`, "AdoptGolden"/"KeepCentral" recommendations). "Golden" and "Canonical" refer to the **same living reference**. The nuance the newer term captures: the workbook is an **evolving standard**, not a frozen historical snapshot — where readability or a ratified product decision improves on the old hand-tuned state, the Canonical workbook is updated to the new standard and the code follows it (see the ratified product decisions recorded per family below and in `ENGINEERING_STANDARDS.md → Ratified product decisions`).
 
 ---
 
@@ -76,12 +82,12 @@ Rating scale (audit quality of the production sheet as a reference):
 
 **Ratified product decision — Cash Flow Summary row financial-health coloring (2026-07-11).** The `Summary | Cash Flow Per Month` row communicates **financial health** through its net values:
 
-- **Positive → green**, **negative → red**, **zero → neutral black** (`$0.00`).
-- Implemented via **number format, not conditional formatting**: `[Green]$#,##0.00;[Red]-$#,##0.00;$#,##0.00`.
+- **Positive → green (`#38761d`)**, **negative → red (`#cc0000`)**, **zero → neutral black**.
+- Implemented via **narrowly scoped conditional formatting** (not a number format). Two idempotent rules over the Summary money cells: `=AND($<Type>1="Summary", <money>1>0)` → green font and `=AND($<Type>1="Summary", <money>1<0)` → red font. The Summary **number format stays neutral currency** (`$#,##0.00;-$#,##0.00;$#,##0.00`); colour comes from the rules, so **zero stays black**.
 
-**Rationale:** positive cash flow should read as healthy at a glance; a number format is simpler and safer than conditional formatting, is **inspectable by the current Validator today** (which snapshots number formats but not conditional-format rules), and extends the negative-red format already used on these cells. Conditional-format validation remains a **future Validator Phase 2 capability** (`VALIDATOR_ARCHITECTURE.md §10`).
+**Rationale:** conditional formatting matches the exact Cash Flow colour language already used for Income/Expense rows (shared `CASH_FLOW_HEALTH_COLOR_POSITIVE_` / `CASH_FLOW_HEALTH_COLOR_NEGATIVE_` constants), is dynamic (never stale), and unifies all Cash Flow colour under one mechanism. *(An earlier `[Green]…;[Red]…` number-format approach was evaluated and **rejected** — it could not render a green positive cleanly alongside a neutral zero, and it would fork the colour language away from the Income/Expense rules.)* Conditional-format rules are **not yet inspectable by the Validator** — capturing them is a **future Validator Phase 2 capability** (`VALIDATOR_ARCHITECTURE.md §10`).
 
-**Scope:** applies **only** to the Summary row's month values and Total. It does **not** change Income/Expense row formatting, and does **not** change formulas, widths, row heights, borders, background, or typography. Implemented in `writeCashFlowSummaryFormulas_` (`CASH_FLOW_SUMMARY_HEALTH_NUMBER_FORMAT_`, `cashflow_setup.js`). **Existing workbooks self-heal narrowly** the next time `writeCashFlowSummaryFormulas_` runs (every Quick Add) — allowed because that function already rewrites the Summary formulas/formats and touches only the Summary value cells. See `ENGINEERING_STANDARDS.md → Ratified product decisions`.
+**Scope:** applies **only** to the Summary row's money cells. It does **not** change Income/Expense row formatting, and does **not** change formulas, widths, row heights, borders, background, or typography. Implemented in `applyCashFlowSummaryHealthColorRules_` (called by `writeCashFlowSummaryFormulas_`, `cashflow_setup.js`); rules are added **idempotently** — any prior `="Summary"` health rule is dropped and re-added, always exactly two. **Existing workbooks self-heal narrowly** the next time `writeCashFlowSummaryFormulas_` runs (every Quick Add) — allowed because that function already rewrites the Summary formulas and the reassertion is **colour-only** and scoped to the Summary cells. See `ENGINEERING_STANDARDS.md → Ratified product decisions`.
 
 ### 2. Operational family — ★★★★★ Golden Reference
 
@@ -111,13 +117,15 @@ The canonical `INPUT - Bills` sheet **ends with three trailing scheduling column
 
 **Purpose:** forward-looking planning lists that *feed the plan*. Lighter and more entry-oriented than the ledgers — date + amount capture for expected/planned items. Visual language is a cleaner, simpler list that signals "things you are planning" rather than "history you are tracking."
 
+> **Note — `INPUT - Donation` uses the Financial Ledger year-block *styling engine*.** Although Donation belongs to this family by **purpose**, it is **structurally** a year-block sheet (row 1 Year banner, row 2 `Name of Charity` header, data below, additional tax years stacked as more blocks). As of 2026-07-12 it routes through the shared year-block walker `applyFinancialLedgerBaseStyle_` (via `applyDonationSheetStyling_`, first-create only) rather than the flat Operational helper — Year banner `#f4a300`/20pt, header `#ffe599`/16pt centered with thin black bottom border, white 14pt body/26px, freeze rows 2 + column 1, widen-only header-keyed widths (`DONATION_CANONICAL_WIDTHS_`). This replaced the old ad-hoc minimal first-create styling.
+
 **Ratified product decision — Upcoming Expenses (2026-07-11).** After Operational Validator convergence, two attributes on `INPUT - Upcoming Expenses` are **intentional, ratified deviations** from the older Golden workbook state — **readability is preferred over preserving historical compactness**:
 
 - **Body font remains 14pt** (the canonical body size). The historical Golden workbook used 12pt body text, which allowed a narrower ID column; the Canonical workbook has since been updated to 14pt so the two agree.
 - **ID column width is 190px.** At 14pt the generated 16-character IDs (`UE-` + 13-digit epoch ms) were cramped at the historical 165px, so ID is widened to **190px** for comfortable display. This is a **product decision, not Golden parity** — the Canonical workbook's ID width is aligned to 190 to match.
-- **Header background is an unresolved ProductDecision:** Canonical `#ffff00` vs Central `#ffe599`. This is a deliberate open design choice, not a convergence gap; it is tracked until a single hex is chosen for both sides.
+- **Header background is `#ffe599`** — resolved by the ratified header-yellow standardization (2026-07-12): all CashCompass header bands use the single canonical yellow `#ffe599`, and the older Canonical `#ffff00` is updated to match. No longer an open ProductDecision.
 
-These are expected to surface in the Validator as **KeepCentral** (ID width, body font) / **ProductDecision** (header background) — never **AdoptGolden**. See `ENGINEERING_STANDARDS.md → Canonical Width Standard`.
+The ID width / body font are expected to surface in the Validator as **KeepCentral** — never **AdoptGolden**. See `ENGINEERING_STANDARDS.md → Canonical Width Standard` and `→ Ratified product decisions` (canonical header yellow).
 
 ### 4. Analytical / Configuration family — ★★★★☆ Production Ready
 

@@ -2,11 +2,15 @@
 
 *The read-only Validator subsystem: architecture, current state, and roadmap.*
 
-**Status:** Documentation. The **first Validator module is implemented** in the
-main app (Golden Workbook parity comparison), **disabled by default**,
-**admin-gated**, **read-only**, with **no runtime/UI/provisioning call sites**.
-It is run manually from the Apps Script editor for now. Remaining capabilities
-(single-workbook rules-based validators) are still planned — see §10.
+**Status:** Documentation. **Phase 1 is complete** — the Golden Workbook parity
+comparison + recommendation engine + scoped family runners are implemented in the
+main app, **disabled by default**, **admin-gated**, **read-only**, with **no
+runtime/UI/provisioning call sites**. It is run manually from the Apps Script
+editor. Phase 1 drove the **2026-07 Golden Workbook convergence milestone**
+(Operational, Financial Ledger, SYS, and Special families converged — see
+`WORKBOOK_PARITY_CHECKLIST.md`). Remaining capabilities (single-workbook
+rules-based validators, conditional-format capture, provisioning validation) are
+**Phase 2+ future work** — see §10.
 
 **Related docs:** `GOLDEN_WORKBOOK.md` (visual source of truth + design
 families), `WORKBOOK_PARITY_CHECKLIST.md` (per-sheet convergence status),
@@ -31,6 +35,36 @@ support (planned):
 The Validator is a **trust asset**, not a runtime dependency. It reports; it
 never repairs, restyles, or mutates. Repair remains the job of the existing
 provisioning / self-heal code, which is explicitly out of scope here.
+
+### 1a. Recommendation engine (implemented)
+
+The parity comparison does not just list raw differences — it assigns **exactly
+one recommendation** to every diff (`validator_format_compare.js →
+validatorRecommendation_`), which is what made the 2026-07 convergence milestone
+tractable. The vocabulary (fixed print order, `VALIDATOR_RECO_ORDER_`):
+
+- **AdoptGolden** — Central is objectively worse and should match Golden (mainly
+  Golden column is **wider** while Central sits near Sheets defaults, or a header
+  Central left unstyled/white while Golden has a real fill). *These are the
+  actionable engineering items.*
+- **KeepCentral** — Golden reflects an untouched Sheets default while Central's
+  value is the ratified canonical standard (canonical row heights, `middle`
+  vertical align, negative-aware currency formats, columns already ≥ Golden).
+- **ProductDecision** — a deliberate design call with no single right answer
+  (palette background hexes, single-value font colours, font **size** — Golden is
+  bigger on ledgers but smaller on SYS).
+- **IgnoreNoise** — non-actionable (mature-vs-fresh row presence, expected totals /
+  year banners, blank-cell default number formats, Arial↔Calibri font-family drift).
+- **NeedsReview** — anything the rules can't confidently classify.
+
+The report shapes these into a **Recommendation Summary** (headline counts), a
+**Family Summary** (per-design-family counts + owning helper via
+`validatorSuggestedHelper_`), and a **Convergence Priority** (the focused set of
+sheets present in both workbooks). The workflow is: run a scoped family runner →
+implement only the **AdoptGolden** items → rerun until AdoptGolden = 0 → the
+remaining KeepCentral / ProductDecision / IgnoreNoise are intentional. This is the
+**Validator-driven development workflow** used across Operational, Financial
+Ledger, SYS, and Special (see `WORKBOOK_PARITY_CHECKLIST.md`).
 
 ---
 
@@ -100,16 +134,35 @@ access control — see the guard model in §5.)
 
 ### Implemented
 
-**Public (guarded) — the only non-underscore Validator function**
+**Public (guarded) — the core entry point**
 - `validateGoldenParityReport(options)` — snapshot two workbooks by ID and report
   formatting differences grouped by design family. Read-only; **`redactValues`
-  defaults to `true`**; `outputMode` is `'log'` (default) | `'json'` | `'both'`.
+  defaults to `true`**; `outputMode` is `'log'` (default) | `'json'` | `'both'`;
+  `snapshotOptions.sheetNames` optionally scopes both snapshots to an exact-name
+  allow-list. All runners below funnel through this function, so the guard
+  (`VALIDATOR_ENABLED` + admin) always applies.
 
-**Developer runners (internal, no-arg — Run directly from the editor)**
-- `validatorRunGoldenParity_(centralSpreadsheetIdOverride?)` — reads workbook IDs
-  from Script Properties and calls `validateGoldenParityReport` with developer
-  defaults (`redactValues: true`, `outputMode: 'log'`). Still admin+flag gated
-  (it goes through the public entry point). Replaces the old temporary
+**Public developer runners (no-arg — appear in the editor Run dropdown)**
+These are intentionally **non-underscore** so the Apps Script editor lists them
+(some editor versions hide trailing-underscore functions). Each is still fully
+guarded via `validateGoldenParityReport`, takes no arguments, reads workbook IDs
+from Script Properties, and runs read-only (`redactValues: true`, `outputMode: 'log'`).
+- `validatorRunGoldenParity()` — full parity across **every** INPUT/SYS/OUT/HOUSES/LOG
+  sheet present in both workbooks. On a mature Golden workbook this can approach the
+  6-minute execution limit — prefer a scoped runner below.
+- **Scoped family runners** (each limits both snapshots to that family's
+  convergence-priority sheets via `snapshotOptions.sheetNames`, keeping runs fast
+  and timeout-safe — these drove the 2026-07 convergence milestone):
+  - `validatorRunGoldenParityFinancialLedger()` → `INPUT - Bank Accounts`, `INPUT - Cash Flow 2026` (`VALIDATOR_SCOPE_FINANCIAL_LEDGER_`).
+  - `validatorRunGoldenParityOperational()` → `INPUT - Upcoming Expenses`, `LOG - Activity` (`VALIDATOR_SCOPE_OPERATIONAL_`).
+  - `validatorRunGoldenParitySys()` → `SYS - Accounts` (`VALIDATOR_SCOPE_SYS_`).
+  - `validatorRunGoldenParitySpecial()` → `INPUT - Settings`, `INPUT - Donation` (`VALIDATOR_SCOPE_SPECIAL_`).
+
+**Developer runner (internal)**
+- `validatorRunGoldenParity_(centralSpreadsheetIdOverride?)` — the underscore
+  implementation the public `validatorRunGoldenParity()` delegates to; accepts an
+  optional Central-ID override. `validatorRunGoldenParityScoped_(sheetNames)` is the
+  shared internal helper the four scoped runners call. Replaces the old temporary
   `runParity()` wrapper — no throwaway files needed.
 
 **Internal**
@@ -260,8 +313,11 @@ The Validator must never enter the hot path:
   standalone `dev-tools/` project.
 - **Phase 1 — done.** Migrated the parity comparator into the main app as the
   first Validator module (`validator_core.js`, `validator_snapshot.js`,
-  `validator_format_compare.js`, `validator_report.js`); exposed the single
-  guarded entry point `validateGoldenParityReport()`; removed `dev-tools/`.
+  `validator_format_compare.js`, `validator_report.js`); exposed the guarded entry
+  point `validateGoldenParityReport()` plus the public no-arg runners (full +
+  four scoped family runners); added the **recommendation engine** (§1a); removed
+  `dev-tools/`. Phase 1 drove the **2026-07 Golden Workbook convergence
+  milestone** to `AdoptGolden = 0` for the audited families.
 - **Phase 2 — Provisioning Validation — planned.** Add `validator_rules.js`
   (required-sheets + headers, **sourced from the existing canonical constants**
   used by provisioning) and `validator_checks.js` (`checkRequiredSheets_`,

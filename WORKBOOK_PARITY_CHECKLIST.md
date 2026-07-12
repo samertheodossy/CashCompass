@@ -4,6 +4,8 @@ The engineering checklist for **Golden Workbook Convergence** — bringing every
 
 **Status:** Documentation only. No code changes are authorized by this checklist. The **first Golden Workbook Audit is complete (2026-07-06)** — ten core user-facing sheets are visually verified and rated below. The remaining sheets stay **UNKNOWN** until audited; no convergence code is written for a sheet until its row is resolved out of **UNKNOWN**.
 
+> **Engineering convergence complete for the audited families (2026-07-12).** Driven by the Validator, the **Operational** (Bills · Debts · Upcoming Expenses · LOG - Activity), **Financial Ledger** (Cash Flow · Bank Accounts), **SYS** (SYS - Accounts), and **Special** (Settings · Donation) families have finished their `AdoptGolden` convergence — remaining Validator differences are intentionally **KeepCentral / ProductDecision / IgnoreNoise**. Rows below are marked **✅ converged** where this applies. Open ProductDecision items pending a manual Canonical-workbook update are called out in the notes.
+
 ---
 
 ## How to use this checklist
@@ -39,18 +41,18 @@ Columns: **Sheet** · **Design family** · **Audit status** · **Convergence foc
 
 | Sheet | Design family | Audit status | Convergence focus (fresh → Golden) | Est. effort | Priority |
 |---|---|---|---|---|---|
-| **INPUT - Cash Flow `<year>`** | Financial Ledger | ★★★★★ Golden Reference | Converge fresh sheet toward Golden: header palette, negative-number format, summary-row styling, per-column widths, borders, banding, tab order | S | P1 |
-| **INPUT - Bank Accounts** | Financial Ledger | ★★★★★ Golden Reference | Converge toward Golden: year-row/header/Total/Delta colors, month-column widths & currency, freeze rows/cols, negative conditional formatting, notes | S | P1 |
+| **INPUT - Cash Flow `<year>`** | Financial Ledger | ★★★★★ Golden Reference | **✅ Converged (Validator, 2026-07-12):** AdoptGolden widths (Type 189 / Flow Source 255 / Active 147 / Payee 439) + Summary-row financial-health colours via conditional formatting (`#38761d`/`#cc0000`). Remaining diffs = KeepCentral / ProductDecision. | S | P1 |
+| **INPUT - Bank Accounts** | Financial Ledger | ★★★★★ Golden Reference | **✅ Converged (Validator):** shared year-block styling + widen-only widths, year/header/Total/Delta palette, freeze rows/cols. Remaining diffs = KeepCentral / ProductDecision. | S | P1 |
 | **INPUT - Investments** | Financial Ledger | ★★★★★ Golden Reference | Converge toward Golden: year/header/total/delta colors, **month-column currency pre-format on create**, freeze rows/cols, widths | S | P1 |
 | **INPUT - House Values** | Financial Ledger | ★★★★★ Golden Reference | Converge toward Golden: year-banner contrast, money-column formats on create, widths (empty-column collapse), freeze | S–M | P1 |
 | **INPUT - Debts** | Operational | ★★★★★ Golden Reference | Converge toward Golden: header color, TOTAL DEBT band, column widths, currency formats on empty range, notes/tooltips, conditional formatting | S | P1 |
 | **INPUT - Bills** | Operational | ★★★★★ Golden Reference | Converge toward Golden: header color, widths, notes on non-obvious columns (use-policy/autopay), number formats, conditional formatting. **Canonical schema now ends with `Weekday` · `Anchor Date` · `Schedule Effective Date` — see "Canonical schema — INPUT - Bills scheduling columns" below.** | S | P1 |
-| **INPUT - Upcoming Expenses** | Operational Planning | ★★★★☆ Production Ready | Converge toward Golden: header color, widths, date/amount formats on empty range, banding | S | P1 |
-| **INPUT - Donation** | Operational Planning | ★★★★☆ Production Ready | Converge toward Golden: header styling/colors/widths/number formats (fresh sheet currently minimal) | M | P1 |
+| **INPUT - Upcoming Expenses** | Operational Planning | ★★★★☆ Production Ready | **✅ Converged (Validator):** AdoptGolden widths; ratified body 14pt + ID 190px (ProductDecision); header `#ffe599`. Remaining diffs = KeepCentral. | S | P1 |
+| **INPUT - Donation** | Operational Planning *(year-block styling engine)* | ★★★★☆ Production Ready | **✅ Converged (2026-07-12):** migrated from ad-hoc minimal styling to the shared Financial Ledger year-block engine (`applyDonationSheetStyling_` → `applyFinancialLedgerBaseStyle_`, first-create): Year `#f4a300`/20pt, header `#ffe599`/16pt, white 14pt body, freeze rows 2 + col 1, widen-only widths. | M | P1 |
 | **INPUT - Retirement** | Analytical / Configuration | ★★★★☆ Production Ready | Converge toward Golden: section shading/structure, borders between scenario blocks, widths, number/percent formats | M | P1 |
-| **INPUT - Settings** | Analytical / Configuration | ★★★★☆ Production Ready | Converge toward Golden: header background/border, widths; small key/value surface | XS | P2 |
+| **INPUT - Settings** | Analytical / Configuration | ★★★★☆ Production Ready | **✅ Converged (Validator, Special scope):** Key 240 / Value 385 widths + header `#ffe599`, first-create only. Header/body **font size** remains an open ProductDecision. | XS | P2 |
 | **HOUSES - `<Name>`** | Financial Ledger | UNKNOWN | Audit first: **first-ever house** (fallback path) vs later houses (template clone) — row heights, widths, banner/header styling | M | P2 |
-| **LOG - Activity** | Operational | UNKNOWN | Audit first: header background, column widths (wide text columns), amount/date number formats | S | P2 |
+| **LOG - Activity** | Operational | Validator-audited (live) | **✅ Width convergence done (Validator, Operational scope):** canonical header-keyed widen-only widths incl. Payee 392 (`ACTIVITY_LOG_CANONICAL_WIDTHS_`). Full screenshot audit of remaining attributes still optional. | S | P2 |
 | **OUT - Dashboard** | Analytical / Configuration | UNKNOWN | Audit first: planner rebuilds formatting each run — confirm the planner-produced look matches production | S | P2 |
 | **OUT - History** | Analytical / Configuration | UNKNOWN | Audit first: header styling, widths, number formats vs production | S | P2 |
 
@@ -76,7 +78,7 @@ These are backing data sheets a user *can* open but rarely does. Audit only if t
 
 | Sheet | Current status | Visual comparison required | Remaining gaps (to verify — unconfirmed) | Est. effort | Priority |
 |---|---|---|---|---|---|
-| **SYS - Accounts** | UNKNOWN | Yes | Confirm header color/widths vs production | XS–S | P3 |
+| **SYS - Accounts** | ✅ Converged (Validator, SYS scope) | Done (live) | AdoptGolden widths applied for 7 columns (Account Name 288 / Type 194 / Current Balance 245 / Available Now 224 / Min Buffer 233 / Use Policy 223 / Priority 245); header `#ffe599`. Remaining diffs = KeepCentral / ProductDecision. | XS–S | P3 |
 | **SYS - Assets** | UNKNOWN | Yes | Confirm header styling/widths | XS | P3 |
 | **SYS - House Assets** | UNKNOWN | Yes | Confirm header styling/widths/money formats | XS | P3 |
 
@@ -94,7 +96,7 @@ These are backing data sheets a user *can* open but rarely does. Audit only if t
 |---|---|---|---|---|---|
 | **Sheet (tab) ordering** | UNKNOWN | Yes | Fresh workbook tabs appear in creation order; confirm the production tab order and whether provisioning should enforce it | M | P1 |
 | **Tab colors** | UNKNOWN | Yes | Confirm whether production uses tab colors | XS | P3 |
-| **Conditional formatting** | UNKNOWN | Yes | Confirm which sheets/cells use conditional formatting in production (design decision before implementing) | M | P2 |
+| **Conditional formatting** | Partially known | Yes | **Known:** Cash Flow uses conditional formatting for Income/Expense row colours (`applyCashFlowRowTypeColorRules_`) and Summary-row financial-health colours (`applyCashFlowSummaryHealthColorRules_`, `#38761d`/`#cc0000`). The Validator **cannot yet snapshot CF rules** — CF-rule capture is a future Validator Phase 2 capability (`VALIDATOR_ARCHITECTURE.md §10`). Confirm CF usage on other sheets before implementing. | M | P2 |
 | **Row banding** | UNKNOWN | Yes | Confirm whether production uses banding on data tables | S | P3 |
 | **Number formats on empty ranges** | UNKNOWN | Yes | Confirm which sheets pre-format the empty data area in production | S | P2 |
 | **Cell notes / tooltips** | UNKNOWN | Yes | Confirm whether production annotates non-obvious headers | XS–S | P3 |
