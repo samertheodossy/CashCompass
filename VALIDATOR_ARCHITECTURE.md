@@ -273,7 +273,7 @@ All Validator configuration lives in Script Properties (never hardcoded):
 | `VALIDATOR_ENABLED` | yes (to enable) | Must equal `"true"`; otherwise the subsystem is inert. |
 | `ADMIN_EMAILS` (or `BETA_CONTACT_EMAIL`) | yes | Admin allow-list used by `isAdminUser_()`. |
 | `VALIDATOR_GOLDEN_WORKBOOK_ID` | for the runner | The Golden / reference workbook spreadsheet ID. |
-| `VALIDATOR_DEFAULT_CENTRAL_WORKBOOK_ID` | optional | Default Central workbook to compare when the runner is called with no override. |
+| `VALIDATOR_DEFAULT_CENTRAL_WORKBOOK_ID` | optional for parity; required for `validatorRunProvisioning()` with no override | Default Central workbook. Used by the parity runner when no Central override is passed, and as the default target validated by the provisioning runner (which throws if it is unset and no override is given). |
 
 ### How to run (developer, from the Apps Script editor)
 
@@ -290,6 +290,39 @@ the permanent no-arg runner reads its inputs from Script Properties:
 `VALIDATOR_DEFAULT_CENTRAL_WORKBOOK_ID`, or call the runner with an override from a
 one-liner, e.g. `validatorRunGoldenParity_('OTHER_CENTRAL_ID')`. The Golden ID is
 always read from `VALIDATOR_GOLDEN_WORKBOOK_ID`.
+
+### Engineering rule — developer runners vs runtime APIs
+
+> **Developer runners operate on Script Property–configured resources. Runtime /
+> user-facing APIs operate on `getUserSpreadsheet_()`. Overrides remain supported
+> for diagnostics and one-off investigations.**
+
+This separates *developer tooling* from *runtime application behavior*. A developer
+runner must be **deterministic** — it validates (or, for the future Test Harness,
+mutates) exactly the workbook the operator configured, never "whatever
+`getUserSpreadsheet_()` happens to resolve." This matters most in Central editor
+mode, where `getUserSpreadsheet_()` resolves — and can even provision — the
+*operator's own* mapped workbook rather than the workbook under test.
+
+Consequences:
+
+- Every developer runner reads its target(s) from Script Properties by default and
+  accepts an optional explicit ID override (diagnostics / one-off runs). If the
+  required Script Property is unset it throws a clear error — **no silent fallback
+  to `getUserSpreadsheet_()`**.
+- Conforming runners today: `validatorRunGoldenParity()` /
+  `validatorRunGoldenParity*` (Golden + default Central IDs from properties) and
+  `validatorRunProvisioning(spreadsheetIdOverride?, options?)` (override, else
+  `VALIDATOR_DEFAULT_CENTRAL_WORKBOOK_ID`). Future `validatorRunWorkbookHealth()`
+  and Test Harness runners follow the same shape.
+- **Runtime** application code (e.g. a future in-app Workbook Health check) does
+  the opposite: it calls the pure, `ss`-parameterized seam — `validateProvisioning_(ss)`
+  — with `getUserSpreadsheet_()`, so it always acts on the current user's own
+  workbook. Runtime code must never call the developer runners.
+
+Because of this, `VALIDATOR_DEFAULT_CENTRAL_WORKBOOK_ID` is **required** when
+`validatorRunProvisioning()` is called with no override (it is still optional for
+the parity runner, which can take its Central override inline).
 
 ---
 
@@ -749,3 +782,32 @@ the read-only judge:
 **What the Validator provides to the Harness:** the read-only single-workbook
 health entry `validator_health.js` (§10). The Harness writes; the Validator judges;
 neither crosses that line.
+
+---
+
+## 13. Validation & Testing admin console *(planned — the UI surface; design only)*
+
+> **Status:** **Design only, not implemented.** Full design of record:
+> **`VALIDATION_TESTING_CONSOLE.md`**.
+
+A dedicated admin-only page — **Validation & Testing** — is the operator surface for
+both subsystems: (B) run Validator / Workbook Health checks against a chosen target,
+(C) run Test-Harness suites against disposable workbooks, and render the aggregated
+**Release Readiness** verdict. It picks a target workbook with an explicit
+**safety readout** (name · ID · target type · READ-ONLY/WRITABLE/REFUSED) shown on
+every action.
+
+Key design rules carried by the console:
+
+- **Server functions return structured report objects, not logs.** The console
+  server layer (`validation_testing_server.js`) calls the pure, `ss`-parameterized
+  seams (`validateProvisioning_(ss)`, the other `validate*_(ss)` in
+  `validator_health.js`) and the guarded Harness suite functions, and returns their
+  objects for the client to render.
+- **Server is authoritative for admin/target/safety** — the client's chosen target
+  type is re-resolved and re-classified server-side; Harness actions require a
+  disposable target that passes `assertDisposableTarget_`.
+- **Editor runners remain available for development but are secondary.**
+
+Sequenced in `ROADMAP.md → P1`: console C1 (read-only Validator) after Validator
+Phase 2A; the Regression Testing section after the Test Harness foundation.

@@ -43,6 +43,7 @@
 2. **Test Harness foundation** *(disposable-workbook lifecycle + fail-closed guard + single-scenario run loop — `TEST_HARNESS_ARCHITECTURE.md`)*
 3. **Scenario packs** *(SMOKE → REGRESSION → RECOVERY → STRESS; registry in `REGRESSION_SCENARIOS.md`)*
 4. **Release Readiness gate** *(aggregate Harness + Validator results into a pre-beta go/no-go — `RELEASE_READINESS.md`)*
+5. **Validation & Testing admin console** *(operator UI surface for B/C above — `VALIDATION_TESTING_CONSOLE.md`; C1 read-only Validator page after Validator 2A, Regression Testing section after the Harness foundation)*
 
 Remaining Validator Phase 2 modules (fold into the judge track, `§10`): Conditional-format validation *(the current Validator blind spot)* · Formula validation · Named-range validation · Workbook Health scoring/diagnostics surface.
 

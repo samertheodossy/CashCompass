@@ -12,7 +12,9 @@ Phase 2 foundation: (1) Validator Phase 2A/2B → **(2) Test Harness foundation 
 **Related docs:** `VALIDATOR_ARCHITECTURE.md` (the read-only judge — §10 Workbook
 Health, §12 boundary), `REGRESSION_SCENARIOS.md` (the historical-bug registry /
 permanent project memory), `RELEASE_READINESS.md` (the release report + workflow),
-`ROADMAP.md`, `ENGINEERING_STANDARDS.md`.
+`VALIDATION_TESTING_CONSOLE.md` (the admin-only UI surface that drives
+`runRegressionSuite` and renders the Release Readiness verdict), `ROADMAP.md`,
+`ENGINEERING_STANDARDS.md`.
 
 ---
 

@@ -52,6 +52,7 @@ These four documents are the project's top-level reference set. Read them top-do
 - `TEST_HARNESS_ARCHITECTURE.md` — the developer-only **Test Harness / Regression Runner** (the writer counterpart; planned, default-off): disposable-workbook lifecycle, fail-closed target guard, the scenario model (SMOKE / REGRESSION / RECOVERY / STRESS), packs, and implementation order. Drives scenarios and calls the read-only Validator to judge health.
 - `REGRESSION_SCENARIOS.md` — the **historical-bug registry** (permanent project memory): every fixed production bug becomes a permanent `REG-###` regression scenario.
 - `RELEASE_READINESS.md` — the pre-release **go/no-go report** format + workflow (`Release Readiness gate = Harness × Validator`).
+- `VALIDATION_TESTING_CONSOLE.md` — the admin-only **Validation & Testing** page design (planned): one operator console for Validator / Workbook Health checks, Test-Harness suites, and the Release Readiness verdict, with an explicit per-target safety readout. Server functions return structured report objects; editor runners stay secondary.
 - `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md` — active Phase 2 design: read-only duplicate / orphan / stale workbook detection, classification, and admin audit (Phase 2A), with Phase 2B recovery scope in its `§10`.
 
 ### History (what shipped)
