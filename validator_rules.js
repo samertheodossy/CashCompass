@@ -24,9 +24,12 @@
  *                           SYS Accounts, Donation, Activity Log)
  *
  * What is DECLARED here (not a copy of any existing named symbol):
- *   - the required/expected/optional PRESENCE classification per sheet, and
+ *   - the required/expected/optional PRESENCE classification per sheet,
  *   - frozen-row/column expectations (there is no shared frozen-pane constant to
- *     reference today; these literals are centralized here for the first time).
+ *     reference today; these literals are centralized here for the first time), and
+ *   - the hidden SYS - Meta support sheet: its expected hidden state plus its
+ *     identity-marker KEY labels (the labels are DERIVED from the production
+ *     stamp helper buildWorkbookAppProperties_, not copied; values are never read).
  *   Where a sheet's headers/widths are not yet a shared constant, that attribute
  *   is left NULL and the corresponding check is skipped (never guessed). The
  *   Phase 2A header-constant extraction is complete for INPUT - Settings,
@@ -62,7 +65,13 @@ var VALIDATOR_PRESENCE_OPTIONAL_ = 'optional';
  *     widths:        {Object|null}    header→px canonical widths (referenced
  *                                     constant) or null (skip),
  *     frozenRows:    {number|null}    expected frozen rows or null (skip),
- *     frozenColumns: {number|null}    expected frozen columns or null (skip)
+ *     frozenColumns: {number|null}    expected frozen columns or null (skip),
+ *     hidden:        {boolean=}       expected sheet-hidden state; omit/null to
+ *                                     skip (only asserted where canonical, e.g.
+ *                                     the hidden SYS - Meta marker sheet),
+ *     markerKeys:    {string[]=}      required column-A key labels for a key/value
+ *                                     marker sheet (keys only — never values);
+ *                                     omit/null to skip
  *   }
  *
  * @returns {Array<Object>}
@@ -89,6 +98,22 @@ function getValidatorCanonicalModel_() {
   var upcomingHeaders = (typeof UPCOMING_EXPENSES_REQUIRED_HEADERS_ !== 'undefined') ? UPCOMING_EXPENSES_REQUIRED_HEADERS_ : null;
 
   var upcomingWidths = (typeof UPCOMING_EXPENSES_CANONICAL_WIDTHS_ !== 'undefined') ? UPCOMING_EXPENSES_CANONICAL_WIDTHS_ : null;
+
+  // Canonical identity-marker key labels for the hidden SYS - Meta sheet, derived
+  // from the SAME production definition that stamps them
+  // (buildWorkbookAppProperties_, central_diagnostics.js) — no duplication. Pure
+  // (no I/O); a dummy email is required only so the function returns its shape.
+  // Only the KEY labels (column A) are ever checked — never the values (column B
+  // holds an email hash), so no sensitive data is read or logged.
+  var metaMarkerKeys = null;
+  try {
+    if (typeof buildWorkbookAppProperties_ === 'function') {
+      metaMarkerKeys = Object.keys(
+        buildWorkbookAppProperties_('validator-model@cashcompass.local', '1970-01-01T00:00:00Z'));
+    }
+  } catch (_metaErr) {
+    metaMarkerKeys = null;
+  }
   var cashFlowWidths = (typeof CASH_FLOW_CANONICAL_WIDTHS_ !== 'undefined') ? CASH_FLOW_CANONICAL_WIDTHS_ : null;
   var sysAccountsWidths = (typeof SYS_ACCOUNTS_CANONICAL_WIDTHS_ !== 'undefined') ? SYS_ACCOUNTS_CANONICAL_WIDTHS_ : null;
   var donationWidths = (typeof DONATION_CANONICAL_WIDTHS_ !== 'undefined') ? DONATION_CANONICAL_WIDTHS_ : null;
@@ -126,8 +151,8 @@ function getValidatorCanonicalModel_() {
       headerRow: 1,
       headers: cashFlowHeaders, // CASH_FLOW_REQUIRED_HEADERS_ (leading structural columns; months + Total are dynamic/positional)
       widths: cashFlowWidths, // CASH_FLOW_CANONICAL_WIDTHS_ (referenced)
-      frozenRows: null,       // not asserted yet
-      frozenColumns: null
+      frozenRows: 1,          // applyCashFlowSheetStyling_ / clone set setFrozenRows(1)
+      frozenColumns: 0
     },
 
     // SYS - Accounts
@@ -137,8 +162,8 @@ function getValidatorCanonicalModel_() {
       headerRow: 1,
       headers: sysAccountsHeaders, // SYS_ACCOUNTS_REQUIRED_HEADERS_ (referenced)
       widths: sysAccountsWidths, // SYS_ACCOUNTS_CANONICAL_WIDTHS_ (referenced)
-      frozenRows: null,
-      frozenColumns: null
+      frozenRows: 1,             // applySysSheetBaseStyle_ sets setFrozenRows(1)
+      frozenColumns: 1           // SYS - Accounts freezes column 1 (KeepCentral per SYS convergence)
     },
 
     // INPUT - Bank Accounts (presence only for now — no shared header/width constant)
@@ -159,8 +184,8 @@ function getValidatorCanonicalModel_() {
       headerRow: 1,
       headers: upcomingHeaders, // UPCOMING_EXPENSES_REQUIRED_HEADERS_ (referenced)
       widths: upcomingWidths,   // UPCOMING_EXPENSES_CANONICAL_WIDTHS_ (referenced)
-      frozenRows: null,
-      frozenColumns: null
+      frozenRows: 1,            // getOrCreateUpcomingExpensesSheet_ sets setFrozenRows(1)
+      frozenColumns: 0
     },
 
     // INPUT - Donation — year-block sheet (header on row 2), module/feature sheet.
@@ -172,6 +197,23 @@ function getValidatorCanonicalModel_() {
       widths: donationWidths,   // DONATION_CANONICAL_WIDTHS_ (referenced)
       frozenRows: 2,            // applyDonationSheetStyling_ freezeRows: 2
       frozenColumns: 1          // applyDonationSheetStyling_ freezeColumns: 1
+    },
+
+    // SYS - Meta — the hidden Central identity/version marker sheet stamped during
+    // provisioning (ensureWorkbookIdentityMarkers_). 'expected' (not required) so
+    // bound / pre-marker beta workbooks that haven't been re-opened only WARN.
+    // Value cells (column B, which holds an email hash) are never read — only the
+    // marker KEY labels in column A are checked.
+    {
+      name: (typeof SYS_META_SHEET_NAME_ === 'string') ? SYS_META_SHEET_NAME_ : 'SYS - Meta',
+      presence: VALIDATOR_PRESENCE_EXPECTED_,
+      headerRow: null,          // key/value sheet — no column-header row
+      headers: null,
+      widths: null,
+      frozenRows: null,
+      frozenColumns: null,
+      hidden: true,             // ensureWorkbookIdentityMarkers_ calls hideSheet()
+      markerKeys: metaMarkerKeys // column-A identity-marker labels (keys only)
     }
   ];
 }

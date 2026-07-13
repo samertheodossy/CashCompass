@@ -18,6 +18,9 @@
  *   2. required headers   — header row matches the referenced canonical list
  *   3. frozen panes       — frozen rows/columns match the canonical model
  *   4. canonical widths   — present columns are at least their canonical width
+ *   5. hidden state       — asserted only where canonical (hidden SYS - Meta)
+ *   6. identity markers    — required column-A marker KEYS on SYS - Meta (never
+ *                            reads column-B values, which hold an email hash)
  *
  * Public entry point (DEVELOPER RUNNER):
  *   validatorRunProvisioning(spreadsheetIdOverride?, options?)
@@ -130,6 +133,8 @@ function validateProvisioning_(ss) {
         pushAll_(sheetFindings, checkSheetHeaders_(rule, actualHeaders));
         pushAll_(sheetFindings, checkSheetFrozen_(sheet, rule));
         pushAll_(sheetFindings, checkSheetWidths_(sheet, rule, actualHeaders));
+        pushAll_(sheetFindings, checkSheetHidden_(sheet, rule));
+        pushAll_(sheetFindings, checkSheetMarkerKeys_(sheet, rule));
 
         if (sheetFindings.length === 0) {
           sheetFindings.push(validatorFinding_(VALIDATOR_SEV_OK_, rule.name, 'sheet',
@@ -268,6 +273,53 @@ function checkSheetWidths_(sheet, rule, actualHeaders) {
     if (actual < canonical) {
       out.push(validatorFinding_(VALIDATOR_SEV_WARN_, rule.name, 'width',
         'Column "' + key + '" width ' + actual + 'px, below canonical ' + canonical + 'px.'));
+    }
+  }
+  return out;
+}
+
+/**
+ * Hidden-state check. Only asserts sheets the model marks with an explicit
+ * boolean `hidden` (currently just the SYS - Meta marker sheet); all other rules
+ * leave it undefined/null and are skipped, so a user hiding an app sheet never
+ * produces a false positive. Mismatch → WARN (structural, non-data-critical, and
+ * Central-provisioning-specific). Read-only (isSheetHidden).
+ */
+function checkSheetHidden_(sheet, rule) {
+  if (rule.hidden == null) return [];
+  var actual = sheet.isSheetHidden();
+  if (actual === rule.hidden) return [];
+  return [validatorFinding_(VALIDATOR_SEV_WARN_, rule.name, 'hidden',
+    'Sheet hidden = ' + actual + ', canonical ' + rule.hidden + '.')];
+}
+
+/**
+ * Identity-marker key check for a key/value marker sheet (SYS - Meta). Verifies
+ * each canonical marker KEY label in rule.markerKeys is present in column A.
+ * Only column A (labels) is read — column B holds an email hash and is never
+ * read or logged. A missing marker key → WARN (the marker is stamped best-effort
+ * during provisioning and lazily back-filled on open, so pre-marker beta
+ * workbooks should not FAIL). Skipped when the rule has no markerKeys. Read-only.
+ */
+function checkSheetMarkerKeys_(sheet, rule) {
+  if (!rule.markerKeys || !rule.markerKeys.length) return [];
+  var out = [];
+
+  var lastRow = sheet.getLastRow();
+  var present = {};
+  if (lastRow >= 1) {
+    var colA = sheet.getRange(1, 1, lastRow, 1).getValues();
+    for (var r = 0; r < colA.length; r++) {
+      var label = String(colA[r][0] == null ? '' : colA[r][0]).trim();
+      if (label !== '') present[label] = true;
+    }
+  }
+
+  for (var i = 0; i < rule.markerKeys.length; i++) {
+    var key = String(rule.markerKeys[i]).trim();
+    if (!present.hasOwnProperty(key)) {
+      out.push(validatorFinding_(VALIDATOR_SEV_WARN_, rule.name, 'marker',
+        'Missing identity-marker key "' + key + '".'));
     }
   }
   return out;
