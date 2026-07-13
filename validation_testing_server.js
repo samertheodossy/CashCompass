@@ -130,3 +130,21 @@ function vtRunWorkbookDrift(spreadsheetId) {
     return { ok: true, target: vtTargetInfo_(t), report: report };
   });
 }
+
+/**
+ * Run Schema Evolution (advisory, version-aware) against the target. Reuses the
+ * pure seam validateSchemaEvolution_(ss); returns its structured report — which
+ * carries the derived Workbook Type + Compatibility, a RECONCILED provisioning
+ * report (supported legacy differences removed), and a schema section holding
+ * those differences as INFO. Advisory — never FAILs on its own.
+ * @param {string=} spreadsheetId
+ * @returns {!Object} { ok, target, report } | { ok:false, error }
+ */
+function vtRunSchemaEvolution(spreadsheetId) {
+  return vtSafe_(function() {
+    assertValidatorAllowed_();
+    var t = vtResolveTarget_(spreadsheetId);
+    var report = validateSchemaEvolution_(t.ss);
+    return { ok: true, target: vtTargetInfo_(t), report: report };
+  });
+}

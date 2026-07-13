@@ -50,7 +50,10 @@ workbooks looks this way); Drift explains **per-workbook** cosmetic changes (thi
 one workbook was edited). Both are advisory; neither FAILs the gate.
 
 > **Status:** Provisioning (#1) and Drift (#3) are implemented (Phase 2A/2B′).
-> **Schema Evolution (#2) is architecture/design only — not implemented.**
+> **Schema Evolution (#2) V1 is implemented** (Phase 2B″ — `validator_schema.js`:
+> `validatorRunSchemaEvolution()` / `validateSchemaEvolution_(ss)`), reconciling the
+> three initial supported legacy differences (missing `SYS - Meta`, header ordering,
+> frozen-pane conventions) into a Workbook Type + Compatibility verdict.
 
 **Related docs:** `GOLDEN_WORKBOOK.md` (visual source of truth + design
 families), `WORKBOOK_PARITY_CHECKLIST.md` (per-sheet convergence status),
@@ -69,7 +72,7 @@ support (planned):
 - **Required-sheet validation** *(implemented, Phase 2A — Provisioning gate)* — every canonical sheet exists.
 - **Header validation** *(implemented, Phase 2A)* — header **presence** is a Provisioning gate; header **ordering** is a version signal that will move to Schema Evolution (§10.0b).
 - **Provisioning structure** *(implemented, Phase 2A)* — frozen panes, hidden system sheets, `SYS - Meta` identity markers. *(Slated to reclassify as Schema Evolution / advisory — §10.0b — since these are version-attributable, not creation defects, on legacy/bound workbooks.)*
-- **Schema Evolution / version compatibility** *(planned — advisory, §10.0b)* — detect the workbook's schema generation, reconcile era-explained structural deltas against a schema-version registry, and emit a **Workbook Type** + **Compatibility** verdict. Supersedes the older "Schema validation (Provisioning gate)" framing.
+- **Schema Evolution / version compatibility** *(implemented V1 — advisory, §10.0b; `validator_schema.js`)* — detect the workbook's schema generation, reconcile era-explained structural deltas (V1: missing `SYS - Meta`, header ordering, frozen-pane conventions) into a **Workbook Type** + **Compatibility** verdict. A formal schema-version registry is future work. Supersedes the older "Schema validation (Provisioning gate)" framing.
 - **Formula validation** *(planned — Workbook Drift, advisory)* — expected formula shapes (e.g. `=SUM` totals, Delta chains).
 - **Formatting / Drift validation** *(planned — Workbook Drift, advisory)* — canonical widths, row heights, fonts, colors, conditional formatting, product-decision colors.
 
@@ -541,7 +544,20 @@ and header *ordering* are **Schema-Evolution-class (advisory, version-aware —
 formatting) are **Drift-class (advisory)**; Module 5 (named ranges) is structural
 (Provisioning) but thin today.
 
-#### 10.0b Schema Evolution — the third question (designed, not implemented)
+#### 10.0b Schema Evolution — the third question (V1 implemented — `validator_schema.js`)
+
+> **V1 status (2026-07-13).** Implemented as a read-only, advisory reconciliation
+> lens in `validator_schema.js`: `validateSchemaEvolution_(ss)` runs the Provisioning
+> gate, `classifyWorkbook_(provReport)` derives platform (Central/Bound) × generation
+> (Current/Legacy) → **Workbook Type**, plus a **Compatibility** verdict
+> (`FULLY_CURRENT` / `COMPATIBLE_LEGACY` / `UPGRADE_RECOMMENDED` / `UPGRADE_REQUIRED`),
+> and `reclassifySchemaFindings_(...)` MOVES the three supported legacy differences
+> (missing `SYS - Meta`, header **ordering**, frozen-pane conventions) out of
+> Provisioning and re-emits them under **Schema Evolution** as INFO
+> (*"Supported legacy schema — …"*). It invents no new rules, never repairs, never
+> migrates. Exposed via the guarded developer runner `validatorRunSchemaEvolution()`
+> and the Workbook Health Console (server seam `vtRunSchemaEvolution`). A formal
+> schema-version registry (per-version expected structures) remains future work.
 
 **Origin (2026-07-13).** Workbook Health V1 was tested against a **newly
 provisioned Central workbook** (clean) and an **older bounded production workbook**.
@@ -836,14 +852,14 @@ Provision / Self-heal Workbook
   widths (and later row heights / styling / formulas / CF), **never** FAILing.
   Small — reuses the existing `checkSheetWidths_` function; mostly re-wiring. Do this
   before adding more Drift-class checks so every new check lands in the right bucket.
-- **2B″ — Schema Evolution / version compatibility (advisory, version-aware; see
-  §10.0b).** Add a schema-version registry + reconciliation lens that detects the
+- **2B″ — Schema Evolution / version compatibility (V1 DONE — advisory, version-aware;
+  see §10.0b; `validator_schema.js`).** A read-only reconciliation lens that detects the
   workbook's **Workbook Type** (Central/Bound × Current/Legacy) and **Compatibility**
-  verdict, and reclassifies version-attributable structural deltas (missing
-  `SYS - Meta`, header ordering, frozen-pane conventions, legacy structural
-  conventions) as *supported legacy* rather than provisioning failures. Reuses the
-  existing structural check functions; adds no new I/O. Sequenced after 2B′ because
-  it re-buckets exactly the checks the split leaves in the provisioning gate.
+  verdict, and reclassifies version-attributable structural deltas (V1: missing
+  `SYS - Meta`, header ordering, frozen-pane conventions) as *supported legacy* rather
+  than provisioning failures. Reuses the existing structural check functions; adds no
+  new I/O beyond the Provisioning run. **Future:** a formal per-version schema registry
+  and reconciling additional legacy structural conventions.
 - **2C — Conditional Formatting (Module 4, Drift-class).** Add `snapshotConditionalFormatRules_`;
   closes the known blind spot and **upgrades Phase 1 parity** as a bonus.
 - **2D — Formulas (Module 3).** Add targeted formula reads + `normalizeFormulaShape_`.

@@ -104,22 +104,24 @@ Name          : <workbook name>
 ID            : <workbook id>
 Target type   : CONFIGURED_DEFAULT | EXPLICIT_ID | MAPPED_USER | DISPOSABLE_TEST
 Safety status : READ-ONLY SAFE | WRITABLE (DISPOSABLE) | REFUSED (production/unknown)
-Workbook type : CENTRAL_CURRENT | CENTRAL_LEGACY | BOUND_CURRENT | BOUND_LEGACY   (Schema Evolution — planned, §10.0b)
-Compatibility : FULLY_CURRENT | COMPATIBLE_LEGACY | UPGRADE_RECOMMENDED | UPGRADE_REQUIRED   (Schema Evolution — planned)
+Workbook type : CENTRAL_CURRENT | CENTRAL_LEGACY | BOUND_CURRENT | BOUND_LEGACY   (Schema Evolution V1 — §10.0b)
+Compatibility : FULLY_CURRENT | COMPATIBLE_LEGACY | UPGRADE_RECOMMENDED | UPGRADE_REQUIRED   (Schema Evolution V1)
 ```
 
 The safety status is computed **server-side** (`classifyTarget_`) and echoed to the
 client; the client renders it but never decides it.
 
-**Workbook Type + Compatibility (Schema Evolution — designed, not implemented; see
-`VALIDATOR_ARCHITECTURE.md → §10.0b`).** Once the Schema Evolution lens ships, the
-target readout also shows the detected **Workbook Type** (Central/Bound × Current/
-Legacy) and a **Compatibility** verdict (Fully Current / Compatible Legacy / Upgrade
-Recommended / Upgrade Required). Both are computed **server-side** from structural
-signals + the schema-version registry and echoed to the client. Until then these
-two lines render as *"— (Schema Evolution not yet implemented)"*. Their purpose is
-to let an operator read a legacy/bound workbook as *Compatible Legacy* at a glance
-rather than mistaking version deltas for provisioning failures.
+**Workbook Type + Compatibility (Schema Evolution V1 — implemented; see
+`VALIDATOR_ARCHITECTURE.md → §10.0b`).** The console shows the detected **Workbook
+Type** (Central/Bound × Current/Legacy) and a **Compatibility** verdict (Fully
+Current / Compatible Legacy / Upgrade Recommended / Upgrade Required). Both are
+computed **server-side** (`validateSchemaEvolution_` → `classifyWorkbook_`, via the
+`vtRunSchemaEvolution` seam) from structural signals and echoed to the client, which
+renders but never decides them. In V1 they populate after a **Schema Evolution** or
+**Run Workbook Health** run (before that they read *"not run"*); a future slice may
+compute them at inspect time. Their purpose is to let an operator read a legacy/bound
+workbook as *Compatible Legacy* at a glance rather than mistaking version deltas for
+provisioning failures.
 
 ### B. Workbook Validation (Validator — read-only)
 
@@ -130,15 +132,15 @@ Buttons are disabled until their module ships:
 *Gating (Provisioning):*
 - Run Provisioning Validation *(available now — Phase 2A; structural: required sheets, header presence, frozen, hidden, `SYS - Meta` markers)*
 
-*Advisory & version-aware (Schema Evolution — planned, §10.0b):*
-- Run Schema Evolution *(Phase 2B″ — detects Workbook Type + Compatibility; reclassifies version-attributable deltas — missing `SYS - Meta`, header ordering, frozen-pane conventions — as *supported legacy* rather than provisioning failures)*
+*Advisory & version-aware (Schema Evolution V1 — §10.0b):*
+- Run Schema Evolution *(available now — Phase 2B″ V1; detects Workbook Type + Compatibility; reclassifies version-attributable deltas — missing `SYS - Meta`, header ordering, frozen-pane conventions — as *supported legacy* rather than provisioning failures. Note: Provisioning findings shown after this run are the RECONCILED set, with those deltas moved to the Schema section.)*
 
 *Advisory (Workbook Drift):*
 - Run Workbook Drift *(available now — widths; row heights, styling, product-decision colors — Phase 2B′)*
 - Run Conditional Formatting Validation *(Phase 2C — Drift-class)*
 - Run Formula Validation *(Phase 2D — Drift-class)*
 
-- Run Full Workbook Health *(runs all available modules; renders all sections)*
+- Run Full Workbook Health *(runs the stable pipeline: **Provisioning + Workbook Drift**. Schema Evolution V1 is intentionally EXCLUDED — it stays a standalone action until validated across workbook types, then can be promoted into this pipeline deliberately.)*
 
 Output panel:
 

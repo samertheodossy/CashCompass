@@ -206,6 +206,7 @@
     <div class="btn-row">
       <button class="primary" onclick="vtRunHealth()">Run Workbook Health</button>
       <button onclick="vtRunOne('provisioning')">Provisioning only</button>
+      <button onclick="vtRunSchema()">Schema Evolution</button>
       <button onclick="vtRunOne('drift')">Drift only</button>
       <span id="vt-run-status" class="runmsg"></span>
     </div>
@@ -236,7 +237,6 @@
   <div class="card">
     <h2>More checks</h2>
     <div class="soon-grid">
-      <div class="soon"><div class="t">Schema Validation</div><div class="badge">Coming soon</div></div>
       <div class="soon"><div class="t">Formula Validation</div><div class="badge">Coming soon</div></div>
       <div class="soon"><div class="t">Conditional Formatting</div><div class="badge">Coming soon</div></div>
       <div class="soon"><div class="t">Workbook Health score</div><div class="badge">Coming soon</div></div>
@@ -247,7 +247,8 @@
 </div>
 
 <script>
-  var vtState = { target: null, provisioning: null, drift: null };
+  var vtState = { target: null, provisioning: null, schema: null, drift: null,
+                  workbookType: null, compatibility: null };
   // Monotonic run token. Every run/reset bumps it; async callbacks capture the
   // token at dispatch and ignore themselves if a newer run has since started.
   // This prevents a slow callback (e.g. Drift from a prior "Run Workbook Health")
@@ -277,7 +278,10 @@
   function vtClearResults() {
     vtRunToken++;                 // invalidate any in-flight run callbacks
     vtState.provisioning = null;
+    vtState.schema = null;
     vtState.drift = null;
+    vtState.workbookType = null;
+    vtState.compatibility = null;
     vtBlankReportDom();
     var results = document.getElementById('vt-results');
     if (results) results.classList.add('hidden');
@@ -328,12 +332,15 @@
   }
 
   function vtRunOne(kind) {
-    // Single-action runs render ONLY that action — clear BOTH reports and blank
+    // Single-action runs render ONLY that action — clear ALL reports and blank
     // the DOM so a prior run's findings never linger, and bump the run token so
     // any in-flight callback from a previous run is ignored.
     var token = ++vtRunToken;
     vtState.provisioning = null;
+    vtState.schema = null;
     vtState.drift = null;
+    vtState.workbookType = null;
+    vtState.compatibility = null;
     vtBlankReportDom();
     vtSetRunMsg(vtSpin(kind === 'drift' ? 'Running Workbook Drift…' : 'Running Provisioning…'), false);
     var fn = (kind === 'drift') ? 'vtRunWorkbookDrift' : 'vtRunProvisioning';
@@ -353,10 +360,51 @@
       [fn](vtCurrentId());
   }
 
+  // Schema Evolution only. Returns a RECONCILED provisioning report + a schema
+  // section + Workbook Type/Compatibility. Clears drift (single-action semantics).
+  function vtRunSchema() {
+    var token = ++vtRunToken;
+    vtState.provisioning = null;
+    vtState.schema = null;
+    vtState.drift = null;
+    vtState.workbookType = null;
+    vtState.compatibility = null;
+    vtBlankReportDom();
+    vtSetRunMsg(vtSpin('Running Schema Evolution…'), false);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (token !== vtRunToken) return;
+        if (!res || !res.ok) { vtSetRunMsg(vtEsc(res && res.error ? res.error : 'Schema Evolution failed.'), true); return; }
+        vtSetRunMsg('', false);
+        vtApplySchemaResult_(res);
+        vtRenderAll();
+      })
+      .withFailureHandler(function(err) {
+        if (token !== vtRunToken) return;
+        vtSetRunMsg(vtEsc(err && err.message ? err.message : 'Schema Evolution failed.'), true);
+      })
+      .vtRunSchemaEvolution(vtCurrentId());
+  }
+
+  // Apply a schemaEvolution envelope into state: the report carries the reconciled
+  // provisioning report + schema section + classification.
+  function vtApplySchemaResult_(res) {
+    vtState.target = res.target;
+    vtState.provisioning = res.report.provisioning;
+    vtState.schema = res.report.schema;
+    vtState.workbookType = res.report.workbookType;
+    vtState.compatibility = res.report.compatibility;
+  }
+
+  // Full Workbook Health: Provisioning (the gate) THEN Workbook Drift (advisory).
+  // Schema Evolution is intentionally NOT part of this pipeline yet — it stays a
+  // standalone action until Schema Evolution V1 is validated across workbook types,
+  // then it can be promoted here deliberately. One shared token guards both callbacks.
   function vtRunHealth() {
     var id = vtCurrentId();
     var token = ++vtRunToken;
-    vtState.provisioning = null; vtState.drift = null;
+    vtState.provisioning = null; vtState.schema = null; vtState.drift = null;
+    vtState.workbookType = null; vtState.compatibility = null;
     vtBlankReportDom();
     vtSetRunMsg(vtSpin('Running Provisioning…'), false);
     google.script.run
@@ -404,15 +452,33 @@
     return { text: '—', cls: 'pass' };
   }
 
+  function vtCompatLabel(c) {
+    if (!c) return '—';
+    return String(c).replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, function(m) { return m.toUpperCase(); });
+  }
+  function vtCompatColor(c) {
+    if (c === 'UPGRADE_REQUIRED') return 'var(--red-fg)';
+    if (c === 'UPGRADE_RECOMMENDED') return 'var(--amber-fg)';
+    if (c === 'COMPATIBLE_LEGACY') return 'var(--info-fg)';
+    if (c === 'FULLY_CURRENT') return 'var(--green-fg)';
+    return 'var(--ink)';
+  }
+
   function vtRenderSummary() {
     var t = vtState.target || {}; var p = vtState.provisioning; var d = vtState.drift;
     var overall = vtOverallVerdict();
     var overallColor = overall.cls === 'fail' ? 'var(--red-fg)' : overall.cls === 'drift' ? 'var(--amber-fg)' : 'var(--green-fg)';
     var provTxt = p ? (p.overall === 'PASS' ? 'PASS' : 'FAIL') : 'not run';
     var driftTxt = d ? (d.overall === 'PASS' ? 'no drift' : ((d.counts && d.counts.warn ? d.counts.warn : 0) + ' advisory')) : 'not run';
+    var typeTxt = vtState.workbookType ? vtCompatLabel(vtState.workbookType) : 'not run';
+    var compatTxt = vtState.compatibility
+      ? '<span style="color:' + vtCompatColor(vtState.compatibility) + ';">' + vtEsc(vtCompatLabel(vtState.compatibility)) + '</span>'
+      : 'not run';
     document.getElementById('vt-summary').innerHTML = '' +
       vtCell('Workbook', vtEsc(t.name || '—')) +
       vtCell('Overall', '<span style="color:' + overallColor + ';">' + vtEsc(overall.text) + '</span>') +
+      vtCell('Workbook Type', vtEsc(typeTxt)) +
+      vtCell('Compatibility', compatTxt) +
       vtCell('Provisioning', vtEsc(provTxt)) +
       vtCell('Workbook Drift', vtEsc(driftTxt)) +
       vtCell('Target', vtEsc(vtTargetTypeLabel(t.targetType))) +
@@ -442,6 +508,26 @@
         '<div class="desc">' + (pass ? 'Structural validation — no issues.' : errs + ' structural error' + (errs === 1 ? '' : 's') + ' must be fixed.') + '</div>' +
         '<div class="tally">' + vtTally(p.counts) + '</div>' +
         '<div class="tally">' + pc.ok + ' / ' + pc.total + ' checks passed</div>' +
+      '</div>';
+    }
+
+    var sc = vtState.schema;
+    if (sc) {
+      var legacy = sc.overall === 'LEGACY';
+      var recon = (sc.counts && sc.counts.info) || 0;
+      var compat = vtState.compatibility;
+      var cardCls = compat === 'UPGRADE_REQUIRED' ? 'fail'
+        : (compat === 'UPGRADE_RECOMMENDED' ? 'drift' : 'pass');
+      var verdictCls = cardCls;
+      var verdictTxt = legacy
+        ? ('🟦 ' + recon + ' legacy delta' + (recon === 1 ? '' : 's'))
+        : '🟢 Fully current';
+      html += '<div class="status ' + cardCls + '" style="border-left-color:#3b82f6;">' +
+        '<div class="name">Schema Evolution <span style="font-weight:400;color:var(--ink-mute);">(advisory)</span></div>' +
+        '<div class="verdict ' + verdictCls + '">' + verdictTxt + '</div>' +
+        '<div class="desc"><b>' + vtEsc(vtCompatLabel(vtState.workbookType)) + '</b> · ' +
+          vtEsc(vtCompatLabel(compat)) + '</div>' +
+        '<div class="tally">' + vtTally(sc.counts) + '</div>' +
       '</div>';
     }
 
@@ -483,6 +569,7 @@
     // Merge sheet rows from whichever reports ran; provisioning first, then drift.
     var groups = [];
     if (vtState.provisioning) groups.push({ label: 'Provisioning', report: vtState.provisioning });
+    if (vtState.schema)       groups.push({ label: 'Schema Evolution', report: vtState.schema });
     if (vtState.drift)        groups.push({ label: 'Workbook Drift', report: vtState.drift });
 
     if (!groups.length) { box.innerHTML = '<p class="empty">Run a check to see findings.</p>'; return; }
@@ -493,7 +580,11 @@
       var rep = groups[g].report;
       var sheets = rep.sheets || [];
       html += '<div style="margin:' + (g ? '16px' : '0') + ' 0 8px;"><b style="font-size:12.5px;">' + vtEsc(groups[g].label) + '</b></div>';
-      if (!sheets.length) { html += '<p class="empty" style="padding:12px;">No sheets compared.</p>'; continue; }
+      if (!sheets.length) {
+        var emptyMsg = rep.summary ? rep.summary : 'No sheets compared.';
+        html += '<p class="empty" style="padding:12px;">' + vtEsc(emptyMsg) + '</p>';
+        continue;
+      }
       for (var i = 0; i < sheets.length; i++) {
         var s = sheets[i];
         var findings = (s.findings || []).filter(function(f) { return f.severity !== 'OK'; });
@@ -532,7 +623,10 @@
   function vtCombinedReport() {
     // Include only what the selected action produced (omit unrun reports).
     var out = { target: vtState.target };
+    if (vtState.workbookType) out.workbookType = vtState.workbookType;
+    if (vtState.compatibility) out.compatibility = vtState.compatibility;
     if (vtState.provisioning) out.provisioning = vtState.provisioning;
+    if (vtState.schema) out.schema = vtState.schema;
     if (vtState.drift) out.drift = vtState.drift;
     return out;
   }
