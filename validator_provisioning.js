@@ -13,14 +13,17 @@
  * Guard: reuses the existing Validator guard unchanged — assertValidatorAllowed_()
  * (VALIDATOR_ENABLED === "true" AND isAdminUser_()). Disabled by default.
  *
- * Checks performed (Phase 2A):
+ * Checks performed (Provisioning gate — STRUCTURAL only; VALIDATOR_ARCHITECTURE.md §10.0a):
  *   1. required sheets    — presence, severity by presence class
  *   2. required headers   — header row matches the referenced canonical list
  *   3. frozen panes       — frozen rows/columns match the canonical model
- *   4. canonical widths   — present columns are at least their canonical width
- *   5. hidden state       — asserted only where canonical (hidden SYS - Meta)
- *   6. identity markers    — required column-A marker KEYS on SYS - Meta (never
+ *   4. hidden state       — asserted only where canonical (hidden SYS - Meta)
+ *   5. identity markers    — required column-A marker KEYS on SYS - Meta (never
  *                            reads column-B values, which hold an email hash)
+ *
+ * NOT here (moved to the advisory Workbook Drift runner, validator_drift.js):
+ *   - canonical column widths — advisory divergence, never a provisioning FAIL.
+ *     checkSheetWidths_ still lives in this file and is reused by validateDrift_.
  *
  * Public entry point (DEVELOPER RUNNER):
  *   validatorRunProvisioning(spreadsheetIdOverride?, options?)
@@ -132,9 +135,12 @@ function validateProvisioning_(ss) {
 
         pushAll_(sheetFindings, checkSheetHeaders_(rule, actualHeaders));
         pushAll_(sheetFindings, checkSheetFrozen_(sheet, rule));
-        pushAll_(sheetFindings, checkSheetWidths_(sheet, rule, actualHeaders));
         pushAll_(sheetFindings, checkSheetHidden_(sheet, rule));
         pushAll_(sheetFindings, checkSheetMarkerKeys_(sheet, rule));
+        // Canonical WIDTH drift is ADVISORY, not a provisioning failure — it moved
+        // to the Workbook Drift runner (validator_drift.js → validateDrift_). See
+        // VALIDATOR_ARCHITECTURE.md §10.0a. checkSheetWidths_ still lives in this
+        // file (reused by Drift); the Provisioning gate simply no longer calls it.
 
         if (sheetFindings.length === 0) {
           sheetFindings.push(validatorFinding_(VALIDATOR_SEV_OK_, rule.name, 'sheet',
@@ -245,9 +251,12 @@ function checkSheetFrozen_(sheet, rule) {
 }
 
 /**
- * Canonical-width check (widen-only semantics). For each header in the referenced
- * width map, find its actual column and compare its width. Canonical widths are
- * applied widen-only at first-create, so:
+ * Canonical-width check (widen-only semantics). ADVISORY — consumed by the Workbook
+ * Drift runner (validator_drift.js → validateDrift_), not by the Provisioning gate
+ * (see VALIDATOR_ARCHITECTURE.md §10.0a). It lives in this file because it shares
+ * the header-index helpers here; the Provisioning runner deliberately does not call
+ * it. For each header in the referenced width map, find its actual column and
+ * compare its width. Canonical widths are applied widen-only at first-create, so:
  *   actual >= canonical → OK (a user may legitimately widen further),
  *   actual  < canonical → WARN (first-create widths likely not applied).
  * Headers absent from the row are skipped (covered by the header check / INFO).

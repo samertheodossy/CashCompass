@@ -20,18 +20,25 @@ A single aggregated verdict across the dimensions the Harness + Validator can
 assert. Each **line** = the worst severity across the scenarios that exercise that
 dimension. The **Overall** gate summarizes them into a release decision.
 
+Lines are grouped by **class** (see `VALIDATOR_ARCHITECTURE.md → §10.0a`):
+**gating** lines can block the release; **advisory** (Workbook Drift) lines report
+divergence from the canonical standard but **never** force NOT READY.
+
 ```
 CashCompass — Release Readiness
 Run: <runId>   Packs: SMOKE, REGRESSION, RECOVERY, STRESS   Scenarios: <n passed>/<n>
 
-Provisioning            PASS
+── Gating ─────────────────────────────
+Provisioning            PASS      (sheets, headers, frozen, hidden, SYS - Meta markers)
 Schema                  PASS
-Formula                 PASS
-Conditional Formatting  PASS
 Named Ranges            PASS
 Regression              PASS
 Recovery                PASS
 Performance             PASS
+── Advisory (Workbook Drift) ──────────
+Workbook Drift          PASS      (widths, row heights, styling, product-decision colors)
+Formula                 PASS
+Conditional Formatting  PASS
 ──────────────────────────────────────
 Overall                 READY FOR BETA
 ```
@@ -40,16 +47,22 @@ Overall                 READY FOR BETA
 
 ## 2. Where each line comes from
 
-| Report line | Source | Asserted by |
-|---|---|---|
-| Provisioning | Validator Module 1 (required sheets) | every scenario's post-check |
-| Schema | Validator Module 2 (headers/schema) | every scenario's post-check |
-| Formula | Validator Module 3 | scenarios that write formulas |
-| Conditional Formatting | Validator Module 4 | Cash Flow / colored-row scenarios |
-| Named Ranges | Validator Module 5 | all (thin check today) |
-| Regression | `REGRESSION` pack | one scenario per historical bug |
-| Recovery | `RECOVERY` pack | damage → detect → heal → PASS |
-| Performance | `STRESS` pack timings | scenarios that record runtime |
+| Report line | Class | Source | Asserted by |
+|---|---|---|---|
+| Provisioning | **Gating** | `validateProvisioning_` (sheets, headers, frozen, hidden, `SYS - Meta` markers) | every scenario's post-check |
+| Schema | **Gating** | Validator Module 2 (headers/schema) | every scenario's post-check |
+| Named Ranges | **Gating** | Validator Module 5 (thin check today) | all |
+| Workbook Drift | **Advisory** | `validateDrift_` (canonical widths, row heights, styling, product-decision colors) | scenarios on freshly provisioned workbooks |
+| Formula | **Advisory** | Validator Module 3 (Drift-class) | scenarios that write formulas |
+| Conditional Formatting | **Advisory** | Validator Module 4 (Drift-class) | Cash Flow / colored-row scenarios |
+| Regression | **Gating** | `REGRESSION` pack | one scenario per historical bug |
+| Recovery | **Gating** | `RECOVERY` pack | damage → detect → heal → PASS |
+| Performance | **Gating** | `STRESS` pack timings | scenarios that record runtime |
+
+**Gating** lines can trip the Overall gate to NOT READY. **Advisory (Workbook
+Drift)** lines report divergence from the evolving canonical standard and are
+informational — a drift WARN never blocks a release (drift is expected on lived-in
+workbooks; see `VALIDATOR_ARCHITECTURE.md → §10.0a`).
 
 ---
 
@@ -65,8 +78,12 @@ Overall                 READY FOR BETA
 
 | Overall | Condition |
 |---|---|
-| **READY FOR BETA** | no line is FAIL; any WARN lines are signed off |
-| **NOT READY** | any line is FAIL |
+| **READY FOR BETA** | no **gating** line is FAIL; any gating WARN lines are signed off |
+| **NOT READY** | any **gating** line is FAIL |
+
+**Advisory (Workbook Drift) lines never change the Overall verdict** — they surface
+divergence for awareness only. A workbook can be READY FOR BETA with drift WARNs
+outstanding.
 
 The report lists **every failed scenario** with its Validator findings so the
 failures are actionable, not just a red light.

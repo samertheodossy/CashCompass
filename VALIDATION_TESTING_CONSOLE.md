@@ -52,8 +52,9 @@ ValidationTestingUI.html   ──renders──►  A Target · B Validation · C
 validation_testing_server.js  ── guarded API layer (admin + feature flags) ──┐
         │                                                                    │
         ├─ Validator actions → validator_* pure seams (read-only)            │
-        │     validateProvisioning_(ss) · validateSchema_(ss) ·              │
-        │     validateFormulas_(ss) · validateConditionalFormatting_(ss) ·   │
+        │     validateProvisioning_(ss) [gating] · validateSchema_(ss) ·     │
+        │     validateDrift_(ss) [advisory] · validateFormulas_(ss) ·        │
+        │     validateConditionalFormatting_(ss) ·                           │
         │     validateWorkbookHealth_(ss)   [validator_health.js]            │
         │                                                                    │
         └─ Harness actions → test_harness_core.js (guarded, writer)          │
@@ -110,19 +111,28 @@ client; the client renders it but never decides it.
 
 ### B. Workbook Validation (Validator — read-only)
 
-Actions (buttons; each disabled until its module ships):
+Actions are grouped by class (see `VALIDATOR_ARCHITECTURE.md → §10.0a`) —
+**gating** (can FAIL) vs **advisory / Workbook Drift** (divergence only, never FAIL).
+Buttons are disabled until their module ships:
 
-- Run Provisioning Validation *(available now — Phase 2A)*
+*Gating (Provisioning):*
+- Run Provisioning Validation *(available now — Phase 2A; structural: sheets, headers, frozen, hidden, `SYS - Meta` markers)*
 - Run Schema Validation *(Phase 2B)*
-- Run Formula Validation *(Phase 2C)*
-- Run Conditional Formatting Validation *(Phase 2D)*
-- Run Full Workbook Health *(runs all available modules)*
+
+*Advisory (Workbook Drift):*
+- Run Workbook Drift *(widths, row heights, styling, product-decision colors — Phase 2B′)*
+- Run Formula Validation *(Phase 2C — Drift-class)*
+- Run Conditional Formatting Validation *(Phase 2D — Drift-class)*
+
+- Run Full Workbook Health *(runs all available modules; renders both sections)*
 
 Output panel:
 
-- Overall badge: **PASS / WARN / FAIL**.
+- Overall badge: **PASS / WARN / FAIL** — driven by **gating** findings only;
+  advisory Drift findings surface as WARN/INFO and never flip the badge to FAIL.
 - Counts: **ERROR / WARN / INFO / OK**.
-- Per-module sections (Provisioning, Schema, …), each with its own badge + counts.
+- Two grouped sections — **Structural (Provisioning)** and **Divergence (Drift)** —
+  each with per-module sub-sections, badge + counts.
 - Per-sheet findings table: `sheet · presence · status · [severity][kind] message`.
 - **Copy JSON** (the raw report object) and **Copy text summary** (the human report).
 
@@ -288,8 +298,10 @@ Rendering:
 - **Copy JSON** = `JSON.stringify(report)`; **Copy text** = the same human summary
   `validatorFormatProvisioningReport_` (and siblings) already produce, returned as a
   string field so the client copies without re-deriving.
-- Findings are **structural only** (headers, widths, frozen panes, sheet
-  names) — no user cell values — so nothing needs redaction in the UI.
+- Findings are **structural/metadata only** (sheet names, headers, frozen panes,
+  hidden state, marker keys, and — on the advisory Drift side — column widths / row
+  heights / style attributes) — **no user cell values** — so nothing needs
+  redaction in the UI.
 
 ---
 

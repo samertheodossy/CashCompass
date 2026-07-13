@@ -39,13 +39,13 @@
 
 **Sequenced milestone order** (the Validator is the read-only **judge**; the Test Harness is the developer-only **writer/mutator** that drives scenarios against disposable workbooks and asks the Validator to confirm nothing broke):
 
-1. **Validator Phase 2A/2B — Provisioning + Schema validation** *(the judge; `validator_health.js` — `VALIDATOR_ARCHITECTURE.md → §10.12`)*
+1. **Validator Phase 2A/2B — Provisioning + Schema validation** *(the judge; `validator_health.js` — `VALIDATOR_ARCHITECTURE.md → §10.12`)*. Phase 2A (provisioning runner) is implemented. Phase 2 distinguishes two questions (`§10.0a`): **Provisioning Validation** = *"created correctly?"* (structural — sheets, headers, frozen panes, hidden sheets, `SYS - Meta` markers; **gating/FAIL**) vs **Workbook Drift Validation** = *"diverged from the canonical standard?"* (widths, row heights, styling, formulas, conditional formatting; **advisory, never FAIL**). Immediate next slice: split widths out of the provisioning gate into an advisory Drift runner.
 2. **Test Harness foundation** *(disposable-workbook lifecycle + fail-closed guard + single-scenario run loop — `TEST_HARNESS_ARCHITECTURE.md`)*
 3. **Scenario packs** *(SMOKE → REGRESSION → RECOVERY → STRESS; registry in `REGRESSION_SCENARIOS.md`)*
 4. **Release Readiness gate** *(aggregate Harness + Validator results into a pre-beta go/no-go — `RELEASE_READINESS.md`)*
 5. **Validation & Testing admin console** *(operator UI surface for B/C above — `VALIDATION_TESTING_CONSOLE.md`; C1 read-only Validator page after Validator 2A, Regression Testing section after the Harness foundation)*
 
-Remaining Validator Phase 2 modules (fold into the judge track, `§10`): Conditional-format validation *(the current Validator blind spot)* · Formula validation · Named-range validation · Workbook Health scoring/diagnostics surface.
+Remaining Validator Phase 2 modules (fold into the judge track, `§10`): Workbook Drift runner *(widths, row heights, styling, product-decision colors — advisory)* · Conditional-format validation *(the current Validator blind spot — Drift-class)* · Formula validation *(Drift-class)* · Named-range validation · Workbook Health umbrella report *(combines the Provisioning gate + Drift advisory into one score)*.
 
 ### Priority 2 — Financial Model Accuracy
 

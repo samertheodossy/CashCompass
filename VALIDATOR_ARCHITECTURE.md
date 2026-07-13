@@ -14,12 +14,25 @@ editor. Phase 1 drove the **2026-07 Golden Workbook convergence milestone**
 rules-based validators, conditional-format capture, provisioning validation) are
 **Phase 2+ future work** — see §10.
 
-**Phase 2 — architecture designed (2026-07-12), not implemented.** Phase 2 shifts
-the Validator from **two-workbook Canonical comparison** to **single-workbook
-Workbook Health validation** (does *this* workbook match the canonical rules?).
-Its full module architecture, execution order, report format, phased plan, risks,
-and recommended first implementation are specified in **§10 → Phase 2
-architecture**. No Phase 2 code exists yet; the design is documentation only.
+**Phase 2 — architecture designed (2026-07-12), partially implemented.** Phase 2
+shifts the Validator from **two-workbook Canonical comparison** to
+**single-workbook Workbook Health validation** (does *this* workbook match the
+canonical rules?). Its full module architecture, execution order, report format,
+phased plan, risks, and recommended first implementation are specified in **§10 →
+Phase 2 architecture**. Phase 2A (`validator_rules.js` + `validator_provisioning.js`
++ `validatorRunProvisioning()`) is implemented; the remaining modules are design
+only.
+
+**Two validation questions (refined 2026-07-13 — see §10.0a).** Workbook Health
+answers *two distinct questions* that must not be conflated:
+
+1. **Provisioning Validation** — *"Was this workbook created correctly?"*
+   Structural correctness (sheets, headers, frozen panes, hidden system sheets,
+   `SYS - Meta` markers). **Gating** — can FAIL.
+2. **Workbook Drift Validation** — *"Has this workbook diverged from the current
+   canonical product standard?"* Cosmetic/semantic divergence (canonical widths,
+   row heights, styling, formulas, conditional formatting, ratified product-decision
+   colors). **Advisory only** — never FAILs; drift is normal on lived-in workbooks.
 
 **Related docs:** `GOLDEN_WORKBOOK.md` (visual source of truth + design
 families), `WORKBOOK_PARITY_CHECKLIST.md` (per-sheet convergence status),
@@ -35,11 +48,12 @@ support (planned):
 
 - **Golden Workbook parity comparison** *(implemented)* — a freshly provisioned
   workbook vs the live Golden Workbook, differences grouped by design family.
-- **Schema validation** *(planned)* — column order, types, canonical schema evolution.
-- **Required-sheet validation** *(planned)* — every canonical sheet exists.
-- **Header validation** *(planned)* — header text/positions match the canonical schema.
-- **Formula validation** *(planned)* — expected formula shapes (e.g. `=SUM` totals, Delta chains).
-- **Formatting validation** *(planned)* — fonts, colors, geometry, freeze panes, number formats.
+- **Required-sheet validation** *(implemented, Phase 2A — Provisioning gate)* — every canonical sheet exists.
+- **Header validation** *(implemented, Phase 2A — Provisioning gate)* — header text/positions match the canonical schema.
+- **Provisioning structure** *(implemented, Phase 2A — Provisioning gate)* — frozen panes, hidden system sheets, `SYS - Meta` identity markers.
+- **Schema validation** *(planned — Provisioning gate)* — column order, types, canonical schema evolution.
+- **Formula validation** *(planned — Workbook Drift, advisory)* — expected formula shapes (e.g. `=SUM` totals, Delta chains).
+- **Formatting / Drift validation** *(planned — Workbook Drift, advisory)* — canonical widths, row heights, fonts, colors, conditional formatting, product-decision colors.
 
 The Validator is a **trust asset**, not a runtime dependency. It reports; it
 never repairs, restyles, or mutates. Repair remains the job of the existing
@@ -458,8 +472,58 @@ looks like," expressed **per sheet** and derived from existing sources of truth:
 > `validator_rules.js` read the *same* symbol. `validator_rules.js` must contain
 > **references/adapters**, not copied literals.
 
+#### 10.0a Two validation questions — Provisioning vs Workbook Drift
+
+The 2026-07 provisioning reports surfaced a modeling flaw: `validatorRunProvisioning`
+emitted **column-width WARNs on healthy, lived-in workbooks**. Those are real and
+useful, but they are **not provisioning failures** — a user legitimately resizing a
+column, or an older workbook predating a widened canonical standard, is **drift**,
+not a creation defect. Phase 2 therefore separates two questions that share one
+check library but have different **gating semantics**:
+
+| | **Provisioning Validation** | **Workbook Drift Validation** |
+|---|---|---|
+| Question | *Was this workbook created correctly?* | *Has this workbook diverged from the current canonical standard?* |
+| Nature | Structural / functional correctness | Cosmetic / semantic divergence |
+| Gate | **Gating** — ERROR ⇒ FAIL | **Advisory** — WARN/INFO only, **never FAIL** |
+| Stable under user edits? | Yes — a created-correctly workbook stays PASS no matter how much data/formatting the user changes | No — expected to accumulate over a workbook's life |
+| Checks | required/expected/optional **sheet presence**; **required headers** (schema); **frozen panes**; **hidden system sheets**; **`SYS - Meta` identity markers**; **required bootstrap metadata**; no **unexpected named ranges** | **canonical column widths**; **row heights**; **family styling / header-yellow / banner** drift; **canonical color / product-decision** drift; **formula-shape** drift; **conditional-format** drift |
+
+**The dividing line:** *structural & set-once-at-create → Provisioning; cosmetic &
+user-adjustable (or semantic divergence from an evolving standard) → Drift.* Frozen
+panes stay in Provisioning (functional, set once, rarely touched); widths and row
+heights move to Drift (cosmetic, widen-only, routinely resized).
+
+**Width decision (evaluated: keep in Provisioning / move to Drift / make it a
+mode).** **Move to Drift.** A width below canonical is *ambiguous* — it can mean
+"first-create widths were never applied" (a defect) **or** "user narrowed the
+column" / "older canonical standard" (drift) — and the Validator cannot tell which
+read-only. Ambiguous, non-gating signals belong in the advisory Drift report, not
+the pass/fail Provisioning gate. A mode toggle was rejected as needless config:
+the two runners already express the distinction cleanly. Widen-only semantics are
+preserved wherever widths are checked.
+
+**One library, two runners, one umbrella.** The atomic unit is the per-check
+function (`checkSheetHeaders_`, `checkSheetFrozen_`, `checkSheetWidths_`, …). Two
+`ss`-parameterized seams compose them:
+
+```
+validateProvisioning_(ss)  → structural gate     (presence, headers, frozen, hidden, markers)   ERROR ⇒ FAIL
+validateDrift_(ss)         → advisory divergence  (widths, row heights, styling, formulas, CF)  never FAIL
+```
+
+**Workbook Health (Module 6)** runs both and renders two sections —
+**Structural (Provisioning)** and **Divergence (Drift)** — with a combined gate
+where **only Provisioning ERRORs FAIL**. Module mapping to the buckets: Modules 1
+(sheets) + 2 (headers/schema) + the frozen/hidden/marker checks are
+**Provisioning-class (gating)**; widths/row-heights/styling + Module 3 (formulas) +
+Module 4 (conditional formatting) are **Drift-class (advisory)**; Module 5 (named
+ranges) is structural (Provisioning) but thin today.
+
 #### 10.1 Module 1 — Provisioning Validation
 
+- **Bucket:** **Provisioning (gating).** Structural correctness only — **no width,
+  row-height, styling, formula, or CF checks** (those are Drift, §10.0a).
 - **Purpose:** verify the workbook has the correct **set of sheets** — every
   required sheet present, module-conditional sheets present iff their module is
   enabled, and no unexpected/misnamed core sheets.
@@ -659,7 +723,15 @@ Provision / Self-heal Workbook
 - **2B — Provisioning + Schema (Modules 1–2).** Highest value, lowest cost — Module 2
   reuses the snapshot's already-captured headers; Module 1 reuses the bootstrap
   registry. Ship the first real Workbook Health report here.
-- **2C — Conditional Formatting (Module 4).** Add `snapshotConditionalFormatRules_`;
+- **2B′ — Provisioning/Drift split (recommended next slice, see §10.0a).** The
+  implemented `validatorRunProvisioning` currently mixes an advisory **width** check
+  into the structural gate (it WARNs on healthy lived-in workbooks). Split it:
+  keep `validateProvisioning_(ss)` **structural-only** (drop width findings) and
+  add an advisory `validateDrift_(ss)` + `validatorRunWorkbookDrift()` that owns
+  widths (and later row heights / styling / formulas / CF), **never** FAILing.
+  Small — reuses the existing `checkSheetWidths_` function; mostly re-wiring. Do this
+  before adding more Drift-class checks so every new check lands in the right bucket.
+- **2C — Conditional Formatting (Module 4, Drift-class).** Add `snapshotConditionalFormatRules_`;
   closes the known blind spot and **upgrades Phase 1 parity** as a bonus.
 - **2D — Formulas (Module 3).** Add targeted formula reads + `normalizeFormulaShape_`.
 - **2E — Named Ranges (Module 5) + Health scoring polish (Module 6) + optional
