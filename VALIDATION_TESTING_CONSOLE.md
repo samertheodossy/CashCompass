@@ -104,10 +104,22 @@ Name          : <workbook name>
 ID            : <workbook id>
 Target type   : CONFIGURED_DEFAULT | EXPLICIT_ID | MAPPED_USER | DISPOSABLE_TEST
 Safety status : READ-ONLY SAFE | WRITABLE (DISPOSABLE) | REFUSED (production/unknown)
+Workbook type : CENTRAL_CURRENT | CENTRAL_LEGACY | BOUND_CURRENT | BOUND_LEGACY   (Schema Evolution — planned, §10.0b)
+Compatibility : FULLY_CURRENT | COMPATIBLE_LEGACY | UPGRADE_RECOMMENDED | UPGRADE_REQUIRED   (Schema Evolution — planned)
 ```
 
 The safety status is computed **server-side** (`classifyTarget_`) and echoed to the
 client; the client renders it but never decides it.
+
+**Workbook Type + Compatibility (Schema Evolution — designed, not implemented; see
+`VALIDATOR_ARCHITECTURE.md → §10.0b`).** Once the Schema Evolution lens ships, the
+target readout also shows the detected **Workbook Type** (Central/Bound × Current/
+Legacy) and a **Compatibility** verdict (Fully Current / Compatible Legacy / Upgrade
+Recommended / Upgrade Required). Both are computed **server-side** from structural
+signals + the schema-version registry and echoed to the client. Until then these
+two lines render as *"— (Schema Evolution not yet implemented)"*. Their purpose is
+to let an operator read a legacy/bound workbook as *Compatible Legacy* at a glance
+rather than mistaking version deltas for provisioning failures.
 
 ### B. Workbook Validation (Validator — read-only)
 
@@ -116,23 +128,31 @@ Actions are grouped by class (see `VALIDATOR_ARCHITECTURE.md → §10.0a`) —
 Buttons are disabled until their module ships:
 
 *Gating (Provisioning):*
-- Run Provisioning Validation *(available now — Phase 2A; structural: sheets, headers, frozen, hidden, `SYS - Meta` markers)*
-- Run Schema Validation *(Phase 2B)*
+- Run Provisioning Validation *(available now — Phase 2A; structural: required sheets, header presence, frozen, hidden, `SYS - Meta` markers)*
+
+*Advisory & version-aware (Schema Evolution — planned, §10.0b):*
+- Run Schema Evolution *(Phase 2B″ — detects Workbook Type + Compatibility; reclassifies version-attributable deltas — missing `SYS - Meta`, header ordering, frozen-pane conventions — as *supported legacy* rather than provisioning failures)*
 
 *Advisory (Workbook Drift):*
-- Run Workbook Drift *(widths, row heights, styling, product-decision colors — Phase 2B′)*
-- Run Formula Validation *(Phase 2C — Drift-class)*
-- Run Conditional Formatting Validation *(Phase 2D — Drift-class)*
+- Run Workbook Drift *(available now — widths; row heights, styling, product-decision colors — Phase 2B′)*
+- Run Conditional Formatting Validation *(Phase 2C — Drift-class)*
+- Run Formula Validation *(Phase 2D — Drift-class)*
 
-- Run Full Workbook Health *(runs all available modules; renders both sections)*
+- Run Full Workbook Health *(runs all available modules; renders all sections)*
 
 Output panel:
 
-- Overall badge: **PASS / WARN / FAIL** — driven by **gating** findings only;
-  advisory Drift findings surface as WARN/INFO and never flip the badge to FAIL.
+- **Workbook Type + Compatibility badge** *(Schema Evolution — planned)* — top-line
+  read of the workbook's schema generation so legacy/bound targets are legible at a
+  glance.
+- Overall badge: **PASS / WARN / FAIL** — driven by **gating (Provisioning)**
+  findings only; advisory Schema Evolution and Drift findings surface as WARN/INFO
+  and never flip the badge to FAIL (the sole exception is *Upgrade Required*, which
+  by definition is a residual Provisioning ERROR).
 - Counts: **ERROR / WARN / INFO / OK**.
-- Two grouped sections — **Structural (Provisioning)** and **Divergence (Drift)** —
-  each with per-module sub-sections, badge + counts.
+- Three grouped sections — **Structural (Provisioning)**, **Schema (Schema
+  Evolution)** *(planned)*, and **Divergence (Drift)** — each with per-module
+  sub-sections, badge + counts.
 - Per-sheet findings table: `sheet · presence · status · [severity][kind] message`.
 - **Copy JSON** (the raw report object) and **Copy text summary** (the human report).
 

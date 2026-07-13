@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_top">
+  <title>CashCompass — Validation &amp; Testing</title>
+  <style>
+    :root {
+      --ink: #1f2933;
+      --ink-soft: #52606d;
+      --ink-mute: #9aa5b1;
+      --line: #e1e5ea;
+      --line-soft: #eceff2;
+      --bg: #f5f7fa;
+      --card: #fff;
+      --blue: #2563eb;
+      --green-bg: #def7ec; --green-fg: #03543f;
+      --amber-bg: #fdf6b2; --amber-fg: #723b13;
+      --red-bg: #fde8e8;   --red-fg: #9b1c1c;
+      --info-bg: #e1effe;  --info-fg: #1e429f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      margin: 0;
+      padding: 24px 16px 64px;
+      background: var(--bg);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap { max-width: 940px; margin: 0 auto; }
+    header.page { margin-bottom: 16px; }
+    h1 { font-size: 22px; margin: 0 0 2px; letter-spacing: -0.01em; }
+    .sub { color: var(--ink-soft); font-size: 13px; margin: 0; }
+    h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+         color: var(--ink-soft); margin: 0 0 10px; }
+
+    .banner {
+      display: flex; gap: 8px; align-items: flex-start;
+      background: #eef6ff; border: 1px solid #cfe3fb; color: #1e3a5f;
+      border-radius: 8px; padding: 10px 14px; font-size: 12.5px; margin: 0 0 18px;
+    }
+    .banner .ico { font-size: 14px; line-height: 1.2; }
+
+    .card {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 10px; padding: 18px; margin: 0 0 16px;
+      box-shadow: 0 1px 2px rgba(16,24,40,.03);
+    }
+    .card > h2:first-child { margin-top: 0; }
+
+    /* Target */
+    .radio-row { margin: 4px 0; font-size: 13px; }
+    input[type=text] {
+      width: 100%; padding: 9px 11px; font-size: 13px;
+      font-family: ui-monospace, Menlo, monospace;
+      border: 1px solid #cbd2d9; border-radius: 8px; margin: 6px 0 2px;
+    }
+    input[type=text]:disabled { background: #f3f5f7; color: var(--ink-mute); }
+
+    button {
+      font-size: 13px; font-weight: 600; padding: 9px 15px;
+      border: 1px solid #cbd2d9; border-radius: 8px; background: #fff;
+      color: var(--ink); cursor: pointer; transition: background .12s, border-color .12s;
+    }
+    button:hover:not(:disabled) { background: #f3f5f7; }
+    button.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+    button.primary:hover:not(:disabled) { background: #1d4ed8; }
+    button:disabled { opacity: .5; cursor: default; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .runmsg { font-size: 12.5px; color: var(--ink-mute); }
+    .runmsg.err { color: var(--red-fg); font-weight: 600; }
+    .spinner {
+      display: inline-block; width: 13px; height: 13px; vertical-align: -2px;
+      border: 2px solid #cfd6de; border-top-color: var(--blue);
+      border-radius: 50%; animation: spin .7s linear infinite; margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Target readout */
+    .kv { font-size: 13px; margin: 3px 0; }
+    .kv b { color: var(--ink-soft); font-weight: 600; display: inline-block; min-width: 108px; }
+    code { font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+           background: #f3f5f7; padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+    .safe { color: var(--green-fg); font-weight: 600; }
+    .shield { color: var(--green-fg); }
+
+    /* Summary strip */
+    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0;
+               border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 16px; background: #fff; }
+    .summary .cell { padding: 12px 14px; border-right: 1px solid var(--line-soft); }
+    .summary .cell:last-child { border-right: 0; }
+    .summary .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-mute); margin-bottom: 3px; }
+    .summary .val { font-size: 14px; font-weight: 600; }
+    .summary .val.small { font-size: 12.5px; font-weight: 500; word-break: break-all; }
+
+    /* Status cards */
+    .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-bottom: 16px; }
+    .status {
+      border: 1px solid var(--line); border-left-width: 5px; border-radius: 10px;
+      padding: 16px; background: #fff;
+    }
+    .status.pass  { border-left-color: #0e9f6e; }
+    .status.drift { border-left-color: #d9a400; }
+    .status.fail  { border-left-color: #e02424; }
+    .status .name { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); }
+    .status .verdict { font-size: 21px; font-weight: 700; margin: 6px 0 2px; display: flex; align-items: center; gap: 8px; }
+    .status .verdict.pass  { color: var(--green-fg); }
+    .status .verdict.drift { color: var(--amber-fg); }
+    .status .verdict.fail  { color: var(--red-fg); }
+    .status .desc { font-size: 12.5px; color: var(--ink-soft); }
+    .status .tally { font-size: 12px; color: var(--ink-mute); margin-top: 8px; }
+    .status .tally .chip { font-weight: 600; margin-right: 10px; }
+
+    /* Findings */
+    details.sheet { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+    details.sheet > summary {
+      list-style: none; cursor: pointer; padding: 10px 12px; display: flex;
+      align-items: center; gap: 10px; font-size: 13px; background: #fafbfc; user-select: none;
+    }
+    details.sheet > summary::-webkit-details-marker { display: none; }
+    details.sheet > summary .chev { color: var(--ink-mute); transition: transform .15s; font-size: 11px; }
+    details.sheet[open] > summary .chev { transform: rotate(90deg); }
+    details.sheet > summary .sname { font-weight: 600; }
+    details.sheet > summary .presence { color: var(--ink-mute); font-weight: 400; font-size: 12px; }
+    details.sheet > summary .count { margin-left: auto; font-size: 12px; color: var(--ink-mute); }
+    .findings { padding: 6px 12px 12px; }
+    .finding { display: flex; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line-soft); font-size: 12.5px; }
+    .finding:first-child { border-top: 0; }
+    .finding .fico { flex: 0 0 auto; line-height: 1.4; }
+    .finding .kind { color: var(--ink-mute); font-size: 11px; }
+    .clean { color: var(--green-fg); font-size: 12.5px; }
+
+    .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+    .p-ok { background: var(--green-bg); color: var(--green-fg); }
+    .p-info { background: var(--info-bg); color: var(--info-fg); }
+    .p-warn { background: var(--amber-bg); color: var(--amber-fg); }
+    .p-error { background: var(--red-bg); color: var(--red-fg); }
+
+    .empty { text-align: center; color: var(--ink-mute); font-size: 13px; padding: 22px 12px; }
+    .empty .big { font-size: 26px; display: block; margin-bottom: 6px; }
+
+    /* JSON */
+    details.json > summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+    pre.json { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px;
+               font-size: 11px; overflow: auto; max-height: 340px; margin: 10px 0 0; }
+    .copybtn { margin-left: 10px; font-size: 12px; font-weight: 600; }
+    .copied { color: var(--green-fg); font-size: 12px; margin-left: 8px; }
+
+    /* Coming soon */
+    .soon-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+    .soon {
+      border: 1px dashed #cbd2d9; border-radius: 8px; padding: 12px 14px; background: #fbfcfd;
+      opacity: .8;
+    }
+    .soon .t { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+    .soon .badge { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .04em;
+                   text-transform: uppercase; color: var(--ink-mute); background: #eef1f4;
+                   border-radius: 6px; padding: 1px 6px; margin-top: 6px; }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 640px) {
+      body { padding: 16px 10px 48px; }
+      .kv b { min-width: 92px; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <h1>Validation &amp; Testing</h1>
+    <p class="sub">Admin-only · read-only Validator · Workbook Health (V1)</p>
+  </header>
+
+  <div class="banner">
+    <span class="ico">🛡️</span>
+    <span>The Validator is <b>read-only</b> — it never provisions, mutates, or repairs.
+      <b>Provisioning</b> gates structural correctness (can FAIL); <b>Workbook Drift</b>
+      is advisory (never FAILs).</span>
+  </div>
+
+  <!-- TARGET -->
+  <div class="card">
+    <h2>Target workbook</h2>
+    <div class="radio-row">
+      <label><input type="radio" name="vt-target" value="default" checked onchange="vtOnTargetModeChange()">
+        Configured Central default</label>
+    </div>
+    <div class="radio-row">
+      <label><input type="radio" name="vt-target" value="explicit" onchange="vtOnTargetModeChange()">
+        Explicit workbook ID</label>
+    </div>
+    <input type="text" id="vt-id" placeholder="Spreadsheet ID" disabled oninput="vtResetTargetInfo()">
+    <div class="btn-row" style="margin-top:8px;">
+      <button onclick="vtInspect()">Inspect target</button>
+    </div>
+    <div id="vt-target-info" style="margin-top:12px;"></div>
+  </div>
+
+  <!-- WORKBOOK HEALTH ACTIONS -->
+  <div class="card">
+    <h2>Workbook Health</h2>
+    <div class="btn-row">
+      <button class="primary" onclick="vtRunHealth()">Run Workbook Health</button>
+      <button onclick="vtRunOne('provisioning')">Provisioning only</button>
+      <button onclick="vtRunOne('drift')">Drift only</button>
+      <span id="vt-run-status" class="runmsg"></span>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="vt-results" class="hidden">
+    <div class="summary" id="vt-summary"></div>
+    <div class="status-grid" id="vt-status-grid"></div>
+
+    <div class="card">
+      <h2>Findings</h2>
+      <div id="vt-findings"></div>
+    </div>
+
+    <div class="card">
+      <details class="json">
+        <summary>View raw JSON
+          <button class="copybtn" onclick="vtCopyJson(event)">Copy</button>
+          <span id="vt-copied" class="copied hidden">Copied!</span>
+        </summary>
+        <pre class="json" id="vt-json"></pre>
+      </details>
+    </div>
+  </div>
+
+  <!-- FUTURE -->
+  <div class="card">
+    <h2>More checks</h2>
+    <div class="soon-grid">
+      <div class="soon"><div class="t">Schema Validation</div><div class="badge">Coming soon</div></div>
+      <div class="soon"><div class="t">Formula Validation</div><div class="badge">Coming soon</div></div>
+      <div class="soon"><div class="t">Conditional Formatting</div><div class="badge">Coming soon</div></div>
+      <div class="soon"><div class="t">Workbook Health score</div><div class="badge">Coming soon</div></div>
+      <div class="soon"><div class="t">Regression</div><div class="badge">Coming soon</div></div>
+      <div class="soon"><div class="t">Release Readiness</div><div class="badge">Coming soon</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  var vtState = { target: null, provisioning: null, drift: null };
+  // Monotonic run token. Every run/reset bumps it; async callbacks capture the
+  // token at dispatch and ignore themselves if a newer run has since started.
+  // This prevents a slow callback (e.g. Drift from a prior "Run Workbook Health")
+  // from re-populating state after a newer single-action run.
+  var vtRunToken = 0;
+
+  // Hard-blank every report container. Used before each run and on reset so no
+  // stale DOM can survive even if a later render step bails.
+  function vtBlankReportDom() {
+    document.getElementById('vt-summary').innerHTML = '';
+    document.getElementById('vt-status-grid').innerHTML = '';
+    document.getElementById('vt-findings').innerHTML = '';
+    document.getElementById('vt-json').textContent = '';
+  }
+
+  function vtOnTargetModeChange() {
+    var explicit = document.querySelector('input[name="vt-target"]:checked').value === 'explicit';
+    document.getElementById('vt-id').disabled = !explicit;
+    vtResetTargetInfo();
+  }
+  function vtResetTargetInfo() {
+    document.getElementById('vt-target-info').innerHTML = '';
+    vtClearResults();
+  }
+  // Drop any prior validation reports and hide the results section. Used when the
+  // target changes so stale findings are never attributed to a new workbook.
+  function vtClearResults() {
+    vtRunToken++;                 // invalidate any in-flight run callbacks
+    vtState.provisioning = null;
+    vtState.drift = null;
+    vtBlankReportDom();
+    var results = document.getElementById('vt-results');
+    if (results) results.classList.add('hidden');
+    vtSetRunMsg('', false);
+  }
+  function vtCurrentId() {
+    var explicit = document.querySelector('input[name="vt-target"]:checked').value === 'explicit';
+    return explicit ? document.getElementById('vt-id').value.trim() : '';
+  }
+  function vtEsc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function vtSpin(text) { return '<span class="spinner"></span>' + vtEsc(text); }
+
+  /* ---- Inspect ---- */
+  function vtInspect() {
+    // Re-targeting: never carry a prior workbook's findings into a new inspection.
+    vtClearResults();
+    var box = document.getElementById('vt-target-info');
+    box.innerHTML = vtSpin('Inspecting…');
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res || !res.ok) { box.innerHTML = '<span class="runmsg err">' + vtEsc(res && res.error ? res.error : 'Inspect failed.') + '</span>'; return; }
+        vtState.target = res.target;
+        box.innerHTML = vtRenderTarget(res.target);
+      })
+      .withFailureHandler(function(err) {
+        box.innerHTML = '<span class="runmsg err">' + vtEsc(err && err.message ? err.message : 'Inspect failed.') + '</span>';
+      })
+      .vtInspectTarget(vtCurrentId());
+  }
+  function vtTargetTypeLabel(t) {
+    return t === 'CONFIGURED_DEFAULT' ? 'Configured Central default' : 'Explicit workbook ID';
+  }
+  function vtRenderTarget(t) {
+    return '' +
+      '<div class="kv"><b>Workbook</b> ' + vtEsc(t.name) + '</div>' +
+      '<div class="kv"><b>ID</b> <code>' + vtEsc(t.spreadsheetId) + '</code></div>' +
+      '<div class="kv"><b>Target type</b> ' + vtEsc(vtTargetTypeLabel(t.targetType)) + '</div>' +
+      '<div class="kv"><b>Safety</b> <span class="safe">🛡️ ' + vtEsc(t.safety) + '</span></div>';
+  }
+
+  /* ---- Run ---- */
+  function vtSetRunMsg(html, isErr) {
+    var el = document.getElementById('vt-run-status');
+    el.className = 'runmsg' + (isErr ? ' err' : '');
+    el.innerHTML = html;
+  }
+
+  function vtRunOne(kind) {
+    // Single-action runs render ONLY that action — clear BOTH reports and blank
+    // the DOM so a prior run's findings never linger, and bump the run token so
+    // any in-flight callback from a previous run is ignored.
+    var token = ++vtRunToken;
+    vtState.provisioning = null;
+    vtState.drift = null;
+    vtBlankReportDom();
+    vtSetRunMsg(vtSpin(kind === 'drift' ? 'Running Workbook Drift…' : 'Running Provisioning…'), false);
+    var fn = (kind === 'drift') ? 'vtRunWorkbookDrift' : 'vtRunProvisioning';
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (token !== vtRunToken) return;   // a newer run/reset superseded this one
+        if (!res || !res.ok) { vtSetRunMsg(vtEsc(res && res.error ? res.error : 'Run failed.'), true); return; }
+        vtSetRunMsg('', false);
+        vtState.target = res.target;
+        if (kind === 'drift') vtState.drift = res.report; else vtState.provisioning = res.report;
+        vtRenderAll();
+      })
+      .withFailureHandler(function(err) {
+        if (token !== vtRunToken) return;
+        vtSetRunMsg(vtEsc(err && err.message ? err.message : 'Run failed.'), true);
+      })
+      [fn](vtCurrentId());
+  }
+
+  function vtRunHealth() {
+    var id = vtCurrentId();
+    var token = ++vtRunToken;
+    vtState.provisioning = null; vtState.drift = null;
+    vtBlankReportDom();
+    vtSetRunMsg(vtSpin('Running Provisioning…'), false);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (token !== vtRunToken) return;   // superseded before Provisioning returned
+        if (!res || !res.ok) { vtSetRunMsg(vtEsc(res && res.error ? res.error : 'Provisioning failed.'), true); return; }
+        vtState.target = res.target; vtState.provisioning = res.report;
+        vtSetRunMsg(vtSpin('Running Workbook Drift…'), false);
+        vtRenderAll();
+        google.script.run
+          .withSuccessHandler(function(res2) {
+            if (token !== vtRunToken) return; // superseded before Drift returned
+            if (!res2 || !res2.ok) { vtSetRunMsg(vtEsc(res2 && res2.error ? res2.error : 'Drift failed.'), true); return; }
+            vtSetRunMsg('', false);
+            vtState.target = res2.target; vtState.drift = res2.report;
+            vtRenderAll();
+          })
+          .withFailureHandler(function(err) {
+            if (token !== vtRunToken) return;
+            vtSetRunMsg(vtEsc(err && err.message ? err.message : 'Drift failed.'), true);
+          })
+          .vtRunWorkbookDrift(id);
+      })
+      .withFailureHandler(function(err) {
+        if (token !== vtRunToken) return;
+        vtSetRunMsg(vtEsc(err && err.message ? err.message : 'Provisioning failed.'), true);
+      })
+      .vtRunProvisioning(id);
+  }
+
+  /* ---- Render ---- */
+  function vtRenderAll() {
+    document.getElementById('vt-results').classList.remove('hidden');
+    vtRenderSummary();
+    vtRenderStatusCards();
+    vtRenderFindings();
+    vtRenderJson();
+  }
+
+  function vtOverallVerdict() {
+    var p = vtState.provisioning, d = vtState.drift;
+    if (p && p.overall === 'FAIL') return { text: 'FAIL', cls: 'fail' };
+    if (d && d.overall === 'DRIFT') return { text: 'PASS · drift', cls: 'drift' };
+    if (p && p.overall === 'PASS') return { text: 'PASS', cls: 'pass' };
+    return { text: '—', cls: 'pass' };
+  }
+
+  function vtRenderSummary() {
+    var t = vtState.target || {}; var p = vtState.provisioning; var d = vtState.drift;
+    var overall = vtOverallVerdict();
+    var overallColor = overall.cls === 'fail' ? 'var(--red-fg)' : overall.cls === 'drift' ? 'var(--amber-fg)' : 'var(--green-fg)';
+    var provTxt = p ? (p.overall === 'PASS' ? 'PASS' : 'FAIL') : 'not run';
+    var driftTxt = d ? (d.overall === 'PASS' ? 'no drift' : ((d.counts && d.counts.warn ? d.counts.warn : 0) + ' advisory')) : 'not run';
+    document.getElementById('vt-summary').innerHTML = '' +
+      vtCell('Workbook', vtEsc(t.name || '—')) +
+      vtCell('Overall', '<span style="color:' + overallColor + ';">' + vtEsc(overall.text) + '</span>') +
+      vtCell('Provisioning', vtEsc(provTxt)) +
+      vtCell('Workbook Drift', vtEsc(driftTxt)) +
+      vtCell('Target', vtEsc(vtTargetTypeLabel(t.targetType))) +
+      vtCell('Workbook ID', '<span class="small">' + vtEsc(t.spreadsheetId || '—') + '</span>');
+  }
+  function vtCell(lbl, valHtml) {
+    return '<div class="cell"><div class="lbl">' + vtEsc(lbl) + '</div><div class="val">' + valHtml + '</div></div>';
+  }
+
+  function vtChecks(counts) {
+    counts = counts || {};
+    var total = (counts.error||0) + (counts.warn||0) + (counts.info||0) + (counts.ok||0);
+    return { total: total, ok: counts.ok || 0 };
+  }
+
+  function vtRenderStatusCards() {
+    var html = '';
+    var p = vtState.provisioning, d = vtState.drift;
+
+    if (p) {
+      var pc = vtChecks(p.counts);
+      var pass = p.overall === 'PASS';
+      var errs = (p.counts && p.counts.error) || 0;
+      html += '<div class="status ' + (pass ? 'pass' : 'fail') + '">' +
+        '<div class="name">Provisioning</div>' +
+        '<div class="verdict ' + (pass ? 'pass' : 'fail') + '">' + (pass ? '🟢 PASS' : '🔴 FAIL') + '</div>' +
+        '<div class="desc">' + (pass ? 'Structural validation — no issues.' : errs + ' structural error' + (errs === 1 ? '' : 's') + ' must be fixed.') + '</div>' +
+        '<div class="tally">' + vtTally(p.counts) + '</div>' +
+        '<div class="tally">' + pc.ok + ' / ' + pc.total + ' checks passed</div>' +
+      '</div>';
+    }
+
+    if (d) {
+      var warns = (d.counts && d.counts.warn) || 0;
+      var drift = d.overall === 'DRIFT';
+      html += '<div class="status ' + (drift ? 'drift' : 'pass') + '">' +
+        '<div class="name">Workbook Drift <span style="font-weight:400;color:var(--ink-mute);">(advisory)</span></div>' +
+        '<div class="verdict ' + (drift ? 'drift' : 'pass') + '">' + (drift ? '🟡 ' + warns + ' finding' + (warns === 1 ? '' : 's') : '🟢 PASS') + '</div>' +
+        '<div class="desc">' + (drift ? 'Cosmetic divergence from canonical standards. Never blocks release.' : 'No drift from canonical standards.') + '</div>' +
+        '<div class="tally">' + vtTally(d.counts) + '</div>' +
+      '</div>';
+    }
+
+    document.getElementById('vt-status-grid').innerHTML = html;
+  }
+
+  function vtTally(counts) {
+    counts = counts || {};
+    return '<span class="chip" style="color:var(--red-fg);">ERROR ' + (counts.error||0) + '</span>' +
+           '<span class="chip" style="color:var(--amber-fg);">WARN ' + (counts.warn||0) + '</span>' +
+           '<span class="chip" style="color:var(--info-fg);">INFO ' + (counts.info||0) + '</span>' +
+           '<span class="chip" style="color:var(--green-fg);">OK ' + (counts.ok||0) + '</span>';
+  }
+
+  function vtSevIco(sev) {
+    if (sev === 'ERROR') return '<span class="fico" style="color:var(--red-fg);">✕</span>';
+    if (sev === 'WARN')  return '<span class="fico" style="color:var(--amber-fg);">⚠</span>';
+    if (sev === 'INFO')  return '<span class="fico" style="color:var(--info-fg);">ℹ</span>';
+    return '<span class="fico" style="color:var(--green-fg);">✓</span>';
+  }
+  function vtSevPill(sev) {
+    var cls = sev === 'ERROR' ? 'p-error' : sev === 'WARN' ? 'p-warn' : sev === 'INFO' ? 'p-info' : 'p-ok';
+    return '<span class="pill ' + cls + '">' + vtEsc(sev) + '</span>';
+  }
+
+  function vtRenderFindings() {
+    var box = document.getElementById('vt-findings');
+    // Merge sheet rows from whichever reports ran; provisioning first, then drift.
+    var groups = [];
+    if (vtState.provisioning) groups.push({ label: 'Provisioning', report: vtState.provisioning });
+    if (vtState.drift)        groups.push({ label: 'Workbook Drift', report: vtState.drift });
+
+    if (!groups.length) { box.innerHTML = '<p class="empty">Run a check to see findings.</p>'; return; }
+
+    var anyIssue = false;
+    var html = '';
+    for (var g = 0; g < groups.length; g++) {
+      var rep = groups[g].report;
+      var sheets = rep.sheets || [];
+      html += '<div style="margin:' + (g ? '16px' : '0') + ' 0 8px;"><b style="font-size:12.5px;">' + vtEsc(groups[g].label) + '</b></div>';
+      if (!sheets.length) { html += '<p class="empty" style="padding:12px;">No sheets compared.</p>'; continue; }
+      for (var i = 0; i < sheets.length; i++) {
+        var s = sheets[i];
+        var findings = (s.findings || []).filter(function(f) { return f.severity !== 'OK'; });
+        var hasIssue = findings.length > 0;
+        if (hasIssue) anyIssue = true;
+        html += '<details class="sheet"' + (hasIssue ? ' open' : '') + '>' +
+          '<summary>' +
+            '<span class="chev">▶</span>' +
+            '<span class="sname">' + vtEsc(s.name) + '</span>' +
+            '<span class="presence">(' + vtEsc(s.presence) + ')</span>' +
+            vtSevPill(s.status) +
+            '<span class="count">' + (hasIssue ? (findings.length + ' finding' + (findings.length === 1 ? '' : 's')) : 'clean') + '</span>' +
+          '</summary>' +
+          '<div class="findings">';
+        if (!hasIssue) {
+          html += '<div class="clean">✓ No issues — matches canonical.</div>';
+        } else {
+          for (var j = 0; j < findings.length; j++) {
+            var f = findings[j];
+            html += '<div class="finding">' + vtSevIco(f.severity) +
+              '<div><span class="kind">[' + vtEsc(f.kind) + ']</span> ' + vtEsc(f.message) + '</div></div>';
+          }
+        }
+        html += '</div></details>';
+      }
+    }
+
+    if (!anyIssue) {
+      box.innerHTML = '<div class="empty"><span class="big">🟢</span>All checks clean — no findings.</div>' + html;
+    } else {
+      box.innerHTML = html;
+    }
+  }
+
+  /* ---- JSON ---- */
+  function vtCombinedReport() {
+    // Include only what the selected action produced (omit unrun reports).
+    var out = { target: vtState.target };
+    if (vtState.provisioning) out.provisioning = vtState.provisioning;
+    if (vtState.drift) out.drift = vtState.drift;
+    return out;
+  }
+  function vtRenderJson() {
+    document.getElementById('vt-json').textContent = JSON.stringify(vtCombinedReport(), null, 2);
+  }
+  function vtCopyJson(ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    var text = JSON.stringify(vtCombinedReport(), null, 2);
+    var done = document.getElementById('vt-copied');
+    try {
+      navigator.clipboard.writeText(text);
+      done.classList.remove('hidden');
+      setTimeout(function() { done.classList.add('hidden'); }, 1600);
+    } catch (e) {
+      // Clipboard blocked in sandboxed iframe — reveal the viewer for manual copy.
+      var d = document.querySelector('details.json');
+      if (d) d.open = true;
+    }
+  }
+</script>
+</body>
+</html>

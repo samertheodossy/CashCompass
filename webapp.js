@@ -30,6 +30,18 @@ function doGet(e) {
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
+  // Validation & Testing console route: /exec?view=validation. Admin-gated,
+  // read-only Validator surface. Like the admin route above, non-admins silently
+  // fall through to the normal dashboard so the route's existence is never
+  // disclosed. The page's server functions independently re-gate on every call
+  // (assertValidatorAllowed_: VALIDATOR_ENABLED + isAdminUser_).
+  if (view === 'validation' && isAdminUser_()) {
+    return HtmlService.createTemplateFromFile('ValidationTestingUI')
+      .evaluate()
+      .setTitle('CashCompass — Validation & Testing')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
   return HtmlService.createTemplateFromFile('PlannerDashboardWeb')
     .evaluate()
     .setTitle('CashCompass')
