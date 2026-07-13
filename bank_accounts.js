@@ -42,6 +42,18 @@ const SYS_ACCOUNTS_REQUIRED_HEADERS_ = [
 ];
 
 /**
+ * Canonical LEADING structural header(s) for INPUT - Bank Accounts year blocks.
+ * Only "Account Name" (block header row, column A) is a fixed, stable header:
+ * the 12 month columns (Jan-YY..Dec-YY) are year-dynamic/positional and the
+ * trailing Total / self-healed Active columns are positional. So — exactly like
+ * CASH_FLOW_REQUIRED_HEADERS_ — only the stable leading column is modeled.
+ * Single source of truth shared by the block creator (onboarding.js), the block
+ * contract check (getBankAccountsYearBlock_ below), and the Validator canonical
+ * model (validator_rules.js). Do not reorder/rename.
+ */
+const BANK_ACCOUNTS_REQUIRED_HEADERS_ = ['Account Name'];
+
+/**
  * First-run safe creator for SYS - Accounts.
  *
  * Safety contract:
@@ -1151,7 +1163,7 @@ function getBankAccountsYearBlock_(sheet, year, optionalDisplay) {
   const headerName = String(
     (display[headerRow - 1] && display[headerRow - 1][0]) || ''
   ).trim();
-  if (headerName !== 'Account Name') {
+  if (headerName !== BANK_ACCOUNTS_REQUIRED_HEADERS_[0]) {
     throw new Error('Expected Account Name header row for Year ' + year + ' in Bank Accounts.');
   }
 

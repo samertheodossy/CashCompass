@@ -1961,7 +1961,7 @@ function ensureOnboardingBankAccountsSheetFromDashboard(mode) {
     // (enforced by getBankAccountsYearBlock_). Trailing "Total" column
     // matches the reader in getOnboardingBankAccountsFromDashboard, which
     // skips any column labelled /^total$/i when picking the latest month.
-    var headerRow = ['Account Name'].concat(monthHeaders).concat(['Total']);
+    var headerRow = [BANK_ACCOUNTS_REQUIRED_HEADERS_[0]].concat(monthHeaders).concat(['Total']);
     sheet.getRange(2, 1, 1, headerRow.length).setValues([headerRow]);
 
     // Cosmetic polish applied only to the fresh sheet. Year-block style

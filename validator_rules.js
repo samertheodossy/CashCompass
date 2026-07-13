@@ -19,7 +19,8 @@
  *                           PROFILE_SETTINGS_REQUIRED_HEADERS_,
  *                           CASH_FLOW_REQUIRED_HEADERS_ (leading structural cols),
  *                           SYS_ACCOUNTS_REQUIRED_HEADERS_,
- *                           UPCOMING_EXPENSES_REQUIRED_HEADERS_
+ *                           UPCOMING_EXPENSES_REQUIRED_HEADERS_,
+ *                           BANK_ACCOUNTS_REQUIRED_HEADERS_ (leading structural col)
  *     - canonical widths .. *_CANONICAL_WIDTHS_ (Upcoming Expenses, Cash Flow,
  *                           SYS Accounts, Donation, Activity Log)
  *
@@ -33,9 +34,10 @@
  *   Where a sheet's headers/widths are not yet a shared constant, that attribute
  *   is left NULL and the corresponding check is skipped (never guessed). The
  *   Phase 2A header-constant extraction is complete for INPUT - Settings,
- *   INPUT - Cash Flow, SYS - Accounts, and INPUT - Upcoming Expenses (all now
- *   referenced above). Still NULL / future work: INPUT - Bank Accounts headers,
- *   and canonical width constants for INPUT - Settings and INPUT - Bank Accounts.
+ *   INPUT - Cash Flow, SYS - Accounts, INPUT - Upcoming Expenses, and the leading
+ *   structural column of INPUT - Bank Accounts (all now referenced above). Still
+ *   NULL / future work: canonical width constants for INPUT - Settings and
+ *   INPUT - Bank Accounts, and INPUT - Bank Accounts frozen-pane expectations.
  *
  * READ-ONLY: this file defines data + a pure builder. It performs no I/O and
  * never writes to a workbook.
@@ -96,6 +98,7 @@ function getValidatorCanonicalModel_() {
   var cashFlowHeaders = (typeof CASH_FLOW_REQUIRED_HEADERS_ !== 'undefined') ? CASH_FLOW_REQUIRED_HEADERS_ : null;
   var sysAccountsHeaders = (typeof SYS_ACCOUNTS_REQUIRED_HEADERS_ !== 'undefined') ? SYS_ACCOUNTS_REQUIRED_HEADERS_ : null;
   var upcomingHeaders = (typeof UPCOMING_EXPENSES_REQUIRED_HEADERS_ !== 'undefined') ? UPCOMING_EXPENSES_REQUIRED_HEADERS_ : null;
+  var bankAccountsHeaders = (typeof BANK_ACCOUNTS_REQUIRED_HEADERS_ !== 'undefined') ? BANK_ACCOUNTS_REQUIRED_HEADERS_ : null;
 
   var upcomingWidths = (typeof UPCOMING_EXPENSES_CANONICAL_WIDTHS_ !== 'undefined') ? UPCOMING_EXPENSES_CANONICAL_WIDTHS_ : null;
 
@@ -166,12 +169,15 @@ function getValidatorCanonicalModel_() {
       frozenColumns: 1           // SYS - Accounts freezes column 1 (KeepCentral per SYS convergence)
     },
 
-    // INPUT - Bank Accounts (presence only for now — no shared header/width constant)
+    // INPUT - Bank Accounts — year-block sheet (block header on row 2). Only the
+    // leading structural column "Account Name" is stable; the 12 month columns are
+    // year-dynamic and Total/Active are positional (same treatment as Cash Flow),
+    // so only that leading header is modeled. No shared width constant yet.
     {
       name: (names && names.BANK_ACCOUNTS) ? names.BANK_ACCOUNTS : 'INPUT - Bank Accounts',
       presence: VALIDATOR_PRESENCE_EXPECTED_,
-      headerRow: null,
-      headers: null,
+      headerRow: 2,
+      headers: bankAccountsHeaders, // BANK_ACCOUNTS_REQUIRED_HEADERS_ (leading structural col; months + Total/Active dynamic/positional)
       widths: null,
       frozenRows: null,
       frozenColumns: null
