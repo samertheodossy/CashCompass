@@ -25,6 +25,11 @@
 
 var PROFILE_SETTINGS_SHEET_NAME_ = 'INPUT - Settings';
 
+// Canonical INPUT - Settings header row (exact text + order). Single source of
+// truth shared by ensureInputSettingsSheet_ (first-create + blank-A1 self-heal)
+// and the Validator canonical model (validator_rules.js).
+var PROFILE_SETTINGS_REQUIRED_HEADERS_ = ['Key', 'Value'];
+
 // Keys written by this module. Using a constant map keeps the canonical
 // spelling in one place and lets tests / future readers grep for them.
 // Primary (Name / Email / Phone / Address) has been here since V1.
@@ -184,7 +189,7 @@ function ensureInputSettingsSheet_(ss) {
     // row 1 we restore the header so reads don't blow up downstream.
     var topLeft = String(sheet.getRange(1, 1).getValue() || '').trim();
     if (!topLeft) {
-      sheet.getRange(1, 1, 1, 2).setValues([['Key', 'Value']]);
+      sheet.getRange(1, 1, 1, 2).setValues([PROFILE_SETTINGS_REQUIRED_HEADERS_.slice()]);
       try {
         sheet.getRange(1, 1, 1, 2).setFontWeight('bold');
         sheet.setFrozenRows(1);
@@ -194,7 +199,7 @@ function ensureInputSettingsSheet_(ss) {
   }
 
   sheet = ss.insertSheet(PROFILE_SETTINGS_SHEET_NAME_);
-  sheet.getRange(1, 1, 1, 2).setValues([['Key', 'Value']]);
+  sheet.getRange(1, 1, 1, 2).setValues([PROFILE_SETTINGS_REQUIRED_HEADERS_.slice()]);
   try {
     sheet.getRange(1, 1, 1, 2).setFontWeight('bold');
     sheet.setFrozenRows(1);

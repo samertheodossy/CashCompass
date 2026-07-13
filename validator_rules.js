@@ -15,7 +15,11 @@
  *     - sheet names ....... getSheetNames_() / PROFILE_SETTINGS_SHEET_NAME_ /
  *                           ACTIVITY_LOG_SHEET_NAME / DONATION_SHEET_NAME_ /
  *                           getCashFlowSheetName_(year)
- *     - required headers .. ACTIVITY_LOG_HEADERS, DONATION_REQUIRED_HEADERS_
+ *     - required headers .. ACTIVITY_LOG_HEADERS, DONATION_REQUIRED_HEADERS_,
+ *                           PROFILE_SETTINGS_REQUIRED_HEADERS_,
+ *                           CASH_FLOW_REQUIRED_HEADERS_ (leading structural cols),
+ *                           SYS_ACCOUNTS_REQUIRED_HEADERS_,
+ *                           UPCOMING_EXPENSES_REQUIRED_HEADERS_
  *     - canonical widths .. *_CANONICAL_WIDTHS_ (Upcoming Expenses, Cash Flow,
  *                           SYS Accounts, Donation, Activity Log)
  *
@@ -24,9 +28,11 @@
  *   - frozen-row/column expectations (there is no shared frozen-pane constant to
  *     reference today; these literals are centralized here for the first time).
  *   Where a sheet's headers/widths are not yet a shared constant, that attribute
- *   is left NULL and the corresponding check is skipped (never guessed) — the
- *   documented Phase 2A follow-up is to extract those inline definitions into
- *   *_REQUIRED_HEADERS_ constants so this model can reference them too.
+ *   is left NULL and the corresponding check is skipped (never guessed). The
+ *   Phase 2A header-constant extraction is complete for INPUT - Settings,
+ *   INPUT - Cash Flow, SYS - Accounts, and INPUT - Upcoming Expenses (all now
+ *   referenced above). Still NULL / future work: INPUT - Bank Accounts headers,
+ *   and canonical width constants for INPUT - Settings and INPUT - Bank Accounts.
  *
  * READ-ONLY: this file defines data + a pure builder. It performs no I/O and
  * never writes to a workbook.
@@ -77,6 +83,10 @@ function getValidatorCanonicalModel_() {
   // Header + width constants (referenced, not copied).
   var activityHeaders = (typeof ACTIVITY_LOG_HEADERS !== 'undefined') ? ACTIVITY_LOG_HEADERS : null;
   var donationHeaders = (typeof DONATION_REQUIRED_HEADERS_ !== 'undefined') ? DONATION_REQUIRED_HEADERS_ : null;
+  var settingsHeaders = (typeof PROFILE_SETTINGS_REQUIRED_HEADERS_ !== 'undefined') ? PROFILE_SETTINGS_REQUIRED_HEADERS_ : null;
+  var cashFlowHeaders = (typeof CASH_FLOW_REQUIRED_HEADERS_ !== 'undefined') ? CASH_FLOW_REQUIRED_HEADERS_ : null;
+  var sysAccountsHeaders = (typeof SYS_ACCOUNTS_REQUIRED_HEADERS_ !== 'undefined') ? SYS_ACCOUNTS_REQUIRED_HEADERS_ : null;
+  var upcomingHeaders = (typeof UPCOMING_EXPENSES_REQUIRED_HEADERS_ !== 'undefined') ? UPCOMING_EXPENSES_REQUIRED_HEADERS_ : null;
 
   var upcomingWidths = (typeof UPCOMING_EXPENSES_CANONICAL_WIDTHS_ !== 'undefined') ? UPCOMING_EXPENSES_CANONICAL_WIDTHS_ : null;
   var cashFlowWidths = (typeof CASH_FLOW_CANONICAL_WIDTHS_ !== 'undefined') ? CASH_FLOW_CANONICAL_WIDTHS_ : null;
@@ -91,7 +101,7 @@ function getValidatorCanonicalModel_() {
       name: settingsName,
       presence: VALIDATOR_PRESENCE_REQUIRED_,
       headerRow: 1,
-      headers: null,          // headers ['Key','Value'] are inline in profile.js — extract to a constant (§10.0) before checking
+      headers: settingsHeaders,   // PROFILE_SETTINGS_REQUIRED_HEADERS_ (referenced)
       widths: null,           // Settings widths are inline literals (Key 240 / Value 385) — extract before checking
       frozenRows: 1,          // ensureInputSettingsSheet_ sets setFrozenRows(1)
       frozenColumns: 0
@@ -114,7 +124,7 @@ function getValidatorCanonicalModel_() {
       name: cashFlowName,
       presence: VALIDATOR_PRESENCE_EXPECTED_,
       headerRow: 1,
-      headers: null,          // Cash Flow headers are inline — extract before checking
+      headers: cashFlowHeaders, // CASH_FLOW_REQUIRED_HEADERS_ (leading structural columns; months + Total are dynamic/positional)
       widths: cashFlowWidths, // CASH_FLOW_CANONICAL_WIDTHS_ (referenced)
       frozenRows: null,       // not asserted yet
       frozenColumns: null
@@ -125,7 +135,7 @@ function getValidatorCanonicalModel_() {
       name: (names && names.ACCOUNTS) ? names.ACCOUNTS : 'SYS - Accounts',
       presence: VALIDATOR_PRESENCE_EXPECTED_,
       headerRow: 1,
-      headers: null,             // SYS Accounts headers are inline — extract before checking
+      headers: sysAccountsHeaders, // SYS_ACCOUNTS_REQUIRED_HEADERS_ (referenced)
       widths: sysAccountsWidths, // SYS_ACCOUNTS_CANONICAL_WIDTHS_ (referenced)
       frozenRows: null,
       frozenColumns: null
@@ -147,7 +157,7 @@ function getValidatorCanonicalModel_() {
       name: 'INPUT - Upcoming Expenses',
       presence: VALIDATOR_PRESENCE_EXPECTED_,
       headerRow: 1,
-      headers: null,            // Upcoming Expenses headers are inline — extract before checking
+      headers: upcomingHeaders, // UPCOMING_EXPENSES_REQUIRED_HEADERS_ (referenced)
       widths: upcomingWidths,   // UPCOMING_EXPENSES_CANONICAL_WIDTHS_ (referenced)
       frozenRows: null,
       frozenColumns: null

@@ -25,6 +25,23 @@ const SYS_ACCOUNTS_CANONICAL_WIDTHS_ = {
 };
 
 /**
+ * Canonical SYS - Accounts header row (exact text + order). Single source of
+ * truth shared by ensureSysAccountsSheet_ (first-create), the header-map readers
+ * (getAccountsHeaderMap_ / planner_core normalizeAccounts_ look these labels up),
+ * and the Validator canonical model (validator_rules.js). Do not reorder/rename.
+ */
+const SYS_ACCOUNTS_REQUIRED_HEADERS_ = [
+  'Account Name',
+  'Current Balance',
+  'Available Now',
+  'Min Buffer',
+  'Type',
+  'Use Policy',
+  'Priority',
+  'Active'
+];
+
+/**
  * First-run safe creator for SYS - Accounts.
  *
  * Safety contract:
@@ -63,16 +80,7 @@ function ensureSysAccountsSheet_() {
     throw e;
   }
 
-  var headers = [
-    'Account Name',
-    'Current Balance',
-    'Available Now',
-    'Min Buffer',
-    'Type',
-    'Use Policy',
-    'Priority',
-    'Active'
-  ];
+  var headers = SYS_ACCOUNTS_REQUIRED_HEADERS_.slice();
   try {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   } catch (_e) {

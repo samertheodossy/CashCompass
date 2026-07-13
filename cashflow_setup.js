@@ -569,7 +569,7 @@ function ensureCashFlowYearSheet_(year) {
   const suffix = String(yearNum).slice(-2);
   const monthHeaders = monthNames.map(function(m) { return m + '-' + suffix; });
 
-  const headerRow = ['Type', 'Flow Source', 'Payee', 'Active']
+  const headerRow = CASH_FLOW_REQUIRED_HEADERS_
     .concat(monthHeaders)
     .concat(['Total']);
 
@@ -772,6 +772,17 @@ const CASH_FLOW_CANONICAL_WIDTHS_ = {
   'Payee': 439,
   'Active': 147
 };
+
+/**
+ * Canonical LEADING (structural) header columns for INPUT - Cash Flow YYYY, in
+ * exact order. The 12 month columns (MMM-YY) and the trailing 'Total' column are
+ * positional/dynamic — the creator appends them after this prefix — so they are
+ * intentionally NOT part of this name-checked list. Single source of truth shared
+ * by createCashFlowYearSheet_ (first-create) and the Validator canonical model
+ * (validator_rules.js). getCashFlowHeaderMap_ / detectCashFlowLayout_ resolve
+ * these labels by string, so order here is layout-independent but must not change.
+ */
+const CASH_FLOW_REQUIRED_HEADERS_ = ['Type', 'Flow Source', 'Payee', 'Active'];
 
 /**
  * Apply the canonical Cash Flow header styling (warm-yellow fill, bold

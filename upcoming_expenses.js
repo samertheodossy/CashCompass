@@ -103,19 +103,7 @@ function getUpcomingExpensesUiData() {
   }
 
   const headers = display[0];
-  const colMap = mapHeaders_(headers, [
-    'ID',
-    'Status',
-    'Expense Name',
-    'Category',
-    'Payee',
-    'Due Date',
-    'Amount',
-    'Account / Source',
-    'Auto Add To Cash Flow',
-    'Added To Cash Flow',
-    'Notes'
-  ]);
+  const colMap = mapHeaders_(headers, UPCOMING_EXPENSES_REQUIRED_HEADERS_);
 
   const rows = [];
 
@@ -684,19 +672,7 @@ function getOrCreateUpcomingExpensesSheet_() {
 
   sheet = ss.insertSheet(sheetName);
 
-  const headers = [[
-    'ID',
-    'Status',
-    'Expense Name',
-    'Category',
-    'Payee',
-    'Due Date',
-    'Amount',
-    'Account / Source',
-    'Auto Add To Cash Flow',
-    'Added To Cash Flow',
-    'Notes'
-  ]];
+  const headers = [UPCOMING_EXPENSES_REQUIRED_HEADERS_.slice()];
 
   sheet.getRange(1, 1, 1, headers[0].length).setValues(headers);
   sheet.getRange(1, 1, 1, headers[0].length).setFontWeight('bold');
@@ -761,6 +737,27 @@ const UPCOMING_EXPENSES_CANONICAL_WIDTHS_ = {
   'Auto Add To Cash Flow': 264,
   'Added To Cash Flow': 241
 };
+
+/**
+ * Canonical header row for INPUT - Upcoming Expenses (exact text + order).
+ * Single source of truth shared by the first-create writer
+ * (getOrCreateUpcomingExpensesSheet_), the header readers (mapHeaders_), and the
+ * Validator canonical model (validator_rules.js). Do not reorder or rename —
+ * downstream colMap lookups and Validator provisioning checks key off this list.
+ */
+const UPCOMING_EXPENSES_REQUIRED_HEADERS_ = [
+  'ID',
+  'Status',
+  'Expense Name',
+  'Category',
+  'Payee',
+  'Due Date',
+  'Amount',
+  'Account / Source',
+  'Auto Add To Cash Flow',
+  'Added To Cash Flow',
+  'Notes'
+];
 
 /**
  * First-create cosmetic styling for INPUT - Upcoming Expenses.
@@ -830,19 +827,7 @@ function findUpcomingExpenseRowById_(id) {
   if (values.length < 2) return null;
 
   const headers = display[0];
-  const colMap = mapHeaders_(headers, [
-    'ID',
-    'Status',
-    'Expense Name',
-    'Category',
-    'Payee',
-    'Due Date',
-    'Amount',
-    'Account / Source',
-    'Auto Add To Cash Flow',
-    'Added To Cash Flow',
-    'Notes'
-  ]);
+  const colMap = mapHeaders_(headers, UPCOMING_EXPENSES_REQUIRED_HEADERS_);
 
   for (let r = 1; r < values.length; r++) {
     if (String(values[r][colMap['ID']] || '').trim() === id) {
