@@ -865,6 +865,17 @@
         '<div class="tally">' + vtTally(d.counts) + '</div>' +
       '</div>';
     }
+    // Functional assertions (E0a). Minimal card — PASS/FAIL + pass/fail tally.
+    // Detailed per-assertion viewing is available via the raw JSON below.
+    var f = r.functional;
+    if (f) {
+      var fpass = f.overall === 'PASS';
+      html += '<div class="status ' + (fpass ? 'pass' : 'fail') + '">' +
+        '<div class="name">Functional</div>' +
+        '<div class="verdict ' + (fpass ? 'pass' : 'fail') + '">' + (fpass ? '🟢 PASS' : '🔴 FAIL') + '</div>' +
+        '<div class="tally">' + ((f.counts && f.counts.pass) || 0) + ' pass · ' + ((f.counts && f.counts.fail) || 0) + ' fail</div>' +
+      '</div>';
+    }
     html += '</div>';
 
     if (r.error) {

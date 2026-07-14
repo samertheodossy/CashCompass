@@ -121,6 +121,9 @@ function runScenario_(scenario, runId, options) {
   var error = null;
   var validators = { provisioning: null, schema: null, drift: null };
   var disposition = 'KEPT_FOR_INSPECTION';
+  // Functional-assertion collector (E0a). Declared outside the try so its results
+  // are always available to the report builder, even if a later step throws.
+  var assertions = makeAssertionCollector_();
 
   try {
     wb = createDisposableWorkbook_(scenario.id, runId);
@@ -133,6 +136,11 @@ function runScenario_(scenario, runId, options) {
       ss: wb.ss,
       runId: runId,
       actions: actions,
+      // Read layer (read-only) — the single home for all functional reads. See
+      // test_harness_read.js. Bound to the disposable workbook.
+      read: makeReadLayer_(wb.ss),
+      // Functional assertions (read/compare only) — see test_harness_assert.js.
+      assert: assertions,
       // Scenarios MUST call this immediately before every write.
       assertWritable: function() { assertDisposableTarget_(wb.ss, runId); }
     };
@@ -160,6 +168,11 @@ function runScenario_(scenario, runId, options) {
     validators.provisioning = validateProvisioning_(wb.ss, scope);
     validators.schema = validateSchemaEvolution_(wb.ss, scope);
     validators.drift = validateDrift_(wb.ss, scope);
+
+    // Functional correctness (E0a) — the scenario reads actual values back from the
+    // disposable workbook and asserts them via ctx.assert.*. Read/compare only; a
+    // thrown assertion setup error is captured like any scenario error (→ FAIL).
+    if (typeof scenario.expectedOutcome === 'function') scenario.expectedOutcome(ctx);
   } catch (e) {
     error = (e && e.message) ? e.message : String(e);
   }
@@ -192,6 +205,7 @@ function runScenario_(scenario, runId, options) {
       : { id: null, name: null, url: null },
     actions: actions,
     validators: validators,
+    assertions: assertions.results,
     disposition: disposition,
     error: error,
     startedAt: startedAt,

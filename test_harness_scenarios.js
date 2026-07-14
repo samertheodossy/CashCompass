@@ -53,6 +53,27 @@ function getHarnessSmokeScenario_() {
     },
     actions: function(ctx) {
       harnessSeedOneDonationRow_(ctx);
+    },
+    // Functional assertions (E0a) — read via the common read layer (ctx.read) and
+    // compare via ctx.assert. Read/compare only.
+    expectedOutcome: function(ctx) {
+      var seeded = ctx.seededDonation;
+      if (!seeded) {
+        throw new Error('Harness: expected a seeded donation to assert against.');
+      }
+      // exists (Slice 3): the Donation sheet was provisioned. Reading A1 through
+      // the read layer yields undefined if the sheet is missing, so a present A1
+      // ('Year' banner) proves the sheet exists.
+      ctx.assert.exists('Donation sheet', ctx.read.sheetValue(donationName, 1, 1), {
+        module: 'Donation',
+        location: donationName + '!R1C1'
+      });
+      // equals (Slice 1): the seeded donation Amount round-trips as 100.
+      var actual = ctx.read.sheetValue(donationName, seeded.row, seeded.amountCol);
+      ctx.assert.equals('Donation amount', actual, 100, {
+        module: 'Donation',
+        location: donationName + '!R' + seeded.row + 'C' + seeded.amountCol
+      });
     }
   };
 }
@@ -105,12 +126,16 @@ function harnessSeedOneDonationRow_(ctx) {
   sheet.getRange(row1, 1, 1, row.length).setValues([row]);
 
   // Match addDonation()'s first-row number formats for a faithful row.
+  var amountCol = block.colMap['Amount'] + 1;
   try {
     var dateCol = block.colMap['Date'] + 1;
-    var amountCol = block.colMap['Amount'] + 1;
     sheet.getRange(row1, dateCol).setNumberFormat('M/d/yyyy');
     sheet.getRange(row1, amountCol).setNumberFormat('$#,##0.00');
   } catch (_nf) { /* cosmetic */ }
+
+  // Record the seeded row location so expectedOutcome (E0a) can read the actual
+  // Amount back and assert on it. Scenario scratch only — not a workbook write.
+  ctx.seededDonation = { row: row1, amountCol: amountCol };
 
   ctx.actions.push('Add one donation row (buildDonationOutputRow_) at row ' + row1);
 }

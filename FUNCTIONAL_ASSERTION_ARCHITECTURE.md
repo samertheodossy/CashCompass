@@ -5,11 +5,20 @@ correctness** — the numeric counterpart to the read-only Validator's structura
 checks. This is the foundation (enabler **E0a**) that every future regression
 scenario builds on.*
 
-**Status:** **Design only. Not implemented.** No assertion code exists yet; this
-document is the design of record. It changes **nothing** in `validator_*`,
-`test_harness_*`, `ValidationTestingUI.html`, or any workbook logic. It sits on top
-of `TEST_HARNESS_ARCHITECTURE.md` (the writer) and `REGRESSION_SUITE_PLAN.md`
-(§1 structural-vs-functional split, §5 scenario model, E0a in the build order).
+**Status:** **Design of record — Slices 1–3 (E0a pipeline + read layer + presence
+assertions) implemented; later slices design only.** The end-to-end pipeline exists
+(`test_harness_assert.js`: `assertEquals_` + `assertExists_` + `makeAssertionCollector_()`
+exposing `equals` / `exists` / `notExists`; `test_harness_read.js`: `makeReadLayer_` →
+`ctx.read.sheetValue` / `ctx.read.sheetRange`; `ctx.read` + `ctx.assert` +
+`expectedOutcome(ctx)` in `runScenario_`; the `functional` report section + gate in
+`test_harness_report.js`; `SMOKE-PROVISION-DONATION` asserts *Donation sheet exists*
+(`exists`) and *Donation amount == 100* (`equals`) through the read layer; a Functional
+card in `ValidationTestingUI.html`). Everything else in this document —
+`near`/`dateEquals`/`reconciles`, the richer readers, clock, seed profiles,
+categories, and the remaining §17 slices — is still design only. The Validator
+remains read-only and untouched. Sits on top of `TEST_HARNESS_ARCHITECTURE.md` (the writer) and
+`REGRESSION_SUITE_PLAN.md` (§1 structural-vs-functional split, §5 scenario model,
+E0a in the build order).
 
 ---
 
@@ -64,9 +73,9 @@ seedData ──setup──▶ disposable workbook ──actions──▶ mutated
 1. **Sources (read layer)** — `test_harness_read.js`. Thin, read-only wrappers that
    return an `actual` value (or collection) from the disposable `ss`. One place that
    knows the shipping getter names, so a getter rename touches one file:
-   - `ctx.read.sheetValue(sheetName, a1)` — a single cell.
-   - `ctx.read.sheetRange(sheetName, a1)` — a 2-D array.
-   - `ctx.read.dashboard()` — `getDashboardSnapshot(ss)` (subject to E0b, §13).
+   - `ctx.read.sheetValue(sheetName, row, column)` — a single cell. *(implemented — Slice 2)*
+   - `ctx.read.sheetRange(sheetName, row, column, numRows, numCols)` — a 2-D array. *(implemented — Slice 2)*
+   - `ctx.read.dashboard()` — `getDashboardSnapshot(ss)` (subject to E0b, §13). *(future)*
    - `ctx.read.billsDue()` — `getBillsDueFromCashFlowForDashboard(ss)`.
    - `ctx.read.propertyPerformance()` — `getPropertyPerformanceData(ss)`.
    - `ctx.read.retirementSummary()` — `getRetirementSummarySafe_(ss)`.
@@ -91,10 +100,10 @@ sprawling API. Each returns an assertion result (§5).
 
 | Method (`ctx.assert.`) | Signature | Use for |
 |---|---|---|
-| `equals` | `(label, actual, expected, opts)` | exact match: integers, strings, booleans, enums, counts |
+| `equals` | `(label, actual, expected, opts)` | exact match: integers, strings, booleans, enums, counts *(implemented — Slice 1)* |
 | `near` | `(label, actual, expected, opts{tolerance})` | **currency / percentage / floats** — tolerance compare (§4) |
 | `isTrue` / `isFalse` | `(label, actual, opts)` | boolean flags (`Active`, AutoPay pending, `isOverdue`) |
-| `exists` / `notExists` | `(label, actual, opts)` | presence/absence (row created, cell populated, no orphan) |
+| `exists` / `notExists` | `(label, actual, opts)` | presence/absence (row created, cell populated, no orphan) *(implemented — Slice 3)* |
 | `contains` | `(label, haystack, needle, opts)` | substring, array membership, "collection includes X" |
 | `count` | `(label, collection, expected, opts)` | length equality (sugar over `equals` on `.length`) |
 | `dateEquals` | `(label, actual, expected, opts{granularity})` | **calendar-date** equality (Bills next occurrence, due date) — normalizes time-of-day/timezone |
@@ -104,6 +113,13 @@ sprawling API. Each returns an assertion result (§5).
 | `withinYear` | `(label, date, year)` | prev-year read vs current-year write boundaries; temporal (§16) |
 
 Notes:
+- **`exists` / `notExists` semantics (implemented — Slice 3):** `assertExists_(actual)`
+  treats a value as **present** unless it is `undefined`, `null`, or a blank/whitespace-only
+  string (`''`) — because the read layer (§2.1) returns `undefined` for a missing
+  sheet/cell and Sheets returns `''` for an empty cell. Crucially, `0`, `false`, and
+  `NaN` are **present** (real values, just falsy) — so `exists` never confuses a zero
+  amount with a missing one. `notExists` is the exact inverse. Both take
+  `(label, actual, opts)`, do no I/O, and pair naturally with `ctx.read.sheetValue(...)`.
 - The last three are **temporal** comparators (see §16) layered on `dateEquals` — they
   exist so a failure reads *"advanced 14d not 7d"* instead of a bare `expected/actual`.
   They are still pure comparators; temporal is a **category tag**, not a parallel API.
@@ -289,7 +305,7 @@ raw JSON viewer already present shows the full `functional.results` array.
 | File | Responsibility |
 |---|---|
 | `test_harness_assert.js` | **Pure comparators** (`assertEquals_`, `assertNear_`, `assertDateEquals_`, `assertReconciles_`, …) + tolerance defaults + the collector factory `makeAssertionCollector_()` → `ctx.assert`. No I/O. |
-| `test_harness_read.js` | **Read-only source helpers** → `ctx.read.*` (sheet value/range, dashboard, bills due, property performance, retirement summary, `jsonPath`). One place coupling to shipping getter names. |
+| `test_harness_read.js` *(created — Slice 2)* | **Read-only source helpers** → `ctx.read.*`. Shipped: `sheetValue` / `sheetRange` via `makeReadLayer_(ss)`. Future (same file): dashboard, bills due, property performance, retirement summary, `jsonPath`, cross-sheet readers. One place coupling to shipping getter names. |
 | `test_harness_clock.js` | **Harness-only logical clock** (§14) → `ctx.clock` (`today`/`currentYear`/`setToday`/`freeze` + boundary helpers). Pure; no production dependency, no `new Date()` override. |
 | `test_harness_data.js` *(already planned)* | Declarative `seedData` → workbook via real `ensure*` / pure builders. Assertions depend on deterministic seeds; listed for completeness. |
 | `test_harness_profiles.js` | **Reusable seed profiles** (§15) → `getSeedProfile_` / `applySeedProfile_` / `composeProfiles_`. Base personas + modifier mixins; each profile is the single source of truth for both the seeded rows **and** the expected aggregates. |
@@ -605,8 +621,8 @@ seam]` after E0c.
 
 | Slice | Adds | Proof / capability after this slice | Tag |
 |---|---|---|---|
-| **1** | `test_harness_assert.js`: `equals` + `near` + collector + result envelope; wire `expectedOutcome(ctx)` into `runScenario_`; `functional` report section + gate | **`assertEquals` — Donation amount == 100 → PASS** in the existing SMOKE scenario (pipeline proven end-to-end) | `[pure]` |
-| **2** | `test_harness_read.js` pure sources (`sheetValue` / `sheetRange` / `jsonPath`) | assert any seeded cell/value without hand-reading ranges | `[pure]` |
+| **1 ✅ done** | `test_harness_assert.js`: `equals` + collector + result envelope; wire `ctx.assert` + `expectedOutcome(ctx)` into `runScenario_`; `functional` report section + gate; Functional UI card | **`assertEquals` — Donation amount == 100 → PASS** in the existing SMOKE scenario (pipeline proven end-to-end) | `[pure]` |
+| **2 ✅ done** | `test_harness_read.js` pure sources (`sheetValue` / `sheetRange`) via `makeReadLayer_` → `ctx.read`; SMOKE now reads through `ctx.read.sheetValue` instead of inline (`jsonPath` + richer readers deferred) | assert any seeded cell/range without hand-reading; single read layer for all future functional assertions | `[pure]` |
 | **3** | UI **Functional** status card + per-category/module findings block in `ValidationTestingUI.html` | functional results visible in the console (not just logs) | `[pure]` |
 | **4** | `test_harness_clock.js` → `ctx.clock` (freeze/today/currentYear + boundary helpers); scenario `clock` config | deterministic dates for seeding + expecteds | `[pure]` |
 | **5** | `dateEquals` + temporal comparators (`advancesBy`, `landsOnWeekday`); Temporal category | **`dateEquals` — Bills recurrence** (Weekly/Monthly/Biweekly) on the pure `generateOccurrences_(asOf=ctx.clock)` | `[pure-clock]` |
@@ -617,6 +633,12 @@ seam]` after E0c.
 | **10** | E0c optional date seam on the wall-clock write path(s) | deterministic AutoPay / due-window behavior | `[needs clock seam]` |
 | **11** | Profile mixins (`RetirementHeavy` / `DebtHeavy` / `InvestmentHeavy` / `RentalPropertyOwner`) + named `FamilyB` | House/Retirement/Investment functional packs; richer System Integrity | `[pure]` / `[needs seam]` |
 | **12** | Multi-year / year-rollover temporal scenarios; Performance timing category | year-boundary correctness; perf regression thresholds | `[pure-clock]` / later |
+
+> **Shipped out of band:** `exists` / `notExists` (presence comparators, §3) were
+> added right after the read layer — a tiny pure comparator that pairs with
+> `ctx.read` (which returns `undefined` on absence). `SMOKE-PROVISION-DONATION` now
+> makes **2 assertions** (`exists` Donation sheet + `equals` amount == 100). This is
+> orthogonal to the UI slice below (still row 3) and needed no report/UI redesign.
 
 **Risk-minimizing properties:** slices 1–3 prove the pipeline with zero temporal or
 seam risk; the **clock (4) precedes Bills recurrence (5)** so recurrence is

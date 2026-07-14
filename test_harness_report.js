@@ -7,8 +7,10 @@
  * list, the three Validator reports); this module turns them into a structured,
  * loggable result.
  *
- * Gate (V1): a scenario PASSes iff it raised no error AND Provisioning is PASS.
- * Schema Evolution and Workbook Drift are ADVISORY — they never fail a scenario.
+ * Gate: a scenario PASSes iff it raised no error AND Provisioning is PASS AND every
+ * functional assertion (E0a, if any) passed. Schema Evolution and Workbook Drift are
+ * ADVISORY — they never fail a scenario. When a scenario declares no expectedOutcome,
+ * the functional section is null and does not affect the gate (backward compatible).
  *
  * Reuses the Validator severity vocabulary (VALIDATOR_SEV_*) and the chunked log
  * shaper validatorLogChunked_ (validator_report.js). Design of record:
@@ -26,6 +28,29 @@ function harnessSummarizeValidator_(r) {
 }
 
 /**
+ * Build the functional-assertion section (E0a) from the collector results.
+ * Returns null when there are no assertions (scenario declared no expectedOutcome),
+ * so the gate is unaffected. Forward-compatible shape: overall + counts + results
+ * (module grouping / categories are later slices; the raw results already carry the
+ * `module` / `category` fields).
+ *
+ * @param {Array<Object>|undefined} assertions collector results (test_harness_assert.js)
+ * @returns {Object|null} { overall, counts:{pass,fail}, results }
+ */
+function harnessBuildFunctionalSection_(assertions) {
+  if (!assertions || !assertions.length) return null;
+  var pass = 0, fail = 0;
+  for (var i = 0; i < assertions.length; i++) {
+    if (assertions[i] && assertions[i].pass) pass++; else fail++;
+  }
+  return {
+    overall: fail === 0 ? 'PASS' : 'FAIL',
+    counts: { pass: pass, fail: fail },
+    results: assertions
+  };
+}
+
+/**
  * Build the structured scenario result.
  *
  * @param {Object} p {
@@ -34,6 +59,7 @@ function harnessSummarizeValidator_(r) {
  *   workbook:  { id, name, url },
  *   actions:   Array<string>,
  *   validators:{ provisioning, schema, drift } (raw Validator reports or null),
+ *   assertions: Array<Object> (functional-assertion results, E0a) or undefined,
  *   disposition: string,
  *   error:     string|null,
  *   startedAt: number (ms), finishedAt: number (ms)
@@ -45,8 +71,13 @@ function buildHarnessScenarioReport_(p) {
   var schema = p.validators && p.validators.schema ? p.validators.schema : null;
   var drift = p.validators && p.validators.drift ? p.validators.drift : null;
 
+  // Functional assertions (E0a). Null when the scenario declares no expectedOutcome
+  // → does not affect the gate (backward compatible).
+  var functional = harnessBuildFunctionalSection_(p.assertions);
+
   var provPass = !!(prov && prov.overall === 'PASS');
-  var overall = (!p.error && provPass) ? 'PASS' : 'FAIL';
+  var functionalPass = !functional || functional.overall === 'PASS';
+  var overall = (!p.error && provPass && functionalPass) ? 'PASS' : 'FAIL';
 
   var schemaSummary = null;
   if (schema) {
@@ -71,9 +102,11 @@ function buildHarnessScenarioReport_(p) {
       schema: schemaSummary,
       drift: harnessSummarizeValidator_(drift)
     },
+    functional: functional,
     gate: {
-      basis: 'Provisioning must PASS; Schema Evolution + Workbook Drift are advisory (never fail).',
-      provisioning: prov ? prov.overall : 'NOT RUN'
+      basis: 'Provisioning must PASS + all functional assertions must PASS; Schema Evolution + Workbook Drift are advisory (never fail).',
+      provisioning: prov ? prov.overall : 'NOT RUN',
+      functional: functional ? functional.overall : 'NOT RUN'
     },
     overall: overall,
     error: p.error || null,
@@ -118,6 +151,19 @@ function formatHarnessReport_(report) {
   lines.push('  Workbook Drift: ' + (v.drift
     ? v.drift.overall + harnessCountsTail_(v.drift.counts)
     : 'not run'));
+  var f = report.functional;
+  lines.push('  Functional   : ' + (f
+    ? f.overall + '  (' + f.counts.pass + ' pass, ' + f.counts.fail + ' fail)'
+    : 'not run'));
+  if (f && f.counts.fail > 0) {
+    for (var fi = 0; fi < f.results.length; fi++) {
+      var a = f.results[fi];
+      if (a && !a.pass) {
+        lines.push('    FAIL: ' + a.label + ' — ' + a.reason +
+          (a.location ? '  @ ' + a.location : ''));
+      }
+    }
+  }
   if (report.error) {
     lines.push('');
     lines.push('ERROR        : ' + report.error);
