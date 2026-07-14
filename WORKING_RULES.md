@@ -21,6 +21,7 @@ Every new change must follow these rules unless the user explicitly approves oth
 - **Every fix must be minimal, localized, and safe.** Prefer client-side fixes when the payload already exposes what you need (e.g. `snapshot.state`). Touch backend only when strictly necessary.
 - **Favor small diffs.** Cursor / agent edits should not touch unrelated files.
 - **After each implementation step, include exact manual test steps** for both the blank workbook and the populated workbook. See `TESTING_PLAN.md` → *Blank + populated two-track manual checks* for the canonical checklist.
+- **Regression-First Development.** Every significant change must leave the project with **equal or greater** regression coverage; coverage is never intentionally reduced. Consider whether new regression scenarios are required (bug fix / feature / architecture / schema / dashboard / financial-calculation change) and run the **Regression Discovery** checklist. See `ENGINEERING_STANDARDS.md → §12` (principle), `REGRESSION_SUITE_PLAN.md → Regression Discovery Policy + §A` (how).
 
 The forward plan is `TODO.md → Launch Readiness Roadmap`; small-polish picks are in `TODO.md → V1.2 polish backlog`; product shape is in `PROJECT_CONTEXT.md → Current phase`; ship-by-ship history is in `SESSION_NOTES.md`.
 

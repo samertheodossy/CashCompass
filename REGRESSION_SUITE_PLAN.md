@@ -10,9 +10,11 @@ cover and *in what order to build it*. It does **not** authorize implementing an
 scenario — each scenario ships in its own approved milestone.
 
 > **Guiding principle — the regression suite is CashCompass's primary confidence
-> mechanism.** After any significant bug fix or architectural change, running the
-> appropriate regression packs must quickly and reliably answer *"did this introduce
-> unintended side effects?"* The suite is a **ratchet**: coverage only ever
+> mechanism.** This is the project's **Regression-First Development** standard
+> (`ENGINEERING_STANDARDS.md → §12`): every significant change leaves coverage equal
+> or greater, never reduced. After any significant bug fix or architectural change,
+> running the appropriate regression packs must quickly and reliably answer *"did this
+> introduce unintended side effects?"* The suite is a **ratchet**: coverage only ever
 > increases (every fixed production bug becomes a permanent `REG-###`; §4.9), and it
 > is intended to become the **required gate for every beta and production release**
 > (Release Certification, Level 18). Breadth is built incrementally, but the bar is
@@ -159,6 +161,11 @@ compute. The suite therefore has two assertion layers:
 > `getPropertyPerformanceData()`, `getRetirementSummarySafe_()`). This is additive to
 > V1 and is called out in the build order (§7). It does **not** give the Validator
 > write power or numeric responsibility — the assertions live in the harness.
+>
+> **Full design of this capability:** `FUNCTIONAL_ASSERTION_ARCHITECTURE.md` (E0a) —
+> the sources/comparators/collector model, assertion vocabulary + tolerance policy,
+> the per-module result envelope, `expectedOutcome(ctx)` integration, and the
+> gate/aggregation rules.
 
 ---
 
@@ -690,7 +697,7 @@ seams + pure builders; `[needs seam]` = best after the ss-injection refactor (§
 `[needs func]` = needs the functional-assertion capability (§1).
 
 **Enabler 0 (do first, unblocks depth):**
-- **E0a — Functional-assertion capability** in `expectedOutcome` (§1).
+- **E0a — Functional-assertion capability** in `expectedOutcome` (§1); full design in `FUNCTIONAL_ASSERTION_ARCHITECTURE.md`.
 - **E0b — ss-injection refactor** for the top-level workflows (§2).
 
 **Then the requested order:**

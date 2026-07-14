@@ -105,6 +105,18 @@ Once a milestone has started, **finish it before beginning another.**
 
 **Purpose:** maintain focus, reduce context switching, and increase completion rate. This pairs with the Validator-driven workflow (implement → run Validator → fix `AdoptGolden` → repeat → commit): the milestone is *done* when `AdoptGolden = 0` for its scope and the remaining diffs are intentional (KeepCentral / ProductDecision / IgnoreNoise).
 
+### 12. Regression-First Development
+
+**CashCompass grows its regression suite continuously.** Regression coverage is the primary confidence mechanism for Beta and Production releases, and it is a **one-way ratchet** — it only ever grows.
+
+- **Equal-or-greater coverage.** Every significant change must leave the project with **equal or greater** regression coverage than before.
+- **Coverage is never intentionally reduced.** Scenarios may be consolidated or superseded, but effective coverage is never dropped. Retiring a scenario requires an explicit, documented replacement.
+- **Every change considers new scenarios.** Architecture changes, bug fixes, feature work, schema changes, dashboard changes, and financial-calculation changes must all consider whether new regression scenarios are required — via the **Regression Discovery Policy** and its reusable prompt block (`REGRESSION_SUITE_PLAN.md → Regression Discovery Policy` + `§A`).
+- **Bugs become permanent memory.** Every fixed production bug becomes a permanent `REG-###` scenario (`REGRESSION_SCENARIOS.md`) so it can never silently return.
+- **Coverage grows with the product.** As the suite fills out (Smoke → module packs → Dashboard/System Integrity → Release Certification, per `REGRESSION_SUITE_PLAN.md`), it becomes the required release gate.
+
+**Purpose:** make correctness cumulative. New work adds proof rather than risk, so confidence compounds over time instead of eroding. This principle is the *why*; the **Regression Discovery Policy** (`REGRESSION_SUITE_PLAN.md`) is the *how* (the per-change trigger checklists), and the **Functional Assertion framework** (`FUNCTIONAL_ASSERTION_ARCHITECTURE.md`) is the *mechanism* (how a scenario proves numeric/temporal correctness).
+
 ---
 
 ## Cash Flow Data Semantics — Actuals vs Projection
