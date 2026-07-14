@@ -96,6 +96,18 @@ function getHarnessScenarios_() {
   if (typeof getHarnessBillsBiweeklyScenario_ === 'function') {
     list.push(getHarnessBillsBiweeklyScenario_());
   }
+  if (typeof getHarnessBillsYearBoundaryScenario_ === 'function') {
+    list.push(getHarnessBillsYearBoundaryScenario_());
+  }
+  if (typeof getHarnessBills31stScenario_ === 'function') {
+    list.push(getHarnessBills31stScenario_());
+  }
+  if (typeof getHarnessBillsLeapFeb29Scenario_ === 'function') {
+    list.push(getHarnessBillsLeapFeb29Scenario_());
+  }
+  if (typeof getHarnessBillsYearlyScenario_ === 'function') {
+    list.push(getHarnessBillsYearlyScenario_());
+  }
   if (typeof getHarnessBillsMonthlyIntegrationScenario_ === 'function') {
     list.push(getHarnessBillsMonthlyIntegrationScenario_());
   }

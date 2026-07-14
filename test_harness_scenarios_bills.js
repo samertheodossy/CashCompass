@@ -363,6 +363,300 @@ function getHarnessBillsBiweeklyScenario_() {
 }
 
 /**
+ * Sort a copy of an occurrence array ascending by due date. Shared by the PURE
+ * temporal scenarios below so each assertion block reads by chronological index.
+ * @param {Array<{dueDate: Date}>} occs
+ * @returns {Array<{dueDate: Date}>}
+ */
+function harnessSortOccurrences_(occs) {
+  return (occs || []).slice().sort(function(a, b) {
+    return a.dueDate.getTime() - b.dueDate.getTime();
+  });
+}
+
+/**
+ * REGRESSION-BILLS-YEAR-BOUNDARY — Monthly recurrence across December → January.
+ *
+ * Bill: Monthly, Due Day 15, Start Month 1. The engine's [-1, 0, +1] month window
+ * is exercised from two deterministic anchors so the calendar-year transition is
+ * pinned from both sides:
+ *   A) todayOnly = Dec 20 2025 → Nov 15 2025 (prior), Dec 15 2025 (current),
+ *      Jan 15 2026 (next — the NEXT occurrence rolls into the following YEAR).
+ *   B) todayOnly = Jan 5 2026 → Dec 15 2025 (prior — the look-back reaches back
+ *      into the PREVIOUS year), Jan 15 2026 (current), Feb 15 2026 (next).
+ * This permanently protects the Dec↔Jan boundary against off-by-one-year drift in
+ * both the +1 next-month roll-forward and the -1 prior-month look-back.
+ *
+ * @returns {Object} scenario
+ */
+function getHarnessBillsYearBoundaryScenario_() {
+  var settingsName = (typeof PROFILE_SETTINGS_SHEET_NAME_ === 'string') ? PROFILE_SETTINGS_SHEET_NAME_ : 'INPUT - Settings';
+  var sysMetaName = (typeof SYS_META_SHEET_NAME_ === 'string') ? SYS_META_SHEET_NAME_ : 'SYS - Meta';
+
+  return {
+    id: 'REGRESSION-BILLS-YEAR-BOUNDARY',
+    category: 'REGRESSION',
+    executionLevel: 'PURE',
+    description: 'Validate pure Bills recurrence across the December → January boundary (Monthly, Due Day 15): prior/current/next occurrences and correct year transition from both a December and an early-January anchor.',
+    expectedSheets: [settingsName, sysMetaName],
+    setup: function(ctx) {
+      ctx.assertWritable();
+      runMinimalBootstrap_(ctx.ss);
+      ctx.actions.push('Provision minimal workbook (runMinimalBootstrap_ → INPUT - Settings)');
+    },
+    actions: function(ctx) {
+      ctx.actions.push('No seeding required — recurrence engine is pure (explicit dates)');
+    },
+    expectedOutcome: function(ctx) {
+      if (typeof buildInputBillDueCandidates_ !== 'function') {
+        throw new Error('Bills recurrence engine (buildInputBillDueCandidates_) not available.');
+      }
+      var dueDay = 15;
+      var startMonth = 1;
+      var freq = (typeof normalizeFrequency_ === 'function') ? normalizeFrequency_('Monthly') : 'monthly';
+      var mod = 'Bills';
+
+      // (A) December anchor — the NEXT occurrence crosses into 2026.
+      var todayA = new Date(2025, 11, 20); // Dec 20, 2025
+      var a = harnessSortOccurrences_(
+        buildInputBillDueCandidates_(todayA, dueDay, freq, startMonth, '', null, null));
+
+      ctx.assert.equals('Dec-anchor occurrence count (Nov/Dec/Jan window)', a.length, 3, { module: mod });
+      ctx.assert.dateEquals('Dec-anchor prior occurrence (Nov 15 2025)',
+        a[0] && a[0].dueDate, new Date(2025, 10, 15), { module: mod });
+      ctx.assert.dateEquals('Dec-anchor current occurrence (Dec 15 2025)',
+        a[1] && a[1].dueDate, new Date(2025, 11, 15), { module: mod });
+      ctx.assert.dateEquals('Dec-anchor next occurrence crosses year (Jan 15 2026)',
+        a[2] && a[2].dueDate, new Date(2026, 0, 15), { module: mod });
+      // Make the year transition explicit: current is 2025, next is 2026.
+      ctx.assert.equals('Dec-anchor current year is 2025',
+        a[1] && a[1].dueDate.getFullYear(), 2025, { module: mod });
+      ctx.assert.equals('Dec-anchor next year is 2026 (year transition)',
+        a[2] && a[2].dueDate.getFullYear(), 2026, { module: mod });
+
+      // (B) Early-January anchor — the prior look-back reaches back into 2025.
+      var todayB = new Date(2026, 0, 5); // Jan 5, 2026
+      var b = harnessSortOccurrences_(
+        buildInputBillDueCandidates_(todayB, dueDay, freq, startMonth, '', null, null));
+
+      ctx.assert.equals('Jan-anchor occurrence count (Dec/Jan/Feb window)', b.length, 3, { module: mod });
+      ctx.assert.dateEquals('Jan-anchor prior occurrence is previous year (Dec 15 2025)',
+        b[0] && b[0].dueDate, new Date(2025, 11, 15), { module: mod });
+      ctx.assert.equals('Jan-anchor prior occurrence year is 2025 (look-back crosses year)',
+        b[0] && b[0].dueDate.getFullYear(), 2025, { module: mod });
+      ctx.assert.dateEquals('Jan-anchor current occurrence (Jan 15 2026)',
+        b[1] && b[1].dueDate, new Date(2026, 0, 15), { module: mod });
+      ctx.assert.dateEquals('Jan-anchor next occurrence (Feb 15 2026)',
+        b[2] && b[2].dueDate, new Date(2026, 1, 15), { module: mod });
+    }
+  };
+}
+
+/**
+ * REGRESSION-BILLS-31ST — CHARACTERIZATION of Due Day = 31 in short months.
+ *
+ * ⚠ This scenario asserts CURRENT PRODUCTION BEHAVIOR, which is intentionally
+ * *not* changed here. For Monthly bills the engine uses the raw
+ * `new Date(year, monthIndex, dueDay)` constructor (generateOccurrences_,
+ * stepDays === 0 path) with NO day-of-month clamp. JavaScript Date OVERFLOWS a
+ * too-large day into the following month:
+ *   • Mar 2026 (31 days): due 31 → Mar 31 2026 (exact).
+ *   • Apr 2026 (30 days): due 31 → OVERFLOWS to May 1 2026 (NOT Apr 30).
+ *   • May 2026 (31 days): due 31 → May 31 2026 (exact).
+ * Anchored at Apr 15 2026 the [-1,0,+1] window therefore yields
+ * [Mar 31, May 1, May 31] — April contributes NO April-dated occurrence, and its
+ * intended occurrence silently lands on May 1. (Note: the WEEKLY/BIWEEKLY path
+ * DOES clamp via Math.min(dueDay, daysInMonth); only the Monthly path overflows —
+ * an inconsistency flagged as a Product Decision, see the review report.)
+ *
+ * @returns {Object} scenario
+ */
+function getHarnessBills31stScenario_() {
+  var settingsName = (typeof PROFILE_SETTINGS_SHEET_NAME_ === 'string') ? PROFILE_SETTINGS_SHEET_NAME_ : 'INPUT - Settings';
+  var sysMetaName = (typeof SYS_META_SHEET_NAME_ === 'string') ? SYS_META_SHEET_NAME_ : 'SYS - Meta';
+
+  return {
+    id: 'REGRESSION-BILLS-31ST',
+    category: 'REGRESSION',
+    executionLevel: 'PURE',
+    description: 'Characterize CURRENT Monthly recurrence for Due Day 31 across a short month (Mar/Apr/May 2026): the April occurrence OVERFLOWS to May 1 (no clamp). Asserts existing behavior exactly; a Product Decision is reported, not applied.',
+    expectedSheets: [settingsName, sysMetaName],
+    setup: function(ctx) {
+      ctx.assertWritable();
+      runMinimalBootstrap_(ctx.ss);
+      ctx.actions.push('Provision minimal workbook (runMinimalBootstrap_ → INPUT - Settings)');
+    },
+    actions: function(ctx) {
+      ctx.actions.push('No seeding required — recurrence engine is pure (explicit dates)');
+    },
+    expectedOutcome: function(ctx) {
+      if (typeof buildInputBillDueCandidates_ !== 'function') {
+        throw new Error('Bills recurrence engine (buildInputBillDueCandidates_) not available.');
+      }
+      var todayOnly = new Date(2026, 3, 15); // Apr 15, 2026 → window Mar/Apr/May
+      var freq = (typeof normalizeFrequency_ === 'function') ? normalizeFrequency_('Monthly') : 'monthly';
+      var mod = 'Bills';
+
+      var occs = harnessSortOccurrences_(
+        buildInputBillDueCandidates_(todayOnly, 31, freq, 1, '', null, null));
+
+      ctx.assert.equals('Due-31 occurrence count (Mar/Apr/May window)', occs.length, 3, { module: mod });
+      ctx.assert.exists('First due-31 occurrence exists', occs[0] && occs[0].dueDate, { module: mod });
+
+      // Mar has 31 days → exact 31st.
+      ctx.assert.dateEquals('Due-31 in 31-day March → Mar 31 2026',
+        occs[0] && occs[0].dueDate, new Date(2026, 2, 31), { module: mod });
+
+      // CHARACTERIZATION: April (30 days) overflows to May 1 (current behavior).
+      ctx.assert.dateEquals('Due-31 in 30-day April OVERFLOWS to May 1 2026 (current behavior)',
+        occs[1] && occs[1].dueDate, new Date(2026, 4, 1), { module: mod });
+
+      // May has 31 days → exact 31st.
+      ctx.assert.dateEquals('Due-31 in 31-day May → May 31 2026',
+        occs[2] && occs[2].dueDate, new Date(2026, 4, 31), { module: mod });
+
+      // No occurrence lands on any APRIL calendar date — the tell-tale of the
+      // overflow (April's occurrence moved into May).
+      var aprilCount = occs.filter(function(o) { return o.dueDate.getMonth() === 3; }).length;
+      ctx.assert.equals('No occurrence lands in April (overflowed out of the month)', aprilCount, 0, { module: mod });
+    }
+  };
+}
+
+/**
+ * REGRESSION-BILLS-LEAP-FEB29 — CHARACTERIZATION of Due Day = 29 around February.
+ *
+ * ⚠ Asserts CURRENT PRODUCTION BEHAVIOR (unchanged here). Same non-clamping
+ * Monthly path as REGRESSION-BILLS-31ST:
+ *   • LEAP year (Feb 2028 has 29 days): due 29 → Feb 29 2028 (exact — leap Feb
+ *     produces a real Feb 29 occurrence).
+ *   • NON-LEAP year (Feb 2027 has 28 days): due 29 → OVERFLOWS to Mar 1 2027
+ *     (NOT Feb 28); February contributes NO February-dated occurrence.
+ * Two deterministic anchors (Feb 10 2028 leap, Feb 10 2027 non-leap) pin both.
+ *
+ * @returns {Object} scenario
+ */
+function getHarnessBillsLeapFeb29Scenario_() {
+  var settingsName = (typeof PROFILE_SETTINGS_SHEET_NAME_ === 'string') ? PROFILE_SETTINGS_SHEET_NAME_ : 'INPUT - Settings';
+  var sysMetaName = (typeof SYS_META_SHEET_NAME_ === 'string') ? SYS_META_SHEET_NAME_ : 'SYS - Meta';
+
+  return {
+    id: 'REGRESSION-BILLS-LEAP-FEB29',
+    category: 'REGRESSION',
+    executionLevel: 'PURE',
+    description: 'Characterize CURRENT Monthly recurrence for Due Day 29 around February: leap-year Feb yields Feb 29 (exact); non-leap Feb OVERFLOWS to Mar 1 (no clamp). Asserts existing behavior exactly; a Product Decision is reported, not applied.',
+    expectedSheets: [settingsName, sysMetaName],
+    setup: function(ctx) {
+      ctx.assertWritable();
+      runMinimalBootstrap_(ctx.ss);
+      ctx.actions.push('Provision minimal workbook (runMinimalBootstrap_ → INPUT - Settings)');
+    },
+    actions: function(ctx) {
+      ctx.actions.push('No seeding required — recurrence engine is pure (explicit dates)');
+    },
+    expectedOutcome: function(ctx) {
+      if (typeof buildInputBillDueCandidates_ !== 'function') {
+        throw new Error('Bills recurrence engine (buildInputBillDueCandidates_) not available.');
+      }
+      var freq = (typeof normalizeFrequency_ === 'function') ? normalizeFrequency_('Monthly') : 'monthly';
+      var mod = 'Bills';
+
+      // (A) LEAP year — Feb 2028 has 29 days → a real Feb 29 occurrence.
+      var todayLeap = new Date(2028, 1, 10); // Feb 10, 2028
+      var leap = harnessSortOccurrences_(
+        buildInputBillDueCandidates_(todayLeap, 29, freq, 1, '', null, null));
+
+      ctx.assert.equals('Leap-year occurrence count (Jan/Feb/Mar 2028)', leap.length, 3, { module: mod });
+      ctx.assert.dateEquals('Leap Feb produces Feb 29 2028 (exact)',
+        leap[1] && leap[1].dueDate, new Date(2028, 1, 29), { module: mod });
+      ctx.assert.equals('Leap Feb occurrence is in February (month index 1)',
+        leap[1] && leap[1].dueDate.getMonth(), 1, { module: mod });
+
+      // (B) NON-LEAP year — Feb 2027 has 28 days → due 29 overflows to Mar 1.
+      var todayNon = new Date(2027, 1, 10); // Feb 10, 2027
+      var non = harnessSortOccurrences_(
+        buildInputBillDueCandidates_(todayNon, 29, freq, 1, '', null, null));
+
+      ctx.assert.equals('Non-leap occurrence count (Jan/Feb/Mar 2027)', non.length, 3, { module: mod });
+      ctx.assert.dateEquals('Non-leap Feb 29 OVERFLOWS to Mar 1 2027 (current behavior)',
+        non[1] && non[1].dueDate, new Date(2027, 2, 1), { module: mod });
+      var febCount = non.filter(function(o) { return o.dueDate.getMonth() === 1; }).length;
+      ctx.assert.equals('Non-leap year: no occurrence lands in February (overflowed out)', febCount, 0, { module: mod });
+    }
+  };
+}
+
+/**
+ * REGRESSION-BILLS-YEARLY — Yearly recurrence with explicit deterministic dates.
+ *
+ * Bill: Yearly, Due Day 15, Start Month 6 (June). billAppliesInMonth_ restricts a
+ * yearly bill to its Start Month, so within the [-1,0,+1] window it emits AT MOST
+ * one occurrence. Four deterministic anchors characterize the full behavior:
+ *   • Jun 10 2026 (in the start month)  → exactly [Jun 15 2026].
+ *   • Jun 10 2027 (one year later)      → exactly [Jun 15 2027] (yearly cadence).
+ *   • Sep 10 2026 (off-cycle month)     → [] (no occurrence outside the window).
+ *   • Jul 5 2026 (month after start)    → [Jun 15 2026] (prior-month look-back
+ *                                          keeps the just-passed occurrence visible).
+ *
+ * @returns {Object} scenario
+ */
+function getHarnessBillsYearlyScenario_() {
+  var settingsName = (typeof PROFILE_SETTINGS_SHEET_NAME_ === 'string') ? PROFILE_SETTINGS_SHEET_NAME_ : 'INPUT - Settings';
+  var sysMetaName = (typeof SYS_META_SHEET_NAME_ === 'string') ? SYS_META_SHEET_NAME_ : 'SYS - Meta';
+
+  return {
+    id: 'REGRESSION-BILLS-YEARLY',
+    category: 'REGRESSION',
+    executionLevel: 'PURE',
+    description: 'Validate pure Yearly recurrence (Due Day 15, Start Month June): exactly one occurrence in the start month, the same date one year later, zero occurrences off-cycle, and prior-month look-back the month after the start.',
+    expectedSheets: [settingsName, sysMetaName],
+    setup: function(ctx) {
+      ctx.assertWritable();
+      runMinimalBootstrap_(ctx.ss);
+      ctx.actions.push('Provision minimal workbook (runMinimalBootstrap_ → INPUT - Settings)');
+    },
+    actions: function(ctx) {
+      ctx.actions.push('No seeding required — recurrence engine is pure (explicit dates)');
+    },
+    expectedOutcome: function(ctx) {
+      if (typeof buildInputBillDueCandidates_ !== 'function') {
+        throw new Error('Bills recurrence engine (buildInputBillDueCandidates_) not available.');
+      }
+      var dueDay = 15;
+      var startMonth = 6; // June
+      var freq = (typeof normalizeFrequency_ === 'function') ? normalizeFrequency_('Yearly') : 'yearly';
+      var mod = 'Bills';
+
+      // In the start month (June 2026) → exactly one occurrence, Jun 15 2026.
+      var y26 = harnessSortOccurrences_(
+        buildInputBillDueCandidates_(new Date(2026, 5, 10), dueDay, freq, startMonth, '', null, null));
+      ctx.assert.equals('Yearly: one occurrence in start month (Jun 2026)', y26.length, 1, { module: mod });
+      ctx.assert.exists('Yearly 2026 occurrence exists', y26[0] && y26[0].dueDate, { module: mod });
+      ctx.assert.dateEquals('Yearly occurrence Jun 15 2026', y26[0] && y26[0].dueDate, new Date(2026, 5, 15), { module: mod });
+
+      // One year later → the same calendar date, Jun 15 2027 (yearly cadence).
+      var y27 = harnessSortOccurrences_(
+        buildInputBillDueCandidates_(new Date(2027, 5, 10), dueDay, freq, startMonth, '', null, null));
+      ctx.assert.equals('Yearly: one occurrence one year later (Jun 2027)', y27.length, 1, { module: mod });
+      ctx.assert.dateEquals('Yearly recurrence advances exactly one year (Jun 15 2027)',
+        y27[0] && y27[0].dueDate, new Date(2027, 5, 15), { module: mod });
+
+      // Off-cycle month (September) → no occurrence in the window.
+      var off = harnessSortOccurrences_(
+        buildInputBillDueCandidates_(new Date(2026, 8, 10), dueDay, freq, startMonth, '', null, null));
+      ctx.assert.equals('Yearly: zero occurrences off-cycle (Sep 2026 window)', off.length, 0, { module: mod });
+
+      // Month after the start (July) → prior-month look-back keeps Jun 15 visible.
+      var jul = harnessSortOccurrences_(
+        buildInputBillDueCandidates_(new Date(2026, 6, 5), dueDay, freq, startMonth, '', null, null));
+      ctx.assert.equals('Yearly: prior-month look-back after start month (Jul 2026)', jul.length, 1, { module: mod });
+      ctx.assert.dateEquals('Yearly prior-month look-back surfaces Jun 15 2026',
+        jul[0] && jul[0].dueDate, new Date(2026, 5, 15), { module: mod });
+    }
+  };
+}
+
+/**
  * REGRESSION-BILLS-MONTHLY-INTEGRATION — the first *inspectable* Bills scenario.
  *
  * Creates a disposable workbook that visibly contains a canonical `INPUT - Bills`

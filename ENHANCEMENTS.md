@@ -45,6 +45,26 @@ Authoritative copy: `TODO.md → Future UI Standardization — Manage Pattern Ro
 
 Manage Bills and Manage Debts proved the `[Primary View] [Manage]` pattern (Primary = daily usage / dashboard actions / updates / monitoring; Manage = edit / rename / stop tracking / archive / maintenance / configuration) is far more user-friendly than direct sheet editing, and it is now the preferred long-term UI pattern for module maintenance. Planned candidates, in priority order: **Bank Accounts (High — recommended next; still relies on backend sheet maintenance: rename account, edit institution, edit type, edit credit limit, stop tracking)**, Income Sources (Medium), Investments (Medium), Properties (Medium), Donations (Lower). After **three** modules adopt it (Bills, Debts, Bank Accounts), investigate extracting a reusable management framework — shared table component, edit-form pattern, stop-tracking workflow, stale-row protection, and activity logging — but only once three real consumers exist. Sequenced after 6F Recovery Validation closes; lower risk than recovery work. UX enhancement, not a blocker.
 
+### Open Product Decision — Bills recurrence Due-Day month-end overflow vs clamp
+
+**Status:** OPEN product decision. **Discovered 2026-07-14** by the Bills Recurrence Regression Pack (`REGRESSION-BILLS-31ST`, `REGRESSION-BILLS-LEAP-FEB29`). Behavior is **characterized and asserted exactly** in the harness; production logic is **unchanged**.
+
+**Observed behavior (current production).** The recurrence engine (`dashboard_data.js → generateOccurrences_`) treats Due-Day by frequency:
+- **Monthly / Yearly / other one-per-month frequencies (`stepDays === 0`):** the occurrence date is `new Date(year, monthIndex, dueDay)` with **no day-of-month clamp**. When `dueDay` exceeds the month length, JavaScript `Date` **overflows into the next month**:
+  - Due Day 31 in a 30-day month → the **1st of the next month** (e.g. Apr 31 → **May 1**).
+  - Due Day 29 in a non-leap February → **Mar 1** (leap February correctly yields **Feb 29**).
+  - Net effect: the short month gets **no occurrence on any of its own dates**, and the occurrence's stored `monthIndex` can disagree with its `dueDate`.
+- **Weekly / Biweekly (`stepDays > 0`):** the anchor day **is clamped** — `Math.min(Math.max(1, dueDay), daysInMonth)` — so it lands on the month's **last day**, never overflowing.
+
+So the two paths are **inconsistent**: high Due-Days clamp for weekly/biweekly but overflow for monthly/yearly.
+
+**Expected-behavior candidates.**
+1. **Clamp monthly/yearly to month-end** (Apr 31 → Apr 30; non-leap Feb 29 → Feb 28). Matches most users' mental model of "end of month" bills and makes the two paths consistent. Behavior change; must be covered by updating the characterization scenarios to the new expectation.
+2. **Keep overflow (document as intended).** No code change; simplest, but surprising for month-end bills and inconsistent with weekly/biweekly.
+3. **Explicit "last day of month" sentinel** (e.g. Due Day 0 / "EOM") separate from a numeric day, leaving numeric overflow as-is. Larger UX + schema change.
+
+**Recommendation:** Candidate **1 (clamp monthly/yearly to month-end)** for consistency with the weekly/biweekly path and least user surprise — but **only as a deliberate, separately-approved change**, because it alters generated due dates for existing month-end bills. Until ratified, the regression pack pins the **current overflow** behavior so any accidental change is caught. Not a beta blocker.
+
 ### Future — Shared Entity Lifecycle Framework (lifecycle standardization)
 
 Authoritative copy: `TODO.md → Future Feature — Shared Entity Lifecycle Framework` (high-level mirror in `PROJECT_CONTEXT.md`). **Status:** documented, **not implemented.** **Reference implementation: the Debt lifecycle (`Active → Stop Tracking → Inactive → Reactivate`, commit `893d50d`).**
