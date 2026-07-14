@@ -7,8 +7,10 @@ counterpart that drives scenarios and calls the Validator to judge health (§12)
 **Status:** Documentation. **Phase 1 is complete** — the Golden Workbook parity
 comparison + recommendation engine + scoped family runners are implemented in the
 main app, **disabled by default**, **admin-gated**, **read-only**, with **no
-runtime/UI/provisioning call sites**. It is run manually from the Apps Script
-editor. Phase 1 drove the **2026-07 Golden Workbook convergence milestone**
+runtime or provisioning call sites** (the only UI call site is the admin-gated
+**Validation & Testing console**, `?view=validation`; nothing runs a validator in
+the normal app flow). It is run manually from the Apps Script editor or that
+console. Phase 1 drove the **2026-07 Golden Workbook convergence milestone**
 (Operational, Financial Ledger, SYS, and Special families converged — see
 `WORKBOOK_PARITY_CHECKLIST.md`). Remaining capabilities (single-workbook
 rules-based validators, conditional-format capture, provisioning validation) are
@@ -19,9 +21,11 @@ shifts the Validator from **two-workbook Canonical comparison** to
 **single-workbook Workbook Health validation** (does *this* workbook match the
 canonical rules?). Its full module architecture, execution order, report format,
 phased plan, risks, and recommended first implementation are specified in **§10 →
-Phase 2 architecture**. Phase 2A (`validator_rules.js` + `validator_provisioning.js`
-+ `validatorRunProvisioning()`) is implemented; the remaining modules are design
-only.
+Phase 2 architecture**. Implemented: **2A Provisioning** (`validator_rules.js` +
+`validator_provisioning.js` + `validatorRunProvisioning()`), **2B Workbook Drift**
+(`validator_drift.js`), and **2B″ Schema Evolution V1** (`validator_schema.js`).
+Formula, Conditional-Formatting, Named-Range validation, and the aggregate Workbook
+Health report remain design only.
 
 **Three validation questions (Provisioning + Drift refined 2026-07-13 → §10.0a;
 Schema Evolution added 2026-07-13 → §10.0b).** Workbook Health answers *three
@@ -176,12 +180,15 @@ validator_health.js   # Workbook Health orchestrator + scoring + report shaping
 Phase 2 also **extends `validator_snapshot.js`** with read-only capture of
 conditional-format rules, named ranges, and targeted formula reads (see §10).
 
-### Planned (Test Harness / Regression Runner — a *separate* writer subsystem)
+### Test Harness / Regression Runner — a *separate* writer subsystem *(foundation V1 implemented)*
 
 The Test Harness is **not** part of the Validator — it is the **writer/mutator**
 counterpart that drives scenarios and calls the read-only Validator to judge the
 result (see §12). It lives in its own `test_harness_*` files so the read-only
-guarantee of `validator_*` is never blurred:
+guarantee of `validator_*` is never blurred. Foundation V1 (guard + disposable
+lifecycle + one SMOKE scenario + report) is implemented; the fuller file set below
+reflects the planned end state (`test_harness_data.js` and the scenario packs are
+still future):
 
 ```
 test_harness_core.js       # guard + disposable-workbook lifecycle + run loop
@@ -287,8 +294,11 @@ therefore layered:
    `central_resolver.js`, `central_provisioning.js`, `dashboard_data.js`,
    `onboarding.js`, planner code, or any `Dashboard_Script_*.html`.
 4. **No triggers / no auto-run.** No time-driven or installable triggers; no
-   `onOpen` auto-run and no menu item. The only entry today is a **manual editor
-   Run** (a future admin-gated Admin Diagnostics action is optional).
+   `onOpen` auto-run and no menu item. Validators run only on an explicit, guarded
+   request: a **manual editor Run**, or an admin action in the **Validation &
+   Testing console** (`?view=validation`), whose `validation_testing_server.js`
+   functions each re-check `assertValidatorAllowed_()` before calling a pure seam.
+   Nothing runs a validator as a side effect of loading the app.
 5. **Default-off.** With `VALIDATOR_ENABLED` unset, the entire subsystem is inert.
 
 ```
@@ -432,25 +442,35 @@ The Validator must never enter the hot path:
   four scoped family runners); added the **recommendation engine** (§1a); removed
   `dev-tools/`. Phase 1 drove the **2026-07 Golden Workbook convergence
   milestone** to `AdoptGolden = 0` for the audited families.
-- **Phase 2 — Workbook Health validation — architecture designed (2026-07-12),
-  not implemented.** Single-workbook, rules-based validation across six modules
-  (Provisioning · Schema · Formula · Conditional Formatting · Named Range ·
-  Workbook Health report). Adds `validator_rules.js` (the canonical model),
-  `validator_checks.js`, and `validator_health.js`; extends `validator_snapshot.js`;
-  exposes `validateActiveWorkbook()` behind `assertValidatorAllowed_()`. Full
-  architecture, execution order, report format, phased plan, risks, and
-  recommended first implementation are in **§10 → Phase 2 architecture** below.
-- **Phase 4 — planned (optional).** An admin-gated Admin Diagnostics UI action to
-  run validators without the editor (the user-facing **Workbook Health** workflow,
-  §10).
+- **Phase 2 — Workbook Health validation — partially implemented.** Single-workbook,
+  rules-based validation. **Implemented:** **2A Provisioning** (structural gate —
+  `validator_rules.js` canonical model + `validator_provisioning.js` /
+  `validatorRunProvisioning()`), **2B Workbook Drift** (advisory —
+  `validator_drift.js` / `validatorRunWorkbookDrift()`), and **2B″ Schema Evolution
+  V1** (advisory, version-aware — `validator_schema.js` /
+  `validatorRunSchemaEvolution()`). **Still planned:** Formula validation,
+  Conditional-Formatting validation, Named-Range validation, and the aggregate
+  Workbook Health report (`validator_health.js`). Full architecture, execution
+  order, report format, phased plan, and risks are in **§10 → Phase 2 architecture**
+  below.
+- **Phase 4 — admin UI — implemented (V1).** The **Validation & Testing console**
+  (`ValidationTestingUI.html` + `validation_testing_server.js`, admin-gated route
+  `?view=validation`) runs Provisioning / Workbook Drift / Schema Evolution — and
+  the Test Harness smoke scenario — from the browser without the editor. Formula /
+  Conditional-Formatting / Full Workbook Health buttons and the Release Readiness
+  verdict remain future additions to the same page (`VALIDATION_TESTING_CONSOLE.md`).
 
 At every phase: read-only, guarded, default-off, and covered by the CI guards.
 
-### Phase 2 architecture — Workbook Health validation *(designed 2026-07-12; not implemented)*
+### Phase 2 architecture — Workbook Health validation *(designed 2026-07-12; partially implemented)*
 
-> **Status:** **Architecture only.** Golden Workbook convergence is complete, so
-> Phase 2 is now unblocked, but **no Phase 2 code exists yet.** This section is the
-> design of record; implementation is a separate, later step.
+> **Status:** **Partially implemented.** This section is the full design of record.
+> Built so far: **Provisioning** (`validator_provisioning.js`), **Workbook Drift**
+> (`validator_drift.js`), and **Schema Evolution V1** (`validator_schema.js`), all
+> reachable from the admin **Validation & Testing console** (§13). Still design only:
+> Formula validation, Conditional-Formatting validation, Named-Range validation, and
+> the **aggregate Workbook Health report** (`validator_health.js`) that rolls them
+> into one score — those remain a later step.
 
 **Goal.** After Central provisions (or self-heals) a workbook, run a **read-only**
 validation that verifies *this one* workbook matches the **canonical CashCompass
@@ -636,10 +656,13 @@ badge. The overall gate still FAILs **only** on Provisioning ERRORs; Schema
 Evolution and Drift never flip it to FAIL (except the *Upgrade Required* case,
 which is by definition a residual Provisioning ERROR).
 
-**Not implemented.** This section is architecture only. The current runners are
-unchanged; the reclassification and schema-version registry are future Phase 2
-work (roadmap slice **2B″ — Schema Evolution / version compatibility**, sequenced
-right after the 2B′ Provisioning/Drift split; see §10.10).
+**Implementation status.** Schema Evolution **V1 is implemented**
+(`validator_schema.js` — `validatorRunSchemaEvolution()` / `validateSchemaEvolution_`):
+it performs the reclassification described above and yields the Workbook Type +
+Compatibility verdict, surfaced in the Validation & Testing console (§13). Still
+future: a formal **schema-version registry** (per-version expected structures) and
+folding the three sections into the single aggregate **Workbook Health report**
+(Module 6). Roadmap slice **2B″** (see §10.10).
 
 #### 10.1 Module 1 — Provisioning Validation
 
@@ -816,10 +839,12 @@ Phase 1; **`redactValues` defaults to `true`**.
 
 #### 10.9 Future user-facing Workbook Health workflow
 
-Today: admin/editor only. Future (optional **Phase 4** UI): an **admin-gated Admin
-Diagnostics** action — "Check Workbook Health" — that runs `validateActiveWorkbook`
-and renders a **read-only report card** (score + top issues + an "advisory only"
-banner). It **never repairs**; if the user wants to fix issues, a separate button
+Today: **admin-only** — editor runners **plus** the admin **Validation & Testing
+console** (`?view=validation`), which already runs Provisioning / Drift / Schema
+against a chosen workbook. Still future: a **user-facing** "Check Workbook Health"
+action (e.g. in the user's own app / Admin Diagnostics) that runs
+`validateActiveWorkbook` on the caller's workbook and renders a **read-only report
+card** (score + top issues + an "advisory only" banner). It **never repairs**; if the user wants to fix issues, a separate button
 invokes the **existing provisioning / self-heal** code (not the Validator),
 preserving the "validate ≠ provision" boundary:
 
@@ -906,7 +931,10 @@ targeted reads), and Named Ranges (currently unused). The one prerequisite refac
 to do first: **extract inline header lists into `*_REQUIRED_HEADERS_` constants** so
 provisioning and the Validator share one definition.
 
-**Note.** Architecture only. **Do not begin implementation now.**
+**Note.** This recommended first slice has **shipped** (Phase 2A): required-sheet +
+header-presence validation (`validator_provisioning.js`), and the prerequisite
+`*_REQUIRED_HEADERS_` constant extraction is done for the initial core sheets.
+Conditional Formatting, Formulas, and Named Ranges remain deferred as noted above.
 
 ---
 
@@ -931,12 +959,18 @@ physical separation, and `dev-tools/` has been removed.
 
 ---
 
-## 12. Test Harness / Regression Runner *(planned — the writer counterpart; architecture only)*
+## 12. Test Harness / Regression Runner *(foundation V1 implemented — the writer counterpart)*
 
-> **Status:** **Architecture only, not implemented.** Sequenced in the roadmap
-> **after** the Validator Phase 2 foundation (`ROADMAP.md → P1`): (1) Validator
-> Phase 2A/2B → (2) Test Harness foundation → (3) Scenario packs → (4) Release
-> Readiness gate.
+> **Status:** **Foundation V1 implemented.** `test_harness_core.js`,
+> `test_harness_scenarios.js`, and `test_harness_report.js` exist: the guard +
+> disposable-workbook lifecycle + `assertDisposableTarget_` + one SMOKE scenario
+> (Provision + one Donation row) + report shaping. It runs from the editor
+> (`testRunSmoke()` / `testRunSmokeTrash()`) and from the Validation & Testing
+> console's Test Harness card (Keep/Trash). Scenario packs, Regression/Recovery/
+> Stress, and the Release Readiness gate remain unbuilt. Roadmap sequence
+> (`ROADMAP.md → P1`): (1) Validator Phase 2A/2B → **(2) Test Harness foundation
+> *(done)*** → (3) Scenario packs → (4) Release Readiness gate. Full design:
+> `TEST_HARNESS_ARCHITECTURE.md`.
 
 ### 12.1 The boundary (why this is a separate subsystem)
 
@@ -986,9 +1020,15 @@ neither crosses that line.
 
 ---
 
-## 13. Validation & Testing admin console *(planned — the UI surface; design only)*
+## 13. Validation & Testing admin console *(V1 implemented — the UI surface)*
 
-> **Status:** **Design only, not implemented.** Full design of record:
+> **Status:** **V1 implemented.** `ValidationTestingUI.html` +
+> `validation_testing_server.js`, admin-gated route `?view=validation` in
+> `webapp.js`. Live: **Target** selection (Configured Central default / Explicit ID)
+> with a safety readout; **Workbook Health** — Provisioning (gating), Workbook Drift
+> (advisory), Schema Evolution (advisory, standalone); and a single-scenario **Test
+> Harness** card (Keep/Trash). Still future: the multi-suite selector, Formula/CF
+> buttons, and the Release Readiness verdict. Full design of record:
 > **`VALIDATION_TESTING_CONSOLE.md`**.
 
 A dedicated admin-only page — **Validation & Testing** — is the operator surface for

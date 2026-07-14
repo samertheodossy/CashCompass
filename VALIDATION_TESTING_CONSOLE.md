@@ -4,11 +4,21 @@
 Health) and the writer **Test Harness** (Regression Runner), plus the aggregated
 **Release Readiness** verdict.*
 
-**Status:** **Design only. Not implemented.** No `ValidationTestingUI.html` /
-`validation_testing*.js` code exists yet. This document is the design of record; it
-authorizes no code changes. It sits on top of the subsystems designed in
-`VALIDATOR_ARCHITECTURE.md` (§10 Phase 2 Workbook Health) and
-`TEST_HARNESS_ARCHITECTURE.md`, and the report format in `RELEASE_READINESS.md`.
+**Status:** **V1 implemented; later phases still design.** Live today
+(`ValidationTestingUI.html` + `validation_testing_server.js`, admin-gated route
+`?view=validation` in `webapp.js`): **Section A Target** (Configured Central default
+/ Explicit ID) with a read-only safety readout; **Section B Workbook Health** —
+Provisioning (gating), Workbook Drift (advisory), and Schema Evolution (advisory,
+standalone) with status cards, findings, and a JSON viewer; and **Section C Test
+Harness** — a collapsible writer card running the single `SMOKE-PROVISION-DONATION`
+scenario with a Keep/Trash disposition (`vtListHarnessScenarios()` /
+`vtRunHarnessScenario()`). **Still design only:** the multi-suite/scenario selector,
+the mapped-user and disposable target types, Formula / Conditional-Formatting
+validation buttons, the Release Readiness verdict, and extracting the inline client
+controller into a separate `validation_testing.js`. This document remains the design
+of record for those; it sits on top of the subsystems in `VALIDATOR_ARCHITECTURE.md`
+(§10 Phase 2 Workbook Health) and `TEST_HARNESS_ARCHITECTURE.md`, and the report
+format in `RELEASE_READINESS.md`.
 
 **Why a page (vs editor functions / Admin Diagnostics):** the editor runners stay
 available for development but are secondary — they log to Executions and require an
@@ -144,17 +154,17 @@ Buttons are disabled until their module ships:
 
 Output panel:
 
-- **Workbook Type + Compatibility badge** *(Schema Evolution — planned)* — top-line
-  read of the workbook's schema generation so legacy/bound targets are legible at a
-  glance.
+- **Workbook Type + Compatibility badge** *(Schema Evolution — live via the standalone
+  action; not part of the Full Workbook Health pipeline)* — top-line read of the
+  workbook's schema generation so legacy/bound targets are legible at a glance.
 - Overall badge: **PASS / WARN / FAIL** — driven by **gating (Provisioning)**
   findings only; advisory Schema Evolution and Drift findings surface as WARN/INFO
   and never flip the badge to FAIL (the sole exception is *Upgrade Required*, which
   by definition is a residual Provisioning ERROR).
 - Counts: **ERROR / WARN / INFO / OK**.
 - Three grouped sections — **Structural (Provisioning)**, **Schema (Schema
-  Evolution)** *(planned)*, and **Divergence (Drift)** — each with per-module
-  sub-sections, badge + counts.
+  Evolution)** *(live via the standalone action)*, and **Divergence (Drift)** — each
+  with per-module sub-sections, badge + counts.
 - Per-sheet findings table: `sheet · presence · status · [severity][kind] message`.
 - **Copy JSON** (the raw report object) and **Copy text summary** (the human report).
 
@@ -339,12 +349,23 @@ Rendering:
 
 ## 7. Proposed files
 
+> **Implemented today (V1) — note the naming/shape differences from the proposal
+> below.** Files: `ValidationTestingUI.html` (with the client controller **inline**,
+> not a separate `validation_testing.js`) + `validation_testing_server.js`. Shipped
+> server functions: `vtGetDefaultTarget()`, `vtInspectTarget(id)`,
+> `vtRunProvisioning(spreadsheetId)`, `vtRunWorkbookDrift(spreadsheetId)`,
+> `vtRunSchemaEvolution(spreadsheetId)`, `vtListHarnessScenarios()`,
+> `vtRunHarnessScenario(scenarioId, options)`. The `(type, id)` argument model,
+> `vtRunFormulas` / `vtRunConditionalFormatting` / `vtRunWorkbookHealth`,
+> `vtRunSuite`, `vtRunReleaseReadiness`, and `vtCleanupStragglers` below remain the
+> design for later phases.
+
 New (this console):
 
 ```
-ValidationTestingUI.html        # page markup + include of validation_testing.js
-validation_testing.js           # CLIENT controller: state, google.script.run, rendering
+ValidationTestingUI.html        # page markup + inline CLIENT controller (state, google.script.run, rendering)
 validation_testing_server.js    # SERVER API: guarded, resolves targets, returns objects
+                                #   (a separate validation_testing.js controller is deferred)
 ```
 
 Depended-upon (designed elsewhere; built in their own milestones):
@@ -387,17 +408,22 @@ Editor runners (`validatorRunProvisioning`, `validatorRunGoldenParity*`,
 Layered so value ships the moment each underlying module exists; the console never
 gates on the whole subsystem.
 
-- **C1 — Read-only Validator console (after Phase 2A).** `ValidationTestingUI.html`
-  + `validation_testing.js` + `validation_testing_server.js` with **Section A
-  (Target)** and **Section B (Provisioning only)**. Proves the route guard, target
-  classification, structured-object return, and rendering end-to-end against the
-  already-shipped `validateProvisioning_`.
-- **C2 — More Validator modules.** Wire Schema / Formula / Conditional Formatting /
-  Full Workbook Health buttons to their server functions as each Phase-2 module
-  ships (`validator_health.js`). Pure additions — no console rework.
-- **C3 — Regression Testing (after Test Harness foundation).** Add **Section C**:
-  disposable-target creation, suite/scenario selector from `vtListScenarios`,
-  scenario-by-scenario rendering, `assertDisposableTarget_`-enforced runs.
+- **C1 — Read-only Validator console (after Phase 2A). ✅ Done.**
+  `ValidationTestingUI.html` + `validation_testing_server.js` with **Section A
+  (Target)** and **Section B (Provisioning)**. Proves the route guard, target
+  resolution, structured-object return, and rendering end-to-end. *(The client
+  controller currently lives inline in the HTML rather than a separate
+  `validation_testing.js`; extraction is deferred.)*
+- **C2 — More Validator modules. ◑ Partial.** Workbook Drift and Schema Evolution
+  buttons are wired (`vtRunWorkbookDrift`, `vtRunSchemaEvolution`). Formula /
+  Conditional-Formatting / Full Workbook Health buttons remain future as each
+  Phase-2 module ships.
+- **C3 — Regression Testing (after Test Harness foundation). ◑ V1 slice done.**
+  Section C exists as a single-scenario **Test Harness** card
+  (`SMOKE-PROVISION-DONATION`, Keep/Trash) via `vtListHarnessScenarios` /
+  `vtRunHarnessScenario`; the harness always creates its own disposable workbook and
+  `assertDisposableTarget_` enforces the trash. The multi-suite/scenario selector
+  remains future.
 - **C4 — Release Readiness verdict.** Add the aggregated verdict rendering + "Run
   Full Release Readiness" once the gate (`RELEASE_READINESS.md`) exists.
 - **C5 — Polish.** Long-run handling (per-pack runs / progress), cleanup-stragglers
@@ -450,4 +476,4 @@ When this is built (not now):
 
 ---
 
-*Design only. No implementation, no code changes, no commit/push/deploy.*
+*V1 implemented (see Status header); later phases remain design only. This document is the design of record for the unbuilt phases.*

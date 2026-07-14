@@ -8,6 +8,14 @@ pack in `test_harness_scenarios.js` (see `TEST_HARNESS_ARCHITECTURE.md`) will
 implement these entries. This file is the source of truth for *what* the
 regression pack covers; the harness is *how*.
 
+> **Scope of this file vs. the suite plan.** This registry is **permanent memory of
+> fixed historical bugs** — one `REG-###` per bug so it can never silently return.
+> The broader **forward-looking end-to-end suite roadmap** (Smoke / Bills Recurrence
+> / Income / Investments / Houses / Dashboard / Recovery / Stress / Release
+> Readiness, with coverage matrices and build order) lives in
+> **`REGRESSION_SUITE_PLAN.md`**. The historical `REG-###` entries below are a subset
+> of that suite's REGRESSION level.
+
 > **Note on seeded entries:** the initial `REG-###` entries below are reconstructed
 > from project history (`SESSION_NOTES.md`, the Central-migration audit, and recent
 > milestones). **Dates, root causes, and affected files should be confirmed against
@@ -16,6 +24,12 @@ regression pack covers; the harness is *how*.
 ---
 
 ## Workflow — fix a bug → add a scenario
+
+> **Trigger:** every bug fix runs the **Regression Discovery Policy**
+> (`REGRESSION_SUITE_PLAN.md → Regression Discovery Policy`, §2) — *does this map to
+> an existing `REG-###`, or does it need a new one? What exact behavior failed, and
+> what exact assertion would catch it next time?* Use the copy-paste **Regression
+> Discovery** prompt block (`REGRESSION_SUITE_PLAN.md → §A`).
 
 Whenever a production bug is fixed:
 

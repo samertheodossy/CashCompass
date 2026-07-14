@@ -3,14 +3,19 @@
 *The developer-only **writer/mutator** that drives scenarios against disposable
 workbooks and asks the read-only **Validator** to confirm nothing broke.*
 
-**Status:** **Foundation V1 implemented.** `test_harness_core.js`,
+**Status:** **Foundation V1 implemented — editor + admin UI.** `test_harness_core.js`,
 `test_harness_scenarios.js`, and `test_harness_report.js` exist: the full guard +
 disposable-workbook lifecycle + `assertDisposableTarget_` + **one** SMOKE scenario
-(Provision + one Donation row) + report shaping, driven by the editor runner
-`testRunSmoke()`. Scenario packs, Regression/Recovery/Stress, and Release Readiness
-remain unbuilt. Sequenced in `ROADMAP.md → P1` **after** the Validator Phase 2
-foundation: (1) Validator Phase 2A/2B → **(2) Test Harness foundation *(V1 done)* →
-(3) Scenario packs → (4) Release Readiness gate**.
+(Provision + one Donation row) + report shaping. It runs from the editor via
+`testRunSmoke()` / `testRunSmokeTrash()` **and** from the Validation & Testing admin
+console — a collapsible **Test Harness** card (writer) that runs the smoke scenario
+with a Keep/Trash disposition, backed by the thin server wrappers
+`vtListHarnessScenarios()` / `vtRunHarnessScenario()` (guarded by
+`assertHarnessAllowed_()`; they never accept a client workbook ID and always create
+the harness's own disposable workbook). Scenario packs, Regression/Recovery/Stress,
+and Release Readiness remain unbuilt. Sequenced in `ROADMAP.md → P1` **after** the
+Validator Phase 2 foundation: (1) Validator Phase 2A/2B → **(2) Test Harness
+foundation *(V1 done)* → (3) Scenario packs → (4) Release Readiness gate**.
 
 > **Two deviations the V1 implementation revealed (design corrections):**
 > 1. **Marker primitive.** `PropertiesService.getDocumentProperties()` is scoped to
@@ -245,6 +250,17 @@ Scenario {
 
 ## 4. Scenario packs
 
+> **Full E2E suite roadmap → `REGRESSION_SUITE_PLAN.md`.** That doc specifies the
+> **eighteen packs** in four bands (Foundational: Smoke · Bills Recurrence · Income ·
+> Investments · Retirement · Houses · Financial Ledger/Activity Log — Whole-system:
+> Dashboard E2E · System Integrity · Multi-Year · Edit/Delete — Non-functional:
+> Stress · Performance · UI · Security/Safety — Recovery & gates: Recovery ·
+> Import/Migration · Release Readiness · Release Certification), the per-module
+> coverage matrices, reusable fixture families, the scenario-model contract, the
+> recommended build order, and the two cross-cutting enablers (a functional-assertion
+> capability + the ss-injection refactor). This section is the summary; the plan is
+> the source of truth for *what to build next*.
+
 Packs group scenarios by category and let a run enable a subset. Target coverage:
 
 - **Smoke:** Provision · Settings · Cash Flow · Bills · Donation (+ Bank Accounts,
@@ -279,6 +295,12 @@ The registry format, workflow ("fix a bug → add a scenario"), and the seeded
 initial entries (Central-migration `getActiveSpreadsheet()`-null class, etc.) live
 in **`REGRESSION_SCENARIOS.md`**. `test_harness_scenarios.js` implements the
 `REGRESSION` pack from that registry.
+
+> **Coverage grows by policy, not by luck.** The **Regression Discovery Policy**
+> (`REGRESSION_SUITE_PLAN.md`) requires every bug fix / feature / schema / dashboard /
+> recurrence / financial-calc change to identify new & affected scenarios, packs, and
+> assertions — via the reusable **Regression Discovery** prompt block
+> (`REGRESSION_SUITE_PLAN.md → §A`) appended to future task prompts.
 
 ---
 
@@ -317,6 +339,12 @@ validator_health.js        # (Validator, read-only) the health entry the harness
 ```
 
 **Public (guarded) entry points** — `test_harness_core.js`:
+
+> **Implemented today (V1):** `testRunSmoke(options)` and the no-arg convenience
+> `testRunSmokeTrash()` (forwards `{ trash: true }`). These are the current editor
+> runners; the console reaches the same scenario via `vtRunHarnessScenario()`. The
+> multi-suite entry points below are the planned end state and are **not** built yet.
+
 - `runRegressionSuite(options)` — `{ enabledPacks, stopOnSeverity, keepOnFailure,
   archive }`.
 - `harnessRunSmoke()` / `harnessRunRegression()` / `harnessRunAll()` — no-arg dev
@@ -339,8 +367,12 @@ Layered, fail-closed, mirroring the Validator guard but **stricter**:
 2. **Admin identity gate** — reuse `isAdminUser_()` (`ADMIN_EMAILS` /
    `BETA_CONTACT_EMAIL`).
 3. **Disposable-target gate** — `assertDisposableTarget_` before every write (§2.4).
-4. **No runtime wiring** — never called from `doGet`, `onOpen`, a menu, or a
-   trigger; manual editor Run (or a future admin-gated Admin Diagnostics action).
+4. **No automatic runtime wiring** — never called from `doGet`, `onOpen`, a menu,
+   or a trigger. It runs only on an explicit, guarded request: a manual editor Run
+   (`testRunSmoke()` / `testRunSmokeTrash()`) **or** an admin action in the
+   Validation & Testing console (`vtRunHarnessScenario()`, itself
+   `assertHarnessAllowed_()`-guarded). No path invokes it as a side effect of
+   loading the app.
 5. **Default-off** — inert unless an admin explicitly enables it.
 
 ### Script properties

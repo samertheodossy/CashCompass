@@ -3,10 +3,13 @@
 *The pre-release go/no-go produced by the Test Harness running every scenario pack
 and the Validator judging each result.*
 
-**Status:** **Design + template. Not implemented.** Produced by
-`test_harness_report.js` (see `TEST_HARNESS_ARCHITECTURE.md`) once the harness and
-Validator Phase 2 exist. This file is the report format and the release workflow;
-the harness is the producer.
+**Status:** **Design + template. Not implemented.** The Test Harness *foundation
+V1* and the Validator Phase 2 core (Provisioning / Drift / Schema Evolution) now
+exist, but the **aggregate Release Readiness report** — every scenario pack across
+all families rolled into one go/no-go — is not built yet. It will be produced by
+`test_harness_report.js` (see `TEST_HARNESS_ARCHITECTURE.md`) once the scenario
+packs land. This file is the report format and the release workflow; the harness is
+the producer.
 
 **Related docs:** `TEST_HARNESS_ARCHITECTURE.md` (the runner),
 `VALIDATOR_ARCHITECTURE.md` (the read-only judge), `REGRESSION_SCENARIOS.md` (the
