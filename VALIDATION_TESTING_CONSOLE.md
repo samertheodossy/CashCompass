@@ -160,7 +160,17 @@ Output panel:
 
 ### C. Regression Testing (Test Harness — writer, disposable targets only)
 
-Enabled only when a `DISPOSABLE_TEST` target is selected and `TEST_HARNESS_ENABLED`.
+> **V1 SLICE IMPLEMENTED (single smoke scenario).** A collapsible **Test Harness**
+> card is live on `ValidationTestingUI.html`, below Workbook Health. It runs ONLY
+> `SMOKE-PROVISION-DONATION` with a Keep/Trash disposition and renders the harness
+> report (Overall · Run ID · Workbook link · Disposition + Provisioning / Schema
+> Evolution / Drift cards + raw JSON). Server: `vtListHarnessScenarios()` and
+> `vtRunHarnessScenario(scenarioId, options)` in `validation_testing_server.js` —
+> thin wrappers over `testRunSmoke(options)`, guarded by `assertHarnessAllowed_()`,
+> that never accept a client workbook ID and never use the Target selector (the
+> harness always creates its own disposable workbook; `assertDisposableTarget_`
+> stays authoritative for the trash). The full multi-suite selector below remains
+> future work (phase C3+).
 
 Actions:
 

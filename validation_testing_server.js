@@ -148,3 +148,60 @@ function vtRunSchemaEvolution(spreadsheetId) {
     return { ok: true, target: vtTargetInfo_(t), report: report };
   });
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Test Harness (WRITER) — thin wrappers over the guarded harness runner       */
+/*                                                                              */
+/*  DIFFERENT trust model from the Validator functions above: these are guarded */
+/*  by assertHarnessAllowed_() (TEST_HARNESS_ENABLED + admin), NOT the Validator */
+/*  guard. They own NO harness logic — they list the scenario descriptor and    */
+/*  delegate execution to the existing testRunSmoke() runner. The harness ALWAYS */
+/*  creates its OWN disposable workbook; these functions NEVER accept a workbook */
+/*  ID from the client and NEVER use the Target selector, so no client input can */
+/*  redirect a write. assertDisposableTarget_ (inside runScenario_) stays the    */
+/*  authoritative gate for the optional trash.                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * List the Test Harness scenarios available to the UI (V1: the SMOKE scenario
+ * only). Guarded by the WRITER guard. Read-only listing — surfaces the scenario
+ * descriptor only; no workbook is created.
+ * @returns {!Object} { ok, scenarios:[{id,category,description,expectedSheets}] } | {ok:false,error}
+ */
+function vtListHarnessScenarios() {
+  return vtSafe_(function() {
+    assertHarnessAllowed_();
+    var s = getHarnessSmokeScenario_();
+    return { ok: true, scenarios: [{
+      id: s.id,
+      category: s.category,
+      description: s.description,
+      expectedSheets: (s.expectedSheets && s.expectedSheets.length) ? s.expectedSheets.slice() : null
+    }] };
+  });
+}
+
+/**
+ * Run ONE Test Harness scenario and return its structured report. V1 accepts ONLY
+ * SMOKE-PROVISION-DONATION and rejects any other id fail-closed (before any write).
+ * Delegates to the existing testRunSmoke(options) — which creates the disposable
+ * workbook, runs the scenario, has the read-only Validator judge it, and honors
+ * options.trash (soft-delete after validation, only after re-passing the
+ * disposable gate). Never accepts/uses a client workbook ID.
+ * @param {string} scenarioId  must equal the SMOKE scenario id
+ * @param {Object=} options     { trash: boolean } (default: keep)
+ * @returns {!Object} { ok, report } | { ok:false, error }
+ */
+function vtRunHarnessScenario(scenarioId, options) {
+  return vtSafe_(function() {
+    assertHarnessAllowed_();
+    var id = String(scenarioId || '').trim();
+    var smokeId = getHarnessSmokeScenario_().id;
+    if (id !== smokeId) {
+      throw new Error('Unknown or unsupported scenario: "' + id + '". V1 supports only ' + smokeId + '.');
+    }
+    var trash = !!(options && options.trash === true);
+    var report = testRunSmoke({ trash: trash });
+    return { ok: true, report: report };
+  });
+}

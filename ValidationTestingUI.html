@@ -160,6 +160,12 @@
                    text-transform: uppercase; color: var(--ink-mute); background: #eef1f4;
                    border-radius: 6px; padding: 1px 6px; margin-top: 6px; }
 
+    /* Test Harness disclosure */
+    #vt-harness > summary::-webkit-details-marker { display: none; }
+    #vt-harness > summary .chev { transition: transform .15s; }
+    #vt-harness[open] > summary .chev { transform: rotate(90deg); }
+    #vt-h-results .summary, #vt-h-results .status-grid { margin-bottom: 14px; }
+
     .hidden { display: none !important; }
 
     @media (max-width: 640px) {
@@ -231,6 +237,58 @@
         <pre class="json" id="vt-json"></pre>
       </details>
     </div>
+  </div>
+
+  <!-- TEST HARNESS (writer) -->
+  <div class="card">
+    <details id="vt-harness" ontoggle="vtHOnToggle(this)">
+      <summary style="list-style:none; cursor:pointer; display:flex; align-items:center; gap:10px;">
+        <span class="chev" style="color:var(--ink-mute); font-size:11px;">▶</span>
+        <span style="font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); font-weight:700;">Test Harness</span>
+        <span style="font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:#723b13; background:var(--amber-bg); border-radius:6px; padding:1px 7px;">Writer</span>
+        <span style="font-size:12.5px; color:var(--ink-mute); font-weight:400;">creates disposable workbooks</span>
+      </summary>
+
+      <div style="margin-top:14px;">
+        <div class="banner" style="background:#fff7ed; border-color:#fcd9b6; color:#7c4a1e;">
+          <span class="ico">🧪</span>
+          <span>The Test Harness creates a <b>new disposable workbook</b> for each run and
+            <b>ignores the selected target workbook</b>. It never writes to the configured Central
+            default, to any existing bounded/user workbook, or to the canonical workbook — every
+            destructive step is gated by <code>assertDisposableTarget_</code>.</span>
+        </div>
+
+        <!-- Capability notice (shown when the harness guard denies access). -->
+        <div id="vt-h-disabled" class="hidden" style="display:flex; gap:8px; align-items:flex-start;
+             background:#f3f5f7; border:1px solid var(--line); border-radius:8px;
+             padding:10px 14px; font-size:12.5px; color:var(--ink-soft); margin-bottom:14px;">
+          <span aria-hidden="true">🔒</span>
+          <span id="vt-h-disabled-msg"></span>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <div class="lbl" style="font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-mute); margin-bottom:4px;">Scenario</div>
+          <select id="vt-h-scenario" onchange="vtHRenderDesc()" disabled
+                  style="width:100%; max-width:420px; padding:9px 11px; font-size:13px; border:1px solid #cbd2d9; border-radius:8px; background:#fff;">
+            <option value="SMOKE-PROVISION-DONATION">SMOKE-PROVISION-DONATION</option>
+          </select>
+          <div id="vt-h-desc" style="font-size:12.5px; color:var(--ink-soft); margin-top:6px;"></div>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <div class="lbl" style="font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-mute); margin-bottom:4px;">Workbook disposition</div>
+          <div class="radio-row"><label><input type="radio" name="vt-h-disp" value="keep" checked disabled> Keep workbook for inspection</label></div>
+          <div class="radio-row"><label><input type="radio" name="vt-h-disp" value="trash" disabled> Trash after validation</label></div>
+        </div>
+
+        <div class="btn-row">
+          <button class="primary" id="vt-h-run" onclick="vtHRun()" disabled>Run Scenario</button>
+          <span id="vt-h-run-status" class="runmsg"></span>
+        </div>
+
+        <div id="vt-h-results" style="margin-top:16px;"></div>
+      </div>
+    </details>
   </div>
 
   <!-- FUTURE -->
@@ -645,6 +703,193 @@
       // Clipboard blocked in sandboxed iframe — reveal the viewer for manual copy.
       var d = document.querySelector('details.json');
       if (d) d.open = true;
+    }
+  }
+
+  /* ==================================================================== */
+  /*  Test Harness (WRITER) — isolated from the read-only Validator state  */
+  /*  above. Its own run token, scenario map, and last-report; it never    */
+  /*  touches vtState or the Target selector.                              */
+  /* ==================================================================== */
+  var vtHLoaded = false;      // scenarios fetched on first expand
+  var vtHRunToken = 0;        // ignore superseded/late run callbacks
+  var vtHScenMap = {};        // id → scenario descriptor
+  var vtHLastReport = null;   // for the JSON copy button
+
+  // Enable/disable all harness controls together. Controls start DISABLED in the
+  // markup and are only enabled once vtListHarnessScenarios() confirms capability
+  // (ok:true) — so a guard-denied harness never shows a runnable state. This is a
+  // UX affordance ONLY; the server re-guards every call (assertHarnessAllowed_),
+  // which stays authoritative.
+  function vtHSetEnabled(enabled) {
+    document.getElementById('vt-h-scenario').disabled = !enabled;
+    document.getElementById('vt-h-run').disabled = !enabled;
+    var radios = document.querySelectorAll('input[name="vt-h-disp"]');
+    for (var i = 0; i < radios.length; i++) radios[i].disabled = !enabled;
+  }
+
+  // Show the disabled/capability notice and force controls off.
+  function vtHShowDisabled(msg) {
+    vtHSetEnabled(false);
+    document.getElementById('vt-h-desc').textContent = '';
+    document.getElementById('vt-h-run-status').innerHTML = '';
+    document.getElementById('vt-h-disabled-msg').textContent = msg;
+    document.getElementById('vt-h-disabled').classList.remove('hidden');
+  }
+  function vtHHideDisabled() {
+    document.getElementById('vt-h-disabled').classList.add('hidden');
+  }
+
+  // Lazy-load scenarios the first time the section is expanded (the list call is
+  // harness-guarded, so we avoid firing it on page load for non-harness admins).
+  function vtHOnToggle(el) { if (el.open && !vtHLoaded) vtHLoadScenarios(); }
+
+  function vtHLoadScenarios() {
+    var desc = document.getElementById('vt-h-desc');
+    desc.innerHTML = vtSpin('Loading scenarios…');
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res || !res.ok) {
+          // Guard denied (disabled flag or non-admin) — present a clear disabled
+          // state, no runnable controls. Prefer the server's specific reason.
+          vtHShowDisabled(res && res.error ? res.error : 'Test Harness is not enabled for this user/environment.');
+          return;
+        }
+        vtHLoaded = true;
+        vtHHideDisabled();
+        var list = res.scenarios || [];
+        var sel = document.getElementById('vt-h-scenario');
+        var html = '';
+        vtHScenMap = {};
+        for (var i = 0; i < list.length; i++) {
+          vtHScenMap[list[i].id] = list[i];
+          html += '<option value="' + vtEsc(list[i].id) + '">' + vtEsc(list[i].id) + '</option>';
+        }
+        if (html) sel.innerHTML = html;
+        vtHSetEnabled(true);   // capability confirmed — activate the controls
+        vtHRenderDesc();
+      })
+      .withFailureHandler(function(err) {
+        vtHShowDisabled(err && err.message ? err.message : 'Test Harness is not enabled for this user/environment.');
+      })
+      .vtListHarnessScenarios();
+  }
+
+  function vtHRenderDesc() {
+    var sel = document.getElementById('vt-h-scenario');
+    var desc = document.getElementById('vt-h-desc');
+    var s = vtHScenMap[sel.value];
+    if (!s) { desc.textContent = ''; return; }
+    var scope = (s.expectedSheets && s.expectedSheets.length)
+      ? ' · Validated scope: ' + s.expectedSheets.join(', ') : '';
+    desc.innerHTML = vtEsc(s.description || '') +
+      '<span style="color:var(--ink-mute);">' + vtEsc(scope) + '</span>';
+  }
+
+  function vtHSetMsg(html, isErr) {
+    var el = document.getElementById('vt-h-run-status');
+    el.className = 'runmsg' + (isErr ? ' err' : '');
+    el.innerHTML = html;
+  }
+
+  function vtHRun() {
+    var token = ++vtHRunToken;
+    var scenarioId = document.getElementById('vt-h-scenario').value;
+    var trash = document.querySelector('input[name="vt-h-disp"]:checked').value === 'trash';
+    var btn = document.getElementById('vt-h-run');
+    var box = document.getElementById('vt-h-results');
+    btn.disabled = true;
+    box.innerHTML = '';
+    vtHLastReport = null;
+    vtHSetMsg(vtSpin(trash ? 'Running scenario (trash on success)…' : 'Running scenario…'), false);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (token !== vtHRunToken) return;
+        btn.disabled = false;
+        if (!res || !res.ok) { vtHSetMsg(vtEsc(res && res.error ? res.error : 'Run failed.'), true); return; }
+        vtHSetMsg('', false);
+        vtHRenderReport(res.report);
+      })
+      .withFailureHandler(function(err) {
+        if (token !== vtHRunToken) return;
+        btn.disabled = false;
+        vtHSetMsg(vtEsc(err && err.message ? err.message : 'Run failed.'), true);
+      })
+      .vtRunHarnessScenario(scenarioId, { trash: trash });
+  }
+
+  function vtHRenderReport(r) {
+    var box = document.getElementById('vt-h-results');
+    if (!r) { box.innerHTML = '<p class="empty">No report returned.</p>'; return; }
+    vtHLastReport = r;
+    var v = r.validators || {};
+    var overallColor = r.overall === 'PASS' ? 'var(--green-fg)' : 'var(--red-fg)';
+    var wbCell = (r.workbook && r.workbook.url)
+      ? '<a href="' + vtEsc(r.workbook.url) + '" target="_blank" rel="noopener noreferrer">' + vtEsc(r.workbook.name || 'open workbook') + '</a>'
+      : vtEsc((r.workbook && r.workbook.name) || '—');
+
+    var html = '<div class="summary">' +
+      vtCell('Overall', '<span style="color:' + overallColor + ';">' + vtEsc(r.overall) + '</span>') +
+      vtCell('Disposition', vtEsc(r.disposition || '—')) +
+      vtCell('Run ID', '<span class="small">' + vtEsc(r.runId || '—') + '</span>') +
+      vtCell('Workbook', wbCell) +
+    '</div>';
+
+    html += '<div class="status-grid">';
+    var p = v.provisioning;
+    if (p) {
+      var pass = p.overall === 'PASS';
+      html += '<div class="status ' + (pass ? 'pass' : 'fail') + '">' +
+        '<div class="name">Provisioning</div>' +
+        '<div class="verdict ' + (pass ? 'pass' : 'fail') + '">' + (pass ? '🟢 PASS' : '🔴 FAIL') + '</div>' +
+        '<div class="tally">' + vtTally(p.counts) + '</div>' +
+      '</div>';
+    }
+    var sc = v.schema;
+    if (sc) {
+      var compat = sc.compatibility;
+      var cardCls = compat === 'UPGRADE_REQUIRED' ? 'fail' : (compat === 'UPGRADE_RECOMMENDED' ? 'drift' : 'pass');
+      html += '<div class="status ' + cardCls + '" style="border-left-color:#3b82f6;">' +
+        '<div class="name">Schema Evolution <span style="font-weight:400;color:var(--ink-mute);">(advisory)</span></div>' +
+        '<div class="verdict ' + cardCls + '">' + vtEsc(vtCompatLabel(sc.workbookType)) + '</div>' +
+        '<div class="desc">' + vtEsc(vtCompatLabel(compat)) + '</div>' +
+      '</div>';
+    }
+    var d = v.drift;
+    if (d) {
+      var drift = d.overall === 'DRIFT';
+      var warns = (d.counts && d.counts.warn) || 0;
+      html += '<div class="status ' + (drift ? 'drift' : 'pass') + '">' +
+        '<div class="name">Workbook Drift <span style="font-weight:400;color:var(--ink-mute);">(advisory)</span></div>' +
+        '<div class="verdict ' + (drift ? 'drift' : 'pass') + '">' + (drift ? '🟡 ' + warns + ' finding' + (warns === 1 ? '' : 's') : '🟢 PASS') + '</div>' +
+        '<div class="tally">' + vtTally(d.counts) + '</div>' +
+      '</div>';
+    }
+    html += '</div>';
+
+    if (r.error) {
+      html += '<p class="runmsg err" style="margin:0 0 12px;">' + vtEsc(r.error) + '</p>';
+    }
+
+    html += '<details class="json"><summary>View raw JSON ' +
+      '<button class="copybtn" onclick="vtHCopyJson(event)">Copy</button>' +
+      '<span id="vt-h-copied" class="copied hidden">Copied!</span></summary>' +
+      '<pre class="json" id="vt-h-json"></pre></details>';
+
+    box.innerHTML = html;
+    document.getElementById('vt-h-json').textContent = JSON.stringify(r, null, 2);
+  }
+
+  function vtHCopyJson(ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    var text = JSON.stringify(vtHLastReport || {}, null, 2);
+    var done = document.getElementById('vt-h-copied');
+    try {
+      navigator.clipboard.writeText(text);
+      if (done) { done.classList.remove('hidden'); setTimeout(function() { done.classList.add('hidden'); }, 1600); }
+    } catch (e) {
+      var dd = document.querySelector('#vt-h-results details.json');
+      if (dd) dd.open = true;
     }
   }
 </script>
