@@ -3,11 +3,21 @@
 *The forward-looking roadmap for expanding the Test Harness from one smoke scenario
 into a full beta-readiness regression suite that exercises CashCompass end to end.*
 
-**Status:** **Plan / design only. Not implemented.** Test Harness **Foundation V1**
-is working (`test_harness_*.js` + the Validation & Testing console; one scenario
-`SMOKE-PROVISION-DONATION`). This document specifies *what* the full suite should
-cover and *in what order to build it*. It does **not** authorize implementing any
-scenario — each scenario ships in its own approved milestone.
+**Status:** **Plan / design; first scenarios shipping incrementally.** Test Harness
+**Foundation V1** is working (`test_harness_*.js` + the Validation & Testing
+console). Implemented scenarios: `SMOKE-PROVISION-DONATION` and, as the first real
+regression scenarios: the pure recurrence pack **`REGRESSION-BILLS-MONTHLY`**,
+**`-WEEKLY`**, **`-WEEKLY-ON-DAY`**, **`-BIWEEKLY`** (recurrence-engine math only) plus
+the inspectable workbook-integration scenarios **`REGRESSION-BILLS-MONTHLY-INTEGRATION`**
+(visible `INPUT - Bills` + `LOG - Activity`) and **`REGRESSION-BILLS-MONTHLY-CASHFLOW`**
+(adds a canonical `INPUT - Cash Flow 2026` with the bill's Expense row and asserts the
+Bills ↔ Cash Flow linkage), all in `test_harness_scenarios_bills.js`. Scenarios now
+declare an **`executionLevel`** (`PURE` / `INTEGRATION` / `E2E`) so a tester
+immediately knows what to expect — see `TEST_HARNESS_ARCHITECTURE.md §3.1`. Keep both
+levels: PURE scenarios prove engine math, INTEGRATION scenarios prove visible workbook
+behavior. This document specifies *what* the full suite
+should cover and *in what order to build it*. It does **not** authorize implementing
+any additional scenario — each ships in its own approved milestone.
 
 > **Guiding principle — the regression suite is CashCompass's primary confidence
 > mechanism.** This is the project's **Regression-First Development** standard
@@ -452,19 +462,22 @@ Anchor Date, Schedule Effective Date`. Engine: `buildRuleFromBillRow_` →
 
 | Scenario ID | Case | Seed (bill config) | Assertion |
 |---|---|---|---|
-| `REGRESSION-BILLS-MONTHLY` | Monthly | Frequency=Monthly, Due Day=15 | occurrence on the 15th; next-occurrence correct |
-| `REGRESSION-BILLS-WEEKLY` | Weekly | Frequency=Weekly | 7-day cadence continuous across month boundary |
-| `REGRESSION-BILLS-WEEKLY-ON-DAY` | Weekly on weekday | Frequency=Weekly, Weekday=Sun | occurrences land on the chosen weekday |
-| `REGRESSION-BILLS-BIWEEKLY` | Biweekly | Frequency=Biweekly, Anchor Date set | true 14-day cadence from anchor, no monthly re-anchor / no parity drift |
-| `REGRESSION-BILLS-YEARLY` | Yearly | Frequency=Yearly, Start Month set | one occurrence in the anchor month only |
+| `REGRESSION-BILLS-MONTHLY` **✅ implemented** | Monthly (pure engine) | Frequency=Monthly, Due Day=15 | occurrence on the 15th; count/prior/next occurrence + one-month advancement (pure `buildInputBillDueCandidates_`, explicit anchor, `dateEquals`) — `test_harness_scenarios_bills.js` |
+| `REGRESSION-BILLS-MONTHLY-INTEGRATION` **✅ implemented** | Monthly (workbook integration) | Payee=City Utilities, Amount=125, Frequency=Monthly, Due Day=15, Manual pay | seeds a visible canonical `INPUT - Bills` row + `LOG - Activity` bill_add row on the disposable workbook; asserts sheet/row exist, payee/amount/due day, next occurrence (`dateEquals`), and the bill_add activity row + content **unconditionally** (bill add always logs) — `test_harness_scenarios_bills.js` (mirrors production write path via sheet-/ss-scoped helpers; Cash Flow + Dashboard deferred) |
+| `REGRESSION-BILLS-MONTHLY-CASHFLOW` **✅ implemented** | Monthly (Bills → Cash Flow integration) | Payee=City Utilities, Amount=125, Monthly, Due Day=15, Manual (CASH) | builds `INPUT - Bills` + a **canonical `INPUT - Cash Flow 2026`** (header + month columns + Summary, via real sheet-scoped helpers) + `LOG - Activity`; seeds the bill's Cash Flow Expense row exactly as `addBillFromDashboard` does (`findCashFlowRowByTypeAndPayee_` + `insertCashFlowRow_`); asserts both sheets exist, the Expense row (Type/Payee/Flow Source), and the **Bills ↔ Cash Flow payee linkage** — `test_harness_scenarios_bills.js`. Cash Flow *amount* is intentionally not asserted (production writes structural columns only at add time; amounts are a pay/autopay concern). Dashboard deferred |
+| `REGRESSION-BILLS-WEEKLY` **✅ implemented** | Weekly (legacy, no weekday) | Frequency=Weekly, Due Day=10 | count=11 across window; in-month 7-day cadence; prior/current/next; **per-month RE-ANCHOR** pinned (Dec 31 → Jan 10 = 10 days, not 7 — legacy weekly restarts at Due Day each month) — `test_harness_scenarios_bills.js` |
+| `REGRESSION-BILLS-WEEKLY-ON-DAY` **✅ implemented** | Weekly on weekday | Frequency=Weekly, Weekday=Sunday (Due Day ignored) | count=12; **every** occurrence is a Sunday (`getDay()===0`); continuous +7 across month/year boundaries (all gaps===7); next Sunday on/after anchor — `test_harness_scenarios_bills.js` |
+| `REGRESSION-BILLS-BIWEEKLY` **✅ implemented** | Biweekly (anchor-driven) | Frequency=Biweekly, Weekday=Monday, Anchor=Dec 15 2025 | count=6; anchor is first occurrence; true 14-day cadence (all gaps===14, no monthly re-anchor); **month + YEAR crossing** (Dec 29 → Jan 12 2026); correct next occurrence — `test_harness_scenarios_bills.js` |
+| `REGRESSION-BILLS-YEARLY` | Yearly | Frequency=Yearly, Start Month set | one occurrence in the anchor month only (reuses the non-clamping monthly path — see 31st/leap edge cases below) |
 | `REGRESSION-BILLS-AUTOPAY` | AutoPay | Autopay=Yes, Varies≠Yes, due date passed | Cash Flow cell written **once** + one `bill_autopay` Activity row; **no double-post** (guards REG-008) |
 | `REGRESSION-BILLS-MANUAL-PAY` | Manual Pay | Autopay=No | Pay writes payment + `bill_paid` marker; occurrence suppressed |
 | `REGRESSION-BILLS-OVERDUE` | Overdue | Due Day in the past, unpaid | appears in `overdue` bucket with overdue styling semantics |
 | `REGRESSION-BILLS-PAID-OCCURRENCE` | Paid occurrence | pay one occurrence of a recurring bill | that exact occurrence suppressed; others remain |
 | `REGRESSION-BILLS-NEXT-OCCURRENCE` | Next occurrence | any recurring bill | `generateOccurrences_` next date matches expected within the [-1,0,+1] month window |
 | `REGRESSION-BILLS-MONTH-BOUNDARY` | Month boundary | weekly/biweekly spanning end of month | cadence continuous across the boundary |
-| `REGRESSION-BILLS-31ST` | 31st-of-month | Due Day=31 | correct handling in 30-day / February months (no skipped/duplicated occurrence) |
-| `REGRESSION-BILLS-YEAR-BOUNDARY` | Year boundary | biweekly spanning Dec→Jan | cadence continuous into next year's Cash Flow sheet |
+| `REGRESSION-BILLS-31ST` | 31st-of-month | Due Day=31 | correct handling in 30-day / February months. **⚠ Discovered:** monthly/yearly do NOT clamp Due Day — `new Date(y, m, 31)` OVERFLOWS (e.g. Feb → Mar 3), and the occurrence's `monthIndex` can disagree with its `dueDate`. This scenario must first CHARACTERIZE current behavior; whether overflow is correct is a product decision (see Regression Discovery below) |
+| `REGRESSION-BILLS-LEAP-FEB29` | Leap Feb 29 | Due Day=29, Feb | **⚠ Discovered edge case:** Due Day 29 lands on Feb 29 in leap years but overflows to Mar 1 in non-leap years (no clamp). Characterize behavior in both a leap and non-leap year |
+| `REGRESSION-BILLS-YEAR-BOUNDARY` | Year boundary | monthly/biweekly window spanning Dec→Jan | cadence continuous into next year (a Dec/Jan `todayOnly` puts the [-1,0,+1] window across the year boundary). **Note:** already partially exercised — `REGRESSION-BILLS-BIWEEKLY` crosses 2025→2026 (Dec 29 → Jan 12) |
 
 ### 4.2 Income (Level 3)
 
@@ -658,7 +671,10 @@ Scenario {
   real `ensure*`/pure builders so the seeded state is production-shaped.
 - `actions(ctx)` must call **shipping code**, never reimplement behavior. Prefer the
   public entry point once the ss-injection seam exists (§2); until then use the
-  workbook-scoped seams + pure builders.
+  workbook-scoped seams + pure builders, per the **Integration Scenario Principle**
+  (`ENGINEERING_STANDARDS.md §13`): pure fn → sheet-scoped helper → ss-scoped helper →
+  small extraction → harness-specific code (last resort, documented). Duplicating
+  production build/format logic is what caused the Cash Flow "10pt row" fidelity bug.
 - `expectedOutcome` carries **both** the structural gate and any functional numeric
   assertions (§1).
 - `keep`/`trash` and JSON reporting are already supported by Foundation V1.
@@ -707,10 +723,12 @@ seams + pure builders; `[needs seam]` = best after the ss-injection refactor (§
 3. `SMOKE-PROVISION-HOUSE-VALUES` — `[pure]`
 4. `SMOKE-PROVISION-HOUSE-EXPENSES` — `[pure]`
 5. `SMOKE-PROVISION-INVESTMENTS-RETIREMENT` — `[pure]`
-6. `REGRESSION-BILLS-MONTHLY` — `[pure]` (engine is pure; occurrence math testable directly)
-7. `REGRESSION-BILLS-WEEKLY` — `[pure]`
-8. `REGRESSION-BILLS-WEEKLY-ON-DAY` — `[pure]`
-9. `REGRESSION-BILLS-BIWEEKLY` — `[pure]`
+6. `REGRESSION-BILLS-MONTHLY` — `[pure]` (engine is pure; occurrence math testable directly) — **✅ implemented** (`test_harness_scenarios_bills.js`; `dateEquals` comparator)
+7. `REGRESSION-BILLS-WEEKLY` — `[pure]` — **✅ implemented** (`test_harness_scenarios_bills.js`; legacy per-month re-anchor pinned)
+8. `REGRESSION-BILLS-WEEKLY-ON-DAY` — `[pure]` — **✅ implemented** (weekday correctness + continuous +7)
+9. `REGRESSION-BILLS-BIWEEKLY` — `[pure]` — **✅ implemented** (anchor-driven +14; month+year crossing)
+9a. `REGRESSION-BILLS-YEAR-BOUNDARY` — `[pure]` — **recommended before Yearly** (higher-frequency risk; monthly Dec/Jan window)
+9b. `REGRESSION-BILLS-31ST` + `REGRESSION-BILLS-LEAP-FEB29` — `[pure]` — **recommended before Yearly** (characterize the non-clamping overflow the yearly path also relies on)
 10. `REGRESSION-BILLS-YEARLY` — `[pure]`
 11. `REGRESSION-INCOME-BIWEEKLY` — **open (§8)**; if income cadence is not built,
     substitute `REGRESSION-INCOME-MULTIPLE-SOURCES` + `-DASHBOARD-REFLECTION` `[needs func]`

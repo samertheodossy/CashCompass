@@ -6,9 +6,19 @@
  * have the read-only Validator judge it. Design of record:
  * TEST_HARNESS_ARCHITECTURE.md §3.
  *
- * Scenario contract (V1 subset): { id, category, description, setup(ctx),
- * actions(ctx) }. `ctx` carries { ss, runId, actions[], assertWritable() }.
- * Scenarios MUST call ctx.assertWritable() immediately before every write.
+ * Scenario contract: { id, category, executionLevel, description, expectedSheets?,
+ * setup(ctx), actions(ctx), expectedOutcome?(ctx) }. `ctx` carries
+ * { ss, runId, actions[], assertWritable(), assert, read }. Scenarios MUST call
+ * ctx.assertWritable() immediately before every write.
+ *
+ * executionLevel classifies what a tester should EXPECT (see HARNESS_EXECUTION_LEVELS_):
+ *   PURE ......... minimal disposable workbook; no visual inspection expected;
+ *                  validates algorithms only (e.g. the recurrence-engine scenarios).
+ *   INTEGRATION .. visible workbook artifacts expected; intended for workbook
+ *                  inspection; validates production sheet behavior (e.g. the Bills
+ *                  monthly-integration / cash-flow scenarios).
+ *   E2E .......... validates a complete feature workflow — workbook + dashboard +
+ *                  activity log + cash flow + summaries (none yet; reserved).
  *
  * FIDELITY NOTE (V1 seam limitation): the production create-a-workbook workflows
  * (ensureInputDonationSheet_ / addDonation, ensureCashFlowYearSheet_, …) resolve
@@ -23,6 +33,93 @@
  * scenarios invoke the top-level workflows verbatim.
  */
 
+/* -------------------------------------------------------------------------- */
+/*  Execution-level classification                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The execution levels a scenario can declare, with the tester-facing expectation
+ * text surfaced in the console UI and the human report. Single source of truth so
+ * the UI, report, and docs stay in sync.
+ */
+var HARNESS_EXECUTION_LEVELS_ = {
+  PURE: {
+    label: 'PURE',
+    expectation: 'Minimal disposable workbook. No visual inspection expected. Validates algorithms only.'
+  },
+  INTEGRATION: {
+    label: 'INTEGRATION',
+    expectation: 'Visible workbook artifacts expected. Intended for workbook inspection. Validates production sheet behavior.'
+  },
+  E2E: {
+    label: 'E2E',
+    expectation: 'Validates a complete feature workflow: workbook + dashboard + activity log + cash flow + summaries.'
+  }
+};
+
+/**
+ * Resolve the { label, expectation } for a scenario execution level, tolerating
+ * unknown/blank values (defaults to a neutral UNKNOWN descriptor).
+ * @param {string} level
+ * @returns {{label:string, expectation:string}}
+ */
+function harnessExecutionLevelInfo_(level) {
+  var key = String(level || '').toUpperCase();
+  return HARNESS_EXECUTION_LEVELS_[key] || { label: key || 'UNKNOWN', expectation: '' };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Scenario registry                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * All Test Harness scenarios available to the runners/console, in a stable order.
+ * The registry is the single source of truth so adding a scenario (e.g. a new Bills
+ * case) surfaces it in BOTH the editor runner (testRunScenarioById_) and the
+ * console dropdown (vtListHarnessScenarios) with no other wiring. Each additional
+ * pack is referenced defensively (typeof guard) so a missing file never breaks the
+ * registry.
+ *
+ * @returns {Array<Object>} scenario objects
+ */
+function getHarnessScenarios_() {
+  var list = [getHarnessSmokeScenario_()];
+  if (typeof getHarnessBillsMonthlyScenario_ === 'function') {
+    list.push(getHarnessBillsMonthlyScenario_());
+  }
+  if (typeof getHarnessBillsWeeklyScenario_ === 'function') {
+    list.push(getHarnessBillsWeeklyScenario_());
+  }
+  if (typeof getHarnessBillsWeeklyOnDayScenario_ === 'function') {
+    list.push(getHarnessBillsWeeklyOnDayScenario_());
+  }
+  if (typeof getHarnessBillsBiweeklyScenario_ === 'function') {
+    list.push(getHarnessBillsBiweeklyScenario_());
+  }
+  if (typeof getHarnessBillsMonthlyIntegrationScenario_ === 'function') {
+    list.push(getHarnessBillsMonthlyIntegrationScenario_());
+  }
+  if (typeof getHarnessBillsMonthlyCashflowScenario_ === 'function') {
+    list.push(getHarnessBillsMonthlyCashflowScenario_());
+  }
+  return list;
+}
+
+/**
+ * Look up a scenario by id from the registry. Returns null if unknown (callers
+ * fail-closed on null before any write).
+ * @param {string} id
+ * @returns {Object|null}
+ */
+function getHarnessScenarioById_(id) {
+  var wanted = String(id || '').trim();
+  var all = getHarnessScenarios_();
+  for (var i = 0; i < all.length; i++) {
+    if (all[i] && all[i].id === wanted) return all[i];
+  }
+  return null;
+}
+
 /**
  * The V1 SMOKE scenario: provision a fresh workbook (INPUT - Settings) and add
  * one real donation row, then let Workbook Health judge it.
@@ -36,6 +133,7 @@ function getHarnessSmokeScenario_() {
   return {
     id: 'SMOKE-PROVISION-DONATION',
     category: 'SMOKE',
+    executionLevel: 'INTEGRATION',   // seeds a visible INPUT - Donation row for inspection
     description: 'Provision a fresh workbook (INPUT - Settings) and add one donation row.',
     // Scenario-scoped validation: this SMOKE only creates these three sheets, so
     // Workbook Health is scoped to them (validatorScopeModel_). Without this, the

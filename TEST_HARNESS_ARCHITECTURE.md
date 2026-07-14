@@ -27,7 +27,12 @@ foundation *(V1 done)* → (3) Scenario packs → (4) Release Readiness gate**.
 > 2. **Workflow-invocation seam.** The top-level create-a-workbook workflows
 >    (`ensureInputDonationSheet_`/`addDonation`, `ensureCashFlowYearSheet_`, …)
 >    resolve their workbook via `getUserSpreadsheet_()`, which has **no injection
->    seam** — calling them from the Harness could write to a REAL workbook. V1 stays
+>    seam** — calling them from the Harness could write to a REAL workbook. (Cash Flow
+>    is the first to gain an ss-scoped core: `buildCashFlowYearSheet_(ss, year)` was
+>    extracted from `ensureCashFlowYearSheet_`, so the Cash Flow integration scenario
+>    now reuses the **exact** production builder — structure + all formatting — with no
+>    harness duplication; only the `getUserSpreadsheet_()`-bound wrapper stays
+>    off-limits.) V1 stays
 >    inside the disposable target by invoking the workbook-SCOPED real seams
 >    (`runMinimalBootstrap_(ss)`) and the exact **pure** row helpers `addDonation()`
 >    uses (`findDonationBlockForTaxYear_` → `getDonationAppendRow1_` →
@@ -213,6 +218,10 @@ Scenarios are **data**, not ad-hoc scripts.
 Scenario {
   id,             // stable, e.g. 'SMOKE-PROVISION' or 'REG-014'
   category,       // 'SMOKE' | 'REGRESSION' | 'RECOVERY' | 'STRESS'
+  executionLevel, // 'PURE' | 'INTEGRATION' | 'E2E' — what a tester should EXPECT
+                  //   (see the classification table below; single source of truth is
+                  //   HARNESS_EXECUTION_LEVELS_ + harnessExecutionLevelInfo_ in
+                  //   test_harness_scenarios.js). Surfaced in the console UI + report.
   description,    // human summary
   prerequisites,  // other scenario ids / capabilities that must pass first
   setup(ctx),     // build initial state via REAL production helpers + fixtures
@@ -232,6 +241,41 @@ Scenario {
 - `expectedOutcome` lets a scenario assert either "clean PASS" or "these specific
   findings are expected" (e.g. a recovery scenario that intentionally starts
   corrupted and expects the Validator to detect it, then re-heals and expects PASS).
+
+**Execution level (`executionLevel`).** Orthogonal to `category`, this tells a tester
+what to expect from the disposable workbook a run produces. It is surfaced in the
+Workbook Health console (pill on the scenario dropdown + result summary) and the human
+report. Single source of truth: `HARNESS_EXECUTION_LEVELS_` in
+`test_harness_scenarios.js`.
+
+| Level | Workbook expectation | Example scenarios |
+|---|---|---|
+| **PURE** | Minimal disposable workbook. **No visual inspection expected.** Validates algorithms only. | `REGRESSION-BILLS-MONTHLY` / `-WEEKLY` / `-WEEKLY-ON-DAY` / `-BIWEEKLY` (recurrence-engine math) |
+| **INTEGRATION** | **Visible workbook artifacts expected.** Intended for workbook inspection. Validates production sheet behavior. | `REGRESSION-BILLS-MONTHLY-INTEGRATION`, `REGRESSION-BILLS-MONTHLY-CASHFLOW`, `SMOKE-PROVISION-DONATION` |
+| **E2E** | Validates a complete feature workflow — workbook + dashboard + activity log + cash flow + summaries. | *(none yet; reserved)* |
+
+**Integration Scenario Principle.** Integration scenarios must exercise **production
+code whenever it is safely possible** — an integration scenario only earns confidence
+when the workbook it produces is built by the *same* code production runs. Preference
+order (use a lower option only after ruling out the ones above):
+
+1. **Pure production functions** (deterministic, no I/O — e.g. the recurrence engine).
+2. **Sheet-scoped production helpers** (take a `Sheet` — e.g. `insertCashFlowRow_`,
+   `applyCashFlowSheetStyling_`, `ensureCashFlowSummaryRow_`).
+3. **Spreadsheet-scoped production helpers** (take an explicit `ss`, never resolve their
+   own workbook — e.g. `buildCashFlowYearSheet_(ss, year)`, `appendActivityLog_(ss, …)`).
+4. **Small helper extraction from production** — when only a `getUserSpreadsheet_()`-bound
+   wrapper exists, extract its ss-scoped core (behavior-preserving) and have the wrapper
+   delegate, then reuse the core; **never copy** the logic. (`buildCashFlowYearSheet_`
+   was extracted from `ensureCashFlowYearSheet_` this way.)
+5. **Harness-specific implementation — last resort only, with documented justification**
+   (permitted only when extraction is unsafe/unreasonable; document *why* in the scenario).
+
+The safety constraints in the fidelity notes above are never traded away for fidelity:
+no `getUserSpreadsheet_()`-bound calls from the harness, no broadened access, no touching
+the Central default / bound workbook, no formatting wash over populated workbooks. When
+fidelity and safety conflict, safety wins and the gap is documented. Full standard:
+`ENGINEERING_STANDARDS.md §13`.
 
 ### 3.2 Categories
 

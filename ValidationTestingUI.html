@@ -763,7 +763,8 @@
         vtHScenMap = {};
         for (var i = 0; i < list.length; i++) {
           vtHScenMap[list[i].id] = list[i];
-          html += '<option value="' + vtEsc(list[i].id) + '">' + vtEsc(list[i].id) + '</option>';
+          var lvl = list[i].executionLevel ? '  ·  ' + list[i].executionLevel : '';
+          html += '<option value="' + vtEsc(list[i].id) + '">' + vtEsc(list[i].id + lvl) + '</option>';
         }
         if (html) sel.innerHTML = html;
         vtHSetEnabled(true);   // capability confirmed — activate the controls
@@ -775,6 +776,19 @@
       .vtListHarnessScenarios();
   }
 
+  // Colored pill for a scenario execution level so a tester knows what to expect.
+  function vtHLevelBadge(level) {
+    var lv = String(level || '').toUpperCase();
+    var bg = '#e5e7eb', fg = '#374151';
+    if (lv === 'PURE') { bg = '#e0e7ff'; fg = '#3730a3'; }          // indigo — algorithm-only
+    else if (lv === 'INTEGRATION') { bg = '#dcfce7'; fg = '#166534'; } // green — inspect the workbook
+    else if (lv === 'E2E') { bg = '#fef3c7'; fg = '#92400e'; }      // amber — full workflow
+    if (!lv) return '';
+    return '<span style="display:inline-block; padding:1px 8px; border-radius:999px; ' +
+      'font-size:11px; font-weight:700; letter-spacing:.03em; background:' + bg + '; color:' + fg + ';">' +
+      vtEsc(lv) + '</span>';
+  }
+
   function vtHRenderDesc() {
     var sel = document.getElementById('vt-h-scenario');
     var desc = document.getElementById('vt-h-desc');
@@ -782,7 +796,13 @@
     if (!s) { desc.textContent = ''; return; }
     var scope = (s.expectedSheets && s.expectedSheets.length)
       ? ' · Validated scope: ' + s.expectedSheets.join(', ') : '';
-    desc.innerHTML = vtEsc(s.description || '') +
+    var levelLine = s.executionLevel
+      ? '<div style="margin-bottom:5px;">' + vtHLevelBadge(s.executionLevel) +
+        (s.executionExpectation
+          ? '<span style="color:var(--ink-soft); margin-left:8px;">' + vtEsc(s.executionExpectation) + '</span>'
+          : '') + '</div>'
+      : '';
+    desc.innerHTML = levelLine + vtEsc(s.description || '') +
       '<span style="color:var(--ink-mute);">' + vtEsc(scope) + '</span>';
   }
 
@@ -828,8 +848,11 @@
       ? '<a href="' + vtEsc(r.workbook.url) + '" target="_blank" rel="noopener noreferrer">' + vtEsc(r.workbook.name || 'open workbook') + '</a>'
       : vtEsc((r.workbook && r.workbook.name) || '—');
 
+    var levelVal = (r.scenario && r.scenario.executionLevel)
+      ? vtHLevelBadge(r.scenario.executionLevel) : '—';
     var html = '<div class="summary">' +
       vtCell('Overall', '<span style="color:' + overallColor + ';">' + vtEsc(r.overall) + '</span>') +
+      vtCell('Level', levelVal) +
       vtCell('Disposition', vtEsc(r.disposition || '—')) +
       vtCell('Run ID', '<span class="small">' + vtEsc(r.runId || '—') + '</span>') +
       vtCell('Workbook', wbCell) +

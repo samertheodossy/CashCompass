@@ -5,18 +5,24 @@ correctness** — the numeric counterpart to the read-only Validator's structura
 checks. This is the foundation (enabler **E0a**) that every future regression
 scenario builds on.*
 
-**Status:** **Design of record — Slices 1–3 (E0a pipeline + read layer + presence
-assertions) implemented; later slices design only.** The end-to-end pipeline exists
-(`test_harness_assert.js`: `assertEquals_` + `assertExists_` + `makeAssertionCollector_()`
-exposing `equals` / `exists` / `notExists`; `test_harness_read.js`: `makeReadLayer_` →
-`ctx.read.sheetValue` / `ctx.read.sheetRange`; `ctx.read` + `ctx.assert` +
-`expectedOutcome(ctx)` in `runScenario_`; the `functional` report section + gate in
-`test_harness_report.js`; `SMOKE-PROVISION-DONATION` asserts *Donation sheet exists*
-(`exists`) and *Donation amount == 100* (`equals`) through the read layer; a Functional
-card in `ValidationTestingUI.html`). Everything else in this document —
-`near`/`dateEquals`/`reconciles`, the richer readers, clock, seed profiles,
-categories, and the remaining §17 slices — is still design only. The Validator
-remains read-only and untouched. Sits on top of `TEST_HARNESS_ARCHITECTURE.md` (the writer) and
+**Status:** **Design of record — Slices 1–4 implemented (pipeline + read layer +
+presence assertions + `dateEquals` and the first real regression scenario); later
+slices design only.** The end-to-end pipeline exists (`test_harness_assert.js`:
+`assertEquals_` + `assertExists_` + `assertDateEquals_` + `makeAssertionCollector_()`
+exposing `equals` / `exists` / `notExists` / `dateEquals`; `test_harness_read.js`:
+`makeReadLayer_` → `ctx.read.sheetValue` / `ctx.read.sheetRange`; `ctx.read` +
+`ctx.assert` + `expectedOutcome(ctx)` in `runScenario_`; the `functional` report
+section + gate in `test_harness_report.js`; a scenario registry
+(`getHarnessScenarios_` / `getHarnessScenarioById_`) run via `testRunScenarioById_`
+and the console; `SMOKE-PROVISION-DONATION` asserts *Donation sheet exists* +
+*amount == 100*, and **`REGRESSION-BILLS-MONTHLY`** asserts the pure recurrence
+engine's occurrence count + prior/next occurrence + one-month advancement via
+`dateEquals`; a Functional card in `ValidationTestingUI.html`). Everything else in
+this document — `near`/`reconciles`, the richer temporal comparators, the richer
+readers, clock, seed profiles, categories, and the remaining §17 slices — is still
+design only. The Bills recurrence engine is already deterministic (explicit
+`todayOnly` anchor), so **no clock seam (E0c) was required**. The Validator remains
+read-only and untouched. Sits on top of `TEST_HARNESS_ARCHITECTURE.md` (the writer) and
 `REGRESSION_SUITE_PLAN.md` (§1 structural-vs-functional split, §5 scenario model,
 E0a in the build order).
 
@@ -106,7 +112,7 @@ sprawling API. Each returns an assertion result (§5).
 | `exists` / `notExists` | `(label, actual, opts)` | presence/absence (row created, cell populated, no orphan) *(implemented — Slice 3)* |
 | `contains` | `(label, haystack, needle, opts)` | substring, array membership, "collection includes X" |
 | `count` | `(label, collection, expected, opts)` | length equality (sugar over `equals` on `.length`) |
-| `dateEquals` | `(label, actual, expected, opts{granularity})` | **calendar-date** equality (Bills next occurrence, due date) — normalizes time-of-day/timezone |
+| `dateEquals` | `(label, actual, expected, opts)` | **calendar-date** equality (Bills next occurrence, due date) — compares year/month/day, ignores time-of-day *(implemented — Slice 4; `granularity` option deferred, day-only for now)* |
 | `reconciles` | `(label, parts[], total, opts{tolerance})` | **cross-sheet / no-double-count**: `sum(parts) ≈ total` (System Integrity) |
 | `advancesBy` | `(label, prev, next, interval)` | **recurrence advancement** — asserts `next − prev` equals a cadence (`7d` / `14d` / `1mo` / `1yr`); temporal (§16) |
 | `landsOnWeekday` | `(label, date, weekday)` | weekly-on-day correctness; temporal (§16) |
@@ -625,7 +631,7 @@ seam]` after E0c.
 | **2 ✅ done** | `test_harness_read.js` pure sources (`sheetValue` / `sheetRange`) via `makeReadLayer_` → `ctx.read`; SMOKE now reads through `ctx.read.sheetValue` instead of inline (`jsonPath` + richer readers deferred) | assert any seeded cell/range without hand-reading; single read layer for all future functional assertions | `[pure]` |
 | **3** | UI **Functional** status card + per-category/module findings block in `ValidationTestingUI.html` | functional results visible in the console (not just logs) | `[pure]` |
 | **4** | `test_harness_clock.js` → `ctx.clock` (freeze/today/currentYear + boundary helpers); scenario `clock` config | deterministic dates for seeding + expecteds | `[pure]` |
-| **5** | `dateEquals` + temporal comparators (`advancesBy`, `landsOnWeekday`); Temporal category | **`dateEquals` — Bills recurrence** (Weekly/Monthly/Biweekly) on the pure `generateOccurrences_(asOf=ctx.clock)` | `[pure-clock]` |
+| **5 ◑ started** | `dateEquals` (Temporal category) **✅ done** + the richer temporal comparators (`advancesBy`, `landsOnWeekday`, `withinYear`) *(deferred)* | **`dateEquals` — Bills recurrence** — **`REGRESSION-BILLS-MONTHLY` ✅ done** (Monthly, on the pure `buildInputBillDueCandidates_(todayOnly=…)` — no clock seam needed); Weekly/Biweekly/Yearly/etc. still to come | `[pure]` (engine takes explicit `todayOnly`) |
 | **6** | `test_harness_data.js` fixture applier (`seedData` → workbook via real builders) | scenarios seed declaratively instead of hand-writing rows | `[pure]` |
 | **7** | `test_harness_profiles.js`: `MinimalWorkbook` + `FamilyA` base + profile-derived `expected` | `FamilyA → modify one slice → assert` flow | `[pure]` |
 | **8** | `reconciles` + Reconciliation category | **`reconciles` — Net Worth** (assets − liabilities) on FamilyA; no-double-count | `[pure]` |
@@ -639,6 +645,17 @@ seam]` after E0c.
 > `ctx.read` (which returns `undefined` on absence). `SMOKE-PROVISION-DONATION` now
 > makes **2 assertions** (`exists` Donation sheet + `equals` amount == 100). This is
 > orthogonal to the UI slice below (still row 3) and needed no report/UI redesign.
+>
+> **First real regression scenario (Slice 4 / roadmap row 5 started):** `dateEquals`
+> shipped **without a clock** because the Bills recurrence engine
+> (`buildInputBillDueCandidates_`) already takes an explicit `todayOnly` anchor and
+> does no `new Date()`. `REGRESSION-BILLS-MONTHLY` (`test_harness_scenarios_bills.js`)
+> is the reference Bills scenario and the **template** for Weekly / Weekly-on-Day /
+> Biweekly / Yearly / 31st-of-month / leap year / year-rollover / overdue / paid /
+> AutoPay: minimal disposable workbook + pure-engine assertions with fixed dates. A
+> tiny scenario **registry** (`getHarnessScenarios_` / `getHarnessScenarioById_`,
+> run via `testRunScenarioById_`) now backs both the editor runners and the console
+> dropdown, which auto-populates from `vtListHarnessScenarios()` (no HTML change).
 
 **Risk-minimizing properties:** slices 1–3 prove the pipeline with zero temporal or
 seam risk; the **clock (4) precedes Bills recurrence (5)** so recurrence is

@@ -532,16 +532,46 @@ function refreshBlockSumAggregates_(sheet, dataStartRow, dataEndRow, afterRow, t
  *     sheet insertion fails for a non-race reason.
  */
 function ensureCashFlowYearSheet_(year) {
+  // Thin wrapper: resolve the user's workbook, then delegate to the ss-scoped
+  // builder. Production behavior is unchanged. The builder is shared so callers that
+  // already hold a workbook (e.g. the Test Harness on a disposable workbook) reuse the
+  // exact production build path — header, month columns, currency, header styling,
+  // canonical body font/row height, Income/Expense color rules, and the Summary row —
+  // instead of duplicating any of it. See buildCashFlowYearSheet_.
+  return buildCashFlowYearSheet_(getUserSpreadsheet_(), year);
+}
+
+/**
+ * ss-scoped core of ensureCashFlowYearSheet_ — builds (idempotently) the canonical
+ * INPUT - Cash Flow <year> sheet on an EXPLICITLY provided workbook.
+ *
+ * Extracted so getUserSpreadsheet_() resolution lives ONLY in the ensureCashFlowYearSheet_
+ * wrapper and every other caller reuses the exact same production build path (structure
+ * + all formatting) rather than re-implementing it. This is what lets an integration
+ * test harness produce a Cash Flow sheet that is visually identical to production
+ * without ever touching a real workbook.
+ *
+ * FIRST-CREATE ONLY: if the sheet already exists it is returned untouched (no styling
+ * or font wash over a populated sheet) — identical to the prior ensure semantics.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss Target workbook (REQUIRED — never resolved internally).
+ * @param {number|string=} year Defaults to the current calendar year.
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet} The (possibly newly created) Cash Flow sheet.
+ * @throws {Error} If ss is missing, the resolved year is not a positive integer, or sheet insertion fails for a non-race reason.
+ */
+function buildCashFlowYearSheet_(ss, year) {
+  if (!ss) {
+    throw new Error('buildCashFlowYearSheet_: ss (target workbook) is required.');
+  }
   const yearNum = Number(
     (year === undefined || year === null || year === '')
       ? getCurrentYear_()
       : year
   );
   if (!Number.isFinite(yearNum) || yearNum <= 0 || Math.floor(yearNum) !== yearNum) {
-    throw new Error('ensureCashFlowYearSheet_: invalid year: ' + String(year));
+    throw new Error('buildCashFlowYearSheet_: invalid year: ' + String(year));
   }
 
-  const ss = getUserSpreadsheet_();
   const sheetName = getCashFlowSheetName_(yearNum);
 
   const existing = ss.getSheetByName(sheetName);

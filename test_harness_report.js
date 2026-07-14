@@ -125,6 +125,12 @@ function formatHarnessReport_(report) {
   var lines = [];
   lines.push('===== TEST HARNESS — SCENARIO RESULT =====');
   lines.push('Scenario     : ' + report.scenario.id + '  [' + report.scenario.category + ']');
+  if (report.scenario.executionLevel) {
+    var lvl = (typeof harnessExecutionLevelInfo_ === 'function')
+      ? harnessExecutionLevelInfo_(report.scenario.executionLevel)
+      : { label: report.scenario.executionLevel, expectation: '' };
+    lines.push('Level        : ' + lvl.label + (lvl.expectation ? '  — ' + lvl.expectation : ''));
+  }
   lines.push('Description  : ' + report.scenario.description);
   lines.push('Run ID       : ' + report.runId);
   lines.push('Workbook     : ' + report.workbook.name);

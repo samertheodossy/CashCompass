@@ -38,6 +38,29 @@ function vtSafe_(fn) {
 }
 
 /**
+ * Produce a browser-safe copy of a value for return through google.script.run.
+ *
+ * WHY: google.script.run cannot reliably deliver JavaScript `Date` objects in a
+ * return payload. The Harness's rich in-memory report embeds Dates in
+ * `functional.results[].expected` / `.actual` as soon as a temporal comparator
+ * (e.g. `dateEquals`) is used, which broke delivery of REGRESSION-BILLS-MONTHLY
+ * even though it PASSes server-side. This helper normalizes the value for the wire.
+ *
+ * The current normalization is a JSON round-trip: Dates become ISO strings, and any
+ * non-JSON value is dropped — which is exactly what the client already renders
+ * (status cards show counts; the JSON viewer shows the normalized object). The rich
+ * in-memory report is NOT mutated; this returns a deep copy. This is the single
+ * place to evolve wire-safety later (e.g. a smarter Date encoding) — keep such
+ * changes HERE, inside the browser adapter, never in the canonical report/harness.
+ *
+ * @param {*} value the rich in-memory value (e.g. a harness report)
+ * @returns {*} a JSON-normalized deep copy safe to return to the browser
+ */
+function makeWireSafe_(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+/**
  * Resolve the target workbook from an optional explicit ID.
  *   - explicit ID given  → open that workbook            (targetType EXPLICIT_ID)
  *   - omitted/blank      → VALIDATOR_DEFAULT_CENTRAL_WORKBOOK_ID
@@ -163,32 +186,45 @@ function vtRunSchemaEvolution(spreadsheetId) {
 /* -------------------------------------------------------------------------- */
 
 /**
- * List the Test Harness scenarios available to the UI (V1: the SMOKE scenario
- * only). Guarded by the WRITER guard. Read-only listing — surfaces the scenario
- * descriptor only; no workbook is created.
- * @returns {!Object} { ok, scenarios:[{id,category,description,expectedSheets}] } | {ok:false,error}
+ * List the Test Harness scenarios available to the UI, from the harness registry
+ * (getHarnessScenarios_ — currently SMOKE-PROVISION-DONATION + REGRESSION-BILLS-
+ * MONTHLY). Guarded by the WRITER guard. Read-only listing — surfaces scenario
+ * descriptors only; no workbook is created. The console dropdown populates from
+ * this list, so new registered scenarios appear with no HTML change.
+ * @returns {!Object} { ok, scenarios:[{id,category,executionLevel,executionExpectation,description,expectedSheets}] } | {ok:false,error}
  */
 function vtListHarnessScenarios() {
   return vtSafe_(function() {
     assertHarnessAllowed_();
-    var s = getHarnessSmokeScenario_();
-    return { ok: true, scenarios: [{
-      id: s.id,
-      category: s.category,
-      description: s.description,
-      expectedSheets: (s.expectedSheets && s.expectedSheets.length) ? s.expectedSheets.slice() : null
-    }] };
+    var all = getHarnessScenarios_();
+    var scenarios = [];
+    for (var i = 0; i < all.length; i++) {
+      var s = all[i];
+      var lvl = (typeof harnessExecutionLevelInfo_ === 'function')
+        ? harnessExecutionLevelInfo_(s.executionLevel)
+        : { label: s.executionLevel || 'UNKNOWN', expectation: '' };
+      scenarios.push({
+        id: s.id,
+        category: s.category,
+        executionLevel: lvl.label,
+        executionExpectation: lvl.expectation,
+        description: s.description,
+        expectedSheets: (s.expectedSheets && s.expectedSheets.length) ? s.expectedSheets.slice() : null
+      });
+    }
+    return { ok: true, scenarios: scenarios };
   });
 }
 
 /**
- * Run ONE Test Harness scenario and return its structured report. V1 accepts ONLY
- * SMOKE-PROVISION-DONATION and rejects any other id fail-closed (before any write).
- * Delegates to the existing testRunSmoke(options) — which creates the disposable
- * workbook, runs the scenario, has the read-only Validator judge it, and honors
- * options.trash (soft-delete after validation, only after re-passing the
- * disposable gate). Never accepts/uses a client workbook ID.
- * @param {string} scenarioId  must equal the SMOKE scenario id
+ * Run ONE registered Test Harness scenario and return its structured report.
+ * Accepts only ids present in the harness registry (getHarnessScenarioById_) and
+ * rejects any other id fail-closed BEFORE any write. Delegates to
+ * testRunScenarioById_(id, options) — which creates the disposable workbook, runs
+ * the scenario, has the read-only Validator judge it, and honors options.trash
+ * (soft-delete after validation, only after re-passing the disposable gate). Never
+ * accepts/uses a client workbook ID.
+ * @param {string} scenarioId  a registered scenario id
  * @param {Object=} options     { trash: boolean } (default: keep)
  * @returns {!Object} { ok, report } | { ok:false, error }
  */
@@ -196,12 +232,14 @@ function vtRunHarnessScenario(scenarioId, options) {
   return vtSafe_(function() {
     assertHarnessAllowed_();
     var id = String(scenarioId || '').trim();
-    var smokeId = getHarnessSmokeScenario_().id;
-    if (id !== smokeId) {
-      throw new Error('Unknown or unsupported scenario: "' + id + '". V1 supports only ' + smokeId + '.');
+    if (!getHarnessScenarioById_(id)) {
+      throw new Error('Unknown or unsupported scenario: "' + id + '".');
     }
     var trash = !!(options && options.trash === true);
-    var report = testRunSmoke({ trash: trash });
-    return { ok: true, report: report };
+    // testRunScenarioById_ returns the RICH in-memory report (may embed Date objects
+    // from temporal comparators). Normalize to a wire-safe copy ONLY for the browser
+    // return — the editor runners keep receiving the rich object unchanged.
+    var report = testRunScenarioById_(id, { trash: trash });
+    return { ok: true, report: makeWireSafe_(report) };
   });
 }

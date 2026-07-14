@@ -119,6 +119,24 @@ Once a milestone has started, **finish it before beginning another.**
 
 ---
 
+### 13. Integration Scenario Principle
+
+**Integration scenarios must exercise production code whenever it is safely possible.** An integration scenario only earns confidence when the workbook it produces is built by the *same* code that runs in production — otherwise the harness can silently drift from reality and "pass" against behavior the app never actually performs.
+
+**Preference order** (use the highest-numbered option only after ruling out the ones above it):
+
+1. **Pure production functions.** Deterministic, no I/O — call them directly (e.g. the Bills recurrence engine).
+2. **Sheet-scoped production helpers.** Functions that take a `Sheet` (e.g. `insertCashFlowRow_`, `applyCashFlowSheetStyling_`, `ensureCashFlowSummaryRow_`).
+3. **Spreadsheet-scoped production helpers.** Functions that take an explicit `ss` and never resolve their own workbook (e.g. `buildCashFlowYearSheet_(ss, year)`, `appendActivityLog_(ss, …)`).
+4. **Small helper extraction from production.** When only a `getUserSpreadsheet_()`-bound wrapper exists, extract its ss-scoped core (behavior-preserving) so the wrapper delegates and the harness reuses the exact core — *never* copy the logic. This is how `buildCashFlowYearSheet_` was extracted from `ensureCashFlowYearSheet_`.
+5. **Harness-specific implementation — last resort only, with documented justification.** Permitted only when extraction is unsafe or unreasonable; the scenario must document *why* production code could not be reused, so the deviation is visible and revisitable.
+
+**Hard constraints (never traded away for fidelity):** the harness must never call a `getUserSpreadsheet_()`-bound / active-spreadsheet-bound production function, never broaden workbook access, never touch the configured Central default or a bound workbook, and never wash formatting over a populated workbook. When production fidelity and these safety constraints conflict, safety wins and the gap is documented.
+
+**Why:** duplicated build/format logic is the exact drift that produced the Cash Flow "10pt row" fidelity bug — the harness had re-implemented part of `ensureCashFlowYearSheet_` and missed a step. Reusing extracted production code makes such drift structurally impossible. See `TEST_HARNESS_ARCHITECTURE.md §3.1` (scenario model + execution levels) and `REGRESSION_SUITE_PLAN.md`.
+
+---
+
 ## Cash Flow Data Semantics — Actuals vs Projection
 
 `INPUT - Cash Flow <year>` is an **actuals ledger**, not a forecast. Two concepts must be kept strictly separate; conflating them corrupts trust in the numbers.

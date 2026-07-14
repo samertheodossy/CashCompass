@@ -1,5 +1,5 @@
 /**
- * test_harness_assert.js — Test Harness · functional assertions (E0a, Slices 1 & 3).
+ * test_harness_assert.js — Test Harness · functional assertions (E0a, Slices 1/3/4).
  *
  * The Functional Assertion framework's comparator library
  * (FUNCTIONAL_ASSERTION_ARCHITECTURE.md). It proves the pipeline end-to-end:
@@ -7,10 +7,12 @@
  *   scenario → expectedOutcome(ctx) → ctx.assert.<kind>(...) → collector
  *            → functional report section → Validation & Testing UI.
  *
- * SCOPE so far: `equals` (Slice 1) and `exists` / `notExists` (Slice 3) — the
- * minimal vocabulary most regression scenarios need. Still NOT here (later slices,
- * §17): tolerance (`near`), temporal (`dateEquals` / `advancesBy`), `reconciles`,
- * seed profiles, clock, module grouping, suite aggregation. The result envelope is
+ * SCOPE so far: `equals` (Slice 1), `exists` / `notExists` (Slice 3), and
+ * `dateEquals` (Slice 4 / Temporal — the minimal comparator the Bills recurrence
+ * engine needs). Still NOT here (later slices, §17): tolerance (`near`), the richer
+ * temporal comparators (`advancesBy` / `landsOnWeekday` / `withinYear`),
+ * `reconciles`, seed profiles, clock, module grouping, suite aggregation. The
+ * result envelope is
  * a FORWARD-COMPATIBLE SUBSET of §5: fields the later comparators need (`category`,
  * `delta`, `tolerance`, `location`) are present now and simply stay null when a
  * given comparator doesn't use them, so no report/UI redesign is needed later.
@@ -36,6 +38,33 @@ function assertEquals_(actual, expected) {
     return actual.getTime() === expected.getTime();
   }
   return actual === expected;
+}
+
+/**
+ * Pure calendar-date equality (Slice 4 / temporal). Compares two Dates by
+ * **calendar day** only — year + month + day — ignoring time-of-day and timezone
+ * offset within the day. This is the minimal temporal comparator the Bills
+ * recurrence engine needs: occurrence `dueDate` values are date-only in intent, so
+ * comparing full timestamps would be brittle. Non-Date or invalid inputs fail
+ * (never throw).
+ *
+ * @param {*} actual
+ * @param {*} expected
+ * @returns {boolean}
+ */
+function assertDateEquals_(actual, expected) {
+  if (!(actual instanceof Date) || !(expected instanceof Date)) return false;
+  if (isNaN(actual.getTime()) || isNaN(expected.getTime())) return false;
+  return actual.getFullYear() === expected.getFullYear() &&
+    actual.getMonth() === expected.getMonth() &&
+    actual.getDate() === expected.getDate();
+}
+
+/** Compact yyyy-mm-dd for temporal failure messages. Never throws. */
+function harnessAssertDateDisplay_(v) {
+  if (!(v instanceof Date) || isNaN(v.getTime())) return harnessAssertDisplay_(v);
+  var m = v.getMonth() + 1, d = v.getDate();
+  return v.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (d < 10 ? '0' : '') + d;
 }
 
 /**
@@ -148,6 +177,29 @@ function makeAssertionCollector_() {
     notExists: function(label, actual, opts) {
       return record_('notExists', label, actual, '(absent)', !assertExists_(actual),
         existsOpts_(opts, actual, false));
+    },
+    /**
+     * Calendar-date equality (Slice 4 / Temporal) — PASS when `actual` and
+     * `expected` are the same year/month/day (time-of-day ignored). Tagged
+     * category 'Temporal' (§16) so temporal results can be filtered later; the
+     * failure reason renders both dates as yyyy-mm-dd. Pairs with the Bills
+     * recurrence engine's date-only `dueDate` values.
+     * @param {string} label
+     * @param {Date} actual
+     * @param {Date} expected
+     * @param {Object=} opts { module, category, location }
+     * @returns {boolean}
+     */
+    dateEquals: function(label, actual, expected, opts) {
+      var o = {};
+      if (opts) { for (var k in opts) { if (opts.hasOwnProperty(k)) o[k] = opts[k]; } }
+      if (!o.category) o.category = 'Temporal';
+      if (!o.reason) {
+        o.reason = 'expected ' + harnessAssertDateDisplay_(expected) +
+          ', got ' + harnessAssertDateDisplay_(actual);
+      }
+      return record_('dateEquals', label, actual, expected,
+        assertDateEquals_(actual, expected), o);
     }
   };
 }

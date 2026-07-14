@@ -61,6 +61,40 @@ function testRunSmoke(options) {
 }
 
 /**
+ * PUBLIC (guarded) EDITOR RUNNER — run ANY registered scenario by id (the generic
+ * entry point behind the console). Guarded, looks the scenario up in the registry
+ * (getHarnessScenarioById_), fail-closed on an unknown id BEFORE any workbook is
+ * created, then delegates to the same run loop as testRunSmoke().
+ *
+ * @param {string} scenarioId  a registered scenario id (see getHarnessScenarios_)
+ * @param {Object=} options     { trash: boolean } (default: keep)
+ * @returns {Object} the scenario report (see test_harness_report.js)
+ */
+function testRunScenarioById_(scenarioId, options) {
+  assertHarnessAllowed_();
+  var scenario = getHarnessScenarioById_(scenarioId);
+  if (!scenario) {
+    throw new Error('Test Harness: unknown scenario "' + String(scenarioId) + '".');
+  }
+  var runId = harnessGenerateRunId_();
+  var report = runScenario_(scenario, runId, options || {});
+  harnessLogReport_(report);
+  return report;
+}
+
+/**
+ * PUBLIC (guarded) EDITOR RUNNER — the first real regression scenario: validate the
+ * pure Bills recurrence engine for a Monthly bill. Convenience wrapper over
+ * testRunScenarioById_ for one-click editor use; adds no logic of its own.
+ *
+ * @param {Object=} options { trash: boolean } (default: keep)
+ * @returns {Object} the scenario report
+ */
+function testRunRegressionBillsMonthly(options) {
+  return testRunScenarioById_('REGRESSION-BILLS-MONTHLY', options || {});
+}
+
+/**
  * PUBLIC (guarded) EDITOR RUNNER — same as testRunSmoke() but trashes the
  * disposable workbook after validation (still re-passing the disposable gate
  * before teardown). A thin convenience wrapper for the Apps Script editor so the
@@ -194,6 +228,7 @@ function runScenario_(scenario, runId, options) {
     scenario: {
       id: scenario.id,
       category: scenario.category,
+      executionLevel: scenario.executionLevel || null,
       description: scenario.description,
       expectedSheets: (scenario.expectedSheets && scenario.expectedSheets.length)
         ? scenario.expectedSheets.slice()
