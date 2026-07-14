@@ -3,11 +3,61 @@
 *The developer-only **writer/mutator** that drives scenarios against disposable
 workbooks and asks the read-only **Validator** to confirm nothing broke.*
 
-**Status:** **Implementation-ready architecture. Not implemented.** No
-`test_harness_*` code exists yet. This document is the design of record; it
-authorizes no code changes. Sequenced in `ROADMAP.md → P1` **after** the Validator
-Phase 2 foundation: (1) Validator Phase 2A/2B → **(2) Test Harness foundation →
+**Status:** **Foundation V1 implemented.** `test_harness_core.js`,
+`test_harness_scenarios.js`, and `test_harness_report.js` exist: the full guard +
+disposable-workbook lifecycle + `assertDisposableTarget_` + **one** SMOKE scenario
+(Provision + one Donation row) + report shaping, driven by the editor runner
+`testRunSmoke()`. Scenario packs, Regression/Recovery/Stress, and Release Readiness
+remain unbuilt. Sequenced in `ROADMAP.md → P1` **after** the Validator Phase 2
+foundation: (1) Validator Phase 2A/2B → **(2) Test Harness foundation *(V1 done)* →
 (3) Scenario packs → (4) Release Readiness gate**.
+
+> **Two deviations the V1 implementation revealed (design corrections):**
+> 1. **Marker primitive.** `PropertiesService.getDocumentProperties()` is scoped to
+>    the script's *own* container document and cannot be attached to a workbook
+>    created by this standalone script. V1 therefore uses the hidden `_HARNESS_META`
+>    sheet (authoritative) **+ spreadsheet-level developer metadata**
+>    (`addDeveloperMetadata`) as the forge-resistant markers, instead of Document
+>    Properties (§2.2/§2.4 updated in spirit).
+> 2. **Workflow-invocation seam.** The top-level create-a-workbook workflows
+>    (`ensureInputDonationSheet_`/`addDonation`, `ensureCashFlowYearSheet_`, …)
+>    resolve their workbook via `getUserSpreadsheet_()`, which has **no injection
+>    seam** — calling them from the Harness could write to a REAL workbook. V1 stays
+>    inside the disposable target by invoking the workbook-SCOPED real seams
+>    (`runMinimalBootstrap_(ss)`) and the exact **pure** row helpers `addDonation()`
+>    uses (`findDonationBlockForTaxYear_` → `getDonationAppendRow1_` →
+>    `buildDonationOutputRow_`, + `applyDonationSheetStyling_`). A future
+>    ss-injection refactor (§9) will let scenarios call the top-level workflows
+>    verbatim, closing the last fidelity gap.
+> 3. **Harness bootstrap — SYS - Meta identity marker (Central-style by default).**
+>    `runMinimalBootstrap_(ss)` provisions structure but does NOT stamp identity
+>    markers (those live in the Central provision path via
+>    `ensureWorkbookIdentityMarkers_`, which needs a fileId + email and writes global
+>    side effects), so a harness workbook would otherwise validate as
+>    `BOUND_LEGACY / UPGRADE_RECOMMENDED`. `runScenario_` therefore calls
+>    `harnessStampIdentityMarkers_(ss, runId)` after setup/actions (unless
+>    `scenario.createsLegacyStructure === true`). It stamps ONLY the in-workbook
+>    `SYS - Meta` marker via the ss-scoped `ensureSysMetaMarker_` — deliberately NOT
+>    the `ensureWorkbookIdentityMarkers_` orchestrator, because that also writes the
+>    **global** reverse-index script property (`wbid::<id>`), which would pollute the
+>    real mapping store AND make `assertDisposableTarget_` refuse the workbook, plus
+>    Drive appProperties the Validator does not read. Result: a clean harness
+>    workbook now reports **`CENTRAL_CURRENT / FULLY_CURRENT`**.
+> 4. **Scenario-scoped validation.** A scenario only provisions the sheets it needs,
+>    so judging it against the *full* canonical model produces misleading WARNs for
+>    canonical sheets it never created (`LOG - Activity`, `Cash Flow`,
+>    `SYS - Accounts`, `Bank Accounts`, `Upcoming Expenses`). Scenarios therefore
+>    declare `expectedSheets` — the sheets they intentionally create — and
+>    `runScenario_` forwards `{ sheetNames: expectedSheets }` to all three Validator
+>    seams. This scopes the model **for this run only** via the shared
+>    `validatorScopeModel_(model, options)` helper (in `validator_provisioning.js`,
+>    reused by Drift and Schema) — it does **not** change global canonical rules, and
+>    omitting `expectedSheets` still validates the full model. `SMOKE-PROVISION-DONATION`
+>    scopes to `INPUT - Settings`, `INPUT - Donation`, `SYS - Meta` and now reports
+>    **Provisioning PASS / WARN 0**. Fixture rows also use realistic short data
+>    (charity `Local Food Bank`, comment `Smoke test donation`) — the workbook *name*
+>    already carries the `— SAFE TO DELETE` marker, so rows stay representative and
+>    un-clipped.
 
 **Related docs:** `VALIDATOR_ARCHITECTURE.md` (the read-only judge — §10 Workbook
 Health, §12 boundary), `REGRESSION_SCENARIOS.md` (the historical-bug registry /
@@ -121,8 +171,13 @@ teardown/trash. **All** of the following must be true or it throws:
    - any ID present in the Central user→workbook mapping,
    - the currently bound workbook (if any).
 
-Unknown / ambiguous → **refuse** (fail closed). Teardown trashes via
-`DriveApp`/`Drive.Files.remove` **only** after this check passes.
+Unknown / ambiguous → **refuse** (fail closed). Teardown soft-deletes via the
+Advanced Drive Service — `Drive.Files.update({ trashed: true }, id)` — **only**
+after this check passes. It deliberately does **not** use
+`DriveApp.getFileById().setTrashed()`: the project declares the narrow `drive.file`
+scope (no `drive`/`drive.readonly`), under which `DriveApp.getFileById()` is not
+permitted, whereas `Drive.Files.update` honors the per-file `drive.file` grant on
+script-created workbooks.
 
 ### 2.5 Cleanup strategy
 
@@ -157,6 +212,8 @@ Scenario {
   prerequisites,  // other scenario ids / capabilities that must pass first
   setup(ctx),     // build initial state via REAL production helpers + fixtures
   actions(ctx),   // the workflow(s) under test (real production functions)
+  expectedSheets, // sheets this scenario creates → scopes validation to just these
+                  //   (V1, via validatorScopeModel_); omit to validate the full model
   expectedOutcome,// declarative: expected Validator gate + allowed/expected findings
   validatorChecks,// which Validator modules to run (default: all) + scope
   cleanup(ctx)    // scenario-specific teardown (workbook teardown is automatic)

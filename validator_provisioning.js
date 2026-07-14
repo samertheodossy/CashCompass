@@ -112,10 +112,13 @@ function validatorRunProvisioning(spreadsheetIdOverride, options) {
  * failures are captured as ERROR findings.
  *
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @param {Object=} options - { Array<string> sheetNames } optional allow-list to
+ *   scope validation to only those canonical sheets (see validatorScopeModel_).
+ *   Omitted → the full canonical model (unchanged default for all callers).
  * @returns {Object} report
  */
-function validateProvisioning_(ss) {
-  var model = getValidatorCanonicalModel_();
+function validateProvisioning_(ss, options) {
+  var model = validatorScopeModel_(getValidatorCanonicalModel_(), options);
   var findings = [];
   var sheetsOut = [];
 
@@ -179,6 +182,35 @@ function validateProvisioning_(ss) {
     sheets: sheetsOut,
     findings: findings
   };
+}
+
+/**
+ * Optionally scope the canonical model to an allow-list of sheet names.
+ *
+ * When options.sheetNames is a non-empty array, only rules whose name is in that
+ * set are kept (canonical order preserved); otherwise the full model is returned
+ * unchanged. This lets a caller validate ONLY the sheets it intentionally
+ * provisions — e.g. a Test Harness scenario that creates just INPUT - Settings,
+ * INPUT - Donation, and SYS - Meta — instead of WARNing on canonical sheets that
+ * the scenario never creates. It does NOT change global canonical rules and never
+ * mutates the input model. Names not present in the model are simply ignored.
+ *
+ * @param {Array<Object>} model  canonical model from getValidatorCanonicalModel_()
+ * @param {Object=} options      { Array<string> sheetNames }
+ * @returns {Array<Object>} scoped (or original) model
+ */
+function validatorScopeModel_(model, options) {
+  var names = options && options.sheetNames;
+  if (!names || !names.length) return model;
+  var allow = {};
+  for (var i = 0; i < names.length; i++) {
+    allow[String(names[i])] = true;
+  }
+  var out = [];
+  for (var j = 0; j < model.length; j++) {
+    if (allow[model[j].name]) out.push(model[j]);
+  }
+  return out;
 }
 
 /* -------------------------------------------------------------------------- */

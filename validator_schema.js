@@ -83,11 +83,14 @@ function validatorRunSchemaEvolution(spreadsheetIdOverride, options) {
  * differences.
  *
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @param {Object=} options - { Array<string> sheetNames } optional allow-list,
+ *   forwarded to validateProvisioning_ so classification is scoped to only the
+ *   sheets a caller intentionally provisions (see validatorScopeModel_).
  * @returns {Object} { type:'schemaEvolution', workbook, workbookId, platform,
  *   generation, workbookType, compatibility, signals, provisioning, schema }
  */
-function validateSchemaEvolution_(ss) {
-  var prov = validateProvisioning_(ss);
+function validateSchemaEvolution_(ss, options) {
+  var prov = validateProvisioning_(ss, options);
   var signals = classifyWorkbook_(prov);
   var split = reclassifySchemaFindings_(prov, signals);
   return {

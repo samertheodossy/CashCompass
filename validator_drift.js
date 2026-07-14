@@ -92,10 +92,13 @@ function validatorRunWorkbookDrift(spreadsheetIdOverride, options) {
  * 'FAIL'.
  *
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @param {Object=} options - { Array<string> sheetNames } optional allow-list to
+ *   scope drift to only those canonical sheets (see validatorScopeModel_).
+ *   Omitted → the full canonical model (unchanged default for all callers).
  * @returns {Object} report
  */
-function validateDrift_(ss) {
-  var model = getValidatorCanonicalModel_();
+function validateDrift_(ss, options) {
+  var model = validatorScopeModel_(getValidatorCanonicalModel_(), options);
   var findings = [];
   var sheetsOut = [];
 

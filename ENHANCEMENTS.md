@@ -63,6 +63,33 @@ Authoritative copy: `TODO.md → Future Feature — Income Expected / Due Workfl
 
 Make income **symmetrical with Bills Due**: track income sources with frequency/date rules, surface **expected income** on the dashboard (Overdue / Next-7-days style), let the user **record/confirm** receipt (writing the *actual* amount to Cash Flow), and handle **variable income** (expected ≠ actual). Must **avoid double-counting** when income already exists in Cash Flow for that month/date — reuse the Bills Due handled-cell + dedupe-suppression model (e.g. an `income_received` key per source + occurrence). Reuses the Bills Due recurrence-expansion logic and the `[Primary View] [Manage]` Manage Pattern (this absorbs the "Income Sources — Medium" Manage candidate). Likely-affected areas: Income source schema (frequency / Due Day / Varies columns + provisioning/header-repair review), `dashboard_data.js` recurrence expansion, a new Income Due generation path, Cash Flow income write + suppression, Activity Log, and the Income UI. **Out of scope for now:** bank import automation, payroll integrations, advanced forecasting. UX enhancement, not a blocker.
 
+### Future — AutoPay Pending Confirmation UX (post Test Harness / Release Readiness)
+
+**Status:** documented, **not implemented.** **Priority: Future Product Enhancement** — sequenced **after Test Harness / Release Readiness** (`ROADMAP.md → P4`). UX enhancement, not a blocker. This is a **product enhancement only — no implementation in scope.**
+
+**Problem.** Bills Due currently shows AutoPay bills until CashCompass has *evidence* they were actually paid (manual payment, bank import, or future bank sync). This is the **correct** behavior — CashCompass must never assume a payment succeeded until it has confirmation. But users who know the payment already cleared in their bank may perceive these bills as needing action, because an AutoPay bill awaiting confirmation looks identical to a bill that truly requires manual payment.
+
+**Product direction.** **Keep the current behavior.** Do **NOT** automatically hide AutoPay bills on or after their due date. Instead, **distinguish them visually** so "waiting for confirmation" reads differently from "you must act."
+
+**Proposed future states.**
+
+- **Manual Action Required** — user must pay; stays in the Bills Due attention queue.
+- **AutoPay Pending Confirmation** — AutoPay expected to run; awaiting payment evidence (distinct badge/color, e.g. "AutoPay Pending").
+- **Confirmed / Matched** — a matching payment has been detected.
+- **Completed** — reconciled; removed from the attention queue.
+
+**Possible future UI.** AutoPay bills awaiting confirmation display a different badge/color ("AutoPay Pending") instead of looking identical to bills requiring manual payment.
+
+**Future automation.** Once a matching payment is detected through **manual payment entry**, **bank import**, or **future bank synchronization**, transition automatically: **AutoPay Pending Confirmation → Confirmed → Completed**, and remove the bill from the Bills Due attention queue.
+
+**Engineering guardrails (non-negotiable).**
+
+- The source of truth remains **CashCompass data** — never infer payment success from the **due date alone**.
+- **Never auto-complete** AutoPay bills without **payment evidence**.
+- Reuse the existing Bills Due handled-cell / dedupe-suppression + Pay-occurrence bridge model for confirmation matching (no parallel state machine).
+
+*(Related existing work to build on: the Bills Due → Pay occurrence bridge, Recurrence Engine V2 AutoPay scheduling + `LockService` hardening, and the handled-cell/dedupe model referenced above.)*
+
 ### Future — Money Plan (Income Allocation) Page (Phase 2)
 
 Authoritative copy: `TODO.md → Future Feature — Money Plan (Income Allocation) Page` (high-level mirror in `PROJECT_CONTEXT.md`). **Status: Phase 1 dashboard 10/70/20 card ✓ complete; Phase 2 Money Plan page = documented design direction, not implemented — separate approval required. Roadmap placement: Stage 5 — External Beta, P2, L–XL** — a major Version 1 differentiator (long-term/goal planning, recommendation engine, cash-allocation guidance, retirement integration, forecasting, long-term insights), restored from being folded into the Version 2 catch-all.
