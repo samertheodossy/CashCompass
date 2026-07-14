@@ -211,6 +211,23 @@ function runScenario_(scenario, runId, options) {
     error = (e && e.message) ? e.message : String(e);
   }
 
+  // Harness fidelity: drop the default blank "Sheet1" that SpreadsheetApp.create
+  // leaves, so a kept disposable workbook shows only real CashCompass sheets — exactly
+  // like a production-provisioned workbook. Reuses the production helper
+  // cleanupDefaultSheet1_ (ss-scoped, content-safe: only deletes a content-blank sheet
+  // literally named "Sheet1" and NEVER the last remaining sheet). Harness-core so ALL
+  // scenarios benefit even if they don't call runMinimalBootstrap_. Gated by
+  // assertDisposableTarget_ (it is a delete) and best-effort (non-fatal — a leftover
+  // Sheet1 is harmless). Skipped when trashing (the workbook is about to be discarded).
+  // By this point _HARNESS_META always exists (plus any scenario/SYS - Meta sheets), so
+  // Sheet1 is never the last sheet.
+  if (wb && options.trash !== true && typeof cleanupDefaultSheet1_ === 'function') {
+    try {
+      assertDisposableTarget_(wb.ss, runId);
+      cleanupDefaultSheet1_(wb.ss);
+    } catch (_s1) { /* non-fatal — Sheet1 cleanup is cosmetic fidelity */ }
+  }
+
   // Teardown (default keep). Trash only when explicitly requested AND the target
   // still passes the disposable gate.
   if (wb && options.trash === true) {
@@ -292,14 +309,11 @@ function createDisposableWorkbook_(scenarioId, runId) {
     ss.addDeveloperMetadata(HARNESS_MD_RUN_ID_KEY_, runId);
   } catch (_md) { /* best-effort secondary marker */ }
 
-  // Visible human banner on the default Sheet1. Kept non-blank so the
-  // provisioning cleanup (cleanupDefaultSheet1_) won't remove it.
-  try {
-    var s1 = ss.getSheetByName('Sheet1');
-    if (s1) {
-      s1.getRange(1, 1).setValue('⚠ DISPOSABLE CASHCOMPASS TEST WORKBOOK — SAFE TO DELETE — ' + runId);
-    }
-  } catch (_b) { /* cosmetic */ }
+  // NOTE: we deliberately leave the default blank "Sheet1" untouched here so it
+  // stays content-blank and the production cleanup (cleanupDefaultSheet1_, run later
+  // in the loop) can remove it — mirroring production provisioning. The "SAFE TO
+  // DELETE" signal is carried by the workbook NAME (HARNESS_NAME_SUFFIX_) and the
+  // hidden _HARNESS_META marker, so no banner is written into Sheet1.
 
   return { ss: ss, id: ss.getId(), name: name, runId: runId };
 }

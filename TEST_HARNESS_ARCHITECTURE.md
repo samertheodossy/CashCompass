@@ -163,9 +163,13 @@ and easy to verify**:
 
 ### 2.3 Labeling
 
-Beyond the name: an obvious top-row banner on the first sheet
-(`⚠ DISPOSABLE CASHCOMPASS TEST WORKBOOK — SAFE TO DELETE — <runId>`) so a human
-who stumbles on it in Drive cannot mistake it for real data.
+The human "safe to delete" signal is the workbook **name** (which ends `— SAFE TO
+DELETE`, visible in Drive and the browser title bar) plus the hidden `_HARNESS_META`
+marker sheet. The default blank `Sheet1` is intentionally left untouched at creation so
+it stays content-blank and the run loop can remove it via the production helper
+`cleanupDefaultSheet1_` — a kept disposable workbook therefore shows only real
+CashCompass sheets, exactly like a production-provisioned workbook (no stray `Sheet1`,
+no harness-only banner tab).
 
 ### 2.4 Safe deletion (fail-closed target check)
 

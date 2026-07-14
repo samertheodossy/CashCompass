@@ -399,15 +399,19 @@ function getHarnessBillsBiweeklyScenario_() {
 function getHarnessBillsMonthlyIntegrationScenario_() {
   var settingsName = (typeof PROFILE_SETTINGS_SHEET_NAME_ === 'string') ? PROFILE_SETTINGS_SHEET_NAME_ : 'INPUT - Settings';
   var sysMetaName = (typeof SYS_META_SHEET_NAME_ === 'string') ? SYS_META_SHEET_NAME_ : 'SYS - Meta';
+  var activityName = (typeof ACTIVITY_LOG_SHEET_NAME === 'string') ? ACTIVITY_LOG_SHEET_NAME : 'LOG - Activity';
 
   return {
     id: 'REGRESSION-BILLS-MONTHLY-INTEGRATION',
     category: 'REGRESSION',
     executionLevel: 'INTEGRATION',
     description: 'Integration: seed a real INPUT - Bills sheet (City Utilities, $125, Monthly, Due Day 15, Manual) + LOG - Activity row on a disposable workbook and assert the visible facts (payee/amount/due day/next occurrence/activity).',
-    // Provisioning gate is scoped to the minimal canonical structure the scenario
-    // guarantees; Bills/Activity visible facts are carried by functional assertions.
-    expectedSheets: [settingsName, sysMetaName],
+    // INTEGRATION policy: expectedSheets includes every scenario-created sheet the
+    // Validator can structurally validate. LOG - Activity IS modeled (headers +
+    // frozen row + widths), so it is validated here. INPUT - Bills has no canonical
+    // Validator rule yet, so its visible facts are carried by functional assertions
+    // only (documented Validator-coverage gap; see Harness Validation Integration Review).
+    expectedSheets: [settingsName, activityName, sysMetaName],
     setup: function(ctx) {
       ctx.assertWritable();
       runMinimalBootstrap_(ctx.ss);
@@ -649,15 +653,26 @@ function harnessSeedOneBillRow_(ctx) {
 function getHarnessBillsMonthlyCashflowScenario_() {
   var settingsName = (typeof PROFILE_SETTINGS_SHEET_NAME_ === 'string') ? PROFILE_SETTINGS_SHEET_NAME_ : 'INPUT - Settings';
   var sysMetaName = (typeof SYS_META_SHEET_NAME_ === 'string') ? SYS_META_SHEET_NAME_ : 'SYS - Meta';
+  var activityName = (typeof ACTIVITY_LOG_SHEET_NAME === 'string') ? ACTIVITY_LOG_SHEET_NAME : 'LOG - Activity';
+  // This scenario hard-builds the 2026 Cash Flow sheet (see harnessSeedCashFlowForBill_),
+  // so name expectedSheets to exactly that year. The Validator canonical model keys
+  // Cash Flow to the CURRENT year; in 2026 they align and Cash Flow is structurally
+  // validated. In a later calendar year the scope simply won't match the model entry
+  // and Cash Flow degrades gracefully to functional-only (no false failure).
+  var cashFlowName = (typeof getCashFlowSheetName_ === 'function') ? getCashFlowSheetName_(2026) : 'INPUT - Cash Flow 2026';
 
   return {
     id: 'REGRESSION-BILLS-MONTHLY-CASHFLOW',
     category: 'REGRESSION',
     executionLevel: 'INTEGRATION',
     description: 'Integration: seed INPUT - Bills + a canonical INPUT - Cash Flow 2026 (with the bill\'s Expense row) + LOG - Activity on a disposable workbook, and assert the visible Bills ↔ Cash Flow linkage.',
-    // Provisioning gate scoped to the guaranteed minimal structure; Bills/Cash Flow/
-    // Activity visible facts are carried by the functional assertions.
-    expectedSheets: [settingsName, sysMetaName],
+    // INTEGRATION policy: expectedSheets includes every scenario-created sheet the
+    // Validator can structurally validate. INPUT - Cash Flow <year> and LOG - Activity
+    // are both modeled (headers + frozen row + widths) and are built via production
+    // helpers (buildCashFlowYearSheet_ / getOrCreateActivityLogSheet_), so both are
+    // validated here in addition to the functional assertions. INPUT - Bills has no
+    // canonical Validator rule yet → functional-only (documented coverage gap).
+    expectedSheets: [settingsName, cashFlowName, activityName, sysMetaName],
     setup: function(ctx) {
       ctx.assertWritable();
       runMinimalBootstrap_(ctx.ss);
