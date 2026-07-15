@@ -243,3 +243,58 @@ function vtRunHarnessScenario(scenarioId, options) {
     return { ok: true, report: makeWireSafe_(report) };
   });
 }
+
+/**
+ * List the Test Harness SUITES available to the UI, from the suite registry
+ * (getHarnessSuites_ — currently the Bills Regression Suite). Guarded by the WRITER
+ * guard. Read-only listing — surfaces suite descriptors only; no workbook is
+ * created. The console suite dropdown populates from this list, so new registered
+ * suites appear with no HTML change.
+ * @returns {!Object} { ok, suites:[{id,label,description,scenarioIds,count}] } | {ok:false,error}
+ */
+function vtListHarnessSuites() {
+  return vtSafe_(function() {
+    assertHarnessAllowed_();
+    var all = getHarnessSuites_();
+    var suites = [];
+    for (var i = 0; i < all.length; i++) {
+      var s = all[i];
+      suites.push({
+        id: s.id,
+        label: s.label,
+        description: s.description,
+        scenarioIds: (s.scenarioIds && s.scenarioIds.length) ? s.scenarioIds.slice() : [],
+        count: (s.scenarioIds && s.scenarioIds.length) ? s.scenarioIds.length : 0
+      });
+    }
+    return { ok: true, suites: suites };
+  });
+}
+
+/**
+ * Run every scenario in a registered SUITE (each in its own disposable workbook)
+ * and return the aggregated suite report. Accepts only ids present in the suite
+ * registry (getHarnessSuiteById_) and rejects any other id fail-closed BEFORE any
+ * write. Delegates to testRunSuiteById_(id, { dispositionMode }) — which iterates
+ * the scenario runner (creating one disposable workbook per scenario, honoring the
+ * disposition policy, and re-passing the disposable gate before every teardown).
+ * Never accepts/uses a client workbook ID.
+ * @param {string} suiteId  a registered suite id
+ * @param {Object=} options { dispositionMode: 'keep'|'trash' } (default keep;
+ *                            applied uniformly to every scenario)
+ * @returns {!Object} { ok, report } | { ok:false, error }
+ */
+function vtRunHarnessSuite(suiteId, options) {
+  return vtSafe_(function() {
+    assertHarnessAllowed_();
+    var id = String(suiteId || '').trim();
+    if (!getHarnessSuiteById_(id)) {
+      throw new Error('Unknown or unsupported suite: "' + id + '".');
+    }
+    var mode = (options && options.dispositionMode) ? String(options.dispositionMode) : 'keep';
+    // Rich in-memory report may embed Date objects (temporal comparators inside the
+    // per-scenario functional results) — normalize to a wire-safe copy for the browser.
+    var report = testRunSuiteById_(id, { dispositionMode: mode });
+    return { ok: true, report: makeWireSafe_(report) };
+  });
+}

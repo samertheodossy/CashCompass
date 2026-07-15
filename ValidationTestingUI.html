@@ -165,6 +165,45 @@
     #vt-harness > summary .chev { transition: transform .15s; }
     #vt-harness[open] > summary .chev { transform: rotate(90deg); }
     #vt-h-results .summary, #vt-h-results .status-grid { margin-bottom: 14px; }
+    #vt-h-suite-results .summary { margin-bottom: 14px; }
+
+    /* Suite result table */
+    .suite-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 14px; }
+    .suite-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+                      color: var(--ink-mute); font-weight: 600; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+    .suite-table td { padding: 7px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+    .suite-table tr:last-child td { border-bottom: 0; }
+    .suite-table .st-pass { color: var(--green-fg); font-weight: 700; }
+    .suite-table .st-fail { color: var(--red-fg); font-weight: 700; }
+    .suite-table .st-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    .suite-table tr.summary-row { cursor: pointer; }
+    .suite-table tr.summary-row:hover td { background: #f3f6f9; }
+    .suite-table .sd-caret { color: var(--ink-mute); user-select: none; }
+
+    /* Suite per-scenario expandable detail */
+    .suite-table tr.detail-row > td { background: #fafbfc; padding: 12px 16px; }
+    .sd-desc { font-size: 12.5px; color: var(--ink-soft); margin-bottom: 6px; }
+    .sd-h { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-mute); font-weight: 700; margin: 12px 0 6px; }
+    .sd-empty { font-size: 12.5px; color: var(--ink-mute); }
+    .fa-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 3px 0; font-size: 12.5px; }
+    .fa-pass .fa-ico { color: var(--green-fg); font-weight: 700; }
+    .fa-fail { flex-direction: column; align-items: flex-start; background: var(--red-bg);
+               border: 1px solid #f3c2c2; border-radius: 8px; padding: 8px 10px; margin: 6px 0; }
+    .fa-fail .fa-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .fa-fail .fa-ico { color: var(--red-fg); font-weight: 700; }
+    .fa-label { font-weight: 600; color: var(--ink); }
+    .fa-kind { font-size: 11px; color: var(--ink-mute); background: #eef1f4; border-radius: 6px; padding: 1px 6px; }
+    .fa-exp { font-size: 12px; color: var(--ink-mute); }
+    .fa-detail { margin-top: 6px; display: grid; gap: 3px; width: 100%; }
+    .fa-kv { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; }
+    .fa-kv > span { min-width: 72px; color: var(--ink-mute); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+    .fa-kv code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    .fa-kv code.bad { color: var(--red-fg); font-weight: 700; }
+    .fa-reason { font-size: 12px; color: var(--red-fg); margin-top: 2px; }
+    .sd-val { display: grid; gap: 4px; }
+    .sd-kv { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; }
+    .sd-kv > span { min-width: 100px; color: var(--ink-mute); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+    .sd-wb { font-size: 12.5px; margin-top: 12px; }
 
     .hidden { display: none !important; }
 
@@ -277,8 +316,8 @@
 
         <div style="margin-bottom:14px;">
           <div class="lbl" style="font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-mute); margin-bottom:4px;">Workbook disposition</div>
-          <div class="radio-row"><label><input type="radio" name="vt-h-disp" value="keep" checked disabled> Keep workbook for inspection</label></div>
-          <div class="radio-row"><label><input type="radio" name="vt-h-disp" value="trash" disabled> Trash after validation</label></div>
+          <div class="radio-row"><label><input type="radio" name="vt-h-disp" value="keep" checked disabled onchange="vtHMirrorDisp('scenario')"> Keep workbook for inspection</label></div>
+          <div class="radio-row"><label><input type="radio" name="vt-h-disp" value="trash" disabled onchange="vtHMirrorDisp('scenario')"> Trash after validation</label></div>
         </div>
 
         <div class="btn-row">
@@ -287,6 +326,35 @@
         </div>
 
         <div id="vt-h-results" style="margin-top:16px;"></div>
+
+        <!-- Suite runner — run a whole pack (each scenario in its own disposable workbook). -->
+        <hr style="border:none; border-top:1px solid var(--line); margin:22px 0 18px;">
+
+        <div style="margin-bottom:12px;">
+          <div class="lbl" style="font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-mute); margin-bottom:4px;">Suite</div>
+          <select id="vt-h-suite" onchange="vtHRenderSuiteDesc()" disabled
+                  style="width:100%; max-width:420px; padding:9px 11px; font-size:13px; border:1px solid #cbd2d9; border-radius:8px; background:#fff;">
+            <option value="SUITE-BILLS-REGRESSION">Bills Regression Suite</option>
+          </select>
+          <div id="vt-h-suite-desc" style="font-size:12.5px; color:var(--ink-soft); margin-top:6px;"></div>
+          <div style="font-size:12px; color:var(--ink-mute); margin-top:6px;">
+            Every scenario runs in its own disposable workbook. The disposition below
+            applies to every scenario in the suite.
+          </div>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <div class="lbl" style="font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-mute); margin-bottom:4px;">Workbook disposition</div>
+          <div class="radio-row"><label><input type="radio" name="vt-h-suite-disp" value="keep" checked disabled onchange="vtHMirrorDisp('suite')"> Keep workbook for inspection</label></div>
+          <div class="radio-row"><label><input type="radio" name="vt-h-suite-disp" value="trash" disabled onchange="vtHMirrorDisp('suite')"> Trash after validation</label></div>
+        </div>
+
+        <div class="btn-row">
+          <button class="primary" id="vt-h-suite-run" onclick="vtHRunSuite()" disabled>Run Suite</button>
+          <span id="vt-h-suite-status" class="runmsg"></span>
+        </div>
+
+        <div id="vt-h-suite-results" style="margin-top:16px;"></div>
       </div>
     </details>
   </div>
@@ -715,6 +783,9 @@
   var vtHRunToken = 0;        // ignore superseded/late run callbacks
   var vtHScenMap = {};        // id → scenario descriptor
   var vtHLastReport = null;   // for the JSON copy button
+  var vtHSuiteRunToken = 0;   // ignore superseded/late SUITE run callbacks
+  var vtHSuiteMap = {};       // id → suite descriptor
+  var vtHLastSuiteReport = null;
 
   // Enable/disable all harness controls together. Controls start DISABLED in the
   // markup and are only enabled once vtListHarnessScenarios() confirms capability
@@ -726,6 +797,25 @@
     document.getElementById('vt-h-run').disabled = !enabled;
     var radios = document.querySelectorAll('input[name="vt-h-disp"]');
     for (var i = 0; i < radios.length; i++) radios[i].disabled = !enabled;
+    // Suite controls share the same capability gate as the single-scenario controls.
+    document.getElementById('vt-h-suite').disabled = !enabled;
+    document.getElementById('vt-h-suite-run').disabled = !enabled;
+    var sradios = document.querySelectorAll('input[name="vt-h-suite-disp"]');
+    for (var j = 0; j < sradios.length; j++) sradios[j].disabled = !enabled;
+  }
+
+  // V1: the Scenario and Suite disposition controls are two views of ONE shared
+  // state — changing either mirrors the other, so the two sections stay in sync and
+  // a tester never sees divergent selections. (No separate persistence yet; future
+  // suite-only policies — keep-all / keep-failures-only / trash-all — will break this
+  // mirror. See TEST_HARNESS_ARCHITECTURE.md §4.0.4.)
+  function vtHMirrorDisp(source) {
+    var srcName = source === 'suite' ? 'vt-h-suite-disp' : 'vt-h-disp';
+    var dstName = source === 'suite' ? 'vt-h-disp' : 'vt-h-suite-disp';
+    var picked = document.querySelector('input[name="' + srcName + '"]:checked');
+    if (!picked) return;
+    var dst = document.querySelectorAll('input[name="' + dstName + '"]');
+    for (var i = 0; i < dst.length; i++) dst[i].checked = (dst[i].value === picked.value);
   }
 
   // Show the disabled/capability notice and force controls off.
@@ -769,6 +859,7 @@
         if (html) sel.innerHTML = html;
         vtHSetEnabled(true);   // capability confirmed — activate the controls
         vtHRenderDesc();
+        vtHLoadSuites();       // capability confirmed — populate the suite dropdown too
       })
       .withFailureHandler(function(err) {
         vtHShowDisabled(err && err.message ? err.message : 'Test Harness is not enabled for this user/environment.');
@@ -923,6 +1014,261 @@
       if (done) { done.classList.remove('hidden'); setTimeout(function() { done.classList.add('hidden'); }, 1600); }
     } catch (e) {
       var dd = document.querySelector('#vt-h-results details.json');
+      if (dd) dd.open = true;
+    }
+  }
+
+  /* -------------------------------------------------------------------- */
+  /*  Suite runner (WRITER) — runs a whole pack; each scenario still gets  */
+  /*  its own disposable workbook. Own run token / map / last-report.      */
+  /* -------------------------------------------------------------------- */
+
+  // Populate the suite dropdown (called once capability is confirmed). Guard-safe:
+  // a denial simply leaves the suite controls disabled with no report.
+  function vtHLoadSuites() {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res || !res.ok) return;   // capability already surfaced by scenario load
+        var list = res.suites || [];
+        var sel = document.getElementById('vt-h-suite');
+        var html = '';
+        vtHSuiteMap = {};
+        for (var i = 0; i < list.length; i++) {
+          vtHSuiteMap[list[i].id] = list[i];
+          html += '<option value="' + vtEsc(list[i].id) + '">' + vtEsc(list[i].label || list[i].id) + '</option>';
+        }
+        if (html) sel.innerHTML = html;
+        vtHRenderSuiteDesc();
+      })
+      .withFailureHandler(function() { /* non-fatal — suite controls stay usable with the default option */ })
+      .vtListHarnessSuites();
+  }
+
+  function vtHRenderSuiteDesc() {
+    var sel = document.getElementById('vt-h-suite');
+    var desc = document.getElementById('vt-h-suite-desc');
+    var s = vtHSuiteMap[sel.value];
+    if (!s) { desc.textContent = ''; return; }
+    var count = (s.count != null) ? s.count : (s.scenarioIds ? s.scenarioIds.length : 0);
+    desc.innerHTML = vtEsc(s.description || '') +
+      '<span style="color:var(--ink-mute);"> · ' + count + ' scenario' + (count === 1 ? '' : 's') + '</span>';
+  }
+
+  function vtHSetSuiteMsg(html, isErr) {
+    var el = document.getElementById('vt-h-suite-status');
+    el.className = 'runmsg' + (isErr ? ' err' : '');
+    el.innerHTML = html;
+  }
+
+  function vtHRunSuite() {
+    var token = ++vtHSuiteRunToken;
+    var suiteId = document.getElementById('vt-h-suite').value;
+    // V1: read the Suite section's own disposition control (mirrored with the Scenario
+    // one — one shared state, shown in both sections). Applied uniformly to every
+    // scenario (no mixed policy yet).
+    var trash = document.querySelector('input[name="vt-h-suite-disp"]:checked').value === 'trash';
+    var mode = trash ? 'trash' : 'keep';
+    var btn = document.getElementById('vt-h-suite-run');
+    var box = document.getElementById('vt-h-suite-results');
+    btn.disabled = true;
+    box.innerHTML = '';
+    vtHLastSuiteReport = null;
+    vtHSetSuiteMsg(vtSpin(trash
+      ? 'Running suite (one disposable workbook per scenario · trash on success)…'
+      : 'Running suite (one disposable workbook per scenario)…'), false);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (token !== vtHSuiteRunToken) return;
+        btn.disabled = false;
+        if (!res || !res.ok) { vtHSetSuiteMsg(vtEsc(res && res.error ? res.error : 'Suite run failed.'), true); return; }
+        vtHSetSuiteMsg('', false);
+        vtHRenderSuiteReport(res.report);
+      })
+      .withFailureHandler(function(err) {
+        if (token !== vtHSuiteRunToken) return;
+        btn.disabled = false;
+        vtHSetSuiteMsg(vtEsc(err && err.message ? err.message : 'Suite run failed.'), true);
+      })
+      .vtRunHarnessSuite(suiteId, { dispositionMode: mode });
+  }
+
+  function vtHRenderSuiteReport(r) {
+    var box = document.getElementById('vt-h-suite-results');
+    if (!r) { box.innerHTML = '<p class="empty">No suite report returned.</p>'; return; }
+    vtHLastSuiteReport = r;
+    var c = r.counts || {};
+    var overallColor = r.overall === 'PASS' ? 'var(--green-fg)' : 'var(--red-fg)';
+
+    var durTxt = (r.durationMs != null) ? (r.durationMs / 1000).toFixed(1) + ' s' : '—';
+    var html = '<div class="summary">' +
+      vtCell('Suite', vtEsc((r.suite && r.suite.label) || (r.suite && r.suite.id) || '—')) +
+      vtCell('Overall', '<span style="color:' + overallColor + ';">' + vtEsc(r.overall) + '</span>') +
+      vtCell('Scenarios', String(c.total || 0)) +
+      vtCell('Pass', '<span style="color:var(--green-fg);">' + String(c.pass || 0) + '</span>') +
+      vtCell('Fail', '<span style="color:' + ((c.fail || 0) ? 'var(--red-fg)' : 'var(--ink-soft)') + ';">' + String(c.fail || 0) + '</span>') +
+      (c.notRun ? vtCell('Not run', String(c.notRun)) : '') +
+      vtCell('Duration', vtEsc(durTxt)) +
+      vtCell('Disposition', vtEsc(r.dispositionMode || 'keep')) +
+    '</div>';
+
+    if (r.catastrophic) {
+      html += '<p class="runmsg err" style="margin:0 0 12px;">Catastrophic harness failure at ' +
+        vtEsc(r.catastrophic.scenarioId) + ': ' + vtEsc(r.catastrophic.error) +
+        ' — remaining scenarios not run.</p>';
+    }
+
+    // Correlate each compact row with its FULL scenario report (reports[]) for the
+    // expandable detail. reports[] only holds scenarios that actually ran (a missing
+    // or catastrophic entry has none → detail falls back to the compact summary).
+    var repById = {};
+    var repList = r.reports || [];
+    for (var ri = 0; ri < repList.length; ri++) {
+      if (repList[ri] && repList[ri].scenario && repList[ri].scenario.id) {
+        repById[repList[ri].scenario.id] = repList[ri];
+      }
+    }
+
+    var rows = r.scenarios || [];
+    html += '<table class="suite-table"><thead><tr>' +
+      '<th></th><th>Result</th><th>Scenario</th><th>Level</th><th>Functional</th>' +
+      '<th>Provisioning</th><th>Drift</th><th>Disposition</th><th>Workbook</th>' +
+      '</tr></thead><tbody>';
+    for (var i = 0; i < rows.length; i++) {
+      var s = rows[i];
+      var pass = s.overall === 'PASS';
+      var fn = s.functional
+        ? (s.functional.pass + '/' + (s.functional.pass + s.functional.fail))
+        : '—';
+      var wb = (s.workbook && s.workbook.url)
+        ? '<a href="' + vtEsc(s.workbook.url) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();">open</a>'
+        : '<span style="color:var(--ink-mute);">—</span>';
+      html += '<tr class="summary-row" onclick="vtHToggleSuiteDetail(' + i + ')">' +
+        '<td class="sd-caret" id="vt-h-sc-' + i + '">▸</td>' +
+        '<td class="' + (pass ? 'st-pass' : 'st-fail') + '">' + (pass ? '🟢 PASS' : '🔴 FAIL') + '</td>' +
+        '<td class="st-mono">' + vtEsc(s.id) + (s.error ? '<div class="runmsg err" style="font-weight:500;">' + vtEsc(s.error) + '</div>' : '') + '</td>' +
+        '<td>' + (s.executionLevel ? vtHLevelBadge(s.executionLevel) : '—') + '</td>' +
+        '<td>' + fn + '</td>' +
+        '<td>' + vtEsc(s.provisioning || '—') + '</td>' +
+        '<td>' + vtEsc(s.drift || '—') + '</td>' +
+        '<td>' + vtEsc(s.disposition || '—') + '</td>' +
+        '<td>' + wb + '</td>' +
+      '</tr>';
+      html += '<tr class="detail-row hidden" id="vt-h-sd-' + i + '"><td colspan="9">' +
+        vtHRenderScenarioDetail(repById[s.id] || null, s) +
+      '</td></tr>';
+    }
+    html += '</tbody></table>';
+
+    html += '<details class="json"><summary>View raw JSON ' +
+      '<button class="copybtn" onclick="vtHCopySuiteJson(event)">Copy</button>' +
+      '<span id="vt-h-suite-copied" class="copied hidden">Copied!</span></summary>' +
+      '<pre class="json" id="vt-h-suite-json"></pre></details>';
+
+    box.innerHTML = html;
+    document.getElementById('vt-h-suite-json').textContent = JSON.stringify(r, null, 2);
+  }
+
+  // Expand/collapse one scenario's detail row.
+  function vtHToggleSuiteDetail(idx) {
+    var row = document.getElementById('vt-h-sd-' + idx);
+    var car = document.getElementById('vt-h-sc-' + idx);
+    if (!row) return;
+    var nowHidden = row.classList.toggle('hidden');
+    if (car) car.textContent = nowHidden ? '▸' : '▾';
+  }
+
+  // Render a value already normalized for the wire (Dates arrive as ISO strings).
+  function vtHFmtVal(v) {
+    if (v === null) return 'null';
+    if (v === undefined) return 'undefined';
+    if (typeof v === 'object') { try { return JSON.stringify(v); } catch (e) { return String(v); } }
+    return String(v);
+  }
+
+  // One functional-assertion line. PASS = compact (label · kind · muted expected);
+  // FAIL = prominent block with Expected vs Actual, reason, and location.
+  function vtHRenderAssertion(a) {
+    if (!a) return '';
+    var kind = a.kind ? '<span class="fa-kind">' + vtEsc(a.kind) + '</span>' : '';
+    var label = '<span class="fa-label">' + vtEsc(a.label || '(assertion)') + '</span>';
+    if (a.pass) {
+      var exp = (a.expected !== undefined && a.expected !== null && a.expected !== '')
+        ? '<span class="fa-exp">= ' + vtEsc(vtHFmtVal(a.expected)) + '</span>' : '';
+      return '<div class="fa-row fa-pass"><span class="fa-ico">✓</span>' + label + kind + exp + '</div>';
+    }
+    var loc = a.location
+      ? '<div class="fa-kv"><span>Location</span><code>' + vtEsc(a.location) + '</code></div>' : '';
+    var reason = a.reason
+      ? '<div class="fa-reason">' + vtEsc(a.reason) + '</div>' : '';
+    return '<div class="fa-row fa-fail">' +
+      '<div class="fa-head"><span class="fa-ico">✕</span>' + label + kind + '</div>' +
+      '<div class="fa-detail">' +
+        '<div class="fa-kv"><span>Expected</span><code>' + vtEsc(vtHFmtVal(a.expected)) + '</code></div>' +
+        '<div class="fa-kv"><span>Actual</span><code class="bad">' + vtEsc(vtHFmtVal(a.actual)) + '</code></div>' +
+        loc + reason +
+      '</div>' +
+    '</div>';
+  }
+
+  // Validator summary block (Provisioning / Schema / Drift). Prefers the full report,
+  // falls back to the compact summary fields.
+  function vtHRenderValidatorSummary(full, s) {
+    var v = (full && full.validators) ? full.validators : {};
+    var prov = v.provisioning || (s.provisioning ? { overall: s.provisioning, counts: s.provisioningCounts } : null);
+    var sch = v.schema || s.schema || null;
+    var dr = v.drift || (s.drift ? { overall: s.drift, counts: s.driftCounts } : null);
+    var out = '<div class="sd-val">';
+    out += '<div class="sd-kv"><span>Provisioning</span><span>' +
+      (prov ? vtEsc(prov.overall || '—') + ' ' + (prov.counts ? vtTally(prov.counts) : '') : '—') + '</span></div>';
+    out += '<div class="sd-kv"><span>Schema</span><span>' +
+      (sch ? vtEsc((sch.workbookType || '—') + ' / ' + (sch.compatibility || '—')) : '—') + '</span></div>';
+    out += '<div class="sd-kv"><span>Drift</span><span>' +
+      (dr ? vtEsc(dr.overall || '—') + ' ' + (dr.counts ? vtTally(dr.counts) : '') : '—') + '</span></div>';
+    out += '</div>';
+    return out;
+  }
+
+  // Reusable per-scenario detail renderer. Takes the FULL scenario report (may be
+  // null for missing/catastrophic entries) + the compact summary. Reused later for
+  // individual scenario results (see vtHRenderReport). UI-only; reads existing fields.
+  function vtHRenderScenarioDetail(full, s) {
+    var parts = [];
+    var desc = (full && full.scenario && full.scenario.description) ? full.scenario.description : '';
+    if (desc) parts.push('<div class="sd-desc">' + vtEsc(desc) + '</div>');
+
+    parts.push('<div class="sd-h">Functional assertions</div>');
+    var results = (full && full.functional && full.functional.results) ? full.functional.results : null;
+    if (!results || !results.length) {
+      parts.push('<div class="sd-empty">No functional assertions for this scenario' +
+        (full ? '.' : ' (no detailed report — scenario did not run).') + '</div>');
+    } else {
+      for (var i = 0; i < results.length; i++) parts.push(vtHRenderAssertion(results[i]));
+    }
+
+    parts.push('<div class="sd-h">Validator</div>');
+    parts.push(vtHRenderValidatorSummary(full, s));
+
+    var url = (full && full.workbook && full.workbook.url) || (s.workbook && s.workbook.url) || '';
+    var name = (full && full.workbook && full.workbook.name) || (s.workbook && s.workbook.name) || 'open workbook';
+    parts.push('<div class="sd-wb">Workbook: ' +
+      (url ? '<a href="' + vtEsc(url) + '" target="_blank" rel="noopener noreferrer">' + vtEsc(name) + '</a>'
+           : '<span style="color:var(--ink-mute);">—</span>') + '</div>');
+
+    var err = (full && full.error) || (!full && s.error) || '';
+    if (err) parts.push('<div class="runmsg err" style="margin-top:8px;">' + vtEsc(err) + '</div>');
+
+    return parts.join('');
+  }
+
+  function vtHCopySuiteJson(ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    var text = JSON.stringify(vtHLastSuiteReport || {}, null, 2);
+    var done = document.getElementById('vt-h-suite-copied');
+    try {
+      navigator.clipboard.writeText(text);
+      if (done) { done.classList.remove('hidden'); setTimeout(function() { done.classList.add('hidden'); }, 1600); }
+    } catch (e) {
+      var dd = document.querySelector('#vt-h-suite-results details.json');
       if (dd) dd.open = true;
     }
   }

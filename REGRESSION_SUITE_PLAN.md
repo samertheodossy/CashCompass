@@ -248,6 +248,17 @@ present.
 AutoPay, manual Pay, overdue, paid-occurrence suppression, next-occurrence
 calculation, month-boundary, 31st-of-month, and year-boundary.
 
+> **Suite runner shipped (V1).** All ten implemented Bills scenarios (8 PURE +
+> 2 INTEGRATION) can now be run as one action via **`SUITE-BILLS-REGRESSION`** — the
+> first registered Test Harness *suite* (`test_harness_suites.js`,
+> `testRunBillsSuite()` / console **Run Suite**). Each scenario still runs
+> independently in its own disposable workbook; the suite only aggregates results
+> (overall PASS iff every scenario PASSes). V1 disposition is **uniform** — the
+> panel's keep/trash selection applies to every scenario (per-verdict policies such
+> as *keep-failures-only* are documented but deferred). This is the pattern future
+> packs (Income / Houses / Retirement / System Integrity / Release Readiness) will
+> register into. See TEST_HARNESS_ARCHITECTURE.md §4.0.
+
 ### Level 3 — Income Regression
 *Income totals must flow into Cash Flow and the dashboard.* See §4.2. **Caveat:**
 income cadence (weekly/biweekly/semi-monthly/one-time) is **not modeled distinctly**

@@ -309,6 +309,147 @@ fidelity and safety conflict, safety wins and the gap is documented. Full standa
 > capability + the ss-injection refactor). This section is the summary; the plan is
 > the source of truth for *what to build next*.
 
+### 4.0 Suite runner (V1 implemented — `test_harness_suites.js`)
+
+A **suite** runs a fixed, ordered list of registered scenarios as one action, so a
+whole pack can be validated after any related change without hand-running each
+scenario. **Independence is preserved:** a suite is not a mega-workbook — every
+scenario still runs through the same `runScenario_` loop and creates its own
+disposable workbook with its own `runId`. The suite layer only iterates the
+registry and aggregates per-scenario reports.
+
+- **Registry:** `getHarnessSuites_()` / `getHarnessSuiteById_(id)` — a suite is
+  `{ id, label, description, scenarioIds[] }` referencing scenarios by id. V1 ships
+  **`SUITE-BILLS-REGRESSION`** (the Bills Regression Suite: 8 PURE + 2 INTEGRATION
+  scenarios).
+- **Runner:** `testRunSuiteById_(suiteId, { dispositionMode })` (public, guarded once
+  at entry) + convenience `testRunBillsSuite()`. Fail policy: one failing scenario
+  does **not** stop the suite (a regression suite must report *all* failures);
+  overall PASS only if every scenario PASSed and none were skipped. The only
+  early-out is a **catastrophic** harness failure (a throw from `runScenario_`,
+  which is designed never to throw) — the suite stops and marks the rest NOT RUN.
+- **Disposition policy (V1 — uniform)** (`harnessSuiteScenarioTrash_`): the suite
+  applies the **single disposition selected in the panel** (`keep` default, or
+  `trash`) to **every** scenario. No mixed/per-level policy in V1. Each teardown
+  still re-passes `assertDisposableTarget_`. Future policies are deferred (§4.0.4).
+- **Report:** `buildHarnessSuiteReport_` → `{ overall, counts:{total,pass,fail,notRun},
+  scenarios:[compact summaries], reports:[full per-scenario], catastrophic }`.
+- **Console:** `vtListHarnessSuites()` / `vtRunHarnessSuite(suiteId, options)`
+  (guarded; never accept a client workbook id), surfaced as a **Run Suite** control
+  in the Test Harness card of the Workbook Health console. The suite table renders
+  each scenario as an **expandable row** (`vtHRenderScenarioDetail`): scenario
+  description, per-assertion PASS/FAIL with kind + expected/actual (failures shown
+  prominently with reason/location), Validator summary (Provisioning/Schema/Drift),
+  and the workbook link — all from the existing report (`reports[]` +
+  `functional.results[]`), so **no report-shape change** was needed and raw JSON stays
+  available for deep debugging. The detail renderer is UI-only and reusable for
+  individual-scenario results later.
+- **Generalization:** new packs (Income / Houses / Retirement / System Integrity /
+  Release Readiness) register by adding a suite descriptor — no runner change. Future
+  meta-suites (all PURE, all INTEGRATION, all Bills, Release Readiness) are a natural
+  extension of the same registry + runner.
+
+#### 4.0.1 UI model (design of record)
+
+The Test Harness card exposes **two independent selectors**, never merged:
+
+1. **Individual Scenario** dropdown → **Run Scenario** — runs exactly one scenario
+   in its own disposable workbook.
+2. **Suite** dropdown → **Run Suite** — runs an ordered collection of scenarios,
+   each in its own disposable workbook.
+
+Suites are **never** listed in the scenario dropdown and scenarios are never listed
+in the suite dropdown. Each selector owns its own run token, results area, and JSON
+viewer, so a scenario run and a suite run never overwrite each other's output. V1
+has a **single Workbook-disposition control** (keep / trash) shared by both actions —
+a suite applies that selected disposition uniformly to every scenario.
+
+#### 4.0.2 Workbook lifecycle decision — one workbook per scenario (V1)
+
+**Decision:** both individual runs *and* suite runs use **one disposable workbook per
+scenario**. A suite does **not** reuse a single cumulative workbook across scenarios.
+This is the implemented V1 behavior and the design of record.
+
+Rationale — a shared/cumulative workbook would break the properties a regression
+suite depends on:
+
+- **Isolation / determinism.** Each scenario asserts against a known clean state.
+  Reuse makes results **order-dependent**: scenario *N* sees the residue (rows,
+  sheets, Cash Flow totals, Activity Log entries, SYS aggregates) of scenarios
+  `1..N-1`.
+- **False greens.** A `exists()`/sheet-present assertion could pass because an
+  *earlier* scenario created the artifact, not the one under test — silently
+  weakening coverage.
+- **Failure isolation.** A failure in a late scenario could be caused by an early
+  scenario's leftovers; the single kept workbook shows only cumulative state, so you
+  cannot see the exact state that failed, and re-running the scenario alone may pass.
+- **Validator scoping.** Per-scenario `expectedSheets` scoping (`validatorScopeModel_`)
+  assumes the workbook contains only the sheets *this* scenario created. On a
+  cumulative workbook the scope is ambiguous — Provisioning/Drift would have to move
+  to a **whole-workbook, end-of-suite** model (a different validation contract).
+- **Disposition / reporting.** Per-scenario disposition and per-scenario workbook
+  links only make sense with one workbook per scenario. A shared workbook has a single
+  suite-level URL and a single suite-level keep/trash — per-scenario disposition
+  becomes meaningless.
+
+PURE scenarios don't read or write the workbook at all (they exercise the pure
+recurrence engine), so sharing would be *data-safe* for them but provides **zero
+benefit** while muddying the 1:1 “one workbook = one scenario result” model.
+
+#### 4.0.3 Deferred: shared/cumulative-workbook mode (NOT V1)
+
+Shared reuse is **deferred** and must not be added until clearly safe. The only
+legitimate use is a genuine **E2E sequence** where later steps intentionally build on
+earlier ones (income → bills → AutoPay → dashboard). Even then, the **preferred**
+model is a *single multi-step E2E scenario* (multiple `actions`, one workbook, one
+`expectedOutcome`) rather than a shared-workbook *suite* — the multi-step scenario is
+the cleaner abstraction and needs no new machinery.
+
+If a true shared-workbook **suite** is ever built, it is an **explicit opt-in,
+E2E-only** mode requiring ALL of:
+
+- a **suite-level `runId`** stamped once into `_HARNESS_META`, with the disposable
+  gate accepting that suite runId for every member scenario;
+- **explicit, stable ordering** and **fail-fast prerequisites** (skip/short-circuit a
+  cumulative step whose prerequisite scenario failed);
+- a **cumulative expected-state model** (Seed Profiles as the single source of truth
+  for expected aggregates) — assertions written against cumulative state, not
+  clean-slate constants;
+- **whole-workbook, end-of-suite Validator scoping** (union of created sheets),
+  replacing per-scenario `expectedSheets` scoping for that suite;
+- **suite-level disposition + link** (one URL, one keep/trash at suite end;
+  per-scenario `disposition` becomes “SHARED — torn down at suite end”);
+- an **idempotency/reset contract** for each cumulative step (or runner-level
+  snapshot/restore, which is expensive in Sheets).
+
+Mixing isolated and cumulative scenarios inside one shared workbook is disallowed.
+
+#### 4.0.4 Deferred: richer disposition policies (NOT V1)
+
+V1 disposition is **uniform** — the panel's keep/trash selection applies to every
+scenario in the suite. The Scenario and Suite sections each show their **own**
+disposition control, but V1 keeps them as **two views of one shared state** (they
+mirror each other in the UI, `vtHMirrorDisp`), so a tester never sees divergent
+selections and each section reads as complete on its own.
+
+Future **suite-only** policies are **documented but not implemented**, because they
+require the runner to defer teardown until *after* each scenario's PASS/FAIL verdict
+is known (today teardown happens inside `runScenario_` right after validation, driven
+only by the `{ trash }` option):
+
+- **Keep all** — keep every scenario's workbook (the current `keep`).
+- **Trash all** — trash every scenario's workbook (the current `trash`).
+- **Keep failures only** — keep only the workbooks of FAILed scenarios (the ones
+  worth inspecting); trash the passes. The natural default once implemented.
+  (`trash-passed` is an equivalent alias.)
+
+When built, these become additional `dispositionMode` values resolved in
+`harnessSuiteScenarioTrash_` — but only after the scenario report exists, so the
+suite runner (not `runScenario_`'s inline teardown) would own the trash decision. At
+that point the Suite disposition control becomes **suite-only** (the UI mirror is
+dropped and the two controls hold independent state). No change to
+`assertDisposableTarget_` is needed; teardown still re-passes the gate.
+
 Packs group scenarios by category and let a run enable a subset. Target coverage:
 
 - **Smoke:** Provision · Settings · Cash Flow · Bills · Donation (+ Bank Accounts,
@@ -379,19 +520,25 @@ Overall                 READY FOR BETA
 ## 7. File layout
 
 ```
-test_harness_core.js       # guard + disposable-workbook lifecycle + run loop
-test_harness_scenarios.js  # declarative scenario packs (SMOKE/REGRESSION/RECOVERY/STRESS)
-test_harness_data.js       # synthetic fixture-data generators + historical-bug repro data
-test_harness_report.js     # Release Readiness report aggregation
-validator_health.js        # (Validator, read-only) the health entry the harness calls
+test_harness_core.js          # guard + disposable-workbook lifecycle + run loop
+test_harness_scenarios.js     # scenario registry + SMOKE/donation scenario
+test_harness_scenarios_bills.js # Bills recurrence scenarios (PURE + INTEGRATION)
+test_harness_suites.js        # suite registry + runner + report (V1: SUITE-BILLS-REGRESSION)
+test_harness_assert.js        # functional-assertion primitives + collector (E0a)
+test_harness_read.js          # read layer (ctx.read.sheetValue/sheetRange)
+test_harness_report.js        # per-scenario result envelope + gate + log shaping
+validation_testing_server.js  # console API (scenarios + suites), guarded, wire-safe
+validator_health.js           # (Validator, read-only) planned aggregate health entry
 ```
 
 **Public (guarded) entry points** — `test_harness_core.js`:
 
-> **Implemented today (V1):** `testRunSmoke(options)` and the no-arg convenience
-> `testRunSmokeTrash()` (forwards `{ trash: true }`). These are the current editor
-> runners; the console reaches the same scenario via `vtRunHarnessScenario()`. The
-> multi-suite entry points below are the planned end state and are **not** built yet.
+> **Implemented today (V1):** `testRunSmoke(options)` / `testRunSmokeTrash()`,
+> `testRunScenarioById_(id, options)` (generic single-scenario runner behind the
+> console), and the **suite runner** `testRunSuiteById_(suiteId, { dispositionMode })`
+> with convenience `testRunBillsSuite()` (`test_harness_suites.js`). The console
+> reaches these via `vtRunHarnessScenario()` / `vtRunHarnessSuite()`. The richer
+> option-driven `runRegressionSuite(options)` end state below is **not** built yet.
 
 - `runRegressionSuite(options)` — `{ enabledPacks, stopOnSeverity, keepOnFailure,
   archive }`.
