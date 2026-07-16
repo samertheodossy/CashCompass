@@ -47,9 +47,25 @@ Then read only task-relevant documents, such as:
 
 Do not blindly read or rewrite every Markdown file.
 
+## Instruction Precedence
+
+When repository instructions conflict, apply them in this order:
+
+1. Explicit user instructions and approvals for the current task.
+2. `AGENTS.md`.
+3. `agents/shared.md`.
+4. `agents/orchestrator.md`.
+5. `agents/artifacts.md`.
+6. The active role file.
+7. `agents/workflows/change-flow.md`.
+8. Task-relevant project documentation.
+
+Higher-priority instructions control when requirements conflict. When requirements at the same level differ, apply the stricter safety rule. Surface any unresolved conflict before acting.
+
 ## Hard Stops
 
 - No commits unless explicitly approved.
+- No pushes unless explicitly approved.
 - No deploys unless explicitly approved.
 - No destructive workbook changes unless explicitly approved.
 - No schema rewrites, formatting washes, or broad migrations unless explicitly approved.

@@ -4,10 +4,28 @@ Use this flow for non-trivial CashCompass changes.
 
 ## Flow
 
-1. Engineer
-2. Reviewer
-3. Tester
-4. Validator
+1. Planner
+2. Engineer
+3. Reviewer
+4. Tester
+5. Validator
+
+## Planner Phase
+
+Purpose:
+- Understand the task and discover relevant documentation.
+- Identify affected features, files, sheets, workflows, and user data paths.
+- Identify existing validator, regression, and test harness coverage.
+- Identify risks, assumptions, and open questions.
+- Propose the smallest safe implementation plan.
+
+Output:
+- Task summary
+- Relevant docs reviewed
+- Affected areas
+- Existing coverage to reuse
+- Proposed plan
+- Risks / assumptions / open questions
 
 ## Engineer Phase
 
@@ -55,16 +73,21 @@ Output:
 ## Validator Phase
 
 Purpose:
-- Decide whether the change is ready for commit or deploy.
+- Decide commit, push, and deploy readiness separately.
 - Confirm safety rules were followed.
 - Confirm docs, tests, rollback notes, and deployment risk are understood.
 
 Output:
 - Commit readiness
+- Push readiness
 - Deploy readiness
 - Remaining risks
 - Required follow-ups
 
+## Phase Status Routing
+
+Every phase must report `COMPLETE`, `BLOCKED`, or `NEEDS_USER_DECISION`. Follow the routing rules in `agents/orchestrator.md`; do not advance a blocked phase or infer a user decision.
+
 ## Hard Rule
 
-Do not skip directly from Engineer to commit or deploy unless explicitly approved.
+Do not skip directly from Engineer to commit, push, or deploy. Each action requires its own explicit approval under `agents/orchestrator.md`.

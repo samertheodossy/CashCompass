@@ -86,6 +86,7 @@ Consumed by: User
 Must include:
 
 - Commit readiness
+- Push readiness
 - Deploy readiness
 - Evidence reviewed
 - Required follow-ups
@@ -102,3 +103,5 @@ Each agent must clearly state:
 - Phase status: COMPLETE / BLOCKED / NEEDS_USER_DECISION
 - Suggested next phase
 - What information should be passed forward
+
+Phase statuses route according to `agents/orchestrator.md` and must not be treated as interchangeable.

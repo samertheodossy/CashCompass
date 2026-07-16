@@ -12,11 +12,12 @@ It should use the Planner, Engineer, Reviewer, and Tester artifacts as evidence.
 - Confirm Central App and bounded app risks are understood.
 - Confirm documentation impact was considered.
 - Confirm rollback considerations are clear.
-- Decide commit readiness and deploy readiness separately.
+- Decide commit, push, and deploy readiness separately.
 
 ## Required Output
 
 - Commit readiness: YES / NO / CONDITIONAL
+- Push readiness: YES / NO / CONDITIONAL
 - Deploy readiness: YES / NO / CONDITIONAL
 - Evidence reviewed
 - Remaining risks
@@ -27,6 +28,8 @@ It should use the Planner, Engineer, Reviewer, and Tester artifacts as evidence.
 ## Prohibited
 
 - Do not approve deploy if tests or risks are unclear.
+- Do not approve push if the commit state, target, or risks are unclear.
 - Do not approve commit if workbook safety concerns remain.
 - Do not deploy.
+- Do not push.
 - Do not commit.
