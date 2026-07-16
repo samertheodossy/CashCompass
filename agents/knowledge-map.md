@@ -59,6 +59,20 @@ Central App
 
 ---
 
+# Feature Knowledge
+
+Canonical Template
+
+- agents/templates/feature-knowledge.md
+
+Completed Feature Knowledge
+
+- agents/features/*.md
+
+Feature experts must use the canonical template, cite authoritative repository evidence, and keep volatile status in its existing source of truth rather than duplicating it.
+
+---
+
 # Workbook Safety
 
 Golden Workbook

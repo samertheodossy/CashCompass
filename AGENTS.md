@@ -16,6 +16,7 @@ These files are instructions only. They must not change runtime behavior, deploy
 - Reviewer role: `agents/reviewer.md`
 - Tester role: `agents/tester.md`
 - Validator role: `agents/validator.md`
+- Feature knowledge template: `agents/templates/feature-knowledge.md`
 
 ## Default Startup
 
@@ -46,6 +47,8 @@ Then read only task-relevant documents, such as:
 - `COMMIT_RULES.md` and `RELEASE_READINESS.md` for commit/deploy readiness
 
 Do not blindly read or rewrite every Markdown file.
+
+When creating or maintaining a feature expert knowledge document, use `agents/templates/feature-knowledge.md` and store the completed document at `agents/features/<feature-slug>.md`.
 
 ## Instruction Precedence
 
