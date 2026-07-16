@@ -11,9 +11,9 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current stage — Stage 3: Beta Readiness
 
-**Maturity (estimated):** Family Beta Readiness **~97–98%** · External / Public Beta Readiness **~92%**. **Stage 1 (Core Platform) and Stage 2 (Product Hardening) are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** The remaining work before family beta is the **Beta Gate**, sequenced by the **confirmed execution order (2026-07-09): Bills Due Pay runtime validation → Investments cleanup → Recovery completion → Validation Agent → Golden Workbook polish → Family Beta polish** (Financial Integrity Phase 3 is a Beta-Gate requirement sequenced alongside Recovery / Validation Agent). This is no longer major feature development.
+**Maturity (estimated):** Family Beta Readiness **~97–98%** · External / Public Beta Readiness **~92%**. **Stage 1 (Core Platform) and Stage 2 (Product Hardening) are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** The remaining work before family beta is the **Beta Gate**. The July 9 execution queue is retained below as historical planning context, but the current ordering authority is `ROADMAP.md`: **P0 Project Stabilization → remaining P1 Validator/Test Harness/Release Readiness scope → P2 House Financial Accuracy**. This is no longer major feature development.
 
-The **authoritative roadmap is the `## Product Maturity Stages` section immediately below** (Stage 1–6), which carries the at-a-glance framing, `## Current Engineering Priorities`, the `## Shared Lifecycle Framework` direction, and the `## Beta Gate`. `PROJECT_CONTEXT.md` and `README.md` carry high-level mirrors of the stage roadmap. The older `## Launch Readiness Roadmap` (Phase 1–7) is retained further below as detailed historical phase expansion; **where any Phase statement conflicts with the Stage model above, the Stage model wins.**
+`ROADMAP.md` is authoritative for **priority and sequence**. The `## Product Maturity Stages` section below supplies detailed stages, tasks, dependencies, testing inventory, and history; `PROJECT_CONTEXT.md` is authoritative for current technical status. The older `## Launch Readiness Roadmap` (Phase 1–7) is retained further below as historical phase expansion; where it conflicts with current ordering, `ROADMAP.md` wins.
 
 **What is done (reconciled 2026-07-02).** The Central App is live and operational (CENTRAL_MODE routing, per-user provisioning, workbook mapping — runtime-validated) and family-beta capable. **Product Hardening (Stage 2) is complete**, delivering:
 
@@ -40,11 +40,11 @@ The `## Product Maturity Stages` section below remains the detailed **Stage 1–
 
 ## Product Maturity Stages
 
-**Authoritative roadmap — the single source of truth for where CashCompass is and where it is going.** Stages are sequential. Each stage below lists **remaining work** with **Priority** (P0 = now/current · P1 = next, gates the following stage · P2 = high · P3 = gates external beta · P4 = V2/future), **Dependencies**, and **Estimated effort** (XS `<0.5d` · S `0.5–1d` · M `1–3d` · L `3–5d` · XL `>5d`). Completed stages list what closed them. `PROJECT_CONTEXT.md` and `README.md` carry high-level mirrors.
+**Detailed maturity model and work inventory.** `ROADMAP.md` controls current priority and sequence; this section records stages, tasks, dependencies, testing inventory, and history. Each stage below lists **remaining work** with **Priority** (P0 = now/current · P1 = next, gates the following stage · P2 = high · P3 = gates external beta · P4 = V2/future), **Dependencies**, and **Estimated effort** (XS `<0.5d` · S `0.5–1d` · M `1–3d` · L `3–5d` · XL `>5d`). Completed stages list what closed them.
 
 > **Companion: `## UX Backlog (Version 1)`** (below) is the permanent home for small product-quality improvements (polish, loading, empty-states, consistency, wording). It is cross-referenced from Stage 3–5 so these items **never disappear during a roadmap reorganization**. Review it before every Family Beta milestone and before External Beta.
 
-**Maturity (estimated):** Family Beta Readiness **~97–98%** · External / Public Beta Readiness **~92%**. Remaining pre-beta work is the Beta Gate in agreed order — Golden Workbook Convergence, Financial Integrity Phase 3, the Validation Agent, Recovery completion, Workbook/UX polish — **not major feature development.**
+**Maturity (estimated):** Family Beta Readiness **~97–98%** · External / Public Beta Readiness **~92%**. Remaining pre-beta work is the Beta Gate — including Golden Workbook convergence, Financial Integrity Phase 3, remaining Validator/Test Harness/Release Readiness coverage, Recovery validation, and Workbook/UX polish — **not major feature development**. `ROADMAP.md` controls the current order.
 
 ### Stage 1 — Core Platform *(✅ Complete)*
 
@@ -66,9 +66,9 @@ Made the built capabilities provably correct and recoverable. **Completed this s
 
 Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remaining work.
 
-> **Current execution order (confirmed 2026-07-09):** **1) Bills Due Pay runtime validation · 2) Investments cleanup · 3) Recovery implementation · 4) Validation Agent · 5) Golden Workbook polish · 6) Family Beta.** This is the operative near-term sequence — finish the in-flight trust items (Bills Due Pay, Investments) first, then build Recovery and the Validation Agent, then converge the Golden Workbook, then Family Beta. It is the single source of truth for *what to do next*.
+> **Historical execution order (recorded 2026-07-09):** **1) Bills Due Pay runtime validation · 2) Investments cleanup · 3) Recovery implementation · 4) Validation Agent · 5) Golden Workbook polish · 6) Family Beta.** Retained for planning history only. It is not the current work sequence and does not override `ROADMAP.md`.
 >
-> **Beta-Gate workstreams (lettered A–F below) are organized by workstream, not execution order.** All of them must be satisfied before Family Beta; the execution order above sequences them. **Financial Integrity — Phase 3 (workstream B)** stays a Beta-Gate requirement even though it is not a numbered slot in the near-term queue — *the numbers must reconcile* before Family Beta broadens. Strategic rationale: *trust before features; the numbers must reconcile; converge the workbook before broadening Family Beta; the Validation Agent protects trust* (see `PRODUCT_VISION.md → §11 Version 1 Guiding Conclusions`).
+> **Beta-Gate workstreams (lettered A–F below) are organized by workstream, not execution order.** All must be satisfied before Family Beta. `ROADMAP.md` controls current sequencing. **Financial Integrity — Phase 3 (workstream B)** remains a Beta-Gate requirement — *the numbers must reconcile* before Family Beta broadens. Strategic rationale: *trust before features; the numbers must reconcile; converge the workbook before broadening Family Beta; automated validation protects trust* (see `PRODUCT_VISION.md → §11 Version 1 Guiding Conclusions`).
 
 **A. Golden Workbook Convergence** *(Beta-Gate workstream · execution item #5 — a **convergence project, not a redesign**; the production workbook is the **visual source of truth**; full inventory in `## UX Backlog (Version 1)`)*
 
@@ -100,17 +100,17 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | Dashboard audit module (`runDashboardAudit`) | P1 | Framework ✓ | M |
 | Permanent reconciliation diagnostic wired into release | P1 | Convergence + audit modules | M |
 
-**C. Validation Agent — the automated release gate** *(Beta-Gate workstream · execution item #4 — protects the reconciled numbers; the automated guardian of trust)*
+**C. Validator / Test Harness / Release Readiness** *(Beta-Gate evidence workstream; foundation shipped, remaining scope follows P0)*
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
-| Validation Agent / automated regression detection (release gate) | P0 | Stable read models ✓ | L–XL |
-| **Validator Phase 2 — Provisioning Validation** — read-only validation that a freshly provisioned workbook matches the canonical CashCompass architecture (see note + `VALIDATOR_ARCHITECTURE.md §10`) | P1 | Golden Workbook convergence complete | L |
+| Aggregate Release Readiness gate and remaining automated regression coverage | P1 | Stable read models ✓ + remaining Validator/Harness coverage | L–XL |
+| **Remaining Validator Phase 2 modules** — Formula, Conditional-Formatting, Named-Range, and aggregate Workbook Health | P1 | Phase 2 foundation ✓ | L |
 | Runtime regression checklist (interim manual gate) | P1 | — | M |
 | Financial-integrity gate wiring into release | P1 | FI Phase 3 convergence | S |
 | Deployment checklist | P2 | — | S |
 
-> **Validator Phase 2 — Provisioning Validation (planned; do not start yet).** After Central provisions a workbook, run a **read-only** validation that verifies the workbook matches the canonical CashCompass architecture. **Design principle: the Validator *validates* provisioning; it never *performs* provisioning, and it stays read-only.** Scope (future): required sheets · optional sheets per enabled module · sheet schema · headers · frozen panes · canonical column widths · typography · family styling · named ranges · key formulas · hidden/protected support structures · metadata sheets · workbook version compatibility · cross-sheet integrity · regression detection. **Architecture:** the Validator derives expectations from the **same canonical constants and shared helpers** provisioning uses — it must never duplicate provisioning rules; provisioning and Validator always share one source of truth. **Workflow:** Provision Workbook → Run Validator → PASS *or* actionable report → Fix → Run Validator again. **This work intentionally begins only after Golden Workbook convergence is complete.** Full milestone detail lives in `VALIDATOR_ARCHITECTURE.md §10 → Phase 2`.
+> **Validator Phase 2 foundation (shipped 2026-07-13; remaining scope follows P0).** Provisioning, Workbook Drift, and Schema Evolution V1 are implemented, along with Test Harness Foundation V1 and the Validation & Testing console V1. The Validator remains read-only: it validates provisioning and never performs it. Remaining P1 scope includes Formula, Conditional-Formatting, and Named-Range validation; the aggregate Workbook Health report; scenario packs; and the Release Readiness gate. Full milestone detail lives in `VALIDATOR_ARCHITECTURE.md §10`, `TEST_HARNESS_ARCHITECTURE.md`, and `VALIDATION_TESTING_CONSOLE.md`.
 
 **D. Recovery completion — remaining adoption paths** *(Beta-Gate workstream · execution item #3 — gates Family Beta; destructive/admin paths already validated)*
 
@@ -214,14 +214,14 @@ Proposed behavior for a *future* projection feature (forecasting-adjacent; relat
 
 ---
 
-## Current Engineering Priorities
+## Historical Beta-Gate Queue (2026-07-09)
 
-Ranked, current — the **confirmed near-term execution order (2026-07-09)**. (Granular ranked execution items remain in `## Known priorities (ranked)` below.) The Beta-Gate *criteria* are unordered requirements listed in `## Beta Gate`; this list sequences the work.
+This queue records the July 9 plan and is **not the current ordering authority**. Use `ROADMAP.md` for current priority and sequence. The entries below are retained to preserve the origin of still-open validation questions and must be interpreted using the status notes added here and in `PROJECT_CONTEXT.md`.
 
-1. **Bills Due Pay runtime validation** — confirm the shipped Bills Due → Pay occurrence bridge on the next genuine bill paid through Bills Due (marker written, occurrence disappears, future occurrences remain, no duplicates), then commit. Code-path already reviewed. *(In-flight; XS)*
-2. **Investments cleanup** — finish the in-flight Investments Golden Workbook convergence (first-create styling; footer `Account Totals` / `Delta` seeding follow-up), runtime-validate, then commit the local `investments.js` WIP. *(In-flight; S–M)*
+1. **Bills Due Pay runtime validation** — the occurrence bridge is committed (`fdf4a30`); natural runtime evidence remains pending. Commit only if that validation produces a documentation or code change. *(Evidence gap; XS)*
+2. **Investments cleanup** — the recorded local WIP is no longer current; Investments convergence was committed (`85fafc3`, with later related convergence commits). Any remaining runtime or footer work must be re-established from current evidence before planning. *(Remaining scope: UNKNOWN)*
 3. **Recovery completion — remaining adoption paths** — implement the ratified Recovery Architecture (`CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md`): unconditional candidate detection + Auto-Adopt / Ambiguous / Name-only / Orphan + provision-after-recovery duplicate guard, then validate on a disposable account (flags OFF afterward). *Recovery must never create silent duplicates.* *(P0; S–M)*
-4. **Validation Agent** — *(next major engineering project)* the automated regression-detection **release gate** that **protects the reconciled numbers**. Every deploy passes it before shipping. Interim: a runtime regression checklist. *(P0; L–XL)*
+4. **Validator / Test Harness / Release Readiness** — the Phase 2 foundation, Test Harness Foundation V1, and Validation & Testing console V1 shipped 2026-07-13. Remaining modules, scenario packs, and the aggregate release gate follow P0 under current `ROADMAP.md` sequencing.
 5. **Golden Workbook polish** — a newly provisioned workbook must **converge toward the Golden Workbook** (the **visual source of truth**) until **visually indistinguishable from production** (styling, widths, freezes, conditional formats, number formats, totals, notes, filters, sheet order; Cash Flow / Investments / House Values / Retirement). A **convergence project, not a redesign.** First audit complete (2026-07-06, ten core sheets across four design families). *(P0/P1; L)*
 6. **Family Beta polish** — Workbook / UX polish sweep (onboarding, empty-states, loading-experience consistency, messaging, Help/content cleanup — see `## UX Backlog (Version 1)`), Beta Gate assembly, release-readiness review, Stage 4 go/no-go.
 
@@ -252,13 +252,13 @@ This is a **long-term architecture goal**, sequenced after the Beta Gate and bef
 
 ## Beta Gate
 
-Before broader beta, **every release must pass** the following before deployment. These are **unordered gate criteria** — all must be satisfied. The **execution order** that sequences them is the confirmed near-term queue: Bills Due Pay validation → Investments cleanup → Recovery → Validation Agent → Golden Workbook polish → Family Beta (with Financial Integrity Phase 3 sequenced alongside Recovery/Validation Agent). Criteria:
+Before broader beta, **every release must pass** the following before deployment. These are **unordered gate criteria** — all must be satisfied. Current implementation order comes from `ROADMAP.md`; the historical July 9 queue above no longer controls sequence. Criteria:
 
 - **Golden Workbook Convergence** — freshly provisioned workbook is visually convergent with the Golden/Canonical Workbook for the core sheets. *(First audit complete; **Validator-driven engineering convergence complete for the Operational / Financial Ledger / SYS / Special families incl. Cash Flow, 2026-07-12** — remaining diffs are KeepCentral/ProductDecision/IgnoreNoise; convergence passes remaining for Investments / House Values / Retirement + the unaudited sheets. See `VALIDATOR_ARCHITECTURE.md`.)*
 - **Financial Integrity** — Dashboard / Planner / active source-sheet totals reconcile within $0.01. *(Audit Framework + Debt Audit shipped; canonical basis + Planner/Dashboard/Rolling convergence + Asset/Planner/Dashboard audit modules remaining — Phase 3.)*
-- **Validation Agent** — automated regression detection passes. *(Read-only **Validator Phase 1 complete** — Golden Workbook parity + recommendation engine + scoped family runners, admin-gated/default-off; Phase 2 provisioning validation and the numbers-reconciliation release gate still planned. See `VALIDATOR_ARCHITECTURE.md`.)*
+- **Validator / Test Harness / Release Readiness** — required automated evidence passes. *(Validator Phase 1 and the Phase 2 Provisioning/Drift/Schema Evolution foundation are complete; Test Harness Foundation V1 and the Validation & Testing console V1 are shipped. Remaining validation modules, scenario packs, and the aggregate Release Readiness gate are planned. See `VALIDATOR_ARCHITECTURE.md`.)*
 - **Recovery Validation** — recovery stack validated. *(Admin Clear / recovery routing / Reconnect / admin validation done; Auto-Adopt / Ambiguous / Name-only / Orphan remaining.)*
-- **Runtime regression checklist** — core workflows + edge cases verified. *(Interim manual gate until the Validation Agent exists.)*
+- **Runtime regression checklist** — core workflows + edge cases verified. *(Interim manual evidence remains required until the planned automated coverage and aggregate Release Readiness gate are complete.)*
 
 This gate is the release-readiness target for **Stage 3 (Beta Readiness, current)**.
 
@@ -339,14 +339,14 @@ New UX/polish/consistency/loading/empty-state/wording findings go **here** (appe
 
 ---
 
-## Next Session — Recommended Starting Point
+## Historical Next-Session Queue (2026-07-09)
 
-We are in **Stage 3 — Beta Readiness**. Stage 1 (Core Platform) and Stage 2 (Product Hardening) are complete, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09**. The Beta Gate is what remains. **Current active-work queue** (near-term order; the full Stage 3 Beta-Gate detail — including Financial Integrity Phase 3 — lives in `## Product Maturity Stages → Stage 3`):
+This section preserves the July 9 handoff and is not the current starting-point recommendation. Use `ROADMAP.md` for current priority and sequence. Status corrections below prevent this historical queue from being mistaken for live work:
 
-1. **Bills Due Pay runtime validation** — confirm the shipped Bills Due → Pay occurrence bridge on the next genuine bill paid through Bills Due: `bill_paid` marker written, occurrence disappears, future occurrences remain, no duplicate markers. *(No fake data — validate on a real payable occurrence; code-path already reviewed end-to-end.)*
-2. **Investments cleanup** — finish the in-flight Investments convergence work (first-create styling; footer `Account Totals` / `Delta` seeding follow-up) and clear the local WIP in `investments.js`.
+1. **Bills Due Pay runtime validation** — bridge committed (`fdf4a30`); natural runtime evidence remains pending. *(No fake data — validate on a real payable occurrence.)*
+2. **Investments cleanup** — prior WIP was committed (`85fafc3`, with later related convergence commits); any remaining scope is UNKNOWN until re-established from current evidence.
 3. **Recovery implementation** — build the ratified Version 1 Recovery Architecture (`CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md`): unconditional candidate detection, Auto-Adopt / Ambiguous / Name-only / Orphan, provision-after-recovery duplicate guard. *Recovery must never create silent duplicates.*
-4. **Validation Agent** — stand up automated regression detection as the **release gate** (P0, major engineering project); ship a runtime regression checklist as the interim gate.
+4. **Validator / Test Harness / Release Readiness** — Phase 2 foundation, Test Harness Foundation V1, and console V1 shipped 2026-07-13; remaining P1 scope follows P0.
 5. **Golden Workbook polish** — converge fresh provisioning toward the Golden Workbook (visual source of truth); first audit complete (ten sheets, four design families), so write the additive first-create passes for the diverging sheets.
 6. **Family Beta** — once 1–5 are green, do the UX polish sweep (incl. `## UX Backlog (Version 1)` review), Beta Gate assembly, release-readiness review, and the Stage 4 go/no-go pass.
 
@@ -358,7 +358,7 @@ We are in **Stage 3 — Beta Readiness**. Stage 1 (Core Platform) and Stage 2 (P
 
 ## Launch Readiness Roadmap
 
-**Historical phase detail (Phase 1–7) — superseded by the `## Product Maturity Stages` model above.** The Stage model (Stage 1–6) is the at-a-glance authoritative roadmap; **where any statement here conflicts with it, the Stage model wins.** This section is retained for the per-phase rationale (objective, why it matters, deliverables, dependencies) that shaped the current state. Every phase runs under `WORKING_RULES.md → Current phase` and, for central-mode work, `→ Central App Transition Rules` (active).
+**Historical phase detail (Phase 1–7) — superseded by the current P0–P4 ordering in `ROADMAP.md`.** This section is retained for the per-phase rationale (objective, why it matters, deliverables, dependencies) that shaped the current state. Where historical ordering conflicts with current priority, `ROADMAP.md` wins. Every phase runs under `WORKING_RULES.md → Current phase` and, for central-mode work, `→ Central App Transition Rules` (active).
 
 **Stage ↔ Phase mapping:** **Stage 1 — Core Platform** *(✅ complete)* = Phase 1 (Documentation Cleanup) + Phase 3 (Workbook Totals) + shipped core/Manage/lifecycle + Bills Due performance. **Stage 2 — Product Hardening** *(✅ complete)* = Phase 2 (Family Beta Hardening incl. the recovery stack + destructive/admin validation) + the Financial Integrity foundation (Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`). **Stage 3 — Beta Readiness** *(current)* = the Beta Gate (Golden Workbook Convergence · Financial Integrity Phase 3 · Validation Agent · remaining Recovery adoption paths · Workbook/UX polish · runtime regression checklist) + release-readiness review. **Stage 4 — Family Beta** = go/no-go + Phase 5 (Web App UX) + recovery slices 6D.2b / 6E.2 + Shared Lifecycle (Bank Accounts). **Stage 5 — External Beta** = Phase 6 (External Beta Readiness) + user-lifecycle + remaining Shared Lifecycle rollout. **Stage 6 — Version 2 / Future Platform** = Phase 4 (Chat Assistant) + Phase 7 (Paid Product) + Operations Dashboard / metrics / monitoring / analytics.
 
@@ -475,16 +475,16 @@ Explicit, admin-driven and self-service repair built on 2A's evidence. This is t
 
 ---
 
-## Known priorities (ranked)
+## Historical Known Priorities (ranked, 2026-07-09)
 
-The next major efforts, ranked, aligned to the Stage model above (Stage 3 first). Diagnostics, Debt parity, Bank Accounts parity, Identity markers, the recovery destructive/admin paths, the Financial Integrity Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`, and the Bills Due performance optimization are **already complete** and are not in this list.
+Historical ranked detail retained for traceability. It does not override the current P0–P4 ordering in `ROADMAP.md`. Diagnostics, Debt parity, Bank Accounts parity, Identity markers, the recovery destructive/admin paths, the Financial Integrity Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`, and the Bills Due performance optimization were already complete when this queue was recorded.
 
 **Stage 3 — Beta Readiness (current):** *(confirmed near-term execution order — 2026-07-09)*
 
-1. **Bills Due Pay runtime validation** — confirm the shipped Pay occurrence bridge on the next genuine paid bill, then commit. *(In-flight; XS)*
-2. **Investments cleanup** — finish in-flight Investments convergence + runtime-validate + commit `investments.js` WIP. *(In-flight; S–M)*
+1. **Bills Due Pay runtime validation** — bridge committed (`fdf4a30`); natural runtime evidence remains pending. *(Evidence gap; XS)*
+2. **Investments cleanup** — prior WIP was committed (`85fafc3`, with later related convergence commits); remaining scope is UNKNOWN until re-established.
 3. **Recovery completion — remaining adoption paths** *(6F)* — ratified Recovery Architecture: unconditional candidate detection → Auto-Adopt → Ambiguous → Name-only adoption decision → Orphan + provision-after-recovery duplicate guard, then flags OFF. *(P0–P1)*
-4. **Validation Agent** — automated regression-detection **release gate** that protects the reconciled numbers (next major engineering project); interim runtime regression checklist. *(P0)*
+4. **Validator / Test Harness / Release Readiness** — Phase 2 foundation, Test Harness Foundation V1, and console V1 shipped 2026-07-13; remaining automated coverage and release-gate work follows P0 under `ROADMAP.md`.
 5. **Golden Workbook polish (Convergence)** — newly provisioned workbook converges toward the Golden Workbook (visual source of truth) until visually indistinguishable from production (Cash Flow / Investments / House Values / Retirement + all visual attributes). First audit complete (2026-07-06). *(P0/P1, L — convergence, not redesign)*
 6. **Family Beta polish** — Workbook / UX polish sweep (loading-experience consistency, empty-state standardization, UX consistency, onboarding — see `## UX Backlog (Version 1)`) + Beta Gate assembly + go/no-go. *(P2)*
 

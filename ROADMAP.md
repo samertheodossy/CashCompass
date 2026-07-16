@@ -8,18 +8,19 @@
 
 ---
 
-## Current status (2026-07-12)
+## Current status (2026-07-16)
 
 **Completed:**
 
 - ✅ **Golden/Canonical engineering convergence** — `AdoptGolden = 0` for the audited families (Operational, Financial Ledger, SYS, Special); remaining diffs are intentional (KeepCentral / ProductDecision / IgnoreNoise). See `GOLDEN_WORKBOOK.md`, `WORKBOOK_PARITY_CHECKLIST.md`.
 - ✅ **Validator Phase 1** — read-only Golden↔Central formatting parity + recommendation engine + scoped family runners, admin-gated and default-off. See `VALIDATOR_ARCHITECTURE.md`.
 - ✅ **Central migration Phase 1** — user-facing paths resolve the correct workbook via `getUserSpreadsheet_()` (no `getActiveSpreadsheet()` null bugs on the audited paths).
+- ✅ **Validator Phase 2 foundation + Test Harness Foundation V1** — Provisioning, Workbook Drift, Schema Evolution V1, the disposable-workbook harness foundation, and the Validation & Testing console V1 shipped 2026-07-13. Remaining Phase 2 work is listed under P1 below.
 
 **Now / next:**
 
 - **Current milestone:** **Documentation Cleanup / Project stabilization** (P0).
-- **Next engineering milestone:** **Validator Phase 2** (P1).
+- **Next engineering milestone:** **Remaining Validator Phase 2 scope** (P1).
 - **Next product-model milestone:** **House Financial Accuracy** (P2).
 
 ---
@@ -36,7 +37,7 @@
 
 ### Priority 1 — Validator Phase 2 + Test Harness / Regression Runner
 
-*(Do not start until P0 is closed. Detail: `VALIDATOR_ARCHITECTURE.md → §10 Phase 2` (the judge) and `TEST_HARNESS_ARCHITECTURE.md` (the writer), with `REGRESSION_SCENARIOS.md` + `RELEASE_READINESS.md`.)*
+*(Do not advance the remaining P1 scope until P0 is closed. Detail: `VALIDATOR_ARCHITECTURE.md → §10 Phase 2` (the judge) and `TEST_HARNESS_ARCHITECTURE.md` (the writer), with `REGRESSION_SCENARIOS.md` + `RELEASE_READINESS.md`.)*
 
 **Sequenced milestone order** (the Validator is the read-only **judge**; the Test Harness is the developer-only **writer/mutator** that drives scenarios against disposable workbooks and asks the Validator to confirm nothing broke):
 
@@ -46,7 +47,7 @@
 4. **Release Readiness gate** *(aggregate Harness + Validator results into a pre-beta go/no-go — `RELEASE_READINESS.md`)*
 5. **Validation & Testing admin console** — **◑ V1 done.** *(operator UI surface — `VALIDATION_TESTING_CONSOLE.md`; route `?view=validation`. Live: Target + Workbook Health (Provisioning / Drift / Schema Evolution) + a single-scenario Test Harness card. Future: multi-suite selector, Formula/CF buttons, Release Readiness verdict.)*
 
-Remaining Validator Phase 2 modules (fold into the judge track, `§10`): Schema Evolution / version-compatibility lens *(advisory, version-aware — Workbook Type + Compatibility verdict; `§10.0b`)* · Conditional-format validation *(the current Validator blind spot — Drift-class)* · Formula validation *(Drift-class)* · Named-range validation · Workbook Health umbrella report *(combines the Provisioning gate + Schema Evolution + Drift advisory into one score and a Compatibility badge)*.
+Remaining Validator Phase 2 modules (fold into the judge track, `§10`): formal per-version schema registry beyond the shipped Schema Evolution V1 · Conditional-format validation *(the current Validator blind spot — Drift-class)* · Formula validation *(Drift-class)* · Named-range validation · Workbook Health umbrella report *(combines the Provisioning gate + Schema Evolution + Drift advisory into one score and a Compatibility badge)*.
 
 ### Priority 2 — Financial Model Accuracy
 
@@ -104,5 +105,5 @@ Sequenced **immediately after Validator Phase 2 and before major new user featur
 - `TODO.md → Product Maturity Stages` — the detailed Stage 1–6 roadmap (effort, dependencies, history, Beta Gate).
 - `PROJECT_CONTEXT.md` — current architecture + project status.
 - `ENGINEERING_STANDARDS.md` — engineering rules, canonical styling, and **Milestone Discipline (§11)**.
-- `VALIDATOR_ARCHITECTURE.md` — the Validator subsystem (Phase 1 complete; Phase 2 future).
+- `VALIDATOR_ARCHITECTURE.md` — the Validator subsystem (Phase 1 and the Phase 2 foundation complete; remaining Phase 2 scope planned).
 - `GOLDEN_WORKBOOK.md` / `WORKBOOK_PARITY_CHECKLIST.md` — the Canonical workbook standard + per-sheet convergence status.

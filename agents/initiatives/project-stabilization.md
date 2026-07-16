@@ -10,7 +10,7 @@
 | Initiative status | `ACTIVE` |
 | Knowledge status | `DRAFT` |
 | Last reviewed date | `2026-07-16` |
-| Last reviewed Git reference | `688d7ca` |
+| Last reviewed Git reference | `c81621e` |
 | Authoritative priority source | [`ROADMAP.md`](../../ROADMAP.md) → “Priority 0 — Project stabilization” |
 
 ## 2. Mission and Outcome
@@ -49,7 +49,7 @@ CashCompass has synchronized project documentation, recorded disposition of rema
 | Subject | Authoritative source | What it controls |
 | --- | --- | --- |
 | Priority and sequence | [`ROADMAP.md`](../../ROADMAP.md) → “Current status” and “Priority 0 — Project stabilization” | Current milestone and P0 workstreams |
-| Detailed maturity work | [`TODO.md`](../../TODO.md) → “Product Maturity Stages,” “Current Engineering Priorities,” “Beta Gate,” and “Open testing inventory” | Detailed tasks, dependencies, and remaining validation inventory |
+| Detailed maturity work | [`TODO.md`](../../TODO.md) → “Product Maturity Stages,” “Beta Gate,” and “Open testing inventory” | Detailed tasks, dependencies, history, and remaining validation inventory |
 | Current technical status | [`PROJECT_CONTEXT.md`](../../PROJECT_CONTEXT.md) → “Current Product Status” | Implemented state, runtime evidence, and known remaining gaps |
 | Engineering discipline | [`ENGINEERING_STANDARDS.md`](../../ENGINEERING_STANDARDS.md) → “Milestone Discipline” and “Regression-First Development” | Work sequencing, workbook safety, and regression expectations |
 | Canonical convergence | [`GOLDEN_WORKBOOK.md`](../../GOLDEN_WORKBOOK.md) and [`WORKBOOK_PARITY_CHECKLIST.md`](../../WORKBOOK_PARITY_CHECKLIST.md) | Audited-family convergence and remaining ProductDecision/UNKNOWN items |
@@ -72,7 +72,7 @@ CashCompass has synchronized project documentation, recorded disposition of rema
 | Document | Relationship | Status or decision needed |
 | --- | --- | --- |
 | [`CENTRAL_APP_DOC_INDEX.md`](../../CENTRAL_APP_DOC_INDEX.md) | Index for Central architecture and verification evidence | Use it to select current documents; do not read every historical Central file by default |
-| [`CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md`](../../CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md) | Related remaining recovery adoption-path design and validation | The four remaining paths have mixed P0–P1 classifications in `TODO.md`; whether any block P0 closure remains unresolved pending roadmap/status synchronization |
+| [`CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md`](../../CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md) | Related remaining recovery adoption-path design and validation | The four remaining paths have mixed P0–P1 classifications in `TODO.md`; whether any block P0 closure requires an explicit roadmap decision |
 | [`GOLDEN_WORKBOOK.md`](../../GOLDEN_WORKBOOK.md) | Canonical workbook convergence authority | Remaining UNKNOWN sheets and ProductDecision items require explicit handling |
 | [`WORKBOOK_PARITY_CHECKLIST.md`](../../WORKBOOK_PARITY_CHECKLIST.md) | Per-sheet audit and convergence status | Do not write convergence code for UNKNOWN sheets before audit resolution |
 | [`REGRESSION_SUITE_PLAN.md`](../../REGRESSION_SUITE_PLAN.md) | Regression discovery and future scenario-pack plan | Apply discovery now; scenario-pack implementation belongs to the sequenced P1 work |
@@ -107,13 +107,11 @@ CashCompass has synchronized project documentation, recorded disposition of rema
 
 | Conflict | Sources | Governing interpretation | Follow-up |
 | --- | --- | --- | --- |
-| “Documentation Cleanup” appears as a completed historical phase while Documentation Cleanup / Project Stabilization is the current P0 milestone | `PROJECT_CONTEXT.md` → historical Launch Readiness phase; `ROADMAP.md` → current status/P0 | `ROADMAP.md` controls current priority; the older completed phase is historical and does not close the newer P0 stabilization milestone | Use “P0 Project Stabilization” when referring to current work to avoid ambiguity |
-| Detailed Stage 3 ordering predates the 2026-07-12 P0–P4 priority stack | `TODO.md` / `PROJECT_CONTEXT.md` snapshots versus `ROADMAP.md` | `ROADMAP.md` controls ordering; detailed documents remain authoritative for task/evidence detail | Reconcile mirrors when their status text is next updated |
-| Remaining Recovery Validation paths have mixed priority labels | `TODO.md` labels Auto-Adopt and Ambiguous validation P0, Name-only and Orphan validation P1, Recovery Validation 6F overall P1, and Recovery completion elsewhere P0–P1 | Treat the work as unresolved P0–P1 scope; do not infer that all four block P0 or that all four are deferred to P1 | Resolve the priority and P0 completion impact during the focused roadmap/TODO/context synchronization review |
+| Remaining Recovery Validation paths have mixed priority labels | `TODO.md` labels Auto-Adopt and Ambiguous validation P0, Name-only and Orphan validation P1, Recovery Validation 6F overall P1, and Recovery completion elsewhere P0–P1 | Treat the work as unresolved P0–P1 scope; do not infer that all four block P0 or that all four are deferred to P1 | Obtain an explicit roadmap decision, then update `ROADMAP.md`, `TODO.md`, and `PROJECT_CONTEXT.md` together |
 
 ## 10. Completion Criteria
 
-- [ ] Architecture, roadmap, standards, and technical-status mirrors agree on the current milestone and remaining P0 work.
+- [ ] Architecture, roadmap, standards, and technical-status mirrors agree on the current milestone and remaining P0 work. *(Current milestone is synchronized; Recovery Validation priority remains unresolved.)*
 - [ ] Regression Discovery is applied consistently to meaningful changes and any required reusable scenarios are recorded.
 - [ ] Remaining P0 ProductDecision items have an explicit disposition in their authoritative documents.
 - [ ] Beta-readiness polish and runtime regression evidence required for P0 are recorded.
@@ -124,8 +122,8 @@ CashCompass has synchronized project documentation, recorded disposition of rema
 
 ## 11. Recommended Next Task
 
-- Task: Perform a focused documentation synchronization review across `ROADMAP.md`, `TODO.md`, and `PROJECT_CONTEXT.md`, producing a proposed correction list before editing.
-- Why this task: Documentation synchronization is the first P0 workstream and prevents stale status from steering later Planner decisions.
+- Task: Resolve the mixed P0–P1 priority and P0 completion impact of the remaining Recovery Validation paths, then update the authoritative roadmap/detail documents consistently.
+- Why this task: Documentation synchronization exposed one deliberately unresolved sequencing decision; resolving it prevents the Planner from inferring whether all, some, or none of the four remaining paths block P0 closure.
 - Required role flow: Planner → Engineer → Reviewer → Validator; Tester may be skipped for documentation-only corrections when Reviewer confirms no runtime behavior changed.
 - Approval gates: Implementation approval before documentation edits; separate commit and push approvals. No deployment is applicable.
 
