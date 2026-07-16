@@ -75,6 +75,22 @@ Feature experts must use the canonical template and cite authoritative repositor
 
 ---
 
+# Initiative Knowledge
+
+Canonical Template
+
+- agents/templates/initiative-knowledge.md
+
+Initiative Knowledge Documents
+
+| Initiative | Priority | Initiative status | Knowledge status | Document |
+| --- | --- | --- | --- | --- |
+| Project Stabilization | P0 | `ACTIVE` | `DRAFT` | agents/initiatives/project-stabilization.md |
+
+Initiative documents connect authoritative roadmap priorities to designs, features, evidence, and next tasks. They are navigation artifacts, not replacement roadmaps, and must not invent completion percentages or duplicate volatile status details.
+
+---
+
 # Workbook Safety
 
 Golden Workbook
