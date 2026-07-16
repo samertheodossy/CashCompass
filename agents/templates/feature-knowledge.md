@@ -1,6 +1,6 @@
 # CashCompass Feature Knowledge Template
 
-Use this template for every CashCompass feature expert knowledge document.
+Use this template for every CashCompass feature expert knowledge document. The current template revision is `1.1`. Increment the revision when required fields, semantics, or completion rules change; wording-only corrections do not require a revision bump.
 
 Copy it to `agents/features/<feature-slug>.md`, replace all bracketed placeholders, and remove instructional text that does not belong in the completed document. Complete every required section; write `Not applicable` with a short reason when a section does not apply.
 
@@ -11,7 +11,7 @@ Copy it to `agents/features/<feature-slug>.md`, replace all bracketed placeholde
 - Link to volatile roadmap, release, and status documents instead of copying information that will drift.
 - Distinguish current behavior, planned behavior, historical context, and unresolved questions.
 - Preserve secrets and user privacy. Never include credentials, deployment secrets, personal financial data, user email addresses, or workbook identifiers.
-- Update `agents/knowledge-map.md` when a new feature knowledge document is added.
+- Update `agents/knowledge-map.md` when a feature knowledge document is added or its knowledge status changes. The feature document is canonical; the map mirrors only its knowledge status.
 - Mark the document `STALE` when material behavior changes and the document has not yet been re-verified.
 
 ---
@@ -24,6 +24,8 @@ Copy it to `agents/features/<feature-slug>.md`, replace all bracketed placeholde
 | --- | --- |
 | Feature slug | `[feature-slug]` |
 | Domain | [Bills / Debts / Cash Flow / Central App / other] |
+| Template revision | `1.1` |
+| Template completeness | `COMPLETE` / `INCOMPLETE` |
 | Knowledge status | `DRAFT` / `VERIFIED` / `STALE` / `DEPRECATED` |
 | Product status | [Planned / Flagged / Beta / Shipped / Deprecated] |
 | Feature expert | [Role or owner; do not include personal data unnecessarily] |
@@ -39,6 +41,8 @@ Copy it to `agents/features/<feature-slug>.md`, replace all bracketed placeholde
 - `VERIFIED`: All required sections are supported by current repository evidence and relevant tests or runtime observations.
 - `STALE`: A material implementation or product decision changed after the last verification.
 - `DEPRECATED`: The feature is no longer active; the document remains only for historical or migration context.
+
+`Template completeness` reports only whether every required template section is populated or explains why it is not applicable. `COMPLETE` does not imply that behavior has been tested or runtime-validated, and a structurally complete document may correctly remain `DRAFT`.
 
 ## 2. Feature Summary
 
@@ -76,14 +80,21 @@ Copy it to `agents/features/<feature-slug>.md`, replace all bracketed placeholde
 
 List the minimum evidence needed to re-establish expertise without reading the whole repository.
 
-| Subject | Authoritative source | Evidence type | Last verified |
-| --- | --- | --- | --- |
-| Product behavior | [File and section] | Decision / specification / runtime evidence | `YYYY-MM-DD` |
-| Implementation | [File and function] | Source code | `YYYY-MM-DD` |
-| Workbook contract | [File, sheet, or validator rule] | Schema / runtime evidence | `YYYY-MM-DD` |
-| Tests | [Scenario, harness, or test file] | Automated / manual | `YYYY-MM-DD` |
+| Subject | Authoritative source | Evidence type | Verification state | Last verified |
+| --- | --- | --- | --- | --- |
+| Product behavior | [File and section] | Decision / specification / runtime evidence | `SOURCE-INSPECTED` / `TESTED` / `RUNTIME-VALIDATED` / `UNKNOWN` | `YYYY-MM-DD` |
+| Implementation | [File and function] | Source code | `SOURCE-INSPECTED` / `UNKNOWN` | `YYYY-MM-DD` |
+| Workbook contract | [File, sheet, or validator rule] | Schema / runtime evidence | `SOURCE-INSPECTED` / `TESTED` / `RUNTIME-VALIDATED` / `UNKNOWN` | `YYYY-MM-DD` |
+| Tests | [Scenario, harness, or test file] | Automated / manual | `TESTED` / `SOURCE-INSPECTED` / `UNKNOWN` | `YYYY-MM-DD` |
 
-When sources disagree, apply the instruction precedence in `AGENTS.md`, record the conflict under Open Questions, and do not silently choose a convenient interpretation.
+Verification-state meanings:
+
+- `SOURCE-INSPECTED`: The cited repository source or document was read, but the behavior was not executed in this verification pass.
+- `TESTED`: A named controlled test, manual test procedure, or harness result was executed or directly observed for the cited date/reference.
+- `RUNTIME-VALIDATED`: The behavior was directly observed in its intended deployed runtime, outside a controlled test-only environment, for the cited date/reference.
+- `UNKNOWN`: The evidence is absent, conflicting, or insufficient to classify more strongly.
+
+These states describe evidence, not subjective confidence. When sources disagree, apply the instruction precedence in `AGENTS.md`, record the disagreement under Source and Documentation Conflicts, and do not silently choose a convenient interpretation.
 
 ## 5. User Experience and Workflows
 
@@ -127,6 +138,14 @@ When sources disagree, apply the instruction precedence in `AGENTS.md`, record t
 | Persistence | [Sheets/properties/Drive resources] | [Responsibility] |
 | Diagnostics / validation | [Files/functions] | [Responsibility] |
 
+### Callable, scheduled, and downstream entry points
+
+List externally callable server functions, scheduled triggers, batch consumers, and important internal entry points that expose or consume the feature. Do not duplicate UI-only entry points already covered in Section 5.
+
+| Function or trigger | Caller / invocation | Side effects | Downstream consumers |
+| --- | --- | --- | --- |
+| [Public RPC, trigger, scheduled job, or internal consumer] | [UI, trigger, email, planner, admin tool] | [Reads, writes, provisioning, logging, or none] | [Feature, report, UI, job, or external consumer] |
+
 ### Request and write path
 
 1. [Entry point]
@@ -149,6 +168,14 @@ When sources disagree, apply the instruction precedence in `AGENTS.md`, record t
 | Store or sheet | Reads | Writes | Ownership | Safety notes |
 | --- | --- | --- | --- | --- |
 | [Sheet, property, cache, or Drive resource] | [Range/fields] | [Range/fields] | [Feature/shared/external] | [Mutation restrictions] |
+
+### Read-path mutations
+
+Identify any list, load, open, read, preview, or reporting path that can provision, self-heal, log, cache, or otherwise mutate persistent state. Write `None found` with supporting evidence when the feature has no read-path mutations.
+
+| Read path | Possible mutation | Trigger / guard | Idempotency and safety |
+| --- | --- | --- | --- |
+| [Function or user action] | [Schema, data, log, property, cache, or none] | [When and why it writes] | [Idempotency, scope, failure behavior, and workbook risk] |
 
 ### Schema and semantics
 
@@ -194,6 +221,14 @@ Include authorization boundaries, Central-versus-bounded routing, deployment-spe
 | [Failure mode] | [Message/state] | [Log, validator, admin diagnostic] | [Safe recovery] | Low / Medium / High |
 
 State which failures are retryable, which require user action, which require admin action, and which must stop the workflow.
+
+### Multi-step writes and partial success
+
+Document workflows that perform more than one persistent write. Write `Not applicable` with a reason when every write is atomic or independent.
+
+| Workflow | Write sequence | Atomicity | Possible partial-success state | Safe recovery |
+| --- | --- | --- | --- | --- |
+| [Workflow] | [Ordered stores/sheets/logs] | Atomic / non-atomic / `UNKNOWN` | [Durable state if a later write fails] | [Retry, reconcile, compensate, or stop] |
 
 ## 13. Compatibility and Migration
 
@@ -259,6 +294,12 @@ Record only decisions needed to prevent future regressions or repeated debate. K
 
 - [Assumption and evidence needed]
 
+### Source and documentation conflicts
+
+| Conflict | Sources | Current executable behavior | Decision / owner / status |
+| --- | --- | --- | --- |
+| [Conflicting claim or stale comment] | [Files, functions, or documents] | [Observed implementation, or `UNKNOWN`] | [Decision needed, owner, and blocking status] |
+
 ### Open questions
 
 - [Question, decision owner, and blocking status]
@@ -305,18 +346,27 @@ Re-verify this document when any of the following changes:
 - Validator, regression, harness, or release requirements
 - Product decision, compatibility contract, or deprecation status
 
-### Verification checklist
+### Structural completion checklist
 
 - [ ] All bracketed placeholders are replaced.
 - [ ] Every required section is complete or explains why it is not applicable.
 - [ ] Current and planned behavior are separated.
-- [ ] Material claims cite repository or runtime evidence.
 - [ ] Central and bounded behavior are addressed.
 - [ ] Populated-workbook safety and first-create behavior are addressed.
-- [ ] Invariants map to tests or explicitly listed coverage gaps.
-- [ ] Failure, recovery, diagnostics, and rollback are documented.
 - [ ] Secrets and user data are absent.
-- [ ] Metadata contains a verification date and Git reference.
-- [ ] `agents/knowledge-map.md` links to the completed feature document.
+- [ ] Metadata contains the template revision, verification date, and source Git reference reviewed.
+- [ ] `agents/knowledge-map.md` links to the feature document and mirrors its knowledge status.
 
-Knowledge status may be set to `VERIFIED` only after this checklist passes.
+Set `Template completeness` to `COMPLETE` only after this structural checklist passes.
+
+### Behavioral verification checklist
+
+- [ ] Material claims cite repository, test, or runtime evidence with an accurate verification state.
+- [ ] Callable, scheduled, and downstream entry points and consumers are inventoried.
+- [ ] Read-path mutations are documented or explicitly ruled out with evidence.
+- [ ] Invariants map to executed tests or explicitly listed coverage gaps.
+- [ ] Multi-step writes, partial-success states, and safe recovery are documented.
+- [ ] Failure, recovery, diagnostics, and rollback are documented.
+- [ ] Source/documentation conflicts are resolved or explicitly tracked with status and ownership.
+
+Knowledge status may be set to `VERIFIED` only after both checklists pass and all material behavior is supported by current evidence.

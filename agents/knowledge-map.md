@@ -67,9 +67,11 @@ Canonical Template
 
 Feature Knowledge Documents
 
-- agents/features/bills.md — `DRAFT`
+| Feature | Document | Knowledge status |
+| --- | --- | --- |
+| Bills | agents/features/bills.md | `DRAFT` |
 
-Feature experts must use the canonical template, cite authoritative repository evidence, and keep volatile status in its existing source of truth rather than duplicating it.
+Feature experts must use the canonical template and cite authoritative repository evidence. Each feature document is canonical; this map mirrors only its knowledge status, which must be updated in the same change whenever that status changes. Keep verification dates, Git references, product status, and other volatile details in the feature document rather than duplicating them here.
 
 ---
 

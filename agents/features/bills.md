@@ -6,6 +6,8 @@
 | --- | --- |
 | Feature slug | `bills` |
 | Domain | Bills / Cash Flow |
+| Template revision | `1.1` |
+| Template completeness | `COMPLETE` |
 | Knowledge status | `DRAFT` |
 | Product status | Shipped / Beta; Recurrence Engine V2 is shipped, while natural runtime validation of the expanded-occurrence Pay bridge remains recorded as pending |
 | Feature expert | Bills feature expert |
@@ -84,18 +86,18 @@ Bills affects near-term cash decisions and the Cash Flow actuals ledger. Incorre
 
 ## 4. Authoritative Evidence
 
-| Subject | Authoritative source | Evidence type | Last verified |
-| --- | --- | --- | --- |
-| Product behavior | `Dashboard_Help.html` → Bills; `PROJECT_CONTEXT.md` → Recurrence Engine V2 and actuals semantics | User documentation and decision record | `2026-07-16` |
-| Add/Edit/Deactivate | `bills.js` → `addBillFromDashboard`, `updateTrackedBillFromDashboard`, `deactivateBillFromDashboard` | Source code | `2026-07-16` |
-| Occurrence and queue behavior | `dashboard_data.js` → `getBillsDueFromCashFlowForDashboard`, `getInputBillsDueRows_`, `buildRuleFromBillRow_`, `generateOccurrences_` | Source code | `2026-07-16` |
-| Pay/Skip/AutoPay | `Dashboard_Script_BillsDue.html`, `Dashboard_Script_Payments.html`, `quick_add_payment.js`, `dashboard_data.js` | Client/server source code | `2026-07-16` |
-| Workbook contract | `onboarding.js` → `ensureOnboardingBillsSheetFromDashboard`; `bills.js` → `ensureBillsSheetSchema_`, `applyBillsSheetStyling_` | Schema and creation source | `2026-07-16` |
-| Activity contract | `activity_log.js`; Bills write paths in `bills.js` and `dashboard_data.js` | Source code | `2026-07-16` |
-| Test coverage | `test_harness_scenarios_bills.js`; `test_harness_suites.js`; `REGRESSION_SCENARIOS.md`; `REGRESSION_SUITE_PLAN.md` | Automated scenario definitions and plans | `2026-07-16` |
-| Validator coverage | `validator_snapshot.js`, `validator_core.js`, `validator_rules.js`, `VALIDATOR_ARCHITECTURE.md` | Read-only Validator implementation/design | `2026-07-16` |
+| Subject | Authoritative source | Evidence type | Verification state | Last verified |
+| --- | --- | --- | --- | --- |
+| Product behavior | `Dashboard_Help.html` → Bills; `PROJECT_CONTEXT.md` → Recurrence Engine V2 and actuals semantics | User documentation and decision record | `SOURCE-INSPECTED` | `2026-07-16` |
+| Add/Edit/Deactivate | `bills.js` → `addBillFromDashboard`, `updateTrackedBillFromDashboard`, `deactivateBillFromDashboard` | Source code | `SOURCE-INSPECTED` | `2026-07-16` |
+| Occurrence and queue behavior | `dashboard_data.js` → `getBillsDueFromCashFlowForDashboard`, `getInputBillsDueRows_`, `buildRuleFromBillRow_`, `generateOccurrences_` | Source code | `SOURCE-INSPECTED` | `2026-07-16` |
+| Pay/Skip/AutoPay | `Dashboard_Script_BillsDue.html`, `Dashboard_Script_Payments.html`, `quick_add_payment.js`, `dashboard_data.js` | Client/server source code | `SOURCE-INSPECTED` | `2026-07-16` |
+| Workbook contract | `onboarding.js` → `ensureOnboardingBillsSheetFromDashboard`; `bills.js` → `ensureBillsSheetSchema_`, `applyBillsSheetStyling_` | Schema and creation source | `SOURCE-INSPECTED` | `2026-07-16` |
+| Activity contract | `activity_log.js`; Bills write paths in `bills.js` and `dashboard_data.js` | Source code | `SOURCE-INSPECTED` | `2026-07-16` |
+| Test coverage | `test_harness_scenarios_bills.js`; `test_harness_suites.js`; `REGRESSION_SCENARIOS.md`; `REGRESSION_SUITE_PLAN.md` | Automated scenario definitions and plans; scenarios not executed in this pass | `SOURCE-INSPECTED` | `2026-07-16` |
+| Validator coverage | `validator_snapshot.js`, `validator_core.js`, `validator_rules.js`, `VALIDATOR_ARCHITECTURE.md` | Read-only Validator implementation/design; Validator not executed in this pass | `SOURCE-INSPECTED` | `2026-07-16` |
 
-When sources disagree, this DRAFT follows executable behavior and higher-precedence Engineering OS instructions, while recording the disagreement under Open Questions. It does not silently rewrite historical documentation.
+When sources disagree, this DRAFT follows executable behavior and higher-precedence Engineering OS instructions, while recording the disagreement under Source and Documentation Conflicts. It does not silently rewrite historical documentation.
 
 ## 5. User Experience and Workflows
 
@@ -160,6 +162,19 @@ When sources disagree, this DRAFT follows executable behavior and higher-precede
 | Provisioning | `onboarding.js`, `cashflow_setup.js` | First-create Bills and Cash Flow structures |
 | Diagnostics / validation | `validator_snapshot.js`, `validator_core.js`, `validator_rules.js`, `test_harness_scenarios_bills.js`, `test_harness_suites.js` | Formatting snapshots, partial structural validation, recurrence and workbook scenarios |
 
+### Callable, scheduled, and downstream entry points
+
+| Function or trigger | Caller / invocation | Side effects | Downstream consumers |
+| --- | --- | --- | --- |
+| `getBillsDueFromCashFlowForDashboard` | Bills UI, next-actions logic, planner/email overdue path | Reads Bills, Debts, Cash Flow, and Activity; may lazily ensure Activity/Cash Flow and post eligible AutoPay actuals | Bills queues, Overview, next actions, planner/email |
+| `getRecurringBillsWithoutDueDateForDashboard` | Bills UI | Reads Cash Flow, Bills, Debts, and Upcoming Expenses; may lazily ensure the current Cash Flow year | Recurring Bills (No Due Date) cards |
+| `getActiveBillsForManagementFromDashboard` | Manage bills load | Reads active Bills rows; may perform best-effort optional-column schema self-heal | Manage bills table and Edit/Stop actions |
+| `getBillCategoriesFromDashboard` | Add/Edit category controls | Reads exact-case `Category` values; no persistent writes | Bills form category suggestions |
+| `addBillFromDashboard`, `updateTrackedBillFromDashboard`, `deactivateBillFromDashboard` | Manage bills actions | Mutate Bills rows, append best-effort Activity evidence, and refresh source state; Add also best-effort seeds Cash Flow | Bills management, Bills Due, Activity, Cash Flow |
+| `skipDashboardBill`, `markDashboardBillOccurrencePaid` | Bills Due Skip and post-Quick-add Pay bridge | Write occurrence evidence; Skip may also write a Cash Flow zero | Occurrence suppression, Activity, Bills refresh |
+| `buildInputBillPlannerPaymentWindows_` | `code.js` planner/email generation | Reads input-bill occurrences through `getInputBillsDueRows_`; may inherit eligible AutoPay writes | Planner/email Pay now and Pay soon windows |
+| `resolveFlowSourceFromBillOrDebt_` | Quick add when creating a new Expense row | Best-effort read of Bills/Debts; no direct writes | Cash Flow Flow Source inference |
+
 ### Request and write path
 
 1. `loadDashboardActionSections` starts the three Bills reads.
@@ -186,6 +201,16 @@ When sources disagree, this DRAFT follows executable behavior and higher-precede
 | `LOG - Activity` | Dedupe markers for AutoPay/Pay/Skip | `bill_add`, `bill_update`, `bill_deactivate`, `bill_skip`, `bill_autopay`, `bill_paid`, plus `quick_pay` | Shared Activity | Activity writes are best-effort for Add/Edit/Deactivate; occurrence handling relies on markers for expanded recurrence |
 | `INPUT - Debts` | Active debt items, payment-source inference, recurring-fallback exclusions | None from Bills management | Debts | Debt-backed cards are adjacent Bills Due inputs, not Bills rows |
 | `INPUT - Upcoming Expenses` | Payee exclusion for no-due-date recurrence fallback | None from Bills | Upcoming Expenses | Prevents project spend from being misclassified as a recurring bill |
+
+### Read-path mutations
+
+| Read path | Possible mutation | Trigger / guard | Idempotency and safety |
+| --- | --- | --- | --- |
+| `getBillsDueFromCashFlowForDashboard` | Ensure `LOG - Activity`; best-effort ensure current Cash Flow year; post eligible AutoPay Cash Flow values and markers | Runs during Bills/Overview/next-action/email reads; AutoPay requires lock, configured fixed amount, and a past-due unhandled occurrence | Lazy ensures are intended to be idempotent; AutoPay uses per-user locking and dedupe markers but has partial-success risk |
+| `getRecurringBillsWithoutDueDateForDashboard` | Best-effort ensure current Cash Flow year | Runs before fallback discovery | Year ensure is intended to be idempotent; failure falls through to downstream error/empty handling |
+| `getActiveBillsForManagementFromDashboard` | Add missing optional Bills columns and format new columns | Runs when Manage bills opens; best-effort on failure | Additive, anchor-positioned, and data-preserving, but can shift existing column positions |
+| `buildInputBillPlannerPaymentWindows_` | Eligible AutoPay writes inherited from `getInputBillsDueRows_` | Runs during planner/email generation | Same lock/dedupe and partial-success characteristics as Bills Due AutoPay |
+| `getBillCategoriesFromDashboard`, `resolveFlowSourceFromBillOrDebt_` | None found | Read-only lookup paths | Missing sheets/headers return fallback values; no persistent mutation found |
 
 ### Schema and semantics
 
@@ -282,6 +307,16 @@ Bills has no Bills-specific admin role in the reviewed implementation. Deploymen
 
 Retryable failures include transient reads, lock contention, and stale UI after refresh. User action is required for invalid fields. Admin/developer action may be required for malformed schema, access, or validator configuration. A payment saved without its expanded-occurrence marker must stop automated retry of the payment itself until reconciliation proves whether money was already recorded.
 
+### Multi-step writes and partial success
+
+| Workflow | Write sequence | Atomicity | Possible partial-success state | Safe recovery |
+| --- | --- | --- | --- | --- |
+| Add bill | Bills row → best-effort `bill_add` Activity → best-effort Cash Flow year/Expense row → dashboard freshness | Non-atomic | Bill exists without Activity evidence or matching Cash Flow row | Preserve the Bills row; repair/seed the Cash Flow row after inspection and add audit evidence only through an approved process |
+| Edit or Stop tracking | One or more Bills cell changes → best-effort Activity → dashboard freshness | Non-atomic | Edit fields may be partially changed, or the final bill state may lack corresponding audit evidence | Do not repeat the action blindly; refresh and inspect every affected field plus Activity before an approved repair |
+| Monthly or expanded AutoPay | Cash Flow amount/format → dashboard freshness → `bill_autopay` Activity marker | Non-atomic | Cash Flow contains the actual but the dedupe marker is absent, allowing a later duplicate | Stop automatic retry; reconcile Cash Flow and Activity, then repair marker evidence carefully |
+| Expanded-occurrence Pay | Quick add Cash Flow/`quick_pay` write → separate client RPC for `bill_paid` marker | Non-atomic | Payment is recorded but the occurrence remains visible and may be paid again | Treat Cash Flow as authoritative; do not repay, then reconcile or repair the missing marker |
+| Skip | Optional blank-cell zero/format → `bill_skip` Activity marker | Non-atomic | Cash Flow may contain zero without the occurrence marker | Inspect the target cell and Activity; retry only the missing marker path without overwriting a real amount |
+
 ## 13. Compatibility and Migration
 
 - Previous behavior: Legacy Weekly/Biweekly schedules used Due Day as a per-month anchor with 7/14-day stepping. Earlier workbooks lacked Weekday, Anchor Date, Schedule Effective Date, and possibly other optional metadata columns.
@@ -323,6 +358,9 @@ Retryable failures include transient reads, lock contention, and stale UI after 
 ### Known coverage gaps
 
 - No implemented Bills suite scenario was found for AutoPay, manual Pay, overdue bucketing, per-occurrence paid suppression, per-occurrence Skip, or lock contention.
+- No implemented Bills suite scenario was found for Add validation, Edit, Deactivate, optional-column self-heal, or preservation of existing populated Bills workbooks.
+- No implemented Bills suite scenario was found for the no-due-date fallback/exclusion path, Bimonthly, Quarterly, Semi-annual, or first-run lazy-provisioning and partial-failure behavior.
+- No current Central-versus-bounded Bills execution matrix result was found; the same workflows remain to be exercised against explicitly selected safe targets in both modes.
 - No implemented stress scenario was found for REG-007 or REG-008 despite their planned reproductions.
 - No test result was executed during this documentation-only task.
 - The Bills → Pay natural runtime validation remains pending in current project status documentation.
@@ -375,15 +413,20 @@ Do not treat readiness as approval. Report commit, push, and deployment readines
 - `UNKNOWN`: The full Golden parity runner currently compares a representative `INPUT - Bills` in both configured workbooks and has a known latest result.
 - `UNKNOWN`: Activity-log failure during AutoPay/Skip cannot leave a Cash Flow write without durable handled evidence in all exception paths.
 
+### Source and documentation conflicts
+
+| Conflict | Sources | Current executable behavior | Decision / owner / status |
+| --- | --- | --- | --- |
+| Cash Flow row creation is described as out of scope | `bills.js` top-level comments versus `addBillFromDashboard` | Add best-effort ensures the current Cash Flow year and seeds a matching blank Expense row | Owner: `UNKNOWN`; source-comment cleanup needed; non-blocking for this DRAFT |
+| Schema self-heal is described as append-only and as not moving columns | `ensureBillsSheetSchema_` comments versus its `insertColumnBefore` path | Missing columns may be inserted after canonical anchors and shift existing column positions while preserving cell data | Owner: `UNKNOWN`; source-comment and return-wording cleanup needed; non-blocking for this DRAFT |
+| Scheduling columns are described as schema-only/unpopulated | `onboarding.js` and `ensureBillsSheetSchema_` comments versus current Add/Edit/recurrence paths | Weekday, Anchor Date, and Schedule Effective Date are actively written/read when configured | Owner: `UNKNOWN`; source-comment cleanup needed; non-blocking for this DRAFT |
+| Expanded AutoPay is described as preserving manual totals | `PROJECT_CONTEXT.md` versus expanded-occurrence logic in `getInputBillsDueRows_` | Source accumulates an unmarked eligible occurrence onto the existing monthly value | Owner: `UNKNOWN`; product/financial semantics decision required before relying on or changing this behavior; potentially blocking relevant implementation |
+| Bimonthly appears in source/UI but not Help schedule lists | `billAppliesInMonth_` and Bills form versus `Dashboard_Help.html` | Source implements every-two-month cadence | Owner: `UNKNOWN`; product/documentation decision needed; non-blocking for this DRAFT |
+
 ### Open questions
 
 - **Blocking verification:** Has the weekly/biweekly Bills → Pay bridge now passed the natural runtime validation still marked pending in `PROJECT_CONTEXT.md`?
 - **Product decision:** Should Monthly Due Day 29/30/31 clamp to month end or retain JavaScript overflow?
-- **Documentation inconsistency:** Should Bimonthly be added to Help schedule lists, or is it intentionally being retired despite source/UI support?
-- **Source-comment inconsistency:** `bills.js` still labels Cash Flow auto-row creation out of scope even though `addBillFromDashboard` now performs it. Which comments should be updated?
-- **Source-comment inconsistency:** `ensureBillsSheetSchema_` comments describe self-heal as “append-only” and as not moving existing columns, while the implementation can use `insertColumnBefore` at a canonical anchor and therefore shift existing column positions. Should the source comments and return-value wording be corrected to describe additive, anchor-positioned schema evolution?
-- **Source-comment inconsistency:** Some `onboarding.js`/`ensureBillsSheetSchema_` comments say scheduling columns are schema-only and unpopulated, while current Add/Edit/recurrence code uses them. Should these comments be refreshed?
-- **Behavior/documentation conflict:** `PROJECT_CONTEXT.md` says expanded AutoPay preserves manual values, while the current weekly/biweekly source deliberately accumulates onto any existing monthly value when no occurrence marker exists. What is the intended protection rule when a manual total may already include the occurrence?
 - **Coverage ownership:** When will Bills be added to `VALIDATOR_SCOPE_OPERATIONAL_` and `getValidatorCanonicalModel_` with a shared header constant?
 - **Lifecycle:** Should Bills gain a dedicated Reactivate flow and duplicate-name protection under the Shared Entity Lifecycle Framework?
 - **Failure atomicity:** Should expanded-occurrence Pay marker creation be moved into the same server transaction/path as the Cash Flow write to reduce partial-success risk?
@@ -433,18 +476,27 @@ Re-verify this document when any of the following changes:
 - Bills Validator, regression, harness, runtime validation, or release requirements
 - Product decision, compatibility contract, or deprecation status
 
-### Verification checklist
+### Structural completion checklist
 
 - [x] All template placeholders are replaced with evidence, `DRAFT`, `UNKNOWN`, or a reasoned Not applicable statement.
 - [x] Every required section is present.
 - [x] Current and planned behavior are separated.
-- [x] Material claims cite repository or recorded runtime evidence.
 - [x] Central and bounded behavior are addressed.
 - [x] Populated-workbook safety and first-create behavior are addressed.
-- [ ] Every invariant maps to executed current tests; known gaps remain in AutoPay, Pay, Skip, overdue, performance, and concurrency coverage.
-- [x] Failure, recovery, diagnostics, and rollback are documented at DRAFT depth.
 - [x] Secrets and user data are absent.
-- [x] Metadata contains a verification date and Git reference.
-- [x] `agents/knowledge-map.md` links to this feature document.
+- [x] Metadata contains template revision `1.1`, a verification date, and the source Git reference reviewed.
+- [x] `agents/knowledge-map.md` links to this feature document and mirrors its `DRAFT` status.
 
-Knowledge status remains `DRAFT` until the unchecked evidence requirement and the blocking verification questions are resolved.
+`Template completeness` is `COMPLETE` because the structural checklist passes.
+
+### Behavioral verification checklist
+
+- [x] Material claims cite repository or recorded runtime evidence with an explicit verification state in the evidence inventory.
+- [x] Callable, scheduled, and downstream entry points and consumers are inventoried at DRAFT depth.
+- [x] Read-path mutations are documented.
+- [ ] Every invariant maps to executed current tests; known gaps remain in AutoPay, Pay, Skip, overdue, performance, and concurrency coverage.
+- [x] Multi-step writes, partial-success states, and safe recovery are documented at DRAFT depth.
+- [x] Failure, recovery, diagnostics, and rollback are documented at DRAFT depth.
+- [x] Source/documentation conflicts are explicitly tracked with current behavior, status, and ownership (`UNKNOWN` where not established).
+
+Knowledge status remains `DRAFT` until the unchecked behavioral-verification requirement and the blocking verification questions are resolved.
