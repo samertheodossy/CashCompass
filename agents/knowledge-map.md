@@ -65,9 +65,9 @@ Canonical Template
 
 - agents/templates/feature-knowledge.md
 
-Completed Feature Knowledge
+Feature Knowledge Documents
 
-- agents/features/*.md
+- agents/features/bills.md — `DRAFT`
 
 Feature experts must use the canonical template, cite authoritative repository evidence, and keep volatile status in its existing source of truth rather than duplicating it.
 
