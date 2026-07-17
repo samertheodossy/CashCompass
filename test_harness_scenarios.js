@@ -114,6 +114,9 @@ function getHarnessScenarios_() {
   if (typeof getHarnessBillsMonthlyCashflowScenario_ === 'function') {
     list.push(getHarnessBillsMonthlyCashflowScenario_());
   }
+  if (typeof getHarnessRecoveryDuplicateGuardScenario_ === 'function') {
+    list.push(getHarnessRecoveryDuplicateGuardScenario_());
+  }
   return list;
 }
 

@@ -1,6 +1,6 @@
 # CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md
 
-**Status:** Ratified architecture (Version 1). Implementation must follow this document.
+**Status:** Ratified architecture (Version 1). P0 duplicate-prevention decision tree implemented 2026-07-16; HIGH-marker Admin Clear → automatic relink runtime-validated across two accounts 2026-07-17; full disposable-account matrix pending.
 **Owner area:** Central App — workbook resolution, provisioning, and recovery.
 **Related code:** `central_provisioning.js`, `central_diagnostics.js`, `central_resolver.js`, `sheet_bootstrap.js`, recovery client (`Dashboard_Body.html → #page_recovery`).
 **Ratified:** 2026-07-07.
@@ -12,9 +12,11 @@
 This document defines the **Version 1 Recovery Architecture** for the Central App: how the
 system resolves, adopts, reconnects, or (only as a last resort) creates a user's CashCompass
 workbook. It exists because Golden Workbook Convergence testing on `cashcompass2026@gmail.com`
-exposed a structural problem — **clearing a mapping while `CENTRAL_AUTO_ADOPT` is OFF can
-legitimately create duplicate CashCompass workbooks.** That behavior is *expected* under the
-current implementation but is **not acceptable for Family Beta**.
+exposed a structural problem — **clearing a mapping while `CENTRAL_AUTO_ADOPT` was OFF could
+create duplicate CashCompass workbooks.** The P0 implementation now blocks that path. The exact
+Admin Clear → one HIGH-marker candidate → same-workbook relink path passed isolated Central runtime
+validation on 2026-07-17; the remaining decision-tree branches still require the disposable-account
+matrix before Family Beta reliance.
 
 This is the **authoritative recovery specification for Version 1**. All Stage 3 Recovery
 Completion work (Auto-Adopt, Ambiguous recovery, Name-only adoption, Orphan handling, and the
@@ -123,11 +125,11 @@ screen (which is, by definition, not silent).
    every non-clean-open resolution. "Should we search?" is removed as a question. Only a Drive-list
    *exception* short-circuits — and to UNAVAILABLE, never to CREATE.
 
-2. **`CENTRAL_AUTO_ADOPT` no longer controls whether searching occurs.** It is repurposed (rename
-   optional, e.g. `CENTRAL_ADOPT_SINGLE_AUTOMATICALLY`) to control **only the single-candidate
-   branch**:
-   - `true` (**recommended Family Beta default**) → 1 candidate ⇒ **ADOPT/RECONNECT automatically**.
-   - `false` → 1 candidate ⇒ route to a **confirm-adopt prompt** (a one-candidate recovery screen).
+2. **`CENTRAL_AUTO_ADOPT` no longer controls whether searching occurs.** It controls only the
+   **MEDIUM-confidence, name-only single-candidate branch**:
+   - HIGH marker candidate → **ADOPT/RECONNECT automatically**, regardless of the flag.
+   - MEDIUM name-only + `true` → **ADOPT/RECONNECT automatically**.
+   - MEDIUM name-only + `false` → route to a **confirm-adopt prompt**.
    In **neither** setting does it disable detection or permit a silent duplicate. `0 → CREATE` and
    `2+ → AMBIGUOUS` are invariant regardless of the flag.
 
@@ -151,11 +153,11 @@ This is the intended **Version 1 behavior**.
 | Phase | Work | Notes |
 |---|---|---|
 | **Phase 1 — Ratify architecture** | This document. | ✅ Done (2026-07-07). |
-| **Phase 2 — Unconditional candidate detection** | Move `findCandidateWorkbooks_` out from behind `isAutoAdoptEnabled_()` in `provisionWorkbookForUser_`; wire `0→CREATE · 1→ADOPT · 2+→AmbiguousWorkbookError` on every no-mapping/stale resolution. Change the Drive-failure and verify-failure leaves from "fall through to create" to **UNAVAILABLE**. | The structural fix; removes the silent-duplicate leaf. |
-| **Phase 3 — Repurpose AUTO_ADOPT semantics** | `isAutoAdoptEnabled_()` now gates only single-candidate auto-adopt vs confirm-prompt. Detection / ambiguous / create remain invariant. | Optional rename; keep backward-compatible property read. |
+| **Phase 2 — Unconditional candidate detection** | Move `findCandidateWorkbooks_` out from behind `isAutoAdoptEnabled_()` in `provisionWorkbookForUser_`; wire `0→CREATE · 1→ADOPT · 2+→AmbiguousWorkbookError` on every no-mapping/stale resolution. Change the Drive-failure and verify-failure leaves from "fall through to create" to **UNAVAILABLE**. | ✅ Implemented 2026-07-16; HIGH-marker Admin Clear/relink path runtime-validated 2026-07-17; remaining matrix pending. |
+| **Phase 3 — Repurpose AUTO_ADOPT semantics** | `isAutoAdoptEnabled_()` now gates only MEDIUM/name-only single-candidate auto-adopt vs confirm-prompt. HIGH/marker candidates relink automatically; detection / ambiguous / create remain invariant. | ✅ Implemented 2026-07-16; HIGH relink with flag OFF runtime-validated 2026-07-17; MEDIUM OFF/ON paths pending. |
 | **Phase 4 — Ambiguous selection UI** | Make the `ambiguous` recovery screen list candidates and let the user pick one → relink (reuse `relinkSingleCandidate_`); add explicit confirmed "create new." Ensure `buildRecoveryRouting_` carries candidate data. | Client: `Dashboard_Body.html → #page_recovery` + recovery script. |
 | **Phase 5 — Admin enhancements** | Surface candidate count in `adminInspectUser`; keep `adminClearMapping` mapping-only; document `adminTrashOrphan` (soft-delete, id-in-hand). | No bulk operations. |
-| **Phase 6 — Validation** | Run the Testing Matrix on a disposable account; then set flags to the approved Family Beta posture (auto-adopt-single default ON). | Record evidence in `SESSION_NOTES.md`. |
+| **Phase 6 — Validation** | Run the Testing Matrix on a disposable account; then choose the Family Beta flag posture from evidence. | Record evidence in `SESSION_NOTES.md`. |
 
 ---
 
@@ -166,7 +168,7 @@ Run on a **disposable** account, flags isolated, bound deployment untouched.
 | # | Scenario | Precondition | Expected terminal action |
 |---|---|---|---|
 | 1 | No mapping, 0 candidates | fresh account | **CREATE** (exactly one workbook; mapping written) |
-| 2 | No mapping, 1 candidate (marker/HIGH) | existing app-created workbook | **ADOPT** (silent when auto-adopt-single ON) |
+| 2 | No mapping, 1 candidate (marker/HIGH) | existing app-created workbook | **ADOPT** (verified relink regardless of auto-adopt flag) |
 | 3 | No mapping, 1 candidate (name-only/MEDIUM) | owned + exact name | **ADOPT** (ON) / **confirm-adopt prompt** (OFF) |
 | 4 | No mapping, 2+ candidates | two workbooks | **AMBIGUOUS** — no file created, none auto-picked; selection relinks |
 | 5 | Stale mapping, 0 candidates | mapped file trashed/deleted | **UNAVAILABLE** (recovery screen) |
@@ -175,10 +177,24 @@ Run on a **disposable** account, flags isolated, bound deployment untouched.
 | 8 | Drive search failure | simulate `Drive.Files.list` throw | **UNAVAILABLE/retry** — **never CREATE** |
 | 9 | Candidate verification failure | candidate lists but `openById` throws | **UNAVAILABLE/retry** — **never CREATE** |
 | 10 | Admin Clear → reload | existing workbook present | flows through tree → **ADOPT** (no duplicate). *Exact `cashcompass2026` reproduction.* |
-| 11 | Flag semantics | 1 candidate, flag ON vs OFF | ON → silent adopt; OFF → confirm-adopt prompt; both keep ambiguous/create invariant |
+| 11 | Flag semantics | 1 MEDIUM/name-only candidate, flag ON vs OFF | ON → silent adopt; OFF → confirm-adopt prompt; HIGH/ambiguous/create invariants do not change |
 | 12 | Regression | bound (non-central) deployment | unaffected; `getUserSpreadsheet_` returns active spreadsheet |
 | 13 | No cross-user leakage | second account's files exist | candidate queries scoped to `'me' in owners`; never appear |
 | 14 | drive.file coverage | workbook app never created/opened | (acceptably) not a candidate; limitation documented |
+
+---
+
+## Runtime Evidence — 2026-07-17
+
+- Central-only source push completed through `./push-central.sh`; isolated deployment version 107 was created without updating the existing Beta deployment.
+- Script-property separation was verified before testing: Central `CENTRAL_MODE=true`; real bounded project `CENTRAL_MODE=false`.
+- `REGRESSION-RECOVERY-DUPLICATE-GUARD` passed in Apps Script with 7/7 functional assertions; `SUITE-RECOVERY-REGRESSION` passed 1/1. Both disposable harness workbooks were trashed automatically.
+- Isolated Central healthy load reached the dashboard without a recovery error.
+- Admin Diagnostics before the clear showed one mapped HIGH-confidence workbook, one candidate, both identity markers present, and zero orphans.
+- The mapping-only Admin Clear was executed. Reloading the isolated Central app automatically relinked the same workbook and loaded the dashboard; follow-up inspection showed the mapping and reverse index restored, one candidate, and zero orphans. No duplicate workbook was created.
+- The same mapping-clear/reload path was then repeated while signed in as `cashcompass2026@gmail.com`. A distinctive `$10,000` cash value was written to its existing workbook before the mapping was cleared; after reload, Central automatically relinked that workbook and the `$10,000` value returned on the dashboard. No recreate/start-page flow or duplicate workbook appeared.
+- The real bounded `Expenses/Payments` workbook was then inspected independently; its sheets and populated Overview remained intact and correct.
+- This closes matrix rows 2, 10, and 12 for the tested HIGH-marker path and adds multi-account isolation evidence for row 13. Rows 1, 3–9, 11, 13, and 14 remain part of the formal isolated disposable-account matrix.
 
 ---
 

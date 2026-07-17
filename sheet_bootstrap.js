@@ -750,7 +750,8 @@ function getStartupRoutingFromDashboard() {
  *                     (StaleMappingError).
  *   - 'ambiguous'   : multiple candidate workbooks and none linked; we
  *                     refused to auto-pick (AmbiguousWorkbookError).
- *                     Only reachable when CENTRAL_AUTO_ADOPT is on.
+ *   - 'confirm'     : one name-only candidate needs explicit confirmation
+ *                     before relinking (ConfirmAdoptWorkbookError).
  *   - 'unavailable' : any other resolution/provisioning failure
  *                     (e.g., no identified user, transient Drive error).
  *
@@ -766,6 +767,8 @@ function buildRecoveryRouting_(err) {
     type = 'stale';
   } else if (name === 'AmbiguousWorkbookError') {
     type = 'ambiguous';
+  } else if (name === 'ConfirmAdoptWorkbookError') {
+    type = 'confirm';
   } else {
     type = 'unavailable';
   }
@@ -778,16 +781,16 @@ function buildRecoveryRouting_(err) {
     contactEmail = '';
   }
 
-  // Phase 6D.2a: whether self-service recovery actions (currently just
-  // "Reconnect existing workbook") should render. Driven by the
-  // CENTRAL_RECOVERY_ACTIONS flag, read defensively — when OFF (or the reader
-  // is unavailable, e.g. bound project), the recovery page stays display-only.
-  var actionsEnabled = false;
+  // Phase 6D.2a: whether the self-service recovery action should render.
+  // A confirm-adopt screen always exposes the explicit confirmation action;
+  // CENTRAL_RECOVERY_ACTIONS controls its optional appearance elsewhere.
+  var actionsEnabled = type === 'confirm';
   try {
-    actionsEnabled = (typeof isRecoveryActionsEnabled_ === 'function') &&
-      isRecoveryActionsEnabled_();
+    actionsEnabled = actionsEnabled ||
+      ((typeof isRecoveryActionsEnabled_ === 'function') &&
+       isRecoveryActionsEnabled_());
   } catch (_a) {
-    actionsEnabled = false;
+    actionsEnabled = type === 'confirm';
   }
 
   return {

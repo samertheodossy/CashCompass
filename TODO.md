@@ -114,7 +114,7 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 
 **D. Recovery completion — remaining adoption paths** *(Beta-Gate workstream · execution item #3 — gates Family Beta; destructive/admin paths already validated)*
 
-> **Implementation specification:** `CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md` is the **ratified Version 1 Recovery Architecture** (decision tree, unconditional candidate detection, `CENTRAL_AUTO_ADOPT` repurposed to auto-adopt-single vs prompt, failure branches → Unavailable, testing matrix). All items in this section are implemented against that document. Core rule: *recovery must never create silent duplicates.*
+> **Implementation specification:** `CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md` is the **ratified Version 1 Recovery Architecture** (decision tree, unconditional candidate detection, `CENTRAL_AUTO_ADOPT` repurposed to MEDIUM/name-only auto-adopt vs prompt, failure branches → Unavailable, testing matrix). All items in this section are implemented against that document. Core rule: *recovery must never create silent duplicates.*
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
@@ -122,9 +122,9 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | Ambiguous validation (≥2 candidates → `AmbiguousWorkbookError`) | P0 | Auto-Adopt pass | S |
 | Name-only adoption decision (MEDIUM-confidence single candidate) | P1 | Auto-Adopt pass | S |
 | Orphan validation (`ORPHANS_PRESENT` surfaced + cleanup doc) | P1 | Auto-Adopt pass | XS–S |
-| **Provision-after-recovery duplicate guard** — detect existing candidate CashCompass workbooks before creating a new one after a **mapping clear / stale-mapping recovery**, and offer adopt/reconnect instead of silently creating a second workbook *(confirmed gap — 2026-07-07)* | P0 | Auto-Adopt + Ambiguous paths | S–M |
+| **Provision-after-recovery duplicate guard** — unconditional candidate detection before create/recovery; safe stop on ambiguity/search/verify failure; HIGH relink and MEDIUM confirmation *(implemented 2026-07-16; HIGH-marker clear/relink + bounded isolation runtime-validated 2026-07-17; remaining matrix pending)* | P0 | Remaining disposable recovery matrix | S–M |
 
-> **Confirmed recovery/adoption gap (2026-07-07, `cashcompass2026`).** During Golden Workbook Convergence testing, **clearing a stale mapping let Central provision a *second* workbook even though another CashCompass workbook still existed in the user's Drive** — a silent duplicate. Today the create-after-clear path (`provisionWorkbookForUser_`) only runs adopt-before-create when `CENTRAL_AUTO_ADOPT` is ON (default OFF), so with the flag off it creates unconditionally. This is **not caused by the Investments convergence work**; the test simply reproduced the exact risk the four adoption paths above are meant to handle. Fix belongs with Recovery completion: before create-after-clear / stale recovery, detect candidates and route to adopt/reconnect (or `AmbiguousWorkbookError` when ≥2), never a silent duplicate. Ties to **Auto-Adopt validation, Ambiguous recovery, Name-only adoption, and Orphan workbook handling**. No implementation yet.
+> **Recovery/adoption defect (discovered 2026-07-07; P0 fix implemented 2026-07-16).** During Golden Workbook Convergence testing, **clearing a stale mapping let Central provision a *second* workbook even though another CashCompass workbook still existed in the user's Drive**. The fix makes candidate detection unconditional for no-mapping and stale-mapping resolution: confirmed zero is the only create path; HIGH/marker candidates relink; MEDIUM/name-only candidates require confirmation while auto-adopt is off; ambiguity and search/verify uncertainty stop safely. **The exact HIGH-marker Admin Clear/reload reproduction passed 2026-07-17 with no duplicate and the bounded workbook intact; the remaining decision-tree matrix stays open.**
 
 **E. Workbook / UX polish** *(Beta-Gate workstream · execution item #6 / Family Beta polish — loading, empty-states, consistency, onboarding; opportunistic — see `## UX Backlog (Version 1)`)*
 
@@ -403,9 +403,9 @@ Explicit, admin-driven and self-service repair built on 2A's evidence. This is t
 
 - **6A — Workbook Identity & Recovery design** *(✅ complete)* — identity-marker model (primary Drive `appProperties`, secondary in-workbook `SYS - Meta`, Script-Properties reverse index), adopt-before-create decision tree + confidence/safety rules, recovery UX, admin-repair safeguards + audit logging, and existing-workbook migration strategy.
 - **6B — Workbook Identity Markers** *(✅ complete)* — durable identity markers stamped at create + lazy backfill on mapped-open, reverse index (`wbid::<spreadsheetId> → user`), hidden `SYS - Meta` marker sheet, and read-only admin marker diagnostics. **No provisioning/resolution behavior change.**
-- **6C.1 — Adopt-Before-Create** *(✅ implemented; flag `CENTRAL_AUTO_ADOPT`, default OFF; not yet validated — flag was OFF during the 2026-06-09 pass)* — at provisioning time with no mapping (inside the per-user lock, after the double-check, before create): 0 candidates → create; exactly 1 strict (HIGH or MEDIUM) candidate → adopt (relink mapping + reverse index, no Drive create/delete); ≥2 → throw `AmbiguousWorkbookError`. Availability-first: detection failures log and fall through to create. Adopt path mirrors mapped-open (`cleanupDefaultSheet1_`, `ensureWorkbookIdentityMarkers_`). Functions: `isAutoAdoptEnabled_`, `tryAdoptWorkbookBeforeCreate_`, `relinkSingleCandidate_`, `buildAmbiguousWorkbookError_`.
-- **6D.1 — Recovery Page** *(✅ implemented; not flag-gated; real-failure render validated 2026-06-11 — a real stale mapping rendered the page and blocked the dashboard)* — display-only recovery screen for `StaleMappingError` / `AmbiguousWorkbookError` / generic provisioning failure, routed from the startup gate instead of a raw error. No self-service actions, no writes. Functions: `buildRecoveryRouting_` (in `sheet_bootstrap.js`), `showRecoveryPage` / `recoveryReload` (client), `#page_recovery` (Dashboard_Body.html).
-- **6D.2a — Reconnect** *(✅ implemented; flag `CENTRAL_RECOVERY_ACTIONS`, default OFF; validated end-to-end 2026-06-11 — executed reconnect relinked the user and the dashboard reloaded; reconnect reload bug fixed)* — self-scoped, user-initiated relink to a single existing candidate (reuses `relinkSingleCandidate_`); ambiguous/none/error handled in UI; no Drive create. Functions: `isRecoveryActionsEnabled_`, `recoveryReconnectSelf`, client `recoveryReconnect`.
+- **6C.1 — Adopt-Before-Create / duplicate guard** *(✅ P0 decision tree implemented 2026-07-16; HIGH-marker clear/relink + bounded isolation runtime-validated 2026-07-17; remaining matrix pending)* — no-mapping and stale-mapping resolution always search under the user lock. Confirmed zero is the only create path; one HIGH/marker candidate relinks; one MEDIUM/name-only candidate relinks only when `CENTRAL_AUTO_ADOPT=true`, otherwise it routes to an explicit confirmation screen; ≥2 throws `AmbiguousWorkbookError`; search/verify failures route to unavailable and never create. Functions: `resolveExistingWorkbookForRecovery_`, `tryAdoptWorkbookBeforeCreate_`, `relinkSingleCandidate_`, `buildAmbiguousWorkbookError_`, `buildConfirmAdoptWorkbookError_`, `buildWorkbookRecoveryUnavailableError_`.
+- **6D.1 — Recovery Page** *(✅ implemented; real-failure render validated 2026-06-11)* — calm screen for confirm / stale / ambiguous / unavailable resolution failures, routed from the startup gate instead of a raw error. No raw IDs or internal errors. Functions: `buildRecoveryRouting_`, `showRecoveryPage` / `recoveryReload`, `#page_recovery`.
+- **6D.2a — Reconnect / confirm** *(✅ implemented; reconnect validated end-to-end 2026-06-11)* — self-scoped, user-initiated relink to a single existing candidate (reuses `relinkSingleCandidate_`); ambiguous/none/error handled in UI; no Drive create. `CENTRAL_RECOVERY_ACTIONS` controls optional action visibility on general recovery pages; the MEDIUM/name-only confirmation path is available regardless. Functions: `isRecoveryActionsEnabled_`, `recoveryReconnectSelf`, client `recoveryReconnect`.
 - **6E.1 — Admin Inspect + Clear Mapping** *(✅ implemented; flag `CENTRAL_ADMIN_REPAIR`, default OFF; **validated end-to-end 2026-07-02** — Inspect/preview/reverse-index/confirm UI work **and executed clear runtime-validated**: mapping removal + reverse-index removal + repair audit history + bootstrap reprovision after clear)* — admin-gated read-only `adminInspectUser` (full for self, mapping-only for others — `drive.file` scope limits cross-user Drive reads) + guarded, audited `adminClearMapping` (deletes mapping + reverse-index property only; **no Drive writes, no file deletion**). Bounded admin audit ring buffer (`appendAdminAudit_` / `adminGetAuditLog`, hashed/truncated). Functions in `central_diagnostics.js` + `clearReverseIndexForWorkbook_` in `central_provisioning.js`.
 - **6F — Recovery Validation** *(current, P1, ~94–96%)* — healthy-path load validated 2026-06-09; **recovery-page render from a real stale mapping + executed Reconnect validated 2026-06-11** (reconnect reload bug fixed); **executed Admin Clear Mapping + mapping/reverse-index removal + repair audit history + bootstrap reprovision after clear + Welcome routing + dashboard empty-state + Financial Integrity `NOT_INITIALIZED` handling + Central admin routing + `ADMIN_EMAILS` validated 2026-07-02**; remaining = **Auto-Adopt + Ambiguous recovery + Name-only adoption + Orphan workbook** validation on a disposable account, then **flags OFF**. No new code expected unless a defect is found. See `## Open testing inventory`.
 - **6D.2b — Create New Workbook** *(remaining, P1; designed, not implemented)* — self-service "start fresh" recovery action; separate flag, explicit confirm, duplicate-avoidance-first, self-scoped.
@@ -517,8 +517,8 @@ Central-project **script properties** (`PropertiesService`), read at runtime, **
 
 | Flag | Default | Status | Risk | Gates | When OFF |
 | --- | --- | --- | --- | --- | --- |
-| `CENTRAL_AUTO_ADOPT` | OFF | Implemented, not fully validated | High | 6C.1 Adopt-Before-Create (`tryAdoptWorkbookBeforeCreate_`) | No adoption; provisioning creates a new workbook. |
-| `CENTRAL_RECOVERY_ACTIONS` | OFF | Implemented, validated end-to-end (2026-06-11) | Medium | 6D.2a Reconnect action (`recoveryReconnectSelf`) | Recovery page stays display-only; Reconnect button hidden. |
+| `CENTRAL_AUTO_ADOPT` | OFF | P0 semantics implemented, not runtime-validated | High | Automatic adoption of a single MEDIUM/name-only candidate | Candidate detection remains active; HIGH candidates relink; MEDIUM candidates require explicit confirmation; no silent create. |
+| `CENTRAL_RECOVERY_ACTIONS` | OFF | Implemented, validated end-to-end (2026-06-11) | Medium | Optional Reconnect action on general recovery pages | General recovery pages stay display-only; the required MEDIUM-candidate confirmation action remains available. |
 | `CENTRAL_ADMIN_REPAIR` | OFF | Implemented, validated end-to-end (2026-07-02) | Medium | 6E.1 admin Inspect + Clear Mapping (`adminInspectUser` / `adminClearMapping`) | Admin repair endpoints disabled / no-op. |
 
 **Recommended usage:** `CENTRAL_AUTO_ADOPT` — keep OFF until 6F validates adopt + ambiguous handling (High risk: only flag that changes the create/relink path). `CENTRAL_RECOVERY_ACTIONS` / `CENTRAL_ADMIN_REPAIR` — safe to enable for controlled testing (healthy-path load validated 2026-06-09; reconnect validated 2026-06-11; executed admin clear validated 2026-07-02); run any actual repair only against a disposable test user before family-beta reliance.
@@ -537,7 +537,7 @@ Central-project **script properties** (`PropertiesService`), read at runtime, **
 
 ## Open testing inventory
 
-Validation status per recovery capability. A **healthy-path** pass ran 2026-06-09 (flags `CENTRAL_RECOVERY_ACTIONS` + `CENTRAL_ADMIN_REPAIR` ON, `CENTRAL_AUTO_ADOPT` OFF); **6F Part 2 (2026-06-10)** added the **Admin Repair disabled-path** (all flags OFF → clicked Clear is a no-op with the "Repair is disabled (flag off)." message); **6F reconnect validation (2026-06-11)** validated the **recovery page from a real stale mapping** and an **executed Reconnect** (dashboard reloaded; reconnect reload bug fixed); **6F executed-Admin-Clear validation (2026-07-02)** validated the **executed Admin Clear Mapping** (mapping + reverse-index removal, repair audit history, bootstrap reprovision after clear, Welcome routing, dashboard empty-state, Financial Integrity `NOT_INITIALIZED` handling, Central admin routing, `ADMIN_EMAILS`). The remaining gap is the **adoption/ambiguous/orphan paths** (Auto-Adopt with flag ON, Ambiguous recovery, Name-only adoption, Orphan workbook); the 6F pass below closes it. Authoritative copy: `PROJECT_CONTEXT.md → Recovery Validation Inventory`. (Validation-surface note: Script Properties UI may lag; **Admin Diagnostics is authoritative**.)
+Prior passes validated healthy mapped load, the recovery page, executed reconnect, disabled admin repair, and executed Admin Clear. The **P0 HIGH-marker clear/relink path passed across two accounts 2026-07-17** with the auto-adopt flag off, no duplicate, mapping/reverse index restored, Recovery suite PASS, and the bounded workbook intact. The `cashcompass2026@gmail.com` repetition recovered a distinctive `$10,000` value from the same existing workbook after mapping clear and reload. The remaining disposable-account matrix covers confirmed-zero create, MEDIUM confirm/off + auto/on, ambiguity, search/verify failure, stale variants, formal cross-user isolation, drive.file limits, and Orphan detection. Authoritative copy: `PROJECT_CONTEXT.md → Recovery Validation Inventory`.
 
 ### Recovery Validation Progress (2026-06-24)
 
@@ -578,14 +578,15 @@ Latest 6F pass — Admin Diagnostics + inspection + feature-flag enforcement re-
 - ✓ Central admin routing validation.
 - ✓ `ADMIN_EMAILS` validation.
 
-**Not yet validated (only remaining recovery items):**
+**Not yet validated (remaining recovery items):**
 
-- Auto-Adopt validation (`CENTRAL_AUTO_ADOPT=true`).
-- Ambiguous recovery validation.
-- Name-only adoption validation.
+- P0 decision-tree runtime matrix on a disposable Central account.
+- Auto-Adopt validation (`CENTRAL_AUTO_ADOPT=true`, MEDIUM/name-only candidate).
+- Ambiguous and unavailable failure routing.
+- Name-only explicit confirmation with `CENTRAL_AUTO_ADOPT=false`.
 - Orphan workbook validation.
 
-**Readiness note:** With the **executed Admin Clear workflow now runtime-validated (2026-07-02)** — including mapping/reverse-index removal, repair audit history, and bootstrap reprovision — Recovery Validation confidence rose to **~94–96%**. The remaining open items are the adoption/ambiguous/orphan paths (all gated behind `CENTRAL_AUTO_ADOPT`, tested on a disposable account only). Family Beta Readiness is unchanged (readiness is not tied to the remaining adoption-path testing).
+**Readiness note:** Existing recovery evidence remains valid, but Family Beta reliance on the new P0 no-duplicate tree requires the disposable runtime matrix. Not all remaining paths are gated by `CENTRAL_AUTO_ADOPT`; only automatic MEDIUM/name-only adoption is.
 
 **Implemented + tested (validated):**
 
@@ -609,12 +610,13 @@ Latest 6F pass — Admin Diagnostics + inspection + feature-flag enforcement re-
 
 | Item | Flag | Risk | Status / timing |
 | --- | --- | --- | --- |
+| P0 duplicate-prevention decision tree | — | High | Local tests PASS; Apps Script scenario 7/7 + Recovery suite 1/1 PASS; HIGH-marker Admin Clear/relink + bounded isolation PASS; remaining disposable matrix pending. |
 | Auto-Adopt with flag ON (6C.1) | `CENTRAL_AUTO_ADOPT` | High | Not tested (flag OFF during validation) → 6F, isolated, disposable account. |
-| Ambiguous recovery (≥2 → `AmbiguousWorkbookError`) | `CENTRAL_AUTO_ADOPT` | Medium | Not tested → 6F. |
-| Name-only adoption (MEDIUM-confidence single candidate) | `CENTRAL_AUTO_ADOPT` | Medium | Not tested → 6F; confirm MEDIUM adoption is acceptable for beta. |
+| Ambiguous recovery (≥2 → `AmbiguousWorkbookError`) | — | Medium | Not runtime-tested → 6F. |
+| Name-only confirm/adopt (MEDIUM-confidence single candidate) | `CENTRAL_AUTO_ADOPT` | Medium | Decision implemented; OFF-confirm + ON-auto runtime paths pending. |
 | Orphan workbook detection (`ORPHANS_PRESENT`) | — | Low | Not exercised end-to-end → 6F; surfacing-only, manual cleanup. |
 
-**6F — Recovery Validation pass (P1):** the executed admin clear + audit + reprovision + reconnect + recovery-page render are validated (see the tables above; 2026-06-11 / 2026-07-02); remaining = the four untested adoption/ambiguous/orphan rows. On a **disposable** account, exercise Auto-Adopt + Ambiguous + Name-only adoption + Orphan detection (enable `CENTRAL_AUTO_ADOPT` only in isolation) → confirm expected behavior, no cross-user leakage, bound deployment unaffected → **set all flags OFF** → record evidence in `SESSION_NOTES.md`. No production/bound workbook involved. Triggering a safe stale mapping for the recovery-page test: set the test user's mapping to an invalid ID (or clear it via `clearMappingForUser_`); mapping store only, data untouched.
+**6F — Recovery Validation pass:** run `SUITE-RECOVERY-REGRESSION` first, then exercise the full decision matrix on a **disposable Central account only**. Validate confirmed-zero create, HIGH relink with auto-adopt off, MEDIUM confirm/off + auto/on, ambiguity, search/verify failure, stale recovery, no cross-user leakage, and Orphan detection. Return flags OFF and record evidence in `SESSION_NOTES.md`. No production/bound workbook involved.
 
 ---
 

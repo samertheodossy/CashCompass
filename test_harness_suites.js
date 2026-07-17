@@ -102,6 +102,14 @@ function getHarnessSuites_() {
         'REGRESSION-BILLS-MONTHLY-INTEGRATION',
         'REGRESSION-BILLS-MONTHLY-CASHFLOW'
       ]
+    },
+    {
+      id: 'SUITE-RECOVERY-REGRESSION',
+      label: 'Recovery Regression Suite',
+      description: 'Permanent recovery decision guards, beginning with the silent-duplicate prevention matrix.',
+      scenarioIds: [
+        'REGRESSION-RECOVERY-DUPLICATE-GUARD'
+      ]
     }
   ];
 }
@@ -199,6 +207,11 @@ function testRunSuiteById_(suiteId, options) {
  */
 function testRunBillsSuite(options) {
   return testRunSuiteById_('SUITE-BILLS-REGRESSION', options || {});
+}
+
+/** Run the Recovery Regression Suite against disposable harness workbooks. */
+function testRunRecoverySuite(options) {
+  return testRunSuiteById_('SUITE-RECOVERY-REGRESSION', options || {});
 }
 
 /* -------------------------------------------------------------------------- */

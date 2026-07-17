@@ -154,6 +154,28 @@ Whenever a production bug is fixed:
   workbook.
 - Expected result: exactly one posting + Validator PASS (no duplicate rows).
 
+### REG-009 — Central recovery silently created a duplicate workbook
+- Category: REGRESSION / RECOVERY
+- Date discovered: 2026-07-07
+- Status: covered by `REGRESSION-RECOVERY-DUPLICATE-GUARD`; Apps Script scenario 7/7 and Recovery suite 1/1 passed 2026-07-17; HIGH-marker runtime reproduction passed across two accounts, including restoration of a distinctive `$10,000` value for `cashcompass2026@gmail.com`
+- Affected files: `central_provisioning.js`, `central_diagnostics.js`,
+  `sheet_bootstrap.js`, `Dashboard_Script_Render.html`, `Dashboard_Body.html`
+- Root cause: after a mapping was cleared, `provisionWorkbookForUser_` searched
+  for an existing workbook only when `CENTRAL_AUTO_ADOPT` was enabled. With the
+  default-off flag—or when candidate search/verification failed—the resolver
+  fell through to `Drive.Files.create`, even if a viable CashCompass workbook
+  still existed.
+- Repro (harness): `REGRESSION-RECOVERY-DUPLICATE-GUARD` exercises the pure
+  candidate matrix on a disposable harness workbook. The separate Central
+  runtime matrix creates and identifies one disposable CashCompass workbook,
+  clears only its mapping, and repeats with multiple candidates, Drive-list
+  failure, and candidate verification failure.
+- Expected result: candidate detection always runs. Exactly zero confirmed
+  candidates is the only path that calls `Drive.Files.create`; one marker
+  candidate relinks, one name-only candidate requests explicit confirmation,
+  two or more candidates stop as ambiguous, and search/verify failures stop as
+  unavailable. No branch silently creates a duplicate.
+
 ---
 
 ## RECOVERY scenarios (design — not historical bugs)
@@ -184,4 +206,5 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-006 | Bootstrap registry straggler | REGRESSION | fixed |
 | REG-007 | Bills Due performance (~51s) | STRESS | fixed |
 | REG-008 | AutoPay concurrency race | REGRESSION | fixed |
+| REG-009 | Central recovery silent duplicate workbook | REGRESSION / RECOVERY | covered; scenario 7/7 + suite 1/1 + HIGH-marker runtime reproduction PASS |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

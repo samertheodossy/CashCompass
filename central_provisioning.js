@@ -26,8 +26,8 @@
  *     with a 30 s tryLock and a double-check inside the lock.
  *   - Partial-failure cleanup uses soft delete (setTrashed). Hard
  *     delete is intentionally forbidden in the first slice.
- *   - Stale mapping throws StaleMappingError; auto-reprovisioning
- *     is intentionally deferred.
+ *   - Missing/stale mappings always run candidate detection before any create
+ *     decision. Search uncertainty never falls through to Drive create.
  *   - Bootstrap is exactly one call: ensureInputSettingsSheet_(ss).
  *     Every other ensure helper is invoked lazily as the user
  *     navigates the dashboard.
@@ -47,29 +47,28 @@ var BETA_CONTACT_EMAIL_KEY_ = 'BETA_CONTACT_EMAIL';
 var MAPPING_KEY_PREFIX_ = 'mapping::';
 
 /**
- * Adopt-before-create flag (Phase 6C). When a caller has NO mapping but a
- * single strict candidate workbook already exists in their Drive, central mode
- * can adopt that workbook (write the mapping to it) instead of creating a
- * duplicate. Read by isAutoAdoptEnabled_().
+ * Single-candidate auto-adopt flag (Phase 6C / recovery completion). Candidate
+ * detection is unconditional; this flag controls only whether a single
+ * MEDIUM-confidence, name-only candidate is adopted automatically or requires
+ * an explicit user confirmation. HIGH-confidence marker candidates are safe to
+ * relink automatically. Read by isAutoAdoptEnabled_().
  *
  * Fail-closed, exactly like CENTRAL_MODE: only the literal string "true"
- * enables it; unset / anything else = OFF. While OFF, provisioning behaves
- * byte-for-byte as before (always create) — Phase 6C is dark until this flag
- * is flipped on a test account.
+ * enables it; unset / anything else = OFF. OFF never disables candidate
+ * detection and never permits a silent duplicate.
  */
 var CENTRAL_AUTO_ADOPT_KEY_ = 'CENTRAL_AUTO_ADOPT';
 
 /**
- * Recovery actions flag (Phase 6D.2a). Gates the user-initiated, self-scoped
- * "Reconnect existing workbook" action on the recovery page. Independent of
- * CENTRAL_AUTO_ADOPT: that flag governs automatic adoption during provisioning;
- * this one governs the manual reconnect a user can trigger after a resolution
- * failure. Read by isRecoveryActionsEnabled_().
+ * Recovery actions flag (Phase 6D.2a). Controls whether the user-initiated,
+ * self-scoped reconnect action is offered on general recovery pages. The
+ * explicit one-candidate confirmation path is always available in central mode.
+ * Read by isRecoveryActionsEnabled_().
  *
  * Fail-closed, exactly like CENTRAL_MODE / CENTRAL_AUTO_ADOPT: only the literal
- * string "true" enables it; unset / anything else = OFF. While OFF, the recovery
- * page stays display-only (Phase 6D.1 behavior) and the reconnect endpoint
- * refuses — dark until flipped on a test account.
+ * string "true" enables it; unset / anything else = OFF. While OFF, general
+ * recovery pages stay display-only; this does not disable the self-scoped
+ * confirmation endpoint.
  */
 var CENTRAL_RECOVERY_ACTIONS_KEY_ = 'CENTRAL_RECOVERY_ACTIONS';
 
@@ -503,9 +502,8 @@ function isAutoAdoptEnabled_() {
 /**
  * Returns true only when the CENTRAL_RECOVERY_ACTIONS script property is the
  * literal string "true" (Phase 6D.2a). Any other value (including unset)
- * returns false. Never throws — read failures fail closed (recovery actions
- * off), so the recovery page stays display-only and the reconnect endpoint
- * refuses.
+ * returns false. Never throws — read failures fail closed, so optional actions
+ * on general recovery pages stay hidden.
  *
  * @returns {boolean}
  */
@@ -536,10 +534,9 @@ function isAdminRepairEnabled_() {
 }
 
 /**
- * Builds a name-tagged Error for the ambiguous case (≥2 strict candidates for
- * one user with no mapping). Tagged `name = 'AmbiguousWorkbookError'` — mirrors
- * handleStaleMapping_'s StaleMappingError — so a later recovery surface (Phase
- * 6D) can detect and render it specially. Adoption is impossible here because
+ * Builds a name-tagged Error for the ambiguous case (≥2 strict candidates).
+ * The recovery router detects the error name and renders it specially.
+ * Adoption is impossible here because
  * "which workbook holds the real data?" is a human decision; we deliberately
  * create nothing and trash nothing.
  *
@@ -560,23 +557,84 @@ function buildAmbiguousWorkbookError_(candidateIds) {
 }
 
 /**
- * Adopt-before-create core (Phase 6C). Called ONLY from inside
- * provisionWorkbookForUser_, inside the user lock, after the mapping
- * double-check has confirmed there is no mapping, and only when
- * isAutoAdoptEnabled_() is true.
+ * Builds a recovery error for a single MEDIUM-confidence name-only candidate.
+ * The candidate is viable enough to block creation but not strong enough to
+ * relink silently while CENTRAL_AUTO_ADOPT is off.
+ *
+ * @returns {!Error}
+ */
+function buildConfirmAdoptWorkbookError_() {
+  var err = new Error(
+    'An existing CashCompass workbook was found by its expected name. ' +
+    'CashCompass stopped before creating another copy and needs your ' +
+    'confirmation before reconnecting it.'
+  );
+  err.name = 'ConfirmAdoptWorkbookError';
+  return err;
+}
+
+/**
+ * Builds a fail-closed recovery error for candidate-search or verification
+ * uncertainty. This error must never be treated as confirmation that zero
+ * candidates exist.
+ *
+ * @param {string} reason Internal diagnostic reason (not rendered directly).
+ * @returns {!Error}
+ */
+function buildWorkbookRecoveryUnavailableError_(reason) {
+  var err = new Error(
+    'CashCompass could not safely verify your workbook right now. It stopped ' +
+    'before creating or linking another workbook. Please try again.'
+  );
+  err.name = 'WorkbookRecoveryUnavailableError';
+  err.recoveryReason = String(reason || 'unknown');
+  return err;
+}
+
+/**
+ * Pure recovery decision seam. It classifies an already-successful candidate
+ * search without performing Drive, Spreadsheet, mapping, or workbook writes.
+ *
+ * @param {string} recoveryState 'no_mapping' or 'stale'.
+ * @param {!Array<Object>} candidates Candidate descriptors.
+ * @param {boolean} autoAdoptMedium Whether a name-only candidate may relink
+ *   without confirmation.
+ * @returns {{action:string, confidence:string}}
+ */
+function decideRecoveryCandidateAction_(recoveryState, candidates, autoAdoptMedium) {
+  var state = recoveryState === 'stale' ? 'stale' : 'no_mapping';
+  var list = candidates || [];
+
+  if (list.length === 0) {
+    return {
+      action: state === 'no_mapping' ? 'create' : 'unavailable',
+      confidence: 'NONE'
+    };
+  }
+  if (list.length >= 2) {
+    return { action: 'ambiguous', confidence: 'MULTIPLE' };
+  }
+
+  var confidence = list[0] && list[0].matchedBy === 'name'
+    ? 'MEDIUM'
+    : 'HIGH';
+  if (confidence === 'MEDIUM' && !autoAdoptMedium) {
+    return { action: 'confirm', confidence: confidence };
+  }
+  return { action: 'relink', confidence: confidence };
+}
+
+/**
+ * Resolves an existing workbook before create/recovery. Called from inside a
+ * per-user lock after the mapping state has been checked.
  *
  * Behavior (approved decision tree):
- *   - Detection failure (Drive list throws) → availability-first: log and
- *     return null so the caller falls through to create. A rare transient
- *     failure may create a duplicate, but that is recoverable later; blocking
- *     provisioning entirely is not.
- *   - 0 candidates → return null → caller creates (current behavior).
- *   - exactly 1 strict candidate (HIGH = marker-hash match, or MEDIUM =
- *     exact-name match; both already owned-by-caller + non-trashed by
- *     construction in findCandidateWorkbooks_) → re-verify openById, write the
- *     mapping, mirror the mapped-open post-steps (cleanupDefaultSheet1_ +
- *     ensureWorkbookIdentityMarkers_), and return the adopted Spreadsheet. If
- *     the re-verify open fails → log and return null → caller creates.
+ *   - Detection failure → UNAVAILABLE; never create.
+ *   - 0 candidates → null only for no_mapping; stale → UNAVAILABLE.
+ *   - exactly 1 HIGH candidate → verified relink.
+ *   - exactly 1 MEDIUM name-only candidate → verified relink only when
+ *     CENTRAL_AUTO_ADOPT is true; otherwise require explicit confirmation.
+ *   - candidate verification failure → UNAVAILABLE; never create.
  *   - ≥2 candidates → throw AmbiguousWorkbookError (adopt/create nothing).
  *
  * LOW-confidence files cannot appear here: findCandidateWorkbooks_ only matches
@@ -584,49 +642,73 @@ function buildAmbiguousWorkbookError_(candidateIds) {
  * own non-trashed spreadsheets, so every merged candidate is HIGH or MEDIUM.
  *
  * @param {string} email Caller email (already validated non-empty by caller).
+ * @param {string=} recoveryState 'no_mapping' or 'stale'.
  * @returns {?GoogleAppsScript.Spreadsheet.Spreadsheet} Adopted workbook, or
- *   null when the caller should create a new workbook.
+ *   null only when a successful no-mapping search found zero candidates.
  */
-function tryAdoptWorkbookBeforeCreate_(email) {
+function resolveExistingWorkbookForRecovery_(email, recoveryState) {
+  var state = recoveryState === 'stale' ? 'stale' : 'no_mapping';
   var found;
   try {
     found = findCandidateWorkbooks_(email);
   } catch (detectErr) {
-    // Availability-first: never let a Drive list hiccup block provisioning.
-    Logger.log('[6C] adopt detection failed; falling through to create: ' +
+    Logger.log('[recovery] candidate detection failed; create blocked: ' +
       (detectErr && detectErr.message ? detectErr.message : String(detectErr)));
-    return null;
+    throw buildWorkbookRecoveryUnavailableError_('candidate_search_failed');
   }
 
   var merged = (found && found.merged) ? found.merged : [];
+  var decision = decideRecoveryCandidateAction_(
+    state,
+    merged,
+    isAutoAdoptEnabled_()
+  );
 
-  if (merged.length === 0) {
-    return null; // no candidate → create (current behavior)
+  if (decision.action === 'create') {
+    Logger.log('[recovery] no mapping + confirmed zero candidates → create allowed');
+    return null;
   }
-
-  if (merged.length >= 2) {
+  if (decision.action === 'unavailable') {
+    Logger.log('[recovery] stale mapping + zero candidates → unavailable');
+    throw buildWorkbookRecoveryUnavailableError_('stale_mapping_no_candidate');
+  }
+  if (decision.action === 'ambiguous') {
     var ids = merged.map(function(c) { return c.id; });
-    Logger.log('[6C] ambiguous: ' + merged.length +
+    Logger.log('[recovery] ambiguous: ' + merged.length +
       ' candidates, adopting none. ids=' +
       ids.map(function(id) { return truncateId_(id); }).join(','));
     throw buildAmbiguousWorkbookError_(ids);
   }
+  if (decision.action === 'confirm') {
+    Logger.log('[recovery] one name-only candidate requires explicit confirmation');
+    throw buildConfirmAdoptWorkbookError_();
+  }
 
-  // Exactly one strict candidate. Relink via the shared helper, which mirrors
-  // the mapped-open post-steps exactly (verify open → cleanupDefaultSheet1_ →
-  // writeSpreadsheetIdForUser_ → ensureWorkbookIdentityMarkers_).
+  // Exactly one approved candidate. Relink via the shared helper, which
+  // mirrors mapped-open post-steps (verify → cleanup → mapping → markers).
   var cand = merged[0];
   var relink = relinkSingleCandidate_(email, cand);
   if (!relink.ok) {
-    // Re-verify failed (e.g. trashed between list and adopt) → create instead.
-    Logger.log('[6C] candidate re-verify openById failed; falling through to ' +
-      'create. id=' + truncateId_(cand.id));
-    return null;
+    Logger.log('[recovery] candidate verification failed; create blocked. id=' +
+      truncateId_(cand.id));
+    throw buildWorkbookRecoveryUnavailableError_('candidate_verify_failed');
   }
 
-  Logger.log('[6C] adopted workbook id=' + truncateId_(cand.id) +
+  Logger.log('[recovery] relinked workbook id=' + truncateId_(cand.id) +
+    ' state=' + state +
     ' confidence=' + relink.confidence + ' matchedBy=' + relink.matchedBy);
   return relink.ss;
+}
+
+/**
+ * Backward-compatible no-mapping wrapper retained for diagnostics/tests.
+ * Candidate detection is unconditional at its provisioning call site.
+ *
+ * @param {string} email
+ * @returns {?GoogleAppsScript.Spreadsheet.Spreadsheet}
+ */
+function tryAdoptWorkbookBeforeCreate_(email) {
+  return resolveExistingWorkbookForRecovery_(email, 'no_mapping');
 }
 
 /**
@@ -685,7 +767,7 @@ function relinkSingleCandidate_(email, cand) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Recovery actions (Phase 6D.2a — self-scoped, flag-gated, default OFF)      */
+/*  Recovery actions (Phase 6D.2a — self-scoped explicit confirmation)        */
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -697,15 +779,18 @@ function relinkSingleCandidate_(email, cand) {
  * detection is owner-constrained and non-trashed by construction). This is the
  * IDOR guard; the bound/production workbook is unreachable from here.
  *
- * Gated by central mode AND CENTRAL_RECOVERY_ACTIONS (both fail closed). Runs
- * under the per-user lock to serialize against any concurrent resolve/provision.
+ * Gated by central mode. The endpoint itself is always available because it is
+ * the explicit confirmation path for a single name-only candidate while
+ * CENTRAL_AUTO_ADOPT is off. CENTRAL_RECOVERY_ACTIONS still controls whether
+ * the optional action appears on other recovery screens. Runs under the
+ * per-user lock to serialize against concurrent resolution/provisioning.
  *
  * Returns ONLY primitives — never raw exceptions, spreadsheet IDs, email
  * addresses, or internal error names:
  *   - { status: 'reconnected' } : exactly one candidate, verified + relinked.
  *   - { status: 'ambiguous' }   : ≥2 candidates; never auto-picks.
  *   - { status: 'none' }        : no candidate to reconnect to.
- *   - { status: 'disabled' }    : central mode off or flag off.
+ *   - { status: 'disabled' }    : central mode off.
  *   - { status: 'error' }       : no identified user, lock busy, detection
  *                                 failure, verify failure, or anything
  *                                 unexpected.
@@ -721,11 +806,6 @@ function recoveryReconnectSelf() {
       Logger.log('[6D2a] reconnect disabled: central mode off → status=disabled');
       return { status: 'disabled' };
     }
-    if (!isRecoveryActionsEnabled_()) {
-      Logger.log('[6D2a] reconnect disabled: CENTRAL_RECOVERY_ACTIONS off → status=disabled');
-      return { status: 'disabled' };
-    }
-
     var email = getCurrentUserEmail_();
     if (!email) {
       Logger.log('[6D2a] reconnect no identified user → status=error');
@@ -745,6 +825,22 @@ function recoveryReconnectSelf() {
     }
 
     try {
+      // A concurrent reconnect/admin repair may have restored a healthy mapping
+      // while this recovery screen was open. Preserve it rather than replacing
+      // it with a newly discovered candidate.
+      var currentId = lookupSpreadsheetIdForUser_(email);
+      if (currentId) {
+        try {
+          var currentSs = SpreadsheetApp.openById(currentId);
+          cleanupDefaultSheet1_(currentSs);
+          try { ensureWorkbookIdentityMarkers_(currentSs, currentId, email); } catch (_mk) {}
+          Logger.log('[6D2a] mapping already healthy → status=reconnected');
+          return { status: 'reconnected' };
+        } catch (_mappedOpenErr) {
+          Logger.log('[6D2a] current mapping still unavailable; continuing candidate search');
+        }
+      }
+
       var found;
       try {
         found = findCandidateWorkbooks_(email);
@@ -792,10 +888,9 @@ function recoveryReconnectSelf() {
 
 /**
  * Central-mode branch of getUserSpreadsheet_(). Looks up the
- * caller's mapping, opens the workbook if present, or provisions a
- * new one if absent. Throws StaleMappingError if the mapping exists
- * but openById fails (manual recovery only — no auto-reprovision in
- * the first slice per first-slice plan § 6.5).
+ * caller's mapping and opens it when healthy. Missing or stale mappings enter
+ * the locked recovery decision tree; only a no-mapping search that positively
+ * confirms zero candidates may provision a new workbook.
  */
 function getOrProvisionUserSpreadsheet_() {
   var email = getCurrentUserEmail_();
@@ -865,27 +960,30 @@ function provisionWorkbookForUser_(email) {
     // provisioned while we were waiting.
     var existingId = lookupSpreadsheetIdForUser_(email);
     if (existingId) {
-      var existingSs = SpreadsheetApp.openById(existingId);
-      // Same non-fatal cleanup as the pre-lock branch: a workbook
-      // provisioned by the winning execution (or a manually reset one)
-      // may still carry the default blank "Sheet1".
-      cleanupDefaultSheet1_(existingSs);
-      // Phase 6B lazy backfill (race branch): idempotent + best-effort.
-      try { ensureWorkbookIdentityMarkers_(existingSs, existingId, email); } catch (_bf) {}
-      return existingSs;
+      try {
+        var existingSs = SpreadsheetApp.openById(existingId);
+        // Same non-fatal cleanup as the pre-lock branch: a workbook
+        // provisioned by the winning execution (or a manually reset one)
+        // may still carry the default blank "Sheet1".
+        cleanupDefaultSheet1_(existingSs);
+        // Phase 6B lazy backfill (race branch): idempotent + best-effort.
+        try { ensureWorkbookIdentityMarkers_(existingSs, existingId, email); } catch (_bf) {}
+        return existingSs;
+      } catch (_existingOpenErr) {
+        // The mapping appeared while this request waited but is stale. We
+        // already hold the user lock, so enter the stale decision tree directly
+        // rather than calling handleStaleMapping_ (which would re-lock).
+        return resolveExistingWorkbookForRecovery_(email, 'stale');
+      }
     }
 
-    // Phase 6C adopt-before-create: with no mapping, prefer adopting a single
-    // strict pre-existing candidate over creating a duplicate. Flag-gated
-    // (default OFF → skipped entirely, current behavior preserved). Runs INSIDE
-    // the lock, AFTER the mapping double-check. May return a Spreadsheet (adopt
-    // → done), null (fall through to create), or throw AmbiguousWorkbookError
-    // (≥2 candidates → create nothing).
-    if (isAutoAdoptEnabled_()) {
-      var adopted = tryAdoptWorkbookBeforeCreate_(email);
-      if (adopted) {
-        return adopted;
-      }
+    // Unconditional candidate detection is the duplicate-prevention gate.
+    // CREATE is reachable only after a successful Drive search positively
+    // confirms zero app-visible candidates. Search/verify uncertainty,
+    // ambiguity, and unconfirmed name-only candidates all stop here.
+    var adopted = tryAdoptWorkbookBeforeCreate_(email);
+    if (adopted) {
+      return adopted;
     }
 
     var fileId = null;
@@ -1071,26 +1169,43 @@ function sheetDataRangeIsBlank_(range) {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Called when lookupSpreadsheetIdForUser_ returned a non-null id but
- * SpreadsheetApp.openById(id) threw. First-slice behavior: surface
- * a clear error and require manual recovery. Auto-reprovisioning is
- * intentionally deferred to a later slice (first-slice plan § 6.5).
- *
- * Throws an Error with name='StaleMappingError' so the caller
- * (getOrProvisionUserSpreadsheet_, ultimately doGet) could choose
- * to render a recovery message if a recovery surface is later
- * added. The first slice surfaces the raw error to the user via
- * the dashboard render path — acceptable because the user is in
- * the private-beta allow-list and can ping the developer.
+ * Called when a mapped workbook could not be opened. Re-checks under the user
+ * lock, then runs the same unconditional candidate decision tree used before
+ * create. Stale recovery never creates a workbook.
  */
 function handleStaleMapping_(email, mappedId, openErr) {
-  var msg =
-    'Your CashCompass workbook could not be opened. It may have been ' +
-    'deleted or moved out of access. Contact the project owner to ' +
-    're-provision. Mapped ID: ' + mappedId +
-    '. Underlying error: ' +
-    (openErr && openErr.message ? openErr.message : String(openErr));
-  var err = new Error(msg);
-  err.name = 'StaleMappingError';
-  throw err;
+  Logger.log('[recovery] mapped open failed id=' + truncateId_(mappedId) +
+    ' reason=' + (openErr && openErr.message ? openErr.message : String(openErr)));
+
+  var lock = LockService.getUserLock();
+  var acquired = false;
+  try {
+    acquired = lock.tryLock(PROVISIONING_LOCK_TIMEOUT_MS_);
+  } catch (_lockErr) {
+    acquired = false;
+  }
+  if (!acquired) {
+    throw buildWorkbookRecoveryUnavailableError_('stale_mapping_lock_busy');
+  }
+
+  try {
+    // Another execution may have repaired/replaced the mapping while this
+    // request waited. Re-read it and prefer a clean mapped open if available.
+    var latestId = lookupSpreadsheetIdForUser_(email);
+    if (latestId) {
+      try {
+        var latestSs = SpreadsheetApp.openById(latestId);
+        cleanupDefaultSheet1_(latestSs);
+        try { ensureWorkbookIdentityMarkers_(latestSs, latestId, email); } catch (_mk) {}
+        return latestSs;
+      } catch (_latestOpenErr) {
+        Logger.log('[recovery] mapped re-check still unavailable id=' +
+          truncateId_(latestId));
+      }
+    }
+
+    return resolveExistingWorkbookForRecovery_(email, 'stale');
+  } finally {
+    try { lock.releaseLock(); } catch (_releaseErr) {}
+  }
 }

@@ -115,6 +115,10 @@ function showRecoveryPage(recovery) {
     message = 'We found more than one CashCompass workbook for your account, ' +
       'so we paused instead of opening the wrong one. Reach out and we\u2019ll ' +
       'connect you to the right one.';
+  } else if (type === 'confirm') {
+    message = 'We found an existing CashCompass workbook for your account. ' +
+      'To protect your data, we paused instead of creating another copy. ' +
+      'Choose Use existing workbook to reconnect it.';
   } else if (type === 'stale') {
     message = 'We couldn\u2019t open your CashCompass workbook right now. This ' +
       'can happen if it was moved, renamed, or its sharing changed. Please ' +
@@ -148,12 +152,15 @@ function showRecoveryPage(recovery) {
   }
 
   // Phase 6D.2a — reveal the self-service reconnect action only when the
-  // server reports actionsEnabled (CENTRAL_RECOVERY_ACTIONS = true). Reset
-  // any prior disabled/status state so the screen is clean on re-entry.
+  // server reports actionsEnabled. Confirmation screens enable it regardless
+  // of the optional general-recovery flag. Reset prior disabled/status state.
   var reconnectBtn = document.getElementById('recovery_reconnect_btn');
   if (reconnectBtn) {
     reconnectBtn.style.display = rec.actionsEnabled ? '' : 'none';
     reconnectBtn.disabled = false;
+    reconnectBtn.textContent = type === 'confirm'
+      ? 'Use existing workbook'
+      : 'Reconnect existing workbook';
   }
   var actionStatusEl = document.getElementById('recovery_action_status');
   if (actionStatusEl) {
