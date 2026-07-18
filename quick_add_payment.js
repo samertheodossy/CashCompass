@@ -326,6 +326,7 @@ function quickAddPayment(payload) {
   const entryDateStr = Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
   var activitySnapshot = {
+    operationId: Utilities.getUuid(),
     entryType: entryType,
     payee: payee,
     entryDate: entryDateStr,
@@ -399,6 +400,222 @@ function quickAddPayment(payload) {
     loanOrHelocNotice: loanOrHelocNotice,
     activitySnapshot: activitySnapshot
   };
+}
+
+/**
+ * Normalize and validate the browser-held receipt used to verify a completed
+ * Quick Add write. The receipt may identify only the canonical Cash Flow cell
+ * that quickAddPayment() already wrote; it cannot target another sheet or turn
+ * a correction into a second additive payment.
+ */
+function normalizeQuickAddWriteReceipt_(raw) {
+  raw = raw || {};
+  validateRequired_(raw, [
+    'entryType', 'payee', 'entryDate', 'previousValue', 'newValue',
+    'signedAmount', 'cashFlowSheet', 'cashFlowMonth'
+  ]);
+
+  var entryType = String(raw.entryType || '').trim();
+  var payee = String(raw.payee || '').trim();
+  var entryDate = parseIsoDateLocal_(raw.entryDate);
+  var previousValue = Number(raw.previousValue);
+  var newValue = Number(raw.newValue);
+  var signedAmount = Number(raw.signedAmount);
+
+  if (entryType !== 'Expense' && entryType !== 'Income') {
+    throw new Error('Quick Add receipt has an invalid entry type.');
+  }
+  if (!payee || isNaN(entryDate.getTime())) {
+    throw new Error('Quick Add receipt has an invalid payee or date.');
+  }
+  if (!isFinite(previousValue) || !isFinite(newValue) || !isFinite(signedAmount)) {
+    throw new Error('Quick Add receipt has invalid numeric values.');
+  }
+  if ((entryType === 'Expense' && signedAmount > 0) ||
+      (entryType === 'Income' && signedAmount < 0)) {
+    throw new Error('Quick Add receipt amount direction does not match its type.');
+  }
+
+  previousValue = round2_(previousValue);
+  newValue = round2_(newValue);
+  signedAmount = round2_(signedAmount);
+  if (!quickAddMoneyEquals_(round2_(previousValue + signedAmount), newValue)) {
+    throw new Error('Quick Add receipt before/after values are inconsistent.');
+  }
+
+  var expectedSheet = getCashFlowSheetName_(entryDate.getFullYear());
+  var expectedMonth = Utilities.formatDate(
+    entryDate,
+    Session.getScriptTimeZone(),
+    'MMM-yy'
+  );
+  if (String(raw.cashFlowSheet || '').trim() !== expectedSheet ||
+      String(raw.cashFlowMonth || '').trim() !== expectedMonth) {
+    throw new Error('Quick Add receipt does not match its date target.');
+  }
+
+  return {
+    operationId: String(raw.operationId || '').trim(),
+    entryType: entryType,
+    payee: payee,
+    entryDate: Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+    previousValue: previousValue,
+    newValue: newValue,
+    signedAmount: signedAmount,
+    cashFlowSheet: expectedSheet,
+    cashFlowMonth: expectedMonth
+  };
+}
+
+/** Two-decimal money equality with a half-cent tolerance. */
+function quickAddMoneyEquals_(left, right) {
+  return Math.abs(round2_(left) - round2_(right)) < 0.005;
+}
+
+/**
+ * Pure decision seam used by the UI guard and disposable regression harness.
+ */
+function classifyQuickAddWriteState_(currentValue, previousValue, expectedValue) {
+  if (quickAddMoneyEquals_(currentValue, expectedValue)) return 'MATCH';
+  if (quickAddMoneyEquals_(currentValue, previousValue)) return 'REVERTED_TO_PREVIOUS';
+  return 'CHANGED_TO_OTHER';
+}
+
+/** Locate and read the canonical cell described by a validated receipt. */
+function inspectQuickAddWriteInSpreadsheet_(ss, receipt) {
+  var sheet = ss.getSheetByName(receipt.cashFlowSheet);
+  if (!sheet) {
+    return {
+      status: 'TARGET_MISSING',
+      currentValue: null,
+      receipt: receipt,
+      message: 'Cash Flow sheet is missing.'
+    };
+  }
+
+  var rowInfo = findCashFlowRowByTypeAndPayee_(sheet, receipt.entryType, receipt.payee);
+  if (!rowInfo) {
+    return {
+      status: 'TARGET_MISSING',
+      currentValue: null,
+      receipt: receipt,
+      message: 'Cash Flow payee row is missing.'
+    };
+  }
+
+  var entryDate = parseIsoDateLocal_(receipt.entryDate);
+  var monthCol = getMonthColumnByDate_(sheet, entryDate, 1);
+  var currentValue = round2_(toNumber_(sheet.getRange(rowInfo.row, monthCol).getValue()));
+
+  return {
+    status: classifyQuickAddWriteState_(
+      currentValue,
+      receipt.previousValue,
+      receipt.newValue
+    ),
+    currentValue: currentValue,
+    receipt: receipt,
+    row: rowInfo.row,
+    column: monthCol,
+    sheet: sheet
+  };
+}
+
+/** Shape an inspection result for the browser without returning Sheet objects. */
+function quickAddWriteResultForClient_(inspection) {
+  var receipt = inspection.receipt || {};
+  return {
+    operationId: receipt.operationId || '',
+    status: inspection.status,
+    entryType: receipt.entryType || '',
+    payee: receipt.payee || '',
+    entryDate: receipt.entryDate || '',
+    cashFlowSheet: receipt.cashFlowSheet || '',
+    cashFlowMonth: receipt.cashFlowMonth || '',
+    previousValue: receipt.previousValue,
+    expectedValue: receipt.newValue,
+    currentValue: inspection.currentValue,
+    message: inspection.message || ''
+  };
+}
+
+/**
+ * PUBLIC, READ-ONLY: recheck recent browser-held Quick Add receipts. Receipts
+ * remain client-session state; this endpoint only resolves and reads their
+ * canonical Cash Flow cells.
+ */
+function verifyQuickAddPaymentWrites(receipts) {
+  if (!Array.isArray(receipts)) return [];
+  var ss = getUserSpreadsheet_();
+  return receipts.slice(0, 10).map(function(raw) {
+    try {
+      var receipt = normalizeQuickAddWriteReceipt_(raw);
+      return quickAddWriteResultForClient_(inspectQuickAddWriteInSpreadsheet_(ss, receipt));
+    } catch (e) {
+      return {
+        operationId: String(raw && raw.operationId || '').trim(),
+        status: 'INVALID_RECEIPT',
+        message: e && e.message ? e.message : String(e)
+      };
+    }
+  });
+}
+
+/**
+ * Workbook-scoped compare-and-set correction seam. This SETS the already
+ * recorded expected value only when the cell still equals its pre-save value.
+ * It never adds the amount and never appends another Activity row.
+ */
+function restoreQuickAddPaymentWriteInSpreadsheet_(ss, rawReceipt) {
+  var receipt = normalizeQuickAddWriteReceipt_(rawReceipt);
+  var before = inspectQuickAddWriteInSpreadsheet_(ss, receipt);
+
+  if (before.status === 'MATCH') {
+    var already = quickAddWriteResultForClient_(before);
+    already.status = 'MATCH';
+    already.message = 'The recorded amount is already present.';
+    return already;
+  }
+  if (before.status !== 'REVERTED_TO_PREVIOUS') {
+    var refused = quickAddWriteResultForClient_(before);
+    refused.status = 'RESTORE_REFUSED';
+    refused.message = 'The cell contains a different newer value, so CashCompass did not overwrite it.';
+    return refused;
+  }
+
+  before.sheet.getRange(before.row, before.column).setValue(receipt.newValue);
+  SpreadsheetApp.flush();
+
+  var after = inspectQuickAddWriteInSpreadsheet_(ss, receipt);
+  var result = quickAddWriteResultForClient_(after);
+  if (after.status === 'MATCH') {
+    result.status = 'RESTORED';
+    result.message = 'Recorded amount restored. No duplicate Activity entry was created.';
+  } else {
+    result.status = 'RESTORE_NOT_CONFIRMED';
+    result.message = 'The restore was immediately changed again. Finish or cancel the open spreadsheet edit and retry.';
+  }
+  return result;
+}
+
+/**
+ * PUBLIC, GUARDED WRITE: repair a late client-edit overwrite without replaying
+ * quickAddPayment(). A per-user lock serializes CashCompass calls; the strict
+ * compare-and-set check protects a legitimate newer spreadsheet value.
+ */
+function restoreQuickAddPaymentWrite(receipt) {
+  var lock = LockService.getUserLock();
+  lock.waitLock(5000);
+  try {
+    var result = restoreQuickAddPaymentWriteInSpreadsheet_(getUserSpreadsheet_(), receipt);
+    if (result.status === 'RESTORED') {
+      touchDashboardSourceUpdated_('quick_payment');
+      touchDashboardSourceUpdated_('cash_flow');
+    }
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /**

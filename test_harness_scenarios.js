@@ -117,6 +117,9 @@ function getHarnessScenarios_() {
   if (typeof getHarnessRecoveryDuplicateGuardScenario_ === 'function') {
     list.push(getHarnessRecoveryDuplicateGuardScenario_());
   }
+  if (typeof getHarnessQuickAddWriteGuardScenario_ === 'function') {
+    list.push(getHarnessQuickAddWriteGuardScenario_());
+  }
   return list;
 }
 

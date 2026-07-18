@@ -327,7 +327,335 @@ function runDebtPlannerAfterQuickPayment_() {
   } catch (_e) { /* silent */ }
 }
 
+// Recent successful Quick Add writes stay monitored for this browser-tab
+// session. This catches the Google Sheets last-writer-wins case where a cell
+// was still being edited when Apps Script saved, and the pending browser edit
+// committed later. Receipts are verification metadata only; replaying a
+// receipt never calls quickAddPayment() and never creates another Activity row.
+var QUICK_ADD_WRITE_RECEIPTS_KEY_ = 'cashcompass.quickAddWriteReceipts.v1';
+var QUICK_ADD_WRITE_RECEIPT_TTL_MS_ = 12 * 60 * 60 * 1000;
+var quickAddWriteVerifyInFlight_ = false;
+var quickAddWriteHooksInstalled_ = false;
+var quickAddActiveWriteGuardId_ = '';
+var quickAddWriteReturnCheckTimers_ = [];
+
+function loadQuickAddWriteReceipts_() {
+  var parsed = [];
+  try {
+    parsed = JSON.parse(sessionStorage.getItem(QUICK_ADD_WRITE_RECEIPTS_KEY_) || '[]');
+  } catch (_e) {
+    parsed = [];
+  }
+  if (!Array.isArray(parsed)) parsed = [];
+
+  var cutoff = Date.now() - QUICK_ADD_WRITE_RECEIPT_TTL_MS_;
+  parsed = parsed.filter(function(receipt) {
+    return receipt && receipt.operationId && Number(receipt.savedAtMs || 0) >= cutoff;
+  }).slice(-10);
+  saveQuickAddWriteReceipts_(parsed);
+  return parsed;
+}
+
+function saveQuickAddWriteReceipts_(receipts) {
+  try {
+    sessionStorage.setItem(QUICK_ADD_WRITE_RECEIPTS_KEY_, JSON.stringify(receipts || []));
+  } catch (_e) { /* browser storage unavailable: save still succeeds */ }
+}
+
+function quickAddWriteReceiptTargetKey_(receipt) {
+  return [
+    String(receipt.cashFlowSheet || '').trim().toLowerCase(),
+    String(receipt.cashFlowMonth || '').trim().toLowerCase(),
+    String(receipt.entryType || '').trim().toLowerCase(),
+    String(receipt.payee || '').trim().toLowerCase()
+  ].join('|');
+}
+
+function registerQuickAddWriteReceipt_(snapshot) {
+  if (!snapshot || !snapshot.operationId) return;
+  if (Number(snapshot.previousValue) === Number(snapshot.newValue)) return;
+
+  var receipt = {
+    operationId: String(snapshot.operationId),
+    entryType: snapshot.entryType,
+    payee: snapshot.payee,
+    entryDate: snapshot.entryDate,
+    previousValue: Number(snapshot.previousValue),
+    newValue: Number(snapshot.newValue),
+    signedAmount: Number(snapshot.signedAmount),
+    cashFlowSheet: snapshot.cashFlowSheet,
+    cashFlowMonth: snapshot.cashFlowMonth,
+    savedAtMs: Date.now(),
+    lastStatus: 'PENDING'
+  };
+
+  var targetKey = quickAddWriteReceiptTargetKey_(receipt);
+  var receipts = loadQuickAddWriteReceipts_().filter(function(existing) {
+    // A newer Quick Add to the same cell supersedes the older receipt. The
+    // newest before/after pair is the only safe compare-and-set authority.
+    return quickAddWriteReceiptTargetKey_(existing) !== targetKey;
+  });
+  receipts.push(receipt);
+  saveQuickAddWriteReceipts_(receipts.slice(-10));
+
+  // Keep monitoring after an initial MATCH: a spreadsheet edit that was still
+  // open may commit after this first read. Focus/visibility hooks below provide
+  // the longer-lived checks; these two checks cover the common short race.
+  setTimeout(function() { verifyPendingQuickAddWrites_({}); }, 1200);
+  setTimeout(function() { verifyPendingQuickAddWrites_({}); }, 6000);
+}
+
+function hideQuickAddWriteGuard_() {
+  var box = document.getElementById('pay_write_guard');
+  if (!box) return;
+  box.className = 'warning-box';
+  quickAddActiveWriteGuardId_ = '';
+}
+
+function renderQuickAddWriteGuard_(result) {
+  var box = document.getElementById('pay_write_guard');
+  var message = document.getElementById('pay_write_guard_message');
+  var restoreButton = document.getElementById('pay_write_guard_restore');
+  if (!box || !message || !restoreButton || !result) return;
+
+  quickAddActiveWriteGuardId_ = String(result.operationId || '');
+  var payee = String(result.payee || 'this payee');
+  var month = String(result.cashFlowMonth || 'the selected month');
+  var status = String(result.status || '');
+  var canRestore = status === 'REVERTED_TO_PREVIOUS' ||
+    (status === 'RESTORE_NOT_CONFIRMED' &&
+      Number(result.currentValue) === Number(result.previousValue));
+
+  if (canRestore) {
+    message.textContent = 'CashCompass detected that Google Sheets changed ' +
+      payee + ' (' + month + ') back to its value from before Quick Add. ' +
+      'Finish or cancel any open cell edit in Google Sheets, then restore the ' +
+      'already-recorded amount. This will not add it twice or create another Activity entry.';
+  } else if (status === 'CHANGED_TO_OTHER' || status === 'RESTORE_REFUSED') {
+    message.textContent = 'The Cash Flow cell for ' + payee + ' (' + month +
+      ') changed after Quick Add and now contains ' + fmtCurrency(result.currentValue) +
+      '. CashCompass did not overwrite this newer value. Review the sheet, then recheck or dismiss this notice.';
+  } else if (status === 'TARGET_MISSING') {
+    message.textContent = 'CashCompass could not find the original Cash Flow target for ' +
+      payee + ' (' + month + '). No value was written. Review the workbook before dismissing this notice.';
+  } else {
+    message.textContent = result.message ||
+      'CashCompass could not verify the previous Quick Add write. No value was changed.';
+  }
+
+  restoreButton.style.display = canRestore ? '' : 'none';
+  box.className = 'warning-box warning-info';
+}
+
+function chooseQuickAddWriteWarning_(results) {
+  var priority = {
+    REVERTED_TO_PREVIOUS: 1,
+    RESTORE_NOT_CONFIRMED: 1,
+    CHANGED_TO_OTHER: 2,
+    RESTORE_REFUSED: 2,
+    TARGET_MISSING: 3,
+    INVALID_RECEIPT: 4
+  };
+  var warnings = (results || []).filter(function(result) {
+    return result && result.status !== 'MATCH';
+  });
+  warnings.sort(function(a, b) {
+    return (priority[a.status] || 99) - (priority[b.status] || 99);
+  });
+  return warnings.length ? warnings[0] : null;
+}
+
+function verifyPendingQuickAddWrites_(options) {
+  options = options || {};
+  var onComplete = typeof options.onComplete === 'function' ? options.onComplete : null;
+
+  if (quickAddWriteVerifyInFlight_) {
+    if (onComplete) {
+      setTimeout(function() { verifyPendingQuickAddWrites_(options); }, 250);
+    }
+    return;
+  }
+
+  var receipts = loadQuickAddWriteReceipts_();
+  if (!receipts.length) {
+    hideQuickAddWriteGuard_();
+    if (onComplete) onComplete(true, []);
+    return;
+  }
+
+  quickAddWriteVerifyInFlight_ = true;
+  google.script.run
+    .withSuccessHandler(function(results) {
+      quickAddWriteVerifyInFlight_ = false;
+      results = Array.isArray(results) ? results : [];
+
+      var byId = {};
+      results.forEach(function(result) {
+        if (result && result.operationId) byId[result.operationId] = result;
+      });
+      receipts.forEach(function(receipt) {
+        if (byId[receipt.operationId]) {
+          receipt.lastStatus = byId[receipt.operationId].status;
+          receipt.lastCheckedAtMs = Date.now();
+        }
+      });
+      saveQuickAddWriteReceipts_(receipts);
+
+      var warning = chooseQuickAddWriteWarning_(results);
+      if (warning) renderQuickAddWriteGuard_(warning);
+      else hideQuickAddWriteGuard_();
+
+      if (onComplete) onComplete(!warning, results);
+    })
+    .withFailureHandler(function(err) {
+      quickAddWriteVerifyInFlight_ = false;
+      if (options.manual || onComplete) {
+        renderQuickAddWriteGuard_({
+          operationId: receipts[0] && receipts[0].operationId,
+          status: 'VERIFY_FAILED',
+          message: 'CashCompass could not verify the previous Quick Add: ' +
+            (err.message || String(err))
+        });
+      }
+      if (onComplete) onComplete(false, []);
+    })
+    .verifyQuickAddPaymentWrites(receipts);
+}
+
+function findQuickAddWriteReceipt_(operationId) {
+  var receipts = loadQuickAddWriteReceipts_();
+  for (var i = 0; i < receipts.length; i++) {
+    if (receipts[i].operationId === operationId) return receipts[i];
+  }
+  return null;
+}
+
+function restorePendingQuickAddWrite_() {
+  var receipt = findQuickAddWriteReceipt_(quickAddActiveWriteGuardId_);
+  if (!receipt) {
+    hideQuickAddWriteGuard_();
+    return;
+  }
+
+  setStatus('pay_status', 'Restoring the recorded amount…', false);
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && (result.status === 'RESTORED' || result.status === 'MATCH')) {
+        setStatus('pay_status', result.message || 'Recorded amount restored.', false);
+        hideQuickAddWriteGuard_();
+        // Do not retire the receipt yet. If a cell edit is still pending, its
+        // later commit can overwrite the restore too; recheck and warn again.
+        setTimeout(function() { verifyPendingQuickAddWrites_({}); }, 1000);
+        setTimeout(function() { verifyPendingQuickAddWrites_({}); }, 5000);
+        refreshSnapshot();
+      } else {
+        renderQuickAddWriteGuard_(result || {
+          operationId: receipt.operationId,
+          status: 'RESTORE_NOT_CONFIRMED',
+          message: 'The restore could not be confirmed.'
+        });
+        setStatus('pay_status', (result && result.message) || 'Restore not completed.', true);
+      }
+    })
+    .withFailureHandler(function(err) {
+      setStatus('pay_status', 'Restore failed: ' + (err.message || String(err)), true);
+      verifyPendingQuickAddWrites_({ manual: true });
+    })
+    .restoreQuickAddPaymentWrite(receipt);
+}
+
+function recheckPendingQuickAddWrite_() {
+  verifyPendingQuickAddWrites_({ manual: true });
+}
+
+function dismissPendingQuickAddWrite_() {
+  var activeId = quickAddActiveWriteGuardId_;
+  var receipts = loadQuickAddWriteReceipts_().filter(function(receipt) {
+    return receipt.operationId !== activeId;
+  });
+  saveQuickAddWriteReceipts_(receipts);
+  hideQuickAddWriteGuard_();
+}
+
+function openQuickAddWriteGuard_() {
+  if (typeof showTab === 'function') showTab('payments');
+  var panel = document.getElementById('payments');
+  if (panel && typeof panel.scrollIntoView === 'function') {
+    setTimeout(function() {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  }
+}
+
+function clearQuickAddWriteReturnChecks_() {
+  quickAddWriteReturnCheckTimers_.forEach(function(timerId) {
+    clearTimeout(timerId);
+  });
+  quickAddWriteReturnCheckTimers_ = [];
+}
+
+/**
+ * Returning from Google Sheets can itself commit a still-open cell edit.
+ * Drive propagation may lag that focus/visibility event, so verify once
+ * immediately and again after short delays. The 100 ms leading timer merges
+ * the duplicate focus + visibilitychange events browsers commonly emit.
+ */
+function scheduleQuickAddWriteReturnChecks_() {
+  clearQuickAddWriteReturnChecks_();
+  if (!loadQuickAddWriteReceipts_().length) {
+    hideQuickAddWriteGuard_();
+    return;
+  }
+
+  quickAddWriteReturnCheckTimers_.push(setTimeout(function() {
+    verifyPendingQuickAddWrites_({});
+    quickAddWriteReturnCheckTimers_.push(setTimeout(function() {
+      verifyPendingQuickAddWrites_({});
+    }, 1500));
+    quickAddWriteReturnCheckTimers_.push(setTimeout(function() {
+      verifyPendingQuickAddWrites_({});
+    }, 5000));
+  }, 100));
+}
+
+function installQuickAddWriteVerificationHooks_() {
+  if (quickAddWriteHooksInstalled_) return;
+  quickAddWriteHooksInstalled_ = true;
+  window.addEventListener('focus', function() {
+    scheduleQuickAddWriteReturnChecks_();
+  });
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) scheduleQuickAddWriteReturnChecks_();
+  });
+}
+
+/**
+ * Verify prior monitored Quick Adds before allowing a new one. This avoids
+ * losing an unresolved receipt when a second save targets the same cell.
+ */
 function savePayment() {
+  var receipts = loadQuickAddWriteReceipts_();
+  if (!receipts.length) {
+    savePaymentAfterQuickAddVerification_();
+    return;
+  }
+
+  setStatus('pay_status', 'Checking the previous Quick Add…', false);
+  verifyPendingQuickAddWrites_({
+    manual: true,
+    onComplete: function(clearToSave) {
+      if (!clearToSave) {
+        setStatus('pay_status',
+          'Resolve, recheck, or dismiss the previous Quick Add notice before saving another entry.',
+          true);
+        return;
+      }
+      savePaymentAfterQuickAddVerification_();
+    }
+  });
+}
+
+function savePaymentAfterQuickAddVerification_() {
   const rawAmount = document.getElementById('pay_amount').value;
   const numericAmount = toNumber(rawAmount);
 
@@ -365,6 +693,7 @@ function savePayment() {
   google.script.run
     .withSuccessHandler(function(res) {
       setStatus('pay_status', res.message || 'Saved.', false);
+      registerQuickAddWriteReceipt_(res && res.activitySnapshot);
       if (res && res.preview) {
         applyQuickAddPreviewFromResult_(res.preview);
       } else {
@@ -476,3 +805,5 @@ function savePayment() {
       flowSource: pendingFlowSource
     });
 }
+
+installQuickAddWriteVerificationHooks_();

@@ -110,6 +110,14 @@ function getHarnessSuites_() {
       scenarioIds: [
         'REGRESSION-RECOVERY-DUPLICATE-GUARD'
       ]
+    },
+    {
+      id: 'SUITE-QUICK-ADD-RELIABILITY',
+      label: 'Quick Add Reliability Suite',
+      description: 'Quick Add write verification and duplicate-safe guarded restore behavior.',
+      scenarioIds: [
+        'REGRESSION-QUICK-ADD-WRITE-GUARD'
+      ]
     }
   ];
 }
@@ -212,6 +220,11 @@ function testRunBillsSuite(options) {
 /** Run the Recovery Regression Suite against disposable harness workbooks. */
 function testRunRecoverySuite(options) {
   return testRunSuiteById_('SUITE-RECOVERY-REGRESSION', options || {});
+}
+
+/** Run the Quick Add Reliability Suite against disposable harness workbooks. */
+function testRunQuickAddReliabilitySuite(options) {
+  return testRunSuiteById_('SUITE-QUICK-ADD-RELIABILITY', options || {});
 }
 
 /* -------------------------------------------------------------------------- */

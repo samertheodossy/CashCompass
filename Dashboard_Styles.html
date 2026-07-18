@@ -1080,8 +1080,16 @@
   .check-row input[type="checkbox"] { width: auto; margin: 0; }
 
   .warning-box { margin-top: 12px; padding: 10px; border-radius: 8px; font-size: 12px; line-height: 1.5; display: none; white-space: pre-wrap; }
+  #pay_write_guard { margin-bottom: 18px; }
   .warning-danger { background: #fde8e8; border: 1px solid #f5c2c7; color: #991b1b; display: block; }
   .warning-info { background: #fff4db; border: 1px solid #f3d08b; color: #7a4b00; display: block; }
+  .quick-add-write-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .quick-add-write-actions button { width: auto; margin-top: 0; padding: 8px 12px; }
+  .quick-add-write-actions .quick-add-write-secondary {
+    background: #ffffff;
+    color: #7a4b00;
+    border: 1px solid #d9b96d;
+  }
 
   .field-error {
     display: none;
@@ -1586,6 +1594,8 @@
    * Toggled by adding/removing `.setup-mode` on <body> in showPage().
    */
   body.setup-mode .page-nav { display: none !important; }
+  body.setup-mode #pay_write_guard,
+  body.setup-editor-mode #pay_write_guard { display: none !important; }
 
   /*
    * Also hide the top-right dashboard action controls while in Setup so the

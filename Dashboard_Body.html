@@ -43,6 +43,16 @@
     <button class="page-btn" data-page="planning" onclick="showPage('planning')">Planning</button>
   </div>
 
+  <div id="pay_write_guard" class="warning-box" role="alert" aria-live="assertive">
+    <div id="pay_write_guard_message"></div>
+    <div class="quick-add-write-actions">
+      <button type="button" id="pay_write_guard_restore" onclick="restorePendingQuickAddWrite_()">Restore recorded amount</button>
+      <button type="button" class="quick-add-write-secondary" onclick="recheckPendingQuickAddWrite_()">Check again</button>
+      <button type="button" class="quick-add-write-secondary" onclick="openQuickAddWriteGuard_()">Open Quick Add</button>
+      <button type="button" class="quick-add-write-secondary" onclick="dismissPendingQuickAddWrite_()">Dismiss</button>
+    </div>
+  </div>
+
   <div id="page_overview" class="workspace-page active">
     <div class="snapshot-grid">
       <div class="snapshot-card" onclick="showTab('bank')">
