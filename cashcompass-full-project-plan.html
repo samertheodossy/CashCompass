@@ -1,0 +1,884 @@
+<section id="cc-full-plan-v1" aria-labelledby="cc-plan-title">
+  <style>
+    #cc-full-plan-v1 {
+      --cc-done: var(--color-accent-secondary);
+      --cc-current: var(--color-accent-primary);
+      --cc-next: var(--color-accent-tertiary);
+      --cc-muted: var(--color-text-secondary);
+      color: var(--color-text-primary);
+      font-family: var(--font-sans);
+      background: transparent;
+      width: 100%;
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+    #cc-full-plan-v1 * { box-sizing: border-box; }
+    #cc-full-plan-v1 h1,
+    #cc-full-plan-v1 h2,
+    #cc-full-plan-v1 h3,
+    #cc-full-plan-v1 h4,
+    #cc-full-plan-v1 p { margin-top: 0; }
+    #cc-full-plan-v1 .cc-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.7fr) minmax(240px, .8fr);
+      gap: 18px;
+      align-items: end;
+      padding: 12px 2px 18px;
+    }
+    #cc-full-plan-v1 .cc-eyebrow {
+      color: var(--color-accent-primary);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    #cc-full-plan-v1 h1 {
+      font-size: clamp(28px, 5vw, 48px);
+      line-height: 1.04;
+      letter-spacing: -.035em;
+      margin-bottom: 10px;
+    }
+    #cc-full-plan-v1 .cc-lede {
+      max-width: 760px;
+      color: var(--color-text-secondary);
+      font-size: 15px;
+      line-height: 1.55;
+      margin-bottom: 0;
+    }
+    #cc-full-plan-v1 .cc-asof {
+      border-left: 3px solid var(--color-accent-primary);
+      padding: 10px 0 10px 14px;
+      color: var(--color-text-secondary);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    #cc-full-plan-v1 .cc-asof strong { color: var(--color-text-primary); }
+    #cc-full-plan-v1 .viz-grid.cc-stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+    #cc-full-plan-v1 .viz-stat {
+      min-width: 0;
+      padding: 14px;
+      background: var(--color-background-secondary);
+      border: 1px solid var(--color-border-primary);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+    }
+    #cc-full-plan-v1 .cc-stat-label {
+      color: var(--color-text-secondary);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .055em;
+      text-transform: uppercase;
+      margin-bottom: 7px;
+    }
+    #cc-full-plan-v1 .cc-stat-value {
+      font-size: 19px;
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: 5px;
+    }
+    #cc-full-plan-v1 .cc-stat-note {
+      color: var(--color-text-secondary);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    #cc-full-plan-v1 .cc-section {
+      margin: 22px 0;
+    }
+    #cc-full-plan-v1 .cc-section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    #cc-full-plan-v1 .cc-section-head h2 {
+      font-size: 18px;
+      margin-bottom: 0;
+    }
+    #cc-full-plan-v1 .cc-section-head p {
+      color: var(--color-text-secondary);
+      font-size: 12px;
+      margin-bottom: 0;
+      text-align: right;
+    }
+    #cc-full-plan-v1 .cc-flow {
+      list-style: none;
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 8px;
+      padding: 0;
+      margin: 0;
+    }
+    #cc-full-plan-v1 .cc-flow li {
+      position: relative;
+      min-width: 0;
+      padding: 12px 10px;
+      background: var(--color-background-secondary);
+      border: 1px solid var(--color-border-primary);
+      border-top: 3px solid var(--color-border-secondary);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+    }
+    #cc-full-plan-v1 .cc-flow li[data-state="done"] { border-top-color: var(--cc-done); }
+    #cc-full-plan-v1 .cc-flow li[data-state="current"] { border-top-color: var(--cc-current); }
+    #cc-full-plan-v1 .cc-flow li[data-state="next"] { border-top-color: var(--cc-next); }
+    #cc-full-plan-v1 .cc-flow li:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -8px;
+      top: 50%;
+      transform: translate(50%, -50%);
+      z-index: 2;
+      color: var(--color-text-secondary);
+      font-weight: 800;
+    }
+    #cc-full-plan-v1 .cc-flow-step {
+      display: block;
+      color: var(--color-text-secondary);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      margin-bottom: 5px;
+    }
+    #cc-full-plan-v1 .cc-flow strong {
+      display: block;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    #cc-full-plan-v1 .cc-band-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    #cc-full-plan-v1 .cc-band {
+      padding: 14px;
+      background: var(--color-background-secondary);
+      border: 1px solid var(--color-border-primary);
+      border-radius: var(--radius-lg);
+    }
+    #cc-full-plan-v1 .cc-band strong {
+      display: block;
+      font-size: 15px;
+      margin-bottom: 5px;
+    }
+    #cc-full-plan-v1 .cc-band span {
+      display: block;
+      color: var(--color-text-secondary);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    #cc-full-plan-v1 .viz-controls.cc-controls {
+      position: sticky;
+      top: 0;
+      z-index: 4;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 10px;
+      margin: 22px 0 12px;
+      background: var(--color-background-primary);
+      border: 1px solid var(--color-border-primary);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+    }
+    #cc-full-plan-v1 .cc-filter-set,
+    #cc-full-plan-v1 .cc-action-set {
+      display: flex;
+      gap: 7px;
+      flex-wrap: wrap;
+    }
+    #cc-full-plan-v1 .btn {
+      appearance: none;
+      border: 1px solid var(--color-border-secondary);
+      border-radius: var(--radius-md);
+      background: var(--color-background-secondary);
+      color: var(--color-text-primary);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+    #cc-full-plan-v1 .btn:hover,
+    #cc-full-plan-v1 .btn:focus-visible {
+      border-color: var(--color-accent-primary);
+      outline: none;
+    }
+    #cc-full-plan-v1 .btn[aria-pressed="true"] {
+      background: var(--color-accent-primary);
+      border-color: var(--color-accent-primary);
+      color: var(--color-background-primary);
+    }
+    #cc-full-plan-v1 .cc-phase-list {
+      display: grid;
+      gap: 12px;
+    }
+    #cc-full-plan-v1 .cc-phase[hidden] { display: none; }
+    #cc-full-plan-v1 details.cc-phase {
+      background: var(--color-background-secondary);
+      border: 1px solid var(--color-border-primary);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      overflow: clip;
+    }
+    #cc-full-plan-v1 details.cc-phase[open] { box-shadow: var(--shadow-md); }
+    #cc-full-plan-v1 details.cc-phase > summary {
+      list-style: none;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      padding: 15px;
+      cursor: pointer;
+    }
+    #cc-full-plan-v1 details.cc-phase > summary::-webkit-details-marker { display: none; }
+    #cc-full-plan-v1 details.cc-phase > summary::after {
+      content: "+";
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--color-border-secondary);
+      border-radius: var(--radius-md);
+      color: var(--color-text-secondary);
+      font-weight: 800;
+    }
+    #cc-full-plan-v1 details.cc-phase[open] > summary::after { content: "−"; }
+    #cc-full-plan-v1 .cc-phase-code {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border-radius: var(--radius-md);
+      background: var(--color-background-tertiary);
+      border: 1px solid var(--color-border-primary);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    #cc-full-plan-v1 .cc-phase-title {
+      min-width: 0;
+    }
+    #cc-full-plan-v1 .cc-phase-title h3 {
+      font-size: 16px;
+      margin-bottom: 4px;
+    }
+    #cc-full-plan-v1 .cc-phase-title p {
+      color: var(--color-text-secondary);
+      font-size: 12px;
+      line-height: 1.4;
+      margin-bottom: 0;
+    }
+    #cc-full-plan-v1 .cc-summary-meta {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    #cc-full-plan-v1 .viz-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border: 1px solid var(--color-border-primary);
+      border-radius: 999px;
+      background: var(--color-background-tertiary);
+      color: var(--color-text-secondary);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .03em;
+      padding: 4px 7px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    #cc-full-plan-v1 .viz-badge::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--color-border-secondary);
+    }
+    #cc-full-plan-v1 .viz-badge[data-state="done"]::before { background: var(--cc-done); }
+    #cc-full-plan-v1 .viz-badge[data-state="current"]::before { background: var(--cc-current); }
+    #cc-full-plan-v1 .viz-badge[data-state="next"]::before { background: var(--cc-next); }
+    #cc-full-plan-v1 .cc-effort {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--color-text-secondary);
+      white-space: nowrap;
+    }
+    #cc-full-plan-v1 .cc-phase-body {
+      padding: 0 15px 16px;
+      border-top: 1px solid var(--color-border-primary);
+    }
+    #cc-full-plan-v1 .cc-phase-note {
+      margin: 12px 0;
+      padding: 10px 12px;
+      border-left: 3px solid var(--color-accent-primary);
+      background: var(--color-background-tertiary);
+      color: var(--color-text-secondary);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    #cc-full-plan-v1 .cc-work {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    #cc-full-plan-v1 .cc-work th,
+    #cc-full-plan-v1 .cc-work td {
+      padding: 11px 9px;
+      border-bottom: 1px solid var(--color-border-primary);
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+    #cc-full-plan-v1 .cc-work th {
+      color: var(--color-text-secondary);
+      font-size: 10px;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+    #cc-full-plan-v1 .cc-work td {
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    #cc-full-plan-v1 .cc-work th:nth-child(1) { width: 24%; }
+    #cc-full-plan-v1 .cc-work th:nth-child(2) { width: 46%; }
+    #cc-full-plan-v1 .cc-work th:nth-child(3) { width: 14%; }
+    #cc-full-plan-v1 .cc-work th:nth-child(4) { width: 16%; }
+    #cc-full-plan-v1 .cc-work strong { display: block; margin-bottom: 3px; }
+    #cc-full-plan-v1 .cc-work small { color: var(--color-text-secondary); line-height: 1.4; }
+    #cc-full-plan-v1 .cc-phase-total {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding-top: 12px;
+      font-size: 12px;
+    }
+    #cc-full-plan-v1 .cc-phase-total strong { font-family: var(--font-mono); }
+    #cc-full-plan-v1 .cc-order {
+      counter-reset: ccorder;
+      list-style: none;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      padding: 0;
+      margin: 0;
+    }
+    #cc-full-plan-v1 .cc-order li {
+      counter-increment: ccorder;
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+      background: var(--color-background-secondary);
+      border: 1px solid var(--color-border-primary);
+      border-radius: var(--radius-md);
+    }
+    #cc-full-plan-v1 .cc-order li::before {
+      content: counter(ccorder);
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: var(--color-background-tertiary);
+      color: var(--color-accent-primary);
+      font-family: var(--font-mono);
+      font-weight: 800;
+    }
+    #cc-full-plan-v1 .cc-order strong { display: block; font-size: 12px; }
+    #cc-full-plan-v1 .cc-order small { color: var(--color-text-secondary); font-size: 11px; }
+    #cc-full-plan-v1 .cc-order time {
+      color: var(--color-text-secondary);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-align: right;
+    }
+    #cc-full-plan-v1 .cc-risk-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    #cc-full-plan-v1 .cc-risk {
+      padding: 11px;
+      border: 1px solid var(--color-border-primary);
+      border-radius: var(--radius-md);
+      background: var(--color-background-secondary);
+    }
+    #cc-full-plan-v1 .cc-risk strong { display: block; font-size: 12px; margin-bottom: 4px; }
+    #cc-full-plan-v1 .cc-risk span { color: var(--color-text-secondary); font-size: 11px; line-height: 1.45; }
+    #cc-full-plan-v1 .cc-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 0 4px;
+    }
+    #cc-full-plan-v1 .cc-footnote {
+      color: var(--color-text-secondary);
+      font-size: 11px;
+      line-height: 1.55;
+      padding: 12px 0 4px;
+      border-top: 1px solid var(--color-border-primary);
+    }
+    @media (max-width: 900px) {
+      #cc-full-plan-v1 .viz-grid.cc-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      #cc-full-plan-v1 .cc-flow { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      #cc-full-plan-v1 .cc-flow li::after { display: none; }
+      #cc-full-plan-v1 .cc-band-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 680px) {
+      #cc-full-plan-v1 { padding: 6px; }
+      #cc-full-plan-v1 .cc-hero { grid-template-columns: 1fr; }
+      #cc-full-plan-v1 .viz-grid.cc-stats { grid-template-columns: 1fr; }
+      #cc-full-plan-v1 .cc-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      #cc-full-plan-v1 .cc-section-head { display: block; }
+      #cc-full-plan-v1 .cc-section-head p { margin-top: 5px; text-align: left; }
+      #cc-full-plan-v1 details.cc-phase > summary {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 9px;
+        padding: 12px;
+      }
+      #cc-full-plan-v1 .cc-phase-code { width: 38px; height: 38px; }
+      #cc-full-plan-v1 .cc-summary-meta { grid-column: 2 / 3; justify-content: flex-start; }
+      #cc-full-plan-v1 details.cc-phase > summary::after { grid-column: 3; grid-row: 1; }
+      #cc-full-plan-v1 .cc-phase-body { padding: 0 10px 12px; }
+      #cc-full-plan-v1 .cc-work,
+      #cc-full-plan-v1 .cc-work tbody,
+      #cc-full-plan-v1 .cc-work tr,
+      #cc-full-plan-v1 .cc-work td { display: block; width: 100%; }
+      #cc-full-plan-v1 .cc-work thead { display: none; }
+      #cc-full-plan-v1 .cc-work tr { padding: 8px 0; border-bottom: 1px solid var(--color-border-primary); }
+      #cc-full-plan-v1 .cc-work td { border: 0; padding: 4px 2px; }
+      #cc-full-plan-v1 .cc-work td:nth-child(3)::before { content: "Effort: "; color: var(--color-text-secondary); }
+      #cc-full-plan-v1 .cc-work td:nth-child(4)::before { content: "Dependency: "; color: var(--color-text-secondary); }
+      #cc-full-plan-v1 .cc-order { grid-template-columns: 1fr; }
+      #cc-full-plan-v1 .cc-risk-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+
+  <header class="cc-hero">
+    <div>
+      <div class="cc-eyebrow">Repository-backed roadmap · long-range view</div>
+      <h1 id="cc-plan-title">CashCompass — Full Project Plan</h1>
+      <p class="cc-lede">A detailed path from the current stabilization gate through Family Beta, financial-model accuracy, scale work, bank connectivity, assistant capabilities, and paid-product readiness.</p>
+    </div>
+    <div class="cc-asof">
+      <strong>Plan snapshot: July 19, 2026</strong><br>
+      Estimates are focused engineering time, not calendar promises. Review, testing, Google authorization, and product decisions can extend elapsed time.
+    </div>
+  </header>
+
+  <div class="viz-grid cc-stats" aria-label="Project summary">
+    <div class="viz-stat">
+      <div class="cc-stat-label">Current gate</div>
+      <div class="cc-stat-value">P0 Stabilization</div>
+      <div class="cc-stat-note">Documentation, remaining recovery evidence, Central verification, and beta polish.</div>
+    </div>
+    <div class="viz-stat">
+      <div class="cc-stat-label">Recent proof</div>
+      <div class="cc-stat-value">2 reliability wins</div>
+      <div class="cc-stat-note">Recovery core and Quick Add guarded restore both passed automated and manual checks.</div>
+    </div>
+    <div class="viz-stat">
+      <div class="cc-stat-label">Controlled beta candidate</div>
+      <div class="cc-stat-value">≈ 2–4 focused weeks</div>
+      <div class="cc-stat-note">Assumes agreement on a minimum P1 release gate instead of completing every future validator module first.</div>
+    </div>
+    <div class="viz-stat">
+      <div class="cc-stat-label">Full roadmap horizon</div>
+      <div class="cc-stat-value">Multi-quarter</div>
+      <div class="cc-stat-note">P4 items are product programs; bank provider, chat actions, and subscriptions require separate scope decisions.</div>
+    </div>
+  </div>
+
+  <section class="cc-section" aria-labelledby="cc-path-title">
+    <div class="cc-section-head">
+      <h2 id="cc-path-title">Dependency path</h2>
+      <p>Each gate unlocks the next level of product risk.</p>
+    </div>
+    <ol class="cc-flow">
+      <li data-state="done"><span class="cc-flow-step">Proven</span><strong>Recovery + write reliability</strong></li>
+      <li data-state="current"><span class="cc-flow-step">Now</span><strong>P0 Stabilization</strong></li>
+      <li data-state="next"><span class="cc-flow-step">Next</span><strong>P1 Validation gate</strong></li>
+      <li data-state="next"><span class="cc-flow-step">Gate</span><strong>Controlled Family Beta</strong></li>
+      <li><span class="cc-flow-step">Then</span><strong>P2 Financial accuracy</strong></li>
+      <li><span class="cc-flow-step">Then</span><strong>P3 Scale + latency</strong></li>
+      <li><span class="cc-flow-step">Expand</span><strong>P4 Product programs</strong></li>
+    </ol>
+  </section>
+
+  <section class="cc-section" aria-labelledby="cc-bands-title">
+    <div class="cc-section-head">
+      <h2 id="cc-bands-title">Planning bands</h2>
+      <p>Two valid beta definitions are shown so the plan does not hide the tradeoff.</p>
+    </div>
+    <div class="cc-band-grid">
+      <div class="cc-band"><strong>Minimum controlled-beta path</strong><span>P0 closeout + a deliberately bounded P1 gate + rollout checks. Approximately 2–4 focused weeks.</span></div>
+      <div class="cc-band"><strong>Formal comprehensive P1</strong><span>Complete validator modules, expanded scenario packs, console aggregation, and Release Readiness. Approximately 5–10 focused weeks.</span></div>
+      <div class="cc-band"><strong>Product-expansion horizon</strong><span>Financial model, paid-bill correction, bank connectivity, chat, and monetization. Multi-quarter, with selected streams able to overlap after beta foundations.</span></div>
+    </div>
+  </section>
+
+  <div class="viz-controls cc-controls" aria-label="Roadmap controls">
+    <div class="cc-filter-set" role="group" aria-label="Filter phases">
+      <button class="btn" type="button" data-filter="all" aria-pressed="true">All phases</button>
+      <button class="btn" type="button" data-filter="beta" aria-pressed="false">Beta path</button>
+      <button class="btn" type="button" data-filter="product" aria-pressed="false">Product</button>
+      <button class="btn" type="button" data-filter="foundation" aria-pressed="false">Foundations</button>
+      <button class="btn" type="button" data-filter="completed" aria-pressed="false">Completed proof</button>
+    </div>
+    <div class="cc-action-set" role="group" aria-label="Expand or collapse phases">
+      <button class="btn" type="button" data-action="expand">Expand all</button>
+      <button class="btn" type="button" data-action="collapse">Collapse all</button>
+    </div>
+  </div>
+
+  <section class="cc-phase-list" aria-label="Detailed project phases">
+    <details class="cc-phase" data-tags="completed foundation beta" open>
+      <summary>
+        <span class="cc-phase-code">S0</span>
+        <span class="cc-phase-title"><h3>Recent reliability foundation</h3><p>Evidence already produced and worth protecting as the baseline.</p></span>
+        <span class="cc-summary-meta"><span class="viz-badge" data-state="done">Completed proof</span><span class="cc-effort">Shipped</span></span>
+      </summary>
+      <div class="cc-phase-body">
+        <div class="cc-phase-note">These items are not “done forever”; they are the proven foundation for regression protection and beta confidence.</div>
+        <table class="cc-work">
+          <thead><tr><th>Item</th><th>Subitems and evidence</th><th>Effort</th><th>Dependency</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Central Recovery core</strong><small>Duplicate prevention and mapping recovery</small></td><td>Zero-candidate duplicate guard; Recovery suite 7/7; admin clear/relink across primary and cashcompass2026 accounts; bounded workbook visually confirmed intact.</td><td>Completed</td><td>Baseline for remaining recovery matrix.</td></tr>
+            <tr><td><strong>Quick Add reliability</strong><small>Guarded write verification</small></td><td>Verify-after-write; warning when Sheets reverts an open-cell write; duplicate-safe restore; immutable Activity behavior; automated 8/8 plus manual open-cell reproduction.</td><td>Completed</td><td>Pattern for future financial write guards.</td></tr>
+            <tr><td><strong>Engineering OS</strong><small>Repository-native agent workflow</small></td><td>Planner → Engineer → Reviewer → Tester → Validator; approval gates; artifacts; feature template; Bills DRAFT; initiative and knowledge-map foundation.</td><td>Completed V1</td><td>Must stay synchronized with roadmap and code evidence.</td></tr>
+          </tbody>
+        </table>
+        <div class="cc-phase-total"><span>Exit evidence</span><strong>Automated + manual + bounded-safety checks recorded</strong></div>
+      </div>
+    </details>
+
+    <details class="cc-phase" data-tags="beta foundation" open>
+      <summary>
+        <span class="cc-phase-code">P0</span>
+        <span class="cc-phase-title"><h3>Project stabilization and beta closeout</h3><p>Current priority: finish the known gaps before adding large new surface area.</p></span>
+        <span class="cc-summary-meta"><span class="viz-badge" data-state="current">Current</span><span class="cc-effort">4.5–10 days</span></span>
+      </summary>
+      <div class="cc-phase-body">
+        <div class="cc-phase-note">Beta-critical. The goal is a clean source of truth, explicit remaining risk, and repeatable Central behavior without changing populated bounded workbooks.</div>
+        <table class="cc-work">
+          <thead><tr><th>Item</th><th>Subitems</th><th>Effort</th><th>Dependency</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Roadmap and documentation sync</strong></td><td>Resolve mixed P0/P1 wording; reconcile ROADMAP, TODO, session/release notes, initiatives, and open product decisions; mark stale claims.</td><td>0.5–1.5 d</td><td>None</td></tr>
+            <tr><td><strong>Remaining Recovery matrix</strong></td><td>Formally exercise pending matrix rows 1, 3–9, 11, 13, and 14; record observed routing, ambiguity, adoption, and multi-account outcomes.</td><td>1–2 d</td><td>Recovery core shipped</td></tr>
+            <tr><td><strong>Central Tier-2 verification</strong></td><td>Multi-account routing; allow-list posture; mapping/reverse-index consistency; no silent workbook creation; admin diagnostic clarity.</td><td>0.5–1.5 d</td><td>Recovery matrix</td></tr>
+            <tr><td><strong>Onboarding and empty-state polish</strong></td><td>First-run flow; missing-sheet guidance; error messages; optional vs required setup; safe return paths; consistent setup cards.</td><td>1–2 d</td><td>Central verification</td></tr>
+            <tr><td><strong>Runtime regression + triage</strong></td><td>Run existing suites; manual Central smoke; bounded-app spot check; resolve beta-blocking regressions only; document non-blockers.</td><td>1–2 d</td><td>Docs and UI settled</td></tr>
+            <tr><td><strong>Small enhancement closure</strong></td><td>Finish only low-risk items already adjacent to P0 work; update test evidence and release checklist.</td><td>0.5–1 d</td><td>No scope expansion</td></tr>
+          </tbody>
+        </table>
+        <div class="cc-phase-total"><span>Exit gate</span><strong>Stabilization criteria checked + P1 beta slice explicitly approved</strong></div>
+      </div>
+    </details>
+
+    <details class="cc-phase" data-tags="beta foundation">
+      <summary>
+        <span class="cc-phase-code">P1</span>
+        <span class="cc-phase-title"><h3>Validator Phase 2, regression packs, and Release Readiness</h3><p>Convert current testing assets into a reliable pre-release decision system.</p></span>
+        <span class="cc-summary-meta"><span class="viz-badge" data-state="next">Next</span><span class="cc-effort">15–35 days full</span></span>
+      </summary>
+      <div class="cc-phase-body">
+        <div class="cc-phase-note">A smaller 5–10 day beta-minimum slice can be selected from this phase. Full P1 is broader than the minimum evidence needed for a controlled family beta.</div>
+        <table class="cc-work">
+          <thead><tr><th>Item</th><th>Subitems</th><th>Effort</th><th>Dependency</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Remaining Validator modules</strong></td><td>Formal schema registry; formulas; conditional formatting; named ranges; Workbook Health umbrella; consolidated report contract.</td><td>3–6 d</td><td>Current provisioning/drift foundation</td></tr>
+            <tr><td><strong>Harness enablers</strong></td><td>Functional-assertion capability; spreadsheet-injection refactor; stable disposable-target guarantees; reusable fixtures and evidence format.</td><td>2–4 d</td><td>Test Harness V1</td></tr>
+            <tr><td><strong>Scenario-pack expansion</strong></td><td>SMOKE → REGRESSION → RECOVERY → STRESS; grow toward 18 levels covering Bills, income, investments, retirement, houses, dashboard E2E, and system integrity.</td><td>6–12 d</td><td>Harness enablers</td></tr>
+            <tr><td><strong>Validation console evolution</strong></td><td>Multi-suite execution; clearer scenario evidence; formula and formatting results; historical run comparison; operator-safe UX.</td><td>2–4 d</td><td>Scenario contracts</td></tr>
+            <tr><td><strong>Release Readiness aggregate</strong></td><td>Gate provisioning, schema, named ranges, regression, recovery, and performance; advisory drift/formula/formatting; explicit go/no-go reasons.</td><td>2–4 d</td><td>Report producer + packs</td></tr>
+            <tr><td><strong>Beta end-to-end run</strong></td><td>Execute selected gate; investigate failures; bounded safety spot-check; document rollback and residual risk.</td><td>2–5 d</td><td>Approved beta slice</td></tr>
+          </tbody>
+        </table>
+        <div class="cc-phase-total"><span>Exit gate</span><strong>Repeatable release verdict with traceable evidence</strong></div>
+      </div>
+    </details>
+
+    <details class="cc-phase" data-tags="beta product">
+      <summary>
+        <span class="cc-phase-code">β</span>
+        <span class="cc-phase-title"><h3>Controlled Family Beta</h3><p>Move from developer validation to observed use with a narrow rollout and rollback plan.</p></span>
+        <span class="cc-summary-meta"><span class="viz-badge" data-state="next">Gate</span><span class="cc-effort">2–5 days setup</span></span>
+      </summary>
+      <div class="cc-phase-body">
+        <table class="cc-work">
+          <thead><tr><th>Item</th><th>Subitems</th><th>Effort</th><th>Dependency</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Account cohort</strong></td><td>Confirm allow-list; choose known workbooks; record owner, mapping, expected sheets, and consent for beta testing.</td><td>0.5–1 d</td><td>P0 complete</td></tr>
+            <tr><td><strong>Release checklist</strong></td><td>Version and deployment identity; recovery flags; rollback deployment; support contact; known limitations.</td><td>0.5–1 d</td><td>P1 minimum gate</td></tr>
+            <tr><td><strong>Multi-account run</strong></td><td>Fresh, sparse, and mature workbook paths; onboarding; Quick Add; dashboard refresh; recovery; no bounded-app mutation.</td><td>0.5–1.5 d</td><td>Release candidate</td></tr>
+            <tr><td><strong>Observe and triage</strong></td><td>Collect beta notes; distinguish blocker from enhancement; patch only scoped high-severity defects; rerun evidence.</td><td>0.5–1.5 d</td><td>Beta users active</td></tr>
+          </tbody>
+        </table>
+        <div class="cc-phase-total"><span>Exit gate</span><strong>Controlled users complete core workflows without data integrity incidents</strong></div>
+      </div>
+    </details>
+
+    <details class="cc-phase" data-tags="product">
+      <summary>
+        <span class="cc-phase-code">P2</span>
+        <span class="cc-phase-title"><h3>House financial accuracy</h3><p>Unify property operating and financing cash flow across the product.</p></span>
+        <span class="cc-summary-meta"><span class="viz-badge">Future</span><span class="cc-effort">10–21 days</span></span>
+      </summary>
+      <div class="cc-phase-body">
+        <table class="cc-work">
+          <thead><tr><th>Item</th><th>Subitems</th><th>Effort</th><th>Dependency</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Discovery and contracts</strong></td><td>Inventory mortgage, taxes, insurance, HOA, expenses, and existing calculator semantics; define authoritative inputs and outputs.</td><td>1–2 d</td><td>Beta baseline</td></tr>
+            <tr><td><strong>Shared financial model</strong></td><td>Operating cash flow; financing cash flow; total net property cash flow; explicit principal/interest and escrow extension points.</td><td>2–4 d</td><td>Approved contracts</td></tr>
+            <tr><td><strong>Product integration</strong></td><td>Property Performance, House Values, House Expenses, Planner, and Cash Flow consume the same helper without duplicate calculations.</td><td>3–6 d</td><td>Shared model</td></tr>
+            <tr><td><strong>Compatibility and migration</strong></td><td>Preserve mature workbooks; additive evolution only; detect legacy columns; document any opt-in conversion.</td><td>1–3 d</td><td>Schema decision</td></tr>
+            <tr><td><strong>Tests and Validator</strong></td><td>Reconciliation invariants; edge cases; multiple loans; missing values; totals agree across features.</td><td>2–4 d</td><td>Integrated model</td></tr>
+            <tr><td><strong>Manual validation + docs</strong></td><td>Representative property cases; dashboard checks; terminology and help updates; rollback notes.</td><td>1–2 d</td><td>Tests pass</td></tr>
+          </tbody>
+        </table>
+        <div class="cc-phase-total"><span>Exit gate</span><strong>One shared property truth reconciles everywhere</strong></div>
+      </div>
+    </details>
+
+    <details class="cc-phase" data-tags="foundation">
+      <summary>
+        <span class="cc-phase-code">P3</span>
+        <span class="cc-phase-title"><h3>Performance and scalability</h3><p>Measure first, then reduce Apps Script latency and quota pressure.</p></span>
+        <span class="cc-summary-meta"><span class="viz-badge">Future</span><span class="cc-effort">8–17 days</span></span>
+      </summary>
+      <div class="cc-phase-body">
+        <table class="cc-work">
+          <thead><tr><th>Item</th><th>Subitems</th><th>Effort</th><th>Dependency</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Profiling baseline</strong></td><td>Provisioning, dashboard refresh, planner, validators, and large-sheet reads; capture p50/p95 and API-call counts.</td><td>1–2 d</td><td>Stable beta flows</td></tr>
+            <tr><td><strong>Dashboard + planner</strong></td><td>Reduce repeated reads; batch range access; cache derived data safely; preserve freshness markers.</td><td>2–5 d</td><td>Measured hotspots</td></tr>
+            <tr><td><strong>Provisioning + bulk APIs</strong></td><td>Batch formatting and writes; minimize per-cell operations; safe cache invalidation; quota-aware retries.</td><td>3–6 d</td><td>Measured hotspots</td></tr>
+            <tr><td><strong>Load and stress evidence</strong></td><td>Large workbook fixtures; multi-account concurrency; timeouts; lock contention; predictable degradation.</td><td>2–4 d</td><td>Optimizations implemented</td></tr>
+          </tbody>
+        </table>
+        <div class="cc-phase-total"><span>Exit gate</span><strong>Performance targets demonstrated, not inferred</strong></div>
+      </div>
+    </details>
+
+    <details class="cc-phase" data-tags="product">
+      <summary>
+        <span class="cc-phase-code">P4a</span>
+        <span class="cc-phase-title"><h3>Paid Bill Correction / Edit Recorded Payment</h3><p>Correct a paid amount without duplicating financial or Activity evidence.</p></span>
+        <span class="cc-summary-meta"><span class="viz-badge">Roadmap</span><span class="cc-effort">3.5–7 days</span></span>
+      </summary>
+      <div class="cc-phase-body">
+        <div class="cc-phase-note">This is the first recommended post-beta product correction because it closes a real observed user problem and reuses the guarded-write and immutable-audit patterns.</div>
+        <table class="cc-work">
+          <thead><tr><th>Item</th><th>Subitems</th><th>Effort</th><th>Dependency</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Evidence design</strong></td><td>Define exact payment identity, source coordinates, before/after amounts, bill occurrence, and audit linkage.</td><td>0.5–1 d</td><td>Bills/payment contract</td></tr>
+            <tr><td><strong>Edit and reopen flow</strong></td><td>Manual Bills Pay first; adjust already-paid amount; optionally reopen; present clear confirmation and current state.</td><td>1–2 d</td><td>Evidence design</td></tr>
+            <tr><td><strong>Audit and dedupe</strong></td><td>Immutable correction record; no duplicate Cash Flow update; guarded reversal/restore; handle partial success.</td><td>1–2 d</td><td>Quick Add reliability pattern</td></tr>
+            <tr><td><strong>Tests and runtime proof</strong></td><td>Same-month edits; zero/negative guards; repeated submit; stale UI; Activity linkage; bounded and Central paths.</td><td>1–2 d</td><td>Implementation complete</td></tr>
+          </tbody>
+        </table>
+        <div class="cc-phase-total"><span>Exit gate</span><strong>Correction is traceable, reversible, and duplicate-safe</strong></div>
+      </div>
+    </details>
+
+    <details class="cc-phase" data-tags="product">
+      <summary>
+        <span class="cc-phase-code">P4b</span>
+        <span class="cc-phase-title"><h3>AutoPay Pending Confirmation</h3><p>Make automated payment expectations visible without claiming a bank-confirmed payment.</p></span>
+        <span class="cc-summary-meta"><span class="viz-badge">Roadmap</span><span class="cc-effort">3–6 days</span></span>
+      </summary>
+      <div class="cc-phase-body">
+        <table class="cc-work">
+          <thead><tr><th>Item</th><th>Subitems</th><th>Effort</th><th>Dependency</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Status model</strong></td><td>Expected, pending, confirmed, failed, skipped; clear distinction from manually paid.</td><td>0.5–1 d</td><td>Payment evidence model</td></tr>
+            <tr><td><strong>Bills UI</strong></td><td>Pending badges; due windows; confirmation action; stale state messaging; no automatic financial assertion.</td><td>1–2 d</td><td>Status model</td></tr>
+            <tr><td><strong>Reconciliation hooks</strong></td><td>Prepare matching to imported bank transactions; duplicate rules; immutable transition log.</td><td>1–2 d</td><td>Bank-import contract</td></tr>
+            <tr><td><strong>Tests</strong></td><td>Recurring schedules, late confirmation, duplicate match, mismatch, manual override.</td><td>0.5–1 d</td><td>Implementation complete</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    <details class="cc-phase" data-tags="product foundation">
+      <summary>
+        <span class="cc-phase-code">P4c</span>
+        <span class="cc-phase-title"><h3>Account Aggregation and Transaction Import</h3><p>Progress from existing ingestion work to reliable review, reconciliation, and optional direct bank connectivity.</p></span>
+        <span class="cc-summary-meta"><span class="viz-badge">Program</span><span class="cc-effort">1.5–3 wks + provider</span></span>
+      </summary>
+      <div class="cc-phase-body">
+        <div class="cc-phase-note">Direct bank synchronization is a separate security and vendor program. It should not be estimated as a small extension of CSV ingestion.</div>
+        <table class="cc-work">
+          <thead><tr><th>Item</th><th>Subitems</th><th>Effort</th><th>Dependency</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Verify current ingestion baseline</strong></td><td>Confirm shipped Step 2a behavior; reconcile repository notes with runtime; preserve raw input and deterministic parsing.</td><td>0.5–1 d</td><td>Existing bank_import work</td></tr>
+            <tr><td><strong>Finish staged review UI</strong></td><td>Review/ignore/accept workflow; category and account suggestions; clear validation; batch actions; audit trail.</td><td>3–7 d</td><td>Ingestion baseline</td></tr>
+            <tr><td><strong>Rules + reconciliation</strong></td><td>Dedupe keys; transfer matching; recurring merchant rules; bill/payment matching; conflict handling; replay safety.</td><td>4–8 d</td><td>Review UI</td></tr>
+            <tr><td><strong>Direct bank provider</strong></td><td>Vendor selection; OAuth/token storage; consent; privacy; webhooks; refresh; disconnect; incident and support path.</td><td>3–6+ wks</td><td>Explicit provider/security decision</td></tr>
+          </tbody>
+        </table>
+        <div class="cc-phase-total"><span>Exit gate</span><strong>No imported transaction changes financial truth without review or an approved rule</strong></div>
+      </div>
+    </details>
+
+    <details class="cc-phase" data-tags="product">
+      <summary>
+        <span class="cc-phase-code">P4d</span>
+        <span class="cc-phase-title"><h3>Money Plan Phase 2</h3><p>Broaden planning guidance after core financial truth and release confidence are stable.</p></span>
+        <span class="cc-summary-meta"><span class="viz-badge">Program</span><span class="cc-effort">2–4 weeks</span></span>
+      </summary>
+      <div class="cc-phase-body">
+        <table class="cc-work">
+          <thead><tr><th>Item</th><th>Subitems</th><th>Effort</th><th>Dependency</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Decision framework</strong></td><td>Priorities, constraints, goal ordering, scenario assumptions, and explanation contract.</td><td>2–4 d</td><td>Product decision</td></tr>
+            <tr><td><strong>Recommendation engine</strong></td><td>Next actions, tradeoffs, scenario comparison, transparent evidence, and stable calculation helpers.</td><td>5–10 d</td><td>Financial models</td></tr>
+            <tr><td><strong>Experience + evidence</strong></td><td>UI, help, planner output, regression scenarios, validator reconciliations, and user testing.</td><td>3–6 d</td><td>Engine complete</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    <details class="cc-phase" data-tags="product">
+      <summary>
+        <span class="cc-phase-code">P4e</span>
+        <span class="cc-phase-title"><h3>Chat / Assistant</h3><p>Add conversational access in safety tiers, beginning with grounded read-only answers.</p></span>
+        <span class="cc-summary-meta"><span class="viz-badge">Program</span><span class="cc-effort">1–8 weeks by tier</span></span>
+      </summary>
+      <div class="cc-phase-body">
+        <div class="cc-phase-note">The assistant should earn authority in stages. Read-only grounded questions can arrive far earlier than transactional actions.</div>
+        <table class="cc-work">
+          <thead><tr><th>Tier</th><th>Subitems</th><th>Effort</th><th>Dependency</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Tier 1: grounded Q&amp;A</strong></td><td>Explain dashboard values, bills, cash flow, and planning outputs; cite source feature/date; no writes or recommendations presented as certainty.</td><td>1–2 wks</td><td>Stable read APIs + privacy model</td></tr>
+            <tr><td><strong>Tier 2: insights and proposals</strong></td><td>Detect patterns; suggest actions; show evidence and tradeoffs; user approves any mutation in the normal UI.</td><td>2–4 wks</td><td>Tier 1 + audited proposal contract</td></tr>
+            <tr><td><strong>Tier 3: transactional assistant</strong></td><td>Tool/action permissions; previews; idempotency; confirmation; audit; rollback; failure recovery; abuse and privacy controls.</td><td>4–8 wks</td><td>Safe action model + mature APIs</td></tr>
+          </tbody>
+        </table>
+        <div class="cc-phase-total"><span>Exit gate</span><strong>Every answer is grounded; every action is explicit, idempotent, and auditable</strong></div>
+      </div>
+    </details>
+
+    <details class="cc-phase" data-tags="product foundation">
+      <summary>
+        <span class="cc-phase-code">P4f</span>
+        <span class="cc-phase-title"><h3>Paid Product Framework</h3><p>Build the operational layer needed to charge, support, and protect users.</p></span>
+        <span class="cc-summary-meta"><span class="viz-badge">Post-beta</span><span class="cc-effort">2–5 weeks</span></span>
+      </summary>
+      <div class="cc-phase-body">
+        <table class="cc-work">
+          <thead><tr><th>Item</th><th>Subitems</th><th>Effort</th><th>Dependency</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Identity and entitlement</strong></td><td>Account lifecycle, plans, feature gates, admin view, cancellation, and data export/deletion.</td><td>3–6 d</td><td>Product packaging decision</td></tr>
+            <tr><td><strong>Billing</strong></td><td>Subscription provider, checkout, webhooks, failed payments, tax considerations, receipts, refunds.</td><td>3–7 d</td><td>Legal/business setup</td></tr>
+            <tr><td><strong>Privacy and support</strong></td><td>Terms, privacy disclosures, bank-data posture, support workflow, incident response, audit retention.</td><td>3–8 d</td><td>Feature/data inventory</td></tr>
+            <tr><td><strong>Operational readiness</strong></td><td>Usage limits, monitoring, error reporting, release channels, feature flags, and customer communication.</td><td>3–6 d</td><td>Hosting/operations decision</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    <details class="cc-phase" data-tags="product">
+      <summary>
+        <span class="cc-phase-code">Q</span>
+        <span class="cc-phase-title"><h3>Continuous minor-enhancement queue</h3><p>Small usability and correctness wins scheduled around phase gates.</p></span>
+        <span class="cc-summary-meta"><span class="viz-badge">Ongoing</span><span class="cc-effort">0.25–1.5 d each</span></span>
+      </summary>
+      <div class="cc-phase-body">
+        <table class="cc-work">
+          <thead><tr><th>Class</th><th>Subitems</th><th>Effort</th><th>Dependency</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Microcopy and guidance</strong></td><td>Clearer empty states, warnings, Help alignment, and recovery instructions.</td><td>0.25–0.75 d</td><td>Adjacent feature stable</td></tr>
+            <tr><td><strong>Diagnostics</strong></td><td>Actionable errors, evidence links, timestamps, and safe retry guidance.</td><td>0.5–1 d</td><td>Known failure mode</td></tr>
+            <tr><td><strong>Narrow behavior fixes</strong></td><td>One root cause, one affected workflow, explicit regression case, no broad refactor.</td><td>0.5–1.5 d</td><td>Testable reproduction</td></tr>
+          </tbody>
+        </table>
+        <div class="cc-phase-total"><span>Scheduling rule</span><strong>Take only when it does not blur the active phase exit gate</strong></div>
+      </div>
+    </details>
+  </section>
+
+  <section class="cc-section" aria-labelledby="cc-order-title">
+    <div class="cc-section-head">
+      <h2 id="cc-order-title">Recommended working order</h2>
+      <p>This sequence keeps all requested features visible while protecting the trust foundation.</p>
+    </div>
+    <ol class="cc-order">
+      <li><span><strong>Close P0</strong><small>Docs, recovery matrix, Central verification, beta polish</small></span><time>4.5–10 d</time></li>
+      <li><span><strong>Define the minimum P1 beta gate</strong><small>Choose explicit must-pass evidence</small></span><time>0.5–1 d</time></li>
+      <li><span><strong>Implement and run beta-gate slice</strong><small>Harness, selected modules, release report</small></span><time>5–10 d</time></li>
+      <li><span><strong>Controlled Family Beta</strong><small>Multi-account rollout and observed use</small></span><time>2–5 d setup</time></li>
+      <li><span><strong>House financial accuracy</strong><small>One property truth across the application</small></span><time>10–21 d</time></li>
+      <li><span><strong>Paid Bill Correction</strong><small>Traceable edit without duplicate evidence</small></span><time>3.5–7 d</time></li>
+      <li><span><strong>Continue bank import</strong><small>Review UI, rules, reconciliation, then provider decision</small></span><time>1.5–3 wks</time></li>
+      <li><span><strong>AutoPay Pending</strong><small>Expected versus confirmed payment truth</small></span><time>3–6 d</time></li>
+      <li><span><strong>Performance and scale</strong><small>Profile, optimize, stress, prove</small></span><time>8–17 d</time></li>
+      <li><span><strong>Chat + paid product tiers</strong><small>Read-only first; transactional authority last</small></span><time>multi-week</time></li>
+    </ol>
+  </section>
+
+  <section class="cc-section" aria-labelledby="cc-risk-title">
+    <div class="cc-section-head">
+      <h2 id="cc-risk-title">Estimate multipliers and open decisions</h2>
+      <p>These are the main reasons calendar time can exceed focused engineering time.</p>
+    </div>
+    <div class="cc-risk-grid">
+      <div class="cc-risk"><strong>Apps Script runtime and permissions</strong><span>Authorization, quotas, deployment identities, locks, eventual consistency, and account-specific Drive visibility can add investigation cycles.</span></div>
+      <div class="cc-risk"><strong>Real workbook safety</strong><span>Disposable tests are fast; proving mature bounded workbooks remain intact requires slower, explicit visual and runtime checks.</span></div>
+      <div class="cc-risk"><strong>Bank-provider choice</strong><span>CSV/staged import is already an engineering stream. Direct aggregation adds vendor, OAuth, privacy, token, webhook, and support scope.</span></div>
+      <div class="cc-risk"><strong>Assistant authority</strong><span>Read-only Q&amp;A is a modest feature. Transactional chat is a security, idempotency, audit, recovery, and product-policy program.</span></div>
+      <div class="cc-risk"><strong>Product-scope changes</strong><span>New roadmap requests are welcome, but each should be placed behind the active phase gate unless it fixes an observed blocker.</span></div>
+      <div class="cc-risk"><strong>Formal verification depth</strong><span>A controlled family beta and a comprehensive release system are different thresholds; choosing one must be explicit.</span></div>
+    </div>
+  </section>
+
+  <div class="cc-legend" aria-label="Status legend">
+    <span class="viz-badge" data-state="done">Completed proof</span>
+    <span class="viz-badge" data-state="current">Current</span>
+    <span class="viz-badge" data-state="next">Next / gate</span>
+    <span class="viz-badge">Future / depends</span>
+  </div>
+  <p class="cc-footnote">Source basis: current repository roadmap, stabilization initiative, Central recovery completion plan, release-readiness design, TODOs, and the runtime evidence recorded in this CashCompass task. The plan intentionally separates technical readiness from authorization to commit, push, or deploy.</p>
+
+  <script>
+    (() => {
+      const root = document.getElementById('cc-full-plan-v1');
+      if (!root) return;
+      const phases = Array.from(root.querySelectorAll('.cc-phase'));
+      const filters = Array.from(root.querySelectorAll('[data-filter]'));
+      filters.forEach((button) => {
+        button.addEventListener('click', () => {
+          const filter = button.dataset.filter;
+          filters.forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+          phases.forEach((phase) => {
+            const tags = (phase.dataset.tags || '').split(/\s+/);
+            phase.hidden = filter !== 'all' && !tags.includes(filter);
+          });
+        });
+      });
+      root.querySelector('[data-action="expand"]').addEventListener('click', () => {
+        phases.filter((phase) => !phase.hidden).forEach((phase) => { phase.open = true; });
+      });
+      root.querySelector('[data-action="collapse"]').addEventListener('click', () => {
+        phases.filter((phase) => !phase.hidden).forEach((phase) => { phase.open = false; });
+      });
+    })();
+  </script>
+</section>
