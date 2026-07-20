@@ -10,7 +10,7 @@
 | Initiative status | `ACTIVE` |
 | Knowledge status | `DRAFT` |
 | Last reviewed date | `2026-07-20` |
-| Last reviewed Git reference | `255890a` (pre-change baseline) |
+| Last reviewed Git reference | `e3582c0` (P0 decisions + Central verification evidence) |
 | Authoritative priority source | [`ROADMAP.md`](../../ROADMAP.md) → “Priority 0 — Project stabilization” |
 
 ## 2. Mission and Outcome
@@ -61,7 +61,7 @@ CashCompass has synchronized project documentation, recorded disposition of rema
 
 | Workstream | Source | Source-reported status | Completion evidence |
 | --- | --- | --- | --- |
-| Documentation synchronization | `ROADMAP.md` → P0 Documentation; `PROJECT_CONTEXT.md`; `TODO.md` | `ACTIVE` — current P0 | Architecture, roadmap, standards, and status documents agree on current milestones and remaining work |
+| Documentation synchronization | `ROADMAP.md` → P0 Documentation; `PROJECT_CONTEXT.md`; `TODO.md` | `COMPLETE` — synchronized 2026-07-20 | Architecture, roadmap, standards, and status documents agree that ProductDecisions + static Tier-2 verification are closed while live 6F + beta-readiness evidence remain |
 | Regression Discovery process | `ROADMAP.md` → P0 Regression Discovery; `REGRESSION_SUITE_PLAN.md` → policy and prompt block | `ACTIVE` — current P0 | Meaningful changes record their coverage decision and add reusable scenarios where required |
 | Remaining ProductDecision items | `ROADMAP.md` → P0 Product decisions; `GOLDEN_WORKBOOK.md`; `WORKBOOK_PARITY_CHECKLIST.md`; `ENGINEERING_STANDARDS.md` | `COMPLETE` — known P0 inventory resolved 2026-07-20 | Settings typography ratified as 16pt header / 14pt body and implemented first-create only; future discoveries use normal record-and-defer discipline |
 | Beta readiness | `ROADMAP.md` → P0 Beta readiness; `TODO.md` → Beta Gate; `PROJECT_CONTEXT.md` → Family Beta Readiness | `ACTIVE` — current P0 | Required onboarding/UX/error/empty-state review and runtime regression evidence are recorded in authoritative sources |
@@ -111,7 +111,7 @@ CashCompass has synchronized project documentation, recorded disposition of rema
 
 ## 10. Completion Criteria
 
-- [ ] Architecture, roadmap, standards, and technical-status mirrors agree on the current milestone and remaining P0 work. *(Recovery Validation priority was resolved and synchronized 2026-07-19; continue checking other P0 mirrors.)*
+- [x] Architecture, roadmap, standards, and technical-status mirrors agree on the current milestone and remaining P0 work. *(Synchronized 2026-07-20: ProductDecisions + static Tier-2 sweep complete; live Recovery Validation 6F + beta-readiness evidence remain.)*
 - [ ] Regression Discovery is applied consistently to meaningful changes and any required reusable scenarios are recorded.
 - [x] Remaining P0 ProductDecision items have an explicit disposition in their authoritative documents. *(Settings typography resolved 2026-07-20; no other known P0 ProductDecision remains.)*
 - [ ] Beta-readiness polish and runtime regression evidence required for P0 are recorded.

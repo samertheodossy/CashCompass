@@ -4,7 +4,7 @@ The engineering checklist for **Golden Workbook Convergence** — bringing every
 
 **Status:** Documentation only. No code changes are authorized by this checklist. The **first Golden Workbook Audit is complete (2026-07-06)** — ten core user-facing sheets are visually verified and rated below. The remaining sheets stay **UNKNOWN** until audited; no convergence code is written for a sheet until its row is resolved out of **UNKNOWN**.
 
-> **Engineering convergence complete for the audited families (2026-07-12).** Driven by the Validator, the **Operational** (Bills · Debts · Upcoming Expenses · LOG - Activity), **Financial Ledger** (Cash Flow · Bank Accounts), **SYS** (SYS - Accounts), and **Special** (Settings · Donation) families have finished their `AdoptGolden` convergence — remaining Validator differences are intentionally **KeepCentral / ProductDecision / IgnoreNoise**. Rows below are marked **✅ converged** where this applies. Open ProductDecision items pending a manual Canonical-workbook update are called out in the notes.
+> **Engineering convergence complete for the audited families (updated 2026-07-20).** Driven by the Validator, the **Operational** (Bills · Debts · Upcoming Expenses · LOG - Activity), **Financial Ledger** (Cash Flow · Bank Accounts), **SYS** (SYS - Accounts), and **Special** (Settings · Donation) families have finished their `AdoptGolden` convergence — remaining Validator differences are intentionally **KeepCentral / ProductDecision / IgnoreNoise**. Rows below are marked **✅ converged** where this applies. The known P0 ProductDecision inventory is resolved; any manual Canonical-workbook alignment noted below is non-blocking.
 
 ---
 

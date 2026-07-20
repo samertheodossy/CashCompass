@@ -196,6 +196,13 @@ Run on a **disposable** account, flags isolated, bound deployment untouched.
 - The real bounded `Expenses/Payments` workbook was then inspected independently; its sheets and populated Overview remained intact and correct.
 - This closes matrix rows 2, 10, and 12 for the tested HIGH-marker path and adds multi-account isolation evidence for row 13. Rows 1, 3–9, 11, 13, and 14 remain part of the formal isolated disposable-account matrix.
 
+### Isolated rerun + Central health evidence — 2026-07-20
+
+- Central-only source was pushed and isolated deployment version 109 was created without updating the existing Beta or bounded deployments.
+- `SUITE-RECOVERY-REGRESSION` passed 1/1 with 7/7 functional assertions. Its disposable workbook was retained long enough to inspect the newly ratified `INPUT - Settings` formatting (16pt header, 14pt body, `#ffe599` header), then moved to trash.
+- The configured Central default passed the read-only Provisioning health gate 8/8. Workbook Drift reported six advisory width findings only: one on `LOG - Activity` and five on `INPUT - Upcoming Expenses`; drift is non-blocking by design.
+- This rerun reconfirms the synthetic duplicate guard and Central structural health. It does **not** close the still-pending live Recovery Validation 6F rows listed above.
+
 ---
 
 ## Documentation

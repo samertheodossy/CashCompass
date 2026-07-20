@@ -503,7 +503,7 @@ Historical ranked detail retained for traceability. It does not override the cur
 8. **Money Plan Phase 2** *(major V1 differentiator)* + **Income Expected/Due Workflow** *(product symmetry with Bills Due)*.
 9. **External Beta Hardening** — support, feedback, onboarding invite flow, beta-user management at scale.
 10. **User Lifecycle Handling** — onboarding/offboarding, ownership changes, re-provisioning, allow-list removal, mapping health at scale.
-11. **Shared Lifecycle rollout — Investments · Houses · Income Sources**; Shared Sheet Write Utilities; Tier-2 `getActiveSpreadsheet()` cleanup.
+11. **Shared Lifecycle rollout — Investments · Houses · Income Sources**; Shared Sheet Write Utilities; bound-deployment cleanup once Central is primary. *(The user-facing Tier-2 `getActiveSpreadsheet()` sweep closed by source inspection 2026-07-20.)*
 
 **Stage 6 — Version 2 / Future Platform:**
 
