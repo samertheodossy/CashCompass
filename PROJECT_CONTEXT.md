@@ -219,7 +219,7 @@ High-level technical-status mirror. `ROADMAP.md` controls priority and sequence;
 - **6D.1 — Recovery Page** *(✅ implemented)* — calm recovery screen for confirm / stale / ambiguous / unavailable resolution failures (no raw errors).
 - **6D.2a — Reconnect / confirm** *(✅ implemented)* — self-scoped, user-initiated relink to one existing candidate; optional general recovery visibility is flag-controlled, while the required MEDIUM-candidate confirmation remains available.
 - **6E.1 — Admin Inspect + Clear Mapping** *(✅ implemented, flag `CENTRAL_ADMIN_REPAIR` default OFF)* — admin-gated read-only inspect + guarded, audited, mapping-store-only clear (no Drive writes).
-- **6F — Recovery Validation** *(current, P1)* — flag-on runtime validation of the full recovery stack on a disposable account, then flags OFF.
+- **6F — Recovery Validation** *(current; P0 safety matrix + P1 orphan detection)* — P0 requires disposable-account runtime validation of confirmed-zero create, MEDIUM confirmation with auto-adopt OFF, MEDIUM auto-adopt with the flag ON, ambiguity, search/verification failure, stale variants, and cross-user isolation, then flags OFF. Read-only Orphan detection remains P1 and does not block P0 closure.
 - **6D.2b — Create New Workbook** *(remaining, P1)* — self-service "start fresh" recovery action (designed; not implemented).
 - **6E.2 — Admin Set Mapping** *(remaining, P2)* — guarded admin remap (designed; not implemented).
 
@@ -629,7 +629,7 @@ The Central App can lose track of a user's workbook (cleared/lost mapping, trash
 - **`SYS - Meta` sheet** — a lightweight, hidden in-workbook marker sheet that survives Drive-level metadata loss (e.g. file copy), as a secondary identity signal.
 - **Admin marker diagnostics** — read-only, admin-gated visibility into which markers are present / matching for a given user.
 
-**What's implemented — recovery stack (P0 duplicate-prevention decision tree implemented 2026-07-16; HIGH-marker Admin Clear/relink + bounded isolation runtime-validated 2026-07-17; remaining decision-tree matrix and orphan path pending — see `## Recovery Validation Inventory`):**
+**What's implemented — recovery stack (P0 duplicate-prevention decision tree implemented 2026-07-16; HIGH-marker Admin Clear/relink + bounded isolation runtime-validated 2026-07-17; remaining P0 decision-tree matrix pending, with read-only orphan detection tracked separately as P1 — see `## Recovery Validation Inventory`):**
 
 - **6C.1 Adopt-Before-Create / duplicate guard** — candidate detection is unconditional for no-mapping and stale-mapping resolution. Confirmed zero is the only create path; HIGH/marker candidates relink; MEDIUM/name-only candidates require confirmation while `CENTRAL_AUTO_ADOPT` is off; ambiguity and search/verify failures stop safely.
 - **6D.1 Recovery Page** — recovery screen for confirm / stale / ambiguous / unavailable instead of raw errors; routed from the startup gate.
@@ -640,7 +640,7 @@ Recovery writes remain central-mode/self-scoped or admin-gated. `CENTRAL_AUTO_AD
 
 **Recovery roadmap (remaining):**
 
-- **6F — Recovery Validation** *(current, ~94–96%)* — healthy-path load validated (2026-06-09); **recovery-page render from a real stale mapping + executed Reconnect validated (2026-06-11)**; **executed admin clear + mapping/reverse-index removal + repair audit history + bootstrap reprovision + Welcome routing + dashboard empty-state + Financial Integrity `NOT_INITIALIZED` + Central admin routing + `ADMIN_EMAILS` validated (2026-07-02)**; remaining = Auto-Adopt + Ambiguous recovery + Name-only adoption + Orphan workbook validation on a disposable account, then flags OFF.
+- **6F — Recovery Validation** *(current, ~94–96%; P0 safety matrix + P1 orphan detection)* — healthy-path load validated (2026-06-09); **recovery-page render from a real stale mapping + executed Reconnect validated (2026-06-11)**; **executed admin clear + mapping/reverse-index removal + repair audit history + bootstrap reprovision + Welcome routing + dashboard empty-state + Financial Integrity `NOT_INITIALIZED` + Central admin routing + `ADMIN_EMAILS` validated (2026-07-02)**. Remaining P0 = confirmed-zero create, MEDIUM name-only confirmation with auto-adopt OFF + auto-adopt ON, ambiguity, search/verification failure, stale variants, and cross-user isolation on a disposable account; then flags OFF. Read-only Orphan detection remains P1 and does not block P0 closure.
 - **6D.2b — Create New Workbook** — self-service "start fresh" action (designed; not implemented). Separate flag, confirm, duplicate-avoidance-first.
 - **6E.2 — Admin Set Mapping** — guarded admin remap to an admin-supplied ID (designed; not implemented).
 
@@ -679,11 +679,11 @@ Notes:
 
 - These are **independent** of `CENTRAL_MODE` (which selects central vs bound) and of the existing `FAMILY_BETA_ALLOWLIST` / `ADMIN_EMAILS` properties.
 - The **Recovery Page (6D.1)** itself is **not** flag-gated. `CENTRAL_RECOVERY_ACTIONS` controls the optional reconnect button on general recovery pages; the explicit MEDIUM/name-only confirmation action remains available because it is the safe alternative to silent creation.
-- All three flags remain **OFF in steady state**, but the P0 safety tree is intentionally active in Central mode: candidate detection, HIGH-confidence relink, ambiguity, and safe-unavailable handling do not depend on a flag. The remaining decision-tree and orphan paths need the **Recovery Validation (6F)** pass on a disposable account.
+- All three flags remain **OFF in steady state**, but the P0 safety tree is intentionally active in Central mode: candidate detection, HIGH-confidence relink, ambiguity, and safe-unavailable handling do not depend on a flag. The remaining P0 decision-tree paths need the **Recovery Validation (6F)** pass on a disposable account; read-only Orphan detection is a separate P1 follow-up and does not block P0 closure.
 
 ## Recovery Validation Inventory
 
-Tracks runtime evidence separately from implementation. Prior passes validated healthy mapped load, the recovery page, executed reconnect, disabled admin repair, and executed Admin Clear. **The P0 HIGH-marker path passed on 2026-07-17:** Apps Script scenario 7/7 and Recovery suite 1/1; mapping-only Admin Clear; reload automatically relinked the same marked workbook with `CENTRAL_AUTO_ADOPT=false`; Admin Diagnostics showed the restored mapping/reverse index, one candidate, and zero orphans; no duplicate was created; the real bounded workbook stayed intact. The remaining disposable-account matrix covers confirmed-zero create, MEDIUM confirmation/off + auto/on, ambiguity, search failure, verification failure, stale variants, cross-user isolation, drive.file limits, and Orphan detection. **Admin Diagnostics is the authoritative validation surface** if Script Properties UI lags.
+Tracks runtime evidence separately from implementation. Prior passes validated healthy mapped load, the recovery page, executed reconnect, disabled admin repair, and executed Admin Clear. **The P0 HIGH-marker path passed on 2026-07-17:** Apps Script scenario 7/7 and Recovery suite 1/1; mapping-only Admin Clear; reload automatically relinked the same marked workbook with `CENTRAL_AUTO_ADOPT=false`; Admin Diagnostics showed the restored mapping/reverse index, one candidate, and zero orphans; no duplicate was created; the real bounded workbook stayed intact. The remaining P0 disposable-account matrix covers confirmed-zero create, MEDIUM confirmation/off + auto/on, ambiguity, search failure, verification failure, stale variants, cross-user isolation, and drive.file-limited failure handling. Read-only Orphan detection remains a separate P1 follow-up. **Admin Diagnostics is the authoritative validation surface** if Script Properties UI lags.
 
 **Implemented + tested (validated):**
 
@@ -709,7 +709,7 @@ Tracks runtime evidence separately from implementation. Prior passes validated h
 - **Auto-Adopt with `CENTRAL_AUTO_ADOPT=true` (MEDIUM only)** — Status: not runtime-tested. Risk: High. Timing: 6F, isolated disposable account.
 - **Ambiguous-candidate handling (≥2 → `AmbiguousWorkbookError`)** — Status: not runtime-tested. Risk: Medium. Timing: 6F.
 - **Name-only confirmation/adoption (MEDIUM-confidence single candidate)** — Status: implementation decision complete; OFF-confirm and ON-auto runtime paths not tested. Risk: Medium. Timing: 6F.
-- **Orphan workbook detection (`ORPHANS_PRESENT`)** — Status: not exercised end-to-end; surfacing-only, manual cleanup. Risk: Low. Timing: 6F.
+- **Orphan workbook detection (`ORPHANS_PRESENT`)** — Status: not exercised end-to-end; surfacing-only, manual cleanup. Risk: Low. Timing: P1 follow-up after the P0 6F matrix; non-blocking for P0 closure.
 
 ## Bound Project Safety
 

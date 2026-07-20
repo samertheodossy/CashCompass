@@ -9,8 +9,8 @@
 | Priority | P0 |
 | Initiative status | `ACTIVE` |
 | Knowledge status | `DRAFT` |
-| Last reviewed date | `2026-07-16` |
-| Last reviewed Git reference | `c81621e` |
+| Last reviewed date | `2026-07-19` |
+| Last reviewed Git reference | `255890a` (pre-change baseline) |
 | Authoritative priority source | [`ROADMAP.md`](../../ROADMAP.md) → “Priority 0 — Project stabilization” |
 
 ## 2. Mission and Outcome
@@ -72,7 +72,7 @@ CashCompass has synchronized project documentation, recorded disposition of rema
 | Document | Relationship | Status or decision needed |
 | --- | --- | --- |
 | [`CENTRAL_APP_DOC_INDEX.md`](../../CENTRAL_APP_DOC_INDEX.md) | Index for Central architecture and verification evidence | Use it to select current documents; do not read every historical Central file by default |
-| [`CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md`](../../CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md) | Related remaining recovery adoption-path design and validation | The four remaining paths have mixed P0–P1 classifications in `TODO.md`; whether any block P0 closure requires an explicit roadmap decision |
+| [`CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md`](../../CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md) | Related remaining recovery adoption-path design and validation | Decision recorded 2026-07-19: the duplicate-prevention safety matrix is P0; read-only Orphan detection is P1 and does not block P0 closure |
 | [`GOLDEN_WORKBOOK.md`](../../GOLDEN_WORKBOOK.md) | Canonical workbook convergence authority | Remaining UNKNOWN sheets and ProductDecision items require explicit handling |
 | [`WORKBOOK_PARITY_CHECKLIST.md`](../../WORKBOOK_PARITY_CHECKLIST.md) | Per-sheet audit and convergence status | Do not write convergence code for UNKNOWN sheets before audit resolution |
 | [`REGRESSION_SUITE_PLAN.md`](../../REGRESSION_SUITE_PLAN.md) | Regression discovery and future scenario-pack plan | Apply discovery now; scenario-pack implementation belongs to the sequenced P1 work |
@@ -83,7 +83,7 @@ CashCompass has synchronized project documentation, recorded disposition of rema
 | Feature | Knowledge document | Initiative relationship |
 | --- | --- | --- |
 | Bills | [`agents/features/bills.md`](../features/bills.md) | The DRAFT records pending runtime and coverage evidence relevant to stabilization; it does not independently define P0 priority |
-| Central App | Not yet created | P0 uses Central resolver/Tier-2 verification evidence; remaining Recovery Validation 6F spans conflicting P0–P1 classifications and its P0 completion impact is unresolved |
+| Central App | Not yet created | P0 uses Central resolver/Tier-2 verification evidence; Recovery Validation 6F now has an explicit split: the duplicate-prevention safety matrix is P0, while read-only Orphan detection is P1 and does not block P0 closure |
 | Validator / Test Harness | Not yet created | Existing infrastructure supplies evidence; remaining expansion is sequenced primarily under P1 |
 | Onboarding and Dashboard UX | Not yet created | Beta-readiness polish and calm failure/empty-state behavior are P0 concerns |
 
@@ -100,18 +100,18 @@ CashCompass has synchronized project documentation, recorded disposition of rema
 
 - Status drift across `ROADMAP.md`, `TODO.md`, and `PROJECT_CONTEXT.md` can cause the Planner to recommend outdated work. Mitigation: route each fact to its declared source of truth and update mirrors together when status changes.
 - P0 spans multiple workstreams; treating every listed item as one implementation task would create scope creep. Mitigation: plan and approve one narrow task at a time.
-- Remaining Central Recovery Validation 6F includes high-risk paths and must use an isolated disposable account with flags returned OFF, as specified in `TODO.md`. Its source-reported priority is mixed P0–P1; this document does not decide whether it blocks P0 and authorizes no execution.
+- Remaining Central Recovery Validation 6F includes high-risk paths and must use an isolated disposable account with flags returned OFF, as specified in `TODO.md`. The duplicate-prevention safety matrix is P0; read-only Orphan detection is P1 and does not block P0 closure. This document authorizes no runtime execution.
 - Release Readiness is designed but not implemented. Do not report the future aggregate gate as current evidence.
 
-### Source conflicts
+### Resolved source conflict
 
-| Conflict | Sources | Governing interpretation | Follow-up |
-| --- | --- | --- | --- |
-| Remaining Recovery Validation paths have mixed priority labels | `TODO.md` labels Auto-Adopt and Ambiguous validation P0, Name-only and Orphan validation P1, Recovery Validation 6F overall P1, and Recovery completion elsewhere P0–P1 | Treat the work as unresolved P0–P1 scope; do not infer that all four block P0 or that all four are deferred to P1 | Obtain an explicit roadmap decision, then update `ROADMAP.md`, `TODO.md`, and `PROJECT_CONTEXT.md` together |
+| Decision | Sources synchronized | Governing interpretation |
+| --- | --- | --- |
+| Recovery Validation 6F priority split resolved 2026-07-19 | `ROADMAP.md`, `TODO.md`, `PROJECT_CONTEXT.md`, and this initiative | P0 includes the remaining duplicate-prevention safety matrix: confirmed-zero create, MEDIUM confirmation/OFF + auto-adopt/ON, ambiguity, search/verification failure, stale variants, and cross-user isolation. Read-only Orphan detection remains P1 and does not block P0 closure. |
 
 ## 10. Completion Criteria
 
-- [ ] Architecture, roadmap, standards, and technical-status mirrors agree on the current milestone and remaining P0 work. *(Current milestone is synchronized; Recovery Validation priority remains unresolved.)*
+- [ ] Architecture, roadmap, standards, and technical-status mirrors agree on the current milestone and remaining P0 work. *(Recovery Validation priority was resolved and synchronized 2026-07-19; continue checking other P0 mirrors.)*
 - [ ] Regression Discovery is applied consistently to meaningful changes and any required reusable scenarios are recorded.
 - [ ] Remaining P0 ProductDecision items have an explicit disposition in their authoritative documents.
 - [ ] Beta-readiness polish and runtime regression evidence required for P0 are recorded.
@@ -122,10 +122,10 @@ CashCompass has synchronized project documentation, recorded disposition of rema
 
 ## 11. Recommended Next Task
 
-- Task: Resolve the mixed P0–P1 priority and P0 completion impact of the remaining Recovery Validation paths, then update the authoritative roadmap/detail documents consistently.
-- Why this task: Documentation synchronization exposed one deliberately unresolved sequencing decision; resolving it prevents the Planner from inferring whether all, some, or none of the four remaining paths block P0 closure.
-- Required role flow: Planner → Engineer → Reviewer → Validator; Tester may be skipped for documentation-only corrections when Reviewer confirms no runtime behavior changed.
-- Approval gates: Implementation approval before documentation edits; separate commit and push approvals. No deployment is applicable.
+- Task: Plan the P0 Recovery Validation 6F safety-matrix pass against an isolated disposable Central account, including the exact flag transitions, evidence capture, and flags-OFF cleanup check.
+- Why this task: The sequencing decision is now resolved; runtime evidence for the remaining duplicate-prevention branches is the next Central-verification gate for P0.
+- Required role flow: Planner → Tester → Validator; route to Engineer only if validation exposes a defect.
+- Approval gates: Explicit runtime-test approval for the named disposable account and Central target; separate approval for any code edit, commit, push, or deployment.
 
 ## 12. Maintenance
 
