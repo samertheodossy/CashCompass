@@ -6,6 +6,28 @@
 
 Once the user has approved a commit and the commit succeeded, **also push it to `origin`** on the branch that was just committed, in the same action, so `origin/main` stays in sync. Only push when the branch already has an upstream configured; never force-push without an explicit request; on any push failure, report it and stop (do not retry with `--force`, do not rebase, do not reset).
 
+## Commit message format
+
+Use a concise, specific subject line followed by a useful commit body for every meaningful commit. Do not rely on a one-line message alone.
+
+The commit body should explain, as applicable:
+
+- Why the change was needed or what problem it addresses.
+- What changed, including the important files or components.
+- Safety and compatibility considerations, especially Central versus bounded workbook impact.
+- Tests and validation performed, plus anything that was not tested.
+- Deployment, migration, or rollback notes when relevant.
+
+Keep the details relevant and concrete. Documentation-only commits should still state their scope and confirm whether runtime behavior, workbooks, or deployment were affected.
+
+Example:
+
+```bash
+git commit -m "Document paid-bill correction roadmap item" \
+  -m "Adds the requested ability to correct a previously recorded bill payment to the roadmap, including adjustment, reversal, and duplicate-prevention requirements." \
+  -m "Scope: ROADMAP.md only. No runtime behavior, workbook data, or deployment changed."
+```
+
 ---
 
 1. Change the files needed.
@@ -16,4 +38,4 @@ Once the user has approved a commit and the commit succeeded, **also push it to 
 6. **Context docs:** When the change affects **high-level product shape** (features list, sheet roles, Activity behavior, Cash Flow naming), update **`PROJECT_CONTEXT.md`** and, if onboarding copy is affected, **`ONBOARDING_TODO.md`**, in the same effort—or leave an explicit note in **SESSION_NOTES.md** to sync next time.
 7. **Never commit without explicit approval** — same as the rule at the top; do not commit automatically as part of “done”.
 
-When the user **explicitly** asks to commit: `git add` (scoped files as appropriate), then `git commit -m "Comment on changes"`, then `git push` to the configured upstream.
+When the user **explicitly** asks to commit: stage only the scoped files, review the staged diff, create a concise subject plus a detailed body following the format above, and then push to the configured upstream.
