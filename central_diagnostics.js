@@ -604,6 +604,11 @@ function findCandidateWorkbooks_(email) {
     return { byMarker: [], byName: [], merged: [], coverage: CANDIDATE_COVERAGE_ };
   }
 
+  // Test-only 6F failure injection. This is inert unless the exact configured
+  // disposable caller has enabled a per-user failure mode through the guarded
+  // recovery fixture page.
+  maybeInjectRecovery6fFailure_('search', emailLower, null);
+
   var expectedHash = buildMappingKey_(emailLower).slice(MAPPING_KEY_PREFIX_.length);
   var expectedName = buildWorkbookName_(emailLower);
 

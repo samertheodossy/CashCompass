@@ -741,6 +741,14 @@ function relinkSingleCandidate_(email, cand) {
              reason: 'no_candidate' };
   }
 
+  // Test-only 6F verification-failure injection. The helper is fail-closed and
+  // returns false for every caller/file except a marker-verified fixture owned
+  // by the exact configured disposable account.
+  if (maybeInjectRecovery6fFailure_('verify', email, cand)) {
+    return { ok: false, ss: null, confidence: confidence, matchedBy: matchedBy,
+             reason: 'verify_failed' };
+  }
+
   var ss;
   try {
     ss = SpreadsheetApp.openById(cand.id);
@@ -769,6 +777,27 @@ function relinkSingleCandidate_(email, cand) {
 /* -------------------------------------------------------------------------- */
 /*  Recovery actions (Phase 6D.2a — self-scoped explicit confirmation)        */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * Opens a mapped workbook only when Drive confirms it is not in Trash.
+ *
+ * SpreadsheetApp.openById() can still open a trashed spreadsheet, so mapped
+ * resolution must normalize that state to an open failure and enter the
+ * existing stale-recovery path.
+ *
+ * @param {string} fileId
+ * @return {GoogleAppsScript.Spreadsheet.Spreadsheet}
+ */
+function openLiveMappedWorkbook_(fileId) {
+  var file = Drive.Files.get(fileId, { fields: 'id,trashed' });
+  if (file && file.trashed === true) {
+    var trashedErr = new Error('Mapped workbook is in Trash.');
+    trashedErr.name = 'MappedWorkbookTrashedError';
+    trashedErr.recoveryReason = 'mapped_workbook_trashed';
+    throw trashedErr;
+  }
+  return SpreadsheetApp.openById(fileId);
+}
 
 /**
  * User-initiated "Reconnect existing workbook" recovery action (Phase 6D.2a).
@@ -831,7 +860,7 @@ function recoveryReconnectSelf() {
       var currentId = lookupSpreadsheetIdForUser_(email);
       if (currentId) {
         try {
-          var currentSs = SpreadsheetApp.openById(currentId);
+          var currentSs = openLiveMappedWorkbook_(currentId);
           cleanupDefaultSheet1_(currentSs);
           try { ensureWorkbookIdentityMarkers_(currentSs, currentId, email); } catch (_mk) {}
           Logger.log('[6D2a] mapping already healthy → status=reconnected');
@@ -905,7 +934,7 @@ function getOrProvisionUserSpreadsheet_() {
   var mappedId = lookupSpreadsheetIdForUser_(email);
   if (mappedId) {
     try {
-      var mappedSs = SpreadsheetApp.openById(mappedId);
+      var mappedSs = openLiveMappedWorkbook_(mappedId);
       // Existing mapped workbook: a manually reset/emptied workbook can
       // still carry the default blank "Sheet1". This branch skips
       // runMinimalBootstrap_, so reuse the same non-fatal cleanup here.
@@ -961,7 +990,7 @@ function provisionWorkbookForUser_(email) {
     var existingId = lookupSpreadsheetIdForUser_(email);
     if (existingId) {
       try {
-        var existingSs = SpreadsheetApp.openById(existingId);
+        var existingSs = openLiveMappedWorkbook_(existingId);
         // Same non-fatal cleanup as the pre-lock branch: a workbook
         // provisioned by the winning execution (or a manually reset one)
         // may still carry the default blank "Sheet1".
@@ -1177,6 +1206,10 @@ function handleStaleMapping_(email, mappedId, openErr) {
   Logger.log('[recovery] mapped open failed id=' + truncateId_(mappedId) +
     ' reason=' + (openErr && openErr.message ? openErr.message : String(openErr)));
 
+  var mappedRecoveryReason = openErr && openErr.recoveryReason
+    ? String(openErr.recoveryReason)
+    : '';
+
   var lock = LockService.getUserLock();
   var acquired = false;
   try {
@@ -1194,17 +1227,32 @@ function handleStaleMapping_(email, mappedId, openErr) {
     var latestId = lookupSpreadsheetIdForUser_(email);
     if (latestId) {
       try {
-        var latestSs = SpreadsheetApp.openById(latestId);
+        var latestSs = openLiveMappedWorkbook_(latestId);
         cleanupDefaultSheet1_(latestSs);
         try { ensureWorkbookIdentityMarkers_(latestSs, latestId, email); } catch (_mk) {}
         return latestSs;
       } catch (_latestOpenErr) {
+        mappedRecoveryReason = _latestOpenErr && _latestOpenErr.recoveryReason
+          ? String(_latestOpenErr.recoveryReason)
+          : '';
         Logger.log('[recovery] mapped re-check still unavailable id=' +
           truncateId_(latestId));
       }
+    } else {
+      mappedRecoveryReason = '';
     }
 
-    return resolveExistingWorkbookForRecovery_(email, 'stale');
+    try {
+      return resolveExistingWorkbookForRecovery_(email, 'stale');
+    } catch (recoveryErr) {
+      if (mappedRecoveryReason === 'mapped_workbook_trashed' &&
+          recoveryErr &&
+          recoveryErr.name === 'WorkbookRecoveryUnavailableError' &&
+          recoveryErr.recoveryReason === 'stale_mapping_no_candidate') {
+        recoveryErr.recoveryReason = 'mapped_workbook_trashed';
+      }
+      throw recoveryErr;
+    }
   } finally {
     try { lock.releaseLock(); } catch (_releaseErr) {}
   }

@@ -1,6 +1,6 @@
 # CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md
 
-**Status:** Ratified architecture (Version 1). P0 duplicate-prevention decision tree implemented 2026-07-16; HIGH-marker Admin Clear → automatic relink runtime-validated across two accounts 2026-07-17; full disposable-account matrix pending.
+**Status:** Ratified architecture (Version 1). P0 duplicate-prevention decision tree implemented 2026-07-16. The disposable-account matrix is runtime-validated for confirmed-zero create, HIGH relink with auto-adopt OFF, MEDIUM explicit confirmation with auto-adopt OFF, ambiguity, search/verification failure, stale variants, and cross-user isolation. Only MEDIUM automatic adoption with `CENTRAL_AUTO_ADOPT=true` remains open; read-only orphan detection is a separate P1 follow-up.
 **Owner area:** Central App — workbook resolution, provisioning, and recovery.
 **Related code:** `central_provisioning.js`, `central_diagnostics.js`, `central_resolver.js`, `sheet_bootstrap.js`, recovery client (`Dashboard_Body.html → #page_recovery`).
 **Ratified:** 2026-07-07.
@@ -153,8 +153,8 @@ This is the intended **Version 1 behavior**.
 | Phase | Work | Notes |
 |---|---|---|
 | **Phase 1 — Ratify architecture** | This document. | ✅ Done (2026-07-07). |
-| **Phase 2 — Unconditional candidate detection** | Move `findCandidateWorkbooks_` out from behind `isAutoAdoptEnabled_()` in `provisionWorkbookForUser_`; wire `0→CREATE · 1→ADOPT · 2+→AmbiguousWorkbookError` on every no-mapping/stale resolution. Change the Drive-failure and verify-failure leaves from "fall through to create" to **UNAVAILABLE**. | ✅ Implemented 2026-07-16; HIGH-marker Admin Clear/relink path runtime-validated 2026-07-17; remaining matrix pending. |
-| **Phase 3 — Repurpose AUTO_ADOPT semantics** | `isAutoAdoptEnabled_()` now gates only MEDIUM/name-only single-candidate auto-adopt vs confirm-prompt. HIGH/marker candidates relink automatically; detection / ambiguous / create remain invariant. | ✅ Implemented 2026-07-16; HIGH relink with flag OFF runtime-validated 2026-07-17; MEDIUM OFF/ON paths pending. |
+| **Phase 2 — Unconditional candidate detection** | Move `findCandidateWorkbooks_` out from behind `isAutoAdoptEnabled_()` in `provisionWorkbookForUser_`; wire `0→CREATE · 1→ADOPT · 2+→AmbiguousWorkbookError` on every no-mapping/stale resolution. Change the Drive-failure and verify-failure leaves from "fall through to create" to **UNAVAILABLE**. | ✅ Implemented; confirmed-zero, HIGH, ambiguity, failure, and stale branches runtime-validated by 2026-07-20. |
+| **Phase 3 — Repurpose AUTO_ADOPT semantics** | `isAutoAdoptEnabled_()` now gates only MEDIUM/name-only single-candidate auto-adopt vs confirm-prompt. HIGH/marker candidates relink automatically; detection / ambiguous / create remain invariant. | ✅ Implemented; MEDIUM confirmation/OFF passed. MEDIUM automatic adoption/ON remains open. |
 | **Phase 4 — Ambiguous selection UI** | Make the `ambiguous` recovery screen list candidates and let the user pick one → relink (reuse `relinkSingleCandidate_`); add explicit confirmed "create new." Ensure `buildRecoveryRouting_` carries candidate data. | Client: `Dashboard_Body.html → #page_recovery` + recovery script. |
 | **Phase 5 — Admin enhancements** | Surface candidate count in `adminInspectUser`; keep `adminClearMapping` mapping-only; document `adminTrashOrphan` (soft-delete, id-in-hand). | No bulk operations. |
 | **Phase 6 — Validation** | Run the Testing Matrix on a disposable account; then choose the Family Beta flag posture from evidence. | Record evidence in `SESSION_NOTES.md`. |
@@ -182,6 +182,26 @@ Run on a **disposable** account, flags isolated, bound deployment untouched.
 | 13 | No cross-user leakage | second account's files exist | candidate queries scoped to `'me' in owners`; never appear |
 | 14 | drive.file coverage | workbook app never created/opened | (acceptably) not a candidate; limitation documented |
 
+### Guarded live-fixture support
+
+The MEDIUM, ambiguity, search-failure, and verification-failure rows require
+states that normal product UI must never create. The dedicated
+`?view=recovery-test` surface (`RecoveryTestingUI.html` +
+`recovery_test_fixtures.js`) provides those states only when all of these gates
+pass: `CENTRAL_MODE=true`, `TEST_HARNESS_ENABLED=true`, and the effective caller
+exactly matches `RECOVERY_6F_TEST_EMAIL`; the configured caller must not be an
+admin. Fixture files are owned by that caller,
+use the exact CashCompass name so they classify MEDIUM, intentionally omit the
+normal identity markers, and carry a separate owner-bound 6F fixture marker.
+Cleanup soft-trashes only stored IDs that re-pass the marker/name/owner checks;
+there is no permanent-delete path. Search and verification failure injection is
+stored in User Properties and is ignored for every other caller and file.
+Failure injection also refuses to arm while that user still has a mapping, so
+the resolver cannot bypass the candidate branch under test. After the matrix,
+clear the fixture failure mode, trash the verified fixture set, remove
+`RECOVERY_6F_TEST_EMAIL`, and restore `CENTRAL_AUTO_ADOPT`,
+`CENTRAL_RECOVERY_ACTIONS`, and `CENTRAL_ADMIN_REPAIR` to `false`.
+
 ---
 
 ## Runtime Evidence — 2026-07-17
@@ -202,6 +222,18 @@ Run on a **disposable** account, flags isolated, bound deployment untouched.
 - `SUITE-RECOVERY-REGRESSION` passed 1/1 with 7/7 functional assertions. Its disposable workbook was retained long enough to inspect the newly ratified `INPUT - Settings` formatting (16pt header, 14pt body, `#ffe599` header), then moved to trash.
 - The configured Central default passed the read-only Provisioning health gate 8/8. Workbook Drift reported six advisory width findings only: one on `LOG - Activity` and five on `INPUT - Upcoming Expenses`; drift is non-blocking by design.
 - This rerun reconfirms the synthetic duplicate guard and Central structural health. It does **not** close the still-pending live Recovery Validation 6F rows listed above.
+
+### Disposable-account decision-tree evidence — 2026-07-20
+
+- The guarded `?view=recovery-test` fixture surface was reviewed and exercised only as the configured non-admin disposable Central user. Route and RPC gates rejected use outside the exact `RECOVERY_6F_TEST_EMAIL` + `CENTRAL_MODE=true` + `TEST_HARNESS_ENABLED=true` combination.
+- Confirmed-zero provisioning created exactly one workbook and wrote its mapping.
+- One MEDIUM/name-only candidate with `CENTRAL_AUTO_ADOPT=false` rendered the explicit confirmation path; confirming relinked that existing workbook without creating a duplicate.
+- Two MEDIUM/name-only candidates stopped as ambiguous and created no workbook.
+- Injected Drive search and candidate verification failures both stopped as unavailable and created no workbook.
+- Stale invalid-ID and mapped-workbook-in-Trash variants both stopped safely. The Trash variant now reports targeted restore-and-retry guidance and hides the inapplicable reconnect action.
+- Cross-user isolation passed: fixture candidates remained owner-scoped and were not surfaced to another account.
+- Fixture files were moved to Trash through marker/name/owner-verified cleanup, failure injection was cleared, the disposable mapping was left in the intended test state, and recovery flags were restored OFF.
+- **Only open P0 row:** one MEDIUM/name-only candidate with `CENTRAL_AUTO_ADOPT=true` must still be runtime-validated. Read-only orphan detection remains P1 and does not block P0 closure.
 
 ---
 

@@ -773,6 +773,12 @@ function buildRecoveryRouting_(err) {
     type = 'unavailable';
   }
 
+  var condition = '';
+  if (type === 'unavailable' && err &&
+      err.recoveryReason === 'mapped_workbook_trashed') {
+    condition = 'mapped_workbook_trashed';
+  }
+
   var contactEmail = '';
   try {
     contactEmail = String(PropertiesService.getScriptProperties()
@@ -799,6 +805,7 @@ function buildRecoveryRouting_(err) {
     mode: 'recovery',
     recovery: {
       type: type,
+      condition: condition,
       contactEmail: contactEmail,
       actionsEnabled: actionsEnabled
     }

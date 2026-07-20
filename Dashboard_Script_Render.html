@@ -109,9 +109,17 @@ function showPage(name) {
 function showRecoveryPage(recovery) {
   var rec = recovery || {};
   var type = rec.type || 'unavailable';
+  var condition = rec.condition || '';
+  var isMappedWorkbookTrashed = condition === 'mapped_workbook_trashed';
 
   var message;
-  if (type === 'ambiguous') {
+  var title = 'We couldn\u2019t open your workbook';
+  if (isMappedWorkbookTrashed) {
+    title = 'Your workbook is in Trash';
+    message = 'Your CashCompass workbook is in Google Drive Trash. Restore ' +
+      'it from Trash, then choose Try again. We paused here so we wouldn\u2019t ' +
+      'create a duplicate.';
+  } else if (type === 'ambiguous') {
     message = 'We found more than one CashCompass workbook for your account, ' +
       'so we paused instead of opening the wrong one. Reach out and we\u2019ll ' +
       'connect you to the right one.';
@@ -132,7 +140,7 @@ function showRecoveryPage(recovery) {
   var msgEl = document.getElementById('recovery_message');
   var contactEl = document.getElementById('recovery_contact');
 
-  if (titleEl) titleEl.textContent = 'We couldn\u2019t open your workbook';
+  if (titleEl) titleEl.textContent = title;
   if (msgEl) msgEl.textContent = message;
 
   if (contactEl) {
@@ -156,7 +164,9 @@ function showRecoveryPage(recovery) {
   // of the optional general-recovery flag. Reset prior disabled/status state.
   var reconnectBtn = document.getElementById('recovery_reconnect_btn');
   if (reconnectBtn) {
-    reconnectBtn.style.display = rec.actionsEnabled ? '' : 'none';
+    reconnectBtn.style.display = rec.actionsEnabled && !isMappedWorkbookTrashed
+      ? ''
+      : 'none';
     reconnectBtn.disabled = false;
     reconnectBtn.textContent = type === 'confirm'
       ? 'Use existing workbook'

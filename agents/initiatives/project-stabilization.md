@@ -61,11 +61,11 @@ CashCompass has synchronized project documentation, recorded disposition of rema
 
 | Workstream | Source | Source-reported status | Completion evidence |
 | --- | --- | --- | --- |
-| Documentation synchronization | `ROADMAP.md` → P0 Documentation; `PROJECT_CONTEXT.md`; `TODO.md` | `COMPLETE` — synchronized 2026-07-20 | Architecture, roadmap, standards, and status documents agree that ProductDecisions + static Tier-2 verification are closed while live 6F + beta-readiness evidence remain |
+| Documentation synchronization | `ROADMAP.md` → P0 Documentation; `PROJECT_CONTEXT.md`; `TODO.md` | `COMPLETE` — synchronized 2026-07-20 | Architecture, roadmap, standards, and status documents agree that only the 6F MEDIUM auto-adopt-ON row and broader beta-readiness evidence remain in P0 |
 | Regression Discovery process | `ROADMAP.md` → P0 Regression Discovery; `REGRESSION_SUITE_PLAN.md` → policy and prompt block | `ACTIVE` — current P0 | Meaningful changes record their coverage decision and add reusable scenarios where required |
 | Remaining ProductDecision items | `ROADMAP.md` → P0 Product decisions; `GOLDEN_WORKBOOK.md`; `WORKBOOK_PARITY_CHECKLIST.md`; `ENGINEERING_STANDARDS.md` | `COMPLETE` — known P0 inventory resolved 2026-07-20 | Settings typography ratified as 16pt header / 14pt body and implemented first-create only; future discoveries use normal record-and-defer discipline |
 | Beta readiness | `ROADMAP.md` → P0 Beta readiness; `TODO.md` → Beta Gate; `PROJECT_CONTEXT.md` → Family Beta Readiness | `ACTIVE` — current P0 | Required onboarding/UX/error/empty-state review and runtime regression evidence are recorded in authoritative sources |
-| Central verification | `ROADMAP.md` → P0 Central resolver verification + Recovery Validation 6F; `PROJECT_CONTEXT.md` → Central status | `PARTIAL` — static Tier-2 sweep closed 2026-07-20; live 6F matrix pending | Source scan confirms user-facing paths route through the resolver; residual direct calls are classified bound/dev/safety-only. P0 completes after the approved disposable-account recovery matrix and flags-OFF evidence. |
+| Central verification | `ROADMAP.md` → P0 Central resolver verification + Recovery Validation 6F; `PROJECT_CONTEXT.md` → Central status | `PARTIAL` — static Tier-2 sweep closed; 6F has one runtime row pending | Confirmed-zero, HIGH/OFF, MEDIUM-confirm/OFF, ambiguity, failure, stale, and cross-user rows passed with flags restored OFF. MEDIUM auto-adopt ON remains. |
 
 ## 6. Related Designs and Decisions
 
@@ -100,30 +100,30 @@ CashCompass has synchronized project documentation, recorded disposition of rema
 
 - Status drift across `ROADMAP.md`, `TODO.md`, and `PROJECT_CONTEXT.md` can cause the Planner to recommend outdated work. Mitigation: route each fact to its declared source of truth and update mirrors together when status changes.
 - P0 spans multiple workstreams; treating every listed item as one implementation task would create scope creep. Mitigation: plan and approve one narrow task at a time.
-- Remaining Central Recovery Validation 6F includes high-risk paths and must use an isolated disposable account with flags returned OFF, as specified in `TODO.md`. The duplicate-prevention safety matrix is P0; read-only Orphan detection is P1 and does not block P0 closure. This document authorizes no runtime execution.
+- The remaining Central Recovery Validation 6F auto-adopt-ON row is high risk and must use the isolated disposable account with the flag returned OFF, as specified in `TODO.md`. Read-only Orphan detection is P1 and does not block P0 closure.
 - Release Readiness is designed but not implemented. Do not report the future aggregate gate as current evidence.
 
 ### Resolved source conflict
 
 | Decision | Sources synchronized | Governing interpretation |
 | --- | --- | --- |
-| Recovery Validation 6F priority split resolved 2026-07-19 | `ROADMAP.md`, `TODO.md`, `PROJECT_CONTEXT.md`, and this initiative | P0 includes the remaining duplicate-prevention safety matrix: confirmed-zero create, MEDIUM confirmation/OFF + auto-adopt/ON, ambiguity, search/verification failure, stale variants, and cross-user isolation. Read-only Orphan detection remains P1 and does not block P0 closure. |
+| Recovery Validation 6F priority split resolved 2026-07-19 | `ROADMAP.md`, `TODO.md`, `PROJECT_CONTEXT.md`, and this initiative | P0 matrix is closed except MEDIUM auto-adopt ON; read-only Orphan detection remains P1 and does not block P0 closure. |
 
 ## 10. Completion Criteria
 
-- [x] Architecture, roadmap, standards, and technical-status mirrors agree on the current milestone and remaining P0 work. *(Synchronized 2026-07-20: ProductDecisions + static Tier-2 sweep complete; live Recovery Validation 6F + beta-readiness evidence remain.)*
+- [x] Architecture, roadmap, standards, and technical-status mirrors agree on the current milestone and remaining P0 work. *(Synchronized 2026-07-20: only 6F MEDIUM auto-adopt ON + beta-readiness evidence remain.)*
 - [ ] Regression Discovery is applied consistently to meaningful changes and any required reusable scenarios are recorded.
 - [x] Remaining P0 ProductDecision items have an explicit disposition in their authoritative documents. *(Settings typography resolved 2026-07-20; no other known P0 ProductDecision remains.)*
 - [ ] Beta-readiness polish and runtime regression evidence required for P0 are recorded.
-- [ ] Central verification gaps assigned to P0 are closed or explicitly deferred with rationale and safety evidence. *(Static Tier-2 resolver sweep closed 2026-07-20; live Recovery Validation 6F safety matrix remains.)*
+- [ ] Central verification gaps assigned to P0 are closed or explicitly deferred with rationale and safety evidence. *(Static Tier-2 sweep and all 6F rows except MEDIUM auto-adopt ON are closed.)*
 - [ ] `ROADMAP.md` and `PROJECT_CONTEXT.md` explicitly identify P0 as complete and the remaining P1 scope as current before additional P1 implementation advances.
 - [ ] Required validation evidence is recorded without claiming the future aggregate Release Readiness report has run.
 - [ ] Deferred work is explicitly routed to P1, P2, or a later authoritative milestone.
 
 ## 11. Recommended Next Task
 
-- Task: Plan the P0 Recovery Validation 6F safety-matrix pass against an isolated disposable Central account, including the exact flag transitions, evidence capture, and flags-OFF cleanup check.
-- Why this task: The sequencing decision is now resolved; runtime evidence for the remaining duplicate-prevention branches is the next Central-verification gate for P0.
+- Task: Run the final 6F MEDIUM/name-only automatic-adoption row with `CENTRAL_AUTO_ADOPT=true` on the isolated disposable Central account, verify exact-candidate relink/no-create, then restore the flag OFF.
+- Why this task: Every other P0 recovery branch now has runtime evidence; this is the sole remaining Central-verification row.
 - Required role flow: Planner → Tester → Validator; route to Engineer only if validation exposes a defect.
 - Approval gates: Explicit runtime-test approval for the named disposable account and Central target; separate approval for any code edit, commit, push, or deployment.
 
@@ -133,7 +133,7 @@ CashCompass has synchronized project documentation, recorded disposition of rema
 - Central Tier-2 source sweep: no direct active-spreadsheet acquisition remains in a Central user-facing production path outside the resolver. Residual executable calls are the resolver's bound fallback, bound-only HOME/sort utilities, developer Test Setup, and the harness fail-closed safety check.
 - Regression Discovery: the Settings change affects first-create formatting only. Existing Provisioning and Workbook Drift coverage are the appropriate checks; no header/schema, financial calculation, dashboard output, recovery behavior, or historical `REG-###` case changes.
 - Isolated deployment `@109` runtime evidence: Recovery Regression Suite passed 1/1 with 7/7 functional assertions; its disposable workbook was inspected with a 16pt `INPUT - Settings` header, 14pt body, and the ratified `#ffe599` header background, then moved to trash.
-- Configured Central default read-only Workbook Health passed provisioning 8/8. Workbook Drift reported six non-blocking width advisories only: one on `LOG - Activity` and five on `INPUT - Upcoming Expenses`. This evidence does not replace the remaining live Recovery Validation 6F disposable-account matrix.
+- Configured Central default read-only Workbook Health passed provisioning 8/8. Workbook Drift reported six non-blocking width advisories only. The later disposable-account pass closed every 6F row except MEDIUM auto-adopt ON.
 
 ## 12. Maintenance
 

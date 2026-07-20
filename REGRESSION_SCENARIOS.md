@@ -157,7 +157,7 @@ Whenever a production bug is fixed:
 ### REG-009 — Central recovery silently created a duplicate workbook
 - Category: REGRESSION / RECOVERY
 - Date discovered: 2026-07-07
-- Status: covered by `REGRESSION-RECOVERY-DUPLICATE-GUARD`; Apps Script scenario 7/7 and Recovery suite 1/1 passed 2026-07-17; HIGH-marker runtime reproduction passed across two accounts, including restoration of a distinctive `$10,000` value for `cashcompass2026@gmail.com`
+- Status: covered by `REGRESSION-RECOVERY-DUPLICATE-GUARD`; Apps Script scenario 7/7 and Recovery suite 1/1 passed; runtime PASS for confirmed-zero, HIGH/OFF, MEDIUM-confirm/OFF, ambiguity, search/verify failure, stale variants, and cross-user isolation. MEDIUM auto-adopt ON remains open.
 - Affected files: `central_provisioning.js`, `central_diagnostics.js`,
   `sheet_bootstrap.js`, `Dashboard_Script_Render.html`, `Dashboard_Body.html`
 - Root cause: after a mapping was cleared, `provisionWorkbookForUser_` searched
