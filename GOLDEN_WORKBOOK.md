@@ -20,6 +20,7 @@ These are the **deliberate deviations from the older hand-tuned Golden state** r
 - **Cash Flow Summary row financial-health coloring (2026-07-11).** Summary net values color green (`#38761d`) positive / red (`#cc0000`) negative / black zero via narrowly-scoped conditional formatting; Summary number format reverted to neutral currency. → see *Financial Ledger* family below.
 - **Donation year-block styling (2026-07-12).** `INPUT - Donation` migrated to the shared Financial-Ledger year-block styling engine (`applyDonationSheetStyling_` → `applyFinancialLedgerBaseStyle_`), first-create only. → see *Financial Ledger* family below.
 - **Upcoming Expenses typography (2026-07-11).** 14pt body font retained (vs Golden's historical 12pt) with `ID` widened for readability; surfaces as **KeepCentral**, never **AdoptGolden**. → see *Operational Planning* family below.
+- **Settings typography (2026-07-20).** `INPUT - Settings` uses the canonical non-SYS input-grid sizes: 16pt Key / Value header and 14pt editable body, first-create only. This resolves the final known P0 typography ProductDecision; manual alignment of the Canonical workbook is non-blocking.
 
 ---
 

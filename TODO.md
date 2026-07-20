@@ -179,7 +179,7 @@ Broader invited audience; operate many users safely. **Review `## UX Backlog (Ve
 | Shared Lifecycle rollout — **Investments · Houses · Income Sources** | P3 | Bank Accounts pattern | M each |
 | Shared Sheet Write Utilities | P3 | — | L |
 | Admin tooling: `adminAdoptWorkbook`, `adminTrashOrphan` (soft-delete only) | P3 | 6E.2 | M |
-| Tier-2 `getActiveSpreadsheet()` migration cleanup (full dashboard) | P3 | — | M–L |
+| Tier-2 `getActiveSpreadsheet()` user-facing sweep | P3 | — | ✅ Closed by source inspection 2026-07-20 — residual calls are resolver fallback, bound/dev utilities, or harness safety only |
 | Bound deployment cleanup / manifest revert once central is primary | P3 | Central primary | S |
 
 ### Stage 6 — Version 2 / Future Platform

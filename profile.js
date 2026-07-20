@@ -203,15 +203,20 @@ function ensureInputSettingsSheet_(ss) {
   try {
     sheet.getRange(1, 1, 1, 2).setFontWeight('bold');
     sheet.setFrozenRows(1);
-    // Validator-approved AdoptGolden convergence (FIRST-CREATE ONLY — this
+    // Validator-approved canonical convergence (FIRST-CREATE ONLY — this
     // branch runs only on the insertSheet path, so existing populated Settings
-    // sheets are never restyled): Key 160→240, Value 360→385, and the ratified
-    // softer Operational header yellow #ffe599 (NOT the brighter legacy
-    // #ffff00 / #fff200). Fonts are intentionally left unchanged (header/body
-    // font size remains a ProductDecision, deferred this pass).
+    // sheets are never restyled): Key 160→240, Value 360→385, the ratified
+    // softer header yellow #ffe599 (NOT the brighter legacy #ffff00 / #fff200),
+    // and the 2026-07-20 Settings typography decision (16pt header / 14pt body).
     sheet.setColumnWidth(1, 240);
     sheet.setColumnWidth(2, 385);
-    sheet.getRange(1, 1, 1, 2).setBackground(CANON_HEADER_YELLOW_);
+    sheet.getRange(1, 1, 1, 2)
+      .setBackground(CANON_HEADER_YELLOW_)
+      .setFontSize(CANON_FONT_HEADER_);
+    var settingsBodyRows = sheet.getMaxRows() - 1;
+    if (settingsBodyRows > 0) {
+      sheet.getRange(2, 1, settingsBodyRows, 2).setFontSize(CANON_FONT_BODY_);
+    }
   } catch (_e) { /* cosmetic */ }
   return sheet;
 }

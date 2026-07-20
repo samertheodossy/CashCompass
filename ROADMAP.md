@@ -31,9 +31,9 @@
 
 - **Documentation** — keep architecture docs, roadmap, and standards in sync with the current state (this milestone).
 - **Regression Discovery (process)** — every meaningful bug fix / feature / schema / dashboard / financial-calc change runs the **Regression Discovery Policy** and appends the reusable **Regression Discovery** prompt block (`REGRESSION_SUITE_PLAN.md → Regression Discovery Policy` + `§A`) so test coverage grows as the product evolves.
-- **Remaining product decisions** — record and resolve the deferred **ProductDecision** items (e.g. Settings header/body font size) tracked in `GOLDEN_WORKBOOK.md` / `WORKBOOK_PARITY_CHECKLIST.md` / `ENGINEERING_STANDARDS.md → Ratified product decisions`.
+- **Product decisions — ✅ current P0 inventory resolved.** The final known P0 item, Settings header/body typography, was ratified 2026-07-20 as 16pt / 14pt and implemented first-create only. Future Validator discoveries follow the normal record-and-defer rule.
 - **Beta readiness** — onboarding polish, error handling, empty-state / UX consistency, and a runtime regression pass before release.
-- **Central verification** — confirm all user-facing paths resolve the correct workbook in Central mode; close the Tier-2 sweep of remaining non-critical / dev paths.
+- **Central resolver verification — ✅ static Tier-2 sweep closed 2026-07-20.** All Central user-facing production paths use `getUserSpreadsheet_()`; remaining direct active-spreadsheet calls are intentionally confined to the resolver's bound fallback, bound-only utilities, developer Test Setup, and the harness safety guard. Live Recovery Validation 6F remains the P0 runtime evidence gate below.
 - **Recovery Validation 6F safety matrix** — close the remaining P0 duplicate-prevention branches on a disposable Central account: confirmed-zero create, MEDIUM confirmation with auto-adopt OFF, MEDIUM auto-adopt with the flag ON, ambiguity, search/verification failure, stale variants, and cross-user isolation. Return all recovery flags OFF afterward. Read-only orphan detection remains P1 and does not block P0 closure.
 
 ### Priority 1 — Validator Phase 2 + Test Harness / Regression Runner

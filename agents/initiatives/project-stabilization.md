@@ -9,7 +9,7 @@
 | Priority | P0 |
 | Initiative status | `ACTIVE` |
 | Knowledge status | `DRAFT` |
-| Last reviewed date | `2026-07-19` |
+| Last reviewed date | `2026-07-20` |
 | Last reviewed Git reference | `255890a` (pre-change baseline) |
 | Authoritative priority source | [`ROADMAP.md`](../../ROADMAP.md) → “Priority 0 — Project stabilization” |
 
@@ -63,9 +63,9 @@ CashCompass has synchronized project documentation, recorded disposition of rema
 | --- | --- | --- | --- |
 | Documentation synchronization | `ROADMAP.md` → P0 Documentation; `PROJECT_CONTEXT.md`; `TODO.md` | `ACTIVE` — current P0 | Architecture, roadmap, standards, and status documents agree on current milestones and remaining work |
 | Regression Discovery process | `ROADMAP.md` → P0 Regression Discovery; `REGRESSION_SUITE_PLAN.md` → policy and prompt block | `ACTIVE` — current P0 | Meaningful changes record their coverage decision and add reusable scenarios where required |
-| Remaining ProductDecision items | `ROADMAP.md` → P0 Remaining product decisions; `GOLDEN_WORKBOOK.md`; `WORKBOOK_PARITY_CHECKLIST.md`; `ENGINEERING_STANDARDS.md` | `ACTIVE` — current P0 | Each remaining item is ratified, deferred with rationale, or otherwise given an explicit disposition |
+| Remaining ProductDecision items | `ROADMAP.md` → P0 Product decisions; `GOLDEN_WORKBOOK.md`; `WORKBOOK_PARITY_CHECKLIST.md`; `ENGINEERING_STANDARDS.md` | `COMPLETE` — known P0 inventory resolved 2026-07-20 | Settings typography ratified as 16pt header / 14pt body and implemented first-create only; future discoveries use normal record-and-defer discipline |
 | Beta readiness | `ROADMAP.md` → P0 Beta readiness; `TODO.md` → Beta Gate; `PROJECT_CONTEXT.md` → Family Beta Readiness | `ACTIVE` — current P0 | Required onboarding/UX/error/empty-state review and runtime regression evidence are recorded in authoritative sources |
-| Central verification | `ROADMAP.md` → P0 Central verification; `PROJECT_CONTEXT.md` → Central status | `ACTIVE` — current P0 | User-facing paths are confirmed through the resolver seam and the documented remaining non-critical/dev sweep is closed or explicitly deferred |
+| Central verification | `ROADMAP.md` → P0 Central resolver verification + Recovery Validation 6F; `PROJECT_CONTEXT.md` → Central status | `PARTIAL` — static Tier-2 sweep closed 2026-07-20; live 6F matrix pending | Source scan confirms user-facing paths route through the resolver; residual direct calls are classified bound/dev/safety-only. P0 completes after the approved disposable-account recovery matrix and flags-OFF evidence. |
 
 ## 6. Related Designs and Decisions
 
@@ -113,9 +113,9 @@ CashCompass has synchronized project documentation, recorded disposition of rema
 
 - [ ] Architecture, roadmap, standards, and technical-status mirrors agree on the current milestone and remaining P0 work. *(Recovery Validation priority was resolved and synchronized 2026-07-19; continue checking other P0 mirrors.)*
 - [ ] Regression Discovery is applied consistently to meaningful changes and any required reusable scenarios are recorded.
-- [ ] Remaining P0 ProductDecision items have an explicit disposition in their authoritative documents.
+- [x] Remaining P0 ProductDecision items have an explicit disposition in their authoritative documents. *(Settings typography resolved 2026-07-20; no other known P0 ProductDecision remains.)*
 - [ ] Beta-readiness polish and runtime regression evidence required for P0 are recorded.
-- [ ] Central verification gaps assigned to P0 are closed or explicitly deferred with rationale and safety evidence.
+- [ ] Central verification gaps assigned to P0 are closed or explicitly deferred with rationale and safety evidence. *(Static Tier-2 resolver sweep closed 2026-07-20; live Recovery Validation 6F safety matrix remains.)*
 - [ ] `ROADMAP.md` and `PROJECT_CONTEXT.md` explicitly identify P0 as complete and the remaining P1 scope as current before additional P1 implementation advances.
 - [ ] Required validation evidence is recorded without claiming the future aggregate Release Readiness report has run.
 - [ ] Deferred work is explicitly routed to P1, P2, or a later authoritative milestone.
@@ -126,6 +126,14 @@ CashCompass has synchronized project documentation, recorded disposition of rema
 - Why this task: The sequencing decision is now resolved; runtime evidence for the remaining duplicate-prevention branches is the next Central-verification gate for P0.
 - Required role flow: Planner → Tester → Validator; route to Engineer only if validation exposes a defect.
 - Approval gates: Explicit runtime-test approval for the named disposable account and Central target; separate approval for any code edit, commit, push, or deployment.
+
+### Local closeout evidence (2026-07-20)
+
+- ProductDecision inventory: Settings typography was the only explicitly open P0 decision found. It is ratified as 16pt header / 14pt body and implemented on first-create only; existing populated sheets remain untouched.
+- Central Tier-2 source sweep: no direct active-spreadsheet acquisition remains in a Central user-facing production path outside the resolver. Residual executable calls are the resolver's bound fallback, bound-only HOME/sort utilities, developer Test Setup, and the harness fail-closed safety check.
+- Regression Discovery: the Settings change affects first-create formatting only. Existing Provisioning and Workbook Drift coverage are the appropriate checks; no header/schema, financial calculation, dashboard output, recovery behavior, or historical `REG-###` case changes.
+- Isolated deployment `@109` runtime evidence: Recovery Regression Suite passed 1/1 with 7/7 functional assertions; its disposable workbook was inspected with a 16pt `INPUT - Settings` header, 14pt body, and the ratified `#ffe599` header background, then moved to trash.
+- Configured Central default read-only Workbook Health passed provisioning 8/8. Workbook Drift reported six non-blocking width advisories only: one on `LOG - Activity` and five on `INPUT - Upcoming Expenses`. This evidence does not replace the remaining live Recovery Validation 6F disposable-account matrix.
 
 ## 12. Maintenance
 
