@@ -62,6 +62,8 @@ assert.match(suites, /id: 'SUITE-PERFORMANCE-PLANNER'[\s\S]*?implemented: true[\
   'Performance suite must use the explicit-workbook planner scenario');
 assert.match(suites, /id: 'SUITE-BILLS-PAY-E2E'[\s\S]*?implemented: true[\s\S]*?'E2E-BILLS-DUE-PAY'/,
   'Bills Pay suite must use the explicit-workbook payment scenario');
+assert.match(suites, /id: 'SUITE-WORKBOOK-HEALTH'[\s\S]*?aggregate read-only Workbook Health[\s\S]*?'SMOKE-POPULATED-FIXTURE'/,
+  'Workbook Health suite must reuse the proven populated disposable scenario');
 assert.match(release, /PERFORMANCE_BUDGETS_RATIFIED/, 'Release verdict must fail closed until performance budgets are ratified');
 assert.match(planner, /options\.spreadsheet \|\| getUserSpreadsheet_\(\)/, 'Planner must preserve normal resolution and allow an internal explicit target');
 assert.match(planner, /buildInputBillPlannerPaymentWindows_\([\s\S]*?paySoonWindowDays,\s*ss\s*\)/,
@@ -139,6 +141,15 @@ const healthyFormulaSheet = {
 };
 assert.equal(formulaCtx.validatorCheckSummaryFormulas_(healthyFormulaSheet).length, 0,
   'Canonical SUM summary must pass formula validation');
+const normalizedSingleCellFormulaSheet = {
+  ...healthyFormulaSheet,
+  getLastRow: () => 4,
+  getRange: (row, col, rows, cols) => row === 1 && rows === 4
+    ? { getDisplayValues: () => [['Account Name', 'Balance'], ['Test A', ''], ['Test B', '100'], ['TOTAL DEBT', '100']] }
+    : { getDisplayValues: () => [['TOTAL DEBT', '100']], getFormulas: () => [['', '=SUM(B3)']] }
+};
+assert.equal(formulaCtx.validatorCheckSummaryFormulas_(normalizedSingleCellFormulaSheet).length, 0,
+  'Google Sheets-normalized single-cell SUM summary must pass formula validation');
 const hardcodedFormulaSheet = {
   ...healthyFormulaSheet,
   getLastRow: () => 2,

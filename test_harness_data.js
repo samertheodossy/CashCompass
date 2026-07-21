@@ -194,7 +194,9 @@ function harnessSeedDebt_(ctx, debt) {
   ctx.assertWritable();
   ensureOnboardingDebtsSheetFromDashboard('normal', ctx.ss);
   var sheet = ctx.ss.getSheetByName(getSheetNames_().DEBTS);
-  var row = harnessAppendByHeader_(sheet, {
+  var hm = getDebtsHeaderMap_(sheet);
+  var existingTotalRow = findDebtTotalRow_(sheet, hm);
+  var debtValues = {
     'Account Name': debt.name,
     'Type': debt.type,
     'Account Balance': debt.balance,
@@ -205,8 +207,14 @@ function harnessSeedDebt_(ctx, debt) {
     'Int Rate': debt.interestRate,
     'Acct PCT Avail': debt.pctAvailable,
     'Active': 'Yes'
-  });
-  var hm = getDebtsHeaderMap_(sheet);
+  };
+  // Central first-create sheets already contain TOTAL DEBT. Insert the
+  // representative debt above that summary so the fixture matches the same
+  // row ordering used by the production debt writer. Never append active
+  // fixture data below the summary row.
+  var row = existingTotalRow === -1
+    ? harnessAppendByHeader_(sheet, debtValues)
+    : harnessInsertBeforeByHeader_(sheet, existingTotalRow, debtValues);
   var totalRow = seedDebtsTotalRow_(sheet, hm);
   refreshDebtsTotalRow_(sheet, hm, totalRow);
   ctx.actions.push('Seed representative Debt and TOTAL DEBT formulas');
@@ -288,6 +296,21 @@ function harnessSeedRetirement_(ctx, retirement) {
 
 /** Append one row by exact canonical header labels; unknown labels are refused. */
 function harnessAppendByHeader_(sheet, valuesByHeader) {
+  var row = harnessBuildRowByHeader_(sheet, valuesByHeader);
+  sheet.appendRow(row);
+  return sheet.getLastRow();
+}
+
+/** Insert one canonical row immediately before an existing summary row. */
+function harnessInsertBeforeByHeader_(sheet, beforeRow, valuesByHeader) {
+  var row = harnessBuildRowByHeader_(sheet, valuesByHeader);
+  sheet.insertRowBefore(beforeRow);
+  sheet.getRange(beforeRow, 1, 1, row.length).setValues([row]);
+  return beforeRow;
+}
+
+/** Build one row by exact canonical header labels; unknown labels are refused. */
+function harnessBuildRowByHeader_(sheet, valuesByHeader) {
   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0] || [];
   var row = [];
   for (var i = 0; i < headers.length; i++) row.push('');
@@ -297,8 +320,7 @@ function harnessAppendByHeader_(sheet, valuesByHeader) {
     if (col === -1) throw new Error('Harness seed: missing canonical header "' + key + '" on ' + sheet.getName() + '.');
     row[col] = valuesByHeader[key];
   }
-  sheet.appendRow(row);
-  return sheet.getLastRow();
+  return row;
 }
 
 function harnessHeaderColumn_(sheet, header) {

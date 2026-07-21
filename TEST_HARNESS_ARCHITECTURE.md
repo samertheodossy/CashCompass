@@ -4,8 +4,9 @@
 workbooks and asks the read-only **Validator** to confirm nothing broke.*
 
 **Status:** **Foundation V1 implemented; populated-fixture hardening passed isolated
-Central runtime validation on `@117`, and Performance Planner plus Bills Pay E2E
-passed isolated Central `@120` (2026-07-21).** `test_harness_core.js`, scenario/data modules, and
+Central runtime validation on `@117`, Performance Planner plus Bills Pay E2E
+passed isolated Central `@120`, and dedicated Workbook Health passed isolated
+Central `@122` (2026-07-21).** `test_harness_core.js`, scenario/data modules, and
 `test_harness_report.js` provide the guard + disposable-workbook lifecycle +
 `assertDisposableTarget_` + smoke/regression scenarios + report shaping. The new
 `SMOKE-POPULATED-FIXTURE` scenario verifies Restricted sharing before any seed
@@ -20,12 +21,19 @@ selected from the dynamic registry with a Keep/Trash disposition, backed by the 
 the harness's own disposable workbook). Five foundation suites are runtime-proven.
 The current P1 slice adds explicit-disposable-workbook Performance Planner and
 Bills Pay E2E scenarios plus bounded Release Readiness orchestration. The source is
-pushed to Central and only the isolated validation deployment is at `@120`; Beta
+pushed to Central and only the isolated validation deployment is at `@122`; Beta
 remains `@106`.
 First-Run UX E2E, Populated Dashboard E2E, and Recovery Live are registered
 fail-closed as NOT IMPLEMENTED until their authenticated browser/disposable-account
-seams exist; dedicated runtime validation of the new Workbook Health modules and
-the final bounded Release Readiness verdict remain pending.
+seams exist; the final bounded Release Readiness verdict remains pending.
+
+**`@122` Workbook Health evidence:** `SUITE-WORKBOOK-HEALTH` reused the proven
+Restricted populated fixture and passed 1/1 scenario, 9/9 functional assertions,
+CURRENT/FULLY_CURRENT schema, Provisioning, Drift, Formula, Conditional Formatting,
+Named Ranges, aggregate Health, and verified Trash. The first `@121` run exposed
+24 valid single-cell `SUM` normalization shapes plus one fixture-only Debt summary
+ordering defect; the corrected confirmation had zero warnings. Harness and timing
+flags were restored OFF, and no bounded workbook was touched.
 
 **`@120` deeper-suite evidence:** `SUITE-BILLS-PAY-E2E` completed in 96.1 seconds
 with 1/1 scenario PASS, 3/3 functional assertions, Provisioning/Drift PASS, and

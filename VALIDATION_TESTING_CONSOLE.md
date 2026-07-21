@@ -422,10 +422,12 @@ gates on the whole subsystem.
   resolution, structured-object return, and rendering end-to-end. *(The client
   controller currently lives inline in the HTML rather than a separate
   `validation_testing.js`; extraction is deferred.)*
-- **C2 — More Validator modules. ◑ Source-ready; runtime pending.** Workbook Drift
+- **C2 — More Validator modules. ✅ Runtime-proven at isolated `@122`.** Workbook Drift
   and Schema Evolution remain wired individually. **Run Workbook Health** now calls
   the aggregate server report and renders Formula, Conditional-Formatting, and
-  Named-Range advisory cards/findings with Provisioning, Schema, and Drift.
+  Named-Range advisory cards/findings with Provisioning, Schema, and Drift. The
+  dedicated `SUITE-WORKBOOK-HEALTH` confirmation passed with zero warnings on a
+  Restricted populated disposable fixture and verified Trash cleanup.
 - **C3 — Regression Testing (after Test Harness foundation). ◑ V1 slice done.**
   Section C supports one registered scenario or one registered suite at a time,
   including `SMOKE-POPULATED-FIXTURE` and `SUITE-CENTRAL-SAFETY`, with Keep/Trash

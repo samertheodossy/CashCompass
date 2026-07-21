@@ -105,14 +105,14 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
 | Aggregate Release Readiness gate and remaining automated regression coverage | P1 | Stable read models ✓ + remaining Validator/Harness coverage | L–XL |
-| **Remaining Validator Phase 2 modules** — Formula, Conditional-Formatting, Named-Range, and aggregate Workbook Health | P1 | Phase 2 foundation ✓ | L |
+| **Validator Phase 2 runtime evidence — ✅ COMPLETE** — isolated Central `@122` aggregate Workbook Health PASS: Formula / Conditional Formatting / Named Ranges / formal schema registry / Provisioning / Drift clean, zero warnings after correcting validator normalization and fixture debt ordering; Restricted + 9/9 functional + verified Trash | P1 | Run `20260721-120759-5dc2` | — |
 | **Disposable populated-fixture hardening** — ✅ isolated Central `@117` PASS: Central-created fixture, representative eight-domain data seeding, Restricted-sharing assertion, `drive.file`-compatible access, and verified Trash cleanup | P1 | Test Harness Foundation V1 ✓ | M |
 | Runtime regression checklist (interim manual gate) | P1 | — | M |
-| **Recent-session permanent regression packs** — `SUITE-FIRST-RUN-UX-E2E`, `SUITE-POPULATED-DASHBOARD-E2E`, `SUITE-RECOVERY-LIVE`, `SUITE-PERFORMANCE-PLANNER`, `SUITE-BILLS-PAY-E2E`; aggregate in bounded chunks | P1–P3 by dependency | Central Safety suite + UI runner + explicit-ss planner seam | L–XL |
+| **Recent-session permanent regression packs** — Performance Planner and Bills Pay E2E runtime PASS at `@120`; remaining `SUITE-FIRST-RUN-UX-E2E`, `SUITE-POPULATED-DASHBOARD-E2E`, and `SUITE-RECOVERY-LIVE`; aggregate in bounded chunks | P1–P3 by dependency | Central Safety suite + real browser/disposable-account seams | L–XL |
 | Financial-integrity gate wiring into release | P1 | FI Phase 3 convergence | S |
 | Deployment checklist | P2 | — | S |
 
-> **Validator Phase 2 foundation (shipped 2026-07-13; remaining scope follows P0).** Provisioning, Workbook Drift, and Schema Evolution V1 are implemented, along with Test Harness Foundation V1 and the Validation & Testing console V1. The Validator remains read-only: it validates provisioning and never performs it. Remaining P1 scope includes Formula, Conditional-Formatting, and Named-Range validation; the aggregate Workbook Health report; scenario packs; and the Release Readiness gate. Full milestone detail lives in `VALIDATOR_ARCHITECTURE.md §10`, `TEST_HARNESS_ARCHITECTURE.md`, and `VALIDATION_TESTING_CONSOLE.md`.
+> **Validator Phase 2 Workbook Health runtime gate completed 2026-07-21.** Provisioning, Workbook Drift, Schema Evolution V1, Formula, Conditional Formatting, Named Ranges, the formal schema registry, and aggregate Workbook Health are implemented and passed on isolated Central `@122`. The Validator remains read-only: it validates provisioning and never performs it. Remaining P1 scope is the three execution-dependent scenario packs, performance-budget ratification, Release Readiness console controls, and the final bounded verdict. Full milestone detail lives in `VALIDATOR_ARCHITECTURE.md §10`, `TEST_HARNESS_ARCHITECTURE.md`, and `VALIDATION_TESTING_CONSOLE.md`.
 
 **D. Recovery completion — ✅ P0 complete 2026-07-20**
 
@@ -340,6 +340,8 @@ A shared vocabulary + spacing/typography pass so every surface feels the same.
 **Goal:** turn the working dashboard into a clear, balanced, professional product without changing calculations, workbook schemas, or write behavior. This is an **ordered set of small implementation passes**: complete, review, and validate one ID at a time. Do not bundle the entire list into one broad redesign.
 
 **Ordering rule:** begin with `UX-01` and proceed in ID order unless a related P1/P2 change makes a later item safer to complete opportunistically. Each pass must preserve Central and bounded behavior, use existing components/styles where practical, and receive focused desktop + responsive regression validation before it closes.
+
+**Opportunistic polish completed 2026-07-21:** shared signed-currency formatting now places the negative sign before the currency symbol (`-$68.00`, not `$-68.00`) across the web and standalone dashboards. Positive (`+$…`) and zero (`$0.00`) behavior is preserved. Focused/full local regressions and a bounded Overview runtime check passed.
 
 ##### UX-01 — Overview information architecture and balanced grid *(first)*
 

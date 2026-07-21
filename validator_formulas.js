@@ -76,6 +76,13 @@ function validatorFormulaShapeMatches_(sheetName, formula, summaryRow, col) {
     return normalized.indexOf('"INCOME"') !== -1 && normalized.indexOf('"EXPENSE"') !== -1 &&
       normalized.indexOf(ownRange) !== -1 && (normalized.match(/SUMIF\(/g) || []).length === 2;
   }
+  // Google Sheets normalizes a one-row range such as =SUM(H3:H3) to
+  // =SUM(H3). This is still the canonical summary shape when the referenced
+  // cell is in the summary cell's own column and above the summary row.
+  var single = normalized.match(/^=SUM\(\$?([A-Z]+)\$?(\d+)\)$/);
+  if (single) {
+    return single[1] === colLetter && Number(single[2]) >= 2 && Number(single[2]) < summaryRow;
+  }
   var m = normalized.match(/^=SUM\(\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?(\d+)\)$/);
   if (!m) return false;
   var startCol = m[1], startRow = Number(m[2]), endCol = m[3], endRow = Number(m[4]);

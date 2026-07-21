@@ -128,6 +128,14 @@ function getHarnessSuites_() {
       ]
     },
     {
+      id: 'SUITE-WORKBOOK-HEALTH',
+      label: 'Workbook Health Validation',
+      description: 'Run aggregate read-only Workbook Health—schema, formulas, conditional formatting, named ranges, Provisioning, and Drift—on the proven Restricted populated disposable fixture with verified Trash cleanup.',
+      scenarioIds: [
+        'SMOKE-POPULATED-FIXTURE'
+      ]
+    },
+    {
       id: 'SUITE-CENTRAL-SAFETY',
       label: 'Central Safety Regression',
       description: 'On-demand recent-session guard pack: recovery duplicate prevention, Quick Add write integrity, and Restricted representative populated-fixture lifecycle.',

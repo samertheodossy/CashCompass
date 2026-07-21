@@ -3,7 +3,7 @@
 *The pre-release go/no-go produced by the Test Harness running every scenario pack
 and the Validator judging each result.*
 
-**Status:** **Bounded runner source-ready and isolated at Central `@120`; final runtime verdict pending.** The Validator
+**Status:** **Bounded runner source-ready; Validator/Workbook Health runtime-proven at isolated Central `@122`; final runtime verdict pending.** The Validator
 Phase 2 core (Provisioning / Drift / Schema Evolution), fail-closed disposable
 workbook lifecycle, and populated-fixture hardening now exist. Five suites are
 runnable: `SUITE-BILLS-REGRESSION`, `SUITE-RECOVERY-REGRESSION`,
@@ -17,7 +17,8 @@ Planner and Bills Pay E2E are runtime-proven on disposable workbooks at isolated
 verified Trash; Performance Planner passed 4/4 with first/repeat timings of
 32.779 s / 31.901 s, retained History rows, zero History charts, Restricted
 owner-only sharing, CURRENT schema, Provisioning/Drift PASS, and verified Trash.
-First-Run UX
+Dedicated aggregate Workbook Health passed with zero warnings at isolated `@122`
+after narrow validator-normalization and disposable-fixture corrections. First-Run UX
 E2E, Populated Dashboard E2E, and Recovery Live remain explicitly NOT IMPLEMENTED
 until their authenticated browser/disposable-account seams exist. Therefore the
 current P1 verdict remains **NOT READY**; performance budgets also remain unratified
