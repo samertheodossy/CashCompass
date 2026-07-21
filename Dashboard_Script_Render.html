@@ -489,8 +489,7 @@ function fmtDelta(value, baselineLabel) {
   const num = Number(value);
   if (isNaN(num)) return 'Change since comparison point: —';
   const label = baselineLabel ? String(baselineLabel) : 'comparison point';
-  const sign = num > 0 ? '+' : '';
-  return 'Change since ' + label + ': ' + sign + fmtCurrency(num);
+  return 'Change since ' + label + ': ' + fmtSignedCurrency(num);
 }
 
 function fmtPriorMonthDelta(value, monthLabel) {
@@ -498,8 +497,7 @@ function fmtPriorMonthDelta(value, monthLabel) {
   const num = Number(value);
   if (isNaN(num)) return 'Change vs prior month: —';
   const label = monthLabel ? String(monthLabel) : 'prior month';
-  const sign = num > 0 ? '+' : '';
-  return 'Change vs ' + label + ': ' + sign + fmtCurrency(num);
+  return 'Change vs ' + label + ': ' + fmtSignedCurrency(num);
 }
 
 function fmtHealthTrendPoints(change, monthLabel) {
@@ -515,8 +513,9 @@ function fmtHealthTrendPoints(change, monthLabel) {
 function fmtSignedCurrency(value) {
   if (value === null || value === undefined || isNaN(Number(value))) return '—';
   const num = Number(value);
-  const sign = num > 0 ? '+' : '';
-  return sign + fmtCurrency(num);
+  if (num > 0) return '+' + fmtCurrency(num);
+  if (num < 0) return '-' + fmtCurrency(Math.abs(num));
+  return fmtCurrency(0);
 }
 
 function setCurrencyInputValue(id, value) {

@@ -571,8 +571,9 @@ function fmtCurrency(value) {
 function fmtSignedCurrency(value) {
   if (value === null || value === undefined || isNaN(Number(value))) return '—';
   const num = Number(value);
-  const sign = num > 0 ? '+' : '';
-  return sign + fmtCurrency(num);
+  if (num > 0) return '+' + fmtCurrency(num);
+  if (num < 0) return '-' + fmtCurrency(Math.abs(num));
+  return fmtCurrency(0);
 }
 
 function setCurrencyInputValue(id, value) {

@@ -9,6 +9,7 @@ const files = Object.fromEntries(await Promise.all([
   'Dashboard_Script_PlanningDebts.html',
   'Dashboard_Script_PropertiesHouseExpenses.html',
   'Dashboard_Script_Render.html',
+  'PlannerDashboard.html',
   'onboarding.js'
 ].map(async (name) => [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')])));
 
@@ -28,6 +29,12 @@ assert.match(
 );
 assert.match(render, /Financial plan refreshed/, 'Planner refresh must leave a success message');
 assert.match(render, /planner_refresh_btn/, 'Planner refresh must guard against duplicate clicks');
+for (const source of [render, files['PlannerDashboard.html']]) {
+  assert.match(source, /if \(num < 0\) return '-' \+ fmtCurrency\(Math\.abs\(num\)\);/,
+    'Signed currency must place the minus sign before the dollar sign');
+}
+assert.match(render, /Change vs ['"] \+ label \+ ': ' \+ fmtSignedCurrency\(num\)/,
+  'Overview month deltas must use the signed-currency formatter');
 
 const body = files['Dashboard_Body.html'];
 for (const id of [
