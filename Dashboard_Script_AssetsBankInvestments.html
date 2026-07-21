@@ -10,6 +10,24 @@ function fillBankAccountDropdownFromData_(data) {
     sel.appendChild(opt);
   });
   populateBankAddDatalists_(data);
+  updateBankUpdateAvailability_();
+}
+
+function updateBankUpdateAvailability_() {
+  const sel = document.getElementById('bank_account');
+  const hasSelection = !!(sel && String(sel.value || '').trim());
+  const hasAccounts = !!(sel && sel.options && sel.options.length > 1);
+  const saveBtn = document.getElementById('bank_update_save_btn');
+  const stopBtn = document.getElementById('bank_update_stop_btn');
+  const hint = document.getElementById('bank_update_empty_hint');
+  if (saveBtn) saveBtn.disabled = !hasSelection;
+  if (stopBtn) stopBtn.disabled = !hasSelection;
+  if (hint) {
+    hint.textContent = hasAccounts
+      ? 'Select a bank account to update or stop tracking it.'
+      : 'Add your first bank account to start tracking balances.';
+    hint.style.display = hasSelection ? 'none' : '';
+  }
 }
 
 // First-run fallback used when the workbook has no Bank Account Type
@@ -405,6 +423,7 @@ function evaluateBankBufferWarning() {
 function loadBankData(quiet) {
   const account = document.getElementById('bank_account').value;
   const date = document.getElementById('bank_date').value;
+  updateBankUpdateAvailability_();
 
   if (!account || !date) {
     bankCurrentData = null;
@@ -683,6 +702,24 @@ function fillInvestmentAccountDropdownFromData_(data) {
     sel.appendChild(opt);
   });
   populateInvestmentAddDatalists_(data);
+  updateInvestmentUpdateAvailability_();
+}
+
+function updateInvestmentUpdateAvailability_() {
+  const sel = document.getElementById('inv_account');
+  const hasSelection = !!(sel && String(sel.value || '').trim());
+  const hasAccounts = !!(sel && sel.options && sel.options.length > 1);
+  const saveBtn = document.getElementById('inv_update_save_btn');
+  const stopBtn = document.getElementById('inv_update_stop_btn');
+  const hint = document.getElementById('inv_update_empty_hint');
+  if (saveBtn) saveBtn.disabled = !hasSelection;
+  if (stopBtn) stopBtn.disabled = !hasSelection;
+  if (hint) {
+    hint.textContent = hasAccounts
+      ? 'Select an investment account to update or stop tracking it.'
+      : 'Add your first investment account to start tracking values.';
+    hint.style.display = hasSelection ? 'none' : '';
+  }
 }
 
 var INV_ADD_TYPE_CORE_OPTIONS_ = ['Brokerage', 'Retirement', 'Education', 'Other'];
@@ -849,6 +886,7 @@ function loadInvestmentSectionThenSelect_(accountName) {
 function loadInvestmentData(quiet) {
   const account = document.getElementById('inv_account').value;
   const date = document.getElementById('inv_date').value;
+  updateInvestmentUpdateAvailability_();
 
   if (!account || !date) {
     document.getElementById('inv_selectedMonth').textContent = '—';

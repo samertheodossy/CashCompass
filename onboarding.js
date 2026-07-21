@@ -146,13 +146,13 @@ function headerIndexCI_(map, label) {
  */
 function probeBankAccountsStatus_(ss, mode) {
   var sheet = getOnboardingSheet_(ss, mode, 'BANK_ACCOUNTS');
-  if (!sheet) return emptyProbeResult_(mode, 'BANK_ACCOUNTS', { note: 'Bank Accounts sheet not found.' });
+  if (!sheet) return emptyProbeResult_(mode, 'BANK_ACCOUNTS', { note: 'Add your first bank account to get started.' });
 
   var display;
   try {
     display = sheet.getDataRange().getDisplayValues();
   } catch (e) {
-    return emptyProbeResult_(mode, 'BANK_ACCOUNTS', { note: 'Could not read sheet.' });
+    return emptyProbeResult_(mode, 'BANK_ACCOUNTS', { note: "Couldn't check bank accounts. Please try again." });
   }
   if (display.length < 2) {
     return {
@@ -161,7 +161,7 @@ function probeBankAccountsStatus_(ss, mode) {
       partialCount: 0,
       sheetExists: true,
       sheetName: sheet.getName(),
-      note: 'Sheet exists but has no rows yet.'
+      note: 'Add your first bank account to get started.'
     };
   }
 
@@ -250,13 +250,13 @@ function probeBankAccountsStatus_(ss, mode) {
  */
 function probeDebtsStatus_(ss, mode) {
   var sheet = getOnboardingSheet_(ss, mode, 'DEBTS');
-  if (!sheet) return emptyProbeResult_(mode, 'DEBTS', { note: 'Debts sheet not found.' });
+  if (!sheet) return emptyProbeResult_(mode, 'DEBTS', { note: 'Add your debts to track balances and payments.' });
 
   var display;
   try {
     display = sheet.getDataRange().getDisplayValues();
   } catch (e) {
-    return emptyProbeResult_(mode, 'DEBTS', { note: 'Could not read sheet.' });
+    return emptyProbeResult_(mode, 'DEBTS', { note: "Couldn't check debts. Please try again." });
   }
   if (display.length < 2) {
     return {
@@ -265,7 +265,7 @@ function probeDebtsStatus_(ss, mode) {
       partialCount: 0,
       sheetExists: true,
       sheetName: sheet.getName(),
-      note: 'Sheet exists but has no rows yet.'
+      note: 'Add your debts to track balances and payments.'
     };
   }
 
@@ -331,13 +331,13 @@ function probeDebtsStatus_(ss, mode) {
  */
 function probeBillsStatus_(ss, mode) {
   var sheet = getOnboardingSheet_(ss, mode, 'BILLS');
-  if (!sheet) return emptyProbeResult_(mode, 'BILLS', { note: 'Bills sheet not found.' });
+  if (!sheet) return emptyProbeResult_(mode, 'BILLS', { note: 'Add your recurring bills to see what is due.' });
 
   var display;
   try {
     display = sheet.getDataRange().getDisplayValues();
   } catch (e) {
-    return emptyProbeResult_(mode, 'BILLS', { note: 'Could not read sheet.' });
+    return emptyProbeResult_(mode, 'BILLS', { note: "Couldn't check bills. Please try again." });
   }
   if (display.length < 2) {
     return {
@@ -346,7 +346,7 @@ function probeBillsStatus_(ss, mode) {
       partialCount: 0,
       sheetExists: true,
       sheetName: sheet.getName(),
-      note: 'Sheet exists but has no rows yet.'
+      note: 'Add your recurring bills to see what is due.'
     };
   }
 
@@ -414,13 +414,13 @@ function probeBillsStatus_(ss, mode) {
  */
 function probeUpcomingStatus_(ss, mode) {
   var sheet = getOnboardingSheet_(ss, mode, 'UPCOMING');
-  if (!sheet) return emptyProbeResult_(mode, 'UPCOMING', { note: 'Upcoming Expenses sheet not found.' });
+  if (!sheet) return emptyProbeResult_(mode, 'UPCOMING', { note: 'No upcoming expenses yet.' });
 
   var display;
   try {
     display = sheet.getDataRange().getDisplayValues();
   } catch (e) {
-    return emptyProbeResult_(mode, 'UPCOMING', { note: 'Could not read sheet.' });
+    return emptyProbeResult_(mode, 'UPCOMING', { note: "Couldn't check upcoming expenses. Please try again." });
   }
   if (display.length < 2) {
     return {
@@ -429,7 +429,7 @@ function probeUpcomingStatus_(ss, mode) {
       partialCount: 0,
       sheetExists: true,
       sheetName: sheet.getName(),
-      note: 'Sheet exists but has no rows yet.'
+      note: 'No upcoming expenses yet.'
     };
   }
 
@@ -527,7 +527,7 @@ function probeIncomeStatus_(ss, mode) {
       partialCount: 0,
       sheetExists: false,
       sheetName: cashFlowName,
-      note: 'Cash Flow sheet for ' + currentYear + ' not found.'
+      note: 'Add your income to complete this setup step.'
     };
   }
 
@@ -541,7 +541,7 @@ function probeIncomeStatus_(ss, mode) {
       partialCount: 0,
       sheetExists: true,
       sheetName: cashFlowSheet.getName(),
-      note: 'Cash Flow header row is malformed.'
+      note: "Couldn't check income. Please try again."
     };
   }
 
@@ -610,7 +610,7 @@ function probeIncomeStatus_(ss, mode) {
       partialCount: 0,
       sheetExists: true,
       sheetName: cashFlowSheet.getName(),
-      note: 'No income detected on ' + cashFlowSheet.getName() + '.'
+      note: 'Add your income to complete this setup step.'
     };
   }
 
@@ -750,7 +750,7 @@ function getOnboardingBankAccountsFromDashboard(mode) {
   };
 
   if (!sheet) {
-    base.statusNote = 'Bank Accounts sheet not found.';
+    base.statusNote = 'Add your first bank account to get started.';
     return base;
   }
 
@@ -758,11 +758,11 @@ function getOnboardingBankAccountsFromDashboard(mode) {
   try {
     display = sheet.getDataRange().getDisplayValues();
   } catch (e) {
-    base.statusNote = 'Could not read Bank Accounts sheet.';
+    base.statusNote = "Couldn't check bank accounts. Please try again.";
     return base;
   }
   if (display.length < 2) {
-    base.statusNote = 'Sheet exists but has no rows yet.';
+    base.statusNote = 'Add your first bank account to get started.';
     return base;
   }
 
@@ -891,7 +891,7 @@ function getOnboardingDebtsFromDashboard(mode) {
   };
 
   if (!sheet) {
-    base.statusNote = 'Debts sheet not found.';
+    base.statusNote = 'Add your debts to track balances and payments.';
     return base;
   }
 
@@ -899,11 +899,11 @@ function getOnboardingDebtsFromDashboard(mode) {
   try {
     display = sheet.getDataRange().getDisplayValues();
   } catch (e) {
-    base.statusNote = 'Could not read Debts sheet.';
+    base.statusNote = "Couldn't check debts. Please try again.";
     return base;
   }
   if (display.length < 2) {
-    base.statusNote = 'Sheet exists but has no rows yet.';
+    base.statusNote = 'Add your debts to track balances and payments.';
     return base;
   }
 
@@ -1130,7 +1130,7 @@ function getOnboardingBillsFromDashboard(mode) {
   };
 
   if (!sheet) {
-    base.statusNote = 'Bills sheet not found.';
+    base.statusNote = 'Add your recurring bills to see what is due.';
     return base;
   }
 
@@ -1138,11 +1138,11 @@ function getOnboardingBillsFromDashboard(mode) {
   try {
     display = sheet.getDataRange().getDisplayValues();
   } catch (e) {
-    base.statusNote = 'Could not read Bills sheet.';
+    base.statusNote = "Couldn't check bills. Please try again.";
     return base;
   }
   if (display.length < 2) {
-    base.statusNote = 'Sheet exists but has no rows yet.';
+    base.statusNote = 'Add your recurring bills to see what is due.';
     return base;
   }
 
@@ -1346,7 +1346,7 @@ function getOnboardingUpcomingFromDashboard(mode) {
   };
 
   if (!sheet) {
-    base.statusNote = 'Upcoming Expenses sheet not found.';
+    base.statusNote = 'No upcoming expenses yet.';
     return base;
   }
 
@@ -1354,11 +1354,11 @@ function getOnboardingUpcomingFromDashboard(mode) {
   try {
     display = sheet.getDataRange().getDisplayValues();
   } catch (e) {
-    base.statusNote = 'Could not read Upcoming Expenses sheet.';
+    base.statusNote = "Couldn't check upcoming expenses. Please try again.";
     return base;
   }
   if (display.length < 2) {
-    base.statusNote = 'Sheet exists but has no rows yet.';
+    base.statusNote = 'No upcoming expenses yet.';
     return base;
   }
 
@@ -1540,7 +1540,7 @@ function getOnboardingIncomeFromDashboard(mode) {
   };
 
   if (!sheet) {
-    base.statusNote = 'Cash Flow sheet for ' + currentYear + ' not found.';
+    base.statusNote = 'Add your income to complete this setup step.';
     return base;
   }
 
@@ -1633,7 +1633,7 @@ function getOnboardingIncomeFromDashboard(mode) {
 
   if (recurring.length === 0 && other.length === 0) {
     base.status = 'missing';
-    base.statusNote = 'No income detected on ' + sheet.getName() + '.';
+    base.statusNote = 'Add your income to complete this setup step.';
   } else {
     base.status = recurring.length > 0 ? 'complete' : 'partial';
     base.statusNote = recurring.length + ' recurring · ' + other.length + ' other detected';
@@ -1700,7 +1700,7 @@ function getOnboardingHousesFromDashboard(mode) {
   };
 
   if (!sheet) {
-    base.statusNote = 'House Values sheet not found.';
+    base.statusNote = 'No houses added yet.';
     return base;
   }
 
@@ -1713,7 +1713,7 @@ function getOnboardingHousesFromDashboard(mode) {
     try {
       names = getHousesFromHouseValues_();
     } catch (e) {
-      base.statusNote = 'Could not read House Values sheet.';
+      base.statusNote = "Couldn't check houses. Please try again.";
       return base;
     }
   } else {
@@ -1734,7 +1734,7 @@ function getOnboardingHousesFromDashboard(mode) {
         if (!seen[nm]) { seen[nm] = true; names.push(nm); }
       }
     } catch (e2) {
-      base.statusNote = 'Could not read House Values sheet.';
+      base.statusNote = "Couldn't check houses. Please try again.";
       return base;
     }
   }

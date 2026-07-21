@@ -926,6 +926,23 @@ function filterDebtAccounts() {
   loadDebtFieldValue();
 }
 
+function updateDebtUpdateAvailability_() {
+  const sel = document.getElementById('debt_account');
+  const hasSelection = !!(sel && String(sel.value || '').trim());
+  const hasDebts = !!(sel && sel.options && sel.options.length > 1);
+  const saveBtn = document.getElementById('debt_update_save_btn');
+  const stopBtn = document.getElementById('debt_update_stop_btn');
+  const hint = document.getElementById('debt_update_empty_hint');
+  if (saveBtn) saveBtn.disabled = !hasSelection;
+  if (stopBtn) stopBtn.disabled = !hasSelection;
+  if (hint) {
+    hint.textContent = hasDebts
+      ? 'Select a debt account to update or stop tracking it.'
+      : 'Add your first debt account to start tracking balances and payments.';
+    hint.style.display = hasSelection ? 'none' : '';
+  }
+}
+
 function handleDebtValueFocus() {
   const fieldName = document.getElementById('debt_field').value;
   if (debtFieldTypes[fieldName] !== 'currency') return;
@@ -945,6 +962,7 @@ function handleDebtValueBlur() {
 function loadDebtFieldValue(quiet) {
   const accountName = document.getElementById('debt_account').value;
   const fieldName = document.getElementById('debt_field').value;
+  updateDebtUpdateAvailability_();
 
   if (!accountName || !fieldName) {
     document.getElementById('debt_currentValue').textContent = '—';

@@ -8,7 +8,7 @@
 
 ---
 
-## Current status (2026-07-16)
+## Current status (2026-07-20)
 
 **Completed:**
 
@@ -16,29 +16,30 @@
 - ✅ **Validator Phase 1** — read-only Golden↔Central formatting parity + recommendation engine + scoped family runners, admin-gated and default-off. See `VALIDATOR_ARCHITECTURE.md`.
 - ✅ **Central migration Phase 1** — user-facing paths resolve the correct workbook via `getUserSpreadsheet_()` (no `getActiveSpreadsheet()` null bugs on the audited paths).
 - ✅ **Validator Phase 2 foundation + Test Harness Foundation V1** — Provisioning, Workbook Drift, Schema Evolution V1, the disposable-workbook harness foundation, and the Validation & Testing console V1 shipped 2026-07-13. Remaining Phase 2 work is listed under P1 below.
+- ✅ **P0 Documentation Cleanup / Project Stabilization** — closed 2026-07-20 after synchronized documentation, ProductDecision closeout, Central Tier-2 verification, the full Recovery 6F matrix, and two-track isolated `@114` blank/fresh plus representative populated-workbook runtime validation.
 
 **Now / next:**
 
-- **Current milestone:** **Documentation Cleanup / Project stabilization** (P0).
-- **Next engineering milestone:** **Remaining Validator Phase 2 scope** (P1).
+- **Current engineering milestone:** **Remaining Validator Phase 2 scope** (P1).
 - **Next product-model milestone:** **House Financial Accuracy** (P2).
+- **Measured follow-up:** Financial Plan refresh succeeded but took 143 seconds on the blank/fresh fixture; investigate under P3 Performance without reopening the completed P0 functional-feedback work.
 
 ---
 
 ## Priority stack (P0–P4)
 
-### Priority 0 — Project stabilization
+### Priority 0 — Project stabilization — ✅ complete 2026-07-20
 
 - **Documentation** — keep architecture docs, roadmap, and standards in sync with the current state (this milestone).
 - **Regression Discovery (process)** — every meaningful bug fix / feature / schema / dashboard / financial-calc change runs the **Regression Discovery Policy** and appends the reusable **Regression Discovery** prompt block (`REGRESSION_SUITE_PLAN.md → Regression Discovery Policy` + `§A`) so test coverage grows as the product evolves.
 - **Product decisions — ✅ current P0 inventory resolved.** The final known P0 item, Settings header/body typography, was ratified 2026-07-20 as 16pt / 14pt and implemented first-create only. Future Validator discoveries follow the normal record-and-defer rule.
-- **Beta readiness** — onboarding polish, error handling, empty-state / UX consistency, and a runtime regression pass before release.
+- **Beta readiness — ✅ stabilization evidence complete.** On isolated Central `@114`, the canonical blank/fresh pass and a Central-owned representative populated fixture both passed Setup, navigation, editor gating, first-run/populated rendering, Help, and broad workspace checks without console warnings. This closes the stabilization slice; remaining Beta-Gate work stays sequenced under P1/P2.
 - **Central resolver verification — ✅ static Tier-2 sweep closed 2026-07-20.** All Central user-facing production paths use `getUserSpreadsheet_()`; remaining direct active-spreadsheet calls are intentionally confined to the resolver's bound fallback, bound-only utilities, developer Test Setup, and the harness safety guard.
 - **Recovery Validation 6F — ✅ P0 complete 2026-07-20.** Full disposable-account matrix passed, including MEDIUM auto-adopt ON; flags OFF and fixture gate removed. Read-only orphan detection remains P1.
 
 ### Priority 1 — Validator Phase 2 + Test Harness / Regression Runner
 
-*(Do not advance the remaining P1 scope until P0 is closed. Detail: `VALIDATOR_ARCHITECTURE.md → §10 Phase 2` (the judge) and `TEST_HARNESS_ARCHITECTURE.md` (the writer), with `REGRESSION_SCENARIOS.md` + `RELEASE_READINESS.md`.)*
+*(P0 closed 2026-07-20; this is now the current engineering milestone. Detail: `VALIDATOR_ARCHITECTURE.md → §10 Phase 2` (the judge) and `TEST_HARNESS_ARCHITECTURE.md` (the writer), with `REGRESSION_SCENARIOS.md` + `RELEASE_READINESS.md`.)*
 
 **Sequenced milestone order** (the Validator is the read-only **judge**; the Test Harness is the developer-only **writer/mutator** that drives scenarios against disposable workbooks and asks the Validator to confirm nothing broke):
 

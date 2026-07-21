@@ -2,7 +2,8 @@
   "name": "samer-financial-planner",
   "private": true,
   "scripts": {
-    "build:rolling-dashboard": "vite build --config vite.rolling-dashboard.config.ts && node scripts/emitRollingDashboardBundleHtml.mjs"
+    "build:rolling-dashboard": "vite build --config vite.rolling-dashboard.config.ts && node scripts/emitRollingDashboardBundleHtml.mjs",
+    "test:dashboard-ux": "node scripts/checkDashboardUxRegressions.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

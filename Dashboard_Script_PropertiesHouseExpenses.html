@@ -10,6 +10,16 @@ function syncHouseExpenseLocation() {
 
   const date = document.getElementById('hx_date').value;
   document.getElementById('hx_yearPreview').textContent = date ? String(new Date(date).getFullYear()) : '—';
+  updateHouseExpenseAvailability_();
+}
+
+function updateHouseExpenseAvailability_() {
+  const sel = document.getElementById('hx_house');
+  const hasHouse = !!(sel && String(sel.value || '').trim());
+  const addBtn = document.getElementById('hx_add_btn');
+  const hint = document.getElementById('hx_empty_hint');
+  if (addBtn) addBtn.disabled = !hasHouse;
+  if (hint) hint.style.display = hasHouse ? 'none' : '';
 }
 
 function loadHouseExpensesSection() {

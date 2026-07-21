@@ -80,19 +80,21 @@ function showPage(name) {
     loadOnboardingSection();
   }
 
-  // Planning lands on the featured Next Actions entry point by default.
-  // If that panel is the currently active sub-tab, prime its loader so
-  // the user doesn't see an empty surface on first visit (showTab's
-  // loader only fires when the user clicks a sub-tab).
-  if (name === 'planning') {
-    var nextActionsPanel = document.getElementById('nextActions');
-    if (
-      nextActionsPanel &&
-      nextActionsPanel.classList.contains('active') &&
-      typeof loadNextActions === 'function'
-    ) {
-      loadNextActions();
-    }
+  // Sub-tab panels share one global `.panel.active` state. After a user
+  // visits a panel in another workspace, opening a top-level workspace can
+  // therefore leave that page with no active child and a blank content area.
+  // Select the product's default only when this page does not already own an
+  // active panel. showTab() calls showPage() after activating its target, so
+  // the guard also prevents recursion and preserves explicit sub-tab choices.
+  var defaultTabs = {
+    assets: 'houses',
+    cashflow: 'payments',
+    properties: 'houseExpenses',
+    planning: 'nextActions'
+  };
+  var defaultTab = defaultTabs[name];
+  if (page && defaultTab && !page.querySelector('.panel.active')) {
+    showTab(defaultTab);
   }
 }
 
@@ -980,19 +982,30 @@ function refreshSnapshot() {
 }
 
 function runPlannerNow() {
+  const refreshButton = document.getElementById('planner_refresh_btn');
+  if (refreshButton) refreshButton.disabled = true;
   setStatusLoading('planner_status', 'Refreshing…');
   google.script.run
     .withSuccessHandler(function(res) {
-      // applySnapshot() sets the "Dashboard updated <time>" status. Fall back
-      // to a generic confirmation if the response carried no snapshot.
-      if (res && res.snapshot) {
-        applySnapshot(res.snapshot);
-      } else {
-        setStatus('planner_status', 'Last updated', false);
+      try {
+        if (res && res.snapshot) {
+          applySnapshot(res.snapshot);
+          const refreshedTime = formatRefreshedTime_(res.snapshot.refreshedAt);
+          setStatus(
+            'planner_status',
+            refreshedTime ? ('Financial plan refreshed at ' + refreshedTime) : 'Financial plan refreshed.',
+            false
+          );
+        } else {
+          setStatus('planner_status', 'Financial plan refreshed.', false);
+        }
+      } finally {
+        if (refreshButton) refreshButton.disabled = false;
       }
     })
     .withFailureHandler(function(err) {
       setStatus('planner_status', (err.message || String(err)), true);
+      if (refreshButton) refreshButton.disabled = false;
     })
     .runPlannerAndRefreshDashboard();
 }

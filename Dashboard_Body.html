@@ -11,7 +11,7 @@
       <div class="top-actions-buttons">
         <button type="button" class="btn-help-prominent" onclick="showPage('help')">Help</button>
         <button type="button" class="btn-setup-topbar" onclick="showPage('onboarding')">Setup / Review</button>
-        <button type="button" class="btn-planner-run" onclick="runPlannerNow()">Refresh Financial Plan</button>
+        <button type="button" id="planner_refresh_btn" class="btn-planner-run" onclick="runPlannerNow()">Refresh Financial Plan</button>
       </div>
       <div id="planner_status" class="status"></div>
     </div>
@@ -390,9 +390,10 @@
               <label for="bank_updateMinBuffer" style="margin:0;font-weight:normal;">Also update Min Buffer</label>
             </div>
             <div class="house-update-actions">
-              <button onclick="saveBank()">Save Bank Account</button>
-              <button type="button" class="small-btn" onclick="stopTrackingBank()" title="Mark this bank account inactive. History is preserved.">Stop tracking</button>
+              <button id="bank_update_save_btn" onclick="saveBank()" disabled>Save Bank Account</button>
+              <button type="button" id="bank_update_stop_btn" class="small-btn" onclick="stopTrackingBank()" title="Mark this bank account inactive. History is preserved." disabled>Stop tracking</button>
             </div>
+            <div id="bank_update_empty_hint" class="muted" style="margin-top:8px;">Add your first bank account to start tracking balances.</div>
           </div>
           <div class="info">
             <div><strong>Selected month:</strong> <span id="bank_selectedMonth" class="muted">—</span></div>
@@ -464,8 +465,8 @@
             <button onclick="createBankAccount()">Create account</button>
           </div>
           <div class="info muted">
-            <p style="margin-top:0;">Creates the account in the current year's Bank Accounts block. A Year block for the current calendar year must already exist.</p>
-            <p>If you use an opening balance, the date must fall in that same year. Type and Use policy can be chosen from existing accounts or typed as new values.</p>
+            <p style="margin-top:0;">Creates the account and prepares the current year's tracking area automatically when needed.</p>
+            <p>If you use an opening balance, the date must fall in that same year. Type uses common choices plus types already in use; Use policy includes a custom option when needed.</p>
           </div>
         </div>
       </div>
@@ -535,9 +536,10 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <label>Value</label>
             <input type="text" id="inv_value" inputmode="decimal" onfocus="currencyFocus('inv_value')" onblur="currencyBlur('inv_value')">
             <div class="house-update-actions">
-              <button onclick="saveInvestment()">Save Investment</button>
-              <button type="button" class="small-btn" onclick="stopTrackingInvestment()" title="Mark this investment account inactive. History is preserved.">Stop tracking</button>
+              <button id="inv_update_save_btn" onclick="saveInvestment()" disabled>Save Investment</button>
+              <button type="button" id="inv_update_stop_btn" class="small-btn" onclick="stopTrackingInvestment()" title="Mark this investment account inactive. History is preserved." disabled>Stop tracking</button>
             </div>
+            <div id="inv_update_empty_hint" class="muted" style="margin-top:8px;">Add your first investment account to start tracking values.</div>
           </div>
           <div class="info">
             <div><strong>Selected month:</strong> <span id="inv_selectedMonth" class="muted">—</span></div>
@@ -574,7 +576,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <button onclick="createInvestmentAccount()">Create account</button>
           </div>
           <div class="info muted">
-            <p style="margin-top:0;">Creates the account in the current year's Investments block. A Year block for the current calendar year must already exist.</p>
+            <p style="margin-top:0;">Creates the account and prepares the current year's tracking area automatically when needed.</p>
             <p>Starting value is required (enter <code>0</code> if unknown). Starting value date is optional — <strong>if left blank, the current month is used automatically</strong> so the amount always lands in a real month column. Type is a dropdown of common investment roles plus any types already used in this workbook; pick <strong>Other</strong> to enter a custom label.</p>
           </div>
         </div>
@@ -1106,7 +1108,8 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <label for="hx_autoAddToCashFlow" style="margin:0;font-weight:normal;">Also add to Cash Flow</label>
           </div>
 
-          <button onclick="saveHouseExpense()">Add House Expense</button>
+          <button id="hx_add_btn" onclick="saveHouseExpense()" disabled>Add House Expense</button>
+          <div id="hx_empty_hint" class="muted" style="margin-top:8px;">Add a house before recording property expenses.</div>
           <div id="hx_status" class="status"></div>
         </div>
 
@@ -1262,8 +1265,9 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <label>New Value</label>
             <input type="text" id="debt_value" inputmode="decimal" onfocus="handleDebtValueFocus()" onblur="handleDebtValueBlur()">
             <div class="house-update-actions">
-              <button onclick="saveDebt()">Save Debt Update</button>
+              <button id="debt_update_save_btn" onclick="saveDebt()" disabled>Save Debt Update</button>
             </div>
+            <div id="debt_update_empty_hint" class="muted" style="margin-top:8px;">Add your first debt account to start tracking balances and payments.</div>
           </div>
           <div class="info">
             <div><strong>Current value:</strong> <span id="debt_currentValue" class="muted">—</span></div>
@@ -1275,7 +1279,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <div class="debt-danger-zone">
           <div class="danger-zone-title">Danger Zone</div>
           <p class="muted">Stop tracking removes this debt from active financial calculations. It can be restored later from Inactive Debts.</p>
-          <button type="button" class="small-btn danger" onclick="stopTrackingDebt()">Stop tracking this debt</button>
+          <button type="button" id="debt_update_stop_btn" class="small-btn danger" onclick="stopTrackingDebt()" disabled>Stop tracking this debt</button>
         </div>
       </div>
 

@@ -184,9 +184,6 @@ function onboardingRenderStepCard_(step) {
     if (step.partialCount > 0) line += ' · ' + step.partialCount + ' need details';
     fragments.push('<p class="muted">' + line + '</p>');
   }
-  if (!step.sheetExists) {
-    fragments.push('<p class="muted">Sheet <code>' + escapeOnboardingHtml_(step.sheetName) + '</code> not found.</p>');
-  }
   body.innerHTML = fragments.join('') || '<p class="muted">No details available.</p>';
 }
 
@@ -300,10 +297,7 @@ function loadOnboardingSection() {
       // Fail closed to the grid. A probe failure must never trap the
       // user on Welcome: the grid surfaces the error inline and offers
       // Refresh + Back to Dashboard, which Welcome does not.
-      onboardingSetStatus_(
-        'Error reading setup status: ' + (err && err.message ? err.message : String(err)),
-        'error'
-      );
+      onboardingSetStatus_('Couldn\'t read setup status. Please try again.', 'error');
       onboardingShowView('grid');
     })
     .getOnboardingStatusFromDashboard(ONBOARDING_MODE_);
@@ -326,10 +320,7 @@ function onboardingLoadStatusGrid_() {
       onboardingApplyStatusGrid_(data);
     })
     .withFailureHandler(function(err) {
-      onboardingSetStatus_(
-        'Error reading setup status: ' + (err && err.message ? err.message : String(err)),
-        'error'
-      );
+      onboardingSetStatus_('Couldn\'t read setup status. Please try again.', 'error');
     })
     .getOnboardingStatusFromDashboard(ONBOARDING_MODE_);
 }
@@ -1909,11 +1900,7 @@ function onboardingLoadFinishDetail_() {
   google.script.run
     .withSuccessHandler(function(data) { onboardingRenderFinishDetail_(data); })
     .withFailureHandler(function(err) {
-      onboardingFinishSetStatus_(
-        'Error reading setup status: ' +
-          (err && err.message ? err.message : String(err)),
-        'error'
-      );
+      onboardingFinishSetStatus_('Couldn\'t read setup status. Please try again.', 'error');
       if (body) body.innerHTML = '';
     })
     .getOnboardingStatusFromDashboard(mode);

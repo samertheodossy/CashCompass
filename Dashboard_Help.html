@@ -28,7 +28,7 @@
         <a href="#help-payoff-path">Debt Overview</a>
         <a href="#help-rolling-debt-payoff">Rolling Debt Payoff</a>
         <a href="#help-debt-email">Debt Planner email</a>
-        <a href="#help-sheets">Sheet names</a>
+        <a href="#help-sheets">Advanced sheet reference</a>
       </nav>
     </div>
 
@@ -66,7 +66,7 @@
 
         <h4>Flow</h4>
         <ul class="help-list">
-          <li><strong>Welcome</strong> — shown when Setup itself is genuinely empty. <code>loadOnboardingSection()</code> in <code>Dashboard_Script_Onboarding.html</code> asks the server for the same five required probes the grid renders (Bank Accounts, Debts, Bills, Income, Profile); if every step reports <code>status === 'missing'</code> the Welcome screen renders, otherwise the status grid renders directly. Upcoming Expenses and Houses are optional and deliberately omitted from this gate. That keeps Welcome available on a freshly deployed workbook even when the startup router already classified it "populated" from scaffold sheets alone (empty <code>INPUT - Cash Flow &lt;year&gt;</code>, empty <code>INPUT - Upcoming Expenses</code>, etc.) — the gate deliberately ignores <code>sheetExists</code> and the dashboard-init flag, because the grid would just repeat "0 complete · 5 not set up" and Welcome is a better explanation. Probe failures fail closed to the grid (with an inline error and a Refresh action) rather than stranding the user on Welcome. <strong>Back to Dashboard</strong> from either Welcome <em>or</em> the status grid routes to the real dashboard via <code>onboardingBackToDashboard()</code> (the grid's Back button intentionally exits Setup rather than bouncing back to Welcome), so showing Welcome on a genuinely empty workbook is never a loop — Continue advances, Back to Dashboard returns to overview.</li>
+          <li><strong>Welcome</strong> — shown when none of the five required areas has been set up yet. Choose <strong>Continue</strong> to review the setup checklist, or <strong>Back to Dashboard</strong> to return to Overview.</li>
           <li><strong>Status grid</strong> — one card per required area (Bank Accounts, Debts, Bills, Income, Profile). Each shows <em>Setup complete</em> or <em>Not set up</em> plus a short summary.</li>
           <li><strong>Optional: Upcoming Expenses</strong> — planned expenses for cash-flow forecasting. Not part of the completion count; its card shows a planned-item count rather than a status badge.</li>
           <li><strong>Optional: Houses</strong> — property tracking. Not part of the completion count.</li>
@@ -89,9 +89,9 @@
 
         <h4>Safety</h4>
         <ul class="help-list">
-          <li>Setup / Review never writes on its own — no sheet edits, no Activity entries.</li>
+          <li>Setup / Review never changes your data on its own.</li>
           <li>Editors launched from Setup / Review use the same save logic as the normal path.</li>
-          <li>Missing required setup sheets (Settings, Bank Accounts, Debts, Bills, Upcoming Expenses, Cash Flow for the current year) are created with the correct headers on demand — existing sheets are never modified.</li>
+          <li>CashCompass prepares missing setup structure when needed and preserves existing data.</li>
         </ul>
       </section>
 
@@ -122,7 +122,7 @@
           <li><strong>Update</strong> saves the valuation for the selected house on the selected month. Edits go to <strong>INPUT - House Values</strong>.</li>
           <li><strong>Status feedback:</strong> the status row below the save button cycles through <em>Saving…</em> → <em>Saved.</em> on success. The summary panel (selected month / stored value / current value / change vs prior month) updates immediately from the save payload. The full planner runs as a silent background refresh after the save returns, so the Overview snapshot catches up without holding the UI.</li>
           <li><strong>Activity log:</strong> every Update logs a <strong>house_value_update</strong> event to <strong>LOG - Activity</strong>. <strong>Type</strong> is <strong>House Expenses</strong>; the <strong>Action</strong> sub-label includes the month and new value (e.g. <em>Updated May-26 value to $750,000.00</em>). <strong>Amount</strong> shows <strong>—</strong> because a valuation update is not a transaction; the previous value is preserved in the event's <strong>details</strong> JSON.</li>
-          <li><strong>Add new</strong> appends one row to <strong>INPUT - House Values</strong> (current calendar-year block), one row to <strong>SYS - House Assets</strong>, and creates a new <strong>HOUSES - {House}</strong> sheet with the canonical expense headers (<em>Item, Type, Date, Location, Cost, Service Fees Paid, Insurance covered, Payments Links, Notes</em>). The workbook must already have that Year block on <strong>INPUT - House Values</strong>.</li>
+          <li><strong>Add new</strong> creates the property and prepares its current-year tracking area automatically when needed. It also creates the matching property-expense area.</li>
           <li><strong>Required Add-new fields:</strong> House name, Property type, Current value, Loan amount left. <strong>Property type</strong> is a dropdown of common roles (<em>Primary Residence</em>, <em>Vacation Home</em>, <em>Rental</em>) merged with any types already used in this workbook; pick <strong>Other (custom)…</strong> to enter a custom label. <strong>Valuation date</strong> is optional and <strong>historical dates are allowed</strong> — a house purchased years ago is still recorded in the current year block. When the date falls in the current year the Current value is seeded into that month; an out-of-year date records into the current month instead. When left blank the current month is used automatically so the Current value always lands in a real month column. (Past year blocks are never created or backfilled; your entered date is preserved in the event's <strong>details</strong> JSON.)</li>
           <li><strong>Loan Amount Left</strong> is written into column 2 of the new <strong>INPUT - House Values</strong> row; the matching <strong>SYS - House Assets</strong> row is created with the same Loan Amount Left and Current Value. Row formatting and column widths are copied from an existing HOUSES sheet so the new sheet visually matches.</li>
           <li><strong>Duplicate names</strong> are rejected across <strong>INPUT - House Values</strong>, <strong>SYS - House Assets</strong>, and existing <strong>HOUSES - *</strong> tab names. Inline errors show next to the House name field and focus the input.</li>
@@ -153,9 +153,9 @@
           <li><strong>Update</strong> saves the balance for the selected account. Edits go to <strong>INPUT - Bank Accounts</strong> (canonical) and <strong>SYS - Accounts</strong> mirrors the latest current-year value as <strong>Current Balance</strong>.</li>
           <li><strong>Status feedback:</strong> the status row below the save button cycles through <em>Saving…</em> → <em>Saved.</em> on success. The summary panel (selected month / stored value / current balance / change vs prior month) updates immediately from the save payload — no re-fetch needed. The full planner runs as a silent background refresh after the save returns, so Rolling Debt Payoff and Overview snapshot catch up shortly after without holding the UI on <em>Saving…</em>.</li>
           <li><strong>Activity log:</strong> every Update logs a <strong>bank_account_update</strong> event to <strong>LOG - Activity</strong>. <strong>Type</strong> is <strong>Bank</strong>; the <strong>Action</strong> sub-label includes the month and new balance (e.g. <em>Updated May-26 balance to $1,234.56</em>). <strong>Amount</strong> shows <strong>—</strong> because a balance restatement is not a transaction; the previous balance is preserved in the event's <strong>details</strong> JSON.</li>
-          <li><strong>Add new</strong> appends one row to <strong>INPUT - Bank Accounts</strong> (current calendar-year block) and one to <strong>SYS - Accounts</strong>. The workbook must already have that Year block.</li>
+          <li><strong>Add new</strong> creates the bank account and prepares its current-year tracking area automatically when needed.</li>
           <li><strong>Opening balance</strong> is required and prefilled to <strong>0.00</strong>. Enter <code>0</code> if unknown — the field cannot be empty. <strong>Opening balance date</strong> is required only when the amount is non-zero and, when provided, must fall in the current year.</li>
-          <li><strong>Type</strong> is a controlled dropdown of existing bank account types read from <strong>SYS - Accounts</strong> (e.g. Checking, Savings). Pick one rather than typing free text; add new types directly in <strong>SYS - Accounts</strong> if needed.</li>
+          <li><strong>Type</strong> offers common choices such as Checking and Savings, plus types already used in your workbook.</li>
           <li><strong>Use policy</strong> is a dropdown with fixed choices — <em>Do not touch</em>, <em>Use for bills</em>, <em>Use for debt</em>, <em>Use with caution</em>, and <em>Other (custom)…</em>. The four main choices save as canonical tokens (<code>DO_NOT_TOUCH</code>, <code>USE_FOR_BILLS</code>, <code>USE_FOR_DEBT</code>, <code>USE_WITH_CAUTION</code>) the planner already understands; <em>Other</em> reveals a free-text input and is treated like <em>Do not touch</em> until it's mapped.</li>
           <li><strong>Priority</strong> is a dropdown — <em>Use first (primary account)</em>, <em>Use after others</em>, or <em>Use last (backup)</em> — defaulting to <strong>Use last</strong>. Internally these map to the numeric values <strong>1</strong>, <strong>5</strong>, and <strong>9</strong> the planner reads from the <strong>Priority</strong> column on <strong>SYS - Accounts</strong> (see <code>planner_core.js</code> → <code>normalizeAccounts_</code>). Lower numbers are drawn first within the same <strong>Use policy</strong> bucket.</li>
           <li><strong>"Also set Available Now to opening amount"</strong> and <strong>"Also set Min Buffer to opening amount"</strong> both default to checked on the Add-new form, so a fresh account has sensible buffers from the first save.</li>
@@ -234,7 +234,7 @@
           <li><strong>Update</strong> saves the value for the selected investment account on the selected month. Edits go to <strong>INPUT - Investments</strong> (canonical) and <strong>SYS - Assets</strong> mirrors the latest current-year value as <strong>Current Balance</strong>.</li>
           <li><strong>Status feedback:</strong> the status row below the save button cycles through <em>Saving…</em> → <em>Saved.</em> on success. The summary panel (selected month / stored value / current balance / change vs prior month) updates immediately from the save payload — no re-fetch needed. The full planner runs as a silent background refresh after the save returns, so the Overview snapshot catches up without holding the UI.</li>
           <li><strong>Activity log:</strong> every Update logs an <strong>investment_update</strong> event to <strong>LOG - Activity</strong>. <strong>Type</strong> is <strong>Investment</strong>; the <strong>Action</strong> sub-label includes the month and new value (e.g. <em>Updated May-26 balance to $44,679.48</em>). <strong>Amount</strong> shows <strong>—</strong> because a balance restatement is not a transaction; the previous value is preserved in the event's <strong>details</strong> JSON.</li>
-          <li><strong>Add new</strong> appends one row to <strong>INPUT - Investments</strong> (current calendar-year block) and one row to <strong>SYS - Assets</strong>. The workbook must already have that Year block on <strong>INPUT - Investments</strong>.</li>
+          <li><strong>Add new</strong> creates the investment account and prepares its current-year tracking area automatically when needed.</li>
           <li><strong>Required Add-new fields:</strong> Account name, Type, and Starting value. <strong>Starting value</strong> is prefilled to <strong>0.00</strong>; enter <code>0</code> if unknown. <strong>Starting value date</strong> is optional — when provided it must fall in the current year; when left blank the current month is used automatically so the Starting value always lands in a real month column. (Month columns are left empty when the Starting value is <code>0</code>, matching the historical "no data" convention.)</li>
           <li><strong>Type</strong> is a dropdown of common investment roles (<em>Brokerage</em>, <em>Retirement</em>, <em>Education</em>) merged with any types already used in <strong>SYS - Assets</strong>; pick <strong>Other (custom)…</strong> to enter a custom label.</li>
           <li><strong>Duplicate names</strong> are rejected across <strong>INPUT - Investments</strong> (all year blocks, including inactive) and <strong>SYS - Assets</strong>. Inline errors show next to the Account name field and focus the input.</li>
@@ -973,7 +973,8 @@
       <!-- Sheet names                                                      -->
       <!-- ================================================================ -->
       <section id="help-sheets" class="help-section">
-        <h3>Sheet names (quick reference)</h3>
+        <h3>Advanced sheet reference</h3>
+        <p class="muted">For users who intentionally work in the underlying Google Sheets. You do not need this section for normal dashboard setup.</p>
 
         <h4>INPUT sheets</h4>
         <ul class="help-list">
