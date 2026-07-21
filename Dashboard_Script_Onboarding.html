@@ -153,7 +153,7 @@ function onboardingBackToDashboard() {
 function onboardingSetStatus_(text, cls) {
   var el = document.getElementById('onboarding_status');
   if (!el) return;
-  el.textContent = text || '';
+  el.textContent = cls === 'error' ? customerSafeErrorMessage_(text) : (text || '');
   el.className = 'status' + (cls ? ' ' + cls : '');
 }
 
@@ -461,7 +461,7 @@ function onboardingApplyFinishPanel_(complete, total) {
 function onboardingBankSetStatus_(text, cls) {
   var el = document.getElementById('onboarding_bank_status');
   if (!el) return;
-  el.textContent = text || '';
+  el.textContent = cls === 'error' ? customerSafeErrorMessage_(text) : (text || '');
   el.className = 'status' + (cls ? ' ' + cls : '');
 }
 
@@ -648,7 +648,7 @@ function onboardingOpenBankAccountsPage() {
 function onboardingDebtsSetStatus_(text, cls) {
   var el = document.getElementById('onboarding_debts_status');
   if (!el) return;
-  el.textContent = text || '';
+  el.textContent = cls === 'error' ? customerSafeErrorMessage_(text) : (text || '');
   el.className = 'status' + (cls ? ' ' + cls : '');
 }
 
@@ -830,7 +830,7 @@ function onboardingOpenDebtsPage() {
 function onboardingBillsSetStatus_(text, cls) {
   var el = document.getElementById('onboarding_bills_status');
   if (!el) return;
-  el.textContent = text || '';
+  el.textContent = cls === 'error' ? customerSafeErrorMessage_(text) : (text || '');
   el.className = 'status' + (cls ? ' ' + cls : '');
 }
 
@@ -996,7 +996,7 @@ function onboardingOpenBillsPage() {
 function onboardingUpcomingSetStatus_(text, cls) {
   var el = document.getElementById('onboarding_upcoming_status');
   if (!el) return;
-  el.textContent = text || '';
+  el.textContent = cls === 'error' ? customerSafeErrorMessage_(text) : (text || '');
   el.className = 'status' + (cls ? ' ' + cls : '');
 }
 
@@ -1154,7 +1154,7 @@ function onboardingOpenUpcomingPage() {
 function onboardingIncomeSetStatus_(text, cls) {
   var el = document.getElementById('onboarding_income_status');
   if (!el) return;
-  el.textContent = text || '';
+  el.textContent = cls === 'error' ? customerSafeErrorMessage_(text) : (text || '');
   el.className = 'status' + (cls ? ' ' + cls : '');
 }
 
@@ -1337,7 +1337,7 @@ function onboardingOpenIncomePage() {
 function onboardingProfileSetStatus_(text, cls) {
   var el = document.getElementById('onboarding_profile_status');
   if (!el) return;
-  el.textContent = text || '';
+  el.textContent = cls === 'error' ? customerSafeErrorMessage_(text) : (text || '');
   el.className = 'status' + (cls ? ' ' + cls : '');
 }
 
@@ -1697,7 +1697,7 @@ function onboardingSaveProfile_() {
 function onboardingHousesSetStatus_(text, cls) {
   var el = document.getElementById('onboarding_houses_status');
   if (!el) return;
-  el.textContent = text || '';
+  el.textContent = cls === 'error' ? customerSafeErrorMessage_(text) : (text || '');
   el.className = 'status' + (cls ? ' ' + cls : '');
 }
 
@@ -1886,7 +1886,7 @@ function onboardingOpenHousesPage() {
 function onboardingFinishSetStatus_(text, cls) {
   var el = document.getElementById('onboarding_finish_status');
   if (!el) return;
-  el.textContent = text || '';
+  el.textContent = cls === 'error' ? customerSafeErrorMessage_(text) : (text || '');
   el.className = 'status' + (cls ? ' ' + cls : '');
 }
 

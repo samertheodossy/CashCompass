@@ -70,8 +70,9 @@ function loadRecentHouseExpenses() {
     .withFailureHandler(function(err) {
       const root = document.getElementById('hx_recentList');
       if (root) {
-        root.innerHTML = '<div class="muted">Couldn&rsquo;t load recent house expenses &mdash; ' +
-          escapeHtml(err.message || String(err)) + '</div>';
+        root.innerHTML = '<div class="muted">' +
+          escapeHtml(customerSafeErrorMessage_(err && err.message ? err.message : String(err),
+            'Could not load recent property expenses. Please refresh and try again.')) + '</div>';
       }
     })
     .getRecentHouseExpenses(20);
@@ -190,7 +191,8 @@ function loadHouseExpenseSummaries() {
         const root = document.getElementById(id);
         if (root) {
           root.innerHTML = '<div class="muted">Couldn&rsquo;t load summaries &mdash; ' +
-            escapeHtml(err.message || String(err)) + '</div>';
+            escapeHtml(customerSafeErrorMessage_(err && err.message ? err.message : String(err),
+              'Could not load property summaries. Please refresh and try again.')) + '</div>';
         }
       });
     })

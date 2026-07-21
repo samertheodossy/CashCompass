@@ -1,0 +1,230 @@
+(function() {
+  var cfg = window.__cashCompassFirstRunE2E;
+  if (!cfg || !cfg.enabled || !cfg.runId) return;
+
+  var started = Date.now();
+  var assertions = [];
+  var finished = false;
+
+  function waitFor(predicate, timeoutMs, label) {
+    return new Promise(function(resolve, reject) {
+      var until = Date.now() + timeoutMs;
+      (function poll() {
+        var value = false;
+        try { value = predicate(); } catch (_e) {}
+        if (value) { resolve(value); return; }
+        if (Date.now() >= until) { reject(new Error('Timed out waiting for ' + label + '.')); return; }
+        setTimeout(poll, 150);
+      })();
+    });
+  }
+
+  function visible(el) {
+    if (!el) return false;
+    var style = window.getComputedStyle(el);
+    return style.display !== 'none' && style.visibility !== 'hidden' && !el.hidden;
+  }
+
+  function add(id, pass, detail) {
+    assertions.push({ id: id, pass: pass === true, detail: String(detail || '') });
+  }
+
+  function click(selector) {
+    var el = document.querySelector(selector);
+    if (!el) throw new Error('Missing control: ' + selector);
+    el.click();
+    return el;
+  }
+
+  function activePage(name) {
+    var page = document.getElementById('page_' + name);
+    return !!(page && page.classList.contains('active'));
+  }
+
+  function activeTab(pageName, tabName) {
+    var page = document.getElementById('page_' + pageName);
+    var panel = document.getElementById(tabName);
+    var tab = page && page.querySelector('.tab-btn[data-tab="' + tabName + '"]');
+    return !!(page && page.classList.contains('active') && panel && panel.classList.contains('active') &&
+      tab && tab.classList.contains('active'));
+  }
+
+  function errorMessages() {
+    var captured = Array.isArray(cfg.errors) ? cfg.errors.slice() : [];
+    document.querySelectorAll('.status.error').forEach(function(el) {
+      var txt = String(el.textContent || '').trim();
+      if (txt) captured.push('Visible error status: ' + txt);
+    });
+    return captured.filter(function(value, index, all) { return all.indexOf(value) === index; }).slice(0, 10);
+  }
+
+  function customerLanguageLeaks(label) {
+    var text = String(document.body.innerText || '');
+    var patterns = [
+      /(?:INPUT|SYS|OUT|LOG)\s*-[^\n]*/ig,
+      /Missing sheet[^\n]*/ig,
+      /(?:Exception|TypeError|ReferenceError):[^\n]*/ig,
+      /Required column missing[^\n]*/ig
+    ];
+    var leaks = [];
+    patterns.forEach(function(pattern) {
+      var matches = text.match(pattern) || [];
+      matches.forEach(function(match) {
+        leaks.push(label + ': ' + String(match).trim().slice(0, 180));
+      });
+    });
+    return leaks;
+  }
+
+  function overlay(title, report, bad) {
+    var old = document.getElementById('cc_first_run_e2e_result');
+    if (old) old.remove();
+    var root = document.createElement('div');
+    root.id = 'cc_first_run_e2e_result';
+    root.style.cssText = 'position:fixed;inset:18px;z-index:999999;background:#fff;border:3px solid ' +
+      (bad ? '#b91c1c' : '#047857') + ';border-radius:12px;padding:20px;overflow:auto;' +
+      'box-shadow:0 20px 60px rgba(0,0,0,.3);font-family:-apple-system,Arial,sans-serif;color:#1f2933';
+    var heading = document.createElement('h2');
+    heading.textContent = title;
+    heading.style.marginTop = '0';
+    root.appendChild(heading);
+    var note = document.createElement('p');
+    note.textContent = bad
+      ? 'The fixture was still cleaned up when the exact safety checks allowed it. Review the failed assertion below.'
+      : 'All browser assertions passed and verified Trash cleanup completed.';
+    root.appendChild(note);
+    var pre = document.createElement('pre');
+    pre.style.cssText = 'white-space:pre-wrap;background:#f8fafc;border:1px solid #e2e8f0;padding:12px;border-radius:8px';
+    pre.textContent = JSON.stringify(report, null, 2);
+    root.appendChild(pre);
+    document.body.appendChild(root);
+  }
+
+  async function run() {
+    try {
+      await waitFor(function() {
+        return !document.body.classList.contains('startup-gated') &&
+          activePage('onboarding') && visible(document.getElementById('onboarding_view_welcome'));
+      }, 90000, 'the first-run Welcome screen');
+      var welcome = document.getElementById('onboarding_view_welcome');
+      add('startup_welcome', /Welcome to CashCompass/.test(welcome.textContent || ''),
+        'Fresh workbook routed directly to the Welcome screen.');
+
+      click('#onboarding_view_welcome .btn-primary');
+      await waitFor(function() {
+        var grid = document.getElementById('onboarding_view_grid');
+        var status = document.getElementById('onboarding_status');
+        return visible(grid) && status && status.textContent && !/Reading status/i.test(status.textContent);
+      }, 90000, 'the Setup status grid');
+      var setupText = String(document.getElementById('page_onboarding').textContent || '');
+      var internalLeak = /(?:INPUT|SYS|OUT|LOG)\s*-/i.test(setupText) || /Missing sheet|Exception:|TypeError:/i.test(setupText);
+      add('setup_copy', !internalLeak, internalLeak
+        ? 'Setup exposed internal sheet or raw error wording.'
+        : 'Setup status copy stayed user-facing with no internal sheet names or raw errors.');
+      add('first_run_guidance', /Setup \/ Review/.test(setupText) && /Not set up/.test(setupText),
+        'The fresh-user grid explained Setup and marked unfinished areas clearly.');
+
+      click('#onboarding_view_grid button[onclick="onboardingBackToDashboard()"]');
+      await waitFor(function() { return activePage('overview'); }, 10000, 'Overview after leaving Setup');
+      // Let the normal first dashboard hydration settle before navigating and
+      // invoking the much heavier planner refresh. This avoids manufacturing
+      // concurrency that a human first-run flow would not normally create.
+      await new Promise(function(resolve) { setTimeout(resolve, 5000); });
+
+      var customerLeaks = customerLanguageLeaks('Overview');
+
+      var defaults = { assets:'houses', cashflow:'payments', properties:'houseExpenses', planning:'nextActions' };
+      var defaultFailures = [];
+      Object.keys(defaults).forEach(function(pageName) {
+        click('.page-btn[data-page="' + pageName + '"]');
+        if (!activeTab(pageName, defaults[pageName])) defaultFailures.push(pageName + '→' + defaults[pageName]);
+        customerLeaks = customerLeaks.concat(customerLanguageLeaks(pageName));
+      });
+      add('default_subtabs', defaultFailures.length === 0,
+        defaultFailures.length ? ('Wrong default: ' + defaultFailures.join(', ')) : 'All four workspaces opened on their intended default tab.');
+
+      click('.page-btn[data-page="assets"]');
+      if (typeof showTab === 'function') showTab('bank');
+      await new Promise(function(resolve) { setTimeout(resolve, 1200); });
+      customerLeaks = customerLeaks.concat(customerLanguageLeaks('Assets → Bank'));
+      var bankSave = document.getElementById('bank_update_save_btn');
+      var bankStop = document.getElementById('bank_update_stop_btn');
+      click('.page-btn[data-page="planning"]');
+      if (typeof showTab === 'function') showTab('debts');
+      await new Promise(function(resolve) { setTimeout(resolve, 1200); });
+      var debtSave = document.getElementById('debt_update_save_btn');
+      var debtStop = document.getElementById('debt_update_stop_btn');
+      var gated = !!(bankSave && bankSave.disabled && bankStop && bankStop.disabled &&
+        debtSave && debtSave.disabled && debtStop && debtStop.disabled);
+      add('empty_action_gating', gated, gated
+        ? 'Bank and Debt update/destructive actions remained disabled with no selectable records.'
+        : 'One or more empty-state Bank/Debt actions were enabled.');
+
+      click('.btn-help-prominent');
+      await waitFor(function() { return activePage('help'); }, 10000, 'Help');
+      var helpSetup = document.getElementById('help-setup');
+      var helpText = String((helpSetup && helpSetup.textContent) || '');
+      var helpPass = /Setup \/ Review/.test(helpText) && /never changes your data on its own/i.test(helpText) &&
+        !/loadOnboardingSection|Dashboard_Script|status ===/i.test(helpText);
+      add('help_wording', helpPass, helpPass
+        ? 'Setup Help used user-facing guidance and safety wording.'
+        : 'Setup Help was missing expected user guidance or exposed implementation wording.');
+      customerLeaks = customerLeaks.concat(customerLanguageLeaks('Help'));
+      customerLeaks = customerLeaks.filter(function(value, index, all) {
+        return all.indexOf(value) === index;
+      });
+      add('customer_language', customerLeaks.length === 0, customerLeaks.length
+        ? ('Internal customer-facing wording found: ' + customerLeaks.slice(0, 5).join(' | '))
+        : 'Overview, primary workspaces, Bank, and Help exposed no workbook tab names or raw technical errors.');
+
+      if (typeof showPage === 'function') showPage('overview');
+      var refresh = document.getElementById('planner_refresh_btn');
+      var refreshPass = !!(refresh && !refresh.disabled);
+      if (refreshPass) {
+        refresh.click();
+        refreshPass = refresh.disabled === true;
+        if (refreshPass) {
+          await waitFor(function() { return refresh.disabled === false; }, 300000, 'Refresh Financial Plan completion');
+          var plannerStatus = document.getElementById('planner_status');
+          refreshPass = !(plannerStatus && plannerStatus.classList.contains('error'));
+        }
+      }
+      add('refresh_button_state', refreshPass, refreshPass
+        ? 'Refresh disabled during the real planner request, then re-enabled without an error state.'
+        : 'Refresh did not preserve the expected running/completed button state.');
+
+      var errors = errorMessages();
+      add('clean_console_navigation', errors.length === 0, errors.length
+        ? ('Captured ' + errors.length + ' browser/visible error(s).')
+        : 'No browser errors, unhandled rejections, or visible error statuses were captured.');
+      finish(errors);
+    } catch (e) {
+      if (assertions.every(function(item) { return item.id !== 'clean_console_navigation'; })) {
+        add('clean_console_navigation', false, 'Runner stopped: ' + (e && e.message ? e.message : String(e)));
+      }
+      finish(errorMessages().concat([e && e.message ? e.message : String(e)]));
+    }
+  }
+
+  function finish(errors) {
+    if (finished) return;
+    finished = true;
+    google.script.run
+      .withSuccessHandler(function(res) {
+        var bad = !res || !res.ok || !res.report || res.report.overall !== 'PASS';
+        overlay(bad ? 'First-Run UX E2E — FAIL' : 'First-Run UX E2E — PASS',
+          (res && (res.report || res.error)) || 'No report returned.', bad);
+      })
+      .withFailureHandler(function(err) {
+        overlay('First-Run UX E2E — COMPLETION ERROR',
+          { error:(err && err.message) ? err.message : String(err), assertions:assertions }, true);
+      })
+      .frE2EComplete(cfg.runId, {
+        assertions: assertions,
+        errors: errors || [],
+        durationMs: Date.now() - started
+      }, true);
+  }
+
+  setTimeout(run, 0);
+})();

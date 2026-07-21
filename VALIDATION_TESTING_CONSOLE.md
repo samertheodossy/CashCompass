@@ -433,7 +433,11 @@ gates on the whole subsystem.
   including `SMOKE-POPULATED-FIXTURE` and `SUITE-CENTRAL-SAFETY`, with Keep/Trash
   controls and detailed reports. The harness always creates its own disposable
   workbook and `assertDisposableTarget_` enforces teardown. Multi-select pack
-  composition and bounded-chunk Release Certification remain future.
+  composition and bounded-chunk Release Certification remain future. Browser-backed
+  suites use an **Open Browser Runner** action rather than pretending to run inside
+  the server loop. `SUITE-FIRST-RUN-UX-E2E` passed this path at isolated `@128`; its
+  saved PASS/cleanup summary is surfaced to the console and consumed by Release
+  Readiness.
 - **C4 — Release Readiness verdict. ◑ Runner source-ready; UI pending.** The bounded
   one-scenario-per-invocation runner and archived evidence contract exist in
   `release_readiness_runner.js`; console start/progress/final-verdict controls and

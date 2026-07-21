@@ -292,12 +292,31 @@ function vtListHarnessSuites() {
     var suites = [];
     for (var i = 0; i < all.length; i++) {
       var s = all[i];
+      var latestEvidence = null;
+      if (s.runner === 'browser' && s.evidenceKey) {
+        try {
+          var rawEvidence = PropertiesService.getScriptProperties().getProperty(s.evidenceKey);
+          var parsedEvidence = rawEvidence ? JSON.parse(rawEvidence) : null;
+          if (parsedEvidence && parsedEvidence.suiteId === s.id) {
+            latestEvidence = {
+              overall: parsedEvidence.overall,
+              finishedAt: parsedEvidence.finishedAt,
+              cleanupVerified: !!(parsedEvidence.cleanup && parsedEvidence.cleanup.verified)
+            };
+          }
+        } catch (_e) {}
+      }
       suites.push({
         id: s.id,
         label: s.label,
         description: s.description,
         implemented: s.implemented !== false,
         blocker: s.blocker || null,
+        runner: s.runner || 'server',
+        launchUrl: s.runner === 'browser'
+          ? String(ScriptApp.getService().getUrl() || '').replace(/\?.*$/, '') + '?view=first-run-e2e'
+          : null,
+        latestEvidence: latestEvidence,
         scenarioIds: (s.scenarioIds && s.scenarioIds.length) ? s.scenarioIds.slice() : [],
         count: (s.scenarioIds && s.scenarioIds.length) ? s.scenarioIds.length : 0
       });
@@ -326,10 +345,36 @@ function vtRunHarnessSuite(suiteId, options) {
     if (!getHarnessSuiteById_(id)) {
       throw new Error('Unknown or unsupported suite: "' + id + '".');
     }
+    var suite = getHarnessSuiteById_(id);
+    if (suite.runner === 'browser') {
+      throw new Error('This suite requires its authenticated browser runner. Use the Open Browser Runner action.');
+    }
     var mode = (options && options.dispositionMode) ? String(options.dispositionMode) : 'keep';
     // Rich in-memory report may embed Date objects (temporal comparators inside the
     // per-scenario functional results) — normalize to a wire-safe copy for the browser.
     var report = testRunSuiteById_(id, { dispositionMode: mode });
     return { ok: true, report: makeWireSafe_(report) };
+  });
+}
+
+/**
+ * Return the authenticated browser-suite launcher. Admin-only through the
+ * Validator guard. The returned URL contains no token; the browser route
+ * independently requires the exact disposable non-admin identity.
+ */
+function vtOpenHarnessBrowserRunner(suiteId) {
+  return vtSafe_(function() {
+    assertValidatorAllowed_();
+    var suite = getHarnessSuiteById_(String(suiteId || '').trim());
+    if (!suite || suite.runner !== 'browser') {
+      throw new Error('Unknown or unsupported browser suite.');
+    }
+    if (suite.id !== 'SUITE-FIRST-RUN-UX-E2E') {
+      throw new Error('This browser suite does not yet have an approved launcher.');
+    }
+    return {
+      ok: true,
+      launchUrl: String(ScriptApp.getService().getUrl() || '').replace(/\?.*$/, '') + '?view=first-run-e2e'
+    };
   });
 }

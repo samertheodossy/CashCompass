@@ -45,13 +45,50 @@
 
 <script>
   window.onerror = function(message, source, lineno, colno) {
+    if (window.console && typeof window.console.error === 'function') {
+      window.console.error('[CashCompass browser detail]', message, source, lineno, colno);
+    }
     var el = document.getElementById('planner_status');
     if (el) {
-      el.textContent = 'JS Error: ' + message + ' @ line ' + lineno;
+      el.textContent = 'CashCompass encountered a display problem. Please refresh and try again.';
       el.className = 'status error';
     }
   };
 </script>
+
+<? if (firstRunE2EEnabled) { ?>
+<script>
+  // Installed before the dashboard bundles so browser errors from startup and
+  // navigation are retained for the guarded First-Run E2E report.
+  window.__cashCompassFirstRunE2E = <?!= firstRunE2EConfigJson ?>;
+  window.__cashCompassFirstRunE2E.errors = [];
+  window.addEventListener('error', function(event) {
+    window.__cashCompassFirstRunE2E.errors.push(
+      String((event && event.message) || 'Browser error').slice(0, 300)
+    );
+  });
+  window.addEventListener('unhandledrejection', function(event) {
+    var reason = event && event.reason;
+    window.__cashCompassFirstRunE2E.errors.push(
+      String((reason && reason.message) || reason || 'Unhandled promise rejection').slice(0, 300)
+    );
+  });
+  ['error', 'warn'].forEach(function(level) {
+    if (!window.console || typeof window.console[level] !== 'function') return;
+    var original = window.console[level].bind(window.console);
+    window.console[level] = function() {
+      var parts = Array.prototype.slice.call(arguments).map(function(value) {
+        try { return typeof value === 'string' ? value : JSON.stringify(value); }
+        catch (_e) { return String(value); }
+      });
+      window.__cashCompassFirstRunE2E.errors.push(
+        ('console.' + level + ': ' + parts.join(' ')).slice(0, 300)
+      );
+      return original.apply(null, arguments);
+    };
+  });
+</script>
+<? } ?>
 
 <script>
   <?!= includeHtml_('Dashboard_Script_Render'); ?>
@@ -248,5 +285,11 @@
     }
   }
 </script>
+
+<? if (firstRunE2EEnabled) { ?>
+<script>
+  <?!= includeHtml_('Dashboard_Script_FirstRunE2E'); ?>
+</script>
+<? } ?>
 </body>
 </html>

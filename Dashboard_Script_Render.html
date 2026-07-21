@@ -452,8 +452,28 @@ function toggleHealthExplainer() {
 function setStatus(id, msg, isError) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.textContent = msg || '';
+  el.textContent = isError ? customerSafeErrorMessage_(msg) : (msg || '');
   el.className = isError ? 'status error' : 'status';
+}
+
+/**
+ * Keep implementation details in logs while presenting calm, actionable copy
+ * in the customer UI. Known business-validation messages remain unchanged;
+ * workbook tab names, schema terms, stack-style errors, and Apps Script
+ * exception prefixes are replaced at the final display boundary.
+ */
+function customerSafeErrorMessage_(value, fallback) {
+  const raw = String(value == null ? '' : value).trim();
+  const safeFallback = fallback ||
+    'CashCompass could not complete that action right now. Please refresh and try again.';
+  if (!raw) return safeFallback;
+  if (/(?:INPUT|SYS|OUT|LOG)\s*-|Missing sheet|required column|header row|schema|Exception:|TypeError:|ReferenceError:|\bat .*\.js:\d+/i.test(raw)) {
+    if (window.console && typeof window.console.error === 'function') {
+      window.console.error('[CashCompass detail]', raw);
+    }
+    return safeFallback;
+  }
+  return raw.replace(/^Exception:\s*/i, '');
 }
 
 function toNumber(value) {
@@ -719,7 +739,7 @@ function renderWeeklyAttribution(attribution) {
   if (!attribution || !attribution.items || !attribution.items.length) {
     const msg =
       (attribution && attribution.note) ||
-      'No OUT - History rows yet, or required columns are missing. Run the planner to record history.';
+      'Weekly changes will appear after your first Financial Plan refresh.';
     root.innerHTML = '<div class="muted">' + escapeHtml(msg) + '</div>';
     return;
   }

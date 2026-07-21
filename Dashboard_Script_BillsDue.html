@@ -453,7 +453,8 @@ function loadActiveBillsManagementUi_() {
     .withFailureHandler(function(err) {
       el.innerHTML =
         '<div class="muted">Couldn&rsquo;t load active bills &mdash; ' +
-        escapeHtml(err && err.message ? err.message : String(err)) +
+        escapeHtml(customerSafeErrorMessage_(err && err.message ? err.message : String(err),
+          'Could not load recurring bills. Please refresh and try again.')) +
         '</div>';
     })
     .getActiveBillsForManagementFromDashboard();

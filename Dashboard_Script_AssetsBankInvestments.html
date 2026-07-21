@@ -1494,8 +1494,8 @@ function renderBankImportReviewAddForm_(row) {
         '<option value="9" selected>Use last (backup)</option>' +
       '</select>' +
       '<div class="muted" style="margin-top:8px;font-size:12px;">' +
-        'This creates the account on SYS&nbsp;-&nbsp;Accounts and a row in the current Year block on INPUT&nbsp;-&nbsp;Bank Accounts, then stamps the External Account Id so future imports auto-link.' +
-        ' <strong>The imported balance is not written here.</strong> After saving, click <em>Apply balance</em> on the same staged row to write the snapshot.' +
+        'This creates a CashCompass bank account and links this imported account so future imports can recognize it.' +
+        ' <strong>The imported balance is not saved yet.</strong> After saving, click <em>Apply balance</em> on the same import to confirm the amount.' +
       '</div>' +
       '<div style="margin-top:8px;">' +
         '<button class="small-btn primary" onclick="confirmBankImportReviewAddNew_(\'' + sid + '\')">Save</button>' +
@@ -1531,8 +1531,8 @@ function renderBankImportReviewMatchForm_(row) {
       '<label>Existing account</label>' +
       '<select id="brv_match_account_' + sid + '">' + opts + '</select>' +
       '<div class="muted" style="margin-top:6px;font-size:12px;">' +
-        'This writes the External Account Id onto the selected SYS&nbsp;-&nbsp;Accounts row. Balances and planner fields are not touched. If the account is already linked to a different external id, the match is refused.' +
-        ' <strong>The imported balance is not written here.</strong> After saving, click <em>Apply balance</em> on the same staged row to write the snapshot.' +
+        'This links the imported account to the CashCompass account you select. Existing balances and planning settings are not changed. An account already linked to a different source cannot be matched.' +
+        ' <strong>The imported balance is not saved yet.</strong> After saving, click <em>Apply balance</em> on the same import to confirm the amount.' +
       '</div>' +
       '<div style="margin-top:8px;">' +
         '<button class="small-btn primary" onclick="confirmBankImportReviewMatch_(\'' + sid + '\')">Save</button>' +
@@ -1574,13 +1574,13 @@ function renderBankImportReviewApplyForm_(row) {
   }
   const account = escapeHtml(row.linkedAccountName || '(unknown)');
   const balanceDisp = escapeHtml(fmtCurrency(row.balance));
-  const monthLine = monthLabel ? escapeHtml(monthLabel) + ' cell' : 'the matching month cell';
+  const monthLine = monthLabel ? escapeHtml(monthLabel) : 'the matching month';
   return (
     '<div style="margin-top:10px;padding:10px;background:#f8f8f8;border-radius:6px;">' +
       '<div style="margin-bottom:6px;"><strong>Apply imported balance</strong></div>' +
       '<div style="font-size:13px;line-height:1.5;">' +
         'About to write <strong>' + balanceDisp + '</strong> to <strong>' + account + '</strong>.' +
-        '<br>INPUT&nbsp;-&nbsp;Bank Accounts ' + monthLine + ' will be updated for ' +
+        '<br>Your ' + monthLine + ' bank balance will be updated as of ' +
         '<strong>' + escapeHtml(row.balanceAsOf || '—') + '</strong>.' +
         '<br>Other months are not touched. Available Now / Min Buffer / Use Policy / Priority / Active are not touched.' +
       '</div>' +
@@ -1605,10 +1605,8 @@ function renderBankImportReviewUnmatchForm_(row) {
     '<div style="margin-top:10px;padding:10px;background:#f8f8f8;border-radius:6px;">' +
       '<div style="margin-bottom:6px;"><strong>Change match (unlink)</strong></div>' +
       '<div style="font-size:13px;line-height:1.5;">' +
-        'Clears the External Account Id from <strong>' + linkedTo + '</strong> on ' +
-        'SYS&nbsp;-&nbsp;Accounts and returns this staged row to <em>pending</em>. ' +
-        'Balances on INPUT&nbsp;-&nbsp;Bank Accounts and every other column ' +
-        'on the SYS&nbsp;-&nbsp;Accounts row are not touched.' +
+        'Disconnects this import from <strong>' + linkedTo + '</strong> and returns it to the unmatched list. ' +
+        'Saved balances and account settings are not changed.' +
       '</div>' +
       '<div class="muted" style="margin-top:6px;font-size:12px;">' +
         'After unlink you can pick a different account via Match, Add as new, or Ignore.' +
@@ -1627,7 +1625,7 @@ function renderBankImportReviewIgnoreForm_(row) {
     '<div style="margin-top:10px;padding:10px;background:#f8f8f8;border-radius:6px;">' +
       '<div style="margin-bottom:6px;"><strong>Ignore this bank account</strong></div>' +
       '<div class="muted" style="font-size:12px;">' +
-        'Future imports for this external account will skip the staging step (permanent ignore). You can remove the entry from <em>SYS&nbsp;-&nbsp;Import Ignored — Bank Accounts</em> later if needed.' +
+        'Future imports for this external account will be ignored. Contact support if you need to restore an ignored account.' +
       '</div>' +
       '<div style="margin-top:8px;">' +
         '<button class="small-btn primary" onclick="confirmBankImportReviewIgnore_(\'' + sid + '\')">Ignore</button>' +

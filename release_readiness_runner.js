@@ -41,7 +41,9 @@ function releaseReadinessStart(candidateSpreadsheetId, metadata) {
       severity2: Number(metadata.openSeverity2),
       declared: isFinite(Number(metadata.openSeverity1)) && isFinite(Number(metadata.openSeverity2))
     },
-    health: releaseCompactHealth_(health), inventory: inventory, cursor: 0, results: [], status: 'IN_PROGRESS'
+    health: releaseCompactHealth_(health), inventory: inventory,
+    externalEvidence: releaseLoadExternalEvidence_(inventory.externalSuites),
+    cursor: 0, results: [], status: 'IN_PROGRESS'
   };
   releaseSaveState_(state);
   return state;
@@ -86,6 +88,15 @@ function releaseReadinessFinalize() {
   if (!state.openIssues || !state.openIssues.declared) failures.push('Severity 1/2 issue counts were not explicitly declared.');
   else if (state.openIssues.severity1 > 0 || state.openIssues.severity2 > 0) failures.push('Open Severity 1 or Severity 2 issues remain.');
   for (var i = 0; i < state.inventory.missingSuites.length; i++) failures.push('Required suite not implemented: ' + state.inventory.missingSuites[i]);
+  var externalSuites = state.inventory.externalSuites || [];
+  var externalEvidence = state.externalEvidence || {};
+  for (var e = 0; e < externalSuites.length; e++) {
+    var suiteId = externalSuites[e];
+    if (!externalEvidence[suiteId] || externalEvidence[suiteId].overall !== 'PASS' ||
+        externalEvidence[suiteId].cleanupVerified !== true) {
+      failures.push('Required browser evidence missing or not PASS: ' + suiteId);
+    }
+  }
   if (state.cursor < state.inventory.scenarioIds.length) failures.push('Required scenarios remain NOT RUN.');
   for (var r = 0; r < state.results.length; r++) if (state.results[r].overall !== 'PASS') failures.push('Scenario failed: ' + state.results[r].scenarioId);
   if (PropertiesService.getScriptProperties().getProperty(RELEASE_PERFORMANCE_BUDGET_RATIFIED_KEY_) !== 'true') {
@@ -100,16 +111,42 @@ function releaseReadinessFinalize() {
 }
 
 function releaseBuildInventory_() {
-  var missing = [], ids = [], seen = {};
+  var missing = [], ids = [], seen = {}, external = [];
   for (var i = 0; i < RELEASE_REQUIRED_SUITES_.length; i++) {
     var suite = getHarnessSuiteById_(RELEASE_REQUIRED_SUITES_[i]);
     if (!suite || suite.implemented === false) { missing.push(RELEASE_REQUIRED_SUITES_[i]); continue; }
+    if (suite.runner === 'browser') { external.push(suite.id); continue; }
     for (var j = 0; j < suite.scenarioIds.length; j++) {
       var id = suite.scenarioIds[j];
       if (!seen[id]) { seen[id] = true; ids.push(id); }
     }
   }
-  return { requiredSuites: RELEASE_REQUIRED_SUITES_.slice(), missingSuites: missing, scenarioIds: ids };
+  return { requiredSuites: RELEASE_REQUIRED_SUITES_.slice(), missingSuites: missing,
+    externalSuites: external, scenarioIds: ids };
+}
+
+/** Snapshot compact browser evidence when a bounded release run begins. */
+function releaseLoadExternalEvidence_(suiteIds) {
+  var out = {};
+  var ids = suiteIds || [];
+  var props = PropertiesService.getScriptProperties();
+  for (var i = 0; i < ids.length; i++) {
+    var suite = getHarnessSuiteById_(ids[i]);
+    if (!suite || !suite.evidenceKey) continue;
+    try {
+      var raw = props.getProperty(suite.evidenceKey);
+      var report = raw ? JSON.parse(raw) : null;
+      if (!report || report.suiteId !== suite.id) continue;
+      out[suite.id] = {
+        overall: report.overall,
+        runId: releaseSanitizeMetadata_(report.runId),
+        finishedAt: report.finishedAt,
+        durationMs: Number(report.durationMs) || 0,
+        cleanupVerified: !!(report.cleanup && report.cleanup.verified)
+      };
+    } catch (_e) {}
+  }
+  return out;
 }
 
 function releaseCompactHealth_(h) {

@@ -365,7 +365,10 @@ function activityDeleteClick_(ev) {
     .withFailureHandler(function(err) {
       btn.disabled = false;
       if (statusEl) {
-        statusEl.textContent = err && err.message ? err.message : String(err);
+        statusEl.textContent = customerSafeErrorMessage_(
+          err && err.message ? err.message : String(err),
+          'Could not remove that activity entry. Please refresh and try again.'
+        );
         statusEl.className = 'status error';
       }
     })
@@ -555,7 +558,10 @@ function loadActivitySection(opts) {
     .withFailureHandler(function(err) {
       wrap.innerHTML = '<div class="muted">Couldn&rsquo;t load &mdash; please try again.</div>';
       if (statusEl) {
-        statusEl.textContent = err && err.message ? err.message : String(err);
+        statusEl.textContent = customerSafeErrorMessage_(
+          err && err.message ? err.message : String(err),
+          'Could not load more activity. Please refresh and try again.'
+        );
         statusEl.className = 'status error';
       }
     })

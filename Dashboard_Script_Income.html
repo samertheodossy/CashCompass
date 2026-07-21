@@ -67,7 +67,8 @@ function loadIncomeSourcesSection() {
     .withFailureHandler(function(err) {
       el.innerHTML =
         '<div class="muted">Couldn&rsquo;t load income sources &mdash; ' +
-        escapeHtml(err && err.message ? err.message : String(err)) +
+        escapeHtml(customerSafeErrorMessage_(err && err.message ? err.message : String(err),
+          'Could not load income sources. Please refresh and try again.')) +
         '</div>';
     })
     .getActiveIncomeSourcesForManagementFromDashboard();

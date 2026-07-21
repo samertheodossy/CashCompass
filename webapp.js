@@ -55,8 +55,34 @@ function doGet(e) {
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
-  return HtmlService.createTemplateFromFile('PlannerDashboardWeb')
-    .evaluate()
+  // Browser-backed First-Run UX E2E. Both routes are invisible to every
+  // account except the permanent disposable non-admin identity. The control
+  // page creates the fixture; the run route renders the shipping dashboard
+  // with a narrowly-scoped assertion overlay only after the exact run token,
+  // mapping, owner, and durable workbook markers have all been verified.
+  if (view === 'first-run-e2e' && isFirstRunE2EUser_()) {
+    return HtmlService.createTemplateFromFile('FirstRunE2ETestingUI')
+      .evaluate()
+      .setTitle('CashCompass — First-Run UX E2E')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+  if (view === 'first-run-e2e-run') {
+    var runId = (e && e.parameter && e.parameter.runId) ? String(e.parameter.runId) : '';
+    var context = frE2ERenderContext_(runId);
+    if (context) {
+      var e2eTemplate = HtmlService.createTemplateFromFile('PlannerDashboardWeb');
+      e2eTemplate.firstRunE2EEnabled = true;
+      e2eTemplate.firstRunE2EConfigJson = JSON.stringify({ enabled: true, runId: context.runId });
+      return e2eTemplate.evaluate()
+        .setTitle('CashCompass — First-Run UX E2E Running')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    }
+  }
+
+  var dashboardTemplate = HtmlService.createTemplateFromFile('PlannerDashboardWeb');
+  dashboardTemplate.firstRunE2EEnabled = false;
+  dashboardTemplate.firstRunE2EConfigJson = '{}';
+  return dashboardTemplate.evaluate()
     .setTitle('CashCompass')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }

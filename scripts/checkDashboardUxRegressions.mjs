@@ -7,9 +7,13 @@ const files = Object.fromEntries(await Promise.all([
   'Dashboard_Script_AssetsBankInvestments.html',
   'Dashboard_Script_Onboarding.html',
   'Dashboard_Script_PlanningDebts.html',
+  'Dashboard_Script_PlanningNextActions.html',
   'Dashboard_Script_PropertiesHouseExpenses.html',
   'Dashboard_Script_Render.html',
+  'Dashboard_Script_RollingDebtPayoff.html',
   'PlannerDashboard.html',
+  'QuickAddPaymentUI.html',
+  'dashboard_data.js',
   'onboarding.js'
 ].map(async (name) => [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')])));
 
@@ -77,6 +81,31 @@ for (const leakedCopy of [
 const help = files['Dashboard_Help.html'];
 assert.doesNotMatch(help, /loadOnboardingSection\(\)|Dashboard_Script_Onboarding\.html|status === 'missing'/);
 assert.doesNotMatch(help, /The workbook must already have that Year block/);
-assert.match(help, /Advanced sheet reference/);
+assert.doesNotMatch(help, /(?:INPUT|SYS|OUT|LOG)\s*-/,
+  'Customer Help must not expose internal workbook tab names');
+assert.doesNotMatch(help, /Advanced sheet reference|details JSON|planner_core\.js/,
+  'Customer Help must not read like an engineering reference');
+
+const customerCopy = [
+  body,
+  render,
+  files['Dashboard_Script_PlanningNextActions.html'],
+  files['Dashboard_Script_RollingDebtPayoff.html'],
+  files['QuickAddPaymentUI.html'],
+  files['dashboard_data.js']
+].join('\n');
+for (const leakedCopy of [
+  'No rows in OUT - History',
+  'No OUT - History rows',
+  'No bank accounts found in <code>SYS - Accounts</code>',
+  'Current SYS - Assets balance',
+  '<strong>Sheet:</strong>',
+  '<strong>Current value in cell:</strong>',
+  '<strong>Existing row:</strong>'
+]) {
+  assert.ok(!customerCopy.includes(leakedCopy), `Customer UI must not include: ${leakedCopy}`);
+}
+assert.match(render, /function customerSafeErrorMessage_\(/,
+  'Dashboard must keep raw workbook and stack details out of customer error states');
 
 console.log('Dashboard UX regression checks passed.');

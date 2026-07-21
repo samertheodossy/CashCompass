@@ -142,7 +142,10 @@ function loadRetirementSection() {
       showRetirementEmptyState_({
         title: 'Retirement planner is unavailable right now.',
         body: 'Try again in a moment.',
-        hint: (err && err.message) ? err.message : ''
+        hint: customerSafeErrorMessage_(
+          err && err.message ? err.message : String(err),
+          'Retirement information is unavailable right now. Please refresh and try again.'
+        )
       });
       clearRetirementReadOnlyInfo_();
       setStatus('retirement_status', '', false);

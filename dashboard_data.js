@@ -641,7 +641,7 @@ function pickWeeklyBaselineFromRows_(rows) {
     return {
       baseline: null,
       insufficientHistory: true,
-      note: 'No rows in OUT - History yet. Run the planner to record history.',
+      note: 'Weekly changes will appear after your first Financial Plan refresh.',
       daysSinceBaseline: null
     };
   }
@@ -689,7 +689,7 @@ function buildNetWorthAttributionWeekly_(current, pickMeta) {
       items: [],
       baselineLabel: '',
       baselineDetail: '',
-      note: (pickMeta && pickMeta.note) || 'No OUT - History data.',
+      note: (pickMeta && pickMeta.note) || 'Weekly changes are not available yet.',
       insufficientHistory: true,
       comparisonMode: 'weekly'
     };

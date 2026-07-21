@@ -3,7 +3,7 @@
 *The pre-release go/no-go produced by the Test Harness running every scenario pack
 and the Validator judging each result.*
 
-**Status:** **Bounded runner source-ready; Validator/Workbook Health runtime-proven at isolated Central `@122`; final runtime verdict pending.** The Validator
+**Status:** **Bounded runner source-ready; Validator/Workbook Health and First-Run UX E2E runtime-proven through isolated Central `@128`; final runtime verdict pending.** The Validator
 Phase 2 core (Provisioning / Drift / Schema Evolution), fail-closed disposable
 workbook lifecycle, and populated-fixture hardening now exist. Five suites are
 runnable: `SUITE-BILLS-REGRESSION`, `SUITE-RECOVERY-REGRESSION`,
@@ -19,8 +19,11 @@ verified Trash; Performance Planner passed 4/4 with first/repeat timings of
 owner-only sharing, CURRENT schema, Provisioning/Drift PASS, and verified Trash.
 Dedicated aggregate Workbook Health passed with zero warnings at isolated `@122`
 after narrow validator-normalization and disposable-fixture corrections. First-Run UX
-E2E, Populated Dashboard E2E, and Recovery Live remain explicitly NOT IMPLEMENTED
-until their authenticated browser/disposable-account seams exist. Therefore the
+E2E passed its original 8/8 browser contract at isolated `@128` with Restricted sharing, a real
+planner Refresh, privacy-safe saved evidence, and verified Trash cleanup. Customer-language
+hardening subsequently added a ninth whole-interface assertion and moved saved evidence to V2;
+the historical result cannot satisfy the current gate until an isolated rerun passes. Populated
+Dashboard E2E and Recovery Live remain explicitly NOT IMPLEMENTED. Therefore the
 current P1 verdict remains **NOT READY**; performance budgets also remain unratified
 because one passing timing sample is not percentile evidence. See
 `P1_RELEASE_EVIDENCE_CONTRACT.md`.

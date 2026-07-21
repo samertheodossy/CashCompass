@@ -1555,14 +1555,14 @@ function getOnboardingIncomeFromDashboard(mode) {
   try {
     headerMap = getCashFlowHeaderMap_(sheet);
   } catch (e) {
-    base.statusNote = 'Cash Flow header row is malformed.';
+    base.statusNote = 'Cash Flow needs attention before income can be reviewed.';
     return base;
   }
 
   var display = sheet.getDataRange().getDisplayValues();
   var values = sheet.getDataRange().getValues();
   if (!display || display.length < 2) {
-    base.statusNote = 'Cash Flow sheet has no rows yet.';
+    base.statusNote = 'Add your first income or expense to begin Cash Flow.';
     return base;
   }
 

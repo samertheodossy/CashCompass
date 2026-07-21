@@ -148,9 +148,11 @@ function getHarnessSuites_() {
     {
       id: 'SUITE-FIRST-RUN-UX-E2E',
       label: 'First-Run UX E2E',
-      description: 'Planned browser-driven blank/fresh Setup, navigation, gating, Help, refresh-state, and clean-console validation.',
-      implemented: false,
-      blocker: 'Requires an authenticated browser-runner seam; static HTML checks are not equivalent to E2E evidence.',
+      description: 'Browser-driven fresh Central provisioning, Setup, navigation, gating, Help, real Refresh state, clean-console checks, and verified Trash cleanup.',
+      implemented: true,
+      runner: 'browser',
+      evidenceKey: 'FIRST_RUN_E2E_LATEST_EVIDENCE_V2',
+      blocker: null,
       scenarioIds: []
     },
     {
@@ -226,6 +228,10 @@ function testRunSuiteById_(suiteId, options) {
   }
   if (suite.implemented === false) {
     throw new Error('Test Harness: suite "' + suite.id + '" is NOT IMPLEMENTED. ' + String(suite.blocker || 'Required execution seam is unavailable.'));
+  }
+  if (suite.runner === 'browser') {
+    throw new Error('Test Harness: suite "' + suite.id +
+      '" must run in its authenticated browser runner; the server suite runner cannot substitute for browser evidence.');
   }
   options = options || {};
   var mode = normalizeSuiteDisposition_(options.dispositionMode);

@@ -1078,8 +1078,20 @@
     var s = vtHSuiteMap[sel.value];
     if (!s) { desc.textContent = ''; return; }
     var count = (s.count != null) ? s.count : (s.scenarioIds ? s.scenarioIds.length : 0);
+    var browser = s.runner === 'browser';
     desc.innerHTML = vtEsc(s.description || '') +
-      '<span style="color:var(--ink-mute);"> · ' + count + ' scenario' + (count === 1 ? '' : 's') + '</span>';
+      '<span style="color:var(--ink-mute);"> · ' + (browser ? 'authenticated browser flow' :
+        (count + ' scenario' + (count === 1 ? '' : 's'))) + '</span>' +
+      (browser && s.latestEvidence
+        ? '<div style="margin-top:5px;color:var(--ink-soft);">Latest evidence: <strong>' +
+          vtEsc(s.latestEvidence.overall || 'UNKNOWN') + '</strong> · cleanup ' +
+          (s.latestEvidence.cleanupVerified ? 'verified' : 'not verified') + ' · ' +
+          vtEsc(s.latestEvidence.finishedAt || '') + '</div>'
+        : '');
+    var btn = document.getElementById('vt-h-suite-run');
+    btn.textContent = browser ? 'Open Browser Runner' : 'Run Suite';
+    var radios = document.querySelectorAll('input[name="vt-h-suite-disp"]');
+    for (var i = 0; i < radios.length; i++) radios[i].disabled = browser;
   }
 
   function vtHSetSuiteMsg(html, isErr) {
@@ -1091,6 +1103,28 @@
   function vtHRunSuite() {
     var token = ++vtHSuiteRunToken;
     var suiteId = document.getElementById('vt-h-suite').value;
+    var suite = vtHSuiteMap[suiteId];
+    if (suite && suite.runner === 'browser') {
+      if (!suite.launchUrl) { vtHSetSuiteMsg('Browser runner URL is unavailable.', true); return; }
+      var browserTab = window.open('about:blank', '_blank');
+      vtHSetSuiteMsg(vtSpin('Opening the guarded disposable-account runner…'), false);
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (!res || !res.ok || !res.launchUrl) {
+            if (browserTab) browserTab.close();
+            vtHSetSuiteMsg(vtEsc(res && res.error ? res.error : 'Could not open browser runner.'), true);
+            return;
+          }
+          if (browserTab) browserTab.location = res.launchUrl;
+          vtHSetSuiteMsg('Opened the guarded browser runner. Sign in as the disposable test account if prompted.', false);
+        })
+        .withFailureHandler(function(err) {
+          if (browserTab) browserTab.close();
+          vtHSetSuiteMsg(vtEsc(err && err.message ? err.message : 'Could not open browser runner.'), true);
+        })
+        .vtOpenHarnessBrowserRunner(suiteId);
+      return;
+    }
     // V1: read the Suite section's own disposition control (mirrored with the Scenario
     // one — one shared state, shown in both sections). Applied uniformly to every
     // scenario (no mixed policy yet).

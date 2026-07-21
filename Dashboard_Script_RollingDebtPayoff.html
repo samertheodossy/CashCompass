@@ -464,7 +464,7 @@ function rollingThisMonthPlanHtml_(tmp) {
   ];
   if (lq.near_term_planned_cash_reserved != null && Number(lq.near_term_planned_cash_reserved) > 0.005) {
     liqBody.push([
-      'Near-term planned cash reserved (INPUT - Upcoming Expenses)',
+      'Cash reserved for upcoming expenses',
       fmtCurrency(lq.near_term_planned_cash_reserved)
     ]);
   }
@@ -495,7 +495,7 @@ function rollingThisMonthPlanHtml_(tmp) {
 
   var peiLines = tmp.planned_expense_lines;
   if (peiLines && peiLines.length) {
-    h.push('<p class="rolling-dp-subhead">Planned expense impact (INPUT - Upcoming Expenses)</p>');
+    h.push('<p class="rolling-dp-subhead">Upcoming expense impact</p>');
     h.push('<ul class="rolling-dp-narrative-list">');
     peiLines.forEach(function(line) {
       var treat = line.execution_treatment ? String(line.execution_treatment) : String(line.impact_tag || '');
@@ -521,7 +521,7 @@ function rollingThisMonthPlanHtml_(tmp) {
   if (ams && typeof ams === 'object') {
     var ap = ams.already_paid || [];
     var pn = ams.pay_now || [];
-    h.push('<p class="rolling-dp-subhead">Anchor month minimums (INPUT - Cash Flow)</p>');
+    h.push('<p class="rolling-dp-subhead">Payments recorded for the current month</p>');
     h.push(
       '<p class="muted rolling-dp-anchor-cf-note">A positive expense in the anchor month column for a payee that matches the debt means that payment is already logged — do not schedule that minimum again.</p>'
     );

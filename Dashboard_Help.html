@@ -2,7 +2,7 @@
   <div class="help-header">
     <div>
       <h2 class="help-title">Help &amp; how it works</h2>
-      <p class="help-subtitle muted"><strong>CashCompass</strong> — guiding your money decisions. This page documents the web dashboard. The top-nav areas (Overview, Assets, Cash Flow, Activity, Properties, Planning) match the sections below.</p>
+      <p class="help-subtitle muted"><strong>CashCompass</strong> — a practical guide to setting up your finances, staying current, and deciding what to do next.</p>
     </div>
     <button type="button" class="btn-help-back" onclick="showPage('overview')">← Back to Overview</button>
   </div>
@@ -11,7 +11,6 @@
     <div class="help-toc-wrap">
       <nav class="help-toc" aria-label="Help sections">
         <div class="help-toc-title">On this page</div>
-        <a href="#help-intro">Introduction</a>
         <a href="#help-getting-started">Getting started</a>
         <a href="#help-setup">Setup / Review</a>
         <a href="#help-overview">Overview</a>
@@ -19,991 +18,192 @@
         <a href="#help-cashflow">Cash Flow</a>
         <a href="#help-upcoming">Upcoming expenses</a>
         <a href="#help-donations">Donations</a>
-        <a href="#help-activity">Activity log</a>
+        <a href="#help-activity">Activity</a>
         <a href="#help-bills-due">Bills</a>
         <a href="#help-properties">Properties</a>
-        <a href="#help-property-performance">Property performance</a>
         <a href="#help-planning">Planning</a>
         <a href="#help-next-actions">Next Actions</a>
         <a href="#help-payoff-path">Debt Overview</a>
         <a href="#help-rolling-debt-payoff">Rolling Debt Payoff</a>
-        <a href="#help-debt-email">Debt Planner email</a>
-        <a href="#help-sheets">Advanced sheet reference</a>
+        <a href="#help-debt-email">Financial Plan email</a>
       </nav>
     </div>
 
     <div class="help-main">
-
-      <!-- ================================================================ -->
-      <!-- Introduction                                                     -->
-      <!-- ================================================================ -->
-      <section id="help-intro" class="help-section">
-        <h3>Introduction</h3>
-        <p><strong>CashCompass</strong> reads and updates your Google Sheets. Balances and totals always come from the sheets — the UI keeps no local copy.</p>
-        <p>Use <strong>Refresh Financial Plan</strong> to pull the latest sheet values into Overview and re-run the debt planner.</p>
-        <p>New here? See <a href="#help-getting-started">Getting started</a>.</p>
-      </section>
-
-      <!-- ================================================================ -->
-      <!-- Getting started                                                  -->
-      <!-- ================================================================ -->
       <section id="help-getting-started" class="help-section">
         <h3>Getting started</h3>
         <ol class="help-list">
           <li>Open <strong>Setup / Review</strong> from the top-right.</li>
-          <li>Fill in the five required areas from the status grid: <strong>Bank Accounts</strong>, <strong>Debts</strong>, <strong>Bills</strong>, <strong>Income</strong>, and <strong>Profile</strong>.</li>
-          <li>Open <strong>Next Actions</strong> (Planning) to see what to do next.</li>
+          <li>Add your bank accounts, debts, bills, income, and profile information.</li>
+          <li>Choose <strong>Refresh Financial Plan</strong> after your starting information is ready.</li>
+          <li>Open <strong>Planning → Next Actions</strong> for a short, prioritized list.</li>
         </ol>
-        <p class="muted">Setup / Review is read-only until you open an editor. <strong>Upcoming Expenses</strong> and <strong>Houses</strong> are optional and do not count toward completion.</p>
+        <p class="muted">Upcoming expenses and properties are optional. Add them when they are useful to your household plan.</p>
       </section>
 
-      <!-- ================================================================ -->
-      <!-- Setup / Review                                                   -->
-      <!-- ================================================================ -->
       <section id="help-setup" class="help-section">
         <h3>Setup / Review</h3>
-        <p>Top-right button. Opens a read-only walkthrough of the five required input areas plus two optional ones.</p>
-
-        <h4>Flow</h4>
+        <p>Setup / Review shows what is ready and what still needs attention. It does not change your data by itself.</p>
         <ul class="help-list">
-          <li><strong>Welcome</strong> — shown when none of the five required areas has been set up yet. Choose <strong>Continue</strong> to review the setup checklist, or <strong>Back to Dashboard</strong> to return to Overview.</li>
-          <li><strong>Status grid</strong> — one card per required area (Bank Accounts, Debts, Bills, Income, Profile). Each shows <em>Setup complete</em> or <em>Not set up</em> plus a short summary.</li>
-          <li><strong>Optional: Upcoming Expenses</strong> — planned expenses for cash-flow forecasting. Not part of the completion count; its card shows a planned-item count rather than a status badge.</li>
-          <li><strong>Optional: Houses</strong> — property tracking. Not part of the completion count.</li>
-          <li><strong>Completion panel</strong> — <em>Your setup is ready.</em> when all five required areas are complete, otherwise <em>Almost there</em> with a short progress line. Primary action: <em>Go to Next Actions</em>.</li>
-          <li><strong>Detail screens</strong> — click any card for a read-only view plus a link to the matching editor. Profile uses an inline editor right on its detail screen.</li>
+          <li><strong>Not set up</strong> means CashCompass still needs information for that area.</li>
+          <li><strong>Setup complete</strong> means enough information is available to use that area.</li>
+          <li>Open a card to review its summary and continue to the matching editor.</li>
+          <li>Your profile supplies the name and email used for Financial Plan messages. Date of birth supports retirement calculations.</li>
+          <li>When all required areas are complete, use <strong>Go to Next Actions</strong> to continue.</li>
         </ul>
-
-        <h4>Profile (Contact Info)</h4>
-        <ul class="help-list">
-          <li><strong>Required</strong> — <strong>Name</strong> and <strong>Email</strong>. Used for planner emails and personalization.</li>
-          <li><strong>Optional (primary)</strong> — <strong>Phone</strong>, <strong>Address</strong>, and <strong>Date of Birth</strong>. Add later if needed.</li>
-          <li><strong>Optional (spouse / partner)</strong> — <strong>Spouse Name</strong>, <strong>Spouse Email</strong>, <strong>Spouse Phone</strong>, <strong>Spouse Address</strong>, and <strong>Spouse Date of Birth</strong>. Fill in only what applies.</li>
-          <li><strong>Why Date of Birth</strong> — <strong>Date of Birth</strong> is the source of truth for the current age used in Retirement calculations (and the Overview Retirement Outlook card). Spouse DOB is optional and only used for partnered Retirement scenarios. If DOB is blank, Retirement shows a setup hint and an <em>Open Profile</em> link rather than calculating.</li>
-          <li><strong>Why email</strong> — Planner emails go to the Email entered here. If this field is blank, the planner will skip sending the email — there is no fallback to your Google account.</li>
-          <li><strong>Edit</strong> — Open <strong>Setup / Review</strong> → Profile → <em>Edit profile</em>. Save writes immediately; Cancel discards edits.</li>
-        </ul>
-
-        <h4>Editor handoff</h4>
-        <p>Opening an editor from <strong>Setup / Review</strong> uses a focused shell with a <strong>Back to Setup</strong> bar; the main nav, page sub-tabs, and planner controls are hidden. Opening the same editor from the top nav is unchanged.</p>
-
-        <h4>Safety</h4>
-        <ul class="help-list">
-          <li>Setup / Review never changes your data on its own.</li>
-          <li>Editors launched from Setup / Review use the same save logic as the normal path.</li>
-          <li>CashCompass prepares missing setup structure when needed and preserves existing data.</li>
-        </ul>
+        <p class="muted"><strong>Safety:</strong> Setup / Review never changes your data on its own. An editor saves only after you choose its Save or Add action.</p>
       </section>
 
-      <!-- ================================================================ -->
-      <!-- Overview                                                         -->
-      <!-- ================================================================ -->
       <section id="help-overview" class="help-section">
         <h3>Overview</h3>
-        <p>Snapshot cards summarize totals for cash, investments, real estate, debt, and net worth.</p>
+        <p>Overview summarizes cash, investments, real estate, debt, net worth, financial health, retirement, near-term obligations, and suggested actions.</p>
         <ul class="help-list">
-          <li><strong>Change vs prior period</strong> — Some cards show change vs prior month (or week, where noted). The comparison uses INPUT history or <strong>OUT - History</strong>.</li>
-          <li><strong>Shortcuts</strong> — Clicking a card jumps to the related workspace tab when a shortcut is available.</li>
-          <li><strong>Suggested Actions</strong> — Proactive nudges (cash flow, buffer runway, retirement, etc.).</li>
-          <li><strong>Issues</strong> — Full list of detected problems (utilization, buffers, upcoming overdue, …). Kept separate from Suggested Actions so items are not duplicated.</li>
-          <li><strong>Retirement Outlook</strong> — Summary of the active retirement scenario (goal, current investable assets, estimated retirement age, Monte Carlo success). When <strong>Date of Birth</strong> is missing from your Profile or the active scenario's assumptions are incomplete, the card shows a calm setup hint — open the <strong>Retirement</strong> tab or <strong>Setup / Review → Profile</strong> to finish the inputs. Current age is always derived from Profile DOB, never entered on Retirement directly.</li>
+          <li><strong>Change vs prior period</strong> compares current information with the most relevant earlier Financial Plan refresh.</li>
+          <li><strong>Financial Health</strong> explains the main factors helping or hurting the score.</li>
+          <li><strong>Operations Snapshot</strong> highlights bills, upcoming expenses, and property spending.</li>
+          <li><strong>Weekly net worth change</strong> appears after Financial Plan history is available.</li>
+          <li><strong>Suggested Actions</strong> offers practical next steps. <strong>Issues</strong> keeps the complete warning list separate.</li>
         </ul>
-        <p class="muted"><strong>Note:</strong> A short line under Suggested Actions reminds you to scroll to Issues when alerts exist; it does not repeat the issue count.</p>
       </section>
 
-      <!-- ================================================================ -->
-      <!-- Assets                                                           -->
-      <!-- ================================================================ -->
       <section id="help-assets" class="help-section">
         <h3>Assets</h3>
-
-        <h4>House Values</h4>
+        <h4>Bank accounts</h4>
         <ul class="help-list">
-          <li><strong>Update</strong> saves the valuation for the selected house on the selected month. Edits go to <strong>INPUT - House Values</strong>.</li>
-          <li><strong>Status feedback:</strong> the status row below the save button cycles through <em>Saving…</em> → <em>Saved.</em> on success. The summary panel (selected month / stored value / current value / change vs prior month) updates immediately from the save payload. The full planner runs as a silent background refresh after the save returns, so the Overview snapshot catches up without holding the UI.</li>
-          <li><strong>Activity log:</strong> every Update logs a <strong>house_value_update</strong> event to <strong>LOG - Activity</strong>. <strong>Type</strong> is <strong>House Expenses</strong>; the <strong>Action</strong> sub-label includes the month and new value (e.g. <em>Updated May-26 value to $750,000.00</em>). <strong>Amount</strong> shows <strong>—</strong> because a valuation update is not a transaction; the previous value is preserved in the event's <strong>details</strong> JSON.</li>
-          <li><strong>Add new</strong> creates the property and prepares its current-year tracking area automatically when needed. It also creates the matching property-expense area.</li>
-          <li><strong>Required Add-new fields:</strong> House name, Property type, Current value, Loan amount left. <strong>Property type</strong> is a dropdown of common roles (<em>Primary Residence</em>, <em>Vacation Home</em>, <em>Rental</em>) merged with any types already used in this workbook; pick <strong>Other (custom)…</strong> to enter a custom label. <strong>Valuation date</strong> is optional and <strong>historical dates are allowed</strong> — a house purchased years ago is still recorded in the current year block. When the date falls in the current year the Current value is seeded into that month; an out-of-year date records into the current month instead. When left blank the current month is used automatically so the Current value always lands in a real month column. (Past year blocks are never created or backfilled; your entered date is preserved in the event's <strong>details</strong> JSON.)</li>
-          <li><strong>Loan Amount Left</strong> is written into column 2 of the new <strong>INPUT - House Values</strong> row; the matching <strong>SYS - House Assets</strong> row is created with the same Loan Amount Left and Current Value. Row formatting and column widths are copied from an existing HOUSES sheet so the new sheet visually matches.</li>
-          <li><strong>Duplicate names</strong> are rejected across <strong>INPUT - House Values</strong>, <strong>SYS - House Assets</strong>, and existing <strong>HOUSES - *</strong> tab names. Inline errors show next to the House name field and focus the input.</li>
-          <li><strong>Add new</strong> logs <strong>house_add</strong> to <strong>LOG - Activity</strong>. It does <em>not</em> re-run the full planner — use <strong>Refresh Financial Plan</strong> when you want projections and Overview updated.</li>
-          <li>After a successful add, the House Values dropdown re-selects the new house, and the <strong>Properties → House Expenses</strong> selector refreshes so the house is immediately available there.</li>
-          <li>Running the planner refreshes <strong>SYS - House Assets → Current Value</strong> from the latest values in the current-year block. Other SYS columns (<strong>Type</strong>, <strong>Loan Amount Left</strong>) are <em>not</em> overwritten by that sync.</li>
+          <li><strong>Update</strong> records a balance for the selected month.</li>
+          <li><strong>Available Now</strong> is the amount that may be considered for bills or debt decisions.</li>
+          <li><strong>Min Buffer</strong> protects the minimum balance you want to keep.</li>
+          <li><strong>Use policy</strong> tells the planner whether an account is protected or available for a specific purpose.</li>
+          <li><strong>Stop tracking</strong> removes an account from active views while preserving past balances.</li>
         </ul>
-
-        <h4>House Values — Stop tracking (soft deactivate)</h4>
-        <ul class="help-list">
-          <li><strong>Update</strong> mode shows a secondary <strong>Stop tracking</strong> button next to <strong>Save House Value</strong>. Use it when you sell a house or otherwise want to retire it from active views without losing history.</li>
-          <li>Clicking it opens an inline confirmation. On confirm:
-            <ul class="help-list">
-              <li>Every row for that house in <strong>INPUT - House Values</strong> (across all year blocks) is flipped to <strong>Active = No</strong> — canonical source of truth.</li>
-              <li>The matching <strong>SYS - House Assets</strong> row mirrors <strong>Active = No</strong>.</li>
-              <li>Month values, <strong>Loan Amount Left</strong>, <strong>Current Value</strong>, <strong>Type</strong>, and the <strong>HOUSES - {House}</strong> sheet are left untouched.</li>
-            </ul>
-          </li>
-          <li>Inactive houses drop out of the <strong>Update House Value</strong> dropdown, the <strong>Properties → House Expenses</strong> selector, and the <strong>Properties → Property performance</strong> rows + portfolio cards. History stays in every sheet for audit / reporting.</li>
-          <li>The <strong>HOUSES - {House}</strong> sheet is <em>not</em> deleted or renamed. You can still open it directly on the workbook to review past expenses.</li>
-          <li>Duplicate-name validation still blocks reuse of a stop-tracked house name when adding a new house (names stay reserved).</li>
-          <li>Logs <strong>house_deactivate</strong> to <strong>LOG - Activity</strong>. Activity <strong>Type</strong> is <strong>House Expenses</strong>; <strong>Action</strong> sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong> because no money moved.</li>
-          <li>New <strong>Yes</strong> / <strong>No</strong> values written into the <strong>Active</strong> column inherit the row's text style so they visually match the rest of the row.</li>
-        </ul>
-
-        <h4>Bank Accounts</h4>
-        <ul class="help-list">
-          <li><strong>Update</strong> saves the balance for the selected account. Edits go to <strong>INPUT - Bank Accounts</strong> (canonical) and <strong>SYS - Accounts</strong> mirrors the latest current-year value as <strong>Current Balance</strong>.</li>
-          <li><strong>Status feedback:</strong> the status row below the save button cycles through <em>Saving…</em> → <em>Saved.</em> on success. The summary panel (selected month / stored value / current balance / change vs prior month) updates immediately from the save payload — no re-fetch needed. The full planner runs as a silent background refresh after the save returns, so Rolling Debt Payoff and Overview snapshot catch up shortly after without holding the UI on <em>Saving…</em>.</li>
-          <li><strong>Activity log:</strong> every Update logs a <strong>bank_account_update</strong> event to <strong>LOG - Activity</strong>. <strong>Type</strong> is <strong>Bank</strong>; the <strong>Action</strong> sub-label includes the month and new balance (e.g. <em>Updated May-26 balance to $1,234.56</em>). <strong>Amount</strong> shows <strong>—</strong> because a balance restatement is not a transaction; the previous balance is preserved in the event's <strong>details</strong> JSON.</li>
-          <li><strong>Add new</strong> creates the bank account and prepares its current-year tracking area automatically when needed.</li>
-          <li><strong>Opening balance</strong> is required and prefilled to <strong>0.00</strong>. Enter <code>0</code> if unknown — the field cannot be empty. <strong>Opening balance date</strong> is required only when the amount is non-zero and, when provided, must fall in the current year.</li>
-          <li><strong>Type</strong> offers common choices such as Checking and Savings, plus types already used in your workbook.</li>
-          <li><strong>Use policy</strong> is a dropdown with fixed choices — <em>Do not touch</em>, <em>Use for bills</em>, <em>Use for debt</em>, <em>Use with caution</em>, and <em>Other (custom)…</em>. The four main choices save as canonical tokens (<code>DO_NOT_TOUCH</code>, <code>USE_FOR_BILLS</code>, <code>USE_FOR_DEBT</code>, <code>USE_WITH_CAUTION</code>) the planner already understands; <em>Other</em> reveals a free-text input and is treated like <em>Do not touch</em> until it's mapped.</li>
-          <li><strong>Priority</strong> is a dropdown — <em>Use first (primary account)</em>, <em>Use after others</em>, or <em>Use last (backup)</em> — defaulting to <strong>Use last</strong>. Internally these map to the numeric values <strong>1</strong>, <strong>5</strong>, and <strong>9</strong> the planner reads from the <strong>Priority</strong> column on <strong>SYS - Accounts</strong> (see <code>planner_core.js</code> → <code>normalizeAccounts_</code>). Lower numbers are drawn first within the same <strong>Use policy</strong> bucket.</li>
-          <li><strong>"Also set Available Now to opening amount"</strong> and <strong>"Also set Min Buffer to opening amount"</strong> both default to checked on the Add-new form, so a fresh account has sensible buffers from the first save.</li>
-          <li>New rows appended to <strong>SYS - Accounts</strong> copy formatting (borders, font, number formats, row height) from the last existing account row so they visually match neighbors.</li>
-          <li><strong>Duplicate names</strong> are rejected across <strong>INPUT - Bank Accounts</strong> (all year blocks, including inactive) and <strong>SYS - Accounts</strong>. Inline errors show next to the Account name field and focus the input.</li>
-          <li>Status text during <strong>Add new</strong> is <em>Creating bank account…</em>. After success, the panel flips back to <strong>Update</strong> and preselects the new account.</li>
-          <li><strong>Add new</strong> logs <strong>bank_account_add</strong> to <strong>LOG - Activity</strong>. <strong>Amount</strong> shows the opening balance when you supplied one, or <strong>$0.00</strong> when you did not. It does <em>not</em> re-run the full planner — use <strong>Refresh Financial Plan</strong> when you want projections and Overview updated.</li>
-        </ul>
-
-        <h4>Bank Accounts — Stop tracking (soft deactivate)</h4>
-        <ul class="help-list">
-          <li><strong>Update</strong> mode shows a secondary <strong>Stop tracking</strong> button next to <strong>Save Bank Account</strong>. Use it when you close a bank account or otherwise want to retire it from active selectors without losing history.</li>
-          <li>Clicking it opens an inline confirmation. On confirm:
-            <ul class="help-list">
-              <li>Every row for that account in <strong>INPUT - Bank Accounts</strong> (across all year blocks) is flipped to <strong>Active = No</strong> — canonical source of truth.</li>
-              <li>The matching <strong>SYS - Accounts</strong> row mirrors <strong>Active = No</strong>.</li>
-              <li>All month values, <strong>Current Balance</strong>, <strong>Available Now</strong>, <strong>Min Buffer</strong>, <strong>Type</strong>, <strong>Use Policy</strong>, <strong>Priority</strong>, and totals / delta rows are left untouched.</li>
-            </ul>
-          </li>
-          <li>Inactive bank accounts drop out of the <strong>Bank Account</strong> dropdown immediately. History stays in both sheets for audit / reporting.</li>
-          <li>Duplicate-name validation still blocks reuse of a stop-tracked account name when adding a new bank account (names stay reserved).</li>
-          <li>Status text during the flow is <em>Stopping tracking…</em>.</li>
-          <li>Backward compatibility: rows with a blank / missing <strong>Active</strong> value are treated as active, so pre-existing data is unaffected until you explicitly stop tracking. The <strong>Active</strong> column is self-healed — the script adds it to <strong>INPUT - Bank Accounts</strong> year blocks and to <strong>SYS - Accounts</strong> automatically if missing.</li>
-          <li>Logs <strong>bank_account_deactivate</strong> to <strong>LOG - Activity</strong>. Activity <strong>Type</strong> is <strong>Bank</strong>; <strong>Action</strong> sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong> because no money moved.</li>
-          <li>New <strong>Yes</strong> / <strong>No</strong> values written into the <strong>Active</strong> column inherit the row's text style so they visually match the rest of the row.</li>
-        </ul>
-
-        <h4>Bank Accounts — Import (CSV paste)</h4>
-        <ul class="help-list">
-          <li>The Bank panel's <strong>Import</strong> segment (hidden by default behind the dashboard's <code>BANK_IMPORT_CSV_PASTE_ENABLED</code> flag) lets you stage one or more bank-account balance snapshots by pasting a CSV. <strong>Nothing is written to any account.</strong> Imported rows go through the same Step 2a/2d staging and approval flow as every other source: link the row first (<strong>Add as new</strong> or <strong>Match to existing</strong>), then click <strong>Apply balance</strong> to write the snapshot to <strong>INPUT&nbsp;-&nbsp;Bank Accounts</strong>.</li>
-          <li><strong>Template columns</strong> (header row required; case-insensitive; column order does not matter):
-            <ul>
-              <li><strong>displayName</strong> — friendly name for the account (e.g. "Chase Total Checking ••0123"). Required <em>or</em> any other identifier (<em>externalAccountId</em> / <em>institution</em> / <em>last4</em>) must be present.</li>
-              <li><strong>balance</strong> — required. Numeric, US format, decimals with <code>.</code>. <code>$</code> and thousands <code>,</code> are stripped automatically; locale comma-as-decimal is rejected.</li>
-              <li><strong>balanceAsOf</strong> — required. ISO date <code>YYYY-MM-DD</code>. Future-dated or older than 90 days routes to pending with <em>stale_balance</em>.</li>
-              <li><strong>externalAccountId</strong> — optional. When provided, future imports auto-link to the matched SYS row. When blank, the row stages with <em>no_exact_id_match</em> for manual matching.</li>
-              <li><strong>institution</strong>, <strong>last4</strong>, <strong>type</strong> — optional. Used for the ignored-list composite key and for type-conflict detection.</li>
-              <li><strong>currency</strong> — optional. Defaults to USD. Anything else routes to pending with <em>currency_mismatch</em> so a non-USD snapshot can never sneak into a USD account.</li>
-            </ul>
-          </li>
-          <li><strong>Preview before staging.</strong> Click <strong>Preview</strong> to parse the textarea client-side. The preview table shows each row with its parsed values, soft hints (<em>will stage as currency mismatch</em>, <em>will stage as stale balance</em>, <em>will stage for manual match</em>), and any errors highlighted in red. Errored rows include <em>balance must be a number</em>, <em>balanceAsOf must be YYYY-MM-DD</em>, <em>balanceAsOf is not a valid date</em>, <em>Need at least one of externalAccountId, displayName, institution, or last4</em>, and <em>Wrong number of fields</em>.</li>
-          <li><strong>All-or-nothing staging.</strong> If any row has an error, the <strong>Stage</strong> button is disabled with the message <em>Fix N errors before staging</em>. Edit the textarea, click <strong>Preview</strong> again, and the button re-enables once every row is clean. There is intentionally no skip-errors checkbox — the entire batch must be valid before any row is sent.</li>
-          <li><strong>Block-level rejections</strong> (table is hidden, Stage disabled): empty paste, missing <em>balance</em> / <em>balanceAsOf</em> / identifier headers, header set that looks like a transaction export (e.g. contains <em>transaction_id</em>, <em>posted_date</em>, <em>description</em>, or <em>category</em> with no <em>balance</em>), more than 200 rows in one paste, or UTF-16-encoded CSVs (save as UTF-8).</li>
-          <li><strong>Quoted fields</strong> (<code>"a, b"</code>) and <strong>escaped quotes inside quoted fields</strong> (<code>""</code> → <code>"</code>) are supported. Embedded newlines inside quoted fields are supported. <code>\r\n</code> and <code>\n</code> line endings are both accepted.</li>
-          <li><strong>After staging.</strong> The dashboard automatically flips to <strong>Review imports</strong> with the badge updated. The status row reports the breakdown from the ingestion pipeline (<em>Staged 12 (pending 12)</em>, plus optional <em>dedupe N</em> / <em>ignored N</em> / <em>errors N</em> counts when present). Step 2d's strict-approval rule still applies: every row waits for an explicit Apply.</li>
-          <li><strong>Re-pasting the same CSV is safe.</strong> The pipeline's fingerprint dedupe (<em>externalAccountId</em> + <em>balance</em> + <em>YYYY-MM</em>) reports already-applied identical rows as <em>dedupe_noop</em>, and re-stages un-applied rows by upserting the existing Staging Id (no duplicate review cards).</li>
-          <li>Activity log: each staged row emits the standard Step 2a events (<em>bank_import_pending</em> primarily; <em>bank_import_ignored_hit</em> / <em>bank_import_row_error</em> when applicable). The <em>source</em> field on those rows is <code>csv_paste_v1</code> so a paste batch can be filtered out of the audit trail later. There is no separate batch-summary event — the per-row events are the audit trail.</li>
-        </ul>
-
-        <h4>Bank Accounts — Review imports</h4>
-        <ul class="help-list">
-          <li>The Bank panel's third segment, <strong>Review imports</strong>, lists pending bank accounts staged by the import pipeline. Pending rows live on <strong>SYS&nbsp;-&nbsp;Import Staging — Bank Accounts</strong> and <em>do not</em> affect planner output, the Overview snapshot, or any account balance until you resolve them. The segment label shows a <strong>(N)</strong> count badge that includes both <em>unlinked</em> rows and <em>linked-but-not-yet-applied</em> rows so you always see the full review backlog.</li>
-          <li><strong>Strict approval (Step 2d).</strong> Bank import never writes balances on its own. Even when the External Account Id of an incoming snapshot already matches an active <strong>SYS&nbsp;-&nbsp;Accounts</strong> row, the row is staged with <em>auto_match_awaiting_apply</em> and waits for an explicit click. Updating monthly bank balances is a deliberate <strong>two-step</strong> approval: <strong>(1) link</strong> the staged row to a SYS&nbsp;-&nbsp;Accounts row, <strong>(2) apply</strong> the snapshot to <strong>INPUT&nbsp;-&nbsp;Bank Accounts</strong>.</li>
-          <li>Each card shows the institution, display name, masked last 4, account type / currency, the snapshot's <strong>balance</strong> + <strong>balance as-of</strong> date, the pipeline's pending reason (e.g. <em>no_exact_id_match</em>, <em>auto_match_awaiting_apply</em>, <em>currency_mismatch</em>, <em>type_conflict</em>, <em>inactive_match</em>, <em>ambiguous_external_id</em>, <em>stale_balance</em>), and — when linked — the SYS&nbsp;-&nbsp;Accounts row name.</li>
-          <li><strong>Add as new (link only).</strong> Creates a brand-new account from a staged row. Account name + type are pre-filled from the staged display name and type but stay editable. <strong>Use policy</strong> is required (same dropdown as the regular Add new form, including <em>Other (custom)…</em>); <strong>Priority</strong> defaults to <em>Use last (backup)</em>. New behavior in Step 2d: <em>no opening balance is written</em>. The action only inserts rows on <strong>SYS&nbsp;-&nbsp;Accounts</strong> and the current Year block on <strong>INPUT&nbsp;-&nbsp;Bank Accounts</strong>, then stamps the staged External Account Id onto the new SYS row so future ingestions auto-link. The staged row stays in the Review imports list with status <em>linked_added</em> and <strong>Apply balance</strong> becomes the next click.</li>
-          <li><strong>Match to existing (link only).</strong> Writes the staged External Account Id onto the chosen active account on <strong>SYS&nbsp;-&nbsp;Accounts</strong>. Balances, planner fields, and every other column are <em>not</em> touched. If the selected account is already linked to a different external id the match is refused with <em>"That account is already linked to a different external id. Match aborted."</em> The staged row stays in the Review imports list with status <em>linked_matched</em> and <strong>Apply balance</strong> becomes the next click.</li>
-          <li><strong>Suggested match by last 4 (Step 3b).</strong> When an unlinked staged row carries an exact 4-digit <em>last4</em> and that 4-digit run appears as a digit-boundary-bounded substring in the Account Name of <strong>exactly one</strong> active <strong>SYS&nbsp;-&nbsp;Accounts</strong> row, that row is offered as a one-click suggestion. The card shows <em>Suggested match: &lt;account&gt;</em> and a primary <strong>Match to &lt;account&gt;</strong> button alongside <strong>Match to a different account</strong> / <strong>Add as new</strong> / <strong>Ignore</strong>. The suggestion is suppressed when the candidate is already linked to any external id, when the candidate's <em>Type</em> conflicts with the staged row's type, when more than one active account matches, or when <em>last4</em> is missing or not exactly four digits. Confirming a suggestion routes through the same locked Match path — the row flips to <em>linked_matched</em> and still requires an explicit <strong>Apply balance</strong> click. <em>linked_added</em>, <em>linked_matched</em>, and auto-pending rows never show a suggestion.</li>
-          <li><strong>Change match (Unlink).</strong> Available on <em>linked_matched</em> rows only. Clears the External Account Id cell on the matched <strong>SYS&nbsp;-&nbsp;Accounts</strong> row and flips the staged row's Status back to <em>pending</em> with Pending Reason <em>no_exact_id_match</em>. <strong>No balances are written</strong>; <strong>INPUT&nbsp;-&nbsp;Bank Accounts</strong> is not touched; every other column on the SYS&nbsp;-&nbsp;Accounts row (Type, Use Policy, Priority, Active, etc.) is preserved exactly as it was. The staged row reappears in the Review imports list with the standard <strong>Add as new / Match to existing / Ignore</strong> buttons so you can pick a different account. Change match is intentionally <em>not</em> offered on <em>linked_added</em> rows (which created their own SYS row at link time) or on auto-pending rows that were never user-matched in the first place — for those, use Ignore.</li>
-          <li><strong>Apply balance.</strong> Writes the staged snapshot to the linked SYS&nbsp;-&nbsp;Accounts row's matching month cell on <strong>INPUT&nbsp;-&nbsp;Bank Accounts</strong> using exactly the same path Bank → Update uses. The month is derived from <strong>Latest Balance As Of</strong>: a snapshot dated <em>2026-05-12</em> writes the <em>May-26</em> column only — prior and future months are not touched. If the snapshot's <strong>Year block exists</strong> on <strong>INPUT&nbsp;-&nbsp;Bank Accounts</strong> but the linked account does not yet have a row inside it (typical for an account you just linked via <strong>Add as new</strong> against a year you haven't backfilled), Apply <strong>auto-creates the missing row in place</strong> before writing — the success message appends <em>Created INPUT&nbsp;-&nbsp;Bank Accounts row for YYYY.</em> and the activity log's <strong>details</strong> JSON records <em>autoCreatedInputRow: true</em>. The auto-create reuses the same row-insert path the manual Add new flow uses; missing Year blocks themselves are <em>not</em> auto-created. After the write, <strong>SYS&nbsp;-&nbsp;Accounts.Current Balance</strong> is mirrored from the latest non-empty current-year cell (same as a manual update), the dashboard snapshot cache is invalidated, and the staged row's Status flips to <em>resolved_applied</em>.</li>
-          <li><strong>Apply is refused</strong> (with the staged row left untouched, so you can fix the underlying issue and re-click) when:
-            <ul>
-              <li>the row is not linked yet (use Add as new or Match first),</li>
-              <li>pending reason is <em>stale_balance</em>, <em>currency_mismatch</em>, or <em>type_conflict</em> — re-import a fresh / corrected snapshot or click Ignore,</li>
-              <li>the linked SYS&nbsp;-&nbsp;Accounts row is marked inactive — reactivate it or pick a different account via Match,</li>
-              <li>the External Account Id no longer matches any active SYS row — re-link via Match,</li>
-              <li>INPUT&nbsp;-&nbsp;Bank Accounts has no Year block for the snapshot's year (Step 2d intentionally does <em>not</em> auto-create year blocks from import data — extend the sheet manually first).</li>
-            </ul>
-          </li>
-          <li><strong>Ignore</strong> appends an entry to <strong>SYS&nbsp;-&nbsp;Import Ignored — Bank Accounts</strong> with <strong>Scope = permanent</strong>. The next import will match against the ignored sheet first and silently skip the account. Idempotent: re-clicking Ignore on an entry already on the ignored sheet does not duplicate the row but still flips the staging row to <em>resolved_ignored</em>.</li>
-          <li><strong>Re-import behavior.</strong> Re-importing the same snapshot for the same month overwrites the same staging row in place (key = External Account Id + balance date) — the latest balance is the one shown, and one Apply click writes the latest snapshot to the matching month cell. An exact re-import of an already-applied snapshot is detected by the apply fingerprint and silently skipped at ingestion (no new staging row, no new activity log entry).</li>
-          <li>All actions write a <strong>LOG&nbsp;-&nbsp;Activity</strong> row classified under the <strong>Bank Import</strong> Type filter. If two tabs are open and a row was resolved elsewhere first, the second action returns a friendly <em>"Staged row is no longer pending..."</em> / <em>"This row is no longer pending..."</em> message — no hard error.</li>
-        </ul>
-
         <h4>Investments</h4>
         <ul class="help-list">
-          <li><strong>Update</strong> saves the value for the selected investment account on the selected month. Edits go to <strong>INPUT - Investments</strong> (canonical) and <strong>SYS - Assets</strong> mirrors the latest current-year value as <strong>Current Balance</strong>.</li>
-          <li><strong>Status feedback:</strong> the status row below the save button cycles through <em>Saving…</em> → <em>Saved.</em> on success. The summary panel (selected month / stored value / current balance / change vs prior month) updates immediately from the save payload — no re-fetch needed. The full planner runs as a silent background refresh after the save returns, so the Overview snapshot catches up without holding the UI.</li>
-          <li><strong>Activity log:</strong> every Update logs an <strong>investment_update</strong> event to <strong>LOG - Activity</strong>. <strong>Type</strong> is <strong>Investment</strong>; the <strong>Action</strong> sub-label includes the month and new value (e.g. <em>Updated May-26 balance to $44,679.48</em>). <strong>Amount</strong> shows <strong>—</strong> because a balance restatement is not a transaction; the previous value is preserved in the event's <strong>details</strong> JSON.</li>
-          <li><strong>Add new</strong> creates the investment account and prepares its current-year tracking area automatically when needed.</li>
-          <li><strong>Required Add-new fields:</strong> Account name, Type, and Starting value. <strong>Starting value</strong> is prefilled to <strong>0.00</strong>; enter <code>0</code> if unknown. <strong>Starting value date</strong> is optional — when provided it must fall in the current year; when left blank the current month is used automatically so the Starting value always lands in a real month column. (Month columns are left empty when the Starting value is <code>0</code>, matching the historical "no data" convention.)</li>
-          <li><strong>Type</strong> is a dropdown of common investment roles (<em>Brokerage</em>, <em>Retirement</em>, <em>Education</em>) merged with any types already used in <strong>SYS - Assets</strong>; pick <strong>Other (custom)…</strong> to enter a custom label.</li>
-          <li><strong>Duplicate names</strong> are rejected across <strong>INPUT - Investments</strong> (all year blocks, including inactive) and <strong>SYS - Assets</strong>. Inline errors show next to the Account name field and focus the input.</li>
-          <li>Status text during <strong>Add new</strong> is <em>Creating investment account…</em>. After success, the panel flips back to <strong>Update</strong> and preselects the new account.</li>
-          <li><strong>Add new</strong> logs <strong>investment_add</strong> to <strong>LOG - Activity</strong>. Activity <strong>Type</strong> is <strong>Investment</strong>; <strong>Action</strong> sub-label is <strong>Account added</strong>. It does <em>not</em> re-run the full planner — use <strong>Refresh Financial Plan</strong> when you want projections and Overview updated.</li>
+          <li>Record each investment account and its current value.</li>
+          <li>Use a clear type such as Brokerage, Retirement, or Education.</li>
+          <li>Stopping tracking preserves past values and removes the account from active totals.</li>
         </ul>
-
-        <h4>Investments — Stop tracking (soft deactivate)</h4>
+        <h4>House values</h4>
         <ul class="help-list">
-          <li><strong>Update</strong> mode shows a secondary <strong>Stop tracking</strong> button next to <strong>Save Investment</strong>. Use it when you close an investment account or otherwise want to retire it from active selectors without losing history.</li>
-          <li>Clicking it opens an inline confirmation. On confirm:
-            <ul class="help-list">
-              <li>Every row for that account in <strong>INPUT - Investments</strong> (across all year blocks) is flipped to <strong>Active = No</strong> — canonical source of truth.</li>
-              <li>The matching <strong>SYS - Assets</strong> row mirrors <strong>Active = No</strong>.</li>
-              <li>All month values, <strong>Current Balance</strong>, <strong>Type</strong>, and totals / delta rows are left untouched.</li>
-            </ul>
-          </li>
-          <li>Inactive investment accounts drop out of the <strong>Investment Account</strong> dropdown immediately. History stays in both sheets for audit / reporting.</li>
-          <li>Duplicate-name validation still blocks reuse of a stop-tracked account name when adding a new investment (names stay reserved).</li>
-          <li>Status text during the flow is <em>Stopping tracking…</em>.</li>
-          <li>Backward compatibility: rows with a blank / missing <strong>Active</strong> value are treated as active, so pre-existing data is unaffected until you explicitly stop tracking.</li>
-          <li>Logs <strong>investment_deactivate</strong> to <strong>LOG - Activity</strong>. Activity <strong>Type</strong> is <strong>Investment</strong>; <strong>Action</strong> sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong> because no money moved.</li>
-          <li>New <strong>Yes</strong> / <strong>No</strong> values written into the <strong>Active</strong> column inherit the row's text style so they visually match the rest of the row.</li>
+          <li>Record the property value and remaining loan amount.</li>
+          <li>CashCompass calculates equity from those two amounts.</li>
+          <li>Each property can also track repairs, fees, insurance, and other expenses.</li>
         </ul>
       </section>
 
-      <!-- ================================================================ -->
-      <!-- Cash Flow                                                        -->
-      <!-- ================================================================ -->
       <section id="help-cashflow" class="help-section">
         <h3>Cash Flow</h3>
-        <p>The Cash Flow page is split into several tabs. The core of the page is <strong>Quick add</strong>; the other tabs (<a href="#help-upcoming">Upcoming</a>, <a href="#help-donations">Donations</a>, <a href="#help-bills-due">Bills</a>) have their own help sections below.</p>
-
-        <h4>Quick add</h4>
+        <p>Cash Flow brings together payments, upcoming expenses, donations, bills, and income.</p>
         <ul class="help-list">
-          <li>Adds an <strong>Expense</strong> or <strong>Income</strong> line to <strong>INPUT - Cash Flow</strong> for the selected year.</li>
-          <li>The preview box shows the same payee’s <strong>previous-month value</strong> when available. It reads the prior calendar month on the correct year’s Cash Flow tab — January uses the <em>previous year’s</em> tab for December.</li>
-          <li><strong>Existing Payee</strong> dropdown lists every payee already used in <strong>INPUT - Cash Flow</strong>. Pick one to autofill the typed payee input. The bottom of the list always shows <strong>Other (type new payee)</strong> — pick this when you need to add a payee that does not exist yet; the typed input clears and focuses so you can enter the new name. Whatever you type wins, so a typo in the dropdown doesn't lock you in.</li>
-          <li><strong>Launched from Bills → Pay or Upcoming → Quick add payment:</strong> the form opens with the row's payee, due date, and current amount pre-filled. The Existing Payee dropdown is populated with the matching entry as soon as the payee list finishes loading (cold-tab race condition fixed in `1305c40`); your typed input is never overwritten if you've already started editing.</li>
-          <li><strong>Amount:</strong> any valid number is accepted, <strong>including $0</strong>. Useful for zeroing out a month cell, correcting a bad entry, or saving a placeholder row so the payee shows up in Bills Due / Upcoming before the first real payment. Non-numeric values are rejected with <em>Amount must be a valid number.</em></li>
-          <li><strong>Status feedback:</strong> clicking <strong>Add to Cash Flow</strong> shows a spinner with <em>Saving…</em> in the status row below the button, then flips to <em>Saved to Cash Flow.</em> on success (or a red error message on failure). The right-hand summary (<strong>Sheet</strong>, <strong>Month</strong>, <strong>Current value in cell</strong>, <strong>Existing row</strong>, <strong>Previous month</strong>) updates from the save payload so you never need to re-fetch the payee to see what landed.</li>
-          <li><strong>Open spreadsheet edit protection:</strong> CashCompass rechecks recent Quick Add writes during the current browser-tab session. If a Google Sheets cell edit that was already open later changes the saved cell back, the Quick Add panel warns you and offers <strong>Restore recorded amount</strong>. Finish or cancel the open sheet edit first. Restore sets the already-recorded result only when the cell still has its earlier value; it never adds the amount twice, replaces a different newer value, or creates another Activity entry.</li>
-          <li><strong>Activity tab refresh:</strong> the matching <strong>quick_pay</strong> row appears at the top of the Activity table <em>instantly</em> from the server&rsquo;s save response — no wait for any reload RPC. A quiet background reload reconciles with the authoritative ledger seconds later, so the visible row stays in place even when the planner queue is busy. The full planner runs in the background as a silent refresh so Rolling Debt Payoff and Overview snapshot catch up shortly after.</li>
+          <li><strong>Quick add</strong> records an income or expense amount for a selected month.</li>
+          <li><strong>Income</strong> tracks recurring and other household income.</li>
+          <li><strong>Bills</strong> manages recurring obligations and their schedules.</li>
+          <li><strong>Upcoming</strong> keeps larger planned expenses visible before they arrive.</li>
+          <li><strong>Donations</strong> records charitable giving by tax year.</li>
         </ul>
       </section>
 
-      <!-- ================================================================ -->
-      <!-- Upcoming expenses                                                -->
-      <!-- ================================================================ -->
       <section id="help-upcoming" class="help-section">
         <h3>Upcoming expenses</h3>
-
-        <h4>What it does</h4>
         <ul class="help-list">
-          <li>Reads and writes <strong>INPUT - Upcoming Expenses</strong>.</li>
-          <li>Upcoming is an <strong>open-obligations board</strong>: each row is a planned expense with a <strong>remaining amount</strong>. The <em>Amount</em> column is the live remaining balance — partial payments reduce it and fully paid rows drop off the active list automatically.</li>
-          <li>The tab shows mini-cards (<strong>Next 7 Days</strong>, <strong>Next 30 Days</strong>, <strong>Overdue</strong>, <strong>Total Planned</strong>) and a list of items that are still actionable (<em>Planned</em> with remaining &gt; 0).</li>
+          <li>Add the expense name, due date, amount, payment source, and optional notes.</li>
+          <li><strong>Quick add payment</strong> records a payment without retyping the details.</li>
+          <li><strong>Dismiss</strong> removes an item from active planning while preserving its history.</li>
+          <li>The 7-day, 30-day, overdue, and total-planned cards update from active items.</li>
         </ul>
-
-        <h4>Actions</h4>
-        <ul class="help-list">
-          <li><strong>Add Upcoming Expense</strong> — Saves a new row. <strong>Expense Name</strong>, <strong>Due Date</strong>, and <strong>Amount</strong> are required (Amount must be greater than 0); the other fields are optional. Required-field errors appear inline next to the offending field; the status line below the button carries the action-specific loading / error message. <strong>Account / Source</strong> is a dropdown — pick <em>Cash</em>, <em>Credit Card</em>, <em>Cash + Credit Card</em>, <em>Loan / Financing</em>, <em>Other / Unknown</em>, or <em>Other (custom)…</em> to type a specific bank/card name. The choice drives how Rolling Debt Payoff reserves cash: <em>Cash</em> subtracts from deployable cash; <em>Credit Card</em> maps to the matching card debt when possible, otherwise reserves the amount as a card-risk hold; <em>Loan / Financing</em> is excluded from both cash and card-risk reserves (the financed purchase price is not drawn from cash today — enter any down payment as a separate <em>Cash</em> row); <em>Cash + Credit Card</em> stays conservative and is treated as Credit Card in v1; <em>Other / Unknown</em> and blank both default to Cash.</li>
-          <li><strong>Quick add payment</strong> — Sends you to <strong>Cash Flow → Quick add</strong> pre-filled with this row’s payee, due date, and current <em>remaining</em> amount. This is the <strong>single payment path</strong> for Upcoming: edit the amount if you paid more or less, then save. Cash Flow records the money movement; Upcoming’s remaining balance is decremented automatically and the row is flipped to <em>Paid</em> when it reaches 0.</li>
-          <li><strong>Edit</strong> — Available on each <em>Planned</em> card. Reuses the existing <strong>Add Upcoming Expense</strong> form below the list: clicking <em>Edit</em> hydrates it with the current row's values, the button label flips to <em>Save changes</em>, and a <em>Cancel edit</em> link appears next to it. You can change <strong>Expense Name</strong>, <strong>Category</strong>, <strong>Payee</strong>, <strong>Due Date</strong>, <strong>Amount</strong>, <strong>Account / Source</strong>, <strong>Auto Add To Cash Flow</strong>, and <strong>Notes</strong>. Validation matches Add: name and due date required, amount must be greater than 0. <strong>Status and payment history are preserved</strong> — the row's <em>Status</em>, <em>Added To Cash Flow</em> flag, and any prior <em>upcoming_payment</em> / <em>upcoming_status</em> events are never touched by Edit. Saving with no changes returns <em>No changes.</em> and writes nothing to Activity. Note that <strong>Amount represents the remaining balance</strong>, so editing it on a partially-paid row replaces the remaining figure (not the original total). Edit is only available on <em>Planned</em> rows; <em>Paid</em> and <em>Dismissed</em> rows can't be edited.</li>
-          <li><strong>Dismiss</strong> — Removes the row from the active board without recording a payment. Use this for obligations you no longer want to track. The sheet row is preserved with <em>Status = Dismissed</em> for history.</li>
-        </ul>
-
-        <h4>Lifecycle model</h4>
-        <ul class="help-list">
-          <li><strong>Status</strong> is a read-only label: <em>Planned</em> / <em>Paid</em> / <em>Dismissed</em> (and legacy <em>Skipped</em> rows are treated the same as <em>Dismissed</em> for filtering and sort). The old manual <em>Planned</em> / <em>Paid</em> / <em>Skipped</em> buttons and the direct <em>Add to Cash Flow</em> button have been retired in favor of Quick add + Dismiss.</li>
-          <li><strong>Partial payments:</strong> paying less than the remaining amount keeps the row on the active board with the reduced balance. The row’s <em>Added To Cash Flow</em> column is flipped to <em>Yes</em> the first time a payment is applied.</li>
-          <li><strong>Full payment:</strong> paying the full remaining amount (or more) clamps remaining to 0, flips Status to <em>Paid</em>, and removes the row from the active board. The sheet row is never deleted.</li>
-          <li>Cash Flow + Activity are the money/history trail — Upcoming does not maintain a parallel payment log.</li>
-        </ul>
-
-        <h4>Status messages</h4>
-        <ul class="help-list">
-          <li>Action-specific text: <em>Saving upcoming expense…</em>, <em>Opening Quick Add…</em>, <em>Dismissing…</em>.</li>
-          <li>When Quick Add is launched from an Upcoming row, the Quick Add status line reports the Cash Flow save followed by the Upcoming remaining-balance update (e.g. <em>Partial payment applied. Remaining: $123.45</em> or <em>Upcoming expense fully paid.</em>).</li>
-        </ul>
-
-        <h4>Cross-panel refresh</h4>
-        <ul class="help-list">
-          <li>Every Upcoming write (add / dismiss / payment via Quick add) re-pulls the Upcoming list, the <strong>Bills Due</strong> execution queue, and the Overview snapshot so stale counts don’t linger.</li>
-          <li>Navigating to the <strong>Upcoming</strong> tab also re-loads the list, so new items added from another flow appear without a full page reload.</li>
-        </ul>
-
-        <h4>Activity log</h4>
-        <ul class="help-list">
-          <li><strong>upcoming_add</strong> — new row saved on this tab. Amount is the originally planned amount.</li>
-          <li><strong>upcoming_payment</strong> — a Quick Add payment was applied to this row. Lifecycle-only; Amount renders as <strong>—</strong> so the dollars aren’t double-counted against the paired <em>quick_pay</em> row. The action label reads <em>Applied $500.00 (Remaining $250.00)</em> for a partial payment, <em>Applied $500.00 (Fully paid)</em> when the payment closes the item, and falls back to <em>Payment applied</em> for legacy rows without paid-amount details. Amount and remaining are read from the existing details JSON (<em>paidAmount</em>, <em>remainingAfter</em>, <em>fullyPaid</em>).</li>
-          <li><strong>upcoming_update</strong> — Edit event written when a Planned upcoming expense is saved from the Edit form. Lifecycle-only; Amount renders as <strong>—</strong> (the edit didn't move money, only metadata). Single-field edits get a specific label: <em>Updated Due Date to 2026-05-19</em>, <em>Updated Amount to $9,500.00</em>, or <em>Updated &lt;Field&gt;</em>. Multi-field edits read <em>Updated 3 fields</em>. Details JSON includes <em>changedFields</em> plus complete <em>previous</em> / <em>new</em> snapshots of all 8 editable columns so the change is fully reconstructable. Saves with no changes write nothing to Activity.</li>
-          <li><strong>upcoming_status</strong> — Dismiss event. Lifecycle-only; Amount renders as <strong>—</strong>.</li>
-          <li><strong>upcoming_cashflow</strong> — legacy event from the retired direct <em>Add to Cash Flow</em> path. Still rendered for historical rows; no new events of this type are written.</li>
-        </ul>
-        <p class="muted"><strong>Notes:</strong> The actual money movement from an Upcoming payment is the <strong>quick_pay</strong> row logged by the Quick Add save (same as any manual Quick Add). The paired <strong>upcoming_payment</strong> row is the Upcoming-side audit trail only.</p>
       </section>
 
-      <!-- ================================================================ -->
-      <!-- Donations                                                        -->
-      <!-- ================================================================ -->
       <section id="help-donations" class="help-section">
         <h3>Donations</h3>
-
-        <h4>What it does</h4>
-        <ul class="help-list">
-          <li>Appends one row to <strong>INPUT - Donation</strong> under the tax-year block you pick.</li>
-          <li>Does <strong>not</strong> write to <strong>INPUT - Cash Flow</strong> — this is the charitable-giving log for records and taxes.</li>
-        </ul>
-
-        <h4>Where rows go</h4>
-        <ul class="help-list">
-          <li>Year blocks start with a row where column A is <strong>Year</strong> and column B is the year.</li>
-          <li>The next row must be the literal header row: <em>Name of Charity, Date, Amount, Tax Year, Comments, Payment type</em>.</li>
-          <li>Data rows follow until the next <strong>Year</strong> row or the end of the sheet.</li>
-          <li>The script inserts after the last non-empty row in the matching block.</li>
-        </ul>
-
-        <h4>Row formatting</h4>
-        <ul class="help-list">
-          <li>When the block already has data, the new row copies <strong>number formats, fonts, borders, and fills</strong> from the last existing row (format only; your typed values are preserved).</li>
-          <li>The first row in a brand-new block still gets default date and currency formats on <strong>Date</strong> and <strong>Amount</strong>.</li>
-        </ul>
-
-        <h4>Form fields</h4>
-        <ul class="help-list">
-          <li><strong>Tax year</strong> — Dropdown built from existing <strong>Year</strong> rows. Add the block on the sheet first if it’s missing.</li>
-          <li><strong>Name of Charity</strong> — Dropdown from existing names. Pick <strong>Other…</strong> to type a new one.</li>
-          <li><strong>Amount</strong> — Negatives are allowed (e.g. adjustments). Currency-style typing works like elsewhere.</li>
-          <li><strong>Payment type</strong> — <strong>Required.</strong> Values like <strong>Check #1234</strong> collapse into a single <strong>Check</strong> choice; picking Check prompts for a number and the row is saved as <strong>Check #</strong> + number. Use <strong>Other…</strong> for one-off labels.</li>
-        </ul>
-
-        <h4>Recent donations</h4>
-        <ul class="help-list">
-          <li>The right-hand list shows the newest rows from <strong>all</strong> year blocks (sorted by date when the sheet has real dates), similar to recent house expenses.</li>
-        </ul>
+        <p>Use Donations as a charitable-giving record for reporting and tax preparation. Choose a tax year, charity, date, amount, and optional comments.</p>
+        <p class="muted">A donation is not automatically treated as a Cash Flow payment. Record the payment separately when you want it included in monthly Cash Flow.</p>
       </section>
 
-      <!-- ================================================================ -->
-      <!-- Activity log                                                     -->
-      <!-- ================================================================ -->
       <section id="help-activity" class="help-section">
-        <h3>Activity log</h3>
-
-        <h4>What it does</h4>
-        <p>The <strong>Activity</strong> page shows events this script has recorded. It is not the same as <strong>OUT - History</strong>.</p>
+        <h3>Activity</h3>
+        <p>Activity shows important actions recorded through CashCompass, including payments, bill changes, property expenses, donations, and account updates.</p>
         <ul class="help-list">
-          <li><strong>OUT - History</strong> — Snapshots from planner runs (rolled-up cash, debt, net worth, etc.).</li>
-          <li><strong>LOG - Activity</strong> — Discrete events (who was paid, when it was logged, skip/autopay, etc.). Created automatically if missing.</li>
+          <li>Use filters and sorting to find an action.</li>
+          <li>Activity is an audit trail; it is not a financial statement.</li>
+          <li>Removing an eligible mistaken activity entry does not silently rewrite unrelated financial records.</li>
         </ul>
-
-        <h4>What gets logged — Cash Flow actions</h4>
-        <ul class="help-list">
-          <li><strong>quick_pay</strong> — Save in Quick add. For expense payees tied to <strong>INPUT - Debts</strong>, the matching debt balance is optionally updated.</li>
-          <li><strong>house_expense</strong> — Save in <strong>Add House Expense</strong> (see Properties). If the same save also posts to Cash Flow, only <strong>house_expense</strong> is logged — no duplicate <strong>quick_pay</strong>.</li>
-        </ul>
-
-        <h4>What gets logged — Bills actions</h4>
-        <ul class="help-list">
-          <li><strong>bill_skip</strong> — <strong>Skip</strong> records the skipped occurrence (deduplicated per occurrence). It also writes <strong>0</strong> into the Cash Flow cell for that cycle when the cell is empty; if the cell already holds a value the amount is preserved, but the skip is still logged so the occurrence is removed from Bills Due (this is what lets Weekly/Biweekly occurrences be skipped individually).</li>
-          <li><strong>bill_autopay</strong> — Autopay writes the default amount for a due, eligible bill. Deduplicated so dashboard refreshes do not create duplicates.</li>
-          <li><strong>bill_add</strong> — New recurring bill saved via <strong>Cash Flow → Bills → Add bill</strong>. The new row is inserted into <strong>INPUT - Bills</strong> in <strong>Due Day</strong> order — it lands just above the first existing bill whose Due Day is greater, with same-day ties going below the existing same-day rows. Activity <strong>Type</strong> is <strong>Bill</strong>; <strong>Action</strong> sub-label is <strong>Bill added</strong>.</li>
-          <li><strong>bill_update</strong> — Field-level edit on a tracked bill from <strong>Cash Flow → Bills → Manage bills → Edit</strong> (Payee, Default Amount, Due Day, Frequency, Weekday, Anchor Date, Payment Source, Category, Autopay, Varies, Notes). Scheduling edits (Frequency, Due Day, Weekday, Anchor Date) apply <strong>going forward only</strong> — past payments, Cash Flow history, and earlier Activity entries are never changed. Activity <strong>Type</strong> is <strong>Bill</strong>; the <strong>Action</strong> sub-label inlines the new value for single-field saves (e.g. <em>Updated Default Amount to $126.00</em>, <em>Updated Due Day to 15</em>) and collapses to <em>Updated N fields</em> for multi-field saves. <strong>Amount</strong> shows <strong>—</strong> because a field edit does not move money; the previous and new values are preserved in the event&rsquo;s <strong>details</strong> JSON (<em>payeeBefore</em>, <em>payeeAfter</em>, <em>changedFields</em>, <em>old</em>, <em>new</em>). The bill row stays in place in <strong>INPUT - Bills</strong> (no re-sort) and existing Cash Flow rows are <strong>not</strong> retroactively renamed.</li>
-          <li><strong>bill_deactivate</strong> — <strong>Stop tracking</strong> on a recurring bill (sets <strong>Active = No</strong>; the row is kept for history, no payments are reversed). Activity <strong>Type</strong> is <strong>Bill</strong>; sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong> because no money moved.</li>
-        </ul>
-
-        <h4>What gets logged — Upcoming, Donations, Property, Bank</h4>
-        <ul class="help-list">
-          <li><strong>upcoming_add</strong> / <strong>upcoming_payment</strong> / <strong>upcoming_update</strong> (Edit) / <strong>upcoming_status</strong> (Dismiss) / legacy <strong>upcoming_cashflow</strong> — See <a href="#help-upcoming">Upcoming expenses</a>.</li>
-          <li><strong>donation</strong> — Save on <strong>Cash Flow → Donations</strong>. Activity <strong>Type</strong> shows <strong>Donation</strong>.</li>
-          <li><strong>house_expense</strong> — Save on <strong>Add House Expense</strong>, covered above.</li>
-          <li><strong>bank_account_add</strong> — Create an account from <strong>Assets → Bank Accounts → Add new</strong> (same event from the sidebar HTML). Activity <strong>Type</strong> is <strong>Bank</strong>; <strong>Action</strong> sub-label is <strong>Account added</strong>. <strong>Amount</strong> shows the required opening balance entered on the form (may be <strong>$0.00</strong>).</li>
-          <li><strong>bank_account_update</strong> — Update a bank account balance from <strong>Assets → Bank Accounts → Update</strong>. Writes the new balance to <strong>INPUT - Bank Accounts</strong> for the selected month and mirrors the latest current-year value into <strong>SYS - Accounts → Current Balance</strong>. Activity <strong>Type</strong> is <strong>Bank</strong>; the <strong>Action</strong> sub-label names the month and new balance (e.g. <em>Updated May-26 balance to $1,234.56</em>). <strong>Amount</strong> shows <strong>—</strong> because a balance restatement is not a transaction; the previous balance is preserved in the event's <strong>details</strong> JSON.</li>
-          <li><strong>bank_account_deactivate</strong> — <strong>Stop tracking</strong> on a bank account from <strong>Assets → Bank Accounts → Update</strong>. Flips <strong>Active = No</strong> on every <strong>INPUT - Bank Accounts</strong> row for that account plus the mirror <strong>SYS - Accounts</strong> row; month history, <strong>Available Now</strong>, and <strong>Min Buffer</strong> stay in place. Activity <strong>Type</strong> is <strong>Bank</strong>; sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong>.</li>
-          <li><strong>bank_import_review_add_new</strong> — <strong>Add as new</strong> resolution from <strong>Assets → Bank Accounts → Review imports</strong>. Creates a fresh account from a staged pending row (link only — no balance written) and stamps the staged External Account Id onto the new <strong>SYS - Accounts</strong> row. Activity <strong>Type</strong> is <strong>Bank Import</strong>; <strong>Action</strong> sub-label is <strong>Linked new account from import</strong>; <strong>Amount</strong> shows <strong>—</strong>. The staged row remains visible in Review imports until the user clicks <strong>Apply balance</strong>.</li>
-          <li><strong>bank_import_review_match</strong> — <strong>Match to existing</strong> resolution from <strong>Assets → Bank Accounts → Review imports</strong>. Writes the staged External Account Id onto the chosen active <strong>SYS - Accounts</strong> row. No balances, planner fields, or other columns are touched. Activity <strong>Type</strong> is <strong>Bank Import</strong>; <strong>Action</strong> sub-label is <strong>Linked to existing account</strong>; <strong>Amount</strong> shows <strong>—</strong>. The staged row remains visible in Review imports until the user clicks <strong>Apply balance</strong>.</li>
-          <li><strong>bank_import_review_unlink_match</strong> — <strong>Change match</strong> resolution from <strong>Assets → Bank Accounts → Review imports</strong> (linked_matched rows only). Clears the External Account Id from the previously-matched <strong>SYS - Accounts</strong> row and returns the staged row to <em>pending</em> with reason <em>no_exact_id_match</em>. No balances are written and no other columns on the SYS row are touched. Activity <strong>Type</strong> is <strong>Bank Import</strong>; <strong>Action</strong> sub-label is <strong>Unlinked match</strong>; <strong>Amount</strong> shows <strong>—</strong>. <strong>details</strong> JSON carries <em>previousAccountName</em> so the audit trail records which account was unlinked.</li>
-          <li><strong>bank_import_apply_balance</strong> — <strong>Apply balance</strong> from <strong>Assets → Bank Accounts → Review imports</strong>. Writes the staged snapshot to the linked SYS&nbsp;-&nbsp;Accounts row's matching month cell on <strong>INPUT - Bank Accounts</strong> (same write path Bank → Update uses), mirrors <strong>SYS - Accounts.Current Balance</strong>, and flips the staging row to <em>resolved_applied</em>. Activity <strong>Type</strong> is <strong>Bank Import</strong>; <strong>Action</strong> sub-label is <strong>Applied imported balance</strong>; <strong>Amount</strong> shows <strong>—</strong> (the snapshot is a balance, not a money movement). <strong>details</strong> JSON carries <em>monthLabel</em>, <em>previousRaw</em> / <em>previousDisplay</em>, <em>newRaw</em>, <em>linkStateAtApply</em>, the apply fingerprint as the row's <strong>dedupeKey</strong> so an identical re-import is silently no-oped at ingestion time, and <em>autoCreatedInputRow: true</em> on the rare path where Apply had to insert a missing <strong>INPUT - Bank Accounts</strong> row inside an existing Year block before writing the snapshot.</li>
-          <li><strong>bank_import_review_ignore</strong> — <strong>Ignore</strong> resolution from <strong>Assets → Bank Accounts → Review imports</strong>. Appends a permanent entry to <strong>SYS - Import Ignored — Bank Accounts</strong> so future ingestions skip the staged external account. Activity <strong>Type</strong> is <strong>Bank Import</strong>; <strong>Action</strong> sub-label is <strong>Ignored bank import</strong>; <strong>Amount</strong> shows <strong>—</strong>.</li>
-          <li><strong>house_add</strong> — Create a house from <strong>Assets → House Values → Add new</strong>. Adds rows to <strong>INPUT - House Values</strong> and <strong>SYS - House Assets</strong> and creates the matching <strong>HOUSES - {House}</strong> sheet. Activity <strong>Type</strong> is <strong>House Expenses</strong>; <strong>Action</strong> sub-label is <strong>House added</strong>. <strong>Amount</strong> shows the house's initial Current Value.</li>
-          <li><strong>house_value_update</strong> — Update a house valuation from <strong>Assets → House Values → Update</strong>. Writes the new value to <strong>INPUT - House Values</strong> for the selected month and mirrors the latest current-year value into <strong>SYS - House Assets → Current Value</strong>. Activity <strong>Type</strong> is <strong>House Expenses</strong>; the <strong>Action</strong> sub-label names the month and new value (e.g. <em>Updated May-26 value to $750,000.00</em>). <strong>Amount</strong> shows <strong>—</strong> because a valuation update is not a transaction; the previous value is preserved in the event's <strong>details</strong> JSON.</li>
-          <li><strong>house_deactivate</strong> — <strong>Stop tracking</strong> on a house from <strong>Assets → House Values → Update</strong>. Flips <strong>Active = No</strong> on every <strong>INPUT - House Values</strong> row for that house plus the mirror <strong>SYS - House Assets</strong> row; history and the <strong>HOUSES - {House}</strong> sheet stay in place. Activity <strong>Type</strong> is <strong>House Expenses</strong>; sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong>.</li>
-          <li><strong>investment_add</strong> — Create an investment account from <strong>Assets → Investments → Add new</strong>. Adds rows to <strong>INPUT - Investments</strong> (current year block) and <strong>SYS - Assets</strong>. Activity <strong>Type</strong> is <strong>Investment</strong>; <strong>Action</strong> sub-label is <strong>Account added</strong>. <strong>Amount</strong> shows the required starting value entered on the form (may be <strong>$0.00</strong>).</li>
-          <li><strong>investment_update</strong> — Update an investment value from <strong>Assets → Investments → Update</strong>. Writes the new value to <strong>INPUT - Investments</strong> for the selected month and mirrors the latest current-year value into <strong>SYS - Assets → Current Balance</strong>. Activity <strong>Type</strong> is <strong>Investment</strong>; the <strong>Action</strong> sub-label names the month and new value (e.g. <em>Updated May-26 balance to $44,679.48</em>). <strong>Amount</strong> shows <strong>—</strong> because a balance restatement is not a transaction; the previous value is preserved in the event's <strong>details</strong> JSON.</li>
-          <li><strong>investment_deactivate</strong> — <strong>Stop tracking</strong> on an investment account from <strong>Assets → Investments → Update</strong>. Flips <strong>Active = No</strong> on every <strong>INPUT - Investments</strong> row for that account plus the mirror <strong>SYS - Assets</strong> row; month history stays in place. Activity <strong>Type</strong> is <strong>Investment</strong>; sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong>.</li>
-          <li><strong>debt_add</strong> — Create a debt account from <strong>Planning → Debts → Add new</strong>. Inserts one row into the active region of <strong>INPUT - Debts</strong> (above the <strong>TOTAL DEBT</strong> summary) with <strong>Active = Yes</strong>, placed in <strong>Due Day</strong> order alongside existing active debts. Activity <strong>Type</strong> is <strong>Debt</strong>; <strong>Action</strong> sub-label is <strong>Account added</strong>. <strong>Amount</strong> shows the required opening balance entered on the form (may be <strong>$0.00</strong>).</li>
-          <li><strong>debt_deactivate</strong> — <strong>Stop tracking</strong> on a debt from <strong>Planning → Debts → Update</strong>. Flips <strong>Active = No</strong> on the matching <strong>INPUT - Debts</strong> row (the row is kept for history). The debt drops out of the planner, Rolling Debt Payoff, Bills Due, and active selectors. Activity <strong>Type</strong> is <strong>Debt</strong>; sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong>.</li>
-          <li><strong>debt_update</strong> — Field-level edit on a debt from <strong>Planning → Debts → Update</strong> or <strong>Manage Debts → Edit</strong> (Account Balance, Due Date, Credit Limit, Minimum Payment, Credit Left, Int Rate). Activity <strong>Type</strong> is <strong>Debt</strong>; the <strong>Action</strong> sub-label names the field and the new value for single-field saves (e.g. <em>Updated Account Balance to $54,000.00</em>, <em>Updated Int Rate to 7.50%</em>, <em>Updated Due Day to 15</em>) and collapses to <em>Updated N fields</em> for the multi-field Manage Debts → Edit save. <strong>Amount</strong> shows <strong>—</strong> because a field edit does not move money; the previous and new values are preserved in the event&rsquo;s <strong>details</strong> JSON (<em>previousRaw</em>, <em>previousDisplay</em>, <em>newRaw</em>, <em>fieldKind</em>) so a future undo tool can reverse the edit without a second lookup.</li>
-          <li><strong>debt_rename</strong> — Rename a debt account from <strong>Planning → Debts → Manage Debts → Rename</strong>. Renames the <strong>Account Name</strong> on its <strong>INPUT - Debts</strong> row <em>and</em> the matching <strong>Expense Payee</strong> cell on every <strong>INPUT - Cash Flow &lt;year&gt;</strong> tab (Payee text only — month values and formulas untouched). Activity <strong>Type</strong> is <strong>Debt</strong>; the <strong>Action</strong> sub-label reads <em>Renamed &lt;old name&gt; → &lt;new name&gt;</em>. <strong>Amount</strong> shows <strong>—</strong>. The old and new names plus the count of Cash Flow rows/sheets updated are preserved in the event&rsquo;s <strong>details</strong> JSON; <strong>older Activity rows keep the original name</strong> (history is never rewritten).</li>
-          <li><strong>planner_email_deferred</strong> — <em>Legacy only.</em> Earlier versions wrote one of these rows on every per-save defer, which crowded out real money events during heavy update sessions. New defers no longer write this row — the count is rolled up onto the <strong>planner_email_sent</strong> row instead (see below). Historical rows already on <strong>LOG - Activity</strong> still render as <strong>Type: Planner / Action: Email deferred / Amount: —</strong> and remain searchable.</li>
-          <li><strong>planner_email_sent</strong> — The actual planner email went out. Activity <strong>Type</strong> is <strong>Planner</strong>; <strong>Payee</strong> is <strong>Planner</strong>; <strong>Action</strong> sub-label includes the recipient count and, when the email was debounced, how many saves were batched into it — e.g. <em>Email sent to 2 recipients</em> for an immediate manual send, or <em>Email sent to 2 recipients (12 saves batched)</em> after a heavy month-start session. <strong>Amount</strong> shows <strong>—</strong>. Recipient field names and the batched count are preserved in the event&rsquo;s <strong>details</strong> JSON (<em>recipientFields</em>, <em>deferredSaveCount</em>); the addresses themselves are deliberately never logged.</li>
-          <li><strong>planner_email_invalid_recipient</strong> — A value in <strong>Profile → Email</strong> or <strong>Profile → Spouse Email</strong> failed validation, so that recipient was dropped silently before sending. Activity <strong>Type</strong> is <strong>Planner</strong>; <strong>Payee</strong> is <strong>Planner</strong>; <strong>Action</strong> sub-label names the field (e.g. <em>Invalid Spouse Email — skipped</em>). <strong>Amount</strong> shows <strong>—</strong>. The bad value itself is intentionally never logged so a typo can&rsquo;t leak into Activity. Open <strong>Setup / Review → Profile → Edit profile</strong> and fix it; the next email will include them.</li>
-        </ul>
-
-        <h4>Remove button</h4>
-        <ul class="help-list">
-          <li><strong>Enabled only for Donation</strong> rows until safe undo exists for other event types.</li>
-          <li>For donations: after confirmation, the log line is removed; if <strong>INPUT - Donation</strong> still has a matching row (charity, date, amount, tax year, payment type, comments), that sheet row is removed too.</li>
-          <li>For other events (<strong>quick_pay</strong>, bill skip, house expense, bank account add, <strong>bank_account_update</strong>, <strong>bank_account_deactivate</strong>, <strong>house_add</strong>, <strong>house_value_update</strong>, <strong>house_deactivate</strong>, <strong>investment_add</strong>, <strong>investment_update</strong>, <strong>investment_deactivate</strong>, <strong>debt_add</strong>, <strong>debt_deactivate</strong>, <strong>debt_update</strong>, <strong>debt_rename</strong>, <strong>bank_import_auto_matched</strong>, <strong>bank_import_pending</strong>, <strong>bank_import_ignored_hit</strong>, <strong>bank_import_row_error</strong>, <strong>planner_email_deferred</strong>, <strong>planner_email_sent</strong>, <strong>planner_email_invalid_recipient</strong>, …) the button is greyed out — delete those lines directly on <strong>LOG - Activity</strong> if needed.</li>
-        </ul>
-
-        <h4>Filters</h4>
-        <ul class="help-list">
-          <li><strong>Date range</strong> — Applies to <em>when the row was logged</em> (server timestamp).</li>
-          <li><strong>Payee</strong> — Substring match, case-insensitive.</li>
-          <li><strong>Type</strong> — Lists every activity type present anywhere in <strong>LOG - Activity</strong>, derived the same way as the Type column.</li>
-          <li><strong>Amount min / max</strong> — Optional currency-style inputs; filter on the logged amount.</li>
-          <li>Up to <strong>500</strong> matching rows load per Apply; the table shows <strong>20</strong> at a time with Previous / Next.</li>
-        </ul>
-
-        <h4>Table columns</h4>
-        <ul class="help-list">
-          <li><strong>Logged at</strong> — When the script appended the row (browser locale).</li>
-          <li><strong>Payee</strong> — The Cash Flow / bill payee for that action.</li>
-          <li><strong>Type</strong> — A short label derived for scanning: <strong>Loan</strong>, <strong>Bill</strong>, <strong>HOA</strong>, <strong>Tuition</strong>, <strong>Income</strong>, <strong>Donation</strong>, <strong>Upcoming</strong>, <strong>Bank</strong>, <strong>Investment</strong>, <strong>Repair</strong> / <strong>Maintenance</strong> / <strong>Utilities</strong> / <strong>Property Tax</strong> (from the House Expenses <strong>Type</strong>), <strong>House Expenses</strong> if that field was blank, or <strong>Other</strong>.
-            <ul class="help-list">
-              <li>It is <em>derived</em>, not a column you edit. Payees are matched to <strong>INPUT - Debts</strong> (Account Name + Type) and <strong>INPUT - Bills</strong> (Payee + Category); keyword checks cover HOA and tuition; <strong>donation</strong> events map to <strong>Donation</strong>; <strong>house_expense</strong> events use the log <strong>Category</strong>.</li>
-              <li>Under the pill, a small <strong>Action</strong> sub-label disambiguates events that share a Type (e.g. the <strong>Bill</strong> pill can show <strong>Bill added</strong>, <strong>Tracking stopped</strong>, <strong>Bill skipped</strong>, or <strong>Bill autopay</strong>).</li>
-              <li>The <strong>Type</strong> filter operates on the broad pill, so filtering by <strong>Bill</strong> still surfaces every bill lifecycle event.</li>
-            </ul>
-          </li>
-          <li><strong>Amount</strong> — The amount stored for the event (payment amount, or 0 for a skip). Non-monetary events show <strong>—</strong> instead of <strong>$0.00</strong>: <strong>Tracking stopped</strong> (<strong>bill_deactivate</strong>, <strong>bank_account_deactivate</strong>, <strong>house_deactivate</strong>, <strong>investment_deactivate</strong>, <strong>debt_deactivate</strong>) and field edits (<strong>bill_update</strong>, <strong>debt_update</strong>). Account creation events (<strong>bank_account_add</strong>, <strong>investment_add</strong>, <strong>house_add</strong>, <strong>debt_add</strong>) show the supplied opening / starting / current value, or <strong>$0.00</strong> when none was provided.</li>
-          <li><strong>Bill due date</strong> — The obligation date for that cycle (from the log entry date). Not necessarily the day you clicked the button.</li>
-        </ul>
-
-        <h4>Sorting</h4>
-        <ul class="help-list">
-          <li>Click a column header to sort; click again to flip ascending/descending.</li>
-          <li>Sorting applies to <em>all</em> rows that matched your filters on the last Apply (up to 500) — not only the current page.</li>
-        </ul>
-
-        <h4>Source of truth</h4>
-        <p class="muted">Cash Flow, Debts, and the other INPUT/SYS tabs remain authoritative for balances. The Activity page helps you audit <em>what the automation recorded</em>; open <strong>LOG - Activity</strong> directly for the raw grid or to copy rows.</p>
       </section>
 
-      <!-- ================================================================ -->
-      <!-- Bills                                                            -->
-      <!-- ================================================================ -->
       <section id="help-bills-due" class="help-section">
         <h3>Bills</h3>
-        <p>The Bills page (on Cash Flow) has two internal views: <strong>Due this period</strong> for execution, and <strong>Manage bills</strong> for the underlying list on <strong>INPUT - Bills</strong>.</p>
-
-        <h4>Recurring bills — an overview</h4>
         <ul class="help-list">
-          <li>CashCompass supports these repeat schedules: <strong>Monthly</strong>, <strong>Weekly</strong>, <strong>Biweekly</strong> (every other week), <strong>Quarterly</strong>, <strong>Semiannual</strong>, and <strong>Yearly</strong>.</li>
-          <li>Every recurring bill creates <strong>individual occurrences</strong> — one for each time the bill is actually due. A weekly bill, for example, shows up several times a month, each on its own date and at its own amount, instead of as one lumped total.</li>
-          <li>Each occurrence is tracked on its own, so you can <strong>Pay</strong> or <strong>Skip</strong> a single date without affecting the others.</li>
-        </ul>
-
-        <h4>Due this period</h4>
-        <ul class="help-list">
-          <li>Three groups: <strong>Overdue</strong>, <strong>Next 7 Days</strong>, and <strong>Recurring Bills (No Due Date)</strong>.</li>
-          <li><strong>Overdue</strong> = bills whose due date has already passed.</li>
-          <li><strong>Next 7 Days</strong> = bills due within the upcoming week.</li>
-          <li>Each card shows the bill <strong>name</strong>, <strong>amount</strong>, and <strong>due date</strong> (when applicable), plus <strong>Pay</strong> and <strong>Skip</strong>.</li>
-          <li>The card does not list category, autopay, or “varies” flags as text — those remain on the sheet for your reference (AutoPay is shown as a star icon, see below).</li>
-        </ul>
-
-        <h4>Visual indicators</h4>
-        <ul class="help-list">
-          <li><strong>⭐ Gold star</strong> (top-right of a card) — the bill has <strong>AutoPay</strong> enabled.</li>
-          <li><strong>Light-red card</strong> — an <strong>Overdue</strong> bill.</li>
-          <li><strong>White card</strong> — an upcoming bill (Next 7 Days).</li>
-        </ul>
-
-        <h4>What the buttons do</h4>
-        <ul class="help-list">
-          <li><strong>Pay</strong> — Records the bill payment. Opens <strong>Quick add</strong> with payee, due date, and amount pre-filled (you can change the amount before saving), then updates <strong>Cash Flow</strong> and the <strong>Activity Log</strong>. The amount shown on the card is the same number Pay starts with; there is no separate “suggested” line.</li>
-          <li><strong>Skip</strong> — Marks that bill <strong>occurrence</strong> as intentionally skipped, removes it from Bills Due, and records the skip on <strong>LOG - Activity</strong>. If the matching Cash Flow cell for that cycle is empty it also writes <strong>0</strong>; if the cell already holds a value the cell is left untouched but the skip is still recorded. For <strong>Weekly/Biweekly</strong> bills, Skip applies <em>only to that specific occurrence</em> — future occurrences stay on the list.</li>
-        </ul>
-
-        <h4>Weekly bills</h4>
-        <ul class="help-list">
-          <li>Weekly bills can now repeat on a <strong>weekday you choose</strong> — for example <em>every Sunday</em>, <em>every Monday</em>, or <em>every Friday</em>.</li>
-          <li>When you set up a Weekly bill, pick the <strong>Weekday</strong> it should fall on. CashCompass then creates one occurrence on that weekday, every week.</li>
-          <li>Older Weekly bills that don't have a Weekday selected keep working the way they always have (based on their <strong>Due Day</strong>). They switch to weekday scheduling only when you choose a Weekday for them.</li>
-        </ul>
-
-        <h4>Biweekly bills</h4>
-        <ul class="help-list">
-          <li>Biweekly bills repeat <strong>every other week</strong>. You set two things: the <strong>Weekday</strong> and an <strong>Anchor Date</strong>.</li>
-          <li>The <strong>Anchor Date</strong> is simply a real date when the bill occurs — it establishes the every-two-week rhythm. The Anchor Date must land on the weekday you picked.</li>
-          <li>Example — <strong>Monday</strong>, Anchor Date <strong>July 6</strong>:
-            <ul class="help-list">
-              <li>July 6 → July 20 → August 3 → August 17 … (every other Monday, continuing cleanly across months).</li>
-            </ul>
-          </li>
-          <li>If you enter an Anchor Date that isn't on the selected weekday, CashCompass asks you to fix it rather than quietly changing it.</li>
-        </ul>
-
-        <h4>Schedule changes</h4>
-        <ul class="help-list">
-          <li>When you change a bill's schedule (its frequency, weekday, day, or anchor date), the change applies <strong>going forward only</strong>.</li>
-          <li>Changing a schedule does <strong>not</strong> rewrite past payments, does <strong>not</strong> rewrite your Cash Flow history, and does <strong>not</strong> delete anything from your Activity history.</li>
-          <li>Everything you've already recorded stays exactly as it was. Only <strong>future</strong> occurrences follow the new schedule.</li>
-          <li>Changes apply going forward only. The next valid occurrence becomes active automatically. No manual cleanup is required.</li>
-        </ul>
-
-        <h4>Paying and skipping occurrences</h4>
-        <ul class="help-list">
-          <li>Bills Due tracks each occurrence separately. Any occurrence can be <strong>Paid</strong> or <strong>Skipped</strong> on its own.</li>
-          <li><strong>Paying</strong> one occurrence does not affect future ones. <strong>Skipping</strong> one occurrence does not affect future ones.</li>
-          <li>So you can pay this week's occurrence, skip next week's, and leave the following week untouched — each is independent.</li>
-        </ul>
-
-        <h4>AutoPay</h4>
-        <ul class="help-list">
-          <li>When a bill has AutoPay turned on, CashCompass records each occurrence <strong>only once</strong>.</li>
-          <li>Even if the dashboard refreshes several times, a due occurrence won't be paid twice — <strong>duplicate payments are prevented automatically</strong>.</li>
-          <li>AutoPay records <strong>actual activity</strong>: it writes an amount only when the bill is due, the due date has <strong>passed</strong>, AutoPay is on, and that occurrence hasn't already been handled. It does <strong>not</strong> fill in future months ahead of time.</li>
-        </ul>
-
-        <h4>Cash Flow shows actual activity, not a forecast</h4>
-        <ul class="help-list">
-          <li>Adding a bill creates its <strong>Cash Flow row</strong> so the bill is tracked — but it does <strong>not</strong> fill in a dollar amount for every month.</li>
-          <li>CashCompass does <strong>not</strong> project a recurring bill across the whole year. Amounts appear as occurrences actually come due (and AutoPay settles them), so your Cash Flow reflects <strong>what has happened</strong>, not a forecast of what will.</li>
-          <li><strong>Start Month</strong> controls <strong>when a bill becomes eligible to recur</strong> — it does not pre-fill Cash Flow months. A monthly bill with Start Month = 1 does not put an amount in January through December up front; each month fills in as it comes due. This is intentional.</li>
-          <li>Forward-looking projection is a planned future feature and is kept separate from this actual-activity view.</li>
-        </ul>
-
-        <h4>Legacy bills</h4>
-        <ul class="help-list">
-          <li>Existing bills continue working <strong>exactly as before</strong>. Nothing about your current bills changes on its own.</li>
-          <li>Weekday and Biweekly scheduling are <strong>opt-in</strong>: a bill only uses them once you choose a Weekday (and, for Biweekly, an Anchor Date).</li>
-          <li>You can upgrade any bill to weekday scheduling whenever you like — there's no rush and no migration to run.</li>
-        </ul>
-
-        <h4>Examples</h4>
-        <ul class="help-list">
-          <li><strong>Kids allowance</strong> — Weekly, Weekday <em>Sunday</em>. Pays out every Sunday.</li>
-          <li><strong>House cleaning</strong> — Biweekly, Weekday <em>Monday</em>, Anchor Date <em>July 6</em>. Occurs July 6, July 20, August 3, and so on — every other Monday.</li>
-          <li><strong>Mortgage</strong> — Monthly, Due Day <em>1</em>. Occurs on the 1st of each month.</li>
-        </ul>
-
-        <h4>Where amounts come from</h4>
-        <ul class="help-list">
-          <li>Rows from <strong>INPUT - Bills</strong> use that sheet’s bill fields.</li>
-          <li>Items tied to <strong>INPUT - Debts</strong> (minimum payments) use the planner / debt amount.</li>
-        </ul>
-
-        <h4>Default Amount = $0</h4>
-        <ul class="help-list">
-          <li>Bills can use <strong>0</strong> for variable or “enter when known” expenses. They still appear in <strong>Overdue</strong> / <strong>Next 7 Days</strong> when the Cash Flow cell for that cycle is empty.</li>
-          <li><strong>Pay</strong> opens Quick add with <strong>0</strong> — set the real amount there.</li>
-          <li><strong>Autopay</strong> never writes a payment when the default amount is <strong>0</strong> (even if Autopay is Yes and Varies is No).</li>
-        </ul>
-
-        <h4>Recurring (no due date)</h4>
-        <ul class="help-list">
-          <li>Bills not yet tied to a dated row in <strong>INPUT - Bills</strong> land in the third section.</li>
-          <li><strong>Pay</strong> opens Quick add with today’s date and amount <strong>0</strong> so you can enter the real payment.</li>
-          <li>Map or add due dates on <strong>INPUT - Bills</strong> when you want them in the dated lists.</li>
-        </ul>
-
-        <h4>Manage bills</h4>
-        <ul class="help-list">
-          <li>Lists every row from <strong>INPUT - Bills</strong> with sortable columns (Payee, Due Day).</li>
-          <li>Default sort is <strong>Due Day</strong>, ascending. Click a column header to sort; click again to flip direction.</li>
-        </ul>
-
-        <h4>Add bill</h4>
-        <ul class="help-list">
-          <li>Inserts a row into <strong>INPUT - Bills</strong> in <strong>Due Day</strong> order so the sheet stays sorted as you add new bills. The new row lands just above the first existing bill with a higher Due Day; same-day ties go to the bottom of the same-day group, and any legacy rows with a blank Due Day stay at the bottom.</li>
-          <li>Pick a <strong>Frequency</strong> (Monthly, Weekly, Biweekly, Quarterly, Semiannual, or Yearly). For <strong>Weekly</strong> and <strong>Biweekly</strong> bills a <strong>Weekday</strong> field appears; <strong>Biweekly</strong> also shows an <strong>Anchor Date</strong> field that sets the every-other-week rhythm (it must fall on the chosen weekday). See <em>Weekly bills</em> and <em>Biweekly bills</em> above.</li>
-          <li><strong>Category</strong> is required (both client and server side).</li>
-          <li>Logs <strong>bill_add</strong> on <strong>LOG - Activity</strong>.</li>
-        </ul>
-
-        <h4>Edit a tracked bill</h4>
-        <ul class="help-list">
-          <li>Each row in Manage bills has an <strong>Edit</strong> action that reuses the <strong>Add bill</strong> form in edit mode. The form heading and primary button switch to <strong>Edit bill</strong> / <strong>Save changes</strong>; <strong>Start Month</strong> and <strong>Active</strong> are hidden because they are Add-only fields (use <strong>Stop tracking</strong> to deactivate a bill).</li>
-          <li>Editable fields: <strong>Payee</strong>, <strong>Default Amount</strong>, <strong>Due Day</strong>, <strong>Frequency</strong>, <strong>Weekday</strong> (shown for Weekly and Biweekly), <strong>Anchor Date</strong> (shown for Biweekly), <strong>Payment Source</strong>, <strong>Category</strong>, <strong>Autopay</strong>, <strong>Varies</strong>, <strong>Notes</strong>. Validation rules match <strong>Add bill</strong>. Only the columns that actually changed are written.</li>
-          <li>The <strong>Weekday</strong> and <strong>Anchor Date</strong> fields appear only when they apply: Weekday for Weekly and Biweekly bills, Anchor Date for Biweekly bills. They stay hidden for Monthly, Quarterly, Semiannual, and Yearly bills. Changing any scheduling field applies <strong>going forward only</strong> (see <em>Schedule changes</em> above).</li>
-          <li>The bill row is updated <em>in place</em> — its position in <strong>INPUT - Bills</strong> does not change, even on a Due Day edit. The Manage table sorts client-side so the displayed order stays correct.</li>
-          <li>Existing <strong>Cash Flow</strong> rows generated when the bill was first added are <strong>not</strong> retroactively renamed or reclassified, even on a <strong>Payee</strong> rename. History is preserved on purpose; future bill matches use the new values from the next Add / payment.</li>
-          <li>Inactive bills cannot be edited — re-add the bill or restore it later. A <strong>save with no changes</strong> returns <em>No changes.</em> and is <strong>not</strong> logged.</li>
-          <li>Logs <strong>bill_update</strong> on <strong>LOG - Activity</strong> (sub-label inlines the changed field, e.g. <em>Updated Default Amount to $126.00</em>; multi-field saves render as <em>Updated N fields</em>; amount <strong>—</strong>).</li>
-        </ul>
-
-        <h4>Stop tracking</h4>
-        <ul class="help-list">
-          <li>Sets <strong>Active = No</strong> on the bill row. The row is kept for history; no payments are reversed.</li>
-          <li>Logs <strong>bill_deactivate</strong> (sub-label <strong>Tracking stopped</strong>, amount <strong>—</strong>).</li>
-        </ul>
-
-        <h4>Status &amp; errors</h4>
-        <ul class="help-list">
-          <li>Feedback from <strong>Pay</strong> / <strong>Skip</strong> and from Add bill / Stop tracking appears in the status line <strong>under the Bills heading</strong>, not next to Run Planner. Success messages auto-clear.</li>
-          <li>If the bills queue fails to load, the error shows under the Bills heading and in the Overview Bills Due card summary.</li>
+          <li><strong>Due Soon</strong> and <strong>Overdue</strong> show obligations that still need attention.</li>
+          <li><strong>Pay</strong> records the payment and refreshes the affected views.</li>
+          <li><strong>Skip</strong> suppresses only the selected occurrence.</li>
+          <li><strong>Autopay</strong> identifies bills expected to be handled automatically.</li>
+          <li>Weekly and biweekly bills use their configured weekday and schedule anchor when available.</li>
+          <li><strong>Manage bills</strong> edits schedules, amounts, sources, and tracking status.</li>
         </ul>
       </section>
 
-      <!-- ================================================================ -->
-      <!-- Properties                                                       -->
-      <!-- ================================================================ -->
       <section id="help-properties" class="help-section">
         <h3>Properties</h3>
         <ul class="help-list">
-          <li><strong>House Expenses</strong> — Adds rows to the per-property <strong>HOUSES - …</strong> tabs. The house selector refreshes every time you open the tab, so houses created via <strong>Assets → House Values → Add new</strong> appear immediately (their <strong>HOUSES - {House}</strong> sheet is created automatically at add time).</li>
-          <li><strong>Property performance</strong> — See the next section for rent, expenses, and how the <strong>Type</strong> column on <strong>SYS - House Assets</strong> ties them together.</li>
+          <li><strong>House Expenses</strong> records repairs, maintenance, fees, and insurance details.</li>
+          <li><strong>Property performance</strong> summarizes value, debt, equity, income, expenses, and net cash by property.</li>
+          <li>Use consistent property names so income and expenses are grouped correctly.</li>
         </ul>
       </section>
 
-      <!-- ================================================================ -->
-      <!-- Property performance                                             -->
-      <!-- ================================================================ -->
       <section id="help-property-performance" class="help-section">
-        <h3>Property performance (detail)</h3>
-
-        <h4>Active houses only</h4>
-        <ul class="help-list">
-          <li>The table and portfolio mini-cards show <strong>active houses only</strong> — houses whose <strong>SYS - House Assets → Active</strong> is blank (legacy) or anything other than <strong>No</strong> / <strong>n</strong> / <strong>false</strong> / <strong>inactive</strong>.</li>
-          <li>Stop-tracked houses drop out on the next load/refresh. Their <strong>INPUT - House Values</strong> rows, <strong>SYS - House Assets</strong> row, and <strong>HOUSES - {House}</strong> sheet are preserved; only the view is filtered.</li>
-          <li>Portfolio totals (<strong>Equity</strong>, <strong>Rent</strong>, <strong>Expenses</strong>, <strong>Net</strong>) are summed from the same filtered row set, so cards and rows always agree.</li>
-        </ul>
-
-        <h4>Rent</h4>
-        <ul class="help-list">
-          <li>Sums <strong>Income</strong> rows on <strong>INPUT - Cash Flow</strong> for the selected year.</li>
-          <li>Only counts rows whose <strong>Payee</strong> starts with <code>Rent </code> followed by the <strong>same house name</strong> as in <strong>SYS - House Assets</strong> — for example, <code>Rent Oakley House - …</code>.</li>
-        </ul>
-
-        <h4>Rent only for rentals</h4>
-        <ul class="help-list">
-          <li>The <strong>Type</strong> column on <strong>SYS - House Assets</strong> controls this.</li>
-          <li><strong>Rental</strong> (and the common typo <strong>Renal</strong>) use Cash Flow rent.</li>
-          <li><strong>Home</strong> and <strong>Vacation Home</strong> show <strong>$0</strong> rent even if Income rows exist.</li>
-          <li>A blank <strong>Type</strong> still sums rent (legacy behavior).</li>
-        </ul>
-
-        <h4>Expenses</h4>
-        <ul class="help-list">
-          <li>Come from each property’s <strong>HOUSES - …</strong> sheet.</li>
-          <li>The table sums <strong>Cost</strong> + <strong>Service Fees</strong> for the selected year on the sheet whose location matches the house (matching is case- and spacing-insensitive).</li>
-        </ul>
-
-        <h4>HOUSES sheet</h4>
-        <ul class="help-list">
-          <li>There must be a <strong>HOUSES - …</strong> tab aligned with the SYS <strong>House</strong> name. <strong>Assets → House Values → Add new</strong> creates this sheet automatically with the canonical header layout and column widths copied from an existing HOUSES tab.</li>
-          <li>If no matching HOUSES sheet exists — or the name differs (e.g. <code>SD Condo</code> vs <code>San Diego House</code>) — expense totals stay <strong>$0</strong> until you add or rename the tab.</li>
-        </ul>
-
-        <h4>Net</h4>
-        <ul class="help-list">
-          <li>Net = Rent − Expenses for that row.</li>
-          <li>The portfolio mini-cards sum the same figures across all houses.</li>
-        </ul>
+        <h3>Property performance</h3>
+        <p>Review each property’s current value, remaining debt, equity, rental income, expenses, and net cash contribution.</p>
+        <p class="muted">A missing amount is shown as unavailable rather than guessed. Update the related property information and refresh the Financial Plan.</p>
       </section>
 
-      <!-- ================================================================ -->
-      <!-- Planning                                                         -->
-      <!-- ================================================================ -->
       <section id="help-planning" class="help-section">
         <h3>Planning</h3>
-        <p>Planning is the <strong>decision layer</strong> — it answers <em>"what should I do next?"</em> by interpreting data from Bills, Upcoming, Debts, Bank Accounts, and Cash Flow. It does not store its own copies of those numbers and does not move money. The single payment path remains <strong>Cash Flow → Quick Add</strong>.</p>
-        <p>The landing view is <strong>Next Actions</strong> (featured at the top). Everything else is a <strong>Planning tool</strong> — deeper views you drill into from a Next Actions card:</p>
+        <p>Planning turns your current financial information into decisions. Start with Next Actions, then open deeper views when you need them.</p>
         <ul class="help-list">
-          <li><strong>Next Actions</strong> — Prioritized short lists of what to pay, finish, or review now. See the next section for details.</li>
-          <li><strong>Debts</strong> — Edit <strong>INPUT - Debts</strong>; planner output uses the balances and minimums there.</li>
-          <li><strong>Retirement</strong> — Uses the latest snapshot plus your inputs. <strong>Current age is no longer entered in Retirement</strong> — it is derived automatically from <strong>Date of Birth</strong> in your Profile (and <strong>Spouse Date of Birth</strong> for partnered scenarios). To use Retirement, open <strong>Setup / Review → Profile</strong> and add your Date of Birth. If Profile DOB is missing, the Retirement tab and the Overview Retirement Outlook card show a setup hint with an <em>Open Profile</em> shortcut instead of calculating. Scenario inputs (target retirement age, spending, expected return, etc.) still live on the Retirement tab.</li>
-          <li><strong>Purchase Sim</strong> — Uses the latest snapshot plus your inputs. Details depend on sheet configuration.</li>
-          <li><strong>Debt Overview</strong> vs <strong>Rolling Debt Payoff</strong>:
-            <ul class="help-list">
-              <li><strong>Debt Overview</strong> — Read-only reference view of your debt structure.</li>
-              <li><strong>Rolling Debt Payoff</strong> — The monthly action decision engine. See its own section below.</li>
-            </ul>
-          </li>
-        </ul>
-
-        <h4>Debts — Update / Add new / Manage Debts / Stop tracking</h4>
-        <ul class="help-list">
-          <li><strong>Update</strong> saves a single field on the selected debt row in <strong>INPUT - Debts</strong> (Account Balance, Due Date, Credit Limit, Minimum Payment, Credit Left, Int Rate). The status row below the button shows <em>Saving…</em> and then <em>Saved.</em>; the right-hand info panel repaints immediately from the saved value and the Overview snapshot refreshes. <strong>Acct PCT Avail</strong> is recomputed on the row at save time. The debt planner runs silently in the background after the save returns so <strong>Rolling Debt Payoff</strong> and other planner-dependent cards catch up shortly after, without blocking the save itself. The <strong>TOTAL DEBT</strong> summary row is always excluded from the selector. Every field save is written to <strong>LOG - Activity</strong> as a <strong>debt_update</strong> event (see <a href="#help-activity">Activity log</a>).</li>
-          <li><strong>Add new</strong> inserts one row into the active region above the <strong>TOTAL DEBT</strong> summary on <strong>INPUT - Debts</strong> with <strong>Active = Yes</strong>. The row is placed in <strong>Due Day</strong> order — it lands just above the first existing active debt with a higher Due Day, with same-day ties going below the existing same-day rows. When the new debt's Due Day is greater than every existing active row, it lands at the bottom of the active region (just above the blank buffer + TOTAL DEBT), matching the legacy placement; the <strong>TOTAL DEBT</strong> anchor and any stop-tracked rows below it are never touched. <em>All</em> fields are required: <strong>Account name</strong>, <strong>Type</strong>, <strong>Account balance</strong>, <strong>Minimum payment</strong>, <strong>Credit limit</strong>, <strong>Interest rate %</strong>, and <strong>Due day of month</strong>. Enter <strong>0</strong> for a field that does not apply (for example, Credit limit on a Loan or HELOC). <strong>Credit Left</strong> is <em>derived</em> (Credit limit − Account balance) — not a separate input — and <strong>Acct PCT Avail</strong> is recomputed from it.</li>
-          <li><strong>Type</strong> is a dropdown populated from the distinct <strong>Type</strong> values currently on <strong>INPUT - Debts</strong> (e.g. Credit Card, Loan, HELOC). Pick <strong>Other…</strong> to reveal a text input and add a new type on the fly — the typed value is written as-is to the new row's <strong>Type</strong> cell and becomes available in the dropdown for future adds.</li>
-          <li><strong>Cash Flow auto-seed</strong> — Also writes a matching <strong>Expense</strong> row on the current year's <strong>INPUT - Cash Flow</strong> tab so the new debt shows up in <strong>Bills Due</strong>, <strong>Upcoming</strong>, and the planner email without you editing the sheet. The row is inserted in the Expense block with <strong>Type = Expense</strong>, <strong>Payee = Account name</strong>, <strong>Active = YES</strong>, and <strong>Flow Source</strong> inferred from Type (<strong>Credit Card → CREDIT_CARD</strong>, everything else → <strong>CASH</strong>). <strong>All month cells are left blank</strong> — nothing has been paid yet. The first time you run <strong>Quick Add → Pay</strong> or <strong>Bills → Pay</strong> for this debt, that action fills the correct month cell; until then Bills Due treats the current cycle as unhandled. Idempotent: if an Expense row for the same payee already exists on that year tab (e.g. pre-seeded by hand, or the name was previously stop-tracked and re-added), the existing row is left untouched. If the current-year Cash Flow tab does not exist yet, the seed is skipped and the status line explains why.</li>
-          <li><strong>Duplicate names</strong> are rejected across every non-summary row on <strong>INPUT - Debts</strong>, <em>including rows you previously stop-tracked</em>, so names stay reserved. Reserved summary names (e.g. <strong>TOTAL DEBT</strong>) are always rejected. Inline errors show next to the Account name field and focus the input.</li>
-          <li>Status text during the flow is <em>Creating debt account…</em>. After success, the panel flips back to <strong>Update</strong> and preselects the new debt.</li>
-          <li><strong>Add new</strong> logs <strong>debt_add</strong> to <strong>LOG - Activity</strong>. Activity <strong>Type</strong> is <strong>Debt</strong>; <strong>Action</strong> sub-label is <strong>Account added</strong>. <strong>Amount</strong> shows the required opening balance (which may be <strong>$0.00</strong> if you entered 0). It does <em>not</em> re-run the full planner — use <strong>Refresh Financial Plan</strong> when you want projections and Overview updated.</li>
-        </ul>
-
-        <h4>Debts — Manage Debts (table view)</h4>
-        <ul class="help-list">
-          <li>The Debts panel has a third view, <strong>Manage Debts</strong>, on the <strong>[Update] [Add new] [Manage Debts]</strong> toggle. <strong>Update</strong> stays the default and is unchanged. Manage Debts is the friendly way to maintain debts without hand-editing the protected <strong>INPUT - Debts</strong> sheet — it mirrors <strong>Cash Flow → Bills → Manage bills</strong>.</li>
-          <li>It shows a sortable table of your active debts (the <strong>TOTAL DEBT</strong> summary row and stop-tracked debts are excluded): <strong>Account Name</strong>, <strong>Type</strong>, <strong>Balance</strong>, <strong>Minimum Payment</strong>, <strong>Interest Rate</strong>, <strong>Acct PCT Avail</strong>, and an <strong>Actions</strong> column with <strong>Edit</strong>, <strong>Rename</strong>, and <strong>Stop tracking</strong>.</li>
-          <li><strong>Edit</strong> opens an inline form for one debt. You can edit <strong>Type</strong>, <strong>Account Balance</strong>, <strong>Due Date</strong>, <strong>Credit Limit</strong>, <strong>Credit Left</strong>, <strong>Minimum Payment</strong>, and <strong>Interest Rate</strong> together. <strong>Account Name is read-only here</strong> (use <strong>Rename</strong> for that). <strong>Acct PCT Avail</strong> is display-only and recalculated on the server after you save. Only the fields you actually change are written; an unchanged save returns <em>No changes made.</em> Saving writes <strong>one</strong> consolidated <strong>debt_update</strong> entry to <strong>LOG - Activity</strong> and never touches Cash Flow.</li>
-          <li><strong>Stop tracking</strong> here behaves exactly like the Update-mode button (soft deactivate; see below).</li>
-        </ul>
-
-        <h4>Debts — Rename (Manage Debts)</h4>
-        <ul class="help-list">
-          <li><strong>Rename</strong> in the Manage Debts table opens a dedicated <strong>Rename Debt</strong> form: <strong>Current Account Name</strong> (read-only) and <strong>New Account Name</strong> (editable), with the note <em>&ldquo;Renaming updates linked debt references. Activity history keeps original names.&rdquo;</em></li>
-          <li>Renaming updates the debt in two coordinated places: the <strong>Account Name</strong> on its <strong>INPUT - Debts</strong> row, <em>and</em> the matching <strong>Expense Payee</strong> cell on <em>every</em> <strong>INPUT - Cash Flow &lt;year&gt;</strong> tab. Only the <strong>Payee text</strong> is changed — month values, totals, and formulas are never touched, and formatting is preserved. This keeps <strong>Bills Due</strong>, <strong>Debt Overview</strong>, and <strong>Rolling Debt Payoff</strong> linked to the renamed debt.</li>
-          <li><strong>Duplicate names are blocked.</strong> If another debt already uses the new name — <em>active or stop-tracked</em>, matched case-insensitively — the rename is rejected with <em>&ldquo;Another debt account already uses this name. Rename was not completed.&rdquo;</em> and nothing is changed. The reserved <strong>TOTAL DEBT</strong> row can never be renamed. (Intentionally combining two real accounts into one is a separate future <strong>Merge</strong> feature, not a rename.)</li>
-          <li>The rename is protected by a stale-row check (it confirms the row still holds the expected name before writing) and runs under a document lock; on a partial failure it best-effort reverts the cells it already changed.</li>
-          <li>It writes <strong>one</strong> <strong>debt_rename</strong> entry to <strong>LOG - Activity</strong> recording the old name, new name, and how many Cash Flow rows/sheets were updated. <strong>Past Activity entries keep the original name on purpose</strong>, so your history stays accurate.</li>
-        </ul>
-
-        <h4>Debts — Stop tracking (soft deactivate)</h4>
-        <ul class="help-list">
-          <li><strong>Update</strong> mode shows a secondary <strong>Stop tracking</strong> button next to <strong>Save Debt Update</strong> (the same action is also available per-row in <strong>Manage Debts</strong>). Use it when a debt is closed / paid off / no longer relevant without losing history.</li>
-          <li>Clicking it opens an inline confirmation. On confirm, the matching <strong>INPUT - Debts</strong> row is flipped to <strong>Active = No</strong>. The row is never deleted; balance, minimum payment, credit limit, interest rate, due day, and the name stay intact so historical <strong>quick_pay</strong> / bill matches still classify correctly.</li>
-          <li>Inactive debts drop out of the Planning Debts selector, Debt Overview, Rolling Debt Payoff (waterfall, HELOC gate, focus/next-debt selection, payment windows), Bills Due, Overdue / Next 7, and Quick add Flow Source inference. They are also excluded from Debt totals and high-utilization alerts.</li>
-          <li>Historical <strong>LOG - Activity</strong> classification is <em>not</em> filtered by Active — rows that used to hit a now-inactive debt still show the right <strong>Type</strong> and <strong>Kind</strong> so you can audit past payments.</li>
-          <li>Duplicate-name validation still blocks reuse of a stop-tracked debt name when adding a new debt (names stay reserved).</li>
-          <li>Status text during the flow is <em>Stopping tracking…</em>.</li>
-          <li><strong>Backward compatibility</strong>: If the <strong>Active</strong> column is missing on your workbook, the script self-heals — it adds the column automatically the first time you Add new or Stop tracking. Existing rows with blank <strong>Active</strong> are treated as active, and if no <strong>Active</strong> column exists at all the legacy fallback still applies (<strong>balance &gt; 0 || minimum payment &gt; 0</strong>).</li>
-          <li>Logs <strong>debt_deactivate</strong> to <strong>LOG - Activity</strong>. Activity <strong>Type</strong> is <strong>Debt</strong>; <strong>Action</strong> sub-label is <strong>Tracking stopped</strong>; <strong>Amount</strong> shows <strong>—</strong> because no money moved.</li>
-          <li>New <strong>Yes</strong> / <strong>No</strong> values written into the <strong>Active</strong> column inherit the row's text style so they visually match the rest of the row.</li>
+          <li><strong>Next Actions</strong> prioritizes immediate work.</li>
+          <li><strong>Debts</strong> maintains balances, rates, minimums, due dates, and tracking status.</li>
+          <li><strong>Debt Overview</strong> compares payoff paths.</li>
+          <li><strong>Rolling Debt Payoff</strong> builds a month-by-month operating plan.</li>
+          <li><strong>Retirement</strong> evaluates your selected assumptions and scenarios.</li>
+          <li><strong>Purchase Simulator</strong> explores affordability without changing saved account balances.</li>
         </ul>
       </section>
 
-      <!-- ================================================================ -->
-      <!-- Next Actions                                                     -->
-      <!-- ================================================================ -->
       <section id="help-next-actions" class="help-section">
         <h3>Next Actions</h3>
-
-        <p>Your primary Planning entry point. Next Actions reads your existing data (Bills, Upcoming remaining balances, Debts, Bank Accounts) and returns a prioritized short list in three sections. It does not move money — each card is a pointer you can open to the relevant tool.</p>
-
-        <h4>What it shows</h4>
+        <p>Next Actions is the best place to begin after setup. It combines near-term obligations, cash available after protections, and planning priorities.</p>
         <ul class="help-list">
-          <li><strong>Summary row</strong> — three figures:
-            <ul class="help-list">
-              <li><strong>Cash to use</strong> — What's safely available right now across eligible Bank Accounts, after each account's minimum buffer. Credit cards, accounts flagged do-not-touch, and inactive rows are excluded.</li>
-              <li><strong>Due soon</strong> — Sum of every Urgent item (overdue + due in the next 7 days).</li>
-              <li><strong>Available after urgent</strong> — <strong>Cash to use</strong> minus <strong>Due soon</strong>. This is what's left to suggest moving beyond your must-pays.</li>
-            </ul>
-          </li>
-          <li><strong>Urgent</strong> — Overdue items and anything due in the next 7 days across Bills, debt minimums, and Upcoming obligations. Overdue items come first; after that, larger near-term obligations (roof, solar, big tax payments) are ranked ahead of tiny bills so they are never buried. If <strong>Cash to use</strong> is less than <strong>Due soon</strong>, a <em>Review cash gap</em> row appears at the top explaining the shortfall. The top obligations are shown individually; the remainder collapses into a single <em>Other bills due soon</em> row with a count and total so the visible amounts still reconcile with the summary.</li>
-          <li><strong>Recommended</strong> — Suggested next moves once Urgent is covered. Two kinds of suggestion:
-            <ul class="help-list">
-              <li>Non-urgent Upcoming items due 8–30 days out, with earlier / larger items surfaced first. "Pay now to keep it out of the urgent window."</li>
-              <li>One <em>Apply $X to &lt;debt&gt;</em> suggestion, sized from a conservative slice of <strong>Available after urgent</strong> and capped at the debt's remaining balance. The target and APR details are confirmed on Rolling Debt Payoff — Next Actions keeps the reason short ("Confirm in Rolling Debt Payoff") to avoid duplicating that surface's Focus-debt narrative.</li>
-            </ul>
-          </li>
-          <li><strong>Optimize</strong> — Sparse by design. Only appears when there is genuine optimization signal (e.g. extra debt acceleration when no spare cash is available right now). Usually empty. HELOC strategy is not surfaced here — it lives on the Rolling Debt Payoff "HELOC strategy" card.</li>
-        </ul>
-
-        <h4>Open links — where each card routes</h4>
-        <p>Every card is clickable. The <em>Open …</em> link on the right (also the whole card's click target) routes to the deeper tool:</p>
-        <ul class="help-list">
-          <li><strong>Open Bills</strong> → Cash Flow → Bills Due</li>
-          <li><strong>Open Upcoming</strong> → Cash Flow → Upcoming</li>
-          <li><strong>Open Payoff</strong> → Planning → Rolling Debt Payoff</li>
-          <li><strong>Open Debts</strong> → Planning → Debts</li>
-        </ul>
-        <p class="muted">The <em>Review cash gap</em> row is informational and does not open anywhere — its reason line explains the shortfall.</p>
-
-        <h4>Guardrails (what Next Actions will not do)</h4>
-        <ul class="help-list">
-          <li>No writes. No payments. Quick Add remains the single payment path.</li>
-          <li>No forecasts. <strong>Cash to use</strong> is a conservative current-state number — it ignores future income, pending transfers, credit lines, and investments.</li>
-          <li>No recommended actions while a cash gap exists — must-pays come first.</li>
-          <li>Every suggestion is explainable in one sentence from current data.</li>
+          <li>Address overdue or urgent items first.</li>
+          <li>Review the reason shown before acting on a suggested payment.</li>
+          <li>Use the linked workspace button to inspect or update the underlying information.</li>
         </ul>
       </section>
 
-      <!-- ================================================================ -->
-      <!-- Debt Overview                                                    -->
-      <!-- ================================================================ -->
       <section id="help-payoff-path" class="help-section">
         <h3>Debt Overview</h3>
-
-        <h4>What it is</h4>
-        <ul class="help-list">
-          <li>Read-only reference view of your debt structure: balances, minimums, APRs, and estimated payoff at current minimums.</li>
-          <li><strong>Not</strong> an action planner — no recommendations, no cash-flow notes, no decision content. For this month's action plan, use <strong>Rolling Debt Payoff</strong>. For what to do next across bills / upcoming / debts, start at <strong>Next Actions</strong>.</li>
-        </ul>
-
-        <h4>Data sources</h4>
-        <ul class="help-list">
-          <li><strong>Balances and minimums</strong> — From your <strong>Debts</strong> (active rows only — stop-tracked debts are hidden from the bar chart, table, and totals).</li>
-          <li><strong>CF paid</strong> — Sums expense rows on <strong>Cash Flow</strong> for the last two calendar years where the payee matches the debt.</li>
-        </ul>
-
-        <h4>Estimated payoff</h4>
-        <ul class="help-list">
-          <li><strong>Loan</strong> and <strong>HELOC</strong> — Monthly amortization loop using the sheet’s APR and minimum: interest on remaining balance, then principal.</li>
-          <li>Other debt types — Rough estimate as balance ÷ minimum payment.</li>
-          <li>If the minimum is not greater than monthly interest on a loan, payoff is shown as <strong>unavailable</strong>.</li>
-        </ul>
-
-        <h4>Summary</h4>
-        <p class="muted">The summary row shows only <strong>Total debt balance</strong> and <strong>Total monthly minimums</strong>. Decision-style context (safe-to-use cash, projected cash flow, highest-APR callouts, longest-payoff callouts) intentionally lives elsewhere — on Next Actions and Rolling Debt Payoff — so Debt Overview stays a pure reference view.</p>
+        <p>Debt Overview compares balances, required payments, payoff timing, and interest impact. It is a planning view, not a promise of future results.</p>
+        <p class="muted">Update balances and interest rates, then refresh the Financial Plan before making a major payoff decision.</p>
       </section>
 
-      <!-- ================================================================ -->
-      <!-- Rolling Debt Payoff                                              -->
-      <!-- ================================================================ -->
       <section id="help-rolling-debt-payoff" class="help-section">
         <h3>Rolling Debt Payoff</h3>
-        <p>This is the monthly <strong>decision engine</strong> — separate from Debt Overview (which is a read-only reference). The anchor month is the <strong>latest Cash Flow month that has any income or expense data</strong> — not today’s calendar date.</p>
-
-        <h4>Standard view</h4>
-        <p>The tab opens in a compact decision layout. Everything here is driven by the same planner JSON; the <strong>Show details</strong> toggle at the bottom expands the full forecasts, audits, and diagnostics.</p>
-
-        <h4>Cash to use now</h4>
+        <p>This view estimates how much cash can be used after protected balances, buffers, upcoming expenses, and other near-term risks.</p>
         <ul class="help-list">
-          <li>Single input at the top. Type how much you want to deploy this month.</li>
-          <li>The planner caps it at <strong>Safe to use</strong> (your deployable max after reserves, buffers, and holds) and reruns the waterfall instantly.</li>
-          <li>A short live formula line shows <code>min(Cash to use now, Safe to use)</code>.</li>
-        </ul>
-
-        <h4>Decision card</h4>
-        <p>A three-line narrative summary:</p>
-        <ul class="help-list">
-          <li><strong>Recommendation</strong> — What the plan suggests (e.g. deploy $X now, focus on Account Y).</li>
-          <li><strong>Why</strong> — The short reason (highest-APR target, balance caps, or a strategy choice).</li>
-          <li><strong>Caution</strong> — Any near-term risk or reason the recommendation is conservative.</li>
-        </ul>
-
-        <h4>HELOC strategy card</h4>
-        <ul class="help-list">
-          <li>Appears when a HELOC is modeled.</li>
-          <li>Shows the recommended action and the draw size.</li>
-          <li><strong>What would change this?</strong> lists the actionable levers (HELOC APR, eligible-debt spread, upcoming expense hold, recurring monthly repayment) with current values, so you can see what’s driving the recommendation.</li>
-        </ul>
-
-        <h4>Payment result — what the numbers mean</h4>
-        <p>A compact table of the accounts the plan actually touches this month:</p>
-        <ul class="help-list">
-          <li><strong>Account</strong> — The debt name plus its role in the waterfall:
-            <ul class="help-list">
-              <li><strong>Small balance</strong> — paid first to close small accounts.</li>
-              <li><strong>Focus debt</strong> — the highest-priority target this month.</li>
-              <li><strong>Next debt</strong> — spill once Focus debt is capped.</li>
-              <li><strong>Excess</strong> — anything else (e.g. a low-rate line kept for last).</li>
-            </ul>
-          </li>
-          <li><strong>Action</strong> — <strong>Paid off (this month)</strong> when the plan clears the balance (shown green), or <strong>Partially paid</strong> when it reduces the balance.</li>
-          <li><strong>Remaining</strong> — Projected balance after this month’s payment.</li>
-          <li><strong>[Add payment]</strong> — Small pill on rows with a real payable amount. Clicking it jumps to <strong>Cash Flow → Quick add</strong> pre-filled with the payee and the planner’s amount; review or adjust, then save. Hidden in standalone contexts where Quick add is not available.</li>
-        </ul>
-
-        <h4>Why not more?</h4>
-        <ul class="help-list">
-          <li>Shown when the plan deploys less than <strong>Safe to use</strong>.</li>
-          <li>Explains the two holds that caused it: <strong>near-term planned hold</strong> and <strong>unmapped card risk hold</strong>.</li>
-          <li>Each bullet has an inline <strong>[View]</strong> pill that opens <strong>Cash Flow → Upcoming</strong> when the hold is driven by planned upcoming expenses, so you can act on the underlying rows.</li>
-        </ul>
-
-        <h4>Strategy control</h4>
-        <ul class="help-list">
-          <li>Small toggle to switch between the conservative default and a more aggressive concentration (e.g. push a larger share of the remainder onto Focus debt).</li>
-          <li>The decision card and payment result update in place.</li>
-        </ul>
-
-        <h4>Safe to use (liquidity model)</h4>
-        <p>Derived from your Accounts. The legacy $100k / $100k hardcoded reserve and buffer constants are retained for audit only and no longer drive the numbers.</p>
-        <ul class="help-list">
-          <li><strong>Total cash</strong> — Full liquid total across your Accounts (all cash + checking + savings).</li>
-          <li><strong>Reserve</strong> — Sum of current balances for accounts flagged do-not-touch.</li>
-          <li><strong>Buffer</strong> — Sum of per-account minimum buffers for eligible, non-reserve accounts.</li>
-          <li><strong>Cash available to use</strong> — Total cash − Reserve − Buffer, <em>before</em> subtracting holds.</li>
-          <li><strong>Near-term planned hold</strong> — Cash reserved for upcoming planned expenses within 90 days. First driver behind <strong>Why not more?</strong>.</li>
-          <li><strong>Unmapped card risk hold</strong> — Safety hold for card-funded planned expenses not yet mapped. Second <strong>Why not more?</strong> driver; when fed by Upcoming rows, the bullet exposes the same <strong>[View]</strong> action.</li>
-          <li><strong>Safe to use (Deployable max)</strong> = Total cash − Reserve − Buffer − Near-term hold − Unmapped card risk hold (floored at 0).</li>
-          <li><strong>Cash to use now</strong> — Your planning input.</li>
-          <li><strong>Execute now</strong> = <code>min(Cash to use now, Safe to use)</code>. This is the value the waterfall uses. The legacy $50k monthly cap has been retired — your input is the limit.</li>
-          <li><strong>Future / Conditional Cash (not available yet)</strong> — Variable-income-contingent allocations surfaced below execution totals. Not part of Execute now until income arrives.</li>
-        </ul>
-
-        <h4>Show details — planner mechanics</h4>
-        <p><strong>Show details</strong> expands the full output: cash-bridge audit, allocation audit (month 0), 12-month cash table, yearly projection, forecasts, diagnostics, and raw JSON. Click <strong>Hide details</strong> to collapse back.</p>
-        <ul class="help-list">
-          <li><strong>Cash out vs minimums</strong> — Required cash out uses Cash Flow expense lines. Debt minimums appear as <em>reference only</em> in triggers and JSON; they are <strong>not</strong> double-counted on top of Cash Flow.</li>
-          <li><strong>Income split</strong> — Stable income = <strong>Cisco</strong> (payee contains “Cisco”) plus the fixed recurring rent payees in product rules. Other income is variable; variable inflows use the <strong>50% / 30% / 20%</strong> split (debt / reserve+cash / flexible).</li>
-          <li><strong>Forward months</strong> — After the anchor month, stable income uses trailing medians. Forward <strong>expenses</strong> use a <strong>recurring operating</strong> baseline only: expenses are bucketed (recurring operating / debt cleanup / irregular) and future months sum trailing medians (6 → 3 → 1 non-empty fallback per payee) for <strong>recurring_operating</strong> payees only — not total cash-out. High-volatility credit-card payees go to debt cleanup; taxes, repairs, and similar keywords go to irregular. Variable income in projections defaults to <strong>$0</strong> (conservative).</li>
-          <li><strong>Debt ordering</strong> — Extra principal (after the reserve rule) goes to credit cards by <strong>highest APR first</strong>, then HELOC, Tahoe, San Diego, Missouri, and San Jose last. <strong>Loan Depot - San Jose House</strong> and any debt with APR ≤ <strong>2.25%</strong> get <code>LOW_RATE_KEEP_LAST</code> on the normalized debt row.</li>
-          <li><strong>Role names in the waterfall</strong> — Presentation labels only; math and JSON field names are unchanged.
-            <ul class="help-list">
-              <li><strong>Small balance</strong> → engine’s <em>Cleanup</em> bucket.</li>
-              <li><strong>Focus debt</strong> → <em>Primary</em>.</li>
-              <li><strong>Next debt</strong> → <em>Secondary</em>.</li>
-              <li><strong>Excess</strong> → <em>Overflow</em>.</li>
-            </ul>
-          </li>
-          <li><strong>Confidence</strong> — <code>overall_plan_confidence</code> is a simple rubric (see JSON <code>overall_plan_confidence_rubric</code>); credit-card “spend” without statement-balance tracking is marked <strong>LOW</strong>.</li>
-          <li><strong>Operating vs forecast</strong> — The Standard view is the <em>operating</em> picture (this month’s decision). The 12-month cash table, yearly rows, and next-three-month preview under <strong>Show details</strong> are <strong>forecasts</strong>, not a month-by-month instruction list.</li>
-          <li><strong>Plan status</strong>:
-            <ul class="help-list">
-              <li><code>OK</code> — Core forward model is clean.</li>
-              <li><code>PARTIALLY_VALID</code> — An execution-integrity check failed (cash split vs execution total, missing per-account lines when cash extra is non-zero, or total executable mismatch). Advisory noise does not change status.</li>
-              <li><code>NEEDS_REVIEW</code> — Sheet triggers fire.</li>
-              <li><code>INVALID</code> — Income/expense forward numbers cannot be trusted.</li>
-            </ul>
-          </li>
-          <li><strong>JSON highlights</strong> — <code>this_month_plan</code>, <code>action_decision_box</code>, <code>next_3_month_preview</code>, <code>summary</code> (anchor month as <code>yyyy-MM</code>), <code>key_warnings</code>, <code>next_12_months</code>, <code>yearly_projection</code> (with <code>debt_reduction_vs_prior_year</code> = prior year ending debt minus this year ending), <code>debt_priority</code>, <code>property_watchlist</code>, <code>assumptions</code>, <code>confidence</code>, <code>diagnostics</code> (including <code>expense_baseline</code> irregular flags).</li>
+          <li><strong>Safe to use</strong> is the maximum amount available after protections.</li>
+          <li><strong>Cash to use now</strong> is your chosen amount, capped at the safe limit.</li>
+          <li><strong>Standard payoff</strong> follows the normal priority model.</li>
+          <li><strong>Aggressive payoff</strong> explores faster allocation while keeping the same safety cap.</li>
+          <li><strong>Show details</strong> explains assumptions and forecasts for users who want a deeper review.</li>
         </ul>
       </section>
 
-      <!-- ================================================================ -->
-      <!-- Debt Planner email                                               -->
-      <!-- ================================================================ -->
       <section id="help-debt-email" class="help-section">
-        <h3>Debt Planner email</h3>
-        <p>Running the debt planner may send a short email titled <strong>Debt Planner Update</strong>. It is a quick glance — bill buckets first, then a compact summary (stability, net worth, cash flow, extra-payoff hints). Full definitions live here, not in the email.</p>
-
-        <h4>Who gets the email</h4>
+        <h3>Financial Plan email</h3>
         <ul class="help-list">
-          <li><strong>Both Email fields are used</strong> — the planner sends a single email to <em>every</em> valid address configured in <strong>Setup / Review → Profile</strong>. That means <strong>Email</strong> (primary) <em>and</em> <strong>Spouse Email</strong> when both are filled in; both addresses appear together on the <em>To:</em> line so they get the same copy. Leave Spouse Email blank to send to primary only.</li>
-          <li><strong>Each address is validated</strong> — values are checked against the same regex Profile uses on save. If a field has an obviously invalid value (typo, missing <code>@</code>, etc.) that recipient is dropped silently for safety, and a <strong>planner_email_invalid_recipient</strong> row is logged to <strong>LOG - Activity</strong> naming the field (<em>not</em> the bad value, so a typo can't leak into the audit log). Open Profile, fix it, and the next email will include them.</li>
-          <li><strong>Recipient must be configured</strong> — the planner reads Profile directly. If <em>both</em> Email and Spouse Email are blank, the email is skipped. There is no fallback to your Google account email.</li>
-          <li><strong>Planner summary must be meaningful</strong> — the email is also skipped when the current workbook has nothing substantive to report (for example: no active debts, no assets, no scheduled payments, and no recommendation). Populated workbooks with a valid recipient are unaffected.</li>
-          <li><strong>Where to change the recipients</strong> — open <strong>Setup / Review → Profile → Edit profile</strong> to update <strong>Email</strong> and / or <strong>Spouse Email</strong>; both are stored in <strong>INPUT - Settings</strong>.</li>
-        </ul>
-
-        <h4>When the email is sent (debounce)</h4>
-        <p>To avoid blasting a fresh email after every save during a heavy update session (e.g. month-start, when you might fire 20-50 saves in a row), the planner email is <strong>debounced</strong>:</p>
-        <ul class="help-list">
-          <li><strong>Per-save background runs defer the email.</strong> Saving a debt, bank balance, investment value, house value, quick-add payment, or a house expense still re-runs the planner and refreshes Overview / Rolling Debt Payoff in the background — but it <em>queues</em> the email instead of sending it. Each defer silently bumps an internal counter; <strong>no per-defer Activity row is written</strong>, so a 50-save month-start no longer fills the Activity ledger with redundant <em>Email deferred</em> lines.</li>
-          <li><strong>One email goes out once you've been quiet for ~10 minutes.</strong> A background sweep checks every 5 minutes; if no further saves have arrived in the last 10 minutes, it sends a single email reflecting the latest state and logs a single <strong>planner_email_sent</strong> row showing the recipient count and how many saves were batched — e.g. <em>Email sent to 2 recipients (12 saves batched)</em>. Worst-case latency from your last save is roughly 10–15 minutes. The counter is approximate under rapid concurrent saves (it's telemetry, not money).</li>
-          <li><strong>The "Refresh Financial Plan" button bypasses debounce.</strong> Clicking it explicitly always sends immediately (subject to the validity / meaningfulness checks above) and clears the queued debounce, so you can still force a fresh email at any time.</li>
-          <li><strong>Failure modes are silent and self-healing.</strong> If the time trigger ever gets deleted or fails, the next time you load the dashboard re-installs it; if Activity logging fails for any reason, the planner itself still runs.</li>
-        </ul>
-
-        <h4>What you see</h4>
-        <ul class="help-list">
-          <li><strong>Overdue bills</strong> — Same idea as <strong>Bills → Overdue</strong>: due date is before today and the matching Cash Flow month cell for that cycle does not yet count as having a value. Combines <strong>INPUT - Debts</strong> and <strong>INPUT - Bills</strong>.</li>
-          <li><strong>Pay now</strong> — Scheduled amounts due in the next <strong>7 days</strong> from the run date: <strong>INPUT - Debts</strong> minimums (with the “handled this month” rule below) <strong>plus</strong> dated rows from <strong>INPUT - Bills</strong> whose Cash Flow cell for that cycle is still empty. If the same payee + due date appears as both, the debt line is used once — no double count.</li>
-          <li><strong>Pay soon</strong> — Same combined sources, for due dates <strong>day 8 through day 30</strong> out.</li>
-          <li><strong>Recommended total to pay now</strong> — Appears <em>only when</em> the planner suggests an <strong>extra</strong> payment on top of Pay now minimums. Otherwise, Pay now covers minimums; the summary section still notes the best card target and liquidity when relevant.</li>
-        </ul>
-
-        <h4>“Already paid this month” rule</h4>
-        <ul class="help-list">
-          <li>If the expense row for a debt already has a value in the current month column on Cash Flow (same “handled” rule as Bills), that debt is <strong>omitted</strong> from Pay now / Pay soon for that run.</li>
-          <li>Re-run the planner after updating Cash Flow to refresh the email.</li>
-        </ul>
-
-        <h4>Why it matches the Bills page</h4>
-        <p class="muted">The Bills page uses the same underlying queues. <strong>Next 7 Days</strong> on the web is calendar-based through seven days; <strong>Pay now</strong> in the email uses the same 7-day window from the run date, so counts usually line up.</p>
-      </section>
-
-      <!-- ================================================================ -->
-      <!-- Sheet names                                                      -->
-      <!-- ================================================================ -->
-      <section id="help-sheets" class="help-section">
-        <h3>Advanced sheet reference</h3>
-        <p class="muted">For users who intentionally work in the underlying Google Sheets. You do not need this section for normal dashboard setup.</p>
-
-        <h4>INPUT sheets</h4>
-        <ul class="help-list">
-          <li><strong>INPUT - House Values</strong> — Year blocks with monthly valuations per house.</li>
-          <li><strong>INPUT - Cash Flow {year}</strong> — Monthly columns; Rent payees drive rental income.</li>
-          <li><strong>INPUT - Bills</strong> — Dated bills (category, autopay, varies, payment source, etc.). Drives most Bills cards.</li>
-          <li><strong>INPUT - Upcoming Expenses</strong> — Planned expenses. Edited from <strong>Cash Flow → Upcoming</strong>.</li>
-          <li><strong>INPUT - Debts</strong> — Loan accounts; minimums can surface on the Bills page.</li>
-          <li><strong>INPUT - Donation</strong> — Charitable giving log organized by tax-year blocks. Added from <strong>Cash Flow → Donations</strong>.</li>
-          <li><strong>INPUT - Bank Accounts</strong> — Per-year balance blocks. Written by <strong>Assets → Bank Accounts</strong>.</li>
-          <li><strong>INPUT - Investments</strong> — Per-year balance blocks for investment accounts (Account Name, Type, Active, Jan..Dec, totals / delta). Canonical active/inactive state for investments. Written by <strong>Assets → Investments</strong>.</li>
-        </ul>
-
-        <h4>SYS sheets</h4>
-        <ul class="help-list">
-          <li><strong>SYS - House Assets</strong> — One row per property: House, Type, Loan Amount Left, Current Value, Active.</li>
-          <li><strong>SYS - Accounts</strong> — Liquid accounts with use-policy flags; feeds the Safe-to-use liquidity model.</li>
-          <li><strong>SYS - Assets</strong> — One row per investment account: Account Name, Type, Current Balance, Active. Mirrors the latest current-year value from <strong>INPUT - Investments</strong>.</li>
-        </ul>
-
-        <h4>HOUSES sheets</h4>
-        <ul class="help-list">
-          <li><strong>HOUSES - {House}</strong> — Expense detail per property. Name should match the SYS house for rollups. Created automatically by <strong>Assets → House Values → Add new</strong> with canonical headers (<em>Item, Type, Date, Location, Cost, Service Fees Paid, Insurance covered, Payments Links, Notes</em>) and column widths copied from an existing HOUSES sheet.</li>
-        </ul>
-
-        <h4>Output &amp; audit</h4>
-        <ul class="help-list">
-          <li><strong>OUT - History</strong> — Planner run snapshots (cash, debt, net worth).</li>
-          <li><strong>LOG - Activity</strong> — Audit log for <strong>quick_pay</strong>, bill skip / autopay / add / deactivate, house expense, donation, upcoming actions, bank account add, house add / deactivate, and investment add / deactivate. Filter, sort, paginate, and remove (Donation-only) mistaken rows from the Activity page.</li>
+          <li>Email recipients come from the primary and spouse/partner email fields in your Profile.</li>
+          <li>If both email fields are blank, no message is sent.</li>
+          <li>Background saves group changes together to avoid repeated messages.</li>
+          <li><strong>Refresh Financial Plan</strong> requests an immediate current result.</li>
+          <li>The email summarizes urgent bills, upcoming obligations, cash flow, and payoff guidance. Use CashCompass for the full explanation.</li>
         </ul>
       </section>
     </div>

@@ -385,7 +385,7 @@
     <select id="bank_add_type">
       <option value="">— Select type —</option>
     </select>
-    <div class="muted" style="margin-top:4px;font-size:12px;">Choose from existing bank account types in SYS - Accounts.</div>
+    <div class="muted" style="margin-top:4px;font-size:12px;">Choose from bank account types already used in CashCompass.</div>
 
     <label>Use policy</label>
     <input type="text" id="bank_add_policy" maxlength="120" list="bank_add_policy_list" autocomplete="off">
@@ -435,7 +435,7 @@
     <div class="info">
       <div><strong>Selected month:</strong> <span id="inv_selectedMonth" class="muted">—</span></div>
       <div><strong>Stored value for selected month:</strong> <span id="inv_selectedMonthValue" class="muted">—</span></div>
-      <div><strong>Current SYS - Assets balance:</strong> <span id="inv_currentBalance" class="muted">—</span></div>
+      <div><strong>Current investment balance:</strong> <span id="inv_currentBalance" class="muted">—</span></div>
       <div><strong>Type:</strong> <span id="inv_type" class="muted">—</span></div>
       <div class="house-value-delta-sep" aria-hidden="true"></div>
       <div class="house-value-delta-row"><strong>Change vs prior month:</strong> <span id="inv_deltaPriorMonth" class="muted">—</span></div>
@@ -459,7 +459,7 @@
     <select id="inv_add_type">
       <option value="">— Select type —</option>
     </select>
-    <div class="muted" style="margin-top:4px;font-size:12px;">Choose from existing investment types in SYS - Assets.</div>
+    <div class="muted" style="margin-top:4px;font-size:12px;">Choose from investment types already used in CashCompass.</div>
 
     <label>Starting value (optional)</label>
     <input type="text" id="inv_add_starting_value" inputmode="decimal" onfocus="currencyFocus('inv_add_starting_value')" onblur="currencyBlur('inv_add_starting_value')">
@@ -500,10 +500,10 @@
   </div>
 
   <div class="info">
-    <div><strong>Sheet:</strong> <span id="pay_sheetName" class="muted">—</span></div>
+    <div><strong>Cash Flow period:</strong> <span id="pay_sheetName" class="muted">—</span></div>
     <div><strong>Month:</strong> <span id="pay_monthName" class="muted">—</span></div>
-    <div><strong>Current value in cell:</strong> <span id="pay_currentValue" class="muted">—</span></div>
-    <div><strong>Existing row:</strong> <span id="pay_rowExists" class="muted">—</span></div>
+    <div><strong>Amount already recorded:</strong> <span id="pay_currentValue" class="muted">—</span></div>
+    <div><strong>Existing entry:</strong> <span id="pay_rowExists" class="muted">—</span></div>
     <div class="house-value-delta-sep" aria-hidden="true"></div>
     <div class="house-value-delta-row"><strong>Previous month (<span id="pay_priorMonthLabel">—</span>):</strong> <span id="pay_priorMonthPayment" class="muted">—</span></div>
   </div>
@@ -530,8 +530,22 @@ function showTab(name) {
 
 function setStatus(id, msg, isError) {
   const el = document.getElementById(id);
-  el.textContent = msg || '';
+  el.textContent = isError ? customerSafeErrorMessage_(msg) : (msg || '');
   el.className = isError ? 'status error' : 'status';
+}
+
+function customerSafeErrorMessage_(value, fallback) {
+  const raw = String(value == null ? '' : value).trim();
+  const safeFallback = fallback ||
+    'CashCompass could not complete that action right now. Please refresh and try again.';
+  if (!raw) return safeFallback;
+  if (/(?:INPUT|SYS|OUT|LOG)\s*-|Missing sheet|required column|header row|schema|Exception:|TypeError:|ReferenceError:|\bat .*\.js:\d+/i.test(raw)) {
+    if (window.console && typeof window.console.error === 'function') {
+      window.console.error('[CashCompass detail]', raw);
+    }
+    return safeFallback;
+  }
+  return raw.replace(/^Exception:\s*/i, '');
 }
 
 function setStatusLoading(id, label) {
@@ -1276,8 +1290,7 @@ function stopTrackingBank() {
   const confirmed = window.confirm(
     'Stop tracking "' + account + '"?\n\n' +
     'The account will no longer appear in the Bank Account selector. ' +
-    'All history in INPUT - Bank Accounts and the SYS - Accounts row stay in ' +
-    'place. You can still view past values for reporting.'
+    'Your past balances remain available for reporting.'
   );
   if (!confirmed) return;
 
@@ -1590,8 +1603,7 @@ function stopTrackingInvestment() {
   const confirmed = window.confirm(
     'Stop tracking "' + account + '"?\n\n' +
     'The account will no longer appear in the Investment Account selector. ' +
-    'All history in INPUT - Investments and the SYS - Assets row stay in ' +
-    'place. You can still view past values for reporting.'
+    'Your past values remain available for reporting.'
   );
   if (!confirmed) return;
 
