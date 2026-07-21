@@ -22,7 +22,7 @@ Only items that are refined, structured, and prioritized should be promoted to `
 - **Performance:** **Bills Due performance optimization (~51s → ~5.6s)** (per-request Cash Flow row-map + Activity Log dedupe caching).
 - **Recurrence Engine V2 — Weekday & Biweekly scheduling (✅ shipped 2026-07-09):** pure recurrence refactor (`buildRuleFromBillRow_` + `generateOccurrences_` seam) · **Weekly weekday** scheduling · **Biweekly weekday** anchor-driven 14-day cadence · **Weekday UI** · **Anchor Date** (schema + UI + validation, no silent correction) · **Schedule Effective Date** (prospective-only schedule changes) · **AutoPay concurrency hardening** (`LockService`) · **Bills schema evolution** (Weekday / Anchor Date / Schedule Effective Date columns + self-heal + formatting parity). Runtime validated (Laith, Lutfi, M1, Robinhood, San Jose House Cleaning). Legacy Weekly/Biweekly/Monthly behavior preserved.
 
-The **only remaining P0 recovery-validation path** is MEDIUM automatic adoption with `CENTRAL_AUTO_ADOPT=true`. Read-only Orphan detection is a separate P1 follow-up. The remaining Financial Integrity work is also tracked in Stage 3. (**Admin Diagnostics is authoritative** if the Script Properties UI lags.)
+**Recovery Validation 6F is complete.** The full P0 matrix passed 2026-07-20, all recovery flags are OFF, and the disposable fixture gate was removed. Read-only Orphan detection is a separate P1 follow-up.
 
 The V1 trust baseline (blank-workbook stability, no fake states, gated planner email, UI copy consistency pass) and the V1.1 retirement profile integration remain the stable foundation. The **change discipline still applies to every edit** (`WORKING_RULES.md → Current phase` + `→ Central App Transition Rules`): one issue at a time, minimal / localized / safe diff, blank + populated workbook manual test steps. See `SESSION_NOTES.md → Current State — Post V1.2 Prep` for the chronological record.
 
@@ -112,7 +112,7 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 
 > **Validator Phase 2 foundation (shipped 2026-07-13; remaining scope follows P0).** Provisioning, Workbook Drift, and Schema Evolution V1 are implemented, along with Test Harness Foundation V1 and the Validation & Testing console V1. The Validator remains read-only: it validates provisioning and never performs it. Remaining P1 scope includes Formula, Conditional-Formatting, and Named-Range validation; the aggregate Workbook Health report; scenario packs; and the Release Readiness gate. Full milestone detail lives in `VALIDATOR_ARCHITECTURE.md §10`, `TEST_HARNESS_ARCHITECTURE.md`, and `VALIDATION_TESTING_CONSOLE.md`.
 
-**D. Recovery completion — final auto-adopt-ON validation** *(Beta-Gate workstream · execution item #3 — gates Family Beta)*
+**D. Recovery completion — ✅ P0 complete 2026-07-20**
 
 > **Implementation specification:** `CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md` is the **ratified Version 1 Recovery Architecture** (decision tree, unconditional candidate detection, `CENTRAL_AUTO_ADOPT` repurposed to MEDIUM/name-only auto-adopt vs prompt, failure branches → Unavailable, testing matrix). All items in this section are implemented against that document. Core rule: *recovery must never create silent duplicates.*
 
@@ -120,13 +120,13 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 |---|---|---|---|
 | Auto-Adopt validation (`CENTRAL_AUTO_ADOPT=true`, disposable account) | P0 | Disposable account | S |
 | Ambiguous validation (≥2 candidates → `AmbiguousWorkbookError`) | P0 | Auto-Adopt pass | S |
-| Name-only confirmation/adoption validation (MEDIUM-confidence single candidate; OFF-confirm + ON-auto paths) | P0 | Disposable account | S |
+| Name-only confirmation/adoption validation (MEDIUM-confidence single candidate; OFF-confirm + ON-auto paths) | ✅ Complete | Disposable account | — |
 | Orphan validation (`ORPHANS_PRESENT` surfaced + cleanup doc) | P1 | Auto-Adopt pass | XS–S |
 | **Provision-after-recovery duplicate guard** — unconditional candidate detection before create/recovery; safe stop on ambiguity/search/verify failure; HIGH relink and MEDIUM confirmation *(implemented 2026-07-16; HIGH-marker clear/relink + bounded isolation runtime-validated 2026-07-17; remaining matrix pending)* | P0 | Remaining disposable recovery matrix | S–M |
 
-> **Recovery/adoption defect (discovered 2026-07-07; P0 fix implemented 2026-07-16).** Clearing a stale mapping could provision a second workbook. Candidate detection is now unconditional and only confirmed zero can create. Runtime validation passed for confirmed-zero, HIGH/OFF, MEDIUM-confirm/OFF, ambiguity, search/verify failure, stale variants, and cross-user isolation. MEDIUM auto-adopt ON remains open.
+> **Recovery/adoption defect (closed 2026-07-20).** Candidate detection is unconditional and only confirmed zero can create. The full runtime matrix passed, including MEDIUM auto-adopt ON; no tested branch created a duplicate.
 
-> **P0/P1 disposition (updated 2026-07-20).** P0 now has one open recovery row: MEDIUM auto-adopt ON. Read-only Orphan detection remains P1 and does not block P0 closure. Recovery flags stay OFF outside isolated validation.
+> **P0/P1 disposition (2026-07-20).** P0 recovery is complete. Read-only Orphan detection remains P1. Recovery flags are OFF and `RECOVERY_6F_TEST_EMAIL` is removed.
 
 **E. Workbook / UX polish** *(Beta-Gate workstream · execution item #6 / Family Beta polish — loading, empty-states, consistency, onboarding; opportunistic — see `## UX Backlog (Version 1)`)*
 
@@ -222,7 +222,7 @@ This queue records the July 9 plan and is **not the current ordering authority**
 
 1. **Bills Due Pay runtime validation** — the occurrence bridge is committed (`fdf4a30`); natural runtime evidence remains pending. Commit only if that validation produces a documentation or code change. *(Evidence gap; XS)*
 2. **Investments cleanup** — the recorded local WIP is no longer current; Investments convergence was committed (`85fafc3`, with later related convergence commits). Any remaining runtime or footer work must be re-established from current evidence before planning. *(Remaining scope: UNKNOWN)*
-3. **Recovery completion** — validate the final MEDIUM auto-adopt-ON row on the disposable account, then restore the flag OFF. Read-only Orphan detection follows in P1. *(P0; XS)*
+3. **Recovery completion** — ✅ P0 complete; read-only Orphan detection follows in P1.
 4. **Validator / Test Harness / Release Readiness** — the Phase 2 foundation, Test Harness Foundation V1, and Validation & Testing console V1 shipped 2026-07-13. Remaining modules, scenario packs, and the aggregate release gate follow P0 under current `ROADMAP.md` sequencing.
 5. **Golden Workbook polish** — a newly provisioned workbook must **converge toward the Golden Workbook** (the **visual source of truth**) until **visually indistinguishable from production** (styling, widths, freezes, conditional formats, number formats, totals, notes, filters, sheet order; Cash Flow / Investments / House Values / Retirement). A **convergence project, not a redesign.** First audit complete (2026-07-06, ten core sheets across four design families). *(P0/P1; L)*
 6. **Family Beta polish** — Workbook / UX polish sweep (onboarding, empty-states, loading-experience consistency, messaging, Help/content cleanup — see `## UX Backlog (Version 1)`), Beta Gate assembly, release-readiness review, Stage 4 go/no-go.
@@ -259,7 +259,7 @@ Before broader beta, **every release must pass** the following before deployment
 - **Golden Workbook Convergence** — freshly provisioned workbook is visually convergent with the Golden/Canonical Workbook for the core sheets. *(First audit complete; **Validator-driven engineering convergence complete for the Operational / Financial Ledger / SYS / Special families incl. Cash Flow, 2026-07-12** — remaining diffs are KeepCentral/ProductDecision/IgnoreNoise; convergence passes remaining for Investments / House Values / Retirement + the unaudited sheets. See `VALIDATOR_ARCHITECTURE.md`.)*
 - **Financial Integrity** — Dashboard / Planner / active source-sheet totals reconcile within $0.01. *(Audit Framework + Debt Audit shipped; canonical basis + Planner/Dashboard/Rolling convergence + Asset/Planner/Dashboard audit modules remaining — Phase 3.)*
 - **Validator / Test Harness / Release Readiness** — required automated evidence passes. *(Validator Phase 1 and the Phase 2 Provisioning/Drift/Schema Evolution foundation are complete; Test Harness Foundation V1 and the Validation & Testing console V1 are shipped. Remaining validation modules, scenario packs, and the aggregate Release Readiness gate are planned. See `VALIDATOR_ARCHITECTURE.md`.)*
-- **Recovery Validation** — all P0 branches except MEDIUM auto-adopt ON validated; read-only Orphan detection remains P1.
+- **Recovery Validation** — ✅ full P0 matrix validated; read-only Orphan detection remains P1.
 - **Runtime regression checklist** — core workflows + edge cases verified. *(Interim manual evidence remains required until the planned automated coverage and aggregate Release Readiness gate are complete.)*
 
 This gate is the release-readiness target for **Stage 3 (Beta Readiness, current)**.
@@ -405,11 +405,11 @@ Explicit, admin-driven and self-service repair built on 2A's evidence. This is t
 
 - **6A — Workbook Identity & Recovery design** *(✅ complete)* — identity-marker model (primary Drive `appProperties`, secondary in-workbook `SYS - Meta`, Script-Properties reverse index), adopt-before-create decision tree + confidence/safety rules, recovery UX, admin-repair safeguards + audit logging, and existing-workbook migration strategy.
 - **6B — Workbook Identity Markers** *(✅ complete)* — durable identity markers stamped at create + lazy backfill on mapped-open, reverse index (`wbid::<spreadsheetId> → user`), hidden `SYS - Meta` marker sheet, and read-only admin marker diagnostics. **No provisioning/resolution behavior change.**
-- **6C.1 — Adopt-Before-Create / duplicate guard** *(✅ implemented; all runtime rows except MEDIUM auto-adopt ON validated)* — no-mapping and stale-mapping resolution always search under the user lock. Confirmed zero is the only create path; HIGH relinks; MEDIUM confirms while OFF or auto-relinks while ON; ambiguity and search/verify failures stop safely.
+- **6C.1 — Adopt-Before-Create / duplicate guard** *(✅ implemented + fully runtime-validated)* — no-mapping and stale-mapping resolution always search under the user lock. Confirmed zero is the only create path; HIGH relinks; MEDIUM confirms while OFF or auto-relinks while ON; ambiguity and search/verify failures stop safely.
 - **6D.1 — Recovery Page** *(✅ implemented; real-failure render validated 2026-06-11)* — calm screen for confirm / stale / ambiguous / unavailable resolution failures, routed from the startup gate instead of a raw error. No raw IDs or internal errors. Functions: `buildRecoveryRouting_`, `showRecoveryPage` / `recoveryReload`, `#page_recovery`.
 - **6D.2a — Reconnect / confirm** *(✅ implemented; reconnect validated end-to-end 2026-06-11)* — self-scoped, user-initiated relink to a single existing candidate (reuses `relinkSingleCandidate_`); ambiguous/none/error handled in UI; no Drive create. `CENTRAL_RECOVERY_ACTIONS` controls optional action visibility on general recovery pages; the MEDIUM/name-only confirmation path is available regardless. Functions: `isRecoveryActionsEnabled_`, `recoveryReconnectSelf`, client `recoveryReconnect`.
 - **6E.1 — Admin Inspect + Clear Mapping** *(✅ implemented; flag `CENTRAL_ADMIN_REPAIR`, default OFF; **validated end-to-end 2026-07-02** — Inspect/preview/reverse-index/confirm UI work **and executed clear runtime-validated**: mapping removal + reverse-index removal + repair audit history + bootstrap reprovision after clear)* — admin-gated read-only `adminInspectUser` (full for self, mapping-only for others — `drive.file` scope limits cross-user Drive reads) + guarded, audited `adminClearMapping` (deletes mapping + reverse-index property only; **no Drive writes, no file deletion**). Bounded admin audit ring buffer (`appendAdminAudit_` / `adminGetAuditLog`, hashed/truncated). Functions in `central_diagnostics.js` + `clearReverseIndexForWorkbook_` in `central_provisioning.js`.
-- **6F — Recovery Validation** *(current; P0 nearly closed + P1 orphan detection)* — healthy load, real stale-page routing, executed Reconnect, executed Admin Clear, HIGH relink, confirmed-zero create, MEDIUM explicit confirmation with auto-adopt OFF, ambiguity, search/verification failure, stale invalid-ID/Trash variants, and cross-user isolation are runtime-validated. The guarded disposable-account `?view=recovery-test` surface supplied the otherwise unreachable MEDIUM/ambiguous/failure states. **Only remaining P0 row: MEDIUM automatic adoption with `CENTRAL_AUTO_ADOPT=true`.** Recovery flags were restored OFF after the pass. Read-only Orphan detection remains P1 and does not block P0 closure. See `## Open testing inventory`.
+- **6F — Recovery Validation** *(✅ P0 complete 2026-07-20)* — full matrix passed, including MEDIUM automatic adoption with auto-adopt ON. Final cleanup soft-trashed the fixture, cleared mapping/reverse index, returned candidate count to zero, restored all recovery flags OFF, and removed the fixture email gate. Read-only Orphan detection remains P1.
 - **6D.2b — Create New Workbook** *(remaining, P1; designed, not implemented)* — self-service "start fresh" recovery action; separate flag, explicit confirm, duplicate-avoidance-first, self-scoped.
 - **6E.2 — Admin Set Mapping** *(remaining, P2; designed, not implemented)* — guarded admin remap to an admin-supplied spreadsheet ID (preview-before-write, audited). Future admin tooling also: `adminAdoptWorkbook`, `adminTrashOrphan` (soft delete only, id-in-hand, never bulk) + family-beta rollout checklist.
 
@@ -485,7 +485,7 @@ Historical ranked detail retained for traceability. It does not override the cur
 
 1. **Bills Due Pay runtime validation** — bridge committed (`fdf4a30`); natural runtime evidence remains pending. *(Evidence gap; XS)*
 2. **Investments cleanup** — prior WIP was committed (`85fafc3`, with later related convergence commits); remaining scope is UNKNOWN until re-established.
-3. **Recovery completion** *(6F)* — final MEDIUM auto-adopt-ON runtime row, then flags OFF; read-only Orphan detection follows in P1.
+3. **Recovery completion** *(6F)* — ✅ P0 complete; read-only Orphan detection follows in P1.
 4. **Validator / Test Harness / Release Readiness** — Phase 2 foundation, Test Harness Foundation V1, and console V1 shipped 2026-07-13; remaining automated coverage and release-gate work follows P0 under `ROADMAP.md`.
 5. **Golden Workbook polish (Convergence)** — newly provisioned workbook converges toward the Golden Workbook (visual source of truth) until visually indistinguishable from production (Cash Flow / Investments / House Values / Retirement + all visual attributes). First audit complete (2026-07-06). *(P0/P1, L — convergence, not redesign)*
 6. **Family Beta polish** — Workbook / UX polish sweep (loading-experience consistency, empty-state standardization, UX consistency, onboarding — see `## UX Backlog (Version 1)`) + Beta Gate assembly + go/no-go. *(P2)*
@@ -529,7 +529,7 @@ Central-project **script properties** (`PropertiesService`), read at runtime, **
 
 **Reconnect validation (2026-06-11):** with `CENTRAL_RECOVERY_ACTIONS=true`, a real stale mapping (invalid workbook ID) rendered the recovery page and blocked the dashboard; **Reconnect executed and the dashboard reloaded** (reconnect reload bug fixed). An empty orphan workbook (same name; only `Sheet1` + `INPUT - Settings`; no data) was found and trashed. **Admin Diagnostics is the authoritative validation surface** — the Script Properties UI may lag runtime mapping changes during testing.
 
-**Executed Admin Clear validation (2026-07-02):** executed clear, mapping/reverse-index removal, audit entry, bootstrap reprovision, Welcome/empty-state, Financial Integrity `NOT_INITIALIZED`, and admin routing all passed. The later 2026-07-20 pass closed ambiguity and MEDIUM confirmation/OFF. Only MEDIUM auto-adopt ON remains P0; read-only Orphan detection remains P1.
+**Recovery validation closure (2026-07-20):** Admin Clear and every duplicate-prevention branch passed, including MEDIUM auto-adopt ON. Read-only Orphan detection remains P1.
 
 - Independent of `CENTRAL_MODE`, `FAMILY_BETA_ALLOWLIST`, and `ADMIN_EMAILS`.
 - The **Recovery Page (6D.1)** is **not** flag-gated — it always replaces a raw error with a friendly screen; only the Reconnect action on it is gated.
@@ -539,7 +539,7 @@ Central-project **script properties** (`PropertiesService`), read at runtime, **
 
 ## Open testing inventory
 
-Prior passes validated healthy mapped load, the recovery page, executed reconnect, disabled admin repair, executed Admin Clear, and the HIGH-marker clear/relink path across two accounts. The 2026-07-20 disposable-account pass additionally validated confirmed-zero create, MEDIUM explicit confirmation with auto-adopt OFF, ambiguity, search/verification failure, stale invalid-ID/Trash variants, and cross-user isolation; no tested failure branch created a duplicate. **Only MEDIUM automatic adoption with `CENTRAL_AUTO_ADOPT=true` remains open in P0.** Recovery flags were restored OFF. Read-only Orphan detection remains a separate P1 follow-up. Authoritative copy: `PROJECT_CONTEXT.md → Recovery Validation Inventory`.
+The full P0 recovery matrix is validated. The final MEDIUM auto-adopt-ON run silently relinked the exact single candidate, created no duplicate, and reached Welcome. Cleanup returned mapping/candidate count to zero, restored all recovery flags OFF, and removed `RECOVERY_6F_TEST_EMAIL`. Read-only Orphan detection remains P1.
 
 ### Recovery Validation Progress (2026-06-24)
 
@@ -622,10 +622,10 @@ Latest 6F pass — Admin Diagnostics + inspection + feature-flag enforcement re-
 | P0 duplicate-prevention decision tree | — | High | Local tests PASS; Apps Script scenario 7/7 + Recovery suite 1/1 PASS; confirmed-zero, HIGH/OFF, MEDIUM-confirm/OFF, ambiguity, failure, stale, and cross-user runtime rows PASS. |
 | Auto-Adopt with flag ON (6C.1) | `CENTRAL_AUTO_ADOPT` | High | Not tested (flag OFF during validation) → 6F, isolated, disposable account. |
 | Ambiguous recovery (≥2 → `AmbiguousWorkbookError`) | — | Medium | Runtime-validated 2026-07-20 — no auto-pick and no create. |
-| Name-only confirm/adopt (MEDIUM-confidence single candidate) | `CENTRAL_AUTO_ADOPT` | Medium | OFF-confirm runtime path PASS; ON-auto remains pending. |
+| Name-only confirm/adopt (MEDIUM-confidence single candidate) | `CENTRAL_AUTO_ADOPT` | Medium | OFF-confirm + ON-auto runtime PASS; flag restored OFF. |
 | Orphan workbook detection (`ORPHANS_PRESENT`) | — | Low | Not exercised end-to-end; P1 follow-up after the P0 6F matrix; surfacing-only, manual cleanup; does not block P0 closure. |
 
-**6F — remaining validation:** on the same isolated disposable Central account, validate one MEDIUM/name-only candidate with `CENTRAL_AUTO_ADOPT=true`, confirm automatic relink to that exact candidate and no create, then restore `CENTRAL_AUTO_ADOPT=false`. All other P0 matrix rows passed 2026-07-20. Read-only Orphan detection is a separate P1 follow-up and is not a P0 exit criterion. No production/bounded workbook is involved.
+**6F — COMPLETE:** full P0 matrix passed on the isolated disposable Central account. Read-only Orphan detection is a separate P1 follow-up.
 
 ---
 

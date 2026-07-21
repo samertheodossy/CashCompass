@@ -13,15 +13,15 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
   - **Bank Accounts parity** — Phase 3.2a Total Accounts row + Phase 3.2b Delta row.
   - **Add-New dropdown fix** — Bank Accounts / Debts Type dropdowns now merge canonical + server-provided options (no longer collapse after an add).
   - **Identity markers** — Phase 6A Workbook Identity & Recovery design + Phase 6B Workbook Identity Markers (durable identity markers + reverse index + `SYS - Meta`, with admin marker diagnostics; no provisioning/resolution behavior change).
-  - **Recovery stack:** Phase 6C.1 Adopt-Before-Create, Phase 6D.1 Recovery Page, Phase 6D.2a Reconnect, Phase 6E.1 Admin Inspect + Clear Mapping. Healthy-path, Reconnect, Admin Clear, and HIGH-marker recovery were validated before the 2026-07-20 disposable-account decision-tree pass. That pass validated confirmed-zero create, MEDIUM explicit confirmation with auto-adopt OFF, ambiguity, search/verification failure, stale invalid-ID/Trash variants, and cross-user isolation; no tested failure branch created a duplicate, and recovery flags were restored OFF. **Only MEDIUM automatic adoption with `CENTRAL_AUTO_ADOPT=true` remains open in P0.** Read-only orphan detection remains P1.
+  - **Recovery stack / 6F:** P0 Recovery Validation complete 2026-07-20. Healthy load, Reconnect, Admin Clear, confirmed-zero create, HIGH/OFF relink, MEDIUM confirmation/OFF, MEDIUM automatic adoption/ON, ambiguity, search/verification failure, stale invalid-ID/Trash variants, and cross-user isolation all passed. No tested failure branch created a duplicate. All recovery flags are OFF and `RECOVERY_6F_TEST_EMAIL` was removed. Read-only orphan detection remains P1.
   - **Bills Due recurrence overhaul (2026-06-12, shipped + family-beta validated):** Weekly/Biweekly bills now use **true occurrence expansion** (individual occurrences at their normal per-occurrence amount on the Due Day anchor + 7/14-day steps; the rejected monthly-burden averaging was reverted), with **per-occurrence autopay accumulation/dedupe** into the single monthly Cash Flow cell (manual-protection preserved). **Skip suppression for expanded recurrence completed** — `skipDashboardBill` now logs the `bill_skip` event regardless of cell state (the `$0` write stays blank-guarded), so a skipped Weekly/Biweekly occurrence clears and stays gone while future occurrences remain. **AutoPay + overdue visual indicators completed** — gold ⭐ star on AutoPay cards, light-red styling on overdue cards. **Weekday-aware recurrence is now shipped** — see **Recurrence Engine V2 (Weekday & Biweekly scheduling, 2026-07-09)**: true Weekly weekday + Biweekly `Anchor Date` cadence, `Weekday`/`Anchor Date`/`Schedule Effective Date` columns, prospective-only schedule changes, AutoPay `LockService` hardening; legacy Due Day behavior preserved when the fields are blank.
   - **Manage Debts (2026-06-15/16, shipped + runtime-validated):** A user-friendly debt-maintenance experience under Planning → Debts (mirrors Manage Bills) so users don't hand-edit the protected `INPUT - Debts` sheet. **Phase 1** — `[Update] [Add new] [Manage Debts]` toggle; sortable debt table; inline multi-field **Edit** (Type / Balance / Due Date / Credit Limit / Credit Left / Minimum Payment / Interest Rate; Account Name read-only; Acct PCT Avail recalculated server-side; one consolidated `debt_update` log); **Stop tracking** reuses `deactivateDebtFromDashboard`. **Phase 1.5 — Rename Debt** — a separate Rename modal performs a coordinated, lock-guarded rename of the `INPUT - Debts` row **and** the matching `Type = Expense` Payee cell across **all** `INPUT - Cash Flow YYYY` sheets (Payee cell only; month values/formulas untouched), with stale-row protection, **duplicate-name protection** (active + inactive, case-insensitive → *"Another debt account already uses this name. Rename was not completed."*), a TOTAL-DEBT/reserved guard, one `debt_rename` Activity Log row (no history rewrite), and best-effort revert on partial failure. No schema changes. **Merge Debt Accounts** is documented as a separate **future** enhancement (deliberately distinct from block-on-duplicate Rename).
 - **Completed this stage (Stage 2 — Product Hardening, 2026-07-02):**
   - **Recovery (destructive/admin paths):** executed **Admin Clear** + mapping removal + reverse-index removal + repair audit history + bootstrap reprovision + Welcome routing + dashboard empty-state + recovery routing + Reconnect + **Central admin validation** + **`ADMIN_EMAILS` validation**. *(Recovery validation completed today.)*
   - **Financial Integrity (foundation):** **Audit Framework** (read-only, admin-gated) + **Debt Audit** + **shared debt Active helper (Phase 2)** + **`NOT_INITIALIZED`** state.
   - **Performance:** **Bills Due performance optimization (~51s → ~5.6s)** (per-request Cash Flow row-map + Activity Log dedupe caching).
-- **Current focus — P0 Project Stabilization (2026-07-20):** the known P0 ProductDecision inventory is resolved, the static Tier-2 Central resolver sweep is closed, and Recovery Validation 6F has runtime evidence for every duplicate-prevention branch except **MEDIUM automatic adoption with `CENTRAL_AUTO_ADOPT=true`**. Keep that flag OFF until the final isolated row passes. The broader beta-readiness evidence review also remains. Bills Due → Pay is committed (`fdf4a30`) with natural runtime evidence pending.
-- **Status snapshot (2026-07-20):** Central Architecture ~96%+; Recovery Architecture implemented with all P0 runtime branches validated except MEDIUM auto-adopt ON (read-only Orphan detection remains P1); **Financial Integrity foundation shipped** (Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`; Phase 3 convergence remaining); **Recurrence Engine V2 shipped + runtime-validated**; **Bills Due → Pay occurrence bridge committed** (natural runtime evidence pending); **Golden/Canonical convergence closed for the audited Operational / Financial Ledger / SYS / Special families**; and **Validator Phase 2 foundation + Test Harness Foundation V1 + Validation & Testing console V1 shipped**. Still open: final Recovery 6F auto-adopt-ON evidence, broader P0 stabilization/beta-readiness evidence, unaudited/UNKNOWN convergence scope, Formula/Conditional-Formatting/Named-Range validation, aggregate Workbook Health, scenario packs, Release Readiness, and Financial Integrity Phase 3.
+- **Current focus — P0 Project Stabilization (2026-07-20):** ProductDecision inventory, static Tier-2 Central resolver verification, and Recovery Validation 6F are closed. The broader beta-readiness evidence review remains. Bills Due → Pay is committed (`fdf4a30`) with natural runtime evidence pending.
+- **Status snapshot (2026-07-20):** Central Architecture ~96%+; Recovery Architecture implemented and P0 Recovery Validation complete (read-only Orphan detection remains P1); Financial Integrity foundation, Recurrence Engine V2, audited Golden/Canonical convergence, Validator Phase 2 foundation, Test Harness Foundation V1, and the Validation & Testing console are shipped. Remaining work is broader beta-readiness evidence plus the planned P1/P2 roadmap.
 - **Validation-surface note:** the Apps Script **Script Properties UI may not immediately reflect runtime mapping changes during active testing**; **Admin Diagnostics is the authoritative validation surface** for mapping/reverse-index state.
 - **✅ Milestone complete — Validator-driven Golden/Canonical convergence (2026-07-12).** Completed and closed:
   - **Validator Phase 1** — read-only Golden↔Central formatting parity + recommendation engine + scoped family runners (`VALIDATOR_ARCHITECTURE.md`).
@@ -43,7 +43,7 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
   ```
 
   KeepCentral / ProductDecision / IgnoreNoise are recorded and deferred, not "fixed." See `ENGINEERING_STANDARDS.md → Milestone discipline` and `VALIDATOR_ARCHITECTURE.md → §1a Recommendation engine`.
-- **Next milestones (see `ROADMAP.md` — the authoritative P0–P4 priority stack):** immediate priority is **Project stabilization** (P0 — final Recovery 6F MEDIUM auto-adopt-ON row + beta-readiness evidence; the other recovery matrix rows, known ProductDecision inventory, and static Central resolver sweep are closed); the next **engineering** milestone is the remainder of **Validator Phase 2**; the next **product-model** milestone is **House Financial Accuracy**.
+- **Next milestones:** Recovery 6F is closed. Finish the remaining P0 beta-readiness evidence review, then proceed to the remainder of Validator Phase 2 (P1) and House Financial Accuracy (P2) per `ROADMAP.md`.
 - **Future:** External beta readiness / hardening, family-beta expansion + user-lifecycle handling, Chat Assistant, Paid Product framework.
 
 Roadmap: `## Launch Readiness Roadmap (high-level)` below (detail in `TODO.md → Launch Readiness Roadmap`). Live architecture: `## Current architecture — Central App (live)` below. Workbook recovery summary: `## Workbook Identity & Recovery (live + roadmap)` below.
@@ -130,7 +130,7 @@ Dashboard, planner, assets, properties, cash flow, bills, debts, income, activit
 Central App operational and runtime-validated — per-user provisioning, workbook mapping, resolver routing, and allow-list gating are live; the bound / production workbook stays protected.
 
 - User-facing Tier-2 resolver sweep ✅ closed by source inspection 2026-07-20; retained direct calls are bound/dev/safety-only
-- Recovery Validation 6F has one remaining P0 runtime row: MEDIUM automatic adoption with `CENTRAL_AUTO_ADOPT=true`
+- Recovery Validation 6F ✅ complete 2026-07-20; read-only Orphan detection remains P1
 - Bound deployment cleanup / manifest revert once central is primary
 - Optional optimization
 
@@ -142,11 +142,11 @@ Read-only, admin-gated **Audit Framework** + **Debt Audit** + **shared debt Acti
 - Planner / Dashboard / Rolling Debt convergence to $0.01
 - Asset audit · Planner audit · Dashboard audit modules
 
-### Workbook Identity & Recovery — implemented · one P0 runtime row open
+### Workbook Identity & Recovery — implemented · P0 validation complete
 
 Identity markers + reverse index + the recovery stack (adopt-before-create, recovery page, reconnect, admin inspect + clear) are implemented and committed behind flags. Validated: healthy-path load, disabled-path enforcement, recovery-page render from a real stale mapping, executed Reconnect (2026-06-11), and **executed Admin Clear + mapping/reverse-index removal + repair audit history + bootstrap reprovision + Welcome routing + empty-dashboard + Central admin routing + `ADMIN_EMAILS` (2026-07-02).**
 
-- 6F Recovery Validation — confirmed-zero, HIGH/OFF, MEDIUM-confirm/OFF, ambiguity, failure, stale, and cross-user rows passed; only MEDIUM auto-adopt ON remains P0. Read-only Orphan detection remains P1.
+- 6F Recovery Validation ✅ complete — full P0 matrix passed, flags OFF, fixture gate removed. Read-only Orphan detection remains P1.
 - 6D.2b Create New Workbook (designed, not implemented)
 - 6E.2 Admin Set Mapping (designed, not implemented)
 
@@ -156,7 +156,7 @@ Stable and family-beta capable; provisioning is proven across multiple accounts;
 
 - Bills Due Pay bridge committed (`fdf4a30`); natural runtime evidence remains pending
 - Investments convergence committed (`85fafc3`, with later related commits); remaining scope must be re-established from evidence
-- Recovery completion — final MEDIUM auto-adopt-ON runtime row (ratified Recovery Architecture)
+- Recovery completion ✅ P0 complete; read-only Orphan detection remains P1
 - Validator Phase 2 foundation, Test Harness Foundation V1, and console V1 shipped; remaining automated coverage and Release Readiness work is planned
 - Golden Workbook polish (converge provisioning toward the visual source of truth; first audit complete)
 - Family Beta polish (Workbook / UX polish + onboarding + additional beta users)
@@ -192,7 +192,7 @@ High-level technical-status mirror. `ROADMAP.md` controls priority and sequence;
 
 **Current priority and sequence:** `ROADMAP.md` — **P0 Project Stabilization → remaining P1 Validator/Test Harness/Release Readiness scope → P2 House Financial Accuracy**. Detailed Beta Gate tasks and evidence inventories live in `TODO.md`; this document records their technical status.
 
-**Beta Gate (release-readiness target — unordered criteria, all must pass):** before broader beta every release must pass **Golden Workbook Convergence**, **Financial Integrity**, **Validator/Test Harness/Release Readiness evidence**, **Recovery Validation** (only MEDIUM auto-adopt ON remains P0), and a **runtime regression checklist** before deployment. `ROADMAP.md` controls implementation order.
+**Beta Gate:** Recovery Validation is complete. Golden Workbook Convergence, Financial Integrity, Validator/Test Harness/Release Readiness evidence, and the runtime regression checklist remain governed by `ROADMAP.md`.
 
 **UX Backlog (Version 1):** small product-quality improvements (loading standardization, empty-state standardization, UX consistency framework, workbook visual parity, Money Plan Phase 2) live in the permanent **`TODO.md → UX Backlog (Version 1)`** — intentionally separated from engineering priorities, completed opportunistically, and **reviewed before every Family Beta milestone and before External Beta**. It is cross-referenced from the Stage roadmap so these items never disappear during a roadmap reorganization.
 
@@ -205,7 +205,7 @@ High-level technical-status mirror. `ROADMAP.md` controls priority and sequence;
 **Priority scale:** P0 = now / in progress · P1 = next, gates family beta · P2 = high, needed before external beta · P3 = gates external beta · P4 = post-beta / longest horizon.
 
 - **Phase 1 — Documentation Cleanup** *(historical, ✅ complete)* — this earlier cleanup is distinct from the current **P0 Project Stabilization** milestone. Current authority is split deliberately: `ROADMAP.md` for priority/sequence, `TODO.md` for detailed work/testing inventory/history, and `PROJECT_CONTEXT.md` for technical status.
-- **Phase 2 — Family Beta Hardening** *(✅ complete — Stage 2)* — per-user provisioning made robust, recoverable, and observable. Workbook Diagnostics and the recovery stack are implemented. Stage 3 Recovery Validation now has one P0 row remaining (MEDIUM auto-adopt ON); read-only Orphan detection and the 6D.2b/6E.2 slices remain later scope.
+- **Phase 2 — Family Beta Hardening** *(✅ complete — Stage 2)* — diagnostics and the recovery stack are implemented; Stage 3 Recovery Validation 6F is complete. Read-only Orphan detection and the 6D.2b/6E.2 slices remain later scope.
 - **Phase 3 — Workbook Totals Project** *(✅ complete for current scope — Stage 1)* — canonical summary rows: TOTAL DEBT (3.1), Bank Accounts Total Accounts (3.2a), Bank Accounts Delta (3.2b). Investments / House Values summary parity is a later follow-up if needed.
 - **Phase 4 — Chat Assistant v1** *(→ Stage 6 — Version 2)* — read-only NL assistant over canonical read models (write-capable is later). **Not required for Family or External Beta.**
 - **Phase 5 — Web App UX Improvements** *(Stage 4)* — onboarding, empty-states, error handling, guidance, dashboard + planner polish, and help/content cleanup to reduce cognitive load.
@@ -220,7 +220,7 @@ High-level technical-status mirror. `ROADMAP.md` controls priority and sequence;
 - **6D.1 — Recovery Page** *(✅ implemented)* — calm recovery screen for confirm / stale / ambiguous / unavailable resolution failures (no raw errors).
 - **6D.2a — Reconnect / confirm** *(✅ implemented)* — self-scoped, user-initiated relink to one existing candidate; optional general recovery visibility is flag-controlled, while the required MEDIUM-candidate confirmation remains available.
 - **6E.1 — Admin Inspect + Clear Mapping** *(✅ implemented, flag `CENTRAL_ADMIN_REPAIR` default OFF)* — admin-gated read-only inspect + guarded, audited, mapping-store-only clear (no Drive writes).
-- **6F — Recovery Validation** *(current; one P0 row + P1 orphan detection)* — every P0 branch except MEDIUM automatic adoption with `CENTRAL_AUTO_ADOPT=true` passed on the disposable account; flags returned OFF. Read-only Orphan detection remains P1.
+- **6F — Recovery Validation** *(✅ P0 complete 2026-07-20)* — full disposable-account matrix passed, including MEDIUM auto-adopt ON; flags OFF and fixture gate removed. Read-only Orphan detection remains P1.
 - **6D.2b — Create New Workbook** *(remaining, P1)* — self-service "start fresh" recovery action (designed; not implemented).
 - **6E.2 — Admin Set Mapping** *(remaining, P2)* — guarded admin remap (designed; not implemented).
 
@@ -607,8 +607,8 @@ CashCompass now runs in **two coexisting shapes** that share one codebase. The b
 ### Family Beta readiness
 
 - Provisioning runtime-validated: **Phase A** (developer account) and **Phase B** (disposable second account) both PASS — separate user-owned workbooks, `INPUT - Settings` bootstrapped, mappings written, no cross-user data leakage, bound deployment unaffected.
-- Current maturity: **stable and family-beta capable.** The recovery stack is implemented and flag-gated OFF. Healthy load, Recovery Page, Reconnect, Admin Clear, confirmed-zero create, HIGH/OFF relink, MEDIUM confirmation/OFF, ambiguity, search/verification failure, stale variants, and cross-user isolation are runtime-validated. Only MEDIUM auto-adopt ON remains P0; read-only Orphan detection remains P1. The production / bound workbook stayed protected throughout.
-- **Known hardening items (Phase 2 — Family Beta Hardening):** diagnostics and identity markers are done; the recovery stack is built and all P0 runtime branches except MEDIUM auto-adopt ON are validated. Read-only Orphan detection, 6D.2b Create New Workbook, and 6E.2 Admin Set Mapping remain later scope.
+- Current maturity: **stable and family-beta capable.** The recovery stack is implemented, the full P0 runtime matrix passed, all recovery flags are OFF, and the production/bound workbook stayed protected. Read-only Orphan detection remains P1.
+- **Known hardening items:** recovery P0 is closed. Read-only Orphan detection, 6D.2b Create New Workbook, and 6E.2 Admin Set Mapping remain later scope.
 - Full per-slice migration history (manifest prep, resolver/provisioning slice, standalone project build, runtime evidence) is in `SESSION_NOTES.md → Current State — Post V1.2 Prep` and the `CENTRAL_APP_*.md` planning docs (`CENTRAL_APP_DESIGN.md`, `CENTRAL_APP_CENTRAL_PROJECT_SETUP_CHECKLIST.md`, `CENTRAL_APP_WORKBOOK_CREATION_FIRST_SLICE_PLAN.md`, `CENTRAL_APP_FAMILY_BETA_READINESS_CHECKPOINT.md`, others).
 - **Active Phase 2 design:** `CENTRAL_APP_WORKBOOK_DIAGNOSTICS_PLAN.md` — read-only duplicate / orphan / stale workbook detection, classification, marker strategy, and admin audit functions (Phase 2A), with Phase 2B recovery scope recorded in its `§10`.
 
@@ -630,7 +630,7 @@ The Central App can lose track of a user's workbook (cleared/lost mapping, trash
 - **`SYS - Meta` sheet** — a lightweight, hidden in-workbook marker sheet that survives Drive-level metadata loss (e.g. file copy), as a secondary identity signal.
 - **Admin marker diagnostics** — read-only, admin-gated visibility into which markers are present / matching for a given user.
 
-**What's implemented — recovery stack (P0 duplicate-prevention decision tree implemented 2026-07-16; all runtime rows except MEDIUM auto-adopt ON validated by 2026-07-20; read-only orphan detection tracked separately as P1 — see `## Recovery Validation Inventory`):**
+**What's implemented — recovery stack (P0 duplicate-prevention decision tree implemented and fully runtime-validated; read-only orphan detection tracked separately as P1):**
 
 - **6C.1 Adopt-Before-Create / duplicate guard** — candidate detection is unconditional for no-mapping and stale-mapping resolution. Confirmed zero is the only create path; HIGH/marker candidates relink; MEDIUM/name-only candidates require confirmation while `CENTRAL_AUTO_ADOPT` is off; ambiguity and search/verify failures stop safely.
 - **6D.1 Recovery Page** — recovery screen for confirm / stale / ambiguous / unavailable instead of raw errors; routed from the startup gate.
@@ -641,7 +641,7 @@ Recovery writes remain central-mode/self-scoped or admin-gated. `CENTRAL_AUTO_AD
 
 **Recovery roadmap (remaining):**
 
-- **6F — Recovery Validation** *(current; one P0 row + P1 orphan detection)* — healthy path, Recovery Page, Reconnect, Admin Clear, confirmed-zero create, HIGH/OFF relink, MEDIUM confirmation/OFF, ambiguity, search/verification failure, stale invalid-ID/Trash variants, and cross-user isolation are runtime-validated. Recovery flags were restored OFF after the 2026-07-20 pass. **Only MEDIUM automatic adoption with `CENTRAL_AUTO_ADOPT=true` remains P0.** Read-only Orphan detection remains P1 and does not block P0 closure.
+- **6F — Recovery Validation** *(✅ P0 complete 2026-07-20)* — all branches passed, including MEDIUM automatic adoption with `CENTRAL_AUTO_ADOPT=true`. Cleanup returned mapping/candidates to zero, restored all recovery flags OFF, and removed the disposable fixture gate. Read-only Orphan detection remains P1.
 - **6D.2b — Create New Workbook** — self-service "start fresh" action (designed; not implemented). Separate flag, confirm, duplicate-avoidance-first.
 - **6E.2 — Admin Set Mapping** — guarded admin remap to an admin-supplied ID (designed; not implemented).
 
@@ -651,7 +651,7 @@ Feature flags are central-project **script properties** (`PropertiesService`), r
 
 | Flag | Default | Status | Gates | Behavior when OFF |
 | --- | --- | --- | --- | --- |
-| `CENTRAL_AUTO_ADOPT` | OFF | OFF behavior validated; ON auto-adopt row pending | Automatic adoption of one MEDIUM/name-only candidate | Detection remains unconditional; HIGH relinks; MEDIUM requires confirmation; no silent create. |
+| `CENTRAL_AUTO_ADOPT` | OFF | OFF-confirm + ON-auto runtime-validated; restored OFF | Automatic adoption of one MEDIUM/name-only candidate | Detection remains unconditional; HIGH relinks; MEDIUM requires confirmation; no silent create. |
 | `CENTRAL_RECOVERY_ACTIONS` | OFF | Implemented, **validated end-to-end (2026-06-11)** | Optional Reconnect action on general recovery pages | General recovery pages are display-only; required MEDIUM-candidate confirmation remains available. |
 | `CENTRAL_ADMIN_REPAIR` | OFF | Implemented, **validated end-to-end (2026-07-02)** — executed clear + audit + reprovision | 6E.1 admin Inspect + Clear Mapping (`adminInspectUser`, `adminClearMapping`) | Admin repair endpoints return disabled / no-op; no mapping writes. |
 
@@ -680,11 +680,11 @@ Notes:
 
 - These are **independent** of `CENTRAL_MODE` (which selects central vs bound) and of the existing `FAMILY_BETA_ALLOWLIST` / `ADMIN_EMAILS` properties.
 - The **Recovery Page (6D.1)** itself is **not** flag-gated. `CENTRAL_RECOVERY_ACTIONS` controls the optional reconnect button on general recovery pages; the explicit MEDIUM/name-only confirmation action remains available because it is the safe alternative to silent creation.
-- All three flags remain **OFF in steady state**, but the P0 safety tree is intentionally active in Central mode. Every P0 decision branch except MEDIUM auto-adopt ON now has disposable-account runtime evidence; read-only Orphan detection is a separate P1 follow-up.
+- All three recovery flags are **OFF in steady state**. Every P0 decision branch has disposable-account runtime evidence; read-only Orphan detection is a separate P1 follow-up.
 
 ## Recovery Validation Inventory
 
-Tracks runtime evidence separately from implementation. Prior passes validated healthy mapped load, Recovery Page, executed Reconnect, disabled admin repair, executed Admin Clear, and HIGH-marker relink across two accounts. The 2026-07-20 disposable-account pass validated confirmed-zero create, MEDIUM confirmation/OFF, ambiguity, injected search/verification failure, stale invalid-ID/Trash variants, and cross-user isolation. No tested failure branch created a duplicate; fixture cleanup completed and recovery flags returned OFF. **Only MEDIUM auto-adopt ON remains P0.** Read-only Orphan detection remains P1. **Admin Diagnostics is the authoritative validation surface** if Script Properties UI lags.
+Tracks runtime evidence separately from implementation. All P0 recovery branches passed by 2026-07-20, including MEDIUM auto-adopt ON. The final run mapped the exact single fixture, reached Welcome without confirmation, created no duplicate, then cleaned the fixture and mapping, restored all flags OFF, and removed `RECOVERY_6F_TEST_EMAIL`. Read-only Orphan detection remains P1.
 
 **Implemented + tested (validated):**
 
@@ -712,9 +712,9 @@ Tracks runtime evidence separately from implementation. Prior passes validated h
 
 **Implemented + not yet tested:**
 
-- **P0 duplicate-prevention decision tree** — Status: all local/harness and runtime branches PASS except MEDIUM auto-adopt ON. Risk: High only for the remaining flag-ON row. Timing: final 6F row.
-- **Auto-Adopt with `CENTRAL_AUTO_ADOPT=true` (MEDIUM only)** — Status: not runtime-tested. Risk: High. Timing: 6F, isolated disposable account.
-- **Name-only automatic adoption (MEDIUM-confidence single candidate)** — Status: OFF-confirm path passed; ON-auto path not tested. Risk: High. Timing: final 6F row.
+- **P0 duplicate-prevention decision tree** — Status: COMPLETE; all local/harness and runtime branches PASS.
+- **Auto-Adopt with `CENTRAL_AUTO_ADOPT=true` (MEDIUM only)** — Status: runtime PASS 2026-07-20; exact candidate relink, no confirmation, no create; flag restored OFF.
+- **Name-only adoption (MEDIUM-confidence single candidate)** — Status: OFF-confirm and ON-auto paths both runtime PASS.
 - **Orphan workbook detection (`ORPHANS_PRESENT`)** — Status: not exercised end-to-end; surfacing-only, manual cleanup. Risk: Low. Timing: P1 follow-up after the P0 6F matrix; non-blocking for P0 closure.
 
 ## Bound Project Safety

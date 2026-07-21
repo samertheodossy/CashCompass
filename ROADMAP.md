@@ -34,7 +34,7 @@
 - **Product decisions — ✅ current P0 inventory resolved.** The final known P0 item, Settings header/body typography, was ratified 2026-07-20 as 16pt / 14pt and implemented first-create only. Future Validator discoveries follow the normal record-and-defer rule.
 - **Beta readiness** — onboarding polish, error handling, empty-state / UX consistency, and a runtime regression pass before release.
 - **Central resolver verification — ✅ static Tier-2 sweep closed 2026-07-20.** All Central user-facing production paths use `getUserSpreadsheet_()`; remaining direct active-spreadsheet calls are intentionally confined to the resolver's bound fallback, bound-only utilities, developer Test Setup, and the harness safety guard.
-- **Recovery Validation 6F safety matrix — one P0 row remains.** Confirmed-zero create, HIGH relink/OFF, MEDIUM confirmation/OFF, ambiguity, search/verification failure, stale variants, and cross-user isolation passed on the disposable Central account; flags were restored OFF. Validate MEDIUM automatic adoption with `CENTRAL_AUTO_ADOPT=true`, then return it OFF. Read-only orphan detection remains P1 and does not block P0 closure.
+- **Recovery Validation 6F — ✅ P0 complete 2026-07-20.** Full disposable-account matrix passed, including MEDIUM auto-adopt ON; flags OFF and fixture gate removed. Read-only orphan detection remains P1.
 
 ### Priority 1 — Validator Phase 2 + Test Harness / Regression Runner
 

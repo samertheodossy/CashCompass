@@ -1,6 +1,6 @@
 # CENTRAL_APP_RECOVERY_COMPLETION_PLAN.md
 
-**Status:** Ratified architecture (Version 1). P0 duplicate-prevention decision tree implemented 2026-07-16. The disposable-account matrix is runtime-validated for confirmed-zero create, HIGH relink with auto-adopt OFF, MEDIUM explicit confirmation with auto-adopt OFF, ambiguity, search/verification failure, stale variants, and cross-user isolation. Only MEDIUM automatic adoption with `CENTRAL_AUTO_ADOPT=true` remains open; read-only orphan detection is a separate P1 follow-up.
+**Status:** Version 1 P0 Recovery Validation 6F complete 2026-07-20. The full duplicate-prevention matrix is runtime-validated, including MEDIUM automatic adoption with `CENTRAL_AUTO_ADOPT=true`. All recovery flags were restored OFF and the disposable fixture gate was removed. Read-only orphan detection is a separate P1 follow-up.
 **Owner area:** Central App — workbook resolution, provisioning, and recovery.
 **Related code:** `central_provisioning.js`, `central_diagnostics.js`, `central_resolver.js`, `sheet_bootstrap.js`, recovery client (`Dashboard_Body.html → #page_recovery`).
 **Ratified:** 2026-07-07.
@@ -233,7 +233,8 @@ clear the fixture failure mode, trash the verified fixture set, remove
 - Stale invalid-ID and mapped-workbook-in-Trash variants both stopped safely. The Trash variant now reports targeted restore-and-retry guidance and hides the inapplicable reconnect action.
 - Cross-user isolation passed: fixture candidates remained owner-scoped and were not surfaced to another account.
 - Fixture files were moved to Trash through marker/name/owner-verified cleanup, failure injection was cleared, the disposable mapping was left in the intended test state, and recovery flags were restored OFF.
-- **Only open P0 row:** one MEDIUM/name-only candidate with `CENTRAL_AUTO_ADOPT=true` must still be runtime-validated. Read-only orphan detection remains P1 and does not block P0 closure.
+- **Final P0 row — PASS:** with exactly one MEDIUM/name-only candidate and no mapping, `CENTRAL_AUTO_ADOPT=true` silently relinked the exact fixture workbook, wrote the matching mapping, reached Welcome without a confirmation/recovery page, and left candidate count at one; no duplicate was created. Cleanup soft-trashed the fixture, cleared its mapping/reverse index, returned candidate count to zero, restored all recovery flags to `false`, and removed `RECOVERY_6F_TEST_EMAIL`.
+- **6F disposition:** P0 complete. Read-only orphan detection remains P1 and does not block closure.
 
 ---
 

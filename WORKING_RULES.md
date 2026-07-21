@@ -2,7 +2,7 @@
 
 ## Current phase — Central App live + Family Beta readiness
 
-The Central App architecture is **live** and **family-beta capable**. The Workbook Recovery stack is implemented, flag-gated OFF, and runtime-validated for healthy load, Recovery Page, Reconnect, Admin Clear, confirmed-zero create, HIGH relink/OFF, MEDIUM confirmation/OFF, ambiguity, search/verification failure, stale variants, and cross-user isolation. **Only MEDIUM automatic adoption with `CENTRAL_AUTO_ADOPT=true` remains open in P0; keep the flag OFF until that isolated row passes.** Read-only orphan detection remains P1 and does not block P0 closure. Bound safety and all commit/push/deploy approval rules below remain unchanged. The authoritative status is `PROJECT_CONTEXT.md → Recovery Validation Inventory`; the execution checklist is `TODO.md → Open testing inventory`.
+The Central App architecture is **live** and **family-beta capable**. Recovery Validation 6F is complete: the full P0 matrix passed, all recovery flags are OFF, and the disposable fixture gate was removed. Read-only orphan detection remains P1. Bound safety and all commit/push/deploy approval rules below remain unchanged.
 
 **Flag discipline (recovery stack):** the three recovery flags default OFF and **fail closed**. Do not turn any of them on except for a deliberate, scoped validation pass on a **disposable** account, and **set them back OFF** afterward. Never enable a recovery flag against the production / bound workbook.
 
