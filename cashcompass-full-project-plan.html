@@ -478,7 +478,7 @@
       <p class="cc-lede">A detailed path from the current validation and test-harness milestone through Family Beta, financial-model accuracy, scale work, bank connectivity, assistant capabilities, and paid-product readiness.</p>
     </div>
     <div class="cc-asof">
-      <strong>Plan snapshot: July 20, 2026</strong><br>
+      <strong>Plan snapshot: July 21, 2026</strong><br>
       Estimates are focused engineering time, not calendar promises. Review, testing, Google authorization, and product decisions can extend elapsed time.
     </div>
   </header>
@@ -487,7 +487,7 @@
     <div class="viz-stat">
       <div class="cc-stat-label">Current gate</div>
       <div class="cc-stat-value">P1 Validation gate</div>
-      <div class="cc-stat-note">Validator Phase 2, disposable populated-fixture hardening, regression packs, and Release Readiness.</div>
+      <div class="cc-stat-note">Remaining Validator modules, deeper E2E/live/performance packs, and bounded Release Readiness orchestration.</div>
     </div>
     <div class="viz-stat">
       <div class="cc-stat-label">Recent proof</div>
@@ -607,10 +607,11 @@
           <tbody>
             <tr><td><strong>Remaining Validator modules</strong></td><td>Formal schema registry; formulas; conditional formatting; named ranges; Workbook Health umbrella; consolidated report contract.</td><td>3–6 d</td><td>Current provisioning/drift foundation</td></tr>
             <tr><td><strong>Harness enablers</strong></td><td>Functional-assertion capability; spreadsheet-injection refactor; stable disposable-target guarantees; reusable fixtures and evidence format.</td><td>2–4 d</td><td>Test Harness V1</td></tr>
-            <tr><td><strong>Disposable populated-fixture hardening</strong></td><td>Create fixtures through Central for <code>drive.file</code>-compatible access; automatically seed representative Bank, Investment, House, and Debt data; assert Restricted sharing; fail closed on link-accessible fixtures; verify recoverable Trash cleanup without touching owner/bounded workbooks.</td><td>1–3 d</td><td>Test Harness V1</td></tr>
-            <tr><td><strong>Scenario-pack expansion</strong></td><td>SMOKE → REGRESSION → RECOVERY → STRESS; grow toward 18 levels covering Bills, income, investments, retirement, houses, dashboard E2E, and system integrity.</td><td>6–12 d</td><td>Harness enablers</td></tr>
+            <tr><td><strong>Disposable populated-fixture hardening</strong></td><td>Completed on isolated Central <code>@117</code>: Central-created, <code>drive.file</code>-compatible fixture; automatic Bank, Investment, House, Debt, Bills, Income, Upcoming, and Retirement seeding; Restricted sharing; 9/9 assertions; Validator checks; and Drive-confirmed Trash cleanup without touching owner/bounded workbooks.</td><td>Completed</td><td>Test Harness V1</td></tr>
+            <tr><td><strong>Runnable suite foundation</strong></td><td>Five suites now run on demand: Bills Regression, Recovery Regression, Quick Add Reliability, Populated Fixture, and combined Central Safety.</td><td>Completed</td><td>Harness enablers</td></tr>
+            <tr><td><strong>Scenario-pack expansion</strong></td><td>Build the remaining E2E/live/performance packs: First-Run UX E2E, Populated Dashboard E2E, Recovery Live, Performance Planner, and Bills Pay E2E; continue toward the broader 18-pack roadmap.</td><td>6–12 d</td><td>Runnable suite foundation</td></tr>
             <tr><td><strong>Validation console evolution</strong></td><td>Multi-suite execution; clearer scenario evidence; formula and formatting results; historical run comparison; operator-safe UX.</td><td>2–4 d</td><td>Scenario contracts</td></tr>
-            <tr><td><strong>Release Readiness aggregate</strong></td><td>Gate provisioning, schema, named ranges, regression, recovery, and performance; advisory drift/formula/formatting; explicit go/no-go reasons.</td><td>2–4 d</td><td>Report producer + packs</td></tr>
+            <tr><td><strong>Release Readiness aggregate</strong></td><td>Orchestrate required suites in bounded chunks, persist their evidence, and aggregate provisioning, schema, named-range, regression, recovery, and performance gates into explicit go/no-go reasons without exceeding Apps Script execution limits.</td><td>2–4 d</td><td>Report producer + packs</td></tr>
             <tr><td><strong>Beta end-to-end run</strong></td><td>Execute selected gate; investigate failures; bounded safety spot-check; document rollback and residual risk.</td><td>2–5 d</td><td>Approved beta slice</td></tr>
           </tbody>
         </table>
@@ -851,7 +852,7 @@
     </div>
     <ol class="cc-order">
       <li><span><strong>P0 stabilization</strong><small>Docs, Recovery 6F, Central verification, two-track UX validation</small></span><time>Completed</time></li>
-      <li><span><strong>Harden populated fixtures</strong><small>Central-created, seeded, Restricted, <code>drive.file</code>-compatible, safely trashed</small></span><time>1–3 d</time></li>
+      <li><span><strong>Harden populated fixtures</strong><small>Central-created, eight-domain seeded, Restricted, <code>drive.file</code>-compatible, safely trashed</small></span><time>Completed @117</time></li>
       <li><span><strong>Ratify the P1 evidence contract</strong><small>Define the required checks, fixtures, reports, and archived evidence</small></span><time>0.5–1 d</time></li>
       <li><span><strong>Complete and run P1 release evidence</strong><small>Validator modules, harness, scenario packs, console, and aggregate release report</small></span><time>15–35 d full</time></li>
       <li><span><strong>Begin supervised validation cohort</strong><small>Learn under close support; not broad or monetized release</small></span><time>2–5 d setup</time></li>

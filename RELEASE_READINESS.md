@@ -3,13 +3,17 @@
 *The pre-release go/no-go produced by the Test Harness running every scenario pack
 and the Validator judging each result.*
 
-**Status:** **Design + template. Not implemented.** The Test Harness *foundation
-V1* and the Validator Phase 2 core (Provisioning / Drift / Schema Evolution) now
-exist, but the **aggregate Release Readiness report** — every scenario pack across
-all families rolled into one go/no-go — is not built yet. It will be produced by
-`test_harness_report.js` (see `TEST_HARNESS_ARCHITECTURE.md`) once the scenario
-packs land. This file is the report format and the release workflow; the harness is
-the producer.
+**Status:** **Design + template; aggregate verdict not implemented.** The Validator
+Phase 2 core (Provisioning / Drift / Schema Evolution), fail-closed disposable
+workbook lifecycle, and populated-fixture hardening now exist. Five suites are
+runnable: `SUITE-BILLS-REGRESSION`, `SUITE-RECOVERY-REGRESSION`,
+`SUITE-QUICK-ADD-RELIABILITY`, `SUITE-POPULATED-FIXTURE`, and the combined
+`SUITE-CENTRAL-SAFETY`. The **aggregate Release Readiness report** — required
+suites and remaining Validator gates rolled into one go/no-go — is not built yet.
+It will be produced through bounded suite orchestration and
+`test_harness_report.js` (see `TEST_HARNESS_ARCHITECTURE.md`) as the remaining
+E2E/live/performance packs land. This file is the report format and release
+workflow; the harness is the producer.
 
 **Related docs:** `TEST_HARNESS_ARCHITECTURE.md` (the runner),
 `VALIDATOR_ARCHITECTURE.md` (the read-only judge), `REGRESSION_SCENARIOS.md` (the
@@ -121,11 +125,11 @@ Before a major change or a beta release:
 
   Enable TEST_HARNESS_ENABLED + VALIDATOR_ENABLED (admin, dev only)
         ↓
-  runRegressionSuite({ enabledPacks: ALL })
+  Run the required suites in bounded chunks
         ↓
   Harness: per scenario → provision disposable wb → run workflow → Validator health check
         ↓
-  test_harness_report.js aggregates → Release Readiness report
+  Persist each chunk's evidence; test_harness_report.js aggregates → Release Readiness report
         ↓
   Overall READY?  ──no──►  fix failing scenarios (each links to findings) ──► re-run
         │yes
@@ -134,8 +138,9 @@ Before a major change or a beta release:
   Disable the flags again (default-off)
 ```
 
-- Run the **SMOKE + REGRESSION** packs before any major change; run **ALL** packs
-  before a beta release.
+- Run the applicable fast regression suites before a major change. Before a beta
+  release, execute every required suite in bounded chunks and aggregate the saved
+  evidence; do not depend on one execution exceeding Apps Script runtime limits.
 - Archive each Release Readiness report alongside the release (or in
   `SESSION_NOTES.md`) so the go/no-go decision is auditable.
 

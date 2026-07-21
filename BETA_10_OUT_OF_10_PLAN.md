@@ -154,12 +154,12 @@ The beta does not need to charge immediately, but it must avoid architecture and
 
 **Objective:** Make every important claim reproducible without touching a real household workbook.
 
-1. Harden Central-created populated fixtures and Restricted-sharing assertions.
-2. Add synthetic representative seeding for Bank, Investment, House, Debt, Bills, Income, Upcoming, Retirement, and multi-year history.
+1. **Complete:** Harden Central-created populated fixtures and Restricted-sharing assertions; verify safe Trash cleanup without touching owner/bounded workbooks.
+2. **Complete for the current representative fixture:** Seed Bank, Investment, House, Debt, Bills, Income, Upcoming, and Retirement data automatically. Multi-year history remains a future pack need.
 3. Ratify performance instrumentation and budgets.
 4. Complete the required Validator modules and Workbook Health aggregation.
-5. Expand scenario packs around historical defects and core workflows.
-6. Implement the aggregate Release Readiness report.
+5. Expand E2E, live, and performance packs around historical defects and core workflows.
+6. Implement bounded Release Readiness orchestration and its aggregate report.
 
 **Exit:** Repeatable evidence can judge blank, sparse, populated, mature, legacy, and recovery states without manual fixture improvisation.
 
@@ -279,4 +279,4 @@ Metrics must be defined before instrumentation and must avoid copying transactio
 
 ## 8. Immediate next decision
 
-The next implementation-planning task remains **P1 disposable populated-fixture hardening**. Its design should include the performance timing hooks and privacy assertions needed by this 10/10 scorecard so later work builds on measurable foundations.
+Disposable populated-fixture hardening is complete on isolated Central `@117`. The next P1 work is to complete the remaining Validator modules, build the planned E2E/live/performance packs, and implement bounded Release Readiness orchestration so the five currently runnable suites can grow into a reproducible beta verdict without exceeding Apps Script execution limits.
