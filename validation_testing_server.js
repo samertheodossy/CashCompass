@@ -245,7 +245,7 @@ function vtRunHarnessScenario(scenarioId, options) {
 
 /**
  * List the Test Harness SUITES available to the UI, from the suite registry
- * (getHarnessSuites_ — currently the Bills Regression Suite). Guarded by the WRITER
+ * (`getHarnessSuites_`). Guarded by the WRITER
  * guard. Read-only listing — surfaces suite descriptors only; no workbook is
  * created. The console suite dropdown populates from this list, so new registered
  * suites appear with no HTML change.

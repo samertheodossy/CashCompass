@@ -28,6 +28,13 @@ PASS, Restricted sharing confirmed as one owner-only user permission, and Drive
 read-back confirming the fixture was trashed. `TEST_HARNESS_ENABLED` was restored
 to `false`; Beta and owner/bounded workbooks were untouched.
 
+**Recent-session on-demand pack:** `SUITE-CENTRAL-SAFETY` groups the existing
+Recovery duplicate guard, Quick Add write guard, and representative populated
+fixture without duplicating scenario definitions. Run it with
+`testRunCentralSafetySuite({ dispositionMode: 'trash' })`. Browser UX, live
+identity/mapping recovery, and planner timing remain separate planned suites because
+they require different runners or additional safe injection seams.
+
 > **Two deviations the V1 implementation revealed (design corrections):**
 > 1. **Marker primitive.** `PropertiesService.getDocumentProperties()` is scoped to
 >    the script's *own* container document and cannot be attached to a workbook
@@ -340,11 +347,11 @@ disposable workbook with its own `runId`. The suite layer only iterates the
 registry and aggregates per-scenario reports.
 
 - **Registry:** `getHarnessSuites_()` / `getHarnessSuiteById_(id)` — a suite is
-  `{ id, label, description, scenarioIds[] }` referencing scenarios by id. V1 ships
-  **`SUITE-BILLS-REGRESSION`** (the Bills Regression Suite: 8 PURE + 2 INTEGRATION
-  scenarios).
+  `{ id, label, description, scenarioIds[] }` referencing scenarios by id. Runnable
+  packs include Bills Regression (8 PURE + 2 INTEGRATION), Recovery Regression,
+  Quick Add Reliability, Representative Populated Fixture, and Central Safety.
 - **Runner:** `testRunSuiteById_(suiteId, { dispositionMode })` (public, guarded once
-  at entry) + convenience `testRunBillsSuite()`. Fail policy: one failing scenario
+  at entry) plus convenience suite wrappers. Fail policy: one failing scenario
   does **not** stop the suite (a regression suite must report *all* failures);
   overall PASS only if every scenario PASSed and none were skipped. The only
   early-out is a **catastrophic** harness failure (a throw from `runScenario_`,
@@ -544,7 +551,7 @@ Overall                 READY FOR BETA
 test_harness_core.js          # guard + disposable-workbook lifecycle + run loop
 test_harness_scenarios.js     # scenario registry + SMOKE/donation scenario
 test_harness_scenarios_bills.js # Bills recurrence scenarios (PURE + INTEGRATION)
-test_harness_suites.js        # suite registry + runner + report (V1: SUITE-BILLS-REGRESSION)
+test_harness_suites.js        # registered suite catalog + runner + aggregate report
 test_harness_assert.js        # functional-assertion primitives + collector (E0a)
 test_harness_read.js          # read layer (ctx.read.sheetValue/sheetRange)
 test_harness_report.js        # per-scenario result envelope + gate + log shaping

@@ -108,6 +108,7 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | **Remaining Validator Phase 2 modules** — Formula, Conditional-Formatting, Named-Range, and aggregate Workbook Health | P1 | Phase 2 foundation ✓ | L |
 | **Disposable populated-fixture hardening** — ✅ isolated Central `@117` PASS: Central-created fixture, representative eight-domain data seeding, Restricted-sharing assertion, `drive.file`-compatible access, and verified Trash cleanup | P1 | Test Harness Foundation V1 ✓ | M |
 | Runtime regression checklist (interim manual gate) | P1 | — | M |
+| **Recent-session permanent regression packs** — `SUITE-FIRST-RUN-UX-E2E`, `SUITE-POPULATED-DASHBOARD-E2E`, `SUITE-RECOVERY-LIVE`, `SUITE-PERFORMANCE-PLANNER`, `SUITE-BILLS-PAY-E2E`; aggregate in bounded chunks | P1–P3 by dependency | Central Safety suite + UI runner + explicit-ss planner seam | L–XL |
 | Financial-integrity gate wiring into release | P1 | FI Phase 3 convergence | S |
 | Deployment checklist | P2 | — | S |
 

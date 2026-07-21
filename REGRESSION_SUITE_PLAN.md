@@ -3,15 +3,14 @@
 *The forward-looking roadmap for expanding the Test Harness from one smoke scenario
 into a full beta-readiness regression suite that exercises CashCompass end to end.*
 
-**Status:** **Plan / design; first scenarios shipping incrementally.** Test Harness
-**Foundation V1** is working (`test_harness_*.js` + the Validation & Testing
-console). Implemented scenarios: `SMOKE-PROVISION-DONATION` and, as the first real
-regression scenarios: the pure recurrence pack **`REGRESSION-BILLS-MONTHLY`**,
-**`-WEEKLY`**, **`-WEEKLY-ON-DAY`**, **`-BIWEEKLY`** (recurrence-engine math only) plus
-the inspectable workbook-integration scenarios **`REGRESSION-BILLS-MONTHLY-INTEGRATION`**
-(visible `INPUT - Bills` + `LOG - Activity`) and **`REGRESSION-BILLS-MONTHLY-CASHFLOW`**
-(adds a canonical `INPUT - Cash Flow 2026` with the bill's Expense row and asserts the
-Bills ↔ Cash Flow linkage), all in `test_harness_scenarios_bills.js`. Scenarios now
+**Status:** **Plan / design with executable packs shipping incrementally.** Test
+Harness **Foundation V1** is working (`test_harness_*.js` + the Validation &
+Testing console). Implemented coverage includes `SMOKE-PROVISION-DONATION`, ten
+Bills recurrence/integration scenarios, `REGRESSION-RECOVERY-DUPLICATE-GUARD`,
+`REGRESSION-QUICK-ADD-WRITE-GUARD`, and the isolated-runtime-validated
+`SMOKE-POPULATED-FIXTURE`. Registered on-demand suites are Bills Regression,
+Recovery Regression, Quick Add Reliability, Representative Populated Fixture,
+and Central Safety Regression. Scenarios
 declare an **`executionLevel`** (`PURE` / `INTEGRATION` / `E2E`) so a tester
 immediately knows what to expect — see `TEST_HARNESS_ARCHITECTURE.md §3.1`. Keep both
 levels: PURE scenarios prove engine math, INTEGRATION scenarios prove visible workbook
@@ -40,6 +39,34 @@ any additional scenario — each ships in its own approved milestone.
 | `RELEASE_READINESS.md` | **How results roll up** into a single go/no-go verdict. |
 
 **Related:** `VALIDATOR_ARCHITECTURE.md` (the read-only judge), `ROADMAP.md → P1`.
+
+## Recent-session regression coverage map (2026-07-21)
+
+This map converts the July stabilization/testing sessions into permanent regression
+homes. Manual evidence remains valuable release proof, but it is not confused with
+an automatically repeatable guard.
+
+| Recent evidence / risk | Runnable now | On-demand home | Remaining permanent coverage |
+|---|---|---|---|
+| Recovery 6F duplicate-prevention matrix | Pure seven-branch decision guard | `SUITE-RECOVERY-REGRESSION`; also `SUITE-CENTRAL-SAFETY` | `SUITE-RECOVERY-LIVE` must reproduce confirmed-zero, HIGH/OFF, MEDIUM confirm/OFF, MEDIUM auto-adopt/ON, ambiguity, search/verify failure, stale invalid/Trash, and cross-user isolation with exact mapping/flag cleanup. |
+| Quick Add late-edit/duplicate protection | Workbook integration guard | `SUITE-QUICK-ADD-RELIABILITY`; also `SUITE-CENTRAL-SAFETY` | Add dashboard round-trip when the UI E2E runner exists. |
+| Blank/fresh `@114` UX fixes | Static `npm run test:dashboard-ux` plus server smoke provisioning | Local CI + `SMOKE-PROVISION-DONATION` | `SUITE-FIRST-RUN-UX-E2E`: Setup copy/no internal names, default subtabs, empty-action gating, first-run guidance, Help wording, refresh-button state, and clean-console navigation. |
+| Representative populated `@114` UI validation | Server fixture lifecycle and eight-domain values | `SUITE-POPULATED-FIXTURE`; also `SUITE-CENTRAL-SAFETY` | `SUITE-POPULATED-DASHBOARD-E2E`: KPI/rendering reconciliation, selection/action gating, property equity, active-subtab retention, Help/Setup language, and broad clean-console navigation. |
+| Restricted sharing + safe Trash `@117` | Sharing gate before seed, 9/9 assertions, Drive Trash read-back | `SUITE-POPULATED-FIXTURE`; `SUITE-CENTRAL-SAFETY` | Add negative tests for anyone/domain permissions and protected-workbook refusal under Level 17 Security/Safety. |
+| Planner timing `@115` and History-chart retirement `@116` | Static `npm run test:performance-timing`; manual first/repeat evidence | Local CI today | `SUITE-PERFORMANCE-PLANNER`: explicit-ss planner seam, first/repeat envelopes, privacy allow-list, History rows retained, zero History charts, `cleanup_history_charts`, and ratified budgets. |
+| Bills Due → Pay | Bills recurrence and Cash Flow linkage automated | `SUITE-BILLS-REGRESSION` | `SUITE-BILLS-PAY-E2E`: Due → Pay → Cash Flow → Activity → duplicate suppression. Synthetic regression does not replace separately required natural cohort evidence. |
+
+### Safe run grouping
+
+- `SUITE-CENTRAL-SAFETY` is the immediate recent-session server pack. It runs
+  recovery decision safety, Quick Add integrity, and the populated lifecycle as
+  independent disposable workbooks. Use `dispositionMode: 'trash'`; the populated
+  scenario forces verified Trash even if a caller selects Keep.
+- Keep Bills in `SUITE-BILLS-REGRESSION` instead of making one giant Apps Script
+  suite. A monolithic suite risks the Apps Script execution ceiling and produces a
+  less useful all-or-nothing timeout.
+- The future Release Certification orchestrator must run suites in bounded chunks,
+  preserve each report, and aggregate them after completion.
 
 ---
 

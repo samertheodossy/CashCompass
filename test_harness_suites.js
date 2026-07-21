@@ -1,6 +1,6 @@
 /**
  * test_harness_suites.js — Test Harness · suite registry + suite runner + suite
- * report (V1: the Bills Regression Suite).
+ * report (registered on-demand regression/safety suites).
  *
  * A SUITE runs a fixed, ordered list of registered scenarios as one action so a
  * whole pack (e.g. every Bills recurrence scenario) can be validated after any
@@ -126,6 +126,16 @@ function getHarnessSuites_() {
       scenarioIds: [
         'SMOKE-POPULATED-FIXTURE'
       ]
+    },
+    {
+      id: 'SUITE-CENTRAL-SAFETY',
+      label: 'Central Safety Regression',
+      description: 'On-demand recent-session guard pack: recovery duplicate prevention, Quick Add write integrity, and Restricted representative populated-fixture lifecycle.',
+      scenarioIds: [
+        'REGRESSION-RECOVERY-DUPLICATE-GUARD',
+        'REGRESSION-QUICK-ADD-WRITE-GUARD',
+        'SMOKE-POPULATED-FIXTURE'
+      ]
     }
   ];
 }
@@ -238,6 +248,11 @@ function testRunQuickAddReliabilitySuite(options) {
 /** Run the representative populated fixture; the scenario always verifies Trash. */
 function testRunPopulatedFixtureSuite(options) {
   return testRunSuiteById_('SUITE-POPULATED-FIXTURE', options || {});
+}
+
+/** Run the recent-session Central safety pack; pass dispositionMode:'trash'. */
+function testRunCentralSafetySuite(options) {
+  return testRunSuiteById_('SUITE-CENTRAL-SAFETY', options || {});
 }
 
 /* -------------------------------------------------------------------------- */

@@ -3,10 +3,10 @@
 *Permanent project memory. Every production bug fixed becomes a **Regression
 Scenario** so it can never silently return.*
 
-**Status:** **Design + seed registry. Not implemented.** The `REGRESSION` scenario
-pack in `test_harness_scenarios.js` (see `TEST_HARNESS_ARCHITECTURE.md`) will
-implement these entries. This file is the source of truth for *what* the
-regression pack covers; the harness is *how*.
+**Status:** **Living registry; coverage implemented incrementally.** REG-009 has an
+executable Harness guard and full isolated runtime evidence; REG-010–013 retain
+their static/manual evidence and explicit future automated homes. This file is the
+source of truth for *what* the regression pack covers; the harness is *how*.
 
 > **Scope of this file vs. the suite plan.** This registry is **permanent memory of
 > fixed historical bugs** — one `REG-###` per bug so it can never silently return.
@@ -176,6 +176,55 @@ Whenever a production bug is fixed:
   two or more candidates stop as ambiguous, and search/verify failures stop as
   unavailable. No branch silently creates a duplicate.
 
+### REG-010 — Blank/fresh workspace opened with no default subpanel
+- Category: REGRESSION / UI
+- Date discovered: 2026-07-20
+- Status: fixed; automated UI scenario pending
+- Affected files: dashboard workspace routing/render scripts
+- Root cause: top-level Cash Flow, Properties, and Planning entry could leave no
+  selected child panel on first entry.
+- Repro (future UI harness): open every top-level workspace on a fresh disposable
+  workbook without clicking a subtab first.
+- Expected result: Assets → House Values, Cash Flow → Quick add, Properties → House
+  Expenses, and Planning → Next Actions render immediately while preserving an
+  already selected subtab on return.
+
+### REG-011 — Setup surfaced internal sheet names and raw failure detail
+- Category: REGRESSION / UI
+- Date discovered: 2026-07-20
+- Status: fixed; static checks present, UI scenario pending
+- Affected files: onboarding server/UI copy
+- Root cause: onboarding status messages reused internal workbook identifiers and
+  raw error text instead of product guidance.
+- Repro (future UI harness): load Setup on blank, partial, and probe-failure fixtures.
+- Expected result: calm product language, no `INPUT -`/`SYS -` identifiers in normal
+  guidance, and a retryable fail-closed message rather than raw server errors.
+
+### REG-012 — Empty editors allowed invalid Save/Stop/Add actions
+- Category: REGRESSION / UI
+- Date discovered: 2026-07-20
+- Status: fixed; static checks present, UI scenario pending
+- Affected files: Bank, Investment, Debt, and House Expense dashboard editors
+- Root cause: action controls were enabled before an account/debt/house selection
+  existed, inviting no-target writes and confusing failures.
+- Repro (future UI harness): open each editor on a fresh disposable workbook and
+  inspect controls before and after creating/selecting a representative record.
+- Expected result: actions remain disabled with guidance until their target exists,
+  then enable and complete against the selected disposable record.
+
+### REG-013 — Financial Plan refresh rebuilt unused History charts
+- Category: STRESS / performance
+- Date discovered: 2026-07-20
+- Status: fixed; static guard present, runtime performance scenario pending
+- Affected files: planner History output and performance timing
+- Root cause: every refresh rebuilt six embedded `OUT - History` charts that no
+  product surface used, adding 11.507 seconds to the measured repeat run.
+- Repro (future performance harness): run first/repeat planner refreshes on the
+  representative disposable fixture through an explicit-spreadsheet seam.
+- Expected result: History rows still append/deduplicate and feed comparisons, the
+  sheet contains zero chart objects, timing uses `cleanup_history_charts`, and the
+  operation stays within the ratified planner budget.
+
 ---
 
 ## RECOVERY scenarios (design — not historical bugs)
@@ -207,4 +256,8 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-007 | Bills Due performance (~51s) | STRESS | fixed |
 | REG-008 | AutoPay concurrency race | REGRESSION | fixed |
 | REG-009 | Central recovery silent duplicate workbook | REGRESSION / RECOVERY | covered; scenario 7/7 + suite 1/1 + HIGH-marker runtime reproduction PASS |
+| REG-010 | Blank/fresh workspace lacked default subpanel | REGRESSION / UI | fixed; UI scenario pending |
+| REG-011 | Setup leaked internal identifiers/raw errors | REGRESSION / UI | fixed; static guard; UI scenario pending |
+| REG-012 | Empty editor actions were enabled | REGRESSION / UI | fixed; static guard; UI scenario pending |
+| REG-013 | Planner rebuilt unused History charts | STRESS / performance | fixed; static guard; runtime scenario pending |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

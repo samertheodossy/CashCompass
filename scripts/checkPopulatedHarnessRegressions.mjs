@@ -59,6 +59,20 @@ assert.match(files['test_harness_scenarios.js'], /getHarnessPopulatedFixtureScen
   'Scenario must be registered');
 assert.match(files['test_harness_suites.js'], /SUITE-POPULATED-FIXTURE/,
   'Populated fixture suite must be registered');
+assert.match(files['test_harness_suites.js'], /SUITE-CENTRAL-SAFETY/,
+  'Recent-session Central safety suite must be registered');
+const centralSafetySuite = files['test_harness_suites.js'].match(
+  /id: 'SUITE-CENTRAL-SAFETY'[\s\S]*?scenarioIds:\s*\[([\s\S]*?)\]\s*\}/
+);
+assert.ok(centralSafetySuite, 'Central safety suite descriptor must expose scenarioIds');
+for (const scenarioId of [
+  'REGRESSION-RECOVERY-DUPLICATE-GUARD',
+  'REGRESSION-QUICK-ADD-WRITE-GUARD',
+  'SMOKE-POPULATED-FIXTURE'
+]) {
+  assert.ok(centralSafetySuite[1].includes(`'${scenarioId}'`),
+    `Central safety suite must include ${scenarioId}`);
+}
 assert.match(files['test_harness_report.js'], /Restricted sharing/,
   'Harness report gate must surface Restricted sharing');
 assert.match(files['test_harness_report.js'], /verified Trash/,

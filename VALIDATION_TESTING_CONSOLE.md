@@ -10,9 +10,11 @@ Health) and the writer **Test Harness** (Regression Runner), plus the aggregated
 / Explicit ID) with a read-only safety readout; **Section B Workbook Health** —
 Provisioning (gating), Workbook Drift (advisory), and Schema Evolution (advisory,
 standalone) with status cards, findings, and a JSON viewer; and **Section C Test
-Harness** — a collapsible writer card running the single `SMOKE-PROVISION-DONATION`
-scenario with a Keep/Trash disposition (`vtListHarnessScenarios()` /
-`vtRunHarnessScenario()`). **Still design only:** the multi-suite/scenario selector,
+Harness** — a collapsible writer card with dynamic scenario and suite selectors,
+Keep/Trash disposition, per-scenario detail, and JSON reports
+(`vtListHarnessScenarios()` / `vtRunHarnessScenario()` /
+`vtListHarnessSuites()` / `vtRunHarnessSuite()`). **Still design only:** multi-select
+pack composition and the aggregate Release Certification orchestrator,
 the mapped-user and disposable target types, Formula / Conditional-Formatting
 validation buttons, the Release Readiness verdict, and extracting the inline client
 controller into a separate `validation_testing.js`. This document remains the design
@@ -419,11 +421,11 @@ gates on the whole subsystem.
   Conditional-Formatting / Full Workbook Health buttons remain future as each
   Phase-2 module ships.
 - **C3 — Regression Testing (after Test Harness foundation). ◑ V1 slice done.**
-  Section C exists as a one-scenario-at-a-time **Test Harness** card with a dynamic
-  registry selector (including `SMOKE-POPULATED-FIXTURE`) and Keep/Trash via `vtListHarnessScenarios` /
-  `vtRunHarnessScenario`; the harness always creates its own disposable workbook and
-  `assertDisposableTarget_` enforces the trash. The multi-suite/scenario selector
-  remains future.
+  Section C supports one registered scenario or one registered suite at a time,
+  including `SMOKE-POPULATED-FIXTURE` and `SUITE-CENTRAL-SAFETY`, with Keep/Trash
+  controls and detailed reports. The harness always creates its own disposable
+  workbook and `assertDisposableTarget_` enforces teardown. Multi-select pack
+  composition and bounded-chunk Release Certification remain future.
 - **C4 — Release Readiness verdict.** Add the aggregated verdict rendering + "Run
   Full Release Readiness" once the gate (`RELEASE_READINESS.md`) exists.
 - **C5 — Polish.** Long-run handling (per-pack runs / progress), cleanup-stragglers
