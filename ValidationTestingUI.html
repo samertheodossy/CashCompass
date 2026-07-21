@@ -374,6 +374,7 @@
 
 <script>
   var vtState = { target: null, provisioning: null, schema: null, drift: null,
+                  formulas: null, conditionalFormatting: null, namedRanges: null, health: null,
                   workbookType: null, compatibility: null };
   // Monotonic run token. Every run/reset bumps it; async callbacks capture the
   // token at dispatch and ignore themselves if a newer run has since started.
@@ -406,6 +407,7 @@
     vtState.provisioning = null;
     vtState.schema = null;
     vtState.drift = null;
+    vtState.formulas = null; vtState.conditionalFormatting = null; vtState.namedRanges = null; vtState.health = null;
     vtState.workbookType = null;
     vtState.compatibility = null;
     vtBlankReportDom();
@@ -465,6 +467,7 @@
     vtState.provisioning = null;
     vtState.schema = null;
     vtState.drift = null;
+    vtState.formulas = null; vtState.conditionalFormatting = null; vtState.namedRanges = null; vtState.health = null;
     vtState.workbookType = null;
     vtState.compatibility = null;
     vtBlankReportDom();
@@ -493,6 +496,7 @@
     vtState.provisioning = null;
     vtState.schema = null;
     vtState.drift = null;
+    vtState.formulas = null; vtState.conditionalFormatting = null; vtState.namedRanges = null; vtState.health = null;
     vtState.workbookType = null;
     vtState.compatibility = null;
     vtBlankReportDom();
@@ -522,43 +526,38 @@
     vtState.compatibility = res.report.compatibility;
   }
 
-  // Full Workbook Health: Provisioning (the gate) THEN Workbook Drift (advisory).
-  // Schema Evolution is intentionally NOT part of this pipeline yet — it stays a
-  // standalone action until Schema Evolution V1 is validated across workbook types,
-  // then it can be promoted here deliberately. One shared token guards both callbacks.
+  // Full Workbook Health: one server-side read-only aggregate so every module is
+  // captured against one target and one report contract.
   function vtRunHealth() {
     var id = vtCurrentId();
     var token = ++vtRunToken;
     vtState.provisioning = null; vtState.schema = null; vtState.drift = null;
+    vtState.formulas = null; vtState.conditionalFormatting = null; vtState.namedRanges = null; vtState.health = null;
     vtState.workbookType = null; vtState.compatibility = null;
     vtBlankReportDom();
-    vtSetRunMsg(vtSpin('Running Provisioning…'), false);
+    vtSetRunMsg(vtSpin('Running Workbook Health…'), false);
     google.script.run
       .withSuccessHandler(function(res) {
-        if (token !== vtRunToken) return;   // superseded before Provisioning returned
-        if (!res || !res.ok) { vtSetRunMsg(vtEsc(res && res.error ? res.error : 'Provisioning failed.'), true); return; }
-        vtState.target = res.target; vtState.provisioning = res.report;
-        vtSetRunMsg(vtSpin('Running Workbook Drift…'), false);
+        if (token !== vtRunToken) return;
+        if (!res || !res.ok) { vtSetRunMsg(vtEsc(res && res.error ? res.error : 'Workbook Health failed.'), true); return; }
+        vtSetRunMsg('', false);
+        var h = res.report || {}; var reports = h.reports || {};
+        vtState.target = res.target; vtState.health = h;
+        vtState.provisioning = reports.provisioning || null;
+        vtState.schema = reports.schema || null;
+        vtState.drift = reports.drift || null;
+        vtState.formulas = reports.formulas || null;
+        vtState.conditionalFormatting = reports.conditionalFormatting || null;
+        vtState.namedRanges = reports.namedRanges || null;
+        vtState.workbookType = h.workbookType || null;
+        vtState.compatibility = h.compatibility || null;
         vtRenderAll();
-        google.script.run
-          .withSuccessHandler(function(res2) {
-            if (token !== vtRunToken) return; // superseded before Drift returned
-            if (!res2 || !res2.ok) { vtSetRunMsg(vtEsc(res2 && res2.error ? res2.error : 'Drift failed.'), true); return; }
-            vtSetRunMsg('', false);
-            vtState.target = res2.target; vtState.drift = res2.report;
-            vtRenderAll();
-          })
-          .withFailureHandler(function(err) {
-            if (token !== vtRunToken) return;
-            vtSetRunMsg(vtEsc(err && err.message ? err.message : 'Drift failed.'), true);
-          })
-          .vtRunWorkbookDrift(id);
       })
       .withFailureHandler(function(err) {
         if (token !== vtRunToken) return;
-        vtSetRunMsg(vtEsc(err && err.message ? err.message : 'Provisioning failed.'), true);
+        vtSetRunMsg(vtEsc(err && err.message ? err.message : 'Workbook Health failed.'), true);
       })
-      .vtRunProvisioning(id);
+      .vtRunWorkbookHealth(id);
   }
 
   /* ---- Render ---- */
@@ -572,6 +571,8 @@
 
   function vtOverallVerdict() {
     var p = vtState.provisioning, d = vtState.drift;
+    if (vtState.health && vtState.health.overall === 'FAIL') return { text: 'FAIL', cls: 'fail' };
+    if (vtState.health && vtState.health.overall === 'WARN') return { text: 'PASS · advisory findings', cls: 'drift' };
     if (p && p.overall === 'FAIL') return { text: 'FAIL', cls: 'fail' };
     if (d && d.overall === 'DRIFT') return { text: 'PASS · drift', cls: 'drift' };
     if (p && p.overall === 'PASS') return { text: 'PASS', cls: 'pass' };
@@ -668,6 +669,22 @@
       '</div>';
     }
 
+    var advisoryCards = [
+      ['Formula Validation', vtState.formulas],
+      ['Conditional Formatting', vtState.conditionalFormatting],
+      ['Named Ranges', vtState.namedRanges]
+    ];
+    for (var ac = 0; ac < advisoryCards.length; ac++) {
+      var ar = advisoryCards[ac][1];
+      if (!ar) continue;
+      var hasDrift = ar.overall === 'DRIFT';
+      var aw = (ar.counts && ar.counts.warn) || 0;
+      html += '<div class="status ' + (hasDrift ? 'drift' : 'pass') + '">' +
+        '<div class="name">' + vtEsc(advisoryCards[ac][0]) + ' <span style="font-weight:400;color:var(--ink-mute);">(advisory)</span></div>' +
+        '<div class="verdict ' + (hasDrift ? 'drift' : 'pass') + '">' + (hasDrift ? '🟡 ' + aw + ' finding' + (aw === 1 ? '' : 's') : '🟢 PASS') + '</div>' +
+        '<div class="tally">' + vtTally(ar.counts) + '</div></div>';
+    }
+
     document.getElementById('vt-status-grid').innerHTML = html;
   }
 
@@ -697,6 +714,9 @@
     if (vtState.provisioning) groups.push({ label: 'Provisioning', report: vtState.provisioning });
     if (vtState.schema)       groups.push({ label: 'Schema Evolution', report: vtState.schema });
     if (vtState.drift)        groups.push({ label: 'Workbook Drift', report: vtState.drift });
+    if (vtState.formulas)     groups.push({ label: 'Formula Validation', report: vtState.formulas });
+    if (vtState.conditionalFormatting) groups.push({ label: 'Conditional Formatting', report: vtState.conditionalFormatting });
+    if (vtState.namedRanges)  groups.push({ label: 'Named Ranges', report: vtState.namedRanges });
 
     if (!groups.length) { box.innerHTML = '<p class="empty">Run a check to see findings.</p>'; return; }
 
@@ -705,6 +725,10 @@
     for (var g = 0; g < groups.length; g++) {
       var rep = groups[g].report;
       var sheets = rep.sheets || [];
+      if (!sheets.length && rep.findings && rep.findings.length) {
+        sheets = [{ name: '(workbook)', presence: 'workbook',
+          status: rep.overall === 'DRIFT' ? 'WARN' : 'OK', findings: rep.findings }];
+      }
       html += '<div style="margin:' + (g ? '16px' : '0') + ' 0 8px;"><b style="font-size:12.5px;">' + vtEsc(groups[g].label) + '</b></div>';
       if (!sheets.length) {
         var emptyMsg = rep.summary ? rep.summary : 'No sheets compared.';
@@ -754,6 +778,10 @@
     if (vtState.provisioning) out.provisioning = vtState.provisioning;
     if (vtState.schema) out.schema = vtState.schema;
     if (vtState.drift) out.drift = vtState.drift;
+    if (vtState.formulas) out.formulas = vtState.formulas;
+    if (vtState.conditionalFormatting) out.conditionalFormatting = vtState.conditionalFormatting;
+    if (vtState.namedRanges) out.namedRanges = vtState.namedRanges;
+    if (vtState.health) out.health = { overall: vtState.health.overall, schemaVersion: vtState.health.schemaVersion };
     return out;
   }
   function vtRenderJson() {

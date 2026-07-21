@@ -6,6 +6,10 @@ The Central App architecture is **live** and **family-beta capable**. Recovery V
 
 **Flag discipline (recovery stack):** the three recovery flags default OFF and **fail closed**. Do not turn any of them on except for a deliberate, scoped validation pass on a **disposable** account, and **set them back OFF** afterward. Never enable a recovery flag against the production / bound workbook.
 
+**Immutable administrator rule:** `samertheodossy@gmail.com` is the sole CashCompass administrator. `cashcompass2026@gmail.com` is a non-admin disposable test identity. Never edit `ADMIN_EMAILS`, alter its fallback, or temporarily elevate a test/beta/project-owner account for validation. An admin-only test must run while authenticated as the sole administrator; otherwise it stops fail-closed.
+
+**Unified-source rule:** deployment pinning is a temporary rollout/rollback tool, not the long-term compatibility model. Central and bounded deployments must be able to converge on the same reviewed source. The projects keep separate properties: Central requires `CENTRAL_MODE=true`; a bound project requires `CENTRAL_MODE` absent/false and test/recovery flags OFF. Before a unified-source deployment, prove that normal no-argument calls still resolve the existing bounded workbook exactly as before and that all test writers remain unreachable from normal runtime and refuse active, mapped, Golden, and configured-default workbooks.
+
 The change discipline below (carried from V1.2) still governs **every** edit. For Central App work, the **`## Central App Transition Rules`** section is now the **active** governing policy (it is no longer conditional / future).
 
 Every new change must follow these rules unless the user explicitly approves otherwise:
@@ -61,6 +65,7 @@ Every Central App change must follow:
 - **Always support the existing bound-sheet mode during transition.** Until the resolver is wired everywhere, both modes must coexist without regression:
   - existing bound-sheet users continue to work byte-for-byte unchanged,
   - new central-app users go through the bootstrap flow.
+- **Converge the source, separate the context.** Do not preserve bounded safety by leaving it indefinitely on old code. Shared production functions keep their normal no-argument resolver behavior; test-only explicit-spreadsheet seams are additive, guarded, and never runtime-wired.
 - **Test both flows on every migration pass:**
   1. **Legacy workbook (bound-sheet mode)** — the touched module still resolves the active spreadsheet correctly and behaves identically to pre-migration.
   2. **New user bootstrap flow** — a first-time user with no mapping lands on a freshly bootstrapped workbook, the touched module reads/writes against that workbook, and no admin-side or another user's data is touched.

@@ -154,7 +154,7 @@ function runScenario_(scenario, runId, options) {
   var actions = [];
   var wb = null;
   var error = null;
-  var validators = { provisioning: null, schema: null, drift: null };
+  var validators = { provisioning: null, schema: null, drift: null, health: null };
   var sharing = null;
   var cleanup = { requested: trashRequested, trashed: false, verified: false, error: null };
   var disposition = 'KEPT_FOR_INSPECTION';
@@ -211,9 +211,18 @@ function runScenario_(scenario, runId, options) {
     var scope = (scenario.expectedSheets && scenario.expectedSheets.length)
       ? { sheetNames: scenario.expectedSheets }
       : undefined;
-    validators.provisioning = validateProvisioning_(wb.ss, scope);
-    validators.schema = validateSchemaEvolution_(wb.ss, scope);
-    validators.drift = validateDrift_(wb.ss, scope);
+    if (typeof validateWorkbookHealth_ === 'function') {
+      validators.health = validateWorkbookHealth_(wb.ss, scope);
+      validators.provisioning = validators.health.reports.provisioning;
+      validators.schema = validators.health.reports.schemaEvolution;
+      validators.drift = validators.health.reports.drift;
+    } else {
+      // Backward-compatible fallback while source versions roll through isolated
+      // deployments. The current source always supplies Workbook Health.
+      validators.provisioning = validateProvisioning_(wb.ss, scope);
+      validators.schema = validateSchemaEvolution_(wb.ss, scope);
+      validators.drift = validateDrift_(wb.ss, scope);
+    }
 
     // Functional correctness (E0a) — the scenario reads actual values back from the
     // disposable workbook and asserts them via ctx.assert.*. Read/compare only; a

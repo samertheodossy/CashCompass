@@ -213,6 +213,9 @@ A persistent panel restating the guarantees and the live gate state:
 
 - Admin-only; `VALIDATOR_ENABLED` gates section B; `TEST_HARNESS_ENABLED` gates
   section C (both shown as on/off).
+- The sole administrator is `samertheodossy@gmail.com`. The disposable identity
+  `cashcompass2026@gmail.com` remains non-admin even when it owns the Central
+  script or a test workbook. `ADMIN_EMAILS` is never changed to run a test.
 - Validator is read-only; Harness writes only to disposable test workbooks.
 - Harness refuses the Canonical workbook, any mapped real user workbook, the
   production workbook, or an unknown/ambiguous workbook (fail closed).
@@ -240,6 +243,9 @@ standards).
    admin + the relevant feature flag first — never assumes the page guard ran.
    Validator actions require `assertValidatorAllowed_()`; Harness actions require
    `assertHarnessAllowed_()`.
+   If the browser is authenticated as any other account, the test stops. Project
+   ownership, allow-list membership, and test-account status do not bypass this
+   check.
 3. **Target classification is server-side.** `classifyTarget_(type, id)` resolves
    the workbook, computes the safety status, and refuses production IDs
    (`VALIDATOR_GOLDEN_WORKBOOK_ID`, `VALIDATOR_DEFAULT_CENTRAL_WORKBOOK_ID` for
@@ -416,18 +422,20 @@ gates on the whole subsystem.
   resolution, structured-object return, and rendering end-to-end. *(The client
   controller currently lives inline in the HTML rather than a separate
   `validation_testing.js`; extraction is deferred.)*
-- **C2 — More Validator modules. ◑ Partial.** Workbook Drift and Schema Evolution
-  buttons are wired (`vtRunWorkbookDrift`, `vtRunSchemaEvolution`). Formula /
-  Conditional-Formatting / Full Workbook Health buttons remain future as each
-  Phase-2 module ships.
+- **C2 — More Validator modules. ◑ Source-ready; runtime pending.** Workbook Drift
+  and Schema Evolution remain wired individually. **Run Workbook Health** now calls
+  the aggregate server report and renders Formula, Conditional-Formatting, and
+  Named-Range advisory cards/findings with Provisioning, Schema, and Drift.
 - **C3 — Regression Testing (after Test Harness foundation). ◑ V1 slice done.**
   Section C supports one registered scenario or one registered suite at a time,
   including `SMOKE-POPULATED-FIXTURE` and `SUITE-CENTRAL-SAFETY`, with Keep/Trash
   controls and detailed reports. The harness always creates its own disposable
   workbook and `assertDisposableTarget_` enforces teardown. Multi-select pack
   composition and bounded-chunk Release Certification remain future.
-- **C4 — Release Readiness verdict.** Add the aggregated verdict rendering + "Run
-  Full Release Readiness" once the gate (`RELEASE_READINESS.md`) exists.
+- **C4 — Release Readiness verdict. ◑ Runner source-ready; UI pending.** The bounded
+  one-scenario-per-invocation runner and archived evidence contract exist in
+  `release_readiness_runner.js`; console start/progress/final-verdict controls and
+  isolated runtime validation remain.
 - **C5 — Polish.** Long-run handling (per-pack runs / progress), cleanup-stragglers
   action, copy/export refinements.
 

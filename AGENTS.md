@@ -72,3 +72,6 @@ Higher-priority instructions control when requirements conflict. When requiremen
 - No deploys unless explicitly approved.
 - No destructive workbook changes unless explicitly approved.
 - No schema rewrites, formatting washes, or broad migrations unless explicitly approved.
+- **Administrator identity is immutable.** `samertheodossy@gmail.com` is the sole CashCompass administrator. Never add, substitute, temporarily elevate, or infer another administrator; never modify `ADMIN_EMAILS` or its fallback to enable testing. `cashcompass2026@gmail.com` is a non-admin disposable test identity. If a test requires admin execution, authenticate as the sole administrator or stop and request that access path.
+- **The bounded workbook is never a test target.** Test/Validator/Release tooling may read an explicitly approved candidate where documented, but every writer must create and continuously re-verify its own marked disposable workbook. Never pass the active, bounded, mapped-user, Golden, or configured-default workbook into a test writer.
+- **Do not rely on permanent version pinning for compatibility.** Central and bounded deployments must be able to converge on the same reviewed source. Every production seam must preserve its existing no-argument bounded behavior, and unified-source deployment requires explicit bounded-safety regression evidence before approval.

@@ -219,7 +219,7 @@ function getQuickAddPreview(payload) {
   };
 }
 
-function quickAddPayment(payload) {
+function quickAddPayment(payload, optionalSs) {
   validateRequired_(payload, ['entryType', 'payee', 'entryDate', 'amount']);
 
   const entryType = String(payload.entryType || '').trim();
@@ -245,7 +245,10 @@ function quickAddPayment(payload) {
   const signedAmount = entryType === 'Expense' ? -amount : amount;
   const year = entryDate.getFullYear();
 
-  const ss = getUserSpreadsheet_();
+  // Internal Test Harness seam: normal browser/sidebar callers omit optionalSs
+  // and preserve Central/bound resolution. Harness callers pass only an already
+  // validated disposable Spreadsheet object.
+  const ss = optionalSs || getUserSpreadsheet_();
   const sheet = getCashFlowSheetForYear_(ss, year);
   const monthCol = getMonthColumnByDate_(sheet, entryDate, 1);
   const headerMap = getCashFlowHeaderMap_(sheet);
@@ -319,8 +322,12 @@ function quickAddPayment(payload) {
   const loanOrHelocNotice = !!(debtAdjustResult && debtAdjustResult.loanOrHelocSkipped);
   const debtBalanceNote = loanOrHelocNotice ? null : debtAdjustResult;
 
-  touchDashboardSourceUpdated_('quick_payment');
-  touchDashboardSourceUpdated_('cash_flow');
+  // The explicit Spreadsheet seam is harness-only; do not update the operator's
+  // per-user dashboard freshness metadata while exercising a disposable fixture.
+  if (!optionalSs) {
+    touchDashboardSourceUpdated_('quick_payment');
+    touchDashboardSourceUpdated_('cash_flow');
+  }
 
   const monthLabel = Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'MMM-yy');
   const entryDateStr = Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');

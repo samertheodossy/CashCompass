@@ -15,6 +15,24 @@ The bounded application contains **real user workbooks**. Whenever implementing 
 - Existing populated sheets must **not** be modified or restyled unless the task explicitly requires it.
 - Preserve all user **data**, **formulas**, **formatting**, **column widths**, **row heights**, and **workbook behavior**.
 - Existing user workbooks must continue behaving exactly as they do today.
+- Automated test writers must never use an existing workbook as their mutation target. They create their own marked disposable workbook and refuse active/bounded, mapped-user, Golden, and configured-default IDs before every write and cleanup.
+
+### 1.1 Administrator Identity Is Configuration, Not a Test Knob
+
+- `samertheodossy@gmail.com` is the sole administrator.
+- `cashcompass2026@gmail.com` is test-only and must remain non-admin.
+- `ADMIN_EMAILS` and its fallback must never be changed, broadened, or temporarily overridden to unblock testing.
+- Admin-only execution must authenticate as the sole administrator. Project ownership, editor access, allow-list membership, or possession of a deployment URL never substitutes for the application admin gate.
+- Automated source checks must reject code that writes or deletes `ADMIN_EMAILS`.
+
+### 1.2 Unified-Source Compatibility
+
+Version pinning is permitted for staged rollout and rollback, but it is not the permanent bounded-safety strategy. Central and bounded deployments must converge on one reviewed source.
+
+- Existing no-argument production entry points retain their resolver behavior.
+- Explicit `Spreadsheet` parameters are internal test seams only and must be optional.
+- No test runner may be wired to `doGet`, `onOpen`, menus, triggers, or normal dashboard calls.
+- A unified-source deployment is not ready until automated checks confirm these invariants and runtime validation uses only a copy/disposable workbook—not the main bounded workbook.
 
 This is always the default assumption, even when a prompt doesn't restate it.
 

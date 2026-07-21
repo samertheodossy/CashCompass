@@ -145,6 +145,7 @@ Validation Console
 Release Validation
 
 - RELEASE_READINESS.md
+- P1_RELEASE_EVIDENCE_CONTRACT.md
 
 ---
 

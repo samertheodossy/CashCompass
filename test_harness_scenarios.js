@@ -123,6 +123,12 @@ function getHarnessScenarios_() {
   if (typeof getHarnessPopulatedFixtureScenario_ === 'function') {
     list.push(getHarnessPopulatedFixtureScenario_());
   }
+  if (typeof getHarnessPerformancePlannerScenario_ === 'function') {
+    list.push(getHarnessPerformancePlannerScenario_());
+  }
+  if (typeof getHarnessBillsPayE2EScenario_ === 'function') {
+    list.push(getHarnessBillsPayE2EScenario_());
+  }
   return list;
 }
 

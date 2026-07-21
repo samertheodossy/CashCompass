@@ -1010,6 +1010,11 @@ function sendPlannerEmailIfConfigured_(summary, options) {
   options = options || {};
   var emailMode = String(options.emailMode || 'send').toLowerCase();
 
+  // Harness-only privacy seam. Normal callers never pass `suppress`; unknown
+  // values retain the legacy send behavior below. This performs no property,
+  // Activity, recipient, or MailApp work.
+  if (emailMode === 'suppress') return;
+
   if (emailMode === 'defer') {
     // Per-save background run. Defer the email — the debounce trigger
     // will eventually settle and send. Bump LAST_SAVE_AT so the

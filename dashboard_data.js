@@ -1560,8 +1560,12 @@ function getUpcomingBillsDueForDashboard() {
 }
 
 
-function getBillsDueFromCashFlowForDashboard(preloadedCurrentCashFlow) {
-  const ss = getUserSpreadsheet_();
+function getBillsDueFromCashFlowForDashboard(preloadedCurrentCashFlow, optionalSs) {
+  // Internal explicit-workbook seam: planner/harness callers that already hold
+  // a validated disposable target must keep every nested Bills read/write on
+  // that same workbook. Normal dashboard callers omit optionalSs and preserve
+  // the production resolver path.
+  const ss = optionalSs || getUserSpreadsheet_();
   ensureActivityLogSheet_(ss);
 
   // Phase 1B perf: activate the request-scoped Activity Log dedupe-key cache
@@ -1588,8 +1592,8 @@ function getBillsDueFromCashFlowForDashboard(preloadedCurrentCashFlow) {
   // bill. Creating it on demand via the centralized safe helper is a
   // no-op if the sheet already exists (populated workbooks unchanged).
   try {
-    if (typeof ensureCashFlowYearSheet_ === 'function') {
-      ensureCashFlowYearSheet_(today.getFullYear());
+    if (typeof buildCashFlowYearSheet_ === 'function') {
+      buildCashFlowYearSheet_(ss, today.getFullYear());
     }
   } catch (_e) { /* fall through; downstream will surface a clear error */ }
 
@@ -2646,8 +2650,10 @@ function getInputBillsDueRows_(ss, today, tz) {
  * windows as the debt planner email. Omits overdue (negative days) so they stay only
  * in the email Overdue section from getBillsDueFromCashFlowForDashboard.
  */
-function buildInputBillPlannerPaymentWindows_(today, tz, payNowWindowDays, paySoonWindowDays) {
-  const ss = getUserSpreadsheet_();
+function buildInputBillPlannerPaymentWindows_(today, tz, payNowWindowDays, paySoonWindowDays, optionalSs) {
+  // Preserve normal production resolution while allowing the planner's
+  // explicit disposable-workbook seam to propagate through this nested read.
+  const ss = optionalSs || getUserSpreadsheet_();
   const rows = getInputBillsDueRows_(ss, today, tz);
   const todayOnly = stripTime_(today);
   const payNow = [];
@@ -3370,7 +3376,7 @@ function buildDashboardBillPaidKey_(payee, dueDate) {
  * @param {{ payee: string, dueDate: string, monthHeader?: string, amount?: number }} payload
  * @returns {{ ok: boolean, message?: string }}
  */
-function markDashboardBillOccurrencePaid(payload) {
+function markDashboardBillOccurrencePaid(payload, optionalSs) {
   payload = payload || {};
   var payee = String(payload.payee || '').trim();
   var dueDate = String(payload.dueDate || '').trim();
@@ -3378,7 +3384,8 @@ function markDashboardBillOccurrencePaid(payload) {
     return { ok: false, message: 'Missing payee or due date for paid marker.' };
   }
 
-  var ss = getUserSpreadsheet_();
+  // Internal Test Harness seam; normal UI callers omit optionalSs.
+  var ss = optionalSs || getUserSpreadsheet_();
   if (!ss) {
     return { ok: false, message: 'No active workbook for paid marker.' };
   }

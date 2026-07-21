@@ -13,6 +13,12 @@ populated-fixture scenario that creates its own Central-owned workbook, verifies
 Restricted sharing before seeding, writes synthetic data, and confirms Trash by
 Drive read-back. Its first isolated Central runtime run passed on `@117`
 (2026-07-21): 9/9 functional assertions and verified cleanup. Automated
+deeper-suite evidence then passed on isolated `@120`: Bills Pay E2E passed 3/3
+functional assertions with Provisioning/Drift PASS and verified Trash; Performance
+Planner passed 4/4 with first/repeat timings of 32.779 s / 31.901 s, retained
+History rows, zero History charts, Restricted sharing, CURRENT schema,
+Provisioning/Drift PASS, and verified Trash. The Performance run also proved the
+corrected nested Bills helpers remain on the explicit disposable workbook.
 disposable fixtures reduce repetitive setup; they do
 not replace final blank/fresh and representative-populated release evidence. Every
 change must still ship with exact checks appropriate to both tracks. See
@@ -32,9 +38,9 @@ Run both tracks after every change, however small.
 6. Save one happy-path write the change touches (e.g. Add bank account, Add bill, Quick add, Add donation) and confirm Activity shows exactly one expected row.
 7. Re-check any panel the change touched against the copy standard: `No <things> yet.`, `Add your <things> in Setup / Review to see <outcome>.`, no `"Error:"` prefixes, ellipses render as `…`, and no internal sheet names leak into user-facing messages.
 
-**Track B — Real populated workbook (regression guardrail for existing users)**
+**Track B — Disposable populated copy (regression guardrail for existing users)**
 
-1. Open the deployed web app against a populated workbook (the real household workbook or a recent copy).
+1. Open the deployed web app against a recent **non-sensitive disposable copy** of the populated workbook. Never use the main bounded household workbook as a test target.
 2. Confirm Overview KPIs, Bills Due, Upcoming Next 7/30, Net Worth, Buffer Runway, and Retirement Outlook render **unchanged** from the prior known-good baseline.
 3. Open every page the change touched and confirm the existing data still renders byte-for-byte the same (no reordering, no new dashes where values used to appear, no sheet-name leakage into success / error text).
 4. Run **Run Planner + Refresh Snapshot**. Confirm OUT - History snapshot still appends (or stays identical if snapshot is idempotent). If `INPUT - Settings.Email` is configured and the summary is meaningful, confirm the planner email still sends.
@@ -42,6 +48,29 @@ Run both tracks after every change, however small.
 6. Spot-check **Rolling Debt Payoff** Standard mode: Decision card, HELOC card, Payment result table, and the `[Add payment]` → Cash Flow → Quick add prefill all still work.
 
 If either track fails, the change is not ready to ship — fix, then re-run both tracks.
+
+### Unified-source deployment gate
+
+Central and bounded deployments must eventually run the same reviewed source;
+an old bounded version is not the permanent safety mechanism. Before moving the
+bounded deployment to a converged source:
+
+1. Record one Git/source identity for both Apps Script projects (their numeric
+   Apps Script version numbers may differ; the source content must match).
+2. Run Central suites only as `samertheodossy@gmail.com`; never modify
+   `ADMIN_EMAILS`. `cashcompass2026@gmail.com` remains a normal disposable user.
+3. Run Central writers only on Harness-created marked workbooks with Restricted
+   sharing and verified Trash cleanup.
+4. Push the same source to a copied/container-bound test workbook and execute the
+   blank and populated-copy tracks there. Do not publish or test against the main
+   bounded workbook.
+5. In that bound-copy project, verify `CENTRAL_MODE` is absent/false and all
+   Validator/Harness/Recovery flags are OFF. In the Central project, verify
+   `CENTRAL_MODE=true`. Source is shared; project properties define the context.
+6. Confirm normal no-argument UI/server calls still use the resolver while every
+   optional explicit-Spreadsheet seam is used only by guarded tests.
+7. Only after both contexts pass may the real bounded deployment be updated—with
+   separate explicit deployment approval and a rollback version recorded.
 
 ### Flag-gated performance timing
 

@@ -3,17 +3,26 @@
 *The pre-release go/no-go produced by the Test Harness running every scenario pack
 and the Validator judging each result.*
 
-**Status:** **Design + template; aggregate verdict not implemented.** The Validator
+**Status:** **Bounded runner source-ready and isolated at Central `@120`; final runtime verdict pending.** The Validator
 Phase 2 core (Provisioning / Drift / Schema Evolution), fail-closed disposable
 workbook lifecycle, and populated-fixture hardening now exist. Five suites are
 runnable: `SUITE-BILLS-REGRESSION`, `SUITE-RECOVERY-REGRESSION`,
 `SUITE-QUICK-ADD-RELIABILITY`, `SUITE-POPULATED-FIXTURE`, and the combined
 `SUITE-CENTRAL-SAFETY`. The **aggregate Release Readiness report** — required
-suites and remaining Validator gates rolled into one go/no-go — is not built yet.
-It will be produced through bounded suite orchestration and
-`test_harness_report.js` (see `TEST_HARNESS_ARCHITECTURE.md`) as the remaining
-E2E/live/performance packs land. This file is the report format and release
-workflow; the harness is the producer.
+suites and Validator gates rolled into one go/no-go — is now implemented locally
+by `release_readiness_runner.js`: one scenario per invocation, compact privacy-safe
+evidence, archived final runs, and fail-closed READY/NOT READY rules. Performance
+Planner and Bills Pay E2E are runtime-proven on disposable workbooks at isolated
+`@120`: Bills Pay passed 3/3 functional assertions with Provisioning/Drift PASS and
+verified Trash; Performance Planner passed 4/4 with first/repeat timings of
+32.779 s / 31.901 s, retained History rows, zero History charts, Restricted
+owner-only sharing, CURRENT schema, Provisioning/Drift PASS, and verified Trash.
+First-Run UX
+E2E, Populated Dashboard E2E, and Recovery Live remain explicitly NOT IMPLEMENTED
+until their authenticated browser/disposable-account seams exist. Therefore the
+current P1 verdict remains **NOT READY**; performance budgets also remain unratified
+because one passing timing sample is not percentile evidence. See
+`P1_RELEASE_EVIDENCE_CONTRACT.md`.
 
 **Related docs:** `TEST_HARNESS_ARCHITECTURE.md` (the runner),
 `VALIDATOR_ARCHITECTURE.md` (the read-only judge), `REGRESSION_SCENARIOS.md` (the
@@ -137,6 +146,11 @@ Before a major change or a beta release:
   Proceed with the change / release; archive the report with the release notes
   Disable the flags again (default-off)
 ```
+
+The admin identity is not a test setting: only `samertheodossy@gmail.com` may run
+the guarded evidence. `cashcompass2026@gmail.com` stays a normal disposable test
+user. Never modify `ADMIN_EMAILS` to work around authentication; switch the
+operator session to the administrator or stop.
 
 - Run the applicable fast regression suites before a major change. Before a beta
   release, execute every required suite in bounded chunks and aggregate the saved

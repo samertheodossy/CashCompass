@@ -3,10 +3,11 @@
   "private": true,
   "scripts": {
     "build:rolling-dashboard": "vite build --config vite.rolling-dashboard.config.ts && node scripts/emitRollingDashboardBundleHtml.mjs",
-    "test": "npm run test:dashboard-ux && npm run test:performance-timing && npm run test:populated-harness",
+    "test": "npm run test:dashboard-ux && npm run test:performance-timing && npm run test:populated-harness && npm run test:p1-evidence",
     "test:dashboard-ux": "node scripts/checkDashboardUxRegressions.mjs",
     "test:performance-timing": "node scripts/checkPerformanceTimingRegressions.mjs",
-    "test:populated-harness": "node scripts/checkPopulatedHarnessRegressions.mjs"
+    "test:populated-harness": "node scripts/checkPopulatedHarnessRegressions.mjs",
+    "test:p1-evidence": "node scripts/checkP1EvidenceRegressions.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

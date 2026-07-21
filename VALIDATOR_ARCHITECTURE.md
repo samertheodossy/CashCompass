@@ -16,7 +16,7 @@ console. Phase 1 drove the **2026-07 Golden Workbook convergence milestone**
 rules-based validators, conditional-format capture, provisioning validation) are
 **Phase 2+ future work** — see §10.
 
-**Phase 2 — architecture designed (2026-07-12), partially implemented.** Phase 2
+**Phase 2 — source-complete locally; isolated runtime validation pending (2026-07-21).** Phase 2
 shifts the Validator from **two-workbook Canonical comparison** to
 **single-workbook Workbook Health validation** (does *this* workbook match the
 canonical rules?). Its full module architecture, execution order, report format,
@@ -24,8 +24,10 @@ phased plan, risks, and recommended first implementation are specified in **§10
 Phase 2 architecture**. Implemented: **2A Provisioning** (`validator_rules.js` +
 `validator_provisioning.js` + `validatorRunProvisioning()`), **2B Workbook Drift**
 (`validator_drift.js`), and **2B″ Schema Evolution V1** (`validator_schema.js`).
-Formula, Conditional-Formatting, Named-Range validation, and the aggregate Workbook
-Health report remain design only.
+The current local P1 slice adds the formal schema registry, targeted Formula and
+Conditional-Formatting validation, thin Named-Range validation, and aggregate
+Workbook Health (`validator_health.js`). These additions remain **unshipped and
+runtime-unverified** until an explicitly approved isolated Central push/deployment.
 
 **Three validation questions (Provisioning + Drift refined 2026-07-13 → §10.0a;
 Schema Evolution added 2026-07-13 → §10.0b).** Workbook Health answers *three
@@ -467,10 +469,10 @@ At every phase: read-only, guarded, default-off, and covered by the CI guards.
 > **Status:** **Partially implemented.** This section is the full design of record.
 > Built so far: **Provisioning** (`validator_provisioning.js`), **Workbook Drift**
 > (`validator_drift.js`), and **Schema Evolution V1** (`validator_schema.js`), all
-> reachable from the admin **Validation & Testing console** (§13). Still design only:
-> Formula validation, Conditional-Formatting validation, Named-Range validation, and
-> the **aggregate Workbook Health report** (`validator_health.js`) that rolls them
-> into one score — those remain a later step.
+> reachable from the admin **Validation & Testing console** (§13). The current local
+> source also implements Formula validation, Conditional-Formatting validation,
+> Named-Range validation, and the aggregate **Workbook Health report**
+> (`validator_health.js`). Isolated Central runtime validation remains pending.
 
 **Goal.** After Central provisions (or self-heals) a workbook, run a **read-only**
 validation that verifies *this one* workbook matches the **canonical CashCompass
@@ -934,7 +936,8 @@ provisioning and the Validator share one definition.
 **Note.** This recommended first slice has **shipped** (Phase 2A): required-sheet +
 header-presence validation (`validator_provisioning.js`), and the prerequisite
 `*_REQUIRED_HEADERS_` constant extraction is done for the initial core sheets.
-Conditional Formatting, Formulas, and Named Ranges remain deferred as noted above.
+Conditional Formatting, Formulas, Named Ranges, and Workbook Health are now
+source-ready locally; runtime evidence remains pending.
 
 ---
 

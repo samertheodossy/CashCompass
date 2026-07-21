@@ -99,7 +99,9 @@ function runDebtPlanner(options) {
 }
 
 function runDebtPlannerCore_(options, performanceTrace, ownsPerformanceTrace) {
-  const ss = getUserSpreadsheet_();
+  // Internal Test Harness seam: an already-validated disposable Spreadsheet may
+  // be supplied explicitly. Normal callers omit it and preserve the resolver.
+  const ss = options.spreadsheet || getUserSpreadsheet_();
   const today = new Date();
   const tz = Session.getScriptTimeZone();
 
@@ -109,9 +111,9 @@ function runDebtPlannerCore_(options, performanceTrace, ownsPerformanceTrace) {
   // sheet errors are swallowed here; any other error still propagates
   // so real bugs remain visible. On a fully populated workbook every
   // try block succeeds and behavior is identical to before.
-  runDebtPlannerSyncSafely_(syncAllHouseAssetsFromLatestCurrentYear_);
-  runDebtPlannerSyncSafely_(syncAllAccountsFromLatestCurrentYear_);
-  runDebtPlannerSyncSafely_(syncAllAssetsFromLatestCurrentYear_);
+  runDebtPlannerSyncSafely_(function() { syncAllHouseAssetsFromLatestCurrentYear_(ss); });
+  runDebtPlannerSyncSafely_(function() { syncAllAccountsFromLatestCurrentYear_(ss); });
+  runDebtPlannerSyncSafely_(function() { syncAllAssetsFromLatestCurrentYear_(ss); });
   if (typeof markPerformanceTrace_ === 'function') {
     markPerformanceTrace_(performanceTrace, 'sync_inputs');
   }
@@ -208,7 +210,8 @@ function runDebtPlannerCore_(options, performanceTrace, ownsPerformanceTrace) {
     today,
     tz,
     payNowWindowDays,
-    paySoonWindowDays
+    paySoonWindowDays,
+    ss
   );
   const nextPaymentsForPlanner = mergeDebtAndBillPaymentWindows_(
     nextPayments.payNow,
@@ -221,7 +224,7 @@ function runDebtPlannerCore_(options, performanceTrace, ownsPerformanceTrace) {
   // bills-due helper can skip a duplicate getDataRange() of the same
   // sheet. When the planner could not load the sheet (blank workbook),
   // cashFlowRaw is null and the helper reads on its own as before.
-  const overdueBillsForEmail = getBillsDueFromCashFlowForDashboard(cashFlowRaw).overdue || [];
+  const overdueBillsForEmail = getBillsDueFromCashFlowForDashboard(cashFlowRaw, ss).overdue || [];
   if (typeof markPerformanceTrace_ === 'function') {
     markPerformanceTrace_(performanceTrace, 'build_payment_windows');
   }

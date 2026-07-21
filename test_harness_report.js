@@ -127,7 +127,8 @@ function buildHarnessScenarioReport_(p) {
     durationMs: (p.startedAt && p.finishedAt) ? (p.finishedAt - p.startedAt) : null,
     // Full nested Validator reports for programmatic callers (not printed in the
     // human log; available via the JSON chunk).
-    full: { provisioning: prov, schema: schema, drift: drift }
+    full: { provisioning: prov, schema: schema, drift: drift,
+      health: p.validators && p.validators.health ? p.validators.health : null }
   };
 }
 

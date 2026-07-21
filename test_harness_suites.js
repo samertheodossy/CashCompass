@@ -136,6 +136,46 @@ function getHarnessSuites_() {
         'REGRESSION-QUICK-ADD-WRITE-GUARD',
         'SMOKE-POPULATED-FIXTURE'
       ]
+    },
+    {
+      id: 'SUITE-FIRST-RUN-UX-E2E',
+      label: 'First-Run UX E2E',
+      description: 'Planned browser-driven blank/fresh Setup, navigation, gating, Help, refresh-state, and clean-console validation.',
+      implemented: false,
+      blocker: 'Requires an authenticated browser-runner seam; static HTML checks are not equivalent to E2E evidence.',
+      scenarioIds: []
+    },
+    {
+      id: 'SUITE-POPULATED-DASHBOARD-E2E',
+      label: 'Populated Dashboard E2E',
+      description: 'Planned browser-driven populated KPI, selection/action, equity, subtab, Help/Setup, and clean-console validation.',
+      implemented: false,
+      blocker: 'Requires an authenticated browser runner plus an explicit disposable-workbook dashboard target.',
+      scenarioIds: []
+    },
+    {
+      id: 'SUITE-RECOVERY-LIVE',
+      label: 'Recovery Live',
+      description: 'Planned live disposable-account recovery matrix with exact mapping and flag cleanup evidence.',
+      implemented: false,
+      blocker: 'Requires an isolated disposable account/mapping sandbox; the pure decision matrix is not live evidence.',
+      scenarioIds: []
+    },
+    {
+      id: 'SUITE-PERFORMANCE-PLANNER',
+      label: 'Performance Planner',
+      description: 'Planned first/repeat planner timings, privacy allow-list, History-row retention, zero History charts, and ratified budgets.',
+      implemented: true,
+      blocker: null,
+      scenarioIds: ['PERFORMANCE-PLANNER-FIRST-REPEAT']
+    },
+    {
+      id: 'SUITE-BILLS-PAY-E2E',
+      label: 'Bills Pay E2E',
+      description: 'Planned Due → Pay → Cash Flow → Activity → duplicate-suppression workflow.',
+      implemented: true,
+      blocker: 'Synthetic server E2E does not replace separately required natural cohort proof.',
+      scenarioIds: ['E2E-BILLS-DUE-PAY']
     }
   ];
 }
@@ -175,6 +215,9 @@ function testRunSuiteById_(suiteId, options) {
   var suite = getHarnessSuiteById_(suiteId);
   if (!suite) {
     throw new Error('Test Harness: unknown suite "' + String(suiteId) + '".');
+  }
+  if (suite.implemented === false) {
+    throw new Error('Test Harness: suite "' + suite.id + '" is NOT IMPLEMENTED. ' + String(suite.blocker || 'Required execution seam is unavailable.'));
   }
   options = options || {};
   var mode = normalizeSuiteDisposition_(options.dispositionMode);

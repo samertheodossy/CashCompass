@@ -145,7 +145,7 @@ function ensureSysAccountsSheet_(optionalSs) {
   return sheet;
 }
 
-function syncAllAccountsFromLatestCurrentYear_() {
+function syncAllAccountsFromLatestCurrentYear_(optionalSs) {
   // Use ensureSysAccountsSheet_() for the SYS - Accounts handle so this
   // stays working on first-run saves where the sheet was just inserted
   // earlier in the same Apps Script execution. Some runtimes do not
@@ -162,8 +162,8 @@ function syncAllAccountsFromLatestCurrentYear_() {
   // changed. Now we (1) compute the latest map with 2 round-trips total
   // via a batched read and (2) skip the format-preserving write when
   // the new value equals the existing value.
-  const targetSheet = ensureSysAccountsSheet_();
-  const ss = getUserSpreadsheet_();
+  const ss = optionalSs || getUserSpreadsheet_();
+  const targetSheet = ensureSysAccountsSheet_(ss);
   const sourceSheet = getSheet_(ss, 'BANK_ACCOUNTS');
 
   const targetDisplay = targetSheet.getDataRange().getDisplayValues();

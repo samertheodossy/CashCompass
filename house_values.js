@@ -659,7 +659,7 @@ function getHouseValueFromHistoryForMonth_(house, year, valuationDate) {
  * Copies latest INPUT - House Values (current year) into SYS - House Assets **Current Value** only.
  * Other columns (Type, Loan Amount Left) are left unchanged.
  */
-function syncAllHouseAssetsFromLatestCurrentYear_() {
+function syncAllHouseAssetsFromLatestCurrentYear_(optionalSs) {
   // Performance: previously this function did ~4 sheet round-trips PER
   // HOUSE inside getLatestHouseValuesForYear_, then ~2-3 more
   // round-trips PER SYS - House Assets ROW writing through
@@ -667,7 +667,7 @@ function syncAllHouseAssetsFromLatestCurrentYear_() {
   // changed. Now we (1) compute the latest map with 2 round-trips
   // total via a batched read and (2) skip the format-preserving write
   // when the new value equals the existing value.
-  const ss = getUserSpreadsheet_();
+  const ss = optionalSs || getUserSpreadsheet_();
   const hvSheet = getSheet_(ss, 'HOUSE_VALUES');
   const haSheet = getSheet_(ss, 'HOUSE_ASSETS');
 

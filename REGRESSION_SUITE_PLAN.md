@@ -8,9 +8,10 @@ Harness **Foundation V1** is working (`test_harness_*.js` + the Validation &
 Testing console). Implemented coverage includes `SMOKE-PROVISION-DONATION`, ten
 Bills recurrence/integration scenarios, `REGRESSION-RECOVERY-DUPLICATE-GUARD`,
 `REGRESSION-QUICK-ADD-WRITE-GUARD`, and the isolated-runtime-validated
-`SMOKE-POPULATED-FIXTURE`. Registered on-demand suites are Bills Regression,
+`SMOKE-POPULATED-FIXTURE`, `PERFORMANCE-PLANNER-FIRST-REPEAT`, and
+`E2E-BILLS-DUE-PAY`. Seven on-demand suites are runtime-proven: Bills Regression,
 Recovery Regression, Quick Add Reliability, Representative Populated Fixture,
-and Central Safety Regression. Scenarios
+Central Safety Regression, Performance Planner, and Bills Pay E2E. Scenarios
 declare an **`executionLevel`** (`PURE` / `INTEGRATION` / `E2E`) so a tester
 immediately knows what to expect — see `TEST_HARNESS_ARCHITECTURE.md §3.1`. Keep both
 levels: PURE scenarios prove engine math, INTEGRATION scenarios prove visible workbook
@@ -53,8 +54,8 @@ an automatically repeatable guard.
 | Blank/fresh `@114` UX fixes | Static `npm run test:dashboard-ux` plus server smoke provisioning | Local CI + `SMOKE-PROVISION-DONATION` | `SUITE-FIRST-RUN-UX-E2E`: Setup copy/no internal names, default subtabs, empty-action gating, first-run guidance, Help wording, refresh-button state, and clean-console navigation. |
 | Representative populated `@114` UI validation | Server fixture lifecycle and eight-domain values | `SUITE-POPULATED-FIXTURE`; also `SUITE-CENTRAL-SAFETY` | `SUITE-POPULATED-DASHBOARD-E2E`: KPI/rendering reconciliation, selection/action gating, property equity, active-subtab retention, Help/Setup language, and broad clean-console navigation. |
 | Restricted sharing + safe Trash `@117` | Sharing gate before seed, 9/9 assertions, Drive Trash read-back | `SUITE-POPULATED-FIXTURE`; `SUITE-CENTRAL-SAFETY` | Add negative tests for anyone/domain permissions and protected-workbook refusal under Level 17 Security/Safety. |
-| Planner timing `@115` and History-chart retirement `@116` | Static `npm run test:performance-timing`; manual first/repeat evidence | Local CI today | `SUITE-PERFORMANCE-PLANNER`: explicit-ss planner seam, first/repeat envelopes, privacy allow-list, History rows retained, zero History charts, `cleanup_history_charts`, and ratified budgets. |
-| Bills Due → Pay | Bills recurrence and Cash Flow linkage automated | `SUITE-BILLS-REGRESSION` | `SUITE-BILLS-PAY-E2E`: Due → Pay → Cash Flow → Activity → duplicate suppression. Synthetic regression does not replace separately required natural cohort evidence. |
+| Planner timing `@115`, History-chart retirement `@116`, and automated `@120` run | Static `npm run test:performance-timing`; explicit disposable-workbook planner integration | `SUITE-PERFORMANCE-PLANNER` runtime PASS: 4/4, 32.779 s first / 31.901 s repeat, History retained, zero charts, email suppressed, Restricted/CURRENT/Provisioning/Drift/Trash PASS | Ratify p50/p95 budgets from enough samples; one passing sample is not percentile evidence. |
+| Bills Due → Pay | Bills recurrence and Cash Flow linkage automated | `SUITE-BILLS-REGRESSION`; `SUITE-BILLS-PAY-E2E` runtime PASS at `@120`: explicit disposable-ss Quick Add → Cash Flow → Activity → handled-marker dedupe, 3/3, Provisioning/Drift/Trash PASS | Synthetic regression does not replace separately required natural cohort evidence. |
 
 ### Safe run grouping
 

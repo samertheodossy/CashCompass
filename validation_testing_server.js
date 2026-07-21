@@ -172,6 +172,38 @@ function vtRunSchemaEvolution(spreadsheetId) {
   });
 }
 
+function vtRunWorkbookHealth(spreadsheetId) {
+  return vtSafe_(function() {
+    assertValidatorAllowed_();
+    var t = vtResolveTarget_(spreadsheetId);
+    return { ok: true, target: vtTargetInfo_(t), report: makeWireSafe_(validateWorkbookHealth_(t.ss)) };
+  });
+}
+
+function vtRunFormulaValidation(spreadsheetId) {
+  return vtSafe_(function() {
+    assertValidatorAllowed_();
+    var t = vtResolveTarget_(spreadsheetId);
+    return { ok: true, target: vtTargetInfo_(t), report: makeWireSafe_(validateFormulas_(t.ss)) };
+  });
+}
+
+function vtRunConditionalFormatting(spreadsheetId) {
+  return vtSafe_(function() {
+    assertValidatorAllowed_();
+    var t = vtResolveTarget_(spreadsheetId);
+    return { ok: true, target: vtTargetInfo_(t), report: makeWireSafe_(validateConditionalFormatting_(t.ss)) };
+  });
+}
+
+function vtRunNamedRanges(spreadsheetId) {
+  return vtSafe_(function() {
+    assertValidatorAllowed_();
+    var t = vtResolveTarget_(spreadsheetId);
+    return { ok: true, target: vtTargetInfo_(t), report: makeWireSafe_(validateNamedRanges_(t.ss)) };
+  });
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Test Harness (WRITER) — thin wrappers over the guarded harness runner       */
 /*                                                                              */
@@ -208,6 +240,8 @@ function vtListHarnessScenarios() {
         executionLevel: lvl.label,
         executionExpectation: lvl.expectation,
         description: s.description,
+        implemented: s.implemented !== false,
+        blocker: s.blocker || null,
         expectedSheets: (s.expectedSheets && s.expectedSheets.length) ? s.expectedSheets.slice() : null
       });
     }
@@ -262,6 +296,8 @@ function vtListHarnessSuites() {
         id: s.id,
         label: s.label,
         description: s.description,
+        implemented: s.implemented !== false,
+        blocker: s.blocker || null,
         scenarioIds: (s.scenarioIds && s.scenarioIds.length) ? s.scenarioIds.slice() : [],
         count: (s.scenarioIds && s.scenarioIds.length) ? s.scenarioIds.length : 0
       });

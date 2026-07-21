@@ -293,7 +293,7 @@ function ensureSysAssetsSheet_(optionalSs) {
   return sheet;
 }
 
-function syncAllAssetsFromLatestCurrentYear_() {
+function syncAllAssetsFromLatestCurrentYear_(optionalSs) {
   // Performance: previously this function did ~4 sheet round-trips PER
   // INVESTMENT inside getLatestInvestmentValuesForYear_ (per-row display
   // read + getLatestNonEmptyMonthColumnForRow_'s 2 reads + the matched
@@ -306,7 +306,7 @@ function syncAllAssetsFromLatestCurrentYear_() {
   // a batched read, and (2) skip the format-preserving write when
   // the new value equals the existing value, which is the common case
   // because the user only changed one account in this save.
-  const ss = getUserSpreadsheet_();
+  const ss = optionalSs || getUserSpreadsheet_();
   const sourceSheet = getSheet_(ss, 'INVESTMENTS');
   const targetSheet = getSheet_(ss, 'ASSETS');
 

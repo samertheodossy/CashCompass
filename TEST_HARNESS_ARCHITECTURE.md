@@ -4,7 +4,8 @@
 workbooks and asks the read-only **Validator** to confirm nothing broke.*
 
 **Status:** **Foundation V1 implemented; populated-fixture hardening passed isolated
-Central runtime validation on `@117` (2026-07-21).** `test_harness_core.js`, scenario/data modules, and
+Central runtime validation on `@117`, and Performance Planner plus Bills Pay E2E
+passed isolated Central `@120` (2026-07-21).** `test_harness_core.js`, scenario/data modules, and
 `test_harness_report.js` provide the guard + disposable-workbook lifecycle +
 `assertDisposableTarget_` + smoke/regression scenarios + report shaping. The new
 `SMOKE-POPULATED-FIXTURE` scenario verifies Restricted sharing before any seed
@@ -16,10 +17,28 @@ console — a collapsible **Test Harness** card (writer) that runs the smoke sce
 selected from the dynamic registry with a Keep/Trash disposition, backed by the thin server wrappers
 `vtListHarnessScenarios()` / `vtRunHarnessScenario()` (guarded by
 `assertHarnessAllowed_()`; they never accept a client workbook ID and always create
-the harness's own disposable workbook). Scenario packs, Regression/Recovery/Stress,
-and Release Readiness remain unbuilt. Sequenced in `ROADMAP.md → P1` **after** the
-Validator Phase 2 foundation: (1) Validator Phase 2A/2B → **(2) Test Harness
-foundation *(V1 done)* → (3) Scenario packs → (4) Release Readiness gate**.
+the harness's own disposable workbook). Five foundation suites are runtime-proven.
+The current P1 slice adds explicit-disposable-workbook Performance Planner and
+Bills Pay E2E scenarios plus bounded Release Readiness orchestration. The source is
+pushed to Central and only the isolated validation deployment is at `@120`; Beta
+remains `@106`.
+First-Run UX E2E, Populated Dashboard E2E, and Recovery Live are registered
+fail-closed as NOT IMPLEMENTED until their authenticated browser/disposable-account
+seams exist; dedicated runtime validation of the new Workbook Health modules and
+the final bounded Release Readiness verdict remain pending.
+
+**`@120` deeper-suite evidence:** `SUITE-BILLS-PAY-E2E` completed in 96.1 seconds
+with 1/1 scenario PASS, 3/3 functional assertions, Provisioning/Drift PASS, and
+verified Trash. `SUITE-PERFORMANCE-PLANNER` completed in 144.4 seconds with 1/1
+scenario PASS, 4/4 functional assertions, first/repeat planner timings of
+32.779 s / 31.901 s, retained `OUT - History` rows, zero History charts,
+Restricted owner-only sharing, `CENTRAL_CURRENT / FULLY_CURRENT`,
+Provisioning/Drift PASS, and verified Trash. The first Performance attempt safely
+failed before planner evidence when nested Bills helpers escaped the explicit
+workbook seam; the corrected path now propagates the disposable spreadsheet into
+both Bills readers and the Cash Flow ensure step. Regression checks permanently
+guard those calls. The harness flag was restored OFF; no bounded workbook was
+touched.
 
 **First populated-fixture evidence:** `SUITE-POPULATED-FIXTURE` completed in
 119.7 seconds with 1/1 scenario PASS, 9/9 functional assertions PASS,
@@ -31,9 +50,9 @@ to `false`; Beta and owner/bounded workbooks were untouched.
 **Recent-session on-demand pack:** `SUITE-CENTRAL-SAFETY` groups the existing
 Recovery duplicate guard, Quick Add write guard, and representative populated
 fixture without duplicating scenario definitions. Run it with
-`testRunCentralSafetySuite({ dispositionMode: 'trash' })`. Browser UX, live
-identity/mapping recovery, and planner timing remain separate planned suites because
-they require different runners or additional safe injection seams.
+`testRunCentralSafetySuite({ dispositionMode: 'trash' })`. Planner timing and Bills
+Pay now have local explicit-workbook seams. Browser UX and live identity/mapping
+recovery remain blocked on their distinct authenticated runners.
 
 > **Two deviations the V1 implementation revealed (design corrections):**
 > 1. **Marker primitive.** `PropertiesService.getDocumentProperties()` is scoped to
@@ -588,7 +607,10 @@ Layered, fail-closed, mirroring the Validator guard but **stricter**:
    `assertHarnessAllowed_()` throws unless it equals `"true"`. Separate from
    `VALIDATOR_ENABLED`.
 2. **Admin identity gate** — reuse `isAdminUser_()` (`ADMIN_EMAILS` /
-   `BETA_CONTACT_EMAIL`).
+   `BETA_CONTACT_EMAIL`). `samertheodossy@gmail.com` is the sole administrator;
+   `cashcompass2026@gmail.com` is test-only and must remain non-admin. The
+   allow-list is immutable during testing—authenticate as the administrator or
+   stop fail-closed.
 3. **Disposable-target gate** — `assertDisposableTarget_` before every write (§2.4).
 4. **No automatic runtime wiring** — never called from `doGet`, `onOpen`, a menu,
    or a trigger. It runs only on an explicit, guarded request: a manual editor Run
@@ -613,6 +635,16 @@ Unlike the Validator (no new OAuth scope), the Harness needs **create/trash**
 (Drive) — but the app already creates and trashes workbooks for Central
 provisioning (`central_provisioning.js`), so no new consent surface is introduced.
 The extra power is contained by the guard above, not by scope.
+
+### Unified-source bounded safety
+
+Harness safety must survive the day Central and bounded deployments run the same
+source version. It therefore does not depend on deployment pinning. Harness
+entry points have no normal runtime wiring; writers create their own workbook;
+every write re-checks the disposable name, marker, and run ID; and protected-ID
+checks refuse the active/bounded workbook, Golden/default targets, and all mapped
+user workbooks. Production functions that gained an optional explicit
+Spreadsheet seam preserve their original no-argument resolver path.
 
 ---
 
