@@ -28,9 +28,13 @@ for (const [page, tab] of Object.entries({
 }
 assert.match(
   render,
-  /defaultTab\s*&&\s*!page\.querySelector\(['"]\.panel\.active['"]\)/,
+  /targetTab\s*&&\s*!page\.querySelector\(['"]\.panel\.active['"]\)/,
   'Default navigation must preserve an explicitly active panel'
 );
+assert.match(render, /DASHBOARD_LAST_TAB_BY_PAGE_\[ownerPage\]\s*=\s*name/,
+  'Subtab navigation must remember the selected panel for its workspace');
+assert.match(render, /DASHBOARD_LAST_TAB_BY_PAGE_\[name\]\s*\|\|\s*defaultTab/,
+  'Returning to a workspace must restore its most recent subtab before using the default');
 assert.match(render, /Financial plan refreshed/, 'Planner refresh must leave a success message');
 assert.match(render, /planner_refresh_btn/, 'Planner refresh must guard against duplicate clicks');
 for (const source of [render, files['PlannerDashboard.html']]) {

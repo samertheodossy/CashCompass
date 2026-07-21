@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_top">
+  <title>CashCompass — Populated Dashboard E2E</title>
+  <style>
+    body { font-family:-apple-system,Arial,sans-serif; margin:0; padding:24px; background:#f5f7fa; color:#1f2933; }
+    .wrap { max-width:900px; margin:0 auto; }
+    .card { background:#fff; border:1px solid #e1e5ea; border-radius:10px; padding:18px; margin:0 0 16px; }
+    h1 { font-size:22px; margin:0 0 6px; } h2 { font-size:16px; margin:0 0 10px; }
+    p { line-height:1.5; } .muted { color:#64748b; font-size:13px; }
+    .safe { background:#ecfdf5; border:1px solid #86efac; border-radius:8px; padding:12px; }
+    button, a.button { display:inline-block; padding:9px 13px; border:1px solid #cbd5e1; border-radius:7px;
+      background:#fff; color:#1f2933; cursor:pointer; margin:4px 6px 4px 0; text-decoration:none; font-size:14px; }
+    button.primary { background:#2563eb; color:#fff; border-color:#2563eb; }
+    button.danger { background:#fff1f2; color:#9f1239; border-color:#fecdd3; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    code, pre { font-family:ui-monospace,Menlo,monospace; font-size:12px; }
+    pre { white-space:pre-wrap; overflow-wrap:anywhere; background:#f8fafc; border:1px solid #e2e8f0; padding:12px; border-radius:8px; }
+    .ok { color:#047857; font-weight:600; } .err { color:#b91c1c; font-weight:600; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Populated Dashboard E2E</h1>
+  <p class="muted">Browser-driven validation of representative existing-user dashboard behavior.</p>
+
+  <div class="safe">
+    This runner is locked to <strong>cashcompass2026@gmail.com</strong>. It provisions and seeds a new
+    synthetic workbook through guarded Central paths, never accepts a workbook ID, and moves only its
+    exact marker-verified fixture to Trash after the run. It cannot target the configured default,
+    canonical, admin, or bounded workbook.
+  </div>
+
+  <div class="card">
+    <h2>Run the suite</h2>
+    <label><input id="confirm" type="checkbox" onchange="syncButtons()"> I confirm this is the disposable test account.</label>
+    <p class="muted">The browser will check populated KPIs, account selection and safe action gating,
+      property equity, workspace data, subtab retention, Setup/Help language, Refresh state, and console/navigation errors.</p>
+    <button id="run" class="primary guarded" onclick="prepareAndRun()" disabled>Prepare &amp; run Populated Dashboard E2E</button>
+    <a id="resume" class="button" href="#" style="display:none">Resume active run</a>
+  </div>
+
+  <div class="card">
+    <h2>Fixture state and latest evidence</h2>
+    <button onclick="refreshState()">Refresh state</button>
+    <button class="danger guarded" onclick="cleanup()" disabled>Trash verified active fixture</button>
+    <pre id="state">Loading…</pre>
+  </div>
+  <div id="status" class="muted"></div>
+</div>
+<script>
+  function confirmed() { return document.getElementById('confirm').checked; }
+  function syncButtons() {
+    document.querySelectorAll('.guarded').forEach(function(btn) { btn.disabled = !confirmed(); });
+  }
+  function showStatus(message, bad) {
+    var el = document.getElementById('status');
+    el.className = bad ? 'err' : 'ok';
+    el.textContent = message || '';
+  }
+  function renderState(res) {
+    if (!res || !res.ok) {
+      showStatus((res && res.error) ? res.error : 'Unknown server error.', true);
+      return;
+    }
+    var state = res.state || {};
+    document.getElementById('state').textContent = JSON.stringify(state, null, 2);
+    var resume = document.getElementById('resume');
+    if (state.active && state.active.mode === 'POPULATED_DASHBOARD' && state.active.runUrl &&
+        !state.active.invalid && !state.active.trashed) {
+      resume.href = state.active.runUrl;
+      resume.style.display = 'inline-block';
+    } else {
+      resume.style.display = 'none';
+    }
+    showStatus('State loaded.', false);
+  }
+  function fail(err) { showStatus((err && err.message) ? err.message : String(err), true); }
+  function refreshState() {
+    showStatus('Loading…', false);
+    google.script.run.withSuccessHandler(renderState).withFailureHandler(fail).pdE2EGetState();
+  }
+  function prepareAndRun() {
+    var btn = document.getElementById('run');
+    btn.disabled = true;
+    showStatus('Creating and seeding a fresh Restricted synthetic fixture…', false);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res || !res.ok || !res.runUrl) {
+          btn.disabled = !confirmed();
+          showStatus((res && res.error) ? res.error : 'Preparation failed.', true);
+          return;
+        }
+        window.location.assign(res.runUrl);
+      })
+      .withFailureHandler(function(err) { btn.disabled = !confirmed(); fail(err); })
+      .pdE2EPrepare(confirmed());
+  }
+  function cleanup() {
+    showStatus('Verifying and moving the exact fixture to Trash…', false);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res || !res.ok) { showStatus((res && res.error) ? res.error : 'Cleanup failed.', true); return; }
+        renderState({ ok:true, state:res.state || {} });
+        showStatus('Verified fixture cleanup complete.', false);
+      })
+      .withFailureHandler(fail)
+      .pdE2ECleanup(confirmed());
+  }
+  refreshState();
+</script>
+</body>
+</html>

@@ -48,6 +48,8 @@ assert.ok((data.match(/ctx\.assertWritable\(\);/g) || []).length >= 10,
   'Representative seed must re-assert the disposable target before module writes');
 assert.match(data, /existingTotalRow === -1[\s\S]*?harnessInsertBeforeByHeader_\(sheet, existingTotalRow, debtValues\)/,
   'Representative debt must be inserted above an existing TOTAL DEBT summary row');
+assert.match(data, /refreshDebtsTotalRow_\(sheet, hm, totalRow\);[\s\S]*?applyDebtsSheetStyling_\(sheet\);/,
+  'Representative debt seeding must restore a white data row and green TOTAL DEBT band');
 
 const scenario = files['test_harness_scenarios_populated.js'];
 assert.match(scenario, /id: 'SMOKE-POPULATED-FIXTURE'/);

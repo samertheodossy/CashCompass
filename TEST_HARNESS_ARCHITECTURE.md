@@ -22,12 +22,34 @@ selected from the dynamic registry with a Keep/Trash disposition, backed by the 
 the harness's own disposable workbook). Five foundation suites are runtime-proven.
 The current P1 slice adds explicit-disposable-workbook Performance Planner and
 Bills Pay E2E scenarios plus bounded Release Readiness orchestration. The source is
-pushed to Central and only the isolated validation deployment is at `@129`; Beta
+pushed to Central and only the isolated validation deployment is at `@133`; Beta
 remains `@106`.
 First-Run UX E2E now runs in the shipping dashboard as the hard-coded non-admin
 disposable account, saves privacy-safe external evidence, and requires exact verified
-Trash cleanup. Populated Dashboard E2E and Recovery Live remain registered fail-closed
-as NOT IMPLEMENTED; the final bounded Release Readiness verdict remains pending.
+Trash cleanup. Populated Dashboard E2E is runtime-proven on the same fixed identity and
+reuses the production Central provisioner plus explicit-workbook representative seed;
+its 11 browser assertions and V1 evidence key are wired into Release Readiness, with
+run `FR-19eb43ab-e8fe-4bc8-96a5-336afff43596` passing at isolated `@133`.
+Recovery Live remains registered fail-closed as
+NOT IMPLEMENTED; the final bounded Release Readiness verdict remains pending.
+
+**Populated Dashboard browser contract (runtime-proven):** the runner accepts only a
+boolean disposable-account confirmation and no workbook ID. It verifies the exact
+owner/name/durable-marker/forward-mapping/reverse-index identity before bootstrap,
+each seed write, dashboard execution, completion, and cleanup. Assertions cover direct
+populated Overview routing; deterministic cash, investment, real-estate, debt, and net-
+worth KPIs; Bank/Debt selection and action gating; property equity; representative
+Investments/Upcoming/Bills/Income rendering; subtab retention; populated Setup and Help;
+customer-language leakage; real planner Refresh state; and clean console/navigation.
+Evidence is saved under `POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V1`; PASS requires
+Restricted sharing and exact Drive-verified Trash cleanup.
+
+**`@133` Populated Dashboard browser evidence:** run
+`FR-19eb43ab-e8fe-4bc8-96a5-336afff43596` passed 11/11 assertions in 126.323 s,
+including real Debt selection, cross-workspace Assets subtab retention, real Refresh,
+Restricted owner-only sharing, clean console/navigation, and verified Trash. The
+real-code-first inventory and the four reviewed fixture/mutation exceptions are
+maintained in `TEST_PRODUCTION_PATH_AUDIT.md` and enforced by `npm test`.
 
 **`@129` First-Run browser evidence:** V2 run
 `FR-9c57ac53-0250-4ebb-a57a-cddec545356b` passed 9/9 assertions in 85.864 s:

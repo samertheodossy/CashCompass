@@ -90,6 +90,40 @@
 </script>
 <? } ?>
 
+<? if (populatedDashboardE2EEnabled) { ?>
+<script>
+  // Installed before the dashboard bundles so startup, navigation, and RPC
+  // display failures are retained for the guarded populated-browser report.
+  window.__cashCompassPopulatedDashboardE2E = <?!= populatedDashboardE2EConfigJson ?>;
+  window.__cashCompassPopulatedDashboardE2E.errors = [];
+  window.addEventListener('error', function(event) {
+    window.__cashCompassPopulatedDashboardE2E.errors.push(
+      String((event && event.message) || 'Browser error').slice(0, 300)
+    );
+  });
+  window.addEventListener('unhandledrejection', function(event) {
+    var reason = event && event.reason;
+    window.__cashCompassPopulatedDashboardE2E.errors.push(
+      String((reason && reason.message) || reason || 'Unhandled promise rejection').slice(0, 300)
+    );
+  });
+  ['error', 'warn'].forEach(function(level) {
+    if (!window.console || typeof window.console[level] !== 'function') return;
+    var original = window.console[level].bind(window.console);
+    window.console[level] = function() {
+      var parts = Array.prototype.slice.call(arguments).map(function(value) {
+        try { return typeof value === 'string' ? value : JSON.stringify(value); }
+        catch (_e) { return String(value); }
+      });
+      window.__cashCompassPopulatedDashboardE2E.errors.push(
+        ('console.' + level + ': ' + parts.join(' ')).slice(0, 300)
+      );
+      return original.apply(null, arguments);
+    };
+  });
+</script>
+<? } ?>
+
 <script>
   <?!= includeHtml_('Dashboard_Script_Render'); ?>
 </script>
@@ -289,6 +323,11 @@
 <? if (firstRunE2EEnabled) { ?>
 <script>
   <?!= includeHtml_('Dashboard_Script_FirstRunE2E'); ?>
+</script>
+<? } ?>
+<? if (populatedDashboardE2EEnabled) { ?>
+<script>
+  <?!= includeHtml_('Dashboard_Script_PopulatedDashboardE2E'); ?>
 </script>
 <? } ?>
 </body>

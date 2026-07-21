@@ -3,12 +3,12 @@
 *The pre-release go/no-go produced by the Test Harness running every scenario pack
 and the Validator judging each result.*
 
-**Status:** **Bounded runner source-ready; Validator/Workbook Health and First-Run UX E2E V2 runtime-proven through isolated Central `@129`; final runtime verdict pending.** The Validator
+**Status:** **Bounded runner source-ready; Validator/Workbook Health and both browser E2E suites runtime-proven through isolated Central `@133`; final runtime verdict pending.** The Validator
 Phase 2 core (Provisioning / Drift / Schema Evolution), fail-closed disposable
-workbook lifecycle, and populated-fixture hardening now exist. Five suites are
-runnable: `SUITE-BILLS-REGRESSION`, `SUITE-RECOVERY-REGRESSION`,
-`SUITE-QUICK-ADD-RELIABILITY`, `SUITE-POPULATED-FIXTURE`, and the combined
-`SUITE-CENTRAL-SAFETY`. The **aggregate Release Readiness report** — required
+workbook lifecycle, and populated-fixture hardening now exist. Ten suites are
+runtime-proven across server and authenticated-browser runners: the five foundation
+suites, Workbook Health, Performance Planner, Bills Pay E2E, First-Run UX E2E,
+and Populated Dashboard E2E. The **aggregate Release Readiness report** — required
 suites and Validator gates rolled into one go/no-go — is now implemented locally
 by `release_readiness_runner.js`: one scenario per invocation, compact privacy-safe
 evidence, archived final runs, and fail-closed READY/NOT READY rules. Performance
@@ -22,8 +22,12 @@ after narrow validator-normalization and disposable-fixture corrections. First-R
 E2E V2 passed 9/9 at isolated `@129` in 85.864 s, including Restricted owner-only sharing,
 a real planner Refresh, the whole-interface customer-language assertion, privacy-safe saved
 evidence, clean console/navigation, and verified Trash cleanup. Persisted runner state confirmed
-that no active fixture remained. Populated
-Dashboard E2E and Recovery Live remain explicitly NOT IMPLEMENTED. Therefore the
+that no active fixture remained. Populated Dashboard E2E run `FR-19eb43ab-e8fe-4bc8-96a5-336afff43596`
+passed 11/11 at isolated `@133` in 126.323 s, including deterministic KPIs, real
+selection/navigation/Refresh paths, populated Setup/Help and customer language,
+Restricted owner-only sharing, clean console/navigation, and verified Trash; saved
+state also confirmed no active fixture. Recovery Live remains explicitly
+NOT IMPLEMENTED. Therefore the
 current P1 verdict remains **NOT READY**; performance budgets also remain unratified
 because one passing timing sample is not percentile evidence. See
 `P1_RELEASE_EVIDENCE_CONTRACT.md`.
@@ -31,6 +35,7 @@ because one passing timing sample is not percentile evidence. See
 **Related docs:** `TEST_HARNESS_ARCHITECTURE.md` (the runner),
 `VALIDATOR_ARCHITECTURE.md` (the read-only judge), `REGRESSION_SCENARIOS.md` (the
 regression pack), `ROADMAP.md` (P1 sequencing), and
+`TEST_PRODUCTION_PATH_AUDIT.md` (the real-code-first test inventory), and
 `BETA_10_OUT_OF_10_PLAN.md` (the full product-quality and monetization-readiness
 gate).
 

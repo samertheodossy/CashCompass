@@ -217,6 +217,11 @@ function harnessSeedDebt_(ctx, debt) {
     : harnessInsertBeforeByHeader_(sheet, existingTotalRow, debtValues);
   var totalRow = seedDebtsTotalRow_(sheet, hm);
   refreshDebtsTotalRow_(sheet, hm, totalRow);
+  // insertRowBefore() inherits the TOTAL DEBT row's green band when the
+  // summary is the only existing body row. Reapply the canonical Debts
+  // presentation so the fixture's new account row is white and only the
+  // summary remains green—the same visual contract as a production add.
+  applyDebtsSheetStyling_(sheet);
   ctx.actions.push('Seed representative Debt and TOTAL DEBT formulas');
   return { sheet: sheet.getName(), row: row, balanceCol: hm.balanceCol };
 }

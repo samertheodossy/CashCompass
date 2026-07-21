@@ -5,7 +5,8 @@ import vm from 'node:vm';
 const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 const [registry, formulas, cf, named, health, release, contract, suites,
   planner, bank, investments, houses, plannerOutput, quickAdd, dashboard, performanceScenario, billsPayScenario,
-  harnessCore, p1Runner, webapp, centralDiagnostics, firstRunE2E, firstRunBrowser, validationServer] = await Promise.all([
+  harnessCore, p1Runner, webapp, centralDiagnostics, firstRunE2E, firstRunBrowser,
+  populatedE2E, populatedBrowser, populatedUi, validationServer] = await Promise.all([
   read('validator_schema_registry.js'), read('validator_formulas.js'),
   read('validator_conditional_formatting.js'), read('validator_named_ranges.js'),
   read('validator_health.js'), read('release_readiness_runner.js'),
@@ -15,6 +16,8 @@ const [registry, formulas, cf, named, health, release, contract, suites,
   read('test_harness_scenarios_performance.js'), read('test_harness_scenarios_bills_pay.js'),
   read('test_harness_core.js'), read('test_p1_isolated_runner.js'), read('webapp.js'), read('central_diagnostics.js'),
   read('first_run_e2e.js'), read('Dashboard_Script_FirstRunE2E.html'),
+  read('populated_dashboard_e2e.js'), read('Dashboard_Script_PopulatedDashboardE2E.html'),
+  read('PopulatedDashboardE2ETestingUI.html'),
   read('validation_testing_server.js')
 ]);
 
@@ -57,9 +60,9 @@ assert.doesNotMatch(release, /runScenario_\([^\n]*candidateSpreadsheetId/,
   'Candidate workbook ID must never enter a writer');
 for (const suite of ['SUITE-POPULATED-DASHBOARD-E2E', 'SUITE-RECOVERY-LIVE']) {
   assert.ok(release.includes(`'${suite}'`), `Required release inventory missing ${suite}`);
-  const descriptor = suites.match(new RegExp(`id: '${suite}'[\\s\\S]*?scenarioIds: \\[\\]`));
-  assert.ok(descriptor && /implemented: false/.test(descriptor[0]), `${suite} must fail closed until its real execution seam exists`);
 }
+assert.match(suites, /id: 'SUITE-RECOVERY-LIVE'[\s\S]*?implemented: false[\s\S]*?scenarioIds: \[\]/,
+  'Recovery Live must fail closed until its real execution seam exists');
 assert.match(suites, /id: 'SUITE-FIRST-RUN-UX-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?FIRST_RUN_E2E_LATEST_EVIDENCE_V2/,
   'First-Run UX must be an implemented browser suite backed by saved evidence');
 assert.match(firstRunE2E, /FIRST_RUN_E2E_EVIDENCE_KEY_\s*=\s*'FIRST_RUN_E2E_LATEST_EVIDENCE_V2'/,
@@ -82,12 +85,51 @@ assert.match(firstRunE2E, /assertFirstRunE2EFixture_\(state, email, true\)[\s\S]
   'Verified stale mappings to an already-Trashed disposable workbook must be safely clearable');
 assert.match(firstRunE2E, /priorId[\s\S]*?frE2ECleanupVerified_\(priorState, email\)[\s\S]*?findCandidateWorkbooks_\(email\)/,
   'First-Run preflight may recycle only an exactly verified mapped disposable workbook before candidate recheck');
+assert.match(firstRunE2E, /mode: FIRST_RUN_E2E_MODE_[\s\S]*?state\.mode !== FIRST_RUN_E2E_MODE_/,
+  'First-Run route must accept only fixtures prepared for the First-Run suite');
 assert.match(firstRunBrowser, /\.frE2EComplete\(cfg\.runId/,
   'The browser runner must save its evidence through the guarded completion seam');
 assert.match(firstRunE2E, /'customer_language'/,
   'First-Run E2E must require the whole-interface customer-language assertion');
 assert.match(firstRunBrowser, /function customerLanguageLeaks\(/,
   'First-Run E2E must scan visible customer pages for internal workbook terminology');
+assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V1/,
+  'Populated Dashboard E2E must be an implemented browser suite backed by saved evidence');
+assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V1'/,
+  'Populated Dashboard E2E must use its own versioned saved-evidence key');
+assert.doesNotMatch(populatedE2E, /function pdE2EPrepare\([^)]*(?:spreadsheet|workbook|file)Id/i,
+  'Populated Dashboard preparation must never accept an arbitrary workbook target');
+assert.match(populatedE2E, /frE2EPrepare\(confirmed\)/,
+  'Populated Dashboard must reuse the guarded production Central provisioning lifecycle');
+assert.match(populatedE2E, /state\.mode = POPULATED_DASHBOARD_E2E_MODE_[\s\S]*?state\.mode !== POPULATED_DASHBOARD_E2E_MODE_/,
+  'Populated Dashboard route must accept only fixtures prepared and seeded for its suite');
+assert.match(populatedE2E, /assertFirstRunE2EFixture_\(state, email, false\)[\s\S]*?runMinimalBootstrap_\(ss\)[\s\S]*?harnessSeedRepresentativeWorkbook_\(ctx\)/,
+  'Populated Dashboard must verify the exact mapped fixture before explicit-target seeding');
+assert.match(populatedE2E, /frE2ECleanupVerified_\(state, email\)/,
+  'Populated Dashboard cleanup must reuse exact verified soft-Trash cleanup');
+assert.match(populatedE2E, /var sharing = frE2EInspectRestrictedSharing_\(state\.workbookId\)/,
+  'Populated Dashboard completion must re-verify Restricted sharing before reporting PASS');
+assert.match(populatedBrowser, /\.pdE2EComplete\(cfg\.runId/,
+  'The populated browser runner must save evidence through its guarded completion seam');
+assert.match(populatedBrowser, /showPage\('assets'\)[\s\S]*?showTab\('bank'\)[\s\S]*?showPage\('cashflow'\)[\s\S]*?showPage\('assets'\)/,
+  'Subtab retention must establish Assets → Bank before leaving and returning');
+assert.match(populatedBrowser, /loadDebtSectionThenSelect_\(expected\.debtName\)/,
+  'Populated Debt selection must use the production load-and-select path');
+assert.match(populatedBrowser, /\/complete\/i\.test\(setupText\)/,
+  'Populated Setup wording must be checked case-insensitively against customer-facing text');
+assert.match(populatedBrowser, /income_manage_list[\s\S]*?income_other_detected/,
+  'Populated Income evidence must accept both tracked and reference-only product presentations');
+for (const assertionId of ['overview_kpis', 'bank_selection_actions', 'debt_selection_actions',
+  'property_equity', 'populated_workspaces', 'subtab_retention', 'setup_help_language',
+  'customer_language', 'refresh_button_state', 'clean_console_navigation']) {
+  assert.ok(populatedE2E.includes(`'${assertionId}'`), `Populated Dashboard contract missing ${assertionId}`);
+}
+assert.match(populatedUi, /cashcompass2026@gmail\.com[\s\S]*?never accepts a workbook ID[\s\S]*?bounded workbook/,
+  'Populated Dashboard control UI must explain its fixed disposable safety boundary');
+assert.match(webapp, /view === 'populated-dashboard-e2e'[\s\S]*?isFirstRunE2EUser_\(\)/,
+  'Populated Dashboard control route must remain hidden from every non-test identity');
+assert.match(webapp, /pdE2ERenderContext_\(populatedRunId\)/,
+  'Populated Dashboard run route must require the guarded active run context');
 assert.match(validationServer, /function vtOpenHarnessBrowserRunner\(suiteId\)[\s\S]*?assertValidatorAllowed_\(\)/,
   'Only the admin Validator console may launch the browser-test link from the console');
 assert.match(suites, /id: 'SUITE-PERFORMANCE-PLANNER'[\s\S]*?implemented: true[\s\S]*?'PERFORMANCE-PLANNER-FIRST-REPEAT'/,
@@ -120,12 +162,15 @@ vm.runInContext(suites, inventoryCtx);
 vm.runInContext(release, inventoryCtx);
 const inventory = inventoryCtx.releaseBuildInventory_();
 assert.deepEqual(Array.from(inventory.missingSuites), [
-  'SUITE-POPULATED-DASHBOARD-E2E', 'SUITE-RECOVERY-LIVE'
-], 'Release inventory must explicitly refuse the two remaining execution-dependent packs');
-assert.deepEqual(Array.from(inventory.externalSuites), ['SUITE-FIRST-RUN-UX-E2E'],
-  'Release inventory must require First-Run browser evidence outside the server scenario queue');
+  'SUITE-RECOVERY-LIVE'
+], 'Release inventory must explicitly refuse the remaining Recovery Live pack');
+assert.deepEqual(Array.from(inventory.externalSuites), [
+  'SUITE-FIRST-RUN-UX-E2E', 'SUITE-POPULATED-DASHBOARD-E2E'
+], 'Release inventory must require both browser suites outside the server scenario queue');
 assert.throws(() => inventoryCtx.testRunSuiteById_('SUITE-FIRST-RUN-UX-E2E', {}), /authenticated browser runner/,
   'The server runner must never substitute an empty run for First-Run browser evidence');
+assert.throws(() => inventoryCtx.testRunSuiteById_('SUITE-POPULATED-DASHBOARD-E2E', {}), /authenticated browser runner/,
+  'The server runner must never substitute an empty run for Populated Dashboard browser evidence');
 
 const propertyBag = new Map();
 const props = {
@@ -142,7 +187,7 @@ const baseState = {
   version: 1, runId: 'RR-test', startedAt: new Date().toISOString(),
   candidate: { workbookId: 'fixture', sourceVersion: 'abc123', deployment: '@test' },
   openIssues: { severity1: 0, severity2: 0, declared: true },
-  health: { overall: 'PASS' }, inventory: { missingSuites: ['SUITE-RECOVERY-LIVE'], externalSuites: ['SUITE-FIRST-RUN-UX-E2E'], scenarioIds: [] },
+  health: { overall: 'PASS' }, inventory: { missingSuites: ['SUITE-RECOVERY-LIVE'], externalSuites: ['SUITE-FIRST-RUN-UX-E2E', 'SUITE-POPULATED-DASHBOARD-E2E'], scenarioIds: [] },
   externalEvidence: {},
   cursor: 0, results: [], status: 'IN_PROGRESS'
 };
@@ -150,8 +195,11 @@ props.setProperty('RELEASE_READINESS_ACTIVE_RUN_V1', JSON.stringify(baseState));
 assert.equal(verdictCtx.releaseReadinessFinalize().status, 'NOT_READY',
   'Missing execution-dependent evidence must force NOT READY');
 const readyState = { ...baseState, runId: 'RR-ready',
-  inventory: { missingSuites: [], externalSuites: ['SUITE-FIRST-RUN-UX-E2E'], scenarioIds: [] },
-  externalEvidence: { 'SUITE-FIRST-RUN-UX-E2E': { overall: 'PASS', cleanupVerified: true } },
+  inventory: { missingSuites: [], externalSuites: ['SUITE-FIRST-RUN-UX-E2E', 'SUITE-POPULATED-DASHBOARD-E2E'], scenarioIds: [] },
+  externalEvidence: {
+    'SUITE-FIRST-RUN-UX-E2E': { overall: 'PASS', cleanupVerified: true },
+    'SUITE-POPULATED-DASHBOARD-E2E': { overall: 'PASS', cleanupVerified: true }
+  },
   status: 'IN_PROGRESS' };
 props.setProperty('RELEASE_READINESS_ACTIVE_RUN_V1', JSON.stringify(readyState));
 props.setProperty('PERFORMANCE_BUDGETS_RATIFIED', 'true');

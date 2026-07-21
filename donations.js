@@ -56,7 +56,7 @@ var DONATION_CANONICAL_WIDTHS_ = {
  *
  * @returns {GoogleAppsScript.Spreadsheet.Sheet}
  */
-function ensureInputDonationSheet_() {
+function ensureInputDonationSheet_(optionalSs) {
   // Central-aware workbook resolution. In the standalone Central project there
   // is no bound/active spreadsheet, so SpreadsheetApp.getActiveSpreadsheet()
   // returns null and every downstream ss.getSheetByName(...) threw
@@ -65,7 +65,7 @@ function ensureInputDonationSheet_() {
   // bound mode and resolves/provisions the caller's own workbook in Central
   // mode. It throws a clear error if the user cannot be resolved, so genuine
   // Central resolution failures are surfaced rather than masked.
-  const ss = getUserSpreadsheet_();
+  const ss = optionalSs || getUserSpreadsheet_();
   const existing = ss.getSheetByName(DONATION_SHEET_NAME_);
   if (existing) return existing;
 
@@ -146,11 +146,11 @@ function applyDonationSheetStyling_(sheet) {
   } catch (_widthErr) { /* cosmetic only */ }
 }
 
-function getDonationsSheet_() {
+function getDonationsSheet_(optionalSs) {
   // Lazy-create on first read so a blank workbook can open the
   // Donations form without surfacing a red banner. Idempotent on
   // populated workbooks (returns the existing handle byte-for-byte).
-  return ensureInputDonationSheet_();
+  return ensureInputDonationSheet_(optionalSs);
 }
 
 /**
@@ -436,7 +436,7 @@ function buildDonationOutputRow_(colMap, charityName, dateValue, amount, taxYear
 /**
  * @param {Object} payload charityName, donationDate (ISO yyyy-mm-dd), amount, taxYear (number), comments?, paymentType?
  */
-function addDonation(payload) {
+function addDonation(payload, optionalSs) {
   validateRequired_(payload, ['charityName', 'donationDate', 'amount', 'taxYear']);
 
   const charityName = String(payload.charityName || '').trim();
@@ -453,7 +453,7 @@ function addDonation(payload) {
   const paymentType = String(payload.paymentType || '').trim();
   if (!paymentType) throw new Error('Payment type is required.');
 
-  const sheet = getDonationsSheet_();
+  const sheet = getDonationsSheet_(optionalSs);
   const values = sheet.getDataRange().getValues();
   const block = findDonationBlockForTaxYear_(values, taxYear);
 

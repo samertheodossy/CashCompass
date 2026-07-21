@@ -1,0 +1,299 @@
+(function() {
+  var cfg = window.__cashCompassPopulatedDashboardE2E;
+  if (!cfg || !cfg.enabled || !cfg.runId || !cfg.expected) return;
+
+  var started = Date.now();
+  var assertions = [];
+  var finished = false;
+  var expected = cfg.expected;
+
+  function waitFor(predicate, timeoutMs, label) {
+    return new Promise(function(resolve, reject) {
+      var until = Date.now() + timeoutMs;
+      (function poll() {
+        var value = false;
+        try { value = predicate(); } catch (_e) {}
+        if (value) { resolve(value); return; }
+        if (Date.now() >= until) { reject(new Error('Timed out waiting for ' + label + '.')); return; }
+        setTimeout(poll, 180);
+      })();
+    });
+  }
+
+  function add(id, pass, detail) {
+    assertions.push({ id: id, pass: pass === true, detail: String(detail || '') });
+  }
+
+  function activePage(name) {
+    var page = document.getElementById('page_' + name);
+    return !!(page && page.classList.contains('active'));
+  }
+
+  function activeTab(pageName, tabName) {
+    var page = document.getElementById('page_' + pageName);
+    var panel = document.getElementById(tabName);
+    var tab = page && page.querySelector('.tab-btn[data-tab="' + tabName + '"]');
+    return !!(page && page.classList.contains('active') && panel && panel.classList.contains('active') &&
+      tab && tab.classList.contains('active'));
+  }
+
+  function text(id) {
+    var el = document.getElementById(id);
+    return String((el && el.textContent) || '').trim();
+  }
+
+  function hasOption(id, value) {
+    var el = document.getElementById(id);
+    if (!el || !el.options) return false;
+    return Array.prototype.some.call(el.options, function(opt) {
+      return String(opt.value || opt.textContent || '').trim() === String(value);
+    });
+  }
+
+  function expectedCurrency(value) {
+    return typeof fmtCurrency === 'function' ? fmtCurrency(Number(value)) : String(value);
+  }
+
+  function errorMessages() {
+    var captured = Array.isArray(cfg.errors) ? cfg.errors.slice() : [];
+    document.querySelectorAll('.status.error').forEach(function(el) {
+      var value = String(el.textContent || '').trim();
+      if (value) captured.push('Visible error status: ' + value);
+    });
+    return captured.filter(function(value, index, all) { return all.indexOf(value) === index; }).slice(0, 10);
+  }
+
+  function customerLanguageLeaks(label) {
+    var bodyText = String(document.body.innerText || '');
+    var patterns = [
+      /(?:INPUT|SYS|OUT|LOG)\s*-[^\n]*/ig,
+      /Missing sheet[^\n]*/ig,
+      /(?:Exception|TypeError|ReferenceError):[^\n]*/ig,
+      /Required column missing[^\n]*/ig
+    ];
+    var leaks = [];
+    patterns.forEach(function(pattern) {
+      (bodyText.match(pattern) || []).forEach(function(match) {
+        leaks.push(label + ': ' + String(match).trim().slice(0, 180));
+      });
+    });
+    return leaks;
+  }
+
+  function overlay(title, report, bad) {
+    var old = document.getElementById('cc_populated_dashboard_e2e_result');
+    if (old) old.remove();
+    var root = document.createElement('div');
+    root.id = 'cc_populated_dashboard_e2e_result';
+    root.style.cssText = 'position:fixed;inset:18px;z-index:999999;background:#fff;border:3px solid ' +
+      (bad ? '#b91c1c' : '#047857') + ';border-radius:12px;padding:20px;overflow:auto;' +
+      'box-shadow:0 20px 60px rgba(0,0,0,.3);font-family:-apple-system,Arial,sans-serif;color:#1f2933';
+    var heading = document.createElement('h2');
+    heading.textContent = title;
+    heading.style.marginTop = '0';
+    root.appendChild(heading);
+    var note = document.createElement('p');
+    note.textContent = bad
+      ? 'The fixture was still cleaned up when the exact safety checks allowed it. Review the failed assertion below.'
+      : 'All browser assertions passed and verified Trash cleanup completed.';
+    root.appendChild(note);
+    var pre = document.createElement('pre');
+    pre.style.cssText = 'white-space:pre-wrap;background:#f8fafc;border:1px solid #e2e8f0;padding:12px;border-radius:8px';
+    pre.textContent = JSON.stringify(report, null, 2);
+    root.appendChild(pre);
+    document.body.appendChild(root);
+  }
+
+  async function run() {
+    var customerLeaks = [];
+    try {
+      await waitFor(function() {
+        return !document.body.classList.contains('startup-gated') && activePage('overview') &&
+          text('snap_cash') !== '' && text('snap_cash') !== '—';
+      }, 120000, 'the populated Overview');
+      add('startup_populated_overview', !activePage('onboarding'),
+        'The populated workbook routed directly to Overview with rendered data.');
+
+      var expectedNetWorth = Number(expected.bankBalance) + Number(expected.investmentBalance) +
+        Number(expected.houseValue) - Number(expected.debtBalance);
+      var kpis = {
+        snap_cash: expected.bankBalance,
+        snap_investments: expected.investmentBalance,
+        snap_houseEquity: expected.houseValue,
+        snap_debt: expected.debtBalance,
+        snap_netWorth: expectedNetWorth
+      };
+      var kpiFailures = [];
+      Object.keys(kpis).forEach(function(id) {
+        var wanted = expectedCurrency(kpis[id]);
+        if (text(id) !== wanted) kpiFailures.push(id + ' expected ' + wanted + ', saw ' + text(id));
+      });
+      add('overview_kpis', kpiFailures.length === 0, kpiFailures.length
+        ? ('KPI mismatch: ' + kpiFailures.join(' | '))
+        : 'Cash, investments, real estate, debt, and net worth matched the deterministic fixture.');
+      customerLeaks = customerLeaks.concat(customerLanguageLeaks('Overview'));
+
+      if (typeof showTab === 'function') showTab('bank');
+      if (typeof loadBankSectionThenSelect_ === 'function') loadBankSectionThenSelect_(expected.bankName);
+      await waitFor(function() {
+        return hasOption('bank_account', expected.bankName) &&
+          text('bank_currentBalance') === expectedCurrency(expected.bankBalance);
+      }, 90000, 'the populated Bank account');
+      var bankSelect = document.getElementById('bank_account');
+      var bankSave = document.getElementById('bank_update_save_btn');
+      var bankStop = document.getElementById('bank_update_stop_btn');
+      var bankPass = !!(bankSelect && bankSelect.value === expected.bankName && bankSave && !bankSave.disabled &&
+        bankStop && !bankStop.disabled);
+      add('bank_selection_actions', bankPass, bankPass
+        ? 'The synthetic Bank account selected and its guarded actions became available.'
+        : 'The populated Bank selector or its action gating was incorrect.');
+      customerLeaks = customerLeaks.concat(customerLanguageLeaks('Assets → Bank'));
+
+      if (typeof showTab === 'function') showTab('debts');
+      if (typeof loadDebtSectionThenSelect_ === 'function') loadDebtSectionThenSelect_(expected.debtName);
+      await waitFor(function() {
+        var field = document.getElementById('debt_field');
+        var selected = document.getElementById('debt_account');
+        var save = document.getElementById('debt_update_save_btn');
+        var stop = document.getElementById('debt_update_stop_btn');
+        return hasOption('debt_account', expected.debtName) && selected &&
+          selected.value === expected.debtName && field && field.options && field.options.length > 0 &&
+          text('debt_currentValue') !== '—' && save && !save.disabled && stop && !stop.disabled;
+      }, 90000, 'the populated Debt selection and actions');
+      var debtSelect = document.getElementById('debt_account');
+      var debtSave = document.getElementById('debt_update_save_btn');
+      var debtStop = document.getElementById('debt_update_stop_btn');
+      var debtPass = !!(debtSelect && debtSelect.value === expected.debtName && debtSave && !debtSave.disabled &&
+        debtStop && !debtStop.disabled);
+      add('debt_selection_actions', debtPass, debtPass
+        ? 'The synthetic Debt account selected and its guarded actions became available.'
+        : 'The populated Debt selector or its action gating was incorrect.');
+
+      if (typeof showTab === 'function') showTab('propertyPerformance');
+      await waitFor(function() {
+        return text('pp_port_equity') !== '—' &&
+          String(text('pp_tbody')).indexOf(expected.houseName) !== -1;
+      }, 90000, 'Property performance');
+      var expectedEquity = Number(expected.houseValue) - Number(expected.houseLoan);
+      var propertyPass = text('pp_port_equity') === expectedCurrency(expectedEquity) &&
+        String(text('pp_tbody')).indexOf(expected.houseName) !== -1;
+      add('property_equity', propertyPass, propertyPass
+        ? 'Property performance rendered the expected house and portfolio equity.'
+        : 'Property performance did not reconcile the representative property equity.');
+
+      if (typeof showTab === 'function') showTab('investments');
+      if (typeof loadInvestmentSectionThenSelect_ === 'function') loadInvestmentSectionThenSelect_(expected.investmentName);
+      await waitFor(function() {
+        return hasOption('inv_account', expected.investmentName) &&
+          text('inv_currentBalance') === expectedCurrency(expected.investmentBalance);
+      }, 90000, 'the populated Investment account');
+      var workspaceFailures = [];
+      if (!hasOption('inv_account', expected.investmentName)) workspaceFailures.push('investment');
+
+      if (typeof showTab === 'function') showTab('upcoming');
+      await waitFor(function() { return String(text('upcoming_list')).indexOf(expected.upcomingName) !== -1; },
+        90000, 'the populated Upcoming list');
+      if (String(text('upcoming_list')).indexOf(expected.upcomingName) === -1) workspaceFailures.push('upcoming');
+
+      if (typeof showTab === 'function') showTab('billsDue');
+      if (typeof setBillsView === 'function') setBillsView('manage');
+      await waitFor(function() { return String(text('bills_manage_list')).indexOf(expected.billPayee) !== -1; },
+        90000, 'the populated Bills list');
+      if (String(text('bills_manage_list')).indexOf(expected.billPayee) === -1) workspaceFailures.push('bills');
+
+      if (typeof showTab === 'function') showTab('income');
+      await waitFor(function() {
+        return (String(text('income_manage_list')) + ' ' + String(text('income_other_detected')))
+          .indexOf(expected.incomePayee) !== -1;
+      }, 90000, 'the populated Income presentation');
+      if ((String(text('income_manage_list')) + ' ' + String(text('income_other_detected')))
+          .indexOf(expected.incomePayee) === -1) workspaceFailures.push('income');
+      add('populated_workspaces', workspaceFailures.length === 0, workspaceFailures.length
+        ? ('Representative data missing from: ' + workspaceFailures.join(', '))
+        : 'Investments, Upcoming, Bills, and Income rendered their representative data.');
+      customerLeaks = customerLeaks.concat(customerLanguageLeaks('Populated workspaces'));
+
+      if (typeof showPage === 'function') showPage('assets');
+      if (typeof showTab === 'function') showTab('bank');
+      if (typeof showPage === 'function') showPage('cashflow');
+      if (typeof showPage === 'function') showPage('assets');
+      var retained = activeTab('assets', 'bank');
+      add('subtab_retention', retained, retained
+        ? 'Returning to Assets preserved the previously selected Bank subtab.'
+        : 'Assets did not preserve the selected Bank subtab.');
+
+      if (typeof showPage === 'function') showPage('onboarding');
+      await waitFor(function() {
+        var status = document.getElementById('onboarding_status');
+        return activePage('onboarding') && status && !/Reading status/i.test(status.textContent || '') &&
+          document.getElementById('onboarding_view_grid').style.display !== 'none';
+      }, 90000, 'the populated Setup grid');
+      var setupText = String(document.getElementById('page_onboarding').textContent || '');
+      var setupPass = /Setup \/ Review/.test(setupText) && /complete/i.test(setupText) &&
+        !/(?:INPUT|SYS|OUT|LOG)\s*-|Missing sheet|Exception:|TypeError:/i.test(setupText);
+      customerLeaks = customerLeaks.concat(customerLanguageLeaks('Setup'));
+      if (typeof showPage === 'function') showPage('help');
+      var helpText = String(document.getElementById('page_help').textContent || '');
+      var helpPass = /Setup \/ Review/.test(helpText) &&
+        !/loadOnboardingSection|Dashboard_Script|status ===/i.test(helpText);
+      add('setup_help_language', setupPass && helpPass, setupPass && helpPass
+        ? 'Populated Setup status and Help stayed complete, readable, and customer-facing.'
+        : 'Setup or Help did not meet the populated customer-language contract.');
+      customerLeaks = customerLeaks.concat(customerLanguageLeaks('Help'));
+
+      customerLeaks = customerLeaks.filter(function(value, index, all) { return all.indexOf(value) === index; });
+      add('customer_language', customerLeaks.length === 0, customerLeaks.length
+        ? ('Internal customer-facing wording found: ' + customerLeaks.slice(0, 5).join(' | '))
+        : 'Overview and populated workspaces exposed no workbook tab names or raw technical errors.');
+
+      if (typeof showPage === 'function') showPage('overview');
+      var refresh = document.getElementById('planner_refresh_btn');
+      var refreshPass = !!(refresh && !refresh.disabled);
+      if (refreshPass) {
+        refresh.click();
+        refreshPass = refresh.disabled === true;
+        if (refreshPass) {
+          await waitFor(function() { return refresh.disabled === false; }, 300000, 'Refresh Financial Plan completion');
+          var plannerStatus = document.getElementById('planner_status');
+          refreshPass = !(plannerStatus && plannerStatus.classList.contains('error'));
+        }
+      }
+      add('refresh_button_state', refreshPass, refreshPass
+        ? 'Refresh disabled during the populated planner request, then re-enabled without an error state.'
+        : 'Refresh did not preserve the expected running/completed button state.');
+
+      var errors = errorMessages();
+      add('clean_console_navigation', errors.length === 0, errors.length
+        ? ('Captured ' + errors.length + ' browser/visible error(s).')
+        : 'No browser errors, unhandled rejections, or visible error statuses were captured.');
+      finish(errors);
+    } catch (e) {
+      if (assertions.every(function(item) { return item.id !== 'clean_console_navigation'; })) {
+        add('clean_console_navigation', false, 'Runner stopped: ' + (e && e.message ? e.message : String(e)));
+      }
+      finish(errorMessages().concat([e && e.message ? e.message : String(e)]));
+    }
+  }
+
+  function finish(errors) {
+    if (finished) return;
+    finished = true;
+    google.script.run
+      .withSuccessHandler(function(res) {
+        var bad = !res || !res.ok || !res.report || res.report.overall !== 'PASS';
+        overlay(bad ? 'Populated Dashboard E2E — FAIL' : 'Populated Dashboard E2E — PASS',
+          (res && (res.report || res.error)) || 'No report returned.', bad);
+      })
+      .withFailureHandler(function(err) {
+        overlay('Populated Dashboard E2E — COMPLETION ERROR',
+          { error:(err && err.message) ? err.message : String(err), assertions:assertions }, true);
+      })
+      .pdE2EComplete(cfg.runId, {
+        assertions: assertions,
+        errors: errors || [],
+        durationMs: Date.now() - started
+      }, true);
+  }
+
+  setTimeout(run, 0);
+})();

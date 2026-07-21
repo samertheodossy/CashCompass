@@ -40,6 +40,22 @@ let debtFieldTypes = {
   'Int Rate': 'plain'
 };
 
+// Preserve the user's most recent subtab within each top-level workspace for
+// the lifetime of the dashboard session. Panels use one global active state,
+// so moving to another workspace necessarily clears the prior panel; this map
+// lets showPage() restore the user's real choice instead of always falling
+// back to the workspace default.
+var DASHBOARD_LAST_TAB_BY_PAGE_ = Object.create(null);
+
+function dashboardPageForTab_(name) {
+  if (name === 'houses' || name === 'bank' || name === 'investments') return 'assets';
+  if (name === 'payments' || name === 'upcoming' || name === 'donations' || name === 'billsDue' || name === 'income') return 'cashflow';
+  if (name === 'houseExpenses' || name === 'propertyPerformance') return 'properties';
+  if (name === 'debts' || name === 'retirement' || name === 'purchase' ||
+      name === 'debtPayoff' || name === 'rollingDebtPayoff' || name === 'nextActions') return 'planning';
+  return '';
+}
+
 function showPage(name) {
   document.querySelectorAll('.workspace-page').forEach(function(el) {
     el.classList.remove('active');
@@ -93,8 +109,9 @@ function showPage(name) {
     planning: 'nextActions'
   };
   var defaultTab = defaultTabs[name];
-  if (page && defaultTab && !page.querySelector('.panel.active')) {
-    showTab(defaultTab);
+  var targetTab = DASHBOARD_LAST_TAB_BY_PAGE_[name] || defaultTab;
+  if (page && targetTab && !page.querySelector('.panel.active')) {
+    showTab(targetTab);
   }
 }
 
@@ -344,6 +361,9 @@ function openHelpToSection(anchorId) {
 })();
 
 function showTab(name) {
+  var ownerPage = dashboardPageForTab_(name);
+  if (ownerPage) DASHBOARD_LAST_TAB_BY_PAGE_[ownerPage] = name;
+
   document.querySelectorAll('.panel').forEach(function(el) {
     el.classList.remove('active');
   });

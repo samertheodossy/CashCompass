@@ -204,9 +204,9 @@ function getHarnessSmokeScenario_() {
 }
 
 /**
- * Seed the INPUT - Donation year block (if absent) and append ONE donation row
- * using the same pure production helpers addDonation() uses. All writes are
- * guarded by ctx.assertWritable() and confined to the disposable ss.
+ * Seed one donation through the real production addDonation path, using its
+ * explicit disposable-workbook seam. All writes are guarded by
+ * ctx.assertWritable() and confined to the disposable ss.
  *
  * @param {Object} ctx { ss, runId, actions[], assertWritable() }
  */
@@ -214,53 +214,33 @@ function harnessSeedOneDonationRow_(ctx) {
   var ss = ctx.ss;
   var name = (typeof DONATION_SHEET_NAME_ === 'string') ? DONATION_SHEET_NAME_ : 'INPUT - Donation';
   var year = (typeof getCurrentYear_ === 'function') ? getCurrentYear_() : new Date().getFullYear();
+  ctx.assertWritable();
+  if (typeof addDonation !== 'function') {
+    throw new Error('Harness: production donation writer is unavailable.');
+  }
+  addDonation({
+    charityName: 'Local Food Bank',
+    donationDate: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+    amount: 100,
+    taxYear: year,
+    comments: 'Smoke test donation',
+    paymentType: 'Cash'
+  }, ss);
 
   var sheet = ss.getSheetByName(name);
-  if (!sheet) {
-    ctx.assertWritable();
-    sheet = ss.insertSheet(name);
-    // Same seed shape as ensureInputDonationSheet_: Year banner + header row.
-    sheet.getRange(1, 1, 1, 2).setValues([['Year', year]]);
-    sheet.getRange(2, 1, 1, DONATION_REQUIRED_HEADERS_.length)
-      .setValues([DONATION_REQUIRED_HEADERS_.slice()]);
-    if (typeof applyDonationSheetStyling_ === 'function') {
-      try { applyDonationSheetStyling_(sheet); } catch (_st) { /* cosmetic */ }
-    }
-    ctx.actions.push('Create INPUT - Donation year block (' + year + ')');
-  }
-
-  // Append one row via the exact pure helpers addDonation() relies on.
-  ctx.assertWritable();
+  if (!sheet) throw new Error('Harness: production donation writer did not create its sheet.');
   var values = sheet.getDataRange().getValues();
   var block = findDonationBlockForTaxYear_(values, year);
   if (!block) {
-    throw new Error('Harness: donation block for tax year ' + year + ' not found after seeding.');
+    throw new Error('Harness: donation block for tax year ' + year + ' not found after production save.');
   }
-  var row1 = getDonationAppendRow1_(values, block);
-  // Realistic short fixture data — the workbook NAME already marks it disposable
-  // ("… — SAFE TO DELETE"), so the row itself stays representative and un-clipped.
-  var row = buildDonationOutputRow_(
-    block.colMap,
-    'Local Food Bank',
-    new Date(),
-    100,
-    year,
-    'Smoke test donation',
-    'Cash'
-  );
-  sheet.getRange(row1, 1, 1, row.length).setValues([row]);
-
-  // Match addDonation()'s first-row number formats for a faithful row.
   var amountCol = block.colMap['Amount'] + 1;
-  try {
-    var dateCol = block.colMap['Date'] + 1;
-    sheet.getRange(row1, dateCol).setNumberFormat('M/d/yyyy');
-    sheet.getRange(row1, amountCol).setNumberFormat('$#,##0.00');
-  } catch (_nf) { /* cosmetic */ }
+  var row1 = getDonationLastDataRow1_(values, block);
+  if (row1 < 1) throw new Error('Harness: production donation row was not found after save.');
 
   // Record the seeded row location so expectedOutcome (E0a) can read the actual
   // Amount back and assert on it. Scenario scratch only — not a workbook write.
   ctx.seededDonation = { row: row1, amountCol: amountCol };
 
-  ctx.actions.push('Add one donation row (buildDonationOutputRow_) at row ' + row1);
+  ctx.actions.push('Add one donation row through production addDonation at row ' + row1);
 }

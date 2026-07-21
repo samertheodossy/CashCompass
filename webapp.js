@@ -73,8 +73,39 @@ function doGet(e) {
       var e2eTemplate = HtmlService.createTemplateFromFile('PlannerDashboardWeb');
       e2eTemplate.firstRunE2EEnabled = true;
       e2eTemplate.firstRunE2EConfigJson = JSON.stringify({ enabled: true, runId: context.runId });
+      e2eTemplate.populatedDashboardE2EEnabled = false;
+      e2eTemplate.populatedDashboardE2EConfigJson = '{}';
       return e2eTemplate.evaluate()
         .setTitle('CashCompass — First-Run UX E2E Running')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    }
+  }
+
+  // Browser-backed representative existing-user validation. The control route
+  // is locked to the same permanent disposable non-admin identity. Preparation
+  // creates and seeds only a newly provisioned Central workbook; the run route
+  // requires the exact active token and verified mapped-workbook identity.
+  if (view === 'populated-dashboard-e2e' && isFirstRunE2EUser_()) {
+    return HtmlService.createTemplateFromFile('PopulatedDashboardE2ETestingUI')
+      .evaluate()
+      .setTitle('CashCompass — Populated Dashboard E2E')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+  if (view === 'populated-dashboard-e2e-run') {
+    var populatedRunId = (e && e.parameter && e.parameter.runId) ? String(e.parameter.runId) : '';
+    var populatedContext = pdE2ERenderContext_(populatedRunId);
+    if (populatedContext) {
+      var populatedTemplate = HtmlService.createTemplateFromFile('PlannerDashboardWeb');
+      populatedTemplate.firstRunE2EEnabled = false;
+      populatedTemplate.firstRunE2EConfigJson = '{}';
+      populatedTemplate.populatedDashboardE2EEnabled = true;
+      populatedTemplate.populatedDashboardE2EConfigJson = JSON.stringify({
+        enabled: true,
+        runId: populatedContext.runId,
+        expected: populatedContext.expected
+      });
+      return populatedTemplate.evaluate()
+        .setTitle('CashCompass — Populated Dashboard E2E Running')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
     }
   }
@@ -82,6 +113,8 @@ function doGet(e) {
   var dashboardTemplate = HtmlService.createTemplateFromFile('PlannerDashboardWeb');
   dashboardTemplate.firstRunE2EEnabled = false;
   dashboardTemplate.firstRunE2EConfigJson = '{}';
+  dashboardTemplate.populatedDashboardE2EEnabled = false;
+  dashboardTemplate.populatedDashboardE2EConfigJson = '{}';
   return dashboardTemplate.evaluate()
     .setTitle('CashCompass')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);

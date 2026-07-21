@@ -313,8 +313,8 @@ function vtListHarnessSuites() {
         implemented: s.implemented !== false,
         blocker: s.blocker || null,
         runner: s.runner || 'server',
-        launchUrl: s.runner === 'browser'
-          ? String(ScriptApp.getService().getUrl() || '').replace(/\?.*$/, '') + '?view=first-run-e2e'
+        launchUrl: s.runner === 'browser' && s.browserRoute
+          ? String(ScriptApp.getService().getUrl() || '').replace(/\?.*$/, '') + '?view=' + encodeURIComponent(s.browserRoute)
           : null,
         latestEvidence: latestEvidence,
         scenarioIds: (s.scenarioIds && s.scenarioIds.length) ? s.scenarioIds.slice() : [],
@@ -369,12 +369,13 @@ function vtOpenHarnessBrowserRunner(suiteId) {
     if (!suite || suite.runner !== 'browser') {
       throw new Error('Unknown or unsupported browser suite.');
     }
-    if (suite.id !== 'SUITE-FIRST-RUN-UX-E2E') {
+    if (!suite.browserRoute) {
       throw new Error('This browser suite does not yet have an approved launcher.');
     }
     return {
       ok: true,
-      launchUrl: String(ScriptApp.getService().getUrl() || '').replace(/\?.*$/, '') + '?view=first-run-e2e'
+      launchUrl: String(ScriptApp.getService().getUrl() || '').replace(/\?.*$/, '') +
+        '?view=' + encodeURIComponent(suite.browserRoute)
     };
   });
 }

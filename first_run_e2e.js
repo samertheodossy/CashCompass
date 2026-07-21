@@ -11,6 +11,7 @@ var FIRST_RUN_E2E_TEST_EMAIL_ = 'cashcompass2026@gmail.com';
 var FIRST_RUN_E2E_STATE_KEY_ = 'FIRST_RUN_E2E_ACTIVE_STATE_V1';
 var FIRST_RUN_E2E_EVIDENCE_KEY_ = 'FIRST_RUN_E2E_LATEST_EVIDENCE_V2';
 var FIRST_RUN_E2E_SCENARIO_ID_ = 'E2E-FIRST-RUN-UX';
+var FIRST_RUN_E2E_MODE_ = 'FIRST_RUN';
 var FIRST_RUN_E2E_REQUIRED_ASSERTIONS_ = [
   'startup_welcome',
   'setup_copy',
@@ -135,11 +136,15 @@ function frE2EPublicState_() {
   if (state) {
     try {
       var file = assertFirstRunE2EFixture_(state, FIRST_RUN_E2E_TEST_EMAIL_, true);
+      var route = state.mode === 'POPULATED_DASHBOARD'
+        ? 'populated-dashboard-e2e-run'
+        : 'first-run-e2e-run';
       active = {
         runId: state.runId,
         createdAt: state.createdAt,
         trashed: !!file.trashed,
-        runUrl: frE2EBaseUrl_() + '?view=first-run-e2e-run&runId=' + encodeURIComponent(state.runId)
+        mode: state.mode || FIRST_RUN_E2E_MODE_,
+        runUrl: frE2EBaseUrl_() + '?view=' + route + '&runId=' + encodeURIComponent(state.runId)
       };
     } catch (e) {
       active = { runId: state.runId || '', invalid: true,
@@ -189,6 +194,7 @@ function frE2EPrepare(confirmed) {
     var state = {
       version: 2,
       status: 'ACTIVE',
+      mode: FIRST_RUN_E2E_MODE_,
       runId: 'FR-' + Utilities.getUuid(),
       workbookId: id,
       emailHash: buildMappingKey_(email).slice(MAPPING_KEY_PREFIX_.length),
@@ -233,7 +239,7 @@ function frE2EPrepare(confirmed) {
 function frE2ERenderContext_(runId) {
   if (!isFirstRunE2EUser_()) return null;
   var state = frE2EReadState_();
-  if (!state || String(runId || '') !== state.runId) return null;
+  if (!state || state.mode !== FIRST_RUN_E2E_MODE_ || String(runId || '') !== state.runId) return null;
   try {
     assertFirstRunE2EFixture_(state, FIRST_RUN_E2E_TEST_EMAIL_, false);
     return { runId: state.runId };
@@ -242,21 +248,22 @@ function frE2ERenderContext_(runId) {
   }
 }
 
-function frE2ENormalizeEvidence_(payload) {
+function frE2ENormalizeEvidenceFor_(payload, requiredAssertions) {
   payload = payload || {};
+  requiredAssertions = requiredAssertions || [];
   var incoming = Array.isArray(payload.assertions) ? payload.assertions : [];
   var byId = {};
   for (var i = 0; i < incoming.length; i++) {
     var item = incoming[i] || {};
     var id = String(item.id || '');
-    if (FIRST_RUN_E2E_REQUIRED_ASSERTIONS_.indexOf(id) === -1 || byId[id]) continue;
+    if (requiredAssertions.indexOf(id) === -1 || byId[id]) continue;
     byId[id] = {
       id: id,
       pass: item.pass === true,
       detail: String(item.detail || '').replace(/[\r\n\t]/g, ' ').slice(0, 240)
     };
   }
-  var assertions = FIRST_RUN_E2E_REQUIRED_ASSERTIONS_.map(function(id) {
+  var assertions = requiredAssertions.map(function(id) {
     return byId[id] || { id: id, pass: false, detail: 'Required browser assertion was not reported.' };
   });
   var errors = Array.isArray(payload.errors) ? payload.errors.slice(0, 10).map(function(value) {
@@ -267,6 +274,10 @@ function frE2ENormalizeEvidence_(payload) {
     errors: errors,
     durationMs: Math.max(0, Math.min(Number(payload.durationMs) || 0, 900000))
   };
+}
+
+function frE2ENormalizeEvidence_(payload) {
+  return frE2ENormalizeEvidenceFor_(payload, FIRST_RUN_E2E_REQUIRED_ASSERTIONS_);
 }
 
 function frE2ECleanupVerified_(state, email) {

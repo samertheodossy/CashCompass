@@ -151,6 +151,7 @@ function getHarnessSuites_() {
       description: 'Browser-driven fresh Central provisioning, Setup, navigation, gating, Help, real Refresh state, clean-console checks, and verified Trash cleanup.',
       implemented: true,
       runner: 'browser',
+      browserRoute: 'first-run-e2e',
       evidenceKey: 'FIRST_RUN_E2E_LATEST_EVIDENCE_V2',
       blocker: null,
       scenarioIds: []
@@ -158,9 +159,12 @@ function getHarnessSuites_() {
     {
       id: 'SUITE-POPULATED-DASHBOARD-E2E',
       label: 'Populated Dashboard E2E',
-      description: 'Planned browser-driven populated KPI, selection/action, equity, subtab, Help/Setup, and clean-console validation.',
-      implemented: false,
-      blocker: 'Requires an authenticated browser runner plus an explicit disposable-workbook dashboard target.',
+      description: 'Browser-driven populated KPI, selection/action, equity, subtab, Help/Setup, real Refresh, customer-language, and clean-console validation.',
+      implemented: true,
+      runner: 'browser',
+      browserRoute: 'populated-dashboard-e2e',
+      evidenceKey: 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V1',
+      blocker: null,
       scenarioIds: []
     },
     {
