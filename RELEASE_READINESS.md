@@ -13,7 +13,9 @@ the producer.
 
 **Related docs:** `TEST_HARNESS_ARCHITECTURE.md` (the runner),
 `VALIDATOR_ARCHITECTURE.md` (the read-only judge), `REGRESSION_SCENARIOS.md` (the
-regression pack), `ROADMAP.md` (P1 sequencing).
+regression pack), `ROADMAP.md` (P1 sequencing), and
+`BETA_10_OUT_OF_10_PLAN.md` (the full product-quality and monetization-readiness
+gate).
 
 ---
 
@@ -90,6 +92,25 @@ outstanding.
 
 The report lists **every failed scenario** with its Validator findings so the
 failures are actionable, not just a red light.
+
+### Automated READY is necessary, not sufficient
+
+This report answers whether the automated Harness + Validator evidence is ready.
+It does **not**, by itself, authorize a broad beta. The exact release candidate must
+also pass the human/product gates in `BETA_10_OUT_OF_10_PLAN.md`:
+
+- weighted readiness score at least 95/100, with no dimension below 9/10;
+- no unresolved Severity 1 or Severity 2 defect;
+- financial truth reconciled to $0.01 across release-critical surfaces;
+- ratified performance budgets passing, including long-running workflows;
+- core task/usability, responsive/accessibility, privacy, support, and operations
+  evidence complete;
+- supervised-cohort evidence without a financial-integrity, recovery, privacy, or
+  data-loss incident;
+- monetization foundations ready before payment collection.
+
+The automated report may say **READY FOR BETA** while the full product gate still
+says **NOT READY**. The stricter verdict controls release.
 
 ---
 

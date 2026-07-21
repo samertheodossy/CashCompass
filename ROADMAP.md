@@ -23,6 +23,7 @@
 - **Current engineering milestone:** **Remaining Validator Phase 2 scope** (P1).
 - **Next product-model milestone:** **House Financial Accuracy** (P2).
 - **Measured follow-up:** Financial Plan refresh succeeded but took 143 seconds on the blank/fresh fixture; investigate under P3 Performance without reopening the completed P0 functional-feedback work.
+- **Release policy:** CashCompass is **quality-gated, not date-gated**. A small supervised cohort may validate work during P1–P3, but a broad Beta Release Candidate must satisfy `BETA_10_OUT_OF_10_PLAN.md`: score ≥95/100, no dimension below 9/10, no unresolved Severity 1 or Severity 2 defect, and every non-negotiable release gate passing.
 
 ---
 
@@ -33,13 +34,13 @@
 - **Documentation** — keep architecture docs, roadmap, and standards in sync with the current state (this milestone).
 - **Regression Discovery (process)** — every meaningful bug fix / feature / schema / dashboard / financial-calc change runs the **Regression Discovery Policy** and appends the reusable **Regression Discovery** prompt block (`REGRESSION_SUITE_PLAN.md → Regression Discovery Policy` + `§A`) so test coverage grows as the product evolves.
 - **Product decisions — ✅ current P0 inventory resolved.** The final known P0 item, Settings header/body typography, was ratified 2026-07-20 as 16pt / 14pt and implemented first-create only. Future Validator discoveries follow the normal record-and-defer rule.
-- **Beta readiness — ✅ stabilization evidence complete.** On isolated Central `@114`, the canonical blank/fresh pass and a Central-owned representative populated fixture both passed Setup, navigation, editor gating, first-run/populated rendering, Help, and broad workspace checks without console warnings. This closes the stabilization slice; remaining Beta-Gate work stays sequenced under P1/P2.
+- **Beta readiness — ✅ stabilization evidence complete.** On isolated Central `@114`, the canonical blank/fresh pass and a Central-owned representative populated fixture both passed Setup, navigation, editor gating, first-run/populated rendering, Help, and broad workspace checks without console warnings. This closes the stabilization slice; remaining Beta-Gate work stays sequenced under P1 evidence, P2 financial truth, P3 experience/performance, and the final 10/10 Release Candidate gate.
 - **Central resolver verification — ✅ static Tier-2 sweep closed 2026-07-20.** All Central user-facing production paths use `getUserSpreadsheet_()`; remaining direct active-spreadsheet calls are intentionally confined to the resolver's bound fallback, bound-only utilities, developer Test Setup, and the harness safety guard.
 - **Recovery Validation 6F — ✅ P0 complete 2026-07-20.** Full disposable-account matrix passed, including MEDIUM auto-adopt ON; flags OFF and fixture gate removed. Read-only orphan detection remains P1.
 
 ### Priority 1 — Validator Phase 2 + Test Harness / Regression Runner
 
-*(P0 closed 2026-07-20; this is now the current engineering milestone. Detail: `VALIDATOR_ARCHITECTURE.md → §10 Phase 2` (the judge) and `TEST_HARNESS_ARCHITECTURE.md` (the writer), with `REGRESSION_SCENARIOS.md` + `RELEASE_READINESS.md`.)*
+*(P0 closed 2026-07-20; this is now the current engineering milestone. Detail: `VALIDATOR_ARCHITECTURE.md → §10 Phase 2` (the judge) and `TEST_HARNESS_ARCHITECTURE.md` (the writer), with `REGRESSION_SCENARIOS.md`, `RELEASE_READINESS.md`, and the quality gate in `BETA_10_OUT_OF_10_PLAN.md`.)*
 
 **Sequenced milestone order** (the Validator is the read-only **judge**; the Test Harness is the developer-only **writer/mutator** that drives scenarios against disposable workbooks and asks the Validator to confirm nothing broke):
 
@@ -54,20 +55,22 @@ Remaining Validator Phase 2 modules (fold into the judge track, `§10`): formal 
 
 ### Priority 2 — Financial Model Accuracy
 
-The next **product-model** milestone (after Validator Phase 2, before major new user features). Full spec below in **House Financial Accuracy**.
+The next **product-model** milestone (after Validator Phase 2, before the broad Beta Release Candidate and before major new user features). Full spec below in **House Financial Accuracy**.
 
 - **House Financial Accuracy** — rental-property cash-flow accuracy including financing costs, with one shared house cash-flow model reconciled across all house-related sheets.
 
-### Priority 3 — Performance and scalability
+### Priority 3 — Performance, finished-feeling UX, and scalability
 
-- Provisioning + dashboard/planner latency, bulk-API and caching passes where measured; scale toward more users/workbooks.
+- Beta-critical performance and experience pass before broad release: provisioning + dashboard/planner latency, bulk-API and caching passes, long-running-action feedback, terminology/loading consistency, responsive/accessibility review, and measured scale toward more users/workbooks.
 - **Financial Plan refresh latency** — isolated blank/fresh `@114` completed correctly but took **143 seconds**. Profile server/planner stages, identify dominant calls, establish a representative baseline, and optimize without weakening refresh correctness or email safeguards.
+- **10/10 Beta Release Candidate gate** — after P1 evidence, P2 financial truth, and P3 experience/performance work, run the exact candidate through the full scorecard and release gates in `BETA_10_OUT_OF_10_PLAN.md`. A supervised cohort may run earlier; broad or monetized beta does not.
 
 ### Priority 4 — Future features
 
 - **AutoPay Pending Confirmation UX** *(future product enhancement — after Test Harness / Release Readiness)* — visually distinguish AutoPay bills that are **awaiting payment confirmation** from bills that **require manual action**, without hiding them or inferring payment from the due date. Keeps current behavior; adds an "AutoPay Pending" state/badge and a future auto-transition **Pending → Confirmed → Completed** once a matching payment is detected via manual entry / bank import / future bank sync (then removed from the Bills Due attention queue). Never auto-complete AutoPay bills without payment evidence. Full spec: `ENHANCEMENTS.md → Future — AutoPay Pending Confirmation UX`.
 - **Paid Bill Correction / Edit Recorded Payment** *(planned financial-correction workflow)* — allow a user to select a specific already-recorded bill occurrence and correct the paid amount, payment date/month, or reopen it when payment did not actually occur. The correction must update the existing Cash Flow/payment evidence rather than add another payment, preserve an immutable before/after Activity audit trail, and never create duplicate Cash Flow amounts or occurrence markers. Reuse the guarded-reversal model in `TODO.md` under **Activity — Smart undo / reverse transaction**: resolve exact stored coordinates or dedupe evidence, verify the current workbook state still matches the recorded post-state, and stop for reconciliation if it does not. Scope manual Bills Pay first; treat AutoPay and expanded recurrence separately until their evidence is sufficient.
 - Money Plan Phase 2, Account Aggregation & Transaction Import, Chat / Assistant, Paid Product framework, and other post-beta product direction (`PRODUCT_VISION.md`, `ENHANCEMENTS.md`).
+- **Monetization preparation begins before billing:** define customer/value proposition, packaging hypotheses, entitlement seams, owned-data guarantees, privacy/terms/support posture, cost metrics, and billing architecture during beta hardening. Actual payment collection remains gated on demonstrated trust, repeated use, supportability, and the 10/10 release standard.
 
 ---
 
@@ -111,4 +114,5 @@ Sequenced **immediately after Validator Phase 2 and before major new user featur
 - `PROJECT_CONTEXT.md` — current architecture + project status.
 - `ENGINEERING_STANDARDS.md` — engineering rules, canonical styling, and **Milestone Discipline (§11)**.
 - `VALIDATOR_ARCHITECTURE.md` — the Validator subsystem (Phase 1 and the Phase 2 foundation complete; remaining Phase 2 scope planned).
+- `BETA_10_OUT_OF_10_PLAN.md` — quality scorecard, non-negotiable release gates, supervised-cohort boundary, and monetization-ready delivery map.
 - `GOLDEN_WORKBOOK.md` / `WORKBOOK_PARITY_CHECKLIST.md` — the Canonical workbook standard + per-sheet convergence status.

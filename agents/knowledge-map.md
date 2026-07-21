@@ -28,6 +28,10 @@ Roadmap
 
 - ROADMAP.md
 
+10/10 Beta and Monetization-Ready Plan
+
+- BETA_10_OUT_OF_10_PLAN.md
+
 Working Rules
 
 - WORKING_RULES.md
@@ -157,6 +161,10 @@ Central Deployment
 ---
 
 # Planning
+
+Beta Quality and Monetization Readiness
+
+- BETA_10_OUT_OF_10_PLAN.md
 
 Enhancements
 

@@ -11,7 +11,7 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current stage — Stage 3: Beta Readiness
 
-**Maturity (estimated):** Family Beta Readiness **~97–98%** · External / Public Beta Readiness **~92%**. **Stage 1 (Core Platform) and Stage 2 (Product Hardening) are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** The remaining work before family beta is the **Beta Gate**. The July 9 execution queue is retained below as historical planning context, but the current ordering authority is `ROADMAP.md`: **P0 Project Stabilization → remaining P1 Validator/Test Harness/Release Readiness scope → P2 House Financial Accuracy**. This is no longer major feature development.
+**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the prior capability-oriented estimate; the new quality score baseline is **7.5/10** from the 2026-07-20 two-track validation. **Stage 1 (Core Platform), Stage 2 (Product Hardening), and P0 Project Stabilization are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** Current ordering authority is `ROADMAP.md`: **P1 Validator/Test Harness/Release Readiness → P2 House Financial Accuracy → P3 finished-feeling UX/performance → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
 
 `ROADMAP.md` is authoritative for **priority and sequence**. The `## Product Maturity Stages` section below supplies detailed stages, tasks, dependencies, testing inventory, and history; `PROJECT_CONTEXT.md` is authoritative for current technical status. The older `## Launch Readiness Roadmap` (Phase 1–7) is retained further below as historical phase expansion; where it conflicts with current ordering, `ROADMAP.md` wins.
 
@@ -68,7 +68,7 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 
 > **Historical execution order (recorded 2026-07-09):** **1) Bills Due Pay runtime validation · 2) Investments cleanup · 3) Recovery implementation · 4) Validation Agent · 5) Golden Workbook polish · 6) Family Beta.** Retained for planning history only. It is not the current work sequence and does not override `ROADMAP.md`.
 >
-> **Beta-Gate workstreams (lettered A–F below) are organized by workstream, not execution order.** All must be satisfied before Family Beta. `ROADMAP.md` controls current sequencing. **Financial Integrity — Phase 3 (workstream B)** remains a Beta-Gate requirement — *the numbers must reconcile* before Family Beta broadens. Strategic rationale: *trust before features; the numbers must reconcile; converge the workbook before broadening Family Beta; automated validation protects trust* (see `PRODUCT_VISION.md → §11 Version 1 Guiding Conclusions`).
+> **Beta-Gate workstreams (lettered A–F below) are organized by workstream, not execution order.** All must be satisfied before the Beta Release Candidate can broaden beyond supervised validation. `ROADMAP.md` controls current sequencing. **Financial Integrity — Phase 3 (workstream B)** remains a Beta-Gate requirement — *the numbers must reconcile* before release broadens. Strategic rationale: *trust before features; the numbers must reconcile; converge the workbook before broad release; automated validation protects trust* (see `PRODUCT_VISION.md → §11 Version 1 Guiding Conclusions`).
 
 **A. Golden Workbook Convergence** *(Beta-Gate workstream · execution item #5 — a **convergence project, not a redesign**; the production workbook is the **visual source of truth**; full inventory in `## UX Backlog (Version 1)`)*
 
@@ -142,17 +142,18 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
 | Beta Gate assembly (Golden Workbook · FI Phase 3 · Validation Agent · Recovery · regression checklist) | P1 | A–D | Dependent |
+| 10/10 Beta scorecard + product gate (≥95/100; no dimension <9/10; all non-negotiable gates PASS) | P1–P3 | Automated READY + financial truth + performance/UX + operations | Dependent |
 | Documentation + onboarding review | P2 | — | S |
 
-**Goal:** Family Beta Release Candidate — **provably correct, recoverable, and visually production-grade.**
+**Goal:** 10/10 Beta Release Candidate — **provably correct, recoverable, responsive, understandable, private, and supportable.**
 
-### Stage 4 — Family Beta
+### Stage 4 — Supervised Family Validation Cohort
 
-Limited trusted users; stabilize real-world workflows. Remaining work:
+Limited trusted users; stabilize real-world workflows while P1–P3 quality work continues. This is a learning cohort, not authorization for broad or monetized beta. Remaining work:
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
-| Family Beta go/no-go pass *(includes a `## UX Backlog (Version 1)` review — required before every Family Beta milestone)* | P1 | Beta Gate (Stage 3) | S |
+| Cohort go/no-go pass *(includes a `## UX Backlog (Version 1)` review and strict workbook/data-safety checks)* | P1 | Safe candidate + support coverage | S |
 | Onboard trusted users · collect usability feedback | P1 | Go/no-go | Ongoing |
 | Identify workflow gaps + missing diagnostics | P2 | Beta usage | M |
 | 6D.2b Create New Workbook (self-service "start fresh") | P1 | 6F closed | M |
@@ -163,9 +164,9 @@ Limited trusted users; stabilize real-world workflows. Remaining work:
 
 *(Golden Workbook Convergence was elevated to Stage 3 — it is a Family Beta quality gate, not a follow-up. The full opportunistic UX list lives in `## UX Backlog (Version 1)`, reviewed before this milestone.)*
 
-### Stage 5 — External Beta
+### Stage 5 — 10/10 Beta Release Candidate and External Beta
 
-Broader invited audience; operate many users safely. **Review `## UX Backlog (Version 1)` before entering this stage** (required before External Beta). Remaining work:
+Broader invited audience only after the full `BETA_10_OUT_OF_10_PLAN.md` gate passes on the exact candidate. Operate many users safely and prepare monetization foundations before collecting payment. **Review `## UX Backlog (Version 1)` before entering this stage.** Remaining work:
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
@@ -182,10 +183,14 @@ Broader invited audience; operate many users safely. **Review `## UX Backlog (Ve
 | Admin tooling: `adminAdoptWorkbook`, `adminTrashOrphan` (soft-delete only) | P3 | 6E.2 | M |
 | Tier-2 `getActiveSpreadsheet()` user-facing sweep | P3 | — | ✅ Closed by source inspection 2026-07-20 — residual calls are resolver fallback, bound/dev utilities, or harness safety only |
 | Bound deployment cleanup / manifest revert once central is primary | P3 | Central primary | S |
+| **10/10 Beta Release Candidate gate** — score ≥95/100, no dimension below 9/10, automated READY, no Sev-1/Sev-2, financial/performance/UX/privacy/operations/cohort gates PASS | P1–P3 | Stages 3–4 evidence | M |
+| **Monetization foundation** — customer/value proposition, packaging hypotheses, entitlement seams, owned-data guarantees, privacy/terms/support/refunds, unit-cost metrics, billing/tax architecture decision | P3 | Trust + cohort evidence | L |
+
+Actual payment collection remains later and requires demonstrated repeated value, supportability, safe cancellation/export behavior, and a separate explicit launch decision.
 
 ### Stage 6 — Version 2 / Future Platform
 
-Differentiators and platform/operations maturity. **None of these are required for Family Beta or External Beta.** Remaining work:
+Differentiators and expanded platform/operations maturity. Their **full implementations** are not required for the 10/10 Beta Release Candidate; the privacy, support, measurement, entitlement, and architecture foundations named in its gate are required. Remaining work:
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
@@ -194,7 +199,7 @@ Differentiators and platform/operations maturity. **None of these are required f
 | **Operational metrics** (provisioning / mapping / usage counters) | P4 | Monitoring | M |
 | **Monitoring / alerting** (proactive failure detection) | P4 | — | M |
 | **Analytics** (product / usage analytics) | P4 | — | M |
-| **Paid product readiness** (pricing, subscription, entitlements, plan enforcement fail-open, ToS, privacy, support ops, billing) | P4 | Stable external beta | XL |
+| **Billing activation and paid-product expansion** (provider integration, subscription lifecycle, production webhooks, tax, failed payment, refunds, pricing launch) | P4 | 10/10 gate + monetization foundation | XL |
 | Account Aggregation & Transaction Import (Plaid-style) | P4 | Paid tier | XL |
 | Merge Debt Accounts · Debt Payee Aliases · Google Sheets refresh awareness | P4 | — | S–L each |
 | **Cash Flow Forward Projection** — explicit forward-only bill projection, separate from AutoPay actuals *(future product feature, not unfinished work — see `## Future Feature — Cash Flow Forward Projection` below)* | P4 | — | M–L |
@@ -228,7 +233,7 @@ This queue records the July 9 plan and is **not the current ordering authority**
 5. **Golden Workbook polish** — a newly provisioned workbook must **converge toward the Golden Workbook** (the **visual source of truth**) until **visually indistinguishable from production** (styling, widths, freezes, conditional formats, number formats, totals, notes, filters, sheet order; Cash Flow / Investments / House Values / Retirement). A **convergence project, not a redesign.** First audit complete (2026-07-06, ten core sheets across four design families). *(P0/P1; L)*
 6. **Family Beta polish** — Workbook / UX polish sweep (onboarding, empty-states, loading-experience consistency, messaging, Help/content cleanup — see `## UX Backlog (Version 1)`), Beta Gate assembly, release-readiness review, Stage 4 go/no-go.
 
-> **Also a Beta-Gate requirement (not in the numbered execution queue above): Financial Integrity — Phase 3 (convergence)** — declare the **canonical financial basis**, converge **Planner / Dashboard / Rolling Debt** to within $0.01, add the **Asset / Planner / Dashboard audit modules**. *(Completed foundation: Audit Framework, Debt Audit, shared Active helper, `NOT_INITIALIZED`.)* Strategic anchor: **the numbers must reconcile** — the product's core trust claim. It must be satisfied before Family Beta broadens; sequence it alongside items 3–5.
+> **Also a Beta-Gate requirement (not in the numbered execution queue above): Financial Integrity — Phase 3 (convergence)** — declare the **canonical financial basis**, converge **Planner / Dashboard / Rolling Debt** to within $0.01, add the **Asset / Planner / Dashboard audit modules**. *(Completed foundation: Audit Framework, Debt Audit, shared Active helper, `NOT_INITIALIZED`.)* Strategic anchor: **the numbers must reconcile** — the product's core trust claim. It must be satisfied before release broadens beyond supervised validation; sequence it alongside items 3–5.
 
 **Longer-horizon (post-Beta-Gate, not near-term):**
 
@@ -375,7 +380,7 @@ This section preserves the July 9 handoff and is not the current starting-point 
 5. **Golden Workbook polish** — converge fresh provisioning toward the Golden Workbook (visual source of truth); first audit complete (ten sheets, four design families), so write the additive first-create passes for the diverging sheets.
 6. **Family Beta** — once 1–5 are green, do the UX polish sweep (incl. `## UX Backlog (Version 1)` review), Beta Gate assembly, release-readiness review, and the Stage 4 go/no-go pass.
 
-> **Note:** **Financial Integrity Phase 3** (canonical basis · Planner/Dashboard/Rolling convergence to $0.01 · Asset/Planner/Dashboard audit modules) remains a **Beta Gate requirement** (`Stage 3 → B`) even though it is not in the immediate active queue above — *the numbers must reconcile* before Family Beta broadens.
+> **Note:** **Financial Integrity Phase 3** (canonical basis · Planner/Dashboard/Rolling convergence to $0.01 · Asset/Planner/Dashboard audit modules) remains a **Beta Gate requirement** (`Stage 3 → B`) even though it is not in the immediate active queue above — *the numbers must reconcile* before release broadens beyond supervised validation.
 
 (Validation-surface reminder: the Script Properties UI may lag runtime mapping changes during testing — **Admin Diagnostics is authoritative**. All `CENTRAL_*` flags return OFF in steady state.)
 
@@ -513,7 +518,7 @@ Historical ranked detail retained for traceability. It does not override the cur
 5. **Golden Workbook polish (Convergence)** — newly provisioned workbook converges toward the Golden Workbook (visual source of truth) until visually indistinguishable from production (Cash Flow / Investments / House Values / Retirement + all visual attributes). First audit complete (2026-07-06). *(P0/P1, L — convergence, not redesign)*
 6. **Family Beta polish** — Workbook / UX polish sweep (loading-experience consistency, empty-state standardization, UX consistency, onboarding — see `## UX Backlog (Version 1)`) + Beta Gate assembly + go/no-go. *(P2)*
 
-> **Beta-Gate requirement, sequenced alongside items 3–5 (not a numbered slot above): Financial Integrity — Phase 3 (convergence)** — canonical basis → Planner/Dashboard/Rolling convergence to $0.01 → Asset/Planner/Dashboard audit modules. Foundation shipped (Audit Framework · Debt Audit · shared Active helper · `NOT_INITIALIZED`). *The numbers must reconcile* before Family Beta broadens. *(P0–P1)*
+> **Beta-Gate requirement, sequenced alongside items 3–5 (not a numbered slot above): Financial Integrity — Phase 3 (convergence)** — canonical basis → Planner/Dashboard/Rolling convergence to $0.01 → Asset/Planner/Dashboard audit modules. Foundation shipped (Audit Framework · Debt Audit · shared Active helper · `NOT_INITIALIZED`). *The numbers must reconcile* before the Beta Release Candidate broadens beyond supervised validation. *(P0–P2)*
 
 **Stage 4 — Family Beta:**
 

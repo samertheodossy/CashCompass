@@ -6,6 +6,7 @@ This is the highest-level product document in the repository. It defines **what 
 
 - **PRODUCT_VISION.md** (this doc) — *why* we are building CashCompass and where it is going.
 - **`TODO.md → Product Maturity Stages`** — *how* and in *what order* we build it.
+- **`BETA_10_OUT_OF_10_PLAN.md`** — the measurable quality, release, and monetization-readiness standard for earning a broad beta.
 - **`TODO.md` (current work) + `ENHANCEMENTS.md`** — the current engineering backlog.
 - **`PROJECT_CONTEXT.md`** — the current technical state.
 
@@ -191,3 +192,15 @@ Strategic conclusions from the Version 1 Readiness Review (2026-07-06). These ar
 - **Recovery must not create silent duplicates.** Ownership is only meaningful if the link to the data is durable. The full P0 recovery adoption matrix is now validated; recovery flags remain OFF by default and any later recovery extension must preserve the confirmed-zero-only create invariant.
 - **Product differentiation depends on Decision Support.** Ownership and transparency get CashCompass in the door; the lasting differentiation is helping people *decide* — which is why Money Plan (long-term planning and guided allocation) is a Version 1 objective, not a Version 2 nicety.
 - **Version 1 is a horizon, not a single date.** Version 1 spans Family Beta and External Beta. "Family Beta Release Candidate" and "Version 1 complete" are different milestones; sequencing honors that distinction.
+
+---
+
+## 12. Quality-First Beta and Monetization
+
+CashCompass will be **quality-gated, not date-gated**. A supervised validation cohort may help us learn while the product is still being hardened, but a broad Beta Release Candidate must earn its release through measurable financial integrity, safety, usability, performance, automated evidence, privacy, and operational readiness.
+
+The target is a **10/10 beta standard**, defined in `BETA_10_OUT_OF_10_PLAN.md`: at least 95/100 on the weighted scorecard, no dimension below 9/10, no unresolved Severity 1 or Severity 2 defect, and every non-negotiable release gate passing on the exact candidate. “10/10” means the focused core is excellent and provable; it does not mean every future feature is present.
+
+Monetization should be prepared before payment is enabled. Identity and entitlement seams, owned-data guarantees, packaging hypotheses, privacy, terms, support, cancellation/export behavior, cost metrics, and billing architecture should be deliberate during beta hardening. Actual charging follows demonstrated trust, repeated household value, and supportability.
+
+The commercial principle is simple: **monetize decision value, guidance, automation, and premium capability—not access to a user's own workbook or financial history.** A user's Drive-owned data remains theirs regardless of plan state.

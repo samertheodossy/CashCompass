@@ -495,9 +495,9 @@
       <div class="cc-stat-note">Recovery 6F, Central verification, documentation, and isolated blank/fresh plus populated validation passed.</div>
     </div>
     <div class="viz-stat">
-      <div class="cc-stat-label">Controlled beta candidate</div>
-      <div class="cc-stat-value">≈ 2–4 focused weeks</div>
-      <div class="cc-stat-note">Assumes agreement on a minimum P1 release gate instead of completing every future validator module first.</div>
+      <div class="cc-stat-label">Release policy</div>
+      <div class="cc-stat-value">Quality-gated</div>
+      <div class="cc-stat-note">Broad beta requires ≥95/100, no dimension below 9/10, no critical/high defect, and every non-negotiable gate passing.</div>
     </div>
     <div class="viz-stat">
       <div class="cc-stat-label">Full roadmap horizon</div>
@@ -515,22 +515,24 @@
       <li data-state="done"><span class="cc-flow-step">Proven</span><strong>Recovery + write reliability</strong></li>
       <li data-state="done"><span class="cc-flow-step">Closed</span><strong>P0 Stabilization</strong></li>
       <li data-state="current"><span class="cc-flow-step">Now</span><strong>P1 Validation gate</strong></li>
-      <li data-state="next"><span class="cc-flow-step">Gate</span><strong>Controlled Family Beta</strong></li>
+      <li data-state="next"><span class="cc-flow-step">Learn</span><strong>Supervised validation cohort</strong></li>
       <li><span class="cc-flow-step">Then</span><strong>P2 Financial accuracy</strong></li>
-      <li><span class="cc-flow-step">Then</span><strong>P3 Scale + latency</strong></li>
+      <li><span class="cc-flow-step">Then</span><strong>P3 Experience + performance</strong></li>
+      <li><span class="cc-flow-step">Parallel</span><strong>Monetization foundations</strong></li>
+      <li><span class="cc-flow-step">Gate</span><strong>10/10 Beta Release Candidate</strong></li>
       <li><span class="cc-flow-step">Expand</span><strong>P4 Product programs</strong></li>
     </ol>
   </section>
 
   <section class="cc-section" aria-labelledby="cc-bands-title">
     <div class="cc-section-head">
-      <h2 id="cc-bands-title">Planning bands</h2>
-      <p>Two valid beta definitions are shown so the plan does not hide the tradeoff.</p>
+      <h2 id="cc-bands-title">Quality policy</h2>
+      <p>The supervised cohort and the release candidate are deliberately different milestones.</p>
     </div>
     <div class="cc-band-grid">
-      <div class="cc-band"><strong>Minimum controlled-beta path</strong><span>A deliberately bounded P1 gate + rollout checks. Approximately 2–4 focused weeks from the completed P0 baseline.</span></div>
-      <div class="cc-band"><strong>Formal comprehensive P1</strong><span>Complete validator modules, expanded scenario packs, console aggregation, and Release Readiness. Approximately 5–10 focused weeks.</span></div>
-      <div class="cc-band"><strong>Product-expansion horizon</strong><span>Financial model, paid-bill correction, bank connectivity, chat, and monetization. Multi-quarter, with selected streams able to overlap after beta foundations.</span></div>
+      <div class="cc-band"><strong>Supervised validation cohort</strong><span>A small, consented group may test safe candidates during P1–P3. This produces learning evidence; it is not a broad or monetized release.</span></div>
+      <div class="cc-band"><strong>10/10 Beta Release Candidate</strong><span>P1 evidence + P2 financial truth + P3 finished-feeling UX/performance + cohort proof. Score ≥95/100, no category below 9/10, all hard gates PASS.</span></div>
+      <div class="cc-band"><strong>Monetization-ready foundation</strong><span>Prepare customer/value proposition, packaging, entitlements, owned-data guarantees, privacy, support, metrics, and billing architecture before collecting payment.</span></div>
     </div>
   </section>
 
@@ -599,7 +601,7 @@
         <span class="cc-summary-meta"><span class="viz-badge" data-state="current">Current</span><span class="cc-effort">15–35 days full</span></span>
       </summary>
       <div class="cc-phase-body">
-        <div class="cc-phase-note">A smaller 5–10 day beta-minimum slice can be selected from this phase. Full P1 is broader than the minimum evidence needed for a controlled family beta.</div>
+        <div class="cc-phase-note">P1 establishes the repeatable evidence foundation. A supervised cohort may use an explicitly safe candidate while P1–P3 continue, but no shortened evidence slice substitutes for the 10/10 broad-release gate.</div>
         <table class="cc-work">
           <thead><tr><th>Item</th><th>Subitems</th><th>Effort</th><th>Dependency</th></tr></thead>
           <tbody>
@@ -619,20 +621,21 @@
     <details class="cc-phase" data-tags="beta product">
       <summary>
         <span class="cc-phase-code">β</span>
-        <span class="cc-phase-title"><h3>Controlled Family Beta</h3><p>Move from developer validation to observed use with a narrow rollout and rollback plan.</p></span>
-        <span class="cc-summary-meta"><span class="viz-badge" data-state="next">Gate</span><span class="cc-effort">2–5 days setup</span></span>
+        <span class="cc-phase-title"><h3>Supervised Family Validation Cohort</h3><p>Learn from real use while retaining close support and strict release boundaries.</p></span>
+        <span class="cc-summary-meta"><span class="viz-badge" data-state="next">Learning cohort</span><span class="cc-effort">2–5 days setup</span></span>
       </summary>
       <div class="cc-phase-body">
+        <div class="cc-phase-note">This cohort may operate during P1–P3 on explicitly safe candidates. It is not authorization for broad availability, payment collection, or a relaxed release gate.</div>
         <table class="cc-work">
           <thead><tr><th>Item</th><th>Subitems</th><th>Effort</th><th>Dependency</th></tr></thead>
           <tbody>
-            <tr><td><strong>Account cohort</strong></td><td>Confirm allow-list; choose known workbooks; record owner, mapping, expected sheets, and consent for beta testing.</td><td>0.5–1 d</td><td>P0 complete</td></tr>
-            <tr><td><strong>Release checklist</strong></td><td>Version and deployment identity; recovery flags; rollback deployment; support contact; known limitations.</td><td>0.5–1 d</td><td>P1 minimum gate</td></tr>
+            <tr><td><strong>Account cohort</strong></td><td>Confirm allow-list; choose known workbooks; record owner, mapping, expected sheets, consent, support coverage, and privacy boundaries.</td><td>0.5–1 d</td><td>Explicitly safe candidate</td></tr>
+            <tr><td><strong>Cohort checklist</strong></td><td>Version and deployment identity; recovery flags; rollback deployment; support contact; known limitations; incident stop rule.</td><td>0.5–1 d</td><td>P1 safety evidence</td></tr>
             <tr><td><strong>Multi-account run</strong></td><td>Fresh, sparse, and mature workbook paths; onboarding; Quick Add; dashboard refresh; recovery; no bounded-app mutation.</td><td>0.5–1.5 d</td><td>Release candidate</td></tr>
             <tr><td><strong>Observe and triage</strong></td><td>Collect beta notes; distinguish blocker from enhancement; patch only scoped high-severity defects; rerun evidence.</td><td>0.5–1.5 d</td><td>Beta users active</td></tr>
           </tbody>
         </table>
-        <div class="cc-phase-total"><span>Exit gate</span><strong>Controlled users complete core workflows without data integrity incidents</strong></div>
+        <div class="cc-phase-total"><span>Exit evidence</span><strong>Users complete core workflows, return voluntarily, and incur no integrity, recovery, privacy, or data-loss incident</strong></div>
       </div>
     </details>
 
@@ -640,7 +643,7 @@
       <summary>
         <span class="cc-phase-code">P2</span>
         <span class="cc-phase-title"><h3>House financial accuracy</h3><p>Unify property operating and financing cash flow across the product.</p></span>
-        <span class="cc-summary-meta"><span class="viz-badge">Future</span><span class="cc-effort">10–21 days</span></span>
+        <span class="cc-summary-meta"><span class="viz-badge" data-state="next">After P1</span><span class="cc-effort">10–21 days</span></span>
       </summary>
       <div class="cc-phase-body">
         <table class="cc-work">
@@ -661,20 +664,44 @@
     <details class="cc-phase" data-tags="foundation">
       <summary>
         <span class="cc-phase-code">P3</span>
-        <span class="cc-phase-title"><h3>Performance and scalability</h3><p>Measure first, then reduce Apps Script latency and quota pressure.</p></span>
-        <span class="cc-summary-meta"><span class="viz-badge">Future</span><span class="cc-effort">8–17 days</span></span>
+        <span class="cc-phase-title"><h3>Finished-feeling UX, performance, and scalability</h3><p>Meet release budgets and make core workflows clear, responsive, accessible, and coherent.</p></span>
+        <span class="cc-summary-meta"><span class="viz-badge" data-state="next">Before broad beta</span><span class="cc-effort">8–17 days</span></span>
       </summary>
       <div class="cc-phase-body">
         <table class="cc-work">
           <thead><tr><th>Item</th><th>Subitems</th><th>Effort</th><th>Dependency</th></tr></thead>
           <tbody>
-            <tr><td><strong>Profiling baseline</strong></td><td>Provisioning, dashboard refresh, planner, validators, and large-sheet reads; capture p50/p95 and API-call counts.</td><td>1–2 d</td><td>Stable beta flows</td></tr>
+            <tr><td><strong>Profiling baseline</strong></td><td>Provisioning, dashboard refresh, planner, entity creation, validators, and large-sheet reads; capture p50/p95 and API-call counts. Start with the observed 143-second Financial Plan refresh.</td><td>1–2 d</td><td>Stable beta flows</td></tr>
             <tr><td><strong>Dashboard + planner</strong></td><td>Reduce repeated reads; batch range access; cache derived data safely; preserve freshness markers.</td><td>2–5 d</td><td>Measured hotspots</td></tr>
+            <tr><td><strong>Finished-feeling experience</strong></td><td>Consistent terminology, contextual guidance, loading/save/success/error states, long-running-action progress, responsive/mobile behavior, keyboard flow, and contrast.</td><td>2–4 d</td><td>Core workflows stable</td></tr>
             <tr><td><strong>Provisioning + bulk APIs</strong></td><td>Batch formatting and writes; minimize per-cell operations; safe cache invalidation; quota-aware retries.</td><td>3–6 d</td><td>Measured hotspots</td></tr>
             <tr><td><strong>Load and stress evidence</strong></td><td>Large workbook fixtures; multi-account concurrency; timeouts; lock contention; predictable degradation.</td><td>2–4 d</td><td>Optimizations implemented</td></tr>
           </tbody>
         </table>
         <div class="cc-phase-total"><span>Exit gate</span><strong>Performance targets demonstrated, not inferred</strong></div>
+      </div>
+    </details>
+
+    <details class="cc-phase" data-tags="beta foundation" open>
+      <summary>
+        <span class="cc-phase-code">RC</span>
+        <span class="cc-phase-title"><h3>10/10 Beta Release Candidate</h3><p>Release only when the focused core is excellent, measurable, supportable, and ready to earn trust.</p></span>
+        <span class="cc-summary-meta"><span class="viz-badge" data-state="next">Hard gate</span><span class="cc-effort">Evidence-driven</span></span>
+      </summary>
+      <div class="cc-phase-body">
+        <div class="cc-phase-note">Authoritative criteria: <code>BETA_10_OUT_OF_10_PLAN.md</code>. The schedule may move; the quality threshold does not.</div>
+        <table class="cc-work">
+          <thead><tr><th>Gate</th><th>Required evidence</th><th>Threshold</th><th>Dependency</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Scorecard</strong></td><td>Financial integrity, safety/privacy, usability, performance, automated evidence, workbook quality, and operations/monetization foundation.</td><td>≥95/100; no dimension &lt;9/10</td><td>P1–P3 complete</td></tr>
+            <tr><td><strong>Hard blockers</strong></td><td>No unresolved Severity 1 or Severity 2 defect; no unreconciled financial value; no duplicate/loss/privacy risk; no failing required release line.</td><td>Zero</td><td>Exact candidate</td></tr>
+            <tr><td><strong>Automated verdict</strong></td><td>Aggregate Harness + Validator Release Readiness report with archived version, deployment, scenarios, findings, warnings, and rollback target.</td><td>READY FOR BETA</td><td>P1 report producer</td></tr>
+            <tr><td><strong>Human/product verdict</strong></td><td>Task-based UX, performance budgets, responsive/accessibility, privacy, support, operations, and known-limitations review.</td><td>All PASS</td><td>P2–P3 complete</td></tr>
+            <tr><td><strong>Cohort proof</strong></td><td>Sustained supervised use without financial-integrity, recovery, privacy, or data-loss incident; users complete and repeat core workflows.</td><td>PASS</td><td>Validation cohort</td></tr>
+            <tr><td><strong>Monetization foundation</strong></td><td>Value proposition, packaging hypotheses, entitlement seams, owned-data guarantees, privacy/terms/support/refunds, cost metrics, and billing architecture decision.</td><td>Design ready</td><td>Trust + cohort evidence</td></tr>
+          </tbody>
+        </table>
+        <div class="cc-phase-total"><span>Exit gate</span><strong>Broad beta may proceed; payment collection still requires a separate explicit decision</strong></div>
       </div>
     </details>
 
@@ -784,6 +811,7 @@
         <span class="cc-summary-meta"><span class="viz-badge">Post-beta</span><span class="cc-effort">2–5 weeks</span></span>
       </summary>
       <div class="cc-phase-body">
+        <div class="cc-phase-note">Monetization preparation begins during beta hardening: value proposition, packaging hypotheses, entitlement seams, owned-data guarantees, privacy/support posture, and cost metrics. This phase implements billing only after trust, repeated value, supportability, and the 10/10 Beta gate are demonstrated.</div>
         <table class="cc-work">
           <thead><tr><th>Item</th><th>Subitems</th><th>Effort</th><th>Dependency</th></tr></thead>
           <tbody>
@@ -824,14 +852,16 @@
     <ol class="cc-order">
       <li><span><strong>P0 stabilization</strong><small>Docs, Recovery 6F, Central verification, two-track UX validation</small></span><time>Completed</time></li>
       <li><span><strong>Harden populated fixtures</strong><small>Central-created, seeded, Restricted, <code>drive.file</code>-compatible, safely trashed</small></span><time>1–3 d</time></li>
-      <li><span><strong>Define the minimum P1 beta gate</strong><small>Choose explicit must-pass evidence</small></span><time>0.5–1 d</time></li>
-      <li><span><strong>Implement and run beta-gate slice</strong><small>Validator modules, harness, scenario evidence, release report</small></span><time>5–10 d</time></li>
-      <li><span><strong>Controlled Family Beta</strong><small>Multi-account rollout and observed use</small></span><time>2–5 d setup</time></li>
+      <li><span><strong>Ratify the P1 evidence contract</strong><small>Define the required checks, fixtures, reports, and archived evidence</small></span><time>0.5–1 d</time></li>
+      <li><span><strong>Complete and run P1 release evidence</strong><small>Validator modules, harness, scenario packs, console, and aggregate release report</small></span><time>15–35 d full</time></li>
+      <li><span><strong>Begin supervised validation cohort</strong><small>Learn under close support; not broad or monetized release</small></span><time>2–5 d setup</time></li>
       <li><span><strong>House financial accuracy</strong><small>One property truth across the application</small></span><time>10–21 d</time></li>
+      <li><span><strong>Finished-feeling UX and performance</strong><small>Meet p50/p95 budgets; resolve repeated usability friction; accessibility/responsive pass</small></span><time>8–17 d</time></li>
+      <li><span><strong>Build monetization foundations in parallel</strong><small>Packaging, entitlements, owned-data guarantees, privacy, support, metrics, billing design—without collecting payment</small></span><time>During P1–P3</time></li>
+      <li><span><strong>Run 10/10 Beta gate</strong><small>≥95/100, no category below 9/10, all hard gates PASS</small></span><time>Evidence-driven</time></li>
       <li><span><strong>Paid Bill Correction</strong><small>Traceable edit without duplicate evidence</small></span><time>3.5–7 d</time></li>
       <li><span><strong>Continue bank import</strong><small>Review UI, rules, reconciliation, then provider decision</small></span><time>1.5–3 wks</time></li>
       <li><span><strong>AutoPay Pending</strong><small>Expected versus confirmed payment truth</small></span><time>3–6 d</time></li>
-      <li><span><strong>Performance and scale</strong><small>Start with the measured 143-second Financial Plan refresh; profile, optimize, stress, prove</small></span><time>8–17 d</time></li>
       <li><span><strong>Chat + paid product tiers</strong><small>Read-only first; transactional authority last</small></span><time>multi-week</time></li>
     </ol>
   </section>
@@ -848,7 +878,7 @@
       <div class="cc-risk"><strong>Bank-provider choice</strong><span>CSV/staged import is already an engineering stream. Direct aggregation adds vendor, OAuth, privacy, token, webhook, and support scope.</span></div>
       <div class="cc-risk"><strong>Assistant authority</strong><span>Read-only Q&amp;A is a modest feature. Transactional chat is a security, idempotency, audit, recovery, and product-policy program.</span></div>
       <div class="cc-risk"><strong>Product-scope changes</strong><span>New roadmap requests are welcome, but each should be placed behind the active phase gate unless it fixes an observed blocker.</span></div>
-      <div class="cc-risk"><strong>Formal verification depth</strong><span>A controlled family beta and a comprehensive release system are different thresholds; choosing one must be explicit.</span></div>
+      <div class="cc-risk"><strong>Formal verification depth</strong><span>A supervised learning cohort and a broadly available beta are different thresholds; the cohort never substitutes for the 10/10 release system.</span></div>
     </div>
   </section>
 
@@ -858,7 +888,7 @@
     <span class="viz-badge" data-state="next">Next / gate</span>
     <span class="viz-badge">Future / depends</span>
   </div>
-  <p class="cc-footnote">Source basis: current repository roadmap, stabilization initiative, Central recovery completion plan, release-readiness design, TODOs, and the runtime evidence recorded in this CashCompass task. The plan intentionally separates technical readiness from authorization to commit, push, or deploy.</p>
+  <p class="cc-footnote">Source basis: <code>BETA_10_OUT_OF_10_PLAN.md</code>, the current repository roadmap, stabilization initiative, Central recovery completion plan, release-readiness design, TODOs, and the runtime evidence recorded in this CashCompass task. The plan intentionally separates a supervised learning cohort from broad-release authorization, and technical readiness from authorization to commit, push, or deploy.</p>
 
   <script>
     (() => {
