@@ -106,6 +106,7 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 |---|---|---|---|
 | Aggregate Release Readiness gate and remaining automated regression coverage | P1 | Stable read models ✓ + remaining Validator/Harness coverage | L–XL |
 | **Remaining Validator Phase 2 modules** — Formula, Conditional-Formatting, Named-Range, and aggregate Workbook Health | P1 | Phase 2 foundation ✓ | L |
+| **Disposable populated-fixture hardening** — Central-created fixture, representative data seeding, Restricted-sharing assertion, `drive.file`-compatible access, and verified Trash cleanup | P1 | Test Harness Foundation V1 ✓ | M |
 | Runtime regression checklist (interim manual gate) | P1 | — | M |
 | Financial-integrity gate wiring into release | P1 | FI Phase 3 convergence | S |
 | Deployment checklist | P2 | — | S |
@@ -290,6 +291,13 @@ The isolated `@113` pass found two P0 defects and four polish gaps. The source f
 Reusable coverage: `npm run test:dashboard-ux`. **Two-track validation is complete and P0 Project Stabilization closed 2026-07-20.** The blank/fresh fixture passed the six approved rows. A separate Central-owned representative populated fixture then passed Bank/Investment/Debt selection gating, populated balances and totals, House Expenses enablement, Property Performance equity, Setup/Help language, active-subtab retention, and broad navigation with no console warnings. The populated fixture was returned to Drive Trash. The owner copy and main bounded workbook were not touched. Only the isolated deployment moved to `@114`; Beta remains pinned to `@106` and no bound deployment changed.
 
 **Milestone boundary decision:** `ROADMAP.md` controls execution order. Remaining Golden Workbook, Financial Integrity, Validator/Test Harness, Release Readiness, and natural Bills Due → Pay evidence remain Beta-Gate work, but they do not keep the narrower P0 Project Stabilization milestone open. The measured 143-second refresh is routed to P3 Performance.
+
+**Follow-ups discovered during the populated pass, in execution order:**
+
+1. **P1 — disposable populated-fixture hardening.** Central's intentional `drive.file` scope cannot inspect an owner-created workbook merely shared to the disposable account. Build the populated test path around a Central-created fixture, automate representative Bank / Investment / House / Debt seeding, assert the Drive file is **Restricted** rather than link-accessible, and verify recoverable Trash cleanup without touching owner/bounded workbooks.
+2. **P2 UX polish — debt due-day wording.** The value is a day number, but user-facing surfaces alternate between **Due Date**, **Due Date (day of month)**, and **Due day of month**. Standardize the dashboard and Help wording on **Due day of month** without renaming the existing sheet header/schema.
+3. **P2 UX polish — optional Setup loading state.** Houses and Upcoming Expenses currently show a calm `—` while their asynchronous summaries load, which can briefly look like missing populated data. Use a small **Checking…** state, then render the count / **None yet** / failure fallback.
+4. **P3 Performance — Financial Plan refresh latency.** Profile the recorded 143-second successful run and optimize the dominant server/planner stages while preserving correctness, email gating, and durable completion feedback.
 
 #### Loading Experience Standardization — **P1 · effort S–M**
 

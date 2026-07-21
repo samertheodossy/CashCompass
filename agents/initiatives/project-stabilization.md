@@ -122,8 +122,8 @@ CashCompass has synchronized project documentation, recorded disposition of rema
 
 ## 11. Recommended Next Task
 
-- Task: Begin the remaining P1 Validator Phase 2 / Test Harness / Release Readiness scope selected from `ROADMAP.md`.
-- Why this task: P0 Project Stabilization is closed; P1 is now the authoritative current engineering milestone.
+- Task: Begin P1 with disposable populated-fixture hardening: Central-created fixture lifecycle, representative-data seeding, Restricted-sharing assertion, `drive.file`-compatible access, and verified Trash cleanup.
+- Why this task: P0 Project Stabilization is closed; the populated pass exposed this concrete Test Harness gap, and resolving it makes later P1 scenario packs repeatable without touching owner/bounded workbooks.
 - Required role flow: Planner → Engineer → Reviewer → Tester → Validator for any non-trivial implementation slice.
 - Approval gates: Explicit approval remains required for any Apps Script push/deployment, commit, and Git push.
 

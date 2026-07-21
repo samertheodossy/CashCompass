@@ -43,7 +43,7 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
   ```
 
   KeepCentral / ProductDecision / IgnoreNoise are recorded and deferred, not "fixed." See `ENGINEERING_STANDARDS.md → Milestone discipline` and `VALIDATOR_ARCHITECTURE.md → §1a Recommendation engine`.
-- **Next milestones:** Proceed with the remaining Validator Phase 2 / Test Harness / Release Readiness scope (P1), then House Financial Accuracy (P2), per `ROADMAP.md`. The 143-second Financial Plan refresh is recorded for P3 Performance and does not reopen P0.
+- **Next milestones:** Begin P1 with disposable populated-fixture hardening (Central-created lifecycle, representative-data seeding, Restricted-sharing assertion, `drive.file`-compatible access, and verified Trash cleanup), then continue the remaining Validator Phase 2 / Test Harness / Release Readiness scope. House Financial Accuracy follows as P2. The two small populated-pass copy/loading findings are P2 UX polish; the 143-second Financial Plan refresh is recorded for P3 Performance and does not reopen P0.
 - **Future:** External beta readiness / hardening, family-beta expansion + user-lifecycle handling, Chat Assistant, Paid Product framework.
 
 Roadmap: `## Launch Readiness Roadmap (high-level)` below (detail in `TODO.md → Launch Readiness Roadmap`). Live architecture: `## Current architecture — Central App (live)` below. Workbook recovery summary: `## Workbook Identity & Recovery (live + roadmap)` below.
