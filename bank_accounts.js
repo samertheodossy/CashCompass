@@ -74,10 +74,12 @@ const BANK_ACCOUNTS_REQUIRED_HEADERS_ = ['Account Name'];
  * creation on blank workbooks (previously threw "Missing sheet:
  * SYS - Accounts" before the row could be written).
  *
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet=} optionalSs Explicit target for
+ *   disposable harness runs; normal product callers resolve the user's workbook.
  * @returns {GoogleAppsScript.Spreadsheet.Sheet}
  */
-function ensureSysAccountsSheet_() {
-  var ss = getUserSpreadsheet_();
+function ensureSysAccountsSheet_(optionalSs) {
+  var ss = optionalSs || getUserSpreadsheet_();
   var names = getSheetNames_();
   var sheetName = names.ACCOUNTS;
   var existing = ss.getSheetByName(sheetName);

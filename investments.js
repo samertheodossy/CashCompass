@@ -57,10 +57,12 @@
  * formatted, and widen-only readable column widths. All cosmetic-only and
  * first-create only — populated workbooks return at the `existing` guard.
  *
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet=} optionalSs Explicit target for
+ *   disposable harness runs; normal product callers resolve the user's workbook.
  * @returns {GoogleAppsScript.Spreadsheet.Sheet} the sheet (existing or new)
  */
-function ensureInputInvestmentsSheet_() {
-  const ss = getUserSpreadsheet_();
+function ensureInputInvestmentsSheet_(optionalSs) {
+  const ss = optionalSs || getUserSpreadsheet_();
   const names = getSheetNames_();
   const sheetName = names.INVESTMENTS;
 
@@ -231,10 +233,12 @@ function ensureInputInvestmentsSheet_() {
  * overwrites or re-styles populated sheets — the font wash and width logic
  * below run only on the freshly inserted, empty sheet.
  *
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet=} optionalSs Explicit target for
+ *   disposable harness runs; normal product callers resolve the user's workbook.
  * @returns {GoogleAppsScript.Spreadsheet.Sheet}
  */
-function ensureSysAssetsSheet_() {
-  const ss = getUserSpreadsheet_();
+function ensureSysAssetsSheet_(optionalSs) {
+  const ss = optionalSs || getUserSpreadsheet_();
   const names = getSheetNames_();
   const sheetName = names.ASSETS;
 

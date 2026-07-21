@@ -149,11 +149,14 @@ function assertHarnessAllowed_() {
  */
 function runScenario_(scenario, runId, options) {
   options = options || {};
+  var trashRequested = options.trash === true || scenario.requiresTrashCleanup === true;
   var startedAt = Date.now();
   var actions = [];
   var wb = null;
   var error = null;
   var validators = { provisioning: null, schema: null, drift: null };
+  var sharing = null;
+  var cleanup = { requested: trashRequested, trashed: false, verified: false, error: null };
   var disposition = 'KEPT_FOR_INSPECTION';
   // Functional-assertion collector (E0a). Declared outside the try so its results
   // are always available to the report builder, even if a later step throws.
@@ -165,6 +168,15 @@ function runScenario_(scenario, runId, options) {
     // Fail-closed: prove the freshly created target is disposable before ANY
     // scenario write touches it.
     assertDisposableTarget_(wb.ss, runId);
+
+    // Privacy gate: a Central-created fixture must remain Drive-Restricted before
+    // any synthetic financial rows are written. We never log permission ids or
+    // email addresses — only permission type/role counts.
+    sharing = harnessInspectRestrictedSharing_(wb.ss, runId);
+    if (!sharing.restricted) {
+      throw new Error('Test Harness REFUSED: disposable workbook is not Restricted in Drive.');
+    }
+    actions.push('Verify Drive sharing is Restricted (no anyone/domain permission)');
 
     var ctx = {
       ss: wb.ss,
@@ -221,20 +233,21 @@ function runScenario_(scenario, runId, options) {
   // Sheet1 is harmless). Skipped when trashing (the workbook is about to be discarded).
   // By this point _HARNESS_META always exists (plus any scenario/SYS - Meta sheets), so
   // Sheet1 is never the last sheet.
-  if (wb && options.trash !== true && typeof cleanupDefaultSheet1_ === 'function') {
+  if (wb && !trashRequested && typeof cleanupDefaultSheet1_ === 'function') {
     try {
       assertDisposableTarget_(wb.ss, runId);
       cleanupDefaultSheet1_(wb.ss);
     } catch (_s1) { /* non-fatal — Sheet1 cleanup is cosmetic fidelity */ }
   }
 
-  // Teardown (default keep). Trash only when explicitly requested AND the target
-  // still passes the disposable gate.
-  if (wb && options.trash === true) {
+  // Teardown (default keep). Trash when the caller requests it or when a scenario
+  // explicitly requires cleanup verification, and only after the disposable gate.
+  if (wb && trashRequested) {
     try {
-      teardownDisposableWorkbook_(wb.ss, runId, { trash: true });
+      cleanup = teardownDisposableWorkbook_(wb.ss, runId, { trash: true });
       disposition = 'TRASHED';
     } catch (te) {
+      cleanup.error = (te && te.message) ? te.message : String(te);
       disposition = 'KEPT_FOR_INSPECTION (trash refused: ' + (te && te.message ? te.message : te) + ')';
     }
   }
@@ -258,6 +271,8 @@ function runScenario_(scenario, runId, options) {
     actions: actions,
     validators: validators,
     assertions: assertions.results,
+    sharing: sharing,
+    cleanup: cleanup,
     disposition: disposition,
     error: error,
     startedAt: startedAt,
@@ -316,6 +331,57 @@ function createDisposableWorkbook_(scenarioId, runId) {
   // hidden _HARNESS_META marker, so no banner is written into Sheet1.
 
   return { ss: ss, id: ss.getId(), name: name, runId: runId };
+}
+
+/**
+ * Read the permissions of a harness-created workbook and classify whether its
+ * Drive sharing is Restricted. Restricted means there is no link/domain-wide
+ * permission (`type=anyone` or `type=domain`). Explicit owner/user permissions
+ * are counted but no identities are returned or logged.
+ *
+ * The target must pass assertDisposableTarget_ first. Under drive.file this
+ * permission read is allowed because SpreadsheetApp.create created the file.
+ * Any API/read ambiguity throws and stops the scenario before seed writes.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @param {string} runId
+ * @returns {{overall:string,restricted:boolean,total:number,ownerCount:number,byType:Object,byRole:Object}}
+ */
+function harnessInspectRestrictedSharing_(ss, runId) {
+  assertDisposableTarget_(ss, runId);
+  var response = Drive.Permissions.list(ss.getId(), {
+    fields: 'permissions(type,role,deleted)'
+  });
+  var permissions = (response && response.permissions) ? response.permissions : [];
+  if (!permissions.length) {
+    throw new Error('Test Harness: Drive permission check returned no permissions; refusing to seed.');
+  }
+
+  var byType = {};
+  var byRole = {};
+  var ownerCount = 0;
+  var restricted = true;
+  for (var i = 0; i < permissions.length; i++) {
+    var p = permissions[i] || {};
+    if (p.deleted === true) continue;
+    var type = String(p.type || 'unknown').toLowerCase();
+    var role = String(p.role || 'unknown').toLowerCase();
+    byType[type] = (byType[type] || 0) + 1;
+    byRole[role] = (byRole[role] || 0) + 1;
+    if (role === 'owner') ownerCount++;
+    if (type === 'anyone' || type === 'domain') restricted = false;
+  }
+  if (ownerCount < 1) {
+    throw new Error('Test Harness: Drive permission check found no owner; refusing to seed.');
+  }
+  return {
+    overall: restricted ? 'PASS' : 'FAIL',
+    restricted: restricted,
+    total: permissions.length,
+    ownerCount: ownerCount,
+    byType: byType,
+    byRole: byRole
+  };
 }
 
 /**
@@ -480,10 +546,22 @@ function harnessIsProtectedId_(id) {
  */
 function teardownDisposableWorkbook_(ss, runId, options) {
   options = options || {};
-  if (options.trash !== true) return { trashed: false, kept: true };
+  if (options.trash !== true) {
+    return { requested: false, trashed: false, verified: false, kept: true, error: null };
+  }
   assertDisposableTarget_(ss, runId); // fail-closed before any destructive op
   Drive.Files.update({ trashed: true }, ss.getId());
-  return { trashed: true, kept: false };
+  var check = Drive.Files.get(ss.getId(), { fields: 'id,trashed' });
+  if (!check || check.trashed !== true) {
+    throw new Error('Test Harness: Trash update was not confirmed by Drive read-back.');
+  }
+  return {
+    requested: true,
+    trashed: true,
+    verified: true,
+    kept: false,
+    error: null
+  };
 }
 
 /** Best-effort edit URL for logging. */

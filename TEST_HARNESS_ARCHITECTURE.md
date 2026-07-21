@@ -3,19 +3,30 @@
 *The developer-only **writer/mutator** that drives scenarios against disposable
 workbooks and asks the read-only **Validator** to confirm nothing broke.*
 
-**Status:** **Foundation V1 implemented — editor + admin UI.** `test_harness_core.js`,
-`test_harness_scenarios.js`, and `test_harness_report.js` exist: the full guard +
-disposable-workbook lifecycle + `assertDisposableTarget_` + **one** SMOKE scenario
-(Provision + one Donation row) + report shaping. It runs from the editor via
+**Status:** **Foundation V1 implemented; populated-fixture hardening passed isolated
+Central runtime validation on `@117` (2026-07-21).** `test_harness_core.js`, scenario/data modules, and
+`test_harness_report.js` provide the guard + disposable-workbook lifecycle +
+`assertDisposableTarget_` + smoke/regression scenarios + report shaping. The new
+`SMOKE-POPULATED-FIXTURE` scenario verifies Restricted sharing before any seed
+write, seeds synthetic Bank / Investment / House / Debt / Bills / Income /
+Upcoming / Retirement data through explicit spreadsheet-scoped seams, and always
+requires verified Drive Trash cleanup. It runs from the editor via
 `testRunSmoke()` / `testRunSmokeTrash()` **and** from the Validation & Testing admin
 console — a collapsible **Test Harness** card (writer) that runs the smoke scenario
-with a Keep/Trash disposition, backed by the thin server wrappers
+selected from the dynamic registry with a Keep/Trash disposition, backed by the thin server wrappers
 `vtListHarnessScenarios()` / `vtRunHarnessScenario()` (guarded by
 `assertHarnessAllowed_()`; they never accept a client workbook ID and always create
 the harness's own disposable workbook). Scenario packs, Regression/Recovery/Stress,
 and Release Readiness remain unbuilt. Sequenced in `ROADMAP.md → P1` **after** the
 Validator Phase 2 foundation: (1) Validator Phase 2A/2B → **(2) Test Harness
 foundation *(V1 done)* → (3) Scenario packs → (4) Release Readiness gate**.
+
+**First populated-fixture evidence:** `SUITE-POPULATED-FIXTURE` completed in
+119.7 seconds with 1/1 scenario PASS, 9/9 functional assertions PASS,
+Provisioning PASS (0 errors/warnings), `CENTRAL_CURRENT / FULLY_CURRENT`, Drift
+PASS, Restricted sharing confirmed as one owner-only user permission, and Drive
+read-back confirming the fixture was trashed. `TEST_HARNESS_ENABLED` was restored
+to `false`; Beta and owner/bounded workbooks were untouched.
 
 > **Two deviations the V1 implementation revealed (design corrections):**
 > 1. **Marker primitive.** `PropertiesService.getDocumentProperties()` is scoped to
@@ -122,10 +133,10 @@ guard) stays absolute.
 6. Continue / Stop              by stopOnSeverity threshold ──────────┘
          │
          ▼
-7. Generate Release Readiness report      test_harness_report.js
+7. Generate scenario/suite report          test_harness_report.js
          │
          ▼
-8. Archive or delete workbook   trash (default) | keep-on-failure | archive
+8. Keep or trash workbook       caller choice; cleanup-test scenarios force Trash
 ```
 
 Each step is idempotent and resumable; a crash mid-suite leaves only clearly
@@ -155,11 +166,13 @@ CASHCOMPASS TEST — <pack>/<scenario> — <runId> — SAFE TO DELETE
 On creation the Harness stamps the workbook with a marker that is **hard to forge
 and easy to verify**:
 
-- **Document Properties** (`PropertiesService.getDocumentProperties()` on the new
-  ss): `HARNESS_DISPOSABLE = "true"`, `HARNESS_RUN_ID = <runId>`,
-  `HARNESS_CREATED_AT = <iso>`, `HARNESS_SCENARIO = <id>`.
-- A hidden **`_HARNESS_META`** sheet with the same fields (human-visible proof +
-  survives property edge cases).
+- A hidden **`_HARNESS_META`** sheet containing `HARNESS_DISPOSABLE = "true"`,
+  `HARNESS_RUN_ID = <runId>`, `HARNESS_CREATED_AT = <iso>`, and
+  `HARNESS_SCENARIO = <id>` (authoritative in-workbook proof).
+- Spreadsheet-level developer metadata with the disposable/run markers as an
+  independent, script-readable corroboration. Document Properties are not used:
+  in a standalone Central script they belong to the script container and cannot
+  be attached to the newly created workbook.
 
 ### 2.3 Labeling
 
@@ -193,10 +206,18 @@ scope (no `drive`/`drive.readonly`), under which `DriveApp.getFileById()` is not
 permitted, whereas `Drive.Files.update` honors the per-file `drive.file` grant on
 script-created workbooks.
 
+Before synthetic financial data is written, `harnessInspectRestrictedSharing_`
+reads only permission `type`, `role`, and `deleted` fields. It fails closed on an
+unreadable/empty permission result, a missing owner, or any `anyone`/`domain`
+permission. Reports contain aggregate type/role counts only—never permission IDs
+or email addresses. After a requested Trash operation, the Harness reads the file
+back through Drive and only passes cleanup when `trashed === true`.
+
 ### 2.5 Cleanup strategy
 
-- **Per-run teardown:** trash each workbook after its scenario (unless
-  `keepOnFailure` and the scenario failed, or `archive` is set).
+- **Per-run teardown:** caller-selected Keep/Trash remains the general policy.
+  Cleanup-validation scenarios declare `requiresTrashCleanup: true`, which forces
+  guarded Trash plus Drive read-back even if a suite-level Keep option was chosen.
 - **Sweep:** a guarded `harnessCleanupStragglers()` finds workbooks whose name
   carries the required prefix **and** the disposable marker **and** are older than
   a threshold (e.g. 24h), and trashes them — never touching anything without the

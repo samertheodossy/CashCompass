@@ -178,7 +178,7 @@ function vtRunSchemaEvolution(spreadsheetId) {
 /*  DIFFERENT trust model from the Validator functions above: these are guarded */
 /*  by assertHarnessAllowed_() (TEST_HARNESS_ENABLED + admin), NOT the Validator */
 /*  guard. They own NO harness logic — they list the scenario descriptor and    */
-/*  delegate execution to the existing testRunSmoke() runner. The harness ALWAYS */
+/*  delegate execution to the registered scenario runner. The harness ALWAYS     */
 /*  creates its OWN disposable workbook; these functions NEVER accept a workbook */
 /*  ID from the client and NEVER use the Target selector, so no client input can */
 /*  redirect a write. assertDisposableTarget_ (inside runScenario_) stays the    */
@@ -187,8 +187,7 @@ function vtRunSchemaEvolution(spreadsheetId) {
 
 /**
  * List the Test Harness scenarios available to the UI, from the harness registry
- * (getHarnessScenarios_ — currently SMOKE-PROVISION-DONATION + REGRESSION-BILLS-
- * MONTHLY). Guarded by the WRITER guard. Read-only listing — surfaces scenario
+ * (`getHarnessScenarios_`). Guarded by the WRITER guard. Read-only listing — surfaces scenario
  * descriptors only; no workbook is created. The console dropdown populates from
  * this list, so new registered scenarios appear with no HTML change.
  * @returns {!Object} { ok, scenarios:[{id,category,executionLevel,executionExpectation,description,expectedSheets}] } | {ok:false,error}

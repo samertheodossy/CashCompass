@@ -729,8 +729,13 @@ function getRetirementModelData_(sheet) {
   };
 }
 
-function getOrCreateRetirementSheet_() {
-  const ss = getUserSpreadsheet_();
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet=} optionalSs Explicit target for
+ *   disposable harness runs; normal product callers resolve the user's workbook.
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet}
+ */
+function getOrCreateRetirementSheet_(optionalSs) {
+  const ss = optionalSs || getUserSpreadsheet_();
   const sheetName = 'INPUT - Retirement';
   let sheet = ss.getSheetByName(sheetName);
   if (sheet) return sheet;

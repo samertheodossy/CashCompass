@@ -1,4 +1,4 @@
-# Automated testing plan (no code yet)
+# Automated testing plan
 
 Goal: **build confidence for production-style releases** without pointing tests at your **live** financial workbook or changing how you use the app day to day.
 
@@ -6,9 +6,17 @@ This complements `GoingToProduction.md`: validation/onboarding reduce user error
 
 ---
 
-## Current phase — V1.2 manual test discipline (same rules as V1.1)
+## Current phase — automated disposable fixtures plus two-track release evidence
 
-In V1.2 / controlled improvement mode (V1.1 closed out) there is still no automated harness. Every change must ship with **exact manual test steps for both a blank workbook and a real populated workbook**. See `WORKING_RULES.md → Current phase` for the rule; the canonical checklist is the two-track section below. The rules carry over from V1.1 unchanged.
+The Test Harness foundation is implemented, including a guarded representative
+populated-fixture scenario that creates its own Central-owned workbook, verifies
+Restricted sharing before seeding, writes synthetic data, and confirms Trash by
+Drive read-back. Its first isolated Central runtime run passed on `@117`
+(2026-07-21): 9/9 functional assertions and verified cleanup. Automated
+disposable fixtures reduce repetitive setup; they do
+not replace final blank/fresh and representative-populated release evidence. Every
+change must still ship with exact checks appropriate to both tracks. See
+`WORKING_RULES.md → Current phase` and `TEST_HARNESS_ARCHITECTURE.md`.
 
 ### Blank + populated two-track manual checks
 

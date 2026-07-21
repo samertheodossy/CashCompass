@@ -30,10 +30,12 @@
  *            | … | Dec-YY | Active                     (cols 1..15)
  *   Data:    (none — addHouseFromDashboard inserts on write)
  *
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet=} optionalSs Explicit target for
+ *   disposable harness runs; normal product callers resolve the user's workbook.
  * @returns {GoogleAppsScript.Spreadsheet.Sheet}
  */
-function ensureInputHouseValuesSheet_() {
-  const ss = getUserSpreadsheet_();
+function ensureInputHouseValuesSheet_(optionalSs) {
+  const ss = optionalSs || getUserSpreadsheet_();
   const names = getSheetNames_();
   const sheetName = names.HOUSE_VALUES;
 
@@ -197,8 +199,13 @@ var SYS_HOUSE_ASSETS_CANONICAL_WIDTHS_ = {
   'Active': 110
 };
 
-function ensureSysHouseAssetsSheet_() {
-  const ss = getUserSpreadsheet_();
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet=} optionalSs Explicit target for
+ *   disposable harness runs; normal product callers resolve the user's workbook.
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet}
+ */
+function ensureSysHouseAssetsSheet_(optionalSs) {
+  const ss = optionalSs || getUserSpreadsheet_();
   const names = getSheetNames_();
   const sheetName = names.HOUSE_ASSETS;
 

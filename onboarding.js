@@ -981,9 +981,10 @@ function getOnboardingDebtsFromDashboard(mode) {
  *     no activity log entries.
  *
  * @param {string=} mode 'normal' (default) or 'test'
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet=} optionalSs Explicit target for disposable harness runs.
  * @returns {{ ok: boolean, created: boolean, sheetName: string, mode: string, reason?: string }}
  */
-function ensureOnboardingDebtsSheetFromDashboard(mode) {
+function ensureOnboardingDebtsSheetFromDashboard(mode, optionalSs) {
   var m = normalizeOnboardingMode_(mode);
   var sheetName = resolveOnboardingSheetName_(m, 'DEBTS');
 
@@ -997,7 +998,7 @@ function ensureOnboardingDebtsSheetFromDashboard(mode) {
     };
   }
 
-  var ss = getUserSpreadsheet_();
+  var ss = optionalSs || getUserSpreadsheet_();
   var existing = ss.getSheetByName(sheetName);
   if (existing) {
     return { ok: true, created: false, sheetName: sheetName, mode: m };
@@ -1214,8 +1215,11 @@ function getOnboardingBillsFromDashboard(mode) {
  * usable by every Bills reader. The self-heal logic in the Add form
  * handles back-compat for existing workbooks, so we seed the most
  * complete layout up front. No data rows are seeded.
+ *
+ * @param {string=} mode 'normal' (default) or 'test'
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet=} optionalSs Explicit target for disposable harness runs.
  */
-function ensureOnboardingBillsSheetFromDashboard(mode) {
+function ensureOnboardingBillsSheetFromDashboard(mode, optionalSs) {
   var m = normalizeOnboardingMode_(mode);
   var sheetName = resolveOnboardingSheetName_(m, 'BILLS');
 
@@ -1229,7 +1233,7 @@ function ensureOnboardingBillsSheetFromDashboard(mode) {
     };
   }
 
-  var ss = getUserSpreadsheet_();
+  var ss = optionalSs || getUserSpreadsheet_();
   var existing = ss.getSheetByName(sheetName);
   if (existing) {
     return { ok: true, created: false, sheetName: sheetName, mode: m };
@@ -1428,8 +1432,11 @@ function getOnboardingUpcomingFromDashboard(mode) {
  * helper in upcoming_expenses.js so the header row, number formats, and
  * frozen-row behavior are identical to what the Add form already
  * assumes. We intentionally avoid duplicating the schema here.
+ *
+ * @param {string=} mode 'normal' (default) or 'test'
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet=} optionalSs Explicit target for disposable harness runs.
  */
-function ensureOnboardingUpcomingSheetFromDashboard(mode) {
+function ensureOnboardingUpcomingSheetFromDashboard(mode, optionalSs) {
   var m = normalizeOnboardingMode_(mode);
   var sheetName = resolveOnboardingSheetName_(m, 'UPCOMING');
 
@@ -1443,7 +1450,7 @@ function ensureOnboardingUpcomingSheetFromDashboard(mode) {
     };
   }
 
-  var ss = getUserSpreadsheet_();
+  var ss = optionalSs || getUserSpreadsheet_();
   var existed = !!ss.getSheetByName(sheetName);
   if (existed) {
     return { ok: true, created: false, sheetName: sheetName, mode: m };
@@ -1460,7 +1467,7 @@ function ensureOnboardingUpcomingSheetFromDashboard(mode) {
   }
 
   try {
-    getOrCreateUpcomingExpensesSheet_();
+    getOrCreateUpcomingExpensesSheet_(ss);
   } catch (e) {
     return {
       ok: false,
@@ -1912,9 +1919,10 @@ function ensureOnboardingTestSheetsFromDashboard() {
  *     entries, and no Activity events.
  *
  * @param {string=} mode 'normal' (default) or 'test'
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet=} optionalSs Explicit target for disposable harness runs.
  * @returns {{ ok: boolean, created: boolean, sheetName: string, mode: string, reason?: string }}
  */
-function ensureOnboardingBankAccountsSheetFromDashboard(mode) {
+function ensureOnboardingBankAccountsSheetFromDashboard(mode, optionalSs) {
   var m = normalizeOnboardingMode_(mode);
   var sheetName = resolveOnboardingSheetName_(m, 'BANK_ACCOUNTS');
 
@@ -1929,7 +1937,7 @@ function ensureOnboardingBankAccountsSheetFromDashboard(mode) {
     };
   }
 
-  var ss = getUserSpreadsheet_();
+  var ss = optionalSs || getUserSpreadsheet_();
   var existing = ss.getSheetByName(sheetName);
   if (existing) {
     return { ok: true, created: false, sheetName: sheetName, mode: m };

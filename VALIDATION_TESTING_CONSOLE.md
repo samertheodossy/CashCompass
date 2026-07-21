@@ -170,13 +170,13 @@ Output panel:
 
 ### C. Regression Testing (Test Harness — writer, disposable targets only)
 
-> **V1 SLICE IMPLEMENTED (single smoke scenario).** A collapsible **Test Harness**
-> card is live on `ValidationTestingUI.html`, below Workbook Health. It runs ONLY
-> `SMOKE-PROVISION-DONATION` with a Keep/Trash disposition and renders the harness
+> **V1 SLICE IMPLEMENTED (dynamic scenario registry).** A collapsible **Test Harness**
+> card is live on `ValidationTestingUI.html`, below Workbook Health. Its selector
+> reads the registered scenarios, including `SMOKE-POPULATED-FIXTURE`, and renders the harness
 > report (Overall · Run ID · Workbook link · Disposition + Provisioning / Schema
 > Evolution / Drift cards + raw JSON). Server: `vtListHarnessScenarios()` and
 > `vtRunHarnessScenario(scenarioId, options)` in `validation_testing_server.js` —
-> thin wrappers over `testRunSmoke(options)`, guarded by `assertHarnessAllowed_()`,
+> thin wrappers over the guarded scenario runner, guarded by `assertHarnessAllowed_()`,
 > that never accept a client workbook ID and never use the Target selector (the
 > harness always creates its own disposable workbook; `assertDisposableTarget_`
 > stays authoritative for the trash). The full multi-suite selector below remains
@@ -419,8 +419,8 @@ gates on the whole subsystem.
   Conditional-Formatting / Full Workbook Health buttons remain future as each
   Phase-2 module ships.
 - **C3 — Regression Testing (after Test Harness foundation). ◑ V1 slice done.**
-  Section C exists as a single-scenario **Test Harness** card
-  (`SMOKE-PROVISION-DONATION`, Keep/Trash) via `vtListHarnessScenarios` /
+  Section C exists as a one-scenario-at-a-time **Test Harness** card with a dynamic
+  registry selector (including `SMOKE-POPULATED-FIXTURE`) and Keep/Trash via `vtListHarnessScenarios` /
   `vtRunHarnessScenario`; the harness always creates its own disposable workbook and
   `assertDisposableTarget_` enforces the trash. The multi-suite/scenario selector
   remains future.

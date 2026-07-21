@@ -60,6 +60,8 @@ function harnessBuildFunctionalSection_(assertions) {
  *   actions:   Array<string>,
  *   validators:{ provisioning, schema, drift } (raw Validator reports or null),
  *   assertions: Array<Object> (functional-assertion results, E0a) or undefined,
+ *   sharing:    Restricted-sharing result or null,
+ *   cleanup:    Trash/read-back result,
  *   disposition: string,
  *   error:     string|null,
  *   startedAt: number (ms), finishedAt: number (ms)
@@ -77,7 +79,11 @@ function buildHarnessScenarioReport_(p) {
 
   var provPass = !!(prov && prov.overall === 'PASS');
   var functionalPass = !functional || functional.overall === 'PASS';
-  var overall = (!p.error && provPass && functionalPass) ? 'PASS' : 'FAIL';
+  var sharingPass = !!(p.sharing && p.sharing.restricted === true);
+  var cleanupPass = !(p.cleanup && p.cleanup.requested === true) ||
+    (p.cleanup.trashed === true && p.cleanup.verified === true && !p.cleanup.error);
+  var overall = (!p.error && provPass && functionalPass && sharingPass && cleanupPass)
+    ? 'PASS' : 'FAIL';
 
   var schemaSummary = null;
   if (schema) {
@@ -102,11 +108,17 @@ function buildHarnessScenarioReport_(p) {
       schema: schemaSummary,
       drift: harnessSummarizeValidator_(drift)
     },
+    sharing: p.sharing || null,
+    cleanup: p.cleanup || null,
     functional: functional,
     gate: {
-      basis: 'Provisioning must PASS + all functional assertions must PASS; Schema Evolution + Workbook Drift are advisory (never fail).',
+      basis: 'Restricted sharing + Provisioning PASS + all functional assertions PASS + verified Trash when requested; Schema Evolution + Workbook Drift are advisory.',
+      sharing: sharingPass ? 'PASS' : 'FAIL',
       provisioning: prov ? prov.overall : 'NOT RUN',
-      functional: functional ? functional.overall : 'NOT RUN'
+      functional: functional ? functional.overall : 'NOT RUN',
+      cleanup: (p.cleanup && p.cleanup.requested)
+        ? (cleanupPass ? 'PASS' : 'FAIL')
+        : 'NOT REQUESTED'
     },
     overall: overall,
     error: p.error || null,
@@ -137,6 +149,12 @@ function formatHarnessReport_(report) {
   lines.push('Workbook ID  : ' + report.workbook.id);
   if (report.workbook.url) lines.push('URL          : ' + report.workbook.url);
   lines.push('Disposition  : ' + report.disposition);
+  lines.push('Drive sharing: ' + (report.sharing && report.sharing.restricted
+    ? 'PASS — Restricted'
+    : 'FAIL / not verified'));
+  lines.push('Trash cleanup: ' + (report.cleanup && report.cleanup.requested
+    ? (report.cleanup.verified ? 'PASS — Drive confirmed trashed' : 'FAIL — not confirmed')
+    : 'not requested'));
   if (report.scenario.expectedSheets && report.scenario.expectedSheets.length) {
     lines.push('Validated scope: ' + report.scenario.expectedSheets.join(', ') +
       '  (scenario-scoped — sheets this scenario creates)');

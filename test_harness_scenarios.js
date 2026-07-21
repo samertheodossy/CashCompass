@@ -1,9 +1,9 @@
 /**
  * test_harness_scenarios.js — Test Harness · declarative scenarios (V1).
  *
- * V1 ships exactly ONE SMOKE scenario — the smallest end-to-end proof that the
- * Harness can create a disposable workbook, drive one real workflow into it, and
- * have the read-only Validator judge it. Design of record:
+ * The registry contains smoke/regression scenarios that create their own
+ * disposable workbooks, drive real spreadsheet-scoped seams, and have the
+ * read-only Validator judge them. Design of record:
  * TEST_HARNESS_ARCHITECTURE.md §3.
  *
  * Scenario contract: { id, category, executionLevel, description, expectedSheets?,
@@ -119,6 +119,9 @@ function getHarnessScenarios_() {
   }
   if (typeof getHarnessQuickAddWriteGuardScenario_ === 'function') {
     list.push(getHarnessQuickAddWriteGuardScenario_());
+  }
+  if (typeof getHarnessPopulatedFixtureScenario_ === 'function') {
+    list.push(getHarnessPopulatedFixtureScenario_());
   }
   return list;
 }

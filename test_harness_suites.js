@@ -118,6 +118,14 @@ function getHarnessSuites_() {
       scenarioIds: [
         'REGRESSION-QUICK-ADD-WRITE-GUARD'
       ]
+    },
+    {
+      id: 'SUITE-POPULATED-FIXTURE',
+      label: 'Representative Populated Fixture',
+      description: 'Central-created Restricted fixture with synthetic Bank, Investment, House, Debt, Bills, Income, Upcoming, and Retirement data; always verifies Trash cleanup.',
+      scenarioIds: [
+        'SMOKE-POPULATED-FIXTURE'
+      ]
     }
   ];
 }
@@ -225,6 +233,11 @@ function testRunRecoverySuite(options) {
 /** Run the Quick Add Reliability Suite against disposable harness workbooks. */
 function testRunQuickAddReliabilitySuite(options) {
   return testRunSuiteById_('SUITE-QUICK-ADD-RELIABILITY', options || {});
+}
+
+/** Run the representative populated fixture; the scenario always verifies Trash. */
+function testRunPopulatedFixtureSuite(options) {
+  return testRunSuiteById_('SUITE-POPULATED-FIXTURE', options || {});
 }
 
 /* -------------------------------------------------------------------------- */

@@ -106,7 +106,7 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 |---|---|---|---|
 | Aggregate Release Readiness gate and remaining automated regression coverage | P1 | Stable read models ✓ + remaining Validator/Harness coverage | L–XL |
 | **Remaining Validator Phase 2 modules** — Formula, Conditional-Formatting, Named-Range, and aggregate Workbook Health | P1 | Phase 2 foundation ✓ | L |
-| **Disposable populated-fixture hardening** — Central-created fixture, representative data seeding, Restricted-sharing assertion, `drive.file`-compatible access, and verified Trash cleanup | P1 | Test Harness Foundation V1 ✓ | M |
+| **Disposable populated-fixture hardening** — ✅ isolated Central `@117` PASS: Central-created fixture, representative eight-domain data seeding, Restricted-sharing assertion, `drive.file`-compatible access, and verified Trash cleanup | P1 | Test Harness Foundation V1 ✓ | M |
 | Runtime regression checklist (interim manual gate) | P1 | — | M |
 | Financial-integrity gate wiring into release | P1 | FI Phase 3 convergence | S |
 | Deployment checklist | P2 | — | S |
@@ -299,7 +299,7 @@ Reusable coverage: `npm run test:dashboard-ux`. **Two-track validation is comple
 
 **Follow-ups discovered during the populated pass, in execution order:**
 
-1. **P1 — disposable populated-fixture hardening.** Central's intentional `drive.file` scope cannot inspect an owner-created workbook merely shared to the disposable account. Build the populated test path around a Central-created fixture, automate representative Bank / Investment / House / Debt seeding, assert the Drive file is **Restricted** rather than link-accessible, and verify recoverable Trash cleanup without touching owner/bounded workbooks.
+1. **P1 — disposable populated-fixture hardening. ✅ Complete on isolated Central `@117` (2026-07-21).** The 119.7-second run created a Central-owned fixture under `drive.file`, confirmed Restricted owner-only sharing before seeding, populated Bank / Investment / House / Debt / Bills / Income / Upcoming / Retirement, passed 9/9 functional assertions plus Validator checks, and confirmed Trash by Drive read-back. `TEST_HARNESS_ENABLED=false` was restored; Beta `@106` and owner/bounded workbooks were untouched.
 2. **P2 UX polish — debt due-day wording.** The value is a day number, but user-facing surfaces alternate between **Due Date**, **Due Date (day of month)**, and **Due day of month**. Standardize the dashboard and Help wording on **Due day of month** without renaming the existing sheet header/schema.
 3. **P2 UX polish — optional Setup loading state.** Houses and Upcoming Expenses currently show a calm `—` while their asynchronous summaries load, which can briefly look like missing populated data. Use a small **Checking…** state, then render the count / **None yet** / failure fallback.
 4. **P3 Performance — Financial Plan refresh latency.** **Profiling complete; first optimization isolated PASS.** Central `@116` preserved/appended `OUT - History` rows and completed History-backed snapshot comparisons while removing the six unused embedded charts. Repeat History work fell from **11.507 s to 0.165 s** and total repeat server time from **77.275 s to 43.946 s**. Next address per-cell Dashboard formatting, Dashboard chart churn, and duplicate snapshot reads. Rerun the same `PERFORMANCE_TIMING_ENABLED` first/repeat scenario after each safe optimization while preserving correctness, email gating, and durable completion feedback.
