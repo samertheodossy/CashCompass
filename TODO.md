@@ -108,11 +108,11 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | **Validator Phase 2 runtime evidence — ✅ COMPLETE** — isolated Central `@122` aggregate Workbook Health PASS: Formula / Conditional Formatting / Named Ranges / formal schema registry / Provisioning / Drift clean, zero warnings after correcting validator normalization and fixture debt ordering; Restricted + 9/9 functional + verified Trash | P1 | Run `20260721-120759-5dc2` | — |
 | **Disposable populated-fixture hardening** — ✅ isolated Central `@117` PASS: Central-created fixture, representative eight-domain data seeding, Restricted-sharing assertion, `drive.file`-compatible access, and verified Trash cleanup | P1 | Test Harness Foundation V1 ✓ | M |
 | Runtime regression checklist (interim manual gate) | P1 | — | M |
-| **Recent-session permanent regression packs** — Performance Planner and Bills Pay E2E runtime PASS at `@120`; First-Run UX E2E V2 PASS 9/9 at `@129`; Populated Dashboard E2E PASS 11/11 at `@133`; production-path audit enforced; only `SUITE-RECOVERY-LIVE` remains unimplemented; aggregate in bounded chunks | P1–P3 by dependency | Central Safety suite + real browser/disposable-account seams | L–XL |
+| **Recent-session permanent regression packs** — Performance Planner and Bills Pay E2E PASS at `@120`; First-Run UX E2E PASS at `@129`; Populated Dashboard E2E PASS at `@133`; Recovery Live PASS 9/9 at `@135`; production-path audit enforced; all required packs implemented; aggregate in bounded chunks | P1–P3 by dependency | Central Safety suite + real browser/disposable-account seams | L–XL |
 | Financial-integrity gate wiring into release | P1 | FI Phase 3 convergence | S |
 | Deployment checklist | P2 | — | S |
 
-> **Validator Phase 2 Workbook Health runtime gate completed 2026-07-21.** Provisioning, Workbook Drift, Schema Evolution V1, Formula, Conditional Formatting, Named Ranges, the formal schema registry, and aggregate Workbook Health are implemented and passed on isolated Central `@122`. First-Run UX E2E V2 then passed 9/9 at `@129`, and Populated Dashboard E2E passed 11/11 at `@133`. The Validator remains read-only. Remaining P1 scope is Recovery Live, performance-budget ratification, Release Readiness console controls, and the final bounded verdict.
+> **Validator Phase 2 and scenario-pack runtime gates completed 2026-07-21.** Aggregate Workbook Health passed on isolated Central `@122`; First-Run UX E2E passed at `@129`; Populated Dashboard E2E passed at `@133`; and Recovery Live passed 9/9 at `@135`. The Validator remains read-only. Remaining P1 scope is performance-budget ratification, Release Readiness console controls, and the final bounded verdict.
 
 **D. Recovery completion — ✅ P0 complete 2026-07-20**
 

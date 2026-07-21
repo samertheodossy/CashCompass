@@ -6,7 +6,8 @@ const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 const [registry, formulas, cf, named, health, release, contract, suites,
   planner, bank, investments, houses, plannerOutput, quickAdd, dashboard, performanceScenario, billsPayScenario,
   harnessCore, p1Runner, webapp, centralDiagnostics, firstRunE2E, firstRunBrowser,
-  populatedE2E, populatedBrowser, populatedUi, validationServer] = await Promise.all([
+  populatedE2E, populatedBrowser, populatedUi, recoveryLive, recoveryUi,
+  validationUi, validationServer] = await Promise.all([
   read('validator_schema_registry.js'), read('validator_formulas.js'),
   read('validator_conditional_formatting.js'), read('validator_named_ranges.js'),
   read('validator_health.js'), read('release_readiness_runner.js'),
@@ -18,6 +19,7 @@ const [registry, formulas, cf, named, health, release, contract, suites,
   read('first_run_e2e.js'), read('Dashboard_Script_FirstRunE2E.html'),
   read('populated_dashboard_e2e.js'), read('Dashboard_Script_PopulatedDashboardE2E.html'),
   read('PopulatedDashboardE2ETestingUI.html'),
+  read('recovery_live.js'), read('RecoveryTestingUI.html'), read('ValidationTestingUI.html'),
   read('validation_testing_server.js')
 ]);
 
@@ -61,8 +63,30 @@ assert.doesNotMatch(release, /runScenario_\([^\n]*candidateSpreadsheetId/,
 for (const suite of ['SUITE-POPULATED-DASHBOARD-E2E', 'SUITE-RECOVERY-LIVE']) {
   assert.ok(release.includes(`'${suite}'`), `Required release inventory missing ${suite}`);
 }
-assert.match(suites, /id: 'SUITE-RECOVERY-LIVE'[\s\S]*?implemented: false[\s\S]*?scenarioIds: \[\]/,
-  'Recovery Live must fail closed until its real execution seam exists');
+assert.match(suites, /id: 'SUITE-RECOVERY-LIVE'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?RECOVERY_LIVE_LATEST_EVIDENCE_V1/,
+  'Recovery Live must be an implemented browser suite backed by saved evidence');
+assert.match(recoveryLive, /RECOVERY_LIVE_TEST_EMAIL_\s*=\s*'cashcompass2026@gmail.com'/,
+  'Recovery Live must stay pinned to the permanent disposable identity');
+assert.match(recoveryLive, /!isAdminUser_\(\)[\s\S]*?isCentralModeEnabled_\(\)[\s\S]*?isAllowlistedUser_\(\)/,
+  'Recovery Live must require the exact disposable, non-admin, allow-listed Central identity');
+assert.doesNotMatch(recoveryLive, /function recoveryLiveStart\([^)]*(?:email|spreadsheet|workbook|file)Id/i,
+  'Recovery Live start must never accept a caller-selected identity or workbook');
+assert.match(recoveryLive, /priorId[\s\S]*?frE2ECleanupVerified_\(priorState, email\)[\s\S]*?findCandidateWorkbooks_\(email\)/,
+  'Recovery Live may recycle only an exactly verified mapped disposable workbook before candidate recheck');
+assert.match(recoveryLive, /resolveExistingWorkbookForRecovery_\(email, 'no_mapping'\)/,
+  'Recovery Live must exercise the production confirmation path');
+assert.match(recoveryLive, /recoveryReconnectSelf\(\)/,
+  'Recovery Live must exercise the production self-scoped reconnect path');
+assert.match(recoveryLive, /getUserSpreadsheet_\(\)/,
+  'Recovery Live must exercise production stale-mapping routing');
+assert.match(recoveryLive, /Drive\.Files\.update\(\{ trashed: true \}, id\)/,
+  'Recovery Live cleanup must soft-trash only a verified active-run fixture');
+assert.doesNotMatch(recoveryLive, /setProperty\(\s*ADMIN_EMAILS_KEY_|deleteProperty\(\s*ADMIN_EMAILS_KEY_/,
+  'Recovery Live must never modify administrator configuration');
+assert.match(recoveryUi, /cashcompass2026@gmail\.com[\s\S]*?never accepts an email or workbook ID/,
+  'Recovery Live UI must explain its fixed identity and target boundary');
+assert.match(validationUi, /single suite inventory and evidence dashboard[\s\S]*?All suites/,
+  'Validation console must remain the consolidated suite inventory and evidence surface');
 assert.match(suites, /id: 'SUITE-FIRST-RUN-UX-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?FIRST_RUN_E2E_LATEST_EVIDENCE_V2/,
   'First-Run UX must be an implemented browser suite backed by saved evidence');
 assert.match(firstRunE2E, /FIRST_RUN_E2E_EVIDENCE_KEY_\s*=\s*'FIRST_RUN_E2E_LATEST_EVIDENCE_V2'/,
@@ -162,15 +186,16 @@ vm.runInContext(suites, inventoryCtx);
 vm.runInContext(release, inventoryCtx);
 const inventory = inventoryCtx.releaseBuildInventory_();
 assert.deepEqual(Array.from(inventory.missingSuites), [
-  'SUITE-RECOVERY-LIVE'
-], 'Release inventory must explicitly refuse the remaining Recovery Live pack');
+], 'Release inventory must contain no unimplemented required suite');
 assert.deepEqual(Array.from(inventory.externalSuites), [
-  'SUITE-FIRST-RUN-UX-E2E', 'SUITE-POPULATED-DASHBOARD-E2E'
-], 'Release inventory must require both browser suites outside the server scenario queue');
+  'SUITE-FIRST-RUN-UX-E2E', 'SUITE-POPULATED-DASHBOARD-E2E', 'SUITE-RECOVERY-LIVE'
+], 'Release inventory must require all authenticated browser suites outside the server scenario queue');
 assert.throws(() => inventoryCtx.testRunSuiteById_('SUITE-FIRST-RUN-UX-E2E', {}), /authenticated browser runner/,
   'The server runner must never substitute an empty run for First-Run browser evidence');
 assert.throws(() => inventoryCtx.testRunSuiteById_('SUITE-POPULATED-DASHBOARD-E2E', {}), /authenticated browser runner/,
   'The server runner must never substitute an empty run for Populated Dashboard browser evidence');
+assert.throws(() => inventoryCtx.testRunSuiteById_('SUITE-RECOVERY-LIVE', {}), /authenticated browser runner/,
+  'The server runner must never substitute an empty run for Recovery Live evidence');
 
 const propertyBag = new Map();
 const props = {
@@ -187,7 +212,7 @@ const baseState = {
   version: 1, runId: 'RR-test', startedAt: new Date().toISOString(),
   candidate: { workbookId: 'fixture', sourceVersion: 'abc123', deployment: '@test' },
   openIssues: { severity1: 0, severity2: 0, declared: true },
-  health: { overall: 'PASS' }, inventory: { missingSuites: ['SUITE-RECOVERY-LIVE'], externalSuites: ['SUITE-FIRST-RUN-UX-E2E', 'SUITE-POPULATED-DASHBOARD-E2E'], scenarioIds: [] },
+  health: { overall: 'PASS' }, inventory: { missingSuites: [], externalSuites: ['SUITE-FIRST-RUN-UX-E2E', 'SUITE-POPULATED-DASHBOARD-E2E', 'SUITE-RECOVERY-LIVE'], scenarioIds: [] },
   externalEvidence: {},
   cursor: 0, results: [], status: 'IN_PROGRESS'
 };
@@ -195,10 +220,11 @@ props.setProperty('RELEASE_READINESS_ACTIVE_RUN_V1', JSON.stringify(baseState));
 assert.equal(verdictCtx.releaseReadinessFinalize().status, 'NOT_READY',
   'Missing execution-dependent evidence must force NOT READY');
 const readyState = { ...baseState, runId: 'RR-ready',
-  inventory: { missingSuites: [], externalSuites: ['SUITE-FIRST-RUN-UX-E2E', 'SUITE-POPULATED-DASHBOARD-E2E'], scenarioIds: [] },
+  inventory: { missingSuites: [], externalSuites: ['SUITE-FIRST-RUN-UX-E2E', 'SUITE-POPULATED-DASHBOARD-E2E', 'SUITE-RECOVERY-LIVE'], scenarioIds: [] },
   externalEvidence: {
     'SUITE-FIRST-RUN-UX-E2E': { overall: 'PASS', cleanupVerified: true },
-    'SUITE-POPULATED-DASHBOARD-E2E': { overall: 'PASS', cleanupVerified: true }
+    'SUITE-POPULATED-DASHBOARD-E2E': { overall: 'PASS', cleanupVerified: true },
+    'SUITE-RECOVERY-LIVE': { overall: 'PASS', cleanupVerified: true }
   },
   status: 'IN_PROGRESS' };
 props.setProperty('RELEASE_READINESS_ACTIVE_RUN_V1', JSON.stringify(readyState));

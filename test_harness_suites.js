@@ -170,9 +170,12 @@ function getHarnessSuites_() {
     {
       id: 'SUITE-RECOVERY-LIVE',
       label: 'Recovery Live',
-      description: 'Planned live disposable-account recovery matrix with exact mapping and flag cleanup evidence.',
-      implemented: false,
-      blocker: 'Requires an isolated disposable account/mapping sandbox; the pure decision matrix is not live evidence.',
+      description: 'Authenticated disposable-account production recovery: confirmation, reconnect, stale/Trash routing, ambiguity, protected-target isolation, and verified cleanup.',
+      implemented: true,
+      runner: 'browser',
+      browserRoute: 'recovery-test',
+      evidenceKey: 'RECOVERY_LIVE_LATEST_EVIDENCE_V1',
+      blocker: null,
       scenarioIds: []
     },
     {

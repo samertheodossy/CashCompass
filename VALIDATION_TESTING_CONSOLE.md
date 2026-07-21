@@ -11,7 +11,8 @@ Health) and the writer **Test Harness** (Regression Runner), plus the aggregated
 Provisioning (gating), Workbook Drift (advisory), and Schema Evolution (advisory,
 standalone) with status cards, findings, and a JSON viewer; and **Section C Test
 Harness** — a collapsible writer card with dynamic scenario and suite selectors,
-Keep/Trash disposition, per-scenario detail, and JSON reports
+an all-suite inventory with saved evidence/cleanup status, Keep/Trash disposition,
+per-scenario detail, and JSON reports
 (`vtListHarnessScenarios()` / `vtRunHarnessScenario()` /
 `vtListHarnessSuites()` / `vtRunHarnessSuite()`). **Still design only:** multi-select
 pack composition and the aggregate Release Certification orchestrator,
@@ -434,10 +435,12 @@ gates on the whole subsystem.
   controls and detailed reports. The harness always creates its own disposable
   workbook and `assertDisposableTarget_` enforces teardown. Multi-select pack
   composition and bounded-chunk Release Certification remain future. Browser-backed
-  suites use an **Open Browser Runner** action rather than pretending to run inside
-  the server loop. `SUITE-FIRST-RUN-UX-E2E` passed this path at isolated `@128`; its
-  saved PASS/cleanup summary is surfaced to the console and consumed by Release
-  Readiness.
+  suites use an **Open Browser Runner** action because they must execute as the
+  disposable non-admin rather than inherit admin-console authority. The console is
+  the single inventory/evidence surface and now shows all suites at once with latest
+  PASS/FAIL and cleanup status. First-Run UX E2E, Populated Dashboard E2E, and
+  Recovery Live are runtime-proven through isolated `@135`; all three saved
+  PASS/cleanup summaries are consumed by Release Readiness.
 - **C4 — Release Readiness verdict. ◑ Runner source-ready; UI pending.** The bounded
   one-scenario-per-invocation runner and archived evidence contract exist in
   `release_readiness_runner.js`; console start/progress/final-verdict controls and

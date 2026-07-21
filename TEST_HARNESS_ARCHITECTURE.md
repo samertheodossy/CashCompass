@@ -22,7 +22,7 @@ selected from the dynamic registry with a Keep/Trash disposition, backed by the 
 the harness's own disposable workbook). Five foundation suites are runtime-proven.
 The current P1 slice adds explicit-disposable-workbook Performance Planner and
 Bills Pay E2E scenarios plus bounded Release Readiness orchestration. The source is
-pushed to Central and only the isolated validation deployment is at `@133`; Beta
+pushed to Central and only the isolated validation deployment is at `@135`; Beta
 remains `@106`.
 First-Run UX E2E now runs in the shipping dashboard as the hard-coded non-admin
 disposable account, saves privacy-safe external evidence, and requires exact verified
@@ -30,8 +30,20 @@ Trash cleanup. Populated Dashboard E2E is runtime-proven on the same fixed ident
 reuses the production Central provisioner plus explicit-workbook representative seed;
 its 11 browser assertions and V1 evidence key are wired into Release Readiness, with
 run `FR-19eb43ab-e8fe-4bc8-96a5-336afff43596` passing at isolated `@133`.
-Recovery Live remains registered fail-closed as
-NOT IMPLEMENTED; the final bounded Release Readiness verdict remains pending.
+Recovery Live is runtime-proven by run `RL-12557aaa-5e18-4d67-a567-6304a5b57542`
+at isolated `@135`: 9/9 production-path assertions, three Restricted fixtures,
+verified Trash, no active mapping, zero protected-target matches, and unchanged
+sole-admin configuration/mapping fingerprints. The final bounded Release Readiness
+verdict remains pending.
+
+**Recovery Live browser contract (runtime-proven):** the runner is permanently
+locked to `cashcompass2026@gmail.com`, requires that identity to remain non-admin,
+and accepts only a boolean confirmation—never an email or workbook ID. Bounded
+steps call production candidate search, MEDIUM confirmation, self-reconnect,
+mapping/reverse-index, stale mapped-Trash routing, and ambiguity handling.
+Fixture creation is the unavoidable test-only seam. Every fixture must match the
+current run marker, exact expected name, caller ownership, and protected-ID
+exclusion before use or Trash cleanup.
 
 **Populated Dashboard browser contract (runtime-proven):** the runner accepts only a
 boolean disposable-account confirmation and no workbook ID. It verifies the exact

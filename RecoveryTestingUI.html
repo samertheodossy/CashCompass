@@ -4,63 +4,50 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <base target="_top">
-  <title>CashCompass — Recovery 6F Test Fixtures</title>
+  <title>CashCompass — Recovery Live</title>
   <style>
     body { font-family:-apple-system,Arial,sans-serif; margin:0; padding:24px; background:#f5f7fa; color:#1f2933; }
     .wrap { max-width:900px; margin:0 auto; }
     .card { background:#fff; border:1px solid #e1e5ea; border-radius:10px; padding:18px; margin:0 0 16px; }
     h1 { font-size:22px; margin:0 0 6px; } h2 { font-size:16px; margin:0 0 10px; }
     p { line-height:1.5; } .muted { color:#64748b; font-size:13px; }
-    .warn { background:#fff4d6; border:1px solid #f0c200; border-radius:8px; padding:12px; }
-    button { padding:9px 13px; border:1px solid #cbd5e1; border-radius:7px; background:#fff; cursor:pointer; margin:4px 6px 4px 0; }
+    .safe { background:#ecfdf5; border:1px solid #86efac; border-radius:8px; padding:12px; }
+    button { padding:9px 13px; border:1px solid #cbd5e1; border-radius:7px; background:#fff;
+      cursor:pointer; margin:4px 6px 4px 0; }
     button.primary { background:#2563eb; color:#fff; border-color:#2563eb; }
     button.danger { background:#fff1f2; color:#9f1239; border-color:#fecdd3; }
     button:disabled { opacity:.45; cursor:not-allowed; }
-    code, pre { font-family:ui-monospace,Menlo,monospace; font-size:12px; }
-    pre { white-space:pre-wrap; background:#f8fafc; border:1px solid #e2e8f0; padding:12px; border-radius:8px; }
+    pre { white-space:pre-wrap; overflow-wrap:anywhere; font-family:ui-monospace,Menlo,monospace;
+      font-size:12px; background:#f8fafc; border:1px solid #e2e8f0; padding:12px; border-radius:8px; }
     .ok { color:#047857; font-weight:600; } .err { color:#b91c1c; font-weight:600; }
   </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Recovery Validation 6F — Test Fixtures</h1>
-  <p class="muted">Disposable-account-only staging for MEDIUM, ambiguity, search-failure, and verification-failure branches.</p>
+  <h1>Recovery Live</h1>
+  <p class="muted">Authenticated production-path recovery validation.</p>
 
-  <div class="warn">
-    This page creates exact-name candidate spreadsheets in the signed-in disposable account.
-    Cleanup only moves marker-verified fixture files to Trash; it never permanently deletes files.
+  <div class="safe">
+    This runner is locked to <strong>cashcompass2026@gmail.com</strong>, which must remain a non-admin.
+    It never accepts an email or workbook ID. It creates only owner-bound, run-marked candidates and
+    moves only those exact files to Trash. Canonical, configured-default, administrator, and bounded
+    workbooks are excluded before every recovery action.
   </div>
 
   <div class="card">
-    <h2>Safety confirmation</h2>
-    <label><input id="confirm" type="checkbox" onchange="syncButtons()"> I confirm this is the configured disposable 6F account.</label>
+    <h2>Run the suite</h2>
+    <label><input id="confirm" type="checkbox" onchange="syncButtons()"> I confirm this is the disposable test account.</label>
+    <p class="muted">Runs bounded steps through production candidate detection, explicit confirmation,
+      self-reconnect, stale/Trash routing, and ambiguity handling.</p>
+    <button id="run" class="primary guarded" onclick="startRun()" disabled>Run Recovery Live</button>
   </div>
 
   <div class="card">
-    <h2>Current state</h2>
+    <h2>Suite state and latest evidence</h2>
     <button onclick="refreshState()">Refresh state</button>
+    <button class="danger guarded" onclick="cleanupRun()" disabled>Clean active run</button>
     <pre id="state">Loading…</pre>
   </div>
-
-  <div class="card">
-    <h2>Candidate fixtures</h2>
-    <button class="primary guarded" onclick="stageCandidates(1)" disabled>Stage 1 MEDIUM candidate</button>
-    <button class="primary guarded" onclick="stageCandidates(2)" disabled>Stage 2 ambiguous candidates</button>
-  </div>
-
-  <div class="card">
-    <h2>Failure injection</h2>
-    <button class="guarded" onclick="setFailure('search')" disabled>Inject search failure</button>
-    <button class="guarded" onclick="setFailure('verify')" disabled>Inject verification failure</button>
-    <button class="guarded" onclick="setFailure('none')" disabled>Clear failure injection</button>
-  </div>
-
-  <div class="card">
-    <h2>Cleanup</h2>
-    <button class="danger guarded" onclick="cleanupFixtures()" disabled>Trash verified fixture files</button>
-    <p class="muted">If a fixture was adopted, cleanup also clears this disposable account's mapping only when it points to that verified fixture.</p>
-  </div>
-
   <div id="status" class="muted"></div>
 </div>
 <script>
@@ -74,34 +61,59 @@
     el.textContent = message || '';
   }
   function render(res) {
-    if (res && res.state) {
-      document.getElementById('state').textContent = JSON.stringify(res.state, null, 2);
-    }
     if (!res || !res.ok) {
       showStatus((res && res.error) ? res.error : 'Unknown server error.', true);
       return;
     }
-    showStatus('Action completed.', false);
+    if (res.state) document.getElementById('state').textContent = JSON.stringify(res.state, null, 2);
+    showStatus('State loaded.', false);
   }
   function fail(err) { showStatus((err && err.message) ? err.message : String(err), true); }
   function refreshState() {
     showStatus('Loading…', false);
-    google.script.run.withSuccessHandler(render).withFailureHandler(fail).r6fGetState();
+    google.script.run.withSuccessHandler(render).withFailureHandler(fail).recoveryLiveGetState();
   }
-  function stageCandidates(count) {
-    showStatus('Creating fixture candidate(s)…', false);
-    google.script.run.withSuccessHandler(render).withFailureHandler(fail)
-      .r6fStageNameOnlyCandidates(count, confirmed());
+  function startRun() {
+    var btn = document.getElementById('run');
+    btn.disabled = true;
+    showStatus('Starting guarded Recovery Live validation…', false);
+    google.script.run.withSuccessHandler(function(res) {
+      if (!res || !res.ok || !res.runId) {
+        btn.disabled = !confirmed();
+        render(res);
+        return;
+      }
+      runNext(res.runId);
+    }).withFailureHandler(function(err) {
+      btn.disabled = !confirmed();
+      fail(err);
+    }).recoveryLiveStart(confirmed());
   }
-  function setFailure(mode) {
-    showStatus('Updating failure mode…', false);
-    google.script.run.withSuccessHandler(render).withFailureHandler(fail)
-      .r6fSetFailureMode(mode, confirmed());
+  function runNext(runId) {
+    showStatus('Running next bounded production recovery step…', false);
+    google.script.run.withSuccessHandler(function(res) {
+      if (!res || !res.ok) {
+        document.getElementById('run').disabled = !confirmed();
+        render(res);
+        return;
+      }
+      if (res.state) document.getElementById('state').textContent = JSON.stringify(res.state, null, 2);
+      if (res.done) {
+        document.getElementById('run').disabled = !confirmed();
+        showStatus('Recovery Live completed: ' + (res.report ? res.report.overall : 'UNKNOWN'),
+          !res.report || res.report.overall !== 'PASS');
+        return;
+      }
+      window.setTimeout(function() { runNext(runId); }, 250);
+    }).withFailureHandler(function(err) {
+      document.getElementById('run').disabled = !confirmed();
+      fail(err);
+    }).recoveryLiveRunNext(runId);
   }
-  function cleanupFixtures() {
-    showStatus('Cleaning verified fixtures…', false);
+  function cleanupRun() {
+    showStatus('Verifying and moving only active run fixtures to Trash…', false);
     google.script.run.withSuccessHandler(render).withFailureHandler(fail)
-      .r6fCleanupFixtures(confirmed());
+      .recoveryLiveCleanup(confirmed());
   }
   refreshState();
 </script>

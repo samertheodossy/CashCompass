@@ -3,12 +3,12 @@
 *The pre-release go/no-go produced by the Test Harness running every scenario pack
 and the Validator judging each result.*
 
-**Status:** **Bounded runner source-ready; Validator/Workbook Health and both browser E2E suites runtime-proven through isolated Central `@133`; final runtime verdict pending.** The Validator
+**Status:** **Bounded runner source-ready; Validator/Workbook Health and all three authenticated browser suites runtime-proven through isolated Central `@135`; final runtime verdict pending.** The Validator
 Phase 2 core (Provisioning / Drift / Schema Evolution), fail-closed disposable
-workbook lifecycle, and populated-fixture hardening now exist. Ten suites are
+workbook lifecycle, and populated-fixture hardening now exist. Eleven suites are
 runtime-proven across server and authenticated-browser runners: the five foundation
 suites, Workbook Health, Performance Planner, Bills Pay E2E, First-Run UX E2E,
-and Populated Dashboard E2E. The **aggregate Release Readiness report** — required
+Populated Dashboard E2E, and Recovery Live. The **aggregate Release Readiness report** — required
 suites and Validator gates rolled into one go/no-go — is now implemented locally
 by `release_readiness_runner.js`: one scenario per invocation, compact privacy-safe
 evidence, archived final runs, and fail-closed READY/NOT READY rules. Performance
@@ -26,9 +26,13 @@ that no active fixture remained. Populated Dashboard E2E run `FR-19eb43ab-e8fe-4
 passed 11/11 at isolated `@133` in 126.323 s, including deterministic KPIs, real
 selection/navigation/Refresh paths, populated Setup/Help and customer language,
 Restricted owner-only sharing, clean console/navigation, and verified Trash; saved
-state also confirmed no active fixture. Recovery Live remains explicitly
-NOT IMPLEMENTED. Therefore the
-current P1 verdict remains **NOT READY**; performance budgets also remain unratified
+state also confirmed no active fixture. Recovery Live run
+`RL-12557aaa-5e18-4d67-a567-6304a5b57542` passed 9/9 at isolated `@135`
+in 42.071 s through production confirmation, self-reconnect, stale/Trash routing,
+and ambiguity. Three Restricted owner-only fixtures were verified in Trash, no
+mapping remained, no protected target matched, and sole-admin configuration and
+mapping fingerprints were unchanged. Therefore the current P1 verdict remains
+**NOT READY**; performance budgets remain unratified
 because one passing timing sample is not percentile evidence. See
 `P1_RELEASE_EVIDENCE_CONTRACT.md`.
 

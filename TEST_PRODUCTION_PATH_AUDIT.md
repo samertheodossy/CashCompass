@@ -26,6 +26,7 @@ canonical workbook for a write.
 | Bills Pay E2E | Real `quickAddPayment` and `markDashboardBillOccurrencePaid` | Representative bill fixture |
 | First-Run UX E2E | Real Central `provisionWorkbookForUser_`, product dashboard, real planner refresh, verified cleanup | Browser assertions and synthetic identity |
 | Populated Dashboard E2E | Real Central provisioning, product renderers/navigation/load-and-select helpers, real planner refresh, verified cleanup | Representative fixture setup and browser assertions |
+| Recovery Live | Real candidate discovery, confirmation, self-reconnect, mapping/reverse-index, stale/Trash routing, and ambiguity paths | Exact-name, caller-owned candidate creation plus browser orchestration |
 | Workbook Health | Real aggregate read-only validator modules | Representative fixture setup |
 
 ## Reviewed direct-write exceptions
@@ -47,5 +48,7 @@ reviewed and this audit is updated.
 
 When a production writer gains an explicit disposable-workbook seam, replace the
 corresponding fixture-only row writer. Do not maintain two implementations of
-the same behavior. Recovery Live remains the only planned pack that cannot be
-substituted by a pure or synthetic test.
+the same behavior. Recovery Live is now live production-path evidence; its only
+test-only seam is creation of exact owner-bound candidates required to exercise
+the production recovery paths. No planned pack may be substituted by a pure or
+synthetic test.

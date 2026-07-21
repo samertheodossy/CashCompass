@@ -42,16 +42,16 @@ function doGet(e) {
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
-  // Recovery Validation 6F fixture route. Unlike the admin consoles, this
-  // runs as the one explicitly configured disposable account so Drive-owned
-  // candidate files are created in that account. The route and every server
-  // action independently require TEST_HARNESS_ENABLED=true, CENTRAL_MODE=true,
-  // and an exact RECOVERY_6F_TEST_EMAIL match. Everyone else falls through to
-  // the normal dashboard without learning that the route exists.
-  if (view === 'recovery-test' && isRecovery6fFixtureUser_()) {
+  // Recovery Live runner. Unlike the admin console, this must execute as the
+  // permanent disposable non-admin identity so candidate files are owned by
+  // that caller and production owner-scoped discovery can see them. The route
+  // and every server step independently require the exact identity, Central
+  // mode, and allow-list membership. No client-selected email or workbook ID
+  // exists. Everyone else falls through without learning the route exists.
+  if (view === 'recovery-test' && isRecoveryLiveUser_()) {
     return HtmlService.createTemplateFromFile('RecoveryTestingUI')
       .evaluate()
-      .setTitle('CashCompass — Recovery 6F Test Fixtures')
+      .setTitle('CashCompass — Recovery Live')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
