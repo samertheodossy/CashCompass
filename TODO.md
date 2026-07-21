@@ -334,6 +334,114 @@ A shared vocabulary + spacing/typography pass so every surface feels the same.
 - Success messages · Error wording · Empty-state wording · Loading wording
 - Toast consistency · Button spacing · Typography · Dialog widths · Card spacing · Badge styling
 
+#### Web Dashboard page-by-page polish — **P3 beta-critical · effort M–L** *(audited 2026-07-21)*
+
+**Goal:** turn the working dashboard into a clear, balanced, professional product without changing calculations, workbook schemas, or write behavior. This is an **ordered set of small implementation passes**: complete, review, and validate one ID at a time. Do not bundle the entire list into one broad redesign.
+
+**Ordering rule:** begin with `UX-01` and proceed in ID order unless a related P1/P2 change makes a later item safer to complete opportunistically. Each pass must preserve Central and bounded behavior, use existing components/styles where practical, and receive focused desktop + responsive regression validation before it closes.
+
+##### UX-01 — Overview information architecture and balanced grid *(first)*
+
+- Replace the generic three-column rows that currently hold four, one, and two cards with intentional filled rows (or an explicit 12-column Overview grid). Eliminate orphan cards and unused columns.
+- Organize the page in this reading order: **At a glance → What needs your attention → Financial outlook → This week → More insights**.
+- Emphasize Net Worth as the primary KPI; keep Cash, Investments, Real Estate, and Debt as supporting KPIs.
+- Place Suggested Actions beside Issues near the top. When there are no issues, render a compact positive state rather than a full empty card.
+- Condense Retirement Outlook to its three most decision-useful values plus **View retirement details**.
+- Pair Bills with Weekly Net Worth Change in one balanced two-column row.
+- Move 10/70/20 Plan and Operations Snapshot into a visually quieter **More insights** section; evaluate collapsing the section.
+- Remove the large Open Workspaces card because it duplicates top navigation, or replace it with a compact Quick links row only if user testing proves it useful.
+- Add a visible affordance (chevron or **View details**) to cards that are clickable.
+
+**Acceptance:** no unexplained desktop gaps or orphan rows at supported widths; the first screen answers current position and required attention; all existing card destinations and values remain correct; responsive stacking is deliberate; loading, empty, issue, and healthy states are validated.
+
+##### UX-02 — Global visual and interaction consistency
+
+- Standardize section spacing, card padding, headings, button gaps, badges, and dialog widths.
+- Use sentence case consistently for visible labels and actions.
+- Keep one visually dominant action per form; separate destructive / Stop tracking actions from the primary action.
+- Standardize loading, empty, success, and error states using the existing shared patterns rather than adding a parallel component system.
+- Shorten long information panels to concise outcome-focused guidance, with detailed mechanics in Help.
+- Add a short purpose line to pages where a new user may not understand the workspace immediately.
+
+**Acceptance:** the same visual role looks and behaves consistently across pages; no spreadsheet/schema labels are renamed by this pass; existing loading and empty-state backlog items are either reused or explicitly cross-referenced rather than duplicated.
+
+##### UX-03 — Cash Flow daily-use polish
+
+- Keep Quick add visually primary and make recent completion feedback easy to notice.
+- Distinguish the daily **Due this period** queue from **Manage bills** configuration.
+- Standardize visible debt/bill wording on **Due day of month** without renaming sheet headers or schemas.
+- Reveal Weekday, Anchor Date, and other recurrence details only when the selected frequency requires them; preserve the separate Bills Scheduling UX safeguards below.
+- Align Upcoming, Donations, Bills, and Income on the same add/list/status pattern where their workflows permit it.
+
+**Acceptance:** users can identify where to record money versus where to maintain recurring definitions; recurrence behavior is unchanged; Quick Add remains the single payment path; terminology is consistent in Dashboard and Help.
+
+##### UX-04 — Planning hierarchy and progressive disclosure
+
+- Keep Next Actions as the default and clearly separate **Do now** tools from **Explore / model** tools.
+- Improve cross-links between Debts, Debt Overview, and Rolling Debt Payoff so their distinct purposes are clear.
+- Keep automation presentation, raw JSON, and advanced assumptions visually secondary or collapsed.
+- Condense dense Retirement and Purchase result panels into headline outputs with optional supporting detail.
+- Preserve the existing separation between read-only planning and explicit Cash Flow write paths.
+
+**Acceptance:** a new user can explain which Planning tool to open for an action, a reference view, or a scenario; no planner calculations or payment routes change.
+
+##### UX-05 — Assets workflow consistency
+
+- Give House Values, Bank Accounts, and Investments the same visual sequence: select entity → current summary → update form → one primary Save action.
+- Make Update / Add new / Review imports modes unambiguous and keep their selected state visible.
+- Shorten developer-oriented helper copy and use outcome-focused language; route mechanics to Help.
+- Keep selected-month, current-value, and prior-month-change summaries aligned across all three asset types.
+- Review Stop tracking placement and confirmation language for consistent safety cues.
+
+**Acceptance:** equivalent asset tasks appear in the same place and order; empty selection and first-account states remain safely gated; no asset writer, lifecycle, import, or year-block behavior changes.
+
+##### UX-06 — Properties context and form polish
+
+- Keep the selected property and year/context visible when moving between House Expenses and Property performance.
+- Simplify the House Expense guidance panel and explain **Also add to Cash Flow** by its user-visible outcome.
+- Align property summary cards and period labels; make equity, income, expenses, and net result easy to scan.
+- Retain explicit disabled/empty guidance when no active house exists.
+
+**Acceptance:** users always know which property and period they are editing or reviewing; Cash Flow posting semantics and property calculations remain unchanged.
+
+##### UX-07 — Activity review polish
+
+- Show active filters as compact chips or an equally clear summary and provide **Clear filters**.
+- Keep the filter controls compact (and evaluate a sticky filter bar on long result sets).
+- Use a responsive card/list presentation when the full table cannot remain readable.
+- Make donation-only Remove behavior and unavailable actions understandable without exposing event internals.
+
+**Acceptance:** active filtering is obvious and reversible; desktop sorting/paging remains correct; mobile content is readable; Activity remains an audit surface and no undo/delete scope expands.
+
+##### UX-08 — Setup / Review completion guidance
+
+- Add visible required-step progress (for example, **4 of 5 complete**) and identify one recommended next step.
+- Replace temporary `—` values on asynchronous optional cards with **Checking…**, then show count / **None yet** / failure fallback.
+- Keep optional areas clearly separated from required setup.
+- Preserve the read-only Setup promise and explicit handoff into editors.
+
+**Acceptance:** loading cannot be mistaken for missing data; completion and next action are obvious; opening Setup alone performs no writes.
+
+##### UX-09 — Help and contextual guidance
+
+- Put Getting Started and common tasks before implementation detail.
+- Keep spreadsheet/internal references under a clearly marked **Advanced** section.
+- Add concise contextual Help links from complex pages where users are likely to need them.
+- Remove normal-path internal terminology while retaining the technical reference needed by developers and power users.
+
+**Acceptance:** common-task guidance is discoverable without reading the advanced reference; existing Help anchors and cross-links remain valid.
+
+##### UX-10 — Responsive, accessibility, and compatibility closeout
+
+- Validate supported desktop and narrow widths after `UX-01`–`UX-09`; fix overflow, cramped navigation, and unintentionally stretched cards.
+- Verify keyboard order, visible focus, semantic tab state, accessible names, reduced motion, and contrast.
+- Run task-based usability checks across Overview, Quick Add, Bills, Assets, Planning, Setup, and Help; fix repeated confusion rather than isolated preference.
+- Record browser/runtime evidence and add targeted automated checks only where the existing dashboard UX coverage is insufficient.
+
+**Acceptance:** core tasks pass on supported desktop and narrow layouts, keyboard-only navigation is usable, no critical contrast/focus issue remains, and the exact beta candidate satisfies the Core Experience gate in `BETA_10_OUT_OF_10_PLAN.md`.
+
+**Program completion:** all ten passes reviewed and validated; no unresolved Severity 1/2 UX defect; loading/empty/terminology findings reconciled with the adjacent UX backlog; final task-based evidence linked from the Release Readiness gate.
+
 #### Golden Workbook Convergence — **P1 · effort L** *(also Stage 3 → D)*
 
 **Goal:** freshly provisioned workbooks **converge toward the Golden Workbook** (the production workbook — visual source of truth) until they are visually indistinguishable from it. A **convergence project, not a redesign.** Spec: `GOLDEN_WORKBOOK.md` (incl. the four **design families**). Engineering checklist + per-sheet status: `WORKBOOK_PARITY_CHECKLIST.md`. **First audit complete (2026-07-06)** — ten core sheets rated by family; remaining sheets audited before their convergence pass.

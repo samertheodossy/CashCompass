@@ -185,6 +185,8 @@ The beta does not need to charge immediately, but it must avoid architecture and
 4. Complete responsive, keyboard, contrast, and browser compatibility review.
 5. Run task-based usability sessions; fix repeated confusion rather than isolated preference.
 
+The ordered implementation inventory for this experience work is `TODO.md → UX Backlog (Version 1) → Web Dashboard page-by-page polish` (`UX-01` through `UX-10`). It begins with Overview hierarchy and balanced card rows, then proceeds through global consistency, Cash Flow, Planning, Assets, Properties, Activity, Setup, Help, and the responsive/accessibility closeout. Each ID is intended to ship and validate independently; this phase is not authorization for a broad redesign or for calculation/schema/write-path changes.
+
 **Exit:** Performance budgets pass and core tasks feel coherent, responsive, and understandable.
 
 ### Phase 4 — Supervised validation cohort
