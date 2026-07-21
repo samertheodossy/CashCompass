@@ -117,6 +117,10 @@ Testing Strategy
 
 - TESTING_PLAN.md
 
+Performance Observability
+
+- PERFORMANCE_OBSERVABILITY.md
+
 Regression
 
 - REGRESSION_SCENARIOS.md

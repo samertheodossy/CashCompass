@@ -647,13 +647,14 @@ Recovery writes remain central-mode/self-scoped or admin-gated. `CENTRAL_AUTO_AD
 
 ## Flag Registry
 
-Feature flags are central-project **script properties** (`PropertiesService`), read at runtime, **default OFF**, and **fail closed** (absent / unparseable → treated as OFF). They gate the recovery stack so it can ship dark and be enabled only for a controlled validation pass. Set a value to `true` (string) to enable; delete or set anything else to disable.
+Feature flags are central-project **script properties** (`PropertiesService`), read at runtime, **default OFF**, and **fail closed** (absent / unparseable → treated as OFF). Recovery flags gate behavior changes; the performance flag gates privacy-safe observability only. Set a value to `true` (string) to enable; delete or set anything else to disable.
 
 | Flag | Default | Status | Gates | Behavior when OFF |
 | --- | --- | --- | --- | --- |
 | `CENTRAL_AUTO_ADOPT` | OFF | OFF-confirm + ON-auto runtime-validated; restored OFF | Automatic adoption of one MEDIUM/name-only candidate | Detection remains unconditional; HIGH relinks; MEDIUM requires confirmation; no silent create. |
 | `CENTRAL_RECOVERY_ACTIONS` | OFF | Implemented, **validated end-to-end (2026-06-11)** | Optional Reconnect action on general recovery pages | General recovery pages are display-only; required MEDIUM-candidate confirmation remains available. |
 | `CENTRAL_ADMIN_REPAIR` | OFF | Implemented, **validated end-to-end (2026-07-02)** — executed clear + audit + reprovision | 6E.1 admin Inspect + Clear Mapping (`adminInspectUser`, `adminClearMapping`) | Admin repair endpoints return disabled / no-op; no mapping writes. |
+| `PERFORMANCE_TIMING_ENABLED` | OFF | Implemented; isolated first/repeat planner runtime validated 2026-07-20; restored OFF | Privacy-safe stage timing for instrumented operations; initially planner manual/save/direct flows | No timing envelope or log; no workbook, Activity, or property writes. |
 
 **Healthy-path validation note (2026-06-09):** the central dashboard was loaded with `CENTRAL_RECOVERY_ACTIONS=true` + `CENTRAL_ADMIN_REPAIR=true` + `CENTRAL_AUTO_ADOPT=false`. The existing workbook resolved correctly, no recovery page triggered, no regression. Admin Diagnostics loaded with the Repair Toolkit visible; Inspect User, mapping preview, reverse-index visibility, and the confirm-before-clear UI all rendered.
 
@@ -675,12 +676,16 @@ Per-flag detail:
   - **Purpose:** expose the admin Repair Toolkit — read-only Inspect User + a guarded, audited Clear Mapping (mapping store + reverse index only).
   - **Risk:** **Medium** — Inspect is read-only and admin-gated; Clear Mapping is a guarded write to the mapping store only (**no Drive writes, no file deletion**), but clearing the wrong user's mapping would force a re-provision/recovery on their next visit. **Validated end-to-end (2026-07-02):** an executed clear removed the mapping + reverse index, wrote the audit entry, and the next load reprovisioned.
   - **Recommended usage:** validated for the executed-clear path; keep OFF in steady state and only run an actual Clear Mapping against a disposable test user.
+- **`PERFORMANCE_TIMING_ENABLED`**
+  - **Purpose:** emit one structured, privacy-safe duration envelope for each instrumented operation so bottlenecks can be proved before optimization. Initial coverage is planner manual refresh, background save refresh, and direct planner execution.
+  - **Risk:** **Low** — observational only and never writes workbook/Activity data. The flag is project-wide, so an enabled Central window can log timings from any deployment/user executing an instrumented path; payloads deliberately contain no identity or financial content.
+  - **Recommended usage:** validated on isolated Central `@115` and optimized `@116`; enable briefly for disposable-account timing passes, capture first-run and repeat evidence, then restore OFF. The original baseline was 81.455 s / 77.275 s. After retiring unused History charts, `@116` measured 42.378 s / 43.946 s; Dashboard formatting and snapshot construction remain dominant. Contract and procedure: `PERFORMANCE_OBSERVABILITY.md`.
 
 Notes:
 
 - These are **independent** of `CENTRAL_MODE` (which selects central vs bound) and of the existing `FAMILY_BETA_ALLOWLIST` / `ADMIN_EMAILS` properties.
 - The **Recovery Page (6D.1)** itself is **not** flag-gated. `CENTRAL_RECOVERY_ACTIONS` controls the optional reconnect button on general recovery pages; the explicit MEDIUM/name-only confirmation action remains available because it is the safe alternative to silent creation.
-- All three recovery flags are **OFF in steady state**. Every P0 decision branch has disposable-account runtime evidence; read-only Orphan detection is a separate P1 follow-up.
+- All three recovery flags and `PERFORMANCE_TIMING_ENABLED` are **OFF in steady state**. Every P0 recovery decision branch and the planner timing first-run/repeat scenario have disposable-account runtime evidence; performance optimization and read-only Orphan detection remain separate follow-ups.
 
 ## Recovery Validation Inventory
 

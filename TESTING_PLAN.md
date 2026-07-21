@@ -35,6 +35,16 @@ Run both tracks after every change, however small.
 
 If either track fails, the change is not ready to ship — fix, then re-run both tracks.
 
+### Flag-gated performance timing
+
+For performance investigations, use the reusable contract in `PERFORMANCE_OBSERVABILITY.md`. Enable `PERFORMANCE_TIMING_ENABLED=true` only for a short isolated test window, run first-refresh and immediate-repeat cases against a disposable Central-created workbook, capture the `[PERF]` / `[CashCompass performance]` envelopes, verify they contain no identity/workbook/financial values, and restore the flag OFF. Performance timing never authorizes testing against the owner/bounded workbook.
+
+For the History-chart retirement validation, also confirm that `OUT - History`
+still appends or deduplicates its planner row, contains zero embedded chart objects
+after the run, and continues to feed weekly/prior-period dashboard comparisons.
+The timing envelope must report `cleanup_history_charts`, not
+`build_history_charts`.
+
 ---
 
 ## Why this matters

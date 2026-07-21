@@ -3,7 +3,9 @@
   "private": true,
   "scripts": {
     "build:rolling-dashboard": "vite build --config vite.rolling-dashboard.config.ts && node scripts/emitRollingDashboardBundleHtml.mjs",
-    "test:dashboard-ux": "node scripts/checkDashboardUxRegressions.mjs"
+    "test": "npm run test:dashboard-ux && npm run test:performance-timing",
+    "test:dashboard-ux": "node scripts/checkDashboardUxRegressions.mjs",
+    "test:performance-timing": "node scripts/checkPerformanceTimingRegressions.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

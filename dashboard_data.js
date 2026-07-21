@@ -22,19 +22,46 @@ function runPlannerAndRefreshDashboard() {
     throw new Error('runDebtPlanner() is not available.');
   }
 
-  // No options arg: default emailMode === 'send'. Manual button users
-  // explicitly asked for an email so we honor that immediately.
-  runDebtPlanner();
-  touchDashboardSourceUpdated_('planner');
+  var performanceTrace = typeof startPerformanceTrace_ === 'function'
+    ? startPerformanceTrace_('planner.manual_refresh')
+    : null;
 
-  const snapshot = buildDashboardSnapshot_();
-  saveDashboardBaselineSnapshot_(snapshot);
+  try {
+    // Manual button users explicitly asked for an email, so preserve the
+    // default send behavior while threading the optional trace through the
+    // planner. The trace object never contains workbook or financial data.
+    runDebtPlanner({ emailMode: 'send', performanceTrace: performanceTrace });
+    touchDashboardSourceUpdated_('planner');
+    if (typeof markPerformanceTrace_ === 'function') {
+      markPerformanceTrace_(performanceTrace, 'touch_source');
+    }
 
-  return {
-    ok: true,
-    message: 'Plan refreshed — your outlook is updated',
-    snapshot: snapshot
-  };
+    const snapshot = buildDashboardSnapshot_();
+    if (typeof markPerformanceTrace_ === 'function') {
+      markPerformanceTrace_(performanceTrace, 'build_snapshot');
+    }
+    saveDashboardBaselineSnapshot_(snapshot);
+    if (typeof markPerformanceTrace_ === 'function') {
+      markPerformanceTrace_(performanceTrace, 'save_baseline');
+    }
+
+    return {
+      ok: true,
+      message: 'Plan refreshed — your outlook is updated',
+      snapshot: snapshot,
+      performance: typeof finishPerformanceTrace_ === 'function'
+        ? finishPerformanceTrace_(performanceTrace, { outcome: 'ok' })
+        : null
+    };
+  } catch (err) {
+    if (typeof finishPerformanceTrace_ === 'function') {
+      finishPerformanceTrace_(performanceTrace, {
+        outcome: 'error',
+        failedStage: 'planner_or_snapshot'
+      });
+    }
+    throw err;
+  }
 }
 
 /**
@@ -56,17 +83,43 @@ function runPlannerAndRefreshDashboardFromSave() {
     throw new Error('runDebtPlanner() is not available.');
   }
 
-  runDebtPlanner({ emailMode: 'defer' });
-  touchDashboardSourceUpdated_('planner');
+  var performanceTrace = typeof startPerformanceTrace_ === 'function'
+    ? startPerformanceTrace_('planner.save_refresh')
+    : null;
 
-  const snapshot = buildDashboardSnapshot_();
-  saveDashboardBaselineSnapshot_(snapshot);
+  try {
+    runDebtPlanner({ emailMode: 'defer', performanceTrace: performanceTrace });
+    touchDashboardSourceUpdated_('planner');
+    if (typeof markPerformanceTrace_ === 'function') {
+      markPerformanceTrace_(performanceTrace, 'touch_source');
+    }
 
-  return {
-    ok: true,
-    message: 'Plan refreshed — your outlook is updated',
-    snapshot: snapshot
-  };
+    const snapshot = buildDashboardSnapshot_();
+    if (typeof markPerformanceTrace_ === 'function') {
+      markPerformanceTrace_(performanceTrace, 'build_snapshot');
+    }
+    saveDashboardBaselineSnapshot_(snapshot);
+    if (typeof markPerformanceTrace_ === 'function') {
+      markPerformanceTrace_(performanceTrace, 'save_baseline');
+    }
+
+    return {
+      ok: true,
+      message: 'Plan refreshed — your outlook is updated',
+      snapshot: snapshot,
+      performance: typeof finishPerformanceTrace_ === 'function'
+        ? finishPerformanceTrace_(performanceTrace, { outcome: 'ok' })
+        : null
+    };
+  } catch (err) {
+    if (typeof finishPerformanceTrace_ === 'function') {
+      finishPerformanceTrace_(performanceTrace, {
+        outcome: 'error',
+        failedStage: 'planner_or_snapshot'
+      });
+    }
+    throw err;
+  }
 }
 
 function buildDashboardSnapshot_() {

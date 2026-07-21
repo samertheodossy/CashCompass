@@ -1,4 +1,4 @@
-function writeRecommendations_(ss, summary) {
+function writeRecommendations_(ss, summary, performanceTrace) {
   let sheet;
 
   try {
@@ -176,8 +176,17 @@ function writeRecommendations_(ss, summary) {
   });
 
   sheet.getRange(1, 1, normalizedRows.length, width).setValues(normalizedRows);
+  if (typeof markPerformanceTrace_ === 'function') {
+    markPerformanceTrace_(performanceTrace, 'write_dashboard_data');
+  }
   formatRecommendationsSheet_(sheet, normalizedRows);
+  if (typeof markPerformanceTrace_ === 'function') {
+    markPerformanceTrace_(performanceTrace, 'format_dashboard');
+  }
   writeDashboardChartDataAndBuildCharts_(ss, sheet, summary);
+  if (typeof markPerformanceTrace_ === 'function') {
+    markPerformanceTrace_(performanceTrace, 'build_dashboard_charts');
+  }
 }
 
 function removeAllCharts_(sheet) {
@@ -299,9 +308,8 @@ function writeDashboardSnapshotTables_(dashboardSheet, summary, startCol) {
 // for the Credit Card chart), the specific stale chart is removed and
 // a replacement is inserted.
 //
-// Only Dashboard charts use these helpers. buildHistoryCharts_ still
-// uses removeAllCharts_(historySheet) and is intentionally unchanged
-// in this pass.
+// Only Dashboard charts use these helpers. History-sheet charts are legacy
+// output and are no longer rebuilt by the planner; see appendHistory_().
 // --------------------------------------------------------------------------
 
 function findDashboardChartByTitle_(sheet, title) {
@@ -441,6 +449,12 @@ function buildDashboardCreditCardPaydownChart_(sheet, startCol, posRow) {
   sheet.insertChart(chart);
 }
 
+/**
+ * @deprecated Rollback-only during the History-chart removal release window.
+ * Normal planner runs intentionally do not call this function. OUT - History
+ * rows remain the source for dashboard comparisons; only its sheet charts are
+ * retired.
+ */
 function buildHistoryCharts_(ss) {
   const historySheet = ensureHistorySheet_(ss);
   removeAllCharts_(historySheet);
@@ -901,7 +915,7 @@ function formatHistorySheet_(sheet, headerCount) {
   sheet.autoResizeColumns(1, headerCount);
 }
 
-function appendHistory_(ss, summary) {
+function appendHistory_(ss, summary, performanceTrace) {
   const sheet = ensureHistorySheet_(ss);
 
   const newRow = [
@@ -939,7 +953,18 @@ function appendHistory_(ss, summary) {
     sheet.getRange(2, 17, lastRow - 1, 5).setNumberFormat('$#,##0.00;-$#,##0.00');
   }
 
-  buildHistoryCharts_(ss);
+  if (typeof markPerformanceTrace_ === 'function') {
+    markPerformanceTrace_(performanceTrace, 'write_history');
+  }
+
+  // OUT - History rows feed dashboard comparisons, but its six embedded charts
+  // are not displayed anywhere in the product. Remove legacy copies and do not
+  // rebuild them. On later runs getCharts() returns an empty array, leaving only
+  // a small cleanup check instead of repeated chart insertion work.
+  removeAllCharts_(sheet);
+  if (typeof markPerformanceTrace_ === 'function') {
+    markPerformanceTrace_(performanceTrace, 'cleanup_history_charts');
+  }
 }
 
 function isDuplicateHistoryRow_(sheet, newRow) {

@@ -988,6 +988,9 @@ function runPlannerNow() {
   google.script.run
     .withSuccessHandler(function(res) {
       try {
+        if (res && res.performance && window.console && typeof window.console.info === 'function') {
+          window.console.info('[CashCompass performance]', res.performance);
+        }
         if (res && res.snapshot) {
           applySnapshot(res.snapshot);
           const refreshedTime = formatRefreshedTime_(res.snapshot.refreshedAt);

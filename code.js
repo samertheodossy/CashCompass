@@ -77,6 +77,28 @@ function showQuickAddPaymentSidebar() {
  */
 function runDebtPlanner(options) {
   options = options || {};
+  var ownsPerformanceTrace = !Object.prototype.hasOwnProperty.call(options, 'performanceTrace');
+  var performanceTrace = ownsPerformanceTrace && typeof startPerformanceTrace_ === 'function'
+    ? startPerformanceTrace_('planner.run')
+    : (options.performanceTrace || null);
+
+  try {
+    return runDebtPlannerCore_(options, performanceTrace, ownsPerformanceTrace);
+  } catch (err) {
+    // Dashboard wrappers own and finish their shared end-to-end trace. A
+    // direct/menu/editor planner run owns its local trace and records a safe
+    // error outcome here before preserving the original exception.
+    if (ownsPerformanceTrace && typeof finishPerformanceTrace_ === 'function') {
+      finishPerformanceTrace_(performanceTrace, {
+        outcome: 'error',
+        failedStage: 'planner'
+      });
+    }
+    throw err;
+  }
+}
+
+function runDebtPlannerCore_(options, performanceTrace, ownsPerformanceTrace) {
   const ss = getUserSpreadsheet_();
   const today = new Date();
   const tz = Session.getScriptTimeZone();
@@ -90,6 +112,9 @@ function runDebtPlanner(options) {
   runDebtPlannerSyncSafely_(syncAllHouseAssetsFromLatestCurrentYear_);
   runDebtPlannerSyncSafely_(syncAllAccountsFromLatestCurrentYear_);
   runDebtPlannerSyncSafely_(syncAllAssetsFromLatestCurrentYear_);
+  if (typeof markPerformanceTrace_ === 'function') {
+    markPerformanceTrace_(performanceTrace, 'sync_inputs');
+  }
 
   const currentYear = today.getFullYear();
 
@@ -128,6 +153,9 @@ function runDebtPlanner(options) {
   const houseAssetRows = runDebtPlannerReadSafely_(function() {
     return readSheetAsObjects_(ss, 'HOUSE_ASSETS');
   });
+  if (typeof markPerformanceTrace_ === 'function') {
+    markPerformanceTrace_(performanceTrace, 'read_inputs');
+  }
 
   const payNowWindowDays = 7;
   const paySoonWindowDays = 30;
@@ -194,6 +222,9 @@ function runDebtPlanner(options) {
   // sheet. When the planner could not load the sheet (blank workbook),
   // cashFlowRaw is null and the helper reads on its own as before.
   const overdueBillsForEmail = getBillsDueFromCashFlowForDashboard(cashFlowRaw).overdue || [];
+  if (typeof markPerformanceTrace_ === 'function') {
+    markPerformanceTrace_(performanceTrace, 'build_payment_windows');
+  }
 
   const warnings = [];
   const notes = [];
@@ -444,9 +475,21 @@ function runDebtPlanner(options) {
     netWorth: netWorth
   };
 
-  appendHistory_(ss, summary);
-  writeRecommendations_(ss, summary);
+  if (typeof markPerformanceTrace_ === 'function') {
+    markPerformanceTrace_(performanceTrace, 'calculate_plan');
+  }
+  appendHistory_(ss, summary, performanceTrace);
+  writeRecommendations_(ss, summary, performanceTrace);
   sendPlannerEmailIfConfigured_(summary, options);
+  if (typeof markPerformanceTrace_ === 'function') {
+    markPerformanceTrace_(performanceTrace, 'email');
+  }
+
+  return {
+    performance: ownsPerformanceTrace && typeof finishPerformanceTrace_ === 'function'
+      ? finishPerformanceTrace_(performanceTrace, { outcome: 'ok' })
+      : null
+  };
 }
 
 // Returns true if `err` is the specific "sheet not found" error surfaced by

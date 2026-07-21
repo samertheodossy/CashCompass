@@ -135,6 +135,18 @@ Once a milestone has started, **finish it before beginning another.**
 
 **Why:** duplicated build/format logic is the exact drift that produced the Cash Flow "10pt row" fidelity bug — the harness had re-implemented part of `ensureCashFlowYearSheet_` and missed a step. Reusing extracted production code makes such drift structurally impossible. See `TEST_HARNESS_ARCHITECTURE.md §3.1` (scenario model + execution levels) and `REGRESSION_SUITE_PLAN.md`.
 
+### 14. Performance Observability
+
+- Measure before optimizing. Record end-to-end and stage timings on representative blank, populated, and scale fixtures.
+- Reuse `performance_timing.js`; do not create one-off timer/log formats inside feature modules.
+- Timing must remain privacy-safe: operational names and durations only—never identity, workbook IDs, financial values, account/payee names, transaction content, email addresses, or raw exception messages.
+- Detailed runtime timing is gated by `PERFORMANCE_TIMING_ENABLED`, literal `true` only, default OFF and fail-closed.
+- Timing code must not write to a workbook, Activity Log, or persistent property store, and must not change the success/failure semantics of the measured operation.
+- Stage names are report contracts. Keep them stable or update documentation and regression checks deliberately.
+- Optimize the dominant measured stage first; rerun the same fixture and preserve correctness evidence before accepting an improvement.
+
+Canonical contract and operating procedure: `PERFORMANCE_OBSERVABILITY.md`.
+
 ---
 
 ## Cash Flow Data Semantics — Actuals vs Projection

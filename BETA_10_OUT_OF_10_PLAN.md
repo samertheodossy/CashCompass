@@ -95,7 +95,7 @@ The 7.5/10 baseline above is an honest product-review judgment, not a backfilled
 
 ### Gate D — Performance
 
-The first P1 task is to instrument representative flows and ratify budgets. Proposed starting budgets:
+The reusable, flag-gated timing foundation is implemented in `performance_timing.js` (`PERFORMANCE_OBSERVABILITY.md`). Isolated planner timing passed on Central `@115`: first/repeat server time was **81.455 s / 77.275 s**, with 82.2% of the repeat in dashboard formatting, snapshot construction, and History/Dashboard chart rebuilding. The first optimization passed on isolated Central `@116`: preserving History rows while retiring their six unused embedded charts reduced the repeat History stage from **11.507 s to 0.165 s** and total repeat server time to **43.946 s**. Performance hardening remains beta-critical; more samples and the remaining hotspots are still required. P1 should extend the same contract to representative flows and ratify budgets. Proposed starting budgets:
 
 | Flow | Proposed p50 | Proposed p95 |
 | --- | ---: | ---: |

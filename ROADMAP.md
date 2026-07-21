@@ -22,7 +22,7 @@
 
 - **Current engineering milestone:** **Remaining Validator Phase 2 scope** (P1).
 - **Next product-model milestone:** **House Financial Accuracy** (P2).
-- **Measured follow-up:** Financial Plan refresh succeeded but took 143 seconds on the blank/fresh fixture; investigate under P3 Performance without reopening the completed P0 functional-feedback work.
+- **Measured follow-up:** Financial Plan refresh succeeded but took 143 seconds on the blank/fresh fixture. Reusable privacy-safe stage instrumentation is now source-ready behind `PERFORMANCE_TIMING_ENABLED`; isolated first-run/repeat timing evidence and optimization remain under P3 Performance without reopening the completed P0 functional-feedback work.
 - **Release policy:** CashCompass is **quality-gated, not date-gated**. A small supervised cohort may validate work during P1–P3, but a broad Beta Release Candidate must satisfy `BETA_10_OUT_OF_10_PLAN.md`: score ≥95/100, no dimension below 9/10, no unresolved Severity 1 or Severity 2 defect, and every non-negotiable release gate passing.
 
 ---
@@ -62,7 +62,7 @@ The next **product-model** milestone (after Validator Phase 2, before the broad 
 ### Priority 3 — Performance, finished-feeling UX, and scalability
 
 - Beta-critical performance and experience pass before broad release: provisioning + dashboard/planner latency, bulk-API and caching passes, long-running-action feedback, terminology/loading consistency, responsive/accessibility review, and measured scale toward more users/workbooks.
-- **Financial Plan refresh latency** — isolated blank/fresh `@114` completed correctly but took **143 seconds**. Profile server/planner stages, identify dominant calls, establish a representative baseline, and optimize without weakening refresh correctness or email safeguards.
+- **Financial Plan refresh latency** — isolated blank/fresh `@114` completed correctly but took **143 seconds**. Central `@115` profiling measured **81.455 s first / 77.275 s repeat**. The first optimization passed on isolated `@116`: History rows and their dashboard consumers remained correct while six unused embedded History charts were retired; the repeat History stage fell from **11.507 s to 0.165 s** and total repeat server time reached **43.946 s**. Next address Dashboard formatting (**18.303 s on the `@116` repeat**), snapshot construction (**11.783 s**), and Dashboard charts (**4.848 s**), then collect enough samples to ratify the release percentile.
 - **10/10 Beta Release Candidate gate** — after P1 evidence, P2 financial truth, and P3 experience/performance work, run the exact candidate through the full scorecard and release gates in `BETA_10_OUT_OF_10_PLAN.md`. A supervised cohort may run earlier; broad or monetized beta does not.
 
 ### Priority 4 — Future features

@@ -399,6 +399,22 @@ assertion and records it on the Release Readiness **Performance** line (§3.1).
 - `PERF-100-BILLS`, `PERF-1000-ACTIVITY-ROWS` (guards REG-007, the ~51s→~5.6s Bills
   Due regression), `PERF-LARGE-DONATIONS`, `PERF-LARGE-INVESTMENT-HISTORY`,
   `PERF-MULTIPLE-HOUSES`, `PERF-LARGE-DASHBOARD`.
+- `PERF-PLANNER-STAGES` — with `PERFORMANCE_TIMING_ENABLED=true`, execute first-run
+  and repeat manual planner refreshes on a disposable workbook; assert one
+  privacy-safe timing envelope per run, stable stage names, non-negative stage
+  durations, no user/workbook/financial values, and total time within the ratified
+  planner budget. With the flag unset/OFF, assert no timing envelope or log.
+  **Baseline evidence (2026-07-20, isolated Central `@115`):** instrumentation and
+  privacy assertions PASS; first/repeat totals were 81.455 s / 77.275 s, so the
+  proposed ≤60-second p95 release budget does not yet pass. Flag restored OFF and
+  disposable workbook returned to Trash.
+  **History-chart retirement follow-up — PASS on isolated Central `@116`
+  (2026-07-20):** History rows still appended,
+  deduplicate as before, existing `OUT - History` chart objects are removed, no
+  chart objects are rebuilt, History-backed dashboard comparisons remain valid,
+  and the trace uses `cleanup_history_charts`. First/repeat cleanup was
+  0.650 s / 0.165 s and total server time was 42.378 s / 43.946 s. Timing was
+  restored OFF and the disposable workbook returned to Trash.
 - **Assertion:** Validator PASS **and** execution under an agreed threshold (per
   operation; recorded, trend-tracked).
 
