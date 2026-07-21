@@ -29,7 +29,7 @@ Runnable foundation: Bills Regression, Recovery Regression, Quick Add Reliabilit
 
 Required deeper evidence: First-Run UX E2E, Populated Dashboard E2E, Recovery Live, Performance Planner, and Bills Pay E2E. A suite is not considered implemented merely because its name is registered: it must invoke the real scoped workflow or an approved explicit-workbook seam and make functional assertions.
 
-Current runtime status (2026-07-21): First-Run UX E2E is implemented as authenticated external browser evidence. Its original contract passed 8/8 on isolated Central `@128`, including Restricted sharing and verified Trash cleanup. A customer-language review added a ninth whole-interface assertion and bumped the evidence key to V2, intentionally making the historical PASS ineligible until the isolated suite is rerun. Release Readiness refuses to treat the browser suite as an empty server scenario. Populated Dashboard E2E and Recovery Live remain missing and continue to force NOT READY.
+Current runtime status (2026-07-21): First-Run UX E2E is implemented as authenticated external browser evidence. V2 run `FR-9c57ac53-0250-4ebb-a57a-cddec545356b` passed 9/9 on isolated Central `@129` in 85.864 s, including the whole-interface customer-language gate, Restricted owner-only sharing, real Refresh behavior, clean console/navigation, and verified Trash cleanup. Its privacy-safe V2 evidence is saved and no active fixture remains. Release Readiness refuses to treat the browser suite as an empty server scenario. Populated Dashboard E2E and Recovery Live remain missing and continue to force NOT READY.
 
 ## Bounded execution
 

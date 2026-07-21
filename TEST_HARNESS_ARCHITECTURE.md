@@ -6,8 +6,8 @@ workbooks and asks the read-only **Validator** to confirm nothing broke.*
 **Status:** **Foundation V1 implemented; populated-fixture hardening passed isolated
 Central runtime validation on `@117`, Performance Planner plus Bills Pay E2E
 passed isolated Central `@120`, and dedicated Workbook Health passed isolated
-Central `@122`, and First-Run UX E2E passed the authenticated browser runner at
-isolated Central `@128` (2026-07-21).** `test_harness_core.js`, scenario/data modules, and
+Central `@122`, and First-Run UX E2E V2 passed the authenticated browser runner at
+isolated Central `@129` (2026-07-21).** `test_harness_core.js`, scenario/data modules, and
 `test_harness_report.js` provide the guard + disposable-workbook lifecycle +
 `assertDisposableTarget_` + smoke/regression scenarios + report shaping. The new
 `SMOKE-POPULATED-FIXTURE` scenario verifies Restricted sharing before any seed
@@ -22,25 +22,22 @@ selected from the dynamic registry with a Keep/Trash disposition, backed by the 
 the harness's own disposable workbook). Five foundation suites are runtime-proven.
 The current P1 slice adds explicit-disposable-workbook Performance Planner and
 Bills Pay E2E scenarios plus bounded Release Readiness orchestration. The source is
-pushed to Central and only the isolated validation deployment is at `@128`; Beta
+pushed to Central and only the isolated validation deployment is at `@129`; Beta
 remains `@106`.
 First-Run UX E2E now runs in the shipping dashboard as the hard-coded non-admin
 disposable account, saves privacy-safe external evidence, and requires exact verified
 Trash cleanup. Populated Dashboard E2E and Recovery Live remain registered fail-closed
 as NOT IMPLEMENTED; the final bounded Release Readiness verdict remains pending.
 
-**`@128` First-Run browser evidence:** run
-`FR-3fcd3587-7547-4e3d-92a9-2011f3bff7f0` passed the original 8/8 assertions in 97.267 s:
+**`@129` First-Run browser evidence:** V2 run
+`FR-9c57ac53-0250-4ebb-a57a-cddec545356b` passed 9/9 assertions in 85.864 s:
 Welcome routing, Setup copy, guidance, default subtabs, empty Bank/Debt gating,
-Help wording, real Refresh state, and clean console/navigation. Sharing was
-Restricted owner-only and cleanup was Drive-verified. The route never accepts a
-workbook ID and is available only to `cashcompass2026@gmail.com` when it is
-allow-listed, non-admin, and in Central mode.
-
-The current V2 evidence contract adds a ninth `customer_language` assertion that
-scans the visible Overview, primary workspaces, Bank, and Help surfaces for internal
-workbook prefixes and raw technical errors. The evidence key is V2, so the historical
-8/8 PASS cannot satisfy Release Readiness until this expanded contract is rerun.
+Help wording, whole-interface customer language, real Refresh state, and clean
+console/navigation. Sharing was Restricted owner-only, cleanup was Drive-verified,
+and persisted runner state reported `active: null`. The route never accepts a workbook
+ID and is available only to `cashcompass2026@gmail.com` when it is allow-listed,
+non-admin, and in Central mode. The V2 evidence key prevents the historical 8/8 result
+from substituting for this expanded contract.
 
 **`@122` Workbook Health evidence:** `SUITE-WORKBOOK-HEALTH` reused the proven
 Restricted populated fixture and passed 1/1 scenario, 9/9 functional assertions,
