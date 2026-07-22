@@ -78,6 +78,11 @@ The next **product-model** milestone (after Validator Phase 2, before the broad 
 
 ## House Financial Accuracy *(Priority 2 — High)*
 
+**Execution plan:** `HOUSE_FINANCIAL_ACCURACY_PLAN.md` — ratified additive direction,
+schema/Golden parity, implementation slices, regression matrix, bounded validation,
+and rollback boundaries. Implementation is intentionally deferred to the next work
+session; begin with its read-only Slice A audit.
+
 Sequenced **immediately after Validator Phase 2 and before major new user features.**
 
 > **This is a financial-model improvement, not a UI enhancement.**

@@ -34,6 +34,8 @@ The older "V1.2 work queue" candidates are retained below under `## V1.2 polish 
 
 **The current at-a-glance priority stack now lives in its own document: `ROADMAP.md`** (created 2026-07-12, after the Validator-driven Golden/Canonical convergence milestone closed). `ROADMAP.md` is the authoritative **priority and sequence** view: P0 is complete; non-performance P1 Release Readiness engineering is complete; P2 **House Financial Accuracy** is active; P3 experience/performance follows; and the exact-candidate Performance/final-verdict gate returns before broad Beta. The roadmap carries the full House Financial Accuracy spec.
 
+**House Financial Accuracy execution plan:** `HOUSE_FINANCIAL_ACCURACY_PLAN.md` records the approved additive direction: append `Linked Property` as the final `INPUT - Debts` column; align Golden, fresh, and safely evolved legacy workbooks; preserve the current operating result; add actual selected-year loan payments and after-financing net cash flow; and validate in disposable workbooks before an explicitly approved bounded comparison. Implementation is deferred to the next work session and starts with a read-only audit.
+
 The `## Product Maturity Stages` section below remains the detailed **Stage 1–6** roadmap (per-item effort, dependencies, history, Beta Gate). `ROADMAP.md` and the Stage model describe the same work — where they conflict on **ordering**, `ROADMAP.md` reflects the latest intent. Follow **Milestone Discipline** (`ENGINEERING_STANDARDS.md → §11`): finish the current milestone before starting the next.
 
 ---
