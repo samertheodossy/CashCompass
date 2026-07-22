@@ -154,6 +154,14 @@ function getHarnessSuites_() {
       ]
     },
     {
+      id: 'SUITE-FINANCIAL-INTEGRITY-CANONICAL',
+      label: 'Financial Integrity Canonical Snapshot',
+      description: 'Validate the approved active-owned-position read model, source/mirror freshness, and fail-closed property financing on a Restricted disposable workbook.',
+      scenarioIds: [
+        'REGRESSION-FINANCIAL-INTEGRITY-CANONICAL'
+      ]
+    },
+    {
       id: 'SUITE-FIRST-RUN-UX-E2E',
       label: 'First-Run UX E2E',
       description: 'Browser-driven fresh Central provisioning, Setup, navigation, gating, Help, real Refresh state, clean-console checks, and verified Trash cleanup.',

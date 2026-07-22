@@ -4,7 +4,7 @@
 
 **Created:** 2026-07-20
 
-**Current baseline:** 7.5/10 controlled-family-beta product
+**Last formal baseline:** 7.5/10 controlled-family-beta product (2026-07-20; not yet rescored after subsequent improvements)
 **Target:** A 10/10 Beta Release Candidate whose trust, operations, and product architecture make later monetization an incremental launch step rather than a rescue project.
 
 ## 1. Strategic decision
@@ -150,7 +150,7 @@ The beta does not need to charge immediately, but it must avoid architecture and
 
 ## 5. Quality-first delivery map
 
-### Phase 1 — Repeatable proof foundation (current P1)
+### Phase 1 — Repeatable proof foundation (P1 foundation complete; final candidate gate parked)
 
 **Objective:** Make every important claim reproducible without touching a real household workbook.
 
@@ -167,11 +167,11 @@ The beta does not need to charge immediately, but it must avoid architecture and
 
 **Objective:** Make the core financial promise defensible before broader release.
 
-1. Declare the canonical financial basis.
-2. Reconcile Planner, Dashboard, Rolling Debt, assets, liabilities, and sheets to $0.01.
-3. Complete House Financial Accuracy with one shared operating/financing model.
-4. Add Asset, Planner, Dashboard, and property reconciliation diagnostics.
-5. Add regression scenarios for every corrected discrepancy.
+1. **Decision/read-model slice runtime-proven:** Option A was approved 2026-07-22; the pure canonical snapshot and registered disposable regression passed isolated Central `@147` run `20260722-133952-4f0a` 21/21 with Provisioning/Drift/Restricted/Trash PASS. Consumer convergence remains separately gated under `FINANCIAL_INTEGRITY_PHASE_3_PLAN.md`.
+2. **Open:** Reconcile Planner, Dashboard, Rolling Debt, assets, liabilities, and sheets to $0.01.
+3. **Complete:** House Financial Accuracy V1 with explicit operating and financing sources; commit `96d0ebe`, isolated Central `@145` run `20260722-124210-bc23` PASS 27/27.
+4. **Open except property V1:** Add Asset, Planner, Dashboard, and remaining cross-surface reconciliation diagnostics.
+5. **Ongoing requirement:** Add regression scenarios for every corrected discrepancy.
 
 **Exit:** All release-critical financial surfaces agree and explain why.
 
@@ -216,7 +216,7 @@ The ordered implementation inventory for this experience work is `TODO.md → UX
 
 ### Planning horizon, not a deadline
 
-Current repository estimates imply roughly **33–73 focused engineering days** for full P1 (15–35), P2 (10–21), and beta-critical P3 (8–17), before allowing for cohort observation, external review, Apps Script authorization/runtime delays, defect rework, and final release evidence. Some cohort learning and monetization-foundation design can overlap safely, but the hard gates cannot be skipped to recover a date.
+With the P1 evidence foundation and House Financial Accuracy V1 now complete, the remaining repository plan implies roughly **15–32 focused engineering days** before the supervised-cohort observation window: Financial Integrity Phase 3 (**5–10 days planning estimate**), beta-critical P3 UX/performance (**8–17 days**), and exact-candidate evidence/finalization (**2–5 days**). Add roughly **1–2 calendar weeks** for meaningful supervised cohort observation, plus any defect rework, Google authorization/runtime delays, external review, and release documentation. These are planning estimates, not promises; the quality gates control release.
 
 This range is for capacity planning only. The release decision is based on evidence, not elapsed time.
 
@@ -277,6 +277,6 @@ This is the slower path to first revenue and the faster path to durable trust, r
 
 Metrics must be defined before instrumentation and must avoid copying transaction descriptions, balances, account names, or other private financial content into analytics. The purpose is to measure product outcomes and operating health, not observe household finances.
 
-## 8. Immediate next decision
+## 8. Immediate next gate
 
-Validator modules, the required bounded server inventory, all non-performance E2E/live packs, and the single-console Release Readiness controls are runtime-proven through isolated Central `@141`. The bounded run's saved state contains Workbook Health plus 13/13 server PASS results and remains `IN_PROGRESS`. Separate exact-candidate evidence records for First-Run UX, Populated Dashboard, and Recovery Live are PASS; finalization is the step that refreshes those browser records into the bounded run. Performance is intentionally parked: seven historical pairs are diagnostic only because the campaign began before `@141`, so p50/p95 budgets remain unratified. The next active product-model work is House Financial Accuracy under the approved sequencing exception. Before broad Beta, restart the complete percentile campaign on the exact release candidate, ratify the performance ProductDecision, finalize Release Readiness, and run the full 10/10 scorecard.
+Validator modules, the required bounded server inventory, all non-performance E2E/live packs, and the single-console Release Readiness controls are runtime-proven. House Financial Accuracy V1 is committed as `96d0ebe`; exact isolated Central `@145` run `20260722-124210-bc23` passed 27/27 assertions with Restricted sharing and verified Trash cleanup. Option A is approved, and its pure canonical snapshot plus registered disposable regression passed corrected isolated Central `@147` run `20260722-133952-4f0a` 21/21 with Provisioning/Drift/Restricted/Trash PASS. The immediate gate is separate approval for `$0.01` consumer convergence and audit modules. Then execute the ordered P3 UX/performance work. Performance remains intentionally parked until the final candidate: restart the complete percentile campaign, ratify p50/p95 budgets, finalize Release Readiness, complete supervised cohort proof, and run the full 10/10 scorecard before broad Beta.

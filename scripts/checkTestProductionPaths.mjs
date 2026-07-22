@@ -30,6 +30,11 @@ const requiredProductionPaths = {
     'ensureDebtsLinkedPropertyColumn_', 'buildCashFlowYearSheet_',
     'insertCashFlowRow_', 'getPropertyPerformanceDataForSpreadsheet_'
   ],
+  'test_harness_scenarios_financial_integrity.js': [
+    'ensureOnboardingBankAccountsSheetFromDashboard', 'ensureInputInvestmentsSheet_',
+    'ensureInputHouseValuesSheet_', 'ensureOnboardingDebtsSheetFromDashboard',
+    'readCanonicalFinancialSnapshot_(ctx.ss)'
+  ],
   'test_harness_data.js': [
     'ensureInputSettingsSheet_', 'insertNewBankAccountHistoryRow_',
     'insertNewInvestmentHistoryRow_', 'insertNewHouseHistoryRow_',
@@ -82,7 +87,8 @@ const directWriteAllowlist = new Set([
   'test_harness_data.js',                 // deterministic fixture setup only
   'test_harness_scenarios_bills.js',      // explicit Bills fixtures for engine/schema cases
   'test_harness_scenarios_quick_add.js',  // deliberate late-edit state simulation
-  'test_harness_scenarios_house_financial_accuracy.js' // deliberate retired-schema fixture
+  'test_harness_scenarios_house_financial_accuracy.js', // deliberate retired-schema fixture
+  'test_harness_scenarios_financial_integrity.js' // deterministic Active/mirror discrepancy fixture
 ]);
 const entries = await readdir(root, { withFileTypes: true });
 const candidateNames = entries

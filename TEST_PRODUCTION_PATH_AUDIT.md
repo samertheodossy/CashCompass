@@ -29,6 +29,7 @@ canonical workbook for a write.
 | Recovery Live | Real candidate discovery, confirmation, self-reconnect, mapping/reverse-index, stale/Trash routing, and ambiguity paths | Exact-name, caller-owned candidate creation plus browser orchestration |
 | Workbook Health | Real aggregate read-only validator modules | Representative fixture setup |
 | House Financial Accuracy | Real production Debts creation/styling, `ensureDebtsLinkedPropertyColumn_`, Cash Flow row writers, and Property Performance calculation | The final column is removed only inside the disposable fixture to recreate the retired schema before migration |
+| Financial Integrity canonical snapshot | Real production financial sheet creators/year-row helpers plus `readCanonicalFinancialSnapshot_(ctx.ss)` | Synthetic Active states, source/mirror rows, one stale-mirror value, and one linked-vs-legacy mismatch needed to prove the approved read-only contract |
 
 ## Reviewed direct-write exceptions
 
@@ -44,6 +45,11 @@ canonical workbook for a write.
   `Linked Property` column from a production-styled disposable Debts sheet to
   recreate the retired schema, then proves migration, presentation, and actual
   Cash Flow financing reconciliation through production helpers.
+- `test_harness_scenarios_financial_integrity.js`: creates deterministic active,
+  blank-Active, inactive, linked, and unlinked rows only after re-verifying the
+  disposable target; it then deliberately changes one mirror value and one
+  legacy property-loan value to prove the production canonical reader detects
+  both discrepancies without repairing them.
 
 `scripts/checkTestProductionPaths.mjs` enforces this inventory. A new test file
 with direct workbook writes fails the local regression suite until its design is

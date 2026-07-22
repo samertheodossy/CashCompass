@@ -11,7 +11,7 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current stage — Stage 3: Beta Readiness
 
-**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the prior capability-oriented estimate; the new quality score baseline is **7.5/10** from the 2026-07-20 two-track validation. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, the non-performance P1 Release Readiness engineering, and House Financial Accuracy V1 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** Current ordering authority is `ROADMAP.md`: **P3 finished-feeling UX/performance → exact-candidate Performance and final Release Readiness verdict → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
+**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the prior capability-oriented estimate; the last formal quality score remains **7.5/10** from the 2026-07-20 two-track validation and has not yet been rescored. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, the non-performance P1 Release Readiness engineering, and House Financial Accuracy V1 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** House Financial Accuracy V1 is committed as `96d0ebe` and exact isolated `@145` evidence passed 27/27. Current ordering authority is `ROADMAP.md`: **Financial Integrity Phase 3 → P3 finished-feeling UX/performance → exact-candidate Performance and final Release Readiness verdict → supervised cohort proof → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
 
 `ROADMAP.md` is authoritative for **priority and sequence**. The `## Product Maturity Stages` section below supplies detailed stages, tasks, dependencies, testing inventory, and history; `PROJECT_CONTEXT.md` is authoritative for current technical status. The older `## Launch Readiness Roadmap` (Phase 1–7) is retained further below as historical phase expansion; where it conflicts with current ordering, `ROADMAP.md` wins.
 
@@ -32,7 +32,7 @@ The older "V1.2 work queue" candidates are retained below under `## V1.2 polish 
 
 ## Priority-Ranked Roadmap (P0–P4) → see `ROADMAP.md`
 
-**The current at-a-glance priority stack now lives in its own document: `ROADMAP.md`** (created 2026-07-12, after the Validator-driven Golden/Canonical convergence milestone closed). `ROADMAP.md` is the authoritative **priority and sequence** view: P0 is complete; non-performance P1 Release Readiness engineering is complete; P2 **House Financial Accuracy V1** is complete; P3 experience/performance is next; and the exact-candidate Performance/final-verdict gate returns before broad Beta. The roadmap carries the full House Financial Accuracy spec.
+**The current at-a-glance priority stack now lives in its own document: `ROADMAP.md`** (created 2026-07-12, after the Validator-driven Golden/Canonical convergence milestone closed). `ROADMAP.md` is the authoritative **priority and sequence** view: P0 is complete; non-performance P1 Release Readiness engineering is complete; P2 **House Financial Accuracy V1** is complete; **Financial Integrity Phase 3 is the active remaining financial-truth gate**; P3 experience/performance follows; and the exact-candidate Performance/final-verdict gate returns before broad Beta. The roadmap carries the full House Financial Accuracy spec.
 
 **House Financial Accuracy execution plan:** `HOUSE_FINANCIAL_ACCURACY_PLAN.md` records the completed V1 additive direction: append `Linked Property` as the final `INPUT - Debts` column; preserve the operating result internally; add actual selected-year loan payments and after-financing net cash flow; and fail closed on ambiguous matches. The isolated suite and user-approved backed-up bounded comparison passed. Canonical fresh/evolved behavior is implemented; manual Golden workbook alignment remains separately approval-gated and was not run.
 
@@ -95,7 +95,7 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
-| Choose canonical financial basis (declare the authoritative model) | P0 | Audit Framework ✓ | L |
+| ✅ Runtime-validate approved canonical snapshot — isolated Central `@147` run `20260722-133952-4f0a` passed 21/21 plus Provisioning/Drift/Restricted/Trash; consumer convergence remains separately gated (`FINANCIAL_INTEGRITY_PHASE_3_PLAN.md`) | P0 | Audit Framework ✓ | Complete |
 | Planner / Dashboard / Rolling Debt convergence to within $0.01 | P0 | Canonical basis | L–XL |
 | Asset audit module (`runAssetAudit`) | P1 | Framework ✓ | M |
 | Planner audit module (`runPlannerAudit`) | P1 | Framework ✓ | M |

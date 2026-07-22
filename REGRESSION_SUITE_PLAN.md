@@ -8,8 +8,9 @@ Harness **Foundation V1** is working (`test_harness_*.js` + the Validation &
 Testing console). Implemented coverage includes `SMOKE-PROVISION-DONATION`, ten
 Bills recurrence/integration scenarios, `REGRESSION-RECOVERY-DUPLICATE-GUARD`,
 `REGRESSION-QUICK-ADD-WRITE-GUARD`, and the isolated-runtime-validated
-`SMOKE-POPULATED-FIXTURE`, `PERFORMANCE-PLANNER-FIRST-REPEAT`, and
-`E2E-BILLS-DUE-PAY`. Seven on-demand suites are runtime-proven: Bills Regression,
+`SMOKE-POPULATED-FIXTURE`, `PERFORMANCE-PLANNER-FIRST-REPEAT`,
+`E2E-BILLS-DUE-PAY`, and the locally implemented
+`REGRESSION-FINANCIAL-INTEGRITY-CANONICAL`. Seven on-demand suites are runtime-proven: Bills Regression,
 Recovery Regression, Quick Add Reliability, Representative Populated Fixture,
 Central Safety Regression, Performance Planner, and Bills Pay E2E. Scenarios
 declare an **`executionLevel`** (`PURE` / `INTEGRATION` / `E2E`) so a tester
@@ -56,6 +57,7 @@ an automatically repeatable guard.
 | Restricted sharing + safe Trash `@117` | Sharing gate before seed, 9/9 assertions, Drive Trash read-back | `SUITE-POPULATED-FIXTURE`; `SUITE-CENTRAL-SAFETY` | Add negative tests for anyone/domain permissions and protected-workbook refusal under Level 17 Security/Safety. |
 | Planner timing `@115`, History-chart retirement `@116`, and automated `@120` run | Static `npm run test:performance-timing`; explicit disposable-workbook planner integration | `SUITE-PERFORMANCE-PLANNER` runtime PASS: 4/4, 32.779 s first / 31.901 s repeat, History retained, zero charts, email suppressed, Restricted/CURRENT/Provisioning/Drift/Trash PASS | Ratify p50/p95 budgets from enough samples; one passing sample is not percentile evidence. |
 | Bills Due → Pay | Bills recurrence and Cash Flow linkage automated | `SUITE-BILLS-REGRESSION`; `SUITE-BILLS-PAY-E2E` runtime PASS at `@120`: explicit disposable-ss Quick Add → Cash Flow → Activity → handled-marker dedupe, 3/3, Provisioning/Drift/Trash PASS | Synthetic regression does not replace separately required natural cohort evidence. |
+| Financial Integrity Option A | Pure inclusion/summary checks plus full in-memory snapshot pass locally; guarded workbook scenario registered | `SUITE-FINANCIAL-INTEGRITY-CANONICAL` runtime PASS at isolated `@147` (`20260722-133952-4f0a`): 21/21, Provisioning/Drift/Restricted/Trash PASS | Retain as the prerequisite regression and rerun after each Dashboard/Planner/Rolling consumer-convergence slice. |
 
 ### Safe run grouping
 
