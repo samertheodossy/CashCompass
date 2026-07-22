@@ -44,7 +44,7 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
   ```
 
   KeepCentral / ProductDecision / IgnoreNoise are recorded and deferred, not "fixed." See `ENGINEERING_STANDARDS.md → Milestone discipline` and `VALIDATOR_ARCHITECTURE.md → §1a Recommendation engine`.
-- **Next milestones:** Complete Financial Integrity Phase 3 first: the Option A canonical snapshot and disposable regression are runtime-proven, so separately approve and execute `$0.01` consumer convergence, Asset/Planner/Dashboard audit modules, and Release Readiness wiring. Then execute P3 `UX-01`–`UX-10` plus focused hotspot optimization. Before broad Beta, restart the full Performance campaign on the exact candidate, ratify p50/p95 budgets, finalize bounded Release Readiness, complete a supervised cohort observation window, and run the 10/10 scorecard. Broad or monetized beta waits for the exact candidate to pass `BETA_10_OUT_OF_10_PLAN.md`.
+- **Next milestones:** Complete Financial Integrity Phase 3 first: the Option A snapshot and shared Planner/Rolling convergence are runtime-proven through isolated Central `@148` run `20260722-140739-190f` (27/27). Checkpoint that slice, then execute Dashboard convergence, Asset/Planner/Dashboard audit modules, and Release Readiness wiring. After that, execute P3 `UX-01`–`UX-10` plus focused hotspot optimization. Before broad Beta, restart the full Performance campaign on the exact candidate, ratify p50/p95 budgets, finalize bounded Release Readiness, complete a supervised cohort observation window, and run the 10/10 scorecard. Broad or monetized beta waits for the exact candidate to pass `BETA_10_OUT_OF_10_PLAN.md`.
 - **Future:** External beta readiness / hardening, family-beta expansion + user-lifecycle handling, Chat Assistant, Paid Product framework.
 
 Roadmap: `## Launch Readiness Roadmap (high-level)` below (detail in `TODO.md → Launch Readiness Roadmap`). Live architecture: `## Current architecture — Central App (live)` below. Workbook recovery summary: `## Workbook Identity & Recovery (live + roadmap)` below.
@@ -139,7 +139,7 @@ Central App operational and runtime-validated — per-user provisioning, workboo
 
 Read-only, admin-gated **Audit Framework** + **Debt Audit** + **shared debt Active helper (Phase 2)** + the **`NOT_INITIALIZED`** state are shipped. The framework observes calc-basis differences neutrally; the convergence work (declaring a canonical basis and reconciling to it) is the remaining Beta-Gate item.
 
-- Canonical financial basis — Option A approved 2026-07-22; pure explicit-spreadsheet snapshot and registered disposable regression passed isolated Central `@147` run `20260722-133952-4f0a` 21/21 with Provisioning/Drift/Restricted/Trash PASS; no consumer calculation is switched (`FINANCIAL_INTEGRITY_PHASE_3_PLAN.md`)
+- Canonical financial basis — Option A snapshot and shared Central/bounded Planner liability/net-worth plus Rolling live-debt slice passed isolated Central `@148` run `20260722-140739-190f` 27/27 with Provisioning/Drift/Restricted/Trash PASS; Dashboard and audit consumers are not switched (`FINANCIAL_INTEGRITY_PHASE_3_PLAN.md`)
 - Planner / Dashboard / Rolling Debt convergence to $0.01
 - Asset audit · Planner audit · Dashboard audit modules
 

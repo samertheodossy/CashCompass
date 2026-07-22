@@ -65,6 +65,25 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
 
       SpreadsheetApp.flush();
       ctx.canonicalBaseline = readCanonicalFinancialSnapshot_(ctx.ss);
+      var normalizedDebts = normalizeDebts_(
+        readSheetAsObjects_(ctx.ss, 'DEBTS'), getAliasMap_());
+      ctx.plannerLiabilityBasis =
+        canonicalLiabilitySummaryFromNormalizedDebts_(normalizedDebts);
+      ctx.rollingDebtBasis = canonicalRollingDebtBasis_(
+        normalizedDebts,
+        [{
+          code: 'PLANNED_CARD_FUNDED_MAPPED',
+          label: 'Synthetic mapped card scenario',
+          amount: 250
+        }],
+        canonicalLiveNormalizedDebts_(normalizedDebts).map(function(debt) {
+          var clone = JSON.parse(JSON.stringify(debt));
+          if (clone.name === 'Harness Blank Active Card') {
+            clone.balance = round2_(clone.balance + 250);
+          }
+          return clone;
+        })
+      );
 
       // Create two deliberate post-baseline discrepancies. They prove the seam
       // observes stale mirrors and linked-vs-legacy financing without repairing.
@@ -137,6 +156,22 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
         harnessFiHasIssue_(diverged, 'PROPERTY_FINANCING_MISMATCH'), true, { module: moduleName });
       ctx.assert.equals('Read-only divergence does not alter canonical liabilities',
         diverged.totals.totalLiabilities, 180000, { module: moduleName });
+      ctx.assert.equals('Planner liability basis equals canonical liabilities',
+        ctx.plannerLiabilityBasis.totalLiabilities,
+        baseline.totals.totalLiabilities, { module: moduleName });
+      ctx.assert.equals('Planner liability basis excludes inactive linked debt',
+        ctx.plannerLiabilityBasis.loans, 175000, { module: moduleName });
+      ctx.assert.equals('Rolling live anchor equals canonical liabilities',
+        ctx.rollingDebtBasis.canonicalLiveDebt,
+        baseline.totals.totalLiabilities, { module: moduleName });
+      ctx.assert.equals('Rolling scenario adjustment remains separate',
+        ctx.rollingDebtBasis.scenarioAdjustmentTotal, 250,
+        { module: moduleName });
+      ctx.assert.equals('Rolling modeled start is live plus scenario adjustment',
+        ctx.rollingDebtBasis.modeledStartingDebt, 180250,
+        { module: moduleName });
+      ctx.assert.equals('Rolling debt basis reconciles',
+        ctx.rollingDebtBasis.reconciles, true, { module: moduleName });
     }
   };
 }

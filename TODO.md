@@ -96,7 +96,7 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
 | ✅ Runtime-validate approved canonical snapshot — isolated Central `@147` run `20260722-133952-4f0a` passed 21/21 plus Provisioning/Drift/Restricted/Trash; consumer convergence remains separately gated (`FINANCIAL_INTEGRITY_PHASE_3_PLAN.md`) | P0 | Audit Framework ✓ | Complete |
-| Planner / Dashboard / Rolling Debt convergence to within $0.01 | P0 | Canonical basis | L–XL |
+| ✅ Planner / Rolling Debt convergence to within $0.01 — shared Central/bounded implementation passed isolated `@148` run `20260722-140739-190f` 27/27. Dashboard remains separate. | P0 | Canonical basis ✓ | Complete |
 | Asset audit module (`runAssetAudit`) | P1 | Framework ✓ | M |
 | Planner audit module (`runPlannerAudit`) | P1 | Framework ✓ | M |
 | Dashboard audit module (`runDashboardAudit`) | P1 | Framework ✓ | M |

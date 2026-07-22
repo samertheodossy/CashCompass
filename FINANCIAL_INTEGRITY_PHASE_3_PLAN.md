@@ -1,6 +1,6 @@
 # Financial Integrity Phase 3 — Canonical Basis and Convergence Plan
 
-**Status:** `IMPLEMENTATION_IN_PROGRESS` — canonical snapshot and isolated regression evidence complete; consumer convergence awaits separate approval
+**Status:** `IMPLEMENTATION_IN_PROGRESS` — canonical snapshot and Planner/Rolling convergence runtime-proven; Dashboard/audit convergence remains
 **Inventory completed:** 2026-07-22
 **ProductDecision approved:** 2026-07-22
 **Tolerance:** `$0.01`
@@ -124,7 +124,7 @@ Only the first participates in cross-surface `$0.01` reconciliation.
 
 1. **Complete locally:** add pure/read-only canonical row inclusion helpers and `readCanonicalFinancialSnapshot_(ss)`; no UI or consumer-calculation changes.
 2. **Complete with isolated runtime evidence:** regressions for active, inactive-with-balance, blank-Active legacy, summary-row exclusion, property linked/unlinked/mismatch, and mirror freshness passed 21/21 on isolated Central `@147` (`20260722-133952-4f0a`) with CURRENT/FULLY_CURRENT schema, Provisioning and Drift PASS, Restricted sharing, and verified Trash cleanup.
-3. Converge Planner liability/net worth and Rolling live anchor first; retain separately labeled scenario adjustments.
+3. **Complete with isolated runtime evidence:** Planner liability/net worth and Rolling live anchor use the shared canonical active-debt helpers; Rolling retains its backward-compatible modeled-start field and separately publishes canonical live debt plus itemized scenario adjustments. Isolated Central `@148` run `20260722-140739-190f` passed the expanded suite 27/27 with CURRENT/FULLY_CURRENT schema, Provisioning/Drift/Restricted/Trash PASS.
 4. Converge Dashboard and historical snapshot writes on the same canonical read model.
 5. Add Asset, Planner, and Dashboard audit modules plus property-financing reconciliation.
 6. Add disposable populated-workbook cross-surface tests at `$0.01`; never use the bounded workbook.
@@ -152,4 +152,6 @@ Each step receives its own review, tests, and approval gates. Existing populated
 
 **Engineer slice 1: `COMPLETE` with isolated evidence.** The approved pure/read-only snapshot and registered disposable regression are implemented without switching Dashboard, Planner, Rolling Debt, History, or any UI consumer. Local static, in-memory numeric, safety, production-path, and full `npm test` checks pass. Corrected isolated Central `@147` run `20260722-133952-4f0a` passed all 21 functional assertions plus Provisioning, Drift, Restricted sharing, and verified Trash cleanup. The earlier `@146` fixture-only failure ran no functional assertions and also verified Restricted sharing and Trash cleanup.
 
-**Next gate:** separate implementation approval before any Planner, Dashboard, Rolling Debt, History, audit-module, or other consumer calculation changes. Commit, Git push, workbook migration, Beta/bounded deployment, and bounded-workbook testing remain unauthorized.
+**Engineer slice 2: `COMPLETE` with isolated evidence.** Planner and Rolling now share one Central/bounded canonical live-debt selector. Planner liabilities/net worth exclude explicitly inactive debts. Rolling begins from the same live set, publishes `canonical_live_debt`, keeps scenario adjustments separate, and preserves the existing `starting_total_debt` modeled-start contract for UI compatibility. No UI, schema, workbook-write, environment-specific branch, or new mandatory full-workbook read was added. Full local `npm test` passes, including pure numeric and production call-site regressions. Isolated Central `@148` suite run `20260722-140739-be5f` / scenario `20260722-140739-190f` passed 27/27 in 114.136 s with zero Provisioning/Drift warnings, Restricted owner-only sharing, and verified Trash cleanup.
+
+**Next gate:** separately approve committing/Git-pushing the runtime-proven slice, then plan and approve Dashboard convergence plus Asset/Planner/Dashboard audit modules. Workbook migration, Beta/bounded deployment, and bounded-workbook testing remain unauthorized.

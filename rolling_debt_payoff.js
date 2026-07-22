@@ -2930,7 +2930,12 @@ function getRollingDebtPayoffPlan(options) {
   const aliasMap = getAliasMap_();
   const debtRows = readSheetAsObjects_(ss, 'DEBTS');
   const accountRows = readSheetAsObjects_(ss, 'ACCOUNTS');
-  const debts = normalizeDebts_(debtRows, aliasMap);
+  const normalizedDebts = normalizeDebts_(debtRows, aliasMap);
+  // Financial Integrity Option A, shared by Central and bounded: Rolling's
+  // live anchor and simulator both begin with canonical live debts. Inactive
+  // rows stay preserved on-sheet; blank Active remains active through the
+  // existing normalizeDebts_ compatibility rule.
+  const debts = canonicalLiveNormalizedDebts_(normalizedDebts);
   const accounts = normalizeAccounts_(accountRows);
   const liquidTotal = round2_(
     accounts.reduce(function(s, a) {
@@ -3108,6 +3113,20 @@ function getRollingDebtPayoffPlan(options) {
     (stableMatchSucceeded && Math.abs(fwdStable) < 0.005);
 
   const plannedExpenseModel = buildRollingPlannedExpenseImpactModel_(anchorDate, tz, debts, aliasMap);
+  const rollingDebtBasis = canonicalRollingDebtBasis_(
+    debts,
+    [{
+      code: 'PLANNED_CARD_FUNDED_MAPPED',
+      label: 'Mapped near-term card-funded planned expenses',
+      amount: plannedExpenseModel.near_term_card_funded_mapped_total
+    }],
+    plannedExpenseModel.debts_for_sim
+  );
+  if (!rollingDebtBasis.reconciles) {
+    keyWarnings.push(
+      'Debt basis: modeled starting debt does not reconcile to canonical live debt plus scenario adjustments.'
+    );
+  }
   if (plannedExpenseModel.has_mid_term) {
     keyWarnings.push(
       'Upcoming planned expenses (due within 90 days after anchor month-end) may reduce available cash in future months.'
@@ -3453,6 +3472,15 @@ function getRollingDebtPayoffPlan(options) {
     unmapped_card_funded_cash_risk: plannedExpenseModel.unmapped_card_funded_cash_risk_total,
     near_term_card_funded_mapped_total: plannedExpenseModel.near_term_card_funded_mapped_total,
     reserve_target: ROLLING_DP_RESERVE_DEFAULT_,
+    canonical_live_debt: rollingDebtBasis.canonicalLiveDebt,
+    scenario_debt_adjustments: rollingDebtBasis.scenarioAdjustments,
+    scenario_debt_adjustment_total: rollingDebtBasis.scenarioAdjustmentTotal,
+    modeled_starting_debt: rollingDebtBasis.modeledStartingDebt,
+    debt_basis_reconciliation_delta: rollingDebtBasis.reconciliationDelta,
+    debt_basis_reconciles: rollingDebtBasis.reconciles,
+    // Backward-compatible field retained for existing UI consumers. It keeps
+    // the simulator's modeled start; canonical_live_debt is the cross-surface
+    // live anchor and scenario adjustments are published separately above.
     starting_total_debt: sim.debtStart,
     projected_total_debt_84m: endingDebt84,
     projected_debt_reduction_84m: projectedDebtReduction84,
@@ -3465,6 +3493,7 @@ function getRollingDebtPayoffPlan(options) {
     key_warnings: keyWarnings,
     this_month_plan: thisMonthPlan,
     this_month_execution_plan: thisMonthExecutionPlan,
+    debt_basis: rollingDebtBasis,
     planned_expense_impact: {
       near_term_cash_reserved: plannedExpenseModel.near_term_cash_total,
       unmapped_card_funded_cash_risk: plannedExpenseModel.unmapped_card_funded_cash_risk_total,

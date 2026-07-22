@@ -12,6 +12,8 @@ const files = Object.fromEntries(await Promise.all([
   'test_harness_scenarios_financial_integrity.js',
   'test_harness_suites.js',
   'financial_integrity_canonical.js',
+  'code.js',
+  'rolling_debt_payoff.js',
   'bank_accounts.js',
   'investments.js',
   'house_values.js',
@@ -186,6 +188,34 @@ assert.equal(fakeSnapshot.mirrors.cash.matches, true,
   'Full canonical snapshot must accept a matching source/mirror pair');
 assert.ok(fakeSnapshot.blockingIssues.some((issue) => issue.code === 'UNLINKED_PROPERTY_FINANCING'),
   'Full canonical snapshot must fail closed on unlinked non-zero property financing');
+const normalizedConsumerDebts = [
+  { name: 'Active Loan', originalName: 'Active Loan', type: 'Loan', balance: 100, active: true },
+  { name: 'Blank Active Card', originalName: 'Blank Active Card', type: 'Credit Card', balance: 50, active: true },
+  { name: 'Inactive Loan', originalName: 'Inactive Loan', type: 'Loan', balance: 900, active: false },
+  { name: 'TOTAL DEBT', originalName: 'TOTAL DEBT', type: '', balance: 1050, active: true }
+];
+const consumerLiabilities = canonicalCtx.canonicalLiabilitySummaryFromNormalizedDebts_(
+  normalizedConsumerDebts);
+assert.equal(consumerLiabilities.totalLiabilities, 150,
+  'Planner consumer basis must exclude inactive and summary debts');
+assert.equal(consumerLiabilities.loans, 100,
+  'Planner consumer breakdown must include only the active loan');
+const rollingBasis = canonicalCtx.canonicalRollingDebtBasis_(
+  normalizedConsumerDebts,
+  [{ code: 'PLANNED_CARD_FUNDED_MAPPED', amount: 25 }],
+  [
+    { name: 'Active Loan', originalName: 'Active Loan', type: 'Loan', balance: 100, active: true },
+    { name: 'Blank Active Card', originalName: 'Blank Active Card', type: 'Credit Card', balance: 75, active: true }
+  ]
+);
+assert.equal(rollingBasis.canonicalLiveDebt, 150,
+  'Rolling canonical live anchor must equal active-only liabilities');
+assert.equal(rollingBasis.scenarioAdjustmentTotal, 25,
+  'Rolling scenario adjustment must remain separately itemized');
+assert.equal(rollingBasis.modeledStartingDebt, 175,
+  'Rolling modeled start must include the separate scenario adjustment');
+assert.equal(rollingBasis.reconciles, true,
+  'Rolling modeled start must reconcile to live debt plus scenario adjustments');
 const canonicalScenario = files['test_harness_scenarios_financial_integrity.js'];
 assert.match(canonicalScenario, /requiresTrashCleanup:\s*true/,
   'Financial Integrity regression must always verify Trash cleanup');
@@ -198,6 +228,18 @@ assert.match(canonicalScenario,
   'Financial Integrity fixture must create both the bank input ledger and SYS account mirror');
 assert.ok((canonicalScenario.match(/ctx\.assertWritable\(\);/g) || []).length >= 18,
   'Financial Integrity scenario must continuously re-verify its disposable target before writes');
+assert.match(files['code.js'],
+  /const normalizedDebts = normalizeDebts_\(debtRows, aliasMap\);[\s\S]*?const debts = canonicalLiveNormalizedDebts_\(normalizedDebts\);[\s\S]*?canonicalLiabilitySummaryFromNormalizedDebts_\(debts\)/,
+  'Planner must consume the shared canonical active-only liability basis');
+assert.match(files['rolling_debt_payoff.js'],
+  /const normalizedDebts = normalizeDebts_\(debtRows, aliasMap\);[\s\S]*?const debts = canonicalLiveNormalizedDebts_\(normalizedDebts\);/,
+  'Rolling must start from the shared canonical active-only debt collection');
+assert.match(files['rolling_debt_payoff.js'],
+  /canonical_live_debt:[\s\S]*?scenario_debt_adjustments:[\s\S]*?modeled_starting_debt:/,
+  'Rolling must publish live debt separately from scenario-adjusted modeled debt');
+assert.doesNotMatch(files['code.js'] + files['rolling_debt_payoff.js'],
+  /readCanonicalFinancialSnapshot_\s*\(/,
+  'Shared Planner/Rolling path must not add a mandatory full-workbook snapshot read');
 const houseAccuracyScenario = files['test_harness_scenarios_house_financial_accuracy.js'];
 assert.match(houseAccuracyScenario,
   /insertCashFlowRow_\([\s\S]*?'Harness Ambiguous Loan'[\s\S]*?insertRowAfter\(ambiguousPaymentRowA\)/,

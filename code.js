@@ -174,7 +174,12 @@ function runDebtPlannerCore_(options, performanceTrace, ownsPerformanceTrace) {
   const nextMonthHeader = getNextMonthHeader_(today, tz);
   const aliasMap = getAliasMap_();
 
-  const debts = normalizeDebts_(debtRows, aliasMap);
+  const normalizedDebts = normalizeDebts_(debtRows, aliasMap);
+  // Financial Integrity Option A, shared by Central and bounded: current
+  // Planner calculations operate on canonical live debts only. Explicitly
+  // inactive rows remain preserved on INPUT - Debts but cannot enter current
+  // liabilities or net worth. Blank Active stays active via normalizeDebts_.
+  const debts = canonicalLiveNormalizedDebts_(normalizedDebts);
   const accounts = normalizeAccounts_(accountRows);
   const assets = normalizeAssets_(assetRows);
   const houseAssets = normalizeHouseAssets_(houseAssetRows);
@@ -184,7 +189,7 @@ function runDebtPlannerCore_(options, performanceTrace, ownsPerformanceTrace) {
   const usableCash = calculateUsableCash_(accounts);
   const assetSummary = calculateAssetSummary_(assets);
   const houseAssetSummary = calculateHouseAssetSummary_(houseAssets);
-  const liabilitySummary = calculateLiabilitySummary_(debts);
+  const liabilitySummary = canonicalLiabilitySummaryFromNormalizedDebts_(debts);
 
   const totalCashBalance = round2_(accounts.reduce(function(sum, a) { return sum + a.currentBalance; }, 0));
   const totalAssets = round2_(totalCashBalance + assetSummary.totalAssets + houseAssetSummary.totalRealEstateValue);

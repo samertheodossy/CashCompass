@@ -63,7 +63,7 @@ The roadmap identifies Financial Integrity Phase 3 as the remaining financial-tr
 | Read-only basis inventory | Phase 3 plan → §§3–4 | `COMPLETE` locally; uncommitted | Reviewed source map for Dashboard, Planner, Rolling Debt, history, and mirrors |
 | Canonical-basis ProductDecision | Phase 3 plan → §§5–6 | `COMPLETE` | Option A approved 2026-07-22 with fail-closed unlinked-property handling |
 | Canonical snapshot + regression | Phase 3 plan → §7 steps 1–2 | `COMPLETE` with isolated runtime evidence | Pure explicit-spreadsheet read model plus isolated Central `@147` run `20260722-133952-4f0a`: 21/21, Provisioning/Drift/Restricted/Trash PASS |
-| Cross-surface convergence | `TODO.md` → Financial Integrity | `PLANNED` | Disposable `$0.01` regression evidence |
+| Cross-surface convergence | `TODO.md` → Financial Integrity | Planner/Rolling slice `COMPLETE` with isolated evidence; Dashboard remains | Shared Central/bounded helpers plus isolated `@148` run `20260722-140739-190f` 27/27 |
 | Audit modules | `TODO.md` → Financial Integrity | `PLANNED` | Asset, Planner, and Dashboard modules enabled and passing |
 | Release wiring | `RELEASE_READINESS.md` | `PLANNED` | Exact-candidate aggregate gate evidence |
 
@@ -71,7 +71,7 @@ The roadmap identifies Financial Integrity Phase 3 as the remaining financial-tr
 
 | Document | Relationship | Status or decision needed |
 | --- | --- | --- |
-| [`FINANCIAL_INTEGRITY_PHASE_3_PLAN.md`](../../FINANCIAL_INTEGRITY_PHASE_3_PLAN.md) | Inventory and approved contract | Option A snapshot slice and isolated runtime evidence complete; consumer convergence pending separate approval |
+| [`FINANCIAL_INTEGRITY_PHASE_3_PLAN.md`](../../FINANCIAL_INTEGRITY_PHASE_3_PLAN.md) | Inventory and approved contract | Option A snapshot and Planner/Rolling evidence complete; Dashboard/audit convergence remains |
 | [`HOUSE_FINANCIAL_ACCURACY_PLAN.md`](../../HOUSE_FINANCIAL_ACCURACY_PLAN.md) | Introduced property-linked financing inputs and actual loan-payment reporting | V1 complete; Phase 3 must reconcile loan balances, not rework payment reporting |
 | [`ENGINEERING_STANDARDS.md`](../../ENGINEERING_STANDARDS.md) | Regression-first, milestone discipline, and workbook safety | Governing rules |
 | [`BETA_10_OUT_OF_10_PLAN.md`](../../BETA_10_OUT_OF_10_PLAN.md) | Financial-truth exit gate | Must pass before broad Beta |
@@ -91,7 +91,7 @@ The roadmap identifies Financial Integrity Phase 3 as the remaining financial-tr
 - Upstream dependencies: Financial Integrity framework and Debt Audit; House Financial Accuracy V1; disposable harness and validation console.
 - Downstream initiatives: P3 UX/performance, final Release Readiness, supervised cohort, and broad Beta.
 - Required ordering: inventory → ProductDecision → canonical read model + regressions → surface convergence → audit modules → release wiring.
-- Parallel work allowed: read-only documentation and test-design work consistent with the approved contract; consumer convergence remains separately gated.
+- Parallel work allowed: read-only documentation and test-design work consistent with the approved contract; each additional consumer/audit slice remains separately gated.
 
 ## 9. Risks, Blockers, and Source Conflicts
 
@@ -101,13 +101,13 @@ The roadmap identifies Financial Integrity Phase 3 as the remaining financial-tr
 - Planner/Rolling and Dashboard liabilities can differ today when inactive debt carries a balance.
 - Property loan references and linked debts can disagree without a current gate.
 - Dashboard mirrors can lag authoritative source ledgers.
-- The ProductDecision, read-model slice, and isolated runtime evidence are complete; consumer convergence remains behind a separate approval gate.
+- The ProductDecision, read model, snapshot evidence, and shared Planner/Rolling convergence evidence are complete. Dashboard and audit convergence remain separately gated.
 
 ### Source conflicts
 
 | Conflict | Sources | Governing interpretation | Follow-up |
 | --- | --- | --- | --- |
-| Current debt basis | Dashboard active-only vs Planner/Rolling all normalized debt | Approved Option A makes active non-summary debt rows canonical; report the current difference as FI-01 until consumers converge | Runtime-validate the read model, then separately approve consumer convergence |
+| Current debt basis | Dashboard active-only vs prior Planner/Rolling all normalized debt | Approved Option A makes active non-summary debt rows canonical; isolated `@148` proves the shared Planner/Rolling basis | Preserve this regression while converging Dashboard and audits |
 | Active semantics | Asset/property stop-tracking code preserves balances and gross totals; debt Dashboard excludes inactive rows | Approved Option A excludes explicitly inactive rows from the current position while retaining history | Adopt the implemented shared inclusion rule only through separately reviewed consumer slices |
 
 ## 10. Completion Criteria
@@ -125,9 +125,9 @@ The roadmap identifies Financial Integrity Phase 3 as the remaining financial-tr
 
 ## 11. Recommended Next Task
 
-- Task: Obtain separate implementation approval for the first consumer-convergence slice, beginning with Planner liabilities/net worth and Rolling's canonical live-debt anchor while keeping scenario adjustments separate.
-- Why this task: the pure read model is now runtime-proven, but no production consumer has adopted it yet.
-- Required role flow: Planner (`COMPLETE`) → Engineer slice 1 (`COMPLETE`) → Reviewer/Tester/Validator (`PASS`) → next Engineer approval gate.
+- Task: Obtain separate commit/Git-push approval for the proven Planner/Rolling slice, then plan the Dashboard and audit-module convergence slice.
+- Why this task: the shared consumer slice is runtime-proven; the remaining Financial Integrity work is Dashboard/source convergence and release-gating audits.
+- Required role flow: Planner (`COMPLETE`) → Engineer slices 1–2 (`COMPLETE`) → Reviewer/Tester/Validator (`PASS`) → next Planner/Engineer approval gate.
 - Approval gates: runtime consumer-calculation implementation, commit, push, Central push/version/deployment, and any workbook migration remain separate explicit approvals.
 
 ## 12. Maintenance

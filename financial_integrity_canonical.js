@@ -2,8 +2,9 @@
  * Financial Integrity Phase 3 — approved canonical current-position read model.
  *
  * This file is deliberately additive and read-only. It does not synchronize
- * mirrors, write History, update Dashboard/Planner/Rolling payloads, or mutate a
- * workbook. Production consumers are not wired to this seam in the first slice.
+ * mirrors or mutate a workbook. Planner and Rolling may consume the pure
+ * normalized-debt helpers below; the full snapshot remains an explicit,
+ * read-only diagnostic seam.
  *
  * Approved contract (2026-07-22):
  *   - explicitly inactive rows are excluded; blank/missing Active stays active;
@@ -16,6 +17,7 @@
  */
 
 var CANONICAL_FINANCIAL_SNAPSHOT_VERSION_ = 1;
+var CANONICAL_FINANCIAL_TOLERANCE_USD_ = 0.01;
 var CANONICAL_FINANCIAL_BASIS_ =
   'ACTIVE_OWNED_POSITION_LINKED_DEBT_AUTHORITY';
 var CANONICAL_FINANCIAL_STATUS_ = {
@@ -69,6 +71,85 @@ function canonicalFinancialSumIncluded_(rows, valueField) {
     if (!row || !row.included) return sum;
     return sum + toNumber_(row[valueField]);
   }, 0));
+}
+
+/**
+ * Shared Central/bounded current-position selector for already-normalized debt
+ * objects. normalizeDebts_ owns legacy Active interpretation; this helper owns
+ * active-only inclusion and defensively removes summary rows. It is pure and
+ * introduces no workbook read, write, schema, or environment-specific path.
+ */
+function canonicalLiveNormalizedDebts_(debts) {
+  return (debts || []).filter(function(debt) {
+    if (!debt || debt.active === false) return false;
+    return !canonicalSummaryRow_(
+      'debts', debt.originalName || debt.name || '');
+  });
+}
+
+/** Shared active-only liability total and type breakdown for Planner. */
+function canonicalLiabilitySummaryFromNormalizedDebts_(debts) {
+  var summary = {
+    totalLiabilities: 0,
+    creditCards: 0,
+    loans: 0,
+    heloc: 0,
+    other: 0
+  };
+
+  canonicalLiveNormalizedDebts_(debts).forEach(function(debt) {
+    var balance = round2_(toNumber_(debt.balance));
+    var type = String(debt.type || '').trim();
+    summary.totalLiabilities += balance;
+    if (type === 'Credit Card') summary.creditCards += balance;
+    else if (type === 'Loan') summary.loans += balance;
+    else if (type === 'HELOC') summary.heloc += balance;
+    else summary.other += balance;
+  });
+
+  Object.keys(summary).forEach(function(key) {
+    summary[key] = round2_(summary[key]);
+  });
+  return summary;
+}
+
+/**
+ * Shared Rolling debt basis. The live anchor and scenario adjustments remain
+ * separate while modeledDebts verifies the simulator start reconciles.
+ */
+function canonicalRollingDebtBasis_(debts, scenarioAdjustments, modeledDebts) {
+  var live = canonicalLiabilitySummaryFromNormalizedDebts_(debts)
+    .totalLiabilities;
+  var adjustments = (scenarioAdjustments || []).map(function(adjustment) {
+    return {
+      code: String(adjustment && adjustment.code || '').trim() ||
+        'UNSPECIFIED_SCENARIO_ADJUSTMENT',
+      label: String(adjustment && adjustment.label || '').trim(),
+      amount: round2_(toNumber_(adjustment && adjustment.amount))
+    };
+  }).filter(function(adjustment) {
+    return Math.abs(adjustment.amount) > CANONICAL_FINANCIAL_TOLERANCE_USD_;
+  });
+  var adjustmentTotal = round2_(adjustments.reduce(function(sum, adjustment) {
+    return sum + adjustment.amount;
+  }, 0));
+  var modeledStart = round2_(canonicalLiveNormalizedDebts_(modeledDebts || debts)
+    .reduce(function(sum, debt) {
+      return sum + Math.max(0, toNumber_(debt.balance));
+    }, 0));
+  var expectedModeledStart = round2_(live + adjustmentTotal);
+  var delta = round2_(modeledStart - expectedModeledStart);
+
+  return {
+    basis: CANONICAL_FINANCIAL_BASIS_,
+    canonicalLiveDebt: live,
+    scenarioAdjustments: adjustments,
+    scenarioAdjustmentTotal: adjustmentTotal,
+    modeledStartingDebt: modeledStart,
+    expectedModeledStartingDebt: expectedModeledStart,
+    reconciliationDelta: delta,
+    reconciles: Math.abs(delta) <= CANONICAL_FINANCIAL_TOLERANCE_USD_
+  };
 }
 
 /**
