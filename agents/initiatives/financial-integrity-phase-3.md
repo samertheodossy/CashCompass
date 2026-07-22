@@ -63,7 +63,7 @@ The roadmap identifies Financial Integrity Phase 3 as the remaining financial-tr
 | Read-only basis inventory | Phase 3 plan → §§3–4 | `COMPLETE` locally; uncommitted | Reviewed source map for Dashboard, Planner, Rolling Debt, history, and mirrors |
 | Canonical-basis ProductDecision | Phase 3 plan → §§5–6 | `COMPLETE` | Option A approved 2026-07-22 with fail-closed unlinked-property handling |
 | Canonical snapshot + regression | Phase 3 plan → §7 steps 1–2 | `COMPLETE` with isolated runtime evidence | Pure explicit-spreadsheet read model plus isolated Central `@147` run `20260722-133952-4f0a`: 21/21, Provisioning/Drift/Restricted/Trash PASS |
-| Cross-surface convergence | `TODO.md` → Financial Integrity | Planner/Rolling slice `COMPLETE` with isolated evidence; Dashboard remains | Shared Central/bounded helpers plus isolated `@148` run `20260722-140739-190f` 27/27 |
+| Cross-surface convergence | `TODO.md` → Financial Integrity | Planner/Rolling/Dashboard totals runtime-proven | Shared Central/bounded helpers; isolated `@149` run `20260722-143242-d150` 34/34 |
 | Audit modules | `TODO.md` → Financial Integrity | `PLANNED` | Asset, Planner, and Dashboard modules enabled and passing |
 | Release wiring | `RELEASE_READINESS.md` | `PLANNED` | Exact-candidate aggregate gate evidence |
 
@@ -71,7 +71,7 @@ The roadmap identifies Financial Integrity Phase 3 as the remaining financial-tr
 
 | Document | Relationship | Status or decision needed |
 | --- | --- | --- |
-| [`FINANCIAL_INTEGRITY_PHASE_3_PLAN.md`](../../FINANCIAL_INTEGRITY_PHASE_3_PLAN.md) | Inventory and approved contract | Option A snapshot and Planner/Rolling evidence complete; Dashboard/audit convergence remains |
+| [`FINANCIAL_INTEGRITY_PHASE_3_PLAN.md`](../../FINANCIAL_INTEGRITY_PHASE_3_PLAN.md) | Inventory and approved contract | Option A and Planner/Rolling/Dashboard totals evidence complete; audit convergence remains |
 | [`HOUSE_FINANCIAL_ACCURACY_PLAN.md`](../../HOUSE_FINANCIAL_ACCURACY_PLAN.md) | Introduced property-linked financing inputs and actual loan-payment reporting | V1 complete; Phase 3 must reconcile loan balances, not rework payment reporting |
 | [`ENGINEERING_STANDARDS.md`](../../ENGINEERING_STANDARDS.md) | Regression-first, milestone discipline, and workbook safety | Governing rules |
 | [`BETA_10_OUT_OF_10_PLAN.md`](../../BETA_10_OUT_OF_10_PLAN.md) | Financial-truth exit gate | Must pass before broad Beta |
@@ -101,7 +101,7 @@ The roadmap identifies Financial Integrity Phase 3 as the remaining financial-tr
 - Planner/Rolling and Dashboard liabilities can differ today when inactive debt carries a balance.
 - Property loan references and linked debts can disagree without a current gate.
 - Dashboard mirrors can lag authoritative source ledgers.
-- The ProductDecision, read model, snapshot evidence, and shared Planner/Rolling convergence evidence are complete. Dashboard and audit convergence remain separately gated.
+- The ProductDecision, read model, and shared Planner/Rolling/Dashboard totals evidence are complete. Audit modules, remaining History convergence, and release wiring remain separately gated.
 
 ### Source conflicts
 
@@ -125,9 +125,9 @@ The roadmap identifies Financial Integrity Phase 3 as the remaining financial-tr
 
 ## 11. Recommended Next Task
 
-- Task: Obtain separate commit/Git-push approval for the proven Planner/Rolling slice, then plan the Dashboard and audit-module convergence slice.
-- Why this task: the shared consumer slice is runtime-proven; the remaining Financial Integrity work is Dashboard/source convergence and release-gating audits.
-- Required role flow: Planner (`COMPLETE`) → Engineer slices 1–2 (`COMPLETE`) → Reviewer/Tester/Validator (`PASS`) → next Planner/Engineer approval gate.
+- Task: Obtain separate commit/Git-push approval for the proven Dashboard slice, then plan the Asset/Planner/Dashboard audit-module slice.
+- Why this task: all three live consumers now share the approved basis with isolated evidence; remaining Financial Integrity work is diagnostic and release wiring.
+- Required role flow: Planner (`COMPLETE`) → Engineer slices 1–3 (`COMPLETE`) → Reviewer/Tester/Validator (`PASS`) → next Planner/Engineer approval gate.
 - Approval gates: runtime consumer-calculation implementation, commit, push, Central push/version/deployment, and any workbook migration remain separate explicit approvals.
 
 ## 12. Maintenance

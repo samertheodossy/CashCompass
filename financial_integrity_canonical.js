@@ -153,6 +153,69 @@ function canonicalRollingDebtBasis_(debts, scenarioAdjustments, modeledDebts) {
 }
 
 /**
+ * Shared Central/bounded Dashboard totals adapter.
+ *
+ * Canonical source totals are preferred independently per domain. If one
+ * authoritative source is missing/unreadable on a legacy or partial workbook,
+ * only that domain retains its already-calculated Dashboard value. This keeps
+ * first-run/legacy behavior safe without creating an environment-specific path.
+ */
+function canonicalDashboardTotals_(snapshot, existing) {
+  var snap = snapshot || {};
+  var sources = snap.sources || {};
+  var totals = snap.totals || {};
+  var fallback = existing || {};
+
+  function sourceAvailable_(domain) {
+    return !!(sources[domain] && sources[domain].available);
+  }
+  function choose_(domain, canonicalValue, fallbackValue) {
+    return round2_(toNumber_(
+      sourceAvailable_(domain) ? canonicalValue : fallbackValue));
+  }
+
+  var cash = choose_('cash', totals.cash, fallback.cash);
+  var investments = choose_(
+    'investments', totals.investments, fallback.investments);
+  var grossRealEstate = choose_(
+    'properties', totals.grossRealEstate, fallback.houseValues);
+  var liabilities = choose_(
+    'debts', totals.totalLiabilities, fallback.debt);
+
+  var canonicalPropertyLoans = round2_((((snap.propertyFinancing || {})
+    .byProperty) || []).reduce(function(sum, property) {
+      return sum + toNumber_(property && property.authoritativeLoanBalance);
+    }, 0));
+  var propertyLoans = sourceAvailable_('properties')
+    ? canonicalPropertyLoans
+    : round2_(toNumber_(fallback.houseLoans));
+  var totalAssets = round2_(cash + investments + grossRealEstate);
+
+  return {
+    basis: CANONICAL_FINANCIAL_BASIS_,
+    cash: cash,
+    investments: investments,
+    houseValues: grossRealEstate,
+    houseLoans: propertyLoans,
+    houseEquity: round2_(grossRealEstate - propertyLoans),
+    debt: liabilities,
+    totalAssets: totalAssets,
+    netWorth: round2_(totalAssets - liabilities),
+    sourceMode: {
+      cash: sourceAvailable_('cash') ? 'CANONICAL_INPUT' : 'LEGACY_FALLBACK',
+      investments: sourceAvailable_('investments') ?
+        'CANONICAL_INPUT' : 'LEGACY_FALLBACK',
+      properties: sourceAvailable_('properties') ?
+        'CANONICAL_INPUT' : 'LEGACY_FALLBACK',
+      debts: sourceAvailable_('debts') ?
+        'CANONICAL_INPUT' : 'LEGACY_FALLBACK'
+    },
+    canonicalStatus: String(snap.status || ''),
+    blockingIssues: (snap.blockingIssues || []).slice()
+  };
+}
+
+/**
  * Read one current-year INPUT ledger block with no writes or self-heal.
  */
 function canonicalReadYearLedger_(sheet, year, config) {
@@ -633,6 +696,18 @@ function readCanonicalFinancialSnapshot_(ss) {
       investments: investments.rows,
       properties: properties.rows,
       debts: debts.rows
+    },
+    sources: {
+      cash: { available: !!cash.available, hasActiveColumn: !!cash.hasActiveColumn },
+      investments: {
+        available: !!investments.available,
+        hasActiveColumn: !!investments.hasActiveColumn
+      },
+      properties: {
+        available: !!properties.available,
+        hasActiveColumn: !!properties.hasActiveColumn
+      },
+      debts: { available: !!debts.available, hasActiveColumn: !!debts.hasActiveColumn }
     },
     mirrors: {
       cash: cashMirror,

@@ -84,6 +84,26 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
           return clone;
         })
       );
+      ctx.dashboardCanonicalTotals = canonicalDashboardTotals_(
+        ctx.canonicalBaseline,
+        {
+          cash: 999999,
+          investments: 999999,
+          houseValues: 999999,
+          houseLoans: 999999,
+          debt: 999999
+        }
+      );
+      ctx.dashboardLegacyFallback = canonicalDashboardTotals_(
+        { sources: {}, totals: {}, propertyFinancing: {} },
+        {
+          cash: 11,
+          investments: 22,
+          houseValues: 33,
+          houseLoans: 4,
+          debt: 5
+        }
+      );
 
       // Create two deliberate post-baseline discrepancies. They prove the seam
       // observes stale mirrors and linked-vs-legacy financing without repairing.
@@ -172,6 +192,27 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
         { module: moduleName });
       ctx.assert.equals('Rolling debt basis reconciles',
         ctx.rollingDebtBasis.reconciles, true, { module: moduleName });
+      ctx.assert.equals('Dashboard cash equals canonical cash',
+        ctx.dashboardCanonicalTotals.cash, baseline.totals.cash,
+        { module: moduleName });
+      ctx.assert.equals('Dashboard investments equal canonical investments',
+        ctx.dashboardCanonicalTotals.investments,
+        baseline.totals.investments, { module: moduleName });
+      ctx.assert.equals('Dashboard property value equals canonical property value',
+        ctx.dashboardCanonicalTotals.houseValues,
+        baseline.totals.grossRealEstate, { module: moduleName });
+      ctx.assert.equals('Dashboard liabilities equal canonical liabilities',
+        ctx.dashboardCanonicalTotals.debt,
+        baseline.totals.totalLiabilities, { module: moduleName });
+      ctx.assert.equals('Dashboard net worth equals canonical net worth',
+        ctx.dashboardCanonicalTotals.netWorth, baseline.totals.netWorth,
+        { module: moduleName });
+      ctx.assert.equals('Dashboard property financing uses linked debt plus visible fallback',
+        ctx.dashboardCanonicalTotals.houseLoans, 225000,
+        { module: moduleName });
+      ctx.assert.equals('Dashboard legacy source fallback preserves existing totals safely',
+        ctx.dashboardLegacyFallback.netWorth, 61,
+        { module: moduleName });
     }
   };
 }

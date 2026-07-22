@@ -1,6 +1,6 @@
 # Financial Integrity Phase 3 — Canonical Basis and Convergence Plan
 
-**Status:** `IMPLEMENTATION_IN_PROGRESS` — canonical snapshot and Planner/Rolling convergence runtime-proven; Dashboard/audit convergence remains
+**Status:** `IMPLEMENTATION_IN_PROGRESS` — snapshot, Planner/Rolling, and Dashboard canonical totals runtime-proven; audit convergence remains
 **Inventory completed:** 2026-07-22
 **ProductDecision approved:** 2026-07-22
 **Tolerance:** `$0.01`
@@ -125,7 +125,7 @@ Only the first participates in cross-surface `$0.01` reconciliation.
 1. **Complete locally:** add pure/read-only canonical row inclusion helpers and `readCanonicalFinancialSnapshot_(ss)`; no UI or consumer-calculation changes.
 2. **Complete with isolated runtime evidence:** regressions for active, inactive-with-balance, blank-Active legacy, summary-row exclusion, property linked/unlinked/mismatch, and mirror freshness passed 21/21 on isolated Central `@147` (`20260722-133952-4f0a`) with CURRENT/FULLY_CURRENT schema, Provisioning and Drift PASS, Restricted sharing, and verified Trash cleanup.
 3. **Complete with isolated runtime evidence:** Planner liability/net worth and Rolling live anchor use the shared canonical active-debt helpers; Rolling retains its backward-compatible modeled-start field and separately publishes canonical live debt plus itemized scenario adjustments. Isolated Central `@148` run `20260722-140739-190f` passed the expanded suite 27/27 with CURRENT/FULLY_CURRENT schema, Provisioning/Drift/Restricted/Trash PASS.
-4. Converge Dashboard and historical snapshot writes on the same canonical read model.
+4. **Dashboard current totals complete with isolated evidence:** Dashboard prefers authoritative canonical inputs per domain, uses approved property-financing authority, and retains the prior value only for an unavailable legacy source. Isolated Central `@149` run `20260722-143242-d150` passed 34/34 with CURRENT/FULLY_CURRENT schema and Provisioning/Drift/Restricted/Trash PASS. Historical snapshot/audit convergence remains separate.
 5. Add Asset, Planner, and Dashboard audit modules plus property-financing reconciliation.
 6. Add disposable populated-workbook cross-surface tests at `$0.01`; never use the bounded workbook.
 7. Promote aggregate Financial Integrity to a Release Readiness gate only after runtime evidence passes.
@@ -154,4 +154,6 @@ Each step receives its own review, tests, and approval gates. Existing populated
 
 **Engineer slice 2: `COMPLETE` with isolated evidence.** Planner and Rolling now share one Central/bounded canonical live-debt selector. Planner liabilities/net worth exclude explicitly inactive debts. Rolling begins from the same live set, publishes `canonical_live_debt`, keeps scenario adjustments separate, and preserves the existing `starting_total_debt` modeled-start contract for UI compatibility. No UI, schema, workbook-write, environment-specific branch, or new mandatory full-workbook read was added. Full local `npm test` passes, including pure numeric and production call-site regressions. Isolated Central `@148` suite run `20260722-140739-be5f` / scenario `20260722-140739-190f` passed 27/27 in 114.136 s with zero Provisioning/Drift warnings, Restricted owner-only sharing, and verified Trash cleanup.
 
-**Next gate:** separately approve committing/Git-pushing the runtime-proven slice, then plan and approve Dashboard convergence plus Asset/Planner/Dashboard audit modules. Workbook migration, Beta/bounded deployment, and bounded-workbook testing remain unauthorized.
+**Engineer slice 3: `COMPLETE` with isolated evidence.** `buildDashboardSnapshot_` uses the shared explicit-spreadsheet canonical snapshot and `canonicalDashboardTotals_` on the same Central/bounded path. Canonical source totals win independently for cash, investments, active properties, and active liabilities; a missing/unreadable legacy source retains only that domain's existing value. Property equity uses linked active financing plus the approved visible unlinked fallback, while household net worth subtracts liabilities once. Existing response fields, first-run state, and UI contracts remain; only compact basis metadata is additive. No UI, schema, migration, new write, or environment-specific calculation branch was added. Full local `npm test` passes. Isolated Central `@149` suite `20260722-143242-7060` / scenario `20260722-143242-d150` passed 34/34 in 100.983 s with zero Provisioning/Drift warnings, Restricted owner-only sharing, and verified Trash cleanup.
+
+**Next gate:** separately approve committing/Git-pushing the proven Dashboard slice, then plan and approve Asset/Planner/Dashboard audit modules and remaining History/release wiring. Workbook migration, Beta/bounded deployment, and bounded-workbook testing remain unauthorized.

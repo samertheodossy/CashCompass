@@ -14,6 +14,7 @@ const files = Object.fromEntries(await Promise.all([
   'financial_integrity_canonical.js',
   'code.js',
   'rolling_debt_payoff.js',
+  'dashboard_data.js',
   'bank_accounts.js',
   'investments.js',
   'house_values.js',
@@ -216,6 +217,33 @@ assert.equal(rollingBasis.modeledStartingDebt, 175,
   'Rolling modeled start must include the separate scenario adjustment');
 assert.equal(rollingBasis.reconciles, true,
   'Rolling modeled start must reconcile to live debt plus scenario adjustments');
+const dashboardBasis = canonicalCtx.canonicalDashboardTotals_(fakeSnapshot, {
+  cash: 999999,
+  investments: 999999,
+  houseValues: 999999,
+  houseLoans: 999999,
+  debt: 999999
+});
+assert.equal(dashboardBasis.cash, 1500,
+  'Dashboard must prefer canonical active cash over a stale legacy total');
+assert.equal(dashboardBasis.investments, 2000,
+  'Dashboard must prefer canonical active investments over a stale legacy total');
+assert.equal(dashboardBasis.houseValues, 400000,
+  'Dashboard must prefer canonical active property value over a stale legacy total');
+assert.equal(dashboardBasis.debt, 180000,
+  'Dashboard liabilities must equal canonical liabilities');
+assert.equal(dashboardBasis.netWorth, 223500,
+  'Dashboard net worth must equal the canonical current position');
+const dashboardFallback = canonicalCtx.canonicalDashboardTotals_(
+  { sources: {}, totals: {}, propertyFinancing: {} },
+  { cash: 11, investments: 22, houseValues: 33, houseLoans: 4, debt: 5 }
+);
+assert.equal(dashboardFallback.netWorth, 61,
+  'Dashboard must preserve existing totals when canonical sources are unavailable');
+for (const domain of ['cash', 'investments', 'properties', 'debts']) {
+  assert.equal(dashboardFallback.sourceMode[domain], 'LEGACY_FALLBACK',
+    `Dashboard ${domain} fallback must be explicit and domain-scoped`);
+}
 const canonicalScenario = files['test_harness_scenarios_financial_integrity.js'];
 assert.match(canonicalScenario, /requiresTrashCleanup:\s*true/,
   'Financial Integrity regression must always verify Trash cleanup');
@@ -240,6 +268,12 @@ assert.match(files['rolling_debt_payoff.js'],
 assert.doesNotMatch(files['code.js'] + files['rolling_debt_payoff.js'],
   /readCanonicalFinancialSnapshot_\s*\(/,
   'Shared Planner/Rolling path must not add a mandatory full-workbook snapshot read');
+assert.match(files['dashboard_data.js'],
+  /canonicalSnapshot = readCanonicalFinancialSnapshot_\(ss\);[\s\S]*?canonicalDashboardTotals_\(canonicalSnapshot,/,
+  'Dashboard must consume the shared explicit-spreadsheet canonical snapshot');
+assert.doesNotMatch(files['dashboard_data.js'],
+  /IS_CENTRAL[\s\S]{0,240}canonicalDashboardTotals_|canonicalDashboardTotals_[\s\S]{0,240}IS_CENTRAL/,
+  'Dashboard canonical totals must not fork between Central and bounded');
 const houseAccuracyScenario = files['test_harness_scenarios_house_financial_accuracy.js'];
 assert.match(houseAccuracyScenario,
   /insertCashFlowRow_\([\s\S]*?'Harness Ambiguous Loan'[\s\S]*?insertRowAfter\(ambiguousPaymentRowA\)/,

@@ -152,14 +152,68 @@ function buildDashboardSnapshot_() {
     // Fresh workbook before Debts onboarding: tolerate absence.
   }
 
-  const cash = accountsPresent
-    ? sumColumnByHeader_(accountsSheet, 'Current Balance')
-    : 0;
-  const investments = sumColumnByHeaderForOptionalSheet_(ss, 'ASSETS', 'Current Balance');
-  const houseValues = sumColumnByHeaderForOptionalSheet_(ss, 'HOUSE_ASSETS', 'Current Value');
-  const houseLoans = sumColumnByHeaderForOptionalSheet_(ss, 'HOUSE_ASSETS', 'Loan Amount Left');
-  const houseEquity = round2_(houseValues - houseLoans);
-  const totalDebt = debtsPresent ? sumDebtBalances_(debtsSheet) : 0;
+  // Financial Integrity Option A, shared by Central and bounded. Prefer each
+  // authoritative INPUT domain independently; if a legacy/partial workbook
+  // cannot supply one source, retain only that domain's existing Dashboard
+  // value. The canonical reader and adapter are read-only and add no schema or
+  // environment-specific branch.
+  let canonicalSnapshot = null;
+  try {
+    canonicalSnapshot = readCanonicalFinancialSnapshot_(ss);
+  } catch (_canonicalDashboardReadErr) {
+    // Preserve the pre-convergence Dashboard values on unexpected legacy
+    // shapes. Audit modules can surface the fallback without breaking Overview.
+  }
+
+  // Reuse mirror totals already observed by the canonical snapshot so the
+  // convergence does not add duplicate SYS-grid reads. The old direct readers
+  // remain as the same-environment fallback when the snapshot itself was not
+  // available. House loan reference is not part of the value-mirror comparison,
+  // so its one existing optional read remains.
+  function mirrorTotalOr_(domain, fallbackRead) {
+    const mirror = canonicalSnapshot && canonicalSnapshot.mirrors &&
+      canonicalSnapshot.mirrors[domain];
+    if (mirror && mirror.available && mirror.mirrorTotal !== null) {
+      return round2_(toNumber_(mirror.mirrorTotal));
+    }
+    try {
+      return round2_(toNumber_(fallbackRead()));
+    } catch (_legacyDashboardReadErr) {
+      return 0;
+    }
+  }
+  const legacyCash = mirrorTotalOr_('cash', function() {
+    return accountsPresent ?
+      sumColumnByHeader_(accountsSheet, 'Current Balance') : 0;
+  });
+  const legacyInvestments = mirrorTotalOr_('investments', function() {
+    return sumColumnByHeaderForOptionalSheet_(ss, 'ASSETS', 'Current Balance');
+  });
+  const legacyHouseValues = mirrorTotalOr_('properties', function() {
+    return sumColumnByHeaderForOptionalSheet_(ss, 'HOUSE_ASSETS', 'Current Value');
+  });
+  const legacyHouseLoans = sumColumnByHeaderForOptionalSheet_(
+    ss, 'HOUSE_ASSETS', 'Loan Amount Left');
+  let legacyTotalDebt = 0;
+  try {
+    legacyTotalDebt = debtsPresent ? sumDebtBalances_(debtsSheet) : 0;
+  } catch (_legacyDebtReadErr) {
+    // A malformed legacy debt sheet is represented as unavailable by the
+    // canonical reader; keep Overview alive at zero until it is repaired.
+  }
+  const canonicalDashboard = canonicalDashboardTotals_(canonicalSnapshot, {
+    cash: legacyCash,
+    investments: legacyInvestments,
+    houseValues: legacyHouseValues,
+    houseLoans: legacyHouseLoans,
+    debt: legacyTotalDebt
+  });
+  const cash = canonicalDashboard.cash;
+  const investments = canonicalDashboard.investments;
+  const houseValues = canonicalDashboard.houseValues;
+  const houseLoans = canonicalDashboard.houseLoans;
+  const houseEquity = canonicalDashboard.houseEquity;
+  const totalDebt = canonicalDashboard.debt;
 
   let snapshotState;
   if (accountsPresent && debtsPresent) {
@@ -170,7 +224,7 @@ function buildDashboardSnapshot_() {
     snapshotState = 'notSetUp';
   }
 
-  const netWorth = round2_(cash + investments + houseValues - totalDebt);
+  const netWorth = canonicalDashboard.netWorth;
 
   const historySnapshots = getLatestHistorySnapshots_(2);
   const latestHistory = historySnapshots.length ? historySnapshots[0] : null;
@@ -318,6 +372,11 @@ function buildDashboardSnapshot_() {
     retirement: retirement,
     incomeAllocation: buildIncomeAllocation_(ss),
     state: snapshotState,
+    financialBasis: {
+      basis: canonicalDashboard.basis,
+      sourceMode: canonicalDashboard.sourceMode,
+      canonicalStatus: canonicalDashboard.canonicalStatus
+    },
     sourceUpdated: getDashboardSourceUpdatedMap_(),
     refreshedAt: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss')
   };
