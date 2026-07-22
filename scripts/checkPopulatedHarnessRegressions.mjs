@@ -4,6 +4,7 @@ import vm from 'node:vm';
 
 const files = Object.fromEntries(await Promise.all([
   'test_harness_core.js',
+  'test_harness_assert.js',
   'test_harness_data.js',
   'test_harness_report.js',
   'test_harness_scenarios.js',
@@ -11,8 +12,11 @@ const files = Object.fromEntries(await Promise.all([
   'test_harness_scenarios_house_financial_accuracy.js',
   'test_harness_scenarios_financial_integrity.js',
   'test_harness_suites.js',
+  'validation_testing_server.js',
+  'ValidationTestingUI.html',
   'financial_integrity_canonical.js',
   'financial_integrity_audit.js',
+  'planner_output.js',
   'code.js',
   'rolling_debt_payoff.js',
   'dashboard_data.js',
@@ -35,6 +39,19 @@ assert.doesNotMatch(
 );
 assert.match(core, /Drive\.Files\.get\(ss\.getId\(\), \{ fields: 'id,trashed' \}\)/,
   'Trash cleanup must be verified by Drive read-back');
+
+const assertionCtx = vm.createContext({ Date, String });
+vm.runInContext(files['test_harness_assert.js'], assertionCtx);
+const assertionUpdates = [];
+const progressCollector = assertionCtx.makeAssertionCollector_((_result, counts) => {
+  assertionUpdates.push({ completed: counts.completed, pass: counts.pass, fail: counts.fail });
+});
+progressCollector.equals('progress pass', 1, 1);
+progressCollector.equals('progress fail', 1, 2);
+assert.deepEqual(assertionUpdates, [
+  { completed: 1, pass: 1, fail: 0 },
+  { completed: 2, pass: 1, fail: 1 }
+], 'Assertion progress callback must report cumulative pass/fail counts');
 
 const data = files['test_harness_data.js'];
 const dataCode = data.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
@@ -101,9 +118,9 @@ vm.runInContext(canonicalSource, canonicalCtx);
 const auditSource = files['financial_integrity_audit.js'];
 const auditCode = auditSource.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 vm.runInContext(auditSource, canonicalCtx);
-assert.match(auditSource, /function runFinancialIntegrityAudit\(explicitSpreadsheet\)/,
+assert.match(auditSource, /function runFinancialIntegrityAudit\(explicitSpreadsheet, options\)/,
   'Financial Integrity audit must preserve no-argument production use and expose an explicit disposable seam');
-for (const fn of ['runAssetAudit', 'runPlannerAudit', 'runDashboardAudit']) {
+for (const fn of ['runAssetAudit', 'runPlannerAudit', 'runDashboardAudit', 'runHistoryAudit']) {
   assert.match(auditSource, new RegExp(`function ${fn}\\(explicitSpreadsheet`),
     `Financial Integrity registry module missing: ${fn}`);
 }
@@ -272,13 +289,104 @@ for (const domain of ['cash', 'investments', 'properties', 'debts']) {
   assert.equal(dashboardFallback.sourceMode[domain], 'LEGACY_FALLBACK',
     `Dashboard ${domain} fallback must be explicit and domain-scoped`);
 }
+const historyBasis = canonicalCtx.canonicalHistorySnapshotValues_(fakeSnapshot, {
+  investments: 999999,
+  grossRealEstate: 999999,
+  totalAssets: 999999,
+  totalLiabilities: 999999,
+  netWorth: 999999
+});
+assert.equal(historyBasis.investments, 2000,
+  'History must store canonical active investments');
+assert.equal(historyBasis.grossRealEstate, 400000,
+  'History must store canonical active property value');
+assert.equal(historyBasis.totalAssets, 403500,
+  'History must store canonical total assets including cash');
+assert.equal(historyBasis.totalLiabilities, 180000,
+  'History must store canonical active liabilities');
+assert.equal(historyBasis.netWorth, 223500,
+  'History must store canonical net worth');
+const legacyHistoryBasis = canonicalCtx.canonicalHistorySnapshotValues_(null, {
+  investments: 11,
+  grossRealEstate: 22,
+  totalAssets: 33,
+  totalLiabilities: 4,
+  netWorth: 29
+});
+assert.equal(legacyHistoryBasis.netWorth, 29,
+  'History must retain the existing Planner values when canonical sources are unavailable');
+assert.equal(legacyHistoryBasis.sourceMode.netWorth, 'LEGACY_FALLBACK',
+  'History legacy fallback must remain explicit');
+const partialHistoryBasis = canonicalCtx.canonicalHistorySnapshotValues_({
+  sources: {
+    cash: { available: true },
+    investments: { available: true },
+    properties: { available: true },
+    debts: { available: false }
+  },
+  totals: fakeSnapshot.totals
+}, {
+  investments: 11,
+  grossRealEstate: 22,
+  totalAssets: 33,
+  totalLiabilities: 4,
+  netWorth: 29
+});
+assert.deepEqual({
+  investments: partialHistoryBasis.investments,
+  grossRealEstate: partialHistoryBasis.grossRealEstate,
+  totalAssets: partialHistoryBasis.totalAssets,
+  totalLiabilities: partialHistoryBasis.totalLiabilities,
+  netWorth: partialHistoryBasis.netWorth
+}, {
+  investments: 11,
+  grossRealEstate: 22,
+  totalAssets: 33,
+  totalLiabilities: 4,
+  netWorth: 29
+}, 'History must retain one internally consistent legacy row when any canonical source is unavailable');
+const historyAudit = canonicalCtx.auditCanonicalHistorySnapshot_(fakeSnapshot, {
+  available: true,
+  capturedAt: '2026-07-22 14:00:00',
+  investments: 2000,
+  grossRealEstate: 400000,
+  totalAssets: 403500,
+  totalLiabilities: 180000,
+  netWorth: 223500
+});
+assert.equal(historyAudit.status, 'PASS',
+  'A current canonical History snapshot must pass');
+assert.equal(historyAudit.metrics.materiallyStale, false,
+  'Exact History values must not be marked stale');
+const staleHistoryAudit = canonicalCtx.auditCanonicalHistorySnapshot_(fakeSnapshot, {
+  available: true,
+  capturedAt: '2026-07-21 14:00:00',
+  investments: 1999,
+  grossRealEstate: 400000,
+  totalAssets: 403499,
+  totalLiabilities: 180000,
+  netWorth: 223499
+});
+assert.equal(staleHistoryAudit.status, 'PASS_WITH_OBSERVATIONS',
+  'A materially different History snapshot must be an observation');
+assert.equal(staleHistoryAudit.metrics.materiallyStale, true,
+  'History differences over $0.01 must be marked stale');
 const canonicalScenario = files['test_harness_scenarios_financial_integrity.js'];
 assert.match(canonicalScenario, /requiresTrashCleanup:\s*true/,
   'Financial Integrity regression must always verify Trash cleanup');
 assert.match(canonicalScenario, /readCanonicalFinancialSnapshot_\(ctx\.ss\)/,
   'Financial Integrity regression must pass only the explicit disposable workbook');
-assert.match(canonicalScenario, /runFinancialIntegrityAudit\(ctx\.ss\)/,
-  'Financial Integrity audit regression must pass only the explicit disposable workbook');
+assert.match(canonicalScenario,
+  /runFinancialIntegrityAudit\(ctx\.historyAuditSs, \{[\s\S]*?historySnapshot: ctx\.historyBaseline/,
+  'Financial Integrity audit regression must pass only the fresh disposable workbook and its direct History snapshot');
+assert.match(canonicalScenario,
+  /historySheet = appendHistory_\([\s\S]*?ctx\.historyAuditSs, harnessFiHistorySummary_\(\), null,[\s\S]*?ctx\.canonicalBaseline\)/,
+  'Financial Integrity regression must write History only through its fresh explicit disposable workbook');
+assert.match(canonicalScenario,
+  /appendHistory_\([\s\S]*?ctx\.historyAuditSs,[\s\S]*?SpreadsheetApp\.flush\(\);[\s\S]*?historyBaseline =[\s\S]*?readLatestFinancialHistorySnapshotFromSheet_\(ctx\.historySheet\)/,
+  'Disposable History fixture must flush its append before exact-Sheet read-back');
+assert.match(canonicalScenario, /expectedAssertionCount:\s*53/,
+  'Financial Integrity progress must declare its 53-assertion denominator');
 assert.doesNotMatch(canonicalScenario, /getUserSpreadsheet_\s*\(|getActiveSpreadsheet\s*\(/,
   'Financial Integrity regression must never resolve an existing workbook');
 assert.match(canonicalScenario,
@@ -295,9 +403,30 @@ assert.match(files['rolling_debt_payoff.js'],
 assert.match(files['rolling_debt_payoff.js'],
   /canonical_live_debt:[\s\S]*?scenario_debt_adjustments:[\s\S]*?modeled_starting_debt:/,
   'Rolling must publish live debt separately from scenario-adjusted modeled debt');
-assert.doesNotMatch(files['code.js'] + files['rolling_debt_payoff.js'],
+assert.doesNotMatch(files['rolling_debt_payoff.js'],
   /readCanonicalFinancialSnapshot_\s*\(/,
-  'Shared Planner/Rolling path must not add a mandatory full-workbook snapshot read');
+  'Rolling live debt must remain on its lightweight canonical helper path');
+assert.match(files['code.js'],
+  /canonicalHistorySnapshot = readCanonicalFinancialSnapshot_\(ss\);[\s\S]*?appendHistory_\(ss, summary, performanceTrace, canonicalHistorySnapshot\)/,
+  'Planner must pass one authoritative snapshot into the History writer');
+assert.match(files['planner_output.js'],
+  /function appendHistory_\([\s\S]*?return sheet;[\s\S]*?function isDuplicateHistoryRow_/,
+  'History writer must return its exact Sheet as an additive same-execution test seam');
+assert.match(auditSource,
+  /function runFinancialIntegrityAudit\(explicitSpreadsheet, options\)[\s\S]*?historySnapshot[\s\S]*?m\.fn\(ssForInit, canonicalSnapshot, canonicalReadError,[\s\S]*?suppliedHistorySnapshot\)/,
+  'Aggregate audit must accept an explicit read-only History snapshot without changing its default workbook path');
+assert.match(auditSource,
+  /function readLatestFinancialHistorySnapshot_\(ss\)[\s\S]*?readLatestFinancialHistorySnapshotFromSheet_\(sheet\)/,
+  'Production History reader must delegate to the exact-Sheet read-only parser');
+assert.match(canonicalScenario,
+  /fresh = SpreadsheetApp\.openById\(ctx\.ss\.getId\(\)\);[\s\S]*?assertDisposableTarget_\(fresh, ctx\.runId\)/,
+  'History fixture must re-open and re-verify only its own disposable workbook');
+assert.match(canonicalScenario,
+  /ensureHistorySheet_\(ctx\.ss\);[\s\S]*?SpreadsheetApp\.flush\(\);[\s\S]*?historyAuditSs = harnessFiFreshDisposableSpreadsheet_\(ctx\);[\s\S]*?appendHistory_\([\s\S]*?ctx\.historyAuditSs/,
+  'History fixture must create and flush History before reopening the disposable workbook for append');
+assert.match(canonicalScenario,
+  /historyBaseline =[\s\S]*?readLatestFinancialHistorySnapshotFromSheet_\(ctx\.historySheet\)[\s\S]*?auditBaseline = runFinancialIntegrityAudit\(ctx\.historyAuditSs, \{[\s\S]*?historySnapshot: ctx\.historyBaseline/,
+  'History fixture must use the exact written Sheet and supplied read-only snapshot for its immediate audit');
 assert.match(files['dashboard_data.js'],
   /canonicalSnapshot = readCanonicalFinancialSnapshot_\(ss\);[\s\S]*?canonicalDashboardTotals_\(canonicalSnapshot,/,
   'Dashboard must consume the shared explicit-spreadsheet canonical snapshot');
@@ -330,6 +459,21 @@ assert.match(files['test_harness_report.js'], /Restricted sharing/,
   'Harness report gate must surface Restricted sharing');
 assert.match(files['test_harness_report.js'], /verified Trash/,
   'Harness report gate must surface verified Trash cleanup');
+assert.match(files['test_harness_core.js'], /CacheService\.getUserCache\(\)/,
+  'Harness progress must remain scoped to the running user');
+assert.doesNotMatch(files['test_harness_core.js'],
+  /HARNESS_RUN_PROGRESS[\s\S]{0,800}workbook(Id|Name)|workbook(Id|Name)[\s\S]{0,800}HARNESS_RUN_PROGRESS/,
+  'Harness progress snapshots must not expose workbook identity');
+assert.match(files['test_harness_assert.js'], /onRecord\(result, \{[\s\S]*?completed:[\s\S]*?pass:[\s\S]*?fail:/,
+  'Assertion collector must publish live pass/fail progress without changing results');
+assert.match(files['validation_testing_server.js'], /function vtGetHarnessRunProgress\(progressToken\)/,
+  'Validation server must expose the guarded progress poll seam');
+assert.match(files['ValidationTestingUI.html'], /vtGetHarnessRunProgress\(run\.token\)/,
+  'Validation console must poll live Harness progress');
+assert.match(files['ValidationTestingUI.html'], /passed<\/span>[\s\S]*?failed<\/span>/,
+  'Validation console must render passed/failed denominators');
+assert.match(files['ValidationTestingUI.html'], /Long Google Sheets operations can remain in one phase/,
+  'Validation console must explain long-running server phases');
 
 for (const [file, fn] of [
   ['bank_accounts.js', 'ensureSysAccountsSheet_'],

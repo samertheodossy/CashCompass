@@ -39,6 +39,43 @@ var HARNESS_NAME_SUFFIX_ = ' — SAFE TO DELETE';
 var HARNESS_META_SHEET_NAME_ = '_HARNESS_META';
 var HARNESS_MD_DISPOSABLE_KEY_ = 'HARNESS_DISPOSABLE';
 var HARNESS_MD_RUN_ID_KEY_ = 'HARNESS_RUN_ID';
+var HARNESS_PROGRESS_CACHE_PREFIX_ = 'HARNESS_RUN_PROGRESS_V1_';
+
+/** Accept only opaque client-generated tokens; progress never carries workbook data. */
+function harnessProgressToken_(value) {
+  var token = String(value || '').trim();
+  return /^[A-Za-z0-9_-]{8,100}$/.test(token) ? token : '';
+}
+
+/** Best-effort user-scoped progress snapshot for the Validation console poller. */
+function harnessWriteProgress_(token, payload) {
+  var safeToken = harnessProgressToken_(token);
+  if (!safeToken) return;
+  try {
+    var out = payload || {};
+    out.updatedAt = new Date().toISOString();
+    CacheService.getUserCache().put(
+      HARNESS_PROGRESS_CACHE_PREFIX_ + safeToken,
+      JSON.stringify(out),
+      600
+    );
+  } catch (_progressWriteErr) {
+    // Observability must never fail or alter the guarded Harness run.
+  }
+}
+
+/** Read one user-scoped progress snapshot. No workbook identifiers are stored. */
+function harnessReadProgress_(token) {
+  var safeToken = harnessProgressToken_(token);
+  if (!safeToken) return null;
+  try {
+    var raw = CacheService.getUserCache().get(
+      HARNESS_PROGRESS_CACHE_PREFIX_ + safeToken);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_progressReadErr) {
+    return null;
+  }
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Public (guarded) developer runner                                          */
@@ -149,6 +186,7 @@ function assertHarnessAllowed_() {
  */
 function runScenario_(scenario, runId, options) {
   options = options || {};
+  var progress = options.progress || null;
   var trashRequested = options.trash === true || scenario.requiresTrashCleanup === true;
   var startedAt = Date.now();
   var actions = [];
@@ -161,7 +199,39 @@ function runScenario_(scenario, runId, options) {
   var disposition = 'KEPT_FOR_INSPECTION';
   // Functional-assertion collector (E0a). Declared outside the try so its results
   // are always available to the report builder, even if a later step throws.
-  var assertions = makeAssertionCollector_();
+  function publishProgress_(phase, message, extra) {
+    if (!progress || !progress.token) return;
+    var payload = {
+      kind: progress.kind || 'scenario',
+      suiteId: progress.suiteId || '',
+      scenarioId: scenario.id,
+      scenarioIndex: Number(progress.scenarioIndex) || 1,
+      scenarioTotal: Number(progress.scenarioTotal) || 1,
+      scenariosCompleted: Number(progress.scenariosCompleted) || 0,
+      scenariosPassed: Number(progress.scenariosPassed) || 0,
+      scenariosFailed: Number(progress.scenariosFailed) || 0,
+      phase: phase,
+      message: String(message || ''),
+      startedAt: progress.startedAt || new Date(startedAt).toISOString(),
+      expectedAssertions: Number(progress.expectedAssertions) ||
+        Number(scenario.expectedAssertionCount) || 0,
+      assertionsCompleted: Number(progress.assertionsCompletedBefore) || 0,
+      assertionsPassed: Number(progress.assertionsPassedBefore) || 0,
+      assertionsFailed: Number(progress.assertionsFailedBefore) || 0
+    };
+    extra = extra || {};
+    Object.keys(extra).forEach(function(key) { payload[key] = extra[key]; });
+    harnessWriteProgress_(progress.token, payload);
+  }
+  var assertions = makeAssertionCollector_(function(_result, counts) {
+    publishProgress_('RUNNING_ASSERTIONS', 'Checking functional assertions…', {
+      assertionsCompleted: (Number(progress && progress.assertionsCompletedBefore) || 0) + counts.completed,
+      assertionsPassed: (Number(progress && progress.assertionsPassedBefore) || 0) + counts.pass,
+      assertionsFailed: (Number(progress && progress.assertionsFailedBefore) || 0) + counts.fail
+    });
+  });
+
+  publishProgress_('STARTING', 'Starting guarded disposable run…');
 
   try {
     wb = createDisposableWorkbook_(scenario.id, runId);
@@ -178,6 +248,7 @@ function runScenario_(scenario, runId, options) {
       throw new Error('Test Harness REFUSED: disposable workbook is not Restricted in Drive.');
     }
     actions.push('Verify Drive sharing is Restricted (no anyone/domain permission)');
+    publishProgress_('PREPARING', 'Disposable workbook created and Restricted sharing verified.');
 
     var ctx = {
       ss: wb.ss,
@@ -188,11 +259,16 @@ function runScenario_(scenario, runId, options) {
       read: makeReadLayer_(wb.ss),
       // Functional assertions (read/compare only) — see test_harness_assert.js.
       assert: assertions,
+      progress: function(message) {
+        publishProgress_('RUNNING_ACTIONS', message || 'Running scenario workflow…');
+      },
       // Scenarios MUST call this immediately before every write.
       assertWritable: function() { assertDisposableTarget_(wb.ss, runId); }
     };
 
+    publishProgress_('PREPARING', 'Preparing scenario sheets…');
     if (typeof scenario.setup === 'function') scenario.setup(ctx);
+    publishProgress_('RUNNING_ACTIONS', 'Running scenario workflow…');
     if (typeof scenario.actions === 'function') scenario.actions(ctx);
     performance = ctx.performanceEvidence || null;
 
@@ -213,6 +289,7 @@ function runScenario_(scenario, runId, options) {
     var scope = (scenario.expectedSheets && scenario.expectedSheets.length)
       ? { sheetNames: scenario.expectedSheets }
       : undefined;
+    publishProgress_('VALIDATING_WORKBOOK', 'Running Workbook Health and drift checks…');
     if (typeof validateWorkbookHealth_ === 'function') {
       validators.health = validateWorkbookHealth_(wb.ss, scope);
       validators.provisioning = validators.health.reports.provisioning;
@@ -229,6 +306,7 @@ function runScenario_(scenario, runId, options) {
     // Functional correctness (E0a) — the scenario reads actual values back from the
     // disposable workbook and asserts them via ctx.assert.*. Read/compare only; a
     // thrown assertion setup error is captured like any scenario error (→ FAIL).
+    publishProgress_('RUNNING_ASSERTIONS', 'Checking functional assertions…');
     if (typeof scenario.expectedOutcome === 'function') scenario.expectedOutcome(ctx);
   } catch (e) {
     error = (e && e.message) ? e.message : String(e);
@@ -254,6 +332,14 @@ function runScenario_(scenario, runId, options) {
   // Teardown (default keep). Trash when the caller requests it or when a scenario
   // explicitly requires cleanup verification, and only after the disposable gate.
   if (wb && trashRequested) {
+    publishProgress_('CLEANING_UP', 'Verifying and trashing the disposable workbook…', {
+      assertionsPassed: (Number(progress && progress.assertionsPassedBefore) || 0) +
+        assertions.results.filter(function(a) { return a && a.pass; }).length,
+      assertionsFailed: (Number(progress && progress.assertionsFailedBefore) || 0) +
+        assertions.results.filter(function(a) { return !a || !a.pass; }).length,
+      assertionsCompleted: (Number(progress && progress.assertionsCompletedBefore) || 0) +
+        assertions.results.length
+    });
     try {
       cleanup = teardownDisposableWorkbook_(wb.ss, runId, { trash: true });
       disposition = 'TRASHED';
@@ -265,7 +351,7 @@ function runScenario_(scenario, runId, options) {
 
   var finishedAt = Date.now();
 
-  return buildHarnessScenarioReport_({
+  var report = buildHarnessScenarioReport_({
     scenario: {
       id: scenario.id,
       category: scenario.category,
@@ -290,6 +376,19 @@ function runScenario_(scenario, runId, options) {
     startedAt: startedAt,
     finishedAt: finishedAt
   });
+  publishProgress_('COMPLETE', report.overall === 'PASS' ?
+    'Run completed successfully.' : 'Run completed with failures.', {
+    overall: report.overall,
+    scenariosCompleted: Number(progress && progress.scenariosCompleted) || 0,
+    assertionsCompleted: (Number(progress && progress.assertionsCompletedBefore) || 0) +
+      assertions.results.length,
+    assertionsPassed: (Number(progress && progress.assertionsPassedBefore) || 0) +
+      (report.functional ? report.functional.counts.pass : 0),
+    assertionsFailed: (Number(progress && progress.assertionsFailedBefore) || 0) +
+      (report.functional ? report.functional.counts.fail : 0),
+    finishedAt: new Date(finishedAt).toISOString()
+  });
+  return report;
 }
 
 /* -------------------------------------------------------------------------- */

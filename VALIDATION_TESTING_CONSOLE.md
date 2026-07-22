@@ -446,12 +446,19 @@ gates on the whole subsystem.
   Performance Planner is a permanent resumable browser-backed suite on isolated
   `@136`; its 20-pair campaign is paused after six confirmed pairs and therefore
   does not yet provide ratified p50/p95 release evidence.
+  A local progress-reporting slice now adds user-scoped, privacy-safe polling for
+  current phase, elapsed time, scenario position, and live assertion pass/fail
+  counts. Final suite summaries show `passed/total` and `failed/total`; detailed
+  reports put failures first and collapse passing assertions. No workbook id,
+  name, or financial value enters the progress cache. Isolated evidence remains
+  pending.
 - **C4 — Release Readiness verdict. ◑ Runner source-ready; UI pending.** The bounded
   one-scenario-per-invocation runner and archived evidence contract exist in
   `release_readiness_runner.js`; console start/progress/final-verdict controls and
   isolated runtime validation remain.
-- **C5 — Polish.** Long-run handling (per-pack runs / progress), cleanup-stragglers
-  action, copy/export refinements.
+- **C5 — Polish. ◑ Progress implemented locally.** Long-run phase/elapsed/assertion
+  progress and failure-first reports are source-ready; isolated evidence remains.
+  Cleanup-stragglers action and further copy/export refinements remain.
 
 Sequencing vs the roadmap: C1 follows P1 Validator 2A; C3+ follow the Test Harness
 foundation + Release Readiness gate in `ROADMAP.md → P1`.

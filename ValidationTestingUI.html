@@ -78,6 +78,22 @@
       border-radius: 50%; animation: spin .7s linear infinite; margin-right: 6px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .run-progress {
+      display: none; margin-top: 12px; padding: 12px 14px;
+      border: 1px solid #cfe3fb; border-radius: 9px; background: #f7fbff;
+    }
+    .run-progress.visible { display: block; }
+    .run-progress.done { border-color: #b7e4d3; background: #f3fcf8; }
+    .run-progress.failed { border-color: #f3b8b8; background: #fff7f7; }
+    .run-progress-head { display:flex; justify-content:space-between; gap:12px; align-items:center; }
+    .run-progress-title { font-size:13px; font-weight:700; color:var(--ink); }
+    .run-progress-time { font-size:12px; color:var(--ink-mute); white-space:nowrap; }
+    .run-progress-msg { margin-top:3px; font-size:12.5px; color:var(--ink-soft); }
+    .run-progress progress { width:100%; height:14px; margin:9px 0 5px; }
+    .run-progress-stats { display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12px; color:var(--ink-soft); }
+    .run-progress-stats .good { color:var(--green-fg); font-weight:700; }
+    .run-progress-stats .bad { color:var(--red-fg); font-weight:700; }
+    .run-progress-note { margin-top:5px; font-size:11.5px; color:var(--ink-mute); }
 
     /* Target readout */
     .kv { font-size: 13px; margin: 3px 0; }
@@ -332,6 +348,7 @@
           <button class="primary" id="vt-h-run" onclick="vtHRun()" disabled>Run Scenario</button>
           <span id="vt-h-run-status" class="runmsg"></span>
         </div>
+        <div id="vt-h-progress" class="run-progress" aria-live="polite"></div>
 
         <div id="vt-h-results" style="margin-top:16px;"></div>
 
@@ -367,6 +384,7 @@
           <button class="primary" id="vt-h-suite-run" onclick="vtHRunSuite()" disabled>Run Suite</button>
           <span id="vt-h-suite-status" class="runmsg"></span>
         </div>
+        <div id="vt-h-suite-progress" class="run-progress" aria-live="polite"></div>
 
         <div id="vt-h-suite-results" style="margin-top:16px;"></div>
         <div id="vt-h-suite-inventory" style="margin-top:16px;"></div>
@@ -1122,6 +1140,165 @@
   var vtHSuiteRunToken = 0;   // ignore superseded/late SUITE run callbacks
   var vtHSuiteMap = {};       // id → suite descriptor
   var vtHLastSuiteReport = null;
+  var vtHProgressRuns = { scenario: null, suite: null };
+
+  function vtHProgressToken_(prefix) {
+    var random = '';
+    try {
+      random = crypto.randomUUID().replace(/-/g, '');
+    } catch (_e) {
+      random = String(Date.now()) + String(Math.random()).replace(/\D/g, '');
+    }
+    return prefix + '_' + random.slice(0, 40);
+  }
+
+  function vtHDuration_(ms) {
+    var seconds = Math.max(0, Math.floor(ms / 1000));
+    var minutes = Math.floor(seconds / 60);
+    var remainder = seconds % 60;
+    return minutes ? (minutes + 'm ' + remainder + 's') : (remainder + 's');
+  }
+
+  function vtHProgressTitle_(phase) {
+    var labels = {
+      STARTING: 'Starting run',
+      PREPARING: 'Preparing disposable workbook',
+      RUNNING_ACTIONS: 'Running scenario workflow',
+      VALIDATING_WORKBOOK: 'Validating workbook',
+      RUNNING_ASSERTIONS: 'Checking assertions',
+      CLEANING_UP: 'Verifying cleanup',
+      SCENARIO_COMPLETE: 'Scenario completed',
+      COMPLETE: 'Run completed'
+    };
+    return labels[phase] || 'Run in progress';
+  }
+
+  function vtHProgressStep_(phase) {
+    var steps = {
+      STARTING: 1,
+      PREPARING: 1,
+      RUNNING_ACTIONS: 2,
+      VALIDATING_WORKBOOK: 3,
+      RUNNING_ASSERTIONS: 4,
+      CLEANING_UP: 5,
+      SCENARIO_COMPLETE: 5,
+      COMPLETE: 6
+    };
+    return steps[phase] || 1;
+  }
+
+  function vtHRenderProgress_(kind) {
+    var run = vtHProgressRuns[kind];
+    var box = document.getElementById(kind === 'suite' ? 'vt-h-suite-progress' : 'vt-h-progress');
+    if (!run || !box) return;
+    var p = run.snapshot || {};
+    var startedMs = run.startedMs;
+    if (p.startedAt && !isNaN(Date.parse(p.startedAt))) startedMs = Date.parse(p.startedAt);
+    var elapsed = vtHDuration_(Date.now() - startedMs);
+    var total = Number(p.expectedAssertions) || Number(run.expectedAssertions) || 0;
+    var completed = Number(p.assertionsCompleted) || 0;
+    var passed = Number(p.assertionsPassed) || 0;
+    var failed = Number(p.assertionsFailed) || 0;
+    var scenarioTotal = Number(p.scenarioTotal) || (kind === 'suite' ? Number(run.scenarioTotal) || 0 : 1);
+    var scenarioIndex = Number(p.scenarioIndex) || (scenarioTotal ? 1 : 0);
+    var scenariosCompleted = Number(p.scenariosCompleted) || 0;
+    var done = p.phase === 'COMPLETE';
+    var failedRun = done && p.overall && p.overall !== 'PASS';
+    var phaseStep = vtHProgressStep_(p.phase);
+    box.className = 'run-progress visible' + (done ? (failedRun ? ' failed' : ' done') : '');
+
+    var progressHtml = '<progress max="6" value="' + phaseStep + '"></progress>';
+    if (total) {
+      progressHtml += '<div class="run-progress-note" style="margin-top:0;">Assertion results</div>' +
+        '<progress max="' + total + '" value="' + Math.min(completed, total) + '"></progress>';
+    }
+    var assertionStats = total
+      ? '<span class="good">' + passed + '/' + total + ' passed</span>' +
+        '<span class="bad">' + failed + '/' + total + ' failed</span>'
+      : (completed ? '<span class="good">' + passed + ' passed</span><span class="bad">' + failed + ' failed</span>'
+        : '<span>Assertions begin after workbook setup and validation.</span>');
+    var scenarioStats = kind === 'suite' && scenarioTotal
+      ? '<span>Scenario ' + Math.min(scenarioIndex, scenarioTotal) + '/' + scenarioTotal +
+        ' · ' + scenariosCompleted + ' completed</span>' : '';
+    var phaseStats = '<span>Phase ' + phaseStep + '/6</span>';
+    var lastUpdate = p.updatedAt && !isNaN(Date.parse(p.updatedAt))
+      ? vtHDuration_(Date.now() - Date.parse(p.updatedAt)) + ' since the last server phase update'
+      : 'Waiting for the first server phase update';
+    box.innerHTML = '<div class="run-progress-head"><div class="run-progress-title">' +
+      (done ? (failedRun ? '🔴 ' : '🟢 ') : '<span class="spinner"></span>') +
+      vtEsc(vtHProgressTitle_(p.phase)) + '</div><div class="run-progress-time">Elapsed ' + elapsed + '</div></div>' +
+      '<div class="run-progress-msg">' + vtEsc(p.message || 'The server is working…') + '</div>' +
+      progressHtml + '<div class="run-progress-stats">' + phaseStats + scenarioStats + assertionStats + '</div>' +
+      '<div class="run-progress-note">' + vtEsc(lastUpdate) +
+      '. Long Google Sheets operations can remain in one phase for several minutes.</div>';
+  }
+
+  function vtHStartProgress_(kind, expectedAssertions, scenarioTotal) {
+    vtHStopProgress_(kind);
+    var run = {
+      token: vtHProgressToken_(kind),
+      startedMs: Date.now(),
+      expectedAssertions: Number(expectedAssertions) || 0,
+      scenarioTotal: Number(scenarioTotal) || 1,
+      pending: false,
+      snapshot: { phase: 'STARTING', message: 'Sending the guarded run to the server…' }
+    };
+    vtHProgressRuns[kind] = run;
+    vtHRenderProgress_(kind);
+    run.clockTimer = setInterval(function() { vtHRenderProgress_(kind); }, 1000);
+    function poll() {
+      if (!vtHProgressRuns[kind] || run.pending) return;
+      run.pending = true;
+      google.script.run
+        .withSuccessHandler(function(res) {
+          run.pending = false;
+          if (run.finished || !vtHProgressRuns[kind] || vtHProgressRuns[kind].token !== run.token) return;
+          if (res && res.ok && res.progress) {
+            run.snapshot = res.progress;
+            vtHRenderProgress_(kind);
+          }
+        })
+        .withFailureHandler(function() { run.pending = false; })
+        .vtGetHarnessRunProgress(run.token);
+    }
+    poll();
+    run.pollTimer = setInterval(poll, 2000);
+    return run.token;
+  }
+
+  function vtHStopProgress_(kind, report, errorMessage) {
+    var run = vtHProgressRuns[kind];
+    if (!run) return;
+    run.finished = true;
+    if (run.pollTimer) clearInterval(run.pollTimer);
+    if (run.clockTimer) clearInterval(run.clockTimer);
+    if (report || errorMessage) {
+      var counts = kind === 'suite'
+        ? (report && report.assertions)
+        : (report && report.functional && report.functional.counts);
+      counts = counts || {};
+      var total = (Number(counts.pass) || 0) + (Number(counts.fail) || 0);
+      run.snapshot = {
+        phase: 'COMPLETE',
+        overall: report ? report.overall : 'FAIL',
+        message: errorMessage || (report.overall === 'PASS'
+          ? 'All required checks passed.' : 'The run completed with failures; review the failed assertions below.'),
+        startedAt: new Date(run.startedMs).toISOString(),
+        updatedAt: new Date().toISOString(),
+        expectedAssertions: Math.max(total, Number(run.expectedAssertions) || 0),
+        assertionsCompleted: total,
+        assertionsPassed: Number(counts.pass) || 0,
+        assertionsFailed: Number(counts.fail) || 0,
+        scenarioTotal: kind === 'suite' ? ((report.counts && report.counts.total) || run.scenarioTotal) : 1,
+        scenarioIndex: kind === 'suite' ? ((report.counts && report.counts.total) || run.scenarioTotal) : 1,
+        scenariosCompleted: kind === 'suite'
+          ? (((report.counts && report.counts.pass) || 0) + ((report.counts && report.counts.fail) || 0)) : 1
+      };
+      vtHRenderProgress_(kind);
+      return;
+    }
+    vtHProgressRuns[kind] = null;
+  }
 
   // Enable/disable all harness controls together. Controls start DISABLED in the
   // markup and are only enabled once vtListHarnessScenarios() confirms capability
@@ -1248,21 +1425,30 @@
     btn.disabled = true;
     box.innerHTML = '';
     vtHLastReport = null;
+    var scenario = vtHScenMap[scenarioId] || {};
+    var progressToken = vtHStartProgress_('scenario', scenario.expectedAssertionCount || 0, 1);
     vtHSetMsg(vtSpin(trash ? 'Running scenario (trash on success)…' : 'Running scenario…'), false);
     google.script.run
       .withSuccessHandler(function(res) {
         if (token !== vtHRunToken) return;
         btn.disabled = false;
-        if (!res || !res.ok) { vtHSetMsg(vtEsc(res && res.error ? res.error : 'Run failed.'), true); return; }
+        if (!res || !res.ok) {
+          var message = res && res.error ? res.error : 'Run failed.';
+          vtHStopProgress_('scenario', null, message);
+          vtHSetMsg(vtEsc(message), true); return;
+        }
         vtHSetMsg('', false);
+        vtHStopProgress_('scenario', res.report, '');
         vtHRenderReport(res.report);
       })
       .withFailureHandler(function(err) {
         if (token !== vtHRunToken) return;
         btn.disabled = false;
-        vtHSetMsg(vtEsc(err && err.message ? err.message : 'Run failed.'), true);
+        var message = err && err.message ? err.message : 'Run failed.';
+        vtHStopProgress_('scenario', null, message);
+        vtHSetMsg(vtEsc(message), true);
       })
-      .vtRunHarnessScenario(scenarioId, { trash: trash });
+      .vtRunHarnessScenario(scenarioId, { trash: trash, progressToken: progressToken });
   }
 
   function vtHRenderReport(r) {
@@ -1320,16 +1506,33 @@
     var f = r.functional;
     if (f) {
       var fpass = f.overall === 'PASS';
+      var fPassed = (f.counts && f.counts.pass) || 0;
+      var fFailed = (f.counts && f.counts.fail) || 0;
+      var fTotal = fPassed + fFailed;
       html += '<div class="status ' + (fpass ? 'pass' : 'fail') + '">' +
         '<div class="name">Functional</div>' +
         '<div class="verdict ' + (fpass ? 'pass' : 'fail') + '">' + (fpass ? '🟢 PASS' : '🔴 FAIL') + '</div>' +
-        '<div class="tally">' + ((f.counts && f.counts.pass) || 0) + ' pass · ' + ((f.counts && f.counts.fail) || 0) + ' fail</div>' +
+        '<div class="tally"><span style="color:var(--green-fg);font-weight:700;">' + fPassed + '/' + fTotal + ' passed</span> · ' +
+          '<span style="color:' + (fFailed ? 'var(--red-fg)' : 'var(--ink-mute)') + ';font-weight:700;">' +
+          fFailed + '/' + fTotal + ' failed</span></div>' +
       '</div>';
     }
     html += '</div>';
 
     if (r.error) {
       html += '<p class="runmsg err" style="margin:0 0 12px;">' + vtEsc(r.error) + '</p>';
+    }
+
+    if (r.functional) {
+      html += '<details class="sheet" open><summary><strong>Functional assertion details</strong></summary>' +
+        '<div style="padding:0 12px 12px;">' + vtHRenderScenarioDetail(r, {
+          id: r.scenario && r.scenario.id,
+          overall: r.overall,
+          functional: r.functional.counts,
+          workbook: r.workbook,
+          disposition: r.disposition,
+          error: r.error
+        }) + '</div></details>';
     }
 
     html += '<details class="json"><summary>View raw JSON ' +
@@ -1464,6 +1667,9 @@
     btn.disabled = true;
     box.innerHTML = '';
     vtHLastSuiteReport = null;
+    var progressToken = vtHStartProgress_('suite',
+      (suite && suite.expectedAssertionCount) || 0,
+      (suite && suite.count) || 1);
     vtHSetSuiteMsg(vtSpin(trash
       ? 'Running suite (one disposable workbook per scenario · trash on success)…'
       : 'Running suite (one disposable workbook per scenario)…'), false);
@@ -1471,16 +1677,23 @@
       .withSuccessHandler(function(res) {
         if (token !== vtHSuiteRunToken) return;
         btn.disabled = false;
-        if (!res || !res.ok) { vtHSetSuiteMsg(vtEsc(res && res.error ? res.error : 'Suite run failed.'), true); return; }
+        if (!res || !res.ok) {
+          var message = res && res.error ? res.error : 'Suite run failed.';
+          vtHStopProgress_('suite', null, message);
+          vtHSetSuiteMsg(vtEsc(message), true); return;
+        }
         vtHSetSuiteMsg('', false);
+        vtHStopProgress_('suite', res.report, '');
         vtHRenderSuiteReport(res.report);
       })
       .withFailureHandler(function(err) {
         if (token !== vtHSuiteRunToken) return;
         btn.disabled = false;
-        vtHSetSuiteMsg(vtEsc(err && err.message ? err.message : 'Suite run failed.'), true);
+        var message = err && err.message ? err.message : 'Suite run failed.';
+        vtHStopProgress_('suite', null, message);
+        vtHSetSuiteMsg(vtEsc(message), true);
       })
-      .vtRunHarnessSuite(suiteId, { dispositionMode: mode });
+      .vtRunHarnessSuite(suiteId, { dispositionMode: mode, progressToken: progressToken });
   }
 
   function vtHRenderSuiteReport(r) {
@@ -1491,12 +1704,18 @@
     var overallColor = r.overall === 'PASS' ? 'var(--green-fg)' : 'var(--red-fg)';
 
     var durTxt = (r.durationMs != null) ? (r.durationMs / 1000).toFixed(1) + ' s' : '—';
+    var ac = r.assertions || {};
+    var assertionTotal = Number(ac.total) || 0;
     var html = '<div class="summary">' +
       vtCell('Suite', vtEsc((r.suite && r.suite.label) || (r.suite && r.suite.id) || '—')) +
       vtCell('Overall', '<span style="color:' + overallColor + ';">' + vtEsc(r.overall) + '</span>') +
       vtCell('Scenarios', String(c.total || 0)) +
       vtCell('Pass', '<span style="color:var(--green-fg);">' + String(c.pass || 0) + '</span>') +
       vtCell('Fail', '<span style="color:' + ((c.fail || 0) ? 'var(--red-fg)' : 'var(--ink-soft)') + ';">' + String(c.fail || 0) + '</span>') +
+      (assertionTotal ? vtCell('Assertions passed', '<span style="color:var(--green-fg);">' +
+        String(ac.pass || 0) + '/' + assertionTotal + '</span>') : '') +
+      (assertionTotal ? vtCell('Assertions failed', '<span style="color:' + ((ac.fail || 0) ?
+        'var(--red-fg)' : 'var(--ink-soft)') + ';">' + String(ac.fail || 0) + '/' + assertionTotal + '</span>') : '') +
       (c.notRun ? vtCell('Not run', String(c.notRun)) : '') +
       vtCell('Duration', vtEsc(durTxt)) +
       vtCell('Disposition', vtEsc(r.dispositionMode || 'keep')) +
@@ -1528,7 +1747,8 @@
       var s = rows[i];
       var pass = s.overall === 'PASS';
       var fn = s.functional
-        ? (s.functional.pass + '/' + (s.functional.pass + s.functional.fail))
+        ? (s.functional.pass + '/' + (s.functional.pass + s.functional.fail) + ' passed · ' +
+          s.functional.fail + '/' + (s.functional.pass + s.functional.fail) + ' failed')
         : '—';
       var wb = (s.workbook && s.workbook.url)
         ? '<a href="' + vtEsc(s.workbook.url) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();">open</a>'
@@ -1633,7 +1853,26 @@
       parts.push('<div class="sd-empty">No functional assertions for this scenario' +
         (full ? '.' : ' (no detailed report — scenario did not run).') + '</div>');
     } else {
-      for (var i = 0; i < results.length; i++) parts.push(vtHRenderAssertion(results[i]));
+      var failed = [], passed = [];
+      for (var i = 0; i < results.length; i++) {
+        if (results[i] && results[i].pass) passed.push(results[i]);
+        else failed.push(results[i]);
+      }
+      if (failed.length) {
+        parts.push('<div class="sd-empty" style="color:var(--red-fg);font-weight:700;">' +
+          failed.length + ' failed assertion' + (failed.length === 1 ? '' : 's') + ' — review these first</div>');
+        for (var f = 0; f < failed.length; f++) parts.push(vtHRenderAssertion(failed[f]));
+      } else {
+        parts.push('<div class="sd-empty" style="color:var(--green-fg);font-weight:700;">All ' +
+          passed.length + ' functional assertions passed.</div>');
+      }
+      if (passed.length) {
+        var passedHtml = [];
+        for (var p = 0; p < passed.length; p++) passedHtml.push(vtHRenderAssertion(passed[p]));
+        parts.push('<details class="sheet"' + (failed.length ? '' : ' open') + '><summary>' +
+          '<strong>Passed assertions (' + passed.length + ')</strong></summary><div style="padding:0 12px 10px;">' +
+          passedHtml.join('') + '</div></details>');
+      }
     }
 
     parts.push('<div class="sd-h">Validator</div>');

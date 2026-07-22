@@ -156,7 +156,7 @@ function getHarnessSuites_() {
     {
       id: 'SUITE-FINANCIAL-INTEGRITY-CANONICAL',
       label: 'Financial Integrity Canonical Snapshot',
-      description: 'Validate the approved active-owned-position read model, source/mirror freshness, and fail-closed property financing on a Restricted disposable workbook.',
+      description: 'Validate the approved current-position read model, live consumers, read-only audits, canonical History capture/freshness, and fail-closed property financing on a Restricted disposable workbook.',
       scenarioIds: [
         'REGRESSION-FINANCIAL-INTEGRITY-CANONICAL'
       ]
@@ -263,10 +263,64 @@ function testRunSuiteById_(suiteId, options) {
   var mode = normalizeSuiteDisposition_(options.dispositionMode);
   var suiteRunId = harnessGenerateRunId_();
   var startedAt = Date.now();
+  var progressToken = harnessProgressToken_(options.progressToken);
 
   var results = [];       // compact per-scenario summaries (readable)
   var reports = [];       // full per-scenario reports (JSON drill-down)
   var catastrophic = null;
+  var suiteExpectedAssertions = 0;
+  for (var ec = 0; ec < suite.scenarioIds.length; ec++) {
+    var expectedScenario = getHarnessScenarioById_(suite.scenarioIds[ec]);
+    if (!expectedScenario || !Number(expectedScenario.expectedAssertionCount)) {
+      suiteExpectedAssertions = 0;
+      break;
+    }
+    suiteExpectedAssertions += Number(expectedScenario.expectedAssertionCount);
+  }
+
+  function completedAssertionCounts_() {
+    var counts = { completed: 0, pass: 0, fail: 0 };
+    for (var c = 0; c < results.length; c++) {
+      if (!results[c].functional) continue;
+      counts.pass += Number(results[c].functional.pass) || 0;
+      counts.fail += Number(results[c].functional.fail) || 0;
+    }
+    counts.completed = counts.pass + counts.fail;
+    return counts;
+  }
+
+  function suiteProgress_(phase, message, currentScenario, assertionCounts) {
+    if (!progressToken) return;
+    var scenariosPassed = 0;
+    for (var p = 0; p < results.length; p++) {
+      if (results[p].overall === 'PASS') scenariosPassed++;
+    }
+    harnessWriteProgress_(progressToken, {
+      kind: 'suite',
+      suiteId: suite.id,
+      scenarioId: currentScenario || '',
+      scenarioIndex: Math.min(results.length + 1, suite.scenarioIds.length),
+      scenarioTotal: suite.scenarioIds.length,
+      scenariosCompleted: results.length,
+      scenariosPassed: scenariosPassed,
+      scenariosFailed: results.length - scenariosPassed,
+      phase: phase,
+      message: String(message || ''),
+      startedAt: new Date(startedAt).toISOString(),
+      expectedAssertions: suiteExpectedAssertions ||
+        (assertionCounts ? assertionCounts.expected : 0),
+      assertionsCompleted: assertionCounts ? assertionCounts.completed : 0,
+      assertionsPassed: assertionCounts ? assertionCounts.pass : 0,
+      assertionsFailed: assertionCounts ? assertionCounts.fail : 0
+    });
+  }
+
+  suiteProgress_('STARTING', 'Starting suite…', '', {
+    expected: suiteExpectedAssertions,
+    completed: 0,
+    pass: 0,
+    fail: 0
+  });
 
   for (var i = 0; i < suite.scenarioIds.length; i++) {
     var sid = suite.scenarioIds[i];
@@ -282,7 +336,29 @@ function testRunSuiteById_(suiteId, options) {
     try {
       // Each scenario gets its OWN runId → its OWN disposable workbook. runScenario_
       // is the same run loop used by single-scenario runs; it never throws.
-      report = runScenario_(scenario, harnessGenerateRunId_(), { trash: trash });
+      var scenariosPassed = 0;
+      for (var r = 0; r < results.length; r++) {
+        if (results[r].overall === 'PASS') scenariosPassed++;
+      }
+      var assertionCountsBefore = completedAssertionCounts_();
+      report = runScenario_(scenario, harnessGenerateRunId_(), {
+        trash: trash,
+        progress: progressToken ? {
+          token: progressToken,
+          kind: 'suite',
+          suiteId: suite.id,
+          scenarioIndex: i + 1,
+          scenarioTotal: suite.scenarioIds.length,
+          scenariosCompleted: results.length,
+          scenariosPassed: scenariosPassed,
+          scenariosFailed: results.length - scenariosPassed,
+          startedAt: new Date(startedAt).toISOString(),
+          expectedAssertions: suiteExpectedAssertions,
+          assertionsCompletedBefore: assertionCountsBefore.completed,
+          assertionsPassedBefore: assertionCountsBefore.pass,
+          assertionsFailedBefore: assertionCountsBefore.fail
+        } : null
+      });
     } catch (e) {
       // A throw from runScenario_ is a catastrophic harness-level failure. Stop the
       // suite and mark the remaining scenarios NOT RUN (do not silently continue).
@@ -291,6 +367,16 @@ function testRunSuiteById_(suiteId, options) {
     }
     reports.push(report);
     results.push(harnessSuiteScenarioSummary_(report));
+    var aggregateCounts = completedAssertionCounts_();
+    suiteProgress_('SCENARIO_COMPLETE',
+      'Scenario ' + (i + 1) + ' of ' + suite.scenarioIds.length + ' completed.',
+      sid,
+      {
+        expected: suiteExpectedAssertions,
+        completed: aggregateCounts.completed,
+        pass: aggregateCounts.pass,
+        fail: aggregateCounts.fail
+      });
   }
 
   var finishedAt = Date.now();
@@ -305,6 +391,14 @@ function testRunSuiteById_(suiteId, options) {
     finishedAt: finishedAt
   });
   harnessLogSuiteReport_(suiteReport);
+  var aggregateAssertions = suiteReport.assertions || {};
+  suiteProgress_('COMPLETE', suiteReport.overall === 'PASS' ?
+    'Suite completed successfully.' : 'Suite completed with failures.', '', {
+    expected: aggregateAssertions.total || 0,
+    completed: aggregateAssertions.total || 0,
+    pass: aggregateAssertions.pass || 0,
+    fail: aggregateAssertions.fail || 0
+  });
   return suiteReport;
 }
 
@@ -413,6 +507,12 @@ function buildHarnessSuiteReport_(p) {
   }
   var notRun = total - p.results.length;   // > 0 only after a catastrophic break
   var overall = (!p.catastrophic && fail === 0 && notRun === 0) ? 'PASS' : 'FAIL';
+  var assertionPass = 0, assertionFail = 0;
+  for (var a = 0; a < p.results.length; a++) {
+    if (!p.results[a].functional) continue;
+    assertionPass += Number(p.results[a].functional.pass) || 0;
+    assertionFail += Number(p.results[a].functional.fail) || 0;
+  }
 
   return {
     type: 'harnessSuite',
@@ -421,6 +521,11 @@ function buildHarnessSuiteReport_(p) {
     dispositionMode: p.mode,
     overall: overall,
     counts: { total: total, pass: pass, fail: fail, notRun: notRun },
+    assertions: {
+      total: assertionPass + assertionFail,
+      pass: assertionPass,
+      fail: assertionFail
+    },
     scenarios: p.results,          // readable compact summaries (in run order)
     catastrophic: p.catastrophic || null,
     startedAt: p.startedAt ? new Date(p.startedAt).toISOString() : null,

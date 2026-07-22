@@ -114,6 +114,16 @@ function runDebtPlannerCore_(options, performanceTrace, ownsPerformanceTrace) {
   runDebtPlannerSyncSafely_(function() { syncAllHouseAssetsFromLatestCurrentYear_(ss); });
   runDebtPlannerSyncSafely_(function() { syncAllAccountsFromLatestCurrentYear_(ss); });
   runDebtPlannerSyncSafely_(function() { syncAllAssetsFromLatestCurrentYear_(ss); });
+  // History is an immutable Planner-run snapshot of the authoritative current
+  // position. Read it after the normal mirror syncs, but never make Planner
+  // availability depend on this extra compatibility seam: partial/legacy
+  // workbooks retain the existing summary values for unavailable domains.
+  let canonicalHistorySnapshot = null;
+  try {
+    canonicalHistorySnapshot = readCanonicalFinancialSnapshot_(ss);
+  } catch (_canonicalHistoryReadErr) {
+    canonicalHistorySnapshot = null;
+  }
   if (typeof markPerformanceTrace_ === 'function') {
     markPerformanceTrace_(performanceTrace, 'sync_inputs');
   }
@@ -486,7 +496,7 @@ function runDebtPlannerCore_(options, performanceTrace, ownsPerformanceTrace) {
   if (typeof markPerformanceTrace_ === 'function') {
     markPerformanceTrace_(performanceTrace, 'calculate_plan');
   }
-  appendHistory_(ss, summary, performanceTrace);
+  appendHistory_(ss, summary, performanceTrace, canonicalHistorySnapshot);
   writeRecommendations_(ss, summary, performanceTrace);
   sendPlannerEmailIfConfigured_(summary, options);
   if (typeof markPerformanceTrace_ === 'function') {

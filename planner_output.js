@@ -915,8 +915,22 @@ function formatHistorySheet_(sheet, headerCount) {
   sheet.autoResizeColumns(1, headerCount);
 }
 
-function appendHistory_(ss, summary, performanceTrace) {
+function appendHistory_(ss, summary, performanceTrace, canonicalSnapshot) {
   const sheet = ensureHistorySheet_(ss);
+  // Preserve the existing 21-column History schema and every prior row. Only
+  // the new row's five financial-position cells converge on the approved
+  // canonical basis. Unavailable legacy domains retain the Planner values
+  // instead of breaking refresh or writing a mixed-basis identity.
+  const historyFinancials = canonicalHistorySnapshotValues_(
+    canonicalSnapshot,
+    {
+      investments: summary.assetSummary.totalAssets,
+      grossRealEstate: summary.houseAssetSummary.totalRealEstateValue,
+      totalAssets: summary.totalAssets,
+      totalLiabilities: summary.liabilitySummary.totalLiabilities,
+      netWorth: summary.netWorth
+    }
+  );
 
   const newRow = [
     summary.runDate,
@@ -935,11 +949,11 @@ function appendHistory_(ss, summary, performanceTrace) {
     summary.recommendation && summary.recommendation.nextTargetAfterThis ? summary.recommendation.nextTargetAfterThis.account : '',
     summary.recommendation ? summary.recommendation.estimatedMonthsToPayOffTarget : '',
     summary.recommendation ? summary.recommendation.estimatedMonthsToPayOffAllCards : '',
-    summary.assetSummary.totalAssets,
-    summary.houseAssetSummary.totalRealEstateValue,
-    summary.totalAssets,
-    summary.liabilitySummary.totalLiabilities,
-    summary.netWorth
+    historyFinancials.investments,
+    historyFinancials.grossRealEstate,
+    historyFinancials.totalAssets,
+    historyFinancials.totalLiabilities,
+    historyFinancials.netWorth
   ];
 
   if (!isDuplicateHistoryRow_(sheet, newRow)) {
@@ -965,6 +979,11 @@ function appendHistory_(ss, summary, performanceTrace) {
   if (typeof markPerformanceTrace_ === 'function') {
     markPerformanceTrace_(performanceTrace, 'cleanup_history_charts');
   }
+
+  // Additive test seam: callers that need an immediate same-execution read can
+  // use the exact Sheet object that performed the write. Existing production
+  // callers ignore the return value, so write behavior is unchanged.
+  return sheet;
 }
 
 function isDuplicateHistoryRow_(sheet, newRow) {

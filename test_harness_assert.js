@@ -92,7 +92,7 @@ function assertExists_(actual) {
  *
  * @returns {{ results: Array<Object>, equals: function }}
  */
-function makeAssertionCollector_() {
+function makeAssertionCollector_(onRecord) {
   var results = [];
 
   /**
@@ -107,7 +107,7 @@ function makeAssertionCollector_() {
    */
   function record_(kind, label, actual, expected, pass, opts) {
     opts = opts || {};
-    results.push({
+    var result = {
       id: opts.id || harnessAssertSlug_(label),
       module: opts.module || null,
       category: opts.category || 'Numeric',
@@ -121,7 +121,23 @@ function makeAssertionCollector_() {
       location: opts.location || null,
       reason: pass ? '' : (opts.reason ||
         ('expected ' + harnessAssertDisplay_(expected) + ', got ' + harnessAssertDisplay_(actual)))
-    });
+    };
+    results.push(result);
+    if (typeof onRecord === 'function') {
+      var passCount = 0;
+      for (var i = 0; i < results.length; i++) {
+        if (results[i] && results[i].pass) passCount++;
+      }
+      try {
+        onRecord(result, {
+          completed: results.length,
+          pass: passCount,
+          fail: results.length - passCount
+        });
+      } catch (_progressErr) {
+        // Progress reporting is best-effort and can never change test results.
+      }
+    }
     return !!pass;
   }
 

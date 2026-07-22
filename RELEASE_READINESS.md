@@ -11,6 +11,26 @@ bounded server scenario per invocation, saves resumable progress, accepts browse
 evidence only for the exact source/deployment candidate, archives privacy-safe
 verdicts, and restores a console-owned Harness flag to OFF when finalized.
 
+Financial Integrity is now included in the required server-suite inventory through
+`SUITE-FINANCIAL-INTEGRITY-CANONICAL`. Runs `20260722-151535-b8f9` (`@151`),
+`20260722-154257-86fc` (`@152`), and `20260722-155409-43d5` (`@153`) passed the
+45 existing financial assertions but failed the eight new History checks. Because
+the production-writer change on `@153` did not alter the result, that change was
+reverted. Reopen-after-write (`@154`) and pre-create-then-reopen (`@155`, suite
+`20260722-162550-8fa6`, scenario `20260722-162550-bf3c`) also retained 45/53,
+proving a persistent same-execution Spreadsheet-level cache in the disposable
+fixture rather than a production calculation defect. The local correction reads
+the row through the exact `Sheet` returned by the established writer and supplies
+that already-read snapshot only through an explicit read-only audit option. Normal
+no-argument Central/bounded behavior is unchanged. Local syntax, full regression,
+production-path, harness-safety, and diff checks pass. Isolated Validation `@156`
+suite `20260722-164849-6081` / scenario `20260722-164849-bc33` passed 53/53 in
+154.569 s with CURRENT/FULLY_CURRENT schema, Provisioning and Drift PASS,
+Restricted owner-only sharing, and verified Trash cleanup. Financial Integrity
+Release Readiness wiring is therefore runtime-proven. Beta remains `@106`; the
+bounded deployment and workbook were untouched. The historical
+`@141` result below predates this gate.
+
 The exact `@141` run passed aggregate Workbook Health and all 13/13 server checks.
 First-Run UX E2E (`FR-0c415ac6-cfea-4525-8bf2-766086ce83e9`), Populated Dashboard
 E2E (`FR-263dfd04-4166-454b-8f95-2db2f26613d9`), and Recovery Live
@@ -56,6 +76,7 @@ Provisioning            PASS      (sheets, headers, frozen, hidden, SYS - Meta m
 Schema                  PASS
 Named Ranges            PASS
 Regression              PASS
+Financial Integrity     PASS      (canonical position, History freshness, property financing)
 Recovery                PASS
 Performance             PASS
 ── Advisory (Workbook Drift) ──────────
@@ -79,6 +100,7 @@ Overall                 READY FOR BETA
 | Formula | **Advisory** | Validator Module 3 (Drift-class) | scenarios that write formulas |
 | Conditional Formatting | **Advisory** | Validator Module 4 (Drift-class) | Cash Flow / colored-row scenarios |
 | Regression | **Gating** | `REGRESSION` pack | one scenario per historical bug |
+| Financial Integrity | **Gating** | `SUITE-FINANCIAL-INTEGRITY-CANONICAL` | canonical current position, History freshness, and fail-closed financing |
 | Recovery | **Gating** | `RECOVERY` pack | damage → detect → heal → PASS |
 | Performance | **Gating** | `STRESS` pack timings | scenarios that record runtime |
 

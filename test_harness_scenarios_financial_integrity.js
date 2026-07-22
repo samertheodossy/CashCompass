@@ -12,6 +12,7 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
     id: 'REGRESSION-FINANCIAL-INTEGRITY-CANONICAL',
     category: 'REGRESSION',
     executionLevel: 'INTEGRATION',
+    expectedAssertionCount: 53,
     description: 'Prove the approved active-owned-position snapshot, mirror freshness, and fail-closed property financing contract.',
     requiresTrashCleanup: true,
     expectedSheets: [
@@ -22,6 +23,7 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
       names.HOUSE_VALUES,
       names.HOUSE_ASSETS,
       names.DEBTS,
+      names.HISTORY,
       'SYS - Meta'
     ],
     setup: function(ctx) {
@@ -39,7 +41,10 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
       ensureSysHouseAssetsSheet_(ctx.ss);
       ctx.assertWritable();
       ensureOnboardingDebtsSheetFromDashboard('normal', ctx.ss);
-      ctx.actions.push('Create canonical financial sheets on explicit disposable target');
+      ctx.assertWritable();
+      ensureHistorySheet_(ctx.ss);
+      SpreadsheetApp.flush();
+      ctx.actions.push('Create canonical financial sheets, including History, on explicit disposable target');
     },
     actions: function(ctx) {
       var year = getCurrentYear_();
@@ -65,8 +70,27 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
       harnessFiAddDebt_(ctx, 'Harness Old Mortgage', 'Loan', 10000, 'No', 'Harness Home');
 
       SpreadsheetApp.flush();
+      ctx.progress('Canonical source ledgers seeded; reading the clean baseline…');
       ctx.canonicalBaseline = readCanonicalFinancialSnapshot_(ctx.ss);
-      ctx.auditBaseline = runFinancialIntegrityAudit(ctx.ss);
+      // OUT - History was created and flushed during guarded setup. Reopen only
+      // this exact disposable workbook after every required sheet exists, then
+      // re-pass the disposable gate before using the fresh handle for both the
+      // production append and its immediate read-only audit.
+      ctx.assertWritable();
+      ctx.historyAuditSs = harnessFiFreshDisposableSpreadsheet_(ctx);
+      ctx.historySheet = appendHistory_(
+        ctx.historyAuditSs, harnessFiHistorySummary_(), null,
+        ctx.canonicalBaseline);
+      // appendRow() can remain buffered inside the same Apps Script execution.
+      // Flush only this disposable fixture before its immediate read-back; the
+      // production History writer retains its existing performance behavior.
+      SpreadsheetApp.flush();
+      ctx.historyBaseline =
+        readLatestFinancialHistorySnapshotFromSheet_(ctx.historySheet);
+      ctx.auditBaseline = runFinancialIntegrityAudit(ctx.historyAuditSs, {
+        historySnapshot: ctx.historyBaseline
+      });
+      ctx.progress('Canonical History captured; checking live consumers and audits…');
       var normalizedDebts = normalizeDebts_(
         readSheetAsObjects_(ctx.ss, 'DEBTS'), getAliasMap_());
       ctx.plannerLiabilityBasis =
@@ -112,7 +136,10 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
       harnessFiSetDebtActive_(ctx, 'Harness Cabin Loan', 'No');
       SpreadsheetApp.flush();
       ctx.canonicalUnlinked = readCanonicalFinancialSnapshot_(ctx.ss);
-      ctx.auditUnlinked = runFinancialIntegrityAudit(ctx.ss);
+      ctx.auditUnlinked = runFinancialIntegrityAudit(ctx.historyAuditSs, {
+        historySnapshot: ctx.historyBaseline
+      });
+      ctx.progress('Fail-closed unlinked financing captured; checking divergence behavior…');
 
       // Create two additional disposable-only discrepancies. They prove the
       // seam observes stale mirrors and linked-vs-legacy financing without repair.
@@ -130,7 +157,9 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
       home.inputSheet.getRange(home.inputRow, 2).setValue(170000);
       SpreadsheetApp.flush();
       ctx.canonicalDiverged = readCanonicalFinancialSnapshot_(ctx.ss);
-      ctx.auditDiverged = runFinancialIntegrityAudit(ctx.ss);
+      ctx.auditDiverged = runFinancialIntegrityAudit(ctx.historyAuditSs, {
+        historySnapshot: ctx.historyBaseline
+      });
       ctx.actions.push('Read baseline then introduce disposable-only mirror and property-loan discrepancies');
     },
     expectedOutcome: function(ctx) {
@@ -183,11 +212,11 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
         harnessFiHasIssue_(unlinked, 'UNLINKED_PROPERTY_FINANCING'), true,
         { module: moduleName });
 
-      ctx.assert.equals('Financial Integrity registers four audit modules',
-        ctx.auditBaseline.summary.moduleCount, 4, { module: moduleName });
+      ctx.assert.equals('Financial Integrity registers five audit modules',
+        ctx.auditBaseline.summary.moduleCount, 5, { module: moduleName });
       ctx.assert.equals('Canonical audit has no execution failures',
         ctx.auditBaseline.summary.failureCount, 0, { module: moduleName });
-      ['assets', 'planner', 'dashboard'].forEach(function(id) {
+      ['assets', 'planner', 'dashboard', 'history'].forEach(function(id) {
         ctx.assert.equals('Canonical ' + id + ' audit passes',
           harnessFiFindAuditModule_(ctx.auditBaseline, id).status, 'PASS',
           { module: moduleName });
@@ -200,6 +229,27 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
         { module: moduleName });
       ctx.assert.equals('Asset audit exposes reconciliation blocked',
         harnessFiFindAuditModule_(ctx.auditUnlinked, 'assets').metrics.reconciliationBlocked,
+        true, { module: moduleName });
+      ctx.assert.equals('History stores canonical investments',
+        ctx.historyBaseline.investments, baseline.totals.investments,
+        { module: moduleName });
+      ctx.assert.equals('History stores canonical property value',
+        ctx.historyBaseline.grossRealEstate, baseline.totals.grossRealEstate,
+        { module: moduleName });
+      ctx.assert.equals('History stores canonical total assets',
+        ctx.historyBaseline.totalAssets, baseline.totals.totalAssets,
+        { module: moduleName });
+      ctx.assert.equals('History stores canonical liabilities',
+        ctx.historyBaseline.totalLiabilities, baseline.totals.totalLiabilities,
+        { module: moduleName });
+      ctx.assert.equals('History stores canonical net worth',
+        ctx.historyBaseline.netWorth, baseline.totals.netWorth,
+        { module: moduleName });
+      ctx.assert.equals('History audit exposes its captured timestamp',
+        !!harnessFiFindAuditModule_(ctx.auditBaseline, 'history').metrics.capturedAt,
+        true, { module: moduleName });
+      ctx.assert.equals('Changed live position marks History materially stale',
+        harnessFiFindAuditModule_(ctx.auditUnlinked, 'history').metrics.materiallyStale,
         true, { module: moduleName });
 
       ctx.assert.equals('Stale cash mirror is detected',
@@ -379,6 +429,38 @@ function harnessFiSetDebtActive_(ctx, debtName, active) {
     return;
   }
   throw new Error('Harness Financial Integrity: debt not found: ' + debtName);
+}
+
+function harnessFiFreshDisposableSpreadsheet_(ctx) {
+  ctx.assertWritable();
+  var fresh = SpreadsheetApp.openById(ctx.ss.getId());
+  assertDisposableTarget_(fresh, ctx.runId);
+  return fresh;
+}
+
+function harnessFiHistorySummary_() {
+  return {
+    runDate: Utilities.formatDate(
+      new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss'),
+    monthHeader: Utilities.formatDate(
+      new Date(), Session.getScriptTimeZone(), 'MMM-yy'),
+    mode: 'BALANCED',
+    stability: { label: 'Stable' },
+    thisMonthCashFlow: 0,
+    previousMonthCashFlow: 0,
+    monthChange: 0,
+    usableCashAfterBuffers: 0,
+    minimumDueTotal: 0,
+    totalActiveCreditCardDebt: 0,
+    suggestedExtraPayment: 0,
+    recommendedTotalToPayNow: 0,
+    recommendation: null,
+    assetSummary: { totalAssets: 999999 },
+    houseAssetSummary: { totalRealEstateValue: 999999 },
+    totalAssets: 999999,
+    liabilitySummary: { totalLiabilities: 999999 },
+    netWorth: 999999
+  };
 }
 
 function harnessFiFindAuditModule_(report, moduleId) {

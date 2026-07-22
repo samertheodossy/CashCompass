@@ -242,6 +242,7 @@ function vtListHarnessScenarios() {
         description: s.description,
         implemented: s.implemented !== false,
         blocker: s.blocker || null,
+        expectedAssertionCount: Number(s.expectedAssertionCount) || 0,
         expectedSheets: (s.expectedSheets && s.expectedSheets.length) ? s.expectedSheets.slice() : null
       });
     }
@@ -269,10 +270,20 @@ function vtRunHarnessScenario(scenarioId, options) {
       throw new Error('Unknown or unsupported scenario: "' + id + '".');
     }
     var trash = !!(options && options.trash === true);
+    var progressToken = harnessProgressToken_(options && options.progressToken);
     // testRunScenarioById_ returns the RICH in-memory report (may embed Date objects
     // from temporal comparators). Normalize to a wire-safe copy ONLY for the browser
     // return — the editor runners keep receiving the rich object unchanged.
-    var report = testRunScenarioById_(id, { trash: trash });
+    var report = testRunScenarioById_(id, {
+      trash: trash,
+      progress: progressToken ? {
+        token: progressToken,
+        kind: 'scenario',
+        scenarioIndex: 1,
+        scenarioTotal: 1,
+        startedAt: new Date().toISOString()
+      } : null
+    });
     return { ok: true, report: makeWireSafe_(report) };
   });
 }
@@ -306,6 +317,18 @@ function vtListHarnessSuites() {
           }
         } catch (_e) {}
       }
+      var expectedAssertionCount = 0;
+      var assertionCountKnown = true;
+      var suiteScenarioIds = (s.scenarioIds && s.scenarioIds.length)
+        ? s.scenarioIds.slice() : [];
+      for (var j = 0; j < suiteScenarioIds.length; j++) {
+        var scenario = getHarnessScenarioById_(suiteScenarioIds[j]);
+        if (!scenario || !Number(scenario.expectedAssertionCount)) {
+          assertionCountKnown = false;
+          break;
+        }
+        expectedAssertionCount += Number(scenario.expectedAssertionCount);
+      }
       suites.push({
         id: s.id,
         label: s.label,
@@ -317,8 +340,9 @@ function vtListHarnessSuites() {
           ? String(ScriptApp.getService().getUrl() || '').replace(/\?.*$/, '') + '?view=' + encodeURIComponent(s.browserRoute)
           : null,
         latestEvidence: latestEvidence,
-        scenarioIds: (s.scenarioIds && s.scenarioIds.length) ? s.scenarioIds.slice() : [],
-        count: (s.scenarioIds && s.scenarioIds.length) ? s.scenarioIds.length : 0
+        scenarioIds: suiteScenarioIds,
+        count: suiteScenarioIds.length,
+        expectedAssertionCount: assertionCountKnown ? expectedAssertionCount : 0
       });
     }
     return { ok: true, suites: suites };
@@ -352,8 +376,25 @@ function vtRunHarnessSuite(suiteId, options) {
     var mode = (options && options.dispositionMode) ? String(options.dispositionMode) : 'keep';
     // Rich in-memory report may embed Date objects (temporal comparators inside the
     // per-scenario functional results) — normalize to a wire-safe copy for the browser.
-    var report = testRunSuiteById_(id, { dispositionMode: mode });
+    var progressToken = harnessProgressToken_(options && options.progressToken);
+    var report = testRunSuiteById_(id, {
+      dispositionMode: mode,
+      progressToken: progressToken
+    });
     return { ok: true, report: makeWireSafe_(report) };
+  });
+}
+
+/**
+ * Poll one privacy-safe, user-scoped Harness progress snapshot. The payload has
+ * phase/timing/count metadata only—never workbook ids, names, or financial data.
+ */
+function vtGetHarnessRunProgress(progressToken) {
+  return vtSafe_(function() {
+    assertHarnessAllowed_();
+    var token = harnessProgressToken_(progressToken);
+    if (!token) throw new Error('Invalid Harness progress token.');
+    return { ok: true, progress: harnessReadProgress_(token) };
   });
 }
 

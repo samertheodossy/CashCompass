@@ -91,7 +91,7 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 
 **B. Financial Integrity — Phase 3 (convergence)** *(Beta-Gate workstream · sequenced alongside execution items #3–5 — foundation shipped in Stage 2: Audit Framework · Debt Audit · shared Active helper · `NOT_INITIALIZED`)*
 
-> **Completed (Phase 1–2):** Audit Framework (read-only, admin-gated) · Debt Audit · shared debt Active helper · `NOT_INITIALIZED` state. **Remaining (Phase 3):** the canonical basis, cross-surface convergence, and the Asset / Planner / Dashboard audit modules below. Strategic anchor: *the numbers must reconcile* — this is the product's core trust claim.
+> **Completed through isolated evidence:** canonical basis, live consumers, and Debt / Asset / Planner / Dashboard audits. **Implemented locally; evidence pending:** canonical History capture/freshness and aggregate Release Readiness wiring. Strategic anchor: *the numbers must reconcile* — this is the product's core trust claim.
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
@@ -101,7 +101,8 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | ✅ Asset audit module (`runAssetAudit`) — isolated `@150` run `20260722-145136-d3ce` passed 45/45 | P1 | Framework ✓ | Complete |
 | ✅ Planner audit module (`runPlannerAudit`) — isolated `@150` run `20260722-145136-d3ce` passed 45/45 | P1 | Framework ✓ | Complete |
 | ✅ Dashboard audit module (`runDashboardAudit`) — isolated `@150` run `20260722-145136-d3ce` passed 45/45 | P1 | Framework ✓ | Complete |
-| Permanent reconciliation diagnostic wired into release | P1 | Convergence + audit modules | M |
+| ✅ Canonical History capture + freshness audit — isolated Validation `@156` suite `20260722-164849-6081` passed 53/53 with all safety gates and verified Trash | P1 | Convergence + audit modules | Complete |
+| ✅ Permanent Financial Integrity diagnostic wired into Release Readiness required inventory and runtime-proven by the full `@156` suite | P1 | Convergence + audit modules | Complete |
 
 **C. Validator / Test Harness / Release Readiness** *(Beta-Gate evidence workstream; foundation shipped, remaining scope follows P0)*
 

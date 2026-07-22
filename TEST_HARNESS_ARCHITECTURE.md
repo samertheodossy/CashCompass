@@ -437,17 +437,22 @@ registry and aggregates per-scenario reports.
   `trash`) to **every** scenario. No mixed/per-level policy in V1. Each teardown
   still re-passes `assertDisposableTarget_`. Future policies are deferred (§4.0.4).
 - **Report:** `buildHarnessSuiteReport_` → `{ overall, counts:{total,pass,fail,notRun},
-  scenarios:[compact summaries], reports:[full per-scenario], catastrophic }`.
+  assertions:{total,pass,fail}, scenarios:[compact summaries],
+  reports:[full per-scenario], catastrophic }`.
 - **Console:** `vtListHarnessSuites()` / `vtRunHarnessSuite(suiteId, options)`
   (guarded; never accept a client workbook id), surfaced as a **Run Suite** control
   in the Test Harness card of the Workbook Health console. The suite table renders
   each scenario as an **expandable row** (`vtHRenderScenarioDetail`): scenario
   description, per-assertion PASS/FAIL with kind + expected/actual (failures shown
-  prominently with reason/location), Validator summary (Provisioning/Schema/Drift),
+  first with reason/location; passes collapsible), Validator summary (Provisioning/Schema/Drift),
   and the workbook link — all from the existing report (`reports[]` +
   `functional.results[]`), so **no report-shape change** was needed and raw JSON stays
   available for deep debugging. The detail renderer is UI-only and reusable for
-  individual-scenario results later.
+  individual-scenario results later. A local progress slice uses a client-generated
+  opaque token plus user-scoped CacheService snapshots to poll phase, elapsed time,
+  scenario position, and cumulative assertion counts during long runs. The cache
+  payload intentionally excludes workbook identity and financial data, and any
+  cache/poll failure is observability-only—it cannot change the Harness verdict.
 - **Generalization:** new packs (Income / Houses / Retirement / System Integrity /
   Release Readiness) register by adding a suite descriptor — no runner change. Future
   meta-suites (all PURE, all INTEGRATION, all Bills, Release Readiness) are a natural

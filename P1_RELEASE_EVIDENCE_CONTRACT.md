@@ -25,9 +25,14 @@ Formula, Conditional Formatting, Named Range, and width drift are advisory durin
 
 ## Required suite inventory
 
-Runnable foundation: Bills Regression, Recovery Regression, Quick Add Reliability, Populated Fixture, and Central Safety.
+Runnable foundation: Bills Regression, Recovery Regression, Quick Add Reliability, Populated Fixture, Central Safety, House Financial Accuracy, and Financial Integrity Canonical.
 
 Required deeper evidence: First-Run UX E2E, Populated Dashboard E2E, Recovery Live, Performance Planner, and Bills Pay E2E. A suite is not considered implemented merely because its name is registered: it must invoke the real scoped workflow or an approved explicit-workbook seam and make functional assertions.
+
+Financial Integrity Canonical is a gating server suite in Release Readiness. Its
+shared scenario must prove the active-owned-position basis, property-financing
+fail-closed behavior, live consumer/audit convergence, and immutable canonical
+History capture/freshness on its own Restricted disposable workbook.
 
 Current runtime status (2026-07-21): First-Run UX E2E V2 run `FR-9c57ac53-0250-4ebb-a57a-cddec545356b` passed 9/9 on isolated Central `@129`; Populated Dashboard E2E run `FR-19eb43ab-e8fe-4bc8-96a5-336afff43596` passed 11/11 on `@133`; and Recovery Live run `RL-12557aaa-5e18-4d67-a567-6304a5b57542` passed 9/9 on `@135` in 42.071 s. Recovery Live used the production confirmation, self-reconnect, stale/Trash-routing, and ambiguity seams; all three fixtures were Restricted and verified in Trash, no disposable mapping remained, no protected target matched, and the sole-admin configuration/mapping fingerprints were unchanged. Release Readiness refuses to treat any authenticated browser suite as an empty server scenario and now consumes all three saved PASS records. The permanent Performance Planner suite is available at isolated `@136`; its 20-pair campaign is paused after six confirmed pairs, so its p50/p95 budget evidence remains incomplete and unratified. `TEST_PRODUCTION_PATH_AUDIT.md` records the real-code-first contract; `npm test` rejects unreviewed direct-write test files. P1 remains NOT READY pending Release Readiness console controls, completion of performance-budget ratification, and the final bounded evidence run.
 

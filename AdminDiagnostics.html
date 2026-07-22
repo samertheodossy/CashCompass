@@ -127,15 +127,14 @@
   </div>
 
   <!--
-    Financial Integrity Audit (Stage 2 Product Hardening). Read-only, admin-
-    gated. Surfaces differences between financial calculation bases WITHOUT
-    declaring any basis canonical. Divergences render as neutral observations,
-    not errors. Generic renderer: any future audit module appears automatically
-    as another sub-section from the modules[] array.
+    Financial Integrity Audit. Read-only, admin-gated canonical reconciliation.
+    Divergences render as observations; unreadable sources remain failures.
+    Generic renderer: any future audit module appears automatically as another
+    sub-section from the modules[] array.
   -->
   <div class="card">
     <h2>Financial Integrity Audit</h2>
-    <p class="sub">Read-only. Reports differences between financial bases; it does not declare any basis correct.</p>
+    <p class="sub">Read-only. Reconciles the approved current-position basis and reports source, property-financing, and History freshness issues.</p>
     <div id="fia-status" class="muted"><span class="dash-loading" role="status" aria-live="polite"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></span></div>
     <div id="fia-modules" style="margin-top:8px;"></div>
   </div>
@@ -368,6 +367,17 @@
             if (metrics.activeRule.legacyFallbackInEffect) counts += ' (legacy fallback)';
           }
           wrap.appendChild(el('div', counts, 'muted'));
+        }
+
+        // History freshness is intentionally compact: expose when the latest
+        // immutable Planner snapshot was captured and whether its money fields
+        // still match the live canonical position.
+        if (metrics.capturedAt !== undefined) {
+          var historyLine = metrics.capturedAt
+            ? ('Captured planner snapshot: ' + metrics.capturedAt +
+              ' · materially stale: ' + (metrics.materiallyStale ? 'yes' : 'no'))
+            : 'Captured planner snapshot: not available';
+          wrap.appendChild(el('div', historyLine, 'muted'));
         }
 
         // Deltas.

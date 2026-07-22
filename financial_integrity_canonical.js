@@ -216,6 +216,58 @@ function canonicalDashboardTotals_(snapshot, existing) {
 }
 
 /**
+ * Canonical values for the existing OUT - History financial columns.
+ *
+ * No History schema is added or rewritten. A row uses canonical values only
+ * when every participating source was readable. A partial legacy workbook
+ * retains the complete already-calculated Planner snapshot so one History row
+ * never receives a misleading mixed-basis identity.
+ */
+function canonicalHistorySnapshotValues_(snapshot, existing) {
+  var snap = snapshot || {};
+  var sources = snap.sources || {};
+  var totals = snap.totals || {};
+  var fallback = existing || {};
+
+  function available_(domain) {
+    return !!(sources[domain] && sources[domain].available);
+  }
+
+  var completePosition = available_('cash') && available_('investments') &&
+    available_('properties') && available_('debts');
+  function choose_(canonicalValue, fallbackValue) {
+    return round2_(toNumber_(
+      completePosition ? canonicalValue : fallbackValue));
+  }
+
+  var investments = choose_(totals.investments, fallback.investments);
+  var grossRealEstate = choose_(
+    totals.grossRealEstate, fallback.grossRealEstate);
+  var totalLiabilities = choose_(
+    totals.totalLiabilities, fallback.totalLiabilities);
+  var totalAssets = choose_(totals.totalAssets, fallback.totalAssets);
+  var netWorth = choose_(totals.netWorth, fallback.netWorth);
+  var sourceMode = completePosition ? 'CANONICAL_INPUT' : 'LEGACY_FALLBACK';
+
+  return {
+    basis: CANONICAL_FINANCIAL_BASIS_,
+    canonicalStatus: String(snap.status || ''),
+    investments: investments,
+    grossRealEstate: grossRealEstate,
+    totalAssets: totalAssets,
+    totalLiabilities: totalLiabilities,
+    netWorth: netWorth,
+    sourceMode: {
+      investments: sourceMode,
+      properties: sourceMode,
+      liabilities: sourceMode,
+      totalAssets: sourceMode,
+      netWorth: sourceMode
+    }
+  };
+}
+
+/**
  * Read one current-year INPUT ledger block with no writes or self-heal.
  */
 function canonicalReadYearLedger_(sheet, year, config) {

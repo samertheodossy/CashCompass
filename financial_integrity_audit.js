@@ -19,6 +19,7 @@
  *     -> runAssetAudit()
  *     -> runPlannerAudit()
  *     -> runDashboardAudit()
+ *     -> runHistoryAudit()
  *
  * Modules are registered as metadata in getFinancialAuditModules_() so adding
  * a future audit is: write the function, add one registry entry. The master
@@ -221,6 +222,14 @@ function getFinancialAuditModules_() {
       enabled: true,
       version: 1,
       fn: runDashboardAudit
+    },
+    {
+      id: 'history',
+      title: 'History Freshness',
+      order: 50,
+      enabled: true,
+      version: 1,
+      fn: runHistoryAudit
     }
   ];
 }
@@ -236,7 +245,12 @@ function getFinancialAuditModules_() {
  *
  * @returns {!Object} aggregated audit report (see file header / design doc)
  */
-function runFinancialIntegrityAudit(explicitSpreadsheet) {
+function runFinancialIntegrityAudit(explicitSpreadsheet, options) {
+  options = options || {};
+  var suppliedHistorySnapshot =
+    Object.prototype.hasOwnProperty.call(options, 'historySnapshot')
+      ? options.historySnapshot
+      : null;
   // Early informational short-circuit: if the caller's workbook is still in
   // bootstrap/blank state (no financial sheets), there is nothing to audit.
   // Report NOT_INITIALIZED rather than letting each module FAIL on missing
@@ -280,7 +294,8 @@ function runFinancialIntegrityAudit(explicitSpreadsheet) {
   modules.forEach(function(m) {
     var moduleResult;
     try {
-      moduleResult = m.fn(ssForInit, canonicalSnapshot, canonicalReadError);
+      moduleResult = m.fn(ssForInit, canonicalSnapshot, canonicalReadError,
+        suppliedHistorySnapshot);
       if (!moduleResult || typeof moduleResult !== 'object') {
         moduleResult = newAuditResult_(m.id);
         auditAddFailure_(moduleResult, 'EMPTY_RESULT',
@@ -533,6 +548,109 @@ function auditCanonicalDashboardSnapshot_(snapshot) {
   return result;
 }
 
+function readLatestFinancialHistorySnapshot_(ss) {
+  var sheet = ss && ss.getSheetByName('OUT - History');
+  return readLatestFinancialHistorySnapshotFromSheet_(sheet);
+}
+
+function readLatestFinancialHistorySnapshotFromSheet_(sheet) {
+  if (!sheet) return { available: false, reason: 'NO_HISTORY_SHEET' };
+  var values = sheet.getDataRange().getValues();
+  var display = sheet.getDataRange().getDisplayValues();
+  if (display.length < 2) return { available: false, reason: 'NO_HISTORY_ROWS' };
+  var headers = display[0] || [];
+  var cols = {
+    runDate: headers.indexOf('Run Date'),
+    investments: headers.indexOf('Total Financial Assets'),
+    grossRealEstate: headers.indexOf('Total Real Estate Assets'),
+    totalAssets: headers.indexOf('Total Assets'),
+    totalLiabilities: headers.indexOf('Total Liabilities'),
+    netWorth: headers.indexOf('Net Worth')
+  };
+  var missing = Object.keys(cols).filter(function(key) {
+    return cols[key] === -1;
+  });
+  if (missing.length) {
+    return {
+      available: false,
+      reason: 'HISTORY_SCHEMA_UNREADABLE',
+      missing: missing
+    };
+  }
+  for (var r = display.length - 1; r >= 1; r--) {
+    var capturedAt = String(display[r][cols.runDate] || '').trim();
+    if (!capturedAt) continue;
+    return {
+      available: true,
+      capturedAt: capturedAt,
+      investments: round2_(toNumber_(values[r][cols.investments])),
+      grossRealEstate: round2_(toNumber_(values[r][cols.grossRealEstate])),
+      totalAssets: round2_(toNumber_(values[r][cols.totalAssets])),
+      totalLiabilities: round2_(toNumber_(values[r][cols.totalLiabilities])),
+      netWorth: round2_(toNumber_(values[r][cols.netWorth]))
+    };
+  }
+  return { available: false, reason: 'NO_HISTORY_ROWS' };
+}
+
+function auditCanonicalHistorySnapshot_(snapshot, historySnapshot) {
+  var result = newAuditResult_('history');
+  var history = historySnapshot || { available: false, reason: 'NO_HISTORY_ROWS' };
+  var totals = snapshot && snapshot.totals || {};
+  if (!history.available) {
+    auditSetMetric_(result, 'capturedAt', '');
+    auditSetMetric_(result, 'materiallyStale', null);
+    if (history.reason === 'HISTORY_SCHEMA_UNREADABLE') {
+      auditAddFailure_(result, 'HISTORY_SCHEMA_UNREADABLE',
+        'OUT - History is missing required financial columns: ' +
+        (history.missing || []).join(', ') + '.');
+    } else {
+      auditAddWarning_(result, 'HISTORY_NOT_AVAILABLE',
+        'No completed Planner History snapshot is available yet.', {});
+    }
+    return result;
+  }
+
+  var deltas = {};
+  auditCanonicalDelta_(result, deltas, 'investments', history.investments,
+    totals.investments, 'History investments');
+  auditCanonicalDelta_(result, deltas, 'grossRealEstate',
+    history.grossRealEstate, totals.grossRealEstate,
+    'History property value');
+  auditCanonicalDelta_(result, deltas, 'totalAssets', history.totalAssets,
+    totals.totalAssets, 'History total assets');
+  auditCanonicalDelta_(result, deltas, 'totalLiabilities',
+    history.totalLiabilities, totals.totalLiabilities,
+    'History liabilities');
+  auditCanonicalDelta_(result, deltas, 'netWorth', history.netWorth,
+    totals.netWorth, 'History net worth');
+  var materiallyStale = Object.keys(deltas).some(function(key) {
+    return Math.abs(deltas[key]) > FINANCIAL_AUDIT_TOLERANCE_USD_;
+  });
+  auditSetMetric_(result, 'capturedAt', history.capturedAt);
+  auditSetMetric_(result, 'historyTotals', {
+    investments: history.investments,
+    grossRealEstate: history.grossRealEstate,
+    totalAssets: history.totalAssets,
+    totalLiabilities: history.totalLiabilities,
+    netWorth: history.netWorth
+  });
+  auditSetMetric_(result, 'canonicalTotals', totals);
+  auditSetMetric_(result, 'deltas', deltas);
+  auditSetMetric_(result, 'materiallyStale', materiallyStale);
+  auditSetMetric_(result, 'reconciles', !materiallyStale);
+  auditAddCheck_(result, 'history_snapshot_reconciles',
+    'Latest Planner History snapshot reconciles to the live canonical position',
+    !materiallyStale,
+    'Captured ' + history.capturedAt + '; compared to the live position at $0.01.');
+  if (materiallyStale) {
+    auditAddWarning_(result, 'HISTORY_MATERIALLY_STALE',
+      'The latest Planner History snapshot differs materially from the live current position.',
+      { capturedAt: history.capturedAt, deltas: deltas });
+  }
+  return result;
+}
+
 function runAssetAudit(explicitSpreadsheet, suppliedSnapshot,
     suppliedReadError) {
   var result = newAuditResult_('assets');
@@ -555,6 +673,26 @@ function runDashboardAudit(explicitSpreadsheet, suppliedSnapshot,
   var context = financialAuditModuleContext_(result, explicitSpreadsheet,
     suppliedSnapshot, suppliedReadError);
   return context ? auditCanonicalDashboardSnapshot_(context.snapshot) : result;
+}
+
+function runHistoryAudit(explicitSpreadsheet, suppliedSnapshot,
+    suppliedReadError, suppliedHistorySnapshot) {
+  var result = newAuditResult_('history');
+  var context = financialAuditModuleContext_(result, explicitSpreadsheet,
+    suppliedSnapshot, suppliedReadError);
+  if (!context) return result;
+  var history = suppliedHistorySnapshot;
+  if (!history) {
+    try {
+      history = readLatestFinancialHistorySnapshot_(context.ss);
+    } catch (err) {
+      auditAddFailure_(result, 'HISTORY_READ_FAILED',
+        'Could not read OUT - History: ' +
+        (err && err.message ? err.message : err));
+      return result;
+    }
+  }
+  return auditCanonicalHistorySnapshot_(context.snapshot, history);
 }
 
 /* -------------------------------------------------------------------------- */

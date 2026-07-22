@@ -64,6 +64,7 @@ assert.doesNotMatch(release, /runScenario_\([^\n]*candidateSpreadsheetId/,
   'Candidate workbook ID must never enter a writer');
 for (const suite of [
   'SUITE-HOUSE-FINANCIAL-ACCURACY',
+  'SUITE-FINANCIAL-INTEGRITY-CANONICAL',
   'SUITE-POPULATED-DASHBOARD-E2E',
   'SUITE-RECOVERY-LIVE'
 ]) {

@@ -7,8 +7,8 @@
 | Initiative | Financial Integrity Phase 3 |
 | Initiative slug | `financial-integrity-phase-3` |
 | Priority | P0 Beta gate |
-| Initiative status | `ACTIVE` |
-| Knowledge status | `DRAFT` |
+| Initiative status | `COMPLETE` |
+| Knowledge status | `VERIFIED` |
 | Last reviewed date | `2026-07-22` |
 | Last reviewed Git reference | `96d0ebe` |
 | Authoritative priority source | [`ROADMAP.md`](../../ROADMAP.md) → “Priority 2 — Financial Model Accuracy” |
@@ -65,13 +65,14 @@ The roadmap identifies Financial Integrity Phase 3 as the remaining financial-tr
 | Canonical snapshot + regression | Phase 3 plan → §7 steps 1–2 | `COMPLETE` with isolated runtime evidence | Pure explicit-spreadsheet read model plus isolated Central `@147` run `20260722-133952-4f0a`: 21/21, Provisioning/Drift/Restricted/Trash PASS |
 | Cross-surface convergence | `TODO.md` → Financial Integrity | Planner/Rolling/Dashboard totals runtime-proven | Shared Central/bounded helpers; isolated `@149` run `20260722-143242-d150` 34/34 |
 | Audit modules | `TODO.md` → Financial Integrity | `COMPLETE` with isolated evidence | Debt v2 plus Asset, Planner, and Dashboard modules; isolated `@150` run `20260722-145136-d3ce` passed 45/45 |
-| Release wiring | `RELEASE_READINESS.md` | `PLANNED` | Exact-candidate aggregate gate evidence |
+| History convergence | Phase 3 plan → Decision E | `COMPLETE` with isolated evidence | Isolated Validation `@156` suite `20260722-164849-6081` passed 53/53 with verified Trash |
+| Release wiring | `RELEASE_READINESS.md` | `COMPLETE` with isolated evidence | Financial Integrity is in required release inventory and its full 53-assertion suite is runtime-proven |
 
 ## 6. Related Designs and Decisions
 
 | Document | Relationship | Status or decision needed |
 | --- | --- | --- |
-| [`FINANCIAL_INTEGRITY_PHASE_3_PLAN.md`](../../FINANCIAL_INTEGRITY_PHASE_3_PLAN.md) | Inventory and approved contract | Option A, live consumers, and audit convergence runtime-proven; History/release wiring remains |
+| [`FINANCIAL_INTEGRITY_PHASE_3_PLAN.md`](../../FINANCIAL_INTEGRITY_PHASE_3_PLAN.md) | Inventory and approved contract | History/release slice is deployed; local test-only fresh-handle correction awaits isolated evidence |
 | [`HOUSE_FINANCIAL_ACCURACY_PLAN.md`](../../HOUSE_FINANCIAL_ACCURACY_PLAN.md) | Introduced property-linked financing inputs and actual loan-payment reporting | V1 complete; Phase 3 must reconcile loan balances, not rework payment reporting |
 | [`ENGINEERING_STANDARDS.md`](../../ENGINEERING_STANDARDS.md) | Regression-first, milestone discipline, and workbook safety | Governing rules |
 | [`BETA_10_OUT_OF_10_PLAN.md`](../../BETA_10_OUT_OF_10_PLAN.md) | Financial-truth exit gate | Must pass before broad Beta |
@@ -101,7 +102,7 @@ The roadmap identifies Financial Integrity Phase 3 as the remaining financial-tr
 - Planner/Rolling and Dashboard liabilities can differ today when inactive debt carries a balance.
 - Property loan references and linked debts can disagree without a current gate.
 - Dashboard mirrors can lag authoritative source ledgers.
-- The ProductDecision, read model, shared Planner/Rolling/Dashboard totals, and audit-module evidence are complete. Remaining History convergence and release wiring remain separately gated.
+- The ProductDecision, read model, shared Planner/Rolling/Dashboard totals, all five audit modules, History convergence, and Release Readiness wiring are complete. Isolated Validation `@156` passed 53/53; the production writer and shared Central/bounded path remain unchanged.
 
 ### Source conflicts
 
@@ -114,21 +115,21 @@ The roadmap identifies Financial Integrity Phase 3 as the remaining financial-tr
 
 - [x] Every release-critical financial basis is inventoried.
 - [x] Canonical financial contract is explicitly approved.
-- [ ] Dashboard, Planner, Rolling live anchor, sources, mirrors, and history reconcile to `$0.01`.
-- [ ] Property financing reconciles and is counted exactly once.
-- [ ] Asset, Planner, and Dashboard audit modules pass.
-- [ ] Every corrected discrepancy has a permanent disposable regression.
-- [ ] Financial Integrity gates Release Readiness.
-- [ ] Roadmap and technical-status documents agree that the initiative is complete.
-- [ ] Required exact-candidate evidence is recorded.
-- [ ] Deferred scenario/performance work is routed to its authoritative milestone.
+- [x] Dashboard, Planner, Rolling live anchor, sources, mirrors, and history reconcile to `$0.01`.
+- [x] Property financing reconciles and is counted exactly once.
+- [x] Asset, Planner, and Dashboard audit modules pass.
+- [x] Every corrected discrepancy has a permanent disposable regression.
+- [x] Financial Integrity gates Release Readiness.
+- [x] Roadmap and technical-status documents agree that the initiative is complete.
+- [x] Required exact-candidate evidence is recorded.
+- [x] Deferred scenario/performance work is routed to its authoritative milestone.
 
 ## 11. Recommended Next Task
 
-- Task: Obtain separate commit/Git-push approval for the runtime-proven audit slice, then plan remaining History convergence and Release Readiness wiring.
-- Why this task: all live consumers and read-only audits are runtime-proven; only historical snapshot/freshness and aggregate release integration remain in Phase 3.
-- Required role flow: Planner (`COMPLETE`) → Engineer slices 1–4 (`COMPLETE`) → Reviewer/Tester/Validator (`PASS`) → next Planner/Engineer approval gate.
-- Approval gates: runtime consumer-calculation implementation, commit, push, Central push/version/deployment, and any workbook migration remain separate explicit approvals.
+- Task: Commit and Git-push the validated Phase 3 checkpoint after explicit approval.
+- Why this task: The exact isolated candidate passed 53/53 and every workbook-safety gate; the remaining action is a durable source-control checkpoint.
+- Required role flow: Planner (`COMPLETE`) → Engineer slices 1–5 (`COMPLETE`) → Reviewer/Tester (`PASS`) → Validator (`PASS`).
+- Approval gates: commit/Git push, Beta/bounded deployment, and any workbook migration remain separate explicit approvals.
 
 ## 12. Maintenance
 
