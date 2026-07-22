@@ -90,6 +90,7 @@ Initiative Knowledge Documents
 | Initiative | Priority | Initiative status | Knowledge status | Document |
 | --- | --- | --- | --- | --- |
 | Project Stabilization | P0 | `COMPLETE` | `VERIFIED` | agents/initiatives/project-stabilization.md |
+| Financial Integrity Phase 3 | P0 Beta gate | `ACTIVE` | `DRAFT` | agents/initiatives/financial-integrity-phase-3.md |
 
 Initiative documents connect authoritative roadmap priorities to designs, features, evidence, and next tasks. They are navigation artifacts, not replacement roadmaps, and must not invent completion percentages or duplicate volatile status details.
 
@@ -147,6 +148,11 @@ Release Validation
 
 - RELEASE_READINESS.md
 - P1_RELEASE_EVIDENCE_CONTRACT.md
+
+Financial Integrity
+
+- FINANCIAL_INTEGRITY_PHASE_3_PLAN.md
+- agents/initiatives/financial-integrity-phase-3.md
 
 ---
 

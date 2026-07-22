@@ -319,6 +319,7 @@ The milestone is complete only when:
 ## 10. Closeout and next milestone
 
 House Financial Accuracy V1 is complete after the final disposable ambiguity
-coverage, documentation synchronization, and commit-readiness review. Resume P3
-finished-feeling UX work next; keep the exact-candidate Performance percentile
+coverage, documentation synchronization, and commit/push as `96d0ebe` on
+`origin/main`. Financial Integrity Phase 3 is the next financial-truth gate;
+P3 finished-feeling UX follows. Keep the exact-candidate Performance percentile
 campaign explicitly parked until it is restarted before broad Beta release.
