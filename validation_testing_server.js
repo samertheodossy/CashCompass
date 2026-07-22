@@ -379,3 +379,72 @@ function vtOpenHarnessBrowserRunner(suiteId) {
     };
   });
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Release Readiness — bounded orchestration adapters                         */
+/*                                                                              */
+/*  Release Readiness never resolves or opens the selected workbook. Workbook   */
+/*  Health and every workflow check create their own disposable workbook through */
+/*  runScenario_.                                                               */
+/* -------------------------------------------------------------------------- */
+
+function vtReleaseReadinessStart(spreadsheetId, metadata) {
+  return vtSafe_(function() {
+    assertValidatorAllowed_();
+    assertHarnessAllowed_();
+    // spreadsheetId is intentionally ignored for backward-compatible clients.
+    // The release workflow must never resolve or open a selected/bounded target.
+    var state = releaseReadinessStart(metadata || {});
+    return { ok: true, state: makeWireSafe_(state) };
+  });
+}
+
+function vtReleaseReadinessRunNextChunk() {
+  return vtSafe_(function() {
+    assertValidatorAllowed_();
+    assertHarnessAllowed_();
+    return { ok: true, progress: makeWireSafe_(releaseReadinessRunNextChunk()),
+      state: makeWireSafe_(releaseReadinessGetStatus()) };
+  });
+}
+
+function vtReleaseReadinessGetStatus() {
+  return vtSafe_(function() {
+    assertValidatorAllowed_();
+    return { ok: true, state: makeWireSafe_(releaseReadinessGetStatus()),
+      archives: makeWireSafe_(releaseReadinessListArchives()) };
+  });
+}
+
+function vtReleaseReadinessFinalize() {
+  return vtSafe_(function() {
+    assertValidatorAllowed_();
+    return { ok: true, state: makeWireSafe_(releaseReadinessFinalize()),
+      archives: makeWireSafe_(releaseReadinessListArchives()) };
+  });
+}
+
+/** Admin-only explicit control for the default-OFF disposable test writer. */
+function vtSetReleaseHarnessEnabled(enabled, confirmed) {
+  return vtSafe_(function() {
+    assertValidatorAllowed_();
+    if (confirmed !== true) throw new Error('Explicit confirmation is required to change the disposable test runner flag.');
+    var props = PropertiesService.getScriptProperties();
+    if (enabled === true) {
+      props.setProperty(TEST_HARNESS_ENABLED_KEY_, 'true');
+      props.setProperty(RELEASE_OWNS_HARNESS_FLAG_KEY_, 'true');
+    } else {
+      props.deleteProperty(TEST_HARNESS_ENABLED_KEY_);
+      props.deleteProperty(RELEASE_OWNS_HARNESS_FLAG_KEY_);
+    }
+    return { ok: true, enabled: enabled === true };
+  });
+}
+
+function vtGetReleaseHarnessEnabled() {
+  return vtSafe_(function() {
+    assertValidatorAllowed_();
+    return { ok: true, enabled: PropertiesService.getScriptProperties()
+      .getProperty(TEST_HARNESS_ENABLED_KEY_) === 'true' };
+  });
+}

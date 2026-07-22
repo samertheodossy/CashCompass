@@ -47,6 +47,14 @@ function loadDebtSectionThenSelect_(accountName) {
         opt.textContent = t;
         typeSel.appendChild(opt);
       });
+      const fieldSel = document.getElementById('debt_field');
+      fieldSel.innerHTML = '';
+      (data.editableFields || []).forEach(function(f) {
+        const opt = document.createElement('option');
+        opt.value = f;
+        opt.textContent = f;
+        fieldSel.appendChild(opt);
+      });
       populateDebtAddDatalists_(data);
       filterDebtAccounts();
       const sel = document.getElementById('debt_account');

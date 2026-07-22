@@ -27,7 +27,7 @@ function testRunP1WorkbookHealthAndRelease() {
         throw new Error('P1 validation fixture was not created.');
       }
 
-      var started = releaseReadinessStart(report.workbook.id, {
+      var started = releaseReadinessStart({
         sourceVersion: metadata.sourceVersion,
         deployment: metadata.deployment,
         openSeverity1: 0,
@@ -41,10 +41,10 @@ function testRunP1WorkbookHealthAndRelease() {
       cleanup = teardownDisposableWorkbook_(SpreadsheetApp.openById(report.workbook.id), runId, { trash: true });
       var result = {
         overall: report.overall,
-        workbookHealth: report.validators && report.validators.health ? {
-          overall: report.validators.health.overall,
-          gate: report.validators.health.gate,
-          advisory: report.validators.health.advisory
+        workbookHealth: report.full && report.full.health ? {
+          overall: report.full.health.overall,
+          gate: report.full.health.gate,
+          advisory: report.full.health.advisory
         } : null,
         functional: report.functional ? report.functional.counts : null,
         sharing: report.sharing,

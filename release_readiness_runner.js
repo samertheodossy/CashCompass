@@ -1,11 +1,14 @@
 /**
  * Bounded Release Readiness orchestration. One scenario per invocation; compact,
  * privacy-safe state in Script Properties. Default-off through the existing
- * Validator + Harness guards. No workbook ID is ever passed to a writer.
+ * Validator + Harness guards. Every workbook used by this workflow is disposable.
  */
 var RELEASE_READINESS_STATE_KEY_ = 'RELEASE_READINESS_ACTIVE_RUN_V1';
 var RELEASE_READINESS_ARCHIVE_INDEX_KEY_ = 'RELEASE_READINESS_ARCHIVE_INDEX_V1';
 var RELEASE_PERFORMANCE_BUDGET_RATIFIED_KEY_ = 'PERFORMANCE_BUDGETS_RATIFIED';
+var RELEASE_CANDIDATE_SOURCE_KEY_ = 'RELEASE_CANDIDATE_SOURCE_VERSION_V1';
+var RELEASE_CANDIDATE_DEPLOYMENT_KEY_ = 'RELEASE_CANDIDATE_DEPLOYMENT_V1';
+var RELEASE_OWNS_HARNESS_FLAG_KEY_ = 'RELEASE_READINESS_OWNS_HARNESS_FLAG_V1';
 var RELEASE_REQUIRED_SUITES_ = [
   'SUITE-BILLS-REGRESSION',
   'SUITE-RECOVERY-REGRESSION',
@@ -19,31 +22,54 @@ var RELEASE_REQUIRED_SUITES_ = [
   'SUITE-BILLS-PAY-E2E'
 ];
 
-function releaseReadinessStart(candidateSpreadsheetId, metadata) {
+function releaseReadinessStart(metadata) {
   assertValidatorAllowed_();
   assertHarnessAllowed_();
-  var id = String(candidateSpreadsheetId || '').trim();
-  if (!id) throw new Error('Release Readiness requires the exact candidate workbook ID for read-only Workbook Health.');
   var prior = releaseLoadState_();
   if (prior && prior.status === 'IN_PROGRESS') {
     throw new Error('Release Readiness run ' + prior.runId + ' is still IN_PROGRESS. Finish it before starting another.');
   }
-  var health = validateWorkbookHealth_(SpreadsheetApp.openById(id));
-  var inventory = releaseBuildInventory_();
   metadata = metadata || {};
+  var sourceVersion = releaseSanitizeMetadata_(metadata.sourceVersion);
+  var deployment = releaseSanitizeMetadata_(metadata.deployment);
+  var rawSeverity1 = String(metadata.openSeverity1 == null ? '' : metadata.openSeverity1).trim();
+  var rawSeverity2 = String(metadata.openSeverity2 == null ? '' : metadata.openSeverity2).trim();
+  var severity1 = Number(metadata.openSeverity1);
+  var severity2 = Number(metadata.openSeverity2);
+  if (!sourceVersion || !deployment) {
+    throw new Error('Release Readiness requires the exact source version and deployment identity.');
+  }
+  if (!rawSeverity1 || !rawSeverity2 || !isFinite(severity1) || !isFinite(severity2) || severity1 < 0 || severity2 < 0 ||
+      Math.floor(severity1) !== severity1 || Math.floor(severity2) !== severity2) {
+    throw new Error('Severity 1 and Severity 2 issue counts must be declared as whole numbers zero or greater.');
+  }
+  var inventory = releaseBuildInventory_();
+  var healthScenario = getHarnessScenarioById_('SMOKE-POPULATED-FIXTURE');
+  if (!healthScenario) throw new Error('Release Readiness disposable Workbook Health scenario is unavailable.');
+  var healthReport = runScenario_(healthScenario, harnessGenerateRunId_(), { trash: true });
+  if (!healthReport || !healthReport.workbook || !healthReport.workbook.id ||
+      !healthReport.full || !healthReport.full.health) {
+    throw new Error('Release Readiness could not produce disposable Workbook Health evidence.');
+  }
+  // The preflight fixture already proves the populated-fixture scenario, so do
+  // not create a duplicate workbook when the remaining inventory is executed.
+  inventory.scenarioIds = inventory.scenarioIds.filter(function(scenarioId) {
+    return scenarioId !== healthScenario.id;
+  });
+  var candidate = { workbookFingerprint: releaseWorkbookFingerprint_(healthReport.workbook.id),
+    sourceVersion: sourceVersion, deployment: deployment };
+  releaseSaveCurrentCandidateMetadata_(candidate);
   var state = {
     version: 1, runId: 'RR-' + Utilities.getUuid(), startedAt: new Date().toISOString(),
-    candidate: { workbookId: id,
-      sourceVersion: releaseSanitizeMetadata_(metadata.sourceVersion),
-      deployment: releaseSanitizeMetadata_(metadata.deployment) },
+    candidate: candidate,
     openIssues: {
-      severity1: Number(metadata.openSeverity1),
-      severity2: Number(metadata.openSeverity2),
-      declared: isFinite(Number(metadata.openSeverity1)) && isFinite(Number(metadata.openSeverity2))
+      severity1: severity1,
+      severity2: severity2,
+      declared: true
     },
-    health: releaseCompactHealth_(health), inventory: inventory,
-    externalEvidence: releaseLoadExternalEvidence_(inventory.externalSuites),
-    cursor: 0, results: [], status: 'IN_PROGRESS'
+    health: releaseCompactHealth_(healthReport.full.health), inventory: inventory,
+    externalEvidence: releaseLoadExternalEvidence_(inventory.externalSuites, candidate),
+    cursor: 0, results: [releaseCompactScenario_(healthReport)], status: 'IN_PROGRESS'
   };
   releaseSaveState_(state);
   return state;
@@ -82,6 +108,11 @@ function releaseReadinessFinalize() {
   assertValidatorAllowed_();
   var state = releaseLoadState_();
   if (!state) throw new Error('No active Release Readiness run.');
+  if (state.status !== 'IN_PROGRESS') return state;
+  // Browser-backed suites may finish after this bounded run started. Refresh
+  // their compact saved evidence at finalization so the console can resume a
+  // run without requiring a restart, while still refusing missing/failed data.
+  state.externalEvidence = releaseLoadExternalEvidence_(state.inventory.externalSuites, state.candidate);
   var failures = [];
   if (state.health.overall === 'FAIL') failures.push('Workbook Health gating failure.');
   if (!state.candidate.sourceVersion || !state.candidate.deployment) failures.push('Exact source version and deployment identity were not recorded.');
@@ -107,6 +138,7 @@ function releaseReadinessFinalize() {
   state.failures = failures;
   releaseSaveState_(state);
   releaseArchiveState_(state);
+  releaseRestoreHarnessFlagIfOwned_();
   return state;
 }
 
@@ -126,7 +158,7 @@ function releaseBuildInventory_() {
 }
 
 /** Snapshot compact browser evidence when a bounded release run begins. */
-function releaseLoadExternalEvidence_(suiteIds) {
+function releaseLoadExternalEvidence_(suiteIds, candidate) {
   var out = {};
   var ids = suiteIds || [];
   var props = PropertiesService.getScriptProperties();
@@ -136,7 +168,8 @@ function releaseLoadExternalEvidence_(suiteIds) {
     try {
       var raw = props.getProperty(suite.evidenceKey);
       var report = raw ? JSON.parse(raw) : null;
-      if (!report || report.suiteId !== suite.id) continue;
+      if (!report || report.suiteId !== suite.id ||
+          !releaseEvidenceMatchesCandidate_(report.candidate, candidate)) continue;
       out[suite.id] = {
         overall: report.overall,
         runId: releaseSanitizeMetadata_(report.runId),
@@ -147,6 +180,27 @@ function releaseLoadExternalEvidence_(suiteIds) {
     } catch (_e) {}
   }
   return out;
+}
+
+function releaseEvidenceMatchesCandidate_(evidenceCandidate, expectedCandidate) {
+  return !!(evidenceCandidate && expectedCandidate &&
+    evidenceCandidate.sourceVersion === expectedCandidate.sourceVersion &&
+    evidenceCandidate.deployment === expectedCandidate.deployment);
+}
+
+function releaseSaveCurrentCandidateMetadata_(candidate) {
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty(RELEASE_CANDIDATE_SOURCE_KEY_, releaseSanitizeMetadata_(candidate.sourceVersion));
+  props.setProperty(RELEASE_CANDIDATE_DEPLOYMENT_KEY_, releaseSanitizeMetadata_(candidate.deployment));
+}
+
+/** Candidate metadata attached to browser evidence; contains no workbook id. */
+function releaseCurrentCandidateMetadata_() {
+  var props = PropertiesService.getScriptProperties();
+  return {
+    sourceVersion: releaseSanitizeMetadata_(props.getProperty(RELEASE_CANDIDATE_SOURCE_KEY_)),
+    deployment: releaseSanitizeMetadata_(props.getProperty(RELEASE_CANDIDATE_DEPLOYMENT_KEY_))
+  };
 }
 
 function releaseCompactHealth_(h) {
@@ -173,6 +227,20 @@ function releaseSanitizeMetadata_(value) {
   return String(value || '').replace(/[\r\n\t]/g, ' ').trim().slice(0, 120);
 }
 
+/** Privacy-safe stable identifier for the exact read-only candidate workbook. */
+function releaseWorkbookFingerprint_(spreadsheetId) {
+  var digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    String(spreadsheetId || ''),
+    Utilities.Charset.UTF_8
+  );
+  var hex = digest.map(function(value) {
+    var normalized = value < 0 ? value + 256 : value;
+    return ('0' + normalized.toString(16)).slice(-2);
+  }).join('');
+  return hex.slice(0, 16);
+}
+
 function releaseSaveState_(state) {
   var json = JSON.stringify(state);
   if (json.length > 8500) throw new Error('Release Readiness compact state exceeded the Script Properties safety limit.');
@@ -197,4 +265,22 @@ function releaseArchiveState_(state) {
   index = index.slice(0, 20);
   props.setProperty(RELEASE_READINESS_ARCHIVE_INDEX_KEY_, JSON.stringify(index));
   for (var i = 0; i < evicted.length; i++) if (evicted[i] && evicted[i].key) props.deleteProperty(evicted[i].key);
+}
+
+/** Compact archive index for the admin console; no workbook ids or cell data. */
+function releaseReadinessListArchives() {
+  assertValidatorAllowed_();
+  var raw = PropertiesService.getScriptProperties().getProperty(RELEASE_READINESS_ARCHIVE_INDEX_KEY_);
+  var index = raw ? JSON.parse(raw) : [];
+  return index.slice(0, 20).map(function(item) {
+    return { runId: item.runId, finalizedAt: item.finalizedAt, status: item.status };
+  });
+}
+
+/** Restore the Harness default-OFF boundary after a console-owned run closes. */
+function releaseRestoreHarnessFlagIfOwned_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty(RELEASE_OWNS_HARNESS_FLAG_KEY_) !== 'true') return;
+  props.deleteProperty(TEST_HARNESS_ENABLED_KEY_);
+  props.deleteProperty(RELEASE_OWNS_HARNESS_FLAG_KEY_);
 }

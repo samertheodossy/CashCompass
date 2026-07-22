@@ -313,6 +313,7 @@ function frE2EComplete(runId, payload, trashAfter) {
       suiteId: 'SUITE-FIRST-RUN-UX-E2E',
       scenarioId: FIRST_RUN_E2E_SCENARIO_ID_,
       runId: state.runId,
+      candidate: releaseCurrentCandidateMetadata_(),
       startedAt: state.createdAt,
       finishedAt: new Date().toISOString(),
       overall: pass ? 'PASS' : 'FAIL',

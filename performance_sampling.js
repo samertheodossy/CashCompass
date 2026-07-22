@@ -143,6 +143,7 @@ function psFinalize_(state) {
     suiteId: 'SUITE-PERFORMANCE-PLANNER',
     scenarioId: 'PERFORMANCE-PLANNER-FIRST-REPEAT',
     runId: state.campaignId,
+    candidate: releaseCurrentCandidateMetadata_(),
     startedAt: state.startedAt,
     finishedAt: new Date().toISOString(),
     overall: budgetPass ? 'PASS' : 'FAIL',

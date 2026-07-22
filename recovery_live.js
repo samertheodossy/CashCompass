@@ -387,6 +387,7 @@ function recoveryLiveFinalize_(state) {
     suiteId: 'SUITE-RECOVERY-LIVE',
     scenarioId: RECOVERY_LIVE_SCENARIO_ID_,
     runId: state.runId,
+    candidate: releaseCurrentCandidateMetadata_(),
     startedAt: state.startedAt,
     finishedAt: new Date().toISOString(),
     durationMs: Math.max(0, new Date().getTime() - new Date(state.startedAt).getTime()),

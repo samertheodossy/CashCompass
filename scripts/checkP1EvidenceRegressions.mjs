@@ -7,7 +7,7 @@ const [registry, formulas, cf, named, health, release, contract, suites,
   planner, bank, investments, houses, plannerOutput, quickAdd, dashboard, performanceScenario, billsPayScenario,
   harnessCore, p1Runner, webapp, centralDiagnostics, firstRunE2E, firstRunBrowser,
   populatedE2E, populatedBrowser, populatedUi, recoveryLive, recoveryUi, performanceSampling, performanceSamplingUi,
-  validationUi, validationServer, sharedRules, engineeringStandards, testingUrls] = await Promise.all([
+  validationUi, validationServer, sharedRules, engineeringStandards, testingUrls, debtUi] = await Promise.all([
   read('validator_schema_registry.js'), read('validator_formulas.js'),
   read('validator_conditional_formatting.js'), read('validator_named_ranges.js'),
   read('validator_health.js'), read('release_readiness_runner.js'),
@@ -22,7 +22,7 @@ const [registry, formulas, cf, named, health, release, contract, suites,
   read('recovery_live.js'), read('RecoveryTestingUI.html'), read('performance_sampling.js'),
   read('PerformanceSamplingUI.html'), read('ValidationTestingUI.html'),
   read('validation_testing_server.js'), read('agents/shared.md'), read('ENGINEERING_STANDARDS.md'),
-  read('TESTING_URLS.md')
+  read('TESTING_URLS.md'), read('Dashboard_Script_PlanningDebts.html')
 ]);
 
 const rootEntries = await readdir(new URL('../', import.meta.url), { withFileTypes: true });
@@ -200,6 +200,47 @@ assert.match(suites, /id: 'SUITE-BILLS-PAY-E2E'[\s\S]*?implemented: true[\s\S]*?
 assert.match(suites, /id: 'SUITE-WORKBOOK-HEALTH'[\s\S]*?aggregate read-only Workbook Health[\s\S]*?'SMOKE-POPULATED-FIXTURE'/,
   'Workbook Health suite must reuse the proven populated disposable scenario');
 assert.match(release, /PERFORMANCE_BUDGETS_RATIFIED/, 'Release verdict must fail closed until performance budgets are ratified');
+assert.match(release, /var candidate = \{ workbookFingerprint: releaseWorkbookFingerprint_\(healthReport\.workbook\.id\)/,
+  'Archived Release Readiness evidence must fingerprint the disposable health fixture rather than store a raw workbook id');
+assert.doesNotMatch(release, /candidate:\s*\{\s*workbookId:/,
+  'Release Readiness state must not persist the raw candidate workbook id');
+assert.match(release, /function releaseReadinessFinalize\(\)[\s\S]*?releaseLoadExternalEvidence_\(state\.inventory\.externalSuites, state\.candidate\)/,
+  'Finalization must refresh browser evidence so a bounded run can resume after external suites finish');
+assert.match(release, /releaseEvidenceMatchesCandidate_\(report\.candidate, candidate\)/,
+  'Release Readiness must reject browser evidence from a different source or deployment candidate');
+for (const [label, source] of [
+  ['First-Run UX E2E', firstRunE2E], ['Populated Dashboard E2E', populatedE2E],
+  ['Recovery Live', recoveryLive], ['Performance Planner', performanceSampling]
+]) {
+  assert.match(source, /candidate: releaseCurrentCandidateMetadata_\(\)/,
+    `${label} must attach the active release candidate metadata to saved evidence`);
+}
+assert.match(validationServer, /function vtReleaseReadinessStart\(spreadsheetId, metadata\)[\s\S]*?spreadsheetId is intentionally ignored[\s\S]*?releaseReadinessStart\(metadata/,
+  'Release Readiness must ignore the selected target and start only through disposable workbooks');
+assert.doesNotMatch(validationServer, /function vtReleaseReadinessStart\(spreadsheetId, metadata\)[\s\S]*?vtResolveTarget_\(spreadsheetId\)/,
+  'Release Readiness must never resolve or open the selected or bounded target workbook');
+assert.match(release, /getHarnessScenarioById_\('SMOKE-POPULATED-FIXTURE'\)[\s\S]*?runScenario_\(healthScenario[\s\S]*?\{ trash: true \}/,
+  'Workbook Health preflight must run on the Restricted disposable populated fixture with Trash cleanup');
+assert.match(release, /healthReport\.full\.health[\s\S]*?releaseCompactHealth_\(healthReport\.full\.health\)/,
+  'Release Readiness must consume the harness report full Workbook Health contract');
+assert.match(validationServer, /function vtReleaseReadinessRunNextChunk\(\)[\s\S]*?releaseReadinessRunNextChunk/,
+  'The console must expose one bounded Release Readiness chunk per RPC');
+assert.match(validationUi, /id="vt-release-readiness"[\s\S]*?Run remaining[\s\S]*?function vtRRRunAll\(\)/,
+  'The single Validation console must expose resumable Release Readiness controls');
+assert.doesNotMatch(validationUi, /if \(done\) vtRRFinalize\(\)/,
+  'Run remaining must not finalize before browser evidence is complete');
+assert.match(validationUi, /All server checks are complete and saved\. Run any missing browser suites, then finalize\./,
+  'Run remaining must stop safely after server checks and direct the operator to browser evidence');
+assert.match(debtUi, /function loadDebtSectionThenSelect_\(accountName\)[\s\S]*?data\.editableFields[\s\S]*?loadDebtFieldValue\(\)/,
+  'Debt selection helper must populate editable fields before loading the selected value');
+assert.match(validationUi, /never uses the selected target workbook[\s\S]*?Workbook Health and every workflow check create and safely trash their own disposable workbook/,
+  'Release Readiness UI must state that all checks use disposable workbooks');
+assert.match(validationServer, /function vtSetReleaseHarnessEnabled\(enabled, confirmed\)[\s\S]*?assertValidatorAllowed_\(\)[\s\S]*?confirmed !== true[\s\S]*?TEST_HARNESS_ENABLED_KEY_/,
+  'Only an explicitly confirmed admin Validator session may toggle the disposable runner');
+assert.match(release, /releaseRestoreHarnessFlagIfOwned_\(\)[\s\S]*?deleteProperty\(TEST_HARNESS_ENABLED_KEY_\)/,
+  'A console-owned Release Readiness run must restore the Harness flag to OFF when finalized');
+assert.match(validationUi, /Enable disposable runner[\s\S]*?function vtRRSetHarness_\(enabled\)/,
+  'Release Readiness must expose the guarded runner enable control on the single console');
 assert.match(planner, /options\.spreadsheet \|\| getUserSpreadsheet_\(\)/, 'Planner must preserve normal resolution and allow an internal explicit target');
 assert.match(planner, /buildInputBillPlannerPaymentWindows_\([\s\S]*?paySoonWindowDays,\s*ss\s*\)/,
   'Planner must propagate its explicit workbook into nested Bills payment-window reads');
@@ -247,10 +288,11 @@ const verdictCtx = vm.createContext({
   assertValidatorAllowed_: () => {}, assertHarnessAllowed_: () => {},
   PropertiesService: { getScriptProperties: () => props }, console
 });
+vm.runInContext(suites, verdictCtx);
 vm.runInContext(release, verdictCtx);
 const baseState = {
   version: 1, runId: 'RR-test', startedAt: new Date().toISOString(),
-  candidate: { workbookId: 'fixture', sourceVersion: 'abc123', deployment: '@test' },
+  candidate: { workbookFingerprint: 'fixture-hash', sourceVersion: 'abc123', deployment: '@test' },
   openIssues: { severity1: 0, severity2: 0, declared: true },
   health: { overall: 'PASS' }, inventory: { missingSuites: [], externalSuites: ['SUITE-FIRST-RUN-UX-E2E', 'SUITE-POPULATED-DASHBOARD-E2E', 'SUITE-RECOVERY-LIVE', 'SUITE-PERFORMANCE-PLANNER'], scenarioIds: [] },
   externalEvidence: {},
@@ -269,6 +311,14 @@ const readyState = { ...baseState, runId: 'RR-ready',
   },
   status: 'IN_PROGRESS' };
 props.setProperty('RELEASE_READINESS_ACTIVE_RUN_V1', JSON.stringify(readyState));
+for (const suiteId of readyState.inventory.externalSuites) {
+  const suite = verdictCtx.getHarnessSuiteById_(suiteId);
+  props.setProperty(suite.evidenceKey, JSON.stringify({
+    suiteId, runId: `${suiteId}-pass`, finishedAt: new Date().toISOString(), overall: 'PASS',
+    candidate: readyState.candidate,
+    cleanup: { verified: true }
+  }));
+}
 props.setProperty('PERFORMANCE_BUDGETS_RATIFIED', 'true');
 assert.equal(verdictCtx.releaseReadinessFinalize().status, 'READY',
   'Complete passing evidence with ratified budgets must produce READY');

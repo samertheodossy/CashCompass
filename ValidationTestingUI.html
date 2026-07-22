@@ -53,7 +53,7 @@
 
     /* Target */
     .radio-row { margin: 4px 0; font-size: 13px; }
-    input[type=text] {
+    input[type=text], input[type=number] {
       width: 100%; padding: 9px 11px; font-size: 13px;
       font-family: ui-monospace, Menlo, monospace;
       border: 1px solid #cbd2d9; border-radius: 8px; margin: 6px 0 2px;
@@ -167,6 +167,13 @@
     #vt-h-results .summary, #vt-h-results .status-grid { margin-bottom: 14px; }
     #vt-h-suite-results .summary { margin-bottom: 14px; }
 
+    /* Release Readiness */
+    .rr-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 14px; }
+    .rr-field label { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+                      color:var(--ink-mute); font-weight:600; }
+    .rr-progress { width:100%; height:18px; margin:10px 0 4px; }
+    .rr-failures { margin:10px 0 0; padding-left:20px; color:var(--red-fg); font-size:12.5px; }
+
     /* Suite result table */
     .suite-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 14px; }
     .suite-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
@@ -210,6 +217,7 @@
     @media (max-width: 640px) {
       body { padding: 16px 10px 48px; }
       .kv b { min-width: 92px; }
+      .rr-fields { grid-template-columns:1fr; }
     }
   </style>
 </head>
@@ -366,6 +374,51 @@
     </details>
   </div>
 
+  <!-- RELEASE READINESS -->
+  <div class="card" id="vt-release-readiness">
+    <h2>Release Readiness</h2>
+    <div class="banner" style="margin-bottom:14px;">
+      <span class="ico">🧭</span>
+      <span>Release Readiness <b>never uses the selected target workbook</b>.
+        Workbook Health and every workflow check create and safely trash their own disposable workbook.
+        Runs are saved after each check and can be resumed without one long Apps Script execution.</span>
+    </div>
+    <div class="rr-fields">
+      <div class="rr-field"><label for="vt-rr-source">Exact source version</label>
+        <input type="text" id="vt-rr-source" placeholder="Git commit or source version"></div>
+      <div class="rr-field"><label for="vt-rr-deployment">Exact deployment</label>
+        <input type="text" id="vt-rr-deployment" placeholder="Example: isolated @137"></div>
+      <div class="rr-field"><label for="vt-rr-sev1">Open Severity 1 issues</label>
+        <input type="number" id="vt-rr-sev1" min="0" step="1" value="0"></div>
+      <div class="rr-field"><label for="vt-rr-sev2">Open Severity 2 issues</label>
+        <input type="number" id="vt-rr-sev2" min="0" step="1" value="0"></div>
+    </div>
+    <div class="radio-row" style="margin:12px 0;">
+      <label><input type="checkbox" id="vt-rr-confirm" onchange="vtRRSyncButtons()">
+        I confirm all Release Readiness checks must use disposable workbooks and never target a selected or bounded workbook.</label>
+    </div>
+    <div style="font-size:12px;color:var(--ink-mute);margin:-4px 0 12px;">
+      Finalize now intentionally closes an incomplete run as <b>NOT READY</b>. Browser evidence
+      passes only when it was recorded for the exact source and deployment entered above.
+    </div>
+    <div class="btn-row">
+      <button id="vt-rr-enable-harness" onclick="vtRRSetHarness_(true)">Enable disposable runner</button>
+      <button id="vt-rr-disable-harness" onclick="vtRRSetHarness_(false)">Disable disposable runner</button>
+      <span id="vt-rr-harness-state" class="runmsg">Checking runner…</span>
+    </div>
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="primary" id="vt-rr-start" onclick="vtRRStart()">Start new readiness run</button>
+      <button id="vt-rr-next" onclick="vtRRRunNext()" disabled>Run next check</button>
+      <button id="vt-rr-all" onclick="vtRRRunAll()" disabled>Run remaining</button>
+      <button id="vt-rr-pause" onclick="vtRRPause()" disabled>Pause after current check</button>
+      <button onclick="vtRRRefresh()">Refresh status</button>
+      <button id="vt-rr-finalize" onclick="vtRRFinalize()" disabled>Finalize now</button>
+      <span id="vt-rr-status" class="runmsg"></span>
+    </div>
+    <progress class="rr-progress" id="vt-rr-progress" value="0" max="1"></progress>
+    <div id="vt-rr-results" style="margin-top:12px;"></div>
+  </div>
+
   <!-- FUTURE -->
   <div class="card">
     <h2>More checks</h2>
@@ -374,7 +427,6 @@
       <div class="soon"><div class="t">Conditional Formatting</div><div class="badge">Coming soon</div></div>
       <div class="soon"><div class="t">Workbook Health score</div><div class="badge">Coming soon</div></div>
       <div class="soon"><div class="t">Regression</div><div class="badge">Coming soon</div></div>
-      <div class="soon"><div class="t">Release Readiness</div><div class="badge">Coming soon</div></div>
     </div>
   </div>
 </div>
@@ -388,6 +440,11 @@
   // This prevents a slow callback (e.g. Drift from a prior "Run Workbook Health")
   // from re-populating state after a newer single-action run.
   var vtRunToken = 0;
+  var vtRRState = null;
+  var vtRRArchives = [];
+  var vtRRKeepRunning = false;
+  var vtRRBusy = false;
+  var vtRRHarnessEnabled = false;
 
   // Hard-blank every report container. Used before each run and on reset so no
   // stale DOM can survive even if a later render step bails.
@@ -430,6 +487,250 @@
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
   function vtSpin(text) { return '<span class="spinner"></span>' + vtEsc(text); }
+
+  /* ---- Release Readiness ---- */
+  function vtRRSetStatus(html, isErr) {
+    var el = document.getElementById('vt-rr-status');
+    el.className = 'runmsg' + (isErr ? ' err' : '');
+    el.innerHTML = html || '';
+  }
+
+  function vtRRMetadata_() {
+    return {
+      sourceVersion: document.getElementById('vt-rr-source').value.trim(),
+      deployment: document.getElementById('vt-rr-deployment').value.trim(),
+      openSeverity1: document.getElementById('vt-rr-sev1').value,
+      openSeverity2: document.getElementById('vt-rr-sev2').value
+    };
+  }
+
+  function vtRRSyncButtons() {
+    var active = vtRRState && vtRRState.status === 'IN_PROGRESS';
+    var confirmed = document.getElementById('vt-rr-confirm').checked;
+    document.getElementById('vt-rr-start').disabled = vtRRBusy || active || !confirmed || !vtRRHarnessEnabled;
+    document.getElementById('vt-rr-next').disabled = vtRRBusy || !active || vtRRKeepRunning;
+    document.getElementById('vt-rr-all').disabled = vtRRBusy || !active || vtRRKeepRunning;
+    document.getElementById('vt-rr-pause').disabled = !vtRRKeepRunning;
+    document.getElementById('vt-rr-finalize').disabled = vtRRBusy || !active || vtRRKeepRunning;
+    document.getElementById('vt-rr-enable-harness').disabled = vtRRBusy || vtRRHarnessEnabled || active;
+    document.getElementById('vt-rr-disable-harness').disabled = vtRRBusy || !vtRRHarnessEnabled || active;
+  }
+
+  function vtRRRenderHarnessState_() {
+    var el = document.getElementById('vt-rr-harness-state');
+    el.className = 'runmsg' + (vtRRHarnessEnabled ? '' : ' err');
+    el.textContent = vtRRHarnessEnabled ? 'Disposable runner enabled for this validation.' : 'Disposable runner is OFF.';
+    vtRRSyncButtons();
+  }
+
+  function vtRRLoadHarnessState_() {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res || !res.ok) { vtRRSetStatus(vtEsc(res && res.error ? res.error : 'Could not read runner state.'), true); return; }
+        vtRRHarnessEnabled = res.enabled === true; vtRRRenderHarnessState_();
+      })
+      .withFailureHandler(vtRRFail_)
+      .vtGetReleaseHarnessEnabled();
+  }
+
+  function vtRRSetHarness_(enabled) {
+    if (!document.getElementById('vt-rr-confirm').checked) {
+      vtRRSetStatus('Confirm the safety boundary before changing the disposable runner.', true); return;
+    }
+    vtRRBusy = true; vtRRSyncButtons();
+    vtRRSetStatus(vtSpin((enabled ? 'Enabling' : 'Disabling') + ' the disposable runner…'), false);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        vtRRBusy = false;
+        if (!res || !res.ok) { vtRRSetStatus(vtEsc(res && res.error ? res.error : 'Could not change runner state.'), true); vtRRSyncButtons(); return; }
+        vtRRHarnessEnabled = res.enabled === true; vtRRRenderHarnessState_();
+        vtRRSetStatus(enabled ? 'Disposable runner enabled. It will return OFF when this readiness run is finalized.' : 'Disposable runner returned to OFF.', false);
+      })
+      .withFailureHandler(vtRRFail_)
+      .vtSetReleaseHarnessEnabled(enabled === true, true);
+  }
+
+  function vtRRStart() {
+    var meta = vtRRMetadata_();
+    if (!document.getElementById('vt-rr-confirm').checked) {
+      vtRRSetStatus('Confirm the safety boundary before starting.', true); return;
+    }
+    if (!meta.sourceVersion || !meta.deployment) {
+      vtRRSetStatus('Exact source version and deployment are required.', true); return;
+    }
+    if (meta.openSeverity1 === '' || meta.openSeverity2 === '' ||
+        Number(meta.openSeverity1) < 0 || Number(meta.openSeverity2) < 0) {
+      vtRRSetStatus('Severity counts must be declared as zero or greater.', true); return;
+    }
+    vtRRBusy = true; vtRRSyncButtons();
+    vtRRSetStatus(vtSpin('Creating a disposable workbook for Workbook Health…'), false);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        vtRRBusy = false;
+        if (!res || !res.ok) { vtRRSetStatus(vtEsc(res && res.error ? res.error : 'Could not start.'), true); vtRRSyncButtons(); return; }
+        vtRRState = res.state; vtRRRender();
+        vtRRSetStatus('Readiness run started. Progress is saved after every check.', false);
+      })
+      .withFailureHandler(vtRRFail_)
+      .vtReleaseReadinessStart(vtCurrentId(), meta);
+  }
+
+  function vtRRRunNext() { vtRRDispatchNext_(false); }
+
+  function vtRRRunAll() {
+    vtRRKeepRunning = true;
+    vtRRSyncButtons();
+    vtRRDispatchNext_(true);
+  }
+
+  function vtRRDispatchNext_(continueAll) {
+    if (!vtRRState || vtRRState.status !== 'IN_PROGRESS') return;
+    var total = (vtRRState.inventory && vtRRState.inventory.scenarioIds || []).length;
+    if (Number(vtRRState.cursor || 0) >= total) {
+      if (continueAll) {
+        vtRRKeepRunning = false;
+        vtRRSetStatus('All server checks are complete and saved. Run any missing browser suites, then finalize.', false);
+        vtRRSyncButtons();
+      }
+      return;
+    }
+    vtRRBusy = true; vtRRSyncButtons();
+    vtRRSetStatus(vtSpin('Running check ' + (Number(vtRRState.cursor || 0) + 1) + ' of ' + total + ' in its own disposable workbook…'), false);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        vtRRBusy = false;
+        if (!res || !res.ok) { vtRRKeepRunning = false; vtRRSetStatus(vtEsc(res && res.error ? res.error : 'Check failed.'), true); vtRRSyncButtons(); return; }
+        vtRRState = res.state; vtRRRender();
+        if (continueAll && vtRRKeepRunning) {
+          var done = Number(vtRRState.cursor || 0) >= ((vtRRState.inventory && vtRRState.inventory.scenarioIds || []).length);
+          if (done) {
+            vtRRKeepRunning = false;
+            vtRRSetStatus('All server checks are complete and saved. Run any missing browser suites, then finalize.', false);
+            vtRRSyncButtons();
+          } else {
+            vtRRDispatchNext_(true);
+          }
+        } else {
+          vtRRSetStatus('Check complete and saved. You may continue or return later.', false);
+        }
+      })
+      .withFailureHandler(vtRRFail_)
+      .vtReleaseReadinessRunNextChunk();
+  }
+
+  function vtRRPause() {
+    vtRRKeepRunning = false;
+    vtRRSetStatus('Pause requested. The current check will finish and save safely.', false);
+    vtRRSyncButtons();
+  }
+
+  function vtRRRefresh() {
+    vtRRBusy = true; vtRRSyncButtons();
+    vtRRSetStatus(vtSpin('Loading saved readiness state…'), false);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        vtRRBusy = false;
+        if (!res || !res.ok) { vtRRSetStatus(vtEsc(res && res.error ? res.error : 'Could not load status.'), true); vtRRSyncButtons(); return; }
+        vtRRState = res.state || null; vtRRArchives = res.archives || []; vtRRRender();
+        vtRRSetStatus(vtRRState ? 'Saved readiness state loaded.' : 'No readiness run has been started.', false);
+      })
+      .withFailureHandler(vtRRFail_)
+      .vtReleaseReadinessGetStatus();
+  }
+
+  function vtRRFinalize() {
+    if (!vtRRKeepRunning && vtRRState && vtRRState.status === 'IN_PROGRESS') {
+      var total = (vtRRState.inventory && vtRRState.inventory.scenarioIds || []).length;
+      if (Number(vtRRState.cursor || 0) < total &&
+          !window.confirm('Finalize this incomplete run as NOT READY? You will need to start a new run to execute the remaining checks.')) return;
+    }
+    vtRRKeepRunning = false; vtRRBusy = true; vtRRSyncButtons();
+    vtRRSetStatus(vtSpin('Refreshing browser evidence and calculating the fail-closed verdict…'), false);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        vtRRBusy = false;
+        if (!res || !res.ok) { vtRRSetStatus(vtEsc(res && res.error ? res.error : 'Could not finalize.'), true); vtRRSyncButtons(); return; }
+        vtRRState = res.state; vtRRArchives = res.archives || []; vtRRRender();
+        vtRRHarnessEnabled = false; vtRRRenderHarnessState_();
+        vtRRSetStatus('Final verdict archived: ' + vtEsc(vtRRState.status || 'UNKNOWN') + '.', vtRRState.status !== 'READY');
+      })
+      .withFailureHandler(vtRRFail_)
+      .vtReleaseReadinessFinalize();
+  }
+
+  function vtRRFail_(err) {
+    vtRRBusy = false; vtRRKeepRunning = false;
+    vtRRSetStatus(vtEsc(err && err.message ? err.message : String(err)), true);
+    vtRRSyncButtons();
+  }
+
+  function vtRRCopy_(ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    var text = JSON.stringify(vtRRState || {}, null, 2);
+    try { navigator.clipboard.writeText(text); vtRRSetStatus('Readiness evidence copied.', false); }
+    catch (_e) { var details = document.querySelector('#vt-rr-results details.json'); if (details) details.open = true; }
+  }
+
+  function vtRRRender() {
+    var box = document.getElementById('vt-rr-results');
+    var state = vtRRState;
+    if (!state) {
+      document.getElementById('vt-rr-progress').value = 0;
+      document.getElementById('vt-rr-progress').max = 1;
+      box.innerHTML = '<div class="empty">No saved readiness run.</div>';
+      vtRRSyncButtons(); return;
+    }
+    var inventory = state.inventory || {};
+    var total = (inventory.scenarioIds || []).length;
+    var done = Number(state.cursor || 0);
+    var progress = document.getElementById('vt-rr-progress');
+    progress.max = Math.max(1, total); progress.value = Math.min(done, Math.max(1, total));
+    var verdictColor = state.status === 'READY' ? 'var(--green-fg)' :
+      (state.status === 'NOT_READY' ? 'var(--red-fg)' : 'var(--blue)');
+    var html = '<div class="summary">' +
+      vtCell('Verdict', '<span style="color:' + verdictColor + ';">' + vtEsc(state.status || 'UNKNOWN') + '</span>') +
+      vtCell('Checks', done + ' / ' + total) +
+      vtCell('Workbook Health', vtEsc((state.health && state.health.overall) || '—')) +
+      vtCell('Run ID', '<span class="small">' + vtEsc(state.runId || '—') + '</span>') +
+      vtCell('Candidate', '<span class="small">' + vtEsc((state.candidate && state.candidate.sourceVersion) || '—') + ' · ' + vtEsc((state.candidate && state.candidate.deployment) || '—') + '</span>') +
+      '</div>';
+    var failures = state.failures || [];
+    if (failures.length) {
+      html += '<div class="status fail"><div class="name">Why this candidate is not ready</div><ul class="rr-failures">';
+      for (var f = 0; f < failures.length; f++) html += '<li>' + vtEsc(failures[f]) + '</li>';
+      html += '</ul></div>';
+    }
+    var ext = inventory.externalSuites || [];
+    var evidence = state.externalEvidence || {};
+    html += '<table class="suite-table"><thead><tr><th>Browser evidence</th><th>Result</th><th>Cleanup</th></tr></thead><tbody>';
+    for (var i = 0; i < ext.length; i++) {
+      var ev = evidence[ext[i]] || null;
+      html += '<tr><td>' + vtEsc(ext[i]) + '</td><td class="' + (ev && ev.overall === 'PASS' ? 'st-pass' : 'st-fail') + '">' +
+        vtEsc(ev ? ev.overall : 'MISSING') + '</td><td>' + (ev && ev.cleanupVerified ? 'Verified' : '—') + '</td></tr>';
+    }
+    html += '</tbody></table>';
+    var rows = state.results || [];
+    html += '<table class="suite-table"><thead><tr><th>Completed server check</th><th>Result</th><th>Cleanup</th><th>Duration</th></tr></thead><tbody>';
+    for (var r = 0; r < rows.length; r++) {
+      html += '<tr><td class="st-mono">' + vtEsc(rows[r].scenarioId || '—') + '</td><td class="' +
+        (rows[r].overall === 'PASS' ? 'st-pass' : 'st-fail') + '">' + vtEsc(rows[r].overall || '—') +
+        '</td><td>' + vtEsc(rows[r].cleanup || '—') + '</td><td>' +
+        (rows[r].durationMs != null ? (Number(rows[r].durationMs) / 1000).toFixed(1) + ' s' : '—') + '</td></tr>';
+    }
+    if (!rows.length) html += '<tr><td colspan="4" class="sd-empty">No server checks completed yet.</td></tr>';
+    html += '</tbody></table>';
+    html += '<details class="json"><summary>View / export privacy-safe evidence ' +
+      '<button class="copybtn" onclick="vtRRCopy_(event)">Copy JSON</button></summary>' +
+      '<pre class="json">' + vtEsc(JSON.stringify(state, null, 2)) + '</pre></details>';
+    if (vtRRArchives.length) {
+      html += '<div class="sd-h">Archived verdicts</div><table class="suite-table"><thead><tr><th>Run</th><th>Verdict</th><th>Finalized</th></tr></thead><tbody>';
+      for (var a = 0; a < vtRRArchives.length; a++) html += '<tr><td class="st-mono">' + vtEsc(vtRRArchives[a].runId || '—') +
+        '</td><td>' + vtEsc(vtRRArchives[a].status || '—') + '</td><td>' + vtEsc(vtRRArchives[a].finalizedAt || '—') + '</td></tr>';
+      html += '</tbody></table>';
+    }
+    box.innerHTML = html;
+    vtRRSyncButtons();
+  }
 
   /* ---- Inspect ---- */
   function vtInspect() {
@@ -1362,6 +1663,10 @@
       if (dd) dd.open = true;
     }
   }
+
+  vtRRSyncButtons();
+  vtRRLoadHarnessState_();
+  vtRRRefresh();
 </script>
 </body>
 </html>
