@@ -135,6 +135,16 @@ Once a milestone has started, **finish it before beginning another.**
 
 **Purpose:** make correctness cumulative. New work adds proof rather than risk, so confidence compounds over time instead of eroding. This principle is the *why*; the **Regression Discovery Policy** (`REGRESSION_SUITE_PLAN.md`) is the *how* (the per-change trigger checklists), and the **Functional Assertion framework** (`FUNCTIONAL_ASSERTION_ARCHITECTURE.md`) is the *mechanism* (how a scenario proves numeric/temporal correctness).
 
+#### 12.1 One operator-facing test surface
+
+The admin **Validation & Testing console** is the single operator-facing home for
+all test suites. Every new test must register in `test_harness_suites.js`, launch
+from that console, publish its latest evidence and cleanup state back to that
+console, and finish by returning the operator there. Do not add standalone test
+dashboards or operator-maintained test URLs. A hidden account-specific execution
+adapter is allowed only when a real browser or non-admin identity is required; it
+is an implementation detail, not a second test surface.
+
 ---
 
 ### 13. Integration Scenario Principle

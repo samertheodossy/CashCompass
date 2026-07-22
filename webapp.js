@@ -55,6 +55,16 @@ function doGet(e) {
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
+  // Performance sampling runs as the permanent disposable non-admin so every
+  // timing pair owns its own Restricted fixture. The route and every RPC are
+  // identity-gated; there is no caller-selected email or workbook target.
+  if (view === 'performance-test' && isPerformanceSamplingUser_()) {
+    return HtmlService.createTemplateFromFile('PerformanceSamplingUI')
+      .evaluate()
+      .setTitle('CashCompass — Performance Planner Sampling')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
   // Browser-backed First-Run UX E2E. Both routes are invisible to every
   // account except the permanent disposable non-admin identity. The control
   // page creates the fixture; the run route renders the shipping dashboard

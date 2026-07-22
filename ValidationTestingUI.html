@@ -1117,7 +1117,7 @@
           vtEsc(s.latestEvidence.finishedAt || '') + '</div>'
         : '');
     var btn = document.getElementById('vt-h-suite-run');
-    btn.textContent = browser ? 'Open Browser Runner' : 'Run Suite';
+    btn.textContent = browser ? 'Run / resume suite' : 'Run Suite';
     var radios = document.querySelectorAll('input[name="vt-h-suite-disp"]');
     for (var i = 0; i < radios.length; i++) radios[i].disabled = browser;
   }
@@ -1135,7 +1135,7 @@
     if (suite && suite.runner === 'browser') {
       if (!suite.launchUrl) { vtHSetSuiteMsg('Browser runner URL is unavailable.', true); return; }
       var browserTab = window.open('about:blank', '_blank');
-      vtHSetSuiteMsg(vtSpin('Opening the guarded disposable-account runner…'), false);
+      vtHSetSuiteMsg(vtSpin('Opening the suite execution window from this console…'), false);
       google.script.run
         .withSuccessHandler(function(res) {
           if (!res || !res.ok || !res.launchUrl) {
@@ -1144,7 +1144,7 @@
             return;
           }
           if (browserTab) browserTab.location = res.launchUrl;
-          vtHSetSuiteMsg('Opened the guarded browser runner. Sign in as the disposable test account if prompted.', false);
+          vtHSetSuiteMsg('Suite execution opened. When it finishes, return here and choose Refresh suite status; this console remains the source of truth.', false);
         })
         .withFailureHandler(function(err) {
           if (browserTab) browserTab.close();

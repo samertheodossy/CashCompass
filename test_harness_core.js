@@ -156,6 +156,7 @@ function runScenario_(scenario, runId, options) {
   var error = null;
   var validators = { provisioning: null, schema: null, drift: null, health: null };
   var sharing = null;
+  var performance = null;
   var cleanup = { requested: trashRequested, trashed: false, verified: false, error: null };
   var disposition = 'KEPT_FOR_INSPECTION';
   // Functional-assertion collector (E0a). Declared outside the try so its results
@@ -193,6 +194,7 @@ function runScenario_(scenario, runId, options) {
 
     if (typeof scenario.setup === 'function') scenario.setup(ctx);
     if (typeof scenario.actions === 'function') scenario.actions(ctx);
+    performance = ctx.performanceEvidence || null;
 
     // Harness bootstrap: make the disposable workbook resemble a freshly Central-
     // provisioned workbook by stamping the in-workbook SYS - Meta identity marker,
@@ -281,6 +283,7 @@ function runScenario_(scenario, runId, options) {
     validators: validators,
     assertions: assertions.results,
     sharing: sharing,
+    performance: performance,
     cleanup: cleanup,
     disposition: disposition,
     error: error,

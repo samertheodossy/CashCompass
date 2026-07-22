@@ -26,6 +26,7 @@
 <div class="wrap">
   <h1>Recovery Live</h1>
   <p class="muted">Authenticated production-path recovery validation.</p>
+  <p class="muted"><strong>Temporary execution window.</strong> Launch suites and review final evidence only from the Validation &amp; Testing console. Close this window when the run finishes.</p>
 
   <div class="safe">
     This runner is locked to <strong>cashcompass2026@gmail.com</strong>, which must remain a non-admin.
@@ -100,7 +101,8 @@
       if (res.state) document.getElementById('state').textContent = JSON.stringify(res.state, null, 2);
       if (res.done) {
         document.getElementById('run').disabled = !confirmed();
-        showStatus('Recovery Live completed: ' + (res.report ? res.report.overall : 'UNKNOWN'),
+        showStatus('Recovery Live completed: ' + (res.report ? res.report.overall : 'UNKNOWN') +
+          '. Close this window and return to Validation & Testing to refresh suite status.',
           !res.report || res.report.overall !== 'PASS');
         return;
       }

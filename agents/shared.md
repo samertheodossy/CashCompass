@@ -36,6 +36,13 @@ These rules apply to every AI agent working in this repository.
 - Prefer clear diagnostics over masking errors.
 - Maintain one convergent codebase: Central and bounded deployments must ultimately run the same reviewed source. Optional explicit-spreadsheet test seams must preserve the production no-argument resolver path exactly.
 
+## Single Test Console
+
+- `ValidationTestingUI.html` (`?view=validation`) is the only human-facing test inventory, launch point, progress/evidence index, and completion destination.
+- Every test must be registered as a suite in `test_harness_suites.js` and appear on that console. Do not create an independent test dashboard, unregistered test URL, or second evidence inventory.
+- A separate account-specific route is permitted only as a guarded execution adapter when Google identity separation or real browser behavior makes it technically necessary. It must be launched from the Validation console, accept no arbitrary identity or workbook target, persist its evidence back to the suite registry, and direct the operator back to the Validation console when finished.
+- Internal execution-adapter URLs are implementation details, not operator bookmarks. Do not list them in the human URL registry or require the user to remember them.
+
 ## Git and Deploy Safety
 
 - Do not commit unless explicitly approved.

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_top">
+  <title>CashCompass — Performance Planner Sampling</title>
+  <style>
+    body { font-family:-apple-system,Arial,sans-serif; margin:0; padding:24px; background:#f5f7fa; color:#1f2933; }
+    .wrap { max-width:900px; margin:0 auto; }
+    .card { background:#fff; border:1px solid #e1e5ea; border-radius:10px; padding:18px; margin:0 0 16px; }
+    h1 { font-size:22px; margin:0 0 6px; } h2 { font-size:16px; margin:0 0 10px; }
+    p { line-height:1.5; } .muted { color:#64748b; font-size:13px; }
+    .safe { background:#ecfdf5; border:1px solid #86efac; border-radius:8px; padding:12px; }
+    button { padding:9px 13px; border:1px solid #cbd5e1; border-radius:7px; background:#fff;
+      color:#1f2933; cursor:pointer; margin:4px 6px 4px 0; font-size:14px; }
+    button.primary { background:#2563eb; color:#fff; border-color:#2563eb; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    pre { white-space:pre-wrap; overflow-wrap:anywhere; background:#f8fafc; border:1px solid #e2e8f0;
+      padding:12px; border-radius:8px; font-family:ui-monospace,Menlo,monospace; font-size:12px; }
+    .ok { color:#047857; font-weight:600; } .err { color:#b91c1c; font-weight:600; }
+    progress { width:100%; height:18px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Performance Planner Sampling</h1>
+  <p class="muted">Release-grade p50/p95 evidence for the real Financial Plan workflow.</p>
+  <p class="muted"><strong>Temporary execution window.</strong> Launch suites and review final evidence only from the Validation &amp; Testing console. Close this window when the run finishes.</p>
+
+  <div class="safe">
+    This runner is locked to <strong>cashcompass2026@gmail.com</strong>. It runs the registered real
+    Performance Planner scenario on 20 independent Restricted disposable workbooks. Every sample is
+    marker-verified and moved to Trash. It accepts no email or workbook ID and cannot target the
+    configured default, canonical, administrator, mapped-user, active, or bounded workbook.
+  </div>
+
+  <div class="card">
+    <h2>Sampling campaign</h2>
+    <label><input id="confirm" type="checkbox" onchange="syncButtons()"> I confirm this is the disposable test account.</label>
+    <p class="muted">One click starts or resumes 20 bounded sample pairs. Keep this page open. Each pair runs
+      the real planner twice, so the full campaign may take approximately 45–60 minutes.</p>
+    <button id="run" class="primary guarded" onclick="startAndRun()" disabled>Start / resume sampling campaign</button>
+    <button id="pause" onclick="pauseRun()" disabled>Pause after current sample</button>
+    <progress id="progress" value="0" max="20"></progress>
+  </div>
+
+  <div class="card">
+    <h2>Campaign state and latest evidence</h2>
+    <button onclick="refreshState()">Refresh state</button>
+    <pre id="state">Loading…</pre>
+  </div>
+  <div id="status" class="muted"></div>
+</div>
+<script>
+  var keepRunning = false;
+  function confirmed() { return document.getElementById('confirm').checked; }
+  function syncButtons() { document.getElementById('run').disabled = !confirmed() || keepRunning; }
+  function showStatus(message, bad) {
+    var el = document.getElementById('status');
+    el.className = bad ? 'err' : 'ok';
+    el.textContent = message || '';
+  }
+  function renderState(res) {
+    if (!res || !res.ok) { showStatus((res && res.error) || 'Unknown server error.', true); return; }
+    var state = res.state || {};
+    document.getElementById('state').textContent = JSON.stringify(state, null, 2);
+    var done = state.active ? Number(state.active.completedPairs || 0) :
+      (state.latestEvidence ? Number(state.latestEvidence.samplePairs || 0) : 0);
+    document.getElementById('progress').value = done;
+    showStatus('State loaded: ' + done + ' / 20 sample pairs.', false);
+  }
+  function fail(err) {
+    keepRunning = false;
+    document.getElementById('pause').disabled = true;
+    syncButtons();
+    showStatus((err && err.message) ? err.message : String(err), true);
+  }
+  function refreshState() {
+    google.script.run.withSuccessHandler(renderState).withFailureHandler(fail).psGetState();
+  }
+  function startAndRun() {
+    keepRunning = true;
+    syncButtons();
+    document.getElementById('pause').disabled = false;
+    showStatus('Starting or resuming the fixed 20-pair campaign…', false);
+    google.script.run.withSuccessHandler(function(res) {
+      if (!res || !res.ok) { fail((res && res.error) || 'Campaign start failed.'); return; }
+      renderState(res);
+      runNext();
+    }).withFailureHandler(fail).psStartCampaign(confirmed());
+  }
+  function runNext() {
+    if (!keepRunning) { syncButtons(); showStatus('Paused. Resume when ready.', false); return; }
+    showStatus('Running the next real first/repeat planner sample…', false);
+    google.script.run.withSuccessHandler(function(res) {
+      if (!res || !res.ok) { fail((res && res.error) || 'Sample failed.'); return; }
+      renderState(res);
+      if (res.report || (res.state && res.state.active && res.state.active.status === 'COMPLETE')) {
+        keepRunning = false;
+        document.getElementById('pause').disabled = true;
+        syncButtons();
+        showStatus('Sampling complete. Close this window and return to Validation & Testing to refresh the final p50/p95 suite evidence.', false);
+        return;
+      }
+      runNext();
+    }).withFailureHandler(fail).psRunNextSample(confirmed());
+  }
+  function pauseRun() {
+    keepRunning = false;
+    document.getElementById('pause').disabled = true;
+    showStatus('Pause requested; the current sample will finish safely.', false);
+  }
+  refreshState();
+</script>
+</body>
+</html>

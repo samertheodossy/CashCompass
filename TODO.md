@@ -112,7 +112,7 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | Financial-integrity gate wiring into release | P1 | FI Phase 3 convergence | S |
 | Deployment checklist | P2 | — | S |
 
-> **Validator Phase 2 and scenario-pack runtime gates completed 2026-07-21.** Aggregate Workbook Health passed on isolated Central `@122`; First-Run UX E2E passed at `@129`; Populated Dashboard E2E passed at `@133`; and Recovery Live passed 9/9 at `@135`. The Validator remains read-only. Remaining P1 scope is performance-budget ratification, Release Readiness console controls, and the final bounded verdict.
+> **Validator Phase 2 and scenario-pack runtime gates completed 2026-07-21.** Aggregate Workbook Health passed on isolated Central `@122`; First-Run UX E2E passed at `@129`; Populated Dashboard E2E passed at `@133`; and Recovery Live passed 9/9 at `@135`. The permanent 20-pair Performance Planner percentile campaign is resumable and paused after six confirmed pairs on isolated `@136`; no budget is ratified from partial evidence. The Validator remains read-only. Next active P1 scope is Release Readiness console controls, followed by completing the performance campaign and producing the final bounded verdict.
 
 **D. Recovery completion — ✅ P0 complete 2026-07-20**
 

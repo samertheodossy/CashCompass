@@ -1,6 +1,6 @@
 # CashCompass Performance Observability
 
-**Status:** Reusable timing helper implemented and isolated planner runtime validation passed; optimization is next.
+**Status:** Reusable timing helper and permanent percentile suite implemented. The 20-pair campaign is intentionally paused after six confirmed pairs; no percentile budget is ratified yet.
 
 ## Purpose
 
@@ -127,6 +127,23 @@ The editor execution log validated the server `[PERF]` envelope and its privacy
 contract. The browser-console echo was not separately validated because the
 nested Apps Script dashboard frame did not remain controllable during this pass;
 that does not affect the server-stage measurements above.
+
+## Resumable percentile campaign — paused 2026-07-21
+
+`SUITE-PERFORMANCE-PLANNER` is the permanent on-demand regression suite for
+release-percentile evidence. It reuses the registered real
+`PERFORMANCE-PLANNER-FIRST-REPEAT` scenario for 20 independent first/repeat
+pairs, saves progress between invocations, and calculates nearest-rank p50/p95
+for first, repeat, and combined samples. Candidate budgets remain p50 ≤ 30 s and
+p95 ≤ 60 s; neither is ratified until all 20 pairs complete.
+
+The isolated `@136` campaign was intentionally paused after six confirmed pairs.
+Repeats were generally near 27 seconds, most first runs were slightly above 30
+seconds, and one first-run outlier was about 136 seconds. This is insufficient to
+publish percentiles or make an accept/optimize ProductDecision. Every confirmed
+pair used the fixed disposable non-admin identity, verified Restricted sharing,
+and verified Trash cleanup. Resume the saved campaign later from the Validation
+& Testing console; do not restart it merely to obtain a cleaner distribution.
 
 ## Safe runtime procedure
 

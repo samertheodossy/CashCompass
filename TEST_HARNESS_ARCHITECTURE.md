@@ -33,7 +33,10 @@ run `FR-19eb43ab-e8fe-4bc8-96a5-336afff43596` passing at isolated `@133`.
 Recovery Live is runtime-proven by run `RL-12557aaa-5e18-4d67-a567-6304a5b57542`
 at isolated `@135`: 9/9 production-path assertions, three Restricted fixtures,
 verified Trash, no active mapping, zero protected-target matches, and unchanged
-sole-admin configuration/mapping fingerprints. The final bounded Release Readiness
+sole-admin configuration/mapping fingerprints. Performance Planner is now a
+permanent resumable browser-backed suite on isolated `@136`; its 20-pair campaign
+is paused after six confirmed pairs and its p50/p95 release budget is not yet
+ratified. The final bounded Release Readiness
 verdict remains pending.
 
 **Recovery Live browser contract (runtime-proven):** the runner is permanently

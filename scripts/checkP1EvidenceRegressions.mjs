@@ -6,8 +6,8 @@ const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 const [registry, formulas, cf, named, health, release, contract, suites,
   planner, bank, investments, houses, plannerOutput, quickAdd, dashboard, performanceScenario, billsPayScenario,
   harnessCore, p1Runner, webapp, centralDiagnostics, firstRunE2E, firstRunBrowser,
-  populatedE2E, populatedBrowser, populatedUi, recoveryLive, recoveryUi,
-  validationUi, validationServer] = await Promise.all([
+  populatedE2E, populatedBrowser, populatedUi, recoveryLive, recoveryUi, performanceSampling, performanceSamplingUi,
+  validationUi, validationServer, sharedRules, engineeringStandards, testingUrls] = await Promise.all([
   read('validator_schema_registry.js'), read('validator_formulas.js'),
   read('validator_conditional_formatting.js'), read('validator_named_ranges.js'),
   read('validator_health.js'), read('release_readiness_runner.js'),
@@ -19,8 +19,10 @@ const [registry, formulas, cf, named, health, release, contract, suites,
   read('first_run_e2e.js'), read('Dashboard_Script_FirstRunE2E.html'),
   read('populated_dashboard_e2e.js'), read('Dashboard_Script_PopulatedDashboardE2E.html'),
   read('PopulatedDashboardE2ETestingUI.html'),
-  read('recovery_live.js'), read('RecoveryTestingUI.html'), read('ValidationTestingUI.html'),
-  read('validation_testing_server.js')
+  read('recovery_live.js'), read('RecoveryTestingUI.html'), read('performance_sampling.js'),
+  read('PerformanceSamplingUI.html'), read('ValidationTestingUI.html'),
+  read('validation_testing_server.js'), read('agents/shared.md'), read('ENGINEERING_STANDARDS.md'),
+  read('TESTING_URLS.md')
 ]);
 
 const rootEntries = await readdir(new URL('../', import.meta.url), { withFileTypes: true });
@@ -158,6 +160,41 @@ assert.match(validationServer, /function vtOpenHarnessBrowserRunner\(suiteId\)[\
   'Only the admin Validator console may launch the browser-test link from the console');
 assert.match(suites, /id: 'SUITE-PERFORMANCE-PLANNER'[\s\S]*?implemented: true[\s\S]*?'PERFORMANCE-PLANNER-FIRST-REPEAT'/,
   'Performance suite must use the explicit-workbook planner scenario');
+assert.match(suites, /id: 'SUITE-PERFORMANCE-PLANNER'[\s\S]*?runner: 'browser'[\s\S]*?PERFORMANCE_PLANNER_LATEST_EVIDENCE_V1/,
+  'Performance Planner must be a browser sampling suite backed by saved evidence');
+assert.match(performanceSampling, /PERFORMANCE_SAMPLING_TARGET_PAIRS_\s*=\s*20/,
+  'Performance campaign must collect at least 20 independent first\/repeat pairs');
+assert.match(performanceSampling, /runScenario_\([\s\S]*?getHarnessPerformancePlannerScenario_\(\)[\s\S]*?\{ trash: true \}/,
+  'Performance sampling must reuse the registered real scenario with verified Trash requested');
+assert.match(performanceSampling, /isFirstRunE2EUser_\(\)/,
+  'Performance sampling must stay pinned to the permanent disposable non-admin guard');
+assert.doesNotMatch(performanceSampling, /getUserSpreadsheet_\s*\(|getActiveSpreadsheet\s*\(/,
+  'Performance sampling must never resolve an existing user or bounded workbook');
+assert.match(performanceSampling, /PERFORMANCE_REFRESH_P50_BUDGET_MS_\s*=\s*30000/);
+assert.match(performanceSampling, /PERFORMANCE_REFRESH_P95_BUDGET_MS_\s*=\s*60000/);
+assert.match(performanceSamplingUi, /20 independent Restricted disposable workbooks[\s\S]*?accepts no email or workbook ID/,
+  'Performance UI must explain its fixed sample and target safety boundary');
+assert.match(webapp, /view === 'performance-test'[\s\S]*?isPerformanceSamplingUser_\(\)/,
+  'Performance sampling route must remain hidden from every non-test identity');
+assert.match(sharedRules, /ValidationTestingUI\.html[\s\S]*?only human-facing test inventory[\s\S]*?Every test must be registered as a suite/,
+  'Shared agent rules must enforce the single test-console policy');
+assert.match(engineeringStandards, /One operator-facing test surface[\s\S]*?single operator-facing home for\s+all test suites/,
+  'Engineering standards must preserve one operator-facing test surface');
+assert.match(testingUrls, /only test\s+URL an operator should retain/,
+  'The human URL registry must direct operators to one test entry point');
+assert.doesNotMatch(testingUrls, /\?view=(?:first-run-e2e|populated-dashboard-e2e|recovery-test|performance-test)/,
+  'Internal browser execution adapters must not become operator bookmarks');
+const performanceMathCtx = vm.createContext({ Math, JSON, Number });
+vm.runInContext(performanceSampling, performanceMathCtx);
+assert.equal(performanceMathCtx.psMedian_([1000, 3000]), 2000,
+  'Performance p50 must use the median for an even sample population');
+assert.equal(performanceMathCtx.psPercentileNearestRank_([
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+], 0.95), 19, 'Twenty observations must make p95 the nineteenth sorted value');
+assert.equal(performanceMathCtx.psDistributionPasses_({ p50Ms: 30000, p95Ms: 60000 }), true,
+  'Values exactly on the ratified boundary must pass');
+assert.equal(performanceMathCtx.psDistributionPasses_({ p50Ms: 30001, p95Ms: 60000 }), false,
+  'A p50 over budget must require optimization');
 assert.match(suites, /id: 'SUITE-BILLS-PAY-E2E'[\s\S]*?implemented: true[\s\S]*?'E2E-BILLS-DUE-PAY'/,
   'Bills Pay suite must use the explicit-workbook payment scenario');
 assert.match(suites, /id: 'SUITE-WORKBOOK-HEALTH'[\s\S]*?aggregate read-only Workbook Health[\s\S]*?'SMOKE-POPULATED-FIXTURE'/,
@@ -188,7 +225,8 @@ const inventory = inventoryCtx.releaseBuildInventory_();
 assert.deepEqual(Array.from(inventory.missingSuites), [
 ], 'Release inventory must contain no unimplemented required suite');
 assert.deepEqual(Array.from(inventory.externalSuites), [
-  'SUITE-FIRST-RUN-UX-E2E', 'SUITE-POPULATED-DASHBOARD-E2E', 'SUITE-RECOVERY-LIVE'
+  'SUITE-FIRST-RUN-UX-E2E', 'SUITE-POPULATED-DASHBOARD-E2E', 'SUITE-RECOVERY-LIVE',
+  'SUITE-PERFORMANCE-PLANNER'
 ], 'Release inventory must require all authenticated browser suites outside the server scenario queue');
 assert.throws(() => inventoryCtx.testRunSuiteById_('SUITE-FIRST-RUN-UX-E2E', {}), /authenticated browser runner/,
   'The server runner must never substitute an empty run for First-Run browser evidence');
@@ -196,6 +234,8 @@ assert.throws(() => inventoryCtx.testRunSuiteById_('SUITE-POPULATED-DASHBOARD-E2
   'The server runner must never substitute an empty run for Populated Dashboard browser evidence');
 assert.throws(() => inventoryCtx.testRunSuiteById_('SUITE-RECOVERY-LIVE', {}), /authenticated browser runner/,
   'The server runner must never substitute an empty run for Recovery Live evidence');
+assert.throws(() => inventoryCtx.testRunSuiteById_('SUITE-PERFORMANCE-PLANNER', {}), /authenticated browser runner/,
+  'The server runner must never substitute a single execution for percentile evidence');
 
 const propertyBag = new Map();
 const props = {
@@ -212,7 +252,7 @@ const baseState = {
   version: 1, runId: 'RR-test', startedAt: new Date().toISOString(),
   candidate: { workbookId: 'fixture', sourceVersion: 'abc123', deployment: '@test' },
   openIssues: { severity1: 0, severity2: 0, declared: true },
-  health: { overall: 'PASS' }, inventory: { missingSuites: [], externalSuites: ['SUITE-FIRST-RUN-UX-E2E', 'SUITE-POPULATED-DASHBOARD-E2E', 'SUITE-RECOVERY-LIVE'], scenarioIds: [] },
+  health: { overall: 'PASS' }, inventory: { missingSuites: [], externalSuites: ['SUITE-FIRST-RUN-UX-E2E', 'SUITE-POPULATED-DASHBOARD-E2E', 'SUITE-RECOVERY-LIVE', 'SUITE-PERFORMANCE-PLANNER'], scenarioIds: [] },
   externalEvidence: {},
   cursor: 0, results: [], status: 'IN_PROGRESS'
 };
@@ -220,11 +260,12 @@ props.setProperty('RELEASE_READINESS_ACTIVE_RUN_V1', JSON.stringify(baseState));
 assert.equal(verdictCtx.releaseReadinessFinalize().status, 'NOT_READY',
   'Missing execution-dependent evidence must force NOT READY');
 const readyState = { ...baseState, runId: 'RR-ready',
-  inventory: { missingSuites: [], externalSuites: ['SUITE-FIRST-RUN-UX-E2E', 'SUITE-POPULATED-DASHBOARD-E2E', 'SUITE-RECOVERY-LIVE'], scenarioIds: [] },
+  inventory: { missingSuites: [], externalSuites: ['SUITE-FIRST-RUN-UX-E2E', 'SUITE-POPULATED-DASHBOARD-E2E', 'SUITE-RECOVERY-LIVE', 'SUITE-PERFORMANCE-PLANNER'], scenarioIds: [] },
   externalEvidence: {
     'SUITE-FIRST-RUN-UX-E2E': { overall: 'PASS', cleanupVerified: true },
     'SUITE-POPULATED-DASHBOARD-E2E': { overall: 'PASS', cleanupVerified: true },
-    'SUITE-RECOVERY-LIVE': { overall: 'PASS', cleanupVerified: true }
+    'SUITE-RECOVERY-LIVE': { overall: 'PASS', cleanupVerified: true },
+    'SUITE-PERFORMANCE-PLANNER': { overall: 'PASS', cleanupVerified: true }
   },
   status: 'IN_PROGRESS' };
 props.setProperty('RELEASE_READINESS_ACTIVE_RUN_V1', JSON.stringify(readyState));

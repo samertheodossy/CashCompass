@@ -43,6 +43,9 @@ const requiredProductionPaths = {
     'findCandidateWorkbooks_', 'resolveExistingWorkbookForRecovery_',
     'recoveryReconnectSelf()', 'getUserSpreadsheet_()'
   ],
+  'performance_sampling.js': [
+    'getHarnessPerformancePlannerScenario_', 'runScenario_('
+  ],
   'Dashboard_Script_PopulatedDashboardE2E.html': [
     "showPage('overview')", "showTab('bank')", 'loadBankSectionThenSelect_',
     'loadDebtSectionThenSelect_', 'loadInvestmentSectionThenSelect_',
@@ -78,7 +81,7 @@ const directWriteAllowlist = new Set([
 const entries = await readdir(root, { withFileTypes: true });
 const candidateNames = entries
   .filter((entry) => entry.isFile() && (/^test_.*\.js$/.test(entry.name) ||
-    ['first_run_e2e.js', 'populated_dashboard_e2e.js', 'recovery_live.js',
+    ['first_run_e2e.js', 'populated_dashboard_e2e.js', 'recovery_live.js', 'performance_sampling.js',
       'recovery_test_fixtures.js'].includes(entry.name)))
   .map((entry) => entry.name);
 const directWritePattern = /\.(?:setValue|setValues|appendRow|insertRowBefore|insertRowAfter|insertSheet|deleteSheet|setFormula|setFormulas)\s*\(/;

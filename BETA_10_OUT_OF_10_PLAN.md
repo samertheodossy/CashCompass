@@ -279,4 +279,4 @@ Metrics must be defined before instrumentation and must avoid copying transactio
 
 ## 8. Immediate next decision
 
-Disposable populated-fixture hardening is complete on isolated Central `@117`. The next P1 work is to complete the remaining Validator modules, build the planned E2E/live/performance packs, and implement bounded Release Readiness orchestration so the five currently runnable suites can grow into a reproducible beta verdict without exceeding Apps Script execution limits.
+Validator modules and the required E2E/live packs are runtime-proven. A permanent resumable Performance Planner percentile suite is deployed only to isolated Central `@136`; its 20-pair campaign is intentionally paused after six confirmed pairs, so the proposed p50/p95 budgets remain unratified. The next active P1 work is the single-console Release Readiness controls; afterward, resume the remaining performance pairs and run bounded orchestration to produce the reproducible beta verdict without relying on one timeout-prone Apps Script execution.

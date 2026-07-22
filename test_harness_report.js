@@ -109,6 +109,9 @@ function buildHarnessScenarioReport_(p) {
       drift: harnessSummarizeValidator_(drift)
     },
     sharing: p.sharing || null,
+    // Scenario-owned privacy-safe timing data. Performance scenarios may expose
+    // only duration fields; never workbook ids, identities, or financial values.
+    performance: p.performance || null,
     cleanup: p.cleanup || null,
     functional: functional,
     gate: {

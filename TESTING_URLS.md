@@ -1,9 +1,10 @@
 # CashCompass URL Registry
 
-This is the authoritative human-readable index of CashCompass dashboard,
-validation, and authenticated test-runner URLs. Start from the **Validation &
-Testing console** for test work. Individual browser-runner routes are listed for
-recovery and troubleshooting and should normally be launched from the console.
+This is the authoritative human-readable index of CashCompass application and
+validation entry-point URLs. The **Validation & Testing console is the only test
+URL an operator should retain**. Account-specific browser execution adapters are
+launched from that console and intentionally are not cataloged as separate
+operator destinations.
 
 ## Current applications
 
@@ -11,7 +12,7 @@ recovery and troubleshooting and should normally be launched from the console.
 | --- | --- | --- |
 | Personal bounded dashboard | https://script.google.com/macros/s/AKfycbzJLU-EiHeVHuwrR1IryNzhCyqAw7rrseRvt3gdxW8GFqazYOwW-Dz_IXtx_A9e-0ZASg/exec | Owner-only daily workbook. Never use for Harness or destructive validation. |
 | Central Beta | https://script.google.com/macros/s/AKfycbyq_OGiupdGO79GMOImkIgYv19hqlN1JuJfieuDlkXH6Rp637MhZc6jz9uRW2ZxANBlPA/exec | Family-beta deployment, currently pinned at version 106. Do not update during isolated validation. |
-| Isolated Central validation | https://script.google.com/macros/s/AKfycbzMaD3Ur0H3VmatL4W2vVHlYhFOXF4cZSSjIcn3SwggbTCs9Q9F1_PH74F16lAFkUlWZQ/exec | Disposable runtime-validation deployment, currently version 135. This is the only Central deployment updated during pre-release test work. |
+| Isolated Central validation | https://script.google.com/macros/s/AKfycbzMaD3Ur0H3VmatL4W2vVHlYhFOXF4cZSSjIcn3SwggbTCs9Q9F1_PH74F16lAFkUlWZQ/exec | Disposable runtime-validation deployment, currently version 136. This is the only Central deployment updated during pre-release test work. |
 
 ## Validation entry point
 
@@ -19,20 +20,11 @@ recovery and troubleshooting and should normally be launched from the console.
 | --- | --- | --- |
 | Validation & Testing console | https://script.google.com/macros/s/AKfycbzMaD3Ur0H3VmatL4W2vVHlYhFOXF4cZSSjIcn3SwggbTCs9Q9F1_PH74F16lAFkUlWZQ/exec?view=validation | Sign in as samertheodossy@gmail.com. Consolidated Validator, suite inventory, latest saved evidence, cleanup status, and browser-runner launch controls. |
 
-The Validation console is the source of truth for all suite status. Server suites
-run directly there. Browser suites open a guarded adapter because they must
-execute as cashcompass2026@gmail.com, which is permanently non-admin.
-
-## Authenticated disposable-account runners
-
-| Suite | URL | What it validates |
-| --- | --- | --- |
-| First-Run UX E2E | https://script.google.com/macros/s/AKfycbzMaD3Ur0H3VmatL4W2vVHlYhFOXF4cZSSjIcn3SwggbTCs9Q9F1_PH74F16lAFkUlWZQ/exec?view=first-run-e2e | Fresh provisioning, onboarding, real Refresh, navigation, customer wording, Restricted sharing, and verified Trash. |
-| Populated Dashboard E2E | https://script.google.com/macros/s/AKfycbzMaD3Ur0H3VmatL4W2vVHlYhFOXF4cZSSjIcn3SwggbTCs9Q9F1_PH74F16lAFkUlWZQ/exec?view=populated-dashboard-e2e | Representative populated KPIs, workspaces, selectors/actions, navigation, Refresh, language, Restricted sharing, and verified Trash. |
-| Recovery Live | https://script.google.com/macros/s/AKfycbzMaD3Ur0H3VmatL4W2vVHlYhFOXF4cZSSjIcn3SwggbTCs9Q9F1_PH74F16lAFkUlWZQ/exec?view=recovery-test | Production candidate detection, explicit reconnect, stale/Trash routing, ambiguity, admin immutability, protected-target exclusion, Restricted sharing, and verified cleanup. |
-
-These routes accept no email or workbook ID. They are invisible to other
-identities and must be opened as cashcompass2026@gmail.com.
+The Validation console is the source of truth for every suite's launch, latest
+PASS/FAIL evidence, and cleanup status. Server suites run in place. Browser suites
+may open a guarded execution window as `cashcompass2026@gmail.com`, but the route
+is an internal adapter: it accepts no email or workbook ID, saves evidence back to
+the console, and should not be bookmarked or tracked separately.
 
 ## Deployment identifiers
 

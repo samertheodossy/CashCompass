@@ -17,6 +17,10 @@ Planner and Bills Pay E2E are runtime-proven on disposable workbooks at isolated
 verified Trash; Performance Planner passed 4/4 with first/repeat timings of
 32.779 s / 31.901 s, retained History rows, zero History charts, Restricted
 owner-only sharing, CURRENT schema, Provisioning/Drift PASS, and verified Trash.
+The permanent Performance Planner percentile suite is available only on isolated
+`@136`; its resumable 20-pair campaign was intentionally paused after six
+confirmed pairs. Partial timings are diagnostic only, so p50/p95 budgets remain
+unratified and cannot yet satisfy the release gate.
 Dedicated aggregate Workbook Health passed with zero warnings at isolated `@122`
 after narrow validator-normalization and disposable-fixture corrections. First-Run UX
 E2E V2 passed 9/9 at isolated `@129` in 85.864 s, including Restricted owner-only sharing,

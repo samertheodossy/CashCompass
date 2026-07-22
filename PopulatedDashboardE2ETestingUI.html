@@ -26,6 +26,7 @@
 <div class="wrap">
   <h1>Populated Dashboard E2E</h1>
   <p class="muted">Browser-driven validation of representative existing-user dashboard behavior.</p>
+  <p class="muted"><strong>Temporary execution window.</strong> Launch suites and review final evidence only from the Validation &amp; Testing console. Close this window when the run finishes.</p>
 
   <div class="safe">
     This runner is locked to <strong>cashcompass2026@gmail.com</strong>. It provisions and seeds a new
@@ -105,7 +106,7 @@
       .withSuccessHandler(function(res) {
         if (!res || !res.ok) { showStatus((res && res.error) ? res.error : 'Cleanup failed.', true); return; }
         renderState({ ok:true, state:res.state || {} });
-        showStatus('Verified fixture cleanup complete.', false);
+        showStatus('Verified fixture cleanup complete. Close this window and return to Validation & Testing to refresh suite status.', false);
       })
       .withFailureHandler(fail)
       .pdE2ECleanup(confirmed());

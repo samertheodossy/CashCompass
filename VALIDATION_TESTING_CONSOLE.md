@@ -435,12 +435,17 @@ gates on the whole subsystem.
   controls and detailed reports. The harness always creates its own disposable
   workbook and `assertDisposableTarget_` enforces teardown. Multi-select pack
   composition and bounded-chunk Release Certification remain future. Browser-backed
-  suites use an **Open Browser Runner** action because they must execute as the
+  suites use a **Run / resume suite** action that opens a temporary guarded
+  execution adapter because they must execute as the
   disposable non-admin rather than inherit admin-console authority. The console is
-  the single inventory/evidence surface and now shows all suites at once with latest
+  the single inventory, launch, progress/evidence, and completion surface and now shows all suites at once with latest
   PASS/FAIL and cleanup status. First-Run UX E2E, Populated Dashboard E2E, and
   Recovery Live are runtime-proven through isolated `@135`; all three saved
-  PASS/cleanup summaries are consumed by Release Readiness.
+  PASS/cleanup summaries are consumed by Release Readiness. Execution-adapter
+  routes are internal implementation details and are not separate operator URLs.
+  Performance Planner is a permanent resumable browser-backed suite on isolated
+  `@136`; its 20-pair campaign is paused after six confirmed pairs and therefore
+  does not yet provide ratified p50/p95 release evidence.
 - **C4 — Release Readiness verdict. ◑ Runner source-ready; UI pending.** The bounded
   one-scenario-per-invocation runner and archived evidence contract exist in
   `release_readiness_runner.js`; console start/progress/final-verdict controls and
