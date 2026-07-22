@@ -7,6 +7,7 @@ const files = Object.fromEntries(await Promise.all([
   'test_harness_report.js',
   'test_harness_scenarios.js',
   'test_harness_scenarios_populated.js',
+  'test_harness_scenarios_house_financial_accuracy.js',
   'test_harness_suites.js',
   'bank_accounts.js',
   'investments.js',
@@ -50,6 +51,8 @@ assert.match(data, /existingTotalRow === -1[\s\S]*?harnessInsertBeforeByHeader_\
   'Representative debt must be inserted above an existing TOTAL DEBT summary row');
 assert.match(data, /refreshDebtsTotalRow_\(sheet, hm, totalRow\);[\s\S]*?applyDebtsSheetStyling_\(sheet\);/,
   'Representative debt seeding must restore a white data row and green TOTAL DEBT band');
+assert.match(data, /'Linked Property': ''/,
+  'Representative debt seeding must exercise the current trailing schema');
 
 const scenario = files['test_harness_scenarios_populated.js'];
 assert.match(scenario, /id: 'SMOKE-POPULATED-FIXTURE'/);
@@ -65,6 +68,18 @@ assert.match(files['test_harness_suites.js'], /SUITE-POPULATED-FIXTURE/,
   'Populated fixture suite must be registered');
 assert.match(files['test_harness_suites.js'], /SUITE-CENTRAL-SAFETY/,
   'Recent-session Central safety suite must be registered');
+assert.match(files['test_harness_suites.js'], /SUITE-HOUSE-FINANCIAL-ACCURACY/,
+  'House Financial Accuracy schema suite must be registered');
+const houseAccuracyScenario = files['test_harness_scenarios_house_financial_accuracy.js'];
+assert.match(houseAccuracyScenario,
+  /insertCashFlowRow_\([\s\S]*?'Harness Ambiguous Loan'[\s\S]*?insertRowAfter\(ambiguousPaymentRowA\)/,
+  'House accuracy fixture must use production insertion before simulating one malformed duplicate');
+assert.match(houseAccuracyScenario,
+  /Duplicate linked debt names were excluded to prevent double counting\./,
+  'House accuracy suite must assert duplicate linked debts fail closed');
+assert.match(houseAccuracyScenario,
+  /Ambiguous loan-payment rows were excluded to prevent double counting\./,
+  'House accuracy suite must assert duplicate Cash Flow payments fail closed');
 const centralSafetySuite = files['test_harness_suites.js'].match(
   /id: 'SUITE-CENTRAL-SAFETY'[\s\S]*?scenarioIds:\s*\[([\s\S]*?)\]\s*\}/
 );

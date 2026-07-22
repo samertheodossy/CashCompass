@@ -514,10 +514,10 @@
     <ol class="cc-flow">
       <li data-state="done"><span class="cc-flow-step">Proven</span><strong>Recovery + write reliability</strong></li>
       <li data-state="done"><span class="cc-flow-step">Closed</span><strong>P0 Stabilization</strong></li>
-      <li data-state="current"><span class="cc-flow-step">Now</span><strong>P1 Validation gate</strong></li>
+      <li data-state="done"><span class="cc-flow-step">Closed</span><strong>P1 non-performance validation</strong></li>
       <li data-state="next"><span class="cc-flow-step">Learn</span><strong>Supervised validation cohort</strong></li>
-      <li><span class="cc-flow-step">Then</span><strong>P2 Financial accuracy</strong></li>
-      <li><span class="cc-flow-step">Then</span><strong>P3 Experience + performance</strong></li>
+      <li data-state="done"><span class="cc-flow-step">Closed</span><strong>P2 House Financial Accuracy V1</strong></li>
+      <li data-state="current"><span class="cc-flow-step">Now</span><strong>P3 Experience + focused performance</strong></li>
       <li><span class="cc-flow-step">Parallel</span><strong>Monetization foundations</strong></li>
       <li><span class="cc-flow-step">Gate</span><strong>10/10 Beta Release Candidate</strong></li>
       <li><span class="cc-flow-step">Expand</span><strong>P4 Product programs</strong></li>
@@ -645,21 +645,21 @@
       <summary>
         <span class="cc-phase-code">P2</span>
         <span class="cc-phase-title"><h3>House financial accuracy</h3><p>Unify property operating and financing cash flow across the product.</p></span>
-        <span class="cc-summary-meta"><span class="viz-badge" data-state="next">After P1</span><span class="cc-effort">10–21 days</span></span>
+        <span class="cc-summary-meta"><span class="viz-badge" data-state="done">V1 complete</span><span class="cc-effort">Closed Jul 22</span></span>
       </summary>
       <div class="cc-phase-body">
         <table class="cc-work">
           <thead><tr><th>Item</th><th>Subitems</th><th>Effort</th><th>Dependency</th></tr></thead>
           <tbody>
-            <tr><td><strong>Discovery and contracts</strong></td><td>Inventory mortgage, taxes, insurance, HOA, expenses, and existing calculator semantics; define authoritative inputs and outputs.</td><td>1–2 d</td><td>Beta baseline</td></tr>
-            <tr><td><strong>Shared financial model</strong></td><td>Operating cash flow; financing cash flow; total net property cash flow; explicit principal/interest and escrow extension points.</td><td>2–4 d</td><td>Approved contracts</td></tr>
-            <tr><td><strong>Product integration</strong></td><td>Property Performance, House Values, House Expenses, Planner, and Cash Flow consume the same helper without duplicate calculations.</td><td>3–6 d</td><td>Shared model</td></tr>
-            <tr><td><strong>Compatibility and migration</strong></td><td>Preserve mature workbooks; additive evolution only; detect legacy columns; document any opt-in conversion.</td><td>1–3 d</td><td>Schema decision</td></tr>
-            <tr><td><strong>Tests and Validator</strong></td><td>Reconciliation invariants; edge cases; multiple loans; missing values; totals agree across features.</td><td>2–4 d</td><td>Integrated model</td></tr>
-            <tr><td><strong>Manual validation + docs</strong></td><td>Representative property cases; dashboard checks; terminology and help updates; rollback notes.</td><td>1–2 d</td><td>Tests pass</td></tr>
+            <tr><td><strong>Discovery and contracts</strong></td><td>Debt-owned explicit links; Cash Flow as the actual-payment source; operating expenses remain separate.</td><td>Completed</td><td>Beta baseline</td></tr>
+            <tr><td><strong>Shared financial model</strong></td><td>Property Performance uses one explicit-workbook helper for linked payments and after-financing net cash flow.</td><td>Completed</td><td>Approved contracts</td></tr>
+            <tr><td><strong>Product integration</strong></td><td>Manage Debts links active Loan/HELOC rows; Property Performance presents financing without changing equity or operating sources.</td><td>Completed</td><td>Shared model</td></tr>
+            <tr><td><strong>Compatibility and migration</strong></td><td>Final-column additive evolution, header-driven readers, legacy classification, preserved populated data.</td><td>Completed</td><td>Schema decision</td></tr>
+            <tr><td><strong>Tests and Validator</strong></td><td>Restricted disposable suite covers migration, idempotence, multiple loans, missing/inactive values, reconciliation, and fail-closed ambiguity.</td><td>Passed</td><td>Integrated model</td></tr>
+            <tr><td><strong>Manual validation + docs</strong></td><td>User-created backup; approved bounded comparison; Overview/property baselines preserved; actual payments reconciled.</td><td>Passed</td><td>Tests pass</td></tr>
           </tbody>
         </table>
-        <div class="cc-phase-total"><span>Exit gate</span><strong>One shared property truth reconciles everywhere</strong></div>
+        <div class="cc-phase-total"><span>Exit gate</span><strong>V1 passed isolated and approved bounded validation; broader principal/interest and escrow modeling remains future scope</strong></div>
       </div>
     </details>
 

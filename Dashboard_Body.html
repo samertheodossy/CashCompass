@@ -1158,7 +1158,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
     <div id="propertyPerformance" class="panel">
       <div class="panel-head">
         <h2>Property performance</h2>
-        <div class="updated">Houses + rental income + expense sheets</div>
+        <div class="updated">Houses + rental income + operating expenses + linked loan payments</div>
       </div>
 
       <div class="grid-2">
@@ -1179,32 +1179,37 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <div class="mini-card-value" id="pp_port_rent">—</div>
           </div>
           <div class="mini-card">
-            <div class="mini-card-title">HOUSES expenses</div>
+            <div class="mini-card-title">Operating expenses (year)</div>
             <div class="mini-card-value" id="pp_port_exp">—</div>
           </div>
           <div class="mini-card">
-            <div class="mini-card-title">Net (rent − expenses)</div>
-            <div class="mini-card-value" id="pp_port_net">—</div>
+            <div class="mini-card-title">Loan payments (year)</div>
+            <div class="mini-card-value" id="pp_port_loan_payments">—</div>
+          </div>
+          <div class="mini-card">
+            <div class="mini-card-title">Net cash flow</div>
+            <div class="mini-card-value" id="pp_port_net_cash_flow">—</div>
           </div>
         </div>
       </div>
 
       <div style="overflow-x:auto;margin-top:16px;">
-        <table id="pp_table" style="width:100%;border-collapse:collapse;">
+        <table id="pp_table" style="width:100%;min-width:1000px;border-collapse:collapse;">
           <thead>
             <tr>
               <th style="text-align:left;padding:8px;">House</th>
               <th style="text-align:left;padding:8px;">Type</th>
               <th style="text-align:right;padding:8px;">Value</th>
-              <th style="text-align:right;padding:8px;">Loan</th>
+              <th style="text-align:right;padding:8px;white-space:normal;line-height:1.15;width:90px;">Loan Balance</th>
               <th style="text-align:right;padding:8px;">Equity</th>
               <th style="text-align:right;padding:8px;">Rent</th>
-              <th style="text-align:right;padding:8px;">Expenses</th>
-              <th style="text-align:right;padding:8px;">Net</th>
+              <th style="text-align:right;padding:8px;white-space:normal;line-height:1.15;width:105px;">Operating Expenses</th>
+              <th style="text-align:right;padding:8px;white-space:normal;line-height:1.15;width:90px;">Loan Payments</th>
+              <th style="text-align:right;padding:8px;white-space:normal;line-height:1.15;width:90px;">Net Cash Flow</th>
             </tr>
           </thead>
           <tbody id="pp_tbody">
-            <tr><td colspan="8" class="muted" style="padding:12px;">Open this tab to load.</td></tr>
+            <tr><td colspan="9" class="muted" style="padding:12px;">Open this tab to load.</td></tr>
           </tbody>
         </table>
       </div>
@@ -1292,7 +1297,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <label>Type</label>
             <select id="debt_add_type" onchange="if (typeof onDebtAddTypeChange_==='function') onDebtAddTypeChange_();"></select>
             <div id="debt_add_type_other_wrap" style="margin-top:6px;display:none;">
-              <input type="text" id="debt_add_type_other" maxlength="80" autocomplete="off" placeholder="New type (e.g. Personal Loan)">
+              <input type="text" id="debt_add_type_other" maxlength="80" autocomplete="off" placeholder="New type (e.g. Personal Loan)" oninput="updateDebtLinkedPropertyVisibility_('add')">
             </div>
             <div class="muted" style="margin-top:4px;font-size:12px;">Choose an existing type, or pick <strong>Other…</strong> to add a new one.</div>
             <label>Account balance</label>
@@ -1306,6 +1311,11 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <input type="number" id="debt_add_int_rate" step="0.01" min="0" inputmode="decimal">
             <label>Due day of month</label>
             <input type="number" id="debt_add_due_day" min="1" max="31" step="1" inputmode="numeric">
+            <div id="debt_add_linked_property_wrap" style="display:none;">
+              <label>Linked Property</label>
+              <select id="debt_add_linked_property"></select>
+              <div class="muted" style="margin-top:4px;font-size:12px;">Optional for Loans and HELOCs. Used later to show property financing separately from operating expenses.</div>
+            </div>
             <button onclick="createDebtAccount()">Create debt</button>
           </div>
           <div class="info muted">
@@ -1337,7 +1347,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
               <label>Type</label>
               <select id="debt_edit_type" onchange="onDebtEditTypeChange_()"></select>
               <div id="debt_edit_type_other_wrap" style="margin-top:6px;display:none;">
-                <input type="text" id="debt_edit_type_other" maxlength="80" autocomplete="off" placeholder="New type (e.g. Personal Loan)">
+                <input type="text" id="debt_edit_type_other" maxlength="80" autocomplete="off" placeholder="New type (e.g. Personal Loan)" oninput="updateDebtLinkedPropertyVisibility_('edit')">
               </div>
               <label>Account Balance</label>
               <input type="text" id="debt_edit_balance" inputmode="decimal" onfocus="currencyFocus('debt_edit_balance')" onblur="currencyBlur('debt_edit_balance')">
@@ -1353,6 +1363,11 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
               <input type="text" id="debt_edit_min_payment" inputmode="decimal" onfocus="currencyFocus('debt_edit_min_payment')" onblur="currencyBlur('debt_edit_min_payment')">
               <label>Interest Rate %</label>
               <input type="number" id="debt_edit_int_rate" step="0.01" min="0" inputmode="decimal">
+              <div id="debt_edit_linked_property_wrap" style="display:none;">
+                <label>Linked Property</label>
+                <select id="debt_edit_linked_property"></select>
+                <div class="muted" style="margin-top:4px;font-size:12px;">Optional for Loans and HELOCs. Existing inactive links are retained until you clear or replace them.</div>
+              </div>
               <label>Acct PCT Avail</label>
               <div id="debt_edit_pct_avail" class="muted" style="padding:8px 10px;background:#f1f5f9;border-radius:6px;">—</div>
               <div class="muted" style="margin-top:4px;font-size:12px;">Calculated automatically from Credit Limit, Credit Left and Balance.</div>

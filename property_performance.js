@@ -13,8 +13,16 @@ function isHouseAssetsRentalForCashFlow_(typeStr) {
 }
 
 function getPropertyPerformanceData(payload) {
-  const year = getCurrentOrSelectedYear_(payload && payload.year);
   const ss = getUserSpreadsheet_();
+  return getPropertyPerformanceDataForSpreadsheet_(ss, payload);
+}
+
+/**
+ * Explicit-workbook Property Performance seam used by production and the
+ * guarded disposable harness. It never resolves a user/bounded workbook.
+ */
+function getPropertyPerformanceDataForSpreadsheet_(ss, payload) {
+  const year = getCurrentOrSelectedYear_(payload && payload.year);
 
   // Blank-workbook safety: on a fresh sheet SYS - House Assets does not
   // exist yet and getHouseNamesFromHouseAssets_() -> getSheet_() would
@@ -28,27 +36,41 @@ function getPropertyPerformanceData(payload) {
       year: year,
       yearOptions: [cyEarly - 2, cyEarly - 1, cyEarly, cyEarly + 1],
       rows: [],
-      portfolio: { equity: 0, rent: 0, expenses: 0, netCash: 0 },
+      portfolio: {
+        equity: 0,
+        rent: 0,
+        expenses: 0,
+        netCash: 0,
+        operatingExpenses: 0,
+        operatingNet: 0,
+        loanPayments: 0,
+        netCashFlow: 0
+      },
       message: ''
     };
   }
 
-  const houseNames = getHouseNamesFromHouseAssets_();
+  const assetResult = getActiveHouseAssetRowsForPerformance_(ss);
+  const houseAssets = assetResult.rows;
   const cfSheet = tryGetCashFlowSheet_(ss, year);
-  const message = cfSheet
-    ? ''
-    : 'Cash Flow sheet "' + getCashFlowSheetName_(year) + '" not found; rent totals are $0.';
+  let messages = assetResult.advisories.slice();
+  if (!cfSheet) {
+    messages.push('Cash Flow information for ' + year +
+      ' is not available yet; rent and loan-payment totals are $0.');
+  }
 
-  const allExpenseRows = getAllHouseExpenseRows_();
+  const allExpenseRows = getAllHouseExpenseRowsForSpreadsheet_(ss);
+  const financing = getPropertyFinancingForYear_(ss, year, houseAssets, cfSheet);
+  messages = messages.concat(financing.advisories || []);
 
-  const rows = houseNames.map(function(name) {
-    const assets = getHouseAssetRowData_(name);
-    const cv = assets && assets.currentValue !== '' ? Number(assets.currentValue) : 0;
-    const loan = assets && assets.loanAmountLeft !== '' ? Number(assets.loanAmountLeft) : 0;
+  const rows = houseAssets.map(function(assets) {
+    const name = assets.house;
+    const cv = Number(assets.currentValue || 0);
+    const loan = Number(assets.loanAmountLeft || 0);
     const equity = round2_(cv - loan);
 
     const rent =
-      cfSheet && isHouseAssetsRentalForCashFlow_(assets && assets.propertyType)
+      cfSheet && isHouseAssetsRentalForCashFlow_(assets.propertyType)
         ? sumCashFlowRentForHouse_(cfSheet, year, name)
         : 0;
 
@@ -56,30 +78,58 @@ function getPropertyPerformanceData(payload) {
     const expenseHouseKey = housesSheetName
       ? getHouseExpenseLocationName_(housesSheetName)
       : name;
-    const expenses = sumHouseExpensesForYear_(allExpenseRows, expenseHouseKey, year);
-    const netCash = round2_(rent - expenses);
+    const operatingExpenses = sumHouseExpensesForYear_(allExpenseRows, expenseHouseKey, year);
+    const operatingNet = round2_(rent - operatingExpenses);
+    const financingRow = financing.byProperty[normalizeHouseKeyForMatch_(name)] || {
+      loanPayments: 0,
+      linkedLoanCount: 0,
+      matchedLoanCount: 0,
+      advisories: []
+    };
+    const loanPayments = round2_(financingRow.loanPayments || 0);
+    const netCashFlow = round2_(operatingNet - loanPayments);
+    let financingMessage = '';
+    if (financingRow.linkedLoanCount > 0 && financingRow.matchedLoanCount === 0) {
+      financingMessage = financingRow.advisories.length
+        ? financingRow.advisories[0]
+        : 'No loan payments recorded for this year.';
+    } else if (financingRow.advisories.length) {
+      financingMessage = financingRow.advisories[0];
+    }
 
     return {
       house: name,
-      propertyType: assets && assets.propertyType ? String(assets.propertyType).trim() : '',
+      propertyType: assets.propertyType,
       currentValue: round2_(cv),
       loanAmount: round2_(loan),
       equity: equity,
       rent: rent,
-      expenses: expenses,
-      netCash: netCash
+      // Legacy aliases remain during the additive transition.
+      expenses: operatingExpenses,
+      netCash: operatingNet,
+      operatingExpenses: operatingExpenses,
+      operatingNet: operatingNet,
+      loanPayments: loanPayments,
+      netCashFlow: netCashFlow,
+      linkedLoanCount: financingRow.linkedLoanCount,
+      matchedLoanCount: financingRow.matchedLoanCount,
+      financingMessage: financingMessage
     };
   });
 
   let pEq = 0;
   let pRent = 0;
   let pExp = 0;
-  let pNet = 0;
+  let pOperatingNet = 0;
+  let pLoanPayments = 0;
+  let pNetCashFlow = 0;
   rows.forEach(function(row) {
     pEq += row.equity;
     pRent += row.rent;
-    pExp += row.expenses;
-    pNet += row.netCash;
+    pExp += row.operatingExpenses;
+    pOperatingNet += row.operatingNet;
+    pLoanPayments += row.loanPayments;
+    pNetCashFlow += row.netCashFlow;
   });
 
   const cy = getCurrentYear_();
@@ -92,42 +142,189 @@ function getPropertyPerformanceData(payload) {
       equity: round2_(pEq),
       rent: round2_(pRent),
       expenses: round2_(pExp),
-      netCash: round2_(pNet)
+      netCash: round2_(pOperatingNet),
+      operatingExpenses: round2_(pExp),
+      operatingNet: round2_(pOperatingNet),
+      loanPayments: round2_(pLoanPayments),
+      netCashFlow: round2_(pNetCashFlow)
     },
-    message: message
+    message: uniquePropertyPerformanceMessages_(messages).join(' ')
   };
 }
 
 function getHouseNamesFromHouseAssets_() {
   const ss = getUserSpreadsheet_();
-  const sheet = getSheet_(ss, 'HOUSE_ASSETS');
+  return getActiveHouseAssetRowsForPerformance_(ss).rows.map(function(row) {
+    return row.house;
+  });
+}
+
+/** Read active property rows once for Property Performance. */
+function getActiveHouseAssetRowsForPerformance_(ss) {
+  const sheet = ss && ss.getSheetByName(getSheetNames_().HOUSE_ASSETS);
+  if (!sheet) return { rows: [], advisories: [] };
+  const values = sheet.getDataRange().getValues();
   const display = sheet.getDataRange().getDisplayValues();
-  if (display.length < 2) return [];
+  if (display.length < 2) return { rows: [], advisories: [] };
 
   const headerMap = getHouseAssetsHeaderMap_(sheet);
-
-  // Property performance is an active-holdings view: reuse the shared
-  // inactive-house rule (explicit No/n/false/inactive = inactive; blank or
-  // unknown = active for backward compatibility with rows that predate the
-  // Active column). History in INPUT - House Values, SYS - House Assets,
-  // and HOUSES - {House} sheets is untouched — only the rows fed into the
-  // table/totals are filtered.
-  let inactive = Object.create(null);
-  try {
-    inactive = getInactiveHousesSet_();
-  } catch (e) {
-    Logger.log('getHouseNamesFromHouseAssets_ inactive filter: ' + e);
-  }
-
-  const names = [];
+  const grouped = Object.create(null);
   for (let r = 1; r < display.length; r++) {
     const h = String(display[r][headerMap.houseColZero] || '').trim();
     if (!h) continue;
-    if (inactive[h.toLowerCase()]) continue;
-    names.push(h);
+    const activeRaw = headerMap.activeColZero === -1
+      ? '' : String(display[r][headerMap.activeColZero] || '').trim();
+    if (isExplicitInactive_(activeRaw)) continue;
+    const key = normalizeHouseKeyForMatch_(h);
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push({
+      house: h,
+      propertyType: headerMap.typeColZero === -1
+        ? '' : String(display[r][headerMap.typeColZero] || '').trim(),
+      loanAmountLeft: headerMap.loanColZero === -1
+        ? 0 : round2_(toNumber_(values[r][headerMap.loanColZero])),
+      currentValue: headerMap.valueColZero === -1
+        ? 0 : round2_(toNumber_(values[r][headerMap.valueColZero]))
+    });
   }
 
-  return names.sort();
+  const rows = [];
+  const advisories = [];
+  Object.keys(grouped).forEach(function(key) {
+    if (grouped[key].length !== 1) {
+      advisories.push('A duplicate active property name was excluded until it can be reviewed.');
+      return;
+    }
+    rows.push(grouped[key][0]);
+  });
+  rows.sort(function(a, b) { return a.house.localeCompare(b.house); });
+  return { rows: rows, advisories: advisories };
+}
+
+/**
+ * Sum actual selected-year Cash Flow payments for active linked Loan/HELOC
+ * debts. Duplicate debt names or duplicate matching Expense rows fail closed.
+ */
+function getPropertyFinancingForYear_(ss, year, activeHouseRows, optionalCashFlowSheet) {
+  const result = { byProperty: Object.create(null), totalLoanPayments: 0, advisories: [] };
+  const activeProperties = Object.create(null);
+  (activeHouseRows || []).forEach(function(row) {
+    const key = normalizeHouseKeyForMatch_(row.house);
+    activeProperties[key] = row.house;
+    result.byProperty[key] = {
+      loanPayments: 0,
+      linkedLoanCount: 0,
+      matchedLoanCount: 0,
+      advisories: []
+    };
+  });
+
+  const debtSheet = ss && ss.getSheetByName(getSheetNames_().DEBTS);
+  if (!debtSheet || debtSheet.getLastRow() < 2) return result;
+  const debtValues = debtSheet.getDataRange().getValues();
+  const debtDisplay = debtSheet.getDataRange().getDisplayValues();
+  const debtMap = getDebtsHeaderMap_(debtSheet, debtDisplay);
+  if (debtMap.linkedPropertyColZero === -1) return result;
+
+  const debtsByName = Object.create(null);
+  for (let r = 1; r < debtDisplay.length; r++) {
+    const name = String(debtDisplay[r][debtMap.nameColZero] || '').trim();
+    if (!name || isDebtSummaryRowName_(name)) continue;
+    if (isDebtRowInactive_(debtDisplay[r], debtValues[r], debtMap)) continue;
+    const type = String(debtDisplay[r][debtMap.typeColZero] || '').trim();
+    if (!isDebtTypeLoanOrHeloc_(type)) continue;
+    const linked = String(debtDisplay[r][debtMap.linkedPropertyColZero] || '').trim();
+    if (!linked) continue;
+    const propertyKey = normalizeHouseKeyForMatch_(linked);
+    if (!activeProperties[propertyKey]) {
+      result.advisories.push('A linked loan was excluded because its property is inactive or unavailable.');
+      continue;
+    }
+    const nameKey = normalizeBillName_(name);
+    if (!debtsByName[nameKey]) debtsByName[nameKey] = [];
+    debtsByName[nameKey].push({ name: name, propertyKey: propertyKey });
+    result.byProperty[propertyKey].linkedLoanCount++;
+  }
+
+  const cfSheet = optionalCashFlowSheet || tryGetCashFlowSheet_(ss, year);
+  if (!cfSheet) {
+    Object.keys(result.byProperty).forEach(function(key) {
+      if (result.byProperty[key].linkedLoanCount) {
+        result.byProperty[key].advisories.push('No loan payments recorded for this year.');
+      }
+    });
+    return result;
+  }
+
+  const cfValues = cfSheet.getDataRange().getValues();
+  const cfDisplay = cfSheet.getDataRange().getDisplayValues();
+  const cfHeaders = cfDisplay[0] || [];
+  const cfHeaderMap = getCashFlowHeaderMap_(cfSheet);
+  const monthCols = [];
+  for (let c = 0; c < cfHeaders.length; c++) {
+    const parsed = parseMonthHeader_(cfHeaders[c]);
+    if (parsed && parsed.getFullYear() === Number(year)) monthCols.push(c);
+  }
+
+  const expenseRowsByPayee = Object.create(null);
+  for (let row = 1; row < cfDisplay.length; row++) {
+    const type = String(cfDisplay[row][cfHeaderMap.typeColZero] || '').trim();
+    if (type !== 'Expense') continue;
+    const payee = String(cfDisplay[row][cfHeaderMap.payeeColZero] || '').trim();
+    const key = normalizeBillName_(payee);
+    if (!key) continue;
+    if (!expenseRowsByPayee[key]) expenseRowsByPayee[key] = [];
+    expenseRowsByPayee[key].push(row);
+  }
+
+  Object.keys(debtsByName).forEach(function(debtKey) {
+    const debtRows = debtsByName[debtKey];
+    if (debtRows.length !== 1) {
+      debtRows.forEach(function(debt) {
+        result.byProperty[debt.propertyKey].advisories.push(
+          'A duplicate linked debt name must be reviewed before payments can be calculated.');
+      });
+      result.advisories.push('Duplicate linked debt names were excluded to prevent double counting.');
+      return;
+    }
+
+    const debt = debtRows[0];
+    const matches = expenseRowsByPayee[debtKey] || [];
+    if (matches.length > 1) {
+      result.byProperty[debt.propertyKey].advisories.push(
+        'Multiple matching Cash Flow rows must be reviewed before payments can be calculated.');
+      result.advisories.push('Ambiguous loan-payment rows were excluded to prevent double counting.');
+      return;
+    }
+    if (matches.length === 0 || !monthCols.length) {
+      result.byProperty[debt.propertyKey].advisories.push('No loan payments recorded for this year.');
+      return;
+    }
+
+    let paid = 0;
+    monthCols.forEach(function(col) {
+      paid += Math.abs(toNumber_(cfValues[matches[0]][col]));
+    });
+    paid = round2_(paid);
+    result.byProperty[debt.propertyKey].loanPayments = round2_(
+      result.byProperty[debt.propertyKey].loanPayments + paid);
+    result.byProperty[debt.propertyKey].matchedLoanCount++;
+    result.totalLoanPayments = round2_(result.totalLoanPayments + paid);
+  });
+
+  return result;
+}
+
+function uniquePropertyPerformanceMessages_(messages) {
+  const out = [];
+  const seen = Object.create(null);
+  (messages || []).forEach(function(message) {
+    const text = String(message || '').trim();
+    if (!text || seen[text]) return;
+    seen[text] = true;
+    out.push(text);
+  });
+  return out;
 }
 
 function tryGetCashFlowSheet_(ss, year) {

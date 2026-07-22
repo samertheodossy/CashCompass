@@ -1,4 +1,6 @@
 /* Planning — Debts tab */
+var __debtPropertyOptions = [];
+
 function loadDebtSection() {
   google.script.run
     .withSuccessHandler(function(data) {
@@ -23,6 +25,7 @@ function loadDebtSection() {
       });
 
       populateDebtAddDatalists_(data);
+      populateDebtPropertyOptions_(data && data.propertyOptions);
       filterDebtAccounts();
 
       if (pendingFocus && pendingFocus.tab === 'debts') {
@@ -56,6 +59,7 @@ function loadDebtSectionThenSelect_(accountName) {
         fieldSel.appendChild(opt);
       });
       populateDebtAddDatalists_(data);
+      populateDebtPropertyOptions_(data && data.propertyOptions);
       filterDebtAccounts();
       const sel = document.getElementById('debt_account');
       if (sel && accountName) {
@@ -146,6 +150,61 @@ function onDebtAddTypeChange_() {
   const isOther = sel && sel.value === '__other__';
   if (wrap) wrap.style.display = isOther ? '' : 'none';
   if (!isOther && other) other.value = '';
+  updateDebtLinkedPropertyVisibility_('add');
+}
+
+function isDebtLinkableTypeClient_(typeValue) {
+  const type = String(typeValue || '').trim().toLowerCase();
+  return type === 'loan' || type === 'heloc';
+}
+
+function populateDebtPropertySelect_(select, currentValue) {
+  if (!select) return;
+  const current = String(currentValue || '').trim();
+  select.innerHTML = '';
+  const blank = document.createElement('option');
+  blank.value = '';
+  blank.textContent = '— Not linked —';
+  select.appendChild(blank);
+
+  const seen = Object.create(null);
+  (__debtPropertyOptions || []).forEach(function(name) {
+    const value = String(name || '').trim();
+    if (!value || seen[value.toLowerCase()]) return;
+    seen[value.toLowerCase()] = true;
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = value;
+    select.appendChild(option);
+  });
+  if (current && !seen[current.toLowerCase()]) {
+    const retained = document.createElement('option');
+    retained.value = current;
+    retained.textContent = current + ' (inactive — retained)';
+    select.appendChild(retained);
+  }
+  select.value = current;
+}
+
+function populateDebtPropertyOptions_(options) {
+  __debtPropertyOptions = Array.isArray(options) ? options.slice() : [];
+  populateDebtPropertySelect_(document.getElementById('debt_add_linked_property'), '');
+}
+
+function updateDebtLinkedPropertyVisibility_(mode) {
+  const isEdit = mode === 'edit';
+  const typeEl = document.getElementById(isEdit ? 'debt_edit_type' : 'debt_add_type');
+  const otherEl = document.getElementById(isEdit ? 'debt_edit_type_other' : 'debt_add_type_other');
+  const rawType = typeEl ? String(typeEl.value || '').trim() : '';
+  const typeValue = rawType === '__other__' ? (otherEl ? otherEl.value : '') : rawType;
+  const wrap = document.getElementById(isEdit ? 'debt_edit_linked_property_wrap' : 'debt_add_linked_property_wrap');
+  const select = document.getElementById(isEdit ? 'debt_edit_linked_property' : 'debt_add_linked_property');
+  const show = isDebtLinkableTypeClient_(typeValue);
+  if (wrap) wrap.style.display = show ? '' : 'none';
+  if (select) {
+    select.disabled = !show;
+    if (!show) select.value = '';
+  }
 }
 
 function setDebtPanelMode(mode) {
@@ -404,6 +463,7 @@ function onDebtEditTypeChange_() {
   const isOther = sel && sel.value === '__other__';
   if (wrap) wrap.style.display = isOther ? '' : 'none';
   if (!isOther && other) other.value = '';
+  updateDebtLinkedPropertyVisibility_('edit');
 }
 
 function openDebtEditForm(key) {
@@ -448,6 +508,9 @@ function openDebtEditForm(key) {
   setMoney('debt_edit_min_payment', row.minimumPayment);
   setVal('debt_edit_due_date', (row.dueDate === '' ? '' : row.dueDate));
   setVal('debt_edit_int_rate', (row.intRate === '' ? '' : row.intRate));
+  populateDebtPropertySelect_(
+    document.getElementById('debt_edit_linked_property'), row.linkedProperty || '');
+  updateDebtLinkedPropertyVisibility_('edit');
 
   const pctEl = document.getElementById('debt_edit_pct_avail');
   if (pctEl) pctEl.textContent = row.acctPctAvail ? row.acctPctAvail : '—';
@@ -545,7 +608,11 @@ function submitDebtEdit_() {
     creditLimit: creditLimit,
     creditLeft: creditLeft,
     minimumPayment: minPayment,
-    intRate: intRate
+    intRate: intRate,
+    linkedProperty: (function() {
+      const el = document.getElementById('debt_edit_linked_property');
+      return el && !el.disabled ? String(el.value || '').trim() : '';
+    })()
   };
 
   setStatusLoading('debt_status', 'Saving…');
@@ -870,6 +937,7 @@ function resetDebtAddForm_() {
     'debt_add_credit_limit',
     'debt_add_int_rate',
     'debt_add_due_day',
+    'debt_add_linked_property',
     'debt_add_type_other'
   ];
   ids.forEach(function(id) {
@@ -1153,7 +1221,11 @@ function createDebtAccount() {
     minimumPayment: minPay.value,
     creditLimit: creditLimit.value,
     intRate: intRate.value,
-    dueDay: dueDay
+    dueDay: dueDay,
+    linkedProperty: (function() {
+      const el = document.getElementById('debt_add_linked_property');
+      return el && !el.disabled ? String(el.value || '').trim() : '';
+    })()
   };
 
   setStatusLoading('debt_status', 'Creating debt account…');

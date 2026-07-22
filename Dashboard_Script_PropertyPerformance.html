@@ -9,7 +9,7 @@ function loadPropertyPerformanceSection() {
   const tbodyLoading = document.getElementById('pp_tbody');
   if (tbodyLoading) {
     tbodyLoading.innerHTML =
-      '<tr><td colspan="8" style="padding:0;">' + loadingBlockHtml('Loading…', true) + '</td></tr>';
+      '<tr><td colspan="9" style="padding:0;">' + loadingBlockHtml('Loading…', true) + '</td></tr>';
   }
 
   google.script.run
@@ -35,34 +35,45 @@ function loadPropertyPerformanceSection() {
       const p = (data && data.portfolio) ? data.portfolio : {};
       const setMini = function(id, v) {
         const el = document.getElementById(id);
-        if (el) el.textContent = fmtCurrency(v);
+        if (!el) return;
+        el.textContent = fmtCurrency(v);
+        el.classList.toggle('currency-negative', Number(v) < 0);
       };
       setMini('pp_port_equity', p.equity);
       setMini('pp_port_rent', p.rent);
-      setMini('pp_port_exp', p.expenses);
-      setMini('pp_port_net', p.netCash);
+      setMini('pp_port_exp', p.operatingExpenses != null ? p.operatingExpenses : p.expenses);
+      setMini('pp_port_loan_payments', p.loanPayments);
+      setMini('pp_port_net_cash_flow', p.netCashFlow);
 
       const tbody = document.getElementById('pp_tbody');
       if (!tbody) return;
 
       const rows = (data && data.rows) ? data.rows : [];
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="8" class="muted" style="padding:12px;">No houses yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="muted" style="padding:12px;">No houses yet.</td></tr>';
         return;
       }
 
       tbody.innerHTML = rows.map(function(row) {
         const ptype = row.propertyType ? escapeHtml(row.propertyType) : '—';
+        const amountClass = function(value) {
+          return Number(value) < 0 ? ' class="currency-negative"' : '';
+        };
+        const financingNote = row.financingMessage
+          ? '<div class="muted" style="font-size:11px;margin-top:3px;max-width:180px;">' +
+              escapeHtml(row.financingMessage) + '</div>'
+          : '';
         return (
           '<tr>' +
           '<td style="padding:8px;border-top:1px solid #e2e8f0;">' + escapeHtml(row.house) + '</td>' +
           '<td style="padding:8px;border-top:1px solid #e2e8f0;">' + ptype + '</td>' +
-          '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.currentValue) + '</td>' +
-          '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.loanAmount) + '</td>' +
-          '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.equity) + '</td>' +
-          '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.rent) + '</td>' +
-          '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.expenses) + '</td>' +
-          '<td style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.netCash) + '</td>' +
+          '<td' + amountClass(row.currentValue) + ' style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.currentValue) + '</td>' +
+          '<td' + amountClass(row.loanAmount) + ' style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.loanAmount) + '</td>' +
+          '<td' + amountClass(row.equity) + ' style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.equity) + '</td>' +
+          '<td' + amountClass(row.rent) + ' style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.rent) + '</td>' +
+          '<td' + amountClass(row.operatingExpenses) + ' style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.operatingExpenses) + '</td>' +
+          '<td' + amountClass(row.loanPayments) + ' style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.loanPayments) + financingNote + '</td>' +
+          '<td' + amountClass(row.netCashFlow) + ' style="padding:8px;border-top:1px solid #e2e8f0;text-align:right;">' + fmtCurrency(row.netCashFlow) + '</td>' +
           '</tr>'
         );
       }).join('');
@@ -71,7 +82,7 @@ function loadPropertyPerformanceSection() {
       setStatus('pp_status', (err.message || String(err)), true);
       const tbody = document.getElementById('pp_tbody');
       if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="8" class="muted" style="padding:12px;">Could not load.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="muted" style="padding:12px;">Could not load.</td></tr>';
       }
     })
     .getPropertyPerformanceData({ year: year });

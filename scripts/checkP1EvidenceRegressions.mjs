@@ -62,7 +62,11 @@ assert.match(release, /runScenario_\(scenario,[\s\S]*\{ trash: true \}\)/,
   'Release chunks must use disposable scenario runners and request Trash');
 assert.doesNotMatch(release, /runScenario_\([^\n]*candidateSpreadsheetId/,
   'Candidate workbook ID must never enter a writer');
-for (const suite of ['SUITE-POPULATED-DASHBOARD-E2E', 'SUITE-RECOVERY-LIVE']) {
+for (const suite of [
+  'SUITE-HOUSE-FINANCIAL-ACCURACY',
+  'SUITE-POPULATED-DASHBOARD-E2E',
+  'SUITE-RECOVERY-LIVE'
+]) {
   assert.ok(release.includes(`'${suite}'`), `Required release inventory missing ${suite}`);
 }
 assert.match(suites, /id: 'SUITE-RECOVERY-LIVE'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?RECOVERY_LIVE_LATEST_EVIDENCE_V1/,

@@ -71,6 +71,17 @@ function setStatus(msg, isError) {
   el.className = isError ? 'status error' : 'status';
 }
 
+function fmtCurrency(value) {
+  if (value === '' || value === null || value === undefined) return '—';
+  const num = Number(value);
+  if (isNaN(num)) return '—';
+  const sign = num < 0 ? '-' : '';
+  return sign + '$' + Math.abs(num).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
 function fmtMaybeValue(field, value) {
   if (value === '' || value === null || value === undefined) return '—';
 
@@ -82,11 +93,7 @@ function fmtMaybeValue(field, value) {
   };
 
   if (currencyFields[field]) {
-    const num = Number(value || 0);
-    return '$' + num.toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
+    return fmtCurrency(Number(value || 0));
   }
 
   if (field === 'Int Rate') {

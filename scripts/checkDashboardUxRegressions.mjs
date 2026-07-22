@@ -8,9 +8,15 @@ const files = Object.fromEntries(await Promise.all([
   'Dashboard_Script_Onboarding.html',
   'Dashboard_Script_PlanningDebts.html',
   'Dashboard_Script_PlanningNextActions.html',
+  'Dashboard_Script_PropertyPerformance.html',
   'Dashboard_Script_PropertiesHouseExpenses.html',
   'Dashboard_Script_Render.html',
   'Dashboard_Script_RollingDebtPayoff.html',
+  'Dashboard_Styles.html',
+  'BankAccountsUI.html',
+  'DebtsUI.html',
+  'HouseValuesUI.html',
+  'InvestmentsUI.html',
   'PlannerDashboard.html',
   'QuickAddPaymentUI.html',
   'dashboard_data.js',
@@ -37,6 +43,23 @@ assert.match(render, /DASHBOARD_LAST_TAB_BY_PAGE_\[name\]\s*\|\|\s*defaultTab/,
   'Returning to a workspace must restore its most recent subtab before using the default');
 assert.match(render, /Financial plan refreshed/, 'Planner refresh must leave a success message');
 assert.match(render, /planner_refresh_btn/, 'Planner refresh must guard against duplicate clicks');
+const currencyUiSources = [
+  render,
+  files['PlannerDashboard.html'],
+  files['QuickAddPaymentUI.html'],
+  files['BankAccountsUI.html'],
+  files['DebtsUI.html'],
+  files['HouseValuesUI.html'],
+  files['InvestmentsUI.html']
+];
+for (const source of currencyUiSources) {
+  assert.match(source, /const sign = num < 0 \? '-' : '';/,
+    'Currency formatters must calculate the sign separately');
+  assert.match(source, /sign \+ '\$' \+ Math\.abs\(num\)\.toLocaleString\('en-US'/,
+    'Currency formatters must place the sign before the dollar sign');
+  assert.doesNotMatch(source, /return '\$' \+ num\.toLocaleString\('en-US'/,
+    'Currency formatters must never render $-amount');
+}
 for (const source of [render, files['PlannerDashboard.html']]) {
   assert.match(source, /if \(num < 0\) return '-' \+ fmtCurrency\(Math\.abs\(num\)\);/,
     'Signed currency must place the minus sign before the dollar sign');
@@ -67,6 +90,36 @@ assert.match(assetScript, /function updateBankUpdateAvailability_\(/);
 assert.match(assetScript, /function updateInvestmentUpdateAvailability_\(/);
 assert.match(files['Dashboard_Script_PlanningDebts.html'], /function updateDebtUpdateAvailability_\(/);
 assert.match(files['Dashboard_Script_PropertiesHouseExpenses.html'], /function updateHouseExpenseAvailability_\(/);
+
+const propertyPerformance = files['Dashboard_Script_PropertyPerformance.html'];
+for (const id of ['pp_port_loan_payments', 'pp_port_net_cash_flow']) {
+  assert.ok(body.includes(`id="${id}"`), `Property Performance must expose ${id}`);
+  assert.ok(propertyPerformance.includes(`'${id}'`), `Property Performance must populate ${id}`);
+}
+assert.match(body, /Operating Expenses[\s\S]*Loan Payments[\s\S]*Net Cash Flow/,
+  'Property Performance table must show expenses, financing, and final cash flow');
+assert.doesNotMatch(body, />Operating Net</,
+  'Property Performance must not expose the redundant Operating Net summary or column');
+assert.doesNotMatch(propertyPerformance, /['"]pp_port_net['"]/,
+  'Property Performance must not populate the removed Operating Net summary');
+assert.match(body, /id="pp_table"[^>]*min-width:1000px/,
+  'Property Performance table must remain compact while preserving a safe scroll floor');
+for (const heading of ['Loan Balance', 'Operating Expenses', 'Loan Payments', 'Net Cash Flow']) {
+  assert.match(body, new RegExp(`<th[^>]*white-space:normal[^>]*>${heading}</th>`),
+    `${heading} must be allowed to wrap onto two lines`);
+}
+assert.match(propertyPerformance, /colspan="9"/,
+  'Property Performance empty and loading states must span the compact table');
+assert.doesNotMatch(propertyPerformance, /colspan="10"/,
+  'Property Performance must not retain the removed table column span');
+assert.doesNotMatch(files['Dashboard_Script_PropertyPerformance.html'], /INPUT\s*-|SYS\s*-|OUT\s*-|LOG\s*-/,
+  'Property Performance client copy must not expose internal workbook tab names');
+assert.match(files['Dashboard_Styles.html'], /\.currency-negative\s*\{\s*color:\s*#b91c1c\s*!important;/,
+  'Property Performance negative currency must use the established danger red');
+assert.match(propertyPerformance, /classList\.toggle\(['"]currency-negative['"],\s*Number\(v\) < 0\)/,
+  'Property Performance summary cards must mark negative values');
+assert.match(propertyPerformance, /return Number\(value\) < 0 \? ' class="currency-negative"' : '';/,
+  'Property Performance rows must mark negative values');
 
 const onboardingClient = files['Dashboard_Script_Onboarding.html'];
 assert.doesNotMatch(onboardingClient, /step\.sheetName/, 'Setup cards must not render internal sheet names');

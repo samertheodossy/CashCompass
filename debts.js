@@ -29,6 +29,34 @@ var DEBTS_RESERVED_ROW_NAMES_ = {
   'TOTAL DEBT': true
 };
 
+var DEBTS_LINKED_PROPERTY_HEADER_ = 'Linked Property';
+var DEBTS_REQUIRED_HEADERS_ = [
+  'Account Name',
+  'Type',
+  'Account Balance',
+  'Due Date',
+  'Credit Limit',
+  'Minimum Payment',
+  'Credit Left',
+  'Int Rate',
+  'Acct PCT Avail',
+  'Active',
+  DEBTS_LINKED_PROPERTY_HEADER_
+];
+var DEBTS_CANONICAL_WIDTHS_ = {
+  'Account Name': 220,
+  'Type': 130,
+  'Account Balance': 190,
+  'Due Date': 110,
+  'Credit Limit': 150,
+  'Minimum Payment': 200,
+  'Credit Left': 140,
+  'Int Rate': 110,
+  'Acct PCT Avail': 190,
+  'Active': 90,
+  'Linked Property': 220
+};
+
 /**
  * Canonical allow-list of the ONLY INPUT - Debts columns that the generic
  * field editor (updateDebtField) and the Update-view field picker
@@ -71,12 +99,14 @@ function getDebtsUiData() {
   const sheet = ss.getSheetByName(getSheetNames_().DEBTS);
 
   const editableFields = DEBT_EDITABLE_FIELDS_.slice();
+  const propertyOptions = getActiveHouseNamesForSpreadsheet_(ss);
 
   if (!sheet) {
     return {
       debts: [],
       types: ['All'],
       typeOptions: [],
+      propertyOptions: propertyOptions,
       editableFields: editableFields
     };
   }
@@ -92,6 +122,7 @@ function getDebtsUiData() {
       debts: [],
       types: ['All'],
       typeOptions: [],
+      propertyOptions: propertyOptions,
       editableFields: editableFields
     };
   }
@@ -101,6 +132,7 @@ function getDebtsUiData() {
       debts: [],
       types: ['All'],
       typeOptions: [],
+      propertyOptions: propertyOptions,
       editableFields: editableFields
     };
   }
@@ -114,6 +146,7 @@ function getDebtsUiData() {
       debts: [],
       types: ['All'],
       typeOptions: [],
+      propertyOptions: propertyOptions,
       editableFields: editableFields
     };
   }
@@ -155,6 +188,7 @@ function getDebtsUiData() {
     typeOptions: Object.keys(typeOptionSet).sort(function(a, b) {
       return a.localeCompare(b);
     }),
+    propertyOptions: propertyOptions,
     editableFields: editableFields
   };
 }
@@ -224,6 +258,7 @@ function getActiveDebtsForManagementFromDashboard() {
       minimumPayment: numOrBlank(headerMap.minimumPaymentColZero),
       intRate: disp(headerMap.intRateColZero),
       acctPctAvail: disp(headerMap.pctAvailColZero),
+      linkedProperty: disp(headerMap.linkedPropertyColZero),
       active: disp(headerMap.activeColZero) || 'Yes'
     });
   }
@@ -304,6 +339,7 @@ function getInactiveDebtsForManagementFromDashboard() {
       minimumPayment: numOrBlank(headerMap.minimumPaymentColZero),
       intRate: disp(headerMap.intRateColZero),
       acctPctAvail: disp(headerMap.pctAvailColZero),
+      linkedProperty: disp(headerMap.linkedPropertyColZero),
       active: disp(headerMap.activeColZero) || 'No'
     });
   }
@@ -348,7 +384,7 @@ function debtFieldKindForLabel_(label) {
  *   - never touches Account Name (rename is deferred to Phase 2) and never
  *     touches Cash Flow.
  * Payload: { sheetRow, expectedAccountName, type?, accountBalance?, dueDate?,
- *            creditLimit?, creditLeft?, minimumPayment?, intRate? }
+ *            creditLimit?, creditLeft?, minimumPayment?, intRate?, linkedProperty? }
  */
 function updateTrackedDebtFromDashboard(payload) {
   validateRequired_(payload, ['sheetRow', 'expectedAccountName']);
@@ -364,18 +400,17 @@ function updateTrackedDebtFromDashboard(payload) {
 
   const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'DEBTS');
-  const headerMap = getDebtsHeaderMap_(sheet);
-
-  const lastCol = Math.max(sheet.getLastColumn(), 1);
+  const preliminaryHeaderMap = getDebtsHeaderMap_(sheet);
   const lastRow = Math.max(sheet.getLastRow(), 1);
   if (sheetRow > lastRow) {
     throw new Error('Debt has moved on the sheet. Please refresh and try again.');
   }
 
-  const rowValues = sheet.getRange(sheetRow, 1, 1, lastCol).getValues()[0];
-  const rowDisplay = sheet.getRange(sheetRow, 1, 1, lastCol).getDisplayValues()[0];
-
-  const actualName = String(rowDisplay[headerMap.nameColZero] || '').trim();
+  // Complete the stale-row and inactive guards before additive schema
+  // evolution. A rejected edit must not change even the sheet structure.
+  const actualName = String(
+    sheet.getRange(sheetRow, preliminaryHeaderMap.nameCol).getDisplayValue() || ''
+  ).trim();
   if (isDebtSummaryRowName_(actualName)) {
     throw new Error('Cannot edit the reserved "' + actualName + '" row.');
   }
@@ -385,8 +420,34 @@ function updateTrackedDebtFromDashboard(payload) {
       '", found "' + actualName + '"). Please refresh and try again.'
     );
   }
-  if (headerMap.activeColZero !== -1 && isExplicitInactive_(rowDisplay[headerMap.activeColZero])) {
+  if (preliminaryHeaderMap.activeCol !== -1 && isExplicitInactive_(
+      sheet.getRange(sheetRow, preliminaryHeaderMap.activeCol).getDisplayValue())) {
     throw new Error('This debt is not currently tracked. Restore it before editing.');
+  }
+
+  const headerMap = ensureDebtsLinkedPropertyColumn_(sheet, ss);
+  const lastCol = Math.max(sheet.getLastColumn(), 1);
+  const rowValues = sheet.getRange(sheetRow, 1, 1, lastCol).getValues()[0];
+  const rowDisplay = sheet.getRange(sheetRow, 1, 1, lastCol).getDisplayValues()[0];
+
+  let validatedLinkedProperty;
+  const currentLinkedProperty = headerMap.linkedPropertyColZero === -1
+    ? ''
+    : String(rowDisplay[headerMap.linkedPropertyColZero] || '').trim();
+  const shouldManageLinkedProperty = typeof payload.linkedProperty !== 'undefined' ||
+    (typeof payload.type !== 'undefined' && !!currentLinkedProperty);
+  if (shouldManageLinkedProperty) {
+    const finalTypeForLink = typeof payload.type === 'undefined'
+      ? String(rowDisplay[headerMap.typeColZero] || '').trim()
+      : String(payload.type || '').trim();
+    // Changing away from Loan/HELOC clears a prior managed link even if a
+    // non-UI caller omitted linkedProperty from the payload.
+    const requestedLinkedProperty = !isDebtTypeLoanOrHeloc_(finalTypeForLink)
+      ? ''
+      : (typeof payload.linkedProperty === 'undefined'
+        ? currentLinkedProperty : payload.linkedProperty);
+    validatedLinkedProperty = validateDebtLinkedProperty_(
+      ss, finalTypeForLink, requestedLinkedProperty, currentLinkedProperty);
   }
 
   const changedFields = [];
@@ -460,6 +521,16 @@ function updateTrackedDebtFromDashboard(payload) {
   currencyChange('creditLeft', 'Credit Left', headerMap.creditLeftColZero);
   currencyChange('minimumPayment', 'Minimum Payment', headerMap.minimumPaymentColZero);
   percentChange('intRate', 'Int Rate', headerMap.intRateColZero);
+
+  if (shouldManageLinkedProperty) {
+    if (validatedLinkedProperty !== currentLinkedProperty) {
+      copyNeighborFormatInRow_(sheet, sheetRow, headerMap.linkedPropertyCol, 1);
+      sheet.getRange(sheetRow, headerMap.linkedPropertyCol).setValue(validatedLinkedProperty);
+      changedFields.push(DEBTS_LINKED_PROPERTY_HEADER_);
+      previous[DEBTS_LINKED_PROPERTY_HEADER_] = currentLinkedProperty ? 'Linked' : 'Not linked';
+      next[DEBTS_LINKED_PROPERTY_HEADER_] = validatedLinkedProperty ? 'Linked' : 'Not linked';
+    }
+  }
 
   if (changedFields.length === 0) {
     return { ok: true, message: 'No changes made', accountName: actualName, changedFields: [] };
@@ -1174,6 +1245,7 @@ function addDebtFromDashboard(payload) {
   const typeStr = String(payload.type || '').trim();
   if (!typeStr) throw new Error('Type is required.');
   if (typeStr.length > 80) throw new Error('Type is too long (max 80 characters).');
+  const ss = getUserSpreadsheet_();
 
   // Every numeric field is required. Users should enter 0 where a value does
   // not apply (for example, Credit Limit on a Loan / HELOC). Blank / null /
@@ -1213,6 +1285,8 @@ function addDebtFromDashboard(payload) {
   const creditLimit = parseRequiredNonNegative_(payload.creditLimit, 'Credit limit');
   const intRate = parseRequiredPercent_(payload.intRate, 'Interest rate');
   const dueDay = parseRequiredDueDay_(payload.dueDay);
+  const linkedProperty = validateDebtLinkedProperty_(
+    ss, typeStr, payload.linkedProperty, '');
 
   // Credit Left is derived from the user-supplied Credit Limit and Account
   // Balance. Because both are required on the form, we always pre-populate
@@ -1223,9 +1297,8 @@ function addDebtFromDashboard(payload) {
   // and Credit Left lands at 0 accordingly.
   const creditLeft = round2_(creditLimit - balance);
 
-  const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'DEBTS');
-  const headerMap = ensureDebtsActiveColumn_(sheet);
+  const headerMap = ensureDebtsLinkedPropertyColumn_(sheet, ss);
 
   const headerDisplay = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0] || [];
   const numCols = headerDisplay.length;
@@ -1248,6 +1321,7 @@ function addDebtFromDashboard(payload) {
   setAt_(headerMap.intRateColZero, intRate);
   setAt_(headerMap.dueDateColZero, dueDay);
   if (headerMap.activeColZero !== -1) row[headerMap.activeColZero] = 'Yes';
+  setAt_(headerMap.linkedPropertyColZero, linkedProperty);
 
   const templateRow = findDebtTemplateRow_(sheet, headerMap);
 
@@ -1733,6 +1807,7 @@ function getDebtsHeaderMap_(sheet, optionalDisplay) {
   const intRateColZero = headers.indexOf('Int Rate');
   const pctAvailColZero = headers.indexOf('Acct PCT Avail');
   const activeColZero = headers.indexOf('Active');
+  const linkedPropertyColZero = headers.indexOf(DEBTS_LINKED_PROPERTY_HEADER_);
 
   if (nameColZero === -1) throw new Error('Debts sheet must contain Account Name.');
   if (typeColZero === -1) throw new Error('Debts sheet must contain Type.');
@@ -1748,6 +1823,7 @@ function getDebtsHeaderMap_(sheet, optionalDisplay) {
     intRateColZero: intRateColZero,
     pctAvailColZero: pctAvailColZero,
     activeColZero: activeColZero,
+    linkedPropertyColZero: linkedPropertyColZero,
     nameCol: nameColZero + 1,
     typeCol: typeColZero + 1,
     balanceCol: balanceColZero === -1 ? -1 : balanceColZero + 1,
@@ -1757,7 +1833,8 @@ function getDebtsHeaderMap_(sheet, optionalDisplay) {
     creditLeftCol: creditLeftColZero === -1 ? -1 : creditLeftColZero + 1,
     intRateCol: intRateColZero === -1 ? -1 : intRateColZero + 1,
     pctAvailCol: pctAvailColZero === -1 ? -1 : pctAvailColZero + 1,
-    activeCol: activeColZero === -1 ? -1 : activeColZero + 1
+    activeCol: activeColZero === -1 ? -1 : activeColZero + 1,
+    linkedPropertyCol: linkedPropertyColZero === -1 ? -1 : linkedPropertyColZero + 1
   };
 }
 
@@ -1785,6 +1862,107 @@ function ensureDebtsActiveColumn_(sheet) {
 
   sheet.getRange(1, targetCol).setValue('Active');
   return getDebtsHeaderMap_(sheet);
+}
+
+/**
+ * Additive schema evolution for INPUT - Debts. Active is always established
+ * first, then Linked Property is appended as the final meaningful column.
+ * Existing cells and columns are never moved or rewritten.
+ */
+function ensureDebtsLinkedPropertyColumn_(sheet, optionalSs) {
+  const beforeLastCol = Math.max(sheet.getLastColumn(), 1);
+  const beforeHeaders = sheet.getRange(1, 1, 1, beforeLastCol).getDisplayValues()[0] || [];
+  let beforeLinkedCount = 0;
+  let beforeHasActive = false;
+  for (let b = 0; b < beforeHeaders.length; b++) {
+    const beforeLabel = String(beforeHeaders[b] || '').trim();
+    if (beforeLabel === DEBTS_LINKED_PROPERTY_HEADER_) beforeLinkedCount++;
+    if (beforeLabel === 'Active') beforeHasActive = true;
+  }
+  if (beforeLinkedCount > 1) {
+    throw new Error('Debts sheet contains more than one Linked Property column. No changes were made.');
+  }
+  if (beforeLinkedCount === 1 && !beforeHasActive) {
+    throw new Error('Debts sheet has Linked Property but no Active column. No columns were moved or added.');
+  }
+
+  ensureDebtsActiveColumn_(sheet);
+
+  const lastCol = Math.max(sheet.getLastColumn(), 1);
+  const headers = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0] || [];
+  let linkedCount = 0;
+  let linkedColZero = -1;
+  let lastMeaningfulZero = -1;
+  for (let c = 0; c < headers.length; c++) {
+    const label = String(headers[c] || '').trim();
+    if (label) lastMeaningfulZero = c;
+    if (label === DEBTS_LINKED_PROPERTY_HEADER_) {
+      linkedCount++;
+      if (linkedColZero === -1) linkedColZero = c;
+    }
+  }
+
+  if (linkedCount > 1) {
+    throw new Error('Debts sheet contains more than one Linked Property column. No changes were made.');
+  }
+  if (linkedColZero !== -1 && linkedColZero !== lastMeaningfulZero) {
+    throw new Error('Linked Property must be the final Debts column. No columns were moved.');
+  }
+
+  if (linkedColZero === -1) {
+    const targetCol = lastCol + 1;
+    sheet.getRange(1, targetCol).setValue(DEBTS_LINKED_PROPERTY_HEADER_);
+    try {
+      sheet.getRange(1, targetCol - 1, sheet.getMaxRows(), 1).copyTo(
+        sheet.getRange(1, targetCol, sheet.getMaxRows(), 1),
+        SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+        false
+      );
+      sheet.getRange(1, targetCol)
+        .setValue(DEBTS_LINKED_PROPERTY_HEADER_)
+        .setNote('Optional: link a Loan or HELOC to an active property. Leave blank for other debt types.');
+      sheet.setColumnWidth(targetCol, DEBTS_CANONICAL_WIDTHS_[DEBTS_LINKED_PROPERTY_HEADER_]);
+    } catch (styleErr) {
+      Logger.log('ensureDebtsLinkedPropertyColumn_ style: ' + styleErr);
+    }
+  }
+
+  const refreshed = getDebtsHeaderMap_(sheet);
+  applyDebtLinkedPropertyValidation_(sheet, optionalSs, refreshed);
+  return refreshed;
+}
+
+function applyDebtLinkedPropertyValidation_(sheet, optionalSs, optionalHeaderMap) {
+  const hm = optionalHeaderMap || getDebtsHeaderMap_(sheet);
+  if (hm.linkedPropertyCol === -1 || sheet.getMaxRows() < 2) return;
+  const target = sheet.getRange(2, hm.linkedPropertyCol, sheet.getMaxRows() - 1, 1);
+  const names = getActiveHouseNamesForSpreadsheet_(optionalSs || sheet.getParent());
+  if (!names.length) {
+    target.clearDataValidations();
+    return;
+  }
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(names, true)
+    .setAllowInvalid(false)
+    .setHelpText('Choose an active property for Loan or HELOC debt, or leave blank.')
+    .build();
+  target.setDataValidation(rule);
+}
+
+function validateDebtLinkedProperty_(ss, debtType, rawLinkedProperty, currentLinkedProperty) {
+  const requested = String(rawLinkedProperty == null ? '' : rawLinkedProperty).trim();
+  const current = String(currentLinkedProperty || '').trim();
+  if (!requested) return '';
+  if (!isDebtTypeLoanOrHeloc_(debtType)) {
+    throw new Error('Linked Property is available only for Loan and HELOC debt types.');
+  }
+  if (current && requested.toLowerCase() === current.toLowerCase()) return current;
+
+  const active = getActiveHouseNamesForSpreadsheet_(ss);
+  for (let i = 0; i < active.length; i++) {
+    if (active[i].toLowerCase() === requested.toLowerCase()) return active[i];
+  }
+  throw new Error('Choose an active property from the Linked Property list.');
 }
 
 function findDebtRow_(sheet, accountName) {
@@ -2175,8 +2353,10 @@ function applyDebtsSheetStyling_(sheet) {
   // order):
   // 1 Account Name | 2 Type | 3 Account Balance | 4 Due Date |
   // 5 Credit Limit | 6 Minimum Payment | 7 Credit Left | 8 Int Rate |
-  // 9 Acct PCT Avail | 10 Active.
-  const widthMins = [220, 130, 190, 110, 150, 200, 140, 110, 190, 90];
+  // 9 Acct PCT Avail | 10 Active | 11 Linked Property.
+  const widthMins = DEBTS_REQUIRED_HEADERS_.map(function(header) {
+    return DEBTS_CANONICAL_WIDTHS_[header];
+  });
   for (let c = 1; c <= lastCol && c <= widthMins.length; c++) {
     try {
       if (sheet.getColumnWidth(c) < widthMins[c - 1]) {

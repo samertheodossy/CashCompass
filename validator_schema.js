@@ -13,7 +13,7 @@
  *   1. Run validateProvisioning_(ss) (the structural gate).
  *   2. classifyWorkbook_(provReport) — infer platform (Central/Bound) + generation
  *      (Current/Legacy) from structural signals, then a Compatibility verdict.
- *   3. reclassifySchemaFindings_(...) — for the three supported legacy differences
+ *   3. reclassifySchemaFindings_(...) — for the supported legacy differences
  *      (missing SYS - Meta, legacy header ORDERING, legacy frozen-pane conventions)
  *      MOVE the finding out of the Provisioning section and re-emit it under Schema
  *      Evolution as INFO ("Supported legacy schema — …"). All other findings are
@@ -122,7 +122,7 @@ function validateSchemaEvolution_(ss, options) {
  *
  * Platform: CENTRAL iff the hidden SYS - Meta identity sheet is present (only
  * Central provisioning writes it); else BOUND. Generation: LEGACY iff any of the
- * three supported legacy differences is present; else CURRENT.
+ * supported legacy differences is present; else CURRENT.
  *
  * Compatibility precedence:
  *   residual ERROR                    → UPGRADE_REQUIRED (true defect; provisioning FAIL)
@@ -139,6 +139,7 @@ function classifyWorkbook_(prov) {
   var missingSysMeta = false;
   var legacyHeaderOrdering = false;
   var legacyFrozenPanes = false;
+  var legacyMissingLinkedProperty = false;
   var residualErrors = 0;
   var sysMetaSeen = false;
 
@@ -149,7 +150,11 @@ function classifyWorkbook_(prov) {
     var findings = s.findings || [];
     for (var j = 0; j < findings.length; j++) {
       var f = findings[j];
-      if (f.severity === VALIDATOR_SEV_ERROR_) residualErrors++;
+      var supportedMissingLinkedProperty = s.name === 'INPUT - Debts' &&
+        f.kind === 'header' && f.severity === VALIDATOR_SEV_ERROR_ &&
+        String(f.message).indexOf('Missing header "Linked Property"') !== -1;
+      if (supportedMissingLinkedProperty) legacyMissingLinkedProperty = true;
+      if (f.severity === VALIDATOR_SEV_ERROR_ && !supportedMissingLinkedProperty) residualErrors++;
       if (f.kind === 'sheet' && s.name === sysMetaName &&
           f.severity === VALIDATOR_SEV_WARN_ && /missing/i.test(String(f.message))) {
         missingSysMeta = true;
@@ -166,14 +171,14 @@ function classifyWorkbook_(prov) {
 
   var hasSysMeta = sysMetaSeen && !missingSysMeta;
   var platform = hasSysMeta ? SCHEMA_PLATFORM_CENTRAL_ : SCHEMA_PLATFORM_BOUND_;
-  var isLegacy = missingSysMeta || legacyHeaderOrdering || legacyFrozenPanes;
+  var isLegacy = missingSysMeta || legacyHeaderOrdering || legacyFrozenPanes || legacyMissingLinkedProperty;
   var generation = isLegacy ? SCHEMA_GEN_LEGACY_ : SCHEMA_GEN_CURRENT_;
   var workbookType = platform + '_' + generation;
 
   var compatibility;
   if (residualErrors > 0) compatibility = SCHEMA_COMPAT_UPGRADE_REQUIRED_;
   else if (missingSysMeta) compatibility = SCHEMA_COMPAT_UPGRADE_RECOMMENDED_;
-  else if (legacyHeaderOrdering || legacyFrozenPanes) compatibility = SCHEMA_COMPAT_COMPATIBLE_LEGACY_;
+  else if (legacyHeaderOrdering || legacyFrozenPanes || legacyMissingLinkedProperty) compatibility = SCHEMA_COMPAT_COMPATIBLE_LEGACY_;
   else compatibility = SCHEMA_COMPAT_FULLY_CURRENT_;
 
   return {
@@ -185,6 +190,7 @@ function classifyWorkbook_(prov) {
     missingSysMeta: missingSysMeta,
     legacyHeaderOrdering: legacyHeaderOrdering,
     legacyFrozenPanes: legacyFrozenPanes,
+    legacyMissingLinkedProperty: legacyMissingLinkedProperty,
     residualErrors: residualErrors
   };
 }
@@ -194,12 +200,15 @@ function classifyWorkbook_(prov) {
 /* -------------------------------------------------------------------------- */
 
 /**
- * True iff a finding is one of the three V1 supported legacy differences that a
+ * True iff a finding is one of the supported legacy differences that a
  * legacy classification explains: missing SYS - Meta, legacy header ORDERING (not
  * a missing header, which stays a real defect), or legacy frozen-pane conventions.
  */
 function isSchemaEvolutionFinding_(sheetName, f, sysMetaName) {
   if (f.kind === 'sheet' && sheetName === sysMetaName && f.severity === VALIDATOR_SEV_WARN_) return true;
+  if (sheetName === 'INPUT - Debts' && f.kind === 'header' &&
+      f.severity === VALIDATOR_SEV_ERROR_ &&
+      String(f.message).indexOf('Missing header "Linked Property"') !== -1) return true;
   if (f.kind === 'header' && f.severity === VALIDATOR_SEV_WARN_ &&
       String(f.message).indexOf('canonical column') !== -1) return true;
   if (f.kind === 'frozenRows' || f.kind === 'frozenColumns') return true;

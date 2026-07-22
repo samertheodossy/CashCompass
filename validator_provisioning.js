@@ -247,11 +247,22 @@ function checkSheetHeaders_(rule, actualHeaders) {
 
   for (var i = 0; i < rule.headers.length; i++) {
     var expected = String(rule.headers[i]).trim();
+    var count = 0;
+    for (var countIdx = 0; countIdx < actualHeaders.length; countIdx++) {
+      if (String(actualHeaders[countIdx] == null ? '' : actualHeaders[countIdx]).trim() === expected) count++;
+    }
+    if (rule.uniqueHeaders && rule.uniqueHeaders.indexOf(expected) !== -1 && count > 1) {
+      out.push(validatorFinding_(VALIDATOR_SEV_ERROR_, rule.name, 'header',
+        'Duplicate header "' + expected + '" found ' + count + ' times.'));
+      continue;
+    }
     if (!actualIndex.hasOwnProperty(expected)) {
       out.push(validatorFinding_(VALIDATOR_SEV_ERROR_, rule.name, 'header',
         'Missing header "' + expected + '" (expected at column ' + (i + 1) + ').'));
     } else if (actualIndex[expected] !== i) {
-      out.push(validatorFinding_(VALIDATOR_SEV_WARN_, rule.name, 'header',
+      var orderSeverity = rule.strictHeaderOrder && rule.strictHeaderOrder.indexOf(expected) !== -1
+        ? VALIDATOR_SEV_ERROR_ : VALIDATOR_SEV_WARN_;
+      out.push(validatorFinding_(orderSeverity, rule.name, 'header',
         'Header "' + expected + '" at column ' + (actualIndex[expected] + 1) +
         ', canonical column ' + (i + 1) + '.'));
     }

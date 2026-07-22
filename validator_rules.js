@@ -99,8 +99,12 @@ function getValidatorCanonicalModel_() {
   var sysAccountsHeaders = (typeof SYS_ACCOUNTS_REQUIRED_HEADERS_ !== 'undefined') ? SYS_ACCOUNTS_REQUIRED_HEADERS_ : null;
   var upcomingHeaders = (typeof UPCOMING_EXPENSES_REQUIRED_HEADERS_ !== 'undefined') ? UPCOMING_EXPENSES_REQUIRED_HEADERS_ : null;
   var bankAccountsHeaders = (typeof BANK_ACCOUNTS_REQUIRED_HEADERS_ !== 'undefined') ? BANK_ACCOUNTS_REQUIRED_HEADERS_ : null;
+  var debtsHeaders = (typeof DEBTS_REQUIRED_HEADERS_ !== 'undefined') ? DEBTS_REQUIRED_HEADERS_ : null;
+  var debtsLinkedPropertyHeader = (typeof DEBTS_LINKED_PROPERTY_HEADER_ === 'string')
+    ? DEBTS_LINKED_PROPERTY_HEADER_ : null;
 
   var upcomingWidths = (typeof UPCOMING_EXPENSES_CANONICAL_WIDTHS_ !== 'undefined') ? UPCOMING_EXPENSES_CANONICAL_WIDTHS_ : null;
+  var debtsWidths = (typeof DEBTS_CANONICAL_WIDTHS_ !== 'undefined') ? DEBTS_CANONICAL_WIDTHS_ : null;
 
   // Canonical identity-marker key labels for the hidden SYS - Meta sheet, derived
   // from the SAME production definition that stamps them
@@ -181,6 +185,19 @@ function getValidatorCanonicalModel_() {
       widths: null,
       frozenRows: null,
       frozenColumns: null
+    },
+
+    // INPUT - Debts — additive schema with Linked Property strictly last.
+    {
+      name: (names && names.DEBTS) ? names.DEBTS : 'INPUT - Debts',
+      presence: VALIDATOR_PRESENCE_EXPECTED_,
+      headerRow: 1,
+      headers: debtsHeaders,
+      widths: debtsWidths,
+      frozenRows: 1,
+      frozenColumns: 0,
+      uniqueHeaders: debtsLinkedPropertyHeader ? [debtsLinkedPropertyHeader] : [],
+      strictHeaderOrder: debtsLinkedPropertyHeader ? [debtsLinkedPropertyHeader] : []
     },
 
     // INPUT - Upcoming Expenses

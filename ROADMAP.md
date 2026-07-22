@@ -8,7 +8,7 @@
 
 ---
 
-## Current status (2026-07-21)
+## Current status (2026-07-22)
 
 **Completed:**
 
@@ -18,10 +18,11 @@
 - ✅ **Validator Phase 2 + Test Harness / Release Readiness foundation** — Provisioning, Workbook Drift, Schema Evolution V1, the formal schema, Formula / Conditional-Formatting / Named-Range modules, aggregate Workbook Health, the disposable-workbook harness, required non-performance scenario packs, and the bounded Validation console are complete and runtime-proven through isolated Central `@141`.
 - ✅ **P0 Documentation Cleanup / Project Stabilization** — closed 2026-07-20 after synchronized documentation, ProductDecision closeout, Central Tier-2 verification, the full Recovery 6F matrix, and two-track isolated `@114` blank/fresh plus representative populated-workbook runtime validation.
 - ✅ **Unified-source bounded smoke + signed-currency polish** — after creating a safety copy, the same source was pushed to the bounded Apps Script project. Overview loaded materially faster; sampled balances, Upcoming, Bills, weekly change, and several pages reconciled; no rollback was required. Negative deltas now render as `-$…` consistently, with bounded runtime proof and permanent dashboard regression coverage.
+- ✅ **House Financial Accuracy V1** — additive final `Linked Property` debt schema, Loan/HELOC-only managed links, actual selected-year Cash Flow loan payments, fail-closed ambiguity guards, and after-financing Property Performance totals passed the isolated disposable suite and a user-approved bounded comparison made under a workbook backup. Existing Overview values, property equity, rent, and operating expenses remained unchanged; no Harness run targeted the bounded workbook.
 
 **Now / next:**
 
-- **Current active product-model milestone:** **House Financial Accuracy** (P2). The Release Readiness runner, single-console controls, disposable Workbook Health preflight, 13/13 bounded server checks, and the First-Run / Populated Dashboard / Recovery Live browser suites are complete and runtime-proven on isolated Central `@141`.
+- **Current active milestone:** **P3 finished-feeling UX and focused performance optimization.** House Financial Accuracy V1 is complete; broader principal/interest, escrow, refinancing, or cross-model expansion is deferred to a separately approved financial-model milestone.
 - **Explicitly parked pre-Beta gate:** the Performance Planner percentile campaign and final exact-candidate READY/NOT READY verdict. Seven historical sample pairs are diagnostic only because the campaign began before `@141`; performance must be rerun as an exact-candidate campaign and ratified before any broad Beta release. Deferral does not waive the gate.
 - **Measured follow-up:** Financial Plan refresh succeeded but took 143 seconds on the blank/fresh fixture. Reusable privacy-safe stage instrumentation is now source-ready behind `PERFORMANCE_TIMING_ENABLED`; isolated first-run/repeat timing evidence and optimization remain under P3 Performance without reopening the completed P0 functional-feedback work.
 - **Release policy:** CashCompass is **quality-gated, not date-gated**. A small supervised cohort may validate work during P1–P3, but a broad Beta Release Candidate must satisfy `BETA_10_OUT_OF_10_PLAN.md`: score ≥95/100, no dimension below 9/10, no unresolved Severity 1 or Severity 2 defect, and every non-negotiable release gate passing.
@@ -52,13 +53,13 @@
 5. **Release Readiness gate — ✅ orchestration/runtime controls complete; final verdict parked.** The single Validation console now starts, resumes, pauses, and finalizes bounded runs; each writer check creates and safely trashes its own disposable workbook; browser evidence is accepted only for the exact source/deployment candidate; compact evidence is archived; and a console-owned Harness flag returns OFF at finalization. Source commit `a4f6ddf` is on `origin/main`; isolated Central `@141` proved the runner. The current run remains `IN_PROGRESS`, not READY, because Performance p50/p95 budgets are unratified.
 6. **Validation & Testing admin console — ✅ Release Readiness controls complete.** Workbook Health, the suite inventory, guarded browser adapters, resumable bounded checks, saved status, privacy-safe evidence export, and final READY/NOT READY controls now start and end from the single console.
 
-**Next active item:** begin **House Financial Accuracy**. Keep Performance Planner as an explicit parked gate, then restart its full exact-candidate percentile campaign, ratify the budget ProductDecision, and produce the final bounded verdict before broad Beta release.
+**Next active item:** resume the ordered **P3 page-by-page UX polish**, beginning with the Overview information architecture/balanced-grid work already recorded as `UX-01`. Keep Performance Planner as an explicit parked gate, then restart its full exact-candidate percentile campaign, ratify the budget ProductDecision, and produce the final bounded verdict before broad Beta release.
 
 ### Priority 2 — Financial Model Accuracy
 
-The next **product-model** milestone (after Validator Phase 2, before the broad Beta Release Candidate and before major new user features). Full spec below in **House Financial Accuracy**.
+**✅ House Financial Accuracy V1 complete 2026-07-22.** This product-model milestone followed Validator Phase 2 and closed before the broad Beta Release Candidate. Full scope and evidence are recorded below and in `HOUSE_FINANCIAL_ACCURACY_PLAN.md`.
 
-- **House Financial Accuracy** — rental-property cash-flow accuracy including financing costs, with one shared house cash-flow model reconciled across all house-related sheets.
+- **House Financial Accuracy V1** — rental-property cash-flow accuracy now includes actual linked financing payments in Property Performance while preserving operating expenses and equity sources. Broader house-model expansion is deferred.
 
 ### Priority 3 — Performance, finished-feeling UX, and scalability
 
@@ -78,10 +79,10 @@ The next **product-model** milestone (after Validator Phase 2, before the broad 
 
 ## House Financial Accuracy *(Priority 2 — High)*
 
-**Execution plan:** `HOUSE_FINANCIAL_ACCURACY_PLAN.md` — ratified additive direction,
-schema/Golden parity, implementation slices, regression matrix, bounded validation,
-and rollback boundaries. Implementation is intentionally deferred to the next work
-session; begin with its read-only Slice A audit.
+**Execution plan:** `HOUSE_FINANCIAL_ACCURACY_PLAN.md` — completed additive V1
+direction, canonical fresh/evolved schema, implementation slices, regression
+matrix, approved bounded validation, and rollback boundaries. Manual Golden
+workbook alignment remains separately approval-gated.
 
 Sequenced **immediately after Validator Phase 2 and before major new user features.**
 
@@ -89,9 +90,9 @@ Sequenced **immediately after Validator Phase 2 and before major new user featur
 
 **Goal.** Improve the financial accuracy of rental-property cash-flow calculations.
 
-**Motivation.** Current property profitability does **not** include financing costs, producing an **optimistic** monthly cash-flow picture. Including mortgage/loan payments gives a truthful net-cash-flow view per property.
+**Delivered result.** Property Performance now preserves operating income and expenses while separately including actual selected-year mortgage/loan/HELOC payments and truthful after-financing net cash flow.
 
-**Planned work.**
+**Delivered V1 work.**
 
 - Include **mortgage / loan payments** in recurring monthly property expenses.
 - **Separate** expense classes:

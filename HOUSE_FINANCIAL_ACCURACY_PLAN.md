@@ -1,8 +1,16 @@
 # House Financial Accuracy Plan
 
-**Status:** Planned; implementation intentionally deferred until the next work session.
+**Status:** V1 implementation and approved validation complete (2026-07-22).
+Slices A–D are implemented; exact isolated Central `@145` suite run
+`20260722-124210-bc23` passed 1/1 with 27/27 functional assertions, Restricted
+sharing, CURRENT/FULLY_CURRENT schema, and verified Trash cleanup;
+and, after creating a backup, the user completed an approved bounded rollout and
+confirmed additive debt links plus reconciled Property Performance results. The
+canonical fresh/evolved workbook contract is implemented in code. Manual Golden
+workbook alignment remains a separately approval-gated parity task; no Harness run
+targeted the bounded workbook and no Golden workbook was modified.
 
-**Priority:** P2 — High; active product-model milestone.
+**Priority:** P2 — High; V1 milestone completed.
 
 **Scope owner:** Properties + Debts + Property Performance.
 **Planning decision date:** 2026-07-21.
@@ -54,8 +62,10 @@ retain a permanent no-double-counting guard for future data.
 7. **No automatic balance reduction.** `Loan Amount Left` remains the balance used
    for property equity. A payment may contain interest, escrow, fees, and principal,
    so Property Performance must not subtract the full payment from the balance.
-8. **Preserve the current result.** The existing `Net` becomes the clearly named
-   `Operating Net`; a new `Net Cash Flow` displays the after-financing result.
+8. **Preserve the current calculation.** The existing operating result remains in
+   the payload for reconciliation and future analytics, but is not repeated as a
+   visible card or table column. `Net Cash Flow` is the primary after-financing
+   result.
 9. **Single operator surface for tests.** New automated scenarios must be exposed
    through the existing Validation & Testing console, not through a new standalone
    operator page.
@@ -66,26 +76,25 @@ retain a permanent no-double-counting guard for future data.
 
 Target columns:
 
-| House | Type | Value | Loan Balance | Equity | Rent | Operating Expenses | Operating Net | Loan Payments | Net Cash Flow |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| House | Type | Value | Loan Balance | Equity | Rent | Operating Expenses | Loan Payments | Net Cash Flow |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
 
 Calculations:
 
 - `Equity = Value - Loan Balance` *(unchanged)*
-- `Operating Net = Rent - Operating Expenses` *(existing result, renamed)*
+- `Operating Net = Rent - Operating Expenses` *(retained internally)*
 - `Loan Payments = sum of actual selected-year Cash Flow payments for active linked Loan/HELOC accounts`
 - `Net Cash Flow = Operating Net - Loan Payments`
 
 ### Portfolio summary
 
-Preserve the existing values and expose six traceable totals:
+Preserve the existing values and expose five traceable totals:
 
 1. Portfolio equity
 2. Rent (year)
 3. Operating expenses (year)
-4. Operating net
-5. Loan payments (year)
-6. Net cash flow
+4. Loan payments (year)
+5. Net cash flow
 
 If a linked loan has no matching selected-year Cash Flow row or payments, show
 `$0.00` plus calm guidance such as `No loan payments recorded for this year`.
@@ -149,6 +158,10 @@ Compatibility rule:
 
 ### Slice A — Read-only audit and specification confirmation
 
+**Status: COMPLETE (2026-07-22).** Debt consumers are header-driven; the
+existing Cash Flow debt-payment reader can be reused; and legacy evolution must
+establish `Active` before appending `Linked Property`.
+
 - Inventory all production readers/writers of `INPUT - Debts`.
 - Confirm each locates columns by header or update it before schema evolution.
 - Inspect current Cash Flow debt-payment attribution and exact matching rules.
@@ -159,6 +172,13 @@ Compatibility rule:
 or double-counting risk.
 
 ### Slice B — Schema and managed linking
+
+**Status: COMPLETE + RUNTIME VALIDATED (2026-07-22).** The current code adds the
+canonical trailing header, safe writer-triggered evolution, Loan/HELOC-only managed
+linking, Validator/Schema Evolution rules, and the
+`SUITE-HOUSE-FINANCIAL-ACCURACY` disposable regression pack. The isolated suite and
+approved bounded comparison passed; manual Golden alignment remains a separate
+approval-gated parity task.
 
 - Append `Linked Property` safely for existing workbooks.
 - Include it on first-create/new workbooks.
@@ -173,6 +193,11 @@ and data-preservation checks.
 
 ### Slice C — Shared financing calculation
 
+**Status: COMPLETE + RUNTIME VALIDATED (2026-07-22).** The explicit-spreadsheet
+production helper aggregates actual selected-year Cash Flow payments for active
+linked Loan/HELOC debts and fails closed on duplicate debt names or matching
+payment rows. Permanent disposable assertions cover both ambiguity guards.
+
 - Add one production house-financing helper that accepts an explicit spreadsheet
   and year.
 - Resolve active linked loans, read actual Cash Flow payments, and aggregate per
@@ -184,16 +209,29 @@ and data-preservation checks.
 
 ### Slice D — Property Performance presentation
 
+**Status: IMPLEMENTED; ISOLATED SUITE + USER-APPROVED BOUNDED VALIDATION PASS
+(2026-07-22).**
+The existing operating result remains available under both legacy payload aliases
+and the new explicit names. The UI adds Loan Payments and Net Cash Flow without
+changing equity, rent, or operating-expense sources; the redundant Operating Net
+card and column were removed after user review to keep the screen focused.
+
 - Extend the existing payload without removing current fields during transition.
-- Rename visible `Expenses` to `Operating Expenses` and `Net` to `Operating Net`.
+- Rename visible `Expenses` to `Operating Expenses`; retain the former `Net`
+  calculation internally for compatibility and reconciliation.
 - Add `Loan Payments` and `Net Cash Flow` columns.
-- Expand the portfolio cards to the six-value model.
+- Present the five decision-useful portfolio cards and omit redundant Operating Net.
 - Update loading/empty/error colspan values and responsive table behavior.
 
 **Exit:** blank, legacy, populated, multiple-loan, and no-payment states render
 calmly and reconcile to the shared helper.
 
 ### Slice E — Broader house-model reconciliation
+
+**Status: DEFERRED FOLLOW-UP.** V1 intentionally keeps the new shared financing
+helper scoped to Property Performance and the existing Cash Flow source. Broader
+principal/interest, escrow, refinancing, Planner, or additional house-model
+adoption requires a separately approved financial-model milestone.
 
 - After Slice D is accepted, audit Property Performance, House Values, House
   Expenses, Planner, Cash Flow, and rolling debt logic against the shared model.
@@ -238,8 +276,8 @@ Bounded validation, only after disposable evidence and explicit approval:
    the Test Harness against the bounded workbook.
 4. Confirm `Linked Property` appears once at the final column and nothing moved.
 5. Link one loan at a time through Manage Debts.
-6. Compare Operating Expenses and Operating Net to the captured baseline; they
-   must remain identical.
+6. Compare Operating Expenses to the captured baseline and reconcile the retained
+   operating result as `Net Cash Flow + Loan Payments`; both must remain identical.
 7. Compare Loan Payments to the selected-year Cash Flow source rows.
 8. Confirm Net Cash Flow reconciles exactly.
 9. Verify unrelated dashboard pages and debt workflows remain unchanged.
@@ -265,8 +303,8 @@ The milestone is complete only when:
 - `Linked Property` is the final `INPUT - Debts` column in Golden, fresh, and safely
   evolved legacy workbooks.
 - Existing debt and property data is preserved.
-- Property Performance retains the exact prior Operating Expenses and Operating Net
-  values when no financing is linked.
+- Property Performance retains the exact prior Operating Expenses and internal
+  Operating Net values when no financing is linked.
 - Linked actual payments reconcile to Cash Flow and the after-financing totals sum
   to the cent.
 - Multiple loans, missing payments, inactive records, and ambiguous matches behave
@@ -278,8 +316,9 @@ The milestone is complete only when:
 - Documentation, roadmap, Golden checklist, and Release Readiness inventory are
   synchronized before commit and push.
 
-## 10. Next-session starting point
+## 10. Closeout and next milestone
 
-Begin with **Slice A only**: a read-only code/data-path audit and an affected-file
-map. Do not append the column or alter a workbook until the audit is reviewed and
-the implementation slice is explicitly approved.
+House Financial Accuracy V1 is complete after the final disposable ambiguity
+coverage, documentation synchronization, and commit-readiness review. Resume P3
+finished-feeling UX work next; keep the exact-candidate Performance percentile
+campaign explicitly parked until it is restarted before broad Beta release.

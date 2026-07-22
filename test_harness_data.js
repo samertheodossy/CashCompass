@@ -206,7 +206,8 @@ function harnessSeedDebt_(ctx, debt) {
     'Credit Left': debt.creditLeft,
     'Int Rate': debt.interestRate,
     'Acct PCT Avail': debt.pctAvailable,
-    'Active': 'Yes'
+    'Active': 'Yes',
+    'Linked Property': ''
   };
   // Central first-create sheets already contain TOTAL DEBT. Insert the
   // representative debt above that summary so the fixture matches the same

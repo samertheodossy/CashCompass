@@ -1021,18 +1021,7 @@ function ensureOnboardingDebtsSheetFromDashboard(mode, optionalSs) {
     // form writes all of them, so we seed the full canonical layout.
     // Active is included so self-heal in ensureDebtsActiveColumn_ is a
     // no-op on freshly created sheets.
-    var headerRow = [
-      'Account Name',
-      'Type',
-      'Account Balance',
-      'Due Date',
-      'Credit Limit',
-      'Minimum Payment',
-      'Credit Left',
-      'Int Rate',
-      'Acct PCT Avail',
-      'Active'
-    ];
+    var headerRow = DEBTS_REQUIRED_HEADERS_.slice();
     sheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
 
     // Cosmetic polish applied only to the fresh sheet. Readers identify
@@ -1078,6 +1067,7 @@ function ensureOnboardingDebtsSheetFromDashboard(mode, optionalSs) {
       // populated workbook never reaches (it returns at the `if (existing)`
       // guard above), so existing/bound workbooks are never restyled.
       applyDebtsSheetStyling_(sheet);
+      applyDebtLinkedPropertyValidation_(sheet, ss, getDebtsHeaderMap_(sheet));
     } catch (_e) {
       // Cosmetic only — never fail the ensure op on formatting hiccups.
     }

@@ -227,6 +227,11 @@ function getHouseExpenseSummaryData() {
 
 function getAllHouseExpenseRows_() {
   const ss = getUserSpreadsheet_();
+  return getAllHouseExpenseRowsForSpreadsheet_(ss);
+}
+
+/** Read every HOUSES - * expense row from one explicit workbook. */
+function getAllHouseExpenseRowsForSpreadsheet_(ss) {
   const houseSheets = ss.getSheets().filter(function(sheet) {
     return String(sheet.getName() || '').toUpperCase().indexOf('HOUSES - ') === 0;
   });

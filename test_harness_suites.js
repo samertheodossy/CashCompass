@@ -146,6 +146,14 @@ function getHarnessSuites_() {
       ]
     },
     {
+      id: 'SUITE-HOUSE-FINANCIAL-ACCURACY',
+      label: 'House Financial Accuracy',
+      description: 'Validate styled Debts-to-property schema evolution plus actual linked-loan payments and Property Performance reconciliation on Restricted disposable workbooks.',
+      scenarioIds: [
+        'REGRESSION-HOUSE-DEBT-LINK-SCHEMA'
+      ]
+    },
+    {
       id: 'SUITE-FIRST-RUN-UX-E2E',
       label: 'First-Run UX E2E',
       description: 'Browser-driven fresh Central provisioning, Setup, navigation, gating, Help, real Refresh state, clean-console checks, and verified Trash cleanup.',

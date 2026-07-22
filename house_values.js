@@ -343,9 +343,14 @@ function getHouseUiData() {
  */
 function getInactiveHousesSet_() {
   const ss = getUserSpreadsheet_();
-  const sheet = getSheet_(ss, 'HOUSE_ASSETS');
-  const display = sheet.getDataRange().getDisplayValues();
+  return getInactiveHousesSetForSpreadsheet_(ss);
+}
+
+function getInactiveHousesSetForSpreadsheet_(ss) {
+  const sheet = ss && ss.getSheetByName(getSheetNames_().HOUSE_ASSETS);
   const inactive = Object.create(null);
+  if (!sheet) return inactive;
+  const display = sheet.getDataRange().getDisplayValues();
   if (display.length < 2) return inactive;
 
   let headerMap;
@@ -365,6 +370,38 @@ function getInactiveHousesSet_() {
     }
   }
   return inactive;
+}
+
+/** Active property names from SYS - House Assets for managed debt linking. */
+function getActiveHouseNamesForSpreadsheet_(ss) {
+  const sheet = ss && ss.getSheetByName(getSheetNames_().HOUSE_ASSETS);
+  if (!sheet) return [];
+  const display = sheet.getDataRange().getDisplayValues();
+  if (display.length < 2) return [];
+
+  let headerMap;
+  try {
+    headerMap = getHouseAssetsHeaderMap_(sheet, display);
+  } catch (_e) {
+    return [];
+  }
+
+  const names = [];
+  const seen = Object.create(null);
+  for (let r = 1; r < display.length; r++) {
+    const name = String(display[r][headerMap.houseColZero] || '').trim();
+    if (!name) continue;
+    const activeRaw = headerMap.activeColZero === -1
+      ? ''
+      : String(display[r][headerMap.activeColZero] || '').trim();
+    const activeKey = activeRaw.toLowerCase();
+    if (activeKey === 'no' || activeKey === 'n' || activeKey === 'false' || activeKey === 'inactive') continue;
+    const key = name.toLowerCase();
+    if (seen[key]) continue;
+    seen[key] = true;
+    names.push(name);
+  }
+  return names.sort(function(a, b) { return a.localeCompare(b); });
 }
 
 /**

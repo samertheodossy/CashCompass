@@ -52,6 +52,10 @@ function getHarnessPopulatedFixtureScenario_() {
         l.house.row, l.house.monthCol, p.house.value);
       harnessAssertSeedValue_(ctx, 'Debt balance', 'Debts', l.debt.sheet,
         l.debt.row, l.debt.balanceCol, p.debt.balance);
+      ctx.assert.equals('Debts fresh schema ends with Linked Property',
+        ctx.read.sheetValue(l.debt.sheet, 1, 11), DEBTS_LINKED_PROPERTY_HEADER_, {
+          module: 'Debts', location: l.debt.sheet + '!R1C11'
+        });
       harnessAssertSeedValue_(ctx, 'Bill amount', 'Bills', l.bill.sheet,
         l.bill.row, l.bill.amountCol, p.bill.amount);
       harnessAssertSeedValue_(ctx, 'Income amount', 'Income', l.income.sheet,

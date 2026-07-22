@@ -575,7 +575,7 @@ formatting) are **Drift-class (advisory)**; Module 5 (named ranges) is structura
 > gate, `classifyWorkbook_(provReport)` derives platform (Central/Bound) × generation
 > (Current/Legacy) → **Workbook Type**, plus a **Compatibility** verdict
 > (`FULLY_CURRENT` / `COMPATIBLE_LEGACY` / `UPGRADE_RECOMMENDED` / `UPGRADE_REQUIRED`),
-> and `reclassifySchemaFindings_(...)` MOVES the three supported legacy differences
+> and `reclassifySchemaFindings_(...)` MOVES the supported legacy differences
 > (missing `SYS - Meta`, header **ordering**, frozen-pane conventions) out of
 > Provisioning and re-emits them under **Schema Evolution** as INFO
 > (*"Supported legacy schema — …"*). It invents no new rules, never repairs, never

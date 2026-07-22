@@ -25,6 +25,11 @@ const requiredProductionPaths = {
   'test_harness_scenarios_bills_pay.js': [
     'quickAddPayment({', 'markDashboardBillOccurrencePaid(marker, ctx.ss)'
   ],
+  'test_harness_scenarios_house_financial_accuracy.js': [
+    'ensureSysHouseAssetsSheet_', 'ensureOnboardingDebtsSheetFromDashboard',
+    'ensureDebtsLinkedPropertyColumn_', 'buildCashFlowYearSheet_',
+    'insertCashFlowRow_', 'getPropertyPerformanceDataForSpreadsheet_'
+  ],
   'test_harness_data.js': [
     'ensureInputSettingsSheet_', 'insertNewBankAccountHistoryRow_',
     'insertNewInvestmentHistoryRow_', 'insertNewHouseHistoryRow_',
@@ -76,7 +81,8 @@ const directWriteAllowlist = new Set([
   'test_harness_core.js',                 // harness identity markers only
   'test_harness_data.js',                 // deterministic fixture setup only
   'test_harness_scenarios_bills.js',      // explicit Bills fixtures for engine/schema cases
-  'test_harness_scenarios_quick_add.js'   // deliberate late-edit state simulation
+  'test_harness_scenarios_quick_add.js',  // deliberate late-edit state simulation
+  'test_harness_scenarios_house_financial_accuracy.js' // deliberate retired-schema fixture
 ]);
 const entries = await readdir(root, { withFileTypes: true });
 const candidateNames = entries
@@ -84,7 +90,7 @@ const candidateNames = entries
     ['first_run_e2e.js', 'populated_dashboard_e2e.js', 'recovery_live.js', 'performance_sampling.js',
       'recovery_test_fixtures.js'].includes(entry.name)))
   .map((entry) => entry.name);
-const directWritePattern = /\.(?:setValue|setValues|appendRow|insertRowBefore|insertRowAfter|insertSheet|deleteSheet|setFormula|setFormulas)\s*\(/;
+const directWritePattern = /\.(?:setValue|setValues|appendRow|insertRowBefore|insertRowAfter|insertSheet|deleteSheet|deleteColumn|setFormula|setFormulas)\s*\(/;
 for (const name of candidateNames) {
   const source = await read(name);
   if (directWritePattern.test(source)) {

@@ -28,6 +28,7 @@ canonical workbook for a write.
 | Populated Dashboard E2E | Real Central provisioning, product renderers/navigation/load-and-select helpers, real planner refresh, verified cleanup | Representative fixture setup and browser assertions |
 | Recovery Live | Real candidate discovery, confirmation, self-reconnect, mapping/reverse-index, stale/Trash routing, and ambiguity paths | Exact-name, caller-owned candidate creation plus browser orchestration |
 | Workbook Health | Real aggregate read-only validator modules | Representative fixture setup |
+| House Financial Accuracy | Real production Debts creation/styling, `ensureDebtsLinkedPropertyColumn_`, Cash Flow row writers, and Property Performance calculation | The final column is removed only inside the disposable fixture to recreate the retired schema before migration |
 
 ## Reviewed direct-write exceptions
 
@@ -39,6 +40,10 @@ canonical workbook for a write.
   schema, and Cash Flow integration cases while calling the production engine.
 - `test_harness_scenarios_quick_add.js`: deliberately changes one Cash Flow cell
   to reproduce late-edit and compare-and-set states.
+- `test_harness_scenarios_house_financial_accuracy.js`: removes only the final
+  `Linked Property` column from a production-styled disposable Debts sheet to
+  recreate the retired schema, then proves migration, presentation, and actual
+  Cash Flow financing reconciliation through production helpers.
 
 `scripts/checkTestProductionPaths.mjs` enforces this inventory. A new test file
 with direct workbook writes fails the local regression suite until its design is
