@@ -1,25 +1,24 @@
 /**
  * Financial Integrity Audit framework — Stage 2 Product Hardening.
  *
- * Read-only, admin-gated diagnostics that surface differences between the
- * various financial calculation bases in the workbook WITHOUT declaring any
- * one basis canonical. The output is intended to help decide the canonical
- * financial model later; it never mutates the workbook.
+ * Read-only, admin-gated diagnostics that prove the approved Financial
+ * Integrity Phase 3 canonical basis and surface reconciliation blockers. The
+ * output never mutates the workbook.
  *
  * Hard guarantees for every function in this file:
  *   - Read-only. No sheet writes, no dashboard/planner/history writes, no
  *     touchDashboardSourceUpdated_(), no workbook mutations of any kind.
  *   - Admin-only at the UI seam (adminUiGetFinancialIntegrityAudit()).
- *   - Neutral reporting: observed financial differences are WARNINGS, never
- *     FAILURES. Only audit execution problems (e.g. an unreadable sheet)
- *     produce a FAILURE / FAIL status.
+ *   - Reconciliation differences are observations. Only audit execution or
+ *     source-read problems produce a FAILURE / FAIL status. Release gating is
+ *     wired separately after these modules are runtime-proven.
  *
  * Architecture:
  *   runFinancialIntegrityAudit()            — master aggregator
- *     -> runDebtAudit()                      — Phase 1 (implemented)
- *     -> (future) runAssetAudit()            — registered later
- *     -> (future) runPlannerAudit()          — registered later
- *     -> (future) runDashboardAudit()        — registered later
+ *     -> runDebtAudit()
+ *     -> runAssetAudit()
+ *     -> runPlannerAudit()
+ *     -> runDashboardAudit()
  *
  * Modules are registered as metadata in getFinancialAuditModules_() so adding
  * a future audit is: write the function, add one registry entry. The master
@@ -196,13 +195,33 @@ function getFinancialAuditModules_() {
       title: 'Debt Integrity',
       order: 10,
       enabled: true,
-      version: 1,
+      version: 2,
       fn: runDebtAudit
+    },
+    {
+      id: 'assets',
+      title: 'Asset Integrity',
+      order: 20,
+      enabled: true,
+      version: 1,
+      fn: runAssetAudit
+    },
+    {
+      id: 'planner',
+      title: 'Planner Integrity',
+      order: 30,
+      enabled: true,
+      version: 1,
+      fn: runPlannerAudit
+    },
+    {
+      id: 'dashboard',
+      title: 'Dashboard Integrity',
+      order: 40,
+      enabled: true,
+      version: 1,
+      fn: runDashboardAudit
     }
-    // Future (not yet implemented):
-    //   { id: 'assets',    title: 'Asset Integrity',     order: 20, enabled: false, version: 0, fn: runAssetAudit },
-    //   { id: 'planner',   title: 'Planner Integrity',   order: 30, enabled: false, version: 0, fn: runPlannerAudit },
-    //   { id: 'dashboard', title: 'Dashboard Integrity', order: 40, enabled: false, version: 0, fn: runDashboardAudit }
   ];
 }
 
@@ -217,14 +236,18 @@ function getFinancialAuditModules_() {
  *
  * @returns {!Object} aggregated audit report (see file header / design doc)
  */
-function runFinancialIntegrityAudit() {
+function runFinancialIntegrityAudit(explicitSpreadsheet) {
   // Early informational short-circuit: if the caller's workbook is still in
   // bootstrap/blank state (no financial sheets), there is nothing to audit.
   // Report NOT_INITIALIZED rather than letting each module FAIL on missing
   // sheets. Read-only; if the workbook can't be resolved we skip this check
   // and let the modules run (they surface a genuine FAIL).
-  var ssForInit = null;
-  try { ssForInit = getUserSpreadsheet_(); } catch (_e) { ssForInit = null; }
+  var ssForInit = explicitSpreadsheet || null;
+  try {
+    if (!ssForInit) ssForInit = getUserSpreadsheet_();
+  } catch (_e) {
+    ssForInit = null;
+  }
   if (ssForInit && !financialAuditWorkbookInitialized_(ssForInit)) {
     return {
       status: FINANCIAL_AUDIT_STATUS_.NOT_INITIALIZED,
@@ -244,11 +267,20 @@ function runFinancialIntegrityAudit() {
   var overall = FINANCIAL_AUDIT_STATUS_.PASS;
   var warningCount = 0;
   var failureCount = 0;
+  var canonicalSnapshot = null;
+  var canonicalReadError = null;
+  if (ssForInit) {
+    try {
+      canonicalSnapshot = readCanonicalFinancialSnapshot_(ssForInit);
+    } catch (err) {
+      canonicalReadError = err;
+    }
+  }
 
   modules.forEach(function(m) {
     var moduleResult;
     try {
-      moduleResult = m.fn();
+      moduleResult = m.fn(ssForInit, canonicalSnapshot, canonicalReadError);
       if (!moduleResult || typeof moduleResult !== 'object') {
         moduleResult = newAuditResult_(m.id);
         auditAddFailure_(moduleResult, 'EMPTY_RESULT',
@@ -307,18 +339,236 @@ function runFinancialIntegrityAudit() {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Phase 3 canonical audit helpers and modules                              */
+/* -------------------------------------------------------------------------- */
+
+function financialAuditModuleContext_(result, explicitSpreadsheet,
+    suppliedSnapshot, suppliedReadError) {
+  var ss = explicitSpreadsheet || null;
+  try {
+    if (!ss) ss = getUserSpreadsheet_();
+  } catch (err) {
+    auditAddFailure_(result, 'NO_SPREADSHEET',
+      'Could not resolve workbook: ' + (err && err.message ? err.message : err));
+    return null;
+  }
+  if (!ss) {
+    auditAddFailure_(result, 'NO_SPREADSHEET', 'No active workbook available.');
+    return null;
+  }
+  if (!financialAuditWorkbookInitialized_(ss)) {
+    auditMarkNotInitialized_(result, FINANCIAL_AUDIT_NOT_INITIALIZED_MESSAGE_);
+    return null;
+  }
+  if (suppliedReadError) {
+    auditAddFailure_(result, 'CANONICAL_SNAPSHOT_FAILED',
+      'Canonical snapshot failed: ' +
+      (suppliedReadError.message || suppliedReadError));
+    return null;
+  }
+  var snapshot = suppliedSnapshot;
+  if (!snapshot) {
+    try {
+      snapshot = readCanonicalFinancialSnapshot_(ss);
+    } catch (err2) {
+      auditAddFailure_(result, 'CANONICAL_SNAPSHOT_FAILED',
+        'Canonical snapshot failed: ' +
+        (err2 && err2.message ? err2.message : err2));
+      return null;
+    }
+  }
+  return { ss: ss, snapshot: snapshot };
+}
+
+function auditCanonicalDelta_(result, deltas, key, actual, expected, label) {
+  var delta = auditDelta_(actual, expected);
+  deltas[key] = delta;
+  if (Math.abs(delta) > FINANCIAL_AUDIT_TOLERANCE_USD_) {
+    auditAddWarning_(result, 'CANONICAL_RECONCILIATION_DIFFERENCE',
+      label + ' differs from the canonical basis by ' + delta + '.',
+      { comparison: key, deltaUsd: delta });
+  }
+}
+
+function auditCanonicalAssetSnapshot_(snapshot) {
+  var result = newAuditResult_('assets');
+  var snap = snapshot || {};
+  var sources = snap.sources || {};
+  var mirrors = snap.mirrors || {};
+  var financing = snap.propertyFinancing || {};
+
+  ['cash', 'investments', 'properties'].forEach(function(domain) {
+    var available = !!(sources[domain] && sources[domain].available);
+    auditAddCheck_(result, domain + '_source_available',
+      domain + ' authoritative source available', available,
+      available ? 'Authoritative input ledger read.' :
+        'Source is missing or unreadable.');
+    if (!available) {
+      auditAddFailure_(result, 'CANONICAL_SOURCE_UNAVAILABLE',
+        'Authoritative ' + domain + ' source is missing or unreadable.');
+    }
+
+    var mirror = mirrors[domain] || {};
+    auditAddCheck_(result, domain + '_mirror_matches',
+      domain + ' source and mirror reconcile', !!mirror.matches,
+      mirror.available === false ? 'Mirror is missing or unreadable.' :
+        ('difference ' + String(
+          mirror.difference == null ? 'unknown' : mirror.difference)));
+    if (mirror.available === false) {
+      auditAddFailure_(result, 'CANONICAL_MIRROR_UNAVAILABLE',
+        'Runtime ' + domain + ' mirror is missing or unreadable.');
+    } else if (!mirror.matches) {
+      auditAddWarning_(result, 'CANONICAL_MIRROR_MISMATCH',
+        domain + ' source and runtime mirror differ by ' +
+        String(mirror.difference == null ?
+          'an unknown amount' : mirror.difference) + '.',
+        {
+          domain: domain,
+          differenceUsd: mirror.difference,
+          rowDifferences: mirror.rowDifferences || []
+        });
+    }
+  });
+
+  var propertyBlocked = financing.status === 'BLOCKED' ||
+    (financing.blockingIssues || []).length > 0;
+  auditSetMetric_(result, 'canonicalTotals', snap.totals || {});
+  auditSetMetric_(result, 'mirrorFreshness', mirrors);
+  auditSetMetric_(result, 'propertyFinancing', financing);
+  auditSetMetric_(result, 'reconciliationBlocked', propertyBlocked);
+  auditAddCheck_(result, 'property_financing_reconciles',
+    'Property financing reconciles', !propertyBlocked,
+    propertyBlocked ?
+      'One or more property-financing issues require resolution.' :
+      'Linked active financing and legacy references reconcile.');
+  (financing.blockingIssues || []).forEach(function(issue) {
+    auditAddWarning_(result, issue.code || 'PROPERTY_FINANCING_BLOCKED',
+      issue.message || 'Property financing reconciliation is blocked.',
+      issue.data || {});
+  });
+  return result;
+}
+
+function auditCanonicalPlannerSnapshot_(snapshot) {
+  var result = newAuditResult_('planner');
+  var snap = snapshot || {};
+  var rows = snap.rows || {};
+  var totals = snap.totals || {};
+  var calculated = {
+    cash: canonicalFinancialSumIncluded_(rows.cash || [], 'currentValue'),
+    investments: canonicalFinancialSumIncluded_(
+      rows.investments || [], 'currentValue'),
+    grossRealEstate: canonicalFinancialSumIncluded_(
+      rows.properties || [], 'currentValue'),
+    totalLiabilities: round2_((rows.debts || []).reduce(function(sum, debt) {
+      return debt && debt.included ? sum + toNumber_(debt.balance) : sum;
+    }, 0))
+  };
+  calculated.totalAssets = round2_(calculated.cash + calculated.investments +
+    calculated.grossRealEstate);
+  calculated.netWorth = round2_(
+    calculated.totalAssets - calculated.totalLiabilities);
+
+  var deltas = {};
+  ['cash', 'investments', 'grossRealEstate', 'totalAssets',
+    'totalLiabilities', 'netWorth'].forEach(function(key) {
+    auditCanonicalDelta_(result, deltas, key, calculated[key], totals[key],
+      'Planner ' + key);
+  });
+  var reconciles = Object.keys(deltas).every(function(key) {
+    return Math.abs(deltas[key]) <= FINANCIAL_AUDIT_TOLERANCE_USD_;
+  });
+  auditSetMetric_(result, 'plannerTotals', calculated);
+  auditSetMetric_(result, 'canonicalTotals', totals);
+  auditSetMetric_(result, 'deltas', deltas);
+  auditSetMetric_(result, 'reconciles', reconciles);
+  auditAddCheck_(result, 'planner_current_position_reconciles',
+    'Planner current position reconciles to canonical totals', reconciles,
+    'Active source rows, liabilities, assets, and net worth compared to $0.01.');
+  return result;
+}
+
+function auditCanonicalDashboardSnapshot_(snapshot) {
+  var result = newAuditResult_('dashboard');
+  var snap = snapshot || {};
+  var totals = snap.totals || {};
+  var dashboard = canonicalDashboardTotals_(snap, {
+    cash: 0,
+    investments: 0,
+    houseValues: 0,
+    houseLoans: 0,
+    debt: 0
+  });
+  var deltas = {};
+  auditCanonicalDelta_(result, deltas, 'cash', dashboard.cash, totals.cash,
+    'Dashboard cash');
+  auditCanonicalDelta_(result, deltas, 'investments', dashboard.investments,
+    totals.investments, 'Dashboard investments');
+  auditCanonicalDelta_(result, deltas, 'grossRealEstate', dashboard.houseValues,
+    totals.grossRealEstate, 'Dashboard property value');
+  auditCanonicalDelta_(result, deltas, 'totalLiabilities', dashboard.debt,
+    totals.totalLiabilities, 'Dashboard liabilities');
+  auditCanonicalDelta_(result, deltas, 'netWorth', dashboard.netWorth,
+    totals.netWorth, 'Dashboard net worth');
+
+  var expectedPropertyLoans = round2_((((snap.propertyFinancing || {})
+    .byProperty) || []).reduce(function(sum, property) {
+      return sum + toNumber_(
+        property && property.authoritativeLoanBalance);
+    }, 0));
+  auditCanonicalDelta_(result, deltas, 'propertyFinancing',
+    dashboard.houseLoans, expectedPropertyLoans,
+    'Dashboard property financing');
+
+  var reconciles = Object.keys(deltas).every(function(key) {
+    return Math.abs(deltas[key]) <= FINANCIAL_AUDIT_TOLERANCE_USD_;
+  });
+  auditSetMetric_(result, 'dashboardTotals', dashboard);
+  auditSetMetric_(result, 'canonicalTotals', totals);
+  auditSetMetric_(result, 'deltas', deltas);
+  auditSetMetric_(result, 'reconciles', reconciles);
+  auditAddCheck_(result, 'dashboard_current_position_reconciles',
+    'Dashboard current position reconciles to canonical totals', reconciles,
+    'Dashboard adapter and canonical snapshot compared to $0.01.');
+  return result;
+}
+
+function runAssetAudit(explicitSpreadsheet, suppliedSnapshot,
+    suppliedReadError) {
+  var result = newAuditResult_('assets');
+  var context = financialAuditModuleContext_(result, explicitSpreadsheet,
+    suppliedSnapshot, suppliedReadError);
+  return context ? auditCanonicalAssetSnapshot_(context.snapshot) : result;
+}
+
+function runPlannerAudit(explicitSpreadsheet, suppliedSnapshot,
+    suppliedReadError) {
+  var result = newAuditResult_('planner');
+  var context = financialAuditModuleContext_(result, explicitSpreadsheet,
+    suppliedSnapshot, suppliedReadError);
+  return context ? auditCanonicalPlannerSnapshot_(context.snapshot) : result;
+}
+
+function runDashboardAudit(explicitSpreadsheet, suppliedSnapshot,
+    suppliedReadError) {
+  var result = newAuditResult_('dashboard');
+  var context = financialAuditModuleContext_(result, explicitSpreadsheet,
+    suppliedSnapshot, suppliedReadError);
+  return context ? auditCanonicalDashboardSnapshot_(context.snapshot) : result;
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Phase 1 module — Debt Integrity                                           */
 /* -------------------------------------------------------------------------- */
 
 /**
  * Audits debt-related financial integrity by computing each independent debt
- * "basis" the app already uses and reporting their differences. Declares no
- * basis canonical.
+ * basis the app uses and reporting differences from the approved active-only
+ * current liability basis.
  *
  * Bases measured (Phase 1):
  *   - Dashboard debt total : sumDebtBalances_()  (active-only, explicit rule)
- *   - Planner liability    : calculateLiabilitySummary_(normalizeDebts_())
- *                            (includes ALL rows regardless of active)
+ *   - Planner liability    : canonical active-only normalized debt summary
  *   - Sheet TOTAL DEBT row : the gross =SUM cell on INPUT - Debts
  *
  * Rolling payoff starting balance is intentionally omitted in Phase 1 — no
@@ -327,13 +577,13 @@ function runFinancialIntegrityAudit() {
  *
  * @returns {!Object} module result from newAuditResult_/auditAdd*
  */
-function runDebtAudit() {
+function runDebtAudit(explicitSpreadsheet) {
   var result = newAuditResult_('debt');
 
   // --- Acquire workbook + debts sheet (read-only) --------------------------
   var ss;
   try {
-    ss = getUserSpreadsheet_();
+    ss = explicitSpreadsheet || getUserSpreadsheet_();
   } catch (err) {
     auditAddFailure_(result, 'NO_SPREADSHEET',
       'Could not resolve workbook: ' + (err && err.message ? err.message : err));
@@ -371,7 +621,7 @@ function runDebtAudit() {
       'sumDebtBalances_ failed: ' + (err && err.message ? err.message : err));
   }
 
-  // --- Basis 2: Planner liability total (all rows) -------------------------
+  // --- Basis 2: Planner liability total (canonical active-only) ------------
   var plannerLiabilityTotal = null;
   var debts = null;
   var hasActiveColumn = false;
@@ -379,7 +629,8 @@ function runDebtAudit() {
     var debtRows = readSheetAsObjects_(ss, 'DEBTS');
     hasActiveColumn = debtRowsHaveActiveColumn_(debtRows);
     debts = normalizeDebts_(debtRows, getAliasMap_());
-    plannerLiabilityTotal = calculateLiabilitySummary_(debts).totalLiabilities;
+    plannerLiabilityTotal =
+      canonicalLiabilitySummaryFromNormalizedDebts_(debts).totalLiabilities;
     auditSetMetric_(result, 'plannerLiabilityTotal', plannerLiabilityTotal);
   } catch (err) {
     auditAddFailure_(result, 'PLANNER_TOTAL_FAILED',
@@ -443,15 +694,14 @@ function runDebtAudit() {
     'Active column present on INPUT - Debts', hasActiveColumn,
     hasActiveColumn
       ? 'Explicit active/inactive rule in effect.'
-      : 'No Active column — legacy balance/min-payment fallback drives active status.');
+      : 'No Active column — legacy compatibility behavior remains observable.');
   if (legacyFallbackInEffect) {
     auditAddWarning_(result, 'LEGACY_ACTIVE_FALLBACK',
-      'INPUT - Debts has no Active column; Planner treats $0-balance/$0-min ' +
-      'debts as inactive while the Dashboard treats every row as active. ' +
-      'Bases can diverge until the Active column is present.', {});
+      'INPUT - Debts has no Active column; legacy compatibility behavior is in effect. ' +
+      'Additive schema evolution should be completed before Release Readiness.', {});
   }
 
-  // --- Deltas (neutral differences, no canonical basis declared) -----------
+  // --- Deltas against the canonical active-only consumer basis -------------
   var deltas = {};
   if (dashboardDebtTotal !== null && plannerLiabilityTotal !== null) {
     deltas.dashboard_vs_planner = auditDelta_(dashboardDebtTotal, plannerLiabilityTotal);
@@ -466,11 +716,11 @@ function runDebtAudit() {
 
   // Report each non-trivial divergence as an OBSERVATION (never a failure).
   reportDebtBasisDivergence_(result, 'dashboard_vs_planner', deltas.dashboard_vs_planner,
-    'Dashboard debt total (active-only) and Planner liability total (all rows)');
+    'Dashboard and Planner canonical active-only liability totals');
   reportDebtBasisDivergence_(result, 'dashboard_vs_sheetTotal', deltas.dashboard_vs_sheetTotal,
     'Dashboard debt total (active-only) and Sheet TOTAL DEBT row (gross)');
   reportDebtBasisDivergence_(result, 'planner_vs_sheetTotal', deltas.planner_vs_sheetTotal,
-    'Planner liability total (all rows) and Sheet TOTAL DEBT row (gross)');
+    'Planner canonical liability total and Sheet TOTAL DEBT row (gross)');
 
   // Summary check: did we successfully compute the two primary bases?
   var primaryBasesOk = (dashboardDebtTotal !== null && plannerLiabilityTotal !== null);

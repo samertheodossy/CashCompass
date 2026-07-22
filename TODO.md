@@ -98,9 +98,9 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 | ✅ Runtime-validate approved canonical snapshot — isolated Central `@147` run `20260722-133952-4f0a` passed 21/21 plus Provisioning/Drift/Restricted/Trash; consumer convergence remains separately gated (`FINANCIAL_INTEGRITY_PHASE_3_PLAN.md`) | P0 | Audit Framework ✓ | Complete |
 | ✅ Planner / Rolling Debt convergence to within $0.01 — shared Central/bounded implementation passed isolated `@148` run `20260722-140739-190f` 27/27. Dashboard remains separate. | P0 | Canonical basis ✓ | Complete |
 | ✅ Dashboard canonical totals convergence — shared Central/bounded implementation passed isolated `@149` run `20260722-143242-d150` 34/34 | P0 | Planner/Rolling convergence ✓ | Complete |
-| Asset audit module (`runAssetAudit`) | P1 | Framework ✓ | M |
-| Planner audit module (`runPlannerAudit`) | P1 | Framework ✓ | M |
-| Dashboard audit module (`runDashboardAudit`) | P1 | Framework ✓ | M |
+| ✅ Asset audit module (`runAssetAudit`) — isolated `@150` run `20260722-145136-d3ce` passed 45/45 | P1 | Framework ✓ | Complete |
+| ✅ Planner audit module (`runPlannerAudit`) — isolated `@150` run `20260722-145136-d3ce` passed 45/45 | P1 | Framework ✓ | Complete |
+| ✅ Dashboard audit module (`runDashboardAudit`) — isolated `@150` run `20260722-145136-d3ce` passed 45/45 | P1 | Framework ✓ | Complete |
 | Permanent reconciliation diagnostic wired into release | P1 | Convergence + audit modules | M |
 
 **C. Validator / Test Harness / Release Readiness** *(Beta-Gate evidence workstream; foundation shipped, remaining scope follows P0)*

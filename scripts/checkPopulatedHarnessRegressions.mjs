@@ -12,6 +12,7 @@ const files = Object.fromEntries(await Promise.all([
   'test_harness_scenarios_financial_integrity.js',
   'test_harness_suites.js',
   'financial_integrity_canonical.js',
+  'financial_integrity_audit.js',
   'code.js',
   'rolling_debt_payoff.js',
   'dashboard_data.js',
@@ -97,6 +98,18 @@ const canonicalCtx = vm.createContext({
   FINANCIAL_AUDIT_TOLERANCE_USD_: 0.01
 });
 vm.runInContext(canonicalSource, canonicalCtx);
+const auditSource = files['financial_integrity_audit.js'];
+const auditCode = auditSource.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+vm.runInContext(auditSource, canonicalCtx);
+assert.match(auditSource, /function runFinancialIntegrityAudit\(explicitSpreadsheet\)/,
+  'Financial Integrity audit must preserve no-argument production use and expose an explicit disposable seam');
+for (const fn of ['runAssetAudit', 'runPlannerAudit', 'runDashboardAudit']) {
+  assert.match(auditSource, new RegExp(`function ${fn}\\(explicitSpreadsheet`),
+    `Financial Integrity registry module missing: ${fn}`);
+}
+assert.doesNotMatch(auditCode,
+  /\.setValue\s*\(|\.setValues\s*\(|\.clearContent\s*\(|\.insertSheet\s*\(|\.deleteSheet\s*\(|\.appendRow\s*\(/,
+  'Financial Integrity audit modules must remain read-only');
 assert.equal(canonicalCtx.canonicalCurrentRowIncluded_(true, 'No'), false,
   'Explicit inactive must be excluded from the current position');
 assert.equal(canonicalCtx.canonicalCurrentRowIncluded_(true, ''), true,
@@ -189,6 +202,21 @@ assert.equal(fakeSnapshot.mirrors.cash.matches, true,
   'Full canonical snapshot must accept a matching source/mirror pair');
 assert.ok(fakeSnapshot.blockingIssues.some((issue) => issue.code === 'UNLINKED_PROPERTY_FINANCING'),
   'Full canonical snapshot must fail closed on unlinked non-zero property financing');
+const assetAudit = canonicalCtx.auditCanonicalAssetSnapshot_(fakeSnapshot);
+const plannerAudit = canonicalCtx.auditCanonicalPlannerSnapshot_(fakeSnapshot);
+const dashboardAudit = canonicalCtx.auditCanonicalDashboardSnapshot_(fakeSnapshot);
+assert.equal(assetAudit.status, 'PASS_WITH_OBSERVATIONS',
+  'Asset audit must surface unlinked legacy financing as a neutral blocking observation');
+assert.equal(assetAudit.metrics.reconciliationBlocked, true,
+  'Asset audit must explicitly expose blocked property reconciliation');
+assert.equal(plannerAudit.status, 'PASS',
+  'Planner audit must reconcile the canonical current-position identity');
+assert.equal(plannerAudit.metrics.reconciles, true,
+  'Planner audit must expose an exact reconciliation result');
+assert.equal(dashboardAudit.status, 'PASS',
+  'Dashboard audit must reconcile the canonical Dashboard adapter');
+assert.equal(dashboardAudit.metrics.reconciles, true,
+  'Dashboard audit must expose an exact reconciliation result');
 const normalizedConsumerDebts = [
   { name: 'Active Loan', originalName: 'Active Loan', type: 'Loan', balance: 100, active: true },
   { name: 'Blank Active Card', originalName: 'Blank Active Card', type: 'Credit Card', balance: 50, active: true },
@@ -249,6 +277,8 @@ assert.match(canonicalScenario, /requiresTrashCleanup:\s*true/,
   'Financial Integrity regression must always verify Trash cleanup');
 assert.match(canonicalScenario, /readCanonicalFinancialSnapshot_\(ctx\.ss\)/,
   'Financial Integrity regression must pass only the explicit disposable workbook');
+assert.match(canonicalScenario, /runFinancialIntegrityAudit\(ctx\.ss\)/,
+  'Financial Integrity audit regression must pass only the explicit disposable workbook');
 assert.doesNotMatch(canonicalScenario, /getUserSpreadsheet_\s*\(|getActiveSpreadsheet\s*\(/,
   'Financial Integrity regression must never resolve an existing workbook');
 assert.match(canonicalScenario,

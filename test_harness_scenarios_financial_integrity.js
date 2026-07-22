@@ -60,11 +60,13 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
         ctx, year, today, 'Harness Sold House', 'Rental', 0, 400000, 'No');
 
       harnessFiAddDebt_(ctx, 'Harness Mortgage', 'Loan', 175000, 'Yes', 'Harness Home');
+      harnessFiAddDebt_(ctx, 'Harness Cabin Loan', 'Loan', 50000, 'Yes', 'Harness Cabin');
       harnessFiAddDebt_(ctx, 'Harness Blank Active Card', 'Credit Card', 5000, '', '');
       harnessFiAddDebt_(ctx, 'Harness Old Mortgage', 'Loan', 10000, 'No', 'Harness Home');
 
       SpreadsheetApp.flush();
       ctx.canonicalBaseline = readCanonicalFinancialSnapshot_(ctx.ss);
+      ctx.auditBaseline = runFinancialIntegrityAudit(ctx.ss);
       var normalizedDebts = normalizeDebts_(
         readSheetAsObjects_(ctx.ss, 'DEBTS'), getAliasMap_());
       ctx.plannerLiabilityBasis =
@@ -105,8 +107,15 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
         }
       );
 
-      // Create two deliberate post-baseline discrepancies. They prove the seam
-      // observes stale mirrors and linked-vs-legacy financing without repairing.
+      // First remove the Cabin's active debt link. The legacy loan stays visible
+      // for property equity but must block canonical reconciliation.
+      harnessFiSetDebtActive_(ctx, 'Harness Cabin Loan', 'No');
+      SpreadsheetApp.flush();
+      ctx.canonicalUnlinked = readCanonicalFinancialSnapshot_(ctx.ss);
+      ctx.auditUnlinked = runFinancialIntegrityAudit(ctx.ss);
+
+      // Create two additional disposable-only discrepancies. They prove the
+      // seam observes stale mirrors and linked-vs-legacy financing without repair.
       var accounts = ctx.ss.getSheetByName(getSheetNames_().ACCOUNTS);
       var accountsMap = getAccountsHeaderMap_(accounts);
       var accountDisplay = accounts.getDataRange().getDisplayValues();
@@ -121,10 +130,12 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
       home.inputSheet.getRange(home.inputRow, 2).setValue(170000);
       SpreadsheetApp.flush();
       ctx.canonicalDiverged = readCanonicalFinancialSnapshot_(ctx.ss);
+      ctx.auditDiverged = runFinancialIntegrityAudit(ctx.ss);
       ctx.actions.push('Read baseline then introduce disposable-only mirror and property-loan discrepancies');
     },
     expectedOutcome: function(ctx) {
       var baseline = ctx.canonicalBaseline;
+      var unlinked = ctx.canonicalUnlinked;
       var diverged = ctx.canonicalDiverged;
       var moduleName = 'Financial Integrity';
 
@@ -144,9 +155,9 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
       ctx.assert.equals('Canonical real estate excludes inactive property',
         baseline.totals.grossRealEstate, 400000, { module: moduleName });
       ctx.assert.equals('Canonical liabilities include active and blank-Active debt only',
-        baseline.totals.totalLiabilities, 180000, { module: moduleName });
+        baseline.totals.totalLiabilities, 230000, { module: moduleName });
       ctx.assert.equals('Canonical net worth reconciles',
-        baseline.totals.netWorth, 223500, { module: moduleName });
+        baseline.totals.netWorth, 173500, { module: moduleName });
 
       ctx.assert.equals('Cash source and mirror initially match',
         baseline.mirrors.cash.matches, true, { module: moduleName });
@@ -163,10 +174,33 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
         homeFinancing && homeFinancing.linkedDebtCount, 1, { module: moduleName });
       ctx.assert.equals('Linked property equity uses debt once',
         homeFinancing && homeFinancing.estimatedEquity, 125000, { module: moduleName });
+      ctx.assert.equals('Clean linked property financing passes',
+        baseline.status, 'PASS', { module: moduleName });
       ctx.assert.equals('Unlinked legacy property loan remains visible',
-        cabinFinancing && cabinFinancing.authority, 'UNLINKED_LEGACY_FALLBACK', { module: moduleName });
+        harnessFiFindProperty_(unlinked, 'Harness Cabin').authority,
+        'UNLINKED_LEGACY_FALLBACK', { module: moduleName });
       ctx.assert.equals('Unlinked property financing blocks reconciliation',
-        harnessFiHasIssue_(baseline, 'UNLINKED_PROPERTY_FINANCING'), true, { module: moduleName });
+        harnessFiHasIssue_(unlinked, 'UNLINKED_PROPERTY_FINANCING'), true,
+        { module: moduleName });
+
+      ctx.assert.equals('Financial Integrity registers four audit modules',
+        ctx.auditBaseline.summary.moduleCount, 4, { module: moduleName });
+      ctx.assert.equals('Canonical audit has no execution failures',
+        ctx.auditBaseline.summary.failureCount, 0, { module: moduleName });
+      ['assets', 'planner', 'dashboard'].forEach(function(id) {
+        ctx.assert.equals('Canonical ' + id + ' audit passes',
+          harnessFiFindAuditModule_(ctx.auditBaseline, id).status, 'PASS',
+          { module: moduleName });
+      });
+      ctx.assert.equals('Debt history remains a neutral observation',
+        harnessFiFindAuditModule_(ctx.auditBaseline, 'debt').status,
+        'PASS_WITH_OBSERVATIONS', { module: moduleName });
+      ctx.assert.equals('Unlinked financing is an audit observation',
+        ctx.auditUnlinked.status, 'PASS_WITH_OBSERVATIONS',
+        { module: moduleName });
+      ctx.assert.equals('Asset audit exposes reconciliation blocked',
+        harnessFiFindAuditModule_(ctx.auditUnlinked, 'assets').metrics.reconciliationBlocked,
+        true, { module: moduleName });
 
       ctx.assert.equals('Stale cash mirror is detected',
         diverged.mirrors.cash.matches, false, { module: moduleName });
@@ -174,13 +208,19 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
         diverged.mirrors.cash.difference, -1, { module: moduleName });
       ctx.assert.equals('Linked-vs-legacy property mismatch is gated',
         harnessFiHasIssue_(diverged, 'PROPERTY_FINANCING_MISMATCH'), true, { module: moduleName });
+      ctx.assert.equals('Diverged Asset audit reports observations',
+        harnessFiFindAuditModule_(ctx.auditDiverged, 'assets').status,
+        'PASS_WITH_OBSERVATIONS', { module: moduleName });
+      ctx.assert.equals('Diverged Asset audit retains zero execution failures',
+        harnessFiFindAuditModule_(ctx.auditDiverged, 'assets').failures.length,
+        0, { module: moduleName });
       ctx.assert.equals('Read-only divergence does not alter canonical liabilities',
         diverged.totals.totalLiabilities, 180000, { module: moduleName });
       ctx.assert.equals('Planner liability basis equals canonical liabilities',
         ctx.plannerLiabilityBasis.totalLiabilities,
         baseline.totals.totalLiabilities, { module: moduleName });
       ctx.assert.equals('Planner liability basis excludes inactive linked debt',
-        ctx.plannerLiabilityBasis.loans, 175000, { module: moduleName });
+        ctx.plannerLiabilityBasis.loans, 225000, { module: moduleName });
       ctx.assert.equals('Rolling live anchor equals canonical liabilities',
         ctx.rollingDebtBasis.canonicalLiveDebt,
         baseline.totals.totalLiabilities, { module: moduleName });
@@ -188,7 +228,7 @@ function getHarnessFinancialIntegrityCanonicalScenario_() {
         ctx.rollingDebtBasis.scenarioAdjustmentTotal, 250,
         { module: moduleName });
       ctx.assert.equals('Rolling modeled start is live plus scenario adjustment',
-        ctx.rollingDebtBasis.modeledStartingDebt, 180250,
+        ctx.rollingDebtBasis.modeledStartingDebt, 230250,
         { module: moduleName });
       ctx.assert.equals('Rolling debt basis reconciles',
         ctx.rollingDebtBasis.reconciles, true, { module: moduleName });
@@ -323,6 +363,30 @@ function harnessFiAddDebt_(ctx, name, type, balance, active, linkedProperty) {
   refreshDebtsTotalRow_(sheet, hm, totalRow);
   ctx.assertWritable();
   applyDebtsSheetStyling_(sheet);
+}
+
+function harnessFiSetDebtActive_(ctx, debtName, active) {
+  var sheet = ctx.ss.getSheetByName(getSheetNames_().DEBTS);
+  var hm = getDebtsHeaderMap_(sheet);
+  var display = sheet.getDataRange().getDisplayValues();
+  if (hm.activeColZero === -1) {
+    throw new Error('Harness Financial Integrity: debt Active header missing.');
+  }
+  for (var r = 1; r < display.length; r++) {
+    if (String(display[r][hm.nameColZero] || '').trim() !== debtName) continue;
+    ctx.assertWritable();
+    sheet.getRange(r + 1, hm.activeColZero + 1).setValue(active);
+    return;
+  }
+  throw new Error('Harness Financial Integrity: debt not found: ' + debtName);
+}
+
+function harnessFiFindAuditModule_(report, moduleId) {
+  var modules = report && report.modules || [];
+  for (var i = 0; i < modules.length; i++) {
+    if (modules[i] && modules[i].id === moduleId) return modules[i];
+  }
+  return { status: '', metrics: {}, warnings: [], failures: [] };
 }
 
 function harnessFiFindProperty_(snapshot, propertyName) {
