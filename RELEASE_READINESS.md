@@ -3,42 +3,30 @@
 *The pre-release go/no-go produced by the Test Harness running every scenario pack
 and the Validator judging each result.*
 
-**Status:** **Bounded runner source-ready; Validator/Workbook Health and all three authenticated browser suites runtime-proven through isolated Central `@135`; final runtime verdict pending.** The Validator
-Phase 2 core (Provisioning / Drift / Schema Evolution), fail-closed disposable
-workbook lifecycle, and populated-fixture hardening now exist. Eleven suites are
-runtime-proven across server and authenticated-browser runners: the five foundation
-suites, Workbook Health, Performance Planner, Bills Pay E2E, First-Run UX E2E,
-Populated Dashboard E2E, and Recovery Live. The **aggregate Release Readiness report** — required
-suites and Validator gates rolled into one go/no-go — is now implemented locally
-by `release_readiness_runner.js`: one scenario per invocation, compact privacy-safe
-evidence, archived final runs, and fail-closed READY/NOT READY rules. Performance
-Planner and Bills Pay E2E are runtime-proven on disposable workbooks at isolated
-`@120`: Bills Pay passed 3/3 functional assertions with Provisioning/Drift PASS and
-verified Trash; Performance Planner passed 4/4 with first/repeat timings of
-32.779 s / 31.901 s, retained History rows, zero History charts, Restricted
-owner-only sharing, CURRENT schema, Provisioning/Drift PASS, and verified Trash.
-The permanent Performance Planner percentile suite is available only on isolated
-`@136`; its resumable 20-pair campaign was intentionally paused after six
-confirmed pairs. Partial timings are diagnostic only, so p50/p95 budgets remain
-unratified and cannot yet satisfy the release gate.
-Dedicated aggregate Workbook Health passed with zero warnings at isolated `@122`
-after narrow validator-normalization and disposable-fixture corrections. First-Run UX
-E2E V2 passed 9/9 at isolated `@129` in 85.864 s, including Restricted owner-only sharing,
-a real planner Refresh, the whole-interface customer-language assertion, privacy-safe saved
-evidence, clean console/navigation, and verified Trash cleanup. Persisted runner state confirmed
-that no active fixture remained. Populated Dashboard E2E run `FR-19eb43ab-e8fe-4bc8-96a5-336afff43596`
-passed 11/11 at isolated `@133` in 126.323 s, including deterministic KPIs, real
-selection/navigation/Refresh paths, populated Setup/Help and customer language,
-Restricted owner-only sharing, clean console/navigation, and verified Trash; saved
-state also confirmed no active fixture. Recovery Live run
-`RL-12557aaa-5e18-4d67-a567-6304a5b57542` passed 9/9 at isolated `@135`
-in 42.071 s through production confirmation, self-reconnect, stale/Trash routing,
-and ambiguity. Three Restricted owner-only fixtures were verified in Trash, no
-mapping remained, no protected target matched, and sole-admin configuration and
-mapping fingerprints were unchanged. Therefore the current P1 verdict remains
-**NOT READY**; performance budgets remain unratified
-because one passing timing sample is not percentile evidence. See
-`P1_RELEASE_EVIDENCE_CONTRACT.md`.
+**Status:** **Release Readiness orchestration and console controls are implemented,
+committed at `a4f6ddf`, and runtime-proven on isolated Central `@141`; the saved
+run remains `IN_PROGRESS` because Performance is intentionally parked.** The
+single Validation console creates a disposable Workbook Health preflight, runs one
+bounded server scenario per invocation, saves resumable progress, accepts browser
+evidence only for the exact source/deployment candidate, archives privacy-safe
+verdicts, and restores a console-owned Harness flag to OFF when finalized.
+
+The exact `@141` run passed aggregate Workbook Health and all 13/13 server checks.
+First-Run UX E2E (`FR-0c415ac6-cfea-4525-8bf2-766086ce83e9`), Populated Dashboard
+E2E (`FR-263dfd04-4166-454b-8f95-2db2f26613d9`), and Recovery Live
+(`RL-099c9c9c-c090-46d7-9d4b-84d7b8af14df`) also passed against the exact
+candidate. All writer fixtures were Restricted and verified in Trash. Recovery
+Live passed 9/9 in 44.060 s, matched zero protected targets, and preserved the
+sole-admin configuration and mapping fingerprints. No bounded workbook was used.
+
+The current run must not be finalized as READY yet. The permanent Performance
+Planner percentile suite has seven historical diagnostic pairs, but that campaign
+began before `@141` and cannot qualify as exact-candidate evidence. Performance is
+deferred—not waived—while House Financial Accuracy proceeds. Before broad Beta,
+run a complete candidate-bound campaign, ratify p50/p95 budgets, finalize this
+bounded gate, and run the full 10/10 scorecard. Until then, the automated release
+state is **IN_PROGRESS** and the product-level broad-Beta decision remains **NOT
+READY**. See `P1_RELEASE_EVIDENCE_CONTRACT.md`.
 
 **Related docs:** `TEST_HARNESS_ARCHITECTURE.md` (the runner),
 `VALIDATOR_ARCHITECTURE.md` (the read-only judge), `REGRESSION_SCENARIOS.md` (the

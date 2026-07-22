@@ -11,7 +11,7 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current stage — Stage 3: Beta Readiness
 
-**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the prior capability-oriented estimate; the new quality score baseline is **7.5/10** from the 2026-07-20 two-track validation. **Stage 1 (Core Platform), Stage 2 (Product Hardening), and P0 Project Stabilization are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** Current ordering authority is `ROADMAP.md`: **P1 Validator/Test Harness/Release Readiness → P2 House Financial Accuracy → P3 finished-feeling UX/performance → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
+**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the prior capability-oriented estimate; the new quality score baseline is **7.5/10** from the 2026-07-20 two-track validation. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, and the non-performance P1 Release Readiness engineering are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** Current ordering authority is `ROADMAP.md`: **P2 House Financial Accuracy (active) → P3 finished-feeling UX/performance → exact-candidate Performance and final Release Readiness verdict → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
 
 `ROADMAP.md` is authoritative for **priority and sequence**. The `## Product Maturity Stages` section below supplies detailed stages, tasks, dependencies, testing inventory, and history; `PROJECT_CONTEXT.md` is authoritative for current technical status. The older `## Launch Readiness Roadmap` (Phase 1–7) is retained further below as historical phase expansion; where it conflicts with current ordering, `ROADMAP.md` wins.
 
@@ -32,7 +32,7 @@ The older "V1.2 work queue" candidates are retained below under `## V1.2 polish 
 
 ## Priority-Ranked Roadmap (P0–P4) → see `ROADMAP.md`
 
-**The current at-a-glance priority stack now lives in its own document: `ROADMAP.md`** (created 2026-07-12, after the Validator-driven Golden/Canonical convergence milestone closed). `ROADMAP.md` is the authoritative **priority and sequence** view (P0 Project stabilization → P1 Validator Phase 2 → P2 Financial Model Accuracy / **House Financial Accuracy** → P3 Performance → P4 Future features) and carries the full **House Financial Accuracy** spec.
+**The current at-a-glance priority stack now lives in its own document: `ROADMAP.md`** (created 2026-07-12, after the Validator-driven Golden/Canonical convergence milestone closed). `ROADMAP.md` is the authoritative **priority and sequence** view: P0 is complete; non-performance P1 Release Readiness engineering is complete; P2 **House Financial Accuracy** is active; P3 experience/performance follows; and the exact-candidate Performance/final-verdict gate returns before broad Beta. The roadmap carries the full House Financial Accuracy spec.
 
 The `## Product Maturity Stages` section below remains the detailed **Stage 1–6** roadmap (per-item effort, dependencies, history, Beta Gate). `ROADMAP.md` and the Stage model describe the same work — where they conflict on **ordering**, `ROADMAP.md` reflects the latest intent. Follow **Milestone Discipline** (`ENGINEERING_STANDARDS.md → §11`): finish the current milestone before starting the next.
 
@@ -44,7 +44,7 @@ The `## Product Maturity Stages` section below remains the detailed **Stage 1–
 
 > **Companion: `## UX Backlog (Version 1)`** (below) is the permanent home for small product-quality improvements (polish, loading, empty-states, consistency, wording). It is cross-referenced from Stage 3–5 so these items **never disappear during a roadmap reorganization**. Review it before every Family Beta milestone and before External Beta.
 
-**Maturity (estimated):** Family Beta Readiness **~97–98%** · External / Public Beta Readiness **~92%**. Remaining pre-beta work is the Beta Gate — including Golden Workbook convergence, Financial Integrity Phase 3, remaining Validator/Test Harness/Release Readiness coverage, runtime regression evidence, and Workbook/UX polish. Recovery Validation is complete. This is **not major feature development**. `ROADMAP.md` controls the current order.
+**Maturity (estimated):** Family Beta Readiness **~97–98%** · External / Public Beta Readiness **~92%**. Remaining pre-beta work is the Beta Gate — including Golden Workbook convergence, Financial Integrity Phase 3, exact-candidate Performance and final Release Readiness evidence, runtime regression evidence, and Workbook/UX polish. Recovery Validation and the non-performance Release Readiness path are complete. This is **not major feature development**. `ROADMAP.md` controls the current order.
 
 ### Stage 1 — Core Platform *(✅ Complete)*
 
@@ -104,15 +104,15 @@ Assemble the **Beta Gate** and reach a **Family Beta Release Candidate**. Remain
 
 | Item | Priority | Dependencies | Effort |
 |---|---|---|---|
-| Aggregate Release Readiness gate and remaining automated regression coverage | P1 | Stable read models ✓ + remaining Validator/Harness coverage | L–XL |
+| **Aggregate Release Readiness orchestration and console controls — ✅ COMPLETE**; final exact-candidate verdict remains parked behind Performance percentile evidence | P1 | Stable read models ✓ + required Validator/Harness coverage ✓ | — |
 | **Validator Phase 2 runtime evidence — ✅ COMPLETE** — isolated Central `@122` aggregate Workbook Health PASS: Formula / Conditional Formatting / Named Ranges / formal schema registry / Provisioning / Drift clean, zero warnings after correcting validator normalization and fixture debt ordering; Restricted + 9/9 functional + verified Trash | P1 | Run `20260721-120759-5dc2` | — |
 | **Disposable populated-fixture hardening** — ✅ isolated Central `@117` PASS: Central-created fixture, representative eight-domain data seeding, Restricted-sharing assertion, `drive.file`-compatible access, and verified Trash cleanup | P1 | Test Harness Foundation V1 ✓ | M |
 | Runtime regression checklist (interim manual gate) | P1 | — | M |
-| **Recent-session permanent regression packs** — Performance Planner and Bills Pay E2E PASS at `@120`; First-Run UX E2E PASS at `@129`; Populated Dashboard E2E PASS at `@133`; Recovery Live PASS 9/9 at `@135`; production-path audit enforced; all required packs implemented; aggregate in bounded chunks | P1–P3 by dependency | Central Safety suite + real browser/disposable-account seams | L–XL |
+| **Recent-session permanent regression packs** — Performance Planner smoke and Bills Pay E2E PASS at `@120`; exact-candidate `@141` Workbook Health + 13/13 server checks + First-Run UX + Populated Dashboard + Recovery Live PASS; production-path audit enforced; percentile campaign parked | P1–P3 by dependency | Central Safety suite + real browser/disposable-account seams | L–XL |
 | Financial-integrity gate wiring into release | P1 | FI Phase 3 convergence | S |
 | Deployment checklist | P2 | — | S |
 
-> **Validator Phase 2 and scenario-pack runtime gates completed 2026-07-21.** Aggregate Workbook Health passed on isolated Central `@122`; First-Run UX E2E passed at `@129`; Populated Dashboard E2E passed at `@133`; and Recovery Live passed 9/9 at `@135`. The permanent 20-pair Performance Planner percentile campaign is resumable and paused after six confirmed pairs on isolated `@136`; no budget is ratified from partial evidence. The Validator remains read-only. Next active P1 scope is Release Readiness console controls, followed by completing the performance campaign and producing the final bounded verdict.
+> **Validator Phase 2, scenario packs, and Release Readiness controls completed 2026-07-21.** On isolated Central `@141`, aggregate Workbook Health, all 13/13 bounded server checks, First-Run UX E2E, Populated Dashboard E2E, and Recovery Live passed with Restricted fixtures and verified cleanup. The permanent 20-pair Performance Planner percentile gate is intentionally parked; seven historical pairs are diagnostic only because they predate the exact `@141` candidate. No budget is ratified from partial evidence. The Validator remains read-only. House Financial Accuracy is the next active milestone; Performance and the final verdict must close before broad Beta.
 
 **D. Recovery completion — ✅ P0 complete 2026-07-20**
 
@@ -230,7 +230,7 @@ This queue records the July 9 plan and is **not the current ordering authority**
 1. **Bills Due Pay runtime validation** — the occurrence bridge is committed (`fdf4a30`); natural runtime evidence remains pending. Commit only if that validation produces a documentation or code change. *(Evidence gap; XS)*
 2. **Investments cleanup** — the recorded local WIP is no longer current; Investments convergence was committed (`85fafc3`, with later related convergence commits). Any remaining runtime or footer work must be re-established from current evidence before planning. *(Remaining scope: UNKNOWN)*
 3. **Recovery completion** — ✅ P0 complete; read-only Orphan detection follows in P1.
-4. **Validator / Test Harness / Release Readiness** — the Phase 2 foundation, Test Harness Foundation V1, and Validation & Testing console V1 shipped 2026-07-13. Remaining modules, scenario packs, and the aggregate release gate follow P0 under current `ROADMAP.md` sequencing.
+4. **Validator / Test Harness / Release Readiness** — Validator Phase 2, Test Harness Foundation V1, required non-performance scenario packs, and bounded console orchestration are runtime-proven through isolated `@141`; exact-candidate Performance and the final verdict remain parked gates.
 5. **Golden Workbook polish** — a newly provisioned workbook must **converge toward the Golden Workbook** (the **visual source of truth**) until **visually indistinguishable from production** (styling, widths, freezes, conditional formats, number formats, totals, notes, filters, sheet order; Cash Flow / Investments / House Values / Retirement). A **convergence project, not a redesign.** First audit complete (2026-07-06, ten core sheets across four design families). *(P0/P1; L)*
 6. **Family Beta polish** — Workbook / UX polish sweep (onboarding, empty-states, loading-experience consistency, messaging, Help/content cleanup — see `## UX Backlog (Version 1)`), Beta Gate assembly, release-readiness review, Stage 4 go/no-go.
 
@@ -265,9 +265,9 @@ Before broader beta, **every release must pass** the following before deployment
 
 - **Golden Workbook Convergence** — freshly provisioned workbook is visually convergent with the Golden/Canonical Workbook for the core sheets. *(First audit complete; **Validator-driven engineering convergence complete for the Operational / Financial Ledger / SYS / Special families incl. Cash Flow, 2026-07-12** — remaining diffs are KeepCentral/ProductDecision/IgnoreNoise; convergence passes remaining for Investments / House Values / Retirement + the unaudited sheets. See `VALIDATOR_ARCHITECTURE.md`.)*
 - **Financial Integrity** — Dashboard / Planner / active source-sheet totals reconcile within $0.01. *(Audit Framework + Debt Audit shipped; canonical basis + Planner/Dashboard/Rolling convergence + Asset/Planner/Dashboard audit modules remaining — Phase 3.)*
-- **Validator / Test Harness / Release Readiness** — required automated evidence passes. *(Validator Phase 1 and the Phase 2 Provisioning/Drift/Schema Evolution foundation are complete; Test Harness Foundation V1 and the Validation & Testing console V1 are shipped. Remaining validation modules, scenario packs, and the aggregate Release Readiness gate are planned. See `VALIDATOR_ARCHITECTURE.md`.)*
+- **Validator / Test Harness / Release Readiness** — required automated evidence passes. *(Validator Phase 2, Test Harness Foundation V1, required non-performance scenario packs, and bounded Release Readiness controls are complete and runtime-proven through isolated `@141`. Exact-candidate Performance percentile evidence and the final archived verdict remain mandatory before broad Beta. See `VALIDATOR_ARCHITECTURE.md`.)*
 - **Recovery Validation** — ✅ full P0 matrix validated; read-only Orphan detection remains P1.
-- **Runtime regression checklist** — core workflows + edge cases verified. *(Interim manual evidence remains required until the planned automated coverage and aggregate Release Readiness gate are complete.)*
+- **Runtime regression checklist** — core workflows + edge cases verified. *(Automated bounded and browser evidence now covers the required non-performance inventory; final-candidate Performance and product/human gates remain.)*
 
 This gate is the release-readiness target for **Stage 3 (Beta Readiness, current)**.
 
@@ -487,7 +487,7 @@ This section preserves the July 9 handoff and is not the current starting-point 
 1. **Bills Due Pay runtime validation** — bridge committed (`fdf4a30`); natural runtime evidence remains pending. *(No fake data — validate on a real payable occurrence.)*
 2. **Investments cleanup** — prior WIP was committed (`85fafc3`, with later related convergence commits); any remaining scope is UNKNOWN until re-established from current evidence.
 3. **Recovery implementation** — ✅ completed and full P0 matrix runtime-validated 2026-07-20. Read-only Orphan detection remains P1.
-4. **Validator / Test Harness / Release Readiness** — Phase 2 foundation, Test Harness Foundation V1, and console V1 shipped 2026-07-13; remaining P1 scope follows P0.
+4. **Validator / Test Harness / Release Readiness** — ✅ non-performance engineering and runtime evidence complete through isolated `@141`; exact-candidate Performance and the final verdict remain parked pre-Beta gates.
 5. **Golden Workbook polish** — converge fresh provisioning toward the Golden Workbook (visual source of truth); first audit complete (ten sheets, four design families), so write the additive first-create passes for the diverging sheets.
 6. **Family Beta** — once 1–5 are green, do the UX polish sweep (incl. `## UX Backlog (Version 1)` review), Beta Gate assembly, release-readiness review, and the Stage 4 go/no-go pass.
 
@@ -625,7 +625,7 @@ Historical ranked detail retained for traceability. It does not override the cur
 1. **Bills Due Pay runtime validation** — bridge committed (`fdf4a30`); natural runtime evidence remains pending. *(Evidence gap; XS)*
 2. **Investments cleanup** — prior WIP was committed (`85fafc3`, with later related convergence commits); remaining scope is UNKNOWN until re-established.
 3. **Recovery completion** *(6F)* — ✅ P0 complete; read-only Orphan detection follows in P1.
-4. **Validator / Test Harness / Release Readiness** — Phase 2 foundation, Test Harness Foundation V1, and console V1 shipped 2026-07-13; remaining automated coverage and release-gate work follows P0 under `ROADMAP.md`.
+4. **Validator / Test Harness / Release Readiness** — ✅ non-performance engineering and runtime evidence complete through isolated `@141`; exact-candidate Performance and the final verdict remain parked pre-Beta gates under `ROADMAP.md`.
 5. **Golden Workbook polish (Convergence)** — newly provisioned workbook converges toward the Golden Workbook (visual source of truth) until visually indistinguishable from production (Cash Flow / Investments / House Values / Retirement + all visual attributes). First audit complete (2026-07-06). *(P0/P1, L — convergence, not redesign)*
 6. **Family Beta polish** — Workbook / UX polish sweep (loading-experience consistency, empty-state standardization, UX consistency, onboarding — see `## UX Backlog (Version 1)`) + Beta Gate assembly + go/no-go. *(P2)*
 

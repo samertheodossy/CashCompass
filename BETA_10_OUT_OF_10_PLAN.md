@@ -156,10 +156,10 @@ The beta does not need to charge immediately, but it must avoid architecture and
 
 1. **Complete:** Harden Central-created populated fixtures and Restricted-sharing assertions; verify safe Trash cleanup without touching owner/bounded workbooks.
 2. **Complete for the current representative fixture:** Seed Bank, Investment, House, Debt, Bills, Income, Upcoming, and Retirement data automatically. Multi-year history remains a future pack need.
-3. Ratify performance instrumentation and budgets.
-4. Complete the required Validator modules and Workbook Health aggregation.
-5. Expand E2E, live, and performance packs around historical defects and core workflows.
-6. Implement bounded Release Readiness orchestration and its aggregate report.
+3. **Parked until the final candidate:** ratify performance instrumentation and p50/p95 budgets through a complete exact-candidate campaign.
+4. **Complete:** required Validator modules and Workbook Health aggregation.
+5. **Complete except the parked percentile campaign:** E2E and live packs around historical defects and core workflows.
+6. **Complete:** bounded Release Readiness orchestration, single-console controls, compact archives, and fail-closed aggregate reporting.
 
 **Exit:** Repeatable evidence can judge blank, sparse, populated, mature, legacy, and recovery states without manual fixture improvisation.
 
@@ -279,4 +279,4 @@ Metrics must be defined before instrumentation and must avoid copying transactio
 
 ## 8. Immediate next decision
 
-Validator modules and the required E2E/live packs are runtime-proven. A permanent resumable Performance Planner percentile suite is deployed only to isolated Central `@136`; its 20-pair campaign is intentionally paused after six confirmed pairs, so the proposed p50/p95 budgets remain unratified. The next active P1 work is the single-console Release Readiness controls; afterward, resume the remaining performance pairs and run bounded orchestration to produce the reproducible beta verdict without relying on one timeout-prone Apps Script execution.
+Validator modules, the required bounded server inventory, all non-performance E2E/live packs, and the single-console Release Readiness controls are runtime-proven through isolated Central `@141`. The bounded run's saved state contains Workbook Health plus 13/13 server PASS results and remains `IN_PROGRESS`. Separate exact-candidate evidence records for First-Run UX, Populated Dashboard, and Recovery Live are PASS; finalization is the step that refreshes those browser records into the bounded run. Performance is intentionally parked: seven historical pairs are diagnostic only because the campaign began before `@141`, so p50/p95 budgets remain unratified. The next active product-model work is House Financial Accuracy under the approved sequencing exception. Before broad Beta, restart the complete percentile campaign on the exact release candidate, ratify the performance ProductDecision, finalize Release Readiness, and run the full 10/10 scorecard.
