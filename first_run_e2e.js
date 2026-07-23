@@ -199,7 +199,8 @@ function frE2EPrepare(confirmed) {
       workbookId: id,
       emailHash: buildMappingKey_(email).slice(MAPPING_KEY_PREFIX_.length),
       createdAt: new Date().toISOString(),
-      sharing: null
+      sharing: null,
+      releaseEvidenceContext: releaseBrowserEvidenceContext_()
     };
     try {
       state.sharing = frE2EInspectRestrictedSharing_(id);
@@ -307,13 +308,17 @@ function frE2EComplete(runId, payload, trashAfter) {
     assertFirstRunE2EFixture_(state, email, false);
     var normalized = frE2ENormalizeEvidence_(payload);
     var pass = normalized.assertions.every(function(item) { return item.pass; }) && !normalized.errors.length;
+    var evidenceContext = releaseValidateBrowserEvidenceContext_(state.releaseEvidenceContext);
     var report = {
       version: 1,
       type: 'browserE2E',
       suiteId: 'SUITE-FIRST-RUN-UX-E2E',
       scenarioId: FIRST_RUN_E2E_SCENARIO_ID_,
       runId: state.runId,
-      candidate: releaseCurrentCandidateMetadata_(),
+      candidate: evidenceContext.candidate,
+      releaseEligible: evidenceContext.releaseEligible,
+      releaseRunId: evidenceContext.releaseRunId,
+      evidenceNote: evidenceContext.reason,
       startedAt: state.createdAt,
       finishedAt: new Date().toISOString(),
       overall: pass ? 'PASS' : 'FAIL',

@@ -150,8 +150,11 @@ assert.match(populatedBrowser, /\/complete\/i\.test\(setupText\)/,
   'Populated Setup wording must be checked case-insensitively against customer-facing text');
 assert.match(populatedBrowser, /income_manage_list[\s\S]*?income_other_detected/,
   'Populated Income evidence must accept both tracked and reference-only product presentations');
+assert.match(populatedBrowser,
+  /incomeMainHasExpected[\s\S]*?incomeOtherHasExpected[\s\S]*?add\('income_setup_consistency'/,
+  'Populated Dashboard E2E must fail when Income and Setup classify the salary differently');
 for (const assertionId of ['overview_kpis', 'bank_selection_actions', 'debt_selection_actions',
-  'property_equity', 'populated_workspaces', 'subtab_retention', 'setup_help_language',
+  'property_equity', 'populated_workspaces', 'income_setup_consistency', 'subtab_retention', 'setup_help_language',
   'customer_language', 'refresh_button_state', 'clean_console_navigation']) {
   assert.ok(populatedE2E.includes(`'${assertionId}'`), `Populated Dashboard contract missing ${assertionId}`);
 }
@@ -209,17 +212,37 @@ assert.match(release, /var candidate = \{ workbookFingerprint: releaseWorkbookFi
   'Archived Release Readiness evidence must fingerprint the disposable health fixture rather than store a raw workbook id');
 assert.doesNotMatch(release, /candidate:\s*\{\s*workbookId:/,
   'Release Readiness state must not persist the raw candidate workbook id');
-assert.match(release, /function releaseReadinessFinalize\(\)[\s\S]*?releaseLoadExternalEvidence_\(state\.inventory\.externalSuites, state\.candidate\)/,
+assert.match(release, /function releaseReadinessFinalize\(\)[\s\S]*?releaseLoadExternalEvidence_\([\s\S]*?state\.candidate,\s*state\.runId/,
   'Finalization must refresh browser evidence so a bounded run can resume after external suites finish');
 assert.match(release, /releaseEvidenceMatchesCandidate_\(report\.candidate, candidate\)/,
   'Release Readiness must reject browser evidence from a different source or deployment candidate');
+assert.match(release, /report\.releaseEligible !== true[\s\S]*?report\.releaseRunId[\s\S]*?releaseRunId/,
+  'Release Readiness must reject diagnostic-only or differently owned browser evidence');
+assert.match(release, /function releaseBrowserEvidenceContext_\(\)[\s\S]*?status !== 'IN_PROGRESS'[\s\S]*?releaseEligible: false/,
+  'Standalone browser campaigns must be captured as diagnostic-only');
+assert.match(release, /function releaseValidateBrowserEvidenceContext_\(captured\)[\s\S]*?current\.runId[\s\S]*?releaseEvidenceMatchesCandidate_/,
+  'Browser evidence must revalidate its owning run and candidate at completion');
 for (const [label, source] of [
   ['First-Run UX E2E', firstRunE2E], ['Populated Dashboard E2E', populatedE2E],
   ['Recovery Live', recoveryLive], ['Performance Planner', performanceSampling]
 ]) {
-  assert.match(source, /candidate: releaseCurrentCandidateMetadata_\(\)/,
-    `${label} must attach the active release candidate metadata to saved evidence`);
+  assert.match(source, /releaseValidateBrowserEvidenceContext_\(state\.releaseEvidenceContext\)/,
+    `${label} must revalidate its captured Release Readiness owner at completion`);
+  assert.match(source, /candidate: evidenceContext\.candidate[\s\S]*?releaseEligible: evidenceContext\.releaseEligible[\s\S]*?releaseRunId: evidenceContext\.releaseRunId/,
+    `${label} must label diagnostic-only versus exact-candidate evidence explicitly`);
+  assert.doesNotMatch(source, /candidate: releaseCurrentCandidateMetadata_\(\)/,
+    `${label} must not inherit mutable candidate metadata at completion`);
 }
+for (const [label, source] of [
+  ['First-Run/Populated Dashboard', firstRunE2E],
+  ['Recovery Live', recoveryLive],
+  ['Performance Planner', performanceSampling]
+]) {
+  assert.match(source, /releaseEvidenceContext: releaseBrowserEvidenceContext_\(\)/,
+    `${label} must capture the owning Release Readiness run when preparation starts`);
+}
+assert.match(performanceSampling, /RELEASE_PERFORMANCE_BUDGET_RATIFIED_KEY_[\s\S]*?evidenceContext\.releaseEligible \? 'true' : 'false'/,
+  'Diagnostic-only performance sampling must not ratify a release budget');
 assert.match(validationServer, /function vtReleaseReadinessStart\(spreadsheetId, metadata\)[\s\S]*?spreadsheetId is intentionally ignored[\s\S]*?releaseReadinessStart\(metadata/,
   'Release Readiness must ignore the selected target and start only through disposable workbooks');
 assert.doesNotMatch(validationServer, /function vtReleaseReadinessStart\(spreadsheetId, metadata\)[\s\S]*?vtResolveTarget_\(spreadsheetId\)/,
@@ -295,6 +318,8 @@ const verdictCtx = vm.createContext({
 });
 vm.runInContext(suites, verdictCtx);
 vm.runInContext(release, verdictCtx);
+assert.equal(verdictCtx.releaseBrowserEvidenceContext_().releaseEligible, false,
+  'A standalone browser campaign must be diagnostic-only when no Release Readiness run is active');
 const baseState = {
   version: 1, runId: 'RR-test', startedAt: new Date().toISOString(),
   candidate: { workbookFingerprint: 'fixture-hash', sourceVersion: 'abc123', deployment: '@test' },
@@ -303,6 +328,16 @@ const baseState = {
   externalEvidence: {},
   cursor: 0, results: [], status: 'IN_PROGRESS'
 };
+props.setProperty('RELEASE_READINESS_ACTIVE_RUN_V1', JSON.stringify(baseState));
+const capturedBrowserContext = verdictCtx.releaseBrowserEvidenceContext_();
+assert.equal(capturedBrowserContext.releaseEligible, true,
+  'An active Release Readiness run must provide an exact browser-evidence owner');
+assert.equal(capturedBrowserContext.releaseRunId, baseState.runId);
+props.setProperty('RELEASE_READINESS_ACTIVE_RUN_V1', JSON.stringify({
+  ...baseState, runId: 'RR-replaced'
+}));
+assert.equal(verdictCtx.releaseValidateBrowserEvidenceContext_(capturedBrowserContext).releaseEligible, false,
+  'Evidence must become diagnostic-only when its owning release run is replaced');
 props.setProperty('RELEASE_READINESS_ACTIVE_RUN_V1', JSON.stringify(baseState));
 assert.equal(verdictCtx.releaseReadinessFinalize().status, 'NOT_READY',
   'Missing execution-dependent evidence must force NOT READY');
@@ -320,6 +355,7 @@ for (const suiteId of readyState.inventory.externalSuites) {
   const suite = verdictCtx.getHarnessSuiteById_(suiteId);
   props.setProperty(suite.evidenceKey, JSON.stringify({
     suiteId, runId: `${suiteId}-pass`, finishedAt: new Date().toISOString(), overall: 'PASS',
+    releaseEligible: true, releaseRunId: readyState.runId,
     candidate: readyState.candidate,
     cleanup: { verified: true }
   }));

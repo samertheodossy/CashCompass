@@ -208,6 +208,8 @@
       }, 90000, 'the populated Income presentation');
       if ((String(text('income_manage_list')) + ' ' + String(text('income_other_detected')))
           .indexOf(expected.incomePayee) === -1) workspaceFailures.push('income');
+      var incomeMainHasExpected = String(text('income_manage_list')).indexOf(expected.incomePayee) !== -1;
+      var incomeOtherHasExpected = String(text('income_other_detected')).indexOf(expected.incomePayee) !== -1;
       add('populated_workspaces', workspaceFailures.length === 0, workspaceFailures.length
         ? ('Representative data missing from: ' + workspaceFailures.join(', '))
         : 'Investments, Upcoming, Bills, and Income rendered their representative data.');
@@ -231,6 +233,13 @@
       var setupText = String(document.getElementById('page_onboarding').textContent || '');
       var setupPass = /Setup \/ Review/.test(setupText) && /complete/i.test(setupText) &&
         !/(?:INPUT|SYS|OUT|LOG)\s*-|Missing sheet|Exception:|TypeError:/i.test(setupText);
+      var setupIncomeBody = document.querySelector('[data-body="income"]');
+      var setupIncomeText = String((setupIncomeBody && setupIncomeBody.textContent) || '');
+      var incomeSetupPass = incomeMainHasExpected && !incomeOtherHasExpected &&
+        /1 recurring\s*·\s*0 other detected/i.test(setupIncomeText);
+      add('income_setup_consistency', incomeSetupPass, incomeSetupPass
+        ? 'Income and Setup classified the one-month synthetic salary as the same tracked recurring source.'
+        : 'Income and Setup disagreed about the synthetic salary classification.');
       customerLeaks = customerLeaks.concat(customerLanguageLeaks('Setup'));
       if (typeof showPage === 'function') showPage('help');
       var helpText = String(document.getElementById('page_help').textContent || '');

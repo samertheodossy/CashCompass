@@ -89,7 +89,8 @@ function psStartCampaign(confirmed) {
       campaignId: 'PERF-' + Utilities.getUuid(),
       status: 'IN_PROGRESS',
       startedAt: new Date().toISOString(),
-      samples: []
+      samples: [],
+      releaseEvidenceContext: releaseBrowserEvidenceContext_()
     };
     psWriteState_(state);
     return { ok: true, state: psPublicState_(), resumed: false };
@@ -137,18 +138,22 @@ function psFinalize_(state) {
   var combinedStats = combined.length ? psDistribution_(combined) : null;
   var budgetPass = allRunsPassed && psDistributionPasses_(firstStats) &&
     psDistributionPasses_(repeatStats) && psDistributionPasses_(combinedStats);
+  var evidenceContext = releaseValidateBrowserEvidenceContext_(state.releaseEvidenceContext);
   var report = {
     version: 1,
     type: 'performanceSampling',
     suiteId: 'SUITE-PERFORMANCE-PLANNER',
     scenarioId: 'PERFORMANCE-PLANNER-FIRST-REPEAT',
     runId: state.campaignId,
-    candidate: releaseCurrentCandidateMetadata_(),
+    candidate: evidenceContext.candidate,
+    releaseEligible: evidenceContext.releaseEligible,
+    releaseRunId: evidenceContext.releaseRunId,
+    evidenceNote: evidenceContext.reason,
     startedAt: state.startedAt,
     finishedAt: new Date().toISOString(),
     overall: budgetPass ? 'PASS' : 'FAIL',
     decision: budgetPass ? 'ACCEPT' : 'OPTIMIZE',
-    budgetRatified: true,
+    budgetRatified: evidenceContext.releaseEligible,
     budget: {
       p50Ms: PERFORMANCE_REFRESH_P50_BUDGET_MS_,
       p95Ms: PERFORMANCE_REFRESH_P95_BUDGET_MS_,
@@ -174,7 +179,8 @@ function psFinalize_(state) {
   psWriteState_(state);
   var props = PropertiesService.getScriptProperties();
   props.setProperty(PERFORMANCE_SAMPLING_EVIDENCE_KEY_, JSON.stringify(report));
-  props.setProperty(RELEASE_PERFORMANCE_BUDGET_RATIFIED_KEY_, 'true');
+  props.setProperty(RELEASE_PERFORMANCE_BUDGET_RATIFIED_KEY_,
+    evidenceContext.releaseEligible ? 'true' : 'false');
   return report;
 }
 

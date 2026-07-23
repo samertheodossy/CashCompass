@@ -262,7 +262,8 @@ function recoveryLiveStart(confirmed) {
       preflightCleanup: preflightCleanup,
       fixtureIds: [],
       assertions: [],
-      sharing: []
+      sharing: [],
+      releaseEvidenceContext: releaseBrowserEvidenceContext_()
     };
     recoveryLiveAddAssertion_(state, 'identity_boundary', true,
       'Exact allow-listed disposable non-admin Central identity; no caller-supplied email or workbook ID.');
@@ -381,13 +382,17 @@ function recoveryLiveFinalize_(state) {
     if (state.assertions[j].pass === true) required[state.assertions[j].id] = true;
   }
   var pass = Object.keys(required).every(function(id) { return required[id] === true; });
+  var evidenceContext = releaseValidateBrowserEvidenceContext_(state.releaseEvidenceContext);
   var report = {
     version: 1,
     type: 'browserE2E',
     suiteId: 'SUITE-RECOVERY-LIVE',
     scenarioId: RECOVERY_LIVE_SCENARIO_ID_,
     runId: state.runId,
-    candidate: releaseCurrentCandidateMetadata_(),
+    candidate: evidenceContext.candidate,
+    releaseEligible: evidenceContext.releaseEligible,
+    releaseRunId: evidenceContext.releaseRunId,
+    evidenceNote: evidenceContext.reason,
     startedAt: state.startedAt,
     finishedAt: new Date().toISOString(),
     durationMs: Math.max(0, new Date().getTime() - new Date(state.startedAt).getTime()),

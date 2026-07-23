@@ -26,6 +26,7 @@ const files = Object.fromEntries(await Promise.all([
   'QuickAddPaymentUI.html',
   'quick_add_payment.js',
   'dashboard_data.js',
+  'income_sources.js',
   'onboarding.js'
 ].map(async (name) => [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')])));
 
@@ -483,6 +484,41 @@ for (const leakedCopy of [
 ]) {
   assert.ok(!onboardingServer.includes(leakedCopy), `Setup copy must not include: ${leakedCopy}`);
 }
+const incomeServer = files['income_sources.js'];
+assert.match(incomeServer, /var INCOME_MIN_MONTHS_FOR_RECURRING_ = 1;/,
+  'A source explicitly added for the current month must immediately remain manageable');
+assert.match(incomeServer,
+  /function classifyIncomeGroupsInSheet_\(sheet\)[\s\S]*?incomeGroupQualifiesAsRecurring_\(groups\[i\]\)/,
+  'Income must expose one shared recurring/other classifier');
+assert.match(incomeServer,
+  /getActiveIncomeSourcesForManagementFromDashboard\(\)[\s\S]*?classifyIncomeGroupsInSheet_\(sheet\)\.recurring/,
+  'Income management must use the shared recurring bucket');
+assert.match(incomeServer,
+  /getOtherDetectedIncomeFromLatestCashFlowFromDashboard\(\)[\s\S]*?classifyIncomeGroupsInSheet_\(sheet\)\.other/,
+  'Other detected income must use the complementary shared bucket');
+const incomeClassifierStart = incomeServer.indexOf('function incomeGroupQualifiesAsRecurring_(');
+const incomeClassifierEnd = incomeServer.indexOf('/*  Dashboard: list active income sources', incomeClassifierStart);
+assert.ok(incomeClassifierStart >= 0 && incomeClassifierEnd > incomeClassifierStart,
+  'Shared Income classification must remain directly testable');
+const classifyIncome = Function(
+  'analyzeIncomeGroupsInSheet_',
+  `${incomeServer.slice(incomeClassifierStart, incomeClassifierEnd)}
+   var INCOME_MIN_MONTHS_FOR_RECURRING_ = 1;
+   return classifyIncomeGroupsInSheet_;`
+)(() => [
+  { displayName: 'Salary', monthsHit: 1, avgNonZero: 5000, excluded: false, hasNegativeMonth: false },
+  { displayName: 'Annual Bonus', monthsHit: 1, avgNonZero: 1200, excluded: true, hasNegativeMonth: false },
+  { displayName: 'Adjustment', monthsHit: 2, avgNonZero: 300, excluded: false, hasNegativeMonth: true }
+]);
+const classifiedIncome = classifyIncome({});
+assert.deepEqual(classifiedIncome.recurring.map((group) => group.displayName), ['Salary'],
+  'A one-month non-excluded source must be tracked immediately');
+assert.deepEqual(classifiedIncome.other.map((group) => group.displayName), ['Annual Bonus', 'Adjustment'],
+  'Excluded and negative-month groups must remain Other detected');
+assert.ok((onboardingServer.match(/classifyIncomeGroupsInSheet_\(.*?\)/g) || []).length >= 2,
+  'Setup status and detail must use the same shared Income classifier');
+assert.doesNotMatch(onboardingServer, /g\.months\s*>=\s*1/,
+  'Setup must not retain its own duplicated month-threshold classifier');
 
 const help = files['Dashboard_Help.html'];
 assert.doesNotMatch(help, /loadOnboardingSection\(\)|Dashboard_Script_Onboarding\.html|status === 'missing'/);

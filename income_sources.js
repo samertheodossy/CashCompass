@@ -7,8 +7,7 @@
  *
  *   Display   → scan the latest Cash Flow year that has Income rows,
  *               group active Income rows by a conservatively normalized
- *               payee name, and return the high-confidence recurring
- *               groups.
+ *               payee name, and return tracked non-excluded groups.
  *
  *   Add       → write a Cash Flow Income row in the current year
  *               (Type=Income, Flow Source=CASH, Active=YES, Payee=name)
@@ -38,12 +37,12 @@
 var INCOME_MAX_YEARS_BACK_ = 5;
 
 /**
- * Recurring gate: a grouped income source must appear in at least this
- * many distinct months with positive cash flow before it shows up as a
- * tracked source on the main list. Sparse / one-off rows surface in the
- * "Other detected income" reference section instead.
+ * Tracked-income gate: one positive month is enough for a non-excluded active
+ * source to appear on the main list. The dashboard Add flow writes the current
+ * month only, so a higher threshold hid a source immediately after the user
+ * explicitly added it and made Income disagree with Setup.
  */
-var INCOME_MIN_MONTHS_FOR_RECURRING_ = 3;
+var INCOME_MIN_MONTHS_FOR_RECURRING_ = 1;
 
 /* -------------------------------------------------------------------------- */
 /*  Name normalization and exclusion (shared by display + other-detected)     */
@@ -278,12 +277,28 @@ function incomeGroupQualifiesAsRecurring_(group) {
   return true;
 }
 
+/**
+ * Single classification source shared by Income and Setup. Every active group
+ * belongs to exactly one bucket, so the two surfaces cannot disagree about the
+ * same Cash Flow rows.
+ */
+function classifyIncomeGroupsInSheet_(sheet) {
+  var groups = analyzeIncomeGroupsInSheet_(sheet);
+  var recurring = [];
+  var other = [];
+  for (var i = 0; i < groups.length; i++) {
+    if (incomeGroupQualifiesAsRecurring_(groups[i])) recurring.push(groups[i]);
+    else other.push(groups[i]);
+  }
+  return { recurring: recurring, other: other };
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Dashboard: list active income sources                                     */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Return the high-confidence recurring income groups from the latest
+ * Return the tracked recurring income groups from the latest
  * Cash Flow year as a compact list for the "Manage income sources"
  * surface. Pure read — never writes.
  *
@@ -307,11 +322,10 @@ function getActiveIncomeSourcesForManagementFromDashboard() {
   var sheet;
   try { sheet = getCashFlowSheet_(ss, year); } catch (e) { return []; }
 
-  var groups = analyzeIncomeGroupsInSheet_(sheet);
+  var groups = classifyIncomeGroupsInSheet_(sheet).recurring;
   var out = [];
   for (var i = 0; i < groups.length; i++) {
     var g = groups[i];
-    if (!incomeGroupQualifiesAsRecurring_(g)) continue;
     out.push({
       groupKey: g.displayName.toLowerCase(),
       sourceName: g.displayName,
@@ -673,7 +687,7 @@ function deactivateIncomeSourceFromDashboard(payload) {
  * spotted in the latest Cash Flow year. Shares the same classification
  * pipeline as the main management list so the two surfaces can't drift:
  * an item appears here exactly when it does NOT qualify as a recurring
- * tracked source.
+ * tracked source because it is excluded, negative, or non-positive.
  *
  * Pure read / no writes. No actions attached — the section exists so
  * users can see what the system detected but chose not to treat as a
@@ -697,14 +711,10 @@ function getOtherDetectedIncomeFromLatestCashFlowFromDashboard() {
   var sheet;
   try { sheet = getCashFlowSheet_(ss, year); } catch (e) { return { year: year, items: [] }; }
 
-  var groups = analyzeIncomeGroupsInSheet_(sheet);
+  var groups = classifyIncomeGroupsInSheet_(sheet).other;
   var items = [];
   for (var i = 0; i < groups.length; i++) {
     var g = groups[i];
-    // Mirror the recurring gate: anything that WOULD qualify is already
-    // on the main tracked list, so it never surfaces here.
-    if (incomeGroupQualifiesAsRecurring_(g)) continue;
-
     var reason;
     if (g.excluded) reason = 'excluded_pattern';
     else if (g.hasNegativeMonth) reason = 'negative_month';

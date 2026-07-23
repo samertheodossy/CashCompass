@@ -245,7 +245,7 @@ Whenever a production bug is fixed:
 ### REG-015 — Standalone browser evidence inherited stale candidate metadata
 - Category: REGRESSION / TEST EVIDENCE
 - Date discovered: 2026-07-23
-- Status: open; isolated Central `@175` interactive reproduction
+- Status: local fail-closed fix + regression guard; isolated runtime replay pending
 - Affected files: populated-dashboard browser evidence and Release Readiness
   candidate-metadata handoff
 - Root cause: the standalone Populated Dashboard runner saved a new PASS while
@@ -258,6 +258,21 @@ Whenever a production bug is fixed:
 - Expected result: a browser suite either receives and verifies the exact active
   candidate from the owning Validation-console run or refuses to save
   release-eligible evidence; it must never silently inherit a stale candidate.
+
+### REG-016 — Income and Setup classified the same salary differently
+- Category: REGRESSION / UI
+- Date discovered: 2026-07-23
+- Status: local shared-classifier fix + required browser-harness assertion; isolated interactive replay pending
+- Affected files: Income classification/read models and Setup income status/detail
+- Root cause: Setup classified a non-excluded source with one positive month as
+  recurring, while Income required three positive months and placed the same
+  source under Other detected.
+- Repro: on a populated disposable fixture, add or seed one active non-excluded
+  salary source with a positive value in one month, then compare Income with
+  Setup / Review.
+- Expected result: both surfaces use the same shared classifier; the salary
+  appears as one tracked recurring source on both, while excluded categories
+  and negative/non-positive groups remain Other detected.
 
 ---
 
@@ -295,5 +310,6 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-012 | Empty editor actions were enabled | REGRESSION / UI | fixed; static guard; UI scenario pending |
 | REG-013 | Planner rebuilt unused History charts | STRESS / performance | fixed; static guard; runtime scenario pending |
 | REG-014 | Bank formatted balance replacement concatenated loaded value | REGRESSION / UI | fixed; static guard + isolated `@175` interactive writer replay PASS |
-| REG-015 | Standalone browser evidence inherited stale candidate metadata | REGRESSION / TEST EVIDENCE | open; isolated `@175` reproduction |
+| REG-015 | Standalone browser evidence inherited stale candidate metadata | REGRESSION / TEST EVIDENCE | local fail-closed fix + regression guard; isolated runtime replay pending |
+| REG-016 | Income and Setup classified the same salary differently | REGRESSION / UI | local shared-classifier fix + required browser assertion; isolated interactive replay pending |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

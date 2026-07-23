@@ -143,9 +143,9 @@ function renderIncomeSourcesList_(rows) {
 
 /**
  * Populate the "Other detected income" reference block from the latest
- * Cash Flow year. Shows everything that didn't qualify as a recurring
- * monthly source (bonuses, RSU, refunds, sparse / irregular payees,
- * etc.). Best-effort — silently clears the container on failure so the
+ * Cash Flow year. Shows everything that didn't qualify as a tracked
+ * monthly source (excluded categories such as bonuses, RSU, and refunds,
+ * plus negative/non-positive groups). Best-effort — silently clears the container on failure so the
  * main table is never blocked by this secondary read.
  */
 function loadIncomeOtherDetected_() {
@@ -224,8 +224,8 @@ function renderIncomeOtherDetected_(payload) {
       '<div class="updated">Reference only — not tracked</div>' +
     '</div>' +
     '<p class="muted" style="margin:0 0 10px 0;">' +
-      'Income on your latest Cash Flow that didn\'t look like a steady monthly source ' +
-      '(one-off, irregular, or excluded types like Bonus, RSU, or Refund).' +
+      'Income on your latest Cash Flow that CashCompass does not treat as a tracked monthly source ' +
+      '(for example Bonus, RSU, Refund, or a group with a negative month).' +
     '</p>' +
     '<div class="income-other-detected-tablewrap" style="overflow-x:auto;">' +
       '<table class="income-other-detected-table" style="width:100%;border-collapse:collapse;">' +

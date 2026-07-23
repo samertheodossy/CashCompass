@@ -61,8 +61,9 @@ function releaseReadinessStart(metadata) {
   var candidate = { workbookFingerprint: releaseWorkbookFingerprint_(healthReport.workbook.id),
     sourceVersion: sourceVersion, deployment: deployment };
   releaseSaveCurrentCandidateMetadata_(candidate);
+  var releaseRunId = 'RR-' + Utilities.getUuid();
   var state = {
-    version: 1, runId: 'RR-' + Utilities.getUuid(), startedAt: new Date().toISOString(),
+    version: 1, runId: releaseRunId, startedAt: new Date().toISOString(),
     candidate: candidate,
     openIssues: {
       severity1: severity1,
@@ -70,7 +71,7 @@ function releaseReadinessStart(metadata) {
       declared: true
     },
     health: releaseCompactHealth_(healthReport.full.health), inventory: inventory,
-    externalEvidence: releaseLoadExternalEvidence_(inventory.externalSuites, candidate),
+    externalEvidence: releaseLoadExternalEvidence_(inventory.externalSuites, candidate, releaseRunId),
     cursor: 0, results: [releaseCompactScenario_(healthReport)], status: 'IN_PROGRESS'
   };
   releaseSaveState_(state);
@@ -114,7 +115,9 @@ function releaseReadinessFinalize() {
   // Browser-backed suites may finish after this bounded run started. Refresh
   // their compact saved evidence at finalization so the console can resume a
   // run without requiring a restart, while still refusing missing/failed data.
-  state.externalEvidence = releaseLoadExternalEvidence_(state.inventory.externalSuites, state.candidate);
+  state.externalEvidence = releaseLoadExternalEvidence_(
+    state.inventory.externalSuites, state.candidate, state.runId
+  );
   var failures = [];
   if (state.health.overall === 'FAIL') failures.push('Workbook Health gating failure.');
   if (!state.candidate.sourceVersion || !state.candidate.deployment) failures.push('Exact source version and deployment identity were not recorded.');
@@ -160,7 +163,7 @@ function releaseBuildInventory_() {
 }
 
 /** Snapshot compact browser evidence when a bounded release run begins. */
-function releaseLoadExternalEvidence_(suiteIds, candidate) {
+function releaseLoadExternalEvidence_(suiteIds, candidate, releaseRunId) {
   var out = {};
   var ids = suiteIds || [];
   var props = PropertiesService.getScriptProperties();
@@ -171,6 +174,8 @@ function releaseLoadExternalEvidence_(suiteIds, candidate) {
       var raw = props.getProperty(suite.evidenceKey);
       var report = raw ? JSON.parse(raw) : null;
       if (!report || report.suiteId !== suite.id ||
+          report.releaseEligible !== true ||
+          releaseSanitizeMetadata_(report.releaseRunId) !== releaseSanitizeMetadata_(releaseRunId) ||
           !releaseEvidenceMatchesCandidate_(report.candidate, candidate)) continue;
       out[suite.id] = {
         overall: report.overall,
@@ -202,6 +207,64 @@ function releaseCurrentCandidateMetadata_() {
   return {
     sourceVersion: releaseSanitizeMetadata_(props.getProperty(RELEASE_CANDIDATE_SOURCE_KEY_)),
     deployment: releaseSanitizeMetadata_(props.getProperty(RELEASE_CANDIDATE_DEPLOYMENT_KEY_))
+  };
+}
+
+/**
+ * Capture the exact owning Release Readiness run when a browser campaign starts.
+ * Standalone diagnostic runs remain allowed, but are explicitly non-release-
+ * eligible instead of inheriting stale candidate metadata from Script Properties.
+ */
+function releaseBrowserEvidenceContext_() {
+  var state = releaseLoadState_();
+  if (!state || state.status !== 'IN_PROGRESS' || !state.runId ||
+      !state.candidate || !state.candidate.sourceVersion || !state.candidate.deployment) {
+    return {
+      releaseEligible: false,
+      releaseRunId: '',
+      candidate: null,
+      reason: 'No active Release Readiness run owns this browser campaign.'
+    };
+  }
+  return {
+    releaseEligible: true,
+    releaseRunId: releaseSanitizeMetadata_(state.runId),
+    candidate: {
+      sourceVersion: releaseSanitizeMetadata_(state.candidate.sourceVersion),
+      deployment: releaseSanitizeMetadata_(state.candidate.deployment)
+    },
+    reason: ''
+  };
+}
+
+/**
+ * Revalidate the captured owner at evidence completion. A run that was
+ * finalized, replaced, or changed candidates while the browser was open cannot
+ * save release-eligible evidence.
+ */
+function releaseValidateBrowserEvidenceContext_(captured) {
+  var current = releaseLoadState_();
+  var valid = !!(captured && captured.releaseEligible === true &&
+    captured.releaseRunId && captured.candidate &&
+    current && current.status === 'IN_PROGRESS' &&
+    releaseSanitizeMetadata_(current.runId) === releaseSanitizeMetadata_(captured.releaseRunId) &&
+    releaseEvidenceMatchesCandidate_(captured.candidate, current.candidate));
+  if (!valid) {
+    return {
+      releaseEligible: false,
+      releaseRunId: '',
+      candidate: null,
+      reason: 'Browser evidence is diagnostic only because its exact Release Readiness owner is not active.'
+    };
+  }
+  return {
+    releaseEligible: true,
+    releaseRunId: releaseSanitizeMetadata_(captured.releaseRunId),
+    candidate: {
+      sourceVersion: releaseSanitizeMetadata_(captured.candidate.sourceVersion),
+      deployment: releaseSanitizeMetadata_(captured.candidate.deployment)
+    },
+    reason: ''
   };
 }
 

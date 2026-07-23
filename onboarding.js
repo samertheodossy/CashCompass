@@ -482,29 +482,13 @@ function probeUpcomingStatus_(ss, mode) {
 /**
  * Income probe. Cash Flow-driven.
  *
- *   complete = at least one non-excluded income group has a positive
- *              amount in at least 1 month of the current-year Cash Flow
- *              sheet. Addition path from the dashboard
- *              (addIncomeSourceFromDashboard in income_sources.js) only
- *              writes the current-month cell, so requiring ≥3 months
- *              here meant a freshly-added income always showed yellow
- *              ("1 other detected · 1 need details") until the user
- *              manually populated two more months. The 1-month rule
- *              means the Setup grid reflects "I've told the app about
- *              at least one income stream" and the user isn't punished
- *              for not pre-filling forward months.
- *   partial  = only excluded payees visible (Bonus, Tax Refund, Gift,
- *              …) — those stay in the "other detected" bucket because
- *              they're not the monthly recurring income the planner
- *              relies on.
+ *   complete = at least one group qualifies under the shared Income
+ *              tracked-source classifier.
+ *   partial  = only groups in the shared Other detected bucket.
  *   missing  = no Cash Flow income rows at all.
  *
- * Trade-off accepted: a one-off non-excluded Income row (a rare
- * payee that slipped the exclude list) will now read as "recurring"
- * after one month. That matches the Setup grid's mental model
- * ("green means tracked") and downstream planner code still uses the
- * heavier analyzeIncomeGroupsInSheet_ grouping, which has its own
- * recurrence rules independent of this probe.
+ * Classification deliberately lives in income_sources.js so Setup and
+ * Income cannot apply different month thresholds or exclusion rules.
  */
 function probeIncomeStatus_(ss, mode) {
   var currentYear = getCurrentYear_();
@@ -531,10 +515,9 @@ function probeIncomeStatus_(ss, mode) {
     };
   }
 
-  var headerMap;
   try {
-    headerMap = getCashFlowHeaderMap_(cashFlowSheet);
-  } catch (e) {
+    getCashFlowHeaderMap_(cashFlowSheet);
+  } catch (_e) {
     return {
       status: 'missing',
       count: 0,
@@ -544,64 +527,11 @@ function probeIncomeStatus_(ss, mode) {
       note: "Couldn't check income. Please try again."
     };
   }
-
-  var display = cashFlowSheet.getDataRange().getDisplayValues();
-  var recurringNames = {};
-  var otherNames = {};
-
-  // Collect active Income payees and approximate months seen per group.
-  // We mirror the existing income grouping rules (normalizeIncomeName_
-  // + incomeIsExcludedName_) without importing the heavier analysis
-  // machinery; this keeps the onboarding probe cheap.
-  var groupMonths = {};
-  var monthCols = [];
-  for (var c = 0; c < display[0].length; c++) {
-    var hdr = String(display[0][c] || '').trim();
-    if (/^[A-Za-z]{3}-\d{2}$/.test(hdr)) monthCols.push(c);
-  }
-
-  for (var r = 1; r < display.length; r++) {
-    var row = display[r] || [];
-    var type = String(row[headerMap.typeColZero] || '').trim().toLowerCase();
-    if (type !== 'income') continue;
-    if (headerMap.activeColZero !== -1) {
-      var act = String(row[headerMap.activeColZero] || '').trim();
-      if (act && normalizeYesNo_(act) === 'no') continue;
-    }
-    var payee = String(row[headerMap.payeeColZero] || '').trim();
-    if (!payee) continue;
-    var normalized = normalizeIncomeName_(payee);
-    var excluded = incomeIsExcludedName_(normalized);
-    if (!groupMonths[normalized]) {
-      groupMonths[normalized] = { months: 0, excluded: excluded };
-    }
-    var monthsHit = 0;
-    for (var m = 0; m < monthCols.length; m++) {
-      var v = toNumber_(row[monthCols[m]]);
-      if (isFinite(v) && v > 0) monthsHit++;
-    }
-    groupMonths[normalized].months = Math.max(groupMonths[normalized].months, monthsHit);
-  }
-
-  var recurringCount = 0;
-  var otherCount = 0;
-  for (var gname in groupMonths) {
-    if (!Object.prototype.hasOwnProperty.call(groupMonths, gname)) continue;
-    var g = groupMonths[gname];
-    // Non-excluded income with any positive month counts as recurring
-    // for the Setup grid. See function header for the rationale — the
-    // previous threshold of ≥3 months meant a freshly-added income
-    // source (which only fills the current month) always read as
-    // "other detected", leaving the Income card yellow even though the
-    // user had just finished Income setup.
-    if (!g.excluded && g.months >= 1) {
-      recurringCount++;
-      recurringNames[gname] = true;
-    } else if (g.months > 0) {
-      otherCount++;
-      otherNames[gname] = true;
-    }
-  }
+  var classification = classifyIncomeGroupsInSheet_(cashFlowSheet);
+  var recurringCount = classification.recurring.length;
+  var otherCount = classification.other.filter(function(group) {
+    return Number(group.monthsHit) > 0 || Number(group.avgNonZero) > 0;
+  }).length;
 
   if (recurringCount === 0 && otherCount === 0) {
     return {
@@ -1488,10 +1418,9 @@ function ensureOnboardingUpcomingSheetFromDashboard(mode, optionalSs) {
  * same grouping / exclusion logic as probeIncomeStatus_ but returns
  * per-group breakdowns so the UI can show:
  *   - Recurring income groups (≥1 month with positive amount and not
- *     an excluded name like Bonus / RSU / Refund etc. — kept in sync
- *     with probeIncomeStatus_ so the grid badge and the detail page
- *     never disagree about whether a group is recurring)
- *   - Other detected income groups (excluded categories only)
+ *     an excluded name like Bonus / RSU / Refund etc. — classified by
+ *     the same shared helper used on the Income screen)
+ *   - Other detected income groups (excluded, negative, or non-positive)
  *
  * Write-free. If the current year's sheet is missing, we walk back one
  * year so users in January with a not-yet-created sheet still get a
@@ -1541,85 +1470,31 @@ function getOnboardingIncomeFromDashboard(mode) {
     return base;
   }
 
-  var headerMap;
   try {
-    headerMap = getCashFlowHeaderMap_(sheet);
-  } catch (e) {
+    getCashFlowHeaderMap_(sheet);
+  } catch (_e) {
     base.statusNote = 'Cash Flow needs attention before income can be reviewed.';
     return base;
   }
-
-  var display = sheet.getDataRange().getDisplayValues();
-  var values = sheet.getDataRange().getValues();
-  if (!display || display.length < 2) {
-    base.statusNote = 'Add your first income or expense to begin Cash Flow.';
-    return base;
-  }
-
-  var monthCols = [];
-  for (var c = 0; c < display[0].length; c++) {
-    var hdr = String(display[0][c] || '').trim();
-    if (/^[A-Za-z]{3}-\d{2}$/.test(hdr)) monthCols.push(c);
-  }
-
-  // Group by normalized income name. Track max months seen in any row
-  // belonging to the group (matches the probe's rule) and accumulate
-  // non-zero amounts across contributing rows to compute a conservative
-  // per-group average (average of positive months seen in that group).
-  var groups = {};
-  for (var r = 1; r < values.length; r++) {
-    var typeRaw = String(values[r][headerMap.typeColZero] || '').trim().toLowerCase();
-    if (typeRaw !== 'income') continue;
-    if (headerMap.activeColZero !== -1) {
-      var act = String(values[r][headerMap.activeColZero] || '').trim();
-      if (act && normalizeYesNo_(act) === 'no') continue;
-    }
-    var payee = String(values[r][headerMap.payeeColZero] || '').trim();
-    if (!payee) continue;
-    var normalized = normalizeIncomeName_(payee);
-    var excluded = incomeIsExcludedName_(normalized);
-
-    var g = groups[normalized];
-    if (!g) {
-      g = { name: normalized, months: 0, positiveSum: 0, positiveCount: 0, excluded: excluded };
-      groups[normalized] = g;
-    }
-
-    var monthsHit = 0;
-    for (var m = 0; m < monthCols.length; m++) {
-      var v = toNumber_(values[r][monthCols[m]]);
-      if (isFinite(v) && v > 0) {
-        monthsHit++;
-        g.positiveSum += v;
-        g.positiveCount++;
-      }
-    }
-    if (monthsHit > g.months) g.months = monthsHit;
-  }
-
-  var recurring = [];
-  var other = [];
-  Object.keys(groups).forEach(function(name) {
-    var g = groups[name];
-    var avg = g.positiveCount > 0 ? g.positiveSum / g.positiveCount : 0;
-    var entry = {
-      name: g.name,
-      months: g.months,
-      avgAmount: Math.round(avg * 100) / 100
+  var classification = classifyIncomeGroupsInSheet_(sheet);
+  var recurring = classification.recurring.map(function(group) {
+    return {
+      name: group.displayName,
+      months: group.monthsHit,
+      avgAmount: group.avgNonZero
     };
-    // Keep recurring / other buckets in lockstep with probeIncomeStatus_
-    // (see the matching branch there). Any non-excluded income group with
-    // at least one month of positive amount is recurring; only excluded
-    // categories (Bonus / RSU / Refund / Gift / …) stay in the "other
-    // detected" bucket. Without this parity the grid badge could say
-    // "Setup complete" while the detail page still listed the income
-    // under Other with reason "Seen < 3 months".
-    if (!g.excluded && g.months >= 1) {
-      recurring.push(entry);
-    } else if (g.months > 0) {
-      entry.excludedReason = 'Non-recurring category';
-      other.push(entry);
-    }
+  });
+  var other = classification.other.filter(function(group) {
+    return Number(group.monthsHit) > 0 || Number(group.avgNonZero) > 0;
+  }).map(function(group) {
+    return {
+      name: group.displayName,
+      months: group.monthsHit,
+      avgAmount: group.avgNonZero,
+      excludedReason: group.excluded
+        ? 'Non-recurring category'
+        : (group.hasNegativeMonth ? 'Includes a negative month' : 'Not a positive tracked source')
+    };
   });
 
   recurring.sort(function(a, b) { return b.avgAmount - a.avgAmount; });

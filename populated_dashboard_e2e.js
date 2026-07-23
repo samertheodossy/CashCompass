@@ -16,6 +16,7 @@ var POPULATED_DASHBOARD_E2E_REQUIRED_ASSERTIONS_ = [
   'debt_selection_actions',
   'property_equity',
   'populated_workspaces',
+  'income_setup_consistency',
   'subtab_retention',
   'setup_help_language',
   'customer_language',
@@ -129,13 +130,17 @@ function pdE2EComplete(runId, payload, trashAfter) {
     var normalized = frE2ENormalizeEvidenceFor_(payload, POPULATED_DASHBOARD_E2E_REQUIRED_ASSERTIONS_);
     var pass = sharing.overall === 'PASS' &&
       normalized.assertions.every(function(item) { return item.pass; }) && !normalized.errors.length;
+    var evidenceContext = releaseValidateBrowserEvidenceContext_(state.releaseEvidenceContext);
     var report = {
       version: 1,
       type: 'browserE2E',
       suiteId: 'SUITE-POPULATED-DASHBOARD-E2E',
       scenarioId: POPULATED_DASHBOARD_E2E_SCENARIO_ID_,
       runId: state.runId,
-      candidate: releaseCurrentCandidateMetadata_(),
+      candidate: evidenceContext.candidate,
+      releaseEligible: evidenceContext.releaseEligible,
+      releaseRunId: evidenceContext.releaseRunId,
+      evidenceNote: evidenceContext.reason,
       startedAt: state.createdAt,
       finishedAt: new Date().toISOString(),
       overall: pass ? 'PASS' : 'FAIL',

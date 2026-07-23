@@ -285,6 +285,23 @@ to make new evidence look attributable to an older candidate; require an
 exact-candidate handoff from the owning Validation-console run or mark/refuse the
 evidence as non-release-eligible. Tracked as `REG-015`.
 
+**Implementation follow-up:** the local `REG-015` fix now captures the owning
+Release Readiness run when each First-Run, Populated Dashboard, Recovery Live,
+or Performance browser campaign starts, then revalidates that run and candidate
+at completion. Standalone runs remain available for diagnosis but save
+`releaseEligible: false`, a null candidate, and an explanatory note; Performance
+cannot ratify a release budget in that state. Release Readiness additionally
+requires the exact owning run id before accepting browser evidence. Local P1
+evidence regressions pass; isolated runtime replay remains pending.
+
+**Income / Setup follow-up:** the local fix replaces the duplicated thresholds
+with one shared classification path. A non-excluded active salary with one
+positive month is immediately tracked on both Income and Setup; excluded,
+negative, and non-positive groups remain Other detected. Behavior and static
+regressions pass, and the permanent Populated Dashboard browser contract now
+requires the two surfaces to agree; isolated interactive replay remains pending
+as `REG-016`.
+
 ### 12. Top three improvements
 
 1. Harden every formatted money editor against concatenation and extreme unintended
