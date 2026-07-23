@@ -4,7 +4,7 @@
 Scenario** so it can never silently return.*
 
 **Status:** **Living registry; coverage implemented incrementally.** REG-009 has an
-executable Harness guard and full isolated runtime evidence; REG-010–013 retain
+executable Harness guard and full isolated runtime evidence; REG-010–014 retain
 their static/manual evidence and explicit future automated homes. This file is the
 source of truth for *what* the regression pack covers; the harness is *how*.
 
@@ -225,6 +225,40 @@ Whenever a production bug is fixed:
   sheet contains zero chart objects, timing uses `cleanup_history_charts`, and the
   operation stays within the ratified planner budget.
 
+### REG-014 — Bank formatted balance replacement concatenated the loaded value
+- Category: REGRESSION / UI
+- Date discovered: 2026-07-23
+- Status: fixed; static guard + isolated Central `@175` interactive writer replay PASS
+- Affected files: shared dashboard currency-focus helper and Bank balance editor
+- Root cause: Bank loaded the stored balance as a formatted currency string and
+  focus converted it to raw digits without establishing a whole-value replacement
+  selection. The observed Browser replacement of `$12,500` with `12600` therefore
+  submitted `$1,250,012,600`, which the valid-number path accepted and saved.
+- Repro (UI harness): on a guarded populated disposable workbook, select the Bank
+  account whose loaded value is `$12,500`, focus the balance editor, replace it with
+  `12600` through typing and paste variants, and save.
+- Expected result: first-focus typing/paste replaces the complete loaded value;
+  the submitted and stored value is exactly `$12,600`; Activity records only the
+  intended update; every non-Bank currency editor preserves its existing caret
+  behavior.
+
+### REG-015 — Standalone browser evidence inherited stale candidate metadata
+- Category: REGRESSION / TEST EVIDENCE
+- Date discovered: 2026-07-23
+- Status: open; isolated Central `@175` interactive reproduction
+- Affected files: populated-dashboard browser evidence and Release Readiness
+  candidate-metadata handoff
+- Root cause: the standalone Populated Dashboard runner saved a new PASS while
+  `releaseCurrentCandidateMetadata_()` still held the previous formal candidate,
+  so the `@175` run was labeled `Central Apps Script version 141` /
+  `isolated @141`.
+- Repro: deploy a later isolated candidate without starting a new formal Release
+  Readiness candidate, then run the standalone Populated Dashboard E2E and inspect
+  the saved report's `candidate`.
+- Expected result: a browser suite either receives and verifies the exact active
+  candidate from the owning Validation-console run or refuses to save
+  release-eligible evidence; it must never silently inherit a stale candidate.
+
 ---
 
 ## RECOVERY scenarios (design — not historical bugs)
@@ -260,4 +294,6 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-011 | Setup leaked internal identifiers/raw errors | REGRESSION / UI | fixed; static guard; UI scenario pending |
 | REG-012 | Empty editor actions were enabled | REGRESSION / UI | fixed; static guard; UI scenario pending |
 | REG-013 | Planner rebuilt unused History charts | STRESS / performance | fixed; static guard; runtime scenario pending |
+| REG-014 | Bank formatted balance replacement concatenated loaded value | REGRESSION / UI | fixed; static guard + isolated `@175` interactive writer replay PASS |
+| REG-015 | Standalone browser evidence inherited stale candidate metadata | REGRESSION / TEST EVIDENCE | open; isolated `@175` reproduction |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

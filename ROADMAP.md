@@ -8,7 +8,7 @@
 
 ---
 
-## Current status (2026-07-22)
+## Current status (2026-07-23)
 
 **Completed:**
 
@@ -23,8 +23,9 @@
 
 **Now / next:**
 
-- **Current active milestone:** **P3 finished-feeling UX and focused performance.** `UX-01` Overview information architecture and balanced-grid implementation is user-reviewed on a populated dashboard, its three approved display corrections are local and regression-clean, and the source-control checkpoint is the next gate.
-- **Then:** continue the ordered page passes through `UX-10` responsive/accessibility closeout, followed by focused performance optimization.
+- **Current active milestone:** **P3 finished-feeling UX and focused performance.** `UX-01` Overview information architecture and balanced-grid implementation is user-reviewed on a populated dashboard, its three approved display corrections are local and regression-clean, and the source-control checkpoint remains the next gate.
+- **Independent advocate gate added 2026-07-23:** the approved isolated interactive writer journey confirmed P1 trust defects in formatted bank-amount replacement, Income/Setup classification consistency, Bills Pay handoff/occurrence feedback, and normal-path implementation terminology. The bank replacement defect is now runtime-closed on isolated `@175` for normal typing and paste-like replacement. The rerun also found a separate P1 evidence-integrity defect: the `@175` standalone Populated Dashboard PASS inherited stale `@141` candidate metadata (`REG-015`). Every guarded Restricted fixture finished with verified Trash cleanup; no Beta, bounded, mapped-user, Golden, or configured-default workbook was used. These findings are sequenced in `TODO.md → UX Backlog (Version 1) → Independent advocate priorities`.
+- **Then:** fix the advocate's P1 items one reviewable issue at a time, resume the ordered page passes through `UX-10` responsive/accessibility closeout, and complete focused performance optimization.
 - **Explicitly parked pre-Beta gate:** the Performance Planner percentile campaign and final exact-candidate READY/NOT READY verdict. Seven historical sample pairs are diagnostic only because the campaign began before `@141`; performance must be rerun as an exact-candidate campaign and ratified before any broad Beta release. Deferral does not waive the gate.
 - **Measured follow-up:** Financial Plan refresh succeeded but took 143 seconds on the blank/fresh fixture. Reusable privacy-safe stage instrumentation is now source-ready behind `PERFORMANCE_TIMING_ENABLED`; isolated first-run/repeat timing evidence and optimization remain under P3 Performance without reopening the completed P0 functional-feedback work.
 - **Release policy:** CashCompass is **quality-gated, not date-gated**. A small supervised cohort may validate work during P1–P3, but a broad Beta Release Candidate must satisfy `BETA_10_OUT_OF_10_PLAN.md`: score ≥95/100, no dimension below 9/10, no unresolved Severity 1 or Severity 2 defect, and every non-negotiable release gate passing.
@@ -55,7 +56,7 @@
 5. **Release Readiness gate — ✅ orchestration/runtime controls complete; final verdict parked.** The single Validation console now starts, resumes, pauses, and finalizes bounded runs; each writer check creates and safely trashes its own disposable workbook; browser evidence is accepted only for the exact source/deployment candidate; compact evidence is archived; and a console-owned Harness flag returns OFF at finalization. Source commit `a4f6ddf` is on `origin/main`; isolated Central `@141` proved the runner. The current run remains `IN_PROGRESS`, not READY, because Performance p50/p95 budgets are unratified.
 6. **Validation & Testing admin console — ✅ Release Readiness controls complete.** Workbook Health, the suite inventory, guarded browser adapters, resumable bounded checks, saved status, privacy-safe evidence export, and final READY/NOT READY controls now start and end from the single console.
 
-**Next active item:** checkpoint the user-reviewed, display-only `UX-01` Overview hierarchy and balanced grid, then proceed to `UX-02`. Keep Performance Planner as an explicit parked gate, then restart its full exact-candidate percentile campaign, ratify the budget ProductDecision, and produce the final bounded verdict before broad Beta release.
+**Next active item:** checkpoint the user-reviewed, display-only `UX-01` Overview hierarchy and balanced grid. The Bank formatted-money replacement is runtime-verified on isolated `@175`; next close `REG-015` so browser evidence cannot inherit stale candidate metadata, then continue Income/Setup truth and the remaining advocate P1 issues one at a time before ordinary `UX-02` polish. Keep Performance Planner as an explicit parked gate, then restart its full exact-candidate percentile campaign, ratify the budget ProductDecision, and produce the final bounded verdict before broad Beta release.
 
 ### Priority 2 — Financial Model Accuracy — complete
 
@@ -68,6 +69,7 @@
 
 - Beta-critical performance and experience pass before broad release: provisioning + dashboard/planner latency, bulk-API and caching passes, long-running-action feedback, terminology/loading consistency, responsive/accessibility review, and measured scale toward more users/workbooks.
 - **Web Dashboard page-by-page polish** — execute the ordered `UX-01` through `UX-10` passes in `TODO.md → UX Backlog (Version 1)`, beginning with the Overview information architecture and balanced-grid pass. Each ID is a separate reviewable/validatable change; preserve calculations, schemas, and write behavior.
+- **Independent advocate trust gate** — close the confirmed P1 Bank money-editor, Income/Setup truth, Bills Pay/occurrence feedback, and customer-language findings before claiming Core Experience or 10/10 UX readiness. Preserve the advocate as an independent evidence role and retest every writer fix only on a newly guarded disposable workbook.
 - **Financial Plan refresh latency** — isolated blank/fresh `@114` completed correctly but took **143 seconds**. Central `@115` profiling measured **81.455 s first / 77.275 s repeat**. The first optimization passed on isolated `@116`: History rows and their dashboard consumers remained correct while six unused embedded History charts were retired; the repeat History stage fell from **11.507 s to 0.165 s** and total repeat server time reached **43.946 s**. Next address Dashboard formatting (**18.303 s on the `@116` repeat**), snapshot construction (**11.783 s**), and Dashboard charts (**4.848 s**), then collect enough samples to ratify the release percentile.
 - **10/10 Beta Release Candidate gate** — after P1 evidence, P2 financial truth, and P3 experience/performance work, run the exact candidate through the full scorecard and release gates in `BETA_10_OUT_OF_10_PLAN.md`. A supervised cohort may run earlier; broad or monetized beta does not.
 

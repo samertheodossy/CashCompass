@@ -184,6 +184,7 @@ The beta does not need to charge immediately, but it must avoid architecture and
 3. Resolve terminology and Help/contextual-guidance inconsistencies.
 4. Complete responsive, keyboard, contrast, and browser compatibility review.
 5. Run task-based usability sessions; fix repeated confusion rather than isolated preference.
+6. Run the independent user-advocate contract in `UX_USER_ADVOCATE_REVIEW.md` on the exact candidate. Treat confirmed money-entry safety, cross-surface truth, payment-handoff, and normal-path implementation-language findings as Core Experience gates rather than optional polish.
 
 The ordered implementation inventory for this experience work is `TODO.md → UX Backlog (Version 1) → Web Dashboard page-by-page polish` (`UX-01` through `UX-10`). It begins with Overview hierarchy and balanced card rows, then proceeds through global consistency, Cash Flow, Planning, Assets, Properties, Activity, Setup, Help, and the responsive/accessibility closeout. Each ID is intended to ship and validate independently; this phase is not authorization for a broad redesign or for calculation/schema/write-path changes.
 

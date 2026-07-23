@@ -459,10 +459,35 @@ A shared vocabulary + spacing/typography pass so every surface feels the same.
 - Verify keyboard order, visible focus, semantic tab state, accessible names, reduced motion, and contrast.
 - Run task-based usability checks across Overview, Quick Add, Bills, Assets, Planning, Setup, and Help; fix repeated confusion rather than isolated preference.
 - Record browser/runtime evidence and add targeted automated checks only where the existing dashboard UX coverage is insufficient.
+- Run the independent user-advocate journeys and reporting contract in `UX_USER_ADVOCATE_REVIEW.md`. Screenshot-only findings remain provisional until interactively reproduced.
 
 **Acceptance:** core tasks pass on supported desktop and narrow layouts, keyboard-only navigation is usable, no critical contrast/focus issue remains, and the exact beta candidate satisfies the Core Experience gate in `BETA_10_OUT_OF_10_PLAN.md`.
 
 **Program completion:** all ten passes reviewed and validated; no unresolved Severity 1/2 UX defect; loading/empty/terminology findings reconciled with the adjacent UX backlog; final task-based evidence linked from the Release Readiness gate.
+
+###### Independent advocate priorities — 2026-07-23
+
+The initial screenshot review and the completed interactive populated-workbook review are documented in `UX_USER_ADVOCATE_REVIEW.md`. The interactive writer journey used the approved isolated Central deployment plus the guarded non-admin Populated Dashboard E2E runner. The Restricted synthetic fixture was verified before writes and finished with `active: null` plus verified Trash cleanup; Beta, bounded, mapped-user, Golden, and configured-default workbooks were not used.
+
+**Release-relevant P1 sequence discovered by the advocate:**
+
+1. **Bank formatted-money replacement safety (`UX-05`, core defect closed on isolated `@175`).** A replace operation intended to change `$12,500` to `12600` originally produced and saved `$1,250,012,600`. The narrow fix makes the Bank balance editor opt into whole-value selection on focus while preserving every other currency editor's caret behavior. Local suites pass, and the `@175` Restricted-fixture replay saved exact keyboard and paste-like replacements of `$12,600.00` and `$12,700.00` without concatenation. Keep the 390px input path in `UX-10`; decide separately whether an extreme-change guard needs a ProductDecision.
+2. **Exact-candidate browser evidence trust (`REG-015`).** The standalone Populated Dashboard PASS executed on isolated `@175` was saved under stale candidate metadata `Central Apps Script version 141` / `isolated @141`. Require the owning Validation-console run to hand the exact candidate into browser suites, or refuse/clearly mark standalone evidence as non-release-eligible.
+3. **Income/Setup cross-surface truth (`UX-03` + `UX-08`).** Setup reported one recurring income and zero other detected while Income reported no recurring income and showed the same salary as Other detected. Unify the classification source and add a cross-surface regression assertion.
+4. **Bills Pay handoff and recurrence confirmation (`UX-03` + `UX-09`).** Pay silently opens a prefilled Quick add form that still requires **Add to Cash Flow**, while Help claims Pay records immediately. After paying June, July remained overdue without occurrence-specific explanation. Make the handoff and next-occurrence result explicit and align Help.
+5. **Normal-path implementation-language removal (`UX-02` + `UX-03` + `UX-05` + `UX-06` + `UX-09`).** Remove `INPUT - Cash Flow 2026`, “tab,” “section on sheet,” “writer/sidebar,” `USE_FOR_BILLS`, and **Acct PCT Avail** from customer-facing paths; keep necessary technical references under Advanced Help only.
+
+**P2/P3 follow-through:**
+
+- Keep Bank/Debt writers and Stop tracking disabled until selected-record details finish loading.
+- Explain Quick add duplicate/update semantics precisely.
+- Show **Remove (Donation)** only on eligible donation Activity rows.
+- Replace Retirement's dash-only result wall with a guided minimum-input state.
+- Replace ambiguous Upcoming **Dismiss** language with an outcome and history-preservation explanation.
+- Preserve the proven 390px navigation behavior; the long **Assets & Liabilities** label and Assets subtabs wrapped without horizontal overflow.
+- Tighten desktop header whitespace and modestly improve secondary-text contrast after trust defects are closed.
+
+**Evidence gaps before `UX-10` closure:** Skip, Stop tracking, loading failure, stale data, and server-error recovery still require a separately guarded disposable writer journey.
 
 #### Golden Workbook Convergence — **P1 · effort L** *(also Stage 3 → D)*
 
