@@ -2,12 +2,18 @@
 var __debtPropertyOptions = [];
 var debtUpdateDetailsReady_ = false;
 var debtUpdateDetailsRequestId_ = 0;
+// Debt tab entry and focus/load-and-select can overlap. Only the newest section
+// response may rebuild the shared selectors; otherwise a late ordinary tab load
+// can clear a newer account selection and invalidate its detail request.
+var debtSectionRequestId_ = 0;
 
 function loadDebtSection() {
+  const sectionRequestId = ++debtSectionRequestId_;
   debtUpdateDetailsReady_ = false;
   updateDebtUpdateAvailability_();
   google.script.run
     .withSuccessHandler(function(data) {
+      if (sectionRequestId !== debtSectionRequestId_) return;
       allDebtRows = data.debts || [];
 
       const typeSel = document.getElementById('debt_typeFilter');
@@ -37,16 +43,19 @@ function loadDebtSection() {
       }
     })
     .withFailureHandler(function(err) {
+      if (sectionRequestId !== debtSectionRequestId_) return;
       setStatus('debt_status', (err.message || String(err)), true);
     })
     .getDebtsUiData();
 }
 
 function loadDebtSectionThenSelect_(accountName) {
+  const sectionRequestId = ++debtSectionRequestId_;
   debtUpdateDetailsReady_ = false;
   updateDebtUpdateAvailability_();
   google.script.run
     .withSuccessHandler(function(data) {
+      if (sectionRequestId !== debtSectionRequestId_) return;
       allDebtRows = data.debts || [];
       const typeSel = document.getElementById('debt_typeFilter');
       typeSel.innerHTML = '';
@@ -74,6 +83,7 @@ function loadDebtSectionThenSelect_(accountName) {
       }
     })
     .withFailureHandler(function(err) {
+      if (sectionRequestId !== debtSectionRequestId_) return;
       setStatus('debt_status', (err.message || String(err)), true);
     })
     .getDebtsUiData();

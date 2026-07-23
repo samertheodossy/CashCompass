@@ -290,6 +290,31 @@ Whenever a production bug is fixed:
   `income_setup_consistency`; Income and Setup classified the one-month synthetic
   salary as the same tracked recurring source.
 
+### REG-017 — Overlapping Debt loads cleared the selected account
+- Category: REGRESSION / UI RELIABILITY
+- Date discovered: 2026-07-23
+- Status: fixed; dynamic reversed-completion regression + isolated `@179`
+  interactive replay PASS
+- Affected files: Debt account section loading and the Populated Dashboard browser
+  selection journey
+- Root cause: opening the Debt tab started `loadDebtSection()`, then the guarded
+  browser journey immediately started `loadDebtSectionThenSelect_()`. Both called
+  `getDebtsUiData()` and both success handlers mutated the same selector. When the
+  ordinary tab request returned last, `filterDebtAccounts()` reset the selected
+  account and started an empty detail load, invalidating the selected account's
+  in-flight detail request.
+- Repro: start the ordinary Debt tab load, immediately request load-and-select for
+  a known account, then complete the load-and-select section request first and the
+  ordinary section request last.
+- Expected result: only the newest Debt section request may update the selector,
+  fields, or status. A stale success or failure response is ignored, the requested
+  account remains selected, its details finish loading, and guarded actions become
+  available.
+- Runtime evidence: isolated `@179` run
+  `FR-3f6f2cf7-f823-4b74-a033-5e964f66b05e` passed all 12 browser assertions,
+  including `debt_selection_actions`, with zero captured errors, Restricted
+  owner-only sharing, and verified Trash cleanup.
+
 ---
 
 ## RECOVERY scenarios (design — not historical bugs)
@@ -328,4 +353,5 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-014 | Bank formatted balance replacement concatenated loaded value | REGRESSION / UI | fixed; static guard + isolated `@175` interactive writer replay PASS |
 | REG-015 | Standalone browser evidence inherited stale candidate metadata | REGRESSION / TEST EVIDENCE | standalone fail-closed path runtime-proven on isolated `@178`; dedicated exact-owner runtime proof pending |
 | REG-016 | Income and Setup classified the same salary differently | REGRESSION / UI | fixed; isolated `@178` interactive replay PASS |
+| REG-017 | Overlapping Debt loads cleared the selected account | REGRESSION / UI RELIABILITY | fixed; dynamic reversed-completion regression + isolated `@179` replay PASS |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

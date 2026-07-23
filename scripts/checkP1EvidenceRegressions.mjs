@@ -282,6 +282,81 @@ assert.match(validationUi, /All server checks are complete and saved\. Run any m
   'Run remaining must stop safely after server checks and direct the operator to browser evidence');
 assert.match(debtUi, /function loadDebtSectionThenSelect_\(accountName\)[\s\S]*?data\.editableFields[\s\S]*?loadDebtFieldValue\(\)/,
   'Debt selection helper must populate editable fields before loading the selected value');
+assert.match(debtUi,
+  /var debtSectionRequestId_ = 0[\s\S]*?function loadDebtSection\(\)[\s\S]*?sectionRequestId = \+\+debtSectionRequestId_[\s\S]*?sectionRequestId !== debtSectionRequestId_[\s\S]*?function loadDebtSectionThenSelect_\(accountName\)[\s\S]*?sectionRequestId = \+\+debtSectionRequestId_[\s\S]*?sectionRequestId !== debtSectionRequestId_/,
+  'Debt section loaders must ignore stale overlapping responses before they can reset the selected account');
+const debtLoaderMatch = debtUi.match(
+  /^\/\* Planning — Debts tab \*\/[\s\S]*?\n}\n\n\/\/ First-run fallback/
+);
+assert.ok(debtLoaderMatch, 'Debt section loader functions must remain dynamically testable');
+const debtPendingCalls = [];
+const debtAccountSelect = {
+  value: '',
+  options: [],
+  appendChild(option) { this.options.push(option); }
+};
+const debtTypeSelect = {
+  value: 'All',
+  innerHTML: '',
+  options: [],
+  appendChild(option) { this.options.push(option); }
+};
+const debtFieldSelect = {
+  value: '',
+  innerHTML: '',
+  options: [],
+  appendChild(option) { this.options.push(option); if (!this.value) this.value = option.value; }
+};
+const debtElements = {
+  debt_typeFilter: debtTypeSelect,
+  debt_field: debtFieldSelect,
+  debt_account: debtAccountSelect
+};
+const debtRunner = {
+  success: null,
+  failure: null,
+  withSuccessHandler(handler) { this.success = handler; return this; },
+  withFailureHandler(handler) { this.failure = handler; return this; },
+  getDebtsUiData() {
+    debtPendingCalls.push({ success: this.success, failure: this.failure });
+    this.success = null;
+    this.failure = null;
+  }
+};
+const debtRaceCtx = vm.createContext({
+  google: { script: { run: debtRunner } },
+  document: {
+    getElementById: (id) => debtElements[id],
+    createElement: () => ({ value: '', textContent: '' })
+  },
+  allDebtRows: [],
+  pendingFocus: null,
+  updateDebtUpdateAvailability_: () => {},
+  populateDebtAddDatalists_: () => {},
+  populateDebtPropertyOptions_: () => {},
+  filterDebtAccounts: () => {
+    debtAccountSelect.value = '';
+    debtAccountSelect.options = [{ value: '' }, { value: 'Synthetic Visa' }];
+  },
+  loadDebtFieldValue: () => {},
+  setStatus: () => {}
+});
+vm.runInContext(debtLoaderMatch[0].replace(/\n\/\/ First-run fallback$/, ''), debtRaceCtx);
+debtRaceCtx.loadDebtSection();
+debtRaceCtx.loadDebtSectionThenSelect_('Synthetic Visa');
+assert.equal(debtPendingCalls.length, 2, 'Race test must create overlapping Debt section requests');
+const debtResponse = {
+  debts: [{ accountName: 'Synthetic Visa', type: 'Credit Card' }],
+  types: ['All', 'Credit Card'],
+  editableFields: ['Account Balance'],
+  propertyOptions: []
+};
+debtPendingCalls[1].success(debtResponse);
+assert.equal(debtAccountSelect.value, 'Synthetic Visa',
+  'Newest Debt load-and-select response must select the requested account');
+debtPendingCalls[0].success(debtResponse);
+assert.equal(debtAccountSelect.value, 'Synthetic Visa',
+  'Late ordinary Debt response must not clear the newer selected account');
 assert.match(validationUi, /never uses the selected target workbook[\s\S]*?Workbook Health and every workflow check create and safely trash their own disposable workbook/,
   'Release Readiness UI must state that all checks use disposable workbooks');
 assert.match(validationServer, /function vtSetReleaseHarnessEnabled\(enabled, confirmed\)[\s\S]*?assertValidatorAllowed_\(\)[\s\S]*?confirmed !== true[\s\S]*?TEST_HARNESS_ENABLED_KEY_/,

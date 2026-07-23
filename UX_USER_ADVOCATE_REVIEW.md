@@ -453,6 +453,29 @@ real reliability regression candidate and remains a P1 investigation item.
 limited to the runtime-proven standalone evidence-attribution correction. The
 score is not 10/10 and is not release approval.
 
+### Isolated `@179` REG-017 rerun — 2026-07-23
+
+**Interactive result:** full Populated Dashboard E2E PASS. Run
+`FR-3f6f2cf7-f823-4b74-a033-5e964f66b05e` passed all 12 required browser
+assertions, including `debt_selection_actions`, with zero captured errors,
+Restricted owner-only sharing, and verified Trash cleanup. This runtime-closes
+the overlapping Debt-section response defect recorded as `REG-017`.
+
+| Criterion | `@178` score | `@179` score | Evidence | Rationale |
+|---|---:|---:|---|---|
+| Errors and task completion | 8.0/10 | **8.3/10** | Interactive | The previously timing-sensitive Debt selection now completed correctly under the full journey. HTTP 0 recovery, Bills completion semantics, and remaining controlled failure branches prevent a higher score. |
+| Ease and efficiency | 8.3/10 | **8.3/10** | Interactive / Screenshot | Covered traversal remains straightforward; Bills still has an unclear two-step completion contract. |
+| Language and comprehension | 8.5/10 | **8.5/10** | Interactive / Source review | Covered normal paths remain readable; unresolved Bills/Quick add and Upcoming semantics are unchanged. |
+| Transitions and feedback | 7.5/10 | **7.5/10** | Interactive / Source review | Refresh completed without error, but HTTP 0 recovery and several success/failure transitions remain incomplete. |
+| Visual design and readability | 8.7/10 | **8.7/10** | Screenshot | The established visual system remains clear; no new medium/narrow visual evidence was added. |
+| Navigation and discoverability | 8.8/10 | **8.8/10** | Interactive | Primary destinations and retained Assets subtab passed again. |
+| Trust and safety | 8.2/10 | **8.2/10** | Interactive / Source review | Restricted sharing, diagnostic-only evidence, and cleanup passed; dedicated exact-owner proof remains open. |
+| Responsive and accessibility | 7.0/10 | **7.0/10** | Prior Screenshot / evidence gap | This replay adds no keyboard, focus, semantics, reduced-motion, or narrow-width evidence. |
+
+**Weighted overall: 8.2/10 — unchanged after rounding.** Task reliability improved,
+but the remaining open categories still control the overall score. This is
+usability evidence, not release approval.
+
 ### 3–11. Findings
 
 - **What is good — Interactive / Screenshot:** Both runs completed the populated
@@ -487,7 +510,7 @@ score is not 10/10 and is not release approval.
 
 | Priority | Screen | Finding | Recommendation | Evidence |
 |---|---|---|---|---|
-| P1 | Runtime reliability | Two of three isolated `@178` attempts failed before the final 12/12 PASS: one at Debt selection and one with visible Apps Script HTTP 0. | Reproduce under instrumented timing/transport evidence and add bounded retry/recovery behavior where the application controls it. | Interactive |
+| P1 | Runtime reliability | Two of three isolated `@178` attempts failed before the final 12/12 PASS. The Debt-selection failure is traced to overlapping section requests and has a local `REG-017` stale-response guard; visible Apps Script HTTP 0 recovery remains open. | Runtime-replay the Debt fix, then add bounded retry/recovery behavior for transport failures where the application controls it. | Interactive / Source review |
 | P1 | Test evidence | Standalone `REG-015` behavior is runtime-closed; the dedicated exact-owner path is not yet runtime-proven. | Prove the Release Readiness-owned launcher against an exact candidate before accepting its browser evidence. | Interactive / Source review |
 | P1 | Bills / Quick add | Payment handoff and next-occurrence confirmation remain ambiguous. | Discuss the intended product behavior, then align UI and Help before implementation. | Prior Interactive; unchanged |
 | P2 | Retirement | Guidance/result visibility passed Source review but was not interactively reached in this replay. | Add Retirement state coverage to the guarded browser journey or run a focused read-only fixture replay. | Source review / evidence gap |
@@ -496,8 +519,8 @@ score is not 10/10 and is not release approval.
 
 ### 13. Top three improvements
 
-1. Investigate the intermittent Debt/HTTP 0 runtime failures and runtime-prove the
-   dedicated exact-owner half of `REG-015`.
+1. Runtime-replay the local `REG-017` Debt race fix, address HTTP 0 recovery, and
+   runtime-prove the dedicated exact-owner half of `REG-015`.
 2. Decide and then clarify the Bills Pay → Quick add → next-occurrence journey.
 3. Add focused Retirement and failure-state interactive coverage, then refine the
    medium-width header.
