@@ -53,37 +53,70 @@
     </div>
   </div>
 
-  <div id="page_overview" class="workspace-page active">
-    <div class="snapshot-grid">
-      <div class="snapshot-card" onclick="showTab('bank')">
-        <div class="snapshot-label">Total Cash</div>
-        <div class="snapshot-value" id="snap_cash">—</div>
-        <div class="snapshot-delta" id="snap_delta_cash">—</div>
+  <div id="page_overview" class="workspace-page active overview-page">
+    <section class="overview-section" aria-labelledby="overview_at_glance">
+      <h2 id="overview_at_glance" class="overview-section-title">At a glance</h2>
+      <div class="overview-kpi-grid">
+        <div class="snapshot-card snapshot-card-primary">
+          <div class="snapshot-label">Net Worth</div>
+          <div class="snapshot-value" id="snap_netWorth">—</div>
+          <div class="snapshot-delta" id="snap_delta_netWorth">—</div>
+        </div>
+        <div class="snapshot-card snapshot-card-supporting" role="button" tabindex="0"
+             onclick="showPage('assets'); showTab('bank');"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showPage('assets');showTab('bank');}">
+          <div class="snapshot-label">Total Cash</div>
+          <div class="snapshot-value" id="snap_cash">—</div>
+          <div class="snapshot-delta" id="snap_delta_cash">—</div>
+          <div class="overview-card-link">View bank accounts <span aria-hidden="true">›</span></div>
+        </div>
+        <div class="snapshot-card snapshot-card-supporting" role="button" tabindex="0"
+             onclick="showPage('assets'); showTab('investments');"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showPage('assets');showTab('investments');}">
+          <div class="snapshot-label">Total Investments</div>
+          <div class="snapshot-value" id="snap_investments">—</div>
+          <div class="snapshot-delta" id="snap_delta_investments">—</div>
+          <div class="overview-card-link">View investments <span aria-hidden="true">›</span></div>
+        </div>
+        <div class="snapshot-card snapshot-card-supporting" role="button" tabindex="0"
+             onclick="showPage('assets'); showTab('houses');"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showPage('assets');showTab('houses');}">
+          <div class="snapshot-label">Real Estate Value</div>
+          <div class="snapshot-value" id="snap_houseEquity">—</div>
+          <div class="snapshot-delta" id="snap_delta_houseEquity">—</div>
+          <div class="overview-card-link">View properties <span aria-hidden="true">›</span></div>
+        </div>
+        <div class="snapshot-card snapshot-card-supporting" role="button" tabindex="0"
+             onclick="showPage('planning'); showTab('debts');"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showPage('planning');showTab('debts');}">
+          <div class="snapshot-label">Total Debt</div>
+          <div class="snapshot-value" id="snap_debt">—</div>
+          <div class="snapshot-delta" id="snap_delta_debt">—</div>
+          <div class="overview-card-link">View debts <span aria-hidden="true">›</span></div>
+        </div>
       </div>
-      <div class="snapshot-card" onclick="showTab('investments')">
-        <div class="snapshot-label">Total Investments</div>
-        <div class="snapshot-value" id="snap_investments">—</div>
-        <div class="snapshot-delta" id="snap_delta_investments">—</div>
-      </div>
-      <div class="snapshot-card" onclick="showTab('houses')">
-        <div class="snapshot-label">Real Estate Value</div>
-        <div class="snapshot-value" id="snap_houseEquity">—</div>
-        <div class="snapshot-delta" id="snap_delta_houseEquity">—</div>
-      </div>
-      <div class="snapshot-card" onclick="showTab('debts')">
-        <div class="snapshot-label">Total Debt</div>
-        <div class="snapshot-value" id="snap_debt">—</div>
-        <div class="snapshot-delta" id="snap_delta_debt">—</div>
-      </div>
-      <div class="snapshot-card" onclick="showTab('bank')">
-        <div class="snapshot-label">Net Worth</div>
-        <div class="snapshot-value" id="snap_netWorth">—</div>
-        <div class="snapshot-delta" id="snap_delta_netWorth">—</div>
-      </div>
-    </div>
+    </section>
 
-    <div class="six-grid">
-      <div class="card">
+    <section class="overview-section" aria-labelledby="overview_attention">
+      <h2 id="overview_attention" class="overview-section-title">What needs your attention</h2>
+      <div class="overview-grid overview-grid-attention">
+        <div class="card overview-actions-card">
+          <div class="card-title">Suggested Actions</div>
+          <div id="actions_issue_hint" class="subtle actions-issue-hint" hidden></div>
+          <div id="actions_list" class="actions-list"></div>
+        </div>
+
+        <div class="card overview-issues-card">
+          <div class="card-title">Issues</div>
+          <div id="issues_root"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="overview-section" aria-labelledby="overview_outlook">
+      <h2 id="overview_outlook" class="overview-section-title">Financial outlook</h2>
+      <div class="overview-grid overview-grid-outlook">
+        <div class="card overview-health-card">
         <div class="card-title">Financial Health</div>
         <div class="health-row">
           <div class="health-score-wrap">
@@ -118,20 +151,14 @@
         </div>
       </div>
 
-      <div class="card" onclick="showTab('retirement')" style="cursor:pointer;">
+        <div class="card overview-retirement-card overview-clickable-card" role="button" tabindex="0"
+             onclick="showPage('planning'); showTab('retirement');"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showPage('planning');showTab('retirement');}">
         <div class="card-title">Retirement Outlook</div>
         <div class="ret-row">
           <div class="ret-kpi">
-            <div class="ret-kpi-label">Selected Scenario</div>
-            <div class="ret-kpi-value" id="ret_scenario">—</div>
-          </div>
-          <div class="ret-kpi">
             <div class="ret-kpi-label">Goal Amount</div>
             <div class="ret-kpi-value" id="ret_goal">—</div>
-          </div>
-          <div class="ret-kpi">
-            <div class="ret-kpi-label">Current Investable Assets</div>
-            <div class="ret-kpi-value" id="ret_assets">—</div>
           </div>
           <div class="ret-kpi">
             <div class="ret-kpi-label">Estimated Retirement Age</div>
@@ -143,10 +170,12 @@
           </div>
         </div>
         <div id="ret_summary" class="ret-summary">—</div>
-        <button onclick="event.stopPropagation(); showTab('retirement')">Open Retirement</button>
+        <div class="overview-card-link">View retirement details <span aria-hidden="true">›</span></div>
       </div>
 
-      <div class="card" onclick="showTab('upcoming')" style="cursor:pointer;">
+        <div class="card overview-runway-card overview-clickable-card" role="button" tabindex="0"
+             onclick="showPage('cashflow'); showTab('upcoming');"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showPage('cashflow');showTab('upcoming');}">
         <div class="card-title">Buffer Runway</div>
         <div class="ret-kpi">
           <div class="ret-kpi-label">Months of survival</div>
@@ -154,101 +183,17 @@
         </div>
         <div id="runway_detail" class="ret-summary">—</div>
         <div id="runway_months_line" class="ret-summary runway-months-line">—</div>
+        <div class="overview-card-link">View upcoming expenses <span aria-hidden="true">›</span></div>
       </div>
-    </div>
-
-    <div class="six-grid">
-      <div class="card">
-        <div class="card-title">10/70/20 Plan</div>
-        <div id="incomeAlloc_empty" class="ret-summary" hidden>Add income to see your 10/70/20 plan.</div>
-        <div id="incomeAlloc_body">
-          <div class="ret-kpi">
-            <div class="ret-kpi-label">Monthly Income</div>
-            <div class="ret-kpi-value" id="incomeAlloc_income">—</div>
-          </div>
-          <div class="ret-kpi">
-            <div class="ret-kpi-label">Save 10%</div>
-            <div class="ret-kpi-value" id="incomeAlloc_save">—</div>
-          </div>
-          <div class="ret-kpi">
-            <div class="ret-kpi-label">Living 70%</div>
-            <div class="ret-kpi-value" id="incomeAlloc_living">—</div>
-          </div>
-          <div class="ret-kpi">
-            <div class="ret-kpi-label">Debt Payoff 20%</div>
-            <div class="ret-kpi-value" id="incomeAlloc_debt">—</div>
-          </div>
-          <div id="incomeAlloc_month" class="snapshot-meta">—</div>
-        </div>
-        <div class="ret-summary subtle" style="margin-top:8px;">Use this as a simple guide: save 10%, live on 70%, and use 20% to pay down debt.</div>
       </div>
+    </section>
 
-      <div class="card">
-        <div class="card-title">Suggested Actions</div>
-        <div id="actions_issue_hint" class="subtle actions-issue-hint" hidden></div>
-        <div id="actions_list" class="actions-list"></div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">Operations Snapshot</div>
-        <div class="changes-list">
-          <div class="change-item" onclick="showPage('cashflow'); showTab('billsDue');" style="cursor:pointer;">
-            <div class="change-label">Bills Next 7 Days</div>
-            <div class="change-value" id="ov_bills_next7">—</div>
-            <div class="change-meta">Upcoming bills tracked in Cash Flow</div>
-          </div>
-          <div class="change-item" onclick="showTab('upcoming')" style="cursor:pointer;">
-            <div class="change-label">Upcoming Next 7 Days</div>
-            <div class="change-value" id="ov_upcoming_next7">—</div>
-            <div class="change-meta">Quick view from Upcoming Expenses</div>
-          </div>
-          <div class="change-item" onclick="showTab('upcoming')" style="cursor:pointer;">
-            <div class="change-label">Upcoming Next 30 Days</div>
-            <div class="change-value" id="ov_upcoming_next30">—</div>
-            <div class="change-meta">Quick view from Upcoming Expenses</div>
-          </div>
-          <div class="change-item" onclick="showTab('houseExpenses')" style="cursor:pointer;">
-            <div class="change-label">House Expenses This Month</div>
-            <div class="change-value" id="ov_house_thisMonth">—</div>
-            <div class="change-meta">Combined across all properties</div>
-          </div>
-          <div class="change-item" onclick="showTab('houseExpenses')" style="cursor:pointer;">
-            <div class="change-label">House Expenses YTD</div>
-            <div class="change-value" id="ov_house_ytd">—</div>
-            <div class="change-meta">Combined across all properties</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">Open Workspaces</div>
-        <div class="actions-list">
-          <button class="action-item severity-info" onclick="showPage('assets')">
-            <div class="action-title">Assets</div>
-            <div class="action-message">House values, bank accounts, and investments.</div>
-            <div class="action-cta">Open Assets</div>
-          </button>
-          <button class="action-item severity-info" onclick="showPage('cashflow')">
-            <div class="action-title">Cash Flow</div>
-            <div class="action-message">Quick add to Cash Flow and upcoming expenses.</div>
-            <div class="action-cta">Open Cash Flow</div>
-          </button>
-          <button class="action-item severity-info" onclick="showPage('properties')">
-            <div class="action-title">Properties</div>
-            <div class="action-message">House expenses and property summaries.</div>
-            <div class="action-cta">Open Properties</div>
-          </button>
-          <button class="action-item severity-info" onclick="showPage('planning')">
-            <div class="action-title">Planning</div>
-            <div class="action-message">Debts, retirement, and big purchase simulation.</div>
-            <div class="action-cta">Open Planning</div>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div class="six-grid">
-      <div class="card" onclick="showPage('cashflow'); showTab('billsDue');" style="cursor:pointer;">
+    <section class="overview-section" aria-labelledby="overview_this_week">
+      <h2 id="overview_this_week" class="overview-section-title">This week</h2>
+      <div class="overview-grid overview-grid-week">
+        <div class="card overview-bills-card overview-clickable-card" role="button" tabindex="0"
+             onclick="showPage('cashflow'); showTab('billsDue');"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showPage('cashflow');showTab('billsDue');}">
         <div class="card-title">Bills</div>
 
         <div class="mini-grid">
@@ -263,22 +208,77 @@
         </div>
 
         <div class="ret-summary" id="ov_bills_summaryText">Open Bills</div>
-        <button onclick="event.stopPropagation(); showPage('cashflow'); showTab('billsDue');">Open Bills</button>
+        <div class="overview-card-link">View bills <span aria-hidden="true">›</span></div>
       </div>
-    </div>
 
-    <div class="six-grid">
-      <div class="card">
+        <div class="card overview-weekly-card">
         <div class="card-title">Weekly net worth change</div>
         <div id="weekly_attrib_subtitle" class="subtle" style="margin-bottom:8px;"></div>
         <div id="weekly_attrib_root" class="changes-list"></div>
       </div>
-
-      <div class="card">
-        <div class="card-title">Issues</div>
-        <div id="issues_root"></div>
       </div>
-    </div>
+    </section>
+
+    <section class="overview-section overview-section-secondary" aria-labelledby="overview_more_insights">
+      <h2 id="overview_more_insights" class="overview-section-title">More insights</h2>
+      <div class="overview-grid overview-grid-insights">
+        <div class="card overview-allocation-card">
+          <div class="card-title">10/70/20 Plan</div>
+          <div id="incomeAlloc_empty" class="ret-summary" hidden>Add income to see your 10/70/20 plan.</div>
+          <div id="incomeAlloc_body">
+            <div class="ret-kpi">
+              <div class="ret-kpi-label">Monthly Income</div>
+              <div class="ret-kpi-value" id="incomeAlloc_income">—</div>
+            </div>
+            <div class="ret-kpi">
+              <div class="ret-kpi-label">Save 10%</div>
+              <div class="ret-kpi-value" id="incomeAlloc_save">—</div>
+            </div>
+            <div class="ret-kpi">
+              <div class="ret-kpi-label">Living 70%</div>
+              <div class="ret-kpi-value" id="incomeAlloc_living">—</div>
+            </div>
+            <div class="ret-kpi">
+              <div class="ret-kpi-label">Debt Payoff 20%</div>
+              <div class="ret-kpi-value" id="incomeAlloc_debt">—</div>
+            </div>
+            <div id="incomeAlloc_month" class="snapshot-meta">—</div>
+          </div>
+          <div class="ret-summary subtle" style="margin-top:8px;">Use this as a simple guide: save 10%, live on 70%, and use 20% to pay down debt.</div>
+        </div>
+
+        <div class="card overview-operations-card">
+          <div class="card-title">Operations Snapshot</div>
+          <div class="changes-list">
+            <div class="change-item" onclick="showPage('cashflow'); showTab('billsDue');" style="cursor:pointer;">
+              <div class="change-label">Bills Next 7 Days</div>
+              <div class="change-value" id="ov_bills_next7">—</div>
+              <div class="change-meta">Upcoming bills tracked in Cash Flow</div>
+            </div>
+            <div class="change-item" onclick="showPage('cashflow'); showTab('upcoming');" style="cursor:pointer;">
+              <div class="change-label">Upcoming Next 7 Days</div>
+              <div class="change-value" id="ov_upcoming_next7">—</div>
+              <div class="change-meta">Quick view from Upcoming Expenses</div>
+            </div>
+            <div class="change-item" onclick="showPage('cashflow'); showTab('upcoming');" style="cursor:pointer;">
+              <div class="change-label">Upcoming Next 30 Days</div>
+              <div class="change-value" id="ov_upcoming_next30">—</div>
+              <div class="change-meta">Quick view from Upcoming Expenses</div>
+            </div>
+            <div class="change-item" onclick="showPage('properties'); showTab('houseExpenses');" style="cursor:pointer;">
+              <div class="change-label">House Expenses This Month</div>
+              <div class="change-value" id="ov_house_thisMonth">—</div>
+              <div class="change-meta">Combined across all properties</div>
+            </div>
+            <div class="change-item" onclick="showPage('properties'); showTab('houseExpenses');" style="cursor:pointer;">
+              <div class="change-label">House Expenses YTD</div>
+              <div class="change-value" id="ov_house_ytd">—</div>
+              <div class="change-meta">Combined across all properties</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
 
   <div id="page_assets" class="workspace-page">

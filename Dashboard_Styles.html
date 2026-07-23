@@ -381,17 +381,108 @@
     .help-toc-wrap { position: static; }
   }
 
-  .snapshot-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 18px; }
-  .snapshot-card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); cursor: pointer; }
-  .snapshot-card:hover { border-color: #94a3b8; }
+  .overview-page { padding-bottom: 12px; }
+  .overview-section { margin-bottom: 24px; }
+  .overview-section-title {
+    margin: 0 0 10px;
+    font-size: 14px;
+    line-height: 1.35;
+    font-weight: 700;
+    color: #475569;
+  }
+  .overview-section-secondary {
+    padding: 18px 0 0;
+    border-top: 1px solid #e2e8f0;
+  }
+  .overview-kpi-grid,
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 14px;
+    align-items: stretch;
+  }
+  .snapshot-card {
+    grid-column: span 2;
+    min-width: 0;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .snapshot-card-primary {
+    grid-column: span 4;
+    padding: 18px;
+    background: #eff6ff;
+    border-color: #bfdbfe;
+  }
+  .snapshot-card-primary .snapshot-label {
+    color: #1d4ed8;
+    font-weight: 700;
+  }
+  .snapshot-card-primary .snapshot-value { font-size: 32px; }
+  .snapshot-card-supporting,
+  .overview-clickable-card { cursor: pointer; }
+  .snapshot-card-supporting:hover,
+  .overview-clickable-card:hover {
+    border-color: #94a3b8;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.07);
+  }
+  .snapshot-card-supporting:focus-visible,
+  .overview-clickable-card:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.28);
+    outline-offset: 2px;
+  }
   .snapshot-label { font-size: 12px; color: #64748b; margin-bottom: 6px; }
   .snapshot-value { font-size: 24px; font-weight: bold; color: #0f172a; }
   .snapshot-delta { margin-top: 8px; font-size: 12px; color: #64748b; line-height: 1.4; }
   .snapshot-meta { margin-top: 10px; font-size: 12px; color: #64748b; }
 
-  .six-grid { display: grid; grid-template-columns: 1.2fr 1.1fr 1fr; gap: 16px; margin-bottom: 16px; }
   .card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
   .card-title { font-size: 16px; font-weight: bold; margin: 0 0 12px 0; }
+  .overview-grid > .card {
+    min-width: 0;
+  }
+  .overview-actions-card { grid-column: span 7; }
+  .overview-issues-card { grid-column: span 5; }
+  .overview-health-card { grid-column: span 6; }
+  .overview-retirement-card,
+  .overview-runway-card { grid-column: span 3; }
+  .overview-bills-card { grid-column: span 5; }
+  .overview-weekly-card { grid-column: span 7; }
+  .overview-allocation-card,
+  .overview-operations-card { grid-column: span 6; }
+  .overview-card-link {
+    margin-top: 14px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #2563eb;
+  }
+  .overview-positive-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 11px;
+    border: 1px solid #bbf7d0;
+    border-radius: 10px;
+    background: #f0fdf4;
+    color: #166534;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .overview-operations-card .change-item[onclick] {
+    position: relative;
+    padding-right: 28px;
+  }
+  .overview-operations-card .change-item[onclick]::after {
+    content: '›';
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    color: #64748b;
+    font-size: 18px;
+  }
 
   .health-row { display: grid; grid-template-columns: 140px 1fr; gap: 18px; align-items: center; }
   .health-score-wrap { text-align: center; }
@@ -1574,8 +1665,17 @@
 
   @media (max-width: 1180px) {
     .page-nav { grid-template-columns: repeat(3, 1fr); }
-    .snapshot-grid { grid-template-columns: 1fr 1fr; }
-    .six-grid { grid-template-columns: 1fr; }
+    .snapshot-card-primary { grid-column: span 12; }
+    .snapshot-card-supporting { grid-column: span 3; }
+    .overview-actions-card,
+    .overview-issues-card,
+    .overview-bills-card,
+    .overview-weekly-card,
+    .overview-allocation-card,
+    .overview-operations-card { grid-column: span 6; }
+    .overview-health-card { grid-column: span 12; }
+    .overview-retirement-card,
+    .overview-runway-card { grid-column: span 6; }
     .tabs.assets-tabs, .tabs.properties-tabs { grid-template-columns: 1fr 1fr; }
     .tabs.planning-tools { grid-template-columns: repeat(5, minmax(0, 1fr)); }
     .planning-tools .tab-btn { padding: 8px 4px; font-size: 11px; }
@@ -1585,6 +1685,29 @@
     .topbar { flex-direction: column; }
     .bills-grid { grid-template-columns: 1fr; }
     .onboarding-steps-grid { grid-template-columns: 1fr !important; }
+  }
+
+  @media (max-width: 760px) {
+    .overview-section { margin-bottom: 20px; }
+    .overview-kpi-grid,
+    .overview-grid { gap: 12px; }
+    .snapshot-card-primary { grid-column: span 12; }
+    .snapshot-card-supporting { grid-column: span 6; }
+    .overview-actions-card,
+    .overview-issues-card,
+    .overview-health-card,
+    .overview-retirement-card,
+    .overview-runway-card,
+    .overview-bills-card,
+    .overview-weekly-card,
+    .overview-allocation-card,
+    .overview-operations-card { grid-column: span 12; }
+    .overview-section-secondary { padding: 14px 0 0; }
+  }
+
+  @media (max-width: 460px) {
+    .snapshot-card-supporting { grid-column: span 12; }
+    .snapshot-card-primary .snapshot-value { font-size: 28px; }
   }
 
   /* Onboarding (Setup) page ------------------------------------------------ */

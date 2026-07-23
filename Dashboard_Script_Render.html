@@ -538,7 +538,10 @@ function fmtPriorMonthDelta(value, monthLabel) {
   const num = Number(value);
   if (isNaN(num)) return 'Change vs prior month: —';
   const label = monthLabel ? String(monthLabel) : 'prior month';
-  return 'Change vs ' + label + ': ' + fmtSignedCurrency(num);
+  // Keep the sign attached to the currency symbol when a compact KPI card
+  // wraps. The label may wrap naturally, but "+$" / "-$" stays one unit.
+  return 'Change vs ' + label + ': ' + fmtSignedCurrency(num)
+    .replace(/^([+-])(?=\$)/, '$1\u2060');
 }
 
 function fmtHealthTrendPoints(change, monthLabel) {
@@ -648,7 +651,11 @@ function renderIssues(issues, state) {
       window.__dashboardIssues = [];
       return;
     }
-    root.innerHTML = '<div class="muted">No issues right now.</div>';
+    root.innerHTML =
+      '<div class="overview-positive-state">' +
+        '<span aria-hidden="true">✓</span>' +
+        '<span>You’re all caught up. No issues need attention.</span>' +
+      '</div>';
     window.__dashboardIssues = [];
     return;
   }

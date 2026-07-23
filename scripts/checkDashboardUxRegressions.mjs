@@ -68,6 +68,92 @@ assert.match(render, /Change vs ['"] \+ label \+ ': ' \+ fmtSignedCurrency\(num\
   'Overview month deltas must use the signed-currency formatter');
 
 const body = files['Dashboard_Body.html'];
+const styles = files['Dashboard_Styles.html'];
+const overview = body.slice(
+  body.indexOf('<div id="page_overview"'),
+  body.indexOf('<div id="page_assets"')
+);
+const overviewSections = [
+  'At a glance',
+  'What needs your attention',
+  'Financial outlook',
+  'This week',
+  'More insights'
+];
+let previousOverviewSection = -1;
+for (const heading of overviewSections) {
+  const position = overview.indexOf(`>${heading}</h2>`);
+  assert.ok(position > previousOverviewSection,
+    `Overview section must appear in the approved order: ${heading}`);
+  previousOverviewSection = position;
+}
+assert.match(overview, /snapshot-card snapshot-card-primary[\s\S]*?Net Worth/,
+  'Net Worth must be the primary Overview KPI');
+for (const id of [
+  'snap_netWorth',
+  'snap_cash',
+  'snap_investments',
+  'snap_houseEquity',
+  'snap_debt',
+  'actions_list',
+  'issues_root',
+  'health_score',
+  'ret_goal',
+  'ret_age',
+  'ret_mc',
+  'runway_label',
+  'ov_bills_dueSoonCount',
+  'weekly_attrib_root',
+  'incomeAlloc_income',
+  'ov_bills_next7'
+]) {
+  assert.equal((overview.match(new RegExp(`id=["']${id}["']`, 'g')) || []).length, 1,
+    `Overview must preserve exactly one renderer target for ${id}`);
+}
+assert.doesNotMatch(overview, /Open Workspaces/,
+  'Overview must not duplicate the permanent workspace navigation');
+assert.doesNotMatch(overview, /class=["'][^"']*(?:snapshot-grid|six-grid)/,
+  'Overview must not return to the generic orphan-producing grids');
+assert.doesNotMatch(overview, /Selected Scenario|Current Investable Assets/,
+  'Retirement Outlook must stay condensed to its three decision-useful values');
+for (const destination of [
+  /showPage\('assets'\);\s*showTab\('bank'\)/,
+  /showPage\('assets'\);\s*showTab\('investments'\)/,
+  /showPage\('assets'\);\s*showTab\('houses'\)/,
+  /showPage\('planning'\);\s*showTab\('debts'\)/,
+  /showPage\('planning'\);\s*showTab\('retirement'\)/,
+  /showPage\('cashflow'\);\s*showTab\('billsDue'\)/
+]) {
+  assert.match(overview, destination,
+    'Overview detail affordances must route to their real workspace and tab');
+}
+assert.match(styles,
+  /\.overview-kpi-grid,[\s\S]*?grid-template-columns:\s*repeat\(12,\s*minmax\(0,\s*1fr\)\)/,
+  'Overview must use the intentional 12-column layout');
+assert.match(styles, /\.snapshot-card-primary\s*\{[\s\S]*?grid-column:\s*span 4;/,
+  'Net Worth must receive primary desktop width');
+assert.match(styles,
+  /@media \(max-width:\s*760px\)[\s\S]*?\.snapshot-card-supporting\s*\{\s*grid-column:\s*span 6;/,
+  'Supporting KPIs must form a deliberate two-column mobile grid');
+assert.match(styles,
+  /@media \(max-width:\s*460px\)[\s\S]*?\.snapshot-card-supporting\s*\{\s*grid-column:\s*span 12;/,
+  'Supporting KPIs must stack at the narrowest width');
+assert.match(render,
+  /fmtSignedCurrency\(num\)\s*\.replace\(\/\^\(\[\+\-\]\)\(\?=\\\$\)\//,
+  'Overview deltas must keep their sign attached to the currency amount');
+assert.ok(render.includes("'$1\\u2060'"),
+  'Overview delta sign binding must use a nonbreaking word joiner');
+assert.doesNotMatch(styles,
+  /\.overview-grid\s*>\s*\.card\s*\{[^}]*height:\s*100%/,
+  'Overview cards must rely on grid stretch instead of overflowing into the next section');
+assert.match(styles,
+  /\.overview-section-secondary\s*\{[\s\S]*?padding:\s*18px 0 0;[\s\S]*?border-top:/,
+  'More insights must align to the full content width with only a quiet top divider');
+assert.match(styles,
+  /\.overview-allocation-card,\s*\.overview-operations-card\s*\{\s*grid-column:\s*span 6;/,
+  'More insights cards must use a balanced 50/50 desktop split');
+assert.match(render, /overview-positive-state[\s\S]*?No issues need attention/,
+  'A healthy Overview must show a compact positive Issues state');
 for (const id of [
   'bank_update_save_btn',
   'bank_update_stop_btn',
