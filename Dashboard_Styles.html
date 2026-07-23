@@ -1412,25 +1412,36 @@
 
   .bills-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(280px, 340px));
+    justify-content: start;
+    align-items: stretch;
     gap: 12px;
+  }
+  .bills-grid .bill-card-compact {
+    box-sizing: border-box;
+    width: 100%;
+    height: 132px;
   }
 
   .bills-view-switch {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-width: 100%;
     margin: 0 0 14px 0;
   }
   .bills-view-btn {
+    flex: 0 0 auto;
+    width: auto;
     appearance: none;
     -webkit-appearance: none;
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
+    border: 1px solid transparent;
+    background: transparent;
     color: #64748b;
     font-size: 13px;
     font-weight: 600;
-    padding: 9px 12px;
+    padding: 7px 14px;
     border-radius: 8px;
     cursor: pointer;
     line-height: 1.3;
@@ -1477,6 +1488,62 @@
   }
   #page_cashflow .info .donation-recent-meta {
     font-size: 13px;
+  }
+  .quick-add-history[hidden] { display: none; }
+  .quick-add-history-title {
+    color: #0f172a;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .quick-add-history-note {
+    margin-top: 2px;
+    color: #64748b;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .quick-add-history-chart {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    align-items: end;
+    gap: 6px;
+    min-height: 132px;
+    margin-top: 10px;
+    padding: 8px 4px 0;
+    border-bottom: 1px solid #bfdbfe;
+  }
+  .quick-add-history-column {
+    display: grid;
+    grid-template-rows: 24px 82px 20px;
+    align-items: end;
+    min-width: 0;
+    text-align: center;
+  }
+  .quick-add-history-value {
+    align-self: start;
+    overflow: hidden;
+    color: #334155;
+    font-size: 9px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .quick-add-history-track {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    height: 82px;
+  }
+  .quick-add-history-bar {
+    width: min(34px, 72%);
+    min-height: 2px;
+    border-radius: 4px 4px 0 0;
+    background: #1f4e78;
+  }
+  .quick-add-history-bar.is-empty { background: #cbd5e1; }
+  .quick-add-history-label {
+    padding-top: 5px;
+    color: #64748b;
+    font-size: 10px;
   }
   .bills-view-btn:focus-visible {
     outline: 2px solid #1f4e78;
@@ -1841,7 +1908,7 @@
     .planning-next-actions-feature .featured-title { font-size: 15px; }
     .grid-2, .grid-3, .health-row, .mini-grid, .sim-grid { grid-template-columns: 1fr; }
     .topbar { flex-direction: column; }
-    .bills-grid { grid-template-columns: 1fr; }
+    .bills-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 340px)); }
     .onboarding-steps-grid { grid-template-columns: 1fr !important; }
   }
 
@@ -1849,7 +1916,10 @@
     .overview-section { margin-bottom: 20px; }
     .overview-kpi-grid,
     .overview-grid { gap: 12px; }
-    .snapshot-card-primary { grid-column: span 12; }
+    .snapshot-card-primary {
+      order: -1;
+      grid-column: span 12;
+    }
     .snapshot-card-supporting { grid-column: span 6; }
     .overview-actions-card,
     .overview-issues-card,
@@ -1867,8 +1937,9 @@
     .snapshot-card-supporting { grid-column: span 12; }
     .snapshot-card-primary .snapshot-value { font-size: 28px; }
     .tabs.assets-tabs { grid-template-columns: 1fr; }
-    .tabs.cashflow-tabs,
-    .bills-view-switch { grid-template-columns: 1fr 1fr; }
+    .tabs.cashflow-tabs { grid-template-columns: 1fr 1fr; }
+    .bills-grid { grid-template-columns: 1fr; }
+    .bills-grid .bill-card-compact { height: auto; min-height: 132px; }
   }
 
   /* Onboarding (Setup) page ------------------------------------------------ */

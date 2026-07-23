@@ -12,7 +12,7 @@ operator destinations.
 | --- | --- | --- |
 | Personal bounded dashboard | https://script.google.com/macros/s/AKfycbzJLU-EiHeVHuwrR1IryNzhCyqAw7rrseRvt3gdxW8GFqazYOwW-Dz_IXtx_A9e-0ZASg/exec | Owner-only daily workbook. Never use for Harness or destructive validation. |
 | Central Beta | https://script.google.com/macros/s/AKfycbyq_OGiupdGO79GMOImkIgYv19hqlN1JuJfieuDlkXH6Rp637MhZc6jz9uRW2ZxANBlPA/exec | Family-beta deployment, currently pinned at version 106. Do not update during isolated validation. |
-| Isolated Central validation | https://script.google.com/macros/s/AKfycbzMaD3Ur0H3VmatL4W2vVHlYhFOXF4cZSSjIcn3SwggbTCs9Q9F1_PH74F16lAFkUlWZQ/exec | Disposable runtime-validation deployment, currently version 156. This is the only Central deployment updated during pre-release test work. |
+| Isolated Central validation | https://script.google.com/macros/s/AKfycbzMaD3Ur0H3VmatL4W2vVHlYhFOXF4cZSSjIcn3SwggbTCs9Q9F1_PH74F16lAFkUlWZQ/exec | Disposable runtime-validation deployment, currently version 172. This is the only Central deployment updated during pre-release test work. |
 
 ## Validation entry point
 

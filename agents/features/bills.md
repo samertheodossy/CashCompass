@@ -70,6 +70,7 @@ Bills affects near-term cash decisions and the Cash Flow actuals ledger. Incorre
 ### Planned but not implemented
 
 - Cash Flow forward projection is planned separately; see [`PROJECT_CONTEXT.md`](../../PROJECT_CONTEXT.md) → “Cash Flow Semantics — Actuals, not Projection” and the linked `TODO.md` entry.
+- A monthly Bills summary/calendar with grouped status rows and bill-click historical Cash Flow detail is deferred as a Phase 2 UX candidate in [`TODO.md`](../../TODO.md) → “UX-03 — Phase 2 candidate — Monthly Bills calendar and history.” Isolated visual experiments were rejected in favor of retaining the established **Due this period** experience; no experimental runtime code remains.
 - Dedicated Bills lifecycle consistency/reactivation is part of the future Shared Entity Lifecycle Framework in [`PROJECT_CONTEXT.md`](../../PROJECT_CONTEXT.md).
 - Bills AutoPay, manual Pay, overdue, paid-occurrence, and performance/concurrency harness coverage listed without an implemented marker remains planned in [`REGRESSION_SUITE_PLAN.md`](../../REGRESSION_SUITE_PLAN.md).
 - Bills-specific inclusion in the Phase 2 Validator canonical model and scoped Operational runner is not implemented in the reviewed code.

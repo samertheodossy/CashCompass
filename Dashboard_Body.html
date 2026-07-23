@@ -57,11 +57,6 @@
     <section class="overview-section" aria-labelledby="overview_at_glance">
       <h2 id="overview_at_glance" class="overview-section-title">At a glance</h2>
       <div class="overview-kpi-grid">
-        <div class="snapshot-card snapshot-card-primary">
-          <div class="snapshot-label">Net Worth</div>
-          <div class="snapshot-value" id="snap_netWorth">—</div>
-          <div class="snapshot-delta" id="snap_delta_netWorth">—</div>
-        </div>
         <div class="snapshot-card snapshot-card-supporting" role="button" tabindex="0"
              onclick="showPage('assets'); showTab('bank');"
              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showPage('assets');showTab('bank');}">
@@ -94,21 +89,10 @@
           <div class="snapshot-delta" id="snap_delta_debt">—</div>
           <div class="overview-card-link">View debts <span aria-hidden="true">›</span></div>
         </div>
-      </div>
-    </section>
-
-    <section class="overview-section" aria-labelledby="overview_attention">
-      <h2 id="overview_attention" class="overview-section-title">What needs your attention</h2>
-      <div class="overview-grid overview-grid-attention">
-        <div class="card overview-actions-card">
-          <div class="card-title">Suggested actions</div>
-          <div id="actions_issue_hint" class="subtle actions-issue-hint" hidden></div>
-          <div id="actions_list" class="actions-list"></div>
-        </div>
-
-        <div class="card overview-issues-card">
-          <div class="card-title">Issues</div>
-          <div id="issues_root"></div>
+        <div class="snapshot-card snapshot-card-primary">
+          <div class="snapshot-label">Net Worth</div>
+          <div class="snapshot-value" id="snap_netWorth">—</div>
+          <div class="snapshot-delta" id="snap_delta_netWorth">—</div>
         </div>
       </div>
     </section>
@@ -185,6 +169,22 @@
         <div id="runway_months_line" class="ret-summary runway-months-line">—</div>
         <div class="overview-card-link">View upcoming expenses <span aria-hidden="true">›</span></div>
       </div>
+      </div>
+    </section>
+
+    <section class="overview-section" aria-labelledby="overview_attention">
+      <h2 id="overview_attention" class="overview-section-title">What needs your attention</h2>
+      <div class="overview-grid overview-grid-attention">
+        <div class="card overview-actions-card">
+          <div class="card-title">Suggested actions</div>
+          <div id="actions_issue_hint" class="subtle actions-issue-hint" hidden></div>
+          <div id="actions_list" class="actions-list"></div>
+        </div>
+
+        <div class="card overview-issues-card">
+          <div class="card-title">Issues</div>
+          <div id="issues_root"></div>
+        </div>
       </div>
     </section>
 
@@ -637,6 +637,12 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <div><strong>Month:</strong> <span id="pay_monthName" class="muted">—</span></div>
           <div><strong>Already recorded this month:</strong> <span id="pay_currentValue" class="muted">—</span></div>
           <div class="house-value-delta-row"><strong>Previous month (<span id="pay_priorMonthLabel">—</span>):</strong> <span id="pay_priorMonthPayment" class="muted">—</span></div>
+          <div id="pay_history_wrap" class="quick-add-history" hidden>
+            <div class="house-value-delta-sep" aria-hidden="true"></div>
+            <div class="quick-add-history-title">Recorded history</div>
+            <div class="quick-add-history-note">Last six Cash Flow months for this payee. Blank months stay blank.</div>
+            <div id="pay_history_chart" class="quick-add-history-chart" aria-label="Six-month recorded payment history"></div>
+          </div>
         </div>
       </div>
     </div>

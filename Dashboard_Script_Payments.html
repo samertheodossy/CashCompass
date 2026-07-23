@@ -53,6 +53,41 @@ function applyQuickPaymentPriorMonth_(data) {
   }
 }
 
+function renderQuickAddHistory_(data) {
+  const wrap = document.getElementById('pay_history_wrap');
+  const chart = document.getElementById('pay_history_chart');
+  if (!wrap || !chart) return;
+
+  const points = data && Array.isArray(data.history) ? data.history.slice(-6) : [];
+  const hasRecordedHistory = points.some(function(point) { return !!point.hasValue; });
+  if (!points.length || !hasRecordedHistory) {
+    wrap.hidden = true;
+    chart.innerHTML = '';
+    return;
+  }
+
+  const maximum = points.reduce(function(max, point) {
+    return point.hasValue ? Math.max(max, Math.abs(Number(point.amount || 0))) : max;
+  }, 0);
+
+  chart.innerHTML = points.map(function(point) {
+    const value = Math.abs(Number(point.amount || 0));
+    const height = point.hasValue && maximum > 0
+      ? Math.max(6, Math.round((value / maximum) * 82))
+      : (point.hasValue ? 6 : 2);
+    return (
+      '<div class="quick-add-history-column">' +
+        '<div class="quick-add-history-value">' + (point.hasValue ? fmtCurrency(value) : '—') + '</div>' +
+        '<div class="quick-add-history-track">' +
+          '<div class="quick-add-history-bar' + (point.hasValue ? '' : ' is-empty') + '" style="height:' + height + 'px"></div>' +
+        '</div>' +
+        '<div class="quick-add-history-label">' + escapeHtml(point.label || '') + '</div>' +
+      '</div>'
+    );
+  }).join('');
+  wrap.hidden = false;
+}
+
 /**
  * Hidden prefill-only state: `window.__pendingQuickAddFlowSource` carries a
  * suggested Flow Source value (e.g. from Bills → Pay) into the next
@@ -268,6 +303,7 @@ function loadPaymentPreview() {
     document.getElementById('pay_currentValue').textContent = '—';
     document.getElementById('pay_rowExists').textContent = '—';
     applyQuickPaymentPriorMonth_(null);
+    renderQuickAddHistory_(null);
     return;
   }
 
@@ -278,8 +314,10 @@ function loadPaymentPreview() {
       document.getElementById('pay_currentValue').textContent = fmtCurrency(data.currentValue);
       document.getElementById('pay_rowExists').textContent = data.rowExists ? 'Yes' : 'No';
       applyQuickPaymentPriorMonth_(data);
+      renderQuickAddHistory_(data);
     })
     .withFailureHandler(function(err) {
+      renderQuickAddHistory_(null);
       setStatus('pay_status', (err.message || String(err)), true);
     })
     .getQuickAddPreview(payload);
@@ -292,6 +330,7 @@ function applyQuickAddPreviewFromResult_(data) {
   document.getElementById('pay_currentValue').textContent = fmtCurrency(data.currentValue);
   document.getElementById('pay_rowExists').textContent = data.rowExists ? 'Yes' : 'No';
   applyQuickPaymentPriorMonth_(data);
+  renderQuickAddHistory_(data);
 }
 
 function runDebtPlannerAfterQuickPayment_() {

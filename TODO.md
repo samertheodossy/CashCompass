@@ -384,6 +384,19 @@ A shared vocabulary + spacing/typography pass so every surface feels the same.
 
 **Acceptance:** users can identify where to record money versus where to maintain recurring definitions; recurrence behavior is unchanged; Quick Add remains the single payment path; terminology is consistent in Dashboard and Help.
 
+###### Phase 2 candidate — Monthly Bills calendar and history
+
+**Status:** deferred after isolated visual experiments on 2026-07-23. Keep the established **Due this period** layout as the current product experience.
+
+- Revisit a monthly summary, optional calendar, and grouped **Needs attention / Upcoming / Handled** presentation as a deliberate Phase 2 Bills redesign.
+- Keep any future calendar optional or progressively disclosed; it must not make Bills feel visually disconnected from the rest of CashCompass.
+- A bill-click detail may show historical Cash Flow amounts, but only when the bill is opened. Do not place historical charts in the default Bills view.
+- Use truthful CashCompass evidence labels such as **Recorded**, **Paid**, **Skipped**, **Overdue**, and **Upcoming**. Do not imply external bank-payment detection.
+- Preserve the existing Quick Add Pay path, Skip behavior, actuals-ledger authority, shared Central/bounded source, and populated-workbook safety.
+- Before implementation, produce a focused visual proposal using the established CashCompass card, typography, spacing, and action hierarchy.
+
+**Acceptance:** separately approved visual direction; no schema or migration requirement; read-only monthly/history aggregation; existing Pay/Skip writers unchanged; disposable validation before any bounded deployment consideration.
+
 ##### UX-04 — Planning hierarchy and progressive disclosure
 
 - Keep Next Actions as the default and clearly separate **Do now** tools from **Explore / model** tools.

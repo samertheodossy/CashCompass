@@ -24,6 +24,7 @@ const files = Object.fromEntries(await Promise.all([
   'InvestmentsUI.html',
   'PlannerDashboard.html',
   'QuickAddPaymentUI.html',
+  'quick_add_payment.js',
   'dashboard_data.js',
   'onboarding.js'
 ].map(async (name) => [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')])));
@@ -80,8 +81,8 @@ const overview = body.slice(
 );
 const overviewSections = [
   'At a glance',
-  'What needs your attention',
   'Financial outlook',
+  'What needs your attention',
   'This week',
   'More insights'
 ];
@@ -94,6 +95,10 @@ for (const heading of overviewSections) {
 }
 assert.match(overview, /snapshot-card snapshot-card-primary[\s\S]*?Net Worth/,
   'Net Worth must be the primary Overview KPI');
+assert.ok(
+  overview.indexOf('id="snap_debt"') < overview.indexOf('id="snap_netWorth"'),
+  'Desktop At a glance must place Net Worth after the four component KPIs'
+);
 for (const id of [
   'snap_netWorth',
   'snap_cash',
@@ -140,6 +145,9 @@ assert.match(styles, /\.snapshot-card-primary\s*\{[\s\S]*?grid-column:\s*span 4;
 assert.match(styles,
   /@media \(max-width:\s*760px\)[\s\S]*?\.snapshot-card-supporting\s*\{\s*grid-column:\s*span 6;/,
   'Supporting KPIs must form a deliberate two-column mobile grid');
+assert.match(styles,
+  /@media \(max-width:\s*760px\)[\s\S]*?\.snapshot-card-primary\s*\{[\s\S]*?order:\s*-1;[\s\S]*?grid-column:\s*span 12;/,
+  'Net Worth must return to the first position on narrow layouts');
 assert.match(styles,
   /@media \(max-width:\s*460px\)[\s\S]*?\.snapshot-card-supporting\s*\{\s*grid-column:\s*span 12;/,
   'Supporting KPIs must stack at the narrowest width');
@@ -214,8 +222,41 @@ assert.match(files['Dashboard_Script_Payments.html'],
   'Quick Add completion must use an explicit success treatment');
 assert.match(styles, /\.status\.status-success:not\(:empty\)\s*\{[\s\S]*?background:\s*#f0fdf4/,
   'Successful Quick Add feedback must use the shared success surface');
+assert.match(body,
+  /id="pay_history_wrap"[^>]*hidden[\s\S]*?id="pay_history_chart"/,
+  'Quick Add history must remain contextual and hidden until a known payee is previewed');
+assert.match(files['Dashboard_Script_Payments.html'],
+  /function renderQuickAddHistory_\([\s\S]*?Array\.isArray\(data\.history\)[\s\S]*?wrap\.hidden = false/,
+  'Quick Add must render server-provided history inside its information panel');
+const quickAddServer = files['quick_add_payment.js'];
+const quickAddHistoryStart = quickAddServer.indexOf('function computeQuickAddHistoryPreview_(');
+const quickAddHistoryEnd = quickAddServer.indexOf('function getQuickAddPreview(', quickAddHistoryStart);
+assert.ok(quickAddHistoryStart >= 0 && quickAddHistoryEnd > quickAddHistoryStart,
+  'Quick Add must expose a bounded history helper');
+const quickAddHistorySlice = quickAddServer.slice(quickAddHistoryStart, quickAddHistoryEnd);
+assert.match(quickAddHistorySlice,
+  /entryType !== 'Expense' \|\| !currentRowExists\) return \[\]/,
+  'Quick Add history must only load for a recognized Expense payee');
+assert.doesNotMatch(quickAddHistorySlice,
+  /\.setValue\(|\.setValues\(|\.appendRow\(|\.insertSheet\(|ensure[A-Z_]/,
+  'Quick Add history must remain read-only');
 assert.match(body, /id="bills_view_tab_due"[\s\S]*?>Due this period<\/button>[\s\S]*?id="bills_view_tab_manage"[\s\S]*?>Manage bills<\/button>/,
   'Bills must lead with current due work before recurring-bill management');
+assert.match(styles,
+  /\.bills-view-switch\s*\{[\s\S]*?display:\s*inline-flex;[\s\S]*?max-width:\s*100%;/,
+  'Bills Due and Manage bills must remain compact secondary controls');
+assert.match(styles,
+  /\.bills-view-btn\s*\{[\s\S]*?flex:\s*0 0 auto;[\s\S]*?width:\s*auto;/,
+  'Bills secondary controls must override shared full-width button styling');
+assert.doesNotMatch(styles,
+  /\.bills-view-switch\s*\{[^}]*grid-template-columns:/,
+  'Bills secondary controls must not expand into a full-width grid');
+assert.match(styles,
+  /\.bills-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(280px,\s*340px\)\);[\s\S]*?justify-content:\s*start;/,
+  'Bill cards must use consistent non-stretching desktop columns');
+assert.match(styles,
+  /\.bills-grid \.bill-card-compact\s*\{[\s\S]*?height:\s*132px;/,
+  'Bill cards must keep a consistent desktop height');
 assert.match(files['Dashboard_Script_BillsDue.html'],
   /renderActiveBillsList_\([\s\S]*?updateBillsAddActionVisibility_\(__billsManageRows\.length > 0\)/,
   'Bills must show the header Add action only when active bills exist');

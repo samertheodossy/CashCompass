@@ -168,6 +168,67 @@ function computeQuickAddPriorMonthPreview_(ss, entryType, payee, entryDate) {
   }
 }
 
+/**
+ * Read-only six-month Cash Flow history for the selected Quick Add payee.
+ *
+ * This is presentation evidence only. It never creates a year sheet, inserts
+ * a payee row, writes a month cell, or appends Activity. Missing years, rows,
+ * and blank month cells are returned as blank points so the chart remains
+ * truthful rather than implying a $0 payment.
+ */
+function computeQuickAddHistoryPreview_(ss, entryType, payee, entryDate, currentRowExists) {
+  if (entryType !== 'Expense' || !currentRowExists) return [];
+
+  const tz = Session.getScriptTimeZone();
+  const points = [];
+  const sheetCache = {};
+
+  for (let offset = -5; offset <= 0; offset++) {
+    const monthDate = new Date(entryDate.getFullYear(), entryDate.getMonth() + offset, 15);
+    const year = monthDate.getFullYear();
+    let sheet = Object.prototype.hasOwnProperty.call(sheetCache, year)
+      ? sheetCache[year]
+      : undefined;
+
+    if (sheet === undefined) {
+      try {
+        sheet = getCashFlowSheet_(ss, year);
+      } catch (_e) {
+        sheet = null;
+      }
+      sheetCache[year] = sheet;
+    }
+
+    let amount = 0;
+    let hasValue = false;
+    if (sheet) {
+      const rowInfo = findCashFlowRowByTypeAndPayee_(sheet, entryType, payee);
+      if (rowInfo) {
+        try {
+          const monthCol = getMonthColumnByDate_(sheet, monthDate, 1);
+          const cell = sheet.getRange(rowInfo.row, monthCol);
+          const display = String(cell.getDisplayValue() || '').trim();
+          if (display !== '') {
+            amount = round2_(Math.abs(toNumber_(cell.getValue())));
+            hasValue = true;
+          }
+        } catch (_e2) {
+          hasValue = false;
+        }
+      }
+    }
+
+    points.push({
+      month: Utilities.formatDate(monthDate, tz, 'yyyy-MM'),
+      label: Utilities.formatDate(monthDate, tz, 'MMM'),
+      amount: amount,
+      hasValue: hasValue
+    });
+  }
+
+  return points;
+}
+
 function getQuickAddPreview(payload) {
   validateRequired_(payload, ['entryType', 'payee', 'entryDate']);
 
@@ -205,6 +266,7 @@ function getQuickAddPreview(payload) {
   }
 
   const priorPreview = computeQuickAddPriorMonthPreview_(ss, entryType, payee, entryDate);
+  const history = computeQuickAddHistoryPreview_(ss, entryType, payee, entryDate, !!rowInfo);
 
   return {
     sheetName: sheet.getName(),
@@ -215,7 +277,8 @@ function getQuickAddPreview(payload) {
     existingFlowSource: existingFlowSource,
     priorMonthLabel: priorPreview.priorMonthLabel,
     priorMonthValue: priorPreview.priorMonthValue,
-    priorMonthUnavailableMessage: priorPreview.priorMonthUnavailableMessage
+    priorMonthUnavailableMessage: priorPreview.priorMonthUnavailableMessage,
+    history: history
   };
 }
 
@@ -372,6 +435,7 @@ function quickAddPayment(payload, optionalSs) {
   }
 
   const priorPreview = computeQuickAddPriorMonthPreview_(ss, entryType, payee, entryDate);
+  const history = computeQuickAddHistoryPreview_(ss, entryType, payee, entryDate, true);
 
   // Keep the user-facing status line to a single short sentence. The detailed
   // fields the old multi-line dump surfaced (sheet name, month, before/after
@@ -401,7 +465,8 @@ function quickAddPayment(payload, optionalSs) {
       flowSourceWritten: flowSourceWritten,
       priorMonthLabel: priorPreview.priorMonthLabel,
       priorMonthValue: priorPreview.priorMonthValue,
-      priorMonthUnavailableMessage: priorPreview.priorMonthUnavailableMessage
+      priorMonthUnavailableMessage: priorPreview.priorMonthUnavailableMessage,
+      history: history
     },
     message: message,
     loanOrHelocNotice: loanOrHelocNotice,
