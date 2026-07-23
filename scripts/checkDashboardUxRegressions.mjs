@@ -199,6 +199,12 @@ assert.match(styles,
 assert.match(styles,
   /\.cashflow-tabs \.tab-btn\s*\{[\s\S]*?min-height:\s*46px;[\s\S]*?font-size:\s*14px;[\s\S]*?font-weight:\s*700;/,
   'Cash Flow tabs must remain comfortably sized and readable');
+assert.match(styles,
+  /#page_cashflow \.info\s*\{[\s\S]*?font-size:\s*14px;[\s\S]*?line-height:\s*1\.6;/,
+  'Cash Flow information panels must use readable body typography');
+assert.match(styles,
+  /#page_cashflow \.info \.cashflow-column-title\s*\{[\s\S]*?font-size:\s*16px;/,
+  'Cash Flow information-panel headings must remain visually prominent');
 assert.doesNotMatch(body, /cashflow-tools-label|cashflow-feature-description/,
   'Cash Flow must not reintroduce a second navigation label or banner description');
 assert.doesNotMatch(body + '\n' + styles, /cashflow-primary-tab/,
