@@ -365,6 +365,14 @@ assert.match(files['Dashboard_Script_BillsDue.html'],
   'An empty Bills list must retain one centered Add action');
 assert.match(body, /Due day of month \(1–31\)/,
   'Bills must describe due day in plain language');
+assert.match(body,
+  /<label>Due day of month<\/label>\s*<input[^>]*id="debt_edit_due_date"/,
+  'Debt editor must describe the day number as Due day of month');
+assert.match(files['Dashboard_Script_PlanningDebts.html'],
+  /Due day of month must be a whole number between 1 and 31\./,
+  'Debt validation must use the same plain-language due-day wording');
+assert.doesNotMatch(body, /Due Date \(day of month\)/,
+  'Debt editor must not restore the ambiguous Due Date label');
 assert.match(files['Dashboard_Script_CashFlowUpcoming.html'],
   /saveBtn\.textContent\s*=\s*['"]Add upcoming expense['"]/,
   'Upcoming must preserve its sentence-case action label after form reset');

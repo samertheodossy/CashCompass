@@ -610,7 +610,7 @@ function submitDebtEdit_() {
   if (dueRaw !== '') {
     const dueN = parseInt(dueRaw, 10);
     if (isNaN(dueN) || dueN < 1 || dueN > 31) {
-      setStatus('debt_status', 'Due Date must be a whole number between 1 and 31.', true);
+      setStatus('debt_status', 'Due day of month must be a whole number between 1 and 31.', true);
       return;
     }
   }
