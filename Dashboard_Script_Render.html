@@ -48,15 +48,31 @@ let debtFieldTypes = {
 var DASHBOARD_LAST_TAB_BY_PAGE_ = Object.create(null);
 
 function dashboardPageForTab_(name) {
-  if (name === 'houses' || name === 'bank' || name === 'investments') return 'assets';
+  if (name === 'houses' || name === 'bank' || name === 'investments' || name === 'debts') return 'assets';
   if (name === 'payments' || name === 'upcoming' || name === 'donations' || name === 'billsDue' || name === 'income') return 'cashflow';
   if (name === 'houseExpenses' || name === 'propertyPerformance') return 'properties';
-  if (name === 'debts' || name === 'retirement' || name === 'purchase' ||
+  if (name === 'retirement' || name === 'purchase' ||
       name === 'debtPayoff' || name === 'rollingDebtPayoff' || name === 'nextActions') return 'planning';
   return '';
 }
 
+/**
+ * Re-home the existing Debt accounts editor under Assets & Liabilities.
+ *
+ * The editor remains one unchanged DOM subtree with the same IDs and event
+ * handlers. Moving that subtree once avoids duplicating any debt UI or runtime
+ * path while giving navigation the correct workspace ownership.
+ */
+function mountDebtPanelInAssets_() {
+  var panel = document.getElementById('debts');
+  var mount = document.getElementById('assets_debt_panel_mount');
+  if (!panel || !mount || panel.parentNode === mount.parentNode) return;
+  mount.parentNode.insertBefore(panel, mount);
+}
+mountDebtPanelInAssets_();
+
 function showPage(name) {
+  mountDebtPanelInAssets_();
   document.querySelectorAll('.workspace-page').forEach(function(el) {
     el.classList.remove('active');
   });
@@ -361,6 +377,7 @@ function openHelpToSection(anchorId) {
 })();
 
 function showTab(name) {
+  mountDebtPanelInAssets_();
   var ownerPage = dashboardPageForTab_(name);
   if (ownerPage) DASHBOARD_LAST_TAB_BY_PAGE_[ownerPage] = name;
 
@@ -377,7 +394,7 @@ function showTab(name) {
   const tabBtn = document.querySelector('.tab-btn[data-tab="' + name + '"]');
   if (tabBtn) tabBtn.classList.add('active');
 
-  if (name === 'houses' || name === 'bank' || name === 'investments') {
+  if (name === 'houses' || name === 'bank' || name === 'investments' || name === 'debts') {
     showPage('assets');
   } else if (name === 'payments' || name === 'upcoming' || name === 'donations' || name === 'billsDue' || name === 'income') {
     showPage('cashflow');
@@ -393,7 +410,6 @@ function showTab(name) {
       loadHouseExpensesSection();
     }
   } else if (
-    name === 'debts' ||
     name === 'retirement' ||
     name === 'purchase' ||
     name === 'debtPayoff' ||

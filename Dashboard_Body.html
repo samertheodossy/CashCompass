@@ -36,7 +36,7 @@
 
   <div class="page-nav">
     <button class="page-btn active" data-page="overview" onclick="showPage('overview')">Overview</button>
-    <button class="page-btn" data-page="assets" onclick="showPage('assets')">Assets</button>
+    <button class="page-btn" data-page="assets" onclick="showPage('assets')">Assets &amp; Liabilities</button>
     <button class="page-btn" data-page="cashflow" onclick="showPage('cashflow')">Cash Flow</button>
     <button class="page-btn" data-page="activity" onclick="showPage('activity')">Activity</button>
     <button class="page-btn" data-page="properties" onclick="showPage('properties')">Properties</button>
@@ -82,8 +82,8 @@
           <div class="overview-card-link">View properties <span aria-hidden="true">›</span></div>
         </div>
         <div class="snapshot-card snapshot-card-supporting" role="button" tabindex="0"
-             onclick="showPage('planning'); showTab('debts');"
-             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showPage('planning');showTab('debts');}">
+             onclick="showPage('assets'); showTab('debts');"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showPage('assets');showTab('debts');}">
           <div class="snapshot-label">Total Debt</div>
           <div class="snapshot-value" id="snap_debt">—</div>
           <div class="snapshot-delta" id="snap_delta_debt">—</div>
@@ -283,13 +283,14 @@
 
   <div id="page_assets" class="workspace-page">
     <div class="workspace-page-intro">
-      <h2>Assets</h2>
-      <p>Review current values, update existing accounts, or add something new.</p>
+      <h2>Assets &amp; Liabilities</h2>
+      <p>Maintain the current balances and terms behind your net worth.</p>
     </div>
     <div class="tabs assets-tabs">
       <button class="tab-btn active" data-tab="houses" onclick="showTab('houses')">House values</button>
       <button class="tab-btn" data-tab="bank" onclick="showTab('bank')">Bank accounts</button>
       <button class="tab-btn" data-tab="investments" onclick="showTab('investments')">Investments</button>
+      <button class="tab-btn" data-tab="debts" onclick="showTab('debts')">Debt accounts</button>
     </div>
 
     <div id="houses" class="panel active">
@@ -589,6 +590,14 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
       <div id="inv_status" class="status"></div>
     </div>
+
+    <!--
+      Debt accounts is authored later in this file beside its existing
+      implementation dependencies, then mounted here by
+      mountDebtPanelInAssets_(). This stable mount keeps the editor intact
+      while giving it the correct Assets & Liabilities workspace ownership.
+    -->
+    <div id="assets_debt_panel_mount" hidden></div>
   </div>
 
   <div id="page_cashflow" class="workspace-page">
@@ -1242,9 +1251,9 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       Planning hierarchy:
         1) Featured Next Actions entry point — visually prominent,
            primary "what should I do next?" surface, default landing view.
-        2) Quieter "Planning tools" row — the existing deep-dive tools
-           (Debts, Debt Overview, Rolling Debt Payoff, Retirement,
-           Purchase Sim). Fully accessible, just visually secondary.
+        2) Quieter task groups — "Do now" for account maintenance and
+           payoff action, then "Explore / model" for read-only analysis
+           and scenarios. Existing routes remain unchanged.
       The Next Actions panel reads `getNextActionsData()` and routes to
       these tools via `targetTab`; see PROJECT_CONTEXT.md → Decision Layer.
     -->
@@ -1262,19 +1271,40 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       </button>
     </div>
     <div class="planning-tools-wrap">
-      <div class="planning-tools-label">Planning tools</div>
-      <div class="tabs planning-tools">
-        <button class="tab-btn" data-tab="debts" onclick="showTab('debts')">Debts</button>
-        <button class="tab-btn" data-tab="debtPayoff" onclick="showTab('debtPayoff')">Debt overview</button>
-        <button class="tab-btn" data-tab="rollingDebtPayoff" onclick="showTab('rollingDebtPayoff')">Rolling debt payoff</button>
-        <button class="tab-btn" data-tab="retirement" onclick="showTab('retirement')">Retirement</button>
-        <button class="tab-btn" data-tab="purchase" onclick="showTab('purchase')">Purchase simulator</button>
+      <div class="planning-tool-group planning-tool-group--do-now">
+        <div class="planning-tools-label">Do now</div>
+        <div class="tabs planning-tools">
+          <button class="tab-btn" data-tab="rollingDebtPayoff" onclick="showTab('rollingDebtPayoff')">
+            <span class="planning-tool-title">Rolling debt payoff</span>
+            <span class="planning-tool-description">Choose what to pay next from current balances</span>
+          </button>
+        </div>
+      </div>
+      <div class="planning-tool-group planning-tool-group--explore">
+        <div class="planning-tools-label">Explore / model</div>
+        <div class="tabs planning-tools">
+          <button class="tab-btn" data-tab="debtPayoff" onclick="showTab('debtPayoff')">
+            <span class="planning-tool-title">Debt overview</span>
+            <span class="planning-tool-description">Compare balances and payoff outlook</span>
+          </button>
+          <button class="tab-btn" data-tab="retirement" onclick="showTab('retirement')">
+            <span class="planning-tool-title">Retirement</span>
+            <span class="planning-tool-description">Test retirement goals and assumptions</span>
+          </button>
+          <button class="tab-btn" data-tab="purchase" onclick="showTab('purchase')">
+            <span class="planning-tool-title">Purchase simulator</span>
+            <span class="planning-tool-description">Model the impact of a large purchase</span>
+          </button>
+        </div>
       </div>
     </div>
 
     <div id="debts" class="panel">
       <div class="panel-head">
-        <h2 id="debt_panel_title">Debt accounts</h2>
+        <div>
+          <h2 id="debt_panel_title">Debt accounts</h2>
+          <p class="planning-panel-purpose">Maintain the balances and terms used throughout Planning.</p>
+        </div>
         <div class="updated">Last updated: <span id="debt_updated">—</span></div>
       </div>
       <div class="segmented" role="tablist" aria-label="Debt account mode">
@@ -1441,7 +1471,10 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
     <div id="retirement" class="panel">
       <div class="panel-head">
-        <h2>Retirement planner</h2>
+        <div>
+          <h2>Retirement planner</h2>
+          <p class="planning-panel-purpose">Set a goal first, then adjust advanced assumptions only when you need them.</p>
+        </div>
         <div class="updated">Last updated: <span id="retirement_updated">—</span></div>
       </div>
 
@@ -1490,17 +1523,22 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <label>Annual Contributions</label>
           <input type="text" id="ret_annualContributions" inputmode="decimal" onfocus="currencyFocus('ret_annualContributions')" onblur="currencyBlur('ret_annualContributions')">
 
-          <label>Expected Annual Return %</label>
-          <input type="number" id="ret_expectedAnnualReturnPct" step="0.01">
+          <details class="planning-advanced-details">
+            <summary>Advanced assumptions</summary>
+            <div class="planning-advanced-fields">
+              <label>Expected Annual Return %</label>
+              <input type="number" id="ret_expectedAnnualReturnPct" step="0.01">
 
-          <label>Inflation %</label>
-          <input type="number" id="ret_inflationPct" step="0.01">
+              <label>Inflation %</label>
+              <input type="number" id="ret_inflationPct" step="0.01">
 
-          <label>Safe Withdrawal Rate %</label>
-          <input type="number" id="ret_safeWithdrawalRatePct" step="0.01">
+              <label>Safe Withdrawal Rate %</label>
+              <input type="number" id="ret_safeWithdrawalRatePct" step="0.01">
 
-          <label>One-Time Future Cash Needs</label>
-          <input type="text" id="ret_oneTimeFutureCashNeeds" inputmode="decimal" onfocus="currencyFocus('ret_oneTimeFutureCashNeeds')" onblur="currencyBlur('ret_oneTimeFutureCashNeeds')">
+              <label>One-Time Future Cash Needs</label>
+              <input type="text" id="ret_oneTimeFutureCashNeeds" inputmode="decimal" onfocus="currencyFocus('ret_oneTimeFutureCashNeeds')" onblur="currencyBlur('ret_oneTimeFutureCashNeeds')">
+            </div>
+          </details>
 
           <button onclick="saveRetirement()">Save Selected Scenario</button>
           <div id="retirement_status" class="status"></div>
@@ -1529,7 +1567,10 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
     <div id="purchase" class="panel">
       <div class="panel-head">
-        <h2>Big purchase simulator</h2>
+        <div>
+          <h2>Big purchase simulator</h2>
+          <p class="planning-panel-purpose">Explore the impact before making a large purchase; this does not change your accounts.</p>
+        </div>
         <div class="updated">What happens if I buy this?</div>
       </div>
 
@@ -1561,13 +1602,18 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <input type="number" id="ps_termMonths" step="1">
           </div>
 
-          <label>Monthly Running Cost</label>
-          <input type="text" id="ps_monthlyRunningCost" inputmode="decimal" onfocus="currencyFocus('ps_monthlyRunningCost')" onblur="currencyBlur('ps_monthlyRunningCost')">
+          <details class="planning-advanced-details">
+            <summary>Additional assumptions</summary>
+            <div class="planning-advanced-fields">
+              <label>Monthly Running Cost</label>
+              <input type="text" id="ps_monthlyRunningCost" inputmode="decimal" onfocus="currencyFocus('ps_monthlyRunningCost')" onblur="currencyBlur('ps_monthlyRunningCost')">
 
-          <div class="check-row">
-            <input type="checkbox" id="ps_treatAsAsset">
-            <label for="ps_treatAsAsset" style="margin:0;font-weight:normal;">Treat purchase as an asset (no immediate net worth hit)</label>
-          </div>
+              <div class="check-row">
+                <input type="checkbox" id="ps_treatAsAsset">
+                <label for="ps_treatAsAsset" style="margin:0;font-weight:normal;">Treat purchase as an asset (no immediate net worth hit)</label>
+              </div>
+            </div>
+          </details>
 
           <button onclick="runPurchaseSimulationUi()">Run Simulation</button>
           <div id="ps_status" class="status"></div>
@@ -1597,7 +1643,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <span class="muted" style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-left:8px;padding:2px 8px;border:1px solid #cbd5e1;border-radius:999px;vertical-align:middle;">Reference</span>
           </h2>
           <p class="muted" style="margin:4px 0 0 0;font-size:13px;line-height:1.45;">
-            Read-only portfolio view of current balances and minimum payments.
+            Review the current debt position and payoff outlook; no account changes are made here.
             For this month's action plan, see
             <a href="#" onclick="showTab('rollingDebtPayoff');return false;">Rolling Debt Payoff</a>.
           </p>
@@ -1642,7 +1688,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <div>
           <h2>Rolling debt payoff</h2>
           <p class="muted" style="margin:4px 0 0 0;font-size:13px;line-height:1.45;">
-            Monthly debt-cash deployment plan. For portfolio-level balances and minimums, see
+            Build an actionable month-by-month payoff plan from current balances. For portfolio-level balances and minimums, see
             <a href="#" onclick="showTab('debtPayoff');return false;">Debt Overview</a>.
           </p>
         </div>
@@ -1682,7 +1728,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div id="rolling_debt_payoff_status" class="status"></div>
       <div id="rolling_debt_payoff_tables" class="rolling-dp-tables" aria-live="polite"></div>
       <details class="rolling-dp-json-wrap">
-        <summary class="rolling-dp-json-summary">Raw JSON (export)</summary>
+        <summary class="rolling-dp-json-summary">Advanced: Raw JSON export</summary>
         <p class="muted" style="margin:6px 0 8px 0;">Machine-readable plan payload (legacy trigger details omitted).</p>
         <pre id="rolling_debt_payoff_json" class="rolling-dp-json" aria-label="Rolling Debt Payoff JSON"></pre>
       </details>

@@ -597,7 +597,7 @@
   .bill-card-overdue-item { background: #fff5f5; border-color: #f5c2c7; }
 
   .tabs { display: grid; gap: 8px; margin-bottom: 16px; }
-  .tabs.assets-tabs { grid-template-columns: repeat(3, 1fr); }
+  .tabs.assets-tabs { grid-template-columns: repeat(4, 1fr); }
   /* Cash Flow: five equal tabs keep Quick add immediate and the hierarchy quiet. */
   .tabs.cashflow-tabs {
     display: grid;
@@ -630,9 +630,8 @@
     Planning hierarchy:
       1) `.planning-next-actions-feature` = featured primary entry point.
          Larger, filled-in, reads as "start here" even at rest.
-      2) `.tabs.planning-tools`           = quieter secondary row for the
-         existing deep-dive tools. Smaller padding, muted colors, lighter
-         weight so it doesn't compete with Next Actions.
+      2) `.planning-tools-wrap`           = quieter task groups for
+         immediate maintenance/action and optional exploration/modeling.
   */
   .planning-next-actions-feature { margin: 0 0 12px 0; }
   .planning-next-actions-feature .tab-btn {
@@ -671,7 +670,23 @@
     font-weight: 700;
   }
 
-  .planning-tools-wrap { margin: 0 0 16px 0; }
+  .planning-tools-wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+    gap: 12px;
+    margin: 0 0 16px 0;
+  }
+  .planning-tool-group {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #ffffff;
+  }
+  .planning-tool-group--do-now {
+    border-color: #cbdced;
+    background: #f8fbff;
+  }
   .planning-tools-label {
     font-size: 11px;
     letter-spacing: 0.08em;
@@ -682,20 +697,45 @@
   }
   .tabs.planning-tools {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
     margin-bottom: 0;
+  }
+  .planning-tool-group--do-now .planning-tools {
+    grid-template-columns: 1fr;
+  }
+  .planning-tool-group--explore .planning-tools {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .planning-tools .tab-btn {
     width: 100%;
     min-width: 0;
-    padding: 8px 6px;
+    min-height: 72px;
+    padding: 10px;
     font-size: 12px;
     font-weight: 500;
     border-radius: 8px;
     background: #f8fafc;
     color: #475569;
     border: 1px solid #e2e8f0;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 4px;
+  }
+  .planning-tools .planning-tool-title {
+    color: #1f2937;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+  .planning-tools .planning-tool-description {
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.35;
   }
   .planning-tools .tab-btn:hover {
     background: #eef2f7;
@@ -705,6 +745,38 @@
     background: #1f4e78;
     color: #ffffff;
     border-color: #1f4e78;
+  }
+  .planning-tools .tab-btn.active .planning-tool-title,
+  .planning-tools .tab-btn.active .planning-tool-description {
+    color: #ffffff;
+  }
+  .planning-tools .tab-btn.active .planning-tool-description {
+    opacity: 0.82;
+  }
+  .planning-panel-purpose {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .planning-advanced-details {
+    margin: 14px 0 12px;
+    border: 1px solid #dbe3ec;
+    border-radius: 10px;
+    background: #f8fafc;
+  }
+  .planning-advanced-details > summary {
+    padding: 11px 12px;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .planning-advanced-details[open] > summary {
+    border-bottom: 1px solid #dbe3ec;
+  }
+  .planning-advanced-fields {
+    padding: 2px 12px 12px;
   }
 
   .debt-payoff-summary .debt-payoff-overall-head {
@@ -1900,10 +1972,15 @@
     .overview-health-card { grid-column: span 12; }
     .overview-retirement-card,
     .overview-runway-card { grid-column: span 6; }
-    .tabs.assets-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .tabs.assets-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .tabs.properties-tabs { grid-template-columns: 1fr 1fr; }
-    .tabs.planning-tools { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-    .planning-tools .tab-btn { padding: 8px 4px; font-size: 11px; }
+    .planning-tools-wrap { grid-template-columns: 1fr; }
+    .planning-tool-group--do-now .planning-tools {
+      grid-template-columns: 1fr;
+    }
+    .planning-tool-group--explore .planning-tools {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
     .planning-next-actions-feature .tab-btn { min-height: 52px; padding: 10px 12px; }
     .planning-next-actions-feature .featured-title { font-size: 15px; }
     .grid-2, .grid-3, .health-row, .mini-grid, .sim-grid { grid-template-columns: 1fr; }
@@ -1931,6 +2008,9 @@
     .overview-allocation-card,
     .overview-operations-card { grid-column: span 12; }
     .overview-section-secondary { padding: 14px 0 0; }
+    .planning-tool-group--explore .planning-tools {
+      grid-template-columns: 1fr;
+    }
   }
 
   @media (max-width: 460px) {
@@ -1938,6 +2018,9 @@
     .snapshot-card-primary .snapshot-value { font-size: 28px; }
     .tabs.assets-tabs { grid-template-columns: 1fr; }
     .tabs.cashflow-tabs { grid-template-columns: 1fr 1fr; }
+    .planning-tool-group--do-now .planning-tools {
+      grid-template-columns: 1fr;
+    }
     .bills-grid { grid-template-columns: 1fr; }
     .bills-grid .bill-card-compact { height: auto; min-height: 132px; }
   }

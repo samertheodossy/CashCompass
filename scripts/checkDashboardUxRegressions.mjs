@@ -130,7 +130,7 @@ for (const destination of [
   /showPage\('assets'\);\s*showTab\('bank'\)/,
   /showPage\('assets'\);\s*showTab\('investments'\)/,
   /showPage\('assets'\);\s*showTab\('houses'\)/,
-  /showPage\('planning'\);\s*showTab\('debts'\)/,
+  /showPage\('assets'\);\s*showTab\('debts'\)/,
   /showPage\('planning'\);\s*showTab\('retirement'\)/,
   /showPage\('cashflow'\);\s*showTab\('billsDue'\)/
 ]) {
@@ -152,11 +152,11 @@ assert.match(styles,
   /@media \(max-width:\s*460px\)[\s\S]*?\.snapshot-card-supporting\s*\{\s*grid-column:\s*span 12;/,
   'Supporting KPIs must stack at the narrowest width');
 assert.match(styles,
-  /@media \(max-width:\s*1180px\)[\s\S]*?\.tabs\.assets-tabs\s*\{\s*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
-  'The three Assets tabs must not form an orphan row at medium widths');
+  /@media \(max-width:\s*1180px\)[\s\S]*?\.tabs\.assets-tabs\s*\{\s*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/,
+  'The four Assets & Liabilities tabs must remain in one balanced row at medium widths');
 assert.match(styles,
   /@media \(max-width:\s*460px\)[\s\S]*?\.tabs\.assets-tabs\s*\{\s*grid-template-columns:\s*1fr;/,
-  'Assets tabs must stack deliberately at the narrowest width');
+  'Assets & Liabilities tabs must stack deliberately at the narrowest width');
 assert.match(render,
   /fmtSignedCurrency\(num\)\s*\.replace\(\/\^\(\[\+\-\]\)\(\?=\\\$\)\//,
   'Overview deltas must keep their sign attached to the currency amount');
@@ -175,7 +175,7 @@ assert.match(render, /overview-positive-state[\s\S]*?No issues need attention/,
   'A healthy Overview must show a compact positive Issues state');
 
 for (const [pageId, title] of Object.entries({
-  page_assets: 'Assets',
+  page_assets: 'Assets &amp; Liabilities',
   page_activity: 'Activity log',
   page_properties: 'Properties',
   page_planning: 'Planning'
@@ -194,6 +194,66 @@ assert.doesNotMatch(cashFlowPageLead, /workspace-page-intro/,
   'Cash Flow must not repeat its selected top-level page title above the five action tabs');
 assert.match(styles, /\.workspace-page-intro\s*\{[\s\S]*?margin:\s*0 0 var\(--cc-space-4\)/,
   'Workspace purpose lines must use the shared spacing rhythm');
+
+const planning = body.slice(
+  body.indexOf('<div id="page_planning"'),
+  body.indexOf('<!--\n    Onboarding Phase 1')
+);
+assert.ok(
+  planning.indexOf('planning-tool-group--do-now') < planning.indexOf('planning-tool-group--explore'),
+  'Planning must present immediate tasks before optional modeling tools'
+);
+assert.match(planning,
+  /planning-tool-group--do-now[\s\S]*?data-tab="rollingDebtPayoff"/,
+  'Do now must feature the actionable payoff plan');
+assert.match(planning,
+  /planning-tool-group--explore[\s\S]*?data-tab="debtPayoff"[\s\S]*?data-tab="retirement"[\s\S]*?data-tab="purchase"/,
+  'Explore / model must group the read-only overview and scenario tools');
+for (const tab of ['nextActions', 'rollingDebtPayoff', 'debtPayoff', 'retirement', 'purchase']) {
+  assert.equal((planning.match(new RegExp(`data-tab=["']${tab}["']`, 'g')) || []).length, 1,
+    `Planning must preserve exactly one navigation route for ${tab}`);
+}
+assert.doesNotMatch(planning,
+  /data-tab="debts"/,
+  'Planning navigation must not retain the balance-maintenance Debt accounts editor');
+assert.match(planning,
+  /id="debtPayoff"[\s\S]*?no account changes are made here\./,
+  'Debt overview must clearly identify its read-only purpose');
+assert.match(planning,
+  /id="rollingDebtPayoff"[\s\S]*?actionable month-by-month payoff plan/,
+  'Rolling debt payoff must clearly identify its action-planning purpose');
+assert.equal((planning.match(/class="planning-advanced-details"/g) || []).length, 2,
+  'Retirement and Purchase must each progressively disclose advanced assumptions');
+assert.match(planning,
+  /<details class="rolling-dp-json-wrap">[\s\S]*?Advanced: Raw JSON export/,
+  'Rolling debt raw output must remain inside an explicitly advanced disclosure');
+assert.match(styles,
+  /\.planning-tools-wrap\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(0,\s*3fr\)/,
+  'Planning task groups must use an intentional desktop hierarchy');
+assert.match(styles,
+  /@media \(max-width:\s*1180px\)[\s\S]*?\.planning-tools-wrap\s*\{\s*grid-template-columns:\s*1fr;/,
+  'Planning task groups must stack cleanly at medium widths');
+assert.match(styles,
+  /@media \(max-width:\s*460px\)[\s\S]*?\.planning-tool-group--do-now \.planning-tools\s*\{\s*grid-template-columns:\s*1fr;/,
+  'Immediate Planning tools must stack at the narrowest width');
+
+const assetsAndLiabilities = body.slice(
+  body.indexOf('<div id="page_assets"'),
+  body.indexOf('<div id="page_cashflow"')
+);
+assert.match(assetsAndLiabilities,
+  /<h2>Assets &amp; Liabilities<\/h2>[\s\S]*?data-tab="houses"[\s\S]*?data-tab="bank"[\s\S]*?data-tab="investments"[\s\S]*?data-tab="debts"/,
+  'Assets & Liabilities must present all four balance-maintenance editors');
+assert.match(render,
+  /function dashboardPageForTab_\(name\)[\s\S]*?name === 'investments' \|\| name === 'debts'\) return 'assets'/,
+  'Debt accounts must belong to Assets & Liabilities navigation');
+assert.match(render,
+  /function mountDebtPanelInAssets_\(\)[\s\S]*?insertBefore\(panel, mount\)[\s\S]*?mountDebtPanelInAssets_\(\);/,
+  'The unchanged Debt accounts subtree must mount into Assets & Liabilities before startup');
+assert.match(render,
+  /if \(name === 'houses' \|\| name === 'bank' \|\| name === 'investments' \|\| name === 'debts'\) \{\s*showPage\('assets'\)/,
+  'Direct Debt account navigation must open Assets & Liabilities');
+
 assert.match(styles, /\.status:not\(:empty\)\s*\{[\s\S]*?border:[\s\S]*?background:/,
   'Non-empty statuses must use the shared visible status surface');
 assert.match(styles, /\.status\.error:not\(:empty\)\s*\{[\s\S]*?background:\s*#fff1f2/,
