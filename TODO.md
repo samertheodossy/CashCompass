@@ -11,7 +11,17 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current stage — Stage 3: Beta Readiness
 
-**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the prior capability-oriented estimate; the last formal quality score remains **7.5/10** from the 2026-07-20 two-track validation and has not yet been rescored. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, the non-performance P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** Financial Integrity is committed as `9b97c4d` and exact isolated `@156` evidence passed 53/53. Current ordering authority is `ROADMAP.md`: **P3 finished-feeling UX/performance → exact-candidate Performance and final Release Readiness verdict → supervised cohort proof → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
+**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The current independent advocate score is **8.2/10** after isolated Central `@179` runtime-closed `REG-017`; 7.5/10 remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, the non-performance P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** Financial Integrity is committed as `9b97c4d` and exact isolated `@156` evidence passed 53/53. Current ordering authority is `ROADMAP.md`: **criterion-1 reliability/evidence → Bills/Retirement/failure-path consistency → accessibility and remaining advocate score waves → exact-candidate Performance and final Release Readiness verdict → supervised cohort proof → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
+
+**Execution forecast (ratified 2026-07-23):** controlled Family Beta can continue
+now. After a four-week buffer for planned time away in August, the target broad
+invited-Beta decision is **2026-09-24**, with **2026-10-02** as the contingency
+boundary for one focused repair/retest cycle. The active work windows are Aug
+21–27 HTTP 0/exact-owner evidence; Aug 28–Sep 3 Bills/Retirement/failure paths;
+Sep 4–10 accessibility and remaining advocate score gaps; Sep 11–17 candidate
+freeze, 20-pair Performance, and full Release Readiness; Sep 18–24 supervised
+cohort and final go/no-go. This date never waives a release gate. See
+`PROJECT_CONTEXT.md → Beta delivery forecast` for assumptions and exit evidence.
 
 `ROADMAP.md` is authoritative for **priority and sequence**. The `## Product Maturity Stages` section below supplies detailed stages, tasks, dependencies, testing inventory, and history; `PROJECT_CONTEXT.md` is authoritative for current technical status. The older `## Launch Readiness Roadmap` (Phase 1–7) is retained further below as historical phase expansion; where it conflicts with current ordering, `ROADMAP.md` wins.
 

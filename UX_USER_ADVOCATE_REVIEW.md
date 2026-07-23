@@ -476,6 +476,21 @@ the overlapping Debt-section response defect recorded as `REG-017`.
 but the remaining open categories still control the overall score. This is
 usability evidence, not release approval.
 
+### Score-improvement schedule to the Beta decision
+
+| Window | Advocate focus | Required evidence |
+|---|---|---|
+| Aug 21–27 | Errors/task completion; trust/safety | HTTP 0 recovery and dedicated exact-owner candidate evidence pass isolated runtime and permanent regression checks. |
+| Aug 28–Sep 3 | Ease; language; transitions | Bills completion contract is decided and proven; Retirement and controlled stale/failure journeys communicate explicit outcomes. |
+| Sep 4–10 | Visual; navigation; responsive/accessibility | Desktop, medium, and 390px review plus keyboard, focus, semantics, contrast, and reduced-motion evidence. |
+| Sep 11–17 | Whole-product candidate review | Frozen exact candidate completes Performance and Release Readiness without diagnostic/stale evidence. |
+| Sep 18–24 | Final independent scorecard | ≥95/100 release score, no dimension below 9/10, no unresolved Severity 1/2 defect, and supervised-cohort evidence. |
+
+After a four-week buffer for planned time away in August, the target broad
+invited-Beta decision is **2026-09-24**; **2026-10-02** is the contingency
+boundary for one repair/retest cycle. The advocate rescoring remains independent
+and evidence-led; dates do not raise a score or waive a finding.
+
 ### 3–11. Findings
 
 - **What is good — Interactive / Screenshot:** Both runs completed the populated

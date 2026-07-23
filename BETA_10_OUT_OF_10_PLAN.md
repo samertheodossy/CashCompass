@@ -4,7 +4,8 @@
 
 **Created:** 2026-07-20
 
-**Last formal baseline:** 7.5/10 controlled-family-beta product (2026-07-20; not yet rescored after subsequent improvements)
+**Historical baseline:** 7.5/10 controlled-family-beta product (2026-07-20)
+**Current independent advocate score:** 8.2/10 on isolated Central `@179` (2026-07-23)
 **Target:** A 10/10 Beta Release Candidate whose trust, operations, and product architecture make later monetization an incremental launch step rather than a rescue project.
 
 ## 1. Strategic decision
@@ -24,6 +25,24 @@ This does not mean waiting for every future feature. A 10/10 beta is not feature
 
 Trusted users may participate in a **supervised validation cohort** before the release gate closes. That cohort is a learning mechanism, not a declaration that the product is broadly ready.
 
+### Planning window
+
+- Controlled Family Beta may continue now with the existing supervised cohort.
+- After a four-week buffer for planned time away in August, the target broad
+  invited-Beta **decision** is **2026-09-24**.
+- **2026-10-02** is the contingency boundary if one focused repair/retest cycle is
+  required.
+- The forecast assumes prompt Bills product decisions, no new major feature in
+  scope, continued isolated-Central availability, acceptable exact-candidate
+  performance, and a five-to-seven-day cohort without a material defect.
+- Dates do not waive this plan's score, safety, financial, privacy, performance,
+  cohort, or Release Readiness gates.
+
+The execution waves are: Aug 21–27 HTTP 0 and exact-owner evidence; Aug 28–Sep 3
+Bills/Retirement/failure paths; Sep 4–10 accessibility and remaining advocate
+criteria; Sep 11–17 candidate freeze, Performance, and complete Release
+Readiness; Sep 18–24 supervised cohort, final scorecard, and go/no-go.
+
 ## 2. Honest baseline from the 2026-07-20 validation
 
 | Dimension | Baseline | What was observed |
@@ -36,7 +55,9 @@ Trusted users may participate in a **supervised validation cohort** before the r
 | Performance | 5/10 | Financial Plan refresh took 143 seconds; several first-create actions took tens of seconds. Successful but not yet confidence-inspiring. |
 | Automated release confidence | 7/10 | Strong recovery, Quick Add, provisioning, drift, schema, and targeted UX evidence exists; the aggregate release gate and mature populated scenario coverage remain incomplete. |
 
-**Overall baseline: 7.5/10.** Suitable for one or two trusted users with close support. Not yet suitable for a broad, unattended, or monetized beta.
+**Historical overall baseline: 7.5/10.** It remains useful as the 2026-07-20
+comparison point. The current independent advocate score is **8.2/10** after the
+`@175`–`@179` UX/reliability wave. Neither score is broad-Beta approval.
 
 ## 3. What “10/10 beta” means
 
@@ -280,4 +301,18 @@ Metrics must be defined before instrumentation and must avoid copying transactio
 
 ## 8. Immediate next gate
 
-Validator modules, the required bounded server inventory, all non-performance E2E/live packs, and the single-console Release Readiness controls are runtime-proven. House Financial Accuracy V1 is committed as `96d0ebe`; exact isolated Central `@145` run `20260722-124210-bc23` passed 27/27 assertions with Restricted sharing and verified Trash cleanup. Financial Integrity Phase 3 is committed as `9b97c4d`; isolated Validation `@156` suite `20260722-164849-6081` passed 53/53 with Provisioning/Drift/Restricted/Trash PASS. The display-only `UX-01` Overview pass has completed populated user review, its approved visual corrections pass local regressions, and its source-control checkpoint is the immediate gate before the ordered remaining P3 UX/performance work. Performance remains intentionally parked until the final candidate: restart the complete percentile campaign, ratify p50/p95 budgets, finalize Release Readiness, complete supervised cohort proof, and run the full 10/10 scorecard before broad Beta.
+Validator modules, the required bounded server inventory, all non-performance
+E2E/live packs, and the single-console Release Readiness controls are
+runtime-proven. House Financial Accuracy V1 (`96d0ebe`, isolated `@145`, 27/27)
+and Financial Integrity Phase 3 (`9b97c4d`, isolated `@156`, 53/53) are complete.
+The `@175`–`@179` advocate wave closed formatted Bank replacement, Income/Setup
+classification, customer-language/responsive improvements, standalone
+evidence fail-closed behavior, and `REG-017`; the current score is 8.2/10.
+
+The immediate gate is HTTP 0 recovery (`REG-018`) plus dedicated exact-owner
+candidate evidence. Then decide—do not infer—the Bills Pay → Quick add →
+next-occurrence contract; close Retirement and controlled stale/failure journeys;
+complete accessibility/responsive evidence; freeze the candidate; restart the
+20-pair percentile campaign; ratify p50/p95 budgets; finalize Release Readiness;
+complete supervised cohort proof; and run the full 10/10 scorecard before broad
+Beta.

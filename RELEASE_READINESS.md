@@ -56,6 +56,16 @@ bounded gate, and run the full 10/10 scorecard. Until then, the automated releas
 state is **IN_PROGRESS** and the product-level broad-Beta decision remains **NOT
 READY**. See `P1_RELEASE_EVIDENCE_CONTRACT.md`.
 
+**Delivery forecast (2026-07-23):** after a four-week buffer for planned time away
+in August, candidate freeze and the complete exact-candidate Release Readiness
+run are planned for **2026-09-11 through 2026-09-17**. The target broad invited-
+Beta decision is **2026-09-24**, with **2026-10-02** reserved for one focused
+repair/retest cycle. These dates are planning boundaries only: HTTP 0 recovery,
+dedicated exact-owner proof, all required suites, 20 first/repeat Performance
+pairs, ratified p50/p95 budgets, the supervised cohort, ≥95/100, no dimension
+below 9/10, and no unresolved Severity 1/2 defect remain mandatory. No dated
+milestone may reuse stale, diagnostic-only, or differently attributed evidence.
+
 **Related docs:** `TEST_HARNESS_ARCHITECTURE.md` (the runner),
 `VALIDATOR_ARCHITECTURE.md` (the read-only judge), `REGRESSION_SCENARIOS.md` (the
 regression pack), `ROADMAP.md` (P1 sequencing), and

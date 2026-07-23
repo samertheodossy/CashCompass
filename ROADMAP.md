@@ -24,11 +24,35 @@
 **Now / next:**
 
 - **Current active milestone:** **P3 finished-feeling UX and focused performance.** `UX-01` Overview information architecture and balanced-grid implementation is user-reviewed on a populated dashboard, its three approved display corrections are local and regression-clean, and the source-control checkpoint remains the next gate.
-- **Independent advocate gate added 2026-07-23:** the approved isolated interactive writer journey confirmed P1 trust defects in formatted bank-amount replacement, Income/Setup classification consistency, Bills Pay handoff/occurrence feedback, and normal-path implementation terminology. The bank replacement defect is runtime-closed on isolated `@175`, and the Income/Setup fix is runtime-closed on isolated `@176`. The contained visibility wave is now runtime-verified on isolated `@177`: customer language, Bank/Debt safe-action gating, stronger secondary text, and the 390px header/navigation layout passed default-width and separate 390px populated journeys with verified Trash cleanup; Retirement guidance remains a focused interactive evidence gap. The permanent advocate scorecard records an **8.1/10 baseline**. Both `@177` runs reconfirmed `REG-015` by inheriting stale `@141` candidate metadata and incorrectly saving release-eligible evidence. No Beta, bounded, mapped-user, Golden, or configured-default workbook was used. These findings are sequenced in `TODO.md → UX Backlog (Version 1) → Independent advocate priorities`.
+- **Independent advocate gate added 2026-07-23:** the approved isolated interactive writer journey confirmed P1 trust defects in formatted bank-amount replacement, Income/Setup classification consistency, Bills Pay handoff/occurrence feedback, and normal-path implementation terminology. The bank replacement defect is runtime-closed on isolated `@175`, the Income/Setup fix on `@176`/`@178`, and the contained language/responsive wave on `@177`. Standalone browser evidence now fails closed on `@178`; `REG-017` is runtime-closed on `@179` with all 12 Populated Dashboard assertions passing, zero captured errors, Restricted sharing, and verified Trash cleanup. The current advocate score is **8.2/10**. HTTP 0 recovery, dedicated exact-owner proof, Bills completion semantics, Retirement/failure-path evidence, and accessibility remain open. No Beta, bounded, mapped-user, Golden, or configured-default workbook was used. These findings are sequenced in `TODO.md → UX Backlog (Version 1) → Independent advocate priorities`.
 - **Then:** execute the permanent score-by-score program in `TODO.md → Advocate 10/10 score-improvement program`, one criterion at a time: Errors/task completion → Trust/safety → Transitions/feedback → Ease → Language → Navigation → Visual design → Responsive/accessibility. Each criterion requires isolated runtime evidence and an advocate rescore before moving on; Bills remains a discussion gate rather than an inferred implementation.
 - **Explicitly parked pre-Beta gate:** the Performance Planner percentile campaign and final exact-candidate READY/NOT READY verdict. Seven historical sample pairs are diagnostic only because the campaign began before `@141`; performance must be rerun as an exact-candidate campaign and ratified before any broad Beta release. Deferral does not waive the gate.
 - **Measured follow-up:** Financial Plan refresh succeeded but took 143 seconds on the blank/fresh fixture. Reusable privacy-safe stage instrumentation is now source-ready behind `PERFORMANCE_TIMING_ENABLED`; isolated first-run/repeat timing evidence and optimization remain under P3 Performance without reopening the completed P0 functional-feedback work.
 - **Release policy:** CashCompass is **quality-gated, not date-gated**. A small supervised cohort may validate work during P1–P3, but a broad Beta Release Candidate must satisfy `BETA_10_OUT_OF_10_PLAN.md`: score ≥95/100, no dimension below 9/10, no unresolved Severity 1 or Severity 2 defect, and every non-negotiable release gate passing.
+
+---
+
+## Broad invited-Beta forecast
+
+**Target decision: 2026-09-24 · contingency boundary: 2026-10-02.** This is a
+gate-based forecast, not a promise to ship. Controlled Family Beta can continue
+now for the existing supervised cohort; it does not authorize a Central Beta or
+bounded deployment change. A four-week buffer accommodates planned time away in
+August.
+
+| Window | Planned scope and exit |
+|---|---|
+| Aug 21–27 | Close HTTP 0 recovery (`REG-018`) and prove dedicated exact-candidate ownership/freshness. |
+| Aug 28–Sep 3 | Decide and implement the Bills Pay → Quick add → next-occurrence contract; close Retirement and controlled stale/failure journeys. |
+| Sep 4–10 | Close accessibility, responsive/medium-width, keyboard/focus/semantics/contrast/reduced-motion evidence and remaining advocate score gaps. |
+| Sep 11–17 | Freeze the candidate; complete the 20-pair Performance campaign, ratify p50/p95 budgets, and run full Release Readiness. |
+| Sep 18–24 | Complete a five-to-seven-day supervised cohort, final scorecard, and broad-Beta go/no-go. |
+
+The October 2 boundary allows one focused repair/retest cycle. Any failed
+financial, safety, privacy, performance, Severity 1/2, ≥95/100, or
+no-dimension-below-9 gate moves the decision. Assumptions and full exit evidence
+are maintained in `PROJECT_CONTEXT.md → Beta delivery forecast` and
+`BETA_10_OUT_OF_10_PLAN.md`.
 
 ---
 
