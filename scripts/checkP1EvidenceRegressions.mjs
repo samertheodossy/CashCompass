@@ -5,7 +5,7 @@ import vm from 'node:vm';
 const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 const [registry, formulas, cf, named, health, release, contract, suites,
   planner, bank, investments, houses, plannerOutput, quickAdd, dashboard, performanceScenario, billsPayScenario,
-  harnessCore, p1Runner, webapp, centralDiagnostics, firstRunE2E, firstRunBrowser,
+  harnessCore, p1Runner, webapp, centralDiagnostics, firstRunE2E, firstRunBrowser, firstRunUi,
   populatedE2E, populatedBrowser, populatedUi, recoveryLive, recoveryUi, performanceSampling, performanceSamplingUi,
   validationUi, validationServer, sharedRules, engineeringStandards, testingUrls, debtUi] = await Promise.all([
   read('validator_schema_registry.js'), read('validator_formulas.js'),
@@ -16,7 +16,7 @@ const [registry, formulas, cf, named, health, release, contract, suites,
   read('planner_output.js'), read('quick_add_payment.js'), read('dashboard_data.js'),
   read('test_harness_scenarios_performance.js'), read('test_harness_scenarios_bills_pay.js'),
   read('test_harness_core.js'), read('test_p1_isolated_runner.js'), read('webapp.js'), read('central_diagnostics.js'),
-  read('first_run_e2e.js'), read('Dashboard_Script_FirstRunE2E.html'),
+  read('first_run_e2e.js'), read('Dashboard_Script_FirstRunE2E.html'), read('FirstRunE2ETestingUI.html'),
   read('populated_dashboard_e2e.js'), read('Dashboard_Script_PopulatedDashboardE2E.html'),
   read('PopulatedDashboardE2ETestingUI.html'),
   read('recovery_live.js'), read('RecoveryTestingUI.html'), read('performance_sampling.js'),
@@ -130,7 +130,7 @@ assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULAT
   'Populated Dashboard E2E must use its own versioned saved-evidence key');
 assert.doesNotMatch(populatedE2E, /function pdE2EPrepare\([^)]*(?:spreadsheet|workbook|file)Id/i,
   'Populated Dashboard preparation must never accept an arbitrary workbook target');
-assert.match(populatedE2E, /frE2EPrepare\(confirmed\)/,
+assert.match(populatedE2E, /frE2EPrepare\(confirmed, requestedReleaseRunId\)/,
   'Populated Dashboard must reuse the guarded production Central provisioning lifecycle');
 assert.match(populatedE2E, /state\.mode = POPULATED_DASHBOARD_E2E_MODE_[\s\S]*?state\.mode !== POPULATED_DASHBOARD_E2E_MODE_/,
   'Populated Dashboard route must accept only fixtures prepared and seeded for its suite');
@@ -164,7 +164,7 @@ assert.match(webapp, /view === 'populated-dashboard-e2e'[\s\S]*?isFirstRunE2EUse
   'Populated Dashboard control route must remain hidden from every non-test identity');
 assert.match(webapp, /pdE2ERenderContext_\(populatedRunId\)/,
   'Populated Dashboard run route must require the guarded active run context');
-assert.match(validationServer, /function vtOpenHarnessBrowserRunner\(suiteId\)[\s\S]*?assertValidatorAllowed_\(\)/,
+assert.match(validationServer, /function vtOpenHarnessBrowserRunner\(suiteId, requestedReleaseRunId\)[\s\S]*?assertValidatorAllowed_\(\)/,
   'Only the admin Validator console may launch the browser-test link from the console');
 assert.match(suites, /id: 'SUITE-PERFORMANCE-PLANNER'[\s\S]*?implemented: true[\s\S]*?'PERFORMANCE-PLANNER-FIRST-REPEAT'/,
   'Performance suite must use the explicit-workbook planner scenario');
@@ -218,8 +218,10 @@ assert.match(release, /releaseEvidenceMatchesCandidate_\(report\.candidate, cand
   'Release Readiness must reject browser evidence from a different source or deployment candidate');
 assert.match(release, /report\.releaseEligible !== true[\s\S]*?report\.releaseRunId[\s\S]*?releaseRunId/,
   'Release Readiness must reject diagnostic-only or differently owned browser evidence');
-assert.match(release, /function releaseBrowserEvidenceContext_\(\)[\s\S]*?status !== 'IN_PROGRESS'[\s\S]*?releaseEligible: false/,
-  'Standalone browser campaigns must be captured as diagnostic-only');
+assert.match(release, /function releaseBrowserEvidenceContext_\(requestedReleaseRunId\)[\s\S]*?if \(!requested\)[\s\S]*?releaseEligible: false/,
+  'Standalone browser campaigns must be diagnostic-only even when an unrelated readiness run remains active');
+assert.match(release, /releaseSanitizeMetadata_\(state\.runId\) !== requested[\s\S]*?releaseEligible: false/,
+  'Browser evidence must refuse an explicitly requested owner that is not the exact active readiness run');
 assert.match(release, /function releaseValidateBrowserEvidenceContext_\(captured\)[\s\S]*?current\.runId[\s\S]*?releaseEvidenceMatchesCandidate_/,
   'Browser evidence must revalidate its owning run and candidate at completion');
 for (const [label, source] of [
@@ -238,9 +240,28 @@ for (const [label, source] of [
   ['Recovery Live', recoveryLive],
   ['Performance Planner', performanceSampling]
 ]) {
-  assert.match(source, /releaseEvidenceContext: releaseBrowserEvidenceContext_\(\)/,
-    `${label} must capture the owning Release Readiness run when preparation starts`);
+  assert.match(source, /releaseEvidenceContext: releaseBrowserEvidenceContext_\(requestedReleaseRunId\)/,
+    `${label} must capture only the explicitly requested owning Release Readiness run`);
 }
+for (const [label, source, startCall] of [
+  ['First-Run UX E2E', firstRunUi, 'frE2EPrepare'],
+  ['Populated Dashboard E2E', populatedUi, 'pdE2EPrepare'],
+  ['Recovery Live', recoveryUi, 'recoveryLiveStart'],
+  ['Performance Planner', performanceSamplingUi, 'psStartCampaign']
+]) {
+  assert.match(source, /Standalone diagnostic run[\s\S]*?requestedReleaseRunId/,
+    `${label} must visibly distinguish standalone diagnostic evidence`);
+  assert.match(source, new RegExp(`\\.${startCall}\\(confirmed\\(\\), requestedReleaseRunId\\)`),
+    `${label} must pass the explicit owner from its server-rendered launch context`);
+}
+assert.match(webapp, /requestedReleaseRunId[\s\S]*?releaseRunIdJson = JSON\.stringify\(requestedReleaseRunId\)/,
+  'Browser control routes must inject only the requested Release Readiness owner into their templates');
+assert.match(validationServer, /function vtOpenHarnessBrowserRunner\(suiteId, requestedReleaseRunId\)[\s\S]*?releaseBrowserEvidenceContext_\(releaseRunId\)[\s\S]*?releaseOwned: !!releaseRunId/,
+  'The admin launcher must validate and label explicit Release Readiness ownership');
+assert.match(validationUi, /function vtRROpenBrowserSuite_\(suiteId\)[\s\S]*?vtOpenHarnessBrowserRunner\(suiteId, vtRRState\.runId\)/,
+  'Release Readiness must provide a dedicated exact-owner browser launch path');
+assert.match(validationUi, /function vtHRunSuite\(\)[\s\S]*?\.vtOpenHarnessBrowserRunner\(suiteId\)/,
+  'The generic suite launcher must omit Release Readiness ownership and remain diagnostic-only');
 assert.match(performanceSampling, /RELEASE_PERFORMANCE_BUDGET_RATIFIED_KEY_[\s\S]*?evidenceContext\.releaseEligible \? 'true' : 'false'/,
   'Diagnostic-only performance sampling must not ratify a release budget');
 assert.match(validationServer, /function vtReleaseReadinessStart\(spreadsheetId, metadata\)[\s\S]*?spreadsheetId is intentionally ignored[\s\S]*?releaseReadinessStart\(metadata/,
@@ -329,9 +350,13 @@ const baseState = {
   cursor: 0, results: [], status: 'IN_PROGRESS'
 };
 props.setProperty('RELEASE_READINESS_ACTIVE_RUN_V1', JSON.stringify(baseState));
-const capturedBrowserContext = verdictCtx.releaseBrowserEvidenceContext_();
+assert.equal(verdictCtx.releaseBrowserEvidenceContext_().releaseEligible, false,
+  'A standalone browser campaign must remain diagnostic-only while a stale readiness run is active');
+assert.equal(verdictCtx.releaseBrowserEvidenceContext_('RR-wrong').releaseEligible, false,
+  'A browser campaign must not adopt a different active readiness run');
+const capturedBrowserContext = verdictCtx.releaseBrowserEvidenceContext_(baseState.runId);
 assert.equal(capturedBrowserContext.releaseEligible, true,
-  'An active Release Readiness run must provide an exact browser-evidence owner');
+  'An explicitly requested active Release Readiness run must provide an exact browser-evidence owner');
 assert.equal(capturedBrowserContext.releaseRunId, baseState.runId);
 props.setProperty('RELEASE_READINESS_ACTIVE_RUN_V1', JSON.stringify({
   ...baseState, runId: 'RR-replaced'

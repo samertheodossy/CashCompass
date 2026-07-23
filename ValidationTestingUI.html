@@ -689,6 +689,31 @@
     catch (_e) { var details = document.querySelector('#vt-rr-results details.json'); if (details) details.open = true; }
   }
 
+  function vtRROpenBrowserSuite_(suiteId) {
+    if (!vtRRState || vtRRState.status !== 'IN_PROGRESS' || !vtRRState.runId) {
+      vtRRSetStatus('No active Release Readiness run can own browser evidence.', true);
+      return;
+    }
+    var browserTab = window.open('about:blank', '_blank');
+    vtRRSetStatus(vtSpin('Opening exact-candidate browser evidence for ' + suiteId + '…'), false);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res || !res.ok || !res.launchUrl || res.releaseOwned !== true) {
+          if (browserTab) browserTab.close();
+          vtRRSetStatus(vtEsc(res && res.error ? res.error : 'Could not open exact-candidate browser evidence.'), true);
+          return;
+        }
+        if (browserTab) browserTab.location = res.launchUrl;
+        vtRRSetStatus('Exact-candidate suite opened for ' + vtEsc(vtRRState.runId) +
+          '. Return here and refresh status after it finishes.', false);
+      })
+      .withFailureHandler(function(err) {
+        if (browserTab) browserTab.close();
+        vtRRSetStatus(vtEsc(err && err.message ? err.message : String(err)), true);
+      })
+      .vtOpenHarnessBrowserRunner(suiteId, vtRRState.runId);
+  }
+
   function vtRRRender() {
     var box = document.getElementById('vt-rr-results');
     var state = vtRRState;
@@ -720,11 +745,13 @@
     }
     var ext = inventory.externalSuites || [];
     var evidence = state.externalEvidence || {};
-    html += '<table class="suite-table"><thead><tr><th>Browser evidence</th><th>Result</th><th>Cleanup</th></tr></thead><tbody>';
+    html += '<table class="suite-table"><thead><tr><th>Browser evidence</th><th>Result</th><th>Cleanup</th><th>Action</th></tr></thead><tbody>';
     for (var i = 0; i < ext.length; i++) {
       var ev = evidence[ext[i]] || null;
       html += '<tr><td>' + vtEsc(ext[i]) + '</td><td class="' + (ev && ev.overall === 'PASS' ? 'st-pass' : 'st-fail') + '">' +
-        vtEsc(ev ? ev.overall : 'MISSING') + '</td><td>' + (ev && ev.cleanupVerified ? 'Verified' : '—') + '</td></tr>';
+        vtEsc(ev ? ev.overall : 'MISSING') + '</td><td>' + (ev && ev.cleanupVerified ? 'Verified' : '—') +
+        '</td><td><button data-suite-id="' + vtEsc(ext[i]) +
+        '" onclick="vtRROpenBrowserSuite_(this.getAttribute(\'data-suite-id\'))">Run for this candidate</button></td></tr>';
     }
     html += '</tbody></table>';
     var rows = state.results || [];

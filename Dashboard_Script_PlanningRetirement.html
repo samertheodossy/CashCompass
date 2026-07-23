@@ -182,6 +182,10 @@ function setRetirementDobHint_(elId, age, label) {
 function showRetirementEmptyState_(content) {
   var el = document.getElementById('ret_empty_state');
   if (!el) return;
+  var scenarioCards = document.getElementById('ret_scenario_cards');
+  var resultsPanel = document.getElementById('ret_results_panel');
+  if (scenarioCards) scenarioCards.hidden = true;
+  if (resultsPanel) resultsPanel.hidden = true;
 
   var title = (content && content.title) ? content.title : '';
   var body = (content && content.body) ? content.body : '';
@@ -228,6 +232,10 @@ function showRetirementEmptyState_(content) {
 function hideRetirementEmptyState_() {
   var el = document.getElementById('ret_empty_state');
   if (!el) return;
+  var scenarioCards = document.getElementById('ret_scenario_cards');
+  var resultsPanel = document.getElementById('ret_results_panel');
+  if (scenarioCards) scenarioCards.hidden = false;
+  if (resultsPanel) resultsPanel.hidden = false;
   el.hidden = true;
   el.innerHTML = '';
 }

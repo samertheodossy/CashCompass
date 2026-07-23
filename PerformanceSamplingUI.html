@@ -34,6 +34,7 @@
     marker-verified and moved to Trash. It accepts no email or workbook ID and cannot target the
     configured default, canonical, administrator, mapped-user, active, or bounded workbook.
   </div>
+  <p id="evidence_mode" class="muted"></p>
 
   <div class="card">
     <h2>Sampling campaign</h2>
@@ -53,6 +54,10 @@
   <div id="status" class="muted"></div>
 </div>
 <script>
+  var requestedReleaseRunId = <?!= releaseRunIdJson ?>;
+  document.getElementById('evidence_mode').textContent = requestedReleaseRunId
+    ? 'Exact-candidate evidence requested for Release Readiness run ' + requestedReleaseRunId + '.'
+    : 'Standalone diagnostic run — this campaign cannot ratify a release budget.';
   var keepRunning = false;
   function confirmed() { return document.getElementById('confirm').checked; }
   function syncButtons() { document.getElementById('run').disabled = !confirmed() || keepRunning; }
@@ -88,7 +93,7 @@
       if (!res || !res.ok) { fail((res && res.error) || 'Campaign start failed.'); return; }
       renderState(res);
       runNext();
-    }).withFailureHandler(fail).psStartCampaign(confirmed());
+    }).withFailureHandler(fail).psStartCampaign(confirmed(), requestedReleaseRunId);
   }
   function runNext() {
     if (!keepRunning) { syncButtons(); showStatus('Paused. Resume when ready.', false); return; }

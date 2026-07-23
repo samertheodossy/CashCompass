@@ -162,7 +162,7 @@ function frE2EGetState() {
 }
 
 /** Create one genuinely fresh Central workbook through the production path. */
-function frE2EPrepare(confirmed) {
+function frE2EPrepare(confirmed, requestedReleaseRunId) {
   return frE2ESafe_(function() {
     var email = assertFirstRunE2EAllowed_();
     if (confirmed !== true) throw new Error('Disposable-account confirmation is required.');
@@ -200,7 +200,7 @@ function frE2EPrepare(confirmed) {
       emailHash: buildMappingKey_(email).slice(MAPPING_KEY_PREFIX_.length),
       createdAt: new Date().toISOString(),
       sharing: null,
-      releaseEvidenceContext: releaseBrowserEvidenceContext_()
+      releaseEvidenceContext: releaseBrowserEvidenceContext_(requestedReleaseRunId)
     };
     try {
       state.sharing = frE2EInspectRestrictedSharing_(id);

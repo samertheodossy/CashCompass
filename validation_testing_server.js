@@ -400,10 +400,11 @@ function vtGetHarnessRunProgress(progressToken) {
 
 /**
  * Return the authenticated browser-suite launcher. Admin-only through the
- * Validator guard. The returned URL contains no token; the browser route
+ * Validator guard. An optional non-secret Release Readiness run id identifies
+ * evidence ownership; it is not an authorization token. The browser route still
  * independently requires the exact disposable non-admin identity.
  */
-function vtOpenHarnessBrowserRunner(suiteId) {
+function vtOpenHarnessBrowserRunner(suiteId, requestedReleaseRunId) {
   return vtSafe_(function() {
     assertValidatorAllowed_();
     var suite = getHarnessSuiteById_(String(suiteId || '').trim());
@@ -413,10 +414,19 @@ function vtOpenHarnessBrowserRunner(suiteId) {
     if (!suite.browserRoute) {
       throw new Error('This browser suite does not yet have an approved launcher.');
     }
+    var releaseRunId = releaseSanitizeMetadata_(requestedReleaseRunId);
+    if (releaseRunId) {
+      var owner = releaseBrowserEvidenceContext_(releaseRunId);
+      if (!owner.releaseEligible) {
+        throw new Error('The requested Release Readiness run is not the active browser-evidence owner.');
+      }
+    }
     return {
       ok: true,
       launchUrl: String(ScriptApp.getService().getUrl() || '').replace(/\?.*$/, '') +
-        '?view=' + encodeURIComponent(suite.browserRoute)
+        '?view=' + encodeURIComponent(suite.browserRoute) +
+        (releaseRunId ? '&releaseRunId=' + encodeURIComponent(releaseRunId) : ''),
+      releaseOwned: !!releaseRunId
     };
   });
 }

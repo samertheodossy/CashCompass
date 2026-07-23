@@ -23,6 +23,8 @@ function doGet(e) {
   // route's existence is never disclosed (no distinct rejection, no error).
   var view = (e && e.parameter && e.parameter.view)
     ? String(e.parameter.view) : '';
+  var requestedReleaseRunId = (e && e.parameter && e.parameter.releaseRunId)
+    ? String(e.parameter.releaseRunId) : '';
   if (view === 'admin' && isAdminUser_()) {
     return HtmlService.createTemplateFromFile('AdminDiagnostics')
       .evaluate()
@@ -49,7 +51,9 @@ function doGet(e) {
   // mode, and allow-list membership. No client-selected email or workbook ID
   // exists. Everyone else falls through without learning the route exists.
   if (view === 'recovery-test' && isRecoveryLiveUser_()) {
-    return HtmlService.createTemplateFromFile('RecoveryTestingUI')
+    var recoveryTemplate = HtmlService.createTemplateFromFile('RecoveryTestingUI');
+    recoveryTemplate.releaseRunIdJson = JSON.stringify(requestedReleaseRunId);
+    return recoveryTemplate
       .evaluate()
       .setTitle('CashCompass — Recovery Live')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -59,7 +63,9 @@ function doGet(e) {
   // timing pair owns its own Restricted fixture. The route and every RPC are
   // identity-gated; there is no caller-selected email or workbook target.
   if (view === 'performance-test' && isPerformanceSamplingUser_()) {
-    return HtmlService.createTemplateFromFile('PerformanceSamplingUI')
+    var performanceTemplate = HtmlService.createTemplateFromFile('PerformanceSamplingUI');
+    performanceTemplate.releaseRunIdJson = JSON.stringify(requestedReleaseRunId);
+    return performanceTemplate
       .evaluate()
       .setTitle('CashCompass — Performance Planner Sampling')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -71,7 +77,9 @@ function doGet(e) {
   // with a narrowly-scoped assertion overlay only after the exact run token,
   // mapping, owner, and durable workbook markers have all been verified.
   if (view === 'first-run-e2e' && isFirstRunE2EUser_()) {
-    return HtmlService.createTemplateFromFile('FirstRunE2ETestingUI')
+    var firstRunControlTemplate = HtmlService.createTemplateFromFile('FirstRunE2ETestingUI');
+    firstRunControlTemplate.releaseRunIdJson = JSON.stringify(requestedReleaseRunId);
+    return firstRunControlTemplate
       .evaluate()
       .setTitle('CashCompass — First-Run UX E2E')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -96,7 +104,9 @@ function doGet(e) {
   // creates and seeds only a newly provisioned Central workbook; the run route
   // requires the exact active token and verified mapped-workbook identity.
   if (view === 'populated-dashboard-e2e' && isFirstRunE2EUser_()) {
-    return HtmlService.createTemplateFromFile('PopulatedDashboardE2ETestingUI')
+    var populatedControlTemplate = HtmlService.createTemplateFromFile('PopulatedDashboardE2ETestingUI');
+    populatedControlTemplate.releaseRunIdJson = JSON.stringify(requestedReleaseRunId);
+    return populatedControlTemplate
       .evaluate()
       .setTitle('CashCompass — Populated Dashboard E2E')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);

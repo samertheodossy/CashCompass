@@ -212,18 +212,29 @@ function releaseCurrentCandidateMetadata_() {
 
 /**
  * Capture the exact owning Release Readiness run when a browser campaign starts.
- * Standalone diagnostic runs remain allowed, but are explicitly non-release-
- * eligible instead of inheriting stale candidate metadata from Script Properties.
+ * Ownership is explicit: only a launcher carrying the current Release Readiness
+ * run id may bind evidence to that run. A direct/standalone browser URL never
+ * adopts whichever IN_PROGRESS state happens to remain in Script Properties.
  */
-function releaseBrowserEvidenceContext_() {
+function releaseBrowserEvidenceContext_(requestedReleaseRunId) {
+  var requested = releaseSanitizeMetadata_(requestedReleaseRunId);
+  if (!requested) {
+    return {
+      releaseEligible: false,
+      releaseRunId: '',
+      candidate: null,
+      reason: 'Standalone browser evidence is diagnostic only because no owning Release Readiness run was supplied.'
+    };
+  }
   var state = releaseLoadState_();
   if (!state || state.status !== 'IN_PROGRESS' || !state.runId ||
+      releaseSanitizeMetadata_(state.runId) !== requested ||
       !state.candidate || !state.candidate.sourceVersion || !state.candidate.deployment) {
     return {
       releaseEligible: false,
       releaseRunId: '',
       candidate: null,
-      reason: 'No active Release Readiness run owns this browser campaign.'
+      reason: 'Browser evidence is diagnostic only because the requested Release Readiness owner is not active.'
     };
   }
   return {

@@ -768,7 +768,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <label for="don_amount">Amount</label>
           <input type="text" id="don_amount" inputmode="decimal" onfocus="currencyFocus('don_amount')" onblur="currencyBlur('don_amount')" placeholder="e.g. 50 or -100 for adjustments">
 
-          <label for="don_taxYear">Tax year (section on sheet)</label>
+          <label for="don_taxYear">Tax year</label>
           <select id="don_taxYear"></select>
 
           <label for="don_comments">Comments</label>
@@ -1081,7 +1081,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
     <div id="houseExpenses" class="panel active">
       <div class="panel-head">
         <h2>Add house expense</h2>
-        <div class="updated">Uses the same house expense writer as the sidebar</div>
+        <div class="updated">Record property expenses here, with an option to include them in Cash Flow.</div>
       </div>
 
       <div class="grid-2">
@@ -1332,7 +1332,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <div class="info">
             <div><strong>Current value:</strong> <span id="debt_currentValue" class="muted">—</span></div>
             <div><strong>Type:</strong> <span id="debt_type" class="muted">—</span></div>
-            <div><strong>Acct PCT Avail:</strong> <span id="debt_pctAvail" class="muted">—</span></div>
+            <div><strong>Available credit %:</strong> <span id="debt_pctAvail" class="muted">—</span></div>
           </div>
         </div>
 
@@ -1423,7 +1423,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                 <select id="debt_edit_linked_property"></select>
                 <div class="muted" style="margin-top:4px;font-size:12px;">Optional for Loans and HELOCs. Existing inactive links are retained until you clear or replace them.</div>
               </div>
-              <label>Acct PCT Avail</label>
+              <label>Available credit %</label>
               <div id="debt_edit_pct_avail" class="muted" style="padding:8px 10px;background:#f1f5f9;border-radius:6px;">—</div>
               <div class="muted" style="margin-top:4px;font-size:12px;">Calculated automatically from Credit Limit, Credit Left and Balance.</div>
               <div style="display:flex;gap:8px;margin-top:12px;">
@@ -1480,7 +1480,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
       <div id="ret_empty_state" class="retirement-empty-state" hidden></div>
 
-      <div class="grid-3" style="margin-bottom:14px;">
+      <div id="ret_scenario_cards" class="grid-3 retirement-results" style="margin-bottom:14px;" hidden>
         <div class="scenario-card" id="scenario_card_Conservative"></div>
         <div class="scenario-card" id="scenario_card_Base"></div>
         <div class="scenario-card" id="scenario_card_Aggressive"></div>
@@ -1544,7 +1544,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <div id="retirement_status" class="status"></div>
         </div>
 
-        <div class="info">
+        <div id="ret_results_panel" class="info retirement-results" hidden>
           <div><strong>Scenario:</strong> <span id="ret_info_scenario" class="muted">—</span></div>
           <div><strong>Current investable assets:</strong> <span id="ret_info_assets" class="muted">—</span></div>
           <div><strong>Retirement goal amount:</strong> <span id="ret_info_goal" class="muted">—</span></div>

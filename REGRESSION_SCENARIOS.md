@@ -245,24 +245,36 @@ Whenever a production bug is fixed:
 ### REG-015 — Standalone browser evidence inherited stale candidate metadata
 - Category: REGRESSION / TEST EVIDENCE
 - Date discovered: 2026-07-23
-- Status: local fail-closed fix + regression guard; isolated runtime replay pending
-- Affected files: populated-dashboard browser evidence and Release Readiness
-  candidate-metadata handoff
-- Root cause: the standalone Populated Dashboard runner saved a new PASS while
-  `releaseCurrentCandidateMetadata_()` still held the previous formal candidate,
-  so the `@175` run was labeled `Central Apps Script version 141` /
-  `isolated @141`.
+- Status: standalone fail-closed path runtime-proven on isolated `@178`; dedicated
+  exact-owner Release Readiness path still needs candidate-bound runtime proof
+- Affected files: all browser-suite launchers, runner preparation state, and the
+  Release Readiness candidate-ownership handoff
+- Root cause: the first correction stopped reading mutable candidate metadata at
+  completion, but campaign preparation still treated any saved `IN_PROGRESS`
+  Release Readiness state as its owner. The intentionally parked `@141` run
+  therefore made direct standalone `@175`–`@177` runs look release-owned.
 - Repro: deploy a later isolated candidate without starting a new formal Release
-  Readiness candidate, then run the standalone Populated Dashboard E2E and inspect
-  the saved report's `candidate`.
-- Expected result: a browser suite either receives and verifies the exact active
-  candidate from the owning Validation-console run or refuses to save
-  release-eligible evidence; it must never silently inherit a stale candidate.
+  Readiness candidate while an older `IN_PROGRESS` run remains saved, then open
+  the generic/standalone Populated Dashboard E2E and inspect the report.
+- Expected result: the generic suite launcher and direct runner URL supply no
+  owner, so the report saves `releaseEligible: false`, `candidate: null`, and no
+  release run id even while an older run is active. Only the dedicated Release
+  Readiness table may pass its exact current run id; the server validates that id
+  before launch and revalidates it at completion.
+- Runtime evidence: isolated `@178` standalone runs did not inherit the parked
+  `@141` owner. The final full run
+  `FR-c298ef4e-77a3-4e06-8917-3e76aba0c1df` passed all 12 browser assertions with
+  `releaseEligible: false`, `candidate: null`, an empty `releaseRunId`, zero
+  captured errors, Restricted owner-only sharing, and verified Trash cleanup.
+  Two preceding attempts also failed closed and cleaned up correctly, although
+  one timed out in the journey and one encountered an Apps Script HTTP 0
+  connection failure.
 
 ### REG-016 — Income and Setup classified the same salary differently
 - Category: REGRESSION / UI
 - Date discovered: 2026-07-23
-- Status: local shared-classifier fix + required browser-harness assertion; isolated interactive replay pending
+- Status: shared-classifier fix + required browser-harness assertion; isolated
+  `@178` interactive replay PASS
 - Affected files: Income classification/read models and Setup income status/detail
 - Root cause: Setup classified a non-excluded source with one positive month as
   recurring, while Income required three positive months and placed the same
@@ -273,6 +285,10 @@ Whenever a production bug is fixed:
 - Expected result: both surfaces use the same shared classifier; the salary
   appears as one tracked recurring source on both, while excluded categories
   and negative/non-positive groups remain Other detected.
+- Runtime evidence: isolated `@178` run
+  `FR-c298ef4e-77a3-4e06-8917-3e76aba0c1df` passed
+  `income_setup_consistency`; Income and Setup classified the one-month synthetic
+  salary as the same tracked recurring source.
 
 ---
 
@@ -310,6 +326,6 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-012 | Empty editor actions were enabled | REGRESSION / UI | fixed; static guard; UI scenario pending |
 | REG-013 | Planner rebuilt unused History charts | STRESS / performance | fixed; static guard; runtime scenario pending |
 | REG-014 | Bank formatted balance replacement concatenated loaded value | REGRESSION / UI | fixed; static guard + isolated `@175` interactive writer replay PASS |
-| REG-015 | Standalone browser evidence inherited stale candidate metadata | REGRESSION / TEST EVIDENCE | local fail-closed fix + regression guard; isolated runtime replay pending |
-| REG-016 | Income and Setup classified the same salary differently | REGRESSION / UI | local shared-classifier fix + required browser assertion; isolated interactive replay pending |
+| REG-015 | Standalone browser evidence inherited stale candidate metadata | REGRESSION / TEST EVIDENCE | standalone fail-closed path runtime-proven on isolated `@178`; dedicated exact-owner runtime proof pending |
+| REG-016 | Income and Setup classified the same salary differently | REGRESSION / UI | fixed; isolated `@178` interactive replay PASS |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

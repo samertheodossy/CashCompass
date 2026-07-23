@@ -1,7 +1,11 @@
 /* Planning — Debts tab */
 var __debtPropertyOptions = [];
+var debtUpdateDetailsReady_ = false;
+var debtUpdateDetailsRequestId_ = 0;
 
 function loadDebtSection() {
+  debtUpdateDetailsReady_ = false;
+  updateDebtUpdateAvailability_();
   google.script.run
     .withSuccessHandler(function(data) {
       allDebtRows = data.debts || [];
@@ -39,6 +43,8 @@ function loadDebtSection() {
 }
 
 function loadDebtSectionThenSelect_(accountName) {
+  debtUpdateDetailsReady_ = false;
+  updateDebtUpdateAvailability_();
   google.script.run
     .withSuccessHandler(function(data) {
       allDebtRows = data.debts || [];
@@ -999,28 +1005,32 @@ function filterDebtAccounts() {
     sel.appendChild(opt);
   });
 
+  debtUpdateDetailsReady_ = false;
   loadDebtFieldValue();
 }
 
 function updateDebtUpdateAvailability_() {
   const sel = document.getElementById('debt_account');
   const hasSelection = !!(sel && String(sel.value || '').trim());
+  const hasLoadedSelection = hasSelection && debtUpdateDetailsReady_;
   const hasDebts = !!(sel && sel.options && sel.options.length > 1);
   const saveBtn = document.getElementById('debt_update_save_btn');
   const stopBtn = document.getElementById('debt_update_stop_btn');
   const stopZone = document.getElementById('debt_update_stop_zone');
   const hint = document.getElementById('debt_update_empty_hint');
-  if (saveBtn) saveBtn.disabled = !hasSelection;
+  if (saveBtn) saveBtn.disabled = !hasLoadedSelection;
   if (stopBtn) {
-    stopBtn.disabled = !hasSelection;
-    stopBtn.hidden = !hasSelection;
+    stopBtn.disabled = !hasLoadedSelection;
+    stopBtn.hidden = !hasLoadedSelection;
   }
-  if (stopZone) stopZone.hidden = !hasSelection;
+  if (stopZone) stopZone.hidden = !hasLoadedSelection;
   if (hint) {
-    hint.textContent = hasDebts
-      ? 'Select a debt account to update it.'
-      : 'Add your first debt account to start tracking balances and payments.';
-    hint.style.display = hasSelection ? 'none' : '';
+    hint.textContent = hasSelection
+      ? 'Loading debt details…'
+      : (hasDebts
+        ? 'Select a debt account to update it.'
+        : 'Add your first debt account to start tracking balances and payments.');
+    hint.style.display = hasLoadedSelection ? 'none' : '';
   }
 }
 
@@ -1043,6 +1053,8 @@ function handleDebtValueBlur() {
 function loadDebtFieldValue(quiet) {
   const accountName = document.getElementById('debt_account').value;
   const fieldName = document.getElementById('debt_field').value;
+  const requestId = ++debtUpdateDetailsRequestId_;
+  debtUpdateDetailsReady_ = false;
   updateDebtUpdateAvailability_();
 
   if (!accountName || !fieldName) {
@@ -1056,6 +1068,11 @@ function loadDebtFieldValue(quiet) {
   if (!quiet) setStatusLoading('debt_status');
   google.script.run
     .withSuccessHandler(function(data) {
+      if (requestId !== debtUpdateDetailsRequestId_ ||
+          document.getElementById('debt_account').value !== accountName ||
+          document.getElementById('debt_field').value !== fieldName) {
+        return;
+      }
       document.getElementById('debt_type').textContent = data.type || '—';
       document.getElementById('debt_pctAvail').textContent = data.pctAvail || '—';
 
@@ -1075,9 +1092,14 @@ function loadDebtFieldValue(quiet) {
           data.value !== '' && data.value !== null ? data.value : '';
       }
 
+      debtUpdateDetailsReady_ = true;
+      updateDebtUpdateAvailability_();
       if (!quiet) setStatus('debt_status', '', false);
     })
     .withFailureHandler(function(err) {
+      if (requestId !== debtUpdateDetailsRequestId_) return;
+      debtUpdateDetailsReady_ = false;
+      updateDebtUpdateAvailability_();
       // Even in quiet mode, surface failures so users aren't left with
       // a stale info panel and no signal that something went wrong.
       setStatus('debt_status', (err.message || String(err)), true);

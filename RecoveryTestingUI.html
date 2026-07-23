@@ -34,6 +34,7 @@
     moves only those exact files to Trash. Canonical, configured-default, administrator, and bounded
     workbooks are excluded before every recovery action.
   </div>
+  <p id="evidence_mode" class="muted"></p>
 
   <div class="card">
     <h2>Run the suite</h2>
@@ -52,6 +53,10 @@
   <div id="status" class="muted"></div>
 </div>
 <script>
+  var requestedReleaseRunId = <?!= releaseRunIdJson ?>;
+  document.getElementById('evidence_mode').textContent = requestedReleaseRunId
+    ? 'Exact-candidate evidence requested for Release Readiness run ' + requestedReleaseRunId + '.'
+    : 'Standalone diagnostic run — this evidence cannot qualify a release candidate.';
   function confirmed() { return document.getElementById('confirm').checked; }
   function syncButtons() {
     document.querySelectorAll('.guarded').forEach(function(btn) { btn.disabled = !confirmed(); });
@@ -88,7 +93,7 @@
     }).withFailureHandler(function(err) {
       btn.disabled = !confirmed();
       fail(err);
-    }).recoveryLiveStart(confirmed());
+    }).recoveryLiveStart(confirmed(), requestedReleaseRunId);
   }
   function runNext(runId) {
     showStatus('Running next bounded production recovery step…', false);

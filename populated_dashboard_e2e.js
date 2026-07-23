@@ -37,9 +37,9 @@ function pdE2EGetState() {
 }
 
 /** Provision through Central, verify identity, then seed the exact mapped fixture. */
-function pdE2EPrepare(confirmed) {
+function pdE2EPrepare(confirmed, requestedReleaseRunId) {
   return frE2ESafe_(function() {
-    var prepared = frE2EPrepare(confirmed);
+    var prepared = frE2EPrepare(confirmed, requestedReleaseRunId);
     if (!prepared || !prepared.ok) {
       throw new Error((prepared && prepared.error) || 'Populated Dashboard E2E preparation failed.');
     }

@@ -62,18 +62,80 @@ Run each journey as a first-time user would, without relying on implementation k
 For every review, provide:
 
 1. Overall impression and confidence level.
-2. What is good.
-3. What is confusing.
-4. What is hard to do.
-5. What does not make sense.
-6. Screens or components that look wrong.
-7. Navigation findings.
-8. Ease-of-use assessment.
-9. Color, contrast, spacing, and typography findings.
-10. Trust and feedback-state findings.
-11. Prioritized issues with severity, affected screen, evidence type, and recommendation.
-12. Top three improvements.
-13. Retest checklist.
+2. Scorecard with every criterion scored out of 10, the weighted overall score
+   out of 10, evidence type, and a one-sentence rationale.
+3. What is good.
+4. What is confusing.
+5. What is hard to do.
+6. What does not make sense.
+7. Screens or components that look wrong.
+8. Navigation findings.
+9. Ease-of-use assessment.
+10. Color, contrast, spacing, and typography findings.
+11. Trust and feedback-state findings.
+12. Prioritized issues with severity, affected screen, evidence type, and recommendation.
+13. Top three improvements.
+14. Retest checklist.
+
+### Required 10-point scorecard
+
+Score the same eight criteria on every run so progress is comparable rather than
+impressionistic:
+
+| Criterion | Weight | A 10/10 means |
+|---|---:|---|
+| Errors and task completion | 20% | Reviewed tasks complete without broken, misleading, or unsafe behavior. |
+| Ease and efficiency | 15% | A first-time user can complete the journey confidently with little friction. |
+| Language and comprehension | 10% | Labels, instructions, and feedback use direct customer language without implementation jargon. |
+| Transitions and feedback | 15% | Navigation handoffs, loading, success, empty, stale, and failure states clearly explain what happened and what comes next. |
+| Visual design and readability | 10% | Color, contrast, spacing, typography, hierarchy, and density feel intentional and readable. |
+| Navigation and discoverability | 10% | Destinations and relationships are easy to find and explain without product knowledge. |
+| Trust and safety | 15% | Financial state, writer boundaries, confirmations, history preservation, and data consequences are trustworthy. |
+| Responsive and accessibility | 5% | Supported desktop/narrow layouts, keyboard use, focus, names, targets, contrast, and reduced motion are usable. |
+
+Calculate the weighted overall score to one decimal place:
+
+`overall = Σ(criterion score × criterion weight)`
+
+The report must also show the change from the previous comparable run. Use
+**Baseline** when no comparable prior score exists. A criterion that was not
+meaningfully exercised must be marked **Not fully evidenced** and cannot score
+above 7/10. Do not award points based only on source intent when rendered behavior
+was available for review.
+
+Use these anchors consistently:
+
+- **10 — Excellent:** no material issue or evidence gap in the reviewed scope.
+- **8 — Good:** usable and trustworthy, with limited non-blocking friction.
+- **6 — Mixed:** task is possible, but confusion or repeated friction is material.
+- **4 — Poor:** major difficulty, misleading state, or unreliable feedback.
+- **2 — Failing:** core task is blocked, unsafe, or substantially broken.
+
+Severity constrains the overall result: any unresolved P0 caps the overall score at
+5.9/10; any unresolved P1 in the reviewed scope caps it at 8.9/10. The score is
+usability evidence, not a release approval, and it does not replace the stricter
+Beta readiness scorecard or automated release gates.
+
+### Score-to-10 execution order
+
+Improve and rescore only one criterion at a time:
+
+1. Errors and task completion.
+2. Trust and safety.
+3. Transitions and feedback.
+4. Ease and efficiency.
+5. Language and comprehension.
+6. Navigation and discoverability.
+7. Visual design and readability.
+8. Responsive and accessibility.
+
+For each criterion, the advocate must identify every confirmed defect and evidence
+gap, state what a 10/10 requires, and refuse to award 10 while any material issue
+or untested branch remains. Engineering then implements the smallest coherent
+wave, adds permanent regression coverage, and produces isolated exact-candidate
+runtime evidence before the advocate rescores. The detailed baseline deductions,
+fix path, and closing evidence are maintained in
+`TODO.md → Advocate 10/10 score-improvement program`.
 
 Severity:
 
@@ -285,22 +347,172 @@ to make new evidence look attributable to an older candidate; require an
 exact-candidate handoff from the owning Validation-console run or mark/refuse the
 evidence as non-release-eligible. Tracked as `REG-015`.
 
-**Implementation follow-up:** the local `REG-015` fix now captures the owning
-Release Readiness run when each First-Run, Populated Dashboard, Recovery Live,
-or Performance browser campaign starts, then revalidates that run and candidate
-at completion. Standalone runs remain available for diagnosis but save
-`releaseEligible: false`, a null candidate, and an explanatory note; Performance
-cannot ratify a release budget in that state. Release Readiness additionally
-requires the exact owning run id before accepting browser evidence. Local P1
-evidence regressions pass; isolated runtime replay remains pending.
+**Implementation follow-up:** `@177` proved that merely capturing whichever
+Release Readiness state was `IN_PROGRESS` was insufficient because the parked
+`@141` run still looked like an owner. The corrected local contract now requires
+an explicit run id supplied only by a dedicated action in the active Release
+Readiness evidence table. The admin launcher validates that id; campaign
+preparation captures it; completion revalidates it. Generic/direct launches supply
+no owner and save `releaseEligible: false`, a null candidate, and no release run
+id even while an older run remains active. Performance cannot ratify a budget in
+that state. P1 evidence, production-path, syntax, and full local regressions pass;
+isolated runtime replay remains pending.
 
 **Income / Setup follow-up:** the local fix replaces the duplicated thresholds
 with one shared classification path. A non-excluded active salary with one
 positive month is immediately tracked on both Income and Setup; excluded,
 negative, and non-positive groups remain Other detected. Behavior and static
-regressions pass, and the permanent Populated Dashboard browser contract now
-requires the two surfaces to agree; isolated interactive replay remains pending
-as `REG-016`.
+regressions pass, and the permanent Populated Dashboard browser contract requires
+the two surfaces to agree. **Interactive:** isolated Central `@176` confirmed the
+two surfaces agree, closing `REG-016`.
+
+**Contained visibility-wave follow-up (Source review; runtime replay pending):**
+the confirmed customer-language leaks now render as **Tax year**, customer-facing
+property-expense guidance, friendly Bank policy labels, and **Available credit %**
+without changing stored identifiers or workbook schema. Bank and Debt Save /
+Stop-tracking actions now remain unavailable until the matching selected-record
+details load, with request-generation guards preventing stale responses from
+re-enabling the wrong selection. Retirement hides unavailable result cards while
+guidance is shown. The narrow layout uses compact two-column header actions and
+primary navigation, while the muted-text token and minimum helper size receive a
+modest contrast/readability increase. Exact assertions were added to the existing
+dashboard UX regression suite; focused local checks pass. These findings are not
+closed until the isolated desktop and 390px visual/interactive replay confirms
+the rendered behavior.
+
+## Scored advocate replay — isolated Central `@177`
+
+**Evidence:** Interactive and Screenshot review on the approved isolated Central
+validation deployment, plus Source review only where explicitly noted. Two guarded
+Populated Dashboard E2E journeys ran on newly provisioned Restricted synthetic
+workbooks: the default-width run `FR-178f624b-8b46-4897-a6ea-cf966f4f657a` and a
+separate 390px run starting `2026-07-23T20:26:39.599Z`. Both reported PASS and
+verified Trash cleanup. No Beta, bounded, mapped-user, Golden, configured-default,
+or manually supplied workbook was used.
+
+**Confidence:** High for the automated populated journey and the rendered Overview,
+Properties, Cash Flow, navigation, loading transitions, and 390px layout. Medium
+for Bank/Debt pre-load gating because the permanent source contract and automated
+safe-action assertion passed but failure/stale responses were not deliberately
+induced. Retirement's new guidance state remains Source review in this replay.
+
+### 1–2. Overall impression and scorecard
+
+CashCompass now looks intentionally responsive rather than merely stacked at
+390px. The compact brand/actions area, two-column navigation, stronger helper text,
+and clearer customer wording materially improve first-glance confidence. The
+product remains below a 9 because Bills handoff/occurrence feedback is unresolved,
+failure-state evidence is incomplete, and `REG-015` still makes runtime evidence
+look attributable to the wrong candidate.
+
+| Criterion | Score | Weight | Evidence | Rationale |
+|---|---:|---:|---|---|
+| Errors and task completion | 8.0/10 | 20% | Interactive | Both populated journeys passed, but `REG-015` still saved stale candidate metadata as release-eligible evidence. |
+| Ease and efficiency | 8.3/10 | 15% | Interactive / Screenshot | Core destinations are easy to reach; Bills payment still has an unclear two-step handoff. |
+| Language and comprehension | 8.5/10 | 10% | Interactive / Source review | Properties and traversed normal paths read naturally; remaining ambiguous Quick add/Bills semantics are separate open work. |
+| Transitions and feedback | 7.5/10 | 15% | Interactive / Source review | Loading locks and refresh feedback improved, while Bills next-occurrence, stale, failure, Skip, and Stop-tracking evidence remain incomplete. |
+| Visual design and readability | 8.7/10 | 10% | Screenshot | 390px hierarchy, contrast, spacing, and density are notably better; the medium-width header still leaves excessive unused space. |
+| Navigation and discoverability | 8.8/10 | 10% | Interactive | The stable two-column primary navigation and clear page/subtab hierarchy are strong. |
+| Trust and safety | 7.8/10 | 15% | Interactive / Source review | Guarded fixtures, action gating, and cleanup are trustworthy; stale release attribution and the unresolved Bills handoff reduce confidence. |
+| Responsive and accessibility | 7.0/10 | 5% | Screenshot / evidence gap | 390px had no horizontal overflow and good targets, but keyboard, focus, accessible-name, and reduced-motion checks were not fully exercised. |
+
+**Weighted overall: 8.1/10 — Baseline.** The unresolved P1 findings would cap the
+score at 8.9 even if the weighted result were higher. This is usability evidence,
+not release approval.
+
+### Isolated `@178` full rerun — 2026-07-23
+
+**Interactive result:** full Populated Dashboard E2E PASS. Run
+`FR-c298ef4e-77a3-4e06-8917-3e76aba0c1df` passed all 12 required browser
+assertions, captured zero errors, used Restricted owner-only sharing, and
+completed verified Trash cleanup. The standalone report correctly remained
+diagnostic-only with `releaseEligible: false`, `candidate: null`, and no release
+run id despite the parked `@141` state. This runtime-closes the standalone half of
+`REG-015`; the dedicated exact-owner Release Readiness action still needs
+candidate-bound runtime proof.
+
+**Interactive reliability caveat:** this was the third attempt. The first stopped
+at the Debt-selection step and the second exposed a visible Apps Script
+`NetworkError: Connection failure due to HTTP 0`; both still cleaned up and failed
+closed. The final PASS means there is no consistently reproducible functional
+regression in the covered journey, but a two-failures-before-pass pattern is a
+real reliability regression candidate and remains a P1 investigation item.
+
+| Criterion | `@177` baseline | `@178` score | Evidence | Rationale |
+|---|---:|---:|---|---|
+| Errors and task completion | 8.0/10 | **8.0/10** | Interactive | The final 12/12 run proves the feature path, but the preceding Debt timeout and visible HTTP 0 failure prevent a reliability increase. |
+| Ease and efficiency | 8.3/10 | **8.3/10** | Interactive / Screenshot | Core traversal remains straightforward; Bills still has an unclear two-step completion contract. |
+| Language and comprehension | 8.5/10 | **8.5/10** | Interactive / Source review | The covered normal paths remain readable; Bills/Quick add and Upcoming semantics are still unresolved. |
+| Transitions and feedback | 7.5/10 | **7.5/10** | Interactive / Source review | Refresh feedback passed, but Bills occurrence, stale/failure, Skip, Stop-tracking, and HTTP 0 recovery remain incomplete. |
+| Visual design and readability | 8.7/10 | **8.7/10** | Screenshot | The visual system remains clear; the medium-width header imbalance is unchanged. |
+| Navigation and discoverability | 8.8/10 | **8.8/10** | Interactive | Primary destinations, workspaces, and retained Assets subtab all passed. |
+| Trust and safety | 7.8/10 | **8.2/10** | Interactive / Source review | Standalone evidence now fails closed and cleanup is proven; dedicated-owner proof and Bills/recovery consequences remain open. |
+| Responsive and accessibility | 7.0/10 | **7.0/10** | Prior Screenshot / evidence gap | This default-width rerun adds no new keyboard, focus, semantics, reduced-motion, or narrow-width evidence. |
+
+**Weighted overall: 8.2/10 — provisional improvement from 8.1.** The increase is
+limited to the runtime-proven standalone evidence-attribution correction. The
+score is not 10/10 and is not release approval.
+
+### 3–11. Findings
+
+- **What is good — Interactive / Screenshot:** Both runs completed the populated
+  workflow. At 390px, Help and Setup share a balanced row, Refresh spans the width,
+  primary navigation remains a clean two-column grid, and Properties/Cash Flow
+  content stays inside the viewport.
+- **What is confusing — Interactive:** The existing Bills Pay handoff and
+  occurrence explanation remain unresolved and were deliberately not changed in
+  this wave.
+- **What is hard — Evidence gap:** Failure, stale, Skip, and Stop-tracking recovery
+  were not deliberately induced. Retirement's guidance state was not reached
+  interactively before fixture cleanup.
+- **What does not make sense — Interactive:** Both `@177` PASS reports still claim
+  `Central Apps Script version 141` / `isolated @141`, reuse Release Readiness run
+  `RR-d307848c-bbba-49a2-807d-088c0cae0095`, and save
+  `releaseEligible: true`. This reconfirms `REG-015`.
+- **Looks wrong — Screenshot:** The default/medium-width header still concentrates
+  actions on the left and leaves a large unused area. This is polish rather than a
+  task blocker.
+- **Navigation — Interactive:** Primary destinations and subtabs are discoverable
+  and stable at 390px; **Assets & Liabilities** wraps without overflow.
+- **Ease of use — Interactive:** Orientation and browsing are good. The remaining
+  ease penalty comes mainly from Bills semantics rather than navigation.
+- **Color/contrast/spacing/type — Screenshot:** Stronger secondary text is easier
+  to read without losing hierarchy. Cards and selected navy states remain calm and
+  consistent.
+- **Trust/feedback — Interactive / Source review:** Refresh/loading states are
+  visible and Bank/Debt actions are contractually gated until matching data loads.
+  The evidence-attribution bug and untested recovery branches remain trust gaps.
+
+### 12. Prioritized issues
+
+| Priority | Screen | Finding | Recommendation | Evidence |
+|---|---|---|---|---|
+| P1 | Runtime reliability | Two of three isolated `@178` attempts failed before the final 12/12 PASS: one at Debt selection and one with visible Apps Script HTTP 0. | Reproduce under instrumented timing/transport evidence and add bounded retry/recovery behavior where the application controls it. | Interactive |
+| P1 | Test evidence | Standalone `REG-015` behavior is runtime-closed; the dedicated exact-owner path is not yet runtime-proven. | Prove the Release Readiness-owned launcher against an exact candidate before accepting its browser evidence. | Interactive / Source review |
+| P1 | Bills / Quick add | Payment handoff and next-occurrence confirmation remain ambiguous. | Discuss the intended product behavior, then align UI and Help before implementation. | Prior Interactive; unchanged |
+| P2 | Retirement | Guidance/result visibility passed Source review but was not interactively reached in this replay. | Add Retirement state coverage to the guarded browser journey or run a focused read-only fixture replay. | Source review / evidence gap |
+| P2 | State recovery | Stale, failure, Skip, and Stop-tracking feedback remain unverified. | Use a separately approved guarded disposable writer journey with controlled failures. | Evidence gap |
+| P3 | Header | Medium-width layout retains excessive unused header space. | Add a tablet/medium breakpoint that balances brand, actions, and freshness without weakening the 390px result. | Screenshot |
+
+### 13. Top three improvements
+
+1. Investigate the intermittent Debt/HTTP 0 runtime failures and runtime-prove the
+   dedicated exact-owner half of `REG-015`.
+2. Decide and then clarify the Bills Pay → Quick add → next-occurrence journey.
+3. Add focused Retirement and failure-state interactive coverage, then refine the
+   medium-width header.
+
+### 14. Retest checklist
+
+1. Confirm standalone `@candidate` browser evidence is diagnostic-only and cannot
+   inherit or claim an older Release Readiness candidate.
+2. Revisit Retirement with missing minimum inputs and verify the result wall stays
+   hidden until ready.
+3. Exercise Bank/Debt loading failure and stale-response paths on a guarded
+   disposable fixture.
+4. After the Bills decision, verify Pay handoff, completion, next occurrence, and
+   Help as one journey.
+5. Repeat default, medium, and 390px screenshots plus keyboard/focus checks.
 
 ### 12. Top three improvements
 

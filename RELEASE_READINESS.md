@@ -10,6 +10,14 @@ single Validation console creates a disposable Workbook Health preflight, runs o
 bounded server scenario per invocation, saves resumable progress, accepts browser
 evidence only for the exact source/deployment candidate, archives privacy-safe
 verdicts, and restores a console-owned Harness flag to OFF when finalized.
+The `REG-015` correction now makes ownership explicit: generic/direct
+browser runs are diagnostic-only, while only a dedicated action in the active
+Release Readiness browser-evidence table supplies and server-validates the exact
+owning run id. Isolated `@178` runtime evidence proves the standalone fail-closed
+path even while the older `@141` run remains parked: the final full Populated
+Dashboard run passed 12/12 with `releaseEligible: false`, no candidate or release
+run id, zero captured errors, and verified Trash cleanup. Candidate-bound runtime
+proof of the dedicated exact-owner action remains pending.
 
 Financial Integrity is now included in the required server-suite inventory through
 `SUITE-FINANCIAL-INTEGRITY-CANONICAL`. Runs `20260722-151535-b8f9` (`@151`),

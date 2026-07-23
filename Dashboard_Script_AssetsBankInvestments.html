@@ -1,7 +1,11 @@
 /* Assets — Bank Accounts & Investments tabs */
+var bankUpdateDetailsReady_ = false;
+var bankUpdateDetailsRequestId_ = 0;
+
 function fillBankAccountDropdownFromData_(data) {
   const sel = document.getElementById('bank_account');
   if (!sel) return;
+  bankUpdateDetailsReady_ = false;
   sel.innerHTML = '<option value=""></option>';
   (data.accounts || []).forEach(function(a) {
     const opt = document.createElement('option');
@@ -16,21 +20,36 @@ function fillBankAccountDropdownFromData_(data) {
 function updateBankUpdateAvailability_() {
   const sel = document.getElementById('bank_account');
   const hasSelection = !!(sel && String(sel.value || '').trim());
+  const hasLoadedSelection = hasSelection && bankUpdateDetailsReady_;
   const hasAccounts = !!(sel && sel.options && sel.options.length > 1);
   const saveBtn = document.getElementById('bank_update_save_btn');
   const stopBtn = document.getElementById('bank_update_stop_btn');
   const hint = document.getElementById('bank_update_empty_hint');
-  if (saveBtn) saveBtn.disabled = !hasSelection;
+  if (saveBtn) saveBtn.disabled = !hasLoadedSelection;
   if (stopBtn) {
-    stopBtn.disabled = !hasSelection;
-    stopBtn.hidden = !hasSelection;
+    stopBtn.disabled = !hasLoadedSelection;
+    stopBtn.hidden = !hasLoadedSelection;
   }
   if (hint) {
-    hint.textContent = hasAccounts
-      ? 'Select a bank account to update it.'
-      : 'Add your first bank account to start tracking balances.';
-    hint.style.display = hasSelection ? 'none' : '';
+    hint.textContent = hasSelection
+      ? 'Loading account details…'
+      : (hasAccounts
+        ? 'Select a bank account to update it.'
+        : 'Add your first bank account to start tracking balances.');
+    hint.style.display = hasLoadedSelection ? 'none' : '';
   }
+}
+
+function formatBankUsePolicyLabel_(value) {
+  var raw = String(value == null ? '' : value).trim();
+  if (!raw) return '—';
+  var labels = {
+    DO_NOT_TOUCH: 'Do not touch',
+    USE_FOR_BILLS: 'Use for bills',
+    USE_FOR_DEBT: 'Use for debt',
+    USE_WITH_CAUTION: 'Use with caution'
+  };
+  return labels[raw.toUpperCase()] || raw;
 }
 
 // First-run fallback used when the workbook has no Bank Account Type
@@ -341,6 +360,8 @@ function setBankPanelMode(mode) {
 
 function loadBankSection() {
   document.getElementById('bank_date').value = new Date().toISOString().slice(0, 10);
+  bankUpdateDetailsReady_ = false;
+  updateBankUpdateAvailability_();
   // Reconcile Import segment-button visibility on every Bank tab
   // entry. Earlier reveals (in loadBankImportReviewSection) only fire
   // when the user actually navigates to Review imports; doing it here
@@ -364,6 +385,8 @@ function loadBankSection() {
 function loadBankSectionThenSelect_(accountName) {
   document.getElementById('bank_date').value =
     document.getElementById('bank_date').value || new Date().toISOString().slice(0, 10);
+  bankUpdateDetailsReady_ = false;
+  updateBankUpdateAvailability_();
   google.script.run
     .withSuccessHandler(function(data) {
       fillBankAccountDropdownFromData_(data);
@@ -426,10 +449,12 @@ function evaluateBankBufferWarning() {
 function loadBankData(quiet) {
   const account = document.getElementById('bank_account').value;
   const date = document.getElementById('bank_date').value;
+  const requestId = ++bankUpdateDetailsRequestId_;
+  bankUpdateDetailsReady_ = false;
+  bankCurrentData = null;
   updateBankUpdateAvailability_();
 
   if (!account || !date) {
-    bankCurrentData = null;
     document.getElementById('bank_selectedMonth').textContent = '—';
     document.getElementById('bank_selectedMonthValue').textContent = '—';
     document.getElementById('bank_currentBalance').textContent = '—';
@@ -447,6 +472,11 @@ function loadBankData(quiet) {
   if (!quiet) setStatusLoading('bank_status');
   google.script.run
     .withSuccessHandler(function(data) {
+      if (requestId !== bankUpdateDetailsRequestId_ ||
+          document.getElementById('bank_account').value !== account ||
+          document.getElementById('bank_date').value !== date) {
+        return;
+      }
       bankCurrentData = data;
       document.getElementById('bank_selectedMonth').textContent = data.selectedMonth || '—';
       document.getElementById('bank_selectedMonthValue').textContent =
@@ -458,7 +488,8 @@ function loadBankData(quiet) {
       document.getElementById('bank_minBuffer').textContent =
         data.minBuffer !== '' ? fmtCurrency(data.minBuffer) : '—';
       document.getElementById('bank_type').textContent = data.type || '—';
-      document.getElementById('bank_usePolicy').textContent = data.usePolicy || '—';
+      document.getElementById('bank_usePolicy').textContent =
+        formatBankUsePolicyLabel_(data.usePolicy);
       const bankDeltaEl = document.getElementById('bank_deltaPriorMonth');
       if (bankDeltaEl) {
         bankDeltaEl.textContent =
@@ -473,10 +504,15 @@ function loadBankData(quiet) {
         document.getElementById('bank_value').value = '';
       }
 
+      bankUpdateDetailsReady_ = true;
+      updateBankUpdateAvailability_();
       evaluateBankBufferWarning();
       if (!quiet) setStatus('bank_status', '', false);
     })
     .withFailureHandler(function(err) {
+      if (requestId !== bankUpdateDetailsRequestId_) return;
+      bankUpdateDetailsReady_ = false;
+      updateBankUpdateAvailability_();
       // Even in quiet mode, surface failures so users aren't left
       // with a stale info panel and no signal that something went wrong.
       setStatus('bank_status', (err.message || String(err)), true);

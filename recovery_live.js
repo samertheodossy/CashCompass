@@ -225,7 +225,7 @@ function recoveryLiveGetState() {
   });
 }
 
-function recoveryLiveStart(confirmed) {
+function recoveryLiveStart(confirmed, requestedReleaseRunId) {
   return recoveryLiveSafe_(function() {
     var email = assertRecoveryLiveAllowed_();
     if (confirmed !== true) throw new Error('Disposable-account confirmation is required.');
@@ -263,7 +263,7 @@ function recoveryLiveStart(confirmed) {
       fixtureIds: [],
       assertions: [],
       sharing: [],
-      releaseEvidenceContext: releaseBrowserEvidenceContext_()
+      releaseEvidenceContext: releaseBrowserEvidenceContext_(requestedReleaseRunId)
     };
     recoveryLiveAddAssertion_(state, 'identity_boundary', true,
       'Exact allow-listed disposable non-admin Central identity; no caller-supplied email or workbook ID.');

@@ -73,7 +73,7 @@ function psGetState() {
   });
 }
 
-function psStartCampaign(confirmed) {
+function psStartCampaign(confirmed, requestedReleaseRunId) {
   return psSafe_(function() {
     assertPerformanceSamplingAllowed_();
     if (confirmed !== true) throw new Error('Disposable-account confirmation is required.');
@@ -90,7 +90,7 @@ function psStartCampaign(confirmed) {
       status: 'IN_PROGRESS',
       startedAt: new Date().toISOString(),
       samples: [],
-      releaseEvidenceContext: releaseBrowserEvidenceContext_()
+      releaseEvidenceContext: releaseBrowserEvidenceContext_(requestedReleaseRunId)
     };
     psWriteState_(state);
     return { ok: true, state: psPublicState_(), resumed: false };

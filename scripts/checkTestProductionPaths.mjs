@@ -46,7 +46,7 @@ const requiredProductionPaths = {
     'provisionWorkbookForUser_', 'frE2ECleanupVerified_'
   ],
   'populated_dashboard_e2e.js': [
-    'frE2EPrepare(confirmed)', 'runMinimalBootstrap_',
+    'frE2EPrepare(confirmed, requestedReleaseRunId)', 'runMinimalBootstrap_',
     'harnessSeedRepresentativeWorkbook_', 'frE2ECleanupVerified_'
   ],
   'recovery_live.js': [

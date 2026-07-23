@@ -48,6 +48,20 @@ Current runtime status (2026-07-21): First-Run UX E2E V2 run `FR-9c57ac53-0250-4
 
 Saved evidence contains only run IDs, candidate/deployment identifiers, suite/scenario IDs, timestamps, durations, verdicts, counts, compatibility, cleanup/sharing outcomes, and sanitized error text. It never stores balances, transaction descriptions, account names, workbook cell values, user email addresses, or permission identifiers.
 
+### Browser evidence ownership
+
+- A generic suite launch or direct browser-runner URL is always standalone,
+  diagnostic-only evidence, even when an older Release Readiness run remains
+  `IN_PROGRESS`.
+- Only the browser-suite action rendered inside the active Release Readiness
+  report may supply an owning release run id.
+- The admin launcher validates that supplied id against the exact active run
+  before opening the disposable-account runner.
+- Campaign preparation captures that explicit owner and completion revalidates the
+  same run and candidate. Missing, stale, replaced, finalized, or mismatched
+  ownership saves `releaseEligible: false`, a null candidate, and no release run
+  id. Diagnostic Performance evidence cannot ratify a release budget.
+
 ## Current limitation boundary
 
 Browser rendering/navigation and account-specific Recovery adoption cannot be truthfully simulated by a workbook-only scenario. Accordingly, a browser pack is `NOT IMPLEMENTED` until its UI-driver or disposable-account execution seam exists and passes. All three required browser packs now meet that standard. The Release Readiness runner must still report any missing or stale browser evidence as `NOT READY`; it must never substitute static checks or the pure Recovery decision matrix for live E2E evidence.

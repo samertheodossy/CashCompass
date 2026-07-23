@@ -35,6 +35,7 @@
     it only after the same owner/name/marker/mapping checks pass. It cannot target the configured default,
     canonical, admin, or bounded workbook.
   </div>
+  <p id="evidence_mode" class="muted"></p>
 
   <div class="card">
     <h2>Run the suite</h2>
@@ -54,6 +55,10 @@
   <div id="status" class="muted"></div>
 </div>
 <script>
+  var requestedReleaseRunId = <?!= releaseRunIdJson ?>;
+  document.getElementById('evidence_mode').textContent = requestedReleaseRunId
+    ? 'Exact-candidate evidence requested for Release Readiness run ' + requestedReleaseRunId + '.'
+    : 'Standalone diagnostic run — this evidence cannot qualify a release candidate.';
   function confirmed() { return document.getElementById('confirm').checked; }
   function syncButtons() {
     document.querySelectorAll('.guarded').forEach(function(btn) { btn.disabled = !confirmed(); });
@@ -98,7 +103,7 @@
         window.location.assign(res.runUrl);
       })
       .withFailureHandler(function(err) { btn.disabled = !confirmed(); fail(err); })
-      .frE2EPrepare(confirmed());
+      .frE2EPrepare(confirmed(), requestedReleaseRunId);
   }
   function cleanup() {
     showStatus('Verifying and moving the exact fixture to Trash…', false);

@@ -13,6 +13,7 @@ const files = Object.fromEntries(await Promise.all([
   'Dashboard_Script_Payments.html',
   'Dashboard_Script_PlanningDebts.html',
   'Dashboard_Script_PlanningNextActions.html',
+  'Dashboard_Script_PlanningRetirement.html',
   'Dashboard_Script_PropertyPerformance.html',
   'Dashboard_Script_PropertiesHouseExpenses.html',
   'Dashboard_Script_Render.html',
@@ -400,13 +401,13 @@ assert.match(files['Dashboard_Script_Income.html'], /class="small-btn danger"[\s
 assert.match(body, /id="debt_update_stop_zone"[^>]*hidden/,
   'The Debt danger zone must start hidden until a debt is selected');
 assert.match(files['Dashboard_Script_PlanningDebts.html'],
-  /getElementById\(['"]debt_update_stop_zone['"]\)[\s\S]*?stopZone\.hidden\s*=\s*!hasSelection/,
-  'The Debt availability guard must reveal the whole danger zone only for a valid selection');
-for (const [sourceName, functionName, stopId] of [
-  ['Dashboard_Script_AssetsHouseValues.html', 'updateHouseUpdateAvailability_', 'house_stop_btn'],
-  ['Dashboard_Script_AssetsBankInvestments.html', 'updateBankUpdateAvailability_', 'bank_update_stop_btn'],
-  ['Dashboard_Script_AssetsBankInvestments.html', 'updateInvestmentUpdateAvailability_', 'inv_update_stop_btn'],
-  ['Dashboard_Script_PlanningDebts.html', 'updateDebtUpdateAvailability_', 'debt_update_stop_btn']
+  /getElementById\(['"]debt_update_stop_zone['"]\)[\s\S]*?stopZone\.hidden\s*=\s*!hasLoadedSelection/,
+  'The Debt availability guard must reveal the danger zone only after the selected debt loads');
+for (const [sourceName, functionName, stopId, readinessName] of [
+  ['Dashboard_Script_AssetsHouseValues.html', 'updateHouseUpdateAvailability_', 'house_stop_btn', 'hasSelection'],
+  ['Dashboard_Script_AssetsBankInvestments.html', 'updateBankUpdateAvailability_', 'bank_update_stop_btn', 'hasLoadedSelection'],
+  ['Dashboard_Script_AssetsBankInvestments.html', 'updateInvestmentUpdateAvailability_', 'inv_update_stop_btn', 'hasSelection'],
+  ['Dashboard_Script_PlanningDebts.html', 'updateDebtUpdateAvailability_', 'debt_update_stop_btn', 'hasLoadedSelection']
 ]) {
   const source = files[sourceName];
   const start = source.indexOf(`function ${functionName}(`);
@@ -415,8 +416,8 @@ for (const [sourceName, functionName, stopId] of [
   assert.ok(start >= 0, `${functionName} must exist`);
   assert.match(availabilityFunction, new RegExp(`getElementById\\(['"]${stopId}['"]\\)`),
     `${functionName} must control ${stopId}`);
-  assert.match(availabilityFunction, /stopBtn\.hidden\s*=\s*!hasSelection/,
-    `${functionName} must reveal Stop tracking only for a valid selection`);
+  assert.match(availabilityFunction, new RegExp(`stopBtn\\.hidden\\s*=\\s*!${readinessName}`),
+    `${functionName} must reveal Stop tracking only when its selection is ready`);
 }
 for (const id of [
   'bank_update_save_btn',
@@ -440,6 +441,55 @@ assert.match(assetScript, /function updateBankUpdateAvailability_\(/);
 assert.match(assetScript, /function updateInvestmentUpdateAvailability_\(/);
 assert.match(files['Dashboard_Script_PlanningDebts.html'], /function updateDebtUpdateAvailability_\(/);
 assert.match(files['Dashboard_Script_PropertiesHouseExpenses.html'], /function updateHouseExpenseAvailability_\(/);
+assert.match(assetScript,
+  /var bankUpdateDetailsReady_ = false;[\s\S]*?const hasLoadedSelection = hasSelection && bankUpdateDetailsReady_;/,
+  'Bank writers must depend on loaded account details, not selection alone');
+assert.match(assetScript,
+  /const requestId = \+\+bankUpdateDetailsRequestId_;[\s\S]*?bankUpdateDetailsReady_ = false;[\s\S]*?requestId !== bankUpdateDetailsRequestId_[\s\S]*?bankUpdateDetailsReady_ = true;/,
+  'Bank detail loads must reject stale responses before enabling writers');
+const debtScript = files['Dashboard_Script_PlanningDebts.html'];
+assert.match(debtScript,
+  /var debtUpdateDetailsReady_ = false;[\s\S]*?const hasLoadedSelection = hasSelection && debtUpdateDetailsReady_;/,
+  'Debt writers must depend on loaded debt details, not selection alone');
+assert.match(debtScript,
+  /const requestId = \+\+debtUpdateDetailsRequestId_;[\s\S]*?debtUpdateDetailsReady_ = false;[\s\S]*?requestId !== debtUpdateDetailsRequestId_[\s\S]*?debtUpdateDetailsReady_ = true;/,
+  'Debt detail loads must reject stale responses before enabling writers');
+
+assert.doesNotMatch(body,
+  /section on sheet|same house expense writer|Acct PCT Avail/,
+  'Normal dashboard copy must not expose sheet mechanics, writers, sidebars, or debt abbreviations');
+assert.match(body, /<label for="don_taxYear">Tax year<\/label>/,
+  'Donation tax year must use direct customer language');
+assert.match(body, /Available credit %/,
+  'Debt credit availability must use a readable label');
+assert.match(assetScript,
+  /function formatBankUsePolicyLabel_\(value\)[\s\S]*?USE_FOR_BILLS:\s*'Use for bills'/,
+  'Stored Bank policy tokens must render as customer-facing labels');
+
+const retirementScript = files['Dashboard_Script_PlanningRetirement.html'];
+assert.match(body,
+  /id="ret_scenario_cards"[^>]*hidden[\s\S]*?id="ret_results_panel"[^>]*hidden/,
+  'Retirement results must start hidden instead of flashing dash-only output');
+assert.match(retirementScript,
+  /function showRetirementEmptyState_[\s\S]*?scenarioCards\.hidden = true;[\s\S]*?resultsPanel\.hidden = true;/,
+  'Retirement guidance states must hide unavailable result panels');
+assert.match(retirementScript,
+  /function hideRetirementEmptyState_[\s\S]*?scenarioCards\.hidden = false;[\s\S]*?resultsPanel\.hidden = false;/,
+  'Ready Retirement data must reveal the real result panels');
+assert.match(styles,
+  /#ret_scenario_cards\[hidden\],[\s\S]*?#ret_results_panel\[hidden\]\s*\{[\s\S]*?display:\s*none !important;/,
+  'Retirement hidden result panels must stay hidden despite grid styles');
+assert.match(styles, /--cc-muted:\s*#526173;/,
+  'Secondary text must use the strengthened contrast token');
+assert.match(styles,
+  /\.updated\s*\{\s*font-size:\s*13px;\s*color:\s*var\(--cc-muted\);/,
+  'Freshness and contextual helper text must remain readable');
+assert.match(styles,
+  /@media \(max-width:\s*460px\)[\s\S]*?\.page-nav\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/,
+  'Narrow navigation must use readable two-column rows');
+assert.match(styles,
+  /@media \(max-width:\s*460px\)[\s\S]*?\.top-actions-buttons\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/,
+  'Narrow header actions must use an intentional compact grid');
 
 const propertyPerformance = files['Dashboard_Script_PropertyPerformance.html'];
 for (const id of ['pp_port_loan_payments', 'pp_port_net_cash_flow']) {
