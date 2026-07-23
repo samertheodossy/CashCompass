@@ -69,12 +69,48 @@ for (const source of currencyUiSources) {
 for (const source of [render, files['PlannerDashboard.html']]) {
   assert.match(source, /if \(num < 0\) return '-' \+ fmtCurrency\(Math\.abs\(num\)\);/,
     'Signed currency must place the minus sign before the dollar sign');
+  assert.match(source,
+    /function currencyFocus\(id,\s*selectAll\)[\s\S]*?selectAll === true[\s\S]*?input\.select\(\)/,
+    'Currency focus must support opt-in whole-value replacement');
+
+  const focusStart = source.indexOf('function currencyFocus(');
+  const focusEnd = source.indexOf('function currencyBlur(', focusStart);
+  assert.ok(focusStart >= 0 && focusEnd > focusStart,
+    'Currency focus implementation must remain directly testable');
+  const focusSource = source.slice(focusStart, focusEnd);
+  let selectCount = 0;
+  const input = {
+    value: '$12,500.00',
+    select() { selectCount += 1; }
+  };
+  const documentStub = {
+    activeElement: input,
+    getElementById(id) { return id === 'bank_value' ? input : null; }
+  };
+  const windowStub = { setTimeout(fn) { fn(); } };
+  const toNumberStub = (value) => Number(String(value).replace(/[$,]/g, ''));
+  const focus = Function(
+    'document',
+    'window',
+    'toNumber',
+    `${focusSource}; return currencyFocus;`
+  )(documentStub, windowStub, toNumberStub);
+  focus('bank_value', true);
+  assert.equal(input.value, '12500',
+    'Bank focus must expose the loaded balance as one raw numeric value');
+  assert.ok(selectCount >= 1,
+    'Bank focus must select the complete loaded balance for replacement');
 }
 assert.match(render, /Change vs ['"] \+ label \+ ': ' \+ fmtSignedCurrency\(num\)/,
   'Overview month deltas must use the signed-currency formatter');
 
 const body = files['Dashboard_Body.html'];
 const styles = files['Dashboard_Styles.html'];
+for (const source of [body, files['PlannerDashboard.html']]) {
+  assert.match(source,
+    /id=["']bank_value["'][^>]*onfocus=["']currencyFocus\(['"]bank_value["'],\s*true\)["']/,
+    'Bank balance updates must select the loaded amount for safe replacement');
+}
 const overview = body.slice(
   body.indexOf('<div id="page_overview"'),
   body.indexOf('<div id="page_assets"')

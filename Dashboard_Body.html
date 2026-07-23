@@ -385,7 +385,7 @@
             <label>Date</label>
             <input type="date" id="bank_date" onchange="loadBankData()">
             <label>Value</label>
-            <input type="text" id="bank_value" inputmode="decimal" onfocus="currencyFocus('bank_value')" onblur="currencyBlur('bank_value')" oninput="evaluateBankBufferWarning()">
+            <input type="text" id="bank_value" inputmode="decimal" onfocus="currencyFocus('bank_value', true)" onblur="currencyBlur('bank_value')" oninput="evaluateBankBufferWarning()">
             <div id="bank_bufferWarning" class="warning-box"></div>
             <div class="check-row">
               <input type="checkbox" id="bank_updateAvailableNow" checked>

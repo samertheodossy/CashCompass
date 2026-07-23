@@ -356,7 +356,7 @@
     </div>
 
     <label>Value</label>
-    <input type="text" id="bank_value" inputmode="decimal" onfocus="currencyFocus('bank_value')" onblur="currencyBlur('bank_value')" oninput="evaluateBankBufferWarning()">
+    <input type="text" id="bank_value" inputmode="decimal" onfocus="currencyFocus('bank_value', true)" onblur="currencyBlur('bank_value')" oninput="evaluateBankBufferWarning()">
 
     <div id="bank_bufferWarning" class="warning-box"></div>
 
@@ -605,11 +605,24 @@ function setCurrencyInputValue(id, value) {
   input.value = fmtCurrency(num);
 }
 
-function currencyFocus(id) {
+function currencyFocus(id, selectAll) {
   const input = document.getElementById(id);
   const num = toNumber(input.value);
   if (input.value === '' || isNaN(num)) return;
   input.value = String(num);
+  if (selectAll === true && typeof input.select === 'function') {
+    // Balance editors replace one stored snapshot at a time. Select the full
+    // raw number on first focus so typing/paste replaces the loaded value
+    // instead of concatenating digits onto it. Keep this opt-in: other money
+    // inputs may still need normal caret placement for partial edits.
+    const valueAtFocus = input.value;
+    input.select();
+    window.setTimeout(function() {
+      if (document.activeElement === input && input.value === valueAtFocus) {
+        input.select();
+      }
+    }, 0);
+  }
 }
 
 function currencyBlur(id) {
