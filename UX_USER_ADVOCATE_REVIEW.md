@@ -520,6 +520,11 @@ and evidence-led; dates do not raise a score or waive a finding.
 - **Trust/feedback — Interactive / Source review:** Refresh/loading states are
   visible and Bank/Debt actions are contractually gated until matching data loads.
   The evidence-attribution bug and untested recovery branches remain trust gaps.
+- **Setup optional summaries — Source review:** Houses and Upcoming Expenses now
+  distinguish **Checking…**, populated counts, **None yet**, and **Couldn’t
+  check** instead of using the same dash for loading and failure. Exact dashboard
+  UX regressions cover both cards. This closes the contained source/regression
+  finding without claiming new interactive evidence or changing the 8.2/10 score.
 
 ### 12. Prioritized issues
 

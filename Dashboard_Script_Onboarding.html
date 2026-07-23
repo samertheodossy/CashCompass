@@ -350,9 +350,8 @@ function onboardingApplyStatusGrid_(data) {
   // (onboarding.js) for the rationale. Fetch their summaries in
   // parallel so users see a short "N planned" / "N tracked" / "None
   // yet" line on each card without having to open the detail view.
-  // Failures in either of these loaders fall back to a calm dash ("—")
-  // so the required-step cards never look broken because an optional
-  // fetch hiccupped.
+  // Loading and failure states stay explicit so a temporary fetch state
+  // cannot be mistaken for missing optional data.
   onboardingLoadUpcomingSummary_();
   onboardingLoadHousesSummary_();
 }
@@ -363,15 +362,13 @@ function onboardingApplyStatusGrid_(data) {
 function onboardingLoadHousesSummary_() {
   var body = document.querySelector('[data-body="houses"]');
   if (!body) return;
-  // Calm placeholder: matches the other grid cards' initial `—` state
-  // so the row doesn't flash the word "Loading…" before summary text.
-  body.innerHTML = '<p class="muted">&mdash;</p>';
+  body.innerHTML = '<p class="muted">Checking…</p>';
 
   google.script.run
     .withSuccessHandler(function(data) { onboardingRenderHousesSummary_(data); })
     .withFailureHandler(function() {
       var el = document.querySelector('[data-body="houses"]');
-      if (el) el.innerHTML = '<p class="muted">—</p>';
+      if (el) el.innerHTML = '<p class="muted">Couldn’t check</p>';
     })
     .getOnboardingHousesFromDashboard(ONBOARDING_MODE_);
 }
@@ -381,7 +378,7 @@ function onboardingRenderHousesSummary_(data) {
   if (!body) return;
 
   if (!data || !Array.isArray(data.houses)) {
-    body.innerHTML = '<p class="muted">—</p>';
+    body.innerHTML = '<p class="muted">Couldn’t check</p>';
     return;
   }
 
@@ -395,18 +392,17 @@ function onboardingRenderHousesSummary_(data) {
 // Upcoming detail endpoint (getOnboardingUpcomingFromDashboard) since
 // it already returns Planned rows filtered the same way the Setup
 // detail view needs them, and we only consume the count for the card
-// body. Failure is non-fatal — the card falls back to the calm dash
-// placeholder rather than surfacing an error banner, matching Houses.
+// body. Failure is non-fatal and uses the same concise fallback as Houses.
 function onboardingLoadUpcomingSummary_() {
   var body = document.querySelector('[data-body="upcoming"]');
   if (!body) return;
-  body.innerHTML = '<p class="muted">&mdash;</p>';
+  body.innerHTML = '<p class="muted">Checking…</p>';
 
   google.script.run
     .withSuccessHandler(function(data) { onboardingRenderUpcomingSummary_(data); })
     .withFailureHandler(function() {
       var el = document.querySelector('[data-body="upcoming"]');
-      if (el) el.innerHTML = '<p class="muted">—</p>';
+      if (el) el.innerHTML = '<p class="muted">Couldn’t check</p>';
     })
     .getOnboardingUpcomingFromDashboard(ONBOARDING_MODE_);
 }
@@ -420,7 +416,7 @@ function onboardingRenderUpcomingSummary_(data) {
   // Missing sheet / malformed payload → short fallback so the card
   // still feels intentional rather than broken.
   if (!data || !Array.isArray(data.upcoming)) {
-    body.innerHTML = '<p class="muted">—</p>';
+    body.innerHTML = '<p class="muted">Couldn’t check</p>';
     return;
   }
 

@@ -2,6 +2,16 @@
 
 The V1 trust baseline is shipped and locked, and V1.1 closed out with the retirement profile integration (see **V1.1 — Retirement Profile Integration (DOB Source of Truth)** section below). The project has since moved into **Central App live + Family Beta readiness** — the Central App architecture is operational and the active work is hardening it toward a family beta (see **Current State — Post V1.2 Prep** below for the per-slice migration record). Working rules live in `WORKING_RULES.md → Current phase` + `→ Central App Transition Rules` (now active); product framing lives in `PROJECT_CONTEXT.md → Current phase` and `→ Current architecture — Central App (live)`. All prior phase notes below this header are preserved as-is for historical record.
 
+- **Optional Setup loading states complete (source/regression, 2026-07-23).**
+  Replaced the ambiguous dash on the read-only Houses and Upcoming Expenses Setup
+  cards with an explicit state contract: **Checking…** while loading, the existing
+  count or **None yet** on success, and **Couldn’t check** for transport or
+  malformed-response failure. Added exact dashboard UX regressions for the initial,
+  success, empty, and failure states. Full local `npm test` and diff hygiene pass.
+  Endpoints, schemas, calculations, workbook writes, and data behavior are
+  unchanged. No Central or bounded deployment occurred; no isolated runtime claim
+  is attached.
+
 - **Beta forecast and scope synchronized (docs only, 2026-07-23).** Reconciled
   current status after isolated Central `@179`: the independent advocate score is
   8.2/10, `REG-017` is runtime-closed, Central Beta remains `@106`, and bounded

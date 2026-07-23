@@ -316,7 +316,7 @@ Reusable coverage: `npm run test:dashboard-ux`. **Two-track validation is comple
 
 1. **P1 — disposable populated-fixture hardening. ✅ Complete on isolated Central `@117` (2026-07-21).** The 119.7-second run created a Central-owned fixture under `drive.file`, confirmed Restricted owner-only sharing before seeding, populated Bank / Investment / House / Debt / Bills / Income / Upcoming / Retirement, passed 9/9 functional assertions plus Validator checks, and confirmed Trash by Drive read-back. `TEST_HARNESS_ENABLED=false` was restored; Beta `@106` and owner/bounded workbooks were untouched.
 2. **P2 UX polish — debt due-day wording. ✅ Implemented locally; isolated replay pending.** The Debt editor label and its range-validation message now consistently say **Due day of month**. Exact dashboard UX regressions protect both strings and reject the former ambiguous label. The existing sheet header/schema and all stored values are unchanged.
-3. **P2 UX polish — optional Setup loading state.** Houses and Upcoming Expenses currently show a calm `—` while their asynchronous summaries load, which can briefly look like missing populated data. Use a small **Checking…** state, then render the count / **None yet** / failure fallback.
+3. **P2 UX polish — optional Setup loading state. ✅ Complete 2026-07-23.** Houses and Upcoming Expenses now show **Checking…** while their read-only summaries load, the existing count or **None yet** on success, and **Couldn’t check** for transport or malformed-response failures. Exact dashboard UX regressions protect every state; endpoints and workbook behavior are unchanged. This contained wording/state correction is source- and regression-complete; no isolated runtime claim is attached.
 4. **P3 Performance — Financial Plan refresh latency.** **Profiling complete; first optimization isolated PASS.** Central `@116` preserved/appended `OUT - History` rows and completed History-backed snapshot comparisons while removing the six unused embedded charts. Repeat History work fell from **11.507 s to 0.165 s** and total repeat server time from **77.275 s to 43.946 s**. Next address per-cell Dashboard formatting, Dashboard chart churn, and duplicate snapshot reads. Rerun the same `PERFORMANCE_TIMING_ENABLED` first/repeat scenario after each safe optimization while preserving correctness, email gating, and durable completion feedback.
 
 #### Loading Experience Standardization — **P1 · effort S–M**
@@ -448,7 +448,7 @@ A shared vocabulary + spacing/typography pass so every surface feels the same.
 ##### UX-08 — Setup / Review completion guidance
 
 - Add visible required-step progress (for example, **4 of 5 complete**) and identify one recommended next step.
-- Replace temporary `—` values on asynchronous optional cards with **Checking…**, then show count / **None yet** / failure fallback.
+- ✅ Replace temporary `—` values on asynchronous optional cards with **Checking…**, then show count / **None yet** / **Couldn’t check**. Completed 2026-07-23 with exact regression coverage.
 - Keep optional areas clearly separated from required setup.
 - Preserve the read-only Setup promise and explicit handoff into editors.
 

@@ -373,6 +373,18 @@ assert.match(files['Dashboard_Script_PlanningDebts.html'],
   'Debt validation must use the same plain-language due-day wording');
 assert.doesNotMatch(body, /Due Date \(day of month\)/,
   'Debt editor must not restore the ambiguous Due Date label');
+assert.match(body,
+  /data-body="upcoming"><p class="muted">Checking…<\/p>/,
+  'Optional Upcoming Setup card must identify its initial loading state');
+assert.match(body,
+  /data-body="houses"><p class="muted">Checking…<\/p>/,
+  'Optional Houses Setup card must identify its initial loading state');
+assert.match(files['Dashboard_Script_Onboarding.html'],
+  /onboardingLoadHousesSummary_[\s\S]*?Checking…[\s\S]*?Couldn’t check[\s\S]*?onboardingRenderHousesSummary_[\s\S]*?Couldn’t check[\s\S]*?None yet/,
+  'Houses summary must distinguish loading, failure, and empty states');
+assert.match(files['Dashboard_Script_Onboarding.html'],
+  /onboardingLoadUpcomingSummary_[\s\S]*?Checking…[\s\S]*?Couldn’t check[\s\S]*?onboardingRenderUpcomingSummary_[\s\S]*?Couldn’t check[\s\S]*?None yet/,
+  'Upcoming summary must distinguish loading, failure, and empty states');
 assert.match(files['Dashboard_Script_CashFlowUpcoming.html'],
   /saveBtn\.textContent\s*=\s*['"]Add upcoming expense['"]/,
   'Upcoming must preserve its sentence-case action label after form reset');
