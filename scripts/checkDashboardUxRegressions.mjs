@@ -5,6 +5,9 @@ const files = Object.fromEntries(await Promise.all([
   'Dashboard_Body.html',
   'Dashboard_Help.html',
   'Dashboard_Script_AssetsBankInvestments.html',
+  'Dashboard_Script_AssetsHouseValues.html',
+  'Dashboard_Script_BillsDue.html',
+  'Dashboard_Script_Income.html',
   'Dashboard_Script_Onboarding.html',
   'Dashboard_Script_PlanningDebts.html',
   'Dashboard_Script_PlanningNextActions.html',
@@ -138,6 +141,12 @@ assert.match(styles,
 assert.match(styles,
   /@media \(max-width:\s*460px\)[\s\S]*?\.snapshot-card-supporting\s*\{\s*grid-column:\s*span 12;/,
   'Supporting KPIs must stack at the narrowest width');
+assert.match(styles,
+  /@media \(max-width:\s*1180px\)[\s\S]*?\.tabs\.assets-tabs\s*\{\s*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+  'The three Assets tabs must not form an orphan row at medium widths');
+assert.match(styles,
+  /@media \(max-width:\s*460px\)[\s\S]*?\.tabs\.assets-tabs\s*\{\s*grid-template-columns:\s*1fr;/,
+  'Assets tabs must stack deliberately at the narrowest width');
 assert.match(render,
   /fmtSignedCurrency\(num\)\s*\.replace\(\/\^\(\[\+\-\]\)\(\?=\\\$\)\//,
   'Overview deltas must keep their sign attached to the currency amount');
@@ -154,6 +163,67 @@ assert.match(styles,
   'More insights cards must use a balanced 50/50 desktop split');
 assert.match(render, /overview-positive-state[\s\S]*?No issues need attention/,
   'A healthy Overview must show a compact positive Issues state');
+
+for (const [pageId, title] of Object.entries({
+  page_assets: 'Assets',
+  page_cashflow: 'Cash Flow',
+  page_activity: 'Activity log',
+  page_properties: 'Properties',
+  page_planning: 'Planning'
+})) {
+  assert.match(
+    body,
+    new RegExp(`id=["']${pageId}["'][\\s\\S]*?class=["']workspace-page-intro["'][\\s\\S]*?<h2>${title}</h2>[\\s\\S]*?<p>[^<]+</p>`),
+    `${title} must begin with the shared page title and purpose pattern`
+  );
+}
+assert.match(styles, /\.workspace-page-intro\s*\{[\s\S]*?margin:\s*0 0 var\(--cc-space-4\)/,
+  'Workspace purpose lines must use the shared spacing rhythm');
+assert.match(styles, /\.status:not\(:empty\)\s*\{[\s\S]*?border:[\s\S]*?background:/,
+  'Non-empty statuses must use the shared visible status surface');
+assert.match(styles, /\.status\.error:not\(:empty\)\s*\{[\s\S]*?background:\s*#fff1f2/,
+  'Error statuses must use the shared error treatment');
+assert.match(styles, /\.empty-state,[\s\S]*?\.bills-empty-state,[\s\S]*?\.income-empty-state/,
+  'Daily-use empty states must share one visual pattern');
+assert.doesNotMatch(
+  [
+    files['Dashboard_Script_BillsDue.html'],
+    files['Dashboard_Script_Income.html'],
+    files['Dashboard_Script_PlanningDebts.html']
+  ].join('\n'),
+  /class=["'](?:bills|income)-empty-state["'][^>]*style=/,
+  'Daily-use empty states must not reintroduce one-off inline presentation'
+);
+for (const id of ['house', 'bank_update', 'inv_update', 'debt_update']) {
+  assert.match(
+    body,
+    new RegExp(`id=["']${id}_stop_btn["'][^>]*class=["'][^"']*danger[^>]*disabled[^>]*hidden`),
+    `${id} Stop tracking must start hidden and unavailable until an item is selected`
+  );
+}
+assert.match(files['Dashboard_Script_Income.html'], /class="small-btn danger"[\s\S]*?Stop tracking/,
+  'Income Stop tracking must remain visually destructive');
+assert.match(body, /id="debt_update_stop_zone"[^>]*hidden/,
+  'The Debt danger zone must start hidden until a debt is selected');
+assert.match(files['Dashboard_Script_PlanningDebts.html'],
+  /getElementById\(['"]debt_update_stop_zone['"]\)[\s\S]*?stopZone\.hidden\s*=\s*!hasSelection/,
+  'The Debt availability guard must reveal the whole danger zone only for a valid selection');
+for (const [sourceName, functionName, stopId] of [
+  ['Dashboard_Script_AssetsHouseValues.html', 'updateHouseUpdateAvailability_', 'house_stop_btn'],
+  ['Dashboard_Script_AssetsBankInvestments.html', 'updateBankUpdateAvailability_', 'bank_update_stop_btn'],
+  ['Dashboard_Script_AssetsBankInvestments.html', 'updateInvestmentUpdateAvailability_', 'inv_update_stop_btn'],
+  ['Dashboard_Script_PlanningDebts.html', 'updateDebtUpdateAvailability_', 'debt_update_stop_btn']
+]) {
+  const source = files[sourceName];
+  const start = source.indexOf(`function ${functionName}(`);
+  const end = source.indexOf('\n}', start);
+  const availabilityFunction = source.slice(start, end + 2);
+  assert.ok(start >= 0, `${functionName} must exist`);
+  assert.match(availabilityFunction, new RegExp(`getElementById\\(['"]${stopId}['"]\\)`),
+    `${functionName} must control ${stopId}`);
+  assert.match(availabilityFunction, /stopBtn\.hidden\s*=\s*!hasSelection/,
+    `${functionName} must reveal Stop tracking only for a valid selection`);
+}
 for (const id of [
   'bank_update_save_btn',
   'bank_update_stop_btn',

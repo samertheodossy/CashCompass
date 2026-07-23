@@ -21,10 +21,13 @@ function updateBankUpdateAvailability_() {
   const stopBtn = document.getElementById('bank_update_stop_btn');
   const hint = document.getElementById('bank_update_empty_hint');
   if (saveBtn) saveBtn.disabled = !hasSelection;
-  if (stopBtn) stopBtn.disabled = !hasSelection;
+  if (stopBtn) {
+    stopBtn.disabled = !hasSelection;
+    stopBtn.hidden = !hasSelection;
+  }
   if (hint) {
     hint.textContent = hasAccounts
-      ? 'Select a bank account to update or stop tracking it.'
+      ? 'Select a bank account to update it.'
       : 'Add your first bank account to start tracking balances.';
     hint.style.display = hasSelection ? 'none' : '';
   }
@@ -713,10 +716,13 @@ function updateInvestmentUpdateAvailability_() {
   const stopBtn = document.getElementById('inv_update_stop_btn');
   const hint = document.getElementById('inv_update_empty_hint');
   if (saveBtn) saveBtn.disabled = !hasSelection;
-  if (stopBtn) stopBtn.disabled = !hasSelection;
+  if (stopBtn) {
+    stopBtn.disabled = !hasSelection;
+    stopBtn.hidden = !hasSelection;
+  }
   if (hint) {
     hint.textContent = hasAccounts
-      ? 'Select an investment account to update or stop tracking it.'
+      ? 'Select an investment account to update it.'
       : 'Add your first investment account to start tracking values.';
     hint.style.display = hasSelection ? 'none' : '';
   }

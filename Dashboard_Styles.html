@@ -1,5 +1,21 @@
 <style>
-  body { font-family: Arial, sans-serif; margin: 0; color: #1f2937; background: #f8fafc; }
+  :root {
+    --cc-space-1: 4px;
+    --cc-space-2: 8px;
+    --cc-space-3: 12px;
+    --cc-space-4: 16px;
+    --cc-space-5: 20px;
+    --cc-space-6: 24px;
+    --cc-radius-sm: 8px;
+    --cc-radius-md: 10px;
+    --cc-radius-lg: 12px;
+    --cc-border: #e2e8f0;
+    --cc-text: #1f2937;
+    --cc-muted: #64748b;
+    --cc-primary: #1f4e78;
+    --cc-danger: #b91c1c;
+  }
+  body { font-family: Arial, sans-serif; margin: 0; color: var(--cc-text); background: #f8fafc; }
   .page { max-width: 1280px; margin: 0 auto; padding: 20px; }
   .topbar { display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 16px; }
   .topbar-brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
@@ -281,6 +297,21 @@
 
   .workspace-page { display: none; }
   .workspace-page.active { display: block; }
+  .workspace-page-intro {
+    margin: 0 0 var(--cc-space-4);
+  }
+  .workspace-page-intro h2 {
+    margin: 0 0 var(--cc-space-1);
+    color: #0f172a;
+    font-size: 20px;
+  }
+  .workspace-page-intro p {
+    max-width: 720px;
+    margin: 0;
+    color: var(--cc-muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
 
   .help-page { padding-bottom: 32px; }
   .help-header {
@@ -438,7 +469,7 @@
   .snapshot-delta { margin-top: 8px; font-size: 12px; color: #64748b; line-height: 1.4; }
   .snapshot-meta { margin-top: 10px; font-size: 12px; color: #64748b; }
 
-  .card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .card { background: white; border: 1px solid var(--cc-border); border-radius: var(--cc-radius-lg); padding: var(--cc-space-4); box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
   .card-title { font-size: 16px; font-weight: bold; margin: 0 0 12px 0; }
   .overview-grid > .card {
     min-width: 0;
@@ -985,9 +1016,9 @@
   }
   .tab-btn.active { background: #1f4e78; color: #ffffff; border-color: #1f4e78; }
 
-  .panel { display: none; background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .panel { display: none; background: white; border: 1px solid var(--cc-border); border-radius: var(--cc-radius-lg); padding: var(--cc-space-4); margin-bottom: var(--cc-space-4); box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
   .panel.active { display: block; }
-  .panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  .panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--cc-space-3); margin-bottom: var(--cc-space-3); }
   h2 { margin: 0; font-size: 20px; }
   h3 { margin: 0 0 10px 0; font-size: 16px; }
   .updated { font-size: 12px; color: #64748b; white-space: nowrap; }
@@ -1040,9 +1071,36 @@
 
   textarea { min-height: 86px; resize: vertical; }
   button { margin-top: 14px; background: #1f4e78; color: white; border: none; cursor: pointer; font-weight: bold; }
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  button[hidden] { display: none !important; }
 
-  .status { margin-top: 10px; font-size: 12px; white-space: pre-wrap; }
-  .status.dash-status-loading { white-space: normal; }
+  .status {
+    margin-top: var(--cc-space-3);
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+  }
+  .status:not(:empty) {
+    padding: 9px 11px;
+    border: 1px solid var(--cc-border);
+    border-radius: var(--cc-radius-sm);
+    background: #f8fafc;
+    color: #475569;
+  }
+  .status.error:not(:empty) {
+    border-color: #fecaca;
+    background: #fff1f2;
+    color: #991b1b;
+  }
+  .status.dash-status-loading {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+    white-space: normal;
+  }
   .dash-loading {
     display: inline-flex;
     align-items: center;
@@ -1084,8 +1142,35 @@
     }
   }
   .error { color: #991b1b; }
-  .info { background: #eef6ff; border: 1px solid #cfe3ff; border-radius: 8px; padding: 12px; margin: 14px 0; font-size: 12px; line-height: 1.6; }
+  .info { background: #eef6ff; border: 1px solid #cfe3ff; border-radius: var(--cc-radius-sm); padding: var(--cc-space-3); margin: var(--cc-space-3) 0; font-size: 12px; line-height: 1.55; }
   .muted { color: #475569; }
+
+  .empty-state,
+  .bills-empty-state,
+  .income-empty-state,
+  .debt-inactive-empty,
+  .onboarding-detail-empty {
+    padding: var(--cc-space-4);
+    border: 1px dashed #cbd5e1;
+    border-radius: var(--cc-radius-md);
+    background: #f8fafc;
+    color: #475569;
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .empty-state > :first-child,
+  .bills-empty-state > :first-child,
+  .income-empty-state > :first-child,
+  .onboarding-detail-empty > :first-child {
+    margin-top: 0;
+  }
+  .empty-state > :last-child,
+  .bills-empty-state > :last-child,
+  .income-empty-state > :last-child,
+  .onboarding-detail-empty > :last-child {
+    margin-bottom: 0;
+  }
 
   .retirement-empty-state {
     background: #f1f5f9;
@@ -1206,6 +1291,7 @@
      Stop tracking sits immediately beneath it at an understated size.  */
   .house-update-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
   .house-update-actions > button:first-child { margin-top: 0; }
+  .update-selection-hint { margin-top: 8px; }
 
   .mini-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
   .mini-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; transition: box-shadow 0.2s ease, border-color 0.2s ease; }
@@ -1242,6 +1328,26 @@
      alarm. Communicates "careful" without dominating neutral Edit/Rename. */
   .small-btn.danger { background: #ffffff; color: #b91c1c; border-color: #f0c2c2; }
   .small-btn.danger:hover { background: #fef5f5; border-color: #e3a3a3; }
+  .bill-stop-tracking-btn,
+  .btn-activity-delete {
+    background: #ffffff;
+    color: var(--cc-danger);
+    border-color: #f0c2c2;
+  }
+  .bill-stop-tracking-btn:hover:not(:disabled),
+  .btn-activity-delete:hover:not(:disabled) {
+    background: #fef5f5;
+    border-color: #e3a3a3;
+  }
+
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.24);
+    outline-offset: 2px;
+  }
 
   /* Debt "Danger Zone" — a quiet, neutral card. The destructive intent is
      carried by the red Stop tracking button, not by loud borders/backgrounds,
@@ -1676,7 +1782,8 @@
     .overview-health-card { grid-column: span 12; }
     .overview-retirement-card,
     .overview-runway-card { grid-column: span 6; }
-    .tabs.assets-tabs, .tabs.properties-tabs { grid-template-columns: 1fr 1fr; }
+    .tabs.assets-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .tabs.properties-tabs { grid-template-columns: 1fr 1fr; }
     .tabs.planning-tools { grid-template-columns: repeat(5, minmax(0, 1fr)); }
     .planning-tools .tab-btn { padding: 8px 4px; font-size: 11px; }
     .planning-next-actions-feature .tab-btn { min-height: 52px; padding: 10px 12px; }
@@ -1708,6 +1815,7 @@
   @media (max-width: 460px) {
     .snapshot-card-supporting { grid-column: span 12; }
     .snapshot-card-primary .snapshot-value { font-size: 28px; }
+    .tabs.assets-tabs { grid-template-columns: 1fr; }
   }
 
   /* Onboarding (Setup) page ------------------------------------------------ */
@@ -2047,13 +2155,6 @@
   .onboarding-detail-explainer p { margin: 0 0 4px; }
   .onboarding-detail-explainer p:last-child { margin: 0; }
   .onboarding-detail-explainer .muted { font-size: 13px; }
-  .onboarding-detail-empty {
-    border: 1px dashed #cbd5e1;
-    border-radius: 10px;
-    padding: 18px;
-    color: #475569;
-    text-align: center;
-  }
   /*
    * Profile detail — inline editor styles.
    *

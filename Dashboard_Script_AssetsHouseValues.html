@@ -18,6 +18,7 @@ function fillHouseDropdownFromData_(data) {
     sel.appendChild(opt);
   });
   populateHouseAddDatalists_(data);
+  updateHouseUpdateAvailability_();
 
   // Deterministic default-tab rule (Issue 1): once REAL data has loaded, an
   // empty House Values workbook must land on "Add new" — there is nothing to
@@ -29,6 +30,26 @@ function fillHouseDropdownFromData_(data) {
   // an intentional Add (e.g. adding a second house) is preserved.
   if (!(data.houses && data.houses.length) && typeof setHousePanelMode === 'function') {
     setHousePanelMode('add');
+  }
+}
+
+function updateHouseUpdateAvailability_() {
+  const sel = document.getElementById('house_house');
+  const hasSelection = !!(sel && String(sel.value || '').trim());
+  const hasHouses = !!(sel && sel.options && sel.options.length > 1);
+  const saveBtn = document.getElementById('house_update_save_btn');
+  const stopBtn = document.getElementById('house_stop_btn');
+  const hint = document.getElementById('house_update_empty_hint');
+  if (saveBtn) saveBtn.disabled = !hasSelection;
+  if (stopBtn) {
+    stopBtn.disabled = !hasSelection;
+    stopBtn.hidden = !hasSelection;
+  }
+  if (hint) {
+    hint.textContent = hasHouses
+      ? 'Select a house to update its value.'
+      : 'Add your first house to start tracking values.';
+    hint.style.display = hasSelection ? 'none' : '';
   }
 }
 
@@ -238,6 +259,7 @@ function loadHouseSectionThenSelect_(houseName) {
 function loadHouseData(quiet) {
   const house = document.getElementById('house_house').value;
   const date = document.getElementById('house_date').value;
+  updateHouseUpdateAvailability_();
 
   if (!house || !date) {
     document.getElementById('house_selectedMonth').textContent = '—';

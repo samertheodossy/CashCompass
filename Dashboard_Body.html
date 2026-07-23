@@ -11,7 +11,7 @@
       <div class="top-actions-buttons">
         <button type="button" class="btn-help-prominent" onclick="showPage('help')">Help</button>
         <button type="button" class="btn-setup-topbar" onclick="showPage('onboarding')">Setup / Review</button>
-        <button type="button" id="planner_refresh_btn" class="btn-planner-run" onclick="runPlannerNow()">Refresh Financial Plan</button>
+        <button type="button" id="planner_refresh_btn" class="btn-planner-run" onclick="runPlannerNow()">Refresh financial plan</button>
       </div>
       <div id="planner_status" class="status"></div>
     </div>
@@ -101,7 +101,7 @@
       <h2 id="overview_attention" class="overview-section-title">What needs your attention</h2>
       <div class="overview-grid overview-grid-attention">
         <div class="card overview-actions-card">
-          <div class="card-title">Suggested Actions</div>
+          <div class="card-title">Suggested actions</div>
           <div id="actions_issue_hint" class="subtle actions-issue-hint" hidden></div>
           <div id="actions_list" class="actions-list"></div>
         </div>
@@ -117,7 +117,7 @@
       <h2 id="overview_outlook" class="overview-section-title">Financial outlook</h2>
       <div class="overview-grid overview-grid-outlook">
         <div class="card overview-health-card">
-        <div class="card-title">Financial Health</div>
+        <div class="card-title">Financial health</div>
         <div class="health-row">
           <div class="health-score-wrap">
             <div id="health_score" class="health-score health-neutral">—</div>
@@ -154,7 +154,7 @@
         <div class="card overview-retirement-card overview-clickable-card" role="button" tabindex="0"
              onclick="showPage('planning'); showTab('retirement');"
              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showPage('planning');showTab('retirement');}">
-        <div class="card-title">Retirement Outlook</div>
+        <div class="card-title">Retirement outlook</div>
         <div class="ret-row">
           <div class="ret-kpi">
             <div class="ret-kpi-label">Goal Amount</div>
@@ -176,7 +176,7 @@
         <div class="card overview-runway-card overview-clickable-card" role="button" tabindex="0"
              onclick="showPage('cashflow'); showTab('upcoming');"
              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showPage('cashflow');showTab('upcoming');}">
-        <div class="card-title">Buffer Runway</div>
+        <div class="card-title">Buffer runway</div>
         <div class="ret-kpi">
           <div class="ret-kpi-label">Months of survival</div>
           <div class="ret-kpi-value" id="runway_label">—</div>
@@ -223,7 +223,7 @@
       <h2 id="overview_more_insights" class="overview-section-title">More insights</h2>
       <div class="overview-grid overview-grid-insights">
         <div class="card overview-allocation-card">
-          <div class="card-title">10/70/20 Plan</div>
+          <div class="card-title">10/70/20 plan</div>
           <div id="incomeAlloc_empty" class="ret-summary" hidden>Add income to see your 10/70/20 plan.</div>
           <div id="incomeAlloc_body">
             <div class="ret-kpi">
@@ -248,7 +248,7 @@
         </div>
 
         <div class="card overview-operations-card">
-          <div class="card-title">Operations Snapshot</div>
+          <div class="card-title">Operations snapshot</div>
           <div class="changes-list">
             <div class="change-item" onclick="showPage('cashflow'); showTab('billsDue');" style="cursor:pointer;">
               <div class="change-label">Bills Next 7 Days</div>
@@ -282,15 +282,19 @@
   </div>
 
   <div id="page_assets" class="workspace-page">
+    <div class="workspace-page-intro">
+      <h2>Assets</h2>
+      <p>Review current values, update existing accounts, or add something new.</p>
+    </div>
     <div class="tabs assets-tabs">
-      <button class="tab-btn active" data-tab="houses" onclick="showTab('houses')">House Values</button>
-      <button class="tab-btn" data-tab="bank" onclick="showTab('bank')">Bank Accounts</button>
+      <button class="tab-btn active" data-tab="houses" onclick="showTab('houses')">House values</button>
+      <button class="tab-btn" data-tab="bank" onclick="showTab('bank')">Bank accounts</button>
       <button class="tab-btn" data-tab="investments" onclick="showTab('investments')">Investments</button>
     </div>
 
     <div id="houses" class="panel active">
       <div class="panel-head">
-        <h2 id="house_panel_title">House Values</h2>
+        <h2 id="house_panel_title">House values</h2>
         <div class="updated">Last updated: <span id="house_updated">—</span></div>
       </div>
       <div class="segmented" role="tablist" aria-label="House values mode">
@@ -308,9 +312,10 @@
             <label>Value</label>
             <input type="text" id="house_value" inputmode="decimal" onfocus="currencyFocus('house_value')" onblur="currencyBlur('house_value')">
             <div class="house-update-actions">
-              <button onclick="saveHouse()">Save House Value</button>
-              <button type="button" class="small-btn" onclick="stopTrackingHouse()" title="Mark this house inactive. History and the HOUSES sheet are preserved.">Stop tracking</button>
+              <button id="house_update_save_btn" onclick="saveHouse()" disabled>Save house value</button>
+              <button type="button" id="house_stop_btn" class="small-btn danger" onclick="stopTrackingHouse()" title="Mark this house inactive. History and the HOUSES sheet are preserved." disabled hidden>Stop tracking</button>
             </div>
+            <div id="house_update_empty_hint" class="muted update-selection-hint">Add your first house to start tracking values.</div>
           </div>
           <div class="info">
             <div><strong>Selected month:</strong> <span id="house_selectedMonth" class="muted">—</span></div>
@@ -361,7 +366,7 @@
 
     <div id="bank" class="panel">
       <div class="panel-head">
-        <h2 id="bank_panel_title">Bank Accounts</h2>
+        <h2 id="bank_panel_title">Bank accounts</h2>
         <div class="updated">Last updated: <span id="bank_updated">—</span></div>
       </div>
       <div class="segmented" role="tablist" aria-label="Bank account mode">
@@ -390,8 +395,8 @@
               <label for="bank_updateMinBuffer" style="margin:0;font-weight:normal;">Also update Min Buffer</label>
             </div>
             <div class="house-update-actions">
-              <button id="bank_update_save_btn" onclick="saveBank()" disabled>Save Bank Account</button>
-              <button type="button" id="bank_update_stop_btn" class="small-btn" onclick="stopTrackingBank()" title="Mark this bank account inactive. History is preserved." disabled>Stop tracking</button>
+              <button id="bank_update_save_btn" onclick="saveBank()" disabled>Save bank account</button>
+              <button type="button" id="bank_update_stop_btn" class="small-btn danger" onclick="stopTrackingBank()" title="Mark this bank account inactive. History is preserved." disabled hidden>Stop tracking</button>
             </div>
             <div id="bank_update_empty_hint" class="muted" style="margin-top:8px;">Add your first bank account to start tracking balances.</div>
           </div>
@@ -536,8 +541,8 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <label>Value</label>
             <input type="text" id="inv_value" inputmode="decimal" onfocus="currencyFocus('inv_value')" onblur="currencyBlur('inv_value')">
             <div class="house-update-actions">
-              <button id="inv_update_save_btn" onclick="saveInvestment()" disabled>Save Investment</button>
-              <button type="button" id="inv_update_stop_btn" class="small-btn" onclick="stopTrackingInvestment()" title="Mark this investment account inactive. History is preserved." disabled>Stop tracking</button>
+              <button id="inv_update_save_btn" onclick="saveInvestment()" disabled>Save investment</button>
+              <button type="button" id="inv_update_stop_btn" class="small-btn danger" onclick="stopTrackingInvestment()" title="Mark this investment account inactive. History is preserved." disabled hidden>Stop tracking</button>
             </div>
             <div id="inv_update_empty_hint" class="muted" style="margin-top:8px;">Add your first investment account to start tracking values.</div>
           </div>
@@ -587,6 +592,10 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
   </div>
 
   <div id="page_cashflow" class="workspace-page">
+    <div class="workspace-page-intro">
+      <h2>Cash Flow</h2>
+      <p>Record activity, review what is due, and maintain recurring cash-flow items.</p>
+    </div>
     <div class="tabs cashflow-tabs">
       <button class="tab-btn active" data-tab="payments" onclick="showTab('payments')">Quick add</button>
       <button class="tab-btn" data-tab="upcoming" onclick="showTab('upcoming')">Upcoming</button>
@@ -637,17 +646,17 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
     <div id="upcoming" class="panel">
       <div class="panel-head">
-        <h2>Upcoming Expenses</h2>
+        <h2>Upcoming expenses</h2>
         <div class="updated">Last updated: <span id="upcoming_updated">—</span></div>
       </div>
 
       <div class="mini-grid">
         <div class="mini-card">
-          <div class="mini-card-title">Next 7 Days</div>
+          <div class="mini-card-title">Next 7 days</div>
           <div class="mini-card-value" id="upcoming_next7">—</div>
         </div>
         <div class="mini-card">
-          <div class="mini-card-title">Next 30 Days</div>
+          <div class="mini-card-title">Next 30 days</div>
           <div class="mini-card-value" id="upcoming_next30">—</div>
         </div>
         <div class="mini-card">
@@ -655,7 +664,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <div class="mini-card-value" id="upcoming_overdue">—</div>
         </div>
         <div class="mini-card">
-          <div class="mini-card-title">Total Planned</div>
+          <div class="mini-card-title">Total planned</div>
           <div class="mini-card-value" id="upcoming_total">—</div>
         </div>
       </div>
@@ -717,7 +726,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         </div>
 
         <div>
-          <div class="card-title" style="margin-top:0;">Upcoming List</div>
+          <div class="card-title" style="margin-top:0;">Upcoming list</div>
           <div id="upcoming_list" class="upcoming-list"></div>
         </div>
       </div>
@@ -817,12 +826,12 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         </div>
 
         <div style="margin-bottom:20px;">
-          <div class="card-title" style="margin-top:0;">Next 7 Days</div>
+          <div class="card-title" style="margin-top:0;">Next 7 days</div>
           <div id="bd_next7List" class="bills-grid"></div>
         </div>
 
         <div>
-          <div class="card-title" style="margin-top:0;">Recurring Bills (No Due Date)</div>
+          <div class="card-title" style="margin-top:0;">Recurring bills (no due date)</div>
           <div id="bd_recurringList" class="bills-grid">
             <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></div>
           </div>
@@ -935,7 +944,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
     <div id="income" class="panel">
       <div class="panel-head">
-        <h2>Income Sources</h2>
+        <h2>Income sources</h2>
         <div class="updated">Last updated: <span id="income_updated">—</span></div>
       </div>
       <p class="muted" style="margin:0 0 14px 0;">Track your income sources.</p>
@@ -980,8 +989,9 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
   </div>
 
   <div id="page_activity" class="workspace-page">
-    <div class="panel-head">
+    <div class="workspace-page-intro">
       <h2>Activity log</h2>
+      <p>Find recorded changes and transactions without changing workbook history.</p>
     </div>
 
     <div class="activity-toolbar card">
@@ -1043,14 +1053,18 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
   </div>
 
   <div id="page_properties" class="workspace-page">
+    <div class="workspace-page-intro">
+      <h2>Properties</h2>
+      <p>Record property expenses and review operating and financing performance.</p>
+    </div>
     <div class="tabs properties-tabs">
-      <button class="tab-btn active" data-tab="houseExpenses" onclick="showTab('houseExpenses')">House Expenses</button>
+      <button class="tab-btn active" data-tab="houseExpenses" onclick="showTab('houseExpenses')">House expenses</button>
       <button class="tab-btn" data-tab="propertyPerformance" onclick="showTab('propertyPerformance')">Property performance</button>
     </div>
 
     <div id="houseExpenses" class="panel active">
       <div class="panel-head">
-        <h2>Add House Expense</h2>
+        <h2>Add house expense</h2>
         <div class="updated">Uses the same house expense writer as the sidebar</div>
       </div>
 
@@ -1108,7 +1122,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <label for="hx_autoAddToCashFlow" style="margin:0;font-weight:normal;">Also add to Cash Flow</label>
           </div>
 
-          <button id="hx_add_btn" onclick="saveHouseExpense()" disabled>Add House Expense</button>
+          <button id="hx_add_btn" onclick="saveHouseExpense()" disabled>Add house expense</button>
           <div id="hx_empty_hint" class="muted" style="margin-top:8px;">Add a house before recording property expenses.</div>
           <div id="hx_status" class="status"></div>
         </div>
@@ -1123,7 +1137,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           </div>
 
           <div class="card" style="margin-top:14px;">
-            <div class="card-title">House Expense Summaries</div>
+            <div class="card-title">House expense summaries</div>
 
             <div style="margin-bottom:12px;">
               <div class="change-label">This Month by House</div>
@@ -1227,35 +1241,39 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       The Next Actions panel reads `getNextActionsData()` and routes to
       these tools via `targetTab`; see PROJECT_CONTEXT.md → Decision Layer.
     -->
+    <div class="workspace-page-intro">
+      <h2>Planning</h2>
+      <p>Start with prioritized next steps, then open a focused planning tool when you need more detail.</p>
+    </div>
     <div class="planning-next-actions-feature">
       <button class="tab-btn active"
               data-tab="nextActions"
               onclick="showTab('nextActions')"
               title="Your primary Planning entry point — what should I do next?">
         <span class="featured-kicker">Start here</span>
-        <span class="featured-title">Next Actions</span>
+        <span class="featured-title">Next actions</span>
       </button>
     </div>
     <div class="planning-tools-wrap">
       <div class="planning-tools-label">Planning tools</div>
       <div class="tabs planning-tools">
         <button class="tab-btn" data-tab="debts" onclick="showTab('debts')">Debts</button>
-        <button class="tab-btn" data-tab="debtPayoff" onclick="showTab('debtPayoff')">Debt Overview</button>
-        <button class="tab-btn" data-tab="rollingDebtPayoff" onclick="showTab('rollingDebtPayoff')">Rolling Debt Payoff</button>
+        <button class="tab-btn" data-tab="debtPayoff" onclick="showTab('debtPayoff')">Debt overview</button>
+        <button class="tab-btn" data-tab="rollingDebtPayoff" onclick="showTab('rollingDebtPayoff')">Rolling debt payoff</button>
         <button class="tab-btn" data-tab="retirement" onclick="showTab('retirement')">Retirement</button>
-        <button class="tab-btn" data-tab="purchase" onclick="showTab('purchase')">Purchase Sim</button>
+        <button class="tab-btn" data-tab="purchase" onclick="showTab('purchase')">Purchase simulator</button>
       </div>
     </div>
 
     <div id="debts" class="panel">
       <div class="panel-head">
-        <h2 id="debt_panel_title">Debt Accounts</h2>
+        <h2 id="debt_panel_title">Debt accounts</h2>
         <div class="updated">Last updated: <span id="debt_updated">—</span></div>
       </div>
       <div class="segmented" role="tablist" aria-label="Debt account mode">
         <button type="button" id="debt_mode_update_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setDebtPanelMode('update')">Update</button>
         <button type="button" id="debt_mode_add_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setDebtPanelMode('add')">Add new</button>
-        <button type="button" id="debt_mode_manage_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setDebtPanelMode('manage')">Manage Debts</button>
+        <button type="button" id="debt_mode_manage_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setDebtPanelMode('manage')">Manage debts</button>
       </div>
 
       <div id="debt_mode_update_wrap" class="bank-mode-wrap active">
@@ -1270,7 +1288,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <label>New Value</label>
             <input type="text" id="debt_value" inputmode="decimal" onfocus="handleDebtValueFocus()" onblur="handleDebtValueBlur()">
             <div class="house-update-actions">
-              <button id="debt_update_save_btn" onclick="saveDebt()" disabled>Save Debt Update</button>
+              <button id="debt_update_save_btn" onclick="saveDebt()" disabled>Save debt update</button>
             </div>
             <div id="debt_update_empty_hint" class="muted" style="margin-top:8px;">Add your first debt account to start tracking balances and payments.</div>
           </div>
@@ -1281,10 +1299,10 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           </div>
         </div>
 
-        <div class="debt-danger-zone">
-          <div class="danger-zone-title">Danger Zone</div>
-          <p class="muted">Stop tracking removes this debt from active financial calculations. It can be restored later from Inactive Debts.</p>
-          <button type="button" id="debt_update_stop_btn" class="small-btn danger" onclick="stopTrackingDebt()" disabled>Stop tracking this debt</button>
+        <div id="debt_update_stop_zone" class="debt-danger-zone" hidden>
+          <div class="danger-zone-title">Danger zone</div>
+          <p class="muted">Stop tracking removes this debt from active financial calculations. It can be restored later from inactive debts.</p>
+          <button type="button" id="debt_update_stop_btn" class="small-btn danger" onclick="stopTrackingDebt()" disabled hidden>Stop tracking this debt</button>
         </div>
       </div>
 
@@ -1405,7 +1423,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         </div>
 
         <div id="debt_inactive_wrap" class="debt-inactive-section" style="display:none;">
-          <div class="card-title">Inactive Debts</div>
+          <div class="card-title">Inactive debts</div>
           <p class="muted" style="margin:0 0 12px 0;">These debts are no longer included in Dashboard totals, Net Worth, or Planning. The original debt and all history are preserved. Reactivate restores the existing debt without changing balances, due dates, Cash Flow history, or Activity history.</p>
           <div id="debt_inactive_list" class="bills-manage-list"></div>
         </div>
@@ -1416,7 +1434,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
     <div id="retirement" class="panel">
       <div class="panel-head">
-        <h2>Retirement Planner</h2>
+        <h2>Retirement planner</h2>
         <div class="updated">Last updated: <span id="retirement_updated">—</span></div>
       </div>
 
@@ -1504,7 +1522,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
     <div id="purchase" class="panel">
       <div class="panel-head">
-        <h2>Big Purchase Simulator</h2>
+        <h2>Big purchase simulator</h2>
         <div class="updated">What happens if I buy this?</div>
       </div>
 
@@ -1615,7 +1633,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
     <div id="rollingDebtPayoff" class="panel">
       <div class="panel-head">
         <div>
-          <h2>Rolling Debt Payoff</h2>
+          <h2>Rolling debt payoff</h2>
           <p class="muted" style="margin:4px 0 0 0;font-size:13px;line-height:1.45;">
             Monthly debt-cash deployment plan. For portfolio-level balances and minimums, see
             <a href="#" onclick="showTab('debtPayoff');return false;">Debt Overview</a>.
@@ -1677,7 +1695,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
     -->
     <div id="nextActions" class="panel active">
       <div class="panel-head">
-        <h2>Next Actions</h2>
+        <h2>Next actions</h2>
       </div>
       <p class="muted" style="margin:0 0 12px 0;">
         Your prioritized next steps across Bills, Upcoming, and Debts.
@@ -1937,7 +1955,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
     <div id="onboarding_view_bank" class="onboarding-view onboarding-view-detail" style="display:none;">
       <div class="onboarding-detail-header">
         <div class="onboarding-detail-step">Step 1 of 5</div>
-        <h2 class="onboarding-detail-title">Bank Accounts</h2>
+        <h2 class="onboarding-detail-title">Bank accounts</h2>
         <div id="onboarding_bank_badge" class="onboarding-detail-badge">Loading</div>
       </div>
 
@@ -2023,7 +2041,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
     <div id="onboarding_view_upcoming" class="onboarding-view onboarding-view-detail" style="display:none;">
       <div class="onboarding-detail-header">
         <div class="onboarding-detail-step onboarding-detail-optional">Optional</div>
-        <h2 class="onboarding-detail-title">Upcoming Expenses</h2>
+        <h2 class="onboarding-detail-title">Upcoming expenses</h2>
         <div id="onboarding_upcoming_badge" class="onboarding-detail-badge">Loading</div>
       </div>
 

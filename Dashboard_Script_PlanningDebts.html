@@ -359,7 +359,7 @@ function renderActiveDebtsList_(rows) {
 
   if (!__debtManageRows.length) {
     host.innerHTML =
-      '<div class="bills-empty-state" style="padding:16px;border:1px dashed #d1d5db;border-radius:8px;background:#f9fafb;text-align:center;">' +
+      '<div class="bills-empty-state">' +
         '<div class="muted" style="margin-bottom:10px;">No tracked debts yet.</div>' +
         '<button type="button" class="small-btn primary" onclick="setDebtPanelMode(\'add\')">+ Add a debt</button>' +
       '</div>';
@@ -1008,12 +1008,17 @@ function updateDebtUpdateAvailability_() {
   const hasDebts = !!(sel && sel.options && sel.options.length > 1);
   const saveBtn = document.getElementById('debt_update_save_btn');
   const stopBtn = document.getElementById('debt_update_stop_btn');
+  const stopZone = document.getElementById('debt_update_stop_zone');
   const hint = document.getElementById('debt_update_empty_hint');
   if (saveBtn) saveBtn.disabled = !hasSelection;
-  if (stopBtn) stopBtn.disabled = !hasSelection;
+  if (stopBtn) {
+    stopBtn.disabled = !hasSelection;
+    stopBtn.hidden = !hasSelection;
+  }
+  if (stopZone) stopZone.hidden = !hasSelection;
   if (hint) {
     hint.textContent = hasDebts
-      ? 'Select a debt account to update or stop tracking it.'
+      ? 'Select a debt account to update it.'
       : 'Add your first debt account to start tracking balances and payments.';
     hint.style.display = hasSelection ? 'none' : '';
   }

@@ -204,7 +204,7 @@ function renderHouseExpenseSummaryList_(elementId, rows, emptyMessage) {
   if (!root) return;
 
   if (!rows || !rows.length) {
-    root.innerHTML = '<div class="muted">' + escapeHtml(emptyMessage || 'No data.') + '</div>';
+    root.innerHTML = '<div class="empty-state">' + escapeHtml(emptyMessage || 'No data.') + '</div>';
     return;
   }
 

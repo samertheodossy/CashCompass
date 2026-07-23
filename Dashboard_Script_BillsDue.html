@@ -199,7 +199,7 @@ function renderBillsList_(elementId, rows, emptyMsg) {
   window.__dashboardBills = window.__dashboardBills || {};
 
   if (!rows || !rows.length) {
-    el.innerHTML = '<div class="muted">' + escapeHtml(emptyMsg || 'No items.') + '</div>';
+    el.innerHTML = '<div class="empty-state">' + escapeHtml(emptyMsg || 'No items.') + '</div>';
     return;
   }
 
@@ -374,7 +374,7 @@ function renderRecurringBillsList_(elementId, rows, emptyMsg) {
   window.__dashboardRecurring = window.__dashboardRecurring || {};
 
   if (!rows || !rows.length) {
-    el.innerHTML = '<div class="muted">' + escapeHtml(emptyMsg || 'No items.') + '</div>';
+    el.innerHTML = '<div class="empty-state">' + escapeHtml(emptyMsg || 'No items.') + '</div>';
     return;
   }
 
@@ -530,7 +530,7 @@ function renderActiveBillsList_(rows) {
     // no active bills at all, this is the only Add bill surface the user
     // needs to see.
     el.innerHTML =
-      '<div class="bills-empty-state" style="padding:16px;border:1px dashed #d1d5db;border-radius:8px;background:#f9fafb;text-align:center;">' +
+      '<div class="bills-empty-state">' +
         '<div class="muted" style="margin-bottom:10px;">No active bills yet.</div>' +
         '<button type="button" class="small-btn primary" onclick="openBillsAddFormFromEmptyState()">+ Add bill</button>' +
       '</div>';

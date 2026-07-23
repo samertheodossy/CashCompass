@@ -87,7 +87,7 @@ function renderIncomeSourcesList_(rows) {
 
   if (!rows.length) {
     el.innerHTML =
-      '<div class="income-empty-state" style="padding:16px;border:1px dashed #d1d5db;border-radius:8px;background:#f9fafb;text-align:center;">' +
+      '<div class="income-empty-state">' +
         '<div class="muted">No recurring income yet. Use <strong>+ Add income source</strong> above to log one on this year\'s Cash Flow.</div>' +
       '</div>';
     return;
@@ -110,7 +110,7 @@ function renderIncomeSourcesList_(rows) {
         '<td class="income-manage-num" style="padding:8px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap;">' + amountStr + '</td>' +
         '<td style="padding:8px;border-bottom:1px solid #f1f5f9;">' + freqStr + '</td>' +
         '<td class="income-manage-actions" style="padding:8px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap;">' +
-          '<button class="small-btn" ' +
+          '<button class="small-btn danger" ' +
             'title="Flips Active to NO on every matching Cash Flow row; history is preserved" ' +
             'onclick="stopTrackingIncomeSource(\'' + escapeJs(key) + '\')">' +
             'Stop tracking' +
