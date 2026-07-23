@@ -444,6 +444,7 @@ var __billsManageRows = [];
 function loadActiveBillsManagementUi_() {
   const el = document.getElementById('bills_manage_list');
   if (!el) return;
+  updateBillsAddActionVisibility_(false);
   el.innerHTML = loadingBlockHtml('Loading bill management…');
 
   google.script.run
@@ -451,6 +452,7 @@ function loadActiveBillsManagementUi_() {
       renderActiveBillsList_(Array.isArray(rows) ? rows : []);
     })
     .withFailureHandler(function(err) {
+      updateBillsAddActionVisibility_(true);
       el.innerHTML =
         '<div class="muted">Couldn&rsquo;t load active bills &mdash; ' +
         escapeHtml(customerSafeErrorMessage_(err && err.message ? err.message : String(err),
@@ -524,6 +526,7 @@ function renderActiveBillsList_(rows) {
   // Cache the unsorted payload so re-sorts do not hit the backend.
   __billsManageRows = Array.isArray(rows) ? rows.slice() : [];
   window.__dashboardActiveBills = {};
+  updateBillsAddActionVisibility_(__billsManageRows.length > 0);
 
   if (!__billsManageRows.length) {
     // Empty state doubles as the page-level onboarding CTA: when there are
@@ -616,6 +619,11 @@ function renderActiveBillsList_(rows) {
         '<tbody>' + rowsHtml + '</tbody>' +
       '</table>' +
     '</div>';
+}
+
+function updateBillsAddActionVisibility_(hasActiveBills) {
+  const btn = document.getElementById('bills_add_toggle_btn');
+  if (btn) btn.hidden = !hasActiveBills;
 }
 
 function buildBillsSortableHeader_(column, label, extraClass) {
@@ -1039,7 +1047,7 @@ function submitNewBill() {
 
   const dueDayNum = Number(dueDayRaw);
   if (!dueDayRaw || !isFinite(dueDayNum) || Math.floor(dueDayNum) !== dueDayNum || dueDayNum < 1 || dueDayNum > 31) {
-    setBillsStatus_('Due Day must be an integer from 1 to 31.', true);
+    setBillsStatus_('Due day of month must be an integer from 1 to 31.', true);
     return;
   }
 
@@ -1053,7 +1061,7 @@ function submitNewBill() {
   }
 
   if (paymentSource !== 'CASH' && paymentSource !== 'CREDIT_CARD') {
-    setBillsStatus_('Payment Source must be Cash or Credit Card', true);
+    setBillsStatus_('Payment source must be Cash or Credit Card.', true);
     return;
   }
 
@@ -1076,7 +1084,7 @@ function submitNewBill() {
   if (String(defaultAmountRaw || '').trim() !== '') {
     const n = toNumber(defaultAmountRaw);
     if (!isFinite(n)) {
-      setBillsStatus_('Default Amount must be a valid number.', true);
+      setBillsStatus_('Default amount must be a valid number.', true);
       return;
     }
     defaultAmount = Math.abs(n);
@@ -1086,7 +1094,7 @@ function submitNewBill() {
   if (startMonthRaw !== '') {
     const m = Number(startMonthRaw);
     if (!isFinite(m) || Math.floor(m) !== m || m < 1 || m > 12) {
-      setBillsStatus_('Start Month must be an integer from 1 to 12.', true);
+      setBillsStatus_('Start month must be an integer from 1 to 12.', true);
       return;
     }
     startMonth = m;
@@ -1437,7 +1445,7 @@ function submitBillEdit_() {
   }
   const dueDayNum = Number(dueDayRaw);
   if (!dueDayRaw || !isFinite(dueDayNum) || Math.floor(dueDayNum) !== dueDayNum || dueDayNum < 1 || dueDayNum > 31) {
-    setBillsStatus_('Due Day must be an integer from 1 to 31.', true);
+    setBillsStatus_('Due day of month must be an integer from 1 to 31.', true);
     return;
   }
   const validFrequencies = {
@@ -1449,7 +1457,7 @@ function submitBillEdit_() {
     return;
   }
   if (paymentSource !== 'CASH' && paymentSource !== 'CREDIT_CARD') {
-    setBillsStatus_('Payment Source must be Cash or Credit Card', true);
+    setBillsStatus_('Payment source must be Cash or Credit Card.', true);
     return;
   }
   if (!category) {
@@ -1471,7 +1479,7 @@ function submitBillEdit_() {
   if (String(defaultAmountRaw || '').trim() !== '') {
     const n = toNumber(defaultAmountRaw);
     if (!isFinite(n)) {
-      setBillsStatus_('Default Amount must be a valid number.', true);
+      setBillsStatus_('Default amount must be a valid number.', true);
       return;
     }
     defaultAmount = Math.abs(n);

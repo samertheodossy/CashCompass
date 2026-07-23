@@ -692,7 +692,7 @@ function savePaymentAfterQuickAddVerification_() {
 
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('pay_status', res.message || 'Saved.', false);
+      setQuickAddSuccessStatus_(res.message || 'Saved to Cash Flow.');
       registerQuickAddWriteReceipt_(res && res.activitySnapshot);
       if (res && res.preview) {
         applyQuickAddPreviewFromResult_(res.preview);
@@ -740,9 +740,8 @@ function savePaymentAfterQuickAddVerification_() {
         google.script.run
           .withSuccessHandler(function(upRes) {
             if (upRes && upRes.message) {
-              setStatus('pay_status',
-                (res && res.message ? res.message + ' ' : '') + upRes.message,
-                false);
+              setQuickAddSuccessStatus_(
+                (res && res.message ? res.message + ' ' : '') + upRes.message);
             }
             refreshSnapshot();
             loadUpcomingSection();
@@ -804,6 +803,12 @@ function savePaymentAfterQuickAddVerification_() {
       createIfMissing: document.getElementById('pay_createIfMissing').checked,
       flowSource: pendingFlowSource
     });
+}
+
+function setQuickAddSuccessStatus_(message) {
+  setStatus('pay_status', message || 'Saved to Cash Flow.', false);
+  var status = document.getElementById('pay_status');
+  if (status) status.classList.add('status-success');
 }
 
 installQuickAddWriteVerificationHooks_();

@@ -7,8 +7,10 @@ const files = Object.fromEntries(await Promise.all([
   'Dashboard_Script_AssetsBankInvestments.html',
   'Dashboard_Script_AssetsHouseValues.html',
   'Dashboard_Script_BillsDue.html',
+  'Dashboard_Script_CashFlowUpcoming.html',
   'Dashboard_Script_Income.html',
   'Dashboard_Script_Onboarding.html',
+  'Dashboard_Script_Payments.html',
   'Dashboard_Script_PlanningDebts.html',
   'Dashboard_Script_PlanningNextActions.html',
   'Dashboard_Script_PropertyPerformance.html',
@@ -166,7 +168,6 @@ assert.match(render, /overview-positive-state[\s\S]*?No issues need attention/,
 
 for (const [pageId, title] of Object.entries({
   page_assets: 'Assets',
-  page_cashflow: 'Cash Flow',
   page_activity: 'Activity log',
   page_properties: 'Properties',
   page_planning: 'Planning'
@@ -177,12 +178,61 @@ for (const [pageId, title] of Object.entries({
     `${title} must begin with the shared page title and purpose pattern`
   );
 }
+const cashFlowPageLead = body.slice(
+  body.indexOf('id="page_cashflow"'),
+  body.indexOf('id="payments"')
+);
+assert.doesNotMatch(cashFlowPageLead, /workspace-page-intro/,
+  'Cash Flow must not repeat its selected top-level page title above the five action tabs');
 assert.match(styles, /\.workspace-page-intro\s*\{[\s\S]*?margin:\s*0 0 var\(--cc-space-4\)/,
   'Workspace purpose lines must use the shared spacing rhythm');
 assert.match(styles, /\.status:not\(:empty\)\s*\{[\s\S]*?border:[\s\S]*?background:/,
   'Non-empty statuses must use the shared visible status surface');
 assert.match(styles, /\.status\.error:not\(:empty\)\s*\{[\s\S]*?background:\s*#fff1f2/,
   'Error statuses must use the shared error treatment');
+assert.match(body,
+  /class="tabs cashflow-tabs"[\s\S]*?class="tab-btn active" data-tab="payments"[\s\S]*?data-tab="upcoming"[\s\S]*?data-tab="income"/,
+  'Cash Flow must keep Quick add first within one compact navigation row');
+assert.match(styles,
+  /\.tabs\.cashflow-tabs\s*\{[\s\S]*?grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/,
+  'Cash Flow must use the original balanced five-tab navigation row');
+assert.match(styles,
+  /\.cashflow-tabs \.tab-btn\s*\{[\s\S]*?min-height:\s*46px;[\s\S]*?font-size:\s*14px;[\s\S]*?font-weight:\s*700;/,
+  'Cash Flow tabs must remain comfortably sized and readable');
+assert.doesNotMatch(body, /cashflow-tools-label|cashflow-feature-description/,
+  'Cash Flow must not reintroduce a second navigation label or banner description');
+assert.doesNotMatch(body + '\n' + styles, /cashflow-primary-tab/,
+  'Quick add must not use a competing featured-tab treatment');
+assert.match(files['Dashboard_Script_Payments.html'],
+  /function setQuickAddSuccessStatus_\([\s\S]*?classList\.add\(['"]status-success['"]\)/,
+  'Quick Add completion must use an explicit success treatment');
+assert.match(styles, /\.status\.status-success:not\(:empty\)\s*\{[\s\S]*?background:\s*#f0fdf4/,
+  'Successful Quick Add feedback must use the shared success surface');
+assert.match(body, /id="bills_view_tab_due"[\s\S]*?>Due this period<\/button>[\s\S]*?id="bills_view_tab_manage"[\s\S]*?>Manage bills<\/button>/,
+  'Bills must lead with current due work before recurring-bill management');
+assert.match(files['Dashboard_Script_BillsDue.html'],
+  /renderActiveBillsList_\([\s\S]*?updateBillsAddActionVisibility_\(__billsManageRows\.length > 0\)/,
+  'Bills must show the header Add action only when active bills exist');
+assert.match(body, /id="bills_add_toggle_btn"[^>]*hidden/,
+  'The Bills header Add action must stay hidden until active rows are confirmed');
+assert.match(files['Dashboard_Script_BillsDue.html'],
+  /No active bills yet\.[\s\S]*?openBillsAddFormFromEmptyState\(\)/,
+  'An empty Bills list must retain one centered Add action');
+assert.match(body, /Due day of month \(1–31\)/,
+  'Bills must describe due day in plain language');
+assert.match(files['Dashboard_Script_CashFlowUpcoming.html'],
+  /saveBtn\.textContent\s*=\s*['"]Add upcoming expense['"]/,
+  'Upcoming must preserve its sentence-case action label after form reset');
+assert.match(body, /id="bills_add_weekday_field" style="display:none;"/,
+  'Weekday must remain hidden until its frequency requires it');
+assert.match(body, /id="bills_add_anchor_date_field" style="display:none;"/,
+  'Anchor date must remain hidden until its frequency requires it');
+assert.match(files['Dashboard_Script_BillsDue.html'],
+  /weekdayField\.style\.display\s*=\s*\(isWeekly\s*\|\|\s*isBiweekly\)\s*\?\s*''\s*:\s*'none'/,
+  'Weekly and biweekly schedules must reveal Weekday');
+assert.match(files['Dashboard_Script_BillsDue.html'],
+  /anchorField\.style\.display\s*=\s*isBiweekly\s*\?\s*''\s*:\s*'none'/,
+  'Only biweekly schedules must reveal Anchor date');
 assert.match(styles, /\.empty-state,[\s\S]*?\.bills-empty-state,[\s\S]*?\.income-empty-state/,
   'Daily-use empty states must share one visual pattern');
 assert.doesNotMatch(
