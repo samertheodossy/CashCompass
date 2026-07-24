@@ -408,6 +408,7 @@ function quickAddPayment(payload, optionalSs) {
     debtBalanceNote: debtBalanceNote,
     cashFlowSheet: sheet.getName(),
     cashFlowMonth: monthLabel,
+    workbookIdentity: quickAddWorkbookIdentity_(ss),
     flowSource: flowSource || '',
     flowSourceWritten: flowSourceWritten
   };
@@ -475,6 +476,24 @@ function quickAddPayment(payload, optionalSs) {
 }
 
 /**
+ * Opaque, stable identity for receipt scoping. The browser never receives the
+ * spreadsheet ID itself; it only needs to know whether a later verification
+ * resolves to the same workbook that produced the receipt.
+ */
+function quickAddWorkbookIdentity_(ss) {
+  var spreadsheetId = ss && typeof ss.getId === 'function'
+    ? String(ss.getId() || '').trim()
+    : '';
+  if (!spreadsheetId) return '';
+  var digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    spreadsheetId,
+    Utilities.Charset.UTF_8
+  );
+  return Utilities.base64EncodeWebSafe(digest).replace(/=+$/g, '').slice(0, 24);
+}
+
+/**
  * Normalize and validate the browser-held receipt used to verify a completed
  * Quick Add write. The receipt may identify only the canonical Cash Flow cell
  * that quickAddPayment() already wrote; it cannot target another sheet or turn
@@ -484,7 +503,7 @@ function normalizeQuickAddWriteReceipt_(raw) {
   raw = raw || {};
   validateRequired_(raw, [
     'entryType', 'payee', 'entryDate', 'previousValue', 'newValue',
-    'signedAmount', 'cashFlowSheet', 'cashFlowMonth'
+    'signedAmount', 'cashFlowSheet', 'cashFlowMonth', 'workbookIdentity'
   ]);
 
   var entryType = String(raw.entryType || '').trim();
@@ -535,7 +554,8 @@ function normalizeQuickAddWriteReceipt_(raw) {
     newValue: newValue,
     signedAmount: signedAmount,
     cashFlowSheet: expectedSheet,
-    cashFlowMonth: expectedMonth
+    cashFlowMonth: expectedMonth,
+    workbookIdentity: String(raw.workbookIdentity || '').trim()
   };
 }
 
@@ -619,9 +639,25 @@ function quickAddWriteResultForClient_(inspection) {
 function verifyQuickAddPaymentWrites(receipts) {
   if (!Array.isArray(receipts)) return [];
   var ss = getUserSpreadsheet_();
+  var currentWorkbookIdentity = quickAddWorkbookIdentity_(ss);
   return receipts.slice(0, 10).map(function(raw) {
     try {
       var receipt = normalizeQuickAddWriteReceipt_(raw);
+      if (receipt.workbookIdentity !== currentWorkbookIdentity) {
+        return {
+          operationId: receipt.operationId,
+          status: 'WORKBOOK_CHANGED',
+          entryType: receipt.entryType,
+          payee: receipt.payee,
+          entryDate: receipt.entryDate,
+          cashFlowSheet: receipt.cashFlowSheet,
+          cashFlowMonth: receipt.cashFlowMonth,
+          previousValue: receipt.previousValue,
+          expectedValue: receipt.newValue,
+          currentValue: null,
+          message: 'Receipt belongs to a different workbook.'
+        };
+      }
       return quickAddWriteResultForClient_(inspectQuickAddWriteInSpreadsheet_(ss, receipt));
     } catch (e) {
       return {

@@ -87,10 +87,11 @@ function getHarnessSuites_() {
     {
       id: 'SUITE-BILLS-REGRESSION',
       label: 'Bills Regression Suite',
-      description: 'Every implemented Bills recurrence scenario (8 PURE engine cases + 2 workbook-integration cases). Run after any Bills-related logic change.',
+      description: 'Every implemented Bills recurrence scenario (9 PURE engine cases + 2 workbook-integration cases). Run after any Bills-related logic change.',
       scenarioIds: [
         // PURE — recurrence-engine math (each still gets its own disposable workbook).
         'REGRESSION-BILLS-MONTHLY',
+        'REGRESSION-BILLS-NEW-CREATION-FLOOR',
         'REGRESSION-BILLS-WEEKLY',
         'REGRESSION-BILLS-WEEKLY-ON-DAY',
         'REGRESSION-BILLS-BIWEEKLY',

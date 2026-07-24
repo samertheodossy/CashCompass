@@ -2,6 +2,30 @@
 
 The V1 trust baseline is shipped and locked, and V1.1 closed out with the retirement profile integration (see **V1.1 — Retirement Profile Integration (DOB Source of Truth)** section below). The project has since moved into **Central App live + Family Beta readiness** — the Central App architecture is operational and the active work is hardening it toward a family beta (see **Current State — Post V1.2 Prep** below for the per-slice migration record). Working rules live in `WORKING_RULES.md → Current phase` + `→ Central App Transition Rules` (now active); product framing lives in `PROJECT_CONTEXT.md → Current phase` and `→ Current architecture — Central App (live)`. All prior phase notes below this header are preserved as-is for historical record.
 
+- **Bills completion flow and clean disposable handoff — isolated `@193` PASS
+  (2026-07-24).** Bills now uses three explicit views: **Due this period · Add
+  bill · Manage bills**. Setup preserves Add versus Manage intent, while normal
+  Bills entry still opens the due list. Pay opens a wider side panel where the
+  amount and date can be confirmed; a successful write shows the affected Cash
+  Flow month, previous total, added amount, new total, and six-month payment
+  history before **Done** closes the panel. The paid occurrence is cleared only
+  after its activity marker is verified. New bills receive a creation-month
+  schedule floor so the prior-month look-back cannot invent an occurrence before
+  the bill existed. Browser-held Quick Add receipts are now scoped to an opaque
+  workbook identity, preventing a receipt from a replaced disposable workbook
+  from producing a false conflict. Existing writers, schemas, recurrence
+  calculations, and bounded no-argument behavior remain compatible. Added and
+  extended Bills, Quick Add, harness, and dashboard UX regressions. Full local
+  `npm test`, client syntax, and diff hygiene passed; isolated Bills regression
+  passed 11/11 with 83/83 assertions and Bills Pay E2E passed 1/1 with 3/3
+  assertions, Restricted disposable ownership, and verified Trash cleanup.
+  Isolated Central advanced to `@193`; Beta remained `@106` and the bounded
+  deployment/workbook were untouched. For the final user walkthrough, the prior
+  `cashcompass2026@gmail.com` disposable workbook was moved to recoverable Drive
+  Trash, its exact mapping and reverse index were cleared through the guarded
+  admin repair flow, and a brand-new mapped workbook reached Welcome, clean Setup
+  (0 of 5 ready), and Bills **Add bill** with no prior user data.
+
 - **`1a` / `1b` isolated runtime and REG-019 refresh finding (2026-07-24).**
   Added a shared bounded retry that repeats only verified pure dashboard reads
   once after the observed Apps Script `HTTP 0` transport failure. Reads with

@@ -1543,6 +1543,161 @@
   }
   .bills-view-purpose { margin-bottom: 12px; }
   .bills-management-head .bills-view-purpose { margin: 0; }
+  .bill-pay-drawer-backdrop[hidden] { display: none; }
+  .bill-pay-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    display: flex;
+    justify-content: flex-end;
+    background: rgba(15, 23, 42, 0.38);
+  }
+  .bill-pay-drawer {
+    display: flex;
+    flex-direction: column;
+    width: min(560px, 100vw);
+    height: 100%;
+    overflow: hidden;
+    background: #ffffff;
+    border-left: 1px solid #cbd5e1;
+    box-shadow: -18px 0 50px rgba(15, 23, 42, 0.18);
+  }
+  .bill-pay-drawer-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 24px 24px 18px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .bill-pay-drawer-head h2 {
+    margin: 2px 0 0;
+    color: #0f172a;
+    font-size: 24px;
+    line-height: 1.25;
+  }
+  .bill-pay-drawer-eyebrow {
+    color: #1f4e78;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .bill-pay-drawer-close {
+    flex: 0 0 auto;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: transparent;
+    color: #475569;
+    font-size: 28px;
+    font-weight: 400;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .bill-pay-drawer-close:hover {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+    color: #0f172a;
+  }
+  .bill-pay-drawer-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 22px 24px;
+  }
+  .bill-pay-summary {
+    margin-bottom: 22px;
+    padding: 16px;
+    border: 1px solid #dbeafe;
+    border-radius: 10px;
+    background: #f8fbff;
+  }
+  .bill-pay-summary-name {
+    margin-bottom: 12px;
+    color: #0f172a;
+    font-size: 18px;
+    font-weight: 750;
+    overflow-wrap: anywhere;
+  }
+  .bill-pay-summary-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding-top: 7px;
+    color: #64748b;
+    font-size: 13px;
+  }
+  .bill-pay-summary-row strong {
+    color: #334155;
+    font-weight: 700;
+    text-align: right;
+  }
+  .bill-pay-drawer-body label {
+    display: block;
+    margin-top: 14px;
+  }
+  .bill-pay-drawer-help {
+    margin: 16px 0 0;
+    padding: 12px 14px;
+    border-left: 3px solid #93c5fd;
+    border-radius: 0 6px 6px 0;
+    background: #eff6ff;
+    color: #334155;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .bill-pay-confirmation[hidden] { display: none; }
+  .bill-pay-confirmation {
+    margin-top: 18px;
+    padding: 16px;
+    border: 1px solid #86efac;
+    border-radius: 10px;
+    background: #f0fdf4;
+    color: #14532d;
+  }
+  .bill-pay-confirmation-title {
+    margin-bottom: 8px;
+    color: #166534;
+    font-size: 17px;
+    font-weight: 800;
+  }
+  .bill-pay-confirmation-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 7px 0;
+    font-size: 13px;
+  }
+  .bill-pay-confirmation-row strong {
+    color: #14532d;
+    text-align: right;
+  }
+  .bill-pay-confirmation-total {
+    margin-top: 3px;
+    padding-top: 10px;
+    border-top: 1px solid #bbf7d0;
+    font-size: 14px;
+  }
+  .bill-pay-confirmation p {
+    margin: 10px 0 0;
+    color: #166534;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .bill-pay-drawer-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 24px 20px;
+    border-top: 1px solid #e2e8f0;
+    background: #ffffff;
+  }
+  body.bill-pay-drawer-open { overflow: hidden; }
   .cashflow-column-title {
     margin: 0 0 var(--cc-space-3) 0;
     color: #0f172a;
@@ -1566,6 +1721,13 @@
     font-size: 13px;
   }
   .quick-add-history[hidden] { display: none; }
+  .bill-pay-history {
+    margin-top: 18px;
+    padding: 16px;
+    border: 1px solid #dbeafe;
+    border-radius: 10px;
+    background: #f8fbff;
+  }
   .quick-add-history-title {
     color: #0f172a;
     font-size: 14px;
@@ -2073,6 +2235,18 @@
     }
     .bills-grid { grid-template-columns: 1fr; }
     .bills-grid .bill-card-compact { height: auto; min-height: 132px; }
+    .bill-pay-drawer {
+      width: 100vw;
+      border-left: 0;
+    }
+    .bill-pay-drawer-head { padding: 18px 16px 14px; }
+    .bill-pay-drawer-body { padding: 18px 16px; }
+    .bill-pay-drawer-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding: 14px 16px 18px;
+    }
+    .bill-pay-drawer-actions .small-btn { width: 100%; }
   }
 
   /* Onboarding (Setup) page ------------------------------------------------ */

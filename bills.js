@@ -270,7 +270,8 @@ function addBillFromDashboard(payload) {
     throw new Error('Anchor Date must fall on the selected weekday.');
   }
 
-  var nowMonth = new Date().getMonth() + 1;
+  var billCreatedOn = stripTime_(new Date());
+  var nowMonth = billCreatedOn.getMonth() + 1;
   var startMonth = nowMonth;
   if (
     payload.startMonth !== undefined &&
@@ -283,6 +284,17 @@ function addBillFromDashboard(payload) {
     }
     startMonth = startNum;
   }
+
+  // A newly-created bill did not exist in the prior month. The recurrence
+  // engine's prior-month look-back remains essential for older unresolved
+  // bills, so give new rows a creation-month floor. Use the first day of this
+  // month—not today—so a due day that already passed this month still appears
+  // correctly as overdue.
+  var newBillScheduleEffectiveDate = Utilities.formatDate(
+    new Date(billCreatedOn.getFullYear(), billCreatedOn.getMonth(), 1),
+    Session.getScriptTimeZone(),
+    'yyyy-MM-dd'
+  );
 
   // Ensure-before-write guard. Idempotent no-op on populated workbooks;
   // on fresh workbooks it seeds the canonical INPUT - Bills structure
@@ -372,6 +384,7 @@ function addBillFromDashboard(payload) {
   setIfPresent('Notes', notes);
   setIfPresent('Weekday', weekdayLabel);
   setIfPresent('Anchor Date', anchorLabel);
+  setIfPresent('Schedule Effective Date', newBillScheduleEffectiveDate);
 
   // Sorted insert: place the new bill row above the first existing row whose
   // Due Day is strictly greater so INPUT - Bills stays ordered by due date,
@@ -426,7 +439,8 @@ function addBillFromDashboard(payload) {
         autopay: autopayLabel,
         varies: variesLabel,
         active: activeLabel,
-        notes: notes
+        notes: notes,
+        scheduleEffectiveDate: newBillScheduleEffectiveDate
       })
     });
   } catch (logErr) {
@@ -494,7 +508,8 @@ function addBillFromDashboard(payload) {
     ok: true,
     message: message,
     payee: payee,
-    cashFlowRowSeeded: cashFlowRowSeeded
+    cashFlowRowSeeded: cashFlowRowSeeded,
+    scheduleEffectiveDate: newBillScheduleEffectiveDate
   };
 }
 

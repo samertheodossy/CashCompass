@@ -2364,6 +2364,18 @@ function getInputBillsDueRows_(ss, today, tz) {
 
     if (!isExpandedFreq) for (let i = 0; i < candidates.length; i++) {
       const cand = candidates[i];
+      // Bills Pay records an explicit per-occurrence marker after its Cash Flow
+      // write succeeds. Honor it for monthly and other single-occurrence
+      // schedules too. Their Cash Flow cell remains the normal handled signal
+      // for payments entered elsewhere, while this marker makes the in-app Pay
+      // path deterministic even if a new server execution briefly observes a
+      // stale Cash Flow value immediately after the write.
+      const candDueIso = Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd');
+      const paidOccurrenceKey =
+        'bill_paid::' + buildDashboardBillPaidKey_(payee, candDueIso);
+      if (activityLogDedupeKeyExists_(ss, paidOccurrenceKey)) {
+        continue;
+      }
       // The prior-month look-back can land in a calendar year whose Cash Flow
       // sheet doesn't exist (e.g. a January refresh looking back to December of
       // a year that was never set up). getCashFlowSheet_ throws on a missing
@@ -3453,7 +3465,7 @@ function markDashboardBillOccurrencePaid(payload, optionalSs) {
   var amount = round2_(Math.abs(toNumber_(payload.amount)));
   var paidDedupeKey = 'bill_paid::' + buildDashboardBillPaidKey_(payee, dueDate);
 
-  appendActivityLog_(ss, {
+  var wroteMarker = appendActivityLog_(ss, {
     eventType: 'bill_paid',
     entryDate: dueDate,
     amount: 0,
@@ -3467,7 +3479,24 @@ function markDashboardBillOccurrencePaid(payload, optionalSs) {
     details: JSON.stringify({ source: 'bills_due_pay', occurrence: true, dueDate: dueDate, amount: amount })
   });
 
-  return { ok: true, message: 'Occurrence marked paid.' };
+  // appendActivityLog_ deliberately returns false for both an already-existing
+  // dedupe key and a caught write error. Verify the marker after the append so
+  // an idempotent repeat remains successful while a silent write failure can
+  // never be reported to the browser as "cleared."
+  var markerExists = activityLogDedupeKeyExists_(ss, paidDedupeKey);
+  if (!markerExists) {
+    return {
+      ok: false,
+      message: 'Payment was recorded, but the bill occurrence marker could not be verified.'
+    };
+  }
+
+  return {
+    ok: true,
+    message: wroteMarker ? 'Occurrence marked paid.' : 'Occurrence was already marked paid.',
+    dueDate: dueDate,
+    dedupeKey: paidDedupeKey
+  };
 }
 
 function buildDashboardRecurringSkipKey_(payee, year, monthHeader) {

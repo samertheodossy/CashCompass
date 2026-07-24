@@ -45,7 +45,8 @@ function getHarnessQuickAddWriteGuardScenario_() {
           newValue: 5929.64,
           signedAmount: 5929.64,
           cashFlowSheet: cashFlowName,
-          cashFlowMonth: Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'MMM-yy')
+          cashFlowMonth: Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'MMM-yy'),
+          workbookIdentity: quickAddWorkbookIdentity_(ctx.ss)
         }
       };
       ctx.actions.push('Build canonical disposable Cash Flow sheet and seed a reverted Quick Add target');

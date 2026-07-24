@@ -28,9 +28,11 @@ const files = Object.fromEntries(await Promise.all([
   'PlannerDashboard.html',
   'QuickAddPaymentUI.html',
   'quick_add_payment.js',
+  'bills.js',
   'dashboard_data.js',
   'income_sources.js',
-  'onboarding.js'
+  'onboarding.js',
+  'test_harness_scenarios_bills.js'
 ].map(async (name) => [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')])));
 
 const render = files['Dashboard_Script_Render.html'];
@@ -326,7 +328,7 @@ assert.match(body,
   /id="pay_history_wrap"[^>]*hidden[\s\S]*?id="pay_history_chart"/,
   'Quick Add history must remain contextual and hidden until a known payee is previewed');
 assert.match(files['Dashboard_Script_Payments.html'],
-  /function renderQuickAddHistory_\([\s\S]*?Array\.isArray\(data\.history\)[\s\S]*?wrap\.hidden = false/,
+  /function renderPaymentHistoryChart_\([\s\S]*?Array\.isArray\(data\.history\)[\s\S]*?wrap\.hidden = false[\s\S]*?function renderQuickAddHistory_\([\s\S]*?renderPaymentHistoryChart_\('pay_history_wrap', 'pay_history_chart', data\)/,
   'Quick Add must render server-provided history inside its information panel');
 const quickAddServer = files['quick_add_payment.js'];
 const quickAddHistoryStart = quickAddServer.indexOf('function computeQuickAddHistoryPreview_(');
@@ -340,11 +342,14 @@ assert.match(quickAddHistorySlice,
 assert.doesNotMatch(quickAddHistorySlice,
   /\.setValue\(|\.setValues\(|\.appendRow\(|\.insertSheet\(|ensure[A-Z_]/,
   'Quick Add history must remain read-only');
-assert.match(body, /id="bills_view_tab_due"[\s\S]*?>Due this period<\/button>[\s\S]*?id="bills_view_tab_manage"[\s\S]*?>Manage bills<\/button>/,
-  'Bills must lead with current due work before recurring-bill management');
+assert.match(body, /id="bills_view_tab_due"[\s\S]*?>Due this period<\/button>[\s\S]*?id="bills_view_tab_add"[\s\S]*?>Add bill<\/button>[\s\S]*?id="bills_view_tab_manage"[\s\S]*?>Manage bills<\/button>/,
+  'Bills must expose distinct Due, Add, and Manage modes in task order');
+assert.match(body,
+  /id="bills_view_due"[\s\S]*?id="bills_view_add"[\s\S]*?id="bills_add_wrap"[\s\S]*?id="bills_view_manage"/,
+  'Bills Add form must live in its own view between Due and Manage');
 assert.match(styles,
   /\.bills-view-switch\s*\{[\s\S]*?display:\s*inline-flex;[\s\S]*?max-width:\s*100%;/,
-  'Bills Due and Manage bills must remain compact secondary controls');
+  'Bills Due, Add, and Manage controls must remain compact secondary controls');
 assert.match(styles,
   /\.bills-view-btn\s*\{[\s\S]*?flex:\s*0 0 auto;[\s\S]*?width:\s*auto;/,
   'Bills secondary controls must override shared full-width button styling');
@@ -358,13 +363,41 @@ assert.match(styles,
   /\.bills-grid \.bill-card-compact\s*\{[\s\S]*?height:\s*132px;/,
   'Bill cards must keep a consistent desktop height');
 assert.match(files['Dashboard_Script_BillsDue.html'],
-  /renderActiveBillsList_\([\s\S]*?updateBillsAddActionVisibility_\(__billsManageRows\.length > 0\)/,
-  'Bills must show the header Add action only when active bills exist');
-assert.match(body, /id="bills_add_toggle_btn"[^>]*hidden/,
-  'The Bills header Add action must stay hidden until active rows are confirmed');
-assert.match(files['Dashboard_Script_BillsDue.html'],
   /No active bills yet\.[\s\S]*?openBillsAddFormFromEmptyState\(\)/,
   'An empty Bills list must retain one centered Add action');
+assert.match(files['Dashboard_Script_BillsDue.html'],
+  /function setBillsView\(view\)[\s\S]*?view === 'add'[\s\S]*?bills_view_add[\s\S]*?bills_view_tab_add[\s\S]*?window\.__billsActiveView = target/,
+  'Bills view switching must fully support the dedicated Add mode');
+assert.match(files['Dashboard_Script_BillsDue.html'],
+  /function openBillsAddForm_\(\)[\s\S]*?setBillsView\('add'\)[\s\S]*?resetBillsAddForm_\(\)[\s\S]*?setBillsFormModeToAdd_\(\)/,
+  'Every fresh Bills Add entry must open a clean Add form');
+assert.match(files['Dashboard_Script_BillsDue.html'],
+  /function applyBillsFormModeUi_\(\)[\s\S]*?bills_view_tab_add[\s\S]*?isEdit \? 'Edit bill' : 'Add bill'[\s\S]*?bills_editor_purpose[\s\S]*?Update this recurring bill\. Existing payment history stays unchanged\./,
+  'The Bills editor tab and purpose must identify Edit mode instead of presenting an edit as Add');
+const onboardingBills = files['Dashboard_Script_Onboarding.html'];
+const onboardingBillsOpenStart = onboardingBills.indexOf('function onboardingOpenBillsPage(mode)');
+const onboardingBillsOpenEnd = onboardingBills.indexOf('// --------------------------------------------------------------------------\n// Step detail: Upcoming Expenses', onboardingBillsOpenStart);
+assert.ok(onboardingBillsOpenStart >= 0 && onboardingBillsOpenEnd > onboardingBillsOpenStart,
+  'Setup must define a bounded Bills editor handoff');
+const onboardingBillsOpenSlice = onboardingBills.slice(onboardingBillsOpenStart, onboardingBillsOpenEnd);
+assert.match(onboardingBills,
+  /onclick="onboardingOpenBillsPage\(\\'add\\'\)">Add first bill/,
+  'Empty Setup Bills must route directly to Add');
+assert.match(onboardingBills,
+  /onclick="onboardingOpenBillsPage\(\\'add\\'\)">Add bill[\s\S]*?onclick="onboardingOpenBillsPage\(\\'manage\\'\)">Manage bills/,
+  'Populated Setup Bills must expose explicit Add and Manage actions');
+assert.doesNotMatch(body,
+  /id="onboarding_view_bills"[\s\S]*?<div class="onboarding-actions">[\s\S]*?onboardingOpenBillsPage/,
+  'Setup Bills must not duplicate its Add or Manage actions in the footer');
+assert.match(onboardingBillsOpenSlice,
+  /target === 'manage'[\s\S]*?setBillsView\('manage'\)[\s\S]*?openBillsAddForm_\(\)/,
+  'Setup Bills handoff must preserve the selected Add or Manage intent');
+assert.doesNotMatch(onboardingBillsOpenSlice,
+  /ONBOARDING_BILLS_HAS_TRACKED_|onboardingApplyFirstRunEditorMode_/,
+  'Setup Bills routing must not depend on cached tracked-bill state');
+assert.doesNotMatch(files['Dashboard_Script_BillsDue.html'],
+  /updateBillsAddActionVisibility_|bills_add_toggle_btn/,
+  'Dedicated Bills Add mode must not retain the removed conditional Add control');
 assert.match(body, /Due day of month \(1–31\)/,
   'Bills must describe due day in plain language');
 assert.match(body,
@@ -379,6 +412,152 @@ assert.match(body,
 assert.match(body,
   /id="bd_recurringList"[\s\S]*?Loading recurring bills…/,
   'Bills Due recurring section must use descriptive initial loading copy');
+assert.match(body,
+  /id="bill_pay_drawer_backdrop"[\s\S]*?id="bill_pay_drawer"[\s\S]*?role="dialog"[\s\S]*?aria-modal="true"[\s\S]*?id="bill_pay_amount"[\s\S]*?id="bill_pay_date"[\s\S]*?id="bill_pay_submit_btn"/,
+  'Bills Pay must open an accessible drawer with editable amount and payment date');
+assert.match(body,
+  /id="bill_pay_confirmation"[^>]*hidden[\s\S]*?id="bill_pay_confirmation_month"[\s\S]*?id="bill_pay_confirmation_previous"[\s\S]*?id="bill_pay_confirmation_added"[\s\S]*?id="bill_pay_confirmation_total"[\s\S]*?id="bill_pay_done_btn"[\s\S]*?hidden>Done<\/button>/,
+  'Bills Pay must retain the drawer for a reviewed month-total receipt before Done closes it');
+assert.match(body,
+  /id="bill_pay_history_wrap"[^>]*hidden[\s\S]*?Previous payments[\s\S]*?id="bill_pay_history_chart"[^>]*aria-label="Six-month bill payment history"/,
+  'Bills Pay receipt must include the shared six-month payment-history chart');
+assert.match(body,
+  /The amount entered here is recorded in Cash Flow\. Paying clears this bill occurrence even when the amount differs from the expected amount\./,
+  'Bills Pay must explain changed-amount behavior before the user records it');
+assert.match(styles,
+  /\.bill-pay-drawer-backdrop\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?justify-content:\s*flex-end;/,
+  'Bills Pay must preserve Bills context in a right-side overlay');
+assert.match(styles,
+  /\.bill-pay-drawer\s*\{[\s\S]*?width:\s*min\(560px,\s*100vw\);/,
+  'Bills Pay drawer must provide enough desktop width for the receipt and six-month chart');
+assert.match(styles,
+  /\.bill-pay-history\s*\{[\s\S]*?margin-top:\s*18px;[\s\S]*?background:\s*#f8fbff;/,
+  'Bills payment history must remain visually distinct below the receipt');
+assert.match(styles,
+  /@media \(max-width:\s*460px\)[\s\S]*?\.bill-pay-drawer\s*\{[\s\S]*?width:\s*100vw;/,
+  'Bills Pay drawer must remain usable on a narrow screen');
+const billsDueClient = files['Dashboard_Script_BillsDue.html'];
+const payBillStart = billsDueClient.indexOf('function payBillFromDashboard(');
+const skipBillStart = billsDueClient.indexOf('function skipBillFromDashboard(', payBillStart);
+assert.ok(payBillStart >= 0 && skipBillStart > payBillStart,
+  'Bills must retain a dedicated Pay action');
+const payBillSlice = billsDueClient.slice(payBillStart, skipBillStart);
+assert.match(payBillSlice, /openBillPayDrawer_\(bill,\s*billOccurrencePaid\)/,
+  'Bills Pay must open the Bills-only drawer');
+assert.match(payBillSlice,
+  /var billOccurrencePaid = bill\.dueDate[\s\S]*?dueDate:\s*bill\.dueDate/,
+  'Every dated bill must carry an explicit paid-occurrence marker context');
+assert.doesNotMatch(payBillSlice,
+  /bill\.isExpandedRecurrence\s*&&\s*bill\.dueDate/,
+  'Monthly bill dismissal must not depend only on an immediate Cash Flow reread');
+assert.doesNotMatch(payBillSlice, /prefillQuickPayment|showTab\(['"]payments['"]\)/,
+  'Bills Pay must not navigate to or visually merge with Quick Add');
+const drawerSaveStart = billsDueClient.indexOf('function saveBillPaymentFromDrawer_(');
+const billsViewStart = billsDueClient.indexOf('Internal Bills view switch', drawerSaveStart);
+assert.ok(drawerSaveStart >= 0 && billsViewStart > drawerSaveStart,
+  'Bills drawer must retain a dedicated save flow');
+const drawerSaveSlice = billsDueClient.slice(drawerSaveStart, billsViewStart);
+assert.match(drawerSaveSlice,
+  /\.quickAddPayment\(\{[\s\S]*?entryType:\s*'Expense'[\s\S]*?createIfMissing:\s*true/,
+  'Bills drawer must reuse the guarded Cash Flow payment writer');
+assert.doesNotMatch(drawerSaveSlice, /registerQuickAddWriteReceipt_/,
+  'A completed Bills payment must not create a later Quick Add warning');
+const drawerSubmitSlice = billsDueClient.slice(
+  billsDueClient.indexOf('function submitBillPayment()'),
+  drawerSaveStart
+);
+assert.doesNotMatch(drawerSubmitSlice,
+  /loadQuickAddWriteReceipts_|verifyPendingQuickAddWrites_|Checking the previous payment/,
+  'Bills Pay must not inherit Quick Add browser-session receipt warnings');
+assert.match(drawerSaveSlice,
+  /withSuccessHandler\(function\(res\)[\s\S]*?markDashboardBillOccurrencePaid\(occurrence\)/,
+  'Expanded bill occurrences must only be cleared after the payment succeeds');
+assert.match(drawerSaveSlice,
+  /withSuccessHandler\(function\(markerResult\)[\s\S]*?markerResult\.ok\s*!==\s*true[\s\S]*?could not confirm that this occurrence cleared/,
+  'Bills Pay must not show a cleared receipt when the handled marker is unverified');
+assert.match(drawerSaveSlice,
+  /state\.paymentRecorded\s*=\s*true[\s\S]*?submit\.disabled\s*=\s*true[\s\S]*?It did not repeat the payment/,
+  'A marker failure must prevent duplicate payment submission and explain partial success');
+assert.doesNotMatch(drawerSaveSlice,
+  /runReadOnlyRpcWithRetry_|setTimeout\([\s\S]*?quickAddPayment/,
+  'Bills payment writes must never use automatic transport retry');
+assert.match(drawerSaveSlice,
+  /could not confirm whether the payment finished\. It did not retry\. Check Bills and Cash Flow before trying again\./,
+  'An uncertain payment response must use explicit no-retry guidance');
+assert.match(drawerSaveSlice,
+  /if \(uncertain\)[\s\S]*?submit\.disabled\s*=\s*true[\s\S]*?Check before retrying/,
+  'An uncertain payment response must disable immediate duplicate submission');
+const drawerConfirmationStart = billsDueClient.indexOf('function showBillPaymentConfirmation_(');
+const drawerSubmitStart = billsDueClient.indexOf('function submitBillPayment(', drawerConfirmationStart);
+assert.ok(drawerConfirmationStart >= 0 && drawerSubmitStart > drawerConfirmationStart,
+  'Bills Pay must retain a dedicated post-write receipt state');
+const drawerConfirmationSlice = billsDueClient.slice(drawerConfirmationStart, drawerSubmitStart);
+assert.match(drawerConfirmationSlice,
+  /snapshot\.previousValue[\s\S]*?preview\.currentValue[\s\S]*?bill_pay_confirmation_previous[\s\S]*?bill_pay_confirmation_added[\s\S]*?bill_pay_confirmation_total/,
+  'Bills Pay receipt must use the authoritative writer response for before, added, and new totals');
+assert.match(drawerConfirmationSlice,
+  /renderPaymentHistoryChart_\([\s\S]*?'bill_pay_history_wrap'[\s\S]*?'bill_pay_history_chart'[\s\S]*?preview/,
+  'Bills Pay receipt must render the authoritative post-payment history');
+assert.match(drawerConfirmationSlice,
+  /submit\.hidden\s*=\s*true[\s\S]*?cancel\.hidden\s*=\s*true[\s\S]*?done\.hidden\s*=\s*false/,
+  'A successful payment must wait for explicit Done instead of auto-dismissing the drawer');
+assert.doesNotMatch(drawerConfirmationSlice, /closeBillPayDrawer\(/,
+  'Bills Pay confirmation must not close itself before the customer reviews it');
+assert.match(billsDueClient,
+  /function updateBillPaymentFollowup_\(data\)[\s\S]*?candidateDueDate\s*!==\s*paidDueDate[\s\S]*?Another [\s\S]*?occurrence due [\s\S]*?is still awaiting action/,
+  'Bills Pay must distinguish a cleared occurrence from another occurrence that is also due');
+assert.match(billsDueClient,
+  /renderBillsDueSummary_\(data \|\| \{\}\);[\s\S]*?updateBillPaymentFollowup_\(data \|\| \{\}\);/,
+  'Bills Pay follow-up must use the refreshed Bills response');
+const billsServer = files['dashboard_data.js'];
+const billsWriter = files['bills.js'];
+const addBillWriterStart = billsWriter.indexOf('function addBillFromDashboard(payload)');
+const updateBillWriterStart = billsWriter.indexOf('function updateTrackedBillFromDashboard', addBillWriterStart);
+assert.ok(addBillWriterStart >= 0 && updateBillWriterStart > addBillWriterStart,
+  'Bills must retain a dedicated add writer');
+const addBillWriterSlice = billsWriter.slice(addBillWriterStart, updateBillWriterStart);
+assert.match(addBillWriterSlice,
+  /new Date\(billCreatedOn\.getFullYear\(\),\s*billCreatedOn\.getMonth\(\),\s*1\)[\s\S]*?setIfPresent\('Schedule Effective Date',\s*newBillScheduleEffectiveDate\)/,
+  'New bills must start in their creation month and never generate a prior-month occurrence');
+assert.match(addBillWriterSlice,
+  /scheduleEffectiveDate:\s*newBillScheduleEffectiveDate/,
+  'Bill-add Activity evidence must record the creation-month schedule floor');
+const billsHarness = files['test_harness_scenarios_bills.js'];
+const creationFloorStart = billsHarness.indexOf('function getHarnessBillsNewCreationFloorScenario_()');
+const weeklyScenarioStart = billsHarness.indexOf('function getHarnessBillsWeeklyScenario_()', creationFloorStart);
+assert.ok(creationFloorStart >= 0 && weeklyScenarioStart > creationFloorStart,
+  'Bills must retain a bounded new-creation-floor regression scenario');
+const creationFloorSlice = billsHarness.slice(creationFloorStart, weeklyScenarioStart);
+assert.match(creationFloorSlice,
+  /expectedSheets:\s*\[settingsName,\s*sysMetaName\][\s\S]*?ctx\.assertWritable\(\)[\s\S]*?runMinimalBootstrap_\(ctx\.ss\)/,
+  'Every Bills PURE harness scenario must provision its disposable vehicle before suite validation');
+const monthlyBillsStart = billsServer.indexOf('if (!isExpandedFreq) for (let i = 0; i < candidates.length; i++)');
+const expandedBillsStart = billsServer.indexOf('// ---- Weekly / biweekly:', monthlyBillsStart);
+assert.ok(monthlyBillsStart >= 0 && expandedBillsStart > monthlyBillsStart,
+  'Bills must retain a distinct single-occurrence schedule path');
+const monthlyBillsSlice = billsServer.slice(monthlyBillsStart, expandedBillsStart);
+assert.match(monthlyBillsSlice,
+  /bill_paid::['"]?\s*\+\s*buildDashboardBillPaidKey_\(payee,\s*candDueIso\)[\s\S]*?activityLogDedupeKeyExists_\(ss,\s*paidOccurrenceKey\)[\s\S]*?continue;/,
+  'Monthly bills must honor the explicit paid-occurrence marker before showing a due card');
+assert.match(billsServer,
+  /var wroteMarker = appendActivityLog_\(ss,[\s\S]*?var markerExists = activityLogDedupeKeyExists_\(ss,\s*paidDedupeKey\);[\s\S]*?if \(!markerExists\)[\s\S]*?ok:\s*false/,
+  'Bills Pay marker writer must verify durable evidence before reporting success');
+const quickAddClient = files['Dashboard_Script_Payments.html'];
+assert.match(quickAddServer,
+  /function quickAddWorkbookIdentity_\(ss\)[\s\S]*?Utilities\.DigestAlgorithm\.SHA_256/,
+  'Quick Add receipts must use an opaque workbook identity');
+assert.match(quickAddServer,
+  /workbookIdentity:\s*quickAddWorkbookIdentity_\(ss\)/,
+  'Quick Add writer responses must scope receipts to their source workbook');
+assert.match(quickAddServer,
+  /receipt\.workbookIdentity\s*!==\s*currentWorkbookIdentity[\s\S]*?status:\s*'WORKBOOK_CHANGED'/,
+  'Quick Add verification must detect a receipt from a replaced workbook before reading a cell');
+assert.match(quickAddClient,
+  /cashcompass\.quickAddWriteReceipts\.v2/,
+  'Legacy unscoped Quick Add receipts must be retired by a storage-version bump');
+assert.match(quickAddClient,
+  /result\.status\s*===\s*'WORKBOOK_CHANGED'[\s\S]*?receipts\s*=\s*receipts\.filter/,
+  'Receipts from another workbook must be retired silently');
 assert.match(body,
   /id="bills_manage_list"[\s\S]*?Loading recurring bills…/,
   'Manage bills must use descriptive initial loading copy');

@@ -884,10 +884,8 @@ function onboardingRenderBillsDetail_(data) {
   }
 
   var count = (data.bills && data.bills.length) || 0;
-  // Cache first-run state for the Bills editor handoff. The Bills
-  // editor uses a collapsed-Add-form pattern (not an Update/Add
-  // toggle), so the handoff invokes openBillsAddFormFromEmptyState()
-  // instead of a mode setter when this is false.
+  // Retain the tracked-state snapshot for status/reporting. Editor routing no
+  // longer depends on it: Setup actions now declare Add or Manage explicitly.
   ONBOARDING_BILLS_HAS_TRACKED_ = !!(data.sheetExists && count > 0);
   onboardingBillsSetStatus_(
     count + (count === 1 ? ' bill tracked' : ' bills tracked'),
@@ -904,7 +902,7 @@ function onboardingRenderBillsDetail_(data) {
       ? 'No bills yet.'
       : 'No bills yet.';
     var ctaHtml = '<button type="button" class="btn-primary" ' +
-      'onclick="onboardingOpenBillsPage()">Add first bill</button>';
+      'onclick="onboardingOpenBillsPage(\'add\')">Add first bill</button>';
 
     fragments.push(
       '<div class="onboarding-detail-empty">' +
@@ -948,12 +946,19 @@ function onboardingRenderBillsDetail_(data) {
   }).join('');
 
   fragments.push(
-    '<div class="onboarding-account-list" role="list">' + rows + '</div>'
+    '<div class="onboarding-account-list" role="list">' + rows + '</div>' +
+    '<div class="onboarding-detail-actions" style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">' +
+      '<button type="button" class="btn-primary" ' +
+        'onclick="onboardingOpenBillsPage(\'add\')">Add bill</button>' +
+      '<button type="button" class="btn-secondary" ' +
+        'onclick="onboardingOpenBillsPage(\'manage\')">Manage bills</button>' +
+    '</div>'
   );
   body.innerHTML = fragments.join('');
 }
 
-function onboardingOpenBillsPage() {
+function onboardingOpenBillsPage(mode) {
+  var target = mode === 'manage' ? 'manage' : 'add';
   onboardingBillsSetStatus_('Preparing Bills editor…', 'dash-status-loading');
 
   var navigate = function() {
@@ -961,19 +966,13 @@ function onboardingOpenBillsPage() {
     // the return-view so Back to Setup returns to this detail screen.
     enterSetupEditorMode('cashflow', 'billsDue', 'bills');
 
-    // First-run Bills surface: the Bills tab defaults to "Due this
-    // period" with a collapsed Add form on the Manage view. When the
-    // last detail render explicitly saw zero bills, flip to Manage and
-    // pre-open the Add form. openBillsAddFormFromEmptyState() already
-    // handles both steps.
-    onboardingApplyFirstRunEditorMode_(
-      ONBOARDING_BILLS_HAS_TRACKED_,
-      function() {
-        if (typeof openBillsAddFormFromEmptyState === 'function') {
-          openBillsAddFormFromEmptyState();
-        }
-      }
-    );
+    // Preserve the action the user chose in Setup. This is deliberately
+    // independent of cached bill counts, which can be stale after a refresh.
+    if (target === 'manage') {
+      if (typeof setBillsView === 'function') setBillsView('manage');
+      return;
+    }
+    if (typeof openBillsAddForm_ === 'function') openBillsAddForm_();
   };
 
   google.script.run

@@ -53,9 +53,9 @@ function applyQuickPaymentPriorMonth_(data) {
   }
 }
 
-function renderQuickAddHistory_(data) {
-  const wrap = document.getElementById('pay_history_wrap');
-  const chart = document.getElementById('pay_history_chart');
+function renderPaymentHistoryChart_(wrapId, chartId, data) {
+  const wrap = document.getElementById(wrapId);
+  const chart = document.getElementById(chartId);
   if (!wrap || !chart) return;
 
   const points = data && Array.isArray(data.history) ? data.history.slice(-6) : [];
@@ -86,6 +86,10 @@ function renderQuickAddHistory_(data) {
     );
   }).join('');
   wrap.hidden = false;
+}
+
+function renderQuickAddHistory_(data) {
+  renderPaymentHistoryChart_('pay_history_wrap', 'pay_history_chart', data);
 }
 
 /**
@@ -383,7 +387,10 @@ function runDebtPlannerAfterQuickPayment_() {
 // was still being edited when Apps Script saved, and the pending browser edit
 // committed later. Receipts are verification metadata only; replaying a
 // receipt never calls quickAddPayment() and never creates another Activity row.
-var QUICK_ADD_WRITE_RECEIPTS_KEY_ = 'cashcompass.quickAddWriteReceipts.v1';
+// v2 adds an opaque workbook identity. The key bump deliberately retires v1
+// receipts: they cannot prove which workbook produced them and must never be
+// compared with a replacement Central/disposable workbook.
+var QUICK_ADD_WRITE_RECEIPTS_KEY_ = 'cashcompass.quickAddWriteReceipts.v2';
 var QUICK_ADD_WRITE_RECEIPT_TTL_MS_ = 12 * 60 * 60 * 1000;
 var quickAddWriteVerifyInFlight_ = false;
 var quickAddWriteHooksInstalled_ = false;
@@ -401,7 +408,8 @@ function loadQuickAddWriteReceipts_() {
 
   var cutoff = Date.now() - QUICK_ADD_WRITE_RECEIPT_TTL_MS_;
   parsed = parsed.filter(function(receipt) {
-    return receipt && receipt.operationId && Number(receipt.savedAtMs || 0) >= cutoff;
+    return receipt && receipt.operationId && receipt.workbookIdentity &&
+      Number(receipt.savedAtMs || 0) >= cutoff;
   }).slice(-10);
   saveQuickAddWriteReceipts_(parsed);
   return parsed;
@@ -436,6 +444,7 @@ function registerQuickAddWriteReceipt_(snapshot) {
     signedAmount: Number(snapshot.signedAmount),
     cashFlowSheet: snapshot.cashFlowSheet,
     cashFlowMonth: snapshot.cashFlowMonth,
+    workbookIdentity: snapshot.workbookIdentity,
     savedAtMs: Date.now(),
     lastStatus: 'PENDING'
   };
@@ -550,13 +559,28 @@ function verifyPendingQuickAddWrites_(options) {
           receipt.lastCheckedAtMs = Date.now();
         }
       });
+      // A receipt from another workbook has no authority in the currently
+      // resolved workbook. Retire it silently; it is not a write conflict and
+      // must never become a customer-facing warning.
+      var changedWorkbookIds = {};
+      results.forEach(function(result) {
+        if (result && result.status === 'WORKBOOK_CHANGED' && result.operationId) {
+          changedWorkbookIds[result.operationId] = true;
+        }
+      });
+      receipts = receipts.filter(function(receipt) {
+        return !changedWorkbookIds[receipt.operationId];
+      });
       saveQuickAddWriteReceipts_(receipts);
 
-      var warning = chooseQuickAddWriteWarning_(results);
+      var currentWorkbookResults = results.filter(function(result) {
+        return !result || result.status !== 'WORKBOOK_CHANGED';
+      });
+      var warning = chooseQuickAddWriteWarning_(currentWorkbookResults);
       if (warning) renderQuickAddWriteGuard_(warning);
       else hideQuickAddWriteGuard_();
 
-      if (onComplete) onComplete(!warning, results);
+      if (onComplete) onComplete(!warning, currentWorkbookResults);
     })
     .withFailureHandler(function(err) {
       quickAddWriteVerifyInFlight_ = false;

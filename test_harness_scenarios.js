@@ -87,6 +87,9 @@ function getHarnessScenarios_() {
   if (typeof getHarnessBillsMonthlyScenario_ === 'function') {
     list.push(getHarnessBillsMonthlyScenario_());
   }
+  if (typeof getHarnessBillsNewCreationFloorScenario_ === 'function') {
+    list.push(getHarnessBillsNewCreationFloorScenario_());
+  }
   if (typeof getHarnessBillsWeeklyScenario_ === 'function') {
     list.push(getHarnessBillsWeeklyScenario_());
   }

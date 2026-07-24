@@ -814,6 +814,14 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           onclick="setBillsView('due')">Due this period</button>
         <button
           type="button"
+          id="bills_view_tab_add"
+          class="bills-view-btn"
+          role="tab"
+          aria-selected="false"
+          aria-controls="bills_view_add"
+          onclick="openBillsAddForm_()">Add bill</button>
+        <button
+          type="button"
           id="bills_view_tab_manage"
           class="bills-view-btn"
           role="tab"
@@ -854,15 +862,9 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         </div>
       </section>
 
-      <section id="bills_view_manage" class="bills-section bills-section--management bills-view" role="tabpanel" aria-labelledby="bills_view_tab_manage" style="margin:0;display:none;">
-        <div class="bills-management-head" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between;margin:0 0 12px 0;">
-          <div>
-            <p class="bills-view-purpose">Every recurring bill you currently track.</p>
-          </div>
-          <button type="button" id="bills_add_toggle_btn" class="small-btn primary" onclick="toggleBillsAddForm()" aria-expanded="false" aria-controls="bills_add_wrap" hidden>+ Add bill</button>
-        </div>
-
-        <div id="bills_add_wrap" class="bills-add-wrap" style="display:none;margin:0 0 20px 0;padding:14px 16px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;">
+      <section id="bills_view_add" class="bills-section bills-view" role="tabpanel" aria-labelledby="bills_view_tab_add" style="margin:0;display:none;">
+        <p id="bills_editor_purpose" class="bills-view-purpose">Add a recurring bill to your tracked monthly commitments.</p>
+        <div id="bills_add_wrap" class="bills-add-wrap" style="display:block;margin:0 0 20px 0;padding:14px 16px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;">
           <div id="bills_form_title" class="card-title" style="margin-top:0;">Add a recurring bill</div>
           <p class="muted" style="margin:0 0 10px 0;">Required fields are marked with <span aria-label="required" style="color:#b91c1c;">*</span>.</p>
           <div class="grid-2">
@@ -951,11 +953,127 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             </div>
           </div>
         </div>
+      </section>
 
+      <section id="bills_view_manage" class="bills-section bills-section--management bills-view" role="tabpanel" aria-labelledby="bills_view_tab_manage" style="margin:0;display:none;">
+        <div class="bills-management-head" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between;margin:0 0 12px 0;">
+          <div>
+            <p class="bills-view-purpose">Every recurring bill you currently track. Use Edit to update details or Stop tracking to deactivate it while preserving history.</p>
+          </div>
+        </div>
         <div id="bills_manage_list" class="bills-manage-list">
           <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading recurring bills…</span></div>
         </div>
       </section>
+    </div>
+
+    <div
+      id="bill_pay_drawer_backdrop"
+      class="bill-pay-drawer-backdrop"
+      hidden
+      onclick="onBillPayDrawerBackdropClick(event)">
+      <aside
+        id="bill_pay_drawer"
+        class="bill-pay-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bill_pay_drawer_title"
+        aria-describedby="bill_pay_drawer_help"
+        tabindex="-1">
+        <div class="bill-pay-drawer-head">
+          <div>
+            <div class="bill-pay-drawer-eyebrow">Bills</div>
+            <h2 id="bill_pay_drawer_title">Pay bill</h2>
+          </div>
+          <button
+            type="button"
+            id="bill_pay_close_btn"
+            class="bill-pay-drawer-close"
+            aria-label="Close payment panel"
+            onclick="closeBillPayDrawer()">×</button>
+        </div>
+
+        <div class="bill-pay-drawer-body">
+          <div class="bill-pay-summary">
+            <div id="bill_pay_name" class="bill-pay-summary-name">—</div>
+            <div class="bill-pay-summary-row">
+              <span>Expected amount</span>
+              <strong id="bill_pay_expected">—</strong>
+            </div>
+            <div class="bill-pay-summary-row">
+              <span>Payment source</span>
+              <strong id="bill_pay_source">—</strong>
+            </div>
+          </div>
+
+          <label for="bill_pay_amount">Amount paid</label>
+          <input
+            type="text"
+            id="bill_pay_amount"
+            inputmode="decimal"
+            autocomplete="off"
+            onfocus="currencyFocus('bill_pay_amount', true)"
+            onblur="currencyBlur('bill_pay_amount')"
+            oninput="updateBillPaySubmitLabel_()">
+
+          <label for="bill_pay_date">Payment date</label>
+          <input type="date" id="bill_pay_date">
+
+          <p id="bill_pay_drawer_help" class="bill-pay-drawer-help">
+            The amount entered here is recorded in Cash Flow. Paying clears this bill occurrence even when the amount differs from the expected amount.
+          </p>
+
+          <div id="bill_pay_confirmation" class="bill-pay-confirmation" hidden>
+            <div class="bill-pay-confirmation-title">Payment recorded</div>
+            <div class="bill-pay-confirmation-row">
+              <span>Cash Flow month</span>
+              <strong id="bill_pay_confirmation_month">—</strong>
+            </div>
+            <div class="bill-pay-confirmation-row">
+              <span>Previous total</span>
+              <strong id="bill_pay_confirmation_previous">—</strong>
+            </div>
+            <div class="bill-pay-confirmation-row">
+              <span>Payment added</span>
+              <strong id="bill_pay_confirmation_added">—</strong>
+            </div>
+            <div class="bill-pay-confirmation-row bill-pay-confirmation-total">
+              <span>New month total</span>
+              <strong id="bill_pay_confirmation_total">—</strong>
+            </div>
+            <p id="bill_pay_confirmation_followup">
+              The paid occurrence is cleared. Checking for any other occurrence due…
+            </p>
+          </div>
+
+          <div id="bill_pay_history_wrap" class="quick-add-history bill-pay-history" hidden>
+            <div class="quick-add-history-title">Previous payments</div>
+            <div class="quick-add-history-note">Last six Cash Flow months for this bill, including the month just updated. Blank months stay blank.</div>
+            <div id="bill_pay_history_chart" class="quick-add-history-chart" aria-label="Six-month bill payment history"></div>
+          </div>
+
+          <div id="bill_pay_status" class="status" role="status" aria-live="polite"></div>
+        </div>
+
+        <div class="bill-pay-drawer-actions">
+          <button
+            type="button"
+            id="bill_pay_cancel_btn"
+            class="small-btn"
+            onclick="closeBillPayDrawer()">Cancel</button>
+          <button
+            type="button"
+            id="bill_pay_submit_btn"
+            class="small-btn primary"
+            onclick="submitBillPayment()">Pay</button>
+          <button
+            type="button"
+            id="bill_pay_done_btn"
+            class="small-btn primary"
+            onclick="closeBillPayDrawer()"
+            hidden>Done</button>
+        </div>
+      </aside>
     </div>
 
     <div id="income" class="panel">
@@ -2082,7 +2200,6 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
       <div class="onboarding-actions">
         <button type="button" onclick="onboardingShowView('grid')">Back</button>
-        <button type="button" class="btn-primary" onclick="onboardingOpenBillsPage()">Open Bills editor</button>
       </div>
     </div>
 

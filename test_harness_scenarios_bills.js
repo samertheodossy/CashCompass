@@ -120,6 +120,65 @@ function getHarnessBillsMonthlyScenario_() {
 }
 
 /**
+ * REGRESSION-BILLS-NEW-CREATION-FLOOR — new bills start this month.
+ *
+ * The recurrence engine intentionally looks one month back for older unpaid
+ * bills. The add path supplies a first-of-current-month effective date so a
+ * newly-created bill never inherits that historical occurrence. The floor must
+ * still retain an already-past due day in the current month as overdue.
+ */
+function getHarnessBillsNewCreationFloorScenario_() {
+  var settingsName = (typeof PROFILE_SETTINGS_SHEET_NAME_ === 'string') ? PROFILE_SETTINGS_SHEET_NAME_ : 'INPUT - Settings';
+  var sysMetaName = (typeof SYS_META_SHEET_NAME_ === 'string') ? SYS_META_SHEET_NAME_ : 'SYS - Meta';
+
+  return {
+    id: 'REGRESSION-BILLS-NEW-CREATION-FLOOR',
+    category: 'REGRESSION',
+    executionLevel: 'PURE',
+    description: 'A bill created in July cannot surface a June occurrence, while a July due day before today remains overdue.',
+    expectedSheets: [settingsName, sysMetaName],
+    setup: function(ctx) {
+      // PURE scenarios still run inside the harness's guarded disposable
+      // workbook lifecycle. Provision the standard minimal structure so the
+      // suite-level Provisioning gate evaluates the vehicle consistently.
+      ctx.assertWritable();
+      runMinimalBootstrap_(ctx.ss);
+      ctx.actions.push('Provision minimal workbook for the PURE creation-floor scenario');
+      ctx.newBillFloor = {
+        today: new Date(2026, 6, 24),
+        effectiveDate: new Date(2026, 6, 1)
+      };
+    },
+    actions: function(ctx) {
+      var f = ctx.newBillFloor;
+      f.pastDueCandidates = buildInputBillDueCandidates_(
+        f.today, 20, 'monthly', 1, '', f.effectiveDate, null
+      );
+      f.futureDueCandidates = buildInputBillDueCandidates_(
+        f.today, 26, 'monthly', 1, '', f.effectiveDate, null
+      );
+    },
+    expectedOutcome: function(ctx) {
+      var f = ctx.newBillFloor;
+      var pastDates = f.pastDueCandidates.map(function(c) {
+        return Utilities.formatDate(c.dueDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      });
+      var futureDates = f.futureDueCandidates.map(function(c) {
+        return Utilities.formatDate(c.dueDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      });
+      ctx.assert.equals('New bill excludes prior-month occurrence',
+        pastDates.indexOf('2026-06-20'), -1, { module: 'Bills' });
+      ctx.assert.equals('Current-month past due date remains eligible',
+        pastDates.indexOf('2026-07-20') >= 0, true, { module: 'Bills' });
+      ctx.assert.equals('Current-month future due date remains eligible',
+        futureDates.indexOf('2026-07-26') >= 0, true, { module: 'Bills' });
+      ctx.assert.equals('Future-due bill also excludes prior month',
+        futureDates.indexOf('2026-06-26'), -1, { module: 'Bills' });
+    }
+  };
+}
+
+/**
  * REGRESSION-BILLS-WEEKLY — legacy Weekly recurrence (no weekday).
  *
  * Legacy weekly (frequency=Weekly, Due Day 10, no weekday) re-anchors **each calendar

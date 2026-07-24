@@ -34,44 +34,467 @@ function setBillsStatus_(msg, isError) {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Bills payment drawer                                                      */
+/* -------------------------------------------------------------------------- */
+
+var __billPayDrawerState = null;
+var __billPayDrawerBusy = false;
+var __billPayDrawerPreviousFocus = null;
+var __billPayDrawerKeyHandlerInstalled = false;
+
+function setBillPayDrawerStatus_(msg, isError, isSuccess) {
+  setStatus('bill_pay_status', msg || '', !!isError);
+  var status = document.getElementById('bill_pay_status');
+  if (status && isSuccess) status.classList.add('status-success');
+}
+
+function billPaymentSourceLabel_(value) {
+  var normalized = String(value || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+  if (normalized === 'CASH') return 'Bank account';
+  if (normalized === 'CREDIT_CARD') return 'Credit card';
+  return 'Not specified';
+}
+
+function billPayAmountValue_() {
+  var input = document.getElementById('bill_pay_amount');
+  if (!input) return NaN;
+  var raw = String(input.value || '').trim();
+  if (!raw) return NaN;
+  return toNumber(raw);
+}
+
+function updateBillPaySubmitLabel_() {
+  var button = document.getElementById('bill_pay_submit_btn');
+  if (!button || __billPayDrawerBusy) return;
+  var amount = billPayAmountValue_();
+  button.textContent = isFinite(amount) && amount > 0
+    ? 'Pay ' + fmtCurrency(Math.abs(amount))
+    : 'Pay';
+}
+
+function installBillPayDrawerKeyHandler_() {
+  if (__billPayDrawerKeyHandlerInstalled) return;
+  __billPayDrawerKeyHandlerInstalled = true;
+  document.addEventListener('keydown', function(event) {
+    var backdrop = document.getElementById('bill_pay_drawer_backdrop');
+    if (!backdrop || backdrop.hidden) return;
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeBillPayDrawer();
+      return;
+    }
+
+    if (event.key !== 'Tab') return;
+    var drawer = document.getElementById('bill_pay_drawer');
+    if (!drawer) return;
+    var focusable = Array.prototype.slice.call(
+      drawer.querySelectorAll('button:not([disabled]), input:not([disabled])')
+    ).filter(function(el) {
+      return !el.hidden && el.offsetParent !== null;
+    });
+    if (!focusable.length) return;
+    var first = focusable[0];
+    var last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+}
+
+function openBillPayDrawer_(bill, occurrencePaid) {
+  var backdrop = document.getElementById('bill_pay_drawer_backdrop');
+  var drawer = document.getElementById('bill_pay_drawer');
+  if (!backdrop || !drawer || !bill) {
+    setBillsStatus_('The payment panel could not open. Please refresh and try again.', true);
+    return;
+  }
+
+  var payee = String(bill.payee || bill.name || '').trim();
+  var amount = Math.abs(Number(bill.amount || 0));
+  var entryDate = String(bill.dueDate || '').trim() ||
+    new Date().toISOString().slice(0, 10);
+  var rawFlowSource = String(bill.paymentSource || '').trim()
+    .toUpperCase().replace(/[\s-]+/g, '_');
+  var flowSource = rawFlowSource === 'CASH' || rawFlowSource === 'CREDIT_CARD'
+    ? rawFlowSource
+    : '';
+
+  __billPayDrawerState = {
+    payee: payee,
+    expectedAmount: amount,
+    entryDate: entryDate,
+    flowSource: flowSource,
+    occurrencePaid: occurrencePaid || null,
+    paymentRecorded: false
+  };
+  __billPayDrawerBusy = false;
+  __billPayDrawerPreviousFocus = document.activeElement;
+
+  document.getElementById('bill_pay_name').textContent = payee || 'Bill';
+  document.getElementById('bill_pay_expected').textContent =
+    amount > 0 ? fmtCurrency(amount) : 'Not set';
+  document.getElementById('bill_pay_source').textContent =
+    billPaymentSourceLabel_(flowSource);
+  document.getElementById('bill_pay_date').value = entryDate;
+  setCurrencyInputValue('bill_pay_amount', amount);
+
+  var submit = document.getElementById('bill_pay_submit_btn');
+  var close = document.getElementById('bill_pay_close_btn');
+  var cancel = document.getElementById('bill_pay_cancel_btn');
+  var done = document.getElementById('bill_pay_done_btn');
+  var confirmation = document.getElementById('bill_pay_confirmation');
+  var historyWrap = document.getElementById('bill_pay_history_wrap');
+  var historyChart = document.getElementById('bill_pay_history_chart');
+  var amountInput = document.getElementById('bill_pay_amount');
+  var dateInput = document.getElementById('bill_pay_date');
+  if (submit) {
+    submit.disabled = false;
+    submit.hidden = false;
+  }
+  if (close) close.disabled = false;
+  if (cancel) {
+    cancel.disabled = false;
+    cancel.hidden = false;
+  }
+  if (done) done.hidden = true;
+  if (confirmation) confirmation.hidden = true;
+  if (historyWrap) historyWrap.hidden = true;
+  if (historyChart) historyChart.innerHTML = '';
+  if (amountInput) amountInput.disabled = false;
+  if (dateInput) dateInput.disabled = false;
+  setBillPayDrawerStatus_('', false, false);
+  updateBillPaySubmitLabel_();
+
+  backdrop.hidden = false;
+  document.body.classList.add('bill-pay-drawer-open');
+  installBillPayDrawerKeyHandler_();
+  setTimeout(function() {
+    var amountInput = document.getElementById('bill_pay_amount');
+    if (amountInput) {
+      amountInput.focus();
+      try { amountInput.select(); } catch (_e) {}
+    } else {
+      drawer.focus();
+    }
+  }, 0);
+}
+
+function closeBillPayDrawer() {
+  if (__billPayDrawerBusy) return;
+  var backdrop = document.getElementById('bill_pay_drawer_backdrop');
+  if (backdrop) backdrop.hidden = true;
+  document.body.classList.remove('bill-pay-drawer-open');
+  __billPayDrawerState = null;
+
+  var previousFocus = __billPayDrawerPreviousFocus;
+  __billPayDrawerPreviousFocus = null;
+  if (previousFocus && typeof previousFocus.focus === 'function' &&
+      document.documentElement.contains(previousFocus)) {
+    try { previousFocus.focus(); } catch (_e) {}
+  }
+}
+
+function onBillPayDrawerBackdropClick(event) {
+  if (event && event.target === event.currentTarget) closeBillPayDrawer();
+}
+
+function setBillPayDrawerBusy_(busy) {
+  __billPayDrawerBusy = !!busy;
+  var submit = document.getElementById('bill_pay_submit_btn');
+  var close = document.getElementById('bill_pay_close_btn');
+  var amount = document.getElementById('bill_pay_amount');
+  var date = document.getElementById('bill_pay_date');
+  if (submit) {
+    submit.disabled = __billPayDrawerBusy;
+    submit.textContent = __billPayDrawerBusy ? 'Paying…' : 'Pay';
+  }
+  if (close) close.disabled = __billPayDrawerBusy;
+  if (amount) amount.disabled = __billPayDrawerBusy;
+  if (date) date.disabled = __billPayDrawerBusy;
+  if (!__billPayDrawerBusy) updateBillPaySubmitLabel_();
+}
+
+function refreshAfterBillPayment_() {
+  if (typeof refreshSnapshot === 'function') refreshSnapshot();
+  if (typeof loadUpcomingSection === 'function') loadUpcomingSection();
+  if (typeof loadDashboardActionSections === 'function') loadDashboardActionSections();
+  if (typeof runDebtPlannerAfterQuickPayment_ === 'function') {
+    runDebtPlannerAfterQuickPayment_();
+  }
+}
+
+function updateBillPaymentFollowup_(data) {
+  var state = __billPayDrawerState;
+  var followup = document.getElementById('bill_pay_confirmation_followup');
+  if (!state || !state.paymentRecorded || !followup) return;
+
+  var paidDueDate = String(
+    (state.occurrencePaid && state.occurrencePaid.dueDate) || state.entryDate || ''
+  ).trim();
+  var payee = String(state.payee || 'This bill').trim();
+  var payeeKey = payee.toLowerCase();
+  var candidates = []
+    .concat((data && data.overdue) || [])
+    .concat((data && data.next7) || []);
+  var nextOccurrence = null;
+
+  for (var i = 0; i < candidates.length; i++) {
+    var candidate = candidates[i] || {};
+    var candidatePayee = String(candidate.payee || candidate.name || '').trim();
+    var candidateDueDate = String(candidate.dueDate || '').trim();
+    if (candidatePayee.toLowerCase() === payeeKey &&
+        candidateDueDate && candidateDueDate !== paidDueDate) {
+      nextOccurrence = candidate;
+      break;
+    }
+  }
+
+  if (nextOccurrence) {
+    followup.textContent =
+      'The occurrence due ' + paidDueDate + ' is cleared. Another ' + payee +
+      ' occurrence due ' + String(nextOccurrence.dueDate || '').trim() +
+      ' is still awaiting action behind this panel.';
+  } else {
+    followup.textContent =
+      'The occurrence due ' + paidDueDate + ' is cleared. No other ' + payee +
+      ' payment is currently due.';
+  }
+}
+
+function showBillPaymentConfirmation_(state, amount, res) {
+  var payee = state.payee || 'bill';
+  setBillPayDrawerBusy_(false);
+  var snapshot = (res && res.activitySnapshot) || {};
+  var preview = (res && res.preview) || {};
+  var month = preview.month || snapshot.cashFlowMonth || 'Selected month';
+  var previousValue = Math.abs(Number(snapshot.previousValue || 0));
+  var newValue = Math.abs(Number(
+    preview.currentValue !== undefined ? preview.currentValue : snapshot.newValue
+  ) || 0);
+
+  document.getElementById('bill_pay_confirmation_month').textContent = month;
+  document.getElementById('bill_pay_confirmation_previous').textContent =
+    fmtCurrency(previousValue);
+  document.getElementById('bill_pay_confirmation_added').textContent =
+    fmtCurrency(amount);
+  document.getElementById('bill_pay_confirmation_total').textContent =
+    fmtCurrency(newValue);
+  var followup = document.getElementById('bill_pay_confirmation_followup');
+  var paidDueDate = String(
+    (state.occurrencePaid && state.occurrencePaid.dueDate) || state.entryDate || ''
+  ).trim();
+  if (followup) {
+    followup.textContent =
+      'The occurrence due ' + paidDueDate +
+      ' is cleared. Checking for any other occurrence due…';
+  }
+
+  var confirmation = document.getElementById('bill_pay_confirmation');
+  var submit = document.getElementById('bill_pay_submit_btn');
+  var cancel = document.getElementById('bill_pay_cancel_btn');
+  var done = document.getElementById('bill_pay_done_btn');
+  var amountInput = document.getElementById('bill_pay_amount');
+  var dateInput = document.getElementById('bill_pay_date');
+  if (confirmation) confirmation.hidden = false;
+  if (typeof renderPaymentHistoryChart_ === 'function') {
+    renderPaymentHistoryChart_(
+      'bill_pay_history_wrap',
+      'bill_pay_history_chart',
+      preview
+    );
+  }
+  if (submit) submit.hidden = true;
+  if (cancel) cancel.hidden = true;
+  if (done) {
+    done.hidden = false;
+    done.disabled = false;
+  }
+  if (amountInput) amountInput.disabled = true;
+  if (dateInput) dateInput.disabled = true;
+  setBillPayDrawerStatus_('', false, false);
+  setBillsStatus_(
+    'Paid ' + fmtCurrency(amount) + ' to ' + payee +
+      '. Bills refreshed to show what is next.',
+    false
+  );
+  refreshAfterBillPayment_();
+  if (done) {
+    setTimeout(function() {
+      try { done.focus(); } catch (_e) {}
+    }, 0);
+  }
+}
+
+function submitBillPayment() {
+  if (__billPayDrawerBusy || !__billPayDrawerState) return;
+
+  var amount = billPayAmountValue_();
+  var dateInput = document.getElementById('bill_pay_date');
+  var entryDate = dateInput ? String(dateInput.value || '').trim() : '';
+  if (!isFinite(amount) || amount <= 0) {
+    setBillPayDrawerStatus_('Enter an amount greater than $0.', true, false);
+    return;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(entryDate)) {
+    setBillPayDrawerStatus_('Choose a valid payment date.', true, false);
+    return;
+  }
+
+  // Bills Pay is a complete, self-contained transaction. It receives the
+  // authoritative Quick Add writer response and then verifies the exact paid
+  // occurrence marker. Do not inherit or create Quick Add's separate
+  // browser-session write monitor: once both server confirmations succeed,
+  // this Bills payment is done.
+  saveBillPaymentFromDrawer_(Math.abs(amount), entryDate);
+}
+
+function saveBillPaymentFromDrawer_(amount, entryDate) {
+  var state = __billPayDrawerState;
+  if (!state || state.paymentRecorded) return;
+
+  setBillPayDrawerBusy_(true);
+  setBillPayDrawerStatus_('Recording payment…', false, false);
+  google.script.run
+    .withSuccessHandler(function(res) {
+      state.paymentRecorded = true;
+      if (typeof prependOptimisticQuickPayActivityRow_ === 'function') {
+        try { prependOptimisticQuickPayActivityRow_(res && res.activitySnapshot); } catch (_e) {}
+      }
+      if (typeof loadActivitySection === 'function') {
+        try { loadActivitySection({ quiet: true }); } catch (_e) {}
+      }
+
+      if (!state.occurrencePaid) {
+        showBillPaymentConfirmation_(state, amount, res);
+        return;
+      }
+
+      var occurrence = {
+        payee: state.occurrencePaid.payee || state.payee,
+        dueDate: state.occurrencePaid.dueDate || entryDate,
+        monthHeader: state.occurrencePaid.monthHeader || '',
+        amount: amount
+      };
+      setBillPayDrawerStatus_('Payment recorded. Updating this bill occurrence…', false, false);
+      google.script.run
+        .withSuccessHandler(function(markerResult) {
+          if (!markerResult || markerResult.ok !== true) {
+            setBillPayDrawerBusy_(false);
+            var submit = document.getElementById('bill_pay_submit_btn');
+            if (submit) {
+              submit.disabled = true;
+              submit.textContent = 'Payment recorded';
+            }
+            setBillPayDrawerStatus_(
+              'Payment recorded, but CashCompass could not confirm that this occurrence cleared. It did not repeat the payment. Close this panel, then review Bills and Cash Flow before taking another action.',
+              true,
+              false
+            );
+            refreshAfterBillPayment_();
+            return;
+          }
+          showBillPaymentConfirmation_(state, amount, res);
+        })
+        .withFailureHandler(function(err) {
+          setBillPayDrawerBusy_(false);
+          var submit = document.getElementById('bill_pay_submit_btn');
+          if (submit) {
+            submit.disabled = true;
+            submit.textContent = 'Payment recorded';
+          }
+          setBillPayDrawerStatus_(
+            'Payment recorded, but CashCompass could not clear this occurrence. It did not repeat the payment. Close this panel, then review Bills and Cash Flow before taking another action.',
+            true,
+            false
+          );
+          refreshAfterBillPayment_();
+        })
+        .markDashboardBillOccurrencePaid(occurrence);
+    })
+    .withFailureHandler(function(err) {
+      setBillPayDrawerBusy_(false);
+      var uncertain = typeof isTransientRpcTransportError_ === 'function' &&
+        isTransientRpcTransportError_(err);
+      if (uncertain) {
+        var submit = document.getElementById('bill_pay_submit_btn');
+        if (submit) {
+          submit.disabled = true;
+          submit.textContent = 'Check before retrying';
+        }
+      }
+      setBillPayDrawerStatus_(
+        uncertain
+          ? 'CashCompass could not confirm whether the payment finished. It did not retry. Check Bills and Cash Flow before trying again.'
+          : customerSafeErrorMessage_(
+              err && err.message ? err.message : String(err),
+              'The payment could not be recorded. Please review the details and try again.'
+            ),
+        true,
+        false
+      );
+    })
+    .quickAddPayment({
+      entryType: 'Expense',
+      payee: state.payee,
+      entryDate: entryDate,
+      amount: amount,
+      createIfMissing: true,
+      flowSource: state.flowSource
+    });
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Internal Bills view switch                                                */
 /* -------------------------------------------------------------------------- */
 
 /**
- * The Bills page is one panel with two internal views:
+ * The Bills page is one panel with three internal views:
  *   - 'due'    → execution queue (Overdue / Next 7 / Recurring)
- *   - 'manage' → full active list from INPUT - Bills + Add bill flow
+ *   - 'add'    → focused recurring-bill creation/edit form
+ *   - 'manage' → full active list from INPUT - Bills
  *
  * Only one view is visible at a time. Default is 'due' so users always land
  * on "what to act on now" first; management is one click away in the same
  * page (no extra tab, no separate URL).
  *
- * Data for both views still loads together in loadDashboardActionSections()
+ * Data for all views still loads together in loadDashboardActionSections()
  * so switching is instant and does not re-hit the backend.
  */
 function setBillsView(view) {
-  var target = view === 'manage' ? 'manage' : 'due';
+  var target = view === 'add' ? 'add' : (view === 'manage' ? 'manage' : 'due');
 
   var dueSection = document.getElementById('bills_view_due');
+  var addSection = document.getElementById('bills_view_add');
   var manageSection = document.getElementById('bills_view_manage');
   var dueBtn = document.getElementById('bills_view_tab_due');
+  var addBtn = document.getElementById('bills_view_tab_add');
   var manageBtn = document.getElementById('bills_view_tab_manage');
 
   if (dueSection) dueSection.style.display = target === 'due' ? '' : 'none';
+  if (addSection) addSection.style.display = target === 'add' ? '' : 'none';
   if (manageSection) manageSection.style.display = target === 'manage' ? '' : 'none';
 
   if (dueBtn) {
     dueBtn.classList.toggle('active', target === 'due');
     dueBtn.setAttribute('aria-selected', target === 'due' ? 'true' : 'false');
   }
+  if (addBtn) {
+    addBtn.classList.toggle('active', target === 'add');
+    addBtn.setAttribute('aria-selected', target === 'add' ? 'true' : 'false');
+  }
   if (manageBtn) {
     manageBtn.classList.toggle('active', target === 'manage');
     manageBtn.setAttribute('aria-selected', target === 'manage' ? 'true' : 'false');
   }
 
-  // When switching away from Manage, auto-close the Add bill form so
-  // returning to Due doesn't leave a stale open form behind.
-  if (target === 'due') {
+  // Leaving the editor discards only its unsaved browser state. No workbook
+  // write occurs, and returning to Add always starts from a clean form.
+  if (target !== 'add') {
     if (typeof closeBillsAddForm === 'function') closeBillsAddForm();
   }
 
@@ -79,7 +502,7 @@ function setBillsView(view) {
 }
 
 function loadDashboardActionSections() {
-  // Both views load together: the execution queue always reflects the
+  // All views load together: the execution queue always reflects the
   // current period, and the management list stays ready so flipping to
   // "Manage bills" is instant.
   loadBillsDueUi_();
@@ -103,6 +526,7 @@ function loadBillsDueUi_() {
       renderBillsList_('bd_overdueList', overdue, 'No overdue bills.');
       renderBillsList_('bd_next7List', next7, 'No bills due soon.');
       renderBillsDueSummary_(data || {});
+      updateBillPaymentFollowup_(data || {});
     })
     .withFailureHandler(function(err) {
       const msg = customerSafeErrorMessage_(
@@ -256,20 +680,12 @@ function payBillFromDashboard(billKey) {
     return;
   }
 
-  // Weekly/biweekly expanded occurrences share a single monthly Cash Flow
-  // cell, so paying one occurrence can't be detected from the cell value.
-  // Pass this exact occurrence (payee + dueDate + month + amount) THROUGH
-  // prefillQuickPayment so the Quick Add save records a per-occurrence
-  // bill_paid marker, which Bills Due uses to suppress this occurrence on
-  // reload (mirrors the __pending* bridges used for Flow Source and Upcoming).
-  // It must NOT be assigned to window.__pendingBillOccurrencePaid here:
-  // prefillQuickPayment() calls showTab('payments'), which fires
-  // loadPaymentSection() and clears window.__pendingBillOccurrencePaid — so a
-  // value set before the prefill would be wiped before Save. prefillQuickPayment
-  // sets the pending marker AFTER that clear, alongside the other bridges.
-  // Monthly bills omit isExpandedRecurrence and keep their existing cell-based
-  // handled behavior — nothing carried.
-  var billOccurrencePaid = (bill.isExpandedRecurrence && bill.dueDate)
+  // Carry every dated occurrence through the Bills-only drawer. Weekly and
+  // biweekly bills require the marker because several occurrences share one
+  // monthly Cash Flow cell. Monthly and other single-occurrence bills also use
+  // it so the card can dismiss deterministically without relying on an
+  // immediate cross-request read of the just-written Cash Flow cell.
+  var billOccurrencePaid = bill.dueDate
     ? {
         payee: bill.payee || bill.name || '',
         dueDate: bill.dueDate || '',
@@ -278,18 +694,7 @@ function payBillFromDashboard(billKey) {
       }
     : null;
 
-  // Carry the bill's Payment Source (from INPUT - Bills or the inferred
-  // debt default) through to Quick Add so a newly created Cash Flow row
-  // has its Flow Source column seeded correctly. Blank is tolerated
-  // (legacy rows) and simply skips the Flow Source write downstream.
-  prefillQuickPayment({
-    entryType: 'Expense',
-    payee: bill.payee || bill.name || '',
-    entryDate: bill.dueDate || '',
-    amount: bill.amount || 0,
-    flowSource: bill.paymentSource || '',
-    billOccurrencePaid: billOccurrencePaid
-  });
+  openBillPayDrawer_(bill, billOccurrencePaid);
 }
 
 function skipBillFromDashboard(skipKey) {
@@ -407,12 +812,13 @@ function payRecurringBill(key) {
     return;
   }
 
-  prefillQuickPayment({
-    entryType: 'Expense',
+  openBillPayDrawer_({
     payee: bill.payee || bill.name || '',
-    entryDate: new Date().toISOString().slice(0, 10),
-    amount: 0
-  });
+    name: bill.name || bill.payee || '',
+    dueDate: new Date().toISOString().slice(0, 10),
+    amount: bill.amount || 0,
+    paymentSource: bill.paymentSource || ''
+  }, null);
 }
 
 function skipRecurringBill(skipKey) {
@@ -449,7 +855,6 @@ var __billsManageRows = [];
 function loadActiveBillsManagementUi_() {
   const el = document.getElementById('bills_manage_list');
   if (!el) return;
-  updateBillsAddActionVisibility_(false);
   el.innerHTML = loadingBlockHtml('Loading bill management…');
 
   google.script.run
@@ -457,7 +862,6 @@ function loadActiveBillsManagementUi_() {
       renderActiveBillsList_(Array.isArray(rows) ? rows : []);
     })
     .withFailureHandler(function(err) {
-      updateBillsAddActionVisibility_(true);
       el.innerHTML =
         '<div class="muted">Couldn&rsquo;t load active bills &mdash; ' +
         escapeHtml(customerSafeErrorMessage_(err && err.message ? err.message : String(err),
@@ -531,8 +935,6 @@ function renderActiveBillsList_(rows) {
   // Cache the unsorted payload so re-sorts do not hit the backend.
   __billsManageRows = Array.isArray(rows) ? rows.slice() : [];
   window.__dashboardActiveBills = {};
-  updateBillsAddActionVisibility_(__billsManageRows.length > 0);
-
   if (!__billsManageRows.length) {
     // Empty state doubles as the page-level onboarding CTA: when there are
     // no active bills at all, this is the only Add bill surface the user
@@ -626,11 +1028,6 @@ function renderActiveBillsList_(rows) {
     '</div>';
 }
 
-function updateBillsAddActionVisibility_(hasActiveBills) {
-  const btn = document.getElementById('bills_add_toggle_btn');
-  if (btn) btn.hidden = !hasActiveBills;
-}
-
 function buildBillsSortableHeader_(column, label, extraClass) {
   const isActive = __billsManageSort.column === column;
   const dir = isActive ? __billsManageSort.dir : '';
@@ -663,31 +1060,21 @@ function buildBillsSortableHeader_(column, label, extraClass) {
 /* -------------------------------------------------------------------------- */
 
 function toggleBillsAddForm() {
-  const wrap = document.getElementById('bills_add_wrap');
-  const btn = document.getElementById('bills_add_toggle_btn');
-  if (!wrap || !btn) return;
-
-  const isOpen = wrap.style.display !== 'none';
-  if (isOpen) {
-    closeBillsAddForm();
-  } else {
-    openBillsAddForm_();
-  }
+  openBillsAddForm_();
 }
 
 function openBillsAddForm_() {
   const wrap = document.getElementById('bills_add_wrap');
-  const btn = document.getElementById('bills_add_toggle_btn');
-  if (!wrap || !btn) return;
+  if (!wrap) return;
 
   // Always land in Add mode when this entrypoint runs — covers the
-  // case where the user was halfway through an Edit, clicked the
-  // top + Add bill button, and now expects a clean Add form.
+  // case where the user was halfway through an Edit, clicked Add bill,
+  // and now expects a clean Add form.
+  if (typeof setBillsView === 'function') setBillsView('add');
+  resetBillsAddForm_();
   setBillsFormModeToAdd_();
 
   wrap.style.display = 'block';
-  btn.setAttribute('aria-expanded', 'true');
-  btn.textContent = 'Hide add bill form';
 
   loadBillCategoriesIntoForm_();
 
@@ -698,10 +1085,6 @@ function openBillsAddForm_() {
 }
 
 function openBillsAddFormFromEmptyState() {
-  // The Add bill form only lives in the Manage bills view, so make sure
-  // that view is active before opening it — covers the case where this
-  // function is reached from any future surface outside Manage.
-  if (typeof setBillsView === 'function') setBillsView('manage');
   openBillsAddForm_();
   const wrap = document.getElementById('bills_add_wrap');
   if (wrap && typeof wrap.scrollIntoView === 'function') {
@@ -711,12 +1094,7 @@ function openBillsAddFormFromEmptyState() {
 
 function closeBillsAddForm() {
   const wrap = document.getElementById('bills_add_wrap');
-  const btn = document.getElementById('bills_add_toggle_btn');
   if (wrap) wrap.style.display = 'none';
-  if (btn) {
-    btn.setAttribute('aria-expanded', 'false');
-    btn.textContent = '+ Add bill';
-  }
   // The Add form is shared with Edit mode; reset the title/save
   // label and re-show Start Month / Active so the next open is a
   // clean Add. Idempotent when we're already in Add mode.
@@ -1150,7 +1528,10 @@ function submitNewBill() {
     .withSuccessHandler(function(res) {
       setBillsStatus_((res && res.message) || 'Bill added — tracking started', false);
       resetBillsAddForm_();
-      closeBillsAddForm();
+      setBillsFormModeToAdd_();
+      if (typeof setBillsView === 'function') setBillsView('add');
+      var addWrap = document.getElementById('bills_add_wrap');
+      if (addWrap) addWrap.style.display = 'block';
       // Invalidate the category cache so a fresh "Other…" entry appears in
       // the dropdown the next time the form opens.
       window.__billsCategoryOptionsLoaded = false;
@@ -1200,6 +1581,16 @@ function setBillsFormModeToEdit_(editing) {
  */
 function applyBillsFormModeUi_() {
   const isEdit = __billsFormMode.mode === 'edit';
+  const addTab = document.getElementById('bills_view_tab_add');
+  if (addTab) {
+    addTab.textContent = isEdit ? 'Edit bill' : 'Add bill';
+  }
+  const purpose = document.getElementById('bills_editor_purpose');
+  if (purpose) {
+    purpose.textContent = isEdit
+      ? 'Update this recurring bill. Existing payment history stays unchanged.'
+      : 'Add a recurring bill to your tracked monthly commitments.';
+  }
   const title = document.getElementById('bills_form_title');
   if (title) {
     title.textContent = isEdit ? 'Edit bill' : 'Add a recurring bill';
@@ -1244,7 +1635,7 @@ function setBillFieldVisibilityForEdit_(inputId, hideForEdit) {
  * sheet row.
  *
  * v1 contract:
- *  - Switches to the Manage view if needed (Edit only lives there).
+ *  - Switches to the shared Add/Edit view.
  *  - Pre-fills every editable field; the Category dropdown
  *    populates async, so we install the value when it arrives.
  *  - Hides Start Month + Active.
@@ -1266,15 +1657,10 @@ function openBillEditForm(billKey) {
     return;
   }
 
-  if (typeof setBillsView === 'function') setBillsView('manage');
+  if (typeof setBillsView === 'function') setBillsView('add');
 
   const wrap = document.getElementById('bills_add_wrap');
-  const toggleBtn = document.getElementById('bills_add_toggle_btn');
   if (wrap) wrap.style.display = 'block';
-  if (toggleBtn) {
-    toggleBtn.setAttribute('aria-expanded', 'true');
-    toggleBtn.textContent = 'Hide edit bill form';
-  }
 
   setBillsFormModeToEdit_({
     sheetRow: sheetRow,
@@ -1411,6 +1797,7 @@ function submitBillsForm() {
 
 function cancelBillsForm() {
   closeBillsAddForm();
+  if (typeof setBillsView === 'function') setBillsView('manage');
 }
 
 function submitBillEdit_() {
@@ -1538,6 +1925,7 @@ function submitBillEdit_() {
       setBillsStatus_((res && res.message) || 'Changes saved', false);
       resetBillsAddForm_();
       closeBillsAddForm();
+      if (typeof setBillsView === 'function') setBillsView('manage');
       // Invalidate the category cache so a freshly entered "Other…"
       // category appears in the dropdown the next time the form
       // opens — same invalidation Add does.
