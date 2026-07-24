@@ -19,6 +19,7 @@ const files = Object.fromEntries(await Promise.all([
   'Dashboard_Script_PropertyPerformance.html',
   'Dashboard_Script_PropertiesHouseExpenses.html',
   'Dashboard_Script_Render.html',
+  'Dashboard_Script_TrackedEditors.html',
   'Dashboard_Script_RollingDebtPayoff.html',
   'Dashboard_Styles.html',
   'BankAccountsUI.html',
@@ -26,6 +27,7 @@ const files = Object.fromEntries(await Promise.all([
   'HouseValuesUI.html',
   'InvestmentsUI.html',
   'PlannerDashboard.html',
+  'PlannerDashboardWeb.html',
   'QuickAddPaymentUI.html',
   'quick_add_payment.js',
   'bills.js',
@@ -608,43 +610,37 @@ assert.doesNotMatch(
   /class=["'](?:bills|income)-empty-state["'][^>]*style=/,
   'Daily-use empty states must not reintroduce one-off inline presentation'
 );
-for (const id of ['house', 'bank_update', 'inv_update', 'debt_update']) {
-  assert.match(
-    body,
-    new RegExp(`id=["']${id}_stop_btn["'][^>]*class=["'][^"']*danger[^>]*disabled[^>]*hidden`),
-    `${id} Stop tracking must start hidden and unavailable until an item is selected`
-  );
-}
 assert.match(files['Dashboard_Script_Income.html'], /class="small-btn danger"[\s\S]*?Stop tracking/,
   'Income Stop tracking must remain visually destructive');
-assert.match(body, /id="debt_update_stop_zone"[^>]*hidden/,
-  'The Debt danger zone must start hidden until a debt is selected');
-assert.match(files['Dashboard_Script_PlanningDebts.html'],
-  /getElementById\(['"]debt_update_stop_zone['"]\)[\s\S]*?stopZone\.hidden\s*=\s*!hasLoadedSelection/,
-  'The Debt availability guard must reveal the danger zone only after the selected debt loads');
-for (const [sourceName, functionName, stopId, readinessName] of [
-  ['Dashboard_Script_AssetsHouseValues.html', 'updateHouseUpdateAvailability_', 'house_stop_btn', 'hasSelection'],
-  ['Dashboard_Script_AssetsBankInvestments.html', 'updateBankUpdateAvailability_', 'bank_update_stop_btn', 'hasLoadedSelection'],
-  ['Dashboard_Script_AssetsBankInvestments.html', 'updateInvestmentUpdateAvailability_', 'inv_update_stop_btn', 'hasSelection'],
-  ['Dashboard_Script_PlanningDebts.html', 'updateDebtUpdateAvailability_', 'debt_update_stop_btn', 'hasLoadedSelection']
+for (const id of [
+  'house_stop_btn',
+  'bank_update_stop_btn',
+  'inv_update_stop_btn',
+  'debt_update_stop_btn',
+  'debt_update_stop_zone'
 ]) {
-  const source = files[sourceName];
-  const start = source.indexOf(`function ${functionName}(`);
-  const end = source.indexOf('\n}', start);
-  const availabilityFunction = source.slice(start, end + 2);
-  assert.ok(start >= 0, `${functionName} must exist`);
-  assert.match(availabilityFunction, new RegExp(`getElementById\\(['"]${stopId}['"]\\)`),
-    `${functionName} must control ${stopId}`);
-  assert.match(availabilityFunction, new RegExp(`stopBtn\\.hidden\\s*=\\s*!${readinessName}`),
-    `${functionName} must reveal Stop tracking only when its selection is ready`);
+  assert.doesNotMatch(body, new RegExp(`id=['"]${id}['"]`),
+    `${id} must stay out of the Save-only Update panels`);
 }
+assert.doesNotMatch(styles, /\.debt-danger-zone/,
+  'The retired Debt danger-zone presentation must not return');
+for (const handler of ['stopTrackingHouse', 'stopTrackingBank', 'stopTrackingInvestment']) {
+  assert.doesNotMatch(
+    files['PlannerDashboard.html'],
+    new RegExp(`<button[^>]*onclick=['"]${handler}\\(\\)['"][^>]*>Stop tracking<\\/button>`),
+    `The legacy sidebar Update panel must not duplicate ${handler}`
+  );
+}
+assert.match(files['Dashboard_Script_TrackedEditors.html'],
+  /stopButton\.textContent\s*=\s*['"]Stop tracking['"]/,
+  'Shared tracked-editor Manage inventories must retain Stop tracking');
+assert.match(files['Dashboard_Script_PlanningDebts.html'],
+  /debt_manage_list[\s\S]*?bill-stop-tracking-btn[\s\S]*?Stop tracking/,
+  'Debt Manage must retain its confirmed Stop tracking action');
 for (const id of [
   'bank_update_save_btn',
-  'bank_update_stop_btn',
   'inv_update_save_btn',
-  'inv_update_stop_btn',
   'debt_update_save_btn',
-  'debt_update_stop_btn',
   'hx_add_btn'
 ]) {
   assert.match(body, new RegExp(`id=['\"]${id}['\"][^>]*\\sdisabled`), `${id} must start disabled`);
@@ -925,5 +921,67 @@ for (const [source, loaderName] of [
   assert.doesNotMatch(body, /runReadOnlyRpcWithRetry_/,
     `${loaderName} has an idempotent write/create side effect and must not auto-retry`);
 }
+
+const trackedEditors = files['Dashboard_Script_TrackedEditors.html'];
+const webShell = files['PlannerDashboardWeb.html'];
+assert.ok(
+  webShell.indexOf("includeHtml_('Dashboard_Script_TrackedEditors')") <
+    webShell.indexOf("includeHtml_('Dashboard_Script_AssetsHouseValues')"),
+  'Shared tracked-editor primitives must load before feature-specific editors'
+);
+for (const helper of [
+  'setTrackedEditorMode_',
+  'trackedEditorItemsFromSelect_',
+  'openTrackedEditorItemForUpdate_',
+  'stopTrackedEditorItem_',
+  'renderTrackedEditorManageList_'
+]) {
+  assert.match(trackedEditors, new RegExp(`function ${helper}\\(`),
+    `Shared tracked-editor helper missing: ${helper}`);
+}
+for (const [prefix, label] of [
+  ['bank', 'Bank Accounts'],
+  ['house', 'Houses'],
+  ['inv', 'Investments']
+]) {
+  for (const mode of ['update', 'add', 'manage']) {
+    assert.match(body, new RegExp(`id=["']${prefix}_mode_${mode}_btn["']`),
+      `${label} must expose the ${mode} mode`);
+    assert.match(body, new RegExp(`id=["']${prefix}_mode_${mode}_wrap["']`),
+      `${label} must preserve a dedicated ${mode} surface`);
+  }
+}
+for (const [source, setter, renderer] of [
+  [files['Dashboard_Script_AssetsBankInvestments.html'], 'setBankPanelMode', 'renderBankManageList_'],
+  [files['Dashboard_Script_AssetsBankInvestments.html'], 'setInvestmentPanelMode', 'renderInvestmentManageList_'],
+  [files['Dashboard_Script_AssetsHouseValues.html'], 'setHousePanelMode', 'renderHouseManageList_']
+]) {
+  assert.match(source, new RegExp(`function ${setter}\\([\\s\\S]*?setTrackedEditorMode_\\(`),
+    `${setter} must reuse the shared mode controller`);
+  assert.match(source, new RegExp(`function ${renderer}\\([\\s\\S]*?renderTrackedEditorManageList_\\(`),
+    `${renderer} must reuse the shared manage-list renderer`);
+}
+const bankTabs = body.slice(
+  body.indexOf('aria-label="Bank account mode"'),
+  body.indexOf('id="bank_mode_update_wrap"')
+);
+assert.doesNotMatch(bankTabs, /Review imports|Paste CSV/,
+  'Bank import utilities must remain secondary tools under Manage accounts');
+assert.match(body,
+  /id=["']bank_mode_manage_wrap["'][\s\S]*?Review pending imports[\s\S]*?id=["']bank_mode_import_btn["']/,
+  'Bank Manage must retain both guarded import utilities');
+assert.ok(
+  files['Dashboard_Script_Onboarding.html'].includes("onboardingOpenBankAccountsPage(\\'add\\')") &&
+    files['Dashboard_Script_Onboarding.html'].includes("onboardingOpenBankAccountsPage(\\'manage\\')"),
+  'Populated Bank Setup detail must offer explicit Add and Manage handoffs'
+);
+assert.ok(
+  files['Dashboard_Script_Onboarding.html'].includes("onboardingOpenHousesPage(\\'add\\')") &&
+    files['Dashboard_Script_Onboarding.html'].includes("onboardingOpenHousesPage(\\'manage\\')"),
+  'Populated Houses Setup detail must offer explicit Add and Manage handoffs'
+);
+assert.match(styles,
+  /@media \(max-width:\s*460px\)[\s\S]*?\.tracked-editor-row[\s\S]*?flex-direction:\s*column/,
+  'Tracked-editor inventory rows must stack on narrow screens');
 
 console.log('Dashboard UX regression checks passed.');

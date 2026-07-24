@@ -49,6 +49,11 @@
       tab && tab.classList.contains('active'));
   }
 
+  function text(id) {
+    var el = document.getElementById(id);
+    return String((el && el.textContent) || '').trim();
+  }
+
   function errorMessages() {
     var captured = Array.isArray(cfg.errors) ? cfg.errors.slice() : [];
     document.querySelectorAll('.status.error').forEach(function(el) {
@@ -148,17 +153,43 @@
       await new Promise(function(resolve) { setTimeout(resolve, 1200); });
       customerLeaks = customerLeaks.concat(customerLanguageLeaks('Assets → Bank'));
       var bankSave = document.getElementById('bank_update_save_btn');
-      var bankStop = document.getElementById('bank_update_stop_btn');
+      var bankStopAbsent = !document.getElementById('bank_update_stop_btn');
       click('.page-btn[data-page="planning"]');
       if (typeof showTab === 'function') showTab('debts');
       await new Promise(function(resolve) { setTimeout(resolve, 1200); });
       var debtSave = document.getElementById('debt_update_save_btn');
-      var debtStop = document.getElementById('debt_update_stop_btn');
-      var gated = !!(bankSave && bankSave.disabled && bankStop && bankStop.disabled &&
-        debtSave && debtSave.disabled && debtStop && debtStop.disabled);
+      var debtStopAbsent = !document.getElementById('debt_update_stop_btn') &&
+        !document.getElementById('debt_update_stop_zone');
+      var gated = !!(bankSave && bankSave.disabled && bankStopAbsent &&
+        debtSave && debtSave.disabled && debtStopAbsent);
       add('empty_action_gating', gated, gated
-        ? 'Bank and Debt update/destructive actions remained disabled with no selectable records.'
-        : 'One or more empty-state Bank/Debt actions were enabled.');
+        ? 'Bank and Debt Update remained Save-only, with Save disabled when no record was selectable.'
+        : 'An empty Update panel exposed a destructive action or enabled Save.');
+
+      var emptyEditorFailures = [];
+      click('.page-btn[data-page="assets"]');
+      [
+        { tab:'bank', setter:'setBankPanelMode', prefix:'bank', list:'bank_manage_list' },
+        { tab:'houses', setter:'setHousePanelMode', prefix:'house', list:'house_manage_list' },
+        { tab:'investments', setter:'setInvestmentPanelMode', prefix:'inv', list:'inv_manage_list' }
+      ].forEach(function(editor) {
+        if (typeof showTab === 'function') showTab(editor.tab);
+        if (typeof window[editor.setter] === 'function') window[editor.setter]('manage');
+        ['update', 'add', 'manage'].forEach(function(mode) {
+          if (!document.getElementById(editor.prefix + '_mode_' + mode + '_btn') ||
+              !document.getElementById(editor.prefix + '_mode_' + mode + '_wrap')) {
+            emptyEditorFailures.push(editor.tab + ' ' + mode + ' mode');
+          }
+        });
+        var listText = text(editor.list);
+        if (!/No active|Add first/i.test(listText)) {
+          emptyEditorFailures.push(editor.tab + ' empty Manage state');
+        }
+      });
+      add('empty_tracked_editor_modes', emptyEditorFailures.length === 0,
+        emptyEditorFailures.length
+          ? ('Empty tracked-editor gaps: ' + emptyEditorFailures.join(', '))
+          : 'Empty Bank Accounts, Houses, and Investments expose consistent Update, Add new, and Manage states.');
 
       click('.btn-help-prominent');
       await waitFor(function() { return activePage('help'); }, 10000, 'Help');

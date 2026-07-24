@@ -1055,15 +1055,8 @@ function updateDebtUpdateAvailability_() {
   const hasLoadedSelection = hasSelection && debtUpdateDetailsReady_;
   const hasDebts = !!(sel && sel.options && sel.options.length > 1);
   const saveBtn = document.getElementById('debt_update_save_btn');
-  const stopBtn = document.getElementById('debt_update_stop_btn');
-  const stopZone = document.getElementById('debt_update_stop_zone');
   const hint = document.getElementById('debt_update_empty_hint');
   if (saveBtn) saveBtn.disabled = !hasLoadedSelection;
-  if (stopBtn) {
-    stopBtn.disabled = !hasLoadedSelection;
-    stopBtn.hidden = !hasLoadedSelection;
-  }
-  if (stopZone) stopZone.hidden = !hasLoadedSelection;
   if (hint) {
     hint.textContent = hasSelection
       ? 'Loading debt details…'

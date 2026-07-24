@@ -1,0 +1,158 @@
+/* Shared tracked-editor UI primitives.
+ *
+ * Bank Accounts, Investments, and Houses share the same product hierarchy:
+ * Update an existing item, Add new, or Manage the active inventory. Their
+ * writers remain feature-specific because their sheet structures and financial
+ * rules differ. This file centralizes only presentation/navigation behavior so
+ * focus, empty states, responsive cards, and mode selection stay consistent.
+ */
+
+function setTrackedEditorMode_(config, requestedMode) {
+  config = config || {};
+  const modes = Array.isArray(config.modes) && config.modes.length
+    ? config.modes.slice()
+    : ['update', 'add', 'manage'];
+  const mode = modes.indexOf(requestedMode) !== -1
+    ? requestedMode
+    : (config.defaultMode || modes[0]);
+  const prefix = String(config.prefix || '').trim();
+
+  modes.forEach(function(candidate) {
+    const wrap = document.getElementById(prefix + '_mode_' + candidate + '_wrap');
+    const button = document.getElementById(prefix + '_mode_' + candidate + '_btn');
+    const selected = candidate === mode;
+    if (wrap) wrap.classList.toggle('active', selected);
+    if (button) {
+      button.classList.toggle('active', selected);
+      button.setAttribute('aria-selected', selected ? 'true' : 'false');
+    }
+  });
+
+  return mode;
+}
+
+function trackedEditorItemsFromSelect_(selectId) {
+  const select = document.getElementById(selectId);
+  if (!select || !select.options) return [];
+  const seen = Object.create(null);
+  const items = [];
+
+  Array.prototype.forEach.call(select.options, function(option) {
+    const name = String(option && option.value || '').trim();
+    const key = name.toLowerCase();
+    if (!name || option.disabled || seen[key]) return;
+    seen[key] = true;
+    items.push({ name: name });
+  });
+
+  return items.sort(function(a, b) {
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
+}
+
+function selectTrackedEditorItem_(selectId, itemName) {
+  const select = document.getElementById(selectId);
+  if (!select) return false;
+  const target = String(itemName || '');
+  const option = Array.prototype.find.call(select.options || [], function(candidate) {
+    return candidate.value === target;
+  });
+  if (!option) return false;
+  select.value = target;
+  return true;
+}
+
+function openTrackedEditorItemForUpdate_(options, itemName) {
+  options = options || {};
+  if (!selectTrackedEditorItem_(options.selectId, itemName)) return;
+  if (typeof options.setMode === 'function') options.setMode('update');
+  if (typeof options.loadSelection === 'function') options.loadSelection();
+
+  const select = document.getElementById(options.selectId);
+  if (select && typeof select.focus === 'function') {
+    try { select.focus({ preventScroll: true }); } catch (_e) { select.focus(); }
+  }
+}
+
+function stopTrackedEditorItem_(options, itemName) {
+  options = options || {};
+  if (!selectTrackedEditorItem_(options.selectId, itemName)) return;
+  if (typeof options.stop === 'function') options.stop();
+}
+
+function renderTrackedEditorManageList_(options) {
+  options = options || {};
+  const host = document.getElementById(options.hostId);
+  if (!host) return;
+
+  const items = Array.isArray(options.items) ? options.items : [];
+  host.innerHTML = '';
+
+  if (!items.length) {
+    const empty = document.createElement('div');
+    empty.className = 'tracked-editor-empty';
+
+    const message = document.createElement('p');
+    message.className = 'muted';
+    message.textContent = options.emptyMessage || 'Nothing is being tracked yet.';
+    empty.appendChild(message);
+
+    if (typeof options.onAdd === 'function') {
+      const addButton = document.createElement('button');
+      addButton.type = 'button';
+      addButton.className = 'small-btn primary';
+      addButton.textContent = options.addLabel || 'Add new';
+      addButton.addEventListener('click', options.onAdd);
+      empty.appendChild(addButton);
+    }
+
+    host.appendChild(empty);
+    return;
+  }
+
+  items.forEach(function(item) {
+    const name = String(item && item.name || '').trim();
+    if (!name) return;
+
+    const row = document.createElement('div');
+    row.className = 'tracked-editor-row';
+
+    const identity = document.createElement('div');
+    identity.className = 'tracked-editor-identity';
+
+    const title = document.createElement('strong');
+    title.className = 'tracked-editor-name';
+    title.textContent = name;
+    identity.appendChild(title);
+
+    const kind = document.createElement('span');
+    kind.className = 'tracked-editor-kind muted';
+    kind.textContent = options.itemLabel || 'Tracked item';
+    identity.appendChild(kind);
+    row.appendChild(identity);
+
+    const actions = document.createElement('div');
+    actions.className = 'tracked-editor-actions';
+
+    const updateButton = document.createElement('button');
+    updateButton.type = 'button';
+    updateButton.className = 'small-btn';
+    updateButton.textContent = options.updateLabel || 'Update';
+    updateButton.addEventListener('click', function() {
+      if (typeof options.onUpdate === 'function') options.onUpdate(name);
+    });
+    actions.appendChild(updateButton);
+
+    const stopButton = document.createElement('button');
+    stopButton.type = 'button';
+    stopButton.className = 'small-btn danger';
+    stopButton.textContent = 'Stop tracking';
+    stopButton.addEventListener('click', function() {
+      if (typeof options.onStop === 'function') options.onStop(name);
+    });
+    actions.appendChild(stopButton);
+
+    row.appendChild(actions);
+    host.appendChild(row);
+  });
+}

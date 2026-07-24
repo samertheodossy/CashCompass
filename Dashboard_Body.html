@@ -301,6 +301,7 @@
       <div class="segmented" role="tablist" aria-label="House values mode">
         <button type="button" id="house_mode_update_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setHousePanelMode('update')">Update</button>
         <button type="button" id="house_mode_add_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setHousePanelMode('add')">Add new</button>
+        <button type="button" id="house_mode_manage_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setHousePanelMode('manage')">Manage houses</button>
       </div>
 
       <div id="house_mode_update_wrap" class="bank-mode-wrap active">
@@ -314,7 +315,6 @@
             <input type="text" id="house_value" inputmode="decimal" onfocus="currencyFocus('house_value')" onblur="currencyBlur('house_value')">
             <div class="house-update-actions">
               <button id="house_update_save_btn" onclick="saveHouse()" disabled>Save house value</button>
-              <button type="button" id="house_stop_btn" class="small-btn danger" onclick="stopTrackingHouse()" title="Mark this house inactive. History and the HOUSES sheet are preserved." disabled hidden>Stop tracking</button>
             </div>
             <div id="house_update_empty_hint" class="muted update-selection-hint">Add your first house to start tracking values.</div>
           </div>
@@ -362,6 +362,19 @@
         </div>
       </div>
 
+      <div id="house_mode_manage_wrap" class="bank-mode-wrap">
+        <div class="tracked-editor-manage-head">
+          <div>
+            <h3>Manage houses</h3>
+            <p class="muted">Update a property’s value or stop tracking it while preserving its history and property expense sheet.</p>
+          </div>
+          <button type="button" class="small-btn primary" onclick="setHousePanelMode('add')">Add new house</button>
+        </div>
+        <div id="house_manage_list" class="tracked-editor-list">
+          <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading houses…</span></div>
+        </div>
+      </div>
+
       <div id="house_status" class="status"></div>
     </div>
 
@@ -373,8 +386,7 @@
       <div class="segmented" role="tablist" aria-label="Bank account mode">
         <button type="button" id="bank_mode_update_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setBankPanelMode('update')">Update</button>
         <button type="button" id="bank_mode_add_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setBankPanelMode('add')">Add new</button>
-        <button type="button" id="bank_mode_review_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setBankPanelMode('review')">Review imports<span id="bank_mode_review_badge" class="muted" style="margin-left:6px;display:none;"></span></button>
-        <button type="button" id="bank_mode_import_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setBankPanelMode('import')" style="display:none;">Import</button>
+        <button type="button" id="bank_mode_manage_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setBankPanelMode('manage')">Manage accounts</button>
       </div>
 
       <div id="bank_mode_update_wrap" class="bank-mode-wrap active">
@@ -397,7 +409,6 @@
             </div>
             <div class="house-update-actions">
               <button id="bank_update_save_btn" onclick="saveBank()" disabled>Save bank account</button>
-              <button type="button" id="bank_update_stop_btn" class="small-btn danger" onclick="stopTrackingBank()" title="Mark this bank account inactive. History is preserved." disabled hidden>Stop tracking</button>
             </div>
             <div id="bank_update_empty_hint" class="muted" style="margin-top:8px;">Add your first bank account to start tracking balances.</div>
           </div>
@@ -477,7 +488,33 @@
         </div>
       </div>
 
-      <div id="bank_mode_review_wrap" class="bank-mode-wrap">
+      <div id="bank_mode_manage_wrap" class="bank-mode-wrap">
+        <div id="bank_manage_home">
+          <div class="tracked-editor-manage-head">
+            <div>
+              <h3>Manage bank accounts</h3>
+              <p class="muted">Update a balance or stop tracking an account while preserving its history.</p>
+            </div>
+            <button type="button" class="small-btn primary" onclick="setBankPanelMode('add')">Add new account</button>
+          </div>
+          <div id="bank_manage_list" class="tracked-editor-list">
+            <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading bank accounts…</span></div>
+          </div>
+
+          <div class="tracked-editor-secondary-tools">
+            <div>
+              <strong>Import tools</strong>
+              <p class="muted">Review staged account snapshots or paste a CSV when the import preview is enabled.</p>
+            </div>
+            <div class="tracked-editor-actions">
+              <button type="button" class="small-btn" onclick="setBankPanelMode('review')">Review pending imports<span id="bank_mode_review_badge" class="muted" style="margin-left:6px;display:none;"></span></button>
+              <button type="button" id="bank_mode_import_btn" class="small-btn" onclick="setBankPanelMode('import')" style="display:none;">Paste CSV</button>
+            </div>
+          </div>
+        </div>
+
+      <div id="bank_mode_review_wrap" class="tracked-editor-secondary-view" style="display:none;">
+        <button type="button" class="small-btn tracked-editor-back" onclick="setBankPanelMode('manage')">← Back to account management</button>
         <div class="muted" style="margin-bottom:8px;font-size:13px;line-height:1.4;">
           Review imported accounts. Link first (<strong>Add as new</strong> or <strong>Match</strong>), then <strong>Apply</strong> to update this month's balance.
         </div>
@@ -490,7 +527,8 @@
         <div id="bank_import_review_list"></div>
       </div>
 
-      <div id="bank_mode_import_wrap" class="bank-mode-wrap" style="display:none;">
+      <div id="bank_mode_import_wrap" class="tracked-editor-secondary-view" style="display:none;">
+        <button type="button" class="small-btn tracked-editor-back" onclick="setBankPanelMode('manage')">← Back to account management</button>
         <div class="muted" style="margin-bottom:8px;font-size:13px;line-height:1.4;">
           Paste a CSV of bank-account balance snapshots. Nothing is written to any account until you Apply in Review imports.
         </div>
@@ -518,6 +556,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <button type="button" id="bank_import_csv_stage_btn" class="small-btn primary" onclick="confirmBankImportCsvPasteStage_()" disabled>Stage rows for review</button>
         </div>
       </div>
+      </div>
 
       <div id="bank_status" class="status"></div>
     </div>
@@ -530,6 +569,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div class="segmented" role="tablist" aria-label="Investment mode">
         <button type="button" id="inv_mode_update_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setInvestmentPanelMode('update')">Update</button>
         <button type="button" id="inv_mode_add_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setInvestmentPanelMode('add')">Add new</button>
+        <button type="button" id="inv_mode_manage_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setInvestmentPanelMode('manage')">Manage investments</button>
       </div>
 
       <div id="inv_mode_update_wrap" class="bank-mode-wrap active">
@@ -543,7 +583,6 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <input type="text" id="inv_value" inputmode="decimal" onfocus="currencyFocus('inv_value')" onblur="currencyBlur('inv_value')">
             <div class="house-update-actions">
               <button id="inv_update_save_btn" onclick="saveInvestment()" disabled>Save investment</button>
-              <button type="button" id="inv_update_stop_btn" class="small-btn danger" onclick="stopTrackingInvestment()" title="Mark this investment account inactive. History is preserved." disabled hidden>Stop tracking</button>
             </div>
             <div id="inv_update_empty_hint" class="muted" style="margin-top:8px;">Add your first investment account to start tracking values.</div>
           </div>
@@ -585,6 +624,19 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <p style="margin-top:0;">Creates the account and prepares the current year's tracking area automatically when needed.</p>
             <p>Starting value is required (enter <code>0</code> if unknown). Starting value date is optional — <strong>if left blank, the current month is used automatically</strong> so the amount always lands in a real month column. Type is a dropdown of common investment roles plus any types already used in this workbook; pick <strong>Other</strong> to enter a custom label.</p>
           </div>
+        </div>
+      </div>
+
+      <div id="inv_mode_manage_wrap" class="bank-mode-wrap">
+        <div class="tracked-editor-manage-head">
+          <div>
+            <h3>Manage investments</h3>
+            <p class="muted">Update an account’s value or stop tracking it while preserving its history.</p>
+          </div>
+          <button type="button" class="small-btn primary" onclick="setInvestmentPanelMode('add')">Add new investment</button>
+        </div>
+        <div id="inv_manage_list" class="tracked-editor-list">
+          <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading investments…</span></div>
         </div>
       </div>
 
@@ -1454,11 +1506,6 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           </div>
         </div>
 
-        <div id="debt_update_stop_zone" class="debt-danger-zone" hidden>
-          <div class="danger-zone-title">Danger zone</div>
-          <p class="muted">Stop tracking removes this debt from active financial calculations. It can be restored later from inactive debts.</p>
-          <button type="button" id="debt_update_stop_btn" class="small-btn danger" onclick="stopTrackingDebt()" disabled hidden>Stop tracking this debt</button>
-        </div>
       </div>
 
       <div id="debt_mode_add_wrap" class="bank-mode-wrap">

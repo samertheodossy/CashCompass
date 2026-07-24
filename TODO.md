@@ -1069,7 +1069,7 @@ Authoritative copy lives here; `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md` mirror
 
 ## Future UI Standardization — Manage Pattern Rollout
 
-**Status:** documented, **not implemented** (authoritative copy; high-level mirror in `PROJECT_CONTEXT.md`, backlog entry in `ENHANCEMENTS.md`). **Current status: Bills = complete · Debts = complete · Bank Accounts = next likely candidate.**
+**Status:** current rollout complete. **Bills, Debts, Bank Accounts, Investments, and Houses are implemented; Bank/Investment/House empty and populated states passed isolated Central `@194` on 2026-07-24.**
 
 **Background.** Bills and Debts now have dedicated management workflows — **Manage Bills** and **Manage Debts** — which have proven significantly more user-friendly than direct sheet editing. They establish the **preferred long-term UI pattern** for module maintenance, and each major module should eventually adopt it.
 
@@ -1082,16 +1082,16 @@ Authoritative copy lives here; `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md` mirror
 
 - ✅ **Bills** — Manage Bills, Edit Bill, Stop Tracking, Add Bill.
 - ✅ **Debts** — Manage Debts, Edit Debt, Rename Debt, Stop Tracking.
+- ✅ **Bank Accounts** — Update / Add new / Manage accounts inventory; import tools are secondary under Manage.
+- ✅ **Investments** — Update / Add new / Manage investments inventory.
+- ✅ **Houses** — Update / Add new / Manage houses inventory.
 
-**Planned candidates (no work scheduled):**
+**Remaining candidates:**
 
-1. **Bank Accounts — Priority: High.** Future: Manage Accounts, Rename Account, Edit Institution, Edit Type, Edit Credit Limit, Stop Tracking. *Reason:* currently still relies heavily on backend sheet maintenance — the exact same pain that Manage Debts removed (rename account, change institution, change type, fix account metadata, stop tracking). **Recommended as the next Manage rollout** — much lower risk than Recovery changes, so a good feature stream once recovery work is closed.
-2. **Income Sources — Priority: Medium.** Future: Manage Income, Edit Source, Rename Source, Frequency Changes, Stop Tracking.
-3. **Investments — Priority: Medium.** Future: Manage Investments, Rename Account, Edit Type, Stop Tracking.
-4. **Properties — Priority: Medium.** Future: Manage Properties, Rename Property, Edit Ownership, Edit Property Metadata, Stop Tracking.
-5. **Donations — Priority: Lower.** Future: Manage Donations, Edit Donation Source, Stop Tracking.
+1. **Income Sources — Priority: Medium.** Future: Manage Income, Edit Source, Rename Source, Frequency Changes, Stop Tracking.
+2. **Deeper metadata/lifecycle editing — Priority: Medium.** Rename/reactivate and metadata changes remain separate from the new active-item routing inventories.
 
-**Future framework opportunity.** After at least **three** modules use the pattern (Bills, Debts, Bank Accounts), investigate extracting a reusable management framework: shared table component, shared edit-form pattern, shared stop-tracking workflow, shared stale-row protection, shared activity logging. **Do not implement now** — extract only once three real consumers exist so the abstraction is grounded.
+**Shared framework boundary.** The asset-editor wave extracts common client-side mode selection, active-list rendering, Update focus, Stop routing, and empty states. Feature-specific writers, schemas, confirmations, stale-row protection, and activity logging remain separate; a deeper server lifecycle framework still requires its own review.
 
 **Priority:** Sequenced **after** 6F Recovery Validation closes; Bank Accounts first. UX enhancement, not a blocker.
 
@@ -1101,7 +1101,7 @@ Authoritative copy lives here; `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md` mirror
 
 **Status:** documented, **not implemented** (authoritative copy; high-level mirror in `PROJECT_CONTEXT.md`, backlog entry in `ENHANCEMENTS.md`). **Reference implementation: the Debt lifecycle** (`Active → Stop Tracking → Inactive → Reactivate`), shipped in commit `893d50d`.
 
-**Related (do not duplicate):** this is the **lifecycle** companion to `## Future UI Standardization — Manage Pattern Rollout` (the *Manage view* pattern) and its "Future framework opportunity" note. Manage Pattern Rollout covers the management surface (table + edit form); this item covers the **active/inactive lifecycle** (stop/reactivate, danger zone, inactive section, lifecycle activity events, server guardrails). They should be extracted together once enough consumers exist.
+**Related (do not duplicate):** this is the **lifecycle** companion to `## Future UI Standardization — Manage Pattern Rollout` (the *Manage view* pattern) and its "Future framework opportunity" note. Manage Pattern Rollout covers the management surface (table + edit form); this item covers the **active/inactive lifecycle** (Stop tracking from Manage, Reactivate, inactive section, lifecycle activity events, server guardrails). They should be extracted together once enough consumers exist.
 
 **Context.** The Debt lifecycle flow is now the desired product pattern and should eventually be **consistent across long-lived CashCompass entities**: Debts, Bank Accounts, Investments, House / Real Estate values, Bills, Income Sources, Properties, and any future recurring or tracked financial object.
 
@@ -1109,8 +1109,8 @@ Authoritative copy lives here; `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md` mirror
 
 **Possible shared pieces:**
 
-1. **Shared UI language** — Active section, Inactive section, "Show inactive" toggle with count, Reactivate button, Danger Zone, Stop Tracking button, common empty state ("No inactive *<entities>*."), common helper text.
-2. **Shared button styles** — Edit = neutral · Rename = neutral/secondary · Reactivate = positive (green) · Stop Tracking = destructive (red). (Already realized as `.small-btn.success` / `.small-btn.danger` + `.debt-danger-zone` / `.debt-inactive-section` in `Dashboard_Styles.html` — generalize the class names when extracting.)
+1. **Shared UI language** — Active section, Inactive section, "Show inactive" toggle with count, Reactivate button, Stop Tracking in Manage, common empty state ("No inactive *<entities>*."), common helper text. Update panels remain Save-only.
+2. **Shared button styles** — Edit = neutral · Rename = neutral/secondary · Reactivate = positive (green) · Stop Tracking = destructive (red). (Already realized as `.small-btn.success` / `.small-btn.danger` + `.debt-inactive-section` in `Dashboard_Styles.html` — generalize the class names when extracting.)
 3. **Shared confirmation copy pattern** — Stop Tracking must clearly state: the item **remains in history**, is **excluded from live calculations**, and **can be restored** from the Inactive section.
 4. **Shared server lifecycle helpers** — reusable pattern to: deactivate an existing row, reactivate an existing row, block duplicate **active** names, preserve all historical data, **prevent direct editing of `Active` via generic update endpoints** (allow-list guard), and emit activity-log events. (Debt reference: `deactivateDebtFromDashboard`, `reactivateDebtFromDashboard`, `getInactiveDebtsForManagementFromDashboard`, and the `updateDebtField` allow-list in `debts.js`.)
 5. **Shared activity event pattern** — consistent event names `<entity>_deactivate` / `<entity>_reactivate`; consistent labels **"Tracking stopped" / "Tracking resumed"**; consistent JSON details: `previousActive`, `newActive`, `sheetRow`, `entityName`/`accountName`/`payee`/`propertyName`, `reason`. (Debt reference: `debt_deactivate` / `debt_reactivate` classified in `activity_log.js`.)

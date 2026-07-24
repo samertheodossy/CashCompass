@@ -50,11 +50,9 @@ var ONBOARDING_SKIP_GRID_AUTOLOAD_ = false;
 // race where handoff fires before the first detail render completes —
 // never regress relative to current behavior.
 // --------------------------------------------------------------------------
-var ONBOARDING_BANK_HAS_TRACKED_ = null;
 var ONBOARDING_DEBTS_HAS_TRACKED_ = null;
 var ONBOARDING_BILLS_HAS_TRACKED_ = null;
 var ONBOARDING_INCOME_HAS_TRACKED_ = null;
-var ONBOARDING_HOUSES_HAS_TRACKED_ = null;
 
 /**
  * Shared helper for onboarding handoffs.
@@ -519,11 +517,6 @@ function onboardingRenderBankDetail_(data) {
   }
 
   var count = (data.accounts && data.accounts.length) || 0;
-  // Cache first-run state for the Bank Accounts editor handoff so we
-  // can open it in Add mode when no accounts are tracked yet. Populated
-  // workbooks always reach this branch with count > 0 and therefore
-  // retain today's default Update mode.
-  ONBOARDING_BANK_HAS_TRACKED_ = !!(data.sheetExists && count > 0);
   onboardingBankSetStatus_(
     count + (count === 1 ? ' account tracked' : ' accounts tracked'),
     ''
@@ -550,7 +543,7 @@ function onboardingRenderBankDetail_(data) {
         (data.year ? ' for ' + escapeOnboardingHtml_(String(data.year)) : '') + '.';
 
     var ctaHtml = '<button type="button" class="btn-primary" ' +
-      'onclick="onboardingOpenBankAccountsPage()">Add first bank account</button>';
+      'onclick="onboardingOpenBankAccountsPage(\'add\')">Add first bank account</button>';
 
     fragments.push(
       '<div class="onboarding-detail-empty">' +
@@ -579,13 +572,20 @@ function onboardingRenderBankDetail_(data) {
   fragments.push(
     '<div class="onboarding-account-list" role="list">' + rows + '</div>'
   );
+  fragments.push(
+    '<div class="onboarding-detail-actions">' +
+      '<button type="button" class="btn-primary" onclick="onboardingOpenBankAccountsPage(\'add\')">Add new account</button>' +
+      '<button type="button" class="small-btn" onclick="onboardingOpenBankAccountsPage(\'manage\')">Manage accounts</button>' +
+    '</div>'
+  );
 
   body.innerHTML = fragments.join('');
 }
 
 // Jump into the existing Bank Accounts management surface — the Assets
 // page → Bank Accounts tab.
-function onboardingOpenBankAccountsPage() {
+function onboardingOpenBankAccountsPage(mode) {
+  var targetMode = mode === 'add' ? 'add' : 'manage';
   // Safeguard: make sure INPUT - Bank Accounts exists *before* handing the
   // user off to the Assets → Bank Accounts editor. If it is missing, the
   // backend creates it with the minimum valid structure the rest of the
@@ -608,15 +608,7 @@ function onboardingOpenBankAccountsPage() {
     if (typeof loadBankSection === 'function') {
       try { loadBankSection(); } catch (_e) { /* editor may not be ready */ }
     }
-
-    // First-run editor mode: if the most recent detail render saw no
-    // tracked accounts, flip the Bank Accounts editor into Add mode.
-    onboardingApplyFirstRunEditorMode_(
-      ONBOARDING_BANK_HAS_TRACKED_,
-      function() {
-        if (typeof setBankPanelMode === 'function') setBankPanelMode('add');
-      }
-    );
+    if (typeof setBankPanelMode === 'function') setBankPanelMode(targetMode);
   };
 
   google.script.run
@@ -1745,13 +1737,6 @@ function onboardingRenderHousesDetail_(data) {
 
   var houses = (data.houses && data.houses.length) ? data.houses : [];
   var activeHouses = houses.filter(function(h) { return !h.inactive; });
-  // Cache first-run state for the Houses editor handoff. Houses is
-  // optional, but the Assets → Houses editor uses the same segmented
-  // Update/Add toggle as Bank / Debts, so applying the shared rule
-  // here keeps the handoff consistent: no active properties → Add
-  // new; at least one active property → today's Update default.
-  ONBOARDING_HOUSES_HAS_TRACKED_ = !!(data.sheetExists && activeHouses.length > 0);
-
   // Neutral badge — Houses is optional, so we deliberately do NOT use
   // the status-complete / status-missing color pills that imply the
   // user still has required work to do.
@@ -1780,7 +1765,7 @@ function onboardingRenderHousesDetail_(data) {
   // House Values is the supported path for bootstrapping this surface.
   if (!data.sheetExists) {
     var missingCta = '<button type="button" class="btn-primary" ' +
-      'onclick="onboardingOpenHousesPage()">Open Houses editor</button>';
+      'onclick="onboardingOpenHousesPage(\'add\')">Open Houses editor</button>';
     fragments.push(
       '<div class="onboarding-detail-empty">' +
         '<p>Property tracking is optional.</p>' +
@@ -1795,7 +1780,7 @@ function onboardingRenderHousesDetail_(data) {
 
   if (houses.length === 0) {
     var emptyCta = '<button type="button" class="btn-primary" ' +
-      'onclick="onboardingOpenHousesPage()">Add first property</button>';
+      'onclick="onboardingOpenHousesPage(\'add\')">Add first property</button>';
     fragments.push(
       '<div class="onboarding-detail-empty">' +
         '<p>Property tracking is optional.</p>' +
@@ -1846,11 +1831,18 @@ function onboardingRenderHousesDetail_(data) {
       houses.map(renderHouseRow).join('') +
     '</div>'
   );
+  fragments.push(
+    '<div class="onboarding-detail-actions">' +
+      '<button type="button" class="btn-primary" onclick="onboardingOpenHousesPage(\'add\')">Add new property</button>' +
+      '<button type="button" class="small-btn" onclick="onboardingOpenHousesPage(\'manage\')">Manage houses</button>' +
+    '</div>'
+  );
 
   body.innerHTML = fragments.join('');
 }
 
-function onboardingOpenHousesPage() {
+function onboardingOpenHousesPage(mode) {
+  var targetMode = mode === 'add' ? 'add' : 'manage';
   // Reuse the same setup-editor-mode handoff pattern as Bank Accounts.
   // Returning to 'houses' puts the user back on the optional detail
   // screen (not on the main grid) so Back to Setup feels consistent
@@ -1870,16 +1862,7 @@ function onboardingOpenHousesPage() {
   if (typeof loadHouseSection === 'function') {
     try { loadHouseSection(); } catch (_e) { /* editor may not be ready */ }
   }
-
-  // First-run Houses surface: open the Assets → Houses editor in Add
-  // mode when the last detail render explicitly saw no active
-  // properties. Same shared rule as Bank Accounts and Debts.
-  onboardingApplyFirstRunEditorMode_(
-    ONBOARDING_HOUSES_HAS_TRACKED_,
-    function() {
-      if (typeof setHousePanelMode === 'function') setHousePanelMode('add');
-    }
-  );
+  if (typeof setHousePanelMode === 'function') setHousePanelMode(targetMode);
 }
 
 // --------------------------------------------------------------------------

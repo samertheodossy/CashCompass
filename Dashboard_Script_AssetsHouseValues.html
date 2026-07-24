@@ -19,6 +19,7 @@ function fillHouseDropdownFromData_(data) {
   });
   populateHouseAddDatalists_(data);
   updateHouseUpdateAvailability_();
+  renderHouseManageList_();
 
   // Deterministic default-tab rule (Issue 1): once REAL data has loaded, an
   // empty House Values workbook must land on "Add new" — there is nothing to
@@ -38,13 +39,8 @@ function updateHouseUpdateAvailability_() {
   const hasSelection = !!(sel && String(sel.value || '').trim());
   const hasHouses = !!(sel && sel.options && sel.options.length > 1);
   const saveBtn = document.getElementById('house_update_save_btn');
-  const stopBtn = document.getElementById('house_stop_btn');
   const hint = document.getElementById('house_update_empty_hint');
   if (saveBtn) saveBtn.disabled = !hasSelection;
-  if (stopBtn) {
-    stopBtn.disabled = !hasSelection;
-    stopBtn.hidden = !hasSelection;
-  }
   if (hint) {
     hint.textContent = hasHouses
       ? 'Select a house to update its value.'
@@ -203,24 +199,33 @@ function isHouseNameRelatedError_(msg) {
 }
 
 function setHousePanelMode(mode) {
-  const isUpdate = mode === 'update';
-  const wrapU = document.getElementById('house_mode_update_wrap');
-  const wrapA = document.getElementById('house_mode_add_wrap');
-  const btnU = document.getElementById('house_mode_update_btn');
-  const btnA = document.getElementById('house_mode_add_btn');
-  if (wrapU) wrapU.classList.toggle('active', isUpdate);
-  if (wrapA) wrapA.classList.toggle('active', !isUpdate);
-  if (btnU) {
-    btnU.classList.toggle('active', isUpdate);
-    btnU.setAttribute('aria-selected', isUpdate ? 'true' : 'false');
-  }
-  if (btnA) {
-    btnA.classList.toggle('active', !isUpdate);
-    btnA.setAttribute('aria-selected', !isUpdate ? 'true' : 'false');
-  }
-  if (isUpdate) {
-    setStatus('house_status', '', false);
-  }
+  const m = setTrackedEditorMode_({ prefix: 'house' }, mode);
+  if (m === 'update') setStatus('house_status', '', false);
+  if (m === 'manage') renderHouseManageList_();
+}
+
+function renderHouseManageList_() {
+  renderTrackedEditorManageList_({
+    hostId: 'house_manage_list',
+    items: trackedEditorItemsFromSelect_('house_house'),
+    itemLabel: 'Property',
+    emptyMessage: 'No active houses are being tracked.',
+    addLabel: 'Add first house',
+    onAdd: function() { setHousePanelMode('add'); },
+    onUpdate: function(houseName) {
+      openTrackedEditorItemForUpdate_({
+        selectId: 'house_house',
+        setMode: setHousePanelMode,
+        loadSelection: loadHouseData
+      }, houseName);
+    },
+    onStop: function(houseName) {
+      stopTrackedEditorItem_({
+        selectId: 'house_house',
+        stop: stopTrackingHouse
+      }, houseName);
+    }
+  });
 }
 
 function loadHouseSection() {

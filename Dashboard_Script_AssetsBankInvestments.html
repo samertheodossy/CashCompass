@@ -15,6 +15,7 @@ function fillBankAccountDropdownFromData_(data) {
   });
   populateBankAddDatalists_(data);
   updateBankUpdateAvailability_();
+  renderBankManageList_();
 }
 
 function updateBankUpdateAvailability_() {
@@ -23,13 +24,8 @@ function updateBankUpdateAvailability_() {
   const hasLoadedSelection = hasSelection && bankUpdateDetailsReady_;
   const hasAccounts = !!(sel && sel.options && sel.options.length > 1);
   const saveBtn = document.getElementById('bank_update_save_btn');
-  const stopBtn = document.getElementById('bank_update_stop_btn');
   const hint = document.getElementById('bank_update_empty_hint');
   if (saveBtn) saveBtn.disabled = !hasLoadedSelection;
-  if (stopBtn) {
-    stopBtn.disabled = !hasLoadedSelection;
-    stopBtn.hidden = !hasLoadedSelection;
-  }
   if (hint) {
     hint.textContent = hasSelection
       ? 'Loading account details…'
@@ -283,79 +279,57 @@ function isBankNameRelatedError_(msg) {
 }
 
 function setBankPanelMode(mode) {
-  // Up to four modes share the Bank panel: update existing balance,
-  // add a brand-new account, review pending imported bank accounts,
-  // or paste a CSV import. Import is feature-flag-gated; setBankPanelMode
-  // is tolerant of it being requested whether or not the flag is on
-  // (the segment button only shows when the flag is true). The
-  // segmented control owns visual state; the wraps own the panel
-  // bodies.
-  let m;
-  if (mode === 'add') m = 'add';
-  else if (mode === 'review') m = 'review';
-  else if (mode === 'import') m = 'import';
-  else m = 'update';
-  const wrapU = document.getElementById('bank_mode_update_wrap');
-  const wrapA = document.getElementById('bank_mode_add_wrap');
+  const requested = String(mode || 'update');
+  const secondaryMode = requested === 'review' || requested === 'import'
+    ? requested
+    : '';
+  const m = setTrackedEditorMode_(
+    { prefix: 'bank' },
+    secondaryMode ? 'manage' : requested
+  );
+  const manageHome = document.getElementById('bank_manage_home');
   const wrapR = document.getElementById('bank_mode_review_wrap');
   const wrapI = document.getElementById('bank_mode_import_wrap');
-  const btnU = document.getElementById('bank_mode_update_btn');
-  const btnA = document.getElementById('bank_mode_add_btn');
-  const btnR = document.getElementById('bank_mode_review_btn');
-  const btnI = document.getElementById('bank_mode_import_btn');
-  if (wrapU) wrapU.classList.toggle('active', m === 'update');
-  if (wrapA) wrapA.classList.toggle('active', m === 'add');
-  if (wrapR) wrapR.classList.toggle('active', m === 'review');
-  // The Import wrap inherits .bank-mode-wrap CSS (display:none unless
-  // .active) BUT also has inline display:none from Body so it stays
-  // hidden when the flag is off even before any class toggling. We
-  // toggle .active here for parity with the other three; the inline
-  // style has to be cleared when revealed and re-applied when the
-  // segment is left so this wrap continues to obey the flag.
-  if (wrapI) {
-    wrapI.classList.toggle('active', m === 'import');
-    if (m === 'import' && BANK_IMPORT_CSV_PASTE_ENABLED) {
-      wrapI.style.display = '';
-    } else {
-      wrapI.style.display = 'none';
-    }
-  }
-  if (btnU) {
-    btnU.classList.toggle('active', m === 'update');
-    btnU.setAttribute('aria-selected', m === 'update' ? 'true' : 'false');
-  }
-  if (btnA) {
-    btnA.classList.toggle('active', m === 'add');
-    btnA.setAttribute('aria-selected', m === 'add' ? 'true' : 'false');
-  }
-  if (btnR) {
-    btnR.classList.toggle('active', m === 'review');
-    btnR.setAttribute('aria-selected', m === 'review' ? 'true' : 'false');
-  }
-  if (btnI) {
-    btnI.classList.toggle('active', m === 'import');
-    btnI.setAttribute('aria-selected', m === 'import' ? 'true' : 'false');
-  }
-  if (m === 'update') {
-    setStatus('bank_status', '', false);
-  }
-  if (m === 'review') {
+  const showReview = m === 'manage' && secondaryMode === 'review';
+  const showImport = m === 'manage' &&
+    secondaryMode === 'import' &&
+    BANK_IMPORT_CSV_PASTE_ENABLED;
+
+  if (manageHome) manageHome.style.display = (showReview || showImport) ? 'none' : '';
+  if (wrapR) wrapR.style.display = showReview ? '' : 'none';
+  if (wrapI) wrapI.style.display = showImport ? '' : 'none';
+
+  if (m === 'update') setStatus('bank_status', '', false);
+  if (m === 'manage' && !secondaryMode) renderBankManageList_();
+  if (showReview) {
     setStatus('bank_status', '', false);
     if (typeof loadBankImportReviewSection === 'function') loadBankImportReviewSection();
   }
-  if (m === 'import') {
-    setStatus('bank_status', '', false);
-    // No auto-load. Textarea content + preview are driven entirely
-    // by the user's paste + Preview click. We deliberately do NOT
-    // reset state here so a user who clicks Review imports to peek
-    // at staged rows can come back to Import and see their previous
-    // preview unchanged. resetBankImportCsvPasteState_ is called only
-    // by Clear or by a successful stage.
-  } else {
-    // Leaving Import: clear preview rendering but preserve textarea +
-    // parsed state. (Keeps the "I started a paste, switched tabs to
-    // verify something, came back" workflow zero-cost.)
-  }
+  if (showImport) setStatus('bank_status', '', false);
+}
+
+function renderBankManageList_() {
+  renderTrackedEditorManageList_({
+    hostId: 'bank_manage_list',
+    items: trackedEditorItemsFromSelect_('bank_account'),
+    itemLabel: 'Bank account',
+    emptyMessage: 'No active bank accounts are being tracked.',
+    addLabel: 'Add first bank account',
+    onAdd: function() { setBankPanelMode('add'); },
+    onUpdate: function(accountName) {
+      openTrackedEditorItemForUpdate_({
+        selectId: 'bank_account',
+        setMode: setBankPanelMode,
+        loadSelection: loadBankData
+      }, accountName);
+    },
+    onStop: function(accountName) {
+      stopTrackedEditorItem_({
+        selectId: 'bank_account',
+        stop: stopTrackingBank
+      }, accountName);
+    }
+  });
 }
 
 function loadBankSection() {
@@ -780,6 +754,7 @@ function fillInvestmentAccountDropdownFromData_(data) {
   });
   populateInvestmentAddDatalists_(data);
   updateInvestmentUpdateAvailability_();
+  renderInvestmentManageList_();
 }
 
 function updateInvestmentUpdateAvailability_() {
@@ -787,13 +762,8 @@ function updateInvestmentUpdateAvailability_() {
   const hasSelection = !!(sel && String(sel.value || '').trim());
   const hasAccounts = !!(sel && sel.options && sel.options.length > 1);
   const saveBtn = document.getElementById('inv_update_save_btn');
-  const stopBtn = document.getElementById('inv_update_stop_btn');
   const hint = document.getElementById('inv_update_empty_hint');
   if (saveBtn) saveBtn.disabled = !hasSelection;
-  if (stopBtn) {
-    stopBtn.disabled = !hasSelection;
-    stopBtn.hidden = !hasSelection;
-  }
   if (hint) {
     hint.textContent = hasAccounts
       ? 'Select an investment account to update it.'
@@ -910,24 +880,33 @@ function isInvestmentNameRelatedError_(msg) {
 }
 
 function setInvestmentPanelMode(mode) {
-  const isUpdate = mode === 'update';
-  const wrapU = document.getElementById('inv_mode_update_wrap');
-  const wrapA = document.getElementById('inv_mode_add_wrap');
-  const btnU = document.getElementById('inv_mode_update_btn');
-  const btnA = document.getElementById('inv_mode_add_btn');
-  if (wrapU) wrapU.classList.toggle('active', isUpdate);
-  if (wrapA) wrapA.classList.toggle('active', !isUpdate);
-  if (btnU) {
-    btnU.classList.toggle('active', isUpdate);
-    btnU.setAttribute('aria-selected', isUpdate ? 'true' : 'false');
-  }
-  if (btnA) {
-    btnA.classList.toggle('active', !isUpdate);
-    btnA.setAttribute('aria-selected', !isUpdate ? 'true' : 'false');
-  }
-  if (isUpdate) {
-    setStatus('inv_status', '', false);
-  }
+  const m = setTrackedEditorMode_({ prefix: 'inv' }, mode);
+  if (m === 'update') setStatus('inv_status', '', false);
+  if (m === 'manage') renderInvestmentManageList_();
+}
+
+function renderInvestmentManageList_() {
+  renderTrackedEditorManageList_({
+    hostId: 'inv_manage_list',
+    items: trackedEditorItemsFromSelect_('inv_account'),
+    itemLabel: 'Investment account',
+    emptyMessage: 'No active investment accounts are being tracked.',
+    addLabel: 'Add first investment',
+    onAdd: function() { setInvestmentPanelMode('add'); },
+    onUpdate: function(accountName) {
+      openTrackedEditorItemForUpdate_({
+        selectId: 'inv_account',
+        setMode: setInvestmentPanelMode,
+        loadSelection: loadInvestmentData
+      }, accountName);
+    },
+    onStop: function(accountName) {
+      stopTrackedEditorItem_({
+        selectId: 'inv_account',
+        stop: stopTrackingInvestment
+      }, accountName);
+    }
+  });
 }
 
 function loadInvestmentSection() {
@@ -1972,7 +1951,6 @@ function applyBankImportCsvPasteVisibility_() {
   const wrap = document.getElementById('bank_mode_import_wrap');
   if (wrap && !BANK_IMPORT_CSV_PASTE_ENABLED) {
     wrap.style.display = 'none';
-    wrap.classList.remove('active');
   }
 }
 

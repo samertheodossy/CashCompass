@@ -94,10 +94,10 @@ assert.match(recoveryUi, /cashcompass2026@gmail\.com[\s\S]*?never accepts an ema
   'Recovery Live UI must explain its fixed identity and target boundary');
 assert.match(validationUi, /single suite inventory and evidence dashboard[\s\S]*?All suites/,
   'Validation console must remain the consolidated suite inventory and evidence surface');
-assert.match(suites, /id: 'SUITE-FIRST-RUN-UX-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?FIRST_RUN_E2E_LATEST_EVIDENCE_V2/,
+assert.match(suites, /id: 'SUITE-FIRST-RUN-UX-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?FIRST_RUN_E2E_LATEST_EVIDENCE_V4/,
   'First-Run UX must be an implemented browser suite backed by saved evidence');
-assert.match(firstRunE2E, /FIRST_RUN_E2E_EVIDENCE_KEY_\s*=\s*'FIRST_RUN_E2E_LATEST_EVIDENCE_V2'/,
-  'The expanded customer-language contract must invalidate older eight-assertion evidence');
+assert.match(firstRunE2E, /FIRST_RUN_E2E_EVIDENCE_KEY_\s*=\s*'FIRST_RUN_E2E_LATEST_EVIDENCE_V4'/,
+  'The Save-only Update contract must invalidate older First-Run evidence');
 assert.match(firstRunE2E, /FIRST_RUN_E2E_TEST_EMAIL_\s*=\s*'cashcompass2026@gmail.com'/,
   'First-Run E2E must stay pinned to the permanent disposable identity');
 assert.match(firstRunE2E, /if \(isAdminUser_\(\)\) return false/,
@@ -122,11 +122,13 @@ assert.match(firstRunBrowser, /\.frE2EComplete\(cfg\.runId/,
   'The browser runner must save its evidence through the guarded completion seam');
 assert.match(firstRunE2E, /'customer_language'/,
   'First-Run E2E must require the whole-interface customer-language assertion');
+assert.match(firstRunE2E, /'empty_tracked_editor_modes'/,
+  'First-Run E2E must require empty-state coverage for converged tracked editors');
 assert.match(firstRunBrowser, /function customerLanguageLeaks\(/,
   'First-Run E2E must scan visible customer pages for internal workbook terminology');
-assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V1/,
+assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V3/,
   'Populated Dashboard E2E must be an implemented browser suite backed by saved evidence');
-assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V1'/,
+assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V3'/,
   'Populated Dashboard E2E must use its own versioned saved-evidence key');
 assert.doesNotMatch(populatedE2E, /function pdE2EPrepare\([^)]*(?:spreadsheet|workbook|file)Id/i,
   'Populated Dashboard preparation must never accept an arbitrary workbook target');
@@ -153,7 +155,7 @@ assert.match(populatedBrowser, /income_manage_list[\s\S]*?income_other_detected/
 assert.match(populatedBrowser,
   /incomeMainHasExpected[\s\S]*?incomeOtherHasExpected[\s\S]*?add\('income_setup_consistency'/,
   'Populated Dashboard E2E must fail when Income and Setup classify the salary differently');
-for (const assertionId of ['overview_kpis', 'bank_selection_actions', 'debt_selection_actions',
+for (const assertionId of ['overview_kpis', 'bank_selection_actions', 'tracked_editor_convergence', 'debt_selection_actions',
   'property_equity', 'populated_workspaces', 'income_setup_consistency', 'subtab_retention', 'setup_help_language',
   'customer_language', 'refresh_button_state', 'clean_console_navigation']) {
   assert.ok(populatedE2E.includes(`'${assertionId}'`), `Populated Dashboard contract missing ${assertionId}`);

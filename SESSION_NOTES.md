@@ -2,6 +2,53 @@
 
 The V1 trust baseline is shipped and locked, and V1.1 closed out with the retirement profile integration (see **V1.1 — Retirement Profile Integration (DOB Source of Truth)** section below). The project has since moved into **Central App live + Family Beta readiness** — the Central App architecture is operational and the active work is hardening it toward a family beta (see **Current State — Post V1.2 Prep** below for the per-slice migration record). Working rules live in `WORKING_RULES.md → Current phase` + `→ Central App Transition Rules` (now active); product framing lives in `PROJECT_CONTEXT.md → Current phase` and `→ Current architecture — Central App (live)`. All prior phase notes below this header are preserved as-is for historical record.
 
+- **Tracked-editor destructive-action cleanup — isolated `@195` PASS
+  (2026-07-24).** Following the `@194` convergence walkthrough, removed the
+  duplicate **Stop tracking** controls from the Bank Account, Investment,
+  House, and Debt **Update** panels (including the Debt "Danger zone") and from
+  the older sidebar Update forms. Update is now Save-only; destructive
+  lifecycle actions live in the corresponding **Manage** inventory and keep
+  their existing confirmation dialogs, history preservation, and
+  feature-specific writers. Static UX contracts now prevent destructive
+  controls from returning to Update while requiring Stop tracking in Manage.
+  First-Run and Populated browser evidence keys advanced to V4 and V3,
+  respectively, so the `@194` results remain valid historical evidence but
+  cannot satisfy this changed contract. No schema, financial calculation, or
+  workbook write behavior changed. With explicit approval, the shared source was pushed to Central,
+  immutable version `195` was created, and only the isolated validation
+  deployment advanced to `@195`; Beta remained `@106` and the bounded
+  deployment/workbook were untouched. The prior exact marker-verified
+  `cashcompass2026@gmail.com` disposable fixture was moved to recoverable Drive
+  Trash through the guarded preflight, a fresh Restricted workbook was
+  provisioned through the production Central path, and the root app was
+  verified at the clean **Welcome to CashCompass** screen for user walkthrough.
+  After the walkthrough, the full local `npm test` pack passed. The initially
+  resumed First-Run run correctly failed because the walkthrough had made its
+  fixture non-fresh; it still verified and trashed that exact fixture. The
+  clean rerun `FR-a1df6d9b-c123-4759-b08e-438d4047bf4c` then passed First-Run
+  V4 **10/10** in 116.282 s. Populated V3 run
+  `FR-158bd6a2-bcb9-41b3-addc-180369266010` passed **13/13** in 127.503 s,
+  explicitly proving Save-only Update for Bank/Debt, Update/Add/Manage
+  convergence plus Manage-only Stop tracking for Bank/House/Investment, and
+  Manage-only Stop tracking for Debt. Both accepted runs had zero browser
+  errors, Restricted single-owner sharing, and exact verified Trash cleanup.
+
+- **Tracked-editor convergence — isolated `@194` PASS (2026-07-24).**
+  Bank Accounts, Investments, and Houses now use the consistent **Update · Add
+  new · Manage** hierarchy. A shared client layer owns mode selection, active
+  inventory rendering, Update focus, Stop routing, responsive rows, and empty
+  states; all financial writers, schemas, and feature-specific confirmations
+  remain unchanged. Setup explicitly preserves Add versus Manage intent, and
+  Bank import utilities moved under Manage accounts. Static Dashboard UX plus
+  First-Run and Populated disposable browser contracts now cover empty and
+  populated editor states; saved evidence keys advanced to First-Run V3 and
+  Populated V2 so previous passes cannot satisfy the new contract. First-Run
+  run `FR-9b0914ad-1125-46c2-afe2-4f82688f1646` passed 10/10 in 82.351 s;
+  Populated run `FR-465d30b2-77da-46db-bc67-4070394ee1c7` passed 13/13 in
+  131.091 s. Both verified Restricted single-owner sharing, zero browser
+  errors, and exact fixture Trash cleanup. No Beta, bounded deployment, or
+  bounded workbook was touched.
+
 - **Bills completion flow and clean disposable handoff — isolated `@193` PASS
   (2026-07-24).** Bills now uses three explicit views: **Due this period · Add
   bill · Manage bills**. Setup preserves Add versus Manage intent, while normal

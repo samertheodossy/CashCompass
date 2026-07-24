@@ -50,6 +50,14 @@
     });
   }
 
+  function manageHasStop(hostId) {
+    var host = document.getElementById(hostId);
+    var buttons = host ? host.querySelectorAll('button') : [];
+    return Array.prototype.some.call(buttons, function(button) {
+      return /stop tracking/i.test(String(button.textContent || ''));
+    });
+  }
+
   function expectedCurrency(value) {
     return typeof fmtCurrency === 'function' ? fmtCurrency(Number(value)) : String(value);
   }
@@ -141,13 +149,56 @@
       }, 90000, 'the populated Bank account');
       var bankSelect = document.getElementById('bank_account');
       var bankSave = document.getElementById('bank_update_save_btn');
-      var bankStop = document.getElementById('bank_update_stop_btn');
       var bankPass = !!(bankSelect && bankSelect.value === expected.bankName && bankSave && !bankSave.disabled &&
-        bankStop && !bankStop.disabled);
+        !document.getElementById('bank_update_stop_btn'));
       add('bank_selection_actions', bankPass, bankPass
-        ? 'The synthetic Bank account selected and its guarded actions became available.'
+        ? 'The synthetic Bank account selected, Save became available, and Update remained free of destructive actions.'
         : 'The populated Bank selector or its action gating was incorrect.');
       customerLeaks = customerLeaks.concat(customerLanguageLeaks('Assets → Bank'));
+
+      var trackedEditorFailures = [];
+      if (typeof setBankPanelMode === 'function') setBankPanelMode('manage');
+      if (String(text('bank_manage_list')).indexOf(expected.bankName) === -1 ||
+          !manageHasStop('bank_manage_list')) {
+        trackedEditorFailures.push('Bank manage inventory');
+      }
+
+      if (typeof showTab === 'function') showTab('houses');
+      if (typeof loadHouseSectionThenSelect_ === 'function') loadHouseSectionThenSelect_(expected.houseName);
+      await waitFor(function() {
+        return hasOption('house_house', expected.houseName);
+      }, 90000, 'the populated House editor');
+      if (typeof setHousePanelMode === 'function') setHousePanelMode('manage');
+      if (String(text('house_manage_list')).indexOf(expected.houseName) === -1 ||
+          !manageHasStop('house_manage_list') || document.getElementById('house_stop_btn')) {
+        trackedEditorFailures.push('House manage inventory');
+      }
+
+      if (typeof showTab === 'function') showTab('investments');
+      if (typeof loadInvestmentSectionThenSelect_ === 'function') loadInvestmentSectionThenSelect_(expected.investmentName);
+      await waitFor(function() {
+        return hasOption('inv_account', expected.investmentName);
+      }, 90000, 'the populated Investment editor');
+      if (typeof setInvestmentPanelMode === 'function') setInvestmentPanelMode('manage');
+      if (String(text('inv_manage_list')).indexOf(expected.investmentName) === -1 ||
+          !manageHasStop('inv_manage_list') || document.getElementById('inv_update_stop_btn')) {
+        trackedEditorFailures.push('Investment manage inventory');
+      }
+      if (document.getElementById('bank_update_stop_btn')) {
+        trackedEditorFailures.push('Bank destructive action in Update');
+      }
+      ['bank', 'house', 'inv'].forEach(function(prefix) {
+        ['update', 'add', 'manage'].forEach(function(mode) {
+          if (!document.getElementById(prefix + '_mode_' + mode + '_btn') ||
+              !document.getElementById(prefix + '_mode_' + mode + '_wrap')) {
+            trackedEditorFailures.push(prefix + ' ' + mode + ' mode');
+          }
+        });
+      });
+      add('tracked_editor_convergence', trackedEditorFailures.length === 0,
+        trackedEditorFailures.length
+          ? ('Tracked-editor gaps: ' + trackedEditorFailures.join(', '))
+          : 'Bank Accounts, Houses, and Investments keep Update Save-only and expose Stop tracking only in Manage.');
 
       if (typeof showTab === 'function') showTab('debts');
       if (typeof loadDebtSectionThenSelect_ === 'function') loadDebtSectionThenSelect_(expected.debtName);
@@ -155,18 +206,24 @@
         var field = document.getElementById('debt_field');
         var selected = document.getElementById('debt_account');
         var save = document.getElementById('debt_update_save_btn');
-        var stop = document.getElementById('debt_update_stop_btn');
         return hasOption('debt_account', expected.debtName) && selected &&
           selected.value === expected.debtName && field && field.options && field.options.length > 0 &&
-          text('debt_currentValue') !== '—' && save && !save.disabled && stop && !stop.disabled;
+          text('debt_currentValue') !== '—' && save && !save.disabled;
       }, 90000, 'the populated Debt selection and actions');
       var debtSelect = document.getElementById('debt_account');
       var debtSave = document.getElementById('debt_update_save_btn');
-      var debtStop = document.getElementById('debt_update_stop_btn');
       var debtPass = !!(debtSelect && debtSelect.value === expected.debtName && debtSave && !debtSave.disabled &&
-        debtStop && !debtStop.disabled);
+        !document.getElementById('debt_update_stop_btn') &&
+        !document.getElementById('debt_update_stop_zone'));
+      if (typeof setDebtPanelMode === 'function') setDebtPanelMode('manage');
+      await waitFor(function() {
+        return String(text('debt_manage_list')).indexOf(expected.debtName) !== -1 &&
+          manageHasStop('debt_manage_list');
+      }, 90000, 'the populated Debt Manage inventory');
+      debtPass = debtPass && String(text('debt_manage_list')).indexOf(expected.debtName) !== -1 &&
+        manageHasStop('debt_manage_list');
       add('debt_selection_actions', debtPass, debtPass
-        ? 'The synthetic Debt account selected and its guarded actions became available.'
+        ? 'The synthetic Debt selected with Save in Update and confirmed Stop tracking available only in Manage.'
         : 'The populated Debt selector or its action gating was incorrect.');
 
       if (typeof showTab === 'function') showTab('propertyPerformance');

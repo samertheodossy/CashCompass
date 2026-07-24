@@ -53,11 +53,19 @@ boolean disposable-account confirmation and no workbook ID. It verifies the exac
 owner/name/durable-marker/forward-mapping/reverse-index identity before bootstrap,
 each seed write, dashboard execution, completion, and cleanup. Assertions cover direct
 populated Overview routing; deterministic cash, investment, real-estate, debt, and net-
-worth KPIs; Bank/Debt selection and action gating; property equity; representative
+worth KPIs; Bank/Debt selection and Save-only Update gating; Bank/Investment/House
+tracked-editor modes plus populated Manage inventories with Stop tracking; property equity; representative
 Investments/Upcoming/Bills/Income rendering; subtab retention; populated Setup and Help;
 customer-language leakage; real planner Refresh state; and clean console/navigation.
-Evidence is saved under `POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V1`; PASS requires
+Evidence is saved under `POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V3`; PASS requires
 Restricted sharing and exact Drive-verified Trash cleanup.
+
+**`@195` tracked-editor evidence:** First-Run V4 run
+`FR-a1df6d9b-c123-4759-b08e-438d4047bf4c` passed 10/10 in 116.282 s;
+Populated V3 run `FR-158bd6a2-bcb9-41b3-addc-180369266010` passed 13/13
+in 127.503 s. The pair verifies Save-only Update panels, Stop tracking in
+Manage inventories, zero browser errors, Restricted single-owner sharing, and
+exact verified Trash cleanup.
 
 **`@133` Populated Dashboard browser evidence:** run
 `FR-19eb43ab-e8fe-4bc8-96a5-336afff43596` passed 11/11 assertions in 126.323 s,

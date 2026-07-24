@@ -169,7 +169,7 @@ function getHarnessSuites_() {
       implemented: true,
       runner: 'browser',
       browserRoute: 'first-run-e2e',
-      evidenceKey: 'FIRST_RUN_E2E_LATEST_EVIDENCE_V2',
+      evidenceKey: 'FIRST_RUN_E2E_LATEST_EVIDENCE_V4',
       blocker: null,
       scenarioIds: []
     },
@@ -180,7 +180,7 @@ function getHarnessSuites_() {
       implemented: true,
       runner: 'browser',
       browserRoute: 'populated-dashboard-e2e',
-      evidenceKey: 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V1',
+      evidenceKey: 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V3',
       blocker: null,
       scenarioIds: []
     },
