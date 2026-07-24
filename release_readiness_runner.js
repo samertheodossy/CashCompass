@@ -104,7 +104,17 @@ function releaseReadinessRunNextChunk() {
 
 function releaseReadinessGetStatus() {
   assertValidatorAllowed_();
-  return releaseLoadState_();
+  var state = releaseLoadState_();
+  if (!state || state.status !== 'IN_PROGRESS' || !state.inventory) return state;
+  var refreshedEvidence = releaseLoadExternalEvidence_(
+    state.inventory.externalSuites, state.candidate, state.runId
+  );
+  if (JSON.stringify(state.externalEvidence || {}) !== JSON.stringify(refreshedEvidence)) {
+    state.externalEvidence = refreshedEvidence;
+    state.updatedAt = new Date().toISOString();
+    releaseSaveState_(state);
+  }
+  return state;
 }
 
 function releaseReadinessFinalize() {

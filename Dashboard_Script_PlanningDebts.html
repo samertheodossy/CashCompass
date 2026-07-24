@@ -11,8 +11,17 @@ function loadDebtSection() {
   const sectionRequestId = ++debtSectionRequestId_;
   debtUpdateDetailsReady_ = false;
   updateDebtUpdateAvailability_();
-  google.script.run
-    .withSuccessHandler(function(data) {
+  runReadOnlyRpcWithRetry_({
+    isCurrent: function() {
+      return sectionRequestId === debtSectionRequestId_;
+    },
+    invoke: function(onSuccess, onFailure) {
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onFailure)
+        .getDebtsUiData();
+    },
+    onSuccess: function(data) {
       if (sectionRequestId !== debtSectionRequestId_) return;
       allDebtRows = data.debts || [];
 
@@ -41,20 +50,35 @@ function loadDebtSection() {
       if (pendingFocus && pendingFocus.tab === 'debts') {
         focusDebtTarget_(pendingFocus);
       }
-    })
-    .withFailureHandler(function(err) {
+    },
+    onRetry: function(info) {
+      setStatusLoading('debt_status', info.message);
+    },
+    onRecovered: function() {
+      setStatus('debt_status', '', false);
+    },
+    onFailure: function(err) {
       if (sectionRequestId !== debtSectionRequestId_) return;
       setStatus('debt_status', (err.message || String(err)), true);
-    })
-    .getDebtsUiData();
+    }
+  });
 }
 
 function loadDebtSectionThenSelect_(accountName) {
   const sectionRequestId = ++debtSectionRequestId_;
   debtUpdateDetailsReady_ = false;
   updateDebtUpdateAvailability_();
-  google.script.run
-    .withSuccessHandler(function(data) {
+  runReadOnlyRpcWithRetry_({
+    isCurrent: function() {
+      return sectionRequestId === debtSectionRequestId_;
+    },
+    invoke: function(onSuccess, onFailure) {
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onFailure)
+        .getDebtsUiData();
+    },
+    onSuccess: function(data) {
       if (sectionRequestId !== debtSectionRequestId_) return;
       allDebtRows = data.debts || [];
       const typeSel = document.getElementById('debt_typeFilter');
@@ -81,12 +105,18 @@ function loadDebtSectionThenSelect_(accountName) {
         sel.value = accountName;
         loadDebtFieldValue();
       }
-    })
-    .withFailureHandler(function(err) {
+    },
+    onRetry: function(info) {
+      setStatusLoading('debt_status', info.message);
+    },
+    onRecovered: function() {
+      setStatus('debt_status', '', false);
+    },
+    onFailure: function(err) {
       if (sectionRequestId !== debtSectionRequestId_) return;
       setStatus('debt_status', (err.message || String(err)), true);
-    })
-    .getDebtsUiData();
+    }
+  });
 }
 
 // First-run fallback for the Debt Type dropdown. Used only when the
@@ -1076,8 +1106,19 @@ function loadDebtFieldValue(quiet) {
   }
 
   if (!quiet) setStatusLoading('debt_status');
-  google.script.run
-    .withSuccessHandler(function(data) {
+  runReadOnlyRpcWithRetry_({
+    isCurrent: function() {
+      return requestId === debtUpdateDetailsRequestId_ &&
+        document.getElementById('debt_account').value === accountName &&
+        document.getElementById('debt_field').value === fieldName;
+    },
+    invoke: function(onSuccess, onFailure) {
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onFailure)
+        .getDebtFieldValue(accountName, fieldName);
+    },
+    onSuccess: function(data) {
       if (requestId !== debtUpdateDetailsRequestId_ ||
           document.getElementById('debt_account').value !== accountName ||
           document.getElementById('debt_field').value !== fieldName) {
@@ -1105,16 +1146,19 @@ function loadDebtFieldValue(quiet) {
       debtUpdateDetailsReady_ = true;
       updateDebtUpdateAvailability_();
       if (!quiet) setStatus('debt_status', '', false);
-    })
-    .withFailureHandler(function(err) {
+    },
+    onRetry: function(info) {
+      if (!quiet) setStatusLoading('debt_status', info.message);
+    },
+    onFailure: function(err) {
       if (requestId !== debtUpdateDetailsRequestId_) return;
       debtUpdateDetailsReady_ = false;
       updateDebtUpdateAvailability_();
       // Even in quiet mode, surface failures so users aren't left with
       // a stale info panel and no signal that something went wrong.
       setStatus('debt_status', (err.message || String(err)), true);
-    })
-    .getDebtFieldValue(accountName, fieldName);
+    }
+  });
 }
 
 function saveDebt() {

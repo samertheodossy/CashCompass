@@ -51,8 +51,14 @@ function loadIncomeSourcesSection() {
   if (!el) return;
   el.innerHTML = loadingBlockHtml('Loading income sources…');
 
-  google.script.run
-    .withSuccessHandler(function(rows) {
+  runReadOnlyRpcWithRetry_({
+    invoke: function(onSuccess, onFailure) {
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onFailure)
+        .getActiveIncomeSourcesForManagementFromDashboard();
+    },
+    onSuccess: function(rows) {
       var list = Array.isArray(rows) ? rows : [];
       var updatedEl = document.getElementById('income_updated');
       if (updatedEl) {
@@ -63,15 +69,18 @@ function loadIncomeSourcesSection() {
         }
       }
       renderIncomeSourcesList_(list);
-    })
-    .withFailureHandler(function(err) {
+    },
+    onRetry: function() {
+      el.innerHTML = loadingBlockHtml('Connection interrupted. Retrying income sources…');
+    },
+    onFailure: function(err) {
       el.innerHTML =
         '<div class="muted">Couldn&rsquo;t load income sources &mdash; ' +
         escapeHtml(customerSafeErrorMessage_(err && err.message ? err.message : String(err),
           'Could not load income sources. Please refresh and try again.')) +
         '</div>';
-    })
-    .getActiveIncomeSourcesForManagementFromDashboard();
+    }
+  });
 }
 
 function renderIncomeSourcesList_(rows) {

@@ -105,7 +105,10 @@ function loadBillsDueUi_() {
       renderBillsDueSummary_(data || {});
     })
     .withFailureHandler(function(err) {
-      const msg = "Couldn't load bills due — " + (err.message || String(err));
+      const msg = customerSafeErrorMessage_(
+        err && err.message ? err.message : String(err),
+        'Could not load bills due. Please refresh and try again.'
+      );
       renderBillsList_('bd_overdueList', [], msg);
       renderBillsList_('bd_next7List', [], msg);
       renderBillsDueSummary_({ overdue: [], next7: [] }, msg);
@@ -362,7 +365,9 @@ function loadRecurringBillsUi_() {
       renderRecurringBillsList_('bd_recurringList', rows, 'No recurring bills pending.');
     })
     .withFailureHandler(function(err) {
-      renderRecurringBillsList_('bd_recurringList', [], (err.message || String(err)));
+      renderRecurringBillsList_('bd_recurringList', [],
+        customerSafeErrorMessage_(err && err.message ? err.message : String(err),
+          'Could not load recurring bills. Please refresh and try again.'));
     })
     .getRecurringBillsWithoutDueDateForDashboard();
 }

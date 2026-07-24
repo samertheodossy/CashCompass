@@ -262,6 +262,48 @@ assert.match(validationUi, /function vtRROpenBrowserSuite_\(suiteId\)[\s\S]*?vtO
   'Release Readiness must provide a dedicated exact-owner browser launch path');
 assert.match(validationUi, /function vtHRunSuite\(\)[\s\S]*?\.vtOpenHarnessBrowserRunner\(suiteId\)/,
   'The generic suite launcher must omit Release Readiness ownership and remain diagnostic-only');
+const launcherStart = validationServer.indexOf('function vtOpenHarnessBrowserRunner(');
+const launcherEnd = validationServer.indexOf(
+  '/* -------------------------------------------------------------------------- */\n/*  Release Readiness',
+  launcherStart
+);
+assert.ok(launcherStart >= 0 && launcherEnd > launcherStart,
+  'The exact-owner launcher must remain dynamically testable');
+const launcherCtx = vm.createContext({
+  vtSafe_: (fn) => fn(),
+  assertValidatorAllowed_: () => {},
+  getHarnessSuiteById_: (suiteId) => suiteId === 'SUITE-POPULATED-DASHBOARD-E2E'
+    ? { runner: 'browser', browserRoute: 'populated-dashboard-e2e' }
+    : null,
+  releaseSanitizeMetadata_: (value) => String(value || '').trim(),
+  releaseBrowserEvidenceContext_: (runId) => ({
+    releaseEligible: runId === 'RR-exact'
+  }),
+  ScriptApp: {
+    getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/example/exec' })
+  },
+  String,
+  encodeURIComponent,
+  Error
+});
+vm.runInContext(validationServer.slice(launcherStart, launcherEnd), launcherCtx);
+const exactLaunch = launcherCtx.vtOpenHarnessBrowserRunner(
+  'SUITE-POPULATED-DASHBOARD-E2E',
+  'RR-exact'
+);
+assert.equal(exactLaunch.releaseOwned, true,
+  'The dedicated launcher must label the exact active Release Readiness owner');
+assert.match(exactLaunch.launchUrl, /view=populated-dashboard-e2e&releaseRunId=RR-exact$/,
+  'The dedicated launcher must carry the validated exact owner into the guarded browser adapter');
+assert.throws(
+  () => launcherCtx.vtOpenHarnessBrowserRunner('SUITE-POPULATED-DASHBOARD-E2E', 'RR-stale'),
+  /not the active browser-evidence owner/,
+  'The dedicated launcher must reject a stale or different Release Readiness owner');
+const standaloneLaunch = launcherCtx.vtOpenHarnessBrowserRunner('SUITE-POPULATED-DASHBOARD-E2E');
+assert.equal(standaloneLaunch.releaseOwned, false,
+  'The generic launcher must remain diagnostic-only');
+assert.doesNotMatch(standaloneLaunch.launchUrl, /releaseRunId=/,
+  'The generic launcher must never synthesize an evidence owner');
 assert.match(performanceSampling, /RELEASE_PERFORMANCE_BUDGET_RATIFIED_KEY_[\s\S]*?evidenceContext\.releaseEligible \? 'true' : 'false'/,
   'Diagnostic-only performance sampling must not ratify a release budget');
 assert.match(validationServer, /function vtReleaseReadinessStart\(spreadsheetId, metadata\)[\s\S]*?spreadsheetId is intentionally ignored[\s\S]*?releaseReadinessStart\(metadata/,
@@ -338,8 +380,10 @@ const debtRaceCtx = vm.createContext({
     debtAccountSelect.value = '';
     debtAccountSelect.options = [{ value: '' }, { value: 'Synthetic Visa' }];
   },
+  runReadOnlyRpcWithRetry_: (options) => options.invoke(options.onSuccess, options.onFailure),
   loadDebtFieldValue: () => {},
-  setStatus: () => {}
+  setStatus: () => {},
+  setStatusLoading: () => {}
 });
 vm.runInContext(debtLoaderMatch[0].replace(/\n\/\/ First-run fallback$/, ''), debtRaceCtx);
 debtRaceCtx.loadDebtSection();
@@ -433,6 +477,30 @@ const capturedBrowserContext = verdictCtx.releaseBrowserEvidenceContext_(baseSta
 assert.equal(capturedBrowserContext.releaseEligible, true,
   'An explicitly requested active Release Readiness run must provide an exact browser-evidence owner');
 assert.equal(capturedBrowserContext.releaseRunId, baseState.runId);
+const populatedSuite = verdictCtx.getHarnessSuiteById_('SUITE-POPULATED-DASHBOARD-E2E');
+props.setProperty(populatedSuite.evidenceKey, JSON.stringify({
+  suiteId: populatedSuite.id,
+  runId: 'FR-refresh-pass',
+  finishedAt: new Date().toISOString(),
+  overall: 'PASS',
+  releaseEligible: true,
+  releaseRunId: baseState.runId,
+  candidate: baseState.candidate,
+  cleanup: { verified: true }
+}));
+const refreshedStatus = verdictCtx.releaseReadinessGetStatus();
+assert.equal(refreshedStatus.externalEvidence[populatedSuite.id].overall, 'PASS',
+  'Refresh status must ingest newly completed exact-owner browser evidence without finalizing the run');
+assert.equal(refreshedStatus.status, 'IN_PROGRESS',
+  'Refreshing browser evidence must not finalize the active readiness run');
+assert.equal(
+  JSON.parse(props.getProperty('RELEASE_READINESS_ACTIVE_RUN_V1'))
+    .externalEvidence[populatedSuite.id].runId,
+  'FR-refresh-pass',
+  'Refresh status must persist reconciled compact browser evidence for later resume'
+);
+props.deleteProperty(populatedSuite.evidenceKey);
+props.setProperty('RELEASE_READINESS_ACTIVE_RUN_V1', JSON.stringify(baseState));
 props.setProperty('RELEASE_READINESS_ACTIVE_RUN_V1', JSON.stringify({
   ...baseState, runId: 'RR-replaced'
 }));

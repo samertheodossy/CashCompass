@@ -214,17 +214,29 @@ function loadPaymentSection() {
   // showTab('payments') (which triggers this function), so an entry-time
   // clear would race-erase a freshly-set prefill. The success handler
   // below consumes-and-clears it once the dropdown is populated.
-  google.script.run
-    .withSuccessHandler(function(data) {
+  runReadOnlyRpcWithRetry_({
+    invoke: function(onSuccess, onFailure) {
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onFailure)
+        .getQuickAddPaymentUiData();
+    },
+    onSuccess: function(data) {
       paymentPayees = data.payees || [];
       filterPaymentPayees();
       consumePendingQuickAddPayeePrefill_();
       loadPaymentPreview();
-    })
-    .withFailureHandler(function(err) {
+    },
+    onRetry: function(info) {
+      setStatusLoading('pay_status', info.message);
+    },
+    onRecovered: function() {
+      setStatus('pay_status', '', false);
+    },
+    onFailure: function(err) {
       setStatus('pay_status', (err.message || String(err)), true);
-    })
-    .getQuickAddPaymentUiData();
+    }
+  });
 }
 
 /**

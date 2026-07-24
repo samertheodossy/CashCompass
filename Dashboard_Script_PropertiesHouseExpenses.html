@@ -25,8 +25,14 @@ function updateHouseExpenseAvailability_() {
 function loadHouseExpensesSection() {
   document.getElementById('hx_date').value = new Date().toISOString().slice(0, 10);
 
-  google.script.run
-    .withSuccessHandler(function(data) {
+  runReadOnlyRpcWithRetry_({
+    invoke: function(onSuccess, onFailure) {
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onFailure)
+        .getHouseExpenseUiData();
+    },
+    onSuccess: function(data) {
       houseExpenseOptions = (data && data.houses) || [];
 
       const sel = document.getElementById('hx_house');
@@ -51,11 +57,14 @@ function loadHouseExpensesSection() {
       loadRecentHouseExpenses();
       loadHouseExpenseSummaries();
       setStatus('hx_status', '', false);
-    })
-    .withFailureHandler(function(err) {
+    },
+    onRetry: function(info) {
+      setStatusLoading('hx_status', info.message);
+    },
+    onFailure: function(err) {
       setStatus('hx_status', (err.message || String(err)), true);
-    })
-    .getHouseExpenseUiData();
+    }
+  });
 }
 
 function loadRecentHouseExpenses() {

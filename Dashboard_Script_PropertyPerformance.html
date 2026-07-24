@@ -12,8 +12,14 @@ function loadPropertyPerformanceSection() {
       '<tr><td colspan="9" style="padding:0;">' + loadingBlockHtml('Loading…', true) + '</td></tr>';
   }
 
-  google.script.run
-    .withSuccessHandler(function(data) {
+  runReadOnlyRpcWithRetry_({
+    invoke: function(onSuccess, onFailure) {
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onFailure)
+        .getPropertyPerformanceData({ year: year });
+    },
+    onSuccess: function(data) {
       setStatus('pp_status', '', false);
 
       if (data && data.yearOptions && yearSel) {
@@ -77,13 +83,16 @@ function loadPropertyPerformanceSection() {
           '</tr>'
         );
       }).join('');
-    })
-    .withFailureHandler(function(err) {
+    },
+    onRetry: function(info) {
+      setStatusLoading('pp_status', info.message);
+    },
+    onFailure: function(err) {
       setStatus('pp_status', (err.message || String(err)), true);
       const tbody = document.getElementById('pp_tbody');
       if (tbody) {
         tbody.innerHTML = '<tr><td colspan="9" class="muted" style="padding:12px;">Could not load.</td></tr>';
       }
-    })
-    .getPropertyPerformanceData({ year: year });
+    }
+  });
 }

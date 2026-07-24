@@ -371,15 +371,27 @@ function loadBankSection() {
   if (typeof applyBankImportCsvPasteVisibility_ === 'function') {
     applyBankImportCsvPasteVisibility_();
   }
-  google.script.run
-    .withSuccessHandler(function(data) {
+  runReadOnlyRpcWithRetry_({
+    invoke: function(onSuccess, onFailure) {
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onFailure)
+        .getBankAccountUiData();
+    },
+    onSuccess: function(data) {
       fillBankAccountDropdownFromData_(data);
       if (pendingFocus && pendingFocus.tab === 'bank') focusBankTarget_(pendingFocus);
-    })
-    .withFailureHandler(function(err) {
+    },
+    onRetry: function(info) {
+      setStatusLoading('bank_status', info.message);
+    },
+    onRecovered: function() {
+      setStatus('bank_status', '', false);
+    },
+    onFailure: function(err) {
       setStatus('bank_status', (err.message || String(err)), true);
-    })
-    .getBankAccountUiData();
+    }
+  });
 }
 
 function loadBankSectionThenSelect_(accountName) {
@@ -387,8 +399,14 @@ function loadBankSectionThenSelect_(accountName) {
     document.getElementById('bank_date').value || new Date().toISOString().slice(0, 10);
   bankUpdateDetailsReady_ = false;
   updateBankUpdateAvailability_();
-  google.script.run
-    .withSuccessHandler(function(data) {
+  runReadOnlyRpcWithRetry_({
+    invoke: function(onSuccess, onFailure) {
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onFailure)
+        .getBankAccountUiData();
+    },
+    onSuccess: function(data) {
       fillBankAccountDropdownFromData_(data);
       const sel = document.getElementById('bank_account');
       if (sel && accountName) {
@@ -396,11 +414,17 @@ function loadBankSectionThenSelect_(accountName) {
         loadBankData();
       }
       if (pendingFocus && pendingFocus.tab === 'bank') focusBankTarget_(pendingFocus);
-    })
-    .withFailureHandler(function(err) {
+    },
+    onRetry: function(info) {
+      setStatusLoading('bank_status', info.message);
+    },
+    onRecovered: function() {
+      setStatus('bank_status', '', false);
+    },
+    onFailure: function(err) {
       setStatus('bank_status', (err.message || String(err)), true);
-    })
-    .getBankAccountUiData();
+    }
+  });
 }
 
 function evaluateBankBufferWarning() {
@@ -470,8 +494,19 @@ function loadBankData(quiet) {
   }
 
   if (!quiet) setStatusLoading('bank_status');
-  google.script.run
-    .withSuccessHandler(function(data) {
+  runReadOnlyRpcWithRetry_({
+    isCurrent: function() {
+      return requestId === bankUpdateDetailsRequestId_ &&
+        document.getElementById('bank_account').value === account &&
+        document.getElementById('bank_date').value === date;
+    },
+    invoke: function(onSuccess, onFailure) {
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onFailure)
+        .getBankAccountValueForDate(account, date);
+    },
+    onSuccess: function(data) {
       if (requestId !== bankUpdateDetailsRequestId_ ||
           document.getElementById('bank_account').value !== account ||
           document.getElementById('bank_date').value !== date) {
@@ -508,16 +543,19 @@ function loadBankData(quiet) {
       updateBankUpdateAvailability_();
       evaluateBankBufferWarning();
       if (!quiet) setStatus('bank_status', '', false);
-    })
-    .withFailureHandler(function(err) {
+    },
+    onRetry: function(info) {
+      if (!quiet) setStatusLoading('bank_status', info.message);
+    },
+    onFailure: function(err) {
       if (requestId !== bankUpdateDetailsRequestId_) return;
       bankUpdateDetailsReady_ = false;
       updateBankUpdateAvailability_();
       // Even in quiet mode, surface failures so users aren't left
       // with a stale info panel and no signal that something went wrong.
       setStatus('bank_status', (err.message || String(err)), true);
-    })
-    .getBankAccountValueForDate(account, date);
+    }
+  });
 }
 
 function createBankAccount() {
@@ -894,32 +932,56 @@ function setInvestmentPanelMode(mode) {
 
 function loadInvestmentSection() {
   document.getElementById('inv_date').value = new Date().toISOString().slice(0, 10);
-  google.script.run
-    .withSuccessHandler(function(data) {
+  runReadOnlyRpcWithRetry_({
+    invoke: function(onSuccess, onFailure) {
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onFailure)
+        .getInvestmentUiData();
+    },
+    onSuccess: function(data) {
       fillInvestmentAccountDropdownFromData_(data);
-    })
-    .withFailureHandler(function(err) {
+    },
+    onRetry: function(info) {
+      setStatusLoading('inv_status', info.message);
+    },
+    onRecovered: function() {
+      setStatus('inv_status', '', false);
+    },
+    onFailure: function(err) {
       setStatus('inv_status', (err.message || String(err)), true);
-    })
-    .getInvestmentUiData();
+    }
+  });
 }
 
 function loadInvestmentSectionThenSelect_(accountName) {
   document.getElementById('inv_date').value =
     document.getElementById('inv_date').value || new Date().toISOString().slice(0, 10);
-  google.script.run
-    .withSuccessHandler(function(data) {
+  runReadOnlyRpcWithRetry_({
+    invoke: function(onSuccess, onFailure) {
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onFailure)
+        .getInvestmentUiData();
+    },
+    onSuccess: function(data) {
       fillInvestmentAccountDropdownFromData_(data);
       const sel = document.getElementById('inv_account');
       if (sel && accountName) {
         sel.value = accountName;
         loadInvestmentData();
       }
-    })
-    .withFailureHandler(function(err) {
+    },
+    onRetry: function(info) {
+      setStatusLoading('inv_status', info.message);
+    },
+    onRecovered: function() {
+      setStatus('inv_status', '', false);
+    },
+    onFailure: function(err) {
       setStatus('inv_status', (err.message || String(err)), true);
-    })
-    .getInvestmentUiData();
+    }
+  });
 }
 
 // `quiet` lets the post-save refresh repaint the right-side info panel
@@ -942,8 +1004,14 @@ function loadInvestmentData(quiet) {
   }
 
   if (!quiet) setStatusLoading('inv_status');
-  google.script.run
-    .withSuccessHandler(function(data) {
+  runReadOnlyRpcWithRetry_({
+    invoke: function(onSuccess, onFailure) {
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onFailure)
+        .getInvestmentValueForDate(account, date);
+    },
+    onSuccess: function(data) {
       document.getElementById('inv_selectedMonth').textContent = data.selectedMonth || '—';
       document.getElementById('inv_selectedMonthValue').textContent =
         data.selectedMonthValue !== '' ? fmtCurrency(data.selectedMonthValue) : '—';
@@ -965,13 +1033,16 @@ function loadInvestmentData(quiet) {
       }
 
       if (!quiet) setStatus('inv_status', '', false);
-    })
-    .withFailureHandler(function(err) {
+    },
+    onRetry: function(info) {
+      if (!quiet) setStatusLoading('inv_status', info.message);
+    },
+    onFailure: function(err) {
       // Surface failures even in quiet mode so users aren't left with
       // a stale info panel and no signal that something went wrong.
       setStatus('inv_status', (err.message || String(err)), true);
-    })
-    .getInvestmentValueForDate(account, date);
+    }
+  });
 }
 
 function saveInvestment() {

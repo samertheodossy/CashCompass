@@ -2,6 +2,44 @@
 
 The V1 trust baseline is shipped and locked, and V1.1 closed out with the retirement profile integration (see **V1.1 — Retirement Profile Integration (DOB Source of Truth)** section below). The project has since moved into **Central App live + Family Beta readiness** — the Central App architecture is operational and the active work is hardening it toward a family beta (see **Current State — Post V1.2 Prep** below for the per-slice migration record). Working rules live in `WORKING_RULES.md → Current phase` + `→ Central App Transition Rules` (now active); product framing lives in `PROJECT_CONTEXT.md → Current phase` and `→ Current architecture — Central App (live)`. All prior phase notes below this header are preserved as-is for historical record.
 
+- **`1a` / `1b` isolated runtime and REG-019 refresh finding (2026-07-24).**
+  Added a shared bounded retry that repeats only verified pure dashboard reads
+  once after the observed Apps Script `HTTP 0` transport failure. Reads with
+  trigger, sheet-create, schema-heal, AutoPay, or other write side effects and
+  every explicit writer remain direct/fail-closed; their raw network detail is
+  replaced by calm guidance to verify current state before retrying. Registered
+  `REG-018` and added dynamic coverage for transient recovery, business-error
+  exclusion, recovered-state cleanup, customer-safe wording, and representative
+  writer/side-effect exclusions. Strengthened `REG-015` with dynamic proof that
+  the dedicated launcher accepts the exact active owner, rejects a stale owner,
+  and keeps generic launches diagnostic-only. Full local `npm test`, modified
+  client syntax, and diff checks pass. With explicit approval, pushed the shared
+  source to Central, created immutable version `181`, and advanced only isolated
+  validation deployment `AKfycbzMa…UlWZQ` to `@181`; Beta remains `@106` and the
+  bounded deployment was untouched. Exact-owner readiness run
+  `RR-0e6941fb-6548-4c45-b5c3-6304ad0af686` passed Workbook Health and all 15/15
+  disposable server checks. Its dedicated Populated Dashboard run
+  `FR-13656973-a9c6-49ed-a54a-d6731daf01b6` passed all 12 assertions with exact
+  candidate/run ownership, Restricted single-owner sharing, zero errors, and
+  verified Trash cleanup. This runtime-closed `REG-015` but exposed `REG-019`:
+  the documented **Refresh status** action left the completed suite `MISSING`
+  because external evidence was reloaded only during finalization. The narrow
+  fix makes an `IN_PROGRESS` status refresh reconcile and persist only
+  exact-owner evidence without closing the run; dynamic P1 evidence coverage
+  passes. With explicit approval, Central source was pushed, immutable version
+  `182` was created, and only isolated validation advanced to `@182`. Runtime
+  replay loaded the saved exact-owner run, showed Populated Dashboard
+  `PASS / Verified`, preserved `IN_PROGRESS`, 15/15 server checks, and Workbook
+  Health `PASS`, and left the three genuinely missing browser suites `MISSING`.
+  A second explicit Refresh retained the same result. No workbook was created or
+  modified by the focused replay. No bounded, mapped-user, Golden,
+  configured-default, or Beta workbook/deployment was touched. This closes `1b`;
+  deterministic injected HTTP 0 recovery plus the clean `@181` deployed journey
+  also closes `REG-018 / 1a` without adding a test-only live failure switch. The
+  superseded `@181` readiness run was then archived truthfully as `NOT_READY`
+  because First-Run, Recovery Live, Performance, and budget ratification remain
+  future exact-candidate gates; the console-owned disposable runner returned OFF.
+
 - **Full Beta numbered finish-line and optimization plan added (docs only,
   2026-07-23).** Added `FULL_BETA_REMAINING_PLAN.md` as the authoritative
   `1a`–`9e` inventory with exit evidence and focused-effort estimates. The plan

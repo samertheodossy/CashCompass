@@ -4,7 +4,7 @@
 
 **Reconciled:** 2026-07-23
 
-**Current evidence:** isolated Central `@180`, advocate score **8.3/10**
+**Current evidence:** isolated Central `@182`, advocate score **8.3/10**
 
 **Target broad invited-Beta decision:** **2026-09-24**
 
@@ -49,6 +49,23 @@ Broad invited Beta requires all of the following:
 | 1e | Retirement guidance runtime proof | Missing-minimum-input guidance hides result walls; ready state reveals correct results; focused journey passes | 0.5–1 d |
 
 **Group 1 estimate: 4–8 focused days.**
+
+**Execution note — 2026-07-24:** `1a` is source-ready with one bounded retry
+limited to verified pure dashboard reads, calm `HTTP 0` wording everywhere, and
+permanent dynamic proof that business errors and write-capable operations are
+never retried. Isolated `@181` passed the full normal-path populated journey
+without raw transport errors; a forced live `HTTP 0` is not claimed because the
+harness has no supported injection seam; the production helper is nevertheless
+deterministically exercised by the injected regression, so `1a` is complete.
+`1b` passed its exact-owner runtime
+proof on run `RR-0e6941fb-6548-4c45-b5c3-6304ad0af686` / browser run
+`FR-13656973-a9c6-49ed-a54a-d6731daf01b6`, with exact candidate attribution,
+12/12 assertions, Restricted sharing, and verified Trash cleanup. That replay
+exposed `REG-019`: **Refresh status** did not ingest the new PASS until
+finalization. The narrow refresh/reconciliation fix, dynamic regression, and
+isolated `@182` replay now pass: the console shows `PASS / Verified` while
+keeping the exact run `IN_PROGRESS`. `1b` is complete. Beta remains `@106`;
+the bounded deployment was untouched.
 
 ## 2. Bills and daily-task completion
 

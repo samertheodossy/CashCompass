@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
 
 const files = Object.fromEntries(await Promise.all([
   'Dashboard_Body.html',
@@ -13,6 +14,7 @@ const files = Object.fromEntries(await Promise.all([
   'Dashboard_Script_Payments.html',
   'Dashboard_Script_PlanningDebts.html',
   'Dashboard_Script_PlanningNextActions.html',
+  'Dashboard_Script_PlanningPurchaseSim.html',
   'Dashboard_Script_PlanningRetirement.html',
   'Dashboard_Script_PropertyPerformance.html',
   'Dashboard_Script_PropertiesHouseExpenses.html',
@@ -637,5 +639,112 @@ for (const leakedCopy of [
 }
 assert.match(render, /function customerSafeErrorMessage_\(/,
   'Dashboard must keep raw workbook and stack details out of customer error states');
+assert.match(render,
+  /function isTransientRpcTransportError_\([\s\S]*?HTTP\\s\*0[\s\S]*?NetworkError[\s\S]*?Connection failure/,
+  'Dashboard must recognize the observed Apps Script HTTP 0 transport failure');
+assert.match(render,
+  /function runReadOnlyRpcWithRetry_\([\s\S]*?const maxAttempts = 2;[\s\S]*?isTransientRpcTransportError_[\s\S]*?setTimeout\(invoke_, retryDelayMs\)/,
+  'Read-only dashboard RPCs must use one bounded retry for transient transport failures');
+assert.match(render,
+  /isTransientRpcTransportError_\(raw\)[\s\S]*?CashCompass did not repeat the action/,
+  'Uncertain writer outcomes must hide raw transport details and explain that the action was not repeated');
+
+const retryStart = render.indexOf('function isTransientRpcTransportError_(');
+const retryEnd = render.indexOf('/**\n * Keep implementation details', retryStart);
+assert.ok(retryStart >= 0 && retryEnd > retryStart,
+  'Transport recovery helpers must remain dynamically testable');
+const retryCtx = vm.createContext({
+  setTimeout: function(fn) { fn(); },
+  Error,
+  Number,
+  String
+});
+vm.runInContext(render.slice(retryStart, retryEnd), retryCtx);
+assert.equal(retryCtx.isTransientRpcTransportError_(
+  new Error('NetworkError: Connection failure due to HTTP 0')), true,
+  'The observed HTTP 0 error must be classified as transient');
+assert.equal(retryCtx.isTransientRpcTransportError_(
+  new Error('Account name is required.')), false,
+  'Business validation failures must never be classified as transport retries');
+
+let retryInvocations = 0;
+let retryNotices = 0;
+let recoveredNotices = 0;
+let retryResult = '';
+retryCtx.runReadOnlyRpcWithRetry_({
+  invoke: function(success, failure) {
+    retryInvocations += 1;
+    if (retryInvocations === 1) {
+      failure(new Error('NetworkError: Connection failure due to HTTP 0'));
+    } else {
+      success('recovered');
+    }
+  },
+  onRetry: function() { retryNotices += 1; },
+  onRecovered: function() { recoveredNotices += 1; },
+  onSuccess: function(value) { retryResult = value; },
+  onFailure: function() { retryResult = 'failed'; }
+});
+assert.equal(retryInvocations, 2, 'A transient read must run exactly one retry');
+assert.equal(retryNotices, 1, 'A transient read must expose one calm retry transition');
+assert.equal(recoveredNotices, 1, 'A recovered read must clear its temporary retry transition');
+assert.equal(retryResult, 'recovered', 'The bounded retry must deliver the successful read result');
+
+let businessInvocations = 0;
+let businessFailure = false;
+retryCtx.runReadOnlyRpcWithRetry_({
+  invoke: function(_success, failure) {
+    businessInvocations += 1;
+    failure(new Error('Account name is required.'));
+  },
+  onFailure: function() { businessFailure = true; }
+});
+assert.equal(businessInvocations, 1, 'A business failure must not be retried');
+assert.equal(businessFailure, true, 'A business failure must be delivered immediately');
+
+const customerErrorStart = render.indexOf('function customerSafeErrorMessage_(');
+const customerErrorEnd = render.indexOf('\nfunction toNumber(', customerErrorStart);
+assert.ok(customerErrorStart >= 0 && customerErrorEnd > customerErrorStart,
+  'Customer-safe error formatting must remain dynamically testable');
+retryCtx.window = { console: { error: function() {} } };
+vm.runInContext(render.slice(customerErrorStart, customerErrorEnd), retryCtx);
+const safeTransportMessage = retryCtx.customerSafeErrorMessage_(
+  new Error('NetworkError: Connection failure due to HTTP 0')
+);
+assert.doesNotMatch(safeTransportMessage, /NetworkError|HTTP\s*0|Connection failure/i,
+  'Raw Apps Script transport details must never reach the customer');
+assert.match(safeTransportMessage, /did not repeat the action/i,
+  'An uncertain write outcome must tell the customer that CashCompass did not repeat it');
+
+for (const [source, writerName] of [
+  [render, 'runPlannerNow'],
+  [files['Dashboard_Script_AssetsBankInvestments.html'], 'saveBank'],
+  [files['Dashboard_Script_AssetsBankInvestments.html'], 'saveInvestment'],
+  [files['Dashboard_Script_PlanningDebts.html'], 'saveDebt'],
+  [files['Dashboard_Script_Income.html'], 'submitNewIncomeSource']
+]) {
+  const start = source.indexOf(`function ${writerName}(`);
+  const next = source.indexOf('\nfunction ', start + 1);
+  const body = source.slice(start, next >= 0 ? next : source.length);
+  assert.ok(start >= 0, `${writerName} must exist`);
+  assert.doesNotMatch(body, /runReadOnlyRpcWithRetry_/,
+    `${writerName} must never auto-retry after an uncertain write outcome`);
+}
+for (const [source, loaderName] of [
+  [render, 'refreshSnapshot'],
+  [files['Dashboard_Script_BillsDue.html'], 'loadBillsDueUi_'],
+  [files['Dashboard_Script_BillsDue.html'], 'loadRecurringBillsUi_'],
+  [files['Dashboard_Script_BillsDue.html'], 'loadActiveBillsManagementUi_'],
+  [files['Dashboard_Script_CashFlowUpcoming.html'], 'loadUpcomingSection'],
+  [files['Dashboard_Script_PlanningRetirement.html'], 'loadRetirementSection'],
+  [files['Dashboard_Script_PlanningPurchaseSim.html'], 'loadPurchaseSimulatorSection']
+]) {
+  const start = source.indexOf(`function ${loaderName}(`);
+  const next = source.indexOf('\nfunction ', start + 1);
+  const body = source.slice(start, next >= 0 ? next : source.length);
+  assert.ok(start >= 0, `${loaderName} must exist`);
+  assert.doesNotMatch(body, /runReadOnlyRpcWithRetry_/,
+    `${loaderName} has an idempotent write/create side effect and must not auto-retry`);
+}
 
 console.log('Dashboard UX regression checks passed.');

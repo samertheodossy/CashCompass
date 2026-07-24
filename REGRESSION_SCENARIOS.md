@@ -245,8 +245,9 @@ Whenever a production bug is fixed:
 ### REG-015 — Standalone browser evidence inherited stale candidate metadata
 - Category: REGRESSION / TEST EVIDENCE
 - Date discovered: 2026-07-23
-- Status: standalone fail-closed path runtime-proven on isolated `@178`; dedicated
-  exact-owner Release Readiness path still needs candidate-bound runtime proof
+- Status: fixed; standalone fail-closed path runtime-proven on isolated `@178`
+  and dedicated exact-owner Release Readiness path runtime-proven on isolated
+  `@181`
 - Affected files: all browser-suite launchers, runner preparation state, and the
   Release Readiness candidate-ownership handoff
 - Root cause: the first correction stopped reading mutable candidate metadata at
@@ -269,6 +270,13 @@ Whenever a production bug is fixed:
   Two preceding attempts also failed closed and cleaned up correctly, although
   one timed out in the journey and one encountered an Apps Script HTTP 0
   connection failure.
+- Exact-owner runtime evidence: Release Readiness run
+  `RR-0e6941fb-6548-4c45-b5c3-6304ad0af686` owned candidate
+  `Central Apps Script version 181 · isolated @181`. Its dedicated launcher
+  produced browser run `FR-13656973-a9c6-49ed-a54a-d6731daf01b6`, which passed
+  all 12 assertions with `releaseEligible: true`, the exact owning run id and
+  candidate, Restricted single-owner sharing, zero errors, and verified Trash
+  cleanup.
 
 ### REG-016 — Income and Setup classified the same salary differently
 - Category: REGRESSION / UI
@@ -315,6 +323,64 @@ Whenever a production bug is fixed:
   including `debt_selection_actions`, with zero captured errors, Restricted
   owner-only sharing, and verified Trash cleanup.
 
+### REG-018 — Apps Script HTTP 0 exposed a raw failure with no bounded recovery
+- Category: REGRESSION / UI RELIABILITY
+- Date discovered: 2026-07-23
+- Status: fixed; deterministic injected regression + isolated `@181`
+  integration replay PASS
+- Affected files: shared dashboard RPC/error helpers and the read-only loaders
+  exercised by the populated dashboard journey
+- Root cause: dashboard reads called `google.script.run` directly. A transient
+  browser-to-Apps-Script connection failure therefore terminated the read on its
+  first `HTTP 0` response, and the generic error boundary allowed the raw
+  `NetworkError: Connection failure due to HTTP 0` text to reach the visible UI.
+  Automatically applying the same retry to writers would be unsafe because an
+  `HTTP 0` response does not prove that the server failed before committing.
+- Repro: inject `NetworkError: Connection failure due to HTTP 0` into the first
+  attempt of a dashboard read, then allow the second attempt to succeed. Separately
+  inject the same response into a writer failure boundary.
+- Expected result: an explicitly read-only call retries once after a calm
+  “connection interrupted” transition and then either succeeds or shows
+  customer-safe guidance. Business-validation failures are never retried. Writers
+  are never wrapped by the retry helper; their uncertain outcome is stated calmly
+  and the user is asked to verify current state before trying again.
+- Permanent coverage: `npm run test:dashboard-ux` dynamically proves exactly two
+  attempts for the transient read, one attempt for a business error, safe customer
+  wording, and the no-auto-retry contract for representative writers.
+- Runtime evidence: the isolated `@181` exact-owner Populated Dashboard run
+  `FR-13656973-a9c6-49ed-a54a-d6731daf01b6` passed all 12 normal-path assertions
+  with no raw transport errors or captured browser errors. A forced live
+  `HTTP 0` remains unclaimed because the browser harness has no supported
+  transport-failure injection seam; the injected dynamic regression is the
+  deterministic recovery proof.
+
+### REG-019 — Refresh status did not ingest completed browser evidence
+- Category: REGRESSION / TEST EVIDENCE
+- Date discovered: 2026-07-24
+- Status: fixed; dynamic regression + isolated `@182` runtime replay PASS
+- Affected files: Release Readiness status refresh and exact-candidate browser
+  evidence reconciliation
+- Root cause: `releaseReadinessGetStatus()` returned the compact state saved when
+  the run began. Newly completed browser evidence was reloaded only by
+  `releaseReadinessFinalize()`, even though the console instructs the administrator
+  to return and use **Refresh status** after a browser suite. Finalizing would
+  prematurely close a partially complete run as `NOT_READY`.
+- Repro: start an exact candidate, complete a dedicated browser suite with the
+  matching run id and candidate, then use **Refresh status** before finalization.
+- Expected result: an `IN_PROGRESS` refresh re-runs the existing fail-closed
+  evidence filter, persists only matching compact evidence, keeps the run open,
+  and shows the suite as `PASS` with its verified cleanup result. Stale,
+  standalone, mismatched-candidate, or mismatched-run evidence remains absent.
+- Permanent coverage: `npm run test:p1-evidence` dynamically saves exact-owner
+  Populated Dashboard evidence after run start, proves Refresh ingests and
+  persists it, and proves the readiness run remains `IN_PROGRESS`.
+- Runtime evidence: isolated validation `@182` loaded exact-owner run
+  `RR-0e6941fb-6548-4c45-b5c3-6304ad0af686`, reconciled browser run
+  `FR-13656973-a9c6-49ed-a54a-d6731daf01b6` as `PASS / Verified`, and preserved
+  `IN_PROGRESS`, 15/15 server checks, Workbook Health `PASS`, and the other
+  genuinely missing browser suites. A second explicit **Refresh status** retained
+  the same result without creating or modifying a workbook.
+
 ---
 
 ## RECOVERY scenarios (design — not historical bugs)
@@ -351,7 +417,9 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-012 | Empty editor actions were enabled | REGRESSION / UI | fixed; static guard; UI scenario pending |
 | REG-013 | Planner rebuilt unused History charts | STRESS / performance | fixed; static guard; runtime scenario pending |
 | REG-014 | Bank formatted balance replacement concatenated loaded value | REGRESSION / UI | fixed; static guard + isolated `@175` interactive writer replay PASS |
-| REG-015 | Standalone browser evidence inherited stale candidate metadata | REGRESSION / TEST EVIDENCE | standalone fail-closed path runtime-proven on isolated `@178`; dedicated exact-owner runtime proof pending |
+| REG-015 | Standalone browser evidence inherited stale candidate metadata | REGRESSION / TEST EVIDENCE | fixed; standalone `@178` + exact-owner `@181` runtime PASS |
 | REG-016 | Income and Setup classified the same salary differently | REGRESSION / UI | fixed; isolated `@178` interactive replay PASS |
 | REG-017 | Overlapping Debt loads cleared the selected account | REGRESSION / UI RELIABILITY | fixed; dynamic reversed-completion regression + isolated `@179` replay PASS |
+| REG-018 | Apps Script HTTP 0 exposed a raw failure with no bounded recovery | REGRESSION / UI RELIABILITY | fixed; injected regression + isolated `@181` integration PASS |
+| REG-019 | Refresh status did not ingest completed browser evidence | REGRESSION / TEST EVIDENCE | fixed; dynamic regression + isolated `@182` runtime PASS |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

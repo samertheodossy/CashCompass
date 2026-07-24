@@ -493,6 +493,84 @@ function setStatus(id, msg, isError) {
 }
 
 /**
+ * True only for the transient browser-to-Apps-Script failures that are safe to
+ * retry when the caller is an explicitly read-only operation. Business errors,
+ * authorization failures, and server exceptions are deliberately excluded.
+ */
+function isTransientRpcTransportError_(value) {
+  const raw = String(value && value.message ? value.message : (value == null ? '' : value));
+  return /(?:\bHTTP\s*0\b|NetworkError|Connection failure|Failed to fetch|Network request failed)/i.test(raw);
+}
+
+/**
+ * Run one explicitly read-only google.script.run request with at most one
+ * bounded retry after a transient transport failure.
+ *
+ * This helper must never wrap a writer: an HTTP 0 response does not prove that
+ * the server failed before committing, so automatically repeating a writer can
+ * duplicate a user's action. Writers continue to fail closed and ask the user
+ * to verify the current state before trying again.
+ */
+function runReadOnlyRpcWithRetry_(options) {
+  options = options || {};
+  if (typeof options.invoke !== 'function') {
+    throw new Error('Read-only RPC retry requires an invoke callback.');
+  }
+
+  const maxAttempts = 2;
+  const retryDelayMs = Math.max(0, Number(options.retryDelayMs) || 650);
+  let attempts = 0;
+  let settled = false;
+
+  function isCurrent_() {
+    return typeof options.isCurrent !== 'function' || options.isCurrent() === true;
+  }
+
+  function succeed_(value) {
+    if (settled || !isCurrent_()) return;
+    settled = true;
+    if (attempts > 1 && typeof options.onRecovered === 'function') {
+      options.onRecovered({ attempts: attempts });
+    }
+    if (typeof options.onSuccess === 'function') {
+      options.onSuccess(value, { attempts: attempts });
+    }
+  }
+
+  function fail_(error) {
+    if (settled || !isCurrent_()) return;
+    const transient = isTransientRpcTransportError_(error);
+    if (transient && attempts < maxAttempts) {
+      if (typeof options.onRetry === 'function') {
+        options.onRetry({
+          attempt: attempts,
+          maxAttempts: maxAttempts,
+          message: 'The connection was interrupted. Retrying\u2026'
+        });
+      }
+      setTimeout(invoke_, retryDelayMs);
+      return;
+    }
+    settled = true;
+    if (typeof options.onFailure === 'function') {
+      options.onFailure(error, { attempts: attempts, transport: transient });
+    }
+  }
+
+  function invoke_() {
+    if (settled || !isCurrent_()) return;
+    attempts += 1;
+    try {
+      options.invoke(succeed_, fail_);
+    } catch (error) {
+      fail_(error);
+    }
+  }
+
+  invoke_();
+}
+
+/**
  * Keep implementation details in logs while presenting calm, actionable copy
  * in the customer UI. Known business-validation messages remain unchanged;
  * workbook tab names, schema terms, stack-style errors, and Apps Script
@@ -503,6 +581,11 @@ function customerSafeErrorMessage_(value, fallback) {
   const safeFallback = fallback ||
     'CashCompass could not complete that action right now. Please refresh and try again.';
   if (!raw) return safeFallback;
+  if (isTransientRpcTransportError_(raw)) {
+    return fallback ||
+      'The connection was interrupted. CashCompass did not repeat the action. ' +
+      'Please check the current value, then try again.';
+  }
   if (/(?:INPUT|SYS|OUT|LOG)\s*-|Missing sheet|required column|header row|schema|Exception:|TypeError:|ReferenceError:|\bat .*\.js:\d+/i.test(raw)) {
     if (window.console && typeof window.console.error === 'function') {
       window.console.error('[CashCompass detail]', raw);
