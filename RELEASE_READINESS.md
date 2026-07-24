@@ -71,7 +71,9 @@ milestone may reuse stale, diagnostic-only, or differently attributed evidence.
 regression pack), `ROADMAP.md` (P1 sequencing), and
 `TEST_PRODUCTION_PATH_AUDIT.md` (the real-code-first test inventory), and
 `BETA_10_OUT_OF_10_PLAN.md` (the full product-quality and monetization-readiness
-gate).
+gate). `FULL_BETA_REMAINING_PLAN.md` supplies the numbered remaining-work
+inventory, estimates, critical path, and optimized parallel lanes leading into
+this final exact-candidate verdict.
 
 ---
 

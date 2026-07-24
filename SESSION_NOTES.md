@@ -2,6 +2,19 @@
 
 The V1 trust baseline is shipped and locked, and V1.1 closed out with the retirement profile integration (see **V1.1 — Retirement Profile Integration (DOB Source of Truth)** section below). The project has since moved into **Central App live + Family Beta readiness** — the Central App architecture is operational and the active work is hardening it toward a family beta (see **Current State — Post V1.2 Prep** below for the per-slice migration record). Working rules live in `WORKING_RULES.md → Current phase` + `→ Central App Transition Rules` (now active); product framing lives in `PROJECT_CONTEXT.md → Current phase` and `→ Current architecture — Central App (live)`. All prior phase notes below this header are preserved as-is for historical record.
 
+- **Full Beta numbered finish-line and optimization plan added (docs only,
+  2026-07-23).** Added `FULL_BETA_REMAINING_PLAN.md` as the authoritative
+  `1a`–`9e` inventory with exit evidence and focused-effort estimates. The plan
+  identifies the reliability → Bills → accessibility → performance → frozen
+  candidate → cohort critical path; three parallel lanes for critical engineering,
+  UX/evidence, and operations/product foundations; nine time-saving rules; and
+  five dated waves aligned to the September 24 target and October 2 contingency.
+  Reconciled stale planning text that still treated Financial Integrity Phase 3
+  or the UX-01 source checkpoint as open. The optimized capacity range is 25–35
+  focused working days best-case or 35–50 conservatively, plus a five-to-seven-day
+  cohort and defect rework. No runtime source, workbook, deployment, migration, or
+  user data changed.
+
 - **Bills three-item cosmetic polish isolated `@180` PASS (2026-07-23).** Reordered
   the add-bill scheduling controls to Frequency → Due day → Weekday → Anchor date;
   replaced the remaining generic Bills loading labels with contextual Bills or

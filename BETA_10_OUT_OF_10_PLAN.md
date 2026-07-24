@@ -8,6 +8,11 @@
 **Current independent advocate score:** 8.3/10 on isolated Central `@180` (2026-07-23)
 **Target:** A 10/10 Beta Release Candidate whose trust, operations, and product architecture make later monetization an incremental launch step rather than a rescue project.
 
+**Execution companion:** `FULL_BETA_REMAINING_PLAN.md` is the authoritative
+numbered inventory of remaining items (`1a`–`9e`), focused-effort estimates,
+critical path, parallel lanes, optimization rules, and dated work waves. This
+document remains authoritative for the score and release gates.
+
 ## 1. Strategic decision
 
 CashCompass will be **quality-gated, not date-gated**.
@@ -42,6 +47,12 @@ The execution waves are: Aug 21–27 HTTP 0 and exact-owner evidence; Aug 28–S
 Bills/Retirement/failure paths; Sep 4–10 accessibility and remaining advocate
 criteria; Sep 11–17 candidate freeze, Performance, and complete Release
 Readiness; Sep 18–24 supervised cohort, final scorecard, and go/no-go.
+
+The optimized model uses three coordinated lanes: critical engineering,
+UX/evidence, and operations/product foundation. Operations and monetization
+foundations advance during Apps Script/runtime waits; the exact candidate is
+frozen only after diagnostic performance and UX discovery finish. See
+`FULL_BETA_REMAINING_PLAN.md → Optimized execution model`.
 
 ## 2. Honest baseline from the 2026-07-20 validation
 
@@ -189,10 +200,10 @@ The beta does not need to charge immediately, but it must avoid architecture and
 
 **Objective:** Make the core financial promise defensible before broader release.
 
-1. **Decision/read model, live consumers, and audits runtime-proven:** Option A plus shared Planner/Rolling/Dashboard totals and read-only audits passed isolated Central `@150` run `20260722-145136-d3ce` 45/45 with Provisioning/Drift/Restricted/Trash PASS. History/release wiring remains under `FINANCIAL_INTEGRITY_PHASE_3_PLAN.md`.
-2. **Open:** Reconcile Planner, Dashboard, Rolling Debt, assets, liabilities, and sheets to $0.01.
+1. **Complete:** Option A, the shared Planner/Rolling/Dashboard path, five read-only audits, canonical History freshness, and Release Readiness wiring passed isolated Validation `@156` suite `20260722-164849-6081` 53/53.
+2. **Complete:** Planner, Dashboard, Rolling Debt, assets, liabilities, History, and authoritative sheets reconcile to the approved `$0.01` contract.
 3. **Complete:** House Financial Accuracy V1 with explicit operating and financing sources; commit `96d0ebe`, isolated Central `@145` run `20260722-124210-bc23` PASS 27/27.
-4. **Open except property V1:** Add Asset, Planner, Dashboard, and remaining cross-surface reconciliation diagnostics.
+4. **Complete:** Asset, Planner, Dashboard, Debt, and History diagnostics are registered and runtime-proven.
 5. **Ongoing requirement:** Add regression scenarios for every corrected discrepancy.
 
 **Exit:** All release-critical financial surfaces agree and explain why.
@@ -239,7 +250,14 @@ The ordered implementation inventory for this experience work is `TODO.md → UX
 
 ### Planning horizon, not a deadline
 
-With the P1 evidence foundation and House Financial Accuracy V1 now complete, the remaining repository plan implies roughly **15–32 focused engineering days** before the supervised-cohort observation window: Financial Integrity Phase 3 (**5–10 days planning estimate**), beta-critical P3 UX/performance (**8–17 days**), and exact-candidate evidence/finalization (**2–5 days**). Add roughly **1–2 calendar weeks** for meaningful supervised cohort observation, plus any defect rework, Google authorization/runtime delays, external review, and release documentation. These are planning estimates, not promises; the quality gates control release.
+With the P1 evidence foundation, House Financial Accuracy V1, and Financial
+Integrity Phase 3 complete, the reconciled remaining plan is approximately
+**25–35 focused working days in the optimized best case** or **35–50 focused
+working days conservatively**. Add **5–7 calendar days** for the supervised
+cohort plus defect rework, Google authorization/runtime delays, and external
+review. Several UX audits and the operations/monetization foundations can run in
+parallel; the exact estimates and dependencies are maintained in
+`FULL_BETA_REMAINING_PLAN.md`.
 
 This range is for capacity planning only. The release decision is based on evidence, not elapsed time.
 

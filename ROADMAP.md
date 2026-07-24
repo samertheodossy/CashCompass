@@ -2,7 +2,7 @@
 
 *The current at-a-glance **priority stack** for CashCompass — the authoritative view of what comes next and in what order.*
 
-**Documentation only.** This document sets **priority and sequence**. The detailed **Stage 1–6** roadmap (with per-item effort, dependencies, and history) lives in `TODO.md → Product Maturity Stages`; current technical status lives in `PROJECT_CONTEXT.md`; engineering rules (incl. **Milestone Discipline**) live in `ENGINEERING_STANDARDS.md`. Where the priority stack below and the Stage model disagree on ordering, **this document reflects the latest intent.**
+**Documentation only.** This document sets **priority and sequence**. The complete numbered pre-Beta inventory, estimates, critical path, and parallel lanes live in `FULL_BETA_REMAINING_PLAN.md`; the detailed **Stage 1–6** roadmap (with per-item effort, dependencies, and history) lives in `TODO.md → Product Maturity Stages`; current technical status lives in `PROJECT_CONTEXT.md`; engineering rules (incl. **Milestone Discipline**) live in `ENGINEERING_STANDARDS.md`. Where the priority stack below and the Stage model disagree on ordering, **this document reflects the latest intent.**
 
 > Follow **Milestone Discipline** (`ENGINEERING_STANDARDS.md → §11`): finish the current milestone before starting the next; record discoveries here instead of implementing them immediately; close milestones cleanly before opening the next.
 
@@ -23,7 +23,7 @@
 
 **Now / next:**
 
-- **Current active milestone:** **P3 finished-feeling UX and focused performance.** `UX-01` Overview information architecture and balanced-grid implementation is user-reviewed on a populated dashboard, its three approved display corrections are local and regression-clean, and the source-control checkpoint remains the next gate.
+- **Current active milestone:** **Reliability and trustworthy evidence (`FULL_BETA_REMAINING_PLAN.md → Group 1`).** Begin with HTTP 0 recovery (`1a`) and the dedicated exact-owner proof (`1b`), while the Bills product decision (`2a`) is resolved before implementation. `UX-01` and the subsequent contained UX waves are already committed and runtime-validated through isolated `@180`.
 - **Independent advocate gate added 2026-07-23:** the approved isolated interactive writer journey confirmed P1 trust defects in formatted bank-amount replacement, Income/Setup classification consistency, Bills Pay handoff/occurrence feedback, and normal-path implementation terminology. The bank replacement defect is runtime-closed on isolated `@175`, the Income/Setup fix on `@176`/`@178`, the contained language/responsive wave on `@177`, and `REG-017` on `@179`. Isolated `@180` passed the full 12-assertion diagnostic Populated Dashboard run plus a read-only Bills cosmetic check of field order, loading labels, helper text, and frequency-dependent visibility. The current advocate score is **8.3/10**. HTTP 0 recovery, dedicated exact-owner proof, Bills completion semantics, Retirement/failure-path evidence, medium/narrow replay, and accessibility remain open. No Beta, bounded, mapped-user, Golden, or configured-default workbook was used. These findings are sequenced in `TODO.md → UX Backlog (Version 1) → Independent advocate priorities`.
 - **Then:** execute the permanent score-by-score program in `TODO.md → Advocate 10/10 score-improvement program`, one criterion at a time: Errors/task completion → Trust/safety → Transitions/feedback → Ease → Language → Navigation → Visual design → Responsive/accessibility. Each criterion requires isolated runtime evidence and an advocate rescore before moving on; Bills remains a discussion gate rather than an inferred implementation.
 - **Explicitly parked pre-Beta gate:** the Performance Planner percentile campaign and final exact-candidate READY/NOT READY verdict. Seven historical sample pairs are diagnostic only because the campaign began before `@141`; performance must be rerun as an exact-candidate campaign and ratified before any broad Beta release. Deferral does not waive the gate.
@@ -52,7 +52,8 @@ The October 2 boundary allows one focused repair/retest cycle. Any failed
 financial, safety, privacy, performance, Severity 1/2, ≥95/100, or
 no-dimension-below-9 gate moves the decision. Assumptions and full exit evidence
 are maintained in `PROJECT_CONTEXT.md → Beta delivery forecast` and
-`BETA_10_OUT_OF_10_PLAN.md`.
+`BETA_10_OUT_OF_10_PLAN.md`. Execution IDs, estimates, the critical path, and
+parallel work lanes are maintained in `FULL_BETA_REMAINING_PLAN.md`.
 
 ---
 

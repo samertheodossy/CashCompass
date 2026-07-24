@@ -13,6 +13,12 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 **Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The current independent advocate score is **8.3/10** after isolated Central `@180` passed the full Populated Dashboard run and read-only Bills cosmetic validation; 7.5/10 remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, the non-performance P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** Financial Integrity is committed as `9b97c4d` and exact isolated `@156` evidence passed 53/53. Current ordering authority is `ROADMAP.md`: **criterion-1 reliability/evidence → Bills/Retirement/failure-path consistency → accessibility and remaining advocate score waves → exact-candidate Performance and final Release Readiness verdict → supervised cohort proof → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
 
+`FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered finish-line inventory
+for broad invited Beta. It assigns IDs `1a`–`9e`, focused-effort estimates,
+dependencies, a critical path, three parallel work lanes, time-saving rules, and
+the optimized five-wave calendar. Use those IDs in new plans, handoffs, and
+status updates instead of creating another competing pre-Beta checklist.
+
 **Execution forecast (ratified 2026-07-23):** controlled Family Beta can continue
 now. After a four-week buffer for planned time away in August, the target broad
 invited-Beta decision is **2026-09-24**, with **2026-10-02** as the contingency
