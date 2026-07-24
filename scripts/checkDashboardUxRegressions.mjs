@@ -366,6 +366,24 @@ assert.match(files['Dashboard_Script_BillsDue.html'],
 assert.match(body, /Due day of month \(1–31\)/,
   'Bills must describe due day in plain language');
 assert.match(body,
+  /<label>Frequency[\s\S]*?id="bills_add_frequency"[\s\S]*?<label>Due day of month \(1–31\)[\s\S]*?id="bills_add_due_day"[\s\S]*?id="bills_add_weekday_field"[\s\S]*?id="bills_add_anchor_date_field"/,
+  'Bills scheduling fields must read Frequency, Due day, Weekday, then Anchor date');
+assert.match(body,
+  /Choose the day this bill repeats\. Changes apply going forward; payment history stays unchanged\./,
+  'Bills Weekday helper must explain its outcome and history safety');
+assert.match(body,
+  /Sets which every-other-week cycle to use\. Choose a date that falls on the selected weekday\./,
+  'Bills Anchor date helper must explain cadence in customer language');
+assert.match(body,
+  /id="bd_recurringList"[\s\S]*?Loading recurring bills…/,
+  'Bills Due recurring section must use descriptive initial loading copy');
+assert.match(body,
+  /id="bills_manage_list"[\s\S]*?Loading recurring bills…/,
+  'Manage bills must use descriptive initial loading copy');
+assert.match(files['Dashboard_Script_BillsDue.html'],
+  /loadingIndicatorHtml\('Loading bills…'\)/,
+  'Overview Bills loading copy must identify what is loading');
+assert.match(body,
   /<label>Due day of month<\/label>\s*<input[^>]*id="debt_edit_due_date"/,
   'Debt editor must describe the day number as Due day of month');
 assert.match(files['Dashboard_Script_PlanningDebts.html'],

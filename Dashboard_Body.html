@@ -849,7 +849,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <div>
           <div class="card-title" style="margin-top:0;">Recurring bills (no due date)</div>
           <div id="bd_recurringList" class="bills-grid">
-            <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></div>
+            <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading recurring bills…</span></div>
           </div>
         </div>
       </section>
@@ -869,8 +869,6 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <div>
               <label>Payee <span aria-label="required" style="color:#b91c1c;">*</span></label>
               <input type="text" id="bills_add_payee" maxlength="200" autocomplete="off">
-              <label>Due day of month (1–31) <span aria-label="required" style="color:#b91c1c;">*</span></label>
-              <input type="number" id="bills_add_due_day" min="1" max="31" step="1" inputmode="numeric">
               <label>Frequency <span aria-label="required" style="color:#b91c1c;">*</span></label>
               <select id="bills_add_frequency" onchange="onBillsFrequencyChange()">
                 <option value="Monthly" selected>Monthly</option>
@@ -881,6 +879,8 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                 <option value="Semi-annually">Semi-annually</option>
                 <option value="Yearly">Yearly</option>
               </select>
+              <label>Due day of month (1–31) <span aria-label="required" style="color:#b91c1c;">*</span></label>
+              <input type="number" id="bills_add_due_day" min="1" max="31" step="1" inputmode="numeric">
               <!-- Phase 4 / 6B: Weekday applies to Weekly and Biweekly bills.
                    Hidden for every other frequency (toggled by
                    onBillsFrequencyChange). Blank keeps the bill on legacy Due Day
@@ -897,7 +897,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                   <option value="Friday">Friday</option>
                   <option value="Saturday">Saturday</option>
                 </select>
-                <p class="muted" style="margin:4px 0 0 0;font-size:12px;">Schedule changes apply going forward only. Previous payments and history are preserved.</p>
+                <p class="muted" style="margin:4px 0 0 0;font-size:12px;">Choose the day this bill repeats. Changes apply going forward; payment history stays unchanged.</p>
               </div>
               <!-- Phase 6B: Anchor Date only applies to Biweekly bills. It sets the
                    every-other-week parity (the first occurrence and cadence origin).
@@ -908,7 +908,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
               <div id="bills_add_anchor_date_field" style="display:none;">
                 <label>Anchor date</label>
                 <input type="date" id="bills_add_anchor_date">
-                <p class="muted" style="margin:4px 0 0 0;font-size:12px;">Defines the recurring 2-week cadence. Must fall on the selected weekday.</p>
+                <p class="muted" style="margin:4px 0 0 0;font-size:12px;">Sets which every-other-week cycle to use. Choose a date that falls on the selected weekday.</p>
               </div>
               <label>Payment source <span aria-label="required" style="color:#b91c1c;">*</span></label>
               <select id="bills_add_payment_source">
@@ -953,7 +953,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         </div>
 
         <div id="bills_manage_list" class="bills-manage-list">
-          <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></div>
+          <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading recurring bills…</span></div>
         </div>
       </section>
     </div>

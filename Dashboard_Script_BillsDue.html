@@ -89,7 +89,7 @@ function loadDashboardActionSections() {
 
 function loadBillsDueUi_() {
   const ovBillsNext7 = document.getElementById('ov_bills_next7');
-  if (ovBillsNext7) ovBillsNext7.innerHTML = loadingIndicatorHtml('Loading…');
+  if (ovBillsNext7) ovBillsNext7.innerHTML = loadingIndicatorHtml('Loading bills…');
 
   ['bd_overdueList', 'bd_next7List'].forEach(function(id) {
     const el = document.getElementById(id);

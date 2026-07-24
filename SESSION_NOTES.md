@@ -2,6 +2,25 @@
 
 The V1 trust baseline is shipped and locked, and V1.1 closed out with the retirement profile integration (see **V1.1 — Retirement Profile Integration (DOB Source of Truth)** section below). The project has since moved into **Central App live + Family Beta readiness** — the Central App architecture is operational and the active work is hardening it toward a family beta (see **Current State — Post V1.2 Prep** below for the per-slice migration record). Working rules live in `WORKING_RULES.md → Current phase` + `→ Central App Transition Rules` (now active); product framing lives in `PROJECT_CONTEXT.md → Current phase` and `→ Current architecture — Central App (live)`. All prior phase notes below this header are preserved as-is for historical record.
 
+- **Bills three-item cosmetic polish isolated `@180` PASS (2026-07-23).** Reordered
+  the add-bill scheduling controls to Frequency → Due day → Weekday → Anchor date;
+  replaced the remaining generic Bills loading labels with contextual Bills or
+  recurring-bills text; and rewrote Weekday/Anchor guidance around the repeating
+  day, every-other-week cycle, forward-only effect, and preserved payment history.
+  Exact dashboard UX regressions protect field order, both helper messages, and
+  the Overview/Due/Manage loading labels. Field IDs, recurrence calculations,
+  schemas, stored values, writers, and workbook behavior are unchanged. Full local
+  `npm test` and diff hygiene passed. With explicit approval, the reviewed source
+  was pushed to Central, immutable version `180` was created, and only isolated
+  validation advanced to `@180`; Beta remained `@106` and bounded was untouched.
+  Diagnostic run `FR-ade9cab7-988e-4fac-8245-6b3501e694ab` passed 12/12 with
+  zero errors, Restricted owner-only sharing, and verified Trash. A separate
+  read-only inspection confirmed contextual Bills loading; Frequency → Due day
+  order; Monthly hiding both conditional fields; Weekly showing only Weekday; and
+  Biweekly showing Weekday plus Anchor date. The form was canceled without a
+  dashboard write. The advocate score moved from 8.2 to **8.3/10**; no
+  release-eligible or responsive/accessibility claim is attached.
+
 - **Optional Setup loading states complete (source/regression, 2026-07-23).**
   Replaced the ambiguous dash on the read-only Houses and Upcoming Expenses Setup
   cards with an explicit state contract: **Checking…** while loading, the existing

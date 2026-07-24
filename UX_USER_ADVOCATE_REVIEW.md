@@ -476,6 +476,39 @@ the overlapping Debt-section response defect recorded as `REG-017`.
 but the remaining open categories still control the overall score. This is
 usability evidence, not release approval.
 
+### Isolated `@180` Bills cosmetic validation — 2026-07-23
+
+**Interactive result:** full diagnostic Populated Dashboard E2E PASS. Run
+`FR-ade9cab7-988e-4fac-8245-6b3501e694ab` passed all 12 required assertions in
+130.500 seconds with zero captured errors, Restricted owner-only sharing,
+diagnostic-only attribution, and verified Trash cleanup. A second read-only view
+of the same marked fixture opened Bills → Manage bills → Add bill, changed only
+the in-memory Frequency selector, and canceled without saving.
+
+**Interactive / Screenshot findings:** contextual **Loading bills…**, **Loading
+bills due…**, and **Loading recurring bills…** appeared in the correct surfaces.
+The Add bill form visibly ordered Frequency before Due day. Monthly hid Weekday
+and Anchor date; Weekly showed Weekday only; Biweekly showed both. The revised
+helper text was direct, fit the desktop form cleanly, and stated the cadence and
+preserved-history consequence. No new 390px, medium-width, keyboard, focus, or
+reduced-motion evidence was collected.
+
+| Criterion | `@179` score | `@180` score | Evidence | Rationale |
+|---|---:|---:|---|---|
+| Errors and task completion | 8.3/10 | **8.3/10** | Interactive | The full 12-assertion journey passed again with zero errors. HTTP 0 recovery, Bills Pay completion semantics, and controlled failure branches remain open. |
+| Ease and efficiency | 8.3/10 | **8.4/10** | Interactive / Screenshot | The scheduling controls now read in task order and reveal only frequency-relevant fields. The separate Pay → Quick add issue is unchanged. |
+| Language and comprehension | 8.5/10 | **8.7/10** | Interactive / Screenshot | Due-day, Weekday, Anchor date, and loading language now state the user-visible meaning directly. Quick add duplicate, Bills occurrence, and Upcoming Dismiss semantics remain open. |
+| Transitions and feedback | 7.5/10 | **7.7/10** | Interactive | Bills loading states now identify what is happening. HTTP 0, writer-success, stale, and controlled failure feedback still limit the score. |
+| Visual design and readability | 8.7/10 | **8.8/10** | Screenshot | The desktop form has a more natural vertical rhythm and the conditional guidance fits cleanly. Medium/narrow evidence was not repeated. |
+| Navigation and discoverability | 8.8/10 | **8.8/10** | Interactive | Cash Flow → Bills → Manage bills → Add bill remained easy to find. |
+| Trust and safety | 8.2/10 | **8.2/10** | Interactive / Source review | Restricted sharing, diagnostic attribution, verified cleanup, history-preservation copy, and a canceled read-only form passed; exact-owner release proof remains open. |
+| Responsive and accessibility | 7.0/10 | **7.0/10** | Prior Screenshot / evidence gap | No new medium/390px, keyboard, focus, semantic, contrast, or reduced-motion evidence was collected. |
+
+**Weighted overall: 8.3/10 — up 0.1 from `@179`.** This is a real but contained
+gain in ease, language, feedback, and desktop polish. It is not release approval,
+and it does not close the higher-priority reliability, Bills completion,
+responsive/accessibility, or exact-owner evidence gates.
+
 ### Score-improvement schedule to the Beta decision
 
 | Window | Advocate focus | Required evidence |
@@ -525,6 +558,12 @@ and evidence-led; dates do not raise a score or waive a finding.
   check** instead of using the same dash for loading and failure. Exact dashboard
   UX regressions cover both cards. This closes the contained source/regression
   finding without claiming new interactive evidence or changing the 8.2/10 score.
+- **Bills scheduling polish — Source review:** The add-bill form now presents
+  Frequency → Due day → Weekday → Anchor date, Bills loading labels identify what
+  is loading, and the Weekday/Anchor helper text explains the user-visible cadence
+  and preserved history. Exact dashboard UX regressions cover all three cosmetic
+  contracts. Recurrence logic, field IDs, stored values, and writers are
+  unchanged; no new interactive score is claimed.
 
 ### 12. Prioritized issues
 

@@ -5,7 +5,7 @@
 **Created:** 2026-07-20
 
 **Historical baseline:** 7.5/10 controlled-family-beta product (2026-07-20)
-**Current independent advocate score:** 8.2/10 on isolated Central `@179` (2026-07-23)
+**Current independent advocate score:** 8.3/10 on isolated Central `@180` (2026-07-23)
 **Target:** A 10/10 Beta Release Candidate whose trust, operations, and product architecture make later monetization an incremental launch step rather than a rescue project.
 
 ## 1. Strategic decision
@@ -56,8 +56,9 @@ Readiness; Sep 18–24 supervised cohort, final scorecard, and go/no-go.
 | Automated release confidence | 7/10 | Strong recovery, Quick Add, provisioning, drift, schema, and targeted UX evidence exists; the aggregate release gate and mature populated scenario coverage remain incomplete. |
 
 **Historical overall baseline: 7.5/10.** It remains useful as the 2026-07-20
-comparison point. The current independent advocate score is **8.2/10** after the
-`@175`–`@179` UX/reliability wave. Neither score is broad-Beta approval.
+comparison point. The current independent advocate score is **8.3/10** after the
+`@175`–`@180` UX/reliability and cosmetic-validation wave. Neither score is
+broad-Beta approval.
 
 ## 3. What “10/10 beta” means
 
@@ -305,9 +306,10 @@ Validator modules, the required bounded server inventory, all non-performance
 E2E/live packs, and the single-console Release Readiness controls are
 runtime-proven. House Financial Accuracy V1 (`96d0ebe`, isolated `@145`, 27/27)
 and Financial Integrity Phase 3 (`9b97c4d`, isolated `@156`, 53/53) are complete.
-The `@175`–`@179` advocate wave closed formatted Bank replacement, Income/Setup
+The `@175`–`@180` advocate wave closed formatted Bank replacement, Income/Setup
 classification, customer-language/responsive improvements, standalone
-evidence fail-closed behavior, and `REG-017`; the current score is 8.2/10.
+evidence fail-closed behavior, `REG-017`, and the contained Bills scheduling
+presentation pass; the current score is 8.3/10.
 
 The immediate gate is HTTP 0 recovery (`REG-018`) plus dedicated exact-owner
 candidate evidence. Then decide—do not infer—the Bills Pay → Quick add →

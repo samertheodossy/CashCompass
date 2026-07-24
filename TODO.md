@@ -11,7 +11,7 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current stage — Stage 3: Beta Readiness
 
-**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The current independent advocate score is **8.2/10** after isolated Central `@179` runtime-closed `REG-017`; 7.5/10 remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, the non-performance P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** Financial Integrity is committed as `9b97c4d` and exact isolated `@156` evidence passed 53/53. Current ordering authority is `ROADMAP.md`: **criterion-1 reliability/evidence → Bills/Retirement/failure-path consistency → accessibility and remaining advocate score waves → exact-candidate Performance and final Release Readiness verdict → supervised cohort proof → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
+**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The current independent advocate score is **8.3/10** after isolated Central `@180` passed the full Populated Dashboard run and read-only Bills cosmetic validation; 7.5/10 remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, the non-performance P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** Financial Integrity is committed as `9b97c4d` and exact isolated `@156` evidence passed 53/53. Current ordering authority is `ROADMAP.md`: **criterion-1 reliability/evidence → Bills/Retirement/failure-path consistency → accessibility and remaining advocate score waves → exact-candidate Performance and final Release Readiness verdict → supervised cohort proof → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
 
 **Execution forecast (ratified 2026-07-23):** controlled Family Beta can continue
 now. After a four-week buffer for planned time away in August, the target broad
@@ -324,7 +324,7 @@ Reusable coverage: `npm run test:dashboard-ux`. **Two-track validation is comple
 From the 2026-07-02 loading-experience audit (`SESSION_NOTES.md`). Unify every async surface on the shared `dash-loading` spinner + one wording standard.
 
 - Overview snapshot loading indicator (`refreshSnapshot()` currently loads silently)
-- Bills Due descriptive loading text (instead of generic "Loading…")
+- ✅ Bills Due descriptive loading text instead of generic **Loading…** — completed locally 2026-07-23 across Overview, Due, recurring, and Manage states with exact regression coverage.
 - Replace generic `Loading…` with contextual `Loading <thing>…`
 - Remove raw `...` placeholders (e.g. `ov_bills_next7`)
 - Remove `&hellip;` HTML-entity variants (onboarding)
@@ -497,7 +497,7 @@ The initial screenshot review and the completed interactive populated-workbook r
 - **Runtime-verified on isolated `@177`:** preserve the proven narrow navigation behavior with a two-column primary-nav and compact two-column header action grid; keep the long **Assets & Liabilities** label and Assets subtabs free of horizontal overflow.
 - **390px runtime-verified; medium-width follow-up open:** tighten narrow header spacing and modestly improve secondary-text contrast and minimum helper size without changing the visual system. The scored replay found the medium-width header still leaves excessive unused space.
 
-These contained visibility fixes are covered by exact source-contract assertions in the existing `test:dashboard-ux` suite. Both default-width and 390px isolated `@177` Populated Dashboard journeys passed with verified Trash cleanup; no separate regression identifier is required. The advocate baseline is **8.1/10**. After isolated `@178` proved standalone `REG-015` and isolated `@179` runtime-closed the Debt timeout as `REG-017`, the provisional score remains **8.2/10** after rounding; Errors/task completion improved from 8.0 to 8.3, while Apps Script HTTP 0 recovery and other criterion-1 gaps remain open.
+These contained visibility fixes are covered by exact source-contract assertions in the existing `test:dashboard-ux` suite. Both default-width and 390px isolated `@177` Populated Dashboard journeys passed with verified Trash cleanup; no separate regression identifier is required. The advocate baseline is **8.1/10**. Isolated `@178` proved standalone `REG-015`, `@179` runtime-closed the Debt timeout as `REG-017`, and `@180` passed the full suite plus the read-only Bills cosmetic journey. The current score is **8.3/10** after rounding; Apps Script HTTP 0 recovery and other criterion-1 gaps remain open.
 
 ###### Advocate 10/10 score-improvement program
 
@@ -541,10 +541,10 @@ Long-term planning · goal planning · recommendation engine · cash-allocation 
 
 Opportunistic polish for the Weekday / Biweekly scheduling feature. None are blockers — the feature is shipped and runtime-validated.
 
-- **Reorder scheduling fields in the Bills edit dialog** — group Frequency → Due Day → Weekday → Anchor Date in a natural reading order.
+- **✅ Reorder scheduling fields in the Bills edit dialog — completed locally 2026-07-23.** The form now groups Frequency → Due day → Weekday → Anchor date in a natural reading order; IDs, values, show/hide rules, and writers are unchanged.
 - **Inline Anchor Date validation** — surface the "Anchor Date must fall on the selected weekday" check as live inline feedback (not only on save).
 - **Derived Schedule column evaluation** — evaluate a single read-only "Schedule" summary column (e.g. "Every other Monday from 7/6") derived from Frequency / Weekday / Anchor Date, for at-a-glance clarity.
-- **Helper-text review** — review the Weekday / Anchor Date / schedule-change helper copy for consistency and clarity.
+- **✅ Helper-text review — completed locally 2026-07-23.** Weekday now explains the repeating day and preserved payment history; Anchor date explains the every-other-week cycle and selected-weekday requirement in customer language.
 - **Formatting parity review** — re-verify Weekday / Anchor Date / Schedule Effective Date column formatting matches neighboring Bills columns on both new provisioning and self-heal.
 
 ### General Rules
