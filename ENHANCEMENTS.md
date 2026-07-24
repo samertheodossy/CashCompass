@@ -8,7 +8,11 @@ Durable product/engineering backlog for the financial planning system. Grounded 
 
 **Stage 1 and Stage 2 are complete.** The Central App is live and family-beta capable; Recovery Validation 6F is complete. Read-only Orphan detection remains P1.
 
-The current stage is the **Beta Gate**. Recovery P0 is complete; remaining work includes Bills Due Pay evidence, Financial Integrity convergence, Validator/Release Readiness work, Golden Workbook polish, and Family Beta polish.
+The current stage is the **Beta Gate**. Recovery P0, Financial Integrity
+convergence, core Bills Pay, and tracked-editor convergence are complete.
+Remaining work is controlled reliability/safety proof, adjacent daily-task
+language, page-level UX/accessibility, exact-candidate performance and release
+evidence, operations, and the supervised cohort.
 
 The V1 trust baseline and V1.1 retirement profile integration remain the stable foundation (`SESSION_NOTES.md → V1 trust baseline — complete` / `→ V1.1 — Retirement Profile Integration`). The full per-slice migration history is in `SESSION_NOTES.md → Current State — Post V1.2 Prep` and the `CENTRAL_APP_*.md` docs.
 
@@ -23,7 +27,7 @@ Items below that are fully delivered still carry their original "DELIVERED" tag 
 
 Authoritative sequence lives in `ROADMAP.md`; detailed Beta Gate work lives in `TODO.md → Product Maturity Stages` (high-level mirror in `PROJECT_CONTEXT.md`). **Current stage: Stage 3 — Beta Readiness** (Stages 1–2 complete; Family Beta ~97–98% · External Beta ~92%; Recovery Validation 6F complete; remaining work is the broader Beta Gate, not major feature development). Mirror here is short on purpose:
 
-- **Active now:** P0 Project Stabilization is complete after isolated Central `@114` passed both blank/fresh and representative populated-workbook validation. Populated-fixture hardening is also complete on isolated Central `@117`; five suites are now runnable, including the combined Central Safety suite. Current P1 work advances to the remaining Validator modules, E2E/live/performance packs, and bounded Release Readiness orchestration. The blank Financial Plan refresh completed but took 143 seconds, so product performance remains a P3 follow-up. Bills Due → Pay natural runtime evidence remains pending; do not force it with fake financial activity.
+- **Active now:** isolated Central has advanced through `@195`. HTTP 0 recovery, exact-owner evidence, the dedicated Bills Pay/receipt/history flow, Bills **Due · Add · Manage**, and Houses/Bank/Investments/Debts **Update · Add · Manage** are runtime-closed with permanent regressions and disposable-workbook evidence. Next are controlled stale/failure, Skip/Stop-tracking, and Retirement proof, followed by Quick Add/Upcoming language and the remaining page/accessibility/performance gates. The blank Financial Plan refresh completed but took 143 seconds, so product performance remains beta-critical.
 - **Beta Gate criteria (unordered — all must pass before Family Beta):** Golden Workbook Convergence · **Financial Integrity Phase 3** (canonical basis + Planner/Dashboard/Rolling convergence to $0.01 + Asset/Planner/Dashboard audit modules — *the numbers must reconcile*) · Validator/Test Harness/Release Readiness · Recovery completion ✅ · runtime regression evidence · Workbook/UX polish. Full detail: `TODO.md → Product Maturity Stages → Stage 3`.
 - **Delivered (headline):** Central App migration; Family Beta styling; diagnostics; workbook totals parity; identity markers; and the **Workbook Recovery stack with complete P0 runtime validation**. Read-only Orphan detection remains P1.
 - **UX Backlog (Version 1):** the permanent home for product-quality improvements (loading standardization, empty-state standardization, UX consistency framework, the ordered **Web Dashboard page-by-page polish `UX-01`–`UX-10`**, workbook visual parity, Money Plan Phase 2, and **Bills Scheduling UX**) is **`TODO.md → UX Backlog (Version 1)`**. The page-by-page program is intentionally completed one reviewable/validatable ID at a time, beginning with Overview; other small findings remain opportunistic. The backlog is **reviewed before every Family Beta milestone and before External Beta** and cross-referenced from the Stage roadmap so items never disappear during a reorganization. Append new polish/consistency/loading/empty-state/wording findings there.
@@ -42,7 +46,7 @@ Rename is deliberately **block-on-duplicate** — renaming a debt onto an existi
 
 ### Future — Manage Pattern Rollout (UI standardization, post-recovery)
 
-Authoritative copy: `TODO.md → Future UI Standardization — Manage Pattern Rollout` (high-level mirror in `PROJECT_CONTEXT.md`). **Status:** Bills, Debts, Bank Accounts, Investments, and Houses complete; the shared asset-editor presentation layer passed isolated Central `@194`.
+Authoritative copy: `TODO.md → Future UI Standardization — Manage Pattern Rollout` (high-level mirror in `PROJECT_CONTEXT.md`). **Status:** Bills, Debts, Bank Accounts, Investments, and Houses complete; the shared tracked-editor presentation layer, Save-only Update panels, and Manage-owned lifecycle actions passed isolated Central `@195`.
 
 Manage Bills and Manage Debts proved the pattern. Bank Accounts, Investments, and Houses now share the same client-side mode/list/focus/empty-state primitives while keeping their existing writers and data rules separate. Income Sources remains the next plausible long-lived-entity candidate; transaction/append and singleton workflows should not be forced into this pattern.
 
@@ -778,7 +782,7 @@ The full spec lives in `PROJECT_CONTEXT.md → Decision Layer → Next Actions v
 - **Data sources (no new ones)** — `INPUT - Bills` (active), `INPUT - Upcoming Expenses` (remaining balance only), `INPUT - Debts` (active), bank / usable cash via the existing liquidity model (`SYS - Accounts` → Safe-to-use / Available Now / Min Buffer), and the existing `getRollingDebtPayoffPlan` output. No engine re-run.
 - **Deterministic rules** — build urgent obligations first; compare `sum(urgent)` vs cash-to-use; emit `review_cash_gap` at the top of `urgent` when obligations exceed cash and suppress `recommended` money-movement until resolved; the preferred extra-debt target is the Rolling Debt Payoff focus debt.
 - **Explainability rule** — every emitted action must be describable in **one sentence** from the current snapshot (amount / due date / remaining balance / bucket rule / Rolling-Debt-Payoff reason code). If not, it's not emitted.
-- **Non-goals (v1)** — retirement optimization, investment allocation advice, purchase simulation, scenario / what-if planning, automatic execution. Quick Add remains the single payment path; Next Actions only routes.
+- **Non-goals (v1)** — retirement optimization, investment allocation advice, purchase simulation, scenario / what-if planning, and automatic external execution. Bills Pay and Quick Add are explicit recording paths; Next Actions only routes.
 
 Implementation order, as shipped: backend aggregator (`next_actions.js::getNextActionsData`) + liquidity reader (`cash_to_use.js::getCashToUse`) landed first, followed by the Planning → Next Actions panel (`Dashboard_Body.html` + `Dashboard_Script_PlanningNextActions.html`) rendering the three bucket groups, then help copy (`#help-next-actions`). No mapping-layer changes were needed — the panel calls the backend directly via `google.script.run`, not through the Rolling Debt Payoff React bundle.
 

@@ -11,7 +11,7 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current stage — Stage 3: Beta Readiness
 
-**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The current independent advocate score is **8.3/10** after isolated Central `@180` passed the full Populated Dashboard run and read-only Bills cosmetic validation; 7.5/10 remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, the non-performance P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** Financial Integrity is committed as `9b97c4d` and exact isolated `@156` evidence passed 53/53. Current ordering authority is `ROADMAP.md`: **criterion-1 reliability/evidence → Bills/Retirement/failure-path consistency → accessibility and remaining advocate score waves → exact-candidate Performance and final Release Readiness verdict → supervised cohort proof → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
+**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; isolated Central has since advanced through `@195`, but the official score does not change until a new full scored advocate run. The 7.5/10 value remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, the non-performance P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** Financial Integrity is committed as `9b97c4d` and exact isolated `@156` evidence passed 53/53. Current ordering authority is `ROADMAP.md`: **controlled reliability/safety and Retirement proof → Quick Add/Upcoming language → remaining page UX/accessibility → exact-candidate Performance and final Release Readiness verdict → supervised cohort proof → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
 
 `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered finish-line inventory
 for broad invited Beta. It assigns IDs `1a`–`9e`, focused-effort estimates,
@@ -295,6 +295,12 @@ This gate is the release-readiness target for **Stage 3 (Beta Readiness, current
 
 ## UX Backlog (Version 1)
 
+> **2026-07-24 work-map reconciliation:** the authoritative open Beta list is
+> `FULL_BETA_REMAINING_PLAN.md`. Core Bills Pay (`2a`–`2c`, `2f`) and tracked
+> editor consistency (`3d`) are complete through isolated Central `@195`.
+> Historical bullets below remain for rationale; status notes identify what is
+> still open.
+
 **Purpose.** A permanent home for small product-quality improvements — polish, consistency, loading, empty-states, wording — that are **too small for the main Stage roadmap but too important to lose.** They increase *perceived* quality and are **intentionally separated from engineering priorities**: they are completed **opportunistically** (whenever a related file is already open), not scheduled in strict order.
 
 **This section is permanent.** It is cross-referenced from the Stage roadmap (Stage 3 → Stage 5) so these items survive any future roadmap reorganization. New polish opportunities discovered during investigations should be **appended here** rather than dropped.
@@ -392,13 +398,20 @@ A shared vocabulary + spacing/typography pass so every surface feels the same.
 
 ##### UX-03 — Cash Flow daily-use polish
 
+**Status:** core Bills daily-use work is complete through isolated Central
+`@193`. Bills now use **Due · Add · Manage**; Pay opens a dedicated side panel,
+records the confirmed amount/date, verifies occurrence clearing, and shows the
+Cash Flow receipt plus six-month payment history before **Done**. Quick Add stays
+separate. Remaining adjacent work: `2d` Quick Add duplicate/update semantics and
+`2e` Upcoming Dismiss consequence/history language.
+
 - Keep Quick add visually primary and make recent completion feedback easy to notice.
 - Distinguish the daily **Due this period** queue from **Manage bills** configuration.
 - Standardize visible debt/bill wording on **Due day of month** without renaming sheet headers or schemas.
 - Reveal Weekday, Anchor Date, and other recurrence details only when the selected frequency requires them; preserve the separate Bills Scheduling UX safeguards below.
 - Align Upcoming, Donations, Bills, and Income on the same add/list/status pattern where their workflows permit it.
 
-**Acceptance:** users can identify where to record money versus where to maintain recurring definitions; recurrence behavior is unchanged; Quick Add remains the single payment path; terminology is consistent in Dashboard and Help.
+**Acceptance:** users can identify where to record money versus where to maintain recurring definitions; recurrence behavior is unchanged; Bills Pay and Quick Add remain distinct, intentional payment paths; terminology is consistent in Dashboard and Help.
 
 ###### Phase 2 candidate — Monthly Bills calendar and history
 
@@ -424,6 +437,14 @@ A shared vocabulary + spacing/typography pass so every surface feels the same.
 **Acceptance:** a new user can explain which Planning tool to open for an action, a reference view, or a scenario; no planner calculations or payment routes change.
 
 ##### UX-05 — Assets workflow consistency
+
+**Status:** complete through isolated Central `@195`. Houses, Bank Accounts,
+Investments, and Debts use **Update · Add · Manage**; Setup preserves Add/Manage
+intent; Update is Save-only; Manage owns active-item inventories and guarded
+Stop tracking. Shared presentation helpers reduce duplication while
+feature-specific writers remain separate. First-Run V4 passed 10/10 and
+Populated V3 passed 13/13 with zero browser errors, Restricted fixtures, and
+verified Trash cleanup.
 
 - Give House Values, Bank Accounts, and Investments the same visual sequence: select entity → current summary → update form → one primary Save action.
 - Make Update / Add new / Review imports modes unambiguous and keep their selected state visible.
@@ -490,7 +511,7 @@ The initial screenshot review and the completed interactive populated-workbook r
 1. **Bank formatted-money replacement safety (`UX-05`, core defect closed on isolated `@175`).** A replace operation intended to change `$12,500` to `12600` originally produced and saved `$1,250,012,600`. The narrow fix makes the Bank balance editor opt into whole-value selection on focus while preserving every other currency editor's caret behavior. Local suites pass, and the `@175` Restricted-fixture replay saved exact keyboard and paste-like replacements of `$12,600.00` and `$12,700.00` without concatenation. Keep the 390px input path in `UX-10`; decide separately whether an extreme-change guard needs a ProductDecision.
 2. **Exact-candidate browser evidence trust (`REG-015` and `REG-019` runtime-closed).** Standalone Populated Dashboard PASS reports on isolated `@175`–`@177` inherited the parked `@141` `IN_PROGRESS` run and incorrectly saved release-eligible evidence. Generic/direct launches now carry no owner and are diagnostic-only even while an old run remains active; `@178` proved that fail-closed path. Isolated `@181` exact-owner run `RR-0e6941fb-6548-4c45-b5c3-6304ad0af686` then passed Workbook Health, 15/15 disposable server checks, and browser run `FR-13656973-a9c6-49ed-a54a-d6731daf01b6` with 12/12 assertions, exact candidate/run ownership, Restricted sharing, zero errors, and verified Trash cleanup. That replay exposed `REG-019`; the `@182` fix now makes **Refresh status** reconcile the saved evidence as `PASS / Verified`, persist it, and keep the run `IN_PROGRESS`. Dynamic coverage permanently checks that contract. `REG-018 / 1a` is complete: recovery remains bounded to verified pure reads and is proved by deterministic injected coverage plus the clean `@181` deployed integration replay; no unsupported forced-live transport claim is made. Diagnostic Performance cannot ratify a release budget.
 3. **Income/Setup cross-surface truth (`UX-03` + `UX-08`; `REG-016`; fixed and isolated `@178` interactive replay PASS).** Setup reported one recurring income and zero other detected while Income reported no recurring income and showed the same salary as Other detected. Both surfaces now use one shared one-positive-month tracked-income classifier; excluded and negative/non-positive groups remain Other detected. The final `@178` full run passed the permanent cross-surface consistency assertion with verified Trash cleanup.
-4. **Bills Pay handoff and recurrence confirmation (`UX-03` + `UX-09`).** Pay silently opens a prefilled Quick add form that still requires **Add to Cash Flow**, while Help claims Pay records immediately. After paying June, July remained overdue without occurrence-specific explanation. Make the handoff and next-occurrence result explicit and align Help.
+4. **Bills Pay and recurrence confirmation (`UX-03` + `UX-09`; core journey closed on isolated `@193`).** Pay now opens a dedicated Bills side panel, confirms amount/date, performs one guarded payment write, verifies the exact occurrence cleared, and shows Cash Flow month, previous total, amount added, new total, and six-month history before **Done**. Quick Add remains separate. Creation-month flooring prevents a newly created current-month bill from appearing as a fabricated prior-month occurrence. Permanent Bills regressions cover the contract.
 5. **Normal-path implementation-language removal (`UX-02` + `UX-03` + `UX-05` + `UX-06` + `UX-09`; contained visible-path pass runtime-verified on isolated `@177`).** Customer-facing Tax year and property-expense guidance no longer expose “section on sheet” or “writer/sidebar”; Bank policy tokens render as customer language; **Acct PCT Avail** is now **Available credit %**. Existing technical identifiers and stored enum values remain unchanged behind the UI. The dashboard UX regression suite permanently checks these visible labels, and the guarded populated journey's Setup/Help language assertion passed. Continue the broader normal-path terminology audit during the remaining page passes.
 
 **P2/P3 follow-through:**
@@ -503,7 +524,7 @@ The initial screenshot review and the completed interactive populated-workbook r
 - **Runtime-verified on isolated `@177`:** preserve the proven narrow navigation behavior with a two-column primary-nav and compact two-column header action grid; keep the long **Assets & Liabilities** label and Assets subtabs free of horizontal overflow.
 - **390px runtime-verified; medium-width follow-up open:** tighten narrow header spacing and modestly improve secondary-text contrast and minimum helper size without changing the visual system. The scored replay found the medium-width header still leaves excessive unused space.
 
-These contained visibility fixes are covered by exact source-contract assertions in the existing `test:dashboard-ux` suite. Both default-width and 390px isolated `@177` Populated Dashboard journeys passed with verified Trash cleanup; no separate regression identifier is required. The advocate baseline is **8.1/10**. Isolated `@178` proved standalone `REG-015`, `@179` runtime-closed the Debt timeout as `REG-017`, and `@180` passed the full suite plus the read-only Bills cosmetic journey. The current score is **8.3/10** after rounding; Apps Script HTTP 0 recovery and other criterion-1 gaps remain open.
+These contained visibility fixes are covered by exact source-contract assertions in the existing `test:dashboard-ux` suite. Both default-width and 390px isolated `@177` Populated Dashboard journeys passed with verified Trash cleanup; no separate regression identifier is required. The advocate baseline is **8.1/10**. Isolated `@178` proved standalone `REG-015`, `@179` runtime-closed the Debt timeout as `REG-017`, and `@180` produced the last formal full score of **8.3/10**. HTTP 0 and exact-owner evidence subsequently closed through `@182`; Bills closed through `@193`; tracked-editor convergence closed through `@195`. Those improvements do not change the official score until a fresh full advocate rescore.
 
 ###### Advocate 10/10 score-improvement program
 
@@ -516,19 +537,19 @@ its defined scope; code intent alone cannot raise the score.
 
 | Order | Criterion | Baseline | What is wrong now | Path to 10/10 | Required closing evidence |
 |---:|---|---:|---|---|---|
-| 1 | Errors and task completion | 8.0 | `REG-015` misattributes `@177` PASS evidence to `@141`; Bills Pay looks complete before Quick add submission; paid versus next overdue occurrence is unclear; controlled failure/stale paths and Retirement readiness are not fully exercised. | Fix and runtime-prove exact-candidate evidence first; then decide the Bills product behavior before changing it; close every critical-task failure and missing branch. | Exact-candidate critical-task matrix passes with correct attribution, zero console errors, verified cleanup, and no unresolved task-blocking P0/P1. |
-| 2 | Trust and safety | 7.8 | Stale release attribution is untrustworthy; Bills consequences are ambiguous; Skip, Stop tracking, stale/failure recovery, history preservation, and extreme-change policy are not completely evidenced. | Make ownership/candidate claims fail closed; make every writer consequence and preserved-history rule explicit; add guarded recovery assertions and resolve the extreme-change ProductDecision. | Fresh marked disposable-writer evidence proves target safety, confirmations, history, recovery, attribution, and cleanup; no unexplained financial state transition. |
-| 3 | Transitions and feedback | 7.5 | Bills → Quick add handoff, paid → next occurrence, Upcoming Dismiss, duplicate/update semantics, and several stale/failure/loading outcomes do not consistently explain what happened and what comes next. | Define one feedback contract for loading, empty, success, stale, failure, and cross-page handoffs; implement it using the existing status patterns. | Interactive journey verifies every transition and recovery branch with specific before/after messages and next actions. |
-| 4 | Ease and efficiency | 8.3 | Bills requires an unexpected second action; some core tasks require users to infer product rules; repeated or unnecessary steps remain possible even though navigation is strong. | Remove surprise steps, prefill safely, preserve user context, clarify the shortest supported path, and avoid making users reselect known information. | First-time task timing/step review shows every core journey completes without detours, repeated entry, or advocate assistance. |
+| 1 | Errors and task completion | 8.0 | Exact-owner evidence and core Bills completion are closed. Controlled failure/stale paths, Skip/Stop-tracking safety, and Retirement readiness are not yet fully exercised. | Close `1c`–`1e` with guarded runtime proof and permanent regressions. | Exact-candidate critical-task matrix passes with correct attribution, zero console errors, verified cleanup, and no unresolved task-blocking P0/P1. |
+| 2 | Trust and safety | 7.8 | Bills payment consequences are now explicit and tracked-editor destructive actions live under Manage. Skip, Stop tracking execution, stale/failure recovery, preserved history, and extreme-change policy still need complete evidence. | Prove every remaining writer consequence and preserved-history rule; add guarded recovery assertions and resolve the extreme-change ProductDecision. | Fresh marked disposable-writer evidence proves target safety, confirmations, history, recovery, attribution, and cleanup; no unexplained financial state transition. |
+| 3 | Transitions and feedback | 7.5 | Bills payment/receipt feedback is closed. Upcoming Dismiss, Quick Add duplicate/update semantics, and several stale/failure/loading outcomes still do not consistently explain what happened and what comes next. | Finish one feedback contract for loading, empty, success, stale, failure, and the two remaining daily-task language cases. | Interactive journey verifies every transition and recovery branch with specific before/after messages and next actions. |
+| 4 | Ease and efficiency | 8.3 | Bills Pay and entity Add/Manage navigation are substantially simpler. Remaining core tasks still need a first-time step review to find residual detours or inferred rules. | Preserve context, clarify the shortest supported paths, and remove only confirmed repeated steps. | First-time task timing/step review shows every core journey completes without detours, repeated entry, or advocate assistance. |
 | 5 | Language and comprehension | 8.5 | The contained jargon pass is complete, but Quick add duplicate behavior, Bills occurrence language, Upcoming Dismiss, debt-destination relationships, and some advanced-versus-normal-path wording remain ambiguous. | Use direct customer language that states the action, consequence, preserved history, and next step; keep technical names only in Advanced Help. | Normal-path terminology sweep and interactive comprehension check find no unexplained implementation jargon or ambiguous consequence. |
 | 6 | Navigation and discoverability | 8.8 | Primary navigation is strong, but Debt accounts versus Debt overview versus Rolling payoff still needs clearer contextual relationships; some task-to-next-step links remain implicit. | Add concise contextual links/purpose copy and preserve page/subtab context across handoffs without adding navigation clutter. | A first-time advocate can find and explain every related destination at desktop and narrow widths without implementation knowledge. |
 | 7 | Visual design and readability | 8.7 | The 390px layout is strong, while the medium-width header still leaves excessive unused space; a few dense result surfaces and secondary hierarchy details remain. | Add a deliberate medium breakpoint, refine density and hierarchy page by page, and preserve the established navy/blue/white system. | Default, medium, and narrow screenshots show balanced composition, readable hierarchy, no orphan gaps, and no visually unfinished state. |
 | 8 | Responsive and accessibility | 7.0 | 390px avoids overflow, but keyboard order, focus visibility, semantic tab state, accessible names, touch targets, contrast, and reduced motion have not been fully exercised. | Complete `UX-10`: keyboard-only and semantic audit, focus/contrast corrections, reduced-motion verification, and supported-width coverage. | Desktop / medium / 390 screenshots plus keyboard, focus, semantics, target-size, contrast, and reduced-motion evidence all pass without exceptions. |
 
-**Program order is deliberate:** fix evidence correctness before using later runs to
-claim progress; resolve trust and feedback before optimizing convenience or polish;
-finish with responsive/accessibility because it must validate all preceding UI
-changes. Bills behavior remains a discussion gate—do not implement it by assumption.
+**Program order is deliberate:** evidence correctness and the core Bills behavior
+are closed; finish the remaining trust and feedback proof before optimizing
+convenience or polish; finish with responsive/accessibility because it must
+validate all preceding UI changes.
 
 **Evidence gaps before `UX-10` closure:** Skip, Stop tracking, loading failure, stale data, and server-error recovery still require a separately guarded disposable writer journey.
 
@@ -1069,7 +1090,7 @@ Authoritative copy lives here; `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md` mirror
 
 ## Future UI Standardization — Manage Pattern Rollout
 
-**Status:** current rollout complete. **Bills, Debts, Bank Accounts, Investments, and Houses are implemented; Bank/Investment/House empty and populated states passed isolated Central `@194` on 2026-07-24.**
+**Status:** current rollout complete. **Bills, Debts, Bank Accounts, Investments, and Houses are implemented; the shared presentation layer and Save-only Update / Manage-owned lifecycle contract passed isolated Central `@195` on 2026-07-24.**
 
 **Background.** Bills and Debts now have dedicated management workflows — **Manage Bills** and **Manage Debts** — which have proven significantly more user-friendly than direct sheet editing. They establish the **preferred long-term UI pattern** for module maintenance, and each major module should eventually adopt it.
 

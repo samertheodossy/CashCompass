@@ -5,7 +5,9 @@
 **Created:** 2026-07-20
 
 **Historical baseline:** 7.5/10 controlled-family-beta product (2026-07-20)
-**Current independent advocate score:** 8.3/10 on isolated Central `@180` (2026-07-23)
+**Last formal independent advocate score:** 8.3/10 on isolated Central `@180`
+(2026-07-23). Isolated Central has since advanced through `@195`; a new full
+scored advocate run is still required before the score changes.
 **Target:** A 10/10 Beta Release Candidate whose trust, operations, and product architecture make later monetization an incremental launch step rather than a rescue project.
 
 **Execution companion:** `FULL_BETA_REMAINING_PLAN.md` is the authoritative
@@ -37,16 +39,19 @@ Trusted users may participate in a **supervised validation cohort** before the r
   invited-Beta **decision** is **2026-09-24**.
 - **2026-10-02** is the contingency boundary if one focused repair/retest cycle is
   required.
-- The forecast assumes prompt Bills product decisions, no new major feature in
-  scope, continued isolated-Central availability, acceptable exact-candidate
+- The forecast assumes no new major feature in scope, continued isolated-Central
+  availability, acceptable exact-candidate
   performance, and a five-to-seven-day cohort without a material defect.
 - Dates do not waive this plan's score, safety, financial, privacy, performance,
   cohort, or Release Readiness gates.
 
-The execution waves are: Aug 21–27 HTTP 0 and exact-owner evidence; Aug 28–Sep 3
-Bills/Retirement/failure paths; Sep 4–10 accessibility and remaining advocate
-criteria; Sep 11–17 candidate freeze, Performance, and complete Release
-Readiness; Sep 18–24 supervised cohort, final scorecard, and go/no-go.
+The execution waves are: completed through Jul 24 — HTTP 0, exact-owner
+evidence, core Bills Pay, and tracked-editor convergence; Aug 21–27 —
+controlled reliability/safety, Retirement, Quick Add semantics, and Upcoming
+language; Aug 28–Sep 3 — remaining page UX plus performance and fixture/recovery
+work; Sep 4–10 — accessibility and candidate prerequisites; Sep 11–17 —
+candidate freeze, Performance, and complete Release Readiness; Sep 18–24 —
+supervised cohort, final scorecard, and go/no-go.
 
 The optimized model uses three coordinated lanes: critical engineering,
 UX/evidence, and operations/product foundation. Operations and monetization
@@ -252,7 +257,7 @@ The ordered implementation inventory for this experience work is `TODO.md → UX
 
 With the P1 evidence foundation, House Financial Accuracy V1, and Financial
 Integrity Phase 3 complete, the reconciled remaining plan is approximately
-**25–35 focused working days in the optimized best case** or **35–50 focused
+**20–30 focused working days in the optimized best case** or **30–45 focused
 working days conservatively**. Add **5–7 calendar days** for the supervised
 cohort plus defect rework, Google authorization/runtime delays, and external
 review. Several UX audits and the operations/monetization foundations can run in
@@ -324,15 +329,20 @@ Validator modules, the required bounded server inventory, all non-performance
 E2E/live packs, and the single-console Release Readiness controls are
 runtime-proven. House Financial Accuracy V1 (`96d0ebe`, isolated `@145`, 27/27)
 and Financial Integrity Phase 3 (`9b97c4d`, isolated `@156`, 53/53) are complete.
-The `@175`–`@180` advocate wave closed formatted Bank replacement, Income/Setup
-classification, customer-language/responsive improvements, standalone
-evidence fail-closed behavior, `REG-017`, and the contained Bills scheduling
-presentation pass; the current score is 8.3/10.
+The `@175`–`@182` advocate/reliability wave closed formatted Bank replacement,
+Income/Setup classification, customer-language/responsive improvements,
+standalone evidence fail-closed behavior, `REG-017`, HTTP 0 recovery, and exact
+owner/Refresh reconciliation. The following Bills and tracked-editor waves
+closed the core Bills Pay journey and aligned Bills, Houses, Bank Accounts,
+Investments, and Debts on shared Due/Update, Add, and Manage patterns. Isolated
+`@195` passed First-Run V4 10/10 and Populated Dashboard V3 13/13 with zero
+browser errors, Restricted fixtures, and verified cleanup. The last formal
+advocate score remains 8.3/10 until a fresh full scored run.
 
-The immediate gate is HTTP 0 recovery (`REG-018`) plus dedicated exact-owner
-candidate evidence. Then decide—do not infer—the Bills Pay → Quick add →
-next-occurrence contract; close Retirement and controlled stale/failure journeys;
-complete accessibility/responsive evidence; freeze the candidate; restart the
-20-pair percentile campaign; ratify p50/p95 budgets; finalize Release Readiness;
-complete supervised cohort proof; and run the full 10/10 scorecard before broad
-Beta.
+The immediate gate is controlled stale/failure recovery (`1c`), Skip and
+Stop-tracking safety evidence (`1d`), and Retirement runtime proof (`1e`).
+Then close Quick Add duplicate/update and Upcoming Dismiss language (`2d`–`2e`);
+complete remaining page UX and accessibility/responsive evidence; freeze the
+candidate; restart the 20-pair percentile campaign; ratify p50/p95 budgets;
+finalize Release Readiness; complete supervised cohort proof; and run the full
+10/10 scorecard before broad Beta.

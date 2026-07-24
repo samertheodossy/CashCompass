@@ -2,9 +2,15 @@
 
 **Status:** Active execution inventory
 
-**Reconciled:** 2026-07-23
+**Reconciled:** 2026-07-24
 
-**Current evidence:** isolated Central `@182`, advocate score **8.3/10**
+**Current evidence:** isolated Central `@195`; First-Run V4 **10/10 PASS** and
+Populated Dashboard V3 **13/13 PASS**, with zero browser errors, Restricted
+single-owner fixtures, and verified Trash cleanup
+
+**Last formal independent advocate score:** **8.3/10** on isolated Central
+`@180`. This remains the official score until the next full scored advocate run;
+the product has materially improved since that baseline.
 
 **Target broad invited-Beta decision:** **2026-09-24**
 
@@ -26,6 +32,42 @@ The estimates below are focused effort for one person. They exclude the planned
 August break, external review time, Apps Script waiting time, the five-to-seven
 calendar day cohort, and unpredictable defect rework. A date never waives a gate.
 
+## Reconciled completion checkpoint
+
+The following numbered items were open when this plan was created and are now
+closed. They are retained here so the work map does not lose history.
+
+| ID | Completed result | Closing evidence |
+|---|---|---|
+| 1a | Apps Script HTTP 0 recovery (`REG-018`) | One bounded retry for verified pure reads, calm customer wording, no write retry, deterministic regression, and clean isolated `@181` integration replay |
+| 1b | Exact-owner browser-evidence proof (`REG-015`, `REG-019`) | Exact-run ownership and fail-closed standalone behavior passed through isolated `@182` |
+| 2a | Bills Pay contract decided | Pay records in a dedicated Bills side panel; Quick Add remains separate |
+| 2b | Approved Bills Pay experience implemented | Amount/date confirmation, one guarded write, receipt details, and explicit **Done** flow shipped on isolated `@193` |
+| 2c | Paid occurrence completion explained | Successful payment shows Cash Flow month, previous total, payment added, new total, payment history, and verifies the occurrence is cleared |
+| 2f | Permanent Bills journey regression | Bills Due/Add/Manage, creation-month floor, payment marker, Cash Flow receipt, history chart, no stale warning, Restricted fixture, and cleanup passed |
+| 3d | Tracked-editor workflow consistency | Bills use **Due · Add · Manage**; Houses, Bank Accounts, Investments, and Debts use **Update · Add · Manage**; Setup preserves Add/Manage intent; Update is Save-only and Manage owns guarded Stop tracking |
+
+The remaining tables below are therefore an **open-only list**.
+
+## Open list at a glance
+
+| Order | Open IDs | Workstream | Focused estimate |
+|---:|---|---|---:|
+| 1 | `1c`–`1e` | Controlled reliability, writer safety, and Retirement proof | 2.5–5 d |
+| 2 | `2d`–`2e` | Quick Add and Upcoming consequence language | 1–2 d |
+| 3 | `3a`–`3c`, `3e`–`3k` | Remaining page UX, advocate scoring, responsive/accessibility | 9–18 d |
+| 4 | `4a`–`4f` | Performance optimization, measurement, and percentile gate | 5–11 d |
+| 5 | `5a`–`5f` | Frozen-candidate financial, workbook, recovery, and bounded-safety proof | 4.5–11 d |
+| 6 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
+| 7 | `7a`–`7f` | Monetization-ready policy and architecture foundation; no billing activation | 5–10 d |
+| 8 | `8a`–`8f` | Freeze, complete exact-candidate evidence, score, and READY verdict | 3.5–7 d plus fixes |
+| 9 | `9a`–`9e` | Supervised cohort, go/no-go, and separately approved Central Beta promotion | 2–3 active d plus 5–7 calendar d and fixes |
+
+The arithmetic sum is intentionally not the delivery forecast because Groups
+6–7 and parts of Groups 3 and 5 can advance during runtime waits. The optimized
+capacity forecast is **20–30 focused working days best case** or **30–45
+conservatively**, plus the five-to-seven-day cohort and defect contingency.
+
 ## Completion standard
 
 Broad invited Beta requires all of the following:
@@ -42,43 +84,21 @@ Broad invited Beta requires all of the following:
 
 | ID | Remaining item | Exit evidence | Estimate |
 |---|---|---|---:|
-| 1a | Apps Script HTTP 0 recovery (`REG-018`) | Calm bounded retry/recovery, no raw transport error, no duplicate submission, permanent regression, isolated PASS | 1–2 d |
-| 1b | Dedicated exact-owner browser-evidence proof (`REG-015`) | Release Readiness-owned launcher accepts only its exact active run/candidate; stale or standalone evidence fails closed | 0.5–1 d |
 | 1c | Controlled Bank/Debt stale and failure journeys | Loading failure, stale response, server error, retry, disabled actions, and recovery pass on a marked disposable fixture | 1–2 d |
 | 1d | Skip and Stop-tracking safety evidence | Consequence, preserved history, confirmation, stale protection, recovery, and cleanup are explicit and regression-protected | 1–2 d |
 | 1e | Retirement guidance runtime proof | Missing-minimum-input guidance hides result walls; ready state reveals correct results; focused journey passes | 0.5–1 d |
 
-**Group 1 estimate: 4–8 focused days.**
-
-**Execution note — 2026-07-24:** `1a` is source-ready with one bounded retry
-limited to verified pure dashboard reads, calm `HTTP 0` wording everywhere, and
-permanent dynamic proof that business errors and write-capable operations are
-never retried. Isolated `@181` passed the full normal-path populated journey
-without raw transport errors; a forced live `HTTP 0` is not claimed because the
-harness has no supported injection seam; the production helper is nevertheless
-deterministically exercised by the injected regression, so `1a` is complete.
-`1b` passed its exact-owner runtime
-proof on run `RR-0e6941fb-6548-4c45-b5c3-6304ad0af686` / browser run
-`FR-13656973-a9c6-49ed-a54a-d6731daf01b6`, with exact candidate attribution,
-12/12 assertions, Restricted sharing, and verified Trash cleanup. That replay
-exposed `REG-019`: **Refresh status** did not ingest the new PASS until
-finalization. The narrow refresh/reconciliation fix, dynamic regression, and
-isolated `@182` replay now pass: the console shows `PASS / Verified` while
-keeping the exact run `IN_PROGRESS`. `1b` is complete. Beta remains `@106`;
-the bounded deployment was untouched.
+**Group 1 open estimate: 2.5–5 focused days.**
 
 ## 2. Bills and daily-task completion
 
 | ID | Remaining item | Exit evidence | Estimate |
 |---|---|---|---:|
-| 2a | Decide the Bills Pay contract | Product decision states whether Pay records immediately or intentionally hands off to Quick Add | 0.5 d |
-| 2b | Implement the approved Pay → Quick Add behavior | The remaining action is unmistakable, context is preserved, and no duplicate payment is possible | 1–2 d |
-| 2c | Explain the next bill occurrence | After an occurrence is paid, the next overdue/upcoming/handled state and reason are explicit | 0.5–1 d |
 | 2d | Clarify Quick Add duplicate/update semantics | Customer-facing copy truthfully states replace/update/add behavior | 0.5–1 d |
 | 2e | Clarify Upcoming Dismiss | The outcome and preserved-history rule are explicit | 0.5–1 d |
-| 2f | Permanent Bills journey regression | Pay, handoff, submission, next occurrence, duplicate behavior, Help, Restricted sharing, and verified cleanup pass | 1–2 d |
 
-**Group 2 estimate: 4–7.5 focused days.**
+**Group 2 open estimate: 1–2 focused days.** The core Bills flow is closed; only
+the adjacent Quick Add and Upcoming wording contracts remain.
 
 ## 3. Remaining UX score improvements
 
@@ -90,7 +110,6 @@ acceptance contract, close it with evidence rather than manufacturing a redesign
 | 3a | Finish loading-state consistency | Remaining Overview, Planner, picker, onboarding, and Admin slots use contextual shared loading states | 1–2 d |
 | 3b | Finish empty/error-state consistency | Standard empty, unavailable, retry, and failure patterns cover core surfaces | 1–2 d |
 | 3c | Planning hierarchy and Debt relationships | Debt accounts, Debt Overview, and Rolling Payoff purposes and links are understandable | 0.5–1 d |
-| 3d | Assets workflow consistency | Bank, Investment, and House selection/summary/update/Save/Stop-tracking patterns align | 1–2 d |
 | 3e | Properties context polish | Selected property/year remains clear; Cash Flow-posting consequences are understandable | 0.5–1 d |
 | 3f | Activity review polish | Filters are visible/reversible; Donation-only Remove is correctly gated; narrow layout is readable | 1–2 d |
 | 3g | Setup progress and next step | Required progress and one recommended next action are visible without performing a write | 0.5–1 d |
@@ -99,7 +118,7 @@ acceptance contract, close it with evidence rather than manufacturing a redesign
 | 3j | Responsive and accessibility closeout | Desktop/medium/390px, keyboard, focus, semantics, names, target size, contrast, and reduced motion pass | 2–4 d |
 | 3k | Exact-candidate task-based advocate rerun | All eight criteria are rescored from interactive evidence; every category reaches the release path to ≥9 | 1–2 d |
 
-**Group 3 estimate: 10–20 focused days.**
+**Group 3 open estimate: 9–18 focused days.**
 
 ## 4. Performance gate
 
@@ -182,10 +201,11 @@ This is design and policy readiness, not payment activation.
 
 ## Overall capacity range
 
-- **Best case:** approximately **25–35 focused working days** because many page
-  passes can close through audit, and operations/business foundations can run
-  alongside runtime waits.
-- **Conservative case:** approximately **35–50 focused working days**.
+- **Best case:** approximately **20–30 focused working days** because several
+  formerly critical UX and Bills items are closed, many remaining page passes
+  can close through audit, and operations/business foundations can run alongside
+  runtime waits.
+- **Conservative case:** approximately **30–45 focused working days**.
 - **Cohort:** add **5–7 calendar days**.
 - **Contingency:** add **1–2 weeks** if performance, accessibility, or cohort
   evidence exposes a material defect.
@@ -198,9 +218,9 @@ gate controls the actual date.
 
 ### Critical path
 
-The work that directly controls the finish date is:
+The remaining work that directly controls the finish date is:
 
-`1a → 1b → 2a → 2b–2f → 1c–1e → 3j–3k → 4a–4f → 8a–8f → 9a–9e`
+`1c–1e → 2d–2e → 3j–3k → 4a–4f → 8a–8f → 9a–9e`
 
 Financial/workbook proof in Group 5 must finish before `8b`. Operations and
 monetization foundations in Groups 6–7 must finish before `8d`, but they should
@@ -216,8 +236,8 @@ not block early engineering.
 
 ### Time-saving rules
 
-1. **Resolve decisions before coding.** Decide Bills Pay, recovery disposition,
-   performance budgets, and broad-Beta packaging boundaries at the start.
+1. **Resolve decisions before coding.** Decide recovery disposition,
+   performance budgets, and broad-Beta packaging boundaries before implementation.
 2. **Measure performance early.** Run diagnostic timings before the final freeze
    so the 20-pair campaign is confirmation, not discovery.
 3. **Audit before redesigning.** Close a UX item with evidence when it already
@@ -240,9 +260,10 @@ not block early engineering.
 
 | Window | Lane A — critical | Lane B — UX/evidence | Lane C — parallel foundation | Exit |
 |---|---|---|---|---|
-| Aug 21–27 | `1a`, `1b`, decision `2a` | Audit `1e`, `3a`, `3b`; begin diagnostic performance | Start `6a`–`6f`, `7a`–`7b`, cohort design | Reliability/evidence truth closed; Bills contract approved |
-| Aug 28–Sep 3 | `2b`–`2f`, `1c`–`1d` | Close Retirement and targeted page-pass gaps | `7c`–`7f`, known limitations, support posture | Critical task completion and trust journeys pass |
-| Sep 4–10 | Performance fixes `4a`–`4d` | `3c`–`3j`, Group 5 matrix/recovery proof | Finish Groups 6–7 | UX/accessibility path ≥9 understood; no unresolved proof gap |
+| Completed through Jul 24 | `1a`, `1b`, `2a`–`2c`, `2f` | `3d`; shared tracked-editor convergence | — | Isolated `@195` V4/V3 browser suites pass; Beta stays `@106`; bounded untouched |
+| Aug 21–27 | `1c`–`1e`, `2d`–`2e` | Audit `3a`, `3b`; begin diagnostic performance | Start `6a`–`6f`, `7a`–`7b`, cohort design | Remaining reliability and daily-task language contracts close |
+| Aug 28–Sep 3 | Begin performance fixes `4a`–`4d` | Close `3c`, `3e`–`3i`; advance Group 5 matrix/recovery proof | `7c`–`7f`, known limitations, support posture | Remaining page-level UX and trust gaps close |
+| Sep 4–10 | Finish `4a`–`4d` | `3j` accessibility/responsive closeout; finish Group 5 | Finish Groups 6–7 | UX/accessibility path ≥9 and candidate prerequisites complete |
 | Sep 11–17 | Freeze `8a`; run `4e`–`4f`, `8b`–`8f` | Exact-candidate advocate `3k` | Final release/rollback/support review | Exact candidate reaches automated READY prerequisites |
 | Sep 18–24 | Release-blocking fixes only | Cohort observation and final advocate check | Support the cohort; prepare go/no-go | Five-to-seven-day cohort and final broad-Beta decision |
 

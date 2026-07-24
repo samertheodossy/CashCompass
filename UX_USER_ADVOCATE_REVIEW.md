@@ -16,6 +16,32 @@ The advocate should report:
 - whether the color, contrast, spacing, and typography support readability;
 - whether loading, success, empty, stale, and failure states are trustworthy.
 
+## Current engineering reconciliation — 2026-07-24
+
+This section aligns the historical advocate findings with the current product
+work map. It is an engineering status reconciliation, **not** a new advocate
+score or a substitute for interactive review.
+
+- **Last formal full advocate score:** **8.3/10** on isolated Central `@180`.
+- **Completed after that score:** HTTP 0 recovery and exact-owner evidence
+  (`@181`–`@182`); dedicated Bills Pay with amount/date confirmation,
+  occurrence clearing, Cash Flow receipt, six-month history, and
+  **Due · Add · Manage** (`@193`); Houses, Bank Accounts, Investments, and Debts
+  **Update · Add · Manage**, Setup Add/Manage handoffs, Save-only Update, and
+  Manage-owned guarded Stop tracking (`@194`–`@195`).
+- **Latest regression evidence:** isolated `@195` First-Run V4 **10/10 PASS** and
+  Populated Dashboard V3 **13/13 PASS**, zero browser errors, Restricted
+  single-owner fixtures, verified Trash cleanup.
+- **Still open for advocate closure:** controlled stale/failure recovery;
+  Skip/Stop-tracking consequence and history proof; Retirement ready/not-ready
+  runtime; Quick Add duplicate/update semantics; Upcoming Dismiss language;
+  remaining page-level UX; medium/narrow/accessibility review; and a fresh full
+  scored advocate run on the exact candidate.
+
+The authoritative IDs, sequence, and estimates are in
+`FULL_BETA_REMAINING_PLAN.md`. Historical findings and scorecards below remain
+unchanged so the evidence trail is preserved.
+
 ## Safety and evidence rules
 
 - Never use the bounded workbook as a test target.

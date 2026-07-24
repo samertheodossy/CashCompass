@@ -2,6 +2,19 @@
 
 The V1 trust baseline is shipped and locked, and V1.1 closed out with the retirement profile integration (see **V1.1 — Retirement Profile Integration (DOB Source of Truth)** section below). The project has since moved into **Central App live + Family Beta readiness** — the Central App architecture is operational and the active work is hardening it toward a family beta (see **Current State — Post V1.2 Prep** below for the per-slice migration record). Working rules live in `WORKING_RULES.md → Current phase` + `→ Central App Transition Rules` (now active); product framing lives in `PROJECT_CONTEXT.md → Current phase` and `→ Current architecture — Central App (live)`. All prior phase notes below this header are preserved as-is for historical record.
 
+- **Broad-Beta work-map reconciliation through isolated `@195`
+  (2026-07-24).** Reconciled `FULL_BETA_REMAINING_PLAN.md`, `ROADMAP.md`,
+  `PROJECT_CONTEXT.md`, `BETA_10_OUT_OF_10_PLAN.md`, `TODO.md`,
+  `ENHANCEMENTS.md`, and `UX_USER_ADVOCATE_REVIEW.md` against the completed
+  Bills and tracked-editor waves. The authoritative plan now separates closed
+  IDs `1a`, `1b`, `2a`–`2c`, `2f`, and `3d` from the open-only inventory,
+  identifies `1c`–`1e` as the next active reliability/safety work, and updates
+  the optimized remaining capacity to 20–30 focused days best case or 30–45
+  conservatively plus cohort/contingency. The last formal advocate score remains
+  8.3/10 until a fresh full scored run; regression results were not used to
+  inflate it. Documentation only: no runtime behavior, workbook, Apps Script
+  deployment, Beta deployment, or bounded deployment changed.
+
 - **Tracked-editor destructive-action cleanup — isolated `@195` PASS
   (2026-07-24).** Following the `@194` convergence walkthrough, removed the
   duplicate **Stop tracking** controls from the Bank Account, Investment,
