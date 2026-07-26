@@ -11,7 +11,7 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current stage — Stage 3: Beta Readiness
 
-**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; isolated Central has since advanced through `@195`, but the official score does not change until a new full scored advocate run. The 7.5/10 value remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, the non-performance P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** Financial Integrity is committed as `9b97c4d` and exact isolated `@156` evidence passed 53/53. Current ordering authority is `ROADMAP.md`: **controlled reliability/safety and Retirement proof → Quick Add/Upcoming language → remaining page UX/accessibility → exact-candidate Performance and final Release Readiness verdict → supervised cohort proof → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
+**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; isolated Central has since advanced through `@196`. The `@196` 7.2/10 read-only score is evidence-limited and not comparable, so the official score does not change until a full writer-inclusive advocate run. The 7.5/10 value remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, the non-performance P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** Financial Integrity is committed as `9b97c4d` and exact isolated `@156` evidence passed 53/53. Current ordering authority is `ROADMAP.md`: **Overview health trust → controlled reliability/safety and Retirement proof → Activity correction → Quick Add/Upcoming language → remaining page UX/accessibility → exact-candidate Performance and final Release Readiness verdict → supervised cohort proof → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
 
 `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered finish-line inventory
 for broad invited Beta. It assigns IDs `1a`–`9e`, focused-effort estimates,
@@ -468,11 +468,13 @@ verified Trash cleanup.
 - Show active filters as compact chips or an equally clear summary and provide **Clear filters**.
 - Keep the filter controls compact (and evaluate a sticky filter bar on long result sets).
 - Use a responsive card/list presentation when the full table cannot remain readable.
-- ✅ **Activity action-column truth (`5g`) implemented locally 2026-07-26:**
+- ✅ **Activity action-column truth (`5g` / `REG-020`) runtime-closed on isolated
+  `@196` 2026-07-26:**
   rename the column to **Action**, show **Remove donation** only for eligible
   Donation rows, and render no action control for Planner/email/import or other
   unsupported events. The server remains donation-only and rejects forged
-  non-donation requests. Runtime validation is still required before closure.
+  non-donation requests. The fresh read-only interactive replay passed with no
+  browser errors; permanent UI/server regressions remain enforced.
 
 **Acceptance:** active filtering is obvious and reversible; desktop sorting/paging remains correct; mobile content is readable; unsupported events expose no misleading action; Activity remains an audit surface and no undo/delete scope expands.
 
@@ -532,6 +534,44 @@ The initial screenshot review and the completed interactive populated-workbook r
 - **390px runtime-verified; medium-width follow-up open:** tighten narrow header spacing and modestly improve secondary-text contrast and minimum helper size without changing the visual system. The scored replay found the medium-width header still leaves excessive unused space.
 
 These contained visibility fixes are covered by exact source-contract assertions in the existing `test:dashboard-ux` suite. Both default-width and 390px isolated `@177` Populated Dashboard journeys passed with verified Trash cleanup; no separate regression identifier is required. The advocate baseline is **8.1/10**. Isolated `@178` proved standalone `REG-015`, `@179` runtime-closed the Debt timeout as `REG-017`, and `@180` produced the last formal full score of **8.3/10**. HTTP 0 and exact-owner evidence subsequently closed through `@182`; Bills closed through `@193`; tracked-editor convergence closed through `@195`. Those improvements do not change the official score until a fresh full advocate rescore.
+
+###### Isolated `@196` advocate findings — 2026-07-26
+
+The read-only advocate replay confirmed Activity action truth (`5g` /
+`REG-020`) and found no browser errors. Its **7.2/10** score is evidence-limited
+and is not comparable with the writer-inclusive formal **8.3/10** score. The
+findings below are Beta work, ordered by product risk:
+
+1. **`3l` · P1 — Overview health-score prerequisite/freshness trust (1–2 d).**
+   Do not show **Strong** while Setup/data are incomplete, the baseline is stale,
+   or visible cash/runway/projected flow contradict the label. Add pure/server,
+   Dashboard UX, First-Run, and Populated exact-candidate coverage.
+2. **`3j` · P1 — Programmatic form labels and accessibility closeout (expanded
+   to 3–5 d).** Associate every visible label with its input/select; complete
+   keyboard, focus, target-size, contrast, reduced-motion, and
+   desktop/medium/390px evidence.
+3. **`2d` · P2 — Quick Add consequence wording.** State precisely when an
+   existing entry is added, updated, or replaced; keep the existing write/dupe
+   reliability guards and add a UX-copy assertion.
+4. **`3b` · P2 — Honest empty/guidance states.** Empty Bank, Investment, and
+   Debt pages should begin in Add/guided state; Purchase and Retirement result
+   walls stay hidden until ready.
+5. **`3m` · P2/P3 — Form readiness and residual customer language (1–2 d).**
+   Disable primary actions until minimum input is valid; preserve server
+   validators; render customer-facing Bill payment-source labels without
+   changing stored tokens; remove “2026 block,” duplicated Retirement guidance,
+   and remaining normal-path abbreviations/internal terminology.
+6. **`3c` / `3h` · P2 — Help and Debt routing.** Replace the obsolete
+   `Planning → Debts` path with **Assets & Liabilities → Debt accounts** and add
+   an exact link/copy regression.
+7. **`3i` · P3 — Medium composition.** Correct excessive header whitespace and
+   Setup-card density without regressing the proven 390px layout.
+
+Every fix invokes Regression Discovery. An existing suite counts only if it
+asserts the exact failure; otherwise add the next `REG-###`. The detailed
+server/UI/browser homes are authoritative in
+`FULL_BETA_REMAINING_PLAN.md → Isolated @196 advocate finding reconciliation`
+and `REGRESSION_SUITE_PLAN.md → Isolated @196 advocate regression expansion`.
 
 ###### Advocate 10/10 score-improvement program
 

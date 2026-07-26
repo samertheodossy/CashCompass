@@ -6,7 +6,8 @@
 
 **Historical baseline:** 7.5/10 controlled-family-beta product (2026-07-20)
 **Last formal independent advocate score:** 8.3/10 on isolated Central `@180`
-(2026-07-23). Isolated Central has since advanced through `@195`; a new full
+(2026-07-23). Isolated Central has since advanced through `@196`; the new
+read-only 7.2/10 advocate run is evidence-limited and not comparable. A full
 scored advocate run is still required before the score changes.
 **Target:** A 10/10 Beta Release Candidate whose trust, operations, and product architecture make later monetization an incremental launch step rather than a rescue project.
 
@@ -230,6 +231,13 @@ The beta does not need to charge immediately, but it must avoid architecture and
 4. Complete responsive, keyboard, contrast, and browser compatibility review.
 5. Run task-based usability sessions; fix repeated confusion rather than isolated preference.
 6. Run the independent user-advocate contract in `UX_USER_ADVOCATE_REVIEW.md` on the exact candidate. Treat confirmed money-entry safety, cross-surface truth, payment-handoff, and normal-path implementation-language findings as Core Experience gates rather than optional polish.
+7. Suppress or qualify financial-health scoring until setup/data prerequisites
+   and freshness are satisfied; the app must not label financial health
+   **Strong** when its visible cash, runway, projected-flow, or readiness state
+   contradicts that label.
+8. Require programmatic form labels, honest disabled/readiness states, minimum
+   target sizes, and customer-facing option labels on every core form. Client
+   gating supplements rather than replaces server validation.
 
 The ordered implementation inventory for this experience work is `TODO.md → UX Backlog (Version 1) → Web Dashboard page-by-page polish` (`UX-01` through `UX-10`). It begins with Overview hierarchy and balanced card rows, then proceeds through global consistency, Cash Flow, Planning, Assets, Properties, Activity, Setup, Help, and the responsive/accessibility closeout. Each ID is intended to ship and validate independently; this phase is not authorization for a broad redesign or for calculation/schema/write-path changes.
 
@@ -264,17 +272,18 @@ The ordered implementation inventory for this experience work is `TODO.md → UX
 
 With the P1 evidence foundation, House Financial Accuracy V1, and Financial
 Integrity Phase 3 complete, the reconciled remaining plan is approximately
-**32–48 focused working days in the optimized best case** or **45–70 focused
+**35–52 focused working days in the optimized best case** or **48–76 focused
 working days conservatively**. Add **5–7 calendar days** for the supervised
 cohort plus defect rework, Google authorization/runtime delays, and external
 review. Several UX audits and the operations/monetization foundations can run in
 parallel; the exact estimates and dependencies are maintained in
 `FULL_BETA_REMAINING_PLAN.md`.
 
-The increase reflects the 2026-07-26 decision to make Activity correction and
-immutable reversal a broad-Beta requirement. The September 24 target and October
-2 contingency are therefore at risk until the shared correction foundation is
-implemented and measured.
+The increase reflects the 2026-07-26 decisions to make Activity correction and
+immutable reversal a broad-Beta requirement and to schedule every confirmed
+`@196` advocate finding. The September 24 target and October 2 contingency are
+therefore at risk until the shared correction foundation and new P1 health/
+accessibility work are implemented and measured.
 
 This range is for capacity planning only. The release decision is based on evidence, not elapsed time.
 
@@ -347,14 +356,18 @@ standalone evidence fail-closed behavior, `REG-017`, HTTP 0 recovery, and exact
 owner/Refresh reconciliation. The following Bills and tracked-editor waves
 closed the core Bills Pay journey and aligned Bills, Houses, Bank Accounts,
 Investments, and Debts on shared Due/Update, Add, and Manage patterns. Isolated
-`@195` passed First-Run V4 10/10 and Populated Dashboard V3 13/13 with zero
-browser errors, Restricted fixtures, and verified cleanup. The last formal
-advocate score remains 8.3/10 until a fresh full scored run.
+Isolated `@196` then runtime-closed Activity action truth (`5g` / `REG-020`)
+with no browser errors. The prior `@195` First-Run V4 10/10 and Populated
+Dashboard V3 13/13 remain the latest writer-inclusive evidence. The last formal
+advocate score remains 8.3/10; the `@196` 7.2 read-only score is an
+evidence-limited discovery score, not a comparable regression.
 
-The immediate gate is controlled stale/failure recovery (`1c`), Skip and
+The immediate gate is Overview health prerequisite/freshness trust (`3l`),
+followed by controlled stale/failure recovery (`1c`), Skip and
 Stop-tracking safety evidence (`1d`), and Retirement runtime proof (`1e`).
 Then close Quick Add duplicate/update and Upcoming Dismiss language (`2d`–`2e`);
-complete remaining page UX and accessibility/responsive evidence; freeze the
+complete remaining page UX, form readiness/customer language (`3m`), and
+accessibility/responsive evidence (`3j`); freeze the
 candidate; restart the 20-pair percentile campaign; ratify p50/p95 budgets;
 finalize Release Readiness; complete supervised cohort proof; and run the full
 10/10 scorecard before broad Beta.

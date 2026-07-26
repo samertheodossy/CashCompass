@@ -650,6 +650,70 @@ and evidence-led; dates do not raise a score or waive a finding.
    recovery on a new harness-created disposable workbook.
 9. Repeat supported desktop and 390px responsive checks.
 
+## Isolated `@196` read-only advocate review — 2026-07-26
+
+**Scope:** Interactive, read-only journey on the approved isolated Central
+candidate. No Save, Pay, Skip, Stop tracking, Add, Remove, migration,
+deployment, or workbook write was performed. Beta remained `@106`; bounded,
+mapped-user, Golden, and configured-default workbooks were not used.
+
+**Evidence result:** Activity action truth passed: the column is **Action**,
+eligible Donation rows alone expose **Remove donation**, unsupported Bill,
+Planner, email, import, and diagnostic rows expose no action control, and the
+browser reported no errors. `5g` / `REG-020` is closed.
+
+| Criterion | Read-only score | Evidence label | Main deduction |
+|---|---:|---|---|
+| Errors and task completion | 7.0 | Interactive | Writer and controlled-failure journeys were outside this read-only run. |
+| Ease and efficiency | 7.0 | Interactive | Empty editors and several prematurely enabled actions do not guide the next valid step. |
+| Language and comprehension | 7.2 | Interactive | Quick Add semantics, internal Bill tokens, Setup “block” wording, and obsolete Debt Help routing remain. |
+| Transitions and feedback | 7.0 | Interactive | Not-ready form states and result walls do not consistently reveal when an action becomes valid. |
+| Visual design and readability | 8.2 | Interactive / Screenshot | The visual system is strong; medium header whitespace and Setup-card density remain. |
+| Navigation and discoverability | 8.5 | Interactive | Primary navigation is strong; Debt Help destination needs correction. |
+| Trust and safety | 6.5 | Interactive | **Financial health 85 — Strong** contradicts incomplete setup, zero cash/runway, negative projected flow, and stale data. |
+| Responsive and accessibility | 6.0 | Interactive / Source review | Core controls lack programmatic names and several targets measure below 44px. |
+
+**Weighted read-only score: 7.2/10.** This is a discovery score constrained by
+the approved read-only scope. It is not comparable with, and does not replace,
+the last formal writer-inclusive **8.3/10** score.
+
+### Prioritized findings
+
+| Priority | Finding | Evidence | Work mapping |
+|---|---|---|---|
+| P1 | Contradictory Overview health score and stale/incomplete prerequisites | Interactive | `3l` |
+| P1 | Core form controls lack programmatic accessible names | Interactive / Source review | `3j` |
+| P2 | Quick Add semantics remain vague | Interactive | `2d` |
+| P2 | Empty Bank/Investment/Debt and Purchase states look unfinished | Interactive | `3b` |
+| P2 | Primary actions appear ready before required input; Add Bill exposes stored tokens | Interactive | `3m` |
+| P2 | Help uses an obsolete Debt path | Interactive | `3c`, `3h` |
+| P2 | Several interactive targets are below the agreed minimum | Interactive | `3j` |
+| P3 | Setup/Retirement/internal wording and duplicate guidance remain | Interactive | `3m` |
+| P3 | Medium header whitespace and Setup-card density are unbalanced | Screenshot | `3i` |
+
+### Top three improvements
+
+1. Make Overview financial-health scoring prerequisite- and freshness-aware.
+2. Associate every visible form label with its control and enforce form
+   readiness without weakening server validation.
+3. Finish the empty-state, customer-language, Help-route, target-size, and
+   medium-width cleanup as one regression-backed UX closeout.
+
+### Retest checklist
+
+1. First-Run: incomplete setup never renders a confident health label; ready and
+   current Populated data produces a label that reconciles with displayed inputs.
+2. Automated DOM audit: every visible core input/select has a non-empty
+   accessible name; keyboard/focus and target sizes pass at three widths.
+3. Empty Bank/Investment/Debt opens Add/guided state; Purchase/Retirement
+   results remain hidden until ready.
+4. Not-ready primary actions are disabled; valid input enables them; direct
+   invalid server calls still fail closed.
+5. Bill payment-source labels are customer-facing while stored values remain
+   compatible; Quick Add and Help wording is exact.
+6. Compare default, medium, and 390px screenshots and rerun a full
+   writer-inclusive advocate score on a newly guarded disposable workbook.
+
 ## Browser access for the independent advocate
 
 The temporary advocate must receive the Browser capability in its Codex task and connect to an active browser session. Browser access is an execution capability, not something CashCompass code or an agent prompt can grant.

@@ -58,6 +58,27 @@ an automatically repeatable guard.
 | Planner timing `@115`, History-chart retirement `@116`, and automated `@120` run | Static `npm run test:performance-timing`; explicit disposable-workbook planner integration | `SUITE-PERFORMANCE-PLANNER` runtime PASS: 4/4, 32.779 s first / 31.901 s repeat, History retained, zero charts, email suppressed, Restricted/CURRENT/Provisioning/Drift/Trash PASS | Ratify p50/p95 budgets from enough samples; one passing sample is not percentile evidence. |
 | Bills Due → Pay | Bills recurrence and Cash Flow linkage automated | `SUITE-BILLS-REGRESSION`; `SUITE-BILLS-PAY-E2E` runtime PASS at `@120`: explicit disposable-ss Quick Add → Cash Flow → Activity → handled-marker dedupe, 3/3, Provisioning/Drift/Trash PASS | Synthetic regression does not replace separately required natural cohort evidence. |
 | Financial Integrity Option A | Pure inclusion/summary/full-snapshot, Planner/Rolling/Dashboard, five read-only audits, canonical History capture/freshness, and release-inventory checks | Isolated Validation `@156` suite `20260722-164849-6081` passed 53/53 plus all safety gates and verified Trash. | Preserve as a required release regression; never target the bounded workbook. |
+| Activity action truth (`REG-020`) | Dynamic UI contract, eligible Donation action, unsupported-row no-action rendering, and server rejection of forged non-Donation removal | Local full suite plus isolated `@196` read-only interactive PASS | Retain in Dashboard UX/server packs and exact-candidate Activity browser evidence. |
+
+### Isolated `@196` advocate regression expansion
+
+These are planned permanent homes for the newly confirmed findings. A fix is not
+complete until its exact failure is represented; a generic render/smoke assertion
+does not satisfy this matrix.
+
+| Finding / work ID | Server or pure contract | Static/dynamic UI contract | Exact-candidate browser evidence |
+|---|---|---|---|
+| Overview health prerequisite/freshness (`3l`) | Score availability and label reconcile with setup readiness, required data, visible cash/runway/projected flow, and baseline freshness | Dashboard renders unavailable/qualified state rather than contradictory **Strong** | First-Run and Populated assert the health state and displayed inputs on the same candidate |
+| Programmatic labels and target sizes (`3j`) | N/A except unchanged server validation | Every core visible input/select resolves a non-empty accessible name; audited controls satisfy the agreed minimum target | Keyboard/focus and computed-size checks at desktop, medium, and 390px |
+| Form readiness/customer labels (`3m`) | Required-field validators remain fail-closed against direct/forged calls | Primary actions disable until minimum valid input; Bill payment-source labels are customer-facing while stored values remain unchanged | First-Run and Populated exercise not-ready and ready transitions |
+| Empty editors/simulators (`3b`) | Empty response remains valid, not an error | Bank/Investment/Debt default to Add/guided state; Purchase results stay hidden until a simulation exists | First-Run exact-candidate journey |
+| Quick Add semantics (`2d`) | Existing duplicate/write guards remain green | Copy states add/update/replace behavior precisely | Quick Add reliability browser round-trip when the wording lands |
+| Help/debt path and residual language (`3c`, `3h`, `3m`) | Stored enums and routes remain compatible | Exact Help destination, no “2026 block,” no duplicated Retirement prerequisite, no internal tokens on normal paths | First-Run/Populated language sweep |
+| Medium composition (`3i`) | N/A | Breakpoint contract avoids overflow and unintended density changes | Comparable default/medium/390px screenshots and advocate review |
+
+Apply Regression Discovery when each fix lands. Reuse an existing suite only
+when it asserts the exact failure; otherwise add the next `REG-###` historical
+scenario and register it in `REGRESSION_SCENARIOS.md`.
 
 ### Safe run grouping
 

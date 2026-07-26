@@ -49,6 +49,37 @@ Run both tracks after every change, however small.
 
 If either track fails, the change is not ready to ship — fix, then re-run both tracks.
 
+### `@196` advocate closeout matrix
+
+The following checks are mandatory additions/extensions as their fixes land:
+
+1. **Overview health (`3l`)** — pure/server tests cover incomplete setup,
+   missing/zero financial inputs, negative projected flow, stale baseline, and a
+   fully ready current state; Dashboard UX and both browser tracks reconcile the
+   rendered label with the same displayed inputs.
+2. **Accessible forms (`3j`)** — automated DOM checks require a non-empty
+   programmatic name for every visible core input/select; keyboard/focus and
+   computed target-size checks run at desktop, medium, and 390px.
+3. **Form readiness (`3m`)** — primary actions are disabled before minimum valid
+   input, become enabled when ready, and direct server calls still reject invalid
+   input. Customer-facing Bill option labels must not change stored enum values.
+4. **Empty and guidance states (`3b`)** — fresh Bank, Investment, and Debt
+   editors open Add/guided state rather than a blank Update selector; Retirement
+   and Purchase results stay hidden until ready.
+5. **Language and routing (`2d`, `3c`, `3h`, `3m`)** — Quick Add consequence
+   wording, the exact Debt Help path, Setup/Retirement wording, and normal-path
+   token removal have source-contract assertions plus the applicable browser
+   track.
+6. **Visual composition (`3i`)** — preserve comparable default, medium, and
+   390px screenshots; no horizontal page overflow or excessive header/card
+   imbalance.
+
+For every defect fixed from this matrix, run Regression Discovery before
+handoff. Map it to an existing assertion only if that assertion reproduces the
+exact failure; otherwise add the next `REG-###`. All writer validation remains
+on harness-created, continuously re-verified disposable workbooks—never the
+bounded or mapped-user workbook.
+
 ### Unified-source deployment gate
 
 Central and bounded deployments must eventually run the same reviewed source;

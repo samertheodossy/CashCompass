@@ -2,8 +2,24 @@
 
 The V1 trust baseline is shipped and locked, and V1.1 closed out with the retirement profile integration (see **V1.1 — Retirement Profile Integration (DOB Source of Truth)** section below). The project has since moved into **Central App live + Family Beta readiness** — the Central App architecture is operational and the active work is hardening it toward a family beta (see **Current State — Post V1.2 Prep** below for the per-slice migration record). Working rules live in `WORKING_RULES.md → Current phase` + `→ Central App Transition Rules` (now active); product framing lives in `PROJECT_CONTEXT.md → Current phase` and `→ Current architecture — Central App (live)`. All prior phase notes below this header are preserved as-is for historical record.
 
-- **Activity action truth and Beta correction program — local source complete,
-  runtime pending (2026-07-26).** Elevated transaction correction from a future
+- **Isolated `@196` advocate/Beta-plan reconciliation — documentation only
+  (2026-07-26).** Recorded the read-only advocate run without treating its
+  evidence-limited 7.2/10 as a regression from the formal writer-inclusive
+  8.3/10. Closed Activity action truth (`5g` / `REG-020`) on interactive
+  evidence and added the confirmed remaining findings to the authoritative work
+  map: `3l` Overview health prerequisite/freshness trust, expanded `3j`
+  programmatic labels/target sizes, `3m` form readiness/customer language, plus
+  existing `2d`, `3b`, `3c`, `3h`, and `3i`. Added exact permanent
+  pure/server, Dashboard UX, First-Run, Populated, keyboard/focus, and
+  multi-width regression homes; each future fix must run Regression Discovery
+  and add a new `REG-###` only when no existing assertion reproduces the exact
+  failure. Updated the best-case remaining capacity to 35–52 focused days and
+  conservative capacity to 48–76, with September 24 and October 2 still
+  gate-based and at risk. No runtime source, workbook, deployment, commit, or
+  push changed.
+
+- **Activity action truth and Beta correction program — isolated `@196` runtime
+  complete (2026-07-26).** Elevated transaction correction from a future
   enhancement to the broad-Beta gate as `FULL_BETA_REMAINING_PLAN.md → 5g–5m`.
   The program separates seven families: Donation, direct Cash Flow, linked Bill
   occurrences, Upcoming, compound House Expenses, entity maintenance, and
@@ -17,8 +33,9 @@ The V1 trust baseline is shipped and locked, and V1.1 closed out with the retire
   button for unsupported rows, and retains the server donation-only gate against
   forged requests. Permanent dynamic UI and server regressions were added;
   `npm test` passed. No workbook, schema, deployment, Beta, bounded target, or
-  user data changed. Focused isolated runtime validation remains required before
-  closing `5g`.
+  user data changed during implementation. The later focused read-only advocate
+  replay on isolated `@196` showed the correct **Action** column, no misleading
+  controls on unsupported rows, and no browser errors, closing `5g`.
 
 - **Broad-Beta work-map reconciliation through isolated `@195`
   (2026-07-24).** Reconciled `FULL_BETA_REMAINING_PLAN.md`, `ROADMAP.md`,

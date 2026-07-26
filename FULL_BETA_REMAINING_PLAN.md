@@ -2,11 +2,13 @@
 
 **Status:** Active execution inventory
 
-**Reconciled:** 2026-07-24
+**Reconciled:** 2026-07-26
 
-**Current evidence:** isolated Central `@195`; First-Run V4 **10/10 PASS** and
-Populated Dashboard V3 **13/13 PASS**, with zero browser errors, Restricted
-single-owner fixtures, and verified Trash cleanup
+**Current evidence:** isolated Central `@196`; Activity action truth passed a
+fresh read-only interactive advocate replay. The prior isolated `@195`
+First-Run V4 **10/10 PASS** and Populated Dashboard V3 **13/13 PASS** remain the
+latest complete writer-inclusive browser evidence, with zero browser errors,
+Restricted single-owner fixtures, and verified Trash cleanup.
 
 **Last formal independent advocate score:** **8.3/10** on isolated Central
 `@180`. This remains the official score until the next full scored advocate run;
@@ -46,6 +48,7 @@ closed. They are retained here so the work map does not lose history.
 | 2c | Paid occurrence completion explained | Successful payment shows Cash Flow month, previous total, payment added, new total, payment history, and verifies the occurrence is cleared |
 | 2f | Permanent Bills journey regression | Bills Due/Add/Manage, creation-month floor, payment marker, Cash Flow receipt, history chart, no stale warning, Restricted fixture, and cleanup passed |
 | 3d | Tracked-editor workflow consistency | Bills use **Due · Add · Manage**; Houses, Bank Accounts, Investments, and Debts use **Update · Add · Manage**; Setup preserves Add/Manage intent; Update is Save-only and Manage owns guarded Stop tracking |
+| 5g | Activity action-column truth (`REG-020`) | Isolated `@196` interactively showed **Action**, **Remove donation** only for an eligible Donation row, and `—` for unsupported rows; permanent UI and forged-request server regressions pass |
 
 The remaining tables below are therefore an **open-only list**.
 
@@ -55,9 +58,9 @@ The remaining tables below are therefore an **open-only list**.
 |---:|---|---|---:|
 | 1 | `1c`–`1e` | Controlled reliability, writer safety, and Retirement proof | 2.5–5 d |
 | 2 | `2d`–`2e` | Quick Add and Upcoming consequence language | 1–2 d |
-| 3 | `3a`–`3c`, `3e`–`3k` | Remaining page UX, advocate scoring, responsive/accessibility | 9–18 d |
+| 3 | `3a`–`3c`, `3e`–`3m` | Remaining page UX, trust, advocate scoring, responsive/accessibility | 12–23 d |
 | 4 | `4a`–`4f` | Performance optimization, measurement, and percentile gate | 5–11 d |
-| 5 | `5a`–`5m` | Financial/workbook proof plus Beta-critical Activity correction and reversal | 17.5–37 d |
+| 5 | `5a`–`5f`, `5h`–`5m` | Financial/workbook proof plus Beta-critical Activity correction and reversal | 17–36 d |
 | 6 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
 | 7 | `7a`–`7f` | Monetization-ready policy and architecture foundation; no billing activation | 5–10 d |
 | 8 | `8a`–`8f` | Freeze, complete exact-candidate evidence, score, and READY verdict | 3.5–7 d plus fixes |
@@ -65,10 +68,11 @@ The remaining tables below are therefore an **open-only list**.
 
 The arithmetic sum is intentionally not the delivery forecast because Groups
 6–7 and parts of Groups 3 and 5 can advance during runtime waits. The optimized
-capacity forecast is **32–48 focused working days best case** or **45–70
+capacity forecast is **35–52 focused working days best case** or **48–76
 conservatively**, plus the five-to-seven-day cohort and defect contingency. The
-2026-09-24 target is now at risk until the Activity correction scope is
-implemented and measured; dates remain gates, not promises.
+2026-09-24 target is now at risk until the Activity correction scope and the
+new P1 health/accessibility findings are implemented and measured; dates remain
+gates, not promises.
 
 ## Completion standard
 
@@ -117,10 +121,35 @@ acceptance contract, close it with evidence rather than manufacturing a redesign
 | 3g | Setup progress and next step | Required progress and one recommended next action are visible without performing a write | 0.5–1 d |
 | 3h | Help and contextual links | Common tasks precede Advanced material; complex pages expose concise contextual Help | 1–2 d |
 | 3i | Medium-width header and visual balance | Desktop/medium/390px compositions are balanced without weakening the established visual system | 0.5–1 d |
-| 3j | Responsive and accessibility closeout | Desktop/medium/390px, keyboard, focus, semantics, names, target size, contrast, and reduced motion pass | 2–4 d |
+| 3j | Responsive and accessibility closeout | Desktop/medium/390px, keyboard, focus, programmatic control names, target size, contrast, and reduced motion pass; all visible form labels are associated with their controls | 3–5 d |
 | 3k | Exact-candidate task-based advocate rerun | All eight criteria are rescored from interactive evidence; every category reaches the release path to ≥9 | 1–2 d |
+| 3l | Overview health-score prerequisite and freshness trust | Financial health is unavailable or clearly qualified until required setup/data and a current baseline exist; it never says **Strong** while visible cash, runway, and setup readiness contradict it | 1–2 d |
+| 3m | Form readiness and residual customer language | Primary actions remain disabled until minimum inputs are valid; customer labels replace stored tokens/internal workbook language; duplicated guidance is removed without changing stored values or server validation | 1–2 d |
 
-**Group 3 open estimate: 9–18 focused days.**
+**Group 3 open estimate: 12–23 focused days.**
+
+### Isolated `@196` advocate finding reconciliation
+
+The 2026-07-26 read-only run found no new browser error and confirmed `5g`.
+Its **7.2/10** read-only score is evidence-limited and is not comparable with
+the writer-inclusive formal **8.3/10** score, which remains official. Every new
+finding is nevertheless scheduled and receives a permanent regression home.
+
+| Priority | Confirmed finding | Work ID | Required permanent coverage |
+|---|---|---|---|
+| P1 | Overview says **Financial health 85 — Strong** while setup is 1/5, balances are zero, projected cash flow is negative, and the baseline is stale | `3l` | Pure/server health-prerequisite and freshness contract; Dashboard UX render contract; First-Run and Populated exact-candidate assertions |
+| P1 | Visible form labels are not programmatically associated with core inputs/selects | `3j` | Dashboard UX DOM/accessible-name contract plus keyboard, focus, desktop/medium/390px browser evidence |
+| P2 | Quick Add duplicate/update behavior remains vague | `2d` | Existing Quick Add reliability suite plus Dashboard UX copy assertion |
+| P2 | Empty Bank/Investment/Debt Update and Purchase Simulator surfaces begin with blank selectors or dash-only results | `3b` | Dashboard UX empty-state contract plus First-Run exact-candidate assertion |
+| P2 | Add Bill exposes stored tokens and several primary actions appear enabled before required input exists | `3m` | Dashboard UX label/action-state contract plus server-validation guard and First-Run/Populated assertions |
+| P2 | Help points to `Planning → Debts` instead of **Assets & Liabilities → Debt accounts** | `3c`, `3h` | Dashboard UX Help-link/copy assertion |
+| P2 | Several controls are below the 44px target | `3j` | Computed target-size audit at desktop, medium, and 390px |
+| P3 | Setup says “2026 block,” Retirement repeats the same prerequisite, and customer-facing abbreviations remain | `3m` | Normal-path terminology and duplicate-guidance Dashboard UX assertions |
+| P3 | Medium header and Setup-card density remain visually unbalanced | `3i` | Medium-width screenshot contract and task-based advocate replay |
+
+When a fix closes a confirmed historical defect, Regression Discovery must
+either map the exact failure to an existing assertion or add the next
+`REG-###` entry. Broad “page loaded” coverage is not sufficient.
 
 ## 4. Performance gate
 
@@ -145,7 +174,6 @@ acceptance contract, close it with evidence rather than manufacturing a redesign
 | 5d | Read-only orphan detection | The remaining P1 Recovery follow-up is implemented and proved, or explicitly removed from the broad-Beta gate | 1–2 d |
 | 5e | Recovery follow-up disposition | Create New Workbook and Admin Set Mapping are either closed or documented as supervised-admin scope | 0.5–2 d |
 | 5f | Unified-source bounded-safety evidence | The exact reviewed source preserves no-argument bounded behavior; any bounded deployment remains user-controlled | 0.5–1 d |
-| 5g | Activity action-column truth | Rename the column to **Action**; show **Remove donation** only for eligible Donation rows; show no action control for unsupported rows; retain the forged-request server rejection | 0.5–1 d |
 | 5h | Durable correction identity and immutable reversal contract | Newly correctable events carry a durable event/operation ID, versioned affected-state descriptors, preview, compare-and-swap preflight, one active reversal, and an immutable correction row | 1.5–3 d |
 | 5i | Direct Cash Flow correction | `quick_pay` income/expense can restore the recorded prior Cash Flow state only when the exact post-state still matches; any debt side effect is verified or the correction fails closed | 2–4 d |
 | 5j | Bill occurrence correction | Manual Pay, `bill_paid`, `bill_skip`, and `bill_autopay` are corrected as linked occurrence operations without duplicate amounts or stranded recurrence markers | 3–5 d |
@@ -153,11 +181,7 @@ acceptance contract, close it with evidence rather than manufacturing a redesign
 | 5l | House Expense compound correction | The exact House row and optional Cash Flow posting pass a dual-target preflight and correct together or not at all | 2–4 d |
 | 5m | Entity/audit disposition plus permanent evidence | Entity lifecycle rows route to their owning Update/Manage workflow; Planner/email/import audit rows expose no reversal; every supported family receives client/server regression and guarded disposable-workbook runtime proof | 2–5 d |
 
-**`5g` execution status (2026-07-26):** source implementation plus permanent
-dynamic UI/server regressions are complete and the full local suite passes.
-Focused isolated Central runtime evidence is still required, so `5g` remains open.
-
-**Group 5 estimate: 17.5–37 focused days.** This includes approximately **13–26
+**Group 5 estimate: 17–36 focused days.** This includes approximately **13–26
 days** of newly elevated Activity correction work. Generic one-click reversal of
 multi-sheet entity lifecycle or bank-import/system audit events is not part of
 the broad-Beta scope; those rows must route to their owning workflow or remain
@@ -218,11 +242,11 @@ This is design and policy readiness, not payment activation.
 
 ## Overall capacity range
 
-- **Best case:** approximately **32–48 focused working days** after elevating
-  Activity correction to the Beta gate. Several page passes can still close
+- **Best case:** approximately **35–52 focused working days** after reconciling
+  Activity correction and the `@196` advocate findings. Several page passes can still close
   through audit, and operations/business foundations can run alongside runtime
   waits.
-- **Conservative case:** approximately **45–70 focused working days**.
+- **Conservative case:** approximately **48–76 focused working days**.
 - **Cohort:** add **5–7 calendar days**.
 - **Contingency:** add **1–2 weeks** if performance, accessibility, or cohort
   evidence exposes a material defect.
@@ -238,7 +262,7 @@ strictest failed gate controls the actual date.
 
 The remaining work that directly controls the finish date is:
 
-`1c–1e → 5g–5m → 2d–2e → 3j–3k → 4a–4f → 8a–8f → 9a–9e`
+`3l → 1c–1e → 5h–5m → 2d–2e → 3a–3m → 4a–4f → 8a–8f → 9a–9e`
 
 Financial/workbook proof in Group 5 must finish before `8b`. Operations and
 monetization foundations in Groups 6–7 must finish before `8d`, but they should
@@ -278,10 +302,10 @@ not block early engineering.
 
 | Window | Lane A — critical | Lane B — UX/evidence | Lane C — parallel foundation | Exit |
 |---|---|---|---|---|
-| Completed through Jul 24 | `1a`, `1b`, `2a`–`2c`, `2f` | `3d`; shared tracked-editor convergence | — | Isolated `@195` V4/V3 browser suites pass; Beta stays `@106`; bounded untouched |
-| Aug 21–27 | `1c`–`1e`; begin `5g`–`5i` | Audit `3a`, `3b`; begin diagnostic performance | Start `6a`–`6f`, `7a`–`7b`, cohort design | Reliability proof closes; Activity correction foundation and direct Cash Flow path advance |
+| Completed through Jul 26 | `1a`, `1b`, `2a`–`2c`, `2f`, `5g` | `3d`; shared tracked-editor convergence | — | Isolated `@196` Activity truth passes; Beta stays `@106`; bounded untouched |
+| Aug 21–27 | `3l`; `1c`–`1e`; begin `5h`–`5i` | Audit `3a`, `3b`; begin `3m` and diagnostic performance | Start `6a`–`6f`, `7a`–`7b`, cohort design | Health trust and reliability proof close; Activity correction foundation and direct Cash Flow path advance |
 | Aug 28–Sep 3 | `5j`–`5m` | Close `2d`–`2e`; advance Group 5 matrix/recovery proof | `7c`–`7f`, known limitations, support posture | Supported Activity correction families and audit-only dispositions pass |
-| Sep 4–10 | Begin/finish performance fixes `4a`–`4d` | Close `3c`, `3e`–`3j`; finish Group 5 | Finish Groups 6–7 | UX/accessibility path ≥9 and candidate prerequisites complete |
+| Sep 4–10 | Begin/finish performance fixes `4a`–`4d` | Close `3c`, `3e`–`3m`; finish Group 5 | Finish Groups 6–7 | UX/accessibility path ≥9 and candidate prerequisites complete |
 | Sep 11–17 | Freeze `8a`; run `4e`–`4f`, `8b`–`8f` | Exact-candidate advocate `3k` | Final release/rollback/support review | Exact candidate reaches automated READY prerequisites |
 | Sep 18–24 | Release-blocking fixes only | Cohort observation and final advocate check | Support the cohort; prepare go/no-go | Five-to-seven-day cohort and final broad-Beta decision |
 
