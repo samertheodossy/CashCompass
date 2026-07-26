@@ -112,6 +112,9 @@ The 7.5/10 baseline above is an honest product-review judgment, not a backfilled
 - House Financial Accuracy uses one shared property model, including financing costs where promised.
 - Blank, sparse, representative populated, mature/multi-year, and legacy-compatible fixtures pass.
 - No fake confident state: unavailable, incomplete, and not-initialized conditions remain explicit.
+- Correctable financial actions preserve the original Activity evidence, verify
+  exact current post-state before reversal, and append an immutable correction;
+  unsupported or ambiguous legacy events fail closed.
 
 ### Gate B — Workbook safety and privacy
 
@@ -129,6 +132,10 @@ The 7.5/10 baseline above is an honest product-review judgment, not a backfilled
 - Terminology is consistent, including **Due day of month** and **Refresh Financial Plan** language.
 - Loading, saving, completion, empty, warning, and error states use one coherent system.
 - Long-running actions communicate progress and prevent duplicate submissions.
+- Activity exposes an action only when CashCompass can complete it safely:
+  eligible Donation rows show **Remove donation**, supported financial events use
+  explicit correction workflows, entity events route to their owning editor,
+  and Planner/email/import audit rows show no reversal control.
 - Keyboard, contrast, responsive/mobile, and common browser checks pass.
 
 ### Gate D — Performance
@@ -257,12 +264,17 @@ The ordered implementation inventory for this experience work is `TODO.md → UX
 
 With the P1 evidence foundation, House Financial Accuracy V1, and Financial
 Integrity Phase 3 complete, the reconciled remaining plan is approximately
-**20–30 focused working days in the optimized best case** or **30–45 focused
+**32–48 focused working days in the optimized best case** or **45–70 focused
 working days conservatively**. Add **5–7 calendar days** for the supervised
 cohort plus defect rework, Google authorization/runtime delays, and external
 review. Several UX audits and the operations/monetization foundations can run in
 parallel; the exact estimates and dependencies are maintained in
 `FULL_BETA_REMAINING_PLAN.md`.
+
+The increase reflects the 2026-07-26 decision to make Activity correction and
+immutable reversal a broad-Beta requirement. The September 24 target and October
+2 contingency are therefore at risk until the shared correction foundation is
+implemented and measured.
 
 This range is for capacity planning only. The release decision is based on evidence, not elapsed time.
 

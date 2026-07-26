@@ -169,8 +169,7 @@ function renderActivityTable_(rows, options) {
     activityHeaderLabel_('kind', 'Type') +
     activityHeaderLabel_('amount', 'Amount') +
     activityHeaderLabel_('dueDate', 'Bill due date') +
-    '<th scope="col" class="activity-th-actions" title="Remove is active for Donation rows only until other undo paths are built.">' +
-    'Remove <span class="activity-th-actions-hint muted">(Donation)</span></th>' +
+    '<th scope="col" class="activity-th-actions">Action</th>' +
     '</tr></thead><tbody>';
 
   sorted.forEach(function(row) {
@@ -235,14 +234,10 @@ function renderActivityTable_(rows, options) {
           return (
             '<button type="button" class="btn-activity-delete" data-event-type="donation" data-sheet-row="' +
             Number(sr) +
-            '" onclick="activityDeleteClick_(event)">Remove</button>'
+            '" aria-label="Remove donation" onclick="activityDeleteClick_(event)">Remove donation</button>'
           );
         }
-        return (
-          '<button type="button" class="btn-activity-delete btn-activity-delete--disabled" disabled ' +
-          'title="Remove is only enabled for Donation entries for now. Other types: wait until undo is implemented.">' +
-          'Remove</button>'
-        );
+        return '—';
       })() +
       '</td>' +
       '</tr>';

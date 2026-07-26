@@ -285,8 +285,10 @@ than optional visual polish.
   Quick add form.
 - **Interactive:** Help references **Planning → Debts** even though debt maintenance
   now lives under **Assets & Liabilities → Debt accounts**.
-- **Interactive:** Activity shows a **Remove (Donation)** column for Bank and Bill
-  events.
+- **Interactive (resolved locally 2026-07-26; runtime replay pending):** Activity
+  showed a **Remove (Donation)** column for Bank and Bill events. `REG-020` now
+  uses **Action**, shows **Remove donation** only for eligible Donation rows, and
+  shows no action control for unsupported events.
 - **Interactive:** Properties says it uses “the same house expense writer as the
   sidebar,” which is implementation language.
 
@@ -343,7 +345,7 @@ handoffs, recurrence outcomes, and cross-surface state are not always explicit.
 | P1 | Multiple | Customer UI leaks `INPUT - Cash Flow 2026`, “tab,” “section on sheet,” and “writer/sidebar.” | Replace normal-path implementation terminology with financial-product language; keep technical references in Advanced Help only. | Interactive |
 | P2 | Bank / Debt | Actions become available while selected-account details are still loading. | Disable writers and Stop tracking until the selected record is fully loaded. | Interactive |
 | P2 | Quick add | “May be updated automatically” does not explain duplicate behavior. | State precisely whether CashCompass replaces, adds to, or creates the monthly value. | Interactive |
-| P2 | Activity | **Remove (Donation)** appears for Bank and Bill rows. | Render the action only for eligible donation events. | Interactive |
+| P2 | Activity | **Resolved locally; runtime replay pending:** **Remove (Donation)** appeared for Bank and Bill rows. | `REG-020` renders **Remove donation** only for eligible Donation events, no control for unsupported rows, and retains the server gate. | Interactive |
 | P2 | Bank / Debt | `USE_FOR_BILLS` and **Acct PCT Avail** are internal or jargon-heavy. | Use **Used for bills** and **Available credit %** or equivalent user language. | Interactive |
 | P2 | Retirement | Dash-heavy results dominate before setup. | Replace them with a guided empty state and reveal results after minimum inputs exist. | Interactive |
 | P2 | Upcoming | **Dismiss** has an unclear outcome. | Use an outcome-oriented label and explain history preservation. | Interactive |

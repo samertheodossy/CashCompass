@@ -5,6 +5,7 @@ import vm from 'node:vm';
 const files = Object.fromEntries(await Promise.all([
   'Dashboard_Body.html',
   'Dashboard_Help.html',
+  'Dashboard_Script_Activity.html',
   'Dashboard_Script_AssetsBankInvestments.html',
   'Dashboard_Script_AssetsHouseValues.html',
   'Dashboard_Script_BillsDue.html',
@@ -30,6 +31,7 @@ const files = Object.fromEntries(await Promise.all([
   'PlannerDashboardWeb.html',
   'QuickAddPaymentUI.html',
   'quick_add_payment.js',
+  'activity_log.js',
   'bills.js',
   'dashboard_data.js',
   'income_sources.js',
@@ -114,6 +116,109 @@ assert.match(render, /Change vs ['"] \+ label \+ ': ' \+ fmtSignedCurrency\(num\
 
 const body = files['Dashboard_Body.html'];
 const styles = files['Dashboard_Styles.html'];
+const activityClient = files['Dashboard_Script_Activity.html'];
+const activityServer = files['activity_log.js'];
+const activityRenderStart = activityClient.indexOf('function renderActivityTable_(');
+const activityRenderEnd = activityClient.indexOf('function activityUpdatePagerUi_(', activityRenderStart);
+assert.ok(activityRenderStart >= 0 && activityRenderEnd > activityRenderStart,
+  'Activity must retain a directly testable table renderer');
+const activityRenderSource = activityClient.slice(activityRenderStart, activityRenderEnd);
+const activityWrap = { innerHTML: '' };
+const renderActivityTableForRegression = Function(
+  'document',
+  'window',
+  'activityHeaderLabel_',
+  'activitySortRows_',
+  'escapeHtml',
+  'formatActivityLoggedAtDisplay_',
+  'formatActivityDueDateDisplay_',
+  'fmtCurrency',
+  'toNumber',
+  `${activityRenderSource}; return renderActivityTable_;`
+)(
+  { getElementById(id) { return id === 'act_tableWrap' ? activityWrap : null; } },
+  { __activitySort: { key: 'loggedAt', dir: 'desc' } },
+  (_key, label) => `<th>${label}</th>`,
+  rows => rows,
+  value => String(value),
+  value => String(value || ''),
+  value => String(value || ''),
+  value => `$${Number(value).toFixed(2)}`,
+  value => Number(value)
+);
+renderActivityTableForRegression([{
+  loggedAt: '2026-07-26 07:40:00',
+  payee: 'Planner',
+  kindLabel: 'Planner',
+  eventType: 'planner_email_sent',
+  actionLabel: 'Email sent',
+  amount: 0,
+  amountNum: 0,
+  isNonMonetary: true,
+  entryDate: '',
+  sheetRow: 2
+}], { skipSort: true });
+assert.match(activityWrap.innerHTML, /<th scope="col" class="activity-th-actions">Action<\/th>/,
+  'Activity must use a neutral Action column heading');
+assert.doesNotMatch(activityWrap.innerHTML, /<button[^>]*>[^<]*Remove/i,
+  'Planner/email rows must not render a Remove action');
+assert.doesNotMatch(activityWrap.innerHTML, /disabled/,
+  'Unsupported Activity events must not render misleading disabled controls');
+
+renderActivityTableForRegression([{
+  loggedAt: '2026-07-26 07:41:00',
+  payee: 'Test Charity',
+  kindLabel: 'Donation',
+  eventType: 'donation',
+  actionLabel: '',
+  amount: 25,
+  amountNum: 25,
+  isNonMonetary: false,
+  entryDate: '2026-07-26',
+  sheetRow: 2
+}], { skipSort: true });
+assert.match(activityWrap.innerHTML,
+  /data-event-type="donation"[^>]*aria-label="Remove donation"[^>]*>Remove donation<\/button>/,
+  'Eligible Donation rows must expose the specifically named Remove donation action');
+assert.doesNotMatch(activityClient, /Remove\s*<span[^>]*>\(Donation\)/,
+  'Activity must not restore the old Remove (Donation) column label');
+
+const nonDonationLogRow = [
+  '2026-07-26 07:40:00',
+  'planner_email_sent',
+  '2026-07-26',
+  0,
+  '',
+  'Planner',
+  '',
+  '',
+  '',
+  '',
+  '',
+  '{}'
+];
+const activityServerContext = {
+  Logger: { log() {} },
+  getUserSpreadsheet_() {
+    return {
+      getSheetByName() {
+        return {
+          getLastRow() { return 2; },
+          getRange() {
+            return { getValues() { return [nonDonationLogRow]; } };
+          }
+        };
+      }
+    };
+  }
+};
+vm.runInNewContext(activityServer, activityServerContext);
+const forgedActivityDeleteResult = activityServerContext.deleteActivityLogRow(2);
+assert.equal(forgedActivityDeleteResult.ok, false,
+  'Activity server must reject a forged non-Donation delete request');
+assert.match(forgedActivityDeleteResult.error, /only enabled for Donation rows/i,
+  'Activity server rejection must explain the donation-only contract');
+
 for (const source of [body, files['PlannerDashboard.html']]) {
   assert.match(source,
     /id=["']bank_value["'][^>]*onfocus=["']currencyFocus\(['"]bank_value["'],\s*true\)["']/,

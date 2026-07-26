@@ -468,9 +468,13 @@ verified Trash cleanup.
 - Show active filters as compact chips or an equally clear summary and provide **Clear filters**.
 - Keep the filter controls compact (and evaluate a sticky filter bar on long result sets).
 - Use a responsive card/list presentation when the full table cannot remain readable.
-- Make donation-only Remove behavior and unavailable actions understandable without exposing event internals.
+- ✅ **Activity action-column truth (`5g`) implemented locally 2026-07-26:**
+  rename the column to **Action**, show **Remove donation** only for eligible
+  Donation rows, and render no action control for Planner/email/import or other
+  unsupported events. The server remains donation-only and rejects forged
+  non-donation requests. Runtime validation is still required before closure.
 
-**Acceptance:** active filtering is obvious and reversible; desktop sorting/paging remains correct; mobile content is readable; Activity remains an audit surface and no undo/delete scope expands.
+**Acceptance:** active filtering is obvious and reversible; desktop sorting/paging remains correct; mobile content is readable; unsupported events expose no misleading action; Activity remains an audit surface and no undo/delete scope expands.
 
 ##### UX-08 — Setup / Review completion guidance
 
@@ -518,7 +522,10 @@ The initial screenshot review and the completed interactive populated-workbook r
 
 - **Runtime-verified on isolated `@177`; controlled failure replay pending:** keep Bank/Debt writers and Stop tracking disabled until the matching selected-record details finish loading; stale/out-of-order responses cannot re-enable actions. Both guarded populated journeys passed their safe-action selection assertions.
 - Explain Quick add duplicate/update semantics precisely.
-- Show **Remove (Donation)** only on eligible donation Activity rows.
+- ✅ **Activity action truth (`5g`, local source + regressions):** use the neutral
+  **Action** heading, show **Remove donation** only on eligible Donation rows,
+  and show no action control for unsupported events. Focused isolated runtime
+  evidence remains before closure.
 - **Local implementation and permanent coverage complete; focused interactive replay pending:** Retirement hides the dash-only result wall during guidance states and reveals results only when the minimum-input state is ready.
 - Replace ambiguous Upcoming **Dismiss** language with an outcome and history-preservation explanation.
 - **Runtime-verified on isolated `@177`:** preserve the proven narrow navigation behavior with a two-column primary-nav and compact two-column header action grid; keep the long **Assets & Liabilities** label and Assets subtabs free of horizontal overflow.
@@ -919,7 +926,13 @@ Residual V1.1 candidates that did not ship and were not promoted into V1.2 A/B/C
 Captured so the idea isn't lost; **not** in scope for V1.2. Requires an explicit product decision before being pulled up.
 
 - **Onboarding factory refactor** — consolidate the per-step Setup / Review helpers (see `PROJECT_CONTEXT.md → Queued product work`). Touches onboarding shape.
-- **Activity log — smart undo Phases 2–4** — Phase 1 (donation) is shipped. Phases 2 (`quick_pay`), 3 (`house_expense`), and 4 (bill skip / autopay) require logging upgrades first. See historical "Activity — Smart undo / reverse transaction" section below.
+- **Activity correction and reversal — Beta-critical.** Donation removal is
+  shipped, but it is not a safe generic model for financial history. The
+  remaining Beta scope is a verified correction framework for Quick Add, Bills,
+  Upcoming payments/lifecycle, and compound House Expenses, plus explicit
+  non-reversible routing for entity-maintenance, import, and system audit rows.
+  See **Activity — Correction / reverse transaction** below and
+  `FULL_BETA_REMAINING_PLAN.md → 5g–5m`.
 - **Larger product work** — Cash Strategy, HELOC advisor refinement, Plaid-style bank / card / loan sync, car / vehicle expenses as a first-class dashboard surface, subscriptions, income / expense classification, tax workflow, credit-card segmentation, etc. See the historical body below for full design notes.
 - **Two dashboards unification** — `PlannerDashboard.html` (sidebar) vs `PlannerDashboardWeb.html` (web) shared-source strategy.
 - **Broader regression / test harness** — automated unit / integration tests per `TESTING_PLAN.md`.
@@ -1449,7 +1462,16 @@ Small HTML/docs/a11y tasks; check off when shipped. *(Unnumbered — pick in any
 
 ### Important — Activity / HISTORY flow (LOG - Activity vs OUT - History)
 
-**LOG - Activity** = **event** ledger (who/when/amount); dashboard **Remove** is **donation-only** for now (**`deleteActivityLogRow`**); donations may also remove a matching **INPUT - Donation** row. Other event types: greyed UI + delete on the sheet if needed. **Smart undo** for **Quick add** (`quick_pay`) / house expense / bills — phased list below. **OUT - History** = **planner run** snapshots. Implementation: **`activity_log.js`**, **`appendActivityLog_`**, Help **Activity log**.
+**LOG - Activity** = **event** ledger (who/when/amount); the dashboard
+**Action** column exposes **Remove donation** only for eligible Donation rows
+(**`deleteActivityLogRow`**), and donations may also remove a matching
+**INPUT - Donation** row. Unsupported audit rows expose no action control and
+the server rejects forged non-Donation requests. The Beta-critical correction
+program for direct Cash Flow, Bills, Upcoming, and House Expenses is specified
+above as `5g–5m`; entity events route to their owning workflow and audit-only
+events remain immutable. **OUT - History** = **planner run** snapshots.
+Implementation: **`activity_log.js`**, **`appendActivityLog_`**, Help
+**Activity log**.
 
 **Done (recent)**  
 - **Phase 3 — Upcoming** — **`upcoming_add`** / **`upcoming_status`** / **`upcoming_cashflow`** in **`upcoming_expenses.js`**; Cash Flow from Upcoming uses **`quickAddPayment`** with **`suppressActivityLog: true`** so **`quick_pay`** is not duplicated; **`quick_add_payment.js`** returns **`activitySnapshot`** for callers.  
@@ -1498,34 +1520,66 @@ Small HTML/docs/a11y tasks; check off when shipped. *(Unnumbered — pick in any
 5. **Phase 5 — OUT - History tie-in** — **Open** (optional)  
 6. **Activity UI** — **Done** (filters, type from sheet, paging, sort); **CSV export** optional later
 
-### Activity — Smart undo / “reverse transaction”
+### Activity — Correction / reverse transaction
 
-**Context:** Activity **Remove** always deletes the **LOG - Activity** row. **Phase 1 (donation)** is **implemented**: see **`tryDeleteDonationRowForActivityUndo_`** in **`donations.js`** and **`deleteActivityLogRow`** in **`activity_log.js`**. Phases 2–4 below are still optional follow-ons.
+**Status:** elevated to the broad-Beta gate on 2026-07-26. Donation removal is
+the only shipped path; the general correction framework is not implemented.
+Authoritative execution IDs and estimates: `FULL_BETA_REMAINING_PLAN.md →
+5g–5m`.
 
-**Fool-proof principles (apply to any phase)**
+**Product decision:** Activity is an audit trail, not a trash can. Generalizing
+the existing Donation **Remove** behavior would erase evidence while potentially
+leaving Cash Flow, Bills, Upcoming, House, Debt, or account state unchanged.
+For new correction families, preserve the original event and append an immutable
+correction/reversal event that records the verified before/after result. Use
+**Correct** or **Reverse**, never a generic **Remove**, when workbook state is
+affected.
 
-1. **No guessing** — Never infer missing prior state (e.g. cell value before a skip wrote `0`); only use what was stored in log **Details** (consider `detailsVersion` if shape evolves).
-2. **Precondition gate** — Before mutating INPUT/SYS: e.g. current cell **===** logged `newValue` (with same rounding rules as writes); donation row still matches a **fingerprint** of logged fields + `sheetRow`.
-3. **UX** — Keep **Remove log only**; add a **separate** explicit action for “Reverse transaction and remove log” with a **second** confirmation listing exact sheet / row / cell / values.
-4. **Idempotent / safe failure** — If the sheet changed since the log row was written, **abort** with a clear message (no partial silent fixes).
-5. **Audit** — Prefer explicit success text listing what changed; optional future `activity_undo` log row if you want a paper trail.
+**Seven event families**
 
-**Phased implementation (in order)**
+| Family | Included events | Broad-Beta treatment |
+|---|---|---|
+| 1. Donation | `donation` | Existing fingerprint-gated row removal remains supported; align its UI/status with the new correction language without weakening its guard |
+| 2. Direct Cash Flow | `quick_pay` income/expense, including optional debt-balance side effect and a newly created Cash Flow row | Correct/reverse only with exact Cash Flow target, stored previous/new values, and verified debt post-state |
+| 3. Bill occurrence | `bill_paid`, `bill_skip`, `bill_autopay` and the linked `quick_pay` money row | Treat the occurrence and its money/marker evidence as one operation; reopening must not duplicate or strand recurrence markers |
+| 4. Upcoming | `upcoming_add`, `upcoming_update`, `upcoming_status`, `upcoming_payment` plus any linked `quick_pay` | Use stable `upcomingId`; reverse payment and lifecycle state together when linked, otherwise route edits to Upcoming |
+| 5. House expense | `house_expense`, including optional Cash Flow posting | Dual-target preflight: the exact house row fingerprint and Cash Flow before/after state must both match before either changes |
+| 6. Entity maintenance | Bank, Investment, House, Debt, Bill, and Income add/update/deactivate/reactivate/rename events | Route to the owning Update/Manage workflow and log a new correction there; do not build a generic Activity reversal for multi-sheet lifecycle operations |
+| 7. Import/system audit | `bank_import_*`, `planner_email_*`, and legacy informational rows | Never reverse from Activity. Explain that the row is audit evidence and route to Review imports or the relevant source workflow where a supported corrective action exists |
 
-| Phase | Event type(s) | Risk | What it entails |
-|-------|----------------|------|------------------|
-| **1 — Done** | **`donation`** | **Lowest** | **Shipped:** Details carry **`sheetRow`** + fingerprint fields; **`deleteActivityLogRow`** calls **`tryDeleteDonationRowForActivityUndo_`** when safe, then deletes the log row. Older donation logs without **`sheetRow`** only remove the log line. |
-| **2** | **`quick_pay`** | Medium | Details must include **`previousValue` / `newValue`** (and stable CF sheet + row + month resolution). Reverse **only if** current cell matches logged `newValue`. Debt balance change: undo only if Details allow **verification** of post-state, or **exclude** from v1 and document manual **INPUT - Debts**. |
-| **3** | **`house_expense`** | Higher | Log must store house sheet, inserted row, and if CF was touched the same previous/new gates as Phase 2. Dual preconditions. |
-| **4** | **`bill_skip` / `bill_autopay`** | High until logging fixed | **First** extend writers to log **previousValue**, **newValue**, and coordinates; **then** same cell-match reversal as Phase 2. **Do not** ship auto-undo for these without that logging. |
+**Mandatory safety contract**
 
-**Explicit non-goals**
+1. **Durable identity** — every newly correctable event gets a UUID/operation
+   identity, `detailsVersion`, and explicit affected-state descriptors. Never
+   target a mutable Activity row number.
+2. **Preview before write** — resolve every affected sheet/entity/cell, show the
+   exact consequence, and refuse unsupported or ambiguous legacy events.
+3. **Compare-and-swap preconditions** — under `LockService`, re-read every target
+   and require it to match the logged post-state using the same normalization and
+   rounding rules as the original writer.
+4. **All-or-nothing operation group** — linked events such as Bills Pay +
+   `quick_pay`, Upcoming payment + `quick_pay`, and House row + Cash Flow must
+   preflight together. On unexpected partial failure, restore verified pre-state
+   or stop with a reconciliation-required result; never claim success.
+5. **Immutable audit** — preserve the original row, append a reversal/correction
+   row with `reversalOf`, actor, timestamp, reason, and before/after snapshots,
+   and prevent a second active reversal of the same event.
+6. **No arithmetic guessing** — never subtract a logged amount from whatever
+   value happens to be present. Restore only a recorded previous value after the
+   current value matches the recorded new value.
+7. **Legacy fail-closed** — historical rows without enough identity or
+   before/after evidence are view-only and receive a route to the owning editor.
+8. **Disposable writer evidence** — every supported family gets permanent
+   regression coverage and a harness-created, continuously re-verified disposable
+   workbook journey. Protected workbooks are never writer targets.
 
-- Generic undo from payee + amount + date alone.
-- “Subtract logged amount from current cell” without proving current value still equals logged **newValue**.
+**Explicit non-goals for broad Beta**
 
-**Activity Remove — dashboard scope (temporary)**  
-- **Remove** in the web UI is **enabled only for `donation`** rows (`eventType` **donation**). Other types show a **greyed-out** control; **`deleteActivityLogRow`** rejects non-donation with a clear error (sheet-only delete still works). **Re-enable per type** as Phases 2–4 ship: set **`quick_pay`**, **`house_expense`**, then skip/autopay after logging upgrades—each needs UI enable + server gate + undo implementation.
+- deleting arbitrary Activity history;
+- generic reversal from payee + amount + date;
+- automatic reversal of entity lifecycle or bank-import/system audit events;
+- correcting legacy rows whose original state cannot be proved;
+- editing `OUT - History` snapshots.
 
 ---
 

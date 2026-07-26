@@ -57,7 +57,7 @@ The remaining tables below are therefore an **open-only list**.
 | 2 | `2d`–`2e` | Quick Add and Upcoming consequence language | 1–2 d |
 | 3 | `3a`–`3c`, `3e`–`3k` | Remaining page UX, advocate scoring, responsive/accessibility | 9–18 d |
 | 4 | `4a`–`4f` | Performance optimization, measurement, and percentile gate | 5–11 d |
-| 5 | `5a`–`5f` | Frozen-candidate financial, workbook, recovery, and bounded-safety proof | 4.5–11 d |
+| 5 | `5a`–`5m` | Financial/workbook proof plus Beta-critical Activity correction and reversal | 17.5–37 d |
 | 6 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
 | 7 | `7a`–`7f` | Monetization-ready policy and architecture foundation; no billing activation | 5–10 d |
 | 8 | `8a`–`8f` | Freeze, complete exact-candidate evidence, score, and READY verdict | 3.5–7 d plus fixes |
@@ -65,8 +65,10 @@ The remaining tables below are therefore an **open-only list**.
 
 The arithmetic sum is intentionally not the delivery forecast because Groups
 6–7 and parts of Groups 3 and 5 can advance during runtime waits. The optimized
-capacity forecast is **20–30 focused working days best case** or **30–45
-conservatively**, plus the five-to-seven-day cohort and defect contingency.
+capacity forecast is **32–48 focused working days best case** or **45–70
+conservatively**, plus the five-to-seven-day cohort and defect contingency. The
+2026-09-24 target is now at risk until the Activity correction scope is
+implemented and measured; dates remain gates, not promises.
 
 ## Completion standard
 
@@ -143,8 +145,23 @@ acceptance contract, close it with evidence rather than manufacturing a redesign
 | 5d | Read-only orphan detection | The remaining P1 Recovery follow-up is implemented and proved, or explicitly removed from the broad-Beta gate | 1–2 d |
 | 5e | Recovery follow-up disposition | Create New Workbook and Admin Set Mapping are either closed or documented as supervised-admin scope | 0.5–2 d |
 | 5f | Unified-source bounded-safety evidence | The exact reviewed source preserves no-argument bounded behavior; any bounded deployment remains user-controlled | 0.5–1 d |
+| 5g | Activity action-column truth | Rename the column to **Action**; show **Remove donation** only for eligible Donation rows; show no action control for unsupported rows; retain the forged-request server rejection | 0.5–1 d |
+| 5h | Durable correction identity and immutable reversal contract | Newly correctable events carry a durable event/operation ID, versioned affected-state descriptors, preview, compare-and-swap preflight, one active reversal, and an immutable correction row | 1.5–3 d |
+| 5i | Direct Cash Flow correction | `quick_pay` income/expense can restore the recorded prior Cash Flow state only when the exact post-state still matches; any debt side effect is verified or the correction fails closed | 2–4 d |
+| 5j | Bill occurrence correction | Manual Pay, `bill_paid`, `bill_skip`, and `bill_autopay` are corrected as linked occurrence operations without duplicate amounts or stranded recurrence markers | 3–5 d |
+| 5k | Upcoming correction | Stable `upcomingId` links payment/lifecycle evidence; payment and remaining-balance/status changes correct together; ordinary edits route to Upcoming | 2–4 d |
+| 5l | House Expense compound correction | The exact House row and optional Cash Flow posting pass a dual-target preflight and correct together or not at all | 2–4 d |
+| 5m | Entity/audit disposition plus permanent evidence | Entity lifecycle rows route to their owning Update/Manage workflow; Planner/email/import audit rows expose no reversal; every supported family receives client/server regression and guarded disposable-workbook runtime proof | 2–5 d |
 
-**Group 5 estimate: 4.5–11 focused days.**
+**`5g` execution status (2026-07-26):** source implementation plus permanent
+dynamic UI/server regressions are complete and the full local suite passes.
+Focused isolated Central runtime evidence is still required, so `5g` remains open.
+
+**Group 5 estimate: 17.5–37 focused days.** This includes approximately **13–26
+days** of newly elevated Activity correction work. Generic one-click reversal of
+multi-sheet entity lifecycle or bank-import/system audit events is not part of
+the broad-Beta scope; those rows must route to their owning workflow or remain
+explicitly audit-only.
 
 ## 6. Operations, support, and privacy
 
@@ -201,18 +218,19 @@ This is design and policy readiness, not payment activation.
 
 ## Overall capacity range
 
-- **Best case:** approximately **20–30 focused working days** because several
-  formerly critical UX and Bills items are closed, many remaining page passes
-  can close through audit, and operations/business foundations can run alongside
-  runtime waits.
-- **Conservative case:** approximately **30–45 focused working days**.
+- **Best case:** approximately **32–48 focused working days** after elevating
+  Activity correction to the Beta gate. Several page passes can still close
+  through audit, and operations/business foundations can run alongside runtime
+  waits.
+- **Conservative case:** approximately **45–70 focused working days**.
 - **Cohort:** add **5–7 calendar days**.
 - **Contingency:** add **1–2 weeks** if performance, accessibility, or cohort
   evidence exposes a material defect.
 
-The September 24 decision is the optimized best-case path after the August
-buffer. October 2 supports one focused repair/retest cycle. The strictest failed
-gate controls the actual date.
+The September 24 decision is now an at-risk best-case target after the August
+buffer. October 2 may not contain the full correction program plus one repair
+cycle; re-baseline after `5h` proves the shared correction foundation. The
+strictest failed gate controls the actual date.
 
 ## Optimized execution model
 
@@ -220,7 +238,7 @@ gate controls the actual date.
 
 The remaining work that directly controls the finish date is:
 
-`1c–1e → 2d–2e → 3j–3k → 4a–4f → 8a–8f → 9a–9e`
+`1c–1e → 5g–5m → 2d–2e → 3j–3k → 4a–4f → 8a–8f → 9a–9e`
 
 Financial/workbook proof in Group 5 must finish before `8b`. Operations and
 monetization foundations in Groups 6–7 must finish before `8d`, but they should
@@ -261,9 +279,9 @@ not block early engineering.
 | Window | Lane A — critical | Lane B — UX/evidence | Lane C — parallel foundation | Exit |
 |---|---|---|---|---|
 | Completed through Jul 24 | `1a`, `1b`, `2a`–`2c`, `2f` | `3d`; shared tracked-editor convergence | — | Isolated `@195` V4/V3 browser suites pass; Beta stays `@106`; bounded untouched |
-| Aug 21–27 | `1c`–`1e`, `2d`–`2e` | Audit `3a`, `3b`; begin diagnostic performance | Start `6a`–`6f`, `7a`–`7b`, cohort design | Remaining reliability and daily-task language contracts close |
-| Aug 28–Sep 3 | Begin performance fixes `4a`–`4d` | Close `3c`, `3e`–`3i`; advance Group 5 matrix/recovery proof | `7c`–`7f`, known limitations, support posture | Remaining page-level UX and trust gaps close |
-| Sep 4–10 | Finish `4a`–`4d` | `3j` accessibility/responsive closeout; finish Group 5 | Finish Groups 6–7 | UX/accessibility path ≥9 and candidate prerequisites complete |
+| Aug 21–27 | `1c`–`1e`; begin `5g`–`5i` | Audit `3a`, `3b`; begin diagnostic performance | Start `6a`–`6f`, `7a`–`7b`, cohort design | Reliability proof closes; Activity correction foundation and direct Cash Flow path advance |
+| Aug 28–Sep 3 | `5j`–`5m` | Close `2d`–`2e`; advance Group 5 matrix/recovery proof | `7c`–`7f`, known limitations, support posture | Supported Activity correction families and audit-only dispositions pass |
+| Sep 4–10 | Begin/finish performance fixes `4a`–`4d` | Close `3c`, `3e`–`3j`; finish Group 5 | Finish Groups 6–7 | UX/accessibility path ≥9 and candidate prerequisites complete |
 | Sep 11–17 | Freeze `8a`; run `4e`–`4f`, `8b`–`8f` | Exact-candidate advocate `3k` | Final release/rollback/support review | Exact candidate reaches automated READY prerequisites |
 | Sep 18–24 | Release-blocking fixes only | Cohort observation and final advocate check | Support the cohort; prepare go/no-go | Five-to-seven-day cohort and final broad-Beta decision |
 
@@ -273,7 +291,7 @@ not block early engineering.
 - bank/account aggregation;
 - Chat/Assistant;
 - Money Plan Phase 2;
-- paid-bill correction workflow;
+- generic reversal of legacy Activity rows whose original state cannot be proved;
 - automatic external payment detection;
 - other future Priority 4 features.
 

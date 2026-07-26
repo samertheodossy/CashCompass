@@ -2,6 +2,24 @@
 
 The V1 trust baseline is shipped and locked, and V1.1 closed out with the retirement profile integration (see **V1.1 — Retirement Profile Integration (DOB Source of Truth)** section below). The project has since moved into **Central App live + Family Beta readiness** — the Central App architecture is operational and the active work is hardening it toward a family beta (see **Current State — Post V1.2 Prep** below for the per-slice migration record). Working rules live in `WORKING_RULES.md → Current phase` + `→ Central App Transition Rules` (now active); product framing lives in `PROJECT_CONTEXT.md → Current phase` and `→ Current architecture — Central App (live)`. All prior phase notes below this header are preserved as-is for historical record.
 
+- **Activity action truth and Beta correction program — local source complete,
+  runtime pending (2026-07-26).** Elevated transaction correction from a future
+  enhancement to the broad-Beta gate as `FULL_BETA_REMAINING_PLAN.md → 5g–5m`.
+  The program separates seven families: Donation, direct Cash Flow, linked Bill
+  occurrences, Upcoming, compound House Expenses, entity maintenance, and
+  import/system audit. Supported financial correction must preserve the original
+  event, use durable operation identity plus exact-state preconditions, append an
+  immutable correction event, and fail closed on ambiguous legacy evidence.
+  Entity events route to their owning Manage workflow; Planner/email/import and
+  other audit-only events never advertise reversal. The first slice (`5g`,
+  `REG-020`) is implemented locally: Activity now uses the neutral **Action**
+  heading, shows **Remove donation** only for eligible Donation rows, shows no
+  button for unsupported rows, and retains the server donation-only gate against
+  forged requests. Permanent dynamic UI and server regressions were added;
+  `npm test` passed. No workbook, schema, deployment, Beta, bounded target, or
+  user data changed. Focused isolated runtime validation remains required before
+  closing `5g`.
+
 - **Broad-Beta work-map reconciliation through isolated `@195`
   (2026-07-24).** Reconciled `FULL_BETA_REMAINING_PLAN.md`, `ROADMAP.md`,
   `PROJECT_CONTEXT.md`, `BETA_10_OUT_OF_10_PLAN.md`, `TODO.md`,

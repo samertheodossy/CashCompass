@@ -381,6 +381,31 @@ Whenever a production bug is fixed:
   genuinely missing browser suites. A second explicit **Refresh status** retained
   the same result without creating or modifying a workbook.
 
+### REG-020 — Unsupported Activity rows displayed misleading Remove controls
+- Category: REGRESSION / UI TRUST
+- Date discovered: 2026-07-26
+- Status: fixed locally; dynamic UI/server regressions pass; isolated runtime
+  replay pending
+- Affected files: `Dashboard_Script_Activity.html`,
+  `Dashboard_Styles.html`, `activity_log.js`,
+  `scripts/checkDashboardUxRegressions.mjs`
+- Root cause: the Activity table labeled its final column **Remove (Donation)**
+  and rendered a disabled **Remove** button for every unsupported event. That
+  presentation implied that Planner/email, import/diagnostic, Bill, and other
+  audit rows had a removal operation even though the server correctly accepted
+  only eligible Donation rows.
+- Repro: render a mixed Activity result containing an eligible `donation` row
+  and an unsupported `planner_email_sent` row, then attempt a forged
+  `deleteActivityLogRow` request for the unsupported row.
+- Expected result: the neutral column heading is **Action**; only the eligible
+  Donation row exposes a specifically named **Remove donation** button;
+  unsupported rows expose no action control; and the server rejects a forged
+  non-Donation removal request.
+- Permanent coverage: `npm run test:dashboard-ux` dynamically renders both row
+  types, asserts the exact control contract, prevents the old heading from
+  returning, and executes the server handler with a forged Planner/email row to
+  prove the donation-only gate remains enforced.
+
 ---
 
 ## RECOVERY scenarios (design — not historical bugs)
@@ -422,4 +447,5 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-017 | Overlapping Debt loads cleared the selected account | REGRESSION / UI RELIABILITY | fixed; dynamic reversed-completion regression + isolated `@179` replay PASS |
 | REG-018 | Apps Script HTTP 0 exposed a raw failure with no bounded recovery | REGRESSION / UI RELIABILITY | fixed; injected regression + isolated `@181` integration PASS |
 | REG-019 | Refresh status did not ingest completed browser evidence | REGRESSION / TEST EVIDENCE | fixed; dynamic regression + isolated `@182` runtime PASS |
+| REG-020 | Unsupported Activity rows displayed misleading Remove controls | REGRESSION / UI TRUST | fixed locally; dynamic UI/server regressions pass; runtime pending |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

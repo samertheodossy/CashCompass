@@ -240,7 +240,13 @@ Plain HTML/JS (no React). Read-only reference view of balances, minimums, APRs, 
 - **Aggressive strategy is dark.** The allocator exists and is audited, but the toggle is hidden. Re-exposing it will need a UX moment (confirmation, clear explanation of Focus debt selection).
 - **Two dashboards co-exist.** `PlannerDashboard.html` (sidebar) and the web app (`PlannerDashboardWeb.html`) share some code; fixes can drift. Long-term: pick one, or share a single set of fragments.
 - **Alias map is config-driven but not UI-edited.** Payee → debt mapping is defined in code/config today. Errors surface as "unmapped card risk" but fixing them still requires a code or sheet change.
-- **No true undo for writes beyond donations.** The Activity page's **Remove** is donation-only. Extending it to Quick add / house expense / bill skip is scoped in `TODO.md` as Phases 2–4 — each requires logging `previousValue` + `newValue` first.
+- **No true correction beyond donations yet.** The Activity page exposes
+  **Remove donation** only for eligible Donation rows; unsupported rows have no
+  action control and the server rejects forged requests. Broad-Beta correction
+  is now specified as `FULL_BETA_REMAINING_PLAN.md → 5g–5m`: direct Cash Flow,
+  linked Bill occurrences, Upcoming, and compound House Expenses require durable
+  operation identity, exact-state preconditions, and immutable correction events;
+  entity/audit rows route or remain audit-only.
 - **HELOC credit-limit estimate is optional.** When absent, the draw cap falls back to heuristics; a real limit would tighten the advisor.
 - **`LOG - Activity` "Entry Date" normalization is timezone-sensitive.** Sheet reads return `Date`, not ISO strings; there's a helper (`activityLogEntryDateToYyyyMmDd_`) but every new reader has to remember to call it.
 - **Rolling bundle is a prebuilt artifact.** `RollingDebtPayoffDashboardBundle.html` is committed. If someone edits the component without running `npm run build:rolling-dashboard`, the deployed dashboard won't pick up the change. Build step is documented but easy to forget.
