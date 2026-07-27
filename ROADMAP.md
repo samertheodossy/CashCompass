@@ -8,7 +8,7 @@
 
 ---
 
-## Current status (2026-07-26)
+## Current status (2026-07-27)
 
 **Completed:**
 
@@ -60,6 +60,119 @@ no-dimension-below-9 gate moves the decision. Assumptions and full exit evidence
 are maintained in `PROJECT_CONTEXT.md → Beta delivery forecast` and
 `BETA_10_OUT_OF_10_PLAN.md`. Execution IDs, estimates, the critical path, and
 parallel work lanes are maintained in `FULL_BETA_REMAINING_PLAN.md`.
+
+---
+
+## Focused Beta execution sequence
+
+This is the operating order from the current state to broad invited Beta. Work
+one numbered wave at a time. A discovery from a later wave is recorded in the
+appropriate plan but does not interrupt the active wave unless it is a Severity
+1/2 defect or blocks the active work. Every fix must receive exact regression
+coverage and isolated evidence before its item closes.
+
+### Wave 1 — Trust foundation
+
+**Only active item now: `3l`.**
+
+1. `3l` — make Overview Financial Health prerequisite- and freshness-aware.
+2. `1c` — prove Bank/Debt stale, failure, retry, disabled-action, and recovery
+   behavior.
+3. `1d` — prove Skip and Stop tracking consequences, confirmations, preserved
+   history, stale protection, and cleanup.
+4. `1e` — prove Retirement not-ready guidance and ready-state results.
+
+**Exit:** all four items pass permanent regressions and isolated runtime
+validation. Do not begin Activity correction implementation before this exit.
+
+### Wave 2 — Safe Activity correction
+
+1. `5h` — durable operation identity, preview, exact-state preconditions, and an
+   immutable correction event.
+2. `5i` — direct Cash Flow correction.
+3. `5j` — Bill payment, Skip, and AutoPay occurrence correction.
+4. `5k` — Upcoming payment/lifecycle correction.
+5. `5l` — compound House Expense and optional Cash Flow correction.
+6. `5m` — entity events route to Manage; Planner/email/import remain
+   audit-only; complete permanent evidence.
+
+**Exit:** each supported family corrects atomically or fails closed on a
+harness-created disposable workbook; original Activity evidence remains intact.
+
+### Wave 3 — Daily-task language
+
+1. `2d` — state Quick Add add/update/replace behavior precisely.
+2. `2e` — state Upcoming Dismiss consequences and preserved history precisely.
+
+**Exit:** copy contracts pass Dashboard UX assertions and the applicable
+interactive journey.
+
+### Wave 4 — Page-by-page UX closeout
+
+Complete in this order:
+
+1. `3a` — loading states.
+2. `3b` — empty/error and guided-Add states.
+3. `3c` — Debt destination relationships.
+4. `3e` — Properties context.
+5. `3f` — Activity filters and responsive review.
+6. `3g` — Setup progress and recommended next step.
+7. `3h` — Help and contextual links.
+8. `3i` — medium-width visual balance.
+9. `3m` — form readiness and remaining customer language.
+10. `3j` — programmatic labels, keyboard/focus, target sizes, contrast,
+    reduced motion, and desktop/medium/390px evidence.
+
+**Exit:** no unresolved Severity 1/2 UX defect and every advocate category has a
+documented path to at least 9/10. The final score remains deferred until the
+candidate is frozen.
+
+### Wave 5 — Financial, workbook, and recovery proof
+
+Complete `5a`–`5f`: exact-candidate Financial Integrity, fixture matrix, workbook
+visual review, orphan/recovery disposition, and unified-source bounded-safety
+evidence.
+
+**Exit:** all release-critical financial/workbook gates pass without using the
+bounded workbook as a test target.
+
+### Wave 6 — Performance and candidate preparation
+
+1. `4a`–`4c` — optimize Dashboard formatting, snapshot construction, and chart
+   rebuilding.
+2. `4d` — measure every release-critical flow.
+3. Finish all candidate prerequisites, then freeze once.
+4. `4e` — run twenty exact-candidate first/repeat pairs.
+5. `4f` — ratify and pass p50/p95 budgets.
+
+**Exit:** performance is a passing exact-candidate gate, not diagnostic evidence.
+
+### Parallel lane — Operations and product foundation
+
+Advance `6a`–`6f` and `7a`–`7f` only during runtime waits and review gaps. This
+lane must not interrupt Waves 1–6, but must finish before the final advocate and
+go/no-go verdict.
+
+### Wave 7 — Frozen candidate and final gate
+
+Complete `8a`–`8f` plus `3k`: freeze exact identity, run every required suite,
+resolve warnings, run the full writer-inclusive advocate scorecard, confirm no
+Severity 1/2 defects, and archive the reproducible READY verdict and rollback
+target.
+
+**Exit:** weighted readiness is at least 95/100, no dimension is below 9/10, and
+every non-negotiable gate passes.
+
+### Wave 8 — Supervised cohort and launch decision
+
+Complete `9a`–`9e`: prepare the cohort, observe for five to seven calendar days,
+repair and revalidate defects, make the broad-Beta go/no-go decision, and promote
+Central Beta only after separate explicit approval. The bounded deployment
+remains user-controlled.
+
+**Focused-effort forecast:** **35–52 working days best case** or **48–76
+conservatively**, with operations/product work parallelized, plus the five-to-
+seven-day cohort and any repair cycle. Dates never override a failed gate.
 
 ---
 
