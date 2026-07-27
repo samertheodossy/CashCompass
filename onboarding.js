@@ -559,6 +559,51 @@ function probeIncomeStatus_(ss, mode) {
 /* -------------------------------------------------------------------------- */
 
 /**
+ * Shared read-only prerequisite contract for Setup-gated dashboard insights.
+ * Keep the required-step list here so Setup / Review and Overview cannot drift.
+ */
+function getOnboardingRequiredReadiness_(ss, mode) {
+  var ctxMode = normalizeOnboardingMode_(mode);
+  var bank = probeBankAccountsStatus_(ss, ctxMode);
+  var debts = probeDebtsStatus_(ss, ctxMode);
+  var bills = probeBillsStatus_(ss, ctxMode);
+  var income = probeIncomeStatus_(ss, ctxMode);
+  // Profile is Settings-sheet driven, not mode-routed. The probe lives
+  // in profile.js and is read-only.
+  var profile = (typeof probeProfileStatus_ === 'function')
+    ? probeProfileStatus_()
+    : {
+        status: 'missing', count: 0, partialCount: 0,
+        sheetExists: false, sheetName: 'INPUT - Settings',
+        note: 'Profile module unavailable.'
+      };
+
+  var steps = [
+    { key: 'bank', label: 'Bank Accounts', state: bank },
+    { key: 'debts', label: 'Debts', state: debts },
+    { key: 'bills', label: 'Bills', state: bills },
+    { key: 'income', label: 'Income', state: income },
+    { key: 'profile', label: 'Profile', state: profile }
+  ];
+  var completeCount = steps.filter(function(step) {
+    return step.state && step.state.status === 'complete';
+  }).length;
+
+  return {
+    mode: ctxMode,
+    steps: steps,
+    completeCount: completeCount,
+    total: steps.length,
+    ready: completeCount === steps.length,
+    missingLabels: steps.filter(function(step) {
+      return !step.state || step.state.status !== 'complete';
+    }).map(function(step) {
+      return step.label;
+    })
+  };
+}
+
+/**
  * Top-level read API for the onboarding UI. Returns a shape the client
  * can render directly. Safe for existing users: this reads live sheets
  * only when mode === 'normal', and NEVER writes anywhere.
@@ -568,21 +613,7 @@ function probeIncomeStatus_(ss, mode) {
 function getOnboardingStatusFromDashboard(mode) {
   var ctxMode = normalizeOnboardingMode_(mode);
   var ss = getUserSpreadsheet_();
-
-  var bank = probeBankAccountsStatus_(ss, ctxMode);
-  var debts = probeDebtsStatus_(ss, ctxMode);
-  var bills = probeBillsStatus_(ss, ctxMode);
-  var income = probeIncomeStatus_(ss, ctxMode);
-  // Profile is Settings-sheet driven, not mode-routed. The probe lives
-  // in profile.js and is safe to call on every status fetch — it only
-  // reads a handful of Key/Value rows.
-  var profile = (typeof probeProfileStatus_ === 'function')
-    ? probeProfileStatus_()
-    : {
-        status: 'missing', count: 0, partialCount: 0,
-        sheetExists: false, sheetName: 'INPUT - Settings',
-        note: 'Profile module unavailable.'
-      };
+  var readiness = getOnboardingRequiredReadiness_(ss, ctxMode);
 
   // Upcoming Expenses is intentionally NOT in this steps array — it was
   // moved to the Optional section on the Setup / Review grid (alongside
@@ -594,13 +625,7 @@ function getOnboardingStatusFromDashboard(mode) {
   // the "N complete · M not set up" summary that drives the Finish
   // panel. Adding it back here would re-introduce it as a required
   // step and flip the grid back to 6 cards.
-  var steps = [
-    { key: 'bank', label: 'Bank Accounts', state: bank },
-    { key: 'debts', label: 'Debts', state: debts },
-    { key: 'bills', label: 'Bills', state: bills },
-    { key: 'income', label: 'Income', state: income },
-    { key: 'profile', label: 'Profile', state: profile }
-  ];
+  var steps = readiness.steps;
 
   var missingTestSheets = [];
   if (ctxMode === 'test') {

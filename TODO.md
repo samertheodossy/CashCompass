@@ -542,10 +542,13 @@ The read-only advocate replay confirmed Activity action truth (`5g` /
 and is not comparable with the writer-inclusive formal **8.3/10** score. The
 findings below are Beta work, ordered by product risk:
 
-1. **`3l` · P1 — Overview health-score prerequisite/freshness trust (1–2 d).**
-   Do not show **Strong** while Setup/data are incomplete, the baseline is stale,
-   or visible cash/runway/projected flow contradict the label. Add pure/server,
-   Dashboard UX, First-Run, and Populated exact-candidate coverage.
+1. **`3l` · P1 — Overview health-score prerequisite/freshness trust
+   (runtime-complete on isolated `@197`, 2026-07-27).** Overview now
+   withholds the score until all five required Setup areas and a current-month
+   planner baseline exist. Negative projected cash flow or non-positive usable
+   cash cannot be labeled **Strong**. Pure/Dashboard UX regressions pass locally;
+   First-Run V5 passed 11/11 and Populated V4 passed 14/14 using Restricted,
+   single-owner disposable fixtures with zero errors and verified Trash cleanup.
 2. **`3j` · P1 — Programmatic form labels and accessibility closeout (expanded
    to 3–5 d).** Associate every visible label with its input/select; complete
    keyboard, focus, target-size, contrast, reduced-motion, and

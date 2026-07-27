@@ -406,6 +406,29 @@ Whenever a production bug is fixed:
   returning, and executes the server handler with a forged Planner/email row to
   prove the donation-only gate remains enforced.
 
+### REG-021 — Overview displayed Strong health before prerequisites were trustworthy
+- Category: REGRESSION / UI TRUST / FINANCIAL TRUTH
+- Date discovered: 2026-07-26
+- Status: fixed locally; pure/UI regressions pass; isolated runtime replay pending
+- Affected files: `dashboard_data.js`, `onboarding.js`,
+  `Dashboard_Script_FirstRunE2E.html`,
+  `Dashboard_Script_PopulatedDashboardE2E.html`,
+  `scripts/checkDashboardUxRegressions.mjs`
+- Root cause: Financial Health scored the latest History metrics without
+  consulting the five required Setup probes or verifying that both the planner
+  run and planned month were current. Light penalties also allowed negative
+  projected cash flow and zero usable cash to retain an 85 / Strong result.
+- Repro: supply otherwise high-scoring History metrics while Setup is 1/5;
+  repeat with a prior-month run; then use current metrics with negative projected
+  cash flow and zero usable cash.
+- Expected result: incomplete Setup shows **Setup incomplete** and no score; an
+  old or invalid baseline shows **Needs refresh** and no score; contradictory
+  cash conditions score at most 84 and never show **Strong**; a complete,
+  current, healthy baseline can still show **Strong**.
+- Permanent coverage: `npm run test:dashboard-ux` executes all four states
+  against the production score functions. First-Run V5 and Populated V4 require
+  exact browser evidence that an incomplete fixture cannot expose a score.
+
 ---
 
 ## RECOVERY scenarios (design — not historical bugs)
@@ -448,4 +471,5 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-018 | Apps Script HTTP 0 exposed a raw failure with no bounded recovery | REGRESSION / UI RELIABILITY | fixed; injected regression + isolated `@181` integration PASS |
 | REG-019 | Refresh status did not ingest completed browser evidence | REGRESSION / TEST EVIDENCE | fixed; dynamic regression + isolated `@182` runtime PASS |
 | REG-020 | Unsupported Activity rows displayed misleading Remove controls | REGRESSION / UI TRUST | fixed locally; dynamic UI/server regressions pass; runtime pending |
+| REG-021 | Overview displayed Strong health before prerequisites were trustworthy | REGRESSION / UI TRUST / FINANCIAL TRUTH | fixed locally; pure/UI regressions pass; runtime pending |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

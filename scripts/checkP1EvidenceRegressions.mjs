@@ -94,9 +94,9 @@ assert.match(recoveryUi, /cashcompass2026@gmail\.com[\s\S]*?never accepts an ema
   'Recovery Live UI must explain its fixed identity and target boundary');
 assert.match(validationUi, /single suite inventory and evidence dashboard[\s\S]*?All suites/,
   'Validation console must remain the consolidated suite inventory and evidence surface');
-assert.match(suites, /id: 'SUITE-FIRST-RUN-UX-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?FIRST_RUN_E2E_LATEST_EVIDENCE_V4/,
+assert.match(suites, /id: 'SUITE-FIRST-RUN-UX-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?FIRST_RUN_E2E_LATEST_EVIDENCE_V5/,
   'First-Run UX must be an implemented browser suite backed by saved evidence');
-assert.match(firstRunE2E, /FIRST_RUN_E2E_EVIDENCE_KEY_\s*=\s*'FIRST_RUN_E2E_LATEST_EVIDENCE_V4'/,
+assert.match(firstRunE2E, /FIRST_RUN_E2E_EVIDENCE_KEY_\s*=\s*'FIRST_RUN_E2E_LATEST_EVIDENCE_V5'/,
   'The Save-only Update contract must invalidate older First-Run evidence');
 assert.match(firstRunE2E, /FIRST_RUN_E2E_TEST_EMAIL_\s*=\s*'cashcompass2026@gmail.com'/,
   'First-Run E2E must stay pinned to the permanent disposable identity');
@@ -126,9 +126,9 @@ assert.match(firstRunE2E, /'empty_tracked_editor_modes'/,
   'First-Run E2E must require empty-state coverage for converged tracked editors');
 assert.match(firstRunBrowser, /function customerLanguageLeaks\(/,
   'First-Run E2E must scan visible customer pages for internal workbook terminology');
-assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V3/,
+assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V4/,
   'Populated Dashboard E2E must be an implemented browser suite backed by saved evidence');
-assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V3'/,
+assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V4'/,
   'Populated Dashboard E2E must use its own versioned saved-evidence key');
 assert.doesNotMatch(populatedE2E, /function pdE2EPrepare\([^)]*(?:spreadsheet|workbook|file)Id/i,
   'Populated Dashboard preparation must never accept an arbitrary workbook target');

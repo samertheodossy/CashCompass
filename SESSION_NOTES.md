@@ -2,6 +2,43 @@
 
 The V1 trust baseline is shipped and locked, and V1.1 closed out with the retirement profile integration (see **V1.1 — Retirement Profile Integration (DOB Source of Truth)** section below). The project has since moved into **Central App live + Family Beta readiness** — the Central App architecture is operational and the active work is hardening it toward a family beta (see **Current State — Post V1.2 Prep** below for the per-slice migration record). Working rules live in `WORKING_RULES.md → Current phase` + `→ Central App Transition Rules` (now active); product framing lives in `PROJECT_CONTEXT.md → Current phase` and `→ Current architecture — Central App (live)`. All prior phase notes below this header are preserved as-is for historical record.
 
+- **Overview Financial Health trust — `3l` / `REG-021` runtime complete
+  (2026-07-27).** Root cause was a score builder that read planner History but
+  never consulted the five required Setup probes or verified that the run and
+  planned month were current. Its light cash penalties also allowed negative
+  projected flow plus zero usable cash to retain **85 — Strong**. Setup and
+  Overview now share one read-only required-step contract; Overview withholds
+  the score with **Setup incomplete** or **Needs refresh** guidance until the
+  prerequisites are verified, and contradictory cash conditions cap below
+  Strong. `test:dashboard-ux` dynamically proves incomplete, stale,
+  contradictory, and healthy-current cases; First-Run V5 and Populated V4 add
+  exact browser assertions and invalidate older evidence. Full `npm test`
+  passed. After explicit approval, the reviewed source was pushed only to the
+  Central project and the isolated validation deployment advanced from `@196`
+  to `@197`; deployment inventory confirmed Beta stayed `@106`. First-Run V5
+  run `FR-23fd31cb-df7b-4f2e-8202-586e70254af0` passed 11/11 in 103.629 s and
+  Populated V4 run `FR-9a7b266a-681e-467d-8489-cf8218be666f` passed 14/14 in
+  155.202 s. Both passed `health_prerequisite_truth`, used Restricted
+  single-owner harness fixtures, recorded zero errors, and verified exact
+  fixture Trash cleanup. The console-owned disposable runner returned to OFF.
+  No schema, commit, Git push, bounded target, mapped-user workbook,
+  configured-default workbook, Golden workbook, or administrator workbook was
+  a writer target.
+
+- **Unattended browser evidence accelerator — `1f` planned (2026-07-27).**
+  Continuous operator watching and routine Google-account switching are now an
+  explicit Beta-cycle cost. The approved direction keeps
+  `cashcompass2026@gmail.com` as the fixed non-admin disposable writer and adds
+  one-action orchestration from the administrator Validation console: launch
+  selected suites into an already authenticated dedicated test session, monitor
+  completion, return exact-run evidence, verify exact-fixture Trash cleanup, and
+  restore the runner flag to OFF in a `finally` path. The adapter accepts no
+  email or workbook ID and must refuse administrator, bounded, mapped-user,
+  Golden, configured-default, and stale-candidate targets. Google password/2FA
+  is not automated; an expired session pauses with one clear sign-in action.
+  Permanent coverage must prove identity, ownership, stale-evidence refusal,
+  cleanup on success/failure, and flag restoration before this item closes.
+
 - **Isolated `@196` advocate/Beta-plan reconciliation — documentation only
   (2026-07-26).** Recorded the read-only advocate run without treating its
   evidence-limited 7.2/10 as a regression from the formal writer-inclusive

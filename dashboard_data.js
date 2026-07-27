@@ -324,6 +324,21 @@ function buildDashboardSnapshot_() {
   const latestMetrics = getLatestPlannerHistoryMetrics_();
   const upcoming = getUpcomingExpenseMetricsSafe_();
   const retirement = getRetirementSummarySafe_();
+  let setupReadiness;
+  try {
+    setupReadiness = (typeof getOnboardingRequiredReadiness_ === 'function')
+      ? getOnboardingRequiredReadiness_(ss, 'normal')
+      : { ready: false, completeCount: 0, total: 5, missingLabels: [] };
+  } catch (_setupReadinessErr) {
+    // Fail closed: a health score must not appear authoritative when its
+    // prerequisite state cannot be verified.
+    setupReadiness = {
+      ready: false,
+      completeCount: 0,
+      total: 5,
+      missingLabels: []
+    };
+  }
 
   const bufferRunway = buildBufferRunway_(latestMetrics, cash);
   const historyRows = getAllHistorySnapshotRows_();
@@ -337,7 +352,10 @@ function buildDashboardSnapshot_() {
     },
     weeklyPick
   );
-  const health = buildFinancialHealthScore_(latestMetrics, upcoming);
+  const health = buildFinancialHealthScore_(latestMetrics, upcoming, {
+    setupReadiness: setupReadiness,
+    now: new Date()
+  });
   const issues = buildDashboardIssues_(ss, {
     cash: cash,
     investments: investments,
@@ -1022,9 +1040,9 @@ function computeFinancialHealthScoreNumber_(metrics, upcomingData) {
     drivers.push('Projected cash flow is positive at ' + fmtCurrency_(metrics.projectedCashFlow) + '.');
   }
 
-  if (metrics.usableCash < 0) {
+  if (metrics.usableCash <= 0) {
     score -= 20;
-    drivers.push('Usable cash after buffers is negative.');
+    drivers.push('Usable cash after buffers is at or below zero.');
   } else if (metrics.usableCash < 25000) {
     score -= 10;
     drivers.push('Usable cash after buffers is tight at ' + fmtCurrency_(metrics.usableCash) + '.');
@@ -1062,20 +1080,91 @@ function computeFinancialHealthScoreNumber_(metrics, upcomingData) {
     drivers.push(upcoming.overduePlannedCount + ' overdue upcoming expense(s).');
   }
 
+  // A “Strong” label must never contradict the visible cash outlook.
+  if (metrics.projectedCashFlow < 0 || metrics.usableCash <= 0) {
+    score = Math.min(score, 84);
+  }
+
   score = Math.max(0, Math.min(100, round2_(score)));
   return { score: score, drivers: drivers };
 }
 
-function buildFinancialHealthScore_(latestMetrics, upcoming) {
+function buildFinancialHealthReadiness_(setupReadiness, latestMetrics, nowOpt) {
+  var setup = setupReadiness || {};
+  if (setup.ready !== true) {
+    var completeCount = Number(setup.completeCount || 0);
+    var total = Number(setup.total || 5);
+    return {
+      ready: false,
+      availability: 'setup_incomplete',
+      label: 'Setup incomplete',
+      summary: completeCount + ' of ' + total +
+        ' required setup areas are ready. Finish Setup / Review before relying on a health score.'
+    };
+  }
+
   if (!latestMetrics) {
     return {
-      score: null,
+      ready: false,
+      availability: 'unavailable',
       label: 'Unavailable',
+      summary: 'Run the planner to generate health scoring.'
+    };
+  }
+
+  var now = nowOpt instanceof Date ? nowOpt : new Date();
+  var runDate = latestMetrics.runDate instanceof Date
+    ? latestMetrics.runDate
+    : parseHistoryRunDate_(null, latestMetrics.runDate);
+  var planMonth = parseMonthHeader_(latestMetrics.month);
+  var runIsCurrent = runDate &&
+    runDate.getFullYear() === now.getFullYear() &&
+    runDate.getMonth() === now.getMonth();
+  var monthIsCurrent = planMonth &&
+    planMonth.getFullYear() === now.getFullYear() &&
+    planMonth.getMonth() === now.getMonth();
+
+  if (!runIsCurrent || !monthIsCurrent) {
+    var monthNames = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    var currentMonth = monthNames[now.getMonth()] + '-' + String(now.getFullYear()).slice(-2);
+    return {
+      ready: false,
+      availability: 'stale',
+      label: 'Needs refresh',
+      summary: 'Refresh your Financial Plan for ' + currentMonth +
+        ' before relying on a health score.'
+    };
+  }
+
+  return {
+    ready: true,
+    availability: 'ready',
+    label: '',
+    summary: ''
+  };
+}
+
+function buildFinancialHealthScore_(latestMetrics, upcoming, options) {
+  var opts = options || {};
+  var readiness = buildFinancialHealthReadiness_(
+    opts.setupReadiness,
+    latestMetrics,
+    opts.now
+  );
+  if (!readiness.ready) {
+    return {
+      score: null,
+      label: readiness.label,
       color: 'neutral',
-      summary: 'Run the planner to generate health scoring.',
+      summary: readiness.summary,
       drivers: [],
-      baselineLabel: '',
-      trend: null
+      baselineLabel: latestMetrics ? (latestMetrics.runLabel || latestMetrics.runDate || '') : '',
+      trend: null,
+      availability: readiness.availability,
+      setupReadiness: opts.setupReadiness || null
     };
   }
 
@@ -1129,7 +1218,9 @@ function buildFinancialHealthScore_(latestMetrics, upcoming) {
     summary: label + ' financial health based on the latest planner run and upcoming obligations.',
     drivers: drivers,
     baselineLabel: latestMetrics.runLabel || latestMetrics.runDate || '',
-    trend: trend
+    trend: trend,
+    availability: 'ready',
+    setupReadiness: opts.setupReadiness || null
   };
 }
 

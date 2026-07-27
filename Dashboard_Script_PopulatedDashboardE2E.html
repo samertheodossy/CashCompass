@@ -328,6 +328,16 @@
         ? 'Refresh disabled during the populated planner request, then re-enabled without an error state.'
         : 'Refresh did not preserve the expected running/completed button state.');
 
+      var healthScore = text('health_score');
+      var healthLabel = text('health_label');
+      var healthSummary = text('health_summary');
+      var healthTruthPass = healthScore === '—' &&
+        healthLabel === 'Setup incomplete' &&
+        /Setup \/ Review/i.test(healthSummary);
+      add('health_prerequisite_truth', healthTruthPass, healthTruthPass
+        ? 'Financial Health withheld its score because the representative fixture still has an incomplete required Profile.'
+        : 'Financial Health exposed a score or failed to explain the incomplete required Profile prerequisite.');
+
       var errors = errorMessages();
       add('clean_console_navigation', errors.length === 0, errors.length
         ? ('Captured ' + errors.length + ' browser/visible error(s).')

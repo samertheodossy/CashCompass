@@ -2,13 +2,12 @@
 
 **Status:** Active execution inventory
 
-**Reconciled:** 2026-07-26
+**Reconciled:** 2026-07-27
 
-**Current evidence:** isolated Central `@196`; Activity action truth passed a
-fresh read-only interactive advocate replay. The prior isolated `@195`
-First-Run V4 **10/10 PASS** and Populated Dashboard V3 **13/13 PASS** remain the
-latest complete writer-inclusive browser evidence, with zero browser errors,
-Restricted single-owner fixtures, and verified Trash cleanup.
+**Current evidence:** isolated Central `@197`; First-Run V5 **11/11 PASS** and
+Populated Dashboard V4 **14/14 PASS** are the latest writer-inclusive browser
+evidence, with zero errors, Restricted single-owner disposable fixtures, and
+verified exact-fixture Trash cleanup.
 
 **Last formal independent advocate score:** **8.3/10** on isolated Central
 `@180`. This remains the official score until the next full scored advocate run;
@@ -49,6 +48,7 @@ closed. They are retained here so the work map does not lose history.
 | 2f | Permanent Bills journey regression | Bills Due/Add/Manage, creation-month floor, payment marker, Cash Flow receipt, history chart, no stale warning, Restricted fixture, and cleanup passed |
 | 3d | Tracked-editor workflow consistency | Bills use **Due · Add · Manage**; Houses, Bank Accounts, Investments, and Debts use **Update · Add · Manage**; Setup preserves Add/Manage intent; Update is Save-only and Manage owns guarded Stop tracking |
 | 5g | Activity action-column truth (`REG-020`) | Isolated `@196` interactively showed **Action**, **Remove donation** only for an eligible Donation row, and `—` for unsupported rows; permanent UI and forged-request server regressions pass |
+| 3l | Overview health prerequisite/freshness trust (`REG-021`) | Isolated `@197` First-Run V5 passed 11/11 and Populated V4 passed 14/14; both proved `health_prerequisite_truth`, Restricted single-owner fixtures, zero errors, and verified Trash cleanup |
 
 The remaining tables below are therefore an **open-only list**.
 
@@ -56,9 +56,9 @@ The remaining tables below are therefore an **open-only list**.
 
 | Order | Open IDs | Workstream | Focused estimate |
 |---:|---|---|---:|
-| 1 | `1c`–`1e` | Controlled reliability, writer safety, and Retirement proof | 2.5–5 d |
+| 1 | `1c`–`1f` | Controlled reliability, writer safety, Retirement proof, and unattended browser evidence | 3.5–8 d |
 | 2 | `2d`–`2e` | Quick Add and Upcoming consequence language | 1–2 d |
-| 3 | `3a`–`3c`, `3e`–`3m` | Remaining page UX, trust, advocate scoring, responsive/accessibility | 12–23 d |
+| 3 | `3a`–`3c`, `3e`–`3k`, `3m` | Remaining page UX, trust, advocate scoring, responsive/accessibility | 11–21 d |
 | 4 | `4a`–`4f` | Performance optimization, measurement, and percentile gate | 5–11 d |
 | 5 | `5a`–`5f`, `5h`–`5m` | Financial/workbook proof plus Beta-critical Activity correction and reversal | 17–36 d |
 | 6 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
@@ -93,8 +93,9 @@ Broad invited Beta requires all of the following:
 | 1c | Controlled Bank/Debt stale and failure journeys | Loading failure, stale response, server error, retry, disabled actions, and recovery pass on a marked disposable fixture | 1–2 d |
 | 1d | Skip and Stop-tracking safety evidence | Consequence, preserved history, confirmation, stale protection, recovery, and cleanup are explicit and regression-protected | 1–2 d |
 | 1e | Retirement guidance runtime proof | Missing-minimum-input guidance hides result walls; ready state reveals correct results; focused journey passes | 0.5–1 d |
+| 1f | Guarded unattended browser-suite orchestration | One operator action launches selected browser suites under an already authenticated `cashcompass2026@gmail.com` session, monitors completion, returns exact-run evidence, verifies exact-fixture Trash cleanup, and restores the runner flag to OFF even on failure. The adapter accepts no email or workbook ID and refuses administrator, bounded, mapped-user, Golden, configured-default, and stale-candidate targets. Expired Google authentication pauses with one clear sign-in action; passwords and 2FA are never automated. | 1–3 d |
 
-**Group 1 open estimate: 2.5–5 focused days.**
+**Group 1 open estimate: 3.5–8 focused days.**
 
 ## 2. Bills and daily-task completion
 
@@ -123,10 +124,9 @@ acceptance contract, close it with evidence rather than manufacturing a redesign
 | 3i | Medium-width header and visual balance | Desktop/medium/390px compositions are balanced without weakening the established visual system | 0.5–1 d |
 | 3j | Responsive and accessibility closeout | Desktop/medium/390px, keyboard, focus, programmatic control names, target size, contrast, and reduced motion pass; all visible form labels are associated with their controls | 3–5 d |
 | 3k | Exact-candidate task-based advocate rerun | All eight criteria are rescored from interactive evidence; every category reaches the release path to ≥9 | 1–2 d |
-| 3l | Overview health-score prerequisite and freshness trust | Financial health is unavailable or clearly qualified until required setup/data and a current baseline exist; it never says **Strong** while visible cash, runway, and setup readiness contradict it | 1–2 d |
 | 3m | Form readiness and residual customer language | Primary actions remain disabled until minimum inputs are valid; customer labels replace stored tokens/internal workbook language; duplicated guidance is removed without changing stored values or server validation | 1–2 d |
 
-**Group 3 open estimate: 12–23 focused days.**
+**Group 3 open estimate: 11–21 focused days.**
 
 ### Isolated `@196` advocate finding reconciliation
 
@@ -137,7 +137,7 @@ finding is nevertheless scheduled and receives a permanent regression home.
 
 | Priority | Confirmed finding | Work ID | Required permanent coverage |
 |---|---|---|---|
-| P1 | Overview says **Financial health 85 — Strong** while setup is 1/5, balances are zero, projected cash flow is negative, and the baseline is stale | `3l` | Pure/server health-prerequisite and freshness contract; Dashboard UX render contract; First-Run and Populated exact-candidate assertions |
+| P1 | Overview says **Financial health 85 — Strong** while setup is 1/5, balances are zero, projected cash flow is negative, and the baseline is stale | `3l` | Runtime-closed on isolated `@197`: pure/server and Dashboard UX contracts pass; First-Run V5 passed 11/11 and Populated V4 passed 14/14 with exact fixture cleanup |
 | P1 | Visible form labels are not programmatically associated with core inputs/selects | `3j` | Dashboard UX DOM/accessible-name contract plus keyboard, focus, desktop/medium/390px browser evidence |
 | P2 | Quick Add duplicate/update behavior remains vague | `2d` | Existing Quick Add reliability suite plus Dashboard UX copy assertion |
 | P2 | Empty Bank/Investment/Debt Update and Purchase Simulator surfaces begin with blank selectors or dash-only results | `3b` | Dashboard UX empty-state contract plus First-Run exact-candidate assertion |
@@ -262,7 +262,7 @@ strictest failed gate controls the actual date.
 
 The remaining work that directly controls the finish date is:
 
-`3l → 1c–1e → 5h–5m → 2d–2e → 3a–3m → 4a–4f → 8a–8f → 9a–9e`
+`1f → 1c–1e → 5h–5m → 2d–2e → 3a–3k/3m → 4a–4f → 8a–8f → 9a–9e`
 
 Financial/workbook proof in Group 5 must finish before `8b`. Operations and
 monetization foundations in Groups 6–7 must finish before `8d`, but they should
@@ -303,7 +303,7 @@ not block early engineering.
 | Window | Lane A — critical | Lane B — UX/evidence | Lane C — parallel foundation | Exit |
 |---|---|---|---|---|
 | Completed through Jul 26 | `1a`, `1b`, `2a`–`2c`, `2f`, `5g` | `3d`; shared tracked-editor convergence | — | Isolated `@196` Activity truth passes; Beta stays `@106`; bounded untouched |
-| Aug 21–27 | `3l`; `1c`–`1e`; begin `5h`–`5i` | Audit `3a`, `3b`; begin `3m` and diagnostic performance | Start `6a`–`6f`, `7a`–`7b`, cohort design | Health trust and reliability proof close; Activity correction foundation and direct Cash Flow path advance |
+| Aug 21–27 | `1f`; `1c`–`1e`; begin `5h`–`5i` | Audit `3a`, `3b`; begin `3m` and diagnostic performance | Start `6a`–`6f`, `7a`–`7b`, cohort design | Unattended evidence and reliability proof close; Activity correction foundation and direct Cash Flow path advance |
 | Aug 28–Sep 3 | `5j`–`5m` | Close `2d`–`2e`; advance Group 5 matrix/recovery proof | `7c`–`7f`, known limitations, support posture | Supported Activity correction families and audit-only dispositions pass |
 | Sep 4–10 | Begin/finish performance fixes `4a`–`4d` | Close `3c`, `3e`–`3m`; finish Group 5 | Finish Groups 6–7 | UX/accessibility path ≥9 and candidate prerequisites complete |
 | Sep 11–17 | Freeze `8a`; run `4e`–`4f`, `8b`–`8f` | Exact-candidate advocate `3k` | Final release/rollback/support review | Exact candidate reaches automated READY prerequisites |

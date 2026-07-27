@@ -57,7 +57,7 @@ worth KPIs; Bank/Debt selection and Save-only Update gating; Bank/Investment/Hou
 tracked-editor modes plus populated Manage inventories with Stop tracking; property equity; representative
 Investments/Upcoming/Bills/Income rendering; subtab retention; populated Setup and Help;
 customer-language leakage; real planner Refresh state; and clean console/navigation.
-Evidence is saved under `POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V3`; PASS requires
+Evidence is saved under `POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V4`; PASS requires
 Restricted sharing and exact Drive-verified Trash cleanup.
 
 **`@195` tracked-editor evidence:** First-Run V4 run

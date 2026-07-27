@@ -116,6 +116,7 @@ assert.match(render, /Change vs ['"] \+ label \+ ': ' \+ fmtSignedCurrency\(num\
 
 const body = files['Dashboard_Body.html'];
 const styles = files['Dashboard_Styles.html'];
+const dashboardData = files['dashboard_data.js'];
 const activityClient = files['Dashboard_Script_Activity.html'];
 const activityServer = files['activity_log.js'];
 const activityRenderStart = activityClient.indexOf('function renderActivityTable_(');
@@ -322,6 +323,112 @@ assert.match(styles,
   'More insights cards must use a balanced 50/50 desktop split');
 assert.match(render, /overview-positive-state[\s\S]*?No issues need attention/,
   'A healthy Overview must show a compact positive Issues state');
+
+const healthContext = vm.createContext({
+  Date,
+  Math,
+  Number,
+  String,
+  isNaN,
+  parseInt,
+  round2_: value => Math.round(Number(value) * 100) / 100,
+  fmtCurrency_: value => `$${Number(value).toFixed(2)}`,
+  parseMonthHeader_: value => {
+    const match = String(value || '').match(/^([A-Za-z]{3})-(\d{2})$/);
+    if (!match) return null;
+    const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(match[1]);
+    return month < 0 ? null : new Date(2000 + Number(match[2]), month, 1);
+  }
+});
+vm.runInContext(dashboardData, healthContext);
+vm.runInContext(
+  'getPriorMonthPlannerHistoryMetrics_ = function() { return { metrics: null, label: "" }; };',
+  healthContext
+);
+const healthFns = vm.runInContext(
+  '({ buildFinancialHealthReadiness_, buildFinancialHealthScore_, computeFinancialHealthScoreNumber_ })',
+  healthContext
+);
+const currentHealthMetrics = {
+  runDate: '2026-07-27',
+  runLabel: 'Current validation run',
+  month: 'Jul-26',
+  projectedCashFlow: 5000,
+  usableCash: 50000,
+  ccDebt: 0,
+  totalDebt: 0,
+  totalAssets: 100000,
+  payoffAll: 0
+};
+const setupIncompleteHealth = healthFns.buildFinancialHealthScore_(
+  currentHealthMetrics,
+  null,
+  {
+    setupReadiness: { ready: false, completeCount: 1, total: 5 },
+    now: new Date(2026, 6, 27)
+  }
+);
+assert.equal(setupIncompleteHealth.score, null,
+  'Financial Health must withhold a score while required Setup is incomplete');
+assert.equal(setupIncompleteHealth.label, 'Setup incomplete',
+  'Financial Health must explain that required Setup is incomplete');
+assert.match(setupIncompleteHealth.summary, /1 of 5 required setup areas are ready/,
+  'Financial Health must make prerequisite progress actionable');
+const blankFirstRunHealth = healthFns.buildFinancialHealthScore_(
+  null,
+  null,
+  {
+    setupReadiness: { ready: false, completeCount: 0, total: 5 },
+    now: new Date(2026, 6, 27)
+  }
+);
+assert.equal(blankFirstRunHealth.label, 'Setup incomplete',
+  'A blank first-run workbook must prioritize the required Setup action over missing planner history');
+
+const staleHealth = healthFns.buildFinancialHealthScore_(
+  { ...currentHealthMetrics, runDate: '2026-06-30', month: 'Jun-26' },
+  null,
+  {
+    setupReadiness: { ready: true, completeCount: 5, total: 5 },
+    now: new Date(2026, 6, 27)
+  }
+);
+assert.equal(staleHealth.score, null,
+  'Financial Health must withhold a score when the planner baseline is stale');
+assert.equal(staleHealth.label, 'Needs refresh',
+  'Financial Health must identify a stale baseline');
+assert.match(staleHealth.summary, /Refresh your Financial Plan for Jul-26/,
+  'Financial Health must name the current baseline month in its refresh action');
+
+const contradictoryHealth = healthFns.buildFinancialHealthScore_(
+  { ...currentHealthMetrics, projectedCashFlow: -300, usableCash: 0 },
+  null,
+  {
+    setupReadiness: { ready: true, completeCount: 5, total: 5 },
+    now: new Date(2026, 6, 27)
+  }
+);
+assert.ok(contradictoryHealth.score <= 84,
+  'Negative cash flow or non-positive usable cash must cap Financial Health below Strong');
+assert.notEqual(contradictoryHealth.label, 'Strong',
+  'Financial Health wording must not contradict the visible cash outlook');
+
+const strongHealth = healthFns.buildFinancialHealthScore_(
+  currentHealthMetrics,
+  null,
+  {
+    setupReadiness: { ready: true, completeCount: 5, total: 5 },
+    now: new Date(2026, 6, 27)
+  }
+);
+assert.equal(strongHealth.label, 'Strong',
+  'Financial Health must still show Strong for a complete, current, healthy baseline');
+assert.equal(strongHealth.availability, 'ready',
+  'Financial Health must expose its verified readiness state');
+assert.match(dashboardData,
+  /getOnboardingRequiredReadiness_\(ss,\s*['"]normal['"]\)[\s\S]*?buildFinancialHealthScore_\(latestMetrics,\s*upcoming,\s*\{[\s\S]*?setupReadiness:/,
+  'Overview must gate Financial Health with the shared required Setup contract');
 
 for (const [pageId, title] of Object.entries({
   page_assets: 'Assets &amp; Liabilities',
