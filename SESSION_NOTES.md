@@ -2,6 +2,20 @@
 
 The V1 trust baseline is shipped and locked, and V1.1 closed out with the retirement profile integration (see **V1.1 — Retirement Profile Integration (DOB Source of Truth)** section below). The project has since moved into **Central App live + Family Beta readiness** — the Central App architecture is operational and the active work is hardening it toward a family beta (see **Current State — Post V1.2 Prep** below for the per-slice migration record). Working rules live in `WORKING_RULES.md → Current phase` + `→ Central App Transition Rules` (now active); product framing lives in `PROJECT_CONTEXT.md → Current phase` and `→ Current architecture — Central App (live)`. All prior phase notes below this header are preserved as-is for historical record.
 
+- **Controlled Bank/Debt loading resilience — `1c` / `REG-023` runtime complete
+  on isolated `@203` (2026-07-27).** Populated Dashboard evidence advanced to
+  V5 and now injects controlled read failures into the production Bank and Debt
+  selection flows without issuing a workbook write. Each journey proves Save
+  remains disabled while details are loading or failed, a transient failure
+  recovers through the bounded read retry, and a late stale response cannot
+  overwrite the newest selection state. Local P1-evidence, Dashboard UX, and
+  full `npm test` gates passed. Isolated run
+  `FR-33e93e20-8a46-41e6-8709-696782922076` passed 16/16 in 171.670 s with
+  zero browser errors, Restricted single-owner sharing, and exact-fixture Trash
+  verification. Only isolated Central advanced to `@203`; Beta stayed `@106`.
+  No formula, financial rule, schema, migration, production write path, bounded,
+  mapped-user, Golden, configured-default, or administrator workbook changed.
+
 - **Overview Financial Health trust — `3l` / `REG-021` runtime complete
   (2026-07-27).** Root cause was a score builder that read planner History but
   never consulted the five required Setup probes or verified that the run and

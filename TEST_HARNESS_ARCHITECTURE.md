@@ -57,8 +57,16 @@ worth KPIs; Bank/Debt selection and Save-only Update gating; Bank/Investment/Hou
 tracked-editor modes plus populated Manage inventories with Stop tracking; property equity; representative
 Investments/Upcoming/Bills/Income rendering; subtab retention; populated Setup and Help;
 customer-language leakage; real planner Refresh state; and clean console/navigation.
-Evidence is saved under `POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V4`; PASS requires
+Evidence is saved under `POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V5`; PASS requires
 Restricted sharing and exact Drive-verified Trash cleanup.
+
+**`@203` controlled-loading evidence:** Populated V5 run
+`FR-33e93e20-8a46-41e6-8709-696782922076` passed 16/16 in 171.670 s. Its two
+new assertions force Bank and Debt detail-read failure, verify disabled Save,
+recover through bounded retry, and deliver the newest response before a late
+stale response to prove the stale completion is ignored. The injected journey
+does not invoke a workbook writer. The fixture was Restricted, single-owner,
+and exactly verified in Trash.
 
 **`@195` tracked-editor evidence:** First-Run V4 run
 `FR-a1df6d9b-c123-4759-b08e-438d4047bf4c` passed 10/10 in 116.282 s;

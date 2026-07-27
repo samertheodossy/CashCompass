@@ -523,7 +523,12 @@ The initial screenshot review and the completed interactive populated-workbook r
 
 **P2/P3 follow-through:**
 
-- **Runtime-verified on isolated `@177`; controlled failure replay pending:** keep Bank/Debt writers and Stop tracking disabled until the matching selected-record details finish loading; stale/out-of-order responses cannot re-enable actions. Both guarded populated journeys passed their safe-action selection assertions.
+- ✅ **Controlled Bank/Debt loading resilience (`1c` / `REG-023`) runtime-closed
+  on isolated `@203`:** keep Bank/Debt writers disabled until matching
+  selected-record details finish loading; failure keeps Save disabled, bounded
+  pure-read retry recovers, and stale/out-of-order responses cannot overwrite or
+  re-enable the newest state. Populated V5 passed 16/16 with zero errors,
+  Restricted single-owner sharing, and verified exact-fixture Trash cleanup.
 - Explain Quick add duplicate/update semantics precisely.
 - ✅ **Activity action truth (`5g`, local source + regressions):** use the neutral
   **Action** heading, show **Remove donation** only on eligible Donation rows,

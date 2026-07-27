@@ -126,10 +126,10 @@ assert.match(firstRunE2E, /'empty_tracked_editor_modes'/,
   'First-Run E2E must require empty-state coverage for converged tracked editors');
 assert.match(firstRunBrowser, /function customerLanguageLeaks\(/,
   'First-Run E2E must scan visible customer pages for internal workbook terminology');
-assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V4/,
+assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V5/,
   'Populated Dashboard E2E must be an implemented browser suite backed by saved evidence');
-assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V4'/,
-  'Populated Dashboard E2E must use its own versioned saved-evidence key');
+assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V5'/,
+  'Controlled loading resilience must invalidate older Populated Dashboard evidence');
 assert.doesNotMatch(populatedE2E, /function pdE2EPrepare\([^)]*(?:spreadsheet|workbook|file)Id/i,
   'Populated Dashboard preparation must never accept an arbitrary workbook target');
 assert.match(populatedE2E, /frE2EPrepare\(confirmed, requestedReleaseRunId\)/,
@@ -155,11 +155,18 @@ assert.match(populatedBrowser, /income_manage_list[\s\S]*?income_other_detected/
 assert.match(populatedBrowser,
   /incomeMainHasExpected[\s\S]*?incomeOtherHasExpected[\s\S]*?add\('income_setup_consistency'/,
   'Populated Dashboard E2E must fail when Income and Setup classify the salary differently');
-for (const assertionId of ['overview_kpis', 'bank_selection_actions', 'tracked_editor_convergence', 'debt_selection_actions',
+for (const assertionId of ['overview_kpis', 'bank_selection_actions', 'bank_loading_resilience',
+  'tracked_editor_convergence', 'debt_selection_actions', 'debt_loading_resilience',
   'property_equity', 'populated_workspaces', 'income_setup_consistency', 'subtab_retention', 'setup_help_language',
   'customer_language', 'refresh_button_state', 'clean_console_navigation']) {
   assert.ok(populatedE2E.includes(`'${assertionId}'`), `Populated Dashboard contract missing ${assertionId}`);
 }
+assert.match(populatedBrowser,
+  /exerciseBankLoadingResilience[\s\S]*?Controlled bank details failure[\s\S]*?save\.disabled === true[\s\S]*?pending\[1\]\.onSuccess[\s\S]*?pending\[0\]\.onSuccess/,
+  'Populated Bank evidence must prove disabled-on-failure, recovery, and late-response refusal');
+assert.match(populatedBrowser,
+  /exerciseDebtLoadingResilience[\s\S]*?Controlled debt details failure[\s\S]*?save\.disabled === true[\s\S]*?pending\[1\]\.onSuccess[\s\S]*?pending\[0\]\.onSuccess/,
+  'Populated Debt evidence must prove disabled-on-failure, recovery, and late-response refusal');
 assert.match(populatedUi, /cashcompass2026@gmail\.com[\s\S]*?never accepts a workbook ID[\s\S]*?bounded workbook/,
   'Populated Dashboard control UI must explain its fixed disposable safety boundary');
 assert.match(webapp, /view === 'populated-dashboard-e2e'[\s\S]*?isFirstRunE2EUser_\(\)/,

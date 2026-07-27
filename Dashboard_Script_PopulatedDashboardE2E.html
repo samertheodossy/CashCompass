@@ -88,6 +88,131 @@
     return leaks;
   }
 
+  async function exerciseBankLoadingResilience() {
+    var originalRetry = runReadOnlyRpcWithRetry_;
+    var baseline = bankCurrentData ? JSON.parse(JSON.stringify(bankCurrentData)) : null;
+    var save = document.getElementById('bank_update_save_btn');
+    var hint = document.getElementById('bank_update_empty_hint');
+    var checks = [];
+    try {
+      if (!baseline || !save) return { pass: false, detail: 'Bank baseline details were unavailable.' };
+
+      runReadOnlyRpcWithRetry_ = function(options) {
+        setTimeout(function() {
+          options.onFailure(new Error('Controlled bank details failure.'));
+        }, 0);
+      };
+      loadBankData();
+      checks.push(save.disabled === true && /loading account details/i.test(String(hint && hint.textContent)));
+      await waitFor(function() {
+        return /controlled bank details failure/i.test(text('bank_status'));
+      }, 5000, 'the controlled Bank failure');
+      checks.push(save.disabled === true && bankUpdateDetailsReady_ === false);
+
+      runReadOnlyRpcWithRetry_ = function(options) {
+        if (typeof options.onRetry === 'function') {
+          options.onRetry({ attempt: 1, maxAttempts: 2,
+            message: 'The connection was interrupted. Retrying…' });
+        }
+        setTimeout(function() { options.onSuccess(baseline, { attempts: 2 }); }, 0);
+      };
+      loadBankData();
+      checks.push(/retrying/i.test(text('bank_status')));
+      await waitFor(function() {
+        return bankUpdateDetailsReady_ === true && save.disabled === false &&
+          text('bank_currentBalance') === expectedCurrency(expected.bankBalance);
+      }, 5000, 'Bank recovery');
+      checks.push(!document.getElementById('bank_status').classList.contains('error'));
+
+      var pending = [];
+      runReadOnlyRpcWithRetry_ = function(options) { pending.push(options); };
+      loadBankData();
+      loadBankData();
+      await waitFor(function() { return pending.length === 2; }, 2000, 'overlapping Bank reads');
+      pending[1].onSuccess(baseline, { attempts: 1 });
+      var currentBalance = text('bank_currentBalance');
+      var stale = JSON.parse(JSON.stringify(baseline));
+      stale.currentBalance = Number(expected.bankBalance) + 999999;
+      stale.selectedMonthValue = Number(expected.bankBalance) + 999999;
+      pending[0].onSuccess(stale, { attempts: 1 });
+      checks.push(text('bank_currentBalance') === currentBalance &&
+        bankUpdateDetailsReady_ === true && save.disabled === false);
+    } finally {
+      runReadOnlyRpcWithRetry_ = originalRetry;
+    }
+    return {
+      pass: checks.length === 5 && checks.every(Boolean),
+      detail: checks.length === 5 && checks.every(Boolean)
+        ? 'Failure kept Save disabled; retry recovered; a late stale response was ignored.'
+        : 'One or more Bank loading resilience checks failed: ' + JSON.stringify(checks)
+    };
+  }
+
+  async function exerciseDebtLoadingResilience() {
+    var originalRetry = runReadOnlyRpcWithRetry_;
+    var save = document.getElementById('debt_update_save_btn');
+    var hint = document.getElementById('debt_update_empty_hint');
+    var baseline = {
+      value: Number(expected.debtBalance),
+      displayValue: String(expected.debtBalance),
+      type: text('debt_type'),
+      pctAvail: text('debt_pctAvail')
+    };
+    var checks = [];
+    try {
+      if (!save || !baseline.type) return { pass: false, detail: 'Debt baseline details were unavailable.' };
+
+      runReadOnlyRpcWithRetry_ = function(options) {
+        setTimeout(function() {
+          options.onFailure(new Error('Controlled debt details failure.'));
+        }, 0);
+      };
+      loadDebtFieldValue();
+      checks.push(save.disabled === true && /loading debt details/i.test(String(hint && hint.textContent)));
+      await waitFor(function() {
+        return /controlled debt details failure/i.test(text('debt_status'));
+      }, 5000, 'the controlled Debt failure');
+      checks.push(save.disabled === true && debtUpdateDetailsReady_ === false);
+
+      runReadOnlyRpcWithRetry_ = function(options) {
+        if (typeof options.onRetry === 'function') {
+          options.onRetry({ attempt: 1, maxAttempts: 2,
+            message: 'The connection was interrupted. Retrying…' });
+        }
+        setTimeout(function() { options.onSuccess(baseline, { attempts: 2 }); }, 0);
+      };
+      loadDebtFieldValue();
+      checks.push(/retrying/i.test(text('debt_status')));
+      await waitFor(function() {
+        return debtUpdateDetailsReady_ === true && save.disabled === false &&
+          text('debt_currentValue') === expectedCurrency(expected.debtBalance);
+      }, 5000, 'Debt recovery');
+      checks.push(!document.getElementById('debt_status').classList.contains('error'));
+
+      var pending = [];
+      runReadOnlyRpcWithRetry_ = function(options) { pending.push(options); };
+      loadDebtFieldValue();
+      loadDebtFieldValue();
+      await waitFor(function() { return pending.length === 2; }, 2000, 'overlapping Debt reads');
+      pending[1].onSuccess(baseline, { attempts: 1 });
+      var currentValue = text('debt_currentValue');
+      var stale = JSON.parse(JSON.stringify(baseline));
+      stale.value = Number(expected.debtBalance) + 999999;
+      stale.displayValue = String(stale.value);
+      pending[0].onSuccess(stale, { attempts: 1 });
+      checks.push(text('debt_currentValue') === currentValue &&
+        debtUpdateDetailsReady_ === true && save.disabled === false);
+    } finally {
+      runReadOnlyRpcWithRetry_ = originalRetry;
+    }
+    return {
+      pass: checks.length === 5 && checks.every(Boolean),
+      detail: checks.length === 5 && checks.every(Boolean)
+        ? 'Failure kept Save disabled; retry recovered; a late stale response was ignored.'
+        : 'One or more Debt loading resilience checks failed: ' + JSON.stringify(checks)
+    };
+  }
+
   function overlay(title, report, bad) {
     var old = document.getElementById('cc_populated_dashboard_e2e_result');
     if (old) old.remove();
@@ -154,6 +279,8 @@
       add('bank_selection_actions', bankPass, bankPass
         ? 'The synthetic Bank account selected, Save became available, and Update remained free of destructive actions.'
         : 'The populated Bank selector or its action gating was incorrect.');
+      var bankResilience = await exerciseBankLoadingResilience();
+      add('bank_loading_resilience', bankResilience.pass, bankResilience.detail);
       customerLeaks = customerLeaks.concat(customerLanguageLeaks('Assets → Bank'));
 
       var trackedEditorFailures = [];
@@ -215,6 +342,8 @@
       var debtPass = !!(debtSelect && debtSelect.value === expected.debtName && debtSave && !debtSave.disabled &&
         !document.getElementById('debt_update_stop_btn') &&
         !document.getElementById('debt_update_stop_zone'));
+      var debtResilience = await exerciseDebtLoadingResilience();
+      add('debt_loading_resilience', debtResilience.pass, debtResilience.detail);
       if (typeof setDebtPanelMode === 'function') setDebtPanelMode('manage');
       await waitFor(function() {
         return String(text('debt_manage_list')).indexOf(expected.debtName) !== -1 &&

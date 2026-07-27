@@ -4,11 +4,12 @@
 
 **Reconciled:** 2026-07-27
 
-**Current evidence:** isolated Central `@201`; First-Run V5 **11/11 PASS** and
-Populated Dashboard V4 **14/14 PASS** are the latest writer-inclusive browser
-evidence from the dedicated unattended test session, with zero errors,
-Restricted single-owner disposable fixtures, and verified exact-fixture Trash
-cleanup.
+**Current evidence:** isolated Central `@203`; Populated Dashboard V5 **16/16
+PASS** is the latest writer-inclusive browser evidence from the dedicated
+unattended test session. It includes controlled Bank and Debt loading failure,
+retry recovery, disabled-action, and stale-response rejection, with zero browser
+errors, a Restricted single-owner disposable fixture, and verified exact-fixture
+Trash cleanup.
 
 **Last formal independent advocate score:** **8.3/10** on isolated Central
 `@180`. This remains the official score until the next full scored advocate run;
@@ -50,6 +51,7 @@ closed. They are retained here so the work map does not lose history.
 | 3d | Tracked-editor workflow consistency | Bills use **Due · Add · Manage**; Houses, Bank Accounts, Investments, and Debts use **Update · Add · Manage**; Setup preserves Add/Manage intent; Update is Save-only and Manage owns guarded Stop tracking |
 | 5g | Activity action-column truth (`REG-020`) | Isolated `@196` interactively showed **Action**, **Remove donation** only for an eligible Donation row, and `—` for unsupported rows; permanent UI and forged-request server regressions pass |
 | 3l | Overview health prerequisite/freshness trust (`REG-021`) | Isolated `@197` First-Run V5 passed 11/11 and Populated V4 passed 14/14; both proved `health_prerequisite_truth`, Restricted single-owner fixtures, zero errors, and verified Trash cleanup |
+| 1c | Controlled Bank/Debt loading resilience (`REG-023`) | Isolated `@203` Populated Dashboard V5 passed 16/16; controlled failures kept Save disabled, transient retry recovered, late stale responses were ignored, zero browser errors were captured, and the exact Restricted fixture was verified in Trash |
 
 The remaining tables below are therefore an **open-only list**.
 
@@ -57,7 +59,7 @@ The remaining tables below are therefore an **open-only list**.
 
 | Order | Open IDs | Workstream | Focused estimate |
 |---:|---|---|---:|
-| 1 | `1c`–`1f` | Controlled reliability, writer safety, Retirement proof, and unattended browser evidence | 3.5–8 d |
+| 1 | `1d`–`1e` | Writer safety and Retirement proof | 1.5–3 d |
 | 2 | `2d`–`2e` | Quick Add and Upcoming consequence language | 1–2 d |
 | 3 | `3a`–`3c`, `3e`–`3k`, `3m` | Remaining page UX, trust, advocate scoring, responsive/accessibility | 11–21 d |
 | 4 | `4a`–`4f` | Performance optimization, measurement, and percentile gate | 5–11 d |
@@ -91,12 +93,11 @@ Broad invited Beta requires all of the following:
 
 | ID | Remaining item | Exit evidence | Estimate |
 |---|---|---|---:|
-| 1c | Controlled Bank/Debt stale and failure journeys | Loading failure, stale response, server error, retry, disabled actions, and recovery pass on a marked disposable fixture | 1–2 d |
 | 1d | Skip and Stop-tracking safety evidence | Consequence, preserved history, confirmation, stale protection, recovery, and cleanup are explicit and regression-protected | 1–2 d |
 | 1e | Retirement guidance runtime proof | Missing-minimum-input guidance hides result walls; ready state reveals correct results; focused journey passes | 0.5–1 d |
 | 1f | Guarded unattended browser-suite orchestration (`REG-022`) | **Complete 2026-07-27 on isolated `@201`.** The agent keeps a dedicated authenticated `cashcompass2026@gmail.com` session and opens guarded self-starting routes directly; no account chooser, email parameter, or workbook ID is used. First-Run passed 11/11 and Populated passed 14/14 with Restricted single-owner fixtures and verified Trash cleanup. Expired Google authentication remains the only human pause. | Complete |
 
-**Group 1 open estimate: 2.5–5 focused days.**
+**Group 1 open estimate: 1.5–3 focused days.**
 
 ## 2. Bills and daily-task completion
 

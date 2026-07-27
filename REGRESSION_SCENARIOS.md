@@ -455,6 +455,32 @@ Whenever a production bug is fixed:
   email/workbook targets, verifies all four self-start seams, and rejects the
   fragile Google AccountChooser popup pattern.
 
+### REG-023 — Bank/Debt detail failures or stale responses could expose unsafe editor state
+- Category: REGRESSION / UI RELIABILITY / WRITE SAFETY
+- Date discovered: 2026-07-23
+- Status: fixed; isolated `@203` Populated Dashboard V5 runtime replay passed
+- Affected files: `Dashboard_Script_AssetsBankInvestments.html`,
+  `Dashboard_Script_Planning.html`,
+  `Dashboard_Script_PopulatedDashboardE2E.html`,
+  `populated_dashboard_e2e.js`,
+  `scripts/checkP1EvidenceRegressions.mjs`
+- Risk: a failed or out-of-order account-details read must never leave Save
+  enabled against missing or mismatched data, and an older response must never
+  replace the newest selected-record state.
+- Expected result: Save is disabled immediately while matching details load and
+  stays disabled after failure; the bounded pure-read retry can recover; a late
+  stale success or failure is ignored; only the newest successful response can
+  make the selected record ready.
+- Runtime evidence: isolated `@203` run
+  `FR-33e93e20-8a46-41e6-8709-696782922076` passed 16/16 in 171.670 s.
+  `bank_loading_resilience` and `debt_loading_resilience` both passed, no browser
+  errors were captured, and the Restricted single-owner fixture received exact
+  verified Trash cleanup.
+- Permanent coverage: `npm run test:p1-evidence` requires the V5 evidence key,
+  both assertion IDs, controlled failure/disabled-state/recovery steps, and
+  newest-before-stale response ordering. The browser journey replays the checks
+  against production editor code without performing a workbook write.
+
 ---
 
 ## RECOVERY scenarios (design — not historical bugs)
@@ -499,4 +525,5 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-020 | Unsupported Activity rows displayed misleading Remove controls | REGRESSION / UI TRUST | fixed; isolated `@196` runtime PASS |
 | REG-021 | Overview displayed Strong health before prerequisites were trustworthy | REGRESSION / UI TRUST / FINANCIAL TRUTH | fixed; isolated `@197` First-Run V5 11/11 + Populated V4 14/14 PASS |
 | REG-022 | Browser evidence required continuous watching and manual account switching | REGRESSION / TEST EVIDENCE / OPERATIONS | fixed; isolated First-Run 11/11 and Populated 14/14 PASS with verified cleanup |
+| REG-023 | Bank/Debt detail failures or stale responses could expose unsafe editor state | REGRESSION / UI RELIABILITY / WRITE SAFETY | fixed; isolated `@203` Populated V5 16/16 PASS with verified cleanup |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |
