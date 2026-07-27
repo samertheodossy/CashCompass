@@ -57,7 +57,7 @@ worth KPIs; Bank/Debt selection and Save-only Update gating; Bank/Investment/Hou
 tracked-editor modes plus populated Manage inventories with Stop tracking; property equity; representative
 Investments/Upcoming/Bills/Income rendering; subtab retention; populated Setup and Help;
 customer-language leakage; real planner Refresh state; and clean console/navigation.
-Evidence is saved under `POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V5`; PASS requires
+Evidence is saved under `POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V6`; PASS requires
 Restricted sharing and exact Drive-verified Trash cleanup.
 
 **`@203` controlled-loading evidence:** Populated V5 run
@@ -67,6 +67,16 @@ recover through bounded retry, and deliver the newest response before a late
 stale response to prove the stale completion is ignored. The injected journey
 does not invoke a workbook writer. The fixture was Restricted, single-owner,
 and exactly verified in Trash.
+
+**`@206` Bill Skip/Stop-tracking safety evidence:** Populated V6 run
+`FR-68e32831-070f-4a40-b023-64b7a67a7115` passed 17/17 in 176.243 s. The
+browser accepted Skip's explicit no-payment/future-recurrence confirmation,
+proved a visible tracked bill without a Cash Flow row can be dismissed only by
+its active-bill-gated occurrence marker, rejected a deliberately stale Stop
+request, then retried successfully. Exact-fixture read-only inspection verified
+the inactive source row plus unchanged due day, amount, frequency, and notes,
+with exactly one `bill_skip` and one `bill_deactivate`. No browser errors were
+captured; sharing was Restricted to one owner and Trash cleanup was verified.
 
 **`@195` tracked-editor evidence:** First-Run V4 run
 `FR-a1df6d9b-c123-4759-b08e-438d4047bf4c` passed 10/10 in 116.282 s;

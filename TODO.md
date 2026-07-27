@@ -529,6 +529,14 @@ The initial screenshot review and the completed interactive populated-workbook r
   pure-read retry recovers, and stale/out-of-order responses cannot overwrite or
   re-enable the newest state. Populated V5 passed 16/16 with zero errors,
   Restricted single-owner sharing, and verified exact-fixture Trash cleanup.
+- ✅ **Bill Skip/Stop-tracking safety (`1d` / `REG-024`) runtime-closed on
+  isolated `@206`:** Skip now confirms no-payment/future-recurrence
+  consequences, permits marker-only dismissal only for a verified active tracked
+  bill when its best-effort Cash Flow row is absent, and ignores stale Bills
+  responses. Populated V6 proved stale Stop rejection, valid soft-deactivate
+  recovery, preserved source fields/history, exact Skip/deactivate Activity
+  evidence, zero browser errors, Restricted single-owner sharing, and verified
+  exact-fixture Trash cleanup (17/17).
 - Explain Quick add duplicate/update semantics precisely.
 - ✅ **Activity action truth (`5g`, local source + regressions):** use the neutral
   **Action** heading, show **Remove donation** only on eligible Donation rows,
@@ -593,7 +601,7 @@ its defined scope; code intent alone cannot raise the score.
 
 | Order | Criterion | Baseline | What is wrong now | Path to 10/10 | Required closing evidence |
 |---:|---|---:|---|---|---|
-| 1 | Errors and task completion | 8.0 | Exact-owner evidence and core Bills completion are closed. Controlled failure/stale paths, Skip/Stop-tracking safety, and Retirement readiness are not yet fully exercised. | Close `1c`–`1e` with guarded runtime proof and permanent regressions. | Exact-candidate critical-task matrix passes with correct attribution, zero console errors, verified cleanup, and no unresolved task-blocking P0/P1. |
+| 1 | Errors and task completion | 8.0 | Exact-owner evidence, core Bills completion, controlled Bank/Debt loading, and Skip/Stop-tracking safety are closed. Retirement readiness is not yet fully exercised. | Close `1e` with guarded runtime proof and permanent regressions. | Exact-candidate critical-task matrix passes with correct attribution, zero console errors, verified cleanup, and no unresolved task-blocking P0/P1. |
 | 2 | Trust and safety | 7.8 | Bills payment consequences are now explicit and tracked-editor destructive actions live under Manage. Skip, Stop tracking execution, stale/failure recovery, preserved history, and extreme-change policy still need complete evidence. | Prove every remaining writer consequence and preserved-history rule; add guarded recovery assertions and resolve the extreme-change ProductDecision. | Fresh marked disposable-writer evidence proves target safety, confirmations, history, recovery, attribution, and cleanup; no unexplained financial state transition. |
 | 3 | Transitions and feedback | 7.5 | Bills payment/receipt feedback is closed. Upcoming Dismiss, Quick Add duplicate/update semantics, and several stale/failure/loading outcomes still do not consistently explain what happened and what comes next. | Finish one feedback contract for loading, empty, success, stale, failure, and the two remaining daily-task language cases. | Interactive journey verifies every transition and recovery branch with specific before/after messages and next actions. |
 | 4 | Ease and efficiency | 8.3 | Bills Pay and entity Add/Manage navigation are substantially simpler. Remaining core tasks still need a first-time step review to find residual detours or inferred rules. | Preserve context, clarify the shortest supported paths, and remove only confirmed repeated steps. | First-time task timing/step review shows every core journey completes without detours, repeated entry, or advocate assistance. |

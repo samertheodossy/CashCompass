@@ -4,12 +4,12 @@
 
 **Reconciled:** 2026-07-27
 
-**Current evidence:** isolated Central `@203`; Populated Dashboard V5 **16/16
+**Current evidence:** isolated Central `@206`; Populated Dashboard V6 **17/17
 PASS** is the latest writer-inclusive browser evidence from the dedicated
-unattended test session. It includes controlled Bank and Debt loading failure,
-retry recovery, disabled-action, and stale-response rejection, with zero browser
-errors, a Restricted single-owner disposable fixture, and verified exact-fixture
-Trash cleanup.
+unattended test session. It includes controlled Bank and Debt loading resilience
+plus Bill Skip/Stop-tracking confirmation, stale rejection, recovery, preserved
+source data/history, zero browser errors, Restricted single-owner sharing, and
+verified exact-fixture Trash cleanup.
 
 **Last formal independent advocate score:** **8.3/10** on isolated Central
 `@180`. This remains the official score until the next full scored advocate run;
@@ -52,6 +52,7 @@ closed. They are retained here so the work map does not lose history.
 | 5g | Activity action-column truth (`REG-020`) | Isolated `@196` interactively showed **Action**, **Remove donation** only for an eligible Donation row, and `—` for unsupported rows; permanent UI and forged-request server regressions pass |
 | 3l | Overview health prerequisite/freshness trust (`REG-021`) | Isolated `@197` First-Run V5 passed 11/11 and Populated V4 passed 14/14; both proved `health_prerequisite_truth`, Restricted single-owner fixtures, zero errors, and verified Trash cleanup |
 | 1c | Controlled Bank/Debt loading resilience (`REG-023`) | Isolated `@203` Populated Dashboard V5 passed 16/16; controlled failures kept Save disabled, transient retry recovered, late stale responses were ignored, zero browser errors were captured, and the exact Restricted fixture was verified in Trash |
+| 1d | Bill Skip/Stop-tracking safety (`REG-024`) | Isolated `@206` Populated Dashboard V6 passed 17/17; Skip required consequence confirmation and stayed dismissed without requiring a Cash Flow row, stale Stop failed closed, valid retry soft-deactivated the bill, source fields/history and exact Activity evidence were preserved, and cleanup was verified |
 
 The remaining tables below are therefore an **open-only list**.
 
@@ -59,7 +60,7 @@ The remaining tables below are therefore an **open-only list**.
 
 | Order | Open IDs | Workstream | Focused estimate |
 |---:|---|---|---:|
-| 1 | `1d`–`1e` | Writer safety and Retirement proof | 1.5–3 d |
+| 1 | `1e` | Retirement proof | 0.5–1 d |
 | 2 | `2d`–`2e` | Quick Add and Upcoming consequence language | 1–2 d |
 | 3 | `3a`–`3c`, `3e`–`3k`, `3m` | Remaining page UX, trust, advocate scoring, responsive/accessibility | 11–21 d |
 | 4 | `4a`–`4f` | Performance optimization, measurement, and percentile gate | 5–11 d |
@@ -93,11 +94,11 @@ Broad invited Beta requires all of the following:
 
 | ID | Remaining item | Exit evidence | Estimate |
 |---|---|---|---:|
-| 1d | Skip and Stop-tracking safety evidence | Consequence, preserved history, confirmation, stale protection, recovery, and cleanup are explicit and regression-protected | 1–2 d |
+| 1d | Skip and Stop-tracking safety evidence (`REG-024`) | **Complete 2026-07-27 on isolated `@206`.** Populated V6 passed 17/17. Skip confirms no payment/future recurrence consequences, a missing Cash Flow row falls back only to an active-bill-gated occurrence marker, monthly dismissal persists, stale Bills responses cannot restore the card, stale Stop fails closed, valid retry preserves the inactive source row/history, and exact Skip/deactivate Activity counts plus Trash cleanup are verified. | Complete |
 | 1e | Retirement guidance runtime proof | Missing-minimum-input guidance hides result walls; ready state reveals correct results; focused journey passes | 0.5–1 d |
 | 1f | Guarded unattended browser-suite orchestration (`REG-022`) | **Complete 2026-07-27 on isolated `@201`.** The agent keeps a dedicated authenticated `cashcompass2026@gmail.com` session and opens guarded self-starting routes directly; no account chooser, email parameter, or workbook ID is used. First-Run passed 11/11 and Populated passed 14/14 with Restricted single-owner fixtures and verified Trash cleanup. Expired Google authentication remains the only human pause. | Complete |
 
-**Group 1 open estimate: 1.5–3 focused days.**
+**Group 1 open estimate: 0.5–1 focused day.**
 
 ## 2. Bills and daily-task completion
 
@@ -264,7 +265,7 @@ strictest failed gate controls the actual date.
 
 The remaining work that directly controls the finish date is:
 
-`1c–1e → 5h–5m → 2d–2e → 3a–3k/3m → 4a–4f → 8a–8f → 9a–9e`
+`1e → 5h–5m → 2d–2e → 3a–3k/3m → 4a–4f → 8a–8f → 9a–9e`
 
 Financial/workbook proof in Group 5 must finish before `8b`. Operations and
 monetization foundations in Groups 6–7 must finish before `8d`, but they should
@@ -305,7 +306,7 @@ not block early engineering.
 | Window | Lane A — critical | Lane B — UX/evidence | Lane C — parallel foundation | Exit |
 |---|---|---|---|---|
 | Completed through Jul 26 | `1a`, `1b`, `2a`–`2c`, `2f`, `5g` | `3d`; shared tracked-editor convergence | — | Isolated `@196` Activity truth passes; Beta stays `@106`; bounded untouched |
-| Aug 21–27 | `1c`–`1e`; begin `5h`–`5i` | Audit `3a`, `3b`; begin `3m` and diagnostic performance | Start `6a`–`6f`, `7a`–`7b`, cohort design | Reliability proof closes; Activity correction foundation and direct Cash Flow path advance |
+| Aug 21–27 | Close `1e`; begin `5h`–`5i` | Audit `3a`, `3b`; begin `3m` and diagnostic performance | Start `6a`–`6f`, `7a`–`7b`, cohort design | Reliability proof closes; Activity correction foundation and direct Cash Flow path advance |
 | Aug 28–Sep 3 | `5j`–`5m` | Close `2d`–`2e`; advance Group 5 matrix/recovery proof | `7c`–`7f`, known limitations, support posture | Supported Activity correction families and audit-only dispositions pass |
 | Sep 4–10 | Begin/finish performance fixes `4a`–`4d` | Close `3c`, `3e`–`3m`; finish Group 5 | Finish Groups 6–7 | UX/accessibility path ≥9 and candidate prerequisites complete |
 | Sep 11–17 | Freeze `8a`; run `4e`–`4f`, `8b`–`8f` | Exact-candidate advocate `3k` | Final release/rollback/support review | Exact candidate reaches automated READY prerequisites |

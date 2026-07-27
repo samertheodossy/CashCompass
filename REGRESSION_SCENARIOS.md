@@ -481,6 +481,39 @@ Whenever a production bug is fixed:
   newest-before-stale response ordering. The browser journey replays the checks
   against production editor code without performing a workbook write.
 
+### REG-024 — Bill Skip could fail or reappear, and Stop tracking lacked one durable safety journey
+- Category: REGRESSION / UI RELIABILITY / WRITE SAFETY
+- Date discovered: 2026-07-27
+- Status: fixed; isolated `@206` Populated Dashboard V6 runtime replay passed
+- Affected files: `Dashboard_Script_BillsDue.html`, `dashboard_data.js`,
+  `Dashboard_Help.html`, `Dashboard_Script_PopulatedDashboardE2E.html`,
+  `populated_dashboard_e2e.js`, `scripts/checkDashboardUxRegressions.mjs`,
+  `scripts/checkP1EvidenceRegressions.mjs`
+- Root cause: Skip had no explicit consequence confirmation; a visible active
+  bill without its best-effort Cash Flow row could not resolve a write target;
+  monthly recurrence did not honor the durable `bill_skip` marker; and
+  overlapping Bills loads had no newest-request gate, so a slower pre-Skip
+  response could restore a cleared card. Stop tracking already had a stale-row
+  server guard, but no browser journey proved rejection, recovery, soft
+  deactivation, and preserved source/history evidence together.
+- Expected result: Skip confirms that no payment is recorded and future
+  occurrences remain; an absent Cash Flow row permits marker-only handling only
+  for a verified active tracked bill; no Cash Flow row is fabricated and no
+  populated value is overwritten; monthly and expanded recurrence honor the
+  exact marker; stale Bills responses are ignored. Stop tracking rejects a
+  tampered stale payee, then succeeds after restoring the valid identity while
+  preserving the inactive row, due day, amount, frequency, notes, and immutable
+  history with exactly one `bill_skip` and one `bill_deactivate` event.
+- Runtime evidence: isolated `@206` run
+  `FR-68e32831-070f-4a40-b023-64b7a67a7115` passed 17/17 in 176.243 s,
+  including `bill_skip_stop_safety` and `clean_console_navigation`. Sharing was
+  Restricted with one owner and exact-fixture Trash cleanup was verified.
+- Permanent coverage: Dashboard UX assertions lock the confirmation/outcome
+  language, action-store reset, newest-response gate, active-bill fallback gate,
+  blank-only zero guard, marker metadata, and monthly marker suppression.
+  Populated V6 requires the ordered Skip → stale Stop → valid Stop journey plus
+  exact-fixture server inspection and invalidates older saved evidence.
+
 ---
 
 ## RECOVERY scenarios (design — not historical bugs)
@@ -526,4 +559,5 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-021 | Overview displayed Strong health before prerequisites were trustworthy | REGRESSION / UI TRUST / FINANCIAL TRUTH | fixed; isolated `@197` First-Run V5 11/11 + Populated V4 14/14 PASS |
 | REG-022 | Browser evidence required continuous watching and manual account switching | REGRESSION / TEST EVIDENCE / OPERATIONS | fixed; isolated First-Run 11/11 and Populated 14/14 PASS with verified cleanup |
 | REG-023 | Bank/Debt detail failures or stale responses could expose unsafe editor state | REGRESSION / UI RELIABILITY / WRITE SAFETY | fixed; isolated `@203` Populated V5 16/16 PASS with verified cleanup |
+| REG-024 | Bill Skip could fail or reappear, and Stop tracking lacked one durable safety journey | REGRESSION / UI RELIABILITY / WRITE SAFETY | fixed; isolated `@206` Populated V6 17/17 PASS with verified cleanup |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

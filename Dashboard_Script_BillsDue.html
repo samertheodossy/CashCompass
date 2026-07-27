@@ -511,6 +511,17 @@ function loadDashboardActionSections() {
 }
 
 function loadBillsDueUi_() {
+  // Bills Due can be refreshed by page navigation, a completed action, and the
+  // broader dashboard refresh at nearly the same time. Only the newest request
+  // may publish cards; otherwise a slower pre-Skip response can restore the
+  // occurrence the user just cleared.
+  window.__billsDueLoadGeneration = Number(window.__billsDueLoadGeneration || 0) + 1;
+  const loadGeneration = window.__billsDueLoadGeneration;
+
+  // Loading cards are not actionable. Drop the prior payload immediately so
+  // an old key cannot be invoked while the replacement request is in flight.
+  window.__dashboardBills = {};
+
   const ovBillsNext7 = document.getElementById('ov_bills_next7');
   if (ovBillsNext7) ovBillsNext7.innerHTML = loadingIndicatorHtml('Loading bills…');
 
@@ -521,18 +532,25 @@ function loadBillsDueUi_() {
 
   google.script.run
     .withSuccessHandler(function(data) {
+      if (loadGeneration !== window.__billsDueLoadGeneration) return;
       const overdue = (data && data.overdue) || [];
       const next7 = (data && data.next7) || [];
+      // Rebuild the action payload store from this response only. Keeping
+      // previous cards here would let an already skipped occurrence retain a
+      // callable stale key even after it disappeared from the visible queue.
+      window.__dashboardBills = {};
       renderBillsList_('bd_overdueList', overdue, 'No overdue bills.');
       renderBillsList_('bd_next7List', next7, 'No bills due soon.');
       renderBillsDueSummary_(data || {});
       updateBillPaymentFollowup_(data || {});
     })
     .withFailureHandler(function(err) {
+      if (loadGeneration !== window.__billsDueLoadGeneration) return;
       const msg = customerSafeErrorMessage_(
         err && err.message ? err.message : String(err),
         'Could not load bills due. Please refresh and try again.'
       );
+      window.__dashboardBills = {};
       renderBillsList_('bd_overdueList', [], msg);
       renderBillsList_('bd_next7List', [], msg);
       renderBillsDueSummary_({ overdue: [], next7: [] }, msg);
@@ -697,15 +715,49 @@ function payBillFromDashboard(billKey) {
   openBillPayDrawer_(bill, billOccurrencePaid);
 }
 
-function skipBillFromDashboard(skipKey) {
+function findBillForSkip_(skipKey, store) {
+  const wanted = String(skipKey || '').trim();
+  const source = store || {};
+  const keys = Object.keys(source);
+  for (let i = 0; i < keys.length; i++) {
+    const bill = source[keys[i]] || {};
+    const candidate = String(bill.skipKey || bill.id || '').trim();
+    if (candidate === wanted) return bill;
+  }
+  return null;
+}
+
+function confirmAndSkipBill_(skipKey, bill) {
   if (!skipKey) {
     setBillsStatus_("Couldn't identify this bill — please refresh", true);
     return;
   }
 
+  if (!bill) {
+    setBillsStatus_('Bill not found — please refresh', true);
+    return;
+  }
+
+  const name = String(bill.payee || bill.name || 'this bill').trim();
+  const occurrence = bill.dueDate
+    ? ' due ' + String(bill.dueDate)
+    : ' for this month';
+  const confirmed = window.confirm(
+    'Skip "' + name + '"' + occurrence + '?\n\n' +
+    'No payment will be recorded, and this occurrence will be removed from Bills. ' +
+    'The recurring bill stays active and future occurrences will still appear.'
+  );
+  if (!confirmed) return;
+
+  setStatusLoading('bills_due_status', 'Skipping bill…');
+
   google.script.run
     .withSuccessHandler(function(res) {
-      setBillsStatus_((res && res.message) || 'Bill skipped — $0 recorded for this month', false);
+      setBillsStatus_(
+        'Skipped "' + name + '"' + occurrence +
+        '. No payment was recorded; future occurrences remain scheduled.',
+        false
+      );
       loadDashboardActionSections();
       refreshSnapshot();
       loadPaymentPreview();
@@ -714,6 +766,13 @@ function skipBillFromDashboard(skipKey) {
       setBillsStatus_((err.message || String(err)), true);
     })
     .skipDashboardBill(skipKey);
+}
+
+function skipBillFromDashboard(skipKey) {
+  confirmAndSkipBill_(
+    skipKey,
+    findBillForSkip_(skipKey, window.__dashboardBills || {})
+  );
 }
 
 /**
@@ -822,21 +881,10 @@ function payRecurringBill(key) {
 }
 
 function skipRecurringBill(skipKey) {
-  if (!skipKey) {
-    setBillsStatus_("Couldn't identify this bill — please refresh", true);
-    return;
-  }
-
-  google.script.run
-    .withSuccessHandler(function(res) {
-      setBillsStatus_((res && res.message) || 'Bill skipped — $0 recorded for this month', false);
-      loadDashboardActionSections();
-      refreshSnapshot();
-    })
-    .withFailureHandler(function(err) {
-      setBillsStatus_((err.message || String(err)), true);
-    })
-    .skipDashboardBill(skipKey);
+  confirmAndSkipBill_(
+    skipKey,
+    findBillForSkip_(skipKey, window.__dashboardRecurring || {})
+  );
 }
 
 /* -------------------------------------------------------------------------- */

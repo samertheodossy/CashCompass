@@ -651,6 +651,36 @@ assert.match(styles,
   /@media \(max-width:\s*460px\)[\s\S]*?\.bill-pay-drawer\s*\{[\s\S]*?width:\s*100vw;/,
   'Bills Pay drawer must remain usable on a narrow screen');
 const billsDueClient = files['Dashboard_Script_BillsDue.html'];
+assert.match(billsDueClient,
+  /function confirmAndSkipBill_[\s\S]*?No payment will be recorded[\s\S]*?this occurrence will be removed from Bills[\s\S]*?future occurrences will still appear/,
+  'Skip must require an explicit customer-facing consequence confirmation');
+assert.match(billsDueClient,
+  /Skipped "[\s\S]*?No payment was recorded; future occurrences remain scheduled/,
+  'Skip success must explain the outcome without exposing the internal zero-cell mechanism');
+assert.match(billsDueClient,
+  /function loadBillsDueUi_[\s\S]*?window\.__billsDueLoadGeneration = Number[\s\S]*?const loadGeneration[\s\S]*?window\.__dashboardBills = \{\};/,
+  'Bills Due must invalidate old action payloads as soon as a replacement load starts');
+assert.match(billsDueClient,
+  /withSuccessHandler\(function\(data\)\s*\{[\s\S]*?if \(loadGeneration !== window\.__billsDueLoadGeneration\) return;[\s\S]*?renderBillsList_\('bd_overdueList'[\s\S]*?renderBillsList_\('bd_next7List'/,
+  'Bills Due must reject a stale success response so it cannot restore a skipped card');
+assert.match(billsDueClient,
+  /withFailureHandler\(function\(err\)\s*\{[\s\S]*?if \(loadGeneration !== window\.__billsDueLoadGeneration\) return;/,
+  'Bills Due must reject a stale failure response so it cannot replace newer cards with an old error');
+assert.match(files['dashboard_data.js'],
+  /function skipDashboardBill[\s\S]*?No payment was recorded; future occurrences remain scheduled/,
+  'The server Skip response must preserve the customer consequence contract');
+assert.match(files['dashboard_data.js'],
+  /skippedOccurrenceKey[\s\S]*?'bill_skip::' \+ buildDashboardBillSkipKey_[\s\S]*?activityLogDedupeKeyExists_\(ss, skippedOccurrenceKey\)/,
+  'Monthly Bills Due must honor the same durable per-occurrence Skip marker as expanded recurrence');
+assert.match(files['dashboard_data.js'],
+  /const hasCashFlowTarget[\s\S]*?getInputBillsPayeeMap_\(ss\)[\s\S]*?if \(!hasCashFlowTarget && !isActiveInputBill\)[\s\S]*?throw new Error\('Could not resolve bill skip target\.'\)/,
+  'Marker-only Skip must remain gated to a verified active tracked bill when no Cash Flow row exists');
+assert.match(files['dashboard_data.js'],
+  /cashFlowSheet:\s*hasCashFlowTarget \? info\.sheet\.getName\(\) : ''[\s\S]*?cashFlowTargetResolved:\s*hasCashFlowTarget/,
+  'Marker-only Skip must record whether a Cash Flow target was resolved without inventing a ledger target');
+assert.match(files['dashboard_data.js'],
+  /if \(hasCashFlowTarget\)[\s\S]*?if \(isBlank\)[\s\S]*?cell\.setValue\(0\)/,
+  'Skip must keep its zero write behind both a resolved Cash Flow target and the existing blank-cell guard');
 const payBillStart = billsDueClient.indexOf('function payBillFromDashboard(');
 const skipBillStart = billsDueClient.indexOf('function skipBillFromDashboard(', payBillStart);
 assert.ok(payBillStart >= 0 && skipBillStart > payBillStart,

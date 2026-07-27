@@ -2,6 +2,25 @@
 
 The V1 trust baseline is shipped and locked, and V1.1 closed out with the retirement profile integration (see **V1.1 — Retirement Profile Integration (DOB Source of Truth)** section below). The project has since moved into **Central App live + Family Beta readiness** — the Central App architecture is operational and the active work is hardening it toward a family beta (see **Current State — Post V1.2 Prep** below for the per-slice migration record). Working rules live in `WORKING_RULES.md → Current phase` + `→ Central App Transition Rules` (now active); product framing lives in `PROJECT_CONTEXT.md → Current phase` and `→ Current architecture — Central App (live)`. All prior phase notes below this header are preserved as-is for historical record.
 
+- **Bill Skip/Stop-tracking safety — `1d` / `REG-024` runtime complete on
+  isolated `@206` (2026-07-27).** Skip now requires explicit consequence
+  confirmation, clears the client action store while loading, and rejects stale
+  Bills success/failure responses. The server preserves its resolved-target,
+  blank-only zero rule; when Add's best-effort Cash Flow row is absent, it may
+  record only the occurrence marker and only for a verified active tracked bill.
+  Monthly recurrence now honors that exact marker, so the card stays dismissed
+  without creating a ledger row. Populated Dashboard evidence advanced to V6
+  and executes production Skip, a deliberately stale Stop request, a valid Stop
+  retry, and exact-fixture read-only lifecycle inspection. Isolated run
+  `FR-68e32831-070f-4a40-b023-64b7a67a7115` passed 17/17 in 176.243 s with
+  preserved inactive source row, due day, amount, frequency, notes, exactly one
+  `bill_skip` and one `bill_deactivate`, zero browser errors, Restricted
+  single-owner sharing, and verified Trash cleanup. The first `@204` attempt
+  safely exposed the missing-Cash-Flow-row edge; the first `@205` replay exposed
+  the stale Bills-response race and also cleaned up safely. Only isolated
+  Central advanced to `@206`; Beta stayed `@106`, and no bounded, mapped-user,
+  Golden, configured-default, or administrator workbook was touched.
+
 - **Controlled Bank/Debt loading resilience — `1c` / `REG-023` runtime complete
   on isolated `@203` (2026-07-27).** Populated Dashboard evidence advanced to
   V5 and now injects controlled read failures into the production Bank and Debt

@@ -176,11 +176,11 @@ function getHarnessSuites_() {
     {
       id: 'SUITE-POPULATED-DASHBOARD-E2E',
       label: 'Populated Dashboard E2E',
-      description: 'Browser-driven populated KPI, selection/action, equity, subtab, Help/Setup, real Refresh, customer-language, and clean-console validation.',
+      description: 'Browser-driven populated KPI, selection/action, controlled loading, Bill Skip/Stop safety, equity, subtab, Help/Setup, real Refresh, customer-language, and clean-console validation.',
       implemented: true,
       runner: 'browser',
       browserRoute: 'populated-dashboard-e2e',
-      evidenceKey: 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V5',
+      evidenceKey: 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V6',
       blocker: null,
       scenarioIds: []
     },

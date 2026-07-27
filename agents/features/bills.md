@@ -38,7 +38,7 @@ The Bills page has two views. **Due this period** combines dated items from acti
 
 Recurring `INPUT - Bills` rows support Monthly, Weekly, Biweekly, Bimonthly, Quarterly, Semi-annually, and Yearly schedules in source and UI. Weekly can use a weekday; Biweekly can use a weekday plus an Anchor Date for a true 14-day cadence. Blank scheduling fields preserve legacy Due Day behavior; the recurrence reader also falls back safely on unusable legacy configuration, while Add/Edit rejects an inconsistent Biweekly weekday and anchor. Schedule edits are prospective when `Schedule Effective Date` is available.
 
-Pay opens Quick add with bill details prefilled. Skip writes a zero only into a blank Cash Flow month cell and always records a deduplicated `bill_skip` marker. AutoPay records past-due actual activity, not forecasts. Weekly/Biweekly occurrences use per-occurrence activity markers because multiple occurrences share one monthly Cash Flow cell.
+Pay opens Quick add with bill details prefilled. Skip first confirms that no payment will be recorded and future occurrences remain active. It writes a zero only into a resolved blank Cash Flow month cell and always records a deduplicated `bill_skip` marker; when an active tracked bill has no matching Cash Flow row, Skip records only the marker and never fabricates a ledger row. AutoPay records past-due actual activity, not forecasts. Monthly, Weekly, and Biweekly occurrences honor per-occurrence Skip markers; Weekly/Biweekly also use per-occurrence Pay/AutoPay markers because multiple occurrences share one monthly Cash Flow cell.
 
 ### Business and financial significance
 
@@ -113,7 +113,7 @@ When sources disagree, this DRAFT follows executable behavior and higher-precede
 | Manage bills → Edit | Authorized CashCompass user | Active row and stale-row payee reference still match | Writes only changed fields in place; scheduling changes stamp an effective date when supported |
 | Manage bills → Stop tracking | Authorized CashCompass user | Active row and stale-row payee reference still match | Sets `Active = No` and preserves history |
 | Due card → Pay | Authorized CashCompass user | Card exists | Opens Quick add with Expense/payee/date/amount/Flow Source; save writes Cash Flow and Activity |
-| Due card → Skip | Authorized CashCompass user | Skip target resolves to a Cash Flow cell | Records the occurrence skipped and writes zero only if the cell is blank |
+| Due card → Skip | Authorized CashCompass user | Occurrence resolves; a missing Cash Flow target is accepted only for a verified active tracked bill | Confirms consequences, records the occurrence marker, writes zero only to a resolved blank target, and keeps future occurrences active |
 
 ### Primary workflow
 
@@ -182,7 +182,7 @@ When sources disagree, this DRAFT follows executable behavior and higher-precede
 2. Server entry points call `getUserSpreadsheet_` and read Bills, Debts, Cash Flow, Upcoming, and Activity state as required.
 3. `getInputBillsDueRows_` converts each active Bills row into a recurrence rule, generates the prior/current/next-month window, resolves handled evidence, and may AutoPay past-due occurrences.
 4. `getBillsDueFromCashFlowForDashboard` merges debt and input-bill rows and buckets them into Overdue or Next 7 Days.
-5. Pay routes through Quick add; Skip resolves the target Cash Flow cell; Manage actions write Bills rows. Success handlers refresh the affected views.
+5. Pay routes through Quick add; Skip records the exact occurrence marker and optionally resolves a blank Cash Flow target; Manage actions write Bills rows. Newest-request gating prevents an older Bills response from restoring a cleared card.
 
 ### Dependencies
 
@@ -256,7 +256,7 @@ When sources disagree, this DRAFT follows executable behavior and higher-precede
 10. **Expanded-occurrence evidence:** Weekly/Biweekly Pay, Skip, and AutoPay are resolved per occurrence by dedupe markers because one Cash Flow month cell represents multiple occurrences.
 11. **Exactly-once AutoPay:** Per-user locking plus dedupe keys prevent repeated application. Lock contention defers writes without blocking the due-card response.
 12. **AutoPay eligibility:** AutoPay requires AutoPay Yes, Varies not Yes, Default Amount greater than zero, a matching Cash Flow Expense row, and a due date strictly before today.
-13. **Skip preservation:** Skip writes zero only to a blank target cell; it never overwrites a populated amount and always attempts to record the exact occurrence marker.
+13. **Skip preservation:** Skip writes zero only to a resolved blank target cell; it never overwrites a populated amount or creates a missing Cash Flow row. Marker-only fallback is allowed only for a verified active tracked bill, and monthly/expanded recurrence honor the exact marker.
 14. **Soft lifecycle:** Stop tracking changes only Active, preserves the row and payment history, and does not reverse Cash Flow.
 15. **Timezone/date basis:** User-facing and marker dates are date-only values formatted using the Apps Script timezone; recurrence steps use calendar-date construction rather than fixed milliseconds where DST matters.
 16. **Current monthly overflow characterization:** Monthly/non-expanded `new Date(year, month, dueDay)` can overflow Due Day 29/30/31 into the next month instead of clamping. Tests characterize this behavior; product intent is UNKNOWN.
@@ -270,7 +270,7 @@ When sources disagree, this DRAFT follows executable behavior and higher-precede
 | Schedule-updated | An Edit changes Due Day, Frequency, Weekday, or Anchor Date | Generate only on/after effective floor | Later schedule edit | `Schedule Effective Date`; `bill_update` details |
 | Occurrence pending | Generated occurrence lacks handled evidence | Pay, Skip, eligible AutoPay | Payment/skip/autopay evidence appears | Cash Flow cell and/or Activity dedupe marker |
 | Occurrence paid manually | Quick add succeeds; expanded occurrences also get `bill_paid` | Historical/read-only for that occurrence | Not applicable | `quick_pay`; expanded recurrence `bill_paid` marker |
-| Occurrence skipped | Skip target resolves | Historical/read-only for that occurrence | Not applicable | Optional zero Cash Flow value plus `bill_skip` marker |
+| Occurrence skipped | Exact marker is recorded; missing Cash Flow target is active-bill-gated | Historical/read-only for that occurrence | Not applicable | Optional zero Cash Flow value plus required `bill_skip` marker |
 | Occurrence autopaid | Eligible past-due AutoPay succeeds | Historical/read-only for that occurrence | Not applicable | Negative Cash Flow amount plus `bill_autopay` marker |
 | Inactive | `Active` normalizes to No | Preserved in sheet/history; excluded from management and generation | Dedicated reactivation is not implemented; source says re-add | `Active = No`; `bill_deactivate` |
 
@@ -301,7 +301,7 @@ Bills has no Bills-specific admin role in the reviewed implementation. Deploymen
 | Activity logging fails during Add/Edit/Deactivate | Primary Bills write still succeeds; failure logged | Apps Script Logger | Repair log path; add audit note only through an approved process | Medium: audit gap |
 | AutoPay lock unavailable | Cards load; AutoPay deferred | Logger message | Later Bills load retries | Low |
 | Weekly/Biweekly Pay marker follow-up fails | Cash Flow payment is saved; UI shows marker failure; occurrence may reappear | Client error and missing `bill_paid` marker | Retry/repair marker carefully without duplicating payment | High reconciliation risk |
-| Skip target cannot resolve | Skip returns an error and should not write | Error plus workbook/payee inspection | Refresh; repair Bills↔Cash Flow mapping | Medium |
+| Skip target cannot resolve | Skip returns an error when neither a Cash Flow target nor a verified active tracked bill exists | Error plus workbook/payee inspection | Refresh; repair Bills identity/linkage | Medium |
 | Stale Edit/Deactivate row | Explicit moved-row/payee mismatch error | Server error | Refresh management list and retry | Low; guard prevents wrong-row mutation |
 | Invalid Biweekly anchor | Client/server asks user to correct it | Validation message | Choose an anchor on the selected weekday or leave optional fields blank for legacy mode | Low |
 | Duplicate/variant payee linkage | Monthly matching normalizes some punctuation/case; exact write target may be absent | Bills cards, Cash Flow rows, logs | Manual review; alias repair is not implemented | Medium to High |

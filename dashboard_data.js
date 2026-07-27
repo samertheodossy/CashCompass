@@ -2467,6 +2467,15 @@ function getInputBillsDueRows_(ss, today, tz) {
       if (activityLogDedupeKeyExists_(ss, paidOccurrenceKey)) {
         continue;
       }
+      // Skip is an occurrence-level decision, not a Cash Flow row decision.
+      // A newly tracked bill can legitimately appear here before its best-effort
+      // Cash Flow row seed exists. Honor the durable marker first so a
+      // marker-only Skip remains dismissed without fabricating a ledger row.
+      const skippedOccurrenceKey =
+        'bill_skip::' + buildDashboardBillSkipKey_(payee, candDueIso);
+      if (activityLogDedupeKeyExists_(ss, skippedOccurrenceKey)) {
+        continue;
+      }
       // The prior-month look-back can land in a calendar year whose Cash Flow
       // sheet doesn't exist (e.g. a January refresh looking back to December of
       // a year that was never set up). getCashFlowSheet_ throws on a missing
@@ -3651,41 +3660,57 @@ function skipDashboardBill(skipKey) {
   if (!ss) {
     throw new Error('Could not resolve workbook for bill skip.');
   }
+  const bill = getDashboardBillByKey_(ss, skipKey);
+  if (!bill) {
+    throw new Error('Could not resolve bill skip target.');
+  }
   const info = resolveDashboardBillSkipTarget_(ss, skipKey);
 
-  if (!info || !info.sheet || !info.row || !info.col) {
+  // Add Bill seeds the matching Cash Flow row on a best-effort basis, so a
+  // tracked bill can be visible before that row exists. In that case Skip
+  // records only the durable occurrence marker. Keep this fallback gated to a
+  // currently active INPUT - Bills payee so a forged key cannot create
+  // arbitrary Activity rows. Debt and recurring fallbacks still require their
+  // existing Cash Flow target.
+  const hasCashFlowTarget = !!(info && info.sheet && info.row && info.col);
+  const activeInputBills = getInputBillsPayeeMap_(ss);
+  const isActiveInputBill = !!activeInputBills[normalizeBillName_(bill.payee)];
+  if (!hasCashFlowTarget && !isActiveInputBill) {
     throw new Error('Could not resolve bill skip target.');
   }
 
-  const cell = info.sheet.getRange(info.row, info.col);
-  const currentValue = cell.getValue();
-  const currentDisplay = String(cell.getDisplayValue() || '').trim();
+  let isBlank = false;
+  if (hasCashFlowTarget) {
+    const cell = info.sheet.getRange(info.row, info.col);
+    const currentValue = cell.getValue();
+    const currentDisplay = String(cell.getDisplayValue() || '').trim();
 
-  const isBlank =
-    currentValue === '' ||
-    currentValue === null ||
-    typeof currentValue === 'undefined' ||
-    currentDisplay === '';
+    isBlank =
+      currentValue === '' ||
+      currentValue === null ||
+      typeof currentValue === 'undefined' ||
+      currentDisplay === '';
 
-  // The $0 cell write stays guarded by isBlank: we only stamp a $0 into a
-  // genuinely empty month cell so we never clobber a real (manual or
-  // accumulated) amount.
-  if (isBlank) {
-    cell.setValue(0);
+    // The $0 cell write stays guarded by isBlank: we only stamp a $0 into a
+    // genuinely empty month cell so we never clobber a real (manual or
+    // accumulated) amount.
+    if (isBlank) {
+      cell.setValue(0);
 
-    // Make the freshly-written $0 look identical to the rest of its row.
-    // A blank month cell carries the sheet's default "General"/black
-    // formatting, so preserving *its* look produced a bare, unstyled "0".
-    // Expense rows style their amounts in red (income rows use the default
-    // color), and every amount cell uses the sheet's currency number
-    // format — all of which live on the row's *populated* cells, not the
-    // blank one. Copy the format of the nearest month cell in this row that
-    // already holds a numeric value (typically the prior month) so the
-    // skipped $0 inherits the row's red/currency styling. Fall back to the
-    // canonical currency format only when the row has no populated sibling
-    // yet (e.g. a brand-new row).
-    if (!copyNearestAmountFormatInRow_(info.sheet, info.row, info.col)) {
-      cell.setNumberFormat('$#,##0.00;-$#,##0.00');
+      // Make the freshly-written $0 look identical to the rest of its row.
+      // A blank month cell carries the sheet's default "General"/black
+      // formatting, so preserving *its* look produced a bare, unstyled "0".
+      // Expense rows style their amounts in red (income rows use the default
+      // color), and every amount cell uses the sheet's currency number
+      // format — all of which live on the row's *populated* cells, not the
+      // blank one. Copy the format of the nearest month cell in this row that
+      // already holds a numeric value (typically the prior month) so the
+      // skipped $0 inherits the row's red/currency styling. Fall back to the
+      // canonical currency format only when the row has no populated sibling
+      // yet (e.g. a brand-new row).
+      if (!copyNearestAmountFormatInRow_(info.sheet, info.row, info.col)) {
+        cell.setNumberFormat('$#,##0.00;-$#,##0.00');
+      }
     }
   }
 
@@ -3696,8 +3721,8 @@ function skipDashboardBill(skipKey) {
   // the log write on isBlank meant skipped occurrences were never recorded
   // and kept reappearing. appendActivityLog_'s own dedupe means repeated Skip
   // clicks won't create duplicate rows.
-  const bill = getDashboardBillByKey_(ss, skipKey);
-  const monthHdr = bill && bill.monthHeader ? bill.monthHeader : activityLogMonthHeaderFromCell_(info.sheet, info.col);
+  const monthHdr = bill.monthHeader ||
+    (hasCashFlowTarget ? activityLogMonthHeaderFromCell_(info.sheet, info.col) : '');
   const payeeName = bill ? bill.payee : activityLogFallbackPayeeFromSkipKey_(skipKey);
   const skipDedupeKey = 'bill_skip::' + String(skipKey || '').trim();
   appendActivityLog_(ss, {
@@ -3708,17 +3733,22 @@ function skipDashboardBill(skipKey) {
     payee: payeeName || '(unknown)',
     category: '',
     accountSource: '',
-    cashFlowSheet: info.sheet.getName(),
+    cashFlowSheet: hasCashFlowTarget ? info.sheet.getName() : '',
     cashFlowMonth: monthHdr,
     dedupeKey: skipDedupeKey,
-    details: JSON.stringify({ skipKey: skipKey, wroteZero: isBlank, billResolved: !!bill })
+    details: JSON.stringify({
+      skipKey: skipKey,
+      wroteZero: hasCashFlowTarget && isBlank,
+      billResolved: true,
+      cashFlowTargetResolved: hasCashFlowTarget
+    })
   });
 
   return {
     ok: true,
-    message: isBlank
-      ? 'Bill skipped — recorded as $0 this month'
-      : 'Bill skipped — occurrence recorded'
+    message: hasCashFlowTarget && isBlank
+      ? 'Bill skipped. No payment was recorded; future occurrences remain scheduled.'
+      : 'Bill occurrence skipped. No payment was recorded; future occurrences remain scheduled.'
   };
 }
 

@@ -213,6 +213,119 @@
     };
   }
 
+  function storedEntryByPayee_(store, payee) {
+    var source = store || {};
+    var keys = Object.keys(source);
+    for (var i = 0; i < keys.length; i++) {
+      var row = source[keys[i]] || {};
+      if (String(row.payee || row.name || '').trim() === String(payee || '').trim()) {
+        return { key: keys[i], row: row };
+      }
+    }
+    return null;
+  }
+
+  function inspectBillLifecycle_() {
+    return new Promise(function(resolve, reject) {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(function(err) {
+          reject(new Error((err && err.message) ? err.message : String(err)));
+        })
+        .pdE2EInspectBillLifecycle(cfg.runId);
+    });
+  }
+
+  async function exerciseBillSkipStopSafety() {
+    var originalConfirm = window.confirm;
+    var confirmations = [];
+    var checks = [];
+    try {
+      if (typeof showPage === 'function') showPage('cashflow');
+      if (typeof showTab === 'function') showTab('billsDue');
+      if (typeof setBillsView === 'function') setBillsView('due');
+      await waitFor(function() {
+        return !!storedEntryByPayee_(window.__dashboardBills, expected.billPayee);
+      }, 90000, 'the synthetic bill occurrence');
+
+      var dueEntry = storedEntryByPayee_(window.__dashboardBills, expected.billPayee);
+      var skipKey = String(dueEntry && dueEntry.row && (dueEntry.row.skipKey || dueEntry.row.id) || '');
+      window.confirm = function(message) {
+        confirmations.push(String(message || ''));
+        return true;
+      };
+      skipBillFromDashboard(skipKey);
+      window.confirm = originalConfirm;
+      await waitFor(function() {
+        return /No payment was recorded; future occurrences remain scheduled/i.test(text('bills_due_status'));
+      }, 90000, 'the Bill Skip confirmation');
+      await waitFor(function() {
+        return !storedEntryByPayee_(window.__dashboardBills, expected.billPayee);
+      }, 90000, 'the skipped occurrence to clear');
+      checks.push(confirmations.some(function(message) {
+        return /No payment will be recorded/i.test(message) &&
+          /future occurrences will still appear/i.test(message);
+      }));
+
+      if (typeof setBillsView === 'function') setBillsView('manage');
+      await waitFor(function() {
+        return !!storedEntryByPayee_(window.__dashboardActiveBills, expected.billPayee);
+      }, 90000, 'the active synthetic bill');
+      var manageEntry = storedEntryByPayee_(window.__dashboardActiveBills, expected.billPayee);
+      var originalPayee = manageEntry.row.payee;
+      manageEntry.row.payee = originalPayee + ' stale';
+      window.confirm = function(message) {
+        confirmations.push(String(message || ''));
+        return true;
+      };
+      stopTrackingBillFromDashboard(manageEntry.key);
+      window.confirm = originalConfirm;
+      await waitFor(function() {
+        var status = document.getElementById('bills_due_status');
+        return status && status.classList.contains('error') &&
+          /(moved on the sheet|please refresh)/i.test(String(status.textContent || ''));
+      }, 90000, 'the stale Stop tracking rejection');
+      checks.push(!!storedEntryByPayee_(window.__dashboardActiveBills, originalPayee + ' stale'));
+
+      manageEntry.row.payee = originalPayee;
+      window.confirm = function(message) {
+        confirmations.push(String(message || ''));
+        return true;
+      };
+      stopTrackingBillFromDashboard(manageEntry.key);
+      window.confirm = originalConfirm;
+      await waitFor(function() {
+        return /Tracking stopped/i.test(text('bills_due_status'));
+      }, 90000, 'Stop tracking recovery');
+      await waitFor(function() {
+        return !storedEntryByPayee_(window.__dashboardActiveBills, expected.billPayee);
+      }, 90000, 'the inactive bill to leave Manage');
+
+      var inspected = await inspectBillLifecycle_();
+      var verified = inspected && inspected.ok && inspected.verification;
+      checks.push(confirmations.some(function(message) {
+        return /History is preserved/i.test(message);
+      }));
+      checks.push(!!verified && verified.rowPresent === true &&
+        verified.inactive === true &&
+        verified.dueDayPreserved === true &&
+        verified.amountPreserved === true &&
+        verified.frequencyPreserved === true &&
+        verified.notesPreserved === true);
+      checks.push(!!verified && Number(verified.skipActivityCount) === 1 &&
+        Number(verified.deactivateActivityCount) === 1);
+    } finally {
+      window.confirm = originalConfirm;
+    }
+
+    return {
+      pass: checks.length === 5 && checks.every(Boolean),
+      detail: checks.length === 5 && checks.every(Boolean)
+        ? 'Skip required explicit consequence confirmation; stale Stop tracking failed closed; retry succeeded with the bill row, schedule, history, and immutable Activity evidence preserved.'
+        : 'One or more Bill Skip/Stop safety checks failed: ' + JSON.stringify(checks)
+    };
+  }
+
   function overlay(title, report, bad) {
     var old = document.getElementById('cc_populated_dashboard_e2e_result');
     if (old) old.remove();
@@ -466,6 +579,9 @@
       add('health_prerequisite_truth', healthTruthPass, healthTruthPass
         ? 'Financial Health withheld its score because the representative fixture still has an incomplete required Profile.'
         : 'Financial Health exposed a score or failed to explain the incomplete required Profile prerequisite.');
+
+      var billSafety = await exerciseBillSkipStopSafety();
+      add('bill_skip_stop_safety', billSafety.pass, billSafety.detail);
 
       var errors = errorMessages();
       add('clean_console_navigation', errors.length === 0, errors.length

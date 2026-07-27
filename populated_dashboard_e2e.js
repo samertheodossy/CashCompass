@@ -7,7 +7,7 @@
  * from a caller and the permanent test identity remains a non-admin.
  */
 var POPULATED_DASHBOARD_E2E_MODE_ = 'POPULATED_DASHBOARD';
-var POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_ = 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V5';
+var POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_ = 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V6';
 var POPULATED_DASHBOARD_E2E_SCENARIO_ID_ = 'E2E-POPULATED-DASHBOARD';
 var POPULATED_DASHBOARD_E2E_REQUIRED_ASSERTIONS_ = [
   'startup_populated_overview',
@@ -25,6 +25,7 @@ var POPULATED_DASHBOARD_E2E_REQUIRED_ASSERTIONS_ = [
   'customer_language',
   'refresh_button_state',
   'health_prerequisite_truth',
+  'bill_skip_stop_safety',
   'clean_console_navigation'
 ];
 
@@ -118,6 +119,81 @@ function pdE2ERenderContext_(runId) {
   } catch (_e) {
     return null;
   }
+}
+
+/**
+ * Read-only verification of the exact synthetic Bill after the browser has
+ * exercised Skip and Stop tracking. The caller cannot supply a workbook id or
+ * payee; both come from the marker-verified active fixture and canonical
+ * representative profile.
+ */
+function pdE2EInspectBillLifecycle(runId) {
+  return frE2ESafe_(function() {
+    var email = assertFirstRunE2EAllowed_();
+    var state = frE2EReadState_();
+    if (!state || state.mode !== POPULATED_DASHBOARD_E2E_MODE_ ||
+        String(runId || '') !== state.runId) {
+      throw new Error('Populated Dashboard E2E refused: run token mismatch.');
+    }
+    assertFirstRunE2EFixture_(state, email, false);
+
+    var ss = SpreadsheetApp.openById(state.workbookId);
+    var profile = getHarnessRepresentativeProfile_();
+    var bill = profile.bill;
+    var sheet = ss.getSheetByName(getSheetNames_().BILLS);
+    if (!sheet) throw new Error('Synthetic Bills sheet is unavailable.');
+
+    var values = sheet.getDataRange().getValues();
+    var headers = values[0] || [];
+    var headerMap = {};
+    for (var c = 0; c < headers.length; c++) {
+      var header = String(headers[c] || '').trim();
+      if (header) headerMap[header] = c;
+    }
+    ['Payee', 'Due Day', 'Default Amount', 'Active', 'Frequency', 'Notes'].forEach(function(required) {
+      if (!Object.prototype.hasOwnProperty.call(headerMap, required)) {
+        throw new Error('Synthetic Bills verification is missing required structure.');
+      }
+    });
+
+    var row = null;
+    for (var r = 1; r < values.length; r++) {
+      if (String(values[r][headerMap.Payee] || '').trim() === bill.payee) {
+        row = values[r];
+        break;
+      }
+    }
+
+    var activity = ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
+    var activityValues = activity && activity.getLastRow() >= 2
+      ? activity.getRange(2, 1, activity.getLastRow() - 1, ACTIVITY_LOG_HEADERS.length).getValues()
+      : [];
+    var skipCount = 0;
+    var deactivateCount = 0;
+    activityValues.forEach(function(activityRow) {
+      if (String(activityRow[5] || '').trim() !== bill.payee) return;
+      var eventType = String(activityRow[1] || '').trim();
+      if (eventType === 'bill_skip') skipCount++;
+      if (eventType === 'bill_deactivate') deactivateCount++;
+    });
+
+    assertFirstRunE2EFixture_(state, email, false);
+    return {
+      ok: true,
+      verification: {
+        rowPresent: !!row,
+        inactive: !!row && normalizeYesNo_(row[headerMap.Active]) === 'no',
+        dueDayPreserved: !!row && Number(row[headerMap['Due Day']]) === Number(bill.dueDay),
+        amountPreserved: !!row && Math.abs(Number(row[headerMap['Default Amount']]) - Number(bill.amount)) < 0.005,
+        frequencyPreserved: !!row &&
+          String(row[headerMap.Frequency] || '').trim().toLowerCase() ===
+          String(bill.frequency || '').trim().toLowerCase(),
+        notesPreserved: !!row && String(row[headerMap.Notes] || '').trim() === 'Synthetic harness bill',
+        skipActivityCount: skipCount,
+        deactivateActivityCount: deactivateCount
+      }
+    };
+  });
 }
 
 /** Save privacy-safe browser evidence, then exact verified soft-Trash cleanup. */
