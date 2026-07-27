@@ -191,6 +191,26 @@
           ? ('Empty tracked-editor gaps: ' + emptyEditorFailures.join(', '))
           : 'Empty Bank Accounts, Houses, and Investments expose consistent Update, Add new, and Manage states.');
 
+      if (typeof showPage === 'function') showPage('planning');
+      if (typeof showTab === 'function') showTab('retirement');
+      if (typeof loadRetirementSection === 'function') loadRetirementSection();
+      await waitFor(function() {
+        var guidance = document.getElementById('ret_empty_state');
+        return activeTab('planning', 'retirement') && visible(guidance) &&
+          /Date of Birth in Profile/i.test(String(guidance.textContent || ''));
+      }, 120000, 'fresh Retirement guidance');
+      var retirementGuidance = document.getElementById('ret_empty_state');
+      var retirementCards = document.getElementById('ret_scenario_cards');
+      var retirementResults = document.getElementById('ret_results_panel');
+      var retirementGuidancePass = visible(retirementGuidance) &&
+        /Add your Date of Birth in Profile/i.test(String(retirementGuidance.textContent || '')) &&
+        !visible(retirementCards) && !visible(retirementResults) &&
+        text('ret_info_goal') === '—' && text('ret_info_funded') === '—';
+      add('retirement_guidance_not_ready', retirementGuidancePass, retirementGuidancePass
+        ? 'Retirement explained the missing Profile prerequisite and kept scenario and result walls hidden.'
+        : 'Retirement exposed results or failed to explain the missing Profile Date of Birth.');
+      customerLeaks = customerLeaks.concat(customerLanguageLeaks('Planning → Retirement'));
+
       click('.btn-help-prominent');
       await waitFor(function() { return activePage('help'); }, 10000, 'Help');
       var helpSetup = document.getElementById('help-setup');

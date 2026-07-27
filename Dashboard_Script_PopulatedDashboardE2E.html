@@ -514,6 +514,31 @@
         : 'Investments, Upcoming, Bills, and Income rendered their representative data.');
       customerLeaks = customerLeaks.concat(customerLanguageLeaks('Populated workspaces'));
 
+      if (typeof showPage === 'function') showPage('planning');
+      if (typeof showTab === 'function') showTab('retirement');
+      if (typeof loadRetirementSection === 'function') loadRetirementSection();
+      await waitFor(function() {
+        return text('ret_info_scenario') !== '' && text('ret_info_scenario') !== '—' &&
+          text('ret_info_goal') !== '' && text('ret_info_goal') !== '—' &&
+          text('ret_info_funded') !== '' && text('ret_info_funded') !== '—';
+      }, 120000, 'populated Retirement results');
+      var retirementEmptyState = document.getElementById('ret_empty_state');
+      var retirementScenarioCards = document.getElementById('ret_scenario_cards');
+      var retirementResultsPanel = document.getElementById('ret_results_panel');
+      var retirementReadyPass = document.getElementById('ret_selectedScenario').value === 'Base' &&
+        text('ret_info_scenario') === 'Base' &&
+        text('ret_yourCurrentAge') !== '' &&
+        text('ret_info_goal') !== '—' &&
+        text('ret_info_funded') !== '—' &&
+        retirementEmptyState && retirementEmptyState.hidden === true &&
+        retirementScenarioCards && retirementScenarioCards.hidden === false &&
+        text('scenario_card_Base') !== '' &&
+        retirementResultsPanel && retirementResultsPanel.hidden === false;
+      add('retirement_ready_results', retirementReadyPass, retirementReadyPass
+        ? 'The seeded Base retirement scenario revealed its derived age, scenario cards, goal, funded result, and analysis panel.'
+        : 'The ready Retirement state did not reveal the expected Base scenario results.');
+      customerLeaks = customerLeaks.concat(customerLanguageLeaks('Planning → Retirement'));
+
       if (typeof showPage === 'function') showPage('assets');
       if (typeof showTab === 'function') showTab('bank');
       if (typeof showPage === 'function') showPage('cashflow');

@@ -866,31 +866,31 @@ function writeRetirementHouseholdInputs_(sheet, household) {
 function getRetirementScenarioInputs_(sheet, scenarioName) {
   const col = getRetirementScenarioColumn_(scenarioName);
   return {
-    targetRetirementAge: toNumber_(sheet.getRange(getRetirementScenarioRow_('Target Retirement Age'), col).getValue()),
-    householdRetirementSpendingPerYear: toNumber_(sheet.getRange(getRetirementScenarioRow_('Household Retirement Spending / Year'), col).getValue()),
-    yourSocialSecurityPerYear: toNumber_(sheet.getRange(getRetirementScenarioRow_('Your Social Security / Year'), col).getValue()),
-    spouseSocialSecurityPerYear: toNumber_(sheet.getRange(getRetirementScenarioRow_('Spouse Social Security / Year'), col).getValue()),
-    otherRetirementIncomePerYear: toNumber_(sheet.getRange(getRetirementScenarioRow_('Other Retirement Income / Year'), col).getValue()),
-    annualContributions: toNumber_(sheet.getRange(getRetirementScenarioRow_('Annual Contributions'), col).getValue()),
-    expectedAnnualReturnPct: toNumber_(sheet.getRange(getRetirementScenarioRow_('Expected Annual Return %'), col).getValue()),
-    inflationPct: toNumber_(sheet.getRange(getRetirementScenarioRow_('Inflation %'), col).getValue()),
-    safeWithdrawalRatePct: toNumber_(sheet.getRange(getRetirementScenarioRow_('Safe Withdrawal Rate %'), col).getValue()),
-    oneTimeFutureCashNeeds: toNumber_(sheet.getRange(getRetirementScenarioRow_('One-Time Future Cash Needs'), col).getValue())
+    targetRetirementAge: toNumber_(sheet.getRange(getRetirementScenarioRow_(sheet, 'Target Retirement Age'), col).getValue()),
+    householdRetirementSpendingPerYear: toNumber_(sheet.getRange(getRetirementScenarioRow_(sheet, 'Household Retirement Spending / Year'), col).getValue()),
+    yourSocialSecurityPerYear: toNumber_(sheet.getRange(getRetirementScenarioRow_(sheet, 'Your Social Security / Year'), col).getValue()),
+    spouseSocialSecurityPerYear: toNumber_(sheet.getRange(getRetirementScenarioRow_(sheet, 'Spouse Social Security / Year'), col).getValue()),
+    otherRetirementIncomePerYear: toNumber_(sheet.getRange(getRetirementScenarioRow_(sheet, 'Other Retirement Income / Year'), col).getValue()),
+    annualContributions: toNumber_(sheet.getRange(getRetirementScenarioRow_(sheet, 'Annual Contributions'), col).getValue()),
+    expectedAnnualReturnPct: toNumber_(sheet.getRange(getRetirementScenarioRow_(sheet, 'Expected Annual Return %'), col).getValue()),
+    inflationPct: toNumber_(sheet.getRange(getRetirementScenarioRow_(sheet, 'Inflation %'), col).getValue()),
+    safeWithdrawalRatePct: toNumber_(sheet.getRange(getRetirementScenarioRow_(sheet, 'Safe Withdrawal Rate %'), col).getValue()),
+    oneTimeFutureCashNeeds: toNumber_(sheet.getRange(getRetirementScenarioRow_(sheet, 'One-Time Future Cash Needs'), col).getValue())
   };
 }
 
 function writeRetirementScenarioInputs_(sheet, scenarioName, inputs) {
   const col = getRetirementScenarioColumn_(scenarioName);
-  sheet.getRange(getRetirementScenarioRow_('Target Retirement Age'), col).setValue(round2_(inputs.targetRetirementAge));
-  sheet.getRange(getRetirementScenarioRow_('Household Retirement Spending / Year'), col).setValue(round2_(inputs.householdRetirementSpendingPerYear));
-  sheet.getRange(getRetirementScenarioRow_('Your Social Security / Year'), col).setValue(round2_(inputs.yourSocialSecurityPerYear));
-  sheet.getRange(getRetirementScenarioRow_('Spouse Social Security / Year'), col).setValue(round2_(inputs.spouseSocialSecurityPerYear));
-  sheet.getRange(getRetirementScenarioRow_('Other Retirement Income / Year'), col).setValue(round2_(inputs.otherRetirementIncomePerYear));
-  sheet.getRange(getRetirementScenarioRow_('Annual Contributions'), col).setValue(round2_(inputs.annualContributions));
-  sheet.getRange(getRetirementScenarioRow_('Expected Annual Return %'), col).setValue(round2_(inputs.expectedAnnualReturnPct));
-  sheet.getRange(getRetirementScenarioRow_('Inflation %'), col).setValue(round2_(inputs.inflationPct));
-  sheet.getRange(getRetirementScenarioRow_('Safe Withdrawal Rate %'), col).setValue(round2_(inputs.safeWithdrawalRatePct));
-  sheet.getRange(getRetirementScenarioRow_('One-Time Future Cash Needs'), col).setValue(round2_(inputs.oneTimeFutureCashNeeds));
+  sheet.getRange(getRetirementScenarioRow_(sheet, 'Target Retirement Age'), col).setValue(round2_(inputs.targetRetirementAge));
+  sheet.getRange(getRetirementScenarioRow_(sheet, 'Household Retirement Spending / Year'), col).setValue(round2_(inputs.householdRetirementSpendingPerYear));
+  sheet.getRange(getRetirementScenarioRow_(sheet, 'Your Social Security / Year'), col).setValue(round2_(inputs.yourSocialSecurityPerYear));
+  sheet.getRange(getRetirementScenarioRow_(sheet, 'Spouse Social Security / Year'), col).setValue(round2_(inputs.spouseSocialSecurityPerYear));
+  sheet.getRange(getRetirementScenarioRow_(sheet, 'Other Retirement Income / Year'), col).setValue(round2_(inputs.otherRetirementIncomePerYear));
+  sheet.getRange(getRetirementScenarioRow_(sheet, 'Annual Contributions'), col).setValue(round2_(inputs.annualContributions));
+  sheet.getRange(getRetirementScenarioRow_(sheet, 'Expected Annual Return %'), col).setValue(round2_(inputs.expectedAnnualReturnPct));
+  sheet.getRange(getRetirementScenarioRow_(sheet, 'Inflation %'), col).setValue(round2_(inputs.inflationPct));
+  sheet.getRange(getRetirementScenarioRow_(sheet, 'Safe Withdrawal Rate %'), col).setValue(round2_(inputs.safeWithdrawalRatePct));
+  sheet.getRange(getRetirementScenarioRow_(sheet, 'One-Time Future Cash Needs'), col).setValue(round2_(inputs.oneTimeFutureCashNeeds));
 }
 
 function getRetirementScenarioColumn_(scenarioName) {
@@ -900,23 +900,12 @@ function getRetirementScenarioColumn_(scenarioName) {
   return 4;
 }
 
-function getRetirementScenarioRow_(label) {
-  const map = {
-    'Target Retirement Age': 9,
-    'Household Retirement Spending / Year': 10,
-    'Your Social Security / Year': 11,
-    'Spouse Social Security / Year': 12,
-    'Other Retirement Income / Year': 13,
-    'Annual Contributions': 14,
-    'Expected Annual Return %': 15,
-    'Inflation %': 16,
-    'Safe Withdrawal Rate %': 17,
-    'One-Time Future Cash Needs': 18
-  };
-  if (!Object.prototype.hasOwnProperty.call(map, label)) {
+function getRetirementScenarioRow_(sheet, label) {
+  const valueCell = findLabelValueCell_(sheet, label);
+  if (!valueCell) {
     throw new Error('Unknown retirement scenario row: ' + label);
   }
-  return map[label];
+  return valueCell.getRow();
 }
 
 function setRetirementLabelValue_(sheet, label, value) {

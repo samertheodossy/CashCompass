@@ -165,22 +165,22 @@ function getHarnessSuites_() {
     {
       id: 'SUITE-FIRST-RUN-UX-E2E',
       label: 'First-Run UX E2E',
-      description: 'Browser-driven fresh Central provisioning, Setup, navigation, gating, Help, real Refresh state, clean-console checks, and verified Trash cleanup.',
+      description: 'Browser-driven fresh Central provisioning, Setup, navigation, gating, Retirement prerequisite guidance, Help, real Refresh state, clean-console checks, and verified Trash cleanup.',
       implemented: true,
       runner: 'browser',
       browserRoute: 'first-run-e2e',
-      evidenceKey: 'FIRST_RUN_E2E_LATEST_EVIDENCE_V5',
+      evidenceKey: 'FIRST_RUN_E2E_LATEST_EVIDENCE_V6',
       blocker: null,
       scenarioIds: []
     },
     {
       id: 'SUITE-POPULATED-DASHBOARD-E2E',
       label: 'Populated Dashboard E2E',
-      description: 'Browser-driven populated KPI, selection/action, controlled loading, Bill Skip/Stop safety, equity, subtab, Help/Setup, real Refresh, customer-language, and clean-console validation.',
+      description: 'Browser-driven populated KPI, selection/action, controlled loading, Bill Skip/Stop safety, Retirement ready results, equity, subtab, Help/Setup, real Refresh, customer-language, and clean-console validation.',
       implemented: true,
       runner: 'browser',
       browserRoute: 'populated-dashboard-e2e',
-      evidenceKey: 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V6',
+      evidenceKey: 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V7',
       blocker: null,
       scenarioIds: []
     },

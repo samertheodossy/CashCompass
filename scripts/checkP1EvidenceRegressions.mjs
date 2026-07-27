@@ -94,10 +94,10 @@ assert.match(recoveryUi, /cashcompass2026@gmail\.com[\s\S]*?never accepts an ema
   'Recovery Live UI must explain its fixed identity and target boundary');
 assert.match(validationUi, /single suite inventory and evidence dashboard[\s\S]*?All suites/,
   'Validation console must remain the consolidated suite inventory and evidence surface');
-assert.match(suites, /id: 'SUITE-FIRST-RUN-UX-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?FIRST_RUN_E2E_LATEST_EVIDENCE_V5/,
+assert.match(suites, /id: 'SUITE-FIRST-RUN-UX-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?FIRST_RUN_E2E_LATEST_EVIDENCE_V6/,
   'First-Run UX must be an implemented browser suite backed by saved evidence');
-assert.match(firstRunE2E, /FIRST_RUN_E2E_EVIDENCE_KEY_\s*=\s*'FIRST_RUN_E2E_LATEST_EVIDENCE_V5'/,
-  'The Save-only Update contract must invalidate older First-Run evidence');
+assert.match(firstRunE2E, /FIRST_RUN_E2E_EVIDENCE_KEY_\s*=\s*'FIRST_RUN_E2E_LATEST_EVIDENCE_V6'/,
+  'Retirement prerequisite guidance must invalidate older First-Run evidence');
 assert.match(firstRunE2E, /FIRST_RUN_E2E_TEST_EMAIL_\s*=\s*'cashcompass2026@gmail.com'/,
   'First-Run E2E must stay pinned to the permanent disposable identity');
 assert.match(firstRunE2E, /if \(isAdminUser_\(\)\) return false/,
@@ -124,12 +124,17 @@ assert.match(firstRunE2E, /'customer_language'/,
   'First-Run E2E must require the whole-interface customer-language assertion');
 assert.match(firstRunE2E, /'empty_tracked_editor_modes'/,
   'First-Run E2E must require empty-state coverage for converged tracked editors');
+assert.match(firstRunE2E, /'retirement_guidance_not_ready'/,
+  'First-Run E2E must require Retirement prerequisite guidance coverage');
+assert.match(firstRunBrowser,
+  /showTab\('retirement'\)[\s\S]*?loadRetirementSection\(\)[\s\S]*?ret_empty_state[\s\S]*?ret_scenario_cards[\s\S]*?ret_results_panel[\s\S]*?add\('retirement_guidance_not_ready'/,
+  'First-Run Retirement evidence must prove guidance is visible while result walls stay hidden');
 assert.match(firstRunBrowser, /function customerLanguageLeaks\(/,
   'First-Run E2E must scan visible customer pages for internal workbook terminology');
-assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V6/,
+assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V7/,
   'Populated Dashboard E2E must be an implemented browser suite backed by saved evidence');
-assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V6'/,
-  'Bill Skip and Stop-tracking safety evidence must invalidate older Populated Dashboard evidence');
+assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V7'/,
+  'Retirement ready-result evidence must invalidate older Populated Dashboard evidence');
 assert.doesNotMatch(populatedE2E, /function pdE2EPrepare\([^)]*(?:spreadsheet|workbook|file)Id/i,
   'Populated Dashboard preparation must never accept an arbitrary workbook target');
 assert.match(populatedE2E, /frE2EPrepare\(confirmed, requestedReleaseRunId\)/,
@@ -157,11 +162,14 @@ assert.match(populatedBrowser,
   'Populated Dashboard E2E must fail when Income and Setup classify the salary differently');
 for (const assertionId of ['overview_kpis', 'bank_selection_actions', 'bank_loading_resilience',
   'tracked_editor_convergence', 'debt_selection_actions', 'debt_loading_resilience',
-  'property_equity', 'populated_workspaces', 'income_setup_consistency', 'subtab_retention', 'setup_help_language',
+  'property_equity', 'populated_workspaces', 'retirement_ready_results', 'income_setup_consistency', 'subtab_retention', 'setup_help_language',
   'customer_language', 'refresh_button_state', 'health_prerequisite_truth',
   'bill_skip_stop_safety', 'clean_console_navigation']) {
   assert.ok(populatedE2E.includes(`'${assertionId}'`), `Populated Dashboard contract missing ${assertionId}`);
 }
+assert.match(populatedBrowser,
+  /showTab\('retirement'\)[\s\S]*?loadRetirementSection\(\)[\s\S]*?ret_info_goal[\s\S]*?ret_info_funded[\s\S]*?ret_empty_state[\s\S]*?ret_scenario_cards[\s\S]*?ret_results_panel[\s\S]*?add\('retirement_ready_results'/,
+  'Populated Retirement evidence must prove the ready Base scenario reveals meaningful result walls');
 assert.match(populatedBrowser,
   /exerciseBankLoadingResilience[\s\S]*?Controlled bank details failure[\s\S]*?save\.disabled === true[\s\S]*?pending\[1\]\.onSuccess[\s\S]*?pending\[0\]\.onSuccess/,
   'Populated Bank evidence must prove disabled-on-failure, recovery, and late-response refusal');

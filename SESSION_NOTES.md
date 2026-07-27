@@ -2,6 +2,18 @@
 
 The V1 trust baseline is shipped and locked, and V1.1 closed out with the retirement profile integration (see **V1.1 — Retirement Profile Integration (DOB Source of Truth)** section below). The project has since moved into **Central App live + Family Beta readiness** — the Central App architecture is operational and the active work is hardening it toward a family beta (see **Current State — Post V1.2 Prep** below for the per-slice migration record). Working rules live in `WORKING_RULES.md → Current phase` + `→ Central App Transition Rules` (now active); product framing lives in `PROJECT_CONTEXT.md → Current phase` and `→ Current architecture — Central App (live)`. All prior phase notes below this header are preserved as-is for historical record.
 
+- **Retirement guidance/runtime truth — `1e` / `REG-025` complete on isolated
+  `@211` (2026-07-27).** The runtime replay exposed a compatibility defect:
+  Retirement scenario reads/writes still used row numbers from the former
+  layout after new sheets removed the in-sheet age block. Scenario access now
+  resolves exact labels, preserving compact new sheets and legacy layouts.
+  First-Run V6 run `FR-a3b654b7-8343-4776-9991-2e7118f6e6fb` passed 12/12,
+  including `retirement_guidance_not_ready`. Populated V7 run
+  `FR-0c1c2b85-0851-414d-b8ab-c4c91636b9d6` passed 18/18, including
+  `retirement_ready_results`. Both recorded zero browser errors, Restricted
+  single-owner sharing, and verified exact-fixture Trash cleanup. Beta remained
+  `@106`; bounded was untouched. Full `npm test` passed. Commit/push pending.
+
 - **Bill Skip/Stop-tracking safety — `1d` / `REG-024` runtime complete on
   isolated `@206` (2026-07-27).** Skip now requires explicit consequence
   confirmation, clears the client action store while loading, and rejects stale

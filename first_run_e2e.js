@@ -9,7 +9,7 @@
  */
 var FIRST_RUN_E2E_TEST_EMAIL_ = 'cashcompass2026@gmail.com';
 var FIRST_RUN_E2E_STATE_KEY_ = 'FIRST_RUN_E2E_ACTIVE_STATE_V1';
-var FIRST_RUN_E2E_EVIDENCE_KEY_ = 'FIRST_RUN_E2E_LATEST_EVIDENCE_V5';
+var FIRST_RUN_E2E_EVIDENCE_KEY_ = 'FIRST_RUN_E2E_LATEST_EVIDENCE_V6';
 var FIRST_RUN_E2E_SCENARIO_ID_ = 'E2E-FIRST-RUN-UX';
 var FIRST_RUN_E2E_MODE_ = 'FIRST_RUN';
 var FIRST_RUN_E2E_REQUIRED_ASSERTIONS_ = [
@@ -19,6 +19,7 @@ var FIRST_RUN_E2E_REQUIRED_ASSERTIONS_ = [
   'default_subtabs',
   'empty_action_gating',
   'empty_tracked_editor_modes',
+  'retirement_guidance_not_ready',
   'help_wording',
   'customer_language',
   'refresh_button_state',

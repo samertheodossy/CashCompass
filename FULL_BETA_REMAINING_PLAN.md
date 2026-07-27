@@ -4,12 +4,12 @@
 
 **Reconciled:** 2026-07-27
 
-**Current evidence:** isolated Central `@206`; Populated Dashboard V6 **17/17
-PASS** is the latest writer-inclusive browser evidence from the dedicated
-unattended test session. It includes controlled Bank and Debt loading resilience
-plus Bill Skip/Stop-tracking confirmation, stale rejection, recovery, preserved
-source data/history, zero browser errors, Restricted single-owner sharing, and
-verified exact-fixture Trash cleanup.
+**Current evidence:** isolated Central `@211`; First-Run V6 **12/12 PASS** and
+Populated Dashboard V7 **18/18 PASS** are the latest dedicated unattended
+browser evidence. They include Retirement prerequisite guidance, meaningful
+ready-state results, compact/legacy row compatibility, all prior populated
+journeys, zero browser errors, Restricted single-owner sharing, and verified
+exact-fixture Trash cleanup.
 
 **Last formal independent advocate score:** **8.3/10** on isolated Central
 `@180`. This remains the official score until the next full scored advocate run;
@@ -53,6 +53,7 @@ closed. They are retained here so the work map does not lose history.
 | 3l | Overview health prerequisite/freshness trust (`REG-021`) | Isolated `@197` First-Run V5 passed 11/11 and Populated V4 passed 14/14; both proved `health_prerequisite_truth`, Restricted single-owner fixtures, zero errors, and verified Trash cleanup |
 | 1c | Controlled Bank/Debt loading resilience (`REG-023`) | Isolated `@203` Populated Dashboard V5 passed 16/16; controlled failures kept Save disabled, transient retry recovered, late stale responses were ignored, zero browser errors were captured, and the exact Restricted fixture was verified in Trash |
 | 1d | Bill Skip/Stop-tracking safety (`REG-024`) | Isolated `@206` Populated Dashboard V6 passed 17/17; Skip required consequence confirmation and stayed dismissed without requiring a Cash Flow row, stale Stop failed closed, valid retry soft-deactivated the bill, source fields/history and exact Activity evidence were preserved, and cleanup was verified |
+| 1e | Retirement guidance runtime proof (`REG-025`) | Isolated `@211` First-Run V6 passed 12/12 and Populated V7 passed 18/18; not-ready guidance hid result walls, ready Base results rendered, label-based row resolution preserved compact/legacy compatibility, and both fixtures were verified in Trash |
 
 The remaining tables below are therefore an **open-only list**.
 
@@ -60,11 +61,11 @@ The remaining tables below are therefore an **open-only list**.
 
 | Order | Open IDs | Workstream | Focused estimate |
 |---:|---|---|---:|
-| 1 | `1e` | Retirement proof | 0.5–1 d |
+| 1 | `5h`–`5m` | Beta-critical Activity correction and reversal | 8–17 d |
 | 2 | `2d`–`2e` | Quick Add and Upcoming consequence language | 1–2 d |
 | 3 | `3a`–`3c`, `3e`–`3k`, `3m` | Remaining page UX, trust, advocate scoring, responsive/accessibility | 11–21 d |
 | 4 | `4a`–`4f` | Performance optimization, measurement, and percentile gate | 5–11 d |
-| 5 | `5a`–`5f`, `5h`–`5m` | Financial/workbook proof plus Beta-critical Activity correction and reversal | 17–36 d |
+| 5 | `5a`–`5f` | Remaining financial/workbook proof | 9–19 d |
 | 6 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
 | 7 | `7a`–`7f` | Monetization-ready policy and architecture foundation; no billing activation | 5–10 d |
 | 8 | `8a`–`8f` | Freeze, complete exact-candidate evidence, score, and READY verdict | 3.5–7 d plus fixes |
@@ -95,10 +96,10 @@ Broad invited Beta requires all of the following:
 | ID | Remaining item | Exit evidence | Estimate |
 |---|---|---|---:|
 | 1d | Skip and Stop-tracking safety evidence (`REG-024`) | **Complete 2026-07-27 on isolated `@206`.** Populated V6 passed 17/17. Skip confirms no payment/future recurrence consequences, a missing Cash Flow row falls back only to an active-bill-gated occurrence marker, monthly dismissal persists, stale Bills responses cannot restore the card, stale Stop fails closed, valid retry preserves the inactive source row/history, and exact Skip/deactivate Activity counts plus Trash cleanup are verified. | Complete |
-| 1e | Retirement guidance runtime proof | Missing-minimum-input guidance hides result walls; ready state reveals correct results; focused journey passes | 0.5–1 d |
+| 1e | Retirement guidance runtime proof (`REG-025`) | **Complete 2026-07-27 on isolated `@211`.** First-Run V6 passed 12/12 and Populated V7 passed 18/18. Missing-DOB guidance hid results; the seeded Base scenario revealed age, scenario cards, goal, funded result, and analysis. Stale fixed row numbers were replaced by label-based lookup compatible with compact and legacy sheets. | Complete |
 | 1f | Guarded unattended browser-suite orchestration (`REG-022`) | **Complete 2026-07-27 on isolated `@201`.** The agent keeps a dedicated authenticated `cashcompass2026@gmail.com` session and opens guarded self-starting routes directly; no account chooser, email parameter, or workbook ID is used. First-Run passed 11/11 and Populated passed 14/14 with Restricted single-owner fixtures and verified Trash cleanup. Expired Google authentication remains the only human pause. | Complete |
 
-**Group 1 open estimate: 0.5–1 focused day.**
+**Group 1 open estimate: 0 focused days.**
 
 ## 2. Bills and daily-task completion
 
@@ -265,7 +266,7 @@ strictest failed gate controls the actual date.
 
 The remaining work that directly controls the finish date is:
 
-`1e → 5h–5m → 2d–2e → 3a–3k/3m → 4a–4f → 8a–8f → 9a–9e`
+`5h–5m → 2d–2e → 3a–3k/3m → 4a–4f → 8a–8f → 9a–9e`
 
 Financial/workbook proof in Group 5 must finish before `8b`. Operations and
 monetization foundations in Groups 6–7 must finish before `8d`, but they should

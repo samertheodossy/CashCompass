@@ -359,13 +359,14 @@ Investments, and Debts on shared Due/Update, Add, and Manage patterns. Isolated
 `@196` then runtime-closed Activity action truth (`5g` / `REG-020`) with no
 browser errors. Overview health trust (`3l` / `REG-021`), unattended execution
 (`1f` / `REG-022`), controlled Bank/Debt loading (`1c` / `REG-023`), and Bill
-Skip/Stop safety (`1d` / `REG-024`) subsequently closed. Isolated `@206`
-Populated Dashboard V6 17/17 is the latest writer-inclusive evidence. The last formal
+Skip/Stop safety (`1d` / `REG-024`) and Retirement runtime truth (`1e` /
+`REG-025`) subsequently closed. Isolated `@211` First-Run V6 12/12 and
+Populated Dashboard V7 18/18 are the latest browser evidence. The last formal
 advocate score remains 8.3/10; the `@196` 7.2 read-only score is an
 evidence-limited discovery score, not a comparable regression.
 
-The immediate gate is Retirement runtime proof (`1e`). Then close Quick Add
-duplicate/update and Upcoming Dismiss language (`2d`–`2e`);
+The immediate gate is durable Activity correction (`5h`–`5m`). Then close Quick
+Add duplicate/update and Upcoming Dismiss language (`2d`–`2e`);
 complete remaining page UX, form readiness/customer language (`3m`), and
 accessibility/responsive evidence (`3j`); freeze the
 candidate; restart the 20-pair percentile campaign; ratify p50/p95 budgets;

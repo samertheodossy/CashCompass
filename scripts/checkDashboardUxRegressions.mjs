@@ -36,6 +36,7 @@ const files = Object.fromEntries(await Promise.all([
   'dashboard_data.js',
   'income_sources.js',
   'onboarding.js',
+  'retirement.js',
   'test_harness_scenarios_bills.js'
 ].map(async (name) => [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')])));
 
@@ -924,6 +925,7 @@ assert.match(assetScript,
   'Stored Bank policy tokens must render as customer-facing labels');
 
 const retirementScript = files['Dashboard_Script_PlanningRetirement.html'];
+const retirementServer = files['retirement.js'];
 assert.match(body,
   /id="ret_scenario_cards"[^>]*hidden[\s\S]*?id="ret_results_panel"[^>]*hidden/,
   'Retirement results must start hidden instead of flashing dash-only output');
@@ -933,6 +935,12 @@ assert.match(retirementScript,
 assert.match(retirementScript,
   /function hideRetirementEmptyState_[\s\S]*?scenarioCards\.hidden = false;[\s\S]*?resultsPanel\.hidden = false;/,
   'Ready Retirement data must reveal the real result panels');
+assert.match(retirementServer,
+  /function getRetirementScenarioRow_\(sheet, label\)[\s\S]*?findLabelValueCell_\(sheet, label\)[\s\S]*?valueCell\.getRow\(\)/,
+  'Retirement scenario reads and writes must resolve rows by label for compact and legacy workbook layouts');
+assert.doesNotMatch(retirementServer,
+  /function getRetirementScenarioRow_[\s\S]*?['"]Target Retirement Age['"]:\s*\d+/,
+  'Retirement scenario access must not depend on stale fixed row numbers');
 assert.match(styles,
   /#ret_scenario_cards\[hidden\],[\s\S]*?#ret_results_panel\[hidden\]\s*\{[\s\S]*?display:\s*none !important;/,
   'Retirement hidden result panels must stay hidden despite grid styles');

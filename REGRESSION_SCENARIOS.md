@@ -514,6 +514,35 @@ Whenever a production bug is fixed:
   Populated V6 requires the ordered Skip → stale Stop → valid Stop journey plus
   exact-fixture server inspection and invalidates older saved evidence.
 
+### REG-025 — Compact Retirement sheets were read using stale legacy row numbers
+- Category: REGRESSION / UI TRUST / FINANCIAL TRUTH / COMPATIBILITY
+- Date discovered: 2026-07-27
+- Status: fixed; isolated `@211` First-Run V6 and Populated V7 runtime replays passed
+- Affected files: `retirement.js`, `Dashboard_Script_FirstRunE2E.html`,
+  `Dashboard_Script_PopulatedDashboardE2E.html`, `first_run_e2e.js`,
+  `populated_dashboard_e2e.js`, `test_harness_suites.js`,
+  `scripts/checkDashboardUxRegressions.mjs`,
+  `scripts/checkP1EvidenceRegressions.mjs`
+- Root cause: the Retirement sheet removed the former in-sheet household-age
+  block for newly provisioned workbooks, but scenario reads and writes still
+  used fixed row numbers from the older layout. A correctly seeded compact
+  workbook was therefore classified as missing assumptions even though the Base
+  scenario values were present.
+- Expected result: every scenario input row is resolved by its exact label.
+  Compact new sheets and legacy sheets use the same read/write path. Missing DOB
+  or assumptions show guidance with both result walls hidden; a valid DOB and
+  computable Base scenario reveal meaningful scenario cards and analysis.
+- Runtime evidence: isolated `@211` First-Run V6 run
+  `FR-a3b654b7-8343-4776-9991-2e7118f6e6fb` passed 12/12, including
+  `retirement_guidance_not_ready`. Populated V7 run
+  `FR-0c1c2b85-0851-414d-b8ab-c4c91636b9d6` passed 18/18, including
+  `retirement_ready_results`. Both recorded zero browser errors, Restricted
+  single-owner sharing, and verified exact-fixture Trash cleanup.
+- Permanent coverage: Dashboard UX rejects a hard-coded Retirement row map and
+  requires label lookup; P1 evidence requires the V6/V7 evidence keys, explicit
+  production Retirement loading, hidden guidance panels, and meaningful ready
+  outputs. Older saved browser evidence cannot satisfy the new contract.
+
 ---
 
 ## RECOVERY scenarios (design — not historical bugs)
@@ -560,4 +589,5 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-022 | Browser evidence required continuous watching and manual account switching | REGRESSION / TEST EVIDENCE / OPERATIONS | fixed; isolated First-Run 11/11 and Populated 14/14 PASS with verified cleanup |
 | REG-023 | Bank/Debt detail failures or stale responses could expose unsafe editor state | REGRESSION / UI RELIABILITY / WRITE SAFETY | fixed; isolated `@203` Populated V5 16/16 PASS with verified cleanup |
 | REG-024 | Bill Skip could fail or reappear, and Stop tracking lacked one durable safety journey | REGRESSION / UI RELIABILITY / WRITE SAFETY | fixed; isolated `@206` Populated V6 17/17 PASS with verified cleanup |
+| REG-025 | Compact Retirement sheets were read using stale legacy row numbers | REGRESSION / UI TRUST / FINANCIAL TRUTH / COMPATIBILITY | fixed; isolated `@211` First-Run V6 12/12 + Populated V7 18/18 PASS |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

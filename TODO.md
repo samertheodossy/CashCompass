@@ -542,7 +542,11 @@ The initial screenshot review and the completed interactive populated-workbook r
   **Action** heading, show **Remove donation** only on eligible Donation rows,
   and show no action control for unsupported events. Focused isolated runtime
   evidence remains before closure.
-- **Local implementation and permanent coverage complete; focused interactive replay pending:** Retirement hides the dash-only result wall during guidance states and reveals results only when the minimum-input state is ready.
+- ✅ **Retirement guidance/runtime truth (`1e` / `REG-025`) complete on isolated
+  `@211`:** First-Run V6 passed 12/12 with missing-DOB guidance and hidden result
+  walls; Populated V7 passed 18/18 with meaningful Base results. The runtime
+  replay exposed and closed stale fixed-row access after the compact Retirement
+  layout; reads/writes now resolve exact labels for compact and legacy sheets.
 - Replace ambiguous Upcoming **Dismiss** language with an outcome and history-preservation explanation.
 - **Runtime-verified on isolated `@177`:** preserve the proven narrow navigation behavior with a two-column primary-nav and compact two-column header action grid; keep the long **Assets & Liabilities** label and Assets subtabs free of horizontal overflow.
 - **390px runtime-verified; medium-width follow-up open:** tighten narrow header spacing and modestly improve secondary-text contrast and minimum helper size without changing the visual system. The scored replay found the medium-width header still leaves excessive unused space.

@@ -56,9 +56,19 @@ populated Overview routing; deterministic cash, investment, real-estate, debt, a
 worth KPIs; Bank/Debt selection and Save-only Update gating; Bank/Investment/House
 tracked-editor modes plus populated Manage inventories with Stop tracking; property equity; representative
 Investments/Upcoming/Bills/Income rendering; subtab retention; populated Setup and Help;
-customer-language leakage; real planner Refresh state; and clean console/navigation.
-Evidence is saved under `POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V6`; PASS requires
+customer-language leakage; Retirement ready-state results; real planner Refresh
+state; and clean console/navigation. Evidence is saved under
+`POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V7`; PASS requires
 Restricted sharing and exact Drive-verified Trash cleanup.
+
+**`@211` Retirement evidence:** First-Run V6 run
+`FR-a3b654b7-8343-4776-9991-2e7118f6e6fb` passed 12/12 and Populated V7 run
+`FR-0c1c2b85-0851-414d-b8ab-c4c91636b9d6` passed 18/18. The fresh fixture
+proved missing-DOB guidance hides both Retirement result walls. The populated
+fixture proved the seeded Base scenario reveals derived age, scenario cards,
+goal, funded result, and analysis after server inputs are resolved by label for
+both compact and legacy layouts. Both runs recorded zero browser errors,
+Restricted single-owner sharing, and verified Trash cleanup.
 
 **`@203` controlled-loading evidence:** Populated V5 run
 `FR-33e93e20-8a46-41e6-8709-696782922076` passed 16/16 in 171.670 s. Its two
