@@ -23,7 +23,7 @@
 
 **Now / next:**
 
-- **Current active milestone:** **`3l` commit checkpoint; `1f` queued next.** Isolated `@197` closed Overview health trust (`3l` / `REG-021`) with fresh First-Run V5 **11/11 PASS** and Populated V4 **14/14 PASS** evidence. Per the milestone checkpoint rule, no `1f` implementation begins until `3l` is explicitly approved, committed, and pushed. `1f` will then remove continuous operator watching and routine account switching after an authenticated disposable-test session exists.
+- **Current active milestone:** **`1c` controlled Bank/Debt stale and failure journeys.** `3l` is committed and pushed as `2030abb`. `1f` / `REG-022` writer evidence passed on isolated `@201`, and the final source is deployed/read-only route-smoked on `@202`: the agent keeps one dedicated browser session authenticated as the fixed non-admin disposable identity and opens guarded self-starting routes directly, avoiding fragile cross-account redirects. First-Run passed 11/11 and Populated passed 14/14 with Restricted single-owner fixtures and verified Trash cleanup.
 - **Independent advocate gate added 2026-07-23:** the approved isolated interactive writer journey confirmed P1 trust defects in formatted bank-amount replacement, Income/Setup classification consistency, Bills Pay handoff/occurrence feedback, and normal-path implementation terminology. The bank replacement defect is runtime-closed on isolated `@175`, the Income/Setup fix on `@176`/`@178`, the contained language/responsive wave on `@177`, `REG-017` on `@179`, exact-owner `REG-015` on `@181`, readiness-refresh `REG-019` on `@182`, and Bills completion semantics on `@193`. The last formal advocate score is **8.3/10** pending a fresh full-score run. Retirement/failure-path evidence, medium/narrow replay, and accessibility remain open. No Beta, bounded, mapped-user, Golden, or configured-default workbook was used. These findings are sequenced in `TODO.md → UX Backlog (Version 1) → Independent advocate priorities`.
 - **Tracked-editor consistency polish completed 2026-07-24:** Bills use **Due · Add · Manage**. Houses, Bank Accounts, Investments, and Debts use **Update · Add · Manage**, with explicit Setup Add/Manage handoffs, responsive active-item inventories, and a shared UI layer for mode selection, list rendering, focus, and empty states. Update is Save-only; Manage is the single lifecycle-maintenance surface for guarded Stop tracking. Bank Import / Review imports remain secondary tools under Manage accounts. First-Run V4 run `FR-a1df6d9b-c123-4759-b08e-438d4047bf4c` passed 10/10 and Populated V3 run `FR-158bd6a2-bcb9-41b3-addc-180369266010` passed 13/13 on isolated Central `@195`, each with Restricted single-owner sharing, zero browser errors, and verified Trash cleanup.
 - **Activity correction elevated to the broad-Beta gate 2026-07-26:** Activity must distinguish audit evidence from correctable financial operations. The first slice (`5g`) replaces the misleading Remove-for-every-row presentation with an **Action** column, shows **Remove donation** only for eligible Donation rows, exposes no action control for Planner/email/import or other unsupported rows, and preserves the server-side donation-only rejection. Later slices add immutable, precondition-gated correction for Quick Add, linked Bill occurrences, Upcoming payments/lifecycle, and compound House Expenses; entity lifecycle events route to their owning Manage workflow and system/import rows remain audit-only. Full scope and estimates: `FULL_BETA_REMAINING_PLAN.md → 5g–5m`; safety contract: `TODO.md → Activity — Correction / reverse transaction`.
@@ -74,16 +74,9 @@ coverage and isolated evidence before its item closes.
 
 ### Wave 1 — Trust foundation
 
-**Current checkpoint:** `3l` is runtime-complete on isolated Central `@197` and
-awaiting explicit commit/push approval. **Next queued item:** `1f` unattended
-browser-suite orchestration; implementation has not started.
+**Only active item now:** `1c` controlled Bank/Debt stale and failure journeys.
 
-1. `1f` — launch selected guarded browser suites from one operator action,
-   monitor them to completion, return exact-run evidence, verify exact-fixture
-   cleanup, and restore the runner flag to OFF in a `finally` path. Preserve the
-   non-admin disposable identity and accept no workbook ID. A genuinely expired
-   Google session may pause for sign-in; password and 2FA automation are out.
-2. `1c` — prove Bank/Debt stale, failure, retry, disabled-action, and recovery
+1. `1c` — prove Bank/Debt stale, failure, retry, disabled-action, and recovery
    behavior.
 3. `1d` — prove Skip and Stop tracking consequences, confirmations, preserved
    history, stale protection, and cleanup.
@@ -207,10 +200,7 @@ seven-day cohort and any repair cycle. Dates never override a failed gate.
 5. **Release Readiness gate — ✅ orchestration/runtime controls complete; final verdict parked.** The single Validation console now starts, resumes, pauses, and finalizes bounded runs; each writer check creates and safely trashes its own disposable workbook; browser evidence is accepted only for the exact source/deployment candidate; compact evidence is archived; and a console-owned Harness flag returns OFF at finalization. Source commit `a4f6ddf` is on `origin/main`; isolated Central `@141` proved the runner. The current run remains `IN_PROGRESS`, not READY, because Performance p50/p95 budgets are unratified.
 6. **Validation & Testing admin console — ✅ Release Readiness controls complete.** Workbook Health, the suite inventory, guarded browser adapters, resumable bounded checks, saved status, privacy-safe evidence export, and final READY/NOT READY controls now start and end from the single console.
 
-**Next queued item after the `3l` commit checkpoint:** close `1f`, the guarded unattended browser-suite
-orchestration path, with identity, target-refusal, cleanup, evidence-ownership,
-stale-evidence, and runner-flag restoration regressions. Then close `1c`–`1e`:
-controlled Bank/Debt failure and
+**Next active item:** close `1c`–`1e`: controlled Bank/Debt failure and
 stale-response recovery, Skip/Stop-tracking consequence and preserved-history
 evidence, and Retirement ready/not-ready runtime proof. Keep Performance Planner
 parked until the exact candidate, never treat a diagnostic browser run as release

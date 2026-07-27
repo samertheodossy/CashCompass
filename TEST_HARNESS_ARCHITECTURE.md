@@ -92,6 +92,19 @@ Named Ranges, aggregate Health, and verified Trash. The first `@121` run exposed
 ordering defect; the corrected confirmation had zero warnings. Harness and timing
 flags were restored OFF, and no bounded workbook was touched.
 
+**Unattended browser operation (`1f` / `REG-022`, runtime-proven):** the agent
+keeps a dedicated in-app Browser session authenticated only as the fixed
+non-admin disposable identity and opens guarded internal runner routes directly.
+The client never supplies an email or workbook ID. First-Run, Populated,
+Recovery, and Performance control pages self-start only when `doGet` renders
+the unattended flag after their existing exact non-admin route gate passes.
+This deliberately avoids Google AccountChooser redirects, which proved
+unreliable in a multi-account Apps Script session. Each runner remains
+responsible for PASS evidence and exact-fixture cleanup. Isolated `@201`
+First-Run passed 11/11 and Populated passed 14/14 with Restricted single-owner
+fixtures and verified Trash cleanup. An expired dedicated session remains a
+human sign-in pause; passwords and 2FA are never automated.
+
 **`@120` deeper-suite evidence:** `SUITE-BILLS-PAY-E2E` completed in 96.1 seconds
 with 1/1 scenario PASS, 3/3 functional assertions, Provisioning/Drift PASS, and
 verified Trash. `SUITE-PERFORMANCE-PLANNER` completed in 144.4 seconds with 1/1

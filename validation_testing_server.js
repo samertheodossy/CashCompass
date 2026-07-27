@@ -310,9 +310,12 @@ function vtListHarnessSuites() {
           var parsedEvidence = rawEvidence ? JSON.parse(rawEvidence) : null;
           if (parsedEvidence && parsedEvidence.suiteId === s.id) {
             latestEvidence = {
+              runId: parsedEvidence.runId || null,
               overall: parsedEvidence.overall,
               finishedAt: parsedEvidence.finishedAt,
-              cleanupVerified: !!(parsedEvidence.cleanup && parsedEvidence.cleanup.verified)
+              cleanupVerified: !!(parsedEvidence.cleanup && parsedEvidence.cleanup.verified),
+              releaseEligible: parsedEvidence.releaseEligible === true,
+              releaseRunId: parsedEvidence.releaseRunId || null
             };
           }
         } catch (_e) {}

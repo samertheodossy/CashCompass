@@ -56,6 +56,8 @@
 </div>
 <script>
   var requestedReleaseRunId = <?!= releaseRunIdJson ?>;
+  var unattendedRun = <?!= unattendedJson ?>;
+  var unattendedStarted = false;
   document.getElementById('evidence_mode').textContent = requestedReleaseRunId
     ? 'Exact-candidate evidence requested for Release Readiness run ' + requestedReleaseRunId + '.'
     : 'Standalone diagnostic run — this evidence cannot qualify a release candidate.';
@@ -83,6 +85,18 @@
       resume.style.display = 'none';
     }
     showStatus('State loaded.', false);
+    if (unattendedRun && !unattendedStarted) {
+      unattendedStarted = true;
+      document.getElementById('confirm').checked = true;
+      syncButtons();
+      if (state.active && state.active.mode === 'FIRST_RUN' && state.active.runUrl &&
+          !state.active.invalid && !state.active.trashed) {
+        showStatus('Unattended run resumed on its verified active fixture.', false);
+        window.location.assign(state.active.runUrl);
+      } else {
+        window.setTimeout(prepareAndRun, 100);
+      }
+    }
   }
   function fail(err) { showStatus((err && err.message) ? err.message : String(err), true); }
   function refreshState() {

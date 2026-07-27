@@ -25,19 +25,31 @@ The V1 trust baseline is shipped and locked, and V1.1 closed out with the retire
   configured-default workbook, Golden workbook, or administrator workbook was
   a writer target.
 
-- **Unattended browser evidence accelerator — `1f` planned (2026-07-27).**
+- **Unattended browser evidence accelerator — `1f` / `REG-022` runtime complete
+  on isolated `@201` (2026-07-27).**
   Continuous operator watching and routine Google-account switching are now an
-  explicit Beta-cycle cost. The approved direction keeps
-  `cashcompass2026@gmail.com` as the fixed non-admin disposable writer and adds
-  one-action orchestration from the administrator Validation console: launch
-  selected suites into an already authenticated dedicated test session, monitor
-  completion, return exact-run evidence, verify exact-fixture Trash cleanup, and
-  restore the runner flag to OFF in a `finally` path. The adapter accepts no
-  email or workbook ID and must refuse administrator, bounded, mapped-user,
-  Golden, configured-default, and stale-candidate targets. Google password/2FA
-  is not automated; an expired session pauses with one clear sign-in action.
-  Permanent coverage must prove identity, ownership, stale-evidence refusal,
-  cleanup on success/failure, and flag restoration before this item closes.
+  explicit Beta-cycle cost. The durable operating model keeps
+  `cashcompass2026@gmail.com` as the fixed non-admin disposable writer in one
+  dedicated in-app Browser session. The agent opens each guarded internal route
+  directly with server-rendered unattended mode, monitors completion, and
+  requires exact-fixture Trash verification. No email or workbook ID is accepted.
+  The attempted Google AccountChooser approach was removed after runtime proved
+  multi-account Apps Script redirects unreliable; no API-executable deployment
+  is required. All four control pages self-start only after their existing exact
+  non-admin route gate passes. First-Run run
+  `FR-844dbba4-d4d1-4a40-b760-96aab3275c8e` passed 11/11 and Populated run
+  `FR-b09df630-db92-4dc5-a65d-ad043a65fbed` passed 14/14; both fixtures were
+  Restricted, single-owner, and verified in Trash. Google password/2FA is not
+  automated; only an expired dedicated test session requires user involvement.
+  The final source was deployed only to isolated `@202`; a read-only control-route
+  smoke confirmed unattended mode stays off without the parameter and no active
+  fixture remained. Deployment inventory confirmed Beta stayed `@106`.
+  **Tooling correction:** a plain `clasp version` command was mistakenly run
+  against the repository default project and created unused version `543`.
+  No source push or deployment change occurred there. All Central version,
+  deployment, and inventory commands must explicitly include
+  `--project .clasp-central.json`; the unused version is left untouched pending
+  explicit user approval for exact-version deletion.
 
 - **Isolated `@196` advocate/Beta-plan reconciliation — documentation only
   (2026-07-26).** Recorded the read-only advocate run without treating its

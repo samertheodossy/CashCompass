@@ -54,6 +54,8 @@
 </div>
 <script>
   var requestedReleaseRunId = <?!= releaseRunIdJson ?>;
+  var unattendedRun = <?!= unattendedJson ?>;
+  var unattendedStarted = false;
   document.getElementById('evidence_mode').textContent = requestedReleaseRunId
     ? 'Exact-candidate evidence requested for Release Readiness run ' + requestedReleaseRunId + '.'
     : 'Standalone diagnostic run — this evidence cannot qualify a release candidate.';
@@ -73,6 +75,12 @@
     }
     if (res.state) document.getElementById('state').textContent = JSON.stringify(res.state, null, 2);
     showStatus('State loaded.', false);
+    if (unattendedRun && !unattendedStarted) {
+      unattendedStarted = true;
+      document.getElementById('confirm').checked = true;
+      syncButtons();
+      window.setTimeout(startRun, 100);
+    }
   }
   function fail(err) { showStatus((err && err.message) ? err.message : String(err), true); }
   function refreshState() {

@@ -4,10 +4,11 @@
 
 **Reconciled:** 2026-07-27
 
-**Current evidence:** isolated Central `@197`; First-Run V5 **11/11 PASS** and
+**Current evidence:** isolated Central `@201`; First-Run V5 **11/11 PASS** and
 Populated Dashboard V4 **14/14 PASS** are the latest writer-inclusive browser
-evidence, with zero errors, Restricted single-owner disposable fixtures, and
-verified exact-fixture Trash cleanup.
+evidence from the dedicated unattended test session, with zero errors,
+Restricted single-owner disposable fixtures, and verified exact-fixture Trash
+cleanup.
 
 **Last formal independent advocate score:** **8.3/10** on isolated Central
 `@180`. This remains the official score until the next full scored advocate run;
@@ -93,9 +94,9 @@ Broad invited Beta requires all of the following:
 | 1c | Controlled Bank/Debt stale and failure journeys | Loading failure, stale response, server error, retry, disabled actions, and recovery pass on a marked disposable fixture | 1–2 d |
 | 1d | Skip and Stop-tracking safety evidence | Consequence, preserved history, confirmation, stale protection, recovery, and cleanup are explicit and regression-protected | 1–2 d |
 | 1e | Retirement guidance runtime proof | Missing-minimum-input guidance hides result walls; ready state reveals correct results; focused journey passes | 0.5–1 d |
-| 1f | Guarded unattended browser-suite orchestration | One operator action launches selected browser suites under an already authenticated `cashcompass2026@gmail.com` session, monitors completion, returns exact-run evidence, verifies exact-fixture Trash cleanup, and restores the runner flag to OFF even on failure. The adapter accepts no email or workbook ID and refuses administrator, bounded, mapped-user, Golden, configured-default, and stale-candidate targets. Expired Google authentication pauses with one clear sign-in action; passwords and 2FA are never automated. | 1–3 d |
+| 1f | Guarded unattended browser-suite orchestration (`REG-022`) | **Complete 2026-07-27 on isolated `@201`.** The agent keeps a dedicated authenticated `cashcompass2026@gmail.com` session and opens guarded self-starting routes directly; no account chooser, email parameter, or workbook ID is used. First-Run passed 11/11 and Populated passed 14/14 with Restricted single-owner fixtures and verified Trash cleanup. Expired Google authentication remains the only human pause. | Complete |
 
-**Group 1 open estimate: 3.5–8 focused days.**
+**Group 1 open estimate: 2.5–5 focused days.**
 
 ## 2. Bills and daily-task completion
 
@@ -262,7 +263,7 @@ strictest failed gate controls the actual date.
 
 The remaining work that directly controls the finish date is:
 
-`1f → 1c–1e → 5h–5m → 2d–2e → 3a–3k/3m → 4a–4f → 8a–8f → 9a–9e`
+`1c–1e → 5h–5m → 2d–2e → 3a–3k/3m → 4a–4f → 8a–8f → 9a–9e`
 
 Financial/workbook proof in Group 5 must finish before `8b`. Operations and
 monetization foundations in Groups 6–7 must finish before `8d`, but they should
@@ -303,7 +304,7 @@ not block early engineering.
 | Window | Lane A — critical | Lane B — UX/evidence | Lane C — parallel foundation | Exit |
 |---|---|---|---|---|
 | Completed through Jul 26 | `1a`, `1b`, `2a`–`2c`, `2f`, `5g` | `3d`; shared tracked-editor convergence | — | Isolated `@196` Activity truth passes; Beta stays `@106`; bounded untouched |
-| Aug 21–27 | `1f`; `1c`–`1e`; begin `5h`–`5i` | Audit `3a`, `3b`; begin `3m` and diagnostic performance | Start `6a`–`6f`, `7a`–`7b`, cohort design | Unattended evidence and reliability proof close; Activity correction foundation and direct Cash Flow path advance |
+| Aug 21–27 | `1c`–`1e`; begin `5h`–`5i` | Audit `3a`, `3b`; begin `3m` and diagnostic performance | Start `6a`–`6f`, `7a`–`7b`, cohort design | Reliability proof closes; Activity correction foundation and direct Cash Flow path advance |
 | Aug 28–Sep 3 | `5j`–`5m` | Close `2d`–`2e`; advance Group 5 matrix/recovery proof | `7c`–`7f`, known limitations, support posture | Supported Activity correction families and audit-only dispositions pass |
 | Sep 4–10 | Begin/finish performance fixes `4a`–`4d` | Close `3c`, `3e`–`3m`; finish Group 5 | Finish Groups 6–7 | UX/accessibility path ≥9 and candidate prerequisites complete |
 | Sep 11–17 | Freeze `8a`; run `4e`–`4f`, `8b`–`8f` | Exact-candidate advocate `3k` | Final release/rollback/support review | Exact candidate reaches automated READY prerequisites |

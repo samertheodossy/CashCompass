@@ -411,6 +411,27 @@ assert.match(release, /releaseRestoreHarnessFlagIfOwned_\(\)[\s\S]*?deleteProper
   'A console-owned Release Readiness run must restore the Harness flag to OFF when finalized');
 assert.match(validationUi, /Enable disposable runner[\s\S]*?function vtRRSetHarness_\(enabled\)/,
   'Release Readiness must expose the guarded runner enable control on the single console');
+assert.doesNotMatch(validationServer,
+  /function vtOpenHarnessBrowserRunner\([^)]*(?:email|spreadsheet|workbook|file)Id/i,
+  'The browser launcher must never accept a caller-selected identity or workbook target');
+assert.match(webapp,
+  /unattendedBrowserRun[\s\S]*?firstRunControlTemplate\.unattendedJson[\s\S]*?populatedControlTemplate\.unattendedJson/,
+  'First-Run and Populated control routes must receive only the server-rendered unattended flag');
+assert.match(webapp,
+  /recoveryTemplate\.unattendedJson[\s\S]*?performanceTemplate\.unattendedJson/,
+  'Recovery and Performance control routes must receive only the server-rendered unattended flag');
+for (const [name, ui, startPattern] of [
+  ['First-Run', firstRunUi, /unattendedRun[\s\S]*?confirm['"]\)\.checked = true[\s\S]*?prepareAndRun/],
+  ['Populated', populatedUi, /unattendedRun[\s\S]*?confirm['"]\)\.checked = true[\s\S]*?prepareAndRun/],
+  ['Recovery', recoveryUi, /unattendedRun[\s\S]*?confirm['"]\)\.checked = true[\s\S]*?startRun/],
+  ['Performance', performanceSamplingUi, /unattendedRun[\s\S]*?confirm['"]\)\.checked = true[\s\S]*?startAndRun/]
+]) {
+  assert.match(ui, startPattern,
+    `${name} browser control must self-start only from its server-rendered unattended mode`);
+}
+assert.doesNotMatch(validationUi + validationServer,
+  /accounts\.google\.com\/AccountChooser|cashcompass_unattended_browser_runner/,
+  'Browser orchestration must not depend on fragile cross-account chooser redirects');
 assert.match(planner, /options\.spreadsheet \|\| getUserSpreadsheet_\(\)/, 'Planner must preserve normal resolution and allow an internal explicit target');
 assert.match(planner, /buildInputBillPlannerPaymentWindows_\([\s\S]*?paySoonWindowDays,\s*ss\s*\)/,
   'Planner must propagate its explicit workbook into nested Bills payment-window reads');

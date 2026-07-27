@@ -25,6 +25,8 @@ function doGet(e) {
     ? String(e.parameter.view) : '';
   var requestedReleaseRunId = (e && e.parameter && e.parameter.releaseRunId)
     ? String(e.parameter.releaseRunId) : '';
+  var unattendedBrowserRun = !!(e && e.parameter &&
+    String(e.parameter.unattended || '') === '1');
   if (view === 'admin' && isAdminUser_()) {
     return HtmlService.createTemplateFromFile('AdminDiagnostics')
       .evaluate()
@@ -53,6 +55,7 @@ function doGet(e) {
   if (view === 'recovery-test' && isRecoveryLiveUser_()) {
     var recoveryTemplate = HtmlService.createTemplateFromFile('RecoveryTestingUI');
     recoveryTemplate.releaseRunIdJson = JSON.stringify(requestedReleaseRunId);
+    recoveryTemplate.unattendedJson = JSON.stringify(unattendedBrowserRun);
     return recoveryTemplate
       .evaluate()
       .setTitle('CashCompass — Recovery Live')
@@ -65,6 +68,7 @@ function doGet(e) {
   if (view === 'performance-test' && isPerformanceSamplingUser_()) {
     var performanceTemplate = HtmlService.createTemplateFromFile('PerformanceSamplingUI');
     performanceTemplate.releaseRunIdJson = JSON.stringify(requestedReleaseRunId);
+    performanceTemplate.unattendedJson = JSON.stringify(unattendedBrowserRun);
     return performanceTemplate
       .evaluate()
       .setTitle('CashCompass — Performance Planner Sampling')
@@ -79,6 +83,7 @@ function doGet(e) {
   if (view === 'first-run-e2e' && isFirstRunE2EUser_()) {
     var firstRunControlTemplate = HtmlService.createTemplateFromFile('FirstRunE2ETestingUI');
     firstRunControlTemplate.releaseRunIdJson = JSON.stringify(requestedReleaseRunId);
+    firstRunControlTemplate.unattendedJson = JSON.stringify(unattendedBrowserRun);
     return firstRunControlTemplate
       .evaluate()
       .setTitle('CashCompass — First-Run UX E2E')
@@ -106,6 +111,7 @@ function doGet(e) {
   if (view === 'populated-dashboard-e2e' && isFirstRunE2EUser_()) {
     var populatedControlTemplate = HtmlService.createTemplateFromFile('PopulatedDashboardE2ETestingUI');
     populatedControlTemplate.releaseRunIdJson = JSON.stringify(requestedReleaseRunId);
+    populatedControlTemplate.unattendedJson = JSON.stringify(unattendedBrowserRun);
     return populatedControlTemplate
       .evaluate()
       .setTitle('CashCompass — Populated Dashboard E2E')

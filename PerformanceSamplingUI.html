@@ -55,6 +55,8 @@
 </div>
 <script>
   var requestedReleaseRunId = <?!= releaseRunIdJson ?>;
+  var unattendedRun = <?!= unattendedJson ?>;
+  var unattendedStarted = false;
   document.getElementById('evidence_mode').textContent = requestedReleaseRunId
     ? 'Exact-candidate evidence requested for Release Readiness run ' + requestedReleaseRunId + '.'
     : 'Standalone diagnostic run — this campaign cannot ratify a release budget.';
@@ -74,6 +76,12 @@
       (state.latestEvidence ? Number(state.latestEvidence.samplePairs || 0) : 0);
     document.getElementById('progress').value = done;
     showStatus('State loaded: ' + done + ' / 20 sample pairs.', false);
+    if (unattendedRun && !unattendedStarted) {
+      unattendedStarted = true;
+      document.getElementById('confirm').checked = true;
+      syncButtons();
+      window.setTimeout(startAndRun, 100);
+    }
   }
   function fail(err) {
     keepRunning = false;

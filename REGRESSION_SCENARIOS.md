@@ -409,7 +409,7 @@ Whenever a production bug is fixed:
 ### REG-021 — Overview displayed Strong health before prerequisites were trustworthy
 - Category: REGRESSION / UI TRUST / FINANCIAL TRUTH
 - Date discovered: 2026-07-26
-- Status: fixed locally; pure/UI regressions pass; isolated runtime replay pending
+- Status: fixed; isolated `@197` and `@201` runtime replays passed
 - Affected files: `dashboard_data.js`, `onboarding.js`,
   `Dashboard_Script_FirstRunE2E.html`,
   `Dashboard_Script_PopulatedDashboardE2E.html`,
@@ -428,6 +428,32 @@ Whenever a production bug is fixed:
 - Permanent coverage: `npm run test:dashboard-ux` executes all four states
   against the production score functions. First-Run V5 and Populated V4 require
   exact browser evidence that an incomplete fixture cannot expose a score.
+
+### REG-022 — Browser evidence required continuous watching and manual account switching
+- Category: REGRESSION / TEST EVIDENCE / OPERATIONS
+- Date discovered: 2026-07-27
+- Status: fixed and isolated runtime replay passed
+- Affected files: `webapp.js`, `FirstRunE2ETestingUI.html`,
+  `PopulatedDashboardE2ETestingUI.html`, `RecoveryTestingUI.html`,
+  `PerformanceSamplingUI.html`, `scripts/checkP1EvidenceRegressions.mjs`
+- Root cause: every authenticated browser suite opened a manual control page.
+  The operator had to switch to the disposable account, confirm, start or resume,
+  watch for completion, return to the console, refresh evidence, repeat for the
+  next suite, and manually restore the writer flag.
+- Repro: repeatedly switch an administrator browser between the Validation
+  console and the disposable Google account for First-Run and Populated runs.
+- Expected result: an agent-controlled browser session stays authenticated only
+  as the fixed non-admin disposable identity. Each guarded internal route
+  self-starts when `unattended=1`, still accepts no email or workbook ID, and
+  completes only after exact-fixture Trash verification. The administrator
+  console remains the evidence inventory, not a cross-account popup controller.
+- Runtime evidence: isolated `@201` direct unattended First-Run run
+  `FR-844dbba4-d4d1-4a40-b760-96aab3275c8e` passed 11/11; Populated run
+  `FR-b09df630-db92-4dc5-a65d-ad043a65fbed` passed 14/14. Both used new
+  Restricted single-owner fixtures and verified Trash cleanup.
+- Permanent coverage: `npm run test:p1-evidence` forbids caller-selected
+  email/workbook targets, verifies all four self-start seams, and rejects the
+  fragile Google AccountChooser popup pattern.
 
 ---
 
@@ -470,6 +496,7 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-017 | Overlapping Debt loads cleared the selected account | REGRESSION / UI RELIABILITY | fixed; dynamic reversed-completion regression + isolated `@179` replay PASS |
 | REG-018 | Apps Script HTTP 0 exposed a raw failure with no bounded recovery | REGRESSION / UI RELIABILITY | fixed; injected regression + isolated `@181` integration PASS |
 | REG-019 | Refresh status did not ingest completed browser evidence | REGRESSION / TEST EVIDENCE | fixed; dynamic regression + isolated `@182` runtime PASS |
-| REG-020 | Unsupported Activity rows displayed misleading Remove controls | REGRESSION / UI TRUST | fixed locally; dynamic UI/server regressions pass; runtime pending |
-| REG-021 | Overview displayed Strong health before prerequisites were trustworthy | REGRESSION / UI TRUST / FINANCIAL TRUTH | fixed locally; pure/UI regressions pass; runtime pending |
+| REG-020 | Unsupported Activity rows displayed misleading Remove controls | REGRESSION / UI TRUST | fixed; isolated `@196` runtime PASS |
+| REG-021 | Overview displayed Strong health before prerequisites were trustworthy | REGRESSION / UI TRUST / FINANCIAL TRUTH | fixed; isolated `@197` First-Run V5 11/11 + Populated V4 14/14 PASS |
+| REG-022 | Browser evidence required continuous watching and manual account switching | REGRESSION / TEST EVIDENCE / OPERATIONS | fixed; isolated First-Run 11/11 and Populated 14/14 PASS with verified cleanup |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |
