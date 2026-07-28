@@ -23,11 +23,11 @@
 
 **Now / next:**
 
-- **Current active milestone:** **close `2d` / `2e` with isolated Central presentation confirmation, then begin `5h` durable Activity correction identity.** The two daily-task language contracts are implemented locally as `REG-026` / `REG-027` with the full test suite green. Wave 1 completed ahead of the buffered August schedule on isolated `@211`; the user also spot-checked the reviewed source on the mature bounded workbook and confirmed the Overview and Retirement figures looked correct. Beta remains `@106`; bounded deployment and workbook control remain with the user.
+- **Current active milestone:** **begin `5h`, the end-to-end financial operation envelope.** One server-generated `operationId` will span the complete action, each Activity row will carry its own `eventId`, and versioned target descriptors will preserve verified before/after state. Daily-task language `2d` / `2e` is closed as `REG-026` / `REG-027` in commit `168a49b`; the user confirmed the bounded presentation and the full suite passes. `REG-028` also closes the discovered Upcoming appended-row formatting defect and matching Bills/Debts/Donations gaps without changing formulas or financial rules. Wave 1 completed ahead of the buffered August schedule on isolated `@211`. Beta remains `@106`; bounded deployment and workbook control remain with the user.
 - **Independent advocate gate added 2026-07-23:** the approved isolated interactive writer journey confirmed P1 trust defects in formatted bank-amount replacement, Income/Setup classification consistency, Bills Pay handoff/occurrence feedback, and normal-path implementation terminology. The bank replacement defect is runtime-closed on isolated `@175`, the Income/Setup fix on `@176`/`@178`, the contained language/responsive wave on `@177`, `REG-017` on `@179`, exact-owner `REG-015` on `@181`, readiness-refresh `REG-019` on `@182`, Bills completion semantics on `@193`, controlled failure evidence through `@203`, and Retirement runtime truth on `@211`. The last formal advocate score is **8.3/10** pending a fresh full-score run. Medium/narrow replay and accessibility remain open. No Beta, mapped-user, Golden, or configured-default workbook was used by the Harness; bounded inspection remained user-controlled. These findings are sequenced in `TODO.md → UX Backlog (Version 1) → Independent advocate priorities`.
 - **Tracked-editor consistency polish completed 2026-07-24:** Bills use **Due · Add · Manage**. Houses, Bank Accounts, Investments, and Debts use **Update · Add · Manage**, with explicit Setup Add/Manage handoffs, responsive active-item inventories, and a shared UI layer for mode selection, list rendering, focus, and empty states. Update is Save-only; Manage is the single lifecycle-maintenance surface for guarded Stop tracking. Bank Import / Review imports remain secondary tools under Manage accounts. First-Run V4 run `FR-a1df6d9b-c123-4759-b08e-438d4047bf4c` passed 10/10 and Populated V3 run `FR-158bd6a2-bcb9-41b3-addc-180369266010` passed 13/13 on isolated Central `@195`, each with Restricted single-owner sharing, zero browser errors, and verified Trash cleanup.
 - **Activity correction elevated to the broad-Beta gate 2026-07-26:** Activity must distinguish audit evidence from correctable financial operations. The first slice (`5g`) replaces the misleading Remove-for-every-row presentation with an **Action** column, shows **Remove donation** only for eligible Donation rows, exposes no action control for Planner/email/import or other unsupported rows, and preserves the server-side donation-only rejection. Later slices add immutable, precondition-gated correction for Quick Add, linked Bill occurrences, Upcoming payments/lifecycle, and compound House Expenses; entity lifecycle events route to their owning Manage workflow and system/import rows remain audit-only. Full scope and estimates: `FULL_BETA_REMAINING_PLAN.md → 5g–5m`; safety contract: `TODO.md → Activity — Correction / reverse transaction`.
-- **Isolated `@196` advocate reconciliation:** `5g` passed interactively. The read-only **7.2/10** run is evidence-limited and does not replace the formal writer-inclusive **8.3/10** score. New Beta work is explicitly mapped as `3l` Overview health prerequisite/freshness trust, expanded `3j` programmatic labels and target sizes, `3m` form readiness/customer language, plus existing `2d`, `3b`, `3c`, `3h`, and `3i`. Each fix must add or extend the exact permanent UI/server/browser regression described in `FULL_BETA_REMAINING_PLAN.md`; generic page-load coverage is not sufficient.
+- **Isolated `@196` advocate reconciliation:** `5g` passed interactively. The read-only **7.2/10** run is evidence-limited and does not replace the formal writer-inclusive **8.3/10** score. The resulting Beta work is mapped as `3l` Overview health prerequisite/freshness trust, expanded `3j` programmatic labels and target sizes, `3m` form readiness/customer language, plus `3b`, `3c`, `3h`, and `3i`; `2d` is now closed as `REG-026`. Each fix must add or extend the exact permanent UI/server/browser regression described in `FULL_BETA_REMAINING_PLAN.md`; generic page-load coverage is not sufficient.
 - **Isolated `@197` Overview trust closure:** First-Run V5 run `FR-23fd31cb-df7b-4f2e-8202-586e70254af0` passed 11/11 and Populated V4 run `FR-9a7b266a-681e-467d-8489-cf8218be666f` passed 14/14. Both used a new Restricted, single-owner disposable workbook, passed `health_prerequisite_truth`, recorded zero errors, and verified exact-fixture Trash cleanup. The console-owned disposable-runner flag returned to **OFF**. Beta remained `@106`; no bounded, mapped-user, configured-default, Golden, or administrator workbook was a writer target.
 - **Then:** execute the remaining score-by-score program in `TODO.md → Advocate 10/10 score-improvement program`: controlled error/safety journeys → transition/language cleanup → page-level ease/navigation/visual polish → responsive/accessibility → exact-candidate rescore. Each criterion requires isolated runtime evidence and an advocate rescore before closure. The core Bills decision and payment journey are no longer open.
 - **Explicitly parked pre-Beta gate:** the Performance Planner percentile campaign and final exact-candidate READY/NOT READY verdict. Seven historical sample pairs are diagnostic only because the campaign began before `@141`; performance must be rerun as an exact-candidate campaign and ratified before any broad Beta release. Deferral does not waive the gate.
@@ -51,7 +51,7 @@ correction foundation (`5h`) has measured implementation evidence.
 |---|---|
 | Completed through Jul 27 | Closed HTTP 0 recovery, exact-candidate ownership, core Bills Pay, tracked-editor convergence, Activity action truth, Overview prerequisite/freshness trust, unattended browser orchestration, controlled Bank/Debt loading, Bill Skip/Stop safety, and Retirement runtime through isolated `@211`. Wave 1 is complete. |
 | Aug 21–27 | Begin `5h` durable correction identity/preconditions and, if that contract closes cleanly, advance `5i` direct Cash Flow correction. Use runtime waits for audits of `3a`, `3b`, and `3m` plus operations/product documentation. |
-| Aug 28–Sep 3 | Complete Bills/Upcoming/House Activity correction, entity/audit dispositions, and permanent correction evidence; close Quick Add/Upcoming language. |
+| Aug 28–Sep 3 | Complete Bills/Upcoming/House Activity correction, entity/audit dispositions, and permanent correction evidence. |
 | Sep 4–10 | Close remaining UX including form readiness/customer language, accessibility, responsive/medium-width, keyboard/focus/semantics/contrast/reduced-motion evidence and finish candidate prerequisites. |
 | Sep 11–17 | Freeze the candidate; complete the 20-pair Performance campaign, ratify p50/p95 budgets, and run full Release Readiness. |
 | Sep 18–24 | Complete a five-to-seven-day supervised cohort, final scorecard, and broad-Beta go/no-go. |
@@ -94,25 +94,34 @@ validation. Do not begin Activity correction implementation before this exit.
 
 ### Wave 2 — Daily-task language
 
-**Implementation complete locally; isolated Central presentation confirmation
-remains before the wave is runtime-closed.**
+**Complete in commit `168a49b`; exact-candidate Central replay remains part of
+the final release evidence wave rather than an open implementation item.**
 
 1. ~~`2d` — state Quick Add add/update/replace behavior precisely.~~
-   **Implemented locally with `REG-026`: Quick Add explicitly says the entered
+   **Complete with `REG-026`: Quick Add explicitly says the entered
    amount is added to the selected-month total and does not replace an existing
    amount.**
 2. ~~`2e` — state Upcoming Dismiss consequences and preserved history
-   precisely.~~ **Implemented locally with `REG-027`: the action surface,
+   precisely.~~ **Complete with `REG-027`: the action surface,
    success message, and Help say Dismiss records no payment, changes no Cash
    Flow value, and preserves the Upcoming row plus Activity history.**
 
 **Exit:** copy contracts pass Dashboard UX assertions and the applicable
 interactive journey.
 
+Measured result: the original **1–2 day** combined placeholder closed in about
+**0.5 focused hour** after audit showed both production behaviors were already
+correct. Future language/cosmetic items with an existing regression home start
+at **1–3 focused hours**; runtime queues and external review are tracked
+separately from engineering effort.
+
 ### Wave 3 — Safe Activity correction
 
-1. `5h` — durable operation identity, preview, exact-state preconditions, and an
-   immutable correction event.
+1. `5h` — establish the production-wide end-to-end financial operation envelope:
+   one server-generated `operationId` for the complete action, one `eventId` per
+   Activity row, versioned target descriptors and before/after state, preview,
+   exact-state preconditions, and an immutable correction event. Reuse the
+   existing Quick Add UUID/workbook/CAS seams; do not migrate Activity columns.
 2. `5i` — direct Cash Flow correction.
 3. `5j` — Bill payment, Skip, and AutoPay occurrence correction.
 4. `5k` — Upcoming payment/lifecycle correction.
@@ -122,6 +131,14 @@ interactive journey.
 
 **Exit:** each supported family corrects atomically or fails closed on a
 harness-created disposable workbook; original Activity evidence remains intact.
+
+**Audit rebaseline (2026-07-27):** the pre-audit 12.5–25-day placeholder assumed
+a new accounting platform. Source inspection found Quick Add already has an
+operation UUID, workbook identity, before/after receipt, lock, and compare/set
+inspection; Upcoming and House also retain stable target evidence. The
+end-to-end program is now **7–12 focused days including integrated runtime
+validation**. Begin `5h` with a one-day cap, review the envelope, and re-estimate
+before `5i`. The forecast keeps the recovered margin as quality contingency.
 
 ### Wave 4 — Page-by-page UX closeout
 
@@ -186,7 +203,7 @@ repair and revalidate defects, make the broad-Beta go/no-go decision, and promot
 Central Beta only after separate explicit approval. The bounded deployment
 remains user-controlled.
 
-**Focused-effort forecast:** **35–52 working days best case** or **48–76
+**Focused-effort forecast:** **34–50 working days best case** or **47–74
 conservatively**, with operations/product work parallelized, plus the five-to-
 seven-day cohort and any repair cycle. Dates never override a failed gate.
 
@@ -216,7 +233,7 @@ seven-day cohort and any repair cycle. Dates never override a failed gate.
 5. **Release Readiness gate — ✅ orchestration/runtime controls complete; final verdict parked.** The single Validation console now starts, resumes, pauses, and finalizes bounded runs; each writer check creates and safely trashes its own disposable workbook; browser evidence is accepted only for the exact source/deployment candidate; compact evidence is archived; and a console-owned Harness flag returns OFF at finalization. Source commit `a4f6ddf` is on `origin/main`; isolated Central `@141` proved the runner. The current run remains `IN_PROGRESS`, not READY, because Performance p50/p95 budgets are unratified.
 6. **Validation & Testing admin console — ✅ Release Readiness controls complete.** Workbook Health, the suite inventory, guarded browser adapters, resumable bounded checks, saved status, privacy-safe evidence export, and final READY/NOT READY controls now start and end from the single console.
 
-**Next active item:** `5h`, the durable Activity correction identity,
+**Next active item:** `5h`, the end-to-end financial operation envelope,
 exact-state precondition, preview, and immutable correction-event foundation.
 Retirement runtime proof (`1e` / `REG-025`) is complete on isolated `@211`;
 Bill Skip/Stop-tracking safety (`1d` / `REG-024`) remains complete on `@206`.

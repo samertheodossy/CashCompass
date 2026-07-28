@@ -15,8 +15,8 @@ The V1 trust baseline is shipped and locked, and V1.1 closed out with the retire
   `@106`; bounded was untouched. Full `npm test` passed. Commit `a69184e` was
   pushed to `origin/main`.
 
-- **Daily-task language — `2d` / `2e` implemented locally as `REG-026` /
-  `REG-027` (2026-07-27).** Production-path inspection confirmed Quick Add is
+- **Daily-task language — `2d` / `2e` completed as `REG-026` / `REG-027`
+  in `168a49b` (2026-07-27).** Production-path inspection confirmed Quick Add is
   cumulative (`currentValue + signedAmount`), while Upcoming Dismiss changes
   only the row status, appends a lifecycle event, records no payment, and does
   not call a Cash Flow writer. The Quick Add action surface and Help now state
@@ -24,11 +24,12 @@ The V1 trust baseline is shipped and locked, and V1.1 closed out with the retire
   after the action that Dismiss removes the item from active planning without a
   payment or Cash Flow change and preserves the Upcoming row plus Activity
   history. `npm run test:dashboard-ux` cross-checks both language contracts
-  against their production paths, and full `npm test` passes. Isolated Central
-  presentation confirmation, commit, push, and deployment remain pending; no
-  workbook, schema, formula, or financial rule changed.
+  against their production paths, full `npm test` passed, and the bounded
+  presentation was user-confirmed without a writer action. The implementation
+  was committed and pushed in `168a49b`; no workbook, schema, formula, or
+  financial rule changed.
 
-- **User-facing appended-row presentation — `REG-028` fixed locally
+- **User-facing appended-row presentation — `REG-028` completed in `168a49b`
   (2026-07-27).** A bounded Upcoming row exposed that `addUpcomingExpense`
   appended values and reasserted only date/currency formats, while canonical
   body styling remained first-create only. New Upcoming rows now copy
@@ -37,9 +38,36 @@ The V1 trust baseline is shipped and locked, and V1.1 closed out with the retire
   row-height/first-row gaps in Bills, Debts, and Donations; Bank Accounts,
   Investments, and Houses already used the safe inheritance pattern. Upcoming
   Dismiss consequences now use a compact amber information strip rather than
-  destructive red. `npm test` and `git diff --check` pass. No formula, schema,
-  business rule, existing workbook row, Central deployment, or bounded workbook
-  changed.
+  destructive red. `npm test` and `git diff --check` passed, and the change was
+  committed and pushed in `168a49b`. No formula, schema, business rule, existing
+  workbook row, Central deployment, or bounded workbook changed.
+
+- **Finish-line estimate calibration and open-item cleanup (2026-07-27).**
+  `2d` / `2e` moved from the open inventory into the reconciled completion
+  checkpoint after commit `168a49b`. Their original combined **1–2 day**
+  placeholder was made before source inspection; measured implementation and
+  local verification were about **0.5 focused hour** because the underlying
+  writers were already correct. Similar audit-first language/cosmetic work now
+  starts at **1–3 focused hours**, with deployment queues and external review
+  tracked separately. The remaining capacity range is rebaselined from 35–52 /
+  48–76 to **34–50 / 47–74 focused working days**, and `5h` is now the active
+  milestone.
+
+- **End-to-end financial operation identity ratified for `5h` (documentation
+  architecture, 2026-07-27).** The correction foundation now uses one
+  server-generated `operationId` for the complete financial action and one
+  `eventId` for each Activity row. The versioned Details envelope records
+  operation type, authorized workbook/actor identity, logical target
+  descriptors, and normalized before/after state; IDs provide correlation, not
+  write authority. Locked compare-and-swap preflight, one immutable correction
+  event, one active reversal, legacy fail-closed behavior, and compound
+  all-or-nothing evidence are mandatory. The source audit confirmed Quick Add
+  already supplies the UUID, workbook identity, before/after receipt, lock, and
+  compare/set seams; Upcoming and House retain stable target evidence. The
+  pre-audit 12.5–25-day placeholder is therefore rebaselined to **7–12 focused
+  days including integrated disposable-workbook validation**. `5h` starts with
+  a one-day cap and review checkpoint. No runtime source, workbook, deployment,
+  formula, or financial rule changed in this documentation package.
 
 - **Bill Skip/Stop-tracking safety — `1d` / `REG-024` runtime complete on
   isolated `@206` (2026-07-27).** Skip now requires explicit consequence

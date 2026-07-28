@@ -177,6 +177,38 @@ Canonical contract and operating procedure: `PERFORMANCE_OBSERVABILITY.md`.
 
 ---
 
+### 15. End-to-end financial operation identity
+
+New correctable financial writers must create one server-generated
+`operationId` at the start of the complete user action and propagate it through
+every linked effect. Each Activity row receives a separate `eventId`. Do not use
+an Activity sheet row number, payee/amount/date tuple, browser-generated ID, or
+dedupe key as the authoritative operation identity.
+
+The versioned Activity `Details` envelope must include server-derived target
+descriptors plus normalized `before` and `after` state. IDs provide correlation,
+not write authority. Any correction must:
+
+1. resolve the operation in the currently authorized workbook;
+2. acquire the appropriate `LockService` lock;
+3. preflight every linked target against its recorded `after` state;
+4. restore only its recorded `before` state, all-or-nothing;
+5. preserve the original Activity rows and append an immutable correction row;
+6. refuse legacy, ambiguous, changed, already-reversed, or cross-workbook state.
+
+When a compound action still spans multiple browser RPCs, the later call may
+carry only the opaque operation ID and workflow inputs. The server must resolve
+and validate the original operation; it must never trust client-supplied target
+coordinates or snapshots. Prefer a single spreadsheet-scoped server coordinator
+when the affected workflow is next changed.
+
+Adding IDs does not make an audit-only event reversible. Entity maintenance must
+route to its owning editor, and Planner/email/import/diagnostic events remain
+audit evidence unless a separate correction contract is approved. Historical
+events without the complete envelope remain view-only.
+
+---
+
 ## Cash Flow Data Semantics — Actuals vs Projection
 
 `INPUT - Cash Flow <year>` is an **actuals ledger**, not a forecast. Two concepts must be kept strictly separate; conflating them corrupts trust in the numbers.

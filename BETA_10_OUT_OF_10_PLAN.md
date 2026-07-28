@@ -49,10 +49,11 @@ Trusted users may participate in a **supervised validation cohort** before the r
 The execution waves are: completed through Jul 27 — HTTP 0, exact-owner
 evidence, core Bills Pay, tracked-editor convergence, Activity action truth,
 Overview trust, unattended browser orchestration, controlled loading,
-Skip/Stop safety, and Retirement runtime; Aug 21–27 — begin the durable Activity
-correction foundation and direct Cash Flow correction while auditing remaining
-UX and operations work; Aug 28–Sep 3 — complete supported Activity correction
-families, Quick Add/Upcoming language, and fixture/recovery proof; Sep 4–10 —
+Skip/Stop safety, Retirement runtime, and Quick Add/Upcoming language;
+Aug 21–27 — begin the end-to-end financial operation envelope and direct Cash
+Flow correction while auditing remaining UX and operations work; Aug 28–Sep 3 —
+complete supported Activity correction families and fixture/recovery proof;
+Sep 4–10 —
 remaining page UX, accessibility, performance diagnosis, and candidate
 prerequisites; Sep 11–17 — candidate freeze, Performance, and complete Release
 Readiness; Sep 18–24 — supervised cohort, final scorecard, and go/no-go.
@@ -117,8 +118,12 @@ The 7.5/10 baseline above is an honest product-review judgment, not a backfilled
 - Blank, sparse, representative populated, mature/multi-year, and legacy-compatible fixtures pass.
 - No fake confident state: unavailable, incomplete, and not-initialized conditions remain explicit.
 - Correctable financial actions preserve the original Activity evidence, verify
-  exact current post-state before reversal, and append an immutable correction;
-  unsupported or ambiguous legacy events fail closed.
+  exact current post-state before reversal, and append an immutable correction.
+  One server-generated `operationId` must link every effect of the complete
+  action, each Activity row must have its own `eventId`, and the versioned
+  envelope must record every target's normalized before/after state.
+  Unsupported or ambiguous legacy events fail closed; an ID alone never grants
+  write authority.
 
 ### Gate B — Workbook safety and privacy
 
@@ -275,7 +280,7 @@ The ordered implementation inventory for this experience work is `TODO.md → UX
 
 With the P1 evidence foundation, House Financial Accuracy V1, and Financial
 Integrity Phase 3 complete, the reconciled remaining plan is approximately
-**35–52 focused working days in the optimized best case** or **48–76 focused
+**34–50 focused working days in the optimized best case** or **47–74 focused
 working days conservatively**. Add **5–7 calendar days** for the supervised
 cohort plus defect rework, Google authorization/runtime delays, and external
 review. Several UX audits and the operations/monetization foundations can run in
@@ -369,9 +374,10 @@ Populated Dashboard V7 18/18 are the latest browser evidence. The last formal
 advocate score remains 8.3/10; the `@196` 7.2 read-only score is an
 evidence-limited discovery score, not a comparable regression.
 
-The immediate gate is isolated presentation confirmation for the locally
-implemented Quick Add/Upcoming language contracts (`2d`–`2e`, `REG-026` /
-`REG-027`), then durable Activity correction (`5h`–`5m`). After that, complete
+The immediate gate is durable Activity correction (`5h`–`5m`). Quick
+Add/Upcoming language contracts (`2d`–`2e`, `REG-026` / `REG-027`) are complete
+in `168a49b`; exact-candidate replay remains in the final evidence wave rather
+than the open implementation list. After Activity correction, complete
 remaining page UX, form readiness/customer language (`3m`), and
 accessibility/responsive evidence (`3j`); freeze the
 candidate; restart the 20-pair percentile campaign; ratify p50/p95 budgets;

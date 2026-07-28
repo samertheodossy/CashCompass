@@ -506,6 +506,29 @@ Covers the temporal needs of **Bills Due (Weekly / Weekly-on-day / Biweekly / Mo
 and System Integrity** — via `[pure-clock]` wherever the engine takes an `asOf`, and
 `[needs clock seam]` only for the rare wall-clock write path.
 
+### 14.5 Financial operation and correction assertions
+
+Every newly correctable writer must prove the same operation envelope through
+pure/server assertions and a guarded disposable-workbook scenario:
+
+- one server-generated `operationId` spans every effect of the user action;
+- every Activity row has a unique `eventId`, the shared `operationId`, and a
+  supported `detailsVersion`;
+- every affected target records normalized `before` and `after` state;
+- the preview resolves exactly the targets the original writer changed;
+- exact matching post-state permits one correction and appends immutable
+  `reversalOfOperationId` evidence;
+- changed, missing, ambiguous, already-reversed, legacy, forged, and
+  cross-workbook requests fail closed without a partial write;
+- compound operations either correct all linked targets or none;
+- unsupported entity/system events expose routing or no action, never a generic
+  reversal.
+
+Harness scenarios must invoke the spreadsheet-scoped production coordinator
+against their own continuously verified disposable workbook. The bounded,
+mapped-user, Golden, configured-default, and administrator workbooks remain
+ineligible writer targets.
+
 ---
 
 ## 15. Reusable seed profiles (Part 2)

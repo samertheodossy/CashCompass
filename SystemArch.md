@@ -193,6 +193,51 @@ Plain HTML/JS (no React). Read-only reference view of balances, minimums, APRs, 
 - **Standard view is intentionally thin.** The backend produces dozens of fields (diagnostics, irregular flags, multiple audits, long-range projections). Exposing them all was too noisy for monthly decision-making, so the default surface is four compact cards. The full output is one click away via Show details.
 - **Cash to use now is the only knob in Standard.** Everything else is derived. This is deliberate — it's the one dial that maps cleanly to the user's real question ("how much can I throw at debt this month?").
 - **`LOG - Activity` is a separate ledger from `OUT - History`.** Event-level audit is never merged with planner-run snapshots; those are two different semantics.
+- **Financial writes use one end-to-end operation envelope.** For every newly
+  correctable financial action, the server creates one opaque `operationId`
+  before the first write. Every Activity row and affected-state descriptor
+  produced by that user action carries the same `operationId`; each Activity row
+  also receives its own `eventId`. A Bill payment, for example, is one operation
+  even when it produces a Cash Flow movement, an occurrence marker, and a debt
+  side effect. IDs are generated server-side and never authorize a target by
+  themselves.
+
+### 6.1 Financial operation envelope
+
+The versioned envelope is stored inside the existing `LOG - Activity` **Details**
+JSON. It does not add workbook columns or require a populated-workbook migration.
+New correctable operations record:
+
+- `detailsVersion`, `eventId`, `operationId`, and a stable `operationType`;
+- a server-derived, privacy-safe actor identity and workbook identity;
+- one or more logical target descriptors (entity ID or canonical
+  sheet/type/payee/month key, never an Activity row number);
+- normalized `before` and `after` state for every affected target;
+- links such as `upcomingId`, Bill occurrence key, House sheet/row fingerprint,
+  or debt account identity when applicable;
+- idempotency/correction metadata, including `reversalOfOperationId` on the
+  immutable correction event.
+
+An `operationId` links the effects but does **not** make an operation reversible
+on its own. A correction is available only when every required descriptor is
+present and a locked compare-and-swap preflight proves that current workbook
+state still equals the recorded `after` state. Compound operations preflight all
+targets before any write and then restore the recorded `before` state
+all-or-nothing. The original Activity evidence remains; a new correction event
+is appended and a second active reversal is refused.
+
+The first server call creates the operation ID. If a legacy browser workflow
+still needs a second RPC, it may pass that opaque ID only as a correlation
+handle; the server must resolve it in the current workbook and verify its
+operation type, targets, and expected state. The client cannot supply arbitrary
+target descriptors. Prefer consolidating compound actions behind one
+spreadsheet-scoped server coordinator as each family is touched.
+
+Historical rows that predate the complete envelope are never reconstructed from
+payee, amount, or date guesses. They stay view-only and route to the owning
+editor. Planner, email, import, diagnostic, and entity-maintenance events may
+receive IDs for traceability but remain audit-only unless their own explicit
+correction contract is approved.
 
 ---
 
@@ -243,10 +288,11 @@ Plain HTML/JS (no React). Read-only reference view of balances, minimums, APRs, 
 - **No true correction beyond donations yet.** The Activity page exposes
   **Remove donation** only for eligible Donation rows; unsupported rows have no
   action control and the server rejects forged requests. Broad-Beta correction
-  is now specified as `FULL_BETA_REMAINING_PLAN.md → 5g–5m`: direct Cash Flow,
-  linked Bill occurrences, Upcoming, and compound House Expenses require durable
-  operation identity, exact-state preconditions, and immutable correction events;
-  entity/audit rows route or remain audit-only.
+  begins with the end-to-end operation envelope above and is specified as
+  `FULL_BETA_REMAINING_PLAN.md → 5g–5m`: direct Cash Flow, linked Bill
+  occurrences, Upcoming, and compound House Expenses require exact-state
+  preconditions and immutable correction events; entity/audit rows route or
+  remain audit-only.
 - **HELOC credit-limit estimate is optional.** When absent, the draw cap falls back to heuristics; a real limit would tighten the advisor.
 - **`LOG - Activity` "Entry Date" normalization is timezone-sensitive.** Sheet reads return `Date`, not ISO strings; there's a helper (`activityLogEntryDateToYyyyMmDd_`) but every new reader has to remember to call it.
 - **Rolling bundle is a prebuilt artifact.** `RollingDebtPayoffDashboardBundle.html` is committed. If someone edits the component without running `npm run build:rolling-dashboard`, the deployed dashboard won't pick up the change. Build step is documented but easy to forget.

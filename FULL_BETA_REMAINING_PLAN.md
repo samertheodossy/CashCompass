@@ -55,6 +55,9 @@ closed. They are retained here so the work map does not lose history.
 | 1c | Controlled Bank/Debt loading resilience (`REG-023`) | Isolated `@203` Populated Dashboard V5 passed 16/16; controlled failures kept Save disabled, transient retry recovered, late stale responses were ignored, zero browser errors were captured, and the exact Restricted fixture was verified in Trash |
 | 1d | Bill Skip/Stop-tracking safety (`REG-024`) | Isolated `@206` Populated Dashboard V6 passed 17/17; Skip required consequence confirmation and stayed dismissed without requiring a Cash Flow row, stale Stop failed closed, valid retry soft-deactivated the bill, source fields/history and exact Activity evidence were preserved, and cleanup was verified |
 | 1e | Retirement guidance runtime proof (`REG-025`) | Isolated `@211` First-Run V6 passed 12/12 and Populated V7 passed 18/18; not-ready guidance hid result walls, ready Base results rendered, label-based row resolution preserved compact/legacy compatibility, and both fixtures were verified in Trash |
+| 2d | Quick Add cumulative language (`REG-026`) | Completed and pushed in `168a49b`; action copy and Help state add-to-total / do-not-replace semantics, the production writer remains cumulative, the user confirmed the bounded presentation, and permanent Dashboard UX coverage passes |
+| 2e | Upcoming Dismiss consequences (`REG-027`) | Completed and pushed in `168a49b`; the action surface, hint, success message, and Help state no payment, no Cash Flow change, and preserved Upcoming/Activity history; the user confirmed the bounded wording and permanent server/UI coverage passes |
+| REG-028 | Appended-row presentation safety | Completed and pushed in `168a49b`; Upcoming, Bills, Debts, and Donations inherit sibling format/row height with first-row fallbacks, while Bank, Investment, and House paths were already protected |
 
 The remaining tables below are therefore an **open-only list**.
 
@@ -62,19 +65,18 @@ The remaining tables below are therefore an **open-only list**.
 
 | Order | Open IDs | Workstream | Focused estimate |
 |---:|---|---|---:|
-| 1 | `2d`–`2e` | Quick Add and Upcoming consequence language | Implementation complete locally; isolated presentation confirmation remains |
-| 2 | `5h`–`5m` | Beta-critical Activity correction and reversal | 8–17 d summary estimate; detailed range is 12.5–25 d pending `5h` measurement |
-| 3 | `3a`–`3c`, `3e`–`3k`, `3m` | Remaining page UX, trust, advocate scoring, responsive/accessibility | 11–21 d |
-| 4 | `4a`–`4f` | Performance optimization, measurement, and percentile gate | 5–11 d |
-| 5 | `5a`–`5f` | Remaining financial/workbook proof | 9–19 d |
-| 6 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
-| 7 | `7a`–`7f` | Monetization-ready policy and architecture foundation; no billing activation | 5–10 d |
-| 8 | `8a`–`8f` | Freeze, complete exact-candidate evidence, score, and READY verdict | 3.5–7 d plus fixes |
-| 9 | `9a`–`9e` | Supervised cohort, go/no-go, and separately approved Central Beta promotion | 2–3 active d plus 5–7 calendar d and fixes |
+| 1 | `5h`–`5m` | End-to-end financial operation identity and safe correction | 7–12 d including integrated disposable-workbook validation; rebaseline after `5h` |
+| 2 | `3a`–`3c`, `3e`–`3k`, `3m` | Remaining page UX, trust, advocate scoring, responsive/accessibility | 11–21 d |
+| 3 | `4a`–`4f` | Performance optimization, measurement, and percentile gate | 5–11 d |
+| 4 | `5a`–`5f` | Remaining financial/workbook proof | 9–19 d |
+| 5 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
+| 6 | `7a`–`7f` | Monetization-ready policy and architecture foundation; no billing activation | 5–10 d |
+| 7 | `8a`–`8f` | Freeze, complete exact-candidate evidence, score, and READY verdict | 3.5–7 d plus fixes |
+| 8 | `9a`–`9e` | Supervised cohort, go/no-go, and separately approved Central Beta promotion | 2–3 active d plus 5–7 calendar d and fixes |
 
 The arithmetic sum is intentionally not the delivery forecast because Groups
 6–7 and parts of Groups 3 and 5 can advance during runtime waits. The optimized
-capacity forecast is **35–52 focused working days best case** or **48–76
+capacity forecast is **34–50 focused working days best case** or **47–74
 conservatively**, plus the five-to-seven-day cohort and defect contingency. The
 Wave 1 finished ahead of the buffered August schedule, but the 2026-09-24 target
 remains at risk until the Activity correction foundation is implemented and
@@ -103,16 +105,23 @@ Broad invited Beta requires all of the following:
 
 **Group 1 open estimate: 0 focused days.**
 
-## 2. Bills and daily-task completion
+## 2. Bills and daily-task completion — complete
 
-| ID | Remaining item | Exit evidence | Estimate |
-|---|---|---|---:|
-| 2d | Clarify Quick Add duplicate/update semantics (`REG-026`) | **Implemented locally 2026-07-27.** Action copy and Help state that Quick Add adds to the selected-month total and does not replace an existing amount; Dashboard UX cross-checks the wording against the cumulative production writer. | Isolated presentation confirmation |
-| 2e | Clarify Upcoming Dismiss (`REG-027`) | **Implemented locally 2026-07-27.** Action copy, hint, success message, and Help state no payment, no Cash Flow change, and preserved Upcoming/Activity history; Dashboard UX verifies the server remains status-only. | Isolated presentation confirmation |
+`2a`–`2f` are closed. `2d` / `2e` were originally estimated at **1–2 focused
+days** before source inspection. Measured implementation and local verification
+were approximately **0.5 focused hour** because both underlying writers already
+had the correct behavior; the work reduced to precise language, existing-suite
+regressions, and bounded visual confirmation. Exact-candidate Central replay is
+retained in the final release evidence wave rather than keeping these
+implementation items artificially open.
 
-**Group 2 implementation estimate: complete locally.** The core Bills flow and
-both adjacent wording contracts are implemented with permanent regressions.
-Only isolated Central presentation confirmation remains before runtime closure.
+**Estimation calibration:** audit-first language/cosmetic items that reuse an
+existing component and regression home should begin at **1–3 focused hours**.
+Deployment queues, authentication pauses, and external visual review are tracked
+as elapsed validation time, not engineering effort. Increase the estimate only
+when the audit finds a behavior, schema, financial, or cross-workbook change.
+
+**Group 2 open estimate: 0 focused days.**
 
 ## 3. Remaining UX score improvements
 
@@ -146,7 +155,7 @@ finding is nevertheless scheduled and receives a permanent regression home.
 |---|---|---|---|
 | P1 | Overview says **Financial health 85 — Strong** while setup is 1/5, balances are zero, projected cash flow is negative, and the baseline is stale | `3l` | Runtime-closed on isolated `@197`: pure/server and Dashboard UX contracts pass; First-Run V5 passed 11/11 and Populated V4 passed 14/14 with exact fixture cleanup |
 | P1 | Visible form labels are not programmatically associated with core inputs/selects | `3j` | Dashboard UX DOM/accessible-name contract plus keyboard, focus, desktop/medium/390px browser evidence |
-| P2 | Quick Add duplicate/update behavior was vague | `2d` | Implemented locally as `REG-026`; Dashboard UX locks cumulative add-not-replace copy and cross-checks the production writer; isolated presentation confirmation remains |
+| P2 | Quick Add duplicate/update behavior was vague | `2d` | **Closed in `168a49b` as `REG-026`;** Dashboard UX locks cumulative add-not-replace copy and cross-checks the production writer; bounded presentation confirmed |
 | P2 | Empty Bank/Investment/Debt Update and Purchase Simulator surfaces begin with blank selectors or dash-only results | `3b` | Dashboard UX empty-state contract plus First-Run exact-candidate assertion |
 | P2 | Add Bill exposes stored tokens and several primary actions appear enabled before required input exists | `3m` | Dashboard UX label/action-state contract plus server-validation guard and First-Run/Populated assertions |
 | P2 | Help points to `Planning → Debts` instead of **Assets & Liabilities → Debt accounts** | `3c`, `3h` | Dashboard UX Help-link/copy assertion |
@@ -181,15 +190,16 @@ either map the exact failure to an existing assertion or add the next
 | 5d | Read-only orphan detection | The remaining P1 Recovery follow-up is implemented and proved, or explicitly removed from the broad-Beta gate | 1–2 d |
 | 5e | Recovery follow-up disposition | Create New Workbook and Admin Set Mapping are either closed or documented as supervised-admin scope | 0.5–2 d |
 | 5f | Unified-source bounded-safety evidence | The exact reviewed source preserves no-argument bounded behavior; any bounded deployment remains user-controlled | 0.5–1 d |
-| 5h | Durable correction identity and immutable reversal contract | Newly correctable events carry a durable event/operation ID, versioned affected-state descriptors, preview, compare-and-swap preflight, one active reversal, and an immutable correction row | 1.5–3 d |
-| 5i | Direct Cash Flow correction | `quick_pay` income/expense can restore the recorded prior Cash Flow state only when the exact post-state still matches; any debt side effect is verified or the correction fails closed | 2–4 d |
-| 5j | Bill occurrence correction | Manual Pay, `bill_paid`, `bill_skip`, and `bill_autopay` are corrected as linked occurrence operations without duplicate amounts or stranded recurrence markers | 3–5 d |
-| 5k | Upcoming correction | Stable `upcomingId` links payment/lifecycle evidence; payment and remaining-balance/status changes correct together; ordinary edits route to Upcoming | 2–4 d |
-| 5l | House Expense compound correction | The exact House row and optional Cash Flow posting pass a dual-target preflight and correct together or not at all | 2–4 d |
-| 5m | Entity/audit disposition plus permanent evidence | Entity lifecycle rows route to their owning Update/Manage workflow; Planner/email/import audit rows expose no reversal; every supported family receives client/server regression and guarded disposable-workbook runtime proof | 2–5 d |
+| 5h | End-to-end operation envelope and immutable correction contract | Persist the existing Quick Add operation identity as a shared server-generated `operationId`; give each Activity row an `eventId`; record versioned operation type, authorized workbook/actor identity, logical target descriptors, and normalized before/after state; preview and locked compare-and-swap permit one immutable correction and reject legacy/forged/changed/cross-workbook state. No Activity column/schema migration. | 0.75–1.5 d; start with a one-day cap |
+| 5i | Direct Cash Flow correction | `quick_pay` income/expense reuses the existing receipt normalization, workbook identity, inspection, and locking seams to restore recorded prior Cash Flow state only when the exact post-state still matches; any row-creation or debt side effect is verified or the correction fails closed | 1–1.5 d |
+| 5j | Bill occurrence correction | One operation ID links Manual Pay money and occurrence evidence; Skip and AutoPay record exact prior/new state; Bills Due recognizes an immutable reversal without duplicate amounts or stranded/silently active markers | 2–3 d |
+| 5k | Upcoming correction | The payment operation ID links `quick_pay` to stable `upcomingId`; payment and remaining-balance/status changes correct together; ordinary add/update/dismiss edits route to Upcoming | 1–2 d |
+| 5l | House Expense compound correction | The operation envelope captures the existing exact House row fingerprint plus the optional Quick Add receipt; both targets preflight and correct together or not at all | 1–2 d |
+| 5m | Entity/audit disposition plus permanent evidence | Entity lifecycle rows route to their owning Update/Manage workflow; Planner/email/import audit rows expose no reversal; every supported family receives client/server regression and guarded disposable-workbook runtime proof | 0.5–1 d plus integrated runtime |
 
-**Group 5 estimate: 17–36 focused days.** This includes approximately **13–26
-days** of newly elevated Activity correction work. Generic one-click reversal of
+**Group 5 estimate: approximately 12–23 focused days.** This includes **7–12
+days** for the operation-identity/correction program and integrated runtime
+validation. Generic one-click reversal of
 multi-sheet entity lifecycle or bank-import/system audit events is not part of
 the broad-Beta scope; those rows must route to their owning workflow or remain
 explicitly audit-only.
@@ -249,12 +259,13 @@ This is design and policy readiness, not payment activation.
 
 ## Overall capacity range
 
-- **Best case:** approximately **35–52 focused working days**. Completing Wave 1
-  early adds schedule margin, but the range is intentionally unchanged until
-  `5h` replaces the largest Activity-correction estimate with measured evidence.
+- **Best case:** approximately **34–50 focused working days**. The narrower
+  post-audit Activity range creates contingency inside this planning envelope;
+  do not trade that margin for a weaker architecture. Rebaseline again when
+  `5h` replaces the estimate with measured implementation evidence.
   Several page passes can still close through audit, and operations/business
   foundations can run alongside runtime waits.
-- **Conservative case:** approximately **48–76 focused working days**.
+- **Conservative case:** approximately **47–74 focused working days**.
 - **Cohort:** add **5–7 calendar days**.
 - **Contingency:** add **1–2 weeks** if performance, accessibility, or cohort
   evidence exposes a material defect.
@@ -270,7 +281,7 @@ strictest failed gate controls the actual date.
 
 The remaining work that directly controls the finish date is:
 
-`2d–2e presentation confirmation → 5h–5m → 3a–3k/3m → 4a–4f → 8a–8f → 9a–9e`
+`5h–5m → 3a–3k/3m → 4a–4f → 8a–8f → 9a–9e`
 
 Financial/workbook proof in Group 5 must finish before `8b`. Operations and
 monetization foundations in Groups 6–7 must finish before `8d`, but they should
@@ -310,8 +321,8 @@ not block early engineering.
 
 | Window | Lane A — critical | Lane B — UX/evidence | Lane C — parallel foundation | Exit |
 |---|---|---|---|---|
-| Completed through Jul 27 | `1a`–`1f`, `2a`–`2c`, `2f`, `5g`; `2d`–`2e` implemented locally | `3d`, `3l`; shared tracked-editor convergence and Overview trust | — | Wave 1 closes on isolated `@211`; daily-task language awaits isolated presentation confirmation; Beta stays `@106`; bounded remains user-controlled |
-| Aug 21–27 | Begin `5h`; advance `5i` only after the shared identity/precondition contract closes | Audit `3a`, `3b`, `3m`; collect diagnostic performance evidence without starting the final campaign | Start `6a`–`6f`, `7a`–`7b`, cohort design | `2d`–`2e` are already runtime-closed; durable Activity correction foundation is measured |
+| Completed through Jul 27 | `1a`–`1f`, `2a`–`2f`, `5g`; `REG-028` appended-row safety | `3d`, `3l`; shared tracked-editor convergence, Overview trust, Quick Add/Dismiss language | — | Wave 1 and daily-task language are closed; commit `168a49b` is on `origin/main`; exact-candidate replay remains part of the final evidence wave; Beta stays `@106`; bounded remains user-controlled |
+| Aug 21–27 | Begin `5h`; advance `5i` only after the shared identity/precondition contract closes | Audit `3a`, `3b`, `3m`; collect diagnostic performance evidence without starting the final campaign | Start `6a`–`6f`, `7a`–`7b`, cohort design | Durable Activity correction foundation is measured |
 | Aug 28–Sep 3 | `5j`–`5m` | Advance Group 5 matrix/recovery proof | `7c`–`7f`, known limitations, support posture | Supported Activity correction families and audit-only dispositions pass |
 | Sep 4–10 | Begin/finish performance fixes `4a`–`4d` | Close `3c`, `3e`–`3m`; finish Group 5 | Finish Groups 6–7 | UX/accessibility path ≥9 and candidate prerequisites complete |
 | Sep 11–17 | Freeze `8a`; run `4e`–`4f`, `8b`–`8f` | Exact-candidate advocate `3k` | Final release/rollback/support review | Exact candidate reaches automated READY prerequisites |

@@ -11,7 +11,7 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current stage — Stage 3: Beta Readiness
 
-**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; isolated Central has since advanced through `@196`. The `@196` 7.2/10 read-only score is evidence-limited and not comparable, so the official score does not change until a full writer-inclusive advocate run. The 7.5/10 value remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, the non-performance P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** Financial Integrity is committed as `9b97c4d` and exact isolated `@156` evidence passed 53/53. Current ordering authority is `ROADMAP.md`: **Overview health trust → controlled reliability/safety and Retirement proof → Activity correction → Quick Add/Upcoming language → remaining page UX/accessibility → exact-candidate Performance and final Release Readiness verdict → supervised cohort proof → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
+**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; isolated Central has since advanced through `@196`. The `@196` 7.2/10 read-only score is evidence-limited and not comparable, so the official score does not change until a full writer-inclusive advocate run. The 7.5/10 value remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, the non-performance P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** Financial Integrity is committed as `9b97c4d` and exact isolated `@156` evidence passed 53/53. Current ordering authority is `ROADMAP.md`: **Activity correction → remaining page UX/accessibility → exact-candidate Performance and final Release Readiness verdict → supervised cohort proof → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
 
 `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered finish-line inventory
 for broad invited Beta. It assigns IDs `1a`–`9e`, focused-effort estimates,
@@ -404,8 +404,8 @@ records the confirmed amount/date, verifies occurrence clearing, and shows the
 Cash Flow receipt plus six-month payment history before **Done**. Quick Add stays
 separate. The adjacent `2d` Quick Add cumulative add-not-replace contract and
 `2e` Upcoming Dismiss no-payment/no-Cash-Flow/preserved-history contract are
-implemented locally as `REG-026` / `REG-027`; isolated presentation
-confirmation remains before runtime closure.
+complete in `168a49b` as `REG-026` / `REG-027`; exact-candidate replay remains
+part of the final release evidence wave rather than an open implementation item.
 
 - Keep Quick add visually primary and make recent completion feedback easy to notice.
 - Distinguish the daily **Due this period** queue from **Manage bills** configuration.
@@ -573,11 +573,11 @@ findings below are Beta work, ordered by product risk:
    to 3–5 d).** Associate every visible label with its input/select; complete
    keyboard, focus, target-size, contrast, reduced-motion, and
    desktop/medium/390px evidence.
-3. **`2d` · P2 — Quick Add consequence wording (implemented locally as
-   `REG-026`).** The action surface and Help now state that the entered amount is
+3. ~~**`2d` · P2 — Quick Add consequence wording.**~~ **Complete in `168a49b`
+   as `REG-026`.** The action surface and Help state that the entered amount is
    added to the selected-month total and does not replace an existing amount.
-   Dashboard UX cross-checks the copy against the cumulative writer; isolated
-   presentation confirmation remains.
+   Dashboard UX cross-checks the copy against the cumulative writer and the
+   bounded presentation was confirmed.
 4. **`3b` · P2 — Honest empty/guidance states.** Empty Bank, Investment, and
    Debt pages should begin in Add/guided state; Purchase and Retirement result
    walls stay hidden until ready.
@@ -1614,9 +1614,13 @@ affected.
 
 **Mandatory safety contract**
 
-1. **Durable identity** — every newly correctable event gets a UUID/operation
-   identity, `detailsVersion`, and explicit affected-state descriptors. Never
-   target a mutable Activity row number.
+1. **End-to-end operation envelope** — the server creates one opaque
+   `operationId` before the first write of a newly correctable financial action.
+   Every linked effect shares it, while each Activity row receives a unique
+   `eventId`. The versioned Details envelope also carries `operationType`,
+   server-derived workbook/actor identity, and explicit affected-state
+   descriptors. Never target a mutable Activity row number or treat an ID alone
+   as write authority.
 2. **Preview before write** — resolve every affected sheet/entity/cell, show the
    exact consequence, and refuse unsupported or ambiguous legacy events.
 3. **Compare-and-swap preconditions** — under `LockService`, re-read every target
@@ -1637,6 +1641,24 @@ affected.
 8. **Disposable writer evidence** — every supported family gets permanent
    regression coverage and a harness-created, continuously re-verified disposable
    workbook journey. Protected workbooks are never writer targets.
+
+**Implementation decision (2026-07-27 audit):** build the operation envelope
+first and make it a production-writer standard, not an Activity-only patch.
+Quick Add already generates an `operationId`, captures Cash Flow before/after
+state and workbook identity, and implements locked compare-and-set inspection.
+Upcoming already carries a stable `upcomingId` plus payment before/after state;
+House Expense already records its exact sheet/row. `5h` persists and generalizes
+those existing seams in the current Details JSON—no Activity column/schema
+migration. For compound multi-RPC flows, the first server call owns the ID and
+later calls may supply only that opaque correlation handle; the server resolves
+and verifies the operation in the authorized workbook. Prefer one
+spreadsheet-scoped coordinator as each compound workflow is touched.
+
+**Measured audit estimate:** `5h`–`5m` is now **7–12 focused days including
+integrated disposable-workbook validation**, not the pre-audit 12.5–25-day
+placeholder. Start `5h` with a one-day engineering cap and rebaseline the
+remaining families from that measured foundation. Architecture quality and
+fail-closed evidence take precedence over preserving a calendar date.
 
 **Explicit non-goals for broad Beta**
 
