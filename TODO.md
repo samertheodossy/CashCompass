@@ -1654,6 +1654,36 @@ later calls may supply only that opaque correlation handle; the server resolves
 and verifies the operation in the authorized workbook. Prefer one
 spreadsheet-scoped coordinator as each compound workflow is touched.
 
+**`5h` implementation checkpoint (2026-07-28, isolated runtime complete):** the shared
+contract is additive inside the existing `Details` JSON:
+
+- `operationEnvelope.envelopeVersion = 1`;
+- one server-generated `operationId` created before the first Quick Add write;
+- one new server-generated `eventId` for every newly appended Activity row;
+- opaque server-derived workbook and actor identities;
+- `operationType`, `correctable`, and versioned logical `targets`;
+- each correctable target stores a locator plus normalized `before` and `after`
+  state.
+
+Quick Add now records the Cash Flow month value, row existence, and Flow Source
+state, plus the exact Debt balance delta when that side effect occurs. The
+read-only preview resolves by `operationId`, rejects another workbook/actor,
+duplicate event IDs, conflicting or ambiguous targets, and any target that no
+longer matches its recorded post-state. Other newly logged events receive
+identity metadata but remain audit-only until their owning `5j`–`5m` adapters
+provide complete target evidence. Historical rows without the envelope remain
+`LEGACY_READ_ONLY`.
+
+This checkpoint adds no Activity column, migration, correction writer, or UI
+action. Direct Cash Flow correction and immutable reversal logging remain `5i`;
+compound Bill/Upcoming/House correlation remains `5j`–`5l`. Permanent source
+coverage is `REG-029`; the existing guarded Bills Pay disposable-workbook
+scenario and Populated Dashboard V8 carry the runtime envelope/preview
+assertions. Isolated Central `@214` run
+`FR-dbe0482c-0c10-47c7-8189-109be59be6a4` passed 19/19 in 239.225 s with
+Restricted single-owner sharing, zero browser errors, and verified exact-fixture
+Trash cleanup. Git commit/push remain the approval checkpoint.
+
 **Measured audit estimate:** `5h`–`5m` is now **7–12 focused days including
 integrated disposable-workbook validation**, not the pre-audit 12.5–25-day
 placeholder. Start `5h` with a one-day engineering cap and rebaseline the

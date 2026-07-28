@@ -312,6 +312,10 @@ function quickAddPayment(payload, optionalSs) {
   // and preserve Central/bound resolution. Harness callers pass only an already
   // validated disposable Spreadsheet object.
   const ss = optionalSs || getUserSpreadsheet_();
+  // 5h operation foundation: the server owns the correlation ID and creates it
+  // before the first workbook write. The same context is persisted with the
+  // Activity event after the verified post-state is known.
+  const operationContext = createActivityOperationContext_(ss, 'quick_pay');
   const sheet = getCashFlowSheetForYear_(ss, year);
   const monthCol = getMonthColumnByDate_(sheet, entryDate, 1);
   const headerMap = getCashFlowHeaderMap_(sheet);
@@ -346,6 +350,9 @@ function quickAddPayment(payload, optionalSs) {
 
   const targetCell = sheet.getRange(rowInfo.row, monthCol);
   const previousValue = round2_(toNumber_(targetCell.getValue()));
+  const previousFlowSource = rowWasCreated || headerMap.flowSourceColZero === -1
+    ? ''
+    : String(sheet.getRange(rowInfo.row, headerMap.flowSourceCol).getDisplayValue() || '').trim();
 
   // Cash Flow month cells use the red-negative money format so auto-entered
   // expenses match the surrounding expense cells. Value is unchanged — only
@@ -376,6 +383,9 @@ function quickAddPayment(payload, optionalSs) {
       flowSourceWritten = true;
     }
   }
+  const newFlowSource = headerMap.flowSourceColZero === -1
+    ? ''
+    : String(sheet.getRange(rowInfo.row, headerMap.flowSourceCol).getDisplayValue() || '').trim();
 
   const debtAdjustResult = adjustDebtsBalanceAfterQuickPayment_(ss, payee, entryType, amount);
   // Preserve existing debtBalanceNote semantics: it represents an ACTUAL
@@ -396,7 +406,7 @@ function quickAddPayment(payload, optionalSs) {
   const entryDateStr = Utilities.formatDate(entryDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
   var activitySnapshot = {
-    operationId: Utilities.getUuid(),
+    operationId: operationContext.operationId,
     entryType: entryType,
     payee: payee,
     entryDate: entryDateStr,
@@ -414,6 +424,55 @@ function quickAddPayment(payload, optionalSs) {
   };
 
   if (!payload.suppressActivityLog) {
+    var activityTargets = [{
+      targetVersion: ACTIVITY_TARGET_DESCRIPTOR_VERSION_,
+      targetType: 'cash_flow_month',
+      targetKey: [
+        'cash_flow_month',
+        normalizeActivityKeyPart_(sheet.getName()),
+        normalizeActivityKeyPart_(entryType),
+        normalizeActivityKeyPart_(payee),
+        monthLabel
+      ].join('::'),
+      locator: {
+        sheetName: sheet.getName(),
+        entryType: entryType,
+        payee: payee,
+        entryDate: entryDateStr,
+        month: monthLabel,
+        rowCreated: rowWasCreated
+      },
+      before: {
+        exists: !rowWasCreated,
+        value: previousValue,
+        flowSource: previousFlowSource
+      },
+      after: {
+        exists: true,
+        value: newValue,
+        flowSource: newFlowSource
+      }
+    }];
+
+    if (debtBalanceNote) {
+      activityTargets.push({
+        targetVersion: ACTIVITY_TARGET_DESCRIPTOR_VERSION_,
+        targetType: 'debt_balance',
+        targetKey: 'debt_balance::' + normalizeActivityKeyPart_(payee),
+        locator: {
+          accountName: payee
+        },
+        before: {
+          exists: true,
+          value: round2_(toNumber_(debtBalanceNote.previousBalance))
+        },
+        after: {
+          exists: true,
+          value: round2_(toNumber_(debtBalanceNote.newBalance))
+        }
+      });
+    }
+
     appendActivityLog_(ss, {
       eventType: 'quick_pay',
       entryDate: entryDateStr,
@@ -425,6 +484,11 @@ function quickAddPayment(payload, optionalSs) {
       cashFlowSheet: sheet.getName(),
       cashFlowMonth: monthLabel,
       dedupeKey: '',
+      operationEnvelope: {
+        context: operationContext,
+        correctable: true,
+        targets: activityTargets
+      },
       details: JSON.stringify({
         previousValue: previousValue,
         newValue: newValue,
@@ -481,16 +545,7 @@ function quickAddPayment(payload, optionalSs) {
  * resolves to the same workbook that produced the receipt.
  */
 function quickAddWorkbookIdentity_(ss) {
-  var spreadsheetId = ss && typeof ss.getId === 'function'
-    ? String(ss.getId() || '').trim()
-    : '';
-  if (!spreadsheetId) return '';
-  var digest = Utilities.computeDigest(
-    Utilities.DigestAlgorithm.SHA_256,
-    spreadsheetId,
-    Utilities.Charset.UTF_8
-  );
-  return Utilities.base64EncodeWebSafe(digest).replace(/=+$/g, '').slice(0, 24);
+  return activityWorkbookIdentity_(ss);
 }
 
 /**
@@ -611,6 +666,111 @@ function inspectQuickAddWriteInSpreadsheet_(ss, receipt) {
     column: monthCol,
     sheet: sheet
   };
+}
+
+/**
+ * Read the current state for a versioned Activity target. This is the Quick Add
+ * adapter used by the shared 5h preview contract; it performs no writes.
+ */
+function inspectActivityOperationTargetInSpreadsheet_(ss, target) {
+  target = normalizeActivityTargetDescriptor_(target);
+  var locator = target.locator || {};
+
+  if (target.targetType === 'cash_flow_month') {
+    var entryDate = parseIsoDateLocal_(locator.entryDate);
+    if (isNaN(entryDate.getTime())) {
+      return { supported: false, status: 'INVALID_TARGET' };
+    }
+    var expectedSheet = getCashFlowSheetName_(entryDate.getFullYear());
+    var expectedMonth = Utilities.formatDate(
+      entryDate,
+      Session.getScriptTimeZone(),
+      'MMM-yy'
+    );
+    if (String(locator.sheetName || '').trim() !== expectedSheet ||
+        String(locator.month || '').trim() !== expectedMonth) {
+      return { supported: false, status: 'INVALID_TARGET' };
+    }
+    var sheet = ss.getSheetByName(expectedSheet);
+    if (!sheet) {
+      return {
+        supported: true,
+        status: 'READ',
+        current: { exists: false, value: 0, flowSource: '' }
+      };
+    }
+    var values = sheet.getDataRange().getDisplayValues();
+    var headerMap = getCashFlowHeaderMap_(sheet);
+    var wantType = String(locator.entryType || '').trim().toLowerCase();
+    var wantPayee = String(locator.payee || '').trim().toLowerCase();
+    var matchingRows = [];
+    for (var cashRow = 1; cashRow < values.length; cashRow++) {
+      var rowType = String(values[cashRow][headerMap.typeColZero] || '').trim().toLowerCase();
+      var rowPayee = String(values[cashRow][headerMap.payeeColZero] || '').trim().toLowerCase();
+      if (rowType === wantType && rowPayee === wantPayee) matchingRows.push(cashRow + 1);
+    }
+    if (!matchingRows.length) {
+      return {
+        supported: true,
+        status: 'READ',
+        current: { exists: false, value: 0, flowSource: '' }
+      };
+    }
+    if (matchingRows.length !== 1) {
+      return { supported: false, status: 'AMBIGUOUS_TARGET' };
+    }
+    var row = matchingRows[0];
+    var monthCol = getMonthColumnByDate_(sheet, entryDate, 1);
+    var currentFlowSource = headerMap.flowSourceColZero === -1
+      ? ''
+      : String(sheet.getRange(row, headerMap.flowSourceCol).getDisplayValue() || '').trim();
+    return {
+      supported: true,
+      status: 'READ',
+      current: {
+        exists: true,
+        value: round2_(toNumber_(sheet.getRange(row, monthCol).getValue())),
+        flowSource: currentFlowSource
+      }
+    };
+  }
+
+  if (target.targetType === 'debt_balance') {
+    var debtSheetName = getSheetNames_().DEBTS;
+    var debtSheet = ss.getSheetByName(debtSheetName);
+    if (!debtSheet) {
+      return { supported: true, status: 'READ', current: { exists: false, value: 0 } };
+    }
+    var debtMap = getDebtsHeaderMap_(debtSheet);
+    if (debtMap.balanceColZero === -1) {
+      return { supported: false, status: 'INVALID_TARGET' };
+    }
+    var display = debtSheet.getDataRange().getDisplayValues();
+    var values = debtSheet.getDataRange().getValues();
+    var expectedName = normalizeBillName_(locator.accountName);
+    var matchingDebtStates = [];
+    for (var r = 1; r < display.length; r++) {
+      var name = String(display[r][debtMap.nameColZero] || '').trim();
+      if (!name || isDebtSummaryRowName_(name) ||
+          normalizeBillName_(name) !== expectedName ||
+          isDebtRowInactive_(display[r], values[r], debtMap)) {
+        continue;
+      }
+      matchingDebtStates.push({
+          exists: true,
+          value: round2_(toNumber_(values[r][debtMap.balanceColZero]))
+      });
+    }
+    if (matchingDebtStates.length > 1) {
+      return { supported: false, status: 'AMBIGUOUS_TARGET' };
+    }
+    if (matchingDebtStates.length === 1) {
+      return { supported: true, status: 'READ', current: matchingDebtStates[0] };
+    }
+    return { supported: true, status: 'READ', current: { exists: false, value: 0 } };
+  }
+
+  return { supported: false, status: 'UNSUPPORTED_TARGET' };
 }
 
 /** Shape an inspection result for the browser without returning Sheet objects. */

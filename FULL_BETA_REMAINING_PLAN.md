@@ -2,14 +2,13 @@
 
 **Status:** Active execution inventory
 
-**Reconciled:** 2026-07-27
+**Reconciled:** 2026-07-28
 
-**Current evidence:** isolated Central `@211`; First-Run V6 **12/12 PASS** and
-Populated Dashboard V7 **18/18 PASS** are the latest dedicated unattended
-browser evidence. They include Retirement prerequisite guidance, meaningful
-ready-state results, compact/legacy row compatibility, all prior populated
-journeys, zero browser errors, Restricted single-owner sharing, and verified
-exact-fixture Trash cleanup.
+**Current evidence:** isolated Central `@214`; Populated Dashboard V8
+`FR-dbe0482c-0c10-47c7-8189-109be59be6a4` passed **19/19**. It includes the
+`REG-029` operation-envelope/preview assertion, strengthened server-verified
+Bill stale-request safety, every prior populated journey, zero browser errors,
+Restricted single-owner sharing, and verified exact-fixture Trash cleanup.
 
 **Last formal independent advocate score:** **8.3/10** on isolated Central
 `@180`. This remains the official score until the next full scored advocate run;
@@ -190,12 +189,25 @@ either map the exact failure to an existing assertion or add the next
 | 5d | Read-only orphan detection | The remaining P1 Recovery follow-up is implemented and proved, or explicitly removed from the broad-Beta gate | 1–2 d |
 | 5e | Recovery follow-up disposition | Create New Workbook and Admin Set Mapping are either closed or documented as supervised-admin scope | 0.5–2 d |
 | 5f | Unified-source bounded-safety evidence | The exact reviewed source preserves no-argument bounded behavior; any bounded deployment remains user-controlled | 0.5–1 d |
-| 5h | End-to-end operation envelope and immutable correction contract | Persist the existing Quick Add operation identity as a shared server-generated `operationId`; give each Activity row an `eventId`; record versioned operation type, authorized workbook/actor identity, logical target descriptors, and normalized before/after state; preview and locked compare-and-swap permit one immutable correction and reject legacy/forged/changed/cross-workbook state. No Activity column/schema migration. | 0.75–1.5 d; start with a one-day cap |
+| 5h | End-to-end operation envelope and immutable correction contract | **Runtime-complete pending commit approval.** Persist the existing Quick Add operation identity as a shared server-generated `operationId`; give each Activity row an `eventId`; record versioned operation type, authorized workbook/actor identity, logical target descriptors, and normalized before/after state; preview rejects legacy/forged/changed/cross-workbook state. No Activity column/schema migration. Isolated `@214` Populated V8 passed 19/19. | Measured within the one-day cap |
 | 5i | Direct Cash Flow correction | `quick_pay` income/expense reuses the existing receipt normalization, workbook identity, inspection, and locking seams to restore recorded prior Cash Flow state only when the exact post-state still matches; any row-creation or debt side effect is verified or the correction fails closed | 1–1.5 d |
 | 5j | Bill occurrence correction | One operation ID links Manual Pay money and occurrence evidence; Skip and AutoPay record exact prior/new state; Bills Due recognizes an immutable reversal without duplicate amounts or stranded/silently active markers | 2–3 d |
 | 5k | Upcoming correction | The payment operation ID links `quick_pay` to stable `upcomingId`; payment and remaining-balance/status changes correct together; ordinary add/update/dismiss edits route to Upcoming | 1–2 d |
 | 5l | House Expense compound correction | The operation envelope captures the existing exact House row fingerprint plus the optional Quick Add receipt; both targets preflight and correct together or not at all | 1–2 d |
 | 5m | Entity/audit disposition plus permanent evidence | Entity lifecycle rows route to their owning Update/Manage workflow; Planner/email/import audit rows expose no reversal; every supported family receives client/server regression and guarded disposable-workbook runtime proof | 0.5–1 d plus integrated runtime |
+
+**`5h` one-day checkpoint — 2026-07-28:** the additive Details envelope,
+server-owned Quick Add operation ID, per-row event ID, opaque actor/workbook
+scope, Cash Flow/Debt target snapshots, legacy/audit-only classification, and
+read-only exact-state preview are implemented as `REG-029`. The full local suite
+passes. Isolated Central `@214` Populated V8 run
+`FR-dbe0482c-0c10-47c7-8189-109be59be6a4` passed 19/19 in 239.225 s, including
+the operation-envelope assertion and strengthened server-verified Bill stale
+rejection; it recorded no browser errors and verified Restricted sharing plus
+exact-fixture Trash cleanup. No correction writer or Activity UI action exists
+yet. Git commit/push remain the approval checkpoint. The measured foundation
+supports the existing **7–12-day** `5h`–`5m` program estimate; rebaseline again
+after `5i` measures the first immutable correction writer.
 
 **Group 5 estimate: approximately 12–23 focused days.** This includes **7–12
 days** for the operation-identity/correction program and integrated runtime

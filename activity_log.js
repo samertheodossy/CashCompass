@@ -24,6 +24,321 @@ var ACTIVITY_LOG_HEADERS = [
 var ACTIVITY_LOG_DEDUPE_COL = 11;
 
 /**
+ * Operation metadata lives inside the existing Details JSON cell. This is an
+ * additive contract only: no Activity column or sheet migration is required.
+ *
+ * Existing event-specific `detailsVersion` fields remain untouched. The
+ * correction contract is deliberately nested so those earlier schemas can
+ * continue to evolve independently.
+ */
+var ACTIVITY_OPERATION_ENVELOPE_VERSION_ = 1;
+var ACTIVITY_TARGET_DESCRIPTOR_VERSION_ = 1;
+
+function activityOpaqueIdentity_(prefix, rawValue) {
+  var value = String(rawValue || '').trim();
+  if (!value) return '';
+  var digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    value,
+    Utilities.Charset.UTF_8
+  );
+  return String(prefix || '') +
+    Utilities.base64EncodeWebSafe(digest).replace(/=+$/g, '').slice(0, 24);
+}
+
+function activityWorkbookIdentity_(ss) {
+  var spreadsheetId = ss && typeof ss.getId === 'function'
+    ? String(ss.getId() || '').trim()
+    : '';
+  return activityOpaqueIdentity_('', spreadsheetId);
+}
+
+function activityActorIdentity_() {
+  var email = '';
+  try {
+    email = typeof getCurrentUserEmail_ === 'function'
+      ? getCurrentUserEmail_()
+      : String(Session.getEffectiveUser().getEmail() || '').trim().toLowerCase();
+  } catch (_e) {
+    email = '';
+  }
+  return activityOpaqueIdentity_('actor::', email);
+}
+
+/**
+ * Create the server-owned correlation context before the first write of a
+ * correctable operation. IDs correlate effects; workbook/actor identity and
+ * exact state checks authorize any future correction.
+ */
+function createActivityOperationContext_(ss, operationType) {
+  return {
+    envelopeVersion: ACTIVITY_OPERATION_ENVELOPE_VERSION_,
+    operationId: Utilities.getUuid(),
+    operationType: String(operationType || '').trim(),
+    workbookIdentity: activityWorkbookIdentity_(ss),
+    actorIdentity: activityActorIdentity_()
+  };
+}
+
+function activityJsonObject_(raw) {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    return JSON.parse(JSON.stringify(raw));
+  }
+  var text = String(raw || '').trim();
+  if (!text) return {};
+  try {
+    var parsed = JSON.parse(text);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+  } catch (_e) {
+    // Preserve unexpected historical text instead of dropping it.
+  }
+  return { legacyDetailsText: text };
+}
+
+function normalizeActivityTargetDescriptor_(raw) {
+  raw = raw || {};
+  var descriptor = {
+    targetVersion: Number(raw.targetVersion || ACTIVITY_TARGET_DESCRIPTOR_VERSION_),
+    targetType: String(raw.targetType || '').trim(),
+    targetKey: String(raw.targetKey || '').trim(),
+    locator: activityJsonObject_(raw.locator),
+    before: activityJsonObject_(raw.before),
+    after: activityJsonObject_(raw.after)
+  };
+  if (descriptor.targetVersion !== ACTIVITY_TARGET_DESCRIPTOR_VERSION_ ||
+      !descriptor.targetType || !descriptor.targetKey ||
+      !Object.keys(descriptor.locator).length ||
+      !Object.keys(descriptor.before).length ||
+      !Object.keys(descriptor.after).length) {
+    throw new Error('Activity target descriptor is incomplete or unsupported.');
+  }
+  return descriptor;
+}
+
+/**
+ * Merge immutable operation metadata into the existing Details JSON. Every new
+ * Activity row receives a unique eventId. Callers that do not yet provide exact
+ * target descriptors remain audit-only even though they receive correlation
+ * metadata; this prevents accidental correction of partially described events.
+ */
+function buildActivityDetailsForAppend_(ss, payload) {
+  payload = payload || {};
+  var details = activityJsonObject_(payload.details);
+  var supplied = payload.operationEnvelope || {};
+  var context = supplied.context || {};
+  var operationId = String(context.operationId || supplied.operationId || '').trim();
+  var operationType = String(
+    context.operationType || supplied.operationType || payload.eventType || ''
+  ).trim();
+  var targets = Array.isArray(supplied.targets)
+    ? supplied.targets.map(normalizeActivityTargetDescriptor_)
+    : [];
+
+  var workbookIdentity = String(
+    context.workbookIdentity || supplied.workbookIdentity || activityWorkbookIdentity_(ss)
+  ).trim();
+  var actorIdentity = String(
+    context.actorIdentity || supplied.actorIdentity || activityActorIdentity_()
+  ).trim();
+
+  details.operationEnvelope = {
+    envelopeVersion: ACTIVITY_OPERATION_ENVELOPE_VERSION_,
+    operationId: operationId || Utilities.getUuid(),
+    eventId: Utilities.getUuid(),
+    operationType: operationType,
+    workbookIdentity: workbookIdentity,
+    actorIdentity: actorIdentity,
+    correctable: supplied.correctable === true && targets.length > 0,
+    targets: targets
+  };
+  return details;
+}
+
+function parseActivityOperationEnvelope_(rawDetails) {
+  var details = activityJsonObject_(rawDetails);
+  var envelope = details.operationEnvelope;
+  if (!envelope || typeof envelope !== 'object') {
+    return { status: 'LEGACY_READ_ONLY', envelope: null, details: details };
+  }
+  try {
+    if (Number(envelope.envelopeVersion) !== ACTIVITY_OPERATION_ENVELOPE_VERSION_ ||
+        !String(envelope.operationId || '').trim() ||
+        !String(envelope.eventId || '').trim() ||
+        !String(envelope.operationType || '').trim() ||
+        !String(envelope.workbookIdentity || '').trim() ||
+        !String(envelope.actorIdentity || '').trim()) {
+      throw new Error('Operation envelope identity is incomplete.');
+    }
+    var normalizedTargets = Array.isArray(envelope.targets)
+      ? envelope.targets.map(normalizeActivityTargetDescriptor_)
+      : [];
+    if (envelope.correctable === true && !normalizedTargets.length) {
+      throw new Error('Correctable operation has no verified targets.');
+    }
+    envelope.targets = normalizedTargets;
+    envelope.correctable = envelope.correctable === true;
+    return {
+      status: envelope.correctable ? 'READY_FOR_PREVIEW' : 'AUDIT_ONLY',
+      envelope: envelope,
+      details: details
+    };
+  } catch (e) {
+    return {
+      status: 'INVALID_READ_ONLY',
+      envelope: null,
+      details: details,
+      error: e && e.message ? e.message : String(e)
+    };
+  }
+}
+
+function activityNormalizedState_(value) {
+  if (Array.isArray(value)) return value.map(activityNormalizedState_);
+  if (value && typeof value === 'object') {
+    var out = {};
+    Object.keys(value).sort().forEach(function(key) {
+      out[key] = activityNormalizedState_(value[key]);
+    });
+    return out;
+  }
+  return typeof value === 'number' && isFinite(value) ? round2_(value) : value;
+}
+
+function activityStatesEqual_(left, right) {
+  return JSON.stringify(activityNormalizedState_(left)) ===
+    JSON.stringify(activityNormalizedState_(right));
+}
+
+function findActivityOperationEvents_(ss, operationId) {
+  var requested = String(operationId || '').trim();
+  if (!requested || requested.length > 100) {
+    throw new Error('A valid Activity operation ID is required.');
+  }
+  var sh = ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var values = sh.getRange(
+    2,
+    1,
+    sh.getLastRow() - 1,
+    ACTIVITY_LOG_HEADERS.length
+  ).getValues();
+  var found = [];
+  for (var i = 0; i < values.length; i++) {
+    var parsed = parseActivityOperationEnvelope_(values[i][11]);
+    if (parsed.envelope &&
+        String(parsed.envelope.operationId || '').trim() === requested) {
+      found.push({
+        sheetRow: i + 2,
+        eventType: String(values[i][1] || '').trim(),
+        parsed: parsed
+      });
+    }
+  }
+  return found;
+}
+
+/**
+ * Read-only operation preview. It resolves by immutable operationId, verifies
+ * workbook scope and distinct event IDs, and compares every supported target
+ * with the recorded before/after states. It never offers or performs a write.
+ */
+function previewActivityOperationInSpreadsheet_(ss, operationId) {
+  var events = findActivityOperationEvents_(ss, operationId);
+  if (!events.length) {
+    return { ok: false, status: 'LEGACY_OR_NOT_FOUND', correctable: false, targets: [] };
+  }
+
+  var currentWorkbookIdentity = activityWorkbookIdentity_(ss);
+  var currentActorIdentity = activityActorIdentity_();
+  var eventIds = {};
+  var operationType = '';
+  var targetsByKey = {};
+  for (var i = 0; i < events.length; i++) {
+    var parsed = events[i].parsed;
+    var envelope = parsed.envelope;
+    if (!envelope || parsed.status === 'INVALID_READ_ONLY') {
+      return { ok: false, status: 'INVALID_READ_ONLY', correctable: false, targets: [] };
+    }
+    if (envelope.workbookIdentity !== currentWorkbookIdentity) {
+      return { ok: false, status: 'WORKBOOK_CHANGED', correctable: false, targets: [] };
+    }
+    if (!currentActorIdentity || envelope.actorIdentity !== currentActorIdentity) {
+      return { ok: false, status: 'ACTOR_CHANGED', correctable: false, targets: [] };
+    }
+    if (eventIds[envelope.eventId]) {
+      return { ok: false, status: 'DUPLICATE_EVENT_ID', correctable: false, targets: [] };
+    }
+    eventIds[envelope.eventId] = true;
+    if (operationType && operationType !== envelope.operationType) {
+      return { ok: false, status: 'MIXED_OPERATION_TYPE', correctable: false, targets: [] };
+    }
+    operationType = envelope.operationType;
+    for (var j = 0; j < envelope.targets.length; j++) {
+      var target = envelope.targets[j];
+      var existing = targetsByKey[target.targetKey];
+      if (existing && !activityStatesEqual_(existing, target)) {
+        return { ok: false, status: 'CONFLICTING_TARGETS', correctable: false, targets: [] };
+      }
+      targetsByKey[target.targetKey] = target;
+    }
+  }
+
+  var targetKeys = Object.keys(targetsByKey);
+  if (!targetKeys.length || !events.some(function(event) {
+    return event.parsed.envelope.correctable === true;
+  })) {
+    return {
+      ok: true,
+      status: 'AUDIT_ONLY',
+      operationId: String(operationId),
+      operationType: operationType,
+      correctable: false,
+      targets: []
+    };
+  }
+
+  var previews = targetKeys.map(function(key) {
+    var target = targetsByKey[key];
+    if (typeof inspectActivityOperationTargetInSpreadsheet_ !== 'function') {
+      return { targetKey: key, targetType: target.targetType, status: 'UNSUPPORTED_TARGET' };
+    }
+    var inspection = inspectActivityOperationTargetInSpreadsheet_(ss, target);
+    if (!inspection || inspection.supported !== true) {
+      return { targetKey: key, targetType: target.targetType, status: 'UNSUPPORTED_TARGET' };
+    }
+    var current = activityNormalizedState_(inspection.current);
+    var status = activityStatesEqual_(current, target.after)
+      ? 'MATCHES_AFTER'
+      : (activityStatesEqual_(current, target.before) ? 'MATCHES_BEFORE' : 'CHANGED');
+    return {
+      targetKey: key,
+      targetType: target.targetType,
+      status: status,
+      before: target.before,
+      after: target.after,
+      current: current
+    };
+  });
+  var ready = previews.every(function(target) {
+    return target.status === 'MATCHES_AFTER';
+  });
+  return {
+    ok: true,
+    status: ready ? 'READY' : 'PRECONDITION_FAILED',
+    operationId: String(operationId),
+    operationType: operationType,
+    correctable: ready,
+    eventCount: events.length,
+    targets: previews
+  };
+}
+
+/** PUBLIC, READ-ONLY. No correction action is exposed in 5h. */
+function previewActivityOperationCorrection(operationId) {
+  return previewActivityOperationInSpreadsheet_(getUserSpreadsheet_(), operationId);
+}
+
+/**
  * Canonical first-create column widths (px), keyed by exact header text.
  *
  * Source: Golden Workbook parity (Validator "AdoptGolden" — LOG - Activity
@@ -286,7 +601,8 @@ function activityLogFallbackPayeeFromSkipKey_(skipKey) {
  *   cashFlowSheet?: string,
  *   cashFlowMonth?: string,
  *   dedupeKey?: string,
- *   details?: string
+ *   details?: string,
+ *   operationEnvelope?: Object
  * }} payload
  * @returns {boolean}
  */
@@ -300,6 +616,7 @@ function appendActivityLog_(ss, payload) {
     var sh = getOrCreateActivityLogSheet_(ss);
     var tz = Session.getScriptTimeZone();
     var loggedAt = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
+    var details = buildActivityDetailsForAppend_(ss, payload);
 
     var row = [
       loggedAt,
@@ -313,7 +630,7 @@ function appendActivityLog_(ss, payload) {
       String(payload.cashFlowSheet || '').trim(),
       String(payload.cashFlowMonth || '').trim(),
       dedupe,
-      String(payload.details || '').trim()
+      JSON.stringify(details)
     ];
 
     sh.appendRow(row);

@@ -236,6 +236,17 @@
     });
   }
 
+  function exerciseActivityOperationEnvelope_() {
+    return new Promise(function(resolve, reject) {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(function(err) {
+          reject(new Error((err && err.message) ? err.message : String(err)));
+        })
+        .pdE2EExerciseOperationEnvelope(cfg.runId);
+    });
+  }
+
   async function exerciseBillSkipStopSafety() {
     var originalConfirm = window.confirm;
     var confirmations = [];
@@ -285,9 +296,17 @@
         return status && status.classList.contains('error') &&
           /(moved on the sheet|please refresh)/i.test(String(status.textContent || ''));
       }, 90000, 'the stale Stop tracking rejection');
-      checks.push(!!storedEntryByPayee_(window.__dashboardActiveBills, originalPayee + ' stale'));
+      var staleInspection = await inspectBillLifecycle_();
+      var staleVerified = staleInspection && staleInspection.ok && staleInspection.verification;
+      checks.push(!!staleVerified && staleVerified.rowPresent === true &&
+        staleVerified.inactive === false &&
+        Number(staleVerified.deactivateActivityCount) === 0);
 
-      manageEntry.row.payee = originalPayee;
+      loadDashboardActionSections();
+      await waitFor(function() {
+        return !!storedEntryByPayee_(window.__dashboardActiveBills, originalPayee);
+      }, 90000, 'the active synthetic bill to reload after stale rejection');
+      manageEntry = storedEntryByPayee_(window.__dashboardActiveBills, originalPayee);
       window.confirm = function(message) {
         confirmations.push(String(message || ''));
         return true;
@@ -604,6 +623,25 @@
       add('health_prerequisite_truth', healthTruthPass, healthTruthPass
         ? 'Financial Health withheld its score because the representative fixture still has an incomplete required Profile.'
         : 'Financial Health exposed a score or failed to explain the incomplete required Profile prerequisite.');
+
+      var operationResult = await exerciseActivityOperationEnvelope_();
+      var operationVerification = operationResult && operationResult.ok &&
+        operationResult.verification;
+      var operationPass = !!operationVerification &&
+        operationVerification.operationIdPresent === true &&
+        Number(operationVerification.eventCount) === 1 &&
+        operationVerification.uniqueEventIdPresent === true &&
+        Number(operationVerification.envelopeVersion) === 1 &&
+        operationVerification.operationType === 'quick_pay' &&
+        operationVerification.actorScoped === true &&
+        operationVerification.workbookScoped === true &&
+        operationVerification.correctable === true &&
+        Number(operationVerification.targetCount) === 1 &&
+        operationVerification.previewStatus === 'READY' &&
+        operationVerification.previewCorrectable === true;
+      add('activity_operation_envelope', operationPass, operationPass
+        ? 'Quick Add persisted one server-owned operation ID, one unique event ID, scoped versioned target evidence, and a READY exact-state preview.'
+        : 'The disposable Quick Add operation envelope or exact-state preview was incomplete.');
 
       var billSafety = await exerciseBillSkipStopSafety();
       add('bill_skip_stop_safety', billSafety.pass, billSafety.detail);

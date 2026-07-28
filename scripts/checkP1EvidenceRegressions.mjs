@@ -131,9 +131,9 @@ assert.match(firstRunBrowser,
   'First-Run Retirement evidence must prove guidance is visible while result walls stay hidden');
 assert.match(firstRunBrowser, /function customerLanguageLeaks\(/,
   'First-Run E2E must scan visible customer pages for internal workbook terminology');
-assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V7/,
+assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V8/,
   'Populated Dashboard E2E must be an implemented browser suite backed by saved evidence');
-assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V7'/,
+assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V8'/,
   'Retirement ready-result evidence must invalidate older Populated Dashboard evidence');
 assert.doesNotMatch(populatedE2E, /function pdE2EPrepare\([^)]*(?:spreadsheet|workbook|file)Id/i,
   'Populated Dashboard preparation must never accept an arbitrary workbook target');
@@ -164,12 +164,21 @@ for (const assertionId of ['overview_kpis', 'bank_selection_actions', 'bank_load
   'tracked_editor_convergence', 'debt_selection_actions', 'debt_loading_resilience',
   'property_equity', 'populated_workspaces', 'retirement_ready_results', 'income_setup_consistency', 'subtab_retention', 'setup_help_language',
   'customer_language', 'refresh_button_state', 'health_prerequisite_truth',
-  'bill_skip_stop_safety', 'clean_console_navigation']) {
+  'activity_operation_envelope', 'bill_skip_stop_safety', 'clean_console_navigation']) {
   assert.ok(populatedE2E.includes(`'${assertionId}'`), `Populated Dashboard contract missing ${assertionId}`);
 }
 assert.match(populatedBrowser,
   /showTab\('retirement'\)[\s\S]*?loadRetirementSection\(\)[\s\S]*?ret_info_goal[\s\S]*?ret_info_funded[\s\S]*?ret_empty_state[\s\S]*?ret_scenario_cards[\s\S]*?ret_results_panel[\s\S]*?add\('retirement_ready_results'/,
   'Populated Retirement evidence must prove the ready Base scenario reveals meaningful result walls');
+assert.match(populatedE2E,
+  /function pdE2EExerciseOperationEnvelope\(runId\)[\s\S]*?assertFirstRunE2EFixture_\(state, email, false\)[\s\S]*?quickAddPayment\([\s\S]*?, ss\)[\s\S]*?previewActivityOperationInSpreadsheet_\(ss, operationId\)/,
+  'Operation-envelope runtime proof must use only the marker-verified disposable fixture and exact-state preview');
+assert.doesNotMatch(populatedE2E,
+  /function pdE2EExerciseOperationEnvelope\([^)]*(?:email|spreadsheet|workbook|file)Id/i,
+  'Operation-envelope runtime proof must never accept a caller-selected identity or workbook');
+assert.match(populatedBrowser,
+  /exerciseActivityOperationEnvelope_[\s\S]*?pdE2EExerciseOperationEnvelope\(cfg\.runId\)[\s\S]*?add\('activity_operation_envelope'/,
+  'The unattended populated runner must require the guarded operation-envelope assertion');
 assert.match(populatedBrowser,
   /exerciseBankLoadingResilience[\s\S]*?Controlled bank details failure[\s\S]*?save\.disabled === true[\s\S]*?pending\[1\]\.onSuccess[\s\S]*?pending\[0\]\.onSuccess/,
   'Populated Bank evidence must prove disabled-on-failure, recovery, and late-response refusal');
@@ -177,8 +186,8 @@ assert.match(populatedBrowser,
   /exerciseDebtLoadingResilience[\s\S]*?Controlled debt details failure[\s\S]*?save\.disabled === true[\s\S]*?pending\[1\]\.onSuccess[\s\S]*?pending\[0\]\.onSuccess/,
   'Populated Debt evidence must prove disabled-on-failure, recovery, and late-response refusal');
 assert.match(populatedBrowser,
-  /exerciseBillSkipStopSafety[\s\S]*?skipBillFromDashboard\(skipKey\)[\s\S]*?originalPayee \+ ' stale'[\s\S]*?stopTrackingBillFromDashboard\(manageEntry\.key\)[\s\S]*?manageEntry\.row\.payee = originalPayee[\s\S]*?stopTrackingBillFromDashboard\(manageEntry\.key\)/,
-  'Populated Bill evidence must prove Skip, stale Stop rejection, and valid Stop recovery in order');
+  /exerciseBillSkipStopSafety[\s\S]*?skipBillFromDashboard\(skipKey\)[\s\S]*?originalPayee \+ ' stale'[\s\S]*?stopTrackingBillFromDashboard\(manageEntry\.key\)[\s\S]*?staleInspection = await inspectBillLifecycle_\(\)[\s\S]*?staleVerified\.inactive === false[\s\S]*?loadDashboardActionSections\(\)[\s\S]*?stopTrackingBillFromDashboard\(manageEntry\.key\)/,
+  'Populated Bill evidence must prove Skip, server-verified stale Stop rejection, fresh UI recovery, and valid Stop in order');
 assert.match(populatedBrowser,
   /No payment will be recorded[\s\S]*?History is preserved[\s\S]*?skipActivityCount[\s\S]*?deactivateActivityCount/,
   'Populated Bill evidence must verify confirmation consequences and immutable Activity evidence');

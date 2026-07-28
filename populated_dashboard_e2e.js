@@ -7,7 +7,7 @@
  * from a caller and the permanent test identity remains a non-admin.
  */
 var POPULATED_DASHBOARD_E2E_MODE_ = 'POPULATED_DASHBOARD';
-var POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_ = 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V7';
+var POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_ = 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V8';
 var POPULATED_DASHBOARD_E2E_SCENARIO_ID_ = 'E2E-POPULATED-DASHBOARD';
 var POPULATED_DASHBOARD_E2E_REQUIRED_ASSERTIONS_ = [
   'startup_populated_overview',
@@ -26,6 +26,7 @@ var POPULATED_DASHBOARD_E2E_REQUIRED_ASSERTIONS_ = [
   'customer_language',
   'refresh_button_state',
   'health_prerequisite_truth',
+  'activity_operation_envelope',
   'bill_skip_stop_safety',
   'clean_console_navigation'
 ];
@@ -192,6 +193,70 @@ function pdE2EInspectBillLifecycle(runId) {
         notesPreserved: !!row && String(row[headerMap.Notes] || '').trim() === 'Synthetic harness bill',
         skipActivityCount: skipCount,
         deactivateActivityCount: deactivateCount
+      }
+    };
+  });
+}
+
+/**
+ * Guarded disposable-account writer proof for the shared Activity operation
+ * envelope. No workbook identifier or financial input is accepted from the
+ * browser; the server resolves the marker-verified fixture and deterministic
+ * representative Income row.
+ */
+function pdE2EExerciseOperationEnvelope(runId) {
+  return frE2ESafe_(function() {
+    var email = assertFirstRunE2EAllowed_();
+    var state = frE2EReadState_();
+    if (!state || state.mode !== POPULATED_DASHBOARD_E2E_MODE_ ||
+        String(runId || '') !== state.runId) {
+      throw new Error('Populated Dashboard E2E refused: run token mismatch.');
+    }
+    assertFirstRunE2EFixture_(state, email, false);
+
+    var ss = SpreadsheetApp.openById(state.workbookId);
+    var profile = getHarnessRepresentativeProfile_();
+    var entryDate = new Date();
+    var result = quickAddPayment({
+      entryType: 'Income',
+      payee: profile.income.payee,
+      entryDate: Utilities.formatDate(
+        entryDate,
+        Session.getScriptTimeZone(),
+        'yyyy-MM-dd'
+      ),
+      amount: 123.45,
+      createIfMissing: false,
+      flowSource: 'CASH'
+    }, ss);
+    SpreadsheetApp.flush();
+    assertFirstRunE2EFixture_(state, email, false);
+
+    var operationId = String(
+      result && result.activitySnapshot && result.activitySnapshot.operationId || ''
+    ).trim();
+    var events = operationId ? findActivityOperationEvents_(ss, operationId) : [];
+    var preview = operationId
+      ? previewActivityOperationInSpreadsheet_(ss, operationId)
+      : { status: 'MISSING_OPERATION_ID', correctable: false, targets: [] };
+    var envelope = events.length === 1 ? events[0].parsed.envelope : null;
+
+    return {
+      ok: true,
+      verification: {
+        operationIdPresent: !!operationId,
+        eventCount: events.length,
+        uniqueEventIdPresent: !!(envelope && envelope.eventId),
+        envelopeVersion: envelope ? Number(envelope.envelopeVersion) : 0,
+        operationType: envelope ? String(envelope.operationType || '') : '',
+        actorScoped: !!(envelope && envelope.actorIdentity),
+        workbookScoped: !!(envelope && envelope.workbookIdentity),
+        correctable: !!(envelope && envelope.correctable),
+        targetCount: envelope && Array.isArray(envelope.targets)
+          ? envelope.targets.length
+          : 0,
+        previewStatus: String(preview.status || ''),
+        previewCorrectable: preview.correctable === true
       }
     };
   });

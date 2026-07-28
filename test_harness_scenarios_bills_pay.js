@@ -42,13 +42,37 @@ function getHarnessBillsPayE2EScenario_() {
       var dedupeCol = header.indexOf('Dedupe Key');
       var paidKey = 'bill_paid::' + buildDashboardBillPaidKey_(ev.marker.payee, ev.marker.dueDate);
       var paidCount = 0, quickPayCount = 0;
+      var quickPayEnvelope = null;
+      var detailsCol = header.indexOf('Details');
       for (var r = 1; r < rows.length; r++) {
-        if (eventCol !== -1 && rows[r][eventCol] === 'quick_pay') quickPayCount++;
+        if (eventCol !== -1 && rows[r][eventCol] === 'quick_pay') {
+          quickPayCount++;
+          quickPayEnvelope = detailsCol === -1
+            ? null
+            : parseActivityOperationEnvelope_(rows[r][detailsCol]);
+        }
         if (eventCol !== -1 && rows[r][eventCol] === 'bill_paid' &&
             dedupeCol !== -1 && rows[r][dedupeCol] === paidKey) paidCount++;
       }
       ctx.assert.equals('Quick Pay Activity row', quickPayCount, 1, { module: 'Bills Pay', location: ACTIVITY_LOG_SHEET_NAME });
       ctx.assert.equals('Handled marker deduplicated', paidCount, 1, { module: 'Bills Pay', location: ACTIVITY_LOG_SHEET_NAME });
+      ctx.assert.equals('Quick Pay envelope is correctable',
+        quickPayEnvelope && quickPayEnvelope.status, 'READY_FOR_PREVIEW',
+        { module: 'Bills Pay', location: ACTIVITY_LOG_SHEET_NAME + ' / Details' });
+      ctx.assert.equals('Quick Pay operation ID persisted',
+        quickPayEnvelope && quickPayEnvelope.envelope.operationId,
+        result.activitySnapshot.operationId,
+        { module: 'Bills Pay', location: ACTIVITY_LOG_SHEET_NAME + ' / Details' });
+      ctx.assert.equals('Quick Pay target descriptor count',
+        quickPayEnvelope && quickPayEnvelope.envelope.targets.length, 1,
+        { module: 'Bills Pay', location: ACTIVITY_LOG_SHEET_NAME + ' / Details' });
+      var operationPreview = previewActivityOperationInSpreadsheet_(
+        ctx.ss,
+        result.activitySnapshot.operationId
+      );
+      ctx.assert.equals('Quick Pay operation preview is ready',
+        operationPreview.status, 'READY',
+        { module: 'Bills Pay', location: ACTIVITY_LOG_SHEET_NAME + ' / operation preview' });
     }
   };
 }

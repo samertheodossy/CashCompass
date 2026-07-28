@@ -205,6 +205,30 @@ const nonDonationLogRow = [
 ];
 const activityServerContext = {
   Logger: { log() {} },
+  Session: {
+    getScriptTimeZone() { return 'America/Los_Angeles'; },
+    getEffectiveUser() { return { getEmail() { return 'fixture@example.com'; } }; }
+  },
+  Utilities: {
+    DigestAlgorithm: { SHA_256: 'SHA_256' },
+    Charset: { UTF_8: 'UTF_8' },
+    computeDigest(_algorithm, value) {
+      const text = String(value || '');
+      return Array.from({ length: 32 }, (_v, i) =>
+        (text.charCodeAt(i % Math.max(text.length, 1)) || 0) ^ i);
+    },
+    base64EncodeWebSafe(bytes) {
+      return Buffer.from(bytes).toString('base64url');
+    },
+    getUuid: (() => {
+      let sequence = 0;
+      return () => `00000000-0000-4000-8000-${String(++sequence).padStart(12, '0')}`;
+    })(),
+    formatDate() { return '2026-07-28 12:00:00'; }
+  },
+  round2_(value) { return Math.round(Number(value) * 100) / 100; },
+  toNumber_(value) { return Number(value) || 0; },
+  getCurrentUserEmail_() { return 'fixture@example.com'; },
   getUserSpreadsheet_() {
     return {
       getSheetByName() {
@@ -224,6 +248,153 @@ assert.equal(forgedActivityDeleteResult.ok, false,
   'Activity server must reject a forged non-Donation delete request');
 assert.match(forgedActivityDeleteResult.error, /only enabled for Donation rows/i,
   'Activity server rejection must explain the donation-only contract');
+
+const operationWorkbook = { getId() { return 'disposable-operation-workbook'; } };
+const operationContext = activityServerContext.createActivityOperationContext_(
+  operationWorkbook,
+  'quick_pay'
+);
+const operationTarget = {
+  targetVersion: 1,
+  targetType: 'cash_flow_month',
+  targetKey: 'cash_flow_month::fixture',
+  locator: {
+    sheetName: 'INPUT - Cash Flow 2026',
+    entryType: 'Expense',
+    payee: 'Fixture Bill',
+    entryDate: '2026-07-28',
+    month: 'Jul-26',
+    rowCreated: false
+  },
+  before: { exists: true, value: -10, flowSource: 'CASH' },
+  after: { exists: true, value: -25, flowSource: 'CASH' }
+};
+const firstOperationDetails = activityServerContext.buildActivityDetailsForAppend_(
+  operationWorkbook,
+  {
+    eventType: 'quick_pay',
+    details: JSON.stringify({ previousValue: -10, newValue: -25 }),
+    operationEnvelope: {
+      context: operationContext,
+      correctable: true,
+      targets: [operationTarget]
+    }
+  }
+);
+const secondOperationDetails = activityServerContext.buildActivityDetailsForAppend_(
+  operationWorkbook,
+  {
+    eventType: 'quick_pay',
+    operationEnvelope: {
+      context: operationContext,
+      correctable: true,
+      targets: [operationTarget]
+    }
+  }
+);
+assert.equal(firstOperationDetails.operationEnvelope.operationId,
+  secondOperationDetails.operationEnvelope.operationId,
+  'Linked Activity events must preserve one server-owned operation ID');
+assert.notEqual(firstOperationDetails.operationEnvelope.eventId,
+  secondOperationDetails.operationEnvelope.eventId,
+  'Every Activity event must receive its own event ID');
+assert.equal(firstOperationDetails.previousValue, -10,
+  'Operation metadata must preserve existing event-specific Details fields');
+assert.equal(
+  activityServerContext.parseActivityOperationEnvelope_(firstOperationDetails).status,
+  'READY_FOR_PREVIEW',
+  'A correctable operation requires a valid versioned before/after target'
+);
+assert.equal(
+  activityServerContext.parseActivityOperationEnvelope_(
+    JSON.stringify({ previousValue: -10, newValue: -25 })
+  ).status,
+  'LEGACY_READ_ONLY',
+  'Historical Activity Details without an operation envelope must remain read-only'
+);
+assert.throws(
+  () => activityServerContext.buildActivityDetailsForAppend_(
+    operationWorkbook,
+    {
+      eventType: 'quick_pay',
+      operationEnvelope: {
+        context: operationContext,
+        correctable: true,
+        targets: [{
+          targetVersion: 1,
+          targetType: 'cash_flow_month',
+          targetKey: 'incomplete',
+          locator: {},
+          before: {},
+          after: {}
+        }]
+      }
+    }
+  ),
+  /descriptor is incomplete/i,
+  'Correctable Activity events must fail closed when target evidence is incomplete'
+);
+let operationCurrentState = operationTarget.after;
+activityServerContext.inspectActivityOperationTargetInSpreadsheet_ = () => ({
+  supported: true,
+  status: 'READ',
+  current: operationCurrentState
+});
+const operationLogRow = [
+  '2026-07-28 12:00:00',
+  'quick_pay',
+  '2026-07-28',
+  15,
+  'expense',
+  'Fixture Bill',
+  '',
+  '',
+  'INPUT - Cash Flow 2026',
+  'Jul-26',
+  '',
+  JSON.stringify(firstOperationDetails)
+];
+const previewWorkbook = {
+  getId() { return 'disposable-operation-workbook'; },
+  getSheetByName(name) {
+    if (name !== 'LOG - Activity') return null;
+    return {
+      getLastRow() { return 2; },
+      getRange() { return { getValues() { return [operationLogRow]; } }; }
+    };
+  }
+};
+const readyOperationPreview =
+  activityServerContext.previewActivityOperationInSpreadsheet_(
+    previewWorkbook,
+    operationContext.operationId
+  );
+assert.equal(readyOperationPreview.status, 'READY',
+  'Operation preview must authorize only after every target matches its recorded post-state');
+operationCurrentState = { exists: true, value: -99, flowSource: 'CASH' };
+const changedOperationPreview =
+  activityServerContext.previewActivityOperationInSpreadsheet_(
+    previewWorkbook,
+    operationContext.operationId
+  );
+assert.equal(changedOperationPreview.status, 'PRECONDITION_FAILED',
+  'Operation preview must fail closed after a target changes');
+const wrongWorkbookPreview =
+  activityServerContext.previewActivityOperationInSpreadsheet_(
+    {
+      getId() { return 'different-workbook'; },
+      getSheetByName: previewWorkbook.getSheetByName
+    },
+    operationContext.operationId
+  );
+assert.equal(wrongWorkbookPreview.status, 'WORKBOOK_CHANGED',
+  'Operation preview must reject an operation from another workbook');
+assert.match(files['quick_add_payment.js'],
+  /const operationContext = createActivityOperationContext_\(ss, 'quick_pay'\);[\s\S]*?addCashFlowMoneyToCellPreserveRowFormat_/,
+  'Quick Add must create its server-owned operation ID before the first money write');
+assert.match(files['quick_add_payment.js'],
+  /operationEnvelope:\s*\{[\s\S]*?context:\s*operationContext[\s\S]*?correctable:\s*true[\s\S]*?targets:\s*activityTargets/,
+  'Quick Add must persist its complete operation context and versioned targets');
 
 for (const source of [body, files['PlannerDashboard.html']]) {
   assert.match(source,
@@ -902,8 +1073,11 @@ assert.match(billsServer,
   'Bills Pay marker writer must verify durable evidence before reporting success');
 const quickAddClient = files['Dashboard_Script_Payments.html'];
 assert.match(quickAddServer,
-  /function quickAddWorkbookIdentity_\(ss\)[\s\S]*?Utilities\.DigestAlgorithm\.SHA_256/,
-  'Quick Add receipts must use an opaque workbook identity');
+  /function quickAddWorkbookIdentity_\(ss\)\s*\{\s*return activityWorkbookIdentity_\(ss\);\s*\}/,
+  'Quick Add receipts must reuse the shared opaque Activity workbook identity');
+assert.match(activityServer,
+  /function activityOpaqueIdentity_\(prefix,\s*rawValue\)[\s\S]*?Utilities\.DigestAlgorithm\.SHA_256/,
+  'The shared Activity workbook identity must remain opaque');
 assert.match(quickAddServer,
   /workbookIdentity:\s*quickAddWorkbookIdentity_\(ss\)/,
   'Quick Add writer responses must scope receipts to their source workbook');

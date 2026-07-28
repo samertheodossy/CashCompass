@@ -2,6 +2,23 @@
 
 The V1 trust baseline is shipped and locked, and V1.1 closed out with the retirement profile integration (see **V1.1 — Retirement Profile Integration (DOB Source of Truth)** section below). The project has since moved into **Central App live + Family Beta readiness** — the Central App architecture is operational and the active work is hardening it toward a family beta (see **Current State — Post V1.2 Prep** below for the per-slice migration record). Working rules live in `WORKING_RULES.md → Current phase` + `→ Central App Transition Rules` (now active); product framing lives in `PROJECT_CONTEXT.md → Current phase` and `→ Current architecture — Central App (live)`. All prior phase notes below this header are preserved as-is for historical record.
 
+- **Activity operation envelope — `5h` / `REG-029` isolated runtime complete
+  pending Git approval (2026-07-28).** Added an envelope inside existing
+  Activity Details JSON: one server-owned operation ID for a complete Quick Add
+  action, one unique event ID for each new Activity row, opaque workbook/actor
+  scope, versioned logical targets, and normalized before/after state. Quick Add
+  captures Cash Flow row existence/value/Flow Source and an optional Debt
+  target. Preview is read-only and fails closed for legacy, malformed,
+  ambiguous, changed, duplicate-event, cross-workbook, or cross-actor evidence.
+  No Activity column/schema migration, correction writer, UI action, formula,
+  or financial rule was added. Full local `npm test` passed. Isolated Central
+  was advanced only to `@214`; Populated V8 run
+  `FR-dbe0482c-0c10-47c7-8189-109be59be6a4` passed 19/19 in 239.225 s,
+  including the operation envelope and strengthened server-verified stale Bill
+  rejection. It captured zero browser errors, Restricted single-owner sharing,
+  and verified exact-fixture Trash cleanup. Beta stayed `@106`; bounded was
+  untouched.
+
 - **Retirement guidance/runtime truth — `1e` / `REG-025` complete on isolated
   `@211` (2026-07-27).** The runtime replay exposed a compatibility defect:
   Retirement scenario reads/writes still used row numbers from the former

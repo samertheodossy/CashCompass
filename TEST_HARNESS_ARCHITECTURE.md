@@ -57,9 +57,20 @@ worth KPIs; Bank/Debt selection and Save-only Update gating; Bank/Investment/Hou
 tracked-editor modes plus populated Manage inventories with Stop tracking; property equity; representative
 Investments/Upcoming/Bills/Income rendering; subtab retention; populated Setup and Help;
 customer-language leakage; Retirement ready-state results; real planner Refresh
-state; and clean console/navigation. Evidence is saved under
-`POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V7`; PASS requires
+state; server-owned Activity operation identity plus exact-state preview; Bill
+Skip/Stop stale-request safety; and clean console/navigation. Evidence is saved
+under `POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V8`; PASS requires
 Restricted sharing and exact Drive-verified Trash cleanup.
+
+**`@214` operation-envelope evidence:** Populated V8 run
+`FR-dbe0482c-0c10-47c7-8189-109be59be6a4` passed 19/19 in 239.225 s. The new
+assertion used production Quick Add on the exact marker-verified fixture and
+proved one server-owned operation ID, one unique event ID, versioned/scoped
+target evidence, and a `READY` exact-state preview. The strengthened Bill
+journey also verified on the server that a deliberately stale Stop request left
+the bill active before reloading a fresh UI reference and completing valid Stop
+tracking. Sharing was Restricted/single-owner, no browser errors were captured,
+and the exact fixture was verified in Trash.
 
 **`@211` Retirement evidence:** First-Run V6 run
 `FR-a3b654b7-8343-4776-9991-2e7118f6e6fb` passed 12/12 and Populated V7 run

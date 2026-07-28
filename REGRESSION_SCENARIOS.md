@@ -603,6 +603,42 @@ Whenever a production bug is fixed:
   Debts, and Donations; Bank Accounts, Investments, and Houses already had
   equivalent format-only inheritance.
 
+### REG-029 — Activity events lacked durable operation identity and exact target state
+- Category: REGRESSION / FINANCIAL SAFETY / AUDIT IDENTITY / CORRECTION FOUNDATION
+- Date discovered: 2026-07-27
+- Status: fixed; local regressions and isolated `@214` Populated V8 runtime
+  replay passed 19/19 with verified cleanup
+- Affected files: `activity_log.js`, `quick_add_payment.js`,
+  `test_harness_scenarios_bills_pay.js`, `populated_dashboard_e2e.js`,
+  `Dashboard_Script_PopulatedDashboardE2E.html`,
+  `test_harness_suites.js`, `scripts/checkDashboardUxRegressions.mjs`,
+  `scripts/checkP1EvidenceRegressions.mjs`
+- Root cause: Activity rows were independent descriptive records. Quick Add
+  created a browser receipt UUID and captured before/after values, but did not
+  persist that identity or exact target state in Activity. Other Activity rows
+  had neither a unique event identity nor a shared versioned envelope, so a
+  future correction could not safely correlate effects or prove authorization
+  and current state.
+- Expected result: every newly appended Activity row has a unique `eventId`
+  inside the existing Details JSON and a server-generated `operationId`.
+  Direct Quick Add creates its operation ID before the first write and persists
+  versioned Cash Flow/Debt target descriptors with normalized before/after
+  state plus opaque workbook/actor identity. Read-only preview succeeds only
+  when all targets still match the logged post-state and fails closed for
+  legacy, malformed, ambiguous, changed, cross-workbook, or cross-actor
+  evidence. Existing columns and historical rows are untouched; legacy rows
+  remain read-only.
+- Permanent coverage: `npm run test:dashboard-ux` dynamically verifies shared
+  operation IDs, unique event IDs, preserved legacy detail fields, complete
+  target requirements, legacy read-only classification, exact-state preview,
+  changed-state rejection, cross-workbook rejection, and creation of the
+  Quick Add operation context before its money write. The guarded
+  `E2E-BILLS-DUE-PAY` disposable-workbook scenario now verifies the persisted
+  Quick Add envelope and a `READY` server preview. Populated Dashboard V8 run
+  `FR-dbe0482c-0c10-47c7-8189-109be59be6a4` passed 19/19 on isolated Central
+  `@214` in 239.225 s, with Restricted single-owner sharing, no browser errors,
+  and verified exact-fixture Trash cleanup.
+
 ---
 
 ## RECOVERY scenarios (design — not historical bugs)
@@ -653,4 +689,5 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-026 | Quick Add did not explain that repeated entries are cumulative | REGRESSION / UI TRUST / MONEY-ENTRY LANGUAGE | fixed locally; isolated runtime confirmation pending |
 | REG-027 | Upcoming Dismiss did not explain its no-payment/history consequences | REGRESSION / UI TRUST / LIFECYCLE LANGUAGE | fixed locally; isolated runtime confirmation pending |
 | REG-028 | Newly added Upcoming rows did not inherit body-row formatting | REGRESSION / WORKBOOK PRESENTATION / APPEND SAFETY | fixed locally; isolated disposable-workbook confirmation pending |
+| REG-029 | Activity events lacked durable operation identity and exact target state | REGRESSION / FINANCIAL SAFETY / AUDIT IDENTITY / CORRECTION FOUNDATION | fixed; isolated `@214` Populated V8 19/19 PASS with verified cleanup |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |
