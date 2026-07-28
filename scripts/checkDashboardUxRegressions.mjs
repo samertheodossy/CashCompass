@@ -34,9 +34,13 @@ const files = Object.fromEntries(await Promise.all([
   'activity_log.js',
   'bills.js',
   'dashboard_data.js',
+  'debts.js',
+  'donations.js',
   'income_sources.js',
   'onboarding.js',
+  'planner_helpers.js',
   'retirement.js',
+  'upcoming_expenses.js',
   'test_harness_scenarios_bills.js'
 ].map(async (name) => [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')])));
 
@@ -534,6 +538,115 @@ assert.doesNotMatch(body, /cashflow-tools-label|cashflow-feature-description/,
   'Cash Flow must not reintroduce a second navigation label or banner description');
 assert.doesNotMatch(body + '\n' + styles, /cashflow-primary-tab/,
   'Quick add must not use a competing featured-tab treatment');
+assert.match(body,
+  /Quick Add adds the entered amount to this payee’s total for the selected month\.[\s\S]*?It does not replace an amount already recorded\./,
+  'Quick Add must explain that the entered amount is cumulative rather than a replacement');
+assert.match(files['Dashboard_Help.html'],
+  /Quick add<\/strong> adds an income or expense amount to the selected payee’s existing total for that month\. It does not replace an amount already recorded\./,
+  'Quick Add Help must preserve the same cumulative-write contract');
+assert.match(body,
+  /<strong>Dismiss<\/strong> removes an item from active planning without recording a payment or changing Cash Flow\. Its Upcoming row and Activity history remain\./,
+  'Upcoming must explain Dismiss consequences before the user acts');
+assert.match(body,
+  /class="panel-purpose upcoming-dismiss-note"><strong>Dismiss<\/strong>/,
+  'Upcoming Dismiss consequences must use a distinct information treatment');
+assert.match(styles,
+  /\.upcoming-dismiss-note\s*\{[\s\S]*?color:\s*#7a4b00;[\s\S]*?background:\s*#fff8e1;[\s\S]*?border-left:\s*4px solid #d6a23d;/,
+  'Upcoming Dismiss guidance must remain a calm amber notice rather than destructive red');
+assert.match(files['Dashboard_Script_CashFlowUpcoming.html'],
+  /Remove from active planning without recording a payment; history is preserved[\s\S]*?>Dismiss<\/button>/,
+  'Each Upcoming Dismiss action must retain concise consequence guidance');
+assert.match(files['upcoming_expenses.js'],
+  /message:\s*'Dismissed from active planning\. No payment was recorded; history was preserved\.'/,
+  'Upcoming Dismiss success must confirm that no payment was recorded and history remains');
+assert.match(files['quick_add_payment.js'],
+  /addCashFlowMoneyToCellPreserveRowFormat_\(sheet,\s*rowInfo\.row,\s*monthCol,\s*signedAmount,\s*3\)/,
+  'Quick Add must remain cumulative so its customer-facing add-not-replace copy stays truthful');
+assert.match(files['planner_helpers.js'],
+  /function addCashFlowMoneyToCellPreserveRowFormat_\([\s\S]*?cell\.setValue\(round2_\(currentValue \+ addValue\)\)/,
+  'The Cash Flow add helper must retain its cumulative-value contract');
+const upcomingServer = files['upcoming_expenses.js'];
+const dismissUpcomingStart = upcomingServer.indexOf('function dismissUpcomingExpense(id)');
+const dismissUpcomingEnd = upcomingServer.indexOf('/**', dismissUpcomingStart + 1);
+assert.ok(dismissUpcomingStart >= 0 && dismissUpcomingEnd > dismissUpcomingStart,
+  'Upcoming must expose a bounded Dismiss lifecycle function');
+const dismissUpcomingSlice = upcomingServer.slice(dismissUpcomingStart, dismissUpcomingEnd);
+assert.match(dismissUpcomingSlice, /\.setValue\('Dismissed'\)/,
+  'Upcoming Dismiss must remain a status-only soft removal');
+assert.match(dismissUpcomingSlice, /appendUpcomingActivityStatus_/,
+  'Upcoming Dismiss must preserve an Activity lifecycle record');
+assert.doesNotMatch(dismissUpcomingSlice,
+  /quickAddPayment|addCashFlowMoneyToCellPreserveRowFormat_|setCashFlowMoneyCellPreserveRowFormat_/,
+  'Upcoming Dismiss must never record a payment or change Cash Flow');
+const addUpcomingStart = upcomingServer.indexOf('function addUpcomingExpense(payload)');
+const addUpcomingEnd = upcomingServer.indexOf('function findUpcomingExpenseFormattingTemplateRow_', addUpcomingStart);
+assert.ok(addUpcomingStart >= 0 && addUpcomingEnd > addUpcomingStart,
+  'Upcoming must expose a bounded add workflow before its row-format helpers');
+const addUpcomingSlice = upcomingServer.slice(addUpcomingStart, addUpcomingEnd);
+assert.match(addUpcomingSlice,
+  /const formatTemplateRow = findUpcomingExpenseFormattingTemplateRow_\(sheet\)[\s\S]*?\.setValues\([\s\S]*?applyNewUpcomingExpenseRowFormatting_\(sheet,\s*row,\s*formatTemplateRow\)[\s\S]*?setNumberFormat\('yyyy-mm-dd'\)[\s\S]*?applyCurrencyFormat_/,
+  'Upcoming Add must format only the appended row and then reassert date/currency formats');
+const upcomingFormatStart = upcomingServer.indexOf('function applyNewUpcomingExpenseRowFormatting_(');
+const upcomingFormatEnd = upcomingServer.indexOf('/**\n * Dismiss an Upcoming row', upcomingFormatStart);
+assert.ok(upcomingFormatStart >= 0 && upcomingFormatEnd > upcomingFormatStart,
+  'Upcoming must expose a bounded new-row formatting helper');
+const upcomingFormatSlice = upcomingServer.slice(upcomingFormatStart, upcomingFormatEnd);
+assert.match(upcomingFormatSlice,
+  /SpreadsheetApp\.CopyPasteType\.PASTE_FORMAT[\s\S]*?setRowHeight\(newRow,\s*sheet\.getRowHeight\(templateRow\)\)/,
+  'Upcoming Add must inherit sibling formatting and row height without copying values');
+assert.match(upcomingFormatSlice,
+  /setFontSize\(CANON_FONT_BODY_\)[\s\S]*?setVerticalAlignment\(CANON_VERTICAL_ALIGNMENT_\)[\s\S]*?setRowHeight\(newRow,\s*CANON_ROW_HEIGHT_BODY_\)/,
+  'The first Upcoming data row must receive the canonical body-row fallback');
+assert.doesNotMatch(upcomingFormatSlice,
+  /applyUpcomingExpensesSheetStyling_|applyOperationalFlatSheetStyling_|setValues\(|setValue\(|appendRow\(|insertRow/,
+  'Upcoming row-format inheritance must not restyle the sheet or write workbook data');
+const billsSheetServer = files['bills.js'];
+const billsPreviousFormatStart = billsSheetServer.indexOf('function copyBillsRowFormattingFromPreviousRow_(');
+const billsPreviousFormatEnd = billsSheetServer.indexOf('function findBillsSortedInsertRow_(', billsPreviousFormatStart);
+assert.ok(billsPreviousFormatStart >= 0 && billsPreviousFormatEnd > billsPreviousFormatStart,
+  'Bills must expose bounded append-row formatting helpers');
+const billsAppendFormatSlice = billsSheetServer.slice(billsPreviousFormatStart, billsPreviousFormatEnd);
+assert.match(billsAppendFormatSlice,
+  /SpreadsheetApp\.CopyPasteType\.PASTE_FORMAT[\s\S]*?setRowHeight\(newRow,\s*sheet\.getRowHeight\(sourceRow\)\)/,
+  'Appended Bills rows must inherit sibling format and row height');
+const billsInsertFormatStart = billsSheetServer.indexOf('function copyBillsRowFormattingFromInsertSiblingRow_(');
+const billsFallbackEnd = billsSheetServer.indexOf('// Canonical widen widths', billsInsertFormatStart);
+assert.ok(billsInsertFormatStart >= 0 && billsFallbackEnd > billsInsertFormatStart,
+  'Bills must expose sorted-insert and canonical fallback formatting');
+const billsInsertFormatSlice = billsSheetServer.slice(billsInsertFormatStart, billsFallbackEnd);
+assert.match(billsInsertFormatSlice,
+  /SpreadsheetApp\.CopyPasteType\.PASTE_FORMAT[\s\S]*?setRowHeight\(newRow,\s*sheet\.getRowHeight\(sourceRow\)\)/,
+  'Sorted Bills rows must inherit sibling format and row height');
+assert.match(billsInsertFormatSlice,
+  /function applyBillsNewRowCanonicalFallback_[\s\S]*?setFontSize\(CANON_FONT_BODY_\)[\s\S]*?setRowHeight\(newRow,\s*CANON_ROW_HEIGHT_BODY_\)/,
+  'The first Bills data row must receive the canonical body-row fallback');
+const debtsServer = files['debts.js'];
+const addDebtStart = debtsServer.indexOf('function addDebtFromDashboard(');
+const addDebtEnd = debtsServer.indexOf('function deactivateDebtFromDashboard(', addDebtStart);
+assert.ok(addDebtStart >= 0 && addDebtEnd > addDebtStart,
+  'Debts must expose a bounded Add workflow');
+const addDebtSlice = debtsServer.slice(addDebtStart, addDebtEnd);
+assert.match(addDebtSlice,
+  /legacy\/header-only sheet with no summary row[\s\S]*?setFontSize\(CANON_FONT_BODY_\)[\s\S]*?setVerticalAlignment\(CANON_VERTICAL_ALIGNMENT_\)[\s\S]*?setRowHeight\(appendedRow,\s*CANON_ROW_HEIGHT_BODY_\)/i,
+  'A first Debt row in a legacy header-only sheet must receive canonical body formatting');
+assert.doesNotMatch(addDebtSlice,
+  /leave default formatting/,
+  'No Add Debt path may deliberately leave a new data row at Google Sheets defaults');
+const donationsServer = files['donations.js'];
+const addDonationStart = donationsServer.indexOf('function addDonation(');
+const addDonationEnd = donationsServer.indexOf('function tryDeleteDonationRowForActivityUndo_(', addDonationStart);
+assert.ok(addDonationStart >= 0 && addDonationEnd > addDonationStart,
+  'Donations must expose a bounded Add workflow');
+const addDonationSlice = donationsServer.slice(addDonationStart, addDonationEnd);
+assert.match(addDonationSlice,
+  /SpreadsheetApp\.CopyPasteType\.PASTE_FORMAT[\s\S]*?setRowHeight\(row1,\s*sheet\.getRowHeight\(formatSourceRow1\)\)/,
+  'Donation rows must inherit sibling format and row height');
+assert.match(addDonationSlice,
+  /setFontSize\(CANON_FONT_BODY_\)[\s\S]*?setVerticalAlignment\(CANON_VERTICAL_ALIGNMENT_\)[\s\S]*?setRowHeight\(row1,\s*CANON_ROW_HEIGHT_BODY_\)/,
+  'The first Donation row in a year block must receive canonical body formatting');
+assert.match(addDonationSlice,
+  /const dateCol[\s\S]*?setNumberFormat\('M\/d\/yyyy'\)[\s\S]*?setNumberFormat\('\$#,##0\.00'\)/,
+  'Donation Add must reassert date and currency formats after row styling');
 assert.match(files['Dashboard_Script_Payments.html'],
   /function setQuickAddSuccessStatus_\([\s\S]*?classList\.add\(['"]status-success['"]\)/,
   'Quick Add completion must use an explicit success treatment');

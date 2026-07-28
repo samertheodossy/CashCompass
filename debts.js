@@ -1367,7 +1367,9 @@ function addDebtFromDashboard(payload) {
           .setBackground('#ffffff')
           .setFontWeight('normal')
           .setFontColor('#000000')
-          .setFontSize(CANON_FONT_BODY_);
+          .setFontSize(CANON_FONT_BODY_)
+          .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_);
+        sheet.setRowHeight(appendedRow, CANON_ROW_HEIGHT_BODY_);
         const moneyColsForFmt = [
           headerMap.balanceCol,
           headerMap.minimumPaymentCol,
@@ -1388,9 +1390,31 @@ function addDebtFromDashboard(payload) {
     } else {
       sheet.appendRow(row);
       appendedRow = sheet.getLastRow();
-      // No prior data row and no summary row: nothing styled to copy from —
-      // leave default formatting. The Active cell write below still re-stamps
-      // row-consistent format on that one cell.
+      // Legacy/header-only sheet with no summary row: stamp the same clean
+      // canonical body style used by the seeded-summary path. Row-scoped only.
+      try {
+        sheet.getRange(appendedRow, 1, 1, numCols)
+          .setBackground('#ffffff')
+          .setFontWeight('normal')
+          .setFontColor('#000000')
+          .setFontSize(CANON_FONT_BODY_)
+          .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_);
+        sheet.setRowHeight(appendedRow, CANON_ROW_HEIGHT_BODY_);
+        const moneyColsForFmt = [
+          headerMap.balanceCol,
+          headerMap.minimumPaymentCol,
+          headerMap.creditLimitCol,
+          headerMap.creditLeftCol
+        ];
+        for (let mc = 0; mc < moneyColsForFmt.length; mc++) {
+          if (moneyColsForFmt[mc] !== -1) {
+            sheet.getRange(appendedRow, moneyColsForFmt[mc])
+              .setNumberFormat('$#,##0.00;-$#,##0.00');
+          }
+        }
+      } catch (_legacyStampErr) {
+        Logger.log('addDebtFromDashboard legacy empty-region stamp: ' + _legacyStampErr);
+      }
     }
   } else {
     sheet.insertRowBefore(sortedInsertRow);

@@ -489,13 +489,21 @@ function addDonation(payload, optionalSs) {
     sheet
       .getRange(formatSourceRow1, 1, 1, numCols)
       .copyTo(destRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+    sheet.setRowHeight(row1, sheet.getRowHeight(formatSourceRow1));
     sheet.getRange(row1, 1, 1, numCols).setValues([row]);
   } else {
-    const dateCol = block.colMap['Date'] + 1;
-    const amountCol = block.colMap['Amount'] + 1;
-    sheet.getRange(row1, dateCol).setNumberFormat('M/d/yyyy');
-    sheet.getRange(row1, amountCol).setNumberFormat('$#,##0.00');
+    destRange
+      .setBackground('#ffffff')
+      .setFontWeight('normal')
+      .setFontColor('#000000')
+      .setFontSize(CANON_FONT_BODY_)
+      .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_);
+    sheet.setRowHeight(row1, CANON_ROW_HEIGHT_BODY_);
   }
+  const dateCol = block.colMap['Date'] + 1;
+  const amountCol = block.colMap['Amount'] + 1;
+  sheet.getRange(row1, dateCol).setNumberFormat('M/d/yyyy');
+  sheet.getRange(row1, amountCol).setNumberFormat('$#,##0.00');
 
   touchDashboardSourceUpdated_('donations');
 

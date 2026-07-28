@@ -122,7 +122,7 @@ function renderUpcomingList(rows) {
         '<div class="upcoming-actions">' +
           '<button class="small-btn primary" onclick="quickAddFromUpcoming(\'' + escapeJs(row.id) + '\')">Quick add payment</button>' +
           '<button class="small-btn" onclick="editUpcoming(\'' + escapeJs(row.id) + '\')">Edit</button>' +
-          '<button class="small-btn" onclick="dismissUpcoming(\'' + escapeJs(row.id) + '\')">Dismiss</button>' +
+          '<button class="small-btn" title="Remove from active planning without recording a payment; history is preserved" onclick="dismissUpcoming(\'' + escapeJs(row.id) + '\')">Dismiss</button>' +
         '</div>' +
       '</div>'
     );
@@ -443,7 +443,8 @@ function dismissUpcoming(id) {
   setStatusLoading('upcoming_status', 'Dismissing…');
   google.script.run
     .withSuccessHandler(function(res) {
-      setStatus('upcoming_status', (res && res.message) || 'Upcoming expense dismissed', false);
+      setStatus('upcoming_status', (res && res.message) ||
+        'Dismissed from active planning. No payment was recorded; history was preserved.', false);
       loadUpcomingSection();
       loadDashboardActionSections();
       refreshSnapshot();

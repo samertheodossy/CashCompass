@@ -666,7 +666,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <h2>Quick add to Cash Flow</h2>
         <div class="updated">Last updated: <span id="pay_updated">—</span></div>
       </div>
-      <p class="panel-purpose">Record one expense or income item without leaving the dashboard.</p>
+      <p class="panel-purpose">Add one expense or income amount to its selected month without leaving the dashboard.</p>
       <div class="grid-2">
         <div>
           <label>Type</label>
@@ -692,8 +692,9 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <div class="info">
           <div style="display:none;"><span id="pay_sheetName" class="muted">—</span></div>
           <div style="display:none;"><span id="pay_rowExists" class="muted">—</span></div>
-          <div>Entries are added to your current-year Cash Flow.</div>
-          <div style="margin-top:6px;">Existing entries for the same item and month may be updated automatically.</div>
+          <div>Quick Add adds the entered amount to this payee’s total for the selected month.</div>
+          <div style="margin-top:6px;"><strong>It does not replace an amount already recorded.</strong></div>
+          <div style="margin-top:6px;">If the payee row is missing, CashCompass creates it only when <strong>Create row if payee is missing</strong> is selected.</div>
           <div class="house-value-delta-sep" aria-hidden="true"></div>
           <div><strong>Month:</strong> <span id="pay_monthName" class="muted">—</span></div>
           <div><strong>Already recorded this month:</strong> <span id="pay_currentValue" class="muted">—</span></div>
@@ -714,6 +715,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <div class="updated">Last updated: <span id="upcoming_updated">—</span></div>
       </div>
       <p class="panel-purpose">Add planned expenses and review what is approaching.</p>
+      <p class="panel-purpose upcoming-dismiss-note"><strong>Dismiss</strong> removes an item from active planning without recording a payment or changing Cash Flow. Its Upcoming row and Activity history remain.</p>
 
       <div class="mini-grid">
         <div class="mini-card">

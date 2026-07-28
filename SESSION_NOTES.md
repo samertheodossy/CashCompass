@@ -12,7 +12,34 @@ The V1 trust baseline is shipped and locked, and V1.1 closed out with the retire
   `FR-0c1c2b85-0851-414d-b8ab-c4c91636b9d6` passed 18/18, including
   `retirement_ready_results`. Both recorded zero browser errors, Restricted
   single-owner sharing, and verified exact-fixture Trash cleanup. Beta remained
-  `@106`; bounded was untouched. Full `npm test` passed. Commit/push pending.
+  `@106`; bounded was untouched. Full `npm test` passed. Commit `a69184e` was
+  pushed to `origin/main`.
+
+- **Daily-task language — `2d` / `2e` implemented locally as `REG-026` /
+  `REG-027` (2026-07-27).** Production-path inspection confirmed Quick Add is
+  cumulative (`currentValue + signedAmount`), while Upcoming Dismiss changes
+  only the row status, appends a lifecycle event, records no payment, and does
+  not call a Cash Flow writer. The Quick Add action surface and Help now state
+  add-to-total / do-not-replace semantics. Upcoming now explains before and
+  after the action that Dismiss removes the item from active planning without a
+  payment or Cash Flow change and preserves the Upcoming row plus Activity
+  history. `npm run test:dashboard-ux` cross-checks both language contracts
+  against their production paths, and full `npm test` passes. Isolated Central
+  presentation confirmation, commit, push, and deployment remain pending; no
+  workbook, schema, formula, or financial rule changed.
+
+- **User-facing appended-row presentation — `REG-028` fixed locally
+  (2026-07-27).** A bounded Upcoming row exposed that `addUpcomingExpense`
+  appended values and reasserted only date/currency formats, while canonical
+  body styling remained first-create only. New Upcoming rows now copy
+  `PASTE_FORMAT` plus row height from the nearest populated sibling, with a
+  canonical first-row fallback scoped to that row. The same audit closed latent
+  row-height/first-row gaps in Bills, Debts, and Donations; Bank Accounts,
+  Investments, and Houses already used the safe inheritance pattern. Upcoming
+  Dismiss consequences now use a compact amber information strip rather than
+  destructive red. `npm test` and `git diff --check` pass. No formula, schema,
+  business rule, existing workbook row, Central deployment, or bounded workbook
+  changed.
 
 - **Bill Skip/Stop-tracking safety — `1d` / `REG-024` runtime complete on
   isolated `@206` (2026-07-27).** Skip now requires explicit consequence

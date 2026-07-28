@@ -180,6 +180,7 @@ function addUpcomingExpense(payload) {
   if (!expenseName) throw new Error('Expense Name is required.');
   if (amount <= 0) throw new Error('Amount must be greater than 0.');
 
+  const formatTemplateRow = findUpcomingExpenseFormattingTemplateRow_(sheet);
   const row = sheet.getLastRow() + 1;
   const id = 'UE-' + new Date().getTime();
 
@@ -197,6 +198,7 @@ function addUpcomingExpense(payload) {
     notes
   ]]);
 
+  applyNewUpcomingExpenseRowFormatting_(sheet, row, formatTemplateRow);
   sheet.getRange(row, 6).setNumberFormat('yyyy-mm-dd');
   applyCurrencyFormat_(sheet.getRange(row, 7));
 
@@ -239,6 +241,85 @@ function addUpcomingExpense(payload) {
 }
 
 /**
+ * Finds the nearest real Upcoming expense row whose visual treatment can be
+ * copied onto a newly appended row. Blank spacer rows are ignored.
+ *
+ * Read-only and bounded to the ID column.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @returns {number} 1-based template row, or -1 when the sheet is header-only
+ */
+function findUpcomingExpenseFormattingTemplateRow_(sheet) {
+  if (!sheet) return -1;
+
+  var lastRow = 0;
+  try { lastRow = sheet.getLastRow(); } catch (_) { return -1; }
+  if (lastRow < 2) return -1;
+
+  try {
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getDisplayValues();
+    for (var i = ids.length - 1; i >= 0; i--) {
+      if (String(ids[i][0] || '').trim()) return i + 2;
+    }
+  } catch (e) {
+    Logger.log('findUpcomingExpenseFormattingTemplateRow_: ' + e);
+  }
+  return -1;
+}
+
+/**
+ * Applies body-row presentation to one newly appended Upcoming expense.
+ *
+ * The common case copies FORMAT ONLY from the nearest populated sibling, then
+ * mirrors its row height. Values, formulas, notes, and workbook structure are
+ * never copied or changed. A header-only sheet receives the canonical body-row
+ * fallback on just the new row. Date/currency number formats are reasserted by
+ * addUpcomingExpense immediately after this helper returns.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {number} newRow 1-based newly appended row
+ * @param {number} templateRow 1-based populated sibling, or -1
+ */
+function applyNewUpcomingExpenseRowFormatting_(sheet, newRow, templateRow) {
+  if (!sheet || !newRow || newRow < 2) return;
+
+  var numCols = UPCOMING_EXPENSES_REQUIRED_HEADERS_.length;
+  var copied = false;
+
+  if (templateRow >= 2 && templateRow !== newRow) {
+    try {
+      sheet
+        .getRange(templateRow, 1, 1, numCols)
+        .copyTo(
+          sheet.getRange(newRow, 1, 1, numCols),
+          SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+          false
+        );
+      sheet.setRowHeight(newRow, sheet.getRowHeight(templateRow));
+      copied = true;
+    } catch (e) {
+      Logger.log('applyNewUpcomingExpenseRowFormatting_ format copy: ' + e);
+    }
+  }
+
+  if (copied) return;
+
+  // First data row (or a cosmetic copy failure): stamp only this new row.
+  // Never rerun the sheet-wide first-create styler on a populated workbook.
+  try {
+    sheet.getRange(newRow, 1, 1, numCols)
+      .setBackground('#ffffff')
+      .setFontWeight('normal')
+      .setFontColor('#000000')
+      .setFontSize(CANON_FONT_BODY_)
+      .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_);
+    sheet.setRowHeight(newRow, CANON_ROW_HEIGHT_BODY_);
+  } catch (e) {
+    Logger.log('applyNewUpcomingExpenseRowFormatting_ canonical fallback: ' + e);
+  }
+}
+
+/**
  * Dismiss an Upcoming row — the soft-deactivate equivalent for Upcoming.
  * Preserves the sheet row and logs a non-monetary lifecycle event. Legacy
  * rows with Status = "Skipped" are treated as already-dismissed here so
@@ -278,7 +359,7 @@ function dismissUpcomingExpense(id) {
 
   return {
     ok: true,
-    message: 'Upcoming expense dismissed'
+    message: 'Dismissed from active planning. No payment was recorded; history was preserved.'
   };
 }
 

@@ -46,13 +46,16 @@ Trusted users may participate in a **supervised validation cohort** before the r
 - Dates do not waive this plan's score, safety, financial, privacy, performance,
   cohort, or Release Readiness gates.
 
-The execution waves are: completed through Jul 24 — HTTP 0, exact-owner
-evidence, core Bills Pay, and tracked-editor convergence; Aug 21–27 —
-controlled reliability/safety, Retirement, Quick Add semantics, and Upcoming
-language; Aug 28–Sep 3 — remaining page UX plus performance and fixture/recovery
-work; Sep 4–10 — accessibility and candidate prerequisites; Sep 11–17 —
-candidate freeze, Performance, and complete Release Readiness; Sep 18–24 —
-supervised cohort, final scorecard, and go/no-go.
+The execution waves are: completed through Jul 27 — HTTP 0, exact-owner
+evidence, core Bills Pay, tracked-editor convergence, Activity action truth,
+Overview trust, unattended browser orchestration, controlled loading,
+Skip/Stop safety, and Retirement runtime; Aug 21–27 — begin the durable Activity
+correction foundation and direct Cash Flow correction while auditing remaining
+UX and operations work; Aug 28–Sep 3 — complete supported Activity correction
+families, Quick Add/Upcoming language, and fixture/recovery proof; Sep 4–10 —
+remaining page UX, accessibility, performance diagnosis, and candidate
+prerequisites; Sep 11–17 — candidate freeze, Performance, and complete Release
+Readiness; Sep 18–24 — supervised cohort, final scorecard, and go/no-go.
 
 The optimized model uses three coordinated lanes: critical engineering,
 UX/evidence, and operations/product foundation. Operations and monetization
@@ -281,8 +284,9 @@ parallel; the exact estimates and dependencies are maintained in
 
 The increase reflects the 2026-07-26 decisions to make Activity correction and
 immutable reversal a broad-Beta requirement and to schedule every confirmed
-`@196` advocate finding. The September 24 target and October 2 contingency are
-therefore at risk until the shared correction foundation and new P1 health/
+`@196` advocate finding. Wave 1 and Overview health trust are now complete ahead
+of the buffered schedule, but the September 24 target and October 2 contingency
+remain at risk until the shared correction foundation and remaining
 accessibility work are implemented and measured.
 
 This range is for capacity planning only. The release decision is based on evidence, not elapsed time.
@@ -365,9 +369,10 @@ Populated Dashboard V7 18/18 are the latest browser evidence. The last formal
 advocate score remains 8.3/10; the `@196` 7.2 read-only score is an
 evidence-limited discovery score, not a comparable regression.
 
-The immediate gate is durable Activity correction (`5h`–`5m`). Then close Quick
-Add duplicate/update and Upcoming Dismiss language (`2d`–`2e`);
-complete remaining page UX, form readiness/customer language (`3m`), and
+The immediate gate is isolated presentation confirmation for the locally
+implemented Quick Add/Upcoming language contracts (`2d`–`2e`, `REG-026` /
+`REG-027`), then durable Activity correction (`5h`–`5m`). After that, complete
+remaining page UX, form readiness/customer language (`3m`), and
 accessibility/responsive evidence (`3j`); freeze the
 candidate; restart the 20-pair percentile campaign; ratify p50/p95 budgets;
 finalize Release Readiness; complete supervised cohort proof; and run the full

@@ -543,6 +543,66 @@ Whenever a production bug is fixed:
   production Retirement loading, hidden guidance panels, and meaningful ready
   outputs. Older saved browser evidence cannot satisfy the new contract.
 
+### REG-026 — Quick Add did not explain that repeated entries are cumulative
+- Category: REGRESSION / UI TRUST / MONEY-ENTRY LANGUAGE
+- Date discovered: 2026-07-26
+- Status: fixed locally; isolated runtime confirmation pending
+- Affected files: `Dashboard_Body.html`, `Dashboard_Help.html`,
+  `scripts/checkDashboardUxRegressions.mjs`
+- Root cause: Quick Add said an existing monthly entry “may be updated
+  automatically,” which did not tell the user whether the entered amount would
+  be added to or replace the existing monthly total.
+- Expected result: the action surface and Help both state that Quick Add adds
+  the entered amount to the payee’s selected-month total and does not replace an
+  amount already recorded. Missing-row behavior remains conditional on the
+  existing checkbox.
+- Permanent coverage: `npm run test:dashboard-ux` locks the exact action/Help
+  contract and cross-checks it against the production cumulative writer and
+  `currentValue + addValue` helper.
+
+### REG-027 — Upcoming Dismiss did not explain its no-payment/history consequences
+- Category: REGRESSION / UI TRUST / LIFECYCLE LANGUAGE
+- Date discovered: 2026-07-26
+- Status: fixed locally; isolated runtime confirmation pending
+- Affected files: `Dashboard_Body.html`,
+  `Dashboard_Script_CashFlowUpcoming.html`, `Dashboard_Help.html`,
+  `upcoming_expenses.js`, `scripts/checkDashboardUxRegressions.mjs`
+- Root cause: **Dismiss** was described only as removing an item from active
+  planning while preserving “history,” leaving unclear whether it recorded a
+  payment, changed Cash Flow, or retained the underlying Upcoming row.
+- Expected result: the action surface, action hint, success message, and Help
+  state that Dismiss removes the item from active planning, records no payment,
+  changes no Cash Flow value, and preserves the Upcoming row plus Activity
+  history.
+- Permanent coverage: `npm run test:dashboard-ux` locks the customer wording
+  and verifies the bounded server function remains a status-only soft removal
+  with an Activity lifecycle event and no Cash Flow writer.
+
+### REG-028 — Newly added Upcoming rows did not inherit body-row formatting
+- Category: REGRESSION / WORKBOOK PRESENTATION / APPEND SAFETY
+- Date discovered: 2026-07-27
+- Status: fixed locally; isolated disposable-workbook confirmation pending
+- Affected files: `upcoming_expenses.js`, `bills.js`, `debts.js`,
+  `donations.js`,
+  `scripts/checkDashboardUxRegressions.mjs`
+- Root cause: `addUpcomingExpense` appended values to an existing sheet but
+  reasserted only the Due Date and Amount number formats. The canonical
+  Operational-family body style runs only when the sheet is first created, so a
+  later unused/default row could retain smaller text and different row geometry.
+- Expected result: each new Upcoming row copies formatting and row height only
+  from the nearest populated Upcoming sibling. A first data row receives the
+  canonical body-row fallback. Values, formulas, headers, existing rows, and
+  sheet-wide formatting remain untouched; date and currency formats are
+  reasserted after the format copy.
+- Permanent coverage: `npm run test:dashboard-ux` requires the bounded
+  `PASTE_FORMAT`-only sibling inheritance, canonical first-row fallback,
+  row-height inheritance, number-format reassertion, and absence of any
+  sheet-wide styling or data writer inside the formatting helper. Runtime
+  confirmation must use a harness-created disposable workbook. The same source
+  regression also closes matching latent row-height/first-row gaps in Bills,
+  Debts, and Donations; Bank Accounts, Investments, and Houses already had
+  equivalent format-only inheritance.
+
 ---
 
 ## RECOVERY scenarios (design — not historical bugs)
@@ -590,4 +650,7 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-023 | Bank/Debt detail failures or stale responses could expose unsafe editor state | REGRESSION / UI RELIABILITY / WRITE SAFETY | fixed; isolated `@203` Populated V5 16/16 PASS with verified cleanup |
 | REG-024 | Bill Skip could fail or reappear, and Stop tracking lacked one durable safety journey | REGRESSION / UI RELIABILITY / WRITE SAFETY | fixed; isolated `@206` Populated V6 17/17 PASS with verified cleanup |
 | REG-025 | Compact Retirement sheets were read using stale legacy row numbers | REGRESSION / UI TRUST / FINANCIAL TRUTH / COMPATIBILITY | fixed; isolated `@211` First-Run V6 12/12 + Populated V7 18/18 PASS |
+| REG-026 | Quick Add did not explain that repeated entries are cumulative | REGRESSION / UI TRUST / MONEY-ENTRY LANGUAGE | fixed locally; isolated runtime confirmation pending |
+| REG-027 | Upcoming Dismiss did not explain its no-payment/history consequences | REGRESSION / UI TRUST / LIFECYCLE LANGUAGE | fixed locally; isolated runtime confirmation pending |
+| REG-028 | Newly added Upcoming rows did not inherit body-row formatting | REGRESSION / WORKBOOK PRESENTATION / APPEND SAFETY | fixed locally; isolated disposable-workbook confirmation pending |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

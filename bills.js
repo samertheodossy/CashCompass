@@ -1361,16 +1361,20 @@ function billsNormalizeYesNoLabel_(value, fallbackLabel) {
  *
  * Values are NOT overwritten — we use PASTE_FORMAT only.
  *
- * Silently no-ops if there is no usable source row (e.g. the append produced
- * the very first data row).
+ * If there is no usable source row (the first data row), applies the canonical
+ * body-row fallback to that new row only.
  */
 function copyBillsRowFormattingFromPreviousRow_(sheet, newRow, previousLastRow) {
-  if (!sheet || !newRow || newRow <= 2) return;
+  if (!sheet || !newRow || newRow < 2) return;
   var sourceRow = previousLastRow && previousLastRow >= 2 ? previousLastRow : newRow - 1;
-  if (sourceRow < 2 || sourceRow >= newRow) return;
 
   var numCols = sheet.getLastColumn();
   if (numCols < 1) return;
+
+  if (sourceRow < 2 || sourceRow >= newRow) {
+    applyBillsNewRowCanonicalFallback_(sheet, newRow, numCols);
+    return;
+  }
 
   try {
     sheet
@@ -1380,8 +1384,10 @@ function copyBillsRowFormattingFromPreviousRow_(sheet, newRow, previousLastRow) 
         SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
         false
       );
+    sheet.setRowHeight(newRow, sheet.getRowHeight(sourceRow));
   } catch (e) {
     Logger.log('copyBillsRowFormattingFromPreviousRow_: ' + e);
+    applyBillsNewRowCanonicalFallback_(sheet, newRow, numCols);
   }
 }
 
@@ -1452,10 +1458,13 @@ function copyBillsRowFormattingFromInsertSiblingRow_(sheet, newRow) {
   var lastRow = sheet.getLastRow();
   // Prefer the row immediately below (originally at newRow before insert).
   var sourceRow = (newRow + 1) <= lastRow ? (newRow + 1) : (newRow - 1);
-  if (sourceRow < 2 || sourceRow === newRow) return;
-
   var numCols = sheet.getLastColumn();
   if (numCols < 1) return;
+
+  if (sourceRow < 2 || sourceRow === newRow) {
+    applyBillsNewRowCanonicalFallback_(sheet, newRow, numCols);
+    return;
+  }
 
   try {
     sheet
@@ -1465,8 +1474,28 @@ function copyBillsRowFormattingFromInsertSiblingRow_(sheet, newRow) {
         SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
         false
       );
+    sheet.setRowHeight(newRow, sheet.getRowHeight(sourceRow));
   } catch (e) {
     Logger.log('copyBillsRowFormattingFromInsertSiblingRow_: ' + e);
+    applyBillsNewRowCanonicalFallback_(sheet, newRow, numCols);
+  }
+}
+
+/**
+ * Canonical format fallback for the first Bills data row. Row-scoped and
+ * cosmetic only; never invokes the first-create sheet styler.
+ */
+function applyBillsNewRowCanonicalFallback_(sheet, newRow, numCols) {
+  try {
+    sheet.getRange(newRow, 1, 1, numCols)
+      .setBackground('#ffffff')
+      .setFontWeight('normal')
+      .setFontColor('#000000')
+      .setFontSize(CANON_FONT_BODY_)
+      .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_);
+    sheet.setRowHeight(newRow, CANON_ROW_HEIGHT_BODY_);
+  } catch (e) {
+    Logger.log('applyBillsNewRowCanonicalFallback_: ' + e);
   }
 }
 

@@ -402,8 +402,10 @@ A shared vocabulary + spacing/typography pass so every surface feels the same.
 `@193`. Bills now use **Due · Add · Manage**; Pay opens a dedicated side panel,
 records the confirmed amount/date, verifies occurrence clearing, and shows the
 Cash Flow receipt plus six-month payment history before **Done**. Quick Add stays
-separate. Remaining adjacent work: `2d` Quick Add duplicate/update semantics and
-`2e` Upcoming Dismiss consequence/history language.
+separate. The adjacent `2d` Quick Add cumulative add-not-replace contract and
+`2e` Upcoming Dismiss no-payment/no-Cash-Flow/preserved-history contract are
+implemented locally as `REG-026` / `REG-027`; isolated presentation
+confirmation remains before runtime closure.
 
 - Keep Quick add visually primary and make recent completion feedback easy to notice.
 - Distinguish the daily **Due this period** queue from **Manage bills** configuration.
@@ -571,9 +573,11 @@ findings below are Beta work, ordered by product risk:
    to 3–5 d).** Associate every visible label with its input/select; complete
    keyboard, focus, target-size, contrast, reduced-motion, and
    desktop/medium/390px evidence.
-3. **`2d` · P2 — Quick Add consequence wording.** State precisely when an
-   existing entry is added, updated, or replaced; keep the existing write/dupe
-   reliability guards and add a UX-copy assertion.
+3. **`2d` · P2 — Quick Add consequence wording (implemented locally as
+   `REG-026`).** The action surface and Help now state that the entered amount is
+   added to the selected-month total and does not replace an existing amount.
+   Dashboard UX cross-checks the copy against the cumulative writer; isolated
+   presentation confirmation remains.
 4. **`3b` · P2 — Honest empty/guidance states.** Empty Bank, Investment, and
    Debt pages should begin in Add/guided state; Purchase and Retirement result
    walls stay hidden until ready.
