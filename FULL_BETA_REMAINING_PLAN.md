@@ -13,7 +13,8 @@ refresh; customer-safe language; newest/middle/earlier/post-correction replay;
 and same-target receipt retirement while preserving later values. Every prior
 populated journey passed with zero browser errors, Restricted single-owner
 sharing, and verified exact-fixture Trash cleanup. The user completed the
-corresponding Central visual review; only the Git checkpoint remains.
+corresponding Central visual review, and `5i` is committed and pushed as
+`16b6a8f`. The next active item is `5j`, Bill occurrence correction.
 
 **Last formal independent advocate score:** **8.3/10** on isolated Central
 `@180`. This remains the official score until the next full scored advocate run;
@@ -63,16 +64,17 @@ closed. They are retained here so the work map does not lose history.
 | 2e | Upcoming Dismiss consequences (`REG-027`) | Completed and pushed in `168a49b`; the action surface, hint, success message, and Help state no payment, no Cash Flow change, and preserved Upcoming/Activity history; the user confirmed the bounded wording and permanent server/UI coverage passes |
 | REG-028 | Appended-row presentation safety | Completed and pushed in `168a49b`; Upcoming, Bills, Debts, and Donations inherit sibling format/row height with first-row fallbacks, while Bank, Investment, and House paths were already protected |
 
-The remaining tables below are therefore an **open-only list**.
+The at-a-glance inventory below is **open-only**. Detailed group tables retain
+recently completed `5h` and `5i` as implementation history.
 
 ## Open list at a glance
 
 | Order | Open IDs | Workstream | Focused estimate |
 |---:|---|---|---:|
-| 1 | `5h`–`5m` | End-to-end financial operation identity and safe correction | 7–12 d including integrated disposable-workbook validation; rebaseline after `5h` |
+| 1 | `5j`–`5m` | Remaining safe correction families and audit disposition | 4.5–8 d including integrated disposable-workbook validation |
 | 2 | `3a`–`3c`, `3e`–`3k`, `3m` | Remaining page UX, trust, advocate scoring, responsive/accessibility | 11–21 d |
 | 3 | `4a`–`4f` | Performance optimization, measurement, and percentile gate | 5–11 d |
-| 4 | `5a`–`5f` | Remaining financial/workbook proof | 9–19 d |
+| 4 | `5a`–`5f` | Remaining financial/workbook proof | 4.5–11 d |
 | 5 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
 | 6 | `7a`–`7f` | Monetization-ready policy and architecture foundation; no billing activation | 5–10 d |
 | 7 | `8a`–`8f` | Freeze, complete exact-candidate evidence, score, and READY verdict | 3.5–7 d plus fixes |
@@ -81,10 +83,10 @@ The remaining tables below are therefore an **open-only list**.
 The arithmetic sum is intentionally not the delivery forecast because Groups
 6–7 and parts of Groups 3 and 5 can advance during runtime waits. The optimized
 capacity forecast is **34–50 focused working days best case** or **47–74
-conservatively**, plus the five-to-seven-day cohort and defect contingency. The
-Wave 1 finished ahead of the buffered August schedule, but the 2026-09-24 target
-remains at risk until the Activity correction foundation is implemented and
-measured and the remaining accessibility findings close; dates remain gates,
+conservatively**, plus the five-to-seven-day cohort and defect contingency. This
+conservative planning envelope is retained until `5j` measures the first
+compound correction family. The 2026-09-24 target remains at risk until
+`5j`–`5m` and the remaining accessibility findings close; dates remain gates,
 not promises.
 
 ## Completion standard
@@ -195,7 +197,7 @@ either map the exact failure to an existing assertion or add the next
 | 5e | Recovery follow-up disposition | Create New Workbook and Admin Set Mapping are either closed or documented as supervised-admin scope | 0.5–2 d |
 | 5f | Unified-source bounded-safety evidence | The exact reviewed source preserves no-argument bounded behavior; any bounded deployment remains user-controlled | 0.5–1 d |
 | 5h | End-to-end operation envelope and immutable correction contract | **Complete in commit `d040a34`.** Persist the existing Quick Add operation identity as a shared server-generated `operationId`; give each Activity row an `eventId`; record versioned operation type, authorized workbook/actor identity, logical target descriptors, and normalized before/after state; preview rejects legacy/forged/changed/cross-workbook state. No Activity column/schema migration. Isolated `@214` Populated V8 passed 19/19. | Measured within the one-day cap |
-| 5i | Direct Cash Flow correction | **Implementation, product review, and guarded isolated runtime validation are complete; Git approval remains.** Activity supports **Change amount** and **Remove entry** for explicitly identified direct Quick Add operations. A locked server coordinator reconstructs the verified operation sequence, preserves later active entries, restores optional credit-card effects, writes immutable correction evidence, blocks retries, and refuses linked/legacy/externally changed operations. The same correction language and immutable-history model now covers eligible Donation operations. Clean isolated `@240` run `FR-d75843e0-486e-4faa-8967-05ee40b73e25` passed 21/21, including cash/card/donation change and removal, newest/middle/earlier/post-correction replay, same-page refresh, zero browser errors, and verified Trash cleanup. | Measured within the original 1–1.5 d estimate |
+| 5i | Direct Cash Flow correction | **Complete in commit `16b6a8f`.** Activity supports **Change amount** and **Remove entry** for explicitly identified direct Quick Add operations. A locked server coordinator reconstructs the verified operation sequence, preserves later active entries, restores optional credit-card effects, writes immutable correction evidence, blocks retries, and refuses linked/legacy/externally changed operations. The same correction language and immutable-history model covers eligible Donation operations. Clean isolated `@240` run `FR-d75843e0-486e-4faa-8967-05ee40b73e25` passed 21/21, including cash/card/donation change and removal, newest/middle/earlier/post-correction replay, same-page refresh, zero browser errors, and verified Trash cleanup. | Measured within the original 1–1.5 d estimate |
 | 5j | Bill occurrence correction | One operation ID links Manual Pay money and occurrence evidence; Skip and AutoPay record exact prior/new state; Bills Due recognizes an immutable reversal without duplicate amounts or stranded/silently active markers | 2–3 d |
 | 5k | Upcoming correction | The payment operation ID links `quick_pay` to stable `upcomingId`; payment and remaining-balance/status changes correct together; ordinary add/update/dismiss edits route to Upcoming | 1–2 d |
 | 5l | House Expense compound correction | The operation envelope captures the existing exact House row fingerprint plus the optional Quick Add receipt; both targets preflight and correct together or not at all | 1–2 d |
@@ -299,9 +301,9 @@ Apps Script HTTP 0; its exact fixture was also verified and trashed before this
 fresh passing run. No bounded, mapped-user, default, Golden, Beta, or
 administrator workbook was used by a writer.
 
-**Group 5 estimate: approximately 12–23 focused days.** This includes **7–12
-days** for the operation-identity/correction program and integrated runtime
-validation. Generic one-click reversal of
+**Group 5 remaining estimate: approximately 9–19 focused days.** This includes
+**4.5–8 days** for `5j`–`5m` and integrated runtime validation; completed `5h`
+and `5i` are excluded. Generic one-click reversal of
 multi-sheet entity lifecycle or bank-import/system audit events is not part of
 the broad-Beta scope; those rows must route to their owning workflow or remain
 explicitly audit-only.
@@ -364,7 +366,7 @@ This is design and policy readiness, not payment activation.
 - **Best case:** approximately **34–50 focused working days**. The narrower
   post-audit Activity range creates contingency inside this planning envelope;
   do not trade that margin for a weaker architecture. Rebaseline again when
-  `5h` replaces the estimate with measured implementation evidence.
+  `5j` provides measured compound-operation implementation evidence.
   Several page passes can still close through audit, and operations/business
   foundations can run alongside runtime waits.
 - **Conservative case:** approximately **47–74 focused working days**.
@@ -373,9 +375,9 @@ This is design and policy readiness, not payment activation.
   evidence exposes a material defect.
 
 The September 24 decision is now an at-risk best-case target after the August
-buffer. October 2 may not contain the full correction program plus one repair
-cycle; re-baseline after `5h` proves the shared correction foundation. The
-strictest failed gate controls the actual date.
+buffer. October 2 may not contain the remaining correction program plus one
+repair cycle; re-baseline after `5j` measures the first compound correction
+family. The strictest failed gate controls the actual date.
 
 ## Optimized execution model
 
@@ -383,7 +385,7 @@ strictest failed gate controls the actual date.
 
 The remaining work that directly controls the finish date is:
 
-`5h–5m → 3a–3k/3m → 4a–4f → 8a–8f → 9a–9e`
+`5j–5m → 3a–3k/3m → 4a–4f → 8a–8f → 9a–9e`
 
 Financial/workbook proof in Group 5 must finish before `8b`. Operations and
 monetization foundations in Groups 6–7 must finish before `8d`, but they should

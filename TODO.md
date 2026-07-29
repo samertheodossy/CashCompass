@@ -991,11 +991,12 @@ Residual V1.1 candidates that did not ship and were not promoted into V1.2 A/B/C
 Captured so the idea isn't lost; **not** in scope for V1.2. Requires an explicit product decision before being pulled up.
 
 - **Onboarding factory refactor** — consolidate the per-step Setup / Review helpers (see `PROJECT_CONTEXT.md → Queued product work`). Touches onboarding shape.
-- **Activity correction and reversal — Beta-critical.** Donation removal is
-  shipped, but it is not a safe generic model for financial history. The
-  remaining Beta scope is a verified correction framework for Quick Add, Bills,
-  Upcoming payments/lifecycle, and compound House Expenses, plus explicit
-  non-reversible routing for entity-maintenance, import, and system audit rows.
+- **Activity correction and reversal — Beta-critical.** Direct Quick Add and
+  Donation correction are shipped through `5i`; neither is a generic deletion
+  model for financial history. The remaining Beta scope is verified compound
+  correction for Bills, Upcoming payments/lifecycle, and House Expenses, plus
+  explicit non-reversible routing for entity-maintenance, import, and system
+  audit rows.
   See **Activity — Correction / reverse transaction** below and
   `FULL_BETA_REMAINING_PLAN.md → 5g–5m`.
 - **Larger product work** — Cash Strategy, HELOC advisor refinement, Plaid-style bank / card / loan sync, car / vehicle expenses as a first-class dashboard surface, subscriptions, income / expense classification, tax workflow, credit-card segmentation, etc. See the historical body below for full design notes.
@@ -1587,18 +1588,21 @@ Implementation: **`activity_log.js`**, **`appendActivityLog_`**, Help
 
 ### Activity — Correction / reverse transaction
 
-**Status:** elevated to the broad-Beta gate on 2026-07-26. Donation removal is
-the only shipped path; the general correction framework is not implemented.
-Authoritative execution IDs and estimates: `FULL_BETA_REMAINING_PLAN.md →
-5g–5m`.
+**Status:** elevated to the broad-Beta gate on 2026-07-26. The shared
+operation-envelope foundation (`5h`) and direct Quick Add/Donation correction
+(`5i`) are shipped in `d040a34` and `16b6a8f`. Bill occurrence correction
+(`5j`) is next, followed by Upcoming, House Expense, and entity/audit
+disposition. Authoritative execution IDs and estimates:
+`FULL_BETA_REMAINING_PLAN.md → 5g–5m`.
 
 **Product decision:** Activity is an audit trail, not a trash can. Generalizing
 the existing Donation **Remove** behavior would erase evidence while potentially
 leaving Cash Flow, Bills, Upcoming, House, Debt, or account state unchanged.
-For new correction families, preserve the original event and append an immutable
-correction/reversal event that records the verified before/after result. Use
-**Correct** or **Reverse**, never a generic **Remove**, when workbook state is
-affected.
+For correction families, preserve the original event and append an immutable
+correction/reversal event that records the verified before/after result.
+**Remove entry** may describe the customer's requested financial outcome, but it
+must never delete the original audit evidence; the recorded result remains an
+immutable correction/reversal.
 
 **Seven event families**
 
@@ -1772,7 +1776,7 @@ history remains available. Clean isolated Central `@240` run
 the full Quick Add operation sequence, card impact, Donation change/removal,
 Bill safety, customer language, clean console, Restricted single-owner sharing,
 and exact-fixture Trash cleanup. No bounded or Beta target was touched. `5i` is
-ready for commit approval; `5j` is next after that checkpoint.
+committed and pushed as `16b6a8f`; `5j` is the next active item.
 
 **Measured audit estimate:** `5h`–`5m` is now **7–12 focused days including
 integrated disposable-workbook validation**, not the pre-audit 12.5–25-day

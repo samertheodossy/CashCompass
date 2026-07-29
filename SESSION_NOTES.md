@@ -2,6 +2,18 @@
 
 The V1 trust baseline is shipped and locked, and V1.1 closed out with the retirement profile integration (see **V1.1 — Retirement Profile Integration (DOB Source of Truth)** section below). The project has since moved into **Central App live + Family Beta readiness** — the Central App architecture is operational and the active work is hardening it toward a family beta (see **Current State — Post V1.2 Prep** below for the per-slice migration record). Working rules live in `WORKING_RULES.md → Current phase` + `→ Central App Transition Rules` (now active); product framing lives in `PROJECT_CONTEXT.md → Current phase` and `→ Current architecture — Central App (live)`. All prior phase notes below this header are preserved as-is for historical record.
 
+- **`5i` committed and pushed — `16b6a8f` (2026-07-29).** The completed
+  Activity correction milestone is synchronized on `main` and `origin/main`.
+  Eligible direct Quick Add and Donation operations support **Change amount**
+  and **Remove entry** with exact-state refusal, immutable correction history,
+  linked credit-card coordination, sequence replay, same-target receipt
+  retirement, and same-page value refresh. The final isolated Central `@240`
+  run `FR-d75843e0-486e-4faa-8967-05ee40b73e25` passed 21/21 with zero browser
+  errors, Restricted single-owner sharing, and verified exact-fixture Trash
+  cleanup. The commit introduced no formula-definition, financial-rule,
+  workbook-schema, Activity-column, administrator, bounded, or Beta change.
+  `5j`, Bill occurrence correction, is next.
+
 - **`5i` final commit-readiness evidence — isolated `@240` 21/21 PASS
   (2026-07-29).** The user approved the compact correction drawer and validated
   cash, credit-card, middle-entry, and Donation journeys. The final UI exposes
