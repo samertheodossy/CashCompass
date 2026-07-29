@@ -1682,7 +1682,97 @@ scenario and Populated Dashboard V8 carry the runtime envelope/preview
 assertions. Isolated Central `@214` run
 `FR-dbe0482c-0c10-47c7-8189-109be59be6a4` passed 19/19 in 239.225 s with
 Restricted single-owner sharing, zero browser errors, and verified exact-fixture
-Trash cleanup. Git commit/push remain the approval checkpoint.
+Trash cleanup. The checkpoint is committed as `d040a34`.
+
+**`5i` implementation and runtime checkpoint (2026-07-28):**
+
+- only explicitly tagged new direct Quick Add operations are eligible;
+- Activity exposes **Correct entry**, performs a fresh server preview, and opens
+  a consequence-first side drawer with a required correction reason;
+- the writer rechecks every target under `LockService` and restores exact prior
+  values rather than subtracting the logged amount;
+- an optional credit-card balance is restored with the Cash Flow cell as one
+  operation and its derived availability percentage is recalculated;
+- a Cash Flow row created by Quick Add is removed only while its complete
+  value/formula fingerprint still matches the recorded post-state;
+- the original Activity row remains, a non-monetary
+  `quick_pay_correction` event is appended, the original row becomes
+  non-actionable **Reversed**, and a second correction is refused;
+- Bill, Upcoming, House, unclassified, legacy, and changed-state entries remain
+  read-only for their later compound-operation slices.
+
+No Activity-sheet column migration or populated-workbook formatting pass is
+introduced. Permanent coverage is `REG-030` plus the registered guarded
+`REGRESSION-DIRECT-QUICK-ADD-CORRECTION` disposable-workbook scenario.
+The full local suite passes. Final isolated Central `@217` Populated Dashboard
+run `FR-558cd995-c4c2-4770-a82f-774b6318d1ab` passed 19/19 in 266.627 s with
+exact-state correction, immutable reversal evidence, retry refusal, zero
+browser errors, Restricted single-owner sharing, and verified Trash cleanup.
+User Central validation and Git commit approval remain the checkpoint; Beta
+stayed `@106` and no bounded workbook was used.
+
+The first manual Central replay exposed `REG-031`: the reversal itself and
+immutable Activity evidence succeeded, but the completion loader stayed visible
+and the Quick Add write monitor raised a false external-change warning for the
+intentional restored value. The fix hides the loader, retires only the reversed
+operation's browser receipt before refresh, suppresses stale in-flight results,
+and adds permanent static plus disposable browser coverage. Final unchanged
+`@218` replay `FR-34e460e8-9421-47f8-a59f-9f3319070483` passed 19/19 in
+187.193 s, explicitly proving the spinner and false warning clear while the
+exact-state correction, retry refusal, Refresh state, zero browser errors,
+Restricted sharing, and verified Trash cleanup all remain green. The remaining
+checkpoint is the user's corrected Central replay and Git commit approval.
+
+Further manual `@218` use exposed `REG-032`–`REG-034`: prior-month preview
+leaked a worksheet name, a late verification of the first Quick Add could warn
+against a valid second cumulative Quick Add, and correction success omitted the
+verified resulting values. The contained fixes use customer language, reconcile
+responses only with receipts still current at callback time, and display the
+month, reversed amount, before value, and current Cash Flow/card values.
+Exact dynamic regressions cover each failure and the full local suite passes.
+Only isolated Central advanced to `@219`. Guarded run
+`FR-51f648de-a039-4426-85a9-08d2dee1eac1` passed 19/19 with Restricted
+single-owner sharing and verified fixture Trash cleanup. Exact user replay
+remains open, so `5j` does not start and `5i` is not yet ready for Git approval.
+
+The expanded sequence replay then exposed `REG-035`–`REG-038`: middle/earlier
+entries were rejected after later valid Quick Adds, one provisional verification
+read could flash a yellow warning, presentation-only history reads extended
+**Saving…**, and correction dates came from auto-parsed Activity cells. The
+server now verifies and replays the ordered operation ledger while excluding
+only the selected active operation, including optional credit-card effects.
+Warnings require the same mismatch twice, history refreshes after the
+authoritative save, and immutable locators supply concise dates/months. Pure
+Cash Flow/card chain regressions, the registered disposable scenario, and the
+Populated browser journey cover newest/middle/earlier plus a new entry after a
+correction. Isolated `@221` run
+`FR-5490cb51-aea7-4538-b756-6fb866f60d1c` passed 19/19 in 218.515 s with zero
+browser errors and verified cleanup. Exact user replay and Git approval remain;
+`5j` still does not start.
+
+The next manual replay exposed `REG-039`: after a valid middle-entry reversal,
+the newest browser receipt still expected the pre-reversal cumulative value and
+showed a false yellow warning on return to Activity. Correction completion now
+retires every browser receipt for the corrected Cash Flow target, marks their
+in-flight callbacks retired, closes an active warning, and preserves unrelated
+receipts. Permanent evidence includes the direct receipt-state regression, cash
+and credit-card sequence matrices, and a guarded browser journey using the real
+later-operation snapshot. Isolated `@223` run
+`FR-f78afc2b-7807-4d72-83b1-b30ea398062f` passed 19/19 in 213.270 s with
+newest/middle/earlier/post-correction coverage, zero browser errors, and
+verified cleanup. Exact user visual replay and Git approval remain.
+
+**Final `5i` checkpoint (2026-07-29):** the user approved the compact correction
+drawer after validating cash, credit-card, middle-entry replay, and Donation
+flows. The supported intents are now explicit **Change amount** and **Remove
+entry**; expense amounts are customer-positive while internal Cash Flow signs
+remain unchanged; success refreshes the visible current values; and immutable
+history remains available. Clean isolated Central `@240` run
+`FR-d75843e0-486e-4faa-8967-05ee40b73e25` passed 21/21 in 383.006 s, including
+the full Quick Add operation sequence, card impact, Donation change/removal,
+Bill safety, customer language, clean console, Restricted single-owner sharing,
+and exact-fixture Trash cleanup. No bounded or Beta target was touched. `5i` is
+ready for commit approval; `5j` is next after that checkpoint.
 
 **Measured audit estimate:** `5h`–`5m` is now **7–12 focused days including
 integrated disposable-workbook validation**, not the pre-audit 12.5–25-day

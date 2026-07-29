@@ -2,6 +2,56 @@
 
 The V1 trust baseline is shipped and locked, and V1.1 closed out with the retirement profile integration (see **V1.1 — Retirement Profile Integration (DOB Source of Truth)** section below). The project has since moved into **Central App live + Family Beta readiness** — the Central App architecture is operational and the active work is hardening it toward a family beta (see **Current State — Post V1.2 Prep** below for the per-slice migration record). Working rules live in `WORKING_RULES.md → Current phase` + `→ Central App Transition Rules` (now active); product framing lives in `PROJECT_CONTEXT.md → Current phase` and `→ Current architecture — Central App (live)`. All prior phase notes below this header are preserved as-is for historical record.
 
+- **`5i` final commit-readiness evidence — isolated `@240` 21/21 PASS
+  (2026-07-29).** The user approved the compact correction drawer and validated
+  cash, credit-card, middle-entry, and Donation journeys. The final UI exposes
+  **Change amount** and **Remove entry**, shows positive customer expense
+  amounts, omits internal verification language, refreshes current values after
+  correction, and retains immutable correction history. Clean Populated
+  Dashboard run `FR-d75843e0-486e-4faa-8967-05ee40b73e25` passed 21/21 in
+  383.006 s: operation envelope, full direct Quick Add sequence, linked card
+  impact, Donation change/removal, Bill safety, refresh state, customer
+  language, and clean-console navigation all passed. Sharing stayed Restricted
+  to one owner and exact-fixture Trash cleanup was verified. An earlier attempt
+  stopped on Apps Script HTTP 0; its exact disposable fixture was also verified
+  and trashed before the clean rerun. Beta remains `@106`; no bounded,
+  mapped-user, default, Golden, or administrator workbook was a writer target.
+  No formula definition, schema, or Activity-column migration changed. Git
+  commit/push remain the only open checkpoint.
+
+- **Direct Quick Add correction sequence closure — `REG-032`–`REG-039` on
+  isolated `@223`, guarded runtime green (2026-07-28).** Manual `@218` use exposed an internal
+  Cash Flow worksheet name in prior-month preview copy, a late first-write
+  verification warning after valid consecutive `$100` + `$25` Quick Adds, and
+  a correction success panel that omitted the verified financial result.
+  Preview failures now use customer language; verification callbacks reconcile
+  only receipts still current at response time; success shows month, reversed
+  amount, before value, and current Cash Flow/card values. Potential Bills
+  payload labels were swept to customer terms. Exact dynamic regressions cover
+  those failures. Deeper sequence replay then found that only the newest entry
+  could be corrected, one provisional read could flash a yellow warning,
+  presentation-only history reads extended **Saving…**, and auto-parsed
+  Activity dates leaked timezone details. The writer now verifies/replays the
+  ordered operation ledger while excluding only the selected entry; warning
+  display requires a confirmed repeat mismatch; history refreshes after the
+  authoritative write; immutable target locators supply concise dates/months.
+  Full `npm test` passes. Only isolated Central advanced to `@223`; Beta remains
+  `@106`, bounded is untouched, and no workbook schema, formula definition, or
+  Activity-column migration changed. Guarded run
+  `FR-f78afc2b-7807-4d72-83b1-b30ea398062f` passed 19/19 in 213.270 s, including
+  newest/middle/earlier/post-correction reversal while preserving later entries,
+  same-target receipt retirement, Restricted single-owner sharing, zero browser
+  errors, and verified fixture Trash cleanup. `REG-039` specifically locks the
+  missed return-to-Activity yellow-warning case. A separate live rendered-app
+  replay, `FR-9df0e56c-31af-4a88-a2cd-db17cbd2abc1`, then passed 19/19 in
+  230.544 s while the in-app Browser was observed through populated navigation,
+  controlled loading, planner refresh, the multi-entry correction sequence, and
+  the return path. No yellow conflict notice, stuck progress state, raw sheet
+  term, console warning, or browser error appeared; the Restricted fixture was
+  marker-verified and moved to Trash. This live visual pass is now a required
+  companion to the permanent state/regression matrix before `5i` handoff. The
+  user's product-level visual approval and Git checkpoint remain open.
+
 - **Activity operation envelope — `5h` / `REG-029` isolated runtime complete
   pending Git approval (2026-07-28).** Added an envelope inside existing
   Activity Details JSON: one server-owned operation ID for a complete Quick Add

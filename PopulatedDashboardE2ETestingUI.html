@@ -43,7 +43,8 @@
       controlled loading recovery, Bill Skip/Stop-tracking safety, property equity, workspace data,
       subtab retention, Setup/Help language, Refresh state, and console/navigation errors.</p>
     <button id="run" class="primary guarded" onclick="prepareAndRun()" disabled>Prepare &amp; run Populated Dashboard E2E</button>
-    <a id="resume" class="button" href="#" style="display:none">Resume active run</a>
+    <a id="resume" class="button" href="#" style="display:none">Open prepared run</a>
+    <p id="active_run_note" class="muted" style="display:none"></p>
   </div>
 
   <div class="card">
@@ -78,12 +79,25 @@
     var state = res.state || {};
     document.getElementById('state').textContent = JSON.stringify(state, null, 2);
     var resume = document.getElementById('resume');
+    var activeNote = document.getElementById('active_run_note');
     if (state.active && state.active.mode === 'POPULATED_DASHBOARD' && state.active.runUrl &&
-        !state.active.invalid && !state.active.trashed) {
+        !state.active.invalid && !state.active.trashed && !state.active.browserStartedAt) {
       resume.href = state.active.runUrl;
       resume.style.display = 'inline-block';
+      activeNote.style.display = 'none';
+      activeNote.textContent = '';
     } else {
       resume.style.display = 'none';
+      if (state.active && state.active.mode === 'POPULATED_DASHBOARD' &&
+          !state.active.invalid && !state.active.trashed && state.active.browserStartedAt) {
+        activeNote.textContent =
+          'This run already started. CashCompass will not replay its writer steps. ' +
+          'Trash the verified disposable fixture, then prepare a fresh run.';
+        activeNote.style.display = 'block';
+      } else {
+        activeNote.style.display = 'none';
+        activeNote.textContent = '';
+      }
     }
     showStatus('State loaded.', false);
     if (unattendedRun && !unattendedStarted) {
@@ -91,9 +105,15 @@
       document.getElementById('confirm').checked = true;
       syncButtons();
       if (state.active && state.active.mode === 'POPULATED_DASHBOARD' && state.active.runUrl &&
-          !state.active.invalid && !state.active.trashed) {
-        showStatus('Unattended run resumed on its verified active fixture.', false);
+          !state.active.invalid && !state.active.trashed && !state.active.browserStartedAt) {
+        showStatus('Opening the verified prepared fixture.', false);
         window.location.assign(state.active.runUrl);
+      } else if (state.active && state.active.mode === 'POPULATED_DASHBOARD' &&
+          !state.active.invalid && !state.active.trashed && state.active.browserStartedAt) {
+        showStatus(
+          'The interrupted run will not be replayed. Clean up its verified fixture and start a fresh run.',
+          true
+        );
       } else {
         window.setTimeout(prepareAndRun, 100);
       }

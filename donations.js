@@ -433,6 +433,20 @@ function buildDonationOutputRow_(colMap, charityName, dateValue, amount, taxYear
   return row;
 }
 
+function donationSheetDateFromIso_(isoText, ss) {
+  var iso = String(isoText || '').trim();
+  parseIsoDateLocal_(iso);
+  var timeZone = ss && typeof ss.getSpreadsheetTimeZone === 'function'
+    ? String(ss.getSpreadsheetTimeZone() || '').trim()
+    : '';
+  if (!timeZone) timeZone = Session.getScriptTimeZone();
+  return Utilities.parseDate(
+    iso + ' 12:00:00',
+    timeZone,
+    'yyyy-MM-dd HH:mm:ss'
+  );
+}
+
 /**
  * @param {Object} payload charityName, donationDate (ISO yyyy-mm-dd), amount, taxYear (number), comments?, paymentType?
  */
@@ -442,7 +456,8 @@ function addDonation(payload, optionalSs) {
   const charityName = String(payload.charityName || '').trim();
   if (!charityName) throw new Error('Name of Charity is required.');
 
-  const donationDate = stripTime_(parseIsoDateLocal_(payload.donationDate));
+  const donationDateIso = String(payload.donationDate || '').trim();
+  parseIsoDateLocal_(donationDateIso);
   const amount = round2_(toNumber_(payload.amount));
   if (isNaN(amount)) throw new Error('Amount is not a valid number.');
 
@@ -454,6 +469,9 @@ function addDonation(payload, optionalSs) {
   if (!paymentType) throw new Error('Payment type is required.');
 
   const sheet = getDonationsSheet_(optionalSs);
+  const ss = sheet.getParent();
+  const donationDate = donationSheetDateFromIso_(donationDateIso, ss);
+  const operationContext = createActivityOperationContext_(ss, 'donation');
   const values = sheet.getDataRange().getValues();
   const block = findDonationBlockForTaxYear_(values, taxYear);
 
@@ -507,9 +525,16 @@ function addDonation(payload, optionalSs) {
 
   touchDashboardSourceUpdated_('donations');
 
-  const ss = sheet.getParent();
-  const tz = Session.getScriptTimeZone();
-  const entryDateStr = Utilities.formatDate(donationDate, tz, 'yyyy-MM-dd');
+  const entryDateStr = donationDateIso;
+  const donationState = {
+    exists: true,
+    taxYear: taxYear,
+    charityName: charityName,
+    entryDate: entryDateStr,
+    amount: amount,
+    comments: comments,
+    paymentType: paymentType
+  };
 
   appendActivityLog_(ss, {
     eventType: 'donation',
@@ -522,47 +547,74 @@ function addDonation(payload, optionalSs) {
     cashFlowSheet: DONATION_SHEET_NAME_,
     cashFlowMonth: 'TY ' + taxYear,
     dedupeKey: '',
+    operationEnvelope: {
+      context: operationContext,
+      correctable: true,
+      targets: [{
+        targetVersion: ACTIVITY_TARGET_DESCRIPTOR_VERSION_,
+        targetType: 'donation_row',
+        targetKey: 'donation_row::' + operationContext.operationId,
+        locator: {
+          taxYear: taxYear,
+          initialSheetRow: row1
+        },
+        before: {
+          exists: false
+        },
+        after: donationState
+      }]
+    },
     details: JSON.stringify({
       taxYear: taxYear,
       comments: comments,
       paymentType: paymentType,
       sheetRow: row1,
-      amountSigned: amount
+      amountSigned: amount,
+      activityOrigin: 'direct_donation'
     })
   });
 
   return {
     message: 'Donation saved.',
-    updated: Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss')
+    updated: Utilities.formatDate(
+      new Date(),
+      Session.getScriptTimeZone(),
+      'yyyy-MM-dd HH:mm:ss'
+    ),
+    operationId: operationContext.operationId
   };
 }
 
 /**
  * Compare donation sheet date cell to yyyy-MM-dd from the activity log.
  */
-function donationActivityUndoDateMatchesIso_(cellVal, isoYyyyMmDd) {
+function donationActivityUndoDateMatchesIso_(cellVal, isoYyyyMmDd, timeZone) {
   const target = String(isoYyyyMmDd || '').trim();
   if (!target) return false;
-  let d;
+  const tz = String(timeZone || '').trim() || Session.getScriptTimeZone();
   if (cellVal instanceof Date && !isNaN(cellVal.getTime())) {
-    d = stripTime_(cellVal);
-  } else {
-    try {
-      const p = stripTime_(parseIsoDateLocal_(String(cellVal || '').trim()));
-      if (isNaN(p.getTime())) return false;
-      d = p;
-    } catch (e) {
-      return false;
-    }
+    return Utilities.formatDate(cellVal, tz, 'yyyy-MM-dd') === target;
   }
-  const tz = Session.getScriptTimeZone();
-  return Utilities.formatDate(d, tz, 'yyyy-MM-dd') === target;
+  const raw = String(cellVal || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw === target;
+  try {
+    const parsed = parseIsoDateLocal_(raw);
+    return parsed.getFullYear() === Number(target.slice(0, 4)) &&
+      parsed.getMonth() + 1 === Number(target.slice(5, 7)) &&
+      parsed.getDate() === Number(target.slice(8, 10));
+  } catch (_e) {
+    return false;
+  }
 }
 
 function donationDataRowMatchesActivityUndo_(row, colMap, fp) {
   const charity = String(row[colMap['Name of Charity']] || '').trim();
   if (charity !== String(fp.charityName || '').trim()) return false;
-  if (!donationActivityUndoDateMatchesIso_(row[colMap['Date']], fp.entryDate)) return false;
+  if (!donationActivityUndoDateMatchesIso_(
+    row[colMap['Date']],
+    fp.entryDate,
+    fp.timeZone
+  )) return false;
 
   const cellAmt = round2_(toNumber_(row[colMap['Amount']]));
   if (fp.amountSigned !== null && fp.amountSigned !== undefined && !isNaN(Number(fp.amountSigned))) {
@@ -578,6 +630,470 @@ function donationDataRowMatchesActivityUndo_(row, colMap, fp) {
   const pay = String(row[colMap['Payment type']] || '').trim();
   if (pay !== String(fp.paymentType || '').trim()) return false;
   return true;
+}
+
+function donationActivityState_(raw) {
+  raw = raw || {};
+  return {
+    exists: raw.exists === true,
+    taxYear: Number(raw.taxYear || 0),
+    charityName: String(raw.charityName || '').trim(),
+    entryDate: String(raw.entryDate || '').trim(),
+    amount: round2_(toNumber_(raw.amount)),
+    comments: String(raw.comments || '').trim(),
+    paymentType: String(raw.paymentType || '').trim()
+  };
+}
+
+function findDonationActivityTargetRow_(ss, target, expectedState) {
+  target = normalizeActivityTargetDescriptor_(target);
+  var expected = donationActivityState_(expectedState);
+  var sheet = ss.getSheetByName(DONATION_SHEET_NAME_);
+  if (!sheet) return { sheet: null, matches: [] };
+  var values = sheet.getDataRange().getValues();
+  var block = findDonationBlockForTaxYear_(values, expected.taxYear);
+  if (!block) return { sheet: sheet, matches: [] };
+  var spreadsheetTimeZone = typeof ss.getSpreadsheetTimeZone === 'function'
+    ? String(ss.getSpreadsheetTimeZone() || '').trim()
+    : '';
+  var initialSheetRow = Number(
+    target.locator && target.locator.initialSheetRow
+  );
+  if (Number.isInteger(initialSheetRow) &&
+      initialSheetRow > block.dataStart0 &&
+      initialSheetRow <= values.length &&
+      donationDataRowMatchesActivityUndo_(
+        values[initialSheetRow - 1],
+        block.colMap,
+        {
+          taxYear: expected.taxYear,
+          charityName: expected.charityName,
+          entryDate: expected.entryDate,
+          amountSigned: expected.amount,
+          amountAbs: Math.abs(expected.amount),
+          comments: expected.comments,
+          paymentType: expected.paymentType,
+          timeZone: spreadsheetTimeZone
+        }
+      )) {
+    return {
+      sheet: sheet,
+      values: values,
+      block: block,
+      matches: [initialSheetRow]
+    };
+  }
+  var matches = [];
+  for (var r = block.dataStart0; r < values.length; r++) {
+    if (String(values[r][0] || '').trim().toLowerCase() === 'year') break;
+    if (donationDataRowMatchesActivityUndo_(values[r], block.colMap, {
+      taxYear: expected.taxYear,
+      charityName: expected.charityName,
+      entryDate: expected.entryDate,
+      amountSigned: expected.amount,
+      amountAbs: Math.abs(expected.amount),
+      comments: expected.comments,
+      paymentType: expected.paymentType,
+      timeZone: spreadsheetTimeZone
+    })) {
+      matches.push(r + 1);
+    }
+  }
+  return {
+    sheet: sheet,
+    values: values,
+    block: block,
+    matches: matches
+  };
+}
+
+function inspectDonationActivityTargetInSpreadsheet_(ss, target) {
+  target = normalizeActivityTargetDescriptor_(target);
+  if (target.targetType !== 'donation_row') {
+    return { supported: false, status: 'UNSUPPORTED_TARGET' };
+  }
+  var found = findDonationActivityTargetRow_(ss, target, target.after);
+  if (found.matches.length > 1) {
+    return { supported: false, status: 'AMBIGUOUS_TARGET' };
+  }
+  if (!found.matches.length) {
+    return {
+      supported: true,
+      status: 'READ',
+      current: { exists: false }
+    };
+  }
+  return {
+    supported: true,
+    status: 'READ',
+    row: found.matches[0],
+    current: donationActivityState_(target.after)
+  };
+}
+
+function writeDonationActivityTargetStateInSpreadsheet_(ss, target, desiredState) {
+  target = normalizeActivityTargetDescriptor_(target);
+  var desired = donationActivityState_(desiredState);
+  var found = findDonationActivityTargetRow_(ss, target, target.after);
+  if (found.matches.length === 0 && desired.exists === true) {
+    var sheet = ss.getSheetByName(DONATION_SHEET_NAME_);
+    if (!sheet) throw new Error('Donation sheet is no longer available.');
+    var values = sheet.getDataRange().getValues();
+    var block = findDonationBlockForTaxYear_(values, desired.taxYear);
+    if (!block) throw new Error('Donation year section is no longer available.');
+    var row1 = getDonationAppendRow1_(values, block);
+    var date = donationSheetDateFromIso_(desired.entryDate, ss);
+    var rowValues = buildDonationOutputRow_(
+      block.colMap,
+      desired.charityName,
+      date,
+      desired.amount,
+      desired.taxYear,
+      desired.comments,
+      desired.paymentType
+    );
+    sheet.getRange(row1, 1, 1, rowValues.length).setValues([rowValues]);
+    sheet.getRange(row1, block.colMap['Date'] + 1).setNumberFormat('M/d/yyyy');
+    sheet.getRange(row1, block.colMap['Amount'] + 1).setNumberFormat('$#,##0.00');
+    return;
+  }
+  if (found.matches.length !== 1) {
+    throw new Error('The donation is missing or ambiguous.');
+  }
+  var row = found.matches[0];
+  if (desired.exists === false) {
+    found.sheet.deleteRow(row);
+    return;
+  }
+  var amountCol = found.block.colMap['Amount'] + 1;
+  found.sheet.getRange(row, amountCol)
+    .setValue(desired.amount)
+    .setNumberFormat('$#,##0.00');
+}
+
+function donationActivityEntrySummary_(events) {
+  var event = events && events.length ? events[0] : null;
+  var row = event && event.rowValues ? event.rowValues : [];
+  var details = event && event.parsed ? event.parsed.details : {};
+  var envelope = event && event.parsed ? event.parsed.envelope : null;
+  var target = envelope && Array.isArray(envelope.targets) &&
+    envelope.targets.length
+    ? envelope.targets[0]
+    : null;
+  var targetEntryDate = target && target.after
+    ? String(target.after.entryDate || '').trim()
+    : '';
+  return {
+    entryType: 'Donation',
+    payee: String(row[5] || '').trim(),
+    entryDate: targetEntryDate ||
+      activityLogEntryDateToYyyyMmDd_(row[2]),
+    amount: round2_(Math.abs(toNumber_(row[3]))),
+    cashFlowMonth: String(row[9] || '').trim(),
+    replacesOperationId: String(details.replacesOperationId || '').trim(),
+    rootOperationId: String(
+      details.rootOperationId ||
+      details.replacesOperationId ||
+      (event && event.parsed && event.parsed.envelope
+        ? event.parsed.envelope.operationId
+        : '')
+    ).trim(),
+    correctedFromAmount: details.correctedFromAmount === undefined
+      ? null
+      : round2_(Math.abs(toNumber_(details.correctedFromAmount)))
+  };
+}
+
+function buildDonationCorrectionPlanInSpreadsheet_(ss, operationId) {
+  var requested = String(operationId || '').trim();
+  var events = findActivityOperationEvents_(ss, requested);
+  var entry = donationActivityEntrySummary_(events);
+  if (!events.length || events.some(function(event) {
+    return !event.parsed.envelope ||
+      event.parsed.envelope.operationType !== 'donation';
+  })) {
+    return {
+      ok: false,
+      status: 'LEGACY_OR_NOT_FOUND',
+      correctable: false,
+      entryFamily: 'donation',
+      message: 'This older donation remains read-only.'
+    };
+  }
+  if (activityCorrectionIndex_(ss)[requested]) {
+    return {
+      ok: true,
+      status: 'ALREADY_CORRECTED',
+      correctable: false,
+      entryFamily: 'donation',
+      entry: entry,
+      message: 'This donation has already been corrected.'
+    };
+  }
+  var base = previewActivityOperationInSpreadsheet_(ss, requested);
+  if (!base.ok || base.status !== 'READY' || base.correctable !== true) {
+    return {
+      ok: false,
+      status: base.status || 'PRECONDITION_FAILED',
+      correctable: false,
+      entryFamily: 'donation',
+      entry: entry,
+      verification: {
+        status: String(base.status || 'PRECONDITION_FAILED'),
+        targets: Array.isArray(base.targets) ? base.targets.map(function(target) {
+          return {
+            targetType: String(target.targetType || ''),
+            status: String(target.status || '')
+          };
+        }) : []
+      },
+      message: 'This donation changed after it was recorded. CashCompass will not overwrite it.'
+    };
+  }
+  var targets = collectActivityOperationTargets_(events);
+  if (targets.length !== 1 || targets[0].targetType !== 'donation_row') {
+    return {
+      ok: false,
+      status: 'UNSUPPORTED_TARGET',
+      correctable: false,
+      entryFamily: 'donation',
+      entry: entry,
+      message: 'This donation does not have a complete correction record.'
+    };
+  }
+  return {
+    ok: true,
+    status: 'READY',
+    operationId: requested,
+    operationType: 'donation',
+    entryFamily: 'donation',
+    correctable: true,
+    entry: entry,
+    impacts: [{
+      type: 'donation_row',
+      label: 'Donation amount',
+      currentValue: entry.amount,
+      restoredValue: 0,
+      removesCreatedRow: false
+    }],
+    writes: [{
+      target: targets[0],
+      targetType: 'donation_row',
+      current: donationActivityState_(targets[0].after),
+      desired: { exists: false }
+    }],
+    laterEntryCount: 0,
+    message: 'CashCompass verified the donation record.'
+  };
+}
+
+function previewDonationCorrectionInSpreadsheet_(ss, operationId) {
+  return buildDonationCorrectionPlanInSpreadsheet_(ss, operationId);
+}
+
+function correctDonationOperationInSpreadsheet_(
+  ss,
+  operationId,
+  reason,
+  otherNote,
+  correctionMode,
+  correctedAmount
+) {
+  var reasonData = activityCorrectionReason_(reason, otherNote);
+  var mode = normalizeActivityCorrectionMode_(correctionMode);
+  var replacementAmount = mode === 'change_amount'
+    ? activityCorrectedAmount_(correctedAmount)
+    : null;
+  var preview = buildDonationCorrectionPlanInSpreadsheet_(ss, operationId);
+  if (!preview.ok || preview.status !== 'READY' || preview.correctable !== true) {
+    return {
+      ok: false,
+      status: preview.status || 'CORRECTION_REFUSED',
+      error: preview.message || 'This donation can no longer be corrected safely.'
+    };
+  }
+  if (mode === 'change_amount' &&
+      round2_(replacementAmount) === round2_(preview.entry.amount)) {
+    return {
+      ok: false,
+      status: 'NO_CHANGE',
+      error: 'Enter a different amount, or choose Remove donation.'
+    };
+  }
+
+  var write = preview.writes[0];
+  var desired = mode === 'change_amount'
+    ? Object.assign({}, donationActivityState_(write.current), {
+        amount: replacementAmount
+      })
+    : { exists: false };
+  var correctionAuditDedupe =
+    'donation_correction::' + String(operationId || '').trim();
+  var replacementAuditDedupe =
+    'donation_replacement::' + String(operationId || '').trim();
+  var correctionAuditAppended = false;
+  var replacementAuditAppended = false;
+  try {
+    writeDonationActivityTargetStateInSpreadsheet_(ss, write.target, desired);
+    SpreadsheetApp.flush();
+    var verificationTarget = mode === 'change_amount'
+      ? Object.assign({}, write.target, { after: desired })
+      : write.target;
+    var inspection = mode === 'change_amount'
+      ? inspectDonationActivityTargetInSpreadsheet_(ss, verificationTarget)
+      : inspectDonationActivityTargetInSpreadsheet_(ss, write.target);
+    var verified = mode === 'change_amount'
+      ? inspection && inspection.supported === true &&
+        activityStatesEqual_(inspection.current, donationActivityState_(desired))
+      : inspection && inspection.supported === true &&
+        inspection.current && inspection.current.exists === false;
+    if (!verified) throw new Error('The corrected donation could not be verified.');
+
+    var replacementContext = mode === 'change_amount'
+      ? createActivityOperationContext_(ss, 'donation')
+      : null;
+    var correctionContext = createActivityOperationContext_(ss, 'donation_correction');
+    var correctionAppended = appendActivityLog_(ss, {
+      eventType: 'donation_correction',
+      entryDate: preview.entry.entryDate,
+      amount: 0,
+      direction: '',
+      payee: preview.entry.payee,
+      category: '',
+      accountSource: '',
+      cashFlowSheet: DONATION_SHEET_NAME_,
+      cashFlowMonth: preview.entry.cashFlowMonth,
+      dedupeKey: correctionAuditDedupe,
+      operationEnvelope: {
+        context: correctionContext,
+        correctable: false,
+        targets: []
+      },
+      details: JSON.stringify({
+        reversalOfOperationId: String(operationId || '').trim(),
+        correctionMode: mode,
+        replacementOperationId: replacementContext
+          ? replacementContext.operationId
+          : '',
+        correctionReason: reasonData.reason,
+        correctionNote: reasonData.note,
+        originalAmount: preview.entry.amount,
+        correctedAmount: replacementAmount,
+        originalEntryType: 'Donation'
+      })
+    });
+    if (!correctionAppended) throw new Error('The correction audit record could not be saved.');
+    correctionAuditAppended = true;
+
+    if (replacementContext) {
+      var replacementState = donationActivityState_(desired);
+      var replacementAppended = appendActivityLog_(ss, {
+        eventType: 'donation',
+        entryDate: preview.entry.entryDate,
+        amount: replacementAmount,
+        direction: 'charity',
+        payee: preview.entry.payee,
+        category: replacementState.paymentType,
+        accountSource: '',
+        cashFlowSheet: DONATION_SHEET_NAME_,
+        cashFlowMonth: preview.entry.cashFlowMonth,
+        dedupeKey: replacementAuditDedupe,
+        operationEnvelope: {
+          context: replacementContext,
+          correctable: true,
+          targets: [{
+            targetVersion: ACTIVITY_TARGET_DESCRIPTOR_VERSION_,
+            targetType: 'donation_row',
+            targetKey: write.target.targetKey,
+            locator: write.target.locator,
+            before: donationActivityState_(write.current),
+            after: replacementState
+          }]
+        },
+        details: JSON.stringify({
+          taxYear: replacementState.taxYear,
+          comments: replacementState.comments,
+          paymentType: replacementState.paymentType,
+          amountSigned: replacementAmount,
+          activityOrigin: 'direct_donation',
+          replacesOperationId: String(operationId || '').trim(),
+          rootOperationId: preview.entry.rootOperationId,
+          correctedFromAmount: preview.entry.amount
+        })
+      });
+      if (!replacementAppended) {
+        throw new Error('The corrected donation could not be added to Activity.');
+      }
+      replacementAuditAppended = true;
+    }
+    touchDashboardSourceUpdated_('donations');
+    return {
+      ok: true,
+      status: 'CORRECTED',
+      operationId: String(operationId || '').trim(),
+      replacementOperationId: replacementContext
+        ? replacementContext.operationId
+        : '',
+      correctionMode: mode,
+      entryFamily: 'donation',
+      message: mode === 'change_amount'
+        ? 'Donation amount changed. The correction remains in Activity history.'
+        : 'Donation removed. The original Activity record remains in history.',
+      entry: Object.assign({}, preview.entry, {
+        correctedAmount: replacementAmount
+      }),
+      impacts: [{
+        type: 'donation_row',
+        label: 'Donation amount',
+        currentValue: preview.entry.amount,
+        restoredValue: mode === 'change_amount' ? replacementAmount : 0
+      }]
+    };
+  } catch (e) {
+    if (replacementAuditAppended) {
+      try {
+        rollbackFailedActivityAppend_(
+          ss,
+          'donation',
+          replacementAuditDedupe
+        );
+      } catch (replacementAuditRollbackError) {
+        Logger.log(
+          'Donation replacement audit compensation failed: ' +
+          replacementAuditRollbackError
+        );
+      }
+    }
+    if (correctionAuditAppended) {
+      try {
+        rollbackFailedActivityAppend_(
+          ss,
+          'donation_correction',
+          correctionAuditDedupe
+        );
+      } catch (correctionAuditRollbackError) {
+        Logger.log(
+          'Donation correction audit compensation failed: ' +
+          correctionAuditRollbackError
+        );
+      }
+    }
+    try {
+      var rollbackTarget = Object.assign({}, write.target, { after: desired });
+      writeDonationActivityTargetStateInSpreadsheet_(
+        ss,
+        rollbackTarget,
+        write.current
+      );
+    } catch (rollbackError) {
+      Logger.log('Donation correction compensation failed: ' + rollbackError);
+    }
+    return {
+      ok: false,
+      status: 'CORRECTION_FAILED',
+      error: e && e.message ? e.message : String(e)
+    };
+  }
 }
 
 /**

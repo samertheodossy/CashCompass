@@ -1,5 +1,5 @@
 /**
- * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_update, bill_deactivate, house expense, house_add, house_value_update, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_update, bank_account_deactivate, investment_add, investment_update, investment_deactivate, debt_add, debt_deactivate, debt_reactivate, debt_update, income_add, income_deactivate, planner_email_deferred, planner_email_sent, planner_email_invalid_recipient, …). Only eligible Donation rows can currently be removed from the web UI; all other events remain audit evidence.
+ * Activity ledger: discrete user/script actions (Quick add / quick_pay, bill skip, bill autopay, bill_add, bill_update, bill_deactivate, house expense, house_add, house_value_update, house_deactivate, donations, upcoming add/status/cashflow, bank_account_add, bank_account_update, bank_account_deactivate, investment_add, investment_update, investment_deactivate, debt_add, debt_deactivate, debt_reactivate, debt_update, income_add, income_deactivate, planner_email_deferred, planner_email_sent, planner_email_invalid_recipient, …). Eligible Donations retain fingerprint-gated removal; newly recorded direct Quick Add operations can be corrected through their exact operation envelope. Other events remain audit evidence.
  * Complements OUT - History (planner-run snapshots). Tab: LOG - Activity.
  */
 
@@ -230,6 +230,7 @@ function findActivityOperationEvents_(ss, operationId) {
       found.push({
         sheetRow: i + 2,
         eventType: String(values[i][1] || '').trim(),
+        rowValues: values[i],
         parsed: parsed
       });
     }
@@ -336,6 +337,974 @@ function previewActivityOperationInSpreadsheet_(ss, operationId) {
 /** PUBLIC, READ-ONLY. No correction action is exposed in 5h. */
 function previewActivityOperationCorrection(operationId) {
   return previewActivityOperationInSpreadsheet_(getUserSpreadsheet_(), operationId);
+}
+
+function activityCorrectionReason_(rawReason, rawOther) {
+  var reason = String(rawReason || '').trim();
+  var allowed = ['Entered twice', 'Wrong amount', 'Wrong payee/date', 'Other'];
+  if (allowed.indexOf(reason) === -1) {
+    throw new Error('Choose why this entry is being corrected.');
+  }
+  var other = String(rawOther || '').trim();
+  if (reason === 'Other' && !other) {
+    throw new Error('Add a short note for this correction.');
+  }
+  if (other.length > 240) throw new Error('Correction note must be 240 characters or fewer.');
+  return { reason: reason, note: reason === 'Other' ? other : '' };
+}
+
+function activityCorrectionLedger_(ss) {
+  var out = {};
+  var sh = ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
+  if (!sh || sh.getLastRow() < 2) return out;
+  var details = sh.getRange(2, 12, sh.getLastRow() - 1, 1).getDisplayValues();
+  for (var i = 0; i < details.length; i++) {
+    var parsed = activityJsonObject_(details[i][0]);
+    var reversed = String(parsed.reversalOfOperationId || '').trim();
+    if (reversed && !out[reversed]) out[reversed] = i + 2;
+  }
+  return out;
+}
+
+function activityCorrectionIndex_(ss) {
+  var ledger = activityCorrectionLedger_(ss);
+  var out = {};
+  Object.keys(ledger).forEach(function(operationId) {
+    out[operationId] = true;
+  });
+  return out;
+}
+
+/**
+ * Compensate an Activity append only while the enclosing correction transaction
+ * is still failing. Successful audit history is immutable; this helper removes
+ * only the exact unique row appended by the failed in-flight transaction.
+ */
+function rollbackFailedActivityAppend_(ss, eventType, dedupeKey) {
+  var wantedType = String(eventType || '').trim();
+  var wantedDedupe = String(dedupeKey || '').trim();
+  if (!wantedType || !wantedDedupe) return false;
+  var sh = ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
+  if (!sh || sh.getLastRow() < 2) return false;
+  var values = sh.getRange(2, 1, sh.getLastRow() - 1, 11).getDisplayValues();
+  for (var i = values.length - 1; i >= 0; i--) {
+    if (String(values[i][1] || '').trim() === wantedType &&
+        String(values[i][10] || '').trim() === wantedDedupe) {
+      sh.deleteRow(i + 2);
+      return true;
+    }
+  }
+  return false;
+}
+
+function activityCorrectionRelationsFromValues_(values) {
+  var corrected = {};
+  var superseded = {};
+  var correctionByOriginal = {};
+  var operationById = {};
+  (values || []).forEach(function(row, index) {
+    var parsed = parseActivityOperationEnvelope_(row[11]);
+    var envelope = parsed.envelope;
+    var operationId = envelope
+      ? String(envelope.operationId || '').trim()
+      : '';
+    if (operationId) {
+      operationById[operationId] = {
+        row: row,
+        sheetRow: index + 2,
+        parsed: parsed
+      };
+    }
+    var details = parsed.details || {};
+    var original = String(details.reversalOfOperationId || '').trim();
+    if (original) {
+      corrected[original] = true;
+      correctionByOriginal[original] = {
+        mode: String(details.correctionMode || 'remove').trim(),
+        replacementOperationId: String(
+          details.replacementOperationId || ''
+        ).trim(),
+        reason: String(details.correctionReason || '').trim(),
+        note: String(details.correctionNote || '').trim(),
+        originalAmount: round2_(Math.abs(toNumber_(details.originalAmount))),
+        correctedAmount: details.correctedAmount === null ||
+          details.correctedAmount === undefined
+          ? null
+          : round2_(Math.abs(toNumber_(details.correctedAmount))),
+        loggedAt: String(row[0] || '').trim()
+      };
+      if (correctionByOriginal[original].replacementOperationId) {
+        superseded[original] = true;
+      }
+    }
+  });
+  return {
+    corrected: corrected,
+    superseded: superseded,
+    correctionByOriginal: correctionByOriginal,
+    operationById: operationById
+  };
+}
+
+function activityCorrectionHistory_(relations, operationId) {
+  var history = [];
+  var current = String(operationId || '').trim();
+  var seen = {};
+  while (current && !seen[current]) {
+    seen[current] = true;
+    var operation = relations.operationById[current];
+    var details = operation && operation.parsed
+      ? operation.parsed.details || {}
+      : {};
+    var previous = String(details.replacesOperationId || '').trim();
+    if (!previous) break;
+    var correction = relations.correctionByOriginal[previous] || {};
+    history.push({
+      fromAmount: correction.originalAmount,
+      toAmount: correction.correctedAmount,
+      reason: correction.reason,
+      note: correction.note,
+      loggedAt: correction.loggedAt
+    });
+    current = previous;
+  }
+  return history;
+}
+
+function activityQuickAddEntrySummary_(events) {
+  var event = events && events.length ? events[0] : null;
+  var row = event && event.rowValues ? event.rowValues : [];
+  var details = event && event.parsed ? event.parsed.details : {};
+  var targets = event && event.parsed && event.parsed.envelope
+    ? event.parsed.envelope.targets || []
+    : [];
+  var cashTarget = null;
+  for (var i = 0; i < targets.length; i++) {
+    if (targets[i].targetType === 'cash_flow_month') {
+      cashTarget = targets[i];
+      break;
+    }
+  }
+  var locator = cashTarget && cashTarget.locator ? cashTarget.locator : {};
+  var rawMonth = locator.month || row[9];
+  var cashFlowMonth = rawMonth instanceof Date && !isNaN(rawMonth.getTime())
+    ? Utilities.formatDate(rawMonth, Session.getScriptTimeZone(), 'MMM-yy')
+    : String(rawMonth || '').trim();
+  return {
+    entryType: String(row[4] || '').trim().toLowerCase() === 'income' ? 'Income' : 'Expense',
+    payee: String(row[5] || '').trim(),
+    entryDate: String(locator.entryDate || '').trim() ||
+      activityLogEntryDateToYyyyMmDd_(row[2]),
+    amount: round2_(Math.abs(toNumber_(row[3]))),
+    cashFlowSheet: String(locator.sheetName || row[8] || '').trim(),
+    cashFlowMonth: cashFlowMonth,
+    activityOrigin: String(details.activityOrigin || '').trim(),
+    replacesOperationId: String(details.replacesOperationId || '').trim(),
+    rootOperationId: String(
+      details.rootOperationId ||
+      details.replacesOperationId ||
+      (event && event.parsed && event.parsed.envelope
+        ? event.parsed.envelope.operationId
+        : '')
+    ).trim(),
+    correctedFromAmount: details.correctedFromAmount === undefined
+      ? null
+      : round2_(Math.abs(toNumber_(details.correctedFromAmount)))
+  };
+}
+
+function activityQuickAddImpactForClient_(targetPreview, entry) {
+  var before = targetPreview.current || targetPreview.after || {};
+  var after = targetPreview.desired || targetPreview.before || {};
+  if (targetPreview.targetType === 'cash_flow_month') {
+    return {
+      type: 'cash_flow_month',
+      label: entry.cashFlowMonth + ' Cash Flow total',
+      currentValue: before.value,
+      restoredValue: after.value,
+      removesCreatedRow: after.exists === false
+    };
+  }
+  if (targetPreview.targetType === 'debt_balance') {
+    return {
+      type: 'debt_balance',
+      label: entry.payee + ' tracked balance',
+      currentValue: before.value,
+      restoredValue: after.value,
+      removesCreatedRow: false
+    };
+  }
+  return { type: targetPreview.targetType, label: 'Recorded value' };
+}
+
+function activityQuickAddRelevantState_(targetType, rawState) {
+  rawState = rawState || {};
+  if (targetType === 'cash_flow_month') {
+    return {
+      exists: rawState.exists === true,
+      value: round2_(toNumber_(rawState.value)),
+      flowSource: String(rawState.flowSource || '').trim()
+    };
+  }
+  if (targetType === 'debt_balance') {
+    return {
+      exists: rawState.exists === true,
+      value: round2_(toNumber_(rawState.value))
+    };
+  }
+  return activityNormalizedState_(rawState);
+}
+
+function activityQuickAddApplyEffect_(targetType, state, operation, target) {
+  var next = activityQuickAddRelevantState_(targetType, state);
+  var before = activityQuickAddRelevantState_(targetType, target.before);
+  var after = activityQuickAddRelevantState_(targetType, target.after);
+  if (targetType === 'cash_flow_month') {
+    var signedAmount = operation.entry.entryType === 'Expense'
+      ? -Math.abs(toNumber_(operation.entry.amount))
+      : Math.abs(toNumber_(operation.entry.amount));
+    next.exists = true;
+    next.value = round2_(toNumber_(next.value) + signedAmount);
+    if (before.flowSource !== after.flowSource) next.flowSource = after.flowSource;
+    return next;
+  }
+  if (targetType === 'debt_balance') {
+    next.exists = true;
+    next.value = round2_(Math.max(
+      0,
+      toNumber_(next.value) - Math.abs(toNumber_(operation.entry.amount))
+    ));
+    return next;
+  }
+  throw new Error('Unsupported Quick Add correction target.');
+}
+
+function activityQuickAddStatesMatchForChain_(targetType, left, right) {
+  return activityStatesEqual_(
+    activityQuickAddRelevantState_(targetType, left),
+    activityQuickAddRelevantState_(targetType, right)
+  );
+}
+
+function activityQuickAddRowKey_(target) {
+  if (!target || target.targetType !== 'cash_flow_month') return '';
+  var locator = target.locator || {};
+  return [
+    String(locator.sheetName || '').trim().toLowerCase(),
+    String(locator.entryType || '').trim().toLowerCase(),
+    String(locator.payee || '').trim().toLowerCase()
+  ].join('::');
+}
+
+function collectQuickAddOperationLedger_(ss) {
+  var sh = ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var values = sh.getRange(
+    2,
+    1,
+    sh.getLastRow() - 1,
+    ACTIVITY_LOG_HEADERS.length
+  ).getValues();
+  var corrections = activityCorrectionLedger_(ss);
+  var operations = [];
+  for (var i = 0; i < values.length; i++) {
+    var parsed = parseActivityOperationEnvelope_(values[i][11]);
+    var envelope = parsed.envelope;
+    if (!envelope || envelope.operationType !== 'quick_pay') continue;
+    var event = {
+      sheetRow: i + 2,
+      eventType: String(values[i][1] || '').trim(),
+      rowValues: values[i],
+      parsed: parsed
+    };
+    operations.push({
+      sheetRow: event.sheetRow,
+      operationId: String(envelope.operationId || '').trim(),
+      envelope: envelope,
+      entry: activityQuickAddEntrySummary_([event]),
+      targets: envelope.targets || [],
+      corrected: !!corrections[String(envelope.operationId || '').trim()],
+      correctedAtSheetRow:
+        Number(corrections[String(envelope.operationId || '').trim()] || 0)
+    });
+  }
+  operations.sort(function(left, right) { return left.sheetRow - right.sheetRow; });
+  return operations;
+}
+
+function activityQuickAddSimulateChain_(targetType, chain, operationToExclude) {
+  var state = activityQuickAddRelevantState_(targetType, chain[0].target.before);
+  for (var i = 0; i < chain.length; i++) {
+    var item = chain[i];
+    if (item.operation.corrected ||
+        item.operation.operationId === String(operationToExclude || '')) {
+      continue;
+    }
+    state = activityQuickAddApplyEffect_(
+      targetType,
+      state,
+      item.operation,
+      item.target
+    );
+  }
+  return state;
+}
+
+function activityQuickAddSimulateChainAtRow_(targetType, chain, beforeSheetRow) {
+  var state = activityQuickAddRelevantState_(targetType, chain[0].target.before);
+  var boundary = Number(beforeSheetRow || 0);
+  for (var i = 0; i < chain.length; i++) {
+    var item = chain[i];
+    if (Number(item.operation.sheetRow || 0) >= boundary) break;
+    var correctedBeforeBoundary = item.operation.correctedAtSheetRow > 0 &&
+      item.operation.correctedAtSheetRow < boundary;
+    if (correctedBeforeBoundary) continue;
+    state = activityQuickAddApplyEffect_(
+      targetType,
+      state,
+      item.operation,
+      item.target
+    );
+  }
+  return state;
+}
+
+function buildDirectQuickAddCorrectionPlanInSpreadsheet_(ss, operationId) {
+  var requested = String(operationId || '').trim();
+  var events = findActivityOperationEvents_(ss, requested);
+  if (!events.length) {
+    return { ok: false, status: 'LEGACY_OR_NOT_FOUND', correctable: false,
+      message: 'This older Activity entry cannot be corrected automatically.' };
+  }
+  var entry = activityQuickAddEntrySummary_(events);
+  if (events.some(function(event) {
+    return !event.parsed.envelope ||
+      event.parsed.envelope.operationType !== 'quick_pay';
+  }) || entry.activityOrigin !== QUICK_ADD_ACTIVITY_ORIGIN_DIRECT_) {
+    return { ok: false, status: 'AUDIT_ONLY', correctable: false, entry: entry,
+      message: 'This entry belongs to a linked or legacy workflow and remains read-only.' };
+  }
+  if (activityCorrectionIndex_(ss)[requested]) {
+    return { ok: true, status: 'ALREADY_CORRECTED', correctable: false, entry: entry,
+      message: 'This Quick Add entry has already been corrected.' };
+  }
+
+  var currentWorkbookIdentity = activityWorkbookIdentity_(ss);
+  var currentActorIdentity = activityActorIdentity_();
+  var ledger = collectQuickAddOperationLedger_(ss);
+  var selected = null;
+  for (var i = 0; i < ledger.length; i++) {
+    if (ledger[i].operationId === requested) {
+      if (selected) {
+        return { ok: false, status: 'DUPLICATE_OPERATION', correctable: false,
+          entry: entry, message: 'This Activity operation is duplicated and remains read-only.' };
+      }
+      selected = ledger[i];
+    }
+  }
+  if (!selected) {
+    return { ok: false, status: 'LEGACY_OR_NOT_FOUND', correctable: false,
+      entry: entry, message: 'This Activity entry can no longer be resolved.' };
+  }
+  if (selected.envelope.workbookIdentity !== currentWorkbookIdentity) {
+    return { ok: false, status: 'WORKBOOK_CHANGED', correctable: false,
+      entry: entry, message: 'This entry belongs to a different workbook.' };
+  }
+  if (!currentActorIdentity || selected.envelope.actorIdentity !== currentActorIdentity) {
+    return { ok: false, status: 'ACTOR_CHANGED', correctable: false,
+      entry: entry, message: 'This entry belongs to a different signed-in user.' };
+  }
+
+  var selectedTargets = collectActivityOperationTargets_(events);
+  var writes = [];
+  var laterActiveOperations = {};
+  for (var targetIndex = 0; targetIndex < selectedTargets.length; targetIndex++) {
+    var selectedTarget = selectedTargets[targetIndex];
+    var targetType = selectedTarget.targetType;
+    var chain = [];
+    for (var opIndex = 0; opIndex < ledger.length; opIndex++) {
+      var operation = ledger[opIndex];
+      for (var operationTargetIndex = 0;
+           operationTargetIndex < operation.targets.length;
+           operationTargetIndex++) {
+        var operationTarget = operation.targets[operationTargetIndex];
+        if (operationTarget.targetKey === selectedTarget.targetKey) {
+          if (operation.envelope.workbookIdentity !== currentWorkbookIdentity ||
+              operation.envelope.actorIdentity !== currentActorIdentity) {
+            return { ok: false, status: 'CHAIN_IDENTITY_CHANGED', correctable: false,
+              entry: entry,
+              message: 'A later entry has different workbook or user ownership.' };
+          }
+          chain.push({ operation: operation, target: operationTarget });
+        }
+      }
+    }
+    if (!chain.length) {
+      return { ok: false, status: 'CHAIN_NOT_FOUND', correctable: false,
+        entry: entry, message: 'The Quick Add history could not be verified.' };
+    }
+
+    for (var chainIndex = 0; chainIndex < chain.length; chainIndex++) {
+      var chainItem = chain[chainIndex];
+      var historicalState = activityQuickAddSimulateChainAtRow_(
+        targetType,
+        chain,
+        chainItem.operation.sheetRow
+      );
+      if (!activityQuickAddStatesMatchForChain_(
+        targetType,
+        historicalState,
+        chainItem.target.before
+      )) {
+        return { ok: false, status: 'CHAIN_CHANGED', correctable: false,
+          entry: entry,
+          message: 'The recorded Quick Add sequence has an unexplained value change.' };
+      }
+      historicalState = activityQuickAddApplyEffect_(
+        targetType,
+        chainItem.target.before,
+        chainItem.operation,
+        chainItem.target
+      );
+      if (!activityQuickAddStatesMatchForChain_(
+        targetType,
+        historicalState,
+        chainItem.target.after
+      )) {
+        return { ok: false, status: 'CHAIN_INVALID', correctable: false,
+          entry: entry,
+          message: 'The recorded Quick Add sequence is incomplete and remains read-only.' };
+      }
+      if (!chainItem.operation.corrected &&
+          chainItem.operation.sheetRow > selected.sheetRow) {
+        laterActiveOperations[chainItem.operation.operationId] = true;
+      }
+    }
+
+    var expected = activityQuickAddSimulateChain_(targetType, chain, '');
+    var desired = activityQuickAddSimulateChain_(targetType, chain, requested);
+    var inspection = inspectActivityOperationTargetInSpreadsheet_(ss, selectedTarget);
+    if (!inspection || inspection.supported !== true) {
+      return { ok: false, status: 'UNSUPPORTED_TARGET', correctable: false,
+        entry: entry, message: 'This entry no longer has a supported financial target.' };
+    }
+
+    if (targetType === 'cash_flow_month') {
+      var rowKey = activityQuickAddRowKey_(selectedTarget);
+      var activeRowOperations = 0;
+      var desiredRowOperations = 0;
+      for (var rowOpIndex = 0; rowOpIndex < ledger.length; rowOpIndex++) {
+        var rowOperation = ledger[rowOpIndex];
+        for (var rowTargetIndex = 0;
+             rowTargetIndex < rowOperation.targets.length;
+             rowTargetIndex++) {
+          if (activityQuickAddRowKey_(rowOperation.targets[rowTargetIndex]) !== rowKey) continue;
+          if (!rowOperation.corrected) activeRowOperations++;
+          if (!rowOperation.corrected && rowOperation.operationId !== requested) {
+            desiredRowOperations++;
+          }
+        }
+      }
+      if (expected.exists === false && activeRowOperations > 0) expected.exists = true;
+      if (desired.exists === false && desiredRowOperations > 0) desired.exists = true;
+
+      // Delete a row only when this selected operation created it, no other
+      // active Quick Add still needs it, and the complete original row
+      // fingerprint still matches. Otherwise preserve the row and zero only
+      // this operation's verified month contribution.
+      if (desired.exists === false) {
+        var canDeleteCreatedRow = selectedTarget.before.exists === false &&
+          desiredRowOperations === 0 &&
+          selectedTarget.after && selectedTarget.after.rowSnapshot &&
+          inspection.current && inspection.current.rowSnapshot &&
+          activityStatesEqual_(
+            inspection.current.rowSnapshot,
+            selectedTarget.after.rowSnapshot
+          );
+        if (!canDeleteCreatedRow) {
+          desired.exists = true;
+          desired.value = 0;
+          desired.flowSource = String(
+            inspection.current && inspection.current.flowSource || ''
+          ).trim();
+        }
+      }
+    }
+
+    var current = activityQuickAddRelevantState_(targetType, inspection.current);
+    if (!activityQuickAddStatesMatchForChain_(targetType, current, expected)) {
+      return { ok: false, status: 'PRECONDITION_FAILED', correctable: false,
+        entry: entry,
+        message: 'A value changed outside this verified Quick Add sequence. CashCompass will not overwrite it.' };
+    }
+    writes.push({
+      target: selectedTarget,
+      targetType: targetType,
+      current: current,
+      desired: desired
+    });
+  }
+
+  var impacts = writes.map(function(write) {
+    return activityQuickAddImpactForClient_({
+      targetType: write.targetType,
+      current: write.current,
+      desired: write.desired
+    }, entry);
+  });
+  var laterCount = Object.keys(laterActiveOperations).length;
+  return {
+    ok: true,
+    status: 'READY',
+    operationId: requested,
+    operationType: 'quick_pay',
+    entryFamily: 'quick_add',
+    correctable: true,
+    entry: entry,
+    impacts: impacts,
+    writes: writes,
+    laterEntryCount: laterCount,
+    message: laterCount
+      ? 'CashCompass verified this entry and ' + laterCount +
+        ' later entr' + (laterCount === 1 ? 'y' : 'ies') +
+        '. Correcting removes only this entry and keeps the later entries.'
+      : 'CashCompass verified the current values. Correcting removes only this entry.'
+  };
+}
+
+/**
+ * Read-only, user-facing preview for 5i. Static Activity eligibility is only
+ * a discoverability hint; this server preview is the authority.
+ */
+function previewDirectQuickAddCorrectionInSpreadsheet_(ss, operationId) {
+  return buildDirectQuickAddCorrectionPlanInSpreadsheet_(ss, operationId);
+}
+
+function previewDirectQuickAddCorrection(operationId) {
+  return previewDirectQuickAddCorrectionInSpreadsheet_(
+    getUserSpreadsheet_(),
+    operationId
+  );
+}
+
+function previewActivityEntryCorrection(operationId) {
+  var ss = getUserSpreadsheet_();
+  var events = findActivityOperationEvents_(ss, operationId);
+  if (!events.length || !events[0].parsed.envelope) {
+    return {
+      ok: false,
+      status: 'LEGACY_OR_NOT_FOUND',
+      correctable: false,
+      message: 'This older Activity entry remains read-only.'
+    };
+  }
+  var operationType = String(
+    events[0].parsed.envelope.operationType || ''
+  ).trim();
+  if (operationType === 'quick_pay') {
+    return previewDirectQuickAddCorrectionInSpreadsheet_(ss, operationId);
+  }
+  if (operationType === 'donation' &&
+      typeof previewDonationCorrectionInSpreadsheet_ === 'function') {
+    return previewDonationCorrectionInSpreadsheet_(ss, operationId);
+  }
+  return {
+    ok: false,
+    status: 'AUDIT_ONLY',
+    correctable: false,
+    message: 'This Activity entry is audit history and cannot be corrected here.'
+  };
+}
+
+function correctActivityEntry(
+  operationId,
+  reason,
+  otherNote,
+  correctionMode,
+  correctedAmount
+) {
+  var lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    var ss = getUserSpreadsheet_();
+    var events = findActivityOperationEvents_(ss, operationId);
+    if (!events.length || !events[0].parsed.envelope) {
+      return {
+        ok: false,
+        status: 'LEGACY_OR_NOT_FOUND',
+        error: 'This older Activity entry remains read-only.'
+      };
+    }
+    var operationType = String(
+      events[0].parsed.envelope.operationType || ''
+    ).trim();
+    if (operationType === 'quick_pay') {
+      return correctDirectQuickAddOperationInSpreadsheet_(
+        ss,
+        operationId,
+        reason,
+        otherNote,
+        correctionMode,
+        correctedAmount
+      );
+    }
+    if (operationType === 'donation' &&
+        typeof correctDonationOperationInSpreadsheet_ === 'function') {
+      return correctDonationOperationInSpreadsheet_(
+        ss,
+        operationId,
+        reason,
+        otherNote,
+        correctionMode,
+        correctedAmount
+      );
+    }
+    return {
+      ok: false,
+      status: 'AUDIT_ONLY',
+      error: 'This Activity entry is audit history and cannot be corrected here.'
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function collectActivityOperationTargets_(events) {
+  var byKey = {};
+  events.forEach(function(event) {
+    event.parsed.envelope.targets.forEach(function(target) {
+      byKey[target.targetKey] = target;
+    });
+  });
+  return Object.keys(byKey).map(function(key) { return byKey[key]; });
+}
+
+function normalizeActivityCorrectionMode_(rawMode) {
+  var mode = String(rawMode || 'remove').trim().toLowerCase();
+  if (mode !== 'remove' && mode !== 'change_amount') {
+    throw new Error('Choose whether to change the amount or remove the entry.');
+  }
+  return mode;
+}
+
+function activityCorrectedAmount_(rawAmount) {
+  var amount = Math.abs(toNumber_(rawAmount));
+  if (!isFinite(amount) || amount <= 0) {
+    throw new Error('Enter a corrected amount greater than $0.00.');
+  }
+  return round2_(amount);
+}
+
+function activityQuickAddReplacementWrites_(preview, correctedAmount) {
+  var replacementOperation = {
+    entry: {
+      entryType: preview.entry.entryType,
+      amount: correctedAmount
+    }
+  };
+  return (preview.writes || []).map(function(write) {
+    return {
+      target: write.target,
+      targetType: write.targetType,
+      current: write.current,
+      withoutOriginal: activityQuickAddRelevantState_(
+        write.targetType,
+        write.desired
+      ),
+      desired: activityQuickAddApplyEffect_(
+        write.targetType,
+        write.desired,
+        replacementOperation,
+        write.target
+      )
+    };
+  });
+}
+
+function activityQuickAddImpactsFromWrites_(writes, entry) {
+  return (writes || []).map(function(write) {
+    return activityQuickAddImpactForClient_({
+      targetType: write.targetType,
+      current: write.current,
+      desired: write.desired
+    }, entry);
+  });
+}
+
+function correctDirectQuickAddOperationInSpreadsheet_(
+  ss,
+  operationId,
+  reason,
+  otherNote,
+  correctionMode,
+  correctedAmount
+) {
+  var reasonData = activityCorrectionReason_(reason, otherNote);
+  var mode = normalizeActivityCorrectionMode_(correctionMode);
+  var replacementAmount = mode === 'change_amount'
+    ? activityCorrectedAmount_(correctedAmount)
+    : null;
+  var preview = buildDirectQuickAddCorrectionPlanInSpreadsheet_(ss, operationId);
+  if (!preview.ok || preview.status !== 'READY' || preview.correctable !== true) {
+    return {
+      ok: false,
+      status: preview.status || 'CORRECTION_REFUSED',
+      error: preview.message || 'This entry can no longer be corrected safely.'
+    };
+  }
+  if (mode === 'change_amount' &&
+      round2_(replacementAmount) === round2_(preview.entry.amount)) {
+    return {
+      ok: false,
+      status: 'NO_CHANGE',
+      error: 'Enter a different amount, or choose Remove entry.'
+    };
+  }
+
+  var writes = mode === 'change_amount'
+    ? activityQuickAddReplacementWrites_(preview, replacementAmount)
+    : (preview.writes || []).slice();
+  writes.sort(function(left, right) {
+    var leftDeletesRow = left.targetType === 'cash_flow_month' &&
+      left.desired && left.desired.exists === false;
+    var rightDeletesRow = right.targetType === 'cash_flow_month' &&
+      right.desired && right.desired.exists === false;
+    return leftDeletesRow === rightDeletesRow ? 0 : (leftDeletesRow ? 1 : -1);
+  });
+  var applied = [];
+  var correctionAuditDedupe =
+    'quick_pay_correction::' + String(operationId || '').trim();
+  var replacementAuditDedupe =
+    'quick_pay_replacement::' + String(operationId || '').trim();
+  var correctionAuditAppended = false;
+  var replacementAuditAppended = false;
+  try {
+    for (var i = 0; i < writes.length; i++) {
+      writeActivityOperationTargetStateInSpreadsheet_(
+        ss,
+        writes[i].target,
+        writes[i].desired
+      );
+      applied.push(writes[i]);
+    }
+    SpreadsheetApp.flush();
+
+    for (var j = 0; j < writes.length; j++) {
+      var inspection = inspectActivityOperationTargetInSpreadsheet_(
+        ss,
+        writes[j].target
+      );
+      if (!inspection || inspection.supported !== true ||
+          !activityQuickAddStatesMatchForChain_(
+            writes[j].targetType,
+            inspection.current,
+            writes[j].desired
+          )) {
+        throw new Error('The corrected values could not be verified.');
+      }
+    }
+
+    var replacementContext = mode === 'change_amount'
+      ? createActivityOperationContext_(ss, 'quick_pay')
+      : null;
+    var correctionContext = createActivityOperationContext_(ss, 'quick_pay_correction');
+    var appended = appendActivityLog_(ss, {
+      eventType: 'quick_pay_correction',
+      entryDate: preview.entry.entryDate,
+      amount: 0,
+      direction: '',
+      payee: preview.entry.payee,
+      category: '',
+      accountSource: '',
+      cashFlowSheet: preview.entry.cashFlowSheet,
+      cashFlowMonth: preview.entry.cashFlowMonth,
+      dedupeKey: correctionAuditDedupe,
+      operationEnvelope: {
+        context: correctionContext,
+        correctable: false,
+        targets: []
+      },
+      details: JSON.stringify({
+        reversalOfOperationId: String(operationId || '').trim(),
+        correctionMode: mode,
+        replacementOperationId: replacementContext
+          ? replacementContext.operationId
+          : '',
+        correctionReason: reasonData.reason,
+        correctionNote: reasonData.note,
+        originalAmount: preview.entry.amount,
+        correctedAmount: replacementAmount,
+        originalEntryType: preview.entry.entryType
+      })
+    });
+    if (!appended) throw new Error('The correction audit record could not be saved.');
+    correctionAuditAppended = true;
+
+    if (replacementContext) {
+      var replacementTargets = writes.map(function(write) {
+        var afterState = activityQuickAddRelevantState_(
+          write.targetType,
+          write.desired
+        );
+        if (write.targetType === 'cash_flow_month' &&
+            write.target && write.target.after && write.target.after.rowSnapshot) {
+          var replacementInspection = inspectActivityOperationTargetInSpreadsheet_(
+            ss,
+            write.target
+          );
+          if (replacementInspection && replacementInspection.supported === true &&
+              replacementInspection.current &&
+              replacementInspection.current.rowSnapshot) {
+            afterState.rowSnapshot = replacementInspection.current.rowSnapshot;
+          }
+        }
+        return {
+          targetVersion: ACTIVITY_TARGET_DESCRIPTOR_VERSION_,
+          targetType: write.targetType,
+          targetKey: write.target.targetKey,
+          locator: write.target.locator,
+          before: activityQuickAddRelevantState_(
+            write.targetType,
+            write.withoutOriginal
+          ),
+          after: afterState
+        };
+      });
+      var replacementAppended = appendActivityLog_(ss, {
+        eventType: 'quick_pay',
+        entryDate: preview.entry.entryDate,
+        amount: replacementAmount,
+        direction: preview.entry.entryType === 'Expense' ? 'expense' : 'income',
+        payee: preview.entry.payee,
+        category: '',
+        accountSource: '',
+        cashFlowSheet: preview.entry.cashFlowSheet,
+        cashFlowMonth: preview.entry.cashFlowMonth,
+        dedupeKey: replacementAuditDedupe,
+        operationEnvelope: {
+          context: replacementContext,
+          correctable: true,
+          targets: replacementTargets
+        },
+        details: JSON.stringify({
+          previousValue: replacementTargets.length
+            ? replacementTargets[0].before.value
+            : '',
+          newValue: replacementTargets.length
+            ? replacementTargets[0].after.value
+            : '',
+          signedAmount: preview.entry.entryType === 'Expense'
+            ? -replacementAmount
+            : replacementAmount,
+          createIfMissing: false,
+          debtBalanceNote: null,
+          activityOrigin: QUICK_ADD_ACTIVITY_ORIGIN_DIRECT_,
+          replacesOperationId: String(operationId || '').trim(),
+          rootOperationId: String(
+            preview.entry.rootOperationId || operationId || ''
+          ).trim(),
+          correctedFromAmount: preview.entry.amount
+        })
+      });
+      if (!replacementAppended) {
+        throw new Error('The corrected entry could not be added to Activity.');
+      }
+      replacementAuditAppended = true;
+    }
+
+    touchDashboardSourceUpdated_('quick_payment');
+    touchDashboardSourceUpdated_('cash_flow');
+    if (writes.some(function(write) { return write.targetType === 'debt_balance'; })) {
+      touchDashboardSourceUpdated_('debts');
+    }
+    return {
+      ok: true,
+      status: 'CORRECTED',
+      operationId: String(operationId || '').trim(),
+      replacementOperationId: replacementContext
+        ? replacementContext.operationId
+        : '',
+      correctionMode: mode,
+      message: mode === 'change_amount'
+        ? 'Amount changed. The correction remains in Activity history.'
+        : 'Entry removed. The original Activity record remains in history.',
+      entry: Object.assign({}, preview.entry, {
+        correctedAmount: replacementAmount
+      }),
+      impacts: activityQuickAddImpactsFromWrites_(writes, preview.entry)
+    };
+  } catch (e) {
+    if (replacementAuditAppended) {
+      try {
+        rollbackFailedActivityAppend_(
+          ss,
+          'quick_pay',
+          replacementAuditDedupe
+        );
+      } catch (replacementAuditRollbackError) {
+        Logger.log(
+          'Quick Add replacement audit compensation failed: ' +
+          replacementAuditRollbackError
+        );
+      }
+    }
+    if (correctionAuditAppended) {
+      try {
+        rollbackFailedActivityAppend_(
+          ss,
+          'quick_pay_correction',
+          correctionAuditDedupe
+        );
+      } catch (correctionAuditRollbackError) {
+        Logger.log(
+          'Quick Add correction audit compensation failed: ' +
+          correctionAuditRollbackError
+        );
+      }
+    }
+    // Best-effort compensation restores the exact pre-correction state. This is
+    // reached only after all preconditions passed under the same user lock.
+    for (var k = applied.length - 1; k >= 0; k--) {
+      try {
+        writeActivityOperationTargetStateInSpreadsheet_(
+          ss,
+          applied[k].target,
+          applied[k].current
+        );
+      } catch (rollbackError) {
+        Logger.log('Quick Add correction compensation failed: ' + rollbackError);
+      }
+    }
+    SpreadsheetApp.flush();
+    return {
+      ok: false,
+      status: 'CORRECTION_FAILED',
+      error: e && e.message ? e.message : String(e)
+    };
+  }
+}
+
+function correctDirectQuickAddOperation(
+  operationId,
+  reason,
+  otherNote,
+  correctionMode,
+  correctedAmount
+) {
+  var lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    return correctDirectQuickAddOperationInSpreadsheet_(
+      getUserSpreadsheet_(),
+      operationId,
+      reason,
+      otherNote,
+      correctionMode,
+      correctedAmount
+    );
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /**
@@ -867,6 +1836,9 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
 
   var et = String(eventType || '').toLowerCase();
   var dir = String(direction || '').toLowerCase();
+  if (et === 'quick_pay_correction') return 'Correction';
+  if (et === 'donation_correction') return 'Correction';
+  if (et === 'donation') return 'Donation';
   if (et === 'quick_pay' && dir === 'income') return 'Income';
   if (et === 'quick_pay' && dir === 'expense') return 'Bill';
   if (et === 'bill_skip' || et === 'bill_autopay' || et === 'bill_paid') return 'Bill';
@@ -974,6 +1946,8 @@ function activityLogActionLabel_(eventType, detailsJson) {
     // Legacy: upcoming_cashflow is no longer emitted (direct "Add to Cash
     // Flow" path removed), but historical rows still need a readable label.
     case 'upcoming_cashflow': return 'Pushed to cash flow';
+    case 'quick_pay_correction': return quickPayCorrectionActionLabel_(detailsJson);
+    case 'donation_correction': return quickPayCorrectionActionLabel_(detailsJson);
     // Planner email lifecycle. All three are non-monetary (Amount = "—").
     //   planner_email_deferred — LEGACY. New per-save defers no longer
     //     write this row (a heavy month-start session was producing
@@ -1009,6 +1983,14 @@ function activityLogActionLabel_(eventType, detailsJson) {
     case 'bank_import_apply_balance': return 'Applied imported balance';
     default: return '';
   }
+}
+
+function quickPayCorrectionActionLabel_(detailsJson) {
+  var details = activityJsonObject_(detailsJson);
+  var amount = Number(details.originalAmount);
+  return isFinite(amount)
+    ? 'Reversed Quick Add of ' + fmtCurrency_(Math.abs(amount))
+    : 'Quick Add reversed';
 }
 
 /**
@@ -1536,6 +2518,8 @@ function activityLogIsNonMonetaryEvent_(eventType) {
     et === 'income_source_deactivate' ||
     et === 'upcoming_status' ||
     et === 'upcoming_payment' ||
+    et === 'quick_pay_correction' ||
+    et === 'donation_correction' ||
     // upcoming_update rows carry the new value inline in the action
     // label (see upcomingUpdateActionLabel_) so we render Amount as
     // "—" — otherwise a Due Date / Notes edit would appear as $0.00.
@@ -1590,12 +2574,37 @@ function activityLogDistinctKindsFromValues_(values, lookup) {
   for (var i = 0; i < values.length; i++) {
     var r = values[i];
     if (!String(r[0] || '').trim() && !String(r[1] || '').trim()) continue;
+    var eventType = String(r[1] || '').trim().toLowerCase();
+    if (eventType === 'quick_pay_correction' ||
+        eventType === 'donation_correction') {
+      continue;
+    }
     var k = activityLogRowKind_(lookup, r);
     if (k) seen[k] = true;
   }
   return Object.keys(seen).sort(function(a, b) {
     return a.localeCompare(b);
   });
+}
+
+function activityLogRowHiddenByCorrectionRelations_(row, relations) {
+  var eventType = String(row && row[1] || '').trim().toLowerCase();
+  if (eventType === 'quick_pay_correction' ||
+      eventType === 'donation_correction') {
+    return true;
+  }
+  var operation = parseActivityOperationEnvelope_(
+    String(row && row[11] || '').trim()
+  );
+  var operationId = operation.envelope
+    ? String(operation.envelope.operationId || '').trim()
+    : '';
+  return !!(
+    operationId &&
+    relations &&
+    relations.superseded &&
+    relations.superseded[operationId]
+  );
 }
 
 function activityLogRowMatchesDashboardFilters_(r, dateFrom, dateTo, payeeSearch, minNum, maxNum, kindType, lookup) {
@@ -1637,6 +2646,8 @@ function getActivityDashboardData(filters) {
 
     var values = sh.getRange(2, 1, sh.getLastRow(), ACTIVITY_LOG_HEADERS.length).getDisplayValues();
     var lookup = buildActivityKindLookup_(ss);
+    var correctionRelations = activityCorrectionRelationsFromValues_(values);
+    var correctionIndex = correctionRelations.corrected;
     var kinds = activityLogDistinctKindsFromValues_(values, lookup);
 
     var dateFrom = String(filters.dateFrom || '').trim();
@@ -1654,12 +2665,44 @@ function getActivityDashboardData(filters) {
       if (!activityLogRowMatchesDashboardFilters_(r, dateFrom, dateTo, payeeSearch, minNum, maxNum, kindType, lookup)) {
         continue;
       }
+      if (activityLogRowHiddenByCorrectionRelations_(
+        r,
+        correctionRelations
+      )) {
+        continue;
+      }
 
       var payee = String(r[5] || '').trim();
       var eventType = String(r[1] || '').trim();
       var direction = String(r[4] || '').trim();
       var logCategory = String(r[6] || '').trim();
       var amtVal = round2_(toNumber_(r[3]));
+      var operation = parseActivityOperationEnvelope_(String(r[11] || '').trim());
+      var operationEnvelope = operation.envelope;
+      var operationId = operationEnvelope
+        ? String(operationEnvelope.operationId || '').trim()
+        : '';
+      var operationOrigin = String(operation.details.activityOrigin || '').trim();
+      var isCorrected = !!(operationId && correctionIndex[operationId]);
+      if (operationId && correctionRelations.superseded[operationId]) {
+        continue;
+      }
+      var canCorrectQuickAdd = eventType === 'quick_pay' &&
+        operation.status === 'READY_FOR_PREVIEW' &&
+        operationEnvelope.operationType === 'quick_pay' &&
+        operationOrigin === QUICK_ADD_ACTIVITY_ORIGIN_DIRECT_ &&
+        !isCorrected;
+      var canCorrectDonation = eventType === 'donation' &&
+        operation.status === 'READY_FOR_PREVIEW' &&
+        operationEnvelope.operationType === 'donation' &&
+        operationOrigin === 'direct_donation' &&
+        !isCorrected;
+      var correctionHistory = operationId
+        ? activityCorrectionHistory_(correctionRelations, operationId)
+        : [];
+      var latestCorrection = correctionHistory.length
+        ? correctionHistory[0]
+        : null;
 
       out.push({
         sheetRow: i + 2,
@@ -1677,8 +2720,22 @@ function getActivityDashboardData(filters) {
         dedupeKey: String(r[10] || '').trim(),
         details: String(r[11] || '').trim(),
         kindLabel: activityLogRowKind_(lookup, r),
-        actionLabel: activityLogActionLabel_(eventType, String(r[11] || '').trim()),
-        isNonMonetary: activityLogIsNonMonetaryEvent_(eventType)
+        actionLabel: isCorrected
+          ? 'Removed'
+          : (latestCorrection
+            ? 'Corrected from $' +
+              Number(latestCorrection.fromAmount || 0).toFixed(2)
+            : activityLogActionLabel_(eventType, String(r[11] || '').trim())),
+        isNonMonetary: activityLogIsNonMonetaryEvent_(eventType),
+        operationId: canCorrectQuickAdd || canCorrectDonation || isCorrected
+          ? operationId
+          : '',
+        correctionAction: canCorrectQuickAdd || canCorrectDonation
+          ? 'correct_entry'
+          : '',
+        correctionState: isCorrected ? 'removed' : '',
+        correctionHistory: correctionHistory,
+        entryFamily: canCorrectDonation ? 'donation' : 'quick_add'
       });
     }
 
@@ -1686,7 +2743,11 @@ function getActivityDashboardData(filters) {
     if (out.length >= matchLimit && i >= 0) {
       for (var j = i; j >= 0; j--) {
         if (
-          activityLogRowMatchesDashboardFilters_(values[j], dateFrom, dateTo, payeeSearch, minNum, maxNum, kindType, lookup)
+          activityLogRowMatchesDashboardFilters_(values[j], dateFrom, dateTo, payeeSearch, minNum, maxNum, kindType, lookup) &&
+          !activityLogRowHiddenByCorrectionRelations_(
+            values[j],
+            correctionRelations
+          )
         ) {
           truncated = true;
           break;

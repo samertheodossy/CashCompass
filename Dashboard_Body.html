@@ -1238,6 +1238,138 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
     <div id="act_tableWrap" class="activity-table-wrap">
       <div class="muted">Open this page or click Apply to load events.</div>
     </div>
+
+    <div
+      id="activity_correction_drawer_backdrop"
+      class="bill-pay-drawer-backdrop"
+      hidden
+      onclick="onActivityCorrectionBackdropClick_(event)">
+      <aside
+        id="activity_correction_drawer"
+        class="bill-pay-drawer activity-correction-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="activity_correction_title"
+        tabindex="-1">
+        <div class="bill-pay-drawer-head">
+          <div>
+            <div class="bill-pay-drawer-eyebrow">Quick Add</div>
+            <h2 id="activity_correction_title">Correct entry</h2>
+          </div>
+          <button
+            type="button"
+            id="activity_correction_close"
+            class="bill-pay-drawer-close"
+            aria-label="Close correction panel"
+            onclick="closeActivityCorrectionDrawer_()">×</button>
+        </div>
+        <div class="bill-pay-drawer-body">
+          <div id="activity_correction_loading" class="dash-loading dash-loading--block">
+            <span class="dash-loading-spinner" aria-hidden="true"></span>
+            <span class="dash-loading-label">Checking the recorded values…</span>
+          </div>
+          <div id="activity_correction_content" hidden>
+            <div class="bill-pay-summary">
+              <div id="activity_correction_payee" class="bill-pay-summary-name">—</div>
+              <div class="bill-pay-summary-row">
+                <span>Recorded entry</span>
+                <strong id="activity_correction_entry">—</strong>
+              </div>
+              <div class="bill-pay-summary-row">
+                <span>Date</span>
+                <strong id="activity_correction_date">—</strong>
+              </div>
+            </div>
+
+            <div class="activity-correction-impact">
+              <h3>What will change</h3>
+              <div id="activity_correction_impacts"></div>
+            </div>
+
+            <fieldset class="activity-correction-choice">
+              <legend>Choose the correction</legend>
+              <label>
+                <input
+                  type="radio"
+                  name="activity_correction_mode"
+                  id="activity_correction_mode_change"
+                  value="change_amount"
+                  onchange="activityCorrectionModeChanged_()"
+                  checked>
+                <span class="activity-correction-choice-copy">
+                  <strong>Change amount</strong>
+                  <small>Keep this entry with a corrected amount.</small>
+                </span>
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="activity_correction_mode"
+                  id="activity_correction_mode_remove"
+                  value="remove"
+                  onchange="activityCorrectionModeChanged_()">
+                <span class="activity-correction-choice-copy">
+                  <strong id="activity_correction_remove_label">Remove entry</strong>
+                  <small id="activity_correction_remove_help">Exclude this entry from the recorded total.</small>
+                </span>
+              </label>
+            </fieldset>
+
+            <div id="activity_correction_amount_wrap">
+              <label for="activity_correction_amount">Corrected amount</label>
+              <input
+                id="activity_correction_amount"
+                type="text"
+                inputmode="decimal"
+                autocomplete="off"
+                oninput="activityCorrectionAmountChanged_()">
+            </div>
+
+            <label for="activity_correction_reason">Why are you correcting this?</label>
+            <select id="activity_correction_reason" onchange="activityCorrectionReasonChanged_()">
+              <option value="">Choose a reason…</option>
+              <option value="Entered twice">Entered twice</option>
+              <option value="Wrong amount">Wrong amount</option>
+              <option value="Wrong payee/date">Wrong payee or date</option>
+              <option value="Other">Other</option>
+            </select>
+            <div id="activity_correction_other_wrap" hidden>
+              <label for="activity_correction_other">Short note</label>
+              <textarea id="activity_correction_other" maxlength="240" rows="3"></textarea>
+            </div>
+          </div>
+
+          <div id="activity_correction_blocked" class="activity-correction-blocked" hidden></div>
+          <div
+            id="activity_correction_success"
+            class="bill-pay-confirmation activity-correction-confirmation"
+            hidden>
+            <div id="activity_correction_success_title" class="bill-pay-confirmation-title">Entry corrected</div>
+            <p id="activity_correction_success_message">The corrected entry and its audit history remain in Activity.</p>
+            <div id="activity_correction_success_values" class="activity-correction-success-values"></div>
+          </div>
+          <div id="activity_correction_status" class="status" role="status" aria-live="polite"></div>
+        </div>
+        <div class="bill-pay-drawer-actions">
+          <button
+            type="button"
+            id="activity_correction_cancel"
+            class="small-btn"
+            onclick="closeActivityCorrectionDrawer_()">Cancel</button>
+          <button
+            type="button"
+            id="activity_correction_submit"
+            class="small-btn primary"
+            onclick="submitActivityCorrection_()">Correct entry</button>
+          <button
+            type="button"
+            id="activity_correction_done"
+            class="small-btn primary"
+            onclick="closeActivityCorrectionDrawer_()"
+            hidden>Done</button>
+        </div>
+      </aside>
+    </div>
   </div>
 
   <div id="page_properties" class="workspace-page">

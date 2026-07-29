@@ -1272,6 +1272,9 @@
     gap: 10px;
     vertical-align: middle;
   }
+  .dash-loading[hidden] {
+    display: none !important;
+  }
   .dash-loading-spinner {
     width: 18px;
     height: 18px;
@@ -1758,6 +1761,186 @@
     background: #ffffff;
   }
   body.bill-pay-drawer-open { overflow: hidden; }
+
+  .activity-correction-drawer {
+    width: min(620px, 100vw);
+  }
+.activity-correction-impact {
+    margin: 0 0 26px;
+}
+
+#activity_correction_content > .bill-pay-summary {
+  margin-bottom: 26px;
+}
+
+.activity-correction-choice {
+  border: 0;
+  margin: 0 0 24px;
+  padding: 0;
+}
+
+.activity-correction-choice legend {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.activity-correction-choice label {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  margin-top: 0;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+}
+
+.activity-correction-choice label:has(input:checked) {
+  background: #eff6ff;
+  border-color: #2563eb;
+}
+
+.activity-correction-choice input {
+  flex: 0 0 auto;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  width: 16px;
+}
+
+.activity-correction-choice-copy {
+  align-items: baseline;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(120px, 0.42fr) minmax(0, 1fr);
+  width: 100%;
+}
+
+.activity-correction-choice-copy strong {
+  line-height: 1.35;
+}
+
+.activity-correction-choice small {
+  color: var(--muted);
+  display: block;
+  line-height: 1.4;
+  margin: 0;
+}
+
+#activity_correction_amount_wrap {
+  margin-bottom: 26px;
+}
+
+#activity_correction_content > label[for="activity_correction_reason"] {
+  display: block;
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .activity-correction-choice label {
+    align-items: flex-start;
+  }
+
+  .activity-correction-choice input {
+    margin-top: 3px;
+  }
+
+  .activity-correction-choice-copy {
+    gap: 2px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+  .activity-correction-impact h3 {
+    margin: 0 0 10px;
+    font-size: 15px;
+  }
+  .activity-correction-impact-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .activity-correction-impact-row:last-child {
+    border-bottom: 0;
+  }
+  .activity-correction-impact-values {
+    text-align: right;
+    white-space: nowrap;
+    font-weight: 700;
+  }
+  .activity-correction-impact-arrow {
+    color: var(--muted);
+    padding: 0 5px;
+  }
+  .activity-correction-row-note {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .activity-correction-blocked {
+    padding: 14px;
+    border: 1px solid #f2c66d;
+    border-radius: 10px;
+    background: #fff7e3;
+    color: #704500;
+    line-height: 1.45;
+  }
+  .activity-correction-state {
+    color: #176b36;
+    font-weight: 700;
+  }
+  .activity-correction-confirmation {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+    color: #1e3a5f;
+  }
+  .activity-correction-confirmation .bill-pay-confirmation-title,
+  .activity-correction-confirmation p,
+  .activity-correction-confirmation strong,
+  .activity-correction-confirmation .activity-correction-success-label,
+  .activity-correction-confirmation .activity-correction-success-row {
+    color: #1e3a5f;
+  }
+  .activity-correction-success-values {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid #bfdbfe;
+  }
+  .activity-correction-success-impact {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #dbeafe;
+  }
+  .activity-correction-success-label {
+    margin-bottom: 5px;
+    color: #166534;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .activity-correction-success-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 3px 0;
+    color: #166534;
+    font-size: 13px;
+  }
+  .activity-correction-success-row.is-current {
+    margin-top: 3px;
+    padding-top: 7px;
+    border-top: 1px solid #bfdbfe;
+    font-size: 14px;
+  }
+  #activity_correction_other_wrap {
+    margin-top: 12px;
+  }
+  #activity_correction_other {
+    width: 100%;
+    resize: vertical;
+  }
   .cashflow-column-title {
     margin: 0 0 var(--cc-space-3) 0;
     color: #0f172a;

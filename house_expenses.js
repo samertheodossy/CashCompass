@@ -156,7 +156,8 @@ function addHouseExpenseToCashFlow_(payload, cost, serviceFees) {
     amount: amount,
     createIfMissing: true,
     suppressActivityLog: true,
-    flowSource: payload.flowSource
+    flowSource: payload.flowSource,
+    activityOrigin: 'house_expense'
   });
 
   // Per-save background planner run. emailMode === 'defer' batches

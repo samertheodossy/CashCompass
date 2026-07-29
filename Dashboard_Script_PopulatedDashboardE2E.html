@@ -247,6 +247,28 @@
     });
   }
 
+  function exerciseDonationCorrection_() {
+    return new Promise(function(resolve, reject) {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(function(err) {
+          reject(new Error((err && err.message) ? err.message : String(err)));
+        })
+        .pdE2EExerciseDonationCorrection(cfg.runId);
+    });
+  }
+
+  function prepareCreditCardCorrection_() {
+    return new Promise(function(resolve, reject) {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(function(err) {
+          reject(new Error((err && err.message) ? err.message : String(err)));
+        })
+        .pdE2EPrepareCreditCardCorrection(cfg.runId);
+    });
+  }
+
   async function exerciseBillSkipStopSafety() {
     var originalConfirm = window.confirm;
     var confirmations = [];
@@ -367,6 +389,17 @@
     pre.textContent = JSON.stringify(report, null, 2);
     root.appendChild(pre);
     document.body.appendChild(root);
+  }
+
+  function replayBlockedOverlay(result) {
+    overlay('Populated Dashboard E2E — REPLAY BLOCKED', result, true);
+    var root = document.getElementById('cc_populated_dashboard_e2e_result');
+    var note = root && root.querySelector('p');
+    if (note) {
+      note.textContent =
+        'This verified run already started, so CashCompass stopped before repeating any writer step. ' +
+        'Return to Validation & Testing, clean up the disposable fixture, and start a fresh run.';
+    }
   }
 
   async function run() {
@@ -627,6 +660,89 @@
       var operationResult = await exerciseActivityOperationEnvelope_();
       var operationVerification = operationResult && operationResult.ok &&
         operationResult.verification;
+      var correctionUiStatePass = false;
+      var quickAddUiRefreshPass = false;
+      if (operationVerification &&
+          typeof refreshQuickAddAfterActivityCorrection_ === 'function') {
+        showPage('cashflow');
+        showTab('payments');
+        var quickAddType = document.getElementById('pay_type');
+        quickAddType.value = operationVerification.entryType;
+        filterPaymentPayees();
+        await waitFor(function() {
+          return hasOption('pay_payeeSelect', operationVerification.payee);
+        }, 90000, 'the Quick Add payee list before correction reconciliation');
+        var quickAddSelect = document.getElementById('pay_payeeSelect');
+        var quickAddInput = document.getElementById('pay_payeeInput');
+        var quickAddDate = document.getElementById('pay_date');
+        quickAddSelect.value = operationVerification.payee;
+        quickAddInput.value = operationVerification.payee;
+        quickAddDate.value = operationVerification.entryDate;
+        loadPaymentPreview({ quiet: true });
+        await waitFor(function() {
+          return text('pay_currentValue') ===
+            expectedCurrency(operationVerification.finalCashFlowValue);
+        }, 90000, 'the authoritative Quick Add value');
+
+        // Recreate the same-page stale panel the user observed, then require
+        // correction reconciliation to restore both the value and history
+        // without a browser reload or loss of form state.
+        document.getElementById('pay_currentValue').textContent =
+          expectedCurrency(operationVerification.staleCashFlowValue);
+        document.getElementById('pay_history_chart').innerHTML =
+          '<span>' + expectedCurrency(operationVerification.staleCashFlowValue) + '</span>';
+        refreshQuickAddAfterActivityCorrection_();
+        await waitFor(function() {
+          return text('pay_currentValue') ===
+            expectedCurrency(operationVerification.finalCashFlowValue) &&
+            text('pay_history_chart').indexOf(
+              expectedCurrency(Math.abs(operationVerification.finalCashFlowValue))
+            ) >= 0;
+        }, 90000, 'the same-page Quick Add correction refresh');
+        quickAddUiRefreshPass =
+          quickAddType.value === operationVerification.entryType &&
+          quickAddSelect.value === operationVerification.payee &&
+          quickAddInput.value === operationVerification.payee &&
+          quickAddDate.value === operationVerification.entryDate &&
+          text('pay_currentValue') !==
+            expectedCurrency(operationVerification.staleCashFlowValue);
+      }
+      var originalWriteReceipts = typeof loadQuickAddWriteReceipts_ === 'function'
+        ? loadQuickAddWriteReceipts_()
+        : [];
+      try {
+        var correctionProbeId = String(
+          operationVerification && operationVerification.middleCorrectedOperationId || ''
+        );
+        var laterReceipt = operationVerification &&
+          operationVerification.laterReceiptSnapshot;
+        laterReceipt = laterReceipt ? Object.assign({}, laterReceipt) : null;
+        if (laterReceipt) laterReceipt.savedAtMs = Date.now();
+        saveQuickAddWriteReceipts_(laterReceipt ? [laterReceipt] : []);
+        renderQuickAddWriteGuard_({
+          operationId: laterReceipt && laterReceipt.operationId,
+          status: 'REVERTED_TO_PREVIOUS',
+          payee: 'E2E correction',
+          cashFlowMonth: 'Jul-26',
+          currentValue: 100,
+          previousValue: 100
+        });
+        var correctionLoading = document.getElementById('activity_correction_loading');
+        if (correctionLoading) correctionLoading.hidden = true;
+        retireQuickAddWriteReceiptsForCorrection_({
+          entry: operationVerification && operationVerification.middleCorrectionEntry
+        }, correctionProbeId);
+        correctionUiStatePass = !!correctionLoading &&
+          window.getComputedStyle(correctionLoading).display === 'none' &&
+          loadQuickAddWriteReceipts_().every(function(receipt) {
+            return String(receipt.operationId || '') !==
+              String(laterReceipt && laterReceipt.operationId || '');
+          }) &&
+          String(document.getElementById('pay_write_guard').className || '') === 'warning-box';
+      } finally {
+        saveQuickAddWriteReceipts_(originalWriteReceipts);
+        hideQuickAddWriteGuard_();
+      }
       var operationPass = !!operationVerification &&
         operationVerification.operationIdPresent === true &&
         Number(operationVerification.eventCount) === 1 &&
@@ -638,10 +754,182 @@
         operationVerification.correctable === true &&
         Number(operationVerification.targetCount) === 1 &&
         operationVerification.previewStatus === 'READY' &&
-        operationVerification.previewCorrectable === true;
+        operationVerification.previewCorrectable === true &&
+        operationVerification.correctionStatus === 'CORRECTED' &&
+        Number(operationVerification.restoredValue) ===
+          Number(operationVerification.expectedRestoredValue) &&
+        operationVerification.retryStatus === 'ALREADY_CORRECTED' &&
+        operationVerification.immutableCorrectionPresent === true &&
+        operationVerification.middlePreviewStatus === 'READY' &&
+        Number(operationVerification.middleLaterEntryCount) === 1 &&
+        operationVerification.middleCorrectionStatus === 'CORRECTED' &&
+        Number(operationVerification.afterMiddleValue) ===
+          Number(operationVerification.expectedAfterMiddleValue) &&
+        operationVerification.earlierPreviewStatus === 'READY' &&
+        operationVerification.earlierCorrectionStatus === 'CORRECTED' &&
+        Number(operationVerification.afterEarlierValue) ===
+          Number(operationVerification.expectedAfterEarlierValue) &&
+        operationVerification.latestPreviewStatus === 'READY' &&
+        operationVerification.latestCorrectionStatus === 'CORRECTED' &&
+        Number(operationVerification.afterLatestValue) ===
+          Number(operationVerification.expectedAfterLatestValue) &&
+        operationVerification.remainingPreviewStatus === 'READY' &&
+        operationVerification.chainCorrectionsPresent === true &&
+        operationVerification.chainOperationIdsPresent === true &&
+        correctionUiStatePass &&
+        quickAddUiRefreshPass;
       add('activity_operation_envelope', operationPass, operationPass
-        ? 'Quick Add persisted one server-owned operation ID, one unique event ID, scoped versioned target evidence, and a READY exact-state preview.'
-        : 'The disposable Quick Add operation envelope or exact-state preview was incomplete.');
+        ? 'Direct Quick Add reversed newest, middle, earlier, and post-correction entries while preserving later values; immutable evidence, retry refusal, same-target warning retirement, and the same-page Quick Add value/history refresh all passed.'
+        : 'The disposable direct Quick Add envelope, sequence correction, preserved later values, retry guard, warning retirement, or same-page Quick Add reconciliation was incomplete.');
+
+      var cardSeed = await prepareCreditCardCorrection_();
+      var cardVerification = cardSeed && cardSeed.ok && cardSeed.verification;
+      var cardDrawerPass = false;
+      var cardActivityPass = false;
+      if (cardVerification) {
+        showPage('activity');
+        var cardPayeeFilter = document.getElementById('act_payeeSearch');
+        if (cardPayeeFilter) cardPayeeFilter.value = cardVerification.payee;
+        loadActivitySection();
+        await waitFor(function() {
+          return (window.__activityRows || []).some(function(row) {
+            return String(row.operationId || '') ===
+              String(cardVerification.middleOperationId || '') &&
+              String(row.correctionAction || '') === 'correct_entry';
+          });
+        }, 90000, 'the credit-card middle Activity entry');
+        var cardButton = document.querySelector(
+          '#act_tableWrap button[data-operation-id="' +
+          String(cardVerification.middleOperationId || '') +
+          '"][data-entry-family="quick_add"]'
+        );
+        if (cardButton) cardButton.click();
+        await waitFor(function() {
+          var drawer = document.getElementById('activity_correction_drawer');
+          return drawer &&
+            drawer.getAttribute('data-verification-status') === 'READY' &&
+            document.querySelectorAll(
+              '#activity_correction_impacts .activity-correction-impact-row'
+            ).length === 2;
+        }, 90000, 'the two-impact credit-card correction drawer');
+        var cardImpactText = text('activity_correction_impacts');
+        var cardChangeMode = document.getElementById(
+          'activity_correction_mode_change'
+        );
+        var cardAmount = document.getElementById('activity_correction_amount');
+        var cardReason = document.getElementById('activity_correction_reason');
+        if (cardChangeMode) cardChangeMode.checked = true;
+        if (cardAmount) cardAmount.value = '30.00';
+        if (cardReason) cardReason.value = 'Wrong amount';
+        activityCorrectionModeChanged_();
+        submitActivityCorrection_();
+        await waitFor(function() {
+          return !document.getElementById(
+            'activity_correction_success'
+          ).hidden &&
+            text('activity_correction_success_title') === 'Amount changed';
+        }, 90000, 'the credit-card amount correction');
+        var cardSuccessText = text('activity_correction_success_values');
+        cardDrawerPass =
+          /Cash Flow/i.test(cardImpactText) &&
+          /debt|card|balance/i.test(cardImpactText) &&
+          cardSuccessText.indexOf('$30.00') >= 0 &&
+          /Cash Flow/i.test(cardSuccessText) &&
+          /debt|card|balance/i.test(cardSuccessText);
+        await waitFor(function() {
+          return (window.__activityRows || []).some(function(row) {
+            return String(row.payee || '') === cardVerification.payee &&
+              Number(row.amountNum) === 30 &&
+              String(row.correctionAction || '') === 'correct_entry' &&
+              Array.isArray(row.correctionHistory) &&
+              row.correctionHistory.length === 1;
+          });
+        }, 90000, 'the corrected credit-card Activity replacement');
+        cardActivityPass = !(window.__activityRows || []).some(function(row) {
+          return String(row.operationId || '') ===
+            String(cardVerification.middleOperationId || '') &&
+            String(row.correctionAction || '') === 'correct_entry';
+        });
+        closeActivityCorrectionDrawer_();
+      }
+      var cardPass = !!cardVerification &&
+        cardVerification.previewStatus === 'READY' &&
+        Number(cardVerification.targetCount) === 2 &&
+        cardVerification.impactTypes.indexOf('cash_flow_month') >= 0 &&
+        cardVerification.impactTypes.indexOf('debt_balance') >= 0 &&
+        cardDrawerPass &&
+        cardActivityPass;
+      add('quick_add_credit_card_correction', cardPass, cardPass
+        ? 'The real Activity drawer changed a middle credit-card Quick Add from $25 to $30, visibly showed both Cash Flow and linked card-balance impacts, hid the superseded action, and rendered one actionable replacement with immutable history.'
+        : 'The credit-card correction drawer, two-target impact preview, corrected replacement, or superseded-action state was incomplete.');
+
+      var donationResult = await exerciseDonationCorrection_();
+      var donationVerification = donationResult && donationResult.ok &&
+        donationResult.verification;
+      var donationRenderedPass = false;
+      if (donationVerification) {
+        showPage('activity');
+        var payeeFilter = document.getElementById('act_payeeSearch');
+        if (payeeFilter) payeeFilter.value = donationVerification.payee;
+        loadActivitySection();
+        await waitFor(function() {
+          return (window.__activityRows || []).some(function(row) {
+            return String(row.operationId || '') ===
+              String(donationVerification.finalOperationId || '') &&
+              String(row.correctionState || '') === 'removed';
+          }) && (window.__activityRows || []).some(function(row) {
+            return String(row.operationId || '') ===
+              String(donationVerification.identicalOperationId || '') &&
+              String(row.correctionAction || '') === 'correct_entry';
+          });
+        }, 90000, 'the Donation correction Activity states');
+        var activityTable = document.getElementById('act_tableWrap');
+        var activityText = String(
+          activityTable && activityTable.textContent || ''
+        );
+        var correctButtons = activityTable
+          ? activityTable.querySelectorAll(
+              'button[data-entry-family="donation"][data-operation-id]'
+            )
+          : [];
+        donationRenderedPass =
+          activityText.indexOf('Removed') >= 0 &&
+          activityText.indexOf('Correction history') >= 0 &&
+          correctButtons.length === 1 &&
+          String(correctButtons[0].getAttribute('data-operation-id') || '') ===
+            String(donationVerification.identicalOperationId || '') &&
+          activityText.indexOf(
+            formatActivityDueDateDisplay_(donationVerification.entryDate)
+          ) >= 0;
+      }
+      var donationPass = !!donationVerification &&
+        donationVerification.storedDate === donationVerification.entryDate &&
+        donationVerification.originalPreviewDate ===
+          donationVerification.entryDate &&
+        donationVerification.originalPreviewStatus === 'READY' &&
+        donationVerification.identicalPreviewStatus === 'READY' &&
+        donationVerification.noChangeStatus === 'NO_CHANGE' &&
+        donationVerification.to125Status === 'CORRECTED' &&
+        donationVerification.preview125Status === 'READY' &&
+        donationVerification.to150Status === 'CORRECTED' &&
+        donationVerification.preview150Status === 'READY' &&
+        donationVerification.removeStatus === 'CORRECTED' &&
+        donationVerification.removedRetryStatus === 'ALREADY_CORRECTED' &&
+        donationVerification.originalCorrected === true &&
+        donationVerification.replacement125Corrected === true &&
+        donationVerification.replacement150Corrected === true &&
+        Number(donationVerification.remainingIdenticalCount) === 1 &&
+        Number(donationVerification.removedLogicalRowCount) === 1 &&
+        Number(donationVerification.removedHistoryCount) === 2 &&
+        Number(donationVerification.identicalLogicalRowCount) === 1 &&
+        donationRenderedPass;
+      add('donation_correction_flow', donationPass, donationPass
+        ? 'Donation correction preserved the selected calendar day, kept identical records distinct, rejected a no-op, changed $100→$125→$150, removed only the current logical entry, retained immutable history, and rendered the correct Removed/actionable Activity states.'
+        : ('The disposable Donation correction sequence, date identity, identical-row guard, immutable history, or rendered Activity state was incomplete: ' +
+          JSON.stringify({
+            verification: donationVerification,
+            rendered: donationRenderedPass
+          })));
 
       var billSafety = await exerciseBillSkipStopSafety();
       add('bill_skip_stop_safety', billSafety.pass, billSafety.detail);
@@ -679,5 +967,26 @@
       }, true);
   }
 
-  setTimeout(run, 0);
+  function claimAndRun() {
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (!result || !result.ok) {
+          replayBlockedOverlay(result || { error:'The run claim returned no result.' });
+          return;
+        }
+        if (result.status !== 'CLAIMED') {
+          replayBlockedOverlay(result);
+          return;
+        }
+        run();
+      })
+      .withFailureHandler(function(err) {
+        replayBlockedOverlay({
+          error:(err && err.message) ? err.message : String(err)
+        });
+      })
+      .pdE2EClaimBrowserRun(cfg.runId);
+  }
+
+  setTimeout(claimAndRun, 0);
 })();

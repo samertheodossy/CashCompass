@@ -41,7 +41,9 @@ const files = Object.fromEntries(await Promise.all([
   'planner_helpers.js',
   'retirement.js',
   'upcoming_expenses.js',
-  'test_harness_scenarios_bills.js'
+  'test_harness_scenarios_bills.js',
+  'test_harness_scenarios.js',
+  'test_harness_scenarios_quick_add.js'
 ].map(async (name) => [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')])));
 
 const render = files['Dashboard_Script_Render.html'];
@@ -123,6 +125,7 @@ const body = files['Dashboard_Body.html'];
 const styles = files['Dashboard_Styles.html'];
 const dashboardData = files['dashboard_data.js'];
 const activityClient = files['Dashboard_Script_Activity.html'];
+const paymentsClient = files['Dashboard_Script_Payments.html'];
 const activityServer = files['activity_log.js'];
 const activityRenderStart = activityClient.indexOf('function renderActivityTable_(');
 const activityRenderEnd = activityClient.indexOf('function activityUpdatePagerUi_(', activityRenderStart);
@@ -181,13 +184,361 @@ renderActivityTableForRegression([{
   amountNum: 25,
   isNonMonetary: false,
   entryDate: '2026-07-26',
-  sheetRow: 2
+  sheetRow: 2,
+  operationId: 'fixture-donation-operation',
+  correctionAction: 'correct_entry',
+  correctionState: '',
+  entryFamily: 'donation'
 }], { skipSort: true });
 assert.match(activityWrap.innerHTML,
-  /data-event-type="donation"[^>]*aria-label="Remove donation"[^>]*>Remove donation<\/button>/,
-  'Eligible Donation rows must expose the specifically named Remove donation action');
+  /data-operation-id="fixture-donation-operation"[^>]*data-entry-family="donation"[^>]*>Correct entry<\/button>/,
+  'Eligible Donation rows must expose the shared Correct entry action');
 assert.doesNotMatch(activityClient, /Remove\s*<span[^>]*>\(Donation\)/,
   'Activity must not restore the old Remove (Donation) column label');
+
+renderActivityTableForRegression([{
+  loggedAt: '2026-07-28 09:00:00',
+  payee: 'Fixture Quick Add',
+  kindLabel: 'Bill',
+  eventType: 'quick_pay',
+  actionLabel: '',
+  amount: 40,
+  amountNum: 40,
+  isNonMonetary: false,
+  entryDate: '2026-07-28',
+  sheetRow: 3,
+  operationId: 'fixture-operation',
+  correctionAction: 'correct_entry',
+  correctionState: ''
+}], { skipSort: true });
+assert.match(activityWrap.innerHTML,
+  /data-operation-id="fixture-operation"[^>]*>Correct entry<\/button>/,
+  'Eligible direct Quick Add rows must expose Correct entry');
+assert.match(activityClient, /previewActivityEntryCorrection\(operationId\)/,
+  'Correct entry must run the shared fresh server-side preview before enabling the writer');
+assert.match(activityClient,
+  /\.correctActivityEntry\(/,
+  'The Activity drawer must call the shared guarded correction writer');
+assert.match(styles,
+  /\.dash-loading\[hidden\]\s*\{\s*display:\s*none\s*!important;/,
+  'Hidden loading indicators must not be forced visible by dash-loading display rules');
+assert.match(activityClient,
+  /retireQuickAddWriteReceiptsForCorrection_\([\s\S]*?result,[\s\S]*?__activityCorrectionState\.operationId[\s\S]*?loadActivitySection/,
+  'A completed correction must reconcile all browser receipts for its Cash Flow target before refreshing Activity');
+assert.match(paymentsClient,
+  /function retireQuickAddWriteReceipt_\(operationId\)[\s\S]*?quickAddRetiredWriteReceiptIds_\[id\]\s*=\s*true[\s\S]*?hideQuickAddWriteGuard_\(\)/,
+  'Retiring a corrected Quick Add receipt must suppress stale in-flight checks and hide its write guard');
+assert.match(paymentsClient,
+  /function retireQuickAddWriteReceiptsForCorrection_\(result, operationId\)[\s\S]*?quickAddWriteReceiptTargetKey_\(receipt\) === targetKey[\s\S]*?quickAddRetiredWriteReceiptIds_\[id\]\s*=\s*true/,
+  'Middle-entry correction must retire later browser receipts for the same Cash Flow target');
+assert.match(activityClient,
+  /retireQuickAddWriteReceiptsForCorrection_\([\s\S]*?refreshQuickAddAfterActivityCorrection_\(\)[\s\S]*?loadActivitySection/,
+  'A completed correction must refresh the open Quick Add state before Activity finishes reloading');
+assert.match(paymentsClient,
+  /function loadPaymentPreview\(options\)[\s\S]*?requestSeq\s*=\s*\+\+quickAddPreviewRequestSeq_[\s\S]*?requestSeq !== quickAddPreviewRequestSeq_/,
+  'Quick Add preview responses must be sequenced so a late pre-correction response cannot restore stale values');
+assert.match(paymentsClient,
+  /function loadPaymentSection\(\)[\s\S]*?uiDataRequestSeq\s*=\s*\+\+quickAddUiDataRequestSeq_[\s\S]*?uiDataRequestSeq !== quickAddUiDataRequestSeq_/,
+  'Quick Add payee-list responses must be sequenced so a late cold-load response cannot clear reconciled form state');
+
+const correctionRefreshStart = paymentsClient.indexOf(
+  'function refreshQuickAddAfterActivityCorrection_(');
+const correctionRefreshEnd = paymentsClient.indexOf(
+  'function applyQuickAddPreviewFromResult_(', correctionRefreshStart);
+assert.ok(correctionRefreshStart >= 0 && correctionRefreshEnd > correctionRefreshStart,
+  'Post-correction Quick Add reconciliation must remain directly testable');
+const correctionRefreshSource = paymentsClient.slice(
+  correctionRefreshStart, correctionRefreshEnd);
+const correctionElements = {
+  pay_type: { value: 'Expense' },
+  pay_payeeSelect: {
+    value: '__OTHER__',
+    options: [
+      { value: '' },
+      { value: 'Sequence expense' },
+      { value: '__OTHER__' }
+    ]
+  },
+  pay_payeeInput: { value: 'Sequence expense' },
+  pay_date: { value: '2026-07-28' }
+};
+let correctionRefreshSuccess;
+let correctionRefreshFailure;
+let correctionRefreshPreview = null;
+const runCorrectionRefresh = Function(
+  'document',
+  'google',
+  'filterPaymentPayees',
+  'loadPaymentPreview',
+  'QUICK_ADD_PAYEE_OTHER_SENTINEL_',
+  `var quickAddPreviewRequestSeq_ = 0;
+   var quickAddUiDataRequestSeq_ = 0;
+   ${correctionRefreshSource}
+   var paymentPayees = [];
+   return refreshQuickAddAfterActivityCorrection_;`
+)(
+  { getElementById(id) { return correctionElements[id] || null; } },
+  {
+    script: {
+      run: {
+        withSuccessHandler(handler) {
+          correctionRefreshSuccess = handler;
+          return this;
+        },
+        withFailureHandler(handler) {
+          correctionRefreshFailure = handler;
+          return this;
+        },
+        getQuickAddPaymentUiData() {}
+      }
+    }
+  },
+  () => {
+    correctionElements.pay_payeeSelect.options = [
+      { value: '' },
+      { value: 'Sequence expense' },
+      { value: '__OTHER__' }
+    ];
+  },
+  options => {
+    correctionRefreshPreview = {
+      options,
+      type: correctionElements.pay_type.value,
+      selectedPayee: correctionElements.pay_payeeSelect.value,
+      typedPayee: correctionElements.pay_payeeInput.value,
+      date: correctionElements.pay_date.value
+    };
+  },
+  '__OTHER__'
+);
+runCorrectionRefresh();
+correctionElements.pay_type.value = 'Income';
+correctionElements.pay_payeeSelect.value = '';
+correctionElements.pay_payeeInput.value = 'Changed while waiting';
+correctionElements.pay_date.value = '2026-08-01';
+correctionRefreshSuccess({
+  payees: [{ type: 'Expense', payee: 'Sequence expense' }]
+});
+assert.deepEqual(correctionRefreshPreview, {
+  options: { quiet: true },
+  type: 'Income',
+  selectedPayee: '',
+  typedPayee: 'Changed while waiting',
+  date: '2026-08-01'
+}, 'Activity correction must quietly refresh Quick Add without rolling back an in-flight user edit');
+assert.equal(typeof correctionRefreshFailure, 'function',
+  'A failed payee-list refresh must retain a quiet selected-payee preview fallback');
+
+const correctionReceiptStart = paymentsClient.indexOf(
+  'function quickAddWriteReceiptTargetKey_(');
+const correctionReceiptEnd = paymentsClient.indexOf(
+  'function registerQuickAddWriteReceipt_(', correctionReceiptStart);
+assert.ok(correctionReceiptStart >= 0 && correctionReceiptEnd > correctionReceiptStart,
+  'Correction receipt reconciliation must remain directly testable');
+let storedCorrectionReceipts = [
+  {
+    operationId: 'later-$50',
+    cashFlowSheet: 'INPUT - Cash Flow 2026',
+    cashFlowMonth: 'Jul-26',
+    entryType: 'Expense',
+    payee: 'Sequence expense'
+  },
+  {
+    operationId: 'unrelated',
+    cashFlowSheet: 'INPUT - Cash Flow 2026',
+    cashFlowMonth: 'Jul-26',
+    entryType: 'Expense',
+    payee: 'Other payee'
+  }
+];
+let correctionGuardHidden = false;
+const reconcileCorrectionReceipts = Function(
+  'loadQuickAddWriteReceipts_',
+  'saveQuickAddWriteReceipts_',
+  'retireQuickAddWriteReceipt_',
+  'hideQuickAddWriteGuard_',
+  `${paymentsClient.slice(correctionReceiptStart, correctionReceiptEnd)}
+   var quickAddRetiredWriteReceiptIds_ = {};
+   var quickAddActiveWriteGuardId_ = 'later-$50';
+   return {
+     run: retireQuickAddWriteReceiptsForCorrection_,
+     retired: quickAddRetiredWriteReceiptIds_
+   };`
+)(
+  () => storedCorrectionReceipts.slice(),
+  receipts => { storedCorrectionReceipts = receipts.slice(); },
+  () => { throw new Error('target reconciliation must not use single-receipt fallback'); },
+  () => { correctionGuardHidden = true; }
+);
+reconcileCorrectionReceipts.run({
+  entry: {
+    cashFlowSheet: 'INPUT - Cash Flow 2026',
+    cashFlowMonth: 'Jul-26',
+    entryType: 'Expense',
+    payee: 'Sequence expense'
+  }
+}, 'middle-$25');
+assert.deepEqual(
+  storedCorrectionReceipts.map(receipt => receipt.operationId),
+  ['unrelated'],
+  'Reversing the middle entry must retire a later receipt for the corrected Cash Flow cell');
+assert.equal(reconcileCorrectionReceipts.retired['later-$50'], true,
+  'The later same-target receipt must suppress an already in-flight stale response');
+assert.equal(reconcileCorrectionReceipts.retired['middle-$25'], true,
+  'The selected middle operation must also suppress stale in-flight responses');
+assert.equal(correctionGuardHidden, true,
+  'A visible warning for a retired same-target receipt must close immediately');
+assert.match(body,
+  /id="activity_correction_success_values"/,
+  'Correction success must keep a dedicated financial result summary');
+assert.match(body,
+  /class="bill-pay-confirmation activity-correction-confirmation"/,
+  'Quick Add correction success must use its dedicated confirmation treatment');
+assert.match(styles,
+  /\.activity-correction-confirmation\s*\{[\s\S]*?background:\s*#eff6ff/,
+  'Quick Add correction success must use the approved soft-blue surface');
+assert.match(activityClient,
+  /function renderActivityCorrectionSuccess_\(result\)[\s\S]*?Before correction[\s\S]*?Current value/,
+  'Correction success must show the verified before and current values');
+assert.doesNotMatch(body,
+  /Only this amount will change after its recorded state is verified/,
+  'Correction choices must not expose internal verification wording');
+assert.match(activityClient,
+  /function activityCorrectionImpactMoney_\(impact,\s*value,\s*entryType\)[\s\S]*?cash_flow_month[\s\S]*?Expense[\s\S]*?Math\.abs/,
+  'Expense Cash Flow totals must display as positive customer amounts in correction panels');
+assert.match(body,
+  /Change amount[\s\S]*?Remove entry/,
+  'The correction drawer must offer amount change and removal as distinct choices');
+assert.match(body,
+  /class="activity-correction-choice-copy"[\s\S]*?Change amount[\s\S]*?class="activity-correction-choice-copy"[\s\S]*?Remove entry/,
+  'Both correction choices must use the compact shared label-and-description layout');
+assert.match(styles,
+  /\.activity-correction-choice-copy\s*\{[\s\S]*?grid-template-columns:\s*minmax\(120px,\s*0\.42fr\)\s+minmax\(0,\s*1fr\)/,
+  'Desktop correction choices must align the action label beside its explanation');
+assert.match(styles,
+  /\.activity-correction-choice input\s*\{[\s\S]*?height:\s*16px[\s\S]*?width:\s*16px/,
+  'Correction radios must override the full-width drawer input rule');
+assert.match(styles,
+  /@media\s*\(max-width:\s*640px\)[\s\S]*?\.activity-correction-choice-copy\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+  'Narrow correction choices must stack the explanation below the action label');
+assert.match(styles,
+  /#activity_correction_content > \.bill-pay-summary\s*\{[\s\S]*?margin-bottom:\s*26px[\s\S]*?\.activity-correction-choice\s*\{[\s\S]*?margin:\s*0 0 24px[\s\S]*?#activity_correction_amount_wrap\s*\{[\s\S]*?margin-bottom:\s*26px/,
+  'Correction sections must keep deliberate vertical spacing');
+assert.match(activityClient,
+  /activityCorrectionMode_\(\)[\s\S]*?change_amount[\s\S]*?correctedAmount/,
+  'Amount correction must send its explicit mode and corrected amount');
+
+const correctionSuccessStart = activityClient.indexOf('function renderActivityCorrectionSuccess_(');
+const correctionSuccessEnd = activityClient.indexOf('function activityCorrectionClick_(', correctionSuccessStart);
+assert.ok(correctionSuccessStart >= 0 && correctionSuccessEnd > correctionSuccessStart,
+  'Correction success renderer must remain directly testable');
+const correctionSuccessRoot = { innerHTML: '' };
+const renderCorrectionSuccess = Function(
+  'document',
+  'escapeHtml',
+  'activityCorrectionMoney_',
+  'activityCorrectionImpactMoney_',
+  `${activityClient.slice(correctionSuccessStart, correctionSuccessEnd)}
+   return renderActivityCorrectionSuccess_;`
+)(
+  { getElementById(id) { return id === 'activity_correction_success_values' ? correctionSuccessRoot : null; } },
+  value => String(value),
+  value => `${Number(value) < 0 ? '-' : ''}$${Math.abs(Number(value)).toFixed(2)}`,
+  (impact, value, entryType) => `${impact.type === 'cash_flow_month' && entryType === 'Expense'
+    ? ''
+    : (Number(value) < 0 ? '-' : '')}$${Math.abs(Number(value)).toFixed(2)}`
+);
+renderCorrectionSuccess({
+  entry: { amount: 25, cashFlowMonth: 'Jul-26', entryType: 'Expense' },
+  impacts: [{
+    type: 'cash_flow_month',
+    label: 'Jul-26 Cash Flow total',
+    currentValue: -125,
+    restoredValue: -100
+  }]
+});
+assert.match(correctionSuccessRoot.innerHTML,
+  /Cash Flow month[\s\S]*?Jul-26[\s\S]*?Entry removed[\s\S]*?\$25\.00[\s\S]*?Before correction[\s\S]*?\$125\.00[\s\S]*?Current value[\s\S]*?\$100\.00/,
+  'Correction success must reconcile the removed entry with customer-facing positive expense totals');
+
+const writeReconcileStart = paymentsClient.indexOf(
+  'function reconcileQuickAddWriteVerificationResults_(');
+const writeReconcileEnd = paymentsClient.indexOf(
+  'function verifyPendingQuickAddWrites_(', writeReconcileStart);
+assert.ok(writeReconcileStart >= 0 && writeReconcileEnd > writeReconcileStart,
+  'Quick Add verification reconciliation must remain directly testable');
+const reconcileQuickAddVerification = Function(
+  `${paymentsClient.slice(writeReconcileStart, writeReconcileEnd)}
+   var quickAddRetiredWriteReceiptIds_ = {};
+   return reconcileQuickAddWriteVerificationResults_;`
+)();
+const supersededVerification = reconcileQuickAddVerification(
+  [{ operationId: 'new-$25', lastStatus: 'PENDING' }],
+  [{ operationId: 'old-$100', status: 'CHANGED_TO_OTHER', currentValue: -125 }]
+);
+assert.deepEqual(
+  supersededVerification.receipts.map(receipt => receipt.operationId),
+  ['new-$25'],
+  'A late verification response must not restore the superseded Quick Add receipt');
+assert.deepEqual(supersededVerification.results, [],
+  'A late result for a superseded Quick Add must not produce a false warning');
+const currentVerification = reconcileQuickAddVerification(
+  [{ operationId: 'new-$25', lastStatus: 'PENDING' }],
+  [{ operationId: 'new-$25', status: 'MATCH', currentValue: -125 }]
+);
+assert.equal(currentVerification.receipts[0].lastStatus, 'MATCH',
+  'The current Quick Add receipt must still accept its matching verification result');
+const firstTransientMismatch = reconcileQuickAddVerification(
+  [{
+    operationId: 'new-$25',
+    lastStatus: 'PENDING',
+    mismatchCount: 0,
+    lastMismatchKey: ''
+  }],
+  [{ operationId: 'new-$25', status: 'REVERTED_TO_PREVIOUS', currentValue: -100 }]
+);
+assert.equal(firstTransientMismatch.results[0].confirmedMismatch, false,
+  'One eventually-consistent Quick Add read must remain provisional');
+const confirmedMismatch = reconcileQuickAddVerification(
+  firstTransientMismatch.receipts,
+  [{ operationId: 'new-$25', status: 'REVERTED_TO_PREVIOUS', currentValue: -100 }]
+);
+assert.equal(confirmedMismatch.results[0].confirmedMismatch, true,
+  'The same Quick Add mismatch must be observed twice before warning');
+const recoveredVerification = reconcileQuickAddVerification(
+  confirmedMismatch.receipts,
+  [{ operationId: 'new-$25', status: 'MATCH', currentValue: -125 }]
+);
+assert.equal(recoveredVerification.receipts[0].mismatchCount, 0,
+  'A matching read must clear provisional mismatch evidence');
+assert.match(paymentsClient,
+  /function chooseQuickAddWriteWarning_\(results\)[\s\S]*?confirmedMismatch === true/,
+  'The yellow Quick Add warning must ignore a single provisional mismatch');
+assert.match(paymentsClient,
+  /options\.manual && provisionalMismatch[\s\S]*?600/,
+  'A save-time verification must recheck a provisional mismatch before allowing or blocking the next entry');
+
+renderActivityTableForRegression([{
+  loggedAt: '2026-07-28 09:01:00',
+  payee: 'Fixture Quick Add',
+  kindLabel: 'Bill',
+  eventType: 'quick_pay',
+  actionLabel: 'Quick Add reversed',
+  amount: 40,
+  amountNum: 40,
+  isNonMonetary: false,
+  entryDate: '2026-07-28',
+  sheetRow: 3,
+  operationId: 'fixture-operation',
+  correctionAction: '',
+  correctionState: 'removed'
+}], { skipSort: true });
+assert.match(activityWrap.innerHTML,
+  /activity-correction-state">Removed<\/span>/,
+  'A removed direct Quick Add row must become a non-actionable Removed status');
+assert.doesNotMatch(activityWrap.innerHTML,
+  />Correct entry<\/button>/,
+  'A reversed direct Quick Add row must not retain a correction button');
 
 const nonDonationLogRow = [
   '2026-07-26 07:40:00',
@@ -393,8 +744,153 @@ assert.match(files['quick_add_payment.js'],
   /const operationContext = createActivityOperationContext_\(ss, 'quick_pay'\);[\s\S]*?addCashFlowMoneyToCellPreserveRowFormat_/,
   'Quick Add must create its server-owned operation ID before the first money write');
 assert.match(files['quick_add_payment.js'],
-  /operationEnvelope:\s*\{[\s\S]*?context:\s*operationContext[\s\S]*?correctable:\s*true[\s\S]*?targets:\s*activityTargets/,
-  'Quick Add must persist its complete operation context and versioned targets');
+  /operationEnvelope:\s*\{[\s\S]*?context:\s*operationContext[\s\S]*?correctable:\s*isDirectQuickAdd[\s\S]*?targets:\s*activityTargets/,
+  'Quick Add must persist complete targets while limiting correction to explicit direct Quick Add');
+assert.match(files['Dashboard_Script_Payments.html'],
+  /activityOrigin:[\s\S]{0,180}'direct_quick_add'/,
+  'Production Quick Add UI must explicitly identify direct Quick Add operations');
+assert.match(files['activity_log.js'],
+  /activityOrigin\s*!==\s*QUICK_ADD_ACTIVITY_ORIGIN_DIRECT_/,
+  'Server correction preview must reject linked, unclassified, and legacy Quick Add operations');
+assert.match(files['activity_log.js'],
+  /function buildDirectQuickAddCorrectionPlanInSpreadsheet_[\s\S]*?activityQuickAddSimulateChain_\(targetType,\s*chain,\s*requested\)/,
+  'Direct Quick Add correction must replay the verified operation chain while excluding only the selected entry');
+assert.match(files['activity_log.js'],
+  /writeActivityOperationTargetStateInSpreadsheet_\(\s*ss,\s*writes\[i\]\.target,\s*writes\[i\]\.desired\s*\)/,
+  'Correction writer must apply the verified chain result instead of blindly restoring one historical before-state');
+assert.match(files['activity_log.js'],
+  /applied\[k\]\.current/,
+  'Correction compensation must restore the exact state observed before the attempted correction');
+assert.match(files['activity_log.js'],
+  /function rollbackFailedActivityAppend_[\s\S]*?quick_pay_correction::[\s\S]*?quick_pay_replacement::/,
+  'A failed Quick Add correction must compensate its exact in-flight Activity rows');
+assert.match(files['activity_log.js'],
+  /activityQuickAddReplacementWrites_[\s\S]*?change_amount[\s\S]*?replacementOperationId/,
+  'Quick Add amount correction must create a linked current replacement operation');
+assert.match(files['activity_log.js'],
+  /activityCorrectionHistory_[\s\S]*?replacesOperationId/,
+  'Activity must preserve expandable correction history behind the current logical entry');
+assert.match(files['activity_log.js'],
+  /activityLogRowHiddenByCorrectionRelations_[\s\S]*?superseded/,
+  'Activity must hide superseded audit rows from the default logical-entry list');
+assert.match(files['activity_log.js'],
+  /entryDate:\s*String\(locator\.entryDate/,
+  'Correction entry dates must come from the immutable target locator');
+assert.match(files['activity_log.js'],
+  /var rawMonth = locator\.month/,
+  'Correction month labels must prefer the immutable target locator');
+
+const cashChain = [
+  {
+    operation: {
+      operationId: 'cash-100',
+      corrected: false,
+      entry: { entryType: 'Expense', amount: 100 }
+    },
+    target: {
+      before: { exists: true, value: 0, flowSource: 'CASH' },
+      after: { exists: true, value: -100, flowSource: 'CASH' }
+    }
+  },
+  {
+    operation: {
+      operationId: 'cash-25',
+      corrected: false,
+      entry: { entryType: 'Expense', amount: 25 }
+    },
+    target: {
+      before: { exists: true, value: -100, flowSource: 'CASH' },
+      after: { exists: true, value: -125, flowSource: 'CASH' }
+    }
+  },
+  {
+    operation: {
+      operationId: 'cash-50',
+      corrected: false,
+      entry: { entryType: 'Expense', amount: 50 }
+    },
+    target: {
+      before: { exists: true, value: -125, flowSource: 'CASH' },
+      after: { exists: true, value: -175, flowSource: 'CASH' }
+    }
+  }
+];
+assert.equal(
+  activityServerContext.activityQuickAddSimulateChain_(
+    'cash_flow_month',
+    cashChain,
+    'cash-25'
+  ).value,
+  -150,
+  'Reversing the middle $25 entry must preserve the earlier $100 and later $50 entries'
+);
+cashChain[1].operation.corrected = true;
+cashChain[1].operation.correctedAtSheetRow = 5;
+cashChain[2].operation.sheetRow = 6;
+cashChain[2].target.before = { exists: true, value: -100, flowSource: 'CASH' };
+cashChain[2].target.after = { exists: true, value: -150, flowSource: 'CASH' };
+assert.equal(
+  activityServerContext.activityQuickAddSimulateChainAtRow_(
+    'cash_flow_month',
+    cashChain,
+    6
+  ).value,
+  -100,
+  'A later Quick Add must validate against the active total after an earlier correction'
+);
+assert.equal(
+  activityServerContext.activityQuickAddSimulateChain_(
+    'cash_flow_month',
+    cashChain,
+    'cash-100'
+  ).value,
+  -50,
+  'A second correction must preserve the still-active later entry'
+);
+const debtChain = [
+  {
+    operation: {
+      operationId: 'card-120',
+      corrected: false,
+      entry: { entryType: 'Expense', amount: 120 }
+    },
+    target: { before: { exists: true, value: 500 }, after: { exists: true, value: 380 } }
+  },
+  {
+    operation: {
+      operationId: 'card-25',
+      corrected: false,
+      entry: { entryType: 'Expense', amount: 25 }
+    },
+    target: { before: { exists: true, value: 380 }, after: { exists: true, value: 355 } }
+  },
+  {
+    operation: {
+      operationId: 'card-50',
+      corrected: false,
+      entry: { entryType: 'Expense', amount: 50 }
+    },
+    target: { before: { exists: true, value: 355 }, after: { exists: true, value: 305 } }
+  }
+];
+assert.equal(
+  activityServerContext.activityQuickAddSimulateChain_(
+    'debt_balance',
+    debtChain,
+    'card-25'
+  ).value,
+  330,
+  'Credit-card correction must preserve later verified balance reductions'
+);
+
+const quickAddWriterSource = files['quick_add_payment.js'].slice(
+  files['quick_add_payment.js'].indexOf('function quickAddPayment('),
+  files['quick_add_payment.js'].indexOf('function activitySnapshotCellValue_(')
+);
+assert.doesNotMatch(quickAddWriterSource, /computeQuickAddPriorMonthPreview_/,
+  'Quick Add save must not block on presentation-only prior-month reads');
+assert.doesNotMatch(quickAddWriterSource, /computeQuickAddHistoryPreview_/,
+  'Quick Add save must not block on presentation-only history reads');
 
 for (const source of [body, files['PlannerDashboard.html']]) {
   assert.match(source,
@@ -818,6 +1314,36 @@ assert.match(addDonationSlice,
 assert.match(addDonationSlice,
   /const dateCol[\s\S]*?setNumberFormat\('M\/d\/yyyy'\)[\s\S]*?setNumberFormat\('\$#,##0\.00'\)/,
   'Donation Add must reassert date and currency formats after row styling');
+assert.match(addDonationSlice,
+  /createActivityOperationContext_\(ss,\s*'donation'\)[\s\S]*?targetType:\s*'donation_row'[\s\S]*?activityOrigin:\s*'direct_donation'/,
+  'New donations must receive a complete correctable operation envelope');
+assert.match(donationsServer,
+  /function correctDonationOperationInSpreadsheet_[\s\S]*?change_amount[\s\S]*?donation_correction::[\s\S]*?donation_replacement::/,
+  'Donation correction must support linked amount replacement with immutable correction evidence');
+assert.match(donationsServer,
+  /donation_replacement::[\s\S]*?rollbackFailedActivityAppend_/,
+  'A failed donation correction must compensate its exact in-flight Activity rows');
+assert.match(donationsServer,
+  /initialSheetRow[\s\S]*?donationDataRowMatchesActivityUndo_[\s\S]*?matches:\s*\[initialSheetRow\]/,
+  'Donation correction must verify the recorded row before fingerprint fallback');
+assert.match(donationsServer,
+  /function donationSheetDateFromIso_[\s\S]*?getSpreadsheetTimeZone[\s\S]*?Utilities\.parseDate[\s\S]*?12:00:00/,
+  'Donation dates must be written as calendar dates in the workbook timezone');
+assert.match(donationsServer,
+  /function donationActivityEntrySummary_[\s\S]*?targetEntryDate[\s\S]*?activityLogEntryDateToYyyyMmDd_/,
+  'Donation correction previews must prefer the immutable calendar date target');
+assert.match(files['test_harness_scenarios_quick_add.js'],
+  /Harness Amount Edit[\s\S]*?change_amount[\s\S]*?40[\s\S]*?change_amount[\s\S]*?45[\s\S]*?'remove'/,
+  'The disposable Quick Add harness must edit a middle amount repeatedly and then remove the current replacement');
+assert.match(files['test_harness_scenarios.js'],
+  /REGRESSION-DONATION-CORRECTION[\s\S]*?change_amount[\s\S]*?125[\s\S]*?change_amount[\s\S]*?150[\s\S]*?'remove'/,
+  'The disposable donation harness must edit a donation repeatedly, remove it, and retain audit evidence');
+assert.match(files['test_harness_scenarios.js'],
+  /state\.identical[\s\S]*?Identical donation rows retain distinct correctable identities/,
+  'The disposable donation harness must prove identical rows remain independently correctable');
+assert.match(files['test_harness_scenarios.js'],
+  /state\.storedDate[\s\S]*?Donation date remains the selected calendar day/,
+  'The disposable donation harness must prove the selected date does not shift across timezones');
 assert.match(files['Dashboard_Script_Payments.html'],
   /function setQuickAddSuccessStatus_\([\s\S]*?classList\.add\(['"]status-success['"]\)/,
   'Quick Add completion must use an explicit success treatment');
@@ -830,6 +1356,65 @@ assert.match(files['Dashboard_Script_Payments.html'],
   /function renderPaymentHistoryChart_\([\s\S]*?Array\.isArray\(data\.history\)[\s\S]*?wrap\.hidden = false[\s\S]*?function renderQuickAddHistory_\([\s\S]*?renderPaymentHistoryChart_\('pay_history_wrap', 'pay_history_chart', data\)/,
   'Quick Add must render server-provided history inside its information panel');
 const quickAddServer = files['quick_add_payment.js'];
+const priorPreviewStart = quickAddServer.indexOf('function computeQuickAddPriorMonthPreview_(');
+const priorPreviewEnd = quickAddServer.indexOf(
+  'function computeQuickAddHistoryPreview_(', priorPreviewStart);
+assert.ok(priorPreviewStart >= 0 && priorPreviewEnd > priorPreviewStart,
+  'Quick Add prior-month preview must remain directly testable');
+const priorPreviewSource = quickAddServer.slice(priorPreviewStart, priorPreviewEnd);
+const makePriorPreview = function(getCashFlowSheet, findRow, getMonthColumn) {
+  return Function(
+    'Utilities',
+    'Session',
+    'getCashFlowSheet_',
+    'findCashFlowRowByTypeAndPayee_',
+    'getMonthColumnByDate_',
+    'round2_',
+    'toNumber_',
+    `${priorPreviewSource}; return computeQuickAddPriorMonthPreview_;`
+  )(
+    { formatDate() { return 'Jun-26'; } },
+    { getScriptTimeZone() { return 'America/Los_Angeles'; } },
+    getCashFlowSheet,
+    findRow,
+    getMonthColumn,
+    value => Number(value),
+    value => Number(value)
+  );
+};
+const missingPriorYear = makePriorPreview(
+  () => { throw new Error('internal sheet missing'); },
+  () => null,
+  () => 3
+)({}, 'Expense', 'New payee', new Date(2026, 6, 15));
+assert.equal(
+  missingPriorYear.priorMonthUnavailableMessage,
+  'Previous-month data is not available because Cash Flow has not been set up for that year.',
+  'Missing prior-year data must use customer language without an internal worksheet name');
+const missingPriorPayee = makePriorPreview(
+  () => ({ getRange() { return { getValue() { return 0; } }; } }),
+  () => null,
+  () => 3
+)({}, 'Expense', 'New payee', new Date(2026, 6, 15));
+assert.equal(
+  missingPriorPayee.priorMonthUnavailableMessage,
+  'No previous-month amount is available for this payee. This is expected for a new or renamed payee.',
+  'A new payee must explain missing history without exposing a worksheet name');
+const missingPriorColumn = makePriorPreview(
+  () => ({ getRange() { return { getValue() { return 0; } }; } }),
+  () => ({ row: 2 }),
+  () => { throw new Error('internal month column missing'); }
+)({}, 'Expense', 'Existing payee', new Date(2026, 6, 15));
+assert.equal(
+  missingPriorColumn.priorMonthUnavailableMessage,
+  'The previous-month amount could not be read. Refresh the financial plan and try again.',
+  'A missing prior-month column must use an actionable customer-safe message');
+for (const preview of [missingPriorYear, missingPriorPayee, missingPriorColumn]) {
+  assert.doesNotMatch(
+    preview.priorMonthUnavailableMessage,
+    /(?:INPUT|SYS|OUT|LOG)\s*-|sheet|tab|column/i,
+    'Quick Add preview messages must not expose workbook implementation terminology');
+}
 const quickAddHistoryStart = quickAddServer.indexOf('function computeQuickAddHistoryPreview_(');
 const quickAddHistoryEnd = quickAddServer.indexOf('function getQuickAddPreview(', quickAddHistoryStart);
 assert.ok(quickAddHistoryStart >= 0 && quickAddHistoryEnd > quickAddHistoryStart,
@@ -1088,7 +1673,7 @@ assert.match(quickAddClient,
   /cashcompass\.quickAddWriteReceipts\.v2/,
   'Legacy unscoped Quick Add receipts must be retired by a storage-version bump');
 assert.match(quickAddClient,
-  /result\.status\s*===\s*'WORKBOOK_CHANGED'[\s\S]*?receipts\s*=\s*receipts\.filter/,
+  /function reconcileQuickAddWriteVerificationResults_[\s\S]*?result\.status\s*===\s*'WORKBOOK_CHANGED'[\s\S]*?currentReceipts\.filter/,
   'Receipts from another workbook must be retired silently');
 assert.match(body,
   /id="bills_manage_list"[\s\S]*?Loading recurring bills…/,

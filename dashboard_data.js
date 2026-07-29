@@ -1942,7 +1942,7 @@ function getRecurringBillsWithoutDueDateForDashboard() {
         category: '',
         autopay: '',
         varies: '',
-        notes: 'Not yet mapped in INPUT - Bills',
+        notes: 'Not yet linked to a recurring bill',
         year: currentYear,
         monthHeader: currentMonthHeader
       });
@@ -1977,7 +1977,7 @@ function getRecurringBillsWithoutDueDateForDashboard() {
         category: '',
         autopay: '',
         varies: '',
-        notes: 'Not yet mapped in INPUT - Bills',
+        notes: 'Not yet linked to a recurring bill',
         year: nextDate.getFullYear(),
         monthHeader: nextMonthHeader
       });
@@ -2622,7 +2622,7 @@ function getInputBillsDueRows_(ss, today, tz) {
         amount: defaultAmount,
         dueDate: Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd'),
         sourceType: 'input_bill',
-        sourceLabel: 'INPUT - Bills',
+        sourceLabel: 'Recurring bills',
         category: category,
         varies: varies === 'yes' ? 'Yes' : 'No',
         autopay: autopay === 'yes' ? 'Yes' : 'No',
@@ -2782,7 +2782,7 @@ function getInputBillsDueRows_(ss, today, tz) {
           amount: defaultAmount,
           dueDate: Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd'),
           sourceType: 'input_bill',
-          sourceLabel: 'INPUT - Bills',
+          sourceLabel: 'Recurring bills',
           category: category,
           varies: varies === 'yes' ? 'Yes' : 'No',
           autopay: autopay === 'yes' ? 'Yes' : 'No',

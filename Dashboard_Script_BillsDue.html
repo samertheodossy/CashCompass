@@ -444,7 +444,8 @@ function saveBillPaymentFromDrawer_(amount, entryDate) {
       entryDate: entryDate,
       amount: amount,
       createIfMissing: true,
-      flowSource: state.flowSource
+      flowSource: state.flowSource,
+      activityOrigin: 'bill_payment'
     });
 }
 

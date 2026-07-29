@@ -115,9 +115,11 @@ function getHarnessSuites_() {
     {
       id: 'SUITE-QUICK-ADD-RELIABILITY',
       label: 'Quick Add Reliability Suite',
-      description: 'Quick Add write verification and duplicate-safe guarded restore behavior.',
+      description: 'Quick Add write verification, guarded restore, and immutable direct-entry correction safety.',
       scenarioIds: [
-        'REGRESSION-QUICK-ADD-WRITE-GUARD'
+        'REGRESSION-QUICK-ADD-WRITE-GUARD',
+        'REGRESSION-DIRECT-QUICK-ADD-CORRECTION',
+        'REGRESSION-DONATION-CORRECTION'
       ]
     },
     {
@@ -143,6 +145,8 @@ function getHarnessSuites_() {
       scenarioIds: [
         'REGRESSION-RECOVERY-DUPLICATE-GUARD',
         'REGRESSION-QUICK-ADD-WRITE-GUARD',
+        'REGRESSION-DIRECT-QUICK-ADD-CORRECTION',
+        'REGRESSION-DONATION-CORRECTION',
         'SMOKE-POPULATED-FIXTURE'
       ]
     },

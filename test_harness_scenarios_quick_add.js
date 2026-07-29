@@ -86,3 +86,497 @@ function getHarnessQuickAddWriteGuardScenario_() {
     }
   };
 }
+
+/**
+ * Verify the immutable 5i correction writer on an exact disposable target:
+ * existing Cash Flow + credit-card side effects, created-row removal,
+ * immutable correction evidence, retry rejection, and changed-state refusal.
+ */
+function getHarnessDirectQuickAddCorrectionScenario_() {
+  var year = (typeof getCurrentYear_ === 'function') ? getCurrentYear_() : new Date().getFullYear();
+  return {
+    id: 'REGRESSION-DIRECT-QUICK-ADD-CORRECTION',
+    category: 'REGRESSION',
+    executionLevel: 'E2E',
+    description: 'Validate safe Activity correction for direct Quick Add operations and fail-closed linked/changed state.',
+    expectedSheets: [
+      getCashFlowSheetName_(year),
+      getSheetNames_().DEBTS,
+      ACTIVITY_LOG_SHEET_NAME
+    ],
+    setup: function(ctx) {
+      ctx.assertWritable();
+      runMinimalBootstrap_(ctx.ss);
+      var cashFlow = buildCashFlowYearSheet_(ctx.ss, year);
+      insertCashFlowRow_(cashFlow, 'Expense', 'Harness Visa', 'CREDIT_CARD');
+      insertCashFlowRow_(cashFlow, 'Expense', 'Harness Correction Chain', 'CASH');
+
+      ensureOnboardingDebtsSheetFromDashboard('normal', ctx.ss);
+      var debtSheet = ctx.ss.getSheetByName(getSheetNames_().DEBTS);
+      var debtMap = getDebtsHeaderMap_(debtSheet);
+      var totalRow = findDebtTotalRow_(debtSheet, debtMap);
+      harnessInsertBeforeByHeader_(debtSheet, totalRow, {
+        'Account Name': 'Harness Visa',
+        'Type': 'Credit Card',
+        'Account Balance': 500,
+        'Due Date': 15,
+        'Credit Limit': 2000,
+        'Minimum Payment': 25,
+        'Credit Left': 1500,
+        'Int Rate': 20,
+        'Acct PCT Avail': 75,
+        'Active': 'Yes'
+      });
+      refreshDebtsTotalRow_(debtSheet, debtMap, findDebtTotalRow_(debtSheet, debtMap));
+      ctx.quickAddCorrection = {
+        date: year + '-07-18',
+        cashFlow: cashFlow,
+        debtSheet: debtSheet
+      };
+      ctx.actions.push('Seed direct Quick Add Cash Flow and credit-card targets');
+    },
+    actions: function(ctx) {
+      var state = ctx.quickAddCorrection;
+      ctx.assertWritable();
+      state.cardWrite = quickAddPayment({
+        entryType: 'Expense',
+        payee: 'Harness Visa',
+        entryDate: state.date,
+        amount: 120,
+        createIfMissing: false,
+        flowSource: 'CREDIT_CARD',
+        activityOrigin: 'direct_quick_add'
+      }, ctx.ss);
+      state.cardPreview = previewDirectQuickAddCorrectionInSpreadsheet_(
+        ctx.ss,
+        state.cardWrite.activitySnapshot.operationId
+      );
+
+      ctx.assertWritable();
+      state.cardCorrection = correctDirectQuickAddOperationInSpreadsheet_(
+        ctx.ss,
+        state.cardWrite.activitySnapshot.operationId,
+        'Entered twice',
+        ''
+      );
+      var cardRow = findCashFlowRowByTypeAndPayee_(
+        state.cashFlow,
+        'Expense',
+        'Harness Visa'
+      );
+      var cardMonthCol = getMonthColumnByDate_(
+        state.cashFlow,
+        parseIsoDateLocal_(state.date),
+        1
+      );
+      state.cardValueAfterCorrection = Number(
+        state.cashFlow.getRange(cardRow.row, cardMonthCol).getValue()
+      );
+      var cardDebtMap = getDebtsHeaderMap_(state.debtSheet);
+      var cardDebtRows = state.debtSheet.getDataRange().getDisplayValues();
+      state.cardDebtAfterCorrection = null;
+      for (var cardDebtIndex = 1; cardDebtIndex < cardDebtRows.length; cardDebtIndex++) {
+        if (String(cardDebtRows[cardDebtIndex][cardDebtMap.nameColZero] || '').trim() === 'Harness Visa') {
+          state.cardDebtAfterCorrection = Number(
+            state.debtSheet.getRange(
+              cardDebtIndex + 1,
+              cardDebtMap.balanceCol
+            ).getValue()
+          );
+        }
+      }
+      state.cardRetry = previewDirectQuickAddCorrectionInSpreadsheet_(
+        ctx.ss,
+        state.cardWrite.activitySnapshot.operationId
+      );
+
+      ctx.assertWritable();
+      state.createdWrite = quickAddPayment({
+        entryType: 'Income',
+        payee: 'Harness One-Time Income',
+        entryDate: state.date,
+        amount: 250,
+        createIfMissing: true,
+        flowSource: 'CASH',
+        activityOrigin: 'direct_quick_add'
+      }, ctx.ss);
+      ctx.assertWritable();
+      state.createdCorrection = correctDirectQuickAddOperationInSpreadsheet_(
+        ctx.ss,
+        state.createdWrite.activitySnapshot.operationId,
+        'Wrong payee/date',
+        ''
+      );
+
+      ctx.assertWritable();
+      state.changedWrite = quickAddPayment({
+        entryType: 'Income',
+        payee: 'Harness Salary',
+        entryDate: state.date,
+        amount: 1000,
+        createIfMissing: true,
+        flowSource: 'CASH',
+        activityOrigin: 'direct_quick_add'
+      }, ctx.ss);
+      var changedRow = findCashFlowRowByTypeAndPayee_(
+        state.cashFlow,
+        'Income',
+        'Harness Salary'
+      );
+      var changedCol = getMonthColumnByDate_(
+        state.cashFlow,
+        parseIsoDateLocal_(state.date),
+        1
+      );
+      ctx.assertWritable();
+      state.cashFlow.getRange(changedRow.row, changedCol).setValue(1100);
+      state.changedPreview = previewDirectQuickAddCorrectionInSpreadsheet_(
+        ctx.ss,
+        state.changedWrite.activitySnapshot.operationId
+      );
+      ctx.assertWritable();
+      state.changedCorrection = correctDirectQuickAddOperationInSpreadsheet_(
+        ctx.ss,
+        state.changedWrite.activitySnapshot.operationId,
+        'Wrong amount',
+        ''
+      );
+      state.changedValue = Number(
+        state.cashFlow.getRange(changedRow.row, changedCol).getValue()
+      );
+
+      ctx.assertWritable();
+      state.chain100 = quickAddPayment({
+        entryType: 'Expense',
+        payee: 'Harness Correction Chain',
+        entryDate: state.date,
+        amount: 100,
+        createIfMissing: false,
+        flowSource: 'CASH',
+        activityOrigin: 'direct_quick_add'
+      }, ctx.ss);
+      ctx.assertWritable();
+      state.chain25 = quickAddPayment({
+        entryType: 'Expense',
+        payee: 'Harness Correction Chain',
+        entryDate: state.date,
+        amount: 25,
+        createIfMissing: false,
+        flowSource: 'CASH',
+        activityOrigin: 'direct_quick_add'
+      }, ctx.ss);
+      ctx.assertWritable();
+      state.chain50 = quickAddPayment({
+        entryType: 'Expense',
+        payee: 'Harness Correction Chain',
+        entryDate: state.date,
+        amount: 50,
+        createIfMissing: false,
+        flowSource: 'CASH',
+        activityOrigin: 'direct_quick_add'
+      }, ctx.ss);
+      state.chainMiddlePreview = previewDirectQuickAddCorrectionInSpreadsheet_(
+        ctx.ss,
+        state.chain25.activitySnapshot.operationId
+      );
+      ctx.assertWritable();
+      state.chainMiddleCorrection = correctDirectQuickAddOperationInSpreadsheet_(
+        ctx.ss,
+        state.chain25.activitySnapshot.operationId,
+        'Wrong amount',
+        ''
+      );
+
+      var chainRow = findCashFlowRowByTypeAndPayee_(
+        state.cashFlow,
+        'Expense',
+        'Harness Correction Chain'
+      );
+      var chainCol = getMonthColumnByDate_(
+        state.cashFlow,
+        parseIsoDateLocal_(state.date),
+        1
+      );
+      state.chainAfterMiddle = Number(
+        state.cashFlow.getRange(chainRow.row, chainCol).getValue()
+      );
+
+      // A new entry recorded after a correction must start a valid next link,
+      // not make the earlier Activity sequence permanently read-only.
+      ctx.assertWritable();
+      state.chain10 = quickAddPayment({
+        entryType: 'Expense',
+        payee: 'Harness Correction Chain',
+        entryDate: state.date,
+        amount: 10,
+        createIfMissing: false,
+        flowSource: 'CASH',
+        activityOrigin: 'direct_quick_add'
+      }, ctx.ss);
+      state.chainFirstPreview = previewDirectQuickAddCorrectionInSpreadsheet_(
+        ctx.ss,
+        state.chain100.activitySnapshot.operationId
+      );
+      ctx.assertWritable();
+      state.chainFirstCorrection = correctDirectQuickAddOperationInSpreadsheet_(
+        ctx.ss,
+        state.chain100.activitySnapshot.operationId,
+        'Entered twice',
+        ''
+      );
+      state.chainAfterFirst = Number(
+        state.cashFlow.getRange(chainRow.row, chainCol).getValue()
+      );
+      state.chainLatestPreview = previewDirectQuickAddCorrectionInSpreadsheet_(
+        ctx.ss,
+        state.chain10.activitySnapshot.operationId
+      );
+      ctx.assertWritable();
+      state.chainLatestCorrection = correctDirectQuickAddOperationInSpreadsheet_(
+        ctx.ss,
+        state.chain10.activitySnapshot.operationId,
+        'Entered twice',
+        ''
+      );
+      state.chainAfterLatest = Number(
+        state.cashFlow.getRange(chainRow.row, chainCol).getValue()
+      );
+      state.chainRemainingPreview = previewDirectQuickAddCorrectionInSpreadsheet_(
+        ctx.ss,
+        state.chain50.activitySnapshot.operationId
+      );
+
+      // Credit-card sequences must replay both Cash Flow and debt side effects
+      // when a non-latest operation is corrected.
+      ctx.assertWritable();
+      state.cardChain100 = quickAddPayment({
+        entryType: 'Expense',
+        payee: 'Harness Visa',
+        entryDate: state.date,
+        amount: 100,
+        createIfMissing: false,
+        flowSource: 'CREDIT_CARD',
+        activityOrigin: 'direct_quick_add'
+      }, ctx.ss);
+      ctx.assertWritable();
+      state.cardChain25 = quickAddPayment({
+        entryType: 'Expense',
+        payee: 'Harness Visa',
+        entryDate: state.date,
+        amount: 25,
+        createIfMissing: false,
+        flowSource: 'CREDIT_CARD',
+        activityOrigin: 'direct_quick_add'
+      }, ctx.ss);
+      ctx.assertWritable();
+      state.cardChain50 = quickAddPayment({
+        entryType: 'Expense',
+        payee: 'Harness Visa',
+        entryDate: state.date,
+        amount: 50,
+        createIfMissing: false,
+        flowSource: 'CREDIT_CARD',
+        activityOrigin: 'direct_quick_add'
+      }, ctx.ss);
+      state.cardChainMiddlePreview = previewDirectQuickAddCorrectionInSpreadsheet_(
+        ctx.ss,
+        state.cardChain25.activitySnapshot.operationId
+      );
+      ctx.assertWritable();
+      state.cardChainMiddleCorrection = correctDirectQuickAddOperationInSpreadsheet_(
+        ctx.ss,
+        state.cardChain25.activitySnapshot.operationId,
+        'Wrong amount',
+        '',
+        'change_amount',
+        30
+      );
+      state.cardChainCashValue = Number(
+        state.cashFlow.getRange(cardRow.row, chainCol).getValue()
+      );
+
+      // Amount edits remain one logical entry: edit a middle entry, edit the
+      // replacement again, then remove that replacement while later entries
+      // stay intact.
+      ctx.assertWritable();
+      state.edit100 = quickAddPayment({
+        entryType: 'Expense',
+        payee: 'Harness Amount Edit',
+        entryDate: state.date,
+        amount: 100,
+        createIfMissing: true,
+        flowSource: 'CASH',
+        activityOrigin: 'direct_quick_add'
+      }, ctx.ss);
+      ctx.assertWritable();
+      state.edit36 = quickAddPayment({
+        entryType: 'Expense',
+        payee: 'Harness Amount Edit',
+        entryDate: state.date,
+        amount: 36,
+        createIfMissing: false,
+        flowSource: 'CASH',
+        activityOrigin: 'direct_quick_add'
+      }, ctx.ss);
+      ctx.assertWritable();
+      state.edit50 = quickAddPayment({
+        entryType: 'Expense',
+        payee: 'Harness Amount Edit',
+        entryDate: state.date,
+        amount: 50,
+        createIfMissing: false,
+        flowSource: 'CASH',
+        activityOrigin: 'direct_quick_add'
+      }, ctx.ss);
+      ctx.assertWritable();
+      state.editNoChange = correctDirectQuickAddOperationInSpreadsheet_(
+        ctx.ss,
+        state.edit36.activitySnapshot.operationId,
+        'Wrong amount',
+        '',
+        'change_amount',
+        36
+      );
+      ctx.assertWritable();
+      state.edit36to40 = correctDirectQuickAddOperationInSpreadsheet_(
+        ctx.ss,
+        state.edit36.activitySnapshot.operationId,
+        'Wrong amount',
+        '',
+        'change_amount',
+        40
+      );
+      state.edit40Preview = previewDirectQuickAddCorrectionInSpreadsheet_(
+        ctx.ss,
+        state.edit36to40.replacementOperationId
+      );
+      ctx.assertWritable();
+      state.edit40to45 = correctDirectQuickAddOperationInSpreadsheet_(
+        ctx.ss,
+        state.edit36to40.replacementOperationId,
+        'Wrong amount',
+        '',
+        'change_amount',
+        45
+      );
+      state.edit45Preview = previewDirectQuickAddCorrectionInSpreadsheet_(
+        ctx.ss,
+        state.edit40to45.replacementOperationId
+      );
+      ctx.assertWritable();
+      state.edit45Remove = correctDirectQuickAddOperationInSpreadsheet_(
+        ctx.ss,
+        state.edit40to45.replacementOperationId,
+        'Entered twice',
+        '',
+        'remove',
+        null
+      );
+      var editRow = findCashFlowRowByTypeAndPayee_(
+        state.cashFlow,
+        'Expense',
+        'Harness Amount Edit'
+      );
+      state.editFinalValue = Number(
+        state.cashFlow.getRange(editRow.row, chainCol).getValue()
+      );
+      ctx.actions.push(
+        'Correct existing/card and created-row writes; reverse newest, middle, earlier, and post-correction entries while preserving verified later state'
+      );
+    },
+    expectedOutcome: function(ctx) {
+      var state = ctx.quickAddCorrection;
+      var mod = 'Direct Quick Add Correction';
+      var date = parseIsoDateLocal_(state.date);
+      var monthCol = getMonthColumnByDate_(state.cashFlow, date, 1);
+      var cardRow = findCashFlowRowByTypeAndPayee_(
+        state.cashFlow,
+        'Expense',
+        'Harness Visa'
+      );
+      var debtMap = getDebtsHeaderMap_(state.debtSheet);
+      var debtRows = state.debtSheet.getDataRange().getDisplayValues();
+      var debtBalance = null;
+      for (var r = 1; r < debtRows.length; r++) {
+        if (String(debtRows[r][debtMap.nameColZero] || '').trim() === 'Harness Visa') {
+          debtBalance = Number(state.debtSheet.getRange(r + 1, debtMap.balanceCol).getValue());
+        }
+      }
+      ctx.assert.equals('Direct operation preview is ready', state.cardPreview.status, 'READY', { module: mod });
+      ctx.assert.equals('Existing-row correction succeeds', state.cardCorrection.status, 'CORRECTED', { module: mod });
+      ctx.assert.equals('Cash Flow exact prior value restored',
+        state.cardValueAfterCorrection, 0, { module: mod });
+      ctx.assert.equals('Credit-card exact prior balance restored',
+        state.cardDebtAfterCorrection, 500, { module: mod });
+      ctx.assert.equals('Corrected operation cannot run twice', state.cardRetry.status, 'ALREADY_CORRECTED', { module: mod });
+      ctx.assert.equals('App-created row correction succeeds', state.createdCorrection.status, 'CORRECTED', { module: mod });
+      ctx.assert.equals('Untouched app-created row is removed',
+        findCashFlowRowByTypeAndPayee_(state.cashFlow, 'Income', 'Harness One-Time Income'),
+        null, { module: mod });
+      ctx.assert.equals('Changed state blocks preview', state.changedPreview.status, 'PRECONDITION_FAILED', { module: mod });
+      ctx.assert.equals('Changed state blocks writer', state.changedCorrection.ok, false, { module: mod });
+      ctx.assert.equals('Newer Cash Flow value is preserved', state.changedValue, 1100, { module: mod });
+      ctx.assert.equals('Middle chain entry preview is ready',
+        state.chainMiddlePreview.status, 'READY', { module: mod });
+      ctx.assert.equals('Middle chain preview reports one later entry',
+        state.chainMiddlePreview.laterEntryCount, 1, { module: mod });
+      ctx.assert.equals('Middle chain correction succeeds',
+        state.chainMiddleCorrection.status, 'CORRECTED', { module: mod });
+      ctx.assert.equals('Middle $25 is removed while $100 and $50 remain',
+        state.chainAfterMiddle, -150, { module: mod });
+      ctx.assert.equals('Earlier entry remains correctable after a later new write',
+        state.chainFirstPreview.status, 'READY', { module: mod });
+      ctx.assert.equals('Earlier chain correction succeeds',
+        state.chainFirstCorrection.status, 'CORRECTED', { module: mod });
+      ctx.assert.equals('Only active $50 and $10 entries remain',
+        state.chainAfterFirst, -60, { module: mod });
+      ctx.assert.equals('Newest entry remains independently correctable',
+        state.chainLatestPreview.status, 'READY', { module: mod });
+      ctx.assert.equals('Post-correction newest entry reverses successfully',
+        state.chainLatestCorrection.status, 'CORRECTED', { module: mod });
+      ctx.assert.equals('Only active $50 remains after newest reversal',
+        state.chainAfterLatest, -50, { module: mod });
+      ctx.assert.equals('Remaining entry stays independently correctable',
+        state.chainRemainingPreview.status, 'READY', { module: mod });
+      ctx.assert.equals('Credit-card middle entry preview is ready',
+        state.cardChainMiddlePreview.status, 'READY', { module: mod });
+      ctx.assert.equals('Credit-card middle entry amount changes successfully',
+        state.cardChainMiddleCorrection.status, 'CORRECTED', { module: mod });
+      ctx.assert.equals('Credit-card Cash Flow preserves $100 and $50 plus corrected $30',
+        state.cardChainCashValue, -180, { module: mod });
+
+      var debtRowsAfterChain = state.debtSheet.getDataRange().getDisplayValues();
+      var debtBalanceAfterChain = null;
+      for (var debtIndex = 1; debtIndex < debtRowsAfterChain.length; debtIndex++) {
+        if (String(debtRowsAfterChain[debtIndex][debtMap.nameColZero] || '').trim() === 'Harness Visa') {
+          debtBalanceAfterChain = Number(
+            state.debtSheet.getRange(debtIndex + 1, debtMap.balanceCol).getValue()
+          );
+        }
+      }
+      ctx.assert.equals('Credit-card balance preserves matching $100, $30, and $50 effects',
+        debtBalanceAfterChain, 320, { module: mod });
+      ctx.assert.equals('Identical amount is rejected as a no-op',
+        state.editNoChange.status, 'NO_CHANGE', { module: mod });
+      ctx.assert.equals('Middle amount edit creates a new actionable operation',
+        state.edit40Preview.status, 'READY', { module: mod });
+      ctx.assert.equals('Replacement can be corrected again',
+        state.edit45Preview.status, 'READY', { module: mod });
+      ctx.assert.equals('Corrected replacement can be removed',
+        state.edit45Remove.status, 'CORRECTED', { module: mod });
+      ctx.assert.equals('Removing corrected middle entry preserves $100 and later $50',
+        state.editFinalValue, -150, { module: mod });
+
+      var activity = state.cashFlow.getParent().getSheetByName(ACTIVITY_LOG_SHEET_NAME);
+      var rows = activity.getDataRange().getDisplayValues();
+      var correctionCount = 0;
+      for (var i = 1; i < rows.length; i++) {
+        if (rows[i][1] === 'quick_pay_correction') correctionCount++;
+      }
+      ctx.assert.equals('Immutable correction events appended', correctionCount, 9, {
+        module: mod,
+        location: ACTIVITY_LOG_SHEET_NAME
+      });
+    }
+  };
+}

@@ -149,6 +149,17 @@ assert.match(populatedE2E, /var sharing = frE2EInspectRestrictedSharing_\(state\
   'Populated Dashboard completion must re-verify Restricted sharing before reporting PASS');
 assert.match(populatedBrowser, /\.pdE2EComplete\(cfg\.runId/,
   'The populated browser runner must save evidence through its guarded completion seam');
+assert.match(populatedE2E,
+  /function pdE2EClaimBrowserRun\(runId\)[\s\S]*?LockService\.getScriptLock\(\)[\s\S]*?state\.browserStartedAt[\s\S]*?'ALREADY_STARTED'[\s\S]*?'CLAIMED'/,
+  'Populated Dashboard E2E must atomically claim its browser writer and reject replay');
+assert.match(populatedBrowser,
+  /function claimAndRun\(\)[\s\S]*?\.pdE2EClaimBrowserRun\(cfg\.runId\)[\s\S]*?setTimeout\(claimAndRun,\s*0\)/,
+  'The populated browser must claim the run before executing stateful steps');
+assert.doesNotMatch(populatedBrowser, /setTimeout\(run,\s*0\)/,
+  'The populated browser must never start stateful steps without a server claim');
+assert.match(populatedUi,
+  /!state\.active\.browserStartedAt[\s\S]*?This run already started[\s\S]*?will not replay its writer steps/,
+  'The Populated Dashboard control must not offer replay after a run starts');
 assert.match(populatedBrowser, /showPage\('assets'\)[\s\S]*?showTab\('bank'\)[\s\S]*?showPage\('cashflow'\)[\s\S]*?showPage\('assets'\)/,
   'Subtab retention must establish Assets → Bank before leaving and returning');
 assert.match(populatedBrowser, /loadDebtSectionThenSelect_\(expected\.debtName\)/,
@@ -164,21 +175,49 @@ for (const assertionId of ['overview_kpis', 'bank_selection_actions', 'bank_load
   'tracked_editor_convergence', 'debt_selection_actions', 'debt_loading_resilience',
   'property_equity', 'populated_workspaces', 'retirement_ready_results', 'income_setup_consistency', 'subtab_retention', 'setup_help_language',
   'customer_language', 'refresh_button_state', 'health_prerequisite_truth',
-  'activity_operation_envelope', 'bill_skip_stop_safety', 'clean_console_navigation']) {
+  'activity_operation_envelope', 'quick_add_credit_card_correction',
+  'donation_correction_flow', 'bill_skip_stop_safety', 'clean_console_navigation']) {
   assert.ok(populatedE2E.includes(`'${assertionId}'`), `Populated Dashboard contract missing ${assertionId}`);
 }
 assert.match(populatedBrowser,
   /showTab\('retirement'\)[\s\S]*?loadRetirementSection\(\)[\s\S]*?ret_info_goal[\s\S]*?ret_info_funded[\s\S]*?ret_empty_state[\s\S]*?ret_scenario_cards[\s\S]*?ret_results_panel[\s\S]*?add\('retirement_ready_results'/,
   'Populated Retirement evidence must prove the ready Base scenario reveals meaningful result walls');
 assert.match(populatedE2E,
-  /function pdE2EExerciseOperationEnvelope\(runId\)[\s\S]*?assertFirstRunE2EFixture_\(state, email, false\)[\s\S]*?quickAddPayment\([\s\S]*?, ss\)[\s\S]*?previewActivityOperationInSpreadsheet_\(ss, operationId\)/,
-  'Operation-envelope runtime proof must use only the marker-verified disposable fixture and exact-state preview');
+  /function pdE2EExerciseOperationEnvelope\(runId\)[\s\S]*?assertFirstRunE2EFixture_\(state, email, false\)[\s\S]*?quickAddPayment\([\s\S]*?, ss\)[\s\S]*?previewDirectQuickAddCorrectionInSpreadsheet_\(ss, operationId\)[\s\S]*?correctDirectQuickAddOperationInSpreadsheet_\([\s\S]*?ss,[\s\S]*?operationId/,
+  'Operation-envelope runtime proof must use only the marker-verified disposable fixture for exact-state preview and correction');
 assert.doesNotMatch(populatedE2E,
   /function pdE2EExerciseOperationEnvelope\([^)]*(?:email|spreadsheet|workbook|file)Id/i,
   'Operation-envelope runtime proof must never accept a caller-selected identity or workbook');
 assert.match(populatedBrowser,
   /exerciseActivityOperationEnvelope_[\s\S]*?pdE2EExerciseOperationEnvelope\(cfg\.runId\)[\s\S]*?add\('activity_operation_envelope'/,
   'The unattended populated runner must require the guarded operation-envelope assertion');
+assert.match(populatedE2E,
+  /var chain100 = addChainAmount_\(100\)[\s\S]*?var chain25 = addChainAmount_\(25\)[\s\S]*?var chain50 = addChainAmount_\(50\)[\s\S]*?middleCorrection[\s\S]*?var chain10 = addChainAmount_\(10\)[\s\S]*?earlierCorrection[\s\S]*?latestCorrection[\s\S]*?remainingPreview/,
+  'The guarded correction journey must cover middle, earlier, post-correction newest, and remaining-entry states');
+assert.match(populatedE2E,
+  /chainEntryType\s*=\s*'Expense'[\s\S]*?chainPayee\s*=\s*'Test Cash Expense'[\s\S]*?flowSource:\s*'CASH'/,
+  'The rendered correction journey must use a non-credit-card Expense so its payment history chart is a valid live assertion');
+assert.match(populatedBrowser,
+  /pay_history_chart[\s\S]*?expectedCurrency\(Math\.abs\(operationVerification\.finalCashFlowValue\)\)/,
+  'The rendered correction journey must require the Expense history chart to reconcile with the corrected total');
+assert.match(populatedBrowser,
+  /laterReceiptSnapshot[\s\S]*?retireQuickAddWriteReceiptsForCorrection_\([\s\S]*?middleCorrectionEntry[\s\S]*?correctionUiStatePass/,
+  'The populated browser must reproduce and retire a later same-target receipt after middle-entry correction');
+assert.match(populatedBrowser,
+  /latestCorrectionStatus === 'CORRECTED'[\s\S]*?remainingPreviewStatus === 'READY'/,
+  'The populated browser must require successful post-correction reversal while the remaining entry stays correctable');
+assert.match(populatedE2E,
+  /function pdE2EPrepareCreditCardCorrection\(runId\)[\s\S]*?flowSource:\s*'CREDIT_CARD'[\s\S]*?addAmount_\(100,\s*true\)[\s\S]*?addAmount_\(25,\s*false\)[\s\S]*?addAmount_\(50,\s*false\)/,
+  'The guarded browser fixture must seed a real three-entry credit-card Quick Add sequence');
+assert.match(populatedBrowser,
+  /prepareCreditCardCorrection_[\s\S]*?activity_correction_impacts[\s\S]*?value = '30\.00'[\s\S]*?submitActivityCorrection_[\s\S]*?add\('quick_add_credit_card_correction'/,
+  'The populated browser must drive the real two-impact credit-card correction drawer and require the corrected Activity replacement');
+assert.match(populatedE2E,
+  /function pdE2EExerciseDonationCorrection\(runId\)[\s\S]*?var original = addDonation[\s\S]*?var identical = addDonation[\s\S]*?to125[\s\S]*?to150[\s\S]*?removed/,
+  'The guarded browser fixture must cover date identity, identical donations, repeated edits, and final removal');
+assert.match(populatedBrowser,
+  /exerciseDonationCorrection_[\s\S]*?remainingIdenticalCount[\s\S]*?removedHistoryCount[\s\S]*?add\('donation_correction_flow'/,
+  'The populated browser must require the final Donation logical and rendered Activity states');
 assert.match(populatedBrowser,
   /exerciseBankLoadingResilience[\s\S]*?Controlled bank details failure[\s\S]*?save\.disabled === true[\s\S]*?pending\[1\]\.onSuccess[\s\S]*?pending\[0\]\.onSuccess/,
   'Populated Bank evidence must prove disabled-on-failure, recovery, and late-response refusal');

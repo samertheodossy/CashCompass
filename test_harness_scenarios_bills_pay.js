@@ -19,7 +19,8 @@ function getHarnessBillsPayE2EScenario_() {
       ctx.assertWritable();
       var result = quickAddPayment({
         entryType: 'Expense', payee: p.bill.payee, entryDate: iso,
-        amount: p.bill.amount, createIfMissing: true, flowSource: 'CASH'
+        amount: p.bill.amount, createIfMissing: true, flowSource: 'CASH',
+        activityOrigin: 'bill_payment'
       }, ctx.ss);
       var marker = { payee: p.bill.payee, dueDate: iso, amount: p.bill.amount, monthHeader: result.preview.month };
       ctx.assertWritable();
@@ -56,8 +57,8 @@ function getHarnessBillsPayE2EScenario_() {
       }
       ctx.assert.equals('Quick Pay Activity row', quickPayCount, 1, { module: 'Bills Pay', location: ACTIVITY_LOG_SHEET_NAME });
       ctx.assert.equals('Handled marker deduplicated', paidCount, 1, { module: 'Bills Pay', location: ACTIVITY_LOG_SHEET_NAME });
-      ctx.assert.equals('Quick Pay envelope is correctable',
-        quickPayEnvelope && quickPayEnvelope.status, 'READY_FOR_PREVIEW',
+      ctx.assert.equals('Linked Bill Quick Pay envelope is audit-only',
+        quickPayEnvelope && quickPayEnvelope.status, 'AUDIT_ONLY',
         { module: 'Bills Pay', location: ACTIVITY_LOG_SHEET_NAME + ' / Details' });
       ctx.assert.equals('Quick Pay operation ID persisted',
         quickPayEnvelope && quickPayEnvelope.envelope.operationId,
@@ -70,8 +71,8 @@ function getHarnessBillsPayE2EScenario_() {
         ctx.ss,
         result.activitySnapshot.operationId
       );
-      ctx.assert.equals('Quick Pay operation preview is ready',
-        operationPreview.status, 'READY',
+      ctx.assert.equals('Linked Bill Quick Pay operation preview is audit-only',
+        operationPreview.status, 'AUDIT_ONLY',
         { module: 'Bills Pay', location: ACTIVITY_LOG_SHEET_NAME + ' / operation preview' });
     }
   };

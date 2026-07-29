@@ -273,7 +273,8 @@ function save() {
     payee: currentPayeeValue(),
     entryDate: document.getElementById('entryDate').value,
     amount: numericAmount,
-    createIfMissing: document.getElementById('createIfMissing').checked
+    createIfMissing: document.getElementById('createIfMissing').checked,
+    activityOrigin: 'direct_quick_add'
   };
 
   setStatus('Saving…', false);

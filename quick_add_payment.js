@@ -7,6 +7,23 @@
  * Add per-card values here later; consumers read via `normalizeFlowSource_`.
  */
 var FLOW_SOURCE_ALLOWED_VALUES_ = ['CASH', 'CREDIT_CARD'];
+var QUICK_ADD_ACTIVITY_ORIGIN_DIRECT_ = 'direct_quick_add';
+
+/**
+ * Correction eligibility is explicit and fail-closed. Older callers and
+ * linked workflows that do not identify themselves remain audit-only.
+ */
+function normalizeQuickAddActivityOrigin_(raw) {
+  var origin = String(raw || '').trim().toLowerCase();
+  var allowed = [
+    QUICK_ADD_ACTIVITY_ORIGIN_DIRECT_,
+    'bill_payment',
+    'upcoming_payment',
+    'house_expense',
+    'test_unclassified'
+  ];
+  return allowed.indexOf(origin) === -1 ? '' : origin;
+}
 
 /**
  * Normalize a raw Flow Source value (from UI, payload, or sheet cell) to the
@@ -120,7 +137,6 @@ function computeQuickAddPriorMonthPreview_(ss, entryType, payee, entryDate) {
   const prior = new Date(entryDate.getFullYear(), entryDate.getMonth() - 1, 15);
   const priorMonthLabel = Utilities.formatDate(prior, Session.getScriptTimeZone(), 'MMM-yy');
   const priorYear = prior.getFullYear();
-  const priorTabName = getCashFlowSheetName_(priorYear);
 
   var priorSheet;
   try {
@@ -130,11 +146,7 @@ function computeQuickAddPriorMonthPreview_(ss, entryType, payee, entryDate) {
       priorMonthLabel: priorMonthLabel,
       priorMonthValue: null,
       priorMonthUnavailableMessage:
-        'Missing tab "' +
-        priorTabName +
-        '" — last month (' +
-        priorMonthLabel +
-        ') is stored there, not on the current year’s cash flow sheet.'
+        'Previous-month data is not available because Cash Flow has not been set up for that year.'
     };
   }
 
@@ -144,9 +156,7 @@ function computeQuickAddPriorMonthPreview_(ss, entryType, payee, entryDate) {
       priorMonthLabel: priorMonthLabel,
       priorMonthValue: null,
       priorMonthUnavailableMessage:
-        'No row for this payee on "' +
-        priorTabName +
-        '" — last month’s amount is read from that tab (e.g. new payee this year or renamed payee).'
+        'No previous-month amount is available for this payee. This is expected for a new or renamed payee.'
     };
   }
 
@@ -163,7 +173,7 @@ function computeQuickAddPriorMonthPreview_(ss, entryType, payee, entryDate) {
       priorMonthLabel: priorMonthLabel,
       priorMonthValue: null,
       priorMonthUnavailableMessage:
-        'Could not find column ' + priorMonthLabel + ' on "' + priorSheet.getName() + '".'
+        'The previous-month amount could not be read. Refresh the financial plan and try again.'
     };
   }
 }
@@ -290,6 +300,8 @@ function quickAddPayment(payload, optionalSs) {
   const entryDate = parseIsoDateLocal_(payload.entryDate);
   const amount = Math.abs(toNumber_(payload.amount));
   const createIfMissing = !!payload.createIfMissing;
+  const activityOrigin = normalizeQuickAddActivityOrigin_(payload.activityOrigin);
+  const isDirectQuickAdd = activityOrigin === QUICK_ADD_ACTIVITY_ORIGIN_DIRECT_;
   // Validate up-front so a bad value can't land in the sheet. Blank is allowed
   // (legacy-compatible) and simply skips the Flow Source write below.
   let flowSource = normalizeFlowSource_(payload.flowSource);
@@ -420,10 +432,21 @@ function quickAddPayment(payload, optionalSs) {
     cashFlowMonth: monthLabel,
     workbookIdentity: quickAddWorkbookIdentity_(ss),
     flowSource: flowSource || '',
-    flowSourceWritten: flowSourceWritten
+    flowSourceWritten: flowSourceWritten,
+    activityOrigin: activityOrigin
   };
 
   if (!payload.suppressActivityLog) {
+    var cashFlowAfterState = {
+      exists: true,
+      value: newValue,
+      flowSource: newFlowSource
+    };
+    if (rowWasCreated) {
+      cashFlowAfterState.rowSnapshot =
+        captureCashFlowOperationRowSnapshot_(sheet, rowInfo.row);
+    }
+
     var activityTargets = [{
       targetVersion: ACTIVITY_TARGET_DESCRIPTOR_VERSION_,
       targetType: 'cash_flow_month',
@@ -447,11 +470,7 @@ function quickAddPayment(payload, optionalSs) {
         value: previousValue,
         flowSource: previousFlowSource
       },
-      after: {
-        exists: true,
-        value: newValue,
-        flowSource: newFlowSource
-      }
+      after: cashFlowAfterState
     }];
 
     if (debtBalanceNote) {
@@ -486,7 +505,7 @@ function quickAddPayment(payload, optionalSs) {
       dedupeKey: '',
       operationEnvelope: {
         context: operationContext,
-        correctable: true,
+        correctable: isDirectQuickAdd,
         targets: activityTargets
       },
       details: JSON.stringify({
@@ -494,13 +513,11 @@ function quickAddPayment(payload, optionalSs) {
         newValue: newValue,
         signedAmount: signedAmount,
         createIfMissing: createIfMissing,
-        debtBalanceNote: debtBalanceNote
+        debtBalanceNote: debtBalanceNote,
+        activityOrigin: activityOrigin
       })
     });
   }
-
-  const priorPreview = computeQuickAddPriorMonthPreview_(ss, entryType, payee, entryDate);
-  const history = computeQuickAddHistoryPreview_(ss, entryType, payee, entryDate, true);
 
   // Keep the user-facing status line to a single short sentence. The detailed
   // fields the old multi-line dump surfaced (sheet name, month, before/after
@@ -527,15 +544,43 @@ function quickAddPayment(payload, optionalSs) {
       currentValue: newValue,
       rowExists: true,
       flowSourceColumnPresent: headerMap.flowSourceColZero !== -1,
-      flowSourceWritten: flowSourceWritten,
-      priorMonthLabel: priorPreview.priorMonthLabel,
-      priorMonthValue: priorPreview.priorMonthValue,
-      priorMonthUnavailableMessage: priorPreview.priorMonthUnavailableMessage,
-      history: history
+      flowSourceWritten: flowSourceWritten
     },
     message: message,
     loanOrHelocNotice: loanOrHelocNotice,
     activitySnapshot: activitySnapshot
+  };
+}
+
+function activitySnapshotCellValue_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return {
+      valueType: 'date',
+      value: Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss")
+    };
+  }
+  return value;
+}
+
+function restoreActivitySnapshotCellValue_(value) {
+  if (value && typeof value === 'object' && value.valueType === 'date') {
+    return new Date(String(value.value || ''));
+  }
+  return value;
+}
+
+/**
+ * Exact post-write fingerprint used only when Quick Add created the complete
+ * Cash Flow row. A later correction may delete that row only while every cell
+ * value and formula still matches this snapshot.
+ */
+function captureCashFlowOperationRowSnapshot_(sheet, row) {
+  var width = sheet.getLastColumn();
+  var range = sheet.getRange(row, 1, 1, width);
+  return {
+    width: width,
+    values: range.getValues()[0].map(activitySnapshotCellValue_),
+    formulas: range.getFormulas()[0]
   };
 }
 
@@ -676,6 +721,11 @@ function inspectActivityOperationTargetInSpreadsheet_(ss, target) {
   target = normalizeActivityTargetDescriptor_(target);
   var locator = target.locator || {};
 
+  if (target.targetType === 'donation_row' &&
+      typeof inspectDonationActivityTargetInSpreadsheet_ === 'function') {
+    return inspectDonationActivityTargetInSpreadsheet_(ss, target);
+  }
+
   if (target.targetType === 'cash_flow_month') {
     var entryDate = parseIsoDateLocal_(locator.entryDate);
     if (isNaN(entryDate.getTime())) {
@@ -724,14 +774,19 @@ function inspectActivityOperationTargetInSpreadsheet_(ss, target) {
     var currentFlowSource = headerMap.flowSourceColZero === -1
       ? ''
       : String(sheet.getRange(row, headerMap.flowSourceCol).getDisplayValue() || '').trim();
+    var cashFlowCurrentState = {
+      exists: true,
+      value: round2_(toNumber_(sheet.getRange(row, monthCol).getValue())),
+      flowSource: currentFlowSource
+    };
+    if (target.after && target.after.rowSnapshot) {
+      cashFlowCurrentState.rowSnapshot =
+        captureCashFlowOperationRowSnapshot_(sheet, row);
+    }
     return {
       supported: true,
       status: 'READ',
-      current: {
-        exists: true,
-        value: round2_(toNumber_(sheet.getRange(row, monthCol).getValue())),
-        flowSource: currentFlowSource
-      }
+      current: cashFlowCurrentState
     };
   }
 
@@ -771,6 +826,146 @@ function inspectActivityOperationTargetInSpreadsheet_(ss, target) {
   }
 
   return { supported: false, status: 'UNSUPPORTED_TARGET' };
+}
+
+function refreshCashFlowSummaryAfterCorrection_(sheet) {
+  try {
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0] || [];
+    if (typeof detectCashFlowLayout_ !== 'function' ||
+        typeof findCashFlowSummaryRow_ !== 'function' ||
+        typeof writeCashFlowSummaryFormulas_ !== 'function') {
+      return;
+    }
+    var layout = detectCashFlowLayout_(headers);
+    var summaryRow = findCashFlowSummaryRow_(sheet, sheet.getLastRow(), layout);
+    if (summaryRow > 0) writeCashFlowSummaryFormulas_(sheet, summaryRow, layout);
+  } catch (e) {
+    throw new Error('Cash Flow totals could not be refreshed after correction.');
+  }
+}
+
+/**
+ * Apply one already-preflighted Quick Add target state. This helper accepts
+ * only the two target types emitted by quickAddPayment().
+ */
+function writeActivityOperationTargetStateInSpreadsheet_(ss, target, desiredState) {
+  target = normalizeActivityTargetDescriptor_(target);
+  desiredState = activityJsonObject_(desiredState);
+  var locator = target.locator || {};
+
+  if (target.targetType === 'cash_flow_month') {
+    var entryDate = parseIsoDateLocal_(locator.entryDate);
+    var sheetName = getCashFlowSheetName_(entryDate.getFullYear());
+    if (sheetName !== String(locator.sheetName || '').trim()) {
+      throw new Error('Cash Flow correction target is invalid.');
+    }
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) throw new Error('Cash Flow sheet is no longer available.');
+    var rowInfo = findCashFlowRowByTypeAndPayee_(
+      sheet,
+      String(locator.entryType || '').trim(),
+      String(locator.payee || '').trim()
+    );
+
+    if (desiredState.exists === false) {
+      if (!rowInfo || !target.after.rowSnapshot) {
+        throw new Error('The created Cash Flow row can no longer be safely removed.');
+      }
+      sheet.deleteRow(rowInfo.row);
+      refreshCashFlowSummaryAfterCorrection_(sheet);
+      return;
+    }
+
+    if (!rowInfo && desiredState.exists === true && target.after.rowSnapshot &&
+        locator.rowCreated === true) {
+      rowInfo = insertCashFlowRow_(
+        sheet,
+        String(locator.entryType || '').trim(),
+        String(locator.payee || '').trim(),
+        String(desiredState.flowSource || '').trim()
+      );
+      var snapshot = target.after.rowSnapshot;
+      if (Number(snapshot.width) !== sheet.getLastColumn() ||
+          !Array.isArray(snapshot.values) ||
+          !Array.isArray(snapshot.formulas) ||
+          snapshot.values.length !== Number(snapshot.width) ||
+          snapshot.formulas.length !== Number(snapshot.width)) {
+        throw new Error('The created Cash Flow row snapshot is invalid.');
+      }
+      var restored = snapshot.values.map(function(value, index) {
+        var formula = String(snapshot.formulas[index] || '');
+        return formula || restoreActivitySnapshotCellValue_(value);
+      });
+      sheet.getRange(rowInfo.row, 1, 1, restored.length).setValues([restored]);
+      var restoredHeaderMap = getCashFlowHeaderMap_(sheet);
+      var restoredMonthCol = getMonthColumnByDate_(sheet, entryDate, 1);
+      setCurrencyCellPreserveRowFormat_(
+        sheet,
+        rowInfo.row,
+        restoredMonthCol,
+        round2_(toNumber_(desiredState.value)),
+        3
+      );
+      if (restoredHeaderMap.flowSourceColZero !== -1) {
+        sheet.getRange(rowInfo.row, restoredHeaderMap.flowSourceCol)
+          .setValue(String(desiredState.flowSource || '').trim());
+      }
+      refreshCashFlowSummaryAfterCorrection_(sheet);
+      return;
+    }
+    if (!rowInfo) throw new Error('The Cash Flow row is no longer available.');
+    var headerMap = getCashFlowHeaderMap_(sheet);
+    var monthCol = getMonthColumnByDate_(sheet, entryDate, 1);
+    setCurrencyCellPreserveRowFormat_(
+      sheet,
+      rowInfo.row,
+      monthCol,
+      round2_(toNumber_(desiredState.value)),
+      3
+    );
+    if (headerMap.flowSourceColZero !== -1) {
+      sheet.getRange(rowInfo.row, headerMap.flowSourceCol)
+        .setValue(String(desiredState.flowSource || '').trim());
+    }
+    refreshCashFlowSummaryAfterCorrection_(sheet);
+    return;
+  }
+
+  if (target.targetType === 'debt_balance') {
+    var debtSheet = ss.getSheetByName(getSheetNames_().DEBTS);
+    if (!debtSheet) throw new Error('Debt account is no longer available.');
+    var debtMap = getDebtsHeaderMap_(debtSheet);
+    var display = debtSheet.getDataRange().getDisplayValues();
+    var values = debtSheet.getDataRange().getValues();
+    var expectedName = normalizeBillName_(locator.accountName);
+    var matches = [];
+    for (var r = 1; r < display.length; r++) {
+      var name = String(display[r][debtMap.nameColZero] || '').trim();
+      if (!name || isDebtSummaryRowName_(name) ||
+          normalizeBillName_(name) !== expectedName ||
+          isDebtRowInactive_(display[r], values[r], debtMap)) continue;
+      matches.push(r + 1);
+    }
+    if (matches.length !== 1) {
+      throw new Error('Debt account is missing or ambiguous.');
+    }
+    setCurrencyCellPreserveRowFormat_(
+      debtSheet,
+      matches[0],
+      debtMap.balanceCol,
+      round2_(toNumber_(desiredState.value)),
+      1
+    );
+    recalcDebtPctAvailForRow_(debtSheet, matches[0], {
+      creditLimitCol: debtMap.creditLimitColZero,
+      creditLeftCol: debtMap.creditLeftColZero,
+      balanceCol: debtMap.balanceColZero,
+      pctAvailCol: debtMap.pctAvailColZero
+    });
+    return;
+  }
+
+  throw new Error('Unsupported Quick Add correction target.');
 }
 
 /** Shape an inspection result for the browser without returning Sheet objects. */

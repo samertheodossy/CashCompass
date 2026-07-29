@@ -2,13 +2,18 @@
 
 **Status:** Active execution inventory
 
-**Reconciled:** 2026-07-28
+**Reconciled:** 2026-07-29
 
-**Current evidence:** isolated Central `@214`; Populated Dashboard V8
-`FR-dbe0482c-0c10-47c7-8189-109be59be6a4` passed **19/19**. It includes the
-`REG-029` operation-envelope/preview assertion, strengthened server-verified
-Bill stale-request safety, every prior populated journey, zero browser errors,
-Restricted single-owner sharing, and verified exact-fixture Trash cleanup.
+**Current evidence:** isolated Central `@240`; clean Populated Dashboard run
+`FR-d75843e0-486e-4faa-8967-05ee40b73e25` passed **21/21** in 383.006 s. It
+includes the complete `REG-030`–`REG-039` direct Quick Add matrix plus
+change-amount/remove correction for cash, credit-card, created-row, and Donation
+operations; immutable correction history; replay/retry refusal; same-page value
+refresh; customer-safe language; newest/middle/earlier/post-correction replay;
+and same-target receipt retirement while preserving later values. Every prior
+populated journey passed with zero browser errors, Restricted single-owner
+sharing, and verified exact-fixture Trash cleanup. The user completed the
+corresponding Central visual review; only the Git checkpoint remains.
 
 **Last formal independent advocate score:** **8.3/10** on isolated Central
 `@180`. This remains the official score until the next full scored advocate run;
@@ -189,8 +194,8 @@ either map the exact failure to an existing assertion or add the next
 | 5d | Read-only orphan detection | The remaining P1 Recovery follow-up is implemented and proved, or explicitly removed from the broad-Beta gate | 1–2 d |
 | 5e | Recovery follow-up disposition | Create New Workbook and Admin Set Mapping are either closed or documented as supervised-admin scope | 0.5–2 d |
 | 5f | Unified-source bounded-safety evidence | The exact reviewed source preserves no-argument bounded behavior; any bounded deployment remains user-controlled | 0.5–1 d |
-| 5h | End-to-end operation envelope and immutable correction contract | **Runtime-complete pending commit approval.** Persist the existing Quick Add operation identity as a shared server-generated `operationId`; give each Activity row an `eventId`; record versioned operation type, authorized workbook/actor identity, logical target descriptors, and normalized before/after state; preview rejects legacy/forged/changed/cross-workbook state. No Activity column/schema migration. Isolated `@214` Populated V8 passed 19/19. | Measured within the one-day cap |
-| 5i | Direct Cash Flow correction | `quick_pay` income/expense reuses the existing receipt normalization, workbook identity, inspection, and locking seams to restore recorded prior Cash Flow state only when the exact post-state still matches; any row-creation or debt side effect is verified or the correction fails closed | 1–1.5 d |
+| 5h | End-to-end operation envelope and immutable correction contract | **Complete in commit `d040a34`.** Persist the existing Quick Add operation identity as a shared server-generated `operationId`; give each Activity row an `eventId`; record versioned operation type, authorized workbook/actor identity, logical target descriptors, and normalized before/after state; preview rejects legacy/forged/changed/cross-workbook state. No Activity column/schema migration. Isolated `@214` Populated V8 passed 19/19. | Measured within the one-day cap |
+| 5i | Direct Cash Flow correction | **Implementation, product review, and guarded isolated runtime validation are complete; Git approval remains.** Activity supports **Change amount** and **Remove entry** for explicitly identified direct Quick Add operations. A locked server coordinator reconstructs the verified operation sequence, preserves later active entries, restores optional credit-card effects, writes immutable correction evidence, blocks retries, and refuses linked/legacy/externally changed operations. The same correction language and immutable-history model now covers eligible Donation operations. Clean isolated `@240` run `FR-d75843e0-486e-4faa-8967-05ee40b73e25` passed 21/21, including cash/card/donation change and removal, newest/middle/earlier/post-correction replay, same-page refresh, zero browser errors, and verified Trash cleanup. | Measured within the original 1–1.5 d estimate |
 | 5j | Bill occurrence correction | One operation ID links Manual Pay money and occurrence evidence; Skip and AutoPay record exact prior/new state; Bills Due recognizes an immutable reversal without duplicate amounts or stranded/silently active markers | 2–3 d |
 | 5k | Upcoming correction | The payment operation ID links `quick_pay` to stable `upcomingId`; payment and remaining-balance/status changes correct together; ordinary add/update/dismiss edits route to Upcoming | 1–2 d |
 | 5l | House Expense compound correction | The operation envelope captures the existing exact House row fingerprint plus the optional Quick Add receipt; both targets preflight and correct together or not at all | 1–2 d |
@@ -208,6 +213,91 @@ exact-fixture Trash cleanup. No correction writer or Activity UI action exists
 yet. Git commit/push remain the approval checkpoint. The measured foundation
 supports the existing **7–12-day** `5h`–`5m` program estimate; rebaseline again
 after `5i` measures the first immutable correction writer.
+
+**`5i` runtime checkpoint — 2026-07-28:** the full local regression suite
+passed. Isolated Central `@216` first proved the new writer 19/19; final
+user-facing wording was then changed from **Corrected** to **Reversed** and
+locked by UI regression. The exact final `@217` run
+`FR-558cd995-c4c2-4770-a82f-774b6318d1ab` passed 19/19 in 266.627 s, including
+exact prior-value restoration, immutable reversal evidence, retry refusal, zero
+browser errors, Restricted single-owner sharing, and verified Trash cleanup.
+Beta stayed `@106`; no bounded, mapped-user, configured-default, Golden, or
+administrator workbook was a writer target.
+
+The user's first manual `@217` replay then exposed `REG-031`: reversal completed
+financially, but the correction loader remained visible and the Quick Add
+late-write monitor treated the intentional restored value as an external
+overwrite. The contained UI fix explicitly hides the loader, changes the
+success heading to **Entry reversed**, and retires only that operation's browser
+receipt before refresh while suppressing any in-flight reintroduction.
+Permanent local and Populated Dashboard browser coverage now locks this state;
+Final unchanged `@218` replay `FR-34e460e8-9421-47f8-a59f-9f3319070483`
+passed 19/19 in 187.193 s. Its Activity assertion explicitly verified that the
+spinner stopped and the expected-reversal warning was retired; Refresh, zero
+browser errors, Restricted sharing, and verified cleanup also passed. The
+earlier 18/19 `@218` diagnostic run had already passed the correction assertion
+but hit one Refresh timing failure; the unchanged replay closed that as a
+timing flake rather than a product regression.
+
+Further manual `@218` use exposed three feedback defects without changing the
+underlying corrected money state: `REG-032` leaked a physical worksheet name in
+prior-month preview copy; `REG-033` let an obsolete first-write verification
+warn against a valid second cumulative Quick Add; and `REG-034` omitted the
+verified current values from correction success. The contained fixes execute
+all prior-month failure branches with customer-safe copy, reconcile late
+verification responses only against current receipts, and render the reversed
+amount plus before/current values for Cash Flow and optional card impacts. The
+full local suite passes and only isolated Central has advanced to `@219`.
+Guarded run `FR-51f648de-a039-4426-85a9-08d2dee1eac1` passed 19/19 with
+Restricted single-owner sharing and verified fixture Trash cleanup. Exact user
+replay remains required before `5i` closes.
+
+The next manual sequence replay exposed four deeper reliability gaps:
+`REG-035` allowed only the newest operation to be corrected because later valid
+Quick Adds changed the shared cell; `REG-036` allowed one eventually-consistent
+read to flash a false yellow warning; `REG-037` kept **Saving…** blocked on
+presentation-only history reads; and `REG-038` derived dates from auto-parsed
+Activity cells. The corrected coordinator verifies and replays the complete
+operation ledger while excluding only the selected entry, so newest, middle,
+earlier, and post-correction Quick Adds remain independently correctable.
+Warnings require the same mismatch twice, presentation history loads quietly
+after the authoritative write, and immutable target locators supply concise
+dates/months. Full local regressions pass. Isolated Central `@221` guarded run
+`FR-5490cb51-aea7-4538-b756-6fb866f60d1c` passed 19/19 in 218.515 s, including
+the expanded sequence assertion, zero browser errors, Restricted single-owner
+sharing, and verified exact-fixture Trash cleanup. Beta remained `@106` and no
+bounded workbook was used. Exact user replay and Git approval remain the `5i`
+checkpoint.
+
+The user's next exact replay found `REG-039`: the server correctly removed the
+middle `$25`, but the browser still held the later `$50` receipt whose expected
+cumulative value predated the reversal. Returning to Activity compared that
+stale expected total with the valid corrected total and showed a yellow warning.
+Correction completion now retires every receipt for the corrected Cash Flow
+target and suppresses their in-flight responses while leaving unrelated
+receipts intact. The browser evidence now uses the real later-entry snapshot
+from the guarded sequence and corrects newest, middle, earlier, and a
+post-correction entry. Isolated `@223` run
+`FR-f78afc2b-7807-4d72-83b1-b30ea398062f` passed 19/19 in 213.270 s with the
+same-target warning closed, zero browser errors, Restricted single-owner
+sharing, and verified Trash cleanup. Beta remained `@106`; bounded remained
+untouched.
+
+**Final `5i` closure checkpoint — 2026-07-29:** the correction surface now
+offers the two customer intents directly: **Change amount** or **Remove entry**.
+Expense amounts display as positive customer amounts while the internal signed
+Cash Flow representation remains unchanged. Cash, created-row, credit-card, and
+Donation corrections preserve immutable history and expose current values
+without workbook terminology. After the user approved the final compact layout,
+the unchanged isolated Central `@240` source passed clean run
+`FR-d75843e0-486e-4faa-8967-05ee40b73e25` **21/21** in 383.006 s. The operation
+envelope, full direct Quick Add sequence, linked credit-card impact, Donation
+change/remove flow, Bill safety, refresh state, language, and clean-console
+assertions all passed. Sharing was Restricted to one owner and the exact marked
+fixture was verified before Trash cleanup. One earlier clean attempt stopped on
+Apps Script HTTP 0; its exact fixture was also verified and trashed before this
+fresh passing run. No bounded, mapped-user, default, Golden, Beta, or
+administrator workbook was used by a writer.
 
 **Group 5 estimate: approximately 12–23 focused days.** This includes **7–12
 days** for the operation-identity/correction program and integrated runtime

@@ -7,6 +7,8 @@
 // Mirrors the BANK_ADD_POLICY_OTHER_SENTINEL_ / INV_ADD_TYPE_OTHER_SENTINEL_
 // pattern used elsewhere in this file family.
 var QUICK_ADD_PAYEE_OTHER_SENTINEL_ = '__OTHER__';
+var quickAddPreviewRequestSeq_ = 0;
+var quickAddUiDataRequestSeq_ = 0;
 
 function currentPaymentPayee() {
   const typed = document.getElementById('pay_payeeInput').value.trim();
@@ -203,6 +205,7 @@ function prefillQuickPayment(prefill) {
 }
 
 function loadPaymentSection() {
+  const uiDataRequestSeq = ++quickAddUiDataRequestSeq_;
   document.getElementById('pay_date').value = new Date().toISOString().slice(0, 10);
   // Any pending prefill-only Flow Source value only makes sense inside the
   // single save that immediately follows a prefill. Clear it on a cold
@@ -226,18 +229,22 @@ function loadPaymentSection() {
         .getQuickAddPaymentUiData();
     },
     onSuccess: function(data) {
+      if (uiDataRequestSeq !== quickAddUiDataRequestSeq_) return;
       paymentPayees = data.payees || [];
       filterPaymentPayees();
       consumePendingQuickAddPayeePrefill_();
       loadPaymentPreview();
     },
     onRetry: function(info) {
+      if (uiDataRequestSeq !== quickAddUiDataRequestSeq_) return;
       setStatusLoading('pay_status', info.message);
     },
     onRecovered: function() {
+      if (uiDataRequestSeq !== quickAddUiDataRequestSeq_) return;
       setStatus('pay_status', '', false);
     },
     onFailure: function(err) {
+      if (uiDataRequestSeq !== quickAddUiDataRequestSeq_) return;
       setStatus('pay_status', (err.message || String(err)), true);
     }
   });
@@ -306,7 +313,9 @@ function filterPaymentPayees() {
   sel.appendChild(otherOpt);
 }
 
-function loadPaymentPreview() {
+function loadPaymentPreview(options) {
+  options = options || {};
+  const requestSeq = ++quickAddPreviewRequestSeq_;
   const payload = {
     entryType: document.getElementById('pay_type').value,
     payee: currentPaymentPayee(),
@@ -325,6 +334,7 @@ function loadPaymentPreview() {
 
   google.script.run
     .withSuccessHandler(function(data) {
+      if (requestSeq !== quickAddPreviewRequestSeq_) return;
       document.getElementById('pay_sheetName').textContent = data.sheetName || '—';
       document.getElementById('pay_monthName').textContent = data.month || '—';
       document.getElementById('pay_currentValue').textContent = fmtCurrency(data.currentValue);
@@ -333,10 +343,85 @@ function loadPaymentPreview() {
       renderQuickAddHistory_(data);
     })
     .withFailureHandler(function(err) {
+      if (requestSeq !== quickAddPreviewRequestSeq_) return;
       renderQuickAddHistory_(null);
-      setStatus('pay_status', (err.message || String(err)), true);
+      if (!options.quiet) {
+        setStatus('pay_status', (err.message || String(err)), true);
+      }
     })
     .getQuickAddPreview(payload);
+}
+
+/**
+ * Reconcile the open Quick Add form after an Activity correction without
+ * resetting the user's current type, payee, date, or amount. The payee list is
+ * refreshed because correcting the only entry for an app-created row can
+ * remove that row. The preview request is sequenced, so an older response
+ * cannot restore the pre-correction total after this refresh completes.
+ */
+function refreshQuickAddAfterActivityCorrection_() {
+  const typeEl = document.getElementById('pay_type');
+  const selectEl = document.getElementById('pay_payeeSelect');
+  const inputEl = document.getElementById('pay_payeeInput');
+  const dateEl = document.getElementById('pay_date');
+  if (!typeEl || !selectEl || !inputEl || !dateEl) return;
+
+  // Immediately invalidate a preview request that began before correction.
+  quickAddPreviewRequestSeq_ += 1;
+  // Supersede an older cold-load request as well. Otherwise that response can
+  // repopulate the dropdown after this reconciliation and visibly clear the
+  // selected payee even though the corrected preview is already authoritative.
+  const uiDataRequestSeq = ++quickAddUiDataRequestSeq_;
+
+  function currentFormState_() {
+    return {
+      type: String(typeEl.value || ''),
+      selectedPayee: String(selectEl.value || ''),
+      typedPayee: String(inputEl.value || ''),
+      date: String(dateEl.value || '')
+    };
+  }
+
+  function refreshPreview_(preserved) {
+    typeEl.value = preserved.type;
+    dateEl.value = preserved.date;
+    loadPaymentPreview({ quiet: true });
+  }
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      if (uiDataRequestSeq !== quickAddUiDataRequestSeq_) return;
+      // Capture again when the response arrives so a user edit made while the
+      // read was in flight is preserved instead of being rolled back.
+      var preserved = currentFormState_();
+      paymentPayees = data && Array.isArray(data.payees) ? data.payees : [];
+      typeEl.value = preserved.type;
+      filterPaymentPayees();
+
+      var selectedStillExists = false;
+      for (var i = 0; i < selectEl.options.length; i++) {
+        if (String(selectEl.options[i].value || '') === preserved.selectedPayee) {
+          selectedStillExists = true;
+          break;
+        }
+      }
+      if (selectedStillExists) {
+        selectEl.value = preserved.selectedPayee;
+      } else if (preserved.typedPayee) {
+        selectEl.value = QUICK_ADD_PAYEE_OTHER_SENTINEL_;
+      } else {
+        selectEl.value = '';
+      }
+      inputEl.value = preserved.typedPayee;
+      refreshPreview_(preserved);
+    })
+    .withFailureHandler(function() {
+      if (uiDataRequestSeq !== quickAddUiDataRequestSeq_) return;
+      // The correction already succeeded. A payee-list refresh failure must
+      // not replace that success; still refresh the selected payee's values.
+      refreshPreview_(currentFormState_());
+    })
+    .getQuickAddPaymentUiData();
 }
 
 function applyQuickAddPreviewFromResult_(data) {
@@ -345,8 +430,12 @@ function applyQuickAddPreviewFromResult_(data) {
   document.getElementById('pay_monthName').textContent = data.month || '—';
   document.getElementById('pay_currentValue').textContent = fmtCurrency(data.currentValue);
   document.getElementById('pay_rowExists').textContent = data.rowExists ? 'Yes' : 'No';
-  applyQuickPaymentPriorMonth_(data);
-  renderQuickAddHistory_(data);
+  if (Object.prototype.hasOwnProperty.call(data, 'priorMonthLabel') ||
+      Object.prototype.hasOwnProperty.call(data, 'priorMonthValue') ||
+      Object.prototype.hasOwnProperty.call(data, 'priorMonthUnavailableMessage')) {
+    applyQuickPaymentPriorMonth_(data);
+  }
+  if (Array.isArray(data.history)) renderQuickAddHistory_(data);
 }
 
 function runDebtPlannerAfterQuickPayment_() {
@@ -396,6 +485,7 @@ var quickAddWriteVerifyInFlight_ = false;
 var quickAddWriteHooksInstalled_ = false;
 var quickAddActiveWriteGuardId_ = '';
 var quickAddWriteReturnCheckTimers_ = [];
+var quickAddRetiredWriteReceiptIds_ = {};
 
 function loadQuickAddWriteReceipts_() {
   var parsed = [];
@@ -409,6 +499,7 @@ function loadQuickAddWriteReceipts_() {
   var cutoff = Date.now() - QUICK_ADD_WRITE_RECEIPT_TTL_MS_;
   parsed = parsed.filter(function(receipt) {
     return receipt && receipt.operationId && receipt.workbookIdentity &&
+      !quickAddRetiredWriteReceiptIds_[String(receipt.operationId)] &&
       Number(receipt.savedAtMs || 0) >= cutoff;
   }).slice(-10);
   saveQuickAddWriteReceipts_(parsed);
@@ -421,6 +512,19 @@ function saveQuickAddWriteReceipts_(receipts) {
   } catch (_e) { /* browser storage unavailable: save still succeeds */ }
 }
 
+function retireQuickAddWriteReceipt_(operationId) {
+  var id = String(operationId || '').trim();
+  if (!id) return;
+  quickAddRetiredWriteReceiptIds_[id] = true;
+  var remaining = loadQuickAddWriteReceipts_().filter(function(receipt) {
+    return String(receipt.operationId || '') !== id;
+  });
+  saveQuickAddWriteReceipts_(remaining);
+  if (quickAddActiveWriteGuardId_ === id || !remaining.length) {
+    hideQuickAddWriteGuard_();
+  }
+}
+
 function quickAddWriteReceiptTargetKey_(receipt) {
   return [
     String(receipt.cashFlowSheet || '').trim().toLowerCase(),
@@ -428,6 +532,44 @@ function quickAddWriteReceiptTargetKey_(receipt) {
     String(receipt.entryType || '').trim().toLowerCase(),
     String(receipt.payee || '').trim().toLowerCase()
   ].join('|');
+}
+
+/**
+ * A correction establishes a new authoritative value for the whole Cash Flow
+ * target. Retire every browser receipt for that target—not only the selected
+ * operation—so a later Quick Add receipt cannot compare its pre-correction
+ * total with the valid corrected total and raise a false warning. A future
+ * Quick Add registers a fresh receipt from the corrected value.
+ */
+function retireQuickAddWriteReceiptsForCorrection_(result, operationId) {
+  var selectedId = String(operationId || '').trim();
+  var entry = result && result.entry ? result.entry : null;
+  var targetKey = entry ? quickAddWriteReceiptTargetKey_(entry) : '';
+  if (!targetKey || targetKey === '|||') {
+    retireQuickAddWriteReceipt_(selectedId);
+    return;
+  }
+
+  var removedIds = {};
+  if (selectedId) removedIds[selectedId] = true;
+  var remaining = loadQuickAddWriteReceipts_().filter(function(receipt) {
+    var sameTarget = quickAddWriteReceiptTargetKey_(receipt) === targetKey;
+    var sameOperation = String(receipt.operationId || '') === selectedId;
+    if (sameTarget || sameOperation) {
+      var id = String(receipt.operationId || '').trim();
+      if (id) removedIds[id] = true;
+      return false;
+    }
+    return true;
+  });
+
+  Object.keys(removedIds).forEach(function(id) {
+    quickAddRetiredWriteReceiptIds_[id] = true;
+  });
+  saveQuickAddWriteReceipts_(remaining);
+  if (removedIds[quickAddActiveWriteGuardId_] || !remaining.length) {
+    hideQuickAddWriteGuard_();
+  }
 }
 
 function registerQuickAddWriteReceipt_(snapshot) {
@@ -517,12 +659,84 @@ function chooseQuickAddWriteWarning_(results) {
     INVALID_RECEIPT: 4
   };
   var warnings = (results || []).filter(function(result) {
-    return result && result.status !== 'MATCH';
+    return result && result.status !== 'MATCH' &&
+      result.confirmedMismatch === true;
   });
   warnings.sort(function(a, b) {
     return (priority[a.status] || 99) - (priority[b.status] || 99);
   });
   return warnings.length ? warnings[0] : null;
+}
+
+/**
+ * A verification response may return after a newer Quick Add has superseded
+ * the receipt it checked. Reconcile only against receipts that are still
+ * current at response time so an obsolete response cannot restore its receipt
+ * or warn against the newer valid CashCompass total.
+ */
+function reconcileQuickAddWriteVerificationResults_(currentReceipts, results) {
+  currentReceipts = Array.isArray(currentReceipts) ? currentReceipts : [];
+  results = Array.isArray(results) ? results : [];
+
+  var currentById = {};
+  currentReceipts.forEach(function(receipt) {
+    var id = String(receipt && receipt.operationId || '');
+    if (id && !quickAddRetiredWriteReceiptIds_[id]) currentById[id] = receipt;
+  });
+
+  var currentResults = results.filter(function(result) {
+    var id = String(result && result.operationId || '');
+    return !!currentById[id];
+  });
+  var resultsById = {};
+  currentResults.forEach(function(result) {
+    resultsById[String(result.operationId)] = result;
+  });
+
+  currentReceipts.forEach(function(receipt) {
+    var result = resultsById[String(receipt.operationId || '')];
+    if (result) {
+      var mismatchKey = result.status === 'MATCH'
+        ? ''
+        : [
+            String(result.status || ''),
+            String(result.currentValue === null || result.currentValue === undefined
+              ? ''
+              : result.currentValue)
+          ].join('::');
+      if (!mismatchKey) {
+        receipt.mismatchCount = 0;
+        receipt.lastMismatchKey = '';
+      } else if (String(receipt.lastMismatchKey || '') === mismatchKey) {
+        receipt.mismatchCount = Number(receipt.mismatchCount || 0) + 1;
+      } else {
+        receipt.mismatchCount = 1;
+        receipt.lastMismatchKey = mismatchKey;
+      }
+      receipt.lastStatus = result.status;
+      receipt.lastCheckedAtMs = Date.now();
+      result.confirmedMismatch = result.status !== 'MATCH' &&
+        Number(receipt.mismatchCount || 0) >= 2;
+    }
+  });
+
+  var changedWorkbookIds = {};
+  currentResults.forEach(function(result) {
+    if (result.status === 'WORKBOOK_CHANGED') {
+      changedWorkbookIds[String(result.operationId)] = true;
+    }
+  });
+
+  return {
+    receipts: currentReceipts.filter(function(receipt) {
+      var id = String(receipt && receipt.operationId || '');
+      return id && !changedWorkbookIds[id] &&
+        !quickAddRetiredWriteReceiptIds_[id];
+    }),
+    results: currentResults.filter(function(result) {
+      return result.status !== 'WORKBOOK_CHANGED';
+    })
+  };
 }
 
 function verifyPendingQuickAddWrites_(options) {
@@ -549,37 +763,30 @@ function verifyPendingQuickAddWrites_(options) {
       quickAddWriteVerifyInFlight_ = false;
       results = Array.isArray(results) ? results : [];
 
-      var byId = {};
-      results.forEach(function(result) {
-        if (result && result.operationId) byId[result.operationId] = result;
-      });
-      receipts.forEach(function(receipt) {
-        if (byId[receipt.operationId]) {
-          receipt.lastStatus = byId[receipt.operationId].status;
-          receipt.lastCheckedAtMs = Date.now();
-        }
-      });
-      // A receipt from another workbook has no authority in the currently
-      // resolved workbook. Retire it silently; it is not a write conflict and
-      // must never become a customer-facing warning.
-      var changedWorkbookIds = {};
-      results.forEach(function(result) {
-        if (result && result.status === 'WORKBOOK_CHANGED' && result.operationId) {
-          changedWorkbookIds[result.operationId] = true;
-        }
-      });
-      receipts = receipts.filter(function(receipt) {
-        return !changedWorkbookIds[receipt.operationId];
-      });
+      // Read storage again now. A newer Quick Add may have replaced the
+      // originally requested receipt while this RPC was in flight.
+      var reconciled = reconcileQuickAddWriteVerificationResults_(
+        loadQuickAddWriteReceipts_(),
+        results
+      );
+      receipts = reconciled.receipts;
       saveQuickAddWriteReceipts_(receipts);
 
-      var currentWorkbookResults = results.filter(function(result) {
-        return !result || result.status !== 'WORKBOOK_CHANGED';
-      });
+      var currentWorkbookResults = reconciled.results;
       var warning = chooseQuickAddWriteWarning_(currentWorkbookResults);
       if (warning) renderQuickAddWriteGuard_(warning);
       else hideQuickAddWriteGuard_();
 
+      var provisionalMismatch = currentWorkbookResults.some(function(result) {
+        return result && result.status !== 'MATCH' &&
+          result.confirmedMismatch !== true;
+      });
+      if (options.manual && provisionalMismatch && !warning) {
+        setTimeout(function() {
+          verifyPendingQuickAddWrites_(options);
+        }, 600);
+        return;
+      }
       if (onComplete) onComplete(!warning, currentWorkbookResults);
     })
     .withFailureHandler(function(err) {
@@ -771,9 +978,13 @@ function savePaymentAfterQuickAddVerification_() {
       registerQuickAddWriteReceipt_(res && res.activitySnapshot);
       if (res && res.preview) {
         applyQuickAddPreviewFromResult_(res.preview);
-      } else {
-        loadPaymentPreview();
       }
+      // The money write and immutable Activity evidence are complete. Refresh
+      // the presentation-only prior-month/history evidence after success so a
+      // six-month read never keeps the user staring at "Saving…".
+      setTimeout(function() {
+        loadPaymentPreview({ quiet: true });
+      }, 0);
       document.getElementById('pay_amount').value = '';
       window.__pendingQuickAddFlowSource = '';
 
@@ -876,7 +1087,10 @@ function savePaymentAfterQuickAddVerification_() {
       entryDate: document.getElementById('pay_date').value,
       amount: numericAmount,
       createIfMissing: document.getElementById('pay_createIfMissing').checked,
-      flowSource: pendingFlowSource
+      flowSource: pendingFlowSource,
+      activityOrigin: pendingUpcomingId
+        ? 'upcoming_payment'
+        : (pendingBillOccurrence ? 'bill_payment' : 'direct_quick_add')
     });
 }
 

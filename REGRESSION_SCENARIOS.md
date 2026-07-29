@@ -639,6 +639,234 @@ Whenever a production bug is fixed:
   `@214` in 239.225 s, with Restricted single-owner sharing, no browser errors,
   and verified exact-fixture Trash cleanup.
 
+### REG-030 — Direct Quick Add entries could not be safely corrected from Activity
+- Category: REGRESSION / FINANCIAL SAFETY / IMMUTABLE CORRECTION
+- Date discovered: 2026-07-28
+- Status: fixed; local regressions and isolated `@218` runtime validation pass
+- Affected files: `activity_log.js`, `quick_add_payment.js`,
+  `Dashboard_Body.html`, `Dashboard_Script_Activity.html`,
+  `Dashboard_Styles.html`, Quick Add callers, Help, and Test Harness registry
+- Root cause: Activity retained audit evidence but had no guarded writer that
+  could reverse a direct Quick Add as one operation. A naive subtract/delete
+  would risk overwriting newer Cash Flow values, leaving a credit-card balance
+  inconsistent, deleting a row later edited by the user, or partially reversing
+  a linked Bill/Upcoming/House workflow.
+- Expected result: only explicitly identified new direct Quick Add operations
+  expose **Correct entry**. Server preview and the locked writer require every
+  Cash Flow/debt target to match its recorded post-state. Existing rows restore
+  exact prior values; app-created rows are removed only when their complete
+  value/formula fingerprint remains unchanged; credit-card balance and derived
+  availability are restored together. The original Activity event remains and
+  an immutable non-monetary correction event prevents a second reversal.
+  Linked, legacy, unclassified, and changed operations remain read-only.
+- Permanent coverage: `npm run test:dashboard-ux` locks the action/drawer,
+  direct-origin gate, exact-before-state writer, and linked-path tagging. The
+  registered `REGRESSION-DIRECT-QUICK-ADD-CORRECTION` scenario uses only its own
+  guarded disposable workbook to prove existing-row plus credit-card reversal,
+  created-row removal, immutable evidence, retry prevention, and changed-state
+  refusal. Final Populated Dashboard run
+  `FR-34e460e8-9421-47f8-a59f-9f3319070483` passed 19/19 on isolated Central
+  `@218` in 187.193 s, including exact-state correction, retry refusal, and
+  `REG-031` UI reconciliation, with zero browser errors, Restricted single-owner
+  sharing, and verified Trash cleanup.
+
+### REG-031 — Successful Quick Add reversal left a spinner and false write-conflict warning
+- Category: REGRESSION / UI RELIABILITY / FINANCIAL TRUST
+- Date discovered: 2026-07-28
+- Status: fixed; isolated `@218` Populated Dashboard runtime pass
+- Affected files: `Dashboard_Styles.html`,
+  `Dashboard_Script_Activity.html`, `Dashboard_Script_Payments.html`,
+  `Dashboard_Body.html`, and Populated Dashboard E2E
+- Root cause: `.dash-loading` forced a display value without an explicit
+  `[hidden]` override, so the correction preview spinner remained visible after
+  success. The browser-session Quick Add verification receipt also remained
+  active after an intentional exact-state reversal, causing the late-write
+  monitor to misclassify the restored prior value as an external overwrite.
+- Expected result: successful reversal hides the loading state, shows
+  **Entry reversed**, retires that operation's browser receipt before Activity
+  and dashboard refreshes, suppresses any already-rendered warning, and cannot
+  be reintroduced by an in-flight verification response. Unrelated receipts
+  continue to be monitored.
+- Permanent coverage: the Dashboard UX suite locks the hidden-loader CSS,
+  receipt retirement ordering, in-flight suppression, and warning dismissal.
+  Populated Dashboard E2E exercises the same final browser state inside its
+  guarded disposable-workbook journey. Run
+  `FR-34e460e8-9421-47f8-a59f-9f3319070483` passed 19/19 in 187.193 s on
+  isolated Central `@218`, including hidden completion loading, retired
+  expected-reversal warning, zero browser errors, Restricted single-owner
+  sharing, and verified Trash cleanup.
+
+### REG-032 — Quick Add preview exposed an internal Cash Flow worksheet name
+- Category: REGRESSION / CUSTOMER LANGUAGE / IMPLEMENTATION PRIVACY
+- Date discovered: 2026-07-28
+- Status: fixed; local suite and isolated `@221` guarded runtime pass
+- Affected files: `quick_add_payment.js`, `dashboard_data.js`, and Dashboard UX
+  regressions
+- Root cause: prior-month preview failures were assembled in the server helper
+  with physical worksheet/tab names and returned directly to the Quick Add
+  information panel. Two Bills payload labels carried the same implementation
+  terminology even though normal rendering did not currently surface both.
+- Expected result: unavailable prior-month history is explained in customer
+  terms for missing-year, missing-payee, and missing-month cases. No customer
+  payload or visible message names an internal workbook tab.
+- Permanent coverage: the Dashboard UX suite executes all three preview failure
+  branches and rejects `INPUT`/`SYS`/`OUT`/`LOG`, sheet, tab, and column
+  terminology in their returned customer messages.
+
+### REG-033 — A late Quick Add verification warned against a newer valid Quick Add
+- Category: REGRESSION / UI RELIABILITY / FINANCIAL TRUST
+- Date discovered: 2026-07-28
+- Status: fixed; local suite and isolated `@221` guarded runtime pass
+- Affected files: `Dashboard_Script_Payments.html` and Dashboard UX regressions
+- Root cause: an asynchronous verification of an earlier Quick Add could return
+  after a second Quick Add had superseded the receipt for the same Cash Flow
+  cell. The late callback saved its captured obsolete receipt back into browser
+  storage and misclassified the correct cumulative total as an external edit.
+- Expected result: verification responses reconcile only with receipts that
+  are still current when the response returns. A superseded operation cannot
+  reappear or create a warning; the newest receipt remains monitored normally.
+- Permanent coverage: the Dashboard UX suite recreates an obsolete `$100`
+  response arriving while a newer `$25` receipt is current, proves the newer
+  receipt survives, and proves the old warning result is discarded.
+
+### REG-034 — Correction success did not show the resulting financial values
+- Category: REGRESSION / UI TRUST / CORRECTION FEEDBACK
+- Date discovered: 2026-07-28
+- Status: fixed; local suite and isolated `@221` guarded runtime pass
+- Affected files: `Dashboard_Body.html`, `Dashboard_Script_Activity.html`,
+  `Dashboard_Styles.html`, and Dashboard UX regressions
+- Root cause: the correction result already returned its verified impacts, but
+  the success panel rendered only a generic sentence. Users had to inspect the
+  workbook to confirm the new Cash Flow or credit-card balance.
+- Expected result: the open success panel shows the Cash Flow month, reversed
+  entry amount, before-correction value, and current value for every verified
+  impact, including a linked credit-card balance when present.
+- Permanent coverage: the Dashboard UX suite renders a `$25` reversal from a
+  `-$125` Cash Flow total and asserts the visible current total is `-$100`.
+  The guarded direct-correction scenario continues verifying both Cash Flow
+  and credit-card values server-side.
+
+### REG-035 — Direct Quick Add correction rejected safe middle and earlier entries
+- Category: REGRESSION / FINANCIAL SAFETY / SEQUENCE CORRECTION
+- Date discovered: 2026-07-28
+- Status: fixed; local chain regressions and isolated `@221` guarded runtime pass
+- Affected files: `activity_log.js`, Quick Add correction harnesses, Populated
+  Dashboard E2E, and Dashboard UX regressions
+- Root cause: correction compared the selected operation's recorded post-state
+  directly with the current cell. Any later valid Quick Add therefore looked
+  like an external change, so only the newest entry could be reversed.
+- Expected result: the server reconstructs the ordered operation ledger,
+  verifies the complete current state, then replays every still-active
+  operation except the selected one. Newest, middle, and earlier entries can be
+  corrected while later verified entries remain intact. Corrections and Quick
+  Adds created after a correction remain independently verifiable.
+- Permanent coverage: pure Cash Flow and credit-card chain tests cover
+  `$100 + $25 + $50`, middle and earlier correction, and a new `$10` entry after
+  correction. The guarded Populated Dashboard journey performs the same
+  newest/middle/earlier sequence against its marker-verified disposable
+  workbook. Isolated run `FR-5490cb51-aea7-4538-b756-6fb866f60d1c` passed
+  19/19 on `@221` in 218.515 s with zero browser errors and verified Trash
+  cleanup.
+
+### REG-036 — Eventual consistency briefly displayed a false yellow Quick Add warning
+- Category: REGRESSION / UI RELIABILITY / FINANCIAL TRUST
+- Date discovered: 2026-07-28
+- Status: fixed; local receipt regressions and isolated `@221` guarded runtime pass
+- Affected files: `Dashboard_Script_Payments.html` and Dashboard UX regressions
+- Root cause: a single provisional verification mismatch could render the
+  external-change warning while Sheets was still converging to the just-written
+  value; a later read then removed it.
+- Expected result: one mismatch schedules a short recheck. The warning appears
+  only after the same mismatch is confirmed twice; a matching read resets the
+  evidence. Genuine newer external values continue to fail closed.
+- Permanent coverage: dynamic receipt tests prove provisional mismatch,
+  confirmed mismatch, MATCH reset, and confirmed-only warning rendering.
+
+### REG-037 — Quick Add completion waited on presentation-only history reads
+- Category: REGRESSION / PERFORMANCE / DAILY TASK
+- Date discovered: 2026-07-28
+- Status: fixed; local performance/source regressions and isolated `@221` runtime pass
+- Affected files: `quick_add_payment.js`,
+  `Dashboard_Script_Payments.html`, and performance regressions
+- Root cause: the money write waited synchronously for prior-month and chart
+  history reads even though those values are explanatory UI data, not write
+  preconditions.
+- Expected result: the guarded money write, operation envelope, and exact
+  target evidence remain synchronous. The user receives completion immediately
+  after that authoritative result; history and prior-month presentation refresh
+  quietly in the background.
+- Permanent coverage: source regression prohibits the Quick Add writer from
+  calling the two presentation-only preview helpers and preserves the existing
+  operation-envelope assertions.
+
+### REG-038 — Correction summary displayed raw parsed dates and the wrong calendar day
+- Category: REGRESSION / CUSTOMER LANGUAGE / CORRECTION FEEDBACK
+- Date discovered: 2026-07-28
+- Status: fixed; local renderer regressions and isolated `@221` guarded runtime pass
+- Affected files: `activity_log.js`, `Dashboard_Script_Activity.html`,
+  `Dashboard_Styles.html`, and Dashboard UX regressions
+- Root cause: summary labels were derived from auto-parsed Activity cell values,
+  which exposed a JavaScript timezone string and could shift the displayed day.
+- Expected result: entry date and Cash Flow month come from the immutable
+  operation target locator, render as concise customer dates/months, and the
+  completed correction uses the standard soft-blue confirmation treatment.
+- Permanent coverage: source and renderer regressions require immutable
+  locator date/month use, reject raw timezone output, and lock the soft-blue
+  result panel.
+
+### REG-039 — Middle-entry reversal left a later Quick Add receipt warning active
+- Category: REGRESSION / UI RELIABILITY / SEQUENCE CORRECTION
+- Date discovered: 2026-07-28
+- Status: fixed; local receipt matrix and isolated `@223` guarded runtime pass
+- Affected files: `Dashboard_Script_Payments.html`,
+  `Dashboard_Script_Activity.html`, Populated Dashboard E2E, Quick Add harness,
+  and Dashboard/P1 evidence regressions
+- Root cause: successful correction retired only the selected operation's
+  browser receipt. Because one browser receipt represents the newest expected
+  value for a Cash Flow target, reversing an earlier or middle operation left
+  that later receipt comparing its old total with the valid corrected total.
+  Returning to Activity then displayed a false yellow external-change warning.
+- Expected result: successful correction retires every browser-session receipt
+  for the corrected Cash Flow target and suppresses their in-flight responses.
+  Unrelated target receipts remain monitored, and the next Quick Add registers
+  a fresh receipt from the corrected value.
+- Permanent coverage: the dynamic browser-receipt test seeds a later same-target
+  receipt plus an unrelated receipt, corrects the middle operation, and requires
+  only the unrelated receipt to remain with the warning closed. The guarded
+  Populated journey uses the real later-operation snapshot returned by its
+  disposable sequence, corrects middle/earlier/post-correction entries, and
+  requires same-target warning retirement. A second live rendered-app replay,
+  `FR-9df0e56c-31af-4a88-a2cd-db17cbd2abc1`, passed 19/19 on isolated `@223`
+  in 230.544 s. The browser walkthrough observed the real populated Overview,
+  account, Bills, loading, refresh, and correction journey; the final Activity
+  return exposed no yellow conflict notice, raw worksheet name, stuck progress,
+  console warning, or browser error. Restricted single-owner sharing and exact
+  fixture Trash cleanup also passed.
+
+### REG-040 — Returning to Quick Add after a correction showed the old total
+- Category: REGRESSION / UI RELIABILITY / SAME-PAGE STATE
+- Date discovered: 2026-07-28
+- Status: fixed locally; isolated Central runtime confirmation pending
+- Affected files: `Dashboard_Script_Payments.html`,
+  `Dashboard_Script_Activity.html`, Populated Dashboard E2E, and Dashboard UX
+  regressions
+- Root cause: Activity correction refreshed Activity and the dashboard snapshot
+  but did not invalidate Quick Add's separately loaded preview and history.
+  Returning to the already-open Quick Add panel could therefore keep the
+  selected payee while displaying its pre-correction monthly total and chart.
+- Expected result: a successful correction quietly reloads the Quick Add payee
+  inventory, selected month value, prior-month explanation, and recorded
+  history without a page reload. The current type, payee, date, and amount
+  inputs remain unchanged. Older preview responses are ignored so they cannot
+  restore stale values after the correction refresh.
+- Permanent coverage: the Dashboard UX suite executes the reconciliation
+  helper with an in-flight form mutation and requires the captured type, payee,
+  and date to be restored before a quiet preview refresh. Populated Dashboard
+  E2E deliberately replaces the visible value/history with the stale
+  pre-correction total, runs the real same-page refresh against its
+  marker-verified disposable workbook, and requires the authoritative value,
+  chart, and form selection without reloading the browser.
+
 ---
 
 ## RECOVERY scenarios (design — not historical bugs)
@@ -690,4 +918,15 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-027 | Upcoming Dismiss did not explain its no-payment/history consequences | REGRESSION / UI TRUST / LIFECYCLE LANGUAGE | fixed locally; isolated runtime confirmation pending |
 | REG-028 | Newly added Upcoming rows did not inherit body-row formatting | REGRESSION / WORKBOOK PRESENTATION / APPEND SAFETY | fixed locally; isolated disposable-workbook confirmation pending |
 | REG-029 | Activity events lacked durable operation identity and exact target state | REGRESSION / FINANCIAL SAFETY / AUDIT IDENTITY / CORRECTION FOUNDATION | fixed; isolated `@214` Populated V8 19/19 PASS with verified cleanup |
+| REG-030 | Direct Quick Add entries could not be safely corrected from Activity | REGRESSION / FINANCIAL SAFETY / IMMUTABLE CORRECTION | fixed; isolated `@218` Populated Dashboard 19/19 PASS with verified cleanup |
+| REG-031 | Successful Quick Add reversal left a spinner and false write-conflict warning | REGRESSION / UI RELIABILITY / FINANCIAL TRUST | fixed; isolated `@218` Populated Dashboard 19/19 PASS with verified cleanup |
+| REG-032 | Quick Add preview exposed an internal Cash Flow worksheet name | REGRESSION / CUSTOMER LANGUAGE / IMPLEMENTATION PRIVACY | fixed; isolated `@221` guarded runtime pass |
+| REG-033 | A late Quick Add verification warned against a newer valid Quick Add | REGRESSION / UI RELIABILITY / FINANCIAL TRUST | fixed; isolated `@221` guarded runtime pass |
+| REG-034 | Correction success did not show the resulting financial values | REGRESSION / UI TRUST / CORRECTION FEEDBACK | fixed; isolated `@221` guarded runtime pass |
+| REG-035 | Direct Quick Add correction rejected safe middle and earlier entries | REGRESSION / FINANCIAL SAFETY / SEQUENCE CORRECTION | fixed; isolated `@221` guarded runtime pass |
+| REG-036 | Eventual consistency briefly displayed a false yellow Quick Add warning | REGRESSION / UI RELIABILITY / FINANCIAL TRUST | fixed; isolated `@221` guarded runtime pass |
+| REG-037 | Quick Add completion waited on presentation-only history reads | REGRESSION / PERFORMANCE / DAILY TASK | fixed; isolated `@221` guarded runtime pass |
+| REG-038 | Correction summary displayed raw parsed dates and the wrong calendar day | REGRESSION / CUSTOMER LANGUAGE / CORRECTION FEEDBACK | fixed; isolated `@221` guarded runtime pass |
+| REG-039 | Middle-entry reversal left a later Quick Add receipt warning active | REGRESSION / UI RELIABILITY / SEQUENCE CORRECTION | fixed; isolated `@223` guarded runtime pass |
+| REG-040 | Returning to Quick Add after a correction showed the old total | REGRESSION / UI RELIABILITY / SAME-PAGE STATE | fixed locally; isolated Central runtime confirmation pending |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

@@ -1747,7 +1747,8 @@ function savePayment() {
     payee: currentPaymentPayee(),
     entryDate: document.getElementById('pay_date').value,
     amount: numericAmount,
-    createIfMissing: document.getElementById('pay_createIfMissing').checked
+    createIfMissing: document.getElementById('pay_createIfMissing').checked,
+    activityOrigin: 'direct_quick_add'
   };
 
   setStatus('pay_status', 'Saving…', false);

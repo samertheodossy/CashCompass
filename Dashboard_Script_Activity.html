@@ -205,6 +205,18 @@ function renderActivityTable_(rows, options) {
         ? '<div class="activity-action-label muted">' +
           escapeHtml(actionLabel) +
           '</div>'
+        : '') +
+      (Array.isArray(row.correctionHistory) && row.correctionHistory.length
+        ? '<details class="activity-correction-history"><summary>Correction history</summary>' +
+          row.correctionHistory.map(function(item) {
+            return '<div>' +
+              escapeHtml(activityCorrectionMoney_(item.fromAmount)) +
+              ' → ' +
+              escapeHtml(activityCorrectionMoney_(item.toAmount)) +
+              (item.reason ? ' · ' + escapeHtml(String(item.reason)) : '') +
+              '</div>';
+          }).join('') +
+          '</details>'
         : '');
 
     html +=
@@ -227,14 +239,18 @@ function renderActivityTable_(rows, options) {
       '<td class="activity-td-actions">' +
       (function() {
         var sr = row.sheetRow;
-        var isDon = String(row.eventType || '').toLowerCase() === 'donation';
-        var can = isDon && sr >= 2;
         if (sr < 2) return '—';
-        if (can) {
+        if (String(row.correctionState || '') === 'removed') {
+          return '<span class="activity-correction-state">Removed</span>';
+        }
+        if (String(row.correctionAction || '') === 'correct_entry' &&
+            String(row.operationId || '').trim()) {
           return (
-            '<button type="button" class="btn-activity-delete" data-event-type="donation" data-sheet-row="' +
-            Number(sr) +
-            '" aria-label="Remove donation" onclick="activityDeleteClick_(event)">Remove donation</button>'
+            '<button type="button" class="btn-activity-delete" data-operation-id="' +
+            escapeHtml(String(row.operationId || '')) +
+            '" data-entry-family="' +
+            escapeHtml(String(row.entryFamily || 'quick_add')) +
+            '" aria-label="Correct entry" onclick="activityCorrectionClick_(event)">Correct entry</button>'
           );
         }
         return '—';
@@ -306,6 +322,474 @@ function activityPrevPage() {
     window.__activityPage = (window.__activityPage || 0) - 1;
     activityRenderCurrentPage_();
   }
+}
+
+var __activityCorrectionState = null;
+var __activityCorrectionBusy = false;
+var __activityCorrectionPreviousFocus = null;
+var __activityCorrectionKeyHandlerInstalled = false;
+
+function installActivityCorrectionKeyHandler_() {
+  if (__activityCorrectionKeyHandlerInstalled) return;
+  __activityCorrectionKeyHandlerInstalled = true;
+  document.addEventListener('keydown', function(event) {
+    var backdrop = document.getElementById('activity_correction_drawer_backdrop');
+    if (!backdrop || backdrop.hidden) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeActivityCorrectionDrawer_();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    var drawer = document.getElementById('activity_correction_drawer');
+    if (!drawer) return;
+    var focusable = Array.prototype.slice.call(
+      drawer.querySelectorAll(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
+      )
+    ).filter(function(el) {
+      return !el.hidden && el.offsetParent !== null;
+    });
+    if (!focusable.length) return;
+    var first = focusable[0];
+    var last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+}
+
+function setActivityCorrectionStatus_(message, isError) {
+  var status = document.getElementById('activity_correction_status');
+  if (!status) return;
+  status.textContent = message || '';
+  status.className = isError ? 'status error' : 'status';
+}
+
+function setActivityCorrectionBusy_(busy) {
+  __activityCorrectionBusy = !!busy;
+  ['activity_correction_close', 'activity_correction_cancel',
+    'activity_correction_submit', 'activity_correction_reason',
+    'activity_correction_other', 'activity_correction_amount',
+    'activity_correction_mode_change', 'activity_correction_mode_remove'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.disabled = __activityCorrectionBusy;
+    });
+  var submit = document.getElementById('activity_correction_submit');
+  if (submit) submit.textContent = busy
+    ? 'Correcting…'
+    : activityCorrectionSubmitLabel_();
+}
+
+function activityCorrectionReasonChanged_() {
+  var reason = document.getElementById('activity_correction_reason');
+  var wrap = document.getElementById('activity_correction_other_wrap');
+  if (wrap) wrap.hidden = !reason || reason.value !== 'Other';
+}
+
+function activityCorrectionMoney_(value) {
+  return typeof fmtCurrency === 'function'
+    ? fmtCurrency(Number(value || 0))
+    : String(value || 0);
+}
+
+function activityCorrectionMode_() {
+  var selected = document.querySelector(
+    'input[name="activity_correction_mode"]:checked'
+  );
+  return selected ? String(selected.value || '') : 'change_amount';
+}
+
+function activityCorrectionSubmitLabel_() {
+  var state = __activityCorrectionState || {};
+  var isDonation = state.entryFamily === 'donation';
+  if (activityCorrectionMode_() === 'remove') {
+    return isDonation ? 'Remove donation' : 'Remove entry';
+  }
+  return 'Change amount';
+}
+
+function activityCorrectionCorrectedAmount_() {
+  var input = document.getElementById('activity_correction_amount');
+  var raw = input ? String(input.value || '').replace(/[$,\s]/g, '') : '';
+  var amount = Number(raw);
+  return isFinite(amount) ? Math.abs(amount) : NaN;
+}
+
+function activityCorrectionPreviewImpacts_() {
+  var state = __activityCorrectionState || {};
+  var preview = state.preview || {};
+  var mode = activityCorrectionMode_();
+  var correctedAmount = activityCorrectionCorrectedAmount_();
+  var originalAmount = Number(preview.entry && preview.entry.amount || 0);
+  var entryType = String(preview.entry && preview.entry.entryType || '');
+  return (preview.impacts || []).map(function(impact) {
+    var restored = Number(impact.restoredValue || 0);
+    if (mode === 'change_amount' && isFinite(correctedAmount)) {
+      if (impact.type === 'cash_flow_month') {
+        restored += entryType === 'Expense' ? -correctedAmount : correctedAmount;
+      } else if (impact.type === 'debt_balance') {
+        restored = Math.max(0, restored - correctedAmount);
+      } else if (impact.type === 'donation_row') {
+        restored = correctedAmount;
+      }
+    }
+    return Object.assign({}, impact, {
+      restoredValue: restored,
+      removesCreatedRow: mode === 'remove' && impact.removesCreatedRow,
+      originalAmount: originalAmount
+    });
+  });
+}
+
+function activityCorrectionImpactMoney_(impact, value, entryType) {
+  var displayValue = Number(value || 0);
+  if (impact && impact.type === 'cash_flow_month' &&
+      String(entryType || '') === 'Expense') {
+    displayValue = Math.abs(displayValue);
+  }
+  return activityCorrectionMoney_(displayValue);
+}
+
+function renderActivityCorrectionImpacts_() {
+  var root = document.getElementById('activity_correction_impacts');
+  if (!root) return;
+  var state = __activityCorrectionState || {};
+  var preview = state.preview || {};
+  var entryType = String(preview.entry && preview.entry.entryType || '');
+  root.innerHTML = activityCorrectionPreviewImpacts_().map(function(impact) {
+    var note = impact.removesCreatedRow
+      ? '<div class="activity-correction-row-note">The Cash Flow row created by this entry will also be removed.</div>'
+      : '';
+    return (
+      '<div class="activity-correction-impact-row">' +
+        '<div>' + escapeHtml(String(impact.label || 'Recorded value')) + note + '</div>' +
+        '<div class="activity-correction-impact-values">' +
+          escapeHtml(activityCorrectionImpactMoney_(impact, impact.currentValue, entryType)) +
+          '<span class="activity-correction-impact-arrow">→</span>' +
+          escapeHtml(activityCorrectionImpactMoney_(impact, impact.restoredValue, entryType)) +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+function activityCorrectionModeChanged_() {
+  var mode = activityCorrectionMode_();
+  var amountWrap = document.getElementById('activity_correction_amount_wrap');
+  if (amountWrap) amountWrap.hidden = mode !== 'change_amount';
+  var submit = document.getElementById('activity_correction_submit');
+  if (submit && !__activityCorrectionBusy) submit.textContent = activityCorrectionSubmitLabel_();
+  renderActivityCorrectionImpacts_();
+}
+
+function activityCorrectionAmountChanged_() {
+  renderActivityCorrectionImpacts_();
+}
+
+function renderActivityCorrectionPreview_(preview) {
+  var loading = document.getElementById('activity_correction_loading');
+  var content = document.getElementById('activity_correction_content');
+  var blocked = document.getElementById('activity_correction_blocked');
+  var submit = document.getElementById('activity_correction_submit');
+  var drawer = document.getElementById('activity_correction_drawer');
+  if (drawer) {
+    var verification = preview && preview.verification
+      ? preview.verification
+      : {};
+    drawer.setAttribute(
+      'data-verification-status',
+      String(verification.status || (preview && preview.status) || '')
+    );
+    drawer.setAttribute(
+      'data-target-statuses',
+      Array.isArray(verification.targets)
+        ? verification.targets.map(function(target) {
+            return String(target.targetType || '') + ':' +
+              String(target.status || '');
+          }).join(',')
+        : ''
+    );
+  }
+  if (loading) loading.hidden = true;
+
+  if (!preview || preview.status !== 'READY' || preview.correctable !== true) {
+    if (content) content.hidden = true;
+    if (blocked) {
+      blocked.hidden = false;
+      blocked.textContent = preview && preview.message
+        ? preview.message
+        : 'This entry can no longer be corrected safely.';
+    }
+    if (submit) submit.hidden = true;
+    return;
+  }
+
+  __activityCorrectionState.preview = preview;
+  __activityCorrectionState.entryFamily = String(preview.entryFamily || 'quick_add');
+  if (blocked) blocked.hidden = true;
+  if (content) content.hidden = false;
+  if (submit) submit.hidden = false;
+  var entry = preview.entry || {};
+  document.getElementById('activity_correction_payee').textContent =
+    entry.payee || 'Quick Add entry';
+  document.getElementById('activity_correction_entry').textContent =
+    String(entry.entryType || '') + ' · ' + activityCorrectionMoney_(entry.amount);
+  document.getElementById('activity_correction_date').textContent =
+    formatActivityDueDateDisplay_(entry.entryDate);
+  var amountInput = document.getElementById('activity_correction_amount');
+  if (amountInput) amountInput.value = Number(entry.amount || 0).toFixed(2);
+  var changeMode = document.getElementById('activity_correction_mode_change');
+  if (changeMode) changeMode.checked = true;
+  activityCorrectionModeChanged_();
+}
+
+function renderActivityCorrectionSuccess_(result) {
+  var root = document.getElementById('activity_correction_success_values');
+  if (!root) return;
+  var entry = result && result.entry ? result.entry : {};
+  var impacts = result && Array.isArray(result.impacts) ? result.impacts : [];
+  var rows = [];
+
+  if (entry.cashFlowMonth) {
+    rows.push(
+      '<div class="activity-correction-success-row">' +
+        '<span>Cash Flow month</span><strong>' +
+        escapeHtml(String(entry.cashFlowMonth)) +
+        '</strong></div>'
+    );
+  }
+  if (entry.amount !== '' && entry.amount !== null && entry.amount !== undefined) {
+    rows.push(
+      '<div class="activity-correction-success-row">' +
+        '<span>' + (result.correctionMode === 'change_amount'
+          ? 'Corrected amount'
+          : 'Entry removed') + '</span><strong>' +
+        escapeHtml(activityCorrectionMoney_(
+          result.correctionMode === 'change_amount'
+            ? entry.correctedAmount
+            : entry.amount
+        )) +
+        '</strong></div>'
+    );
+  }
+  impacts.forEach(function(impact) {
+    rows.push(
+      '<div class="activity-correction-success-impact">' +
+        '<div class="activity-correction-success-label">' +
+          escapeHtml(String(impact.label || 'Recorded value')) +
+        '</div>' +
+        '<div class="activity-correction-success-row">' +
+          '<span>Before correction</span><strong>' +
+          escapeHtml(activityCorrectionImpactMoney_(
+            impact,
+            impact.currentValue,
+            entry.entryType
+          )) +
+          '</strong></div>' +
+        '<div class="activity-correction-success-row is-current">' +
+          '<span>Current value</span><strong>' +
+          escapeHtml(activityCorrectionImpactMoney_(
+            impact,
+            impact.restoredValue,
+            entry.entryType
+          )) +
+          '</strong></div>' +
+      '</div>'
+    );
+  });
+  root.innerHTML = rows.join('');
+  var title = document.getElementById('activity_correction_success_title');
+  var message = document.getElementById('activity_correction_success_message');
+  if (title) title.textContent = result.correctionMode === 'change_amount'
+    ? 'Amount changed'
+    : (__activityCorrectionState &&
+       __activityCorrectionState.entryFamily === 'donation'
+        ? 'Donation removed'
+        : 'Entry removed');
+  if (message) message.textContent = result.message ||
+    'The correction and its audit history remain in Activity.';
+}
+
+function activityCorrectionClick_(event) {
+  var button = event && event.currentTarget;
+  var operationId = button
+    ? String(button.getAttribute('data-operation-id') || '').trim()
+    : '';
+  if (!operationId) return;
+  var entryFamily = button
+    ? String(button.getAttribute('data-entry-family') || 'quick_add').trim()
+    : 'quick_add';
+  var backdrop = document.getElementById('activity_correction_drawer_backdrop');
+  var drawer = document.getElementById('activity_correction_drawer');
+  if (!backdrop || !drawer) return;
+
+  __activityCorrectionPreviousFocus = document.activeElement;
+  __activityCorrectionState = {
+    operationId: operationId,
+    entryFamily: entryFamily,
+    preview: null
+  };
+  __activityCorrectionBusy = false;
+  document.getElementById('activity_correction_loading').hidden = false;
+  document.getElementById('activity_correction_content').hidden = true;
+  document.getElementById('activity_correction_blocked').hidden = true;
+  document.getElementById('activity_correction_success').hidden = true;
+  document.getElementById('activity_correction_success_values').innerHTML = '';
+  document.getElementById('activity_correction_submit').hidden = true;
+  document.getElementById('activity_correction_done').hidden = true;
+  document.getElementById('activity_correction_cancel').hidden = false;
+  document.getElementById('activity_correction_reason').value = '';
+  document.getElementById('activity_correction_other').value = '';
+  document.getElementById('activity_correction_amount').value = '';
+  activityCorrectionReasonChanged_();
+  setActivityCorrectionStatus_('', false);
+  var eyebrow = document.querySelector(
+    '#activity_correction_drawer .bill-pay-drawer-eyebrow'
+  );
+  if (eyebrow) eyebrow.textContent = entryFamily === 'donation'
+    ? 'DONATION'
+    : 'QUICK ADD';
+  var removeLabel = document.getElementById('activity_correction_remove_label');
+  var removeHelp = document.getElementById('activity_correction_remove_help');
+  if (removeLabel) removeLabel.textContent = entryFamily === 'donation'
+    ? 'Remove donation'
+    : 'Remove entry';
+  if (removeHelp) removeHelp.textContent = entryFamily === 'donation'
+    ? 'Remove this donation while keeping its audit history.'
+    : 'Exclude this entry from the recorded total.';
+  backdrop.hidden = false;
+  document.body.classList.add('bill-pay-drawer-open');
+  installActivityCorrectionKeyHandler_();
+  drawer.focus();
+
+  google.script.run
+    .withSuccessHandler(renderActivityCorrectionPreview_)
+    .withFailureHandler(function(err) {
+      renderActivityCorrectionPreview_({
+        status: 'PREVIEW_FAILED',
+        correctable: false,
+        message: customerSafeErrorMessage_(
+          err && err.message ? err.message : String(err),
+          'CashCompass could not verify this entry. Refresh Activity and try again.'
+        )
+      });
+    })
+    .previewActivityEntryCorrection(operationId);
+}
+
+function closeActivityCorrectionDrawer_() {
+  if (__activityCorrectionBusy) return;
+  var backdrop = document.getElementById('activity_correction_drawer_backdrop');
+  if (backdrop) backdrop.hidden = true;
+  document.body.classList.remove('bill-pay-drawer-open');
+  __activityCorrectionState = null;
+  var previous = __activityCorrectionPreviousFocus;
+  __activityCorrectionPreviousFocus = null;
+  if (previous && typeof previous.focus === 'function' &&
+      document.documentElement.contains(previous)) {
+    try { previous.focus(); } catch (_e) {}
+  }
+}
+
+function onActivityCorrectionBackdropClick_(event) {
+  if (event && event.target === event.currentTarget) {
+    closeActivityCorrectionDrawer_();
+  }
+}
+
+function submitActivityCorrection_() {
+  if (__activityCorrectionBusy || !__activityCorrectionState) return;
+  var reason = document.getElementById('activity_correction_reason').value;
+  var other = String(document.getElementById('activity_correction_other').value || '').trim();
+  var mode = activityCorrectionMode_();
+  var correctedAmount = activityCorrectionCorrectedAmount_();
+  if (!reason) {
+    setActivityCorrectionStatus_('Choose why this entry is being corrected.', true);
+    return;
+  }
+  if (reason === 'Other' && !other) {
+    setActivityCorrectionStatus_('Add a short note for this correction.', true);
+    return;
+  }
+  if (mode === 'change_amount' && (!isFinite(correctedAmount) || correctedAmount <= 0)) {
+    setActivityCorrectionStatus_('Enter a corrected amount greater than $0.00.', true);
+    return;
+  }
+  var recordedAmount = Number(
+    __activityCorrectionState.preview &&
+    __activityCorrectionState.preview.entry &&
+    __activityCorrectionState.preview.entry.amount
+  );
+  if (mode === 'change_amount' &&
+      isFinite(recordedAmount) &&
+      Math.round(correctedAmount * 100) === Math.round(recordedAmount * 100)) {
+    setActivityCorrectionStatus_(
+      'Enter a different amount, or choose ' +
+      (__activityCorrectionState.entryFamily === 'donation'
+        ? 'Remove donation.'
+        : 'Remove entry.'),
+      true
+    );
+    return;
+  }
+
+  setActivityCorrectionBusy_(true);
+  setActivityCorrectionStatus_('', false);
+  google.script.run
+    .withSuccessHandler(function(result) {
+      setActivityCorrectionBusy_(false);
+      if (!result || !result.ok) {
+        setActivityCorrectionStatus_(
+          result && result.error
+            ? result.error
+            : 'This entry could not be corrected safely.',
+          true
+        );
+        return;
+      }
+      document.getElementById('activity_correction_loading').hidden = true;
+      document.getElementById('activity_correction_content').hidden = true;
+      document.getElementById('activity_correction_success').hidden = false;
+      renderActivityCorrectionSuccess_(result);
+      document.getElementById('activity_correction_submit').hidden = true;
+      document.getElementById('activity_correction_cancel').hidden = true;
+      document.getElementById('activity_correction_done').hidden = false;
+      if (typeof retireQuickAddWriteReceiptsForCorrection_ === 'function') {
+        retireQuickAddWriteReceiptsForCorrection_(
+          result,
+          __activityCorrectionState.operationId
+        );
+      } else if (typeof retireQuickAddWriteReceipt_ === 'function') {
+        retireQuickAddWriteReceipt_(__activityCorrectionState.operationId);
+      }
+      if (typeof refreshQuickAddAfterActivityCorrection_ === 'function') {
+        refreshQuickAddAfterActivityCorrection_();
+      }
+      loadActivitySection({ quiet: true });
+      refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setActivityCorrectionBusy_(false);
+      setActivityCorrectionStatus_(
+        customerSafeErrorMessage_(
+          err && err.message ? err.message : String(err),
+          'The correction could not be completed. Refresh Activity and try again.'
+        ),
+        true
+      );
+    })
+    .correctActivityEntry(
+      __activityCorrectionState.operationId,
+      reason,
+      other,
+      mode,
+      mode === 'change_amount' ? correctedAmount : null
+    );
 }
 
 function activityDeleteClick_(ev) {
