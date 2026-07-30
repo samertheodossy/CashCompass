@@ -512,21 +512,16 @@ function getHarnessBillsYearBoundaryScenario_() {
 }
 
 /**
- * REGRESSION-BILLS-31ST — CHARACTERIZATION of Due Day = 31 in short months.
+ * REGRESSION-BILLS-31ST — Due Day = 31 clamps inside short months.
  *
- * ⚠ This scenario asserts CURRENT PRODUCTION BEHAVIOR, which is intentionally
- * *not* changed here. For Monthly bills the engine uses the raw
- * `new Date(year, monthIndex, dueDay)` constructor (generateOccurrences_,
- * stepDays === 0 path) with NO day-of-month clamp. JavaScript Date OVERFLOWS a
- * too-large day into the following month:
+ * Monthly bills use the last valid calendar day when their configured Due Day
+ * does not exist in a particular month:
  *   • Mar 2026 (31 days): due 31 → Mar 31 2026 (exact).
- *   • Apr 2026 (30 days): due 31 → OVERFLOWS to May 1 2026 (NOT Apr 30).
+ *   • Apr 2026 (30 days): due 31 → Apr 30 2026 (clamped).
  *   • May 2026 (31 days): due 31 → May 31 2026 (exact).
- * Anchored at Apr 15 2026 the [-1,0,+1] window therefore yields
- * [Mar 31, May 1, May 31] — April contributes NO April-dated occurrence, and its
- * intended occurrence silently lands on May 1. (Note: the WEEKLY/BIWEEKLY path
- * DOES clamp via Math.min(dueDay, daysInMonth); only the Monthly path overflows —
- * an inconsistency flagged as a Product Decision, see the review report.)
+ * The exact reported regression is also pinned: on Jul 30, a newly-created
+ * Due-Day-31 bill must not turn the June candidate into Jul 1. The engine must
+ * generate Jun 30, Jul 31, and Aug 31 before the creation floor removes June.
  *
  * @returns {Object} scenario
  */
@@ -538,7 +533,7 @@ function getHarnessBills31stScenario_() {
     id: 'REGRESSION-BILLS-31ST',
     category: 'REGRESSION',
     executionLevel: 'PURE',
-    description: 'Characterize CURRENT Monthly recurrence for Due Day 31 across a short month (Mar/Apr/May 2026): the April occurrence OVERFLOWS to May 1 (no clamp). Asserts existing behavior exactly; a Product Decision is reported, not applied.',
+    description: 'Validate Monthly Due Day 31 across short months: clamp to month end without overflowing into the following month, including the Jun/Jul boundary reported by the user.',
     expectedSheets: [settingsName, sysMetaName],
     setup: function(ctx) {
       ctx.assertWritable();
@@ -566,32 +561,75 @@ function getHarnessBills31stScenario_() {
       ctx.assert.dateEquals('Due-31 in 31-day March → Mar 31 2026',
         occs[0] && occs[0].dueDate, new Date(2026, 2, 31), { module: mod });
 
-      // CHARACTERIZATION: April (30 days) overflows to May 1 (current behavior).
-      ctx.assert.dateEquals('Due-31 in 30-day April OVERFLOWS to May 1 2026 (current behavior)',
-        occs[1] && occs[1].dueDate, new Date(2026, 4, 1), { module: mod });
+      // April has 30 days → clamp to the final valid day.
+      ctx.assert.dateEquals('Due-31 in 30-day April clamps to Apr 30 2026',
+        occs[1] && occs[1].dueDate, new Date(2026, 3, 30), { module: mod });
 
       // May has 31 days → exact 31st.
       ctx.assert.dateEquals('Due-31 in 31-day May → May 31 2026',
         occs[2] && occs[2].dueDate, new Date(2026, 4, 31), { module: mod });
 
-      // No occurrence lands on any APRIL calendar date — the tell-tale of the
-      // overflow (April's occurrence moved into May).
+      // The logical April occurrence stays in April.
       var aprilCount = occs.filter(function(o) { return o.dueDate.getMonth() === 3; }).length;
-      ctx.assert.equals('No occurrence lands in April (overflowed out of the month)', aprilCount, 0, { module: mod });
+      ctx.assert.equals('Exactly one due-31 occurrence remains in April', aprilCount, 1, { module: mod });
+
+      // Exact user-reported boundary: June has 30 days, while July/August have
+      // 31. June's candidate must never overflow to July 1.
+      var julyAnchor = new Date(2026, 6, 30); // Jul 30, 2026
+      var summer = harnessSortOccurrences_(
+        buildInputBillDueCandidates_(
+          julyAnchor,
+          31,
+          freq,
+          1,
+          '',
+          // A newly-added July bill carries a Jul-1 creation floor. This pins
+          // the production reader contract: the clamped Jun-30 look-back must
+          // be removed while the valid Jul-31 occurrence remains.
+          new Date(2026, 6, 1),
+          null
+        ));
+      ctx.assert.equals('New July due-31 bill has Jul/Aug candidates only', summer.length, 2, { module: mod });
+      ctx.assert.dateEquals('July due-31 candidate remains Jul 31 2026',
+        summer[0] && summer[0].dueDate, new Date(2026, 6, 31), { module: mod });
+      ctx.assert.dateEquals('August due-31 candidate remains Aug 31 2026',
+        summer[1] && summer[1].dueDate, new Date(2026, 7, 31), { module: mod });
+      var juneCount = summer.filter(function(o) {
+        return o.dueDate.getFullYear() === 2026 && o.dueDate.getMonth() === 5;
+      }).length;
+      ctx.assert.equals('New July bill excludes the clamped June look-back', juneCount, 0, { module: mod });
+      var julyFirstCount = summer.filter(function(o) {
+        return o.dueDate.getFullYear() === 2026 &&
+          o.dueDate.getMonth() === 6 &&
+          o.dueDate.getDate() === 1;
+      }).length;
+      ctx.assert.equals('Due-31 never fabricates a July 1 occurrence', julyFirstCount, 0, { module: mod });
+
+      // A Sheets date is an instant, but its displayed day belongs to the
+      // workbook timezone. Pin the cross-timezone case that caused a displayed
+      // Jul 1 Schedule Effective Date to be interpreted as Jun 30.
+      var workbookDate = new Date('2026-06-30T12:30:00.000Z');
+      var recoveredFloor = parseSheetDateAtTimeZone_(workbookDate, 'Pacific/Kiritimati');
+      ctx.assert.dateEquals('Workbook-timezone Jul 1 floor remains Jul 1',
+        recoveredFloor, new Date(2026, 6, 1), { module: mod });
+      var displayedFloor = parseDateOnlySheetCell_(
+        new Date('2026-06-30T00:00:00.000Z'),
+        '2026-07-01',
+        'America/Los_Angeles'
+      );
+      ctx.assert.dateEquals('Canonical displayed Jul 1 floor wins over a shifted raw Date',
+        displayedFloor, new Date(2026, 6, 1), { module: mod });
     }
   };
 }
 
 /**
- * REGRESSION-BILLS-LEAP-FEB29 — CHARACTERIZATION of Due Day = 29 around February.
+ * REGRESSION-BILLS-LEAP-FEB29 — Due Days 29/30 clamp correctly in February.
  *
- * ⚠ Asserts CURRENT PRODUCTION BEHAVIOR (unchanged here). Same non-clamping
- * Monthly path as REGRESSION-BILLS-31ST:
- *   • LEAP year (Feb 2028 has 29 days): due 29 → Feb 29 2028 (exact — leap Feb
- *     produces a real Feb 29 occurrence).
- *   • NON-LEAP year (Feb 2027 has 28 days): due 29 → OVERFLOWS to Mar 1 2027
- *     (NOT Feb 28); February contributes NO February-dated occurrence.
- * Two deterministic anchors (Feb 10 2028 leap, Feb 10 2027 non-leap) pin both.
+ *   • LEAP year (Feb 2028 has 29 days): due 29 → Feb 29 2028.
+ *   • NON-LEAP year (Feb 2027 has 28 days): due 29 → Feb 28 2027.
+ *   • Due 30 also clamps to Feb 29 in a leap year and Feb 28 otherwise.
+ * Deterministic anchors pin every high-day February boundary.
  *
  * @returns {Object} scenario
  */
@@ -603,7 +641,7 @@ function getHarnessBillsLeapFeb29Scenario_() {
     id: 'REGRESSION-BILLS-LEAP-FEB29',
     category: 'REGRESSION',
     executionLevel: 'PURE',
-    description: 'Characterize CURRENT Monthly recurrence for Due Day 29 around February: leap-year Feb yields Feb 29 (exact); non-leap Feb OVERFLOWS to Mar 1 (no clamp). Asserts existing behavior exactly; a Product Decision is reported, not applied.',
+    description: 'Validate Monthly Due Days 29 and 30 around February: preserve Feb 29 in leap years and clamp to the final valid February day without overflow.',
     expectedSheets: [settingsName, sysMetaName],
     setup: function(ctx) {
       ctx.assertWritable();
@@ -631,16 +669,27 @@ function getHarnessBillsLeapFeb29Scenario_() {
       ctx.assert.equals('Leap Feb occurrence is in February (month index 1)',
         leap[1] && leap[1].dueDate.getMonth(), 1, { module: mod });
 
-      // (B) NON-LEAP year — Feb 2027 has 28 days → due 29 overflows to Mar 1.
+      // (B) NON-LEAP year — Feb 2027 has 28 days → due 29 clamps to Feb 28.
       var todayNon = new Date(2027, 1, 10); // Feb 10, 2027
       var non = harnessSortOccurrences_(
         buildInputBillDueCandidates_(todayNon, 29, freq, 1, '', null, null));
 
       ctx.assert.equals('Non-leap occurrence count (Jan/Feb/Mar 2027)', non.length, 3, { module: mod });
-      ctx.assert.dateEquals('Non-leap Feb 29 OVERFLOWS to Mar 1 2027 (current behavior)',
-        non[1] && non[1].dueDate, new Date(2027, 2, 1), { module: mod });
+      ctx.assert.dateEquals('Non-leap Feb due-29 clamps to Feb 28 2027',
+        non[1] && non[1].dueDate, new Date(2027, 1, 28), { module: mod });
       var febCount = non.filter(function(o) { return o.dueDate.getMonth() === 1; }).length;
-      ctx.assert.equals('Non-leap year: no occurrence lands in February (overflowed out)', febCount, 0, { module: mod });
+      ctx.assert.equals('Non-leap year retains exactly one February occurrence', febCount, 1, { module: mod });
+
+      // (C) Due Day 30 exercises the remaining high-day boundary in both leap
+      // and non-leap February.
+      var leap30 = harnessSortOccurrences_(
+        buildInputBillDueCandidates_(todayLeap, 30, freq, 1, '', null, null));
+      var non30 = harnessSortOccurrences_(
+        buildInputBillDueCandidates_(todayNon, 30, freq, 1, '', null, null));
+      ctx.assert.dateEquals('Leap Feb due-30 clamps to Feb 29 2028',
+        leap30[1] && leap30[1].dueDate, new Date(2028, 1, 29), { module: mod });
+      ctx.assert.dateEquals('Non-leap Feb due-30 clamps to Feb 28 2027',
+        non30[1] && non30[1].dueDate, new Date(2027, 1, 28), { module: mod });
     }
   };
 }

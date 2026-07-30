@@ -563,15 +563,15 @@ Anchor Date, Schedule Effective Date`. Engine: `buildRuleFromBillRow_` →
 | `REGRESSION-BILLS-WEEKLY` **✅ implemented** | Weekly (legacy, no weekday) | Frequency=Weekly, Due Day=10 | count=11 across window; in-month 7-day cadence; prior/current/next; **per-month RE-ANCHOR** pinned (Dec 31 → Jan 10 = 10 days, not 7 — legacy weekly restarts at Due Day each month) — `test_harness_scenarios_bills.js` |
 | `REGRESSION-BILLS-WEEKLY-ON-DAY` **✅ implemented** | Weekly on weekday | Frequency=Weekly, Weekday=Sunday (Due Day ignored) | count=12; **every** occurrence is a Sunday (`getDay()===0`); continuous +7 across month/year boundaries (all gaps===7); next Sunday on/after anchor — `test_harness_scenarios_bills.js` |
 | `REGRESSION-BILLS-BIWEEKLY` **✅ implemented** | Biweekly (anchor-driven) | Frequency=Biweekly, Weekday=Monday, Anchor=Dec 15 2025 | count=6; anchor is first occurrence; true 14-day cadence (all gaps===14, no monthly re-anchor); **month + YEAR crossing** (Dec 29 → Jan 12 2026); correct next occurrence — `test_harness_scenarios_bills.js` |
-| `REGRESSION-BILLS-YEARLY` **✅ implemented** | Yearly | Frequency=Yearly, Due Day 15, Start Month 6 (June) | exactly one occurrence in the start month (Jun 15 2026); same date one year later (Jun 15 2027 — yearly cadence); zero occurrences off-cycle (Sep window); prior-month look-back the month after start (Jul → Jun 15). Reuses the non-clamping monthly path — see 31st/leap edge cases below — `test_harness_scenarios_bills.js` |
+| `REGRESSION-BILLS-YEARLY` **✅ implemented** | Yearly | Frequency=Yearly, Due Day 15, Start Month 6 (June) | exactly one occurrence in the start month (Jun 15 2026); same date one year later (Jun 15 2027 — yearly cadence); zero occurrences off-cycle (Sep window); prior-month look-back the month after start (Jul → Jun 15). Reuses the one-occurrence-per-month path, including last-valid-day clamping — `test_harness_scenarios_bills.js` |
 | `REGRESSION-BILLS-AUTOPAY` | AutoPay | Autopay=Yes, Varies≠Yes, due date passed | Cash Flow cell written **once** + one `bill_autopay` Activity row; **no double-post** (guards REG-008) |
 | `REGRESSION-BILLS-MANUAL-PAY` | Manual Pay | Autopay=No | Pay writes payment + `bill_paid` marker; occurrence suppressed |
 | `REGRESSION-BILLS-OVERDUE` | Overdue | Due Day in the past, unpaid | appears in `overdue` bucket with overdue styling semantics |
 | `REGRESSION-BILLS-PAID-OCCURRENCE` | Paid occurrence | pay one occurrence of a recurring bill | that exact occurrence suppressed; others remain |
 | `REGRESSION-BILLS-NEXT-OCCURRENCE` | Next occurrence | any recurring bill | `generateOccurrences_` next date matches expected within the [-1,0,+1] month window |
 | `REGRESSION-BILLS-MONTH-BOUNDARY` | Month boundary | weekly/biweekly spanning end of month | cadence continuous across the boundary |
-| `REGRESSION-BILLS-31ST` **✅ implemented** | 31st-of-month | Due Day=31, Monthly, anchored Apr 15 2026 | **CHARACTERIZATION** of current behavior: Mar (31d)→Mar 31 exact; Apr (30d)→**OVERFLOWS to May 1** (no clamp); May (31d)→May 31 exact; asserts no occurrence lands in April. **⚠ Product Decision (open):** the Monthly path does NOT clamp Due Day — `new Date(y, m, 31)` OVERFLOWS into the next month — while the Weekly/Biweekly path DOES clamp. Behavior asserted exactly; not changed — `test_harness_scenarios_bills.js` |
-| `REGRESSION-BILLS-LEAP-FEB29` **✅ implemented** | Leap Feb 29 | Due Day=29, Monthly, anchors Feb 10 2028 (leap) & Feb 10 2027 (non-leap) | **CHARACTERIZATION:** leap-year Feb→Feb 29 2028 (exact); non-leap Feb→**OVERFLOWS to Mar 1 2027** (no clamp), no February-dated occurrence. Same overflow Product Decision as 31st. Behavior asserted exactly; not changed — `test_harness_scenarios_bills.js` |
+| `REGRESSION-BILLS-31ST` **✅ implemented** | 31st-of-month | Due Day=31, Monthly, anchored Apr 15 and Jul 30 2026 | Mar→Mar 31; Apr→**Apr 30**; May→May 31; exact reported boundary generates Jun 30 / Jul 31 / Aug 31 and explicitly refuses a fabricated Jul 1 occurrence — `test_harness_scenarios_bills.js` |
+| `REGRESSION-BILLS-LEAP-FEB29` **✅ implemented** | February high days | Due Day=29 and 30, Monthly, anchors Feb 10 2028 (leap) & Feb 10 2027 (non-leap) | leap February clamps high days to Feb 29; non-leap February clamps them to Feb 28; each logical February occurrence stays in February — `test_harness_scenarios_bills.js` |
 | `REGRESSION-BILLS-YEAR-BOUNDARY` **✅ implemented** | Year boundary | Monthly, Due Day 15, anchors Dec 20 2025 & Jan 5 2026 | Dec-anchor: Nov 15 / Dec 15 2025 / **next crosses to Jan 15 2026** (year transition asserted via `getFullYear`); Jan-anchor: **prior look-back reaches back to Dec 15 2025** (previous year) / Jan 15 / Feb 15 2026 — `test_harness_scenarios_bills.js` |
 
 ### 4.2 Income (Level 3)
@@ -823,7 +823,7 @@ seams + pure builders; `[needs seam]` = best after the ss-injection refactor (§
 8. `REGRESSION-BILLS-WEEKLY-ON-DAY` — `[pure]` — **✅ implemented** (weekday correctness + continuous +7)
 9. `REGRESSION-BILLS-BIWEEKLY` — `[pure]` — **✅ implemented** (anchor-driven +14; month+year crossing)
 9a. `REGRESSION-BILLS-YEAR-BOUNDARY` — `[pure]` — **✅ implemented** (monthly Dec/Jan window; both-sided year transition)
-9b. `REGRESSION-BILLS-31ST` + `REGRESSION-BILLS-LEAP-FEB29` — `[pure]` — **✅ implemented** (characterize the non-clamping Monthly overflow; Product Decision reported)
+9b. `REGRESSION-BILLS-31ST` + `REGRESSION-BILLS-LEAP-FEB29` — `[pure]` — **✅ implemented** (pin last-valid-day clamping for Monthly high Due Days, including the Jun-30 / Jul-31 boundary)
 10. `REGRESSION-BILLS-YEARLY` — `[pure]` — **✅ implemented**
 11. `REGRESSION-INCOME-BIWEEKLY` — **open (§8)**; if income cadence is not built,
     substitute `REGRESSION-INCOME-MULTIPLE-SOURCES` + `-DASHBOARD-REFLECTION` `[needs func]`
@@ -877,9 +877,10 @@ assumptions:
 4. **AutoPay time-dependence.** AutoPay writes only when the due date has passed
    within the rolling window. *Question:* what "today" does the harness inject so
    AutoPay scenarios are deterministic (fixed clock vs. seeding past-due dates)?
-5. **31st-of-month & boundary expectations.** Confirm the intended behavior for
-   Due Day=31 in short months and for weekly/biweekly cadence across month/year
-   boundaries (should be codified from `SESSION_NOTES.md → Recurrence Engine V2`).
+5. **31st-of-month & boundary expectations — resolved 2026-07-30.** Monthly,
+   Yearly, and other one-occurrence-per-month schedules clamp Due Days 29/30/31
+   to the last valid calendar day of a short month. Weekly/Biweekly retain their
+   existing clamped anchor behavior.
 6. **Manual Pay / paid-occurrence suppression.** Confirm the exact key
    (`markDashboardBillOccurrencePaid`, payee + due-date) the scenario must reproduce
    to suppress a specific occurrence.

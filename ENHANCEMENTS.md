@@ -51,25 +51,25 @@ Authoritative copy: `TODO.md → Future UI Standardization — Manage Pattern Ro
 
 Manage Bills and Manage Debts proved the pattern. Bank Accounts, Investments, and Houses now share the same client-side mode/list/focus/empty-state primitives while keeping their existing writers and data rules separate. Income Sources remains the next plausible long-lived-entity candidate; transaction/append and singleton workflows should not be forced into this pattern.
 
-### Open Product Decision — Bills recurrence Due-Day month-end overflow vs clamp
+### Resolved Product Decision — Bills recurrence Due-Day month-end clamp
 
-**Status:** OPEN product decision. **Discovered 2026-07-14** by the Bills Recurrence Regression Pack (`REGRESSION-BILLS-31ST`, `REGRESSION-BILLS-LEAP-FEB29`). Behavior is **characterized and asserted exactly** in the harness; production logic is **unchanged**.
+**Status:** RESOLVED 2026-07-30 — clamp to the last valid calendar day. **Discovered 2026-07-14** by the Bills Recurrence Regression Pack (`REGRESSION-BILLS-31ST`, `REGRESSION-BILLS-LEAP-FEB29`) and ratified after a newly-created Due-Day-31 bill surfaced as July 1 instead of July 31.
 
-**Observed behavior (current production).** The recurrence engine (`dashboard_data.js → generateOccurrences_`) treats Due-Day by frequency:
-- **Monthly / Yearly / other one-per-month frequencies (`stepDays === 0`):** the occurrence date is `new Date(year, monthIndex, dueDay)` with **no day-of-month clamp**. When `dueDay` exceeds the month length, JavaScript `Date` **overflows into the next month**:
-  - Due Day 31 in a 30-day month → the **1st of the next month** (e.g. Apr 31 → **May 1**).
-  - Due Day 29 in a non-leap February → **Mar 1** (leap February correctly yields **Feb 29**).
-  - Net effect: the short month gets **no occurrence on any of its own dates**, and the occurrence's stored `monthIndex` can disagree with its `dueDate`.
-- **Weekly / Biweekly (`stepDays > 0`):** the anchor day **is clamped** — `Math.min(Math.max(1, dueDay), daysInMonth)` — so it lands on the month's **last day**, never overflowing.
+**Resolved behavior.** Every day-of-month recurrence anchor remains in its
+logical month. Monthly, Yearly, and other one-occurrence-per-month frequencies
+now clamp Due Days 29/30/31 to the month's last valid day, matching the existing
+Weekly/Biweekly anchor rule. Examples: Apr 31 → Apr 30; non-leap Feb 29/30 →
+Feb 28; leap Feb 30 → Feb 29.
 
-So the two paths are **inconsistent**: high Due-Days clamp for weekly/biweekly but overflow for monthly/yearly.
-
-**Expected-behavior candidates.**
+**Options considered.**
 1. **Clamp monthly/yearly to month-end** (Apr 31 → Apr 30; non-leap Feb 29 → Feb 28). Matches most users' mental model of "end of month" bills and makes the two paths consistent. Behavior change; must be covered by updating the characterization scenarios to the new expectation.
 2. **Keep overflow (document as intended).** No code change; simplest, but surprising for month-end bills and inconsistent with weekly/biweekly.
 3. **Explicit "last day of month" sentinel** (e.g. Due Day 0 / "EOM") separate from a numeric day, leaving numeric overflow as-is. Larger UX + schema change.
 
-**Recommendation:** Candidate **1 (clamp monthly/yearly to month-end)** for consistency with the weekly/biweekly path and least user surprise — but **only as a deliberate, separately-approved change**, because it alters generated due dates for existing month-end bills. Until ratified, the regression pack pins the **current overflow** behavior so any accidental change is caught. Not a beta blocker.
+**Decision:** Candidate **1** was selected for consistency and least user
+surprise. The existing `REGRESSION-BILLS-31ST` and
+`REGRESSION-BILLS-LEAP-FEB29` scenarios now pin the clamped behavior, including
+the exact Jun-30 / Jul-31 boundary that previously fabricated July 1.
 
 ### Future — Shared Entity Lifecycle Framework (lifecycle standardization)
 

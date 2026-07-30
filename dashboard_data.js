@@ -2321,6 +2321,14 @@ function getInputBillsDueRows_(ss, today, tz) {
 
   const rows = [];
   const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  // Google Sheets stores date-only cells as Date instants in the spreadsheet's
+  // timezone. Reading their local JS components can shift them back one day
+  // when the Apps Script/runtime timezone differs (for example, a displayed
+  // Jul 1 floor can become Jun 30). Recover date-only values in the workbook
+  // timezone before recurrence comparisons.
+  const workbookTz = (ss && typeof ss.getSpreadsheetTimeZone === 'function')
+    ? (ss.getSpreadsheetTimeZone() || tz)
+    : tz;
 
   // Phase 1A perf: build each candidate year's Cash Flow row map at most once
   // per request and share it across every bill (monthly and weekly/biweekly).
@@ -2420,17 +2428,12 @@ function getInputBillsDueRows_(ss, today, tz) {
     let scheduleEffectiveDate = null;
     if (colMap.scheduleEffectiveDate !== -1) {
       const rawEff = values[r][colMap.scheduleEffectiveDate];
-      if (rawEff instanceof Date && !isNaN(rawEff.getTime())) {
-        scheduleEffectiveDate = new Date(rawEff.getFullYear(), rawEff.getMonth(), rawEff.getDate());
-      } else {
-        const effStr = String(rawEff == null ? '' : rawEff).trim();
-        if (effStr) {
-          const parsedEff = parseIsoDateAtLocal_(effStr);
-          if (parsedEff && !isNaN(parsedEff.getTime())) {
-            scheduleEffectiveDate = new Date(parsedEff.getFullYear(), parsedEff.getMonth(), parsedEff.getDate());
-          }
-        }
-      }
+      const displayedEff = display[r][colMap.scheduleEffectiveDate];
+      scheduleEffectiveDate = parseDateOnlySheetCell_(
+        rawEff,
+        displayedEff,
+        workbookTz
+      );
     }
     const notes = colMap.notes === -1 ? '' : String(display[r][colMap.notes] || '').trim();
     // Normalize to the same canonical form used by Flow Source writes
@@ -3012,11 +3015,14 @@ function parseBillWeekday_(value) {
  *   2. Legacy weekly/biweekly (rule.weekday == null, stepDays > 0): Due Day
  *      month-anchor + 7/14-day stepping within the month. Unchanged.
  *   3. All other frequencies (stepDays == 0): one Due Day occurrence per
- *      applicable month. Unchanged.
+ *      applicable month, clamped to that month's last valid calendar day.
+ *      A Due Day of 29/30/31 therefore remains in February or another short
+ *      month instead of overflowing into the following month.
  *
  * Blank/absent Weekday keeps rule.weekday == null (and biweekly keeps
- * anchorDate == null unless Weekday+Anchor Date are both valid), so modes 2 and
- * 3 are byte-for-byte identical to the pre-Phase-3 output.
+ * anchorDate == null unless Weekday+Anchor Date are both valid), so recurrence
+ * mode selection remains backward-compatible. Mode 3 deliberately differs at
+ * invalid high days only: it clamps inside the logical month.
  *
  * @param {{ frequency: string, dueDay: number, startMonth: number, stepDays: number, weekday: (number|null), anchorDate: (Date|null) }} rule
  * @param {Date} todayOnly  date-only "today" (the window anchor)
@@ -3046,8 +3052,7 @@ function generateOccurrences_(rule, todayOnly, effectiveDate) {
   // is NOT a monthly-burden average). Due Day is the anchor day-of-month for
   // the first occurrence in each month; subsequent occurrences step forward by
   // 7 days (weekly) or 14 days (biweekly) while they remain in the same month.
-  // All other frequencies emit exactly one occurrence per applicable month
-  // (unchanged behavior).
+  // All other frequencies emit exactly one occurrence per applicable month.
   const stepDays = rule.stepDays;
   const frequency = rule.frequency;
   const dueDay = rule.dueDay;
@@ -3155,7 +3160,16 @@ function generateOccurrences_(rule, todayOnly, effectiveDate) {
       continue;
     }
 
-    const dueDate = new Date(year, monthIndex, dueDay);
+    // One-occurrence-per-month schedules use a day-of-month anchor. JavaScript
+    // rolls an out-of-range date into the following month (for example,
+    // new Date(2026, 5, 31) becomes July 1), which can make a newly-created
+    // July bill appear immediately overdue as a malformed prior-month
+    // occurrence. Keep the occurrence in its logical month by clamping to the
+    // final valid calendar day, matching the existing weekly/biweekly anchor
+    // behavior.
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    const occurrenceDay = Math.min(Math.max(1, dueDay), daysInMonth);
+    const dueDate = new Date(year, monthIndex, occurrenceDay);
     if (isNaN(dueDate.getTime())) continue;
 
     candidates.push({
@@ -3175,8 +3189,8 @@ function generateOccurrences_(rule, todayOnly, effectiveDate) {
   // affects future occurrences (the first surviving occurrence is the first on
   // or after the effective date). A null/invalid effectiveDate means "no clamp"
   // → legacy behavior (all generated occurrences returned unchanged). This is a
-  // pure post-filter: generation, stepping, and sort are untouched, so blank
-  // Weekday / Monthly / Biweekly behavior is byte-for-byte identical.
+  // pure post-filter: generation, stepping, and sort are untouched by the
+  // effective-date floor itself.
   if (effectiveDate instanceof Date && !isNaN(effectiveDate.getTime())) {
     const floorMs = effectiveDate.getTime();
     return candidates.filter(function(c) {
@@ -3191,12 +3205,13 @@ function generateOccurrences_(rule, todayOnly, effectiveDate) {
  * Thin adapter kept for its existing call site in getInputBillsDueRows_.
  *
  * Occurrence generation flows through the pure rule -> occurrences seam
- * (buildRuleFromBillRow_ + generateOccurrences_). For bills with a blank /
- * absent Weekday the output is byte-for-byte identical to the pre-Phase-3
- * implementation (same window, gating, stepping, and sort). When a Weekly bill
- * has a recognized Weekday, generation switches to the weekday-anchored mode;
- * when a Biweekly bill has a recognized Weekday AND a valid Anchor Date,
- * generation switches to the Phase 6A anchor-driven 14-day cadence.
+ * (buildRuleFromBillRow_ + generateOccurrences_). Blank / absent Weekday keeps
+ * the existing mode selection, window, gating, stepping, and sort; the sole
+ * deliberate boundary change is last-valid-day clamping for an invalid high
+ * Due Day in a short month. When a Weekly bill has a recognized Weekday,
+ * generation switches to the weekday-anchored mode; when a Biweekly bill has a
+ * recognized Weekday AND a valid Anchor Date, generation switches to the Phase
+ * 6A anchor-driven 14-day cadence.
  *
  * @param {Date} todayOnly
  * @param {number} dueDay
@@ -3488,6 +3503,36 @@ function parseIsoDateAtLocal_(isoDate) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(isoDate || '').trim());
   if (!m) return null;
   return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+/**
+ * Recover a date-only Sheets cell in the timezone that owns its displayed day.
+ * Date#getFullYear/getMonth/getDate use the runtime timezone and can therefore
+ * shift a workbook date to the previous day when workbook and script timezones
+ * differ. Formatting first in the workbook timezone preserves the user's date.
+ */
+function parseSheetDateAtTimeZone_(value, timeZone) {
+  if (!(value instanceof Date) || isNaN(value.getTime())) return null;
+  const iso = Utilities.formatDate(value, timeZone, 'yyyy-MM-dd');
+  return parseIsoDateAtLocal_(iso);
+}
+
+/**
+ * Parse a date-only Sheets cell without allowing timezone drift.
+ *
+ * Prefer a canonical yyyy-MM-dd display value because that is the exact date
+ * the workbook shows the user. Fall back to a raw Date interpreted in the
+ * workbook timezone, then to a raw canonical string for text-backed cells.
+ */
+function parseDateOnlySheetCell_(rawValue, displayValue, timeZone) {
+  const displayed = parseIsoDateAtLocal_(displayValue);
+  if (displayed && !isNaN(displayed.getTime())) return displayed;
+
+  const dateValue = parseSheetDateAtTimeZone_(rawValue, timeZone);
+  if (dateValue && !isNaN(dateValue.getTime())) return dateValue;
+
+  const rawText = parseIsoDateAtLocal_(rawValue);
+  return rawText && !isNaN(rawText.getTime()) ? rawText : null;
 }
 
 function compareBillsByDueDate_(a, b) {

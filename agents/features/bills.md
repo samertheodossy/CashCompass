@@ -83,7 +83,7 @@ Bills affects near-term cash decisions and the Cash Flow actuals ledger. Incorre
 - An invalid Biweekly weekday/anchor combination is rejected by Add/Edit; the recurrence reader defensively falls back to legacy behavior rather than silently snapping the date.
 - Payee edits never rewrite historical Cash Flow payee text or Activity entries.
 - Stop tracking is a soft deactivate and never reverses payments.
-- Monthly high Due Days currently use JavaScript date overflow rather than month-end clamping; this is characterized, not approved as a final product decision.
+- Monthly and other one-occurrence-per-month high Due Days clamp to the last valid calendar day, matching Weekly/Biweekly anchor behavior.
 
 ## 4. Authoritative Evidence
 
@@ -259,7 +259,7 @@ When sources disagree, this DRAFT follows executable behavior and higher-precede
 13. **Skip preservation:** Skip writes zero only to a resolved blank target cell; it never overwrites a populated amount or creates a missing Cash Flow row. Marker-only fallback is allowed only for a verified active tracked bill, and monthly/expanded recurrence honor the exact marker.
 14. **Soft lifecycle:** Stop tracking changes only Active, preserves the row and payment history, and does not reverse Cash Flow.
 15. **Timezone/date basis:** User-facing and marker dates are date-only values formatted using the Apps Script timezone; recurrence steps use calendar-date construction rather than fixed milliseconds where DST matters.
-16. **Current monthly overflow characterization:** Monthly/non-expanded `new Date(year, month, dueDay)` can overflow Due Day 29/30/31 into the next month instead of clamping. Tests characterize this behavior; product intent is UNKNOWN.
+16. **Month-end clamping:** Monthly/non-expanded Due Days 29/30/31 remain in their logical month and clamp to its final valid calendar day; they never overflow into the following month.
 
 ## 10. State and Lifecycle
 
@@ -350,7 +350,7 @@ Retryable failures include transient reads, lock contention, and stale UI after 
 - Blank workbook: open Bills, Add first bill, verify 14-column Bills sheet, empty-state behavior, Cash Flow year/row creation, and no future month amounts.
 - Existing populated workbook: confirm no data/format wash; only missing optional headers are added; existing rows and user widths are preserved.
 - Central App and bounded app: run the same read/Add/Edit/Stop/Pay/Skip flows against explicitly selected safe targets.
-- Recurrence: Monthly; legacy Weekly/Biweekly; weekday Weekly; anchored Biweekly; Bimonthly; Quarterly; Semi-annually; Yearly; Start Month; year boundary; short-month overflow.
+- Recurrence: Monthly; legacy Weekly/Biweekly; weekday Weekly; anchored Biweekly; Bimonthly; Quarterly; Semi-annually; Yearly; Start Month; year boundary; short-month month-end clamping.
 - Handling: Pay, Skip, AutoPay, Varies, zero/blank cells, repeated refresh, marker failure, and lock contention.
 - Data linkage: exact and normalized payees, missing Cash Flow row, Payment Source/Flow Source, inactive debts/bills, and no-due-date fallback exclusions.
 - Audit: expected Activity event, dedupe key, non-monetary labels, and no duplicate marker.
@@ -392,7 +392,7 @@ Do not treat readiness as approval. Report commit, push, and deployment readines
 | Stop tracking is soft deactivate | Retains auditable history | Delete the row | `bills.js`; `Dashboard_Help.html` |
 | Expanded occurrences use markers | One monthly Cash Flow cell cannot identify individual weekly/biweekly occurrences | Treat any populated month cell as proof every occurrence was handled | `dashboard_data.js`; `Dashboard_Script_Payments.html` |
 | AutoPay lock contention defers writes | Duplicate prevention and responsive UI are higher priority than immediate posting | Block the dashboard or write without a lock | `dashboard_data.js` → `getInputBillsDueRows_` |
-| Short-month overflow remains characterized | Avoid an unapproved behavior change | Clamp Monthly Due Day to month end | `REGRESSION_SUITE_PLAN.md` → 31st/leap scenarios |
+| Short-month Due Days clamp to month end | Match user expectations and prevent logical-month/date disagreement | JavaScript overflow into the following month | `REGRESSION_SUITE_PLAN.md` → 31st/leap scenarios; ratified 2026-07-30 |
 
 ## 17. Risks, Assumptions, and Open Questions
 
@@ -427,7 +427,7 @@ Do not treat readiness as approval. Report commit, push, and deployment readines
 ### Open questions
 
 - **Blocking verification:** Has the weekly/biweekly Bills → Pay bridge now passed the natural runtime validation still marked pending in `PROJECT_CONTEXT.md`?
-- **Product decision:** Should Monthly Due Day 29/30/31 clamp to month end or retain JavaScript overflow?
+- **Resolved 2026-07-30:** Monthly Due Day 29/30/31 clamps to month end; JavaScript overflow is not supported product behavior.
 - **Coverage ownership:** When will Bills be added to `VALIDATOR_SCOPE_OPERATIONAL_` and `getValidatorCanonicalModel_` with a shared header constant?
 - **Lifecycle:** Should Bills gain a dedicated Reactivate flow and duplicate-name protection under the Shared Entity Lifecycle Framework?
 - **Failure atomicity:** Should expanded-occurrence Pay marker creation be moved into the same server transaction/path as the Cash Flow write to reduce partial-success risk?
