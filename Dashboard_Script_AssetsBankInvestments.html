@@ -1,12 +1,14 @@
 /* Assets — Bank Accounts & Investments tabs */
 var bankUpdateDetailsReady_ = false;
 var bankUpdateDetailsRequestId_ = 0;
+var bankSectionRequestId_ = 0;
 
 function fillBankAccountDropdownFromData_(data) {
   const sel = document.getElementById('bank_account');
   if (!sel) return;
   bankUpdateDetailsReady_ = false;
   sel.innerHTML = '<option value=""></option>';
+  sel.disabled = false;
   (data.accounts || []).forEach(function(a) {
     const opt = document.createElement('option');
     opt.value = a;
@@ -333,8 +335,10 @@ function renderBankManageList_() {
 }
 
 function loadBankSection() {
+  const sectionRequestId = ++bankSectionRequestId_;
   document.getElementById('bank_date').value = new Date().toISOString().slice(0, 10);
   bankUpdateDetailsReady_ = false;
+  setSelectLoading('bank_account', 'Loading bank accounts…');
   updateBankUpdateAvailability_();
   // Reconcile Import segment-button visibility on every Bank tab
   // entry. Earlier reveals (in loadBankImportReviewSection) only fire
@@ -346,6 +350,9 @@ function loadBankSection() {
     applyBankImportCsvPasteVisibility_();
   }
   runReadOnlyRpcWithRetry_({
+    isCurrent: function() {
+      return sectionRequestId === bankSectionRequestId_;
+    },
     invoke: function(onSuccess, onFailure) {
       google.script.run
         .withSuccessHandler(onSuccess)
@@ -353,27 +360,37 @@ function loadBankSection() {
         .getBankAccountUiData();
     },
     onSuccess: function(data) {
+      if (sectionRequestId !== bankSectionRequestId_) return;
       fillBankAccountDropdownFromData_(data);
       if (pendingFocus && pendingFocus.tab === 'bank') focusBankTarget_(pendingFocus);
     },
     onRetry: function(info) {
+      if (sectionRequestId !== bankSectionRequestId_) return;
       setStatusLoading('bank_status', info.message);
     },
     onRecovered: function() {
+      if (sectionRequestId !== bankSectionRequestId_) return;
       setStatus('bank_status', '', false);
     },
     onFailure: function(err) {
+      if (sectionRequestId !== bankSectionRequestId_) return;
+      setSelectLoadFailure('bank_account', 'Couldn’t load bank accounts');
       setStatus('bank_status', (err.message || String(err)), true);
     }
   });
 }
 
 function loadBankSectionThenSelect_(accountName) {
+  const sectionRequestId = ++bankSectionRequestId_;
   document.getElementById('bank_date').value =
     document.getElementById('bank_date').value || new Date().toISOString().slice(0, 10);
   bankUpdateDetailsReady_ = false;
+  setSelectLoading('bank_account', 'Loading bank accounts…');
   updateBankUpdateAvailability_();
   runReadOnlyRpcWithRetry_({
+    isCurrent: function() {
+      return sectionRequestId === bankSectionRequestId_;
+    },
     invoke: function(onSuccess, onFailure) {
       google.script.run
         .withSuccessHandler(onSuccess)
@@ -381,6 +398,7 @@ function loadBankSectionThenSelect_(accountName) {
         .getBankAccountUiData();
     },
     onSuccess: function(data) {
+      if (sectionRequestId !== bankSectionRequestId_) return;
       fillBankAccountDropdownFromData_(data);
       const sel = document.getElementById('bank_account');
       if (sel && accountName) {
@@ -390,12 +408,16 @@ function loadBankSectionThenSelect_(accountName) {
       if (pendingFocus && pendingFocus.tab === 'bank') focusBankTarget_(pendingFocus);
     },
     onRetry: function(info) {
+      if (sectionRequestId !== bankSectionRequestId_) return;
       setStatusLoading('bank_status', info.message);
     },
     onRecovered: function() {
+      if (sectionRequestId !== bankSectionRequestId_) return;
       setStatus('bank_status', '', false);
     },
     onFailure: function(err) {
+      if (sectionRequestId !== bankSectionRequestId_) return;
+      setSelectLoadFailure('bank_account', 'Couldn’t load bank accounts');
       setStatus('bank_status', (err.message || String(err)), true);
     }
   });
@@ -746,6 +768,7 @@ function fillInvestmentAccountDropdownFromData_(data) {
   const sel = document.getElementById('inv_account');
   if (!sel) return;
   sel.innerHTML = '<option value=""></option>';
+  sel.disabled = false;
   (data.accounts || []).forEach(function(a) {
     const opt = document.createElement('option');
     opt.value = a;
@@ -911,6 +934,8 @@ function renderInvestmentManageList_() {
 
 function loadInvestmentSection() {
   document.getElementById('inv_date').value = new Date().toISOString().slice(0, 10);
+  setSelectLoading('inv_account', 'Loading investment accounts…');
+  updateInvestmentUpdateAvailability_();
   runReadOnlyRpcWithRetry_({
     invoke: function(onSuccess, onFailure) {
       google.script.run
@@ -928,6 +953,8 @@ function loadInvestmentSection() {
       setStatus('inv_status', '', false);
     },
     onFailure: function(err) {
+      setSelectLoadFailure('inv_account', 'Couldn’t load investment accounts');
+      updateInvestmentUpdateAvailability_();
       setStatus('inv_status', (err.message || String(err)), true);
     }
   });
@@ -936,6 +963,8 @@ function loadInvestmentSection() {
 function loadInvestmentSectionThenSelect_(accountName) {
   document.getElementById('inv_date').value =
     document.getElementById('inv_date').value || new Date().toISOString().slice(0, 10);
+  setSelectLoading('inv_account', 'Loading investment accounts…');
+  updateInvestmentUpdateAvailability_();
   runReadOnlyRpcWithRetry_({
     invoke: function(onSuccess, onFailure) {
       google.script.run
@@ -958,6 +987,8 @@ function loadInvestmentSectionThenSelect_(accountName) {
       setStatus('inv_status', '', false);
     },
     onFailure: function(err) {
+      setSelectLoadFailure('inv_account', 'Couldn’t load investment accounts');
+      updateInvestmentUpdateAvailability_();
       setStatus('inv_status', (err.message || String(err)), true);
     }
   });

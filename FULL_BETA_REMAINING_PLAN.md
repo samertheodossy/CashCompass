@@ -16,8 +16,10 @@ sharing, and verified exact-fixture Trash cleanup. The user completed the
 corresponding Central visual review, and `5i` is committed and pushed as
 `16b6a8f`. Bill occurrence correction (`5j`) is deferred for a later focused
 redesign. `3c`, Planning hierarchy and Debt relationships, is complete through
-isolated Central `@293`; the active item is `3a`, loading-state consistency.
-The full local suite passes and read-only isolated Central `@293` validation
+isolated Central `@293`. `3a`, loading-state consistency, is complete through
+permanent regression coverage and read-only isolated Central `@294`; the active
+item is `3b`, empty/error-state consistency. The full local suite passes, and
+read-only isolated Central `@293` validation
 confirms the three Debt surfaces, exact cross-links, current Setup/Help route,
 the generic Activity **Date** header, and the responsive **Related views**
 secondary-button row. The user completed the `@293` visual check and confirmed
@@ -144,7 +146,7 @@ acceptance contract, close it with evidence rather than manufacturing a redesign
 
 | ID | Remaining item | Exit evidence | Estimate |
 |---|---|---|---:|
-| 3a | Finish loading-state consistency | Remaining Overview, Planner, picker, onboarding, and Admin slots use contextual shared loading states | 1–2 d |
+| 3a | Finish loading-state consistency — **✅ complete** | Overview, Planner, picker, onboarding, and Admin slots use contextual shared loading states; pickers and dependent actions fail closed; stale Bank responses cannot overwrite newer state | Complete at isolated Central `@294` |
 | 3b | Finish empty/error-state consistency | Standard empty, unavailable, retry, and failure patterns cover core surfaces | 1–2 d |
 | 3c | Planning hierarchy and Debt relationships — **✅ complete** | Debt accounts, Debt Overview, and Rolling Payoff purposes and links are understandable; Setup and Help use the current destination | Complete at isolated Central `@293` |
 | 3e | Properties context polish | Selected property/year remains clear; Cash Flow-posting consequences are understandable | 0.5–1 d |

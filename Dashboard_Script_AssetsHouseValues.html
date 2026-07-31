@@ -11,6 +11,7 @@ function fillHouseDropdownFromData_(data) {
   const sel = document.getElementById('house_house');
   if (!sel) return;
   sel.innerHTML = '<option value=""></option>';
+  sel.disabled = false;
   (data.houses || []).forEach(function(h) {
     const opt = document.createElement('option');
     opt.value = h;
@@ -230,6 +231,8 @@ function renderHouseManageList_() {
 
 function loadHouseSection() {
   document.getElementById('house_date').value = new Date().toISOString().slice(0, 10);
+  setSelectLoading('house_house', 'Loading houses…');
+  updateHouseUpdateAvailability_();
   runReadOnlyRpcWithRetry_({
     invoke: function(onSuccess, onFailure) {
       google.script.run
@@ -247,6 +250,8 @@ function loadHouseSection() {
       setStatus('house_status', '', false);
     },
     onFailure: function(err) {
+      setSelectLoadFailure('house_house', 'Couldn’t load houses');
+      updateHouseUpdateAvailability_();
       setStatus('house_status', (err.message || String(err)), true);
     }
   });
@@ -255,6 +260,8 @@ function loadHouseSection() {
 function loadHouseSectionThenSelect_(houseName) {
   document.getElementById('house_date').value =
     document.getElementById('house_date').value || new Date().toISOString().slice(0, 10);
+  setSelectLoading('house_house', 'Loading houses…');
+  updateHouseUpdateAvailability_();
   runReadOnlyRpcWithRetry_({
     invoke: function(onSuccess, onFailure) {
       google.script.run
@@ -277,6 +284,8 @@ function loadHouseSectionThenSelect_(houseName) {
       setStatus('house_status', '', false);
     },
     onFailure: function(err) {
+      setSelectLoadFailure('house_house', 'Couldn’t load houses');
+      updateHouseUpdateAvailability_();
       setStatus('house_status', (err.message || String(err)), true);
     }
   });

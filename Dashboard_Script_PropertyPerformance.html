@@ -2,14 +2,15 @@ function loadPropertyPerformanceSection() {
   const yearSel = document.getElementById('pp_year');
   const year = yearSel && yearSel.value ? Number(yearSel.value) : new Date().getFullYear();
 
-  setStatusLoading('pp_status');
+  if (yearSel) setSelectLoading('pp_year', 'Loading years…');
+  setStatus('pp_status', '', false);
   const msgEl = document.getElementById('pp_message');
   if (msgEl) msgEl.textContent = '';
 
   const tbodyLoading = document.getElementById('pp_tbody');
   if (tbodyLoading) {
     tbodyLoading.innerHTML =
-      '<tr><td colspan="9" style="padding:0;">' + loadingBlockHtml('Loading…', true) + '</td></tr>';
+      '<tr><td colspan="9" style="padding:0;">' + loadingBlockHtml('Loading property performance…', true) + '</td></tr>';
   }
 
   runReadOnlyRpcWithRetry_({
@@ -32,6 +33,7 @@ function loadPropertyPerformanceSection() {
           if (String(y) === currentVal) opt.selected = true;
           yearSel.appendChild(opt);
         });
+        yearSel.disabled = false;
       }
 
       if (msgEl && data && data.message) {
@@ -88,6 +90,7 @@ function loadPropertyPerformanceSection() {
       setStatusLoading('pp_status', info.message);
     },
     onFailure: function(err) {
+      setSelectLoadFailure('pp_year', 'Couldn’t load years');
       setStatus('pp_status', (err.message || String(err)), true);
       const tbody = document.getElementById('pp_tbody');
       if (tbody) {

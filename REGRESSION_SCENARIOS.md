@@ -869,6 +869,27 @@ Whenever a production bug is fixed:
 
 ---
 
+## 3a loading-state consistency coverage
+
+- Contextual loading labels replace generic placeholders across Overview,
+  Planning, tracked-entity pickers, onboarding, and Admin Diagnostics.
+- Async pickers remain disabled while loading. Empty/failure completion is a
+  terminal state, and dependent House, Investment, and House Expense actions
+  cannot become writable without a valid selection.
+- Overlapping Bank requests are generation-guarded so an older success or
+  failure cannot overwrite the newest section state.
+- Paired Overview placeholders expose only one live-region announcement for a
+  single load, avoiding duplicate screen-reader noise.
+- Permanent checks run in `npm run test:dashboard-ux --if-present` and
+  `npm run test:p1-evidence`; the full `npm test` gate also covers performance,
+  populated-harness safety, and production-path audit checks.
+- Read-only isolated Central `@294` confirmed contextual House Expense,
+  Next Actions, Debt Overview, and Rolling Payoff loaders; disabled picker and
+  dependent-action behavior; settled empty pickers; rapid Bank/Debt navigation;
+  a 390 px layout with no horizontal overflow; and zero browser warnings/errors.
+
+---
+
 ## RECOVERY scenarios (design — not historical bugs)
 
 These are not past bugs but permanent damage/heal guards (RECOVERY pack):

@@ -1264,10 +1264,10 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function loadingIndicatorHtml(label) {
+function loadingIndicatorHtml(label, announce) {
   const text = label != null && String(label).trim() !== '' ? String(label) : 'Loading…';
   return (
-    '<span class="dash-loading" role="status" aria-live="polite">' +
+    '<span class="dash-loading"' + (announce === false ? '' : ' role="status" aria-live="polite"') + '>' +
     '<span class="dash-loading-spinner" aria-hidden="true"></span>' +
     '<span class="dash-loading-label">' + escapeHtml(text) + '</span>' +
     '</span>'
@@ -1291,6 +1291,23 @@ function setStatusLoading(id, label) {
   if (!el) return;
   el.innerHTML = loadingIndicatorHtml(label);
   el.className = 'status dash-status-loading';
+}
+
+function setSelectLoading(id, label) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  sel.innerHTML = '';
+  const opt = document.createElement('option');
+  opt.value = '';
+  opt.textContent = label || 'Loading options…';
+  opt.selected = true;
+  opt.disabled = true;
+  sel.appendChild(opt);
+  sel.disabled = true;
+}
+
+function setSelectLoadFailure(id, label) {
+  setSelectLoading(id, label || 'Couldn’t load options');
 }
 
 function escapeJs(value) {

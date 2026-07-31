@@ -214,12 +214,12 @@ function loadRollingDebtPayoffSection() {
   var jsonWrapLoad = document.querySelector('#rollingDebtPayoff .rolling-dp-json-wrap');
   if (jsonWrapLoad) jsonWrapLoad.style.display = 'none';
 
-  if (statusEl) setStatus('rolling_debt_payoff_status', 'Loading…', false);
+  if (statusEl) setStatus('rolling_debt_payoff_status', '', false);
   if (tablesEl) {
     tablesEl.innerHTML =
       typeof loadingIndicatorHtml === 'function'
         ? loadingIndicatorHtml('Building rolling plan…')
-        : '<p class="muted">Loading…</p>';
+        : '<p class="muted">Building rolling plan…</p>';
   }
   if (jsonEl) jsonEl.textContent = '';
 

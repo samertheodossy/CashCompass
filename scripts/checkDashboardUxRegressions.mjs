@@ -14,6 +14,7 @@ const files = Object.fromEntries(await Promise.all([
   'Dashboard_Script_Onboarding.html',
   'Dashboard_Script_Payments.html',
   'Dashboard_Script_PlanningDebts.html',
+  'Dashboard_Script_PlanningDebtPayoff.html',
   'Dashboard_Script_PlanningNextActions.html',
   'Dashboard_Script_PlanningPurchaseSim.html',
   'Dashboard_Script_PlanningRetirement.html',
@@ -43,7 +44,8 @@ const files = Object.fromEntries(await Promise.all([
   'upcoming_expenses.js',
   'test_harness_scenarios_bills.js',
   'test_harness_scenarios.js',
-  'test_harness_scenarios_quick_add.js'
+  'test_harness_scenarios_quick_add.js',
+  'AdminDiagnostics.html'
 ].map(async (name) => [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')])));
 
 const render = files['Dashboard_Script_Render.html'];
@@ -1830,16 +1832,16 @@ assert.match(files['Dashboard_Script_PlanningDebts.html'],
 assert.doesNotMatch(body, /Due Date \(day of month\)/,
   'Debt editor must not restore the ambiguous Due Date label');
 assert.match(body,
-  /data-body="upcoming"><p class="muted">Checking…<\/p>/,
+  /data-body="upcoming"[\s\S]{0,300}?Checking upcoming expenses…/,
   'Optional Upcoming Setup card must identify its initial loading state');
 assert.match(body,
-  /data-body="houses"><p class="muted">Checking…<\/p>/,
+  /data-body="houses"[\s\S]{0,300}?Checking houses…/,
   'Optional Houses Setup card must identify its initial loading state');
 assert.match(files['Dashboard_Script_Onboarding.html'],
-  /onboardingLoadHousesSummary_[\s\S]*?Checking…[\s\S]*?Couldn’t check[\s\S]*?onboardingRenderHousesSummary_[\s\S]*?Couldn’t check[\s\S]*?None yet/,
+  /onboardingLoadHousesSummary_[\s\S]*?Checking houses…[\s\S]*?Couldn’t check[\s\S]*?onboardingRenderHousesSummary_[\s\S]*?Couldn’t check[\s\S]*?None yet/,
   'Houses summary must distinguish loading, failure, and empty states');
 assert.match(files['Dashboard_Script_Onboarding.html'],
-  /onboardingLoadUpcomingSummary_[\s\S]*?Checking…[\s\S]*?Couldn’t check[\s\S]*?onboardingRenderUpcomingSummary_[\s\S]*?Couldn’t check[\s\S]*?None yet/,
+  /onboardingLoadUpcomingSummary_[\s\S]*?Checking upcoming expenses…[\s\S]*?Couldn’t check[\s\S]*?onboardingRenderUpcomingSummary_[\s\S]*?Couldn’t check[\s\S]*?None yet/,
   'Upcoming summary must distinguish loading, failure, and empty states');
 assert.match(files['Dashboard_Script_CashFlowUpcoming.html'],
   /saveBtn\.textContent\s*=\s*['"]Add upcoming expense['"]/,
@@ -2245,5 +2247,204 @@ assert.ok(
 assert.match(styles,
   /@media \(max-width:\s*460px\)[\s\S]*?\.tracked-editor-row[\s\S]*?flex-direction:\s*column/,
   'Tracked-editor inventory rows must stack on narrow screens');
+
+assert.match(render,
+  /function setSelectLoading\([\s\S]*?opt\.disabled = true[\s\S]*?sel\.disabled = true[\s\S]*?function setSelectLoadFailure/,
+  'Async pickers must share a disabled loading and failure presentation');
+for (const [name, source, id, loading, failure] of [
+  ['House', files['Dashboard_Script_AssetsHouseValues.html'], 'house_house', 'Loading houses…', 'Couldn’t load houses'],
+  ['Bank', files['Dashboard_Script_AssetsBankInvestments.html'], 'bank_account', 'Loading bank accounts…', 'Couldn’t load bank accounts'],
+  ['Investment', files['Dashboard_Script_AssetsBankInvestments.html'], 'inv_account', 'Loading investment accounts…', 'Couldn’t load investment accounts'],
+  ['House expense', files['Dashboard_Script_PropertiesHouseExpenses.html'], 'hx_house', 'Loading properties…', 'Couldn’t load properties'],
+  ['Property year', files['Dashboard_Script_PropertyPerformance.html'], 'pp_year', 'Loading years…', 'Couldn’t load years'],
+  ['Debt', files['Dashboard_Script_PlanningDebts.html'], 'debt_account', 'Loading debt accounts…', 'Couldn’t load debt accounts']
+]) {
+  assert.ok(source.includes(`setSelectLoading('${id}', '${loading}')`),
+    `${name} picker must identify its loading state`);
+  assert.ok(source.includes(`setSelectLoadFailure('${id}', '${failure}')`),
+    `${name} picker must remain disabled with a contextual failure option`);
+}
+assert.match(files['Dashboard_Script_CashFlowUpcoming.html'],
+  /ov_upcoming_next7[\s\S]*?ov_upcoming_next30[\s\S]*?Loading upcoming expenses…/,
+  'Overview Upcoming values must publish contextual loading state before data arrives');
+assert.match(files['Dashboard_Script_PropertiesHouseExpenses.html'],
+  /ov_house_thisMonth[\s\S]*?ov_house_ytd[\s\S]*?Loading property expenses…/,
+  'Overview Property values must publish contextual loading state before data arrives');
+assert.doesNotMatch(files['Dashboard_Script_PlanningDebtPayoff.html'],
+  /setStatus\('debt_payoff_read_status', 'Loading…'/,
+  'Debt Overview must not announce a duplicate generic loader');
+assert.doesNotMatch(files['Dashboard_Script_RollingDebtPayoff.html'],
+  /setStatus\('rolling_debt_payoff_status', 'Loading…'/,
+  'Rolling Payoff must not announce a duplicate generic loader');
+assert.match(files['Dashboard_Script_Onboarding.html'],
+  /cls === 'dash-status-loading'[\s\S]*?loadingIndicatorHtml\(text/,
+  'Setup status must use the shared accessible loading indicator');
+assert.match(files['Dashboard_Script_PlanningDebts.html'],
+  /loadingBlockHtml\('Loading active debts…'\)[\s\S]*?loadingBlockHtml\('Loading inactive debts…'\)/,
+  'Debt Manage lists must use shared contextual loaders');
+for (const label of [
+  'Running self-test…',
+  'Loading workbook audit…',
+  'Loading financial integrity audit…',
+  'Loading repair history…'
+]) {
+  assert.ok(files['AdminDiagnostics.html'].includes(label),
+    `Admin Diagnostics must identify the ${label} state`);
+}
+
+function functionSource_(source, name) {
+  const start = source.indexOf(`function ${name}(`);
+  assert.ok(start >= 0, `${name} must exist for behavioral regression coverage`);
+  const brace = source.indexOf('{', start);
+  let depth = 0;
+  for (let i = brace; i < source.length; i += 1) {
+    if (source[i] === '{') depth += 1;
+    if (source[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(start, i + 1);
+    }
+  }
+  assert.fail(`${name} must have a complete function body`);
+}
+
+const selectElements = {};
+const selectContext = vm.createContext({
+  document: {
+    getElementById: (id) => selectElements[id] || null,
+    createElement: () => ({ value: '', textContent: '', selected: false, disabled: false })
+  }
+});
+selectElements.picker = {
+  innerHTML: 'stale',
+  disabled: false,
+  options: [],
+  appendChild(option) { this.options.push(option); }
+};
+vm.runInContext(
+  functionSource_(render, 'setSelectLoading') + '\n' + functionSource_(render, 'setSelectLoadFailure'),
+  selectContext
+);
+selectContext.setSelectLoading('picker', 'Loading choices…');
+assert.equal(selectElements.picker.disabled, true,
+  'A loading picker must be disabled immediately');
+assert.equal(selectElements.picker.options[0].textContent, 'Loading choices…',
+  'A loading picker must explain what is loading');
+selectContext.setSelectLoadFailure('picker', 'Couldn’t load choices');
+assert.equal(selectElements.picker.disabled, true,
+  'A failed picker must remain disabled');
+assert.equal(selectElements.picker.options.at(-1).textContent, 'Couldn’t load choices',
+  'A failed picker must replace loading copy with a terminal failure state');
+
+function overviewFailureContext_(source, functionName, elementIds) {
+  const elements = Object.fromEntries(elementIds.map((id) => [id, { innerHTML: '', textContent: '' }]));
+  elements.up_dueDate = { value: '' };
+  let failureHandler = null;
+  const runner = {
+    withSuccessHandler() { return this; },
+    withFailureHandler(handler) { failureHandler = handler; return this; },
+    getUpcomingExpensesUiData() {},
+    getHouseExpenseSummaryData() {}
+  };
+  const context = vm.createContext({
+    document: { getElementById: (id) => elements[id] || null },
+    google: { script: { run: runner } },
+    loadingIndicatorHtml: (label, announce) => `${label}|${announce}`,
+    loadingBlockHtml: (label) => label,
+    setStatus() {},
+    escapeHtml: String,
+    customerSafeErrorMessage_: () => 'Could not load.',
+    window: { __dashboardState: 'setUp' }
+  });
+  vm.runInContext(functionSource_(source, functionName), context);
+  context[functionName]();
+  assert.equal(typeof failureHandler, 'function', `${functionName} must register a failure handler`);
+  failureHandler(new Error('offline'));
+  return elements;
+}
+
+const upcomingFailureElements = overviewFailureContext_(
+  files['Dashboard_Script_CashFlowUpcoming.html'],
+  'loadUpcomingSection',
+  ['ov_upcoming_next7', 'ov_upcoming_next30']
+);
+assert.deepEqual(
+  [upcomingFailureElements.ov_upcoming_next7.textContent, upcomingFailureElements.ov_upcoming_next30.textContent],
+  ['—', '—'],
+  'Upcoming failure must replace every Overview loading placeholder with a terminal value'
+);
+
+const houseSummaryFailureElements = overviewFailureContext_(
+  files['Dashboard_Script_PropertiesHouseExpenses.html'],
+  'loadHouseExpenseSummaries',
+  [
+    'ov_house_thisMonth',
+    'ov_house_ytd',
+    'hx_summaryThisMonthByHouse',
+    'hx_summaryYtdByHouse',
+    'hx_summaryYtdByType'
+  ]
+);
+assert.deepEqual(
+  [houseSummaryFailureElements.ov_house_thisMonth.textContent, houseSummaryFailureElements.ov_house_ytd.textContent],
+  ['—', '—'],
+  'Property-summary failure must replace every Overview loading placeholder with a terminal value'
+);
+
+const bankSource = files['Dashboard_Script_AssetsBankInvestments.html'];
+const bankRequests = [];
+const bankFailureEvents = [];
+const bankContext = vm.createContext({
+  document: { getElementById: () => ({ value: '' }) },
+  setSelectLoading() {},
+  setSelectLoadFailure: (...args) => bankFailureEvents.push(['picker', ...args]),
+  updateBankUpdateAvailability_() {},
+  applyBankImportCsvPasteVisibility_() {},
+  runReadOnlyRpcWithRetry_: (request) => bankRequests.push(request),
+  setStatusLoading: (...args) => bankFailureEvents.push(['retry', ...args]),
+  setStatus: (...args) => bankFailureEvents.push(['status', ...args]),
+  fillBankAccountDropdownFromData_() {},
+  focusBankTarget_() {},
+  loadBankData() {},
+  pendingFocus: null,
+  String
+});
+vm.runInContext(
+  'var bankUpdateDetailsReady_ = false; var bankSectionRequestId_ = 0;\n' +
+    functionSource_(bankSource, 'loadBankSection'),
+  bankContext
+);
+bankContext.loadBankSection();
+bankContext.loadBankSection();
+assert.equal(bankRequests.length, 2, 'Overlapping Bank section reads must remain independently tracked');
+bankRequests[0].onFailure(new Error('stale failure'));
+assert.equal(bankFailureEvents.length, 0,
+  'An older Bank failure must not overwrite the newer picker or status');
+bankRequests[1].onFailure(new Error('current failure'));
+assert.equal(bankFailureEvents.some((event) => event[0] === 'picker'), true,
+  'The current Bank failure must publish its terminal picker state');
+
+for (const [name, source, loader, availability] of [
+  ['House', files['Dashboard_Script_AssetsHouseValues.html'], 'loadHouseSection', 'updateHouseUpdateAvailability_'],
+  ['Investment', bankSource, 'loadInvestmentSection', 'updateInvestmentUpdateAvailability_'],
+  ['House expense', files['Dashboard_Script_PropertiesHouseExpenses.html'], 'loadHouseExpensesSection', 'updateHouseExpenseAvailability_']
+]) {
+  const loaderSource = functionSource_(source, loader);
+  assert.match(loaderSource,
+    new RegExp(`setSelectLoading\\([\\s\\S]*?${availability}\\(\\)`),
+    `${name} action availability must be recomputed immediately after loading clears its picker`);
+  assert.match(loaderSource,
+    new RegExp(`setSelectLoadFailure\\([\\s\\S]*?${availability}\\(\\)`),
+    `${name} action availability must remain disabled after picker failure`);
+}
+
+assert.match(render,
+  /function loadingIndicatorHtml\(label, announce\)[\s\S]*?announce === false/,
+  'Shared inline loaders must support one visual-only duplicate without a second live announcement');
+assert.match(files['Dashboard_Script_CashFlowUpcoming.html'],
+  /loadingIndicatorHtml\('Loading upcoming expenses…', index === 0\)/,
+  'Overview Upcoming must emit only one accessible announcement per paired load');
+assert.match(files['Dashboard_Script_PropertiesHouseExpenses.html'],
+  /loadingIndicatorHtml\('Loading property expenses…', index === 0\)/,
+  'Overview Property totals must emit only one accessible announcement per paired load');
 
 console.log('Dashboard UX regression checks passed.');

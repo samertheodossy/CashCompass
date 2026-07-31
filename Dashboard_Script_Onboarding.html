@@ -151,7 +151,11 @@ function onboardingBackToDashboard() {
 function onboardingSetStatus_(text, cls) {
   var el = document.getElementById('onboarding_status');
   if (!el) return;
-  el.textContent = cls === 'error' ? customerSafeErrorMessage_(text) : (text || '');
+  if (cls === 'dash-status-loading') {
+    el.innerHTML = loadingIndicatorHtml(text || 'Loading setup…');
+  } else {
+    el.textContent = cls === 'error' ? customerSafeErrorMessage_(text) : (text || '');
+  }
   el.className = 'status' + (cls ? ' ' + cls : '');
 }
 
@@ -372,7 +376,7 @@ function onboardingApplyStatusGrid_(data) {
 function onboardingLoadHousesSummary_() {
   var body = document.querySelector('[data-body="houses"]');
   if (!body) return;
-  body.innerHTML = '<p class="muted">Checking…</p>';
+  body.innerHTML = loadingIndicatorHtml('Checking houses…');
 
   google.script.run
     .withSuccessHandler(function(data) { onboardingRenderHousesSummary_(data); })
@@ -406,7 +410,7 @@ function onboardingRenderHousesSummary_(data) {
 function onboardingLoadUpcomingSummary_() {
   var body = document.querySelector('[data-body="upcoming"]');
   if (!body) return;
-  body.innerHTML = '<p class="muted">Checking…</p>';
+  body.innerHTML = loadingIndicatorHtml('Checking upcoming expenses…');
 
   google.script.run
     .withSuccessHandler(function(data) { onboardingRenderUpcomingSummary_(data); })

@@ -24,6 +24,8 @@ function updateHouseExpenseAvailability_() {
 
 function loadHouseExpensesSection() {
   document.getElementById('hx_date').value = new Date().toISOString().slice(0, 10);
+  setSelectLoading('hx_house', 'Loading properties…');
+  updateHouseExpenseAvailability_();
 
   runReadOnlyRpcWithRetry_({
     invoke: function(onSuccess, onFailure) {
@@ -37,6 +39,7 @@ function loadHouseExpensesSection() {
 
       const sel = document.getElementById('hx_house');
       sel.innerHTML = '';
+      sel.disabled = false;
 
       houseExpenseOptions.forEach(function(h) {
         const opt = document.createElement('option');
@@ -62,6 +65,8 @@ function loadHouseExpensesSection() {
       setStatusLoading('hx_status', info.message);
     },
     onFailure: function(err) {
+      setSelectLoadFailure('hx_house', 'Couldn’t load properties');
+      updateHouseExpenseAvailability_();
       setStatus('hx_status', (err.message || String(err)), true);
     }
   });
@@ -69,7 +74,7 @@ function loadHouseExpensesSection() {
 
 function loadRecentHouseExpenses() {
   const recentRoot = document.getElementById('hx_recentList');
-  if (recentRoot) recentRoot.innerHTML = loadingBlockHtml('Loading…');
+  if (recentRoot) recentRoot.innerHTML = loadingBlockHtml('Loading recent property expenses…');
 
   google.script.run
     .withSuccessHandler(function(data) {
@@ -147,9 +152,13 @@ function renderRecentHouseExpenses(groups) {
 }
 
 function loadHouseExpenseSummaries() {
+  ['ov_house_thisMonth', 'ov_house_ytd'].forEach(function(id, index) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = loadingIndicatorHtml('Loading property expenses…', index === 0);
+  });
   ['hx_summaryThisMonthByHouse', 'hx_summaryYtdByHouse', 'hx_summaryYtdByType'].forEach(function(id) {
     const root = document.getElementById(id);
-    if (root) root.innerHTML = loadingBlockHtml('Loading…');
+    if (root) root.innerHTML = loadingBlockHtml('Loading property expense summary…');
   });
 
   google.script.run
@@ -196,6 +205,10 @@ function loadHouseExpenseSummaries() {
       if (ovYtd) ovYtd.textContent = ovBlank ? '—' : fmtCurrency(ytdTotal);
     })
     .withFailureHandler(function(err) {
+      ['ov_house_thisMonth', 'ov_house_ytd'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '—';
+      });
       ['hx_summaryThisMonthByHouse', 'hx_summaryYtdByHouse', 'hx_summaryYtdByType'].forEach(function(id) {
         const root = document.getElementById(id);
         if (root) {

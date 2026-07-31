@@ -3,6 +3,11 @@ function loadUpcomingSection() {
   document.getElementById('up_dueDate').value =
     document.getElementById('up_dueDate').value || new Date().toISOString().slice(0, 10);
 
+  ['ov_upcoming_next7', 'ov_upcoming_next30'].forEach(function(id, index) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = loadingIndicatorHtml('Loading upcoming expenses…', index === 0);
+  });
+
   google.script.run
     .withSuccessHandler(function(data) {
       upcomingExpenses = data.expenses || [];
@@ -14,6 +19,10 @@ function loadUpcomingSection() {
       }
     })
     .withFailureHandler(function(err) {
+      ['ov_upcoming_next7', 'ov_upcoming_next30'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '—';
+      });
       setStatus('upcoming_status', (err.message || String(err)), true);
     })
     .getUpcomingExpensesUiData();

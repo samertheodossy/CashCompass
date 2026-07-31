@@ -458,7 +458,9 @@ const debtRaceCtx = vm.createContext({
   runReadOnlyRpcWithRetry_: (options) => options.invoke(options.onSuccess, options.onFailure),
   loadDebtFieldValue: () => {},
   setStatus: () => {},
-  setStatusLoading: () => {}
+  setStatusLoading: () => {},
+  setSelectLoading: () => {},
+  setSelectLoadFailure: () => {}
 });
 vm.runInContext(debtLoaderMatch[0].replace(/\n\/\/ First-run fallback$/, ''), debtRaceCtx);
 debtRaceCtx.loadDebtSection();

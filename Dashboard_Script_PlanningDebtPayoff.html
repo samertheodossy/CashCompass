@@ -7,7 +7,7 @@ function loadDebtPayoffReadSection() {
   var statusEl = document.getElementById('debt_payoff_read_status');
   var wrap = document.getElementById('debt_payoff_read_table_wrap');
   if (statusEl) {
-    setStatus('debt_payoff_read_status', 'Loading…', false);
+    setStatus('debt_payoff_read_status', '', false);
   }
   var sumEl = document.getElementById('debt_payoff_read_summary');
   var recEl = document.getElementById('debt_payoff_read_recommendations');
@@ -23,7 +23,7 @@ function loadDebtPayoffReadSection() {
     wrap.innerHTML =
       typeof loadingIndicatorHtml === 'function'
         ? loadingIndicatorHtml('Loading payoff data…')
-        : '<p class="muted">Loading…</p>';
+        : '<p class="muted">Loading payoff data…</p>';
   }
 
   google.script.run

@@ -10,6 +10,7 @@ var debtSectionRequestId_ = 0;
 function loadDebtSection() {
   const sectionRequestId = ++debtSectionRequestId_;
   debtUpdateDetailsReady_ = false;
+  setSelectLoading('debt_account', 'Loading debt accounts…');
   updateDebtUpdateAvailability_();
   runReadOnlyRpcWithRetry_({
     isCurrent: function() {
@@ -59,6 +60,7 @@ function loadDebtSection() {
     },
     onFailure: function(err) {
       if (sectionRequestId !== debtSectionRequestId_) return;
+      setSelectLoadFailure('debt_account', 'Couldn’t load debt accounts');
       setStatus('debt_status', (err.message || String(err)), true);
     }
   });
@@ -67,6 +69,7 @@ function loadDebtSection() {
 function loadDebtSectionThenSelect_(accountName) {
   const sectionRequestId = ++debtSectionRequestId_;
   debtUpdateDetailsReady_ = false;
+  setSelectLoading('debt_account', 'Loading debt accounts…');
   updateDebtUpdateAvailability_();
   runReadOnlyRpcWithRetry_({
     isCurrent: function() {
@@ -114,6 +117,7 @@ function loadDebtSectionThenSelect_(accountName) {
     },
     onFailure: function(err) {
       if (sectionRequestId !== debtSectionRequestId_) return;
+      setSelectLoadFailure('debt_account', 'Couldn’t load debt accounts');
       setStatus('debt_status', (err.message || String(err)), true);
     }
   });
@@ -310,8 +314,7 @@ var __debtEditing = null; // { sheetRow, accountName }
 function loadActiveDebtsManagementUi_() {
   const host = document.getElementById('debt_manage_list');
   if (host) {
-    host.innerHTML =
-      '<div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></div>';
+    host.innerHTML = loadingBlockHtml('Loading active debts…');
   }
   google.script.run
     .withSuccessHandler(function(rows) {
@@ -768,8 +771,7 @@ function toggleInactiveDebtsView_() {
 function refreshInactiveDebts_() {
   const host = document.getElementById('debt_inactive_list');
   if (host) {
-    host.innerHTML =
-      '<div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading…</span></div>';
+    host.innerHTML = loadingBlockHtml('Loading inactive debts…');
   }
   google.script.run
     .withSuccessHandler(function(rows) {
@@ -1035,6 +1037,7 @@ function filterDebtAccounts() {
   const filterType = document.getElementById('debt_typeFilter').value || 'All';
   const sel = document.getElementById('debt_account');
   sel.innerHTML = '<option value=""></option>';
+  sel.disabled = false;
 
   allDebtRows.filter(function(d) {
     return filterType === 'All' || d.type === filterType;
