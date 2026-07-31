@@ -63,6 +63,18 @@ function billPayAmountValue_() {
   return toNumber(raw);
 }
 
+function billPayAmountFocus_() {
+  var input = document.getElementById('bill_pay_amount');
+  if (!input) return;
+  var amount = toNumber(input.value);
+  if (isFinite(amount)) input.value = fmtCurrency(amount);
+  try { input.select(); } catch (_e) {}
+  setTimeout(function() {
+    if (document.activeElement !== input) return;
+    try { input.select(); } catch (_e) {}
+  }, 0);
+}
+
 function updateBillPaySubmitLabel_() {
   var button = document.getElementById('bill_pay_submit_btn');
   if (!button || __billPayDrawerBusy) return;

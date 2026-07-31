@@ -40,6 +40,8 @@ Recurring `INPUT - Bills` rows support Monthly, Weekly, Biweekly, Bimonthly, Qua
 
 Pay opens Quick add with bill details prefilled. Skip first confirms that no payment will be recorded and future occurrences remain active. It writes a zero only into a resolved blank Cash Flow month cell and always records a deduplicated `bill_skip` marker; when an active tracked bill has no matching Cash Flow row, Skip records only the marker and never fabricates a ledger row. AutoPay records past-due actual activity, not forecasts. Monthly, Weekly, and Biweekly occurrences honor per-occurrence Skip markers; Weekly/Biweekly also use per-occurrence Pay/AutoPay markers because multiple occurrences share one monthly Cash Flow cell.
 
+Bill Pay keeps the editable amount currency-formatted while focused. A successful manual payment remains two coordinated immutable audit records—a monetary `quick_pay` row and a non-monetary `bill_paid` occurrence marker—but the customer-facing Activity table hides the internal marker and presents the monetary row once as **Bill paid** with its amount.
+
 ### Business and financial significance
 
 Bills affects near-term cash decisions and the Cash Flow actuals ledger. Incorrect occurrence dates, duplicate AutoPay writes, lost Pay/Skip markers, or payee-link drift can overstate or understate cash obligations and erode user trust. The project therefore treats recurrence correctness, exactly-once writes, populated-workbook preservation, and the actuals-versus-projection boundary as financial invariants.

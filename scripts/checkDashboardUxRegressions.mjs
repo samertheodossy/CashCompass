@@ -579,6 +579,7 @@ const activityServerContext = {
   },
   round2_(value) { return Math.round(Number(value) * 100) / 100; },
   toNumber_(value) { return Number(value) || 0; },
+  normalizeBillName_(value) { return String(value || '').trim().toLowerCase(); },
   getCurrentUserEmail_() { return 'fixture@example.com'; },
   getUserSpreadsheet_() {
     return {
@@ -594,6 +595,67 @@ const activityServerContext = {
   }
 };
 vm.runInNewContext(activityServer, activityServerContext);
+assert.equal(
+  activityServerContext.activityLogActionLabel_(
+    'quick_pay',
+    JSON.stringify({ activityOrigin: 'bill_payment' })
+  ),
+  'Bill paid',
+  'Bills Due money movement must carry the customer-facing Bill paid label'
+);
+assert.equal(
+  activityServerContext.activityLogActionLabel_(
+    'quick_pay',
+    JSON.stringify({ activityOrigin: 'direct_quick_add' })
+  ),
+  '',
+  'Direct Quick Add must not be mislabeled as a Bills Due payment'
+);
+assert.equal(activityServerContext.activityLogHiddenFromDashboard_('bill_paid'), true,
+  'The internal paid-occurrence marker must stay out of the customer-facing Activity table');
+assert.equal(activityServerContext.activityLogHiddenFromDashboard_('quick_pay'), false,
+  'The monetary Bills Due payment must remain visible in Activity');
+const billPaymentActivityRows = [
+  [
+    '2026-07-31 08:06:00', 'quick_pay', '2026-07-31', 234, 'expense',
+    'Fixture Bill', '', '', 'INPUT - Cash Flow 2026', 'Jul-26', '',
+    JSON.stringify({ activityOrigin: 'bill_payment' })
+  ],
+  [
+    '2026-07-31 08:06:01', 'bill_paid', '2026-07-31', 0, 'expense',
+    'Fixture Bill', '', '', '', 'Jul-26', 'bill_paid::fixture',
+    JSON.stringify({ source: 'bills_due_pay', occurrence: true, amount: 234 })
+  ]
+];
+const originalActivitySpreadsheetResolver = activityServerContext.getUserSpreadsheet_;
+activityServerContext.getUserSpreadsheet_ = () => ({
+  getSheetByName(name) {
+    if (name !== 'LOG - Activity') return null;
+    return {
+      getLastRow() { return billPaymentActivityRows.length + 1; },
+      getRange() {
+        return { getDisplayValues() { return billPaymentActivityRows; } };
+      }
+    };
+  }
+});
+const billPaymentActivity = activityServerContext.getActivityDashboardData({
+  dateFrom: '2026-07-31',
+  dateTo: '2026-07-31',
+  payeeSearch: 'Fixture Bill',
+  kindType: 'Bill'
+});
+assert.equal(billPaymentActivity.ok, true,
+  `Bills Pay Activity read model must load successfully: ${JSON.stringify(billPaymentActivity)}`);
+assert.equal(billPaymentActivity.rows.length, 1,
+  'One Bills Pay action must render as one customer-facing Activity row');
+assert.equal(billPaymentActivity.rows[0].eventType, 'quick_pay',
+  'The visible Bills Pay Activity row must be the monetary record');
+assert.equal(billPaymentActivity.rows[0].amountNum, 234,
+  'The visible Bills Pay Activity row must retain the payment amount');
+assert.equal(billPaymentActivity.rows[0].actionLabel, 'Bill paid',
+  'The visible Bills Pay Activity row must explain why the amount was recorded');
+activityServerContext.getUserSpreadsheet_ = originalActivitySpreadsheetResolver;
 const forgedActivityDeleteResult = activityServerContext.deleteActivityLogRow(2);
 assert.equal(forgedActivityDeleteResult.ok, false,
   'Activity server must reject a forged non-Donation delete request');
@@ -1500,6 +1562,9 @@ assert.match(body,
   /id="bill_pay_drawer_backdrop"[\s\S]*?id="bill_pay_drawer"[\s\S]*?role="dialog"[\s\S]*?aria-modal="true"[\s\S]*?id="bill_pay_amount"[\s\S]*?id="bill_pay_date"[\s\S]*?id="bill_pay_submit_btn"/,
   'Bills Pay must open an accessible drawer with editable amount and payment date');
 assert.match(body,
+  /id="bill_pay_amount"[\s\S]{0,260}?onfocus="billPayAmountFocus_\(\)"/,
+  'Bills Pay amount must retain customer-facing currency formatting while focused');
+assert.match(body,
   /id="bill_pay_confirmation"[^>]*hidden[\s\S]*?id="bill_pay_confirmation_month"[\s\S]*?id="bill_pay_confirmation_previous"[\s\S]*?id="bill_pay_confirmation_added"[\s\S]*?id="bill_pay_confirmation_total"[\s\S]*?id="bill_pay_done_btn"[\s\S]*?hidden>Done<\/button>/,
   'Bills Pay must retain the drawer for a reviewed month-total receipt before Done closes it');
 assert.match(body,
@@ -1521,6 +1586,39 @@ assert.match(styles,
   /@media \(max-width:\s*460px\)[\s\S]*?\.bill-pay-drawer\s*\{[\s\S]*?width:\s*100vw;/,
   'Bills Pay drawer must remain usable on a narrow screen');
 const billsDueClient = files['Dashboard_Script_BillsDue.html'];
+assert.match(billsDueClient,
+  /function billPayAmountFocus_\(\)[\s\S]*?input\.value = fmtCurrency\(amount\)[\s\S]*?input\.select\(\)/,
+  'Bills Pay focus must preserve $0.00 currency formatting while selecting the editable value');
+const billPayFocusStart = billsDueClient.indexOf('function billPayAmountFocus_(');
+const billPayFocusEnd = billsDueClient.indexOf('function updateBillPaySubmitLabel_(', billPayFocusStart);
+assert.ok(billPayFocusStart >= 0 && billPayFocusEnd > billPayFocusStart,
+  'Bills Pay amount focus must remain directly testable');
+const billPayFocusInput = {
+  value: '$550.00',
+  selectCount: 0,
+  select() { this.selectCount += 1; }
+};
+const billPayFocusDocument = {
+  activeElement: billPayFocusInput,
+  getElementById(id) { return id === 'bill_pay_amount' ? billPayFocusInput : null; }
+};
+const billPayAmountFocusForRegression = Function(
+  'document',
+  'setTimeout',
+  'toNumber',
+  'fmtCurrency',
+  `${billsDueClient.slice(billPayFocusStart, billPayFocusEnd)}; return billPayAmountFocus_;`
+)(
+  billPayFocusDocument,
+  (fn) => fn(),
+  (value) => Number(String(value).replace(/[$,]/g, '')),
+  (value) => `$${Number(value).toFixed(2)}`
+);
+billPayAmountFocusForRegression();
+assert.equal(billPayFocusInput.value, '$550.00',
+  'Focused Bills Pay amount must stay formatted as currency');
+assert.ok(billPayFocusInput.selectCount >= 1,
+  'Focused Bills Pay amount must remain fully selected for immediate replacement');
 assert.match(billsDueClient,
   /function confirmAndSkipBill_[\s\S]*?No payment will be recorded[\s\S]*?this occurrence will be removed from Bills[\s\S]*?future occurrences will still appear/,
   'Skip must require an explicit customer-facing consequence confirmation');

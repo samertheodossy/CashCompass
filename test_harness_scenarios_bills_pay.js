@@ -57,6 +57,13 @@ function getHarnessBillsPayE2EScenario_() {
       }
       ctx.assert.equals('Quick Pay Activity row', quickPayCount, 1, { module: 'Bills Pay', location: ACTIVITY_LOG_SHEET_NAME });
       ctx.assert.equals('Handled marker deduplicated', paidCount, 1, { module: 'Bills Pay', location: ACTIVITY_LOG_SHEET_NAME });
+      ctx.assert.equals('Bills Pay monetary row label',
+        activityLogActionLabel_('quick_pay', JSON.stringify({ activityOrigin: 'bill_payment' })),
+        'Bill paid',
+        { module: 'Bills Pay', location: 'Activity dashboard read model' });
+      ctx.assert.equals('Paid occurrence marker hidden from Activity dashboard',
+        activityLogHiddenFromDashboard_('bill_paid'), true,
+        { module: 'Bills Pay', location: 'Activity dashboard read model' });
       ctx.assert.equals('Linked Bill Quick Pay envelope is audit-only',
         quickPayEnvelope && quickPayEnvelope.status, 'AUDIT_ONLY',
         { module: 'Bills Pay', location: ACTIVITY_LOG_SHEET_NAME + ' / Details' });

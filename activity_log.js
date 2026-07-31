@@ -1865,6 +1865,8 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
 function activityLogActionLabel_(eventType, detailsJson) {
   var et = String(eventType || '').trim().toLowerCase();
   switch (et) {
+    case 'quick_pay':
+      return activityLogQuickPayActionLabel_(detailsJson);
     case 'bill_add': return 'Bill added';
     // bill_update is non-monetary (Amount renders "—") because a
     // field edit on a tracked bill doesn't move money. The action
@@ -1876,9 +1878,9 @@ function activityLogActionLabel_(eventType, detailsJson) {
     case 'bill_deactivate': return 'Tracking stopped';
     case 'bill_skip': return 'Bill skipped';
     case 'bill_autopay': return 'Bill autopay';
-    // Per-occurrence "handled by manual pay" marker for weekly/biweekly bills.
-    // The money lives on the partner quick_pay row; this row only records that
-    // the specific occurrence was paid so Bills Due suppresses it (Amount "—").
+    // Per-occurrence "handled by manual pay" markers are intentionally hidden
+    // from the customer-facing Activity table. The label remains available for
+    // internal/read-only consumers of the immutable log.
     case 'bill_paid': return 'Bill paid';
     case 'bank_account_add': return 'Account added';
     // bank_account_update is non-monetary (Amount renders "—") because the
@@ -1983,6 +1985,26 @@ function activityLogActionLabel_(eventType, detailsJson) {
     case 'bank_import_apply_balance': return 'Applied imported balance';
     default: return '';
   }
+}
+
+/**
+ * A Bills Due payment writes its dollars as quick_pay and links the occurrence
+ * through a separate bill_paid marker. Label the monetary row so the Activity
+ * table can present the action as one clear customer-facing event.
+ */
+function activityLogQuickPayActionLabel_(detailsJson) {
+  var details = activityJsonObject_(detailsJson);
+  return String(details.activityOrigin || '').trim() === 'bill_payment'
+    ? 'Bill paid'
+    : '';
+}
+
+/**
+ * Internal coordination markers remain in LOG - Activity for occurrence
+ * suppression and audit, but are not separate customer-facing Activity rows.
+ */
+function activityLogHiddenFromDashboard_(eventType) {
+  return String(eventType || '').trim().toLowerCase() === 'bill_paid';
 }
 
 function quickPayCorrectionActionLabel_(detailsJson) {
@@ -2674,6 +2696,9 @@ function getActivityDashboardData(filters) {
 
       var payee = String(r[5] || '').trim();
       var eventType = String(r[1] || '').trim();
+      if (activityLogHiddenFromDashboard_(eventType)) {
+        continue;
+      }
       var direction = String(r[4] || '').trim();
       var logCategory = String(r[6] || '').trim();
       var amtVal = round2_(toNumber_(r[3]));
