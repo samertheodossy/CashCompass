@@ -921,7 +921,7 @@ function getOnboardingDebtsFromDashboard(mode) {
 
 /**
  * Ensure the live INPUT - Debts sheet exists before the user is handed
- * off to the full Planning → Debts editor from onboarding.
+ * off to Assets & Liabilities → Debt accounts from onboarding.
  *
  * Localized safeguard, same contract as ensureOnboardingBankAccounts-
  * SheetFromDashboard:
@@ -931,7 +931,7 @@ function getOnboardingDebtsFromDashboard(mode) {
  *     schema recognized by the existing Debts readers (getDebtsHeader-
  *     Map_ in debts.js and the probe in this file). Column order
  *     mirrors addDebtFromDashboard so the new sheet is immediately
- *     usable by the Planning → Debts Add / Manage surfaces.
+ *     usable by the Debt accounts Add / Manage surfaces.
  *   - No data rows are seeded — no fake debts, no TOTAL DEBT summary,
  *     no activity log entries.
  *

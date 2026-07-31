@@ -1607,7 +1607,14 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div class="panel-head">
         <div>
           <h2 id="debt_panel_title">Debt accounts</h2>
-          <p class="planning-panel-purpose">Maintain the balances and terms used throughout Planning.</p>
+          <p class="planning-panel-purpose">
+            Maintain the balances and terms used throughout Planning.
+          </p>
+          <nav class="related-view-nav" aria-label="Related debt views">
+            <span class="related-view-nav-label">Related views</span>
+            <button type="button" class="small-btn" onclick="showTab('debtPayoff')">View Debt Overview</button>
+            <button type="button" class="small-btn" onclick="showTab('rollingDebtPayoff')">Open Rolling Payoff</button>
+          </nav>
         </div>
         <div class="updated">Last updated: <span id="debt_updated">—</span></div>
       </div>
@@ -1941,11 +1948,14 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             Debt Overview
             <span class="muted" style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-left:8px;padding:2px 8px;border:1px solid #cbd5e1;border-radius:999px;vertical-align:middle;">Reference</span>
           </h2>
-          <p class="muted" style="margin:4px 0 0 0;font-size:13px;line-height:1.45;">
+          <p class="planning-panel-purpose">
             Review the current debt position and payoff outlook; no account changes are made here.
-            For this month's action plan, see
-            <a href="#" onclick="showTab('rollingDebtPayoff');return false;">Rolling Debt Payoff</a>.
           </p>
+          <nav class="related-view-nav" aria-label="Related debt views">
+            <span class="related-view-nav-label">Related views</span>
+            <button type="button" class="small-btn" onclick="showTab('debts')">Manage Debt Accounts</button>
+            <button type="button" class="small-btn" onclick="showTab('rollingDebtPayoff')">Open Rolling Payoff</button>
+          </nav>
         </div>
         <button type="button" onclick="loadDebtPayoffReadSection()">Refresh</button>
       </div>
@@ -1986,10 +1996,14 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div class="panel-head">
         <div>
           <h2>Rolling debt payoff</h2>
-          <p class="muted" style="margin:4px 0 0 0;font-size:13px;line-height:1.45;">
-            Build an actionable month-by-month payoff plan from current balances. For portfolio-level balances and minimums, see
-            <a href="#" onclick="showTab('debtPayoff');return false;">Debt Overview</a>.
+          <p class="planning-panel-purpose">
+            Build an actionable month-by-month payoff plan from current balances.
           </p>
+          <nav class="related-view-nav" aria-label="Related debt views">
+            <span class="related-view-nav-label">Related views</span>
+            <button type="button" class="small-btn" onclick="showTab('debts')">Manage Debt Accounts</button>
+            <button type="button" class="small-btn" onclick="showTab('debtPayoff')">View Debt Overview</button>
+          </nav>
         </div>
       </div>
       <div class="rolling-dp-controls-row">
@@ -2330,7 +2344,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
     <!--
       View 4: Debts detail. Opened from the status grid when the user
       clicks the Debts card. Read-only: shows what is currently tracked
-      on INPUT - Debts and links out to the existing Planning → Debts
+      on INPUT - Debts and links out to Assets & Liabilities → Debt accounts
       surface for edits. No writes from this view. Reuses the same
       setup-editor-mode handoff pattern established for Bank Accounts.
     -->
@@ -2353,7 +2367,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
       <div class="onboarding-actions">
         <button type="button" onclick="onboardingShowView('grid')">Back</button>
-        <button type="button" class="btn-primary" onclick="onboardingOpenDebtsPage()">Open Debts editor</button>
+        <button type="button" class="btn-primary" onclick="onboardingOpenDebtsPage()">Open Debt accounts</button>
       </div>
     </div>
 

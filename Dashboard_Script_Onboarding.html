@@ -640,7 +640,7 @@ function onboardingOpenBankAccountsPage(mode) {
 //   - Calls getOnboardingDebtsFromDashboard(mode) so live/test routing is
 //     handled on the server side.
 //   - Renders a simple list of debts (name, balance, minimum payment).
-//   - Offers a CTA into the existing Planning → Debts editor via the
+//   - Offers a CTA into Assets & Liabilities → Debt accounts via the
 //     shared setup-editor-mode handoff.
 // No edits happen from this view.
 // --------------------------------------------------------------------------
@@ -772,7 +772,7 @@ function onboardingRenderDebtDetail_(data) {
   body.innerHTML = fragments.join('');
 }
 
-// Jump into the existing Planning → Debts editor. Same contract as the
+// Jump into Assets & Liabilities → Debt accounts. Same contract as the
 // Bank Accounts handoff: run the ensure-sheet safeguard first so the
 // editor never opens against a missing sheet, then enter setup-editor-
 // mode so the main shell collapses around the real editor and the user
@@ -781,10 +781,10 @@ function onboardingOpenDebtsPage() {
   onboardingDebtsSetStatus_('Preparing Debts editor…', 'dash-status-loading');
 
   var navigate = function() {
-    // Planning is the page that hosts the Debts sub-tab. 'debts' is
+    // Assets & Liabilities is the page that hosts Debt accounts. 'debts' is
     // the return-view for exitSetupEditorMode() so Back to Setup drops
     // the user back onto this detail screen.
-    enterSetupEditorMode('planning', 'debts', 'debts');
+    enterSetupEditorMode('assets', 'debts', 'debts');
 
     // Mirror the Bank Accounts first-run rule: open Debts in Add mode
     // when the last detail render explicitly saw zero tracked debts.

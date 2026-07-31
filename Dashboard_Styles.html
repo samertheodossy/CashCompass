@@ -759,6 +759,25 @@
     font-size: 13px;
     line-height: 1.45;
   }
+  .related-view-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .related-view-nav-label {
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .related-view-nav .small-btn {
+    width: auto;
+    margin-top: 0;
+    padding: 7px 10px;
+  }
   .planning-advanced-details {
     margin: 14px 0 12px;
     border: 1px solid #dbe3ec;
@@ -2445,6 +2464,14 @@
       flex-direction: column;
       align-items: flex-start;
       gap: 6px;
+    }
+    .related-view-nav {
+      align-items: stretch;
+      flex-direction: column;
+      width: 100%;
+    }
+    .related-view-nav .small-btn {
+      width: 100%;
     }
     .updated { white-space: normal; }
     .segmented {

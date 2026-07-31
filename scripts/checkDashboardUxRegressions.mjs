@@ -1243,6 +1243,48 @@ assert.match(render,
 assert.match(render,
   /if \(name === 'houses' \|\| name === 'bank' \|\| name === 'investments' \|\| name === 'debts'\) \{\s*showPage\('assets'\)/,
   'Direct Debt account navigation must open Assets & Liabilities');
+assert.match(body,
+  /id="debt_panel_title">Debt accounts<[\s\S]*?showTab\('debtPayoff'\)[\s\S]*?showTab\('rollingDebtPayoff'\)/,
+  'Debt accounts must link current source data to both Planning debt views');
+assert.match(body,
+  /id="debt_panel_title">Debt accounts<[\s\S]*?class="related-view-nav"[\s\S]*?View Debt Overview[\s\S]*?Open Rolling Payoff/,
+  'Debt accounts must present related destinations as discoverable secondary buttons');
+assert.match(planning,
+  /id="debtPayoff"[\s\S]*?showTab\('debts'\)[\s\S]*?showTab\('rollingDebtPayoff'\)/,
+  'Debt Overview must link to source Debt accounts and the monthly payoff plan');
+assert.match(planning,
+  /id="debtPayoff"[\s\S]*?class="related-view-nav"[\s\S]*?Manage Debt Accounts[\s\S]*?Open Rolling Payoff/,
+  'Debt Overview must present both related destinations as secondary buttons');
+assert.match(planning,
+  /id="rollingDebtPayoff"[\s\S]*?showTab\('debts'\)[\s\S]*?showTab\('debtPayoff'\)/,
+  'Rolling Debt Payoff must link to source Debt accounts and the read-only overview');
+assert.match(planning,
+  /id="rollingDebtPayoff"[\s\S]*?class="related-view-nav"[\s\S]*?Manage Debt Accounts[\s\S]*?View Debt Overview/,
+  'Rolling Debt Payoff must present both related destinations as secondary buttons');
+assert.equal((body.match(/class="related-view-nav"/g) || []).length, 3,
+  'The three Debt surfaces must use the same related-view navigation pattern');
+assert.match(files['Dashboard_Script_Onboarding.html'],
+  /function onboardingOpenDebtsPage\(\)[\s\S]*?enterSetupEditorMode\('assets', 'debts', 'debts'\)/,
+  'Setup Debt handoff must open Assets & Liabilities → Debt accounts');
+assert.doesNotMatch(files['Dashboard_Script_Onboarding.html'],
+  /enterSetupEditorMode\('planning', 'debts', 'debts'\)/,
+  'Setup Debt handoff must not route through the obsolete Planning workspace');
+assert.match(body,
+  /onclick="onboardingOpenDebtsPage\(\)">Open Debt accounts<\/button>/,
+  'Setup must name the Debt accounts destination explicitly');
+assert.doesNotMatch(files['Dashboard_Help.html'],
+  /Planning → Debts/,
+  'Help must not direct users to the obsolete Planning → Debts path');
+assert.ok(
+  (files['Dashboard_Help.html'].match(/Assets &amp; Liabilities → Debt accounts/g) || []).length >= 4,
+  'Help must consistently identify Assets & Liabilities → Debt accounts as the maintenance destination'
+);
+assert.match(files['Dashboard_Script_Activity.html'],
+  /activityHeaderLabel_\('dueDate', 'Date'\)/,
+  'Activity must label its generic Entry Date column as Date');
+assert.doesNotMatch(files['Dashboard_Script_Activity.html'],
+  /activityHeaderLabel_\('dueDate', 'Bill due date'\)/,
+  'Activity must not describe every entry date as a Bill due date');
 
 assert.match(styles, /\.status:not\(:empty\)\s*\{[\s\S]*?border:[\s\S]*?background:/,
   'Non-empty statuses must use the shared visible status surface');

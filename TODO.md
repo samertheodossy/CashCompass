@@ -586,9 +586,12 @@ findings below are Beta work, ordered by product risk:
    validators; render customer-facing Bill payment-source labels without
    changing stored tokens; remove “2026 block,” duplicated Retirement guidance,
    and remaining normal-path abbreviations/internal terminology.
-6. **`3c` / `3h` · P2 — Help and Debt routing.** Replace the obsolete
-   `Planning → Debts` path with **Assets & Liabilities → Debt accounts** and add
-   an exact link/copy regression.
+6. **✅ `3c` · P2 — Help and Debt routing — complete through isolated Central
+   `@293` and user-approved visual validation.** The obsolete `Planning → Debts`
+   path now routes to **Assets & Liabilities → Debt accounts**; all three Debt
+   surfaces explain and button-link the maintenance, read-only overview, and
+   actionable payoff relationship. Exact destination, handoff, cross-link,
+   responsive-presentation, Activity **Date**, and stale-path regressions pass.
 7. **`3i` · P3 — Medium composition.** Correct excessive header whitespace and
    Setup-card density without regressing the proven 390px layout.
 

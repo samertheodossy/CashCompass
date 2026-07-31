@@ -90,7 +90,8 @@ does not satisfy this matrix.
 | Form readiness/customer labels (`3m`) | Required-field validators remain fail-closed against direct/forged calls | Primary actions disable until minimum valid input; Bill payment-source labels are customer-facing while stored values remain unchanged | First-Run and Populated exercise not-ready and ready transitions |
 | Empty editors/simulators (`3b`) | Empty response remains valid, not an error | Bank/Investment/Debt default to Add/guided state; Purchase results stay hidden until a simulation exists | First-Run exact-candidate journey |
 | Quick Add semantics (`2d`) | Existing duplicate/write guards remain green | Copy states add/update/replace behavior precisely | Quick Add reliability browser round-trip when the wording lands |
-| Help/debt path and residual language (`3c`, `3h`, `3m`) | Stored enums and routes remain compatible | Exact Help destination, no “2026 block,” no duplicated Retirement prerequisite, no internal tokens on normal paths | First-Run/Populated language sweep |
+| ✅ Debt hierarchy and destination (`3c`) | Stored enums and debt readers remain compatible | Setup opens Assets & Liabilities → Debt accounts; Help rejects the obsolete path; Debt accounts, Debt Overview, and Rolling Debt Payoff cross-link with distinct purposes; Activity uses generic **Date** | First-Run/Populated navigation and language sweep; isolated Central `@293` user-approved visual |
+| Residual Help and customer language (`3h`, `3m`) | Stored enums and routes remain compatible | No “2026 block,” no duplicated Retirement prerequisite, no internal tokens on normal paths | First-Run/Populated language sweep |
 | Medium composition (`3i`) | N/A | Breakpoint contract avoids overflow and unintended density changes | Comparable default/medium/390px screenshots and advocate review |
 
 Apply Regression Discovery when each fix lands. Reuse an existing suite only

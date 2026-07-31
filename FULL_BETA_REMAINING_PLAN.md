@@ -2,7 +2,7 @@
 
 **Status:** Active execution inventory
 
-**Reconciled:** 2026-07-29
+**Reconciled:** 2026-07-31
 
 **Current evidence:** isolated Central `@240`; clean Populated Dashboard run
 `FR-d75843e0-486e-4faa-8967-05ee40b73e25` passed **21/21** in 383.006 s. It
@@ -14,7 +14,15 @@ and same-target receipt retirement while preserving later values. Every prior
 populated journey passed with zero browser errors, Restricted single-owner
 sharing, and verified exact-fixture Trash cleanup. The user completed the
 corresponding Central visual review, and `5i` is committed and pushed as
-`16b6a8f`. The next active item is `5j`, Bill occurrence correction.
+`16b6a8f`. Bill occurrence correction (`5j`) is deferred for a later focused
+redesign. `3c`, Planning hierarchy and Debt relationships, is complete through
+isolated Central `@293`; the active item is `3a`, loading-state consistency.
+The full local suite passes and read-only isolated Central `@293` validation
+confirms the three Debt surfaces, exact cross-links, current Setup/Help route,
+the generic Activity **Date** header, and the responsive **Related views**
+secondary-button row. The user completed the `@293` visual check and confirmed
+that the button presentation is much better. Beta is still `@106` and bounded
+remains user-controlled.
 
 **Last formal independent advocate score:** **8.3/10** on isolated Central
 `@180`. This remains the official score until the next full scored advocate run;
@@ -71,8 +79,8 @@ recently completed `5h` and `5i` as implementation history.
 
 | Order | Open IDs | Workstream | Focused estimate |
 |---:|---|---|---:|
-| 1 | `5j`–`5m` | Remaining safe correction families and audit disposition | 4.5–8 d including integrated disposable-workbook validation |
-| 2 | `3a`–`3c`, `3e`–`3k`, `3m` | Remaining page UX, trust, advocate scoring, responsive/accessibility | 11–21 d |
+| 1 | `3a`–`3b`, `3e`–`3k`, `3m` | Remaining page UX, trust, advocate scoring, responsive/accessibility | 10.5–20 d |
+| 2 | `5j`–`5m` | Deferred safe correction families and audit disposition | 4.5–8 d including integrated disposable-workbook validation |
 | 3 | `4a`–`4f` | Performance optimization, measurement, and percentile gate | 5–11 d |
 | 4 | `5a`–`5f` | Remaining financial/workbook proof | 4.5–11 d |
 | 5 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
@@ -138,7 +146,7 @@ acceptance contract, close it with evidence rather than manufacturing a redesign
 |---|---|---|---:|
 | 3a | Finish loading-state consistency | Remaining Overview, Planner, picker, onboarding, and Admin slots use contextual shared loading states | 1–2 d |
 | 3b | Finish empty/error-state consistency | Standard empty, unavailable, retry, and failure patterns cover core surfaces | 1–2 d |
-| 3c | Planning hierarchy and Debt relationships | Debt accounts, Debt Overview, and Rolling Payoff purposes and links are understandable | 0.5–1 d |
+| 3c | Planning hierarchy and Debt relationships — **✅ complete** | Debt accounts, Debt Overview, and Rolling Payoff purposes and links are understandable; Setup and Help use the current destination | Complete at isolated Central `@293` |
 | 3e | Properties context polish | Selected property/year remains clear; Cash Flow-posting consequences are understandable | 0.5–1 d |
 | 3f | Activity review polish | Filters are visible/reversible; Donation-only Remove is correctly gated; narrow layout is readable | 1–2 d |
 | 3g | Setup progress and next step | Required progress and one recommended next action are visible without performing a write | 0.5–1 d |
@@ -164,7 +172,7 @@ finding is nevertheless scheduled and receives a permanent regression home.
 | P2 | Quick Add duplicate/update behavior was vague | `2d` | **Closed in `168a49b` as `REG-026`;** Dashboard UX locks cumulative add-not-replace copy and cross-checks the production writer; bounded presentation confirmed |
 | P2 | Empty Bank/Investment/Debt Update and Purchase Simulator surfaces begin with blank selectors or dash-only results | `3b` | Dashboard UX empty-state contract plus First-Run exact-candidate assertion |
 | P2 | Add Bill exposes stored tokens and several primary actions appear enabled before required input exists | `3m` | Dashboard UX label/action-state contract plus server-validation guard and First-Run/Populated assertions |
-| P2 | Help points to `Planning → Debts` instead of **Assets & Liabilities → Debt accounts** | `3c`, `3h` | Dashboard UX Help-link/copy assertion |
+| P2 | Help points to `Planning → Debts` instead of **Assets & Liabilities → Debt accounts** | `3c` | Exact Dashboard UX destination, Setup handoff, three-surface cross-link, and stale-path rejection assertions |
 | P2 | Several controls are below the 44px target | `3j` | Computed target-size audit at desktop, medium, and 390px |
 | P3 | Setup says “2026 block,” Retirement repeats the same prerequisite, and customer-facing abbreviations remain | `3m` | Normal-path terminology and duplicate-guidance Dashboard UX assertions |
 | P3 | Medium header and Setup-card density remain visually unbalanced | `3i` | Medium-width screenshot contract and task-based advocate replay |
