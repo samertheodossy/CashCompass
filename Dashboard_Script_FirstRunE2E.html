@@ -150,13 +150,23 @@
 
       click('.page-btn[data-page="assets"]');
       if (typeof showTab === 'function') showTab('bank');
-      await new Promise(function(resolve) { setTimeout(resolve, 1200); });
+      await waitFor(function() {
+        var addButton = document.getElementById('bank_mode_add_btn');
+        return !!(addButton && addButton.classList.contains('active'));
+      }, 120000, 'fresh Bank Add mode');
       customerLeaks = customerLeaks.concat(customerLanguageLeaks('Assets → Bank'));
+      var bankGuidedAdd = !!(document.getElementById('bank_mode_add_btn') &&
+        document.getElementById('bank_mode_add_btn').classList.contains('active'));
       var bankSave = document.getElementById('bank_update_save_btn');
       var bankStopAbsent = !document.getElementById('bank_update_stop_btn');
       click('.page-btn[data-page="planning"]');
       if (typeof showTab === 'function') showTab('debts');
-      await new Promise(function(resolve) { setTimeout(resolve, 1200); });
+      await waitFor(function() {
+        var addButton = document.getElementById('debt_mode_add_btn');
+        return !!(addButton && addButton.classList.contains('active'));
+      }, 120000, 'fresh Debt Add mode');
+      var debtGuidedAdd = !!(document.getElementById('debt_mode_add_btn') &&
+        document.getElementById('debt_mode_add_btn').classList.contains('active'));
       var debtSave = document.getElementById('debt_update_save_btn');
       var debtStopAbsent = !document.getElementById('debt_update_stop_btn') &&
         !document.getElementById('debt_update_stop_zone');
@@ -165,6 +175,44 @@
       add('empty_action_gating', gated, gated
         ? 'Bank and Debt Update remained Save-only, with Save disabled when no record was selectable.'
         : 'An empty Update panel exposed a destructive action or enabled Save.');
+
+      click('.page-btn[data-page="assets"]');
+      if (typeof showTab === 'function') showTab('investments');
+      await waitFor(function() {
+        var addButton = document.getElementById('inv_mode_add_btn');
+        return !!(addButton && addButton.classList.contains('active'));
+      }, 120000, 'fresh Investment Add mode');
+      var investmentGuidedAdd = !!(document.getElementById('inv_mode_add_btn') &&
+        document.getElementById('inv_mode_add_btn').classList.contains('active'));
+      var guidedEditors = bankGuidedAdd && investmentGuidedAdd && debtGuidedAdd;
+      add('empty_editors_open_add', guidedEditors, guidedEditors
+        ? 'Fresh Bank, Investment, and Debt editors opened directly in Add new.'
+        : 'A fresh tracked editor opened on a blank Update selector instead of Add new.');
+
+      click('.page-btn[data-page="cashflow"]');
+      if (typeof showTab === 'function') showTab('upcoming');
+      await waitFor(function() {
+        return /No active upcoming expenses/i.test(text('upcoming_list'));
+      }, 120000, 'fresh Upcoming empty state');
+      var upcomingDismissGuidance = document.getElementById('upcoming_dismiss_guidance');
+      var upcomingGuidanceHidden = !!(upcomingDismissGuidance && !visible(upcomingDismissGuidance));
+      add('upcoming_empty_hides_dismiss_guidance', upcomingGuidanceHidden,
+        upcomingGuidanceHidden
+          ? 'Fresh Upcoming hid Dismiss guidance until an actionable expense exists.'
+          : 'Fresh Upcoming showed Dismiss guidance without an actionable expense.');
+
+      if (typeof showTab === 'function') showTab('billsDue');
+      await waitFor(function() {
+        var addTab = document.getElementById('bills_view_tab_add');
+        return !!(addTab && addTab.classList.contains('active'));
+      }, 120000, 'fresh Bills Add mode');
+      var billsAddTab = document.getElementById('bills_view_tab_add');
+      var billsAddSection = document.getElementById('bills_view_add');
+      var billsOpenedAdd = !!(billsAddTab && billsAddTab.classList.contains('active') &&
+        visible(billsAddSection));
+      add('empty_bills_open_add', billsOpenedAdd, billsOpenedAdd
+        ? 'Fresh Bills opened directly in Add bill.'
+        : 'Fresh Bills remained on an empty Due this period view.');
 
       var emptyEditorFailures = [];
       click('.page-btn[data-page="assets"]');
@@ -210,6 +258,16 @@
         ? 'Retirement explained the missing Profile prerequisite and kept scenario and result walls hidden.'
         : 'Retirement exposed results or failed to explain the missing Profile Date of Birth.');
       customerLeaks = customerLeaks.concat(customerLanguageLeaks('Planning → Retirement'));
+
+      if (typeof showTab === 'function') showTab('purchase');
+      if (typeof loadPurchaseSimulatorSection === 'function') loadPurchaseSimulatorSection();
+      await new Promise(function(resolve) { setTimeout(resolve, 1200); });
+      var purchaseGuidance = document.getElementById('ps_guidance');
+      var purchaseResults = document.getElementById('ps_results');
+      var purchaseGuidancePass = visible(purchaseGuidance) && !visible(purchaseResults);
+      add('purchase_guidance_before_results', purchaseGuidancePass, purchaseGuidancePass
+        ? 'Purchase showed guidance and kept its result wall hidden before a simulation.'
+        : 'Purchase exposed dash-only results before a successful simulation.');
 
       click('.btn-help-prominent');
       await waitFor(function() { return activePage('help'); }, 10000, 'Help');

@@ -66,6 +66,14 @@ The following checks are mandatory additions/extensions as their fixes land:
 4. **Empty and guidance states (`3b`)** — fresh Bank, Investment, and Debt
    editors open Add/guided state rather than a blank Update selector; Retirement
    and Purchase results stay hidden until ready.
+
+   **Completed evidence:** guarded First-Run run
+   `FR-e92641a0-2c59-45da-a90c-8b8780410f76` passed 14/14 on isolated Central
+   `@296`, including `empty_editors_open_add` and
+   `purchase_guidance_before_results`, with Restricted sharing, zero browser
+   errors, and verified exact-fixture Trash cleanup. At isolated `@298`, the
+   user also confirmed on a fresh workbook that empty Upcoming hides Dismiss
+   guidance and truly empty Bills opens Add bill; both checks are permanent.
 5. **Language and routing (`2d`, `3c`, `3h`, `3m`)** — Quick Add consequence
    wording, the exact Debt Help path, Setup/Retirement wording, and normal-path
    token removal have source-contract assertions plus the applicable browser

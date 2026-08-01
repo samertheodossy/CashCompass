@@ -493,6 +493,53 @@ function setStatus(id, msg, isError) {
 }
 
 /**
+ * Render a calm, customer-safe empty or unavailable state without interpolated
+ * HTML. Actions are explicit callbacks so read-only Retry buttons never replay
+ * a writer by accident.
+ */
+function renderSurfaceState_(target, options) {
+  const host = typeof target === 'string' ? document.getElementById(target) : target;
+  if (!host) return;
+  const config = options || {};
+  const kind = ['empty', 'unavailable', 'error'].indexOf(config.kind) >= 0
+    ? config.kind
+    : 'empty';
+
+  host.textContent = '';
+  host.className = 'surface-state surface-state--' + kind;
+
+  const title = document.createElement('strong');
+  title.className = 'surface-state-title';
+  title.textContent = String(config.title || (kind === 'empty'
+    ? 'Nothing here yet.'
+    : 'This information is unavailable right now.'));
+  host.appendChild(title);
+
+  if (config.message) {
+    const message = document.createElement('p');
+    message.className = 'surface-state-message';
+    message.textContent = String(config.message);
+    host.appendChild(message);
+  }
+
+  if (config.actionLabel && typeof config.onAction === 'function') {
+    const action = document.createElement('button');
+    action.type = 'button';
+    action.className = 'small-btn';
+    action.textContent = String(config.actionLabel);
+    action.addEventListener('click', config.onAction);
+    host.appendChild(action);
+  }
+}
+
+function clearSurfaceState_(target, baseClass) {
+  const host = typeof target === 'string' ? document.getElementById(target) : target;
+  if (!host) return;
+  host.textContent = '';
+  host.className = baseClass || '';
+}
+
+/**
  * True only for the transient browser-to-Apps-Script failures that are safe to
  * retry when the caller is an explicitly read-only operation. Business errors,
  * authorization failures, and server exceptions are deliberately excluded.

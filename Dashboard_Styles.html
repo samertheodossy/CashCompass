@@ -1332,6 +1332,7 @@
   .info { background: #eef6ff; border: 1px solid #cfe3ff; border-radius: var(--cc-radius-sm); padding: var(--cc-space-3); margin: var(--cc-space-3) 0; font-size: 12px; line-height: 1.55; }
   .muted { color: #475569; }
 
+  .surface-state,
   .empty-state,
   .bills-empty-state,
   .income-empty-state,
@@ -1345,6 +1346,23 @@
     text-align: center;
     font-size: 13px;
     line-height: 1.5;
+  }
+  .surface-state {
+    margin: var(--cc-space-3) 0;
+  }
+  .surface-state--unavailable,
+  .surface-state--error {
+    border-style: solid;
+    border-left: 4px solid #d97706;
+    text-align: left;
+  }
+  .surface-state-title {
+    color: #0f172a;
+    display: block;
+    font-weight: 700;
+  }
+  .surface-state-message {
+    margin: 4px 0 10px;
   }
   .empty-state > :first-child,
   .bills-empty-state > :first-child,
@@ -1623,6 +1641,7 @@
     border-left: 4px solid #d6a23d;
     border-radius: 8px;
   }
+  .upcoming-dismiss-note[hidden] { display: none !important; }
   .bills-view-purpose { margin-bottom: 12px; }
   .bills-management-head .bills-view-purpose { margin: 0; }
   .bill-pay-drawer-backdrop[hidden] { display: none; }

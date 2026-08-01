@@ -6,8 +6,10 @@ function togglePurchaseFields() {
 }
 
 function loadPurchaseSimulatorSection() {
+  resetPurchaseSimulationResults_();
   google.script.run
     .withSuccessHandler(function(data) {
+      clearSurfaceState_('ps_status', 'status');
       const d = data.defaults || {};
       document.getElementById('ps_fundingMode').value = d.fundingMode || 'Cash';
       document.getElementById('ps_aprPct').value = d.aprPct || 7.5;
@@ -17,9 +19,31 @@ function loadPurchaseSimulatorSection() {
       togglePurchaseFields();
     })
     .withFailureHandler(function(err) {
-      setStatus('ps_status', (err.message || String(err)), true);
+      resetPurchaseSimulationResults_();
+      renderSurfaceState_('ps_status', {
+        kind: 'unavailable',
+        title: 'Purchase simulator is unavailable right now.',
+        message: customerSafeErrorMessage_(err && err.message ? err.message : String(err),
+          'CashCompass could not load the purchase simulator. Try again in a moment.'),
+        actionLabel: 'Try again',
+        onAction: loadPurchaseSimulatorSection
+      });
     })
     .getPurchaseSimulatorUiData();
+}
+
+function resetPurchaseSimulationResults_() {
+  const guidance = document.getElementById('ps_guidance');
+  const results = document.getElementById('ps_results');
+  if (guidance) guidance.hidden = false;
+  if (results) results.hidden = true;
+}
+
+function showPurchaseSimulationResults_() {
+  const guidance = document.getElementById('ps_guidance');
+  const results = document.getElementById('ps_results');
+  if (guidance) guidance.hidden = true;
+  if (results) results.hidden = false;
 }
 
 function runPurchaseSimulationUi() {
@@ -34,7 +58,8 @@ function runPurchaseSimulationUi() {
     treatAsAsset: document.getElementById('ps_treatAsAsset').checked
   };
 
-  setStatus('ps_status', 'Running…', false);
+  resetPurchaseSimulationResults_();
+  setStatusLoading('ps_status', 'Running simulation…');
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -58,9 +83,16 @@ function runPurchaseSimulationUi() {
 
       const cf = document.getElementById('ps_newProjectedCashFlow');
       cf.className = Number(res.newProjectedCashFlow) < 0 ? 'accent-bad' : 'accent-good';
+      showPurchaseSimulationResults_();
     })
     .withFailureHandler(function(err) {
-      setStatus('ps_status', (err.message || String(err)), true);
+      resetPurchaseSimulationResults_();
+      renderSurfaceState_('ps_status', {
+        kind: 'error',
+        title: 'The simulation could not be completed.',
+        message: customerSafeErrorMessage_(err && err.message ? err.message : String(err),
+          'Review the purchase details, then try the simulation again.')
+      });
     })
     .runPurchaseSimulation(payload);
 }

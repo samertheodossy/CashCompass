@@ -17,8 +17,14 @@ corresponding Central visual review, and `5i` is committed and pushed as
 `16b6a8f`. Bill occurrence correction (`5j`) is deferred for a later focused
 redesign. `3c`, Planning hierarchy and Debt relationships, is complete through
 isolated Central `@293`. `3a`, loading-state consistency, is complete through
-permanent regression coverage and read-only isolated Central `@294`; the active
-item is `3b`, empty/error-state consistency. The full local suite passes, and
+permanent regression coverage and read-only isolated Central `@294`; `3b`,
+empty/error-state consistency, is complete through permanent regression coverage
+and guarded First-Run run `FR-e92641a0-2c59-45da-a90c-8b8780410f76`, which
+passed 14/14 on isolated Central `@296` with Restricted sharing, zero browser
+errors, and verified Trash cleanup. The final empty-Upcoming and empty-Bills
+context refinements are deployed to isolated `@298`, permanently covered, and
+user-verified on a fresh workbook. The active item is `3e`, Properties context
+polish. The full local suite passes, and
 read-only isolated Central `@293` validation
 confirms the three Debt surfaces, exact cross-links, current Setup/Help route,
 the generic Activity **Date** header, and the responsive **Related views**
@@ -81,7 +87,7 @@ recently completed `5h` and `5i` as implementation history.
 
 | Order | Open IDs | Workstream | Focused estimate |
 |---:|---|---|---:|
-| 1 | `3a`–`3b`, `3e`–`3k`, `3m` | Remaining page UX, trust, advocate scoring, responsive/accessibility | 10.5–20 d |
+| 1 | `3e`–`3k`, `3m` | Remaining page UX, trust, advocate scoring, responsive/accessibility | 8.5–16 d |
 | 2 | `5j`–`5m` | Deferred safe correction families and audit disposition | 4.5–8 d including integrated disposable-workbook validation |
 | 3 | `4a`–`4f` | Performance optimization, measurement, and percentile gate | 5–11 d |
 | 4 | `5a`–`5f` | Remaining financial/workbook proof | 4.5–11 d |
@@ -147,7 +153,7 @@ acceptance contract, close it with evidence rather than manufacturing a redesign
 | ID | Remaining item | Exit evidence | Estimate |
 |---|---|---|---:|
 | 3a | Finish loading-state consistency — **✅ complete** | Overview, Planner, picker, onboarding, and Admin slots use contextual shared loading states; pickers and dependent actions fail closed; stale Bank responses cannot overwrite newer state | Complete at isolated Central `@294` |
-| 3b | Finish empty/error-state consistency | Standard empty, unavailable, retry, and failure patterns cover core surfaces | 1–2 d |
+| 3b | Finish empty/error-state consistency — **✅ complete** | Standard empty, unavailable, retry, and failure patterns cover core surfaces | Complete at isolated Central `@298`; First-Run 14/14 baseline plus fresh-workbook contextual-state confirmation |
 | 3c | Planning hierarchy and Debt relationships — **✅ complete** | Debt accounts, Debt Overview, and Rolling Payoff purposes and links are understandable; Setup and Help use the current destination | Complete at isolated Central `@293` |
 | 3e | Properties context polish | Selected property/year remains clear; Cash Flow-posting consequences are understandable | 0.5–1 d |
 | 3f | Activity review polish | Filters are visible/reversible; Donation-only Remove is correctly gated; narrow layout is readable | 1–2 d |
@@ -158,7 +164,7 @@ acceptance contract, close it with evidence rather than manufacturing a redesign
 | 3k | Exact-candidate task-based advocate rerun | All eight criteria are rescored from interactive evidence; every category reaches the release path to ≥9 | 1–2 d |
 | 3m | Form readiness and residual customer language | Primary actions remain disabled until minimum inputs are valid; customer labels replace stored tokens/internal workbook language; duplicated guidance is removed without changing stored values or server validation | 1–2 d |
 
-**Group 3 open estimate: 11–21 focused days.**
+**Group 3 open estimate: 8.5–16 focused days.**
 
 ### Isolated `@196` advocate finding reconciliation
 

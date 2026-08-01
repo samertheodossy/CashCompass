@@ -1321,7 +1321,7 @@ assert.match(body,
   /<strong>Dismiss<\/strong> removes an item from active planning without recording a payment or changing Cash Flow\. Its Upcoming row and Activity history remain\./,
   'Upcoming must explain Dismiss consequences before the user acts');
 assert.match(body,
-  /class="panel-purpose upcoming-dismiss-note"><strong>Dismiss<\/strong>/,
+  /id="upcoming_dismiss_guidance"[^>]*class="panel-purpose upcoming-dismiss-note"[^>]*><strong>Dismiss<\/strong>/,
   'Upcoming Dismiss consequences must use a distinct information treatment');
 assert.match(styles,
   /\.upcoming-dismiss-note\s*\{[\s\S]*?color:\s*#7a4b00;[\s\S]*?background:\s*#fff8e1;[\s\S]*?border-left:\s*4px solid #d6a23d;/,
@@ -1561,6 +1561,46 @@ assert.match(files['Dashboard_Script_BillsDue.html'],
 assert.match(files['Dashboard_Script_BillsDue.html'],
   /function openBillsAddForm_\(\)[\s\S]*?setBillsView\('add'\)[\s\S]*?resetBillsAddForm_\(\)[\s\S]*?setBillsFormModeToAdd_\(\)/,
   'Every fresh Bills Add entry must open a clean Add form');
+assert.match(body,
+  /id="upcoming_dismiss_guidance"[^>]*hidden/,
+  'Upcoming Dismiss guidance must start hidden until an actionable row is confirmed');
+assert.match(styles,
+  /\.upcoming-dismiss-note\[hidden\]\s*\{\s*display:\s*none\s*!important;/,
+  'Upcoming Dismiss guidance must remain visually hidden when it is not actionable');
+assert.match(functionSource_(files['Dashboard_Script_CashFlowUpcoming.html'], 'renderUpcomingList'),
+  /setUpcomingDismissGuidanceVisible_\(activeRows\.length > 0\)/,
+  'Upcoming Dismiss guidance must follow the actionable-row count');
+assert.match(functionSource_(files['Dashboard_Script_BillsDue.html'], 'loadActiveBillsManagementUi_'),
+  /Array\.isArray\(rows\)[\s\S]*?renderActiveBillsList_\(rows\)[\s\S]*?routeBillsToAddIfAuthoritativelyEmpty_\(rows, viewGeneration\)/,
+  'Bills must route only an authoritative active-bill response through empty-state handling');
+assert.match(functionSource_(files['Dashboard_Script_BillsDue.html'], 'loadActiveBillsManagementUi_'),
+  /renderSurfaceState_\([\s\S]*?actionLabel:\s*'Try again'/,
+  'Malformed or failed Bills management reads must remain unavailable with a manual Retry');
+const billsEmptyRoutes = [];
+const billsEmptyContext = vm.createContext({
+  window: { __billsActiveView: 'due', __billsViewSelectionGeneration: 4 },
+  openBillsAddForm_: () => billsEmptyRoutes.push('add'),
+  Array,
+  Number
+});
+vm.runInContext(
+  functionSource_(files['Dashboard_Script_BillsDue.html'], 'routeBillsToAddIfAuthoritativelyEmpty_'),
+  billsEmptyContext
+);
+assert.equal(billsEmptyContext.routeBillsToAddIfAuthoritativelyEmpty_([], 4), true,
+  'An authoritative empty active-bill response must open Add bill');
+assert.deepEqual(billsEmptyRoutes, ['add'],
+  'An empty active-bill response must open Add bill exactly once');
+billsEmptyRoutes.length = 0;
+assert.equal(billsEmptyContext.routeBillsToAddIfAuthoritativelyEmpty_([{ payee: 'Existing' }], 4), false,
+  'A populated active-bill response must preserve Due this period');
+assert.equal(billsEmptyContext.routeBillsToAddIfAuthoritativelyEmpty_({}, 4), false,
+  'A malformed active-bill response must never be treated as empty');
+billsEmptyContext.window.__billsViewSelectionGeneration = 5;
+assert.equal(billsEmptyContext.routeBillsToAddIfAuthoritativelyEmpty_([], 4), false,
+  'A late empty response must not override a newer manual Bills view choice');
+assert.deepEqual(billsEmptyRoutes, [],
+  'Only the current authoritative empty response may open Add bill');
 assert.match(files['Dashboard_Script_BillsDue.html'],
   /function applyBillsFormModeUi_\(\)[\s\S]*?bills_view_tab_add[\s\S]*?isEdit \? 'Edit bill' : 'Add bill'[\s\S]*?bills_editor_purpose[\s\S]*?Update this recurring bill\. Existing payment history stays unchanged\./,
   'The Bills editor tab and purpose must identify Edit mode instead of presenting an edit as Add');
@@ -2355,7 +2395,10 @@ function overviewFailureContext_(source, functionName, elementIds) {
     customerSafeErrorMessage_: () => 'Could not load.',
     window: { __dashboardState: 'setUp' }
   });
-  vm.runInContext(functionSource_(source, functionName), context);
+  const supportSource = functionName === 'loadUpcomingSection'
+    ? functionSource_(source, 'setUpcomingDismissGuidanceVisible_') + '\n'
+    : '';
+  vm.runInContext(supportSource + functionSource_(source, functionName), context);
   context[functionName]();
   assert.equal(typeof failureHandler, 'function', `${functionName} must register a failure handler`);
   failureHandler(new Error('offline'));
@@ -2372,6 +2415,37 @@ assert.deepEqual(
   ['—', '—'],
   'Upcoming failure must replace every Overview loading placeholder with a terminal value'
 );
+
+const upcomingListRoot = { innerHTML: '' };
+const upcomingDismissGuidance = { hidden: false };
+const upcomingListContext = vm.createContext({
+  document: {
+    getElementById(id) {
+      if (id === 'upcoming_list') return upcomingListRoot;
+      if (id === 'upcoming_dismiss_guidance') return upcomingDismissGuidance;
+      return null;
+    }
+  },
+  fmtCurrency: value => `$${Number(value).toFixed(2)}`,
+  escapeHtml: String,
+  escapeJs: String,
+  String,
+  Number
+});
+vm.runInContext(
+  functionSource_(files['Dashboard_Script_CashFlowUpcoming.html'], 'upcomingBucketClass') + '\n' +
+    functionSource_(files['Dashboard_Script_CashFlowUpcoming.html'], 'setUpcomingDismissGuidanceVisible_') + '\n' +
+    functionSource_(files['Dashboard_Script_CashFlowUpcoming.html'], 'renderUpcomingList'),
+  upcomingListContext
+);
+upcomingListContext.renderUpcomingList([]);
+assert.equal(upcomingDismissGuidance.hidden, true,
+  'Upcoming Dismiss guidance must be hidden when no active expense exists');
+upcomingListContext.renderUpcomingList([{
+  id: 'up-1', status: 'Planned', amount: 25, expenseName: 'Fixture', dueDate: '2026-08-01'
+}]);
+assert.equal(upcomingDismissGuidance.hidden, false,
+  'Upcoming Dismiss guidance must appear when an active expense can be dismissed');
 
 const houseSummaryFailureElements = overviewFailureContext_(
   files['Dashboard_Script_PropertiesHouseExpenses.html'],
@@ -2402,6 +2476,8 @@ const bankContext = vm.createContext({
   runReadOnlyRpcWithRetry_: (request) => bankRequests.push(request),
   setStatusLoading: (...args) => bankFailureEvents.push(['retry', ...args]),
   setStatus: (...args) => bankFailureEvents.push(['status', ...args]),
+  renderSurfaceState_: (...args) => bankFailureEvents.push(['surface', ...args]),
+  customerSafeErrorMessage_: (_value, fallback) => fallback,
   fillBankAccountDropdownFromData_() {},
   focusBankTarget_() {},
   loadBankData() {},
@@ -2422,6 +2498,203 @@ assert.equal(bankFailureEvents.length, 0,
 bankRequests[1].onFailure(new Error('current failure'));
 assert.equal(bankFailureEvents.some((event) => event[0] === 'picker'), true,
   'The current Bank failure must publish its terminal picker state');
+
+const assetsEditors = files['Dashboard_Script_AssetsBankInvestments.html'];
+assert.match(functionSource_(assetsEditors, 'fillBankAccountDropdownFromData_'),
+  /Array\.isArray\(data\.accounts\)\s*&&\s*data\.accounts\.length\s*===\s*0[\s\S]*?setBankPanelMode\('add'\)/,
+  'A confirmed-empty Bank response must route to Add new');
+assert.match(functionSource_(assetsEditors, 'fillInvestmentAccountDropdownFromData_'),
+  /Array\.isArray\(data\.accounts\)\s*&&\s*data\.accounts\.length\s*===\s*0[\s\S]*?setInvestmentPanelMode\('add'\)/,
+  'A confirmed-empty Investment response must route to Add new');
+assert.match(functionSource_(files['Dashboard_Script_PlanningDebts.html'], 'loadDebtSection'),
+  /Array\.isArray\(data\.debts\)\s*&&\s*data\.debts\.length\s*===\s*0[\s\S]*?setDebtPanelMode\('add'\)/,
+  'A confirmed-empty Debt response must route to Add new');
+for (const [label, source, loader, modeSetter] of [
+  ['Bank', assetsEditors, 'loadBankSection', 'setBankPanelMode'],
+  ['Investment', assetsEditors, 'loadInvestmentSection', 'setInvestmentPanelMode'],
+  ['Debt', files['Dashboard_Script_PlanningDebts.html'], 'loadDebtSection', 'setDebtPanelMode']
+]) {
+  const loaderSource = functionSource_(source, loader);
+  assert.match(loaderSource, /renderSurfaceState_\([\s\S]*?actionLabel:\s*'Try again'/,
+    `${label} read failure must provide a visible Try again action`);
+  assert.doesNotMatch(loaderSource,
+    new RegExp(`onFailure:[\\s\\S]*?${modeSetter}\\('add'\\)`),
+    `${label} failure must never be misclassified as an empty response`);
+}
+
+assert.match(render,
+  /function renderSurfaceState_\([\s\S]*?document\.createElement\('strong'\)[\s\S]*?addEventListener\('click', config\.onAction\)/,
+  'Shared surface states must use safe DOM construction and callable actions');
+assert.doesNotMatch(functionSource_(render, 'renderSurfaceState_'), /innerHTML\s*=/,
+  'Shared surface states must not interpolate customer or server text as HTML');
+
+const purchaseSource = files['Dashboard_Script_PlanningPurchaseSim.html'];
+const purchaseMarkupStart = files['Dashboard_Body.html'].indexOf('<div id="purchase"');
+const purchaseMarkupEnd = files['Dashboard_Body.html'].indexOf('<div id="debtPayoff"', purchaseMarkupStart);
+const purchaseMarkup = files['Dashboard_Body.html'].slice(purchaseMarkupStart, purchaseMarkupEnd);
+const donationsMarkupStart = files['Dashboard_Body.html'].indexOf('<div id="donations"');
+const donationsMarkupEnd = files['Dashboard_Body.html'].indexOf('<div id="billsDue"', donationsMarkupStart);
+const donationsMarkup = files['Dashboard_Body.html'].slice(donationsMarkupStart, donationsMarkupEnd);
+assert.match(purchaseMarkup, /id="ps_guidance"[\s\S]*?id="ps_results"[^>]*hidden/,
+  'Purchase must begin with guidance and a hidden result wall');
+assert.doesNotMatch(donationsMarkup, /id="ps_(?:guidance|results)"/,
+  'Purchase guidance and results must never wrap Donations content');
+assert.match(functionSource_(purchaseSource, 'loadPurchaseSimulatorSection'),
+  /resetPurchaseSimulationResults_\(\)/,
+  'Loading Purchase must clear stale results');
+assert.match(functionSource_(purchaseSource, 'runPurchaseSimulationUi'),
+  /resetPurchaseSimulationResults_\(\)[\s\S]*?withSuccessHandler[\s\S]*?showPurchaseSimulationResults_\(\)[\s\S]*?withFailureHandler[\s\S]*?resetPurchaseSimulationResults_\(\)/,
+  'Purchase results must reveal only after success and hide again after failure');
+const purchaseElements = {
+  ps_guidance: { hidden: true },
+  ps_results: { hidden: false }
+};
+const purchaseContext = vm.createContext({
+  document: { getElementById: (id) => purchaseElements[id] || null }
+});
+vm.runInContext(
+  functionSource_(purchaseSource, 'resetPurchaseSimulationResults_') + '\n' +
+    functionSource_(purchaseSource, 'showPurchaseSimulationResults_'),
+  purchaseContext
+);
+purchaseContext.resetPurchaseSimulationResults_();
+assert.deepEqual([purchaseElements.ps_guidance.hidden, purchaseElements.ps_results.hidden], [false, true],
+  'Purchase reset must show guidance and hide results');
+purchaseContext.showPurchaseSimulationResults_();
+assert.deepEqual([purchaseElements.ps_guidance.hidden, purchaseElements.ps_results.hidden], [true, false],
+  'Purchase success must hide guidance and reveal results');
+
+function trackedEditorSelect_() {
+  return {
+    disabled: true,
+    options: [],
+    set innerHTML(_value) { this.options = []; },
+    appendChild(option) { this.options.push(option); }
+  };
+}
+function verifyConfirmedEmptyRouting_(functionName, source, dataKey, modeSetterName) {
+  const select = trackedEditorSelect_();
+  const modeCalls = [];
+  const context = vm.createContext({
+    document: {
+      getElementById: () => select,
+      createElement: () => ({ value: '', textContent: '' })
+    },
+    populateBankAddDatalists_() {},
+    populateInvestmentAddDatalists_() {},
+    updateBankUpdateAvailability_() {},
+    updateInvestmentUpdateAvailability_() {},
+    renderBankManageList_() {},
+    renderInvestmentManageList_() {},
+    clearSurfaceState_() {},
+    setBankPanelMode: (mode) => modeCalls.push(mode),
+    setInvestmentPanelMode: (mode) => modeCalls.push(mode),
+    Array
+  });
+  vm.runInContext(functionSource_(source, functionName), context);
+  context[functionName]({ [dataKey]: [] });
+  assert.deepEqual(modeCalls, ['add'], `${functionName} must route explicit empty data to Add`);
+  modeCalls.length = 0;
+  context[functionName]({ [dataKey]: ['Existing'] });
+  assert.deepEqual(modeCalls, [], `${functionName} must preserve mode when records exist`);
+  modeCalls.length = 0;
+  context[functionName]({});
+  assert.deepEqual(modeCalls, [], `${functionName} must not classify a malformed response as empty`);
+}
+verifyConfirmedEmptyRouting_('fillBankAccountDropdownFromData_', assetsEditors, 'accounts', 'setBankPanelMode');
+verifyConfirmedEmptyRouting_('fillInvestmentAccountDropdownFromData_', assetsEditors, 'accounts', 'setInvestmentPanelMode');
+
+const debtModeCalls = [];
+const debtRequests = [];
+const debtElements = {
+  debt_typeFilter: trackedEditorSelect_(),
+  debt_field: trackedEditorSelect_()
+};
+const debtEmptyContext = vm.createContext({
+  document: { getElementById: (id) => debtElements[id] || trackedEditorSelect_(), createElement: () => ({}) },
+  setSelectLoading() {},
+  updateDebtUpdateAvailability_() {},
+  runReadOnlyRpcWithRetry_: (request) => debtRequests.push(request),
+  populateDebtAddDatalists_() {},
+  populateDebtPropertyOptions_() {},
+  filterDebtAccounts() {},
+  clearSurfaceState_() {},
+  setDebtPanelMode: (mode) => debtModeCalls.push(mode),
+  focusDebtTarget_() {},
+  setStatusLoading() {},
+  setStatus() {},
+  setSelectLoadFailure() {},
+  renderSurfaceState_() {},
+  customerSafeErrorMessage_: (_value, fallback) => fallback,
+  pendingFocus: null,
+  Array,
+  String
+});
+vm.runInContext('var debtSectionRequestId_ = 0; var debtUpdateDetailsReady_ = false; var allDebtRows = [];\n' +
+  functionSource_(files['Dashboard_Script_PlanningDebts.html'], 'loadDebtSection'), debtEmptyContext);
+for (const [payload, expected, label] of [
+  [{ debts: [], types: ['All'], editableFields: [] }, ['add'], 'explicit empty'],
+  [{ debts: [{ accountName: 'Existing' }], types: ['All'], editableFields: [] }, [], 'populated'],
+  [{ types: ['All'], editableFields: [] }, [], 'malformed']
+]) {
+  debtModeCalls.length = 0;
+  debtEmptyContext.loadDebtSection();
+  debtRequests.at(-1).onSuccess(payload);
+  assert.deepEqual(debtModeCalls, expected, `Debt ${label} response must apply the correct editor mode`);
+}
+
+for (const [label, source, loader] of [
+  ['Bank focus', assetsEditors, 'loadBankSectionThenSelect_'],
+  ['Investment focus', assetsEditors, 'loadInvestmentSectionThenSelect_'],
+  ['Debt focus', files['Dashboard_Script_PlanningDebts.html'], 'loadDebtSectionThenSelect_']
+]) {
+  assert.match(functionSource_(source, loader),
+    /renderSurfaceState_\([\s\S]*?actionLabel:\s*'Try again'/,
+    `${label} read failure must preserve a manual Retry path`);
+}
+
+const debtFocusRequests = [];
+const debtFocusEvents = [];
+let debtFocusRetry = null;
+const debtFocusElements = {
+  debt_typeFilter: trackedEditorSelect_(),
+  debt_field: trackedEditorSelect_(),
+  debt_account: trackedEditorSelect_()
+};
+const debtFocusContext = vm.createContext({
+  document: {
+    getElementById: (id) => debtFocusElements[id] || trackedEditorSelect_(),
+    createElement: () => ({})
+  },
+  setSelectLoading() {},
+  updateDebtUpdateAvailability_() {},
+  runReadOnlyRpcWithRetry_: (request) => debtFocusRequests.push(request),
+  populateDebtAddDatalists_() {},
+  populateDebtPropertyOptions_() {},
+  filterDebtAccounts() {},
+  clearSurfaceState_: (...args) => debtFocusEvents.push(['clear', ...args]),
+  loadDebtFieldValue() {},
+  setStatusLoading() {},
+  setStatus() {},
+  setSelectLoadFailure() {},
+  renderSurfaceState_: (_id, config) => { debtFocusRetry = config.onAction; },
+  customerSafeErrorMessage_: (_value, fallback) => fallback,
+  Array,
+  String
+});
+vm.runInContext('var debtSectionRequestId_ = 0; var debtUpdateDetailsReady_ = false; var allDebtRows = [];\n' +
+  functionSource_(files['Dashboard_Script_PlanningDebts.html'], 'loadDebtSectionThenSelect_'), debtFocusContext);
+debtFocusContext.loadDebtSectionThenSelect_('Existing');
+debtFocusRequests.at(-1).onFailure(new Error('temporary'));
+assert.equal(typeof debtFocusRetry, 'function', 'Debt focus failure must expose a Retry action');
+debtFocusRetry();
+debtFocusRequests.at(-1).onSuccess({
+  debts: [{ accountName: 'Existing' }],
+  types: ['All'],
+  editableFields: []
+});
+assert.deepEqual(debtFocusEvents, [['clear', 'debt_status', 'status']],
+  'Debt focus failure -> Retry -> success must clear the stale unavailable surface');
 
 for (const [name, source, loader, availability] of [
   ['House', files['Dashboard_Script_AssetsHouseValues.html'], 'loadHouseSection', 'updateHouseUpdateAvailability_'],

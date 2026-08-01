@@ -24,6 +24,7 @@ function loadDebtSection() {
     },
     onSuccess: function(data) {
       if (sectionRequestId !== debtSectionRequestId_) return;
+      clearSurfaceState_('debt_status', 'status');
       allDebtRows = data.debts || [];
 
       const typeSel = document.getElementById('debt_typeFilter');
@@ -47,6 +48,9 @@ function loadDebtSection() {
       populateDebtAddDatalists_(data);
       populateDebtPropertyOptions_(data && data.propertyOptions);
       filterDebtAccounts();
+      if (data && Array.isArray(data.debts) && data.debts.length === 0) {
+        setDebtPanelMode('add');
+      }
 
       if (pendingFocus && pendingFocus.tab === 'debts') {
         focusDebtTarget_(pendingFocus);
@@ -55,13 +59,18 @@ function loadDebtSection() {
     onRetry: function(info) {
       setStatusLoading('debt_status', info.message);
     },
-    onRecovered: function() {
-      setStatus('debt_status', '', false);
-    },
     onFailure: function(err) {
       if (sectionRequestId !== debtSectionRequestId_) return;
       setSelectLoadFailure('debt_account', 'Couldn’t load debt accounts');
-      setStatus('debt_status', (err.message || String(err)), true);
+      updateDebtUpdateAvailability_();
+      renderSurfaceState_('debt_status', {
+        kind: 'unavailable',
+        title: 'Debt accounts are unavailable right now.',
+        message: customerSafeErrorMessage_(err && err.message ? err.message : String(err),
+          'CashCompass could not load your debt accounts. Try again in a moment.'),
+        actionLabel: 'Try again',
+        onAction: loadDebtSection
+      });
     }
   });
 }
@@ -83,6 +92,7 @@ function loadDebtSectionThenSelect_(accountName) {
     },
     onSuccess: function(data) {
       if (sectionRequestId !== debtSectionRequestId_) return;
+      clearSurfaceState_('debt_status', 'status');
       allDebtRows = data.debts || [];
       const typeSel = document.getElementById('debt_typeFilter');
       typeSel.innerHTML = '';
@@ -112,13 +122,18 @@ function loadDebtSectionThenSelect_(accountName) {
     onRetry: function(info) {
       setStatusLoading('debt_status', info.message);
     },
-    onRecovered: function() {
-      setStatus('debt_status', '', false);
-    },
     onFailure: function(err) {
       if (sectionRequestId !== debtSectionRequestId_) return;
       setSelectLoadFailure('debt_account', 'Couldn’t load debt accounts');
-      setStatus('debt_status', (err.message || String(err)), true);
+      updateDebtUpdateAvailability_();
+      renderSurfaceState_('debt_status', {
+        kind: 'unavailable',
+        title: 'Debt accounts are unavailable right now.',
+        message: customerSafeErrorMessage_(err && err.message ? err.message : String(err),
+          'CashCompass could not load your debt accounts. Try again in a moment.'),
+        actionLabel: 'Try again',
+        onAction: function() { loadDebtSectionThenSelect_(accountName); }
+      });
     }
   });
 }

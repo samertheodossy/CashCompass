@@ -1,5 +1,6 @@
 /* Cash Flow — Upcoming Expenses tab */
 function loadUpcomingSection() {
+  setUpcomingDismissGuidanceVisible_(false);
   document.getElementById('up_dueDate').value =
     document.getElementById('up_dueDate').value || new Date().toISOString().slice(0, 10);
 
@@ -92,6 +93,11 @@ function upcomingBucketClass(bucket) {
   return '';
 }
 
+function setUpcomingDismissGuidanceVisible_(visible) {
+  const guidance = document.getElementById('upcoming_dismiss_guidance');
+  if (guidance) guidance.hidden = visible !== true;
+}
+
 // Upcoming is an open-obligations board: only actionable rows (Planned with
 // remaining > 0) live on it. Paid and Dismissed (or legacy Skipped) rows
 // stay in INPUT - Upcoming Expenses for history and in LOG - Activity for
@@ -105,6 +111,8 @@ function renderUpcomingList(rows) {
     const amt = Number(row.amount) || 0;
     return status === 'Planned' && amt > 0.005;
   });
+
+  setUpcomingDismissGuidanceVisible_(activeRows.length > 0);
 
   if (!activeRows.length) {
     root.innerHTML = '<div class="muted">No active upcoming expenses.</div>';

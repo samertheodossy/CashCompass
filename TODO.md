@@ -578,9 +578,15 @@ findings below are Beta work, ordered by product risk:
    added to the selected-month total and does not replace an existing amount.
    Dashboard UX cross-checks the copy against the cumulative writer and the
    bounded presentation was confirmed.
-4. **`3b` · P2 — Honest empty/guidance states.** Empty Bank, Investment, and
-   Debt pages should begin in Add/guided state; Purchase and Retirement result
-   walls stay hidden until ready.
+4. **✅ `3b` · P2 — Honest empty/guidance states — complete through isolated
+   Central `@298`.** Empty Bank, Investment, and Debt pages begin in Add/guided
+   state; Purchase and Retirement result walls stay hidden until ready. Shared
+   unavailable/error states expose manual retry, and malformed responses cannot
+   masquerade as valid empty data. Empty Upcoming hides contextual Dismiss
+   guidance, and authoritative empty Bills opens Add bill; both refinements were
+   user-verified on a fresh workbook. Guarded First-Run run
+   `FR-e92641a0-2c59-45da-a90c-8b8780410f76` passed 14/14 with Restricted
+   sharing, zero browser errors, and verified Trash cleanup.
 5. **`3m` · P2/P3 — Form readiness and residual customer language (1–2 d).**
    Disable primary actions until minimum input is valid; preserve server
    validators; render customer-facing Bill payment-source labels without

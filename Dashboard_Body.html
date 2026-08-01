@@ -715,7 +715,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <div class="updated">Last updated: <span id="upcoming_updated">—</span></div>
       </div>
       <p class="panel-purpose">Add planned expenses and review what is approaching.</p>
-      <p class="panel-purpose upcoming-dismiss-note"><strong>Dismiss</strong> removes an item from active planning without recording a payment or changing Cash Flow. Its Upcoming row and Activity history remain.</p>
+      <p id="upcoming_dismiss_guidance" class="panel-purpose upcoming-dismiss-note" hidden><strong>Dismiss</strong> removes an item from active planning without recording a payment or changing Cash Flow. Its Upcoming row and Activity history remain.</p>
 
       <div class="mini-grid">
         <div class="mini-card">
@@ -1925,18 +1925,24 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <div id="ps_status" class="status"></div>
         </div>
 
-        <div class="info">
-          <div><strong>Immediate cash hit:</strong> <span id="ps_immediateCashHit" class="muted">—</span></div>
-          <div><strong>Financed amount:</strong> <span id="ps_financedAmount" class="muted">—</span></div>
-          <div><strong>Monthly payment:</strong> <span id="ps_monthlyPayment" class="muted">—</span></div>
-          <div><strong>Total monthly impact:</strong> <span id="ps_totalMonthlyImpact" class="muted">—</span></div>
-          <div><strong>Cash after purchase:</strong> <span id="ps_newCash" class="muted">—</span></div>
-          <div><strong>Usable cash after purchase:</strong> <span id="ps_newUsableCash" class="muted">—</span></div>
-          <div><strong>Projected cash flow after purchase:</strong> <span id="ps_newProjectedCashFlow" class="muted">—</span></div>
-          <div><strong>Net worth change:</strong> <span id="ps_netWorthChange" class="muted">—</span></div>
-          <div><strong>Buffer runway before:</strong> <span id="ps_runwayBefore" class="muted">—</span></div>
-          <div><strong>Buffer runway after:</strong> <span id="ps_runwayAfter" class="muted">—</span></div>
-          <div style="margin-top:10px;"><strong>Warning:</strong> <span id="ps_warning" class="muted">—</span></div>
+        <div>
+          <div id="ps_guidance" class="surface-state surface-state--empty">
+            <strong class="surface-state-title">Run a simulation to see the impact.</strong>
+            <p class="surface-state-message">Enter a purchase and funding plan. CashCompass will show the result here without changing your accounts.</p>
+          </div>
+          <div id="ps_results" class="info" hidden>
+            <div><strong>Immediate cash hit:</strong> <span id="ps_immediateCashHit" class="muted">—</span></div>
+            <div><strong>Financed amount:</strong> <span id="ps_financedAmount" class="muted">—</span></div>
+            <div><strong>Monthly payment:</strong> <span id="ps_monthlyPayment" class="muted">—</span></div>
+            <div><strong>Total monthly impact:</strong> <span id="ps_totalMonthlyImpact" class="muted">—</span></div>
+            <div><strong>Cash after purchase:</strong> <span id="ps_newCash" class="muted">—</span></div>
+            <div><strong>Usable cash after purchase:</strong> <span id="ps_newUsableCash" class="muted">—</span></div>
+            <div><strong>Projected cash flow after purchase:</strong> <span id="ps_newProjectedCashFlow" class="muted">—</span></div>
+            <div><strong>Net worth change:</strong> <span id="ps_netWorthChange" class="muted">—</span></div>
+            <div><strong>Buffer runway before:</strong> <span id="ps_runwayBefore" class="muted">—</span></div>
+            <div><strong>Buffer runway after:</strong> <span id="ps_runwayAfter" class="muted">—</span></div>
+            <div style="margin-top:10px;"><strong>Warning:</strong> <span id="ps_warning" class="muted">—</span></div>
+          </div>
         </div>
       </div>
     </div>

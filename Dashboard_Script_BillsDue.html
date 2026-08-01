@@ -512,6 +512,8 @@ function setBillsView(view) {
   }
 
   window.__billsActiveView = target;
+  window.__billsViewSelectionGeneration =
+    Number(window.__billsViewSelectionGeneration || 0) + 1;
 }
 
 function loadDashboardActionSections() {
@@ -913,21 +915,50 @@ function skipRecurringBill(skipKey) {
 var __billsManageSort = { column: 'dueDay', dir: 'asc' };
 var __billsManageRows = [];
 
+function routeBillsToAddIfAuthoritativelyEmpty_(rows, viewGeneration) {
+  if (!Array.isArray(rows) || rows.length !== 0) return false;
+  const currentView = window.__billsActiveView || 'due';
+  const viewUnchanged = Number(window.__billsViewSelectionGeneration || 0) ===
+    Number(viewGeneration || 0);
+  if (!viewUnchanged || currentView !== 'due') return false;
+  openBillsAddForm_();
+  return true;
+}
+
 function loadActiveBillsManagementUi_() {
   const el = document.getElementById('bills_manage_list');
   if (!el) return;
+  window.__billsManageLoadGeneration = Number(window.__billsManageLoadGeneration || 0) + 1;
+  const loadGeneration = window.__billsManageLoadGeneration;
+  const viewGeneration = Number(window.__billsViewSelectionGeneration || 0);
   el.innerHTML = loadingBlockHtml('Loading bill management…');
 
   google.script.run
     .withSuccessHandler(function(rows) {
-      renderActiveBillsList_(Array.isArray(rows) ? rows : []);
+      if (loadGeneration !== window.__billsManageLoadGeneration) return;
+      if (!Array.isArray(rows)) {
+        renderSurfaceState_('bills_manage_list', {
+          kind: 'unavailable',
+          title: 'Bills are unavailable right now.',
+          message: 'CashCompass could not load your recurring bills. Try again in a moment.',
+          actionLabel: 'Try again',
+          onAction: loadActiveBillsManagementUi_
+        });
+        return;
+      }
+      renderActiveBillsList_(rows);
+      routeBillsToAddIfAuthoritativelyEmpty_(rows, viewGeneration);
     })
     .withFailureHandler(function(err) {
-      el.innerHTML =
-        '<div class="muted">Couldn&rsquo;t load active bills &mdash; ' +
-        escapeHtml(customerSafeErrorMessage_(err && err.message ? err.message : String(err),
-          'Could not load recurring bills. Please refresh and try again.')) +
-        '</div>';
+      if (loadGeneration !== window.__billsManageLoadGeneration) return;
+      renderSurfaceState_('bills_manage_list', {
+        kind: 'unavailable',
+        title: 'Bills are unavailable right now.',
+        message: customerSafeErrorMessage_(err && err.message ? err.message : String(err),
+          'CashCompass could not load your recurring bills. Try again in a moment.'),
+        actionLabel: 'Try again',
+        onAction: loadActiveBillsManagementUi_
+      });
     })
     .getActiveBillsForManagementFromDashboard();
 }

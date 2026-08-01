@@ -890,6 +890,30 @@ Whenever a production bug is fixed:
 
 ---
 
+## 3b empty/error-state consistency coverage
+
+- Empty Bank, Investment, and Debt responses open their editors directly in
+  **Add new**. Malformed responses leave the current editor mode intact
+  and are not misclassified as authoritative empty results.
+- Purchase results remain hidden before a successful simulation, during a run,
+  and after a failed run; guidance remains visible until a result is ready.
+- Shared unavailable/error states provide a manual retry. A successful retry
+  removes the stale failure state rather than leaving contradictory UI behind.
+- Empty Upcoming hides the contextual Dismiss explanation until at least one
+  active expense exists. A truly empty Bills workspace opens **Add bill** only
+  after an authoritative empty response; active or unavailable states do not.
+- Permanent checks run in `npm run test:dashboard-ux --if-present` and
+  `npm run test:p1-evidence`; the full `npm test` gate covers the remaining
+  performance, populated-harness safety, and production-path audits.
+- Guarded First-Run run `FR-e92641a0-2c59-45da-a90c-8b8780410f76` passed
+  14/14 on isolated Central `@296`, including `empty_editors_open_add` and
+  `purchase_guidance_before_results`, with Restricted sharing, zero browser
+  errors, and verified exact-fixture Trash cleanup. The final contextual
+  Upcoming/Bills checks were user-verified on a fresh workbook at isolated
+  `@298` and are enforced by the local/browser contracts.
+
+---
+
 ## RECOVERY scenarios (design — not historical bugs)
 
 These are not past bugs but permanent damage/heal guards (RECOVERY pack):

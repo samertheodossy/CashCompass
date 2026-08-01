@@ -124,11 +124,28 @@ assert.match(firstRunE2E, /'customer_language'/,
   'First-Run E2E must require the whole-interface customer-language assertion');
 assert.match(firstRunE2E, /'empty_tracked_editor_modes'/,
   'First-Run E2E must require empty-state coverage for converged tracked editors');
+assert.match(firstRunE2E, /'empty_editors_open_add'/,
+  'First-Run E2E must require empty Bank, Investment, and Debt editors to open in Add mode');
+assert.match(firstRunE2E, /'upcoming_empty_hides_dismiss_guidance'/,
+  'First-Run E2E must require empty Upcoming to hide contextual Dismiss guidance');
+assert.match(firstRunE2E, /'empty_bills_open_add'/,
+  'First-Run E2E must require empty Bills to open directly in Add bill');
+assert.match(firstRunE2E, /'purchase_guidance_before_results'/,
+  'First-Run E2E must require Purchase guidance while unready result panels remain hidden');
 assert.match(firstRunE2E, /'retirement_guidance_not_ready'/,
   'First-Run E2E must require Retirement prerequisite guidance coverage');
 assert.match(firstRunBrowser,
   /showTab\('retirement'\)[\s\S]*?loadRetirementSection\(\)[\s\S]*?ret_empty_state[\s\S]*?ret_scenario_cards[\s\S]*?ret_results_panel[\s\S]*?add\('retirement_guidance_not_ready'/,
   'First-Run Retirement evidence must prove guidance is visible while result walls stay hidden');
+assert.match(firstRunBrowser,
+  /waitFor\(function\(\) \{[\s\S]*?bank_mode_add_btn[\s\S]*?classList\.contains\('active'\)[\s\S]*?fresh Bank Add mode/,
+  'First-Run must wait for authoritative Bank Add routing instead of sampling a fixed delay');
+assert.match(firstRunBrowser,
+  /waitFor\(function\(\) \{[\s\S]*?debt_mode_add_btn[\s\S]*?classList\.contains\('active'\)[\s\S]*?fresh Debt Add mode/,
+  'First-Run must wait for authoritative Debt Add routing instead of sampling a fixed delay');
+assert.match(firstRunBrowser,
+  /waitFor\(function\(\) \{[\s\S]*?inv_mode_add_btn[\s\S]*?classList\.contains\('active'\)[\s\S]*?fresh Investment Add mode/,
+  'First-Run must wait for authoritative Investment Add routing instead of sampling a fixed delay');
 assert.match(firstRunBrowser, /function customerLanguageLeaks\(/,
   'First-Run E2E must scan visible customer pages for internal workbook terminology');
 assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V8/,
@@ -457,6 +474,7 @@ const debtRaceCtx = vm.createContext({
   },
   runReadOnlyRpcWithRetry_: (options) => options.invoke(options.onSuccess, options.onFailure),
   loadDebtFieldValue: () => {},
+  clearSurfaceState_: () => {},
   setStatus: () => {},
   setStatusLoading: () => {},
   setSelectLoading: () => {},

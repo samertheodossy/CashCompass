@@ -18,6 +18,13 @@ function fillBankAccountDropdownFromData_(data) {
   populateBankAddDatalists_(data);
   updateBankUpdateAvailability_();
   renderBankManageList_();
+  clearSurfaceState_('bank_status', 'status');
+
+  // A successful empty response is authoritative. Route directly to the
+  // usable Add form, but preserve the user's current mode when records exist.
+  if (data && Array.isArray(data.accounts) && data.accounts.length === 0) {
+    setBankPanelMode('add');
+  }
 }
 
 function updateBankUpdateAvailability_() {
@@ -375,7 +382,15 @@ function loadBankSection() {
     onFailure: function(err) {
       if (sectionRequestId !== bankSectionRequestId_) return;
       setSelectLoadFailure('bank_account', 'Couldn’t load bank accounts');
-      setStatus('bank_status', (err.message || String(err)), true);
+      updateBankUpdateAvailability_();
+      renderSurfaceState_('bank_status', {
+        kind: 'unavailable',
+        title: 'Bank accounts are unavailable right now.',
+        message: customerSafeErrorMessage_(err && err.message ? err.message : String(err),
+          'CashCompass could not load your bank accounts. Try again in a moment.'),
+        actionLabel: 'Try again',
+        onAction: loadBankSection
+      });
     }
   });
 }
@@ -418,7 +433,15 @@ function loadBankSectionThenSelect_(accountName) {
     onFailure: function(err) {
       if (sectionRequestId !== bankSectionRequestId_) return;
       setSelectLoadFailure('bank_account', 'Couldn’t load bank accounts');
-      setStatus('bank_status', (err.message || String(err)), true);
+      updateBankUpdateAvailability_();
+      renderSurfaceState_('bank_status', {
+        kind: 'unavailable',
+        title: 'Bank accounts are unavailable right now.',
+        message: customerSafeErrorMessage_(err && err.message ? err.message : String(err),
+          'CashCompass could not load your bank accounts. Try again in a moment.'),
+        actionLabel: 'Try again',
+        onAction: function() { loadBankSectionThenSelect_(accountName); }
+      });
     }
   });
 }
@@ -778,6 +801,10 @@ function fillInvestmentAccountDropdownFromData_(data) {
   populateInvestmentAddDatalists_(data);
   updateInvestmentUpdateAvailability_();
   renderInvestmentManageList_();
+  clearSurfaceState_('inv_status', 'status');
+  if (data && Array.isArray(data.accounts) && data.accounts.length === 0) {
+    setInvestmentPanelMode('add');
+  }
 }
 
 function updateInvestmentUpdateAvailability_() {
@@ -955,7 +982,14 @@ function loadInvestmentSection() {
     onFailure: function(err) {
       setSelectLoadFailure('inv_account', 'Couldn’t load investment accounts');
       updateInvestmentUpdateAvailability_();
-      setStatus('inv_status', (err.message || String(err)), true);
+      renderSurfaceState_('inv_status', {
+        kind: 'unavailable',
+        title: 'Investments are unavailable right now.',
+        message: customerSafeErrorMessage_(err && err.message ? err.message : String(err),
+          'CashCompass could not load your investments. Try again in a moment.'),
+        actionLabel: 'Try again',
+        onAction: loadInvestmentSection
+      });
     }
   });
 }
@@ -989,7 +1023,14 @@ function loadInvestmentSectionThenSelect_(accountName) {
     onFailure: function(err) {
       setSelectLoadFailure('inv_account', 'Couldn’t load investment accounts');
       updateInvestmentUpdateAvailability_();
-      setStatus('inv_status', (err.message || String(err)), true);
+      renderSurfaceState_('inv_status', {
+        kind: 'unavailable',
+        title: 'Investments are unavailable right now.',
+        message: customerSafeErrorMessage_(err && err.message ? err.message : String(err),
+          'CashCompass could not load your investments. Try again in a moment.'),
+        actionLabel: 'Try again',
+        onAction: function() { loadInvestmentSectionThenSelect_(accountName); }
+      });
     }
   });
 }
