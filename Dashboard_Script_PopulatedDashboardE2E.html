@@ -283,23 +283,21 @@
 
       var dueEntry = storedEntryByPayee_(window.__dashboardBills, expected.billPayee);
       var skipKey = String(dueEntry && dueEntry.row && (dueEntry.row.skipKey || dueEntry.row.id) || '');
-      window.confirm = function(message) {
-        confirmations.push(String(message || ''));
-        return true;
-      };
       skipBillFromDashboard(skipKey);
-      window.confirm = originalConfirm;
+      await waitFor(function() {
+        var drawer = document.getElementById('bill_skip_drawer_backdrop');
+        return drawer && !drawer.hidden;
+      }, 10000, 'the Bill Skip drawer');
+      var skipHelp = text('bill_skip_drawer_help');
+      checks.push(/No payment will be recorded/i.test(skipHelp) &&
+        /future occurrences will still appear/i.test(skipHelp));
+      submitBillSkip();
       await waitFor(function() {
         return /No payment was recorded; future occurrences remain scheduled/i.test(text('bills_due_status'));
       }, 90000, 'the Bill Skip confirmation');
       await waitFor(function() {
         return !storedEntryByPayee_(window.__dashboardBills, expected.billPayee);
       }, 90000, 'the skipped occurrence to clear');
-      checks.push(confirmations.some(function(message) {
-        return /No payment will be recorded/i.test(message) &&
-          /future occurrences will still appear/i.test(message);
-      }));
-
       if (typeof setBillsView === 'function') setBillsView('manage');
       await waitFor(function() {
         return !!storedEntryByPayee_(window.__dashboardActiveBills, expected.billPayee);

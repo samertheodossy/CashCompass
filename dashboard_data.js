@@ -1765,8 +1765,18 @@ function getBillsDueFromCashFlowForDashboard(preloadedCurrentCashFlow, optionalS
 
   const debtRows = getDebtBillsDueRows_(ss, today, tz, preloadForDebtRows);
   const inputBillRows = getInputBillsDueRows_(ss, today, tz);
+  // An explicitly tracked active Bill is the Bills Due authority when the
+  // same normalized payee is also present in INPUT - Debts. Keep the Debt
+  // account fully active everywhere else; only suppress its derived card in
+  // this combined queue so the customer does not see or pay one obligation
+  // twice with competing amounts or dates.
+  const activeInputBillPayees = getInputBillsPayeeMap_(ss);
+  const visibleDebtRows = filterDebtBillsShadowedByTrackedBills_(
+    debtRows,
+    activeInputBillPayees
+  );
 
-  const allRows = debtRows.concat(inputBillRows);
+  const allRows = visibleDebtRows.concat(inputBillRows);
 
   const overdue = [];
   const next7 = [];
@@ -3253,6 +3263,20 @@ function getInputBillsPayeeMap_(ss) {
   }
 
   return out;
+}
+
+/**
+ * Removes only Debt-derived Bills Due cards whose normalized payee is already
+ * owned by an active tracked Bill. This is intentionally a pure read-model
+ * filter: it never changes either underlying dataset or any debt calculation.
+ */
+function filterDebtBillsShadowedByTrackedBills_(debtRows, activeInputBillPayees) {
+  const authoritativePayees = activeInputBillPayees || {};
+  return (debtRows || []).filter(function(row) {
+    const payee = String((row && (row.payee || row.name)) || '').trim();
+    if (!payee) return true;
+    return !authoritativePayees[normalizeBillName_(payee)];
+  });
 }
 
 function getDebtPayeeMap_(ss) {

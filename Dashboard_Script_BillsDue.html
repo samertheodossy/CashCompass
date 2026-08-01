@@ -742,6 +742,117 @@ function findBillForSkip_(skipKey, store) {
   return null;
 }
 
+var __billSkipDrawerState = null;
+var __billSkipDrawerBusy = false;
+var __billSkipDrawerPreviousFocus = null;
+var __billSkipDrawerKeyHandlerInstalled = false;
+
+function setBillSkipDrawerStatus_(msg, isError) {
+  setStatus('bill_skip_status', msg || '', !!isError);
+}
+
+function installBillSkipDrawerKeyHandler_() {
+  if (__billSkipDrawerKeyHandlerInstalled) return;
+  __billSkipDrawerKeyHandlerInstalled = true;
+  document.addEventListener('keydown', function(event) {
+    var backdrop = document.getElementById('bill_skip_drawer_backdrop');
+    if (!backdrop || backdrop.hidden) return;
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeBillSkipDrawer();
+      return;
+    }
+
+    if (event.key !== 'Tab') return;
+    var drawer = document.getElementById('bill_skip_drawer');
+    if (!drawer) return;
+    var focusable = Array.prototype.slice.call(
+      drawer.querySelectorAll('button:not([disabled])')
+    ).filter(function(el) {
+      return !el.hidden && el.offsetParent !== null;
+    });
+    if (!focusable.length) return;
+    var first = focusable[0];
+    var last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+}
+
+function openBillSkipDrawer_(skipKey, bill) {
+  var backdrop = document.getElementById('bill_skip_drawer_backdrop');
+  var drawer = document.getElementById('bill_skip_drawer');
+  if (!backdrop || !drawer || !bill) {
+    setBillsStatus_('The skip panel could not open. Please refresh and try again.', true);
+    return;
+  }
+
+  var name = String(bill.payee || bill.name || 'Bill').trim();
+  var dueDate = String(bill.dueDate || '').trim();
+  var amount = Math.abs(Number(bill.amount || 0));
+  __billSkipDrawerState = {
+    skipKey: String(skipKey || '').trim(),
+    name: name,
+    dueDate: dueDate
+  };
+  __billSkipDrawerBusy = false;
+  __billSkipDrawerPreviousFocus = document.activeElement;
+
+  document.getElementById('bill_skip_name').textContent = name;
+  document.getElementById('bill_skip_amount').textContent =
+    amount > 0 ? fmtCurrency(amount) : 'Not set';
+  document.getElementById('bill_skip_due').textContent = dueDate || 'This month';
+  setBillSkipDrawerStatus_('', false);
+  setBillSkipDrawerBusy_(false);
+
+  backdrop.hidden = false;
+  document.body.classList.add('bill-pay-drawer-open');
+  installBillSkipDrawerKeyHandler_();
+  setTimeout(function() {
+    var cancel = document.getElementById('bill_skip_cancel_btn');
+    if (cancel) cancel.focus();
+    else drawer.focus();
+  }, 0);
+}
+
+function closeBillSkipDrawer() {
+  if (__billSkipDrawerBusy) return;
+  var backdrop = document.getElementById('bill_skip_drawer_backdrop');
+  if (backdrop) backdrop.hidden = true;
+  document.body.classList.remove('bill-pay-drawer-open');
+  __billSkipDrawerState = null;
+
+  var previousFocus = __billSkipDrawerPreviousFocus;
+  __billSkipDrawerPreviousFocus = null;
+  if (previousFocus && typeof previousFocus.focus === 'function' &&
+      document.documentElement.contains(previousFocus)) {
+    try { previousFocus.focus(); } catch (_e) {}
+  }
+}
+
+function onBillSkipDrawerBackdropClick(event) {
+  if (event && event.target === event.currentTarget) closeBillSkipDrawer();
+}
+
+function setBillSkipDrawerBusy_(busy) {
+  __billSkipDrawerBusy = !!busy;
+  var close = document.getElementById('bill_skip_close_btn');
+  var cancel = document.getElementById('bill_skip_cancel_btn');
+  var submit = document.getElementById('bill_skip_submit_btn');
+  if (close) close.disabled = __billSkipDrawerBusy;
+  if (cancel) cancel.disabled = __billSkipDrawerBusy;
+  if (submit) {
+    submit.disabled = __billSkipDrawerBusy;
+    submit.textContent = __billSkipDrawerBusy ? 'Skipping…' : 'Skip occurrence';
+  }
+}
+
 function confirmAndSkipBill_(skipKey, bill) {
   if (!skipKey) {
     setBillsStatus_("Couldn't identify this bill — please refresh", true);
@@ -753,21 +864,26 @@ function confirmAndSkipBill_(skipKey, bill) {
     return;
   }
 
-  const name = String(bill.payee || bill.name || 'this bill').trim();
-  const occurrence = bill.dueDate
-    ? ' due ' + String(bill.dueDate)
-    : ' for this month';
-  const confirmed = window.confirm(
-    'Skip "' + name + '"' + occurrence + '?\n\n' +
-    'No payment will be recorded, and this occurrence will be removed from Bills. ' +
-    'The recurring bill stays active and future occurrences will still appear.'
-  );
-  if (!confirmed) return;
+  openBillSkipDrawer_(skipKey, bill);
+}
 
-  setStatusLoading('bills_due_status', 'Skipping bill…');
+function submitBillSkip() {
+  if (__billSkipDrawerBusy || !__billSkipDrawerState) return;
+
+  var state = __billSkipDrawerState;
+  var skipKey = state.skipKey;
+  var name = state.name || 'this bill';
+  var occurrence = state.dueDate
+    ? ' due ' + state.dueDate
+    : ' for this month';
+
+  setBillSkipDrawerBusy_(true);
+  setBillSkipDrawerStatus_('Skipping bill…', false);
 
   google.script.run
     .withSuccessHandler(function(res) {
+      setBillSkipDrawerBusy_(false);
+      closeBillSkipDrawer();
       setBillsStatus_(
         'Skipped "' + name + '"' + occurrence +
         '. No payment was recorded; future occurrences remain scheduled.',
@@ -778,7 +894,14 @@ function confirmAndSkipBill_(skipKey, bill) {
       loadPaymentPreview();
     })
     .withFailureHandler(function(err) {
-      setBillsStatus_((err.message || String(err)), true);
+      setBillSkipDrawerBusy_(false);
+      setBillSkipDrawerStatus_(
+        customerSafeErrorMessage_(
+          (err && err.message) ? err.message : String(err),
+          'Could not skip this bill. Please check whether it is still due, then try again.'
+        ),
+        true
+      );
     })
     .skipDashboardBill(skipKey);
 }

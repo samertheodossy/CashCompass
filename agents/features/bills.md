@@ -11,8 +11,8 @@
 | Knowledge status | `DRAFT` |
 | Product status | Shipped / Beta; Recurrence Engine V2 is shipped, while natural runtime validation of the expanded-occurrence Pay bridge remains recorded as pending |
 | Feature expert | Bills feature expert |
-| Last verified date | `2026-07-16` |
-| Last verified Git reference | `a2b35f3` |
+| Last verified date | `2026-08-01` |
+| Last verified Git reference | Working tree; commit pending user approval |
 | Applies to | Central App and bounded app |
 | Primary user surfaces | Cash Flow → Bills → Due this period; Cash Flow → Bills → Manage bills; Overview Bills cards; Quick add; `INPUT - Bills`; `INPUT - Cash Flow <year>`; `LOG - Activity` |
 | Canonical source documents | [`PROJECT_CONTEXT.md`](../../PROJECT_CONTEXT.md) → “Weekly/Biweekly Weekday Recurrence Support” and “Cash Flow Semantics”; [`ENGINEERING_STANDARDS.md`](../../ENGINEERING_STANDARDS.md) → “Cash Flow Data Semantics — Actuals vs Projection”; [`Dashboard_Help.html`](../../Dashboard_Help.html) → Bills; [`REGRESSION_SUITE_PLAN.md`](../../REGRESSION_SUITE_PLAN.md) → Bills recurrence |
@@ -38,7 +38,9 @@ The Bills page has two views. **Due this period** combines dated items from acti
 
 Recurring `INPUT - Bills` rows support Monthly, Weekly, Biweekly, Bimonthly, Quarterly, Semi-annually, and Yearly schedules in source and UI. Weekly can use a weekday; Biweekly can use a weekday plus an Anchor Date for a true 14-day cadence. Blank scheduling fields preserve legacy Due Day behavior; the recurrence reader also falls back safely on unusable legacy configuration, while Add/Edit rejects an inconsistent Biweekly weekday and anchor. Schedule edits are prospective when `Schedule Effective Date` is available.
 
-Pay opens Quick add with bill details prefilled. Skip first confirms that no payment will be recorded and future occurrences remain active. It writes a zero only into a resolved blank Cash Flow month cell and always records a deduplicated `bill_skip` marker; when an active tracked bill has no matching Cash Flow row, Skip records only the marker and never fabricates a ledger row. AutoPay records past-due actual activity, not forecasts. Monthly, Weekly, and Biweekly occurrences honor per-occurrence Skip markers; Weekly/Biweekly also use per-occurrence Pay/AutoPay markers because multiple occurrences share one monthly Cash Flow cell.
+Pay opens Quick add with bill details prefilled. Skip opens a CashCompass drawer that identifies the exact occurrence and explains that no payment will be recorded, the occurrence will leave Bills, and future occurrences remain active. Cancel, Escape, or a backdrop click closes the idle drawer without a server call; confirmation submits exactly once, keeps failures retryable in the drawer, and refreshes Bills and dashboard summaries after success. Skip writes a zero only into a resolved blank Cash Flow month cell and always records a deduplicated `bill_skip` marker; when an active tracked bill has no matching Cash Flow row, Skip records only the marker and never fabricates a ledger row. AutoPay records past-due actual activity, not forecasts. Monthly, Weekly, and Biweekly occurrences honor per-occurrence Skip markers; Weekly/Biweekly also use per-occurrence Pay/AutoPay markers because multiple occurrences share one monthly Cash Flow cell.
+
+When an active debt and an active tracked Bill normalize to the same payee, the explicit tracked Bill is authoritative for the Bills Due queue. The debt-derived duplicate card is suppressed only from that combined queue; the debt account remains active and visible in Assets & Liabilities, Planning, and its source sheet. An inactive tracked Bill does not suppress the debt-derived card.
 
 Bill Pay keeps the editable amount currency-formatted while focused. A successful manual payment remains two coordinated immutable audit records—a monetary `quick_pay` row and a non-monetary `bill_paid` occurrence marker—but the customer-facing Activity table hides the internal marker and presents the monetary row once as **Bill paid** with its amount.
 
@@ -115,7 +117,7 @@ When sources disagree, this DRAFT follows executable behavior and higher-precede
 | Manage bills → Edit | Authorized CashCompass user | Active row and stale-row payee reference still match | Writes only changed fields in place; scheduling changes stamp an effective date when supported |
 | Manage bills → Stop tracking | Authorized CashCompass user | Active row and stale-row payee reference still match | Sets `Active = No` and preserves history |
 | Due card → Pay | Authorized CashCompass user | Card exists | Opens Quick add with Expense/payee/date/amount/Flow Source; save writes Cash Flow and Activity |
-| Due card → Skip | Authorized CashCompass user | Occurrence resolves; a missing Cash Flow target is accepted only for a verified active tracked bill | Confirms consequences, records the occurrence marker, writes zero only to a resolved blank target, and keeps future occurrences active |
+| Due card → Skip | Authorized CashCompass user | Occurrence resolves; a missing Cash Flow target is accepted only for a verified active tracked bill | Opens an accessible consequence drawer; confirmation records the occurrence marker, writes zero only to a resolved blank target, and keeps future occurrences active |
 
 ### Primary workflow
 
@@ -130,7 +132,7 @@ When sources disagree, this DRAFT follows executable behavior and higher-precede
 - Existing populated workbook: Add/Edit/Manage use header-based reads. Missing optional Bills columns may self-heal additively; populated rows are not rewritten or restyled broadly.
 - Central App: Bills server entry points resolve the mapped per-user workbook via `getUserSpreadsheet_`.
 - Bounded app: The same resolver preserves active-spreadsheet behavior when Central mode is off.
-- Empty, stale, duplicate, or invalid input: Required values fail with explicit errors. Edit/Deactivate compare row number plus expected payee to prevent writing a shifted row. Duplicate-payee Add behavior is `UNKNOWN`; no explicit duplicate guard was found in `addBillFromDashboard`.
+- Empty, stale, duplicate, or invalid input: Required values fail with explicit errors. Edit/Deactivate compare row number plus expected payee to prevent writing a shifted row. Duplicate-payee Add behavior is `UNKNOWN`; no explicit duplicate guard was found in `addBillFromDashboard`. On the Bills Due read model, however, an active tracked Bill suppresses a normalized matching debt-derived card even when the Bill's current occurrence is already handled or outside the visible window.
 - Retry, concurrent action, or repeated execution: Activity dedupe keys suppress repeated occurrence markers. AutoPay uses a per-user lock; if unavailable, writes are deferred but cards still load. A repeated deactivate returns “Already not tracked.” A no-change edit does not write or log.
 
 ## 6. Domain Vocabulary
@@ -183,7 +185,7 @@ When sources disagree, this DRAFT follows executable behavior and higher-precede
 1. `loadDashboardActionSections` starts the three Bills reads.
 2. Server entry points call `getUserSpreadsheet_` and read Bills, Debts, Cash Flow, Upcoming, and Activity state as required.
 3. `getInputBillsDueRows_` converts each active Bills row into a recurrence rule, generates the prior/current/next-month window, resolves handled evidence, and may AutoPay past-due occurrences.
-4. `getBillsDueFromCashFlowForDashboard` merges debt and input-bill rows and buckets them into Overdue or Next 7 Days.
+4. `getBillsDueFromCashFlowForDashboard` builds the active tracked-Bill payee authority map, removes normalized matching debt-derived duplicates from this queue only, merges the remaining debt rows with input-bill occurrences, and buckets them into Overdue or Next 7 Days.
 5. Pay routes through Quick add; Skip records the exact occurrence marker and optionally resolves a blank Cash Flow target; Manage actions write Bills rows. Newest-request gating prevents an older Bills response from restoring a cleared card.
 
 ### Dependencies

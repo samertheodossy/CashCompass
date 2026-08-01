@@ -1646,6 +1646,12 @@ assert.match(body,
   /id="bill_pay_drawer_backdrop"[\s\S]*?id="bill_pay_drawer"[\s\S]*?role="dialog"[\s\S]*?aria-modal="true"[\s\S]*?id="bill_pay_amount"[\s\S]*?id="bill_pay_date"[\s\S]*?id="bill_pay_submit_btn"/,
   'Bills Pay must open an accessible drawer with editable amount and payment date');
 assert.match(body,
+  /id="bill_skip_drawer_backdrop"[\s\S]*?id="bill_skip_drawer"[\s\S]*?role="dialog"[\s\S]*?aria-modal="true"[\s\S]*?id="bill_skip_name"[\s\S]*?id="bill_skip_due"[\s\S]*?id="bill_skip_submit_btn"/,
+  'Bill Skip must use an accessible CashCompass drawer instead of a browser-native dialog');
+assert.match(body,
+  /No payment will be recorded\. This occurrence will be removed from Bills\. The recurring bill stays active and future occurrences will still appear\./,
+  'Bill Skip drawer must explain every consequence before the customer confirms');
+assert.match(body,
   /id="bill_pay_amount"[\s\S]{0,260}?onfocus="billPayAmountFocus_\(\)"/,
   'Bills Pay amount must retain customer-facing currency formatting while focused');
 assert.match(body,
@@ -1704,8 +1710,168 @@ assert.equal(billPayFocusInput.value, '$550.00',
 assert.ok(billPayFocusInput.selectCount >= 1,
   'Focused Bills Pay amount must remain fully selected for immediate replacement');
 assert.match(billsDueClient,
-  /function confirmAndSkipBill_[\s\S]*?No payment will be recorded[\s\S]*?this occurrence will be removed from Bills[\s\S]*?future occurrences will still appear/,
-  'Skip must require an explicit customer-facing consequence confirmation');
+  /function confirmAndSkipBill_[\s\S]*?openBillSkipDrawer_\(skipKey, bill\)/,
+  'Bill Skip must route the selected current payload into the dedicated drawer');
+const skipConfirmStart = billsDueClient.indexOf('function confirmAndSkipBill_(');
+const skipSubmitEnd = billsDueClient.indexOf('function skipBillFromDashboard(', skipConfirmStart);
+assert.ok(skipConfirmStart >= 0 && skipSubmitEnd > skipConfirmStart,
+  'Bill Skip drawer flow must remain directly inspectable');
+const skipDrawerFlowSlice = billsDueClient.slice(skipConfirmStart, skipSubmitEnd);
+assert.doesNotMatch(skipDrawerFlowSlice, /window\.confirm/,
+  'Bill Skip must never fall back to a browser-native confirmation dialog');
+assert.match(skipDrawerFlowSlice,
+  /function submitBillSkip\(\)[\s\S]*?if \(__billSkipDrawerBusy \|\| !__billSkipDrawerState\) return;[\s\S]*?setBillSkipDrawerBusy_\(true\)[\s\S]*?\.skipDashboardBill\(skipKey\)/,
+  'Bill Skip must guard duplicate submits and call the existing writer with the original skip key');
+assert.match(billsDueClient,
+  /function setBillSkipDrawerBusy_[\s\S]*?close\.disabled = __billSkipDrawerBusy[\s\S]*?cancel\.disabled = __billSkipDrawerBusy[\s\S]*?submit\.disabled = __billSkipDrawerBusy/,
+  'Bill Skip must prevent closing or resubmitting while the outcome is uncertain');
+const skipControllerStart = billsDueClient.indexOf('var __billSkipDrawerState = null;');
+const skipControllerEnd = billsDueClient.indexOf('function confirmAndSkipBill_(', skipControllerStart);
+assert.ok(skipControllerStart >= 0 && skipControllerEnd > skipControllerStart,
+  'Bill Skip drawer controller must remain directly executable in regression coverage');
+const skipOrigin = { focusCount: 0, focus() { this.focusCount += 1; } };
+const skipElements = {};
+function skipElement(id) {
+  return skipElements[id] || (skipElements[id] = {
+    id,
+    hidden: id === 'bill_skip_drawer_backdrop',
+    disabled: false,
+    textContent: '',
+    offsetParent: {},
+    focusCount: 0,
+    focus() { this.focusCount += 1; skipDocument.activeElement = this; },
+    querySelectorAll() {
+      return [skipElement('bill_skip_close_btn'), skipElement('bill_skip_cancel_btn'), skipElement('bill_skip_submit_btn')];
+    }
+  });
+}
+let skipKeyHandler = null;
+const skipDocument = {
+  activeElement: skipOrigin,
+  body: { classList: { add() {}, remove() {} } },
+  documentElement: { contains: () => true },
+  getElementById: skipElement,
+  addEventListener(type, handler) { if (type === 'keydown') skipKeyHandler = handler; }
+};
+const skipController = Function(
+  'document',
+  'setTimeout',
+  'setStatus',
+  'setBillsStatus_',
+  'fmtCurrency',
+  `${billsDueClient.slice(skipControllerStart, skipControllerEnd)}; return {
+    open: openBillSkipDrawer_, close: closeBillSkipDrawer,
+    backdrop: onBillSkipDrawerBackdropClick, busy: setBillSkipDrawerBusy_
+  };`
+)(skipDocument, fn => fn(), () => {}, () => {}, value => `$${Number(value).toFixed(2)}`);
+skipController.open('skip-key-1', { payee: 'Test bill', amount: 100, dueDate: '2026-08-01' });
+assert.equal(skipElement('bill_skip_drawer_backdrop').hidden, false,
+  'Opening Bill Skip must reveal the CashCompass drawer');
+assert.equal(skipElement('bill_skip_cancel_btn').focusCount, 1,
+  'Opening Bill Skip must move focus into the drawer');
+skipController.backdrop({ target: skipElement('bill_skip_drawer_backdrop'), currentTarget: skipElement('bill_skip_drawer_backdrop') });
+assert.equal(skipElement('bill_skip_drawer_backdrop').hidden, true,
+  'An idle Bill Skip backdrop click must close without submitting');
+assert.equal(skipOrigin.focusCount, 1,
+  'Closing Bill Skip must return focus to the originating control');
+skipDocument.activeElement = skipOrigin;
+skipController.open('skip-key-2', { payee: 'Test bill', amount: 100, dueDate: '2026-08-01' });
+let escapePrevented = false;
+skipKeyHandler({ key: 'Escape', preventDefault() { escapePrevented = true; } });
+assert.equal(escapePrevented, true,
+  'Escape must be handled by the open Bill Skip drawer');
+assert.equal(skipElement('bill_skip_drawer_backdrop').hidden, true,
+  'Escape must close an idle Bill Skip drawer');
+skipDocument.activeElement = skipOrigin;
+skipController.open('skip-key-3', { payee: 'Test bill', amount: 100, dueDate: '2026-08-01' });
+skipController.busy(true);
+skipController.close();
+assert.equal(skipElement('bill_skip_drawer_backdrop').hidden, false,
+  'Bill Skip must not close while the write outcome is uncertain');
+skipController.busy(false);
+skipController.close();
+assert.match(skipDrawerFlowSlice,
+  /withFailureHandler\(function\(err\)[\s\S]*?setBillSkipDrawerBusy_\(false\)[\s\S]*?setBillSkipDrawerStatus_/,
+  'Bill Skip failure must keep the drawer available and restore retry controls');
+assert.match(skipDrawerFlowSlice,
+  /customerSafeErrorMessage_\([\s\S]*?Could not skip this bill\. Please check whether it is still due, then try again\./,
+  'Bill Skip must keep internal Apps Script details behind the customer-safe error boundary');
+const skipRpcCalls = [];
+let skipRpcSuccess = null;
+let skipRpcFailure = null;
+const skipRpcRunner = {
+  withSuccessHandler(handler) { skipRpcSuccess = handler; return this; },
+  withFailureHandler(handler) { skipRpcFailure = handler; return this; },
+  skipDashboardBill(skipKey) { skipRpcCalls.push(skipKey); return this; }
+};
+const skipActionElements = {};
+const skipActionOrigin = { focus() {} };
+function skipActionElement(id) {
+  return skipActionElements[id] || (skipActionElements[id] = {
+    id,
+    hidden: id === 'bill_skip_drawer_backdrop',
+    disabled: false,
+    textContent: '',
+    offsetParent: {},
+    focus() { skipActionDocument.activeElement = this; },
+    querySelectorAll() {
+      return [skipActionElement('bill_skip_close_btn'), skipActionElement('bill_skip_cancel_btn'), skipActionElement('bill_skip_submit_btn')];
+    }
+  });
+}
+let skipActionKeyHandler = null;
+const skipActionDocument = {
+  activeElement: skipActionOrigin,
+  body: { classList: { add() {}, remove() {} } },
+  documentElement: { contains: () => true },
+  getElementById: skipActionElement,
+  addEventListener(type, handler) { if (type === 'keydown') skipActionKeyHandler = handler; }
+};
+const skipRefreshCounts = { bills: 0, snapshot: 0, preview: 0 };
+const skipActionController = Function(
+  'document', 'setTimeout', 'setStatus', 'setBillsStatus_', 'fmtCurrency',
+  'customerSafeErrorMessage_', 'google', 'loadDashboardActionSections',
+  'refreshSnapshot', 'loadPaymentPreview',
+  `${billsDueClient.slice(skipControllerStart, skipSubmitEnd)}; return {
+    open: openBillSkipDrawer_, close: closeBillSkipDrawer,
+    backdrop: onBillSkipDrawerBackdropClick, submit: submitBillSkip
+  };`
+)(
+  skipActionDocument, fn => fn(), () => {}, () => {}, value => `$${Number(value).toFixed(2)}`,
+  () => 'Safe skip failure', { script: { run: skipRpcRunner } },
+  () => { skipRefreshCounts.bills += 1; },
+  () => { skipRefreshCounts.snapshot += 1; },
+  () => { skipRefreshCounts.preview += 1; }
+);
+skipActionController.open('skip-dismiss', { payee: 'Dismiss', amount: 5, dueDate: '2026-08-01' });
+skipActionController.close();
+skipActionController.open('skip-backdrop', { payee: 'Backdrop', amount: 5, dueDate: '2026-08-01' });
+skipActionController.backdrop({ target: skipActionElement('bill_skip_drawer_backdrop'), currentTarget: skipActionElement('bill_skip_drawer_backdrop') });
+skipActionController.open('skip-escape', { payee: 'Escape', amount: 5, dueDate: '2026-08-01' });
+skipActionKeyHandler({ key: 'Escape', preventDefault() {} });
+assert.equal(skipRpcCalls.length, 0,
+  'Cancel, backdrop, and Escape must never call the Bill Skip writer');
+skipActionController.open('skip-exactly-once', { payee: 'Exact once', amount: 5, dueDate: '2026-08-01' });
+skipActionController.submit();
+skipActionController.submit();
+assert.deepEqual(skipRpcCalls, ['skip-exactly-once'],
+  'Repeated Bill Skip submission while busy must issue exactly one writer call');
+skipActionController.close();
+assert.equal(skipActionElement('bill_skip_drawer_backdrop').hidden, false,
+  'Bill Skip must remain visible while the first writer outcome is uncertain');
+skipRpcFailure(new Error('Exception: INPUT - Bills required column missing'));
+assert.equal(skipActionElement('bill_skip_submit_btn').disabled, false,
+  'A failed Bill Skip must restore the submit control for a deliberate retry');
+assert.equal(skipActionElement('bill_skip_drawer_backdrop').hidden, false,
+  'A failed Bill Skip must stay open so the customer can review and retry');
+skipActionController.submit();
+assert.deepEqual(skipRpcCalls, ['skip-exactly-once', 'skip-exactly-once'],
+  'A deliberate retry after failure must preserve the original occurrence key');
+skipRpcSuccess({ ok: true });
+assert.equal(skipActionElement('bill_skip_drawer_backdrop').hidden, true,
+  'A successful Bill Skip must close the drawer');
+assert.deepEqual(skipRefreshCounts, { bills: 1, snapshot: 1, preview: 1 },
+  'A successful Bill Skip must refresh Bills, snapshot, and payment preview exactly once');
 assert.match(billsDueClient,
   /Skipped "[\s\S]*?No payment was recorded; future occurrences remain scheduled/,
   'Skip success must explain the outcome without exposing the internal zero-cell mechanism');
@@ -1733,6 +1899,28 @@ assert.match(files['dashboard_data.js'],
 assert.match(files['dashboard_data.js'],
   /if \(hasCashFlowTarget\)[\s\S]*?if \(isBlank\)[\s\S]*?cell\.setValue\(0\)/,
   'Skip must keep its zero write behind both a resolved Cash Flow target and the existing blank-cell guard');
+assert.match(files['dashboard_data.js'],
+  /const activeInputBillPayees = getInputBillsPayeeMap_\(ss\)[\s\S]*?filterDebtBillsShadowedByTrackedBills_\([\s\S]*?const allRows = visibleDebtRows\.concat\(inputBillRows\)/,
+  'Bills Due must give active tracked Bills authority over matching Debt-derived cards');
+const billsData = files['dashboard_data.js'];
+const precedenceStart = billsData.indexOf('function filterDebtBillsShadowedByTrackedBills_(');
+const precedenceEnd = billsData.indexOf('function getDebtPayeeMap_(', precedenceStart);
+assert.ok(precedenceStart >= 0 && precedenceEnd > precedenceStart,
+  'Bills Due cross-source precedence must remain a directly testable pure helper');
+const filterDebtBillsForRegression = Function(
+  'normalizeBillName_',
+  `${billsData.slice(precedenceStart, precedenceEnd)}; return filterDebtBillsShadowedByTrackedBills_;`
+)(name => String(name || '').toLowerCase().replace(/&/g, 'and').replace(/['".,]/g, '').replace(/\s+/g, ' ').trim());
+const debtOnly = { payee: 'Debt Only', amount: 99, sourceType: 'debt' };
+const shadowedToyota = { payee: '  TOYOTA Financial Services  ', amount: 1902, sourceType: 'debt' };
+const filteredDebtRows = filterDebtBillsForRegression(
+  [shadowedToyota, debtOnly],
+  { 'toyota financial services': true }
+);
+assert.deepEqual(filteredDebtRows, [debtOnly],
+  'An active tracked Bill must suppress a normalized matching Debt card while unrelated Debt cards remain');
+assert.deepEqual(filterDebtBillsForRegression([shadowedToyota], {}), [shadowedToyota],
+  'An inactive or absent tracked Bill must not suppress a Debt-derived card');
 const payBillStart = billsDueClient.indexOf('function payBillFromDashboard(');
 const skipBillStart = billsDueClient.indexOf('function skipBillFromDashboard(', payBillStart);
 assert.ok(payBillStart >= 0 && skipBillStart > payBillStart,

@@ -1130,6 +1130,67 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       </aside>
     </div>
 
+    <div
+      id="bill_skip_drawer_backdrop"
+      class="bill-pay-drawer-backdrop"
+      hidden
+      onclick="onBillSkipDrawerBackdropClick(event)">
+      <aside
+        id="bill_skip_drawer"
+        class="bill-pay-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bill_skip_drawer_title"
+        aria-describedby="bill_skip_drawer_help"
+        tabindex="-1">
+        <div class="bill-pay-drawer-head">
+          <div>
+            <div class="bill-pay-drawer-eyebrow">Bills</div>
+            <h2 id="bill_skip_drawer_title">Skip bill</h2>
+          </div>
+          <button
+            type="button"
+            id="bill_skip_close_btn"
+            class="bill-pay-drawer-close"
+            aria-label="Close skip panel"
+            onclick="closeBillSkipDrawer()">×</button>
+        </div>
+
+        <div class="bill-pay-drawer-body">
+          <div class="bill-pay-summary">
+            <div id="bill_skip_name" class="bill-pay-summary-name">—</div>
+            <div class="bill-pay-summary-row">
+              <span>Expected amount</span>
+              <strong id="bill_skip_amount">—</strong>
+            </div>
+            <div class="bill-pay-summary-row">
+              <span>Due date</span>
+              <strong id="bill_skip_due">—</strong>
+            </div>
+          </div>
+
+          <p id="bill_skip_drawer_help" class="bill-pay-drawer-help">
+            No payment will be recorded. This occurrence will be removed from Bills. The recurring bill stays active and future occurrences will still appear.
+          </p>
+
+          <div id="bill_skip_status" class="status" role="status" aria-live="polite"></div>
+        </div>
+
+        <div class="bill-pay-drawer-actions">
+          <button
+            type="button"
+            id="bill_skip_cancel_btn"
+            class="small-btn"
+            onclick="closeBillSkipDrawer()">Cancel</button>
+          <button
+            type="button"
+            id="bill_skip_submit_btn"
+            class="small-btn primary"
+            onclick="submitBillSkip()">Skip occurrence</button>
+        </div>
+      </aside>
+    </div>
+
     <div id="income" class="panel">
       <div class="panel-head">
         <h2>Income sources</h2>
