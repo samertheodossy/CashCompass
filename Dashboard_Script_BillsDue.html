@@ -278,6 +278,45 @@ function updateBillPaymentFollowup_(data) {
   }
 }
 
+function loadBillPaymentHistory_(state) {
+  if (!state || !state.paymentRecorded ||
+      typeof runReadOnlyRpcWithRetry_ !== 'function') return;
+
+  var targetState = state;
+  var payload = {
+    entryType: 'Expense',
+    payee: String(state.payee || '').trim(),
+    entryDate: String(state.paymentDate || state.entryDate || '').trim()
+  };
+  if (!payload.payee || !/^\d{4}-\d{2}-\d{2}$/.test(payload.entryDate)) return;
+
+  runReadOnlyRpcWithRetry_({
+    isCurrent: function() {
+      return __billPayDrawerState === targetState &&
+        targetState.paymentRecorded === true;
+    },
+    invoke: function(onSuccess, onFailure) {
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onFailure)
+        .getQuickAddPreview(payload);
+    },
+    onSuccess: function(data) {
+      if (typeof renderPaymentHistoryChart_ === 'function') {
+        renderPaymentHistoryChart_(
+          'bill_pay_history_wrap',
+          'bill_pay_history_chart',
+          data || {}
+        );
+      }
+    },
+    // Payment is already complete. History is supplementary read-only detail,
+    // so a transport failure must not turn the authoritative receipt into an
+    // error or retry the payment writer.
+    onFailure: function(_err) {}
+  });
+}
+
 function showBillPaymentConfirmation_(state, amount, res) {
   var payee = state.payee || 'bill';
   setBillPayDrawerBusy_(false);
@@ -313,13 +352,7 @@ function showBillPaymentConfirmation_(state, amount, res) {
   var amountInput = document.getElementById('bill_pay_amount');
   var dateInput = document.getElementById('bill_pay_date');
   if (confirmation) confirmation.hidden = false;
-  if (typeof renderPaymentHistoryChart_ === 'function') {
-    renderPaymentHistoryChart_(
-      'bill_pay_history_wrap',
-      'bill_pay_history_chart',
-      preview
-    );
-  }
+  loadBillPaymentHistory_(state);
   if (submit) submit.hidden = true;
   if (cancel) cancel.hidden = true;
   if (done) {
@@ -368,6 +401,8 @@ function submitBillPayment() {
 function saveBillPaymentFromDrawer_(amount, entryDate) {
   var state = __billPayDrawerState;
   if (!state || state.paymentRecorded) return;
+
+  state.paymentDate = entryDate;
 
   setBillPayDrawerBusy_(true);
   setBillPayDrawerStatus_('Recording payment…', false, false);

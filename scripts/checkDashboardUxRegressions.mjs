@@ -1980,13 +1980,33 @@ assert.match(drawerConfirmationSlice,
   /snapshot\.previousValue[\s\S]*?preview\.currentValue[\s\S]*?bill_pay_confirmation_previous[\s\S]*?bill_pay_confirmation_added[\s\S]*?bill_pay_confirmation_total/,
   'Bills Pay receipt must use the authoritative writer response for before, added, and new totals');
 assert.match(drawerConfirmationSlice,
-  /renderPaymentHistoryChart_\([\s\S]*?'bill_pay_history_wrap'[\s\S]*?'bill_pay_history_chart'[\s\S]*?preview/,
-  'Bills Pay receipt must render the authoritative post-payment history');
+  /loadBillPaymentHistory_\(state\)/,
+  'Bills Pay receipt must load its post-payment history after the writer succeeds');
 assert.match(drawerConfirmationSlice,
   /submit\.hidden\s*=\s*true[\s\S]*?cancel\.hidden\s*=\s*true[\s\S]*?done\.hidden\s*=\s*false/,
   'A successful payment must wait for explicit Done instead of auto-dismissing the drawer');
 assert.doesNotMatch(drawerConfirmationSlice, /closeBillPayDrawer\(/,
   'Bills Pay confirmation must not close itself before the customer reviews it');
+const billHistoryStart = billsDueClient.indexOf('function loadBillPaymentHistory_(');
+assert.ok(billHistoryStart >= 0 && billHistoryStart < drawerConfirmationStart,
+  'Bills Pay must retain a dedicated read-only history loader');
+const billHistorySlice = billsDueClient.slice(billHistoryStart, drawerConfirmationStart);
+assert.match(billHistorySlice,
+  /entryType:\s*'Expense'[\s\S]*?state\.paymentDate\s*\|\|\s*state\.entryDate/,
+  'Bills Pay history must use the actual submitted payment date');
+assert.match(billHistorySlice,
+  /runReadOnlyRpcWithRetry_\([\s\S]*?\.getQuickAddPreview\(payload\)/,
+  'Bills Pay history must use the retry-safe read-only preview endpoint');
+assert.match(billHistorySlice,
+  /__billPayDrawerState\s*===\s*targetState[\s\S]*?targetState\.paymentRecorded\s*===\s*true/,
+  'A stale Bill Pay history response must not update a different drawer');
+assert.match(billHistorySlice,
+  /onSuccess:[\s\S]*?renderPaymentHistoryChart_\([\s\S]*?'bill_pay_history_wrap'[\s\S]*?'bill_pay_history_chart'[\s\S]*?data\s*\|\|\s*\{\}/,
+  'Bills Pay history must render the shared six-month payment chart');
+assert.doesNotMatch(billHistorySlice, /quickAddPayment|markDashboardBillOccurrencePaid/,
+  'The supplementary Bill Pay history read must never repeat a payment write');
+assert.match(drawerSaveSlice, /state\.paymentDate\s*=\s*entryDate/,
+  'Bills Pay must retain the submitted date for its post-payment history request');
 assert.match(billsDueClient,
   /function updateBillPaymentFollowup_\(data\)[\s\S]*?candidateDueDate\s*!==\s*paidDueDate[\s\S]*?Another [\s\S]*?occurrence due [\s\S]*?is still awaiting action/,
   'Bills Pay must distinguish a cleared occurrence from another occurrence that is also due');
