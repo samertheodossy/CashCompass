@@ -4,7 +4,8 @@
 
 **Reconciled:** 2026-07-31
 
-**Current evidence:** isolated Central `@240`; clean Populated Dashboard run
+**Current isolated deployment:** `@299`. The Activity-correction evidence
+baseline remains isolated Central `@240`; clean Populated Dashboard run
 `FR-d75843e0-486e-4faa-8967-05ee40b73e25` passed **21/21** in 383.006 s. It
 includes the complete `REG-030`–`REG-039` direct Quick Add matrix plus
 change-amount/remove correction for cash, credit-card, created-row, and Donation
@@ -15,15 +16,21 @@ populated journey passed with zero browser errors, Restricted single-owner
 sharing, and verified exact-fixture Trash cleanup. The user completed the
 corresponding Central visual review, and `5i` is committed and pushed as
 `16b6a8f`. Bill occurrence correction (`5j`) is deferred for a later focused
-redesign. `3c`, Planning hierarchy and Debt relationships, is complete through
-isolated Central `@293`. `3a`, loading-state consistency, is complete through
-permanent regression coverage and read-only isolated Central `@294`; `3b`,
+redesign. `3c`, Planning hierarchy and Debt relationships, is complete in
+`7c0e2ac` through isolated Central `@293`. `3a`, loading-state consistency, is
+complete in `be76bdb` through permanent regression coverage and read-only
+isolated Central `@294`; `3b`,
 empty/error-state consistency, is complete through permanent regression coverage
 and guarded First-Run run `FR-e92641a0-2c59-45da-a90c-8b8780410f76`, which
 passed 14/14 on isolated Central `@296` with Restricted sharing, zero browser
 errors, and verified Trash cleanup. The final empty-Upcoming and empty-Bills
 context refinements are deployed to isolated `@298`, permanently covered, and
-user-verified on a fresh workbook. The active item is `3e`, Properties context
+user-verified on a fresh workbook. Source commit `3e2db4f` is on `origin/main`.
+The follow-up Bill reliability fix in `433bfed` replaces native Skip
+confirmation with the CashCompass drawer and makes explicit tracked Bills
+authoritative over matching debt-derived Bills Due cards. Both behaviors were
+user-verified on isolated Central `@299` and have permanent regression coverage.
+The active item is `3e`, Properties context
 polish. The full local suite passes, and
 read-only isolated Central `@293` validation
 confirms the three Debt surfaces, exact cross-links, current Setup/Help route,
@@ -36,9 +43,9 @@ remains user-controlled.
 `@180`. This remains the official score until the next full scored advocate run;
 the product has materially improved since that baseline.
 
-**Target broad invited-Beta decision:** **2026-09-24**
-
-**Contingency boundary:** **2026-10-02**
+**Broad invited-Beta decision date:** pending rebaseline after the deferred
+`5j` redesign is measured. The former 2026-09-24 target and 2026-10-02
+contingency boundary are historical planning references only.
 
 ## Purpose and authority
 
@@ -96,14 +103,19 @@ recently completed `5h` and `5i` as implementation history.
 | 7 | `8a`–`8f` | Freeze, complete exact-candidate evidence, score, and READY verdict | 3.5–7 d plus fixes |
 | 8 | `9a`–`9e` | Supervised cohort, go/no-go, and separately approved Central Beta promotion | 2–3 active d plus 5–7 calendar d and fixes |
 
+**Current execution decision (2026-07-31):** finish the smaller remaining UX
+and accessibility work first, beginning with `3e`. Compound Activity correction
+`5j`–`5m` remains a broad-Beta requirement but is deliberately deferred until
+after the current UX closeout. The later exact-candidate advocate rerun `3k`
+occurs only after freeze; Groups 6–7 may advance during runtime/review waits.
+
 The arithmetic sum is intentionally not the delivery forecast because Groups
 6–7 and parts of Groups 3 and 5 can advance during runtime waits. The optimized
 capacity forecast is **34–50 focused working days best case** or **47–74
 conservatively**, plus the five-to-seven-day cohort and defect contingency. This
 conservative planning envelope is retained until `5j` measures the first
-compound correction family. The 2026-09-24 target remains at risk until
-`5j`–`5m` and the remaining accessibility findings close; dates remain gates,
-not promises.
+compound correction family. No current broad-Beta date is committed; evidence
+gates control the decision.
 
 ## Completion standard
 
@@ -152,9 +164,9 @@ acceptance contract, close it with evidence rather than manufacturing a redesign
 
 | ID | Remaining item | Exit evidence | Estimate |
 |---|---|---|---:|
-| 3a | Finish loading-state consistency — **✅ complete** | Overview, Planner, picker, onboarding, and Admin slots use contextual shared loading states; pickers and dependent actions fail closed; stale Bank responses cannot overwrite newer state | Complete at isolated Central `@294` |
-| 3b | Finish empty/error-state consistency — **✅ complete** | Standard empty, unavailable, retry, and failure patterns cover core surfaces | Complete at isolated Central `@298`; First-Run 14/14 baseline plus fresh-workbook contextual-state confirmation |
-| 3c | Planning hierarchy and Debt relationships — **✅ complete** | Debt accounts, Debt Overview, and Rolling Payoff purposes and links are understandable; Setup and Help use the current destination | Complete at isolated Central `@293` |
+| 3a | Finish loading-state consistency — **✅ complete** | Overview, Planner, picker, onboarding, and Admin slots use contextual shared loading states; pickers and dependent actions fail closed; stale Bank responses cannot overwrite newer state | Complete in `be76bdb` at isolated Central `@294` |
+| 3b | Finish empty/error-state consistency — **✅ complete** | Standard empty, unavailable, retry, and failure patterns cover core surfaces | Complete in `3e2db4f` at isolated Central `@298`; First-Run 14/14 baseline plus fresh-workbook contextual-state confirmation |
+| 3c | Planning hierarchy and Debt relationships — **✅ complete** | Debt accounts, Debt Overview, and Rolling Payoff purposes and links are understandable; Setup and Help use the current destination | Complete in `7c0e2ac` at isolated Central `@293` |
 | 3e | Properties context polish | Selected property/year remains clear; Cash Flow-posting consequences are understandable | 0.5–1 d |
 | 3f | Activity review polish | Filters are visible/reversible; Donation-only Remove is correctly gated; narrow layout is readable | 1–2 d |
 | 3g | Setup progress and next step | Required progress and one recommended next action are visible without performing a write | 0.5–1 d |
@@ -390,10 +402,8 @@ This is design and policy readiness, not payment activation.
 - **Contingency:** add **1–2 weeks** if performance, accessibility, or cohort
   evidence exposes a material defect.
 
-The September 24 decision is now an at-risk best-case target after the August
-buffer. October 2 may not contain the remaining correction program plus one
-repair cycle; re-baseline after `5j` measures the first compound correction
-family. The strictest failed gate controls the actual date.
+Rebaseline the calendar after `5j` measures the first compound correction
+family. The strictest failed gate controls the actual decision date.
 
 ## Optimized execution model
 
@@ -401,7 +411,7 @@ family. The strictest failed gate controls the actual date.
 
 The remaining work that directly controls the finish date is:
 
-`5j–5m → 3a–3k/3m → 4a–4f → 8a–8f → 9a–9e`
+`3e–3j/3m → 5j–5m → 4a–4f + 5a–5f → 8a–8f/3k → 9a–9e`
 
 Financial/workbook proof in Group 5 must finish before `8b`. Operations and
 monetization foundations in Groups 6–7 must finish before `8d`, but they should
@@ -437,16 +447,17 @@ not block early engineering.
 9. **Preserve environment boundaries.** Beta stays pinned until promotion;
    bounded remains user-controlled and is never a Harness target.
 
-## Optimized calendar waves
+## Reconciled execution waves
 
 | Window | Lane A — critical | Lane B — UX/evidence | Lane C — parallel foundation | Exit |
 |---|---|---|---|---|
-| Completed through Jul 27 | `1a`–`1f`, `2a`–`2f`, `5g`; `REG-028` appended-row safety | `3d`, `3l`; shared tracked-editor convergence, Overview trust, Quick Add/Dismiss language | — | Wave 1 and daily-task language are closed; commit `168a49b` is on `origin/main`; exact-candidate replay remains part of the final evidence wave; Beta stays `@106`; bounded remains user-controlled |
-| Aug 21–27 | Begin `5h`; advance `5i` only after the shared identity/precondition contract closes | Audit `3a`, `3b`, `3m`; collect diagnostic performance evidence without starting the final campaign | Start `6a`–`6f`, `7a`–`7b`, cohort design | Durable Activity correction foundation is measured |
-| Aug 28–Sep 3 | `5j`–`5m` | Advance Group 5 matrix/recovery proof | `7c`–`7f`, known limitations, support posture | Supported Activity correction families and audit-only dispositions pass |
-| Sep 4–10 | Begin/finish performance fixes `4a`–`4d` | Close `3c`, `3e`–`3m`; finish Group 5 | Finish Groups 6–7 | UX/accessibility path ≥9 and candidate prerequisites complete |
-| Sep 11–17 | Freeze `8a`; run `4e`–`4f`, `8b`–`8f` | Exact-candidate advocate `3k` | Final release/rollback/support review | Exact candidate reaches automated READY prerequisites |
-| Sep 18–24 | Release-blocking fixes only | Cohort observation and final advocate check | Support the cohort; prepare go/no-go | Five-to-seven-day cohort and final broad-Beta decision |
+| Completed through Jul 31 | `1a`–`1f`, `2a`–`2f`, `5g`–`5i`; `REG-028` appended-row safety | `3a`–`3d`, `3l`; tracked-editor convergence, Overview trust, loading, empty/error, Debt relationships, and daily-task language | — | Current source is on `origin/main`; isolated Central reached `@298`; Beta stays `@106`; bounded remains user-controlled |
+| Completed Aug 1 | `REG-041` styled Bill Skip and `REG-042` Bills Due authority | CashCompass drawer consistency and one-card Bill/debt presentation | — | Commit `433bfed`; user-verified on isolated Central `@299`; Beta and bounded unchanged |
+| Current UX closeout | Audit/close `3e`–`3j` and `3m`; collect diagnostic performance evidence without starting the final campaign | Permanent regressions and user visual review for each confirmed gap | Advance `6a`–`6f`, `7a`–`7f`, and cohort design during waits | UX/accessibility path reaches ≥9 without reopening completed slices |
+| Deferred correction return | Implement and prove `5j`–`5m` on guarded disposable workbooks | Advance `5a`–`5f` candidate matrix/recovery proof | Continue known limitations and support posture | Supported correction families are atomic; unsupported audit rows remain honest |
+| Candidate preparation | Finish `4a`–`4d` and every remaining `5a`–`5f` prerequisite | Complete fixture, visual, accessibility, and operations evidence | Finish Groups 6–7 | Candidate prerequisites are complete before one freeze |
+| Frozen candidate | Freeze `8a`; run `4e`–`4f`, `8b`–`8f`, and advocate `3k` | Release-blocking fixes only | Final release/rollback/support review | Exact candidate reaches automated READY prerequisites and ≥95/100 |
+| Supervised cohort | `9a`–`9e` cohort, observation, go/no-go, and separately approved promotion | Final advocate check | Support the cohort | Five-to-seven-day cohort and final broad-Beta decision |
 
 ## Explicitly outside broad-Beta scope
 

@@ -846,7 +846,7 @@ Whenever a production bug is fixed:
 ### REG-040 — Returning to Quick Add after a correction showed the old total
 - Category: REGRESSION / UI RELIABILITY / SAME-PAGE STATE
 - Date discovered: 2026-07-28
-- Status: fixed locally; isolated Central runtime confirmation pending
+- Status: fixed in `433bfed`; user-verified on isolated Central `@299`
 - Affected files: `Dashboard_Script_Payments.html`,
   `Dashboard_Script_Activity.html`, Populated Dashboard E2E, and Dashboard UX
   regressions
@@ -866,6 +866,50 @@ Whenever a production bug is fixed:
   pre-correction total, runs the real same-page refresh against its
   marker-verified disposable workbook, and requires the authoritative value,
   chart, and form selection without reloading the browser.
+
+### REG-041 — Bill Skip used a browser-native confirmation instead of the CashCompass drawer pattern
+- Category: REGRESSION / UX CONSISTENCY / WRITE SAFETY
+- Date discovered: 2026-08-01
+- Status: fixed locally; isolated Central runtime confirmation pending
+- Affected files: `Dashboard_Body.html`, `Dashboard_Script_BillsDue.html`,
+  Populated Dashboard E2E, and Dashboard UX regressions
+- Root cause: the Skip action called `window.confirm`, leaving the browser to
+  render a platform-specific embedded-page prompt with no CashCompass styling,
+  focus lifecycle, inline failure state, or protected busy state.
+- Expected result: Skip opens an accessible CashCompass drawer naming the bill,
+  amount, and due date and explaining that no payment is recorded, the current
+  occurrence leaves Bills, and future occurrences remain active. Cancel,
+  Escape, and idle-backdrop close issue no RPC. Confirm issues exactly one RPC,
+  disables dismissal while busy, keeps a failed request open and retryable, and
+  closes plus refreshes Bills and dashboard summaries after success.
+- Permanent coverage: Dashboard UX checks require the dialog semantics and
+  consequence copy, prove the Skip route contains no native confirmation,
+  exercise idle dismissal and busy protection, assert one server call per
+  confirmation, and require retryable failure handling. Populated Dashboard E2E
+  executes the real drawer path against its marker-verified disposable workbook.
+  The user also confirmed the styled Skip drawer visually on isolated Central
+  `@299` before this documentation checkpoint.
+
+### REG-042 — A debt and tracked Bill with the same payee produced duplicate Bills Due cards
+- Category: REGRESSION / READ MODEL / FINANCIAL CLARITY
+- Date discovered: 2026-08-01
+- Status: fixed in `433bfed`; user-verified on isolated Central `@299`
+- Affected files: `dashboard_data.js` and Dashboard UX regressions
+- Root cause: Bills Due concatenated active debt-derived payment rows with
+  tracked-Bill occurrence rows without first establishing which source owned a
+  normalized payee. A debt payment date and explicit Bill due date could
+  therefore appear as separate cards for the same obligation.
+- Expected result: an active explicit tracked Bill is authoritative for the
+  normalized payee in Bills Due, even when its current occurrence is handled or
+  outside the visible seven-day window. Only the matching debt-derived queue
+  card is suppressed. Unrelated debts remain, inactive Bills do not suppress a
+  debt, and the underlying debt remains unchanged and visible everywhere debts
+  are normally shown. The tracked Bill's amount, date, cadence, and markers win.
+- Permanent coverage: the pure authority-filter regression covers exact and
+  normalized payee matches, unrelated debts, empty authority, inactive-source
+  behavior through the active Bills map, and integration before queue merge.
+  Isolated Central `@299` user verification confirmed one matching card in
+  Bills while the debt account remained visible in Assets & Liabilities.
 
 ---
 
@@ -910,7 +954,12 @@ Whenever a production bug is fixed:
   `purchase_guidance_before_results`, with Restricted sharing, zero browser
   errors, and verified exact-fixture Trash cleanup. The final contextual
   Upcoming/Bills checks were user-verified on a fresh workbook at isolated
-  `@298` and are enforced by the local/browser contracts.
+  `@298` and are enforced by the local/browser contracts. The completed slice
+  is committed and pushed as `3e2db4f` on `origin/main`.
+
+Related completed UX slices are contextual loading-state consistency (`3a`) in
+`be76bdb` through isolated Central `@294`, and Debt destination/routing
+consistency (`3c`) in `7c0e2ac` through isolated Central `@293`.
 
 ---
 

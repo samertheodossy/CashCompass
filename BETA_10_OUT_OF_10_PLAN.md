@@ -36,27 +36,27 @@ Trusted users may participate in a **supervised validation cohort** before the r
 ### Planning window
 
 - Controlled Family Beta may continue now with the existing supervised cohort.
-- After a four-week buffer for planned time away in August, the target broad
-  invited-Beta **decision** is **2026-09-24**.
-- **2026-10-02** is the contingency boundary if one focused repair/retest cycle is
-  required.
+- The former **2026-09-24** target and **2026-10-02** contingency boundary are
+  historical planning references and require rebaselining after the deferred
+  `5j` redesign is measured.
+- There is currently no committed broad invited-Beta decision date.
 - The forecast assumes no new major feature in scope, continued isolated-Central
   availability, acceptable exact-candidate
   performance, and a five-to-seven-day cohort without a material defect.
 - Dates do not waive this plan's score, safety, financial, privacy, performance,
   cohort, or Release Readiness gates.
 
-The execution waves are: completed through Jul 27 — HTTP 0, exact-owner
-evidence, core Bills Pay, tracked-editor convergence, Activity action truth,
+The reconciled execution waves are: completed through Jul 31 — platform,
+recovery, core Bills Pay, tracked-editor convergence, Activity action truth,
 Overview trust, unattended browser orchestration, controlled loading,
-Skip/Stop safety, Retirement runtime, and Quick Add/Upcoming language;
-Aug 21–27 — begin the end-to-end financial operation envelope and direct Cash
-Flow correction while auditing remaining UX and operations work; Aug 28–Sep 3 —
-complete supported Activity correction families and fixture/recovery proof;
-Sep 4–10 —
-remaining page UX, accessibility, performance diagnosis, and candidate
-prerequisites; Sep 11–17 — candidate freeze, Performance, and complete Release
-Readiness; Sep 18–24 — supervised cohort, final scorecard, and go/no-go.
+Skip/Stop safety, Retirement runtime, Quick Add/Upcoming language, correction
+foundation/direct correction, and UX items `3a`–`3c`; current — finish the
+remaining UX/accessibility work beginning with `3e`; next — return to deferred
+compound Activity correction `5j`–`5m`; then — close performance,
+financial/workbook/recovery, operations/support, and monetization-ready
+architecture; finally — freeze and prove the exact candidate before the
+supervised cohort, final scorecard, and go/no-go. Calendar targets must be
+rebaselined after the deferred `5j` design is measured; dates never waive gates.
 
 The optimized model uses three coordinated lanes: critical engineering,
 UX/evidence, and operations/product foundation. Operations and monetization
@@ -289,10 +289,10 @@ parallel; the exact estimates and dependencies are maintained in
 
 The increase reflects the 2026-07-26 decisions to make Activity correction and
 immutable reversal a broad-Beta requirement and to schedule every confirmed
-`@196` advocate finding. Wave 1 and Overview health trust are now complete ahead
-of the buffered schedule, but the September 24 target and October 2 contingency
-remain at risk until the shared correction foundation and remaining
-accessibility work are implemented and measured.
+`@196` advocate finding. Wave 1, Overview health trust, the shared correction
+foundation/direct correction, and UX items `3a`–`3c` are complete. The calendar
+requires rebaselining after deferred compound correction `5j` is redesigned and
+measured; no current broad-Beta date is committed.
 
 This range is for capacity planning only. The release decision is based on evidence, not elapsed time.
 
@@ -374,12 +374,15 @@ Populated Dashboard V7 18/18 are the latest browser evidence. The last formal
 advocate score remains 8.3/10; the `@196` 7.2 read-only score is an
 evidence-limited discovery score, not a comparable regression.
 
-The immediate gate is durable Activity correction (`5h`–`5m`). Quick
-Add/Upcoming language contracts (`2d`–`2e`, `REG-026` / `REG-027`) are complete
-in `168a49b`; exact-candidate replay remains in the final evidence wave rather
-than the open implementation list. After Activity correction, complete
-remaining page UX, form readiness/customer language (`3m`), and
-accessibility/responsive evidence (`3j`); freeze the
-candidate; restart the 20-pair percentile campaign; ratify p50/p95 budgets;
-finalize Release Readiness; complete supervised cohort proof; and run the full
-10/10 scorecard before broad Beta.
+The immediate gate is the remaining UX/accessibility closeout, beginning with
+`3e`. Debt context/routing (`3c`, `7c0e2ac`), contextual loading states (`3a`,
+`be76bdb`), and Dashboard empty/error states (`3b`, `3e2db4f`) are complete
+through isolated Central `@298`. Follow-up Bill reliability commit `433bfed`
+closes `REG-041` and `REG-042` with user verification on isolated Central
+`@299`. Bill occurrence correction (`5j`) is deferred
+for a later focused redesign, but `5j`–`5m` remain required before broad Beta.
+After the remaining UX work, return to those correction families, complete the
+performance, financial-integrity, recovery, operations, and monetization-ready
+architecture gates; freeze the exact candidate; restart the 20-pair percentile
+campaign; ratify p50/p95 budgets; finalize Release Readiness; complete
+supervised cohort proof; and run the full 10/10 scorecard before broad Beta.

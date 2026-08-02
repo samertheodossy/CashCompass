@@ -24,6 +24,14 @@ not replace final blank/fresh and representative-populated release evidence. Eve
 change must still ship with exact checks appropriate to both tracks. See
 `WORKING_RULES.md → Current phase` and `TEST_HARNESS_ARCHITECTURE.md`.
 
+Recent completed UX coverage includes Debt destination/routing consistency
+(`3c`) in `7c0e2ac`, contextual loading-state consistency (`3a`) in `be76bdb`,
+and authoritative empty/error-state consistency (`3b`) in `3e2db4f`. The latest
+of these was user-verified on isolated Central `@298`. Follow-up Bill reliability
+commit `433bfed` adds permanent `REG-041`/`REG-042` coverage and was manually
+confirmed on isolated Central `@299`; Beta and the bounded workbook were not
+touched.
+
 ### Blank + populated two-track manual checks
 
 Run both tracks after every change, however small.
@@ -74,6 +82,7 @@ The following checks are mandatory additions/extensions as their fixes land:
    errors, and verified exact-fixture Trash cleanup. At isolated `@298`, the
    user also confirmed on a fresh workbook that empty Upcoming hides Dismiss
    guidance and truly empty Bills opens Add bill; both checks are permanent.
+   The completed slice is committed and pushed as `3e2db4f` on `origin/main`.
 5. **Language and routing (`2d`, `3c`, `3h`, `3m`)** — Quick Add consequence
    wording, the exact Debt Help path, Setup/Retirement wording, and normal-path
    token removal have source-contract assertions plus the applicable browser

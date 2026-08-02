@@ -11,23 +11,24 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current stage — Stage 3: Beta Readiness
 
-**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; isolated Central has since advanced through `@196`. The `@196` 7.2/10 read-only score is evidence-limited and not comparable, so the official score does not change until a full writer-inclusive advocate run. The 7.5/10 value remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, the non-performance P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** Financial Integrity is committed as `9b97c4d` and exact isolated `@156` evidence passed 53/53. Current ordering authority is `ROADMAP.md`: **Activity correction → remaining page UX/accessibility → exact-candidate Performance and final Release Readiness verdict → supervised cohort proof → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
+**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; isolated Central has since advanced through `@299`, including the user-verified `REG-041`/`REG-042` Bill reliability follow-up in `433bfed`. The `@196` 7.2/10 read-only score is evidence-limited and not comparable, so the official score does not change until a full writer-inclusive advocate run. The 7.5/10 value remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, the non-performance P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** Financial Integrity is committed as `9b97c4d` and exact isolated `@156` evidence passed 53/53. Current ordering authority is `ROADMAP.md`: **remaining page UX/accessibility beginning with `3e` → deferred correction `5j`–`5m` → candidate preparation and exact-candidate evidence → supervised cohort proof → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
 
 `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered finish-line inventory
 for broad invited Beta. It assigns IDs `1a`–`9e`, focused-effort estimates,
 dependencies, a critical path, three parallel work lanes, time-saving rules, and
-the optimized five-wave calendar. Use those IDs in new plans, handoffs, and
+the reconciled execution waves. Use those IDs in new plans, handoffs, and
 status updates instead of creating another competing pre-Beta checklist.
 
-**Execution forecast (ratified 2026-07-23):** controlled Family Beta can continue
-now. After a four-week buffer for planned time away in August, the target broad
-invited-Beta decision is **2026-09-24**, with **2026-10-02** as the contingency
-boundary for one focused repair/retest cycle. The active work windows are Aug
-21–27 HTTP 0/exact-owner evidence; Aug 28–Sep 3 Bills/Retirement/failure paths;
-Sep 4–10 accessibility and remaining advocate score gaps; Sep 11–17 candidate
-freeze, 20-pair Performance, and full Release Readiness; Sep 18–24 supervised
-cohort and final go/no-go. This date never waives a release gate. See
-`PROJECT_CONTEXT.md → Beta delivery forecast` for assumptions and exit evidence.
+**Execution forecast (reconciled 2026-07-31):** controlled Family Beta can
+continue now. The former September 24 target and October 2 contingency boundary
+require rebaselining because compound Bill correction (`5j`) is deliberately
+deferred while the remaining UX/accessibility work proceeds from `3e`. The
+gate order is now: UX closeout; deferred `5j`–`5m`; performance plus final
+financial/workbook/recovery proof; operations/support and monetization-ready
+architecture; exact-candidate freeze/evidence; then the supervised cohort and
+go/no-go. No calendar date waives a release gate. See `PROJECT_CONTEXT.md →
+Beta delivery forecast` and `FULL_BETA_REMAINING_PLAN.md` for current scope and
+exit evidence.
 
 `ROADMAP.md` is authoritative for **priority and sequence**. The `## Product Maturity Stages` section below supplies detailed stages, tasks, dependencies, testing inventory, and history; `PROJECT_CONTEXT.md` is authoritative for current technical status. The older `## Launch Readiness Roadmap` (Phase 1–7) is retained further below as historical phase expansion; where it conflicts with current ordering, `ROADMAP.md` wins.
 
@@ -578,22 +579,23 @@ findings below are Beta work, ordered by product risk:
    added to the selected-month total and does not replace an existing amount.
    Dashboard UX cross-checks the copy against the cumulative writer and the
    bounded presentation was confirmed.
-4. **✅ `3b` · P2 — Honest empty/guidance states — complete through isolated
-   Central `@298`.** Empty Bank, Investment, and Debt pages begin in Add/guided
+4. **✅ `3b` · P2 — Honest empty/guidance states — complete in `3e2db4f`
+   through isolated Central `@298`.** Empty Bank, Investment, and Debt pages begin in Add/guided
    state; Purchase and Retirement result walls stay hidden until ready. Shared
    unavailable/error states expose manual retry, and malformed responses cannot
    masquerade as valid empty data. Empty Upcoming hides contextual Dismiss
    guidance, and authoritative empty Bills opens Add bill; both refinements were
    user-verified on a fresh workbook. Guarded First-Run run
    `FR-e92641a0-2c59-45da-a90c-8b8780410f76` passed 14/14 with Restricted
-   sharing, zero browser errors, and verified Trash cleanup.
+   sharing, zero browser errors, and verified Trash cleanup. The commit is on
+   `origin/main`.
 5. **`3m` · P2/P3 — Form readiness and residual customer language (1–2 d).**
    Disable primary actions until minimum input is valid; preserve server
    validators; render customer-facing Bill payment-source labels without
    changing stored tokens; remove “2026 block,” duplicated Retirement guidance,
    and remaining normal-path abbreviations/internal terminology.
-6. **✅ `3c` · P2 — Help and Debt routing — complete through isolated Central
-   `@293` and user-approved visual validation.** The obsolete `Planning → Debts`
+6. **✅ `3c` · P2 — Help and Debt routing — complete in `7c0e2ac` through
+   isolated Central `@293` and user-approved visual validation.** The obsolete `Planning → Debts`
    path now routes to **Assets & Liabilities → Debt accounts**; all three Debt
    surfaces explain and button-link the maintenance, read-only overview, and
    actionable payoff relationship. Exact destination, handoff, cross-link,
@@ -1600,7 +1602,8 @@ Implementation: **`activity_log.js`**, **`appendActivityLog_`**, Help
 **Status:** elevated to the broad-Beta gate on 2026-07-26. The shared
 operation-envelope foundation (`5h`) and direct Quick Add/Donation correction
 (`5i`) are shipped in `d040a34` and `16b6a8f`. Bill occurrence correction
-(`5j`) is next, followed by Upcoming, House Expense, and entity/audit
+(`5j`) is deferred while the UX closeout proceeds from `3e`; it remains required
+before broad Beta and is followed by Upcoming, House Expense, and entity/audit
 disposition. Authoritative execution IDs and estimates:
 `FULL_BETA_REMAINING_PLAN.md → 5g–5m`.
 
@@ -1785,7 +1788,8 @@ history remains available. Clean isolated Central `@240` run
 the full Quick Add operation sequence, card impact, Donation change/removal,
 Bill safety, customer language, clean console, Restricted single-owner sharing,
 and exact-fixture Trash cleanup. No bounded or Beta target was touched. `5i` is
-committed and pushed as `16b6a8f`; `5j` is the next active item.
+committed and pushed as `16b6a8f`; `5j` remains a broad-Beta requirement but is
+deferred while the UX closeout proceeds from `3e`.
 
 **Measured audit estimate:** `5h`–`5m` is now **7–12 focused days including
 integrated disposable-workbook validation**, not the pre-audit 12.5–25-day

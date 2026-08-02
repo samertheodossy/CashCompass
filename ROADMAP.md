@@ -23,7 +23,7 @@
 
 **Now / next:**
 
-- **Current milestone:** **`3e`, Properties context polish.** `3a` loading-state consistency, `3b` empty/error-state consistency, and `3c` Planning hierarchy and Debt relationships are complete. `3b` passed all 14/14 guarded First-Run assertions on isolated Central `@296`, including guided Add mode for empty Bank/Investment/Debt editors and hidden Purchase results until ready. The final contextual refinements are on isolated `@298`: empty Upcoming hides Dismiss guidance and a truly empty Bills workspace opens Add bill, while stale/malformed responses still fail closed. Both refinements were user-verified on a fresh workbook and have permanent local regression coverage. Bill occurrence correction (`5j`) remains explicitly deferred for a later focused redesign; its saved patch remains available and none of its incomplete behavior is part of the current source milestone. Beta remains `@106`; bounded deployment and workbook control remain with the user.
+- **Current milestone:** **`3e`, Properties context polish.** `3c` Planning hierarchy and Debt relationships (`7c0e2ac`, isolated `@293`), `3a` loading-state consistency (`be76bdb`, `@294`), and `3b` empty/error-state consistency (`3e2db4f`, `@298`) are complete and on `origin/main`. `3b` passed all 14/14 guarded First-Run assertions on isolated Central `@296`; the final empty-Upcoming and empty-Bills refinements were user-verified on a fresh workbook at `@298` and have permanent regression coverage. Follow-up Bill reliability commit `433bfed` closes `REG-041` and `REG-042`; its styled Skip drawer and one-card tracked-Bill/debt authority behavior were user-verified on isolated Central `@299`. Bill occurrence correction (`5j`) remains explicitly deferred for a later focused redesign; its saved patch remains available and none of its incomplete behavior is part of the current source milestone. Beta remains `@106`; bounded deployment and workbook control remain with the user.
 - **Independent advocate gate added 2026-07-23:** the approved isolated interactive writer journey confirmed P1 trust defects in formatted bank-amount replacement, Income/Setup classification consistency, Bills Pay handoff/occurrence feedback, and normal-path implementation terminology. The bank replacement defect is runtime-closed on isolated `@175`, the Income/Setup fix on `@176`/`@178`, the contained language/responsive wave on `@177`, `REG-017` on `@179`, exact-owner `REG-015` on `@181`, readiness-refresh `REG-019` on `@182`, Bills completion semantics on `@193`, controlled failure evidence through `@203`, and Retirement runtime truth on `@211`. The last formal advocate score is **8.3/10** pending a fresh full-score run. Medium/narrow replay and accessibility remain open. No Beta, mapped-user, Golden, or configured-default workbook was used by the Harness; bounded inspection remained user-controlled. These findings are sequenced in `TODO.md → UX Backlog (Version 1) → Independent advocate priorities`.
 - **Tracked-editor consistency polish completed 2026-07-24:** Bills use **Due · Add · Manage**. Houses, Bank Accounts, Investments, and Debts use **Update · Add · Manage**, with explicit Setup Add/Manage handoffs, responsive active-item inventories, and a shared UI layer for mode selection, list rendering, focus, and empty states. Update is Save-only; Manage is the single lifecycle-maintenance surface for guarded Stop tracking. Bank Import / Review imports remain secondary tools under Manage accounts. First-Run V4 run `FR-a1df6d9b-c123-4759-b08e-438d4047bf4c` passed 10/10 and Populated V3 run `FR-158bd6a2-bcb9-41b3-addc-180369266010` passed 13/13 on isolated Central `@195`, each with Restricted single-owner sharing, zero browser errors, and verified Trash cleanup.
 - **Activity correction elevated to the broad-Beta gate 2026-07-26:** Activity must distinguish audit evidence from correctable financial operations. The first slice (`5g`) replaces the misleading Remove-for-every-row presentation with an **Action** column, shows **Remove donation** only for eligible Donation rows, exposes no action control for Planner/email/import or other unsupported rows, and preserves the server-side donation-only rejection. Later slices add immutable, precondition-gated correction for Quick Add, linked Bill occurrences, Upcoming payments/lifecycle, and compound House Expenses; entity lifecycle events route to their owning Manage workflow and system/import rows remain audit-only. Full scope and estimates: `FULL_BETA_REMAINING_PLAN.md → 5g–5m`; safety contract: `TODO.md → Activity — Correction / reverse transaction`.
@@ -38,28 +38,27 @@
 
 ## Broad invited-Beta forecast
 
-**Target decision: 2026-09-24 · contingency boundary: 2026-10-02.** This is a
-gate-based forecast, not a promise to ship. Controlled Family Beta can continue
-now for the existing supervised cohort; it does not authorize a Central Beta or
-bounded deployment change. A four-week buffer accommodates planned time away in
-August. Finishing Wave 1 plus `5h`–`5i` early creates useful schedule margin,
-but the September 24 target remains **at risk** because the remaining compound
-Activity correction families and accessibility work are still the largest
-uncertainties. Rebaseline after `5j` provides measured compound-operation
-evidence.
+**Calendar requires rebaseline.** The former 2026-09-24 target and 2026-10-02
+contingency boundary are retained only as historical planning references, not
+current commitments. Controlled Family Beta can continue for the existing
+supervised cohort; it does not authorize a Central Beta or bounded deployment
+change. Deferring `5j` changes the critical-path order, so a new decision date
+must be based on measured compound-operation evidence after its focused redesign.
 
 | Window | Planned scope and exit |
 |---|---|
 | Completed through Jul 27 | Closed HTTP 0 recovery, exact-candidate ownership, core Bills Pay, tracked-editor convergence, Activity action truth, Overview prerequisite/freshness trust, unattended browser orchestration, controlled Bank/Debt loading, Bill Skip/Stop safety, and Retirement runtime through isolated `@211`. Wave 1 is complete. |
 | Completed early Jul 28–29 | Closed `5h` durable correction identity/preconditions and `5i` direct Cash Flow/Donation correction through commits `d040a34` and `16b6a8f`; isolated Central advanced only to `@240`, while Beta remained `@106` and bounded remained user-controlled. |
-| Aug 28–Sep 3 | Complete Bills/Upcoming/House Activity correction, entity/audit dispositions, and permanent correction evidence. |
-| Sep 4–10 | Close remaining UX including form readiness/customer language, accessibility, responsive/medium-width, keyboard/focus/semantics/contrast/reduced-motion evidence and finish candidate prerequisites. |
-| Sep 11–17 | Freeze the candidate; complete the 20-pair Performance campaign, ratify p50/p95 budgets, and run full Release Readiness. |
-| Sep 18–24 | Complete a five-to-seven-day supervised cohort, final scorecard, and broad-Beta go/no-go. |
+| Completed through Jul 31 | Closed UX `3c`, `3a`, and `3b` in `7c0e2ac`, `be76bdb`, and `3e2db4f`; isolated Central advanced to `@298`, while Beta remained `@106` and bounded remained user-controlled. |
+| Completed Aug 1 | Closed `REG-041` styled Bill Skip and `REG-042` Bills Due source authority in `433bfed`; user-verified on isolated Central `@299`, while Beta and bounded remained unchanged. |
+| Current | Close remaining UX/accessibility work beginning with `3e`, including `3e`–`3j` and `3m`; run `3k` only on the frozen candidate. |
+| Next | Return to deferred compound Activity correction `5j`–`5m` with focused redesign and permanent fail-closed evidence. |
+| Candidate preparation | Close performance `4a`–`4f`, financial/workbook/recovery proof `5a`–`5f`, operations/support `6a`–`6f`, and monetization-ready architecture `7a`–`7f`. |
+| Frozen candidate | Complete `8a`–`8f`, the exact-candidate advocate rerun `3k`, the 20-pair Performance campaign, and full Release Readiness. |
+| Promotion | Complete `9a`–`9e`: five-to-seven-day supervised cohort, final scorecard, go/no-go, and separately approved Beta promotion. |
 
-The October 2 boundary allows one focused repair/retest cycle. Any failed
-financial, safety, privacy, performance, Severity 1/2, ≥95/100, or
-no-dimension-below-9 gate moves the decision. Assumptions and full exit evidence
+Any failed financial, safety, privacy, performance, Severity 1/2, ≥95/100, or
+no-dimension-below-9 gate moves the eventual decision. Assumptions and full exit evidence
 are maintained in `PROJECT_CONTEXT.md → Beta delivery forecast` and
 `BETA_10_OUT_OF_10_PLAN.md`. Execution IDs, estimates, the critical path, and
 parallel work lanes are maintained in `FULL_BETA_REMAINING_PLAN.md`.
@@ -165,9 +164,9 @@ before `5i`. The forecast keeps the recovered margin as quality contingency.
 
 Complete in this order:
 
-1. `3a` — loading states — **✅ complete through isolated Central `@294` read-only validation and permanent automated coverage**.
-2. `3b` — empty/error and guided-Add states — **✅ complete through isolated Central `@298`, guarded First-Run 14/14 baseline, fresh-workbook visual confirmation of the contextual Upcoming/Bills refinements, and permanent automated coverage**.
-3. `3c` — Debt destination relationships — **✅ complete through isolated Central `@293` and user-approved visual validation**.
+1. `3a` — loading states — **✅ complete in `be76bdb` through isolated Central `@294` read-only validation and permanent automated coverage**.
+2. `3b` — empty/error and guided-Add states — **✅ complete in `3e2db4f` through isolated Central `@298`, guarded First-Run 14/14 baseline, fresh-workbook visual confirmation of the contextual Upcoming/Bills refinements, and permanent automated coverage**.
+3. `3c` — Debt destination relationships — **✅ complete in `7c0e2ac` through isolated Central `@293` and user-approved visual validation**.
 4. `3e` — Properties context.
 5. `3f` — Activity filters and responsive review.
 6. `3g` — Setup progress and recommended next step.
@@ -259,11 +258,18 @@ consistency, `3b` empty/error-state consistency, and `3c` Planning hierarchy
 and Debt relationships are complete. `3b` passed guarded First-Run run
 `FR-e92641a0-2c59-45da-a90c-8b8780410f76` 14/14 on isolated Central `@296`;
 its final contextual Upcoming/Bills refinements were user-verified on a fresh
-workbook at isolated Central `@298` and are permanently regression-covered.
+workbook at isolated Central `@298`, are permanently regression-covered, and
+are committed and pushed as `3e2db4f` on `origin/main`.
 Bill
 occurrence correction (`5j`) is deferred for a later focused redesign. The
 shared `5h` envelope and direct Quick Add/Donation correction `5i` remain
 committed foundations and are not reopened by this priority change.
+
+**Remaining broad-Beta sequence:** finish `3e`–`3j` and `3m`; return to the
+deferred `5j`–`5m` correction families; close `4a`–`4f` performance and
+`5a`–`5f` financial/workbook/recovery proof; finish `6a`–`6f` operations and
+`7a`–`7f` product foundation; then complete frozen-candidate evidence `8a`–`8f`
+plus advocate rerun `3k`, followed by supervised cohort/promotion `9a`–`9e`.
 Retirement runtime proof (`1e` / `REG-025`) is complete on isolated `@211`;
 Bill Skip/Stop-tracking safety (`1d` / `REG-024`) remains complete on `@206`.
 Keep Performance Planner
