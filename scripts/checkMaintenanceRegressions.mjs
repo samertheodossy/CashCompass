@@ -173,6 +173,25 @@ for (const pattern of [
 assert.match(donationScript,
   /function editManagedDonation_\(key\)[\s\S]*newCharityName[\s\S]*newDonationDate[\s\S]*newAmount[\s\S]*newTaxYear[\s\S]*newPaymentType[\s\S]*newComments/,
   'Manage donations must submit every editable donation field');
+assert.match(donationScript,
+  /paymentType:\s*row\.paymentType[\s\S]*newPaymentType:\s*String\(payment\.value/,
+  'Manage donations must submit the old Payment type snapshot and the edited replacement');
+assert.match(donationScript,
+  /var amountInputId = key \+ '-amount';[\s\S]*amountInput\.onfocus = function\(\) \{ currencyFocus\(amountInputId\); \};[\s\S]*amountInput\.onblur = function\(\) \{ currencyBlur\(amountInputId\); \};[\s\S]*currencyBlur\(amountInputId\);/,
+  'Manage donations must open and leave the Amount editor in canonical currency format');
+const fullDonationUpdateStart = donations.indexOf('function updateDonationFromDashboard(payload, optionalSs)');
+const fullDonationNextStart = donations.indexOf('var next = {', fullDonationUpdateStart);
+const fullDonationExpectedContract = donations.slice(fullDonationUpdateStart, fullDonationNextStart);
+assert.doesNotMatch(fullDonationExpectedContract, /['"]paymentType['"]/,
+  'A legacy blank expected Payment type must not be rejected as a missing required field');
+assert.doesNotMatch(fullDonationExpectedContract, /!expected\.paymentType/,
+  'A legacy blank expected Payment type must remain a valid stable-row snapshot');
+assert.match(donations,
+  /if \(!next\.paymentType\) throw new Error\('Payment type is required\.'\)/,
+  'The replacement Payment type must remain required');
+assert.match(files['test_harness_scenarios_maintenance.js'],
+  /Harness Legacy Blank Payment[\s\S]*paymentType:\s*legacy\.paymentType[\s\S]*newPaymentType:\s*'Cash'[\s\S]*Legacy blank Payment type can be repaired/,
+  'The disposable full-donation scenario must cover blank-to-Cash Payment type repair');
 
 function donationViewElement_() {
   return {
@@ -220,6 +239,43 @@ assert.equal(donationViewElements.donations_view_add.style.display, '',
   'Add donation must restore the focused entry form');
 assert.equal(donationViewElements.donations_view_manage.style.display, 'none',
   'Add donation must hide all management actions');
+
+const managedDonationKey = 'donation-2025-12';
+const managedDonationAmountId = `${managedDonationKey}-amount`;
+const managedDonationElements = {
+  [managedDonationKey]: { innerHTML: '' },
+  [`${managedDonationKey}-charity`]: { focus() {}, select() {} },
+  [managedDonationAmountId]: { value: '800', onfocus: null, onblur: null }
+};
+Object.assign(donationViewElements, managedDonationElements);
+donationViewContext.window.__recentDonationRows = {
+  [managedDonationKey]: {
+    charity: 'GoodWill',
+    entryDate: '2025-12-13',
+    amount: 800,
+    taxYear: 2025,
+    paymentType: '',
+    comments: 'Bags'
+  }
+};
+donationViewContext.window.__donationFormData = { taxYears: [2026, 2025] };
+donationViewContext.escapeHtml = (value) => String(value);
+donationViewContext.escapeJs = (value) => String(value);
+donationViewContext.currencyFocus = (id) => {
+  donationViewElements[id].value = '800';
+};
+donationViewContext.currencyBlur = (id) => {
+  donationViewElements[id].value = '$800.00';
+};
+donationViewContext.editManagedDonation_(managedDonationKey);
+assert.equal(donationViewElements[managedDonationAmountId].value, '$800.00',
+  'Manage donations must immediately format a stored 800 amount as $800.00');
+donationViewElements[managedDonationAmountId].onfocus();
+assert.equal(donationViewElements[managedDonationAmountId].value, '800',
+  'Manage donations must expose the numeric amount while the editor is focused');
+donationViewElements[managedDonationAmountId].onblur();
+assert.equal(donationViewElements[managedDonationAmountId].value, '$800.00',
+  'Manage donations must restore canonical currency when the editor loses focus');
 assert.match(files['activity_log.js'], /donation_comment_update[\s\S]*Donation comments updated/,
   'Donation comment edits must render as immutable Donation audit history');
 assert.match(files['activity_log.js'], /donation_update[\s\S]*Donation updated/,

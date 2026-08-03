@@ -1015,6 +1015,42 @@ Whenever a production bug is fixed:
   `REGRESSION-BILLS-AUTOPAY-ROLLBACK` forces audit failure and verifies value,
   format, marker, and visible-occurrence recovery.
 
+### REG-049 — Manage Donations rejected repair of a blank Payment type
+- Category: REGRESSION / UI RELIABILITY / LEGACY DATA REPAIR / STABLE ROW
+- Date discovered: 2026-08-03
+- Status: fixed locally; focused source regression passed; disposable runtime
+  scenario extended, not yet run
+- Root cause: the editor correctly sent the legacy saved Payment type as the
+  old snapshot and the entered value as `newPaymentType`, but the server treated
+  a blank old `paymentType` as a missing request field. A legacy donation could
+  therefore display an entered replacement such as `Cash` and still fail with
+  `Missing required field: paymentType` before stable-row verification.
+- Expected result: a blank old Payment type is accepted only as the expected
+  snapshot. The locked writer still requires the sheet row to contain the same
+  blank value, requires a nonblank replacement, verifies the write, and records
+  immutable `donation_update` history with the existing rollback behavior.
+- Permanent coverage: `scripts/checkMaintenanceRegressions.mjs` pins the client
+  old/new payload contract and server preconditions. The existing marked-
+  disposable `REGRESSION-DONATION-FULL-EDIT` scenario now repairs a blank legacy
+  Payment type to `Cash` and includes that success in its audit-count assertion.
+
+### REG-050 — Manage Donations displayed a raw edit amount
+- Category: REGRESSION / UI CONSISTENCY / CURRENCY PRESENTATION
+- Date discovered: 2026-08-03
+- Status: fixed locally; focused source regression passed; runtime visual
+  confirmation pending
+- Root cause: the Manage Donations table formatted Amount as currency, but its
+  dynamically rendered edit input copied the stored numeric value directly and
+  did not attach the shared currency focus/blur behavior. Opening an `$800.00`
+  donation therefore displayed `800` in the editor.
+- Expected result: the edit input immediately displays canonical currency such
+  as `$800.00`, exposes the plain numeric value while focused for easy editing,
+  and restores canonical currency on blur. Submission continues through the
+  existing numeric parser and does not change stored donation values.
+- Permanent coverage: `scripts/checkMaintenanceRegressions.mjs` dynamically
+  opens a stored `800` editor, verifies `$800.00`, focus to `800`, and blur back
+  to `$800.00`, while also pinning the shared handler wiring.
+
 ---
 
 ## 3a loading-state consistency coverage
@@ -1135,4 +1171,6 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-046 | AutoPay displayed a bare or non-red negative amount | REGRESSION / WORKBOOK PRESENTATION / FINANCIAL CLARITY | fixed/pushed; bounded user validation passed; disposable runtime scenario pending |
 | REG-047 | Manage Donations could edit only comments | REGRESSION / AUDITABILITY / FULL-ROW EDIT | fixed/pushed; bounded user validation passed; disposable runtime scenario pending |
 | REG-048 | Weekly AutoPay ignored Weekday and posted Due Day 1 | REGRESSION / FINANCIAL INTEGRITY / DEPLOYMENT COMPATIBILITY | fixed/pushed; bounded user validation passed; disposable runtime scenarios pending |
+| REG-049 | Manage Donations rejected repair of a blank Payment type | REGRESSION / UI RELIABILITY / LEGACY DATA REPAIR / STABLE ROW | fixed locally; focused source regression passed; extended disposable runtime scenario pending |
+| REG-050 | Manage Donations displayed a raw edit amount | REGRESSION / UI CONSISTENCY / CURRENCY PRESENTATION | fixed locally; focused source regression passed; runtime visual confirmation pending |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

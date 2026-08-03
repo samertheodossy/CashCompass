@@ -509,7 +509,7 @@ function updateRecentDonationComments(payload, optionalSs) {
  */
 function updateDonationFromDashboard(payload, optionalSs) {
   validateRequired_(payload, [
-    'sheetRow', 'taxYear', 'charityName', 'entryDate', 'amount', 'paymentType',
+    'sheetRow', 'taxYear', 'charityName', 'entryDate', 'amount',
     'newCharityName', 'newDonationDate', 'newAmount', 'newTaxYear', 'newPaymentType'
   ]);
 
@@ -527,10 +527,14 @@ function updateDonationFromDashboard(payload, optionalSs) {
     paymentType: String(payload.paymentType || '').trim()
   };
   if (!expected.charityName || !expected.entryDate ||
-      !isFinite(expected.amountSigned) || !isFinite(expected.taxYear) ||
-      !expected.paymentType) {
+      !isFinite(expected.amountSigned) || !isFinite(expected.taxYear)) {
     throw new Error('Donation reference is incomplete. Please refresh and try again.');
   }
+
+  // Older donation rows may legitimately have a blank Payment type. Treat that
+  // blank as part of the expected stable-row snapshot so Manage donations can
+  // repair it. donationDataRowMatchesActivityUndo_ still verifies the sheet is
+  // also blank under lock, while next.paymentType remains required below.
 
   var next = {
     taxYear: Number(payload.newTaxYear),

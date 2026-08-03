@@ -478,7 +478,7 @@ function getHarnessDonationFullEditScenario_() {
     id: 'REGRESSION-DONATION-FULL-EDIT',
     category: 'REGRESSION',
     executionLevel: 'E2E',
-    description: 'Verify locked full-donation editing, safe tax-year moves, immutable audit, stale refusal, and audit-failure rollback.',
+    description: 'Verify locked full-donation editing, legacy blank Payment type repair, safe tax-year moves, immutable audit, stale refusal, and audit-failure rollback.',
     expectedSheets: [
       'INPUT - Settings', DONATION_SHEET_NAME_, ACTIVITY_LOG_SHEET_NAME, 'SYS - Meta'
     ],
@@ -565,6 +565,36 @@ function getHarnessDonationFullEditScenario_() {
         state.staleError = String(staleErr && staleErr.message || staleErr);
       }
 
+      // Production regression: a legacy row can have a blank Payment type.
+      // The blank must remain part of the stable expected snapshot while the
+      // replacement is required and written with immutable audit history.
+      var legacyRow = 3;
+      state.sheet.getRange(legacyRow, 1, 1, DONATION_REQUIRED_HEADERS_.length)
+        .setValues([[
+          'Harness Legacy Blank Payment',
+          donationSheetDateFromIso_('2026-01-02', ctx.ss),
+          25,
+          2026,
+          'Legacy blank payment type',
+          ''
+        ]]);
+      var legacy = getDonationsFormData(ctx.ss).recentDonations.filter(function(row) {
+        return row.charity === 'Harness Legacy Blank Payment';
+      })[0];
+      ctx.assertWritable();
+      state.legacyRepair = updateDonationFromDashboard({
+        sheetRow: legacy.sheetRow, taxYear: legacy.taxYear,
+        charityName: legacy.charity, entryDate: legacy.entryDate,
+        amount: legacy.amount, paymentType: legacy.paymentType,
+        expectedComments: legacy.comments,
+        newCharityName: legacy.charity, newDonationDate: legacy.entryDate,
+        newAmount: legacy.amount, newTaxYear: legacy.taxYear,
+        newPaymentType: 'Cash', newComments: legacy.comments
+      }, ctx.ss);
+      state.afterLegacyRepair = getDonationsFormData(ctx.ss).recentDonations.filter(function(row) {
+        return row.charity === 'Harness Legacy Blank Payment';
+      })[0];
+
       var activity = ctx.ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
       state.auditCount = activity.getDataRange().getDisplayValues().filter(function(row) {
         return String(row[1] || '') === 'donation_update';
@@ -579,7 +609,8 @@ function getHarnessDonationFullEditScenario_() {
       ctx.assert.equals('Moved donation retains charity', state.afterMove.charity, 'Harness Moved Charity', { module: mod });
       ctx.assert.equals('Moved donation retains amount', state.afterMove.amount, 140.25, { module: mod });
       ctx.assert.equals('Source row clears without shifting structure', state.sourceRowAfterMove.join(''), '', { module: mod });
-      ctx.assert.equals('Successful edits create immutable audits', state.auditCount, 2, { module: mod });
+      ctx.assert.equals('Successful edits create immutable audits', state.auditCount, 3, { module: mod });
+      ctx.assert.equals('Legacy blank Payment type can be repaired', state.afterLegacyRepair.paymentType, 'Cash', { module: mod });
       ctx.assert.equals('Audit failure reports restoration', /prior values were restored/.test(state.rollbackError), true, { module: mod });
       ctx.assert.equals('Audit failure restores charity', state.afterRollback.charity, 'Harness Moved Charity', { module: mod });
       ctx.assert.equals('Audit failure restores amount', state.afterRollback.amount, 140.25, { module: mod });

@@ -246,6 +246,13 @@ function editManagedDonation_(key) {
         '<button type="button" class="small-btn" onclick="cancelManagedDonationEdit_()">Cancel</button>' +
       '</div>' +
     '</td>';
+  var amountInputId = key + '-amount';
+  var amountInput = document.getElementById(amountInputId);
+  if (amountInput) {
+    amountInput.onfocus = function() { currencyFocus(amountInputId); };
+    amountInput.onblur = function() { currencyBlur(amountInputId); };
+    currencyBlur(amountInputId);
+  }
   var input = document.getElementById(key + '-charity');
   if (input) {
     try { input.focus(); input.select(); } catch (_focusErr) {}
