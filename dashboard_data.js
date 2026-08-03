@@ -2474,7 +2474,7 @@ function getInputBillsDueRows_(ss, today, tz) {
       // for payments entered elsewhere, while this marker makes the in-app Pay
       // path deterministic even if a new server execution briefly observes a
       // stale Cash Flow value immediately after the write.
-      const candDueIso = Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd');
+      const candDueIso = formatBillOccurrenceDateIso_(cand.dueDate);
       const paidOccurrenceKey =
         'bill_paid::' + buildDashboardBillPaidKey_(payee, candDueIso);
       if (activityLogDedupeKeyExists_(ss, paidOccurrenceKey)) {
@@ -2575,36 +2575,16 @@ function getInputBillsDueRows_(ss, today, tz) {
         // would let a paid variant suppress the write-back into the
         // canonical row (which is the row autopay must populate).
         if (autopayWritesAllowed && canAutopay && defaultAmount > 0 && dueHasPassed && !isCashFlowBillHandled_(cellValue, cellDisplay)) {
-          // Capture blank-ness BEFORE the write. A blank month cell carries
-          // the sheet's default "General"/black format with no currency
-          // mask, so writeDashboardBillValuePreserveFormat_ (which preserves
-          // the *target* cell's own look) renders a bare "-3" instead of the
-          // row's red "-$3.00". Mirror the skip path: after writing, if the
-          // cell started blank, copy the nearest populated month cell's
-          // format (red/currency), falling back to the canonical currency
-          // format only when the row has no populated sibling yet.
-          const autopayCellWasBlank =
-            cellValue === '' ||
-            cellValue === null ||
-            typeof cellValue === 'undefined' ||
-            String(cellDisplay || '').trim() === '';
-
-          writeDashboardBillValuePreserveFormat_(sheet, rowInfo.row, monthCol + 1, -defaultAmount);
-          if (autopayCellWasBlank) {
-            if (!copyNearestAmountFormatInRow_(sheet, rowInfo.row, monthCol + 1)) {
-              sheet.getRange(rowInfo.row, monthCol + 1).setNumberFormat(CASH_FLOW_MONEY_FORMAT_);
-            }
-          }
-          // AutoPay values are Cash Flow actuals. Regardless of the blank
-          // target/sibling format we inherited above, finish with the canonical
-          // red-negative currency mask (for example -$75.00 in red).
-          applyCashFlowMoneyFormat_(cellRange);
-          touchDashboardSourceUpdated_('cash_flow');
-
-          var autopayDedupe = buildBillAutopayDedupeKey_(payee, cand.monthHeader, cand.dueDate, defaultAmount);
-          appendActivityLog_(ss, {
+          var autopayDedupe = buildBillAutopayDedupeKey_(payee, cand.monthHeader, candDueIso, defaultAmount);
+          var monthlyApplied = writeVerifiedBillAutopay_(ss, {
+            sheet: sheet,
+            row: rowInfo.row,
+            col: monthCol + 1,
+            targetValue: -defaultAmount,
+            dedupeKey: autopayDedupe,
+            activity: {
             eventType: 'bill_autopay',
-            entryDate: Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd'),
+            entryDate: candDueIso,
             amount: defaultAmount,
             direction: 'expense',
             payee: payee,
@@ -2614,10 +2594,17 @@ function getInputBillsDueRows_(ss, today, tz) {
             cashFlowMonth: cand.monthHeader,
             dedupeKey: autopayDedupe,
             details: JSON.stringify({ source: 'INPUT - Bills', autopay: true, varies: varies })
+            }
           });
 
           cellValue = cellRange.getValue();
           cellDisplay = cellRange.getDisplayValue();
+          if (!monthlyApplied) {
+            // A failed/duplicate audit append restores the exact prior cell and
+            // leaves the occurrence visible for explicit reconciliation.
+            cellValue = cellRange.getValue();
+            cellDisplay = cellRange.getDisplayValue();
+          }
         }
       }
 
@@ -2633,11 +2620,11 @@ function getInputBillsDueRows_(ss, today, tz) {
       }
 
       rows.push({
-        id: buildDashboardBillSkipKey_(payee, Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd')),
+        id: buildDashboardBillSkipKey_(payee, candDueIso),
         payee: payee,
         name: payee,
         amount: defaultAmount,
-        dueDate: Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd'),
+        dueDate: candDueIso,
         sourceType: 'input_bill',
         sourceLabel: 'Recurring bills',
         category: category,
@@ -2702,7 +2689,8 @@ function getInputBillsDueRows_(ss, today, tz) {
         const rowInfo = rowMap.rowsByPayee[payee] || null;
         const hasCashFlowRow = !!rowInfo && String(rowInfo.type || '').trim() === 'Expense';
 
-        const occDedupeKey = buildBillAutopayDedupeKey_(payee, cand.monthHeader, cand.dueDate, defaultAmount);
+        const occDueIso = formatBillOccurrenceDateIso_(cand.dueDate);
+        const occDedupeKey = buildBillAutopayDedupeKey_(payee, cand.monthHeader, occDueIso, defaultAmount);
         const alreadyAutopaid = activityLogDedupeKeyExists_(ss, occDedupeKey);
 
         // Occurrence already auto-applied on an earlier pass: its amount is
@@ -2719,7 +2707,6 @@ function getInputBillsDueRows_(ss, today, tz) {
         // to this exact occurrence date, and writes $0 (adds nothing) into the
         // month cell. So a skipped occurrence must not show a card and must not
         // be autopaid/accumulated — this marker check suppresses it.
-        const occDueIso = Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd');
         const occSkipKey = 'bill_skip::' + buildDashboardBillSkipKey_(payee, occDueIso);
         if (activityLogDedupeKeyExists_(ss, occSkipKey)) {
           continue;
@@ -2739,7 +2726,8 @@ function getInputBillsDueRows_(ss, today, tz) {
         }
 
         const dueHasPassed = cand.dueDate.getTime() < todayOnly.getTime();
-        const canAutopay = autopay === 'yes' && varies !== 'yes';
+        const scheduleSafeForAutopay = isBillAutopayOccurrenceScheduleSafe_(frequency, weekday, cand.dueDate);
+        const canAutopay = autopay === 'yes' && varies !== 'yes' && scheduleSafeForAutopay;
 
         if (autopayWritesAllowed && hasCashFlowRow && canAutopay && defaultAmount > 0 && dueHasPassed) {
           // Reaching here means this occurrence has NO bill_autopay / bill_paid /
@@ -2755,29 +2743,16 @@ function getInputBillsDueRows_(ss, today, tz) {
           // didn't itself place and left valid AutoPay occurrences stuck as
           // cards (e.g. Robinhood weekly with a manual/legacy month total).
           const cellRange = sheet.getRange(rowInfo.row, monthCol + 1);
-          const cellValue = cellRange.getValue();
-          const cellDisplay = cellRange.getDisplayValue();
-          const wasBlank =
-            cellValue === '' ||
-            cellValue === null ||
-            typeof cellValue === 'undefined' ||
-            String(cellDisplay || '').trim() === '';
-
-          // Accumulate (add) this occurrence into the single month cell.
-          addCashFlowMoneyToCellPreserveRowFormat_(sheet, rowInfo.row, monthCol + 1, -defaultAmount);
-          if (wasBlank) {
-            // Match the monthly path: a freshly-populated blank cell should
-            // pick up the row's red/currency look, not General/black.
-            if (!copyNearestAmountFormatInRow_(sheet, rowInfo.row, monthCol + 1)) {
-              sheet.getRange(rowInfo.row, monthCol + 1).setNumberFormat(CASH_FLOW_MONEY_FORMAT_);
-            }
-          }
-          applyCashFlowMoneyFormat_(cellRange);
-          touchDashboardSourceUpdated_('cash_flow');
-
-          appendActivityLog_(ss, {
+          const currentAmount = toNumber_(cellRange.getValue());
+          const expandedApplied = writeVerifiedBillAutopay_(ss, {
+            sheet: sheet,
+            row: rowInfo.row,
+            col: monthCol + 1,
+            targetValue: round2_(currentAmount - defaultAmount),
+            dedupeKey: occDedupeKey,
+            activity: {
             eventType: 'bill_autopay',
-            entryDate: Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd'),
+            entryDate: occDueIso,
             amount: defaultAmount,
             direction: 'expense',
             payee: payee,
@@ -2787,18 +2762,21 @@ function getInputBillsDueRows_(ss, today, tz) {
             cashFlowMonth: cand.monthHeader,
             dedupeKey: occDedupeKey,
             details: JSON.stringify({ source: 'INPUT - Bills', autopay: true, varies: varies, frequency: frequency, occurrence: true })
+            }
           });
 
-          continue; // applied → don't also show as a due card
+          if (expandedApplied) {
+            continue; // applied + verified → don't also show as a due card
+          }
         }
 
         // Show this occurrence as its own Bills Due card at the normal amount.
         rows.push({
-          id: buildDashboardBillSkipKey_(payee, Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd')),
+          id: buildDashboardBillSkipKey_(payee, occDueIso),
           payee: payee,
           name: payee,
           amount: defaultAmount,
-          dueDate: Utilities.formatDate(cand.dueDate, tz, 'yyyy-MM-dd'),
+          dueDate: occDueIso,
           sourceType: 'input_bill',
           sourceLabel: 'Recurring bills',
           category: category,
@@ -3004,6 +2982,40 @@ function parseBillWeekday_(value) {
     'saturday': 6, 'sat': 6
   };
   return Object.prototype.hasOwnProperty.call(map, v) ? map[v] : null;
+}
+
+/**
+ * Preserve a recurrence occurrence as a calendar date, not an instant.
+ *
+ * Occurrences are created from year/month/day components and are compared by
+ * those same local calendar components. Passing that Date through
+ * Utilities.formatDate can move it to the prior day when an execution/runtime
+ * timezone differs from the workbook timezone. That changes the marker identity
+ * and can make a Sunday/Monday payment appear as Saturday. Build the ISO value
+ * directly from the occurrence components so UI, audit, Skip/Paid markers, and
+ * AutoPay dedupe all use one stable date-only identity.
+ */
+function formatBillOccurrenceDateIso_(date) {
+  if (!(date instanceof Date) || isNaN(date.getTime())) return '';
+  var year = date.getFullYear();
+  var month = String(date.getMonth() + 1).padStart(2, '0');
+  var day = String(date.getDate()).padStart(2, '0');
+  return year + '-' + month + '-' + day;
+}
+
+/**
+ * Weekly AutoPay is only safe when the configured Weekday is recognized and
+ * the generated occurrence still lands on that exact weekday. Display may keep
+ * the legacy Due-Day fallback for an old/incomplete row, but an unattended
+ * writer must fail closed instead of charging the Due Day.
+ */
+function isBillAutopayOccurrenceScheduleSafe_(frequency, rawWeekday, occurrenceDate) {
+  if (frequency !== 'weekly') return true;
+  var expectedWeekday = parseBillWeekday_(rawWeekday);
+  return expectedWeekday != null &&
+    occurrenceDate instanceof Date &&
+    !isNaN(occurrenceDate.getTime()) &&
+    occurrenceDate.getDay() === expectedWeekday;
 }
 
 /**
@@ -3526,6 +3538,88 @@ function writeDashboardBillValuePreserveFormat_(sheet, row, col, value) {
     .setHorizontalAlignment(horizontalAlignment)
     .setVerticalAlignment(verticalAlignment)
     .setWrap(wrap);
+}
+
+/**
+ * Apply one AutoPay Cash Flow mutation only when its immutable Activity marker
+ * is newly written and verifiable. The caller holds the per-user AutoPay lock.
+ *
+ * Cash Flow is written and verified first; the audit append is then attempted.
+ * If either step fails, the exact prior formula/value and number format are
+ * restored and verified before this returns false. This prevents a partial
+ * success from leaving money without a per-occurrence marker, which would be
+ * re-applied by a later refresh.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
+ * @param {{sheet:Object,row:number,col:number,targetValue:number,dedupeKey:string,activity:Object}} options
+ * @returns {boolean} true only when both Cash Flow and the new marker verify
+ */
+function writeVerifiedBillAutopay_(ss, options) {
+  options = options || {};
+  var sheet = options.sheet;
+  var cell = sheet.getRange(options.row, options.col);
+  var priorFormula = String(cell.getFormula() || '');
+  var priorValue = cell.getValue();
+  var priorNumberFormat = cell.getNumberFormat();
+  var expectedValue = round2_(toNumber_(options.targetValue));
+  var wroteMarker = false;
+
+  try {
+    writeDashboardBillValuePreserveFormat_(sheet, options.row, options.col, expectedValue);
+    applyCashFlowMoneyFormat_(cell);
+    SpreadsheetApp.flush();
+
+    var actualValue = round2_(toNumber_(cell.getValue()));
+    var actualFormat = cell.getNumberFormat();
+    if (actualValue !== expectedValue || actualFormat !== CASH_FLOW_MONEY_FORMAT_) {
+      throw new Error('Cash Flow AutoPay write verification failed.');
+    }
+
+    wroteMarker = appendActivityLog_(ss, options.activity || {});
+    if (!wroteMarker || !activityLogDedupeKeyExists_(ss, options.dedupeKey)) {
+      throw new Error('AutoPay Activity marker write/verification failed.');
+    }
+
+    try {
+      touchDashboardSourceUpdated_('cash_flow');
+    } catch (touchErr) {
+      // Source freshness metadata is secondary. Once both the money and its
+      // immutable marker verify, never roll either one back for a cache-touch
+      // failure; the next normal refresh can repair freshness metadata.
+      Logger.log('writeVerifiedBillAutopay_: source freshness touch failed: ' + touchErr);
+    }
+    return true;
+  } catch (autopayErr) {
+    try {
+      if (priorFormula) cell.setFormula(priorFormula);
+      else cell.setValue(priorValue);
+      cell.setNumberFormat(priorNumberFormat);
+      SpreadsheetApp.flush();
+
+      var restoredFormula = String(cell.getFormula() || '');
+      var restoredValue = cell.getValue();
+      var restoredFormat = cell.getNumberFormat();
+      var valueRestored = priorFormula
+        ? restoredFormula === priorFormula
+        : (typeof priorValue === 'number'
+          ? round2_(toNumber_(restoredValue)) === round2_(priorValue)
+          : String(restoredValue == null ? '' : restoredValue) === String(priorValue == null ? '' : priorValue));
+      if (!valueRestored || restoredFormat !== priorNumberFormat) {
+        throw new Error('Cash Flow AutoPay rollback verification failed.');
+      }
+    } catch (rollbackErr) {
+      throw new Error(
+        'AutoPay failed and Cash Flow rollback could not be verified: ' +
+        String(rollbackErr && rollbackErr.message || rollbackErr)
+      );
+    }
+
+    Logger.log(
+      'writeVerifiedBillAutopay_: restored Cash Flow after uncommitted AutoPay: ' +
+      String(autopayErr && autopayErr.message || autopayErr)
+    );
+    return false;
+  }
 }
 
 function parseIsoDateAtLocal_(isoDate) {

@@ -135,6 +135,12 @@ function getHarnessScenarios_() {
   if (typeof getHarnessBillsAutopayFormatScenario_ === 'function') {
     list.push(getHarnessBillsAutopayFormatScenario_());
   }
+  if (typeof getHarnessBillsWeekdayAutopayGuardScenario_ === 'function') {
+    list.push(getHarnessBillsWeekdayAutopayGuardScenario_());
+  }
+  if (typeof getHarnessBillsAutopayRollbackScenario_ === 'function') {
+    list.push(getHarnessBillsAutopayRollbackScenario_());
+  }
   if (typeof getHarnessDonationCommentsEditScenario_ === 'function') {
     list.push(getHarnessDonationCommentsEditScenario_());
   }

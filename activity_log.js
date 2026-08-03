@@ -1499,7 +1499,7 @@ function activityLogDedupeKeyExists_(ss, dedupeKey) {
 function buildBillAutopayDedupeKey_(payee, monthHeader, dueDate, amount) {
   var dd =
     dueDate instanceof Date
-      ? Utilities.formatDate(dueDate, Session.getScriptTimeZone(), 'yyyy-MM-dd')
+      ? formatBillOccurrenceDateIso_(dueDate)
       : String(dueDate || '');
   return (
     'bill_autopay::' +

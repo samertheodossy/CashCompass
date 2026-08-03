@@ -989,6 +989,26 @@ Whenever a production bug is fixed:
   refusal on a marked disposable workbook; the focused maintenance check pins
   the Add/Manage separation and all submitted fields.
 
+### REG-048 — Weekly AutoPay ignored Weekday and posted Due Day 1
+- Category: REGRESSION / FINANCIAL INTEGRITY / DEPLOYMENT COMPATIBILITY
+- Date discovered: 2026-08-03
+- Status: fixed locally; disposable runtime scenarios implemented, not yet run
+- Root cause: an older still-active bounded deployment (`@495`) predates
+  Weekday-aware recurrence and calls the Weekly engine with Due Day only. Bills
+  configured with Due Day 1 therefore posted on August 1 even though their
+  existing Weekday cells said Sunday or Monday. The writer also changed Cash
+  Flow before confirming its immutable Activity marker.
+- Expected result: current source keeps occurrence identity as stable calendar
+  components; Weekly AutoPay requires a recognized Weekday and re-verifies that
+  the candidate lands on it; Due-Day fallback may remain visible for manual
+  reconciliation but can never AutoPay. Cash Flow amount/format and a newly
+  verified `bill_autopay` marker succeed together or the exact prior cell is
+  restored. Old version-pinned deployment URLs must not be used for validation.
+- Permanent coverage: `REGRESSION-BILLS-WEEKDAY-AUTOPAY-GUARD` reproduces
+  Due Day 1 with Sunday/Monday schedules and a missing-Weekday fail-closed row;
+  `REGRESSION-BILLS-AUTOPAY-ROLLBACK` forces audit failure and verifies value,
+  format, marker, and visible-occurrence recovery.
+
 ---
 
 ## 3a loading-state consistency coverage
@@ -1108,4 +1128,5 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-045 | Recent Donations comments could not be corrected safely | REGRESSION / AUDITABILITY / STABLE-ROW EDIT | fixed locally; disposable runtime scenario pending |
 | REG-046 | AutoPay displayed a bare or non-red negative amount | REGRESSION / WORKBOOK PRESENTATION / FINANCIAL CLARITY | fixed locally; disposable runtime scenario pending |
 | REG-047 | Manage Donations could edit only comments | REGRESSION / AUDITABILITY / FULL-ROW EDIT | fixed locally; disposable runtime scenario pending |
+| REG-048 | Weekly AutoPay ignored Weekday and posted Due Day 1 | REGRESSION / FINANCIAL INTEGRITY / DEPLOYMENT COMPATIBILITY | fixed locally; disposable runtime scenarios pending |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

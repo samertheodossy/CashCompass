@@ -17,14 +17,14 @@ function harnessCreateBillsMaintenanceFixture_(ctx, options) {
     'Utilities',
     options.dueDay || 9,
     options.amount || 75,
-    'No',
+    options.varies || 'No',
     options.autopay || 'No',
     'Yes',
     'CASH',
-    'Monthly',
+    options.frequency || 'Monthly',
     options.startMonth || 1,
     'Original note',
-    '',
+    options.weekday || '',
     '',
     ''
   ];
@@ -233,6 +233,144 @@ function getHarnessBillsAutopayFormatScenario_() {
       ctx.assert.equals('AutoPay writes the signed expense value', state.value, -75, { module: mod });
       ctx.assert.equals('AutoPay applies canonical red-negative currency format', state.numberFormat, CASH_FLOW_MONEY_FORMAT_, { module: mod });
       ctx.assert.equals('AutoPay display retains currency and negative sign', state.display, '-$75.00', { module: mod });
+    }
+  };
+}
+
+function getHarnessBillsWeekdayAutopayGuardScenario_() {
+  return {
+    id: 'REGRESSION-BILLS-WEEKDAY-AUTOPAY-GUARD',
+    category: 'REGRESSION',
+    executionLevel: 'INTEGRATION',
+    description: 'Reproduce Due Day 1 with a Sunday Weekly schedule and prove AutoPay records only the Sunday calendar occurrence, never the Due-Day fallback.',
+    expectedSheets: [
+      'INPUT - Settings', 'INPUT - Bills', 'INPUT - Cash Flow 2026',
+      ACTIVITY_LOG_SHEET_NAME, 'SYS - Meta'
+    ],
+    setup: function(ctx) {
+      ctx.assertWritable();
+      runMinimalBootstrap_(ctx.ss);
+      ctx.billsWeekdayAutopayGuard = harnessCreateBillsMaintenanceFixture_(ctx, {
+        year: 2026,
+        dueDay: 1,
+        startMonth: 8,
+        frequency: 'Weekly',
+        weekday: 'Sunday',
+        autopay: 'Yes',
+        amount: 75,
+        payee: 'Harness Sunday Allowance'
+      });
+      var state = ctx.billsWeekdayAutopayGuard;
+      state.invalidPayee = 'Harness Missing Weekday';
+      state.bills.getRange(3, 1, 1, state.header.length).setValues([[
+        state.invalidPayee, 'Utilities', 1, 75, 'No', 'Yes', 'Yes', 'CASH',
+        'Weekly', 8, 'Must fail closed', '', '', ''
+      ]]);
+      state.invalidCashFlowRow = insertCashFlowRow_(
+        state.cashFlow, 'Expense', state.invalidPayee, 'CASH'
+      ).row;
+    },
+    actions: function(ctx) {
+      var state = ctx.billsWeekdayAutopayGuard;
+      ctx.assertWritable();
+      state.rows = getInputBillsDueRows_(ctx.ss, new Date(2026, 7, 3), Session.getScriptTimeZone());
+      var monthCol = getMonthColumnByDate_(state.cashFlow, new Date(2026, 7, 3), 1);
+      var cell = state.cashFlow.getRange(state.cashFlowRow, monthCol);
+      state.value = cell.getValue();
+      state.display = cell.getDisplayValue();
+      state.invalidValue = state.cashFlow
+        .getRange(state.invalidCashFlowRow, monthCol)
+        .getValue();
+      state.invalidVisibleDates = state.rows.filter(function(row) {
+        return row.payee === state.invalidPayee;
+      }).map(function(row) { return row.dueDate; });
+
+      var activity = ctx.ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
+      var activityRows = activity ? activity.getDataRange().getDisplayValues() : [];
+      state.autopayDates = activityRows.filter(function(row) {
+        return String(row[1] || '') === 'bill_autopay' &&
+          String(row[5] || '') === state.payee;
+      }).map(function(row) { return String(row[2] || ''); });
+
+      state.mondayCandidates = buildInputBillDueCandidates_(
+        new Date(2026, 7, 3), 1, 'weekly', 8, 'Monday', null, null
+      ).map(function(candidate) { return formatBillOccurrenceDateIso_(candidate.dueDate); });
+      state.dueDayFallbackSafe = isBillAutopayOccurrenceScheduleSafe_(
+        'weekly', 'Monday', new Date(2026, 7, 1)
+      );
+    },
+    expectedOutcome: function(ctx) {
+      var state = ctx.billsWeekdayAutopayGuard;
+      var mod = 'Bill Weekly AutoPay Guard';
+      ctx.assert.equals('Sunday occurrence writes exactly once', Number(state.value), -75, { module: mod });
+      ctx.assert.equals('Sunday occurrence keeps canonical display', state.display, '-$75.00', { module: mod });
+      ctx.assert.equals('Activity stores the calendar Sunday without timezone drift', state.autopayDates.join(','), '2026-08-02', { module: mod });
+      ctx.assert.equals('Monday recurrence starts on August 3 rather than Due Day 1', state.mondayCandidates[0], '2026-08-03', { module: mod });
+      ctx.assert.equals('A Due Day 1 candidate is rejected for Monday AutoPay', state.dueDayFallbackSafe, false, { module: mod });
+      ctx.assert.equals('Missing Weekday cannot write a Due-Day AutoPay amount', String(state.invalidValue), '', { module: mod });
+      ctx.assert.equals('Missing Weekday fallback remains visible for reconciliation', state.invalidVisibleDates.indexOf('2026-08-01') !== -1, true, { module: mod });
+    }
+  };
+}
+
+function getHarnessBillsAutopayRollbackScenario_() {
+  return {
+    id: 'REGRESSION-BILLS-AUTOPAY-ROLLBACK',
+    category: 'REGRESSION',
+    executionLevel: 'INTEGRATION',
+    description: 'Verify an unverified AutoPay audit append restores the exact Cash Flow value/format and leaves the occurrence visible.',
+    expectedSheets: [
+      'INPUT - Settings', 'INPUT - Bills', 'INPUT - Cash Flow 2026',
+      ACTIVITY_LOG_SHEET_NAME, 'SYS - Meta'
+    ],
+    setup: function(ctx) {
+      ctx.assertWritable();
+      runMinimalBootstrap_(ctx.ss);
+      ctx.billsAutopayRollback = harnessCreateBillsMaintenanceFixture_(ctx, {
+        year: 2026,
+        dueDay: 1,
+        startMonth: 8,
+        autopay: 'Yes',
+        amount: 600,
+        payee: 'Harness AutoPay Rollback'
+      });
+      var state = ctx.billsAutopayRollback;
+      var monthCol = getMonthColumnByDate_(state.cashFlow, new Date(2026, 7, 3), 1);
+      state.monthCol = monthCol;
+      var cell = state.cashFlow.getRange(state.cashFlowRow, monthCol);
+      state.beforeValue = cell.getValue();
+      state.beforeFormat = cell.getNumberFormat();
+    },
+    actions: function(ctx) {
+      var state = ctx.billsAutopayRollback;
+      var originalAppend = appendActivityLog_;
+      appendActivityLog_ = function() { return false; };
+      try {
+        ctx.assertWritable();
+        state.rows = getInputBillsDueRows_(ctx.ss, new Date(2026, 7, 3), Session.getScriptTimeZone());
+      } finally {
+        appendActivityLog_ = originalAppend;
+      }
+
+      var cell = state.cashFlow.getRange(state.cashFlowRow, state.monthCol);
+      state.afterValue = cell.getValue();
+      state.afterFormat = cell.getNumberFormat();
+      state.visibleDates = state.rows.filter(function(row) {
+        return row.payee === state.payee;
+      }).map(function(row) { return row.dueDate; });
+      var activity = ctx.ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
+      var activityRows = activity ? activity.getDataRange().getDisplayValues() : [];
+      state.autopayCount = activityRows.filter(function(row) {
+        return String(row[1] || '') === 'bill_autopay' && String(row[5] || '') === state.payee;
+      }).length;
+    },
+    expectedOutcome: function(ctx) {
+      var state = ctx.billsAutopayRollback;
+      var mod = 'Bill AutoPay Rollback';
+      ctx.assert.equals('Cash Flow value is restored after audit failure', String(state.afterValue), String(state.beforeValue), { module: mod });
+      ctx.assert.equals('Cash Flow number format is restored after audit failure', state.afterFormat, state.beforeFormat, { module: mod });
+      ctx.assert.equals('Failed AutoPay retains no false audit marker', state.autopayCount, 0, { module: mod });
+      ctx.assert.equals('Failed AutoPay occurrence remains visible', state.visibleDates.indexOf('2026-08-01') !== -1, true, { module: mod });
     }
   };
 }

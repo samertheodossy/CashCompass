@@ -225,8 +225,22 @@ assert.match(files['activity_log.js'], /donation_update[\s\S]*Donation updated/,
 const dashboardData = files['dashboard_data.js'];
 assert.equal(
   (dashboardData.match(/applyCashFlowMoneyFormat_\(cellRange\);/g) || []).length,
+  0,
+  'AutoPay callers must use the verified writer instead of unverified inline formatting'
+);
+assert.match(dashboardData,
+  /function formatBillOccurrenceDateIso_[\s\S]*?getFullYear\(\)[\s\S]*?getMonth\(\)[\s\S]*?getDate\(\)/,
+  'Bill occurrence identity must be built from stable calendar components');
+assert.match(dashboardData,
+  /function isBillAutopayOccurrenceScheduleSafe_[\s\S]*?frequency !== 'weekly'[\s\S]*?parseBillWeekday_[\s\S]*?occurrenceDate\.getDay\(\) === expectedWeekday/,
+  'Weekly AutoPay must fail closed unless the generated date matches the configured Weekday');
+assert.match(dashboardData,
+  /function writeVerifiedBillAutopay_[\s\S]*?SpreadsheetApp\.flush\(\)[\s\S]*?appendActivityLog_[\s\S]*?activityLogDedupeKeyExists_[\s\S]*?setNumberFormat\(priorNumberFormat\)/,
+  'AutoPay must verify money and marker writes and restore the prior cell on failure');
+assert.equal(
+  (dashboardData.match(/writeVerifiedBillAutopay_\(ss, \{/g) || []).length,
   2,
-  'Monthly and expanded-occurrence AutoPay must both finish with canonical Cash Flow formatting'
+  'Monthly and expanded-occurrence AutoPay must both use the verified writer'
 );
 assert.match(files['planner_helpers.js'],
   /CASH_FLOW_MONEY_FORMAT_\s*=\s*'\$#,##0\.00;\[Red\]-\$#,##0\.00'/,
@@ -235,6 +249,8 @@ assert.match(files['planner_helpers.js'],
 for (const id of [
   'REGRESSION-BILLS-EDIT-INTEGRITY',
   'REGRESSION-BILLS-AUTOPAY-FORMAT',
+  'REGRESSION-BILLS-WEEKDAY-AUTOPAY-GUARD',
+  'REGRESSION-BILLS-AUTOPAY-ROLLBACK',
   'REGRESSION-DONATION-COMMENTS-EDIT',
   'REGRESSION-DONATION-FULL-EDIT'
 ]) {
