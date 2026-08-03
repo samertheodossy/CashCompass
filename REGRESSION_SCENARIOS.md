@@ -914,7 +914,8 @@ Whenever a production bug is fixed:
 ### REG-043 — Renaming a Bill left its linked Cash Flow payee behind
 - Category: REGRESSION / FINANCIAL SAFETY / CROSS-SHEET ENTITY LINK
 - Date discovered: 2026-08-03
-- Status: fixed locally; disposable runtime scenario implemented, not yet run
+- Status: fixed/pushed in `456c988` and user-validated in bounded mode;
+  disposable runtime scenario implemented, not yet run
 - Root cause: Bill Edit updated `INPUT - Bills.Payee` in isolation and left the
   Cash Flow row created by Add unchanged.
 - Expected result: under a user lock, a rename requires exactly one current-year
@@ -929,7 +930,8 @@ Whenever a production bug is fixed:
 ### REG-044 — Bill Edit reported “Category is required” while categories loaded
 - Category: REGRESSION / UI RELIABILITY / ASYNC FORM STATE
 - Date discovered: 2026-08-03
-- Status: fixed locally; local dynamic regression passed
+- Status: fixed/pushed in `456c988`; local dynamic regression and bounded user
+  validation passed
 - Root cause: Add category loading and Edit prefill issued overlapping requests;
   a later response rebuilt the select and cleared the edited category.
 - Expected result: Add and Edit share one in-flight request, queued Edit prefill
@@ -943,7 +945,8 @@ Whenever a production bug is fixed:
 ### REG-045 — Recent Donations comments could not be corrected safely
 - Category: REGRESSION / AUDITABILITY / STABLE-ROW EDIT
 - Date discovered: 2026-08-03
-- Status: fixed locally; disposable runtime scenario implemented, not yet run
+- Status: fixed/pushed in `456c988` and user-validated in bounded mode;
+  disposable runtime scenario implemented, not yet run
 - Root cause: Recent Donations was read-only and had no narrow metadata writer
   with stable-row verification or immutable audit history. The first correction
   UI also crowded Edit comments into the Add donation side panel instead of a
@@ -961,7 +964,8 @@ Whenever a production bug is fixed:
 ### REG-046 — AutoPay displayed a bare or non-red negative amount
 - Category: REGRESSION / WORKBOOK PRESENTATION / FINANCIAL CLARITY
 - Date discovered: 2026-08-03
-- Status: fixed locally; disposable runtime scenario implemented, not yet run
+- Status: fixed/pushed in `456c988` and user-validated in bounded mode;
+  disposable runtime scenario implemented, not yet run
 - Root cause: AutoPay preserved or copied a blank/sibling number format after
   writing, so General or legacy black-negative formatting could survive.
 - Expected result: monthly and expanded-occurrence AutoPay both finish with
@@ -974,7 +978,8 @@ Whenever a production bug is fixed:
 ### REG-047 — Manage Donations could edit only comments
 - Category: REGRESSION / AUDITABILITY / FULL-ROW EDIT
 - Date discovered: 2026-08-03
-- Status: fixed locally; disposable runtime scenario implemented, not yet run
+- Status: fixed/pushed in `456c988` and user-validated in bounded mode;
+  disposable runtime scenario implemented, not yet run
 - Root cause: the first management surface exposed only the narrow comments
   writer even though the dedicated Manage donations view is the appropriate
   place to correct the entire saved donation.
@@ -992,7 +997,8 @@ Whenever a production bug is fixed:
 ### REG-048 — Weekly AutoPay ignored Weekday and posted Due Day 1
 - Category: REGRESSION / FINANCIAL INTEGRITY / DEPLOYMENT COMPATIBILITY
 - Date discovered: 2026-08-03
-- Status: fixed locally; disposable runtime scenarios implemented, not yet run
+- Status: fixed in `faae64a`, pushed and user-validated in bounded mode;
+  disposable runtime scenarios implemented, not yet run
 - Root cause: an older still-active bounded deployment (`@495`) predates
   Weekday-aware recurrence and calls the Weekly engine with Due Day only. Bills
   configured with Due Day 1 therefore posted on August 1 even though their
@@ -1123,10 +1129,10 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-040 | Returning to Quick Add after a correction showed the old total | REGRESSION / UI RELIABILITY / SAME-PAGE STATE | fixed locally; isolated Central runtime confirmation pending |
 | REG-041 | Bill Skip used a browser-native confirmation instead of the CashCompass drawer pattern | REGRESSION / UX CONSISTENCY / WRITE SAFETY | fixed in `433bfed`; isolated `@299` user-verified |
 | REG-042 | A debt and tracked Bill with the same payee produced duplicate Bills Due cards | REGRESSION / READ MODEL / FINANCIAL CLARITY | fixed in `433bfed`; isolated `@299` user-verified |
-| REG-043 | Renaming a Bill left its linked Cash Flow payee behind | REGRESSION / FINANCIAL SAFETY / CROSS-SHEET ENTITY LINK | fixed locally; disposable runtime scenario pending |
-| REG-044 | Bill Edit reported “Category is required” while categories loaded | REGRESSION / UI RELIABILITY / ASYNC FORM STATE | fixed locally; local dynamic regression PASS |
-| REG-045 | Recent Donations comments could not be corrected safely | REGRESSION / AUDITABILITY / STABLE-ROW EDIT | fixed locally; disposable runtime scenario pending |
-| REG-046 | AutoPay displayed a bare or non-red negative amount | REGRESSION / WORKBOOK PRESENTATION / FINANCIAL CLARITY | fixed locally; disposable runtime scenario pending |
-| REG-047 | Manage Donations could edit only comments | REGRESSION / AUDITABILITY / FULL-ROW EDIT | fixed locally; disposable runtime scenario pending |
-| REG-048 | Weekly AutoPay ignored Weekday and posted Due Day 1 | REGRESSION / FINANCIAL INTEGRITY / DEPLOYMENT COMPATIBILITY | fixed locally; disposable runtime scenarios pending |
+| REG-043 | Renaming a Bill left its linked Cash Flow payee behind | REGRESSION / FINANCIAL SAFETY / CROSS-SHEET ENTITY LINK | fixed/pushed; bounded user validation passed; disposable runtime scenario pending |
+| REG-044 | Bill Edit reported “Category is required” while categories loaded | REGRESSION / UI RELIABILITY / ASYNC FORM STATE | fixed/pushed; local dynamic and bounded user validation passed |
+| REG-045 | Recent Donations comments could not be corrected safely | REGRESSION / AUDITABILITY / STABLE-ROW EDIT | fixed/pushed; bounded user validation passed; disposable runtime scenario pending |
+| REG-046 | AutoPay displayed a bare or non-red negative amount | REGRESSION / WORKBOOK PRESENTATION / FINANCIAL CLARITY | fixed/pushed; bounded user validation passed; disposable runtime scenario pending |
+| REG-047 | Manage Donations could edit only comments | REGRESSION / AUDITABILITY / FULL-ROW EDIT | fixed/pushed; bounded user validation passed; disposable runtime scenario pending |
+| REG-048 | Weekly AutoPay ignored Weekday and posted Due Day 1 | REGRESSION / FINANCIAL INTEGRITY / DEPLOYMENT COMPATIBILITY | fixed/pushed; bounded user validation passed; disposable runtime scenarios pending |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

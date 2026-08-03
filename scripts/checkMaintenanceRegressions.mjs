@@ -13,6 +13,9 @@ const names = [
   'dashboard_data.js',
   'donations.js',
   'planner_helpers.js',
+  'PROJECT_CONTEXT.md',
+  'TODO.md',
+  'agents/features/bills.md',
   'test_harness_scenarios.js',
   'test_harness_scenarios_maintenance.js',
   'test_harness_suites.js'
@@ -234,6 +237,11 @@ assert.match(dashboardData,
 assert.match(dashboardData,
   /function isBillAutopayOccurrenceScheduleSafe_[\s\S]*?frequency !== 'weekly'[\s\S]*?parseBillWeekday_[\s\S]*?occurrenceDate\.getDay\(\) === expectedWeekday/,
   'Weekly AutoPay must fail closed unless the generated date matches the configured Weekday');
+for (const docName of ['PROJECT_CONTEXT.md', 'TODO.md', 'agents/features/bills.md']) {
+  assert.match(files[docName],
+    /Weekly unattended AutoPay[\s\S]{0,180}fails closed|Weekly AutoPay[\s\S]{0,180}fails closed|unattended Weekly AutoPay[\s\S]{0,180}fails closed/,
+    `${docName} must preserve the Weekly AutoPay fail-closed contract`);
+}
 assert.match(dashboardData,
   /function writeVerifiedBillAutopay_[\s\S]*?SpreadsheetApp\.flush\(\)[\s\S]*?appendActivityLog_[\s\S]*?activityLogDedupeKeyExists_[\s\S]*?setNumberFormat\(priorNumberFormat\)/,
   'AutoPay must verify money and marker writes and restore the prior cell on failure');

@@ -1090,8 +1090,9 @@ Strategic product direction that builds on the existing Bank Import infrastructu
 - **Validation:** client + server enforce that the Anchor Date falls on the selected Weekday — **no silent correction** (`isAnchorDateValidForWeekday_`).
 - **Prospective schedule changes:** editing a scheduling field stamps `Schedule Effective Date = today`; occurrences before it are never generated/autopaid (no retroactive Cash Flow accumulation, no history rewrite).
 - **AutoPay concurrency hardening:** `LockService` guards autopay writes (exactly-once accumulation).
+- **AutoPay schedule authority and transactional verification (2026-08-03):** Weekly AutoPay refuses missing, unrecognized, or mismatched Weekday data even when a legacy Due-Day candidate remains visible for manual reconciliation. Stable calendar-date marker identity prevents timezone drift; verified Cash Flow value/format and immutable marker succeed together, or the exact prior cell is restored and verified.
 
-**Backward compatibility:** blank `Weekday` / `Anchor Date` → legacy Due Day behavior. Monthly, Weekly (legacy), and all other frequencies unchanged.
+**Backward compatibility:** blank `Weekday` / `Anchor Date` → legacy Due Day occurrence display and manual handling. Monthly, Biweekly legacy fallback, and other frequencies remain unchanged. Weekly unattended AutoPay deliberately fails closed when Weekday is missing or mismatched; Due Day is never its silent write fallback.
 
 **Files:** `dashboard_data.js`, `bills.js`, `onboarding.js`, `Dashboard_Body.html`, `Dashboard_Script_BillsDue.html` (commit *Add biweekly weekday scheduling*).
 

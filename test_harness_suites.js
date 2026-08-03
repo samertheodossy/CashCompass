@@ -87,7 +87,7 @@ function getHarnessSuites_() {
     {
       id: 'SUITE-BILLS-REGRESSION',
       label: 'Bills Regression Suite',
-      description: 'Implemented Bills recurrence, exact Edit linkage/rollback, and AutoPay-format scenarios. Every writer runs in its own marker-verified disposable workbook.',
+      description: 'Implemented Bills recurrence, exact Edit linkage/rollback, AutoPay formatting, Weekly weekday authority, and AutoPay audit-rollback scenarios. Every writer runs in its own marker-verified disposable workbook.',
       scenarioIds: [
         // PURE — recurrence-engine math (each still gets its own disposable workbook).
         'REGRESSION-BILLS-MONTHLY',

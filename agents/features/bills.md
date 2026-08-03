@@ -11,8 +11,8 @@
 | Knowledge status | `DRAFT` |
 | Product status | Shipped / Beta; Recurrence Engine V2 is shipped, while natural runtime validation of the expanded-occurrence Pay bridge remains recorded as pending |
 | Feature expert | Bills feature expert |
-| Last verified date | `2026-08-01` |
-| Last verified Git reference | Working tree; commit pending user approval |
+| Last verified date | `2026-08-03` |
+| Last verified Git reference | `456c988` (`Harden Bill maintenance and donation management`) and `faae64a` (`Harden weekly Bill AutoPay scheduling`) |
 | Applies to | Central App and bounded app |
 | Primary user surfaces | Cash Flow → Bills → Due this period; Cash Flow → Bills → Manage bills; Overview Bills cards; Quick add; `INPUT - Bills`; `INPUT - Cash Flow <year>`; `LOG - Activity` |
 | Canonical source documents | [`PROJECT_CONTEXT.md`](../../PROJECT_CONTEXT.md) → “Weekly/Biweekly Weekday Recurrence Support” and “Cash Flow Semantics”; [`ENGINEERING_STANDARDS.md`](../../ENGINEERING_STANDARDS.md) → “Cash Flow Data Semantics — Actuals vs Projection”; [`Dashboard_Help.html`](../../Dashboard_Help.html) → Bills; [`REGRESSION_SUITE_PLAN.md`](../../REGRESSION_SUITE_PLAN.md) → Bills recurrence |
@@ -24,7 +24,7 @@
 - `STALE`: A material implementation or product decision changed after the last verification.
 - `DEPRECATED`: The feature is no longer active; the document remains only for historical or migration context.
 
-Current DRAFT rationale: test results were not executed during this documentation pass, natural runtime validation of the expanded-occurrence Pay bridge is still listed as pending, and Validator/test coverage gaps remain.
+Current DRAFT rationale: focused and full local source gates pass, but the marked-disposable maintenance scenarios were not runtime-executed during this reconciliation pass, natural runtime validation of the expanded-occurrence Pay bridge is still listed as pending, and Validator/test coverage gaps remain.
 
 ## 2. Feature Summary
 
@@ -84,7 +84,7 @@ Bills affects near-term cash decisions and the Cash Flow actuals ledger. Incorre
 
 - Cash Flow is an actuals ledger. Adding a bill seeds structure but no monthly amounts.
 - AutoPay requires the due date to have passed; it must not fill future months.
-- Blank Weekday/Anchor Date preserves legacy Due Day scheduling.
+- Blank Weekday/Anchor Date preserves legacy Due Day occurrence display and manual handling; Weekly unattended AutoPay requires a recognized, matching Weekday and never writes from the fallback.
 - An invalid Biweekly weekday/anchor combination is rejected by Add/Edit; the recurrence reader defensively falls back to legacy behavior rather than silently snapping the date.
 - Payee edits rename only the exact current-year linked Expense Payee cell; after the verified audit succeeds, the Payee columns on Bills and that Cash Flow sheet auto-fit their text. Historical Cash Flow years and prior Activity rows remain unchanged.
 - Stop tracking is a soft deactivate and never reverses payments.
@@ -100,7 +100,7 @@ Bills affects near-term cash decisions and the Cash Flow actuals ledger. Incorre
 | Pay/Skip/AutoPay | `Dashboard_Script_BillsDue.html`, `Dashboard_Script_Payments.html`, `quick_add_payment.js`, `dashboard_data.js` | Client/server source code | `SOURCE-INSPECTED` | `2026-07-16` |
 | Workbook contract | `onboarding.js` → `ensureOnboardingBillsSheetFromDashboard`; `bills.js` → `ensureBillsSheetSchema_`, `applyBillsSheetStyling_` | Schema and creation source | `SOURCE-INSPECTED` | `2026-07-16` |
 | Activity contract | `activity_log.js`; Bills write paths in `bills.js` and `dashboard_data.js` | Source code | `SOURCE-INSPECTED` | `2026-07-16` |
-| Test coverage | `test_harness_scenarios_bills.js`; `test_harness_suites.js`; `REGRESSION_SCENARIOS.md`; `REGRESSION_SUITE_PLAN.md` | Automated scenario definitions and plans; scenarios not executed in this pass | `SOURCE-INSPECTED` | `2026-07-16` |
+| Test coverage | `test_harness_scenarios_bills.js`; `test_harness_scenarios_maintenance.js`; `test_harness_suites.js`; `REGRESSION_SCENARIOS.md`; `REGRESSION_SUITE_PLAN.md` | Automated scenario definitions and plans; local source gates passed, disposable scenarios not executed in this pass | `SOURCE-INSPECTED` | `2026-08-03` |
 | Validator coverage | `validator_snapshot.js`, `validator_core.js`, `validator_rules.js`, `VALIDATOR_ARCHITECTURE.md` | Read-only Validator implementation/design; Validator not executed in this pass | `SOURCE-INSPECTED` | `2026-07-16` |
 
 When sources disagree, this DRAFT follows executable behavior and higher-precedence Engineering OS instructions, while recording the disagreement under Source and Documentation Conflicts. It does not silently rewrite historical documentation.
@@ -148,7 +148,7 @@ When sources disagree, this DRAFT follows executable behavior and higher-precede
 | AutoPay | An internal actuals write triggered after a configured due date passes | It does not send money externally and does not forecast future payments |
 | Payment Source | Bills value normalized to `CASH` or `CREDIT_CARD` | It becomes Cash Flow `Flow Source`; it is not a bank account identifier |
 | Start Month | The recurrence eligibility anchor/month | It does not populate all Cash Flow months |
-| Weekday | Optional Weekly/Biweekly scheduling field | Blank means legacy Due Day behavior |
+| Weekday | Optional Weekly/Biweekly scheduling field | Blank means legacy Due Day display/manual handling; Weekly AutoPay fails closed |
 | Anchor Date | The parity origin for true Biweekly 14-day cadence | It must fall on the selected weekday; it is not silently corrected |
 | Schedule Effective Date | Prospective floor stamped when scheduling fields change | It does not rewrite historical occurrences |
 | Stop tracking | Set `Active = No` while preserving the row and history | It is not deletion and does not reverse money movement |
@@ -233,7 +233,7 @@ When sources disagree, this DRAFT follows executable behavior and higher-precede
 | Frequency | Canonical label | Recurrence cadence | Required by Add/Edit payload; optional legacy header | Reader normalization defaults unknown to Monthly | Accepted-label allow-list on writes |
 | Start Month | Integer 1–12 | Eligibility/cadence anchor | Optional | Current month on Add; reader fallback `1` | Integer range |
 | Notes | Text, max 500 | User context | Optional | Blank | Trim/truncate |
-| Weekday | Full weekday label | Weekly weekday; Biweekly weekday partner | Optional | Blank → legacy Due Day | Recognized label on write normalization |
+| Weekday | Full weekday label | Weekly weekday; Biweekly weekday partner | Optional | Blank → legacy Due Day display/manual handling; no Weekly AutoPay | Recognized label on write normalization |
 | Anchor Date | `yyyy-MM-dd` or parseable Date | Biweekly parity origin | Optional | Blank → legacy Due Day | Must match Weekday on Add/Edit |
 | Schedule Effective Date | Date/`yyyy-MM-dd` | Floor for prospective schedule changes | Optional | Blank → no clamp/legacy | Written as today when schedule fields change and header exists |
 
@@ -255,7 +255,7 @@ When sources disagree, this DRAFT follows executable behavior and higher-precede
 4. **Start Month:** A bill must not generate or AutoPay before its Start Month in the current year; recurring eligibility continues in later years.
 5. **Weekly weekday:** A recognized Weekday produces a continuous seven-day cadence across month boundaries and ignores Due Day for occurrence placement.
 6. **Biweekly anchor:** A valid Weekday plus Anchor Date produces a DST-safe 14-calendar-day cadence across month/year boundaries and never emits before the anchor.
-7. **Legacy compatibility:** Missing/blank/unrecognized weekday data, or unusable Biweekly anchor data on the read path, preserves legacy Due Day scheduling.
+7. **Legacy compatibility:** Missing/blank/unrecognized weekday data, or unusable Biweekly anchor data on the read path, preserves legacy Due Day occurrence display/manual handling. Weekly unattended AutoPay remains governed by invariant 12 and fails closed.
 8. **Prospective changes:** Schedule edits stamp an effective-date floor when the column exists; prior Cash Flow and Activity history are not rewritten.
 9. **Monthly handled evidence:** A populated numeric Cash Flow month cell on any normalized matching Expense row suppresses the monthly occurrence; zero counts as handled.
 10. **Expanded-occurrence evidence:** Weekly/Biweekly Pay, Skip, and AutoPay are resolved per occurrence by dedupe markers because one Cash Flow month cell represents multiple occurrences.
@@ -329,8 +329,8 @@ Retryable failures include transient reads, lock contention, and stale UI after 
 ## 13. Compatibility and Migration
 
 - Previous behavior: Legacy Weekly/Biweekly schedules used Due Day as a per-month anchor with 7/14-day stepping. Earlier workbooks lacked Weekday, Anchor Date, Schedule Effective Date, and possibly other optional metadata columns.
-- Current behavior: Weekday Weekly and anchor-driven Biweekly scheduling are opt-in; blank additions preserve legacy. Scheduling edits are prospective when the effective-date column exists.
-- Backward-compatibility contract: Bound mode remains unchanged through the shared resolver. `addBillFromDashboard`, `updateTrackedBillFromDashboard`, and `ensureBillsSheetSchema_` normalize header casing in their header maps. `deactivateBillFromDashboard`, `getBillCategoriesFromDashboard`, and `getActiveBillsForManagementFromDashboard` require canonical exact-case header labels, which is a compatibility risk for legacy sheets with casing drift. Blank optional scheduling fields preserve legacy recurrence.
+- Current behavior: Weekday Weekly and anchor-driven Biweekly scheduling are opt-in; blank additions preserve legacy occurrence display/manual handling. Weekly unattended AutoPay requires a recognized matching Weekday. Scheduling edits are prospective when the effective-date column exists.
+- Backward-compatibility contract: Bound mode remains unchanged through the shared resolver. `addBillFromDashboard`, `updateTrackedBillFromDashboard`, and `ensureBillsSheetSchema_` normalize header casing in their header maps. `deactivateBillFromDashboard`, `getBillCategoriesFromDashboard`, and `getActiveBillsForManagementFromDashboard` require canonical exact-case header labels, which is a compatibility risk for legacy sheets with casing drift. Blank optional scheduling fields preserve legacy recurrence display/manual handling; Weekly unattended AutoPay fails closed.
 - Existing populated workbook impact: Manage/Add can insert missing optional headers after canonical anchors, or at the sheet end when an anchor is unavailable, and format the new columns. Existing cell data is preserved, although anchored insertion can shift existing column positions. Add/Edit/Deactivate/Pay/Skip/AutoPay perform their explicitly scoped writes; no broad restyle or migration is allowed.
 - Fresh workbook impact: First Add can create the 14-column Bills sheet and current Cash Flow year, then seed a blank Expense row.
 - Migration or self-heal behavior: `ensureBillsSheetSchema_` performs additive, anchor-positioned schema evolution for missing Payment Source, Category, Frequency, Start Month, Notes, Weekday, Anchor Date, and Schedule Effective Date columns. It preserves existing cell data, may shift existing column positions, is best-effort on Manage, and is enforced before Add.
@@ -353,6 +353,7 @@ Retryable failures include transient reads, lock contention, and stale UI after 
 | Harness | `REGRESSION-BILLS-MONTHLY`, `WEEKLY`, `WEEKLY-ON-DAY`, `BIWEEKLY`, `YEAR-BOUNDARY`, `31ST`, `LEAP-FEB29`, `YEARLY` | Pure recurrence math and current edge behavior | Implemented; `NOT RUN` in this documentation task |
 | Harness | `REGRESSION-BILLS-MONTHLY-INTEGRATION` | Canonical Bills row plus mandatory `bill_add` Activity evidence | Implemented; `NOT RUN` in this documentation task |
 | Harness | `REGRESSION-BILLS-MONTHLY-CASHFLOW` | Bills↔Cash Flow structural payee linkage with blank amounts | Implemented; `NOT RUN` in this documentation task |
+| Manual | Bounded user validation on reviewed `456c988` + `faae64a` source | Bill rename/category, Donation management, AutoPay formatting, and Laith/Lutfi/M1 Weekday authority behaved as intended | User-confirmed PASS on `2026-08-03`; no automated writer targeted the bounded workbook |
 | Manual | `PROJECT_CONTEXT.md` → Recurrence Engine V2 runtime validation | Named Weekly/Biweekly schedules behaved correctly in runtime observations | Recorded PASS on `2026-07-09`; not independently rerun here |
 | Manual | `PROJECT_CONTEXT.md` → Bills Due Pay occurrence bridge | Natural weekly/biweekly Pay flow | `UNKNOWN` / recorded as pending natural runtime validation |
 
@@ -374,7 +375,7 @@ Retryable failures include transient reads, lock contention, and stale UI after 
 - No implemented Bills suite scenario was found for the no-due-date fallback/exclusion path, Bimonthly, Quarterly, Semi-annual, or first-run lazy-provisioning and partial-failure behavior.
 - No current Central-versus-bounded Bills execution matrix result was found; the same workflows remain to be exercised against explicitly selected safe targets in both modes.
 - No implemented stress scenario was found for REG-007 or REG-008 despite their planned reproductions.
-- No test result was executed during this documentation-only task.
+- Focused maintenance and full local `npm test` gates passed during the 2026-08-03 reconciliation; the marked-disposable Apps Script scenarios were not runtime-executed.
 - The Bills → Pay natural runtime validation remains pending in current project status documentation.
 - Bills is absent from `VALIDATOR_SCOPE_OPERATIONAL_` and the Phase 2 canonical provisioning model; dedicated schema/frozen-pane coverage is therefore incomplete.
 - Bimonthly behavior is supported by code/UI but omitted from the reviewed Help schedule lists.

@@ -2312,7 +2312,8 @@ function getInputBillsDueRows_(ss, today, tz) {
     paymentSource: findHeaderIdx('Payment Source'),
     // Phase 3 additive scheduling column. Optional: absent on older workbooks
     // (findHeaderIdx returns -1), in which case every bill is treated as blank
-    // Weekday → legacy Due Day behavior, exactly as before.
+    // Weekday. Legacy Due Day occurrences remain available for display/manual
+    // handling, while Weekly unattended AutoPay fails closed below.
     weekday: findHeaderIdx('Weekday'),
     // Phase 6A additive scheduling column. Optional: absent on older workbooks
     // (findHeaderIdx returns -1). Only Biweekly bills honor it, and only when a
@@ -2407,8 +2408,9 @@ function getInputBillsDueRows_(ss, today, tz) {
     const frequency = normalizeFrequency_(display[r][colMap.frequency]);
     const startMonth = colMap.startMonth === -1 ? 1 : (Number(values[r][colMap.startMonth]) || 1);
     // Optional weekday anchor (Phase 3). Blank / missing column / unrecognized
-    // value → treated as no weekday, i.e. legacy Due Day behavior. Only Weekly
-    // bills honor it; parsing/decisions happen in buildRuleFromBillRow_.
+    // value → treated as no weekday, i.e. legacy Due Day occurrence display.
+    // Weekly unattended AutoPay separately requires a recognized Weekday.
+    // Parsing/decisions happen in buildRuleFromBillRow_.
     const weekday = colMap.weekday === -1 ? '' : String(display[r][colMap.weekday] || '').trim();
     // Phase 6A biweekly anchor. Read RAW (values, not display) so both a real
     // Date cell and a yyyy-MM-dd text value resolve without locale ambiguity —
