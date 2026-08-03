@@ -129,6 +129,18 @@ function getHarnessScenarios_() {
   if (typeof getHarnessDonationCorrectionScenario_ === 'function') {
     list.push(getHarnessDonationCorrectionScenario_());
   }
+  if (typeof getHarnessBillsEditIntegrityScenario_ === 'function') {
+    list.push(getHarnessBillsEditIntegrityScenario_());
+  }
+  if (typeof getHarnessBillsAutopayFormatScenario_ === 'function') {
+    list.push(getHarnessBillsAutopayFormatScenario_());
+  }
+  if (typeof getHarnessDonationCommentsEditScenario_ === 'function') {
+    list.push(getHarnessDonationCommentsEditScenario_());
+  }
+  if (typeof getHarnessDonationFullEditScenario_ === 'function') {
+    list.push(getHarnessDonationFullEditScenario_());
+  }
   if (typeof getHarnessPopulatedFixtureScenario_ === 'function') {
     list.push(getHarnessPopulatedFixtureScenario_());
   }

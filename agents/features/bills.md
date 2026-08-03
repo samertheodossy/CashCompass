@@ -55,6 +55,7 @@ Bills affects near-term cash decisions and the Cash Flow actuals ledger. Incorre
 - Add recurring bills to `INPUT - Bills` and seed a matching blank Cash Flow Expense row when possible.
 - Read and manage active bill rows.
 - Edit supported fields in place with stale-row protection and prospective schedule changes.
+- Coordinate a Payee rename with the one exact linked current-year Cash Flow Expense row, with collision refusal, verification, mandatory audit, and rollback.
 - Stop tracking by setting `Active = No`; preserve the row and history.
 - Generate dated occurrences and split them into Overdue and Next 7 Days.
 - Surface recurring Cash Flow items without a mapped due date.
@@ -65,7 +66,7 @@ Bills affects near-term cash decisions and the Cash Flow actuals ledger. Incorre
 ### Out of scope
 
 - Hard deletion of bill rows.
-- Automatic renaming or reclassification of existing Cash Flow rows when a bill is edited.
+- Historical-year Cash Flow renaming, Cash Flow row reclassification, and alias/merge repair.
 - A dedicated Bills reactivation workflow; current source directs users to re-add an inactive bill.
 - Forward projection of scheduled bill amounts into future Cash Flow months.
 - Bank-payment execution, bank connectivity, or confirmation that an external payment cleared.
@@ -85,7 +86,7 @@ Bills affects near-term cash decisions and the Cash Flow actuals ledger. Incorre
 - AutoPay requires the due date to have passed; it must not fill future months.
 - Blank Weekday/Anchor Date preserves legacy Due Day scheduling.
 - An invalid Biweekly weekday/anchor combination is rejected by Add/Edit; the recurrence reader defensively falls back to legacy behavior rather than silently snapping the date.
-- Payee edits never rewrite historical Cash Flow payee text or Activity entries.
+- Payee edits rename only the exact current-year linked Expense Payee cell; after the verified audit succeeds, the Payee columns on Bills and that Cash Flow sheet auto-fit their text. Historical Cash Flow years and prior Activity rows remain unchanged.
 - Stop tracking is a soft deactivate and never reverses payments.
 - Monthly and other one-occurrence-per-month high Due Days clamp to the last valid calendar day, matching Weekly/Biweekly anchor behavior.
 
@@ -244,7 +245,7 @@ When sources disagree, this DRAFT follows executable behavior and higher-precede
 - Fresh-sheet styling is first-create only. Schema evolution formats only the new column and applies widen-only canonical widths.
 - Add inserts in Due Day order; same-day rows follow existing same-day rows and blank Due Day legacy rows remain at the bottom.
 - Edit updates in place and never changes row order.
-- Existing Cash Flow rows are left untouched when Add finds the same Expense payee, or when a bill payee/payment source changes later.
+- Add leaves an existing same-payee Expense row untouched. A later Payee edit changes only one exact linked current-year Expense Payee after collision checks; payment-source edits do not rewrite Cash Flow metadata.
 
 ## 9. Behavioral and Financial Invariants
 
@@ -264,6 +265,8 @@ When sources disagree, this DRAFT follows executable behavior and higher-precede
 14. **Soft lifecycle:** Stop tracking changes only Active, preserves the row and payment history, and does not reverse Cash Flow.
 15. **Timezone/date basis:** User-facing and marker dates are date-only values formatted using the Apps Script timezone; recurrence steps use calendar-date construction rather than fixed milliseconds where DST matters.
 16. **Month-end clamping:** Monthly/non-expanded Due Days 29/30/31 remain in their logical month and clamp to its final valid calendar day; they never overflow into the following month.
+17. **Payee-rename atomicity:** A Bill Payee rename requires one exact current-year Expense link, no Bill or Cash Flow destination collision, verified Bill/Cash Flow writes, and a successful immutable `bill_update` audit; otherwise all accompanying Bill fields and the linked Payee are restored. Once the audit is durable, the two affected Payee columns auto-fit their contents as a best-effort presentation update.
+18. **AutoPay presentation:** Every monthly or expanded-occurrence AutoPay write finishes with `CASH_FLOW_MONEY_FORMAT_` so negative expenses display in canonical red currency.
 
 ## 10. State and Lifecycle
 
@@ -317,7 +320,8 @@ Retryable failures include transient reads, lock contention, and stale UI after 
 | Workflow | Write sequence | Atomicity | Possible partial-success state | Safe recovery |
 | --- | --- | --- | --- | --- |
 | Add bill | Bills row → best-effort `bill_add` Activity → best-effort Cash Flow year/Expense row → dashboard freshness | Non-atomic | Bill exists without Activity evidence or matching Cash Flow row | Preserve the Bills row; repair/seed the Cash Flow row after inspection and add audit evidence only through an approved process |
-| Edit or Stop tracking | One or more Bills cell changes → best-effort Activity → dashboard freshness | Non-atomic | Edit fields may be partially changed, or the final bill state may lack corresponding audit evidence | Do not repeat the action blindly; refresh and inspect every affected field plus Activity before an approved repair |
+| Non-rename Edit or Stop tracking | One or more Bills cell changes → best-effort Activity → dashboard freshness | Non-atomic | Edit fields may be partially changed, or the final bill state may lack corresponding audit evidence | Do not repeat the action blindly; refresh and inspect every affected field plus Activity before an approved repair |
+| Payee rename | Lock → collision/exact-link preflight → Bill and current-year Cash Flow Payee writes → flush/verify → mandatory `bill_update` audit | Compensating transaction | Apps Script cannot provide a cross-sheet transaction; rollback is best-effort if an API write itself becomes unavailable | Refresh and inspect both exact Payee cells plus Activity before any manual repair |
 | Monthly or expanded AutoPay | Cash Flow amount/format → dashboard freshness → `bill_autopay` Activity marker | Non-atomic | Cash Flow contains the actual but the dedupe marker is absent, allowing a later duplicate | Stop automatic retry; reconcile Cash Flow and Activity, then repair marker evidence carefully |
 | Expanded-occurrence Pay | Quick add Cash Flow/`quick_pay` write → separate client RPC for `bill_paid` marker | Non-atomic | Payment is recorded but the occurrence remains visible and may be paid again | Treat Cash Flow as authoritative; do not repay, then reconcile or repair the missing marker |
 | Skip | Optional blank-cell zero/format → `bill_skip` Activity marker | Non-atomic | Cash Flow may contain zero without the occurrence marker | Inspect the target cell and Activity; retry only the missing marker path without overwriting a real amount |
@@ -342,7 +346,8 @@ Retryable failures include transient reads, lock contention, and stale UI after 
 | Validator | `getValidatorCanonicalModel_()` / Provisioning Validation | Current Phase 2 structural model | Coverage gap: `INPUT - Bills` is absent from the reviewed canonical model |
 | Regression | `REG-007` | Bills Due performance regression is permanently registered | Fixed per documentation; stress reproduction remains planned |
 | Regression | `REG-008` | AutoPay concurrency double-post race is permanently registered | Fixed per documentation; overlapping-run harness reproduction remains planned |
-| Harness | `SUITE-BILLS-REGRESSION` | Eight pure recurrence scenarios plus two workbook-integration scenarios | Implemented; `NOT RUN` in this documentation task |
+| Harness | `REGRESSION-BILLS-EDIT-INTEGRITY` | Exact linked rename, dynamic Payee-column sizing, collisions, category omission fallback, immutable audit, and audit-failure rollback on a disposable workbook | Implemented; runtime not yet run |
+| Harness | `REGRESSION-BILLS-AUTOPAY-FORMAT` | Real monthly AutoPay writes `-75` with canonical red negative-currency format | Implemented; runtime not yet run |
 | Harness | `REGRESSION-BILLS-MONTHLY`, `WEEKLY`, `WEEKLY-ON-DAY`, `BIWEEKLY`, `YEAR-BOUNDARY`, `31ST`, `LEAP-FEB29`, `YEARLY` | Pure recurrence math and current edge behavior | Implemented; `NOT RUN` in this documentation task |
 | Harness | `REGRESSION-BILLS-MONTHLY-INTEGRATION` | Canonical Bills row plus mandatory `bill_add` Activity evidence | Implemented; `NOT RUN` in this documentation task |
 | Harness | `REGRESSION-BILLS-MONTHLY-CASHFLOW` | Bills↔Cash Flow structural payee linkage with blank amounts | Implemented; `NOT RUN` in this documentation task |
@@ -362,8 +367,8 @@ Retryable failures include transient reads, lock contention, and stale UI after 
 
 ### Known coverage gaps
 
-- No implemented Bills suite scenario was found for AutoPay, manual Pay, overdue bucketing, per-occurrence paid suppression, per-occurrence Skip, or lock contention.
-- No implemented Bills suite scenario was found for Add validation, Edit, Deactivate, optional-column self-heal, or preservation of existing populated Bills workbooks.
+- No implemented Bills suite scenario was found for manual Pay, overdue bucketing, per-occurrence paid suppression, per-occurrence Skip, or lock contention. Monthly AutoPay value/format now has focused coverage.
+- No implemented Bills suite scenario was found for Add validation, Deactivate, optional-column self-heal, or broad preservation of existing populated Bills workbooks. Payee rename and category-race fallback now have focused Edit coverage.
 - No implemented Bills suite scenario was found for the no-due-date fallback/exclusion path, Bimonthly, Quarterly, Semi-annual, or first-run lazy-provisioning and partial-failure behavior.
 - No current Central-versus-bounded Bills execution matrix result was found; the same workflows remain to be exercised against explicitly selected safe targets in both modes.
 - No implemented stress scenario was found for REG-007 or REG-008 despite their planned reproductions.
@@ -404,7 +409,7 @@ Do not treat readiness as approval. Report commit, push, and deployment readines
 
 - **High — payment saved but expanded marker missing:** The Cash Flow actual exists while the occurrence may reappear. Mitigation: do not repay automatically; reconcile Activity marker evidence first.
 - **High — AutoPay duplicate or missed write:** Concurrency, marker, or payee-link defects can corrupt actuals. Mitigation: lock, dedupe, regression coverage, and manual reconciliation.
-- **Medium — duplicate/renamed payees:** Add has no explicit duplicate guard, and Edit intentionally does not rename Cash Flow rows. Mitigation: inspect matching rows and avoid casual renames.
+- **Medium — duplicate/renamed payees:** Add still has no explicit duplicate guard. Edit now renames only its exact linked current-year Cash Flow Expense row under lock, rejects Bill or Cash Flow collisions and ambiguous links, verifies both cells, requires audit history, and rolls back the coordinated change on failure. Mitigation: retain the exact-link and collision regressions and avoid bypassing the dashboard writer.
 - **Medium — schema drift:** Bills is not yet in the Phase 2 canonical model. Mitigation: retain narrowly scoped, additive, anchor-positioned self-heal and add read-only Validator coverage.
 - **Medium — stale documentation/comments:** Historical comments contradict current behavior. Mitigation: use executable evidence and record conflicts until cleaned up.
 - **Medium — expanded AutoPay versus manual totals:** Current source adds an unmarked due occurrence to whatever value the shared monthly cell holds, while project documentation says manual protection is preserved. Mitigation: treat this as an unresolved semantic conflict and validate before changing or relying on it.

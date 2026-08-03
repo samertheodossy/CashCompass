@@ -156,8 +156,8 @@ function getDonationsSheet_(optionalSs) {
 /**
  * @returns {{ taxYears: number[], defaultTaxYear: number|null, charitySuggestions: string[], paymentTypeSuggestions: string[] }}
  */
-function getDonationsFormData() {
-  const sheet = getDonationsSheet_();
+function getDonationsFormData(optionalSs) {
+  const sheet = getDonationsSheet_(optionalSs);
   const values = sheet.getDataRange().getValues();
   const taxYears = collectDonationTaxYears_(values);
   const tz = Session.getScriptTimeZone();
@@ -170,7 +170,11 @@ function getDonationsFormData() {
   }
   const charitySuggestions = collectDistinctCharityNames_(values);
   const paymentTypeSuggestions = collectDistinctPaymentTypes_(values);
-  const recentDonations = getRecentDonationsForUi_(values, 8);
+  const recentDonations = getRecentDonationsForUi_(
+    values,
+    250,
+    sheet.getParent().getSpreadsheetTimeZone()
+  );
 
   return {
     taxYears: taxYears,
@@ -298,11 +302,23 @@ function formatDonationDateLabel_(raw) {
   return s || '—';
 }
 
+function donationDateIsoForUi_(raw, timeZone) {
+  var tz = String(timeZone || '').trim() || Session.getScriptTimeZone();
+  if (raw instanceof Date && !isNaN(raw.getTime())) {
+    return Utilities.formatDate(raw, tz, 'yyyy-MM-dd');
+  }
+  var text = String(raw || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  var parsed = new Date(text);
+  return isNaN(parsed.getTime()) ? '' : Utilities.formatDate(parsed, tz, 'yyyy-MM-dd');
+}
+
 /**
- * @returns {Array<{charity:string,dateLabel:string,amount:number,taxYear:number,comments:string,paymentType:string}>}
+ * @returns {Array<{sheetRow:number,charity:string,entryDate:string,dateLabel:string,amount:number,taxYear:number,comments:string,paymentType:string}>}
  */
-function getRecentDonationsForUi_(values, limit) {
-  const cap = Math.min(Math.max(Number(limit) || 8, 1), 25);
+function getRecentDonationsForUi_(values, limit, timeZone) {
+  const cap = Math.min(Math.max(Number(limit) || 8, 1), 250);
+  const tz = String(timeZone || '').trim() || Session.getScriptTimeZone();
   const rows = [];
 
   for (let r = 0; r < values.length; r++) {
@@ -332,7 +348,9 @@ function getRecentDonationsForUi_(values, limit) {
       if (!any) continue;
 
       rows.push({
+        sheetRow: dr + 1,
         charity: charity,
+        entryDate: donationDateIsoForUi_(rawDate, tz),
         dateLabel: formatDonationDateLabel_(rawDate),
         sortTime: donationRowSortTime_(rawDate),
         amount: amount,
@@ -349,7 +367,9 @@ function getRecentDonationsForUi_(values, limit) {
 
   return rows.slice(0, cap).map(function(x) {
     return {
+      sheetRow: x.sheetRow,
       charity: x.charity,
+      entryDate: x.entryDate,
       dateLabel: x.dateLabel,
       amount: x.amount,
       taxYear: x.taxYear,
@@ -357,6 +377,392 @@ function getRecentDonationsForUi_(values, limit) {
       paymentType: x.paymentType
     };
   });
+}
+
+/**
+ * Update only Comments on one Recent Donations row.
+ *
+ * The client supplies the row snapshot it rendered. Under a user lock, this
+ * writer verifies the exact row and every non-comment identity/value field,
+ * writes only the Comments cell, flushes and verifies, then appends immutable
+ * audit history. Any write/verification/audit failure restores the prior
+ * comment best-effort before returning an error.
+ */
+function updateRecentDonationComments(payload, optionalSs) {
+  validateRequired_(payload, [
+    'sheetRow', 'taxYear', 'charityName', 'entryDate', 'amount', 'paymentType'
+  ]);
+  var sheetRow = Math.round(Number(payload.sheetRow));
+  if (!isFinite(sheetRow) || sheetRow < 3) {
+    throw new Error('Invalid donation row. Please refresh and try again.');
+  }
+  var expected = {
+    taxYear: Number(payload.taxYear),
+    charityName: String(payload.charityName || '').trim(),
+    entryDate: String(payload.entryDate || '').trim(),
+    amountSigned: round2_(toNumber_(payload.amount)),
+    amountAbs: round2_(Math.abs(toNumber_(payload.amount))),
+    comments: String(payload.expectedComments || '').trim(),
+    paymentType: String(payload.paymentType || '').trim()
+  };
+  if (!expected.charityName || !expected.entryDate ||
+      !isFinite(expected.amountSigned) || !isFinite(expected.taxYear) ||
+      !expected.paymentType) {
+    throw new Error('Donation reference is incomplete. Please refresh and try again.');
+  }
+  var nextComments = String(payload.comments || '').trim();
+  if (nextComments.length > 500) {
+    throw new Error('Comments are too long (max 500 characters).');
+  }
+
+  var lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    var ss = optionalSs || getUserSpreadsheet_();
+    var sheet = ss.getSheetByName(DONATION_SHEET_NAME_);
+    if (!sheet) {
+      throw new Error('Donation moved or was removed. Please refresh and try again.');
+    }
+    var values = sheet.getDataRange().getValues();
+    if (sheetRow > values.length) {
+      throw new Error('Donation moved or was removed. Please refresh and try again.');
+    }
+    var block = findDonationBlockForTaxYear_(values, expected.taxYear);
+    if (!block || sheetRow <= block.dataStart0) {
+      throw new Error('Donation moved or was removed. Please refresh and try again.');
+    }
+    var row0 = sheetRow - 1;
+    if (String(values[row0][0] || '').trim().toLowerCase() === 'year' ||
+        !donationDataRowMatchesActivityUndo_(values[row0], block.colMap, expected)) {
+      throw new Error(
+        'Donation changed or moved after this list loaded. Comments were not updated.'
+      );
+    }
+    if (expected.comments === nextComments) {
+      return { ok: true, message: 'No changes made.', comments: expected.comments };
+    }
+
+    var commentsCol = block.colMap['Comments'] + 1;
+    var commentsCell = sheet.getRange(sheetRow, commentsCol);
+    try {
+      commentsCell.setValue(nextComments);
+      SpreadsheetApp.flush();
+      var refreshed = sheet.getRange(sheetRow, 1, 1, sheet.getLastColumn()).getValues()[0];
+      var nextExpected = Object.assign({}, expected, { comments: nextComments });
+      if (!donationDataRowMatchesActivityUndo_(refreshed, block.colMap, nextExpected)) {
+        throw new Error('The updated donation comments could not be verified.');
+      }
+
+      var appended = appendActivityLog_(ss, {
+        eventType: 'donation_comment_update',
+        entryDate: expected.entryDate,
+        amount: 0,
+        direction: '',
+        payee: expected.charityName,
+        category: expected.paymentType,
+        accountSource: '',
+        cashFlowSheet: DONATION_SHEET_NAME_,
+        cashFlowMonth: 'TY ' + expected.taxYear,
+        dedupeKey: '',
+        details: JSON.stringify({
+          detailsVersion: 1,
+          sheetRow: sheetRow,
+          taxYear: expected.taxYear,
+          oldComments: expected.comments,
+          newComments: nextComments,
+          amountSigned: expected.amountSigned
+        })
+      });
+      if (appended !== true) {
+        throw new Error('The comment audit record could not be saved.');
+      }
+    } catch (writeErr) {
+      try {
+        commentsCell.setValue(expected.comments);
+        SpreadsheetApp.flush();
+      } catch (_rollbackComments) {}
+      throw new Error(
+        'Comments were not updated and the prior value was restored: ' +
+        (writeErr && writeErr.message ? writeErr.message : String(writeErr))
+      );
+    }
+
+    try { touchDashboardSourceUpdated_('donations'); } catch (_touchErr) {}
+    return {
+      ok: true,
+      message: 'Donation comments updated.',
+      comments: nextComments
+    };
+  } finally {
+    try { lock.releaseLock(); } catch (_releaseLock) {}
+  }
+}
+
+/**
+ * Safely edit every user-entered field on one managed donation.
+ *
+ * The rendered row snapshot is verified under a user lock before any write.
+ * Same-tax-year edits update that row in place. A tax-year change writes and
+ * verifies an empty destination row in the requested year block, then clears
+ * the source row without shifting the sheet's year-block structure. Both paths
+ * require a successful immutable audit; any failure restores the prior values.
+ */
+function updateDonationFromDashboard(payload, optionalSs) {
+  validateRequired_(payload, [
+    'sheetRow', 'taxYear', 'charityName', 'entryDate', 'amount', 'paymentType',
+    'newCharityName', 'newDonationDate', 'newAmount', 'newTaxYear', 'newPaymentType'
+  ]);
+
+  var sheetRow = Math.round(Number(payload.sheetRow));
+  if (!isFinite(sheetRow) || sheetRow < 3) {
+    throw new Error('Invalid donation row. Please refresh and try again.');
+  }
+  var expected = {
+    taxYear: Number(payload.taxYear),
+    charityName: String(payload.charityName || '').trim(),
+    entryDate: String(payload.entryDate || '').trim(),
+    amountSigned: round2_(toNumber_(payload.amount)),
+    amountAbs: round2_(Math.abs(toNumber_(payload.amount))),
+    comments: String(payload.expectedComments || '').trim(),
+    paymentType: String(payload.paymentType || '').trim()
+  };
+  if (!expected.charityName || !expected.entryDate ||
+      !isFinite(expected.amountSigned) || !isFinite(expected.taxYear) ||
+      !expected.paymentType) {
+    throw new Error('Donation reference is incomplete. Please refresh and try again.');
+  }
+
+  var next = {
+    taxYear: Number(payload.newTaxYear),
+    charityName: String(payload.newCharityName || '').trim(),
+    entryDate: String(payload.newDonationDate || '').trim(),
+    amount: round2_(toNumber_(payload.newAmount)),
+    comments: String(payload.newComments || '').trim(),
+    paymentType: String(payload.newPaymentType || '').trim()
+  };
+  if (!next.charityName) throw new Error('Name of Charity is required.');
+  if (next.charityName.length > 200) throw new Error('Name of Charity is too long (max 200 characters).');
+  parseIsoDateLocal_(next.entryDate);
+  if (!isFinite(next.amount)) throw new Error('Amount is not a valid number.');
+  if (!isFinite(next.taxYear) || next.taxYear < 1990 || next.taxYear > 2100) {
+    throw new Error('Tax year is invalid.');
+  }
+  if (!next.paymentType) throw new Error('Payment type is required.');
+  if (next.paymentType.length > 200) throw new Error('Payment type is too long (max 200 characters).');
+  if (next.comments.length > 500) throw new Error('Comments are too long (max 500 characters).');
+
+  var unchanged =
+    expected.taxYear === next.taxYear &&
+    expected.charityName === next.charityName &&
+    expected.entryDate === next.entryDate &&
+    expected.amountSigned === next.amount &&
+    expected.comments === next.comments &&
+    expected.paymentType === next.paymentType;
+  if (unchanged) return { ok: true, message: 'No changes made.' };
+
+  var lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    var ss = optionalSs || getUserSpreadsheet_();
+    var sheet = ss.getSheetByName(DONATION_SHEET_NAME_);
+    if (!sheet) throw new Error('Donation moved or was removed. Please refresh and try again.');
+    var values = sheet.getDataRange().getValues();
+    if (sheetRow > values.length) {
+      throw new Error('Donation moved or was removed. Please refresh and try again.');
+    }
+    var sourceBlock = findDonationBlockForTaxYear_(values, expected.taxYear);
+    var row0 = sheetRow - 1;
+    if (!sourceBlock || sheetRow <= sourceBlock.dataStart0 ||
+        String(values[row0][0] || '').trim().toLowerCase() === 'year' ||
+        !donationDataRowMatchesActivityUndo_(values[row0], sourceBlock.colMap, expected)) {
+      throw new Error('Donation changed or moved after this list loaded. Nothing was updated.');
+    }
+
+    var lastCol = sheet.getLastColumn();
+    var sourceRange = sheet.getRange(sheetRow, 1, 1, lastCol);
+    var sourceRaw = sourceRange.getValues()[0];
+    var sourceFormats = sourceRange.getNumberFormats()[0];
+    var destinationRow = sheetRow;
+    var destinationRaw = null;
+    var destinationFormats = null;
+    var destinationBlock = sourceBlock;
+    var movedTaxYear = next.taxYear !== expected.taxYear;
+
+    function writeNextKnownCells_(row, colMap) {
+      var nextByHeader = {
+        'Name of Charity': next.charityName,
+        'Date': donationSheetDateFromIso_(next.entryDate, ss),
+        'Amount': next.amount,
+        'Tax Year': next.taxYear,
+        'Comments': next.comments,
+        'Payment type': next.paymentType
+      };
+      DONATION_REQUIRED_HEADERS_.forEach(function(name) {
+        sheet.getRange(row, colMap[name] + 1).setValue(nextByHeader[name]);
+      });
+      sheet.getRange(row, colMap['Date'] + 1).setNumberFormat('M/d/yyyy');
+      sheet.getRange(row, colMap['Amount'] + 1).setNumberFormat('$#,##0.00');
+    }
+
+    function restoreKnownCells_(row, colMap, raw, formats) {
+      DONATION_REQUIRED_HEADERS_.forEach(function(name) {
+        var col0 = colMap[name];
+        sheet.getRange(row, col0 + 1)
+          .setValue(raw[col0])
+          .setNumberFormat(formats[col0]);
+      });
+    }
+
+    function rollbackDonationEdit_() {
+      try {
+        restoreKnownCells_(sheetRow, sourceBlock.colMap, sourceRaw, sourceFormats);
+      } catch (_restoreSource) {}
+      if (movedTaxYear && destinationRaw) {
+        try {
+          restoreKnownCells_(
+            destinationRow,
+            destinationBlock.colMap,
+            destinationRaw,
+            destinationFormats
+          );
+        } catch (_restoreDestination) {}
+      }
+      try { SpreadsheetApp.flush(); } catch (_rollbackFlush) {}
+    }
+
+    try {
+      if (movedTaxYear) {
+        destinationBlock = findDonationBlockForTaxYear_(values, next.taxYear);
+        if (!destinationBlock) {
+          throw new Error('No donation section exists for tax year ' + next.taxYear + '.');
+        }
+        var requiredNames = DONATION_REQUIRED_HEADERS_.slice();
+        for (var hi = 0; hi < requiredNames.length; hi++) {
+          if (sourceBlock.colMap[requiredNames[hi]] !== destinationBlock.colMap[requiredNames[hi]]) {
+            throw new Error('Donation year sections use different column layouts. Nothing was updated.');
+          }
+        }
+        destinationRow = getDonationAppendRow1_(values, destinationBlock);
+        if (destinationRow === sheetRow) {
+          throw new Error('Donation destination could not be resolved safely.');
+        }
+        var destinationRange = sheet.getRange(destinationRow, 1, 1, lastCol);
+        destinationRaw = destinationRange.getValues()[0];
+        destinationFormats = destinationRange.getNumberFormats()[0];
+        var destinationHasData = destinationRaw.some(function(value) {
+          return value !== '' && value !== null;
+        });
+        if (destinationHasData) {
+          throw new Error('Donation destination row is not empty. Nothing was updated.');
+        }
+        var sourceKnownColumns = {};
+        DONATION_REQUIRED_HEADERS_.forEach(function(name) {
+          sourceKnownColumns[sourceBlock.colMap[name]] = true;
+        });
+        var sourceHasUnsupportedData = sourceRaw.some(function(value, idx) {
+          return !sourceKnownColumns[idx] && value !== '' && value !== null;
+        });
+        if (sourceHasUnsupportedData) {
+          throw new Error('Donation row contains unsupported extra data. Nothing was updated.');
+        }
+        writeNextKnownCells_(destinationRow, destinationBlock.colMap);
+        DONATION_REQUIRED_HEADERS_.forEach(function(name) {
+          sheet.getRange(sheetRow, sourceBlock.colMap[name] + 1).clearContent();
+        });
+      } else {
+        writeNextKnownCells_(sheetRow, sourceBlock.colMap);
+      }
+
+      SpreadsheetApp.flush();
+      var refreshed = sheet.getDataRange().getValues();
+      var nextFingerprint = {
+        taxYear: next.taxYear,
+        charityName: next.charityName,
+        entryDate: next.entryDate,
+        amountSigned: next.amount,
+        amountAbs: Math.abs(next.amount),
+        comments: next.comments,
+        paymentType: next.paymentType,
+        timeZone: ss.getSpreadsheetTimeZone()
+      };
+      if (!donationDataRowMatchesActivityUndo_(
+        refreshed[destinationRow - 1], destinationBlock.colMap, nextFingerprint
+      )) {
+        throw new Error('The updated donation could not be verified.');
+      }
+      if (movedTaxYear) {
+        var sourceStillHasData = sourceRaw.some(function(_value, idx) {
+          return DONATION_REQUIRED_HEADERS_.some(function(name) {
+            return sourceBlock.colMap[name] === idx;
+          }) && refreshed[sheetRow - 1][idx] !== '';
+        });
+        if (sourceStillHasData) throw new Error('The prior donation row could not be cleared.');
+      }
+
+      var appended = appendActivityLog_(ss, {
+        eventType: 'donation_update',
+        entryDate: next.entryDate,
+        amount: 0,
+        direction: '',
+        payee: next.charityName,
+        category: next.paymentType,
+        accountSource: '',
+        cashFlowSheet: DONATION_SHEET_NAME_,
+        cashFlowMonth: 'TY ' + next.taxYear,
+        dedupeKey: '',
+        details: JSON.stringify({
+          detailsVersion: 1,
+          sourceSheetRow: sheetRow,
+          destinationSheetRow: destinationRow,
+          movedTaxYear: movedTaxYear,
+          old: {
+            taxYear: expected.taxYear,
+            charityName: expected.charityName,
+            entryDate: expected.entryDate,
+            amount: expected.amountSigned,
+            comments: expected.comments,
+            paymentType: expected.paymentType
+          },
+          'new': next
+        })
+      });
+      if (appended !== true) throw new Error('The donation update audit could not be saved.');
+      if (movedTaxYear) {
+        // Presentation follows the source row only after the data move and its
+        // immutable audit are durable. A cosmetic failure cannot invalidate the
+        // already-verified financial correction.
+        try {
+          sourceRange.copyTo(
+            sheet.getRange(destinationRow, 1, 1, lastCol),
+            SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+            false
+          );
+          sheet.getRange(destinationRow, destinationBlock.colMap['Date'] + 1)
+            .setNumberFormat('M/d/yyyy');
+          sheet.getRange(destinationRow, destinationBlock.colMap['Amount'] + 1)
+            .setNumberFormat('$#,##0.00');
+        } catch (formatErr) {
+          Logger.log('updateDonationFromDashboard destination formatting: ' + formatErr);
+        }
+      }
+    } catch (writeErr) {
+      rollbackDonationEdit_();
+      throw new Error(
+        'Donation was not updated and the prior values were restored: ' +
+        (writeErr && writeErr.message ? writeErr.message : String(writeErr))
+      );
+    }
+
+    try { touchDashboardSourceUpdated_('donations'); } catch (_touchErr) {}
+    return {
+      ok: true,
+      message: 'Donation updated.',
+      sheetRow: destinationRow,
+      taxYear: next.taxYear
+    };
+  } finally {
+    try { lock.releaseLock(); } catch (_releaseLock) {}
+  }
 }
 
 /**

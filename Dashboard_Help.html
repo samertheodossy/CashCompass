@@ -109,7 +109,7 @@
           <li><strong>Income</strong> tracks recurring and other household income.</li>
           <li><strong>Bills</strong> manages recurring obligations and their schedules.</li>
           <li><strong>Upcoming</strong> keeps larger planned expenses visible before they arrive.</li>
-          <li><strong>Donations</strong> records charitable giving by tax year.</li>
+          <li><strong>Donations</strong> has separate Add donation and Manage donations views. Add keeps a read-only Previous donations panel beside the form; Manage lets you safely update every donation field.</li>
         </ul>
       </section>
 
@@ -126,6 +126,7 @@
       <section id="help-donations" class="help-section">
         <h3>Donations</h3>
         <p>Use Donations as a charitable-giving record for reporting and tax preparation. Choose a tax year, charity, date, amount, and optional comments.</p>
+        <p>Open <strong>Manage donations</strong>, then use <strong>Edit donation</strong> to update the charity, date, amount, tax year, payment type, or comments. CashCompass verifies that the same row is still present, records the change in Activity history, and restores the prior values if the update cannot be completed safely.</p>
         <p class="muted">A donation is not automatically treated as a Cash Flow payment. Record the payment separately when you want it included in monthly Cash Flow.</p>
       </section>
 
@@ -146,12 +147,13 @@
         <ul class="help-list">
           <li><strong>Due this period</strong> shows obligations that still need attention.</li>
           <li><strong>Add bill</strong> creates a recurring bill; <strong>Manage bills</strong> edits schedules, amounts, sources, and tracking status.</li>
+          <li>Renaming a bill also renames its one exact linked Expense payee on the current year’s Cash Flow. CashCompass refuses missing, ambiguous, or colliding links and rolls back the edit if verification or Activity audit fails.</li>
           <li><strong>Due Soon</strong> and <strong>Overdue</strong> show obligations that still need attention.</li>
           <li><strong>Pay</strong> opens a side panel where you can confirm the amount and payment date before recording it.</li>
           <li>After payment, review the Cash Flow total and six-month payment history, then choose <strong>Done</strong>. The paid occurrence is removed from the due list.</li>
           <li><strong>Skip</strong> asks for confirmation, records no payment, and removes only the selected occurrence. The recurring bill stays active and future occurrences still appear.</li>
           <li><strong>Stop tracking</strong> is available from Manage bills. It removes the recurring bill from active views while preserving its row, schedule details, and Activity history.</li>
-          <li><strong>Autopay</strong> identifies bills expected to be handled automatically.</li>
+          <li><strong>Autopay</strong> identifies bills expected to be handled automatically. Posted expenses use Cash Flow’s red negative-currency format.</li>
           <li>Weekly and biweekly bills use their configured weekday and schedule anchor when available.</li>
         </ul>
       </section>

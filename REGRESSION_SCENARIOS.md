@@ -911,6 +911,84 @@ Whenever a production bug is fixed:
   Isolated Central `@299` user verification confirmed one matching card in
   Bills while the debt account remained visible in Assets & Liabilities.
 
+### REG-043 — Renaming a Bill left its linked Cash Flow payee behind
+- Category: REGRESSION / FINANCIAL SAFETY / CROSS-SHEET ENTITY LINK
+- Date discovered: 2026-08-03
+- Status: fixed locally; disposable runtime scenario implemented, not yet run
+- Root cause: Bill Edit updated `INPUT - Bills.Payee` in isolation and left the
+  Cash Flow row created by Add unchanged.
+- Expected result: under a user lock, a rename requires exactly one current-year
+  Expense row with the old exact Payee, rejects Bill and Cash Flow destination
+  collisions, verifies both writes, appends one mandatory `bill_update` audit,
+  and restores all accompanying Bill edits plus the linked Payee on failure.
+  Historical Cash Flow years remain unchanged.
+- Permanent coverage: `REGRESSION-BILLS-EDIT-INTEGRITY` exercises exact
+  propagation, collision refusal, one audit entry, and forced audit-failure
+  rollback on its own marker-verified disposable workbook.
+
+### REG-044 — Bill Edit reported “Category is required” while categories loaded
+- Category: REGRESSION / UI RELIABILITY / ASYNC FORM STATE
+- Date discovered: 2026-08-03
+- Status: fixed locally; local dynamic regression passed
+- Root cause: Add category loading and Edit prefill issued overlapping requests;
+  a later response rebuilt the select and cleared the edited category.
+- Expected result: Add and Edit share one in-flight request, queued Edit prefill
+  runs after options install, and only the newest Edit target may apply. An
+  omitted server category retains the lock-verified row value; a truly blank
+  legacy category still fails closed.
+- Permanent coverage: `scripts/checkMaintenanceRegressions.mjs` reproduces the
+  response race dynamically; `REGRESSION-BILLS-EDIT-INTEGRITY` covers the server
+  fallback.
+
+### REG-045 — Recent Donations comments could not be corrected safely
+- Category: REGRESSION / AUDITABILITY / STABLE-ROW EDIT
+- Date discovered: 2026-08-03
+- Status: fixed locally; disposable runtime scenario implemented, not yet run
+- Root cause: Recent Donations was read-only and had no narrow metadata writer
+  with stable-row verification or immutable audit history. The first correction
+  UI also crowded Edit comments into the Add donation side panel instead of a
+  dedicated management surface.
+- Expected result: Donation comments can be corrected only through a verified
+  management writer. Under a user lock the server verifies row, tax year,
+  charity, date, signed amount, prior comments, and payment type; flushes and
+  verifies; appends immutable audit history; refuses stale state; and restores
+  prior data on failure. The final Manage donations UI routes this through the
+  broader full-donation editor described by REG-047.
+- Permanent coverage: `REGRESSION-DONATION-COMMENTS-EDIT` covers success, stale
+  refusal, audit count, and forced audit-failure rollback on a disposable
+  workbook; the local maintenance check pins the UI/server contracts.
+
+### REG-046 — AutoPay displayed a bare or non-red negative amount
+- Category: REGRESSION / WORKBOOK PRESENTATION / FINANCIAL CLARITY
+- Date discovered: 2026-08-03
+- Status: fixed locally; disposable runtime scenario implemented, not yet run
+- Root cause: AutoPay preserved or copied a blank/sibling number format after
+  writing, so General or legacy black-negative formatting could survive.
+- Expected result: monthly and expanded-occurrence AutoPay both finish with
+  `CASH_FLOW_MONEY_FORMAT_`, producing red negative currency such as `-$75.00`
+  without restyling unrelated properties.
+- Permanent coverage: `REGRESSION-BILLS-AUTOPAY-FORMAT` runs production monthly
+  AutoPay at a fixed date and asserts `-75`, `-$75.00`, and the exact canonical
+  format. The local maintenance check pins both AutoPay branches.
+
+### REG-047 — Manage Donations could edit only comments
+- Category: REGRESSION / AUDITABILITY / FULL-ROW EDIT
+- Date discovered: 2026-08-03
+- Status: fixed locally; disposable runtime scenario implemented, not yet run
+- Root cause: the first management surface exposed only the narrow comments
+  writer even though the dedicated Manage donations view is the appropriate
+  place to correct the entire saved donation.
+- Expected result: Manage donations edits charity, date, amount, tax year,
+  payment type, and comments under a user lock with exact-row verification,
+  mandatory `donation_update` audit history, stale refusal, and rollback. A tax
+  year change moves the verified data between existing year blocks without row
+  deletion or structural shifting. Add donation retains the blue, read-only
+  Previous donations panel and exposes no edit action.
+- Permanent coverage: `REGRESSION-DONATION-FULL-EDIT` covers an in-place edit,
+  tax-year move, immutable audit count, forced audit-failure rollback, and stale
+  refusal on a marked disposable workbook; the focused maintenance check pins
+  the Add/Manage separation and all submitted fields.
+
 ---
 
 ## 3a loading-state consistency coverage
@@ -1023,4 +1101,11 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-038 | Correction summary displayed raw parsed dates and the wrong calendar day | REGRESSION / CUSTOMER LANGUAGE / CORRECTION FEEDBACK | fixed; isolated `@221` guarded runtime pass |
 | REG-039 | Middle-entry reversal left a later Quick Add receipt warning active | REGRESSION / UI RELIABILITY / SEQUENCE CORRECTION | fixed; isolated `@223` guarded runtime pass |
 | REG-040 | Returning to Quick Add after a correction showed the old total | REGRESSION / UI RELIABILITY / SAME-PAGE STATE | fixed locally; isolated Central runtime confirmation pending |
+| REG-041 | Bill Skip used a browser-native confirmation instead of the CashCompass drawer pattern | REGRESSION / UX CONSISTENCY / WRITE SAFETY | fixed in `433bfed`; isolated `@299` user-verified |
+| REG-042 | A debt and tracked Bill with the same payee produced duplicate Bills Due cards | REGRESSION / READ MODEL / FINANCIAL CLARITY | fixed in `433bfed`; isolated `@299` user-verified |
+| REG-043 | Renaming a Bill left its linked Cash Flow payee behind | REGRESSION / FINANCIAL SAFETY / CROSS-SHEET ENTITY LINK | fixed locally; disposable runtime scenario pending |
+| REG-044 | Bill Edit reported “Category is required” while categories loaded | REGRESSION / UI RELIABILITY / ASYNC FORM STATE | fixed locally; local dynamic regression PASS |
+| REG-045 | Recent Donations comments could not be corrected safely | REGRESSION / AUDITABILITY / STABLE-ROW EDIT | fixed locally; disposable runtime scenario pending |
+| REG-046 | AutoPay displayed a bare or non-red negative amount | REGRESSION / WORKBOOK PRESENTATION / FINANCIAL CLARITY | fixed locally; disposable runtime scenario pending |
+| REG-047 | Manage Donations could edit only comments | REGRESSION / AUDITABILITY / FULL-ROW EDIT | fixed locally; disposable runtime scenario pending |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

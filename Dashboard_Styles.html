@@ -1452,14 +1452,66 @@
   .donations-other-wrap { margin-top: 10px; }
   .donations-other-wrap label { display: block; margin-top: 0; }
 
-  .donation-recent-list { font-size: 12px; max-height: 320px; overflow-y: auto; }
-  .donation-recent-item {
-    padding: 8px 0;
-    border-bottom: 1px solid #e2e8f0;
+  .donations-add-wrap {
+    padding: 14px 16px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #f9fafb;
   }
-  .donation-recent-item:last-child { border-bottom: none; }
-  .donation-recent-date { margin-left: 6px; font-weight: normal; }
-  .donation-recent-meta { margin-top: 4px; font-size: 12px; }
+  .donations-view-purpose {
+    margin: 0 0 12px 0;
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .donations-manage-tablewrap {
+    overflow-x: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+  .donations-manage-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .donations-manage-table th,
+  .donations-manage-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: left;
+    vertical-align: middle;
+  }
+  .donations-manage-table th {
+    color: #334155;
+    background: #f8fafc;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .donations-manage-table tbody tr:last-child td { border-bottom: none; }
+  .donations-manage-amount { white-space: nowrap; }
+  .donation-manage-comments { min-width: 220px; }
+  .donation-manage-comments input { margin: 0; min-width: 210px; }
+  .donation-recent-actions { white-space: nowrap; }
+  .donation-recent-actions .small-btn + .small-btn { margin-left: 6px; }
+  .donations-empty-state { padding: 18px; text-align: center; }
+  .donations-previous-panel { min-height: 280px; }
+  .donation-previous-list { max-height: 420px; overflow-y: auto; }
+  .donation-previous-item { padding: 9px 0; border-bottom: 1px solid #bfdbfe; }
+  .donation-previous-item:last-child { border-bottom: none; }
+  .donation-previous-meta { margin-top: 3px; color: #334155; font-size: 13px; }
+  .donation-previous-comment { margin-top: 3px; font-size: 12px; }
+  .donation-manage-editor {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(180px, 1fr));
+    gap: 10px 12px;
+  }
+  .donation-manage-editor label { display: block; margin: 0 0 4px; font-size: 12px; }
+  .donation-manage-editor input,
+  .donation-manage-editor select { margin: 0; }
+  .donation-manage-editor-comments { grid-column: span 2; }
+  .donation-manage-editor-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .donation-manage-editor-actions .small-btn { margin: 0; }
 
   .check-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; }
   .check-row input[type="checkbox"] { width: auto; margin: 0; }
@@ -1599,7 +1651,33 @@
     max-width: 100%;
     margin: 0 0 14px 0;
   }
+  .donations-view-switch {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-width: 100%;
+    margin: 0 0 14px 0;
+  }
   .bills-view-btn {
+    flex: 0 0 auto;
+    width: auto;
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    line-height: 1.3;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    transition: color 0.12s ease, background-color 0.12s ease;
+  }
+  .donations-view-btn {
     flex: 0 0 auto;
     width: auto;
     appearance: none;
@@ -1621,7 +1699,16 @@
     color: #0f172a;
     background: #f1f5f9;
   }
+  .donations-view-btn:hover:not(.active) {
+    color: #0f172a;
+    background: #f1f5f9;
+  }
   .bills-view-btn.active {
+    background: #1f4e78;
+    color: #ffffff;
+    border-color: #1f4e78;
+  }
+  .donations-view-btn.active {
     background: #1f4e78;
     color: #ffffff;
     border-color: #1f4e78;
@@ -1995,12 +2082,6 @@
     font-size: 16px;
     line-height: 1.35;
   }
-  #page_cashflow .info .donation-recent-list {
-    font-size: 14px;
-  }
-  #page_cashflow .info .donation-recent-meta {
-    font-size: 13px;
-  }
   .quick-add-history[hidden] { display: none; }
   .bill-pay-history {
     margin-top: 18px;
@@ -2064,7 +2145,8 @@
     color: #64748b;
     font-size: 10px;
   }
-  .bills-view-btn:focus-visible {
+  .bills-view-btn:focus-visible,
+  .donations-view-btn:focus-visible {
     outline: 2px solid #1f4e78;
     outline-offset: 2px;
   }

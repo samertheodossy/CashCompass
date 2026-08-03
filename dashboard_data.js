@@ -2592,9 +2592,13 @@ function getInputBillsDueRows_(ss, today, tz) {
           writeDashboardBillValuePreserveFormat_(sheet, rowInfo.row, monthCol + 1, -defaultAmount);
           if (autopayCellWasBlank) {
             if (!copyNearestAmountFormatInRow_(sheet, rowInfo.row, monthCol + 1)) {
-              sheet.getRange(rowInfo.row, monthCol + 1).setNumberFormat('$#,##0.00;-$#,##0.00');
+              sheet.getRange(rowInfo.row, monthCol + 1).setNumberFormat(CASH_FLOW_MONEY_FORMAT_);
             }
           }
+          // AutoPay values are Cash Flow actuals. Regardless of the blank
+          // target/sibling format we inherited above, finish with the canonical
+          // red-negative currency mask (for example -$75.00 in red).
+          applyCashFlowMoneyFormat_(cellRange);
           touchDashboardSourceUpdated_('cash_flow');
 
           var autopayDedupe = buildBillAutopayDedupeKey_(payee, cand.monthHeader, cand.dueDate, defaultAmount);
@@ -2765,9 +2769,10 @@ function getInputBillsDueRows_(ss, today, tz) {
             // Match the monthly path: a freshly-populated blank cell should
             // pick up the row's red/currency look, not General/black.
             if (!copyNearestAmountFormatInRow_(sheet, rowInfo.row, monthCol + 1)) {
-              sheet.getRange(rowInfo.row, monthCol + 1).setNumberFormat('$#,##0.00;-$#,##0.00');
+              sheet.getRange(rowInfo.row, monthCol + 1).setNumberFormat(CASH_FLOW_MONEY_FORMAT_);
             }
           }
+          applyCashFlowMoneyFormat_(cellRange);
           touchDashboardSourceUpdated_('cash_flow');
 
           appendActivityLog_(ss, {

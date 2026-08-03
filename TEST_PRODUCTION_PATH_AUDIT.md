@@ -21,6 +21,7 @@ canonical workbook for a write.
 | Bills integration | Production schema/styling/activity helpers and Cash Flow builder | Explicit Bills fixture rows because the public writer resolves the signed-in user's workbook |
 | Recovery regression | `decideRecoveryCandidateAction_` | Synthetic candidate sets; this is not a substitute for Recovery Live |
 | Quick Add reliability | Production inspect/restore compare-and-set seams | Direct late-edit values needed to create MATCH/RESTORE_REFUSED states |
+| Bill/Donation maintenance | Real `updateTrackedBillFromDashboard`, `getInputBillsDueRows_`, `updateRecentDonationComments`, and `updateDonationFromDashboard` explicit-spreadsheet seams | Deterministic Bill/Cash Flow/Donation fixture rows plus forced audit-append failure needed to prove compensation |
 | Representative fixture | Production creators, year-block insertion helpers, formulas, styling, Cash Flow row builder, and Activity creator | Direct synthetic Bills, Upcoming, SYS mirrors, and retirement inputs used only to establish state |
 | Performance Planner | Real `runDebtPlanner` twice with explicit disposable spreadsheet and suppressed email | Timing capture |
 | Bills Pay E2E | Real `quickAddPayment` and `markDashboardBillOccurrencePaid` | Representative bill fixture |
@@ -41,6 +42,11 @@ canonical workbook for a write.
   schema, and Cash Flow integration cases while calling the production engine.
 - `test_harness_scenarios_quick_add.js`: deliberately changes one Cash Flow cell
   to reproduce late-edit and compare-and-set states.
+- `test_harness_scenarios_maintenance.js`: creates only deterministic Bill,
+  current-year Cash Flow, and Donation fixture rows after the disposable guard;
+  calls the real scoped production writers for every behavior under test; and
+  temporarily forces Activity append failure solely to prove both writers
+  restore their exact prior state.
 - `test_harness_scenarios_house_financial_accuracy.js`: removes only the final
   `Linked Property` column from a production-styled disposable Debts sheet to
   recreate the retired schema, then proves migration, presentation, and actual

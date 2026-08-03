@@ -317,8 +317,9 @@ present.
 AutoPay, manual Pay, overdue, paid-occurrence suppression, next-occurrence
 calculation, month-boundary, 31st-of-month, and year-boundary.
 
-> **Suite runner shipped (V1).** All ten implemented Bills scenarios (8 PURE +
-> 2 INTEGRATION) can now be run as one action via **`SUITE-BILLS-REGRESSION`** — the
+> **Suite runner shipped (V1, expanded 2026-08-03).** The recurrence scenarios plus
+> focused exact Edit-link/rollback and AutoPay-format integrations run through
+> **`SUITE-BILLS-REGRESSION`** — the
 > first registered Test Harness *suite* (`test_harness_suites.js`,
 > `testRunBillsSuite()` / console **Run Suite**). Each scenario still runs
 > independently in its own disposable workbook; the suite only aggregates results

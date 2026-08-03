@@ -529,8 +529,9 @@ function addBillFromDashboard(payload) {
  *    correct).
  *  - Never touches Active / Start Month (lifecycle is owned by Stop
  *    tracking; Start Month is a v1 add-only field).
- *  - Never touches Cash Flow rows generated at Add time, even on a
- *    Payee rename (existing history is left intact by design).
+ *  - A Payee rename coordinates the exact linked Expense Payee cell on the
+ *    current-year Cash Flow sheet. Historical year sheets and month values are
+ *    never rewritten; missing, ambiguous, or colliding links fail closed.
  *  - Refuses inactive bills — Stop tracking is the canonical
  *    lifecycle path; re-adding is the way to revive history.
  *  - No-op save (no field actually changed) returns
@@ -557,10 +558,10 @@ function addBillFromDashboard(payload) {
  *
  * @returns {{ok:boolean, message:string, payee:string, changedFields:string[]}}
  */
-function updateTrackedBillFromDashboard(payload) {
+function updateTrackedBillFromDashboard(payload, optionalSs) {
   validateRequired_(payload, [
     'sheetRow', 'expectedPayee', 'payee',
-    'dueDay', 'frequency', 'paymentSource', 'category'
+    'dueDay', 'frequency', 'paymentSource'
   ]);
 
   var targetRow = Math.round(Number(payload.sheetRow));
@@ -603,8 +604,11 @@ function updateTrackedBillFromDashboard(payload) {
     throw new Error('Payment Source must be CASH or CREDIT_CARD.');
   }
 
+  // The edit form loads category suggestions asynchronously. A first-open save
+  // may therefore omit Category even though the selected row already has one.
+  // Resolve that omission from the lock-verified row below; an explicitly
+  // supplied value still follows the normal validation/update path.
   var category = String(payload.category || '').trim();
-  if (!category) throw new Error('Category is required.');
   if (category.length > 200) category = category.slice(0, 200);
 
   var notes = String(payload.notes || '').trim();
@@ -651,7 +655,10 @@ function updateTrackedBillFromDashboard(payload) {
 
   // ---- Open sheet + verify the row hasn't shifted under us. ----
 
-  var ss = getUserSpreadsheet_();
+  var editLock = LockService.getUserLock();
+  editLock.waitLock(10000);
+  try {
+  var ss = optionalSs || getUserSpreadsheet_();
   var sheet = getSheet_(ss, 'BILLS');
 
   if (targetRow > sheet.getLastRow()) {
@@ -746,6 +753,25 @@ function updateTrackedBillFromDashboard(payload) {
   var changedFields = [];
   var oldValues = {};
   var newValues = {};
+  var appliedBillCells = [];
+  var linkedCashFlowRename = null;
+
+  function rollbackAppliedBillEdit_() {
+    if (linkedCashFlowRename) {
+      try {
+        linkedCashFlowRename.sheet
+          .getRange(linkedCashFlowRename.row, linkedCashFlowRename.col)
+          .setValue(linkedCashFlowRename.oldValue);
+      } catch (_rollbackCashFlow) {}
+    }
+    for (var rb = appliedBillCells.length - 1; rb >= 0; rb--) {
+      try {
+        sheet.getRange(targetRow, appliedBillCells[rb].col)
+          .setValue(appliedBillCells[rb].oldValue);
+      } catch (_rollbackBill) {}
+    }
+    try { SpreadsheetApp.flush(); } catch (_rollbackFlush) {}
+  }
 
   function recordChange_(field, header, newVal, currentDisplay, newDisplay) {
     var idx = headerIndex_(header);
@@ -753,12 +779,103 @@ function updateTrackedBillFromDashboard(payload) {
     changedFields.push(field);
     oldValues[field] = currentDisplay;
     newValues[field] = newDisplay;
-    sheet.getRange(targetRow, idx + 1).setValue(newVal);
+    try {
+      sheet.getRange(targetRow, idx + 1).setValue(newVal);
+      appliedBillCells.push({ col: idx + 1, oldValue: rowRaw[idx] });
+    } catch (writeErr) {
+      rollbackAppliedBillEdit_();
+      throw writeErr;
+    }
   }
+
+  // A missing category caused by the first-open category-load race means
+  // "retain the verified row value", never "clear Category". Truly blank
+  // legacy rows still fail closed.
+  var currentCategory = readTextCell_('Category');
+  if (!category) category = String(currentCategory || '').trim();
+  if (!category) throw new Error('Category is required.');
+
+  function preflightLinkedCashFlowRename_() {
+    if (payee === actualPayee) return null;
+
+    // Collision protection covers active and inactive Bills. Payee is the
+    // logical entity key, so case/whitespace variants are also collisions.
+    var wantedKey = payee.toLowerCase();
+    var payeeIdx = headerIndex_('Payee');
+    for (var br = 1; br < sheet.getLastRow(); br++) {
+      var sheetRow1 = br + 1;
+      if (sheetRow1 === targetRow) continue;
+      var otherPayee = String(
+        sheet.getRange(sheetRow1, payeeIdx + 1).getDisplayValue() || ''
+      ).trim();
+      if (otherPayee && otherPayee.toLowerCase() === wantedKey) {
+        throw new Error('Another bill already uses this payee. Rename was not completed.');
+      }
+    }
+
+    // Bill Add links only the current-year Cash Flow Expense row. Historical
+    // year sheets are immutable history and are deliberately not rewritten.
+    var currentYear = new Date().getFullYear();
+    var cashFlowName = getCashFlowSheetName_(currentYear);
+    var cashFlowSheet = ss.getSheetByName(cashFlowName);
+    if (!cashFlowSheet) {
+      throw new Error(
+        'The linked current-year Cash Flow row is unavailable. Rename was not completed.'
+      );
+    }
+    var cashFlowHeader = getCashFlowHeaderMap_(cashFlowSheet);
+    var cfDisplay = cashFlowSheet.getDataRange().getDisplayValues();
+    var exactMatches = [];
+    for (var cr = 1; cr < cfDisplay.length; cr++) {
+      var rowType = String(cfDisplay[cr][cashFlowHeader.typeColZero] || '').trim();
+      var rowPayee = String(cfDisplay[cr][cashFlowHeader.payeeColZero] || '').trim();
+      if (rowType !== 'Expense') continue;
+      if (rowPayee === actualPayee) {
+        exactMatches.push(cr + 1);
+        continue;
+      }
+      if (rowPayee.toLowerCase() === wantedKey) {
+        throw new Error(
+          'An Expense row already uses the new payee on Cash Flow ' +
+          currentYear + '. Rename was not completed.'
+        );
+      }
+    }
+    if (exactMatches.length !== 1) {
+      throw new Error(
+        exactMatches.length > 1
+          ? 'More than one linked Expense row matches this bill. Rename was not completed.'
+          : 'The exact linked Expense row was not found. Rename was not completed.'
+      );
+    }
+    return {
+      sheet: cashFlowSheet,
+      row: exactMatches[0],
+      col: cashFlowHeader.payeeCol,
+      oldValue: actualPayee,
+      newValue: payee,
+      year: currentYear
+    };
+  }
+
+  linkedCashFlowRename = preflightLinkedCashFlowRename_();
 
   // Payee
   if (payee !== actualPayee) {
     recordChange_('payee', 'Payee', payee, actualPayee, payee);
+    try {
+      linkedCashFlowRename.sheet
+        .getRange(linkedCashFlowRename.row, linkedCashFlowRename.col)
+        .setValue(payee);
+    } catch (cashFlowRenameErr) {
+      rollbackAppliedBillEdit_();
+      throw new Error(
+        'Bill rename failed and was rolled back: ' +
+        (cashFlowRenameErr && cashFlowRenameErr.message
+          ? cashFlowRenameErr.message
+          : String(cashFlowRenameErr))
+      );
+    }
   }
 
   // Due Day (numeric)
@@ -788,7 +905,6 @@ function updateTrackedBillFromDashboard(payload) {
   }
 
   // Category (text)
-  var currentCategory = readTextCell_('Category');
   if (currentCategory !== null && currentCategory !== category) {
     recordChange_('category', 'Category', category, currentCategory, category);
   }
@@ -874,14 +990,46 @@ function updateTrackedBillFromDashboard(payload) {
       scheduleEffectiveDateWritten = Utilities.formatDate(
         stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'
       );
-      sheet.getRange(targetRow, schedEffIdx + 1).setValue(scheduleEffectiveDateWritten);
+      try {
+        sheet.getRange(targetRow, schedEffIdx + 1).setValue(scheduleEffectiveDateWritten);
+        appliedBillCells.push({ col: schedEffIdx + 1, oldValue: rowRaw[schedEffIdx] });
+      } catch (scheduleWriteErr) {
+        rollbackAppliedBillEdit_();
+        throw scheduleWriteErr;
+      }
+    }
+  }
+
+  // Renames are coordinated financial-entity writes: flush and verify both
+  // exact cells before recording immutable audit evidence.
+  if (linkedCashFlowRename) {
+    try {
+      SpreadsheetApp.flush();
+      var verifiedBillPayee = String(
+        sheet.getRange(targetRow, headerIndex_('Payee') + 1).getDisplayValue() || ''
+      ).trim();
+      var verifiedCashFlowPayee = String(
+        linkedCashFlowRename.sheet
+          .getRange(linkedCashFlowRename.row, linkedCashFlowRename.col)
+          .getDisplayValue() || ''
+      ).trim();
+      if (verifiedBillPayee !== payee || verifiedCashFlowPayee !== payee) {
+        throw new Error('The coordinated bill rename could not be verified.');
+      }
+    } catch (verifyErr) {
+      rollbackAppliedBillEdit_();
+      throw new Error(
+        'Bill rename failed and was rolled back: ' +
+        (verifyErr && verifyErr.message ? verifyErr.message : String(verifyErr))
+      );
     }
   }
 
   // ---- Activity log + dashboard freshness. ----
 
+  var activityLogged = false;
   try {
-    appendActivityLog_(ss, {
+    activityLogged = appendActivityLog_(ss, {
       eventType: 'bill_update',
       entryDate: Utilities.formatDate(
         stripTime_(new Date()),
@@ -905,11 +1053,42 @@ function updateTrackedBillFromDashboard(payload) {
         'old': oldValues,
         'new': newValues,
         // Phase 5B: present only when a scheduling change stamped a new floor.
-        scheduleEffectiveDate: scheduleEffectiveDateWritten
+        scheduleEffectiveDate: scheduleEffectiveDateWritten,
+        linkedCashFlowRename: linkedCashFlowRename ? {
+          sheet: linkedCashFlowRename.sheet.getName(),
+          row: linkedCashFlowRename.row,
+          oldPayee: linkedCashFlowRename.oldValue,
+          newPayee: linkedCashFlowRename.newValue
+        } : null
       })
     });
   } catch (logErr) {
     Logger.log('updateTrackedBillFromDashboard activity log: ' + logErr);
+  }
+  if (linkedCashFlowRename && activityLogged !== true) {
+    rollbackAppliedBillEdit_();
+    throw new Error('Bill rename audit could not be saved. The rename was rolled back.');
+  }
+
+  // Keep renamed Payees readable in both authoritative views. This runs only
+  // after the coordinated values are verified and their mandatory audit is
+  // durable: column sizing is presentation-only and must never turn a
+  // successfully audited financial rename into a misleading failure. Resize
+  // only the two Payee columns involved, not the rest of either sheet.
+  if (linkedCashFlowRename) {
+    var payeeColumnResizeTargets = [
+      { sheet: sheet, col: headerIndex_('Payee') + 1 },
+      { sheet: linkedCashFlowRename.sheet, col: linkedCashFlowRename.col }
+    ];
+    for (var resizeIdx = 0; resizeIdx < payeeColumnResizeTargets.length; resizeIdx++) {
+      try {
+        payeeColumnResizeTargets[resizeIdx].sheet.autoResizeColumn(
+          payeeColumnResizeTargets[resizeIdx].col
+        );
+      } catch (resizeErr) {
+        Logger.log('updateTrackedBillFromDashboard Payee auto-resize: ' + resizeErr);
+      }
+    }
   }
 
   touchDashboardSourceUpdated_('bills');
@@ -924,6 +1103,9 @@ function updateTrackedBillFromDashboard(payload) {
     payee: payee,
     changedFields: changedFields
   };
+  } finally {
+    try { editLock.releaseLock(); } catch (_releaseEditLock) {}
+  }
 }
 
 /* -------------------------------------------------------------------------- */

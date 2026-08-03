@@ -87,7 +87,7 @@ function getHarnessSuites_() {
     {
       id: 'SUITE-BILLS-REGRESSION',
       label: 'Bills Regression Suite',
-      description: 'Every implemented Bills recurrence scenario (9 PURE engine cases + 2 workbook-integration cases). Run after any Bills-related logic change.',
+      description: 'Implemented Bills recurrence, exact Edit linkage/rollback, and AutoPay-format scenarios. Every writer runs in its own marker-verified disposable workbook.',
       scenarioIds: [
         // PURE — recurrence-engine math (each still gets its own disposable workbook).
         'REGRESSION-BILLS-MONTHLY',
@@ -101,7 +101,9 @@ function getHarnessSuites_() {
         'REGRESSION-BILLS-YEARLY',
         // INTEGRATION — visible, inspectable workbook artifacts.
         'REGRESSION-BILLS-MONTHLY-INTEGRATION',
-        'REGRESSION-BILLS-MONTHLY-CASHFLOW'
+        'REGRESSION-BILLS-MONTHLY-CASHFLOW',
+        'REGRESSION-BILLS-EDIT-INTEGRITY',
+        'REGRESSION-BILLS-AUTOPAY-FORMAT'
       ]
     },
     {
@@ -119,7 +121,9 @@ function getHarnessSuites_() {
       scenarioIds: [
         'REGRESSION-QUICK-ADD-WRITE-GUARD',
         'REGRESSION-DIRECT-QUICK-ADD-CORRECTION',
-        'REGRESSION-DONATION-CORRECTION'
+        'REGRESSION-DONATION-CORRECTION',
+        'REGRESSION-DONATION-COMMENTS-EDIT',
+        'REGRESSION-DONATION-FULL-EDIT'
       ]
     },
     {
@@ -147,6 +151,7 @@ function getHarnessSuites_() {
         'REGRESSION-QUICK-ADD-WRITE-GUARD',
         'REGRESSION-DIRECT-QUICK-ADD-CORRECTION',
         'REGRESSION-DONATION-CORRECTION',
+        'REGRESSION-DONATION-FULL-EDIT',
         'SMOKE-POPULATED-FIXTURE'
       ]
     },

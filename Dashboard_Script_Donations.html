@@ -2,6 +2,26 @@
 var DONATION_SELECT_OTHER = '__other__';
 var DONATION_PAYMENT_CHECK = 'Check';
 
+function setDonationsView(view) {
+  var target = view === 'manage' ? 'manage' : 'add';
+  var addSection = document.getElementById('donations_view_add');
+  var manageSection = document.getElementById('donations_view_manage');
+  var addBtn = document.getElementById('donations_view_tab_add');
+  var manageBtn = document.getElementById('donations_view_tab_manage');
+
+  if (addSection) addSection.style.display = target === 'add' ? '' : 'none';
+  if (manageSection) manageSection.style.display = target === 'manage' ? '' : 'none';
+  if (addBtn) {
+    addBtn.classList.toggle('active', target === 'add');
+    addBtn.setAttribute('aria-selected', target === 'add' ? 'true' : 'false');
+  }
+  if (manageBtn) {
+    manageBtn.classList.toggle('active', target === 'manage');
+    manageBtn.setAttribute('aria-selected', target === 'manage' ? 'true' : 'false');
+  }
+  window.__donationsActiveView = target;
+}
+
 function onDonationCharityChange() {
   const sel = document.getElementById('don_charitySelect');
   const wrap = document.getElementById('don_charityOther_wrap');
@@ -118,7 +138,10 @@ function loadDonationsSection() {
 
       var ts = document.getElementById('don_recent_updated');
       if (ts) ts.textContent = new Date().toLocaleString();
-      renderRecentDonations((data && data.recentDonations) || []);
+      window.__donationFormData = data || {};
+      var donationRows = (data && data.recentDonations) || [];
+      renderPreviousDonations_(donationRows);
+      renderRecentDonations(donationRows);
     })
     .withFailureHandler(function(err) {
       setStatus('donations_status', (err.message || String(err)), true);
@@ -126,27 +149,155 @@ function loadDonationsSection() {
     .getDonationsFormData();
 }
 
-function renderRecentDonations(rows) {
-  var root = document.getElementById('don_recentList');
+function renderPreviousDonations_(rows) {
+  var root = document.getElementById('don_previous_list');
   if (!root) return;
-  if (!rows || !rows.length) {
+  var recent = Array.isArray(rows) ? rows.slice(0, 8) : [];
+  if (!recent.length) {
     root.innerHTML = '<div class="muted">No donations logged yet.</div>';
     return;
   }
-  root.innerHTML = rows.map(function(r) {
-    var ty = r.taxYear != null && r.taxYear !== '' ? String(r.taxYear) : '';
+  root.innerHTML = recent.map(function(r) {
+    var ty = r.taxYear != null && r.taxYear !== '' ? ' · TY ' + String(r.taxYear) : '';
     return (
-      '<div class="donation-recent-item">' +
-        '<div><strong>' + escapeHtml(r.charity || '—') + '</strong>' +
-        (ty ? ' <span class="muted">TY ' + escapeHtml(ty) + '</span>' : '') +
-        ' <span class="muted donation-recent-date">' + escapeHtml(r.dateLabel || '') + '</span></div>' +
-        '<div class="donation-recent-meta">' + fmtCurrency(r.amount) +
-        (r.paymentType ? ' · <span class="muted">' + escapeHtml(r.paymentType) + '</span>' : '') +
-        (r.comments ? '<br><span class="muted">' + escapeHtml(r.comments) + '</span>' : '') +
-        '</div>' +
+      '<div class="donation-previous-item">' +
+        '<div><strong>' + escapeHtml(r.charity || '—') + '</strong></div>' +
+        '<div class="donation-previous-meta">' + fmtCurrency(r.amount) +
+          ' · ' + escapeHtml(r.dateLabel || '—') + escapeHtml(ty) + '</div>' +
+        (r.comments ? '<div class="muted donation-previous-comment">' + escapeHtml(r.comments) + '</div>' : '') +
       '</div>'
     );
   }).join('');
+}
+
+function renderRecentDonations(rows) {
+  var root = document.getElementById('don_manage_list');
+  if (!root) return;
+  window.__recentDonationRows = {};
+  if (!rows || !rows.length) {
+    root.innerHTML =
+      '<div class="donations-empty-state">' +
+        '<div class="muted" style="margin-bottom:10px;">No donations logged yet.</div>' +
+        '<button type="button" class="small-btn primary" onclick="setDonationsView(\'add\')">+ Add donation</button>' +
+      '</div>';
+    return;
+  }
+  var body = rows.map(function(r, index) {
+    var ty = r.taxYear != null && r.taxYear !== '' ? String(r.taxYear) : '';
+    var key = 'recent-donation-' + index;
+    window.__recentDonationRows[key] = r;
+    return (
+      '<tr id="' + escapeHtml(key) + '">' +
+        '<td><strong>' + escapeHtml(r.charity || '—') + '</strong></td>' +
+        '<td>' + escapeHtml(r.dateLabel || '—') + '</td>' +
+        '<td class="donations-manage-amount">' + fmtCurrency(r.amount) + '</td>' +
+        '<td>' + escapeHtml(ty || '—') + '</td>' +
+        '<td>' + escapeHtml(r.paymentType || '—') + '</td>' +
+        '<td class="donation-manage-comments">' +
+          (r.comments ? escapeHtml(r.comments) : '<span class="muted">—</span>') +
+        '</td>' +
+        '<td class="donation-recent-actions">' +
+          '<button type="button" class="small-btn" onclick="editManagedDonation_(\'' +
+            escapeJs(key) + '\')">Edit donation</button>' +
+        '</td>' +
+      '</tr>'
+    );
+  }).join('');
+  root.innerHTML =
+    '<div class="donations-manage-tablewrap">' +
+      '<table class="donations-manage-table">' +
+        '<thead><tr>' +
+          '<th>Charity</th><th>Date</th><th>Amount</th><th>Tax year</th>' +
+          '<th>Payment type</th><th>Comments</th><th>Action</th>' +
+        '</tr></thead>' +
+        '<tbody>' + body + '</tbody>' +
+      '</table>' +
+    '</div>';
+}
+
+function editManagedDonation_(key) {
+  var row = (window.__recentDonationRows || {})[key];
+  var item = document.getElementById(key);
+  if (!row || !item) {
+    setStatus('donations_status', 'Donation not found — please refresh.', true);
+    return;
+  }
+  var years = ((window.__donationFormData || {}).taxYears || []).slice();
+  if (years.indexOf(Number(row.taxYear)) === -1) years.push(Number(row.taxYear));
+  years.sort(function(a, b) { return Number(b) - Number(a); });
+  var yearOptions = years.map(function(year) {
+    var value = String(year);
+    return '<option value="' + escapeHtml(value) + '"' +
+      (Number(year) === Number(row.taxYear) ? ' selected' : '') + '>' +
+      escapeHtml(value) + '</option>';
+  }).join('');
+  item.innerHTML =
+    '<td colspan="7">' +
+      '<div class="donation-manage-editor">' +
+        '<div><label>Charity</label><input id="' + escapeHtml(key) + '-charity" maxlength="200" value="' + escapeHtml(row.charity || '') + '"></div>' +
+        '<div><label>Date</label><input type="date" id="' + escapeHtml(key) + '-date" value="' + escapeHtml(row.entryDate || '') + '"></div>' +
+        '<div><label>Amount</label><input type="text" inputmode="decimal" id="' + escapeHtml(key) + '-amount" value="' + escapeHtml(String(row.amount == null ? '' : row.amount)) + '"></div>' +
+        '<div><label>Tax year</label><select id="' + escapeHtml(key) + '-taxyear">' + yearOptions + '</select></div>' +
+        '<div><label>Payment type</label><input id="' + escapeHtml(key) + '-payment" maxlength="200" value="' + escapeHtml(row.paymentType || '') + '"></div>' +
+        '<div class="donation-manage-editor-comments"><label>Comments</label><input id="' + escapeHtml(key) + '-comments" maxlength="500" value="' + escapeHtml(row.comments || '') + '" placeholder="Optional comment"></div>' +
+      '</div>' +
+      '<div class="donation-manage-editor-actions">' +
+        '<button type="button" class="small-btn primary" onclick="saveManagedDonation_(\'' + escapeJs(key) + '\')">Save changes</button>' +
+        '<button type="button" class="small-btn" onclick="cancelManagedDonationEdit_()">Cancel</button>' +
+      '</div>' +
+    '</td>';
+  var input = document.getElementById(key + '-charity');
+  if (input) {
+    try { input.focus(); input.select(); } catch (_focusErr) {}
+  }
+}
+
+function cancelManagedDonationEdit_() {
+  var rowsByKey = window.__recentDonationRows || {};
+  var rows = Object.keys(rowsByKey).map(function(key) { return rowsByKey[key]; });
+  renderRecentDonations(rows);
+}
+
+function saveManagedDonation_(key) {
+  var row = (window.__recentDonationRows || {})[key];
+  var charity = document.getElementById(key + '-charity');
+  var date = document.getElementById(key + '-date');
+  var amount = document.getElementById(key + '-amount');
+  var taxYear = document.getElementById(key + '-taxyear');
+  var payment = document.getElementById(key + '-payment');
+  var comments = document.getElementById(key + '-comments');
+  if (!row || !charity || !date || !amount || !taxYear || !payment || !comments) {
+    setStatus('donations_status', 'Donation not found — please refresh.', true);
+    return;
+  }
+  var item = document.getElementById(key);
+  var buttons = item ? item.querySelectorAll('button') : [];
+  Array.prototype.forEach.call(buttons, function(button) { button.disabled = true; });
+  setStatus('donations_status', 'Saving donation changes…', false);
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('donations_status', (res && res.message) || 'Donation updated.', false);
+      loadDonationsSection();
+    })
+    .withFailureHandler(function(err) {
+      Array.prototype.forEach.call(buttons, function(button) { button.disabled = false; });
+      setStatus('donations_status', (err && err.message) || String(err), true);
+    })
+    .updateDonationFromDashboard({
+      sheetRow: row.sheetRow,
+      taxYear: row.taxYear,
+      charityName: row.charity,
+      entryDate: row.entryDate,
+      amount: row.amount,
+      paymentType: row.paymentType,
+      expectedComments: row.comments || '',
+      newCharityName: String(charity.value || '').trim(),
+      newDonationDate: String(date.value || '').trim(),
+      newAmount: String(amount.value || '').trim(),
+      newTaxYear: String(taxYear.value || '').trim(),
+      newPaymentType: String(payment.value || '').trim(),
+      newComments: String(comments.value || '').trim()
+    });
 }
 
 function saveDonation() {

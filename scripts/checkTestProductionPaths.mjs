@@ -19,6 +19,10 @@ const requiredProductionPaths = {
     'buildCashFlowYearSheet_', 'insertCashFlowRow_',
     'inspectQuickAddWriteInSpreadsheet_', 'restoreQuickAddPaymentWriteInSpreadsheet_'
   ],
+  'test_harness_scenarios_maintenance.js': [
+    'updateTrackedBillFromDashboard(', 'getInputBillsDueRows_(',
+    'updateRecentDonationComments(', 'updateDonationFromDashboard('
+  ],
   'test_harness_scenarios_performance.js': [
     'runDebtPlanner({ spreadsheet: ctx.ss'
   ],
@@ -87,6 +91,7 @@ const directWriteAllowlist = new Set([
   'test_harness_data.js',                 // deterministic fixture setup only
   'test_harness_scenarios_bills.js',      // explicit Bills fixtures for engine/schema cases
   'test_harness_scenarios_quick_add.js',  // deliberate late-edit state simulation
+  'test_harness_scenarios_maintenance.js', // deterministic Bill/Donation fixtures + forced audit rollback
   'test_harness_scenarios_house_financial_accuracy.js', // deliberate retired-schema fixture
   'test_harness_scenarios_financial_integrity.js' // deterministic Active/mirror discrepancy fixture
 ]);

@@ -1,0 +1,120 @@
+/* Bills Edit category-load coordinator.
+ *
+ * The base Bills bundle may open Add (which starts an async category request)
+ * and then open Edit before that request completes. Historically Edit issued a
+ * second request; whichever response arrived last rebuilt the select and could
+ * erase the edited bill's category, producing a false "Category is required."
+ *
+ * Keep one in-flight request and queue completion callbacks. Edit prefill is
+ * generation-guarded so only the most recently opened bill may select a value.
+ * This fragment intentionally loads after Dashboard_Script_BillsDue.
+ */
+(function() {
+  var state = {
+    loading: false,
+    loaded: false,
+    callbacks: [],
+    editGeneration: 0,
+    saveWaiting: false
+  };
+  var submitBillEditBase_ = submitBillEdit_;
+
+  function finish_(categories) {
+    var serverList = Array.isArray(categories) ? categories : [];
+    var fallback = Array.isArray(BILL_ADD_CATEGORY_FALLBACK_OPTIONS_)
+      ? BILL_ADD_CATEGORY_FALLBACK_OPTIONS_
+      : [];
+    populateBillCategoryOptions_(fallback.concat(serverList));
+    window.__billsCategoryOptionsLoaded = true;
+    state.loaded = true;
+    state.loading = false;
+    var callbacks = state.callbacks.slice();
+    state.callbacks = [];
+    callbacks.forEach(function(callback) {
+      try { callback(); } catch (_callbackErr) {}
+    });
+  }
+
+  function requestCategories_(callback) {
+    // Successful Add/Edit invalidates the public cache flag. Honor that
+    // contract even when this coordinator previously completed a request.
+    if (!window.__billsCategoryOptionsLoaded) state.loaded = false;
+    if (typeof callback === 'function') state.callbacks.push(callback);
+    if (state.loaded) {
+      var ready = state.callbacks.slice();
+      state.callbacks = [];
+      ready.forEach(function(fn) { fn(); });
+      return;
+    }
+    if (state.loading) return;
+    state.loading = true;
+    google.script.run
+      .withSuccessHandler(function(categories) {
+        finish_(categories);
+      })
+      .withFailureHandler(function() {
+        finish_(
+          Array.isArray(BILL_ADD_CATEGORY_FALLBACK_OPTIONS_)
+            ? BILL_ADD_CATEGORY_FALLBACK_OPTIONS_.slice()
+            : []
+        );
+      })
+      .getBillCategoriesFromDashboard();
+  }
+
+  loadBillCategoriesIntoForm_ = function() {
+    requestCategories_();
+  };
+
+  prefillBillCategoryForEdit_ = function(category) {
+    var target = String(category == null ? '' : category).trim();
+    var generation = ++state.editGeneration;
+    requestCategories_(function() {
+      if (generation !== state.editGeneration) return;
+      if (!__billsFormMode || __billsFormMode.mode !== 'edit') return;
+      var select = document.getElementById('bills_add_category');
+      var other = document.getElementById('bills_add_category_other');
+      if (!select) return;
+      var exactOption = Array.prototype.some.call(select.options, function(option) {
+        return option.value === target;
+      });
+      if (exactOption && target) {
+        select.value = target;
+        if (other) {
+          other.style.display = 'none';
+          other.value = '';
+        }
+      } else if (target) {
+        select.value = '__other__';
+        if (other) {
+          other.style.display = '';
+          other.value = target;
+        }
+      } else {
+        select.value = '';
+        if (other) {
+          other.style.display = 'none';
+          other.value = '';
+        }
+      }
+    });
+  };
+
+  submitBillEdit_ = function() {
+    if (state.loaded && window.__billsCategoryOptionsLoaded) {
+      submitBillEditBase_();
+      return;
+    }
+    if (state.saveWaiting) return;
+    state.saveWaiting = true;
+    if (typeof setStatusLoading === 'function') {
+      setStatusLoading('bills_due_status', 'Loading categories…');
+    }
+    requestCategories_(function() {
+      if (!state.saveWaiting) return;
+      state.saveWaiting = false;
+      if (!__billsFormMode || __billsFormMode.mode !== 'edit') return;
+      submitBillEditBase_();
+    });
+  };
+})();

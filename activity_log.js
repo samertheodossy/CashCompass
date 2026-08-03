@@ -1770,7 +1770,8 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
     if (houseType) return houseType;
     return 'House Expenses';
   }
-  if (etEarly === 'donation') return 'Donation';
+  if (etEarly === 'donation' || etEarly === 'donation_comment_update' ||
+      etEarly === 'donation_update') return 'Donation';
   if (etEarly.indexOf('upcoming_') === 0) return 'Upcoming';
   if (etEarly === 'bank_account_add') return 'Bank';
   if (etEarly === 'bank_account_update') return 'Bank';
@@ -1950,6 +1951,8 @@ function activityLogActionLabel_(eventType, detailsJson) {
     case 'upcoming_cashflow': return 'Pushed to cash flow';
     case 'quick_pay_correction': return quickPayCorrectionActionLabel_(detailsJson);
     case 'donation_correction': return quickPayCorrectionActionLabel_(detailsJson);
+    case 'donation_update': return 'Donation updated';
+    case 'donation_comment_update': return 'Donation comments updated';
     // Planner email lifecycle. All three are non-monetary (Amount = "—").
     //   planner_email_deferred — LEGACY. New per-save defers no longer
     //     write this row (a heavy month-start session was producing
@@ -2542,6 +2545,8 @@ function activityLogIsNonMonetaryEvent_(eventType) {
     et === 'upcoming_payment' ||
     et === 'quick_pay_correction' ||
     et === 'donation_correction' ||
+    et === 'donation_update' ||
+    et === 'donation_comment_update' ||
     // upcoming_update rows carry the new value inline in the action
     // label (see upcomingUpdateActionLabel_) so we render Amount as
     // "—" — otherwise a Due Date / Notes edit would appear as $0.00.
