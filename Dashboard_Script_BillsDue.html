@@ -41,6 +41,7 @@ var __billPayDrawerState = null;
 var __billPayDrawerBusy = false;
 var __billPayDrawerPreviousFocus = null;
 var __billPayDrawerKeyHandlerInstalled = false;
+var BILL_PAYMENT_HISTORY_WAIT_MS_ = 15000;
 
 function setBillPayDrawerStatus_(msg, isError, isSuccess) {
   setStatus('bill_pay_status', msg || '', !!isError);
@@ -162,6 +163,7 @@ function openBillPayDrawer_(bill, occurrencePaid) {
   var confirmation = document.getElementById('bill_pay_confirmation');
   var historyWrap = document.getElementById('bill_pay_history_wrap');
   var historyChart = document.getElementById('bill_pay_history_chart');
+  var historyStatus = document.getElementById('bill_pay_history_status');
   var amountInput = document.getElementById('bill_pay_amount');
   var dateInput = document.getElementById('bill_pay_date');
   if (submit) {
@@ -173,10 +175,18 @@ function openBillPayDrawer_(bill, occurrencePaid) {
     cancel.disabled = false;
     cancel.hidden = false;
   }
-  if (done) done.hidden = true;
+  if (done) {
+    done.hidden = true;
+    done.disabled = false;
+    done.textContent = 'Done';
+  }
   if (confirmation) confirmation.hidden = true;
   if (historyWrap) historyWrap.hidden = true;
   if (historyChart) historyChart.innerHTML = '';
+  if (historyStatus) {
+    historyStatus.hidden = true;
+    historyStatus.textContent = '';
+  }
   if (amountInput) amountInput.disabled = false;
   if (dateInput) dateInput.disabled = false;
   setBillPayDrawerStatus_('', false, false);
@@ -198,6 +208,10 @@ function openBillPayDrawer_(bill, occurrencePaid) {
 
 function closeBillPayDrawer() {
   if (__billPayDrawerBusy) return;
+  if (__billPayDrawerState && __billPayDrawerState.historyWaitTimer) {
+    try { clearTimeout(__billPayDrawerState.historyWaitTimer); } catch (_e) {}
+    __billPayDrawerState.historyWaitTimer = null;
+  }
   var backdrop = document.getElementById('bill_pay_drawer_backdrop');
   if (backdrop) backdrop.hidden = true;
   document.body.classList.remove('bill-pay-drawer-open');
@@ -278,9 +292,104 @@ function updateBillPaymentFollowup_(data) {
   }
 }
 
+function beginBillPaymentHistory_(state) {
+  if (!state || __billPayDrawerState !== state || !state.paymentRecorded) return false;
+
+  var wrap = document.getElementById('bill_pay_history_wrap');
+  var chart = document.getElementById('bill_pay_history_chart');
+  var status = document.getElementById('bill_pay_history_status');
+  var done = document.getElementById('bill_pay_done_btn');
+  state.historySettled = false;
+  state.historyTimedOut = false;
+  if (state.historyWaitTimer) {
+    try { clearTimeout(state.historyWaitTimer); } catch (_e) {}
+  }
+  if (wrap) wrap.hidden = false;
+  if (chart) chart.innerHTML = '';
+  if (status) {
+    status.hidden = false;
+    status.textContent = 'Loading payment history…';
+  }
+  if (done) {
+    done.hidden = false;
+    done.disabled = true;
+    done.textContent = 'Finishing…';
+  }
+  state.historyWaitTimer = setTimeout(function() {
+    finishBillPaymentHistory_(state, 'timeout');
+  }, BILL_PAYMENT_HISTORY_WAIT_MS_);
+  return true;
+}
+
+function finishBillPaymentHistory_(state, outcome, data) {
+  if (!state || __billPayDrawerState !== state || !state.paymentRecorded ||
+      state.historySettled) return false;
+
+  var timedOut = outcome === 'timeout';
+  if (timedOut) {
+    // Release the customer from a genuinely hung supplementary read, but do
+    // not discard a valid late response for this same still-open receipt.
+    state.historyTimedOut = true;
+    state.historyWaitTimer = null;
+  } else {
+    state.historySettled = true;
+    if (state.historyWaitTimer) {
+      try { clearTimeout(state.historyWaitTimer); } catch (_e) {}
+      state.historyWaitTimer = null;
+    }
+  }
+
+  var wrap = document.getElementById('bill_pay_history_wrap');
+  var chart = document.getElementById('bill_pay_history_chart');
+  var status = document.getElementById('bill_pay_history_status');
+  var done = document.getElementById('bill_pay_done_btn');
+  var rendered = outcome === 'success' &&
+    typeof renderPaymentHistoryChart_ === 'function';
+
+  if (rendered) {
+    try {
+      renderPaymentHistoryChart_(
+        'bill_pay_history_wrap',
+        'bill_pay_history_chart',
+        data || {}
+      );
+    } catch (_renderErr) {
+      rendered = false;
+    }
+  }
+  if (rendered && status) {
+    status.hidden = true;
+    status.textContent = '';
+  }
+  if (!rendered) {
+    if (wrap) wrap.hidden = false;
+    if (chart) chart.innerHTML = '';
+    if (status) {
+      status.hidden = false;
+      status.textContent = outcome === 'timeout'
+        ? 'Payment history is taking longer than expected. You can safely close this receipt.'
+        : 'Payment history is unavailable right now. Your payment is recorded.';
+    }
+  }
+
+  if (done) {
+    done.hidden = false;
+    done.disabled = false;
+    done.textContent = 'Done';
+    setTimeout(function() {
+      if (__billPayDrawerState !== state) return;
+      try { done.focus(); } catch (_e) {}
+    }, 0);
+  }
+  return true;
+}
+
 function loadBillPaymentHistory_(state) {
-  if (!state || !state.paymentRecorded ||
-      typeof runReadOnlyRpcWithRetry_ !== 'function') return;
+  if (!beginBillPaymentHistory_(state)) return;
+  if (typeof runReadOnlyRpcWithRetry_ !== 'function') {
+    finishBillPaymentHistory_(state, 'failure');
+    return;
+  }
 
   var targetState = state;
   var payload = {
@@ -288,7 +397,10 @@ function loadBillPaymentHistory_(state) {
     payee: String(state.payee || '').trim(),
     entryDate: String(state.paymentDate || state.entryDate || '').trim()
   };
-  if (!payload.payee || !/^\d{4}-\d{2}-\d{2}$/.test(payload.entryDate)) return;
+  if (!payload.payee || !/^\d{4}-\d{2}-\d{2}$/.test(payload.entryDate)) {
+    finishBillPaymentHistory_(targetState, 'failure');
+    return;
+  }
 
   runReadOnlyRpcWithRetry_({
     isCurrent: function() {
@@ -302,18 +414,14 @@ function loadBillPaymentHistory_(state) {
         .getQuickAddPreview(payload);
     },
     onSuccess: function(data) {
-      if (typeof renderPaymentHistoryChart_ === 'function') {
-        renderPaymentHistoryChart_(
-          'bill_pay_history_wrap',
-          'bill_pay_history_chart',
-          data || {}
-        );
-      }
+      finishBillPaymentHistory_(targetState, 'success', data || {});
     },
     // Payment is already complete. History is supplementary read-only detail,
     // so a transport failure must not turn the authoritative receipt into an
     // error or retry the payment writer.
-    onFailure: function(_err) {}
+    onFailure: function(_err) {
+      finishBillPaymentHistory_(targetState, 'failure');
+    }
   });
 }
 
@@ -348,17 +456,12 @@ function showBillPaymentConfirmation_(state, amount, res) {
   var confirmation = document.getElementById('bill_pay_confirmation');
   var submit = document.getElementById('bill_pay_submit_btn');
   var cancel = document.getElementById('bill_pay_cancel_btn');
-  var done = document.getElementById('bill_pay_done_btn');
   var amountInput = document.getElementById('bill_pay_amount');
   var dateInput = document.getElementById('bill_pay_date');
   if (confirmation) confirmation.hidden = false;
   loadBillPaymentHistory_(state);
   if (submit) submit.hidden = true;
   if (cancel) cancel.hidden = true;
-  if (done) {
-    done.hidden = false;
-    done.disabled = false;
-  }
   if (amountInput) amountInput.disabled = true;
   if (dateInput) dateInput.disabled = true;
   setBillPayDrawerStatus_('', false, false);
@@ -368,11 +471,6 @@ function showBillPaymentConfirmation_(state, amount, res) {
     false
   );
   refreshAfterBillPayment_();
-  if (done) {
-    setTimeout(function() {
-      try { done.focus(); } catch (_e) {}
-    }, 0);
-  }
 }
 
 function submitBillPayment() {

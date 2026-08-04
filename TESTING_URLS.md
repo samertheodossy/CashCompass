@@ -10,7 +10,7 @@ operator destinations.
 
 | Surface | URL | Account / purpose |
 | --- | --- | --- |
-| Personal bounded dashboard | https://script.google.com/macros/s/AKfycbzJH23F82XpbJpRVYgMzCxzEHtLTbjiIeEd2bpQ8bUflKnw1jjeO-LIjM1KjAgyTSnOVQ/exec | Owner-only daily workbook, currently version 552 and user-validated on 2026-08-03. Never use for Harness or destructive validation. |
+| Personal bounded dashboard | https://script.google.com/macros/s/AKfycbzSeG-MpuoxqM4FFdv5stdyoazZ0BTfva8lRTpJqPrlpcqR0LF-tTnCwN72CY5mqrYjRw/exec | Owner-only daily workbook, currently version 555 with user testing in progress on 2026-08-04. Never use for Harness or destructive validation. |
 | Central Beta | https://script.google.com/macros/s/AKfycbyq_OGiupdGO79GMOImkIgYv19hqlN1JuJfieuDlkXH6Rp637MhZc6jz9uRW2ZxANBlPA/exec | Family-beta deployment, currently pinned at version 106. Do not update during isolated validation. |
 | Isolated Central validation | https://script.google.com/macros/s/AKfycbzMaD3Ur0H3VmatL4W2vVHlYhFOXF4cZSSjIcn3SwggbTCs9Q9F1_PH74F16lAFkUlWZQ/exec | Disposable runtime-validation deployment, currently version 305. This is the only Central deployment updated during pre-release test work. |
 
@@ -34,7 +34,7 @@ expires.
 
 | Environment | Deployment ID | Rule |
 | --- | --- | --- |
-| Personal bounded production | AKfycbzJH23F82XpbJpRVYgMzCxzEHtLTbjiIeEd2bpQ8bUflKnw1jjeO-LIjM1KjAgyTSnOVQ | Current user-validated deployment at version 552. Update this existing deployment for future reviewed releases; never create another bounded production URL. |
+| Personal bounded production | AKfycbzSeG-MpuoxqM4FFdv5stdyoazZ0BTfva8lRTpJqPrlpcqR0LF-tTnCwN72CY5mqrYjRw | Current bounded deployment at version 555. Update this existing deployment for future reviewed releases; never create another bounded production URL. |
 | Central Beta | AKfycbyq_OGiupdGO79GMOImkIgYv19hqlN1JuJfieuDlkXH6Rp637MhZc6jz9uRW2ZxANBlPA | Keep pinned until an explicit Beta promotion decision. |
 | Isolated Central validation | AKfycbzMaD3Ur0H3VmatL4W2vVHlYhFOXF4cZSSjIcn3SwggbTCs9Q9F1_PH74F16lAFkUlWZQ | Safe target for approved isolated deployment updates. |
 
@@ -45,7 +45,8 @@ and Central HEAD + isolated + Beta. Any exception requires an explicit documente
 approval. If a deployment is intentionally replaced, update this registry,
 PROJECT_CONTEXT.md, and the deployment checklist in the same change.
 
-**Open deployment cleanup (2026-08-03):** bounded deployment
-`AKfycbxDrscovPbwivU8Bjudh1QOZPSrZGwFiuTiwPRVb4da8w7EqsgRVyslT98istFtE61Zzw`
-at version 551 is superseded but still reachable. Do not use or bookmark it.
-Removing it is a deployment mutation and requires separate explicit approval.
+**Deployment cleanup completed (2026-08-04):** after an obsolete `@551` URL
+remained capable of running the pre-Weekday-guard Weekly AutoPay path, the user
+approved retiring bounded deployments `@551`, `@552`, `@553`, and `@554`.
+Post-cleanup inventory was verified as exactly bounded `@HEAD` plus production
+`@555`. Old URLs must not be used or recreated.

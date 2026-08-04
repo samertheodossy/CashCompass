@@ -33,6 +33,46 @@ var ACTIVITY_LOG_DEDUPE_COL = 11;
  */
 var ACTIVITY_OPERATION_ENVELOPE_VERSION_ = 1;
 var ACTIVITY_TARGET_DESCRIPTOR_VERSION_ = 1;
+var ACTIVITY_WRITER_PROVENANCE_VERSION_ = 1;
+
+/**
+ * Capture the exact Apps Script web-app deployment behind an Activity write.
+ *
+ * Apps Script exposes the deployed service URL rather than its friendly
+ * numeric version label (for example, `@555`). The deployment ID in that URL
+ * is stable and maps back to the version through the deployment inventory.
+ * Non-web executions and unavailable/malformed service URLs remain explicit
+ * instead of being attributed to a guessed deployment.
+ */
+function activityWriterProvenance_() {
+  var provenance = {
+    provenanceVersion: ACTIVITY_WRITER_PROVENANCE_VERSION_,
+    source: 'unavailable',
+    deploymentId: '',
+    deploymentMode: ''
+  };
+  try {
+    if (typeof ScriptApp === 'undefined' || !ScriptApp.getService) {
+      return provenance;
+    }
+    var service = ScriptApp.getService();
+    if (!service || !service.getUrl) return provenance;
+    var serviceUrl = String(service.getUrl() || '').trim();
+    if (!serviceUrl) return provenance;
+
+    var match = serviceUrl.match(/\/s\/([^/?#]+)\/(exec|dev)(?:[/?#]|$)/i);
+    if (!match) {
+      provenance.source = 'unresolved_service_url';
+      return provenance;
+    }
+    provenance.source = 'web_app';
+    provenance.deploymentId = String(match[1] || '').trim();
+    provenance.deploymentMode = String(match[2] || '').toLowerCase();
+    return provenance;
+  } catch (_e) {
+    return provenance;
+  }
+}
 
 function activityOpaqueIdentity_(prefix, rawValue) {
   var value = String(rawValue || '').trim();
@@ -151,6 +191,7 @@ function buildActivityDetailsForAppend_(ss, payload) {
     correctable: supplied.correctable === true && targets.length > 0,
     targets: targets
   };
+  details.writerProvenance = activityWriterProvenance_();
   return details;
 }
 

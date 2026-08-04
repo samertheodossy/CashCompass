@@ -558,6 +558,15 @@ const nonDonationLogRow = [
 ];
 const activityServerContext = {
   Logger: { log() {} },
+  ScriptApp: {
+    getService() {
+      return {
+        getUrl() {
+          return 'https://script.google.com/macros/s/fixture-deployment-id/exec';
+        }
+      };
+    }
+  },
   Session: {
     getScriptTimeZone() { return 'America/Los_Angeles'; },
     getEffectiveUser() { return { getEmail() { return 'fixture@example.com'; } }; }
@@ -715,6 +724,40 @@ assert.notEqual(firstOperationDetails.operationEnvelope.eventId,
   'Every Activity event must receive its own event ID');
 assert.equal(firstOperationDetails.previousValue, -10,
   'Operation metadata must preserve existing event-specific Details fields');
+assert.deepEqual(
+  JSON.parse(JSON.stringify(firstOperationDetails.writerProvenance)),
+  {
+    provenanceVersion: 1,
+    source: 'web_app',
+    deploymentId: 'fixture-deployment-id',
+    deploymentMode: 'exec'
+  },
+  'Every new Activity row must retain the exact writer deployment ID in Details'
+);
+activityServerContext.ScriptApp.getService = () => ({
+  getUrl() { return 'https://script.google.com/macros/s/fixture-development-id/dev'; }
+});
+assert.equal(
+  activityServerContext.activityWriterProvenance_().deploymentMode,
+  'dev',
+  'Development-mode Activity writes must be distinguishable from production deployments'
+);
+activityServerContext.ScriptApp.getService = () => ({ getUrl() { return null; } });
+assert.deepEqual(
+  JSON.parse(JSON.stringify(activityServerContext.activityWriterProvenance_())),
+  {
+    provenanceVersion: 1,
+    source: 'unavailable',
+    deploymentId: '',
+    deploymentMode: ''
+  },
+  'Unavailable service identity must remain explicit instead of guessing a deployment'
+);
+assert.doesNotMatch(
+  files['Dashboard_Script_Activity.html'],
+  /writerProvenance|deploymentId|deploymentMode/,
+  'Writer deployment provenance must remain out of the CashCompass Activity display'
+);
 assert.equal(
   activityServerContext.parseActivityOperationEnvelope_(firstOperationDetails).status,
   'READY_FOR_PREVIEW',
@@ -1658,11 +1701,14 @@ assert.match(body,
   /id="bill_pay_confirmation"[^>]*hidden[\s\S]*?id="bill_pay_confirmation_month"[\s\S]*?id="bill_pay_confirmation_previous"[\s\S]*?id="bill_pay_confirmation_added"[\s\S]*?id="bill_pay_confirmation_total"[\s\S]*?id="bill_pay_done_btn"[\s\S]*?hidden>Done<\/button>/,
   'Bills Pay must retain the drawer for a reviewed month-total receipt before Done closes it');
 assert.match(body,
-  /id="bill_pay_history_wrap"[^>]*hidden[\s\S]*?Previous payments[\s\S]*?id="bill_pay_history_chart"[^>]*aria-label="Six-month bill payment history"/,
+  /id="bill_pay_history_wrap"[^>]*hidden[\s\S]*?Previous payments[\s\S]*?id="bill_pay_history_status"[\s\S]*?aria-live="polite"[\s\S]*?id="bill_pay_history_chart"[^>]*aria-label="Six-month bill payment history"/,
   'Bills Pay receipt must include the shared six-month payment-history chart');
 assert.match(body,
   /The amount entered here is recorded in Cash Flow\. Paying clears this bill occurrence even when the amount differs from the expected amount\./,
   'Bills Pay must explain changed-amount behavior before the user records it');
+assert.match(files['Dashboard_Help.html'],
+  /Done<\/strong> becomes available when that supplementary history settles, including if it safely times out/,
+  'Bills Help must explain the bounded receipt-finishing sequence');
 assert.match(styles,
   /\.bill-pay-drawer-backdrop\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?justify-content:\s*flex-end;/,
   'Bills Pay must preserve Bills context in a right-side overlay');
@@ -1672,6 +1718,9 @@ assert.match(styles,
 assert.match(styles,
   /\.bill-pay-history\s*\{[\s\S]*?margin-top:\s*18px;[\s\S]*?background:\s*#f8fbff;/,
   'Bills payment history must remain visually distinct below the receipt');
+assert.match(styles,
+  /\.quick-add-history-status\s*\{[\s\S]*?min-height:\s*132px;[\s\S]*?text-align:\s*center;/,
+  'Bills payment history must reserve chart space while its supplementary read settles');
 assert.match(styles,
   /@media \(max-width:\s*460px\)[\s\S]*?\.bill-pay-drawer\s*\{[\s\S]*?width:\s*100vw;/,
   'Bills Pay drawer must remain usable on a narrow screen');
@@ -1983,14 +2032,16 @@ assert.match(drawerConfirmationSlice,
   /loadBillPaymentHistory_\(state\)/,
   'Bills Pay receipt must load its post-payment history after the writer succeeds');
 assert.match(drawerConfirmationSlice,
-  /submit\.hidden\s*=\s*true[\s\S]*?cancel\.hidden\s*=\s*true[\s\S]*?done\.hidden\s*=\s*false/,
-  'A successful payment must wait for explicit Done instead of auto-dismissing the drawer');
+  /loadBillPaymentHistory_\(state\)[\s\S]*?submit\.hidden\s*=\s*true[\s\S]*?cancel\.hidden\s*=\s*true/,
+  'A successful payment must retain the receipt while supplementary history settles');
 assert.doesNotMatch(drawerConfirmationSlice, /closeBillPayDrawer\(/,
   'Bills Pay confirmation must not close itself before the customer reviews it');
-const billHistoryStart = billsDueClient.indexOf('function loadBillPaymentHistory_(');
-assert.ok(billHistoryStart >= 0 && billHistoryStart < drawerConfirmationStart,
+const billHistoryControllerStart = billsDueClient.indexOf('function beginBillPaymentHistory_(');
+const billHistoryStart = billsDueClient.indexOf('function loadBillPaymentHistory_(', billHistoryControllerStart);
+assert.ok(billHistoryControllerStart >= 0 && billHistoryStart > billHistoryControllerStart &&
+  billHistoryStart < drawerConfirmationStart,
   'Bills Pay must retain a dedicated read-only history loader');
-const billHistorySlice = billsDueClient.slice(billHistoryStart, drawerConfirmationStart);
+const billHistorySlice = billsDueClient.slice(billHistoryControllerStart, drawerConfirmationStart);
 assert.match(billHistorySlice,
   /entryType:\s*'Expense'[\s\S]*?state\.paymentDate\s*\|\|\s*state\.entryDate/,
   'Bills Pay history must use the actual submitted payment date');
@@ -2001,10 +2052,149 @@ assert.match(billHistorySlice,
   /__billPayDrawerState\s*===\s*targetState[\s\S]*?targetState\.paymentRecorded\s*===\s*true/,
   'A stale Bill Pay history response must not update a different drawer');
 assert.match(billHistorySlice,
-  /onSuccess:[\s\S]*?renderPaymentHistoryChart_\([\s\S]*?'bill_pay_history_wrap'[\s\S]*?'bill_pay_history_chart'[\s\S]*?data\s*\|\|\s*\{\}/,
+  /renderPaymentHistoryChart_\([\s\S]*?'bill_pay_history_wrap'[\s\S]*?'bill_pay_history_chart'[\s\S]*?data\s*\|\|\s*\{\}[\s\S]*?onSuccess:[\s\S]*?finishBillPaymentHistory_\(targetState, 'success', data\s*\|\|\s*\{\}\)/,
   'Bills Pay history must render the shared six-month payment chart');
 assert.doesNotMatch(billHistorySlice, /quickAddPayment|markDashboardBillOccurrencePaid/,
   'The supplementary Bill Pay history read must never repeat a payment write');
+assert.match(billsDueClient,
+  /BILL_PAYMENT_HISTORY_WAIT_MS_\s*=\s*15000/,
+  'Bills Pay history completion must reserve fifteen seconds for a normal Apps Script read');
+assert.match(billHistorySlice,
+  /done\.disabled\s*=\s*true[\s\S]*?done\.textContent\s*=\s*'Finishing…'[\s\S]*?finishBillPaymentHistory_\(state, 'timeout'\)/,
+  'Done must remain visibly disabled while payment history is still loading');
+assert.match(billHistorySlice,
+  /outcome === 'timeout'[\s\S]*?You can safely close this receipt[\s\S]*?done\.disabled\s*=\s*false[\s\S]*?done\.textContent\s*=\s*'Done'/,
+  'History timeout must explain the delay and release Done without changing payment success');
+
+function createBillHistoryControllerRegression_(options = {}) {
+  const elements = {
+    bill_pay_history_wrap: { hidden: true },
+    bill_pay_history_chart: { innerHTML: '' },
+    bill_pay_history_status: { hidden: true, textContent: '' },
+    bill_pay_done_btn: {
+      hidden: true,
+      disabled: false,
+      textContent: 'Done',
+      focusCount: 0,
+      focus() { this.focusCount += 1; }
+    }
+  };
+  const timers = [];
+  const cleared = new Set();
+  const retryCalls = [];
+  const renderCalls = [];
+  const controller = Function(
+    'document',
+    'setTimeout',
+    'clearTimeout',
+    'runReadOnlyRpcWithRetry_',
+    'renderPaymentHistoryChart_',
+    'google',
+    `var __billPayDrawerState = null;
+     var BILL_PAYMENT_HISTORY_WAIT_MS_ = 15000;
+     ${billHistorySlice}
+     return {
+       setState: function(state) { __billPayDrawerState = state; },
+       load: loadBillPaymentHistory_
+     };`
+  )(
+    { getElementById(id) { return elements[id] || null; } },
+    (fn, ms) => {
+      const timer = { id: timers.length + 1, fn, ms: Number(ms) || 0 };
+      timers.push(timer);
+      return timer.id;
+    },
+    (id) => { cleared.add(id); },
+    (options) => { retryCalls.push(options); },
+    (wrapId, chartId, data) => {
+      renderCalls.push({ wrapId, chartId, data });
+      if (options.throwOnRender) throw new Error('Controlled chart render failure');
+    },
+    { script: { run: {} } }
+  );
+  return { controller, elements, timers, cleared, retryCalls, renderCalls };
+}
+
+function billHistoryState_() {
+  return {
+    paymentRecorded: true,
+    payee: 'Toyota Financial Services',
+    paymentDate: '2026-08-08'
+  };
+}
+
+const billHistorySuccess = createBillHistoryControllerRegression_();
+const billHistorySuccessState = billHistoryState_();
+billHistorySuccess.controller.setState(billHistorySuccessState);
+billHistorySuccess.controller.load(billHistorySuccessState);
+assert.equal(billHistorySuccess.elements.bill_pay_done_btn.disabled, true,
+  'Done must start disabled while Bill payment history loads');
+assert.equal(billHistorySuccess.elements.bill_pay_done_btn.textContent, 'Finishing…',
+  'The disabled Bill payment action must explain that receipt finishing is in progress');
+assert.equal(billHistorySuccess.elements.bill_pay_history_status.textContent,
+  'Loading payment history…',
+  'The receipt must explain the supplementary history load');
+const billHistoryData = { history: [{ label: 'Aug', amount: 1901.75, hasValue: true }] };
+const billHistorySuccessWaitTimer = billHistorySuccess.timers.find((timer) => timer.ms === 15000);
+billHistorySuccess.retryCalls[0].onSuccess(billHistoryData);
+assert.equal(billHistorySuccess.renderCalls.length, 1,
+  'Successful Bill payment history must render exactly once');
+assert.equal(billHistorySuccess.elements.bill_pay_done_btn.disabled, false,
+  'Done must enable only after successful chart rendering settles');
+assert.equal(billHistorySuccess.elements.bill_pay_done_btn.textContent, 'Done');
+assert.ok(billHistorySuccess.cleared.has(billHistorySuccessWaitTimer.id),
+  'Successful history rendering must clear the bounded wait timer');
+
+const billHistoryRenderFailure = createBillHistoryControllerRegression_({ throwOnRender: true });
+const billHistoryRenderFailureState = billHistoryState_();
+billHistoryRenderFailure.controller.setState(billHistoryRenderFailureState);
+billHistoryRenderFailure.controller.load(billHistoryRenderFailureState);
+billHistoryRenderFailure.retryCalls[0].onSuccess(billHistoryData);
+assert.equal(billHistoryRenderFailure.elements.bill_pay_done_btn.disabled, false,
+  'A chart-render failure must never trap a recorded payment receipt');
+assert.match(billHistoryRenderFailure.elements.bill_pay_history_status.textContent,
+  /unavailable right now.*payment is recorded/i,
+  'Chart-render failure must fall back to authoritative receipt guidance');
+
+const billHistoryFailure = createBillHistoryControllerRegression_();
+const billHistoryFailureState = billHistoryState_();
+billHistoryFailure.controller.setState(billHistoryFailureState);
+billHistoryFailure.controller.load(billHistoryFailureState);
+billHistoryFailure.retryCalls[0].onFailure(new Error('Controlled history failure'));
+assert.equal(billHistoryFailure.elements.bill_pay_done_btn.disabled, false,
+  'A supplementary history failure must never trap a recorded payment receipt');
+assert.match(billHistoryFailure.elements.bill_pay_history_status.textContent,
+  /unavailable right now.*payment is recorded/i,
+  'History failure must preserve confidence in the recorded payment');
+
+const billHistoryTimeout = createBillHistoryControllerRegression_();
+const billHistoryTimeoutState = billHistoryState_();
+billHistoryTimeout.controller.setState(billHistoryTimeoutState);
+billHistoryTimeout.controller.load(billHistoryTimeoutState);
+const billHistoryWaitTimer = billHistoryTimeout.timers.find((timer) => timer.ms === 15000);
+assert.ok(billHistoryWaitTimer, 'Bill payment history must schedule its bounded wait');
+billHistoryWaitTimer.fn();
+assert.equal(billHistoryTimeout.elements.bill_pay_done_btn.disabled, false,
+  'History timeout must release Done');
+assert.match(billHistoryTimeout.elements.bill_pay_history_status.textContent,
+  /taking longer than expected.*safely close/i,
+  'History timeout must provide safe, nonblocking guidance');
+billHistoryTimeout.retryCalls[0].onSuccess(billHistoryData);
+assert.equal(billHistoryTimeout.renderCalls.length, 1,
+  'A valid response arriving after timeout must still render in the same open receipt');
+assert.equal(billHistoryTimeout.elements.bill_pay_history_status.hidden, true,
+  'A late valid chart must replace the timeout guidance');
+
+const billHistoryStale = createBillHistoryControllerRegression_();
+const staleHistoryState = billHistoryState_();
+billHistoryStale.controller.setState(staleHistoryState);
+billHistoryStale.controller.load(staleHistoryState);
+billHistoryStale.controller.setState(billHistoryState_());
+billHistoryStale.retryCalls[0].onSuccess(billHistoryData);
+assert.equal(billHistoryStale.renderCalls.length, 0,
+  'A stale history response must not render into a different Bill Pay drawer');
+assert.equal(billHistoryStale.elements.bill_pay_done_btn.disabled, true,
+  'A stale response must not release controls belonging to a different drawer state');
 assert.match(drawerSaveSlice, /state\.paymentDate\s*=\s*entryDate/,
   'Bills Pay must retain the submitted date for its post-payment history request');
 assert.match(billsDueClient,

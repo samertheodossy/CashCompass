@@ -1051,6 +1051,49 @@ Whenever a production bug is fixed:
   opens a stored `800` editor, verifies `$800.00`, focus to `800`, and blur back
   to `$800.00`, while also pinning the shared handler wiring.
 
+### REG-051 — Bill Pay showed Done before its history chart finished
+- Category: REGRESSION / UI RELIABILITY / ASYNC RECEIPT / CUSTOMER CONFIDENCE
+- Date discovered: 2026-08-03
+- Status: fixed locally; focused dynamic regression passed; runtime visual
+  confirmation pending
+- Root cause: after the authoritative payment write and occurrence-clear
+  confirmation succeeded, the drawer launched its supplementary read-only
+  payment-history request but immediately enabled and focused `Done`. The
+  footer therefore presented a completed state while the chart was still
+  loading.
+- Expected result: the successful payment receipt remains authoritative while
+  the chart area says `Loading payment history…` and the visible footer is a
+  disabled `Finishing…`. A successful history response renders the chart before
+  enabling `Done`. Failure or a fifteen-second last-resort timeout presents calm
+  nonblocking guidance and enables `Done`. A valid late response may still
+  replace that timeout guidance with the chart in the same open receipt, while
+  a stale response from another drawer remains ignored. None of these
+  supplementary paths retries or changes the completed payment.
+- Permanent coverage: `scripts/checkDashboardUxRegressions.mjs` dynamically
+  verifies loading, success, read failure, chart-render failure, bounded timeout,
+  late chart recovery, and stale-drawer behavior, plus the accessible live
+  status and reserved chart layout.
+
+### REG-052 — Activity writes could not identify their Apps Script deployment
+- Category: REGRESSION / AUDIT DIAGNOSTICS / DEPLOYMENT TRACEABILITY
+- Date discovered: 2026-08-04
+- Status: fixed locally; focused and full local regressions passed; runtime log
+  confirmation pending
+- Root cause: `LOG - Activity` preserved event, operation, actor, and workbook
+  identity but not the Apps Script web-app deployment that served the writer.
+  Diagnosing the invalid M1 `8/1` AutoPay therefore required pulling and
+  comparing every active deployment version.
+- Expected result: every newly appended Activity Details JSON receives a
+  versioned `writerProvenance` object. It contains the exact deployment ID and
+  `exec`/`dev` mode parsed from the Apps Script service URL when available;
+  unavailable or unrecognized contexts remain explicit and never guess a
+  deployment. Existing Details fields, Activity columns, historical rows, and
+  the customer-facing CashCompass Activity display remain unchanged.
+- Permanent coverage: `npm run test:dashboard-ux` dynamically verifies exact
+  production deployment parsing, development-mode distinction, safe unavailable
+  fallback, preservation of event-specific Details, and deliberate absence of
+  writer provenance from the CashCompass Activity client.
+
 ---
 
 ## 3a loading-state consistency coverage
@@ -1173,4 +1216,6 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-048 | Weekly AutoPay ignored Weekday and posted Due Day 1 | REGRESSION / FINANCIAL INTEGRITY / DEPLOYMENT COMPATIBILITY | fixed/pushed; bounded user validation passed; disposable runtime scenarios pending |
 | REG-049 | Manage Donations rejected repair of a blank Payment type | REGRESSION / UI RELIABILITY / LEGACY DATA REPAIR / STABLE ROW | fixed locally; focused source regression passed; extended disposable runtime scenario pending |
 | REG-050 | Manage Donations displayed a raw edit amount | REGRESSION / UI CONSISTENCY / CURRENCY PRESENTATION | fixed locally; focused source regression passed; runtime visual confirmation pending |
+| REG-051 | Bill Pay showed Done before its history chart finished | REGRESSION / UI RELIABILITY / ASYNC RECEIPT / CUSTOMER CONFIDENCE | fixed locally; focused dynamic regression passed; runtime visual confirmation pending |
+| REG-052 | Activity writes could not identify their Apps Script deployment | REGRESSION / AUDIT DIAGNOSTICS / DEPLOYMENT TRACEABILITY | fixed locally; focused/full local regressions passed; runtime log confirmation pending |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |
