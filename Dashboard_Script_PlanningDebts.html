@@ -1054,6 +1054,7 @@ function isDebtNameRelatedError_(msg) {
 function filterDebtAccounts() {
   const filterType = document.getElementById('debt_typeFilter').value || 'All';
   const sel = document.getElementById('debt_account');
+  sel.dataset.loadState = 'ready';
   sel.innerHTML = '<option value=""></option>';
   sel.disabled = false;
 
@@ -1072,6 +1073,7 @@ function filterDebtAccounts() {
 
 function updateDebtUpdateAvailability_() {
   const sel = document.getElementById('debt_account');
+  const loadState = String(sel && sel.dataset && sel.dataset.loadState || 'ready');
   const hasSelection = !!(sel && String(sel.value || '').trim());
   const hasLoadedSelection = hasSelection && debtUpdateDetailsReady_;
   const hasDebts = !!(sel && sel.options && sel.options.length > 1);
@@ -1079,11 +1081,15 @@ function updateDebtUpdateAvailability_() {
   const hint = document.getElementById('debt_update_empty_hint');
   if (saveBtn) saveBtn.disabled = !hasLoadedSelection;
   if (hint) {
-    hint.textContent = hasSelection
-      ? 'Loading debt details…'
-      : (hasDebts
-        ? 'Select a debt account to update it.'
-        : 'Add your first debt account to start tracking balances and payments.');
+    hint.textContent = loadState === 'loading'
+      ? 'Loading debt accounts…'
+      : (loadState === 'error'
+        ? 'Couldn’t load debt accounts.'
+        : (hasSelection
+          ? 'Loading debt details…'
+          : (hasDebts
+            ? 'Select a debt account to update it.'
+            : 'Add your first debt account to start tracking balances and payments.')));
     hint.style.display = hasLoadedSelection ? 'none' : '';
   }
 }

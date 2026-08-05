@@ -1711,6 +1711,7 @@ function setStatusLoading(id, label) {
 function setSelectLoading(id, label) {
   const sel = document.getElementById(id);
   if (!sel) return;
+  sel.dataset.loadState = 'loading';
   sel.innerHTML = '';
   const opt = document.createElement('option');
   opt.value = '';
@@ -1723,6 +1724,8 @@ function setSelectLoading(id, label) {
 
 function setSelectLoadFailure(id, label) {
   setSelectLoading(id, label || 'Couldn’t load options');
+  const sel = document.getElementById(id);
+  if (sel) sel.dataset.loadState = 'error';
 }
 
 function escapeJs(value) {

@@ -2877,6 +2877,9 @@ assert.match(styles,
 assert.match(render,
   /function setSelectLoading\([\s\S]*?opt\.disabled = true[\s\S]*?sel\.disabled = true[\s\S]*?function setSelectLoadFailure/,
   'Async pickers must share a disabled loading and failure presentation');
+assert.match(render,
+  /function setSelectLoading\([\s\S]*?sel\.dataset\.loadState = 'loading'[\s\S]*?function setSelectLoadFailure\([\s\S]*?sel\.dataset\.loadState = 'error'/,
+  'Async pickers must distinguish unresolved loading from an authoritative empty result');
 for (const [name, source, id, loading, failure] of [
   ['House', files['Dashboard_Script_AssetsHouseValues.html'], 'house_house', 'Loading houses…', 'Couldn’t load houses'],
   ['Bank', files['Dashboard_Script_AssetsBankInvestments.html'], 'bank_account', 'Loading bank accounts…', 'Couldn’t load bank accounts'],
@@ -2889,6 +2892,25 @@ for (const [name, source, id, loading, failure] of [
     `${name} picker must identify its loading state`);
   assert.ok(source.includes(`setSelectLoadFailure('${id}', '${failure}')`),
     `${name} picker must remain disabled with a contextual failure option`);
+}
+for (const [name, source, readyFunction, availabilityFunction, loading, empty] of [
+  ['House', files['Dashboard_Script_AssetsHouseValues.html'], 'fillHouseDropdownFromData_',
+    'updateHouseUpdateAvailability_', 'Loading houses…', 'Add your first house'],
+  ['Bank', files['Dashboard_Script_AssetsBankInvestments.html'], 'fillBankAccountDropdownFromData_',
+    'updateBankUpdateAvailability_', 'Loading bank accounts…', 'Add your first bank account'],
+  ['Investment', files['Dashboard_Script_AssetsBankInvestments.html'], 'fillInvestmentAccountDropdownFromData_',
+    'updateInvestmentUpdateAvailability_', 'Loading investment accounts…', 'Add your first investment account'],
+  ['Debt', files['Dashboard_Script_PlanningDebts.html'], 'filterDebtAccounts',
+    'updateDebtUpdateAvailability_', 'Loading debt accounts…', 'Add your first debt account']
+]) {
+  assert.ok(functionSource_(source, readyFunction).includes("dataset.loadState = 'ready'"),
+    `${name} picker must mark successful data as authoritative before evaluating emptiness`);
+  const availability = functionSource_(source, availabilityFunction);
+  assert.ok(availability.includes("loadState === 'loading'") &&
+    availability.indexOf(loading) < availability.indexOf(empty),
+  `${name} Update guidance must show loading before considering the first-item empty state`);
+  assert.ok(availability.includes("loadState === 'error'"),
+    `${name} Update guidance must not present a load failure as an empty workbook`);
 }
 assert.match(files['Dashboard_Script_CashFlowUpcoming.html'],
   /ov_upcoming_next7[\s\S]*?ov_upcoming_next30[\s\S]*?Loading upcoming expenses…/,
@@ -2943,6 +2965,7 @@ const selectContext = vm.createContext({
 selectElements.picker = {
   innerHTML: 'stale',
   disabled: false,
+  dataset: {},
   options: [],
   appendChild(option) { this.options.push(option); }
 };
@@ -2953,11 +2976,15 @@ vm.runInContext(
 selectContext.setSelectLoading('picker', 'Loading choices…');
 assert.equal(selectElements.picker.disabled, true,
   'A loading picker must be disabled immediately');
+assert.equal(selectElements.picker.dataset.loadState, 'loading',
+  'A loading picker must remain unresolved rather than appearing authoritatively empty');
 assert.equal(selectElements.picker.options[0].textContent, 'Loading choices…',
   'A loading picker must explain what is loading');
 selectContext.setSelectLoadFailure('picker', 'Couldn’t load choices');
 assert.equal(selectElements.picker.disabled, true,
   'A failed picker must remain disabled');
+assert.equal(selectElements.picker.dataset.loadState, 'error',
+  'A failed picker must remain distinct from a successful empty result');
 assert.equal(selectElements.picker.options.at(-1).textContent, 'Couldn’t load choices',
   'A failed picker must replace loading copy with a terminal failure state');
 
@@ -3157,6 +3184,7 @@ assert.deepEqual([purchaseElements.ps_guidance.hidden, purchaseElements.ps_resul
 function trackedEditorSelect_() {
   return {
     disabled: true,
+    dataset: {},
     options: [],
     set innerHTML(_value) { this.options = []; },
     appendChild(option) { this.options.push(option); }

@@ -7,6 +7,7 @@ function fillBankAccountDropdownFromData_(data) {
   const sel = document.getElementById('bank_account');
   if (!sel) return;
   bankUpdateDetailsReady_ = false;
+  sel.dataset.loadState = 'ready';
   sel.innerHTML = '<option value=""></option>';
   sel.disabled = false;
   (data.accounts || []).forEach(function(a) {
@@ -29,6 +30,7 @@ function fillBankAccountDropdownFromData_(data) {
 
 function updateBankUpdateAvailability_() {
   const sel = document.getElementById('bank_account');
+  const loadState = String(sel && sel.dataset && sel.dataset.loadState || 'ready');
   const hasSelection = !!(sel && String(sel.value || '').trim());
   const hasLoadedSelection = hasSelection && bankUpdateDetailsReady_;
   const hasAccounts = !!(sel && sel.options && sel.options.length > 1);
@@ -36,11 +38,15 @@ function updateBankUpdateAvailability_() {
   const hint = document.getElementById('bank_update_empty_hint');
   if (saveBtn) saveBtn.disabled = !hasLoadedSelection;
   if (hint) {
-    hint.textContent = hasSelection
-      ? 'Loading account details…'
-      : (hasAccounts
-        ? 'Select a bank account to update it.'
-        : 'Add your first bank account to start tracking balances.');
+    hint.textContent = loadState === 'loading'
+      ? 'Loading bank accounts…'
+      : (loadState === 'error'
+        ? 'Couldn’t load bank accounts.'
+        : (hasSelection
+          ? 'Loading account details…'
+          : (hasAccounts
+            ? 'Select a bank account to update it.'
+            : 'Add your first bank account to start tracking balances.')));
     hint.style.display = hasLoadedSelection ? 'none' : '';
   }
 }
@@ -793,6 +799,7 @@ function saveBank() {
 function fillInvestmentAccountDropdownFromData_(data) {
   const sel = document.getElementById('inv_account');
   if (!sel) return;
+  sel.dataset.loadState = 'ready';
   sel.innerHTML = '<option value=""></option>';
   sel.disabled = false;
   (data.accounts || []).forEach(function(a) {
@@ -812,15 +819,20 @@ function fillInvestmentAccountDropdownFromData_(data) {
 
 function updateInvestmentUpdateAvailability_() {
   const sel = document.getElementById('inv_account');
+  const loadState = String(sel && sel.dataset && sel.dataset.loadState || 'ready');
   const hasSelection = !!(sel && String(sel.value || '').trim());
   const hasAccounts = !!(sel && sel.options && sel.options.length > 1);
   const saveBtn = document.getElementById('inv_update_save_btn');
   const hint = document.getElementById('inv_update_empty_hint');
   if (saveBtn) saveBtn.disabled = !hasSelection;
   if (hint) {
-    hint.textContent = hasAccounts
-      ? 'Select an investment account to update it.'
-      : 'Add your first investment account to start tracking values.';
+    hint.textContent = loadState === 'loading'
+      ? 'Loading investment accounts…'
+      : (loadState === 'error'
+        ? 'Couldn’t load investment accounts.'
+        : (hasAccounts
+          ? 'Select an investment account to update it.'
+          : 'Add your first investment account to start tracking values.'));
     hint.style.display = hasSelection ? 'none' : '';
   }
 }

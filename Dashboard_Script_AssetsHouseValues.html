@@ -10,6 +10,7 @@ var houseCreateInFlight_ = false;
 function fillHouseDropdownFromData_(data) {
   const sel = document.getElementById('house_house');
   if (!sel) return;
+  sel.dataset.loadState = 'ready';
   sel.innerHTML = '<option value=""></option>';
   sel.disabled = false;
   (data.houses || []).forEach(function(h) {
@@ -37,15 +38,20 @@ function fillHouseDropdownFromData_(data) {
 
 function updateHouseUpdateAvailability_() {
   const sel = document.getElementById('house_house');
+  const loadState = String(sel && sel.dataset && sel.dataset.loadState || 'ready');
   const hasSelection = !!(sel && String(sel.value || '').trim());
   const hasHouses = !!(sel && sel.options && sel.options.length > 1);
   const saveBtn = document.getElementById('house_update_save_btn');
   const hint = document.getElementById('house_update_empty_hint');
   if (saveBtn) saveBtn.disabled = !hasSelection;
   if (hint) {
-    hint.textContent = hasHouses
-      ? 'Select a house to update its value.'
-      : 'Add your first house to start tracking values.';
+    hint.textContent = loadState === 'loading'
+      ? 'Loading houses…'
+      : (loadState === 'error'
+        ? 'Couldn’t load houses.'
+        : (hasHouses
+          ? 'Select a house to update its value.'
+          : 'Add your first house to start tracking values.'));
     hint.style.display = hasSelection ? 'none' : '';
   }
 }
