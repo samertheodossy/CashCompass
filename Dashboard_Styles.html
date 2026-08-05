@@ -1558,6 +1558,73 @@
   .mini-card-value { font-size: 18px; font-weight: bold; color: #0f172a; }
   .currency-negative { color: #b91c1c !important; }
 
+  .property-performance-overview {
+    display: grid;
+    grid-template-columns: minmax(210px, 1fr) minmax(0, 3fr);
+    gap: 18px;
+    align-items: start;
+  }
+  .property-performance-controls-wrap { min-width: 0; }
+  .property-performance-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: end;
+  }
+  .property-performance-year label { margin-top: 0; }
+  .property-performance-year select { margin: 6px 0 0; }
+  .property-performance-refresh {
+    width: auto;
+    min-width: 88px;
+    margin: 0;
+    padding: 10px 14px;
+  }
+  .property-performance-kpis {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    min-width: 0;
+  }
+  .property-performance-kpi {
+    display: flex;
+    min-width: 0;
+    min-height: 94px;
+    padding: 15px;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .property-performance-kpi-title {
+    min-height: 32px;
+    margin-bottom: 7px;
+    color: #526173;
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.25;
+  }
+  .property-performance-kpi-value {
+    overflow: hidden;
+    font-size: clamp(18px, 1.25vw, 22px);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .property-performance-kpi--net {
+    border: 2px solid #bfdbfe;
+    background: #eff6ff;
+  }
+  .property-performance-kpi--net.is-positive {
+    border-color: #86efac;
+    background: #f0fdf4;
+  }
+  .property-performance-kpi--net.is-positive .property-performance-kpi-value {
+    color: #166534;
+  }
+  .property-performance-kpi--net.is-negative {
+    border-color: #fecaca;
+    background: #fef2f2;
+  }
+
   .upcoming-list { display: grid; gap: 10px; }
   .upcoming-item { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; background: #ffffff; }
   .upcoming-item.bucket-overdue { border-color: #fca5a5; background: #fff1f2; }
@@ -2511,6 +2578,10 @@
     .planning-next-actions-feature .tab-btn { min-height: 52px; padding: 10px 12px; }
     .planning-next-actions-feature .featured-title { font-size: 15px; }
     .grid-2, .grid-3, .health-row, .mini-grid, .sim-grid { grid-template-columns: 1fr; }
+    .property-performance-overview { grid-template-columns: 1fr; }
+    .property-performance-controls-wrap { max-width: 360px; }
+    .property-performance-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .property-performance-kpi--net { grid-column: span 2; }
     .topbar { flex-direction: column; }
     .bills-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 340px)); }
     .onboarding-steps-grid { grid-template-columns: 1fr !important; }
@@ -2538,6 +2609,7 @@
     .planning-tool-group--explore .planning-tools {
       grid-template-columns: 1fr;
     }
+    .property-performance-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 
   @media (max-width: 460px) {
@@ -2559,6 +2631,10 @@
       width: 100%;
       gap: 8px;
     }
+    .property-performance-controls { grid-template-columns: 1fr; }
+    .property-performance-refresh { width: 100%; }
+    .property-performance-kpis { grid-template-columns: 1fr; }
+    .property-performance-kpi--net { grid-column: span 1; }
     .top-actions-buttons .btn-help-prominent,
     .top-actions-buttons .btn-setup-topbar {
       width: 100%;

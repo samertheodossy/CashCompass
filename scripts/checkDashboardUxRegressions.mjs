@@ -2437,6 +2437,24 @@ assert.match(propertyPerformance, /classList\.toggle\(['"]currency-negative['"],
   'Property Performance summary cards must mark negative values');
 assert.match(propertyPerformance, /return Number\(value\) < 0 \? ' class="currency-negative"' : '';/,
   'Property Performance rows must mark negative values');
+assert.match(body,
+  /class="property-performance-overview"[\s\S]*?class="property-performance-controls"[\s\S]*?id="pp_year"[\s\S]*?class="property-performance-refresh"[\s\S]*?class="property-performance-kpis"/,
+  'Property Performance must keep compact Year and Refresh controls beside the KPI area');
+assert.match(styles,
+  /\.property-performance-overview\s*\{[\s\S]*?grid-template-columns:\s*minmax\(210px, 1fr\) minmax\(0, 3fr\);/,
+  'Property Performance controls must occupy one quarter of the wide layout');
+assert.match(styles,
+  /\.property-performance-kpis\s*\{[\s\S]*?grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\);/,
+  'Property Performance must give all five portfolio KPIs a clean full summary row');
+assert.match(styles,
+  /\.property-performance-kpi--net\.is-negative\s*\{[\s\S]*?background:\s*#fef2f2;/,
+  'Negative Net cash flow must receive a distinct but calm summary treatment');
+assert.match(propertyPerformance,
+  /id === 'pp_port_net_cash_flow'[\s\S]*?card\.classList\.toggle\('is-negative', Number\(v\) < 0\)[\s\S]*?card\.classList\.toggle\('is-positive', Number\(v\) > 0\)/,
+  'Net cash flow styling must reflect its loaded financial sign');
+assert.match(styles,
+  /@media \(max-width:\s*1180px\)[\s\S]*?\.property-performance-overview\s*\{\s*grid-template-columns:\s*1fr;\s*\}[\s\S]*?\.property-performance-kpis\s*\{\s*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);\s*\}/,
+  'Property Performance controls and KPIs must reflow cleanly below wide desktop');
 
 const onboardingClient = files['Dashboard_Script_Onboarding.html'];
 assert.doesNotMatch(onboardingClient, /step\.sheetName/, 'Setup cards must not render internal sheet names');

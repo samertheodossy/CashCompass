@@ -1094,6 +1094,26 @@ Whenever a production bug is fixed:
   fallback, preservation of event-specific Details, and deliberate absence of
   writer provenance from the CashCompass Activity client.
 
+### REG-053 — Property Performance controls crowded financial summaries
+- Category: REGRESSION / UI HIERARCHY / RESPONSIVE LAYOUT / FINANCIAL CLARITY
+- Date discovered: 2026-08-04
+- Status: fixed locally; focused and full local regressions passed; runtime
+  visual confirmation pending
+- Root cause: the Year selector and Refresh action consumed half of the desktop
+  content width while five portfolio KPIs were confined to the other half. KPI
+  labels wrapped heavily, values were visually compressed, and the final Net
+  cash flow outcome lacked sufficient hierarchy.
+- Expected result: wide layouts reserve one quarter of the row for compact
+  inline Year/Refresh controls and three quarters for five equal KPI cards.
+  Financial values use larger tabular figures, shorter labels, and an emphasized
+  Net cash flow card whose treatment follows its sign. Intermediate layouts
+  stack the controls above a three-column KPI grid with a wider Net result;
+  tablet and phone layouts reflow to two and one columns. Property calculations,
+  loading behavior, and the detail table remain unchanged.
+- Permanent coverage: `npm run test:dashboard-ux` pins the 25/75 desktop grid,
+  five-card summary row, sign-aware Net cash flow treatment, compact control
+  structure, and responsive reflow rules.
+
 ---
 
 ## 3a loading-state consistency coverage
@@ -1218,4 +1238,5 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-050 | Manage Donations displayed a raw edit amount | REGRESSION / UI CONSISTENCY / CURRENCY PRESENTATION | fixed locally; focused source regression passed; runtime visual confirmation pending |
 | REG-051 | Bill Pay showed Done before its history chart finished | REGRESSION / UI RELIABILITY / ASYNC RECEIPT / CUSTOMER CONFIDENCE | fixed locally; focused dynamic regression passed; runtime visual confirmation pending |
 | REG-052 | Activity writes could not identify their Apps Script deployment | REGRESSION / AUDIT DIAGNOSTICS / DEPLOYMENT TRACEABILITY | fixed locally; focused/full local regressions passed; runtime log confirmation pending |
+| REG-053 | Property Performance controls crowded financial summaries | REGRESSION / UI HIERARCHY / RESPONSIVE LAYOUT / FINANCIAL CLARITY | fixed locally; focused/full local regressions passed; runtime visual confirmation pending |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

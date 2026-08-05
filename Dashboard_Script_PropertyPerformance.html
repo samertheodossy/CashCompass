@@ -46,6 +46,13 @@ function loadPropertyPerformanceSection() {
         if (!el) return;
         el.textContent = fmtCurrency(v);
         el.classList.toggle('currency-negative', Number(v) < 0);
+        if (id === 'pp_port_net_cash_flow') {
+          const card = document.getElementById('pp_net_cash_flow_card');
+          if (card) {
+            card.classList.toggle('is-negative', Number(v) < 0);
+            card.classList.toggle('is-positive', Number(v) > 0);
+          }
+        }
       };
       setMini('pp_port_equity', p.equity);
       setMini('pp_port_rent', p.rent);

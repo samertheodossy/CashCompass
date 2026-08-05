@@ -1592,34 +1592,38 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <div class="updated">Houses + rental income + operating expenses + linked loan payments</div>
       </div>
 
-      <div class="grid-2">
-        <div>
-          <label>Year</label>
-          <select id="pp_year" onchange="loadPropertyPerformanceSection()"></select>
-          <button type="button" onclick="loadPropertyPerformanceSection()">Refresh</button>
+      <div class="property-performance-overview">
+        <div class="property-performance-controls-wrap">
+          <div class="property-performance-controls">
+            <div class="property-performance-year">
+              <label for="pp_year">Year</label>
+              <select id="pp_year" onchange="loadPropertyPerformanceSection()"></select>
+            </div>
+            <button class="property-performance-refresh" type="button" onclick="loadPropertyPerformanceSection()">Refresh</button>
+          </div>
           <div id="pp_status" class="status"></div>
           <div id="pp_message" class="muted" style="margin-top:8px;"></div>
         </div>
-        <div class="mini-grid">
-          <div class="mini-card">
-            <div class="mini-card-title">Portfolio equity</div>
-            <div class="mini-card-value" id="pp_port_equity">—</div>
+        <div class="property-performance-kpis">
+          <div class="mini-card property-performance-kpi">
+            <div class="mini-card-title property-performance-kpi-title">Portfolio equity</div>
+            <div class="mini-card-value property-performance-kpi-value" id="pp_port_equity">—</div>
           </div>
-          <div class="mini-card">
-            <div class="mini-card-title">Rent (year)</div>
-            <div class="mini-card-value" id="pp_port_rent">—</div>
+          <div class="mini-card property-performance-kpi">
+            <div class="mini-card-title property-performance-kpi-title">Rent</div>
+            <div class="mini-card-value property-performance-kpi-value" id="pp_port_rent">—</div>
           </div>
-          <div class="mini-card">
-            <div class="mini-card-title">Operating expenses (year)</div>
-            <div class="mini-card-value" id="pp_port_exp">—</div>
+          <div class="mini-card property-performance-kpi">
+            <div class="mini-card-title property-performance-kpi-title">Operating expenses</div>
+            <div class="mini-card-value property-performance-kpi-value" id="pp_port_exp">—</div>
           </div>
-          <div class="mini-card">
-            <div class="mini-card-title">Loan payments (year)</div>
-            <div class="mini-card-value" id="pp_port_loan_payments">—</div>
+          <div class="mini-card property-performance-kpi">
+            <div class="mini-card-title property-performance-kpi-title">Loan payments</div>
+            <div class="mini-card-value property-performance-kpi-value" id="pp_port_loan_payments">—</div>
           </div>
-          <div class="mini-card">
-            <div class="mini-card-title">Net cash flow</div>
-            <div class="mini-card-value" id="pp_port_net_cash_flow">—</div>
+          <div id="pp_net_cash_flow_card" class="mini-card property-performance-kpi property-performance-kpi--net">
+            <div class="mini-card-title property-performance-kpi-title">Net cash flow</div>
+            <div class="mini-card-value property-performance-kpi-value" id="pp_port_net_cash_flow">—</div>
           </div>
         </div>
       </div>
