@@ -13,19 +13,10 @@ function writeRecommendations_(ss, summary, performanceTrace) {
   const existingFilter = sheet.getFilter();
   if (existingFilter) existingFilter.remove();
 
-  // Previously we tore down every Dashboard chart here and rebuilt all
-  // six below on every planner run. `insertChart` is slow in Apps Script
-  // web-app contexts (often seconds per chart), so that made
-  // Run Planner Now unnecessarily long. The per-chart builders below
-  // now keep an existing chart in place when its bound range + title
-  // still match the desired chart — charts auto-repaint from the fresh
-  // setValues we write into their ranges, so no rebuild is needed when
-  // the range shape hasn't changed. When the range shape DID change
-  // (e.g. a new history row appended, new active credit cards), the
-  // specific stale chart is removed and re-inserted inside its builder.
-  // We intentionally no longer call removeAllCharts_(sheet) here so
-  // (a) the fast path skips all chart work, and (b) any chart the user
-  // manually added to the Dashboard sheet is preserved.
+  // The generated Dashboard remains a tabular planner output. Its former six
+  // embedded charts and O:Z support tables were not consumed by CashCompass;
+  // retire only those known chart objects after rebuilding the table. Unknown
+  // customer-added charts remain untouched.
 
   const rows = [];
 
@@ -183,7 +174,7 @@ function writeRecommendations_(ss, summary, performanceTrace) {
   if (typeof markPerformanceTrace_ === 'function') {
     markPerformanceTrace_(performanceTrace, 'format_dashboard');
   }
-  writeDashboardChartDataAndBuildCharts_(ss, sheet, summary);
+  retireDashboardCharts_(sheet);
   if (typeof markPerformanceTrace_ === 'function') {
     markPerformanceTrace_(performanceTrace, 'build_dashboard_charts');
   }
@@ -196,482 +187,49 @@ function removeAllCharts_(sheet) {
   });
 }
 
-function writeDashboardChartDataAndBuildCharts_(ss, dashboardSheet, summary) {
-  const historySheet = ensureHistorySheet_(ss);
-
-  const startCol = 15; // O
-  const maxRows = dashboardSheet.getMaxRows();
-  const maxCols = dashboardSheet.getMaxColumns();
-
-  if (maxCols < startCol + 12) {
-    dashboardSheet.insertColumnsAfter(maxCols, (startCol + 12) - maxCols);
-  }
-
-  dashboardSheet.getRange(1, startCol, maxRows, 12).clearContent();
-
-  writeDashboardTrendTable_(historySheet, dashboardSheet, startCol);
-  writeDashboardSnapshotTables_(dashboardSheet, summary, startCol + 5);
-
-  const anchorRow = dashboardSheet.getLastRow() + 3;
-
-  buildDashboardNetWorthChart_(dashboardSheet, startCol, anchorRow);
-  buildDashboardCashFlowChart_(dashboardSheet, startCol + 3, anchorRow + 18);
-  buildDashboardAssetsVsLiabilitiesChart_(dashboardSheet, startCol + 5, anchorRow);
-  buildDashboardAssetAllocationChart_(dashboardSheet, startCol + 5, anchorRow + 18);
-  buildDashboardLiabilityBreakdownChart_(dashboardSheet, startCol + 5, anchorRow + 36);
-  buildDashboardCreditCardPaydownChart_(dashboardSheet, startCol + 5, anchorRow + 54);
-}
-
-function writeDashboardTrendTable_(historySheet, dashboardSheet, startCol) {
-  const values = historySheet.getDataRange().getValues();
-  if (values.length < 2) return;
-
-  const headers = values[0];
-  const runDateIdx = headers.indexOf('Run Date');
-  const netWorthIdx = headers.indexOf('Net Worth');
-  const cashFlowIdx = headers.indexOf('Projected Cash Flow');
-  const prevCashFlowIdx = headers.indexOf('Previous Month Cash Flow');
-
-  const out1 = [['Run Label', 'Net Worth']];
-  const out2 = [['Run Label', 'Projected Cash Flow', 'Previous Month Cash Flow']];
-
-  for (let r = 1; r < values.length; r++) {
-    const label = buildRunLabel_(values[r][runDateIdx], r);
-    out1.push([label, toNumber_(values[r][netWorthIdx])]);
-    out2.push([
-      label,
-      toNumber_(values[r][cashFlowIdx]),
-      toNumber_(values[r][prevCashFlowIdx])
-    ]);
-  }
-
-  dashboardSheet.getRange(1, startCol, out1.length, 2).setValues(out1);
-  dashboardSheet.getRange(1, startCol + 3, out2.length, 3).setValues(out2);
-  dashboardSheet.getRange(1, startCol, out1.length, 1).setNumberFormat('@STRING@');
-  dashboardSheet.getRange(1, startCol + 3, out2.length, 1).setNumberFormat('@STRING@');
-}
-
-function writeDashboardSnapshotTables_(dashboardSheet, summary, startCol) {
-  const assetVsLiability = [
-    ['Metric', 'Value'],
-    ['Total Assets', summary.totalAssets],
-    ['Total Liabilities', summary.liabilitySummary.totalLiabilities],
-    ['Net Worth', summary.netWorth]
-  ];
-  dashboardSheet.getRange(1, startCol, assetVsLiability.length, 2).setValues(assetVsLiability);
-
-  const assetAllocation = [
-    ['Asset Type', 'Value'],
-    ['Brokerage Assets', summary.assetSummary.brokerage],
-    ['Retirement Assets', summary.assetSummary.retirement],
-    ['Education Assets', summary.assetSummary.education],
-    ['Real Estate Assets', summary.houseAssetSummary.totalRealEstateValue]
-  ];
-  dashboardSheet.getRange(8, startCol, assetAllocation.length, 2).setValues(assetAllocation);
-
-  const liabilityBreakdown = [
-    ['Liability Type', 'Value'],
-    ['Credit Card Debt', summary.liabilitySummary.creditCards],
-    ['Loan Debt', summary.liabilitySummary.loans],
-    ['HELOC Debt', summary.liabilitySummary.heloc],
-    ['Other Obligations', summary.liabilitySummary.other]
-  ];
-  dashboardSheet.getRange(15, startCol, liabilityBreakdown.length, 2).setValues(liabilityBreakdown);
-
-  const creditCardRows = [['Account', 'Balance']];
-  summary.topDebtTargets
-    .filter(function(d) { return d.type === 'Credit Card'; })
-    .forEach(function(d) {
-      creditCardRows.push([d.name, d.balance]);
-    });
-
-  if (creditCardRows.length === 1) {
-    creditCardRows.push(['No Active Cards', 0]);
-  }
-
-  dashboardSheet.getRange(22, startCol, creditCardRows.length, 2).setValues(creditCardRows);
-}
-
-// --------------------------------------------------------------------------
-// Dashboard chart reuse helpers
-//
-// The six Dashboard chart builders below used to call insertChart() on
-// every planner run. insertChart() is slow in Apps Script web-app
-// contexts, so repeat runs paid that cost unnecessarily. We now key
-// existing charts by their configured title (each of the six has a
-// distinct, stable title) and compare their first bound range to the
-// range we would build fresh. When both match, the existing chart is
-// left in place — Apps Script auto-repaints it from the fresh
-// setValues() we write into its range, so values stay current without
-// any insertChart cost. When they differ (e.g. a new history row
-// extended the NetWorth/CashFlow range, or active-card count changed
-// for the Credit Card chart), the specific stale chart is removed and
-// a replacement is inserted.
-//
-// Only Dashboard charts use these helpers. History-sheet charts are legacy
-// output and are no longer rebuilt by the planner; see appendHistory_().
-// --------------------------------------------------------------------------
-
-function findDashboardChartByTitle_(sheet, title) {
-  const target = String(title || '');
-  if (!target) return null;
-  const charts = sheet.getCharts();
-  for (let i = 0; i < charts.length; i++) {
-    let existingTitle = '';
-    try {
-      const opts = charts[i].getOptions();
-      existingTitle = opts ? String(opts.get('title') || '') : '';
-    } catch (_e) {
-      // Older charts may not expose options; treat as "no match" and
-      // fall through to rebuild rather than silently keep a wrong chart.
-    }
-    if (existingTitle === target) return charts[i];
-  }
-  return null;
-}
-
-function getDashboardChartFirstRangeA1_(chart) {
-  try {
-    const ranges = chart.getRanges();
-    if (!ranges || !ranges.length) return '';
-    return ranges[0].getA1Notation();
-  } catch (_e) {
-    return '';
-  }
-}
-
-function dashboardChartAlreadyMatches_(sheet, title, desiredRangeA1) {
-  const existing = findDashboardChartByTitle_(sheet, title);
-  if (!existing) return false;
-  return getDashboardChartFirstRangeA1_(existing) === desiredRangeA1;
-}
-
-function removeDashboardChartByTitle_(sheet, title) {
-  const existing = findDashboardChartByTitle_(sheet, title);
-  if (existing) sheet.removeChart(existing);
-}
-
-function buildDashboardNetWorthChart_(sheet, startCol, posRow) {
-  const numRows = findLastNonEmptyRowInRange_(sheet, 1, startCol, 500);
-  const range = sheet.getRange(1, startCol, Math.max(2, numRows), 2);
-  const title = 'Net Worth by Run';
-  if (dashboardChartAlreadyMatches_(sheet, title, range.getA1Notation())) return;
-  removeDashboardChartByTitle_(sheet, title);
-  const chart = sheet.newChart()
-    .setChartType(Charts.ChartType.LINE)
-    .addRange(range)
-    .setOption('title', title)
-    .setOption('legend', { position: 'bottom' })
-    .setOption('useFirstColumnAsDomain', true)
-    .setOption('curveType', 'function')
-    .setPosition(posRow, 1, 0, 0)
-    .build();
-  sheet.insertChart(chart);
-}
-
-function buildDashboardCashFlowChart_(sheet, startCol, posRow) {
-  const numRows = findLastNonEmptyRowInRange_(sheet, 1, startCol, 500);
-  const range = sheet.getRange(1, startCol, Math.max(2, numRows), 3);
-  const title = 'Cash Flow by Run (Blue=Projected, Red=Previous Month)';
-  if (dashboardChartAlreadyMatches_(sheet, title, range.getA1Notation())) return;
-  removeDashboardChartByTitle_(sheet, title);
-  const chart = sheet.newChart()
-    .setChartType(Charts.ChartType.LINE)
-    .addRange(range)
-    .setOption('title', title)
-    .setOption('legend', { position: 'bottom' })
-    .setOption('useFirstColumnAsDomain', true)
-    .setOption('curveType', 'function')
-    .setPosition(posRow, 1, 0, 0)
-    .build();
-  sheet.insertChart(chart);
-}
-
-function buildDashboardAssetsVsLiabilitiesChart_(sheet, startCol, posRow) {
-  const range = sheet.getRange(1, startCol, 4, 2);
-  const title = 'Assets vs Liabilities vs Net Worth';
-  if (dashboardChartAlreadyMatches_(sheet, title, range.getA1Notation())) return;
-  removeDashboardChartByTitle_(sheet, title);
-  const chart = sheet.newChart()
-    .setChartType(Charts.ChartType.COLUMN)
-    .addRange(range)
-    .setOption('title', title)
-    .setOption('legend', { position: 'none' })
-    .setPosition(posRow, 8, 0, 0)
-    .build();
-  sheet.insertChart(chart);
-}
-
-function buildDashboardAssetAllocationChart_(sheet, startCol, posRow) {
-  const range = sheet.getRange(8, startCol, 5, 2);
-  const title = 'Asset Allocation';
-  if (dashboardChartAlreadyMatches_(sheet, title, range.getA1Notation())) return;
-  removeDashboardChartByTitle_(sheet, title);
-  const chart = sheet.newChart()
-    .setChartType(Charts.ChartType.PIE)
-    .addRange(range)
-    .setOption('title', title)
-    .setOption('legend', { position: 'right' })
-    .setPosition(posRow, 8, 0, 0)
-    .build();
-  sheet.insertChart(chart);
-}
-
-function buildDashboardLiabilityBreakdownChart_(sheet, startCol, posRow) {
-  const range = sheet.getRange(15, startCol, 5, 2);
-  const title = 'Liability Breakdown';
-  if (dashboardChartAlreadyMatches_(sheet, title, range.getA1Notation())) return;
-  removeDashboardChartByTitle_(sheet, title);
-  const chart = sheet.newChart()
-    .setChartType(Charts.ChartType.PIE)
-    .addRange(range)
-    .setOption('title', title)
-    .setOption('legend', { position: 'right' })
-    .setPosition(posRow, 8, 0, 0)
-    .build();
-  sheet.insertChart(chart);
-}
-
-function buildDashboardCreditCardPaydownChart_(sheet, startCol, posRow) {
-  const lastRow = findLastNonEmptyRowInRange_(sheet, 22, startCol, 50);
-  const numRows = Math.max(2, lastRow - 22 + 1);
-  const range = sheet.getRange(22, startCol, numRows, 2);
-  const title = 'Credit Card Balances';
-  if (dashboardChartAlreadyMatches_(sheet, title, range.getA1Notation())) return;
-  removeDashboardChartByTitle_(sheet, title);
-  const chart = sheet.newChart()
-    .setChartType(Charts.ChartType.BAR)
-    .addRange(range)
-    .setOption('title', title)
-    .setOption('legend', { position: 'none' })
-    .setPosition(posRow, 8, 0, 0)
-    .build();
-  sheet.insertChart(chart);
-}
-
 /**
- * @deprecated Rollback-only during the History-chart removal release window.
- * Normal planner runs intentionally do not call this function. OUT - History
- * rows remain the source for dashboard comparisons; only its sheet charts are
- * retired.
+ * Retire only the six charts historically owned by the planner. Unknown charts
+ * are preserved because a customer may have added them manually. The planner's
+ * leading clearContents() already clears the obsolete O:Z chart-support tables.
  */
-function buildHistoryCharts_(ss) {
-  const historySheet = ensureHistorySheet_(ss);
-  removeAllCharts_(historySheet);
-
-  const values = historySheet.getDataRange().getValues();
-  if (values.length < 2) return;
-
-  const maxCols = historySheet.getMaxColumns();
-  const startCol = 25; // Y
-  if (maxCols < startCol + 30) {
-    historySheet.insertColumnsAfter(maxCols, (startCol + 30) - maxCols);
-  }
-
-  const maxRows = historySheet.getMaxRows();
-  historySheet.getRange(1, startCol, maxRows, 30).clearContent();
-
-  writeHistoryChartTables_(historySheet, startCol);
-
-  const anchorRow = historySheet.getLastRow() + 3;
-
-  buildHistoryNetWorthChart_(historySheet, startCol, anchorRow);
-  buildHistoryCashFlowChart_(historySheet, startCol + 5, anchorRow + 18);
-  buildHistoryAssetsLiabilitiesChart_(historySheet, startCol + 10, anchorRow + 36);
-  buildHistoryDebtTrendChart_(historySheet, startCol + 15, anchorRow + 54);
-  buildHistoryPayNowTrendChart_(historySheet, startCol + 19, anchorRow + 72);
-  buildHistoryMonthsToPayoffChart_(historySheet, startCol + 23, anchorRow + 90);
-}
-
-function writeHistoryChartTables_(historySheet, startCol) {
-  const values = historySheet.getDataRange().getValues();
-  const headers = values[0];
-
-  const runDateIdx = headers.indexOf('Run Date');
-  const netWorthIdx = headers.indexOf('Net Worth');
-  const projectedCashFlowIdx = headers.indexOf('Projected Cash Flow');
-  const prevCashFlowIdx = headers.indexOf('Previous Month Cash Flow');
-  const totalAssetsIdx = headers.indexOf('Total Assets');
-  const totalLiabilitiesIdx = headers.indexOf('Total Liabilities');
-  const totalCardDebtIdx = headers.indexOf('Total Active Credit Card Debt');
-  const totalMinimumsIdx = headers.indexOf('Total Minimum Payments');
-  const suggestedExtraIdx = headers.indexOf('Suggested Extra Payment');
-  const recommendedNowIdx = headers.indexOf('Recommended Total To Pay Now');
-  const monthsTargetIdx = headers.indexOf('Estimated Months To Pay Off Target');
-  const monthsAllIdx = headers.indexOf('Estimated Months To Pay Off All Cards');
-
-  const trend1 = [['Run Label', 'Net Worth']];
-  const trend2 = [['Run Label', 'Projected Cash Flow', 'Previous Month Cash Flow']];
-  const trend3 = [['Run Label', 'Total Assets', 'Total Liabilities', 'Net Worth']];
-  const trend4 = [['Run Label', 'Total Active Credit Card Debt', 'Total Minimum Payments']];
-  const trend5 = [['Run Label', 'Suggested Extra Payment', 'Recommended Total To Pay Now']];
-  const trend6 = [['Run Label', 'Months To Pay Off Target', 'Months To Pay Off All Cards']];
-
-  for (let r = 1; r < values.length; r++) {
-    const label = buildRunLabel_(values[r][runDateIdx], r);
-
-    trend1.push([label, toNumber_(values[r][netWorthIdx])]);
-
-    trend2.push([
-      label,
-      toNumber_(values[r][projectedCashFlowIdx]),
-      toNumber_(values[r][prevCashFlowIdx])
-    ]);
-
-    trend3.push([
-      label,
-      toNumber_(values[r][totalAssetsIdx]),
-      toNumber_(values[r][totalLiabilitiesIdx]),
-      toNumber_(values[r][netWorthIdx])
-    ]);
-
-    trend4.push([
-      label,
-      toNumber_(values[r][totalCardDebtIdx]),
-      toNumber_(values[r][totalMinimumsIdx])
-    ]);
-
-    trend5.push([
-      label,
-      toNumber_(values[r][suggestedExtraIdx]),
-      toNumber_(values[r][recommendedNowIdx])
-    ]);
-
-    trend6.push([
-      label,
-      toNumber_(values[r][monthsTargetIdx]),
-      toNumber_(values[r][monthsAllIdx])
-    ]);
-  }
-
-  historySheet.getRange(1, startCol, trend1.length, 2).setValues(trend1);
-  historySheet.getRange(1, startCol + 5, trend2.length, 3).setValues(trend2);
-  historySheet.getRange(1, startCol + 10, trend3.length, 4).setValues(trend3);
-  historySheet.getRange(1, startCol + 15, trend4.length, 3).setValues(trend4);
-  historySheet.getRange(1, startCol + 19, trend5.length, 3).setValues(trend5);
-  historySheet.getRange(1, startCol + 23, trend6.length, 3).setValues(trend6);
-
-  historySheet.getRange(1, startCol, trend1.length, 1).setNumberFormat('@STRING@');
-  historySheet.getRange(1, startCol + 5, trend2.length, 1).setNumberFormat('@STRING@');
-  historySheet.getRange(1, startCol + 10, trend3.length, 1).setNumberFormat('@STRING@');
-  historySheet.getRange(1, startCol + 15, trend4.length, 1).setNumberFormat('@STRING@');
-  historySheet.getRange(1, startCol + 19, trend5.length, 1).setNumberFormat('@STRING@');
-  historySheet.getRange(1, startCol + 23, trend6.length, 1).setNumberFormat('@STRING@');
-}
-
-function buildHistoryNetWorthChart_(sheet, startCol, posRow) {
-  const rows = findLastNonEmptyRowInRange_(sheet, 1, startCol, 500);
-  const chart = sheet.newChart()
-    .setChartType(Charts.ChartType.LINE)
-    .addRange(sheet.getRange(1, startCol, Math.max(2, rows), 2))
-    .setOption('title', 'Net Worth by Run')
-    .setOption('legend', { position: 'bottom' })
-    .setOption('useFirstColumnAsDomain', true)
-    .setOption('curveType', 'function')
-    .setPosition(posRow, 1, 0, 0)
-    .build();
-  sheet.insertChart(chart);
-}
-
-function buildHistoryCashFlowChart_(sheet, startCol, posRow) {
-  const rows = findLastNonEmptyRowInRange_(sheet, 1, startCol, 500);
-  const chart = sheet.newChart()
-    .setChartType(Charts.ChartType.LINE)
-    .addRange(sheet.getRange(1, startCol, Math.max(2, rows), 3))
-    .setOption('title', 'Cash Flow by Run (Blue=Projected, Red=Previous Month)')
-    .setOption('legend', { position: 'bottom' })
-    .setOption('useFirstColumnAsDomain', true)
-    .setOption('curveType', 'function')
-    .setPosition(posRow, 1, 0, 0)
-    .build();
-  sheet.insertChart(chart);
-}
-
-function buildHistoryAssetsLiabilitiesChart_(sheet, startCol, posRow) {
-  const rows = findLastNonEmptyRowInRange_(sheet, 1, startCol, 500);
-  const chart = sheet.newChart()
-    .setChartType(Charts.ChartType.LINE)
-    .addRange(sheet.getRange(1, startCol, Math.max(2, rows), 4))
-    .setOption('title', 'Assets vs Liabilities vs Net Worth (Blue=Assets, Red=Liabilities, Yellow=Net Worth)')
-    .setOption('legend', { position: 'bottom' })
-    .setOption('useFirstColumnAsDomain', true)
-    .setOption('curveType', 'function')
-    .setPosition(posRow, 1, 0, 0)
-    .build();
-  sheet.insertChart(chart);
-}
-
-function buildHistoryDebtTrendChart_(sheet, startCol, posRow) {
-  const rows = findLastNonEmptyRowInRange_(sheet, 1, startCol, 500);
-  const chart = sheet.newChart()
-    .setChartType(Charts.ChartType.LINE)
-    .addRange(sheet.getRange(1, startCol, Math.max(2, rows), 3))
-    .setOption('title', 'Debt Trend (Blue=Card Debt, Red=Minimum Payments)')
-    .setOption('legend', { position: 'bottom' })
-    .setOption('useFirstColumnAsDomain', true)
-    .setOption('curveType', 'function')
-    .setPosition(posRow, 1, 0, 0)
-    .build();
-  sheet.insertChart(chart);
-}
-
-function buildHistoryPayNowTrendChart_(sheet, startCol, posRow) {
-  const rows = findLastNonEmptyRowInRange_(sheet, 1, startCol, 500);
-  const chart = sheet.newChart()
-    .setChartType(Charts.ChartType.LINE)
-    .addRange(sheet.getRange(1, startCol, Math.max(2, rows), 3))
-    .setOption('title', 'Recommended Pay Now vs Suggested Extra (Blue=Extra, Red=Pay Now)')
-    .setOption('legend', { position: 'bottom' })
-    .setOption('useFirstColumnAsDomain', true)
-    .setOption('curveType', 'function')
-    .setPosition(posRow, 1, 0, 0)
-    .build();
-  sheet.insertChart(chart);
-}
-
-function buildHistoryMonthsToPayoffChart_(sheet, startCol, posRow) {
-  const rows = findLastNonEmptyRowInRange_(sheet, 1, startCol, 500);
-  const chart = sheet.newChart()
-    .setChartType(Charts.ChartType.LINE)
-    .addRange(sheet.getRange(1, startCol, Math.max(2, rows), 3))
-    .setOption('title', 'Months to Payoff (Blue=Target, Red=All Cards)')
-    .setOption('legend', { position: 'bottom' })
-    .setOption('useFirstColumnAsDomain', true)
-    .setOption('curveType', 'function')
-    .setPosition(posRow, 1, 0, 0)
-    .build();
-  sheet.insertChart(chart);
-}
-
-function buildRunLabel_(runDateValue, rowNumber) {
-  if (runDateValue instanceof Date && !isNaN(runDateValue.getTime())) {
-    return Utilities.formatDate(
-      runDateValue,
-      Session.getScriptTimeZone(),
-      'MM/dd HH:mm'
-    );
-  }
-
-  const text = String(runDateValue || '').trim();
-  if (!text) return 'Run ' + rowNumber;
-
-  const m = text.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/);
-  if (m) {
-    return m[2] + '/' + m[3] + ' ' + m[4] + ':' + m[5];
-  }
-
-  return text;
-}
-
-function findLastNonEmptyRowInRange_(sheet, startRow, col, maxRowsToCheck) {
-  const values = sheet.getRange(startRow, col, maxRowsToCheck, 1).getValues();
-  let last = startRow;
-  for (let i = 0; i < values.length; i++) {
-    if (String(values[i][0] || '').trim() !== '') {
-      last = startRow + i;
+function retireDashboardCharts_(sheet) {
+  const retiredTitles = {
+    'Net Worth by Run': true,
+    'Cash Flow by Run (Blue=Projected, Red=Previous Month)': true,
+    'Assets vs Liabilities vs Net Worth': true,
+    'Asset Allocation': true,
+    'Liability Breakdown': true,
+    'Credit Card Balances': true
+  };
+  const charts = sheet.getCharts();
+  charts.forEach(function(chart) {
+    let title = '';
+    try {
+      const options = chart.getOptions();
+      title = options ? String(options.get('title') || '') : '';
+    } catch (_e) {
+      // Preserve charts whose metadata cannot be read; they cannot be safely
+      // identified as planner-owned.
     }
+    if (retiredTitles[title]) sheet.removeChart(chart);
+  });
+}
+
+/** Remove retired History charts and only their recognized Y:BB support area. */
+function retireHistoryChartsAndSupportData_(sheet) {
+  removeAllCharts_(sheet);
+
+  const startCol = 25; // Y
+  const availableCols = sheet.getMaxColumns() - startCol + 1;
+  if (availableCols <= 0) return;
+  const width = Math.min(30, availableCols);
+  const headers = sheet.getRange(1, startCol, 1, width).getDisplayValues()[0];
+  const hasLegacySupportTable = headers.some(function(value) {
+    return String(value || '').trim() === 'Run Label';
+  });
+  if (hasLegacySupportTable) {
+    sheet.getRange(1, startCol, sheet.getMaxRows(), width).clearContent();
   }
-  return last;
 }
 
 function formatRecommendationsSheet_(sheet, rows) {
@@ -975,7 +533,7 @@ function appendHistory_(ss, summary, performanceTrace, canonicalSnapshot) {
   // are not displayed anywhere in the product. Remove legacy copies and do not
   // rebuild them. On later runs getCharts() returns an empty array, leaving only
   // a small cleanup check instead of repeated chart insertion work.
-  removeAllCharts_(sheet);
+  retireHistoryChartsAndSupportData_(sheet);
   if (typeof markPerformanceTrace_ === 'function') {
     markPerformanceTrace_(performanceTrace, 'cleanup_history_charts');
   }

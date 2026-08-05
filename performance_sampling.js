@@ -203,6 +203,13 @@ function psRunNextSample(confirmed) {
         { trash: true }
       );
       var timing = report.performance || {};
+      var failedAssertions = report.functional && report.functional.results
+        ? report.functional.results.filter(function(result) {
+          return !result || result.pass !== true;
+        }).map(function(result) {
+          return result && result.label ? String(result.label).slice(0, 120) : 'Unknown assertion';
+        })
+        : [];
       var sample = {
         index: state.samples.length + 1,
         runId: report.runId,
@@ -212,6 +219,13 @@ function psRunNextSample(confirmed) {
         repeatMs: Number(timing.repeatMs) || null,
         restricted: !!(report.sharing && report.sharing.restricted),
         cleanupVerified: !!(report.cleanup && report.cleanup.verified),
+        gate: report.gate ? {
+          sharing: report.gate.sharing,
+          provisioning: report.gate.provisioning,
+          functional: report.gate.functional,
+          cleanup: report.gate.cleanup
+        } : null,
+        failedAssertions: failedAssertions,
         error: report.error ? String(report.error).slice(0, 300) : null
       };
       if (!sample.firstMs || !sample.repeatMs) sample.overall = 'FAIL';

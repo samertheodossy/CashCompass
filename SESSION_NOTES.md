@@ -2475,3 +2475,13 @@ After fixing the Debts → Bills Due race condition, I swept the rest of the das
 - **UX polish:** negative signed currency now renders as `-$…` rather than `$-…` in `Dashboard_Script_Render.html` and `PlannerDashboard.html`; positives remain `+$…`, zero remains `$0.00`. Permanent checks live in `scripts/checkDashboardUxRegressions.mjs`.
 - **Validation:** focused and full local regression packs passed; bounded Overview runtime verification passed; Git commit `8dbac11` is on `origin/main`.
 - **Next:** run dedicated isolated, read-only runtime evidence for Formula, Conditional Formatting, Named Ranges, the formal schema registry, and aggregate Workbook Health before opening the remaining browser/live suite work.
+
+---
+
+## Generated-sheet chart retirement and exact-workbook safety — 2026-08-05
+
+- **Generated outputs:** `planner_output.js` no longer builds embedded charts or writes their duplicate support tables on `OUT - Dashboard` or `OUT - History`. It retires the six known planner-owned Dashboard chart titles, preserves unknown customer charts, removes History charts, and clears only recognized legacy History Y:BB support data; canonical History A:U and Dashboard tables remain intact.
+- **Routing safety:** `getSheet_()` stale-handle recovery now reopens only the exact caller-supplied spreadsheet ID. It cannot fall through to a mapped, configured-default, active, canonical, or bounded workbook when an explicit disposable workbook lacks an output sheet.
+- **Evidence:** focused and full local regression packs passed. Isolated Central `@308` ran one real first/repeat pair on a marker-verified Restricted disposable workbook at 38.614 s / 40.605 s; all seven functional assertions, Provisioning, Restricted sharing, and verified Trash cleanup passed with no execution error.
+- **Deployment boundary:** source and immutable versions `@306`–`@308` advanced only the isolated Central validation deployment `AKfycbzMa…UlWZQ`; Central Beta remains `@106`. No bounded deployment or bounded workbook was touched.
+- **Next:** capture a fresh stage-level isolated profile, then optimize Dashboard formatting before snapshot construction. The standalone pair is directional evidence only and does not ratify the exact-candidate 20-pair p50/p95 release budget.

@@ -209,7 +209,7 @@ function getHarnessSuites_() {
     {
       id: 'SUITE-PERFORMANCE-PLANNER',
       label: 'Performance Planner',
-      description: 'Twenty independent real first/repeat planner pairs with Restricted fixtures, verified Trash, privacy-safe p50/p95 evidence, History retention, zero History charts, and ratified budgets.',
+      description: 'Twenty independent real first/repeat planner pairs with Restricted fixtures, verified Trash, privacy-safe p50/p95 evidence, History retention, zero generated History/Dashboard charts, blank chart-support cells, and ratified budgets.',
       implemented: true,
       runner: 'browser',
       browserRoute: 'performance-test',

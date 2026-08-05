@@ -67,6 +67,35 @@ The current planner stages are:
 
 Stage names are stable report contracts. Rename or split them deliberately and update tests and this document in the same change.
 
+`build_dashboard_charts` is retained as a comparison-compatible stage name after
+`REG-054` passed isolated disposable runtime validation on Central `@308`. Current source performs
+only exact-title retirement of the six former planner-owned `OUT - Dashboard`
+charts in that stage; it no longer writes O:Z chart-support tables or builds
+Dashboard charts. Unknown customer-added charts are preserved. After exact-source
+additional stage-level evidence is captured, the stage may be renamed deliberately if that
+improves the long-term reporting contract.
+
+## Isolated Dashboard-chart retirement validation — 2026-08-05
+
+Central version `308` was published only to isolated deployment `AKfycbz…UlWZQ`.
+One real first/repeat pair ran on a marker-verified Restricted disposable workbook
+and verified Trash cleanup. The planner retained `OUT - History` rows, produced
+zero generated charts on both OUT sheets, and left the retired History Y:BB and
+Dashboard O:Z support ranges blank. Provisioning and all seven functional
+assertions passed with no execution error.
+
+| Metric | Central `@308` |
+| --- | ---: |
+| First planner run | 38.614 s |
+| Repeat planner run | 40.605 s |
+| Functional assertions | 7 / 7 PASS |
+| Restricted sharing / Trash cleanup | PASS / PASS |
+
+The repeat is 3.341 seconds below the earlier `@116` repeat total of 43.946
+seconds. This single standalone pair confirms correctness and provides a useful
+directional measurement, but it does not ratify the 20-pair p50/p95 release
+budget or isolate the former chart stage from ordinary Apps Script variance.
+
 ## Isolated planner baseline — 2026-07-20
 
 Central version `115` was published only to isolated deployment `AKfycbz…UlWZQ`.
@@ -107,8 +136,10 @@ eliminate unnecessary chart teardown/recreation and duplicate snapshot reads.
 Central version `116` was published only to isolated deployment `AKfycbz…UlWZQ`.
 The underlying History rows remained intact and appended during both runs, the
 legacy chart area was visibly clear after cleanup, and the History-backed snapshot
-path completed successfully. `buildHistoryCharts_` remains temporarily as
-deprecated rollback-only code and is not called by the planner.
+path completed successfully. The temporary `buildHistoryCharts_` rollback code
+was later removed after the product decision to keep generated backend sheets
+chart-free; current local cleanup also clears recognized legacy Y:BB support
+tables without touching canonical History columns A:U.
 
 | Metric | `@115` baseline first | `@116` first | `@115` baseline repeat | `@116` repeat |
 | --- | ---: | ---: | ---: | ---: |

@@ -207,7 +207,7 @@ either map the exact failure to an existing assertion or add the next
 |---|---|---|---:|
 | 4a | Optimize Dashboard formatting | Measured formatting stage is reduced without changing workbook output | 1–3 d |
 | 4b | Optimize snapshot construction | Duplicate reads/calculation work are removed while totals and freshness remain correct | 1–2 d |
-| 4c | Review Dashboard chart rebuilding | Unnecessary chart work is avoided without removing required output | 0.5–1.5 d |
+| 4c | Retire embedded `OUT - Dashboard` charts | **Complete on isolated Central `@308`.** Six generated charts and their O:Z support tables remain absent while tabular output, History, and web-dashboard behavior remain correct | 0.5–1.5 d |
 | 4d | Measure remaining release flows | Initial load, Save, first-create, navigation, provisioning, and mature-workbook timings are captured | 1–2 d |
 | 4e | Run the exact-candidate 20-pair campaign | Twenty independent first/repeat pairs complete with Restricted fixtures and verified Trash | 1–2 active d; 2–4 elapsed d |
 | 4f | Ratify p50/p95 budgets | Budgets are approved and every routine flow passes; failures return to optimization | 0.5–1 d plus rework |

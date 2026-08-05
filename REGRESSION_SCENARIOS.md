@@ -215,14 +215,17 @@ Whenever a production bug is fixed:
 ### REG-013 — Financial Plan refresh rebuilt unused History charts
 - Category: STRESS / performance
 - Date discovered: 2026-07-20
-- Status: fixed; static guard present, runtime performance scenario pending
+- Status: fixed; isolated Central `@116` runtime PASS; obsolete rollback builders
+  removed locally and Y:BB support-table cleanup added; updated disposable
+  runtime scenario pending
 - Affected files: planner History output and performance timing
 - Root cause: every refresh rebuilt six embedded `OUT - History` charts that no
   product surface used, adding 11.507 seconds to the measured repeat run.
 - Repro (future performance harness): run first/repeat planner refreshes on the
   representative disposable fixture through an explicit-spreadsheet seam.
-- Expected result: History rows still append/deduplicate and feed comparisons, the
-  sheet contains zero chart objects, timing uses `cleanup_history_charts`, and the
+- Expected result: History rows still append/deduplicate and feed comparisons,
+  the sheet contains zero chart objects and no Y:BB chart-support tables, timing
+  uses `cleanup_history_charts`, no production chart builder remains, and the
   operation stays within the ratified planner budget.
 
 ### REG-014 — Bank formatted balance replacement concatenated the loaded value
@@ -1114,6 +1117,45 @@ Whenever a production bug is fixed:
   five-card summary row, sign-aware Net cash flow treatment, compact control
   structure, and responsive reflow rules.
 
+### REG-054 — Planner maintained unused embedded Dashboard charts
+- Category: STRESS / PERFORMANCE / GENERATED OUTPUT
+- Date discovered: 2026-08-05
+- Status: fixed; focused static/dynamic regression and isolated Central `@308`
+  disposable runtime scenario passed
+- Root cause: Refresh Financial Plan still maintained six embedded charts and
+  duplicate O:Z chart-support tables on `OUT - Dashboard`, even though the
+  CashCompass web display does not consume that sheet or those chart objects.
+  The measured Dashboard-chart stage previously cost 4.848 seconds on the
+  optimized repeat run and 9.425 seconds on the original repeat baseline.
+- Expected result: each planner refresh preserves the tabular Dashboard output
+  and `OUT - History`, removes only the six known planner-owned Dashboard chart
+  titles, leaves unknown or unreadable customer charts untouched, keeps O:Z
+  support cells empty, and performs no Dashboard chart-data writes or builds.
+  The repository contains no active or rollback-only embedded-chart builder.
+- Permanent coverage: `npm run test:performance-timing` rejects the former
+  writer/build path and dynamically verifies exact-title cleanup with unknown
+  chart preservation. `PERFORMANCE-PLANNER-FIRST-REPEAT` requires zero generated
+  charts on both OUT sheets and blank Dashboard chart-support columns on its
+  marker-verified disposable fixture.
+
+### REG-055 — Stale sheet retry could escape an explicit disposable workbook
+- Category: REGRESSION / TEST SAFETY / WORKBOOK ROUTING
+- Date discovered: 2026-08-05
+- Status: fixed; focused/full local regressions and isolated Central `@308`
+  exact-workbook disposable scenario passed
+- Root cause: when a requested sheet was initially absent, `getSheet_()` retried
+  through `getUserSpreadsheet_()`. An explicit harness spreadsheet could
+  therefore be replaced by the disposable test user's mapped workbook instead
+  of reopening the caller-selected workbook.
+- Expected result: stale-handle recovery reopens only `ss.getId()` and can never
+  resolve a different mapped, active, configured-default, bounded, or canonical
+  workbook. Planner outputs and assertions remain on the marker-verified
+  disposable workbook, which is Restricted and verified in Trash after the run.
+- Permanent coverage: `npm run test:performance-timing` requires exact-ID reopen
+  and rejects mapped-user retry. The isolated first/repeat scenario confirms the
+  OUT sheets exist on the disposable target and all routing-sensitive assertions
+  pass before verified cleanup.
+
 ---
 
 ## 3a loading-state consistency coverage
@@ -1198,7 +1240,7 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-010 | Blank/fresh workspace lacked default subpanel | REGRESSION / UI | fixed; UI scenario pending |
 | REG-011 | Setup leaked internal identifiers/raw errors | REGRESSION / UI | fixed; static guard; UI scenario pending |
 | REG-012 | Empty editor actions were enabled | REGRESSION / UI | fixed; static guard; UI scenario pending |
-| REG-013 | Planner rebuilt unused History charts | STRESS / performance | fixed; static guard; runtime scenario pending |
+| REG-013 | Planner rebuilt unused History charts | STRESS / performance | fixed; isolated `@116` PASS; rollback builders removed locally; updated runtime scenario pending |
 | REG-014 | Bank formatted balance replacement concatenated loaded value | REGRESSION / UI | fixed; static guard + isolated `@175` interactive writer replay PASS |
 | REG-015 | Standalone browser evidence inherited stale candidate metadata | REGRESSION / TEST EVIDENCE | fixed; standalone `@178` + exact-owner `@181` runtime PASS |
 | REG-016 | Income and Setup classified the same salary differently | REGRESSION / UI | fixed; isolated `@178` interactive replay PASS |
@@ -1239,4 +1281,6 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-051 | Bill Pay showed Done before its history chart finished | REGRESSION / UI RELIABILITY / ASYNC RECEIPT / CUSTOMER CONFIDENCE | fixed locally; focused dynamic regression passed; runtime visual confirmation pending |
 | REG-052 | Activity writes could not identify their Apps Script deployment | REGRESSION / AUDIT DIAGNOSTICS / DEPLOYMENT TRACEABILITY | fixed locally; focused/full local regressions passed; runtime log confirmation pending |
 | REG-053 | Property Performance controls crowded financial summaries | REGRESSION / UI HIERARCHY / RESPONSIVE LAYOUT / FINANCIAL CLARITY | fixed locally; focused/full local regressions passed; runtime visual confirmation pending |
+| REG-054 | Planner maintained unused embedded Dashboard charts | STRESS / PERFORMANCE / GENERATED OUTPUT | fixed; focused static/dynamic regression + isolated `@308` disposable runtime PASS |
+| REG-055 | Stale sheet retry could escape an explicit disposable workbook | REGRESSION / TEST SAFETY / WORKBOOK ROUTING | fixed; focused/full regressions + isolated `@308` exact-workbook disposable runtime PASS |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

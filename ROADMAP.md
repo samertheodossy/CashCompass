@@ -191,8 +191,8 @@ bounded workbook as a test target.
 
 ### Wave 6 — Performance and candidate preparation
 
-1. `4a`–`4c` — optimize Dashboard formatting, snapshot construction, and chart
-   rebuilding.
+1. `4a`–`4c` — optimize Dashboard formatting and snapshot construction, then
+   runtime-validate the locally retired `OUT - Dashboard` charts/support tables.
 2. `4d` — measure every release-critical flow.
 3. Finish all candidate prerequisites, then freeze once.
 4. `4e` — run twenty exact-candidate first/repeat pairs.
@@ -295,7 +295,7 @@ evidence, and preserve Beta `@106` plus the user-controlled bounded deployment.
 - **Web Dashboard page-by-page polish** — execute the ordered `UX-01` through `UX-10` passes in `TODO.md → UX Backlog (Version 1)`, beginning with the Overview information architecture and balanced-grid pass. Each ID is a separate reviewable/validatable change; preserve calculations, schemas, and write behavior.
 - **Tracked-editor navigation consistency — runtime-validated through isolated `@195`.** Long-lived financial items now use one recognizable hierarchy: Bills **Due · Add · Manage**; Houses / Bank Accounts / Investments / Debts **Update · Add · Manage**. Setup deep-links preserve whether the customer chose Add or Manage. Update is Save-only; Manage owns active-item inventories and guarded Stop tracking actions with confirmation. Bank import workflows are secondary Manage tools. Shared UI primitives prevent each asset editor from reimplementing mode, focus, list, and empty-state behavior; writers remain feature-specific. First-Run V4 passed 10/10 and Populated V3 passed 13/13 with zero browser errors, Restricted ownership, and verified Trash cleanup.
 - **Independent advocate trust gate** — close the confirmed P1 Bank money-editor, Income/Setup truth, Bills Pay/occurrence feedback, and customer-language findings before claiming Core Experience or 10/10 UX readiness. Preserve the advocate as an independent evidence role and retest every writer fix only on a newly guarded disposable workbook.
-- **Financial Plan refresh latency** — isolated blank/fresh `@114` completed correctly but took **143 seconds**. Central `@115` profiling measured **81.455 s first / 77.275 s repeat**. The first optimization passed on isolated `@116`: History rows and their dashboard consumers remained correct while six unused embedded History charts were retired; the repeat History stage fell from **11.507 s to 0.165 s** and total repeat server time reached **43.946 s**. Next address Dashboard formatting (**18.303 s on the `@116` repeat**), snapshot construction (**11.783 s**), and Dashboard charts (**4.848 s**), then collect enough samples to ratify the release percentile.
+- **Financial Plan refresh latency** — isolated blank/fresh `@114` completed correctly but took **143 seconds**. Central `@115` profiling measured **81.455 s first / 77.275 s repeat**. The first optimization passed on isolated `@116`: History rows and their dashboard consumers remained correct while six unused embedded History charts were retired; the repeat History stage fell from **11.507 s to 0.165 s** and total repeat server time reached **43.946 s**. Dashboard chart retirement passed isolated Central `@308` under `REG-054`: one exact-workbook disposable pair completed at **38.614 s first / 40.605 s repeat**, with 7/7 functional assertions, Restricted sharing, and verified Trash cleanup. Next address Dashboard formatting (**18.303 s on the `@116` repeat**) and snapshot construction (**11.783 s**), then collect the exact-candidate 20-pair sample required to ratify the release percentile.
 - **10/10 Beta Release Candidate gate** — after P1 evidence, P2 financial truth, and P3 experience/performance work, run the exact candidate through the full scorecard and release gates in `BETA_10_OUT_OF_10_PLAN.md`. A supervised cohort may run earlier; broad or monetized beta does not.
 
 ### Priority 4 — Future features
