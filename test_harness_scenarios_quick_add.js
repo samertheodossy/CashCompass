@@ -53,6 +53,68 @@ function getHarnessQuickAddWriteGuardScenario_() {
     },
     actions: function(ctx) {
       var guard = ctx.quickAddGuard;
+      var sourceDate = guard.receipt.entryDate;
+      try {
+        ctx.assertWritable();
+        quickAddPayment({
+          entryType: 'Expense',
+          payee: 'Harness New Source Required',
+          entryDate: sourceDate,
+          amount: 45,
+          createIfMissing: true,
+          activityOrigin: 'direct_quick_add'
+        }, ctx.ss);
+      } catch (missingSourceErr) {
+        guard.missingSourceError = String(missingSourceErr && missingSourceErr.message || missingSourceErr);
+      }
+      guard.missingSourceRow = findCashFlowRowByTypeAndPayee_(
+        guard.sheet,
+        'Expense',
+        'Harness New Source Required'
+      );
+
+      ctx.assertWritable();
+      guard.expenseWithSource = quickAddPayment({
+        entryType: 'Expense',
+        payee: 'Harness New Source Required',
+        entryDate: sourceDate,
+        amount: 45,
+        createIfMissing: true,
+        flowSource: 'CREDIT_CARD',
+        suppressActivityLog: true,
+        activityOrigin: 'direct_quick_add'
+      }, ctx.ss);
+      var sourcedExpenseRow = findCashFlowRowByTypeAndPayee_(
+        guard.sheet,
+        'Expense',
+        'Harness New Source Required'
+      );
+      var sourceHeaderMap = getCashFlowHeaderMap_(guard.sheet);
+      guard.expenseFlowSource = guard.sheet.getRange(
+        sourcedExpenseRow.row,
+        sourceHeaderMap.flowSourceCol
+      ).getDisplayValue();
+
+      ctx.assertWritable();
+      guard.incomeDefaultSource = quickAddPayment({
+        entryType: 'Income',
+        payee: 'Harness New Income Source',
+        entryDate: sourceDate,
+        amount: 75,
+        createIfMissing: true,
+        suppressActivityLog: true,
+        activityOrigin: 'direct_quick_add'
+      }, ctx.ss);
+      var sourcedIncomeRow = findCashFlowRowByTypeAndPayee_(
+        guard.sheet,
+        'Income',
+        'Harness New Income Source'
+      );
+      guard.incomeFlowSource = guard.sheet.getRange(
+        sourcedIncomeRow.row,
+        sourceHeaderMap.flowSourceCol
+      ).getDisplayValue();
+
       guard.before = inspectQuickAddWriteInSpreadsheet_(ctx.ss, normalizeQuickAddWriteReceipt_(guard.receipt));
 
       ctx.assertWritable();
@@ -75,6 +137,15 @@ function getHarnessQuickAddWriteGuardScenario_() {
     expectedOutcome: function(ctx) {
       var guard = ctx.quickAddGuard;
       var mod = 'Quick Add Write Guard';
+      ctx.assert.equals('Missing source is rejected before row creation',
+        String(guard.missingSourceError || '').indexOf('Payment source is required') !== -1,
+        true, { module: mod });
+      ctx.assert.equals('Missing-source attempt creates no row',
+        guard.missingSourceRow, null, { module: mod });
+      ctx.assert.equals('Chosen new Expense source is persisted',
+        guard.expenseFlowSource, 'CREDIT_CARD', { module: mod });
+      ctx.assert.equals('New Income source defaults to cash',
+        guard.incomeFlowSource, 'CASH', { module: mod });
       ctx.assert.equals('Late edit is detected', guard.before.status, 'REVERTED_TO_PREVIOUS', { module: mod });
       ctx.assert.equals('First guarded restore succeeds', guard.firstRestore.status, 'RESTORED', { module: mod });
       ctx.assert.equals('Expected amount is restored', guard.afterFirst, 5929.64, { module: mod });

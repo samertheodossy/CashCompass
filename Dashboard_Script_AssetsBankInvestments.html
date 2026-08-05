@@ -342,6 +342,7 @@ function renderBankManageList_() {
 }
 
 function loadBankSection() {
+  const initialLoadTiming = startDashboardInitialLoadStage_('bank_accounts');
   const sectionRequestId = ++bankSectionRequestId_;
   document.getElementById('bank_date').value = new Date().toISOString().slice(0, 10);
   bankUpdateDetailsReady_ = false;
@@ -367,6 +368,7 @@ function loadBankSection() {
         .getBankAccountUiData();
     },
     onSuccess: function(data) {
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
       if (sectionRequestId !== bankSectionRequestId_) return;
       fillBankAccountDropdownFromData_(data);
       if (pendingFocus && pendingFocus.tab === 'bank') focusBankTarget_(pendingFocus);
@@ -380,6 +382,7 @@ function loadBankSection() {
       setStatus('bank_status', '', false);
     },
     onFailure: function(err) {
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
       if (sectionRequestId !== bankSectionRequestId_) return;
       setSelectLoadFailure('bank_account', 'Couldn’t load bank accounts');
       updateBankUpdateAvailability_();
@@ -960,6 +963,7 @@ function renderInvestmentManageList_() {
 }
 
 function loadInvestmentSection() {
+  const initialLoadTiming = startDashboardInitialLoadStage_('investments');
   document.getElementById('inv_date').value = new Date().toISOString().slice(0, 10);
   setSelectLoading('inv_account', 'Loading investment accounts…');
   updateInvestmentUpdateAvailability_();
@@ -972,6 +976,7 @@ function loadInvestmentSection() {
     },
     onSuccess: function(data) {
       fillInvestmentAccountDropdownFromData_(data);
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
     },
     onRetry: function(info) {
       setStatusLoading('inv_status', info.message);
@@ -990,6 +995,7 @@ function loadInvestmentSection() {
         actionLabel: 'Try again',
         onAction: loadInvestmentSection
       });
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
     }
   });
 }

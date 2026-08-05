@@ -1081,7 +1081,7 @@ function ensureHouseValuesActiveColumnForBlock_(sheet, block) {
  * Sums INPUT - House Values for the prior calendar month (script timezone) for all data rows.
  * Pairs with SYS - House Assets total (Current Value) on the dashboard Real Estate card.
  */
-function getPriorMonthHouseValuesTotalFromHouseValuesInput_() {
+function getPriorMonthHouseValuesTotalFromHouseValuesInput_(optionalSs) {
   const tz = Session.getScriptTimeZone();
   const now = new Date();
   const parts = Utilities.formatDate(now, tz, 'yyyy-MM-dd').split('-');
@@ -1097,17 +1097,22 @@ function getPriorMonthHouseValuesTotalFromHouseValuesInput_() {
   const year = prevY;
 
   try {
-    const ss = getUserSpreadsheet_();
+    const ss = optionalSs || getUserSpreadsheet_();
     const sheet = getSheet_(ss, 'HOUSE_VALUES');
     const block = getHouseValuesYearBlock_(sheet, year);
     const refDate = new Date(year, monthIndexZero, 15);
     const monthCol = getMonthColumnByDate_(sheet, refDate, block.headerRow);
+    const rowCount = Math.max(0, block.dataEndRow - block.dataStartRow + 1);
+    if (!rowCount) return { total: 0, label: Utilities.formatDate(new Date(year, monthIndexZero, 1), tz, 'MMM yyyy') };
+    const readRange = sheet.getRange(block.dataStartRow, 1, rowCount, Math.max(2, monthCol));
+    const rawRows = readRange.getValues();
+    const displayRows = readRange.getDisplayValues();
     var sum = 0;
-    for (var row = block.dataStartRow; row <= block.dataEndRow; row++) {
-      var name = String(sheet.getRange(row, 1).getDisplayValue() || '').trim();
-      var sub = String(sheet.getRange(row, 2).getDisplayValue() || '').trim();
+    for (var row = 0; row < rawRows.length; row++) {
+      var name = String(displayRows[row][0] || '').trim();
+      var sub = String(displayRows[row][1] || '').trim();
       if (!isHouseDataRowName_(name, sub)) continue;
-      sum += toNumber_(sheet.getRange(row, monthCol).getValue());
+      sum += toNumber_(rawRows[row][monthCol - 1]);
     }
     var label = Utilities.formatDate(new Date(year, monthIndexZero, 1), tz, 'MMM yyyy');
     return { total: round2_(sum), label: label };

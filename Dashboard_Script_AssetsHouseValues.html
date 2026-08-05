@@ -230,6 +230,7 @@ function renderHouseManageList_() {
 }
 
 function loadHouseSection() {
+  const initialLoadTiming = startDashboardInitialLoadStage_('houses');
   document.getElementById('house_date').value = new Date().toISOString().slice(0, 10);
   setSelectLoading('house_house', 'Loading houses…');
   updateHouseUpdateAvailability_();
@@ -242,6 +243,7 @@ function loadHouseSection() {
     },
     onSuccess: function(data) {
       fillHouseDropdownFromData_(data);
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
     },
     onRetry: function(info) {
       setStatusLoading('house_status', info.message);
@@ -253,6 +255,7 @@ function loadHouseSection() {
       setSelectLoadFailure('house_house', 'Couldn’t load houses');
       updateHouseUpdateAvailability_();
       setStatus('house_status', (err.message || String(err)), true);
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
     }
   });
 }

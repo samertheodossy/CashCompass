@@ -1156,6 +1156,249 @@ Whenever a production bug is fixed:
   OUT sheets exist on the disposable target and all routing-sensitive assertions
   pass before verified cleanup.
 
+### REG-056 — Generated Dashboard formatting repeatedly re-read its own output
+- Category: STRESS / PERFORMANCE / GENERATED OUTPUT
+- Date discovered: 2026-08-05
+- Status: fixed; focused dynamic and full local regressions passed; isolated
+  Central `@310` production-path timing and formatting read-back PASS
+- Root cause: after writing the complete normalized Dashboard row matrix,
+  `formatRecommendationsSheet_()` read individual cells throughout two row
+  loops, scanned the full sheet again for the stability label, and re-read the
+  entire sheet once for each of eight formatted sections. It also set equal
+  column widths individually.
+- Expected result: formatting targets are derived once from the existing row
+  matrix; the formatting path performs no cell or full-sheet reads, batches
+  repeated range styles and equal-width columns, and preserves the exact
+  generated values, section/header styling, number formats, stability colors,
+  widths, wrapping, merged title, and Central/bounded output contract.
+- Permanent coverage: `npm run test:performance-timing` dynamically verifies
+  representative section, header, currency, integer, decimal, percent, and
+  stability targets; source guards reject post-write `getValue()`,
+  `getDataRange()`, and restoration of `formatSectionTable_()`. The guarded
+  disposable scenario additionally reads back the merged title, colors,
+  currency format, stability style, and all A:K widths. On isolated `@310`, all
+  14 assertions passed; `format_dashboard` measured 0.428 s first / 0.378 s
+  repeat, Restricted sharing passed, and Trash cleanup was verified.
+
+### REG-057 — Overview snapshot calculated every retirement scenario and repeated supporting reads
+- Category: STRESS / PERFORMANCE / DASHBOARD SNAPSHOT
+- Date discovered: 2026-08-05
+- Status: fixed in the current uncommitted candidate; focused/full local
+  regressions and isolated Central `@317` disposable runtime PASS
+- Root cause: Overview built all three retirement analyses even though it
+  displayed only the selected scenario. Snapshot helpers also re-read History,
+  prior-month ledgers, Settings, and the Cash Flow grid within one response.
+- Expected result: Overview calculates only the selected retirement scenario;
+  the Retirement workspace retains its full three-scenario on-demand reader.
+  Snapshot History and ledger reads are shared or batched, Setup readiness uses
+  the explicit workbook, and Income validates/classifies one already-read Cash
+  Flow grid. Totals, readiness, freshness, and the selected scenario remain
+  unchanged.
+- Permanent coverage: `npm run test:performance-timing` rejects restored
+  per-row prior-month reads, duplicate Overview scenario calculation, loss of
+  explicit-workbook routing, duplicate Income-grid classification reads, and
+  loss of privacy-safe snapshot stage timings. The guarded runtime scenario
+  asserts current totals and the selected retirement payload. Planner hands its
+  fresh canonical position to the same-call snapshot without a global cache;
+  canonical-ready domains skip unused legacy fallbacks. Isolated `@317` passed
+  all functional assertions, Restricted sharing, and verified Trash cleanup;
+  current-position construction fell from 5.508 s on `@316` to 0.128 s and the
+  total snapshot fell from 13.026 s to 4.867 s. The single sample does not
+  ratify p50/p95.
+
+### REG-058 — Populated initial page load had no retrievable stage breakdown
+- Category: PERFORMANCE / OBSERVABILITY / PRIVACY
+- Date discovered: 2026-08-05
+- Status: fixed in the current uncommitted candidate; focused local regression
+  PASS; populated runtime evidence pending
+- Root cause: server planner/snapshot traces described explicit refresh work,
+  but the normal page eagerly issued many independent read RPCs and exposed no
+  correlated breakdown for a fully populated workbook. Manual stopwatch timing
+  could measure only the full page and could not identify the slow section.
+- Expected result: `?debug=1` starts one initial-load trace before the routing
+  RPC, measures routing and every initial read through its renderer, and emits one aggregate
+  `[PERF-CLIENT]` server log record after all stages settle or after 45 seconds.
+  Ordinary URLs remain uninstrumented. The log contains only fixed stage names,
+  durations, outcomes, a random run ID, and a server timestamp; it never logs
+  workbook/user identity, financial values, sheet content, or error messages.
+  The sanitized report remains in the caller's user cache for at most six hours
+  so an admin can retrieve it read-only when `clasp logs` is unavailable.
+- Operator workflow: the Validation page also exposes a one-click Dashboard Read
+  Profile for its selected target. This is the primary repeatable scale diagnostic
+  and may read an explicitly selected bounded workbook. It uses only raw sheet/range
+  getters in two passes, returns fixed stage labels plus aggregate size/timing, and
+  never returns cell values or workbook-derived sheet names. Missing areas are
+  reported, not repaired. It deliberately avoids production dashboard getters
+  because some include self-heal writes.
+- Permanent coverage: `npm run test:performance-timing` dynamically proves one
+  complete load emits exactly one aggregate report and that the server rebuilds
+  the log envelope from its allow-list. Static checks require pre-RPC debug
+  initialization, the two visible startup stages, and preserved instrumentation
+  for deferred loaders. Extra/private metadata is discarded, malformed or
+  unknown stages are rejected without logging, and
+  temporary retrieval remains per-user and admin-gated. `npm run test:p1-evidence`
+  dynamically profiles a synthetic explicit bounded target, proves both passes and
+  the admin/selected-ID boundary, rejects writer/persistence calls statically, and
+  proves private cell values and workbook-derived sheet names do not escape.
+
+---
+
+### REG-059 — Overview startup eagerly loaded every hidden workspace
+- Category: PERFORMANCE / DASHBOARD STARTUP / LAZY LOADING
+- Date discovered: 2026-08-05
+- Status: fixed in the current uncommitted candidate; focused/full local
+  regressions PASS; populated bounded remeasurement pending
+- Root cause: `initDashboard()` launched Overview plus Houses, Property
+  Expenses, Bank, Investments, Debts, Quick Add, Upcoming, Retirement,
+  Purchase Simulator, Bills, and Income at the same time. Those hidden RPCs
+  competed with the canonical Overview snapshot and delayed the first useful
+  screen on populated workbooks.
+- Expected result: startup requests only routing and the authoritative Overview
+  snapshot. Every hidden workspace hydrates on its first tab entry and refreshes
+  through its existing navigation behavior. No automatic background sweep runs
+  while the user is viewing Overview.
+- Financial truth guard: Overview continues to use the canonical active-only
+  snapshot. It must not substitute visible sheet footer rows such as `Total
+  Accounts`, `Account Totals`, or `TOTAL DEBT`, because those rows are gross
+  sums by design and can include inactive or stop-tracked records.
+- Permanent coverage: `npm run test:dashboard-ux` proves the startup function
+  contains no hidden loaders and every deferred tab retains its loader;
+  `npm run test:performance-timing` proves the initial browser trace consists
+  only of `startup_routing` and `snapshot` while the server preserves its fixed
+  privacy allow-list for diagnostic compatibility.
+
+---
+
+### REG-060 — Heavy Overview details blocked the top financial cards
+- Category: PERFORMANCE / PROGRESSIVE RENDERING / FINANCIAL TRUTH
+- Date discovered: 2026-08-05
+- Status: fixed in the current uncommitted candidate; focused/full local
+  regressions PASS; bounded visual timing pending
+- Root cause: even after hidden tabs became lazy, the initial Overview RPC did
+  not return until History deltas, health, attribution, runway, retirement,
+  readiness, income, issues, and suggested actions were complete. Trigger
+  registration and Activity-sheet first-create maintenance also remained ahead
+  of the response.
+- Expected result: startup first returns and paints the canonical Cash,
+  Investments, Real Estate, Debt, and Net Worth cards. Only after a browser
+  paint does it request the full Overview payload. Existing Activity and
+  debounce-trigger maintenance runs after the full response. A later refresh
+  invalidates older in-flight responses so stale background data cannot replace
+  a newer save. The background request consumes a random single-use,
+  workbook-bound, two-minute user-cache continuation containing aggregate
+  current-position values only, so it does not repeat the canonical source and
+  mirror reads completed for the fast cards.
+- Financial truth guard: the fast response uses the same canonical active-only
+  current-position builder as the full snapshot; it does not use gross footer
+  totals or a stale persisted financial cache.
+- Permanent coverage: `npm run test:dashboard-ux` requires progressive startup,
+  a double animation-frame paint yield, stale-request identity, and post-render
+  maintenance ordering. `npm run test:performance-timing` requires one shared
+  canonical current-position builder and rejects maintenance from both Overview
+  read endpoints. It also requires a user-scoped, single-use, workbook-bound
+  continuation and rejects caching canonical account-level rows.
+
+---
+
+### REG-061 — Lazy workspace entry left the visible Quick Add panel unhydrated
+- Category: REGRESSION / DASHBOARD NAVIGATION / LAZY LOADING
+- Date discovered: 2026-08-05
+- Status: fixed in the current uncommitted candidate; focused local regression
+  PASS; runtime confirmation pending
+- Root cause: the performance optimization correctly removed eager reads for
+  hidden workspaces, but Quick Add was already marked active in the initial
+  HTML. Opening Cash Flow preserved that visible panel and therefore skipped
+  `showTab('payments')`, which is the lazy entry point that loads Expense and
+  Income payees. The selector consequently contained only its blank and Other
+  options even though the workbook data remained intact.
+- Expected result: clicking Assets & Liabilities, Cash Flow, Properties, or
+  Planning hydrates the panel already visible in that workspace. If no child
+  panel is active, the existing remembered/default-tab path remains responsible
+  for selecting and hydrating it, avoiding a duplicate workbook read.
+- Safety guard: this changes browser navigation only. It does not write to a
+  workbook, restore eager all-tab startup, change payee filtering, or alter
+  Quick Add financial behavior.
+- Permanent coverage: `npm run test:dashboard-ux` dynamically proves that Cash
+  Flow entry hydrates a pre-active Quick Add panel and that a workspace with no
+  active child does not receive a second hydration call.
+
+---
+
+### REG-062 — New Quick Add Expense rows could omit Flow Source
+- Category: REGRESSION / FINANCIAL DATA INTEGRITY / QUICK ADD
+- Date discovered: 2026-08-05
+- Status: fixed in the current uncommitted candidate; focused/full local
+  regressions PASS; bounded runtime confirmation pending
+- Root cause: the Quick Add form exposed Type, Payee, Date, and Amount but no
+  Payment Source. The writer allowed blank Flow Source for legacy compatibility
+  and could only infer it when the new payee matched a Bill or Debt. A genuinely
+  new direct Expense therefore created a Cash Flow row with blank source.
+- Expected result: a genuinely new direct Expense asks for Cash or Credit card
+  before saving. An existing Expense with a blank source asks once and repairs
+  that cell; complete existing rows retain their stored source. Linked workflows
+  use their authoritative source without asking again, and new Income rows use CASH.
+- Safety guard: the server rejects a stale direct client before any row or money
+  write when the new Expense source is missing. The disposable harness proves
+  the rejected attempt creates no row and verifies both Expense persistence and
+  Income defaulting.
+- Permanent coverage: `npm run test:dashboard-ux` covers both Quick Add UIs,
+  the pure prompt decision, payload wiring, server prerequisite, and the
+  marker-verified disposable harness assertions.
+
+---
+
+### REG-063 — Progressive Overview left lower cards blank during refresh
+- Category: PERFORMANCE / PROGRESSIVE RENDERING / PERCEIVED LOAD
+- Date discovered: 2026-08-05
+- Status: fixed in the current uncommitted candidate; focused/full local
+  regressions PASS; bounded runtime confirmation pending
+- Root cause: top totals were split into a fast request, but every lower card
+  still waited for one complete heavy snapshot. The second request could take
+  longer than the former single request and presented blank placeholders until
+  all detail reads finished.
+- Expected result: after one completed Overview read, subsequent loads paint the
+  last completed lower-card payload immediately, restore freshly read top totals,
+  and refresh lower details in the background. Bills and Operations use focused
+  Overview-only render paths so they populate without hydrating hidden workspaces.
+- Safety guard: the cache is short-lived, user-scoped, and workbook-scoped. It
+  never writes workbook data, never crosses users or workbooks, and never
+  overrides the fresh top totals.
+- Permanent coverage: `npm run test:dashboard-ux` proves cached details are
+  applied before fresh top totals and that every completed background detail
+  read refreshes the scoped cache. It also requires all three authoritative
+  operational summary reads while prohibiting hidden-workspace renderers.
+
+---
+
+### REG-064 — Transient Apps Script storage failure aborted repeat Overview load
+- Category: REGRESSION / UI RELIABILITY / DASHBOARD STARTUP
+- Date discovered: 2026-08-05
+- Status: fixed in the current uncommitted candidate; focused/full local
+  regressions PASS; bounded recovery confirmation pending
+- Root cause: the shared safe read-retry classifier covered browser transport
+  failures such as HTTP 0, but not the narrow Apps Script
+  `server error occurred while reading from storage` / `FAILED_PRECONDITION`
+  response observed on an immediate repeat Overview load. The core request
+  therefore failed before details and operational summaries could start.
+- Expected result: the progressive Overview core read retries exactly once for
+  that exact storage signature. A recovered attempt continues the existing
+  core/details/operations sequence; a persistent failure stops after the second
+  attempt and surfaces one customer-safe failure. Unrelated preconditions and
+  business errors are never retried.
+- Safety guard: recovery wraps only the progressive core endpoint. That endpoint
+  does not write the workbook; its only side effects are best-effort,
+  user-scoped, short-lived presentation caches. Writers, full refreshes, and
+  post-render maintenance remain outside automatic retry.
+- Permanent coverage: `npm run test:dashboard-ux` proves exact signature
+  classification, recovery eligibility, rejection of unrelated preconditions,
+  and the two-attempt ceiling. `npm run test:performance-timing` proves cache
+  outages fall back without failing the authoritative Overview read.
+- Runtime reproduction: the bounded Validation trace recorded a successful
+  21.351-second first load, then an immediate repeat whose core snapshot failed
+  at 6.561 seconds with the observed storage precondition response; the trace
+  closed at the 45-second diagnostic timeout. Post-fix bounded recovery evidence
+  is intentionally pending the user-owned push and deployment.
+
 ---
 
 ## 3a loading-state consistency coverage
@@ -1283,4 +1526,13 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-053 | Property Performance controls crowded financial summaries | REGRESSION / UI HIERARCHY / RESPONSIVE LAYOUT / FINANCIAL CLARITY | fixed locally; focused/full local regressions passed; runtime visual confirmation pending |
 | REG-054 | Planner maintained unused embedded Dashboard charts | STRESS / PERFORMANCE / GENERATED OUTPUT | fixed; focused static/dynamic regression + isolated `@308` disposable runtime PASS |
 | REG-055 | Stale sheet retry could escape an explicit disposable workbook | REGRESSION / TEST SAFETY / WORKBOOK ROUTING | fixed; focused/full regressions + isolated `@308` exact-workbook disposable runtime PASS |
+| REG-056 | Generated Dashboard formatting repeatedly re-read its own output | STRESS / PERFORMANCE / GENERATED OUTPUT | fixed; focused/full regressions + isolated `@310` formatting read-back and stage timing PASS |
+| REG-057 | Overview snapshot calculated every retirement scenario and repeated supporting reads | STRESS / PERFORMANCE / DASHBOARD SNAPSHOT | fixed in current candidate; focused/full regressions + isolated `@317` disposable runtime PASS |
+| REG-058 | Populated initial page load had no retrievable stage breakdown | PERFORMANCE / OBSERVABILITY / PRIVACY | fixed in current candidate; focused regression PASS; populated runtime evidence pending |
+| REG-059 | Overview startup eagerly loaded every hidden workspace | PERFORMANCE / DASHBOARD STARTUP / LAZY LOADING | fixed in current candidate; focused/full local regressions PASS; bounded remeasurement pending |
+| REG-060 | Heavy Overview details blocked the top financial cards | PERFORMANCE / PROGRESSIVE RENDERING / FINANCIAL TRUTH | fixed in current candidate; focused/full local regressions PASS; bounded visual timing pending |
+| REG-061 | Lazy workspace entry left the visible Quick Add panel unhydrated | REGRESSION / DASHBOARD NAVIGATION / LAZY LOADING | fixed in current candidate; focused local regression PASS; runtime confirmation pending |
+| REG-062 | New Quick Add Expense rows could omit Flow Source | REGRESSION / FINANCIAL DATA INTEGRITY / QUICK ADD | fixed in current candidate; focused/full local regressions PASS; bounded runtime confirmation pending |
+| REG-063 | Progressive Overview left lower cards blank during refresh | PERFORMANCE / PROGRESSIVE RENDERING / PERCEIVED LOAD | fixed in current candidate; focused/full local regressions PASS; bounded runtime confirmation pending |
+| REG-064 | Transient Apps Script storage failure aborted repeat Overview load | REGRESSION / UI RELIABILITY / DASHBOARD STARTUP | fixed in current candidate; focused/full local regressions PASS; bounded recovery confirmation pending |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

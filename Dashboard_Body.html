@@ -36,11 +36,11 @@
 
   <div class="page-nav">
     <button class="page-btn active" data-page="overview" onclick="showPage('overview')">Overview</button>
-    <button class="page-btn" data-page="assets" onclick="showPage('assets')">Assets &amp; Liabilities</button>
-    <button class="page-btn" data-page="cashflow" onclick="showPage('cashflow')">Cash Flow</button>
+    <button class="page-btn" data-page="assets" onclick="showWorkspacePage('assets')">Assets &amp; Liabilities</button>
+    <button class="page-btn" data-page="cashflow" onclick="showWorkspacePage('cashflow')">Cash Flow</button>
     <button class="page-btn" data-page="activity" onclick="showPage('activity')">Activity</button>
-    <button class="page-btn" data-page="properties" onclick="showPage('properties')">Properties</button>
-    <button class="page-btn" data-page="planning" onclick="showPage('planning')">Planning</button>
+    <button class="page-btn" data-page="properties" onclick="showWorkspacePage('properties')">Properties</button>
+    <button class="page-btn" data-page="planning" onclick="showWorkspacePage('planning')">Planning</button>
   </div>
 
   <div id="pay_write_guard" class="warning-box" role="alert" aria-live="assertive">
@@ -670,20 +670,30 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div class="grid-2">
         <div>
           <label>Type</label>
-          <select id="pay_type" onchange="filterPaymentPayees(); loadPaymentPreview();">
+          <select id="pay_type" onchange="filterPaymentPayees(); updateQuickAddFlowSourceVisibility_(); loadPaymentPreview();">
             <option value="Expense">Expense</option>
             <option value="Income">Income</option>
           </select>
           <label>Date</label>
           <input type="date" id="pay_date" onchange="loadPaymentPreview()">
           <label>Existing Payee</label>
-          <select id="pay_payeeSelect" onchange="syncPaymentPayeeInput(); loadPaymentPreview();"></select>
+          <select id="pay_payeeSelect" onchange="syncPaymentPayeeInput(); updateQuickAddFlowSourceVisibility_(); loadPaymentPreview();"></select>
           <label>Or Type / Edit Payee</label>
-          <input type="text" id="pay_payeeInput" oninput="loadPaymentPreview()" placeholder="Enter payee name">
+          <input type="text" id="pay_payeeInput" oninput="updateQuickAddFlowSourceVisibility_(); loadPaymentPreview()" placeholder="Enter payee name">
+
+          <div id="pay_flowSourceWrap" hidden>
+            <label for="pay_flowSource">Payment source</label>
+            <select id="pay_flowSource" onchange="setStatus('pay_status', '', false)">
+              <option value="">Choose payment source</option>
+              <option value="CASH">Cash</option>
+              <option value="CREDIT_CARD">Credit card</option>
+            </select>
+            <div class="muted" style="margin-top:6px;">Required for a new Expense or an existing Expense with no source.</div>
+          </div>
           <label>Amount</label>
           <input type="text" id="pay_amount" inputmode="decimal" onfocus="currencyFocus('pay_amount')" onblur="currencyBlur('pay_amount')">
           <div class="check-row">
-            <input type="checkbox" id="pay_createIfMissing" checked>
+            <input type="checkbox" id="pay_createIfMissing" checked onchange="updateQuickAddFlowSourceVisibility_()">
             <label for="pay_createIfMissing" style="margin:0;font-weight:normal;">Create row if payee is missing</label>
           </div>
           <button onclick="savePayment()">Add to Cash Flow</button>

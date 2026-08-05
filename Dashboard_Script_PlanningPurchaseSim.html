@@ -6,6 +6,7 @@ function togglePurchaseFields() {
 }
 
 function loadPurchaseSimulatorSection() {
+  const initialLoadTiming = startDashboardInitialLoadStage_('purchase_simulator');
   resetPurchaseSimulationResults_();
   google.script.run
     .withSuccessHandler(function(data) {
@@ -17,6 +18,7 @@ function loadPurchaseSimulatorSection() {
       document.getElementById('ps_monthlyRunningCost').value = '';
       document.getElementById('ps_treatAsAsset').checked = !!d.treatAsAsset;
       togglePurchaseFields();
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
     })
     .withFailureHandler(function(err) {
       resetPurchaseSimulationResults_();
@@ -28,6 +30,7 @@ function loadPurchaseSimulatorSection() {
         actionLabel: 'Try again',
         onAction: loadPurchaseSimulatorSection
       });
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
     })
     .getPurchaseSimulatorUiData();
 }

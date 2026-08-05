@@ -126,6 +126,15 @@ function psDistributionPasses_(distribution) {
     distribution.p95Ms <= PERFORMANCE_REFRESH_P95_BUDGET_MS_;
 }
 
+function psCompactStages_(stages) {
+  return (stages || []).map(function(stage) {
+    return {
+      name: String(stage && stage.name || '').slice(0, 80),
+      durationMs: Math.max(0, Number(stage && stage.durationMs) || 0)
+    };
+  });
+}
+
 function psFinalize_(state) {
   var successful = state.samples.filter(function(sample) { return sample.overall === 'PASS'; });
   var first = successful.map(function(sample) { return sample.firstMs; });
@@ -217,6 +226,10 @@ function psRunNextSample(confirmed) {
         overall: report.overall,
         firstMs: Number(timing.firstMs) || null,
         repeatMs: Number(timing.repeatMs) || null,
+        firstStages: psCompactStages_(timing.firstStages),
+        repeatStages: psCompactStages_(timing.repeatStages),
+        snapshotMs: Number(timing.snapshotMs) || null,
+        snapshotStages: psCompactStages_(timing.snapshotStages),
         restricted: !!(report.sharing && report.sharing.restricted),
         cleanupVerified: !!(report.cleanup && report.cleanup.verified),
         gate: report.gate ? {

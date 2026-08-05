@@ -515,8 +515,11 @@ function probeIncomeStatus_(ss, mode) {
     };
   }
 
+  var display;
+  var headerMap;
   try {
-    getCashFlowHeaderMap_(cashFlowSheet);
+    display = cashFlowSheet.getDataRange().getDisplayValues();
+    headerMap = getCashFlowHeaderMapFromHeaders_(display[0] || []);
   } catch (_e) {
     return {
       status: 'missing',
@@ -527,7 +530,7 @@ function probeIncomeStatus_(ss, mode) {
       note: "Couldn't check income. Please try again."
     };
   }
-  var classification = classifyIncomeGroupsInSheet_(cashFlowSheet);
+  var classification = classifyIncomeGroupsInSheet_(cashFlowSheet, display, headerMap);
   var recurringCount = classification.recurring.length;
   var otherCount = classification.other.filter(function(group) {
     return Number(group.monthsHit) > 0 || Number(group.avgNonZero) > 0;
@@ -562,21 +565,31 @@ function probeIncomeStatus_(ss, mode) {
  * Shared read-only prerequisite contract for Setup-gated dashboard insights.
  * Keep the required-step list here so Setup / Review and Overview cannot drift.
  */
-function getOnboardingRequiredReadiness_(ss, mode) {
+function getOnboardingRequiredReadiness_(ss, mode, performanceTrace) {
   var ctxMode = normalizeOnboardingMode_(mode);
+  function markReadinessStage_(name) {
+    if (performanceTrace && typeof markPerformanceTrace_ === 'function') {
+      markPerformanceTrace_(performanceTrace, name);
+    }
+  }
   var bank = probeBankAccountsStatus_(ss, ctxMode);
+  markReadinessStage_('snapshot_readiness_bank');
   var debts = probeDebtsStatus_(ss, ctxMode);
+  markReadinessStage_('snapshot_readiness_debts');
   var bills = probeBillsStatus_(ss, ctxMode);
+  markReadinessStage_('snapshot_readiness_bills');
   var income = probeIncomeStatus_(ss, ctxMode);
+  markReadinessStage_('snapshot_readiness_income');
   // Profile is Settings-sheet driven, not mode-routed. The probe lives
   // in profile.js and is read-only.
   var profile = (typeof probeProfileStatus_ === 'function')
-    ? probeProfileStatus_()
+    ? probeProfileStatus_(ss)
     : {
         status: 'missing', count: 0, partialCount: 0,
         sheetExists: false, sheetName: 'INPUT - Settings',
         note: 'Profile module unavailable.'
       };
+  markReadinessStage_('snapshot_readiness_profile');
 
   var steps = [
     { key: 'bank', label: 'Bank Accounts', state: bank },

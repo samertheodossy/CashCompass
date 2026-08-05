@@ -27,6 +27,8 @@ function doGet(e) {
     ? String(e.parameter.releaseRunId) : '';
   var unattendedBrowserRun = !!(e && e.parameter &&
     String(e.parameter.unattended || '') === '1');
+  var dashboardPerformanceDebug = !!(e && e.parameter &&
+    /^(?:1|true)$/i.test(String(e.parameter.debug || '')));
   if (view === 'admin' && isAdminUser_()) {
     return HtmlService.createTemplateFromFile('AdminDiagnostics')
       .evaluate()
@@ -98,6 +100,7 @@ function doGet(e) {
       e2eTemplate.firstRunE2EConfigJson = JSON.stringify({ enabled: true, runId: context.runId });
       e2eTemplate.populatedDashboardE2EEnabled = false;
       e2eTemplate.populatedDashboardE2EConfigJson = '{}';
+      e2eTemplate.dashboardPerformanceDebugJson = 'false';
       return e2eTemplate.evaluate()
         .setTitle('CashCompass — First-Run UX E2E Running')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -130,6 +133,7 @@ function doGet(e) {
         runId: populatedContext.runId,
         expected: populatedContext.expected
       });
+      populatedTemplate.dashboardPerformanceDebugJson = 'false';
       return populatedTemplate.evaluate()
         .setTitle('CashCompass — Populated Dashboard E2E Running')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -141,6 +145,7 @@ function doGet(e) {
   dashboardTemplate.firstRunE2EConfigJson = '{}';
   dashboardTemplate.populatedDashboardE2EEnabled = false;
   dashboardTemplate.populatedDashboardE2EConfigJson = '{}';
+  dashboardTemplate.dashboardPerformanceDebugJson = JSON.stringify(dashboardPerformanceDebug);
   return dashboardTemplate.evaluate()
     .setTitle('CashCompass')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);

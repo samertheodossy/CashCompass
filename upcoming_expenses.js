@@ -90,8 +90,8 @@ function appendUpcomingActivityPayment_(ss, row, colMap, upcomingId, previousAmo
   });
 }
 
-function getUpcomingExpensesUiData() {
-  const sheet = getOrCreateUpcomingExpensesSheet_();
+function getUpcomingExpensesUiData(optionalSs) {
+  const sheet = getOrCreateUpcomingExpensesSheet_(optionalSs);
   const values = sheet.getDataRange().getValues();
   const display = sheet.getDataRange().getDisplayValues();
 
@@ -702,8 +702,8 @@ function getUpcomingExpenseForQuickPayment(id) {
   };
 }
 
-function getUpcomingExpenseMetrics_() {
-  const data = getUpcomingExpensesUiData();
+function getUpcomingExpenseMetrics_(optionalSs) {
+  const data = getUpcomingExpensesUiData(optionalSs);
   const rows = data.expenses || [];
   const today = stripTime_(new Date());
 

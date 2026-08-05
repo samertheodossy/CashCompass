@@ -15,6 +15,9 @@ var APP_DEBUG_MODE = false;
 function isDebugMode() {
   if (APP_DEBUG_MODE === true) return true;
   try {
+    if (typeof window !== 'undefined' && window.__cashCompassPerformanceDebug === true) {
+      return true;
+    }
     if (typeof window !== 'undefined' && window.location && window.location.search) {
       // Accept `?debug=1` or `?debug=true`; anything else is falsy.
       var q = window.location.search;
@@ -24,9 +27,120 @@ function isDebugMode() {
   return false;
 }
 
+// Initial dashboard hydration trace. It is enabled only for an explicitly
+// requested `?debug=1` page load and reports operational stage names, elapsed
+// time, and outcome. No workbook values or user/account identifiers enter the
+// report. One aggregate log record keeps diagnostics from adding meaningful
+// RPC contention to the load being measured.
+var DASHBOARD_INITIAL_LOAD_STAGES_ = [
+  'startup_routing',
+  'snapshot',
+  'overview_details',
+  'overview_bills',
+  'overview_upcoming',
+  'overview_house_expenses'
+];
+var DASHBOARD_INITIAL_LOAD_TIMEOUT_MS_ = 45000;
+var dashboardInitialLoadPerformance_ = null;
+
+function beginDashboardInitialLoadPerformance_() {
+  if (!isDebugMode() || dashboardInitialLoadPerformance_) return;
+  var now = Date.now();
+  dashboardInitialLoadPerformance_ = {
+    runId: 'load-' + now.toString(36) + '-' + Math.random().toString(36).slice(2, 10),
+    startedAtMs: now,
+    stages: Object.create(null),
+    finished: false,
+    timeoutId: null
+  };
+  dashboardInitialLoadPerformance_.timeoutId = setTimeout(function() {
+    finishDashboardInitialLoadPerformance_('timeout');
+  }, DASHBOARD_INITIAL_LOAD_TIMEOUT_MS_);
+  if (window.console && typeof window.console.info === 'function') {
+    window.console.info('[CashCompass load performance] started',
+      dashboardInitialLoadPerformance_.runId);
+  }
+}
+
+function startDashboardInitialLoadStage_(stageName) {
+  var state = dashboardInitialLoadPerformance_;
+  if (!state || state.finished || DASHBOARD_INITIAL_LOAD_STAGES_.indexOf(stageName) < 0) {
+    return null;
+  }
+  if (state.stages[stageName]) return null;
+  var token = {
+    runId: state.runId,
+    name: stageName,
+    startedAtMs: Date.now(),
+    tokenId: Math.random().toString(36).slice(2, 12)
+  };
+  state.stages[stageName] = { token: token, settled: false };
+  return token;
+}
+
+function finishDashboardInitialLoadStage_(token, outcome) {
+  var state = dashboardInitialLoadPerformance_;
+  if (!state || state.finished || !token || token.runId !== state.runId) return;
+  var entry = state.stages[token.name];
+  if (!entry || entry.settled || !entry.token || entry.token.tokenId !== token.tokenId) return;
+  entry.settled = true;
+  entry.durationMs = Math.max(0, Date.now() - token.startedAtMs);
+  entry.outcome = outcome === 'error' ? 'error' : 'ok';
+
+  var allSettled = DASHBOARD_INITIAL_LOAD_STAGES_.every(function(name) {
+    return state.stages[name] && state.stages[name].settled;
+  });
+  if (allSettled) finishDashboardInitialLoadPerformance_('settled');
+}
+
+function finishDashboardInitialLoadPerformance_(reason) {
+  var state = dashboardInitialLoadPerformance_;
+  if (!state || state.finished) return;
+  state.finished = true;
+  if (state.timeoutId) clearTimeout(state.timeoutId);
+  var finishedAtMs = Date.now();
+  var stages = DASHBOARD_INITIAL_LOAD_STAGES_.map(function(name) {
+    var entry = state.stages[name];
+    return {
+      name: name,
+      durationMs: entry && entry.settled
+        ? Math.max(0, Number(entry.durationMs) || 0)
+        : Math.max(0, finishedAtMs - (entry && entry.token
+          ? entry.token.startedAtMs
+          : state.startedAtMs)),
+      outcome: entry && entry.settled ? entry.outcome : 'timeout'
+    };
+  });
+  var report = {
+    schemaVersion: 1,
+    operation: 'dashboard.initial_load',
+    runId: state.runId,
+    outcome: reason === 'settled' && stages.every(function(stage) {
+      return stage.outcome === 'ok';
+    }) ? 'ok' : (reason === 'settled' ? 'error' : 'timeout'),
+    recordedAt: new Date(finishedAtMs).toISOString(),
+    totalMs: Math.max(0, finishedAtMs - state.startedAtMs),
+    stages: stages
+  };
+
+  if (window.console && typeof window.console.info === 'function') {
+    window.console.info('[CashCompass load performance]', report);
+  }
+  try {
+    google.script.run
+      .withSuccessHandler(function() {})
+      .withFailureHandler(function() {})
+      .recordDashboardClientPerformance(report);
+  } catch (_e) {
+    // Diagnostics must never affect the product load or surface an error.
+  }
+}
+
 let bankCurrentData = null;
 let paymentPayees = [];
 let allDebtRows = [];
+let overviewSnapshotRequestId_ = 0;
+let overviewOperationalSummaryRequestId_ = 0;
 let pendingFocus = null;
 let upcomingExpenses = [];
 let retirementUiData = null;
@@ -128,6 +242,25 @@ function showPage(name) {
   var targetTab = DASHBOARD_LAST_TAB_BY_PAGE_[name] || defaultTab;
   if (page && targetTab && !page.querySelector('.panel.active')) {
     showTab(targetTab);
+  }
+}
+
+/**
+ * Enter a top-level workspace and hydrate the panel that was already visible.
+ *
+ * The lazy dashboard startup intentionally does not fetch hidden workspaces.
+ * Some default panels are marked active in the initial HTML, so showPage()
+ * correctly preserves them but has no reason to call showTab() and start their
+ * loader. Top-level navigation uses this wrapper to hydrate that pre-active
+ * panel. When no panel was active, showPage() already selects and hydrates the
+ * remembered/default tab, so the wrapper must not trigger a duplicate read.
+ */
+function showWorkspacePage(name) {
+  var page = document.getElementById('page_' + name);
+  var activePanel = page ? page.querySelector('.panel.active') : null;
+  showPage(name);
+  if (activePanel && activePanel.id) {
+    showTab(activePanel.id);
   }
 }
 
@@ -421,6 +554,21 @@ function showTab(name) {
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
+  // Non-Overview workspaces are intentionally lazy. The initial page load
+  // fetches only the canonical Overview snapshot; each hidden section reads
+  // its workbook data when the user actually opens it.
+  if (name === 'houses' && typeof loadHouseSection === 'function') {
+    loadHouseSection();
+  }
+
+  if (name === 'bank' && typeof loadBankSection === 'function') {
+    loadBankSection();
+  }
+
+  if (name === 'investments' && typeof loadInvestmentSection === 'function') {
+    loadInvestmentSection();
+  }
+
   if (name === 'donations' && typeof loadDonationsSection === 'function') {
     loadDonationsSection();
   }
@@ -477,6 +625,14 @@ function showTab(name) {
   // another device) surface without a full reload.
   if (name === 'income' && typeof loadIncomeSourcesSection === 'function') {
     loadIncomeSourcesSection();
+  }
+
+  if (name === 'retirement' && typeof loadRetirementSection === 'function') {
+    loadRetirementSection();
+  }
+
+  if (name === 'purchase' && typeof loadPurchaseSimulatorSection === 'function') {
+    loadPurchaseSimulatorSection();
   }
 }
 
@@ -540,13 +696,16 @@ function clearSurfaceState_(target, baseClass) {
 }
 
 /**
- * True only for the transient browser-to-Apps-Script failures that are safe to
- * retry when the caller is an explicitly read-only operation. Business errors,
- * authorization failures, and server exceptions are deliberately excluded.
+ * True only for transient browser-to-Apps-Script failures that are safe to
+ * retry when the caller is an explicitly read-only operation. This includes
+ * the narrow Apps Script storage precondition failure observed while loading
+ * the Overview. Business errors, authorization failures, and unrelated server
+ * exceptions are deliberately excluded.
  */
 function isTransientRpcTransportError_(value) {
   const raw = String(value && value.message ? value.message : (value == null ? '' : value));
-  return /(?:\bHTTP\s*0\b|NetworkError|Connection failure|Failed to fetch|Network request failed)/i.test(raw);
+  return /(?:\bHTTP\s*0\b|NetworkError|Connection failure|Failed to fetch|Network request failed)/i.test(raw) ||
+    /server error occurred while reading from storage[\s\S]*?FAILED_PRECONDITION/i.test(raw);
 }
 
 /**
@@ -1172,19 +1331,234 @@ function applySnapshot(snapshot) {
   }
 }
 
-function refreshSnapshot() {
+function applyOverviewCoreSnapshot_(snapshot) {
+  try {
+    window.__dashboardState = (snapshot && snapshot.state) ? snapshot.state : null;
+  } catch (_e) {}
+
+  const set = function(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+  set('snap_cash', fmtCurrency(snapshot.cash));
+  set('snap_investments', fmtCurrency(snapshot.investments));
+  set('snap_houseEquity', fmtCurrency(
+    snapshot.houseValues !== undefined ? snapshot.houseValues : snapshot.houseEquity));
+  set('snap_debt', fmtCurrency(snapshot.debt));
+  set('snap_netWorth', fmtCurrency(snapshot.netWorth));
+
+  const refreshedTime = formatRefreshedTime_(snapshot.refreshedAt);
+  setStatus(
+    'planner_status',
+    refreshedTime ? ('Overview loaded ' + refreshedTime) : 'Overview loaded',
+    false
+  );
+}
+
+function runDashboardPostRenderMaintenance_() {
+  try {
+    google.script.run
+      .withSuccessHandler(function() {})
+      .withFailureHandler(function() {})
+      .runDashboardPostRenderMaintenance();
+  } catch (_e) { /* background maintenance must never affect the UI */ }
+}
+
+function requestDashboardOverviewDetails_(requestId, continuationId) {
+  const detailTiming = startDashboardInitialLoadStage_('overview_details');
+  google.script.run
+    .withSuccessHandler(function(data) {
+      finishDashboardInitialLoadStage_(detailTiming, 'ok');
+      if (requestId !== overviewSnapshotRequestId_) return;
+      applySnapshot(data);
+      runDashboardPostRenderMaintenance_();
+    })
+    .withFailureHandler(function() {
+      finishDashboardInitialLoadStage_(detailTiming, 'error');
+      if (requestId !== overviewSnapshotRequestId_) return;
+      setStatus(
+        'planner_status',
+        'Overview totals loaded. Detailed outlook is unavailable right now.',
+        false
+      );
+    })
+    .getDashboardOverviewDetails(continuationId || '');
+}
+
+function requestDashboardOverviewDetailsAfterPaint_(requestId, continuationId) {
+  const start = function() {
+    requestDashboardOverviewDetails_(requestId, continuationId);
+  };
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(function() {
+      window.requestAnimationFrame(start);
+    });
+    return;
+  }
+  setTimeout(start, 0);
+}
+
+/**
+ * Hydrate only the Overview's Bills and Operations cards. These reads reuse
+ * the existing authoritative endpoints but intentionally avoid rendering the
+ * hidden Bills, Upcoming, and House Expense workspaces during startup.
+ */
+function loadOverviewOperationalSummaries_() {
+  const requestId = ++overviewOperationalSummaryRequestId_;
+  const isCurrent = function() {
+    return requestId === overviewOperationalSummaryRequestId_;
+  };
+
+  const billsNext7 = document.getElementById('ov_bills_next7');
+  const billsTiming = startDashboardInitialLoadStage_('overview_bills');
+  if (billsNext7) billsNext7.innerHTML = loadingIndicatorHtml('Loading bills…');
+  google.script.run
+    .withSuccessHandler(function(data) {
+      finishDashboardInitialLoadStage_(billsTiming, 'ok');
+      if (!isCurrent()) return;
+      renderBillsDueSummary_(data || {});
+    })
+    .withFailureHandler(function() {
+      finishDashboardInitialLoadStage_(billsTiming, 'error');
+      if (!isCurrent()) return;
+      renderBillsDueSummary_({ overdue: [], next7: [] }, 'Could not load bills right now.');
+    })
+    .getBillsDueFromCashFlowForDashboard();
+
+  const upcomingTiming = startDashboardInitialLoadStage_('overview_upcoming');
+  ['ov_upcoming_next7', 'ov_upcoming_next30'].forEach(function(id, index) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = loadingIndicatorHtml('Loading upcoming expenses…', index === 0);
+  });
+  google.script.run
+    .withSuccessHandler(function(data) {
+      finishDashboardInitialLoadStage_(upcomingTiming, 'ok');
+      if (!isCurrent()) return;
+      renderUpcomingSummary((data && data.summary) || {});
+    })
+    .withFailureHandler(function() {
+      finishDashboardInitialLoadStage_(upcomingTiming, 'error');
+      if (!isCurrent()) return;
+      ['ov_upcoming_next7', 'ov_upcoming_next30'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '—';
+      });
+    })
+    .getUpcomingExpensesUiData();
+
+  const houseTiming = startDashboardInitialLoadStage_('overview_house_expenses');
+  ['ov_house_thisMonth', 'ov_house_ytd'].forEach(function(id, index) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = loadingIndicatorHtml('Loading property expenses…', index === 0);
+  });
+  google.script.run
+    .withSuccessHandler(function(data) {
+      finishDashboardInitialLoadStage_(houseTiming, 'ok');
+      if (!isCurrent()) return;
+      const thisMonthTotal = ((data && data.thisMonthByHouse) || []).reduce(function(sum, row) {
+        return sum + Number(row.netTotal || 0);
+      }, 0);
+      const ytdTotal = ((data && data.ytdByHouse) || []).reduce(function(sum, row) {
+        return sum + Number(row.netTotal || 0);
+      }, 0);
+      const ovBlank = window.__dashboardState === 'notSetUp';
+      const monthEl = document.getElementById('ov_house_thisMonth');
+      const ytdEl = document.getElementById('ov_house_ytd');
+      if (monthEl) monthEl.textContent = ovBlank ? '—' : fmtCurrency(thisMonthTotal);
+      if (ytdEl) ytdEl.textContent = ovBlank ? '—' : fmtCurrency(ytdTotal);
+    })
+    .withFailureHandler(function() {
+      finishDashboardInitialLoadStage_(houseTiming, 'error');
+      if (!isCurrent()) return;
+      ['ov_house_thisMonth', 'ov_house_ytd'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '—';
+      });
+    })
+    .getHouseExpenseSummaryData();
+}
+
+function requestOverviewOperationalSummariesAfterPaint_() {
+  const start = function() { loadOverviewOperationalSummaries_(); };
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(start);
+    return;
+  }
+  setTimeout(start, 0);
+}
+
+/**
+ * The progressive core endpoint reads the bounded workbook and only performs
+ * best-effort, user-scoped presentation-cache writes. Those short-lived cache
+ * tokens are safe to repeat, so this one startup read may use the shared
+ * single-retry recovery without extending automatic retry to any writer or
+ * post-render maintenance operation.
+ */
+function requestDashboardOverviewCoreSnapshotWithRetry_(options) {
+  const config = options || {};
+  runReadOnlyRpcWithRetry_({
+    isCurrent: config.isCurrent,
+    onRetry: config.onRetry,
+    onRecovered: config.onRecovered,
+    onSuccess: config.onSuccess,
+    onFailure: config.onFailure,
+    invoke: function(success, failure) {
+      google.script.run
+        .withSuccessHandler(success)
+        .withFailureHandler(failure)
+        .getDashboardOverviewCoreSnapshot();
+    }
+  });
+}
+
+function refreshSnapshot(options) {
+  const requestId = ++overviewSnapshotRequestId_;
+  const progressive = !!(options && options.progressive);
+  const initialLoadTiming = startDashboardInitialLoadStage_('snapshot');
   // Show the shared "Refreshing…" indicator on the refresh status line below
   // the main button while the snapshot RPC is in flight. applySnapshot()
   // replaces it with the "Dashboard updated <time>" state on success.
   setStatusLoading('planner_status', 'Refreshing…');
-  google.script.run
-    .withSuccessHandler(function(data) {
-      applySnapshot(data);
-    })
-    .withFailureHandler(function(err) {
+  const handleSuccess = function(data) {
+      if (requestId !== overviewSnapshotRequestId_) return;
+      if (progressive) {
+        if (data && data.cachedDetails) {
+          // Paint the last completed outlook immediately, then restore the
+          // just-read authoritative totals before refreshing details in the
+          // background. This prevents a slow detail RPC from leaving the
+          // lower Overview blank while never presenting stale top totals.
+          applySnapshot(data.cachedDetails);
+        }
+        applyOverviewCoreSnapshot_(data);
+        requestDashboardOverviewDetailsAfterPaint_(requestId, data && data.continuationId);
+        requestOverviewOperationalSummariesAfterPaint_();
+      } else {
+        applySnapshot(data);
+      }
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
+    };
+  const handleFailure = function(err) {
+      if (requestId !== overviewSnapshotRequestId_) return;
       setStatus('planner_status', (err.message || String(err)), true);
-    })
-    .getDashboardSnapshot();
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
+    };
+  if (progressive) {
+    requestDashboardOverviewCoreSnapshotWithRetry_({
+      isCurrent: function() {
+        return requestId === overviewSnapshotRequestId_;
+      },
+      onRetry: function(state) {
+        setStatusLoading('planner_status', state.message);
+      },
+      onSuccess: handleSuccess,
+      onFailure: handleFailure
+    });
+  } else {
+    google.script.run
+      .withSuccessHandler(handleSuccess)
+      .withFailureHandler(handleFailure)
+      .getDashboardSnapshot();
+  }
 }
 
 function runPlannerNow() {
@@ -1245,12 +1619,6 @@ function focusTarget(obj) {
     focusDebtTarget_(obj);
   } else if (obj.tab === 'payments') {
     if (obj.prefill) prefillQuickPayment(obj.prefill);
-  } else if (obj.tab === 'upcoming') {
-    loadUpcomingSection();
-  } else if (obj.tab === 'retirement') {
-    loadRetirementSection();
-  } else if (obj.tab === 'purchase') {
-    loadPurchaseSimulatorSection();
   }
 }
 

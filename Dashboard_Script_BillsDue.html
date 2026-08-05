@@ -659,6 +659,7 @@ function loadDashboardActionSections() {
 }
 
 function loadBillsDueUi_() {
+  const initialLoadTiming = startDashboardInitialLoadStage_('bills_due');
   // Bills Due can be refreshed by page navigation, a completed action, and the
   // broader dashboard refresh at nearly the same time. Only the newest request
   // may publish cards; otherwise a slower pre-Skip response can restore the
@@ -680,6 +681,7 @@ function loadBillsDueUi_() {
 
   google.script.run
     .withSuccessHandler(function(data) {
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
       if (loadGeneration !== window.__billsDueLoadGeneration) return;
       const overdue = (data && data.overdue) || [];
       const next7 = (data && data.next7) || [];
@@ -693,6 +695,7 @@ function loadBillsDueUi_() {
       updateBillPaymentFollowup_(data || {});
     })
     .withFailureHandler(function(err) {
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
       if (loadGeneration !== window.__billsDueLoadGeneration) return;
       const msg = customerSafeErrorMessage_(
         err && err.message ? err.message : String(err),
@@ -1091,6 +1094,7 @@ function stopTrackingBillFromDashboard(billKey) {
 }
 
 function loadRecurringBillsUi_() {
+  const initialLoadTiming = startDashboardInitialLoadStage_('recurring_bills');
   const recEl = document.getElementById('bd_recurringList');
   if (recEl) recEl.innerHTML = loadingBlockHtml('Loading recurring bills…');
 
@@ -1098,11 +1102,13 @@ function loadRecurringBillsUi_() {
     .withSuccessHandler(function(data) {
       const rows = data || [];
       renderRecurringBillsList_('bd_recurringList', rows, 'No recurring bills pending.');
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
     })
     .withFailureHandler(function(err) {
       renderRecurringBillsList_('bd_recurringList', [],
         customerSafeErrorMessage_(err && err.message ? err.message : String(err),
           'Could not load recurring bills. Please refresh and try again.'));
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
     })
     .getRecurringBillsWithoutDueDateForDashboard();
 }
@@ -1184,6 +1190,7 @@ function routeBillsToAddIfAuthoritativelyEmpty_(rows, viewGeneration) {
 function loadActiveBillsManagementUi_() {
   const el = document.getElementById('bills_manage_list');
   if (!el) return;
+  const initialLoadTiming = startDashboardInitialLoadStage_('manage_bills');
   window.__billsManageLoadGeneration = Number(window.__billsManageLoadGeneration || 0) + 1;
   const loadGeneration = window.__billsManageLoadGeneration;
   const viewGeneration = Number(window.__billsViewSelectionGeneration || 0);
@@ -1191,6 +1198,7 @@ function loadActiveBillsManagementUi_() {
 
   google.script.run
     .withSuccessHandler(function(rows) {
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
       if (loadGeneration !== window.__billsManageLoadGeneration) return;
       if (!Array.isArray(rows)) {
         renderSurfaceState_('bills_manage_list', {
@@ -1206,6 +1214,7 @@ function loadActiveBillsManagementUi_() {
       routeBillsToAddIfAuthoritativelyEmpty_(rows, viewGeneration);
     })
     .withFailureHandler(function(err) {
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
       if (loadGeneration !== window.__billsManageLoadGeneration) return;
       renderSurfaceState_('bills_manage_list', {
         kind: 'unavailable',

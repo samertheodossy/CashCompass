@@ -124,6 +124,13 @@ function runDebtPlannerCore_(options, performanceTrace, ownsPerformanceTrace) {
   } catch (_canonicalHistoryReadErr) {
     canonicalHistorySnapshot = null;
   }
+  // Same-call handoff for Dashboard refresh wrappers and the guarded harness.
+  // This avoids rebuilding the identical canonical position immediately after
+  // Planner has just read it. Normal callers omit snapshotContext; no global or
+  // cross-request cache is introduced.
+  if (options.snapshotContext && typeof options.snapshotContext === 'object') {
+    options.snapshotContext.canonicalSnapshot = canonicalHistorySnapshot;
+  }
   if (typeof markPerformanceTrace_ === 'function') {
     markPerformanceTrace_(performanceTrace, 'sync_inputs');
   }

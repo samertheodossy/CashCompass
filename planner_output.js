@@ -235,19 +235,15 @@ function retireHistoryChartsAndSupportData_(sheet) {
 function formatRecommendationsSheet_(sheet, rows) {
   const lastRow = rows.length;
   const lastCol = rows[0].length;
+  const plan = buildRecommendationsFormatPlan_(rows);
 
   sheet.setFrozenRows(1);
 
-  for (let c = 1; c <= lastCol; c++) sheet.setColumnWidth(c, 130);
+  sheet.setColumnWidths(1, lastCol, 130);
   sheet.setColumnWidth(1, 280);
   if (lastCol >= 2) sheet.setColumnWidth(2, 180);
-  if (lastCol >= 3) sheet.setColumnWidth(3, 140);
-  if (lastCol >= 4) sheet.setColumnWidth(4, 140);
-  if (lastCol >= 5) sheet.setColumnWidth(5, 140);
-  if (lastCol >= 6) sheet.setColumnWidth(6, 140);
-  if (lastCol >= 7) sheet.setColumnWidth(7, 140);
-  if (lastCol >= 8) sheet.setColumnWidth(8, 170);
-  if (lastCol >= 9) sheet.setColumnWidth(9, 170);
+  if (lastCol >= 3) sheet.setColumnWidths(3, Math.min(5, lastCol - 2), 140);
+  if (lastCol >= 8) sheet.setColumnWidths(8, Math.min(2, lastCol - 7), 170);
   if (lastCol >= 10) sheet.setColumnWidth(10, 180);
   if (lastCol >= 11) sheet.setColumnWidth(11, 700);
 
@@ -265,6 +261,42 @@ function formatRecommendationsSheet_(sheet, rows) {
     .setFontColor('#ffffff')
     .setHorizontalAlignment('center');
 
+  if (plan.sectionHeaderRanges.length) {
+    sheet.getRangeList(plan.sectionHeaderRanges)
+      .setBackground('#d9eaf7')
+      .setFontWeight('bold')
+      .setFontSize(11);
+  }
+  if (plan.tableHeaderRanges.length) {
+    sheet.getRangeList(plan.tableHeaderRanges)
+      .setBackground('#edf3f8')
+      .setFontWeight('bold');
+  }
+  if (plan.currencyRanges.length) {
+    sheet.getRangeList(plan.currencyRanges).setNumberFormat('$#,##0.00;-$#,##0.00');
+  }
+  if (plan.integerRanges.length) {
+    sheet.getRangeList(plan.integerRanges).setNumberFormat('0');
+  }
+  if (plan.decimalRanges.length) {
+    sheet.getRangeList(plan.decimalRanges).setNumberFormat('0.00');
+  }
+  if (plan.percentRanges.length) {
+    sheet.getRangeList(plan.percentRanges).setNumberFormat('0.00"%"');
+  }
+
+  if (plan.stabilityRow) {
+    const stabilityCell = sheet.getRange(plan.stabilityRow, 2);
+    if (plan.stabilityValue === 'Stable') stabilityCell.setBackground('#d9ead3').setFontColor('#274e13').setFontWeight('bold');
+    else if (plan.stabilityValue === 'Tight') stabilityCell.setBackground('#fff2cc').setFontColor('#7f6000').setFontWeight('bold');
+    else if (plan.stabilityValue === 'Risky') stabilityCell.setBackground('#f4cccc').setFontColor('#990000').setFontWeight('bold');
+  }
+}
+
+/** Build every formatting target from the row matrix already in memory. */
+function buildRecommendationsFormatPlan_(rows) {
+  const lastRow = rows.length;
+  const lastCol = rows[0].length;
   const sectionNames = {
     'Visual Summary': true,
     'Action Plan': true,
@@ -283,25 +315,13 @@ function formatRecommendationsSheet_(sheet, rows) {
     'Warnings': true,
     'Notes': true
   };
-
-  for (let r = 1; r <= lastRow; r++) {
-    const first = String(sheet.getRange(r, 1).getValue() || '').trim();
-    const second = String(sheet.getRange(r, 2).getValue() || '').trim();
-
-    if (sectionNames[first] && !second) {
-      sheet.getRange(r, 1, 1, lastCol)
-        .setBackground('#d9eaf7')
-        .setFontWeight('bold')
-        .setFontSize(11);
-    }
-
-    if (first === 'Metric' || first === 'Account' || first === 'Strategy' || first === 'Type' || first === 'House') {
-      sheet.getRange(r, 1, 1, lastCol)
-        .setBackground('#edf3f8')
-        .setFontWeight('bold');
-    }
-  }
-
+  const tableHeaderNames = {
+    'Metric': true,
+    'Account': true,
+    'Strategy': true,
+    'Type': true,
+    'House': true
+  };
   const currencyLabels = {
     'Usable Cash After Buffers': true,
     'Active Credit Card Debt': true,
@@ -333,81 +353,95 @@ function formatRecommendationsSheet_(sheet, rows) {
     'Recommended Total To Pay Now': true,
     'Estimated Annual Interest Savings': true
   };
-
   const integerLabels = {
     'Estimated Months To Pay Off Target': true,
     'Estimated Months To Pay Off All Cards': true
   };
-
   const decimalLabels = {
     'Months of Minimum Coverage': true,
     'Cash to Card Debt Ratio': true,
     'Upcoming Pay Window Coverage': true
   };
+  const sectionFormats = {
+    'Asset Breakdown': { currencyCols: [3] },
+    'Real Estate Breakdown': { currencyCols: [2, 3, 4] },
+    'Cash Flow Change Breakdown': { currencyCols: [3, 4, 5] },
+    'Pay Now': { currencyCols: [5, 6], percentCols: [7], integerCols: [4] },
+    'Pay Soon': { currencyCols: [5, 6], percentCols: [7], integerCols: [4] },
+    'Other Obligations': { currencyCols: [3, 4], percentCols: [5] },
+    'Recommendation': { currencyCols: [5, 6, 7], percentCols: [4], integerCols: [8, 9] },
+    'Top Debt Targets': { currencyCols: [3, 5], percentCols: [4] }
+  };
+  const plan = {
+    sectionHeaderRanges: [],
+    tableHeaderRanges: [],
+    currencyRanges: [],
+    integerRanges: [],
+    decimalRanges: [],
+    percentRanges: [],
+    stabilityRow: 0,
+    stabilityValue: ''
+  };
+  const firstSectionRows = {};
 
-  for (let r = 1; r <= lastRow; r++) {
-    const label = String(sheet.getRange(r, 1).getValue() || '').trim();
-    if (currencyLabels[label]) sheet.getRange(r, 2).setNumberFormat('$#,##0.00;-$#,##0.00');
-    if (integerLabels[label]) sheet.getRange(r, 2).setNumberFormat('0');
-    if (decimalLabels[label]) sheet.getRange(r, 2).setNumberFormat('0.00');
+  for (let r = 0; r < rows.length; r++) {
+    const first = String(rows[r][0] || '').trim();
+    const second = String(rows[r][1] || '').trim();
+    const rowNumber = r + 1;
+    const fullRowRange = 'A' + rowNumber + ':' + plannerColumnA1_(lastCol) + rowNumber;
+    if (sectionNames[first] && !second) plan.sectionHeaderRanges.push(fullRowRange);
+    if (tableHeaderNames[first]) plan.tableHeaderRanges.push(fullRowRange);
+    if (currencyLabels[first]) plan.currencyRanges.push('B' + rowNumber);
+    if (integerLabels[first]) plan.integerRanges.push('B' + rowNumber);
+    if (decimalLabels[first]) plan.decimalRanges.push('B' + rowNumber);
+    if (first === 'Monthly Stability' && !plan.stabilityRow) {
+      plan.stabilityRow = rowNumber;
+      plan.stabilityValue = second;
+    }
+    // Preserve the former formatSectionTable_ behavior: it used the first row
+    // whose column-A text matched, even when the same label also appeared in a
+    // metrics section before the dedicated table.
+    if (sectionFormats[first] && !firstSectionRows[first]) {
+      firstSectionRows[first] = rowNumber;
+    }
   }
 
-  const stabilityCell = findLabelValueCell_(sheet, 'Monthly Stability');
-  if (stabilityCell) {
-    const value = String(stabilityCell.getValue() || '').trim();
-    if (value === 'Stable') stabilityCell.setBackground('#d9ead3').setFontColor('#274e13').setFontWeight('bold');
-    else if (value === 'Tight') stabilityCell.setBackground('#fff2cc').setFontColor('#7f6000').setFontWeight('bold');
-    else if (value === 'Risky') stabilityCell.setBackground('#f4cccc').setFontColor('#990000').setFontWeight('bold');
-  }
+  Object.keys(sectionFormats).forEach(function(sectionName) {
+    const sectionRow = firstSectionRows[sectionName];
+    if (!sectionRow) return;
+    const dataStartRow = sectionRow + 2;
+    let dataEndRow = lastRow;
+    for (let rowNumber = dataStartRow + 1; rowNumber <= lastRow; rowNumber++) {
+      if (String(rows[rowNumber - 1][0] || '').trim() === '') {
+        dataEndRow = rowNumber - 1;
+        break;
+      }
+    }
+    if (dataEndRow < dataStartRow) return;
+    const config = sectionFormats[sectionName];
+    (config.currencyCols || []).forEach(function(col) {
+      plan.currencyRanges.push(plannerColumnA1_(col) + dataStartRow + ':' + plannerColumnA1_(col) + dataEndRow);
+    });
+    (config.percentCols || []).forEach(function(col) {
+      plan.percentRanges.push(plannerColumnA1_(col) + dataStartRow + ':' + plannerColumnA1_(col) + dataEndRow);
+    });
+    (config.integerCols || []).forEach(function(col) {
+      plan.integerRanges.push(plannerColumnA1_(col) + dataStartRow + ':' + plannerColumnA1_(col) + dataEndRow);
+    });
+  });
 
-  formatSectionTable_(sheet, 'Asset Breakdown', { currencyCols: [3] });
-  formatSectionTable_(sheet, 'Real Estate Breakdown', { currencyCols: [2, 3, 4] });
-  formatSectionTable_(sheet, 'Cash Flow Change Breakdown', { currencyCols: [3, 4, 5] });
-  formatSectionTable_(sheet, 'Pay Now', { currencyCols: [5, 6], percentCols: [7], integerCols: [4] });
-  formatSectionTable_(sheet, 'Pay Soon', { currencyCols: [5, 6], percentCols: [7], integerCols: [4] });
-  formatSectionTable_(sheet, 'Other Obligations', { currencyCols: [3, 4], percentCols: [5] });
-  formatSectionTable_(sheet, 'Recommendation', { currencyCols: [5, 6, 7], percentCols: [4], integerCols: [8, 9] });
-  formatSectionTable_(sheet, 'Top Debt Targets', { currencyCols: [3, 5], percentCols: [4] });
+  return plan;
 }
 
-function formatSectionTable_(sheet, sectionName, config) {
-  const values = sheet.getDataRange().getValues();
-  let dataStartRow = -1;
-  let dataEndRow = -1;
-
-  for (let r = 0; r < values.length; r++) {
-    const first = String(values[r][0] || '').trim();
-    if (first === sectionName) {
-      dataStartRow = r + 3;
-      break;
-    }
+function plannerColumnA1_(columnNumber) {
+  let value = Number(columnNumber) || 0;
+  let out = '';
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    out = String.fromCharCode(65 + remainder) + out;
+    value = Math.floor((value - 1) / 26);
   }
-
-  if (dataStartRow === -1) return;
-
-  for (let r = dataStartRow - 1; r < values.length; r++) {
-    const first = String(values[r][0] || '').trim();
-    if ((r + 1) > dataStartRow && first === '') {
-      dataEndRow = r;
-      break;
-    }
-  }
-
-  if (dataEndRow === -1) dataEndRow = values.length;
-  const numRows = dataEndRow - dataStartRow + 1;
-  if (numRows <= 0) return;
-
-  (config.currencyCols || []).forEach(function(col) {
-    sheet.getRange(dataStartRow, col, numRows, 1).setNumberFormat('$#,##0.00;-$#,##0.00');
-  });
-
-  (config.percentCols || []).forEach(function(col) {
-    sheet.getRange(dataStartRow, col, numRows, 1).setNumberFormat('0.00"%"');
-  });
-
-  (config.integerCols || []).forEach(function(col) {
-    sheet.getRange(dataStartRow, col, numRows, 1).setNumberFormat('0');
-  });
+  return out;
 }
 
 function getHistoryHeaders_() {

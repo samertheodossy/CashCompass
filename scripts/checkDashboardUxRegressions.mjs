@@ -66,6 +66,118 @@ assert.match(render, /DASHBOARD_LAST_TAB_BY_PAGE_\[ownerPage\]\s*=\s*name/,
   'Subtab navigation must remember the selected panel for its workspace');
 assert.match(render, /DASHBOARD_LAST_TAB_BY_PAGE_\[name\]\s*\|\|\s*defaultTab/,
   'Returning to a workspace must restore its most recent subtab before using the default');
+for (const page of ['assets', 'cashflow', 'properties', 'planning']) {
+  assert.match(files['Dashboard_Body.html'],
+    new RegExp(`data-page=["']${page}["'][^>]*onclick=["']showWorkspacePage\\(["']${page}["']\\)`),
+    `${page} top-level navigation must hydrate its visible lazy panel`);
+}
+const workspaceNavigationCalls = [];
+const workspaceNavigationPage = {
+  querySelector(selector) {
+    assert.equal(selector, '.panel.active');
+    return { id: 'payments' };
+  }
+};
+const showWorkspacePage = Function(
+  'document',
+  'showPage',
+  'showTab',
+  `${functionSource_(render, 'showWorkspacePage')}; return showWorkspacePage;`
+)(
+  { getElementById: (id) => id === 'page_cashflow' ? workspaceNavigationPage : null },
+  (name) => workspaceNavigationCalls.push(['page', name]),
+  (name) => workspaceNavigationCalls.push(['tab', name])
+);
+showWorkspacePage('cashflow');
+assert.deepEqual(workspaceNavigationCalls, [
+  ['page', 'cashflow'],
+  ['tab', 'payments']
+], 'Cash Flow entry must hydrate a pre-active Quick Add panel');
+workspaceNavigationCalls.length = 0;
+showWorkspacePage('assets');
+assert.deepEqual(workspaceNavigationCalls, [['page', 'assets']],
+  'Workspace entry must not duplicate the default-tab hydration performed by showPage');
+const initDashboardStart = files['PlannerDashboardWeb.html'].indexOf('function initDashboard()');
+const initDashboardEnd = files['PlannerDashboardWeb.html'].indexOf('\n    // Expose', initDashboardStart);
+const initDashboardBody = files['PlannerDashboardWeb.html'].slice(initDashboardStart, initDashboardEnd);
+assert.ok(initDashboardStart >= 0 && initDashboardEnd > initDashboardStart,
+  'Dashboard startup must remain statically testable');
+assert.match(initDashboardBody, /refreshSnapshot\(\{\s*progressive:\s*true\s*\}\)/,
+  'Dashboard startup must hydrate the visible Overview progressively');
+for (const hiddenLoader of [
+  'loadHouseSection', 'loadHouseExpensesSection', 'loadBankSection',
+  'loadInvestmentSection', 'loadDebtSection', 'loadPaymentSection',
+  'loadUpcomingSection', 'loadRetirementSection', 'loadPurchaseSimulatorSection',
+  'loadDashboardActionSections', 'loadIncomeSourcesSection'
+]) {
+  assert.ok(!initDashboardBody.includes(`${hiddenLoader}(`),
+    `Dashboard startup must not eagerly call hidden loader ${hiddenLoader}`);
+}
+assert.match(render,
+  /function refreshSnapshot\(options\)[\s\S]*?requestDashboardOverviewCoreSnapshotWithRetry_\([\s\S]*?getDashboardSnapshot\(\)/,
+  'Progressive startup must request core cards before the full Overview snapshot');
+assert.match(render,
+  /function requestDashboardOverviewCoreSnapshotWithRetry_\(options\)[\s\S]*?runReadOnlyRpcWithRetry_\([\s\S]*?getDashboardOverviewCoreSnapshot\(\)/,
+  'Only the progressive Overview core read may recover once from a transient storage failure');
+assert.match(render,
+  /applyOverviewCoreSnapshot_\(data\);\s*requestDashboardOverviewDetailsAfterPaint_\(requestId,\s*data\s*&&\s*data\.continuationId\)/,
+  'The full Overview request must begin only after the core response renders');
+assert.match(render,
+  /data && data\.cachedDetails[\s\S]*?applySnapshot\(data\.cachedDetails\)[\s\S]*?applyOverviewCoreSnapshot_\(data\)/,
+  'Progressive Overview must paint cached lower details before restoring fresh top totals');
+assert.match(files['dashboard_data.js'],
+  /core\.cachedDetails = getCachedDashboardOverviewDetails_\(ss\)/,
+  'Overview core must return only user- and workbook-scoped cached details');
+assert.match(files['dashboard_data.js'],
+  /const details = buildDashboardSnapshot_[\s\S]*?cacheDashboardOverviewDetails_\(ss, details\)[\s\S]*?return details/,
+  'A completed background Overview read must refresh the short-lived detail cache');
+assert.match(files['dashboard_data.js'],
+  /CacheService\.getUserCache\(\)[\s\S]*?workbookId:\s*ss\.getId\(\)/,
+  'Overview detail caching must remain user-scoped and workbook-scoped');
+assert.match(render,
+  /function requestDashboardOverviewDetailsAfterPaint_\(requestId, continuationId\)[\s\S]*?requestAnimationFrame[\s\S]*?requestAnimationFrame/,
+  'Progressive startup must yield through a browser paint before background detail work');
+assert.match(render,
+  /function loadOverviewOperationalSummaries_\(\)[\s\S]*?getBillsDueFromCashFlowForDashboard\(\)[\s\S]*?getUpcomingExpensesUiData\(\)[\s\S]*?getHouseExpenseSummaryData\(\)/,
+  'Overview startup must hydrate Bills and Operations from their authoritative summary reads');
+const overviewOperationalLoader = functionSource_(render, 'loadOverviewOperationalSummaries_');
+for (const hiddenRenderer of [
+  'renderBillsList_', 'renderUpcomingList', 'renderHouseExpenseSummaryList_',
+  'loadRecurringBillsUi_', 'loadActiveBillsManagementUi_'
+]) {
+  assert.ok(!overviewOperationalLoader.includes(hiddenRenderer),
+    `Overview summaries must not render hidden workspace content via ${hiddenRenderer}`);
+}
+assert.match(render,
+  /requestDashboardOverviewDetailsAfterPaint_\(requestId, data && data\.continuationId\);\s*requestOverviewOperationalSummariesAfterPaint_\(\)/,
+  'Operational summaries must start after the authoritative top cards are painted');
+assert.match(render,
+  /applySnapshot\(data\);\s*runDashboardPostRenderMaintenance_\(\)/,
+  'Maintenance must run only after the full Overview response is applied');
+assert.match(render,
+  /const requestId = \+\+overviewSnapshotRequestId_/,
+  'Every Overview refresh must receive a monotonic request identity');
+assert.ok((render.match(/requestId !== overviewSnapshotRequestId_/g) || []).length >= 3,
+  'Core, background-detail, and failure callbacks must reject stale responses');
+const showTabStart = render.indexOf('function showTab(name)');
+const showTabEnd = render.indexOf('\nfunction toggleHealthExplainer', showTabStart);
+const showTabBody = render.slice(showTabStart, showTabEnd);
+for (const [tab, loader] of [
+  ['houses', 'loadHouseSection'],
+  ['bank', 'loadBankSection'],
+  ['investments', 'loadInvestmentSection'],
+  ['debts', 'loadDebtSection'],
+  ['payments', 'loadPaymentSection'],
+  ['upcoming', 'loadUpcomingSection'],
+  ['billsDue', 'loadDashboardActionSections'],
+  ['income', 'loadIncomeSourcesSection'],
+  ['retirement', 'loadRetirementSection'],
+  ['purchase', 'loadPurchaseSimulatorSection']
+]) {
+  assert.match(showTabBody,
+    new RegExp(`name === ['"]${tab}['"][\\s\\S]*?${loader}\\(\\)`),
+    `${tab} must hydrate ${loader} on tab entry`);
+}
 assert.match(render, /Financial plan refreshed/, 'Planner refresh must leave a success message');
 assert.match(render, /planner_refresh_btn/, 'Planner refresh must guard against duplicate clicks');
 const currencyUiSources = [
@@ -1206,7 +1318,7 @@ assert.equal(strongHealth.label, 'Strong',
 assert.equal(strongHealth.availability, 'ready',
   'Financial Health must expose its verified readiness state');
 assert.match(dashboardData,
-  /getOnboardingRequiredReadiness_\(ss,\s*['"]normal['"]\)[\s\S]*?buildFinancialHealthScore_\(latestMetrics,\s*upcoming,\s*\{[\s\S]*?setupReadiness:/,
+  /getOnboardingRequiredReadiness_\(ss,\s*['"]normal['"],\s*performanceTrace\)[\s\S]*?buildFinancialHealthScore_\(latestMetrics,\s*upcoming,\s*\{[\s\S]*?setupReadiness:/,
   'Overview must gate Financial Health with the shared required Setup contract');
 
 for (const [pageId, title] of Object.entries({
@@ -1378,6 +1490,42 @@ assert.match(files['upcoming_expenses.js'],
 assert.match(files['quick_add_payment.js'],
   /addCashFlowMoneyToCellPreserveRowFormat_\(sheet,\s*rowInfo\.row,\s*monthCol,\s*signedAmount,\s*3\)/,
   'Quick Add must remain cumulative so its customer-facing add-not-replace copy stays truthful');
+for (const sourceUi of [body, files['QuickAddPaymentUI.html']]) {
+  assert.match(sourceUi, /Payment source[\s\S]*?value="CASH"[\s\S]*?value="CREDIT_CARD"/,
+    'Quick Add must offer Cash and Credit card when a new Expense row needs a source');
+  assert.match(sourceUi, /Required for a new Expense or an existing Expense with no source\./,
+    'Quick Add must explain why payment source is required');
+}
+assert.match(files['Dashboard_Script_Payments.html'],
+  /updateQuickAddFlowSourceVisibility_\(\) && !flowSource[\s\S]*?Choose Cash or Credit card for this new expense/,
+  'Dashboard Quick Add must block a new Expense until a source is selected');
+assert.match(files['Dashboard_Script_Payments.html'], /flowSource:\s*flowSource/,
+  'Dashboard Quick Add must send the selected source to the writer');
+assert.match(files['quick_add_payment.js'],
+  /!flowSource && isDirectQuickAdd && entryType === 'Expense'[\s\S]*?Payment source is required/,
+  'The writer must reject stale direct clients that omit a new Expense source');
+assert.match(files['quick_add_payment.js'],
+  /!flowSource && entryType === 'Income'[\s\S]*?flowSource = 'CASH'/,
+  'New Income rows must receive the canonical CASH source');
+assert.match(files['quick_add_payment.js'],
+  /preview:\s*\{[\s\S]*?existingFlowSource:\s*newFlowSource/,
+  'Quick Add success must return the persisted source so the repaired prompt clears');
+const quickAddNeedsFlowSource = Function(
+  `${functionSource_(files['Dashboard_Script_Payments.html'], 'quickAddNeedsFlowSource_')}; return quickAddNeedsFlowSource_;`
+)();
+assert.equal(quickAddNeedsFlowSource('Expense', 'New expense', true, false, '', ''), true,
+  'A new direct Expense must request a source');
+assert.equal(quickAddNeedsFlowSource('Expense', 'Existing expense', true, true, 'CASH', ''), false,
+  'An existing Expense must keep its stored source without prompting');
+assert.equal(quickAddNeedsFlowSource('Expense', 'Incomplete expense', true, true, '', ''), true,
+  'An existing Expense with a blank source must request a one-time repair');
+assert.equal(quickAddNeedsFlowSource('Income', 'New income', true, false, '', ''), false,
+  'Income must not ask for a credit-card funding source');
+assert.equal(quickAddNeedsFlowSource('Expense', 'Linked bill', true, false, '', 'CASH'), false,
+  'A linked workflow with an authoritative source must not prompt again');
+assert.match(files['test_harness_scenarios_quick_add.js'],
+  /Harness New Source Required[\s\S]*?missingSourceRow[\s\S]*?flowSource:\s*'CREDIT_CARD'[\s\S]*?incomeFlowSource/,
+  'The disposable Quick Add harness must prove missing-source rejection and source persistence');
 assert.match(files['planner_helpers.js'],
   /function addCashFlowMoneyToCellPreserveRowFormat_\([\s\S]*?cell\.setValue\(round2_\(currentValue \+ addValue\)\)/,
   'The Cash Flow add helper must retain its cumulative-value contract');
@@ -2473,7 +2621,7 @@ const incomeServer = files['income_sources.js'];
 assert.match(incomeServer, /var INCOME_MIN_MONTHS_FOR_RECURRING_ = 1;/,
   'A source explicitly added for the current month must immediately remain manageable');
 assert.match(incomeServer,
-  /function classifyIncomeGroupsInSheet_\(sheet\)[\s\S]*?incomeGroupQualifiesAsRecurring_\(groups\[i\]\)/,
+  /function classifyIncomeGroupsInSheet_\(sheet, optionalDisplay, optionalHeaderMap\)[\s\S]*?incomeGroupQualifiesAsRecurring_\(groups\[i\]\)/,
   'Income must expose one shared recurring/other classifier');
 assert.match(incomeServer,
   /getActiveIncomeSourcesForManagementFromDashboard\(\)[\s\S]*?classifyIncomeGroupsInSheet_\(sheet\)\.recurring/,
@@ -2559,6 +2707,12 @@ assert.equal(retryCtx.isTransientRpcTransportError_(
   new Error('NetworkError: Connection failure due to HTTP 0')), true,
   'The observed HTTP 0 error must be classified as transient');
 assert.equal(retryCtx.isTransientRpcTransportError_(
+  new Error("We're sorry, a server error occurred while reading from storage. Error code FAILED_PRECONDITION.")), true,
+  'The observed Apps Script storage precondition failure must be classified as transient');
+assert.equal(retryCtx.isTransientRpcTransportError_(
+  new Error('FAILED_PRECONDITION: workbook setup is incomplete.')), false,
+  'Unrelated precondition failures must never be classified as transient');
+assert.equal(retryCtx.isTransientRpcTransportError_(
   new Error('Account name is required.')), false,
   'Business validation failures must never be classified as transport retries');
 
@@ -2596,6 +2750,22 @@ retryCtx.runReadOnlyRpcWithRetry_({
 });
 assert.equal(businessInvocations, 1, 'A business failure must not be retried');
 assert.equal(businessFailure, true, 'A business failure must be delivered immediately');
+
+let persistentStorageInvocations = 0;
+let persistentStorageFailures = 0;
+retryCtx.runReadOnlyRpcWithRetry_({
+  invoke: function(_success, failure) {
+    persistentStorageInvocations += 1;
+    failure(new Error(
+      "We're sorry, a server error occurred while reading from storage. Error code FAILED_PRECONDITION."
+    ));
+  },
+  onFailure: function() { persistentStorageFailures += 1; }
+});
+assert.equal(persistentStorageInvocations, 2,
+  'A persistent storage failure must stop after exactly one retry');
+assert.equal(persistentStorageFailures, 1,
+  'A persistent storage failure must surface once after bounded recovery is exhausted');
 
 const customerErrorStart = render.indexOf('function customerSafeErrorMessage_(');
 const customerErrorEnd = render.indexOf('\nfunction toNumber(', customerErrorStart);
@@ -2809,7 +2979,9 @@ function overviewFailureContext_(source, functionName, elementIds) {
     setStatus() {},
     escapeHtml: String,
     customerSafeErrorMessage_: () => 'Could not load.',
-    window: { __dashboardState: 'setUp' }
+    window: { __dashboardState: 'setUp' },
+    startDashboardInitialLoadStage_: () => null,
+    finishDashboardInitialLoadStage_: () => {}
   });
   const supportSource = functionName === 'loadUpcomingSection'
     ? functionSource_(source, 'setUpcomingDismissGuidanceVisible_') + '\n'
@@ -2897,6 +3069,8 @@ const bankContext = vm.createContext({
   fillBankAccountDropdownFromData_() {},
   focusBankTarget_() {},
   loadBankData() {},
+  startDashboardInitialLoadStage_: () => null,
+  finishDashboardInitialLoadStage_: () => {},
   pendingFocus: null,
   String
 });
@@ -3042,6 +3216,8 @@ const debtEmptyContext = vm.createContext({
   setSelectLoadFailure() {},
   renderSurfaceState_() {},
   customerSafeErrorMessage_: (_value, fallback) => fallback,
+  startDashboardInitialLoadStage_: () => null,
+  finishDashboardInitialLoadStage_: () => {},
   pendingFocus: null,
   Array,
   String

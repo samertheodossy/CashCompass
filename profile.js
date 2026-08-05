@@ -522,11 +522,17 @@ function saveProfileSettings(profile) {
  * Never throws: if INPUT - Settings cannot be read for any reason we
  * report 'missing' with a clear note, matching the other probes.
  */
-function probeProfileStatus_() {
+function probeProfileStatus_(optionalSs) {
   try {
-    var p = getProfileSettings();
-    var hasName = !!(p.name && p.name.trim());
-    var hasEmail = !!(p.email && p.email.trim());
+    var ss = optionalSs || getUserSpreadsheet_();
+    // Setup readiness needs only Name + Email. Reading the full profile would
+    // re-read INPUT - Settings for DOB normalization even though those fields
+    // do not participate in the readiness contract.
+    var settings = readAllSettingsMap_(ss);
+    var name = String(settings[PROFILE_KEYS_.NAME] || '').trim();
+    var email = String(settings[PROFILE_KEYS_.EMAIL] || '').trim();
+    var hasName = !!name;
+    var hasEmail = !!email;
     if (hasName && hasEmail) {
       return {
         // count/partialCount are reported as 0 because Profile is a
@@ -537,7 +543,7 @@ function probeProfileStatus_() {
         partialCount: 0,
         sheetExists: true,
         sheetName: PROFILE_SETTINGS_SHEET_NAME_,
-        note: p.name + ' · ' + p.email
+        note: name + ' · ' + email
       };
     }
     return {

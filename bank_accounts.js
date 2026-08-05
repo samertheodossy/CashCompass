@@ -1799,7 +1799,7 @@ function ensureBankAccountsActiveColumnForBlock_(sheet, block) {
  * Sums INPUT - Bank Accounts for the prior calendar month (script timezone) for all data rows.
  * Used for dashboard "Total cash" change vs prior month (same pattern as investments).
  */
-function getPriorMonthCashTotalFromBankInput_() {
+function getPriorMonthCashTotalFromBankInput_(optionalSs) {
   const tz = Session.getScriptTimeZone();
   const now = new Date();
   const parts = Utilities.formatDate(now, tz, 'yyyy-MM-dd').split('-');
@@ -1815,16 +1815,21 @@ function getPriorMonthCashTotalFromBankInput_() {
   const year = prevY;
 
   try {
-    const ss = getUserSpreadsheet_();
+    const ss = optionalSs || getUserSpreadsheet_();
     const sheet = getSheet_(ss, 'BANK_ACCOUNTS');
     const block = getBankAccountsYearBlock_(sheet, year);
     const refDate = new Date(year, monthIndexZero, 15);
     const monthCol = getMonthColumnByDate_(sheet, refDate, block.headerRow);
+    const rowCount = Math.max(0, block.dataEndRow - block.dataStartRow + 1);
+    if (!rowCount) return { total: 0, label: Utilities.formatDate(new Date(year, monthIndexZero, 1), tz, 'MMM yyyy') };
+    const readRange = sheet.getRange(block.dataStartRow, 1, rowCount, Math.max(1, monthCol));
+    const rawRows = readRange.getValues();
+    const displayRows = readRange.getDisplayValues();
     var sum = 0;
-    for (var row = block.dataStartRow; row <= block.dataEndRow; row++) {
-      var name = String(sheet.getRange(row, 1).getDisplayValue() || '').trim();
+    for (var row = 0; row < rawRows.length; row++) {
+      var name = String(displayRows[row][0] || '').trim();
       if (!isBankAccountDataRowName_(name)) continue;
-      sum += toNumber_(sheet.getRange(row, monthCol).getValue());
+      sum += toNumber_(rawRows[row][monthCol - 1]);
     }
     var label = Utilities.formatDate(new Date(year, monthIndexZero, 1), tz, 'MMM yyyy');
     return { total: round2_(sum), label: label };

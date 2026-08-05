@@ -94,6 +94,81 @@ assert.match(recoveryUi, /cashcompass2026@gmail\.com[\s\S]*?never accepts an ema
   'Recovery Live UI must explain its fixed identity and target boundary');
 assert.match(validationUi, /single suite inventory and evidence dashboard[\s\S]*?All suites/,
   'Validation console must remain the consolidated suite inventory and evidence surface');
+assert.match(validationUi,
+  /Dashboard read profile[\s\S]*?safe for bounded workbooks[\s\S]*?function vtRunDashboardReadProfile\(\)[\s\S]*?\.vtRunDashboardReadProfile\(vtCurrentId\(\)\)/,
+  'Validation console must profile the currently selected workbook, including an explicit bounded target');
+assert.match(validationUi,
+  /does not measure browser rendering or network latency/,
+  'Dashboard read profile must state its workbook-read-only measurement boundary');
+assert.match(validationUi,
+  /vtCopyDashboardReadProfile\(event\)[\s\S]*?function vtCopyDashboardReadProfile\(ev\)[\s\S]*?vt-profile-json/,
+  'Dashboard read profile must provide one-click exact JSON copying');
+assert.match(validationUi,
+  /Latest Overview load trace[\s\S]*?read-only and does not read or change the selected workbook[\s\S]*?function vtLoadLatestOverviewTrace\(\)[\s\S]*?\.getLatestDashboardClientPerformance\(\)/,
+  'Validation console must retrieve the latest per-admin Overview trace without touching the selected workbook');
+assert.match(validationUi,
+  /vtCopyLatestOverviewTrace\(event\)[\s\S]*?function vtCopyLatestOverviewTrace\(ev\)[\s\S]*?vt-overview-trace-json/,
+  'Latest Overview trace must provide one-click exact JSON copying');
+
+const profileStart = validationServer.indexOf('function vtDashboardReadProfileSpecs_(');
+const profileEnd = validationServer.indexOf('function vtRunFormulaValidation(', profileStart);
+assert.ok(profileStart >= 0 && profileEnd > profileStart,
+  'Dashboard read profile server seam must remain dynamically testable');
+const profileSource = validationServer.slice(profileStart, profileEnd);
+assert.match(profileSource,
+  /function vtRunDashboardReadProfile\(spreadsheetId\)[\s\S]*?assertValidatorAllowed_\(\)[\s\S]*?vtResolveTarget_\(spreadsheetId\)/,
+  'Dashboard read profile must be admin-gated and use the authoritative selected target');
+assert.match(profileSource, /\[1, 2\]\.forEach/,
+  'Dashboard read profile must collect first and immediate-repeat passes');
+assert.doesNotMatch(profileSource,
+  /\.(?:setValue|setValues|setFormula|setNumberFormat|insertSheet|deleteSheet|appendRow|clear|activate|flush)\s*\(/,
+  'Dashboard read profile must remain getter-only');
+assert.doesNotMatch(profileSource,
+  /(?:ensure|getOrCreate|PropertiesService|CacheService|LockService|ScriptApp)\s*[A-Za-z0-9_]*\s*\(/,
+  'Dashboard read profile must not invoke self-heal, persistence, cache, lock, or trigger seams');
+
+let profileAdminChecks = 0;
+let profileOpenedId = '';
+let profileRawReads = 0;
+let profileDisplayReads = 0;
+const makeProfileSheet = (name, values) => ({
+  getName: () => name,
+  getDataRange: () => ({
+    getNumRows: () => values.length,
+    getNumColumns: () => values[0].length,
+    getValues: () => { profileRawReads++; return values; },
+    getDisplayValues: () => { profileDisplayReads++; return values.map((row) => row.map(String)); }
+  })
+});
+const profileWorkbook = {
+  getName: () => 'Bounded fixture',
+  getId: () => 'bounded-fixture-id',
+  getSheets: () => [
+    makeProfileSheet('OUT - History', [['secret-balance'], [12345]]),
+    makeProfileSheet('INPUT - Bills', [['Payee', 'Amount'], ['Secret Payee', 75]]),
+    makeProfileSheet('HOUSES - Private Home', [['Type', 'Amount'], ['Repair', 500]])
+  ]
+};
+const profileCtx = vm.createContext({
+  SpreadsheetApp: { openById: (id) => { profileOpenedId = id; return profileWorkbook; } },
+  getValidatorDefaultCentralWorkbookId_: () => 'configured-default-id',
+  assertValidatorAllowed_: () => { profileAdminChecks++; },
+  safeName_: (ss) => ss.getName(),
+  safeId_: (ss) => ss.getId(),
+  Date, Math, String, JSON, Error
+});
+vm.runInContext(validationServer, profileCtx);
+const selectedProfile = profileCtx.vtRunDashboardReadProfile('bounded-fixture-id');
+assert.equal(selectedProfile.ok, true);
+assert.equal(profileAdminChecks, 1, 'Dashboard read profile must enforce the Validator admin guard');
+assert.equal(profileOpenedId, 'bounded-fixture-id', 'Explicit selected workbook must remain authoritative');
+assert.equal(profileRawReads, 6, 'Three present sheets must receive one raw read in each of two passes');
+assert.equal(profileDisplayReads, 6, 'Three present sheets must receive one display read in each of two passes');
+assert.equal(selectedProfile.report.comparison.length, 10,
+  'Dashboard read profile must return every fixed data family, including missing areas');
+assert.equal(selectedProfile.report.overall, 'COMPLETE_WITH_GAPS');
+assert.doesNotMatch(JSON.stringify(selectedProfile), /secret-balance|Secret Payee|Private Home|12345/,
+  'Dashboard read profile must never return cell values or workbook-derived sheet names');
 assert.match(suites, /id: 'SUITE-FIRST-RUN-UX-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?FIRST_RUN_E2E_LATEST_EVIDENCE_V6/,
   'First-Run UX must be an implemented browser suite backed by saved evidence');
 assert.match(firstRunE2E, /FIRST_RUN_E2E_EVIDENCE_KEY_\s*=\s*'FIRST_RUN_E2E_LATEST_EVIDENCE_V6'/,
@@ -478,7 +553,9 @@ const debtRaceCtx = vm.createContext({
   setStatus: () => {},
   setStatusLoading: () => {},
   setSelectLoading: () => {},
-  setSelectLoadFailure: () => {}
+  setSelectLoadFailure: () => {},
+  startDashboardInitialLoadStage_: () => null,
+  finishDashboardInitialLoadStage_: () => {}
 });
 vm.runInContext(debtLoaderMatch[0].replace(/\n\/\/ First-run fallback$/, ''), debtRaceCtx);
 debtRaceCtx.loadDebtSection();

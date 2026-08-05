@@ -205,8 +205,8 @@ either map the exact failure to an existing assertion or add the next
 
 | ID | Remaining item | Exit evidence | Estimate |
 |---|---|---|---:|
-| 4a | Optimize Dashboard formatting | Measured formatting stage is reduced without changing workbook output | 1–3 d |
-| 4b | Optimize snapshot construction | Duplicate reads/calculation work are removed while totals and freshness remain correct | 1–2 d |
+| 4a | Optimize Dashboard formatting | **Complete on isolated Central `@310` under `REG-056`.** Exact production-path first/repeat runs passed 14/14 functional and formatting read-back assertions with Restricted sharing and verified Trash cleanup; repeat `format_dashboard` fell from 18.303 s on `@116` to 0.378 s | complete |
+| 4b | Optimize snapshot construction | **Complete on isolated Central `@317` under `REG-057`.** History/prior-month reads are shared or batched, Overview calculates only the selected retirement scenario, Income readiness reuses one Cash Flow grid, and refresh snapshots reuse Planner's same-call canonical position. Functional assertions, Restricted sharing, and verified Trash cleanup passed; current-position construction fell from 5.508 s to 0.128 s and total snapshot from 13.026 s to 4.867 s | complete |
 | 4c | Retire embedded `OUT - Dashboard` charts | **Complete on isolated Central `@308`.** Six generated charts and their O:Z support tables remain absent while tabular output, History, and web-dashboard behavior remain correct | 0.5–1.5 d |
 | 4d | Measure remaining release flows | Initial load, Save, first-create, navigation, provisioning, and mature-workbook timings are captured | 1–2 d |
 | 4e | Run the exact-candidate 20-pair campaign | Twenty independent first/repeat pairs complete with Restricted fixtures and verified Trash | 1–2 active d; 2–4 elapsed d |

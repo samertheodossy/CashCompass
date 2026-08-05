@@ -302,8 +302,9 @@ function quickAddPayment(payload, optionalSs) {
   const createIfMissing = !!payload.createIfMissing;
   const activityOrigin = normalizeQuickAddActivityOrigin_(payload.activityOrigin);
   const isDirectQuickAdd = activityOrigin === QUICK_ADD_ACTIVITY_ORIGIN_DIRECT_;
-  // Validate up-front so a bad value can't land in the sheet. Blank is allowed
-  // (legacy-compatible) and simply skips the Flow Source write below.
+  // Validate up-front so a bad value can't land in the sheet. Linked legacy
+  // callers may omit the value because their Bill/Debt source can be resolved
+  // below. A direct Quick Add that creates a new Expense must be explicit.
   let flowSource = normalizeFlowSource_(payload.flowSource);
 
   if (!payee) throw new Error('Payee is required.');
@@ -345,6 +346,14 @@ function quickAddPayment(payload, optionalSs) {
     if (!createIfMissing) {
       throw new Error('Payee row not found. Check "Create row if missing" to add it automatically.');
     }
+    if (!flowSource && isDirectQuickAdd && entryType === 'Expense') {
+      throw new Error('Payment source is required when creating a new expense payee. Choose Cash or Credit card.');
+    }
+    // Income is money received into the user's cash/bank side of Cash Flow;
+    // CREDIT_CARD is an expense funding source, not a valid income choice.
+    if (!flowSource && entryType === 'Income') {
+      flowSource = 'CASH';
+    }
     // Bills → Pay and similar flows can lose `flowSource` along the wire
     // (stale cached client bundle on the deployed web app, alternate pay
     // surfaces such as the sidebar, upcoming-expense auto-writes, etc.).
@@ -356,8 +365,27 @@ function quickAddPayment(payload, optionalSs) {
     if (!flowSource && entryType === 'Expense') {
       flowSource = resolveFlowSourceFromBillOrDebt_(ss, payee);
     }
+    if (flowSource && headerMap.flowSourceColZero === -1) {
+      throw new Error('This Cash Flow sheet is missing the Flow Source column required to create the payee safely.');
+    }
     rowInfo = insertCashFlowRow_(sheet, entryType, payee, flowSource);
     rowWasCreated = true;
+  }
+
+  if (
+    rowInfo &&
+    !rowWasCreated &&
+    !flowSource &&
+    isDirectQuickAdd &&
+    entryType === 'Expense' &&
+    headerMap.flowSourceColZero !== -1
+  ) {
+    const storedFlowSource = String(
+      sheet.getRange(rowInfo.row, headerMap.flowSourceCol).getDisplayValue() || ''
+    ).trim();
+    if (!storedFlowSource) {
+      throw new Error('Payment source is required for this expense payee. Choose Cash or Credit card.');
+    }
   }
 
   const targetCell = sheet.getRange(rowInfo.row, monthCol);
@@ -544,6 +572,7 @@ function quickAddPayment(payload, optionalSs) {
       currentValue: newValue,
       rowExists: true,
       flowSourceColumnPresent: headerMap.flowSourceColZero !== -1,
+      existingFlowSource: newFlowSource,
       flowSourceWritten: flowSourceWritten
     },
     message: message,
@@ -1600,6 +1629,12 @@ function insertCashFlowRow_(sheet, entryType, payee, flowSource) {
  */
 function getCashFlowHeaderMap_(sheet) {
   const headers = sheet.getDataRange().getDisplayValues()[0] || [];
+  return getCashFlowHeaderMapFromHeaders_(headers);
+}
+
+/** Build the canonical Cash Flow header map from an already-read header row. */
+function getCashFlowHeaderMapFromHeaders_(headers) {
+  headers = headers || [];
   const typeColZero = headers.indexOf('Type');
   const payeeColZero = headers.indexOf('Payee');
   const flowSourceColZero = headers.indexOf('Flow Source');

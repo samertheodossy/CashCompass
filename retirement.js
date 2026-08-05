@@ -67,9 +67,9 @@ function saveRetirementInputs(payload) {
   };
 }
 
-function getRetirementSummary_() {
-  const sheet = getOrCreateRetirementSheet_();
-  return getRetirementModelData_(sheet);
+function getRetirementSummary_(optionalSs) {
+  const sheet = getOrCreateRetirementSheet_(optionalSs);
+  return getRetirementModelData_(sheet, optionalSs);
 }
 
 /**
@@ -514,8 +514,8 @@ function normalizePartneredSetting_(raw) {
  * Current Age` are intentionally not read here and no code path writes
  * to them.
  */
-function getRetirementHouseholdFromProfile_() {
-  const derived = readRetirementProfileDerivedAges_();
+function getRetirementHouseholdFromProfile_(optionalSs) {
+  const derived = readRetirementProfileDerivedAges_(optionalSs);
   const your = (typeof derived.derivedCurrentAge === 'number' && derived.derivedCurrentAge >= 0)
     ? derived.derivedCurrentAge
     : 0;
@@ -544,10 +544,10 @@ function getRetirementHouseholdFromProfile_() {
  * fails sanity checks. The UI treats `null` as "no hint" so a blank
  * or brand-new workbook renders cleanly.
  */
-function readRetirementProfileDerivedAges_() {
+function readRetirementProfileDerivedAges_(optionalSs) {
   const out = { derivedCurrentAge: null, derivedSpouseCurrentAge: null };
   try {
-    const ss = getUserSpreadsheet_();
+    const ss = optionalSs || getUserSpreadsheet_();
     const sheet = ss.getSheetByName('INPUT - Settings');
     if (!sheet) return out;
 
@@ -667,9 +667,9 @@ function computeAgeFromDob_(dob) {
   return age;
 }
 
-function getRetirementSummarySafe_() {
+function getRetirementSummarySafe_(optionalSs) {
   try {
-    return getRetirementSummary_();
+    return getRetirementSummary_(optionalSs);
   } catch (e) {
     return {
       selectedScenario: 'Base',
@@ -682,14 +682,71 @@ function getRetirementSummarySafe_() {
   }
 }
 
-function getRetirementModelData_(sheet) {
-  const selectedScenario = getSelectedRetirementScenario_(sheet);
+/**
+ * Lightweight Overview payload. The Overview renders only the selected
+ * scenario, so defer the other two Monte Carlo calculations until the customer
+ * opens Planning → Retirement (whose existing loader still calls the full
+ * three-scenario model above).
+ */
+function getRetirementOverviewSummarySafe_(optionalSs) {
+  try {
+    const sheet = getOrCreateRetirementSheet_(optionalSs);
+    const modelValues = sheet.getDataRange().getValues();
+    const modelRowMap = buildRetirementModelRowMap_(modelValues);
+    const selectedScenarioRow = modelRowMap['Selected Scenario'];
+    const selectedScenario = normalizeRetirementScenario_(
+      selectedScenarioRow ? modelValues[selectedScenarioRow - 1][1] : 'Base'
+    );
+    const household = getRetirementHouseholdFromProfile_(optionalSs);
+    const scenarios = {};
+    const analyses = {};
+    RETIREMENT_SCENARIOS_.forEach(function(name) {
+      scenarios[name] = getRetirementScenarioInputsFromGrid_(modelValues, modelRowMap, name);
+      analyses[name] = null;
+    });
+    const selectedInputs = scenarios[selectedScenario];
+    const analysis = isRetirementScenarioComputable_(selectedInputs)
+      ? calculateRetirementPlan_(
+          household,
+          selectedInputs,
+          selectedScenario,
+          getCurrentInvestableAssetsForRetirement_(optionalSs)
+        )
+      : null;
+    analyses[selectedScenario] = analysis;
+    return {
+      selectedScenario: selectedScenario,
+      household: household,
+      scenarios: scenarios,
+      analyses: analyses,
+      analysis: analysis
+    };
+  } catch (e) {
+    return {
+      selectedScenario: 'Base',
+      household: null,
+      scenarios: null,
+      analyses: null,
+      analysis: null,
+      error: e && e.message ? e.message : String(e)
+    };
+  }
+}
+
+function getRetirementModelData_(sheet, optionalSs) {
+  const modelValues = sheet.getDataRange().getValues();
+  const modelRowMap = buildRetirementModelRowMap_(modelValues);
+  const selectedScenarioRow = modelRowMap['Selected Scenario'];
+  const selectedScenario = normalizeRetirementScenario_(
+    selectedScenarioRow ? modelValues[selectedScenarioRow - 1][1] : 'Base'
+  );
   // Current ages are sourced exclusively from Profile DOBs. The
   // legacy `Your Current Age` / `Spouse Current Age` rows in
   // INPUT - Retirement are intentionally not consulted.
-  const household = getRetirementHouseholdFromProfile_();
+  const household = getRetirementHouseholdFromProfile_(optionalSs);
   const scenarios = {};
   const analyses = {};
+  const currentInvestableAssets = getCurrentInvestableAssetsForRetirement_(optionalSs);
 
   // Treat incomplete scenarios as inactive rather than validating /
   // calculating them. A scenario is "computable" only when it has BOTH
@@ -713,10 +770,10 @@ function getRetirementModelData_(sheet) {
   // `analyses[name]`, so this degrades cleanly — the incomplete
   // scenario's card and info panel simply don't paint.
   RETIREMENT_SCENARIOS_.forEach(function(name) {
-    const inputs = getRetirementScenarioInputs_(sheet, name);
+    const inputs = getRetirementScenarioInputsFromGrid_(modelValues, modelRowMap, name);
     scenarios[name] = inputs;
     analyses[name] = isRetirementScenarioComputable_(inputs)
-      ? calculateRetirementPlan_(household, inputs, name)
+      ? calculateRetirementPlan_(household, inputs, name, currentInvestableAssets)
       : null;
   });
 
@@ -726,6 +783,36 @@ function getRetirementModelData_(sheet) {
     scenarios: scenarios,
     analyses: analyses,
     analysis: analyses[selectedScenario]
+  };
+}
+
+function buildRetirementModelRowMap_(values) {
+  const rowMap = {};
+  (values || []).forEach(function(row, index) {
+    const label = String(row && row[0] || '').trim();
+    if (label && !rowMap[label]) rowMap[label] = index + 1;
+  });
+  return rowMap;
+}
+
+function getRetirementScenarioInputsFromGrid_(values, rowMap, scenarioName) {
+  const col = getRetirementScenarioColumn_(scenarioName) - 1;
+  function valueFor_(label) {
+    const row = rowMap[label];
+    if (!row) throw new Error('Unknown retirement scenario row: ' + label);
+    return toNumber_(values[row - 1][col]);
+  }
+  return {
+    targetRetirementAge: valueFor_('Target Retirement Age'),
+    householdRetirementSpendingPerYear: valueFor_('Household Retirement Spending / Year'),
+    yourSocialSecurityPerYear: valueFor_('Your Social Security / Year'),
+    spouseSocialSecurityPerYear: valueFor_('Spouse Social Security / Year'),
+    otherRetirementIncomePerYear: valueFor_('Other Retirement Income / Year'),
+    annualContributions: valueFor_('Annual Contributions'),
+    expectedAnnualReturnPct: valueFor_('Expected Annual Return %'),
+    inflationPct: valueFor_('Inflation %'),
+    safeWithdrawalRatePct: valueFor_('Safe Withdrawal Rate %'),
+    oneTimeFutureCashNeeds: valueFor_('One-Time Future Cash Needs')
   };
 }
 
@@ -957,11 +1044,13 @@ function validateRetirementScenarioInputs_(household, inputs) {
   if (inputs.oneTimeFutureCashNeeds < 0) throw new Error('One-Time Future Cash Needs cannot be negative.');
 }
 
-function calculateRetirementPlan_(household, inputs, scenarioName) {
+function calculateRetirementPlan_(household, inputs, scenarioName, optionalCurrentInvestableAssets) {
   validateRetirementHousehold_(household);
   validateRetirementScenarioInputs_(household, inputs);
 
-  const currentInvestableAssets = getCurrentInvestableAssetsForRetirement_();
+  const currentInvestableAssets = typeof optionalCurrentInvestableAssets === 'number'
+    ? optionalCurrentInvestableAssets
+    : getCurrentInvestableAssetsForRetirement_();
   const householdRetirementIncomePerYear =
     inputs.yourSocialSecurityPerYear +
     inputs.spouseSocialSecurityPerYear +
@@ -1117,8 +1206,8 @@ function randomNormal_(mean, stdDev) {
   return mean + z * stdDev;
 }
 
-function getCurrentInvestableAssetsForRetirement_() {
-  const ss = getUserSpreadsheet_();
+function getCurrentInvestableAssetsForRetirement_(optionalSs) {
+  const ss = optionalSs || getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'ASSETS');
   return sumColumnByHeader_(sheet, 'Current Balance');
 }

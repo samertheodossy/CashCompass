@@ -23,6 +23,7 @@ function updateHouseExpenseAvailability_() {
 }
 
 function loadHouseExpensesSection() {
+  const initialLoadTiming = startDashboardInitialLoadStage_('house_expenses');
   document.getElementById('hx_date').value = new Date().toISOString().slice(0, 10);
   setSelectLoading('hx_house', 'Loading properties…');
   updateHouseExpenseAvailability_();
@@ -60,6 +61,7 @@ function loadHouseExpensesSection() {
       loadRecentHouseExpenses();
       loadHouseExpenseSummaries();
       setStatus('hx_status', '', false);
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
     },
     onRetry: function(info) {
       setStatusLoading('hx_status', info.message);
@@ -68,11 +70,13 @@ function loadHouseExpensesSection() {
       setSelectLoadFailure('hx_house', 'Couldn’t load properties');
       updateHouseExpenseAvailability_();
       setStatus('hx_status', (err.message || String(err)), true);
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
     }
   });
 }
 
 function loadRecentHouseExpenses() {
+  const initialLoadTiming = startDashboardInitialLoadStage_('house_expense_recent');
   const recentRoot = document.getElementById('hx_recentList');
   if (recentRoot) recentRoot.innerHTML = loadingBlockHtml('Loading recent property expenses…');
 
@@ -80,6 +84,7 @@ function loadRecentHouseExpenses() {
     .withSuccessHandler(function(data) {
       const groups = (data && data.groups) ? data.groups : groupRecentHouseExpensesFallback_((data && data.expenses) || []);
       renderRecentHouseExpenses(groups);
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
     })
     .withFailureHandler(function(err) {
       const root = document.getElementById('hx_recentList');
@@ -88,6 +93,7 @@ function loadRecentHouseExpenses() {
           escapeHtml(customerSafeErrorMessage_(err && err.message ? err.message : String(err),
             'Could not load recent property expenses. Please refresh and try again.')) + '</div>';
       }
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
     })
     .getRecentHouseExpenses(20);
 }
@@ -152,6 +158,7 @@ function renderRecentHouseExpenses(groups) {
 }
 
 function loadHouseExpenseSummaries() {
+  const initialLoadTiming = startDashboardInitialLoadStage_('house_expense_summary');
   ['ov_house_thisMonth', 'ov_house_ytd'].forEach(function(id, index) {
     const el = document.getElementById(id);
     if (el) el.innerHTML = loadingIndicatorHtml('Loading property expenses…', index === 0);
@@ -203,6 +210,7 @@ function loadHouseExpenseSummaries() {
 
       if (ovThisMonth) ovThisMonth.textContent = ovBlank ? '—' : fmtCurrency(thisMonthTotal);
       if (ovYtd) ovYtd.textContent = ovBlank ? '—' : fmtCurrency(ytdTotal);
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
     })
     .withFailureHandler(function(err) {
       ['ov_house_thisMonth', 'ov_house_ytd'].forEach(function(id) {
@@ -217,6 +225,7 @@ function loadHouseExpenseSummaries() {
               'Could not load property summaries. Please refresh and try again.')) + '</div>';
         }
       });
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
     })
     .getHouseExpenseSummaryData();
 }

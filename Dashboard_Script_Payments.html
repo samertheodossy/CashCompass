@@ -9,6 +9,72 @@
 var QUICK_ADD_PAYEE_OTHER_SENTINEL_ = '__OTHER__';
 var quickAddPreviewRequestSeq_ = 0;
 var quickAddUiDataRequestSeq_ = 0;
+var quickAddPreviewRowState_ = null;
+
+function normalizeQuickAddPayeeKey_(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function quickAddKnownPayeeExists_(entryType, payee) {
+  var type = String(entryType || '').trim();
+  var payeeKey = normalizeQuickAddPayeeKey_(payee);
+  if (!type || !payeeKey) return false;
+
+  if (
+    quickAddPreviewRowState_ &&
+    quickAddPreviewRowState_.entryType === type &&
+    quickAddPreviewRowState_.payeeKey === payeeKey
+  ) {
+    return !!quickAddPreviewRowState_.rowExists;
+  }
+
+  return paymentPayees.some(function(item) {
+    return String(item && item.type || '').trim() === type &&
+      normalizeQuickAddPayeeKey_(item && item.payee) === payeeKey;
+  });
+}
+
+function quickAddNeedsFlowSource_(entryType, payee, createIfMissing, rowExists, existingFlowSource, pendingFlowSource) {
+  return String(entryType || '').trim() === 'Expense' &&
+    !!String(payee || '').trim() &&
+    ((!rowExists && !!createIfMissing) ||
+      (rowExists && !String(existingFlowSource || '').trim())) &&
+    !String(pendingFlowSource || '').trim();
+}
+
+function updateQuickAddFlowSourceVisibility_() {
+  var wrap = document.getElementById('pay_flowSourceWrap');
+  var select = document.getElementById('pay_flowSource');
+  var typeEl = document.getElementById('pay_type');
+  var createEl = document.getElementById('pay_createIfMissing');
+  if (!wrap || !select || !typeEl || !createEl) return false;
+
+  var payee = currentPaymentPayee();
+  var rowExists = quickAddKnownPayeeExists_(typeEl.value, payee);
+  var existingFlowSource = '';
+  if (
+    quickAddPreviewRowState_ &&
+    quickAddPreviewRowState_.entryType === String(typeEl.value || '') &&
+    quickAddPreviewRowState_.payeeKey === normalizeQuickAddPayeeKey_(payee)
+  ) {
+    existingFlowSource = quickAddPreviewRowState_.existingFlowSource || '';
+  } else if (rowExists) {
+    // Avoid a false prompt while the authoritative preview is in flight.
+    existingFlowSource = '__PREVIEW_PENDING__';
+  }
+  var needsSource = quickAddNeedsFlowSource_(
+    typeEl.value,
+    payee,
+    createEl.checked,
+    rowExists,
+    existingFlowSource,
+    window.__pendingQuickAddFlowSource || ''
+  );
+  wrap.hidden = !needsSource;
+  select.disabled = !needsSource;
+  select.required = needsSource;
+  return needsSource;
+}
 
 function currentPaymentPayee() {
   const typed = document.getElementById('pay_payeeInput').value.trim();
@@ -95,11 +161,10 @@ function renderQuickAddHistory_(data) {
 }
 
 /**
- * Hidden prefill-only state: `window.__pendingQuickAddFlowSource` carries a
+ * Prefill-only state: `window.__pendingQuickAddFlowSource` carries a
  * suggested Flow Source value (e.g. from Bills → Pay) into the next
- * Quick Add save. The Quick Add form has no visible Flow Source control, so
- * this is the bridge that keeps Cash Flow Flow Source in sync with the
- * originating bill's Payment Source without redesigning the UI.
+ * Quick Add save. It bypasses the visible source choice because the linked
+ * workflow already owns the authoritative Payment Source.
  *
  * Parallel channel: `window.__pendingUpcomingPaymentId` carries an Upcoming
  * row ID when Quick Add was launched from the Upcoming board. savePayment()
@@ -201,16 +266,21 @@ function prefillQuickPayment(prefill) {
   // prefills clear it so a stray earlier occurrence can't follow a later save.
   window.__pendingBillOccurrencePaid = prefill.billOccurrencePaid || null;
 
+  updateQuickAddFlowSourceVisibility_();
   loadPaymentPreview();
 }
 
 function loadPaymentSection() {
+  const initialLoadTiming = startDashboardInitialLoadStage_('quick_add');
   const uiDataRequestSeq = ++quickAddUiDataRequestSeq_;
   document.getElementById('pay_date').value = new Date().toISOString().slice(0, 10);
   // Any pending prefill-only Flow Source value only makes sense inside the
   // single save that immediately follows a prefill. Clear it on a cold
   // tab load so a later manual Quick Add never inherits it.
   window.__pendingQuickAddFlowSource = '';
+  quickAddPreviewRowState_ = null;
+  var flowSourceEl = document.getElementById('pay_flowSource');
+  if (flowSourceEl) flowSourceEl.value = '';
   window.__pendingUpcomingPaymentId = '';
   // Bills Due → Pay occurrence marker only makes sense for the single save that
   // immediately follows a Pay click. Clear it on a cold tab load so a later
@@ -229,10 +299,12 @@ function loadPaymentSection() {
         .getQuickAddPaymentUiData();
     },
     onSuccess: function(data) {
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
       if (uiDataRequestSeq !== quickAddUiDataRequestSeq_) return;
       paymentPayees = data.payees || [];
       filterPaymentPayees();
       consumePendingQuickAddPayeePrefill_();
+      updateQuickAddFlowSourceVisibility_();
       loadPaymentPreview();
     },
     onRetry: function(info) {
@@ -244,6 +316,7 @@ function loadPaymentSection() {
       setStatus('pay_status', '', false);
     },
     onFailure: function(err) {
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
       if (uiDataRequestSeq !== quickAddUiDataRequestSeq_) return;
       setStatus('pay_status', (err.message || String(err)), true);
     }
@@ -311,6 +384,7 @@ function filterPaymentPayees() {
   otherOpt.value = QUICK_ADD_PAYEE_OTHER_SENTINEL_;
   otherOpt.textContent = 'Other (type new payee)';
   sel.appendChild(otherOpt);
+  updateQuickAddFlowSourceVisibility_();
 }
 
 function loadPaymentPreview(options) {
@@ -323,24 +397,33 @@ function loadPaymentPreview(options) {
   };
 
   if (!payload.payee || !payload.entryDate) {
+    quickAddPreviewRowState_ = null;
     document.getElementById('pay_sheetName').textContent = '—';
     document.getElementById('pay_monthName').textContent = '—';
     document.getElementById('pay_currentValue').textContent = '—';
     document.getElementById('pay_rowExists').textContent = '—';
     applyQuickPaymentPriorMonth_(null);
     renderQuickAddHistory_(null);
+    updateQuickAddFlowSourceVisibility_();
     return;
   }
 
   google.script.run
     .withSuccessHandler(function(data) {
       if (requestSeq !== quickAddPreviewRequestSeq_) return;
+      quickAddPreviewRowState_ = {
+        entryType: payload.entryType,
+        payeeKey: normalizeQuickAddPayeeKey_(payload.payee),
+        rowExists: !!data.rowExists,
+        existingFlowSource: String(data.existingFlowSource || '')
+      };
       document.getElementById('pay_sheetName').textContent = data.sheetName || '—';
       document.getElementById('pay_monthName').textContent = data.month || '—';
       document.getElementById('pay_currentValue').textContent = fmtCurrency(data.currentValue);
       document.getElementById('pay_rowExists').textContent = data.rowExists ? 'Yes' : 'No';
       applyQuickPaymentPriorMonth_(data);
       renderQuickAddHistory_(data);
+      updateQuickAddFlowSourceVisibility_();
     })
     .withFailureHandler(function(err) {
       if (requestSeq !== quickAddPreviewRequestSeq_) return;
@@ -426,6 +509,12 @@ function refreshQuickAddAfterActivityCorrection_() {
 
 function applyQuickAddPreviewFromResult_(data) {
   if (!data) return;
+  quickAddPreviewRowState_ = {
+    entryType: String(document.getElementById('pay_type').value || ''),
+    payeeKey: normalizeQuickAddPayeeKey_(currentPaymentPayee()),
+    rowExists: !!data.rowExists,
+    existingFlowSource: String(data.existingFlowSource || '')
+  };
   document.getElementById('pay_sheetName').textContent = data.sheetName || '—';
   document.getElementById('pay_monthName').textContent = data.month || '—';
   document.getElementById('pay_currentValue').textContent = fmtCurrency(data.currentValue);
@@ -436,6 +525,7 @@ function applyQuickAddPreviewFromResult_(data) {
     applyQuickPaymentPriorMonth_(data);
   }
   if (Array.isArray(data.history)) renderQuickAddHistory_(data);
+  updateQuickAddFlowSourceVisibility_();
 }
 
 function runDebtPlannerAfterQuickPayment_() {
@@ -950,6 +1040,14 @@ function savePaymentAfterQuickAddVerification_() {
   // flows like Bills → Pay). Consumed on this one save so a subsequent
   // manual Quick Add never silently reuses the previous bill's source.
   var pendingFlowSource = window.__pendingQuickAddFlowSource || '';
+  var selectedFlowSource = String(
+    (document.getElementById('pay_flowSource') || {}).value || ''
+  ).trim();
+  var flowSource = pendingFlowSource || selectedFlowSource;
+  if (updateQuickAddFlowSourceVisibility_() && !flowSource) {
+    setStatus('pay_status', 'Choose Cash or Credit card for this new expense.', true);
+    return;
+  }
   // Upcoming → Quick Add: capture then immediately clear the pending id so
   // a late retry of this handler can't apply the payment twice.
   var pendingUpcomingId = window.__pendingUpcomingPaymentId || '';
@@ -987,6 +1085,9 @@ function savePaymentAfterQuickAddVerification_() {
       }, 0);
       document.getElementById('pay_amount').value = '';
       window.__pendingQuickAddFlowSource = '';
+      var flowSourceEl = document.getElementById('pay_flowSource');
+      if (flowSourceEl) flowSourceEl.value = '';
+      updateQuickAddFlowSourceVisibility_();
 
       // Activity ledger refresh — two-step optimistic update so the new
       // row appears INSTANTLY (no RPC) and survives the background
@@ -1087,7 +1188,7 @@ function savePaymentAfterQuickAddVerification_() {
       entryDate: document.getElementById('pay_date').value,
       amount: numericAmount,
       createIfMissing: document.getElementById('pay_createIfMissing').checked,
-      flowSource: pendingFlowSource,
+      flowSource: flowSource,
       activityOrigin: pendingUpcomingId
         ? 'upcoming_payment'
         : (pendingBillOccurrence ? 'bill_payment' : 'direct_quick_add')

@@ -125,6 +125,10 @@
 <? } ?>
 
 <script>
+  // Server-rendered from the allow-listed `debug` query parameter so the flag
+  // is available inside the Apps Script iframe before any dashboard RPC starts.
+  // The browser-only URL parser remains as a local/dev fallback.
+  window.__cashCompassPerformanceDebug = <?!= dashboardPerformanceDebugJson ?>;
   <?!= includeHtml_('Dashboard_Script_Render'); ?>
 </script>
 
@@ -229,22 +233,12 @@
   // --------------------------------------------------------------------
   try {
     function initDashboard() {
-      refreshSnapshot();
-      loadHouseSection();
-      loadHouseExpensesSection();
-      loadBankSection();
-      loadInvestmentSection();
-      loadDebtSection();
-      loadPaymentSection();
-      loadUpcomingSection();
-      loadRetirementSection();
-      loadPurchaseSimulatorSection();
-      if (typeof loadDashboardActionSections === 'function') {
-        loadDashboardActionSections();
-      }
-      if (typeof loadIncomeSourcesSection === 'function') {
-        loadIncomeSourcesSection();
-      }
+      beginDashboardInitialLoadPerformance_();
+      // Overview is the only visible workspace at startup. Hydrate its
+      // authoritative snapshot first and defer every other section until the
+      // user opens that page/tab. This avoids making hidden workbook reads
+      // compete with the data the customer is waiting to see.
+      refreshSnapshot({ progressive: true });
       // Mark that the normal dashboard loaders have been kicked off at
       // least once this session. onboardingBackToDashboard() uses this
       // flag so that if the startup gate chose to skip initDashboard()
@@ -267,9 +261,11 @@
     }
 
     function runStartupRouting_() {
+      const startupRoutingTiming = startDashboardInitialLoadStage_('startup_routing');
       // Defensive: if the probe endpoint isn't deployed yet for any
       // reason, don't hang the page — fall back to the existing init.
       if (!google || !google.script || !google.script.run) {
+        finishDashboardInitialLoadStage_(startupRoutingTiming, 'error');
         revealWorkspace_();
         initDashboard();
         return;
@@ -277,6 +273,7 @@
 
       google.script.run
         .withSuccessHandler(function(routing) {
+          finishDashboardInitialLoadStage_(startupRoutingTiming, 'ok');
           // Phase 6D.1 recovery gate. If workbook resolution failed with a
           // known recovery state, show the calm recovery page and STOP —
           // do not call initDashboard(), so the normal loaders never fire
@@ -304,6 +301,7 @@
           initDashboard();
         })
         .withFailureHandler(function() {
+          finishDashboardInitialLoadStage_(startupRoutingTiming, 'error');
           // Preserve today's behavior on any probe failure. Populated
           // workbooks must never regress because of the startup gate.
           revealWorkspace_();
@@ -312,6 +310,7 @@
         .getStartupRoutingFromDashboard();
     }
 
+    beginDashboardInitialLoadPerformance_();
     runStartupRouting_();
   } catch (e) {
     // Ensure the anti-flash gate is always lifted if anything above

@@ -1,15 +1,174 @@
 function getDashboardSnapshot() {
-  // Idempotent first-run: make sure the planner-email debounce trigger
-  // exists. We hook this on the dashboard-load entry rather than on
-  // every `buildDashboardSnapshot_()` call so we don't pay
-  // ScriptApp.getProjectTriggers() round-trips on every per-save
-  // background planner run. Failures are swallowed inside
-  // ensureDebouncePlannerTrigger_ so dashboard loading never breaks
-  // because of trigger registration.
-  if (typeof ensureDebouncePlannerTrigger_ === 'function') {
-    ensureDebouncePlannerTrigger_();
-  }
   return buildDashboardSnapshot_();
+}
+
+/**
+ * Fast first paint for the Overview. It returns only the authoritative current
+ * position required by the top cards; History, health, retirement, readiness,
+ * income, and suggested-action work stays in the full snapshot requested after
+ * the browser has painted this response.
+ */
+function getDashboardOverviewCoreSnapshot() {
+  const ss = getUserSpreadsheet_();
+  const current = buildDashboardCurrentPosition_(ss);
+  const core = buildDashboardOverviewCoreSnapshot_(ss, null, current);
+  core.continuationId = cacheDashboardOverviewCurrentPosition_(ss, current);
+  // Reuse the last completed details payload for immediate lower-card paint.
+  // It is user-scoped, workbook-scoped, short-lived, and refreshed in the
+  // background below. No workbook values are written or shared across users.
+  core.cachedDetails = getCachedDashboardOverviewDetails_(ss);
+  return core;
+}
+
+/**
+ * Background continuation for progressive Overview startup. A valid token
+ * reuses only the server-calculated aggregate current position from the core
+ * response; all heavier details remain fresh reads. Invalid/expired tokens
+ * fail closed to the ordinary full snapshot calculation.
+ */
+function getDashboardOverviewDetails(continuationId) {
+  const ss = getUserSpreadsheet_();
+  const current = takeDashboardOverviewCurrentPosition_(ss, continuationId);
+  const details = buildDashboardSnapshot_(ss, null, null, current);
+  cacheDashboardOverviewDetails_(ss, details);
+  return details;
+}
+
+/**
+ * Existing first-load maintenance moved behind the completed Overview render.
+ * Best-effort by design: neither trigger registration nor LOG - Activity
+ * first-create may turn a successful financial display into a customer error.
+ */
+function runDashboardPostRenderMaintenance() {
+  const ss = getUserSpreadsheet_();
+  try {
+    if (typeof ensureActivityLogSheet_ === 'function') ensureActivityLogSheet_(ss);
+  } catch (_activityMaintenanceErr) { /* non-blocking maintenance */ }
+  try {
+    if (typeof ensureDebouncePlannerTrigger_ === 'function') ensureDebouncePlannerTrigger_();
+  } catch (_triggerMaintenanceErr) { /* non-blocking maintenance */ }
+  return { ok: true };
+}
+
+var DASHBOARD_OVERVIEW_CONTINUATION_CACHE_PREFIX_ = 'DASHBOARD_OVERVIEW_CORE_V1_';
+var DASHBOARD_OVERVIEW_CONTINUATION_TTL_SECONDS_ = 120;
+var DASHBOARD_OVERVIEW_DETAILS_CACHE_PREFIX_ = 'DASHBOARD_OVERVIEW_DETAILS_V1_';
+var DASHBOARD_OVERVIEW_DETAILS_TTL_SECONDS_ = 900;
+
+function dashboardOverviewDetailsCacheKey_(ss) {
+  return DASHBOARD_OVERVIEW_DETAILS_CACHE_PREFIX_ + ss.getId();
+}
+
+function cacheDashboardOverviewDetails_(ss, snapshot) {
+  try {
+    var payload = JSON.stringify({
+      schemaVersion: 1,
+      workbookId: ss.getId(),
+      snapshot: snapshot
+    });
+    // Apps Script cache entries are capped at 100 KB. Fail quietly rather
+    // than allowing presentation caching to affect the authoritative read.
+    if (payload.length > 90000) return false;
+    CacheService.getUserCache().put(
+      dashboardOverviewDetailsCacheKey_(ss),
+      payload,
+      DASHBOARD_OVERVIEW_DETAILS_TTL_SECONDS_
+    );
+    return true;
+  } catch (_cacheWriteErr) {
+    return false;
+  }
+}
+
+function getCachedDashboardOverviewDetails_(ss) {
+  try {
+    var raw = CacheService.getUserCache().get(dashboardOverviewDetailsCacheKey_(ss));
+    if (!raw) return null;
+    var payload = JSON.parse(raw);
+    if (!payload || payload.schemaVersion !== 1 || payload.workbookId !== ss.getId()) {
+      return null;
+    }
+    return payload.snapshot || null;
+  } catch (_cacheReadErr) {
+    return null;
+  }
+}
+
+function cacheDashboardOverviewCurrentPosition_(ss, current) {
+  try {
+    const continuationId = Utilities.getUuid();
+    const canonical = current.canonicalDashboard || {};
+    const payload = {
+      schemaVersion: 1,
+      workbookId: ss.getId(),
+      current: {
+        cash: round2_(current.cash),
+        investments: round2_(current.investments),
+        houseValues: round2_(current.houseValues),
+        houseLoans: round2_(current.houseLoans),
+        houseEquity: round2_(current.houseEquity),
+        totalDebt: round2_(current.totalDebt),
+        netWorth: round2_(current.netWorth),
+        snapshotState: String(current.snapshotState || ''),
+        canonicalDashboard: {
+          basis: String(canonical.basis || ''),
+          sourceMode: canonical.sourceMode || {},
+          canonicalStatus: String(canonical.canonicalStatus || '')
+        }
+      }
+    };
+    CacheService.getUserCache().put(
+      DASHBOARD_OVERVIEW_CONTINUATION_CACHE_PREFIX_ + continuationId,
+      JSON.stringify(payload),
+      DASHBOARD_OVERVIEW_CONTINUATION_TTL_SECONDS_
+    );
+    return continuationId;
+  } catch (_cacheWriteErr) {
+    return '';
+  }
+}
+
+function takeDashboardOverviewCurrentPosition_(ss, continuationId) {
+  const token = String(continuationId || '').trim();
+  if (!/^[0-9a-f-]{20,64}$/i.test(token)) return null;
+  try {
+    const cache = CacheService.getUserCache();
+    const key = DASHBOARD_OVERVIEW_CONTINUATION_CACHE_PREFIX_ + token;
+    const raw = cache.get(key);
+    if (!raw) return null;
+    cache.remove(key);
+    const payload = JSON.parse(raw);
+    if (!payload || payload.schemaVersion !== 1 || payload.workbookId !== ss.getId()) {
+      return null;
+    }
+    const saved = payload.current || {};
+    const requiredNumbers = [
+      'cash', 'investments', 'houseValues', 'houseLoans',
+      'houseEquity', 'totalDebt', 'netWorth'
+    ];
+    for (let i = 0; i < requiredNumbers.length; i++) {
+      const value = saved[requiredNumbers[i]];
+      if (typeof value !== 'number' || !isFinite(value)) return null;
+    }
+    if (['ready', 'partial', 'notSetUp'].indexOf(String(saved.snapshotState || '')) < 0) {
+      return null;
+    }
+    return {
+      spreadsheet: ss,
+      canonicalSnapshot: null,
+      canonicalDashboard: saved.canonicalDashboard || {},
+      cash: round2_(saved.cash),
+      investments: round2_(saved.investments),
+      houseValues: round2_(saved.houseValues),
+      houseLoans: round2_(saved.houseLoans),
+      houseEquity: round2_(saved.houseEquity),
+      totalDebt: round2_(saved.totalDebt),
+      netWorth: round2_(saved.netWorth),
+      snapshotState: String(saved.snapshotState || '')
+    };
+  } catch (_cacheReadErr) {
+    return null;
+  }
 }
 
 /**
@@ -30,13 +189,19 @@ function runPlannerAndRefreshDashboard() {
     // Manual button users explicitly asked for an email, so preserve the
     // default send behavior while threading the optional trace through the
     // planner. The trace object never contains workbook or financial data.
-    runDebtPlanner({ emailMode: 'send', performanceTrace: performanceTrace });
+    var snapshotContext = {};
+    runDebtPlanner({
+      emailMode: 'send',
+      performanceTrace: performanceTrace,
+      snapshotContext: snapshotContext
+    });
     touchDashboardSourceUpdated_('planner');
     if (typeof markPerformanceTrace_ === 'function') {
       markPerformanceTrace_(performanceTrace, 'touch_source');
     }
 
-    const snapshot = buildDashboardSnapshot_();
+    const snapshot = buildDashboardSnapshot_(
+      null, performanceTrace, snapshotContext.canonicalSnapshot);
     if (typeof markPerformanceTrace_ === 'function') {
       markPerformanceTrace_(performanceTrace, 'build_snapshot');
     }
@@ -88,13 +253,19 @@ function runPlannerAndRefreshDashboardFromSave() {
     : null;
 
   try {
-    runDebtPlanner({ emailMode: 'defer', performanceTrace: performanceTrace });
+    var snapshotContext = {};
+    runDebtPlanner({
+      emailMode: 'defer',
+      performanceTrace: performanceTrace,
+      snapshotContext: snapshotContext
+    });
     touchDashboardSourceUpdated_('planner');
     if (typeof markPerformanceTrace_ === 'function') {
       markPerformanceTrace_(performanceTrace, 'touch_source');
     }
 
-    const snapshot = buildDashboardSnapshot_();
+    const snapshot = buildDashboardSnapshot_(
+      null, performanceTrace, snapshotContext.canonicalSnapshot);
     if (typeof markPerformanceTrace_ === 'function') {
       markPerformanceTrace_(performanceTrace, 'build_snapshot');
     }
@@ -122,9 +293,8 @@ function runPlannerAndRefreshDashboardFromSave() {
   }
 }
 
-function buildDashboardSnapshot_() {
-  const ss = getUserSpreadsheet_();
-  ensureActivityLogSheet_(ss);
+function buildDashboardCurrentPosition_(optionalSs, optionalCanonicalSnapshot) {
+  const ss = optionalSs || getUserSpreadsheet_();
 
   // Cash and Debt come from REQUIRED setup sheets (SYS - Accounts, INPUT -
   // Debts). Historically, a missing sheet here threw "Missing sheet
@@ -157,19 +327,21 @@ function buildDashboardSnapshot_() {
   // cannot supply one source, retain only that domain's existing Dashboard
   // value. The canonical reader and adapter are read-only and add no schema or
   // environment-specific branch.
-  let canonicalSnapshot = null;
-  try {
-    canonicalSnapshot = readCanonicalFinancialSnapshot_(ss);
-  } catch (_canonicalDashboardReadErr) {
-    // Preserve the pre-convergence Dashboard values on unexpected legacy
-    // shapes. Audit modules can surface the fallback without breaking Overview.
+  let canonicalSnapshot = optionalCanonicalSnapshot || null;
+  if (!canonicalSnapshot) {
+    try {
+      canonicalSnapshot = readCanonicalFinancialSnapshot_(ss);
+    } catch (_canonicalDashboardReadErr) {
+      // Preserve the pre-convergence Dashboard values on unexpected legacy
+      // shapes. Audit modules can surface the fallback without breaking Overview.
+    }
   }
 
   // Reuse mirror totals already observed by the canonical snapshot so the
   // convergence does not add duplicate SYS-grid reads. The old direct readers
   // remain as the same-environment fallback when the snapshot itself was not
-  // available. House loan reference is not part of the value-mirror comparison,
-  // so its one existing optional read remains.
+  // available. House-loan and debt fallback reads are deferred unless their
+  // canonical source domains are unavailable.
   function mirrorTotalOr_(domain, fallbackRead) {
     const mirror = canonicalSnapshot && canonicalSnapshot.mirrors &&
       canonicalSnapshot.mirrors[domain];
@@ -192,14 +364,18 @@ function buildDashboardSnapshot_() {
   const legacyHouseValues = mirrorTotalOr_('properties', function() {
     return sumColumnByHeaderForOptionalSheet_(ss, 'HOUSE_ASSETS', 'Current Value');
   });
-  const legacyHouseLoans = sumColumnByHeaderForOptionalSheet_(
-    ss, 'HOUSE_ASSETS', 'Loan Amount Left');
+  const canonicalSources = canonicalSnapshot && canonicalSnapshot.sources || {};
+  const legacyHouseLoans = canonicalSources.properties && canonicalSources.properties.available
+    ? 0
+    : sumColumnByHeaderForOptionalSheet_(ss, 'HOUSE_ASSETS', 'Loan Amount Left');
   let legacyTotalDebt = 0;
-  try {
-    legacyTotalDebt = debtsPresent ? sumDebtBalances_(debtsSheet) : 0;
-  } catch (_legacyDebtReadErr) {
-    // A malformed legacy debt sheet is represented as unavailable by the
-    // canonical reader; keep Overview alive at zero until it is repaired.
+  if (!(canonicalSources.debts && canonicalSources.debts.available)) {
+    try {
+      legacyTotalDebt = debtsPresent ? sumDebtBalances_(debtsSheet) : 0;
+    } catch (_legacyDebtReadErr) {
+      // A malformed legacy debt sheet is represented as unavailable by the
+      // canonical reader; keep Overview alive at zero until it is repaired.
+    }
   }
   const canonicalDashboard = canonicalDashboardTotals_(canonicalSnapshot, {
     cash: legacyCash,
@@ -208,13 +384,6 @@ function buildDashboardSnapshot_() {
     houseLoans: legacyHouseLoans,
     debt: legacyTotalDebt
   });
-  const cash = canonicalDashboard.cash;
-  const investments = canonicalDashboard.investments;
-  const houseValues = canonicalDashboard.houseValues;
-  const houseLoans = canonicalDashboard.houseLoans;
-  const houseEquity = canonicalDashboard.houseEquity;
-  const totalDebt = canonicalDashboard.debt;
-
   let snapshotState;
   if (accountsPresent && debtsPresent) {
     snapshotState = 'ready';
@@ -224,9 +393,67 @@ function buildDashboardSnapshot_() {
     snapshotState = 'notSetUp';
   }
 
-  const netWorth = canonicalDashboard.netWorth;
+  return {
+    spreadsheet: ss,
+    canonicalSnapshot: canonicalSnapshot,
+    canonicalDashboard: canonicalDashboard,
+    cash: canonicalDashboard.cash,
+    investments: canonicalDashboard.investments,
+    houseValues: canonicalDashboard.houseValues,
+    houseLoans: canonicalDashboard.houseLoans,
+    houseEquity: canonicalDashboard.houseEquity,
+    totalDebt: canonicalDashboard.debt,
+    netWorth: canonicalDashboard.netWorth,
+    snapshotState: snapshotState
+  };
+}
 
-  const historySnapshots = getLatestHistorySnapshots_(2);
+function buildDashboardOverviewCoreSnapshot_(optionalSs, optionalCanonicalSnapshot, optionalCurrentPosition) {
+  const current = optionalCurrentPosition ||
+    buildDashboardCurrentPosition_(optionalSs, optionalCanonicalSnapshot);
+  return {
+    phase: 'core',
+    cash: round2_(current.cash),
+    investments: round2_(current.investments),
+    houseValues: round2_(current.houseValues),
+    houseLoans: round2_(current.houseLoans),
+    houseEquity: round2_(current.houseEquity),
+    debt: round2_(current.totalDebt),
+    netWorth: round2_(current.netWorth),
+    state: current.snapshotState,
+    financialBasis: {
+      basis: current.canonicalDashboard.basis,
+      sourceMode: current.canonicalDashboard.sourceMode,
+      canonicalStatus: current.canonicalDashboard.canonicalStatus
+    },
+    refreshedAt: Utilities.formatDate(
+      new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss')
+  };
+}
+
+function buildDashboardSnapshot_(optionalSs, performanceTrace, optionalCanonicalSnapshot, optionalCurrentPosition) {
+  const current = optionalCurrentPosition ||
+    buildDashboardCurrentPosition_(optionalSs, optionalCanonicalSnapshot);
+  const ss = current.spreadsheet;
+  const canonicalDashboard = current.canonicalDashboard;
+  const cash = current.cash;
+  const investments = current.investments;
+  const houseValues = current.houseValues;
+  const houseLoans = current.houseLoans;
+  const houseEquity = current.houseEquity;
+  const totalDebt = current.totalDebt;
+  const netWorth = current.netWorth;
+  const snapshotState = current.snapshotState;
+  function markSnapshotStage_(name) {
+    if (typeof markPerformanceTrace_ === 'function') {
+      markPerformanceTrace_(performanceTrace, name);
+    }
+  }
+  markSnapshotStage_('snapshot_current_position');
+
+  const historyGrid = readDashboardHistoryGrid_(ss);
+  const historySnapshots = getLatestHistorySnapshots_(2, ss, historyGrid);
+  const historyRows = getAllHistorySnapshotRows_(ss, historyGrid);
   const latestHistory = historySnapshots.length ? historySnapshots[0] : null;
   const propertyBaseline = getDashboardBaselineSnapshot_();
 
@@ -252,7 +479,9 @@ function buildDashboardSnapshot_() {
         }
       : null);
 
-  const invPrior = getPriorMonthInvestmentsTotalFromInput_();
+  markSnapshotStage_('snapshot_history');
+
+  const invPrior = getPriorMonthInvestmentsTotalFromInput_(ss);
   if (invPrior && invPrior.total !== null) {
     if (!deltas) deltas = {};
     deltas.investments = round2_(investments - invPrior.total);
@@ -264,7 +493,7 @@ function buildDashboardSnapshot_() {
     }
   }
 
-  const cashPrior = getPriorMonthCashTotalFromBankInput_();
+  const cashPrior = getPriorMonthCashTotalFromBankInput_(ss);
   if (cashPrior && cashPrior.total !== null) {
     if (!deltas) deltas = {};
     deltas.cash = round2_(cash - cashPrior.total);
@@ -276,7 +505,7 @@ function buildDashboardSnapshot_() {
     }
   }
 
-  const housePrior = getPriorMonthHouseValuesTotalFromHouseValuesInput_();
+  const housePrior = getPriorMonthHouseValuesTotalFromHouseValuesInput_(ss);
   if (housePrior && housePrior.total !== null) {
     if (!deltas) deltas = {};
     deltas.houseEquity = round2_(houseValues - housePrior.total);
@@ -288,7 +517,7 @@ function buildDashboardSnapshot_() {
     }
   }
 
-  const debtPrior = getPriorMonthTotalDebtFromHistory_();
+  const debtPrior = getPriorMonthTotalDebtFromHistory_(historyRows);
   if (debtPrior && debtPrior.total !== null) {
     if (!deltas) deltas = {};
     deltas.debt = round2_(totalDebt - debtPrior.total);
@@ -321,13 +550,18 @@ function buildDashboardSnapshot_() {
     }
   }
 
-  const latestMetrics = getLatestPlannerHistoryMetrics_();
-  const upcoming = getUpcomingExpenseMetricsSafe_();
-  const retirement = getRetirementSummarySafe_();
+  markSnapshotStage_('snapshot_prior_month');
+
+  const latestMetrics = getLatestPlannerHistoryMetrics_(ss, historyGrid);
+  markSnapshotStage_('snapshot_latest_metrics');
+  const upcoming = getUpcomingExpenseMetricsSafe_(ss);
+  markSnapshotStage_('snapshot_upcoming');
+  const retirement = getRetirementOverviewSummarySafe_(ss);
+  markSnapshotStage_('snapshot_retirement');
   let setupReadiness;
   try {
     setupReadiness = (typeof getOnboardingRequiredReadiness_ === 'function')
-      ? getOnboardingRequiredReadiness_(ss, 'normal')
+      ? getOnboardingRequiredReadiness_(ss, 'normal', performanceTrace)
       : { ready: false, completeCount: 0, total: 5, missingLabels: [] };
   } catch (_setupReadinessErr) {
     // Fail closed: a health score must not appear authoritative when its
@@ -341,7 +575,6 @@ function buildDashboardSnapshot_() {
   }
 
   const bufferRunway = buildBufferRunway_(latestMetrics, cash);
-  const historyRows = getAllHistorySnapshotRows_();
   const weeklyPick = pickWeeklyBaselineFromRows_(historyRows);
   const attribution = buildNetWorthAttributionWeekly_(
     {
@@ -354,7 +587,9 @@ function buildDashboardSnapshot_() {
   );
   const health = buildFinancialHealthScore_(latestMetrics, upcoming, {
     setupReadiness: setupReadiness,
-    now: new Date()
+    now: new Date(),
+    spreadsheet: ss,
+    historyGrid: historyGrid
   });
   const issues = buildDashboardIssues_(ss, {
     cash: cash,
@@ -370,6 +605,11 @@ function buildDashboardSnapshot_() {
     bufferRunway: bufferRunway
   });
   const suggestedActions = buildSuggestedActions_(latestMetrics, upcoming, retirement, bufferRunway);
+  markSnapshotStage_('snapshot_health_actions');
+
+  const incomeAllocation = buildIncomeAllocation_(ss);
+  const sourceUpdated = getDashboardSourceUpdatedMap_();
+  markSnapshotStage_('snapshot_income_and_freshness');
 
   return {
     cash: round2_(cash),
@@ -388,14 +628,14 @@ function buildDashboardSnapshot_() {
     recentChanges: attribution && attribution.items ? attribution.items : [],
     suggestedActions: suggestedActions,
     retirement: retirement,
-    incomeAllocation: buildIncomeAllocation_(ss),
+    incomeAllocation: incomeAllocation,
     state: snapshotState,
     financialBasis: {
       basis: canonicalDashboard.basis,
       sourceMode: canonicalDashboard.sourceMode,
       canonicalStatus: canonicalDashboard.canonicalStatus
     },
-    sourceUpdated: getDashboardSourceUpdatedMap_(),
+    sourceUpdated: sourceUpdated,
     refreshedAt: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss')
   };
 }
@@ -566,13 +806,21 @@ function listActiveIncomeMonthlyTotals_(sheet) {
   return out;
 }
 
-function getLatestHistorySnapshots_(count) {
-  const ss = getUserSpreadsheet_();
+function readDashboardHistoryGrid_(optionalSs) {
+  const ss = optionalSs || getUserSpreadsheet_();
   const sheet = ss.getSheetByName('OUT - History');
-  if (!sheet) return [];
+  if (!sheet) return { values: [], display: [] };
+  const range = sheet.getDataRange();
+  return {
+    values: range.getValues(),
+    display: range.getDisplayValues()
+  };
+}
 
-  const values = sheet.getDataRange().getValues();
-  const display = sheet.getDataRange().getDisplayValues();
+function getLatestHistorySnapshots_(count, optionalSs, optionalHistoryGrid) {
+  const grid = optionalHistoryGrid || readDashboardHistoryGrid_(optionalSs);
+  const values = grid.values || [];
+  const display = grid.display || [];
   if (display.length < 2) return [];
 
   const headers = display[0];
@@ -613,7 +861,7 @@ function getLatestHistorySnapshots_(count) {
  * INPUT - Debts has no monthly columns; use the latest OUT - History row whose Run Date
  * falls in the prior calendar month (script timezone) for Total Liabilities.
  */
-function getPriorMonthTotalDebtFromHistory_() {
+function getPriorMonthTotalDebtFromHistory_(optionalHistoryRows) {
   const tz = Session.getScriptTimeZone();
   const now = new Date();
   const parts = Utilities.formatDate(now, tz, 'yyyy-MM-dd').split('-');
@@ -627,7 +875,7 @@ function getPriorMonthTotalDebtFromHistory_() {
   }
   const targetMonthIndex = prevM - 1;
 
-  const rows = getAllHistorySnapshotRows_();
+  const rows = optionalHistoryRows || getAllHistorySnapshotRows_();
   var best = null;
   var bestTime = 0;
   for (var i = 0; i < rows.length; i++) {
@@ -667,13 +915,10 @@ function parseHistoryRunDate_(cellValue, displayValue) {
   return null;
 }
 
-function getAllHistorySnapshotRows_() {
-  const ss = getUserSpreadsheet_();
-  const sheet = ss.getSheetByName('OUT - History');
-  if (!sheet) return [];
-
-  const values = sheet.getDataRange().getValues();
-  const display = sheet.getDataRange().getDisplayValues();
+function getAllHistorySnapshotRows_(optionalSs, optionalHistoryGrid) {
+  const grid = optionalHistoryGrid || readDashboardHistoryGrid_(optionalSs);
+  const values = grid.values || [];
+  const display = grid.display || [];
   if (display.length < 2) return [];
 
   const headers = display[0];
@@ -822,8 +1067,8 @@ function buildNetWorthAttributionWeekly_(current, pickMeta) {
   };
 }
 
-function getLatestPlannerHistoryMetrics_() {
-  return getPlannerHistoryMetricsByOffset_(0);
+function getLatestPlannerHistoryMetrics_(optionalSs, optionalHistoryGrid) {
+  return getPlannerHistoryMetricsByOffset_(0, optionalSs, optionalHistoryGrid);
 }
 
 function getPreviousPlannerHistoryMetrics_() {
@@ -871,13 +1116,10 @@ function readPlannerHistoryMetricsRow_(values, display, r) {
   };
 }
 
-function getPlannerHistoryMetricsByOffset_(offsetFromLatest) {
-  const ss = getUserSpreadsheet_();
-  const sheet = ss.getSheetByName('OUT - History');
-  if (!sheet) return null;
-
-  const values = sheet.getDataRange().getValues();
-  const display = sheet.getDataRange().getDisplayValues();
+function getPlannerHistoryMetricsByOffset_(offsetFromLatest, optionalSs, optionalHistoryGrid) {
+  const grid = optionalHistoryGrid || readDashboardHistoryGrid_(optionalSs);
+  const values = grid.values || [];
+  const display = grid.display || [];
   if (display.length < 2) return null;
 
   const headers = display[0];
@@ -898,7 +1140,7 @@ function getPlannerHistoryMetricsByOffset_(offsetFromLatest) {
 }
 
 /** Latest planner run in the prior calendar month (script TZ), for health score MoM. */
-function getPriorMonthPlannerHistoryMetrics_() {
+function getPriorMonthPlannerHistoryMetrics_(optionalSs, optionalHistoryGrid) {
   const tz = Session.getScriptTimeZone();
   const now = new Date();
   const parts = Utilities.formatDate(now, tz, 'yyyy-MM-dd').split('-');
@@ -912,12 +1154,9 @@ function getPriorMonthPlannerHistoryMetrics_() {
   }
   const targetMonthIndex = prevM - 1;
 
-  const ss = getUserSpreadsheet_();
-  const sheet = ss.getSheetByName('OUT - History');
-  if (!sheet) return { metrics: null, label: '' };
-
-  const values = sheet.getDataRange().getValues();
-  const display = sheet.getDataRange().getDisplayValues();
+  const grid = optionalHistoryGrid || readDashboardHistoryGrid_(optionalSs);
+  const values = grid.values || [];
+  const display = grid.display || [];
   if (display.length < 2) return { metrics: null, label: '' };
 
   const headers = display[0];
@@ -1196,7 +1435,7 @@ function buildFinancialHealthScore_(latestMetrics, upcoming, options) {
   }
 
   let trend = null;
-  const priorPack = getPriorMonthPlannerHistoryMetrics_();
+  const priorPack = getPriorMonthPlannerHistoryMetrics_(opts.spreadsheet, opts.historyGrid);
   if (priorPack.metrics) {
     const emptyUpcoming = {
       overduePlannedCount: 0,
@@ -1442,10 +1681,10 @@ function sortActionsBySeverity_(actions) {
   });
 }
 
-function getUpcomingExpenseMetricsSafe_() {
+function getUpcomingExpenseMetricsSafe_(optionalSs) {
   try {
     if (typeof getUpcomingExpenseMetrics_ === 'function') {
-      return getUpcomingExpenseMetrics_();
+      return getUpcomingExpenseMetrics_(optionalSs);
     }
   } catch (e) {}
   return {

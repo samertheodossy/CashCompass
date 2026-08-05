@@ -281,6 +281,37 @@
     </div>
   </div>
 
+  <!-- DASHBOARD READ PROFILE -->
+  <div class="card">
+    <h2>Dashboard read profile</h2>
+    <div class="banner" style="margin-bottom:12px;">
+      <span class="ico">⏱️</span>
+      <span>Measures two read-only passes over the dashboard data areas in the selected workbook.
+        It is safe for bounded workbooks: no sheets are created or repaired, and no cell values are
+        returned, logged, cached, or saved. Missing areas are reported as gaps.</span>
+    </div>
+    <div class="btn-row">
+      <button class="primary" onclick="vtRunDashboardReadProfile()">Run dashboard read profile</button>
+      <span id="vt-profile-status" class="runmsg"></span>
+    </div>
+    <div id="vt-profile-results" class="hidden" style="margin-top:16px;"></div>
+  </div>
+
+  <!-- LATEST OVERVIEW LOAD TRACE -->
+  <div class="card">
+    <h2>Latest Overview load trace</h2>
+    <div class="banner" style="margin-bottom:12px;">
+      <span class="ico">🔎</span>
+      <span>Retrieves the latest privacy-safe <code>?debug=1</code> Overview timing trace for the
+        signed-in administrator. This is read-only and does not read or change the selected workbook.</span>
+    </div>
+    <div class="btn-row">
+      <button class="primary" onclick="vtLoadLatestOverviewTrace()">Load latest Overview trace</button>
+      <span id="vt-overview-trace-status" class="runmsg"></span>
+    </div>
+    <div id="vt-overview-trace-results" class="hidden" style="margin-top:16px;"></div>
+  </div>
+
   <!-- RESULTS -->
   <div id="vt-results" class="hidden">
     <div class="summary" id="vt-summary"></div>
@@ -458,6 +489,8 @@
   // This prevents a slow callback (e.g. Drift from a prior "Run Workbook Health")
   // from re-populating state after a newer single-action run.
   var vtRunToken = 0;
+  var vtProfileRunToken = 0;
+  var vtOverviewTraceRunToken = 0;
   var vtRRState = null;
   var vtRRArchives = [];
   var vtRRKeepRunning = false;
@@ -481,6 +514,7 @@
   function vtResetTargetInfo() {
     document.getElementById('vt-target-info').innerHTML = '';
     vtClearResults();
+    vtClearDashboardReadProfile();
   }
   // Drop any prior validation reports and hide the results section. Used when the
   // target changes so stale findings are never attributed to a new workbook.
@@ -505,6 +539,179 @@
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
   function vtSpin(text) { return '<span class="spinner"></span>' + vtEsc(text); }
+
+  function vtClearDashboardReadProfile() {
+    vtProfileRunToken++;
+    var status = document.getElementById('vt-profile-status');
+    var results = document.getElementById('vt-profile-results');
+    if (status) { status.className = 'runmsg'; status.innerHTML = ''; }
+    if (results) { results.innerHTML = ''; results.classList.add('hidden'); }
+  }
+
+  function vtRunDashboardReadProfile() {
+    var token = ++vtProfileRunToken;
+    var status = document.getElementById('vt-profile-status');
+    var results = document.getElementById('vt-profile-results');
+    results.innerHTML = '';
+    results.classList.add('hidden');
+    status.className = 'runmsg';
+    status.innerHTML = vtSpin('Reading selected workbook twice…');
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (token !== vtProfileRunToken) return;
+        if (!res || !res.ok) {
+          status.className = 'runmsg err';
+          status.innerHTML = vtEsc(res && res.error ? res.error : 'Dashboard read profile failed.');
+          return;
+        }
+        status.className = 'runmsg';
+        status.innerHTML = '';
+        vtState.target = res.target;
+        document.getElementById('vt-target-info').innerHTML = vtRenderTarget(res.target);
+        vtRenderDashboardReadProfile(res.report || {});
+      })
+      .withFailureHandler(function(err) {
+        if (token !== vtProfileRunToken) return;
+        status.className = 'runmsg err';
+        status.innerHTML = vtEsc(err && err.message ? err.message : 'Dashboard read profile failed.');
+      })
+      .vtRunDashboardReadProfile(vtCurrentId());
+  }
+
+  function vtProfileMs_(value) {
+    return Number(value || 0).toLocaleString() + ' ms';
+  }
+
+  function vtRenderDashboardReadProfile(report) {
+    var results = document.getElementById('vt-profile-results');
+    var stages = report.comparison || [];
+    var rows = stages.map(function(stage) {
+      var cls = stage.outcome === 'error' ? 'p-error' : (stage.outcome === 'missing' ? 'p-warn' : 'p-ok');
+      return '<tr>' +
+        '<td><b>' + vtEsc(stage.label) + '</b></td>' +
+        '<td>' + vtEsc(stage.sheetCount) + '</td>' +
+        '<td>' + vtEsc(stage.rowCount) + '</td>' +
+        '<td>' + vtEsc(stage.cellCount) + '</td>' +
+        '<td class="st-mono">' + vtEsc(vtProfileMs_(stage.firstMs)) + '</td>' +
+        '<td class="st-mono">' + vtEsc(vtProfileMs_(stage.repeatMs)) + '</td>' +
+        '<td><span class="pill ' + cls + '">' + vtEsc(stage.outcome) + '</span></td>' +
+      '</tr>';
+    }).join('');
+    results.innerHTML =
+      '<div class="summary">' +
+        '<div class="cell"><div class="lbl">Result</div><div class="val">' + vtEsc(report.overall || '—') + '</div></div>' +
+        '<div class="cell"><div class="lbl">First pass</div><div class="val">' + vtEsc(vtProfileMs_(report.firstTotalMs)) + '</div></div>' +
+        '<div class="cell"><div class="lbl">Repeat pass</div><div class="val">' + vtEsc(vtProfileMs_(report.repeatTotalMs)) + '</div></div>' +
+        '<div class="cell"><div class="lbl">Slowest repeat</div><div class="val small">' + vtEsc(report.slowestStage || '—') + '</div></div>' +
+      '</div>' +
+      '<div style="font-size:12px;color:var(--ink-soft);margin:0 0 10px;">' +
+        'Ranked by repeat-read time. This isolates workbook read cost; it does not measure browser rendering or network latency.' +
+      '</div>' +
+      '<div style="overflow:auto;"><table class="suite-table"><thead><tr>' +
+        '<th>Data area</th><th>Sheets</th><th>Rows</th><th>Cells</th><th>First</th><th>Repeat</th><th>Outcome</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<details class="json"><summary>View raw JSON' +
+        '<button class="copybtn" onclick="vtCopyDashboardReadProfile(event)">Copy</button>' +
+        '<span id="vt-profile-copied" class="copied hidden">Copied!</span>' +
+        '</summary><pre class="json" id="vt-profile-json">' +
+        vtEsc(JSON.stringify(report, null, 2)) + '</pre></details>';
+    results.classList.remove('hidden');
+  }
+
+  function vtCopyDashboardReadProfile(ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    var json = document.getElementById('vt-profile-json');
+    var done = document.getElementById('vt-profile-copied');
+    if (!json) return;
+    try {
+      navigator.clipboard.writeText(json.textContent || '');
+      if (done) {
+        done.classList.remove('hidden');
+        setTimeout(function() { done.classList.add('hidden'); }, 1600);
+      }
+    } catch (_e) {
+      var details = document.querySelector('#vt-profile-results details.json');
+      if (details) details.open = true;
+    }
+  }
+
+  function vtLoadLatestOverviewTrace() {
+    var token = ++vtOverviewTraceRunToken;
+    var status = document.getElementById('vt-overview-trace-status');
+    var results = document.getElementById('vt-overview-trace-results');
+    results.innerHTML = '';
+    results.classList.add('hidden');
+    status.className = 'runmsg';
+    status.innerHTML = vtSpin('Loading latest trace…');
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (token !== vtOverviewTraceRunToken) return;
+        if (!res || !res.ok || !res.report) {
+          status.className = 'runmsg err';
+          status.innerHTML = vtEsc(res && res.error ? res.error : 'No recent Overview load trace is available.');
+          return;
+        }
+        status.className = 'runmsg';
+        status.innerHTML = '';
+        vtRenderLatestOverviewTrace(res.report);
+      })
+      .withFailureHandler(function(err) {
+        if (token !== vtOverviewTraceRunToken) return;
+        status.className = 'runmsg err';
+        status.innerHTML = vtEsc(err && err.message ? err.message : 'Latest Overview load trace failed.');
+      })
+      .getLatestDashboardClientPerformance();
+  }
+
+  function vtRenderLatestOverviewTrace(report) {
+    var results = document.getElementById('vt-overview-trace-results');
+    var stages = Array.isArray(report.stages) ? report.stages : [];
+    var rows = stages.map(function(stage) {
+      var outcome = stage.outcome || 'ok';
+      var cls = outcome === 'error' ? 'p-error' : (outcome === 'timeout' ? 'p-warn' : 'p-ok');
+      return '<tr>' +
+        '<td><b>' + vtEsc(stage.name || '—') + '</b></td>' +
+        '<td class="st-mono">' + vtEsc(vtProfileMs_(stage.durationMs)) + '</td>' +
+        '<td><span class="pill ' + cls + '">' + vtEsc(outcome) + '</span></td>' +
+      '</tr>';
+    }).join('');
+    results.innerHTML =
+      '<div class="summary">' +
+        '<div class="cell"><div class="lbl">Result</div><div class="val">' + vtEsc(report.outcome || '—') + '</div></div>' +
+        '<div class="cell"><div class="lbl">Total load</div><div class="val">' + vtEsc(vtProfileMs_(report.totalMs)) + '</div></div>' +
+        '<div class="cell"><div class="lbl">Stages</div><div class="val">' + vtEsc(stages.length) + '</div></div>' +
+        '<div class="cell"><div class="lbl">Run ID</div><div class="val small st-mono">' + vtEsc(report.runId || '—') + '</div></div>' +
+      '</div>' +
+      '<div style="font-size:12px;color:var(--ink-soft);margin:0 0 10px;">' +
+        'Captured from the most recent Overview page opened with <code>?debug=1</code> by this administrator.' +
+      '</div>' +
+      '<div style="overflow:auto;"><table class="suite-table"><thead><tr>' +
+        '<th>Stage</th><th>Duration</th><th>Outcome</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<details class="json"><summary>View raw JSON' +
+        '<button class="copybtn" onclick="vtCopyLatestOverviewTrace(event)">Copy</button>' +
+        '<span id="vt-overview-trace-copied" class="copied hidden">Copied!</span>' +
+        '</summary><pre class="json" id="vt-overview-trace-json">' +
+        vtEsc(JSON.stringify(report, null, 2)) + '</pre></details>';
+    results.classList.remove('hidden');
+  }
+
+  function vtCopyLatestOverviewTrace(ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    var json = document.getElementById('vt-overview-trace-json');
+    var done = document.getElementById('vt-overview-trace-copied');
+    if (!json) return;
+    try {
+      navigator.clipboard.writeText(json.textContent || '');
+      if (done) {
+        done.classList.remove('hidden');
+        setTimeout(function() { done.classList.add('hidden'); }, 1600);
+      }
+    } catch (_e) {
+      var details = document.querySelector('#vt-overview-trace-results details.json');
+      if (details) details.open = true;
+    }
+  }
 
   /* ---- Release Readiness ---- */
   function vtRRSetStatus(html, isErr) {

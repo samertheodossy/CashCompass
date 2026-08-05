@@ -7,7 +7,9 @@ Health) and the writer **Test Harness** (Regression Runner), plus the aggregated
 **Status:** **V1 implemented; later phases still design.** Live today
 (`ValidationTestingUI.html` + `validation_testing_server.js`, admin-gated route
 `?view=validation` in `webapp.js`): **Section A Target** (Configured Central default
-/ Explicit ID) with a read-only safety readout; **Section B Workbook Health** —
+/ Explicit ID) with a read-only safety readout; **Dashboard Read Profile** — a
+one-click, two-pass workbook-read timing report for the selected target, including
+an explicitly selected bounded workbook; **Section B Workbook Health** —
 Provisioning (gating), Workbook Drift (advisory), and Schema Evolution (advisory,
 standalone) with status cards, findings, and a JSON viewer; and **Section C Test
 Harness** — a collapsible writer card with dynamic scenario and suite selectors,
@@ -49,6 +51,16 @@ merely calls the existing guarded subsystems and renders their structured result
 The console never introduces a new way to write to a real workbook. Harness "Run"
 actions are enabled **only** for a `DISPOSABLE_TEST` target, enforced **server-side**
 by `assertDisposableTarget_` (never by client state).
+
+The Dashboard Read Profile is part of the read-only Validator surface, not the
+writer Harness. It may inspect any workbook the sole administrator can read,
+including the bounded workbook when explicitly selected. Its server path uses
+only `openById`, sheet enumeration, and range getters. It does not call production
+dashboard getters because some of those getters legitimately create missing
+sheets, repair schemas, or install triggers. Missing data areas are reported and
+never repaired. The report contains fixed stage labels, aggregate rows/columns/
+cells, timing, and outcome only; cell values and workbook-derived sheet names are
+never returned, logged, cached, or persisted.
 
 ---
 

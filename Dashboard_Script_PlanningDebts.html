@@ -8,6 +8,7 @@ var debtUpdateDetailsRequestId_ = 0;
 var debtSectionRequestId_ = 0;
 
 function loadDebtSection() {
+  const initialLoadTiming = startDashboardInitialLoadStage_('debts');
   const sectionRequestId = ++debtSectionRequestId_;
   debtUpdateDetailsReady_ = false;
   setSelectLoading('debt_account', 'Loading debt accounts…');
@@ -23,6 +24,7 @@ function loadDebtSection() {
         .getDebtsUiData();
     },
     onSuccess: function(data) {
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
       if (sectionRequestId !== debtSectionRequestId_) return;
       clearSurfaceState_('debt_status', 'status');
       allDebtRows = data.debts || [];
@@ -60,6 +62,7 @@ function loadDebtSection() {
       setStatusLoading('debt_status', info.message);
     },
     onFailure: function(err) {
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
       if (sectionRequestId !== debtSectionRequestId_) return;
       setSelectLoadFailure('debt_account', 'Couldn’t load debt accounts');
       updateDebtUpdateAvailability_();

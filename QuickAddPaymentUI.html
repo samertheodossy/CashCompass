@@ -52,7 +52,7 @@
 <h3>Quick add to Cash Flow</h3>
 
 <label>Type</label>
-<select id="entryType" onchange="filterPayees(); loadPreview();">
+<select id="entryType" onchange="filterPayees(); updateFlowSourceVisibility_(); loadPreview();">
   <option value="Expense">Expense</option>
   <option value="Income">Income</option>
 </select>
@@ -61,16 +61,26 @@
 <input type="date" id="entryDate" onchange="loadPreview()">
 
 <label>Existing Payee</label>
-<select id="payeeSelect" onchange="syncPayeeInput(); loadPreview();"></select>
+<select id="payeeSelect" onchange="syncPayeeInput(); updateFlowSourceVisibility_(); loadPreview();"></select>
 
 <label>Or Type / Edit Payee</label>
-<input type="text" id="payeeInput" oninput="loadPreview()" placeholder="Enter payee name">
+<input type="text" id="payeeInput" oninput="updateFlowSourceVisibility_(); loadPreview()" placeholder="Enter payee name">
+
+<div id="flowSourceWrap" hidden>
+  <label for="flowSource">Payment source</label>
+  <select id="flowSource" onchange="setStatus('', false)">
+    <option value="">Choose payment source</option>
+    <option value="CASH">Cash</option>
+    <option value="CREDIT_CARD">Credit card</option>
+  </select>
+  <div class="muted" style="margin-top:6px;">Required for a new Expense or an existing Expense with no source.</div>
+</div>
 
 <label>Amount</label>
 <input type="text" id="amount" inputmode="decimal" onfocus="handleAmountFocus()" onblur="handleAmountBlur()" oninput="loadPreview()">
 
 <div class="check-row">
-  <input type="checkbox" id="createIfMissing" checked>
+  <input type="checkbox" id="createIfMissing" checked onchange="updateFlowSourceVisibility_()">
   <label for="createIfMissing" style="margin:0;font-weight:normal;">Create row if payee is missing</label>
 </div>
 
@@ -89,6 +99,7 @@
 
 <script>
 let allPayees = [];
+let previewRowState = null;
 
 function setStatus(msg, isError) {
   const el = document.getElementById('status');
@@ -171,6 +182,45 @@ function syncPayeeInput() {
   document.getElementById('payeeInput').value = selected;
 }
 
+function normalizePayeeKey_(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function knownPayeeExists_(entryType, payee) {
+  const type = String(entryType || '').trim();
+  const payeeKey = normalizePayeeKey_(payee);
+  if (!type || !payeeKey) return false;
+  if (previewRowState && previewRowState.entryType === type && previewRowState.payeeKey === payeeKey) {
+    return !!previewRowState.rowExists;
+  }
+  return allPayees.some(function(item) {
+    return String(item && item.type || '').trim() === type &&
+      normalizePayeeKey_(item && item.payee) === payeeKey;
+  });
+}
+
+function updateFlowSourceVisibility_() {
+  const entryType = document.getElementById('entryType').value;
+  const payee = currentPayeeValue();
+  const createIfMissing = document.getElementById('createIfMissing').checked;
+  const rowExists = knownPayeeExists_(entryType, payee);
+  let existingFlowSource = '';
+  if (previewRowState && previewRowState.entryType === entryType &&
+      previewRowState.payeeKey === normalizePayeeKey_(payee)) {
+    existingFlowSource = previewRowState.existingFlowSource || '';
+  } else if (rowExists) {
+    existingFlowSource = '__PREVIEW_PENDING__';
+  }
+  const needsSource = entryType === 'Expense' && !!payee &&
+    ((!rowExists && createIfMissing) || (rowExists && !existingFlowSource));
+  const wrap = document.getElementById('flowSourceWrap');
+  const select = document.getElementById('flowSource');
+  wrap.hidden = !needsSource;
+  select.disabled = !needsSource;
+  select.required = needsSource;
+  return needsSource;
+}
+
 function applyPriorMonthPreview_(data) {
   const labelEl = document.getElementById('priorMonthLabel');
   const valEl = document.getElementById('priorMonthPayment');
@@ -204,6 +254,7 @@ function filterPayees() {
       opt.textContent = p.payee;
       sel.appendChild(opt);
     });
+  updateFlowSourceVisibility_();
 }
 
 function loadUiData() {
@@ -228,21 +279,30 @@ function loadPreview() {
   };
 
   if (!payload.payee || !payload.entryDate) {
+    previewRowState = null;
     document.getElementById('sheetName').textContent = '—';
     document.getElementById('monthName').textContent = '—';
     document.getElementById('currentValue').textContent = '—';
     document.getElementById('rowExists').textContent = '—';
     applyPriorMonthPreview_(null);
+    updateFlowSourceVisibility_();
     return;
   }
 
   google.script.run
     .withSuccessHandler(function(data) {
+      previewRowState = {
+        entryType: payload.entryType,
+        payeeKey: normalizePayeeKey_(payload.payee),
+        rowExists: !!data.rowExists,
+        existingFlowSource: String(data.existingFlowSource || '')
+      };
       document.getElementById('sheetName').textContent = data.sheetName || '—';
       document.getElementById('monthName').textContent = data.month || '—';
       document.getElementById('currentValue').textContent = fmtCurrency(data.currentValue);
       document.getElementById('rowExists').textContent = data.rowExists ? 'Yes' : 'No';
       applyPriorMonthPreview_(data);
+      updateFlowSourceVisibility_();
     })
     .withFailureHandler(function(err) {
       setStatus((err.message || String(err)), true);
@@ -252,11 +312,18 @@ function loadPreview() {
 
 function applyQuickAddPreviewFromResult_(data) {
   if (!data) return;
+  previewRowState = {
+    entryType: document.getElementById('entryType').value,
+    payeeKey: normalizePayeeKey_(currentPayeeValue()),
+    rowExists: !!data.rowExists,
+    existingFlowSource: String(data.existingFlowSource || '')
+  };
   document.getElementById('sheetName').textContent = data.sheetName || '—';
   document.getElementById('monthName').textContent = data.month || '—';
   document.getElementById('currentValue').textContent = fmtCurrency(data.currentValue);
   document.getElementById('rowExists').textContent = data.rowExists ? 'Yes' : 'No';
   applyPriorMonthPreview_(data);
+  updateFlowSourceVisibility_();
 }
 
 function save() {
@@ -268,12 +335,19 @@ function save() {
     return;
   }
 
+  const flowSource = String(document.getElementById('flowSource').value || '').trim();
+  if (updateFlowSourceVisibility_() && !flowSource) {
+    setStatus('Choose Cash or Credit card for this new expense.', true);
+    return;
+  }
+
   const payload = {
     entryType: document.getElementById('entryType').value,
     payee: currentPayeeValue(),
     entryDate: document.getElementById('entryDate').value,
     amount: numericAmount,
     createIfMissing: document.getElementById('createIfMissing').checked,
+    flowSource: flowSource,
     activityOrigin: 'direct_quick_add'
   };
 
@@ -288,6 +362,8 @@ function save() {
         loadPreview();
       }
       document.getElementById('amount').value = '';
+      document.getElementById('flowSource').value = '';
+      updateFlowSourceVisibility_();
       google.script.run
         .withFailureHandler(function(err) {
           setStatus((err.message || String(err)), true);

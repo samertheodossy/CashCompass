@@ -1,5 +1,6 @@
 /* Planning — Retirement tab */
 function loadRetirementSection() {
+  const initialLoadTiming = startDashboardInitialLoadStage_('retirement');
   google.script.run
     .withSuccessHandler(function(data) {
       retirementUiData = data;
@@ -133,6 +134,7 @@ function loadRetirementSection() {
       if (pendingFocus && pendingFocus.tab === 'retirement') {
         pendingFocus = null;
       }
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
     })
     .withFailureHandler(function(err) {
       // The safe backend should not throw, but keep this path defensive
@@ -149,6 +151,7 @@ function loadRetirementSection() {
       });
       clearRetirementReadOnlyInfo_();
       setStatus('retirement_status', '', false);
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
     })
     .getRetirementUiDataSafe();
 }

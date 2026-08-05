@@ -181,16 +181,16 @@ function cashFlowSheetHasActiveIncomeRows_(sheet) {
  *   excluded: boolean
  * }>}
  */
-function analyzeIncomeGroupsInSheet_(sheet) {
+function analyzeIncomeGroupsInSheet_(sheet, optionalDisplay, optionalHeaderMap) {
   if (!sheet) return [];
+  var display = optionalDisplay || sheet.getDataRange().getDisplayValues();
+  if (!display || display.length < 2) return [];
   var headerMap;
   try {
-    headerMap = getCashFlowHeaderMap_(sheet);
+    headerMap = optionalHeaderMap || getCashFlowHeaderMapFromHeaders_(display[0] || []);
   } catch (e) {
     return [];
   }
-  var display = sheet.getDataRange().getDisplayValues();
-  if (!display || display.length < 2) return [];
 
   var headers = display[0] || [];
   // Identify month columns by parsing the "MMM-YY" header pattern.
@@ -282,8 +282,8 @@ function incomeGroupQualifiesAsRecurring_(group) {
  * belongs to exactly one bucket, so the two surfaces cannot disagree about the
  * same Cash Flow rows.
  */
-function classifyIncomeGroupsInSheet_(sheet) {
-  var groups = analyzeIncomeGroupsInSheet_(sheet);
+function classifyIncomeGroupsInSheet_(sheet, optionalDisplay, optionalHeaderMap) {
+  var groups = analyzeIncomeGroupsInSheet_(sheet, optionalDisplay, optionalHeaderMap);
   var recurring = [];
   var other = [];
   for (var i = 0; i < groups.length; i++) {

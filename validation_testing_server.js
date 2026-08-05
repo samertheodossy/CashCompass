@@ -180,6 +180,159 @@ function vtRunWorkbookHealth(spreadsheetId) {
   });
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Dashboard read profile — selected-workbook, getter-only diagnostics        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Fixed dashboard data families. These are intentionally sheet selectors, not
+ * calls into production dashboard getters: several production getters include
+ * legitimate self-heal writes that are unsafe for a read-only diagnostic.
+ *
+ * The report exposes only these fixed labels plus aggregate size/timing data.
+ * It never returns sheet names or cell values from the selected workbook.
+ */
+function vtDashboardReadProfileSpecs_() {
+  var year = new Date().getFullYear();
+  return [
+    { id: 'history', label: 'Overview history', exact: ['OUT - History'] },
+    { id: 'cash_flow', label: 'Current-year Cash Flow', exact: ['INPUT - Cash Flow ' + year] },
+    { id: 'bank', label: 'Bank accounts', exact: ['INPUT - Bank Accounts', 'SYS - Accounts'] },
+    { id: 'investments', label: 'Investments', exact: ['INPUT - Investments', 'SYS - Assets'] },
+    { id: 'properties', label: 'Properties', exact: ['INPUT - House Values', 'SYS - House Assets'] },
+    { id: 'property_expenses', label: 'Property expenses', prefix: 'HOUSES - ' },
+    { id: 'debts', label: 'Debts', exact: ['INPUT - Debts'] },
+    { id: 'bills', label: 'Bills and activity', exact: ['INPUT - Bills', 'LOG - Activity'] },
+    { id: 'upcoming', label: 'Upcoming expenses', exact: ['INPUT - Upcoming Expenses'] },
+    { id: 'planning', label: 'Planning inputs', exact: ['INPUT - Retirement', 'INPUT - Settings'] }
+  ];
+}
+
+/** @returns {!Array<!Object>} */
+function vtDashboardReadProfileSheets_(sheets, spec) {
+  var exact = {};
+  (spec.exact || []).forEach(function(name) { exact[name] = true; });
+  return sheets.filter(function(sheet) {
+    var name = String(sheet.getName() || '');
+    return !!exact[name] || (!!spec.prefix && name.indexOf(spec.prefix) === 0);
+  });
+}
+
+/**
+ * Read one fixed data family. Getter-only by construction.
+ * Values are immediately discarded and never enter the returned report.
+ */
+function vtDashboardReadProfileStage_(sheets, spec, pass) {
+  var matched = vtDashboardReadProfileSheets_(sheets, spec);
+  var started = Date.now();
+  var rows = 0;
+  var columns = 0;
+  var cells = 0;
+  var outcome = matched.length ? 'ok' : 'missing';
+  var error = '';
+
+  try {
+    matched.forEach(function(sheet) {
+      var range = sheet.getDataRange();
+      var rangeRows = range.getNumRows();
+      var rangeColumns = range.getNumColumns();
+      var raw = range.getValues();
+      var displayed = range.getDisplayValues();
+      rows += rangeRows;
+      columns += rangeColumns;
+      cells += rangeRows * rangeColumns;
+      raw = null;
+      displayed = null;
+    });
+  } catch (e) {
+    outcome = 'error';
+    // Do not return provider error text: it may contain a workbook-derived
+    // sheet/range name. The fixed stage label is enough to locate the failure.
+    error = 'Read failed for this data area.';
+  }
+
+  return {
+    id: spec.id,
+    label: spec.label,
+    pass: pass,
+    durationMs: Math.max(0, Date.now() - started),
+    outcome: outcome,
+    sheetCount: matched.length,
+    rowCount: rows,
+    columnCount: columns,
+    cellCount: cells,
+    error: error
+  };
+}
+
+/**
+ * Profile the workbook-read layer used to populate the dashboard.
+ *
+ * This action is safe for any admin-selected workbook, including a bounded
+ * workbook: it uses only openById/getSheets/getName/getDataRange/range getters.
+ * It never creates, repairs, formats, flushes, logs, caches, or persists data.
+ * Two sequential passes distinguish first-read cost from an immediate repeat.
+ */
+function vtRunDashboardReadProfile(spreadsheetId) {
+  return vtSafe_(function() {
+    assertValidatorAllowed_();
+    var t = vtResolveTarget_(spreadsheetId);
+    var sheets = t.ss.getSheets();
+    var specs = vtDashboardReadProfileSpecs_();
+    var passes = [];
+
+    [1, 2].forEach(function(pass) {
+      var stages = specs.map(function(spec) {
+        return vtDashboardReadProfileStage_(sheets, spec, pass);
+      });
+      passes.push({
+        pass: pass,
+        totalMs: stages.reduce(function(total, stage) { return total + stage.durationMs; }, 0),
+        stages: stages
+      });
+    });
+
+    var firstById = {};
+    passes[0].stages.forEach(function(stage) { firstById[stage.id] = stage; });
+    var comparison = passes[1].stages.map(function(repeat) {
+      var first = firstById[repeat.id];
+      return {
+        id: repeat.id,
+        label: repeat.label,
+        firstMs: first.durationMs,
+        repeatMs: repeat.durationMs,
+        outcome: repeat.outcome === 'error' || first.outcome === 'error'
+          ? 'error'
+          : (repeat.outcome === 'missing' && first.outcome === 'missing' ? 'missing' : 'ok'),
+        sheetCount: repeat.sheetCount,
+        rowCount: repeat.rowCount,
+        columnCount: repeat.columnCount,
+        cellCount: repeat.cellCount,
+        error: repeat.error || first.error || ''
+      };
+    }).sort(function(a, b) { return b.repeatMs - a.repeatMs; });
+
+    var errorCount = comparison.filter(function(stage) { return stage.outcome === 'error'; }).length;
+    var missingCount = comparison.filter(function(stage) { return stage.outcome === 'missing'; }).length;
+    return {
+      ok: true,
+      target: vtTargetInfo_(t),
+      report: {
+        operation: 'dashboard_read_profile',
+        safety: VT_SAFETY_READONLY_,
+        collectedAt: new Date().toISOString(),
+        overall: errorCount ? 'COMPLETE_WITH_ERRORS' : (missingCount ? 'COMPLETE_WITH_GAPS' : 'COMPLETE'),
+        firstTotalMs: passes[0].totalMs,
+        repeatTotalMs: passes[1].totalMs,
+        slowestStage: comparison.length ? comparison[0].label : '',
+        errorCount: errorCount,
+        missingCount: missingCount,
+        comparison: comparison
+      }
+    };
+  });
+}
+
 function vtRunFormulaValidation(spreadsheetId) {
   return vtSafe_(function() {
     assertValidatorAllowed_();

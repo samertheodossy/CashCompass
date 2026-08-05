@@ -49,6 +49,7 @@ function setIncomeStatus_(msg, isError) {
 function loadIncomeSourcesSection() {
   var el = document.getElementById('income_manage_list');
   if (!el) return;
+  var initialLoadTiming = startDashboardInitialLoadStage_('income_sources');
   el.innerHTML = loadingBlockHtml('Loading income sources…');
 
   runReadOnlyRpcWithRetry_({
@@ -69,6 +70,7 @@ function loadIncomeSourcesSection() {
         }
       }
       renderIncomeSourcesList_(list);
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
     },
     onRetry: function() {
       el.innerHTML = loadingBlockHtml('Connection interrupted. Retrying income sources…');
@@ -79,6 +81,7 @@ function loadIncomeSourcesSection() {
         escapeHtml(customerSafeErrorMessage_(err && err.message ? err.message : String(err),
           'Could not load income sources. Please refresh and try again.')) +
         '</div>';
+      finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
     }
   });
 }
