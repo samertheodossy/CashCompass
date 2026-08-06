@@ -65,6 +65,29 @@ The current planner stages are:
 12. `build_snapshot` *(dashboard wrapper only)*
 13. `save_baseline` *(dashboard wrapper only)*
 
+## Ordinary Bank Save coverage
+
+`bank.ordinary_save` measures the server RPC that keeps the Bank editor on
+`Saving…`. It ends before the success handler starts its quiet Bank-panel read,
+snapshot refresh, or background Planner call. Its fixed stages are:
+
+1. `resolve_workbook`
+2. `read_previous`
+3. `write_history`
+4. `sync_accounts`
+5. `touch_source`
+6. `update_side_fields`
+7. `append_activity`
+
+The guarded Populated Dashboard V10 runner enables the existing project-wide
+timing flag only around five exact shipping Save calls on its marker-verified
+disposable workbook. It restores the prior flag state immediately after the
+sampling window and again during completion/cleanup as a fallback. The saved
+Validation evidence recomputes Save acknowledgement p95, completion p50/p95,
+and per-stage p50/p95/max from allow-listed durations. It never persists the
+account name, workbook ID, balance, identity, or exception text. Runtime proof
+for this V10 addition remains pending on isolated Central.
+
 Stage names are stable report contracts. Rename or split them deliberately and update tests and this document in the same change.
 
 `build_dashboard_charts` is retained as a comparison-compatible stage name after
@@ -338,16 +361,39 @@ acknowledged in 1 ms and completed in 8.332 s; 12 loaded-navigation samples
 measured 17/18 ms p50/p95; representative populated Overview after Planner
 history completed in 11.776 s. Navigation and Overview were within their
 candidate targets. Save acknowledgement passed, but Save completion exceeded
-the directional 6 s target, so optimization/disposition and a fresh measurement
-remain under `4f`. This single diagnostic sample does not independently ratify a
-percentile budget.
+the directional 6 s target and opened the ordinary Save investigation under
+`4f`. This single diagnostic sample does not independently ratify a percentile
+budget.
 
-The admin Validation panel is the evidence authority for this privacy-safe V9
+Ordinary Save investigation `4f` is complete on isolated Central `@322`.
+Populated Dashboard V10 run `FR-afc35e3b-77ff-4c91-88cb-88f28c55fa0f`
+completed five exact Save samples and passed all 24 browser assertions with no
+captured browser errors, Restricted single-owner sharing, and verified Trash
+cleanup. Reusing the already-resolved workbook and the same-call Bank/SYS read
+contexts reduced completion p50 from the original **11.060 s** diagnostic to
+**6.520 s** (41.0% lower); p95 fell from **17.568 s** to **9.418 s** (46.4%
+lower). Acknowledgement p95 was **1 ms**. Individual completion samples were
+5.978, 9.418, 5.612, 8.149, and 6.520 s. Server-stage p50 values were workbook
+resolution 1.170 s, prior read 0.310 s, history write 0.103 s, account sync
+1.356 s, source touch 0.129 s, side fields 0.310 s, and immutable Activity
+append 0.674 s.
+
+The strict 6 s completion budget did **not** pass: reported p50 remained 0.520 s
+over target and p95 remained 3.418 s over. The directional investigation closes
+as a substantial near-miss because two samples were already below 6 s and the
+remaining cost is distributed across required workbook resolution,
+synchronization, immutable audit, and browser/RPC variability. No required Save
+stage is deferred or removed merely to manufacture a passing number. A frozen
+candidate still receives its normal exact-candidate replay under `8b`.
+
+The admin Validation panel is the evidence authority for this privacy-safe
 envelope. The browser runner must execute as `cashcompass2026@gmail.com`, while
-the panel is admin-only. Until separate persistent browser identities are
-available, that Google-session boundary can require an operator account switch;
-the scalable follow-up is dedicated persistent admin and disposable browser
-sessions, not weakening either identity guard.
+the panel is admin-only. The operating requirement is two dedicated persistent
+browser identities: one administrator session for the Validation console and
+one disposable writer session for guarded browser suites. An expired session
+remains a human sign-in boundary, but routine runs must not depend on repeatedly
+switching the same Google session. Identity guards must not be weakened to solve
+browser state.
 
 If source or deployment changes before candidate freeze, rerun all 20 Planner
 pairs under `8b`; never combine samples from different candidates.

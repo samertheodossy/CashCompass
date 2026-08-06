@@ -32,6 +32,34 @@ const incomeSourcesSource = await readFile(new URL('../income_sources.js', impor
 const quickAddSource = await readFile(new URL('../quick_add_payment.js', import.meta.url), 'utf8');
 const configSource = await readFile(new URL('../config.js', import.meta.url), 'utf8');
 
+assert.match(bankAccountsSource,
+  /function updateBankAccountValueByDate\(payload\)[\s\S]*?startPerformanceTrace_\('bank\.ordinary_save'\)[\s\S]*?markPerformanceTrace_\(performanceTrace, 'resolve_workbook'\)[\s\S]*?markPerformanceTrace_\(performanceTrace, 'append_activity'\)[\s\S]*?finishPerformanceTrace_\(performanceTrace\)/,
+  'Ordinary Bank Save must retain flag-gated privacy-safe server stage timing');
+assert.match(bankAccountsSource,
+  /catch \(err\) \{[\s\S]*?finishPerformanceTrace_\(performanceTrace,[\s\S]*?outcome: 'error'[\s\S]*?failedStage: failedStage[\s\S]*?throw err/,
+  'Ordinary Bank Save timing must finish with an allow-listed failed stage and rethrow errors');
+assert.match(bankAccountsSource,
+  /previousSheet && previousBlock && previousRow !== -1 && previousCol !== -1[\s\S]*?setCurrencyCellPreserveRowFormat_\([\s\S]*?previousBlock\.firstMonthCol[\s\S]*?updateBankAccountsHistory_\(accountName, year, balanceDate, currentValue, ss\)/,
+  'Ordinary Bank Save must reuse its prior Bank location with the authoritative lookup as fallback');
+assert.match(bankAccountsSource,
+  /bankDisplay = previousSheet\.getDataRange\(\)\.getDisplayValues\(\)[\s\S]*?getBankAccountsYearBlock_\(previousSheet, year, bankDisplay\)[\s\S]*?findBankAccountRowInBlock_\([\s\S]*?bankDisplay[\s\S]*?syncAllAccountsFromLatestCurrentYear_\(ss, bankDisplay\)/,
+  'Ordinary Bank Save must reuse one Bank display snapshot across lookup and synchronization');
+assert.match(bankAccountsSource,
+  /const accountsContext = syncAllAccountsFromLatestCurrentYear_\(ss, bankDisplay\)[\s\S]*?updateAccountsSheetFields_\(accountName,[\s\S]*?}, ss, accountsContext\)/,
+  'Ordinary Bank Save must reuse its resolved workbook and SYS Accounts read context');
+assert.match(bankAccountsSource,
+  /function updateBankAccountsHistory_\(accountName, year, balanceDate, currentValue, optionalSs\)[\s\S]*?optionalSs \|\| getUserSpreadsheet_\(\)/,
+  'Bank history writes must preserve the no-argument resolver while accepting the same-call workbook');
+assert.match(bankAccountsSource,
+  /function syncAllAccountsFromLatestCurrentYear_\(optionalSs, optionalBankDisplay\)[\s\S]*?getLatestBankAccountValuesForYear_\([\s\S]*?optionalBankDisplay[\s\S]*?return \{[\s\S]*?sheet: targetSheet,[\s\S]*?display: targetDisplay,[\s\S]*?headerMap: targetHeaderMap/,
+  'Bank synchronization must accept an optional same-call display and return reusable SYS Accounts context');
+assert.match(bankAccountsSource,
+  /function getLatestBankAccountValuesForYear_\(sheet, year, optionalDisplay\)[\s\S]*?optionalDisplay && optionalDisplay\.length[\s\S]*?: sheet\.getDataRange\(\)\.getDisplayValues\(\)/,
+  'Latest Bank values must preserve the standalone display read while accepting a same-call snapshot');
+assert.match(bankAccountsSource,
+  /function updateAccountsSheetFields_\(accountName, options, optionalSs, optionalAccountsContext\)[\s\S]*?context && context\.sheet[\s\S]*?: ensureSysAccountsSheet_\(optionalSs\)[\s\S]*?context && context\.display[\s\S]*?: sheet\.getDataRange\(\)\.getDisplayValues\(\)/,
+  'Optional Bank side-field writes must preserve the standalone resolver/read while accepting same-call context');
+
 assert.match(performanceSamplingSource, /failedAssertions:\s*failedAssertions/,
   'Performance samples must retain privacy-safe failed assertion labels');
 assert.match(performanceSamplingSource, /provisioning:\s*report\.gate\.provisioning/,

@@ -334,7 +334,7 @@ function vtRunDashboardReadProfile(spreadsheetId) {
 }
 
 /**
- * Return only the latest allow-listed 4d timing envelope saved by the guarded
+ * Return only the latest allow-listed 4d/4f timing envelope saved by the guarded
  * Populated Dashboard E2E suite. Admin-only and workbook-read-free.
  */
 function vtGetLatestPerformanceFlowsEvidence() {
@@ -345,7 +345,7 @@ function vtGetLatestPerformanceFlowsEvidence() {
     var report = raw ? JSON.parse(raw) : null;
     if (!report || report.suiteId !== 'SUITE-POPULATED-DASHBOARD-E2E' ||
         !report.performanceFlows) {
-      throw new Error('No 4d cross-flow timing evidence is available yet.');
+      throw new Error('No cross-flow timing evidence is available yet.');
     }
     return {
       ok: true,

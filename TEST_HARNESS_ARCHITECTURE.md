@@ -58,14 +58,32 @@ tracked-editor modes plus populated Manage inventories with Stop tracking; prope
 Investments/Upcoming/Bills/Income rendering; subtab retention; populated Setup and Help;
 customer-language leakage; Retirement ready-state results; real planner Refresh
 state; server-owned Activity operation identity plus exact-state preview; Bill
-Skip/Stop stale-request safety; ordinary Bank Save acknowledgement/completion;
+Skip/Stop stale-request safety; five ordinary Bank Save acknowledgement/completion
+samples with privacy-safe server-stage timing;
 twelve warmed loaded-navigation transitions; a representative populated Overview
-refresh after Planner history; and clean console/navigation. The `4d` envelope is
+refresh after Planner history; and clean console/navigation. The `4d`/`4f` envelope is
 strictly allow-listed to fixed flow labels, millisecond durations, candidate-budget
 signals, and suite/run safety metadata; it contains no workbook ID, identity, or
 financial value. Evidence is saved under
-`POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V9`; PASS requires
+`POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V10`; PASS requires
 Restricted sharing and exact Drive-verified Trash cleanup.
+
+V10 limits `PERFORMANCE_TIMING_ENABLED=true` to the exact five-Save sampling
+window, restores the prior property value immediately afterward, and retains
+completion/cleanup restoration as a fallback. During that window the shipping
+Bank writer is unchanged; only its post-completion panel/snapshot/Planner
+follow-ups are suppressed so they cannot overlap the next sample. Runtime proof
+for this V10 addition is complete on isolated Central.
+
+**`@322` V10 ordinary Save evidence:** run
+`FR-afc35e3b-77ff-4c91-88cb-88f28c55fa0f` passed all 24 assertions with zero
+browser errors, Restricted single-owner sharing, and verified exact-fixture
+Trash cleanup. Five Saves measured acknowledgement p95 **1 ms**, completion p50
+**6.520 s**, and completion p95 **9.418 s** after same-call workbook/read-context
+reuse. This is a 41.0% p50 and 46.4% p95 reduction from the original V10
+11.060/17.568 s diagnostic. The strict 6 s completion budget remains a near-miss,
+so the report correctly retains `withinCandidateBudget: false`; `4f` closes as
+an investigated and optimized directional result, not a false budget pass.
 
 **`@319` V9 cross-flow evidence:** diagnostic run
 `FR-47ef0c44-68c8-4cff-a745-828677acf353` passed every browser assertion in
@@ -147,9 +165,10 @@ Named Ranges, aggregate Health, and verified Trash. The first `@121` run exposed
 ordering defect; the corrected confirmation had zero warnings. Harness and timing
 flags were restored OFF, and no bounded workbook was touched.
 
-**Unattended browser operation (`1f` / `REG-022`, runtime-proven):** the agent
-keeps a dedicated in-app Browser session authenticated only as the fixed
-non-admin disposable identity and opens guarded internal runner routes directly.
+**Unattended browser operation (`1f` / `REG-022`, runtime-proven):** operations
+keep two persistent browser identities: an administrator session for the
+Validation console and a separate session authenticated only as the fixed
+non-admin disposable identity for guarded internal runner routes.
 The client never supplies an email or workbook ID. First-Run, Populated,
 Recovery, and Performance control pages self-start only when `doGet` renders
 the unattended flag after their existing exact non-admin route gate passes.

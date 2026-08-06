@@ -2,9 +2,9 @@
 
 **Status:** Active execution inventory
 
-**Reconciled:** 2026-08-05
+**Reconciled:** 2026-08-06
 
-**Current isolated deployment:** `@319`. The Activity-correction evidence
+**Current isolated deployment:** `@322`. The Activity-correction evidence
 baseline remains isolated Central `@240`; clean Populated Dashboard run
 `FR-d75843e0-486e-4faa-8967-05ee40b73e25` passed **21/21** in 383.006 s. It
 includes the complete `REG-030`–`REG-039` direct Quick Add matrix plus
@@ -60,8 +60,13 @@ cleanup. Ordinary Bank Save acknowledged in **1 ms** and completed in
 and the representative populated Overview refresh after Planner history
 completed in **11.776 s**. Navigation and Overview were within their candidate
 targets, while Save acknowledgement passed and Save completion exceeded the
-directional **6 s** target. The remaining performance work is therefore budget
-disposition/optimization and exact-candidate replay, not missing measurement.
+directional **6 s** target. Follow-up V10 run
+`FR-afc35e3b-77ff-4c91-88cb-88f28c55fa0f` on isolated `@322` then passed
+24/24 with five Saves, Restricted sharing, zero errors, and verified cleanup.
+Same-call workbook/read reuse reduced completion p50/p95 from 11.060/17.568 s
+to 6.520/9.418 s. The strict 6 s budget remains a documented near-miss, but the
+investigation and justified optimization are complete; only normal
+frozen-candidate replay remains under `8b`.
 
 **Last formal independent advocate score:** **8.3/10** on isolated Central
 `@180`. This remains the official score until the next full scored advocate run;
@@ -114,7 +119,7 @@ closed. They are retained here so the work map does not lose history.
 | 4b | Optimize snapshot construction | Isolated `@317` `REG-057` reduced current-position construction from 5.508 s to 0.128 s and total snapshot from 13.026 s to 4.867 s with functional, sharing, and cleanup gates passing |
 | 4c | Retire embedded `OUT - Dashboard` charts | Isolated `@308` preserved tabular, History, and web behavior while generated charts and support tables remained absent |
 | 4e | Exact-candidate 20-pair campaign | Exact-owner `@318` campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` passed 20/20 pairs, 40 Planner executions, Restricted sharing, and verified cleanup |
-| 4f | Ratify Planner p50/p95 budgets | Release-eligible evidence recorded `PASS` / `ACCEPT` / `budgetRatified: true`; first, repeat, and combined p50/p95 all passed the 30/60 s budgets |
+| 4f | Ratify Planner budgets and close ordinary Save investigation | Planner evidence recorded `PASS` / `ACCEPT` / `budgetRatified: true` on `@318`. On `@322`, V10 run `FR-afc35e3b-77ff-4c91-88cb-88f28c55fa0f` passed 24/24 with five Saves, Restricted sharing, verified cleanup, and zero errors; completion p50/p95 improved from 11.060/17.568 s to 6.520/9.418 s. The directional investigation is closed as a substantial near-miss; the strict 6 s Save budget is not claimed passed. |
 | 4d | Measure remaining release flows | Isolated `@319` diagnostic run `FR-47ef0c44-68c8-4cff-a745-828677acf353` passed with Restricted sharing and verified cleanup; Save 1 ms acknowledgement / 8.332 s completion, navigation 17/18 ms p50/p95, and populated Overview 11.776 s completion |
 
 The at-a-glance inventory below is **open-only**. Detailed group tables retain
@@ -126,12 +131,11 @@ recently completed `5h` and `5i` as implementation history.
 |---:|---|---|---:|
 | 1 | `3e`–`3k`, `3m` | Remaining page UX, trust, advocate scoring, responsive/accessibility | 8.5–16 d |
 | 2 | `5j`–`5m` | Deferred safe correction families and audit disposition | 4.5–8 d including integrated disposable-workbook validation |
-| 3 | `4f` | Ordinary Save completion budget disposition/optimization and cross-flow rerun | 0.5–1.5 d |
-| 4 | `5a`–`5f` | Remaining financial/workbook proof | 4.5–11 d |
-| 5 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
-| 6 | `7a`–`7f` | Monetization-ready policy and architecture foundation; no billing activation | 5–10 d |
-| 7 | `8a`–`8f` | Freeze, complete exact-candidate evidence, score, and READY verdict | 3.5–7 d plus fixes |
-| 8 | `9a`–`9e` | Supervised cohort, go/no-go, and separately approved Central Beta promotion | 2–3 active d plus 5–7 calendar d and fixes |
+| 3 | `5a`–`5f` | Remaining financial/workbook proof | 4.5–11 d |
+| 4 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
+| 5 | `7a`–`7f` | Monetization-ready policy and architecture foundation; no billing activation | 5–10 d |
+| 6 | `8a`–`8f` | Freeze, complete exact-candidate evidence, score, and READY verdict | 3.5–7 d plus fixes |
+| 7 | `9a`–`9e` | Supervised cohort, go/no-go, and separately approved Central Beta promotion | 2–3 active d plus 5–7 calendar d and fixes |
 
 **Current execution decision (2026-07-31):** finish the smaller remaining UX
 and accessibility work first, beginning with `3e`. Compound Activity correction
@@ -240,10 +244,10 @@ either map the exact failure to an existing assertion or add the next
 | 4c | Retire embedded `OUT - Dashboard` charts | **Complete on isolated Central `@308`.** Six generated charts and their O:Z support tables remain absent while tabular output, History, and web-dashboard behavior remain correct | complete |
 | 4d | Measure remaining release flows | **Complete on isolated Central `@319`.** Diagnostic Populated Dashboard run `FR-47ef0c44-68c8-4cff-a745-828677acf353` passed every assertion with Restricted single-owner sharing and verified Trash cleanup. Ordinary Bank Save acknowledged in 1 ms and completed in 8.332 s; 12 loaded-navigation samples measured 17/18 ms p50/p95; representative populated Overview after Planner history completed in 11.776 s. Navigation and Overview were within candidate targets; Save completion exceeded the directional 6 s target and moves to `4f` disposition/optimization. | complete |
 | 4e | Run the exact-candidate 20-pair campaign | **Complete for source `8aa4bf5` on isolated `@318`.** Exact-owner campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` completed 20/20 passing pairs and 40 Planner executions; every fixture was Restricted and every cleanup was verified. Rerun under `8b` if the final candidate differs. | complete for `@318` |
-| 4f | Ratify p50/p95 budgets | **Complete for Financial Plan refresh on `@318`; cross-flow disposition remains open.** First p50/p95 12.890/16.773 s, repeat 12.350/16.034 s, and combined 12.600/16.773 s passed the 30/60 s budgets. `@319` directionally passed loaded navigation and populated Overview targets, while ordinary Save completed in 8.332 s against the 6 s target. Investigate/optimize that completion path and remeasure it before final ratification. | 0.5–1.5 d for Save follow-up |
+| 4f | Ratify p50/p95 budgets and close ordinary Save follow-up | **Complete.** Financial Plan refresh passed its 30/60 s budgets on exact-owner `@318`. Ordinary Save V10 on `@322` passed 24/24 assertions in run `FR-afc35e3b-77ff-4c91-88cb-88f28c55fa0f`, with five samples, Restricted sharing, verified Trash cleanup, and no errors. Same-call workbook/read reuse reduced Save completion p50/p95 from 11.060/17.568 s to 6.520/9.418 s; acknowledgement p95 was 1 ms. The 6 s strict completion budget remains a documented near-miss and is not marked passed; further removal or deferral of required history, synchronization, or immutable audit work is not justified. | complete; frozen-candidate replay remains under `8b` |
 
-**Group 4 remaining estimate: 0.5–1.5 focused days for ordinary Save follow-up
-under `4f`, plus the conditional frozen-candidate `8b` replay.**
+**Group 4 is complete for the current evidence candidates. The conditional
+frozen-candidate `8b` replay remains.**
 
 ## 5. Final financial, workbook, and recovery proof
 
@@ -442,7 +446,7 @@ family. The strictest failed gate controls the actual decision date.
 
 The remaining work that directly controls the finish date is:
 
-`3e–3j/3m → 5j–5m → 4f + 5a–5f → 8a–8f/3k → 9a–9e`
+`3e–3j/3m → 5j–5m → 5a–5f → 8a–8f/3k → 9a–9e`
 
 Financial/workbook proof in Group 5 must finish before `8b`. Operations and
 monetization foundations in Groups 6–7 must finish before `8d`, but they should
@@ -486,9 +490,10 @@ not block early engineering.
 | Completed Aug 1 | `REG-041` styled Bill Skip and `REG-042` Bills Due authority | CashCompass drawer consistency and one-card Bill/debt presentation | — | Commit `433bfed`; user-verified on isolated Central `@299`; Beta and bounded unchanged |
 | Completed Aug 5 performance gate | `4a`–`4c`, `4e`, and `4f` closed for exact source `8aa4bf5` on isolated `@318`; 20/20 exact-owner pairs passed and Planner budgets were ratified | Validation console recorded `SUITE-PERFORMANCE-PLANNER` PASS with verified cleanup | Beta stayed `@106`; bounded stayed user-controlled; runner returned OFF | Planner percentile gate is closed for `@318`; later candidate changes require an `8b` rerun |
 | Completed Aug 5 cross-flow measurement | `4d` closed on isolated `@319`: Save 1 ms acknowledgement / 8.332 s completion, navigation 17/18 ms p50/p95, populated Overview 11.776 s | Populated Dashboard V9 PASS, Restricted sharing, verified Trash cleanup, and admin 4d panel confirmation | Beta stayed `@106`; bounded stayed untouched; runner returned OFF | Measurement gap closed; ordinary Save completion moves to `4f` follow-up |
-| Current UX closeout | Audit/close `3e`–`3j` and `3m`; investigate/optimize the ordinary Save completion signal under `4f` | Permanent regressions and user visual review for each confirmed gap | Advance `6a`–`6f`, `7a`–`7f`, and cohort design during waits | UX/accessibility path reaches ≥9 without reopening completed slices |
+| Completed Aug 6 ordinary Save follow-up | `4f` Save investigation closed on isolated `@322`: p50/p95 improved from 11.060/17.568 s to 6.520/9.418 s | Populated Dashboard V10 run `FR-afc35e3b-77ff-4c91-88cb-88f28c55fa0f` passed 24/24, Restricted sharing, zero errors, and verified Trash cleanup | Beta stayed `@106`; bounded stayed untouched; no Git commit or push yet | Strict 6 s budget remains a documented near-miss; no required Save/audit stage is weakened |
+| Current UX closeout | Audit/close `3e`–`3j` and `3m` | Permanent regressions and user visual review for each confirmed gap | Advance `6a`–`6f`, `7a`–`7f`, and cohort design during waits | UX/accessibility path reaches ≥9 without reopening completed slices |
 | Deferred correction return | Implement and prove `5j`–`5m` on guarded disposable workbooks | Advance `5a`–`5f` candidate matrix/recovery proof | Continue known limitations and support posture | Supported correction families are atomic; unsupported audit rows remain honest |
-| Candidate preparation | Finish cross-flow budget disposition under `4f` and every remaining `5a`–`5f` prerequisite | Complete fixture, visual, accessibility, and operations evidence | Finish Groups 6–7 | Candidate prerequisites are complete before one freeze |
+| Candidate preparation | Finish every remaining `5a`–`5f` prerequisite | Complete fixture, visual, accessibility, and operations evidence | Finish Groups 6–7 | Candidate prerequisites are complete before one freeze |
 | Frozen candidate | Freeze `8a`; run `8b`–`8f` and advocate `3k`, including a fresh Performance replay if the candidate differs from `8aa4bf5` / `@318` | Release-blocking fixes only | Final release/rollback/support review | Exact candidate reaches automated READY prerequisites and ≥95/100 |
 | Supervised cohort | `9a`–`9e` cohort, observation, go/no-go, and separately approved promotion | Final advocate check | Support the cohort | Five-to-seven-day cohort and final broad-Beta decision |
 

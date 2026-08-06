@@ -757,6 +757,16 @@ function saveBank() {
   google.script.run
     .withSuccessHandler(function(res) {
       setStatus('bank_status', res.message || 'Saved.', false);
+      // The guarded Populated Dashboard performance runner installs this
+      // callback only on its marker-verified disposable route. It receives the
+      // privacy-safe timing envelope, never account or workbook data.
+      if (typeof window.__cashCompassBankSaveDiagnosticListener === 'function') {
+        try { window.__cashCompassBankSaveDiagnosticListener(res || {}); } catch (_listenerErr) {}
+      }
+      // Save-completion timing ends at the status update above. During the
+      // guarded multi-sample diagnostic, suppress only these post-completion
+      // reads/background Planner calls so they cannot overlap the next sample.
+      if (window.__cashCompassSuppressBankSaveFollowUpForE2E === true) return;
       // Quiet refresh: repaint the right-side info panel from the
       // server without overwriting the "Bank account saved." status.
       // Same pattern as Debts saveDebt() → loadDebtFieldValue(true).

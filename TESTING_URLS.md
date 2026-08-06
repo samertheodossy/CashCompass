@@ -12,7 +12,7 @@ operator destinations.
 | --- | --- | --- |
 | Personal bounded dashboard | https://script.google.com/macros/s/AKfycbzSeG-MpuoxqM4FFdv5stdyoazZ0BTfva8lRTpJqPrlpcqR0LF-tTnCwN72CY5mqrYjRw/exec | Owner-only daily workbook, currently version 555 with user testing in progress on 2026-08-04. Never use for Harness or destructive validation. |
 | Central Beta | https://script.google.com/macros/s/AKfycbyq_OGiupdGO79GMOImkIgYv19hqlN1JuJfieuDlkXH6Rp637MhZc6jz9uRW2ZxANBlPA/exec | Family-beta deployment, currently pinned at version 106. Do not update during isolated validation. |
-| Isolated Central validation | https://script.google.com/macros/s/AKfycbzMaD3Ur0H3VmatL4W2vVHlYhFOXF4cZSSjIcn3SwggbTCs9Q9F1_PH74F16lAFkUlWZQ/exec | Disposable runtime-validation deployment, currently version 318. This is the only Central deployment updated during pre-release test work. |
+| Isolated Central validation | https://script.google.com/macros/s/AKfycbzMaD3Ur0H3VmatL4W2vVHlYhFOXF4cZSSjIcn3SwggbTCs9Q9F1_PH74F16lAFkUlWZQ/exec | Disposable runtime-validation deployment, currently version 322. This is the only Central deployment updated during pre-release test work. |
 
 ## Validation entry point
 
@@ -22,8 +22,9 @@ operator destinations.
 
 The Validation console is the source of truth for every suite's launch, latest
 PASS/FAIL evidence, and cleanup status. Server suites run in place. Browser suites
-run in a dedicated browser session authenticated only as
-`cashcompass2026@gmail.com`. Their internal routes accept no email or workbook ID,
+run in a dedicated persistent browser identity authenticated only as
+`cashcompass2026@gmail.com`; the Validation console stays in a separate persistent
+administrator identity. Their internal routes accept no email or workbook ID,
 self-start only when the server-rendered unattended flag is present, save evidence
 back to the console, and should not be bookmarked or tracked separately. The agent
 opens and monitors those routes directly, avoiding cross-account popup redirects.

@@ -3117,6 +3117,10 @@ assert.equal(bankFailureEvents.some((event) => event[0] === 'picker'), true,
   'The current Bank failure must publish its terminal picker state');
 
 const assetsEditors = files['Dashboard_Script_AssetsBankInvestments.html'];
+const bankSaveSource = functionSource_(assetsEditors, 'saveBank');
+assert.match(bankSaveSource,
+  /setStatus\('bank_status',[\s\S]*?__cashCompassBankSaveDiagnosticListener[\s\S]*?__cashCompassSuppressBankSaveFollowUpForE2E === true\) return;[\s\S]*?loadBankData\(true\)[\s\S]*?runPlannerAndRefreshDashboardFromSave/,
+  'The guarded Save diagnostic must observe shipping completion and suppress only later refresh work');
 assert.match(functionSource_(assetsEditors, 'fillBankAccountDropdownFromData_'),
   /Array\.isArray\(data\.accounts\)\s*&&\s*data\.accounts\.length\s*===\s*0[\s\S]*?setBankPanelMode\('add'\)/,
   'A confirmed-empty Bank response must route to Add new');

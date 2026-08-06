@@ -110,21 +110,21 @@ assert.match(validationUi,
   /vtCopyLatestOverviewTrace\(event\)[\s\S]*?function vtCopyLatestOverviewTrace\(ev\)[\s\S]*?vt-overview-trace-json/,
   'Latest Overview trace must provide one-click exact JSON copying');
 assert.match(validationUi,
-  /Latest cross-flow performance evidence \(4d\)[\s\S]*?marked-disposable Populated Dashboard E2E[\s\S]*?function vtLoadLatestPerformanceFlows\(\)[\s\S]*?\.vtGetLatestPerformanceFlowsEvidence\(\)/,
-  'Validation console must expose the latest privacy-safe 4d evidence from the disposable browser suite');
+  /Latest cross-flow performance evidence \(4d \/ 4f\)[\s\S]*?marked-disposable Populated Dashboard E2E[\s\S]*?function vtLoadLatestPerformanceFlows\(\)[\s\S]*?\.vtGetLatestPerformanceFlowsEvidence\(\)/,
+  'Validation console must expose the latest privacy-safe cross-flow evidence from the disposable browser suite');
 assert.match(validationUi,
   /vtCopyPerformanceFlows\(event\)[\s\S]*?function vtCopyPerformanceFlows\(ev\)[\s\S]*?vt-performance-flows-json/,
-  'Latest 4d evidence must provide one-click exact JSON copying');
+  'Latest cross-flow evidence must provide one-click exact JSON copying');
 assert.match(validationServer,
   /function vtGetLatestPerformanceFlowsEvidence\(\)[\s\S]*?assertValidatorAllowed_\(\)[\s\S]*?POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_[\s\S]*?performanceFlows/,
-  'Latest 4d evidence retrieval must be admin-gated and read only saved browser evidence');
+  'Latest cross-flow evidence retrieval must be admin-gated and read only saved browser evidence');
 assert.doesNotMatch(
   validationServer.slice(
     validationServer.indexOf('function vtGetLatestPerformanceFlowsEvidence('),
     validationServer.indexOf('function vtRunFormulaValidation(')
   ),
   /SpreadsheetApp|getUserSpreadsheet_|getActiveSpreadsheet|openById/,
-  'Latest 4d evidence retrieval must not resolve or read any workbook');
+  'Latest cross-flow evidence retrieval must not resolve or read any workbook');
 
 const profileStart = validationServer.indexOf('function vtDashboardReadProfileSpecs_(');
 const profileEnd = validationServer.indexOf('function vtRunFormulaValidation(', profileStart);
@@ -239,9 +239,9 @@ assert.match(firstRunBrowser,
   'First-Run must wait for authoritative Investment Add routing instead of sampling a fixed delay');
 assert.match(firstRunBrowser, /function customerLanguageLeaks\(/,
   'First-Run E2E must scan visible customer pages for internal workbook terminology');
-assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V9/,
+assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V10/,
   'Populated Dashboard E2E must be an implemented browser suite backed by saved evidence');
-assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V9'/,
+assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V10'/,
   'Cross-flow performance assertions must invalidate older Populated Dashboard evidence');
 assert.doesNotMatch(populatedE2E, /function pdE2EPrepare\([^)]*(?:spreadsheet|workbook|file)Id/i,
   'Populated Dashboard preparation must never accept an arbitrary workbook target');
@@ -289,8 +289,11 @@ for (const assertionId of ['overview_kpis', 'bank_selection_actions', 'bank_load
   assert.ok(populatedE2E.includes(`'${assertionId}'`), `Populated Dashboard contract missing ${assertionId}`);
 }
 assert.match(populatedBrowser,
-  /measureOrdinaryBankSave_[\s\S]*?bank_update_save_btn[\s\S]*?acknowledgementMs[\s\S]*?completionMs[\s\S]*?candidateBudget/,
-  '4d must time real ordinary Save acknowledgement and completion through the shipping Bank editor');
+  /measureOrdinaryBankSave_[\s\S]*?bank_update_save_btn[\s\S]*?sampleValues[\s\S]*?samples\.length === 5[\s\S]*?acknowledgementP95Ms[\s\S]*?completionP95Ms[\s\S]*?candidateBudget/,
+  '4f must time five real ordinary Save samples through the shipping Bank editor');
+assert.match(populatedBrowser,
+  /__cashCompassSuppressBankSaveFollowUpForE2E = true[\s\S]*?save\.click\(\)[\s\S]*?__cashCompassSuppressBankSaveFollowUpForE2E = false/,
+  '4f sampling may suppress only post-completion follow-up work around the exact shipping Save click');
 assert.match(populatedBrowser,
   /measureLoadedNavigation_[\s\S]*?Assets \/ Bank accounts[\s\S]*?Cash Flow \/ Quick add[\s\S]*?Planning \/ Retirement[\s\S]*?samples\.length === 12/,
   '4d must collect repeated loaded navigation samples across representative workspaces');
@@ -301,8 +304,29 @@ assert.match(populatedE2E,
   /function pdE2ENormalizePerformanceFlows_[\s\S]*?POPULATED_DASHBOARD_E2E_PERFORMANCE_LABELS_[\s\S]*?Unknown loaded route/,
   '4d evidence must pass through a strict server allow-list before persistence');
 assert.match(populatedE2E,
-  /navigationValues[\s\S]*?pdE2ENearestRank_\(navigationValues, 0\.50\)[\s\S]*?pdE2ENearestRank_\(navigationValues, 0\.95\)[\s\S]*?saveCompletionMs <= 6000[\s\S]*?matureCompletionMs <= 20000/,
-  '4d budget signals and navigation percentiles must be recomputed from sanitized durations on the server');
+  /saveSamples[\s\S]*?saveSamples\.length === 5[\s\S]*?saveCompletionP95Ms <= 6000/,
+  '4f Save budget signals must be recomputed from five sanitized durations on the server');
+assert.match(populatedE2E,
+  /navigationValues[\s\S]*?pdE2ENearestRank_\(navigationValues, 0\.50\)[\s\S]*?pdE2ENearestRank_\(navigationValues, 0\.95\)[\s\S]*?matureCompletionMs <= 20000/,
+  '4d navigation and Overview budget signals must be recomputed from sanitized durations on the server');
+assert.match(populatedE2E,
+  /POPULATED_DASHBOARD_E2E_BANK_SAVE_STAGES_[\s\S]*?pdE2ENormalizeBankSaveTrace_[\s\S]*?unknown_stage/,
+  'Ordinary Save stage evidence must use a fixed privacy-safe server allow-list');
+assert.match(populatedE2E,
+  /function pdE2EEnablePerformanceTiming_[\s\S]*?PERFORMANCE_TIMING_ENABLED_KEY_[\s\S]*?setProperty\(PERFORMANCE_TIMING_ENABLED_KEY_, 'true'\)/,
+  'The guarded suite must reuse the existing performance flag for its diagnostic window');
+assert.match(populatedE2E,
+  /function pdE2ERestorePerformanceTiming_[\s\S]*?performanceTimingPreviousPresent[\s\S]*?deleteProperty\(PERFORMANCE_TIMING_ENABLED_KEY_\)/,
+  'The guarded suite must restore the exact prior performance-flag state');
+assert.match(populatedE2E,
+  /function pdE2EComplete[\s\S]*?pdE2ERestorePerformanceTiming_\(state\)[\s\S]*?frE2ECleanupVerified_\(state, email\)/,
+  'Normal suite completion must restore timing before verified fixture cleanup');
+assert.match(populatedE2E,
+  /function pdE2ESetPerformanceTiming\(runId, enabled\)[\s\S]*?assertFirstRunE2EFixture_\(state, email, false\)[\s\S]*?pdE2EEnablePerformanceTiming_\(state\)[\s\S]*?pdE2ERestorePerformanceTiming_\(state\)/,
+  'Only the exact marker-verified run may control its short Save timing window');
+assert.match(populatedBrowser,
+  /setOrdinarySavePerformanceTiming_\(true\)[\s\S]*?__cashCompassSuppressBankSaveFollowUpForE2E = true[\s\S]*?finally[\s\S]*?setOrdinarySavePerformanceTiming_\(false\)/,
+  'The browser runner must restore the performance flag immediately after Save sampling');
 const performanceNormalizeStart = populatedE2E.indexOf('function pdE2ENormalizePerformanceFlows_(');
 const performanceNormalizeEnd = populatedE2E.indexOf('function pdE2EGetState(', performanceNormalizeStart);
 const performanceNormalizeSource = populatedE2E.slice(performanceNormalizeStart, performanceNormalizeEnd);
@@ -312,8 +336,26 @@ assert.doesNotMatch(performanceNormalizeSource,
 
 const performanceFlowsCtx = vm.createContext({ Math, Number, String, Array, Object, RegExp, isFinite });
 vm.runInContext(populatedE2E, performanceFlowsCtx);
+const bankSaveStageNames = [
+  'resolve_workbook', 'read_previous', 'write_history', 'sync_accounts',
+  'touch_source', 'update_side_fields', 'append_activity'
+];
+const bankSaveSamples = Array.from({ length: 5 }, (_, sampleIndex) => ({
+  acknowledgementMs: 20 + sampleIndex,
+  completionMs: 1200 + sampleIndex * 100,
+  outcome: 'ok',
+  performanceTrace: {
+    operation: 'bank.ordinary_save', outcome: 'ok', totalMs: 1100 + sampleIndex * 100,
+    measuredStageMs: 1090 + sampleIndex * 100, unattributedMs: 10,
+    slowestStage: 'sync_accounts', slowestStageMs: 600 + sampleIndex * 10,
+    stages: bankSaveStageNames.map((name, stageIndex) => ({
+      name, durationMs: 50 + sampleIndex + stageIndex
+    })),
+    accountName: 'Private bank'
+  }
+}));
 const normalizedPerformanceFlows = performanceFlowsCtx.pdE2ENormalizePerformanceFlows_({
-  ordinarySave: { measured: true, acknowledgementMs: 25, completionMs: 1250,
+  ordinarySave: { measured: true, samples: bankSaveSamples,
     withinCandidateBudget: true, outcome: 'ok', accountName: 'Private bank' },
   loadedNavigation: { measured: true, samples: Array.from({ length: 12 }, (_, index) => ({
     label: index % 2 ? 'Assets / Bank accounts' : 'Injected private label', durationMs: 40 + index
@@ -323,7 +365,10 @@ const normalizedPerformanceFlows = performanceFlowsCtx.pdE2ENormalizePerformance
 });
 assert.equal(normalizedPerformanceFlows.loadedNavigation.sampleCount, 12);
 assert.equal(normalizedPerformanceFlows.loadedNavigation.samples[0].label, 'Unknown loaded route');
-assert.equal(normalizedPerformanceFlows.ordinarySave.completionMs, 1250);
+assert.equal(normalizedPerformanceFlows.ordinarySave.sampleCount, 5);
+assert.equal(normalizedPerformanceFlows.ordinarySave.completionMs, 1400);
+assert.equal(normalizedPerformanceFlows.ordinarySave.completionP95Ms, 1600);
+assert.equal(normalizedPerformanceFlows.ordinarySave.stageSummary.length, 7);
 assert.doesNotMatch(JSON.stringify(normalizedPerformanceFlows), /Private bank|private-id|Injected private label/,
   '4d normalization must discard client-supplied private or unknown fields');
 assert.match(populatedBrowser,
@@ -666,7 +711,7 @@ assert.match(dashboard, /function getBillsDueFromCashFlowForDashboard\(preloaded
 assert.match(dashboard, /function buildInputBillPlannerPaymentWindows_\(today, tz, payNowWindowDays, paySoonWindowDays, optionalSs\)/);
 assert.match(dashboard, /buildCashFlowYearSheet_\(ss, today\.getFullYear\(\)\)/,
   'Bills Due first-run provisioning must remain on the already-resolved explicit workbook');
-assert.match(bank, /function syncAllAccountsFromLatestCurrentYear_\(optionalSs\)/);
+assert.match(bank, /function syncAllAccountsFromLatestCurrentYear_\(optionalSs, optionalBankDisplay\)/);
 assert.match(investments, /function syncAllAssetsFromLatestCurrentYear_\(optionalSs\)/);
 assert.match(houses, /function syncAllHouseAssetsFromLatestCurrentYear_\(optionalSs\)/);
 assert.match(plannerOutput, /if \(emailMode === 'suppress'\) return;/, 'Planner harness runs must never send or queue email');

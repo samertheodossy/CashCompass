@@ -312,9 +312,9 @@
     <div id="vt-overview-trace-results" class="hidden" style="margin-top:16px;"></div>
   </div>
 
-  <!-- LATEST 4D CROSS-FLOW EVIDENCE -->
+  <!-- LATEST 4D/4F CROSS-FLOW EVIDENCE -->
   <div class="card">
-    <h2>Latest cross-flow performance evidence (4d)</h2>
+    <h2>Latest cross-flow performance evidence (4d / 4f)</h2>
     <div class="banner" style="margin-bottom:12px;">
       <span class="ico">📏</span>
       <span>Retrieves privacy-safe ordinary Save, loaded navigation, and representative populated
@@ -322,7 +322,7 @@
         is read-only and exposes no workbook ID, account name, or financial value.</span>
     </div>
     <div class="btn-row">
-      <button class="primary" onclick="vtLoadLatestPerformanceFlows()">Load latest 4d evidence</button>
+      <button class="primary" onclick="vtLoadLatestPerformanceFlows()">Load latest cross-flow evidence</button>
       <span id="vt-performance-flows-status" class="runmsg"></span>
     </div>
     <div id="vt-performance-flows-results" class="hidden" style="margin-top:16px;"></div>
@@ -687,13 +687,13 @@
     results.innerHTML = '';
     results.classList.add('hidden');
     status.className = 'runmsg';
-    status.innerHTML = vtSpin('Loading latest 4d evidence…');
+    status.innerHTML = vtSpin('Loading latest cross-flow evidence…');
     google.script.run
       .withSuccessHandler(function(res) {
         if (token !== vtPerformanceFlowsRunToken) return;
         if (!res || !res.ok || !res.report) {
           status.className = 'runmsg err';
-          status.innerHTML = vtEsc(res && res.error ? res.error : 'No 4d timing evidence is available.');
+          status.innerHTML = vtEsc(res && res.error ? res.error : 'No cross-flow timing evidence is available.');
           return;
         }
         status.className = 'runmsg';
@@ -703,7 +703,7 @@
       .withFailureHandler(function(err) {
         if (token !== vtPerformanceFlowsRunToken) return;
         status.className = 'runmsg err';
-        status.innerHTML = vtEsc(err && err.message ? err.message : 'Latest 4d evidence failed.');
+        status.innerHTML = vtEsc(err && err.message ? err.message : 'Latest cross-flow evidence failed.');
       })
       .vtGetLatestPerformanceFlowsEvidence();
   }
@@ -719,6 +719,13 @@
     var save = flows.ordinarySave || {};
     var navigation = flows.loadedNavigation || {};
     var mature = flows.matureOverview || {};
+    var stageRows = (save.stageSummary || []).map(function(stage) {
+      return '<tr><td><b>' + vtEsc(stage.name || '—') + '</b></td><td>' +
+        vtEsc(stage.sampleCount || 0) + '</td><td class="st-mono">' +
+        vtEsc(vtProfileMs_(stage.p50Ms)) + '</td><td class="st-mono">' +
+        vtEsc(vtProfileMs_(stage.p95Ms)) + '</td><td class="st-mono">' +
+        vtEsc(vtProfileMs_(stage.maxMs)) + '</td></tr>';
+    }).join('');
     results.innerHTML =
       '<div class="summary">' +
         '<div class="cell"><div class="lbl">Suite result</div><div class="val">' + vtEsc(report.overall || '—') + '</div></div>' +
@@ -727,10 +734,12 @@
         '<div class="cell"><div class="lbl">Cleanup</div><div class="val">' + vtEsc(report.cleanupVerified ? 'Verified' : 'No') + '</div></div>' +
       '</div>' +
       '<div style="overflow:auto"><table class="suite-table"><thead><tr>' +
-        '<th>Flow</th><th>Acknowledgement</th><th>Completion / p50</th><th>p95</th><th>Budget signal</th>' +
+        '<th>Flow</th><th>Acknowledgement p95</th><th>Completion p50</th><th>Completion p95</th><th>Budget signal</th>' +
       '</tr></thead><tbody>' +
-        '<tr><td><b>Ordinary Bank save</b></td><td class="st-mono">' + vtEsc(vtProfileMs_(save.acknowledgementMs)) +
-          '</td><td class="st-mono">' + vtEsc(vtProfileMs_(save.completionMs)) + '</td><td>—</td><td>' +
+        '<tr><td><b>Ordinary Bank save (' + vtEsc(save.sampleCount || 0) + ' samples)</b></td><td class="st-mono">' +
+          vtEsc(vtProfileMs_(save.acknowledgementP95Ms)) + '</td><td class="st-mono">' +
+          vtEsc(vtProfileMs_(save.completionMs)) + '</td><td class="st-mono">' +
+          vtEsc(vtProfileMs_(save.completionP95Ms)) + '</td><td>' +
           vtPerformanceBudgetPill_(save.withinCandidateBudget === true) + '</td></tr>' +
         '<tr><td><b>Loaded navigation (' + vtEsc(navigation.sampleCount || 0) + ' samples)</b></td><td>—</td>' +
           '<td class="st-mono">' + vtEsc(vtProfileMs_(navigation.p50Ms)) + '</td><td class="st-mono">' +
@@ -741,8 +750,12 @@
           vtEsc(vtProfileMs_(mature.completionMs)) + '</td><td>—</td><td>' +
           vtPerformanceBudgetPill_(mature.withinCandidateBudget === true) + '</td></tr>' +
       '</tbody></table></div>' +
+      '<h3 style="font-size:14px;margin:14px 0 8px;">Ordinary Save server stages</h3>' +
+      '<div style="overflow:auto"><table class="suite-table"><thead><tr>' +
+        '<th>Stage</th><th>Samples</th><th>p50</th><th>p95</th><th>Max</th>' +
+      '</tr></thead><tbody>' + stageRows + '</tbody></table></div>' +
       '<div style="font-size:12px;color:var(--ink-soft);margin:0 0 10px;">' +
-        'Budget comparisons are directional 4d evidence. They do not independently ratify a percentile budget.' +
+        'The five-Save stage profile is diagnostic 4f evidence. Final budget ratification requires the approved exact-candidate sample set.' +
       '</div>' +
       '<details class="json"><summary>View raw JSON' +
         '<button class="copybtn" onclick="vtCopyPerformanceFlows(event)">Copy</button>' +

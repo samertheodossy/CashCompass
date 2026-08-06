@@ -7,7 +7,7 @@
  * from a caller and the permanent test identity remains a non-admin.
  */
 var POPULATED_DASHBOARD_E2E_MODE_ = 'POPULATED_DASHBOARD';
-var POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_ = 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V9';
+var POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_ = 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V10';
 var POPULATED_DASHBOARD_E2E_SCENARIO_ID_ = 'E2E-POPULATED-DASHBOARD';
 var POPULATED_DASHBOARD_E2E_REQUIRED_ASSERTIONS_ = [
   'startup_populated_overview',
@@ -44,6 +44,15 @@ var POPULATED_DASHBOARD_E2E_PERFORMANCE_LABELS_ = [
   'Cash Flow / Bills',
   'Planning / Retirement'
 ];
+var POPULATED_DASHBOARD_E2E_BANK_SAVE_STAGES_ = [
+  'resolve_workbook',
+  'read_previous',
+  'write_history',
+  'sync_accounts',
+  'touch_source',
+  'update_side_fields',
+  'append_activity'
+];
 
 function pdE2ENonnegativeMs_(value) {
   var n = Number(value);
@@ -54,6 +63,57 @@ function pdE2ENearestRank_(values, percentile) {
   if (!values || !values.length) return null;
   var sorted = values.slice().sort(function(a, b) { return a - b; });
   return sorted[Math.max(0, Math.ceil(percentile * sorted.length) - 1)];
+}
+
+function pdE2ENormalizeBankSaveTrace_(raw) {
+  var source = raw && typeof raw === 'object' ? raw : {};
+  var allowedStages = {};
+  POPULATED_DASHBOARD_E2E_BANK_SAVE_STAGES_.forEach(function(name) {
+    allowedStages[name] = true;
+  });
+  var stages = (Array.isArray(source.stages) ? source.stages : [])
+    .slice(0, POPULATED_DASHBOARD_E2E_BANK_SAVE_STAGES_.length)
+    .map(function(stage) {
+      var name = String(stage && stage.name || '');
+      return {
+        name: allowedStages[name] ? name : 'unknown_stage',
+        durationMs: pdE2ENonnegativeMs_(stage && stage.durationMs)
+      };
+    }).filter(function(stage) { return stage.durationMs !== null; });
+  return {
+    operation: source.operation === 'bank.ordinary_save' ? source.operation : 'unknown_operation',
+    outcome: source.outcome === 'ok' ? 'ok' : 'error',
+    totalMs: pdE2ENonnegativeMs_(source.totalMs),
+    measuredStageMs: pdE2ENonnegativeMs_(source.measuredStageMs),
+    unattributedMs: pdE2ENonnegativeMs_(source.unattributedMs),
+    slowestStage: allowedStages[String(source.slowestStage || '')]
+      ? String(source.slowestStage) : null,
+    slowestStageMs: pdE2ENonnegativeMs_(source.slowestStageMs),
+    stages: stages
+  };
+}
+
+function pdE2EEnablePerformanceTiming_(state) {
+  var props = PropertiesService.getScriptProperties();
+  var previous = props.getProperty(PERFORMANCE_TIMING_ENABLED_KEY_);
+  state.performanceTimingPreviousPresent = previous !== null;
+  state.performanceTimingPreviousValue = previous === null ? '' : String(previous);
+  state.performanceTimingManaged = true;
+  props.setProperty(PERFORMANCE_TIMING_ENABLED_KEY_, 'true');
+}
+
+function pdE2ERestorePerformanceTiming_(state) {
+  if (!state || state.performanceTimingManaged !== true) return;
+  var props = PropertiesService.getScriptProperties();
+  if (state.performanceTimingPreviousPresent === true) {
+    props.setProperty(
+      PERFORMANCE_TIMING_ENABLED_KEY_,
+      String(state.performanceTimingPreviousValue || '')
+    );
+  } else {
+    props.deleteProperty(PERFORMANCE_TIMING_ENABLED_KEY_);
+  }
+  state.performanceTimingManaged = false;
 }
 
 /** Strict privacy-safe allow-list for client-collected 4d timing evidence. */
@@ -77,25 +137,67 @@ function pdE2ENormalizePerformanceFlows_(raw) {
         durationMs: pdE2ENonnegativeMs_(sample && sample.durationMs)
       };
     }).filter(function(sample) { return sample.durationMs !== null; });
-  var saveAckMs = pdE2ENonnegativeMs_(save.acknowledgementMs);
-  var saveCompletionMs = pdE2ENonnegativeMs_(save.completionMs);
+  var saveSamples = (Array.isArray(save.samples) ? save.samples : [])
+    .slice(0, 5).map(function(sample) {
+      return {
+        acknowledgementMs: pdE2ENonnegativeMs_(sample && sample.acknowledgementMs),
+        completionMs: pdE2ENonnegativeMs_(sample && sample.completionMs),
+        outcome: sample && sample.outcome === 'ok' ? 'ok' : 'error',
+        performanceTrace: pdE2ENormalizeBankSaveTrace_(sample && sample.performanceTrace)
+      };
+    }).filter(function(sample) {
+      return sample.acknowledgementMs !== null && sample.completionMs !== null;
+    });
+  var saveAcknowledgements = saveSamples.map(function(sample) { return sample.acknowledgementMs; });
+  var saveCompletions = saveSamples.map(function(sample) { return sample.completionMs; });
+  var saveAckMs = pdE2ENearestRank_(saveAcknowledgements, 0.50);
+  var saveAckP95Ms = pdE2ENearestRank_(saveAcknowledgements, 0.95);
+  var saveCompletionMs = pdE2ENearestRank_(saveCompletions, 0.50);
+  var saveCompletionP95Ms = pdE2ENearestRank_(saveCompletions, 0.95);
+  var saveStageSummary = POPULATED_DASHBOARD_E2E_BANK_SAVE_STAGES_.map(function(stageName) {
+    var durations = saveSamples.map(function(sample) {
+      var match = sample.performanceTrace.stages.filter(function(stage) {
+        return stage.name === stageName;
+      })[0];
+      return match ? match.durationMs : null;
+    }).filter(function(durationMs) { return durationMs !== null; });
+    return {
+      name: stageName,
+      sampleCount: durations.length,
+      p50Ms: pdE2ENearestRank_(durations, 0.50),
+      p95Ms: pdE2ENearestRank_(durations, 0.95),
+      maxMs: durations.length ? Math.max.apply(null, durations) : null
+    };
+  });
+  var saveMeasured = save.measured === true && saveSamples.length === 5 &&
+    saveSamples.every(function(sample) {
+      return sample.outcome === 'ok' &&
+        sample.performanceTrace.operation === 'bank.ordinary_save' &&
+        sample.performanceTrace.outcome === 'ok' &&
+        sample.performanceTrace.stages.length === POPULATED_DASHBOARD_E2E_BANK_SAVE_STAGES_.length;
+    });
   var navigationValues = samples.map(function(sample) { return sample.durationMs; });
   var navigationP50Ms = pdE2ENearestRank_(navigationValues, 0.50);
   var navigationP95Ms = pdE2ENearestRank_(navigationValues, 0.95);
   var matureAckMs = pdE2ENonnegativeMs_(mature.acknowledgementMs);
   var matureCompletionMs = pdE2ENonnegativeMs_(mature.completionMs);
   return {
-    version: 1,
+    version: 2,
     ordinarySave: {
       flow: 'Bank account update',
-      measured: save.measured === true,
+      measured: saveMeasured,
+      sampleCount: saveSamples.length,
+      samples: saveSamples,
       acknowledgementMs: saveAckMs,
+      acknowledgementP95Ms: saveAckP95Ms,
       completionMs: saveCompletionMs,
+      completionP95Ms: saveCompletionP95Ms,
+      stageSummary: saveStageSummary,
       candidateBudget: { acknowledgementMs: 2000, completionMs: 6000 },
-      withinCandidateBudget: save.measured === true && saveAckMs !== null &&
-        saveCompletionMs !== null && saveAckMs <= 2000 && saveCompletionMs <= 6000,
-      outcome: /^(?:ok|error|missing_acknowledgement)$/.test(String(save.outcome || ''))
-        ? String(save.outcome) : 'unknown'
+      withinCandidateBudget: saveMeasured && saveAckP95Ms !== null &&
+        saveCompletionMs !== null && saveCompletionP95Ms !== null &&
+        saveAckP95Ms <= 2000 && saveCompletionMs <= 6000 && saveCompletionP95Ms <= 6000,
+      outcome: saveMeasured ? 'ok' : 'error'
     },
     loadedNavigation: {
       measured: navigation.measured === true && samples.length === 12,
@@ -143,6 +245,10 @@ function pdE2EGetState() {
 /** Provision through Central, verify identity, then seed the exact mapped fixture. */
 function pdE2EPrepare(confirmed, requestedReleaseRunId) {
   return frE2ESafe_(function() {
+    var priorState = frE2EReadState_();
+    if (priorState && priorState.mode === POPULATED_DASHBOARD_E2E_MODE_) {
+      pdE2ERestorePerformanceTiming_(priorState);
+    }
     var prepared = frE2EPrepare(confirmed, requestedReleaseRunId);
     if (!prepared || !prepared.ok) {
       throw new Error((prepared && prepared.error) || 'Populated Dashboard E2E preparation failed.');
@@ -151,9 +257,9 @@ function pdE2EPrepare(confirmed, requestedReleaseRunId) {
     var state = frE2EReadState_();
     if (!state) throw new Error('Populated Dashboard E2E lost its active fixture state.');
     state.mode = POPULATED_DASHBOARD_E2E_MODE_;
-    frE2EWriteState_(state);
 
     try {
+      frE2EWriteState_(state);
       assertFirstRunE2EFixture_(state, email, false);
       var ss = SpreadsheetApp.openById(state.workbookId);
       var ctx = {
@@ -174,6 +280,7 @@ function pdE2EPrepare(confirmed, requestedReleaseRunId) {
       state.seedActions = ctx.actions.length;
       frE2EWriteState_(state);
     } catch (seedErr) {
+      pdE2ERestorePerformanceTiming_(state);
       try { frE2ECleanupVerified_(state, email); } catch (_cleanupErr) {}
       throw seedErr;
     }
@@ -185,6 +292,26 @@ function pdE2EPrepare(confirmed, requestedReleaseRunId) {
       preflightCleanup: prepared.preflightCleanup || null,
       state: pdE2EGetState().state
     };
+  });
+}
+
+/** Limit the project-wide performance flag to the exact five-Save window. */
+function pdE2ESetPerformanceTiming(runId, enabled) {
+  return frE2ESafe_(function() {
+    var email = assertFirstRunE2EAllowed_();
+    var state = frE2EReadState_();
+    if (!state || state.mode !== POPULATED_DASHBOARD_E2E_MODE_ ||
+        String(runId || '') !== state.runId || !state.seededAt) {
+      throw new Error('Populated Dashboard E2E timing refused: run token mismatch.');
+    }
+    assertFirstRunE2EFixture_(state, email, false);
+    if (enabled === true) {
+      if (state.performanceTimingManaged !== true) pdE2EEnablePerformanceTiming_(state);
+    } else {
+      pdE2ERestorePerformanceTiming_(state);
+    }
+    frE2EWriteState_(state);
+    return { ok: true, enabled: enabled === true };
   });
 }
 
@@ -851,6 +978,7 @@ function pdE2EComplete(runId, payload, trashAfter) {
     };
     var props = PropertiesService.getScriptProperties();
     props.setProperty(POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_, JSON.stringify(report));
+    pdE2ERestorePerformanceTiming_(state);
     if (trashAfter === true) {
       report.cleanup = frE2ECleanupVerified_(state, email);
       props.setProperty(POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_, JSON.stringify(report));
@@ -868,6 +996,7 @@ function pdE2ECleanup(confirmed) {
     if (state.mode !== POPULATED_DASHBOARD_E2E_MODE_) {
       throw new Error('Populated Dashboard E2E refused: the active fixture belongs to another suite.');
     }
+    pdE2ERestorePerformanceTiming_(state);
     var cleanup = frE2ECleanupVerified_(state, email);
     return { ok: true, cleanup: cleanup, state: pdE2EGetState().state };
   });

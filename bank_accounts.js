@@ -145,7 +145,7 @@ function ensureSysAccountsSheet_(optionalSs) {
   return sheet;
 }
 
-function syncAllAccountsFromLatestCurrentYear_(optionalSs) {
+function syncAllAccountsFromLatestCurrentYear_(optionalSs, optionalBankDisplay) {
   // Use ensureSysAccountsSheet_() for the SYS - Accounts handle so this
   // stays working on first-run saves where the sheet was just inserted
   // earlier in the same Apps Script execution. Some runtimes do not
@@ -173,7 +173,11 @@ function syncAllAccountsFromLatestCurrentYear_(optionalSs) {
   }
 
   const targetHeaderMap = getAccountsHeaderMap_(targetSheet, targetDisplay);
-  const latestMap = getLatestBankAccountValuesForYear_(sourceSheet, getCurrentYear_());
+  const latestMap = getLatestBankAccountValuesForYear_(
+    sourceSheet,
+    getCurrentYear_(),
+    optionalBankDisplay
+  );
 
   for (let r = 1; r < targetDisplay.length; r++) {
     const name = String(targetDisplay[r][targetHeaderMap.nameColZero] || '').trim();
@@ -194,14 +198,26 @@ function syncAllAccountsFromLatestCurrentYear_(optionalSs) {
       1
     );
   }
+
+  // Same-call read context for callers that immediately update another field
+  // on this SYS - Accounts row. Existing callers ignore the return value and
+  // retain their prior behavior; ordinary Save reuses it to avoid loading the
+  // same display grid and header a second time.
+  return {
+    sheet: targetSheet,
+    display: targetDisplay,
+    headerMap: targetHeaderMap
+  };
 }
 
-function getLatestBankAccountValuesForYear_(sheet, year) {
+function getLatestBankAccountValuesForYear_(sheet, year, optionalDisplay) {
   // Performance: same fix as getLatestInvestmentValuesForYear_. Read
   // the year block in 2 batched calls (display once, values once) and
   // resolve the latest non-empty month entirely in memory instead of
   // calling getRange() per row.
-  const display = sheet.getDataRange().getDisplayValues();
+  const display = (optionalDisplay && optionalDisplay.length)
+    ? optionalDisplay
+    : sheet.getDataRange().getDisplayValues();
   const block = getBankAccountsYearBlock_(sheet, year, display);
   const result = {};
 
@@ -955,19 +971,24 @@ function getBankAccountHistoryValueForMonth_(accountName, year, balanceDate) {
 }
 
 function updateBankAccountValueByDate(payload) {
-  validateRequired_(payload, ['accountName', 'balanceDate', 'currentValue']);
+  const performanceTrace = startPerformanceTrace_('bank.ordinary_save');
+  let failedStage = 'validate';
+  try {
+    validateRequired_(payload, ['accountName', 'balanceDate', 'currentValue']);
 
-  const accountName = String(payload.accountName || '').trim();
-  const balanceDate = parseIsoDateLocal_(payload.balanceDate);
-  const currentValue = toNumber_(payload.currentValue);
+    const accountName = String(payload.accountName || '').trim();
+    const balanceDate = parseIsoDateLocal_(payload.balanceDate);
+    const currentValue = toNumber_(payload.currentValue);
 
-  const updateAvailableNow = !!payload.updateAvailableNow;
-  const updateMinBuffer = !!payload.updateMinBuffer;
+    const updateAvailableNow = !!payload.updateAvailableNow;
+    const updateMinBuffer = !!payload.updateMinBuffer;
 
-  if (!accountName) throw new Error('Account name is required.');
+    if (!accountName) throw new Error('Account name is required.');
 
-  const year = balanceDate.getFullYear();
-  const ss = getUserSpreadsheet_();
+    const year = balanceDate.getFullYear();
+    failedStage = 'resolve_workbook';
+    const ss = getUserSpreadsheet_();
+    markPerformanceTrace_(performanceTrace, 'resolve_workbook');
 
   // Capture the prior month-cell value BEFORE the overwrite so the activity
   // log row can show both the previous and new balance. Best-effort — a
@@ -978,32 +999,75 @@ function updateBankAccountValueByDate(payload) {
   // local to this function so updateBankAccountsHistory_'s contract stays
   // unchanged for the other callers (addBankAccountFromDashboard,
   // bankImportApplyAutoMatchWrite_) — neither needs a prior-value read.
-  let previousRaw = null;
-  let previousDisplay = '';
-  try {
-    const prevSheet = getSheet_(ss, 'BANK_ACCOUNTS');
-    const prevBlock = getBankAccountsYearBlock_(prevSheet, year);
-    const prevRow = findBankAccountRowInBlock_(prevSheet, prevBlock, accountName);
-    if (prevRow !== -1) {
-      const prevCol = getMonthColumnByDate_(prevSheet, balanceDate, prevBlock.headerRow);
-      const prevCell = prevSheet.getRange(prevRow, prevCol);
-      previousRaw = round2_(toNumber_(prevCell.getValue()));
-      previousDisplay = String(prevCell.getDisplayValue() || '').trim();
+    failedStage = 'read_previous';
+    let previousRaw = null;
+    let previousDisplay = '';
+    let previousSheet = null;
+    let previousBlock = null;
+    let previousRow = -1;
+    let previousCol = -1;
+    let bankDisplay = null;
+    try {
+      previousSheet = getSheet_(ss, 'BANK_ACCOUNTS');
+      bankDisplay = previousSheet.getDataRange().getDisplayValues();
+      previousBlock = getBankAccountsYearBlock_(previousSheet, year, bankDisplay);
+      previousRow = findBankAccountRowInBlock_(
+        previousSheet,
+        previousBlock,
+        accountName,
+        bankDisplay
+      );
+      if (previousRow !== -1) {
+        const headerValues = bankDisplay[previousBlock.headerRow - 1] || [];
+        previousCol = findMonthColumnIndex_(headerValues, balanceDate);
+        if (previousCol === -1) {
+          throw new Error(
+            'Could not find month column for ' +
+            Utilities.formatDate(balanceDate, Session.getScriptTimeZone(), 'MMM-yyyy') +
+            ' on sheet "' + previousSheet.getName() + '"'
+          );
+        }
+        const prevCell = previousSheet.getRange(previousRow, previousCol);
+        previousRaw = round2_(toNumber_(prevCell.getValue()));
+        previousDisplay = String(prevCell.getDisplayValue() || '').trim();
+      }
+    } catch (prevErr) {
+      Logger.log('updateBankAccountValueByDate previous-read: ' + prevErr);
     }
-  } catch (prevErr) {
-    Logger.log('updateBankAccountValueByDate previous-read: ' + prevErr);
-  }
+    markPerformanceTrace_(performanceTrace, 'read_previous');
 
-  updateBankAccountsHistory_(accountName, year, balanceDate, currentValue);
-  syncAllAccountsFromLatestCurrentYear_();
-  touchDashboardSourceUpdated_('bank_accounts');
+    failedStage = 'write_history';
+    if (previousSheet && previousBlock && previousRow !== -1 && previousCol !== -1) {
+      setCurrencyCellPreserveRowFormat_(
+        previousSheet,
+        previousRow,
+        previousCol,
+        currentValue,
+        previousBlock.firstMonthCol
+      );
+    } else {
+      // Preserve the authoritative lookup/error path if the best-effort prior
+      // read could not produce a reusable location.
+      updateBankAccountsHistory_(accountName, year, balanceDate, currentValue, ss);
+    }
+    markPerformanceTrace_(performanceTrace, 'write_history');
 
-  if (updateAvailableNow || updateMinBuffer) {
-    updateAccountsSheetFields_(accountName, {
-      availableNow: updateAvailableNow ? currentValue : null,
-      minBuffer: updateMinBuffer ? currentValue : null
-    });
-  }
+    failedStage = 'sync_accounts';
+    const accountsContext = syncAllAccountsFromLatestCurrentYear_(ss, bankDisplay);
+    markPerformanceTrace_(performanceTrace, 'sync_accounts');
+
+    failedStage = 'touch_source';
+    touchDashboardSourceUpdated_('bank_accounts');
+    markPerformanceTrace_(performanceTrace, 'touch_source');
+
+    failedStage = 'update_side_fields';
+    if (updateAvailableNow || updateMinBuffer) {
+      updateAccountsSheetFields_(accountName, {
+        availableNow: updateAvailableNow ? currentValue : null,
+        minBuffer: updateMinBuffer ? currentValue : null
+      }, ss, accountsContext);
+    }
+    markPerformanceTrace_(performanceTrace, 'update_side_fields');
 
   // Activity log: balance-update event. Mirrors the debt_update pattern
   // (debts.js::updateDebtField) — non-monetary (Amount renders "—") so a
@@ -1014,37 +1078,39 @@ function updateBankAccountValueByDate(payload) {
   // JSON rather than spawning extra log lines for one user action.
   // Logged BEFORE runDebtPlanner so the row is still captured if the
   // planner trips on bad data downstream.
-  try {
-    const tz = Session.getScriptTimeZone();
-    const monthLabel = Utilities.formatDate(balanceDate, tz, 'MMM-yy');
-    const newRaw = round2_(toNumber_(currentValue));
-    appendActivityLog_(ss, {
-      eventType: 'bank_account_update',
-      entryDate: Utilities.formatDate(stripTime_(new Date()), tz, 'yyyy-MM-dd'),
-      amount: 0,
-      direction: '',
-      payee: accountName,
-      category: '',
-      accountSource: '',
-      cashFlowSheet: '',
-      cashFlowMonth: '',
-      dedupeKey: '',
-      details: JSON.stringify({
-        detailsVersion: 1,
-        fieldName: 'Balance',
-        fieldKind: 'currency',
-        monthLabel: monthLabel,
-        balanceDate: Utilities.formatDate(balanceDate, tz, 'yyyy-MM-dd'),
-        previousRaw: previousRaw,
-        previousDisplay: previousDisplay,
-        newRaw: newRaw,
-        availableNowSet: updateAvailableNow,
-        minBufferSet: updateMinBuffer
-      })
-    });
-  } catch (logErr) {
-    Logger.log('updateBankAccountValueByDate activity log: ' + logErr);
-  }
+    failedStage = 'append_activity';
+    try {
+      const tz = Session.getScriptTimeZone();
+      const monthLabel = Utilities.formatDate(balanceDate, tz, 'MMM-yy');
+      const newRaw = round2_(toNumber_(currentValue));
+      appendActivityLog_(ss, {
+        eventType: 'bank_account_update',
+        entryDate: Utilities.formatDate(stripTime_(new Date()), tz, 'yyyy-MM-dd'),
+        amount: 0,
+        direction: '',
+        payee: accountName,
+        category: '',
+        accountSource: '',
+        cashFlowSheet: '',
+        cashFlowMonth: '',
+        dedupeKey: '',
+        details: JSON.stringify({
+          detailsVersion: 1,
+          fieldName: 'Balance',
+          fieldKind: 'currency',
+          monthLabel: monthLabel,
+          balanceDate: Utilities.formatDate(balanceDate, tz, 'yyyy-MM-dd'),
+          previousRaw: previousRaw,
+          previousDisplay: previousDisplay,
+          newRaw: newRaw,
+          availableNowSet: updateAvailableNow,
+          minBufferSet: updateMinBuffer
+        })
+      });
+    } catch (logErr) {
+      Logger.log('updateBankAccountValueByDate activity log: ' + logErr);
+    }
+    markPerformanceTrace_(performanceTrace, 'append_activity');
 
   // NOTE: we intentionally do NOT call runDebtPlanner() here. The
   // sheet write + SYS - Accounts sync + activity log row are everything
@@ -1056,14 +1122,22 @@ function updateBankAccountValueByDate(payload) {
   // doesn't hang on "Saving…" while the planner runs for several seconds
   // on big workbooks. See Dashboard_Script_AssetsBankInvestments.html::
   // saveBank().
-  return {
-    ok: true,
-    message: 'Bank account saved.'
-  };
+    return {
+      ok: true,
+      message: 'Bank account saved.',
+      performanceTrace: finishPerformanceTrace_(performanceTrace)
+    };
+  } catch (err) {
+    finishPerformanceTrace_(performanceTrace, {
+      outcome: 'error',
+      failedStage: failedStage
+    });
+    throw err;
+  }
 }
 
-function updateBankAccountsHistory_(accountName, year, balanceDate, currentValue) {
-  const ss = getUserSpreadsheet_();
+function updateBankAccountsHistory_(accountName, year, balanceDate, currentValue, optionalSs) {
+  const ss = optionalSs || getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'BANK_ACCOUNTS');
   const block = getBankAccountsYearBlock_(sheet, year);
 
@@ -1102,14 +1176,21 @@ function getAccountsRowData_(accountName) {
   return null;
 }
 
-function updateAccountsSheetFields_(accountName, options) {
+function updateAccountsSheetFields_(accountName, options, optionalSs, optionalAccountsContext) {
   // Match syncAllAccountsFromLatestCurrentYear_: use the idempotent
   // ensure helper so first-run "Create account" does not fail with
   // "Missing sheet: SYS - Accounts" when the sheet was just inserted
   // upstream in the same execution. No-op for populated workbooks.
-  const sheet = ensureSysAccountsSheet_();
-  const display = sheet.getDataRange().getDisplayValues();
-  const headerMap = getAccountsHeaderMap_(sheet);
+  const context = optionalAccountsContext || null;
+  const sheet = context && context.sheet
+    ? context.sheet
+    : ensureSysAccountsSheet_(optionalSs);
+  const display = context && context.display && context.display.length
+    ? context.display
+    : sheet.getDataRange().getDisplayValues();
+  const headerMap = context && context.headerMap
+    ? context.headerMap
+    : getAccountsHeaderMap_(sheet, display);
 
   for (let r = 1; r < display.length; r++) {
     if (String(display[r][headerMap.nameColZero] || '').trim() === accountName) {
