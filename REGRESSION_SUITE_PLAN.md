@@ -95,6 +95,7 @@ does not satisfy this matrix.
 | ✅ Medium composition (`3i`) | N/A | Breakpoint contract avoids overflow and unintended density changes | Isolated `@324` 1024px and 390px browser review plus permanent overflow assertions |
 | Money-format consistency (`3n`) | Stored numeric values and writers remain unchanged | Every normal-path monetary renderer uses signed `$x.xx`; percentages, counts, ages, and inputs are excluded | Static renderer inventory plus blank/populated browser language sweep |
 | Retirement selected-scenario latency (`4g`) | All three scenario calculations and stale-response guards remain truthful | Timing contract separates selected-scenario meaningful paint from background alternative loading | Guarded Populated timing samples plus scenario-switch correctness and clean-console assertions |
+| ✅ Tracked Manage loading truth (`REG-065`) | Read endpoints and confirmed-empty Add routing remain unchanged | Bank, Investment, and House Manage views resolve loading/failure before empty and expose retry after failure | Isolated `@326` Populated run `FR-91155508-65ef-436c-9e3a-fb46fe4177ad` passed 24/24 with Restricted sharing, verified cleanup, and user visual confirmation |
 
 Apply Regression Discovery when each fix lands. Reuse an existing suite only
 when it asserts the exact failure; otherwise add the next `REG-###` historical

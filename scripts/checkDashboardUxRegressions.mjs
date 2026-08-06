@@ -2913,6 +2913,29 @@ for (const [name, source, readyFunction, availabilityFunction, loading, empty] o
   assert.ok(availability.includes("loadState === 'error'"),
     `${name} Update guidance must not present a load failure as an empty workbook`);
 }
+const trackedManageRenderer = functionSource_(
+  files['Dashboard_Script_TrackedEditors.html'], 'renderTrackedEditorManageList_');
+assert.match(trackedManageRenderer,
+  /dataset\.loadState\s*\|\|\s*'loading'[\s\S]*?loadState === 'loading'[\s\S]*?loadingBlockHtml[\s\S]*?loadState === 'error'[\s\S]*?onRetry[\s\S]*?if \(!items\.length\)/,
+  'Tracked Manage lists must resolve loading and failure before considering an authoritative empty result');
+for (const [name, source, renderer, selectId, loading, failure, loader] of [
+  ['House', files['Dashboard_Script_AssetsHouseValues.html'], 'renderHouseManageList_',
+    'house_house', 'Loading houses…', 'Couldn’t load houses.', 'loadHouseSection'],
+  ['Bank', files['Dashboard_Script_AssetsBankInvestments.html'], 'renderBankManageList_',
+    'bank_account', 'Loading bank accounts…', 'Couldn’t load bank accounts.', 'loadBankSection'],
+  ['Investment', files['Dashboard_Script_AssetsBankInvestments.html'], 'renderInvestmentManageList_',
+    'inv_account', 'Loading investment accounts…', 'Couldn’t load investment accounts.', 'loadInvestmentSection']
+]) {
+  const manageSource = functionSource_(source, renderer);
+  assert.ok(manageSource.includes(`selectId: '${selectId}'`) &&
+    manageSource.includes(`loadingMessage: '${loading}'`) &&
+    manageSource.includes(`failureMessage: '${failure}'`) &&
+    manageSource.includes(`onRetry: ${loader}`),
+  `${name} Manage must bind its loading truth and retry action to the authoritative selector`);
+  assert.match(functionSource_(source, loader),
+    new RegExp(`setSelectLoadFailure\\('${selectId}'[\\s\\S]*?${renderer}\\(\\)`),
+    `${name} Manage must replace an unresolved loader with a failure state instead of a false empty state`);
+}
 assert.match(files['Dashboard_Script_CashFlowUpcoming.html'],
   /ov_upcoming_next7[\s\S]*?ov_upcoming_next30[\s\S]*?Loading upcoming expenses…/,
   'Overview Upcoming values must publish contextual loading state before data arrives');
@@ -3088,6 +3111,7 @@ const bankContext = vm.createContext({
   setSelectLoading() {},
   setSelectLoadFailure: (...args) => bankFailureEvents.push(['picker', ...args]),
   updateBankUpdateAvailability_() {},
+  renderBankManageList_() {},
   applyBankImportCsvPasteVisibility_() {},
   runReadOnlyRpcWithRetry_: (request) => bankRequests.push(request),
   setStatusLoading: (...args) => bankFailureEvents.push(['retry', ...args]),

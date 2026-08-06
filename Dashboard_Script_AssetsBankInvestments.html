@@ -326,10 +326,14 @@ function setBankPanelMode(mode) {
 function renderBankManageList_() {
   renderTrackedEditorManageList_({
     hostId: 'bank_manage_list',
+    selectId: 'bank_account',
     items: trackedEditorItemsFromSelect_('bank_account'),
     itemLabel: 'Bank account',
+    loadingMessage: 'Loading bank accounts…',
+    failureMessage: 'Couldn’t load bank accounts.',
     emptyMessage: 'No active bank accounts are being tracked.',
     addLabel: 'Add first bank account',
+    onRetry: loadBankSection,
     onAdd: function() { setBankPanelMode('add'); },
     onUpdate: function(accountName) {
       openTrackedEditorItemForUpdate_({
@@ -392,6 +396,7 @@ function loadBankSection() {
       if (sectionRequestId !== bankSectionRequestId_) return;
       setSelectLoadFailure('bank_account', 'Couldn’t load bank accounts');
       updateBankUpdateAvailability_();
+      renderBankManageList_();
       renderSurfaceState_('bank_status', {
         kind: 'unavailable',
         title: 'Bank accounts are unavailable right now.',
@@ -963,10 +968,14 @@ function setInvestmentPanelMode(mode) {
 function renderInvestmentManageList_() {
   renderTrackedEditorManageList_({
     hostId: 'inv_manage_list',
+    selectId: 'inv_account',
     items: trackedEditorItemsFromSelect_('inv_account'),
     itemLabel: 'Investment account',
+    loadingMessage: 'Loading investment accounts…',
+    failureMessage: 'Couldn’t load investment accounts.',
     emptyMessage: 'No active investment accounts are being tracked.',
     addLabel: 'Add first investment',
+    onRetry: loadInvestmentSection,
     onAdd: function() { setInvestmentPanelMode('add'); },
     onUpdate: function(accountName) {
       openTrackedEditorItemForUpdate_({
@@ -1009,6 +1018,7 @@ function loadInvestmentSection() {
     onFailure: function(err) {
       setSelectLoadFailure('inv_account', 'Couldn’t load investment accounts');
       updateInvestmentUpdateAvailability_();
+      renderInvestmentManageList_();
       renderSurfaceState_('inv_status', {
         kind: 'unavailable',
         title: 'Investments are unavailable right now.',

@@ -214,10 +214,14 @@ function setHousePanelMode(mode) {
 function renderHouseManageList_() {
   renderTrackedEditorManageList_({
     hostId: 'house_manage_list',
+    selectId: 'house_house',
     items: trackedEditorItemsFromSelect_('house_house'),
     itemLabel: 'Property',
+    loadingMessage: 'Loading houses…',
+    failureMessage: 'Couldn’t load houses.',
     emptyMessage: 'No active houses are being tracked.',
     addLabel: 'Add first house',
+    onRetry: loadHouseSection,
     onAdd: function() { setHousePanelMode('add'); },
     onUpdate: function(houseName) {
       openTrackedEditorItemForUpdate_({
@@ -260,6 +264,7 @@ function loadHouseSection() {
     onFailure: function(err) {
       setSelectLoadFailure('house_house', 'Couldn’t load houses');
       updateHouseUpdateAvailability_();
+      renderHouseManageList_();
       setStatus('house_status', (err.message || String(err)), true);
       finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
     }

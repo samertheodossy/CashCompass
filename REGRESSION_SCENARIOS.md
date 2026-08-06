@@ -1401,6 +1401,31 @@ Whenever a production bug is fixed:
 
 ---
 
+### REG-065 — Populated Manage views briefly claimed no tracked records
+- Category: REGRESSION / UI TRUTH / ASYNC LOADING
+- Date discovered: 2026-08-06
+- Status: fixed; focused/full regressions pass; isolated Central `@326`
+  Populated run `FR-91155508-65ef-436c-9e3a-fb46fe4177ad` passed 24/24 with
+  Restricted sharing and verified cleanup; user visual confirmation complete
+- Root cause: Bank Accounts, Investments, and Houses built their shared Manage
+  list from the hidden Update selector before the lazy read had completed. An
+  unresolved selector has no real options, so the shared renderer treated it as
+  an authoritative empty result and briefly displayed “No active ...” on a
+  populated workbook.
+- Expected result: unresolved Manage inventories show a contextual loader;
+  successful zero-item responses alone may show the empty/Add-first state; and
+  read failures show an unavailable state with Try again. A genuine new workbook
+  still routes to Add new after its successful empty response.
+- Safety guard: the change is presentation-only. It does not alter the read
+  endpoints, tracked-item writers, stored values, empty-workbook routing, or
+  destructive lifecycle controls.
+- Permanent coverage: `npm run test:dashboard-ux` requires the shared renderer
+  to resolve loading and failure before empty, binds each affected Manage list
+  to its authoritative selector state, and requires failures to replace the
+  loader rather than fall through to an empty claim.
+
+---
+
 ## 3a loading-state consistency coverage
 
 - Contextual loading labels replace generic placeholders across Overview,
@@ -1535,4 +1560,5 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-062 | New Quick Add Expense rows could omit Flow Source | REGRESSION / FINANCIAL DATA INTEGRITY / QUICK ADD | fixed in current candidate; focused/full local regressions PASS; bounded runtime confirmation pending |
 | REG-063 | Progressive Overview left lower cards blank during refresh | PERFORMANCE / PROGRESSIVE RENDERING / PERCEIVED LOAD | fixed in current candidate; focused/full local regressions PASS; bounded runtime confirmation pending |
 | REG-064 | Transient Apps Script storage failure aborted repeat Overview load | REGRESSION / UI RELIABILITY / DASHBOARD STARTUP | fixed in current candidate; focused/full local regressions PASS; bounded recovery confirmation pending |
+| REG-065 | Populated Manage views briefly claimed no tracked records | REGRESSION / UI TRUTH / ASYNC LOADING | fixed; full regressions + isolated `@326` Populated 24/24 PASS + user visual confirmation |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

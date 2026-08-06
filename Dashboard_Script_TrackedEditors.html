@@ -85,6 +85,46 @@ function renderTrackedEditorManageList_(options) {
   const host = document.getElementById(options.hostId);
   if (!host) return;
 
+  // A selector without an authoritative successful response is unresolved,
+  // not empty. This matters on the first visit to a populated workbook: the
+  // Manage mode can become visible before its lazy RPC has filled the hidden
+  // Update selector. Never turn that temporary lack of options into a false
+  // "No active ..." statement.
+  const sourceSelect = options.selectId
+    ? document.getElementById(options.selectId)
+    : null;
+  const loadState = sourceSelect
+    ? String(sourceSelect.dataset.loadState || 'loading')
+    : 'ready';
+
+  if (loadState === 'loading') {
+    host.innerHTML = loadingBlockHtml(options.loadingMessage || 'Loading tracked items…');
+    return;
+  }
+
+  if (loadState === 'error') {
+    host.innerHTML = '';
+    const unavailable = document.createElement('div');
+    unavailable.className = 'tracked-editor-empty';
+
+    const message = document.createElement('p');
+    message.className = 'muted';
+    message.textContent = options.failureMessage || 'Couldn’t load tracked items.';
+    unavailable.appendChild(message);
+
+    if (typeof options.onRetry === 'function') {
+      const retryButton = document.createElement('button');
+      retryButton.type = 'button';
+      retryButton.className = 'small-btn';
+      retryButton.textContent = 'Try again';
+      retryButton.addEventListener('click', options.onRetry);
+      unavailable.appendChild(retryButton);
+    }
+
+    host.appendChild(unavailable);
+    return;
+  }
+
   const items = Array.isArray(options.items) ? options.items : [];
   host.innerHTML = '';
 
