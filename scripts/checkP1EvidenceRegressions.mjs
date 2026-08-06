@@ -109,6 +109,22 @@ assert.match(validationUi,
 assert.match(validationUi,
   /vtCopyLatestOverviewTrace\(event\)[\s\S]*?function vtCopyLatestOverviewTrace\(ev\)[\s\S]*?vt-overview-trace-json/,
   'Latest Overview trace must provide one-click exact JSON copying');
+assert.match(validationUi,
+  /Latest cross-flow performance evidence \(4d\)[\s\S]*?marked-disposable Populated Dashboard E2E[\s\S]*?function vtLoadLatestPerformanceFlows\(\)[\s\S]*?\.vtGetLatestPerformanceFlowsEvidence\(\)/,
+  'Validation console must expose the latest privacy-safe 4d evidence from the disposable browser suite');
+assert.match(validationUi,
+  /vtCopyPerformanceFlows\(event\)[\s\S]*?function vtCopyPerformanceFlows\(ev\)[\s\S]*?vt-performance-flows-json/,
+  'Latest 4d evidence must provide one-click exact JSON copying');
+assert.match(validationServer,
+  /function vtGetLatestPerformanceFlowsEvidence\(\)[\s\S]*?assertValidatorAllowed_\(\)[\s\S]*?POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_[\s\S]*?performanceFlows/,
+  'Latest 4d evidence retrieval must be admin-gated and read only saved browser evidence');
+assert.doesNotMatch(
+  validationServer.slice(
+    validationServer.indexOf('function vtGetLatestPerformanceFlowsEvidence('),
+    validationServer.indexOf('function vtRunFormulaValidation(')
+  ),
+  /SpreadsheetApp|getUserSpreadsheet_|getActiveSpreadsheet|openById/,
+  'Latest 4d evidence retrieval must not resolve or read any workbook');
 
 const profileStart = validationServer.indexOf('function vtDashboardReadProfileSpecs_(');
 const profileEnd = validationServer.indexOf('function vtRunFormulaValidation(', profileStart);
@@ -223,10 +239,10 @@ assert.match(firstRunBrowser,
   'First-Run must wait for authoritative Investment Add routing instead of sampling a fixed delay');
 assert.match(firstRunBrowser, /function customerLanguageLeaks\(/,
   'First-Run E2E must scan visible customer pages for internal workbook terminology');
-assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V8/,
+assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V9/,
   'Populated Dashboard E2E must be an implemented browser suite backed by saved evidence');
-assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V8'/,
-  'Retirement ready-result evidence must invalidate older Populated Dashboard evidence');
+assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V9'/,
+  'Cross-flow performance assertions must invalidate older Populated Dashboard evidence');
 assert.doesNotMatch(populatedE2E, /function pdE2EPrepare\([^)]*(?:spreadsheet|workbook|file)Id/i,
   'Populated Dashboard preparation must never accept an arbitrary workbook target');
 assert.match(populatedE2E, /frE2EPrepare\(confirmed, requestedReleaseRunId\)/,
@@ -268,9 +284,48 @@ for (const assertionId of ['overview_kpis', 'bank_selection_actions', 'bank_load
   'property_equity', 'populated_workspaces', 'retirement_ready_results', 'income_setup_consistency', 'subtab_retention', 'setup_help_language',
   'customer_language', 'refresh_button_state', 'health_prerequisite_truth',
   'activity_operation_envelope', 'quick_add_credit_card_correction',
-  'donation_correction_flow', 'bill_skip_stop_safety', 'clean_console_navigation']) {
+  'donation_correction_flow', 'bill_skip_stop_safety', 'performance_ordinary_save',
+  'performance_loaded_navigation', 'performance_mature_overview', 'clean_console_navigation']) {
   assert.ok(populatedE2E.includes(`'${assertionId}'`), `Populated Dashboard contract missing ${assertionId}`);
 }
+assert.match(populatedBrowser,
+  /measureOrdinaryBankSave_[\s\S]*?bank_update_save_btn[\s\S]*?acknowledgementMs[\s\S]*?completionMs[\s\S]*?candidateBudget/,
+  '4d must time real ordinary Save acknowledgement and completion through the shipping Bank editor');
+assert.match(populatedBrowser,
+  /measureLoadedNavigation_[\s\S]*?Assets \/ Bank accounts[\s\S]*?Cash Flow \/ Quick add[\s\S]*?Planning \/ Retirement[\s\S]*?samples\.length === 12/,
+  '4d must collect repeated loaded navigation samples across representative workspaces');
+assert.match(populatedBrowser,
+  /measureMatureOverviewRefresh_[\s\S]*?refreshSnapshot\(\)[\s\S]*?representative mature Overview refresh/,
+  '4d must time a full Overview refresh after the populated fixture has Planner history');
+assert.match(populatedE2E,
+  /function pdE2ENormalizePerformanceFlows_[\s\S]*?POPULATED_DASHBOARD_E2E_PERFORMANCE_LABELS_[\s\S]*?Unknown loaded route/,
+  '4d evidence must pass through a strict server allow-list before persistence');
+assert.match(populatedE2E,
+  /navigationValues[\s\S]*?pdE2ENearestRank_\(navigationValues, 0\.50\)[\s\S]*?pdE2ENearestRank_\(navigationValues, 0\.95\)[\s\S]*?saveCompletionMs <= 6000[\s\S]*?matureCompletionMs <= 20000/,
+  '4d budget signals and navigation percentiles must be recomputed from sanitized durations on the server');
+const performanceNormalizeStart = populatedE2E.indexOf('function pdE2ENormalizePerformanceFlows_(');
+const performanceNormalizeEnd = populatedE2E.indexOf('function pdE2EGetState(', performanceNormalizeStart);
+const performanceNormalizeSource = populatedE2E.slice(performanceNormalizeStart, performanceNormalizeEnd);
+assert.doesNotMatch(performanceNormalizeSource,
+  /(?:workbookId|accountName|payee|balance|email)\s*:/i,
+  '4d evidence envelope must not persist workbook, identity, or financial fields');
+
+const performanceFlowsCtx = vm.createContext({ Math, Number, String, Array, Object, RegExp, isFinite });
+vm.runInContext(populatedE2E, performanceFlowsCtx);
+const normalizedPerformanceFlows = performanceFlowsCtx.pdE2ENormalizePerformanceFlows_({
+  ordinarySave: { measured: true, acknowledgementMs: 25, completionMs: 1250,
+    withinCandidateBudget: true, outcome: 'ok', accountName: 'Private bank' },
+  loadedNavigation: { measured: true, samples: Array.from({ length: 12 }, (_, index) => ({
+    label: index % 2 ? 'Assets / Bank accounts' : 'Injected private label', durationMs: 40 + index
+  })), p50Ms: 45, p95Ms: 51, maxMs: 51, withinCandidateBudget: true },
+  matureOverview: { measured: true, acknowledgementMs: 12, completionMs: 9000,
+    withinCandidateBudget: true, outcome: 'ok', workbookId: 'private-id' }
+});
+assert.equal(normalizedPerformanceFlows.loadedNavigation.sampleCount, 12);
+assert.equal(normalizedPerformanceFlows.loadedNavigation.samples[0].label, 'Unknown loaded route');
+assert.equal(normalizedPerformanceFlows.ordinarySave.completionMs, 1250);
+assert.doesNotMatch(JSON.stringify(normalizedPerformanceFlows), /Private bank|private-id|Injected private label/,
+  '4d normalization must discard client-supplied private or unknown fields');
 assert.match(populatedBrowser,
   /showTab\('retirement'\)[\s\S]*?loadRetirementSection\(\)[\s\S]*?ret_info_goal[\s\S]*?ret_info_funded[\s\S]*?ret_empty_state[\s\S]*?ret_scenario_cards[\s\S]*?ret_results_panel[\s\S]*?add\('retirement_ready_results'/,
   'Populated Retirement evidence must prove the ready Base scenario reveals meaningful result walls');

@@ -328,11 +328,29 @@ cleanup-verified. The report records `releaseEligible: true`, `overall: PASS`,
 
 The earlier `@136` partial campaign remains historical diagnostic evidence and is
 superseded for release-budget purposes. The completed `@318` campaign closes the
-Planner percentile gate for that exact candidate only. Ordinary Save
-acknowledgement/completion, loaded navigation, and representative mature-workbook
-timings remain open under roadmap item `4d`. If source or deployment changes
-before candidate freeze, rerun all 20 pairs under `8b`; never combine samples from
-different candidates.
+Planner percentile gate for that exact candidate only.
+
+Roadmap measurement item `4d` is complete on isolated Central `@319` through
+diagnostic Populated Dashboard V9 run
+`FR-47ef0c44-68c8-4cff-a745-828677acf353`. The run passed every assertion with
+Restricted single-owner sharing and verified Trash cleanup. Ordinary Bank Save
+acknowledged in 1 ms and completed in 8.332 s; 12 loaded-navigation samples
+measured 17/18 ms p50/p95; representative populated Overview after Planner
+history completed in 11.776 s. Navigation and Overview were within their
+candidate targets. Save acknowledgement passed, but Save completion exceeded
+the directional 6 s target, so optimization/disposition and a fresh measurement
+remain under `4f`. This single diagnostic sample does not independently ratify a
+percentile budget.
+
+The admin Validation panel is the evidence authority for this privacy-safe V9
+envelope. The browser runner must execute as `cashcompass2026@gmail.com`, while
+the panel is admin-only. Until separate persistent browser identities are
+available, that Google-session boundary can require an operator account switch;
+the scalable follow-up is dedicated persistent admin and disposable browser
+sessions, not weakening either identity guard.
+
+If source or deployment changes before candidate freeze, rerun all 20 Planner
+pairs under `8b`; never combine samples from different candidates.
 
 ## Safe runtime procedure
 

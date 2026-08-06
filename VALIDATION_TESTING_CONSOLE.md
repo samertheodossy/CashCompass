@@ -16,7 +16,14 @@ Harness** — a collapsible writer card with dynamic scenario and suite selector
 an all-suite inventory with saved evidence/cleanup status, Keep/Trash disposition,
 per-scenario detail, and JSON reports
 (`vtListHarnessScenarios()` / `vtRunHarnessScenario()` /
-`vtListHarnessSuites()` / `vtRunHarnessSuite()`). **Still design only:** multi-select
+`vtListHarnessSuites()` / `vtRunHarnessSuite()`). The current console also
+includes the admin-only read-only **Latest Overview load trace** and **Latest
+cross-flow performance evidence (4d)** panels; the latter reads only the saved
+privacy-safe V9 evidence envelope and never resolves a workbook. Browser writers
+remain locked to `cashcompass2026@gmail.com`, while evidence retrieval remains
+locked to the sole administrator. Preserve both guards; scalable operation
+requires separate persistent browser identities rather than shared-session
+account switching. **Still design only:** multi-select
 pack composition and the aggregate Release Certification orchestrator,
 the mapped-user and disposable target types, Formula / Conditional-Formatting
 validation buttons, the Release Readiness verdict, and extracting the inline client

@@ -7,7 +7,7 @@
  * from a caller and the permanent test identity remains a non-admin.
  */
 var POPULATED_DASHBOARD_E2E_MODE_ = 'POPULATED_DASHBOARD';
-var POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_ = 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V8';
+var POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_ = 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V9';
 var POPULATED_DASHBOARD_E2E_SCENARIO_ID_ = 'E2E-POPULATED-DASHBOARD';
 var POPULATED_DASHBOARD_E2E_REQUIRED_ASSERTIONS_ = [
   'startup_populated_overview',
@@ -30,8 +30,97 @@ var POPULATED_DASHBOARD_E2E_REQUIRED_ASSERTIONS_ = [
   'quick_add_credit_card_correction',
   'donation_correction_flow',
   'bill_skip_stop_safety',
+  'performance_ordinary_save',
+  'performance_loaded_navigation',
+  'performance_mature_overview',
   'clean_console_navigation'
 ];
+
+var POPULATED_DASHBOARD_E2E_PERFORMANCE_LABELS_ = [
+  'Assets / Bank accounts',
+  'Assets / Investments',
+  'Assets / Debt accounts',
+  'Cash Flow / Quick add',
+  'Cash Flow / Bills',
+  'Planning / Retirement'
+];
+
+function pdE2ENonnegativeMs_(value) {
+  var n = Number(value);
+  return isFinite(n) && n >= 0 && n <= 300000 ? Math.round(n) : null;
+}
+
+function pdE2ENearestRank_(values, percentile) {
+  if (!values || !values.length) return null;
+  var sorted = values.slice().sort(function(a, b) { return a - b; });
+  return sorted[Math.max(0, Math.ceil(percentile * sorted.length) - 1)];
+}
+
+/** Strict privacy-safe allow-list for client-collected 4d timing evidence. */
+function pdE2ENormalizePerformanceFlows_(raw) {
+  var source = raw && typeof raw === 'object' ? raw : {};
+  var save = source.ordinarySave && typeof source.ordinarySave === 'object'
+    ? source.ordinarySave : {};
+  var navigation = source.loadedNavigation && typeof source.loadedNavigation === 'object'
+    ? source.loadedNavigation : {};
+  var mature = source.matureOverview && typeof source.matureOverview === 'object'
+    ? source.matureOverview : {};
+  var allowedLabels = {};
+  POPULATED_DASHBOARD_E2E_PERFORMANCE_LABELS_.forEach(function(label) {
+    allowedLabels[label] = true;
+  });
+  var samples = (Array.isArray(navigation.samples) ? navigation.samples : [])
+    .slice(0, 12).map(function(sample) {
+      var label = String(sample && sample.label || '');
+      return {
+        label: allowedLabels[label] ? label : 'Unknown loaded route',
+        durationMs: pdE2ENonnegativeMs_(sample && sample.durationMs)
+      };
+    }).filter(function(sample) { return sample.durationMs !== null; });
+  var saveAckMs = pdE2ENonnegativeMs_(save.acknowledgementMs);
+  var saveCompletionMs = pdE2ENonnegativeMs_(save.completionMs);
+  var navigationValues = samples.map(function(sample) { return sample.durationMs; });
+  var navigationP50Ms = pdE2ENearestRank_(navigationValues, 0.50);
+  var navigationP95Ms = pdE2ENearestRank_(navigationValues, 0.95);
+  var matureAckMs = pdE2ENonnegativeMs_(mature.acknowledgementMs);
+  var matureCompletionMs = pdE2ENonnegativeMs_(mature.completionMs);
+  return {
+    version: 1,
+    ordinarySave: {
+      flow: 'Bank account update',
+      measured: save.measured === true,
+      acknowledgementMs: saveAckMs,
+      completionMs: saveCompletionMs,
+      candidateBudget: { acknowledgementMs: 2000, completionMs: 6000 },
+      withinCandidateBudget: save.measured === true && saveAckMs !== null &&
+        saveCompletionMs !== null && saveAckMs <= 2000 && saveCompletionMs <= 6000,
+      outcome: /^(?:ok|error|missing_acknowledgement)$/.test(String(save.outcome || ''))
+        ? String(save.outcome) : 'unknown'
+    },
+    loadedNavigation: {
+      measured: navigation.measured === true && samples.length === 12,
+      sampleCount: samples.length,
+      samples: samples,
+      p50Ms: navigationP50Ms,
+      p95Ms: navigationP95Ms,
+      maxMs: navigationValues.length ? Math.max.apply(null, navigationValues) : null,
+      candidateBudget: { p50Ms: 1000, p95Ms: 3000 },
+      withinCandidateBudget: samples.length === 12 && navigationP50Ms <= 1000 &&
+        navigationP95Ms <= 3000
+    },
+    matureOverview: {
+      flow: 'Representative populated workbook Overview refresh after Planner history',
+      measured: mature.measured === true,
+      acknowledgementMs: matureAckMs,
+      completionMs: matureCompletionMs,
+      candidateBudget: { meaningfulDashboardMs: 20000 },
+      withinCandidateBudget: mature.measured === true && matureCompletionMs !== null &&
+        matureCompletionMs <= 20000,
+      outcome: /^(?:ok|error|missing_acknowledgement)$/.test(String(mature.outcome || ''))
+        ? String(mature.outcome) : 'unknown'
+    }
+  };
+}
 
 function pdE2EGetState() {
   return frE2ESafe_(function() {
@@ -736,6 +825,7 @@ function pdE2EComplete(runId, payload, trashAfter) {
     assertFirstRunE2EFixture_(state, email, false);
     var sharing = frE2EInspectRestrictedSharing_(state.workbookId);
     var normalized = frE2ENormalizeEvidenceFor_(payload, POPULATED_DASHBOARD_E2E_REQUIRED_ASSERTIONS_);
+    var performanceFlows = pdE2ENormalizePerformanceFlows_(payload && payload.performanceFlows);
     var pass = sharing.overall === 'PASS' &&
       normalized.assertions.every(function(item) { return item.pass; }) && !normalized.errors.length;
     var evidenceContext = releaseValidateBrowserEvidenceContext_(state.releaseEvidenceContext);
@@ -756,6 +846,7 @@ function pdE2EComplete(runId, payload, trashAfter) {
       sharing: sharing,
       assertions: normalized.assertions,
       errors: normalized.errors,
+      performanceFlows: performanceFlows,
       cleanup: { requested: trashAfter === true, trashed: false, verified: false }
     };
     var props = PropertiesService.getScriptProperties();

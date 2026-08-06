@@ -333,6 +333,37 @@ function vtRunDashboardReadProfile(spreadsheetId) {
   });
 }
 
+/**
+ * Return only the latest allow-listed 4d timing envelope saved by the guarded
+ * Populated Dashboard E2E suite. Admin-only and workbook-read-free.
+ */
+function vtGetLatestPerformanceFlowsEvidence() {
+  return vtSafe_(function() {
+    assertValidatorAllowed_();
+    var raw = PropertiesService.getScriptProperties()
+      .getProperty(POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_);
+    var report = raw ? JSON.parse(raw) : null;
+    if (!report || report.suiteId !== 'SUITE-POPULATED-DASHBOARD-E2E' ||
+        !report.performanceFlows) {
+      throw new Error('No 4d cross-flow timing evidence is available yet.');
+    }
+    return {
+      ok: true,
+      report: makeWireSafe_({
+        suiteId: report.suiteId,
+        runId: report.runId || null,
+        candidate: report.candidate || null,
+        releaseEligible: report.releaseEligible === true,
+        finishedAt: report.finishedAt || null,
+        overall: report.overall || 'UNKNOWN',
+        cleanupVerified: !!(report.cleanup && report.cleanup.verified),
+        restricted: !!(report.sharing && report.sharing.restricted),
+        performanceFlows: report.performanceFlows
+      })
+    };
+  });
+}
+
 function vtRunFormulaValidation(spreadsheetId) {
   return vtSafe_(function() {
     assertValidatorAllowed_();

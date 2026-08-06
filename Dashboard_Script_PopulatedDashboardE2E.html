@@ -6,6 +6,39 @@
   var assertions = [];
   var finished = false;
   var expected = cfg.expected;
+  var performanceFlows = {
+    version: 1,
+    ordinarySave: null,
+    loadedNavigation: null,
+    matureOverview: null
+  };
+
+  function timingNow_() {
+    return window.performance && typeof window.performance.now === 'function'
+      ? window.performance.now() : Date.now();
+  }
+
+  function roundedMs_(value) {
+    return Math.max(0, Math.round(Number(value) || 0));
+  }
+
+  function nearestRank_(values, percentile) {
+    if (!values || !values.length) return null;
+    var sorted = values.slice().sort(function(a, b) { return a - b; });
+    return sorted[Math.max(0, Math.ceil(percentile * sorted.length) - 1)];
+  }
+
+  function afterPaint_() {
+    return new Promise(function(resolve) {
+      if (typeof window.requestAnimationFrame !== 'function') {
+        setTimeout(resolve, 0);
+        return;
+      }
+      window.requestAnimationFrame(function() {
+        window.requestAnimationFrame(resolve);
+      });
+    });
+  }
 
   function waitFor(predicate, timeoutMs, label) {
     return new Promise(function(resolve, reject) {
@@ -22,6 +55,109 @@
 
   function add(id, pass, detail) {
     assertions.push({ id: id, pass: pass === true, detail: String(detail || '') });
+  }
+
+  async function measureOrdinaryBankSave_() {
+    var input = document.getElementById('bank_value');
+    var save = document.getElementById('bank_update_save_btn');
+    var status = document.getElementById('bank_status');
+    if (!input || !save || save.disabled || !status) {
+      return { measured: false, error: 'The populated Bank save controls were unavailable.' };
+    }
+    if (!String(input.value || '').trim()) input.value = String(expected.bankBalance);
+    var began = timingNow_();
+    save.click();
+    var acknowledgementMs = roundedMs_(timingNow_() - began);
+    var acknowledged = /saving/i.test(String(status.textContent || ''));
+    await waitFor(function() {
+      return !/saving/i.test(String(status.textContent || ''));
+    }, 90000, 'ordinary Bank save completion');
+    var completionMs = roundedMs_(timingNow_() - began);
+    var failed = status.classList.contains('error');
+    return {
+      measured: acknowledged && !failed,
+      flow: 'Bank account update',
+      acknowledgementMs: acknowledgementMs,
+      completionMs: completionMs,
+      candidateBudget: { acknowledgementMs: 2000, completionMs: 6000 },
+      withinCandidateBudget: acknowledged && !failed &&
+        acknowledgementMs <= 2000 && completionMs <= 6000,
+      outcome: failed ? 'error' : (acknowledged ? 'ok' : 'missing_acknowledgement')
+    };
+  }
+
+  async function measureLoadedNavigation_() {
+    var routes = [
+      { label: 'Assets / Bank accounts', go: function() { showPage('assets'); showTab('bank'); },
+        ready: function() { return activeTab('assets', 'bank'); } },
+      { label: 'Assets / Investments', go: function() { showPage('assets'); showTab('investments'); },
+        ready: function() { return activeTab('assets', 'investments'); } },
+      { label: 'Assets / Debt accounts', go: function() { showPage('assets'); showTab('debts'); },
+        ready: function() { return activeTab('assets', 'debts'); } },
+      { label: 'Cash Flow / Quick add', go: function() { showPage('cashflow'); showTab('payments'); },
+        ready: function() { return activeTab('cashflow', 'payments'); } },
+      { label: 'Cash Flow / Bills', go: function() { showPage('cashflow'); showTab('billsDue'); },
+        ready: function() { return activeTab('cashflow', 'billsDue'); } },
+      { label: 'Planning / Retirement', go: function() { showPage('planning'); showTab('retirement'); },
+        ready: function() { return activeTab('planning', 'retirement'); } }
+    ];
+    for (var warm = 0; warm < routes.length; warm++) {
+      routes[warm].go();
+      await waitFor(routes[warm].ready, 5000, routes[warm].label + ' warm navigation');
+      await afterPaint_();
+    }
+    var samples = [];
+    for (var round = 0; round < 2; round++) {
+      for (var i = 0; i < routes.length; i++) {
+        var began = timingNow_();
+        routes[i].go();
+        await waitFor(routes[i].ready, 5000, routes[i].label + ' loaded navigation');
+        await afterPaint_();
+        samples.push({
+          label: routes[i].label,
+          durationMs: roundedMs_(timingNow_() - began)
+        });
+      }
+    }
+    var values = samples.map(function(sample) { return sample.durationMs; });
+    var p50 = nearestRank_(values, 0.50);
+    var p95 = nearestRank_(values, 0.95);
+    return {
+      measured: samples.length === 12,
+      sampleCount: samples.length,
+      samples: samples,
+      p50Ms: p50,
+      p95Ms: p95,
+      maxMs: values.length ? Math.max.apply(null, values) : null,
+      candidateBudget: { p50Ms: 1000, p95Ms: 3000 },
+      withinCandidateBudget: p50 !== null && p95 !== null && p50 <= 1000 && p95 <= 3000
+    };
+  }
+
+  async function measureMatureOverviewRefresh_() {
+    if (typeof refreshSnapshot !== 'function') {
+      return { measured: false, error: 'Overview refresh is unavailable.' };
+    }
+    showPage('overview');
+    var status = document.getElementById('planner_status');
+    var began = timingNow_();
+    refreshSnapshot();
+    var acknowledgementMs = roundedMs_(timingNow_() - began);
+    var acknowledged = !!(status && /refreshing/i.test(String(status.textContent || '')));
+    await waitFor(function() {
+      return status && !/refreshing/i.test(String(status.textContent || ''));
+    }, 120000, 'representative mature Overview refresh');
+    var completionMs = roundedMs_(timingNow_() - began);
+    var failed = status && status.classList.contains('error');
+    return {
+      measured: acknowledged && !failed,
+      flow: 'Representative populated workbook Overview refresh after Planner history',
+      acknowledgementMs: acknowledgementMs,
+      completionMs: completionMs,
+      candidateBudget: { meaningfulDashboardMs: 20000 },
+      withinCandidateBudget: acknowledged && !failed && completionMs <= 20000,
+      outcome: failed ? 'error' : (acknowledged ? 'ok' : 'missing_acknowledgement')
+    };
   }
 
   function activePage(name) {
@@ -444,6 +580,12 @@
         : 'The populated Bank selector or its action gating was incorrect.');
       var bankResilience = await exerciseBankLoadingResilience();
       add('bank_loading_resilience', bankResilience.pass, bankResilience.detail);
+      performanceFlows.ordinarySave = await measureOrdinaryBankSave_();
+      add('performance_ordinary_save', performanceFlows.ordinarySave.measured === true,
+        performanceFlows.ordinarySave.measured
+          ? ('Ordinary Bank save acknowledged in ' + performanceFlows.ordinarySave.acknowledgementMs +
+            ' ms and completed in ' + performanceFlows.ordinarySave.completionMs + ' ms.')
+          : (performanceFlows.ordinarySave.error || 'Ordinary Save timing was not captured.'));
       customerLeaks = customerLeaks.concat(customerLanguageLeaks('Assets → Bank'));
 
       var trackedEditorFailures = [];
@@ -644,6 +786,23 @@
       add('refresh_button_state', refreshPass, refreshPass
         ? 'Refresh disabled during the populated planner request, then re-enabled without an error state.'
         : 'Refresh did not preserve the expected running/completed button state.');
+
+      performanceFlows.loadedNavigation = await measureLoadedNavigation_();
+      add('performance_loaded_navigation', performanceFlows.loadedNavigation.measured === true,
+        performanceFlows.loadedNavigation.measured
+          ? ('Twelve loaded navigation samples recorded p50 ' +
+            performanceFlows.loadedNavigation.p50Ms + ' ms and p95 ' +
+            performanceFlows.loadedNavigation.p95Ms + ' ms.')
+          : 'Loaded navigation timing was not captured.');
+
+      performanceFlows.matureOverview = await measureMatureOverviewRefresh_();
+      add('performance_mature_overview', performanceFlows.matureOverview.measured === true,
+        performanceFlows.matureOverview.measured
+          ? ('Representative populated Overview refresh acknowledged in ' +
+            performanceFlows.matureOverview.acknowledgementMs + ' ms and completed in ' +
+            performanceFlows.matureOverview.completionMs + ' ms after Planner history existed.')
+          : (performanceFlows.matureOverview.error ||
+            'Representative populated Overview timing was not captured.'));
 
       var healthScore = text('health_score');
       var healthLabel = text('health_label');
@@ -961,7 +1120,8 @@
       .pdE2EComplete(cfg.runId, {
         assertions: assertions,
         errors: errors || [],
-        durationMs: Date.now() - started
+        durationMs: Date.now() - started,
+        performanceFlows: performanceFlows
       }, true);
   }
 

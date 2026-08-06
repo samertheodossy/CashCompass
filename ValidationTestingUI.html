@@ -312,6 +312,22 @@
     <div id="vt-overview-trace-results" class="hidden" style="margin-top:16px;"></div>
   </div>
 
+  <!-- LATEST 4D CROSS-FLOW EVIDENCE -->
+  <div class="card">
+    <h2>Latest cross-flow performance evidence (4d)</h2>
+    <div class="banner" style="margin-bottom:12px;">
+      <span class="ico">📏</span>
+      <span>Retrieves privacy-safe ordinary Save, loaded navigation, and representative populated
+        Overview timings from the latest marked-disposable Populated Dashboard E2E run. This panel
+        is read-only and exposes no workbook ID, account name, or financial value.</span>
+    </div>
+    <div class="btn-row">
+      <button class="primary" onclick="vtLoadLatestPerformanceFlows()">Load latest 4d evidence</button>
+      <span id="vt-performance-flows-status" class="runmsg"></span>
+    </div>
+    <div id="vt-performance-flows-results" class="hidden" style="margin-top:16px;"></div>
+  </div>
+
   <!-- RESULTS -->
   <div id="vt-results" class="hidden">
     <div class="summary" id="vt-summary"></div>
@@ -491,6 +507,7 @@
   var vtRunToken = 0;
   var vtProfileRunToken = 0;
   var vtOverviewTraceRunToken = 0;
+  var vtPerformanceFlowsRunToken = 0;
   var vtRRState = null;
   var vtRRArchives = [];
   var vtRRKeepRunning = false;
@@ -661,6 +678,95 @@
         status.innerHTML = vtEsc(err && err.message ? err.message : 'Latest Overview load trace failed.');
       })
       .getLatestDashboardClientPerformance();
+  }
+
+  function vtLoadLatestPerformanceFlows() {
+    var token = ++vtPerformanceFlowsRunToken;
+    var status = document.getElementById('vt-performance-flows-status');
+    var results = document.getElementById('vt-performance-flows-results');
+    results.innerHTML = '';
+    results.classList.add('hidden');
+    status.className = 'runmsg';
+    status.innerHTML = vtSpin('Loading latest 4d evidence…');
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (token !== vtPerformanceFlowsRunToken) return;
+        if (!res || !res.ok || !res.report) {
+          status.className = 'runmsg err';
+          status.innerHTML = vtEsc(res && res.error ? res.error : 'No 4d timing evidence is available.');
+          return;
+        }
+        status.className = 'runmsg';
+        status.innerHTML = '';
+        vtRenderLatestPerformanceFlows(res.report);
+      })
+      .withFailureHandler(function(err) {
+        if (token !== vtPerformanceFlowsRunToken) return;
+        status.className = 'runmsg err';
+        status.innerHTML = vtEsc(err && err.message ? err.message : 'Latest 4d evidence failed.');
+      })
+      .vtGetLatestPerformanceFlowsEvidence();
+  }
+
+  function vtPerformanceBudgetPill_(within) {
+    return '<span class="pill ' + (within ? 'p-ok' : 'p-warn') + '">' +
+      (within ? 'Within candidate budget' : 'Measurement captured') + '</span>';
+  }
+
+  function vtRenderLatestPerformanceFlows(report) {
+    var results = document.getElementById('vt-performance-flows-results');
+    var flows = report.performanceFlows || {};
+    var save = flows.ordinarySave || {};
+    var navigation = flows.loadedNavigation || {};
+    var mature = flows.matureOverview || {};
+    results.innerHTML =
+      '<div class="summary">' +
+        '<div class="cell"><div class="lbl">Suite result</div><div class="val">' + vtEsc(report.overall || '—') + '</div></div>' +
+        '<div class="cell"><div class="lbl">Run</div><div class="val small">' + vtEsc(report.runId || '—') + '</div></div>' +
+        '<div class="cell"><div class="lbl">Restricted</div><div class="val">' + vtEsc(report.restricted ? 'Verified' : 'No') + '</div></div>' +
+        '<div class="cell"><div class="lbl">Cleanup</div><div class="val">' + vtEsc(report.cleanupVerified ? 'Verified' : 'No') + '</div></div>' +
+      '</div>' +
+      '<div style="overflow:auto"><table class="suite-table"><thead><tr>' +
+        '<th>Flow</th><th>Acknowledgement</th><th>Completion / p50</th><th>p95</th><th>Budget signal</th>' +
+      '</tr></thead><tbody>' +
+        '<tr><td><b>Ordinary Bank save</b></td><td class="st-mono">' + vtEsc(vtProfileMs_(save.acknowledgementMs)) +
+          '</td><td class="st-mono">' + vtEsc(vtProfileMs_(save.completionMs)) + '</td><td>—</td><td>' +
+          vtPerformanceBudgetPill_(save.withinCandidateBudget === true) + '</td></tr>' +
+        '<tr><td><b>Loaded navigation (' + vtEsc(navigation.sampleCount || 0) + ' samples)</b></td><td>—</td>' +
+          '<td class="st-mono">' + vtEsc(vtProfileMs_(navigation.p50Ms)) + '</td><td class="st-mono">' +
+          vtEsc(vtProfileMs_(navigation.p95Ms)) + '</td><td>' +
+          vtPerformanceBudgetPill_(navigation.withinCandidateBudget === true) + '</td></tr>' +
+        '<tr><td><b>Representative populated Overview</b></td><td class="st-mono">' +
+          vtEsc(vtProfileMs_(mature.acknowledgementMs)) + '</td><td class="st-mono">' +
+          vtEsc(vtProfileMs_(mature.completionMs)) + '</td><td>—</td><td>' +
+          vtPerformanceBudgetPill_(mature.withinCandidateBudget === true) + '</td></tr>' +
+      '</tbody></table></div>' +
+      '<div style="font-size:12px;color:var(--ink-soft);margin:0 0 10px;">' +
+        'Budget comparisons are directional 4d evidence. They do not independently ratify a percentile budget.' +
+      '</div>' +
+      '<details class="json"><summary>View raw JSON' +
+        '<button class="copybtn" onclick="vtCopyPerformanceFlows(event)">Copy</button>' +
+        '<span id="vt-performance-flows-copied" class="copied hidden">Copied!</span>' +
+        '</summary><pre class="json" id="vt-performance-flows-json">' +
+        vtEsc(JSON.stringify(report, null, 2)) + '</pre></details>';
+    results.classList.remove('hidden');
+  }
+
+  function vtCopyPerformanceFlows(ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    var json = document.getElementById('vt-performance-flows-json');
+    var done = document.getElementById('vt-performance-flows-copied');
+    if (!json) return;
+    try {
+      navigator.clipboard.writeText(json.textContent || '');
+      if (done) {
+        done.classList.remove('hidden');
+        setTimeout(function() { done.classList.add('hidden'); }, 1600);
+      }
+    } catch (_e) {
+      var details = document.querySelector('#vt-performance-flows-results details.json');
+      if (details) details.open = true;
+    }
   }
 
   function vtRenderLatestOverviewTrace(report) {

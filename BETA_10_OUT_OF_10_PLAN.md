@@ -383,8 +383,9 @@ closes `REG-041` and `REG-042` with user verification on isolated Central
 for a later focused redesign, but `5j`–`5m` remain required before broad Beta.
 After the remaining UX work, return to those correction families, complete the
 performance, financial-integrity, recovery, operations, and monetization-ready
-architecture gates, including the remaining `4d` Save, loaded-navigation, and
-mature-workbook measurements; freeze the exact candidate; rerun the 20-pair
+architecture gates, including the remaining `4f` ordinary-Save completion
+follow-up after `4d` measured Save, loaded navigation, and populated Overview;
+freeze the exact candidate; rerun the 20-pair
 percentile campaign only if the frozen source/deployment differs from
 `8aa4bf5` / `@318`; finalize Release Readiness; complete
 supervised cohort proof; and run the full 10/10 scorecard before broad Beta.

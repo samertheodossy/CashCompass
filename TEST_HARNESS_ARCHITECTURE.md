@@ -58,9 +58,25 @@ tracked-editor modes plus populated Manage inventories with Stop tracking; prope
 Investments/Upcoming/Bills/Income rendering; subtab retention; populated Setup and Help;
 customer-language leakage; Retirement ready-state results; real planner Refresh
 state; server-owned Activity operation identity plus exact-state preview; Bill
-Skip/Stop stale-request safety; and clean console/navigation. Evidence is saved
-under `POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V8`; PASS requires
+Skip/Stop stale-request safety; ordinary Bank Save acknowledgement/completion;
+twelve warmed loaded-navigation transitions; a representative populated Overview
+refresh after Planner history; and clean console/navigation. The `4d` envelope is
+strictly allow-listed to fixed flow labels, millisecond durations, candidate-budget
+signals, and suite/run safety metadata; it contains no workbook ID, identity, or
+financial value. Evidence is saved under
+`POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V9`; PASS requires
 Restricted sharing and exact Drive-verified Trash cleanup.
+
+**`@319` V9 cross-flow evidence:** diagnostic run
+`FR-47ef0c44-68c8-4cff-a745-828677acf353` passed every browser assertion in
+335.094 s with zero browser errors, Restricted single-owner sharing, and
+verified Trash cleanup. Ordinary Bank Save acknowledged in 1 ms and completed
+in 8.332 s; 12 loaded-navigation samples measured 17/18 ms p50/p95; and the
+representative populated Overview refresh after Planner history completed in
+11.776 s. Navigation and Overview were within candidate targets. Save
+acknowledgement passed, while Save completion exceeded the directional 6 s
+target and remains a separate `4f` follow-up. The V9 report is diagnostic rather
+than release-owned and does not independently ratify a percentile budget.
 
 **`@214` operation-envelope evidence:** Populated V8 run
 `FR-dbe0482c-0c10-47c7-8189-109be59be6a4` passed 19/19 in 239.225 s. The new
