@@ -8,7 +8,7 @@
 
 ---
 
-## Current status (2026-07-31)
+## Current status (2026-08-05)
 
 **Completed:**
 
@@ -20,6 +20,7 @@
 - ✅ **Unified-source bounded smoke + signed-currency polish** — after creating a safety copy, the same source was pushed to the bounded Apps Script project. Overview loaded materially faster; sampled balances, Upcoming, Bills, weekly change, and several pages reconciled; no rollback was required. Negative deltas now render as `-$…` consistently, with bounded runtime proof and permanent dashboard regression coverage.
 - ✅ **House Financial Accuracy V1** — commit `96d0ebe` is on `origin/main`. Additive final `Linked Property` debt schema, Loan/HELOC-only managed links, actual selected-year Cash Flow loan payments, fail-closed ambiguity guards, and after-financing Property Performance totals passed exact isolated Central `@145` run `20260722-124210-bc23` (27/27 assertions, Restricted sharing, verified Trash) and a user-approved bounded comparison made under a workbook backup. Existing Overview values, property equity, rent, and operating expenses remained unchanged; no Harness run targeted the bounded workbook.
 - ✅ **Financial Integrity Phase 3** — commit `9b97c4d` is on `origin/main`. The approved active-owned-position basis, shared Planner/Rolling/Dashboard path, five read-only audits, canonical History freshness, and Release Readiness inventory passed isolated Validation `@156` suite `20260722-164849-6081` 53/53 with all safety gates and verified Trash.
+- ✅ **Performance Planner percentile gate for `@318`** — exact-owner campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a`, bound to source `8aa4bf5bf58259598289d79368eea944e015d43e`, isolated `@318`, and Release Readiness run `RR-18146129-6e3c-4389-8599-01cbb627b95d`, passed 20/20 pairs and 40 Planner executions. First, repeat, and combined p50/p95 were 12.890/16.773 s, 12.350/16.034 s, and 12.600/16.773 s against the ratified 30/60 s budgets. All fixtures were Restricted, all cleanups were verified, and the suite recorded `PASS`, `ACCEPT`, `releaseEligible: true`, and `budgetRatified: true`. The owning overall run was intentionally archived `NOT_READY` because unrelated required suites were not run; the disposable runner returned OFF.
 
 **Now / next:**
 
@@ -30,8 +31,7 @@
 - **Isolated `@196` advocate reconciliation:** `5g` passed interactively. The read-only **7.2/10** run is evidence-limited and does not replace the formal writer-inclusive **8.3/10** score. The resulting Beta work is mapped as `3l` Overview health prerequisite/freshness trust, expanded `3j` programmatic labels and target sizes, `3m` form readiness/customer language, plus `3b`, `3c`, `3h`, and `3i`; `2d` is now closed as `REG-026`. Each fix must add or extend the exact permanent UI/server/browser regression described in `FULL_BETA_REMAINING_PLAN.md`; generic page-load coverage is not sufficient.
 - **Isolated `@197` Overview trust closure:** First-Run V5 run `FR-23fd31cb-df7b-4f2e-8202-586e70254af0` passed 11/11 and Populated V4 run `FR-9a7b266a-681e-467d-8489-cf8218be666f` passed 14/14. Both used a new Restricted, single-owner disposable workbook, passed `health_prerequisite_truth`, recorded zero errors, and verified exact-fixture Trash cleanup. The console-owned disposable-runner flag returned to **OFF**. Beta remained `@106`; no bounded, mapped-user, configured-default, Golden, or administrator workbook was a writer target.
 - **Then:** execute the remaining score-by-score program in `TODO.md → Advocate 10/10 score-improvement program`: controlled error/safety journeys → transition/language cleanup → page-level ease/navigation/visual polish → responsive/accessibility → exact-candidate rescore. Each criterion requires isolated runtime evidence and an advocate rescore before closure. The core Bills decision and payment journey are no longer open.
-- **Explicitly parked pre-Beta gate:** the Performance Planner percentile campaign and final exact-candidate READY/NOT READY verdict. Seven historical sample pairs are diagnostic only because the campaign began before `@141`; performance must be rerun as an exact-candidate campaign and ratified before any broad Beta release. Deferral does not waive the gate.
-- **Measured follow-up:** Financial Plan refresh succeeded but took 143 seconds on the blank/fresh fixture. Reusable privacy-safe stage instrumentation is now source-ready behind `PERFORMANCE_TIMING_ENABLED`; isolated first-run/repeat timing evidence and optimization remain under P3 Performance without reopening the completed P0 functional-feedback work.
+- **Remaining performance work:** `4a`–`4c`, `4e`, and `4f` are complete for `8aa4bf5` / isolated `@318`. `4d` remains open for ordinary Save acknowledgement/completion, loaded tab/subtab navigation, and representative mature-workbook timings; the `@318` Overview trace emitted in 20.596 s and the provisioning/first-Donation smoke passed in 12.984 s. Any source or deployment change before the frozen-candidate `8b` gate requires a fresh Performance replay because exact-candidate evidence cannot be inherited.
 - **Release policy:** CashCompass is **quality-gated, not date-gated**. A small supervised cohort may validate work during P1–P3, but a broad Beta Release Candidate must satisfy `BETA_10_OUT_OF_10_PLAN.md`: score ≥95/100, no dimension below 9/10, no unresolved Severity 1 or Severity 2 defect, and every non-negotiable release gate passing.
 
 ---
@@ -51,10 +51,11 @@ must be based on measured compound-operation evidence after its focused redesign
 | Completed early Jul 28–29 | Closed `5h` durable correction identity/preconditions and `5i` direct Cash Flow/Donation correction through commits `d040a34` and `16b6a8f`; isolated Central advanced only to `@240`, while Beta remained `@106` and bounded remained user-controlled. |
 | Completed through Jul 31 | Closed UX `3c`, `3a`, and `3b` in `7c0e2ac`, `be76bdb`, and `3e2db4f`; isolated Central advanced to `@298`, while Beta remained `@106` and bounded remained user-controlled. |
 | Completed Aug 1 | Closed `REG-041` styled Bill Skip and `REG-042` Bills Due source authority in `433bfed`; user-verified on isolated Central `@299`, while Beta and bounded remained unchanged. |
+| Completed Aug 5 | Closed `4a`–`4c`, `4e`, and `4f` for source `8aa4bf5` on isolated `@318`; exact-owner Performance passed 20/20 with ratified Planner p50/p95 budgets, Restricted fixtures, verified cleanup, Beta `@106`, and bounded untouched. |
 | Current | Close remaining UX/accessibility work beginning with `3e`, including `3e`–`3j` and `3m`; run `3k` only on the frozen candidate. |
 | Next | Return to deferred compound Activity correction `5j`–`5m` with focused redesign and permanent fail-closed evidence. |
-| Candidate preparation | Close performance `4a`–`4f`, financial/workbook/recovery proof `5a`–`5f`, operations/support `6a`–`6f`, and monetization-ready architecture `7a`–`7f`. |
-| Frozen candidate | Complete `8a`–`8f`, the exact-candidate advocate rerun `3k`, the 20-pair Performance campaign, and full Release Readiness. |
+| Candidate preparation | Close remaining cross-flow performance measurement `4d`, financial/workbook/recovery proof `5a`–`5f`, operations/support `6a`–`6f`, and monetization-ready architecture `7a`–`7f`. |
+| Frozen candidate | Complete `8a`–`8f`, the exact-candidate advocate rerun `3k`, and full Release Readiness; rerun Performance under `8b` if the frozen source/deployment differs from `8aa4bf5` / `@318`. |
 | Promotion | Complete `9a`–`9e`: five-to-seven-day supervised cohort, final scorecard, go/no-go, and separately approved Beta promotion. |
 
 Any failed financial, safety, privacy, performance, Severity 1/2, ≥95/100, or
@@ -191,12 +192,14 @@ bounded workbook as a test target.
 
 ### Wave 6 — Performance and candidate preparation
 
-1. `4a`–`4c` — optimize Dashboard formatting and snapshot construction, then
-   runtime-validate the locally retired `OUT - Dashboard` charts/support tables.
-2. `4d` — measure every release-critical flow.
-3. Finish all candidate prerequisites, then freeze once.
-4. `4e` — run twenty exact-candidate first/repeat pairs.
-5. `4f` — ratify and pass p50/p95 budgets.
+1. `4a`–`4c` — **complete** through isolated `@317` with chart retirement,
+   Dashboard-format batching, and snapshot optimization proved.
+2. `4d` — finish ordinary Save, loaded navigation, and mature-workbook timings;
+   initial Overview plus provisioning/first-create evidence is already captured.
+3. `4e`–`4f` — **complete for `8aa4bf5` / `@318`** with 20/20 exact-owner
+   pairs and ratified 30/60 s Planner budgets.
+4. Finish all candidate prerequisites, then freeze once. Rerun the Performance
+   suite under `8b` if the frozen source/deployment differs.
 
 **Exit:** performance is a passing exact-candidate gate, not diagnostic evidence.
 
@@ -242,15 +245,15 @@ seven-day cohort and any repair cycle. Dates never override a failed gate.
 
 ### Priority 1 — Validator Phase 2 + Test Harness / Regression Runner
 
-*(P0 closed 2026-07-20; P1 **Release Readiness infrastructure and non-performance evidence** are complete, while its Performance/final-verdict gate is intentionally parked. This is an explicitly approved sequencing exception to Milestone Discipline so P2 may proceed without waiving the parked gate. Other P1 recovery follow-ups—including read-only orphan detection, 6D.2b Create New Workbook, and 6E.2 Admin Set Mapping—remain separately tracked and are not claimed complete here. Detail: `VALIDATOR_ARCHITECTURE.md → §10 Phase 2` (the judge) and `TEST_HARNESS_ARCHITECTURE.md` (the writer), with `REGRESSION_SCENARIOS.md`, `RELEASE_READINESS.md`, and the quality gate in `BETA_10_OUT_OF_10_PLAN.md`.)*
+*(P0 closed 2026-07-20; P1 Release Readiness infrastructure and non-performance evidence are complete. The exact-owner Performance Planner percentile gate closed for `8aa4bf5` / isolated `@318` on 2026-08-05; the full product/final-verdict gate remains open because unrelated exact-candidate suites and scenarios are still required. Other P1 recovery follow-ups—including read-only orphan detection, 6D.2b Create New Workbook, and 6E.2 Admin Set Mapping—remain separately tracked and are not claimed complete here. Detail: `VALIDATOR_ARCHITECTURE.md → §10 Phase 2` (the judge) and `TEST_HARNESS_ARCHITECTURE.md` (the writer), with `REGRESSION_SCENARIOS.md`, `RELEASE_READINESS.md`, and the quality gate in `BETA_10_OUT_OF_10_PLAN.md`.)*
 
 **Sequenced milestone order** (the Validator is the read-only **judge**; the Test Harness is the developer-only **writer/mutator** that drives scenarios against disposable workbooks and asks the Validator to confirm nothing broke):
 
 1. **Validator Phase 2 / Workbook Health — ✅ dedicated runtime evidence complete; isolated Central `@122` PASS 2026-07-21.** The formal schema registry, targeted Formula validation, Conditional-Formatting validation, thin Named-Range validation, Provisioning, Drift, and aggregate Workbook Health ran on a Restricted populated disposable fixture. The first `@121` run safely exposed 25 advisory formula findings: 24 valid Google Sheets-normalized single-cell `SUM` shapes and one Debt fixture row-order defect. Narrow fixes plus permanent regressions were deployed at `@122`; confirmation run `20260721-120759-5dc2` returned aggregate Health PASS with zero warnings, 9/9 functional assertions, CURRENT/FULLY_CURRENT schema, Restricted sharing, and verified Trash cleanup (160.338 s). Beta stayed `@106`; the bounded workbook was untouched.
 2. **Test Harness foundation** — **✅ V1 done.** *(disposable-workbook lifecycle + fail-closed guard + `assertDisposableTarget_` + single SMOKE scenario `SMOKE-PROVISION-DONATION` + report; editor runners `testRunSmoke()` / `testRunSmokeTrash()` and the console Test Harness card — `TEST_HARNESS_ARCHITECTURE.md`)*
 3. **Disposable populated-fixture hardening** — **✅ complete; isolated Central `@117` PASS 2026-07-21.** Central created a Restricted, owner-only fixture under the intentional `drive.file` boundary; the harness seeded representative Bank / Investment / House / Debt / Bills / Income / Upcoming / Retirement data, passed 9/9 functional assertions plus Provisioning/Schema/Drift checks, and verified Trash cleanup by Drive read-back. Every write received the disposable spreadsheet explicitly; owner/bounded workbooks were untouched. The 119.7-second harness duration is recorded as test-infrastructure performance evidence, not a product-flow regression.
-4. **Scenario packs — ✅ complete except the parked percentile campaign.** The exact `@141` evidence run passed First-Run UX (`FR-0c415ac6-cfea-4525-8bf2-766086ce83e9`), Populated Dashboard (`FR-263dfd04-4166-454b-8f95-2db2f26613d9`), and Recovery Live (`RL-099c9c9c-c090-46d7-9d4b-84d7b8af14df`). Recovery Live passed 9/9 in 44.060 s; all three fixtures were Restricted and verified in Trash, protected-target matches were zero, and sole-admin configuration/mapping fingerprints were unchanged. The bounded Release Readiness run also passed Workbook Health and all 13/13 server checks. On isolated Central `@120`, **Bills Pay E2E** passed 3/3 and the single-scenario **Performance Planner** smoke passed 4/4. The production-path audit remains enforced by `npm test`.
-5. **Release Readiness gate — ✅ orchestration/runtime controls complete; final verdict parked.** The single Validation console now starts, resumes, pauses, and finalizes bounded runs; each writer check creates and safely trashes its own disposable workbook; browser evidence is accepted only for the exact source/deployment candidate; compact evidence is archived; and a console-owned Harness flag returns OFF at finalization. Source commit `a4f6ddf` is on `origin/main`; isolated Central `@141` proved the runner. The current run remains `IN_PROGRESS`, not READY, because Performance p50/p95 budgets are unratified.
+4. **Scenario packs — ✅ Performance percentile evidence complete for `@318`; other final-candidate replay remains.** The historical exact `@141` evidence run passed First-Run UX, Populated Dashboard, Recovery Live, Workbook Health, and 13/13 server checks. On 2026-08-05, exact-owner Performance campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` passed 20/20 pairs and ratified the Planner budgets for source `8aa4bf5` on isolated `@318`. The production-path audit remains enforced by `npm test`; `8b` must rerun stale suites after any final-candidate change.
+5. **Release Readiness gate — ✅ orchestration/runtime controls and `@318` Performance proof complete; full verdict still open.** The single Validation console starts, resumes, pauses, and finalizes bounded runs; each writer check creates and safely trashes its own disposable workbook; browser evidence is accepted only for the exact source/deployment candidate; compact evidence is archived; and a console-owned Harness flag returns OFF at finalization. Run `RR-18146129-6e3c-4389-8599-01cbb627b95d` recorded Performance PASS/Verified, then intentionally archived `NOT_READY` because First-Run, Populated Dashboard, Recovery Live, and 24 required server checks were not part of the performance-only run. The disposable runner is OFF.
 6. **Validation & Testing admin console — ✅ Release Readiness controls complete.** Workbook Health, the suite inventory, guarded browser adapters, resumable bounded checks, saved status, privacy-safe evidence export, and final READY/NOT READY controls now start and end from the single console.
 
 **Next active item:** `3e`, Properties context polish. `3a` loading-state
@@ -266,15 +269,15 @@ shared `5h` envelope and direct Quick Add/Donation correction `5i` remain
 committed foundations and are not reopened by this priority change.
 
 **Remaining broad-Beta sequence:** finish `3e`–`3j` and `3m`; return to the
-deferred `5j`–`5m` correction families; close `4a`–`4f` performance and
+deferred `5j`–`5m` correction families; finish `4d` cross-flow performance and
 `5a`–`5f` financial/workbook/recovery proof; finish `6a`–`6f` operations and
 `7a`–`7f` product foundation; then complete frozen-candidate evidence `8a`–`8f`
 plus advocate rerun `3k`, followed by supervised cohort/promotion `9a`–`9e`.
 Retirement runtime proof (`1e` / `REG-025`) is complete on isolated `@211`;
 Bill Skip/Stop-tracking safety (`1d` / `REG-024`) remains complete on `@206`.
-Keep Performance Planner
-parked until the exact candidate, never treat a diagnostic browser run as release
-evidence, and preserve Beta `@106` plus the user-controlled bounded deployment.
+Preserve the exact-owner rule: diagnostic browser runs are never release
+evidence, and a final candidate different from `8aa4bf5` / `@318` must rerun
+Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded deployment.
 
 ### Priority 2 — Financial Model Accuracy — complete
 
@@ -295,7 +298,7 @@ evidence, and preserve Beta `@106` plus the user-controlled bounded deployment.
 - **Web Dashboard page-by-page polish** — execute the ordered `UX-01` through `UX-10` passes in `TODO.md → UX Backlog (Version 1)`, beginning with the Overview information architecture and balanced-grid pass. Each ID is a separate reviewable/validatable change; preserve calculations, schemas, and write behavior.
 - **Tracked-editor navigation consistency — runtime-validated through isolated `@195`.** Long-lived financial items now use one recognizable hierarchy: Bills **Due · Add · Manage**; Houses / Bank Accounts / Investments / Debts **Update · Add · Manage**. Setup deep-links preserve whether the customer chose Add or Manage. Update is Save-only; Manage owns active-item inventories and guarded Stop tracking actions with confirmation. Bank import workflows are secondary Manage tools. Shared UI primitives prevent each asset editor from reimplementing mode, focus, list, and empty-state behavior; writers remain feature-specific. First-Run V4 passed 10/10 and Populated V3 passed 13/13 with zero browser errors, Restricted ownership, and verified Trash cleanup.
 - **Independent advocate trust gate** — close the confirmed P1 Bank money-editor, Income/Setup truth, Bills Pay/occurrence feedback, and customer-language findings before claiming Core Experience or 10/10 UX readiness. Preserve the advocate as an independent evidence role and retest every writer fix only on a newly guarded disposable workbook.
-- **Financial Plan refresh latency** — isolated blank/fresh `@114` completed correctly but took **143 seconds**. Central `@115` profiling measured **81.455 s first / 77.275 s repeat**. The first optimization passed on isolated `@116`: History rows and their dashboard consumers remained correct while six unused embedded History charts were retired; the repeat History stage fell from **11.507 s to 0.165 s** and total repeat server time reached **43.946 s**. Dashboard chart retirement passed isolated Central `@308` under `REG-054`: one exact-workbook disposable pair completed at **38.614 s first / 40.605 s repeat**, with 7/7 functional assertions, Restricted sharing, and verified Trash cleanup. Dashboard formatting batching passed isolated Central `@310` under `REG-056`: exact production-path first/repeat runs passed 14/14 functional and formatting read-back assertions, and repeat `format_dashboard` fell from **18.303 s on `@116` to 0.378 s** with Restricted sharing and verified Trash cleanup. Snapshot construction closed on isolated `@317` under `REG-057`: current-position construction fell from **5.508 s to 0.128 s** and total snapshot from **13.026 s to 4.867 s**, with functional assertions, Restricted sharing, and verified Trash cleanup passing. Next collect the exact-candidate 20-pair sample required to ratify the release percentile.
+- **Financial Plan refresh latency — Planner gate closed for `@318`.** Isolated blank/fresh `@114` took 143 seconds; profiling and focused optimization through `@317` retired generated charts, reduced repeat `format_dashboard` from 18.303 s to 0.378 s, and reduced snapshot construction from 13.026 s to 4.867 s. Exact-owner `@318` campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` then passed 20/20 pairs: first p50/p95 12.890/16.773 s, repeat 12.350/16.034 s, and combined 12.600/16.773 s against ratified 30/60 s budgets. All fixtures were Restricted and cleanup-verified. `4d` Save/navigation/mature-workbook measurement remains; `8b` reruns Performance if the final source/deployment differs.
 - **10/10 Beta Release Candidate gate** — after P1 evidence, P2 financial truth, and P3 experience/performance work, run the exact candidate through the full scorecard and release gates in `BETA_10_OUT_OF_10_PLAN.md`. A supervised cohort may run earlier; broad or monetized beta does not.
 
 ### Priority 4 — Future features

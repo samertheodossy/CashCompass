@@ -149,7 +149,7 @@ The 7.5/10 baseline above is an honest product-review judgment, not a backfilled
 
 ### Gate D — Performance
 
-The reusable, flag-gated timing foundation is implemented in `performance_timing.js` (`PERFORMANCE_OBSERVABILITY.md`). Isolated planner timing passed on Central `@115`: first/repeat server time was **81.455 s / 77.275 s**, with 82.2% of the repeat in dashboard formatting, snapshot construction, and History/Dashboard chart rebuilding. The first optimization passed on isolated Central `@116`: preserving History rows while retiring their six unused embedded charts reduced the repeat History stage from **11.507 s to 0.165 s** and total repeat server time to **43.946 s**. Performance hardening remains beta-critical; more samples and the remaining hotspots are still required. P1 should extend the same contract to representative flows and ratify budgets. Proposed starting budgets:
+The reusable, flag-gated timing foundation is implemented in `performance_timing.js` (`PERFORMANCE_OBSERVABILITY.md`). Early isolated profiling on `@115` and `@116` identified and reduced the History/chart, formatting, and snapshot hotspots. The exact-owner campaign on source `8aa4bf5bf58259598289d79368eea944e015d43e` / isolated `@318` then passed 20/20 independent pairs: Financial Plan refresh first p50/p95 was **12.890/16.773 s**, repeat was **12.350/16.034 s**, and combined was **12.600/16.773 s**. All 20 fixtures were Restricted and cleanup-verified; the saved report is release-eligible, PASS/ACCEPT, and budget-ratified. The Financial Plan refresh row is therefore ratified for that candidate. Remaining flows still require representative measurements before their proposed budgets can be ratified:
 
 | Flow | Proposed p50 | Proposed p95 |
 | --- | ---: | ---: |
@@ -157,10 +157,10 @@ The reusable, flag-gated timing foundation is implemented in `performance_timing
 | Ordinary save acknowledgement | ≤ 2 s | ≤ 5 s |
 | Ordinary server save completion | ≤ 6 s | ≤ 12 s |
 | First-create account/property/debt | ≤ 15 s | ≤ 30 s |
-| Financial Plan refresh | ≤ 30 s | ≤ 60 s |
+| Financial Plan refresh — **ratified for `8aa4bf5` / `@318`** | ≤ 30 s | ≤ 60 s |
 | Main tab/subtab navigation after load | ≤ 1 s | ≤ 3 s |
 
-Budgets may be ratified after measurement, but a 143-second routine refresh is not acceptable for release. If it is repeatable, its optimization moves into the beta-critical path rather than remaining a later performance enhancement.
+Unratified rows remain candidate targets until representative evidence closes them. Any candidate change makes the `@318` Planner campaign stale and requires a complete 20-pair replay under the frozen-candidate gate.
 
 ### Gate E — Automated release confidence
 
@@ -204,15 +204,15 @@ The beta does not need to charge immediately, but it must avoid architecture and
 
 ## 5. Quality-first delivery map
 
-### Phase 1 — Repeatable proof foundation (P1 foundation complete; final candidate gate parked)
+### Phase 1 — Repeatable proof foundation (foundation complete; final-candidate replay remains)
 
 **Objective:** Make every important claim reproducible without touching a real household workbook.
 
 1. **Complete:** Harden Central-created populated fixtures and Restricted-sharing assertions; verify safe Trash cleanup without touching owner/bounded workbooks.
 2. **Complete for the current representative fixture:** Seed Bank, Investment, House, Debt, Bills, Income, Upcoming, and Retirement data automatically. Multi-year history remains a future pack need.
-3. **Parked until the final candidate:** ratify performance instrumentation and p50/p95 budgets through a complete exact-candidate campaign.
+3. **Complete for `8aa4bf5` / isolated `@318`:** exact-owner 20-pair Planner campaign passed and ratified the Financial Plan refresh p50/p95 budgets. Replay under `8b` if the frozen candidate differs.
 4. **Complete:** required Validator modules and Workbook Health aggregation.
-5. **Complete except the parked percentile campaign:** E2E and live packs around historical defects and core workflows.
+5. **Complete for the existing pack inventory:** E2E and live packs around historical defects and core workflows. Missing exact-candidate suites must still run in the final Release Readiness owner.
 6. **Complete:** bounded Release Readiness orchestration, single-console controls, compact archives, and fail-closed aggregate reporting.
 
 **Exit:** Repeatable evidence can judge blank, sparse, populated, mature, legacy, and recovery states without manual fixture improvisation.
@@ -383,6 +383,8 @@ closes `REG-041` and `REG-042` with user verification on isolated Central
 for a later focused redesign, but `5j`–`5m` remain required before broad Beta.
 After the remaining UX work, return to those correction families, complete the
 performance, financial-integrity, recovery, operations, and monetization-ready
-architecture gates; freeze the exact candidate; restart the 20-pair percentile
-campaign; ratify p50/p95 budgets; finalize Release Readiness; complete
+architecture gates, including the remaining `4d` Save, loaded-navigation, and
+mature-workbook measurements; freeze the exact candidate; rerun the 20-pair
+percentile campaign only if the frozen source/deployment differs from
+`8aa4bf5` / `@318`; finalize Release Readiness; complete
 supervised cohort proof; and run the full 10/10 scorecard before broad Beta.

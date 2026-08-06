@@ -34,7 +34,24 @@ shared scenario must prove the active-owned-position basis, property-financing
 fail-closed behavior, live consumer/audit convergence, and immutable canonical
 History capture/freshness on its own Restricted disposable workbook.
 
-Current runtime status (2026-07-21): First-Run UX E2E V2 run `FR-9c57ac53-0250-4ebb-a57a-cddec545356b` passed 9/9 on isolated Central `@129`; Populated Dashboard E2E run `FR-19eb43ab-e8fe-4bc8-96a5-336afff43596` passed 11/11 on `@133`; and Recovery Live run `RL-12557aaa-5e18-4d67-a567-6304a5b57542` passed 9/9 on `@135` in 42.071 s. Recovery Live used the production confirmation, self-reconnect, stale/Trash-routing, and ambiguity seams; all three fixtures were Restricted and verified in Trash, no disposable mapping remained, no protected target matched, and the sole-admin configuration/mapping fingerprints were unchanged. Release Readiness refuses to treat any authenticated browser suite as an empty server scenario and now consumes all three saved PASS records. The permanent Performance Planner suite is available at isolated `@136`; its 20-pair campaign is paused after six confirmed pairs, so its p50/p95 budget evidence remains incomplete and unratified. `TEST_PRODUCTION_PATH_AUDIT.md` records the real-code-first contract; `npm test` rejects unreviewed direct-write test files. P1 remains NOT READY pending Release Readiness console controls, completion of performance-budget ratification, and the final bounded evidence run.
+Current runtime status (2026-08-05): exact-owner Release Readiness run
+`RR-18146129-6e3c-4389-8599-01cbb627b95d` bound source
+`8aa4bf5bf58259598289d79368eea944e015d43e` to isolated Central `@318`.
+Performance campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` completed
+20/20 independent first/repeat pairs (40 Planner executions), with every fixture
+Restricted and cleanup-verified. First p50/p95 was 12.890/16.773 s, repeat was
+12.350/16.034 s, and combined was 12.600/16.773 s against the 30/60 s budgets.
+The saved report records `releaseEligible: true`, `overall: PASS`,
+`decision: ACCEPT`, and `budgetRatified: true`; Validation shows
+`SUITE-PERFORMANCE-PLANNER` PASS/Verified. The owning run was then finalized and
+correctly archived overall `NOT_READY` because this performance-only exercise did
+not run First-Run, Populated Dashboard, Recovery Live, or the remaining required
+server inventory. The disposable runner is OFF. This proves exact-owner evidence
+and ratifies the Planner budget for `8aa4bf5` / `@318`; it does not waive missing
+exact-candidate suites or make the full P1 verdict READY. Any later candidate
+source/deployment change requires a fresh campaign at the frozen-candidate gate.
+`TEST_PRODUCTION_PATH_AUDIT.md` records the real-code-first contract; `npm test`
+rejects unreviewed direct-write test files.
 
 ## Bounded execution
 

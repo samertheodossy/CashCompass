@@ -1,6 +1,6 @@
 # CashCompass Performance Observability
 
-**Status:** Reusable timing helper and permanent percentile suite implemented. The 20-pair campaign is intentionally paused after six confirmed pairs; no percentile budget is ratified yet.
+**Status:** Reusable timing helper and permanent percentile suite implemented. An exact-owner 20-pair campaign completed on isolated Central `@318`; the Financial Plan refresh percentile budget is ratified for that candidate.
 
 ## Purpose
 
@@ -308,22 +308,31 @@ contract. The browser-console echo was not separately validated because the
 nested Apps Script dashboard frame did not remain controllable during this pass;
 that does not affect the server-stage measurements above.
 
-## Resumable percentile campaign — paused 2026-07-21
+## Exact-owner percentile campaign — completed 2026-08-05
 
 `SUITE-PERFORMANCE-PLANNER` is the permanent on-demand regression suite for
 release-percentile evidence. It reuses the registered real
 `PERFORMANCE-PLANNER-FIRST-REPEAT` scenario for 20 independent first/repeat
 pairs, saves progress between invocations, and calculates nearest-rank p50/p95
-for first, repeat, and combined samples. Candidate budgets remain p50 ≤ 30 s and
-p95 ≤ 60 s; neither is ratified until all 20 pairs complete.
+for first, repeat, and combined samples. Candidate budgets are p50 ≤ 30 s and
+p95 ≤ 60 s and can be ratified only after all 20 pairs complete.
 
-The isolated `@136` campaign was intentionally paused after six confirmed pairs.
-Repeats were generally near 27 seconds, most first runs were slightly above 30
-seconds, and one first-run outlier was about 136 seconds. This is insufficient to
-publish percentiles or make an accept/optimize ProductDecision. Every confirmed
-pair used the fixed disposable non-admin identity, verified Restricted sharing,
-and verified Trash cleanup. Resume the saved campaign later from the Validation
-& Testing console; do not restart it merely to obtain a cleaner distribution.
+Exact-owner run `RR-18146129-6e3c-4389-8599-01cbb627b95d` bound source
+`8aa4bf5bf58259598289d79368eea944e015d43e` to isolated Central `@318`.
+Campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` passed all 20 pairs and
+40 Planner executions with zero failed samples. First min/p50/p95/max was
+9.240/12.890/16.773/17.046 s; repeat was 7.413/12.350/16.034/17.364 s; combined
+was 7.413/12.600/16.773/17.364 s. Every fixture was Restricted and
+cleanup-verified. The report records `releaseEligible: true`, `overall: PASS`,
+`decision: ACCEPT`, and `budgetRatified: true`.
+
+The earlier `@136` partial campaign remains historical diagnostic evidence and is
+superseded for release-budget purposes. The completed `@318` campaign closes the
+Planner percentile gate for that exact candidate only. Ordinary Save
+acknowledgement/completion, loaded navigation, and representative mature-workbook
+timings remain open under roadmap item `4d`. If source or deployment changes
+before candidate freeze, rerun all 20 pairs under `8b`; never combine samples from
+different candidates.
 
 ## Safe runtime procedure
 

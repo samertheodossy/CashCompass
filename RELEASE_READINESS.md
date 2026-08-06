@@ -3,21 +3,23 @@
 *The pre-release go/no-go produced by the Test Harness running every scenario pack
 and the Validator judging each result.*
 
-**Status:** **Release Readiness orchestration and console controls are implemented,
-committed at `a4f6ddf`, and runtime-proven on isolated Central `@141`; the saved
-run remains `IN_PROGRESS` because Performance is intentionally parked.** The
-single Validation console creates a disposable Workbook Health preflight, runs one
-bounded server scenario per invocation, saves resumable progress, accepts browser
-evidence only for the exact source/deployment candidate, archives privacy-safe
-verdicts, and restores a console-owned Harness flag to OFF when finalized.
-The `REG-015` correction now makes ownership explicit: generic/direct
-browser runs are diagnostic-only, while only a dedicated action in the active
-Release Readiness browser-evidence table supplies and server-validates the exact
-owning run id. Isolated `@178` runtime evidence proves the standalone fail-closed
-path even while the older `@141` run remains parked: the final full Populated
-Dashboard run passed 12/12 with `releaseEligible: false`, no candidate or release
-run id, zero captured errors, and verified Trash cleanup. Candidate-bound runtime
-proof of the dedicated exact-owner action remains pending.
+**Status:** **Release Readiness orchestration, console controls, exact-owner
+browser evidence, and the Performance Planner percentile contract are
+runtime-proven through isolated Central `@318`.** The single Validation console
+creates a disposable Workbook Health preflight, runs one bounded server scenario
+per invocation, saves resumable progress, accepts browser evidence only for the
+exact source/deployment candidate, archives privacy-safe verdicts, and restores a
+console-owned Harness flag to OFF when finalized. Generic/direct browser runs
+remain diagnostic-only. Exact-owner run
+`RR-18146129-6e3c-4389-8599-01cbb627b95d` bound source
+`8aa4bf5bf58259598289d79368eea944e015d43e` to isolated `@318`; its Performance
+campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` passed 20/20 pairs and
+recorded `releaseEligible: true`, `PASS`, `ACCEPT`, and
+`budgetRatified: true`. All 20 fixtures were Restricted and cleanup-verified.
+The owning run then intentionally archived overall `NOT_READY` because the
+performance-only exercise did not execute First-Run, Populated Dashboard,
+Recovery Live, or the remaining server inventory. `SUITE-PERFORMANCE-PLANNER`
+remains PASS/Verified, and the disposable runner is OFF.
 
 Financial Integrity is now included in the required server-suite inventory through
 `SUITE-FINANCIAL-INTEGRITY-CANONICAL`. Runs `20260722-151535-b8f9` (`@151`),
@@ -47,24 +49,23 @@ candidate. All writer fixtures were Restricted and verified in Trash. Recovery
 Live passed 9/9 in 44.060 s, matched zero protected targets, and preserved the
 sole-admin configuration and mapping fingerprints. No bounded workbook was used.
 
-The current run must not be finalized as READY yet. The permanent Performance
-Planner percentile suite has seven historical diagnostic pairs, but that campaign
-began before `@141` and cannot qualify as exact-candidate evidence. Performance is
-deferred—not waived—while House Financial Accuracy proceeds. Before broad Beta,
-run a complete candidate-bound campaign, ratify p50/p95 budgets, finalize this
-bounded gate, and run the full 10/10 scorecard. Until then, the automated release
-state is **IN_PROGRESS** and the product-level broad-Beta decision remains **NOT
-READY**. See `P1_RELEASE_EVIDENCE_CONTRACT.md`.
+The Financial Plan refresh budget is ratified for `8aa4bf5` / isolated `@318`:
+first p50/p95 is 12.890/16.773 s, repeat is 12.350/16.034 s, and combined is
+12.600/16.773 s against the 30/60 s budgets. This does not make the full product
+READY. Remaining `4d` flow measurements, every missing exact-candidate suite and
+server scenario, the final 10/10 scorecard, and the supervised cohort remain
+required. If source or deployment changes before the frozen-candidate gate, the
+Performance suite becomes stale and must be rerun under `8b`. The current broad-
+Beta decision therefore remains **NOT READY**. See
+`P1_RELEASE_EVIDENCE_CONTRACT.md`.
 
-**Delivery forecast (2026-07-23):** after a four-week buffer for planned time away
-in August, candidate freeze and the complete exact-candidate Release Readiness
-run are planned for **2026-09-11 through 2026-09-17**. The target broad invited-
-Beta decision is **2026-09-24**, with **2026-10-02** reserved for one focused
-repair/retest cycle. These dates are planning boundaries only: HTTP 0 recovery,
-dedicated exact-owner proof, all required suites, 20 first/repeat Performance
-pairs, ratified p50/p95 budgets, the supervised cohort, ≥95/100, no dimension
-below 9/10, and no unresolved Severity 1/2 defect remain mandatory. No dated
-milestone may reuse stale, diagnostic-only, or differently attributed evidence.
+**Delivery forecast:** the former September 24 and October 2 planning boundaries
+are historical and require rebaselining after the deferred compound-correction
+work is measured. Dedicated exact-owner proof and the `@318` Planner percentile
+gate are complete. All required suites, the final frozen-candidate replay,
+remaining performance flows, the supervised cohort, ≥95/100, no dimension below
+9/10, and no unresolved Severity 1/2 defect remain mandatory. No dated milestone
+may reuse stale, diagnostic-only, or differently attributed evidence.
 
 **Related docs:** `TEST_HARNESS_ARCHITECTURE.md` (the runner),
 `VALIDATOR_ARCHITECTURE.md` (the read-only judge), `REGRESSION_SCENARIOS.md` (the

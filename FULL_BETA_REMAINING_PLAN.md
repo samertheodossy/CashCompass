@@ -2,9 +2,9 @@
 
 **Status:** Active execution inventory
 
-**Reconciled:** 2026-07-31
+**Reconciled:** 2026-08-05
 
-**Current isolated deployment:** `@299`. The Activity-correction evidence
+**Current isolated deployment:** `@318`. The Activity-correction evidence
 baseline remains isolated Central `@240`; clean Populated Dashboard run
 `FR-d75843e0-486e-4faa-8967-05ee40b73e25` passed **21/21** in 383.006 s. It
 includes the complete `REG-030`–`REG-039` direct Quick Add matrix plus
@@ -38,6 +38,19 @@ the generic Activity **Date** header, and the responsive **Related views**
 secondary-button row. The user completed the `@293` visual check and confirmed
 that the button presentation is much better. Beta is still `@106` and bounded
 remains user-controlled.
+
+The exact-owner Performance Planner campaign is complete for source
+`8aa4bf5bf58259598289d79368eea944e015d43e` on isolated Central `@318`.
+Campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a`, owned by Release
+Readiness run `RR-18146129-6e3c-4389-8599-01cbb627b95d`, passed all 20
+first/repeat pairs and all 40 Planner executions. First, repeat, and combined
+p50/p95 were 12.890/16.773 s, 12.350/16.034 s, and 12.600/16.773 s against
+the ratified 30/60 s budgets. All fixtures were Restricted and all 20 cleanups
+were verified. The owning run recorded `SUITE-PERFORMANCE-PLANNER` as PASS,
+then was intentionally finalized overall `NOT_READY` because unrelated browser
+and server suites were not run; the disposable runner returned OFF. This closes
+`4e` and `4f` for `@318`. A later source/deployment change makes this evidence
+stale for final-candidate `8b` and requires the suite to be rerun there.
 
 **Last formal independent advocate score:** **8.3/10** on isolated Central
 `@180`. This remains the official score until the next full scored advocate run;
@@ -86,6 +99,11 @@ closed. They are retained here so the work map does not lose history.
 | 2d | Quick Add cumulative language (`REG-026`) | Completed and pushed in `168a49b`; action copy and Help state add-to-total / do-not-replace semantics, the production writer remains cumulative, the user confirmed the bounded presentation, and permanent Dashboard UX coverage passes |
 | 2e | Upcoming Dismiss consequences (`REG-027`) | Completed and pushed in `168a49b`; the action surface, hint, success message, and Help state no payment, no Cash Flow change, and preserved Upcoming/Activity history; the user confirmed the bounded wording and permanent server/UI coverage passes |
 | REG-028 | Appended-row presentation safety | Completed and pushed in `168a49b`; Upcoming, Bills, Debts, and Donations inherit sibling format/row height with first-row fallbacks, while Bank, Investment, and House paths were already protected |
+| 4a | Optimize Dashboard formatting | Isolated `@310` `REG-056` passed 14/14 and reduced repeat `format_dashboard` from 18.303 s to 0.378 s |
+| 4b | Optimize snapshot construction | Isolated `@317` `REG-057` reduced current-position construction from 5.508 s to 0.128 s and total snapshot from 13.026 s to 4.867 s with functional, sharing, and cleanup gates passing |
+| 4c | Retire embedded `OUT - Dashboard` charts | Isolated `@308` preserved tabular, History, and web behavior while generated charts and support tables remained absent |
+| 4e | Exact-candidate 20-pair campaign | Exact-owner `@318` campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` passed 20/20 pairs, 40 Planner executions, Restricted sharing, and verified cleanup |
+| 4f | Ratify Planner p50/p95 budgets | Release-eligible evidence recorded `PASS` / `ACCEPT` / `budgetRatified: true`; first, repeat, and combined p50/p95 all passed the 30/60 s budgets |
 
 The at-a-glance inventory below is **open-only**. Detailed group tables retain
 recently completed `5h` and `5i` as implementation history.
@@ -96,7 +114,7 @@ recently completed `5h` and `5i` as implementation history.
 |---:|---|---|---:|
 | 1 | `3e`–`3k`, `3m` | Remaining page UX, trust, advocate scoring, responsive/accessibility | 8.5–16 d |
 | 2 | `5j`–`5m` | Deferred safe correction families and audit disposition | 4.5–8 d including integrated disposable-workbook validation |
-| 3 | `4a`–`4f` | Performance optimization, measurement, and percentile gate | 5–11 d |
+| 3 | `4d` | Remaining cross-flow performance measurement | 0.5–1.5 d |
 | 4 | `5a`–`5f` | Remaining financial/workbook proof | 4.5–11 d |
 | 5 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
 | 6 | `7a`–`7f` | Monetization-ready policy and architecture foundation; no billing activation | 5–10 d |
@@ -207,12 +225,12 @@ either map the exact failure to an existing assertion or add the next
 |---|---|---|---:|
 | 4a | Optimize Dashboard formatting | **Complete on isolated Central `@310` under `REG-056`.** Exact production-path first/repeat runs passed 14/14 functional and formatting read-back assertions with Restricted sharing and verified Trash cleanup; repeat `format_dashboard` fell from 18.303 s on `@116` to 0.378 s | complete |
 | 4b | Optimize snapshot construction | **Complete on isolated Central `@317` under `REG-057`.** History/prior-month reads are shared or batched, Overview calculates only the selected retirement scenario, Income readiness reuses one Cash Flow grid, and refresh snapshots reuse Planner's same-call canonical position. Functional assertions, Restricted sharing, and verified Trash cleanup passed; current-position construction fell from 5.508 s to 0.128 s and total snapshot from 13.026 s to 4.867 s | complete |
-| 4c | Retire embedded `OUT - Dashboard` charts | **Complete on isolated Central `@308`.** Six generated charts and their O:Z support tables remain absent while tabular output, History, and web-dashboard behavior remain correct | 0.5–1.5 d |
-| 4d | Measure remaining release flows | Initial load, Save, first-create, navigation, provisioning, and mature-workbook timings are captured | 1–2 d |
-| 4e | Run the exact-candidate 20-pair campaign | Twenty independent first/repeat pairs complete with Restricted fixtures and verified Trash | 1–2 active d; 2–4 elapsed d |
-| 4f | Ratify p50/p95 budgets | Budgets are approved and every routine flow passes; failures return to optimization | 0.5–1 d plus rework |
+| 4c | Retire embedded `OUT - Dashboard` charts | **Complete on isolated Central `@308`.** Six generated charts and their O:Z support tables remain absent while tabular output, History, and web-dashboard behavior remain correct | complete |
+| 4d | Measure remaining release flows | **Partially complete on `@318`.** A disposable-account Overview `?debug=1` trace emitted in 20.596 s, and provisioning plus the first Donation create passed in 12.984 s with Restricted sharing and verified Trash. Ordinary Save acknowledgement/completion, loaded tab/subtab navigation, and representative mature-workbook timings remain to be captured. | 0.5–1.5 d |
+| 4e | Run the exact-candidate 20-pair campaign | **Complete for source `8aa4bf5` on isolated `@318`.** Exact-owner campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` completed 20/20 passing pairs and 40 Planner executions; every fixture was Restricted and every cleanup was verified. Rerun under `8b` if the final candidate differs. | complete for `@318` |
+| 4f | Ratify p50/p95 budgets | **Complete for Financial Plan refresh on `@318`.** First p50/p95 12.890/16.773 s, repeat 12.350/16.034 s, and combined 12.600/16.773 s passed the 30/60 s budgets. Evidence is release-eligible and records `PASS`, `ACCEPT`, and `budgetRatified: true`. Other `4d` flow budgets remain measurement-gated. | complete for Planner refresh |
 
-**Group 4 estimate: 5–11 focused days.**
+**Group 4 remaining estimate: 0.5–1.5 focused days for `4d`.**
 
 ## 5. Final financial, workbook, and recovery proof
 
@@ -411,7 +429,7 @@ family. The strictest failed gate controls the actual decision date.
 
 The remaining work that directly controls the finish date is:
 
-`3e–3j/3m → 5j–5m → 4a–4f + 5a–5f → 8a–8f/3k → 9a–9e`
+`3e–3j/3m → 5j–5m → 4d + 5a–5f → 8a–8f/3k → 9a–9e`
 
 Financial/workbook proof in Group 5 must finish before `8b`. Operations and
 monetization foundations in Groups 6–7 must finish before `8d`, but they should
@@ -453,10 +471,11 @@ not block early engineering.
 |---|---|---|---|---|
 | Completed through Jul 31 | `1a`–`1f`, `2a`–`2f`, `5g`–`5i`; `REG-028` appended-row safety | `3a`–`3d`, `3l`; tracked-editor convergence, Overview trust, loading, empty/error, Debt relationships, and daily-task language | — | Current source is on `origin/main`; isolated Central reached `@298`; Beta stays `@106`; bounded remains user-controlled |
 | Completed Aug 1 | `REG-041` styled Bill Skip and `REG-042` Bills Due authority | CashCompass drawer consistency and one-card Bill/debt presentation | — | Commit `433bfed`; user-verified on isolated Central `@299`; Beta and bounded unchanged |
-| Current UX closeout | Audit/close `3e`–`3j` and `3m`; collect diagnostic performance evidence without starting the final campaign | Permanent regressions and user visual review for each confirmed gap | Advance `6a`–`6f`, `7a`–`7f`, and cohort design during waits | UX/accessibility path reaches ≥9 without reopening completed slices |
+| Completed Aug 5 performance gate | `4a`–`4c`, `4e`, and `4f` closed for exact source `8aa4bf5` on isolated `@318`; 20/20 exact-owner pairs passed and Planner budgets were ratified | Validation console recorded `SUITE-PERFORMANCE-PLANNER` PASS with verified cleanup | Beta stayed `@106`; bounded stayed user-controlled; runner returned OFF | Planner percentile gate is closed for `@318`; later candidate changes require an `8b` rerun |
+| Current UX closeout | Audit/close `3e`–`3j` and `3m`; finish remaining `4d` cross-flow measurements | Permanent regressions and user visual review for each confirmed gap | Advance `6a`–`6f`, `7a`–`7f`, and cohort design during waits | UX/accessibility path reaches ≥9 without reopening completed slices |
 | Deferred correction return | Implement and prove `5j`–`5m` on guarded disposable workbooks | Advance `5a`–`5f` candidate matrix/recovery proof | Continue known limitations and support posture | Supported correction families are atomic; unsupported audit rows remain honest |
-| Candidate preparation | Finish `4a`–`4d` and every remaining `5a`–`5f` prerequisite | Complete fixture, visual, accessibility, and operations evidence | Finish Groups 6–7 | Candidate prerequisites are complete before one freeze |
-| Frozen candidate | Freeze `8a`; run `4e`–`4f`, `8b`–`8f`, and advocate `3k` | Release-blocking fixes only | Final release/rollback/support review | Exact candidate reaches automated READY prerequisites and ≥95/100 |
+| Candidate preparation | Finish remaining `4d` and every remaining `5a`–`5f` prerequisite | Complete fixture, visual, accessibility, and operations evidence | Finish Groups 6–7 | Candidate prerequisites are complete before one freeze |
+| Frozen candidate | Freeze `8a`; run `8b`–`8f` and advocate `3k`, including a fresh Performance replay if the candidate differs from `8aa4bf5` / `@318` | Release-blocking fixes only | Final release/rollback/support review | Exact candidate reaches automated READY prerequisites and ≥95/100 |
 | Supervised cohort | `9a`–`9e` cohort, observation, go/no-go, and separately approved promotion | Final advocate check | Support the cohort | Five-to-seven-day cohort and final broad-Beta decision |
 
 ## Explicitly outside broad-Beta scope
