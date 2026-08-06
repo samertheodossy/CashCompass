@@ -56,6 +56,31 @@ function onDonationPaymentChange() {
   }
 }
 
+function syncDonationFormReadiness_() {
+  var button = document.getElementById('don_save_btn');
+  var charitySelect = document.getElementById('don_charitySelect');
+  var charityOther = document.getElementById('don_charityOther');
+  var date = document.getElementById('don_date');
+  var amount = document.getElementById('don_amount');
+  var taxYear = document.getElementById('don_taxYear');
+  var paymentSelect = document.getElementById('don_paymentSelect');
+  var paymentOther = document.getElementById('don_paymentOther');
+  var checkNumber = document.getElementById('don_checkNumber');
+  if (!button) return;
+  var charity = charitySelect && charitySelect.value === DONATION_SELECT_OTHER
+    ? String(charityOther && charityOther.value || '').trim()
+    : String(charitySelect && charitySelect.value || '').trim();
+  var payment = String(paymentSelect && paymentSelect.value || '').trim();
+  if (payment === DONATION_SELECT_OTHER) payment = String(paymentOther && paymentOther.value || '').trim();
+  if (payment === DONATION_PAYMENT_CHECK) payment = String(checkNumber && checkNumber.value || '').trim();
+  var rawAmount = String(amount && amount.value || '').trim();
+  var numericAmount = typeof toNumber === 'function' ? toNumber(rawAmount) : Number(rawAmount);
+  button.disabled = !(
+    charity && date && date.value && rawAmount && isFinite(numericAmount) && numericAmount !== 0 &&
+    taxYear && taxYear.value && payment
+  );
+}
+
 function fillDonationSelect_(selectEl, items, includeBlank) {
   if (!selectEl) return;
   selectEl.innerHTML = '';
@@ -82,6 +107,7 @@ function loadDonationsSection() {
   if (dateEl && !dateEl.value) {
     dateEl.value = new Date().toISOString().slice(0, 10);
   }
+  if (typeof syncDonationFormReadiness_ === 'function') syncDonationFormReadiness_();
 
   google.script.run
     .withSuccessHandler(function(data) {
@@ -135,6 +161,7 @@ function loadDonationsSection() {
       if (cn) cn.value = '';
       onDonationCharityChange();
       onDonationPaymentChange();
+      syncDonationFormReadiness_();
 
       var ts = document.getElementById('don_recent_updated');
       if (ts) ts.textContent = new Date().toLocaleString();
@@ -158,7 +185,7 @@ function renderPreviousDonations_(rows) {
     return;
   }
   root.innerHTML = recent.map(function(r) {
-    var ty = r.taxYear != null && r.taxYear !== '' ? ' · TY ' + String(r.taxYear) : '';
+    var ty = r.taxYear != null && r.taxYear !== '' ? ' · Tax year ' + String(r.taxYear) : '';
     return (
       '<div class="donation-previous-item">' +
         '<div><strong>' + escapeHtml(r.charity || '—') + '</strong></div>' +

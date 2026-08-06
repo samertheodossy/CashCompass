@@ -73,7 +73,26 @@ function updateQuickAddFlowSourceVisibility_() {
   wrap.hidden = !needsSource;
   select.disabled = !needsSource;
   select.required = needsSource;
+  if (typeof syncQuickAddReadiness_ === 'function') syncQuickAddReadiness_();
   return needsSource;
+}
+
+function syncQuickAddReadiness_() {
+  var button = document.getElementById('pay_save_btn');
+  if (!button) return;
+  var date = document.getElementById('pay_date');
+  var amount = document.getElementById('pay_amount');
+  var sourceWrap = document.getElementById('pay_flowSourceWrap');
+  var source = document.getElementById('pay_flowSource');
+  var rawAmount = amount ? String(amount.value || '').trim() : '';
+  var numericAmount = typeof toNumber === 'function' ? toNumber(rawAmount) : Number(rawAmount);
+  var needsSource = !!(sourceWrap && !sourceWrap.hidden);
+  button.disabled = !(
+    date && date.value &&
+    currentPaymentPayee() &&
+    rawAmount && isFinite(numericAmount) && numericAmount !== 0 &&
+    (!needsSource || (source && String(source.value || '').trim()) || window.__pendingQuickAddFlowSource)
+  );
 }
 
 function currentPaymentPayee() {
@@ -274,6 +293,7 @@ function loadPaymentSection() {
   const initialLoadTiming = startDashboardInitialLoadStage_('quick_add');
   const uiDataRequestSeq = ++quickAddUiDataRequestSeq_;
   document.getElementById('pay_date').value = new Date().toISOString().slice(0, 10);
+  syncQuickAddReadiness_();
   // Any pending prefill-only Flow Source value only makes sense inside the
   // single save that immediately follows a prefill. Clear it on a cold
   // tab load so a later manual Quick Add never inherits it.

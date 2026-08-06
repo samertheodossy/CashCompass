@@ -16,10 +16,18 @@ function syncHouseExpenseLocation() {
 function updateHouseExpenseAvailability_() {
   const sel = document.getElementById('hx_house');
   const hasHouse = !!(sel && String(sel.value || '').trim());
+  const date = document.getElementById('hx_date');
+  const item = document.getElementById('hx_item');
+  const hasMinimumInput = hasHouse && !!(date && date.value) && !!(item && String(item.value || '').trim());
   const addBtn = document.getElementById('hx_add_btn');
   const hint = document.getElementById('hx_empty_hint');
-  if (addBtn) addBtn.disabled = !hasHouse;
-  if (hint) hint.style.display = hasHouse ? 'none' : '';
+  if (addBtn) addBtn.disabled = !hasMinimumInput;
+  if (hint) {
+    hint.textContent = hasHouse
+      ? 'Enter a date and item to add this expense.'
+      : 'Add a house before recording property expenses.';
+    hint.style.display = hasMinimumInput ? 'none' : '';
+  }
 }
 
 function loadHouseExpensesSection() {

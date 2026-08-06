@@ -357,6 +357,7 @@ function onboardingApplyStatusGrid_(data) {
   onboardingSetStatus_(complete + ' complete · ' + notSetUp + ' not set up', '');
 
   onboardingApplyFinishPanel_(complete, total);
+  onboardingApplyProgressRecommendation_(data.steps, complete, total);
 
   // Optional cards (Upcoming Expenses, Houses) live in the same grid
   // but are NOT part of the status payload that drives the completion
@@ -368,6 +369,38 @@ function onboardingApplyStatusGrid_(data) {
   // cannot be mistaken for missing optional data.
   onboardingLoadUpcomingSummary_();
   onboardingLoadHousesSummary_();
+}
+
+function onboardingApplyProgressRecommendation_(steps, complete, total) {
+  var countEl = document.getElementById('onboarding_progress_count');
+  var nextEl = document.getElementById('onboarding_recommended_next');
+  var action = document.getElementById('onboarding_recommended_action');
+  if (!countEl || !nextEl || !action) return;
+
+  countEl.textContent = complete + ' of ' + total + ' required areas complete';
+  var next = (steps || []).filter(function(step) {
+    return step && step.status !== 'complete';
+  })[0] || null;
+
+  if (!next) {
+    nextEl.textContent = 'Recommended next: review your prioritized Next Actions.';
+    action.textContent = 'Go to Next Actions';
+    action.hidden = false;
+    action.onclick = onboardingGoToNextActions;
+    return;
+  }
+
+  var labels = {
+    bank: 'Bank Accounts',
+    debts: 'Debts',
+    bills: 'Bills',
+    income: 'Income',
+    profile: 'Profile'
+  };
+  nextEl.textContent = 'Recommended next: review ' + (labels[next.key] || 'the next setup area') + '.';
+  action.textContent = 'Open ' + (labels[next.key] || 'next step');
+  action.hidden = false;
+  action.onclick = function() { onboardingShowView(next.key); };
 }
 
 // Fetch a minimal Houses summary for the optional card on the grid.

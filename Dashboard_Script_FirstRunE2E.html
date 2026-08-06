@@ -245,13 +245,15 @@
       await waitFor(function() {
         var guidance = document.getElementById('ret_empty_state');
         return activeTab('planning', 'retirement') && visible(guidance) &&
-          /Date of Birth in Profile/i.test(String(guidance.textContent || ''));
+          /Profile needs your date of birth/i.test(String(guidance.textContent || '')) &&
+          /CashCompass uses it to calculate your current age/i.test(String(guidance.textContent || ''));
       }, 120000, 'fresh Retirement guidance');
       var retirementGuidance = document.getElementById('ret_empty_state');
       var retirementCards = document.getElementById('ret_scenario_cards');
       var retirementResults = document.getElementById('ret_results_panel');
       var retirementGuidancePass = visible(retirementGuidance) &&
-        /Add your Date of Birth in Profile/i.test(String(retirementGuidance.textContent || '')) &&
+        /Profile needs your date of birth/i.test(String(retirementGuidance.textContent || '')) &&
+        /CashCompass uses it to calculate your current age/i.test(String(retirementGuidance.textContent || '')) &&
         !visible(retirementCards) && !visible(retirementResults) &&
         text('ret_info_goal') === '—' && text('ret_info_funded') === '—';
       add('retirement_guidance_not_ready', retirementGuidancePass, retirementGuidancePass

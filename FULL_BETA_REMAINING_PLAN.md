@@ -30,14 +30,12 @@ The follow-up Bill reliability fix in `433bfed` replaces native Skip
 confirmation with the CashCompass drawer and makes explicit tracked Bills
 authoritative over matching debt-derived Bills Due cards. Both behaviors were
 user-verified on isolated Central `@299` and have permanent regression coverage.
-The active item is `3e`, Properties context
-polish. The full local suite passes, and
-read-only isolated Central `@293` validation
-confirms the three Debt surfaces, exact cross-links, current Setup/Help route,
-the generic Activity **Date** header, and the responsive **Related views**
-secondary-button row. The user completed the `@293` visual check and confirmed
-that the button presentation is much better. Beta is still `@106` and bounded
-remains user-controlled.
+The combined `3e`–`3i` and `3m` UX wave is runtime-complete on isolated `@325`.
+Populated run `FR-51e0f9a0-0d1b-4049-9eea-36b1107a0976` passed 24/24 and
+First-Run run `FR-78d9e3b6-a907-4959-bbca-db0966f623f1` passed 16/16, both with
+Restricted sharing and verified Trash cleanup. `3j` remains a separate task.
+The current item is `4g`, Retirement scenario-load latency, followed by the
+`3n` money-format audit. Beta is still `@106` and bounded remains user-controlled.
 
 The exact-owner Performance Planner campaign is complete for source
 `8aa4bf5bf58259598289d79368eea944e015d43e` on isolated Central `@318`.
@@ -129,7 +127,7 @@ recently completed `5h` and `5i` as implementation history.
 
 | Order | Open IDs | Workstream | Focused estimate |
 |---:|---|---|---:|
-| 1 | `3e`–`3k`, `3m` | Remaining page UX, trust, advocate scoring, responsive/accessibility | 8.5–16 d |
+| 1 | `4g`, `3n`, `3j`, `3k` | Retirement load investigation, money-format consistency, separate accessibility closeout, and frozen-candidate advocate score | 5–10 d |
 | 2 | `5j`–`5m` | Deferred safe correction families and audit disposition | 4.5–8 d including integrated disposable-workbook validation |
 | 3 | `5a`–`5f` | Remaining financial/workbook proof | 4.5–11 d |
 | 4 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
@@ -137,11 +135,12 @@ recently completed `5h` and `5i` as implementation history.
 | 6 | `8a`–`8f` | Freeze, complete exact-candidate evidence, score, and READY verdict | 3.5–7 d plus fixes |
 | 7 | `9a`–`9e` | Supervised cohort, go/no-go, and separately approved Central Beta promotion | 2–3 active d plus 5–7 calendar d and fixes |
 
-**Current execution decision (2026-07-31):** finish the smaller remaining UX
-and accessibility work first, beginning with `3e`. Compound Activity correction
+**Current execution decision (2026-08-06):** the combined `3e`–`3i`/`3m` wave
+is complete. Investigate Retirement scenario-load latency (`4g`), audit money
+formatting (`3n`), then execute `3j` separately. Compound Activity correction
 `5j`–`5m` remains a broad-Beta requirement but is deliberately deferred until
-after the current UX closeout. The later exact-candidate advocate rerun `3k`
-occurs only after freeze; Groups 6–7 may advance during runtime/review waits.
+after these focused follow-ups. The exact-candidate advocate rerun `3k` occurs
+only after freeze; Groups 6–7 may advance during runtime/review waits.
 
 The arithmetic sum is intentionally not the delivery forecast because Groups
 6–7 and parts of Groups 3 and 5 can advance during runtime waits. The optimized
@@ -201,16 +200,17 @@ acceptance contract, close it with evidence rather than manufacturing a redesign
 | 3a | Finish loading-state consistency — **✅ complete** | Overview, Planner, picker, onboarding, and Admin slots use contextual shared loading states; pickers and dependent actions fail closed; stale Bank responses cannot overwrite newer state | Complete in `be76bdb` at isolated Central `@294` |
 | 3b | Finish empty/error-state consistency — **✅ complete** | Standard empty, unavailable, retry, and failure patterns cover core surfaces | Complete in `3e2db4f` at isolated Central `@298`; First-Run 14/14 baseline plus fresh-workbook contextual-state confirmation |
 | 3c | Planning hierarchy and Debt relationships — **✅ complete** | Debt accounts, Debt Overview, and Rolling Payoff purposes and links are understandable; Setup and Help use the current destination | Complete in `7c0e2ac` at isolated Central `@293` |
-| 3e | Properties context polish | Selected property/year remains clear; Cash Flow-posting consequences are understandable | 0.5–1 d |
-| 3f | Activity review polish | Filters are visible/reversible; Donation-only Remove is correctly gated; narrow layout is readable | 1–2 d |
-| 3g | Setup progress and next step | Required progress and one recommended next action are visible without performing a write | 0.5–1 d |
-| 3h | Help and contextual links | Common tasks precede Advanced material; complex pages expose concise contextual Help | 1–2 d |
-| 3i | Medium-width header and visual balance | Desktop/medium/390px compositions are balanced without weakening the established visual system | 0.5–1 d |
+| 3e | Properties context polish — **✅ complete** | Selected property/year and Cash Flow-posting consequences passed permanent regressions and isolated browser review | Complete on isolated `@325` |
+| 3f | Activity review polish — **✅ complete** | Reversible filters, active-filter feedback, and the corrected 390px date layout passed isolated browser review | Complete on isolated `@325` |
+| 3g | Setup progress and next step — **✅ complete** | Required progress and one recommended next action render without performing a write | Complete on isolated `@325` |
+| 3h | Help and contextual links — **✅ complete** | Common tasks precede Advanced material; Activity, Properties, and Setup expose contextual Help | Complete on isolated `@325` |
+| 3i | Medium-width header and visual balance — **✅ complete** | 1024px and 390px compositions are balanced without horizontal overflow | Complete on isolated `@325` |
 | 3j | Responsive and accessibility closeout | Desktop/medium/390px, keyboard, focus, programmatic control names, target size, contrast, and reduced motion pass; all visible form labels are associated with their controls | 3–5 d |
 | 3k | Exact-candidate task-based advocate rerun | All eight criteria are rescored from interactive evidence; every category reaches the release path to ≥9 | 1–2 d |
-| 3m | Form readiness and residual customer language | Primary actions remain disabled until minimum inputs are valid; customer labels replace stored tokens/internal workbook language; duplicated guidance is removed without changing stored values or server validation | 1–2 d |
+| 3m | Form readiness and residual customer language — **✅ complete** | Primary actions fail closed until minimum input is valid; customer labels replace stored tokens; duplicate/obsolete guidance is removed without changing stored values or server validation | Complete on isolated `@325`; Populated 24/24 and First-Run 16/16 |
+| 3n | Customer-visible money-format consistency | Audit every normal-path monetary display and standardize finite amounts to signed `$x.xx`; preserve percentages, counts, ages, stored values, and numeric-entry behavior | 0.5–1.5 d |
 
-**Group 3 open estimate: 8.5–16 focused days.**
+**Group 3 open estimate: 4.5–8.5 focused days.**
 
 ### Isolated `@196` advocate finding reconciliation
 
@@ -245,9 +245,10 @@ either map the exact failure to an existing assertion or add the next
 | 4d | Measure remaining release flows | **Complete on isolated Central `@319`.** Diagnostic Populated Dashboard run `FR-47ef0c44-68c8-4cff-a745-828677acf353` passed every assertion with Restricted single-owner sharing and verified Trash cleanup. Ordinary Bank Save acknowledged in 1 ms and completed in 8.332 s; 12 loaded-navigation samples measured 17/18 ms p50/p95; representative populated Overview after Planner history completed in 11.776 s. Navigation and Overview were within candidate targets; Save completion exceeded the directional 6 s target and moves to `4f` disposition/optimization. | complete |
 | 4e | Run the exact-candidate 20-pair campaign | **Complete for source `8aa4bf5` on isolated `@318`.** Exact-owner campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` completed 20/20 passing pairs and 40 Planner executions; every fixture was Restricted and every cleanup was verified. Rerun under `8b` if the final candidate differs. | complete for `@318` |
 | 4f | Ratify p50/p95 budgets and close ordinary Save follow-up | **Complete.** Financial Plan refresh passed its 30/60 s budgets on exact-owner `@318`. Ordinary Save V10 on `@322` passed 24/24 assertions in run `FR-afc35e3b-77ff-4c91-88cb-88f28c55fa0f`, with five samples, Restricted sharing, verified Trash cleanup, and no errors. Same-call workbook/read reuse reduced Save completion p50/p95 from 11.060/17.568 s to 6.520/9.418 s; acknowledgement p95 was 1 ms. The 6 s strict completion budget remains a documented near-miss and is not marked passed; further removal or deferral of required history, synchronization, or immutable audit work is not justified. | complete; frozen-candidate replay remains under `8b` |
+| 4g | Investigate Retirement scenario-load latency | Measure selected-scenario time to meaningful content and the cost of loading all three scenarios; render the selected scenario first and background-load alternatives only if truth, stale-response, and scenario-switch contracts remain intact | 0.5–1.5 d |
 
-**Group 4 is complete for the current evidence candidates. The conditional
-frozen-candidate `8b` replay remains.**
+**Group 4 has one new observed UI-load investigation (`4g`). The conditional
+frozen-candidate `8b` replay also remains.**
 
 ## 5. Final financial, workbook, and recovery proof
 
@@ -446,7 +447,7 @@ family. The strictest failed gate controls the actual decision date.
 
 The remaining work that directly controls the finish date is:
 
-`3e–3j/3m → 5j–5m → 5a–5f → 8a–8f/3k → 9a–9e`
+`4g → 3n → 3j → 5j–5m → 5a–5f → 8a–8f/3k → 9a–9e`
 
 Financial/workbook proof in Group 5 must finish before `8b`. Operations and
 monetization foundations in Groups 6–7 must finish before `8d`, but they should
@@ -491,7 +492,9 @@ not block early engineering.
 | Completed Aug 5 performance gate | `4a`–`4c`, `4e`, and `4f` closed for exact source `8aa4bf5` on isolated `@318`; 20/20 exact-owner pairs passed and Planner budgets were ratified | Validation console recorded `SUITE-PERFORMANCE-PLANNER` PASS with verified cleanup | Beta stayed `@106`; bounded stayed user-controlled; runner returned OFF | Planner percentile gate is closed for `@318`; later candidate changes require an `8b` rerun |
 | Completed Aug 5 cross-flow measurement | `4d` closed on isolated `@319`: Save 1 ms acknowledgement / 8.332 s completion, navigation 17/18 ms p50/p95, populated Overview 11.776 s | Populated Dashboard V9 PASS, Restricted sharing, verified Trash cleanup, and admin 4d panel confirmation | Beta stayed `@106`; bounded stayed untouched; runner returned OFF | Measurement gap closed; ordinary Save completion moves to `4f` follow-up |
 | Completed Aug 6 ordinary Save follow-up | `4f` Save investigation closed on isolated `@322`: p50/p95 improved from 11.060/17.568 s to 6.520/9.418 s | Populated Dashboard V10 run `FR-afc35e3b-77ff-4c91-88cb-88f28c55fa0f` passed 24/24, Restricted sharing, zero errors, and verified Trash cleanup | Beta stayed `@106`; bounded stayed untouched; no Git commit or push yet | Strict 6 s budget remains a documented near-miss; no required Save/audit stage is weakened |
-| Current UX closeout | Audit/close `3e`–`3j` and `3m` | Permanent regressions and user visual review for each confirmed gap | Advance `6a`–`6f`, `7a`–`7f`, and cohort design during waits | UX/accessibility path reaches ≥9 without reopening completed slices |
+| Completed Aug 6 UX closeout | `3e`–`3i` and `3m` runtime-complete on isolated `@325` | Populated `FR-51e0f9a0-0d1b-4049-9eea-36b1107a0976` passed 24/24; First-Run `FR-78d9e3b6-a907-4959-bbca-db0966f623f1` passed 16/16; Restricted sharing and cleanup verified | Beta stayed `@106`; bounded stayed untouched; Git commit/push still awaiting approval | Context, filters, Setup progress, Help, composition, readiness, and customer language close together; `3j` remains separate |
+| Current focused follow-ups | Investigate Retirement selected-scenario latency (`4g`), then audit money display consistency (`3n`) | Add timing and formatting contracts before any optimization or broad rewrite | Advance documentation during runtime waits | Close measured gaps without mixing them into the completed UX wave |
+| Separate accessibility closeout | Complete `3j` alone | Keyboard, focus, names, target size, contrast, reduced motion, and supported-width evidence | Continue operations foundations during browser waits | Accessibility reaches its release gate without broadening the prior UX patch |
 | Deferred correction return | Implement and prove `5j`–`5m` on guarded disposable workbooks | Advance `5a`–`5f` candidate matrix/recovery proof | Continue known limitations and support posture | Supported correction families are atomic; unsupported audit rows remain honest |
 | Candidate preparation | Finish every remaining `5a`–`5f` prerequisite | Complete fixture, visual, accessibility, and operations evidence | Finish Groups 6–7 | Candidate prerequisites are complete before one freeze |
 | Frozen candidate | Freeze `8a`; run `8b`–`8f` and advocate `3k`, including a fresh Performance replay if the candidate differs from `8aa4bf5` / `@318` | Release-blocking fixes only | Final release/rollback/support review | Exact candidate reaches automated READY prerequisites and ≥95/100 |

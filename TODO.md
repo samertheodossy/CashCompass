@@ -11,7 +11,7 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current stage — Stage 3: Beta Readiness
 
-**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; isolated Central has since advanced through `@322`. The `@196` 7.2/10 read-only score is evidence-limited and not comparable, so the official score does not change until a full writer-inclusive advocate run. The 7.5/10 value remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 shipped 2026-07-09.** Exact-owner campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` passed 20/20 Planner pairs on source `8aa4bf5` / isolated `@318` and ratified the Financial Plan refresh budget. Diagnostic `@319` completed `4d`; `@322` closed the ordinary Save `4f` investigation at 6.520/9.418 s p50/p95, with the strict 6 s budget retained as a documented near-miss. Current ordering authority is `ROADMAP.md`: **remaining page UX/accessibility beginning with `3e` → deferred correction `5j`–`5m` → remaining candidate preparation → frozen-candidate evidence (with a Planner replay if the candidate differs) → supervised cohort proof → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
+**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; isolated Central has since advanced through `@325`. The `@196` 7.2/10 read-only score is evidence-limited and not comparable, so the official score does not change until a full writer-inclusive advocate run. The 7.5/10 value remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 shipped 2026-07-09.** Exact-owner campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` passed 20/20 Planner pairs on source `8aa4bf5` / isolated `@318` and ratified the Financial Plan refresh budget. Diagnostic `@319` completed `4d`; `@322` closed the ordinary Save `4f` investigation; and isolated `@325` runtime-closed combined UX items `3e`–`3i`/`3m` while leaving `3j` separate. Current ordering authority is `ROADMAP.md`: **Retirement scenario-load investigation `4g` → money-format audit `3n` → separate accessibility closeout `3j` → deferred correction `5j`–`5m` → remaining candidate preparation → frozen-candidate evidence → supervised cohort proof → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
 
 `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered finish-line inventory
 for broad invited Beta. It assigns IDs `1a`–`9e`, focused-effort estimates,
@@ -19,11 +19,11 @@ dependencies, a critical path, three parallel work lanes, time-saving rules, and
 the reconciled execution waves. Use those IDs in new plans, handoffs, and
 status updates instead of creating another competing pre-Beta checklist.
 
-**Execution forecast (reconciled 2026-07-31):** controlled Family Beta can
+**Execution forecast (reconciled 2026-08-06):** controlled Family Beta can
 continue now. The former September 24 target and October 2 contingency boundary
 require rebaselining because compound Bill correction (`5j`) is deliberately
-deferred while the remaining UX/accessibility work proceeds from `3e`. The
-gate order is now: UX closeout; deferred `5j`–`5m`; performance plus final
+deferred. The gate order is now: Retirement load investigation (`4g`), money
+format audit (`3n`), separate accessibility closeout (`3j`); deferred `5j`–`5m`; final
 financial/workbook/recovery proof; operations/support and monetization-ready
 architecture; exact-candidate freeze/evidence; then the supervised cohort and
 go/no-go. No calendar date waives a release gate. See `PROJECT_CONTEXT.md →
@@ -589,19 +589,31 @@ findings below are Beta work, ordered by product risk:
    `FR-e92641a0-2c59-45da-a90c-8b8780410f76` passed 14/14 with Restricted
    sharing, zero browser errors, and verified Trash cleanup. The commit is on
    `origin/main`.
-5. **`3m` · P2/P3 — Form readiness and residual customer language (1–2 d).**
-   Disable primary actions until minimum input is valid; preserve server
-   validators; render customer-facing Bill payment-source labels without
-   changing stored tokens; remove “2026 block,” duplicated Retirement guidance,
-   and remaining normal-path abbreviations/internal terminology.
+5. **✅ `3m` · P2/P3 — Form readiness and residual customer language complete
+   on isolated `@325`.** Primary actions remain disabled until minimum input is
+   valid; server validators are preserved; Bill payment-source labels are
+   customer-facing without changing stored tokens; obsolete and duplicated
+   normal-path guidance is removed. Populated 24/24 and First-Run 16/16 passed
+   with Restricted fixtures and verified cleanup.
 6. **✅ `3c` · P2 — Help and Debt routing — complete in `7c0e2ac` through
    isolated Central `@293` and user-approved visual validation.** The obsolete `Planning → Debts`
    path now routes to **Assets & Liabilities → Debt accounts**; all three Debt
    surfaces explain and button-link the maintenance, read-only overview, and
    actionable payoff relationship. Exact destination, handoff, cross-link,
    responsive-presentation, Activity **Date**, and stale-path regressions pass.
-7. **`3i` · P3 — Medium composition.** Correct excessive header whitespace and
-   Setup-card density without regressing the proven 390px layout.
+7. **✅ `3i` · P3 — Medium composition complete on isolated `@325`.** The
+   deliberate medium breakpoint, compact header, two-column Setup composition,
+   and corrected 390px Activity date row passed browser and permanent overflow
+   checks.
+
+8. **`4g` · Performance — Retirement scenario-load latency.** Measure the
+   selected scenario separately from the three-scenario payload and render the
+   selected scenario first only if scenario switching, stale responses, and
+   calculation truth remain intact.
+9. **`3n` · UX consistency — monetary display formatting.** Inventory every
+   customer-visible monetary renderer and standardize finite amounts to signed
+   `$x.xx`, excluding percentages, counts, ages, stored values, and numeric-entry
+   behavior.
 
 Every fix invokes Regression Discovery. An existing suite counts only if it
 asserts the exact failure; otherwise add the next `REG-###`. The detailed

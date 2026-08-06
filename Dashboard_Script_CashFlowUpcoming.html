@@ -4,6 +4,7 @@ function loadUpcomingSection() {
   setUpcomingDismissGuidanceVisible_(false);
   document.getElementById('up_dueDate').value =
     document.getElementById('up_dueDate').value || new Date().toISOString().slice(0, 10);
+  if (typeof syncUpcomingFormReadiness_ === 'function') syncUpcomingFormReadiness_();
 
   ['ov_upcoming_next7', 'ov_upcoming_next30'].forEach(function(id, index) {
     const el = document.getElementById(id);
@@ -266,6 +267,7 @@ function enterUpcomingEditMode_(row) {
 
   clearUpcomingAddNameError_();
   setStatus('upcoming_status', '', false);
+  syncUpcomingFormReadiness_();
 
   // Scroll the form into view and focus the first input so the user
   // sees what they're about to change without hunting up the page.
@@ -303,6 +305,22 @@ function resetUpcomingFormToAddMode_() {
   }
 
   clearUpcomingAddNameError_();
+  syncUpcomingFormReadiness_();
+}
+
+function syncUpcomingFormReadiness_() {
+  var button = document.getElementById('up_save_btn');
+  var name = document.getElementById('up_name');
+  var dueDate = document.getElementById('up_dueDate');
+  var amount = document.getElementById('up_amount');
+  if (!button) return;
+  var rawAmount = amount ? String(amount.value || '').trim() : '';
+  var numericAmount = typeof toNumber === 'function' ? toNumber(rawAmount) : Number(rawAmount);
+  button.disabled = !(
+    name && String(name.value || '').trim() &&
+    dueDate && dueDate.value &&
+    rawAmount && isFinite(numericAmount) && numericAmount > 0
+  );
 }
 
 // Per-card "Edit" button handler. Pulls the row out of the in-memory

@@ -69,9 +69,8 @@ function loadRetirementSection() {
         // in-tab age editor. The scenario input form remains in the
         // DOM but its save path will reject until DOB is set.
         showRetirementEmptyState_({
-          title: 'Add your Date of Birth in Profile to see your retirement plan.',
-          body: (data && data.message) ||
-            'Retirement current ages come from your Profile. Add your Date of Birth there to continue.',
+          title: 'Profile needs your date of birth.',
+          body: 'CashCompass uses it to calculate your current age for retirement planning.',
           cta: { label: 'Open Profile', page: 'onboarding' }
         });
 
@@ -92,10 +91,8 @@ function loadRetirementSection() {
         // The scenario input form itself is always in the DOM and is
         // not hidden here — the user fills it in place.
         showRetirementEmptyState_({
-          title: 'Add your retirement assumptions to see your plan.',
-          body: (data && data.message) ||
-            'Add your retirement spending, Social Security, and contributions to see your plan.',
-          hint: 'Fill in Household Retirement Spending / Year (and any other assumptions you know) below, then click "Save Selected Scenario".'
+          title: 'Retirement assumptions are not set yet.',
+          body: 'Enter household retirement spending and any other assumptions you know below, then save the selected scenario.'
         });
 
         // Prefill the readonly age fields and the selected scenario
@@ -166,7 +163,7 @@ function updateRetirementDobHints_(data) {
   var primary = (data && typeof data.derivedCurrentAge === 'number') ? data.derivedCurrentAge : null;
   var spouse = (data && typeof data.derivedSpouseCurrentAge === 'number') ? data.derivedSpouseCurrentAge : null;
 
-  setRetirementDobHint_('ret_yourCurrentAge_dobHint', primary, 'From profile DOB');
+  setRetirementDobHint_('ret_yourCurrentAge_dobHint', primary, 'From Profile date of birth');
   setRetirementDobHint_('ret_spouseCurrentAge_dobHint', spouse, 'From spouse DOB');
 }
 

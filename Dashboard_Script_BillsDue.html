@@ -1506,6 +1506,32 @@ function resetBillsAddForm_() {
   if (anchor) anchor.value = '';
   const anchorField = document.getElementById('bills_add_anchor_date_field');
   if (anchorField) anchorField.style.display = 'none';
+  syncBillsFormReadiness_();
+}
+
+function syncBillsFormReadiness_() {
+  const payee = document.getElementById('bills_add_payee');
+  const dueDay = document.getElementById('bills_add_due_day');
+  const frequency = document.getElementById('bills_add_frequency');
+  const source = document.getElementById('bills_add_payment_source');
+  const category = document.getElementById('bills_add_category');
+  const other = document.getElementById('bills_add_category_other');
+  const save = document.getElementById('bills_form_save_btn');
+  if (!save) return;
+
+  const due = Number(dueDay && dueDay.value);
+  const categoryValue = String(category && category.value || '').trim();
+  const resolvedCategory = categoryValue === '__other__'
+    ? String(other && other.value || '').trim()
+    : categoryValue;
+  save.disabled = !(
+    payee && String(payee.value || '').trim() &&
+    dueDay && String(dueDay.value || '').trim() &&
+    isFinite(due) && Math.floor(due) === due && due >= 1 && due <= 31 &&
+    frequency && String(frequency.value || '').trim() &&
+    source && String(source.value || '').trim() &&
+    resolvedCategory
+  );
 }
 
 /**
@@ -1525,6 +1551,7 @@ function onBillsAddCategoryChange() {
     other.style.display = 'none';
     other.value = '';
   }
+  syncBillsFormReadiness_();
 }
 
 /**
@@ -1615,6 +1642,7 @@ function onBillsFrequencyChange() {
       anchor.value = billsFormatDateInputValue_(billsFirstWeekdayOnOrAfter_(idx, new Date()));
     }
   }
+  syncBillsFormReadiness_();
 }
 
 /**
@@ -1750,6 +1778,7 @@ function populateBillCategoryOptions_(categories) {
     });
     select.value = found ? previousValue : '';
   }
+  syncBillsFormReadiness_();
 }
 
 function submitNewBill() {
@@ -2057,6 +2086,7 @@ function openBillEditForm(billKey) {
   // Category dropdown population is async on first open. The helper
   // installs the value when the option list arrives.
   prefillBillCategoryForEdit_(bill.category || '');
+  syncBillsFormReadiness_();
 
   // Focus the first editable field and scroll into view.
   const payeeInput = document.getElementById('bills_add_payee');
@@ -2113,6 +2143,7 @@ function prefillBillCategoryForEdit_(category) {
       select.value = '';
       if (other) { other.style.display = 'none'; other.value = ''; }
     }
+    syncBillsFormReadiness_();
   }
 
   if (window.__billsCategoryOptionsLoaded) {

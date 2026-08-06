@@ -670,20 +670,20 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div class="grid-2">
         <div>
           <label>Type</label>
-          <select id="pay_type" onchange="filterPaymentPayees(); updateQuickAddFlowSourceVisibility_(); loadPaymentPreview();">
+          <select id="pay_type" onchange="filterPaymentPayees(); updateQuickAddFlowSourceVisibility_(); loadPaymentPreview(); syncQuickAddReadiness_();">
             <option value="Expense">Expense</option>
             <option value="Income">Income</option>
           </select>
           <label>Date</label>
-          <input type="date" id="pay_date" onchange="loadPaymentPreview()">
+          <input type="date" id="pay_date" onchange="loadPaymentPreview(); syncQuickAddReadiness_()">
           <label>Existing Payee</label>
-          <select id="pay_payeeSelect" onchange="syncPaymentPayeeInput(); updateQuickAddFlowSourceVisibility_(); loadPaymentPreview();"></select>
+          <select id="pay_payeeSelect" onchange="syncPaymentPayeeInput(); updateQuickAddFlowSourceVisibility_(); loadPaymentPreview(); syncQuickAddReadiness_();"></select>
           <label>Or Type / Edit Payee</label>
-          <input type="text" id="pay_payeeInput" oninput="updateQuickAddFlowSourceVisibility_(); loadPaymentPreview()" placeholder="Enter payee name">
+          <input type="text" id="pay_payeeInput" oninput="updateQuickAddFlowSourceVisibility_(); loadPaymentPreview(); syncQuickAddReadiness_()" placeholder="Enter payee name">
 
           <div id="pay_flowSourceWrap" hidden>
             <label for="pay_flowSource">Payment source</label>
-            <select id="pay_flowSource" onchange="setStatus('pay_status', '', false)">
+            <select id="pay_flowSource" onchange="setStatus('pay_status', '', false); syncQuickAddReadiness_()">
               <option value="">Choose payment source</option>
               <option value="CASH">Cash</option>
               <option value="CREDIT_CARD">Credit card</option>
@@ -691,12 +691,12 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <div class="muted" style="margin-top:6px;">Required for a new Expense or an existing Expense with no source.</div>
           </div>
           <label>Amount</label>
-          <input type="text" id="pay_amount" inputmode="decimal" onfocus="currencyFocus('pay_amount')" onblur="currencyBlur('pay_amount')">
+          <input type="text" id="pay_amount" inputmode="decimal" onfocus="currencyFocus('pay_amount')" oninput="syncQuickAddReadiness_()" onblur="currencyBlur('pay_amount'); syncQuickAddReadiness_()">
           <div class="check-row">
             <input type="checkbox" id="pay_createIfMissing" checked onchange="updateQuickAddFlowSourceVisibility_()">
             <label for="pay_createIfMissing" style="margin:0;font-weight:normal;">Create row if payee is missing</label>
           </div>
-          <button onclick="savePayment()">Add to Cash Flow</button>
+          <button id="pay_save_btn" onclick="savePayment()" disabled>Add to Cash Flow</button>
           <div id="pay_status" class="status"></div>
         </div>
         <div class="info">
@@ -757,7 +757,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <div id="up_form_mode" class="muted" style="display:none;margin-bottom:8px;"></div>
 
           <label>Expense name</label>
-          <input type="text" id="up_name" maxlength="160" autocomplete="off" oninput="if (typeof clearUpcomingAddNameError_==='function') clearUpcomingAddNameError_();">
+          <input type="text" id="up_name" maxlength="160" autocomplete="off" oninput="if (typeof clearUpcomingAddNameError_==='function') clearUpcomingAddNameError_(); syncUpcomingFormReadiness_();">
           <div id="up_name_error" class="field-error" role="alert" aria-live="polite"></div>
 
           <label>Category</label>
@@ -767,10 +767,10 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <input type="text" id="up_payee">
 
           <label>Due date</label>
-          <input type="date" id="up_dueDate">
+          <input type="date" id="up_dueDate" onchange="syncUpcomingFormReadiness_()">
 
           <label>Amount</label>
-          <input type="text" id="up_amount" inputmode="decimal" onfocus="currencyFocus('up_amount')" onblur="currencyBlur('up_amount')">
+          <input type="text" id="up_amount" inputmode="decimal" onfocus="currencyFocus('up_amount')" oninput="syncUpcomingFormReadiness_()" onblur="currencyBlur('up_amount'); syncUpcomingFormReadiness_()">
 
           <label>Account / source</label>
           <select id="up_accountSource" onchange="syncUpcomingAccountSourceCustom_()">
@@ -798,7 +798,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <!-- Save button is the same control in Add and Edit modes; the
                client flips its label between "Add Upcoming Expense" and
                "Save changes". Cancel-edit is hidden in Add mode. -->
-          <button id="up_save_btn" onclick="saveUpcomingExpense()">Add upcoming expense</button>
+          <button id="up_save_btn" onclick="saveUpcomingExpense()" disabled>Add upcoming expense</button>
           <button id="up_cancel_btn" type="button" class="small-btn" onclick="cancelUpcomingEdit()" hidden>Cancel edit</button>
           <div id="upcoming_status" class="status"></div>
         </div>
@@ -843,36 +843,36 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <div class="donations-add-wrap">
             <div class="cashflow-column-title">Record donation</div>
             <label for="don_charitySelect">Name of charity</label>
-            <select id="don_charitySelect" onchange="onDonationCharityChange()"></select>
+            <select id="don_charitySelect" onchange="onDonationCharityChange(); syncDonationFormReadiness_()"></select>
             <div id="don_charityOther_wrap" class="donations-other-wrap" style="display:none;">
               <label for="don_charityOther">Other — charity name</label>
-              <input type="text" id="don_charityOther" placeholder="Type the charity name" autocomplete="off">
+              <input type="text" id="don_charityOther" placeholder="Type the charity name" autocomplete="off" oninput="syncDonationFormReadiness_()">
             </div>
 
             <label for="don_date">Date</label>
-            <input type="date" id="don_date">
+            <input type="date" id="don_date" onchange="syncDonationFormReadiness_()">
 
             <label for="don_amount">Amount</label>
-            <input type="text" id="don_amount" inputmode="decimal" onfocus="currencyFocus('don_amount')" onblur="currencyBlur('don_amount')" placeholder="e.g. 50 or -100 for adjustments">
+            <input type="text" id="don_amount" inputmode="decimal" onfocus="currencyFocus('don_amount')" oninput="syncDonationFormReadiness_()" onblur="currencyBlur('don_amount'); syncDonationFormReadiness_()" placeholder="e.g. 50 or -100 for adjustments">
 
             <label for="don_taxYear">Tax year</label>
-            <select id="don_taxYear"></select>
+            <select id="don_taxYear" onchange="syncDonationFormReadiness_()"></select>
 
             <label for="don_comments">Comments</label>
             <input type="text" id="don_comments" placeholder="Optional note">
 
             <label for="don_paymentSelect">Payment type <span class="muted">(required)</span></label>
-            <select id="don_paymentSelect" onchange="onDonationPaymentChange()"></select>
+            <select id="don_paymentSelect" onchange="onDonationPaymentChange(); syncDonationFormReadiness_()"></select>
             <div id="don_checkNumber_wrap" class="donations-other-wrap" style="display:none;">
               <label for="don_checkNumber">Check #</label>
-              <input type="text" id="don_checkNumber" inputmode="numeric" placeholder="e.g. 4783" autocomplete="off">
+              <input type="text" id="don_checkNumber" inputmode="numeric" placeholder="e.g. 4783" autocomplete="off" oninput="syncDonationFormReadiness_()">
             </div>
             <div id="don_paymentOther_wrap" class="donations-other-wrap" style="display:none;">
               <label for="don_paymentOther">Other — payment type</label>
-              <input type="text" id="don_paymentOther" placeholder="e.g. Cash, Zelle, check #" autocomplete="off">
+              <input type="text" id="don_paymentOther" placeholder="e.g. Cash, Zelle, check #" autocomplete="off" oninput="syncDonationFormReadiness_()">
             </div>
 
-            <button type="button" onclick="saveDonation()">Add donation</button>
+            <button type="button" id="don_save_btn" onclick="saveDonation()" disabled>Add donation</button>
           </div>
           <div class="info donations-previous-panel">
             <div class="cashflow-column-title">Previous donations</div>
@@ -964,7 +964,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <div class="grid-2">
             <div>
               <label>Payee <span aria-label="required" style="color:#b91c1c;">*</span></label>
-              <input type="text" id="bills_add_payee" maxlength="200" autocomplete="off">
+              <input type="text" id="bills_add_payee" maxlength="200" autocomplete="off" oninput="syncBillsFormReadiness_()">
               <label>Frequency <span aria-label="required" style="color:#b91c1c;">*</span></label>
               <select id="bills_add_frequency" onchange="onBillsFrequencyChange()">
                 <option value="Monthly" selected>Monthly</option>
@@ -976,7 +976,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                 <option value="Yearly">Yearly</option>
               </select>
               <label>Due day of month (1–31) <span aria-label="required" style="color:#b91c1c;">*</span></label>
-              <input type="number" id="bills_add_due_day" min="1" max="31" step="1" inputmode="numeric">
+              <input type="number" id="bills_add_due_day" min="1" max="31" step="1" inputmode="numeric" oninput="syncBillsFormReadiness_()">
               <!-- Phase 4 / 6B: Weekday applies to Weekly and Biweekly bills.
                    Hidden for every other frequency (toggled by
                    onBillsFrequencyChange). Blank keeps the bill on legacy Due Day
@@ -1007,9 +1007,9 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                 <p class="muted" style="margin:4px 0 0 0;font-size:12px;">Sets which every-other-week cycle to use. Choose a date that falls on the selected weekday.</p>
               </div>
               <label>Payment source <span aria-label="required" style="color:#b91c1c;">*</span></label>
-              <select id="bills_add_payment_source">
-                <option value="CASH" selected>CASH (pay from bank)</option>
-                <option value="CREDIT_CARD">CREDIT_CARD (pay on a card)</option>
+              <select id="bills_add_payment_source" onchange="syncBillsFormReadiness_()">
+                <option value="CASH" selected>Bank account</option>
+                <option value="CREDIT_CARD">Credit card</option>
               </select>
               <label>Start month (1–12)</label>
               <input type="number" id="bills_add_start_month" min="1" max="12" step="1" inputmode="numeric" placeholder="Defaults to current month">
@@ -1027,7 +1027,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                 <option value="" selected>— Select a category —</option>
                 <option value="__other__">Other…</option>
               </select>
-              <input type="text" id="bills_add_category_other" maxlength="200" autocomplete="off" placeholder="Enter a new category" style="display:none;margin-top:6px;">
+              <input type="text" id="bills_add_category_other" maxlength="200" autocomplete="off" placeholder="Enter a new category" style="display:none;margin-top:6px;" oninput="syncBillsFormReadiness_()">
               <label>Notes (optional)</label>
               <input type="text" id="bills_add_notes" maxlength="500" autocomplete="off">
               <label>Autopay</label>
@@ -1041,7 +1041,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
                 <option value="Yes">Yes</option>
               </select>
               <div style="display:flex;gap:8px;margin-top:12px;">
-                <button type="button" id="bills_form_save_btn" class="small-btn primary" onclick="submitBillsForm()">Save bill</button>
+                <button type="button" id="bills_form_save_btn" class="small-btn primary" onclick="submitBillsForm()" disabled>Save bill</button>
                 <button type="button" id="bills_form_cancel_btn" class="small-btn" onclick="cancelBillsForm()">Cancel</button>
               </div>
             </div>
@@ -1285,7 +1285,10 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
   <div id="page_activity" class="workspace-page">
     <div class="workspace-page-intro">
-      <h2>Activity log</h2>
+      <div class="workspace-page-intro-row">
+        <h2>Activity log</h2>
+        <button type="button" class="btn-context-help" onclick="openHelpToSection('help-activity')">Activity help</button>
+      </div>
       <p>Find recorded changes and transactions without changing workbook history.</p>
     </div>
 
@@ -1331,11 +1334,15 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             >
           </div>
         </div>
-        <button type="button" class="btn-activity-apply" onclick="loadActivitySection()">Apply</button>
+        <div class="activity-filter-actions">
+          <button type="button" class="btn-activity-apply" onclick="loadActivitySection()">Apply filters</button>
+          <button type="button" id="act_clearFilters" class="btn-activity-clear" onclick="clearActivityFilters()">Clear filters</button>
+        </div>
       </div>
     </div>
 
     <div id="act_status" class="status"></div>
+    <div id="act_activeFilters" class="activity-active-filters" aria-live="polite"></div>
     <div id="act_summary" class="subtle activity-summary"></div>
     <div id="act_pager" class="activity-pager" hidden>
       <button type="button" class="btn-activity-page" id="act_prevPage" onclick="activityPrevPage()" disabled>Previous</button>
@@ -1481,7 +1488,10 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
   <div id="page_properties" class="workspace-page">
     <div class="workspace-page-intro">
-      <h2>Properties</h2>
+      <div class="workspace-page-intro-row">
+        <h2>Properties</h2>
+        <button type="button" class="btn-context-help" onclick="openHelpToSection('help-properties')">Properties help</button>
+      </div>
       <p>Record property expenses and review operating and financing performance.</p>
     </div>
     <div class="tabs properties-tabs">
@@ -1498,13 +1508,13 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div class="grid-2">
         <div>
           <label>House</label>
-          <select id="hx_house"></select>
+          <select id="hx_house" onchange="syncHouseExpenseLocation()"></select>
 
           <label>Date</label>
-          <input type="date" id="hx_date">
+          <input type="date" id="hx_date" onchange="syncHouseExpenseLocation()">
 
           <label>Item</label>
-          <input type="text" id="hx_item" placeholder="Example: HOA Fees April">
+          <input type="text" id="hx_item" placeholder="Example: HOA fees for April" oninput="updateHouseExpenseAvailability_()">
 
           <label>Type</label>
           <select id="hx_type">
@@ -1513,7 +1523,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <option value="HOA">HOA</option>
             <option value="Insurance">Insurance</option>
             <option value="Utilities">Utilities</option>
-            <option value="Mgmt">Mgmt</option>
+            <option value="Mgmt">Property management</option>
             <option value="Cleaning">Cleaning</option>
             <option value="Warranty">Warranty</option>
             <option value="Tax">Property Tax</option>
@@ -1546,7 +1556,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
           <div class="check-row">
             <input type="checkbox" id="hx_autoAddToCashFlow">
-            <label for="hx_autoAddToCashFlow" style="margin:0;font-weight:normal;">Also add to Cash Flow</label>
+            <label for="hx_autoAddToCashFlow" style="margin:0;font-weight:normal;">Also record this amount in Cash Flow</label>
           </div>
 
           <button id="hx_add_btn" onclick="saveHouseExpense()" disabled>Add house expense</button>
@@ -1560,7 +1570,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <div><strong>Selected property:</strong> <span id="hx_locationPreview" class="muted">—</span></div>
             <div><strong>Year:</strong> <span id="hx_yearPreview" class="muted">—</span></div>
             <div style="margin-top:10px;">Expenses are saved to this property's history.</div>
-            <div style="margin-top:10px;">If enabled, this expense will also appear in Cash Flow.</div>
+            <div style="margin-top:10px;">When selected, the cost is also recorded as an expense in Cash Flow for the same month.</div>
           </div>
 
           <div class="card" style="margin-top:14px;">
@@ -1574,14 +1584,14 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             </div>
 
             <div style="margin-bottom:12px;">
-              <div class="change-label">YTD by House</div>
+              <div class="change-label">Year to date by property</div>
               <div id="hx_summaryYtdByHouse" class="changes-list">
                 <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading year-to-date by property…</span></div>
               </div>
             </div>
 
             <div style="margin-bottom:12px;">
-              <div class="change-label">YTD by Type</div>
+              <div class="change-label">Year to date by type</div>
               <div id="hx_summaryYtdByType" class="changes-list">
                 <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading year-to-date by type…</span></div>
               </div>
@@ -1599,7 +1609,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
     <div id="propertyPerformance" class="panel">
       <div class="panel-head">
         <h2>Property performance</h2>
-        <div class="updated">Houses + rental income + operating expenses + linked loan payments</div>
+        <div class="updated">Property values, rental income, operating expenses, and linked loan payments</div>
       </div>
 
       <div class="property-performance-overview">
@@ -2269,11 +2279,21 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
     -->
     <div id="onboarding_view_grid" class="onboarding-view onboarding-view-grid" style="display:none;">
       <div class="onboarding-header">
-        <h2 class="onboarding-title">Setup / Review</h2>
+        <div class="workspace-page-intro-row">
+          <h2 class="onboarding-title">Setup / Review</h2>
+          <button type="button" class="btn-context-help" onclick="openHelpToSection('help-setup')">Setup help</button>
+        </div>
         <p class="muted onboarding-subtitle">Review your accounts, debts, bills, upcoming items, and income.</p>
       </div>
 
       <div id="onboarding_status" class="status"></div>
+      <div id="onboarding_progress_panel" class="onboarding-progress-panel" aria-live="polite">
+        <div>
+          <div id="onboarding_progress_count" class="onboarding-progress-count">Checking required setup…</div>
+          <div id="onboarding_recommended_next" class="onboarding-recommended-next"></div>
+        </div>
+        <button type="button" id="onboarding_recommended_action" class="small-btn primary" hidden>Open next step</button>
+      </div>
 
       <div class="onboarding-steps-grid">
       <div class="onboarding-step-card onboarding-step-card-clickable" data-step="bank" id="onboarding_step_bank"

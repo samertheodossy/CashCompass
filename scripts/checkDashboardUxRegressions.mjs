@@ -10,6 +10,7 @@ const files = Object.fromEntries(await Promise.all([
   'Dashboard_Script_AssetsHouseValues.html',
   'Dashboard_Script_BillsDue.html',
   'Dashboard_Script_CashFlowUpcoming.html',
+  'Dashboard_Script_Donations.html',
   'Dashboard_Script_Income.html',
   'Dashboard_Script_Onboarding.html',
   'Dashboard_Script_Payments.html',
@@ -3343,5 +3344,59 @@ assert.match(files['Dashboard_Script_CashFlowUpcoming.html'],
 assert.match(files['Dashboard_Script_PropertiesHouseExpenses.html'],
   /loadingIndicatorHtml\('Loading property expenses…', index === 0\)/,
   'Overview Property totals must emit only one accessible announcement per paired load');
+
+// Remaining UX closeout (3e-3i, 3m). These assertions lock the exact
+// customer-facing gaps found by the advocate review without absorbing the
+// broader keyboard, focus, contrast, and target-size audit reserved for 3j.
+assert.match(body, /openHelpToSection\('help-activity'\)[\s\S]*?openHelpToSection\('help-properties'\)[\s\S]*?openHelpToSection\('help-setup'\)/,
+  'Activity, Properties, and Setup must expose concise contextual Help links');
+assert.match(files['Dashboard_Help.html'], /Getting started[\s\S]*?Advanced planning/,
+  'Help must present common getting-started work before advanced planning');
+assert.match(body, /id="act_activeFilters"/,
+  'Activity must expose its applied filters');
+assert.match(body, /id="act_clearFilters"[\s\S]*?>Clear filters<\/button>/,
+  'Activity must expose a reversible Clear filters action');
+assert.match(files['Dashboard_Script_Activity.html'], /function clearActivityFilters\(\)[\s\S]*?preserveBlankDates:\s*true/,
+  'Clearing Activity filters must preserve an intentional all-time date range');
+assert.match(files['Dashboard_Script_Activity.html'], /data-label="Logged at"[\s\S]*?data-label="Action"/,
+  'Activity rows must retain labels for the narrow card layout');
+assert.match(styles, /@media \(max-width:\s*760px\)[\s\S]*?\.activity-table thead\s*\{\s*display:\s*none;\s*\}[\s\S]*?content:\s*attr\(data-label\)/,
+  'Activity must become a labeled card list at narrow widths');
+assert.match(styles, /@media \(max-width:\s*760px\)[\s\S]*?\.activity-date-row\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto minmax\(0, 1fr\);[\s\S]*?input\.activity-date-input,[\s\S]*?min-width:\s*0;/,
+  'Activity date filters must release desktop minimum widths at narrow sizes');
+assert.match(body, /id="onboarding_progress_count"[\s\S]*?id="onboarding_recommended_next"[\s\S]*?id="onboarding_recommended_action"/,
+  'Setup must show required progress and one recommended next action');
+assert.match(onboardingClient, /function onboardingApplyProgressRecommendation_\([\s\S]*?step\.status !== 'complete'[\s\S]*?onboardingShowView\(next\.key\)/,
+  'Setup recommendation must choose the first incomplete required area without writing data');
+assert.match(styles, /@media \(min-width:\s*761px\) and \(max-width:\s*1180px\)[\s\S]*?\.topbar\s*\{[\s\S]*?flex-direction:\s*row;[\s\S]*?\.onboarding-steps-grid\s*\{[\s\S]*?repeat\(2,/,
+  'Medium widths must retain a compact horizontal header and two-column Setup grid');
+assert.match(body, /value="CASH" selected>Bank account<\/option>[\s\S]*?value="CREDIT_CARD">Credit card<\/option>/,
+  'Bill payment sources must show customer labels while preserving stored tokens');
+assert.doesNotMatch(body, />CASH \(pay from bank\)<|>CREDIT_CARD \(pay on a card\)</,
+  'Bill form must not expose stored payment-source tokens');
+for (const id of ['pay_save_btn', 'up_save_btn', 'don_save_btn', 'bills_form_save_btn', 'hx_add_btn']) {
+  assert.match(body, new RegExp(`id=["']${id}["'][^>]*\\sdisabled`),
+    `${id} must start disabled until minimum valid input exists`);
+}
+for (const [sourceName, functionName] of [
+  ['Dashboard_Script_Payments.html', 'syncQuickAddReadiness_'],
+  ['Dashboard_Script_CashFlowUpcoming.html', 'syncUpcomingFormReadiness_'],
+  ['Dashboard_Script_Donations.html', 'syncDonationFormReadiness_'],
+  ['Dashboard_Script_BillsDue.html', 'syncBillsFormReadiness_'],
+  ['Dashboard_Script_PropertiesHouseExpenses.html', 'updateHouseExpenseAvailability_']
+]) {
+  assert.match(files[sourceName], new RegExp(`function ${functionName}\\(`),
+    `${functionName} must remain the client-side primary-action readiness guard`);
+}
+assert.match(files['Dashboard_Script_Donations.html'], /Tax year /,
+  'Donation history must spell out Tax year');
+assert.doesNotMatch(body, />Mgmt<|>YTD by/,
+  'Normal Properties copy must not expose residual abbreviations');
+assert.match(files['Dashboard_Script_PlanningRetirement.html'], /Profile needs your date of birth\.[\s\S]*?CashCompass uses it to calculate your current age/,
+  'Retirement missing-profile guidance must state the prerequisite once');
+assert.match(files['Dashboard_Script_PlanningRetirement.html'], /Retirement assumptions are not set yet\.[\s\S]*?Enter household retirement spending/,
+  'Retirement assumption guidance must use one concise next step');
+assert.doesNotMatch(files['Dashboard_Script_PlanningRetirement.html'], /From profile DOB/,
+  'Retirement customer copy must spell out date of birth');
 
 console.log('Dashboard UX regression checks passed.');

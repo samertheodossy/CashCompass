@@ -7,12 +7,65 @@ function initActivityFilterDefaults_() {
   var fromEl = document.getElementById('act_dateFrom');
   var toEl = document.getElementById('act_dateTo');
   if (!fromEl || !toEl) return;
+  if (window.__activityDatesExplicitlyCleared) return;
   if (fromEl.value || toEl.value) return;
 
   var to = new Date();
   var from = new Date(to.getFullYear(), to.getMonth(), to.getDate() - 90);
   toEl.value = to.toISOString().slice(0, 10);
   fromEl.value = from.toISOString().slice(0, 10);
+}
+
+function activityFilterSnapshot_() {
+  var value = function(id) {
+    var el = document.getElementById(id);
+    return el ? String(el.value || '').trim() : '';
+  };
+  return {
+    dateFrom: value('act_dateFrom'),
+    dateTo: value('act_dateTo'),
+    payee: value('act_payeeSearch'),
+    kind: value('act_kindFilter'),
+    amountMin: value('act_amountMin'),
+    amountMax: value('act_amountMax')
+  };
+}
+
+function renderActivityActiveFilters_(filters) {
+  var root = document.getElementById('act_activeFilters');
+  var clear = document.getElementById('act_clearFilters');
+  if (!root) return;
+  filters = filters || activityFilterSnapshot_();
+  var labels = [];
+  if (filters.dateFrom || filters.dateTo) {
+    labels.push('Logged ' + (filters.dateFrom || 'any time') + ' to ' + (filters.dateTo || 'today'));
+  }
+  if (filters.payee) labels.push('Payee contains “' + filters.payee + '”');
+  if (filters.kind) labels.push('Type: ' + filters.kind);
+  if (filters.amountMin || filters.amountMax) {
+    labels.push('Amount: ' + (filters.amountMin || 'any') + ' to ' + (filters.amountMax || 'any'));
+  }
+  if (!labels.length) {
+    root.innerHTML = '<span class="muted">No filters applied.</span>';
+    if (clear) clear.disabled = true;
+    return;
+  }
+  root.innerHTML = '<strong>Active filters:</strong> ' + labels.map(function(label) {
+    return '<span class="activity-filter-chip">' + escapeHtml(label) + '</span>';
+  }).join('');
+  if (clear) clear.disabled = false;
+}
+
+function clearActivityFilters() {
+  ['act_dateFrom', 'act_dateTo', 'act_payeeSearch', 'act_amountMin', 'act_amountMax'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  var kind = document.getElementById('act_kindFilter');
+  if (kind) kind.value = '';
+  window.__activityDatesExplicitlyCleared = true;
+  renderActivityActiveFilters_();
+  loadActivitySection({ preserveBlankDates: true });
 }
 
 function fillActivityKindSelect_(kinds) {
@@ -221,22 +274,22 @@ function renderActivityTable_(rows, options) {
 
     html +=
       '<tr>' +
-      '<td class="activity-cell-muted">' +
+      '<td class="activity-cell-muted" data-label="Logged at">' +
       escapeHtml(formatActivityLoggedAtDisplay_(row.loggedAt)) +
       '</td>' +
-      '<td>' +
+      '<td data-label="Payee">' +
       escapeHtml(String(row.payee || '')) +
       '</td>' +
-      '<td>' +
+      '<td data-label="Type">' +
       typeCellHtml +
       '</td>' +
-      '<td class="activity-num">' +
+      '<td class="activity-num" data-label="Amount">' +
       escapeHtml(amtStr) +
       '</td>' +
-      '<td>' +
+      '<td data-label="Date">' +
       escapeHtml(formatActivityDueDateDisplay_(row.entryDate)) +
       '</td>' +
-      '<td class="activity-td-actions">' +
+      '<td class="activity-td-actions" data-label="Action">' +
       (function() {
         var sr = row.sheetRow;
         if (sr < 2) return '—';
@@ -960,7 +1013,7 @@ function loadActivitySection(opts) {
   var summaryEl = document.getElementById('act_summary');
   if (!wrap) return;
 
-  initActivityFilterDefaults_();
+  if (!opts.preserveBlankDates) initActivityFilterDefaults_();
 
   var dateFrom = document.getElementById('act_dateFrom') ? document.getElementById('act_dateFrom').value : '';
   var dateTo = document.getElementById('act_dateTo') ? document.getElementById('act_dateTo').value : '';
@@ -970,6 +1023,14 @@ function loadActivitySection(opts) {
   var amountMaxEl = document.getElementById('act_amountMax');
   var amountMin = amountMinEl ? String(amountMinEl.value || '').trim() : '';
   var amountMax = amountMaxEl ? String(amountMaxEl.value || '').trim() : '';
+  renderActivityActiveFilters_({
+    dateFrom: dateFrom,
+    dateTo: dateTo,
+    payee: payeeSearch,
+    kind: kindType,
+    amountMin: amountMin,
+    amountMax: amountMax
+  });
 
   // In quiet mode we skip the "Loading activity…" placeholder + status
   // resets so an optimistic row prepended just before this call stays

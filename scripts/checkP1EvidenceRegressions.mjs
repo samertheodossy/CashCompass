@@ -229,6 +229,9 @@ assert.match(firstRunBrowser,
   /showTab\('retirement'\)[\s\S]*?loadRetirementSection\(\)[\s\S]*?ret_empty_state[\s\S]*?ret_scenario_cards[\s\S]*?ret_results_panel[\s\S]*?add\('retirement_guidance_not_ready'/,
   'First-Run Retirement evidence must prove guidance is visible while result walls stay hidden');
 assert.match(firstRunBrowser,
+  /Profile needs your date of birth[\s\S]*?CashCompass uses it to calculate your current age/,
+  'First-Run Retirement readiness must follow the current customer-facing prerequisite copy');
+assert.match(firstRunBrowser,
   /waitFor\(function\(\) \{[\s\S]*?bank_mode_add_btn[\s\S]*?classList\.contains\('active'\)[\s\S]*?fresh Bank Add mode/,
   'First-Run must wait for authoritative Bank Add routing instead of sampling a fixed delay');
 assert.match(firstRunBrowser,
