@@ -191,7 +191,7 @@ function getHarnessSuites_() {
       implemented: true,
       runner: 'browser',
       browserRoute: 'populated-dashboard-e2e',
-      evidenceKey: 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V10',
+      evidenceKey: 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V11',
       blocker: null,
       scenarioIds: []
     },

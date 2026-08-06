@@ -312,13 +312,13 @@
     <div id="vt-overview-trace-results" class="hidden" style="margin-top:16px;"></div>
   </div>
 
-  <!-- LATEST 4D/4F CROSS-FLOW EVIDENCE -->
+  <!-- LATEST 4D/4F/4G CROSS-FLOW EVIDENCE -->
   <div class="card">
-    <h2>Latest cross-flow performance evidence (4d / 4f)</h2>
+    <h2>Latest cross-flow performance evidence (4d / 4f / 4g)</h2>
     <div class="banner" style="margin-bottom:12px;">
       <span class="ico">📏</span>
-      <span>Retrieves privacy-safe ordinary Save, loaded navigation, and representative populated
-        Overview timings from the latest marked-disposable Populated Dashboard E2E run. This panel
+      <span>Retrieves privacy-safe ordinary Save, loaded navigation, representative populated
+        Overview, and Retirement selected-first timings from the latest marked-disposable Populated Dashboard E2E run. This panel
         is read-only and exposes no workbook ID, account name, or financial value.</span>
     </div>
     <div class="btn-row">
@@ -719,6 +719,7 @@
     var save = flows.ordinarySave || {};
     var navigation = flows.loadedNavigation || {};
     var mature = flows.matureOverview || {};
+    var retirement = flows.retirementScenarioLoad || {};
     var stageRows = (save.stageSummary || []).map(function(stage) {
       return '<tr><td><b>' + vtEsc(stage.name || '—') + '</b></td><td>' +
         vtEsc(stage.sampleCount || 0) + '</td><td class="st-mono">' +
@@ -749,13 +750,17 @@
           vtEsc(vtProfileMs_(mature.acknowledgementMs)) + '</td><td class="st-mono">' +
           vtEsc(vtProfileMs_(mature.completionMs)) + '</td><td>—</td><td>' +
           vtPerformanceBudgetPill_(mature.withinCandidateBudget === true) + '</td></tr>' +
+        '<tr><td><b>Retirement: selected / all comparisons</b></td><td>—</td><td class="st-mono">' +
+          vtEsc(vtProfileMs_(retirement.selectedMeaningfulMs)) + '</td><td class="st-mono">' +
+          vtEsc(vtProfileMs_(retirement.allComparisonsMs)) + '</td><td>' +
+          vtPerformanceBudgetPill_(retirement.withinCandidateBudget === true) + '</td></tr>' +
       '</tbody></table></div>' +
       '<h3 style="font-size:14px;margin:14px 0 8px;">Ordinary Save server stages</h3>' +
       '<div style="overflow:auto"><table class="suite-table"><thead><tr>' +
         '<th>Stage</th><th>Samples</th><th>p50</th><th>p95</th><th>Max</th>' +
       '</tr></thead><tbody>' + stageRows + '</tbody></table></div>' +
       '<div style="font-size:12px;color:var(--ink-soft);margin:0 0 10px;">' +
-        'The five-Save stage profile is diagnostic 4f evidence. Final budget ratification requires the approved exact-candidate sample set.' +
+        'The five-Save stage profile is diagnostic 4f evidence. Retirement reports selected meaningful content and all-comparison completion for 4g. Final budget ratification requires the approved exact-candidate sample set.' +
       '</div>' +
       '<details class="json"><summary>View raw JSON' +
         '<button class="copybtn" onclick="vtCopyPerformanceFlows(event)">Copy</button>' +

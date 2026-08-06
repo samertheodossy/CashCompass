@@ -1700,6 +1700,7 @@ function onboardingSaveProfile_() {
       // session notes for the follow-up decision.
       try {
         if (typeof loadRetirementSection === 'function') {
+          if (typeof retirementOverviewUiData !== 'undefined') retirementOverviewUiData = null;
           loadRetirementSection();
         }
       } catch (_e) {

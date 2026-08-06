@@ -7,7 +7,7 @@
  * from a caller and the permanent test identity remains a non-admin.
  */
 var POPULATED_DASHBOARD_E2E_MODE_ = 'POPULATED_DASHBOARD';
-var POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_ = 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V10';
+var POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_ = 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V11';
 var POPULATED_DASHBOARD_E2E_SCENARIO_ID_ = 'E2E-POPULATED-DASHBOARD';
 var POPULATED_DASHBOARD_E2E_REQUIRED_ASSERTIONS_ = [
   'startup_populated_overview',
@@ -31,6 +31,7 @@ var POPULATED_DASHBOARD_E2E_REQUIRED_ASSERTIONS_ = [
   'donation_correction_flow',
   'bill_skip_stop_safety',
   'performance_ordinary_save',
+  'performance_retirement_scenario_load',
   'performance_loaded_navigation',
   'performance_mature_overview',
   'clean_console_navigation'
@@ -125,6 +126,8 @@ function pdE2ENormalizePerformanceFlows_(raw) {
     ? source.loadedNavigation : {};
   var mature = source.matureOverview && typeof source.matureOverview === 'object'
     ? source.matureOverview : {};
+  var retirement = source.retirementScenarioLoad && typeof source.retirementScenarioLoad === 'object'
+    ? source.retirementScenarioLoad : {};
   var allowedLabels = {};
   POPULATED_DASHBOARD_E2E_PERFORMANCE_LABELS_.forEach(function(label) {
     allowedLabels[label] = true;
@@ -181,8 +184,14 @@ function pdE2ENormalizePerformanceFlows_(raw) {
   var navigationP95Ms = pdE2ENearestRank_(navigationValues, 0.95);
   var matureAckMs = pdE2ENonnegativeMs_(mature.acknowledgementMs);
   var matureCompletionMs = pdE2ENonnegativeMs_(mature.completionMs);
+  var retirementSelectedMs = pdE2ENonnegativeMs_(retirement.selectedMeaningfulMs);
+  var retirementComparisonsMs = pdE2ENonnegativeMs_(retirement.allComparisonsMs);
+  var retirementRequestMs = pdE2ENonnegativeMs_(retirement.comparisonRequestMs);
+  var retirementMeasured = retirement.measured === true &&
+    retirementSelectedMs !== null && retirementComparisonsMs !== null &&
+    retirementRequestMs !== null && retirementComparisonsMs >= retirementSelectedMs;
   return {
-    version: 2,
+    version: 3,
     ordinarySave: {
       flow: 'Bank account update',
       measured: saveMeasured,
@@ -220,6 +229,17 @@ function pdE2ENormalizePerformanceFlows_(raw) {
         matureCompletionMs <= 20000,
       outcome: /^(?:ok|error|missing_acknowledgement)$/.test(String(mature.outcome || ''))
         ? String(mature.outcome) : 'unknown'
+    },
+    retirementScenarioLoad: {
+      flow: 'Planning Retirement selected scenario then comparisons',
+      measured: retirementMeasured,
+      selectedMeaningfulMs: retirementSelectedMs,
+      allComparisonsMs: retirementComparisonsMs,
+      comparisonRequestMs: retirementRequestMs,
+      candidateBudget: { selectedMeaningfulMs: 6000, allComparisonsMs: 15000 },
+      withinCandidateBudget: retirementMeasured && retirementSelectedMs <= 6000 &&
+        retirementComparisonsMs <= 15000,
+      outcome: retirementMeasured ? 'ok' : 'error'
     }
   };
 }

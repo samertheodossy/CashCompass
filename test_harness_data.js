@@ -282,17 +282,27 @@ function harnessSeedUpcoming_(ctx, upcoming, today) {
 function harnessSeedRetirement_(ctx, retirement) {
   ctx.assertWritable();
   var sheet = getOrCreateRetirementSheet_(ctx.ss);
-  harnessSetRetirementScenarioValue_(sheet, 'Target Retirement Age', retirement.targetAge);
-  harnessSetRetirementScenarioValue_(sheet, 'Household Retirement Spending / Year', retirement.annualSpending);
-  harnessSetRetirementScenarioValue_(sheet, 'Your Social Security / Year', retirement.socialSecurity);
-  harnessSetRetirementScenarioValue_(sheet, 'Spouse Social Security / Year', retirement.spouseSocialSecurity);
-  harnessSetRetirementScenarioValue_(sheet, 'Other Retirement Income / Year', retirement.otherIncome);
-  harnessSetRetirementScenarioValue_(sheet, 'Annual Contributions', retirement.contributions);
-  harnessSetRetirementScenarioValue_(sheet, 'Expected Annual Return %', retirement.returnPct);
-  harnessSetRetirementScenarioValue_(sheet, 'Inflation %', retirement.inflationPct);
-  harnessSetRetirementScenarioValue_(sheet, 'Safe Withdrawal Rate %', retirement.withdrawalPct);
-  harnessSetRetirementScenarioValue_(sheet, 'One-Time Future Cash Needs', retirement.futureNeeds);
-  ctx.actions.push('Seed representative Base retirement assumptions');
+  harnessSetRetirementScenarioValues_(sheet, 'Target Retirement Age',
+    [retirement.targetAge + 2, retirement.targetAge, retirement.targetAge - 2]);
+  harnessSetRetirementScenarioValues_(sheet, 'Household Retirement Spending / Year',
+    [retirement.annualSpending * 0.9, retirement.annualSpending, retirement.annualSpending * 1.1]);
+  harnessSetRetirementScenarioValues_(sheet, 'Your Social Security / Year',
+    [retirement.socialSecurity, retirement.socialSecurity, retirement.socialSecurity]);
+  harnessSetRetirementScenarioValues_(sheet, 'Spouse Social Security / Year',
+    [retirement.spouseSocialSecurity, retirement.spouseSocialSecurity, retirement.spouseSocialSecurity]);
+  harnessSetRetirementScenarioValues_(sheet, 'Other Retirement Income / Year',
+    [retirement.otherIncome, retirement.otherIncome, retirement.otherIncome]);
+  harnessSetRetirementScenarioValues_(sheet, 'Annual Contributions',
+    [retirement.contributions * 0.9, retirement.contributions, retirement.contributions * 1.1]);
+  harnessSetRetirementScenarioValues_(sheet, 'Expected Annual Return %',
+    [retirement.returnPct - 1.5, retirement.returnPct, retirement.returnPct + 1.5]);
+  harnessSetRetirementScenarioValues_(sheet, 'Inflation %',
+    [retirement.inflationPct + 0.5, retirement.inflationPct, Math.max(0, retirement.inflationPct - 0.5)]);
+  harnessSetRetirementScenarioValues_(sheet, 'Safe Withdrawal Rate %',
+    [Math.max(0.5, retirement.withdrawalPct - 0.5), retirement.withdrawalPct, retirement.withdrawalPct + 0.5]);
+  harnessSetRetirementScenarioValues_(sheet, 'One-Time Future Cash Needs',
+    [retirement.futureNeeds, retirement.futureNeeds, retirement.futureNeeds]);
+  ctx.actions.push('Seed representative Conservative, Base, and Aggressive retirement assumptions');
   return {
     sheet: sheet.getName(),
     spendingRow: harnessFindLabelRow_(sheet, 'Household Retirement Spending / Year'),
@@ -344,6 +354,9 @@ function harnessFindLabelRow_(sheet, label) {
   throw new Error('Harness seed: missing retirement label "' + label + '".');
 }
 
-function harnessSetRetirementScenarioValue_(sheet, label, value) {
-  sheet.getRange(harnessFindLabelRow_(sheet, label), 3).setValue(value); // Base scenario column
+function harnessSetRetirementScenarioValues_(sheet, label, values) {
+  if (!Array.isArray(values) || values.length !== 3) {
+    throw new Error('Harness seed: Retirement scenario values must contain Conservative, Base, and Aggressive.');
+  }
+  sheet.getRange(harnessFindLabelRow_(sheet, label), 2, 1, 3).setValues([values]);
 }

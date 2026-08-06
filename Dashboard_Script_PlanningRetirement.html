@@ -1,8 +1,65 @@
 /* Planning — Retirement tab */
+var retirementLoadGeneration_ = 0;
+
+function retirementTimingNow_() {
+  return window.performance && typeof window.performance.now === 'function'
+    ? window.performance.now() : Date.now();
+}
+
+function emitRetirementLoadDiagnostic_(payload) {
+  if (typeof window.__cashCompassRetirementLoadDiagnosticListener !== 'function') return;
+  try {
+    window.__cashCompassRetirementLoadDiagnosticListener(payload || {});
+  } catch (_e) {}
+}
+
 function loadRetirementSection() {
   const initialLoadTiming = startDashboardInitialLoadStage_('retirement');
+  const generation = ++retirementLoadGeneration_;
+  const requestStarted = retirementTimingNow_();
+  const cached = (typeof retirementOverviewUiData !== 'undefined')
+    ? retirementOverviewUiData : null;
+
+  // Overview already fetched the selected Retirement analysis and all raw
+  // scenario inputs from the same workbook snapshot. Reuse that authoritative
+  // payload for the common first navigation so meaningful content paints
+  // immediately; only the two comparison calculations need a new RPC.
+  if (cached && cached.analysis && cached.scenarios && cached.household) {
+    retirementUiData = cached;
+    retirementUiData.alternativesState = 'loading';
+    hideRetirementEmptyState_();
+    document.getElementById('ret_selectedScenario').value = cached.selectedScenario || 'Base';
+    document.getElementById('ret_yourCurrentAge').textContent =
+      cached.household.yourCurrentAge > 0 ? String(cached.household.yourCurrentAge) : '';
+    document.getElementById('ret_spouseCurrentAge').textContent =
+      cached.household.spouseCurrentAge > 0 ? String(cached.household.spouseCurrentAge) : '';
+    updateRetirementDobHints_({
+      derivedCurrentAge: cached.household.yourCurrentAge,
+      derivedSpouseCurrentAge: cached.household.spouseCurrentAge
+    });
+    fillRetirementScenarioInputs(cached.selectedScenario || 'Base');
+    renderRetirementScenarioCards(cached);
+    renderRetirementPanelInfo(cached.analysis);
+    setStatus('retirement_status', '', false);
+    if (pendingFocus && pendingFocus.tab === 'retirement') pendingFocus = null;
+    finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
+    emitRetirementLoadDiagnostic_({
+      phase: 'selected',
+      outcome: 'ok',
+      source: 'overview_cache',
+      durationMs: Math.max(0, Math.round(retirementTimingNow_() - requestStarted))
+    });
+    loadRetirementAlternativeAnalyses_(
+      generation,
+      cached.selectedScenario || 'Base',
+      requestStarted
+    );
+    return;
+  }
+
   google.script.run
     .withSuccessHandler(function(data) {
+      if (generation !== retirementLoadGeneration_) return;
       retirementUiData = data;
 
       // Keep the Overview Retirement Outlook card consistent with the
@@ -46,6 +103,7 @@ function loadRetirementSection() {
       var state = (data && data.state) ? data.state : 'ready';
 
       if (state === 'ready') {
+        retirementUiData.alternativesState = 'loading';
         hideRetirementEmptyState_();
 
         document.getElementById('ret_selectedScenario').value = data.selectedScenario || 'Base';
@@ -62,6 +120,11 @@ function loadRetirementSection() {
         renderRetirementScenarioCards(data);
         renderRetirementPanelInfo(data.analysis);
         setStatus('retirement_status', '', false);
+        emitRetirementLoadDiagnostic_({
+          phase: 'selected',
+          outcome: 'ok',
+          durationMs: Math.max(0, Math.round(retirementTimingNow_() - requestStarted))
+        });
       } else if (state === 'needsProfileDob') {
         // Primary Date of Birth missing or invalid in Profile /
         // Settings. Retirement current ages come exclusively from
@@ -132,8 +195,12 @@ function loadRetirementSection() {
         pendingFocus = null;
       }
       finishDashboardInitialLoadStage_(initialLoadTiming, 'ok');
+      if (state === 'ready') {
+        loadRetirementAlternativeAnalyses_(generation, data.selectedScenario || 'Base', requestStarted);
+      }
     })
     .withFailureHandler(function(err) {
+      if (generation !== retirementLoadGeneration_) return;
       // The safe backend should not throw, but keep this path defensive
       // for transport-level failures. Still show a calm banner rather
       // than a red error string — consistent with the rest of the tab.
@@ -149,8 +216,68 @@ function loadRetirementSection() {
       clearRetirementReadOnlyInfo_();
       setStatus('retirement_status', '', false);
       finishDashboardInitialLoadStage_(initialLoadTiming, 'error');
+      emitRetirementLoadDiagnostic_({
+        phase: 'selected',
+        outcome: 'error',
+        durationMs: Math.max(0, Math.round(retirementTimingNow_() - requestStarted))
+      });
     })
-    .getRetirementUiDataSafe();
+    .getRetirementSelectedUiDataSafe();
+}
+
+function loadRetirementAlternativeAnalyses_(generation, expectedSelectedScenario, requestStarted) {
+  const comparisonStarted = retirementTimingNow_();
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (generation !== retirementLoadGeneration_ || !retirementUiData) return;
+      if (!res || res.state !== 'ready' ||
+          res.selectedScenario !== expectedSelectedScenario ||
+          retirementUiData.selectedScenario !== expectedSelectedScenario) {
+        retirementUiData.alternativesState = res && res.state === 'stale' ? 'stale' : 'error';
+        renderRetirementScenarioCards(retirementUiData);
+        emitRetirementLoadDiagnostic_({
+          phase: 'comparisons',
+          outcome: retirementUiData.alternativesState,
+          durationMs: Math.max(0, Math.round(retirementTimingNow_() - requestStarted)),
+          comparisonDurationMs: Math.max(0, Math.round(retirementTimingNow_() - comparisonStarted))
+        });
+        return;
+      }
+
+      retirementUiData.analyses = retirementUiData.analyses || {};
+      ['Conservative', 'Base', 'Aggressive'].forEach(function(name) {
+        if (name !== expectedSelectedScenario &&
+            Object.prototype.hasOwnProperty.call(res.analyses || {}, name)) {
+          retirementUiData.analyses[name] = res.analyses[name];
+        }
+      });
+      retirementUiData.alternativesState = 'ready';
+      retirementOverviewUiData = retirementUiData;
+      renderRetirementScenarioCards(retirementUiData);
+      const visibleScenario = document.getElementById('ret_selectedScenario').value || expectedSelectedScenario;
+      if (retirementUiData.analyses[visibleScenario]) {
+        renderRetirementPanelInfo(retirementUiData.analyses[visibleScenario]);
+        setStatus('retirement_status', '', false);
+      }
+      emitRetirementLoadDiagnostic_({
+        phase: 'comparisons',
+        outcome: 'ok',
+        durationMs: Math.max(0, Math.round(retirementTimingNow_() - requestStarted)),
+        comparisonDurationMs: Math.max(0, Math.round(retirementTimingNow_() - comparisonStarted))
+      });
+    })
+    .withFailureHandler(function(_err) {
+      if (generation !== retirementLoadGeneration_ || !retirementUiData) return;
+      retirementUiData.alternativesState = 'error';
+      renderRetirementScenarioCards(retirementUiData);
+      emitRetirementLoadDiagnostic_({
+        phase: 'comparisons',
+        outcome: 'error',
+        durationMs: Math.max(0, Math.round(retirementTimingNow_() - requestStarted)),
+        comparisonDurationMs: Math.max(0, Math.round(retirementTimingNow_() - comparisonStarted))
+      });
+    })
+    .getRetirementComparisonAnalysesSafe(expectedSelectedScenario);
 }
 
 /**
@@ -286,6 +413,11 @@ function onRetirementScenarioChange() {
 
   if (retirementUiData && retirementUiData.analyses && retirementUiData.analyses[scenario]) {
     renderRetirementPanelInfo(retirementUiData.analyses[scenario]);
+  } else {
+    clearRetirementReadOnlyInfo_();
+    if (retirementUiData && retirementUiData.alternativesState === 'loading') {
+      setStatus('retirement_status', 'Loading scenario comparison…', false);
+    }
   }
 
   renderRetirementScenarioCards(retirementUiData);
@@ -314,7 +446,24 @@ function renderRetirementScenarioCards(data) {
   ['Conservative', 'Base', 'Aggressive'].forEach(function(name) {
     const el = document.getElementById('scenario_card_' + name);
     const a = data.analyses[name];
-    if (!el || !a) return;
+    if (!el) return;
+    if (!a) {
+      const inputs = data.scenarios && data.scenarios[name];
+      const hasAssumptions = !!(inputs && Number(inputs.targetRetirementAge) > 0 &&
+        Number(inputs.householdRetirementSpendingPerYear) > 0);
+      const state = data.alternativesState || 'ready';
+      const message = hasAssumptions && state === 'loading'
+        ? 'Loading comparison…'
+        : (hasAssumptions && state === 'error'
+          ? 'Comparison unavailable. Reopen Retirement to retry.'
+          : 'Add assumptions to compare.');
+      el.className = 'scenario-card' + (name === selected ? ' active' : '');
+      el.innerHTML =
+        '<div class="scenario-card-title">' + escapeHtml(name) +
+          (name === selected ? '<span class="scenario-badge">Selected</span>' : '') +
+        '</div><div class="scenario-card-row">' + escapeHtml(message) + '</div>';
+      return;
+    }
 
     const ss = a.surplusAtTargetAge || 0;
     const sf = a.shortfallAtTargetAge || 0;
@@ -401,9 +550,12 @@ function saveRetirement() {
 
   google.script.run
     .withSuccessHandler(function(res) {
+      retirementLoadGeneration_ += 1;
       setStatus('retirement_status', res.message || 'Saved.', false);
       retirementUiData = res.data || retirementUiData;
       if (retirementUiData) {
+        retirementUiData.alternativesState = 'ready';
+        retirementOverviewUiData = retirementUiData;
         document.getElementById('ret_selectedScenario').value = retirementUiData.selectedScenario || payload.selectedScenario;
         renderRetirementScenarioCards(retirementUiData);
         renderRetirementPanelInfo(retirementUiData.analysis);

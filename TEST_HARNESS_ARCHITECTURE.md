@@ -61,19 +61,32 @@ state; server-owned Activity operation identity plus exact-state preview; Bill
 Skip/Stop stale-request safety; five ordinary Bank Save acknowledgement/completion
 samples with privacy-safe server-stage timing;
 twelve warmed loaded-navigation transitions; a representative populated Overview
-refresh after Planner history; and clean console/navigation. The `4d`/`4f` envelope is
+refresh after Planner history; selected-first Retirement plus all-comparison timing;
+and clean console/navigation. The `4d`/`4f`/`4g` envelope is
 strictly allow-listed to fixed flow labels, millisecond durations, candidate-budget
 signals, and suite/run safety metadata; it contains no workbook ID, identity, or
 financial value. Evidence is saved under
-`POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V10`; PASS requires
+`POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V11`; PASS requires
 Restricted sharing and exact Drive-verified Trash cleanup.
 
+V11 retains the V10 exact five-Save timing window and adds an all-three-scenario
+Retirement fixture plus privacy-safe selected/all-comparison browser durations.
 V10 limits `PERFORMANCE_TIMING_ENABLED=true` to the exact five-Save sampling
 window, restores the prior property value immediately afterward, and retains
 completion/cleanup restoration as a fallback. During that window the shipping
 Bank writer is unchanged; only its post-completion panel/snapshot/Planner
 follow-ups are suppressed so they cannot overlap the next sample. Runtime proof
 for this V10 addition is complete on isolated Central.
+
+**`@328` V11 Retirement selected-first evidence:** run
+`FR-72b047d7-4f26-469a-9287-2bfda293023e` passed all 25 assertions with zero
+browser errors, Restricted single-owner sharing, and verified exact-fixture
+Trash cleanup. The authoritative Overview payload painted the selected scenario
+in **1 ms**, while both alternative comparisons completed in **5.648 s** through
+the read-only background path, within the directional 6 s selected and 15 s
+all-comparison targets. The same run measured all five ordinary Saves at
+5.976 s p50 / 7.969 s p95; the existing strict 6 s p95 budget therefore remains
+a truthful near-miss independent of the closed Retirement investigation.
 
 **`@322` V10 ordinary Save evidence:** run
 `FR-afc35e3b-77ff-4c91-88cb-88f28c55fa0f` passed all 24 assertions with zero

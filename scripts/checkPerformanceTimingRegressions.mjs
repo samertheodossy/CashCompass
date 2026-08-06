@@ -27,6 +27,8 @@ const investmentsSource = await readFile(new URL('../investments.js', import.met
 const houseValuesSource = await readFile(new URL('../house_values.js', import.meta.url), 'utf8');
 const upcomingExpensesSource = await readFile(new URL('../upcoming_expenses.js', import.meta.url), 'utf8');
 const retirementSource = await readFile(new URL('../retirement.js', import.meta.url), 'utf8');
+const retirementClientSource = await readFile(new URL('../Dashboard_Script_PlanningRetirement.html', import.meta.url), 'utf8');
+const populatedBrowserSource = await readFile(new URL('../Dashboard_Script_PopulatedDashboardE2E.html', import.meta.url), 'utf8');
 const onboardingSource = await readFile(new URL('../onboarding.js', import.meta.url), 'utf8');
 const incomeSourcesSource = await readFile(new URL('../income_sources.js', import.meta.url), 'utf8');
 const quickAddSource = await readFile(new URL('../quick_add_payment.js', import.meta.url), 'utf8');
@@ -266,6 +268,24 @@ assert.ok(retirementModelSource.includes('calculateRetirementPlan_(household, in
   'Every scenario calculation must reuse the same current-assets value');
 assert.ok(retirementModelSource.includes('RETIREMENT_SCENARIOS_.forEach'),
   'Planning Retirement must continue calculating every scenario on demand');
+const retirementSelectedReader = functionSource_(retirementSource, 'getRetirementSelectedUiDataSafe');
+assert.ok(retirementSelectedReader.includes('selectedOnly: true') &&
+  retirementSelectedReader.includes('writeSelectedOutput: false'),
+  'Current Retirement first paint must calculate only the selected scenario and remain read only');
+const retirementComparisonReader = functionSource_(retirementSource, 'getRetirementComparisonAnalysesSafe');
+assert.ok(retirementComparisonReader.includes("name !== selectedScenario") &&
+  retirementComparisonReader.includes("state: 'stale'") &&
+  retirementComparisonReader.includes('readRetirementScenariosFromGridSafe_'),
+  'Retirement comparisons must exclude the selected calculation, batch-read inputs, and reject stale selection races');
+assert.match(retirementClientSource,
+  /retirementLoadGeneration_[\s\S]*?getRetirementSelectedUiDataSafe\(\)[\s\S]*?loadRetirementAlternativeAnalyses_[\s\S]*?getRetirementComparisonAnalysesSafe\(expectedSelectedScenario\)/,
+  'Retirement client must paint the selected result first, then load stale-response-safe comparisons');
+assert.match(retirementClientSource,
+  /retirementOverviewUiData[\s\S]*?cached\.analysis[\s\S]*?renderRetirementPanelInfo\(cached\.analysis\)[\s\S]*?source: 'overview_cache'[\s\S]*?loadRetirementAlternativeAnalyses_/,
+  'Common Retirement navigation must paint the authoritative Overview-selected payload before requesting comparisons');
+assert.match(populatedBrowserSource,
+  /performance_retirement_scenario_load[\s\S]*?selectedMeaningfulMs[\s\S]*?allComparisonsMs/,
+  'Populated runtime evidence must capture selected meaningful content separately from all comparisons');
 
 function functionSource_(text, name) {
   const start = text.indexOf(`function ${name}`);

@@ -131,6 +131,23 @@ function saveRetirementBasics(_payload) {
  *     downstream convention consumed by `calculateRetirementPlan_`.
  */
 function getRetirementUiDataSafe() {
+  return getRetirementUiDataSafe_({ selectedOnly: false, writeSelectedOutput: true });
+}
+
+/**
+ * Fast, read-only first paint for Planning -> Retirement.
+ *
+ * The legacy no-argument `getRetirementUiDataSafe()` contract above remains
+ * unchanged for stale clients. The current Dashboard uses this seam so the
+ * selected scenario can become meaningful before the two comparison scenarios
+ * finish their Monte Carlo work.
+ */
+function getRetirementSelectedUiDataSafe() {
+  return getRetirementUiDataSafe_({ selectedOnly: true, writeSelectedOutput: false });
+}
+
+function getRetirementUiDataSafe_(options) {
+  const opts = options || {};
   const result = {
     state: 'ready',
     message: '',
@@ -145,11 +162,9 @@ function getRetirementUiDataSafe() {
       }
     },
     // Derived from Profile / Settings DOB keys ("Date of Birth" /
-    // "Spouse Date of Birth") in INPUT - Settings. Helper data only —
-    // the Retirement Basics manual age inputs remain the source of
-    // truth for every downstream calculation. Null whenever a DOB is
-    // absent, malformed, or in the future so the UI can treat "no
-    // hint" as the default without a separate flag.
+    // "Spouse Date of Birth") in INPUT - Settings. These values are the
+    // source of truth for downstream Retirement ages. Null whenever a DOB is
+    // absent, malformed, or in the future.
     derivedCurrentAge: null,
     derivedSpouseCurrentAge: null,
     selectedScenario: 'Base',
@@ -166,8 +181,9 @@ function getRetirementUiDataSafe() {
     // so the UI never fails because of a transient Settings-read issue.
   }
 
+  let derived = { derivedCurrentAge: null, derivedSpouseCurrentAge: null };
   try {
-    const derived = readRetirementProfileDerivedAges_();
+    derived = readRetirementProfileDerivedAges_();
     result.derivedCurrentAge = derived.derivedCurrentAge;
     result.derivedSpouseCurrentAge = derived.derivedSpouseCurrentAge;
   } catch (_derivedErr) {
@@ -184,11 +200,14 @@ function getRetirementUiDataSafe() {
     return result;
   }
 
-  // Compose the household age object from Profile DOBs ONLY. We do not
-  // read `INPUT - Retirement` rows 5/6 here; any value previously
-  // written there is ignored. Spouse DOB is optional and coerces to 0
-  // ("not partnered" sentinel) when absent.
-  const household = getRetirementHouseholdFromProfile_();
+  // Compose the household from the already-read DOB values. This avoids a
+  // duplicate Settings-sheet RPC on the initial Retirement path.
+  const household = {
+    yourCurrentAge: typeof derived.derivedCurrentAge === 'number'
+      ? derived.derivedCurrentAge : 0,
+    spouseCurrentAge: typeof derived.derivedSpouseCurrentAge === 'number'
+      ? derived.derivedSpouseCurrentAge : 0
+  };
   result.household = household;
 
   // Primary DOB missing or invalid → route to Profile instead of
@@ -229,11 +248,18 @@ function getRetirementUiDataSafe() {
   //   - populated workbooks (where every scenario already has spending
   //     > 0) skip this branch entirely and land in the ready branch
   //     below byte-identically to the prior contract.
+  let modelValues = null;
+  let modelRowMap = null;
   let scenariosForGate = null;
   let selectedForGate = 'Base';
   try {
-    scenariosForGate = readRetirementScenariosSafe_(sheet);
-    selectedForGate = getSelectedRetirementScenario_(sheet);
+    modelValues = sheet.getDataRange().getValues();
+    modelRowMap = buildRetirementModelRowMap_(modelValues);
+    const selectedRow = modelRowMap['Selected Scenario'];
+    selectedForGate = normalizeRetirementScenario_(
+      selectedRow ? modelValues[selectedRow - 1][1] : 'Base'
+    );
+    scenariosForGate = readRetirementScenariosFromGridSafe_(modelValues, modelRowMap);
   } catch (_scenariosErr) {
     // Tolerate any transient read issue; fall through to the compute
     // path, which has its own try/catch envelope below.
@@ -256,19 +282,124 @@ function getRetirementUiDataSafe() {
   }
 
   try {
-    const data = getRetirementUiData();
-    result.selectedScenario = data.selectedScenario;
-    result.household = data.household;
-    result.scenarios = data.scenarios;
-    result.analyses = data.analyses;
-    result.analysis = data.analysis;
+    if (!modelValues || !modelRowMap || !scenariosForGate) {
+      modelValues = sheet.getDataRange().getValues();
+      modelRowMap = buildRetirementModelRowMap_(modelValues);
+      const selectedRow = modelRowMap['Selected Scenario'];
+      selectedForGate = normalizeRetirementScenario_(
+        selectedRow ? modelValues[selectedRow - 1][1] : 'Base'
+      );
+      scenariosForGate = readRetirementScenariosFromGridSafe_(modelValues, modelRowMap);
+    }
+
+    const analyses = {};
+    RETIREMENT_SCENARIOS_.forEach(function(name) { analyses[name] = null; });
+    const namesToCalculate = opts.selectedOnly === true
+      ? [selectedForGate] : RETIREMENT_SCENARIOS_;
+    const hasComputable = namesToCalculate.some(function(name) {
+      return isRetirementScenarioComputable_(scenariosForGate[name]);
+    });
+    const currentInvestableAssets = hasComputable
+      ? getCurrentInvestableAssetsForRetirement_() : 0;
+    namesToCalculate.forEach(function(name) {
+      const inputs = scenariosForGate[name];
+      analyses[name] = isRetirementScenarioComputable_(inputs)
+        ? calculateRetirementPlan_(household, inputs, name, currentInvestableAssets)
+        : null;
+    });
+
+    result.selectedScenario = selectedForGate;
+    result.scenarios = scenariosForGate;
+    result.analyses = analyses;
+    result.analysis = analyses[selectedForGate];
     result.state = 'ready';
+    if (opts.writeSelectedOutput === true && result.analysis) {
+      writeRetirementOutputs_(sheet, result.analysis);
+    }
     return result;
   } catch (e) {
     result.state = 'error';
     result.message = 'Retirement planner could not load. Try again, or review your inputs below.';
     return result;
   }
+}
+
+/**
+ * Read-only second phase for the two non-selected Retirement comparisons.
+ * The expected selected scenario is checked against the workbook so a response
+ * that raced a Save cannot be merged into a newer client state.
+ */
+function getRetirementComparisonAnalysesSafe(expectedSelectedScenario) {
+  try {
+    const sheet = getOrCreateRetirementSheet_();
+    const modelValues = sheet.getDataRange().getValues();
+    const modelRowMap = buildRetirementModelRowMap_(modelValues);
+    const selectedRow = modelRowMap['Selected Scenario'];
+    const selectedScenario = normalizeRetirementScenario_(
+      selectedRow ? modelValues[selectedRow - 1][1] : 'Base'
+    );
+    if (selectedScenario !== normalizeRetirementScenario_(expectedSelectedScenario)) {
+      return { state: 'stale', selectedScenario: selectedScenario, analyses: {} };
+    }
+
+    const derived = readRetirementProfileDerivedAges_();
+    const household = {
+      yourCurrentAge: typeof derived.derivedCurrentAge === 'number'
+        ? derived.derivedCurrentAge : 0,
+      spouseCurrentAge: typeof derived.derivedSpouseCurrentAge === 'number'
+        ? derived.derivedSpouseCurrentAge : 0
+    };
+    const scenarios = readRetirementScenariosFromGridSafe_(modelValues, modelRowMap);
+    const comparisonNames = RETIREMENT_SCENARIOS_.filter(function(name) {
+      return name !== selectedScenario;
+    });
+    const hasComputable = comparisonNames.some(function(name) {
+      return isRetirementScenarioComputable_(scenarios[name]);
+    });
+    const currentInvestableAssets = hasComputable
+      ? getCurrentInvestableAssetsForRetirement_() : 0;
+    const analyses = {};
+    comparisonNames.forEach(function(name) {
+      const inputs = scenarios[name];
+      analyses[name] = isRetirementScenarioComputable_(inputs)
+        ? calculateRetirementPlan_(household, inputs, name, currentInvestableAssets)
+        : null;
+    });
+    return {
+      state: 'ready',
+      selectedScenario: selectedScenario,
+      analyses: analyses
+    };
+  } catch (_e) {
+    return {
+      state: 'error',
+      selectedScenario: normalizeRetirementScenario_(expectedSelectedScenario),
+      analyses: {}
+    };
+  }
+}
+
+function readRetirementScenariosFromGridSafe_(values, rowMap) {
+  const out = {};
+  RETIREMENT_SCENARIOS_.forEach(function(name) {
+    try {
+      out[name] = getRetirementScenarioInputsFromGrid_(values, rowMap, name);
+    } catch (_scenarioErr) {
+      out[name] = {
+        targetRetirementAge: 0,
+        householdRetirementSpendingPerYear: 0,
+        yourSocialSecurityPerYear: 0,
+        spouseSocialSecurityPerYear: 0,
+        otherRetirementIncomePerYear: 0,
+        annualContributions: 0,
+        expectedAnnualReturnPct: 0,
+        inflationPct: 0,
+        safeWithdrawalRatePct: 0,
+        oneTimeFutureCashNeeds: 0
+      };
+    }
+  });
+  return out;
 }
 
 /**

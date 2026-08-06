@@ -110,7 +110,7 @@ assert.match(validationUi,
   /vtCopyLatestOverviewTrace\(event\)[\s\S]*?function vtCopyLatestOverviewTrace\(ev\)[\s\S]*?vt-overview-trace-json/,
   'Latest Overview trace must provide one-click exact JSON copying');
 assert.match(validationUi,
-  /Latest cross-flow performance evidence \(4d \/ 4f\)[\s\S]*?marked-disposable Populated Dashboard E2E[\s\S]*?function vtLoadLatestPerformanceFlows\(\)[\s\S]*?\.vtGetLatestPerformanceFlowsEvidence\(\)/,
+  /Latest cross-flow performance evidence \(4d \/ 4f \/ 4g\)[\s\S]*?marked-disposable Populated Dashboard E2E[\s\S]*?function vtLoadLatestPerformanceFlows\(\)[\s\S]*?\.vtGetLatestPerformanceFlowsEvidence\(\)/,
   'Validation console must expose the latest privacy-safe cross-flow evidence from the disposable browser suite');
 assert.match(validationUi,
   /vtCopyPerformanceFlows\(event\)[\s\S]*?function vtCopyPerformanceFlows\(ev\)[\s\S]*?vt-performance-flows-json/,
@@ -242,9 +242,9 @@ assert.match(firstRunBrowser,
   'First-Run must wait for authoritative Investment Add routing instead of sampling a fixed delay');
 assert.match(firstRunBrowser, /function customerLanguageLeaks\(/,
   'First-Run E2E must scan visible customer pages for internal workbook terminology');
-assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V10/,
+assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V11/,
   'Populated Dashboard E2E must be an implemented browser suite backed by saved evidence');
-assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V10'/,
+assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V11'/,
   'Cross-flow performance assertions must invalidate older Populated Dashboard evidence');
 assert.doesNotMatch(populatedE2E, /function pdE2EPrepare\([^)]*(?:spreadsheet|workbook|file)Id/i,
   'Populated Dashboard preparation must never accept an arbitrary workbook target');
@@ -364,7 +364,9 @@ const normalizedPerformanceFlows = performanceFlowsCtx.pdE2ENormalizePerformance
     label: index % 2 ? 'Assets / Bank accounts' : 'Injected private label', durationMs: 40 + index
   })), p50Ms: 45, p95Ms: 51, maxMs: 51, withinCandidateBudget: true },
   matureOverview: { measured: true, acknowledgementMs: 12, completionMs: 9000,
-    withinCandidateBudget: true, outcome: 'ok', workbookId: 'private-id' }
+    withinCandidateBudget: true, outcome: 'ok', workbookId: 'private-id' },
+  retirementScenarioLoad: { measured: true, selectedMeaningfulMs: 2400,
+    allComparisonsMs: 6200, comparisonRequestMs: 3800, outcome: 'ok', scenarioName: 'Private' }
 });
 assert.equal(normalizedPerformanceFlows.loadedNavigation.sampleCount, 12);
 assert.equal(normalizedPerformanceFlows.loadedNavigation.samples[0].label, 'Unknown loaded route');
@@ -372,10 +374,13 @@ assert.equal(normalizedPerformanceFlows.ordinarySave.sampleCount, 5);
 assert.equal(normalizedPerformanceFlows.ordinarySave.completionMs, 1400);
 assert.equal(normalizedPerformanceFlows.ordinarySave.completionP95Ms, 1600);
 assert.equal(normalizedPerformanceFlows.ordinarySave.stageSummary.length, 7);
+assert.equal(normalizedPerformanceFlows.retirementScenarioLoad.selectedMeaningfulMs, 2400);
+assert.equal(normalizedPerformanceFlows.retirementScenarioLoad.allComparisonsMs, 6200);
+assert.equal(normalizedPerformanceFlows.retirementScenarioLoad.measured, true);
 assert.doesNotMatch(JSON.stringify(normalizedPerformanceFlows), /Private bank|private-id|Injected private label/,
   '4d normalization must discard client-supplied private or unknown fields');
 assert.match(populatedBrowser,
-  /showTab\('retirement'\)[\s\S]*?loadRetirementSection\(\)[\s\S]*?ret_info_goal[\s\S]*?ret_info_funded[\s\S]*?ret_empty_state[\s\S]*?ret_scenario_cards[\s\S]*?ret_results_panel[\s\S]*?add\('retirement_ready_results'/,
+  /__cashCompassRetirementLoadDiagnosticListener[\s\S]*?showTab\('retirement'\)[\s\S]*?ret_info_goal[\s\S]*?ret_info_funded[\s\S]*?scenario_card_Conservative[\s\S]*?scenario_card_Aggressive[\s\S]*?add\('retirement_ready_results'[\s\S]*?add\('performance_retirement_scenario_load'/,
   'Populated Retirement evidence must prove the ready Base scenario reveals meaningful result walls');
 assert.match(populatedE2E,
   /function pdE2EExerciseOperationEnvelope\(runId\)[\s\S]*?assertFirstRunE2EFixture_\(state, email, false\)[\s\S]*?quickAddPayment\([\s\S]*?, ss\)[\s\S]*?previewDirectQuickAddCorrectionInSpreadsheet_\(ss, operationId\)[\s\S]*?correctDirectQuickAddOperationInSpreadsheet_\([\s\S]*?ss,[\s\S]*?operationId/,

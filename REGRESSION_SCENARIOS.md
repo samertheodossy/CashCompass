@@ -1424,6 +1424,34 @@ Whenever a production bug is fixed:
   to its authoritative selector state, and requires failures to replace the
   loader rather than fall through to an empty claim.
 
+### REG-066 — Retirement blocked selected results on all three scenario calculations
+- Category: REGRESSION / PERFORMANCE / UI TRUTH / STALE RESPONSE SAFETY
+- Date discovered: 2026-08-06
+- Status: fixed and runtime-proven on isolated Central `@328`; Populated V11
+  run `FR-72b047d7-4f26-469a-9287-2bfda293023e` passed 25/25 with Restricted
+  sharing and verified cleanup; user visual confirmation complete
+- Root cause: the Retirement UI used one RPC that repeatedly read individual
+  scenario cells, recalculated all three Monte Carlo paths, and rewrote selected
+  output cells before returning any meaningful content. The selected scenario
+  therefore waited for work needed only by the two comparison cards.
+- Expected result: one batched, read-only request renders the selected scenario
+  first. A second read-only request calculates only the two alternatives and
+  merges them after the first paint. A generation token plus the persisted
+  selected-scenario check rejects responses that race a reload or Save.
+- Safety guard: the legacy no-argument full reader remains available for stale
+  clients; Retirement math, scenario inputs, workbook schema, and Save-time
+  output persistence are unchanged. Comparison failures leave the selected
+  result usable and never write the workbook.
+- Permanent coverage: `npm run test:performance-timing` requires the selected
+  first/read-only seam, batched comparison reader, and stale-response guard.
+  Populated Dashboard V11 seeds three meaningful scenarios and records both
+  selected meaningful-content time and all-comparison completion time in the
+  privacy-safe Validation evidence panel.
+- Runtime result: the initial `@327` split measured 8.626 s selected / 13.167 s
+  all comparisons. Reusing Overview's authoritative selected payload at `@328`
+  reduced those measurements to 1 ms / 5.648 s, both within the directional
+  6 s / 15 s targets. The comparison request itself completed in 5.647 s.
+
 ---
 
 ## 3a loading-state consistency coverage
@@ -1561,4 +1589,5 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-063 | Progressive Overview left lower cards blank during refresh | PERFORMANCE / PROGRESSIVE RENDERING / PERCEIVED LOAD | fixed in current candidate; focused/full local regressions PASS; bounded runtime confirmation pending |
 | REG-064 | Transient Apps Script storage failure aborted repeat Overview load | REGRESSION / UI RELIABILITY / DASHBOARD STARTUP | fixed in current candidate; focused/full local regressions PASS; bounded recovery confirmation pending |
 | REG-065 | Populated Manage views briefly claimed no tracked records | REGRESSION / UI TRUTH / ASYNC LOADING | fixed; full regressions + isolated `@326` Populated 24/24 PASS + user visual confirmation |
+| REG-066 | Retirement blocked selected results on all three scenario calculations | REGRESSION / PERFORMANCE / UI TRUTH / STALE RESPONSE SAFETY | fixed; full regressions + isolated `@328` Populated V11 25/25 PASS; selected/all comparisons 1 ms/5.648 s; user visual confirmation |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

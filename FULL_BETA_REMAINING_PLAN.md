@@ -34,8 +34,9 @@ The combined `3e`–`3i` and `3m` UX wave is runtime-complete on isolated `@325`
 Populated run `FR-51e0f9a0-0d1b-4049-9eea-36b1107a0976` passed 24/24 and
 First-Run run `FR-78d9e3b6-a907-4959-bbca-db0966f623f1` passed 16/16, both with
 Restricted sharing and verified Trash cleanup. `3j` remains a separate task.
-The current item is `4g`, Retirement scenario-load latency, followed by the
-`3n` money-format audit. Beta is still `@106` and bounded remains user-controlled.
+Retirement scenario-load latency (`4g`) is closed on isolated Central `@328`.
+The current item is the `3n` money-format audit, followed by separate `3j`.
+Beta is still `@106` and bounded remains user-controlled.
 
 The exact-owner Performance Planner campaign is complete for source
 `8aa4bf5bf58259598289d79368eea944e015d43e` on isolated Central `@318`.
@@ -127,7 +128,7 @@ recently completed `5h` and `5i` as implementation history.
 
 | Order | Open IDs | Workstream | Focused estimate |
 |---:|---|---|---:|
-| 1 | `4g`, `3n`, `3j`, `3k` | Retirement load investigation, money-format consistency, separate accessibility closeout, and frozen-candidate advocate score | 5–10 d |
+| 1 | `3n`, `3j`, `3k` | Money-format consistency, separate accessibility closeout, and frozen-candidate advocate score | 4.5–8.5 d |
 | 2 | `5j`–`5m` | Deferred safe correction families and audit disposition | 4.5–8 d including integrated disposable-workbook validation |
 | 3 | `5a`–`5f` | Remaining financial/workbook proof | 4.5–11 d |
 | 4 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
@@ -136,8 +137,8 @@ recently completed `5h` and `5i` as implementation history.
 | 7 | `9a`–`9e` | Supervised cohort, go/no-go, and separately approved Central Beta promotion | 2–3 active d plus 5–7 calendar d and fixes |
 
 **Current execution decision (2026-08-06):** the combined `3e`–`3i`/`3m` wave
-is complete. Investigate Retirement scenario-load latency (`4g`), audit money
-formatting (`3n`), then execute `3j` separately. Compound Activity correction
+and Retirement scenario-load work (`4g`) are complete. Audit money formatting
+(`3n`), then execute `3j` separately. Compound Activity correction
 `5j`–`5m` remains a broad-Beta requirement but is deliberately deferred until
 after these focused follow-ups. The exact-candidate advocate rerun `3k` occurs
 only after freeze; Groups 6–7 may advance during runtime/review waits.
@@ -245,10 +246,10 @@ either map the exact failure to an existing assertion or add the next
 | 4d | Measure remaining release flows | **Complete on isolated Central `@319`.** Diagnostic Populated Dashboard run `FR-47ef0c44-68c8-4cff-a745-828677acf353` passed every assertion with Restricted single-owner sharing and verified Trash cleanup. Ordinary Bank Save acknowledged in 1 ms and completed in 8.332 s; 12 loaded-navigation samples measured 17/18 ms p50/p95; representative populated Overview after Planner history completed in 11.776 s. Navigation and Overview were within candidate targets; Save completion exceeded the directional 6 s target and moves to `4f` disposition/optimization. | complete |
 | 4e | Run the exact-candidate 20-pair campaign | **Complete for source `8aa4bf5` on isolated `@318`.** Exact-owner campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` completed 20/20 passing pairs and 40 Planner executions; every fixture was Restricted and every cleanup was verified. Rerun under `8b` if the final candidate differs. | complete for `@318` |
 | 4f | Ratify p50/p95 budgets and close ordinary Save follow-up | **Complete.** Financial Plan refresh passed its 30/60 s budgets on exact-owner `@318`. Ordinary Save V10 on `@322` passed 24/24 assertions in run `FR-afc35e3b-77ff-4c91-88cb-88f28c55fa0f`, with five samples, Restricted sharing, verified Trash cleanup, and no errors. Same-call workbook/read reuse reduced Save completion p50/p95 from 11.060/17.568 s to 6.520/9.418 s; acknowledgement p95 was 1 ms. The 6 s strict completion budget remains a documented near-miss and is not marked passed; further removal or deferral of required history, synchronization, or immutable audit work is not justified. | complete; frozen-candidate replay remains under `8b` |
-| 4g | Investigate Retirement scenario-load latency | Measure selected-scenario time to meaningful content and the cost of loading all three scenarios; render the selected scenario first and background-load alternatives only if truth, stale-response, and scenario-switch contracts remain intact | 0.5–1.5 d |
+| 4g | Investigate Retirement scenario-load latency | **Complete on isolated Central `@328` under `REG-066`.** Overview's authoritative selected payload now paints immediately; alternatives background-load through batched read-only, generation-guarded, persisted-selection-checked paths. Populated V11 run `FR-72b047d7-4f26-469a-9287-2bfda293023e` passed 25/25; selected/all-comparison timings improved from 8.626/13.167 s at `@327` to 0.001/5.648 s, within directional 6/15 s targets, with Restricted sharing and verified cleanup. | complete; frozen-candidate replay remains under `8b` |
 
-**Group 4 has one new observed UI-load investigation (`4g`). The conditional
-frozen-candidate `8b` replay also remains.**
+**Group 4 is complete for current evidence candidates. The conditional
+frozen-candidate `8b` replay remains.**
 
 ## 5. Final financial, workbook, and recovery proof
 
@@ -447,7 +448,7 @@ family. The strictest failed gate controls the actual decision date.
 
 The remaining work that directly controls the finish date is:
 
-`4g → 3n → 3j → 5j–5m → 5a–5f → 8a–8f/3k → 9a–9e`
+`3n → 3j → 5j–5m → 5a–5f → 8a–8f/3k → 9a–9e`
 
 Financial/workbook proof in Group 5 must finish before `8b`. Operations and
 monetization foundations in Groups 6–7 must finish before `8d`, but they should
@@ -492,8 +493,8 @@ not block early engineering.
 | Completed Aug 5 performance gate | `4a`–`4c`, `4e`, and `4f` closed for exact source `8aa4bf5` on isolated `@318`; 20/20 exact-owner pairs passed and Planner budgets were ratified | Validation console recorded `SUITE-PERFORMANCE-PLANNER` PASS with verified cleanup | Beta stayed `@106`; bounded stayed user-controlled; runner returned OFF | Planner percentile gate is closed for `@318`; later candidate changes require an `8b` rerun |
 | Completed Aug 5 cross-flow measurement | `4d` closed on isolated `@319`: Save 1 ms acknowledgement / 8.332 s completion, navigation 17/18 ms p50/p95, populated Overview 11.776 s | Populated Dashboard V9 PASS, Restricted sharing, verified Trash cleanup, and admin 4d panel confirmation | Beta stayed `@106`; bounded stayed untouched; runner returned OFF | Measurement gap closed; ordinary Save completion moves to `4f` follow-up |
 | Completed Aug 6 ordinary Save follow-up | `4f` Save investigation closed on isolated `@322`: p50/p95 improved from 11.060/17.568 s to 6.520/9.418 s | Populated Dashboard V10 run `FR-afc35e3b-77ff-4c91-88cb-88f28c55fa0f` passed 24/24, Restricted sharing, zero errors, and verified Trash cleanup | Beta stayed `@106`; bounded stayed untouched; no Git commit or push yet | Strict 6 s budget remains a documented near-miss; no required Save/audit stage is weakened |
-| Completed Aug 6 UX closeout | `3e`–`3i` and `3m` runtime-complete on isolated `@325` | Populated `FR-51e0f9a0-0d1b-4049-9eea-36b1107a0976` passed 24/24; First-Run `FR-78d9e3b6-a907-4959-bbca-db0966f623f1` passed 16/16; Restricted sharing and cleanup verified | Beta stayed `@106`; bounded stayed untouched; Git commit/push still awaiting approval | Context, filters, Setup progress, Help, composition, readiness, and customer language close together; `3j` remains separate |
-| Current focused follow-ups | Investigate Retirement selected-scenario latency (`4g`), then audit money display consistency (`3n`) | Add timing and formatting contracts before any optimization or broad rewrite | Advance documentation during runtime waits | Close measured gaps without mixing them into the completed UX wave |
+| Completed Aug 6 UX closeout | `3e`–`3i` and `3m` runtime-complete on isolated `@325` | Populated `FR-51e0f9a0-0d1b-4049-9eea-36b1107a0976` passed 24/24; First-Run `FR-78d9e3b6-a907-4959-bbca-db0966f623f1` passed 16/16; Restricted sharing and cleanup verified | Beta stayed `@106`; bounded stayed untouched; source commit `993720c` is on `origin/main` | Context, filters, Setup progress, Help, composition, readiness, and customer language close together; `3j` remains separate |
+| Current focused follow-ups | Audit money display consistency (`3n`) after closing Retirement latency (`4g`) | Add formatting contracts before any broad rewrite | Advance documentation during runtime waits | Close measured gaps without mixing them into the completed UX wave |
 | Separate accessibility closeout | Complete `3j` alone | Keyboard, focus, names, target size, contrast, reduced motion, and supported-width evidence | Continue operations foundations during browser waits | Accessibility reaches its release gate without broadening the prior UX patch |
 | Deferred correction return | Implement and prove `5j`–`5m` on guarded disposable workbooks | Advance `5a`–`5f` candidate matrix/recovery proof | Continue known limitations and support posture | Supported correction families are atomic; unsupported audit rows remain honest |
 | Candidate preparation | Finish every remaining `5a`–`5f` prerequisite | Complete fixture, visual, accessibility, and operations evidence | Finish Groups 6–7 | Candidate prerequisites are complete before one freeze |

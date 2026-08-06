@@ -7,10 +7,11 @@
   var finished = false;
   var expected = cfg.expected;
   var performanceFlows = {
-    version: 2,
+    version: 3,
     ordinarySave: null,
     loadedNavigation: null,
-    matureOverview: null
+    matureOverview: null,
+    retirementScenarioLoad: null
   };
 
   function timingNow_() {
@@ -758,14 +759,24 @@
         : 'Investments, Upcoming, Bills, and Income rendered their representative data.');
       customerLeaks = customerLeaks.concat(customerLanguageLeaks('Populated workspaces'));
 
-      if (typeof showPage === 'function') showPage('planning');
+      var retirementLoadEvents = {};
+      window.__cashCompassRetirementLoadDiagnosticListener = function(event) {
+        if (event && (event.phase === 'selected' || event.phase === 'comparisons')) {
+          retirementLoadEvents[event.phase] = event;
+        }
+      };
       if (typeof showTab === 'function') showTab('retirement');
-      if (typeof loadRetirementSection === 'function') loadRetirementSection();
       await waitFor(function() {
         return text('ret_info_scenario') !== '' && text('ret_info_scenario') !== '—' &&
           text('ret_info_goal') !== '' && text('ret_info_goal') !== '—' &&
           text('ret_info_funded') !== '' && text('ret_info_funded') !== '—';
       }, 120000, 'populated Retirement results');
+      await waitFor(function() {
+        return retirementLoadEvents.comparisons && retirementLoadEvents.comparisons.outcome === 'ok' &&
+          text('scenario_card_Conservative').indexOf('Loading comparison') === -1 &&
+          text('scenario_card_Aggressive').indexOf('Loading comparison') === -1;
+      }, 120000, 'Retirement comparison scenarios');
+      window.__cashCompassRetirementLoadDiagnosticListener = null;
       var retirementEmptyState = document.getElementById('ret_empty_state');
       var retirementScenarioCards = document.getElementById('ret_scenario_cards');
       var retirementResultsPanel = document.getElementById('ret_results_panel');
@@ -776,11 +787,33 @@
         text('ret_info_funded') !== '—' &&
         retirementEmptyState && retirementEmptyState.hidden === true &&
         retirementScenarioCards && retirementScenarioCards.hidden === false &&
+        text('scenario_card_Conservative') !== '' &&
         text('scenario_card_Base') !== '' &&
+        text('scenario_card_Aggressive') !== '' &&
         retirementResultsPanel && retirementResultsPanel.hidden === false;
       add('retirement_ready_results', retirementReadyPass, retirementReadyPass
-        ? 'The seeded Base retirement scenario revealed its derived age, scenario cards, goal, funded result, and analysis panel.'
-        : 'The ready Retirement state did not reveal the expected Base scenario results.');
+        ? 'The selected Base scenario became meaningful first, then all three seeded scenario cards and the analysis panel rendered.'
+        : 'The ready Retirement state did not reveal the selected result and all three scenario comparisons.');
+      var selectedTiming = retirementLoadEvents.selected || {};
+      var comparisonTiming = retirementLoadEvents.comparisons || {};
+      performanceFlows.retirementScenarioLoad = {
+        measured: selectedTiming.outcome === 'ok' && comparisonTiming.outcome === 'ok',
+        selectedMeaningfulMs: roundedMs_(selectedTiming.durationMs),
+        allComparisonsMs: roundedMs_(comparisonTiming.durationMs),
+        comparisonRequestMs: roundedMs_(comparisonTiming.comparisonDurationMs),
+        candidateBudget: { selectedMeaningfulMs: 6000, allComparisonsMs: 15000 },
+        withinCandidateBudget: selectedTiming.outcome === 'ok' && comparisonTiming.outcome === 'ok' &&
+          roundedMs_(selectedTiming.durationMs) <= 6000 &&
+          roundedMs_(comparisonTiming.durationMs) <= 15000,
+        outcome: selectedTiming.outcome === 'ok' && comparisonTiming.outcome === 'ok' ? 'ok' : 'error'
+      };
+      add('performance_retirement_scenario_load', performanceFlows.retirementScenarioLoad.measured === true,
+        performanceFlows.retirementScenarioLoad.measured
+          ? ('Selected Retirement content became meaningful in ' +
+            performanceFlows.retirementScenarioLoad.selectedMeaningfulMs +
+            ' ms; all three scenario comparisons completed in ' +
+            performanceFlows.retirementScenarioLoad.allComparisonsMs + ' ms.')
+          : 'Retirement selected-first and comparison timing was not captured.');
       customerLeaks = customerLeaks.concat(customerLanguageLeaks('Planning → Retirement'));
 
       if (typeof showPage === 'function') showPage('assets');
