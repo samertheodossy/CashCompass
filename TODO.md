@@ -11,7 +11,7 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current stage — Stage 3: Beta Readiness
 
-**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; isolated Central has since advanced through `@331`. The `@196` 7.2/10 read-only score is evidence-limited and not comparable, so the official score does not change until a full writer-inclusive advocate run. The 7.5/10 value remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 shipped 2026-07-09.** Exact-owner campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` passed 20/20 Planner pairs on source `8aa4bf5` / isolated `@318` and ratified the Financial Plan refresh budget. Diagnostic `@319` completed `4d`; `@322` closed ordinary Save `4f`; `@325` runtime-closed combined UX `3e`–`3i`/`3m`; `@328` closed Retirement `4g`; and `@331` closed money-format consistency `3n` under `REG-067`. Current ordering authority is `ROADMAP.md`: **separate accessibility closeout `3j` → deferred correction `5j`–`5m` → remaining candidate preparation → frozen-candidate evidence → supervised cohort proof → 10/10 Beta Release Candidate**. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
+**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; isolated Central has since advanced through `@334`. The `@196` 7.2/10 read-only score is evidence-limited and not comparable, so the official score does not change until a full writer-inclusive advocate run. The 7.5/10 value remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 shipped 2026-07-09.** Exact-owner campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` passed 20/20 Planner pairs on source `8aa4bf5` / isolated `@318` and ratified the Financial Plan refresh budget. Diagnostic `@319` completed `4d`; `@322` closed ordinary Save `4f`; `@325` runtime-closed combined UX `3e`–`3i`/`3m`; `@328` closed Retirement `4g`; `@331` closed money-format consistency `3n`; and `@334` closed the one-save Debt slice of product consistency `3o`. Current ordering authority is `ROADMAP.md`: **product consistency/shared lifecycle `3o` → separate accessibility closeout `3j` → deferred correction `5j`–`5m` → remaining candidate preparation → frozen-candidate evidence → supervised cohort proof → 10/10 Beta Release Candidate**. Customer-facing operations/support/privacy work is deferred until the product-consistency pass is complete. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
 
 `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered finish-line inventory
 for broad invited Beta. It assigns IDs `1a`–`9e`, focused-effort estimates,
@@ -19,11 +19,11 @@ dependencies, a critical path, three parallel work lanes, time-saving rules, and
 the reconciled execution waves. Use those IDs in new plans, handoffs, and
 status updates instead of creating another competing pre-Beta checklist.
 
-**Execution forecast (reconciled 2026-08-06):** controlled Family Beta can
+**Execution forecast (reconciled 2026-08-07):** controlled Family Beta can
 continue now. The former September 24 target and October 2 contingency boundary
 require rebaselining because compound Bill correction (`5j`) is deliberately
 deferred. Retirement load (`4g`) and money-format consistency (`3n`) are now
-closed. The gate order is: separate accessibility closeout (`3j`); deferred `5j`–`5m`; final
+closed. The gate order is: product consistency/shared lifecycle (`3o`); separate accessibility closeout (`3j`); deferred `5j`–`5m`; final
 financial/workbook/recovery proof; operations/support and monetization-ready
 architecture; exact-candidate freeze/evidence; then the supervised cohort and
 go/no-go. No calendar date waives a release gate. See `PROJECT_CONTEXT.md →

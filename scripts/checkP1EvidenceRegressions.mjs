@@ -298,6 +298,9 @@ for (const assertionId of ['overview_kpis', 'bank_selection_actions', 'bank_load
   assert.ok(populatedE2E.includes(`'${assertionId}'`), `Populated Dashboard contract missing ${assertionId}`);
 }
 assert.match(populatedBrowser,
+  /debtManageHost\.querySelector\('\.bill-edit-btn'\)[\s\S]*?debtSeparateRename[\s\S]*?debt_edit_account_name[\s\S]*?temporaryDebtName[\s\S]*?debt_edit_save_btn[\s\S]*?Debt unified Edit rename restoration/,
+  'Populated Dashboard must prove that one Debt Edit save renames and restores the account with no separate row action');
+assert.match(populatedBrowser,
   /measureOrdinaryBankSave_[\s\S]*?bank_update_save_btn[\s\S]*?sampleValues[\s\S]*?samples\.length === 5[\s\S]*?acknowledgementP95Ms[\s\S]*?completionP95Ms[\s\S]*?candidateBudget/,
   '4f must time five real ordinary Save samples through the shipping Bank editor');
 assert.match(populatedBrowser,

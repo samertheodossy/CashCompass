@@ -129,17 +129,21 @@ recently completed `5h` and `5i` as implementation history.
 
 | Order | Open IDs | Workstream | Focused estimate |
 |---:|---|---|---:|
-| 1 | `3j`, `3k` | Separate accessibility closeout and frozen-candidate advocate score | 4–7 d |
-| 2 | `5j`–`5m` | Deferred safe correction families and audit disposition | 4.5–8 d including integrated disposable-workbook validation |
-| 3 | `5a`–`5f` | Remaining financial/workbook proof | 4.5–11 d |
-| 4 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
-| 5 | `7a`–`7f` | Monetization-ready policy and architecture foundation; no billing activation | 5–10 d |
-| 6 | `8a`–`8f` | Freeze, complete exact-candidate evidence, score, and READY verdict | 3.5–7 d plus fixes |
-| 7 | `9a`–`9e` | Supervised cohort, go/no-go, and separately approved Central Beta promotion | 2–3 active d plus 5–7 calendar d and fixes |
+| 1 | `3o` | Pre-publish product consistency and shared lifecycle | 5–9 d after the completed Debt slice |
+| 2 | `3j`, `3k` | Separate accessibility closeout and frozen-candidate advocate score | 4–7 d |
+| 3 | `5j`–`5m` | Deferred safe correction families and audit disposition | 4.5–8 d including integrated disposable-workbook validation |
+| 4 | `5a`–`5f` | Remaining financial/workbook proof | 4.5–11 d |
+| 5 | `6a`–`6f` | Release operations, support, privacy, and known limitations | 3.5–6.5 d |
+| 6 | `7a`–`7f` | Monetization-ready policy and architecture foundation; no billing activation | 5–10 d |
+| 7 | `8a`–`8f` | Freeze, complete exact-candidate evidence, score, and READY verdict | 3.5–7 d plus fixes |
+| 8 | `9a`–`9e` | Supervised cohort, go/no-go, and separately approved Central Beta promotion | 2–3 active d plus 5–7 calendar d and fixes |
 
-**Current execution decision (2026-08-06):** the combined `3e`–`3i`/`3m` wave,
+**Current execution decision (2026-08-07):** the combined `3e`–`3i`/`3m` wave,
 Retirement scenario-load work (`4g`), and money-format consistency (`3n`) are
-complete. Execute `3j` separately. Compound Activity correction
+complete; `3n` source commit `d1278ef` is on `origin/main`. Hold customer-facing
+release work and execute `3o` first; one-save Debt Edit/Rename convergence is complete on
+isolated `@334`, followed by Bank, Investments, Houses, and Income as separate
+guarded migrations. Execute `3j` afterward. Compound Activity correction
 `5j`–`5m` remains a broad-Beta requirement but is deliberately deferred until
 after these focused follow-ups. The exact-candidate advocate rerun `3k` occurs
 only after freeze; Groups 6–7 may advance during runtime/review waits.
@@ -210,9 +214,10 @@ acceptance contract, close it with evidence rather than manufacturing a redesign
 | 3j | Responsive and accessibility closeout | Desktop/medium/390px, keyboard, focus, programmatic control names, target size, contrast, and reduced motion pass; all visible form labels are associated with their controls | 3–5 d |
 | 3k | Exact-candidate task-based advocate rerun | All eight criteria are rescored from interactive evidence; every category reaches the release path to ≥9 | 1–2 d |
 | 3m | Form readiness and residual customer language — **✅ complete** | Primary actions fail closed until minimum input is valid; customer labels replace stored tokens; duplicate/obsolete guidance is removed without changing stored values or server validation | Complete on isolated `@325`; Populated 24/24 and First-Run 16/16 |
-| 3n | Customer-visible money-format consistency — **✅ complete** | Normal-path finite money uses grouped `$x.xx` with signs before `$`; percentages, counts, ages, stored values, schemas, writers, and numeric-entry behavior remain unchanged | Complete on isolated `@331`; Populated V12 26/26 PASS under `REG-067` |
+| 3n | Customer-visible money-format consistency — **✅ complete** | Normal-path finite money uses grouped `$x.xx` with signs before `$`; percentages, counts, ages, stored values, schemas, writers, and numeric-entry behavior remain unchanged | Commit `d1278ef` on `origin/main`; isolated `@331`; Populated V12 26/26 PASS under `REG-067` |
+| 3o | Pre-publish product consistency and shared lifecycle | Converge Edit/Rename/Stop/Reactivate behavior and customer language across long-lived entities without partial cross-sheet migrations. One user intent gets one obvious action; internal linked-reference, rollback, and audit mechanics stay behind it. Debt is the reference implementation; Bank, Investments, Houses, and Income migrate one at a time with duplicate/stale guards, rollback, audit evidence, and guarded disposable-workbook proof | One-save Debt slice complete on isolated `@334`; run `FR-2abc5049-2b4a-4f3b-b938-10f78ddc9244` passed 26/26 with real rename-and-restore, clean console, Restricted sharing, and verified cleanup; remaining estimate 5–9 d |
 
-**Group 3 open estimate: 4–7 focused days.**
+**Group 3 open estimate: 9–16 focused days, with `3o` sequenced before `3j`.**
 
 ### Isolated `@196` advocate finding reconciliation
 
@@ -495,7 +500,8 @@ not block early engineering.
 | Completed Aug 5 cross-flow measurement | `4d` closed on isolated `@319`: Save 1 ms acknowledgement / 8.332 s completion, navigation 17/18 ms p50/p95, populated Overview 11.776 s | Populated Dashboard V9 PASS, Restricted sharing, verified Trash cleanup, and admin 4d panel confirmation | Beta stayed `@106`; bounded stayed untouched; runner returned OFF | Measurement gap closed; ordinary Save completion moves to `4f` follow-up |
 | Completed Aug 6 ordinary Save follow-up | `4f` Save investigation closed on isolated `@322`: p50/p95 improved from 11.060/17.568 s to 6.520/9.418 s | Populated Dashboard V10 run `FR-afc35e3b-77ff-4c91-88cb-88f28c55fa0f` passed 24/24, Restricted sharing, zero errors, and verified Trash cleanup | Beta stayed `@106`; bounded stayed untouched; no Git commit or push yet | Strict 6 s budget remains a documented near-miss; no required Save/audit stage is weakened |
 | Completed Aug 6 UX closeout | `3e`–`3i` and `3m` runtime-complete on isolated `@325` | Populated `FR-51e0f9a0-0d1b-4049-9eea-36b1107a0976` passed 24/24; First-Run `FR-78d9e3b6-a907-4959-bbca-db0966f623f1` passed 16/16; Restricted sharing and cleanup verified | Beta stayed `@106`; bounded stayed untouched; source commit `993720c` is on `origin/main` | Context, filters, Setup progress, Help, composition, readiness, and customer language close together; `3j` remains separate |
-| Completed Aug 6 money-format closeout | `3n` / `REG-067` runtime-complete on isolated `@331` | Populated V12 run `FR-f7719f23-9248-41fa-9f5c-7327db963ce3` passed 26/26 with clean console, Restricted sharing, and verified cleanup | Beta stayed `@106`; bounded stayed untouched | Normal-path money is grouped `$x.xx` with signs before `$`; stored values and writers are unchanged |
+| Completed Aug 6 money-format closeout | `3n` / `REG-067` runtime-complete on isolated `@331` | Populated V12 run `FR-f7719f23-9248-41fa-9f5c-7327db963ce3` passed 26/26 with clean console, Restricted sharing, and verified cleanup | Source commit `d1278ef` is on `origin/main`; Beta stayed `@106`; bounded stayed untouched | Normal-path money is grouped `$x.xx` with signs before `$`; stored values and writers are unchanged |
+| Current product-consistency closeout | `3o`; one-save Debt Edit complete on `@334`, then Bank → Investments → Houses → Income | `FR-2abc5049-2b4a-4f3b-b938-10f78ddc9244` passed 26/26 with actual rename-and-restore, both immutable rename events, clean console, Restricted sharing, and verified cleanup | Beta stayed `@106`; bounded stayed untouched | One customer intent maps to one obvious action; cross-sheet rename/reactivation changes remain guarded and fail closed |
 | Separate accessibility closeout | Complete `3j` alone | Keyboard, focus, names, target size, contrast, reduced motion, and supported-width evidence | Continue operations foundations during browser waits | Accessibility reaches its release gate without broadening the prior UX patch |
 | Deferred correction return | Implement and prove `5j`–`5m` on guarded disposable workbooks | Advance `5a`–`5f` candidate matrix/recovery proof | Continue known limitations and support posture | Supported correction families are atomic; unsupported audit rows remain honest |
 | Candidate preparation | Finish every remaining `5a`–`5f` prerequisite | Complete fixture, visual, accessibility, and operations evidence | Finish Groups 6–7 | Candidate prerequisites are complete before one freeze |

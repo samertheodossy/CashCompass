@@ -382,8 +382,8 @@ function stopTrackingHouse() {
   const confirmed = window.confirm(
     'Stop tracking "' + house + '"?\n\n' +
     'The house will no longer appear in the House Values or House Expenses ' +
-    'selectors. The HOUSES - ' + house + ' sheet and all history stay in ' +
-    'place. You can still view past values and expenses for reporting.'
+    'selectors or current calculations. All past values and expenses are ' +
+    'preserved for reporting.'
   );
   if (!confirmed) return;
 

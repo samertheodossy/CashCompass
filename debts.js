@@ -381,7 +381,7 @@ function debtFieldKindForLabel_(label) {
  *   - writes ONLY changed cells,
  *   - recomputes the derived Acct PCT Avail ONCE after all edits,
  *   - writes ONE consolidated debt_update activity row,
- *   - never touches Account Name (rename is deferred to Phase 2) and never
+ *   - never touches Account Name (the Edit surface saves rename separately) and never
  *     touches Cash Flow.
  * Payload: { sheetRow, expectedAccountName, type?, accountBalance?, dueDate?,
  *            creditLimit?, creditLeft?, minimumPayment?, intRate?, linkedProperty? }
@@ -513,7 +513,7 @@ function updateTrackedDebtFromDashboard(payload) {
     next[label] = newNum;
   };
 
-  // Account Name is intentionally NOT editable (Phase 2 rename).
+  // Account Name is intentionally handled by the separate guarded rename writer.
   textChange('type', 'Type', headerMap.typeColZero);
   currencyChange('accountBalance', 'Account Balance', headerMap.balanceColZero);
   intChange('dueDate', 'Due Date', headerMap.dueDateColZero);
@@ -650,7 +650,7 @@ function getAllCashFlowYearSheets_(ss) {
  * formulas are never touched), then logs ONE debt_rename activity row. The row
  * is identified by sheetRow + expectedAccountName (stale guard). Duplicates are
  * blocked (active + inactive, case-insensitive) as is the reserved TOTAL DEBT
- * row. Serialized via LockService.getDocumentLock(). On a partial failure the
+ * row. Serialized per user (valid in both Central and bound contexts). On a partial failure the
  * already-applied writes are best-effort reverted.
  *
  * Out of scope (by design): merging accounts, alias-map edits, Activity Log
@@ -673,11 +673,15 @@ function renameDebtFromDashboard(payload) {
     throw new Error('Missing debt account. Please refresh and try again.');
   }
 
-  const lock = LockService.getDocumentLock();
+  // A standalone Central web app has no bound-document lock. The user lock is
+  // available in both Central and bound modes
+  // and is the correct scope because each user resolves to their own workbook.
+  const lock = LockService.getUserLock();
   try {
+    if (!lock) throw new Error('No user lock is available.');
     lock.waitLock(30000);
   } catch (lockErr) {
-    throw new Error('Could not acquire document lock: ' + (lockErr && lockErr.message || lockErr));
+    throw new Error('Another debt change is in progress. Please try again in a moment.');
   }
 
   try {
@@ -827,6 +831,229 @@ function renameDebtFromDashboard(payload) {
 }
 
 /**
+ * Manage Debts — one customer-facing Edit save.
+ *
+ * Account Name is submitted with every other editable field. When the name
+ * changes, this coordinator holds one document lock, updates linked Cash Flow
+ * payees, then applies the remaining debt fields before returning. A failure
+ * after writes begin restores the original debt row and every renamed Cash
+ * Flow payee on a best-effort basis. Existing debt_update and debt_rename
+ * Activity evidence remains explicit even though the UI exposes one action.
+ */
+function saveTrackedDebtFromDashboard(payload) {
+  validateRequired_(payload, ['sheetRow', 'expectedAccountName', 'newAccountName']);
+
+  const sheetRow = parseInt(String(payload.sheetRow), 10);
+  if (isNaN(sheetRow) || sheetRow < 2) {
+    throw new Error('Invalid debt row. Please refresh and try again.');
+  }
+  const expectedAccountName = String(payload.expectedAccountName || '').trim();
+  if (!expectedAccountName) {
+    throw new Error('Missing debt account. Please refresh and try again.');
+  }
+
+  // Central is a standalone web app, where a document-scoped lock is null.
+  // Use the per-user lock so Central and bound deployments share one safe path.
+  const lock = LockService.getUserLock();
+  try {
+    if (!lock) throw new Error('No user lock is available.');
+    lock.waitLock(30000);
+  } catch (lockErr) {
+    throw new Error('Another debt change is in progress. Please try again in a moment.');
+  }
+
+  let writesStarted = false;
+  let sheet = null;
+  let debtRowSnapshot = null;
+  const cashFlowTargets = [];
+
+  try {
+    const ss = getUserSpreadsheet_();
+    sheet = getSheet_(ss, 'DEBTS');
+    const preliminaryHeaderMap = getDebtsHeaderMap_(sheet);
+    if (sheetRow > Math.max(sheet.getLastRow(), 1)) {
+      throw new Error('Debt has moved on the sheet. Please refresh and try again.');
+    }
+
+    const actualName = String(
+      sheet.getRange(sheetRow, preliminaryHeaderMap.nameCol).getDisplayValue() || ''
+    ).trim();
+    if (!actualName) {
+      throw new Error('Debt has moved on the sheet. Please refresh and try again.');
+    }
+    if (isDebtSummaryRowName_(actualName)) {
+      throw new Error('Cannot edit the reserved "' + actualName + '" row.');
+    }
+    if (actualName !== expectedAccountName) {
+      throw new Error(
+        'Debt has moved on the sheet (expected "' + expectedAccountName +
+        '", found "' + actualName + '"). Please refresh and try again.'
+      );
+    }
+    if (preliminaryHeaderMap.activeCol !== -1 && isExplicitInactive_(
+        sheet.getRange(sheetRow, preliminaryHeaderMap.activeCol).getDisplayValue())) {
+      throw new Error('This debt is not currently tracked. Restore it before editing.');
+    }
+
+    const newName = validateRenamedDebtAccountName_(payload.newAccountName, actualName);
+    const nameChanged = newName !== actualName;
+    if (!nameChanged) {
+      return updateTrackedDebtFromDashboard(payload);
+    }
+
+    // Complete validation and additive column evolution before any user data
+    // changes. A validation failure therefore cannot leave a partial rename.
+    const headerMap = ensureDebtsLinkedPropertyColumn_(sheet, ss);
+    const rowDisplay = sheet.getRange(
+      sheetRow, 1, 1, Math.max(sheet.getLastColumn(), 1)).getDisplayValues()[0];
+    const finalType = typeof payload.type === 'undefined'
+      ? String(rowDisplay[headerMap.typeColZero] || '').trim()
+      : String(payload.type || '').trim();
+    if (!finalType) throw new Error('Type is required.');
+
+    if (typeof payload.dueDate !== 'undefined' && String(payload.dueDate || '').trim() !== '') {
+      const dueDay = parseInt(String(payload.dueDate), 10);
+      if (isNaN(dueDay) || dueDay < 1 || dueDay > 31) {
+        throw new Error('Due day of month must be a whole number between 1 and 31.');
+      }
+    }
+
+    const currentLinkedProperty = headerMap.linkedPropertyColZero === -1
+      ? '' : String(rowDisplay[headerMap.linkedPropertyColZero] || '').trim();
+    const requestedLinkedProperty = !isDebtTypeLoanOrHeloc_(finalType)
+      ? ''
+      : (typeof payload.linkedProperty === 'undefined'
+        ? currentLinkedProperty : payload.linkedProperty);
+    validateDebtLinkedProperty_(
+      ss, finalType, requestedLinkedProperty, currentLinkedProperty);
+
+    // Resolve every linked Cash Flow target before the first write.
+    const cashFlowSheetsUpdated = [];
+    const cfSheets = getAllCashFlowYearSheets_(ss);
+    for (let s = 0; s < cfSheets.length; s++) {
+      const cfSheet = cfSheets[s];
+      let cfHeader;
+      try {
+        cfHeader = getCashFlowHeaderMap_(cfSheet);
+      } catch (_headerErr) {
+        continue;
+      }
+      const display = cfSheet.getDataRange().getDisplayValues();
+      let rowsHere = 0;
+      for (let r = 1; r < display.length; r++) {
+        const rowType = String(display[r][cfHeader.typeColZero] || '').trim();
+        const rowPayee = String(display[r][cfHeader.payeeColZero] || '').trim();
+        if (rowType === 'Expense' && rowPayee === actualName) {
+          cashFlowTargets.push({
+            sheet: cfSheet,
+            row: r + 1,
+            col: cfHeader.payeeCol,
+            oldValue: cfSheet.getRange(r + 1, cfHeader.payeeCol).getValue()
+          });
+          rowsHere++;
+        }
+      }
+      if (rowsHere > 0) {
+        cashFlowSheetsUpdated.push({ sheet: cfSheet.getName(), rows: rowsHere });
+      }
+    }
+
+    const lastCol = Math.max(sheet.getLastColumn(), 1);
+    const debtRowRange = sheet.getRange(sheetRow, 1, 1, lastCol);
+    debtRowSnapshot = {
+      values: debtRowRange.getValues()[0],
+      formulas: debtRowRange.getFormulas()[0],
+      numberFormats: debtRowRange.getNumberFormats()[0]
+    };
+
+    writesStarted = true;
+    sheet.getRange(sheetRow, headerMap.nameCol).setValue(newName);
+    for (let i = 0; i < cashFlowTargets.length; i++) {
+      cashFlowTargets[i].sheet
+        .getRange(cashFlowTargets[i].row, cashFlowTargets[i].col)
+        .setValue(newName);
+    }
+
+    const detailPayload = Object.assign({}, payload, {
+      expectedAccountName: newName
+    });
+    const updateResult = updateTrackedDebtFromDashboard(detailPayload);
+
+    try { touchDashboardSourceUpdated_('cash_flow'); } catch (_touchErr) {}
+
+    try {
+      const typeForLog = headerMap.typeColZero === -1
+        ? ''
+        : String(sheet.getRange(sheetRow, headerMap.typeCol).getDisplayValue() || '').trim();
+      appendActivityLog_(ss, {
+        eventType: 'debt_rename',
+        entryDate: Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+        amount: 0,
+        direction: '',
+        payee: newName,
+        category: typeForLog,
+        accountSource: '',
+        cashFlowSheet: '',
+        cashFlowMonth: '',
+        dedupeKey: '',
+        details: JSON.stringify({
+          detailsVersion: 1,
+          oldName: actualName,
+          newName: newName,
+          cashFlowRowsUpdated: cashFlowTargets.length,
+          cashFlowSheetsUpdated: cashFlowSheetsUpdated,
+          sheetRow: sheetRow,
+          unifiedEditSave: true
+        })
+      });
+    } catch (logErr) {
+      Logger.log('saveTrackedDebtFromDashboard rename activity log: ' + logErr);
+    }
+
+    const detailCount = updateResult && Array.isArray(updateResult.changedFields)
+      ? updateResult.changedFields.length : 0;
+    return {
+      ok: true,
+      message: 'Changes saved — account renamed' +
+        (detailCount ? ' and ' + detailCount + ' other field' + (detailCount === 1 ? '' : 's') + ' updated' : '') + '.',
+      accountName: newName,
+      oldAccountName: actualName,
+      nameChanged: true,
+      changedFields: updateResult && updateResult.changedFields || [],
+      cashFlowRowsUpdated: cashFlowTargets.length,
+      cashFlowSheetsUpdated: cashFlowSheetsUpdated
+    };
+  } catch (err) {
+    if (writesStarted && sheet && debtRowSnapshot) {
+      // Restore the original debt row cell-by-cell so formulas remain formulas.
+      try {
+        for (let c = 0; c < debtRowSnapshot.values.length; c++) {
+          const cell = sheet.getRange(sheetRow, c + 1);
+          if (debtRowSnapshot.formulas[c]) {
+            cell.setFormula(debtRowSnapshot.formulas[c]);
+          } else {
+            cell.setValue(debtRowSnapshot.values[c]);
+          }
+          cell.setNumberFormat(debtRowSnapshot.numberFormats[c]);
+        }
+      } catch (_restoreDebtErr) { /* best-effort */ }
+      try {
+        for (let i = 0; i < cashFlowTargets.length; i++) {
+          cashFlowTargets[i].sheet
+            .getRange(cashFlowTargets[i].row, cashFlowTargets[i].col)
+            .setValue(cashFlowTargets[i].oldValue);
+        }
+      } catch (_restoreCashFlowErr) { /* best-effort */ }
+      throw new Error('Changes were not saved and were rolled back: ' +
+        (err && err.message || err));
+    }
+    throw err;
+  } finally {
+    try { lock.releaseLock(); } catch (_releaseErr) {}
+  }
+}
+
+/**
  * Returns active, non-summary debts for dropdowns / UI consumers. Inactive
  * debts are filtered out via the shared explicit-wins-with-fallback rule.
  */
@@ -950,7 +1177,7 @@ function updateDebtField(payload) {
       throw new Error('Use Stop Tracking / Reactivate to change Active.');
     }
     if (fieldName === 'Account Name') {
-      throw new Error('Use Rename Debt to change Account Name.');
+      throw new Error('Use the rename action in Edit to change Account Name.');
     }
     // Derived / calculated columns (e.g. Acct PCT Avail) and anything else.
     throw new Error('This field cannot be edited here: ' + (fieldName || '(blank)'));

@@ -15,6 +15,7 @@ The change discipline below (carried from V1.2) still governs **every** edit. Fo
 Every new change must follow these rules unless the user explicitly approves otherwise:
 
 - **One issue at a time.** Pick the single highest-value issue, ship it, lock it, then pick the next.
+- **Keep the user workflow simple.** One user intent should have one obvious action. Do not expose internal coordination, linked-reference maintenance, audit logging, or safety mechanics as extra buttons or sequential steps when CashCompass can perform them safely behind one action. Challenge designs that make the user understand implementation boundaries; prefer the fewest clear decisions and clicks consistent with financial safety.
 - **No large refactors.** Additive, localized, minimal diffs only.
 - **No architecture changes unless explicitly approved.** `doGet`, `includeHtml_`, snapshot shape, planner decomposition, and sheet/module boundaries are frozen.
 - **No destructive sheet changes.** No header rewrites, no column removals, no reformatting of populated workbooks. New sheets created by helpers must stay idempotent no-ops on populated sheets.

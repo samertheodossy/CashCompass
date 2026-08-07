@@ -726,10 +726,49 @@
         return String(text('debt_manage_list')).indexOf(expected.debtName) !== -1 &&
           manageHasStop('debt_manage_list');
       }, 90000, 'the populated Debt Manage inventory');
+      var debtManageHost = document.getElementById('debt_manage_list');
+      var debtEditButton = debtManageHost && debtManageHost.querySelector('.bill-edit-btn');
+      var debtSeparateRename = debtManageHost && debtManageHost.querySelector('.bill-rename-btn');
+      if (debtEditButton && typeof debtEditButton.click === 'function') debtEditButton.click();
+      await waitFor(function() {
+        var editWrap = document.getElementById('debt_edit_wrap');
+        var accountNameInput = document.getElementById('debt_edit_account_name');
+        var editSave = document.getElementById('debt_edit_save_btn');
+        return editWrap && editWrap.style.display !== 'none' && accountNameInput &&
+          accountNameInput.value === expected.debtName && editSave &&
+          !document.getElementById('debt_rename_save_btn');
+      }, 10000, 'Debt account name inside the unified Edit save');
+
+      var temporaryDebtName = expected.debtName + ' E2E Rename';
+      document.getElementById('debt_edit_account_name').value = temporaryDebtName;
+      document.getElementById('debt_edit_save_btn').click();
+      await waitFor(function() {
+        return Object.keys(window.__dashboardManageDebts || {}).some(function(key) {
+          return String(window.__dashboardManageDebts[key].accountName || '') === temporaryDebtName;
+        });
+      }, 90000, 'Debt unified Edit rename save');
+
+      debtManageHost = document.getElementById('debt_manage_list');
+      debtEditButton = debtManageHost && debtManageHost.querySelector('.bill-edit-btn');
+      if (debtEditButton && typeof debtEditButton.click === 'function') debtEditButton.click();
+      await waitFor(function() {
+        var accountNameInput = document.getElementById('debt_edit_account_name');
+        return accountNameInput && accountNameInput.value === temporaryDebtName;
+      }, 10000, 'renamed Debt in Edit');
+      document.getElementById('debt_edit_account_name').value = expected.debtName;
+      document.getElementById('debt_edit_save_btn').click();
+      await waitFor(function() {
+        var names = Object.keys(window.__dashboardManageDebts || {}).map(function(key) {
+          return String(window.__dashboardManageDebts[key].accountName || '');
+        });
+        return names.indexOf(expected.debtName) !== -1 && names.indexOf(temporaryDebtName) === -1;
+      }, 90000, 'Debt unified Edit rename restoration');
+
       debtPass = debtPass && String(text('debt_manage_list')).indexOf(expected.debtName) !== -1 &&
-        manageHasStop('debt_manage_list');
+        manageHasStop('debt_manage_list') && !debtSeparateRename &&
+        !document.getElementById('debt_rename_save_btn');
       add('debt_selection_actions', debtPass, debtPass
-        ? 'The synthetic Debt selected with Save in Update and confirmed Stop tracking available only in Manage.'
+        ? 'The synthetic Debt selected with Save in Update; Manage exposed Edit and Stop tracking, and one Save changes action renamed and restored the account.'
         : 'The populated Debt selector or its action gating was incorrect.');
 
       if (typeof showTab === 'function') showTab('propertyPerformance');

@@ -13,8 +13,7 @@
  *                                  year)
  *   stopTrackingIncomeSource()   — confirm + POST
  *                                  deactivateIncomeSourceFromDashboard
- *                                  (flips Active=NO on every matching
- *                                  Cash Flow row)
+ *                                  (deactivates every matching Cash Flow row)
  *
  * No separate INPUT - Income Sources sheet is involved.
  */
@@ -123,7 +122,7 @@ function renderIncomeSourcesList_(rows) {
         '<td style="padding:8px;border-bottom:1px solid #f1f5f9;">' + freqStr + '</td>' +
         '<td class="income-manage-actions" style="padding:8px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap;">' +
           '<button class="small-btn danger" ' +
-            'title="Flips Active to NO on every matching Cash Flow row; history is preserved" ' +
+            'title="Stop tracking this income source; history is preserved" ' +
             'onclick="stopTrackingIncomeSource(\'' + escapeJs(key) + '\')">' +
             'Stop tracking' +
           '</button>' +
@@ -420,8 +419,8 @@ function stopTrackingIncomeSource(key) {
   var nameLabel = src.sourceName || 'this income source';
   var confirmed = window.confirm(
     'Stop tracking "' + nameLabel + '"?\n\n' +
-    'Every Cash Flow row that rolls up into this source will be marked Active=NO. ' +
-    'History is preserved — no rows are deleted.'
+    'This source will no longer be included in recurring income totals. ' +
+    'Existing Cash Flow history is preserved.'
   );
   if (!confirmed) return;
 

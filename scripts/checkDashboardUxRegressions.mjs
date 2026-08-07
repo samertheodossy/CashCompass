@@ -28,6 +28,7 @@ const files = Object.fromEntries(await Promise.all([
   'BankAccountsUI.html',
   'DebtsUI.html',
   'HouseValuesUI.html',
+  'house_values.js',
   'InvestmentsUI.html',
   'PlannerDashboard.html',
   'PlannerDashboardWeb.html',
@@ -2475,6 +2476,39 @@ assert.match(files['Dashboard_Script_PlanningDebts.html'],
   'Debt validation must use the same plain-language due-day wording');
 assert.doesNotMatch(body, /Due Date \(day of month\)/,
   'Debt editor must not restore the ambiguous Due Date label');
+assert.doesNotMatch(files['Dashboard_Script_PlanningDebts.html'],
+  /onclick="openDebtRenameForm\(/,
+  'Debt Manage rows must not expose a separate Rename action');
+assert.match(body,
+  /id="debt_edit_wrap"[\s\S]*?id="debt_edit_account_name"[\s\S]*?id="debt_edit_save_btn"[^>]*onclick="submitDebtEdit_\(\)"/,
+  'Debt account name must be part of the single Edit save surface');
+assert.doesNotMatch(body, /debt_rename_save_btn|>Rename account</,
+  'Debt Edit must not require a separate Rename account action');
+assert.match(files['Dashboard_Script_PlanningDebts.html'],
+  /newAccountName:\s*accountName[\s\S]*?\.saveTrackedDebtFromDashboard\(payload\)/,
+  'Debt Save changes must submit the account name through the unified server coordinator');
+assert.match(files['debts.js'],
+  /function saveTrackedDebtFromDashboard\(payload\)[\s\S]*?LockService\.getUserLock\(\)[\s\S]*?lock\.waitLock\(30000\)[\s\S]*?cashFlowTargets[\s\S]*?updateTrackedDebtFromDashboard\(detailPayload\)[\s\S]*?were not saved and were rolled back/,
+  'Unified Debt Edit must retain one lock, linked Cash Flow updates, detail writes, and rollback');
+assert.doesNotMatch(files['debts.js'],
+  /function (?:renameDebtFromDashboard|saveTrackedDebtFromDashboard)\(payload\)[\s\S]{0,900}?LockService\.getDocumentLock\(\)/,
+  'Debt rename writers must not use a null document lock in standalone Central');
+assert.doesNotMatch(files['Dashboard_Script_PlanningDebts.html'], /function submitDebtRename_\(/,
+  'Debt Edit must not retain a second client-side rename submission path');
+assert.doesNotMatch(body, /renaming coming in a later update/i,
+  'Debt Edit must not claim that its existing rename capability is unavailable');
+assert.match(files['Dashboard_Help.html'],
+  /one <strong>Save changes<\/strong> action[\s\S]*?updates linked Cash Flow references/,
+  'Debt Help must describe the one-action Edit workflow');
+assert.doesNotMatch(body, /Stop tracking uses the Active column/i,
+  'Debt lifecycle guidance must describe customer outcomes instead of stored state');
+assert.doesNotMatch(files['Dashboard_Script_Income.html'], /Active=NO/i,
+  'Income lifecycle controls must not expose an internal stored token');
+assert.doesNotMatch(files['Dashboard_Script_AssetsHouseValues.html'], /The HOUSES - /,
+  'House stop-tracking confirmation must not expose an internal property tab name');
+assert.doesNotMatch(files['house_values.js'],
+  /const message = alreadyInactive[\s\S]{0,300}?HOUSES - /,
+  'House stop-tracking success must not expose an internal property tab name');
 assert.match(body,
   /data-body="upcoming"[\s\S]{0,300}?Checking upcoming expenses…/,
   'Optional Upcoming Setup card must identify its initial loading state');

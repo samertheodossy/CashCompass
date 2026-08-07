@@ -2048,9 +2048,8 @@ function deactivateHouseFromDashboard(payload) {
   }
 
   const message = alreadyInactive
-    ? '"' + houseName + '" was already marked inactive. History and HOUSES sheet remain.'
-    : 'Stopped tracking "' + houseName + '". The HOUSES - ' + houseName +
-      ' sheet and all history remain.';
+    ? '"' + houseName + '" was already inactive. History is preserved.'
+    : 'Stopped tracking "' + houseName + '". History is preserved.';
 
   return {
     ok: true,
