@@ -656,7 +656,11 @@ function appendUpcomingActivityUpdate_(ss, upcomingId, previous, next, changedFi
 
 function fmtMoneyForMessage_(n) {
   const v = round2_(toNumber_(n));
-  return '$' + (isNaN(v) ? '0.00' : v.toFixed(2));
+  const safe = isFinite(v) ? v : 0;
+  const sign = safe < 0 ? '-' : '';
+  const parts = Math.abs(safe).toFixed(2).split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return sign + '$' + parts.join('.');
 }
 
 /**

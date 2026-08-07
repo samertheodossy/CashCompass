@@ -1452,6 +1452,35 @@ Whenever a production bug is fixed:
   reduced those measurements to 1 ms / 5.648 s, both within the directional
   6 s / 15 s targets. The comparison request itself completed in 5.647 s.
 
+### REG-067 — Customer-visible money used inconsistent signs, precision, and grouping
+- Category: REGRESSION / UI CONSISTENCY / CURRENCY PRESENTATION / EVIDENCE SAFETY
+- Date discovered: 2026-08-06
+- Status: fixed and runtime-proven on isolated Central `@331`; Populated V12
+  run `FR-f7719f23-9248-41fa-9f5c-7327db963ce3` passed 26/26 with Restricted
+  single-owner sharing, zero browser errors, and verified cleanup
+- Root cause: several client and server presentation paths bypassed the shared
+  currency contract, used literal `$0` guidance, omitted grouping/decimals, or
+  placed a negative sign after the dollar symbol. The first V12 probe also
+  exposed a harness-only false positive when adjacent Bills table cells merged
+  `$180.00` and due day `12` into the text token `$180.0012`.
+- Expected result: every finite normal-path monetary display uses grouped
+  `$x.xx`, with any sign before `$`; percentages, counts, ages, dates, and
+  numeric-entry behavior retain their own semantics. Non-finite values never
+  render as customer money.
+- Safety guard: stored numeric values, workbook formulas, schemas, writers,
+  business rules, and worksheet formatting are unchanged. The populated probe
+  inspects individual text nodes so table-cell boundaries cannot manufacture a
+  malformed amount.
+- Permanent coverage: `npm run test:dashboard-ux` executes the canonical client
+  and server formatters against zero, cents, grouped thousands, negatives, and
+  non-finite input; `npm run test:p1-evidence` locks the text-node-safe V12
+  browser contract. The guarded Populated journey checks Overview, Assets,
+  Properties, Upcoming, Bills, and Income plus seeded representative amounts.
+- Runtime result: isolated `@331` passed `money_format_consistency`, all other 25
+  assertions, clean-console navigation, Restricted sharing, and exact verified
+  Trash cleanup. Beta remained `@106`; the bounded deployment and workbook were
+  untouched.
+
 ---
 
 ## 3a loading-state consistency coverage
@@ -1590,4 +1619,5 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-064 | Transient Apps Script storage failure aborted repeat Overview load | REGRESSION / UI RELIABILITY / DASHBOARD STARTUP | fixed in current candidate; focused/full local regressions PASS; bounded recovery confirmation pending |
 | REG-065 | Populated Manage views briefly claimed no tracked records | REGRESSION / UI TRUTH / ASYNC LOADING | fixed; full regressions + isolated `@326` Populated 24/24 PASS + user visual confirmation |
 | REG-066 | Retirement blocked selected results on all three scenario calculations | REGRESSION / PERFORMANCE / UI TRUTH / STALE RESPONSE SAFETY | fixed; full regressions + isolated `@328` Populated V11 25/25 PASS; selected/all comparisons 1 ms/5.648 s; user visual confirmation |
+| REG-067 | Customer-visible money used inconsistent signs, precision, and grouping | REGRESSION / UI CONSISTENCY / CURRENCY PRESENTATION / EVIDENCE SAFETY | fixed; full regressions + isolated `@331` Populated V12 26/26 PASS; clean console, Restricted sharing, verified cleanup |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

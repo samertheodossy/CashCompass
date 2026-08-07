@@ -2577,7 +2577,7 @@ function renderBankImportCsvPasteTable_(parseResult) {
     const r = allRows[i];
     const bg = r.error ? 'background:#fde2e2;' : '';
     const balanceDisplay = (r.raw && typeof r.raw.balance === 'number')
-      ? '$' + r.raw.balance.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+      ? escapeHtml(fmtCurrency(r.raw.balance))
       : (r.raw && r.raw.balanceRaw != null ? escapeHtml(String(r.raw.balanceRaw)) : '');
     const ext = r.raw && r.raw.externalAccountId ? String(r.raw.externalAccountId) : '';
     const extDisplay = ext.length > 14 ? escapeHtml(ext.slice(0, 12)) + '…' : escapeHtml(ext);

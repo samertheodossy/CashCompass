@@ -41,7 +41,9 @@ const files = Object.fromEntries(await Promise.all([
   'income_sources.js',
   'onboarding.js',
   'planner_helpers.js',
+  'property_performance.js',
   'retirement.js',
+  'rolling_debt_payoff.js',
   'upcoming_expenses.js',
   'test_harness_scenarios_bills.js',
   'test_harness_scenarios.js',
@@ -198,6 +200,61 @@ for (const source of currencyUiSources) {
   assert.doesNotMatch(source, /return '\$' \+ num\.toLocaleString\('en-US'/,
     'Currency formatters must never render $-amount');
 }
+
+const dashboardMoneyFormatter = Function(
+  `${functionSource_(render, 'fmtCurrency')}; return fmtCurrency;`
+)();
+const plannerMoneyFormatter = Function(
+  `${functionSource_(files['planner_helpers.js'], 'fmtCurrency_')}; return fmtCurrency_;`
+)();
+const nextActionsMoneyFormatter = Function(
+  `${functionSource_(files['Dashboard_Script_PlanningNextActions.html'], 'formatMoneyNextActions_')}; return formatMoneyNextActions_;`
+)();
+const activityMoneyFormatter = Function(
+  `${functionSource_(files['activity_log.js'], 'activityLogFmtMoney_')}; return activityLogFmtMoney_;`
+)();
+const upcomingMoneyFormatter = Function(
+  'round2_',
+  'toNumber_',
+  `${functionSource_(files['upcoming_expenses.js'], 'fmtMoneyForMessage_')}; return fmtMoneyForMessage_;`
+)(value => Math.round(Number(value) * 100) / 100, value => Number(value));
+const moneyFormatters = [
+  ['Dashboard', dashboardMoneyFormatter],
+  ['Planner server', plannerMoneyFormatter],
+  ['Next Actions', nextActionsMoneyFormatter],
+  ['Activity server', activityMoneyFormatter],
+  ['Upcoming server message', upcomingMoneyFormatter]
+];
+for (const [label, formatter] of moneyFormatters) {
+  assert.equal(formatter(0), '$0.00', `${label} must show zero with two decimals`);
+  assert.equal(formatter(12.3), '$12.30', `${label} must show two decimal places`);
+  assert.equal(formatter(1234.5), '$1,234.50', `${label} must group thousands`);
+  assert.equal(formatter(-1234.5), '-$1,234.50',
+    `${label} must put the negative sign before the dollar sign`);
+}
+assert.equal(dashboardMoneyFormatter(Infinity), '—',
+  'The customer Dashboard must not render a non-finite amount as currency');
+assert.match(files['Dashboard_Script_AssetsBankInvestments.html'],
+  /balanceDisplay\s*=\s*\(r\.raw[\s\S]*?escapeHtml\(fmtCurrency\(r\.raw\.balance\)\)/,
+  'Bank import preview balances must use the canonical Dashboard currency formatter');
+assert.doesNotMatch(files['Dashboard_Script_AssetsBankInvestments.html'],
+  /'\$'\s*\+\s*r\.raw\.balance/,
+  'Bank import preview must not construct $-amount strings directly');
+assert.match(files['activity_log.js'],
+  /'Corrected from '\s*\+\s*activityLogFmtMoney_\(latestCorrection\.fromAmount\)/,
+  'Activity correction history must use the canonical signed money formatter');
+assert.match(files['rolling_debt_payoff.js'],
+  /Remaining execute-now pool was '\s*\+\s*fmtCurrency_\(/,
+  'Rolling payoff diagnostics must format execute-now money canonically');
+assert.match(files['rolling_debt_payoff.js'],
+  /income exceeds '\s*\+\s*fmtCurrency_\(ROLLING_DP_SD_REVIEW_LOSS_\)/,
+  'Rolling payoff advisory thresholds must use canonical grouped currency');
+assert.match(files['Dashboard_Script_PlanningDebtPayoff.html'], /\$0\.00 balance rows/,
+  'Debt payoff empty guidance must show a two-decimal zero amount');
+assert.match(files['Dashboard_Script_BillsDue.html'], /amount greater than \$0\.00/,
+  'Bill Pay validation must show a two-decimal zero amount');
+assert.match(files['property_performance.js'], /loan-payment totals are \$0\.00/,
+  'Property performance unavailable guidance must show a two-decimal zero amount');
 for (const source of [render, files['PlannerDashboard.html']]) {
   assert.match(source, /if \(num < 0\) return '-' \+ fmtCurrency\(Math\.abs\(num\)\);/,
     'Signed currency must place the minus sign before the dollar sign');

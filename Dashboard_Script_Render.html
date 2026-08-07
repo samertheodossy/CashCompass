@@ -813,7 +813,7 @@ function toNumber(value) {
 function fmtCurrency(value) {
   if (value === '' || value === null || value === undefined) return '—';
   const num = Number(value);
-  if (isNaN(num)) return '—';
+  if (!isFinite(num)) return '—';
   const sign = num < 0 ? '-' : '';
   return sign + '$' + Math.abs(num).toLocaleString('en-US', {
     minimumFractionDigits: 2,

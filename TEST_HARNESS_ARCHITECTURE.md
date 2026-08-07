@@ -66,8 +66,14 @@ and clean console/navigation. The `4d`/`4f`/`4g` envelope is
 strictly allow-listed to fixed flow labels, millisecond durations, candidate-budget
 signals, and suite/run safety metadata; it contains no workbook ID, identity, or
 financial value. Evidence is saved under
-`POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V11`; PASS requires
+`POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V12`; PASS requires
 Restricted sharing and exact Drive-verified Trash cleanup.
+
+V12 retains V11 and adds `money_format_consistency`: a text-node-safe sweep of
+Overview, Assets, Properties, Upcoming, Bills, and Income plus exact seeded
+amount checks. Inspecting individual text nodes preserves table-cell boundaries;
+the first probe proved that whole-table `innerText` can otherwise merge `$180.00`
+and due day `12` into the false token `$180.0012`.
 
 V11 retains the V10 exact five-Save timing window and adds an all-three-scenario
 Retirement fixture plus privacy-safe selected/all-comparison browser durations.
@@ -87,6 +93,15 @@ the read-only background path, within the directional 6 s selected and 15 s
 all-comparison targets. The same run measured all five ordinary Saves at
 5.976 s p50 / 7.969 s p95; the existing strict 6 s p95 budget therefore remains
 a truthful near-miss independent of the closed Retirement investigation.
+
+**`@331` V12 money-format evidence:** run
+`FR-f7719f23-9248-41fa-9f5c-7327db963ce3` passed all 26 assertions with zero
+browser errors, Restricted single-owner sharing, and verified exact-fixture
+Trash cleanup. `money_format_consistency` passed across Overview, Assets,
+Properties, Upcoming, Bills, and Income. Retirement remained within its 6/15 s
+directional targets at 1 ms / 4.740 s. Five ordinary Saves measured 7.610 s
+p50 / 9.055 s p95, so the separate strict 6 s Save budget remains a truthful
+near-miss rather than being reclassified by this UX closeout.
 
 **`@322` V10 ordinary Save evidence:** run
 `FR-afc35e3b-77ff-4c91-88cb-88f28c55fa0f` passed all 24 assertions with zero

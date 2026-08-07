@@ -58,6 +58,25 @@
     assertions.push({ id: id, pass: pass === true, detail: String(detail || '') });
   }
 
+  function malformedMoneyTokens_(value) {
+    var tokens = String(value || '').match(/[+-]?\$-?\d[\d,]*(?:\.\d+)?/g) || [];
+    return tokens.filter(function(token) {
+      return !/^[+-]?\$(?:0|[1-9]\d{0,2}(?:,\d{3})*)\.\d{2}$/.test(token);
+    });
+  }
+
+  function malformedMoneyInElement_(id) {
+    var root = document.getElementById(id);
+    if (!root) return [];
+    var malformed = [];
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    var node;
+    while ((node = walker.nextNode())) {
+      malformed = malformed.concat(malformedMoneyTokens_(node.nodeValue));
+    }
+    return malformed;
+  }
+
   function setOrdinarySavePerformanceTiming_(enabled) {
     return new Promise(function(resolve, reject) {
       google.script.run
@@ -757,6 +776,38 @@
       add('populated_workspaces', workspaceFailures.length === 0, workspaceFailures.length
         ? ('Representative data missing from: ' + workspaceFailures.join(', '))
         : 'Investments, Upcoming, Bills, and Income rendered their representative data.');
+      var moneyFormatFailures = [];
+      [
+        ['Overview', ['snap_cash', 'snap_investments', 'snap_houseEquity', 'snap_debt', 'snap_netWorth']],
+        ['Bank', ['bank_currentBalance']],
+        ['Investment', ['inv_currentBalance']],
+        ['Property performance', ['pp_port_equity', 'pp_tbody']],
+        ['Upcoming', ['upcoming_list']],
+        ['Bills', ['bills_manage_list']],
+        ['Income', ['income_manage_list', 'income_other_detected']]
+      ].forEach(function(group) {
+        var malformed = [];
+        group[1].forEach(function(id) {
+          malformed = malformed.concat(malformedMoneyInElement_(id));
+        });
+        if (malformed.length) {
+          moneyFormatFailures.push(group[0] + ' (' + malformed.join(', ') + ')');
+        }
+      });
+      if (String(text('upcoming_list')).indexOf(expectedCurrency(expected.upcomingAmount)) === -1) {
+        moneyFormatFailures.push('Upcoming expected amount');
+      }
+      if (String(text('bills_manage_list')).indexOf(expectedCurrency(expected.billAmount)) === -1) {
+        moneyFormatFailures.push('Bills expected amount');
+      }
+      if ((String(text('income_manage_list')) + ' ' + String(text('income_other_detected')))
+          .indexOf(expectedCurrency(expected.incomeAmount)) === -1) {
+        moneyFormatFailures.push('Income expected amount');
+      }
+      add('money_format_consistency', moneyFormatFailures.length === 0,
+        moneyFormatFailures.length
+          ? ('Monetary display formatting failed in: ' + moneyFormatFailures.join(', '))
+          : 'Overview, Assets, Properties, Upcoming, Bills, and Income used grouped $x.xx amounts with signs before the dollar symbol.');
       customerLeaks = customerLeaks.concat(customerLanguageLeaks('Populated workspaces'));
 
       var retirementLoadEvents = {};

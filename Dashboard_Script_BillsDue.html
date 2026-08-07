@@ -480,7 +480,7 @@ function submitBillPayment() {
   var dateInput = document.getElementById('bill_pay_date');
   var entryDate = dateInput ? String(dateInput.value || '').trim() : '';
   if (!isFinite(amount) || amount <= 0) {
-    setBillPayDrawerStatus_('Enter an amount greater than $0.', true, false);
+    setBillPayDrawerStatus_('Enter an amount greater than $0.00.', true, false);
     return;
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(entryDate)) {

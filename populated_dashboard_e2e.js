@@ -7,7 +7,7 @@
  * from a caller and the permanent test identity remains a non-admin.
  */
 var POPULATED_DASHBOARD_E2E_MODE_ = 'POPULATED_DASHBOARD';
-var POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_ = 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V11';
+var POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_ = 'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V12';
 var POPULATED_DASHBOARD_E2E_SCENARIO_ID_ = 'E2E-POPULATED-DASHBOARD';
 var POPULATED_DASHBOARD_E2E_REQUIRED_ASSERTIONS_ = [
   'startup_populated_overview',
@@ -19,6 +19,7 @@ var POPULATED_DASHBOARD_E2E_REQUIRED_ASSERTIONS_ = [
   'debt_loading_resilience',
   'property_equity',
   'populated_workspaces',
+  'money_format_consistency',
   'retirement_ready_results',
   'income_setup_consistency',
   'subtab_retention',
@@ -357,7 +358,9 @@ function pdE2ERenderContext_(runId) {
         debtName: p.debt.name,
         debtBalance: p.debt.balance,
         billPayee: p.bill.payee,
+        billAmount: p.bill.amount,
         incomePayee: p.income.payee,
+        incomeAmount: p.income.amount,
         upcomingName: p.upcoming.name,
         upcomingAmount: p.upcoming.amount
       }

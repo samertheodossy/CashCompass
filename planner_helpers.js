@@ -172,6 +172,7 @@ function toNumber_(value) {
 
 function fmtCurrency_(n) {
   const value = Number(n || 0);
+  if (!isFinite(value)) return '—';
   const sign = value < 0 ? '-' : '';
   const abs = Math.abs(value);
   return sign + '$' + abs.toLocaleString('en-US', {

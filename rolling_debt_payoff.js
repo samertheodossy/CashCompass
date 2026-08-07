@@ -4339,8 +4339,8 @@ function rollingWaterfallTraceValidationFailures_(trace, alloc, trivialArr, prim
         Number(lastCleanup.extra_payoff_cap_after) > ROLLING_WF_POOL_EPS_
       ) {
         poolNote =
-          ' Remaining execute-now pool was $' +
-          String(round2_(Number(lastCleanup.pool_remaining_after))) +
+          ' Remaining execute-now pool was ' +
+          fmtCurrency_(round2_(Number(lastCleanup.pool_remaining_after))) +
           ' with positive extra-principal headroom — payoff should have closed.';
       }
       failures.push(
@@ -6887,8 +6887,8 @@ function buildRollingTriggers_(history, debts, anchorNorm, ccMeta, sdSeries) {
         level: 'WARN',
         code: 'SAN_DIEGO_REVIEW',
         message:
-          'Trailing average San Diego-oriented expense minus Rent San Diego House income exceeds $' +
-          ROLLING_DP_SD_REVIEW_LOSS_ +
+          'Trailing average San Diego-oriented expense minus Rent San Diego House income exceeds ' +
+          fmtCurrency_(ROLLING_DP_SD_REVIEW_LOSS_) +
           '/month (advisory HOLD/REVIEW).'
       });
     }
@@ -8340,7 +8340,7 @@ function buildThisMonthPlan_(row0, keyWarnings, reserve, planInvalid, lumpDebt, 
       'All contractual minimums on active debts that do not already show a payment in the anchor Cash Flow month.',
     recommended_extra_payments:
       belowReserve || execTotalNowPlan <= 0.005
-        ? 'None beyond minimums until liquidity improves (executable-now total is $0).'
+        ? 'None beyond minimums until liquidity improves (executable-now total is $0.00).'
         : fmtCurrency_(execTotalNowPlan) +
           ' executable now (cash + optional HELOC with manual approval only). Forecast may show up to ' +
           fmtCurrency_(extra) +

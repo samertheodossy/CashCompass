@@ -252,7 +252,7 @@ function renderDebtPayoffTable_(data, yLabel) {
         rows.length +
         ' of ' +
         allRows.length +
-        ' accounts ($0 balance rows are hidden, including paid-off cards with CF history). Refresh after you update the sheet.';
+        ' accounts ($0.00 balance rows are hidden, including paid-off cards with CF history). Refresh after you update the sheet.';
     } else {
       noteEl.textContent = '';
     }
@@ -271,7 +271,7 @@ function renderDebtPayoffTable_(data, yLabel) {
     var chartEmpty = document.getElementById('debt_payoff_read_chart_wrap');
     if (chartEmpty) chartEmpty.innerHTML = '';
     wrap.innerHTML =
-      '<p class="muted" style="margin:0;">No accounts with a balance &gt; $0 right now. Update your debts or refresh after you pay something down.</p>';
+      '<p class="muted" style="margin:0;">No accounts with a balance &gt; $0.00 right now. Update your debts or refresh after you pay something down.</p>';
     return;
   }
 

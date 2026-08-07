@@ -242,9 +242,9 @@ assert.match(firstRunBrowser,
   'First-Run must wait for authoritative Investment Add routing instead of sampling a fixed delay');
 assert.match(firstRunBrowser, /function customerLanguageLeaks\(/,
   'First-Run E2E must scan visible customer pages for internal workbook terminology');
-assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V11/,
+assert.match(suites, /id: 'SUITE-POPULATED-DASHBOARD-E2E'[\s\S]*?implemented: true[\s\S]*?runner: 'browser'[\s\S]*?POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V12/,
   'Populated Dashboard E2E must be an implemented browser suite backed by saved evidence');
-assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V11'/,
+assert.match(populatedE2E, /POPULATED_DASHBOARD_E2E_EVIDENCE_KEY_\s*=\s*'POPULATED_DASHBOARD_E2E_LATEST_EVIDENCE_V12'/,
   'Cross-flow performance assertions must invalidate older Populated Dashboard evidence');
 assert.doesNotMatch(populatedE2E, /function pdE2EPrepare\([^)]*(?:spreadsheet|workbook|file)Id/i,
   'Populated Dashboard preparation must never accept an arbitrary workbook target');
@@ -282,9 +282,15 @@ assert.match(populatedBrowser, /income_manage_list[\s\S]*?income_other_detected/
 assert.match(populatedBrowser,
   /incomeMainHasExpected[\s\S]*?incomeOtherHasExpected[\s\S]*?add\('income_setup_consistency'/,
   'Populated Dashboard E2E must fail when Income and Setup classify the salary differently');
+assert.match(populatedBrowser,
+  /function malformedMoneyInElement_\(id\)[\s\S]*?createTreeWalker\(root, NodeFilter\.SHOW_TEXT\)/,
+  'Money-format evidence must inspect individual text nodes so adjacent table cells cannot merge into a false malformed amount');
+assert.match(populatedBrowser,
+  /malformed = malformed\.concat\(malformedMoneyInElement_\(id\)\)/,
+  'Money-format evidence groups must use the text-node-safe detector');
 for (const assertionId of ['overview_kpis', 'bank_selection_actions', 'bank_loading_resilience',
   'tracked_editor_convergence', 'debt_selection_actions', 'debt_loading_resilience',
-  'property_equity', 'populated_workspaces', 'retirement_ready_results', 'income_setup_consistency', 'subtab_retention', 'setup_help_language',
+  'property_equity', 'populated_workspaces', 'money_format_consistency', 'retirement_ready_results', 'income_setup_consistency', 'subtab_retention', 'setup_help_language',
   'customer_language', 'refresh_button_state', 'health_prerequisite_truth',
   'activity_operation_envelope', 'quick_add_credit_card_correction',
   'donation_correction_flow', 'bill_skip_stop_safety', 'performance_ordinary_save',

@@ -2528,6 +2528,7 @@ function activityLogAsFiniteNumber_(v) {
 
 function activityLogFmtMoney_(n) {
   var v = Number(n) || 0;
+  if (!isFinite(v)) return '—';
   var sign = v < 0 ? '-' : '';
   var abs = Math.abs(v).toFixed(2);
   // Thin thousands-separator formatter so we don't depend on Utilities/Intl
@@ -2794,8 +2795,7 @@ function getActivityDashboardData(filters) {
         actionLabel: isCorrected
           ? 'Removed'
           : (latestCorrection
-            ? 'Corrected from $' +
-              Number(latestCorrection.fromAmount || 0).toFixed(2)
+            ? 'Corrected from ' + activityLogFmtMoney_(latestCorrection.fromAmount)
             : activityLogActionLabel_(eventType, String(r[11] || '').trim())),
         isNonMonetary: activityLogIsNonMonetaryEvent_(eventType),
         operationId: canCorrectQuickAdd || canCorrectDonation || isCorrected

@@ -56,7 +56,7 @@ function getPropertyPerformanceDataForSpreadsheet_(ss, payload) {
   let messages = assetResult.advisories.slice();
   if (!cfSheet) {
     messages.push('Cash Flow information for ' + year +
-      ' is not available yet; rent and loan-payment totals are $0.');
+      ' is not available yet; rent and loan-payment totals are $0.00.');
   }
 
   const allExpenseRows = getAllHouseExpenseRowsForSpreadsheet_(ss);
