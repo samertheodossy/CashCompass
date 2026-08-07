@@ -270,25 +270,33 @@ function getBankAccountUiData() {
   // Use Policy values, and once for the inactive set. Each read is a
   // ~300–800ms round-trip on populated workbooks, so opening the Bank
   // Accounts tab spent ~1.5–2s before the page could even render. We
-  // now load SYS - Accounts once and derive all three from that single
-  // snapshot. Behavior is identical: same Type list, same Use Policy
-  // list, same inactive filter. The BANK_ACCOUNTS history read (1
-  // round-trip) is unchanged — that's already minimal.
+  // now load SYS - Accounts once and derive the option lists, lifecycle
+  // inventory, and Manage editor data from that single snapshot. The
+  // BANK_ACCOUNTS history read (1 round-trip) remains minimal.
   var typeOpts = [];
   var policyOpts = [];
   let inactive = Object.create(null);
+  var managementByName = Object.create(null);
+  var inactiveAccounts = [];
 
   try {
     const ss = getUserSpreadsheet_();
     const accountsSheet = ss.getSheetByName(getSheetNames_().ACCOUNTS);
     if (accountsSheet) {
-      const accountsDisplay = accountsSheet.getDataRange().getDisplayValues();
+      const accountsRange = accountsSheet.getDataRange();
+      const accountsDisplay = accountsRange.getDisplayValues();
+      const accountsValues = accountsRange.getValues();
       if (accountsDisplay.length >= 1) {
         const headers = accountsDisplay[0] || [];
         const typeIdx = headers.indexOf('Type');
         const policyIdx = headers.indexOf('Use Policy');
         const nameIdx = headers.indexOf('Account Name');
         const activeIdx = headers.indexOf('Active');
+        const balanceIdx = headers.indexOf('Current Balance');
+        const availableIdx = headers.indexOf('Available Now');
+        const bufferIdx = headers.indexOf('Min Buffer');
+        const priorityIdx = headers.indexOf('Priority');
+        const externalIdIdx = headers.indexOf('External Account Id');
 
         const typeSet = Object.create(null);
         const policySet = Object.create(null);
@@ -304,13 +312,32 @@ function getBankAccountUiData() {
             const p = String(row[policyIdx] || '').trim();
             if (p) policySet[p] = true;
           }
-          if (nameIdx !== -1 && activeIdx !== -1) {
+          if (nameIdx !== -1) {
             const name = String(row[nameIdx] || '').trim();
             if (name) {
-              const raw = String(row[activeIdx] || '').trim().toLowerCase();
-              if (raw === 'no' || raw === 'n' || raw === 'false' || raw === 'inactive') {
+              const raw = activeIdx === -1 ? '' :
+                String(row[activeIdx] || '').trim().toLowerCase();
+              const rowInactive = raw === 'no' || raw === 'n' ||
+                raw === 'false' || raw === 'inactive';
+              if (rowInactive) {
                 inactive[name.toLowerCase()] = true;
+                inactiveAccounts.push({ accountName: name, sysAccountsRow: r + 1 });
               }
+              managementByName[name.toLowerCase()] = {
+                sysAccountsRow: r + 1,
+                accountName: name,
+                currentBalance: balanceIdx === -1 || accountsValues[r][balanceIdx] === ''
+                  ? '' : round2_(toNumber_(accountsValues[r][balanceIdx])),
+                availableNow: availableIdx === -1 || accountsValues[r][availableIdx] === ''
+                  ? '' : round2_(toNumber_(accountsValues[r][availableIdx])),
+                minBuffer: bufferIdx === -1 || accountsValues[r][bufferIdx] === ''
+                  ? '' : round2_(toNumber_(accountsValues[r][bufferIdx])),
+                type: typeIdx === -1 ? '' : String(row[typeIdx] || '').trim(),
+                usePolicy: policyIdx === -1 ? '' : String(row[policyIdx] || '').trim(),
+                priority: priorityIdx === -1 ? '' : String(row[priorityIdx] || '').trim(),
+                externalLinked: externalIdIdx !== -1 && !!String(row[externalIdIdx] || '').trim(),
+                inactive: rowInactive
+              };
             }
           }
         }
@@ -340,9 +367,37 @@ function getBankAccountUiData() {
   const activeAccounts = allAccounts.filter(function(name) {
     return !inactive[String(name || '').toLowerCase()];
   });
+  const managementAccounts = activeAccounts.map(function(name) {
+    return managementByName[String(name || '').toLowerCase()] || {
+      sysAccountsRow: 0,
+      accountName: name,
+      currentBalance: '',
+      availableNow: '',
+      minBuffer: '',
+      type: '',
+      usePolicy: '',
+      priority: '',
+      externalLinked: false,
+      inactive: false
+    };
+  });
+  const historyNames = Object.create(null);
+  allAccounts.forEach(function(name) {
+    historyNames[String(name || '').toLowerCase()] = true;
+  });
+  inactiveAccounts = inactiveAccounts.filter(function(row) {
+    return !!historyNames[String(row.accountName || '').toLowerCase()];
+  });
+  inactiveAccounts.sort(function(a, b) {
+    return String(a.accountName || '').localeCompare(String(b.accountName || ''), undefined, {
+      sensitivity: 'base'
+    });
+  });
 
   return {
     accounts: activeAccounts,
+    managementAccounts: managementAccounts,
+    inactiveAccounts: inactiveAccounts,
     typeOptions: typeOpts,
     policyOptions: policyOpts
   };
@@ -850,6 +905,15 @@ function addBankAccountFromDashboard(payload) {
   } catch (logErr) {
     Logger.log('addBankAccountFromDashboard activity log: ' + logErr);
   }
+
+  // Keep both authoritative Account Name columns fitted to the longest
+  // current value after CashCompass adds an account.
+  try {
+    fitBankAccountNameColumnToContents_(accountsSheet, getAccountsHeaderMap_(accountsSheet).nameCol);
+  } catch (accountsResizeErr) {
+    Logger.log('addBankAccountFromDashboard Account Name fit: ' + accountsResizeErr);
+  }
+  fitBankAccountNameColumnToContents_(bankSheet, 1);
 
   return {
     ok: true,
@@ -2063,4 +2127,409 @@ function deactivateBankAccountFromDashboard(payload) {
     alreadyInactive: alreadyInactive,
     rowsUpdated: bankUpdate.rowsUpdated + (accountsUpdate.changed ? 1 : 0)
   };
+}
+
+/**
+ * Save the customer-facing Bank Manage editor in one guarded operation.
+ *
+ * Account Name is authoritative on the SYS - Accounts row and on the matching
+ * row inside every INPUT - Bank Accounts year block. A rename updates only
+ * those name cells; month values, formulas, import staging, External Account
+ * Id, and immutable Activity history are preserved. Metadata lives only on the
+ * existing SYS row. All targets are resolved before the first write and a
+ * partial failure restores the prior SYS row plus every renamed history cell.
+ */
+function saveTrackedBankAccountFromDashboard(payload) {
+  validateRequired_(payload, ['sysAccountsRow', 'expectedAccountName', 'newAccountName']);
+
+  const sysAccountsRow = parseInt(String(payload.sysAccountsRow), 10);
+  if (isNaN(sysAccountsRow) || sysAccountsRow < 2) {
+    throw new Error('Invalid bank account row. Please refresh and try again.');
+  }
+  const expectedAccountName = String(payload.expectedAccountName || '').trim();
+  if (!expectedAccountName) {
+    throw new Error('Missing bank account. Please refresh and try again.');
+  }
+
+  const lock = LockService.getUserLock();
+  try {
+    if (!lock) throw new Error('No user lock is available.');
+    lock.waitLock(30000);
+  } catch (_lockErr) {
+    throw new Error('Another bank account change is in progress. Please try again in a moment.');
+  }
+
+  let writesStarted = false;
+  let accountsSheet = null;
+  let accountsRowSnapshot = null;
+  const historyTargets = [];
+
+  try {
+    const ss = getUserSpreadsheet_();
+    accountsSheet = getSheet_(ss, 'ACCOUNTS');
+    const bankSheet = getSheet_(ss, 'BANK_ACCOUNTS');
+    const accountsDisplay = accountsSheet.getDataRange().getDisplayValues();
+    const headerMap = ensureAccountsActiveColumn_(accountsSheet);
+
+    if (sysAccountsRow > Math.max(accountsSheet.getLastRow(), 1)) {
+      throw new Error('Bank account has moved. Please refresh and try again.');
+    }
+    const actualName = String(
+      accountsSheet.getRange(sysAccountsRow, headerMap.nameCol).getDisplayValue() || ''
+    ).trim();
+    if (!actualName || actualName !== expectedAccountName) {
+      throw new Error('Bank account has moved. Please refresh and try again.');
+    }
+    const activeText = headerMap.activeColZero === -1 ? '' : String(
+      accountsSheet.getRange(sysAccountsRow, headerMap.activeCol).getDisplayValue() || ''
+    ).trim().toLowerCase();
+    if (activeText === 'no' || activeText === 'n' || activeText === 'false' || activeText === 'inactive') {
+      throw new Error('This bank account is not currently tracked. Reactivate it before editing.');
+    }
+
+    const newName = String(payload.newAccountName || '').trim();
+    if (!newName) throw new Error('Account name is required.');
+    if (newName.length > 120) throw new Error('Account name is too long (max 120 characters).');
+    if (!isBankAccountDataRowName_(newName)) {
+      throw new Error('That account name is not allowed (reserved label or invalid).');
+    }
+
+    if (headerMap.typeCol === -1 || headerMap.policyCol === -1 ||
+        headerMap.priorityCol === -1 || headerMap.availableCol === -1 ||
+        headerMap.bufferCol === -1) {
+      throw new Error('SYS - Accounts is missing required bank account fields. Nothing was changed.');
+    }
+
+    const oldType = String(accountsDisplay[sysAccountsRow - 1][headerMap.typeColZero] || '').trim();
+    const oldPolicy = String(accountsDisplay[sysAccountsRow - 1][headerMap.policyColZero] || '').trim();
+    const oldPriority = String(accountsDisplay[sysAccountsRow - 1][headerMap.priorityColZero] || '').trim();
+    const typeStr = String(payload.type || '').trim();
+    const policyStr = String(payload.usePolicy || '').trim();
+    // Existing legacy blanks may remain blank during a name-only edit. Once a
+    // field has a value, the editor cannot silently clear it.
+    if (!typeStr && oldType) throw new Error('Type is required.');
+    if (!policyStr && oldPolicy) throw new Error('Use policy is required.');
+    if (typeStr.length > 80) throw new Error('Type is too long (max 80 characters).');
+    if (policyStr.length > 120) throw new Error('Use policy is too long (max 120 characters).');
+
+    const priorityText = String(payload.priority == null ? '' : payload.priority).trim();
+    const priorityNum = priorityText === '' ? '' : parseInt(priorityText, 10);
+    if ((priorityText === '' && oldPriority) ||
+        (priorityText !== '' && (isNaN(priorityNum) || priorityNum < 1 || priorityNum > 99))) {
+      throw new Error('Priority must be a whole number between 1 and 99.');
+    }
+    const availableText = String(payload.availableNow == null ? '' : payload.availableNow).trim();
+    const bufferText = String(payload.minBuffer == null ? '' : payload.minBuffer).trim();
+    const availableNow = availableText === '' ? '' : toNumber_(payload.availableNow);
+    const minBuffer = bufferText === '' ? '' : toNumber_(payload.minBuffer);
+    if (availableText !== '' && isNaN(availableNow)) {
+      throw new Error('Available now must be a valid number.');
+    }
+    if (bufferText !== '' && isNaN(minBuffer)) {
+      throw new Error('Min buffer must be a valid number.');
+    }
+
+    const newKey = newName.toLowerCase();
+    for (let r = 1; r < accountsDisplay.length; r++) {
+      if (r + 1 === sysAccountsRow) continue;
+      const rowName = String(accountsDisplay[r][headerMap.nameColZero] || '').trim();
+      if (rowName && rowName.toLowerCase() === newKey) {
+        throw new Error('Another bank account already uses this name. Changes were not saved.');
+      }
+    }
+
+    const bankDisplay = bankSheet.getDataRange().getDisplayValues();
+    let targetCount = 0;
+    let currentYearBlock = '';
+    const targetsPerBlock = Object.create(null);
+    for (let r = 0; r < bankDisplay.length; r++) {
+      const rowName = String((bankDisplay[r] && bankDisplay[r][0]) || '').trim();
+      if (rowName === 'Year') {
+        currentYearBlock = String((bankDisplay[r] && bankDisplay[r][1]) || '').trim();
+        continue;
+      }
+      if (!isBankAccountDataRowName_(rowName)) continue;
+      const rowKey = rowName.toLowerCase();
+      if (rowKey === newKey && rowKey !== actualName.toLowerCase()) {
+        throw new Error('Another bank account already uses this name. Changes were not saved.');
+      }
+      if (rowKey === actualName.toLowerCase()) {
+        const blockKey = currentYearBlock || 'unknown';
+        targetsPerBlock[blockKey] = (targetsPerBlock[blockKey] || 0) + 1;
+        if (targetsPerBlock[blockKey] > 1) {
+          throw new Error(
+            'Bank account history is ambiguous in Year ' + blockKey +
+            '. Changes were not saved.'
+          );
+        }
+        historyTargets.push({
+          sheet: bankSheet,
+          row: r + 1,
+          col: 1,
+          oldValue: bankSheet.getRange(r + 1, 1).getValue()
+        });
+        targetCount++;
+      }
+    }
+    if (!targetCount) {
+      throw new Error('No Bank Accounts history was found for this account. Nothing was changed.');
+    }
+
+    const lastCol = Math.max(accountsSheet.getLastColumn(), 1);
+    const rowRange = accountsSheet.getRange(sysAccountsRow, 1, 1, lastCol);
+    accountsRowSnapshot = {
+      values: rowRange.getValues()[0],
+      formulas: rowRange.getFormulas()[0],
+      numberFormats: rowRange.getNumberFormats()[0]
+    };
+
+    const oldAvailable = accountsRowSnapshot.values[headerMap.availableColZero] === ''
+      ? '' : round2_(toNumber_(accountsRowSnapshot.values[headerMap.availableColZero]));
+    const oldBuffer = accountsRowSnapshot.values[headerMap.bufferColZero] === ''
+      ? '' : round2_(toNumber_(accountsRowSnapshot.values[headerMap.bufferColZero]));
+    const changedFields = [];
+    if (newName !== actualName) changedFields.push('Account Name');
+    if (typeStr !== oldType) changedFields.push('Type');
+    if (policyStr !== oldPolicy) changedFields.push('Use Policy');
+    const normalizedPriority = priorityNum === '' ? '' : String(priorityNum);
+    if (normalizedPriority !== oldPriority) changedFields.push('Priority');
+    const normalizedAvailable = availableNow === '' ? '' : round2_(availableNow);
+    const normalizedBuffer = minBuffer === '' ? '' : round2_(minBuffer);
+    if (normalizedAvailable !== oldAvailable) changedFields.push('Available Now');
+    if (normalizedBuffer !== oldBuffer) changedFields.push('Min Buffer');
+
+    if (!changedFields.length) {
+      return {
+        ok: true,
+        message: 'No changes were needed.',
+        accountName: actualName,
+        changedFields: [],
+        historyRowsUpdated: 0
+      };
+    }
+
+    writesStarted = true;
+    if (newName !== actualName) {
+      for (let i = 0; i < historyTargets.length; i++) {
+        historyTargets[i].sheet.getRange(historyTargets[i].row, historyTargets[i].col).setValue(newName);
+      }
+      accountsSheet.getRange(sysAccountsRow, headerMap.nameCol).setValue(newName);
+    }
+    accountsSheet.getRange(sysAccountsRow, headerMap.typeCol).setValue(typeStr);
+    accountsSheet.getRange(sysAccountsRow, headerMap.policyCol).setValue(policyStr);
+    if (normalizedPriority === '') {
+      accountsSheet.getRange(sysAccountsRow, headerMap.priorityCol).clearContent();
+    } else {
+      accountsSheet.getRange(sysAccountsRow, headerMap.priorityCol).setValue(priorityNum);
+    }
+    if (normalizedAvailable === '') {
+      accountsSheet.getRange(sysAccountsRow, headerMap.availableCol).clearContent();
+    } else {
+      setCurrencyCellPreserveRowFormat_(
+        accountsSheet, sysAccountsRow, headerMap.availableCol, normalizedAvailable, 1);
+    }
+    if (normalizedBuffer === '') {
+      accountsSheet.getRange(sysAccountsRow, headerMap.bufferCol).clearContent();
+    } else {
+      setCurrencyCellPreserveRowFormat_(
+        accountsSheet, sysAccountsRow, headerMap.bufferCol, normalizedBuffer, 1);
+    }
+
+    try { touchDashboardSourceUpdated_('bank_accounts'); } catch (_touchErr) {}
+
+    try {
+      appendActivityLog_(ss, {
+        eventType: 'bank_account_update',
+        entryDate: Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+        amount: 0,
+        direction: '',
+        payee: newName,
+        category: typeStr,
+        accountSource: policyStr,
+        cashFlowSheet: '',
+        cashFlowMonth: '',
+        dedupeKey: '',
+        details: JSON.stringify({
+          detailsVersion: 1,
+          updateKind: 'account_details',
+          oldName: actualName,
+          newName: newName,
+          changedFields: changedFields,
+          historyRowsUpdated: newName === actualName ? 0 : historyTargets.length,
+          externalLinkPreserved: true,
+          sysAccountsRow: sysAccountsRow
+        })
+      });
+    } catch (logErr) {
+      Logger.log('saveTrackedBankAccountFromDashboard activity log: ' + logErr);
+    }
+
+    // Keep the renamed account readable in both authoritative views. Resize
+    // only the two Account Name columns involved, and never shrink a width the
+    // customer already made larger. Presentation is best-effort and runs only
+    // after the coordinated data writes succeed, so a sizing problem cannot
+    // turn a successful financial rename into a partial-data failure.
+    if (newName !== actualName) {
+      fitBankAccountNameColumnToContents_(accountsSheet, headerMap.nameCol);
+      fitBankAccountNameColumnToContents_(bankSheet, 1);
+    }
+
+    return {
+      ok: true,
+      message: 'Changes saved' + (newName !== actualName ? ' — account renamed.' : '.'),
+      accountName: newName,
+      oldAccountName: actualName,
+      changedFields: changedFields,
+      historyRowsUpdated: newName === actualName ? 0 : historyTargets.length
+    };
+  } catch (err) {
+    if (writesStarted && accountsSheet && accountsRowSnapshot) {
+      try {
+        for (let c = 0; c < accountsRowSnapshot.values.length; c++) {
+          const cell = accountsSheet.getRange(sysAccountsRow, c + 1);
+          if (accountsRowSnapshot.formulas[c]) {
+            cell.setFormula(accountsRowSnapshot.formulas[c]);
+          } else {
+            cell.setValue(accountsRowSnapshot.values[c]);
+          }
+          cell.setNumberFormat(accountsRowSnapshot.numberFormats[c]);
+        }
+      } catch (_restoreAccountsErr) { /* best-effort */ }
+      try {
+        for (let i = 0; i < historyTargets.length; i++) {
+          historyTargets[i].sheet
+            .getRange(historyTargets[i].row, historyTargets[i].col)
+            .setValue(historyTargets[i].oldValue);
+        }
+      } catch (_restoreHistoryErr) { /* best-effort */ }
+      throw new Error('Changes were not saved and were rolled back: ' +
+        (err && err.message || err));
+    }
+    throw err;
+  } finally {
+    try { lock.releaseLock(); } catch (_releaseErr) {}
+  }
+}
+
+/** Fit one Account Name column to the longest current value. */
+function fitBankAccountNameColumnToContents_(sheet, column) {
+  try {
+    sheet.autoResizeColumn(column);
+    // Sheets can size a column exactly to its measured text boundary, which
+    // still clips the final character once the populated workbook's larger
+    // font and cell padding are rendered (especially when the next column is
+    // non-empty). Re-read the auto-sized width and add a small visual gutter.
+    // The auto-resize runs first on every call, so this remains content-driven
+    // and can shrink again after a shorter rename instead of growing forever.
+    const autoWidth = sheet.getColumnWidth(column);
+    sheet.setColumnWidth(column, Math.min(1000, autoWidth + 24));
+  } catch (resizeErr) {
+    Logger.log('fitBankAccountNameColumnToContents_: ' + resizeErr);
+  }
+}
+
+/** Restore an existing inactive Bank account without changing its history. */
+function reactivateBankAccountFromDashboard(payload) {
+  validateRequired_(payload, ['sysAccountsRow', 'expectedAccountName']);
+  const sysAccountsRow = parseInt(String(payload.sysAccountsRow), 10);
+  const expectedAccountName = String(payload.expectedAccountName || '').trim();
+  if (isNaN(sysAccountsRow) || sysAccountsRow < 2 || !expectedAccountName) {
+    throw new Error('Invalid inactive bank account. Please refresh and try again.');
+  }
+
+  const lock = LockService.getUserLock();
+  try {
+    if (!lock) throw new Error('No user lock is available.');
+    lock.waitLock(30000);
+  } catch (_lockErr) {
+    throw new Error('Another bank account change is in progress. Please try again in a moment.');
+  }
+
+  try {
+    const ss = getUserSpreadsheet_();
+    const accountsSheet = getSheet_(ss, 'ACCOUNTS');
+    const bankSheet = getSheet_(ss, 'BANK_ACCOUNTS');
+    const headerMap = ensureAccountsActiveColumn_(accountsSheet);
+    const display = accountsSheet.getDataRange().getDisplayValues();
+    if (sysAccountsRow > display.length) {
+      throw new Error('Bank account has moved. Please refresh and try again.');
+    }
+    const actualName = String(display[sysAccountsRow - 1][headerMap.nameColZero] || '').trim();
+    if (!actualName || actualName !== expectedAccountName) {
+      throw new Error('Bank account has moved. Please refresh and try again.');
+    }
+    for (let r = 1; r < display.length; r++) {
+      if (r + 1 === sysAccountsRow) continue;
+      const name = String(display[r][headerMap.nameColZero] || '').trim();
+      if (!name || name.toLowerCase() !== actualName.toLowerCase()) continue;
+      const raw = headerMap.activeColZero === -1 ? '' :
+        String(display[r][headerMap.activeColZero] || '').trim().toLowerCase();
+      if (!(raw === 'no' || raw === 'n' || raw === 'false' || raw === 'inactive')) {
+        throw new Error('Another active bank account already uses this name.');
+      }
+    }
+
+    const previousSysActive = String(
+      accountsSheet.getRange(sysAccountsRow, headerMap.activeCol).getDisplayValue() || ''
+    ).trim();
+    const previousSysActiveKey = previousSysActive.toLowerCase();
+    if (!(previousSysActiveKey === 'no' || previousSysActiveKey === 'n' ||
+        previousSysActiveKey === 'false' || previousSysActiveKey === 'inactive')) {
+      return {
+        ok: true,
+        message: '"' + actualName + '" is already active.',
+        accountName: actualName,
+        alreadyActive: true
+      };
+    }
+    const bankUpdate = setBankAccountActiveInAllBlocks_(bankSheet, actualName, 'Yes');
+    if (!bankUpdate.found) {
+      throw new Error('No Bank Accounts history was found for this account.');
+    }
+    let accountsChanged = false;
+    try {
+      const accountUpdate = setAccountsActiveValue_(accountsSheet, actualName, 'Yes');
+      accountsChanged = accountUpdate.changed;
+    } catch (err) {
+      try { setBankAccountActiveInAllBlocks_(bankSheet, actualName, 'No'); } catch (_rollbackErr) {}
+      throw err;
+    }
+
+    try { touchDashboardSourceUpdated_('bank_accounts'); } catch (_touchErr) {}
+    try {
+      appendActivityLog_(ss, {
+        eventType: 'bank_account_reactivate',
+        entryDate: Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+        amount: 0,
+        direction: '',
+        payee: actualName,
+        category: headerMap.typeColZero === -1 ? '' :
+          String(display[sysAccountsRow - 1][headerMap.typeColZero] || '').trim(),
+        accountSource: headerMap.policyColZero === -1 ? '' :
+          String(display[sysAccountsRow - 1][headerMap.policyColZero] || '').trim(),
+        cashFlowSheet: '',
+        cashFlowMonth: '',
+        dedupeKey: '',
+        details: JSON.stringify({
+          detailsVersion: 1,
+          reason: 'reactivate',
+          previousActive: previousSysActive || 'No',
+          newActive: 'Yes',
+          bankRowsUpdated: bankUpdate.rowsUpdated,
+          accountsRowChanged: accountsChanged,
+          sysAccountsRow: sysAccountsRow
+        })
+      });
+    } catch (logErr) {
+      Logger.log('reactivateBankAccountFromDashboard activity log: ' + logErr);
+    }
+
+    return {
+      ok: true,
+      message: 'Reactivated "' + actualName + '". It is tracked again.',
+      accountName: actualName
+    };
+  } finally {
+    try { lock.releaseLock(); } catch (_releaseErr) {}
+  }
 }

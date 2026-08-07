@@ -35,6 +35,7 @@ const files = Object.fromEntries(await Promise.all([
   'QuickAddPaymentUI.html',
   'quick_add_payment.js',
   'activity_log.js',
+  'bank_accounts.js',
   'bills.js',
   'dashboard_data.js',
   'debts.js',
@@ -2500,6 +2501,33 @@ assert.doesNotMatch(body, /renaming coming in a later update/i,
 assert.match(files['Dashboard_Help.html'],
   /one <strong>Save changes<\/strong> action[\s\S]*?updates linked Cash Flow references/,
   'Debt Help must describe the one-action Edit workflow');
+assert.match(body,
+  /id="bank_edit_wrap"[\s\S]*?id="bank_edit_account_name"[\s\S]*?id="bank_edit_save_btn"[^>]*onclick="submitBankEdit_\(\)"/,
+  'Bank Account Name must be part of the single Manage Edit save surface');
+assert.match(files['Dashboard_Script_AssetsBankInvestments.html'],
+  /updateLabel:\s*'Edit'[\s\S]*?openBankEditForm_\(accountName\)[\s\S]*?\.saveTrackedBankAccountFromDashboard\(payload\)/,
+  'Bank Manage must expose Edit and submit one coordinated account-details save');
+assert.match(files['Dashboard_Script_AssetsBankInvestments.html'],
+  /function renderInactiveBankAccounts_\([\s\S]*?Reactivate[\s\S]*?reactivateBankAccountFromDashboard/,
+  'Bank Manage must expose existing inactive accounts through Reactivate');
+assert.match(files['bank_accounts.js'],
+  /function saveTrackedBankAccountFromDashboard\(payload\)[\s\S]*?LockService\.getUserLock\(\)[\s\S]*?historyTargets[\s\S]*?externalLinkPreserved:\s*true[\s\S]*?were not saved and were rolled back/,
+  'Bank Edit must coordinate all history names and the SYS row under one Central-safe lock with rollback');
+assert.match(files['bank_accounts.js'],
+  /Existing legacy blanks may remain blank during a name-only edit[\s\S]*?if \(!typeStr && oldType\)[\s\S]*?if \(!policyStr && oldPolicy\)[\s\S]*?priorityText === '' && oldPriority/,
+  'Bank name-only edits must preserve legacy blank metadata instead of forcing unrelated choices');
+assert.match(files['bank_accounts.js'],
+  /addBankAccountFromDashboard\(payload\)[\s\S]*?fitBankAccountNameColumnToContents_\(accountsSheet,[\s\S]*?fitBankAccountNameColumnToContents_\(bankSheet, 1\)[\s\S]*?if \(newName !== actualName\)[\s\S]*?fitBankAccountNameColumnToContents_\(accountsSheet, headerMap\.nameCol\)[\s\S]*?fitBankAccountNameColumnToContents_\(bankSheet, 1\)[\s\S]*?function fitBankAccountNameColumnToContents_[\s\S]*?autoResizeColumn\(column\)[\s\S]*?getColumnWidth\(column\)[\s\S]*?setColumnWidth\(column, Math\.min\(1000, autoWidth \+ 24\)\)/,
+  'Bank add and rename must fit both authoritative Account Name columns to their longest value');
+assert.match(files['Dashboard_Script_AssetsBankInvestments.html'],
+  /Not set \(legacy account\)[\s\S]*?typeExact:\s*row\.type[\s\S]*?usePolicyExact:\s*row\.usePolicy/,
+  'Bank Edit must visibly preserve legacy blank metadata in the one-save form');
+assert.match(files['bank_accounts.js'],
+  /function reactivateBankAccountFromDashboard\(payload\)[\s\S]*?setBankAccountActiveInAllBlocks_[\s\S]*?setAccountsActiveValue_[\s\S]*?bank_account_reactivate/,
+  'Bank Reactivate must restore both Bank history blocks and SYS lifecycle state');
+assert.match(files['activity_log.js'],
+  /updateKind\s*\|\|\s*''\)\s*===\s*'account_details'[\s\S]*?Account renamed[\s\S]*?bank_account_reactivate/,
+  'Activity must distinguish Bank metadata edits and reactivation from balance snapshots');
 assert.doesNotMatch(body, /Stop tracking uses the Active column/i,
   'Debt lifecycle guidance must describe customer outcomes instead of stored state');
 assert.doesNotMatch(files['Dashboard_Script_Income.html'], /Active=NO/i,

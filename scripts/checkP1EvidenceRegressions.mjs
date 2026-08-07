@@ -301,6 +301,9 @@ assert.match(populatedBrowser,
   /debtManageHost\.querySelector\('\.bill-edit-btn'\)[\s\S]*?debtSeparateRename[\s\S]*?debt_edit_account_name[\s\S]*?temporaryDebtName[\s\S]*?debt_edit_save_btn[\s\S]*?Debt unified Edit rename restoration/,
   'Populated Dashboard must prove that one Debt Edit save renames and restores the account with no separate row action');
 assert.match(populatedBrowser,
+  /bank_manage_list[\s\S]*?bank_edit_account_name[\s\S]*?temporaryBankName[\s\S]*?Bank unified Edit rename restoration[\s\S]*?Stop tracking[\s\S]*?Bank Reactivate lifecycle/,
+  'Populated Dashboard must prove Bank one-save rename restoration plus Stop and Reactivate on its disposable fixture');
+assert.match(populatedBrowser,
   /measureOrdinaryBankSave_[\s\S]*?bank_update_save_btn[\s\S]*?sampleValues[\s\S]*?samples\.length === 5[\s\S]*?acknowledgementP95Ms[\s\S]*?completionP95Ms[\s\S]*?candidateBudget/,
   '4f must time five real ordinary Save samples through the shipping Bank editor');
 assert.match(populatedBrowser,
@@ -729,6 +732,18 @@ assert.match(dashboard, /function buildInputBillPlannerPaymentWindows_\(today, t
 assert.match(dashboard, /buildCashFlowYearSheet_\(ss, today\.getFullYear\(\)\)/,
   'Bills Due first-run provisioning must remain on the already-resolved explicit workbook');
 assert.match(bank, /function syncAllAccountsFromLatestCurrentYear_\(optionalSs, optionalBankDisplay\)/);
+assert.match(bank,
+  /function saveTrackedBankAccountFromDashboard\(payload\)[\s\S]*?getUserSpreadsheet_\(\)[\s\S]*?getSheet_\(ss, 'ACCOUNTS'\)[\s\S]*?getSheet_\(ss, 'BANK_ACCOUNTS'\)[\s\S]*?historyTargets[\s\S]*?externalLinkPreserved:\s*true/,
+  'Bank Edit must resolve the caller workbook and preserve import identity while renaming every history block');
+assert.match(bank,
+  /function saveTrackedBankAccountFromDashboard\(payload\)[\s\S]*?Another bank account already uses this name[\s\S]*?Bank account history is ambiguous[\s\S]*?were not saved and were rolled back/,
+  'Bank Edit must fail closed on duplicate or ambiguous names and retain rollback evidence');
+assert.match(bank,
+  /if \(!typeStr && oldType\)[\s\S]*?if \(!policyStr && oldPolicy\)[\s\S]*?priorityText === '' && oldPriority/,
+  'Bank Edit must permit legacy blank metadata only when the stored field was already blank');
+assert.match(bank,
+  /fitBankAccountNameColumnToContents_\(accountsSheet, headerMap\.nameCol\)[\s\S]*?fitBankAccountNameColumnToContents_\(bankSheet, 1\)[\s\S]*?autoResizeColumn\(column\)[\s\S]*?getColumnWidth\(column\)[\s\S]*?setColumnWidth\(column, Math\.min\(1000, autoWidth \+ 24\)\)/,
+  'Bank rename must keep both authoritative Account Name columns fitted to their contents');
 assert.match(investments, /function syncAllAssetsFromLatestCurrentYear_\(optionalSs\)/);
 assert.match(houses, /function syncAllHouseAssetsFromLatestCurrentYear_\(optionalSs\)/);
 assert.match(plannerOutput, /if \(emailMode === 'suppress'\) return;/, 'Planner harness runs must never send or queue email');

@@ -13,6 +13,16 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 **Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; isolated Central has since advanced through `@334`. The `@196` 7.2/10 read-only score is evidence-limited and not comparable, so the official score does not change until a full writer-inclusive advocate run. The 7.5/10 value remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 shipped 2026-07-09.** Exact-owner campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` passed 20/20 Planner pairs on source `8aa4bf5` / isolated `@318` and ratified the Financial Plan refresh budget. Diagnostic `@319` completed `4d`; `@322` closed ordinary Save `4f`; `@325` runtime-closed combined UX `3e`–`3i`/`3m`; `@328` closed Retirement `4g`; `@331` closed money-format consistency `3n`; and `@334` closed the one-save Debt slice of product consistency `3o`. Current ordering authority is `ROADMAP.md`: **product consistency/shared lifecycle `3o` → separate accessibility closeout `3j` → deferred correction `5j`–`5m` → remaining candidate preparation → frozen-candidate evidence → supervised cohort proof → 10/10 Beta Release Candidate**. Customer-facing operations/support/privacy work is deferred until the product-consistency pass is complete. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
 
+**2026-08-07 status update:** isolated Central is now `@338`. The Bank Account
+`3o` slice passed its exact one-save rename/restore plus Stop/Reactivate browser
+assertion in disposable run `FR-02e19b9d-9757-4847-afe0-55fd5a03be32`; a later
+unrelated correction was interrupted by Apps Script `HTTP 0`, and verified
+cleanup returned the runner to `active: null`. Bank name columns now auto-fit
+with a rendering gutter. Debt and Bank are complete; Investments, Houses, and
+Income remain in that order. Follow-up `3p` commonizes name/payee auto-fit, and
+`5n` reconciles latest-known Dashboard totals with exact-month ledger totals
+before any calculation-basis change is considered.
+
 `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered finish-line inventory
 for broad invited Beta. It assigns IDs `1a`–`9e`, focused-effort estimates,
 dependencies, a critical path, three parallel work lanes, time-saving rules, and

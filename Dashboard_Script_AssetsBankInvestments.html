@@ -2,6 +2,11 @@
 var bankUpdateDetailsReady_ = false;
 var bankUpdateDetailsRequestId_ = 0;
 var bankSectionRequestId_ = 0;
+var __bankUiData = null;
+var __bankManagementRows = [];
+var __bankManagementByName = Object.create(null);
+var __bankInactiveRows = [];
+var __bankEditing = null;
 
 function fillBankAccountDropdownFromData_(data) {
   const sel = document.getElementById('bank_account');
@@ -15,6 +20,16 @@ function fillBankAccountDropdownFromData_(data) {
     opt.value = a;
     opt.textContent = a;
     sel.appendChild(opt);
+  });
+  __bankUiData = data || {};
+  __bankManagementRows = Array.isArray(data && data.managementAccounts)
+    ? data.managementAccounts.slice() : [];
+  __bankInactiveRows = Array.isArray(data && data.inactiveAccounts)
+    ? data.inactiveAccounts.slice() : [];
+  __bankManagementByName = Object.create(null);
+  __bankManagementRows.forEach(function(row) {
+    var name = String(row && row.accountName || '').trim();
+    if (name) __bankManagementByName[name.toLowerCase()] = row;
   });
   populateBankAddDatalists_(data);
   updateBankUpdateAvailability_();
@@ -310,6 +325,8 @@ function setBankPanelMode(mode) {
     secondaryMode === 'import' &&
     BANK_IMPORT_CSV_PASTE_ENABLED;
 
+  if (m !== 'manage' || secondaryMode) closeBankEdit_();
+
   if (manageHome) manageHome.style.display = (showReview || showImport) ? 'none' : '';
   if (wrapR) wrapR.style.display = showReview ? '' : 'none';
   if (wrapI) wrapI.style.display = showImport ? '' : 'none';
@@ -327,7 +344,9 @@ function renderBankManageList_() {
   renderTrackedEditorManageList_({
     hostId: 'bank_manage_list',
     selectId: 'bank_account',
-    items: trackedEditorItemsFromSelect_('bank_account'),
+    items: __bankManagementRows.length
+      ? __bankManagementRows.map(function(row) { return { name: row.accountName }; })
+      : trackedEditorItemsFromSelect_('bank_account'),
     itemLabel: 'Bank account',
     loadingMessage: 'Loading bank accounts…',
     failureMessage: 'Couldn’t load bank accounts.',
@@ -335,20 +354,287 @@ function renderBankManageList_() {
     addLabel: 'Add first bank account',
     onRetry: loadBankSection,
     onAdd: function() { setBankPanelMode('add'); },
+    updateLabel: 'Edit',
     onUpdate: function(accountName) {
-      openTrackedEditorItemForUpdate_({
-        selectId: 'bank_account',
-        setMode: setBankPanelMode,
-        loadSelection: loadBankData
-      }, accountName);
+      openBankEditForm_(accountName);
     },
     onStop: function(accountName) {
+      closeBankEdit_();
       stopTrackedEditorItem_({
         selectId: 'bank_account',
         stop: stopTrackingBank
       }, accountName);
     }
   });
+  renderInactiveBankAccounts_();
+}
+
+function populateBankEditTypeOptions_(currentType) {
+  var select = document.getElementById('bank_edit_type');
+  if (!select) return;
+  select.innerHTML = '';
+  var values = [currentType]
+    .concat((__bankUiData && __bankUiData.typeOptions) || [])
+    .concat(BANK_ADD_TYPE_FALLBACK_OPTIONS_);
+  var seen = Object.create(null);
+  if (!String(currentType || '').trim()) {
+    var unsetOption = document.createElement('option');
+    unsetOption.value = '';
+    unsetOption.textContent = 'Not set (legacy account)';
+    select.appendChild(unsetOption);
+  }
+  values.forEach(function(value) {
+    var text = String(value == null ? '' : value).trim();
+    var key = text.toLowerCase();
+    if (!text || seen[key]) return;
+    seen[key] = true;
+    var option = document.createElement('option');
+    option.value = text;
+    option.textContent = text;
+    select.appendChild(option);
+  });
+  select.value = currentType || '';
+}
+
+function onBankEditPolicyChange_() {
+  var select = document.getElementById('bank_edit_policy');
+  var row = document.getElementById('bank_edit_policy_custom_row');
+  var show = !!(select && select.value === BANK_ADD_POLICY_OTHER_SENTINEL_);
+  if (row) row.style.display = show ? '' : 'none';
+}
+
+function openBankEditForm_(accountName) {
+  var row = __bankManagementByName[String(accountName || '').trim().toLowerCase()];
+  if (!row || !row.sysAccountsRow) {
+    setStatus('bank_status', 'Couldn\u2019t open that account — please refresh.', true);
+    return;
+  }
+  __bankEditing = {
+    sysAccountsRow: row.sysAccountsRow,
+    accountName: row.accountName,
+    typeExact: row.type,
+    usePolicyExact: row.usePolicy,
+    priorityExact: row.priority,
+    priorityBucket: bankPriorityNumberToDropdown_(row.priority)
+  };
+  document.getElementById('bank_edit_account_name').value = row.accountName || '';
+  populateBankEditTypeOptions_(row.type || '');
+
+  var canonicalPolicies = ['DO_NOT_TOUCH', 'USE_FOR_BILLS', 'USE_FOR_DEBT', 'USE_WITH_CAUTION'];
+  var policy = String(row.usePolicy || '').trim();
+  var policySelect = document.getElementById('bank_edit_policy');
+  var policyCustom = document.getElementById('bank_edit_policy_custom');
+  var legacyUnsetPolicy = policySelect.querySelector('option[data-legacy-unset="true"]');
+  if (legacyUnsetPolicy) legacyUnsetPolicy.remove();
+  if (canonicalPolicies.indexOf(policy.toUpperCase()) !== -1) {
+    policySelect.value = policy.toUpperCase();
+    policyCustom.value = '';
+  } else if (policy) {
+    policySelect.value = BANK_ADD_POLICY_OTHER_SENTINEL_;
+    policyCustom.value = policy;
+  } else {
+    legacyUnsetPolicy = document.createElement('option');
+    legacyUnsetPolicy.value = '';
+    legacyUnsetPolicy.textContent = 'Not set (legacy account)';
+    legacyUnsetPolicy.setAttribute('data-legacy-unset', 'true');
+    policySelect.insertBefore(legacyUnsetPolicy, policySelect.firstChild);
+    policySelect.value = '';
+    policyCustom.value = '';
+  }
+  onBankEditPolicyChange_();
+  var prioritySelect = document.getElementById('bank_edit_priority');
+  var legacyUnsetPriority = prioritySelect.querySelector('option[data-legacy-unset="true"]');
+  if (legacyUnsetPriority) legacyUnsetPriority.remove();
+  if (String(row.priority || '').trim()) {
+    prioritySelect.value = String(bankPriorityNumberToDropdown_(row.priority));
+  } else {
+    legacyUnsetPriority = document.createElement('option');
+    legacyUnsetPriority.value = '';
+    legacyUnsetPriority.textContent = 'Not set (legacy account)';
+    legacyUnsetPriority.setAttribute('data-legacy-unset', 'true');
+    prioritySelect.insertBefore(legacyUnsetPriority, prioritySelect.firstChild);
+    prioritySelect.value = '';
+  }
+  if (row.availableNow === '' || row.availableNow === null ||
+      typeof row.availableNow === 'undefined') {
+    document.getElementById('bank_edit_available').value = '';
+  } else {
+    setCurrencyInputValue('bank_edit_available', Number(row.availableNow));
+  }
+  if (row.minBuffer === '' || row.minBuffer === null ||
+      typeof row.minBuffer === 'undefined') {
+    document.getElementById('bank_edit_buffer').value = '';
+  } else {
+    setCurrencyInputValue('bank_edit_buffer', Number(row.minBuffer));
+  }
+  document.getElementById('bank_edit_current_balance').textContent =
+    row.currentBalance === '' || row.currentBalance === null ||
+      typeof row.currentBalance === 'undefined'
+      ? '—' : fmtCurrency(Number(row.currentBalance));
+  document.getElementById('bank_edit_import_note').style.display =
+    row.externalLinked ? '' : 'none';
+  document.getElementById('bank_edit_title').textContent =
+    'Edit bank account — ' + (row.accountName || '');
+  var wrap = document.getElementById('bank_edit_wrap');
+  wrap.style.display = '';
+  try { wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (_e) {}
+}
+
+function closeBankEdit_() {
+  __bankEditing = null;
+  var wrap = document.getElementById('bank_edit_wrap');
+  if (wrap) wrap.style.display = 'none';
+}
+
+function cancelBankEdit_() {
+  closeBankEdit_();
+  setStatus('bank_status', '', false);
+}
+
+function submitBankEdit_() {
+  if (!__bankEditing || !__bankEditing.sysAccountsRow) {
+    setStatus('bank_status', 'No bank account selected to edit. Please refresh.', true);
+    return;
+  }
+  var nameEl = document.getElementById('bank_edit_account_name');
+  var newName = String(nameEl && nameEl.value || '').trim();
+  var type = String(document.getElementById('bank_edit_type').value || '').trim();
+  var policySelect = document.getElementById('bank_edit_policy');
+  var policy = String(policySelect && policySelect.value || '').trim();
+  if (policy === BANK_ADD_POLICY_OTHER_SENTINEL_) {
+    policy = String(document.getElementById('bank_edit_policy_custom').value || '').trim();
+  }
+  if (!newName) {
+    setStatus('bank_status', 'Account name is required.', true);
+    if (nameEl) nameEl.focus();
+    return;
+  }
+  if (!type && String(__bankEditing.typeExact || '').trim()) {
+    setStatus('bank_status', 'Type is required.', true);
+    return;
+  }
+  if (!policy && String(__bankEditing.usePolicyExact || '').trim()) {
+    setStatus('bank_status', 'Use policy is required.', true);
+    return;
+  }
+  var availableText = String(document.getElementById('bank_edit_available').value || '').trim();
+  var bufferText = String(document.getElementById('bank_edit_buffer').value || '').trim();
+  var available = availableText === '' ? '' : toNumber(availableText);
+  var buffer = bufferText === '' ? '' : toNumber(bufferText);
+  if ((availableText !== '' && isNaN(available)) ||
+      (bufferText !== '' && isNaN(buffer))) {
+    setStatus('bank_status', 'Available now and Minimum buffer must be valid numbers.', true);
+    return;
+  }
+
+  var priorityRaw = String(document.getElementById('bank_edit_priority').value || '').trim();
+  var selectedPriorityBucket = priorityRaw === '' ? '' : bankPriorityDropdownToNumber_(priorityRaw);
+  var originalPriority = parseInt(String(__bankEditing.priorityExact || ''), 10);
+  var priority = selectedPriorityBucket === '' ? '' :
+    selectedPriorityBucket === __bankEditing.priorityBucket &&
+      !isNaN(originalPriority) && originalPriority >= 1 && originalPriority <= 99
+    ? originalPriority : selectedPriorityBucket;
+  var payload = {
+    sysAccountsRow: __bankEditing.sysAccountsRow,
+    expectedAccountName: __bankEditing.accountName,
+    newAccountName: newName,
+    type: type,
+    usePolicy: policy,
+    priority: priority,
+    availableNow: available,
+    minBuffer: buffer
+  };
+  setStatusLoading('bank_status', 'Saving changes…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('bank_status', (res && res.message) || 'Changes saved.', false);
+      closeBankEdit_();
+      loadBankSection();
+      if (typeof refreshSnapshot === 'function') refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', (err.message || String(err)), true);
+    })
+    .saveTrackedBankAccountFromDashboard(payload);
+}
+
+function toggleInactiveBankAccountsView_() {
+  var wrap = document.getElementById('bank_inactive_wrap');
+  var button = document.getElementById('bank_show_inactive_btn');
+  if (!wrap || !button) return;
+  var show = wrap.style.display === 'none';
+  wrap.style.display = show ? '' : 'none';
+  button.setAttribute('aria-expanded', show ? 'true' : 'false');
+  button.innerHTML = '<span class="debt-caret" aria-hidden="true">' +
+    (show ? '&#9662;' : '&#9656;') + '</span>' +
+    (show ? 'Hide inactive accounts' : 'Show inactive accounts');
+  if (show) renderInactiveBankAccounts_();
+}
+
+function renderInactiveBankAccounts_() {
+  var host = document.getElementById('bank_inactive_list');
+  var button = document.getElementById('bank_show_inactive_btn');
+  if (!host || !button) return;
+  var count = __bankInactiveRows.length;
+  if (button.getAttribute('aria-expanded') !== 'true') {
+    button.innerHTML = '<span class="debt-caret" aria-hidden="true">&#9656;</span>' +
+      'Show inactive accounts' + (count ? ' (' + count + ')' : '');
+  }
+  host.innerHTML = '';
+  if (!count) {
+    var empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No inactive bank accounts.';
+    host.appendChild(empty);
+    return;
+  }
+  __bankInactiveRows.forEach(function(row) {
+    var item = document.createElement('div');
+    item.className = 'tracked-editor-row';
+    var identity = document.createElement('div');
+    identity.className = 'tracked-editor-identity';
+    var title = document.createElement('strong');
+    title.className = 'tracked-editor-name';
+    title.textContent = row.accountName || 'Bank account';
+    identity.appendChild(title);
+    var kind = document.createElement('span');
+    kind.className = 'tracked-editor-kind muted';
+    kind.textContent = 'Inactive bank account';
+    identity.appendChild(kind);
+    item.appendChild(identity);
+    var actions = document.createElement('div');
+    actions.className = 'tracked-editor-actions';
+    var reactivate = document.createElement('button');
+    reactivate.type = 'button';
+    reactivate.className = 'small-btn';
+    reactivate.textContent = 'Reactivate';
+    reactivate.addEventListener('click', function() {
+      reactivateBankAccountFromManage_(row);
+    });
+    actions.appendChild(reactivate);
+    item.appendChild(actions);
+    host.appendChild(item);
+  });
+}
+
+function reactivateBankAccountFromManage_(row) {
+  var name = String(row && row.accountName || '').trim();
+  if (!name || !row.sysAccountsRow) return;
+  if (!window.confirm('Reactivate "' + name + '"?\n\nIts existing balance history and import connection will be preserved.')) return;
+  setStatusLoading('bank_status', 'Reactivating bank account…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('bank_status', (res && res.message) || 'Bank account reactivated.', false);
+      loadBankSection();
+      if (typeof refreshSnapshot === 'function') refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('bank_status', (err.message || String(err)), true);
+    })
+    .reactivateBankAccountFromDashboard({
+      sysAccountsRow: row.sysAccountsRow,
+      expectedAccountName: name
+    });
 }
 
 function loadBankSection() {

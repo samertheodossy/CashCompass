@@ -666,6 +666,83 @@
           !manageHasStop('bank_manage_list')) {
         trackedEditorFailures.push('Bank manage inventory');
       }
+      var bankLifecyclePass = false;
+      var originalBankConfirm = window.confirm;
+      try {
+        window.confirm = function() { return true; };
+        var bankManageHost = document.getElementById('bank_manage_list');
+        var bankEditButton = Array.prototype.find.call(
+          bankManageHost ? bankManageHost.querySelectorAll('button') : [],
+          function(button) { return String(button.textContent || '').trim() === 'Edit'; }
+        );
+        if (bankEditButton) bankEditButton.click();
+        await waitFor(function() {
+          var wrap = document.getElementById('bank_edit_wrap');
+          var nameInput = document.getElementById('bank_edit_account_name');
+          return wrap && wrap.style.display !== 'none' && nameInput &&
+            nameInput.value === expected.bankName;
+        }, 10000, 'Bank account name inside the unified Edit save');
+
+        var temporaryBankName = expected.bankName + ' E2E Rename';
+        document.getElementById('bank_edit_account_name').value = temporaryBankName;
+        document.getElementById('bank_edit_save_btn').click();
+        await waitFor(function() {
+          var row = window.__bankManagementByName &&
+            window.__bankManagementByName[temporaryBankName.toLowerCase()];
+          return hasOption('bank_account', temporaryBankName) && row && row.sysAccountsRow;
+        }, 90000, 'Bank unified Edit rename save');
+
+        bankManageHost = document.getElementById('bank_manage_list');
+        bankEditButton = Array.prototype.find.call(
+          bankManageHost ? bankManageHost.querySelectorAll('button') : [],
+          function(button) { return String(button.textContent || '').trim() === 'Edit'; }
+        );
+        if (bankEditButton) bankEditButton.click();
+        await waitFor(function() {
+          var input = document.getElementById('bank_edit_account_name');
+          return input && input.value === temporaryBankName;
+        }, 10000, 'renamed Bank account in Edit');
+        document.getElementById('bank_edit_account_name').value = expected.bankName;
+        document.getElementById('bank_edit_save_btn').click();
+        await waitFor(function() {
+          var restored = window.__bankManagementByName &&
+            window.__bankManagementByName[expected.bankName.toLowerCase()];
+          return hasOption('bank_account', expected.bankName) && restored &&
+            restored.sysAccountsRow && !hasOption('bank_account', temporaryBankName);
+        }, 90000, 'Bank unified Edit rename restoration');
+
+        bankManageHost = document.getElementById('bank_manage_list');
+        var bankStopButton = Array.prototype.find.call(
+          bankManageHost ? bankManageHost.querySelectorAll('button') : [],
+          function(button) { return String(button.textContent || '').trim() === 'Stop tracking'; }
+        );
+        if (bankStopButton) bankStopButton.click();
+        await waitFor(function() {
+          return !hasOption('bank_account', expected.bankName) &&
+            (__bankInactiveRows || []).some(function(row) {
+              return String(row.accountName || '') === expected.bankName && row.sysAccountsRow;
+            });
+        }, 90000, 'Bank Stop tracking lifecycle');
+        renderInactiveBankAccounts_();
+        var inactiveHost = document.getElementById('bank_inactive_list');
+        var reactivateButton = Array.prototype.find.call(
+          inactiveHost ? inactiveHost.querySelectorAll('button') : [],
+          function(button) { return String(button.textContent || '').trim() === 'Reactivate'; }
+        );
+        if (reactivateButton) reactivateButton.click();
+        await waitFor(function() {
+          var restored = window.__bankManagementByName &&
+            window.__bankManagementByName[expected.bankName.toLowerCase()];
+          return hasOption('bank_account', expected.bankName) && restored &&
+            restored.sysAccountsRow && !(__bankInactiveRows || []).some(function(row) {
+              return String(row.accountName || '') === expected.bankName;
+            });
+        }, 90000, 'Bank Reactivate lifecycle');
+        bankLifecyclePass = true;
+      } finally {
+        window.confirm = originalBankConfirm;
+      }
+      if (!bankLifecyclePass) trackedEditorFailures.push('Bank Edit/Rename/Reactivate lifecycle');
 
       if (typeof showTab === 'function') showTab('houses');
       if (typeof loadHouseSectionThenSelect_ === 'function') loadHouseSectionThenSelect_(expected.houseName);
@@ -702,7 +779,7 @@
       add('tracked_editor_convergence', trackedEditorFailures.length === 0,
         trackedEditorFailures.length
           ? ('Tracked-editor gaps: ' + trackedEditorFailures.join(', '))
-          : 'Bank Accounts, Houses, and Investments keep Update Save-only and expose Stop tracking only in Manage.');
+          : 'Bank Accounts proved one-save Edit/Rename plus Stop/Reactivate; Houses and Investments keep Update Save-only and Manage-owned lifecycle actions.');
 
       if (typeof showTab === 'function') showTab('debts');
       if (typeof loadDebtSectionThenSelect_ === 'function') loadDebtSectionThenSelect_(expected.debtName);

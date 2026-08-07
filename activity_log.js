@@ -1817,6 +1817,7 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (etEarly === 'bank_account_add') return 'Bank';
   if (etEarly === 'bank_account_update') return 'Bank';
   if (etEarly === 'bank_account_deactivate') return 'Bank';
+  if (etEarly === 'bank_account_reactivate') return 'Bank';
   if (etEarly === 'bill_add') return 'Bill';
   if (etEarly === 'bill_update') return 'Bill';
   if (etEarly === 'bill_deactivate') return 'Bill';
@@ -1934,6 +1935,7 @@ function activityLogActionLabel_(eventType, detailsJson) {
     case 'bank_account_update':
       return bankAccountUpdateActionLabel_(detailsJson);
     case 'bank_account_deactivate': return 'Tracking stopped';
+    case 'bank_account_reactivate': return 'Account reactivated';
     case 'house_add': return 'House added';
     // house_value_update is non-monetary — see houseValueUpdateActionLabel_.
     // Renders e.g. "Updated May-26 value to $850,000.00" so the user can
@@ -2436,6 +2438,16 @@ function bankAccountUpdateActionLabel_(detailsJson) {
   }
   if (!d || typeof d !== 'object') return fallback;
 
+  if (String(d.updateKind || '') === 'account_details') {
+    var changed = Array.isArray(d.changedFields) ? d.changedFields : [];
+    if (changed.indexOf('Account Name') !== -1 && changed.length === 1) {
+      return 'Account renamed';
+    }
+    if (changed.length === 1) return 'Updated ' + String(changed[0] || 'account details');
+    if (changed.length > 1) return 'Updated ' + changed.length + ' account details';
+    return 'Account details updated';
+  }
+
   var newRawNum = activityLogAsFiniteNumber_(d.newRaw);
   if (newRawNum === null) return fallback;
   var formattedNew = activityLogFmtMoney_(newRawNum);
@@ -2564,6 +2576,7 @@ function activityLogIsNonMonetaryEvent_(eventType) {
     // column with a misleading $0.00. See billUpdateActionLabel_.
     et === 'bill_update' ||
     et === 'bank_account_deactivate' ||
+    et === 'bank_account_reactivate' ||
     // bank_account_update / house_value_update / investment_update all
     // log a snapshot edit, not a money movement. Rendering the dollar
     // value in Amount would double-count it against the Activity totals;

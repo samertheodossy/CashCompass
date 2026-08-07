@@ -493,12 +493,67 @@
           <div class="tracked-editor-manage-head">
             <div>
               <h3>Manage bank accounts</h3>
-              <p class="muted">Update a balance or stop tracking an account while preserving its history.</p>
+              <p class="muted">Edit account details or stop tracking an account while preserving its history.</p>
             </div>
-            <button type="button" class="small-btn primary" onclick="setBankPanelMode('add')">Add new account</button>
+            <div class="tracked-editor-actions">
+              <button type="button" id="bank_show_inactive_btn" class="small-btn debt-inactive-toggle" onclick="toggleInactiveBankAccountsView_()" aria-expanded="false" aria-controls="bank_inactive_wrap"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive accounts</button>
+              <button type="button" class="small-btn primary" onclick="setBankPanelMode('add')">Add new account</button>
+            </div>
           </div>
+
+          <div id="bank_edit_wrap" class="bills-add-wrap" style="display:none;margin:0 0 20px 0;padding:14px 16px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;">
+            <div id="bank_edit_title" class="card-title" style="margin-top:0;">Edit bank account</div>
+            <p class="muted" style="margin:0 0 10px 0;">Update the account name and settings, then save everything together. Balance history and any import connection are preserved.</p>
+            <div class="grid-2">
+              <div>
+                <label>Account name</label>
+                <input type="text" id="bank_edit_account_name" maxlength="120" autocomplete="off">
+                <label>Type</label>
+                <select id="bank_edit_type"></select>
+                <label>Use policy</label>
+                <select id="bank_edit_policy" onchange="onBankEditPolicyChange_()">
+                  <option value="DO_NOT_TOUCH">Do not touch</option>
+                  <option value="USE_FOR_BILLS">Use for bills</option>
+                  <option value="USE_FOR_DEBT">Use for debt</option>
+                  <option value="USE_WITH_CAUTION">Use with caution</option>
+                  <option value="__OTHER__">Other (custom)…</option>
+                </select>
+                <div id="bank_edit_policy_custom_row" style="display:none;margin-top:6px;">
+                  <label for="bank_edit_policy_custom">Custom use policy</label>
+                  <input type="text" id="bank_edit_policy_custom" maxlength="120" autocomplete="off">
+                </div>
+                <label>Priority</label>
+                <select id="bank_edit_priority">
+                  <option value="1">Use first (primary account)</option>
+                  <option value="5">Use after others</option>
+                  <option value="9">Use last (backup)</option>
+                </select>
+              </div>
+              <div>
+                <label>Current balance</label>
+                <div id="bank_edit_current_balance" class="muted" style="padding:8px 10px;background:#f1f5f9;border-radius:6px;">—</div>
+                <div class="muted" style="margin-top:4px;font-size:12px;">Update dated balances from the Update tab.</div>
+                <label>Available now</label>
+                <input type="text" id="bank_edit_available" inputmode="decimal" onfocus="currencyFocus('bank_edit_available', true)" onblur="currencyBlur('bank_edit_available')">
+                <label>Minimum buffer</label>
+                <input type="text" id="bank_edit_buffer" inputmode="decimal" onfocus="currencyFocus('bank_edit_buffer', true)" onblur="currencyBlur('bank_edit_buffer')">
+                <div id="bank_edit_import_note" class="muted" style="margin-top:8px;font-size:12px;display:none;">The linked import account remains connected after a rename.</div>
+                <div style="display:flex;gap:8px;margin-top:12px;">
+                  <button type="button" id="bank_edit_save_btn" class="small-btn primary" onclick="submitBankEdit_()">Save changes</button>
+                  <button type="button" class="small-btn" onclick="cancelBankEdit_()">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div id="bank_manage_list" class="tracked-editor-list">
             <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading bank accounts…</span></div>
+          </div>
+
+          <div id="bank_inactive_wrap" class="debt-inactive-section" style="display:none;">
+            <div class="card-title">Inactive bank accounts</div>
+            <p class="muted" style="margin:0 0 12px 0;">These accounts are excluded from current cash totals and planning. Reactivate restores the existing account without changing balances, history, or import connections.</p>
+            <div id="bank_inactive_list" class="tracked-editor-list"></div>
           </div>
 
           <div class="tracked-editor-secondary-tools">
