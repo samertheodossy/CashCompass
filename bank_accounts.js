@@ -906,14 +906,35 @@ function addBankAccountFromDashboard(payload) {
     Logger.log('addBankAccountFromDashboard activity log: ' + logErr);
   }
 
-  // Keep both authoritative Account Name columns fitted to the longest
-  // current value after CashCompass adds an account.
+  // The add writer populates a complete SYS row plus the Bank History name
+  // and optional opening-month value. Fit every column it changes so large
+  // balances remain readable as well as long account names.
   try {
-    fitBankAccountNameColumnToContents_(accountsSheet, getAccountsHeaderMap_(accountsSheet).nameCol);
+    var addAccountsFitMap = getAccountsHeaderMap_(accountsSheet);
+    var addBankFitTargets = [
+      { sheet: bankSheet, col: 1 },
+      { sheet: accountsSheet, col: addAccountsFitMap.nameCol },
+      { sheet: accountsSheet, col: addAccountsFitMap.balanceCol },
+      { sheet: accountsSheet, col: addAccountsFitMap.availableCol },
+      { sheet: accountsSheet, col: addAccountsFitMap.bufferCol },
+      { sheet: accountsSheet, col: addAccountsFitMap.typeCol },
+      { sheet: accountsSheet, col: addAccountsFitMap.policyCol },
+      { sheet: accountsSheet, col: addAccountsFitMap.priorityCol },
+      { sheet: accountsSheet, col: addAccountsFitMap.activeCol }
+    ];
+    if (openingDate) {
+      addBankFitTargets.push({
+        sheet: bankSheet,
+        col: getMonthColumnByDate_(bankSheet, openingDate, block.headerRow)
+      });
+    }
+    fitContentColumnsToContents_(
+      addBankFitTargets,
+      'addBankAccountFromDashboard changed-column fit'
+    );
   } catch (accountsResizeErr) {
-    Logger.log('addBankAccountFromDashboard Account Name fit: ' + accountsResizeErr);
+    Logger.log('addBankAccountFromDashboard changed-column fit: ' + accountsResizeErr);
   }
-  fitBankAccountNameColumnToContents_(bankSheet, 1);
 
   return {
     ok: true,
@@ -1175,6 +1196,35 @@ function updateBankAccountValueByDate(payload) {
       Logger.log('updateBankAccountValueByDate activity log: ' + logErr);
     }
     markPerformanceTrace_(performanceTrace, 'append_activity');
+
+    failedStage = 'fit_changed_columns';
+    var bankValueFitTargets = [];
+    if (previousSheet && previousCol !== -1) {
+      bankValueFitTargets.push({ sheet: previousSheet, col: previousCol });
+    }
+    if (accountsContext && accountsContext.sheet && accountsContext.headerMap) {
+      bankValueFitTargets.push({
+        sheet: accountsContext.sheet,
+        col: accountsContext.headerMap.balanceCol
+      });
+      if (updateAvailableNow) {
+        bankValueFitTargets.push({
+          sheet: accountsContext.sheet,
+          col: accountsContext.headerMap.availableCol
+        });
+      }
+      if (updateMinBuffer) {
+        bankValueFitTargets.push({
+          sheet: accountsContext.sheet,
+          col: accountsContext.headerMap.bufferCol
+        });
+      }
+    }
+    fitContentColumnsToContents_(
+      bankValueFitTargets,
+      'updateBankAccountValueByDate changed-column fit'
+    );
+    markPerformanceTrace_(performanceTrace, 'fit_changed_columns');
 
   // NOTE: we intentionally do NOT call runDebtPlanner() here. The
   // sheet write + SYS - Accounts sync + activity log row are everything
@@ -2364,15 +2414,28 @@ function saveTrackedBankAccountFromDashboard(payload) {
       Logger.log('saveTrackedBankAccountFromDashboard activity log: ' + logErr);
     }
 
-    // Keep the renamed account readable in both authoritative views. Resize
-    // only the two Account Name columns involved, and never shrink a width the
-    // customer already made larger. Presentation is best-effort and runs only
-    // after the coordinated data writes succeed, so a sizing problem cannot
-    // turn a successful financial rename into a partial-data failure.
+    // Fit every edited SYS column, plus Bank History when the name changed.
+    // Presentation is best-effort and runs only after the coordinated writes.
+    const bankEditFitTargets = [];
     if (newName !== actualName) {
-      fitBankAccountNameColumnToContents_(accountsSheet, headerMap.nameCol);
-      fitBankAccountNameColumnToContents_(bankSheet, 1);
+      bankEditFitTargets.push({ sheet: accountsSheet, col: headerMap.nameCol });
+      bankEditFitTargets.push({ sheet: bankSheet, col: 1 });
     }
+    if (typeStr !== oldType) bankEditFitTargets.push({ sheet: accountsSheet, col: headerMap.typeCol });
+    if (policyStr !== oldPolicy) bankEditFitTargets.push({ sheet: accountsSheet, col: headerMap.policyCol });
+    if (normalizedPriority !== oldPriority) {
+      bankEditFitTargets.push({ sheet: accountsSheet, col: headerMap.priorityCol });
+    }
+    if (normalizedAvailable !== oldAvailable) {
+      bankEditFitTargets.push({ sheet: accountsSheet, col: headerMap.availableCol });
+    }
+    if (normalizedBuffer !== oldBuffer) {
+      bankEditFitTargets.push({ sheet: accountsSheet, col: headerMap.bufferCol });
+    }
+    fitContentColumnsToContents_(
+      bankEditFitTargets,
+      'saveTrackedBankAccountFromDashboard changed-column fit'
+    );
 
     return {
       ok: true,
@@ -2408,23 +2471,6 @@ function saveTrackedBankAccountFromDashboard(payload) {
     throw err;
   } finally {
     try { lock.releaseLock(); } catch (_releaseErr) {}
-  }
-}
-
-/** Fit one Account Name column to the longest current value. */
-function fitBankAccountNameColumnToContents_(sheet, column) {
-  try {
-    sheet.autoResizeColumn(column);
-    // Sheets can size a column exactly to its measured text boundary, which
-    // still clips the final character once the populated workbook's larger
-    // font and cell padding are rendered (especially when the next column is
-    // non-empty). Re-read the auto-sized width and add a small visual gutter.
-    // The auto-resize runs first on every call, so this remains content-driven
-    // and can shrink again after a shorter rename instead of growing forever.
-    const autoWidth = sheet.getColumnWidth(column);
-    sheet.setColumnWidth(column, Math.min(1000, autoWidth + 24));
-  } catch (resizeErr) {
-    Logger.log('fitBankAccountNameColumnToContents_: ' + resizeErr);
   }
 }
 

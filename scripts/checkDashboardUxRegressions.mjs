@@ -41,6 +41,7 @@ const files = Object.fromEntries(await Promise.all([
   'debts.js',
   'donations.js',
   'income_sources.js',
+  'investments.js',
   'onboarding.js',
   'planner_helpers.js',
   'property_performance.js',
@@ -2517,8 +2518,26 @@ assert.match(files['bank_accounts.js'],
   /Existing legacy blanks may remain blank during a name-only edit[\s\S]*?if \(!typeStr && oldType\)[\s\S]*?if \(!policyStr && oldPolicy\)[\s\S]*?priorityText === '' && oldPriority/,
   'Bank name-only edits must preserve legacy blank metadata instead of forcing unrelated choices');
 assert.match(files['bank_accounts.js'],
-  /addBankAccountFromDashboard\(payload\)[\s\S]*?fitBankAccountNameColumnToContents_\(accountsSheet,[\s\S]*?fitBankAccountNameColumnToContents_\(bankSheet, 1\)[\s\S]*?if \(newName !== actualName\)[\s\S]*?fitBankAccountNameColumnToContents_\(accountsSheet, headerMap\.nameCol\)[\s\S]*?fitBankAccountNameColumnToContents_\(bankSheet, 1\)[\s\S]*?function fitBankAccountNameColumnToContents_[\s\S]*?autoResizeColumn\(column\)[\s\S]*?getColumnWidth\(column\)[\s\S]*?setColumnWidth\(column, Math\.min\(1000, autoWidth \+ 24\)\)/,
-  'Bank add and rename must fit both authoritative Account Name columns to their longest value');
+  /addBankAccountFromDashboard\(payload\)[\s\S]*?addBankFitTargets[\s\S]*?addAccountsFitMap\.balanceCol[\s\S]*?fitContentColumnsToContents_[\s\S]*?function updateBankAccountValueByDate\(payload\)[\s\S]*?bankValueFitTargets[\s\S]*?fitContentColumnsToContents_[\s\S]*?function saveTrackedBankAccountFromDashboard\(payload\)[\s\S]*?bankEditFitTargets[\s\S]*?fitContentColumnsToContents_/,
+  'Bank add, balance save, and account edit must fit every text or numeric column they change');
+assert.match(files['planner_helpers.js'],
+  /function fitContentColumnToContents_\(sheet, column, context\)[\s\S]*?autoResizeColumn\(col\)[\s\S]*?getColumnWidth\(col\)[\s\S]*?CONTENT_COLUMN_FIT_GUTTER_PX_[\s\S]*?function fitContentColumnsToContents_\(targets, context\)/,
+  'Customer-editable data columns must share one content-fit helper with a rendering gutter');
+assert.match(files['bills.js'],
+  /function addBillFromDashboard\(payload\)[\s\S]*?billFitCol[\s\S]*?fitContentColumnsToContents_\(billFitTargets[\s\S]*?function updateTrackedBillFromDashboard\(payload, optionalSs\)[\s\S]*?appliedBillCells[\s\S]*?billEditFitTargets[\s\S]*?fitContentColumnsToContents_/,
+  'Bill add and edit must fit all changed text and numeric columns');
+assert.match(files['debts.js'],
+  /function renameDebtFromDashboard\(payload\)[\s\S]*?fitContentColumnsToContents_\([\s\S]*?function saveTrackedDebtFromDashboard\(payload\)[\s\S]*?fitContentColumnsToContents_\([\s\S]*?function updateDebtField\(payload\)[\s\S]*?debtFieldFitTargets[\s\S]*?fitContentColumnsToContents_[\s\S]*?function addDebtFromDashboard\(payload\)[\s\S]*?fitContentColumnsToContents_\(debtFitTargets/,
+  'Debt add/edit and both rename coordinators must fit changed Debt and linked Cash Flow columns');
+assert.match(files['investments.js'],
+  /function updateInvestmentValueByDate\(payload\)[\s\S]*?changed-column fit[\s\S]*?function addInvestmentAccountFromDashboard\(payload\)[\s\S]*?fitContentColumnsToContents_\(\[[\s\S]*?balanceCol/,
+  'Investment add and value update must fit INPUT and SYS text and currency columns');
+assert.match(files['house_values.js'],
+  /function updateHouseValueByDate\(payload\)[\s\S]*?changed-column fit[\s\S]*?function addHouseFromDashboardLocked_\(payload\)[\s\S]*?fitContentColumnsToContents_\(\[[\s\S]*?valueCol/,
+  'House add and value update must fit INPUT and SYS text and currency columns');
+assert.match(files['income_sources.js'],
+  /function addIncomeSourceFromDashboard\(payload\)[\s\S]*?incomeFitTargets[\s\S]*?headerMap\.payeeCol[\s\S]*?monthCol[\s\S]*?fitContentColumnsToContents_/,
+  'Income add/reactivation must fit Cash Flow text and amount columns');
 assert.match(files['Dashboard_Script_AssetsBankInvestments.html'],
   /Not set \(legacy account\)[\s\S]*?typeExact:\s*row\.type[\s\S]*?usePolicyExact:\s*row\.usePolicy/,
   'Bank Edit must visibly preserve legacy blank metadata in the one-save form');

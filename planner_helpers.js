@@ -393,6 +393,52 @@ function addCashFlowMoneyToCellPreserveRowFormat_(sheet, row, col, amount, first
   applyCashFlowMoneyFormat_(cell);
 }
 
+/*
+ * Shared content-driven sizing for customer-editable text and numeric columns.
+ * Auto-size first so shorter values can shrink the column again, then add a
+ * small visual gutter because Sheets can otherwise clip the last character
+ * beside a populated neighboring column. Presentation failures are non-fatal.
+ */
+var CONTENT_COLUMN_FIT_GUTTER_PX_ = 24;
+var CONTENT_COLUMN_FIT_MAX_WIDTH_PX_ = 1000;
+
+function fitContentColumnToContents_(sheet, column, context) {
+  try {
+    if (!sheet || typeof sheet.autoResizeColumn !== 'function') return false;
+    var col = parseInt(String(column), 10);
+    if (isNaN(col) || col < 1) return false;
+    sheet.autoResizeColumn(col);
+    var autoWidth = sheet.getColumnWidth(col);
+    sheet.setColumnWidth(
+      col,
+      Math.min(CONTENT_COLUMN_FIT_MAX_WIDTH_PX_, autoWidth + CONTENT_COLUMN_FIT_GUTTER_PX_)
+    );
+    return true;
+  } catch (resizeErr) {
+    Logger.log((context || 'fitContentColumnToContents_') + ': ' + resizeErr);
+    return false;
+  }
+}
+
+function fitContentColumnsToContents_(targets, context) {
+  var seen = Object.create(null);
+  var list = Array.isArray(targets) ? targets : [];
+  for (var i = 0; i < list.length; i++) {
+    var target = list[i] || {};
+    var sheet = target.sheet;
+    var col = parseInt(String(target.col), 10);
+    if (!sheet || isNaN(col) || col < 1) continue;
+    var sheetKey = '';
+    try { sheetKey = String(sheet.getSheetId()); } catch (_sheetIdErr) {
+      try { sheetKey = String(sheet.getName()); } catch (_sheetNameErr) { sheetKey = String(i); }
+    }
+    var key = sheetKey + ':' + col;
+    if (seen[key]) continue;
+    seen[key] = true;
+    fitContentColumnToContents_(sheet, col, context);
+  }
+}
+
 function getLatestMonthColumnIndexFromHeaders_(headers, year) {
   const targetYear = Number(year);
   let bestIdx = -1;

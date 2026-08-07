@@ -114,7 +114,7 @@ for (const pattern of [
   /An Expense row already uses the new payee/,
   /SpreadsheetApp\.flush\(\)[\s\S]*verifiedBillPayee[\s\S]*verifiedCashFlowPayee/,
   /linkedCashFlowRename && activityLogged !== true[\s\S]*rollbackAppliedBillEdit_/,
-  /payeeColumnResizeTargets[\s\S]*autoResizeColumn/,
+  /billEditFitTargets[\s\S]*fitContentColumnsToContents_/,
   /if \(!category\) category = String\(currentCategory \|\| ''\)\.trim\(\)/
 ]) {
   assert.match(bills, pattern, 'Bill Edit integrity contract is incomplete');
@@ -192,6 +192,10 @@ assert.match(donations,
 assert.match(files['test_harness_scenarios_maintenance.js'],
   /Harness Legacy Blank Payment[\s\S]*paymentType:\s*legacy\.paymentType[\s\S]*newPaymentType:\s*'Cash'[\s\S]*Legacy blank Payment type can be repaired/,
   'The disposable full-donation scenario must cover blank-to-Cash Payment type repair');
+assert.match(files['test_harness_scenarios_maintenance.js'],
+  /billPayeeTightAutoWidth[\s\S]*?fitContentColumnToContents_[\s\S]*?Shared content fit adds the exact rendering gutter/,
+  /defaultAmount:\s*1234567890123\.45[\s\S]*?Bills currency column auto-fits a larger formatted amount/,
+  'The disposable Bill scenario must prove the shared fit gutter with the real Sheets sizing engine');
 
 function donationViewElement_() {
   return {

@@ -742,8 +742,8 @@ assert.match(bank,
   /if \(!typeStr && oldType\)[\s\S]*?if \(!policyStr && oldPolicy\)[\s\S]*?priorityText === '' && oldPriority/,
   'Bank Edit must permit legacy blank metadata only when the stored field was already blank');
 assert.match(bank,
-  /fitBankAccountNameColumnToContents_\(accountsSheet, headerMap\.nameCol\)[\s\S]*?fitBankAccountNameColumnToContents_\(bankSheet, 1\)[\s\S]*?autoResizeColumn\(column\)[\s\S]*?getColumnWidth\(column\)[\s\S]*?setColumnWidth\(column, Math\.min\(1000, autoWidth \+ 24\)\)/,
-  'Bank rename must keep both authoritative Account Name columns fitted to their contents');
+  /bankEditFitTargets[\s\S]*?accountsSheet[\s\S]*?bankSheet[\s\S]*?fitContentColumnsToContents_/,
+  'Bank edit must keep every changed SYS column and both renamed Account Name columns fitted');
 assert.match(investments, /function syncAllAssetsFromLatestCurrentYear_\(optionalSs\)/);
 assert.match(houses, /function syncAllHouseAssetsFromLatestCurrentYear_\(optionalSs\)/);
 assert.match(plannerOutput, /if \(emailMode === 'suppress'\) return;/, 'Planner harness runs must never send or queue email');

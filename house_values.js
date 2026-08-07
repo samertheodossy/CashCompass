@@ -647,6 +647,22 @@ function updateHouseValueByDate(payload) {
     Logger.log('updateHouseValueByDate activity log: ' + logErr);
   }
 
+  try {
+    const fitHouseInput = getSheet_(ss, 'HOUSE_VALUES');
+    const fitHouseBlock = getHouseValuesYearBlock_(fitHouseInput, year);
+    const fitHouseAssets = getSheet_(ss, 'HOUSE_ASSETS');
+    const fitHouseAssetsMap = getHouseAssetsHeaderMap_(fitHouseAssets);
+    fitContentColumnsToContents_([
+      {
+        sheet: fitHouseInput,
+        col: getMonthColumnByDate_(fitHouseInput, seedDate, fitHouseBlock.headerRow)
+      },
+      { sheet: fitHouseAssets, col: fitHouseAssetsMap.valueCol }
+    ], 'updateHouseValueByDate changed-column fit');
+  } catch (fitErr) {
+    Logger.log('updateHouseValueByDate changed-column fit: ' + fitErr);
+  }
+
   // NOTE: we intentionally do NOT call runDebtPlanner() here. The sheet
   // write + SYS - House Assets sync + activity log row are everything
   // the user needs to see the new value reflected. Planner-derived
@@ -1968,6 +1984,18 @@ function addHouseFromDashboardLocked_(payload) {
   } catch (logErr) {
     Logger.log('addHouseFromDashboard activity log: ' + logErr);
   }
+
+  const houseAssetsFitMap = getHouseAssetsHeaderMap_(haSheet);
+  fitContentColumnsToContents_([
+    { sheet: hvSheet, col: 1 },
+    { sheet: hvSheet, col: 2 },
+    { sheet: hvSheet, col: getMonthColumnByDate_(hvSheet, seedDate, block.headerRow) },
+    { sheet: haSheet, col: houseAssetsFitMap.houseCol },
+    { sheet: haSheet, col: houseAssetsFitMap.typeCol },
+    { sheet: haSheet, col: houseAssetsFitMap.loanCol },
+    { sheet: haSheet, col: houseAssetsFitMap.valueCol },
+    { sheet: haSheet, col: houseAssetsFitMap.activeCol }
+  ], 'addHouseFromDashboard changed-column fit');
 
   return {
     ok: true,

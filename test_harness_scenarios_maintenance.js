@@ -72,7 +72,7 @@ function getHarnessBillsEditIntegrityScenario_() {
     id: 'REGRESSION-BILLS-EDIT-INTEGRITY',
     category: 'REGRESSION',
     executionLevel: 'E2E',
-    description: 'Verify exact current-year Bill payee propagation, dynamic Payee-column sizing, collision refusal, category-race fallback, immutable audit, and audit-failure rollback.',
+    description: 'Verify exact current-year Bill payee propagation, dynamic text and currency-column sizing, collision refusal, category-race fallback, immutable audit, and audit-failure rollback.',
     expectedSheets: [
       'INPUT - Settings',
       'INPUT - Bills',
@@ -88,9 +88,12 @@ function getHarnessBillsEditIntegrityScenario_() {
       });
       var state = ctx.billEditIntegrity;
       var cfHeader = getCashFlowHeaderMap_(state.cashFlow);
+      state.defaultAmountCol = state.header.indexOf('Default Amount') + 1;
       state.bills.setColumnWidth(1, 60);
+      state.bills.setColumnWidth(state.defaultAmountCol, 60);
       state.cashFlow.setColumnWidth(cfHeader.payeeCol, 60);
       state.billPayeeWidthBeforeRename = state.bills.getColumnWidth(1);
+      state.billAmountWidthBeforeEdit = state.bills.getColumnWidth(state.defaultAmountCol);
       state.cashFlowPayeeWidthBeforeRename = state.cashFlow.getColumnWidth(cfHeader.payeeCol);
       ctx.actions.push('Create exact linked Bill and current-year Cash Flow Expense row');
     },
@@ -98,7 +101,9 @@ function getHarnessBillsEditIntegrityScenario_() {
       var state = ctx.billEditIntegrity;
       ctx.assertWritable();
       state.rename = updateTrackedBillFromDashboard(
-        harnessBillEditPayload_(state, state.payee, 'Harness Power'),
+        harnessBillEditPayload_(state, state.payee, 'Harness Power', {
+          defaultAmount: 1234567890123.45
+        }),
         ctx.ss
       );
 
@@ -108,7 +113,16 @@ function getHarnessBillsEditIntegrityScenario_() {
         .getRange(state.cashFlowRow, cfHeader.payeeCol)
         .getDisplayValue();
       state.billPayeeWidthAfterRename = state.bills.getColumnWidth(1);
+      state.billAmountWidthAfterEdit = state.bills.getColumnWidth(state.defaultAmountCol);
       state.cashFlowPayeeWidthAfterRename = state.cashFlow.getColumnWidth(cfHeader.payeeCol);
+
+      // Prove the shared helper's gutter against the real Sheets sizing
+      // engine. Remove the gutter with a raw auto-resize, capture that tight
+      // width, then reapply the production helper and verify the exact delta.
+      state.bills.autoResizeColumn(1);
+      state.billPayeeTightAutoWidth = state.bills.getColumnWidth(1);
+      fitContentColumnToContents_(state.bills, 1, 'Harness shared content fit');
+      state.billPayeeWidthAfterSharedFit = state.bills.getColumnWidth(1);
 
       // Reproduce the first-open category race at the server boundary: an
       // omitted category retains the verified row value instead of failing.
@@ -179,6 +193,14 @@ function getHarnessBillsEditIntegrityScenario_() {
       ctx.assert.equals('Exact linked Cash Flow row renamed', state.cashFlowPayeeAfterRename, 'Harness Power', { module: mod });
       ctx.assert.equals('Bills Payee column auto-fits renamed text', state.billPayeeWidthAfterRename > state.billPayeeWidthBeforeRename, true, { module: mod });
       ctx.assert.equals('Cash Flow Payee column auto-fits renamed text', state.cashFlowPayeeWidthAfterRename > state.cashFlowPayeeWidthBeforeRename, true, { module: mod });
+      ctx.assert.equals('Bills currency column auto-fits a larger formatted amount', state.billAmountWidthAfterEdit > state.billAmountWidthBeforeEdit, true, { module: mod });
+      ctx.assert.equals(
+        'Shared content fit adds the exact rendering gutter',
+        state.billPayeeWidthAfterSharedFit,
+        Math.min(CONTENT_COLUMN_FIT_MAX_WIDTH_PX_,
+          state.billPayeeTightAutoWidth + CONTENT_COLUMN_FIT_GUTTER_PX_),
+        { module: mod }
+      );
       ctx.assert.equals('Rename writes exactly one immutable audit entry', state.renameAuditCount, 1, { module: mod });
       ctx.assert.equals('Missing category retains verified row category', state.categoryAfterFallback, 'Utilities', { module: mod });
       ctx.assert.equals('Category-race fallback save succeeds', state.categoryFallback.ok, true, { module: mod });

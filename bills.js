@@ -495,6 +495,27 @@ function addBillFromDashboard(payload) {
       'Cash Flow seed skipped: ' + (cfErr && cfErr.message ? cfErr.message : String(cfErr));
   }
 
+  // The add writer materializes the complete Bills row, so fit every column
+  // it can populate (text and numeric). This keeps a large Default Amount or
+  // a long Category/Notes value just as readable as the Payee. The shared
+  // helper de-duplicates columns, adds a small gutter and caps extreme text.
+  var billFitTargets = [];
+  for (var billFitCol = 1; billFitCol <= row.length; billFitCol++) {
+    billFitTargets.push({ sheet: sheet, col: billFitCol });
+  }
+  if (cfSheet) {
+    try {
+      var cfFitMap = getCashFlowHeaderMap_(cfSheet);
+      if (cashFlowRowSeeded) {
+        billFitTargets.push({ sheet: cfSheet, col: cfFitMap.typeCol });
+        billFitTargets.push({ sheet: cfSheet, col: cfFitMap.flowSourceCol });
+        billFitTargets.push({ sheet: cfSheet, col: cfFitMap.activeCol });
+      }
+      billFitTargets.push({ sheet: cfSheet, col: cfFitMap.payeeCol });
+    } catch (_cfFitHeaderErr) { /* presentation only */ }
+  }
+  fitContentColumnsToContents_(billFitTargets, 'addBillFromDashboard changed-column fit');
+
   touchDashboardSourceUpdated_('bills');
 
   var message = 'Bill added.';
@@ -1070,26 +1091,25 @@ function updateTrackedBillFromDashboard(payload, optionalSs) {
     throw new Error('Bill rename audit could not be saved. The rename was rolled back.');
   }
 
-  // Keep renamed Payees readable in both authoritative views. This runs only
+  // Keep every changed Bills column readable, including numeric fields such
+  // as Due Day and Default Amount. This runs only
   // after the coordinated values are verified and their mandatory audit is
   // durable: column sizing is presentation-only and must never turn a
-  // successfully audited financial rename into a misleading failure. Resize
-  // only the two Payee columns involved, not the rest of either sheet.
-  if (linkedCashFlowRename) {
-    var payeeColumnResizeTargets = [
-      { sheet: sheet, col: headerIndex_('Payee') + 1 },
-      { sheet: linkedCashFlowRename.sheet, col: linkedCashFlowRename.col }
-    ];
-    for (var resizeIdx = 0; resizeIdx < payeeColumnResizeTargets.length; resizeIdx++) {
-      try {
-        payeeColumnResizeTargets[resizeIdx].sheet.autoResizeColumn(
-          payeeColumnResizeTargets[resizeIdx].col
-        );
-      } catch (resizeErr) {
-        Logger.log('updateTrackedBillFromDashboard Payee auto-resize: ' + resizeErr);
-      }
-    }
+  // successfully audited financial edit into a misleading failure.
+  var billEditFitTargets = [];
+  for (var fitBillCell = 0; fitBillCell < appliedBillCells.length; fitBillCell++) {
+    billEditFitTargets.push({ sheet: sheet, col: appliedBillCells[fitBillCell].col });
   }
+  if (linkedCashFlowRename) {
+    billEditFitTargets.push({
+      sheet: linkedCashFlowRename.sheet,
+      col: linkedCashFlowRename.col
+    });
+  }
+  fitContentColumnsToContents_(
+    billEditFitTargets,
+    'updateTrackedBillFromDashboard changed-column fit'
+  );
 
   touchDashboardSourceUpdated_('bills');
 

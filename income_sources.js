@@ -545,6 +545,22 @@ function addIncomeSourceFromDashboard(payload) {
 
   touchDashboardSourceUpdated_('cash_flow');
 
+  var incomeFitTargets = [
+    { sheet: sheet, col: headerMap.payeeCol },
+    { sheet: sheet, col: monthCol }
+  ];
+  if (rowCreated || rowReactivated) {
+    incomeFitTargets.push({ sheet: sheet, col: headerMap.typeCol });
+    incomeFitTargets.push({ sheet: sheet, col: headerMap.activeCol });
+  }
+  if (flowSourceWritten) {
+    incomeFitTargets.push({ sheet: sheet, col: headerMap.flowSourceCol });
+  }
+  fitContentColumnsToContents_(
+    incomeFitTargets,
+    'addIncomeSourceFromDashboard changed-column fit'
+  );
+
   var message;
   if (rowReactivated) message = 'Restarted "' + name + '" on ' + sheet.getName() + '.';
   else if (rowCreated) message = 'Added "' + name + '" to ' + sheet.getName() + '.';

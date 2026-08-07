@@ -86,7 +86,7 @@ Bills affects near-term cash decisions and the Cash Flow actuals ledger. Incorre
 - AutoPay requires the due date to have passed; it must not fill future months.
 - Blank Weekday/Anchor Date preserves legacy Due Day occurrence display and manual handling; Weekly unattended AutoPay requires a recognized, matching Weekday and never writes from the fallback.
 - An invalid Biweekly weekday/anchor combination is rejected by Add/Edit; the recurrence reader defensively falls back to legacy behavior rather than silently snapping the date.
-- Payee edits rename only the exact current-year linked Expense Payee cell; after the verified audit succeeds, the Payee columns on Bills and that Cash Flow sheet auto-fit their text. Historical Cash Flow years and prior Activity rows remain unchanged.
+- Payee edits rename only the exact current-year linked Expense Payee cell; after the verified audit succeeds, every Bills column changed by that edit and the linked Cash Flow Payee column use the shared best-effort content fit. Historical Cash Flow years and prior Activity rows remain unchanged.
 - Stop tracking is a soft deactivate and never reverses payments.
 - Monthly and other one-occurrence-per-month high Due Days clamp to the last valid calendar day, matching Weekly/Biweekly anchor behavior.
 
@@ -265,7 +265,7 @@ When sources disagree, this DRAFT follows executable behavior and higher-precede
 14. **Soft lifecycle:** Stop tracking changes only Active, preserves the row and payment history, and does not reverse Cash Flow.
 15. **Timezone/date basis:** User-facing and marker occurrence dates are date-only values built directly from recurrence year/month/day components; they are not converted through another timezone. Recurrence steps use calendar-date construction rather than fixed milliseconds where DST matters.
 16. **Month-end clamping:** Monthly/non-expanded Due Days 29/30/31 remain in their logical month and clamp to its final valid calendar day; they never overflow into the following month.
-17. **Payee-rename atomicity:** A Bill Payee rename requires one exact current-year Expense link, no Bill or Cash Flow destination collision, verified Bill/Cash Flow writes, and a successful immutable `bill_update` audit; otherwise all accompanying Bill fields and the linked Payee are restored. Once the audit is durable, the two affected Payee columns auto-fit their contents as a best-effort presentation update.
+17. **Payee-rename atomicity:** A Bill Payee rename requires one exact current-year Expense link, no Bill or Cash Flow destination collision, verified Bill/Cash Flow writes, and a successful immutable `bill_update` audit; otherwise all accompanying Bill fields and the linked Payee are restored. Once the audit is durable, every Bills column changed by the edit and the linked Cash Flow Payee column use the shared best-effort content fit; sizing failure never changes the saved result.
 18. **AutoPay presentation and commit:** Every monthly or expanded-occurrence AutoPay write verifies its numeric value and `CASH_FLOW_MONEY_FORMAT_`, then requires a newly written and verified immutable marker. Marker failure restores and verifies the exact prior value/formula and number format before the occurrence is returned for reconciliation.
 
 ## 10. State and Lifecycle
@@ -346,7 +346,7 @@ Retryable failures include transient reads, lock contention, and stale UI after 
 | Validator | `getValidatorCanonicalModel_()` / Provisioning Validation | Current Phase 2 structural model | Coverage gap: `INPUT - Bills` is absent from the reviewed canonical model |
 | Regression | `REG-007` | Bills Due performance regression is permanently registered | Fixed per documentation; stress reproduction remains planned |
 | Regression | `REG-008` | AutoPay concurrency double-post race is permanently registered | Fixed per documentation; overlapping-run harness reproduction remains planned |
-| Harness | `REGRESSION-BILLS-EDIT-INTEGRITY` | Exact linked rename, dynamic Payee-column sizing, collisions, category omission fallback, immutable audit, and audit-failure rollback on a disposable workbook | Implemented; runtime not yet run |
+| Harness | `REGRESSION-BILLS-EDIT-INTEGRITY` | Exact linked rename, changed text/currency-column sizing, exact 24 px gutter, collisions, category omission fallback, immutable audit, and audit-failure rollback on a disposable workbook | PASS 14/14 on isolated `@341`, run `20260807-154251-d5e9`; fixture `TRASHED`, runner OFF |
 | Harness | `REGRESSION-BILLS-AUTOPAY-FORMAT` | Real monthly AutoPay writes `-75` with canonical red negative-currency format | Implemented; runtime not yet run |
 | Harness | `REGRESSION-BILLS-WEEKDAY-AUTOPAY-GUARD` | Due Day 1 cannot override Sunday/Monday; calendar identity stays stable; missing Weekday fails closed | Implemented; runtime not yet run |
 | Harness | `REGRESSION-BILLS-AUTOPAY-ROLLBACK` | Forced Activity failure restores prior Cash Flow value/format and leaves occurrence visible | Implemented; runtime not yet run |

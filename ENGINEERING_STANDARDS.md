@@ -13,7 +13,7 @@ These standards guide **all** future development unless a specific task explicit
 The bounded application contains **real user workbooks**. Whenever implementing changes:
 
 - Existing populated sheets must **not** be modified or restyled unless the task explicitly requires it.
-- Preserve all user **data**, **formulas**, **formatting**, **column widths**, **row heights**, and **workbook behavior**.
+- Preserve all user **data**, **formulas**, **formatting**, **column widths**, **row heights**, and **workbook behavior**, except for an explicitly approved and permanently documented product behavior such as the narrow changed-column content-fit exception in §10.
 - Existing user workbooks must continue behaving exactly as they do today.
 - Automated test writers must never use an existing workbook as their mutation target. They create their own marked disposable workbook and refuse active/bounded, mapped-user, Golden, and configured-default IDs before every write and cleanup.
 
@@ -107,6 +107,18 @@ They should **not** perform cosmetic styling (backgrounds, borders, fonts, font 
 - **approved schema evolution** (styling only the newly added columns/rows, additively).
 
 This complements the Styling Reassertion Rule (§9): §9 says *reassert only correctness-critical styling*; §10 says *runtime helpers should not be the place cosmetic styling lives at all*. Cosmetic styling belongs to the creation/repair/evolution paths, not to the routine write path.
+
+**Approved content-fit exception (`3p` / `REG-070`, 2026-08-07):** a successful
+CashCompass entity write may best-effort auto-fit only the authoritative or
+linked columns that the same operation actually changed. The shared helper must
+remain content-driven, add the approved 24 px rendering gutter, cap width at
+1000 px, de-duplicate targets, and swallow/log presentation failures so column
+sizing can never fail or roll back a financial/entity write. It must not perform
+a full-sheet formatting wash or resize unrelated columns. This exception covers
+the reviewed Debt, Bill, Bank, Investment, House, and Income
+add/edit/rename/reactivate/value-save paths; manual sheet edits and unrelated
+non-entity writers remain outside the contract. Any expansion requires separate
+review, performance consideration, and permanent regression coverage.
 
 ### 11. Milestone Discipline
 

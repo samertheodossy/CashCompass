@@ -453,6 +453,7 @@ function updateTrackedDebtFromDashboard(payload) {
   const changedFields = [];
   const previous = {};
   const next = {};
+  const debtColumnFitTargets = [];
 
   // Currency fields: blank → 0 (matches the Add form "enter 0" convention).
   const currencyChange = function(field, label, colZero) {
@@ -463,6 +464,7 @@ function updateTrackedDebtFromDashboard(payload) {
     if (newNum === curNum) return;
     setCurrencyCellPreserveRowFormat_(sheet, sheetRow, colZero + 1, newNum, 1);
     changedFields.push(label);
+    debtColumnFitTargets.push({ sheet: sheet, col: colZero + 1 });
     previous[label] = String(rowDisplay[colZero] || '');
     next[label] = newNum;
   };
@@ -476,6 +478,7 @@ function updateTrackedDebtFromDashboard(payload) {
     copyNeighborFormatInRow_(sheet, sheetRow, colZero + 1, 1);
     sheet.getRange(sheetRow, colZero + 1).setValue(newVal);
     changedFields.push(label);
+    debtColumnFitTargets.push({ sheet: sheet, col: colZero + 1 });
     previous[label] = curVal;
     next[label] = newVal;
   };
@@ -493,6 +496,7 @@ function updateTrackedDebtFromDashboard(payload) {
     cell.setValue(newNum);
     cell.setNumberFormat('0');
     changedFields.push(label);
+    debtColumnFitTargets.push({ sheet: sheet, col: colZero + 1 });
     previous[label] = String(rowDisplay[colZero] || '');
     next[label] = newNum;
   };
@@ -509,6 +513,7 @@ function updateTrackedDebtFromDashboard(payload) {
     cell.setValue(newNum);
     cell.setNumberFormat('0.00');
     changedFields.push(label);
+    debtColumnFitTargets.push({ sheet: sheet, col: colZero + 1 });
     previous[label] = String(rowDisplay[colZero] || '');
     next[label] = newNum;
   };
@@ -527,6 +532,7 @@ function updateTrackedDebtFromDashboard(payload) {
       copyNeighborFormatInRow_(sheet, sheetRow, headerMap.linkedPropertyCol, 1);
       sheet.getRange(sheetRow, headerMap.linkedPropertyCol).setValue(validatedLinkedProperty);
       changedFields.push(DEBTS_LINKED_PROPERTY_HEADER_);
+      debtColumnFitTargets.push({ sheet: sheet, col: headerMap.linkedPropertyCol });
       previous[DEBTS_LINKED_PROPERTY_HEADER_] = currentLinkedProperty ? 'Linked' : 'Not linked';
       next[DEBTS_LINKED_PROPERTY_HEADER_] = validatedLinkedProperty ? 'Linked' : 'Not linked';
     }
@@ -543,6 +549,9 @@ function updateTrackedDebtFromDashboard(payload) {
     balanceCol: headerMap.balanceColZero,
     pctAvailCol: headerMap.pctAvailColZero
   });
+  if (headerMap.pctAvailCol !== -1) {
+    debtColumnFitTargets.push({ sheet: sheet, col: headerMap.pctAvailCol });
+  }
 
   // One consolidated debt_update activity row. When exactly one field
   // changed we also include the single-field keys so debtUpdateActionLabel_
@@ -584,6 +593,11 @@ function updateTrackedDebtFromDashboard(payload) {
   }
 
   touchDashboardSourceUpdated_('debts');
+
+  fitContentColumnsToContents_(
+    debtColumnFitTargets,
+    'updateTrackedDebtFromDashboard changed-column fit'
+  );
 
   return {
     ok: true,
@@ -809,6 +823,12 @@ function renameDebtFromDashboard(payload) {
       Logger.log('renameDebtFromDashboard activity log: ' + logErr);
     }
 
+    fitContentColumnsToContents_([
+      { sheet: sheet, col: headerMap.nameCol }
+    ].concat(cfApplied.map(function(target) {
+      return { sheet: target.sheet, col: target.col };
+    })), 'renameDebtFromDashboard Account Name/Payee fit');
+
     const message = cashFlowMatched
       ? 'Renamed "' + actualName + '" to "' + newName + '" (updated ' + cfRowsUpdated +
         ' Cash Flow row' + (cfRowsUpdated === 1 ? '' : 's') + ' across ' +
@@ -1009,6 +1029,12 @@ function saveTrackedDebtFromDashboard(payload) {
     } catch (logErr) {
       Logger.log('saveTrackedDebtFromDashboard rename activity log: ' + logErr);
     }
+
+    fitContentColumnsToContents_([
+      { sheet: sheet, col: headerMap.nameCol }
+    ].concat(cashFlowTargets.map(function(target) {
+      return { sheet: target.sheet, col: target.col };
+    })), 'saveTrackedDebtFromDashboard Account Name/Payee fit');
 
     const detailCount = updateResult && Array.isArray(updateResult.changedFields)
       ? updateResult.changedFields.length : 0;
@@ -1306,6 +1332,15 @@ function updateDebtField(payload) {
   }
 
   touchDashboardSourceUpdated_('debts');
+
+  var debtFieldFitTargets = [{ sheet: sheet, col: targetCol }];
+  if (headerMap.pctAvailCol !== -1) {
+    debtFieldFitTargets.push({ sheet: sheet, col: headerMap.pctAvailCol });
+  }
+  fitContentColumnsToContents_(
+    debtFieldFitTargets,
+    'updateDebtField changed-column fit'
+  );
 
   // NOTE: we intentionally do NOT call runDebtPlanner() here. The row-level
   // write + Acct PCT Avail recalc + activity log + touch are all the user
@@ -1735,6 +1770,22 @@ function addDebtFromDashboard(payload) {
   //   unhandled for the current cycle.
   // - Any failure is non-fatal — the debt row itself is already on INPUT -
   //   Debts and the user can always add a Cash Flow row manually.
+  const debtFitTargets = [];
+  [
+    headerMap.nameCol,
+    headerMap.typeCol,
+    headerMap.balanceCol,
+    headerMap.dueDateCol,
+    headerMap.creditLimitCol,
+    headerMap.creditLeftCol,
+    headerMap.minimumPaymentCol,
+    headerMap.intRateCol,
+    headerMap.pctAvailCol,
+    headerMap.activeCol,
+    headerMap.linkedPropertyCol
+  ].forEach(function(debtCol) {
+    if (debtCol && debtCol !== -1) debtFitTargets.push({ sheet: sheet, col: debtCol });
+  });
   let cashFlowRowSeeded = false;
   let cashFlowSeedWarning = '';
   try {
@@ -1754,6 +1805,8 @@ function addDebtFromDashboard(payload) {
       cashFlowSeedWarning =
         'Cash Flow ' + currentYear + ' not found — skipped Cash Flow seed. Bills Due will pick the debt up once a Cash Flow ' + currentYear + ' exists and has an expense row for "' + accountName + '".';
     } else {
+      const debtCfHeader = getCashFlowHeaderMap_(cfSheet);
+      debtFitTargets.push({ sheet: cfSheet, col: debtCfHeader.payeeCol });
       const existing = findCashFlowRowByTypeAndPayee_(cfSheet, 'Expense', accountName);
       if (existing) {
         cashFlowRowSeeded = false;
@@ -1763,6 +1816,9 @@ function addDebtFromDashboard(payload) {
         const inferredFlowSource = isDebtCreditCardType_(typeStr) ? 'CREDIT_CARD' : 'CASH';
         insertCashFlowRow_(cfSheet, 'Expense', accountName, inferredFlowSource);
         cashFlowRowSeeded = true;
+        debtFitTargets.push({ sheet: cfSheet, col: debtCfHeader.typeCol });
+        debtFitTargets.push({ sheet: cfSheet, col: debtCfHeader.flowSourceCol });
+        debtFitTargets.push({ sheet: cfSheet, col: debtCfHeader.activeCol });
       }
     }
   } catch (cfErr) {
@@ -1802,6 +1858,8 @@ function addDebtFromDashboard(payload) {
   } catch (logErr) {
     Logger.log('addDebtFromDashboard activity log: ' + logErr);
   }
+
+  fitContentColumnsToContents_(debtFitTargets, 'addDebtFromDashboard changed-column fit');
 
   // Status line is one short sentence; the Cash-Flow-seed details remain
   // available on the returned `cashFlowRowSeeded` / `cashFlowSeedWarning`

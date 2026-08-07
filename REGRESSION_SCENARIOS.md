@@ -1481,6 +1481,54 @@ Whenever a production bug is fixed:
   Trash cleanup. Beta remained `@106`; the bounded deployment and workbook were
   untouched.
 
+### REG-068 — Debt Edit split rename from the rest of one user change
+- Category: REGRESSION / ENTITY LIFECYCLE / CROSS-SHEET CONSISTENCY / ROLLBACK
+- Date discovered: 2026-08-07
+- Status: fixed and runtime-proven on isolated Central `@334`
+- Expected result: editing a Debt name and its other fields uses one **Save
+  changes** action. Linked Cash Flow references, immutable Activity evidence,
+  rollback, and locking remain internal implementation details.
+- Permanent coverage: Dashboard UX, maintenance, and production-path audits
+  protect the single-action UI and guarded coordinator.
+- Runtime result: Populated run `FR-2abc5049-2b4a-4f3b-b938-10f78ddc9244`
+  passed 26/26, including rename and restore, with Restricted sharing and
+  verified Trash cleanup.
+
+### REG-069 — Bank lifecycle split rename, details, and reactivation
+- Category: REGRESSION / ENTITY LIFECYCLE / CROSS-SHEET CONSISTENCY / ROLLBACK
+- Date discovered: 2026-08-07
+- Status: fixed through isolated Central `@338`
+- Expected result: Bank Manage provides one guarded Edit/Save path for name and
+  details plus explicit Stop/Reactivate lifecycle actions, while dated balance
+  Update remains separate.
+- Permanent coverage: static and dynamic regressions protect duplicate/stale
+  refusal, linked history updates, audit evidence, rollback, and presentation.
+- Runtime result: run `FR-02e19b9d-9757-4847-afe0-55fd5a03be32` passed the exact
+  rename/restore and Stop/Reactivate assertion before a later unrelated HTTP 0;
+  the marker-verified fixture was explicitly trashed.
+
+### REG-070 — App-written text and numeric columns could clip current values
+- Category: REGRESSION / WORKBOOK PRESENTATION / APP-WRITE CONSISTENCY
+- Date discovered: 2026-08-07
+- Status: fixed and runtime-proven on isolated Central `@341`
+- Root cause: entity writers either left existing column widths unchanged or
+  applied a Bank-only name fit, so longer text and larger formatted money could
+  remain clipped after otherwise successful app writes.
+- Expected result: supported Debt, Bill, Bank, Investment, House, and Income
+  add/edit/rename/value-save paths fit every authoritative or linked text and
+  numeric column they actually change, add a 24 px rendering gutter, and cap
+  width at 1000 px. A presentation failure never fails the entity write.
+- Scope boundary: manual sheet edits and unrelated non-entity writers are not
+  part of this app-triggered contract.
+- Permanent coverage: Dashboard UX, maintenance, and P1 evidence checks protect
+  the shared helper and each supported writer. `REGRESSION-BILLS-EDIT-INTEGRITY`
+  forces narrow Payee and Default Amount columns, renames the Bill, writes a
+  `$1,234,567,890,123.45` amount, and verifies linked text, formatted currency,
+  and the exact gutter.
+- Runtime result: disposable run `20260807-154251-d5e9` passed 14/14 in 24 s on
+  isolated `@341`; disposition was `TRASHED`, and the runner returned OFF. Beta
+  remained `@106`; bounded code and workbook were untouched.
+
 ---
 
 ## 3a loading-state consistency coverage
@@ -1620,4 +1668,7 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-065 | Populated Manage views briefly claimed no tracked records | REGRESSION / UI TRUTH / ASYNC LOADING | fixed; full regressions + isolated `@326` Populated 24/24 PASS + user visual confirmation |
 | REG-066 | Retirement blocked selected results on all three scenario calculations | REGRESSION / PERFORMANCE / UI TRUTH / STALE RESPONSE SAFETY | fixed; full regressions + isolated `@328` Populated V11 25/25 PASS; selected/all comparisons 1 ms/5.648 s; user visual confirmation |
 | REG-067 | Customer-visible money used inconsistent signs, precision, and grouping | REGRESSION / UI CONSISTENCY / CURRENCY PRESENTATION / EVIDENCE SAFETY | fixed; full regressions + isolated `@331` Populated V12 26/26 PASS; clean console, Restricted sharing, verified cleanup |
+| REG-068 | Debt Edit required a separate Rename action and could leave linked references split | REGRESSION / ENTITY LIFECYCLE / CROSS-SHEET CONSISTENCY / ROLLBACK | fixed; full regressions + isolated `@334` Populated 26/26 PASS with one-save rename/restore and verified cleanup |
+| REG-069 | Bank lifecycle split rename/details and lacked guarded Reactivate behavior | REGRESSION / ENTITY LIFECYCLE / CROSS-SHEET CONSISTENCY / ROLLBACK | fixed; focused/full regressions + isolated `@335` exact lifecycle assertion PASS; marker-verified cleanup after unrelated HTTP 0 |
+| REG-070 | App-written text and formatted numeric values could remain clipped after entity changes | REGRESSION / WORKBOOK PRESENTATION / APP-WRITE CONSISTENCY | fixed; focused/full regressions + isolated `@341` Bills integrity 14/14 PASS in 24 s; linked text, large currency, exact 24 px gutter, TRASHED disposition, runner OFF |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

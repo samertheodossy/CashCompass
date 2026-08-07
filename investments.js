@@ -705,6 +705,22 @@ function updateInvestmentValueByDate(payload) {
     Logger.log('updateInvestmentValueByDate activity log: ' + logErr);
   }
 
+  try {
+    const fitInputSheet = getSheet_(ss, 'INVESTMENTS');
+    const fitInputBlock = getInvestmentsYearBlock_(fitInputSheet, year);
+    const fitAssetsSheet = getSheet_(ss, 'ASSETS');
+    const fitAssetsMap = getAssetsHeaderMap_(fitAssetsSheet);
+    fitContentColumnsToContents_([
+      {
+        sheet: fitInputSheet,
+        col: getMonthColumnByDate_(fitInputSheet, balanceDate, fitInputBlock.headerRow)
+      },
+      { sheet: fitAssetsSheet, col: fitAssetsMap.balanceCol }
+    ], 'updateInvestmentValueByDate changed-column fit');
+  } catch (fitErr) {
+    Logger.log('updateInvestmentValueByDate changed-column fit: ' + fitErr);
+  }
+
   // NOTE: we intentionally do NOT call runDebtPlanner() here. The sheet
   // write + SYS - Assets sync + activity log row are everything the
   // user needs to see the new balance reflected. Planner-derived panels
@@ -1879,6 +1895,17 @@ function addInvestmentAccountFromDashboard(payload) {
   } catch (logErr) {
     Logger.log('addInvestmentAccountFromDashboard activity log: ' + logErr);
   }
+
+  const investmentAssetsFitMap = getAssetsHeaderMap_(assetsSheet);
+  fitContentColumnsToContents_([
+    { sheet: invSheet, col: 1 },
+    { sheet: invSheet, col: 2 },
+    { sheet: invSheet, col: getMonthColumnByDate_(invSheet, startDate, block.headerRow) },
+    { sheet: assetsSheet, col: investmentAssetsFitMap.nameCol },
+    { sheet: assetsSheet, col: investmentAssetsFitMap.typeCol },
+    { sheet: assetsSheet, col: investmentAssetsFitMap.balanceCol },
+    { sheet: assetsSheet, col: investmentAssetsFitMap.activeCol }
+  ], 'addInvestmentAccountFromDashboard changed-column fit');
 
   return {
     ok: true,
