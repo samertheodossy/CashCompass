@@ -2475,6 +2475,19 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <div class="onboarding-step-body" data-body="houses"><span class="dash-loading" role="status" aria-live="polite"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Checking houses…</span></span></div>
           <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
         </div>
+        <div class="onboarding-step-card onboarding-step-card-clickable onboarding-optional-card"
+             data-step="familyInvesting" id="onboarding_step_family_investing"
+             role="button" tabindex="0"
+             onclick="onboardingShowView('familyInvesting')"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();onboardingShowView('familyInvesting');}">
+          <div class="onboarding-step-head">
+            <div class="onboarding-step-num onboarding-step-num-placeholder" aria-hidden="true"></div>
+            <div class="onboarding-step-title">Income-Producing Accounts</div>
+            <span class="onboarding-optional-tag">Optional</span>
+          </div>
+          <div class="onboarding-step-body" data-body="familyInvesting"><span class="dash-loading" role="status" aria-live="polite"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Checking income-producing accounts…</span></span></div>
+          <div class="onboarding-step-cta" aria-hidden="true">Open →</div>
+        </div>
       </div>
 
       <!--
@@ -2512,6 +2525,32 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div class="onboarding-actions">
         <button type="button" onclick="onboardingBackToDashboard()">Back to Dashboard</button>
         <button type="button" onclick="onboardingLoadStatusGrid_()">Refresh status</button>
+      </div>
+    </div>
+
+    <div id="onboarding_view_family_investing" class="onboarding-view onboarding-view-detail" style="display:none;">
+      <div class="onboarding-detail-header">
+        <div class="onboarding-detail-step onboarding-detail-optional">Optional</div>
+        <h2 class="onboarding-detail-title">Income-Producing Accounts</h2>
+        <div id="onboarding_family_investing_badge" class="onboarding-detail-badge">Loading</div>
+      </div>
+
+      <div class="onboarding-detail-explainer">
+        <p>Select every investment account intended to grow and produce long-term income. CashCompass never infers this purpose from an account name.</p>
+        <p class="muted">Designation identifies planning purpose only. Retirement access, taxes, liquidity, and withdrawal restrictions remain separate planning constraints.</p>
+      </div>
+
+      <fieldset class="onboarding-profile-field" style="border:0; padding:0; margin:0;">
+        <legend>Income-producing investment accounts</legend>
+        <div id="onboarding_income_producing_accounts" class="onboarding-income-producing-list"></div>
+      </fieldset>
+      <div id="onboarding_family_investing_details" class="muted" style="margin-top:8px;"></div>
+
+      <div id="onboarding_family_investing_status" class="status onboarding-income-producing-status" role="status" aria-live="polite"></div>
+
+      <div class="onboarding-actions">
+        <button type="button" onclick="onboardingShowView('grid')">Back</button>
+        <button type="button" id="onboarding_family_investing_save_btn" class="btn-primary" onclick="onboardingSaveIncomeProducingAccounts_()" disabled>Save changes</button>
       </div>
     </div>
 

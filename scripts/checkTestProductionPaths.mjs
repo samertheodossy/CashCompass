@@ -39,6 +39,12 @@ const requiredProductionPaths = {
     'ensureInputHouseValuesSheet_', 'ensureOnboardingDebtsSheetFromDashboard',
     'readCanonicalFinancialSnapshot_(ctx.ss)'
   ],
+  'test_harness_scenarios_rfp.js': [
+    'setIncomeProducingAccountDesignationsFromDashboard({ changes:',
+    'saveTrackedInvestmentAccountFromDashboard({',
+    'deactivateInvestmentAccountFromDashboard({',
+    'reactivateInvestmentAccountFromDashboard({'
+  ],
   'test_harness_data.js': [
     'ensureInputSettingsSheet_', 'insertNewBankAccountHistoryRow_',
     'insertNewInvestmentHistoryRow_', 'insertNewHouseHistoryRow_',

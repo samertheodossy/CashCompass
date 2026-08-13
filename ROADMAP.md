@@ -37,13 +37,14 @@
 - **Highest-priority program:** **Rolling Financial Plan (`RFP`)**, starting with
   read-only reconciliation and a decision contract before any schema, writer, or
   calculation change. The program will account for obligations, reserves, and
-  every active remaining debt while deliberately funding **Samer Robinhood** to
-  build the family's long-term income pipeline. Rolling Debt Payoff remains the
+  every active remaining debt while deliberately funding explicitly designated
+  **Income-Producing Accounts**, including Samer Robinhood, to build the family's
+  long-term income pipeline. Rolling Debt Payoff remains the
   detailed debt engine. CashCompass remains the source of current household truth.
 - **Current milestone:** **`RFP-1`, read-only household funding reconciliation.**
   Inventory the exact existing Cash, Debt, Cash Flow, Property/rental, and
-  Investment inputs; use the approved **Samer Robinhood** account for the Family
-  Investing Plan and long-term income funding; define net
+  Investment inputs; use explicitly designated **Income-Producing Accounts** for
+  long-term income funding; define net
   rental income, reserve, comprehensive debt ordering, contribution, distribution, and
   actual-versus-forecast rules; and record every missing input. `RFP-1` makes no
   workbook, schema, UI, calculation, or deployment change.
@@ -292,7 +293,7 @@ seven-day cohort and any repair cycle. Dates never override a failed gate.
 
 **Next active item:** `RFP-1`, the read-only household funding reconciliation and
 decision contract. It must identify the authoritative existing inputs and the
-approved **Samer Robinhood** Family Investing Plan account, define the financial waterfall and
+approved multi-account **Income-Producing Accounts** purpose (including Samer Robinhood), define the financial waterfall and
 actual-versus-forecast rules, reconcile current versus exact-month reporting,
 and list missing data before implementation begins. It does not change a sheet,
 schema, writer, calculation, UI, or deployment.

@@ -156,6 +156,9 @@ function getHarnessScenarios_() {
   if (typeof getHarnessFinancialIntegrityCanonicalScenario_ === 'function') {
     list.push(getHarnessFinancialIntegrityCanonicalScenario_());
   }
+  if (typeof getHarnessRfpInvestmentMetadataScenario_ === 'function') {
+    list.push(getHarnessRfpInvestmentMetadataScenario_());
+  }
   if (typeof getHarnessPerformancePlannerScenario_ === 'function') {
     list.push(getHarnessPerformancePlannerScenario_());
   }

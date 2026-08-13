@@ -96,6 +96,7 @@ function onboardingShowView(view) {
     income:   document.getElementById('onboarding_view_income'),
     profile:  document.getElementById('onboarding_view_profile'),
     houses:   document.getElementById('onboarding_view_houses'),
+    familyInvesting: document.getElementById('onboarding_view_family_investing'),
     finish:   document.getElementById('onboarding_view_finish')
   };
   // Guard: at minimum Welcome + Grid must exist. Missing detail views
@@ -104,7 +105,8 @@ function onboardingShowView(view) {
 
   var allowed = {
     welcome: 1, grid: 1, bank: 1, debts: 1,
-    bills: 1, upcoming: 1, income: 1, profile: 1, houses: 1, finish: 1
+    bills: 1, upcoming: 1, income: 1, profile: 1, houses: 1,
+    familyInvesting: 1, finish: 1
   };
   var target = allowed[view] ? view : 'welcome';
   Object.keys(views).forEach(function(k) {
@@ -125,6 +127,7 @@ function onboardingShowView(view) {
   if (target === 'income')   onboardingLoadIncomeDetail_();
   if (target === 'profile')  onboardingLoadProfileDetail_();
   if (target === 'houses')   onboardingLoadHousesDetail_();
+  if (target === 'familyInvesting') onboardingLoadFamilyInvestingDetail_();
   if (target === 'finish')   onboardingLoadFinishDetail_();
 }
 
@@ -254,6 +257,7 @@ function loadOnboardingSection() {
     'onboarding_view_income',
     'onboarding_view_profile',
     'onboarding_view_houses',
+    'onboarding_view_family_investing',
     'onboarding_view_finish'
   ];
   allViewIds.forEach(function(id) {
@@ -369,6 +373,7 @@ function onboardingApplyStatusGrid_(data) {
   // cannot be mistaken for missing optional data.
   onboardingLoadUpcomingSummary_();
   onboardingLoadHousesSummary_();
+  onboardingLoadFamilyInvestingSummary_();
 }
 
 function onboardingApplyProgressRecommendation_(steps, complete, total) {
@@ -432,6 +437,7 @@ function onboardingRenderHousesSummary_(data) {
   var active = data.houses.filter(function(h) { return !h.inactive; }).length;
   var line = active > 0 ? (active + ' tracked') : 'None yet';
   body.innerHTML = '<p class="muted">' + escapeOnboardingHtml_(line) + '</p>';
+  onboardingSetOptionalCardState_('houses', active > 0);
 }
 
 // Fetch a minimal Upcoming Expenses summary for the optional card on
@@ -470,6 +476,200 @@ function onboardingRenderUpcomingSummary_(data) {
   var planned = data.upcoming.length;
   var line = planned > 0 ? (planned + ' planned') : 'None yet';
   body.innerHTML = '<p class="muted">' + escapeOnboardingHtml_(line) + '</p>';
+  onboardingSetOptionalCardState_('upcoming', planned > 0);
+}
+
+var ONBOARDING_INCOME_PRODUCING_DATA_ = null;
+
+function onboardingLoadFamilyInvestingSummary_() {
+  var body = document.querySelector('[data-body="familyInvesting"]');
+  if (!body) return;
+  body.innerHTML = loadingIndicatorHtml('Checking income-producing accounts…');
+  google.script.run
+    .withSuccessHandler(function(data) {
+      ONBOARDING_INCOME_PRODUCING_DATA_ = data || null;
+      onboardingRenderFamilyInvestingSummary_(data);
+    })
+    .withFailureHandler(function() {
+      var el = document.querySelector('[data-body="familyInvesting"]');
+      if (el) el.innerHTML = '<p class="muted">Couldn’t check</p>';
+    })
+    .getIncomeProducingAccountsSetupDataFromDashboard();
+}
+
+function onboardingRenderFamilyInvestingSummary_(data) {
+  var body = document.querySelector('[data-body="familyInvesting"]');
+  if (!body) return;
+  var config = data && data.configuration;
+  var count = config && Number(config.configuredCount) || 0;
+  var eligible = config && Number(config.eligibleCount) || 0;
+  var line = count ? (eligible + ' active' + (count > eligible ? ' · ' + (count - eligible) + ' inactive' : '')) : 'None selected';
+  body.innerHTML = '<p class="muted">' + escapeOnboardingHtml_(line) + '</p>';
+  onboardingSetOptionalCardState_('familyInvesting', count > 0);
+}
+
+function onboardingSetOptionalCardState_(key, configured) {
+  var card = document.querySelector('[data-step="' + key + '"]');
+  var tag = card && card.querySelector('.onboarding-optional-tag');
+  var marker = card && card.querySelector('.onboarding-step-num-placeholder');
+  if (!tag) return;
+  tag.textContent = configured ? 'Configured' : 'Optional';
+  tag.className = 'onboarding-optional-tag' +
+    (configured ? ' onboarding-optional-tag-configured' : '');
+  if (marker) marker.className = 'onboarding-step-num onboarding-step-num-placeholder' +
+    (configured ? ' onboarding-optional-marker-configured' : '');
+}
+
+function onboardingFamilyInvestingSetStatus_(text, cls) {
+  var el = document.getElementById('onboarding_family_investing_status');
+  if (!el) return;
+  el.textContent = cls === 'error' ? customerSafeErrorMessage_(text) : (text || '');
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+function onboardingLoadFamilyInvestingDetail_() {
+  var list = document.getElementById('onboarding_income_producing_accounts');
+  var badge = document.getElementById('onboarding_family_investing_badge');
+  if (badge) badge.textContent = 'Loading';
+  if (list) list.innerHTML = '';
+  onboardingFamilyInvestingSetStatus_('Reading investment accounts…', 'dash-status-loading');
+  google.script.run
+    .withSuccessHandler(function(data) {
+      ONBOARDING_INCOME_PRODUCING_DATA_ = data || { accounts: [], configuration: {} };
+      onboardingRenderFamilyInvestingDetail_(ONBOARDING_INCOME_PRODUCING_DATA_);
+    })
+    .withFailureHandler(function(err) {
+      onboardingFamilyInvestingSetStatus_(
+        'Could not read investment accounts: ' + (err && err.message ? err.message : String(err)),
+        'error'
+      );
+      if (list) list.innerHTML = '';
+    })
+    .getIncomeProducingAccountsSetupDataFromDashboard();
+}
+
+function onboardingRenderFamilyInvestingDetail_(data) {
+  var list = document.getElementById('onboarding_income_producing_accounts');
+  var badge = document.getElementById('onboarding_family_investing_badge');
+  var details = document.getElementById('onboarding_family_investing_details');
+  if (!list) return;
+  list.innerHTML = '';
+  (data.accounts || []).forEach(function(account) {
+    var label = document.createElement('label');
+    label.className = 'onboarding-income-producing-row' +
+      (account.inactive ? ' onboarding-income-producing-row-inactive' : '');
+    var input = document.createElement('input');
+    input.type = 'checkbox';
+    input.name = 'onboarding_income_producing_account';
+    input.value = String(account.sysAssetsRow);
+    input.dataset.accountName = account.accountName;
+    input.dataset.saved = account.designated ? 'true' : 'false';
+    input.checked = !!account.designated;
+    input.className = 'onboarding-income-producing-checkbox';
+    input.addEventListener('change', onboardingSyncFamilyInvestingReadiness_);
+    label.appendChild(input);
+    var text = document.createElement('span');
+    text.className = 'onboarding-income-producing-label';
+    text.textContent = account.accountName +
+      (account.type ? ' · ' + account.type : '') +
+      (account.inactive ? ' · inactive (uncheck to remove)' : '');
+    label.appendChild(text);
+    list.appendChild(label);
+  });
+  var config = data.configuration || {};
+  if (badge) badge.textContent = config.configured
+    ? String(config.configuredCount || 0) + ' selected' : 'None selected';
+  if (details) {
+    details.textContent = (data.accounts || []).length
+      ? 'Select any number of accounts. Renaming and Stop/Reactivate preserve each designation.'
+      : 'Add an investment account before selecting income-producing accounts.';
+  }
+  onboardingFamilyInvestingSetStatus_('', '');
+  onboardingSyncFamilyInvestingReadiness_();
+}
+
+function onboardingSyncFamilyInvestingReadiness_() {
+  var save = document.getElementById('onboarding_family_investing_save_btn');
+  if (!save) return;
+  var inputs = document.querySelectorAll('input[name="onboarding_income_producing_account"]');
+  var changed = false;
+  for (var i = 0; i < inputs.length; i++) {
+    if (inputs[i].checked !== (inputs[i].dataset.saved === 'true')) changed = true;
+  }
+  save.disabled = !changed;
+  save.textContent = changed ? 'Save changes' : (save.dataset.saved === 'true' ? 'Saved' : 'Save changes');
+  if (changed) {
+    save.dataset.saved = 'false';
+    onboardingFamilyInvestingSetStatus_('You have unsaved changes.', '');
+  }
+}
+
+function onboardingSaveIncomeProducingAccounts_() {
+  var inputs = document.querySelectorAll('input[name="onboarding_income_producing_account"]');
+  var changes = [];
+  for (var i = 0; i < inputs.length; i++) {
+    var saved = inputs[i].dataset.saved === 'true';
+    if (inputs[i].checked === saved) continue;
+    changes.push({
+      sysAssetsRow: inputs[i].value,
+      expectedAccountName: inputs[i].dataset.accountName,
+      planningPurpose: inputs[i].checked ? 'INCOME_PRODUCING' : ''
+    });
+  }
+  if (!changes.length) return;
+  var save = document.getElementById('onboarding_family_investing_save_btn');
+  var startedAt = (window.performance && typeof window.performance.now === 'function')
+    ? window.performance.now() : Date.now();
+  if (save) {
+    save.disabled = true;
+    save.textContent = 'Saving…';
+    save.dataset.saved = 'false';
+  }
+  onboardingFamilyInvestingSetStatus_('Saving income-producing accounts…', 'dash-status-loading');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      var finishedAt = (window.performance && typeof window.performance.now === 'function')
+        ? window.performance.now() : Date.now();
+      var elapsedSeconds = Math.max(0, (finishedAt - startedAt) / 1000);
+      var currentInputs = document.querySelectorAll('input[name="onboarding_income_producing_account"]');
+      for (var j = 0; j < currentInputs.length; j++) {
+        currentInputs[j].dataset.saved = currentInputs[j].checked ? 'true' : 'false';
+      }
+      if (save) {
+        save.disabled = true;
+        save.textContent = 'Saved';
+        save.dataset.saved = 'true';
+      }
+      var config = ONBOARDING_INCOME_PRODUCING_DATA_ &&
+        ONBOARDING_INCOME_PRODUCING_DATA_.configuration || {};
+      var selectedCount = 0;
+      for (var k = 0; k < currentInputs.length; k++) {
+        if (currentInputs[k].checked) selectedCount++;
+      }
+      config.configured = selectedCount > 0;
+      config.configuredCount = selectedCount;
+      if (ONBOARDING_INCOME_PRODUCING_DATA_) {
+        ONBOARDING_INCOME_PRODUCING_DATA_.configuration = config;
+      }
+      var badge = document.getElementById('onboarding_family_investing_badge');
+      if (badge) badge.textContent = selectedCount ? selectedCount + ' selected' : 'None selected';
+      onboardingFamilyInvestingSetStatus_(
+        (result && result.message || 'Accounts saved.') +
+          ' Done in ' + elapsedSeconds.toFixed(1) + ' seconds.',
+        'status-success'
+      );
+      onboardingRenderFamilyInvestingSummary_(ONBOARDING_INCOME_PRODUCING_DATA_ || {});
+    })
+    .withFailureHandler(function(err) {
+      onboardingFamilyInvestingSetStatus_(
+        err && err.message ? err.message : String(err), 'error');
+      if (save) {
+        save.textContent = 'Try saving again';
+        save.dataset.saved = 'false';
+      }
+      onboardingSyncFamilyInvestingReadiness_();
+    })
+    .setIncomeProducingAccountDesignationsFromDashboard({ changes: changes });
 }
 
 // Render the readiness / completion panel shown below the step grid.

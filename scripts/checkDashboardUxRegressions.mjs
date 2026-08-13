@@ -2542,10 +2542,10 @@ assert.match(files['Dashboard_Script_AssetsBankInvestments.html'],
   /function renderInactiveInvestmentAccounts_\([\s\S]*?Reactivate[\s\S]*?reactivateInvestmentAccountFromDashboard/,
   'Investment Manage must expose existing inactive investments through Reactivate');
 assert.match(files['investments.js'],
-  /function saveTrackedInvestmentAccountFromDashboard\(payload\)[\s\S]*?LockService\.getUserLock\(\)[\s\S]*?historyTargets[\s\S]*?investment_account_update[\s\S]*?were not saved and were rolled back/,
+  /function saveTrackedInvestmentAccountFromDashboard\(payload, optionalSs\)[\s\S]*?LockService\.getUserLock\(\)[\s\S]*?historyTargets[\s\S]*?investment_account_update[\s\S]*?were not saved and were rolled back/,
   'Investment Edit must coordinate every history block and the SYS row under one lock with rollback');
 assert.match(files['investments.js'],
-  /function setInvestmentTrackingStateFromDashboard_\(payload, activeValue\)[\s\S]*?LockService\.getUserLock\(\)[\s\S]*?inputTargets[\s\S]*?investment_reactivate[\s\S]*?Tracking change failed and was rolled back/,
+  /function setInvestmentTrackingStateFromDashboard_\(payload, activeValue, optionalSs\)[\s\S]*?LockService\.getUserLock\(\)[\s\S]*?inputTargets[\s\S]*?investment_reactivate[\s\S]*?Tracking change failed and was rolled back/,
   'Investment Stop and Reactivate must share stable identity, lock, duplicate guard, and rollback behavior');
 assert.match(files['investments.js'],
   /function getInvestmentUiData\(\)[\s\S]*?currentYearNames[\s\S]*?!!currentYearNames\[key\][\s\S]*?!!managementByName\[key\][\s\S]*?historicalOnly:\s*!currentYearNames\[key\][\s\S]*?canReactivate:/,
@@ -2592,6 +2592,12 @@ assert.match(files['Dashboard_Script_Onboarding.html'],
 assert.match(files['Dashboard_Script_Onboarding.html'],
   /onboardingLoadUpcomingSummary_[\s\S]*?Checking upcoming expenses…[\s\S]*?Couldn’t check[\s\S]*?onboardingRenderUpcomingSummary_[\s\S]*?Couldn’t check[\s\S]*?None yet/,
   'Upcoming summary must distinguish loading, failure, and empty states');
+assert.match(files['Dashboard_Script_Onboarding.html'],
+  /onboardingRenderHousesSummary_[\s\S]*?onboardingSetOptionalCardState_\('houses', active > 0\)[\s\S]*?onboardingRenderUpcomingSummary_[\s\S]*?onboardingSetOptionalCardState_\('upcoming', planned > 0\)[\s\S]*?onboardingRenderFamilyInvestingSummary_[\s\S]*?onboardingSetOptionalCardState_\('familyInvesting', count > 0\)/,
+  'Every optional Setup card must distinguish Configured data from an unused Optional feature');
+assert.match(styles,
+  /\.onboarding-optional-tag-configured\s*\{[\s\S]*?background:\s*#dcfce7[\s\S]*?color:\s*#166534/,
+  'Configured optional cards must use the established green completion treatment');
 assert.match(files['Dashboard_Script_CashFlowUpcoming.html'],
   /saveBtn\.textContent\s*=\s*['"]Add upcoming expense['"]/,
   'Upcoming must preserve its sentence-case action label after form reset');

@@ -33,6 +33,10 @@
 /*  CREATE only + idempotent; populated workbooks are never migrated.          */
 /* -------------------------------------------------------------------------- */
 
+var INVESTMENT_ID_HEADER_ = 'Investment Id';
+var INVESTMENT_PLANNING_PURPOSE_HEADER_ = 'Planning Purpose';
+var INCOME_PRODUCING_PURPOSE_ = 'INCOME_PRODUCING';
+
 /**
  * Canonical from-scratch creator for `INPUT - Investments`.
  *
@@ -535,6 +539,45 @@ function getInvestmentUiData() {
   };
 }
 
+/** Read-only Setup payload for optional Income-Producing designations. */
+function getIncomeProducingAccountsSetupDataFromDashboard() {
+  const investmentData = getInvestmentUiData();
+  const configuration = getIncomeProducingAccountConfigurations_();
+  const configuredRows = {};
+  (configuration.accounts || []).forEach(function(row) {
+    configuredRows[String(row.sysAssetsRow)] = row;
+  });
+  const accounts = (investmentData.managementAccounts || []).map(function(row) {
+      const configured = configuredRows[String(row.sysAssetsRow)];
+      return {
+        sysAssetsRow: row.sysAssetsRow,
+        accountName: row.accountName,
+        type: row.type,
+        currentBalance: row.currentBalance,
+        designated: !!configured,
+        eligible: !!(configured && configured.eligible)
+      };
+    });
+  const includedRows = {};
+  accounts.forEach(function(row) { includedRows[String(row.sysAssetsRow)] = true; });
+  (configuration.accounts || []).forEach(function(row) {
+    if (includedRows[String(row.sysAssetsRow)]) return;
+    accounts.push({
+      sysAssetsRow: row.sysAssetsRow,
+      accountName: row.accountName,
+      type: row.type,
+      currentBalance: '',
+      designated: true,
+      eligible: false,
+      inactive: true
+    });
+  });
+  return {
+    accounts: accounts,
+    configuration: configuration
+  };
+}
+
 function getInvestmentsFromHistory_() {
   const ss = getUserSpreadsheet_();
   const sheet = getSheet_(ss, 'INVESTMENTS');
@@ -946,6 +989,8 @@ function getAssetsHeaderMap_(sheet, optionalDisplay) {
   const typeColZero = headers.indexOf('Type');
   const balanceColZero = headers.indexOf('Current Balance');
   const activeColZero = headers.indexOf('Active');
+  const investmentIdColZero = headers.indexOf(INVESTMENT_ID_HEADER_);
+  const planningPurposeColZero = headers.indexOf(INVESTMENT_PLANNING_PURPOSE_HEADER_);
 
   if (nameColZero === -1) {
     throw new Error('Assets sheet must contain Account Name.');
@@ -960,10 +1005,14 @@ function getAssetsHeaderMap_(sheet, optionalDisplay) {
     typeColZero: typeColZero,
     balanceColZero: balanceColZero,
     activeColZero: activeColZero,
+    investmentIdColZero: investmentIdColZero,
+    planningPurposeColZero: planningPurposeColZero,
     nameCol: nameColZero + 1,
     typeCol: typeColZero === -1 ? -1 : typeColZero + 1,
     balanceCol: balanceColZero + 1,
-    activeCol: activeColZero === -1 ? -1 : activeColZero + 1
+    activeCol: activeColZero === -1 ? -1 : activeColZero + 1,
+    investmentIdCol: investmentIdColZero === -1 ? -1 : investmentIdColZero + 1,
+    planningPurposeCol: planningPurposeColZero === -1 ? -1 : planningPurposeColZero + 1
   };
 }
 
@@ -1035,6 +1084,106 @@ function ensureAssetsActiveColumn_(sheet) {
 
   sheet.getRange(1, targetCol).setValue('Active');
   return getAssetsHeaderMap_(sheet);
+}
+
+/**
+ * Adds the two optional RFP-2 metadata headers only during an explicit save.
+ * Existing rows remain blank; there is no broad ID migration or name inference.
+ */
+function ensureInvestmentPlanningMetadataColumns_(sheet) {
+  let headerMap = getAssetsHeaderMap_(sheet);
+  if (headerMap.activeCol === -1) {
+    throw new Error('SYS - Assets is missing Active. Nothing was changed.');
+  }
+  const missing = [];
+  if (headerMap.investmentIdCol === -1) missing.push(INVESTMENT_ID_HEADER_);
+  if (headerMap.planningPurposeCol === -1) missing.push(INVESTMENT_PLANNING_PURPOSE_HEADER_);
+  if (!missing.length) {
+    styleInvestmentPlanningMetadataHeaders_(sheet, headerMap);
+    return headerMap;
+  }
+
+  const nextCol = Math.max(sheet.getLastColumn(), 1) + 1;
+  const newHeaderRange = sheet.getRange(1, nextCol, 1, missing.length);
+  newHeaderRange.setValues([missing]);
+  headerMap = getAssetsHeaderMap_(sheet);
+  styleInvestmentPlanningMetadataHeaders_(sheet, headerMap);
+  return headerMap;
+}
+
+/** Match only the two RFP-owned headings to the existing SYS header. */
+function styleInvestmentPlanningMetadataHeaders_(sheet, headerMap) {
+  if (!sheet || !headerMap || headerMap.activeCol === -1) return;
+  [headerMap.investmentIdCol, headerMap.planningPurposeCol].forEach(function(col) {
+    if (col === -1) return;
+    try {
+      const cell = sheet.getRange(1, col);
+      // Preserve this workbook's established header font size and border
+      // family, then make the required color/alignment explicit.
+      sheet.getRange(1, headerMap.activeCol).copyTo(
+        cell, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+      cell
+        .setBackground(CANON_HEADER_YELLOW_)
+        .setFontWeight('bold')
+        .setFontColor('#000000')
+        .setHorizontalAlignment('center')
+        .setVerticalAlignment(CANON_VERTICAL_ALIGNMENT_)
+        .setBorder(false, false, true, false, false, false,
+          '#000000', SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+    } catch (_metadataHeaderStyleErr) { /* presentation must not block Save */ }
+  });
+}
+
+function isAssetRowInactive_(row, headerMap) {
+  if (!row || headerMap.activeColZero === -1) return false;
+  const value = String(row[headerMap.activeColZero] || '').trim().toLowerCase();
+  return value === 'no' || value === 'n' || value === 'false' || value === 'inactive';
+}
+
+function createInvestmentStableId_() {
+  return 'INV-' + Utilities.getUuid();
+}
+
+/**
+ * Read-only RFP-2 configuration seam. Missing columns/metadata return an
+ * unconfigured result and never self-heal the workbook.
+ */
+function getIncomeProducingAccountConfigurations_(optionalSs) {
+  const ss = optionalSs || getUserSpreadsheet_();
+  const sheet = ss.getSheetByName(getSheetNames_().ASSETS);
+  if (!sheet) return { configured: false, accounts: [], eligibleAccounts: [] };
+  const display = sheet.getDataRange().getDisplayValues();
+  const headerMap = getAssetsHeaderMap_(sheet, display);
+  if (headerMap.investmentIdCol === -1 || headerMap.planningPurposeCol === -1) {
+    return { configured: false, accounts: [], eligibleAccounts: [] };
+  }
+
+  const matches = [];
+  for (let r = 1; r < display.length; r++) {
+    const purpose = String(display[r][headerMap.planningPurposeColZero] || '').trim();
+    if (purpose !== INCOME_PRODUCING_PURPOSE_) continue;
+    matches.push({
+      sysAssetsRow: r + 1,
+      investmentId: String(display[r][headerMap.investmentIdColZero] || '').trim(),
+      accountName: String(display[r][headerMap.nameColZero] || '').trim(),
+      type: headerMap.typeColZero === -1 ? '' :
+        String(display[r][headerMap.typeColZero] || '').trim(),
+      active: !isAssetRowInactive_(display[r], headerMap)
+    });
+  }
+
+  matches.forEach(function(row) {
+    row.eligible = row.active && !!row.investmentId && !!row.accountName;
+    row.planningPurpose = INCOME_PRODUCING_PURPOSE_;
+  });
+  const eligibleAccounts = matches.filter(function(row) { return row.eligible; });
+  return {
+    configured: matches.length > 0,
+    accounts: matches,
+    eligibleAccounts: eligibleAccounts,
+    configuredCount: matches.length,
+    eligibleCount: eligibleAccounts.length
+  };
 }
 
 /**
@@ -2053,13 +2202,317 @@ function setAssetsActiveValue_(sheet, accountName, value) {
 }
 
 /**
+ * Explicitly designate or clear one Income-Producing account.
+ * This is a metadata-only writer: it never changes INPUT - Investments,
+ * balances, types, names, or Active state.
+ */
+function setIncomeProducingAccountDesignationFromDashboard(payload, optionalSs) {
+  validateRequired_(payload, ['sysAssetsRow', 'expectedAccountName']);
+
+  const sysAssetsRow = parseInt(String(payload.sysAssetsRow), 10);
+  const expectedAccountName = String(payload.expectedAccountName || '').trim();
+  const requestedPurpose = String(payload.planningPurpose || '').trim();
+  if (isNaN(sysAssetsRow) || sysAssetsRow < 2 || !expectedAccountName) {
+    throw new Error('Invalid investment account. Please refresh and try again.');
+  }
+  if (requestedPurpose !== '' && requestedPurpose !== INCOME_PRODUCING_PURPOSE_) {
+    throw new Error('Unsupported investment planning purpose. Nothing was changed.');
+  }
+
+  const lock = LockService.getUserLock();
+  try {
+    if (!lock) throw new Error('No user lock is available.');
+    lock.waitLock(30000);
+  } catch (_lockErr) {
+    throw new Error('Another investment change is in progress. Please try again in a moment.');
+  }
+
+  let writesStarted = false;
+  let idCell = null;
+  let purposeCell = null;
+  let oldId = '';
+  let oldPurpose = '';
+  const addedHeaderCells = [];
+  try {
+    const ss = optionalSs || getUserSpreadsheet_();
+    const assetsSheet = getSheet_(ss, 'ASSETS');
+    let display = assetsSheet.getDataRange().getDisplayValues();
+    let headerMap = getAssetsHeaderMap_(assetsSheet, display);
+    if (sysAssetsRow > display.length) {
+      throw new Error('Investment account has moved. Please refresh and try again.');
+    }
+    const actualName = String(display[sysAssetsRow - 1][headerMap.nameColZero] || '').trim();
+    if (!actualName || actualName !== expectedAccountName) {
+      throw new Error('Investment account has moved. Please refresh and try again.');
+    }
+    if (requestedPurpose === INCOME_PRODUCING_PURPOSE_ &&
+        isAssetRowInactive_(display[sysAssetsRow - 1], headerMap)) {
+      throw new Error('Reactivate this investment before marking it as income-producing.');
+    }
+
+    const metadataColumnsBefore = {
+      investmentIdCol: headerMap.investmentIdCol,
+      planningPurposeCol: headerMap.planningPurposeCol
+    };
+    headerMap = ensureInvestmentPlanningMetadataColumns_(assetsSheet);
+    if (metadataColumnsBefore.investmentIdCol === -1) {
+      addedHeaderCells.push(assetsSheet.getRange(1, headerMap.investmentIdCol));
+    }
+    if (metadataColumnsBefore.planningPurposeCol === -1) {
+      addedHeaderCells.push(assetsSheet.getRange(1, headerMap.planningPurposeCol));
+    }
+    display = assetsSheet.getDataRange().getDisplayValues();
+    const targetRow = display[sysAssetsRow - 1] || [];
+    oldId = String(targetRow[headerMap.investmentIdColZero] || '').trim();
+    oldPurpose = String(targetRow[headerMap.planningPurposeColZero] || '').trim();
+
+    for (let r = 1; r < display.length; r++) {
+      if (r + 1 === sysAssetsRow) continue;
+      const rowId = String(display[r][headerMap.investmentIdColZero] || '').trim();
+      if (oldId && rowId === oldId) {
+        throw new Error('Investment identity is duplicated. Nothing was changed.');
+      }
+    }
+
+    if (!requestedPurpose && !oldPurpose && !oldId) {
+      return {
+        ok: true,
+        message: 'This account is not marked as income-producing.',
+        accountName: actualName,
+        investmentId: '',
+        planningPurpose: '',
+        changed: false
+      };
+    }
+
+    const stableId = oldId || createInvestmentStableId_();
+    if (requestedPurpose === INCOME_PRODUCING_PURPOSE_) {
+      for (let r = 1; r < display.length; r++) {
+        if (r + 1 === sysAssetsRow) continue;
+        const rowId = String(display[r][headerMap.investmentIdColZero] || '').trim();
+        if (rowId && rowId === stableId) {
+          throw new Error('Investment identity is duplicated. Nothing was changed.');
+        }
+      }
+    }
+    if (oldPurpose === requestedPurpose && oldId) {
+      return {
+        ok: true,
+        message: requestedPurpose
+          ? 'This account is already marked as income-producing.'
+          : 'This account is not marked as income-producing.',
+        accountName: actualName,
+        investmentId: stableId,
+        planningPurpose: requestedPurpose,
+        changed: false
+      };
+    }
+
+    idCell = assetsSheet.getRange(sysAssetsRow, headerMap.investmentIdCol);
+    purposeCell = assetsSheet.getRange(sysAssetsRow, headerMap.planningPurposeCol);
+    writesStarted = true;
+    if (!oldId) idCell.setValue(stableId);
+    purposeCell.setValue(requestedPurpose);
+    try { touchDashboardSourceUpdated_('investments'); } catch (_touchErr) {}
+    try {
+      appendActivityLog_(ss, {
+        eventType: 'investment_planning_purpose_update',
+        entryDate: Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+        amount: 0,
+        direction: '',
+        payee: actualName,
+        category: INCOME_PRODUCING_PURPOSE_,
+        accountSource: '',
+        cashFlowSheet: '',
+        cashFlowMonth: '',
+        dedupeKey: '',
+        details: JSON.stringify({
+          detailsVersion: 1,
+          investmentId: stableId,
+          previousPurpose: oldPurpose,
+          newPurpose: requestedPurpose,
+          sysAssetsRow: sysAssetsRow
+        })
+      });
+    } catch (logErr) {
+      Logger.log('setIncomeProducingAccountDesignationFromDashboard activity log: ' + logErr);
+    }
+
+    return {
+      ok: true,
+      message: requestedPurpose
+        ? 'Marked "' + actualName + '" as income-producing.'
+        : 'Removed "' + actualName + '" from income-producing accounts.',
+      accountName: actualName,
+      investmentId: stableId,
+      planningPurpose: requestedPurpose,
+      changed: true
+    };
+  } catch (err) {
+    if (writesStarted || addedHeaderCells.length) {
+      try { if (idCell) idCell.setValue(oldId); } catch (_idRollbackErr) {}
+      try { if (purposeCell) purposeCell.setValue(oldPurpose); } catch (_purposeRollbackErr) {}
+      for (let i = 0; i < addedHeaderCells.length; i++) {
+        try { addedHeaderCells[i].clearContent(); } catch (_headerRollbackErr) {}
+      }
+      throw new Error('Income-producing account update failed and was rolled back: ' +
+        (err && err.message || err));
+    }
+    throw err;
+  } finally {
+    try { lock.releaseLock(); } catch (_releaseErr) {}
+  }
+}
+
+/** Apply a Setup multi-select change set atomically on one workbook. */
+function setIncomeProducingAccountDesignationsFromDashboard(payload, optionalSs) {
+  const changes = payload && Array.isArray(payload.changes) ? payload.changes : [];
+  if (!changes.length) return { ok: true, changed: false, message: 'No changes to save.' };
+
+  const lock = LockService.getUserLock();
+  try {
+    if (!lock) throw new Error('No user lock is available.');
+    lock.waitLock(30000);
+  } catch (_lockErr) {
+    throw new Error('Another investment change is in progress. Please try again in a moment.');
+  }
+
+  let assetsSheet = null;
+  let beforeValues = null;
+  let beforeLastColumn = 0;
+  let writesStarted = false;
+  try {
+    const ss = optionalSs || getUserSpreadsheet_();
+    assetsSheet = getSheet_(ss, 'ASSETS');
+    beforeLastColumn = assetsSheet.getLastColumn();
+    beforeValues = assetsSheet.getDataRange().getValues();
+    let display = assetsSheet.getDataRange().getDisplayValues();
+    let headerMap = getAssetsHeaderMap_(assetsSheet, display);
+    const seenRows = {};
+
+    changes.forEach(function(change) {
+      validateRequired_(change, ['sysAssetsRow', 'expectedAccountName']);
+      const row = parseInt(String(change.sysAssetsRow), 10);
+      const expectedName = String(change.expectedAccountName || '').trim();
+      const purpose = String(change.planningPurpose || '').trim();
+      if (isNaN(row) || row < 2 || row > display.length || !expectedName || seenRows[row]) {
+        throw new Error('Invalid or duplicate investment account. Please refresh and try again.');
+      }
+      if (purpose !== '' && purpose !== INCOME_PRODUCING_PURPOSE_) {
+        throw new Error('Unsupported investment planning purpose. Nothing was changed.');
+      }
+      const actualName = String(display[row - 1][headerMap.nameColZero] || '').trim();
+      if (actualName !== expectedName) {
+        throw new Error('Investment account has moved. Please refresh and try again.');
+      }
+      if (purpose && isAssetRowInactive_(display[row - 1], headerMap)) {
+        throw new Error('Reactivate "' + actualName + '" before marking it as income-producing.');
+      }
+      seenRows[row] = true;
+    });
+
+    headerMap = ensureInvestmentPlanningMetadataColumns_(assetsSheet);
+    display = assetsSheet.getDataRange().getDisplayValues();
+    const usedIds = {};
+    for (let r = 1; r < display.length; r++) {
+      const id = String(display[r][headerMap.investmentIdColZero] || '').trim();
+      if (!id) continue;
+      if (usedIds[id]) throw new Error('Investment identity is duplicated. Nothing was changed.');
+      usedIds[id] = true;
+    }
+
+    const auditRows = [];
+    writesStarted = true;
+    changes.forEach(function(change) {
+      const row = parseInt(String(change.sysAssetsRow), 10);
+      const name = String(change.expectedAccountName || '').trim();
+      const purpose = String(change.planningPurpose || '').trim();
+      const idCell = assetsSheet.getRange(row, headerMap.investmentIdCol);
+      const purposeCell = assetsSheet.getRange(row, headerMap.planningPurposeCol);
+      const oldId = String(idCell.getDisplayValue() || '').trim();
+      const oldPurpose = String(purposeCell.getDisplayValue() || '').trim();
+      if (oldPurpose === purpose && (oldId || !purpose)) return;
+      const stableId = oldId || createInvestmentStableId_();
+      if (!oldId) idCell.setValue(stableId);
+      purposeCell.setValue(purpose);
+      auditRows.push({
+        name: name,
+        investmentId: stableId,
+        previousPurpose: oldPurpose,
+        newPurpose: purpose,
+        sysAssetsRow: row
+      });
+    });
+
+    try { touchDashboardSourceUpdated_('investments'); } catch (_touchErr) {}
+    auditRows.forEach(function(audit) {
+      try {
+        appendActivityLog_(ss, {
+          eventType: 'investment_planning_purpose_update',
+          entryDate: Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+          amount: 0,
+          direction: '',
+          payee: audit.name,
+          category: INCOME_PRODUCING_PURPOSE_,
+          accountSource: '',
+          cashFlowSheet: '',
+          cashFlowMonth: '',
+          dedupeKey: '',
+          details: JSON.stringify({
+            detailsVersion: 1,
+            investmentId: audit.investmentId,
+            previousPurpose: audit.previousPurpose,
+            newPurpose: audit.newPurpose,
+            sysAssetsRow: audit.sysAssetsRow
+          })
+        });
+      } catch (logErr) {
+        Logger.log('setIncomeProducingAccountDesignationsFromDashboard activity log: ' + logErr);
+      }
+    });
+
+    // Keep the two opt-in metadata columns readable after the first or any
+    // later designation. This is deliberately scoped to the columns this
+    // writer owns; it does not reshape the rest of the populated workbook.
+    fitContentColumnsToContents_([
+      { sheet: assetsSheet, col: headerMap.investmentIdCol },
+      { sheet: assetsSheet, col: headerMap.planningPurposeCol }
+    ], 'setIncomeProducingAccountDesignationsFromDashboard metadata fit');
+
+    return {
+      ok: true,
+      changed: auditRows.length > 0,
+      changedCount: auditRows.length,
+      message: auditRows.length === 1
+        ? 'Saved 1 income-producing account change.'
+        : 'Saved ' + auditRows.length + ' income-producing account changes.'
+    };
+  } catch (err) {
+    if (assetsSheet && beforeValues && (writesStarted || assetsSheet.getLastColumn() !== beforeLastColumn)) {
+      try {
+        assetsSheet.getRange(1, 1, beforeValues.length, beforeValues[0].length).setValues(beforeValues);
+        if (assetsSheet.getLastColumn() > beforeLastColumn) {
+          assetsSheet.getRange(1, beforeLastColumn + 1, assetsSheet.getMaxRows(),
+            assetsSheet.getLastColumn() - beforeLastColumn).clearContent();
+        }
+      } catch (_rollbackErr) {}
+      throw new Error('Income-producing account changes failed and were rolled back: ' +
+        (err && err.message || err));
+    }
+    throw err;
+  } finally {
+    try { lock.releaseLock(); } catch (_releaseErr) {}
+  }
+}
+
+/**
  * Save the customer-facing Investment Manage editor in one guarded operation.
  * Account Name and Type are mirrored on SYS - Assets and every matching
  * INPUT - Investments year block. Dated values, formulas, Active state, and
  * immutable Activity history are preserved. All targets are resolved before
  * the first write and a partial failure restores every changed cell.
  */
-function saveTrackedInvestmentAccountFromDashboard(payload) {
+function saveTrackedInvestmentAccountFromDashboard(payload, optionalSs) {
   validateRequired_(payload, ['sysAssetsRow', 'expectedAccountName', 'newAccountName']);
 
   const sysAssetsRow = parseInt(String(payload.sysAssetsRow), 10);
@@ -2082,7 +2535,7 @@ function saveTrackedInvestmentAccountFromDashboard(payload) {
   const historyTargets = [];
 
   try {
-    const ss = getUserSpreadsheet_();
+    const ss = optionalSs || getUserSpreadsheet_();
     assetsSheet = getSheet_(ss, 'ASSETS');
     const invSheet = getSheet_(ss, 'INVESTMENTS');
     const assetsDisplay = assetsSheet.getDataRange().getDisplayValues();
@@ -2261,7 +2714,7 @@ function saveTrackedInvestmentAccountFromDashboard(payload) {
         }
       } catch (_restoreAssetsErr) {}
       try {
-        const invSheet = getSheet_(getUserSpreadsheet_(), 'INVESTMENTS');
+        const invSheet = getSheet_(optionalSs || getUserSpreadsheet_(), 'INVESTMENTS');
         for (let i = 0; i < historyTargets.length; i++) {
           invSheet.getRange(historyTargets[i].row, 1).setValue(historyTargets[i].oldName);
           invSheet.getRange(historyTargets[i].row, 2).setValue(historyTargets[i].oldType);
@@ -2276,7 +2729,7 @@ function saveTrackedInvestmentAccountFromDashboard(payload) {
   }
 }
 
-function setInvestmentTrackingStateFromDashboard_(payload, activeValue) {
+function setInvestmentTrackingStateFromDashboard_(payload, activeValue, optionalSs) {
   const expected = String(
     payload && (payload.expectedAccountName || payload.accountName) || ''
   ).trim();
@@ -2294,7 +2747,7 @@ function setInvestmentTrackingStateFromDashboard_(payload, activeValue) {
   const inputTargets = [];
   let assetsTarget = null;
   try {
-    const ss = getUserSpreadsheet_();
+    const ss = optionalSs || getUserSpreadsheet_();
     const invSheet = getSheet_(ss, 'INVESTMENTS');
     const assetsSheet = getSheet_(ss, 'ASSETS');
     const assetsDisplay = assetsSheet.getDataRange().getDisplayValues();
@@ -2456,12 +2909,12 @@ function setInvestmentTrackingStateFromDashboard_(payload, activeValue) {
  *
  * @param {{ accountName: string }} payload
  */
-function deactivateInvestmentAccountFromDashboard(payload) {
-  return setInvestmentTrackingStateFromDashboard_(payload || {}, 'No');
+function deactivateInvestmentAccountFromDashboard(payload, optionalSs) {
+  return setInvestmentTrackingStateFromDashboard_(payload || {}, 'No', optionalSs);
 }
 
 /** Restore an existing inactive Investment without changing its history. */
-function reactivateInvestmentAccountFromDashboard(payload) {
+function reactivateInvestmentAccountFromDashboard(payload, optionalSs) {
   validateRequired_(payload, ['sysAssetsRow', 'expectedAccountName']);
-  return setInvestmentTrackingStateFromDashboard_(payload, 'Yes');
+  return setInvestmentTrackingStateFromDashboard_(payload, 'Yes', optionalSs);
 }

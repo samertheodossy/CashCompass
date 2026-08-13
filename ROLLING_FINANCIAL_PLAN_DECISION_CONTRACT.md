@@ -126,7 +126,7 @@ amount carries its source, as-of month, coverage, and actual/forecast label.
    its required payment.
 5. **Reserve restoration** — if protected cash fell below its target, restore it
    before discretionary investment funding.
-6. **Family Investing Plan funding** — calculate the recurring and one-time
+6. **Income-Producing Accounts funding** — calculate the recurring and one-time
    household surplus that can be directed to **Samer Robinhood** without missing
    obligations, violating protected cash, or omitting any debt. Show the source
    of funding, start month, monthly and annual funding pace, cumulative
@@ -195,18 +195,23 @@ design. Requirements:
 
 - existing workbooks with no new metadata behave exactly as they do now;
 - designation is explicit, not inferred from the word “Robinhood”;
-- only one active account can hold `FAMILY_INCOME` purpose;
+- zero, one, or multiple accounts can hold `INCOME_PRODUCING` purpose;
+- designation records planning purpose only and does not make retirement or
+  otherwise restricted funds immediately accessible;
 - rename preserves the stable identity and purpose;
 - Stop tracking suspends its eligibility without deleting its configuration;
-- Reactivate restores eligibility only after uniqueness is rechecked;
-- all changes are guarded, auditable, rollback-capable, and feature-gated;
-- the feature flag defaults off until disposable and isolated runtime proof.
+- Reactivate restores that account's eligibility without affecting other
+  designated accounts;
+- all changes are guarded, auditable, and rollback-capable;
+- no global rollout flag controls a household's choice: missing workbook
+  metadata is the natural unconfigured state, and Setup / Review changes it
+  only after an explicit Save or Clear action.
 
 ## Product decisions required before RFP-2
 
 | Decision | Recommended starting rule | Why approval is required |
 |---|---|---|
-| Family Investing Plan account — **approved 2026-08-13** | Explicitly designate the active **Samer Robinhood** Brokerage account as the account CashCompass must plan how to fund to build the family's long-term income pipeline; persist the designation by a new stable ID. Exclude `Lutfi Robinhood` and every other investment account | This is an affirmative planning objective, not merely an optional destination. The exact approved record must survive later renames. |
+| Income-Producing Accounts — **approved 2026-08-13** | Explicitly designate zero, one, or multiple investment accounts intended to grow and produce long-term income, including **Samer Robinhood** and potentially retirement accounts such as the 401(k). Persist every designation by stable ID; never infer purpose from a name or account type | The long-term income strategy can span several accounts. Each identity must survive rename and Stop/Reactivate, while later recommendations separately respect taxes, liquidity, retirement access, and withdrawal restrictions. |
 | Debt inclusion and ordering — **approved 2026-08-13** | Include every active account with a remaining debt balance. Preserve minimum/scheduled payments for all; rank extra principal continuously, generally higher APR before lower APR, with deterministic tie-breakers. Use **no APR threshold** | The plan must be comprehensive. Interest rate affects priority, not whether a debt is accounted for. |
 | Decision cadence and output — **approved 2026-08-13** | Produce an ordered weekly dollar-action plan and a monthly aggregation from the same decisions: pay obligations, pay debt minimums, apply named extra principal, fund Samer Robinhood, protect cash, and defer/review when necessary. Reconcile cash after every action | The product must answer what to do now, not only show an eventual balance projection. |
 | Protected cash | Reuse `DO_NOT_TOUCH` balances + eligible account Minimum buffers + planned-cash holds; no second fixed reserve | This preserves the existing account policy model and avoids double protection. |

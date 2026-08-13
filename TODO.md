@@ -1914,10 +1914,12 @@ and tax confidence. Samer Robinhood receives a ticker/fund target allocation
 requires tax-lot/account data or explicitly falls back to Review. The system
 never recommends tickers from account totals alone and never places trades.
 
-**RFP-1 account decision — approved 2026-08-13:** **Samer Robinhood** is the
-Family Investing Plan account to fund long-term income. `Lutfi Robinhood` and all
-other investments are excluded. RFP-2 must persist this designation by a stable
-ID so a later rename does not break the relationship.
+**RFP-1 account decision — approved 2026-08-13:** zero, one, or multiple
+investments may be explicitly designated with the **Income-Producing Accounts**
+purpose, including **Samer Robinhood** and potentially the 401(k). RFP-2 must
+persist each designation by a stable ID so a later rename does not break the
+relationship. Account access, tax, liquidity, and withdrawal restrictions remain
+separate planning constraints.
 
 **RFP-1 debt decision — approved 2026-08-13:** include every active debt account
 with a remaining balance. Preserve minimum/scheduled payments for every account.
