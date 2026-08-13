@@ -765,6 +765,85 @@
           !manageHasStop('inv_manage_list') || document.getElementById('inv_update_stop_btn')) {
         trackedEditorFailures.push('Investment manage inventory');
       }
+      var investmentLifecyclePass = false;
+      var originalInvestmentConfirm = window.confirm;
+      try {
+        window.confirm = function() { return true; };
+        var investmentManageHost = document.getElementById('inv_manage_list');
+        var investmentEditButton = Array.prototype.find.call(
+          investmentManageHost ? investmentManageHost.querySelectorAll('button') : [],
+          function(button) { return String(button.textContent || '').trim() === 'Edit'; }
+        );
+        if (investmentEditButton) investmentEditButton.click();
+        await waitFor(function() {
+          var wrap = document.getElementById('inv_edit_wrap');
+          var nameInput = document.getElementById('inv_edit_account_name');
+          return wrap && wrap.style.display !== 'none' && nameInput &&
+            nameInput.value === expected.investmentName;
+        }, 10000, 'Investment account name inside the unified Edit save');
+
+        var temporaryInvestmentName = expected.investmentName + ' E2E Rename';
+        document.getElementById('inv_edit_account_name').value = temporaryInvestmentName;
+        document.getElementById('inv_edit_save_btn').click();
+        await waitFor(function() {
+          var row = window.__investmentManagementByName &&
+            window.__investmentManagementByName[temporaryInvestmentName.toLowerCase()];
+          return hasOption('inv_account', temporaryInvestmentName) && row && row.sysAssetsRow;
+        }, 90000, 'Investment unified Edit rename save');
+
+        investmentManageHost = document.getElementById('inv_manage_list');
+        investmentEditButton = Array.prototype.find.call(
+          investmentManageHost ? investmentManageHost.querySelectorAll('button') : [],
+          function(button) { return String(button.textContent || '').trim() === 'Edit'; }
+        );
+        if (investmentEditButton) investmentEditButton.click();
+        await waitFor(function() {
+          var input = document.getElementById('inv_edit_account_name');
+          return input && input.value === temporaryInvestmentName;
+        }, 10000, 'renamed Investment account in Edit');
+        document.getElementById('inv_edit_account_name').value = expected.investmentName;
+        document.getElementById('inv_edit_save_btn').click();
+        await waitFor(function() {
+          var restored = window.__investmentManagementByName &&
+            window.__investmentManagementByName[expected.investmentName.toLowerCase()];
+          return hasOption('inv_account', expected.investmentName) && restored &&
+            restored.sysAssetsRow && !hasOption('inv_account', temporaryInvestmentName);
+        }, 90000, 'Investment unified Edit rename restoration');
+
+        investmentManageHost = document.getElementById('inv_manage_list');
+        var investmentStopButton = Array.prototype.find.call(
+          investmentManageHost ? investmentManageHost.querySelectorAll('button') : [],
+          function(button) { return String(button.textContent || '').trim() === 'Stop tracking'; }
+        );
+        if (investmentStopButton) investmentStopButton.click();
+        await waitFor(function() {
+          return !hasOption('inv_account', expected.investmentName) &&
+            (__investmentInactiveRows || []).some(function(row) {
+              return String(row.accountName || '') === expected.investmentName && row.sysAssetsRow;
+            });
+        }, 90000, 'Investment Stop tracking lifecycle');
+        renderInactiveInvestmentAccounts_();
+        var inactiveInvestmentHost = document.getElementById('inv_inactive_list');
+        var reactivateInvestmentButton = Array.prototype.find.call(
+          inactiveInvestmentHost ? inactiveInvestmentHost.querySelectorAll('button') : [],
+          function(button) { return String(button.textContent || '').trim() === 'Reactivate'; }
+        );
+        if (reactivateInvestmentButton) reactivateInvestmentButton.click();
+        await waitFor(function() {
+          var restored = window.__investmentManagementByName &&
+            window.__investmentManagementByName[expected.investmentName.toLowerCase()];
+          return hasOption('inv_account', expected.investmentName) && restored &&
+            restored.sysAssetsRow && !(__investmentInactiveRows || []).some(function(row) {
+              return String(row.accountName || '') === expected.investmentName;
+            });
+        }, 90000, 'Investment Reactivate lifecycle');
+        investmentLifecyclePass = true;
+      } finally {
+        window.confirm = originalInvestmentConfirm;
+      }
+      if (!investmentLifecyclePass) {
+        trackedEditorFailures.push('Investment Edit/Rename/Reactivate lifecycle');
+      }
       if (document.getElementById('bank_update_stop_btn')) {
         trackedEditorFailures.push('Bank destructive action in Update');
       }
@@ -779,7 +858,7 @@
       add('tracked_editor_convergence', trackedEditorFailures.length === 0,
         trackedEditorFailures.length
           ? ('Tracked-editor gaps: ' + trackedEditorFailures.join(', '))
-          : 'Bank Accounts proved one-save Edit/Rename plus Stop/Reactivate; Houses and Investments keep Update Save-only and Manage-owned lifecycle actions.');
+          : 'Bank Accounts and Investments proved one-save Edit/Rename plus Stop/Reactivate; Houses keep Update Save-only and Manage-owned lifecycle actions.');
 
       if (typeof showTab === 'function') showTab('debts');
       if (typeof loadDebtSectionThenSelect_ === 'function') loadDebtSectionThenSelect_(expected.debtName);

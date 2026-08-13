@@ -7,6 +7,11 @@ var __bankManagementRows = [];
 var __bankManagementByName = Object.create(null);
 var __bankInactiveRows = [];
 var __bankEditing = null;
+var __investmentUiData = null;
+var __investmentManagementRows = [];
+var __investmentManagementByName = Object.create(null);
+var __investmentInactiveRows = [];
+var __investmentEditing = null;
 
 function fillBankAccountDropdownFromData_(data) {
   const sel = document.getElementById('bank_account');
@@ -1109,6 +1114,16 @@ function fillInvestmentAccountDropdownFromData_(data) {
     opt.textContent = a;
     sel.appendChild(opt);
   });
+  __investmentUiData = data || {};
+  __investmentManagementRows = Array.isArray(data && data.managementAccounts)
+    ? data.managementAccounts.slice() : [];
+  __investmentInactiveRows = Array.isArray(data && data.inactiveAccounts)
+    ? data.inactiveAccounts.slice() : [];
+  __investmentManagementByName = Object.create(null);
+  __investmentManagementRows.forEach(function(row) {
+    var name = String(row && row.accountName || '').trim();
+    if (name) __investmentManagementByName[name.toLowerCase()] = row;
+  });
   populateInvestmentAddDatalists_(data);
   updateInvestmentUpdateAvailability_();
   renderInvestmentManageList_();
@@ -1247,6 +1262,7 @@ function isInvestmentNameRelatedError_(msg) {
 
 function setInvestmentPanelMode(mode) {
   const m = setTrackedEditorMode_({ prefix: 'inv' }, mode);
+  if (m !== 'manage') closeInvestmentEdit_();
   if (m === 'update') setStatus('inv_status', '', false);
   if (m === 'manage') renderInvestmentManageList_();
 }
@@ -1255,7 +1271,9 @@ function renderInvestmentManageList_() {
   renderTrackedEditorManageList_({
     hostId: 'inv_manage_list',
     selectId: 'inv_account',
-    items: trackedEditorItemsFromSelect_('inv_account'),
+    items: __investmentManagementRows.length
+      ? __investmentManagementRows.map(function(row) { return { name: row.accountName }; })
+      : trackedEditorItemsFromSelect_('inv_account'),
     itemLabel: 'Investment account',
     loadingMessage: 'Loading investment accounts…',
     failureMessage: 'Couldn’t load investment accounts.',
@@ -1263,20 +1281,223 @@ function renderInvestmentManageList_() {
     addLabel: 'Add first investment',
     onRetry: loadInvestmentSection,
     onAdd: function() { setInvestmentPanelMode('add'); },
+    updateLabel: 'Edit',
     onUpdate: function(accountName) {
-      openTrackedEditorItemForUpdate_({
-        selectId: 'inv_account',
-        setMode: setInvestmentPanelMode,
-        loadSelection: loadInvestmentData
-      }, accountName);
+      openInvestmentEditForm_(accountName);
     },
     onStop: function(accountName) {
+      closeInvestmentEdit_();
       stopTrackedEditorItem_({
         selectId: 'inv_account',
         stop: stopTrackingInvestment
       }, accountName);
     }
   });
+  renderInactiveInvestmentAccounts_();
+}
+
+function populateInvestmentEditTypeOptions_(currentType) {
+  var select = document.getElementById('inv_edit_type');
+  if (!select) return;
+  select.innerHTML = '';
+  var values = [currentType]
+    .concat((__investmentUiData && __investmentUiData.typeOptions) || [])
+    .concat(INV_ADD_TYPE_CORE_OPTIONS_);
+  var seen = Object.create(null);
+  if (!String(currentType || '').trim()) {
+    var unset = document.createElement('option');
+    unset.value = '';
+    unset.textContent = 'Not set (legacy account)';
+    select.appendChild(unset);
+  }
+  values.forEach(function(value) {
+    var text = String(value == null ? '' : value).trim();
+    var key = text.toLowerCase();
+    if (!text || key === 'other' || seen[key]) return;
+    seen[key] = true;
+    var option = document.createElement('option');
+    option.value = text;
+    option.textContent = text;
+    select.appendChild(option);
+  });
+  var other = document.createElement('option');
+  other.value = INV_ADD_TYPE_OTHER_SENTINEL_;
+  other.textContent = 'Other (custom)…';
+  select.appendChild(other);
+  select.value = currentType || '';
+  onInvestmentEditTypeChange_();
+}
+
+function onInvestmentEditTypeChange_() {
+  var select = document.getElementById('inv_edit_type');
+  var row = document.getElementById('inv_edit_type_custom_row');
+  var custom = document.getElementById('inv_edit_type_custom');
+  var show = !!(select && select.value === INV_ADD_TYPE_OTHER_SENTINEL_);
+  if (row) row.style.display = show ? '' : 'none';
+  if (!show && custom) custom.value = '';
+}
+
+function openInvestmentEditForm_(accountName) {
+  var row = __investmentManagementByName[
+    String(accountName || '').trim().toLowerCase()
+  ];
+  if (!row || !row.sysAssetsRow) {
+    setStatus('inv_status', 'Couldn’t open that investment — please refresh.', true);
+    return;
+  }
+  __investmentEditing = {
+    sysAssetsRow: row.sysAssetsRow,
+    accountName: row.accountName,
+    typeExact: row.type
+  };
+  document.getElementById('inv_edit_account_name').value = row.accountName || '';
+  populateInvestmentEditTypeOptions_(row.type || '');
+  document.getElementById('inv_edit_type_custom').value = '';
+  document.getElementById('inv_edit_current_balance').textContent =
+    row.currentBalance === '' || row.currentBalance === null ||
+      typeof row.currentBalance === 'undefined'
+      ? '—' : fmtCurrency(Number(row.currentBalance));
+  document.getElementById('inv_edit_title').textContent =
+    'Edit investment — ' + (row.accountName || '');
+  var wrap = document.getElementById('inv_edit_wrap');
+  wrap.style.display = '';
+  try { wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (_e) {}
+}
+
+function closeInvestmentEdit_() {
+  __investmentEditing = null;
+  var wrap = document.getElementById('inv_edit_wrap');
+  if (wrap) wrap.style.display = 'none';
+}
+
+function cancelInvestmentEdit_() {
+  closeInvestmentEdit_();
+  setStatus('inv_status', '', false);
+}
+
+function submitInvestmentEdit_() {
+  if (!__investmentEditing || !__investmentEditing.sysAssetsRow) {
+    setStatus('inv_status', 'No investment selected to edit. Please refresh.', true);
+    return;
+  }
+  var nameEl = document.getElementById('inv_edit_account_name');
+  var newName = String(nameEl && nameEl.value || '').trim();
+  var typeSelect = document.getElementById('inv_edit_type');
+  var type = String(typeSelect && typeSelect.value || '').trim();
+  if (type === INV_ADD_TYPE_OTHER_SENTINEL_) {
+    type = String(document.getElementById('inv_edit_type_custom').value || '').trim();
+  }
+  if (!newName) {
+    setStatus('inv_status', 'Account name is required.', true);
+    if (nameEl) nameEl.focus();
+    return;
+  }
+  if (!type && String(__investmentEditing.typeExact || '').trim()) {
+    setStatus('inv_status', 'Type is required.', true);
+    return;
+  }
+  setStatusLoading('inv_status', 'Saving changes…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('inv_status', (res && res.message) || 'Changes saved.', false);
+      closeInvestmentEdit_();
+      loadInvestmentSection();
+      if (typeof refreshSnapshot === 'function') refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_status', (err.message || String(err)), true);
+    })
+    .saveTrackedInvestmentAccountFromDashboard({
+      sysAssetsRow: __investmentEditing.sysAssetsRow,
+      expectedAccountName: __investmentEditing.accountName,
+      newAccountName: newName,
+      type: type
+    });
+}
+
+function toggleInactiveInvestmentAccountsView_() {
+  var wrap = document.getElementById('inv_inactive_wrap');
+  var button = document.getElementById('inv_show_inactive_btn');
+  if (!wrap || !button) return;
+  var show = wrap.style.display === 'none';
+  wrap.style.display = show ? '' : 'none';
+  button.setAttribute('aria-expanded', show ? 'true' : 'false');
+  button.innerHTML = '<span class="debt-caret" aria-hidden="true">' +
+    (show ? '&#9662;' : '&#9656;') + '</span>' +
+    (show ? 'Hide inactive investments' : 'Show inactive investments');
+  if (show) renderInactiveInvestmentAccounts_();
+}
+
+function renderInactiveInvestmentAccounts_() {
+  var host = document.getElementById('inv_inactive_list');
+  var button = document.getElementById('inv_show_inactive_btn');
+  if (!host || !button) return;
+  var count = __investmentInactiveRows.length;
+  if (button.getAttribute('aria-expanded') !== 'true') {
+    button.innerHTML = '<span class="debt-caret" aria-hidden="true">&#9656;</span>' +
+      'Show inactive investments' + (count ? ' (' + count + ')' : '');
+  }
+  host.innerHTML = '';
+  if (!count) {
+    var empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No inactive investments.';
+    host.appendChild(empty);
+    return;
+  }
+  __investmentInactiveRows.forEach(function(row) {
+    var item = document.createElement('div');
+    item.className = 'tracked-editor-row';
+    var identity = document.createElement('div');
+    identity.className = 'tracked-editor-identity';
+    var title = document.createElement('strong');
+    title.className = 'tracked-editor-name';
+    title.textContent = row.accountName || 'Investment';
+    identity.appendChild(title);
+    var kind = document.createElement('span');
+    kind.className = 'tracked-editor-kind muted';
+    kind.textContent = row.historicalOnly
+      ? 'Historical investment — not tracked this year'
+      : (row.missingSystemRecord
+        ? 'Inactive investment — system record missing'
+        : 'Inactive investment');
+    identity.appendChild(kind);
+    item.appendChild(identity);
+    var actions = document.createElement('div');
+    actions.className = 'tracked-editor-actions';
+    if (row.canReactivate) {
+      var reactivate = document.createElement('button');
+      reactivate.type = 'button';
+      reactivate.className = 'small-btn';
+      reactivate.textContent = 'Reactivate';
+      reactivate.addEventListener('click', function() {
+        reactivateInvestmentFromManage_(row);
+      });
+      actions.appendChild(reactivate);
+    }
+    item.appendChild(actions);
+    host.appendChild(item);
+  });
+}
+
+function reactivateInvestmentFromManage_(row) {
+  var name = String(row && row.accountName || '').trim();
+  if (!name || !row.sysAssetsRow) return;
+  if (!window.confirm('Reactivate "' + name + '"?\n\nIts existing values and history will be preserved.')) return;
+  setStatusLoading('inv_status', 'Reactivating investment…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setStatus('inv_status', (res && res.message) || 'Investment reactivated.', false);
+      loadInvestmentSection();
+      if (typeof refreshSnapshot === 'function') refreshSnapshot();
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_status', (err.message || String(err)), true);
+    })
+    .reactivateInvestmentAccountFromDashboard({
+      sysAssetsRow: row.sysAssetsRow,
+      expectedAccountName: name
+    });
 }
 
 function loadInvestmentSection() {
@@ -1541,8 +1762,9 @@ function createInvestmentAccount() {
 function stopTrackingInvestment() {
   const sel = document.getElementById('inv_account');
   const account = sel ? String(sel.value || '').trim() : '';
+  const managementRow = __investmentManagementByName[account.toLowerCase()];
 
-  if (!account) {
+  if (!account || !managementRow || !managementRow.sysAssetsRow) {
     setStatus('inv_status', 'Pick an investment account first.', true);
     return;
   }
@@ -1566,7 +1788,10 @@ function stopTrackingInvestment() {
     .withFailureHandler(function(err) {
       setStatus('inv_status', (err.message || String(err)), true);
     })
-    .deactivateInvestmentAccountFromDashboard({ accountName: account });
+    .deactivateInvestmentAccountFromDashboard({
+      sysAssetsRow: managementRow.sysAssetsRow,
+      expectedAccountName: account
+    });
 }
 
 /* =============================================================

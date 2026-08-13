@@ -2532,6 +2532,30 @@ assert.match(files['debts.js'],
 assert.match(files['investments.js'],
   /function updateInvestmentValueByDate\(payload\)[\s\S]*?changed-column fit[\s\S]*?function addInvestmentAccountFromDashboard\(payload\)[\s\S]*?fitContentColumnsToContents_\(\[[\s\S]*?balanceCol/,
   'Investment add and value update must fit INPUT and SYS text and currency columns');
+assert.match(body,
+  /id="inv_edit_wrap"[\s\S]*?id="inv_edit_account_name"[\s\S]*?id="inv_edit_type"[\s\S]*?id="inv_edit_save_btn"[^>]*onclick="submitInvestmentEdit_\(\)"/,
+  'Investment Account Name and Type must share one Manage Edit save surface');
+assert.match(files['Dashboard_Script_AssetsBankInvestments.html'],
+  /function renderInvestmentManageList_\([\s\S]*?updateLabel:\s*'Edit'[\s\S]*?openInvestmentEditForm_\(accountName\)[\s\S]*?\.saveTrackedInvestmentAccountFromDashboard\(/,
+  'Investment Manage must expose Edit and submit one coordinated account-details save');
+assert.match(files['Dashboard_Script_AssetsBankInvestments.html'],
+  /function renderInactiveInvestmentAccounts_\([\s\S]*?Reactivate[\s\S]*?reactivateInvestmentAccountFromDashboard/,
+  'Investment Manage must expose existing inactive investments through Reactivate');
+assert.match(files['investments.js'],
+  /function saveTrackedInvestmentAccountFromDashboard\(payload\)[\s\S]*?LockService\.getUserLock\(\)[\s\S]*?historyTargets[\s\S]*?investment_account_update[\s\S]*?were not saved and were rolled back/,
+  'Investment Edit must coordinate every history block and the SYS row under one lock with rollback');
+assert.match(files['investments.js'],
+  /function setInvestmentTrackingStateFromDashboard_\(payload, activeValue\)[\s\S]*?LockService\.getUserLock\(\)[\s\S]*?inputTargets[\s\S]*?investment_reactivate[\s\S]*?Tracking change failed and was rolled back/,
+  'Investment Stop and Reactivate must share stable identity, lock, duplicate guard, and rollback behavior');
+assert.match(files['investments.js'],
+  /function getInvestmentUiData\(\)[\s\S]*?currentYearNames[\s\S]*?!!currentYearNames\[key\][\s\S]*?!!managementByName\[key\][\s\S]*?historicalOnly:\s*!currentYearNames\[key\][\s\S]*?canReactivate:/,
+  'Historical-only Investments must render as inactive instead of masquerading as current editable accounts');
+assert.match(files['Dashboard_Script_AssetsBankInvestments.html'],
+  /Historical investment — not tracked this year[\s\S]*?if \(row\.canReactivate\)/,
+  'Investment inactive inventory must explain historical-only rows and avoid a non-working Reactivate action');
+assert.match(files['activity_log.js'],
+  /investment_account_update[\s\S]*?Account details updated[\s\S]*?investment_reactivate[\s\S]*?Account reactivated/,
+  'Activity must distinguish Investment metadata edits and reactivation from dated value snapshots');
 assert.match(files['house_values.js'],
   /function updateHouseValueByDate\(payload\)[\s\S]*?changed-column fit[\s\S]*?function addHouseFromDashboardLocked_\(payload\)[\s\S]*?fitContentColumnsToContents_\(\[[\s\S]*?valueCol/,
   'House add and value update must fit INPUT and SYS text and currency columns');

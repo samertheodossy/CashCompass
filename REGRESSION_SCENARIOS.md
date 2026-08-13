@@ -1529,6 +1529,38 @@ Whenever a production bug is fixed:
   isolated `@341`; disposition was `TRASHED`, and the runner returned OFF. Beta
   remained `@106`; bounded code and workbook were untouched.
 
+### REG-071 — Investment history could masquerade as a current editable account
+
+- Area: Investments / Entity lifecycle / Cross-sheet consistency / UI truth.
+- Root cause: the Investment selector and Manage inventory began with every
+  account name found in every historical `INPUT - Investments` year block, then
+  removed only names explicitly marked inactive in `SYS - Assets`. An account
+  present only in an older year, with no current-year row and no SYS mirror,
+  therefore appeared active even though Edit and Stop had no stable row to use.
+- Expected result: a current editable investment must have both a current-year
+  tracking row and a matching active `SYS - Assets` row. Older-year-only names
+  render under **Inactive investments** as historical records, without broken
+  Edit/Stop/Reactivate controls. Explicitly inactive current accounts keep the
+  guarded Reactivate action.
+- Lifecycle result: Manage exposes one Edit/Save for Account name and Type.
+  The coordinator updates every matching year block plus the stable SYS row
+  under a user lock with duplicate, stale-row, and ambiguous-history guards;
+  partial writes roll back. Stop/Reactivate uses the same stable identity and
+  rollback discipline. Dated values, formulas, and immutable Activity history
+  remain unchanged.
+- Permanent coverage: Dashboard UX source contracts protect the one-save form,
+  current-year/SYS active predicate, historical-only inactive explanation,
+  stable lifecycle RPC payloads, lock/rollback behavior, Activity labels, and
+  changed-column fitting. Populated Dashboard E2E performs rename, restore,
+  Stop, and Reactivate on its own marker-verified fixture.
+- Runtime status: full local regressions pass and the source is deployed only
+  to isolated Central `@343`. Populated Dashboard run
+  `FR-ec5cf708-d20a-4bd2-a539-2a3cc139aefc` passed 26/26, including exact
+  Investment rename/restore plus Stop/Reactivate, with Restricted single-owner
+  sharing, zero browser errors, verified Trash cleanup, and `active: null`.
+  The user visually confirmed name propagation in `INPUT - Investments` and
+  `SYS - Assets`. Beta remains `@106`; bounded is untouched by Codex.
+
 ---
 
 ## 3a loading-state consistency coverage
@@ -1671,4 +1703,5 @@ These are not past bugs but permanent damage/heal guards (RECOVERY pack):
 | REG-068 | Debt Edit required a separate Rename action and could leave linked references split | REGRESSION / ENTITY LIFECYCLE / CROSS-SHEET CONSISTENCY / ROLLBACK | fixed; full regressions + isolated `@334` Populated 26/26 PASS with one-save rename/restore and verified cleanup |
 | REG-069 | Bank lifecycle split rename/details and lacked guarded Reactivate behavior | REGRESSION / ENTITY LIFECYCLE / CROSS-SHEET CONSISTENCY / ROLLBACK | fixed; focused/full regressions + isolated `@335` exact lifecycle assertion PASS; marker-verified cleanup after unrelated HTTP 0 |
 | REG-070 | App-written text and formatted numeric values could remain clipped after entity changes | REGRESSION / WORKBOOK PRESENTATION / APP-WRITE CONSISTENCY | fixed; focused/full regressions + isolated `@341` Bills integrity 14/14 PASS in 24 s; linked text, large currency, exact 24 px gutter, TRASHED disposition, runner OFF |
+| REG-071 | Historical-only Investment names appeared as current editable accounts | REGRESSION / ENTITY LIFECYCLE / CROSS-SHEET CONSISTENCY / UI TRUTH | fixed; full regressions + isolated `@343` Populated 26/26 PASS with exact Investment lifecycle assertion, Restricted sharing, zero browser errors, verified Trash, and `active: null` |
 | REC-001–004 | Recovery/heal guards | RECOVERY | design |

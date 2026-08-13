@@ -11,19 +11,16 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current stage — Stage 3: Beta Readiness
 
-**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; isolated Central has since advanced through `@341`. The `@196` 7.2/10 read-only score is evidence-limited and not comparable, so the official score does not change until a full writer-inclusive advocate run. The 7.5/10 value remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 shipped 2026-07-09.** Exact-owner campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` passed 20/20 Planner pairs on source `8aa4bf5` / isolated `@318` and ratified the Financial Plan refresh budget. Diagnostic `@319` completed `4d`; `@322` closed ordinary Save `4f`; `@325` runtime-closed combined UX `3e`–`3i`/`3m`; `@328` closed Retirement `4g`; `@331` closed money-format consistency `3n`; `@334` closed one-save Debt; `@338` closed Bank lifecycle; and `@341` closed shared changed-column fit `3p`. Current ordering authority is `ROADMAP.md`: **product consistency/shared lifecycle `3o` → separate accessibility closeout `3j` → deferred correction `5j`–`5m` → remaining candidate preparation → frozen-candidate evidence → supervised cohort proof → 10/10 Beta Release Candidate**. Customer-facing operations/support/privacy work is deferred until the product-consistency pass is complete. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
+**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; isolated Central has since advanced through `@343`. The `@196` 7.2/10 read-only score is evidence-limited and not comparable, so the official score does not change until a full writer-inclusive advocate run. The 7.5/10 value remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 shipped 2026-07-09.** Exact-owner campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` passed 20/20 Planner pairs on source `8aa4bf5` / isolated `@318` and ratified the Financial Plan refresh budget. Diagnostic `@319` completed `4d`; `@322` closed ordinary Save `4f`; `@325` runtime-closed combined UX `3e`–`3i`/`3m`; `@328` closed Retirement `4g`; `@331` closed money-format consistency `3n`; `@334` closed one-save Debt; `@338` closed Bank lifecycle; `@341` closed shared changed-column fit `3p`; and `@343` closed Investment lifecycle. Current ordering authority is `ROADMAP.md`: **Rolling Financial Plan core `RFP-1`–`RFP-5` → resume `3o` Houses/Income → separate accessibility closeout `3j` → deferred correction `5j`–`5m` → remaining candidate preparation → frozen-candidate evidence → supervised cohort proof → 10/10 Beta Release Candidate**. Customer-facing operations/support/privacy work remains deferred. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
 
-**2026-08-07 status update:** isolated Central is now `@341`. The Bank Account
-`3o` slice passed its exact one-save rename/restore plus Stop/Reactivate browser
-assertion in disposable run `FR-02e19b9d-9757-4847-afe0-55fd5a03be32`; a later
-unrelated correction was interrupted by Apps Script `HTTP 0`, and verified
-cleanup returned the runner to `active: null`. Shared changed-column fit `3p`
-then passed disposable Bills integrity 14/14 in run `20260807-154251-d5e9`,
-including linked text, large formatted currency, and the exact rendering gutter;
-the fixture was trashed and the runner returned OFF. Debt and Bank are complete;
-Investments, Houses, and Income remain in that order, and
-`5n` reconciles latest-known Dashboard totals with exact-month ledger totals
-before any calculation-basis change is considered.
+**2026-08-13 status update:** isolated Central is now `@343`. Debt, Bank, and
+Investment lifecycle convergence are runtime-complete; Houses and Income remain
+under `3o`. The new highest-priority Rolling Financial Plan starts with `RFP-1`,
+a read-only reconciliation/design increment. It composes existing current
+CashCompass data and Rolling Debt Payoff rather than replacing either, and it
+makes no schema, writer, calculation, UI, or deployment change. `5n` begins
+inside that audit and closes only if its own reporting-basis reconciliation
+criteria pass.
 
 `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered finish-line inventory
 for broad invited Beta. It assigns IDs `1a`–`9e`, focused-effort estimates,
@@ -31,11 +28,13 @@ dependencies, a critical path, three parallel work lanes, time-saving rules, and
 the reconciled execution waves. Use those IDs in new plans, handoffs, and
 status updates instead of creating another competing pre-Beta checklist.
 
-**Execution forecast (reconciled 2026-08-07):** controlled Family Beta can
+**Execution forecast (reconciled 2026-08-13):** controlled Family Beta can
 continue now. The former September 24 target and October 2 contingency boundary
 require rebaselining because compound Bill correction (`5j`) is deliberately
 deferred. Retirement load (`4g`) and money-format consistency (`3n`) are now
-closed. The gate order is: product consistency/shared lifecycle (`3o`); separate accessibility closeout (`3j`); deferred `5j`–`5m`; final
+closed. The gate order is: Rolling Financial Plan core (`RFP-1`–`RFP-5`);
+resume product consistency/shared lifecycle Houses and Income (`3o`); separate
+accessibility closeout (`3j`); deferred `5j`–`5m`; final
 financial/workbook/recovery proof; operations/support and monetization-ready
 architecture; exact-candidate freeze/evidence; then the supervised cohort and
 go/no-go. No calendar date waives a release gate. See `PROJECT_CONTEXT.md →
@@ -1880,6 +1879,72 @@ fail-closed evidence take precedence over preserving a calendar date.
 **Explicit non-goals (early phases):** Auto-posting results to Cash Flow / **INPUT - Debts**; full issuer minimum engines.
 
 **Related code:** **`code.js`** (`runDebtPlanner`, `buildUpcomingPayments_`); **`planner_core.js`** (`normalizeDebts_`); **`readCashFlowSheetAsObjects_`** / year tabs; **`Dashboard_Script_PlanningDebts.html`**; **`PlannerDashboardWeb.html`** includes.
+
+---
+
+### Rolling Financial Plan — highest priority (2026-08-13)
+
+**Objective:** account for obligations, protected cash, and every active
+remaining debt while calculating how and when to fund **Samer Robinhood** to
+build the family's long-term income pipeline using current CashCompass data.
+Show the funding sources, start month, monthly/annual contribution pace,
+cumulative contributions, projected balance, and progress toward the approved
+income objective. Keep Rolling Debt Payoff as the detailed debt engine and keep
+the base household plan independent of security-level holdings.
+
+**Incremental delivery:**
+
+1. `RFP-1` — read-only source reconciliation and decision contract.
+2. `RFP-2` — optional, backward-compatible purpose/funding metadata; blank means
+   existing behavior.
+3. `RFP-3` — read-only deterministic waterfall/recommendation engine with
+   provenance and confidence.
+4. `RFP-4` — default-off Planning UI explaining the current stage, available
+   amount, next destination, constraints, and family-income funding status.
+5. `RFP-5` — disposable-workbook matrix and isolated runtime proof.
+6. `RFP-6` — later optional holdings/allocation analysis.
+7. `RFP-7` — later optional tax-lot/sale analysis.
+
+**RFP-6/7 portfolio contract — approved 2026-08-13 for when granular data is
+available:** every holding in every account receives Hold / Add / Reduce / Sell /
+Review with rationale, amount, concentration/overlap effects, account context,
+and tax confidence. Samer Robinhood receives a ticker/fund target allocation
+(for example QQQ, JEPI, other approved holdings, and cash) totaling exactly
+100%, contribution routing, income/growth role, and rebalance bands. Sell advice
+requires tax-lot/account data or explicitly falls back to Review. The system
+never recommends tickers from account totals alone and never places trades.
+
+**RFP-1 account decision — approved 2026-08-13:** **Samer Robinhood** is the
+Family Investing Plan account to fund long-term income. `Lutfi Robinhood` and all
+other investments are excluded. RFP-2 must persist this designation by a stable
+ID so a later rename does not break the relationship.
+
+**RFP-1 debt decision — approved 2026-08-13:** include every active debt account
+with a remaining balance. Preserve minimum/scheduled payments for every account.
+Interest rate may prioritize extra principal—generally higher before lower—but
+there is no APR threshold and no debt disappears from the rolling plan because
+its rate is low or missing.
+
+**RFP-1 decision cadence — approved 2026-08-13:** lead with an ordered weekly
+action plan and derive the monthly outlook from those same decisions. Each week
+must say exactly what to pay, each required debt minimum, any named extra debt
+payment, how much to add to Samer Robinhood, what cash remains protected, and
+what must wait. Show the reason and remaining cash after every action; reconcile
+opening cash plus inflows through ending cash. A $0 Samer Robinhood action remains
+visible with the reason it is paused. Current recorded data and future forecasts
+must be labeled separately.
+
+**Remaining RFP-1 decisions:** net rental income basis;
+reserve and minimum-buffer basis; recurring contribution rule;
+target balance/income; reinvest-versus-distribute rule; tax assumptions; and
+actual-versus-forecast labeling. Reconcile latest-known Dashboard values against
+exact-month ledgers as required by `5n`.
+
+**Non-regression contract:** no automatic transfers, trades, sales, or debt
+payments; no broad sheet rewrite or migration; existing behavior when optional
+metadata is missing; one independently reviewed and committed slice at a time;
+feature flag defaults off for the new UI; and all writer proof uses only a
+marker-verified disposable workbook. The bounded workbook is never a test target.
 
 ---
 

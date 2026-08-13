@@ -32,6 +32,15 @@ commit `433bfed` adds permanent `REG-041`/`REG-042` coverage and was manually
 confirmed on isolated Central `@299`; Beta and the bounded workbook were not
 touched.
 
+The Investment lifecycle slice is runtime-complete on isolated Central `@343`
+under `REG-071`. Permanent regressions require a single Manage Edit/Save for Account
+name and Type, stable-row Stop/Reactivate with lock and rollback, and inactive
+classification for older-year-only history that lacks a current-year/SYS
+record. Full local regressions pass. Disposable Populated Dashboard run
+`FR-ec5cf708-d20a-4bd2-a539-2a3cc139aefc` passed 26/26 on `@343`, including
+Investment rename/restore plus Stop/Reactivate, with Restricted single-owner
+sharing, zero browser errors, verified Trash cleanup, and `active: null`.
+
 ### Blank + populated two-track manual checks
 
 Run both tracks after every change, however small.

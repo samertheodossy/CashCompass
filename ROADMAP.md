@@ -8,7 +8,7 @@
 
 ---
 
-## Current status (2026-08-07)
+## Current status (2026-08-13)
 
 **Completed:**
 
@@ -30,10 +30,34 @@
 - ✅ **Debt Edit/Rename convergence `3o.1` / `REG-068` on isolated `@334`** — user validation correctly rejected the initial two-save interaction on `@332`. The corrected contract uses one **Save changes** action for account name and every other debt field; the server keeps the Central-safe user lock, linked Cash Flow updates, rollback, and Activity evidence behind that action. The first corrected run on `@333` failed closed on the inherited null document-lock assumption and verified Trash cleanup; the permanent Central-lock regression and `@334` fix followed. Diagnostic Populated run `FR-2abc5049-2b4a-4f3b-b938-10f78ddc9244` passed 26/26, including a real rename-and-restore through Save changes, both immutable rename events, clean console, Restricted sharing, and verified cleanup. Residual House, Income, and Debt implementation-language leaks remain removed. Beta stayed `@106`; bounded was untouched.
 - ✅ **Bank Account Edit/Rename/lifecycle convergence `3o.2` / `REG-069` through isolated `@338`** — Manage now exposes one **Edit → Save changes** action for Account name, Type, Use policy, Priority, Available now, and Minimum buffer; Update remains the dated-balance workflow. A guarded coordinator updates the existing `SYS - Accounts` row and every matching Bank history block under a Central-safe user lock, preserving month values, formulas, import staging, `External Account Id`, and immutable Activity history, with stale/duplicate/ambiguous-history guards and rollback. Inactive inventory and Reactivate complete the lifecycle. Populated retry `FR-02e19b9d-9757-4847-afe0-55fd5a03be32` on `@335` passed the exact Bank rename/restore plus Stop/Reactivate assertion and Activity labels before an unrelated credit-card correction timed out after Apps Script `HTTP 0`; the marker-verified fixture was then explicitly trashed and state returned to `active: null`. Shared presentation behavior is recorded separately under completed `3p` / `REG-070`. Beta stayed `@106`; bounded was untouched.
 - ✅ **Shared dynamic changed-column fit `3p` / `REG-070` on isolated `@341`** — one best-effort helper now fits every text or numeric column changed by supported Debt, Bill, Bank, Investment, House, and Income add/edit/rename/value-save paths, including linked Cash Flow columns. It adds a 24 px rendering gutter, caps width at 1000 px, and never converts a presentation failure into a failed financial/entity write. Disposable Bills integrity run `20260807-154251-d5e9` passed 14/14 in 24 s, including linked Payee, large formatted currency, and exact-gutter assertions; the fixture was trashed and the runner returned OFF. Manual sheet edits and unrelated non-entity writers remain outside this app-triggered contract. Beta stayed `@106`; bounded was untouched.
+- ✅ **Investment Edit/Rename/lifecycle convergence `3o.3` / `REG-071` on isolated `@343`** — Manage now uses one Edit/Save for Account name and Type, guarded stable-row Stop/Reactivate, and a current-year-plus-active-SYS predicate so older-year-only names such as Lending Club appear under Inactive rather than masquerading as current editable accounts. Populated run `FR-ec5cf708-d20a-4bd2-a539-2a3cc139aefc` passed 26/26, including Investment rename/restore and Stop/Reactivate, with Restricted single-owner sharing, zero browser errors, verified Trash cleanup, and `active: null`. The user visually confirmed name propagation in `INPUT - Investments` and `SYS - Assets`. Beta stayed `@106`; bounded was untouched.
 
 **Now / next:**
 
-- **Current milestone:** **`3o`, the pre-publish product-consistency and shared-lifecycle closeout.** Debt and Bank Account convergence are complete through isolated `@338`, and shared changed-column fit `3p` is complete through `@341`; Investments is next, followed by Houses and Income Sources. Financial follow-up `5n` reconciles latest-known Dashboard balances with exact-month ledger totals before deciding whether any calculation rule should change. Customer-facing operations/support/privacy work (`6a`–`6f`) and the broad `3j` responsive/accessibility closeout are deferred until this product pass is complete, not waived. Beta remains `@106`; bounded deployment and workbook control remain with the user.
+- **Highest-priority program:** **Rolling Financial Plan (`RFP`)**, starting with
+  read-only reconciliation and a decision contract before any schema, writer, or
+  calculation change. The program will account for obligations, reserves, and
+  every active remaining debt while deliberately funding **Samer Robinhood** to
+  build the family's long-term income pipeline. Rolling Debt Payoff remains the
+  detailed debt engine. CashCompass remains the source of current household truth.
+- **Current milestone:** **`RFP-1`, read-only household funding reconciliation.**
+  Inventory the exact existing Cash, Debt, Cash Flow, Property/rental, and
+  Investment inputs; use the approved **Samer Robinhood** account for the Family
+  Investing Plan and long-term income funding; define net
+  rental income, reserve, comprehensive debt ordering, contribution, distribution, and
+  actual-versus-forecast rules; and record every missing input. `RFP-1` makes no
+  workbook, schema, UI, calculation, or deployment change.
+  The audit and proposed defaults are documented in
+  `ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md`; product decisions remain the
+  checkpoint before `RFP-2`.
+- **Paused, not waived:** finish `3o` Houses and Income after the core `RFP`
+  slices. Debt, Bank Account, and Investment convergence are runtime-complete
+  through isolated `@343`; shared changed-column fit `3p` is complete through
+  `@341`. Financial follow-up `5n` is folded into the `RFP-1` reporting-basis
+  audit and closes only if its own reconciliation exit criteria pass.
+- Customer-facing operations/support/privacy work (`6a`–`6f`) and the broad
+  `3j` responsive/accessibility closeout remain deferred, not waived. Beta
+  remains `@106`; bounded deployment and workbook control remain with the user.
 - **Independent advocate gate added 2026-07-23:** the approved isolated interactive writer journey confirmed P1 trust defects in formatted bank-amount replacement, Income/Setup classification consistency, Bills Pay handoff/occurrence feedback, and normal-path implementation terminology. The bank replacement defect is runtime-closed on isolated `@175`, the Income/Setup fix on `@176`/`@178`, the contained language/responsive wave on `@177`, `REG-017` on `@179`, exact-owner `REG-015` on `@181`, readiness-refresh `REG-019` on `@182`, Bills completion semantics on `@193`, controlled failure evidence through `@203`, and Retirement runtime truth on `@211`. The last formal advocate score is **8.3/10** pending a fresh full-score run. Medium/narrow replay and accessibility remain open. No Beta, mapped-user, Golden, or configured-default workbook was used by the Harness; bounded inspection remained user-controlled. These findings are sequenced in `TODO.md → UX Backlog (Version 1) → Independent advocate priorities`.
 - **Tracked-editor consistency polish completed 2026-07-24:** Bills use **Due · Add · Manage**. Houses, Bank Accounts, Investments, and Debts use **Update · Add · Manage**, with explicit Setup Add/Manage handoffs, responsive active-item inventories, and a shared UI layer for mode selection, list rendering, focus, and empty states. Update is Save-only; Manage is the single lifecycle-maintenance surface for guarded Stop tracking. Bank Import / Review imports remain secondary tools under Manage accounts. First-Run V4 run `FR-a1df6d9b-c123-4759-b08e-438d4047bf4c` passed 10/10 and Populated V3 run `FR-158bd6a2-bcb9-41b3-addc-180369266010` passed 13/13 on isolated Central `@195`, each with Restricted single-owner sharing, zero browser errors, and verified Trash cleanup.
 - **Activity correction elevated to the broad-Beta gate 2026-07-26:** Activity must distinguish audit evidence from correctable financial operations. The first slice (`5g`) replaces the misleading Remove-for-every-row presentation with an **Action** column, shows **Remove donation** only for eligible Donation rows, exposes no action control for Planner/email/import or other unsupported rows, and preserves the server-side donation-only rejection. Later slices add immutable, precondition-gated correction for Quick Add, linked Bill occurrences, Upcoming payments/lifecycle, and compound House Expenses; entity lifecycle events route to their owning Manage workflow and system/import rows remain audit-only. Full scope and estimates: `FULL_BETA_REMAINING_PLAN.md → 5g–5m`; safety contract: `TODO.md → Activity — Correction / reverse transaction`.
@@ -62,8 +86,8 @@ must be based on measured compound-operation evidence after its focused redesign
 | Completed Aug 1 | Closed `REG-041` styled Bill Skip and `REG-042` Bills Due source authority in `433bfed`; user-verified on isolated Central `@299`, while Beta and bounded remained unchanged. |
 | Completed Aug 5 | Closed `4a`–`4c`, `4e`, and `4f` for source `8aa4bf5` on isolated `@318`; exact-owner Performance passed 20/20 with ratified Planner p50/p95 budgets, Restricted fixtures, verified cleanup, Beta `@106`, and bounded untouched. |
 | Completed Aug 6 | Closed combined UX items `3e`–`3i` and `3m` on isolated `@325`; Populated 24/24 and First-Run 16/16 passed with Restricted fixtures and verified cleanup. |
-| Current | Close `3o` product consistency and shared lifecycle one guarded module at a time: Investments → Houses → Income. Debt and Bank are complete through isolated `@338`; shared changed-column fit `3p` is complete through `@341`. |
-| Next | Run `3j` as its own responsive/accessibility task, then return to deferred compound Activity correction `5j`–`5m`. |
+| Current | Execute `RFP-1`: read-only household funding reconciliation and decision contract. No schema, writer, calculation, UI, or deployment change. |
+| Next | Implement the Rolling Financial Plan one gated slice at a time: optional funding-purpose metadata → read-only decision engine → feature-flagged Planning UI → disposable-workbook proof. Then resume `3o` Houses → Income. |
 | Candidate preparation | Close financial/workbook/recovery proof `5a`–`5f`, operations/support `6a`–`6f`, and monetization-ready architecture `7a`–`7f`. |
 | Frozen candidate | Complete `8a`–`8f`, the exact-candidate advocate rerun `3k`, and full Release Readiness; rerun Performance under `8b` if the frozen source/deployment differs from `8aa4bf5` / `@318`. |
 | Promotion | Complete `9a`–`9e`: five-to-seven-day supervised cohort, final scorecard, go/no-go, and separately approved Beta promotion. |
@@ -266,19 +290,25 @@ seven-day cohort and any repair cycle. Dates never override a failed gate.
 5. **Release Readiness gate — ✅ orchestration/runtime controls and `@318` Performance proof complete; full verdict still open.** The single Validation console starts, resumes, pauses, and finalizes bounded runs; each writer check creates and safely trashes its own disposable workbook; browser evidence is accepted only for the exact source/deployment candidate; compact evidence is archived; and a console-owned Harness flag returns OFF at finalization. Run `RR-18146129-6e3c-4389-8599-01cbb627b95d` recorded Performance PASS/Verified, then intentionally archived `NOT_READY` because First-Run, Populated Dashboard, Recovery Live, and 24 required server checks were not part of the performance-only run. The disposable runner is OFF.
 6. **Validation & Testing admin console — ✅ Release Readiness controls complete.** Workbook Health, the suite inventory, guarded browser adapters, resumable bounded checks, saved status, privacy-safe evidence export, and final READY/NOT READY controls now start and end from the single console.
 
-**Next active item:** `3o`, the pre-publish product-consistency and shared-
-lifecycle closeout. Debt and Bank Account convergence are runtime-proven through isolated
-Central `@338`, and shared changed-column fit `3p` is complete through `@341`;
-migrate Investments, Houses, and Income Sources
-one at a time with atomic reference updates, duplicate/stale guards, rollback,
-audit evidence, and disposable-workbook proof. The separate `3j` accessibility
-closeout follows this product pass. Bill occurrence correction (`5j`) remains
-deferred for its focused redesign. The shared
-`5h` envelope and direct Quick Add/Donation correction `5i` remain committed
-foundations and are not reopened by this priority change.
+**Next active item:** `RFP-1`, the read-only household funding reconciliation and
+decision contract. It must identify the authoritative existing inputs and the
+approved **Samer Robinhood** Family Investing Plan account, define the financial waterfall and
+actual-versus-forecast rules, reconcile current versus exact-month reporting,
+and list missing data before implementation begins. It does not change a sheet,
+schema, writer, calculation, UI, or deployment.
 
-**Remaining broad-Beta sequence:** close `3o`; close the separate `3j` task; return to the
-deferred `5j`–`5m` correction families; finish `5a`–`5f`
+**Rolling Financial Plan sequence:** `RFP-1` read-only contract → `RFP-2`
+optional funding-purpose metadata → `RFP-3` read-only recommendation engine →
+`RFP-4` default-off Planning UI → `RFP-5` disposable-workbook and isolated
+runtime proof. `RFP-6` holdings and `RFP-7` tax-lot analysis are later optional
+portfolio layers; the household plan must work without either. Each slice has a
+separate review and commit boundary. Existing Rolling Debt Payoff behavior stays
+unchanged until a reviewed composition seam is introduced, and no slice may
+automatically transfer cash, sell securities, or post debt payments.
+
+**Remaining broad-Beta sequence:** close the core `RFP-1`–`RFP-5` program;
+resume and close `3o` Houses and Income; close the separate `3j` task; return to
+the deferred `5j`–`5m` correction families; finish `5a`–`5f`
 financial/workbook/recovery proof; finish `6a`–`6f` operations and
 `7a`–`7f` product foundation; then complete frozen-candidate evidence `8a`–`8f`
 plus advocate rerun `3k`, followed by supervised cohort/promotion `9a`–`9e`.

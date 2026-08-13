@@ -413,21 +413,30 @@ function getInvestmentUiData() {
   // exist yet, return empty shape so the page renders clean.
   const ss = getUserSpreadsheet_();
   if (!ss.getSheetByName(getSheetNames_().INVESTMENTS)) {
-    return { accounts: [], typeOptions: [] };
+    return {
+      accounts: [],
+      managementAccounts: [],
+      inactiveAccounts: [],
+      typeOptions: []
+    };
   }
 
   var typeOpts = [];
   let inactive = Object.create(null);
+  const managementByName = Object.create(null);
 
   try {
     const assetsSheet = ss.getSheetByName(getSheetNames_().ASSETS);
     if (assetsSheet) {
-      const assetsDisplay = assetsSheet.getDataRange().getDisplayValues();
+      const assetsRange = assetsSheet.getDataRange();
+      const assetsDisplay = assetsRange.getDisplayValues();
+      const assetsValues = assetsRange.getValues();
       if (assetsDisplay.length >= 1) {
-        const headers = assetsDisplay[0] || [];
-        const nameIdx = headers.indexOf('Account Name');
-        const typeIdx = headers.indexOf('Type');
-        const activeIdx = headers.indexOf('Active');
+        const headerMap = getAssetsHeaderMap_(assetsSheet, assetsDisplay);
+        const nameIdx = headerMap.nameColZero;
+        const typeIdx = headerMap.typeColZero;
+        const balanceIdx = headerMap.balanceColZero;
+        const activeIdx = headerMap.activeColZero;
 
         const typeSet = Object.create(null);
 
@@ -439,13 +448,24 @@ function getInvestmentUiData() {
             if (t) typeSet[t] = true;
           }
 
-          if (nameIdx !== -1 && activeIdx !== -1) {
+          if (nameIdx !== -1) {
             const name = String(row[nameIdx] || '').trim();
             if (name) {
-              const raw = String(row[activeIdx] || '').trim().toLowerCase();
-              if (raw === 'no' || raw === 'n' || raw === 'false' || raw === 'inactive') {
+              const raw = activeIdx === -1 ? '' :
+                String(row[activeIdx] || '').trim().toLowerCase();
+              const rowInactive = raw === 'no' || raw === 'n' ||
+                raw === 'false' || raw === 'inactive';
+              if (rowInactive) {
                 inactive[name.toLowerCase()] = true;
               }
+              managementByName[name.toLowerCase()] = {
+                sysAssetsRow: r + 1,
+                accountName: name,
+                type: typeIdx === -1 ? '' : String(row[typeIdx] || '').trim(),
+                currentBalance: balanceIdx === -1 || assetsValues[r][balanceIdx] === ''
+                  ? '' : round2_(toNumber_(assetsValues[r][balanceIdx])),
+                inactive: rowInactive
+              };
             }
           }
         }
@@ -458,12 +478,59 @@ function getInvestmentUiData() {
   }
 
   const allAccounts = getInvestmentsFromHistory_();
+  const currentYearNames = Object.create(null);
+  try {
+    const invSheet = ss.getSheetByName(getSheetNames_().INVESTMENTS);
+    const invDisplay = invSheet.getDataRange().getDisplayValues();
+    const currentBlock = getInvestmentsYearBlock_(invSheet, getCurrentYear_(), invDisplay);
+    for (let row = currentBlock.dataStartRow; row <= currentBlock.dataEndRow; row++) {
+      const name = String((invDisplay[row - 1] && invDisplay[row - 1][0]) || '').trim();
+      if (isInvestmentDataRowName_(name)) currentYearNames[name.toLowerCase()] = true;
+    }
+  } catch (e) {
+    // A missing current-year block means every historical account is
+    // historical-only for this year's editor. Do not surface those names as
+    // active merely because an older year contains them.
+    Logger.log('getInvestmentUiData current-year inventory: ' + e);
+  }
   const activeAccounts = allAccounts.filter(function(name) {
-    return !inactive[String(name || '').toLowerCase()];
+    const key = String(name || '').toLowerCase();
+    return !!currentYearNames[key] && !!managementByName[key] && !inactive[key];
+  });
+  const managementAccounts = activeAccounts.map(function(name) {
+    return managementByName[String(name || '').toLowerCase()] || {
+      sysAssetsRow: 0,
+      accountName: name,
+      type: '',
+      currentBalance: '',
+      inactive: false
+    };
+  });
+  const inactiveAccounts = allAccounts.filter(function(name) {
+    return activeAccounts.indexOf(name) === -1;
+  }).map(function(name) {
+    const key = String(name || '').toLowerCase();
+    const sysRow = managementByName[key] || null;
+    return {
+      accountName: name,
+      sysAssetsRow: sysRow ? sysRow.sysAssetsRow : 0,
+      type: sysRow ? sysRow.type : '',
+      historicalOnly: !currentYearNames[key],
+      missingSystemRecord: !sysRow,
+      explicitlyInactive: !!inactive[key],
+      canReactivate: !!sysRow && !!currentYearNames[key]
+    };
+  });
+  inactiveAccounts.sort(function(a, b) {
+    return String(a.accountName || '').localeCompare(String(b.accountName || ''), undefined, {
+      sensitivity: 'base'
+    });
   });
 
   return {
     accounts: activeAccounts,
+    managementAccounts: managementAccounts,
+    inactiveAccounts: inactiveAccounts,
     typeOptions: typeOpts
   };
 }
@@ -1986,6 +2053,401 @@ function setAssetsActiveValue_(sheet, accountName, value) {
 }
 
 /**
+ * Save the customer-facing Investment Manage editor in one guarded operation.
+ * Account Name and Type are mirrored on SYS - Assets and every matching
+ * INPUT - Investments year block. Dated values, formulas, Active state, and
+ * immutable Activity history are preserved. All targets are resolved before
+ * the first write and a partial failure restores every changed cell.
+ */
+function saveTrackedInvestmentAccountFromDashboard(payload) {
+  validateRequired_(payload, ['sysAssetsRow', 'expectedAccountName', 'newAccountName']);
+
+  const sysAssetsRow = parseInt(String(payload.sysAssetsRow), 10);
+  const expectedAccountName = String(payload.expectedAccountName || '').trim();
+  if (isNaN(sysAssetsRow) || sysAssetsRow < 2 || !expectedAccountName) {
+    throw new Error('Invalid investment account. Please refresh and try again.');
+  }
+
+  const lock = LockService.getUserLock();
+  try {
+    if (!lock) throw new Error('No user lock is available.');
+    lock.waitLock(30000);
+  } catch (_lockErr) {
+    throw new Error('Another investment change is in progress. Please try again in a moment.');
+  }
+
+  let writesStarted = false;
+  let assetsSheet = null;
+  let assetsRowSnapshot = null;
+  const historyTargets = [];
+
+  try {
+    const ss = getUserSpreadsheet_();
+    assetsSheet = getSheet_(ss, 'ASSETS');
+    const invSheet = getSheet_(ss, 'INVESTMENTS');
+    const assetsDisplay = assetsSheet.getDataRange().getDisplayValues();
+    const headerMap = ensureAssetsActiveColumn_(assetsSheet);
+    if (headerMap.typeCol === -1) {
+      throw new Error('SYS - Assets is missing Type. Nothing was changed.');
+    }
+    if (sysAssetsRow > assetsDisplay.length) {
+      throw new Error('Investment account has moved. Please refresh and try again.');
+    }
+
+    const actualName = String(
+      assetsSheet.getRange(sysAssetsRow, headerMap.nameCol).getDisplayValue() || ''
+    ).trim();
+    if (!actualName || actualName !== expectedAccountName) {
+      throw new Error('Investment account has moved. Please refresh and try again.');
+    }
+    const activeText = String(
+      assetsSheet.getRange(sysAssetsRow, headerMap.activeCol).getDisplayValue() || ''
+    ).trim().toLowerCase();
+    if (activeText === 'no' || activeText === 'n' || activeText === 'false' ||
+        activeText === 'inactive') {
+      throw new Error('This investment is not currently tracked. Reactivate it before editing.');
+    }
+
+    const newName = String(payload.newAccountName || '').trim();
+    const typeStr = String(payload.type || '').trim();
+    if (!newName) throw new Error('Account name is required.');
+    if (newName.length > 120) throw new Error('Account name is too long (max 120 characters).');
+    if (!isInvestmentDataRowName_(newName)) {
+      throw new Error('That account name is not allowed (reserved label or invalid).');
+    }
+    const oldType = String(
+      assetsDisplay[sysAssetsRow - 1][headerMap.typeColZero] || ''
+    ).trim();
+    if (!typeStr && oldType) throw new Error('Type is required.');
+    if (typeStr.length > 80) throw new Error('Type is too long (max 80 characters).');
+
+    const newKey = newName.toLowerCase();
+    for (let r = 1; r < assetsDisplay.length; r++) {
+      if (r + 1 === sysAssetsRow) continue;
+      const rowName = String(assetsDisplay[r][headerMap.nameColZero] || '').trim();
+      if (rowName && rowName.toLowerCase() === newKey) {
+        throw new Error('Another asset already uses this name. Changes were not saved.');
+      }
+    }
+
+    const invDisplay = invSheet.getDataRange().getDisplayValues();
+    let currentYearBlock = '';
+    const targetsPerBlock = Object.create(null);
+    for (let r = 0; r < invDisplay.length; r++) {
+      const rowName = String((invDisplay[r] && invDisplay[r][0]) || '').trim();
+      if (rowName === 'Year') {
+        currentYearBlock = String((invDisplay[r] && invDisplay[r][1]) || '').trim();
+        continue;
+      }
+      if (!isInvestmentDataRowName_(rowName)) continue;
+      const rowKey = rowName.toLowerCase();
+      if (rowKey === newKey && rowKey !== actualName.toLowerCase()) {
+        throw new Error('Another investment already uses this name. Changes were not saved.');
+      }
+      if (rowKey !== actualName.toLowerCase()) continue;
+      const blockKey = currentYearBlock || 'unknown';
+      targetsPerBlock[blockKey] = (targetsPerBlock[blockKey] || 0) + 1;
+      if (targetsPerBlock[blockKey] > 1) {
+        throw new Error(
+          'Investment history is ambiguous in Year ' + blockKey + '. Changes were not saved.'
+        );
+      }
+      historyTargets.push({
+        row: r + 1,
+        oldName: invSheet.getRange(r + 1, 1).getValue(),
+        oldType: invSheet.getRange(r + 1, 2).getValue()
+      });
+    }
+    if (!historyTargets.length) {
+      throw new Error('No Investments history was found for this account. Nothing was changed.');
+    }
+
+    const lastCol = Math.max(assetsSheet.getLastColumn(), 1);
+    const rowRange = assetsSheet.getRange(sysAssetsRow, 1, 1, lastCol);
+    assetsRowSnapshot = {
+      values: rowRange.getValues()[0],
+      formulas: rowRange.getFormulas()[0],
+      numberFormats: rowRange.getNumberFormats()[0]
+    };
+
+    const changedFields = [];
+    if (newName !== actualName) changedFields.push('Account Name');
+    if (typeStr !== oldType) changedFields.push('Type');
+    if (!changedFields.length) {
+      return {
+        ok: true,
+        message: 'No changes were needed.',
+        accountName: actualName,
+        changedFields: [],
+        historyRowsUpdated: 0
+      };
+    }
+
+    writesStarted = true;
+    for (let i = 0; i < historyTargets.length; i++) {
+      if (newName !== actualName) {
+        invSheet.getRange(historyTargets[i].row, 1).setValue(newName);
+      }
+      if (typeStr !== oldType) {
+        invSheet.getRange(historyTargets[i].row, 2).setValue(typeStr);
+      }
+    }
+    if (newName !== actualName) {
+      assetsSheet.getRange(sysAssetsRow, headerMap.nameCol).setValue(newName);
+    }
+    if (typeStr !== oldType) {
+      assetsSheet.getRange(sysAssetsRow, headerMap.typeCol).setValue(typeStr);
+    }
+
+    try { touchDashboardSourceUpdated_('investments'); } catch (_touchErr) {}
+    try {
+      appendActivityLog_(ss, {
+        eventType: 'investment_account_update',
+        entryDate: Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+        amount: 0,
+        direction: '',
+        payee: newName,
+        category: typeStr,
+        accountSource: '',
+        cashFlowSheet: '',
+        cashFlowMonth: '',
+        dedupeKey: '',
+        details: JSON.stringify({
+          detailsVersion: 1,
+          updateKind: 'account_details',
+          oldName: actualName,
+          newName: newName,
+          oldType: oldType,
+          newType: typeStr,
+          changedFields: changedFields,
+          historyRowsUpdated: historyTargets.length,
+          sysAssetsRow: sysAssetsRow
+        })
+      });
+    } catch (logErr) {
+      Logger.log('saveTrackedInvestmentAccountFromDashboard activity log: ' + logErr);
+    }
+
+    const fitTargets = [];
+    if (newName !== actualName) {
+      fitTargets.push({ sheet: invSheet, col: 1 });
+      fitTargets.push({ sheet: assetsSheet, col: headerMap.nameCol });
+    }
+    if (typeStr !== oldType) {
+      fitTargets.push({ sheet: invSheet, col: 2 });
+      fitTargets.push({ sheet: assetsSheet, col: headerMap.typeCol });
+    }
+    fitContentColumnsToContents_(
+      fitTargets,
+      'saveTrackedInvestmentAccountFromDashboard changed-column fit'
+    );
+
+    return {
+      ok: true,
+      message: 'Changes saved' + (newName !== actualName ? ' — account renamed.' : '.'),
+      accountName: newName,
+      oldAccountName: actualName,
+      changedFields: changedFields,
+      historyRowsUpdated: historyTargets.length
+    };
+  } catch (err) {
+    if (writesStarted && assetsSheet && assetsRowSnapshot) {
+      try {
+        for (let c = 0; c < assetsRowSnapshot.values.length; c++) {
+          const cell = assetsSheet.getRange(sysAssetsRow, c + 1);
+          if (assetsRowSnapshot.formulas[c]) cell.setFormula(assetsRowSnapshot.formulas[c]);
+          else cell.setValue(assetsRowSnapshot.values[c]);
+          cell.setNumberFormat(assetsRowSnapshot.numberFormats[c]);
+        }
+      } catch (_restoreAssetsErr) {}
+      try {
+        const invSheet = getSheet_(getUserSpreadsheet_(), 'INVESTMENTS');
+        for (let i = 0; i < historyTargets.length; i++) {
+          invSheet.getRange(historyTargets[i].row, 1).setValue(historyTargets[i].oldName);
+          invSheet.getRange(historyTargets[i].row, 2).setValue(historyTargets[i].oldType);
+        }
+      } catch (_restoreHistoryErr) {}
+      throw new Error('Changes were not saved and were rolled back: ' +
+        (err && err.message || err));
+    }
+    throw err;
+  } finally {
+    try { lock.releaseLock(); } catch (_releaseErr) {}
+  }
+}
+
+function setInvestmentTrackingStateFromDashboard_(payload, activeValue) {
+  const expected = String(
+    payload && (payload.expectedAccountName || payload.accountName) || ''
+  ).trim();
+  if (!expected) throw new Error('Account name is required.');
+  const requestedRow = parseInt(String(payload && payload.sysAssetsRow || ''), 10);
+  const lock = LockService.getUserLock();
+  try {
+    if (!lock) throw new Error('No user lock is available.');
+    lock.waitLock(30000);
+  } catch (_lockErr) {
+    throw new Error('Another investment change is in progress. Please try again in a moment.');
+  }
+
+  let writesStarted = false;
+  const inputTargets = [];
+  let assetsTarget = null;
+  try {
+    const ss = getUserSpreadsheet_();
+    const invSheet = getSheet_(ss, 'INVESTMENTS');
+    const assetsSheet = getSheet_(ss, 'ASSETS');
+    const assetsDisplay = assetsSheet.getDataRange().getDisplayValues();
+    const headerMap = ensureAssetsActiveColumn_(assetsSheet);
+    let sysRow = requestedRow;
+    if (isNaN(sysRow) || sysRow < 2) {
+      sysRow = -1;
+      for (let r = 1; r < assetsDisplay.length; r++) {
+        const name = String(assetsDisplay[r][headerMap.nameColZero] || '').trim();
+        if (name.toLowerCase() === expected.toLowerCase()) {
+          if (sysRow !== -1) throw new Error('Investment account is ambiguous. Please refresh.');
+          sysRow = r + 1;
+        }
+      }
+    }
+    if (sysRow < 2 || sysRow > assetsDisplay.length) {
+      throw new Error('Investment account has moved. Please refresh and try again.');
+    }
+    const actualName = String(
+      assetsSheet.getRange(sysRow, headerMap.nameCol).getDisplayValue() || ''
+    ).trim();
+    if (!actualName || actualName !== expected) {
+      throw new Error('Investment account has moved. Please refresh and try again.');
+    }
+
+    if (activeValue === 'Yes') {
+      for (let r = 1; r < assetsDisplay.length; r++) {
+        if (r + 1 === sysRow) continue;
+        const name = String(assetsDisplay[r][headerMap.nameColZero] || '').trim();
+        if (!name || name.toLowerCase() !== actualName.toLowerCase()) continue;
+        const raw = String(assetsDisplay[r][headerMap.activeColZero] || '').trim().toLowerCase();
+        if (!(raw === 'no' || raw === 'n' || raw === 'false' || raw === 'inactive')) {
+          throw new Error('Another active asset already uses this name.');
+        }
+      }
+    }
+
+    const perBlock = Object.create(null);
+    forEachInvestmentsYearBlock_(invSheet, function(block, year) {
+      const activeCol = ensureInvestmentsActiveColumnForBlock_(invSheet, block);
+      for (let row = block.dataStartRow; row <= block.dataEndRow; row++) {
+        const name = String(invSheet.getRange(row, 1).getDisplayValue() || '').trim();
+        if (!isInvestmentDataRowName_(name) || name.toLowerCase() !== actualName.toLowerCase()) continue;
+        const blockKey = String(year);
+        perBlock[blockKey] = (perBlock[blockKey] || 0) + 1;
+        if (perBlock[blockKey] > 1) {
+          throw new Error('Investment history is ambiguous in Year ' + blockKey + '.');
+        }
+        inputTargets.push({
+          sheet: invSheet,
+          row: row,
+          col: activeCol,
+          oldValue: invSheet.getRange(row, activeCol).getValue()
+        });
+      }
+    });
+    if (!inputTargets.length) {
+      throw new Error('No Investments history was found for this account.');
+    }
+    assetsTarget = {
+      sheet: assetsSheet,
+      row: sysRow,
+      col: headerMap.activeCol,
+      oldValue: assetsSheet.getRange(sysRow, headerMap.activeCol).getValue()
+    };
+    const oldKey = String(assetsTarget.oldValue || '').trim().toLowerCase();
+    const sysInactive = oldKey === 'no' || oldKey === 'n' ||
+      oldKey === 'false' || oldKey === 'inactive';
+    const allInputAtTarget = inputTargets.every(function(target) {
+      const key = String(target.oldValue || '').trim().toLowerCase();
+      const inactive = key === 'no' || key === 'n' ||
+        key === 'false' || key === 'inactive';
+      return activeValue === 'Yes' ? !inactive : inactive;
+    });
+    const alreadyTarget = allInputAtTarget &&
+      (activeValue === 'Yes' ? !sysInactive : sysInactive);
+    if (alreadyTarget) {
+      return {
+        ok: true,
+        message: '"' + actualName + '" is already ' +
+          (activeValue === 'Yes' ? 'active.' : 'inactive. History remains.'),
+        accountName: actualName,
+        alreadyActive: activeValue === 'Yes',
+        alreadyInactive: activeValue === 'No'
+      };
+    }
+
+    writesStarted = true;
+    for (let i = 0; i < inputTargets.length; i++) {
+      writeActiveCellWithRowFormat_(
+        inputTargets[i].sheet, inputTargets[i].row, inputTargets[i].col, activeValue);
+    }
+    writeActiveCellWithRowFormat_(assetsSheet, sysRow, headerMap.activeCol, activeValue);
+    try { touchDashboardSourceUpdated_('investments'); } catch (_touchErr) {}
+    try {
+      appendActivityLog_(ss, {
+        eventType: activeValue === 'Yes' ? 'investment_reactivate' : 'investment_deactivate',
+        entryDate: Utilities.formatDate(stripTime_(new Date()), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+        amount: 0,
+        direction: '',
+        payee: actualName,
+        category: headerMap.typeColZero === -1 ? '' :
+          String(assetsDisplay[sysRow - 1][headerMap.typeColZero] || '').trim(),
+        accountSource: '',
+        cashFlowSheet: '',
+        cashFlowMonth: '',
+        dedupeKey: '',
+        details: JSON.stringify({
+          detailsVersion: 1,
+          reason: activeValue === 'Yes' ? 'reactivate' : 'stop_tracking',
+          previousActive: assetsTarget.oldValue || '',
+          newActive: activeValue,
+          investmentRowsUpdated: inputTargets.length,
+          sysAssetsRow: sysRow
+        })
+      });
+    } catch (logErr) {
+      Logger.log('setInvestmentTrackingStateFromDashboard_ activity log: ' + logErr);
+    }
+    fitContentColumnsToContents_([
+      { sheet: invSheet, col: inputTargets[0].col },
+      { sheet: assetsSheet, col: headerMap.activeCol }
+    ], 'investment lifecycle changed-column fit');
+    return {
+      ok: true,
+      message: activeValue === 'Yes'
+        ? 'Reactivated "' + actualName + '". It is tracked again.'
+        : 'Stopped tracking "' + actualName + '". History is preserved.',
+      accountName: actualName,
+      rowsUpdated: inputTargets.length + 1
+    };
+  } catch (err) {
+    if (writesStarted) {
+      try {
+        for (let i = 0; i < inputTargets.length; i++) {
+          inputTargets[i].sheet.getRange(inputTargets[i].row, inputTargets[i].col)
+            .setValue(inputTargets[i].oldValue);
+        }
+        if (assetsTarget) {
+          assetsTarget.sheet.getRange(assetsTarget.row, assetsTarget.col)
+            .setValue(assetsTarget.oldValue);
+        }
+      } catch (_rollbackErr) {}
+      throw new Error('Tracking change failed and was rolled back: ' +
+        (err && err.message || err));
+    }
+    throw err;
+  } finally {
+    try { lock.releaseLock(); } catch (_releaseErr) {}
+  }
+}
+
+/**
  * Stop tracking an investment account: flips Active=No on every matching
  * INPUT - Investments row (across all year blocks) and on the mirror
  * SYS - Assets row. History (month values, Current Balance) is preserved;
@@ -1995,67 +2457,11 @@ function setAssetsActiveValue_(sheet, accountName, value) {
  * @param {{ accountName: string }} payload
  */
 function deactivateInvestmentAccountFromDashboard(payload) {
-  validateRequired_(payload, ['accountName']);
-  const accountName = String(payload.accountName || '').trim();
-  if (!accountName) throw new Error('Account name is required.');
+  return setInvestmentTrackingStateFromDashboard_(payload || {}, 'No');
+}
 
-  const ss = getUserSpreadsheet_();
-  const invSheet = getSheet_(ss, 'INVESTMENTS');
-  const assetsSheet = getSheet_(ss, 'ASSETS');
-
-  // 1) Canonical write across every year block.
-  const invUpdate = setInvestmentActiveInAllBlocks_(invSheet, accountName, 'No');
-  if (!invUpdate.found) {
-    throw new Error('No rows found for "' + accountName + '" in Investments.');
-  }
-
-  // 2) Mirror write on SYS - Assets.
-  const assetsUpdate = setAssetsActiveValue_(assetsSheet, accountName, 'No');
-
-  const alreadyInactive = invUpdate.rowsUpdated === 0 && !assetsUpdate.changed;
-
-  // 3) Activity log (best-effort).
-  try {
-    const tz = Session.getScriptTimeZone();
-    appendActivityLog_(ss, {
-      eventType: 'investment_deactivate',
-      entryDate: Utilities.formatDate(stripTime_(new Date()), tz, 'yyyy-MM-dd'),
-      amount: 0,
-      direction: 'expense',
-      payee: accountName,
-      category: '',
-      accountSource: '',
-      cashFlowSheet: '',
-      cashFlowMonth: '',
-      dedupeKey: '',
-      details: JSON.stringify({
-        detailsVersion: 1,
-        reason: 'stop_tracking',
-        invRowsUpdated: invUpdate.rowsUpdated,
-        invBlocksScanned: invUpdate.blocksScanned,
-        assetsRowFound: assetsUpdate.found,
-        alreadyInactive: alreadyInactive
-      })
-    });
-  } catch (logErr) {
-    Logger.log('deactivateInvestmentAccountFromDashboard activity log: ' + logErr);
-  }
-
-  try {
-    touchDashboardSourceUpdated_('investments');
-  } catch (e) {
-    /* best-effort */
-  }
-
-  const message = alreadyInactive
-    ? '"' + accountName + '" was already marked inactive. History remains.'
-    : 'Stopped tracking "' + accountName + '". History is preserved.';
-
-  return {
-    ok: true,
-    message: message,
-    accountName: accountName,
-    alreadyInactive: alreadyInactive,
-    rowsUpdated: invUpdate.rowsUpdated + (assetsUpdate.changed ? 1 : 0)
-  };
+/** Restore an existing inactive Investment without changing its history. */
+function reactivateInvestmentAccountFromDashboard(payload) {
+  validateRequired_(payload, ['sysAssetsRow', 'expectedAccountName']);
+  return setInvestmentTrackingStateFromDashboard_(payload, 'Yes');
 }
