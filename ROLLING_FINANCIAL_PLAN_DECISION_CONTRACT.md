@@ -131,7 +131,8 @@ amount carries its source, as-of month, coverage, and actual/forecast label.
    obligations, violating protected cash, or omitting any debt. Show the source
    of funding, start month, monthly and annual funding pace, cumulative
    contributions, projected account balance, and progress toward the approved
-   long-term income objective.
+   observed income production and balance growth. No artificial income target
+   or target date is required.
 7. **Remaining ranked debts and family investing** — show the complete rolling
    timeline for every remaining debt alongside Samer Robinhood funding. Lower
    rates may receive extra principal later than higher rates, but they remain in
@@ -210,8 +211,8 @@ design. Requirements:
 | Decision cadence and output — **approved 2026-08-13** | Produce an ordered weekly dollar-action plan and a monthly aggregation from the same decisions: pay obligations, pay debt minimums, apply named extra principal, fund Samer Robinhood, protect cash, and defer/review when necessary. Reconcile cash after every action | The product must answer what to do now, not only show an eventual balance projection. |
 | Protected cash | Reuse `DO_NOT_TOUCH` balances + eligible account Minimum buffers + planned-cash holds; no second fixed reserve | This preserves the existing account policy model and avoids double protection. |
 | Recurring contribution | Treat **$1,100/week** as a forecast assumption only until confirmed and stored; actual funding comes only from recorded transactions | The amount came from planning discussion, not an authoritative current CashCompass field. |
-| Long-term income objective | Define both the desired future income amount and the planning date; derive the required capital and contribution pace from explicit, editable assumptions rather than a promised yield | Without an income objective and date, the plan cannot determine whether Samer Robinhood is being funded fast enough. |
-| Distribution policy | Default to **reinvest** until the approved balance target is reached, then display distributions separately from market gains and contributions | Reinvest versus distribute materially changes the household plan. |
+| Growth and income tracking — **approved 2026-08-13** | Use no artificial income goal, balance target, or deadline. Track what Samer Robinhood actually produces as it grows: recorded contributions, withdrawals, distributions/interest, balance change, and—when holdings data is available—market gain/loss separately. Show trailing production and clearly labeled projections without judging progress against an invented target | The purpose is to observe and improve the account's developing income pipeline, not force it toward a speculative goal. |
+| Distribution policy | Report recorded reinvested and withdrawn distributions separately when the source data supports that distinction. Until then, do not infer whether distributions were reinvested or spent | Reinvestment behavior cannot be derived safely from account balance alone. |
 | Rental funding | Use trailing monthly **net** rental cash flow after operating expenses and linked loan payments; require adequate coverage before forecasting | Gross receipts overstate deployable household cash. |
 | Tax treatment | Show pre-tax recommendation initially and apply no invented tax rate; optional tax-lot analysis comes later | Tax effects depend on account type, holding period, basis, and jurisdiction. |
 
@@ -252,8 +253,11 @@ are never silently invented.
 ## RFP-1 exit assessment
 
 The source audit, gap analysis, waterfall, compatibility boundary, and test
-contract are complete. Two decisions are approved: **Samer Robinhood** is the
+contract are complete. Four decisions are approved: **Samer Robinhood** is the
 account the plan must deliberately fund to build the family's long-term income
 pipeline, and the plan includes **every active debt with a remaining balance
-with no APR threshold**. RFP-1 remains decision-pending for the other product
-decisions above. No RFP-2 implementation should start before that checkpoint.
+with no APR threshold**; the plan produces one reconciled weekly action schedule
+and monthly rollup; and Samer Robinhood is tracked by its observed growth and
+income production with no artificial goal or deadline. RFP-1 remains
+decision-pending for the other product decisions above. No RFP-2 implementation
+should start before that checkpoint.
