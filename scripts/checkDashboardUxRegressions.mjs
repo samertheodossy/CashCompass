@@ -3010,6 +3010,19 @@ for (const [prefix, label] of [
       `${label} must preserve a dedicated ${mode} surface`);
   }
 }
+for (const [prefix, setter, statusId, label] of [
+  ['house', 'setHousePanelMode', 'house_status', 'Houses'],
+  ['bank', 'setBankPanelMode', 'bank_status', 'Bank Accounts'],
+  ['inv', 'setInvestmentPanelMode', 'inv_status', 'Investments']
+]) {
+  const manageStart = body.indexOf(`id="${prefix}_mode_manage_wrap"`);
+  const manageEnd = body.indexOf(`id="${statusId}"`, manageStart);
+  const manageSurface = body.slice(manageStart, manageEnd);
+  assert.ok(manageStart >= 0 && manageEnd > manageStart,
+    `${label} must retain a bounded Manage surface`);
+  assert.doesNotMatch(manageSurface, new RegExp(`${setter}\\('add'\\)`),
+    `${label} Manage must not duplicate the primary Add new mode`);
+}
 for (const [source, setter, renderer] of [
   [files['Dashboard_Script_AssetsBankInvestments.html'], 'setBankPanelMode', 'renderBankManageList_'],
   [files['Dashboard_Script_AssetsBankInvestments.html'], 'setInvestmentPanelMode', 'renderInvestmentManageList_'],

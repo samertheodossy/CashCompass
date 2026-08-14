@@ -11,11 +11,14 @@ Only items that are refined, structured, and prioritized should be promoted to `
 
 ## Current stage — Stage 3: Beta Readiness
 
-**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; isolated Central has since advanced through `@343`. The `@196` 7.2/10 read-only score is evidence-limited and not comparable, so the official score does not change until a full writer-inclusive advocate run. The 7.5/10 value remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 shipped 2026-07-09.** Exact-owner campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` passed 20/20 Planner pairs on source `8aa4bf5` / isolated `@318` and ratified the Financial Plan refresh budget. Diagnostic `@319` completed `4d`; `@322` closed ordinary Save `4f`; `@325` runtime-closed combined UX `3e`–`3i`/`3m`; `@328` closed Retirement `4g`; `@331` closed money-format consistency `3n`; `@334` closed one-save Debt; `@338` closed Bank lifecycle; `@341` closed shared changed-column fit `3p`; and `@343` closed Investment lifecycle. Current ordering authority is `ROADMAP.md`: **Rolling Financial Plan core `RFP-1`–`RFP-5` → resume `3o` Houses/Income → separate accessibility closeout `3j` → deferred correction `5j`–`5m` → remaining candidate preparation → frozen-candidate evidence → supervised cohort proof → 10/10 Beta Release Candidate**. Customer-facing operations/support/privacy work remains deferred. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
+**Maturity (estimated):** Family Beta Readiness **~97–98% · External / Public Beta Readiness ~92%** under the capability-oriented estimate. The last formal independent advocate score is **8.3/10** from isolated Central `@180`; isolated Central has since advanced through `@352`. The `@196` 7.2/10 read-only score is evidence-limited and not comparable, so the official score does not change until a full writer-inclusive advocate run. The 7.5/10 value remains only the historical 2026-07-20 baseline. **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, P1 Release Readiness engineering, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 shipped 2026-07-09.** Exact-owner campaign `PERF-e75d61db-7f46-446b-a4cd-93c84e893a8a` passed 20/20 Planner pairs on source `8aa4bf5` / isolated `@318` and ratified the Financial Plan refresh budget. Diagnostic `@319` completed `4d`; `@322` closed ordinary Save `4f`; `@325` runtime-closed combined UX `3e`–`3i`/`3m`; `@328` closed Retirement `4g`; `@331` closed money-format consistency `3n`; `@334` closed one-save Debt; `@338` closed Bank lifecycle; `@341` closed shared changed-column fit `3p`; `@343` closed Investment lifecycle; and `@352` removed duplicate Manage/Add entry points with permanent regression coverage. Current ordering authority is `ROADMAP.md`: **Rolling Financial Plan core `RFP-1`–`RFP-5` → resume `3o` Houses/Income/Bills → separate accessibility closeout `3j` → deferred correction `5j`–`5m` → remaining candidate preparation → frozen-candidate evidence → supervised cohort proof → 10/10 Beta Release Candidate**. Customer-facing operations/support/privacy work remains deferred. `BETA_10_OUT_OF_10_PLAN.md` defines the measurable release and monetization-readiness gates.
 
-**2026-08-13 status update:** isolated Central is now `@343`. Debt, Bank, and
-Investment lifecycle convergence are runtime-complete; Houses and Income remain
-under `3o`. The new highest-priority Rolling Financial Plan starts with `RFP-1`,
+**2026-08-14 status update:** isolated Central is now `@352`. Debt, Bank, and
+Investment lifecycle convergence are runtime-complete; Houses, Income, and
+Bills remain under `3o`. The lifecycle audit requires every Stop path to expose
+a counted inactive inventory and restore the existing identity through an
+explicit Reactivate action; Add must never substitute for recovery. The new
+highest-priority Rolling Financial Plan starts with `RFP-1`,
 a read-only reconciliation/design increment. It composes existing current
 CashCompass data and Rolling Debt Payoff rather than replacing either, and it
 makes no schema, writer, calculation, UI, or deployment change. `5n` begins
@@ -33,7 +36,7 @@ continue now. The former September 24 target and October 2 contingency boundary
 require rebaselining because compound Bill correction (`5j`) is deliberately
 deferred. Retirement load (`4g`) and money-format consistency (`3n`) are now
 closed. The gate order is: Rolling Financial Plan core (`RFP-1`–`RFP-5`);
-resume product consistency/shared lifecycle Houses and Income (`3o`); separate
+resume product consistency/shared lifecycle Houses, Income, and Bills (`3o`); separate
 accessibility closeout (`3j`); deferred `5j`–`5m`; final
 financial/workbook/recovery proof; operations/support and monetization-ready
 architecture; exact-candidate freeze/evidence; then the supervised cohort and
@@ -193,7 +196,7 @@ Limited trusted users; stabilize real-world workflows while P1–P3 quality work
 | 6E.2 Admin Set Mapping (guarded remap, preview + audit) | P2 | 6F closed | M |
 | Web App UX polish (onboarding, empty-states, error handling, Help/content cleanup) — *see `## UX Backlog (Version 1)`* | P2 | — | M–L |
 | Loading-experience polish pass (unify spinner/labels, Overview + Admin loading states) — *`## UX Backlog → Loading Experience Standardization`* | P2 | — | M |
-| Shared Lifecycle rollout — **Bank Accounts** (Manage pattern + lifecycle) | P2 | Debt reference ✓ | M |
+| Shared Lifecycle rollout — **Bank Accounts** (Manage pattern + lifecycle) | P2 | ✅ Complete through isolated `@338` | M |
 
 *(Golden Workbook Convergence was elevated to Stage 3 — it is a Family Beta quality gate, not a follow-up. The full opportunistic UX list lives in `## UX Backlog (Version 1)`, reviewed before this milestone.)*
 
@@ -211,7 +214,7 @@ Broader invited audience only after the full `BETA_10_OUT_OF_10_PLAN.md` gate pa
 | Beta-user management at scale (add/remove, status, mapping health) | P3 | Admin tooling | M |
 | User Lifecycle Handling (onboarding/offboarding, ownership changes, re-provision) | P3 | — | L |
 | Scalability review (provisioning, locks, quotas) | P3 | — | M |
-| Shared Lifecycle rollout — **Investments · Houses · Income Sources** | P3 | Bank Accounts pattern | M each |
+| Shared Lifecycle rollout — **Houses · Income Sources · Bills** | P3 | Debt, Bank Accounts, and Investments complete | M each |
 | Shared Sheet Write Utilities | P3 | — | L |
 | Admin tooling: `adminAdoptWorkbook`, `adminTrashOrphan` (soft-delete only) | P3 | 6E.2 | M |
 | Tier-2 `getActiveSpreadsheet()` user-facing sweep | P3 | — | ✅ Closed by source inspection 2026-07-20 — residual calls are resolver fallback, bound/dev utilities, or harness safety only |
@@ -268,9 +271,9 @@ This queue records the July 9 plan and is **not the current ordering authority**
 
 > **Also a Beta-Gate requirement (not in the numbered execution queue above): Financial Integrity — Phase 3 (convergence)** — declare the **canonical financial basis**, converge **Planner / Dashboard / Rolling Debt** to within $0.01, add the **Asset / Planner / Dashboard audit modules**. *(Completed foundation: Audit Framework, Debt Audit, shared Active helper, `NOT_INITIALIZED`.)* Strategic anchor: **the numbers must reconcile** — the product's core trust claim. It must be satisfied before release broadens beyond supervised validation; sequence it alongside items 3–5.
 
-**Longer-horizon (post-Beta-Gate, not near-term):**
+**Numbered follow-on after the core Rolling Financial Plan:**
 
-- **Shared Lifecycle Framework rollout** — Debt is the reference implementation; roll out to **Bank Accounts → Investments → Houses → Income Sources** (see `## Shared Lifecycle Framework` below).
+- **Shared Lifecycle Framework rollout** — Debt is the reference implementation; Bank Accounts and Investments are complete; finish **Houses → Income Sources → Bills** (see `## Shared Lifecycle Framework` below).
 - **Product differentiators (Version 1, External Beta)** — **Money Plan Phase 2** (long-term/goal planning, recommendations, forecasting, retirement integration) and the **Income Expected/Due Workflow** (income symmetry with Bills Due).
 
 ---
@@ -285,9 +288,10 @@ The **Debt Lifecycle is now the reference implementation** (shipped 2026-06-29, 
 Create → Edit → Rename → Stop Tracking → Inactive → Reactivate
 ```
 
-**Rollout order (remaining):** **Bank Accounts** (next; Stage 4) → **Investments · Houses · Income Sources** (Stage 5). Debt is the shipped reference; Bills already uses the Manage pattern.
+**Rollout order (remaining):** **Houses → Income Sources → Bills**. Debt is the shipped reference; Bank Accounts and Investments are complete. Bills has a Manage surface but not a complete lifecycle: it still lacks counted inactive inventory and true Reactivate of the stopped row.
 
-This is a **long-term architecture goal**, sequenced after the Beta Gate and before broader external beta if time allows. Not a blocker.
+This is active numbered work under `FULL_BETA_REMAINING_PLAN.md → 3o`, sequenced
+after the core Rolling Financial Plan increment and before broader external beta.
 
 ---
 
@@ -716,7 +720,7 @@ This section preserves the July 9 handoff and is not the current starting-point 
 
 **Historical phase detail (Phase 1–7) — superseded by the current P0–P4 ordering in `ROADMAP.md`.** This section is retained for the per-phase rationale (objective, why it matters, deliverables, dependencies) that shaped the current state. Where historical ordering conflicts with current priority, `ROADMAP.md` wins. Every phase runs under `WORKING_RULES.md → Current phase` and, for central-mode work, `→ Central App Transition Rules` (active).
 
-**Stage ↔ Phase mapping:** **Stage 1 — Core Platform** *(✅ complete)* = Phase 1 (Documentation Cleanup) + Phase 3 (Workbook Totals) + shipped core/Manage/lifecycle + Bills Due performance. **Stage 2 — Product Hardening** *(✅ complete)* = Phase 2 (Family Beta Hardening incl. the recovery stack + destructive/admin validation) + the Financial Integrity foundation (Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`). **Stage 3 — Beta Readiness** *(current)* = the Beta Gate (Golden Workbook Convergence · Financial Integrity Phase 3 · Validation Agent · completed Recovery Validation · Workbook/UX polish · runtime regression checklist) + release-readiness review. **Stage 4 — Family Beta** = go/no-go + Phase 5 (Web App UX) + recovery slices 6D.2b / 6E.2 + Shared Lifecycle (Bank Accounts). **Stage 5 — External Beta** = Phase 6 (External Beta Readiness) + user-lifecycle + remaining Shared Lifecycle rollout. **Stage 6 — Version 2 / Future Platform** = Phase 4 (Chat Assistant) + Phase 7 (Paid Product) + Operations Dashboard / metrics / monitoring / analytics.
+**Stage ↔ Phase mapping:** **Stage 1 — Core Platform** *(✅ complete)* = Phase 1 (Documentation Cleanup) + Phase 3 (Workbook Totals) + shipped core/Manage/lifecycle + Bills Due performance. **Stage 2 — Product Hardening** *(✅ complete)* = Phase 2 (Family Beta Hardening incl. the recovery stack + destructive/admin validation) + the Financial Integrity foundation (Audit Framework + Debt Audit + shared Active helper + `NOT_INITIALIZED`). **Stage 3 — Beta Readiness** *(current)* = the Beta Gate (Golden Workbook Convergence · Financial Integrity Phase 3 · Validation Agent · completed Recovery Validation · Workbook/UX polish · runtime regression checklist) + release-readiness review. **Stage 4 — Family Beta** = go/no-go + Phase 5 (Web App UX) + recovery slices 6D.2b / 6E.2; Bank lifecycle is already complete. **Stage 5 — External Beta** = Phase 6 (External Beta Readiness) + user-lifecycle + remaining Shared Lifecycle rollout for Houses, Income Sources, and Bills. **Stage 6 — Version 2 / Future Platform** = Phase 4 (Chat Assistant) + Phase 7 (Paid Product) + Operations Dashboard / metrics / monitoring / analytics.
 
 **Priority scale:** P0 = now / in progress · P1 = next, gates family beta · P2 = high, needed before external beta · P3 = gates external beta · P4 = post-beta / longest horizon. Phases are roughly sequential; where noted, some can overlap.
 
@@ -850,14 +854,14 @@ Historical ranked detail retained for traceability. It does not override the cur
 
 5. **Family Beta go/no-go + Web App UX polish** — onboarding, empty-states, loading-experience consistency, Help/content cleanup.
 6. **Create New Workbook recovery action** *(6D.2b)* + **Admin Set Mapping** *(6E.2)* — designed, not implemented.
-7. **Shared Lifecycle rollout — Bank Accounts** (Manage pattern + lifecycle).
+7. **Shared Lifecycle rollout — Bank Accounts** — ✅ complete through isolated `@338`.
 
 **Stage 5 — External Beta:**
 
 8. **Money Plan Phase 2** *(major V1 differentiator)* + **Income Expected/Due Workflow** *(product symmetry with Bills Due)*.
 9. **External Beta Hardening** — support, feedback, onboarding invite flow, beta-user management at scale.
 10. **User Lifecycle Handling** — onboarding/offboarding, ownership changes, re-provisioning, allow-list removal, mapping health at scale.
-11. **Shared Lifecycle rollout — Investments · Houses · Income Sources**; Shared Sheet Write Utilities; bound-deployment cleanup once Central is primary. *(The user-facing Tier-2 `getActiveSpreadsheet()` sweep closed by source inspection 2026-07-20.)*
+11. **Shared Lifecycle rollout — Houses · Income Sources · Bills**; Debt, Bank Accounts, and Investments are complete. Shared Sheet Write Utilities and bound-deployment cleanup remain separate. *(The user-facing Tier-2 `getActiveSpreadsheet()` sweep closed by source inspection 2026-07-20.)*
 
 **Stage 6 — Version 2 / Future Platform:**
 
@@ -1205,7 +1209,7 @@ Authoritative copy lives here; `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md` mirror
 
 ## Future UI Standardization — Manage Pattern Rollout
 
-**Status:** current rollout complete. **Bills, Debts, Bank Accounts, Investments, and Houses are implemented; the shared presentation layer and Save-only Update / Manage-owned lifecycle contract passed isolated Central `@195` on 2026-07-24.**
+**Status:** management-surface rollout complete; lifecycle convergence remains active. **Bills, Debts, Bank Accounts, Investments, and Houses have Manage surfaces; the shared presentation layer and Save-only Update / Manage-owned Stop contract passed isolated Central `@195` on 2026-07-24.** Debt, Bank Accounts, and Investments now also have complete inactive inventory and Reactivate behavior. Houses, Income Sources, and Bills remain under `3o` for full lifecycle parity.
 
 **Background.** Bills and Debts now have dedicated management workflows — **Manage Bills** and **Manage Debts** — which have proven significantly more user-friendly than direct sheet editing. They establish the **preferred long-term UI pattern** for module maintenance, and each major module should eventually adopt it.
 
@@ -1235,7 +1239,7 @@ Authoritative copy lives here; `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md` mirror
 
 ## Future Feature — Shared Entity Lifecycle Framework
 
-**Status:** documented, **not implemented** (authoritative copy; high-level mirror in `PROJECT_CONTEXT.md`, backlog entry in `ENHANCEMENTS.md`). **Reference implementation: the Debt lifecycle** (`Active → Stop Tracking → Inactive → Reactivate`), shipped in commit `893d50d`.
+**Status:** active phased rollout (authoritative copy; high-level mirror in `PROJECT_CONTEXT.md`, numbered scope in `FULL_BETA_REMAINING_PLAN.md → 3o`). **Reference implementation: the Debt lifecycle** (`Active → Stop Tracking → Inactive → Reactivate`), shipped in commit `893d50d`. Bank Accounts and Investments are complete; Houses, Income Sources, and Bills remain.
 
 **Related (do not duplicate):** this is the **lifecycle** companion to `## Future UI Standardization — Manage Pattern Rollout` (the *Manage view* pattern) and its "Future framework opportunity" note. Manage Pattern Rollout covers the management surface (table + edit form); this item covers the **active/inactive lifecycle** (Stop tracking from Manage, Reactivate, inactive section, lifecycle activity events, server guardrails). They should be extracted together once enough consumers exist.
 
@@ -1260,7 +1264,9 @@ Authoritative copy lives here; `PROJECT_CONTEXT.md` and `ENHANCEMENTS.md` mirror
 - **Phase 4** — Extract common server helper patterns where safe.
 - **Phase 5** — Migrate one module at a time, each with runtime validation.
 
-**Priority:** **Medium.** Do **after** Financial Integrity reconciliation and **before** broader external beta if time allows. **Not a blocker** for the current debt lifecycle commit.
+**Priority:** active numbered scope under `FULL_BETA_REMAINING_PLAN.md → 3o`.
+Resume **Houses → Income Sources → Bills** after the core Rolling Financial Plan
+increment and close it before broader external beta.
 
 ---
 
