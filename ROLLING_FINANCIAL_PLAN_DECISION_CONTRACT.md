@@ -1,8 +1,8 @@
 # Rolling Financial Plan — RFP-1 Decision Contract
 
-**Status:** Read-only audit complete; product decisions pending
+**Status:** RFP-1/RFP-2 decisions complete; RFP-3 architecture approved; allocation-policy details pending
 
-**Date:** 2026-08-13
+**Date:** 2026-08-14
 
 **Runtime impact:** None. This document does not change a workbook, schema,
 writer, calculation, UI, feature flag, Apps Script deployment, or user data.
@@ -17,6 +17,37 @@ Payoff as the detailed debt engine.
 
 The base Rolling Financial Plan must work at account level. Security holdings
 and tax lots are later optional analysis layers, not prerequisites.
+
+## Approved decision-engine architecture
+
+**Approved 2026-08-14:** CashCompass owns the financial decision path
+deterministically. Application code—not an LLM—must build the household input
+snapshot, enforce constraints, calculate balances and economic effects, rank
+eligible actions, allocate dollars, calculate counterfactuals, and reconcile
+every result. Identical authoritative inputs and policy settings must produce
+identical ordered actions without requiring an LLM.
+
+RFP-3 introduces an in-memory **Capital Allocation Queue** with two explicit
+classes:
+
+1. **Hard constraints and required actions** — protected/earmarked cash, urgent
+   obligations, taxes, property requirements, and every required debt minimum.
+   These are eligibility and safety boundaries; they cannot lose to a scored
+   discretionary candidate.
+2. **Discretionary allocation candidates** — named extra-debt payments,
+   reserve restoration, Income-Producing Account funding, other approved family
+   investing, or intentionally holding cash. Each candidate carries its source,
+   target, maximum usable amount, timing, expected benefit, guaranteed versus
+   uncertain character, tax/liquidity/cash-flow effects when supported, risk,
+   reversibility, confidence, and source provenance.
+
+The queue is a runtime read model, not a new recommendation worksheet. RFP-3
+does not persist recommendations or mark them completed. RFP-4 makes **This
+Week** the center of the feature-guarded Planning experience and adds **Why
+not?** comparisons. Those comparisons use backend-calculated counterfactuals;
+an optional LLM may explain validated facts, assumptions, recommendations,
+warnings, and scenarios, but may not invent inputs or silently change amounts,
+eligibility, ranking, or action order.
 
 When holdings granularity is added, the portfolio layer must answer two distinct
 questions without changing the base weekly cash plan:
@@ -49,16 +80,20 @@ merit and must never place or imply an automatic trade.
 | Property value and financing | `SYS - House Assets`, linked active Loan/HELOC rows in `INPUT - Debts` | Use existing current value, loan balance, and link guards. |
 | Rental cash generation | Cash Flow rent, House Expenses, and linked Cash Flow loan payments through Property Performance | Use **net cash flow**: rent minus operating expenses minus actual linked loan payments. Gross rent alone is never available family funding. |
 | Investment account identity and balance | `INPUT - Investments` history with `SYS - Assets` current mirror | Use only an active current-year account with one matching system row. Current balance is account-level; holdings are optional later. |
+| Investment activity, holdings, and recurring intentions | `SYS - Investment Activity`, `SYS - Investment Holdings`, and `SYS - Investment Plans` for explicitly designated Income-Producing Accounts | Imported activity and derived holdings are facts; editable recurring plans are user intentions. `INPUT - Investments` remains the account-total authority. A plan is a requested funding pace, not proof that household cash can safely fund it. |
 | Current-versus-month reporting | Current `SYS -` mirrors versus exact cells in the selected `INPUT` month | Label latest-known current values separately from exact-month ledger values and include coverage/staleness. Never imply they are the same measure. |
 
-## Confirmed gaps
+## Remaining gaps and completed foundations
 
-1. `SYS - Assets` has Account name, Type, Current balance, and Active, but no
-   stable account ID, purpose, funding target, distribution target, or funding
-   priority.
-2. The approved account is **Samer Robinhood**. More than one account may contain
-   “Robinhood,” so name-pattern matching remains unsafe and a later rename must
-   not break the plan.
+1. **Resolved by RFP-2:** `SYS - Assets` now carries stable Investment Id and
+   optional Planning Purpose. Zero, one, or many accounts can be explicitly
+   designated Income-Producing; identity and purpose survive rename and
+   Stop/Reactivate without changing `INPUT - Investments`.
+2. **Resolved by RFP-6a and post-proof commit `529ce88`:** selected-account
+   imports now provide duplicate-safe activity, derived holdings, editable
+   recurring intentions, and checkpointed ticker review. Samer Robinhood is the
+   current primary account, but the architecture remains multi-account and never
+   selects by a name pattern.
 3. Property Performance provides selected-year net cash flow, while the Rolling
    planner's stable-income list treats named rent receipts as income. The new
    plan needs a monthly/trailing **net rental** projection so gross rent is not
@@ -66,17 +101,22 @@ merit and must never place or imply an automatic trade.
 4. Next Actions currently recommends urgent obligations and extra debt; it
    intentionally excludes investment optimization. The new decision engine
    should compose this information rather than change Next Actions in place.
-5. The system has no approved rule for the Samer Robinhood funding target,
-   reinvest/distribute policy, contribution amount, or tax haircut. The debt
-   inclusion rule is approved: every active debt with a remaining balance must
-   be represented, without an APR eligibility threshold.
+5. User-confirmed recurring investment intentions can now be stored, but RFP-3
+   still needs a transparent household allocation policy for competition between
+   extra debt, safely affordable Income-Producing Account funding, reserve
+   restoration, and holding liquidity. No plan amount is an entitlement to cash.
+   Distribution policy and tax haircut remain unapproved where source data is
+   insufficient. Every active positive-balance debt remains included without an
+   APR eligibility threshold.
 6. Latest-known system balances can legitimately differ from an exact-month
    ledger total when some current-month cells are blank. RFP must expose that
    distinction; it must not silently substitute one basis for the other.
-7. Holdings, tax lots, account registration/type, distributions, fees, and
-   trade restrictions are not yet modeled. Until that granularity arrives,
-   CashCompass may recommend how much to fund Samer Robinhood but not which
-   security to buy, hold, reduce, or sell.
+7. Activity-derived holdings now exist for imported accounts, but current market
+   prices, household-wide position coverage, look-through exposure, account
+   registration/restrictions, cost basis, tax lots, and dependable distribution
+   forecasts remain incomplete. Until those inputs arrive, RFP-3 may recommend
+   how much to fund an Income-Producing Account but may not invent per-ticker
+   routing or Hold/Add/Reduce/Sell advice.
 
 ## Approved future portfolio-analysis contract
 
@@ -207,15 +247,17 @@ design. Requirements:
   metadata is the natural unconfigured state, and Setup / Review changes it
   only after an explicit Save or Clear action.
 
-## Product decisions required before RFP-2
+## Product decisions for the RFP program
 
 | Decision | Recommended starting rule | Why approval is required |
 |---|---|---|
 | Income-Producing Accounts — **approved 2026-08-13** | Explicitly designate zero, one, or multiple investment accounts intended to grow and produce long-term income, including **Samer Robinhood** and potentially retirement accounts such as the 401(k). Persist every designation by stable ID; never infer purpose from a name or account type | The long-term income strategy can span several accounts. Each identity must survive rename and Stop/Reactivate, while later recommendations separately respect taxes, liquidity, retirement access, and withdrawal restrictions. |
 | Debt inclusion and ordering — **approved 2026-08-13** | Include every active account with a remaining debt balance. Preserve minimum/scheduled payments for all; rank extra principal continuously, generally higher APR before lower APR, with deterministic tie-breakers. Use **no APR threshold** | The plan must be comprehensive. Interest rate affects priority, not whether a debt is accounted for. |
 | Decision cadence and output — **approved 2026-08-13** | Produce an ordered weekly dollar-action plan and a monthly aggregation from the same decisions: pay obligations, pay debt minimums, apply named extra principal, fund Samer Robinhood, protect cash, and defer/review when necessary. Reconcile cash after every action | The product must answer what to do now, not only show an eventual balance projection. |
+| Deterministic decision kernel and Capital Allocation Queue — **approved 2026-08-14** | Application code owns household context, hard constraints, candidate generation, ranking, allocation, counterfactual math, and exact reconciliation. The queue is an in-memory read model and separates required actions from discretionary candidates | Financial recommendations must be reproducible, auditable, testable, and usable without an LLM. Required reserves or obligations cannot lose to an opaque score. |
+| This Week and Why not? — **approved 2026-08-14** | Make This Week the center of the feature-guarded Planning experience. Compare alternatives through deterministic backend counterfactuals; an optional LLM explains validated results but cannot alter calculations or order | The product should tell the user what the next dollar should do and directly explain why a competing use ranks lower. |
 | Protected cash | Reuse `DO_NOT_TOUCH` balances + eligible account Minimum buffers + planned-cash holds; no second fixed reserve | This preserves the existing account policy model and avoids double protection. |
-| Recurring contribution | Treat **$1,100/week** as a forecast assumption only until confirmed and stored; actual funding comes only from recorded transactions | The amount came from planning discussion, not an authoritative current CashCompass field. |
+| Recurring contribution | Treat **$1,100/week** as a forecast assumption only until confirmed in the account-and-ticker plan model. Confirmed active plans are user intentions and cap/request the desired pace; RFP-3 may recommend less when household constraints require it. Actual funding comes only from recorded transactions | A planned amount must remain distinct from both safely affordable funding and completed activity. |
 | Growth and income tracking — **approved 2026-08-13** | Use no artificial income goal, balance target, or deadline. Track what Samer Robinhood actually produces as it grows: recorded contributions, withdrawals, distributions/interest, balance change, and—when holdings data is available—market gain/loss separately. Show trailing production and clearly labeled projections without judging progress against an invented target | The purpose is to observe and improve the account's developing income pipeline, not force it toward a speculative goal. |
 | Distribution policy | Report recorded reinvested and withdrawn distributions separately when the source data supports that distinction. Until then, do not infer whether distributions were reinvested or spent | Reinvestment behavior cannot be derived safely from account balance alone. |
 | Rental funding | Use trailing monthly **net** rental cash flow after operating expenses and linked loan payments; require adequate coverage before forecasting | Gross receipts overstate deployable household cash. |

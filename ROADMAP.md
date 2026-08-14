@@ -35,23 +35,21 @@
 
 **Now / next:**
 
-- **Highest-priority program:** **Rolling Financial Plan (`RFP`)**, starting with
-  read-only reconciliation and a decision contract before any schema, writer, or
-  calculation change. The program will account for obligations, reserves, and
+- **Highest-priority program:** **Rolling Financial Plan (`RFP`)**, now advancing
+  from its completed decision and investment-data foundations into a deterministic
+  household capital-allocation engine. The program will account for obligations, reserves, and
   every active remaining debt while deliberately funding explicitly designated
   **Income-Producing Accounts**, including Samer Robinhood, to build the family's
   long-term income pipeline. Rolling Debt Payoff remains the
   detailed debt engine. CashCompass remains the source of current household truth.
-- **Current milestone:** **`RFP-1`, read-only household funding reconciliation.**
-  Inventory the exact existing Cash, Debt, Cash Flow, Property/rental, and
-  Investment inputs; use explicitly designated **Income-Producing Accounts** for
-  long-term income funding; define net
-  rental income, reserve, comprehensive debt ordering, contribution, distribution, and
-  actual-versus-forecast rules; and record every missing input. `RFP-1` makes no
-  workbook, schema, UI, calculation, or deployment change.
-  The audit and proposed defaults are documented in
-  `ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md`; product decisions remain the
-  checkpoint before `RFP-2`.
+- **Current milestone:** **`RFP-3`, read-only Capital Allocation Queue and weekly
+  recommendation engine.** CashCompass—not an LLM—will deterministically build
+  the household snapshot, enforce hard constraints, generate and rank candidate
+  uses of capital, allocate available dollars, calculate counterfactuals, and
+  reconcile every action to ending cash. The LLM may explain validated results,
+  compare scenarios, and identify interactions; it may not invent inputs or
+  silently change calculations or ranking. The primary output is **This Week**,
+  with a monthly aggregation derived from the same weekly decisions.
 - **Paused, not waived:** finish `3o` Houses, Income, and Bills after the core
   `RFP` slices. Debt, Bank Account, and Investment convergence are
   runtime-complete through isolated `@343`; shared changed-column fit `3p` is
@@ -319,16 +317,29 @@ view after the next weekly purchases and dividend reinvestment. This is bounded
 acceptance evidence, not Harness evidence; the bounded workbook was never used
 as a test target by Codex.
 
+Post-proof foundation commit `529ce88` adds the account-first Portfolio activity
+drawer, editable recurring plans that remain separate from imported facts, and
+checkpointed ticker review. A ticker marked as not part of the portfolio for now
+stays quiet for already reviewed history, returns after a later purchase, and
+does not retroactively import activity behind its boundary if later included.
+The owner reviewed and accepted the bounded presentation. This is a common-source
+foundation extension; it is not retroactively claimed as isolated `@351` evidence.
+
 **Next active item after the separate commit boundary:** `RFP-3`, the read-only
-weekly recommendation engine. It must reconcile every proposed action to
-available cash and may not transfer funds, place trades, post payments, or write
+Capital Allocation Queue and weekly recommendation engine. It uses an in-memory
+read model with two classes: hard constraints such as obligations, protected
+cash, and debt minimums; and ranked discretionary candidates such as extra debt,
+Income-Producing Account funding, reserve restoration, or waiting. Every result
+must be deterministic, provenance-backed, confidence-labeled, and exactly
+reconciled. It may not transfer funds, place trades, post payments, or write
 recommendations into the workbook.
 
 **Rolling Financial Plan sequence:** `RFP-1` read-only contract → `RFP-2`
 optional funding-purpose metadata → `RFP-6a` broker activity/holdings foundation
 (prioritized after granular data arrived) → `RFP-3` read-only recommendation engine →
-`RFP-4` default-off Planning UI → `RFP-5` disposable-workbook and isolated
-runtime proof. `RFP-6b` allocation analysis and `RFP-7` tax-lot analysis are later optional
+`RFP-4` default-off **This Week** Planning UI with deterministic **Why not?**
+counterfactuals → `RFP-5` disposable-workbook and isolated runtime proof.
+`RFP-6b` allocation analysis and `RFP-7` tax-lot analysis are later optional
 portfolio layers; the household plan must work without either. Each slice has a
 separate review and commit boundary. Existing Rolling Debt Payoff behavior stays
 unchanged until a reviewed composition seam is introduced, and no slice may
