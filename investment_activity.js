@@ -19,6 +19,11 @@ var INVESTMENT_HOLDINGS_HEADERS_ = [
   'Total Buy Cost', 'Sale Proceeds', 'Dividends Received',
   'Weekly Recurring Buy', 'Last Activity Price', 'Activity Count', 'Updated At'
 ];
+var INVESTMENT_PLAN_HEADERS_ = [
+  'Investment Id', 'Account Name', 'Ticker', 'Portfolio Status',
+  'Plan Frequency', 'Planned Amount', 'Plan Active', 'Updated At',
+  'Activity Boundary Date'
+];
 var INVESTMENT_ACTIVITY_CANONICAL_WIDTHS_ = {
   'Import Key': 250, 'Investment Id': 250, 'Account Name': 280,
   'Activity Date': 125, 'Settle Date': 125, 'Ticker': 100,
@@ -32,6 +37,12 @@ var INVESTMENT_HOLDINGS_CANONICAL_WIDTHS_ = {
   'Weekly Recurring Buy': 190, 'Last Activity Price': 170,
   'Activity Count': 140, 'Updated At': 170
 };
+var INVESTMENT_PLAN_CANONICAL_WIDTHS_ = {
+  'Investment Id': 250, 'Account Name': 280, 'Ticker': 100,
+  'Portfolio Status': 180, 'Plan Frequency': 170,
+  'Planned Amount': 170, 'Plan Active': 130, 'Updated At': 170,
+  'Activity Boundary Date': 210
+};
 
 function ensureInvestmentActivitySheet_(optionalSs) {
   var ss = optionalSs || getUserSpreadsheet_();
@@ -43,6 +54,43 @@ function ensureInvestmentHoldingsSheet_(optionalSs) {
   var ss = optionalSs || getUserSpreadsheet_();
   return ensureInvestmentSystemSheet_(ss, getSheetNames_().INVESTMENT_HOLDINGS,
     INVESTMENT_HOLDINGS_HEADERS_, INVESTMENT_HOLDINGS_CANONICAL_WIDTHS_);
+}
+
+function ensureInvestmentPlansSheet_(optionalSs) {
+  var ss = optionalSs || getUserSpreadsheet_();
+  var name = getSheetNames_().INVESTMENT_PLANS;
+  var existing = ss.getSheetByName(name);
+  if (existing) {
+    var boundaryHeader = String(existing.getRange(1, 9).getDisplayValue() || '').trim();
+    if (boundaryHeader && boundaryHeader !== INVESTMENT_PLAN_HEADERS_[8]) {
+      throw new Error(name + ' column 9 must be "' + INVESTMENT_PLAN_HEADERS_[8] + '".');
+    }
+    if (!boundaryHeader) {
+      try {
+        existing.getRange(1, 8).copyTo(existing.getRange(1, 9),
+          SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+      } catch (_copyFormatErr) { /* header format is cosmetic */ }
+      existing.getRange(1, 9).setValue(INVESTMENT_PLAN_HEADERS_[8]);
+      existing.setColumnWidth(9, INVESTMENT_PLAN_CANONICAL_WIDTHS_[INVESTMENT_PLAN_HEADERS_[8]]);
+    }
+    return existing;
+  }
+  var sheet;
+  try {
+    sheet = ss.insertSheet(name);
+  } catch (e) {
+    var raced = ss.getSheetByName(name);
+    if (raced) return raced;
+    throw e;
+  }
+  sheet.getRange(1, 1, 1, INVESTMENT_PLAN_HEADERS_.length)
+    .setValues([INVESTMENT_PLAN_HEADERS_]);
+  applySysSheetBaseStyle_(sheet, INVESTMENT_PLAN_CANONICAL_WIDTHS_);
+  try {
+    sheet.getRange(2, 6, Math.max(1, sheet.getMaxRows() - 1), 1)
+      .setNumberFormat('$#,##0.00;-$#,##0.00');
+  } catch (_formatErr) { /* cosmetic only */ }
+  return sheet;
 }
 
 function ensureInvestmentSystemSheet_(ss, sheetName, headers, widths) {
@@ -82,6 +130,110 @@ function fitInvestmentSystemSheetColumns_(sheet, headers, context) {
   fitContentColumnsToContents_((headers || []).map(function(_header, index) {
     return { sheet: sheet, col: index + 1 };
   }), context || 'investment system-sheet content fit');
+}
+
+function normalizeInvestmentPlanFrequency_(value, allowBlank) {
+  var normalized = String(value || '').trim().toUpperCase();
+  if (!normalized && allowBlank) return '';
+  if (['WEEKLY', 'BIWEEKLY', 'MONTHLY'].indexOf(normalized) === -1) {
+    throw new Error('Choose Weekly, Biweekly, or Monthly for the investment plan.');
+  }
+  return normalized;
+}
+
+function readInvestmentPlanRows_(ss, investmentId) {
+  var sheet = ss.getSheetByName(getSheetNames_().INVESTMENT_PLANS);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  return sheet.getRange(2, 1, sheet.getLastRow() - 1,
+    INVESTMENT_PLAN_HEADERS_.length).getValues().map(function(row, index) {
+      return {
+        sheetRow: index + 2,
+        investmentId: String(row[0] || '').trim(),
+        accountName: String(row[1] || '').trim(),
+        ticker: normalizeInvestmentTicker_(row[2]),
+        portfolioStatus: String(row[3] || '').trim().toUpperCase(),
+        planFrequency: String(row[4] || '').trim().toUpperCase(),
+        plannedAmount: Number(row[5]) || 0,
+        planActive: String(row[6] || '').trim().toUpperCase() !== 'NO',
+        updatedAt: String(row[7] || '').trim(),
+        activityBoundaryDate: String(row[8] || '').trim()
+      };
+    }).filter(function(row) {
+      return row.investmentId === investmentId && !!row.ticker;
+    });
+}
+
+function investmentPlanRowsByTicker_(rows) {
+  var result = {};
+  (rows || []).forEach(function(row) {
+    if (row && row.ticker) result[row.ticker] = row;
+  });
+  return result;
+}
+
+function readSavedInvestmentTickers_(ss, investmentId) {
+  var result = {};
+  var activity = ss.getSheetByName(getSheetNames_().INVESTMENT_ACTIVITY);
+  if (activity && activity.getLastRow() >= 2) {
+    activity.getRange(2, 1, activity.getLastRow() - 1,
+      INVESTMENT_ACTIVITY_HEADERS_.length).getValues().forEach(function(row) {
+      if (String(row[1] || '').trim() !== investmentId) return;
+      var ticker = normalizeInvestmentTicker_(row[5]);
+      if (ticker) result[ticker] = true;
+    });
+  }
+  readInvestmentPlanRows_(ss, investmentId).forEach(function(row) {
+    if (row.portfolioStatus === 'EXCLUDED') delete result[row.ticker];
+    if (row.portfolioStatus === 'INCLUDED') result[row.ticker] = true;
+  });
+  return result;
+}
+
+function normalizeInvestmentTickerDecisions_(value) {
+  var source = value && typeof value === 'object' ? value : {};
+  var result = {};
+  Object.keys(source).sort().forEach(function(rawTicker) {
+    var ticker = normalizeInvestmentTicker_(rawTicker);
+    var decision = String(source[rawTicker] || '').trim().toUpperCase();
+    if (!ticker || ['INCLUDE', 'EXCLUDE'].indexOf(decision) === -1) return;
+    result[ticker] = decision;
+  });
+  return result;
+}
+
+function investmentTickerDecisionsDigestPart_(decisions, boundaries) {
+  return Object.keys(decisions || {}).sort().map(function(ticker) {
+    return ticker + ':' + decisions[ticker] + ':' + String(boundaries && boundaries[ticker] || '');
+  }).join('|');
+}
+
+function isInvestmentTickerReviewRow_(row, cutoff) {
+  var code = String(row && row.transCode || '').toUpperCase();
+  return !!(row && row.ticker && row.activityDate >= cutoff &&
+    ['BUY', 'SELL', 'CDIV'].indexOf(code) !== -1 &&
+    ['BTO', 'STC', 'STO', 'BTC'].indexOf(code) === -1 &&
+    !/\b(call|put)\b/i.test(row.description));
+}
+
+function readLatestRecurringActivityByTicker_(ss, investmentId) {
+  var result = {};
+  var activity = ss.getSheetByName(getSheetNames_().INVESTMENT_ACTIVITY);
+  if (!activity || activity.getLastRow() < 2) return result;
+  activity.getRange(2, 1, activity.getLastRow() - 1,
+    INVESTMENT_ACTIVITY_HEADERS_.length).getValues().forEach(function(row) {
+    if (String(row[1] || '').trim() !== investmentId ||
+        String(row[6] || '').trim() !== 'RECURRING_BUY') return;
+    var ticker = normalizeInvestmentTicker_(row[5]);
+    var activityDate = String(row[3] || '').trim();
+    if (!ticker || !activityDate) return;
+    if (!result[ticker] || activityDate > result[ticker].activityDate) {
+      result[ticker] = { activityDate: activityDate, amount: 0 };
+    }
+    if (activityDate === result[ticker].activityDate) {
+      result[ticker].amount = round2_(result[ticker].amount + Math.abs(Number(row[9]) || 0));
+    }
+  });
+  return result;
 }
 
 function getInvestmentActivityImportSetupFromDashboard() {
@@ -170,27 +322,182 @@ function previewInvestmentActivityImportFromDashboard(payload, optionalSs) {
     });
   }
 
-  var universe = {};
-  Object.keys(recurringUniverse).forEach(function(ticker) { universe[ticker] = true; });
-  Object.keys(dividendUniverse).forEach(function(ticker) { universe[ticker] = true; });
+  var detectionUniverse = {};
+  Object.keys(recurringUniverse).forEach(function(ticker) { detectionUniverse[ticker] = true; });
+  Object.keys(dividendUniverse).forEach(function(ticker) { detectionUniverse[ticker] = true; });
   var detectedCutoff = '';
   parsed.forEach(function(row) {
     var code = String(row.transCode || '').toUpperCase();
-    if (!universe[row.ticker] || (code !== 'BUY' && code !== 'SELL')) return;
+    if (!detectionUniverse[row.ticker] || (code !== 'BUY' && code !== 'SELL')) return;
     if (!detectedCutoff || row.activityDate < detectedCutoff) detectedCutoff = row.activityDate;
   });
   var cutoff = requestedCutoff
     ? normalizeInvestmentImportDate_(requestedCutoff, 'Start date')
     : detectedCutoff;
   if (!cutoff) throw new Error('CashCompass could not detect the portfolio start date. Enter it and preview again.');
+  var tickerDecisions = normalizeInvestmentTickerDecisions_(payload.tickerDecisions);
+  var planRowsByTicker = investmentPlanRowsByTicker_(
+    readInvestmentPlanRows_(ss, account.investmentId));
+  var universe = readSavedInvestmentTickers_(ss, account.investmentId);
+  var reviewEligibleTickers = {};
+  var latestReviewDateByTicker = {};
+  parsed.forEach(function(row) {
+    if (!isInvestmentTickerReviewRow_(row, cutoff)) return;
+    reviewEligibleTickers[row.ticker] = true;
+    if (!latestReviewDateByTicker[row.ticker] ||
+        row.activityDate > latestReviewDateByTicker[row.ticker]) {
+      latestReviewDateByTicker[row.ticker] = row.activityDate;
+    }
+  });
+  Object.keys(tickerDecisions).forEach(function(ticker) {
+    if (!reviewEligibleTickers[ticker]) {
+      throw new Error('Ticker decision is no longer present in this CSV: ' + ticker + '. Preview again.');
+    }
+  });
+  Object.keys(tickerDecisions).forEach(function(ticker) {
+    if (tickerDecisions[ticker] === 'INCLUDE') universe[ticker] = true;
+    if (tickerDecisions[ticker] === 'EXCLUDE') delete universe[ticker];
+  });
+  var reopenedExcludedTickers = {};
+  parsed.forEach(function(row) {
+    var plan = planRowsByTicker[row.ticker] || null;
+    if (!plan || plan.portfolioStatus !== 'EXCLUDED' ||
+        !isInvestmentTickerReviewRow_(row, cutoff) ||
+        String(row.transCode || '').toUpperCase() !== 'BUY') return;
+    if (!plan.activityBoundaryDate || row.activityDate > plan.activityBoundaryDate) {
+      if (!reopenedExcludedTickers[row.ticker] ||
+          row.activityDate < reopenedExcludedTickers[row.ticker]) {
+        reopenedExcludedTickers[row.ticker] = row.activityDate;
+      }
+    }
+  });
+  var tickerDecisionBoundaries = {};
+  Object.keys(tickerDecisions).forEach(function(ticker) {
+    var existingPlan = planRowsByTicker[ticker] || null;
+    if (tickerDecisions[ticker] === 'EXCLUDE') {
+      tickerDecisionBoundaries[ticker] = String(latestReviewDateByTicker[ticker] || '');
+      return;
+    }
+    var boundary = String(existingPlan && existingPlan.activityBoundaryDate || '');
+    var reopenDate = reopenedExcludedTickers[ticker] || '';
+    if (existingPlan && existingPlan.portfolioStatus === 'EXCLUDED' && reopenDate) {
+      parsed.forEach(function(row) {
+        if (row.ticker !== ticker || !isInvestmentTickerReviewRow_(row, cutoff) ||
+            row.activityDate >= reopenDate) return;
+        if (!boundary || row.activityDate > boundary) boundary = row.activityDate;
+      });
+    }
+    tickerDecisionBoundaries[ticker] = boundary;
+  });
+  var candidateByTicker = {};
+  parsed.forEach(function(row) {
+    var ticker = row.ticker;
+    var code = String(row.transCode || '').toUpperCase();
+    if (!isInvestmentTickerReviewRow_(row, cutoff) || universe[ticker] ||
+        tickerDecisions[ticker] === 'EXCLUDE') return;
+    var priorPlan = planRowsByTicker[ticker] || null;
+    if (priorPlan && priorPlan.portfolioStatus === 'EXCLUDED') {
+      if (!reopenedExcludedTickers[ticker] ||
+          row.activityDate < reopenedExcludedTickers[ticker]) return;
+    }
+    if (!candidateByTicker[ticker]) {
+      candidateByTicker[ticker] = {
+        ticker: ticker, activityCount: 0, purchaseAmount: 0,
+        saleAmount: 0, dividendAmount: 0, recurringDetected: false,
+        latestRecurringAmount: 0, latestRecurringDate: '', firstActivityDate: '',
+        lastActivityDate: '', previouslyExcluded: !!(priorPlan &&
+          priorPlan.portfolioStatus === 'EXCLUDED'),
+        reviewedThroughDate: String(priorPlan && priorPlan.activityBoundaryDate || '')
+      };
+    }
+    var candidate = candidateByTicker[ticker];
+    candidate.activityCount++;
+    if (!candidate.firstActivityDate || row.activityDate < candidate.firstActivityDate) {
+      candidate.firstActivityDate = row.activityDate;
+    }
+    if (!candidate.lastActivityDate || row.activityDate > candidate.lastActivityDate) {
+      candidate.lastActivityDate = row.activityDate;
+    }
+    if (code === 'BUY') candidate.purchaseAmount += Math.abs(row.amount);
+    if (code === 'SELL') candidate.saleAmount += Math.abs(row.amount);
+    if (code === 'CDIV') candidate.dividendAmount += Math.abs(row.amount);
+    if (code === 'BUY' && row.recurring) {
+      if (row.activityDate > candidate.latestRecurringDate) {
+        candidate.latestRecurringDate = row.activityDate;
+        candidate.latestRecurringAmount = 0;
+      }
+      if (row.activityDate === candidate.latestRecurringDate) {
+        candidate.latestRecurringAmount += Math.abs(row.amount);
+      }
+      candidate.recurringDetected = true;
+    }
+  });
+  var newTickerCandidates = Object.keys(candidateByTicker).sort().map(function(ticker) {
+    var row = candidateByTicker[ticker];
+    row.purchaseAmount = round2_(row.purchaseAmount);
+    row.saleAmount = round2_(row.saleAmount);
+    row.dividendAmount = round2_(row.dividendAmount);
+    row.latestRecurringAmount = round2_(row.latestRecurringAmount);
+    return row;
+  });
+  var savedRecurringByTicker = readLatestRecurringActivityByTicker_(
+    ss, account.investmentId);
+  var latestRecurringInFile = {};
+  parsed.forEach(function(row) {
+    if (!row.ticker || !universe[row.ticker] || !row.recurring ||
+        String(row.transCode || '').toUpperCase() !== 'BUY' ||
+        row.activityDate < cutoff) return;
+    if (!latestRecurringInFile[row.ticker] ||
+        row.activityDate > latestRecurringInFile[row.ticker].activityDate) {
+      latestRecurringInFile[row.ticker] = { activityDate: row.activityDate, amount: 0 };
+    }
+    if (row.activityDate === latestRecurringInFile[row.ticker].activityDate) {
+      latestRecurringInFile[row.ticker].amount = round2_(
+        latestRecurringInFile[row.ticker].amount + Math.abs(row.amount));
+    }
+  });
+  var recurringPlanChanges = Object.keys(latestRecurringInFile).sort().filter(function(ticker) {
+    var saved = savedRecurringByTicker[ticker];
+    return !saved || latestRecurringInFile[ticker].activityDate > saved.activityDate;
+  }).map(function(ticker) {
+    var saved = savedRecurringByTicker[ticker] || null;
+    var latest = latestRecurringInFile[ticker];
+    var plan = planRowsByTicker[ticker] || null;
+    return {
+      ticker: ticker,
+      previousDetectedAmount: saved ? saved.amount : 0,
+      previousDetectedDate: saved ? saved.activityDate : '',
+      newDetectedAmount: latest.amount,
+      newDetectedDate: latest.activityDate,
+      planConfigured: !!(plan && plan.planFrequency),
+      planFrequency: plan ? plan.planFrequency : '',
+      plannedAmount: plan ? plan.plannedAmount : 0,
+      planActive: plan ? plan.planActive : true
+    };
+  });
   var administrativeOffsets = {};
   parsed.forEach(function(row) {
     if (String(row.transCode || '').toUpperCase() !== 'GOLD' || row.amount >= 0) return;
     administrativeOffsets[row.activityDate + '|' + round2_(Math.abs(row.amount))] = true;
   });
+  var activityBoundaryByTicker = {};
+  Object.keys(universe).forEach(function(ticker) {
+    var plan = planRowsByTicker[ticker] || null;
+    var boundary = tickerDecisions[ticker] === 'INCLUDE'
+      ? tickerDecisionBoundaries[ticker]
+      : String(plan && plan.activityBoundaryDate || '');
+    if (boundary) activityBoundaryByTicker[ticker] = boundary;
+  });
   var accepted = [];
   var excluded = preExcluded.slice();
   parsed.forEach(function(row) {
+    if (universe[row.ticker] && activityBoundaryByTicker[row.ticker] &&
+        row.activityDate <= activityBoundaryByTicker[row.ticker] &&
+        isInvestmentTickerReviewRow_(row, cutoff)) {
+      excluded.push({ sourceRow: row.sourceRow, reason: 'BEFORE_TICKER_BOUNDARY',
+        ticker: row.ticker, transCode: row.transCode, activityDate: row.activityDate });
+      return;
+    }
     var classification = classifyInvestmentImportRow_(row, cutoff, universe, administrativeOffsets);
     if (!classification.accepted) {
       excluded.push({ sourceRow: row.sourceRow, reason: classification.reason,
@@ -232,10 +539,11 @@ function previewInvestmentActivityImportFromDashboard(payload, optionalSs) {
     accepted.push(opening);
   });
 
-  if (!accepted.length) {
+  if (!accepted.length && !newTickerCandidates.length) {
     throw new Error('No supported long-term portfolio activity was found on or after ' + cutoff + '.');
   }
-  var digest = investmentImportDigest_(account.investmentId, cutoff, rawCsv);
+  var digest = investmentImportDigest_(account.investmentId, cutoff, rawCsv,
+    investmentTickerDecisionsDigestPart_(tickerDecisions, tickerDecisionBoundaries));
   var summary = summarizeInvestmentImportPreview_(accepted, excluded, universe);
   return {
     investmentId: account.investmentId,
@@ -244,6 +552,11 @@ function previewInvestmentActivityImportFromDashboard(payload, optionalSs) {
     digest: digest,
     acceptedRows: accepted,
     excludedRows: excluded,
+    newTickerCandidates: newTickerCandidates,
+    appliedTickerDecisions: tickerDecisions,
+    tickerDecisionBoundaries: tickerDecisionBoundaries,
+    requiresTickerDecisions: newTickerCandidates.length > 0,
+    recurringPlanChanges: recurringPlanChanges,
     summary: summary
   };
 }
@@ -267,10 +580,14 @@ function importInvestmentActivityFromDashboard(payload, optionalSs) {
   var activitySheet = null;
   var appendedStart = 0;
   var appendedCount = 0;
+  var decisionAppend = null;
   try {
     var preview = previewInvestmentActivityImportFromDashboard(payload, ss);
     if (!payload.expectedDigest || String(payload.expectedDigest) !== preview.digest) {
       throw new Error('The CSV or import settings changed after preview. Preview it again before saving.');
+    }
+    if (preview.requiresTickerDecisions) {
+      throw new Error('Review every new ticker and update the Preview before saving.');
     }
     activitySheet = ensureInvestmentActivitySheet_(ss);
     ensureInvestmentHoldingsSheet_(ss);
@@ -295,6 +612,10 @@ function importInvestmentActivityFromDashboard(payload, optionalSs) {
     fitInvestmentSystemSheetColumns_(activitySheet, INVESTMENT_ACTIVITY_HEADERS_,
       'investment activity import content fit');
     rebuildInvestmentHoldingsForAccount_(ss, preview.investmentId, preview.accountName);
+    decisionAppend = saveInvestmentTickerDecisions_(ss, {
+      investmentId: preview.investmentId,
+      accountName: preview.accountName
+    }, preview.appliedTickerDecisions, preview.tickerDecisionBoundaries);
     try {
       appendActivityLog_(ss, {
         eventType: 'investment_activity_import', entryDate: preview.cutoffDate,
@@ -308,6 +629,7 @@ function importInvestmentActivityFromDashboard(payload, optionalSs) {
           appendedRows: newRows.length,
           duplicateRows: preview.summary.acceptedCount - newRows.length,
           excludedRows: preview.summary.excludedCount,
+          tickerDecisions: preview.appliedTickerDecisions,
           source: INVESTMENT_ACTIVITY_SOURCE_ROBINHOOD_
         }
       });
@@ -323,6 +645,24 @@ function importInvestmentActivityFromDashboard(payload, optionalSs) {
       holdings: getInvestmentHoldingsSummary_(ss, preview.investmentId)
     };
   } catch (e) {
+    var rollbackProblems = [];
+    if (decisionAppend && decisionAppend.sheet && decisionAppend.rowCount > 0) {
+      try {
+        decisionAppend.sheet.deleteRows(decisionAppend.startRow, decisionAppend.rowCount);
+      } catch (_decisionRollbackErr) {
+        rollbackProblems.push('portfolio decisions');
+      }
+    }
+    if (decisionAppend && decisionAppend.updatedRows) {
+      try {
+        decisionAppend.updatedRows.forEach(function(change) {
+          decisionAppend.sheet.getRange(change.row, 1, 1, INVESTMENT_PLAN_HEADERS_.length)
+            .setValues([change.previous]);
+        });
+      } catch (_decisionUpdateRollbackErr) {
+        rollbackProblems.push('portfolio decision updates');
+      }
+    }
     if (activitySheet && appendedStart >= 2 && appendedCount > 0) {
       try {
         activitySheet.deleteRows(appendedStart, appendedCount);
@@ -330,8 +670,12 @@ function importInvestmentActivityFromDashboard(payload, optionalSs) {
           rebuildInvestmentHoldingsForAccount_(ss, preview.investmentId, preview.accountName);
         }
       } catch (_rollbackErr) {
-        throw new Error((e.message || String(e)) + ' The activity rollback could not be confirmed.');
+        rollbackProblems.push('activity and holdings');
       }
+    }
+    if (rollbackProblems.length) {
+      throw new Error((e.message || String(e)) + ' Rollback could not be confirmed for: ' +
+        rollbackProblems.join(', ') + '.');
     }
     throw e;
   } finally {
@@ -513,6 +857,73 @@ function readInvestmentActivityImportKeys_(sheet) {
   return result;
 }
 
+function saveInvestmentTickerDecisions_(ss, account, decisions, boundaries) {
+  var keys = Object.keys(decisions || {}).sort();
+  if (!keys.length) return null;
+  var sheet = ensureInvestmentPlansSheet_(ss);
+  var existing = investmentPlanRowsByTicker_(
+    readInvestmentPlanRows_(ss, account.investmentId));
+  var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  var rows = [];
+  var updatedRows = [];
+  keys.forEach(function(ticker) {
+    var wanted = decisions[ticker] === 'INCLUDE' ? 'INCLUDED' : 'EXCLUDED';
+    var boundary = String(boundaries && boundaries[ticker] || '');
+    var prior = existing[ticker] || null;
+    if (prior) {
+      var previous = sheet.getRange(prior.sheetRow, 1, 1,
+        INVESTMENT_PLAN_HEADERS_.length).getValues()[0];
+      var next = previous.slice();
+      next[0] = account.investmentId;
+      next[1] = account.accountName;
+      next[2] = ticker;
+      next[3] = wanted;
+      next[7] = now;
+      next[8] = boundary || prior.activityBoundaryDate || '';
+      if (prior.portfolioStatus === wanted &&
+          prior.activityBoundaryDate === String(next[8] || '')) return;
+      updatedRows.push({ row: prior.sheetRow, previous: previous, next: next });
+      return;
+    }
+    rows.push([account.investmentId, account.accountName, ticker, wanted,
+      '', 0, 'Yes', now, boundary]);
+  });
+  if (!rows.length && !updatedRows.length) return null;
+  var startRow = rows.length ? sheet.getLastRow() + 1 : 0;
+  try {
+    updatedRows.forEach(function(change) {
+      sheet.getRange(change.row, 1, 1, INVESTMENT_PLAN_HEADERS_.length)
+        .setValues([change.next]);
+    });
+    if (rows.length) {
+      sheet.getRange(startRow, 1, rows.length, INVESTMENT_PLAN_HEADERS_.length)
+        .setValues(rows);
+    }
+    fitInvestmentSystemSheetColumns_(sheet, INVESTMENT_PLAN_HEADERS_,
+      'investment ticker decision content fit');
+  } catch (writeErr) {
+    var rollbackFailed = false;
+    try {
+      if (rows.length && sheet.getLastRow() >= startRow) {
+        sheet.deleteRows(startRow, rows.length);
+      }
+      updatedRows.forEach(function(change) {
+        sheet.getRange(change.row, 1, 1, INVESTMENT_PLAN_HEADERS_.length)
+          .setValues([change.previous]);
+      });
+    } catch (_rollbackErr) {
+      rollbackFailed = true;
+    }
+    if (rollbackFailed) {
+      throw new Error((writeErr.message || String(writeErr)) +
+        ' The ticker decision rollback could not be confirmed.');
+    }
+    throw writeErr;
+  }
+  return { sheet: sheet, startRow: startRow, rowCount: rows.length,
+    updatedRows: updatedRows };
+}
+
 function rebuildInvestmentHoldingsForAccount_(ss, investmentId, accountName) {
   var activity = ensureInvestmentActivitySheet_(ss);
   var holdings = ensureInvestmentHoldingsSheet_(ss);
@@ -583,9 +994,121 @@ function getInvestmentHoldingsSummary_(ss, investmentId) {
       return {
         ticker: row[3], quantity: Number(row[4]) || 0,
         totalBuyCost: Number(row[5]) || 0,
+        saleProceeds: Number(row[6]) || 0,
         dividendsReceived: Number(row[7]) || 0,
         weeklyRecurringBuy: Number(row[8]) || 0,
+        lastActivityPrice: Number(row[9]) || 0,
+        activityCount: Number(row[10]) || 0,
         asOfDate: String(row[2] || '')
       };
     });
+}
+
+function getInvestmentPortfolioActivityFromDashboard(investmentId, optionalSs) {
+  var ss = optionalSs || getUserSpreadsheet_();
+  var account = resolveEligibleInvestmentImportAccount_(ss, investmentId);
+  var holdings = getInvestmentHoldingsSummary_(ss, account.investmentId);
+  var planRows = readInvestmentPlanRows_(ss, account.investmentId);
+  var plansByTicker = investmentPlanRowsByTicker_(planRows);
+  var recurringByTicker = readLatestRecurringActivityByTicker_(ss, account.investmentId);
+  var portfolio = holdings.map(function(row) {
+    var plan = plansByTicker[row.ticker] || null;
+    var recurring = recurringByTicker[row.ticker] || null;
+    return {
+      ticker: row.ticker,
+      quantity: row.quantity,
+      totalBuyCost: row.totalBuyCost,
+      saleProceeds: row.saleProceeds,
+      dividendsReceived: row.dividendsReceived,
+      lastActivityPrice: row.lastActivityPrice,
+      activityCount: row.activityCount,
+      detectedRecurringAmount: recurring ? recurring.amount : 0,
+      detectedRecurringDate: recurring ? recurring.activityDate : '',
+      planConfigured: !!(plan && plan.planFrequency),
+      planFrequency: plan ? plan.planFrequency : '',
+      plannedAmount: plan ? plan.plannedAmount : 0,
+      planActive: plan ? plan.planActive : true
+    };
+  });
+  return {
+    investmentId: account.investmentId,
+    accountName: account.accountName,
+    holdings: portfolio,
+    excludedTickers: planRows.filter(function(row) {
+      return row.portfolioStatus === 'EXCLUDED';
+    }).map(function(row) {
+      return { ticker: row.ticker, reviewedThroughDate: row.activityBoundaryDate };
+    }).sort(function(a, b) { return a.ticker.localeCompare(b.ticker); })
+  };
+}
+
+function saveInvestmentTickerPlanFromDashboard(payload, optionalSs) {
+  payload = payload || {};
+  var ss = optionalSs || getUserSpreadsheet_();
+  var lock = LockService.getUserLock();
+  if (!lock.tryLock(15000)) {
+    throw new Error('Another investment change is in progress. Please try again in a moment.');
+  }
+  try {
+    var account = resolveEligibleInvestmentImportAccount_(ss, payload.investmentId);
+    var ticker = normalizeInvestmentTicker_(payload.ticker);
+    if (!ticker) throw new Error('Choose a valid ticker.');
+    var frequency = normalizeInvestmentPlanFrequency_(payload.planFrequency, false);
+    var amount = Number(payload.plannedAmount);
+    if (!isFinite(amount) || amount < 0 || amount > 1000000) {
+      throw new Error('Planned amount must be between $0 and $1,000,000.');
+    }
+    amount = round2_(amount);
+    var planActive = payload.planActive !== false &&
+      String(payload.planActive || '').trim().toUpperCase() !== 'NO';
+    var savedTickers = readSavedInvestmentTickers_(ss, account.investmentId);
+    var existingRows = investmentPlanRowsByTicker_(
+      readInvestmentPlanRows_(ss, account.investmentId));
+    if (!savedTickers[ticker] && !existingRows[ticker]) {
+      throw new Error('That ticker is not part of the selected portfolio. Import and include it first.');
+    }
+    var sheet = ensureInvestmentPlansSheet_(ss);
+    var existing = existingRows[ticker] || null;
+    var rowNumber = existing ? existing.sheetRow : sheet.getLastRow() + 1;
+    var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    var nextRow = [account.investmentId, account.accountName, ticker, 'INCLUDED',
+      frequency, amount, planActive ? 'Yes' : 'No', now,
+      existing ? existing.activityBoundaryDate : ''];
+    var previous = existing
+      ? sheet.getRange(rowNumber, 1, 1, INVESTMENT_PLAN_HEADERS_.length).getValues()[0]
+      : null;
+    try {
+      sheet.getRange(rowNumber, 1, 1, INVESTMENT_PLAN_HEADERS_.length).setValues([nextRow]);
+      fitInvestmentSystemSheetColumns_(sheet, INVESTMENT_PLAN_HEADERS_,
+        'investment plan update content fit');
+    } catch (writeErr) {
+      try {
+        if (previous) {
+          sheet.getRange(rowNumber, 1, 1, INVESTMENT_PLAN_HEADERS_.length)
+            .setValues([previous]);
+        } else if (sheet.getLastRow() >= rowNumber) {
+          sheet.deleteRow(rowNumber);
+        }
+      } catch (_rollbackErr) {
+        throw new Error((writeErr.message || String(writeErr)) +
+          ' The plan rollback could not be confirmed.');
+      }
+      throw writeErr;
+    }
+    try {
+      appendActivityLog_(ss, {
+        eventType: 'investment_plan_update', entryDate: now.slice(0, 10),
+        amount: amount, direction: 'INFO', payee: account.accountName,
+        category: 'Investments', accountSource: account.accountName,
+        details: {
+          investmentId: account.investmentId, ticker: ticker,
+          planFrequency: frequency, plannedAmount: amount,
+          planActive: planActive
+        }
+      });
+    } catch (_auditErr) { /* best-effort audit */ }
+    return getInvestmentPortfolioActivityFromDashboard(account.investmentId, ss);
+  } finally {
+    lock.releaseLock();
+  }
 }

@@ -2539,6 +2539,7 @@ function saveTrackedInvestmentAccountFromDashboard(payload, optionalSs) {
   let assetsSheet = null;
   let assetsRowSnapshot = null;
   const historyTargets = [];
+  const systemNameTargets = [];
 
   try {
     const ss = optionalSs || getUserSpreadsheet_();
@@ -2621,6 +2622,31 @@ function saveTrackedInvestmentAccountFromDashboard(payload, optionalSs) {
       throw new Error('No Investments history was found for this account. Nothing was changed.');
     }
 
+    const investmentId = headerMap.investmentIdColZero === -1 ? '' : String(
+      assetsDisplay[sysAssetsRow - 1][headerMap.investmentIdColZero] || ''
+    ).trim();
+    if (newName !== actualName && investmentId) {
+      [
+        { name: getSheetNames_().INVESTMENT_ACTIVITY, idCol: 2, nameCol: 3 },
+        { name: getSheetNames_().INVESTMENT_HOLDINGS, idCol: 1, nameCol: 2 },
+        { name: getSheetNames_().INVESTMENT_PLANS, idCol: 1, nameCol: 2 }
+      ].forEach(function(spec) {
+        const sheet = ss.getSheetByName(spec.name);
+        if (!sheet || sheet.getLastRow() < 2) return;
+        const values = sheet.getRange(2, 1, sheet.getLastRow() - 1,
+          Math.max(spec.idCol, spec.nameCol)).getValues();
+        for (let rowIndex = 0; rowIndex < values.length; rowIndex++) {
+          if (String(values[rowIndex][spec.idCol - 1] || '').trim() !== investmentId) continue;
+          systemNameTargets.push({
+            sheet: sheet,
+            row: rowIndex + 2,
+            col: spec.nameCol,
+            oldName: sheet.getRange(rowIndex + 2, spec.nameCol).getValue()
+          });
+        }
+      });
+    }
+
     const lastCol = Math.max(assetsSheet.getLastColumn(), 1);
     const rowRange = assetsSheet.getRange(sysAssetsRow, 1, 1, lastCol);
     assetsRowSnapshot = {
@@ -2657,6 +2683,12 @@ function saveTrackedInvestmentAccountFromDashboard(payload, optionalSs) {
     if (typeStr !== oldType) {
       assetsSheet.getRange(sysAssetsRow, headerMap.typeCol).setValue(typeStr);
     }
+    if (newName !== actualName) {
+      for (let i = 0; i < systemNameTargets.length; i++) {
+        systemNameTargets[i].sheet.getRange(
+          systemNameTargets[i].row, systemNameTargets[i].col).setValue(newName);
+      }
+    }
 
     try { touchDashboardSourceUpdated_('investments'); } catch (_touchErr) {}
     try {
@@ -2680,6 +2712,7 @@ function saveTrackedInvestmentAccountFromDashboard(payload, optionalSs) {
           newType: typeStr,
           changedFields: changedFields,
           historyRowsUpdated: historyTargets.length,
+          systemRowsUpdated: systemNameTargets.length,
           sysAssetsRow: sysAssetsRow
         })
       });
@@ -2691,6 +2724,9 @@ function saveTrackedInvestmentAccountFromDashboard(payload, optionalSs) {
     if (newName !== actualName) {
       fitTargets.push({ sheet: invSheet, col: 1 });
       fitTargets.push({ sheet: assetsSheet, col: headerMap.nameCol });
+      for (let i = 0; i < systemNameTargets.length; i++) {
+        fitTargets.push({ sheet: systemNameTargets[i].sheet, col: systemNameTargets[i].col });
+      }
     }
     if (typeStr !== oldType) {
       fitTargets.push({ sheet: invSheet, col: 2 });
@@ -2726,6 +2762,13 @@ function saveTrackedInvestmentAccountFromDashboard(payload, optionalSs) {
           invSheet.getRange(historyTargets[i].row, 2).setValue(historyTargets[i].oldType);
         }
       } catch (_restoreHistoryErr) {}
+      try {
+        for (let i = 0; i < systemNameTargets.length; i++) {
+          systemNameTargets[i].sheet.getRange(
+            systemNameTargets[i].row, systemNameTargets[i].col)
+            .setValue(systemNameTargets[i].oldName);
+        }
+      } catch (_restoreSystemNamesErr) {}
       throw new Error('Changes were not saved and were rolled back: ' +
         (err && err.message || err));
     }

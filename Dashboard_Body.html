@@ -687,6 +687,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
             <p class="muted">Edit account details or stop tracking an investment while preserving its value history.</p>
           </div>
           <div class="tracked-editor-actions">
+            <button type="button" id="inv_portfolio_activity_btn" class="small-btn" onclick="openInvestmentPortfolioDrawer_()">Portfolio activity</button>
             <button type="button" id="inv_show_inactive_btn" class="small-btn debt-inactive-toggle" onclick="toggleInactiveInvestmentAccountsView_()" aria-expanded="false" aria-controls="inv_inactive_wrap"><span class="debt-caret" aria-hidden="true">&#9656;</span>Show inactive investments</button>
           </div>
         </div>
@@ -720,30 +721,6 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading investments…</span></div>
         </div>
 
-        <div id="inv_activity_import_wrap" class="bills-add-wrap" style="margin:20px 0 0 0;padding:16px;border:1px solid #dbe3ee;border-radius:10px;background:#f8fafc;">
-          <div class="card-title" style="margin-top:0;">Import portfolio activity</div>
-          <p class="muted" style="margin:0 0 12px 0;">Preview a Robinhood activity CSV for an Income-Producing account. Options, unrelated holdings, fees, and cash administration are excluded before anything is saved.</p>
-          <div class="grid-2">
-            <div>
-              <label for="inv_activity_account">Income-Producing account</label>
-              <select id="inv_activity_account" onchange="invalidateInvestmentActivityPreview_('Account changed. Preview the CSV again.')"></select>
-              <label for="inv_activity_start_date">Portfolio start date (optional)</label>
-              <input type="date" id="inv_activity_start_date" onchange="invalidateInvestmentActivityPreview_('Start date changed. Preview the CSV again.')">
-              <div class="muted" style="margin-top:4px;font-size:12px;">Leave blank to detect the first long-term portfolio trade in the CSV.</div>
-              <label for="inv_activity_file">Robinhood activity CSV</label>
-              <input type="file" id="inv_activity_file" accept=".csv,text/csv" onchange="onInvestmentActivityFileChanged_()">
-              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-                <button type="button" class="small-btn" onclick="previewInvestmentActivityImport_()">Preview import</button>
-                <button type="button" id="inv_activity_save_btn" class="small-btn primary" onclick="saveInvestmentActivityImport_()" disabled>Save imported activity</button>
-                <button type="button" class="small-btn" onclick="clearInvestmentActivityImport_()">Clear</button>
-              </div>
-            </div>
-            <div>
-              <div id="inv_activity_preview" class="info muted" style="min-height:150px;">Choose an account and CSV, then preview the accepted and excluded activity.</div>
-            </div>
-          </div>
-          <div id="inv_activity_status" class="status" aria-live="polite"></div>
-        </div>
         <div id="inv_inactive_wrap" class="debt-inactive-section" style="display:none;">
           <div class="card-title">Inactive investments</div>
           <p class="muted" style="margin:0 0 12px 0;">These investments are not part of the current tracking year. When Reactivate is available, it restores the existing account without changing its values or history; historical-only records remain available for reporting.</p>
@@ -752,6 +729,80 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       </div>
 
       <div id="inv_status" class="status"></div>
+
+      <div id="inv_portfolio_drawer_backdrop" class="bill-pay-drawer-backdrop" hidden onclick="onInvestmentPortfolioDrawerBackdropClick_(event)">
+        <aside id="inv_portfolio_drawer" class="bill-pay-drawer investment-portfolio-drawer" role="dialog" aria-modal="true" aria-labelledby="inv_portfolio_drawer_title" tabindex="-1">
+          <div class="bill-pay-drawer-head">
+            <div>
+              <div class="bill-pay-drawer-eyebrow">Investments</div>
+              <h2 id="inv_portfolio_drawer_title">Portfolio activity</h2>
+            </div>
+            <button type="button" id="inv_portfolio_drawer_close" class="bill-pay-drawer-close" aria-label="Close Portfolio activity" onclick="closeInvestmentPortfolioDrawer_()">×</button>
+          </div>
+          <div class="bill-pay-drawer-body">
+            <label for="inv_activity_account">Income-Producing account</label>
+            <select id="inv_activity_account" onchange="onInvestmentPortfolioAccountChanged_()"></select>
+            <p class="muted investment-portfolio-account-help">Choose an account to view its holdings, update recurring plans, or import activity. Each account is kept separate.</p>
+
+            <div id="inv_portfolio_account_content" hidden>
+              <div class="investment-portfolio-tabs" role="tablist" aria-label="Portfolio activity views">
+                <button type="button" id="inv_portfolio_view_btn" class="segment-btn active" role="tab" aria-selected="true" onclick="setInvestmentPortfolioDrawerView_('portfolio')">Portfolio</button>
+                <button type="button" id="inv_portfolio_import_btn" class="segment-btn" role="tab" aria-selected="false" onclick="setInvestmentPortfolioDrawerView_('import')">Import CSV</button>
+              </div>
+
+              <section id="inv_portfolio_view" class="investment-portfolio-view">
+                <div id="inv_portfolio_summary" class="investment-portfolio-list">
+                  <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading portfolio…</span></div>
+                </div>
+                <div id="inv_portfolio_plan_editor" class="investment-plan-editor" hidden>
+                  <div class="card-title">Edit recurring plan</div>
+                  <div id="inv_plan_ticker" class="investment-plan-ticker">—</div>
+                  <div class="grid-2">
+                    <div>
+                      <label for="inv_plan_frequency">Frequency</label>
+                      <select id="inv_plan_frequency">
+                        <option value="WEEKLY">Weekly</option>
+                        <option value="BIWEEKLY">Biweekly</option>
+                        <option value="MONTHLY">Monthly</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label for="inv_plan_amount">Amount per occurrence</label>
+                      <input type="text" id="inv_plan_amount" inputmode="decimal" onfocus="currencyFocus('inv_plan_amount')" onblur="currencyBlur('inv_plan_amount')">
+                    </div>
+                  </div>
+                  <label class="investment-plan-active-row"><input type="checkbox" id="inv_plan_active" checked> Plan is active</label>
+                  <div class="investment-plan-actions">
+                    <button type="button" id="inv_plan_save_btn" class="small-btn primary" onclick="saveInvestmentTickerPlan_()">Save plan</button>
+                    <button type="button" class="small-btn" onclick="closeInvestmentPlanEditor_()">Cancel</button>
+                  </div>
+                </div>
+                <div id="inv_portfolio_status" class="status" aria-live="polite"></div>
+              </section>
+
+              <section id="inv_portfolio_import_view" class="investment-portfolio-view" hidden>
+                <p class="muted">Preview a Robinhood activity CSV for the selected account. New tickers must be included or marked as not part of this portfolio for now before Save.</p>
+                <label for="inv_activity_start_date">Portfolio start date (optional)</label>
+                <input type="date" id="inv_activity_start_date" onchange="invalidateInvestmentActivityPreview_('Start date changed. Preview the CSV again.')">
+                <div class="muted" style="margin-top:4px;font-size:12px;">Leave blank to detect the first long-term portfolio trade in the CSV.</div>
+                <label for="inv_activity_file">Robinhood activity CSV</label>
+                <input type="file" id="inv_activity_file" accept=".csv,text/csv" onchange="onInvestmentActivityFileChanged_()">
+                <div class="investment-import-actions">
+                  <button type="button" class="small-btn" onclick="previewInvestmentActivityImport_()">Preview import</button>
+                  <button type="button" id="inv_activity_apply_tickers_btn" class="small-btn" onclick="refreshInvestmentActivityPreviewWithTickerDecisions_()" hidden>Update preview with ticker choices</button>
+                  <button type="button" id="inv_activity_save_btn" class="small-btn primary" onclick="saveInvestmentActivityImport_()" disabled>Save imported activity</button>
+                  <button type="button" class="small-btn" onclick="clearInvestmentActivityImport_()">Clear</button>
+                </div>
+                <div id="inv_activity_preview" class="info muted investment-activity-preview">Choose a CSV, then preview the accepted, excluded, and newly detected activity.</div>
+                <div id="inv_activity_status" class="status" aria-live="polite"></div>
+              </section>
+            </div>
+          </div>
+          <div class="bill-pay-drawer-actions">
+            <button type="button" class="small-btn" onclick="closeInvestmentPortfolioDrawer_()">Close</button>
+          </div>
+        </aside>
+      </div>
     </div>
 
     <!--

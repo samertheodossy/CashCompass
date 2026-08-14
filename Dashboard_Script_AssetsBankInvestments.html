@@ -17,8 +17,14 @@ var __investmentActivityImportState = {
   digest: '',
   investmentId: '',
   cutoffDate: '',
-  preview: null
+  preview: null,
+  tickerDecisions: {}
 };
+var __investmentPortfolioDrawerPreviousFocus = null;
+var __investmentPortfolioDrawerKeyHandlerInstalled = false;
+var __investmentPortfolioData = null;
+var __investmentPlanEditingTicker = '';
+var __investmentPortfolioSelectedId = '';
 
 function fillBankAccountDropdownFromData_(data) {
   const sel = document.getElementById('bank_account');
@@ -1273,8 +1279,271 @@ function isInvestmentNameRelatedError_(msg) {
 function setInvestmentPanelMode(mode) {
   const m = setTrackedEditorMode_({ prefix: 'inv' }, mode);
   if (m !== 'manage') closeInvestmentEdit_();
+  if (m !== 'manage') closeInvestmentPortfolioDrawer_();
   if (m === 'update') setStatus('inv_status', '', false);
   if (m === 'manage') renderInvestmentManageList_();
+}
+
+function installInvestmentPortfolioDrawerKeyHandler_() {
+  if (__investmentPortfolioDrawerKeyHandlerInstalled) return;
+  __investmentPortfolioDrawerKeyHandlerInstalled = true;
+  document.addEventListener('keydown', function(event) {
+    var backdrop = document.getElementById('inv_portfolio_drawer_backdrop');
+    if (!backdrop || backdrop.hidden) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeInvestmentPortfolioDrawer_();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    var drawer = document.getElementById('inv_portfolio_drawer');
+    if (!drawer) return;
+    var focusable = Array.prototype.slice.call(drawer.querySelectorAll(
+      'button:not([disabled]), select:not([disabled]), input:not([disabled])'
+    )).filter(function(el) { return !el.hidden && el.offsetParent !== null; });
+    if (!focusable.length) return;
+    var first = focusable[0];
+    var last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+}
+
+function openInvestmentPortfolioDrawer_() {
+  var backdrop = document.getElementById('inv_portfolio_drawer_backdrop');
+  var drawer = document.getElementById('inv_portfolio_drawer');
+  var select = document.getElementById('inv_activity_account');
+  if (!backdrop || !drawer || !select) {
+    setStatus('inv_status', 'The Portfolio activity drawer could not open. Refresh and try again.', true);
+    return;
+  }
+  __investmentPortfolioDrawerPreviousFocus = document.activeElement;
+  __investmentPortfolioData = null;
+  __investmentPlanEditingTicker = '';
+  __investmentPortfolioSelectedId = '';
+  select.value = '';
+  var content = document.getElementById('inv_portfolio_account_content');
+  if (content) content.hidden = true;
+  clearInvestmentActivityImport_();
+  closeInvestmentPlanEditor_();
+  setInvestmentPortfolioDrawerView_('portfolio');
+  setStatus('inv_portfolio_status', '', false);
+  backdrop.hidden = false;
+  document.body.classList.add('bill-pay-drawer-open');
+  installInvestmentPortfolioDrawerKeyHandler_();
+  setTimeout(function() { try { select.focus(); } catch (_e) { drawer.focus(); } }, 0);
+}
+
+function closeInvestmentPortfolioDrawer_() {
+  var backdrop = document.getElementById('inv_portfolio_drawer_backdrop');
+  if (backdrop) backdrop.hidden = true;
+  document.body.classList.remove('bill-pay-drawer-open');
+  __investmentPortfolioData = null;
+  __investmentPlanEditingTicker = '';
+  var previous = __investmentPortfolioDrawerPreviousFocus;
+  __investmentPortfolioDrawerPreviousFocus = null;
+  if (previous && typeof previous.focus === 'function' &&
+      document.documentElement.contains(previous)) {
+    try { previous.focus(); } catch (_e) {}
+  }
+}
+
+function onInvestmentPortfolioDrawerBackdropClick_(event) {
+  if (event && event.target === event.currentTarget) closeInvestmentPortfolioDrawer_();
+}
+
+function setInvestmentPortfolioDrawerView_(view) {
+  var mode = view === 'import' ? 'import' : 'portfolio';
+  var portfolio = document.getElementById('inv_portfolio_view');
+  var importView = document.getElementById('inv_portfolio_import_view');
+  var portfolioBtn = document.getElementById('inv_portfolio_view_btn');
+  var importBtn = document.getElementById('inv_portfolio_import_btn');
+  if (portfolio) portfolio.hidden = mode !== 'portfolio';
+  if (importView) importView.hidden = mode !== 'import';
+  if (portfolioBtn) {
+    portfolioBtn.classList.toggle('active', mode === 'portfolio');
+    portfolioBtn.setAttribute('aria-selected', mode === 'portfolio' ? 'true' : 'false');
+  }
+  if (importBtn) {
+    importBtn.classList.toggle('active', mode === 'import');
+    importBtn.setAttribute('aria-selected', mode === 'import' ? 'true' : 'false');
+  }
+  if (mode === 'portfolio' && __investmentPortfolioData) {
+    renderInvestmentPortfolioSummary_(__investmentPortfolioData);
+  }
+}
+
+function onInvestmentPortfolioAccountChanged_() {
+  var select = document.getElementById('inv_activity_account');
+  var investmentId = String(select && select.value || '').trim();
+  if (__investmentPortfolioSelectedId && investmentId !== __investmentPortfolioSelectedId &&
+      (__investmentActivityImportState.rawCsv || __investmentActivityImportState.preview)) {
+    if (!window.confirm('Switch accounts and discard the current CSV preview?')) {
+      select.value = __investmentPortfolioSelectedId;
+      return;
+    }
+  }
+  __investmentPortfolioSelectedId = investmentId;
+  clearInvestmentActivityImport_();
+  closeInvestmentPlanEditor_();
+  __investmentPortfolioData = null;
+  var content = document.getElementById('inv_portfolio_account_content');
+  if (content) content.hidden = !investmentId;
+  if (!investmentId) return;
+  setInvestmentPortfolioDrawerView_('portfolio');
+  var host = document.getElementById('inv_portfolio_summary');
+  if (host) host.innerHTML = '<div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading portfolio…</span></div>';
+  setStatusLoading('inv_portfolio_status', 'Loading the selected portfolio…');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (!select || select.value !== investmentId) return;
+      __investmentPortfolioData = result || {};
+      renderInvestmentPortfolioSummary_(result || {});
+      setStatus('inv_portfolio_status', '', false);
+    })
+    .withFailureHandler(function(err) {
+      if (!select || select.value !== investmentId) return;
+      if (host) host.textContent = 'Couldn’t load this portfolio.';
+      setStatus('inv_portfolio_status', err.message || String(err), true);
+    })
+    .getInvestmentPortfolioActivityFromDashboard(investmentId);
+}
+
+function investmentPlanFrequencyLabel_(value) {
+  var labels = { WEEKLY: 'Weekly', BIWEEKLY: 'Biweekly', MONTHLY: 'Monthly' };
+  return labels[String(value || '').toUpperCase()] || 'Not set';
+}
+
+function renderInvestmentPortfolioSummary_(data) {
+  var host = document.getElementById('inv_portfolio_summary');
+  if (!host) return;
+  host.innerHTML = '';
+  var holdings = Array.isArray(data && data.holdings) ? data.holdings : [];
+  if (!holdings.length) {
+    var empty = document.createElement('div');
+    empty.className = 'info muted';
+    empty.textContent = 'No saved holdings yet for ' + (data.accountName || 'this account') +
+      '. Open Import CSV to preview the first activity file.';
+    host.appendChild(empty);
+  }
+  holdings.forEach(function(row) {
+    var card = document.createElement('div');
+    card.className = 'investment-portfolio-card';
+    var head = document.createElement('div');
+    head.className = 'investment-portfolio-card-head';
+    var ticker = document.createElement('div');
+    ticker.className = 'investment-portfolio-ticker';
+    ticker.textContent = row.ticker;
+    var edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'small-btn';
+    edit.textContent = row.planConfigured ? 'Edit plan' : 'Set plan';
+    edit.onclick = function() { openInvestmentPlanEditor_(row.ticker); };
+    head.appendChild(ticker);
+    head.appendChild(edit);
+    card.appendChild(head);
+    var metrics = document.createElement('div');
+    metrics.className = 'investment-portfolio-metrics';
+    var metricRows = [
+      ['Shares', Number(row.quantity || 0).toFixed(4)],
+      ['Dividends received', fmtCurrency(Number(row.dividendsReceived || 0))],
+      ['Last recurring purchase', row.detectedRecurringDate
+        ? fmtCurrency(Number(row.detectedRecurringAmount || 0)) + ' on ' + row.detectedRecurringDate
+        : 'None detected'],
+      ['Your plan', row.planConfigured
+        ? (row.planActive ? '' : 'Paused · ') + investmentPlanFrequencyLabel_(row.planFrequency) +
+          ' · ' + fmtCurrency(Number(row.plannedAmount || 0))
+        : 'Not confirmed']
+    ];
+    metricRows.forEach(function(pair) {
+      var metric = document.createElement('div');
+      metric.className = 'investment-portfolio-metric';
+      var value = document.createElement('strong');
+      value.textContent = pair[1];
+      metric.appendChild(document.createTextNode(pair[0]));
+      metric.appendChild(value);
+      metrics.appendChild(metric);
+    });
+    card.appendChild(metrics);
+    host.appendChild(card);
+  });
+  var excluded = Array.isArray(data && data.excludedTickers) ? data.excludedTickers : [];
+  if (excluded.length) {
+    var excludedBox = document.createElement('div');
+    excludedBox.className = 'investment-excluded-tickers';
+    excludedBox.textContent = 'Not currently part of this portfolio: ' + excluded.map(function(item) {
+      if (typeof item === 'string') return item;
+      return item.ticker + (item.reviewedThroughDate
+        ? ' (reviewed through ' + item.reviewedThroughDate + ')' : '');
+    }).join(', ');
+    host.appendChild(excludedBox);
+  }
+}
+
+function openInvestmentPlanEditor_(ticker) {
+  var rows = __investmentPortfolioData && __investmentPortfolioData.holdings || [];
+  var row = rows.filter(function(item) { return item.ticker === ticker; })[0];
+  if (!row) return;
+  __investmentPlanEditingTicker = ticker;
+  var editor = document.getElementById('inv_portfolio_plan_editor');
+  var tickerHost = document.getElementById('inv_plan_ticker');
+  var frequency = document.getElementById('inv_plan_frequency');
+  var amount = document.getElementById('inv_plan_amount');
+  var active = document.getElementById('inv_plan_active');
+  if (tickerHost) tickerHost.textContent = ticker;
+  if (frequency) frequency.value = row.planFrequency || 'WEEKLY';
+  if (amount) amount.value = Number(row.planConfigured
+    ? row.plannedAmount : row.detectedRecurringAmount || 0).toFixed(2);
+  if (active) active.checked = row.planConfigured ? row.planActive !== false : true;
+  if (editor) editor.hidden = false;
+  if (frequency) frequency.focus();
+}
+
+function closeInvestmentPlanEditor_() {
+  __investmentPlanEditingTicker = '';
+  var editor = document.getElementById('inv_portfolio_plan_editor');
+  if (editor) editor.hidden = true;
+}
+
+function saveInvestmentTickerPlan_() {
+  var select = document.getElementById('inv_activity_account');
+  var amountInput = document.getElementById('inv_plan_amount');
+  var frequency = document.getElementById('inv_plan_frequency');
+  var active = document.getElementById('inv_plan_active');
+  var investmentId = String(select && select.value || '').trim();
+  var ticker = __investmentPlanEditingTicker;
+  var amount = toNumber(amountInput && amountInput.value);
+  if (!investmentId || !ticker || !isFinite(amount) || amount < 0) {
+    setStatus('inv_portfolio_status', 'Enter a valid non-negative planned amount.', true);
+    return;
+  }
+  var button = document.getElementById('inv_plan_save_btn');
+  if (button) button.disabled = true;
+  setStatusLoading('inv_portfolio_status', 'Saving the portfolio plan…');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (button) button.disabled = false;
+      __investmentPortfolioData = result || {};
+      renderInvestmentPortfolioSummary_(result || {});
+      closeInvestmentPlanEditor_();
+      setStatus('inv_portfolio_status', 'Plan saved.', false);
+    })
+    .withFailureHandler(function(err) {
+      if (button) button.disabled = false;
+      setStatus('inv_portfolio_status', err.message || String(err), true);
+    })
+    .saveInvestmentTickerPlanFromDashboard({
+      investmentId: investmentId,
+      ticker: ticker,
+      planFrequency: frequency ? frequency.value : '',
+      plannedAmount: amount,
+      planActive: !!(active && active.checked)
+    });
 }
 
 function populateInvestmentActivityImportAccounts_(data) {
@@ -1282,15 +1551,22 @@ function populateInvestmentActivityImportAccounts_(data) {
   if (!select) return;
   var previous = select.value || '';
   select.innerHTML = '<option value="">— Select account —</option>';
+  var eligibleCount = 0;
   (data && data.managementAccounts || []).forEach(function(row) {
     if (!row || row.planningPurpose !== 'INCOME_PRODUCING' || !row.investmentId) return;
     var option = document.createElement('option');
     option.value = row.investmentId;
     option.textContent = row.accountName;
     select.appendChild(option);
+    eligibleCount += 1;
   });
+  if (!eligibleCount) {
+    select.innerHTML = '<option value="">No active Income-Producing accounts</option>';
+    select.disabled = true;
+  } else {
+    select.disabled = false;
+  }
   if (previous) select.value = previous;
-  if (!select.value && select.options.length === 2) select.selectedIndex = 1;
 }
 
 function onInvestmentActivityFileChanged_() {
@@ -1301,8 +1577,11 @@ function invalidateInvestmentActivityPreview_(message) {
   __investmentActivityImportState.rawCsv = '';
   __investmentActivityImportState.digest = '';
   __investmentActivityImportState.preview = null;
+  __investmentActivityImportState.tickerDecisions = {};
   var save = document.getElementById('inv_activity_save_btn');
   if (save) save.disabled = true;
+  var applyTickers = document.getElementById('inv_activity_apply_tickers_btn');
+  if (applyTickers) applyTickers.hidden = true;
   var preview = document.getElementById('inv_activity_preview');
   if (preview) preview.textContent = message || 'Preview the CSV again before saving.';
   setStatus('inv_activity_status', '', false);
@@ -1329,31 +1608,45 @@ function previewInvestmentActivityImport_() {
   }
   setStatusLoading('inv_activity_status', 'Reading and checking activity…');
   readInvestmentActivityCsvFile_(function(rawCsv) {
-    google.script.run
-      .withSuccessHandler(function(result) {
-        __investmentActivityImportState = {
-          rawCsv: rawCsv,
-          digest: result.digest,
-          investmentId: result.investmentId,
-          cutoffDate: result.cutoffDate,
-          preview: result
-        };
-        renderInvestmentActivityPreview_(result);
-        var save = document.getElementById('inv_activity_save_btn');
-        if (save) save.disabled = false;
-        setStatus('inv_activity_status', 'Preview ready. Review the totals, then save.', false);
-      })
-      .withFailureHandler(function(err) {
-        setStatus('inv_activity_status', err.message || String(err), true);
-      })
-      .previewInvestmentActivityImportFromDashboard({
-        investmentId: account.value,
-        cutoffDate: document.getElementById('inv_activity_start_date').value || '',
-        rawCsv: rawCsv
-      });
+    __investmentActivityImportState.tickerDecisions = {};
+    requestInvestmentActivityPreview_(rawCsv);
   }, function(err) {
     setStatus('inv_activity_status', err.message || String(err), true);
   });
+}
+
+function requestInvestmentActivityPreview_(rawCsv) {
+  var account = document.getElementById('inv_activity_account');
+  var investmentId = String(account && account.value || '').trim();
+  if (!investmentId) {
+    setStatus('inv_activity_status', 'Select an Income-Producing account first.', true);
+    return;
+  }
+  setStatusLoading('inv_activity_status', 'Reading and checking activity…');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (!account || account.value !== investmentId) return;
+      __investmentActivityImportState.rawCsv = rawCsv;
+      __investmentActivityImportState.digest = result.digest;
+      __investmentActivityImportState.investmentId = result.investmentId;
+      __investmentActivityImportState.cutoffDate = result.cutoffDate;
+      __investmentActivityImportState.preview = result;
+      renderInvestmentActivityPreview_(result);
+      var save = document.getElementById('inv_activity_save_btn');
+      if (save) save.disabled = !!result.requiresTickerDecisions;
+      setStatus('inv_activity_status', result.requiresTickerDecisions
+        ? 'Review every new ticker, then update the Preview.'
+        : 'Preview ready. Review the totals, then save.', false);
+    })
+    .withFailureHandler(function(err) {
+      setStatus('inv_activity_status', err.message || String(err), true);
+    })
+    .previewInvestmentActivityImportFromDashboard({
+      investmentId: investmentId,
+      cutoffDate: document.getElementById('inv_activity_start_date').value || '',
+      rawCsv: rawCsv,
+      tickerDecisions: __investmentActivityImportState.tickerDecisions || {}
+    });
 }
 
 function renderInvestmentActivityPreview_(result) {
@@ -1388,6 +1681,120 @@ function renderInvestmentActivityPreview_(result) {
     list.appendChild(item);
   });
   host.appendChild(list);
+  var candidates = Array.isArray(result && result.newTickerCandidates)
+    ? result.newTickerCandidates : [];
+  var applyTickers = document.getElementById('inv_activity_apply_tickers_btn');
+  if (applyTickers) applyTickers.hidden = candidates.length === 0;
+  if (candidates.length) {
+    var candidateHeading = document.createElement('div');
+    candidateHeading.className = 'card-title';
+    candidateHeading.style.marginTop = '16px';
+    candidateHeading.textContent = 'New tickers require a decision';
+    host.appendChild(candidateHeading);
+    var candidateList = document.createElement('div');
+    candidateList.className = 'investment-ticker-candidates';
+    candidates.forEach(function(candidate) {
+      var card = document.createElement('div');
+      card.className = 'investment-ticker-candidate';
+      var title = document.createElement('strong');
+      title.textContent = candidate.ticker;
+      card.appendChild(title);
+      var detail = document.createElement('div');
+      detail.className = 'muted';
+      detail.style.marginTop = '4px';
+      detail.textContent = candidate.activityCount + ' supported row' +
+        (candidate.activityCount === 1 ? '' : 's') + ' · purchases ' +
+        fmtCurrency(Number(candidate.purchaseAmount || 0)) +
+        (candidate.recurringDetected
+          ? ' · recurring purchase detected ' +
+            fmtCurrency(Number(candidate.latestRecurringAmount || 0))
+          : ' · no recurring purchase detected') +
+        (candidate.previouslyExcluded
+          ? ' · new purchase since reviewed through ' +
+            (candidate.reviewedThroughDate || 'the prior import')
+          : '');
+      card.appendChild(detail);
+      var decision = document.createElement('select');
+      decision.setAttribute('aria-label', 'Decision for ' + candidate.ticker);
+      decision.innerHTML = '<option value="">— Choose —</option>' +
+        '<option value="INCLUDE">Include in this income portfolio</option>' +
+        '<option value="EXCLUDE">Not part of this portfolio for now</option>';
+      decision.value = (__investmentActivityImportState.tickerDecisions || {})[candidate.ticker] || '';
+      decision.onchange = function() {
+        if (!__investmentActivityImportState.tickerDecisions) {
+          __investmentActivityImportState.tickerDecisions = {};
+        }
+        if (decision.value) {
+          __investmentActivityImportState.tickerDecisions[candidate.ticker] = decision.value;
+        } else {
+          delete __investmentActivityImportState.tickerDecisions[candidate.ticker];
+        }
+        var save = document.getElementById('inv_activity_save_btn');
+        if (save) save.disabled = true;
+      };
+      card.appendChild(decision);
+      candidateList.appendChild(card);
+    });
+    host.appendChild(candidateList);
+  }
+  var applied = result && result.appliedTickerDecisions || {};
+  var appliedKeys = Object.keys(applied).sort();
+  if (appliedKeys.length && !candidates.length) {
+    var decisions = document.createElement('div');
+    decisions.className = 'investment-excluded-tickers';
+    decisions.textContent = 'Ticker decisions in this Save: ' + appliedKeys.map(function(ticker) {
+      return ticker + ' — ' + (applied[ticker] === 'INCLUDE'
+        ? 'Include' : 'Not part of this portfolio for now');
+    }).join(' · ');
+    host.appendChild(decisions);
+  }
+  var recurringChanges = Array.isArray(result && result.recurringPlanChanges)
+    ? result.recurringPlanChanges : [];
+  if (recurringChanges.length) {
+    var recurringHeading = document.createElement('div');
+    recurringHeading.className = 'card-title';
+    recurringHeading.style.marginTop = '16px';
+    recurringHeading.textContent = 'New recurring purchases detected';
+    host.appendChild(recurringHeading);
+    var recurringList = document.createElement('ul');
+    recurringList.style.margin = '10px 0 0 18px';
+    recurringChanges.forEach(function(change) {
+      var item = document.createElement('li');
+      var observed = change.previousDetectedDate
+        ? fmtCurrency(Number(change.previousDetectedAmount || 0)) + ' on ' +
+          change.previousDetectedDate + ' → '
+        : '';
+      var plan = change.planConfigured
+        ? ' · your plan remains ' +
+          (change.planActive ? '' : 'paused ') +
+          investmentPlanFrequencyLabel_(change.planFrequency) + ' ' +
+          fmtCurrency(Number(change.plannedAmount || 0))
+        : ' · no plan confirmed yet';
+      item.textContent = change.ticker + ': ' + observed +
+        fmtCurrency(Number(change.newDetectedAmount || 0)) + ' on ' +
+        change.newDetectedDate + plan;
+      recurringList.appendChild(item);
+    });
+    host.appendChild(recurringList);
+  }
+}
+
+function refreshInvestmentActivityPreviewWithTickerDecisions_() {
+  var preview = __investmentActivityImportState.preview || {};
+  var candidates = Array.isArray(preview.newTickerCandidates)
+    ? preview.newTickerCandidates : [];
+  var decisions = __investmentActivityImportState.tickerDecisions || {};
+  var missing = candidates.filter(function(row) { return !decisions[row.ticker]; });
+  if (missing.length) {
+    setStatus('inv_activity_status', 'Choose Include or Exclude for: ' +
+      missing.map(function(row) { return row.ticker; }).join(', ') + '.', true);
+    return;
+  }
+  if (!__investmentActivityImportState.rawCsv) {
+    setStatus('inv_activity_status', 'Choose the CSV and Preview again.', true);
+    return;
+  }
+  requestInvestmentActivityPreview_(__investmentActivityImportState.rawCsv);
 }
 
 function saveInvestmentActivityImport_() {
@@ -1404,6 +1811,11 @@ function saveInvestmentActivityImport_() {
       setStatus('inv_activity_status', (result && result.message) || 'Import complete.', false);
       if (save) save.disabled = false;
       if (result && result.holdings) renderInvestmentActivityHoldings_(result.holdings);
+      google.script.run
+        .withSuccessHandler(function(portfolio) {
+          __investmentPortfolioData = portfolio || {};
+        })
+        .getInvestmentPortfolioActivityFromDashboard(state.investmentId);
     })
     .withFailureHandler(function(err) {
       if (save) save.disabled = false;
@@ -1413,7 +1825,8 @@ function saveInvestmentActivityImport_() {
       investmentId: state.investmentId,
       cutoffDate: state.cutoffDate,
       rawCsv: state.rawCsv,
-      expectedDigest: state.digest
+      expectedDigest: state.digest,
+      tickerDecisions: state.tickerDecisions || {}
     });
 }
 
@@ -1429,7 +1842,8 @@ function renderInvestmentActivityHoldings_(holdings) {
   (holdings || []).forEach(function(row) {
     var item = document.createElement('li');
     item.textContent = row.ticker + ': ' + Number(row.quantity || 0).toFixed(4) +
-      ' shares · weekly buy ' + fmtCurrency(Number(row.weeklyRecurringBuy || 0)) +
+      ' shares · last detected recurring purchase ' +
+      fmtCurrency(Number(row.weeklyRecurringBuy || 0)) +
       ' · dividends ' + fmtCurrency(Number(row.dividendsReceived || 0));
     list.appendChild(item);
   });
@@ -1438,7 +1852,8 @@ function renderInvestmentActivityHoldings_(holdings) {
 
 function clearInvestmentActivityImport_() {
   __investmentActivityImportState = {
-    rawCsv: '', digest: '', investmentId: '', cutoffDate: '', preview: null
+    rawCsv: '', digest: '', investmentId: '', cutoffDate: '', preview: null,
+    tickerDecisions: {}
   };
   var file = document.getElementById('inv_activity_file');
   var start = document.getElementById('inv_activity_start_date');
@@ -1447,7 +1862,9 @@ function clearInvestmentActivityImport_() {
   if (file) file.value = '';
   if (start) start.value = '';
   if (save) save.disabled = true;
-  if (preview) preview.textContent = 'Choose an account and CSV, then preview the accepted and excluded activity.';
+  var applyTickers = document.getElementById('inv_activity_apply_tickers_btn');
+  if (applyTickers) applyTickers.hidden = true;
+  if (preview) preview.textContent = 'Choose a CSV, then preview the accepted, excluded, and newly detected activity.';
   setStatus('inv_activity_status', '', false);
 }
 

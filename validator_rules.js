@@ -99,6 +99,7 @@ function getValidatorCanonicalModel_() {
   var sysAccountsHeaders = (typeof SYS_ACCOUNTS_REQUIRED_HEADERS_ !== 'undefined') ? SYS_ACCOUNTS_REQUIRED_HEADERS_ : null;
   var investmentActivityHeaders = (typeof INVESTMENT_ACTIVITY_HEADERS_ !== 'undefined') ? INVESTMENT_ACTIVITY_HEADERS_ : null;
   var investmentHoldingsHeaders = (typeof INVESTMENT_HOLDINGS_HEADERS_ !== 'undefined') ? INVESTMENT_HOLDINGS_HEADERS_ : null;
+  var investmentPlanHeaders = (typeof INVESTMENT_PLAN_HEADERS_ !== 'undefined') ? INVESTMENT_PLAN_HEADERS_ : null;
   var upcomingHeaders = (typeof UPCOMING_EXPENSES_REQUIRED_HEADERS_ !== 'undefined') ? UPCOMING_EXPENSES_REQUIRED_HEADERS_ : null;
   var bankAccountsHeaders = (typeof BANK_ACCOUNTS_REQUIRED_HEADERS_ !== 'undefined') ? BANK_ACCOUNTS_REQUIRED_HEADERS_ : null;
   var debtsHeaders = (typeof DEBTS_REQUIRED_HEADERS_ !== 'undefined') ? DEBTS_REQUIRED_HEADERS_ : null;
@@ -127,6 +128,7 @@ function getValidatorCanonicalModel_() {
   var sysAccountsWidths = (typeof SYS_ACCOUNTS_CANONICAL_WIDTHS_ !== 'undefined') ? SYS_ACCOUNTS_CANONICAL_WIDTHS_ : null;
   var investmentActivityWidths = (typeof INVESTMENT_ACTIVITY_CANONICAL_WIDTHS_ !== 'undefined') ? INVESTMENT_ACTIVITY_CANONICAL_WIDTHS_ : null;
   var investmentHoldingsWidths = (typeof INVESTMENT_HOLDINGS_CANONICAL_WIDTHS_ !== 'undefined') ? INVESTMENT_HOLDINGS_CANONICAL_WIDTHS_ : null;
+  var investmentPlanWidths = (typeof INVESTMENT_PLAN_CANONICAL_WIDTHS_ !== 'undefined') ? INVESTMENT_PLAN_CANONICAL_WIDTHS_ : null;
   var donationWidths = (typeof DONATION_CANONICAL_WIDTHS_ !== 'undefined') ? DONATION_CANONICAL_WIDTHS_ : null;
   var activityWidths = (typeof ACTIVITY_LOG_CANONICAL_WIDTHS_ !== 'undefined') ? ACTIVITY_LOG_CANONICAL_WIDTHS_ : null;
 
@@ -196,6 +198,16 @@ function getValidatorCanonicalModel_() {
       headerRow: 1,
       headers: investmentHoldingsHeaders,
       widths: investmentHoldingsWidths,
+      frozenRows: 1,
+      frozenColumns: 1
+    },
+    {
+      name: (names && names.INVESTMENT_PLANS)
+        ? names.INVESTMENT_PLANS : 'SYS - Investment Plans',
+      presence: VALIDATOR_PRESENCE_OPTIONAL_,
+      headerRow: 1,
+      headers: investmentPlanHeaders,
+      widths: investmentPlanWidths,
       frozenRows: 1,
       frozenColumns: 1
     },

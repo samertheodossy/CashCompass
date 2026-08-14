@@ -235,6 +235,7 @@ function validatorSuggestedHelper_(name) {
   if (name === 'SYS - Assets') return 'applySysSheetBaseStyle_ / ensureSysAssetsSheet_ (investments.js + sheet_bootstrap.js)';
   if (name === 'SYS - House Assets') return 'applySysSheetBaseStyle_ / ensureSysHouseAssetsSheet_ (house_values.js + sheet_bootstrap.js)';
   if (name === 'SYS - Accounts') return 'applySysSheetBaseStyle_ / ensureSysAccountsSheet_ (bank_accounts.js + sheet_bootstrap.js)';
+  if (name === 'SYS - Investment Plans') return 'applySysSheetBaseStyle_ / ensureInvestmentPlansSheet_ (investment_activity.js + sheet_bootstrap.js)';
   if (name.indexOf('HOUSES - ') === 0) return 'applyHousesExpenseSheetStyling_ (house_values.js)';
   if (name.indexOf('OUT - ') === 0) return 'planner_output.js (planner rebuild)';
   if (name === 'LOG - Activity') return 'getOrCreateActivityLogSheet_ (activity_log.js)';

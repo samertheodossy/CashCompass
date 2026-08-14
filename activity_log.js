@@ -1830,6 +1830,7 @@ function classifyActivityKind_(lookup, payee, eventType, direction, logCategory)
   if (etEarly === 'investment_deactivate') return 'Investment';
   if (etEarly === 'investment_reactivate') return 'Investment';
   if (etEarly === 'investment_planning_purpose_update') return 'Investment';
+  if (etEarly === 'investment_plan_update') return 'Investment';
   if (etEarly === 'debt_add') return 'Debt';
   if (etEarly === 'debt_deactivate') return 'Debt';
   if (etEarly === 'debt_reactivate') return 'Debt';
@@ -1955,6 +1956,7 @@ function activityLogActionLabel_(eventType, detailsJson) {
     case 'investment_deactivate': return 'Tracking stopped';
     case 'investment_reactivate': return 'Account reactivated';
     case 'investment_planning_purpose_update': return 'Planning purpose updated';
+    case 'investment_plan_update': return 'Portfolio plan updated';
     case 'debt_add': return 'Account added';
     case 'debt_deactivate': return 'Tracking stopped';
     case 'debt_reactivate': return 'Tracking resumed';
@@ -2597,6 +2599,7 @@ function activityLogIsNonMonetaryEvent_(eventType) {
     et === 'investment_deactivate' ||
     et === 'investment_reactivate' ||
     et === 'investment_planning_purpose_update' ||
+    et === 'investment_plan_update' ||
     et === 'debt_deactivate' ||
     et === 'debt_reactivate' ||
     // debt_update rows carry the new value inside the action label (not

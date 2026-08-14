@@ -186,11 +186,12 @@ function getHarnessRfpInvestmentActivityScenario_() {
     id: 'REGRESSION-RFP-INVESTMENT-ACTIVITY',
     category: 'REGRESSION',
     executionLevel: 'INTEGRATION',
-    expectedAssertionCount: 23,
-    description: 'Prove preview-first Robinhood import, option/unrelated/footer exclusions, lazy system sheets, duplicate protection, and holdings reconciliation on a disposable workbook.',
+    expectedAssertionCount: 37,
+    description: 'Prove account-scoped Robinhood import, new-ticker review, editable recurring plans, exclusions, lazy system sheets, duplicate protection, and holdings reconciliation on a disposable workbook.',
     requiresTrashCleanup: true,
     expectedSheets: [names.INVESTMENTS, names.ASSETS, names.INVESTMENT_ACTIVITY,
-      names.INVESTMENT_HOLDINGS, ACTIVITY_LOG_SHEET_NAME, 'SYS - Meta'],
+      names.INVESTMENT_HOLDINGS, names.INVESTMENT_PLANS,
+      ACTIVITY_LOG_SHEET_NAME, 'SYS - Meta'],
     setup: function(ctx) {
       ctx.assertWritable();
       ensureInputInvestmentsSheet_(ctx.ss);
@@ -229,21 +230,53 @@ function getHarnessRfpInvestmentActivityScenario_() {
         '""',
         '"","","","","","","","","","The data provided is for informational purposes only. Please consult a professional tax service or personal tax advisor."'
       ].join('\n');
-      ctx.preview = previewInvestmentActivityImportFromDashboard({
+      ctx.discoveryPreview = previewInvestmentActivityImportFromDashboard({
         investmentId: ctx.investmentId, rawCsv: ctx.csv, cutoffDate: ''
+      }, ctx.ss);
+      ctx.tickerDecisions = { QQQ: 'INCLUDE', JEPQ: 'INCLUDE', HL: 'EXCLUDE' };
+      ctx.preview = previewInvestmentActivityImportFromDashboard({
+        investmentId: ctx.investmentId, rawCsv: ctx.csv,
+        cutoffDate: ctx.discoveryPreview.cutoffDate,
+        tickerDecisions: ctx.tickerDecisions
       }, ctx.ss);
       ctx.assertWritable();
       ctx.firstImport = importInvestmentActivityFromDashboard({
         investmentId: ctx.investmentId, rawCsv: ctx.csv, cutoffDate: ctx.preview.cutoffDate,
-        expectedDigest: ctx.preview.digest
+        expectedDigest: ctx.preview.digest, tickerDecisions: ctx.tickerDecisions
+      }, ctx.ss);
+      ctx.assertWritable();
+      ctx.portfolioAfterPlan = saveInvestmentTickerPlanFromDashboard({
+        investmentId: ctx.investmentId, ticker: 'JEPQ',
+        planFrequency: 'WEEKLY', plannedAmount: 75, planActive: true
       }, ctx.ss);
       ctx.assertWritable();
       ctx.ss.getSheetByName(names.INVESTMENT_ACTIVITY).setColumnWidth(1, 60);
       ctx.ss.getSheetByName(names.INVESTMENT_HOLDINGS).setColumnWidth(1, 60);
+      ctx.secondPreview = previewInvestmentActivityImportFromDashboard({
+        investmentId: ctx.investmentId, rawCsv: ctx.csv,
+        cutoffDate: ctx.preview.cutoffDate, tickerDecisions: {}
+      }, ctx.ss);
       ctx.assertWritable();
       ctx.secondImport = importInvestmentActivityFromDashboard({
         investmentId: ctx.investmentId, rawCsv: ctx.csv, cutoffDate: ctx.preview.cutoffDate,
-        expectedDigest: ctx.preview.digest
+        expectedDigest: ctx.secondPreview.digest, tickerDecisions: {}
+      }, ctx.ss);
+      ctx.futureCsv = ctx.csv + '\n' +
+        '"5/11/2026","5/11/2026","5/12/2026","HL","Hecla Mining new purchase","Buy","3","$6.00","($18.00)"';
+      ctx.futureDiscovery = previewInvestmentActivityImportFromDashboard({
+        investmentId: ctx.investmentId, rawCsv: ctx.futureCsv,
+        cutoffDate: ctx.preview.cutoffDate, tickerDecisions: {}
+      }, ctx.ss);
+      ctx.futureIncludePreview = previewInvestmentActivityImportFromDashboard({
+        investmentId: ctx.investmentId, rawCsv: ctx.futureCsv,
+        cutoffDate: ctx.preview.cutoffDate, tickerDecisions: { HL: 'INCLUDE' }
+      }, ctx.ss);
+      ctx.assertWritable();
+      saveTrackedInvestmentAccountFromDashboard({
+        sysAssetsRow: ctx.assetRow,
+        expectedAccountName: 'Synthetic Income Portfolio',
+        newAccountName: 'Synthetic Income Portfolio Renamed',
+        type: 'Brokerage'
       }, ctx.ss);
       var activitySheet = ctx.ss.getSheetByName(names.INVESTMENT_ACTIVITY);
       var holdingsSheet = ctx.ss.getSheetByName(names.INVESTMENT_HOLDINGS);
@@ -251,6 +284,16 @@ function getHarnessRfpInvestmentActivityScenario_() {
       ctx.activityImportKeyWidth = activitySheet.getColumnWidth(1);
       ctx.holdingsInvestmentIdWidth = holdingsSheet.getColumnWidth(1);
       ctx.holdingsRows = holdingsSheet.getDataRange().getDisplayValues();
+      ctx.planRows = ctx.ss.getSheetByName(names.INVESTMENT_PLANS).getLastRow() - 1;
+      var planValues = ctx.ss.getSheetByName(names.INVESTMENT_PLANS)
+        .getRange(2, 1, ctx.planRows, INVESTMENT_PLAN_HEADERS_.length).getDisplayValues();
+      ctx.hlBoundary = planValues.filter(function(row) { return row[2] === 'HL'; })[0][8];
+      ctx.activityAccountNames = activitySheet.getRange(2, 3, ctx.activityRows, 1)
+        .getDisplayValues().map(function(row) { return row[0]; });
+      ctx.planAccountNames = ctx.ss.getSheetByName(names.INVESTMENT_PLANS)
+        .getRange(2, 2, ctx.planRows, 1).getDisplayValues().map(function(row) { return row[0]; });
+      ctx.renamedPortfolio = getInvestmentPortfolioActivityFromDashboard(
+        ctx.investmentId, ctx.ss);
       ctx.inputHeadersAfter = ctx.ss.getSheetByName(names.INVESTMENTS)
         .getRange(2, 1, 1, 15).getDisplayValues()[0];
       ctx.actions.push('Preview and import a synthetic Robinhood CSV twice through production writers');
@@ -258,6 +301,10 @@ function getHarnessRfpInvestmentActivityScenario_() {
     expectedOutcome: function(ctx) {
       var mod = 'Investment activity import';
       ctx.assert.equals('Start date auto-detected', ctx.preview.cutoffDate, '2026-04-27', { module: mod });
+      ctx.assert.equals('First preview requires three ticker decisions',
+        ctx.discoveryPreview.newTickerCandidates.length, 3, { module: mod });
+      ctx.assert.equals('First accepted preview reports two new recurring observations',
+        ctx.preview.recurringPlanChanges.length, 2, { module: mod });
       ctx.assert.equals('Accepted portfolio rows', ctx.preview.summary.acceptedCount, 7, { module: mod });
       ctx.assert.equals('Excluded non-portfolio rows', ctx.preview.summary.excludedCount, 6, { module: mod });
       ctx.assert.equals('Options excluded', ctx.preview.summary.excludedByReason.OPTIONS_ACTIVITY, 1, { module: mod });
@@ -271,13 +318,44 @@ function getHarnessRfpInvestmentActivityScenario_() {
       ctx.assert.equals('Dividend total', ctx.preview.summary.dividends, 10, { module: mod });
       ctx.assert.equals('First import appends all accepted rows', ctx.firstImport.appendedRows, 7, { module: mod });
       ctx.assert.equals('Second import appends no rows', ctx.secondImport.appendedRows, 0, { module: mod });
+      ctx.assert.equals('Duplicate preview reports no new recurring observation',
+        ctx.secondPreview.recurringPlanChanges.length, 0, { module: mod });
+      ctx.assert.equals('Repeat preview does not ask about reviewed excluded ticker',
+        ctx.secondPreview.newTickerCandidates.length, 0, { module: mod });
       ctx.assert.equals('Second import reports all duplicates', ctx.secondImport.duplicateRows, 7, { module: mod });
       ctx.assert.equals('Activity ledger remains deduplicated', ctx.activityRows, 7, { module: mod });
+      ctx.assert.equals('Ticker decisions persist once per ticker', ctx.planRows, 3, { module: mod });
+      ctx.assert.equals('Excluded ticker saves its reviewed-through checkpoint',
+        ctx.hlBoundary, '2026-05-04', { module: mod });
+      ctx.assert.equals('Later excluded-ticker purchase reopens review',
+        ctx.futureDiscovery.newTickerCandidates.length, 1, { module: mod });
+      ctx.assert.equals('Including later activity does not import pre-boundary rows',
+        ctx.futureIncludePreview.summary.excludedByReason.BEFORE_TICKER_BOUNDARY, 1,
+        { module: mod });
+      ctx.assert.equals('Including later activity accepts only the new ticker purchase',
+        ctx.futureIncludePreview.summary.acceptedCount, 8, { module: mod });
+      ctx.assert.equals('Rename updates every Activity account label',
+        ctx.activityAccountNames.every(function(name) {
+          return name === 'Synthetic Income Portfolio Renamed';
+        }), true, { module: mod });
+      ctx.assert.equals('Rename updates every Plan account label',
+        ctx.planAccountNames.every(function(name) {
+          return name === 'Synthetic Income Portfolio Renamed';
+        }), true, { module: mod });
+      ctx.assert.equals('Stable id loads the renamed account portfolio',
+        ctx.renamedPortfolio.accountName, 'Synthetic Income Portfolio Renamed', { module: mod });
       ctx.assert.equals('Duplicate import repairs Activity content width',
         ctx.activityImportKeyWidth > 60, true, { module: mod });
       ctx.assert.equals('Duplicate import repairs Holdings content width',
         ctx.holdingsInvestmentIdWidth > 60, true, { module: mod });
       ctx.assert.equals('Holdings contains two tickers', ctx.firstImport.holdings.length, 2, { module: mod });
+      var plannedJepq = ctx.portfolioAfterPlan.holdings.filter(function(row) {
+        return row.ticker === 'JEPQ';
+      })[0];
+      ctx.assert.equals('JEPQ recurring plan is user-configured',
+        plannedJepq.planConfigured, true, { module: mod });
+      ctx.assert.equals('JEPQ recurring plan preserves the chosen amount',
+        plannedJepq.plannedAmount, 75, { module: mod });
       var qqq = ctx.firstImport.holdings.filter(function(row) { return row.ticker === 'QQQ'; })[0];
       var jepq = ctx.firstImport.holdings.filter(function(row) { return row.ticker === 'JEPQ'; })[0];
       ctx.assert.equals('QQQ quantity reconciles', round2_(qqq.quantity), 5.5, { module: mod });

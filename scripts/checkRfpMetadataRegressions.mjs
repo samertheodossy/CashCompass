@@ -5,6 +5,7 @@ import vm from 'node:vm';
 const source = await readFile(new URL('../investments.js', import.meta.url), 'utf8');
 const activitySource = await readFile(new URL('../investment_activity.js', import.meta.url), 'utf8');
 const body = await readFile(new URL('../Dashboard_Body.html', import.meta.url), 'utf8');
+const help = await readFile(new URL('../Dashboard_Help.html', import.meta.url), 'utf8');
 const onboarding = await readFile(new URL('../Dashboard_Script_Onboarding.html', import.meta.url), 'utf8');
 const investmentClient = await readFile(new URL('../Dashboard_Script_AssetsBankInvestments.html', import.meta.url), 'utf8');
 const styles = await readFile(new URL('../Dashboard_Styles.html', import.meta.url), 'utf8');
@@ -134,6 +135,9 @@ assert.match(styles,
 assert.match(functionSource('setIncomeProducingAccountDesignationsFromDashboard'),
   /fitContentColumnsToContents_\([\s\S]*?investmentIdCol[\s\S]*?planningPurposeCol[\s\S]*?metadata fit/,
   'Designation Save must fit both owned SYS - Assets metadata columns');
+assert.match(functionSource('saveTrackedInvestmentAccountFromDashboard'),
+  /INVESTMENT_ACTIVITY[\s\S]*?INVESTMENT_HOLDINGS[\s\S]*?INVESTMENT_PLANS[\s\S]*?systemNameTargets[\s\S]*?oldName[\s\S]*?restoreSystemNamesErr/,
+  'Investment rename must update and roll back every activity, holdings, and plan account label by stable id');
 
 const activityContext = vm.createContext({ String, Number, Object, Array, Math, isFinite });
 vm.runInContext(`
@@ -209,19 +213,49 @@ assert.match(activitySource,
 assert.match(activitySource,
   /function ensureInvestmentSystemSheet_[\s\S]*?if \(existing\) return existing[\s\S]*?insertSheet/,
   'Investment system sheets must be lazy first-create structures');
+assert.match(activitySource,
+  /INVESTMENT_PLAN_HEADERS_[\s\S]*?function ensureInvestmentPlansSheet_[\s\S]*?insertSheet[\s\S]*?function getInvestmentPortfolioActivityFromDashboard[\s\S]*?function saveInvestmentTickerPlanFromDashboard/,
+  'Portfolio plans must use a lazy account-and-ticker configuration sheet with dashboard read and save entry points');
+assert.match(activitySource,
+  /saleProceeds: Number\(row\[6\]\) \|\| 0,[\s\S]*?lastActivityPrice: Number\(row\[9\]\) \|\| 0,[\s\S]*?activityCount: Number\(row\[10\]\) \|\| 0/,
+  'Portfolio drawer data must expose the complete derived holding metrics');
+assert.match(activitySource,
+  /normalizeInvestmentTickerDecisions_[\s\S]*?newTickerCandidates[\s\S]*?requiresTickerDecisions[\s\S]*?Review every new ticker/,
+  'New supported tickers must require an explicit Include or Exclude decision before Save');
+assert.match(activitySource,
+  /Activity Boundary Date[\s\S]*?reopenedExcludedTickers[\s\S]*?transCode[\s\S]*?BUY[\s\S]*?BEFORE_TICKER_BOUNDARY[\s\S]*?saveInvestmentTickerDecisions_/,
+  'Excluded tickers must use a reviewed-through checkpoint and reopen only for a later purchase');
+assert.match(activitySource,
+  /savedRecurringByTicker[\s\S]*?latestRecurringInFile[\s\S]*?recurringPlanChanges[\s\S]*?plannedAmount/,
+  'Preview must report newly detected recurring purchases without overwriting the saved plan');
 assert.match(validatorRules,
-  /INVESTMENT_ACTIVITY_HEADERS_[\s\S]*?INVESTMENT_HOLDINGS_HEADERS_[\s\S]*?INVESTMENT_ACTIVITY_CANONICAL_WIDTHS_[\s\S]*?INVESTMENT_HOLDINGS_CANONICAL_WIDTHS_[\s\S]*?SYS - Investment Activity[\s\S]*?SYS - Investment Holdings/,
-  'Validator canonical model must cover both lazy investment-import system sheets');
+  /INVESTMENT_ACTIVITY_HEADERS_[\s\S]*?INVESTMENT_HOLDINGS_HEADERS_[\s\S]*?INVESTMENT_PLAN_HEADERS_[\s\S]*?INVESTMENT_ACTIVITY_CANONICAL_WIDTHS_[\s\S]*?INVESTMENT_HOLDINGS_CANONICAL_WIDTHS_[\s\S]*?INVESTMENT_PLAN_CANONICAL_WIDTHS_[\s\S]*?SYS - Investment Activity[\s\S]*?SYS - Investment Holdings[\s\S]*?SYS - Investment Plans/,
+  'Validator canonical model must cover all lazy investment activity, holdings, and plan sheets');
 assert.doesNotMatch(activitySource, /setValue\([^\n]*INPUT - Investments|updateInvestmentValueByDate/,
   'Activity import must not write balances into INPUT Investments');
 assert.match(body,
-  /Import portfolio activity[\s\S]*?inv_activity_account[\s\S]*?inv_activity_file[\s\S]*?Preview import[\s\S]*?Save imported activity/,
-  'Manage Investments must expose one preview-first import surface');
+  /Portfolio activity[\s\S]*?inv_portfolio_drawer_backdrop[\s\S]*?inv_activity_account[\s\S]*?inv_portfolio_account_content[\s\S]*?Portfolio[\s\S]*?Import CSV[\s\S]*?inv_activity_file[\s\S]*?Preview import[\s\S]*?Save imported activity/,
+  'Manage Investments must open an account-first Portfolio Activity drawer with Portfolio and Import views');
+assert.match(body,
+  /Choose an account to view its holdings, update recurring plans, or import activity\. Each account is kept separate\./,
+  'Portfolio Activity account guidance must use customer-facing language');
+assert.doesNotMatch(investmentClient,
+  /select\.options\.length === 2\) select\.selectedIndex = 1/,
+  'Portfolio Activity must not auto-select the only eligible account');
 assert.match(investmentClient,
-  /function previewInvestmentActivityImport_[\s\S]*?previewInvestmentActivityImportFromDashboard[\s\S]*?function saveInvestmentActivityImport_[\s\S]*?expectedDigest/,
-  'Client must preview before enabling the guarded Save RPC');
+  /function openInvestmentPortfolioDrawer_[\s\S]*?function onInvestmentPortfolioAccountChanged_[\s\S]*?getInvestmentPortfolioActivityFromDashboard[\s\S]*?function previewInvestmentActivityImport_[\s\S]*?tickerDecisions[\s\S]*?function saveInvestmentActivityImport_[\s\S]*?expectedDigest/,
+  'Client must choose an account, load its portfolio, review ticker decisions, and preview before guarded Save');
+assert.match(investmentClient,
+  /function saveInvestmentTickerPlan_[\s\S]*?New recurring purchases detected[\s\S]*?your plan remains/,
+  'Drawer must distinguish newly detected recurring facts from the editable user plan');
+assert.match(investmentClient,
+  /new purchase since reviewed through[\s\S]*?Not part of this portfolio for now/,
+  'Ticker exclusion copy must describe a temporary checkpoint rather than a permanent blacklist');
+assert.match(help,
+  /not part of this portfolio for now[\s\S]*?later purchase brings the ticker back for review[\s\S]*?previously excluded activity is not silently added/,
+  'Investments Help must explain checkpointed ticker exclusion and later-purchase review');
 assert.match(await readFile(new URL('../test_harness_scenarios_rfp.js', import.meta.url), 'utf8'),
-  /REGRESSION-RFP-INVESTMENT-ACTIVITY[\s\S]*?expectedAssertionCount:\s*23[\s\S]*?Robinhood disclaimer footer excluded[\s\S]*?Second import appends no rows[\s\S]*?Duplicate import repairs Activity content width[\s\S]*?Duplicate import repairs Holdings content width[\s\S]*?INPUT Investments schema unchanged/,
-  'Disposable validation must prove footer handling, exclusions, dedupe, content-fit repair, holdings, and schema isolation');
+  /REGRESSION-RFP-INVESTMENT-ACTIVITY[\s\S]*?expectedAssertionCount:\s*37[\s\S]*?First preview requires three ticker decisions[\s\S]*?First accepted preview reports two new recurring observations[\s\S]*?Robinhood disclaimer footer excluded[\s\S]*?Second import appends no rows[\s\S]*?Duplicate preview reports no new recurring observation[\s\S]*?Repeat preview does not ask about reviewed excluded ticker[\s\S]*?Ticker decisions persist once per ticker[\s\S]*?Excluded ticker saves its reviewed-through checkpoint[\s\S]*?Later excluded-ticker purchase reopens review[\s\S]*?Including later activity does not import pre-boundary rows[\s\S]*?Rename updates every Activity account label[\s\S]*?Stable id loads the renamed account portfolio[\s\S]*?Duplicate import repairs Activity content width[\s\S]*?Duplicate import repairs Holdings content width[\s\S]*?JEPQ recurring plan is user-configured[\s\S]*?INPUT Investments schema unchanged/,
+  'Disposable validation must prove ticker review, editable plans, stable-id rename propagation, exclusions, dedupe, content-fit repair, holdings, and schema isolation');
 
 console.log('RFP investment metadata regression checks passed.');

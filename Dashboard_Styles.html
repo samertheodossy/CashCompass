@@ -1976,6 +1976,122 @@
   .activity-correction-drawer {
     width: min(620px, 100vw);
   }
+  .investment-portfolio-drawer {
+    width: min(760px, 100vw);
+  }
+  .investment-portfolio-account-help {
+    margin: 8px 0 18px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .investment-portfolio-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0 0 18px;
+  }
+  .investment-portfolio-tabs .segment-btn:first-child {
+    border-radius: 8px 0 0 8px;
+  }
+  .investment-portfolio-tabs .segment-btn:last-child {
+    border-left: 0;
+    border-radius: 0 8px 8px 0;
+  }
+  .investment-portfolio-view[hidden] { display: none; }
+  .investment-portfolio-list {
+    display: grid;
+    gap: 10px;
+  }
+  .investment-portfolio-card {
+    padding: 14px;
+    border: 1px solid #dbe3ee;
+    border-radius: 10px;
+    background: #ffffff;
+  }
+  .investment-portfolio-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .investment-portfolio-ticker {
+    color: #0f172a;
+    font-size: 17px;
+    font-weight: 800;
+  }
+  .investment-portfolio-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 14px;
+    margin-top: 12px;
+  }
+  .investment-portfolio-metric {
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .investment-portfolio-metric strong {
+    display: block;
+    color: #334155;
+    font-size: 13px;
+  }
+  .investment-plan-editor {
+    margin-top: 16px;
+    padding: 16px;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    background: #f8fbff;
+  }
+  .investment-plan-editor[hidden] { display: none; }
+  .investment-plan-ticker {
+    margin: 4px 0 8px;
+    color: #0f172a;
+    font-size: 18px;
+    font-weight: 800;
+  }
+  .investment-plan-active-row {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .investment-plan-active-row input {
+    width: auto;
+    margin: 0;
+  }
+  .investment-plan-actions,
+  .investment-import-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .investment-activity-preview {
+    min-height: 150px;
+    margin-top: 16px;
+  }
+  .investment-ticker-candidates {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .investment-ticker-candidate {
+    padding: 12px;
+    border: 1px solid #f3d08b;
+    border-radius: 8px;
+    background: #fffaf0;
+  }
+  .investment-ticker-candidate select {
+    margin-top: 8px;
+  }
+  .investment-excluded-tickers {
+    margin-top: 16px;
+    padding: 12px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 12px;
+  }
 .activity-correction-impact {
     margin: 0 0 26px;
 }
@@ -2688,6 +2804,7 @@
   @media (max-width: 760px) {
     .topbar { flex-direction: column; }
     .onboarding-steps-grid { grid-template-columns: 1fr !important; }
+    .investment-portfolio-metrics { grid-template-columns: 1fr; }
     .activity-filter-group,
     .activity-filter-actions { width: 100%; }
     .activity-date-row {
