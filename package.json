@@ -3,10 +3,11 @@
   "private": true,
   "scripts": {
     "build:rolling-dashboard": "vite build --config vite.rolling-dashboard.config.ts && node scripts/emitRollingDashboardBundleHtml.mjs",
-    "test": "npm run test:maintenance && npm run test:dashboard-ux && npm run test:rfp-metadata && npm run test:performance-timing && npm run test:populated-harness && npm run test:p1-evidence && npm run test:production-paths",
+    "test": "npm run test:maintenance && npm run test:dashboard-ux && npm run test:rfp-metadata && npm run test:rfp-capital-allocation && npm run test:performance-timing && npm run test:populated-harness && npm run test:p1-evidence && npm run test:production-paths",
     "test:maintenance": "node scripts/checkMaintenanceRegressions.mjs",
     "test:dashboard-ux": "node scripts/checkDashboardUxRegressions.mjs",
     "test:rfp-metadata": "node scripts/checkRfpMetadataRegressions.mjs",
+    "test:rfp-capital-allocation": "node scripts/checkRfpCapitalAllocationRegressions.mjs",
     "test:performance-timing": "node scripts/checkPerformanceTimingRegressions.mjs",
     "test:populated-harness": "node scripts/checkPopulatedHarnessRegressions.mjs",
     "test:p1-evidence": "node scripts/checkP1EvidenceRegressions.mjs",

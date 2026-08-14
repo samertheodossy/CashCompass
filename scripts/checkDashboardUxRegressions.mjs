@@ -59,7 +59,7 @@ for (const [page, tab] of Object.entries({
   assets: 'houses',
   cashflow: 'payments',
   properties: 'houseExpenses',
-  planning: 'nextActions'
+  planning: 'capitalAllocationPreview'
 })) {
   assert.match(render, new RegExp(`${page}:\\s*['\"]${tab}['\"]`), `${page} must have a default panel`);
 }
@@ -1412,12 +1412,15 @@ assert.ok(
   'Planning must present immediate tasks before optional modeling tools'
 );
 assert.match(planning,
-  /planning-tool-group--do-now[\s\S]*?data-tab="rollingDebtPayoff"/,
-  'Do now must feature the actionable payoff plan');
+  /planning-next-actions-feature[\s\S]*?data-tab="capitalAllocationPreview"[\s\S]*?Start here[\s\S]*?This week/,
+  'Planning must feature This Week as the Start Here experience');
+assert.match(planning,
+  /planning-tool-group--do-now[\s\S]*?data-tab="nextActions"[\s\S]*?data-tab="rollingDebtPayoff"/,
+  'Do now must preserve immediate priorities and the actionable payoff plan');
 assert.match(planning,
   /planning-tool-group--explore[\s\S]*?data-tab="debtPayoff"[\s\S]*?data-tab="retirement"[\s\S]*?data-tab="purchase"/,
   'Explore / model must group the read-only overview and scenario tools');
-for (const tab of ['nextActions', 'rollingDebtPayoff', 'debtPayoff', 'retirement', 'purchase']) {
+for (const tab of ['capitalAllocationPreview', 'nextActions', 'rollingDebtPayoff', 'debtPayoff', 'retirement', 'purchase']) {
   assert.equal((planning.match(new RegExp(`data-tab=["']${tab}["']`, 'g')) || []).length, 1,
     `Planning must preserve exactly one navigation route for ${tab}`);
 }

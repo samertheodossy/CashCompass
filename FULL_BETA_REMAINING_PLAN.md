@@ -4,7 +4,7 @@
 
 **Reconciled:** 2026-08-14
 
-**Current isolated deployment:** `@352`. The Activity-correction evidence
+**Current isolated deployment:** `@353`. The Activity-correction evidence
 baseline remains isolated Central `@240`; clean Populated Dashboard run
 `FR-d75843e0-486e-4faa-8967-05ee40b73e25` passed **21/21** in 383.006 s. It
 includes the complete `REG-030`–`REG-039` direct Quick Add matrix plus
@@ -145,7 +145,64 @@ Rolling Debt Payoff or require security-level holdings for its base plan.
 | RFP-1 | Read-only household funding reconciliation and decision contract | Audit, proposed defaults, waterfall, compatibility boundary, and test contract are complete in `ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md`; zero or more investments may be explicitly designated as **Income-Producing Accounts**, including Samer Robinhood; every active positive-balance debt is included with no APR threshold and rate affects ordering only; remaining product decisions are pending | 0.5–1 d |
 | RFP-2 | Optional account-purpose and funding metadata | Complete on isolated Central `@349`: explicit zero/one/many Income-Producing designations use stable investment IDs, survive rename and Stop/Reactivate, preserve blank legacy behavior, and do not change `INPUT - Investments`; disposable closeout passed 19/19 with verified cleanup | Complete |
 | RFP-3 | Deterministic Capital Allocation Queue and read-only recommendation engine | Build a canonical household snapshot and an in-memory queue with hard constraints separated from discretionary candidates. CashCompass deterministically owns eligibility, ranking, allocation, counterfactual math, and exact cash reconciliation; the result must not depend on an LLM. Produce an ordered weekly action ledger and monthly aggregation from the same decisions, with source/provenance, confidence, remaining cash after every action, zero-dollar reasons, named minimum/extra debt amounts, safely affordable Income-Producing Account funding, protected cash, and explicit waits. Existing Rolling Debt Payoff calculations remain intact; no transfers, trades, payments, or workbook recommendation writes | 2–3 d |
-| RFP-4 | Feature-flagged **This Week** Planning experience and **Why not?** comparisons | Default-off UI makes This Week the center of Planning, followed by the monthly outlook. Each ordered action shows amount, source, destination, reason, required/recommended status, expected benefit, liquidity/tax/risk effects when supported, confidence, and remaining cash. Why not? compares backend-calculated alternatives such as debt payment, investment funding, or holding liquidity; an optional LLM may explain validated results but cannot change their numbers or order. Existing Planning remains unchanged with the flag off | 1.5–2.5 d |
+
+`RFP-3a` is complete on isolated Central `@353`: canonical read-only facts,
+blocking data-quality findings, required constraints, and an unranked in-memory
+candidate queue. Run `20260814-112123-c4fd` passed 16/16 assertions in 5.7 s
+with Provisioning/Drift PASS, verified Trash cleanup, and the runner returned
+OFF. It allocates $0 by design. Ranking, weekly/monthly allocation,
+counterfactuals, and UI remain open until later separately reviewed slices.
+
+`RFP-3b` is locally implemented and awaiting visual/runtime acceptance. It adds
+the pure weekly ranking/allocation kernel, exact remaining-cash ledger,
+current-week-derived monthly rollup, no-write tracked-Bill occurrence reader,
+and the integrated read-only Planning **This Week** experience. This Week is
+the default Start Here view, while Next Actions remains under Do now; there is
+no alternate URL or parallel dashboard. Current-cash allocation counts no unscheduled
+income. A rolling 90-day operating reserve protects future Bills, debt minimums,
+Upcoming expenses, and an
+irregular-property contingency after estimated recurring income. Recurring
+gross rent supplies the income side; scheduled mortgages and property operating
+costs remain owned once by Bills, debts, or Upcoming. Only trailing
+Repair/Maintenance/Appliance/Other house history, net of matching planned
+Upcoming costs, contributes an additional property contingency. Future income reduces the
+reserve forecast but never inflates current cash or removes the one-month
+operating floor. Variable Bills use their saved
+estimates as protected required amounts; only missing estimates, missing APR,
+required-payment shortfalls, and reserve shortfalls fail closed.
+Explicit $0 estimates and episodic healthcare periods with no scheduled cost do
+not pause the plan. Active tracked-debt aliases suppress duplicate debt minimums.
+The aggregate Property Performance shortfall is not a forecast input, preventing
+mortgages, HOA, management, and other scheduled property costs from being
+counted twice.
+The default customer view uses grouped cash/plan cards, a collapsed What waits
+section, and separately disclosed calculation details instead of exposing the
+full internal ledger first.
+RFP-3b removes recurring investment contributions represented in Bills from the
+household-Bill total and shows them separately. Samer Robinhood normally receives
+the standing $500 weekly investment-policy minimum; a scheduled contribution
+fulfills rather than duplicates it. An explicit safety override pauses the
+minimum when the operating floor, a missed payment, or dangerous revolving debt
+makes funding unsafe. Normal future commitments remain disclosed but do not
+inflate the operating reserve. Highest-APR debt receives remaining goal money.
+Delivery 1 now adds a Capital Source Ladder, separates stopping M1 funding from
+an in-kind transfer and from a taxable sale, blocks sales as `TAX_DATA_REQUIRED`,
+shows deterministic Why-not comparisons, recomputes After Action → Next Dollar,
+and releases a fully paid debt's former minimum into future cash flow. It never
+performs a transfer, payment, or trade.
+The pre-commit correction pass makes a Samer Ally `DO_NOT_TOUCH` mismatch a
+blocking, customer-actionable policy conflict instead of silently excluding or
+overriding it; children-owned accounts remain protected. Robinhood safety pauses
+show the exact trigger and reserve reconciliation, and critical revolving debt
+continues to receive the next dollar when the reserve is already protected.
+Property contingency retains a 25% unknown-repair floor after Upcoming offsets.
+Brokerage rows expose stable identity status, while 401(k), retirement, and
+custodial assets are retained for household analysis but removed from actionable
+capital-source candidates.
+No workbook recommendation write, transfer, payment, or trade was added.
+A complete future-week monthly forecast and tax-lot calculations remain later
+slices.
+| RFP-4 | Complete **This Week** decision experience and **Why not?** comparisons | Mature the integrated This Week view with amount, source, destination, reason, required/recommended status, expected benefit, liquidity/tax/risk effects when supported, confidence, and remaining cash. Why not? compares backend-calculated alternatives such as debt payment, investment funding, or holding liquidity; an optional LLM may explain validated results but cannot change their numbers or order | 1.5–2.5 d |
 | RFP-5 | Disposable-workbook and isolated runtime proof | Marker-verified fixtures prove deterministic repeatability, exact reconciliation, reserve shortfall, mixed APRs, net rental income, multiple Income-Producing Accounts, missing metadata, zero-dollar investment recommendations, counterfactual comparisons, and legacy behavior; cleanup and environment boundaries verified | 1–2 d |
 | RFP-6a | Broker activity, holdings, and portfolio-intention foundation | Complete on isolated Central `@351` and owner-accepted on the bounded app: preview-first Robinhood CSV import on a selected Income-Producing account; server-side option/unrelated/admin exclusions; raw CSV is not retained; duplicate-safe normalized `SYS - Investment Activity`; derived `SYS - Investment Holdings`; opening capital, later contributions, purchases, quantities, dividends, and weekly recurring buys. `INPUT - Investments` remains the account-total authority. Robinhood's blank disclaimer footer is excluded and reported without weakening the fail-closed rule for transaction-bearing rows with no date. Run `20260814-070625-5dbc` passed both integration scenarios and 40/40 assertions in 136.0 s, with Restricted sharing, provisioning/drift PASS, verified Trash cleanup, and the runner OFF. The first owner-controlled bounded import saved 104 Samer Robinhood activities; JEPQ, QQQ, QQQI, and SPYI quantities reconciled to the later broker view after the next weekly buys and dividend reinvestment. Post-proof common-source commit `529ce88` adds an account-first Portfolio activity drawer, editable recurring plans kept separate from imported facts, and checkpointed ticker review that reopens after a later purchase without retroactively importing excluded history. The owner accepted the bounded presentation; this extension is not claimed as part of the earlier isolated `@351` evidence | Complete |
 | RFP-6b | Holdings and target-allocation analysis | Additive position model produces Hold/Add/Reduce/Sell/Review by holding and account; household-wide concentration/overlap; and a Samer Robinhood allocation by ticker/fund (for example QQQ/JEPQ/QQQI/SPYI/other approved holdings/cash) totaling 100%, including contribution routing and rebalance bands. No recommendation from account totals alone; base weekly plan remains independent | 2–4 d after RFP-6a proof and current prices/distribution inputs |

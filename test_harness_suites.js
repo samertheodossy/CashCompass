@@ -85,6 +85,15 @@ function harnessSuiteScenarioTrash_(scenario, mode) {
 function getHarnessSuites_() {
   return [
     {
+      id: 'SUITE-RFP-CAPITAL-ALLOCATION-FOUNDATION',
+      label: 'Capital Allocation Foundation',
+      description: 'Validate deterministic read-only household facts, required constraints, and the unranked in-memory candidate queue before recommendation policy is enabled.',
+      scenarioIds: [
+        'REGRESSION-RFP-CAPITAL-ALLOCATION-FOUNDATION',
+        'REGRESSION-RFP-CAPITAL-ALLOCATION-WEEKLY-PLAN'
+      ]
+    },
+    {
       id: 'SUITE-RFP-INVESTMENT-FOUNDATION',
       label: 'Income-Producing Investment Foundation',
       description: 'Validate stable Income-Producing designations plus preview-first broker activity import, exclusions, dedupe, and derived holdings on marker-verified disposable workbooks.',

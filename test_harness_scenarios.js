@@ -162,6 +162,12 @@ function getHarnessScenarios_() {
   if (typeof getHarnessRfpInvestmentActivityScenario_ === 'function') {
     list.push(getHarnessRfpInvestmentActivityScenario_());
   }
+  if (typeof getHarnessRfpCapitalAllocationScenario_ === 'function') {
+    list.push(getHarnessRfpCapitalAllocationScenario_());
+  }
+  if (typeof getHarnessRfpCapitalAllocationWeeklyPlanScenario_ === 'function') {
+    list.push(getHarnessRfpCapitalAllocationWeeklyPlanScenario_());
+  }
   if (typeof getHarnessPerformancePlannerScenario_ === 'function') {
     list.push(getHarnessPerformancePlannerScenario_());
   }

@@ -1,6 +1,6 @@
 # Rolling Financial Plan — RFP-1 Decision Contract
 
-**Status:** RFP-1/RFP-2 decisions complete; RFP-3 architecture approved; allocation-policy details pending
+**Status:** RFP-1/RFP-2 decisions complete; RFP-3 architecture approved; RFP-3b preview policy implemented for review
 
 **Date:** 2026-08-14
 
@@ -49,6 +49,105 @@ an optional LLM may explain validated facts, assumptions, recommendations,
 warnings, and scenarios, but may not invent inputs or silently change amounts,
 eligibility, ranking, or action order.
 
+### RFP-3a implementation boundary
+
+RFP-3a establishes the read-only deterministic seam before policy is enabled.
+It returns canonical household facts, provenance-backed data-quality findings,
+hard constraints/required actions, and stable discretionary candidates. Every
+discretionary candidate is explicitly `UNRANKED` with `rank = null` and
+`allocatedAmount = null`; reconciliation reports zero allocated dollars and
+unchanged available cash. Missing APR, unscheduled income receipt dates, or an
+unreconciled tracked-bill occurrence blocks later allocation rather than being
+silently estimated. Ranking, dollar allocation, ordered weekly actions,
+counterfactuals, and the This Week UI remain later reviewed increments.
+
+### RFP-3b read-only Planning boundary
+
+RFP-3b adds a deterministic weekly allocation kernel and an integrated,
+read-only **This Week** experience under Planning. This Week is the default
+Start Here view, with Next Actions retained under Do now beside Rolling Debt
+Payoff. Its visible V1 order is:
+required household actions; a rolling 90-day operating reserve; the normal
+$500 weekly Samer Robinhood investment policy unless an emergency override is
+active; account-buffer
+restoration; serial extra principal by descending APR; confirmed account-scoped
+Income-Producing funding pace; then explicitly held cash. Every active positive-balance debt remains visible even
+when it receives $0 this week.
+
+The plan uses current deployable cash and counts no forecast income unless an
+authoritative receipt amount is available for the week. Missing income timing
+therefore remains visible as a warning but does not inflate cash or block a
+current-cash-only plan. Tracked Bills reuse the production recurrence and
+handled-occurrence logic through an explicit no-write option. Variable Bills
+use their saved estimate as a protected required amount and remain visibly
+labeled as estimates; only a variable Bill with no usable saved estimate blocks
+allocation. Required-payment shortfalls and missing APRs also fail closed. Extra principal is capped after any same-week
+minimum payment so a debt cannot be overpaid.
+
+The 90-day operating reserve includes recorded Bills, debt minimums, Upcoming
+expenses, and an irregular-property contingency after the current seven-day
+window, offset by estimated recurring
+income. Future income reduces
+the reserve estimate but is never added to current deployable cash and cannot
+reduce protected cash below one month of the 90-day scheduled outflows. Variable
+Bills use saved estimates; missing estimates fail closed. Debt minimums already
+represented by active tracked Bills are counted once, including configured name
+aliases. An explicitly saved $0 estimate is valid, and episodic healthcare costs
+may remain $0 until an Upcoming expense or saved estimate records an expected
+visit. Recurring gross rent is the property-income input. Bills, linked debt
+minimums, and Upcoming expenses own scheduled mortgages and property costs once.
+Trailing House Expense history contributes only Repair, Maintenance, Appliance,
+and Other contingency, and matching planned Upcoming costs reduce that allowance.
+HOA, management, insurance, utilities, tax, cleaning, and warranty history is
+excluded from the contingency because scheduled sources own it. Aggregate
+Property Performance net cash flow is analytics only and is not another reserve
+input.
+
+The twelve normal-policy Robinhood contributions remain disclosed separately
+in the forecast. They do not inflate the solvency floor and may be temporarily
+paused when the emergency-liquidity rule is active. The monthly card aggregates only the actions in the current weekly ledger and
+is labeled `CURRENT_WEEK_ONLY`; it does not fabricate future paydays or income.
+The plan writes no recommendation, transfer, payment, trade, Cash Flow value,
+or Activity row. It is part of the same common dashboard source and requires no
+alternate URL or feature-specific deployment.
+
+Recurring investment contributions are not household Bills. Samer Robinhood's
+$500 weekly amount is a normal standing investment-policy minimum, not a
+solvency obligation. A scheduled Robinhood contribution fulfills it rather than
+creating a duplicate. The safety override may recommend a temporary $0 when
+funding would violate the operating floor, a required payment is missed, or a
+critical revolving-debt rule is active. Every override remains visible with its
+reason. Policy precedence is ownership/hard exclusion, then Use Policy, account
+buffer, Planning Role, and finally optimizer recommendation.
+
+Delivery 1 also distinguishes three M1 decisions: stop or redirect future
+funding; review an in-kind custodian transfer; and review a taxable sale and
+redeployment. An in-kind transfer is not passive-income progress. Taxable-sale
+recommendations return `TAX_DATA_REQUIRED` until security, account, quantity,
+market value, basis, tax lots, holding period, unrealized gain/loss, and planning
+status are available. No transfer, sale, or funding change is executed.
+
+The Capital Source Ladder lists current eligible cash, forecast free cash flow,
+optional contribution redirects, and blocked brokerage sources. The optimizer
+maximizes sustainable household after-tax net worth, free cash flow, and passive
+income rather than a brokerage balance. After every action, it recomputes the
+next dollar; a fully paid debt releases its former monthly minimum into future
+allocatable cash.
+
+Pre-commit correction contract: Samer Ally is eligible only after its recorded
+Use Policy permits use above its minimum buffer; a conflicting `DO_NOT_TOUCH`
+value blocks discretionary allocation and directs the user to the Bank Manage
+screen rather than being silently overridden. Children-owned Ally accounts stay
+hard-excluded. The emergency-override result exposes its exact trigger, required
+reserve, projected protected cash, and reserve surplus; a critical-debt trigger
+does not masquerade as a reserve shortfall, so the next dollar still targets the
+highest critical APR when the reserve is fully protected. Planned property
+repairs may offset overlapping history but cannot reduce unknown-property
+contingency below 25% of the trailing 90-day irregular allowance. Brokerage
+source rows carry their SYS - Assets row and stable-ID status; retirement and
+custodial assets remain available to net-worth/allocation analysis but are not
+actionable capital-source candidates.
+
 When holdings granularity is added, the portfolio layer must answer two distinct
 questions without changing the base weekly cash plan:
 
@@ -78,7 +177,7 @@ merit and must never place or imply an automatic trade.
 | Cash Flow anchor | Latest populated Cash Flow month on or before the current month | Preserve the existing capped anchor. A future-only month must not become current actual data. |
 | Stable and variable income | Cash Flow history through Rolling Debt Payoff's classification and trailing baselines | Keep stable recurring income separate from RSU, stock sale, bonus, refund, dividend, and other variable income. Forecast values must never be labeled actual. |
 | Property value and financing | `SYS - House Assets`, linked active Loan/HELOC rows in `INPUT - Debts` | Use existing current value, loan balance, and link guards. |
-| Rental cash generation | Cash Flow rent, House Expenses, and linked Cash Flow loan payments through Property Performance | Use **net cash flow**: rent minus operating expenses minus actual linked loan payments. Gross rent alone is never available family funding. |
+| Rental cash generation | Recurring Cash Flow rent plus Bills, debts, Upcoming expenses, and House Expense history | Use recurring gross rent as forecast income. Count scheduled mortgages and property costs once through Bills/debts/Upcoming; add only an irregular Repair/Maintenance/Appliance/Other historical contingency net of matching Upcoming costs. Property Performance remains analytics and is not added as another forecast ledger line. |
 | Investment account identity and balance | `INPUT - Investments` history with `SYS - Assets` current mirror | Use only an active current-year account with one matching system row. Current balance is account-level; holdings are optional later. |
 | Investment activity, holdings, and recurring intentions | `SYS - Investment Activity`, `SYS - Investment Holdings`, and `SYS - Investment Plans` for explicitly designated Income-Producing Accounts | Imported activity and derived holdings are facts; editable recurring plans are user intentions. `INPUT - Investments` remains the account-total authority. A plan is a requested funding pace, not proof that household cash can safely fund it. |
 | Current-versus-month reporting | Current `SYS -` mirrors versus exact cells in the selected `INPUT` month | Label latest-known current values separately from exact-month ledger values and include coverage/staleness. Never imply they are the same measure. |
@@ -92,12 +191,14 @@ merit and must never place or imply an automatic trade.
 2. **Resolved by RFP-6a and post-proof commit `529ce88`:** selected-account
    imports now provide duplicate-safe activity, derived holdings, editable
    recurring intentions, and checkpointed ticker review. Samer Robinhood is the
-   current primary account, but the architecture remains multi-account and never
-   selects by a name pattern.
-3. Property Performance provides selected-year net cash flow, while the Rolling
-   planner's stable-income list treats named rent receipts as income. The new
-   plan needs a monthly/trailing **net rental** projection so gross rent is not
-   allocated twice or without its costs.
+   current primary account, while the broader import and holdings architecture
+   remains multi-account. The current standing-minimum policy resolves the exact
+   Samer Robinhood account and carries its stable Investment Id into actions;
+   explicit primary-role metadata remains a future rename-hardening gap.
+3. **Resolved for RFP-3b:** recurring gross rent and scheduled property outflows
+   now enter one forecast ledger. Aggregate Property Performance net cash flow
+   is excluded from allocation, and only unscheduled historical property costs
+   contribute a separate contingency.
 4. Next Actions currently recommends urgent obligations and extra debt; it
    intentionally excludes investment optimization. The new decision engine
    should compose this information rather than change Next Actions in place.
@@ -156,24 +257,29 @@ amount carries its source, as-of month, coverage, and actual/forecast label.
    active records, missing debt APR needed for ranking, or unreconciled cash.
 2. **Urgent obligations** — overdue and near-term Bills, Upcoming items, and
    required cash out.
-3. **Protected cash** — `DO_NOT_TOUCH` reserve plus account Minimum buffers and
-   existing near-term planned-cash holds.
-4. **Complete debt plan** — include every active debt with a remaining balance,
+3. **Protected cash** — apply ownership/hard exclusions, `DO_NOT_TOUCH`, account
+   minimum buffers, and the 90-day operating floor before optimizer choices.
+4. **Normal Samer Robinhood policy** — allocate $500 every week when the safety
+   override is inactive. A scheduled contribution satisfies this action once;
+   it is never also counted as a Bill. When the override is active, show a
+   visible $0 safety pause and its exact reason.
+5. **Complete debt plan** — include every active debt with a remaining balance,
    preserve its required minimum/scheduled payment, and reuse Rolling Debt
    Payoff's serial extra-payment ordering. Higher APR generally ranks before
    lower APR, but no rate threshold excludes or hides a debt. A missing APR
    keeps the debt in the plan, flags its ranking confidence, and never suppresses
    its required payment.
-5. **Reserve restoration** — if protected cash fell below its target, restore it
+6. **Reserve restoration** — if protected cash fell below its target, restore it
    before discretionary investment funding.
-6. **Income-Producing Accounts funding** — calculate the recurring and one-time
-   household surplus that can be directed to **Samer Robinhood** without missing
-   obligations, violating protected cash, or omitting any debt. Show the source
+7. **Additional Income-Producing funding** — when a confirmed account plan pace
+   exceeds the required $500, calculate the additional household surplus that
+   can be directed to **Samer Robinhood** without missing obligations, violating
+   protected cash, or omitting any debt. Show the source
    of funding, start month, monthly and annual funding pace, cumulative
    contributions, projected account balance, and progress toward the approved
    observed income production and balance growth. No artificial income target
    or target date is required.
-7. **Remaining ranked debts and family investing** — show the complete rolling
+8. **Remaining ranked debts and family investing** — show the complete rolling
    timeline for every remaining debt alongside Samer Robinhood funding. Lower
    rates may receive extra principal later than higher rates, but they remain in
    the plan until their balances reach zero.

@@ -366,3 +366,310 @@ function getHarnessRfpInvestmentActivityScenario_() {
     }
   };
 }
+
+/** RFP-3a deterministic facts and unranked Capital Allocation Queue. */
+function getHarnessRfpCapitalAllocationScenario_() {
+  return {
+    id: 'REGRESSION-RFP-CAPITAL-ALLOCATION-FOUNDATION',
+    category: 'REGRESSION',
+    executionLevel: 'PURE',
+    expectedAssertionCount: 16,
+    description: 'Prove deterministic required constraints and unranked candidates without allocating cash or writing recommendations.',
+    requiresTrashCleanup: true,
+    expectedSheets: ['SYS - Meta'],
+    setup: function(ctx) {
+      ctx.actions.push('Use normalized synthetic household facts; production kernel remains read-only');
+    },
+    actions: function(ctx) {
+      ctx.facts = {
+        asOfDate: '2026-08-14',
+        liquidity: {
+          cashToUse: 7450,
+          accounts: [
+            { accountName: 'Operating', balance: 10000, minBuffer: 2500, usable: 7500, included: true },
+            { accountName: 'Emergency', balance: 12000, minBuffer: 0, usable: 0,
+              included: false, excludedReason: 'do_not_touch_policy' },
+            { accountName: 'Property reserve', balance: 500, minBuffer: 1500, usable: 0, included: true }
+          ]
+        },
+        debts: [
+          { name: 'High APR card', originalName: 'High APR card', active: true,
+            balance: 10000, minimumPayment: 300, interestRate: 26.99 },
+          { name: 'Low mortgage', originalName: 'Low mortgage', active: true,
+            balance: 100000, minimumPayment: 900, interestRate: 1.99 },
+          { name: 'Missing APR', originalName: 'Missing APR', active: true,
+            balance: 5000, minimumPayment: 100, interestRate: 0 },
+          { name: 'Stopped debt', originalName: 'Stopped debt', active: false,
+            balance: 4000, minimumPayment: 50, interestRate: 19 }
+        ],
+        obligations: [
+          { sourceType: 'debt_minimum', sourceId: 'High APR card', name: 'High APR card',
+            actionType: 'PAY_DEBT_MINIMUM', amount: 300, requiredThisWeek: true,
+            amountBasis: 'MINIMUM_PAYMENT', reason: 'Due', provenance: 'INPUT - Debts' },
+          { sourceType: 'tracked_bill', sourceId: 'Tax:2026-08-20', name: 'Property tax',
+            actionType: 'PAY_TRACKED_BILL', amount: 850, requiredThisWeek: true,
+            amountBasis: 'DEFAULT_AMOUNT', reason: 'Due', provenance: 'INPUT - Bills' }
+        ],
+        incomeProducingAccounts: [
+          { investmentId: 'INV-1', accountName: 'Samer Robinhood', eligible: true,
+            requestedWeeklyPace: 500 },
+          { investmentId: 'INV-2', accountName: 'Second Income Account', eligible: true,
+            requestedWeeklyPace: 0 }
+        ],
+        dataQuality: []
+      };
+      ctx.first = buildCapitalAllocationQueue_(ctx.facts);
+      ctx.second = buildCapitalAllocationQueue_(ctx.facts);
+      ctx.actions.push('Build the same queue twice through the production pure kernel');
+    },
+    expectedOutcome: function(ctx) {
+      var mod = 'Capital Allocation Queue';
+      ctx.assert.equals('Schema version is explicit', ctx.first.schemaVersion,
+        'RFP_3A_V1', { module: mod });
+      ctx.assert.equals('Identical facts are deterministic', JSON.stringify(ctx.first),
+        JSON.stringify(ctx.second), { module: mod });
+      ctx.assert.equals('Allocation remains disabled', ctx.first.allocationStatus,
+        'NOT_ALLOCATED', { module: mod });
+      ctx.assert.equals('No cash is allocated', ctx.first.reconciliation.allocatedAmount,
+        0, { module: mod });
+      ctx.assert.equals('Unallocated cash is unchanged', ctx.first.reconciliation.remainingCash,
+        7450, { module: mod });
+      ctx.assert.equals('Required actions total without protected cash',
+        ctx.first.totals.requiredActionAmount, 1650, { module: mod });
+      ctx.assert.equals('Protected balances remain separately visible',
+        ctx.first.totals.protectedCashAmount, 15000, { module: mod });
+      ctx.assert.equals('Every discretionary candidate is unranked',
+        ctx.first.discretionaryCandidates.every(function(row) {
+          return row.rank === null && row.allocatedAmount === null && row.status === 'UNRANKED';
+        }), true, { module: mod });
+      var debtTargets = ctx.first.discretionaryCandidates.filter(function(row) {
+        return row.actionType === 'PAY_EXTRA_DEBT';
+      }).map(function(row) { return row.targetName; });
+      ctx.assert.equals('All active positive debts are candidates', debtTargets.length,
+        3, { module: mod });
+      ctx.assert.equals('Low APR debt is not excluded', debtTargets.indexOf('Low mortgage') !== -1,
+        true, { module: mod });
+      ctx.assert.equals('Stopped debt is excluded', debtTargets.indexOf('Stopped debt'),
+        -1, { module: mod });
+      ctx.assert.equals('Do-not-touch cash is protected', ctx.first.hardConstraints.some(function(row) {
+        return row.actionType === 'PROTECT_CASH' && row.requestedAmount === 12000;
+      }), true, { module: mod });
+      ctx.assert.equals('Reserve shortfall becomes a candidate',
+        ctx.first.discretionaryCandidates.some(function(row) {
+          return row.actionType === 'RESTORE_RESERVE' && row.requestedAmount === 1000;
+        }), true, { module: mod });
+      ctx.assert.equals('Samer Robinhood minimum is a required weekly commitment',
+        ctx.first.hardConstraints.some(function(row) {
+          return row.actionType === 'FUND_INCOME_PRODUCING_MINIMUM' &&
+            row.targetName === 'Samer Robinhood' && row.requestedAmount === 500;
+        }), true, { module: mod });
+      ctx.assert.equals('Holding cash remains an explicit candidate',
+        ctx.first.discretionaryCandidates.some(function(row) {
+          return row.actionType === 'HOLD_CASH';
+        }), true, { module: mod });
+      ctx.assert.equals('Missing APR blocks later allocation but not queue inclusion',
+        ctx.first.dataQuality.some(function(row) {
+          return row.findingId === 'MISSING_DEBT_APR:MISSING_APR' && row.blocksAllocation;
+        }), true, { module: mod });
+    }
+  };
+}
+
+/** RFP-3b deterministic weekly ranking, allocation, and monthly rollup. */
+function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
+  return {
+    id: 'REGRESSION-RFP-CAPITAL-ALLOCATION-WEEKLY-PLAN',
+    category: 'REGRESSION',
+    executionLevel: 'PURE',
+    expectedAssertionCount: 33,
+    description: 'Prove deterministic weekly ranking, variable-bill estimate handling, 90-day cash protection, debt-before-investment allocation, exact reconciliation, explicit waits, and a monthly rollup derived from the same actions.',
+    requiresTrashCleanup: true,
+    expectedSheets: ['SYS - Meta'],
+    setup: function(ctx) {
+      ctx.actions.push('Use normalized synthetic household facts with complete ranking inputs');
+    },
+    actions: function(ctx) {
+      ctx.facts = {
+        asOfDate: '2026-08-14',
+        liquidity: {
+          cashToUse: 7450,
+          accounts: [
+            { accountName: 'Operating', balance: 10000, minBuffer: 2500, usable: 7500, included: true },
+            { accountName: 'Emergency', balance: 12000, minBuffer: 0, usable: 0,
+              included: false, excludedReason: 'do_not_touch_policy' },
+            { accountName: 'Property reserve', balance: 500, minBuffer: 1500, usable: 0, included: true }
+          ]
+        },
+        income: { expectedThisWeek: null, normalizedWeeklyPace: 2000 },
+        forecast90: {
+          horizonDays: 90, startDate: '2026-08-14', endDate: '2026-11-11',
+          futureBillsAmount: 7000, futureDebtMinimumsAmount: 3000,
+          futureUpcomingAmount: 1000, futureInvestmentCommitmentsAmount: 6000,
+          futureOperatingOutflowsAmount: 11000,
+          propertyContingencyAmount: 0,
+          expectedIncome: 9000, expectedNonRentalIncome: 6000,
+          expectedRentalIncome: 3000, requiredReserveAmount: 2000
+        },
+        debts: [
+          { name: 'High APR card', originalName: 'High APR card', active: true,
+            balance: 10000, minimumPayment: 300, interestRate: 26.99 },
+          { name: 'Low mortgage', originalName: 'Low mortgage', active: true,
+            balance: 100000, minimumPayment: 900, interestRate: 1.99 }
+        ],
+        obligations: [
+          { sourceType: 'debt_minimum', sourceId: 'High APR card', name: 'High APR card',
+            actionType: 'PAY_DEBT_MINIMUM', amount: 300, requiredThisWeek: true,
+            amountBasis: 'MINIMUM_PAYMENT', reason: 'Due', provenance: 'INPUT - Debts' },
+          { sourceType: 'tracked_bill', sourceId: 'Tax:2026-08-20', name: 'Property tax',
+            actionType: 'PAY_TRACKED_BILL', amount: 850, requiredThisWeek: true,
+            amountBasis: 'DEFAULT_AMOUNT', reason: 'Due', provenance: 'INPUT - Bills' }
+        ],
+        incomeProducingAccounts: [
+          { investmentId: 'INV-1', accountName: 'Samer Robinhood', eligible: true,
+            requestedWeeklyPace: 500 }
+        ],
+        existingInvestmentContributions: [{
+          name: 'Robinhood', amount: 500, dueDate: '2026-08-17',
+          matchedInvestmentId: 'INV-1', matchedAccountName: 'Samer Robinhood',
+          classificationBasis: 'MATCHED_INVESTMENT_ACCOUNT', provenance: 'INPUT - Bills'
+        }, {
+          name: 'M1 Investment', amount: 600, dueDate: '2026-08-17',
+          matchedInvestmentId: '', matchedAccountName: '',
+          classificationBasis: 'INVESTMENT_CONTRIBUTION_LABEL', provenance: 'INPUT - Bills'
+        }],
+        recurringInvestmentContributions: [{
+          name: 'M1 Investment', scheduledAmount: 600, frequency: 'weekly', amount: 600,
+          matchedInvestmentId: '', matchedAccountName: '',
+          classificationBasis: 'INVESTMENT_CONTRIBUTION_LABEL',
+          provenance: 'INPUT - Bills recurring schedule'
+        }],
+        brokerageFoundation: [{ investmentId: 'INV-M1', accountName: 'M1 Account',
+          currentBalance: 50000, inKindTransferStatus: 'REVIEW_COMPATIBILITY',
+          salePlanningStatus: 'TAX_DATA_REQUIRED', actionableSource: true,
+          identityMessage: 'Separate SYS - Assets identity verified by INV-M1.',
+          sysAssetsRow: 4
+        }, { investmentId: '', accountName: '401K Account', currentBalance: 1887450,
+          assetClass: 'RETIREMENT_OR_RESTRICTED', actionableSource: false,
+          exclusionReason: 'Retirement assets are excluded from actionable capital sources.',
+          sysAssetsRow: 5 }],
+        dataQuality: [{
+          findingId: 'VARIABLE_BILL_ESTIMATE_USED:PROPERTY_TAX',
+          severity: 'WARNING', blocksAllocation: false,
+          message: 'Property tax uses its saved estimate of $850.00 for this plan.',
+          provenance: 'INPUT - Bills', estimatedAmount: 850
+        }]
+      };
+      ctx.first = buildCapitalAllocationPlan_(ctx.facts);
+      ctx.second = buildCapitalAllocationPlan_(ctx.facts);
+      ctx.actions.push('Build the same weekly plan twice through the production pure kernel');
+    },
+    expectedOutcome: function(ctx) {
+      var mod = 'Capital Allocation Weekly Plan';
+      ctx.assert.equals('Plan schema version is explicit', ctx.first.schemaVersion,
+        'RFP_3B_V1', { module: mod });
+      ctx.assert.equals('Identical facts produce identical plans', JSON.stringify(ctx.first),
+        JSON.stringify(ctx.second), { module: mod });
+      ctx.assert.equals('Complete facts allocate', ctx.first.allocationStatus,
+        'ALLOCATED', { module: mod });
+      ctx.assert.equals('Saved variable-bill estimates do not pause allocation',
+        ctx.first.dataQuality[0].blocksAllocation, false, { module: mod });
+      ctx.assert.equals('Opening cash is preserved', ctx.first.summary.openingCash,
+        7450, { module: mod });
+      ctx.assert.equals('Required actions total', ctx.first.summary.requiredThisWeek,
+        1650, { module: mod });
+      ctx.assert.equals('Cash after required actions', ctx.first.summary.deployableAfterRequired,
+        5800, { module: mod });
+      ctx.assert.equals('Protected balances remain visible', ctx.first.summary.protectedCash,
+        15000, { module: mod });
+      ctx.assert.equals('Ninety-day operating reserve is protected', ctx.first.summary.reserve90Days,
+        2000, { module: mod });
+      ctx.assert.equals('Goal money excludes the operating reserve', ctx.first.summary.availableForGoals,
+        3800, { module: mod });
+      ctx.assert.equals('Existing investment contribution stays separate from required bills',
+        ctx.first.existingInvestmentContributions[0].amount, 500, { module: mod });
+      var reserve = ctx.first.rankedCandidates.filter(function(row) {
+        return row.actionType === 'RESTORE_RESERVE';
+      })[0];
+      var funding = ctx.first.rankedCandidates.filter(function(row) {
+        return row.actionType === 'FUND_INCOME_PRODUCING_ACCOUNT';
+      })[0];
+      var high = ctx.first.rankedCandidates.filter(function(row) {
+        return row.targetName === 'High APR card';
+      })[0];
+      var low = ctx.first.rankedCandidates.filter(function(row) {
+        return row.targetName === 'Low mortgage';
+      })[0];
+      var hold = ctx.first.rankedCandidates.filter(function(row) {
+        return row.actionType === 'HOLD_CASH';
+      })[0];
+      ctx.assert.equals('Reserve restoration ranks first', reserve.rank, 1, { module: mod });
+      ctx.assert.equals('Reserve receives its full shortfall', reserve.allocatedAmount, 1000, { module: mod });
+      ctx.assert.equals('Confirmed investment pace ranks after higher-priority debt', high.rank < funding.rank,
+        true, { module: mod });
+      ctx.assert.equals('Investment funding waits while higher-priority debt uses goal money', funding.allocatedAmount, 0, { module: mod });
+      ctx.assert.equals('Higher APR debt ranks before lower APR debt', high.rank < low.rank,
+        true, { module: mod });
+      ctx.assert.equals('Remaining cash goes to high APR debt', high.allocatedAmount,
+        2800, { module: mod });
+      ctx.assert.equals('Lower APR debt stays visible with zero allocation', low.allocatedAmount,
+        0, { module: mod });
+      ctx.assert.equals('Hold cash remains explicit', hold.allocatedAmount, 0, { module: mod });
+      ctx.assert.equals('Ending cash reconciles', ctx.first.reconciliation.endingCash,
+        2000, { module: mod });
+      ctx.assert.equals('Reconciliation difference is zero', ctx.first.reconciliation.difference,
+        0, { module: mod });
+      ctx.assert.equals('Debt benefit is deterministic and labeled', high.estimatedAnnualInterestAvoided,
+        755.72, { module: mod });
+      ctx.assert.equals('Monthly totals reuse weekly decisions',
+        ctx.first.monthlyOutlook.totals.requiredActions +
+          ctx.first.monthlyOutlook.totals.reserveRestoration +
+          ctx.first.monthlyOutlook.totals.incomeProducingFunding +
+          ctx.first.monthlyOutlook.totals.extraDebt +
+          ctx.first.monthlyOutlook.totals.endingCash,
+        7450, { module: mod });
+      ctx.assert.equals('Optional contributions redirect to high-APR debt',
+        ctx.first.contributionStrategy.recommendation + ':' +
+          ctx.first.contributionStrategy.redirectedWeekly,
+        'REDIRECT_OPTIONAL_CONTRIBUTIONS_TO_DEBT:600', { module: mod });
+      ctx.assert.equals('M1 in-kind transfer remains a separate review decision',
+        ctx.first.capitalSourceLadder.steps.some(function(row) {
+          return row.sourceType === 'BROKERAGE_IN_KIND_TRANSFER_REVIEW' &&
+            row.status === 'REVIEW_COMPATIBILITY';
+        }), true, { module: mod });
+      ctx.assert.equals('M1 taxable sale is blocked pending tax data',
+        ctx.first.capitalSourceLadder.steps.some(function(row) {
+          return row.sourceType === 'BROKERAGE_SELL_OR_TRIM_REVIEW' &&
+            row.status === 'TAX_DATA_REQUIRED';
+        }), true, { module: mod });
+      ctx.assert.equals('Retirement assets stay outside actionable source candidates',
+        ctx.first.capitalSourceLadder.excludedAssets.some(function(row) {
+          return row.accountName === '401K Account' &&
+            row.assetClass === 'RETIREMENT_OR_RESTRICTED';
+        }), true, { module: mod });
+      ctx.assert.equals('Next dollar targets highest remaining APR',
+        ctx.first.nextDollar.destination, 'High APR card', { module: mod });
+      ctx.assert.equals('Debt comparison explains why not invest',
+        ctx.first.whyNot.winner, 'PAY_DEBT', { module: mod });
+      var emergencyFacts = JSON.parse(JSON.stringify(ctx.facts));
+      emergencyFacts.debts[0].type = 'Credit Card';
+      var emergency = buildCapitalAllocationPlan_(emergencyFacts);
+      ctx.assert.equals('Emergency override pauses the normal $500 policy',
+        emergency.summary.emergencyInvestmentOverride + ':' +
+          emergency.summary.standingInvestmentFunded,
+        'true:0', { module: mod });
+      ctx.assert.equals('Critical-debt safety pause keeps next dollar on debt',
+        emergency.nextDollar.destination, 'High APR card', { module: mod });
+      ctx.assert.equals('Emergency override exposes its exact trigger',
+        emergency.summary.emergencyInvestmentOverrideReasons.some(function(row) {
+          return row.code === 'CRITICAL_REVOLVING_DEBT' && row.apr === 26.99;
+        }), true, { module: mod });
+      var blockedFacts = JSON.parse(JSON.stringify(ctx.facts));
+      blockedFacts.dataQuality = [{ findingId: 'MISSING', severity: 'ERROR',
+        blocksAllocation: true, message: 'Missing', provenance: 'Fixture' }];
+      var blocked = buildCapitalAllocationPlan_(blockedFacts);
+      ctx.assert.equals('Blocking findings stop discretionary cash after required commitments',
+        blocked.allocationStatus + ':' + blocked.reconciliation.endingCash,
+        'BLOCKED:5800', { module: mod });
+    }
+  };
+}

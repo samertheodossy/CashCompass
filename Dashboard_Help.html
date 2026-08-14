@@ -22,6 +22,7 @@
         <a href="#help-bills-due">Bills</a>
         <a href="#help-properties">Properties</a>
         <a href="#help-planning">Planning</a>
+        <a href="#help-this-week-preview">This Week</a>
         <a href="#help-advanced">Advanced planning</a>
         <a href="#help-next-actions">Next Actions</a>
         <a href="#help-payoff-path">Debt Overview</a>
@@ -184,9 +185,10 @@
 
       <section id="help-planning" class="help-section">
         <h3>Planning</h3>
-        <p>Planning turns your current financial information into decisions. Start with Next Actions, then open deeper views when you need them.</p>
+        <p>Planning turns your current financial information into decisions. Start with This Week, then open immediate priorities or deeper views when you need them.</p>
         <ul class="help-list">
-          <li><strong>Next Actions</strong> prioritizes immediate work.</li>
+          <li><strong>This Week</strong> is the primary read-only plan that reconciles current available cash across required payments, the 90-day operating floor, Samer Robinhood&rsquo;s normal $500 weekly policy, account-buffer restoration, highest-APR debt, and money that should wait.</li>
+          <li><strong>Next Actions</strong> prioritizes immediate work across bills, upcoming items, and debts.</li>
           <li><strong>Debt Overview</strong> is a read-only comparison of current balances, minimums, and payoff outlook.</li>
           <li><strong>Rolling Debt Payoff</strong> turns those current balances into a month-by-month action plan.</li>
           <li>To change a balance, rate, minimum, due date, tracking status, or optional Loan/HELOC property link, use <strong>Assets &amp; Liabilities → Debt accounts</strong>.</li>
@@ -202,11 +204,36 @@
 
       <section id="help-next-actions" class="help-section">
         <h3>Next actions</h3>
-        <p>Next Actions is the best place to begin after setup. It combines near-term obligations, cash available after protections, and planning priorities.</p>
+        <p>Next Actions collects immediate priorities across bills, upcoming items, and debts. Use it when you want to review the underlying work behind This Week&rsquo;s plan.</p>
         <ul class="help-list">
           <li>Address overdue or urgent items first.</li>
           <li>Review the reason shown before acting on a suggested payment.</li>
           <li>Use the linked workspace button to inspect or update the underlying information.</li>
+        </ul>
+      </section>
+
+      <section id="help-this-week-preview" class="help-section">
+        <h3>This Week</h3>
+        <p>This Week shows what CashCompass can recommend from current recorded information. It does not transfer money, pay bills, change balances, place trades, or mark an action completed.</p>
+        <ul class="help-list">
+          <li><strong>Required this week</strong> normally includes Samer Robinhood&rsquo;s standing $500 weekly investment policy. An explicit safety override pauses it when the operating floor, a missed required payment, or dangerous revolving debt makes continued funding unsafe.</li>
+          <li><strong>Protected cash</strong> remains outside deployable cash through your account policies and minimum buffers.</li>
+          <li>Samer Ally is intended to be eligible household capital above its minimum buffer. If it is still marked <strong>Do Not Touch</strong>, This Week pauses discretionary allocation and tells you to correct the Use Policy in <strong>Assets &amp; Liabilities → Bank accounts → Manage</strong>. CashCompass never silently overrides Do Not Touch. Children&rsquo;s accounts remain protected.</li>
+          <li><strong>90-day operating reserve</strong> protects recorded future Bills, debt minimums, Upcoming expenses, and an allowance for irregular property costs. Normal future Robinhood policy contributions remain visible in the forecast but do not inflate the solvency floor. Estimated recurring income reduces the forecast, but future income is never treated as cash available today.</li>
+          <li>Variable Bills use their saved estimates. Episodic healthcare expenses may use $0 when nothing is scheduled; add an Upcoming expense or saved estimate when a visit or bill is expected.</li>
+          <li>Recurring gross rent is the property-income input. Mortgages and scheduled HOA, management, insurance, utilities, tax, cleaning, and warranty costs come from Bills, debt minimums, or Upcoming expenses exactly once. House history adds only a trailing allowance for irregular Repair, Maintenance, Appliance, and Other costs, reduced by matching planned Upcoming costs.</li>
+          <li>Planned repairs reduce overlapping historical contingency, but they cannot erase it. CashCompass keeps an unknown-repair floor equal to 25% of the trailing 90-day irregular-property allowance.</li>
+          <li>Existing investment contributions such as M1, Robinhood, or Stash are shown separately for review. Stopping future M1 funding, transferring M1 securities in kind, and selling/redeploying M1 positions are three different decisions. Taxable sales remain blocked as <strong>TAX_DATA_REQUIRED</strong> until position and tax-lot inputs exist.</li>
+          <li><strong>Capital Source Ladder</strong> shows eligible cash above account protections, expected future free cash flow, optional contribution redirects, in-kind transfer reviews, and taxable sale reviews without treating any of them as the same operation.</li>
+          <li>Each brokerage source shows whether a separate stable Investment Id verifies its identity. Retirement and custodial assets such as a 401(k) are retained for household analysis but excluded from actionable funding-source candidates.</li>
+          <li><strong>After Action &rarr; Next Dollar</strong> recomputes debt balances, interest avoided, minimum payments released by a full payoff, and the next recommended $1,000. Released minimums become future allocatable cash rather than disappearing.</li>
+          <li><strong>Why not the alternative?</strong> compares the recommended action with a competing use, such as paying guaranteed high APR versus an uncertain investment return.</li>
+          <li><strong>Plan at a glance</strong> groups bills and commitments, reserve protection, account-buffer restoration, highest-APR extra debt, investment funding, and unassigned cash.</li>
+          <li>After required minimums and cash protection, extra debt follows a debt avalanche: the highest APR receives available goal money while lower-APR debts remain visible and wait at their required minimums.</li>
+          <li><strong>What waits</strong> keeps zero-dollar choices visible without mixing them into this week&rsquo;s actions.</li>
+          <li><strong>View calculation details</strong> expands the complete ordered ledger and every eligible choice when you want to audit the arithmetic.</li>
+          <li>If important information is missing or cannot be reconciled, the plan pauses allocation and explains what needs review.</li>
+          <li>The monthly card currently summarizes the same current-week decisions; it does not invent future pay dates or income.</li>
         </ul>
       </section>
 

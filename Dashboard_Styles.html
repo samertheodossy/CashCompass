@@ -647,7 +647,7 @@
   .tabs.properties-tabs { grid-template-columns: repeat(2, 1fr); }
   /*
     Planning hierarchy:
-      1) `.planning-next-actions-feature` = featured primary entry point.
+      1) `.planning-next-actions-feature` = featured This Week entry point.
          Larger, filled-in, reads as "start here" even at rest.
       2) `.planning-tools-wrap`           = quieter task groups for
          immediate maintenance/action and optional exploration/modeling.
@@ -721,7 +721,7 @@
     margin-bottom: 0;
   }
   .planning-tool-group--do-now .planning-tools {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .planning-tool-group--explore .planning-tools {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -777,6 +777,279 @@
     color: #64748b;
     font-size: 13px;
     line-height: 1.45;
+  }
+  .capital-allocation-preview-head { align-items: flex-end; }
+  .capital-allocation-preview-kicker {
+    color: #1f4e78;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .capital-allocation-preview-controls {
+    display: grid;
+    grid-template-columns: minmax(145px, 180px) auto;
+    align-items: end;
+    gap: 8px;
+  }
+  .capital-allocation-preview-controls label {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-size: 12px;
+  }
+  .capital-allocation-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0 0 16px;
+  }
+  .capital-allocation-summary-card,
+  .capital-allocation-card {
+    border: 1px solid #dbe5ef;
+    border-radius: 10px;
+    background: #ffffff;
+  }
+  .capital-allocation-summary-card { padding: 12px; }
+  .capital-allocation-summary-label { color: #64748b; font-size: 12px; }
+  .capital-allocation-summary-value {
+    color: #0f172a;
+    font-size: 20px;
+    font-weight: 700;
+    margin-top: 3px;
+  }
+  .capital-allocation-summary-note {
+    color: #64748b;
+    font-size: 11px;
+    line-height: 1.35;
+    margin-top: 5px;
+  }
+  .capital-allocation-section { margin-top: 18px; }
+  .capital-allocation-section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .capital-allocation-section-head h3 { margin: 0; }
+  .capital-allocation-card { padding: 11px 12px; margin-bottom: 8px; }
+  .capital-allocation-card-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .capital-allocation-rank {
+    color: #1f4e78;
+    font-size: 12px;
+    font-weight: 800;
+    min-width: 24px;
+  }
+  .capital-allocation-card-title { flex: 1 1 220px; font-weight: 700; color: #0f172a; }
+  .capital-allocation-card-amount { font-weight: 700; color: #0f172a; white-space: nowrap; }
+  .capital-allocation-card-meta,
+  .capital-allocation-card-reason {
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.45;
+    margin-top: 4px;
+  }
+  .capital-allocation-badge {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 2px 7px;
+    background: #eef5ff;
+    color: #1f4e78;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+  }
+  .capital-allocation-blocker {
+    border: 1px solid #f1c27d;
+    background: #fff8e8;
+    color: #704b12;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 14px;
+  }
+  .capital-allocation-estimate-note {
+    margin: 14px 0;
+    padding: 12px 14px;
+    border: 1px solid #bcd7f1;
+    border-radius: 10px;
+    background: #eef5ff;
+    color: #1f4e78;
+  }
+  .capital-allocation-forecast {
+    margin: 14px 0;
+    border: 1px solid #dbe5ef;
+    border-radius: 10px;
+    background: #f8fafc;
+  }
+  .capital-allocation-forecast > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    list-style: none;
+    cursor: pointer;
+    padding: 13px 14px;
+  }
+  .capital-allocation-forecast > summary::-webkit-details-marker { display: none; }
+  .capital-allocation-forecast-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 20px;
+    padding: 4px 14px 8px;
+    border-top: 1px solid #e2e8f0;
+  }
+  .capital-allocation-forecast-line {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid #e2e8f0;
+    color: #334155;
+  }
+  .capital-allocation-forecast-line > span {
+    color: #0f172a;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .capital-allocation-forecast-line > span.capital-allocation-forecast-offset { color: #166534; }
+  .capital-allocation-forecast-total {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    color: #0f172a;
+  }
+  .capital-allocation-forecast-total strong { font-size: 18px; }
+  .capital-allocation-forecast > .muted { margin: 0; padding: 0 14px 13px; }
+  .capital-allocation-property-detail {
+    margin: 0 14px 12px;
+    border: 1px solid #dbe5ef;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+  .capital-allocation-property-detail > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    list-style: none;
+    cursor: pointer;
+    padding: 11px 12px;
+  }
+  .capital-allocation-property-detail > summary::-webkit-details-marker { display: none; }
+  .capital-allocation-property-detail > .muted { margin: 0; padding: 0 12px 12px; }
+  .capital-allocation-group-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .capital-allocation-group-card {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid #dbe5ef;
+    border-radius: 10px;
+    background: #ffffff;
+  }
+  details.capital-allocation-group-card { padding: 0; }
+  details.capital-allocation-group-card[open] { grid-column: 1 / -1; }
+  .capital-allocation-group-card > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 14px;
+  }
+  .capital-allocation-group-card > summary::-webkit-details-marker { display: none; }
+  .capital-allocation-group-card--empty,
+  .capital-allocation-group-card--hold { background: #f8fafc; }
+  .capital-allocation-group-label {
+    color: #475569;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .capital-allocation-group-value {
+    color: #0f172a;
+    font-size: 22px;
+    font-weight: 800;
+    margin-top: 4px;
+  }
+  .capital-allocation-expand-label {
+    display: inline-block;
+    color: #1f4e78;
+    font-size: 11px;
+    font-weight: 700;
+    margin-top: 9px;
+  }
+  .capital-allocation-group-items {
+    border-top: 1px solid #e2e8f0;
+    padding: 4px 14px 10px;
+  }
+  .capital-allocation-compact-action {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 0;
+    border-bottom: 1px solid #eef2f7;
+    font-size: 12px;
+  }
+  .capital-allocation-compact-action:last-child { border-bottom: 0; }
+  .capital-allocation-waits,
+  .capital-allocation-calculation-details {
+    margin-top: 18px;
+    border: 1px solid #dbe5ef;
+    border-radius: 10px;
+    background: #f8fafc;
+  }
+  .capital-allocation-waits > summary,
+  .capital-allocation-calculation-details > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    list-style: none;
+    cursor: pointer;
+    padding: 13px 14px;
+    color: #1f2937;
+  }
+  .capital-allocation-waits > summary::-webkit-details-marker,
+  .capital-allocation-calculation-details > summary::-webkit-details-marker { display: none; }
+  .capital-allocation-waits-summary {
+    display: block;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 500;
+    margin-top: 2px;
+  }
+  .capital-allocation-waits-body,
+  .capital-allocation-calculation-details[open] {
+    padding-bottom: 14px;
+  }
+  .capital-allocation-waits-body,
+  .capital-allocation-calculation-details > .capital-allocation-section,
+  .capital-allocation-calculation-details > p { margin-left: 14px; margin-right: 14px; }
+  .capital-allocation-waits-body h4 { margin: 14px 0 4px; }
+  .capital-allocation-wait-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid #e2e8f0;
+    color: #475569;
+    font-size: 12px;
+  }
+  .capital-allocation-blocker ul { margin: 8px 0 0 18px; padding: 0; }
+  .capital-allocation-month {
+    border: 1px dashed #b7c8da;
+    border-radius: 10px;
+    padding: 12px;
+    background: #f8fafc;
   }
   .related-view-nav {
     display: flex;
@@ -2737,9 +3010,7 @@
     .tabs.assets-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .tabs.properties-tabs { grid-template-columns: 1fr 1fr; }
     .planning-tools-wrap { grid-template-columns: 1fr; }
-    .planning-tool-group--do-now .planning-tools {
-      grid-template-columns: 1fr;
-    }
+    .planning-tool-group--do-now .planning-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .planning-tool-group--explore .planning-tools {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
@@ -2756,6 +3027,11 @@
   }
 
   @media (max-width: 760px) {
+    .capital-allocation-summary { grid-template-columns: 1fr; }
+    .capital-allocation-group-grid,
+    .capital-allocation-forecast-grid { grid-template-columns: 1fr; }
+    .capital-allocation-preview-controls { grid-template-columns: 1fr; width: 100%; }
+    .capital-allocation-preview-controls label { grid-column: auto; }
     .overview-section { margin-bottom: 20px; }
     .overview-kpi-grid,
     .overview-grid { gap: 12px; }

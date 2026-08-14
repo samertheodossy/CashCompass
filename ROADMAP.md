@@ -334,10 +334,68 @@ must be deterministic, provenance-backed, confidence-labeled, and exactly
 reconciled. It may not transfer funds, place trades, post payments, or write
 recommendations into the workbook.
 
+**RFP-3a complete on isolated Central `@353`:** the first contained slice defines the
+spreadsheet-scoped read-only fact seam and pure Capital Allocation Queue kernel.
+It emits hard constraints and stable discretionary candidates but deliberately
+does not rank or allocate them. Account buffers and Do Not Touch cash are
+protected, every active positive-balance debt remains eligible regardless of
+APR, Income-Producing funding stays account-scoped, holding cash is explicit,
+and unsupported timing/reconciliation inputs fail closed through data-quality
+findings. Permanent local regressions pass, and isolated run
+`20260814-112123-c4fd` passed its PURE scenario and 16/16 assertions in 5.7 s
+with Provisioning/Drift PASS, verified Trash cleanup, and the runner returned
+OFF. Ranking and allocation remain the next separately reviewed RFP-3 slice.
+
+**RFP-3b local candidate ready for visual review:** the deterministic kernel
+now orders required actions, a rolling 90-day operating reserve, account-buffer
+restoration, extra debt by APR, confirmed Income-Producing funding pace, and explicit held cash; caps extra principal
+after same-week minimums; and reconciles every cash use to ending cash. A
+read-only **This Week** experience renders the weekly ledger, ranked choices,
+blockers, protected cash, and a current-week-only monthly rollup as Planning's
+default Start Here view. Next Actions remains under Do now beside Rolling Debt
+Payoff; the common app has no alternate Planning URL. The Bills occurrence
+reader has an explicit no-write mode, so plan reads cannot trigger AutoPay.
+Variable Bills use their saved estimates as protected required amounts with one
+visible estimate warning; a genuinely missing estimate still fails closed. The
+90-day reserve includes future Bills, debt minimums, Upcoming expenses, and an
+irregular-property contingency,
+offset by estimated recurring income without treating future income as current
+cash or dropping below a one-month
+operating floor.
+Episodic healthcare Bills may remain at $0 when no expense is scheduled. Debt
+minimums represented by tracked Bill aliases are counted once. Recurring gross
+rent supplies property income; Bills/debts/Upcoming own scheduled mortgages,
+HOA, management, insurance, utilities, tax, cleaning, and warranty costs once.
+Only trailing Repair/Maintenance/Appliance/Other history, net of matching
+Upcoming items, supplies additional property contingency. The aggregate
+Property Performance gap is not used in this forecast.
+The default view presents grouped household and plan cards, keeps zero-dollar
+choices under What waits, and moves the full ledger behind calculation details.
+Recurring investment contributions recorded through Bills are separated from
+household Bills and displayed for review without double counting. Samer
+Robinhood normally receives the $500 weekly investment-policy minimum; its
+scheduled contribution fulfills that policy. A visible emergency override pauses
+it when the operating floor, a missed payment, or critical revolving debt makes
+funding unsafe. Future normal-policy payments are disclosed separately from the
+operating reserve. Highest-APR debt receives remaining goal money. Delivery 1
+adds the Capital Source Ladder, deterministic contribution redirection,
+After Action → Next Dollar recomputation, released-minimum snowballing, and a
+Why-not comparison. Stopping M1 funding, reviewing an in-kind transfer, and
+reviewing a taxable sell/redeploy are distinct; sales remain `TAX_DATA_REQUIRED`.
+The pre-commit correction pass blocks rather than silently overrides a Samer
+Ally `DO_NOT_TOUCH` mismatch, keeps children-owned cash protected, explains the
+exact Robinhood safety trigger and reserve surplus, preserves critical-debt
+next-dollar ordering, keeps a 25% unknown-property-repair contingency floor,
+requires visible stable identity for brokerage pools, and removes retirement or
+custodial assets from actionable Capital Source Ladder candidates.
+Local focused and full regressions pass;
+isolated runtime proof and owner visual acceptance remain open before RFP-3b is
+called complete.
+
 **Rolling Financial Plan sequence:** `RFP-1` read-only contract → `RFP-2`
 optional funding-purpose metadata → `RFP-6a` broker activity/holdings foundation
 (prioritized after granular data arrived) → `RFP-3` read-only recommendation engine →
-`RFP-4` default-off **This Week** Planning UI with deterministic **Why not?**
+`RFP-4` completed **This Week** decision detail with deterministic **Why not?**
 counterfactuals → `RFP-5` disposable-workbook and isolated runtime proof.
 `RFP-6b` allocation analysis and `RFP-7` tax-lot analysis are later optional
 portfolio layers; the household plan must work without either. Each slice has a

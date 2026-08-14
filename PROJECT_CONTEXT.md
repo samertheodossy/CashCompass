@@ -4,7 +4,7 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
 
 ## Current Product Status (August 2026)
 
-- **Stage:** **Stage 3 — Beta Readiness (current).** **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** The capability estimate remains **Family Beta Readiness ~97–98% · External / Public Beta Readiness ~92%**. The last formal independent advocate score is **8.3/10** on isolated Central `@180`; it remains official because the isolated `@196` **7.2/10** run was read-only and evidence-limited, not a comparable writer-inclusive rescore. Isolated Central is `@352`; RFP-2 provides optional multi-account **Income-Producing Accounts** designations with stable investment identity and no `INPUT - Investments` schema change. `RFP-6a` is runtime-proven: preview-first Robinhood activity import writes only normalized, deduplicated system activity and derived holdings, while `INPUT - Investments` remains the balance authority and raw CSV is not retained. Foundation run `20260814-070625-5dbc` passed both integration scenarios and 40/40 assertions in 136.0 s, including the real-export disclaimer-footer regression, with Restricted sharing, provisioning/drift PASS, verified Trash cleanup, and the runner OFF. The owner then pushed and deployed the same source to the bounded app and completed the first real import: 104 Samer Robinhood activities saved, with JEPQ/QQQ/QQQI/SPYI holdings reconciling to the later broker view after subsequent weekly buys and dividend reinvestment. A later owner-controlled duplicate-safe preview/save confirmed that both investment system sheets now apply the shared content-fit rule after writes. Isolated `@352` removes redundant Add actions from House, Bank, and Investment Manage views; permanent UX coverage passes and the owner visually approved the common-source bounded presentation. Central Beta remains `@106`; all bounded actions were performed and approved by the owner. Customer-facing operations and the broad `3j` audit are deferred, not waived. `BETA_10_OUT_OF_10_PLAN.md` defines the ≥95/100 release standard and monetization foundations; `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered open inventory with estimates, regression homes, and the optimized execution model.
+- **Stage:** **Stage 3 — Beta Readiness (current).** **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** The capability estimate remains **Family Beta Readiness ~97–98% · External / Public Beta Readiness ~92%**. The last formal independent advocate score is **8.3/10** on isolated Central `@180`; it remains official because the isolated `@196` **7.2/10** run was read-only and evidence-limited, not a comparable writer-inclusive rescore. Isolated Central is `@353`; RFP-3a now provides the runtime-proven deterministic household-fact and unranked Capital Allocation Queue foundation. Run `20260814-112123-c4fd` passed 16/16 assertions in 5.7 s with Provisioning/Drift PASS, verified Trash cleanup, and the runner returned OFF. RFP-2 provides optional multi-account **Income-Producing Accounts** designations with stable investment identity and no `INPUT - Investments` schema change. `RFP-6a` remains runtime-proven: preview-first Robinhood activity import writes only normalized, deduplicated system activity and derived holdings, while `INPUT - Investments` remains the balance authority and raw CSV is not retained. The owner-controlled bounded import saved 104 Samer Robinhood activities and reconciled JEPQ/QQQ/QQQI/SPYI holdings; later duplicate-safe acceptance confirmed shared content fitting. Central Beta remains `@106`; no bounded deployment or bounded-workbook write occurred for RFP-3a. Customer-facing operations and the broad `3j` audit are deferred, not waived. `BETA_10_OUT_OF_10_PLAN.md` defines the ≥95/100 release standard and monetization foundations; `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered open inventory with estimates, regression homes, and the optimized execution model.
 - **Architecture:** Central App operational — **stable, family-beta capable**. The production / bound workbook remains protected (bound mode unchanged); the central architecture is operational and runtime-validated.
 - **Completed (working in central mode):** Provisioning, Workbook Mapping, Dashboard, Planner, Assets, Properties, Cash Flow, Bills, Debts, Income, Activity, Email.
 - **Current Debt navigation (2026-07-31):** Debt maintenance lives under **Assets & Liabilities → Debt accounts**. **Planning → Debt Overview** is read-only comparison, and **Planning → Rolling Debt Payoff** is the actionable month-by-month plan. Older historical notes that say `Planning → Debts` describe the former navigation label only.
@@ -25,6 +25,59 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
 - **Status snapshot (2026-08-07):** Central Architecture ~96%+; the major platform, recovery, financial-integrity, workbook, Validator, Harness, and Release Readiness foundations are shipped. The shared correction foundation `5h` and direct Quick Add/Donation correction `5i` remain committed foundations in `d040a34` and `16b6a8f`, with clean guarded isolated Central `@240` evidence. Bill occurrence correction (`5j`) is deferred for a later focused redesign. The completed page-UX slices are `3c` in `7c0e2ac` at isolated `@293`, `3a` in `be76bdb` at `@294`, and `3b` in `3e2db4f` at `@298`. Follow-up Bill reliability commit `433bfed` is user-verified at `@299`. Exact-owner Performance Planner evidence is ratified for `8aa4bf5` / isolated `@318`; `4d` cross-flow measurement is complete on `@319`; ordinary Save `4f` is closed on `@322` as a 41.0% p50 improvement with a documented strict-budget near-miss; Retirement `4g` is closed on `@328`; and money-format consistency `3n` / `REG-067` is committed and pushed as `d1278ef` after a 26/26 Populated V12 PASS on `@331`. Beta remains `@106`; bounded deployment and workbook control remain with the user.
 
 **Current implementation priority (2026-08-14):** complete the core Rolling Financial Plan sequence, then resume `3o`, the product-consistency/shared-lifecycle wave. Debt, Bank Account, and Investment convergence are complete through isolated `@343`; shared changed-column fit `3p` is complete through `@341`. Houses, Income Sources, and Bills remain as separate guarded migrations. Each must expose counted inactive inventory and explicit Reactivate of the preserved existing identity; Houses and Income retain pending Edit/Rename convergence, and Bills must replace re-add-as-recovery with duplicate-safe reactivation. `5n` audits and reconciles latest-known Dashboard totals with exact-month ledger totals before any calculation-basis change. The broad `3j` accessibility closeout and operations/support/privacy `6a`–`6f` are deferred until this internal product pass is complete, not waived. Bill occurrence correction (`5j`) remains a separate later redesign. This priority change does not reopen the completed `5h`/`5i` foundations.
+
+**RFP-3a foundation (2026-08-14):** `capital_allocation.js` adds a
+spreadsheet-scoped, read-only household-fact seam and a pure deterministic
+Capital Allocation Queue kernel. The slice separates required constraints from
+unranked discretionary candidates and refuses to allocate when timing or source
+facts are not yet authoritative. It does not write workbook recommendations,
+invoke the mutating Bills Due/AutoPay path, rank candidates, or change Rolling
+Debt Payoff. Local static/pure checks and a disposable Harness scenario are the
+implementation evidence. Isolated Central `@353` run
+`20260814-112123-c4fd` passed 16/16 assertions in 5.7 s with Provisioning and
+Drift PASS, verified Trash cleanup, and the disposable runner returned OFF.
+
+**RFP-3b local candidate (2026-08-14):** the same module now adds a pure
+weekly ranking/allocation kernel with an exact cash ledger and a monthly rollup
+derived only from the current week. `dashboard_data.js` exposes the established
+tracked-Bill recurrence/handled-state reader through an explicit `readOnly`
+option; normal Bills Due callers retain AutoPay behavior, while the planner
+cannot acquire the writer lock or apply AutoPay. **This Week** is integrated as
+the default Start Here experience in the existing Planning workspace; Next
+Actions remains available under Do now beside Rolling Debt Payoff. The plan is
+read-only and displays blockers and zero-dollar waits without moving money or
+writing workbook recommendations. There is no alternate URL or parallel app.
+Variable Bills use their saved estimates as protected required amounts and
+produce a concise nonblocking estimate warning; a missing estimate still blocks.
+A rolling 90-day operating reserve now covers future Bills, debt minimums,
+Upcoming expenses, and an
+irregular-property contingency after estimated recurring income, with a
+one-month operating floor that forecast income cannot erase. Recurring gross
+rent supplies the income side; scheduled mortgages and property costs remain
+owned once by Bills, debts, or Upcoming, while trailing house history contributes
+only Repair/Maintenance/Appliance/Other contingency net of matching Upcoming
+items. Recurring investment contributions are separated from mandatory Bills;
+a scheduled Robinhood contribution fulfills rather than duplicates the normal
+$500 weekly investment policy. A safety override may pause it when solvency,
+missed-payment, or critical revolving-debt rules apply; future policy payments
+remain disclosed outside the operating reserve. After protection and
+account-buffer restoration, highest-APR debt receives goal money before optional
+investment funding. Delivery 1 also exposes a Capital Source Ladder, separate
+M1 stop-funding/in-kind/sell decisions, `TAX_DATA_REQUIRED` brokerage blocks,
+released-minimum snowballing, After Action → Next Dollar, and Why-not comparisons. The
+pre-commit correction pass adds an actionable Samer Ally policy-conflict gate,
+exact Robinhood safety-trigger and reserve-surplus disclosure, correct
+critical-debt next-dollar behavior, a 25% unknown-repair contingency floor,
+stable brokerage-identity evidence, and retirement/custodial exclusion from
+actionable capital sources. The
+reserve accepts explicit $0 estimates and episodic healthcare periods with no
+scheduled cost and deduplicates debt minimums through tracked Bill aliases. The
+customer view groups cash, commitments, protected balances, investment funding,
+extra debt, and held cash into summary cards. Zero-dollar choices live
+under What waits, while the full deterministic ledger remains available under
+View calculation details.
+Focused checks and the complete local regression suite pass. Isolated runtime
+proof and owner visual acceptance are not yet claimed.
 
 **What remains before broad Beta:** close the separate `3j` accessibility task (with `3k` reserved for the frozen-candidate advocate rerun); return to deferred compound Activity correction (`5j`–`5m`); finish final financial/workbook/recovery proof (`5a`–`5f`); finish operations/support (`6a`–`6f`) and monetization-ready policy/architecture (`7a`–`7f`); then freeze and prove the exact candidate (`8a`–`8f`) before the supervised cohort and separately approved Beta promotion (`9a`–`9e`). If the frozen source/deployment differs from `8aa4bf5` / `@318`, `8b` must rerun the complete 20-pair Planner campaign. `FULL_BETA_REMAINING_PLAN.md` is the detailed open inventory and evidence authority.
 

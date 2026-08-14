@@ -167,7 +167,8 @@ function dashboardPageForTab_(name) {
   if (name === 'payments' || name === 'upcoming' || name === 'donations' || name === 'billsDue' || name === 'income') return 'cashflow';
   if (name === 'houseExpenses' || name === 'propertyPerformance') return 'properties';
   if (name === 'retirement' || name === 'purchase' ||
-      name === 'debtPayoff' || name === 'rollingDebtPayoff' || name === 'nextActions') return 'planning';
+      name === 'debtPayoff' || name === 'rollingDebtPayoff' || name === 'nextActions' ||
+      name === 'capitalAllocationPreview') return 'planning';
   return '';
 }
 
@@ -237,7 +238,7 @@ function showPage(name) {
     assets: 'houses',
     cashflow: 'payments',
     properties: 'houseExpenses',
-    planning: 'nextActions'
+    planning: 'capitalAllocationPreview'
   };
   var defaultTab = defaultTabs[name];
   var targetTab = DASHBOARD_LAST_TAB_BY_PAGE_[name] || defaultTab;
@@ -548,7 +549,8 @@ function showTab(name) {
     name === 'purchase' ||
     name === 'debtPayoff' ||
     name === 'rollingDebtPayoff' ||
-    name === 'nextActions'
+    name === 'nextActions' ||
+    name === 'capitalAllocationPreview'
   ) {
     showPage('planning');
   }
@@ -586,6 +588,11 @@ function showTab(name) {
   // reflects the latest Bills / Upcoming / Debts / SYS - Accounts state.
   if (name === 'nextActions' && typeof loadNextActions === 'function') {
     loadNextActions();
+  }
+
+  if (name === 'capitalAllocationPreview' &&
+      typeof loadCapitalAllocationPreview_ === 'function') {
+    loadCapitalAllocationPreview_();
   }
 
   // Re-pull Bills Due / Upcoming / Manage bills on every navigation to the

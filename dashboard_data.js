@@ -2516,7 +2516,13 @@ function getDebtBillsDueRows_(ss, today, tz, preloadedCurrentCashFlow) {
   return rows;
 }
 
-function getInputBillsDueRows_(ss, today, tz) {
+function getInputBillsDueRows_(ss, today, tz, options) {
+  // RFP-3b uses this established occurrence/handled-state reader in an
+  // explicitly read-only mode. Normal Bills Due callers omit `options` and
+  // preserve AutoPay behavior exactly. Read-only callers still honor Cash Flow
+  // values plus bill_autopay/bill_paid/bill_skip markers, but never acquire a
+  // writer lock or apply an AutoPay occurrence while building advice.
+  const readOnly = !!(options && options.readOnly);
   // First-run safety: INPUT - Bills may be missing on a blank workbook.
   // Treat missing as "no bills due" so the Bills page can render
   // cleanly without a red "Missing sheet: INPUT - Bills" banner.
@@ -2615,16 +2621,18 @@ function getInputBillsDueRows_(ss, today, tz) {
   // read/display output is identical either way, so display data always loads.
   var autopayLock = null;
   var autopayWritesAllowed = false;
-  try {
-    autopayLock = LockService.getUserLock();
-    // Short timeout: this is a frequently-called read RPC. Prefer deferring
-    // AutoPay to the next load over stalling the dashboard under contention.
-    autopayWritesAllowed = autopayLock.tryLock(2000);
-  } catch (lockErr) {
-    autopayLock = null;
-    autopayWritesAllowed = false;
+  if (!readOnly) {
+    try {
+      autopayLock = LockService.getUserLock();
+      // Short timeout: this is a frequently-called read RPC. Prefer deferring
+      // AutoPay to the next load over stalling the dashboard under contention.
+      autopayWritesAllowed = autopayLock.tryLock(2000);
+    } catch (lockErr) {
+      autopayLock = null;
+      autopayWritesAllowed = false;
+    }
   }
-  if (!autopayWritesAllowed) {
+  if (!readOnly && !autopayWritesAllowed) {
     Logger.log('getInputBillsDueRows_: AutoPay writes SKIPPED this pass — user lock unavailable/contended. Bills Due display data still returned; unresolved occurrences will autopay on a later load.');
   }
 
@@ -2639,7 +2647,11 @@ function getInputBillsDueRows_(ss, today, tz) {
     const dueDay = Number(values[r][colMap.dueDay]) || 0;
     if (!dueDay) continue;
 
-    const defaultAmount = round2_(Math.abs(toNumber_(values[r][colMap.defaultAmount])));
+    const rawDefaultAmount = values[r][colMap.defaultAmount];
+    const defaultAmount = round2_(Math.abs(toNumber_(rawDefaultAmount)));
+    const hasSavedDefaultAmount = rawDefaultAmount !== '' && rawDefaultAmount != null &&
+      String(display[r][colMap.defaultAmount] == null ? '' :
+        display[r][colMap.defaultAmount]).trim() !== '';
 
     const category = colMap.category === -1 ? '' : String(display[r][colMap.category] || '').trim();
     const varies = normalizeYesNo_(colMap.varies === -1 ? '' : display[r][colMap.varies]);
@@ -2870,6 +2882,7 @@ function getInputBillsDueRows_(ss, today, tz) {
         sourceLabel: 'Recurring bills',
         category: category,
         varies: varies === 'yes' ? 'Yes' : 'No',
+        hasSavedDefaultAmount: hasSavedDefaultAmount,
         autopay: autopay === 'yes' ? 'Yes' : 'No',
         // Frontend uses paymentSource to seed Flow Source when Quick Add
         // creates a missing Cash Flow row via Bills → Pay.
@@ -3022,6 +3035,7 @@ function getInputBillsDueRows_(ss, today, tz) {
           sourceLabel: 'Recurring bills',
           category: category,
           varies: varies === 'yes' ? 'Yes' : 'No',
+          hasSavedDefaultAmount: hasSavedDefaultAmount,
           autopay: autopay === 'yes' ? 'Yes' : 'No',
           paymentSource: paymentSource,
           startMonth: startMonth,
@@ -3298,7 +3312,7 @@ function isBillAutopayOccurrenceScheduleSafe_(frequency, rawWeekday, occurrenceD
  *   this date are dropped. null/invalid → no clamp (legacy behavior).
  * @returns {Array<{ year: number, monthIndex: number, monthHeader: string, dueDate: Date }>}
  */
-function generateOccurrences_(rule, todayOnly, effectiveDate) {
+function generateOccurrences_(rule, todayOnly, effectiveDate, horizonEnd) {
   const candidates = [];
   // Prior-month look-back (-1) keeps an UNRESOLVED recurring occurrence visible
   // after the calendar rolls into a new month. The window used to be only
@@ -3310,7 +3324,15 @@ function generateOccurrences_(rule, todayOnly, effectiveDate) {
   // is actually resolved. Resolution is decided downstream, per occurrence: a
   // bill_autopay / bill_paid / bill_skip marker, or a handled Cash Flow cell
   // value, is the source of truth for "resolved" — NOT the mere passage of time.
-  const monthOffsets = [-1, 0, 1];
+  const hasCustomHorizon = horizonEnd instanceof Date && !isNaN(horizonEnd.getTime());
+  const finalMonthOffset = hasCustomHorizon
+    ? Math.max(1, (horizonEnd.getFullYear() - todayOnly.getFullYear()) * 12 +
+      horizonEnd.getMonth() - todayOnly.getMonth())
+    : 1;
+  const monthOffsets = [];
+  for (let monthOffset = -1; monthOffset <= finalMonthOffset; monthOffset++) {
+    monthOffsets.push(monthOffset);
+  }
   const effectiveStart = rule.startMonth;
   const todayYear = todayOnly.getFullYear();
 
@@ -3337,7 +3359,9 @@ function generateOccurrences_(rule, todayOnly, effectiveDate) {
   if (rule.anchorDate instanceof Date && !isNaN(rule.anchorDate.getTime())) {
     // Window bounds: first day of the -1 month .. last day of the +1 month.
     const winStart = new Date(todayOnly.getFullYear(), todayOnly.getMonth() - 1, 1);
-    const winEnd = new Date(todayOnly.getFullYear(), todayOnly.getMonth() + 2, 0);
+    const winEnd = hasCustomHorizon
+      ? new Date(horizonEnd.getFullYear(), horizonEnd.getMonth(), horizonEnd.getDate())
+      : new Date(todayOnly.getFullYear(), todayOnly.getMonth() + 2, 0);
 
     // Step in whole calendar days (new Date(y, m, d + 14)) rather than by fixed
     // millisecond arithmetic so the cadence is DST-safe and never drifts an hour
@@ -3459,14 +3483,21 @@ function generateOccurrences_(rule, todayOnly, effectiveDate) {
   // → legacy behavior (all generated occurrences returned unchanged). This is a
   // pure post-filter: generation, stepping, and sort are untouched by the
   // effective-date floor itself.
+  var filteredCandidates = candidates;
+  if (hasCustomHorizon) {
+    var horizonMs = new Date(horizonEnd.getFullYear(), horizonEnd.getMonth(),
+      horizonEnd.getDate()).getTime();
+    filteredCandidates = filteredCandidates.filter(function(c) {
+      return c.dueDate.getTime() <= horizonMs;
+    });
+  }
   if (effectiveDate instanceof Date && !isNaN(effectiveDate.getTime())) {
     const floorMs = effectiveDate.getTime();
-    return candidates.filter(function(c) {
+    filteredCandidates = filteredCandidates.filter(function(c) {
       return c.dueDate.getTime() >= floorMs;
     });
   }
-
-  return candidates;
+  return filteredCandidates;
 }
 
 /**
@@ -3489,9 +3520,9 @@ function generateOccurrences_(rule, todayOnly, effectiveDate) {
  * @param {Date} [effectiveDate]  Phase 5 prospective floor (optional; null → no clamp)
  * @param {Date} [anchorDate]  Phase 6A date-only Anchor Date (optional; biweekly only)
  */
-function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth, weekday, effectiveDate, anchorDate) {
+function buildInputBillDueCandidates_(todayOnly, dueDay, frequency, startMonth, weekday, effectiveDate, anchorDate, horizonEnd) {
   const rule = buildRuleFromBillRow_(dueDay, frequency, startMonth, weekday, anchorDate);
-  return generateOccurrences_(rule, todayOnly, effectiveDate);
+  return generateOccurrences_(rule, todayOnly, effectiveDate, horizonEnd);
 }
 
 function getInputBillsPayeeMap_(ss) {

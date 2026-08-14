@@ -1836,31 +1836,35 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
   <div id="page_planning" class="workspace-page">
     <!--
       Planning hierarchy:
-        1) Featured Next Actions entry point — visually prominent,
-           primary "what should I do next?" surface, default landing view.
-        2) Quieter task groups — "Do now" for account maintenance and
+        1) Featured This Week entry point — visually prominent,
+           primary household capital-allocation surface and default landing view.
+        2) Quieter task groups — "Do now" for immediate priorities and
            payoff action, then "Explore / model" for read-only analysis
            and scenarios. Existing routes remain unchanged.
-      The Next Actions panel reads `getNextActionsData()` and routes to
-      these tools via `targetTab`; see PROJECT_CONTEXT.md → Decision Layer.
+      Next Actions remains available under Do now and continues to route to
+      deeper tools via `targetTab`; see PROJECT_CONTEXT.md → Decision Layer.
     -->
     <div class="workspace-page-intro">
       <h2>Planning</h2>
-      <p>Start with prioritized next steps, then open a focused planning tool when you need more detail.</p>
+      <p>Start with this week&rsquo;s plan, then open a focused tool when you need more detail.</p>
     </div>
     <div class="planning-next-actions-feature">
       <button class="tab-btn active"
-              data-tab="nextActions"
-              onclick="showTab('nextActions')"
-              title="Your primary Planning entry point — what should I do next?">
+              data-tab="capitalAllocationPreview"
+              onclick="showTab('capitalAllocationPreview')"
+              title="See what this week&rsquo;s available cash should do next">
         <span class="featured-kicker">Start here</span>
-        <span class="featured-title">Next actions</span>
+        <span class="featured-title">This week</span>
       </button>
     </div>
     <div class="planning-tools-wrap">
       <div class="planning-tool-group planning-tool-group--do-now">
         <div class="planning-tools-label">Do now</div>
         <div class="tabs planning-tools">
+          <button class="tab-btn" data-tab="nextActions" onclick="showTab('nextActions')">
+            <span class="planning-tool-title">Next actions</span>
+            <span class="planning-tool-description">Review immediate priorities across bills, upcoming items, and debts</span>
+          </button>
           <button class="tab-btn" data-tab="rollingDebtPayoff" onclick="showTab('rollingDebtPayoff')">
             <span class="planning-tool-title">Rolling debt payoff</span>
             <span class="planning-tool-description">Choose what to pay next from current balances</span>
@@ -2317,7 +2321,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
     <!--
       Planning → Next Actions panel.
 
-      Primary Planning entry point. Renders `getNextActionsData()` as a
+      Immediate-priorities Planning tool. Renders `getNextActionsData()` as a
       compact summary plus Urgent / Recommended / Optimize buckets, and
       routes into the deeper tools via `targetTab`. The
       `#next_actions_liquidity_details` slot below is a *debug-only*
@@ -2326,7 +2330,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       true (see Dashboard_Script_Render.html). Read-only by design — the
       single payment path remains Cash Flow → Quick Add.
     -->
-    <div id="nextActions" class="panel active">
+    <div id="nextActions" class="panel">
       <div class="panel-head">
         <h2>Next actions</h2>
       </div>
@@ -2340,6 +2344,30 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div id="next_actions_status" class="status"></div>
       <div id="next_actions_output" aria-live="polite"></div>
       <div id="next_actions_liquidity_details" aria-live="polite" style="margin-top:20px;"></div>
+    </div>
+
+    <!--
+      Planning → This Week panel.
+
+      Default Planning landing view. The deterministic server plan reconciles
+      the current week's available cash and returns recommendations without
+      writing a workbook recommendation or moving money.
+    -->
+    <div id="capitalAllocationPreview" class="panel active">
+      <div class="panel-head capital-allocation-preview-head">
+        <div>
+          <div class="capital-allocation-preview-kicker">Your household plan · read only</div>
+          <h2>This week</h2>
+          <p class="planning-panel-purpose">See what available cash should cover, where the next dollar should go, and what should wait.</p>
+        </div>
+        <div class="capital-allocation-preview-controls">
+          <label for="capital_allocation_as_of">Plan date</label>
+          <input id="capital_allocation_as_of" type="date">
+          <button type="button" class="small-btn" onclick="loadCapitalAllocationPreview_()">Refresh plan</button>
+        </div>
+      </div>
+      <div id="capital_allocation_status" class="status" aria-live="polite"></div>
+      <div id="capital_allocation_output" aria-live="polite"></div>
     </div>
   </div>
 
