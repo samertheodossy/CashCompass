@@ -204,6 +204,9 @@ assert.match(activitySource,
   /function importInvestmentActivityFromDashboard[\s\S]*?expectedDigest[\s\S]*?readInvestmentActivityImportKeys_[\s\S]*?rebuildInvestmentHoldingsForAccount_[\s\S]*?deleteRows/,
   'Save must re-preview, verify the digest, dedupe, rebuild holdings, and roll back appended rows');
 assert.match(activitySource,
+  /function fitInvestmentSystemSheetColumns_[\s\S]*?fitContentColumnsToContents_[\s\S]*?function importInvestmentActivityFromDashboard[\s\S]*?investment activity import content fit[\s\S]*?rebuildInvestmentHoldingsForAccount_[\s\S]*?investment holdings rebuild content fit/,
+  'Activity and Holdings writes must use the shared content-fit rule');
+assert.match(activitySource,
   /function ensureInvestmentSystemSheet_[\s\S]*?if \(existing\) return existing[\s\S]*?insertSheet/,
   'Investment system sheets must be lazy first-create structures');
 assert.match(validatorRules,
@@ -218,7 +221,7 @@ assert.match(investmentClient,
   /function previewInvestmentActivityImport_[\s\S]*?previewInvestmentActivityImportFromDashboard[\s\S]*?function saveInvestmentActivityImport_[\s\S]*?expectedDigest/,
   'Client must preview before enabling the guarded Save RPC');
 assert.match(await readFile(new URL('../test_harness_scenarios_rfp.js', import.meta.url), 'utf8'),
-  /REGRESSION-RFP-INVESTMENT-ACTIVITY[\s\S]*?expectedAssertionCount:\s*21[\s\S]*?Robinhood disclaimer footer excluded[\s\S]*?Second import appends no rows[\s\S]*?INPUT Investments schema unchanged/,
-  'Disposable validation must prove footer handling, exclusions, dedupe, holdings, and schema isolation');
+  /REGRESSION-RFP-INVESTMENT-ACTIVITY[\s\S]*?expectedAssertionCount:\s*23[\s\S]*?Robinhood disclaimer footer excluded[\s\S]*?Second import appends no rows[\s\S]*?Duplicate import repairs Activity content width[\s\S]*?Duplicate import repairs Holdings content width[\s\S]*?INPUT Investments schema unchanged/,
+  'Disposable validation must prove footer handling, exclusions, dedupe, content-fit repair, holdings, and schema isolation');
 
 console.log('RFP investment metadata regression checks passed.');

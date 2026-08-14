@@ -78,6 +78,12 @@ function ensureInvestmentSystemSheet_(ss, sheetName, headers, widths) {
   return sheet;
 }
 
+function fitInvestmentSystemSheetColumns_(sheet, headers, context) {
+  fitContentColumnsToContents_((headers || []).map(function(_header, index) {
+    return { sheet: sheet, col: index + 1 };
+  }), context || 'investment system-sheet content fit');
+}
+
 function getInvestmentActivityImportSetupFromDashboard() {
   var config = getIncomeProducingAccountConfigurations_();
   return {
@@ -286,6 +292,8 @@ function importInvestmentActivityFromDashboard(payload, optionalSs) {
       activitySheet.getRange(appendedStart, 1, newRows.length,
         INVESTMENT_ACTIVITY_HEADERS_.length).setValues(newRows);
     }
+    fitInvestmentSystemSheetColumns_(activitySheet, INVESTMENT_ACTIVITY_HEADERS_,
+      'investment activity import content fit');
     rebuildInvestmentHoldingsForAccount_(ss, preview.investmentId, preview.accountName);
     try {
       appendActivityLog_(ss, {
@@ -561,6 +569,8 @@ function rebuildInvestmentHoldingsForAccount_(ss, investmentId, accountName) {
     holdings.getRange(holdings.getLastRow() + 1, 1, output.length,
       INVESTMENT_HOLDINGS_HEADERS_.length).setValues(output);
   }
+  fitInvestmentSystemSheetColumns_(holdings, INVESTMENT_HOLDINGS_HEADERS_,
+    'investment holdings rebuild content fit');
 }
 
 function getInvestmentHoldingsSummary_(ss, investmentId) {

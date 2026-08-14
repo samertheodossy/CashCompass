@@ -186,7 +186,7 @@ function getHarnessRfpInvestmentActivityScenario_() {
     id: 'REGRESSION-RFP-INVESTMENT-ACTIVITY',
     category: 'REGRESSION',
     executionLevel: 'INTEGRATION',
-    expectedAssertionCount: 21,
+    expectedAssertionCount: 23,
     description: 'Prove preview-first Robinhood import, option/unrelated/footer exclusions, lazy system sheets, duplicate protection, and holdings reconciliation on a disposable workbook.',
     requiresTrashCleanup: true,
     expectedSheets: [names.INVESTMENTS, names.ASSETS, names.INVESTMENT_ACTIVITY,
@@ -238,13 +238,19 @@ function getHarnessRfpInvestmentActivityScenario_() {
         expectedDigest: ctx.preview.digest
       }, ctx.ss);
       ctx.assertWritable();
+      ctx.ss.getSheetByName(names.INVESTMENT_ACTIVITY).setColumnWidth(1, 60);
+      ctx.ss.getSheetByName(names.INVESTMENT_HOLDINGS).setColumnWidth(1, 60);
+      ctx.assertWritable();
       ctx.secondImport = importInvestmentActivityFromDashboard({
         investmentId: ctx.investmentId, rawCsv: ctx.csv, cutoffDate: ctx.preview.cutoffDate,
         expectedDigest: ctx.preview.digest
       }, ctx.ss);
-      ctx.activityRows = ctx.ss.getSheetByName(names.INVESTMENT_ACTIVITY).getLastRow() - 1;
-      ctx.holdingsRows = ctx.ss.getSheetByName(names.INVESTMENT_HOLDINGS)
-        .getDataRange().getDisplayValues();
+      var activitySheet = ctx.ss.getSheetByName(names.INVESTMENT_ACTIVITY);
+      var holdingsSheet = ctx.ss.getSheetByName(names.INVESTMENT_HOLDINGS);
+      ctx.activityRows = activitySheet.getLastRow() - 1;
+      ctx.activityImportKeyWidth = activitySheet.getColumnWidth(1);
+      ctx.holdingsInvestmentIdWidth = holdingsSheet.getColumnWidth(1);
+      ctx.holdingsRows = holdingsSheet.getDataRange().getDisplayValues();
       ctx.inputHeadersAfter = ctx.ss.getSheetByName(names.INVESTMENTS)
         .getRange(2, 1, 1, 15).getDisplayValues()[0];
       ctx.actions.push('Preview and import a synthetic Robinhood CSV twice through production writers');
@@ -267,6 +273,10 @@ function getHarnessRfpInvestmentActivityScenario_() {
       ctx.assert.equals('Second import appends no rows', ctx.secondImport.appendedRows, 0, { module: mod });
       ctx.assert.equals('Second import reports all duplicates', ctx.secondImport.duplicateRows, 7, { module: mod });
       ctx.assert.equals('Activity ledger remains deduplicated', ctx.activityRows, 7, { module: mod });
+      ctx.assert.equals('Duplicate import repairs Activity content width',
+        ctx.activityImportKeyWidth > 60, true, { module: mod });
+      ctx.assert.equals('Duplicate import repairs Holdings content width',
+        ctx.holdingsInvestmentIdWidth > 60, true, { module: mod });
       ctx.assert.equals('Holdings contains two tickers', ctx.firstImport.holdings.length, 2, { module: mod });
       var qqq = ctx.firstImport.holdings.filter(function(row) { return row.ticker === 'QQQ'; })[0];
       var jepq = ctx.firstImport.holdings.filter(function(row) { return row.ticker === 'JEPQ'; })[0];
