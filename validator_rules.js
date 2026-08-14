@@ -97,6 +97,8 @@ function getValidatorCanonicalModel_() {
   var settingsHeaders = (typeof PROFILE_SETTINGS_REQUIRED_HEADERS_ !== 'undefined') ? PROFILE_SETTINGS_REQUIRED_HEADERS_ : null;
   var cashFlowHeaders = (typeof CASH_FLOW_REQUIRED_HEADERS_ !== 'undefined') ? CASH_FLOW_REQUIRED_HEADERS_ : null;
   var sysAccountsHeaders = (typeof SYS_ACCOUNTS_REQUIRED_HEADERS_ !== 'undefined') ? SYS_ACCOUNTS_REQUIRED_HEADERS_ : null;
+  var investmentActivityHeaders = (typeof INVESTMENT_ACTIVITY_HEADERS_ !== 'undefined') ? INVESTMENT_ACTIVITY_HEADERS_ : null;
+  var investmentHoldingsHeaders = (typeof INVESTMENT_HOLDINGS_HEADERS_ !== 'undefined') ? INVESTMENT_HOLDINGS_HEADERS_ : null;
   var upcomingHeaders = (typeof UPCOMING_EXPENSES_REQUIRED_HEADERS_ !== 'undefined') ? UPCOMING_EXPENSES_REQUIRED_HEADERS_ : null;
   var bankAccountsHeaders = (typeof BANK_ACCOUNTS_REQUIRED_HEADERS_ !== 'undefined') ? BANK_ACCOUNTS_REQUIRED_HEADERS_ : null;
   var debtsHeaders = (typeof DEBTS_REQUIRED_HEADERS_ !== 'undefined') ? DEBTS_REQUIRED_HEADERS_ : null;
@@ -123,6 +125,8 @@ function getValidatorCanonicalModel_() {
   }
   var cashFlowWidths = (typeof CASH_FLOW_CANONICAL_WIDTHS_ !== 'undefined') ? CASH_FLOW_CANONICAL_WIDTHS_ : null;
   var sysAccountsWidths = (typeof SYS_ACCOUNTS_CANONICAL_WIDTHS_ !== 'undefined') ? SYS_ACCOUNTS_CANONICAL_WIDTHS_ : null;
+  var investmentActivityWidths = (typeof INVESTMENT_ACTIVITY_CANONICAL_WIDTHS_ !== 'undefined') ? INVESTMENT_ACTIVITY_CANONICAL_WIDTHS_ : null;
+  var investmentHoldingsWidths = (typeof INVESTMENT_HOLDINGS_CANONICAL_WIDTHS_ !== 'undefined') ? INVESTMENT_HOLDINGS_CANONICAL_WIDTHS_ : null;
   var donationWidths = (typeof DONATION_CANONICAL_WIDTHS_ !== 'undefined') ? DONATION_CANONICAL_WIDTHS_ : null;
   var activityWidths = (typeof ACTIVITY_LOG_CANONICAL_WIDTHS_ !== 'undefined') ? ACTIVITY_LOG_CANONICAL_WIDTHS_ : null;
 
@@ -171,6 +175,29 @@ function getValidatorCanonicalModel_() {
       widths: sysAccountsWidths, // SYS_ACCOUNTS_CANONICAL_WIDTHS_ (referenced)
       frozenRows: 1,             // applySysSheetBaseStyle_ sets setFrozenRows(1)
       frozenColumns: 1           // SYS - Accounts freezes column 1 (KeepCentral per SYS convergence)
+    },
+
+    // Optional RFP-6a import sheets are created only after a confirmed import.
+    // Scoped harness validation must still verify their exact structure.
+    {
+      name: (names && names.INVESTMENT_ACTIVITY)
+        ? names.INVESTMENT_ACTIVITY : 'SYS - Investment Activity',
+      presence: VALIDATOR_PRESENCE_OPTIONAL_,
+      headerRow: 1,
+      headers: investmentActivityHeaders,
+      widths: investmentActivityWidths,
+      frozenRows: 1,
+      frozenColumns: 1
+    },
+    {
+      name: (names && names.INVESTMENT_HOLDINGS)
+        ? names.INVESTMENT_HOLDINGS : 'SYS - Investment Holdings',
+      presence: VALIDATOR_PRESENCE_OPTIONAL_,
+      headerRow: 1,
+      headers: investmentHoldingsHeaders,
+      widths: investmentHoldingsWidths,
+      frozenRows: 1,
+      frozenColumns: 1
     },
 
     // INPUT - Bank Accounts — year-block sheet (block header on row 2). Only the

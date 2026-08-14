@@ -138,11 +138,13 @@ Rolling Debt Payoff or require security-level holdings for its base plan.
 | ID | Increment | Exit evidence | Estimate |
 |---|---|---|---:|
 | RFP-1 | Read-only household funding reconciliation and decision contract | Audit, proposed defaults, waterfall, compatibility boundary, and test contract are complete in `ROLLING_FINANCIAL_PLAN_DECISION_CONTRACT.md`; zero or more investments may be explicitly designated as **Income-Producing Accounts**, including Samer Robinhood; every active positive-balance debt is included with no APR threshold and rate affects ordering only; remaining product decisions are pending | 0.5–1 d |
-| RFP-2 | Optional account-purpose and funding metadata | Additive, backward-compatible storage chosen only after RFP-1; blank metadata preserves existing behavior; one guarded family-income designation; focused static/server tests | 0.5–1.5 d |
+| RFP-2 | Optional account-purpose and funding metadata | Complete on isolated Central `@349`: explicit zero/one/many Income-Producing designations use stable investment IDs, survive rename and Stop/Reactivate, preserve blank legacy behavior, and do not change `INPUT - Investments`; disposable closeout passed 19/19 with verified cleanup | Complete |
 | RFP-3 | Read-only recommendation engine | Deterministic weekly action schedule and monthly aggregation from the same decisions, with exact cash reconciliation, source/provenance, and confidence. Each period says what to pay, named minimum/extra debt amounts, how much to add to Samer Robinhood, what cash stays protected, and what waits; existing Rolling Debt Payoff calculations remain intact; no transfers, trades, payments, or workbook writes | 1–2 d |
 | RFP-4 | Feature-flagged Planning experience | Default-off UI leads with this week, then the monthly outlook; each ordered action shows amount, reason, required/recommended status, and remaining cash. Existing Planning remains unchanged with the flag off | 1–2 d |
 | RFP-5 | Disposable-workbook and isolated runtime proof | Marker-verified fixtures cover reserve shortfall, mixed APRs, net rental income, multiple Robinhood accounts, missing metadata, and legacy behavior; cleanup and environment boundaries verified | 1–2 d |
-| RFP-6 | Holdings and target-allocation analysis | Additive position model produces Hold/Add/Reduce/Sell/Review by holding and account; household-wide concentration/overlap; and a Samer Robinhood allocation by ticker/fund (for example QQQ/JEPI/other approved holdings/cash) totaling 100%, including contribution routing and rebalance bands. No recommendation from account totals alone; base weekly plan remains independent | 2–4 d after granular data |
+| RFP-6a | Broker activity and holdings foundation | Complete on isolated Central `@351` and owner-accepted on the bounded app: preview-first Robinhood CSV import on a selected Income-Producing account; server-side option/unrelated/admin exclusions; raw CSV is not retained; duplicate-safe normalized `SYS - Investment Activity`; derived `SYS - Investment Holdings`; opening capital, later contributions, purchases, quantities, dividends, and weekly recurring buys. `INPUT - Investments` remains the account-total authority. Robinhood's blank disclaimer footer is excluded and reported without weakening the fail-closed rule for transaction-bearing rows with no date. Run `20260814-070625-5dbc` passed both integration scenarios and 40/40 assertions in 136.0 s, with Restricted sharing, provisioning/drift PASS, verified Trash cleanup, and the runner OFF. The first owner-controlled bounded import saved 104 Samer Robinhood activities; JEPQ, QQQ, QQQI, and SPYI quantities reconciled to the later broker view after the next weekly buys and dividend reinvestment | Complete |
+| RFP-6b | Holdings and target-allocation analysis | Additive position model produces Hold/Add/Reduce/Sell/Review by holding and account; household-wide concentration/overlap; and a Samer Robinhood allocation by ticker/fund (for example QQQ/JEPQ/QQQI/SPYI/other approved holdings/cash) totaling 100%, including contribution routing and rebalance bands. No recommendation from account totals alone; base weekly plan remains independent | 2–4 d after RFP-6a proof and current prices/distribution inputs |
+| RFP-6c | Product data-import framework and adapter expansion | Extract the RFP-6a Robinhood path into a reusable CashCompass import framework shared by Investments, Bank Accounts, Debts, Bills, Income, Houses/valuations, and future domains. Common controls cover source detection, account/entity mapping, Preview, validation, confirmation, import history/status, provenance/as-of dates, duplicate reporting, actionable row-level errors, audit/rollback, and safe overlapping re-imports. Each domain retains its own normalized contract, business rules, permissions, and adapter registry; brokerage activity, bank transactions, balances, bills, and property valuations are not forced into one universal row schema. Robinhood is the first adapter, with E*TRADE/M1/Schwab and other approved file formats added incrementally. Preserve raw-file non-retention by default. Any future direct provider connection is a separate read-only security/privacy review and is not implied by file import | 3–6 d for common framework extraction and a second-domain proof; later adapters commonly 0.5–1.5 d each |
 | RFP-7 | Tax-lot-aware sale plan | Additive lot basis makes Reduce/Sell guidance tax-aware by account, acquisition date, basis, gain/loss, and holding period. Missing basis forces a warning or Review; no automatic trade and no prerequisite for the base plan | 2–4 d after granular data |
 
 **Compatibility gates for every increment:** one reviewed slice and one commit
@@ -167,9 +169,19 @@ under `3o` are paused behind the core `RFP-1`–`RFP-5` sequence, not removed.
 | 8 | `8a`–`8f` | Freeze, complete exact-candidate evidence, score, and READY verdict | 3.5–7 d plus fixes |
 | 9 | `9a`–`9e` | Supervised cohort, go/no-go, and separately approved Central Beta promotion | 2–3 active d plus 5–7 calendar d and fixes |
 
-**Current execution decision (2026-08-13):** begin `RFP-1` as a read-only
-reconciliation/design increment, then advance `RFP-2`–`RFP-5` only through
-separate review, implementation, validation, and commit boundaries. The combined `3e`–`3i`/`3m` wave,
+**Current execution decision (2026-08-13):** `RFP-1`, `RFP-2`, and `RFP-6a` are
+complete. Granular Robinhood data was supplied, so the contained activity and
+holdings foundation was prioritized and proven on isolated Central `@351`
+before commit. It is an input foundation, not yet a Hold/Add/Reduce/Sell
+recommendation engine. Continue `RFP-3`–`RFP-5` and
+`RFP-6b` only through separate review, validation, and commit boundaries.
+`RFP-6c` now captures the long-term product-wide import framework: the current
+Robinhood workflow remains the first adapter, while shared format detection,
+entity mapping, Preview/Save, provenance, import history/status, duplicate
+handling, actionable errors, and later adapters for brokerages, banks, debts,
+bills, income, and house valuations stay out of the current proof slice. Common
+orchestration is reused without erasing domain-specific schemas and validation.
+The combined `3e`–`3i`/`3m` wave,
 Retirement scenario-load work (`4g`), and money-format consistency (`3n`) are
 complete; `3n` source commit `d1278ef` is on `origin/main`. Hold customer-facing
 release work. Debt, Bank Account, and Investment convergence are complete through

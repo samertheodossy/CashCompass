@@ -291,21 +291,57 @@ seven-day cohort and any repair cycle. Dates never override a failed gate.
 5. **Release Readiness gate — ✅ orchestration/runtime controls and `@318` Performance proof complete; full verdict still open.** The single Validation console starts, resumes, pauses, and finalizes bounded runs; each writer check creates and safely trashes its own disposable workbook; browser evidence is accepted only for the exact source/deployment candidate; compact evidence is archived; and a console-owned Harness flag returns OFF at finalization. Run `RR-18146129-6e3c-4389-8599-01cbb627b95d` recorded Performance PASS/Verified, then intentionally archived `NOT_READY` because First-Run, Populated Dashboard, Recovery Live, and 24 required server checks were not part of the performance-only run. The disposable runner is OFF.
 6. **Validation & Testing admin console — ✅ Release Readiness controls complete.** Workbook Health, the suite inventory, guarded browser adapters, resumable bounded checks, saved status, privacy-safe evidence export, and final READY/NOT READY controls now start and end from the single console.
 
-**Next active item:** `RFP-1`, the read-only household funding reconciliation and
-decision contract. It must identify the authoritative existing inputs and the
-approved multi-account **Income-Producing Accounts** purpose (including Samer Robinhood), define the financial waterfall and
-actual-versus-forecast rules, reconcile current versus exact-month reporting,
-and list missing data before implementation begins. It does not change a sheet,
-schema, writer, calculation, UI, or deployment.
+**Latest completed item:** `RFP-6a`, the broker-activity and holdings foundation,
+passed isolated disposable runtime proof on Central `@351`. Run
+`20260814-070625-5dbc` passed both integration scenarios and 40/40 assertions in
+136.0 seconds; both Restricted fixtures passed provisioning and drift checks,
+were verified Trashed, and the disposable runner is OFF. The activity proof
+includes safe exclusion of Robinhood's blank disclaimer footer while preserving
+fail-closed rejection of genuine undated transactions. It adds
+preview-first Robinhood CSV import for explicitly designated
+**Income-Producing Accounts**, a duplicate-safe normalized activity ledger, and
+derived holdings reconciliation. Options, unrelated holdings, brokerage fees,
+and cash-administration rows are excluded; raw CSV is not retained; `INPUT -
+Investments` remains the account-total authority. This slice does not yet issue
+Hold/Add/Reduce/Sell advice or execute trades.
+
+The owner subsequently pushed and deployed this source to the bounded app and
+completed the first real import. It saved 104 Samer Robinhood activities and
+produced JEPQ, QQQ, QQQI, and SPYI holdings that reconcile to the later broker
+view after the next weekly purchases and dividend reinvestment. This is bounded
+acceptance evidence, not Harness evidence; the bounded workbook was never used
+as a test target by Codex.
+
+**Next active item after the separate commit boundary:** `RFP-3`, the read-only
+weekly recommendation engine. It must reconcile every proposed action to
+available cash and may not transfer funds, place trades, post payments, or write
+recommendations into the workbook.
 
 **Rolling Financial Plan sequence:** `RFP-1` read-only contract → `RFP-2`
-optional funding-purpose metadata → `RFP-3` read-only recommendation engine →
+optional funding-purpose metadata → `RFP-6a` broker activity/holdings foundation
+(prioritized after granular data arrived) → `RFP-3` read-only recommendation engine →
 `RFP-4` default-off Planning UI → `RFP-5` disposable-workbook and isolated
-runtime proof. `RFP-6` holdings and `RFP-7` tax-lot analysis are later optional
+runtime proof. `RFP-6b` allocation analysis and `RFP-7` tax-lot analysis are later optional
 portfolio layers; the household plan must work without either. Each slice has a
 separate review and commit boundary. Existing Rolling Debt Payoff behavior stays
 unchanged until a reviewed composition seam is introduced, and no slice may
 automatically transfer cash, sell securities, or post debt payments.
+
+`RFP-6c` is the product-wide data-import framework follow-up. It extracts the
+safe workflow established by the Robinhood adapter—source detection,
+account/entity mapping, Preview, validation, confirmation, provenance/as-of
+status, import history, duplicate reporting, actionable row-level errors,
+audit/rollback, and safe overlapping re-imports—for reuse by Investments, Bank
+Accounts, Debts, Bills, Income, Houses/valuations, and future domains. Each
+domain keeps its own normalized contract, business rules, permissions, and
+adapter registry; brokerage trades, bank transactions, balances, bills, and
+property valuations are not forced into one universal schema. Robinhood remains
+the first adapter; E*TRADE, M1, Schwab, bank exports, valuation sources, and
+other approved formats are added incrementally. Raw source files remain
+non-retained by default. Any future direct provider connection requires its own
+read-only security, consent, token-storage, privacy, and support review. This
+work does not block the base household plan or expand the current `RFP-6a`
+runtime-validation boundary.
 
 **Remaining broad-Beta sequence:** close the core `RFP-1`–`RFP-5` program;
 resume and close `3o` Houses and Income; close the separate `3j` task; return to

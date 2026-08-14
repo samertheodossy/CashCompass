@@ -178,3 +178,103 @@ function harnessRfpReadAssetField_(sheet, row, header) {
   var index = (display[0] || []).indexOf(header);
   return index === -1 ? '' : String((display[row - 1] || [])[index] || '').trim();
 }
+
+/** RFP-6a broker activity import, exclusions, dedupe, and holdings rebuild. */
+function getHarnessRfpInvestmentActivityScenario_() {
+  var names = getSheetNames_();
+  return {
+    id: 'REGRESSION-RFP-INVESTMENT-ACTIVITY',
+    category: 'REGRESSION',
+    executionLevel: 'INTEGRATION',
+    expectedAssertionCount: 21,
+    description: 'Prove preview-first Robinhood import, option/unrelated/footer exclusions, lazy system sheets, duplicate protection, and holdings reconciliation on a disposable workbook.',
+    requiresTrashCleanup: true,
+    expectedSheets: [names.INVESTMENTS, names.ASSETS, names.INVESTMENT_ACTIVITY,
+      names.INVESTMENT_HOLDINGS, ACTIVITY_LOG_SHEET_NAME, 'SYS - Meta'],
+    setup: function(ctx) {
+      ctx.assertWritable();
+      ensureInputInvestmentsSheet_(ctx.ss);
+      ctx.assertWritable();
+      ensureSysAssetsSheet_(ctx.ss);
+      var year = getCurrentYear_();
+      var today = new Date(year, 7, 13);
+      harnessRfpAddInvestment_(ctx, year, today, 'Synthetic Income Portfolio', 18000, 'Yes');
+      var assets = ctx.ss.getSheetByName(names.ASSETS);
+      ctx.assetRow = harnessRfpFindAssetRow_(assets, 'Synthetic Income Portfolio');
+      ctx.assertWritable();
+      setIncomeProducingAccountDesignationsFromDashboard({ changes: [{
+        sysAssetsRow: ctx.assetRow,
+        expectedAccountName: 'Synthetic Income Portfolio',
+        planningPurpose: INCOME_PRODUCING_PURPOSE_
+      }] }, ctx.ss);
+      ctx.investmentId = getIncomeProducingAccountConfigurations_(ctx.ss)
+        .eligibleAccounts[0].investmentId;
+      ctx.inputHeadersBefore = ctx.ss.getSheetByName(names.INVESTMENTS)
+        .getRange(2, 1, 1, 15).getDisplayValues()[0];
+    },
+    actions: function(ctx) {
+      ctx.csv = [
+        '"Activity Date","Process Date","Settle Date","Instrument","Description","Trans Code","Quantity","Price","Amount"',
+        '"4/21/2026","4/21/2026","4/22/2026","","ACH Deposit","ACH","","","$4,000.00"',
+        '"4/27/2026","4/27/2026","4/28/2026","QQQ","Invesco QQQ","Buy","5","$600.00","($3,000.00)"',
+        '"4/27/2026","4/27/2026","4/28/2026","JEPQ","JPMorgan Income ETF","Buy","20","$50.00","($1,000.00)"',
+        '"5/4/2026","5/4/2026","5/5/2026","QQQ","Invesco QQQ Recurring","Buy","0.5","$700.00","($350.00)"',
+        '"5/4/2026","5/4/2026","5/5/2026","JEPQ","JPMorgan Income ETF Recurring","Buy","1.5","$50.00","($75.00)"',
+        '"5/5/2026","5/5/2026","5/5/2026","JEPQ","Cash Div","CDIV","","","$10.00"',
+        '"5/4/2026","5/4/2026","5/5/2026","","ACH Deposit","ACH","","","$500.00"',
+        '"5/4/2026","5/4/2026","5/5/2026","","ACH Deposit","ACH","","","$5.00"',
+        '"5/4/2026","5/4/2026","5/5/2026","SPY","SPY 5/8/2026 Call $700.00","BTO","1","$1.00","($100.00)"',
+        '"5/4/2026","5/4/2026","5/5/2026","HL","Hecla Mining","Buy","2","$5.00","($10.00)"',
+        '"5/4/2026","5/4/2026","5/5/2026","","Gold Subscription Fee","GOLD","","","($5.00)"',
+        '""',
+        '"","","","","","","","","","The data provided is for informational purposes only. Please consult a professional tax service or personal tax advisor."'
+      ].join('\n');
+      ctx.preview = previewInvestmentActivityImportFromDashboard({
+        investmentId: ctx.investmentId, rawCsv: ctx.csv, cutoffDate: ''
+      }, ctx.ss);
+      ctx.assertWritable();
+      ctx.firstImport = importInvestmentActivityFromDashboard({
+        investmentId: ctx.investmentId, rawCsv: ctx.csv, cutoffDate: ctx.preview.cutoffDate,
+        expectedDigest: ctx.preview.digest
+      }, ctx.ss);
+      ctx.assertWritable();
+      ctx.secondImport = importInvestmentActivityFromDashboard({
+        investmentId: ctx.investmentId, rawCsv: ctx.csv, cutoffDate: ctx.preview.cutoffDate,
+        expectedDigest: ctx.preview.digest
+      }, ctx.ss);
+      ctx.activityRows = ctx.ss.getSheetByName(names.INVESTMENT_ACTIVITY).getLastRow() - 1;
+      ctx.holdingsRows = ctx.ss.getSheetByName(names.INVESTMENT_HOLDINGS)
+        .getDataRange().getDisplayValues();
+      ctx.inputHeadersAfter = ctx.ss.getSheetByName(names.INVESTMENTS)
+        .getRange(2, 1, 1, 15).getDisplayValues()[0];
+      ctx.actions.push('Preview and import a synthetic Robinhood CSV twice through production writers');
+    },
+    expectedOutcome: function(ctx) {
+      var mod = 'Investment activity import';
+      ctx.assert.equals('Start date auto-detected', ctx.preview.cutoffDate, '2026-04-27', { module: mod });
+      ctx.assert.equals('Accepted portfolio rows', ctx.preview.summary.acceptedCount, 7, { module: mod });
+      ctx.assert.equals('Excluded non-portfolio rows', ctx.preview.summary.excludedCount, 6, { module: mod });
+      ctx.assert.equals('Options excluded', ctx.preview.summary.excludedByReason.OPTIONS_ACTIVITY, 1, { module: mod });
+      ctx.assert.equals('Unrelated holding excluded', ctx.preview.summary.excludedByReason.OUTSIDE_PORTFOLIO, 1, { module: mod });
+      ctx.assert.equals('Admin cash and matching fee offset excluded', ctx.preview.summary.excludedByReason.CASH_OR_ADMIN, 2, { module: mod });
+      ctx.assert.equals('Robinhood disclaimer footer excluded', ctx.preview.summary.excludedByReason.NON_ACTIVITY_FOOTER, 1, { module: mod });
+      ctx.assert.equals('Contribution total', ctx.preview.summary.contributions, 500, { module: mod });
+      ctx.assert.equals('Opening capital reconstructed', ctx.preview.summary.openingCapital, 4000, { module: mod });
+      ctx.assert.equals('Total capital includes opening funding', ctx.preview.summary.totalCapitalAdded, 4500, { module: mod });
+      ctx.assert.equals('Purchase total', ctx.preview.summary.purchases, 4425, { module: mod });
+      ctx.assert.equals('Dividend total', ctx.preview.summary.dividends, 10, { module: mod });
+      ctx.assert.equals('First import appends all accepted rows', ctx.firstImport.appendedRows, 7, { module: mod });
+      ctx.assert.equals('Second import appends no rows', ctx.secondImport.appendedRows, 0, { module: mod });
+      ctx.assert.equals('Second import reports all duplicates', ctx.secondImport.duplicateRows, 7, { module: mod });
+      ctx.assert.equals('Activity ledger remains deduplicated', ctx.activityRows, 7, { module: mod });
+      ctx.assert.equals('Holdings contains two tickers', ctx.firstImport.holdings.length, 2, { module: mod });
+      var qqq = ctx.firstImport.holdings.filter(function(row) { return row.ticker === 'QQQ'; })[0];
+      var jepq = ctx.firstImport.holdings.filter(function(row) { return row.ticker === 'JEPQ'; })[0];
+      ctx.assert.equals('QQQ quantity reconciles', round2_(qqq.quantity), 5.5, { module: mod });
+      ctx.assert.equals('JEPQ quantity reconciles', round2_(jepq.quantity), 21.5, { module: mod });
+      ctx.assert.equals('JEPQ dividend reconciles', jepq.dividendsReceived, 10, { module: mod });
+      ctx.assert.equals('INPUT Investments schema unchanged', JSON.stringify(ctx.inputHeadersAfter),
+        JSON.stringify(ctx.inputHeadersBefore), { module: mod });
+    }
+  };
+}

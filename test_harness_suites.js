@@ -85,6 +85,15 @@ function harnessSuiteScenarioTrash_(scenario, mode) {
 function getHarnessSuites_() {
   return [
     {
+      id: 'SUITE-RFP-INVESTMENT-FOUNDATION',
+      label: 'Income-Producing Investment Foundation',
+      description: 'Validate stable Income-Producing designations plus preview-first broker activity import, exclusions, dedupe, and derived holdings on marker-verified disposable workbooks.',
+      scenarioIds: [
+        'REGRESSION-RFP-INVESTMENT-METADATA',
+        'REGRESSION-RFP-INVESTMENT-ACTIVITY'
+      ]
+    },
+    {
       id: 'SUITE-BILLS-REGRESSION',
       label: 'Bills Regression Suite',
       description: 'Implemented Bills recurrence, exact Edit linkage/rollback, AutoPay formatting, Weekly weekday authority, and AutoPay audit-rollback scenarios. Every writer runs in its own marker-verified disposable workbook.',

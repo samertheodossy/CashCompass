@@ -441,6 +441,8 @@ function getInvestmentUiData() {
         const typeIdx = headerMap.typeColZero;
         const balanceIdx = headerMap.balanceColZero;
         const activeIdx = headerMap.activeColZero;
+        const investmentIdIdx = headerMap.investmentIdColZero;
+        const planningPurposeIdx = headerMap.planningPurposeColZero;
 
         const typeSet = Object.create(null);
 
@@ -468,6 +470,10 @@ function getInvestmentUiData() {
                 type: typeIdx === -1 ? '' : String(row[typeIdx] || '').trim(),
                 currentBalance: balanceIdx === -1 || assetsValues[r][balanceIdx] === ''
                   ? '' : round2_(toNumber_(assetsValues[r][balanceIdx])),
+                investmentId: investmentIdIdx === -1 ? '' :
+                  String(row[investmentIdIdx] || '').trim(),
+                planningPurpose: planningPurposeIdx === -1 ? '' :
+                  String(row[planningPurposeIdx] || '').trim(),
                 inactive: rowInactive
               };
             }

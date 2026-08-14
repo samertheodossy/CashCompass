@@ -12,6 +12,13 @@ var __investmentManagementRows = [];
 var __investmentManagementByName = Object.create(null);
 var __investmentInactiveRows = [];
 var __investmentEditing = null;
+var __investmentActivityImportState = {
+  rawCsv: '',
+  digest: '',
+  investmentId: '',
+  cutoffDate: '',
+  preview: null
+};
 
 function fillBankAccountDropdownFromData_(data) {
   const sel = document.getElementById('bank_account');
@@ -1124,6 +1131,9 @@ function fillInvestmentAccountDropdownFromData_(data) {
     var name = String(row && row.accountName || '').trim();
     if (name) __investmentManagementByName[name.toLowerCase()] = row;
   });
+  if (typeof populateInvestmentActivityImportAccounts_ === 'function') {
+    populateInvestmentActivityImportAccounts_(data);
+  }
   populateInvestmentAddDatalists_(data);
   updateInvestmentUpdateAvailability_();
   renderInvestmentManageList_();
@@ -1265,6 +1275,180 @@ function setInvestmentPanelMode(mode) {
   if (m !== 'manage') closeInvestmentEdit_();
   if (m === 'update') setStatus('inv_status', '', false);
   if (m === 'manage') renderInvestmentManageList_();
+}
+
+function populateInvestmentActivityImportAccounts_(data) {
+  var select = document.getElementById('inv_activity_account');
+  if (!select) return;
+  var previous = select.value || '';
+  select.innerHTML = '<option value="">— Select account —</option>';
+  (data && data.managementAccounts || []).forEach(function(row) {
+    if (!row || row.planningPurpose !== 'INCOME_PRODUCING' || !row.investmentId) return;
+    var option = document.createElement('option');
+    option.value = row.investmentId;
+    option.textContent = row.accountName;
+    select.appendChild(option);
+  });
+  if (previous) select.value = previous;
+  if (!select.value && select.options.length === 2) select.selectedIndex = 1;
+}
+
+function onInvestmentActivityFileChanged_() {
+  invalidateInvestmentActivityPreview_('File selected. Preview it before saving.');
+}
+
+function invalidateInvestmentActivityPreview_(message) {
+  __investmentActivityImportState.rawCsv = '';
+  __investmentActivityImportState.digest = '';
+  __investmentActivityImportState.preview = null;
+  var save = document.getElementById('inv_activity_save_btn');
+  if (save) save.disabled = true;
+  var preview = document.getElementById('inv_activity_preview');
+  if (preview) preview.textContent = message || 'Preview the CSV again before saving.';
+  setStatus('inv_activity_status', '', false);
+}
+
+function readInvestmentActivityCsvFile_(onSuccess, onFailure) {
+  var input = document.getElementById('inv_activity_file');
+  var file = input && input.files && input.files[0];
+  if (!file) {
+    onFailure(new Error('Choose a Robinhood CSV file first.'));
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function(event) { onSuccess(String(event.target && event.target.result || '')); };
+  reader.onerror = function() { onFailure(new Error('CashCompass could not read that file.')); };
+  reader.readAsText(file);
+}
+
+function previewInvestmentActivityImport_() {
+  var account = document.getElementById('inv_activity_account');
+  if (!account || !account.value) {
+    setStatus('inv_activity_status', 'Select an Income-Producing account first.', true);
+    return;
+  }
+  setStatusLoading('inv_activity_status', 'Reading and checking activity…');
+  readInvestmentActivityCsvFile_(function(rawCsv) {
+    google.script.run
+      .withSuccessHandler(function(result) {
+        __investmentActivityImportState = {
+          rawCsv: rawCsv,
+          digest: result.digest,
+          investmentId: result.investmentId,
+          cutoffDate: result.cutoffDate,
+          preview: result
+        };
+        renderInvestmentActivityPreview_(result);
+        var save = document.getElementById('inv_activity_save_btn');
+        if (save) save.disabled = false;
+        setStatus('inv_activity_status', 'Preview ready. Review the totals, then save.', false);
+      })
+      .withFailureHandler(function(err) {
+        setStatus('inv_activity_status', err.message || String(err), true);
+      })
+      .previewInvestmentActivityImportFromDashboard({
+        investmentId: account.value,
+        cutoffDate: document.getElementById('inv_activity_start_date').value || '',
+        rawCsv: rawCsv
+      });
+  }, function(err) {
+    setStatus('inv_activity_status', err.message || String(err), true);
+  });
+}
+
+function renderInvestmentActivityPreview_(result) {
+  var host = document.getElementById('inv_activity_preview');
+  if (!host) return;
+  var summary = result && result.summary || {};
+  var reasons = summary.excludedByReason || {};
+  var reasonText = Object.keys(reasons).sort().map(function(reason) {
+    return reason.replace(/_/g, ' ').toLowerCase() + ': ' + reasons[reason];
+  }).join(' · ');
+  host.innerHTML = '';
+  var heading = document.createElement('strong');
+  heading.textContent = (result.accountName || 'Portfolio') + ' · ' +
+    (summary.firstActivityDate || result.cutoffDate) + ' to ' + (summary.lastActivityDate || '—');
+  host.appendChild(heading);
+  var lines = [
+    'Portfolio tickers: ' + ((summary.tickers || []).join(', ') || '—'),
+    'Accepted activities: ' + (summary.acceptedCount || 0),
+    'Opening capital at strategy start: ' + fmtCurrency(Number(summary.openingCapital || 0)),
+    'Other proceeds invested at strategy start: ' + fmtCurrency(Number(summary.incidentalProceedsInvested || 0)),
+    'Later cash contributions: ' + fmtCurrency(Number(summary.contributions || 0)),
+    'Total capital added: ' + fmtCurrency(Number(summary.totalCapitalAdded || 0)),
+    'Purchases: ' + fmtCurrency(Number(summary.purchases || 0)),
+    'Dividends received: ' + fmtCurrency(Number(summary.dividends || 0)),
+    'Excluded rows: ' + (summary.excludedCount || 0) + (reasonText ? ' (' + reasonText + ')' : '')
+  ];
+  var list = document.createElement('ul');
+  list.style.margin = '10px 0 0 18px';
+  lines.forEach(function(line) {
+    var item = document.createElement('li');
+    item.textContent = line;
+    list.appendChild(item);
+  });
+  host.appendChild(list);
+}
+
+function saveInvestmentActivityImport_() {
+  var state = __investmentActivityImportState;
+  if (!state.preview || !state.rawCsv || !state.digest) {
+    setStatus('inv_activity_status', 'Preview the CSV before saving.', true);
+    return;
+  }
+  var save = document.getElementById('inv_activity_save_btn');
+  if (save) save.disabled = true;
+  setStatusLoading('inv_activity_status', 'Saving activity and rebuilding holdings…');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      setStatus('inv_activity_status', (result && result.message) || 'Import complete.', false);
+      if (save) save.disabled = false;
+      if (result && result.holdings) renderInvestmentActivityHoldings_(result.holdings);
+    })
+    .withFailureHandler(function(err) {
+      if (save) save.disabled = false;
+      setStatus('inv_activity_status', err.message || String(err), true);
+    })
+    .importInvestmentActivityFromDashboard({
+      investmentId: state.investmentId,
+      cutoffDate: state.cutoffDate,
+      rawCsv: state.rawCsv,
+      expectedDigest: state.digest
+    });
+}
+
+function renderInvestmentActivityHoldings_(holdings) {
+  var host = document.getElementById('inv_activity_preview');
+  if (!host) return;
+  host.innerHTML = '';
+  var heading = document.createElement('strong');
+  heading.textContent = 'Saved holdings reconciliation';
+  host.appendChild(heading);
+  var list = document.createElement('ul');
+  list.style.margin = '10px 0 0 18px';
+  (holdings || []).forEach(function(row) {
+    var item = document.createElement('li');
+    item.textContent = row.ticker + ': ' + Number(row.quantity || 0).toFixed(4) +
+      ' shares · weekly buy ' + fmtCurrency(Number(row.weeklyRecurringBuy || 0)) +
+      ' · dividends ' + fmtCurrency(Number(row.dividendsReceived || 0));
+    list.appendChild(item);
+  });
+  host.appendChild(list);
+}
+
+function clearInvestmentActivityImport_() {
+  __investmentActivityImportState = {
+    rawCsv: '', digest: '', investmentId: '', cutoffDate: '', preview: null
+  };
+  var file = document.getElementById('inv_activity_file');
+  var start = document.getElementById('inv_activity_start_date');
+  var save = document.getElementById('inv_activity_save_btn');
+  var preview = document.getElementById('inv_activity_preview');
+  if (file) file.value = '';
+  if (start) start.value = '';
+  if (save) save.disabled = true;
+  if (preview) preview.textContent = 'Choose an account and CSV, then preview the accepted and excluded activity.';
+  setStatus('inv_activity_status', '', false);
 }
 
 function renderInvestmentManageList_() {

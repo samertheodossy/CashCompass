@@ -10,6 +10,8 @@ function getSheetNames_() {
     ACCOUNTS: 'SYS - Accounts',
     HOUSE_ASSETS: 'SYS - House Assets',
     ASSETS: 'SYS - Assets',
+    INVESTMENT_ACTIVITY: 'SYS - Investment Activity',
+    INVESTMENT_HOLDINGS: 'SYS - Investment Holdings',
 
     // Bank Import scaffold (Step 1). Both sheets are created lazily by
     // ensure helpers in bank_import.js and are not read by any existing

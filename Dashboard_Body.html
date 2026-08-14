@@ -722,6 +722,31 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
         <div id="inv_manage_list" class="tracked-editor-list">
           <div class="dash-loading dash-loading--block"><span class="dash-loading-spinner" aria-hidden="true"></span><span class="dash-loading-label">Loading investments…</span></div>
         </div>
+
+        <div id="inv_activity_import_wrap" class="bills-add-wrap" style="margin:20px 0 0 0;padding:16px;border:1px solid #dbe3ee;border-radius:10px;background:#f8fafc;">
+          <div class="card-title" style="margin-top:0;">Import portfolio activity</div>
+          <p class="muted" style="margin:0 0 12px 0;">Preview a Robinhood activity CSV for an Income-Producing account. Options, unrelated holdings, fees, and cash administration are excluded before anything is saved.</p>
+          <div class="grid-2">
+            <div>
+              <label for="inv_activity_account">Income-Producing account</label>
+              <select id="inv_activity_account" onchange="invalidateInvestmentActivityPreview_('Account changed. Preview the CSV again.')"></select>
+              <label for="inv_activity_start_date">Portfolio start date (optional)</label>
+              <input type="date" id="inv_activity_start_date" onchange="invalidateInvestmentActivityPreview_('Start date changed. Preview the CSV again.')">
+              <div class="muted" style="margin-top:4px;font-size:12px;">Leave blank to detect the first long-term portfolio trade in the CSV.</div>
+              <label for="inv_activity_file">Robinhood activity CSV</label>
+              <input type="file" id="inv_activity_file" accept=".csv,text/csv" onchange="onInvestmentActivityFileChanged_()">
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+                <button type="button" class="small-btn" onclick="previewInvestmentActivityImport_()">Preview import</button>
+                <button type="button" id="inv_activity_save_btn" class="small-btn primary" onclick="saveInvestmentActivityImport_()" disabled>Save imported activity</button>
+                <button type="button" class="small-btn" onclick="clearInvestmentActivityImport_()">Clear</button>
+              </div>
+            </div>
+            <div>
+              <div id="inv_activity_preview" class="info muted" style="min-height:150px;">Choose an account and CSV, then preview the accepted and excluded activity.</div>
+            </div>
+          </div>
+          <div id="inv_activity_status" class="status" aria-live="polite"></div>
+        </div>
         <div id="inv_inactive_wrap" class="debt-inactive-section" style="display:none;">
           <div class="card-title">Inactive investments</div>
           <p class="muted" style="margin:0 0 12px 0;">These investments are not part of the current tracking year. When Reactivate is available, it restores the existing account without changing its values or history; historical-only records remain available for reporting.</p>

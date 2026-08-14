@@ -247,6 +247,27 @@ Before implementation is accepted, static and disposable tests must prove:
 
 ## RFP-6 / RFP-7 data contract before recommendations
 
+`RFP-6a` implements the first broker-neutral foundation behind this contract.
+A Robinhood adapter previews exported activity, infers the long-term portfolio
+universe from recurring buys and dividends, excludes options/unrelated/admin
+rows, and saves only normalized activity tied to the selected stable Investment
+Id. `SYS - Investment Holdings` is derived from that ledger. `INPUT -
+Investments` remains the account-balance authority, and raw broker CSV is not
+retained. Current market prices, security metadata, expense ratios,
+restrictions, and tax lots remain later inputs; missing values are not invented.
+
+`RFP-6c` productizes ingestion without changing this model. The common import
+orchestrator provides format detection, entity mapping, Preview, validation,
+Save, deduplication, provenance/as-of status, import history, actionable errors,
+audit, and rollback. Domain adapters then map into separate authoritative
+contracts for investments, bank activity, debts, bills, income, and property
+valuations; a trade and a house valuation never become the same generic record.
+File support never implies custody, trade authority, or permission to overwrite
+authoritative data silently. Any later direct provider connection must be
+independently approved as read-only and must define consent, least-privilege
+scopes, token handling, revocation, retention, privacy, support, and failure
+behavior before implementation.
+
 The holdings layer should accept one current row per account/position containing
 at least Account stable ID, account name, account/registration type, ticker,
 security name/type, quantity, price/as-of date, market value, cash, annual
