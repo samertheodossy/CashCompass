@@ -8,6 +8,7 @@ const registry = fs.readFileSync(new URL('../test_harness_scenarios.js', import.
 const suites = fs.readFileSync(new URL('../test_harness_suites.js', import.meta.url), 'utf8');
 const body = fs.readFileSync(new URL('../Dashboard_Body.html', import.meta.url), 'utf8');
 const client = fs.readFileSync(new URL('../Dashboard_Script_PlanningCapitalAllocation.html', import.meta.url), 'utf8');
+const styles = fs.readFileSync(new URL('../Dashboard_Styles.html', import.meta.url), 'utf8');
 const template = fs.readFileSync(new URL('../PlannerDashboardWeb.html', import.meta.url), 'utf8');
 const webapp = fs.readFileSync(new URL('../webapp.js', import.meta.url), 'utf8');
 const dashboardData = fs.readFileSync(new URL('../dashboard_data.js', import.meta.url), 'utf8');
@@ -72,9 +73,15 @@ assert.match(client, /Variable bills use planning estimates/);
 assert.match(client, /estimatedAmount/);
 assert.match(client, /episodic bill/);
 assert.match(client, /Scheduled categories[\s\S]*?are excluded here because Bills, debt minimums, or Upcoming expenses already own them/);
-assert.match(client, /Cash available now[\s\S]*?Cash remaining after this plan[\s\S]*?Reserved for the next 90 days[\s\S]*?Liquidity above the hard floor/);
+assert.match(client, /Cash retained[\s\S]*?Hard reserve[\s\S]*?Additional preferred cushion/);
 assert.match(client, /Recommended deployment this period[\s\S]*?Preferred liquidity target[\s\S]*?Accelerated deployment[\s\S]*?Intentionally retained liquidity/);
 assert.match(client, /Your plan this week/);
+assert.match(client, /capitalAllocationViewTabsHtml_/);
+for (const view of ['Overview', 'Debt', 'Cash', 'Investments', 'Properties', 'Forecast']) {
+  assert.match(client, new RegExp(`label: '${view}'`), `This Week must expose the ${view} subview`);
+}
+assert.match(client, /var __capitalAllocationActiveView = 'overview'/,
+  'This Week must open on the concise Overview cockpit');
 assert.match(client, /Pay down debt/);
 assert.match(client, /Keep in cash/);
 assert.match(client, /Pause for now/);
@@ -114,6 +121,9 @@ assert.match(template, /Dashboard_Script_PlanningCapitalAllocation/);
 assert.doesNotMatch(client, /__cashCompassPlanningPreviewEnabled/);
 assert.doesNotMatch(template, /planningPreviewEnabledJson/);
 assert.doesNotMatch(webapp, /planningPreview/);
+assert.match(styles, /\.capital-allocation-view-tabs\s*\{[\s\S]*?repeat\(6,/);
+assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.capital-allocation-view-tabs\s*\{[^}]*repeat\(3,/);
+assert.match(styles, /@media \(max-width: 480px\)[\s\S]*?\.capital-allocation-view-tabs\s*\{[^}]*repeat\(2,/);
 
 const context = { console };
 vm.createContext(context);
@@ -399,13 +409,38 @@ assert.equal(outcomeDecision.debtActions[1].annualInterestReduction,
   outcomePlan.afterAction.debts[1].projectedAnnualInterestAvoided,
   'the customer outcome must use the existing deterministic interest result');
 const outcomeHtml = clientContext.capitalAllocationPrimaryDecisionHtml_(outcomePlan);
-assert.match(outcomeHtml, /Paid off[\s\S]*?American Express[\s\S]*?Pay off \$39,790\.53[\s\S]*?Balance after plan[\s\S]*?\$0\.00[\s\S]*?APR eliminated if confirmed: 26\.99%[\s\S]*?Estimated first-year interest avoided:[\s\S]*?\$10,739\.46/);
-assert.match(outcomeHtml, /Paid down[\s\S]*?CitiAA[\s\S]*?Pay down \$2,238\.60[\s\S]*?Required payment[\s\S]*?\$270\.00[\s\S]*?Extra debt payment[\s\S]*?\$1,968\.60[\s\S]*?Total this week[\s\S]*?\$2,238\.60[\s\S]*?Balance after plan[\s\S]*?\$6,761\.40[\s\S]*?APR remains: 23\.49%[\s\S]*?Estimated first-year interest reduction:[\s\S]*?\$525\.82/);
-assert.match(outcomeHtml, /Required payment[\s\S]*?Southwest[\s\S]*?Pay \$988\.41[\s\S]*?Required payment[\s\S]*?\$988\.41[\s\S]*?Extra debt payment[\s\S]*?\$0\.00[\s\S]*?Total this week[\s\S]*?\$988\.41/);
+assert.match(outcomeHtml, /American Express — Paid off[\s\S]*?\$39,790\.53 → \$0\.00[\s\S]*?~\$10,739\.46\/yr[\s\S]*?projected interest avoided/);
+assert.match(outcomeHtml, /CitiAA — Paid down[\s\S]*?\$9,000\.00 → \$6,761\.40[\s\S]*?~\$525\.82\/yr[\s\S]*?projected interest reduction/);
+assert.match(outcomeHtml, /Southwest — Required payment[\s\S]*?\$988\.41 due · No extra payment/);
 const partialOutcome = outcomeHtml.slice(outcomeHtml.lastIndexOf('CitiAA'),
   outcomeHtml.indexOf('Additional investing'));
 assert.doesNotMatch(partialOutcome, /APR eliminated|Avoid 23\.49% interest/,
   'a partial payoff must never imply that its APR was eliminated or avoided');
+assert.doesNotMatch(outcomeHtml, /Extra debt payment|Total this week|Current balance|APR remains/,
+  'the Overview outcome drill-down must remain compact');
+const debtViewHtml = clientContext.capitalAllocationDebtViewHtml_(outcomePlan);
+assert.match(debtViewHtml, /Paid off[\s\S]*?American Express[\s\S]*?Pay off \$39,790\.53[\s\S]*?Balance after plan[\s\S]*?\$0\.00[\s\S]*?APR eliminated if confirmed: 26\.99%[\s\S]*?Estimated first-year interest avoided:[\s\S]*?\$10,739\.46/);
+assert.match(debtViewHtml, /Paid down[\s\S]*?CitiAA[\s\S]*?Pay down \$2,238\.60[\s\S]*?Required payment[\s\S]*?\$270\.00[\s\S]*?Extra debt payment[\s\S]*?\$1,968\.60[\s\S]*?Total this week[\s\S]*?\$2,238\.60[\s\S]*?Balance after plan[\s\S]*?\$6,761\.40[\s\S]*?APR remains: 23\.49%[\s\S]*?Estimated first-year interest reduction:[\s\S]*?\$525\.82/);
+assert.match(debtViewHtml, /Required payment[\s\S]*?Southwest[\s\S]*?Pay \$988\.41[\s\S]*?Required payment[\s\S]*?\$988\.41[\s\S]*?Extra debt payment[\s\S]*?\$0\.00[\s\S]*?Total this week[\s\S]*?\$988\.41/);
+
+const overviewHtml = clientContext.capitalAllocationPrimaryDecisionHtml_(plan) +
+  clientContext.capitalAllocationProgressHtml_(plan) +
+  clientContext.capitalAllocationOverviewWarningsHtml_(plan, [], plan.dataQuality || []) +
+  clientContext.capitalAllocationOverviewNextStepHtml_(plan);
+assert.match(overviewHtml, /Your plan this week[\s\S]*?Progress[\s\S]*?Data status[\s\S]*?Next step/);
+assert.doesNotMatch(overviewHtml, /Proposal [A-Z0-9-]+|Eligible Cash Sources|How the 90-day reserve is calculated|View allocation logic/,
+  'Overview must keep audit and formula detail out of the daily cockpit');
+const cashViewHtml = clientContext.capitalAllocationCashViewHtml_(plan);
+const investmentsViewHtml = clientContext.capitalAllocationInvestmentsViewHtml_(plan);
+const propertiesViewHtml = clientContext.capitalAllocationPropertiesViewHtml_(plan.forecast90);
+const forecastViewHtml = clientContext.capitalAllocationForecastViewHtml_(plan, plan.dataQuality || []);
+assert.match(cashViewHtml, /Eligible Cash Sources[\s\S]*?How the cash target is calculated/);
+assert.match(investmentsViewHtml, /Contribution strategy[\s\S]*?Other capital decisions[\s\S]*?TAX_DATA_REQUIRED/);
+assert.match(propertiesViewHtml, /Property reserve planning/);
+assert.match(forecastViewHtml, /Upcoming cash requirements[\s\S]*?How the 90-day reserve is calculated[\s\S]*?View calculation details/);
+assert.equal(overviewHtml.length < debtViewHtml.length + cashViewHtml.length +
+  investmentsViewHtml.length + propertiesViewHtml.length + forecastViewHtml.length, true,
+  'the default cockpit must be materially shorter than the reachable domain detail');
 assert.equal(outcomeDecision.debtAmount, 43017.54,
   'presentation classification must not alter the underlying proposed payments');
 assert.equal(plan.economicAssumptions.investmentComparison.source, 'DEFAULT_PLANNING_ASSUMPTION');

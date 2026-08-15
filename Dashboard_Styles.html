@@ -779,6 +779,73 @@
     line-height: 1.45;
   }
   .capital-allocation-preview-head { align-items: flex-end; }
+  .capital-allocation-view-tabs {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    margin: 0 0 14px;
+  }
+  .capital-allocation-view-tabs .segment-btn {
+    border-radius: 0;
+  }
+  .capital-allocation-view-tabs .segment-btn + .segment-btn {
+    border-left: 0;
+  }
+  .capital-allocation-view-tabs .segment-btn:first-child {
+    border-radius: 8px 0 0 8px;
+  }
+  .capital-allocation-view-tabs .segment-btn:last-child {
+    border-radius: 0 8px 8px 0;
+  }
+  .capital-allocation-view[hidden] { display: none; }
+  .capital-allocation-progress { margin: 0 0 14px; }
+  .capital-allocation-progress-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .capital-allocation-progress-card {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid #dbe5ef;
+    border-radius: 10px;
+    background: #ffffff;
+  }
+  .capital-allocation-progress-value {
+    margin-top: 4px;
+    color: #0f172a;
+    font-size: 18px;
+    font-weight: 800;
+  }
+  .capital-allocation-overview-status,
+  .capital-allocation-overview-next {
+    margin: 0 0 14px;
+    padding: 13px 14px;
+    border: 1px solid #dbe5ef;
+    border-radius: 10px;
+    background: #f8fafc;
+  }
+  .capital-allocation-overview-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .capital-allocation-overview-status details { flex: 1 0 100%; }
+  .capital-allocation-overview-status details ul { margin-bottom: 0; }
+  .capital-allocation-status-chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+  .capital-allocation-overview-next {
+    border-color: #bcd7f1;
+    background: #eef5ff;
+    color: #1f4e78;
+  }
+  .capital-allocation-overview-next p { margin: 5px 0 0; }
+  .capital-allocation-focused-view { margin-bottom: 14px; }
   .capital-allocation-preview-kicker {
     color: #1f4e78;
     font-size: 11px;
@@ -818,6 +885,20 @@
     border: 1px solid #dbe5ef;
     border-radius: 12px;
     background: #ffffff;
+  }
+  .capital-allocation-deployment-pace > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    list-style: none;
+    cursor: pointer;
+  }
+  .capital-allocation-deployment-pace > summary::-webkit-details-marker { display: none; }
+  .capital-allocation-deployment-pace-body {
+    padding-top: 14px;
+    border-top: 1px solid #e2e8f0;
+    margin-top: 12px;
   }
   .capital-allocation-deployment-grid {
     display: grid;
@@ -893,6 +974,29 @@
     border-bottom: 1px solid #e2e8f0;
   }
   .capital-allocation-debt-outcome:last-child { border-bottom: 0; }
+  .capital-allocation-compact-outcome {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid #eef2f7;
+  }
+  .capital-allocation-compact-outcome:last-child { border-bottom: 0; }
+  .capital-allocation-compact-outcome-impact {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    flex: 0 0 auto;
+    color: #0f172a;
+  }
+  .capital-allocation-compact-outcome-impact span {
+    max-width: 180px;
+    color: #64748b;
+    font-size: 10px;
+    line-height: 1.25;
+    text-align: right;
+  }
   .capital-allocation-debt-outcome-head {
     display: flex;
     align-items: flex-start;
@@ -3222,6 +3326,14 @@
   }
 
   @media (max-width: 760px) {
+    .capital-allocation-view-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .capital-allocation-view-tabs .segment-btn,
+    .capital-allocation-view-tabs .segment-btn:first-child,
+    .capital-allocation-view-tabs .segment-btn:last-child {
+      border: 1px solid #cbd5e1;
+      border-radius: 7px;
+    }
+    .capital-allocation-progress-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .capital-allocation-summary,
     .capital-allocation-summary--simple,
     .capital-allocation-decision-hero-points { grid-template-columns: 1fr; }
@@ -3232,6 +3344,7 @@
     .capital-allocation-source-audit-grid { grid-template-columns: 1fr; }
     .capital-allocation-preview-controls { grid-template-columns: 1fr; width: 100%; }
     .capital-allocation-preview-controls label { grid-column: auto; }
+    .capital-allocation-compact-outcome { align-items: flex-start; }
     .overview-section { margin-bottom: 20px; }
     .overview-kpi-grid,
     .overview-grid { gap: 12px; }
@@ -3327,6 +3440,17 @@
     .activity-td-actions { width: auto; text-align: left; }
     .onboarding-progress-panel { align-items: flex-start; flex-direction: column; }
     .onboarding-progress-panel .small-btn { width: 100%; }
+  }
+
+  @media (max-width: 480px) {
+    .capital-allocation-view-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .capital-allocation-progress-grid { grid-template-columns: 1fr; }
+    .capital-allocation-compact-outcome { display: block; }
+    .capital-allocation-compact-outcome-impact {
+      align-items: flex-start;
+      margin-top: 7px;
+    }
+    .capital-allocation-compact-outcome-impact span { text-align: left; }
   }
 
   @media (max-width: 460px) {
