@@ -346,6 +346,19 @@ findings. Permanent local regressions pass, and isolated run
 with Provisioning/Drift PASS, verified Trash cleanup, and the runner returned
 OFF. Ranking and allocation remain the next separately reviewed RFP-3 slice.
 
+**RFP-3 Part 1 Capital Deployment Pace candidate:** the optimizer no longer
+hands every dollar above the hard reserve to the ranker. A disclosed preferred
+liquidity target first caps the current-period deployment budget. `BALANCED`
+adds the greatest of one normalized month of forecast operating outflows,
+monthly active-debt service, or monthly property contingency, plus configured
+stability/volatility/event cushions; `LIQUIDITY_FIRST` retains more and
+`AGGRESSIVE_DEBT_REDUCTION` can deploy more without breaching the hard floor.
+The existing Robinhood policy floor, reserve restoration, source protection,
+and serial APR avalanche are unchanged. Same-week proposal identity and
+confirmed/awaiting period deductions prevent additive refreshes when tracking
+inputs are supplied. Cash-yield ordering remains explicitly deferred as
+`CASH_YIELD_DATA_REQUIRED`.
+
 **RFP-3b local candidate ready for visual review:** the deterministic kernel
 now orders required actions, a rolling 90-day operating reserve, account-buffer
 restoration, extra debt by APR, confirmed Income-Producing funding pace, and explicit held cash; caps extra principal
@@ -373,19 +386,29 @@ The default view presents grouped household and plan cards, keeps zero-dollar
 choices under What waits, and moves the full ledger behind calculation details.
 Recurring investment contributions recorded through Bills are separated from
 household Bills and displayed for review without double counting. Samer
-Robinhood normally receives the $500 weekly investment-policy minimum; its
-scheduled contribution fulfills that policy. A visible emergency override pauses
-it when the operating floor, a missed payment, or critical revolving debt makes
-funding unsafe. Future normal-policy payments are disclosed separately from the
-operating reserve. Highest-APR debt receives remaining goal money. Delivery 1
+Robinhood receives a distinct user-defined `$500/week` `POLICY_FLOOR`; its
+scheduled contribution fulfills that policy, while acceleration above it remains
+optional. Higher APR debt alone cannot pause the floor. An override requires an
+exact liquidity or solvency violation and names the violated constraint. Future
+normal-policy payments are disclosed separately from the operating reserve.
+All positive revolving balances receive remaining goal money from highest APR to
+lowest with no arbitrary cutoff; loans are compared using relative economics.
+Delivery 1
 adds the Capital Source Ladder, deterministic contribution redirection,
 After Action → Next Dollar recomputation, released-minimum snowballing, and a
 Why-not comparison. Stopping M1 funding, reviewing an in-kind transfer, and
 reviewing a taxable sell/redeploy are distinct; sales remain `TAX_DATA_REQUIRED`.
-The pre-commit correction pass blocks rather than silently overrides a Samer
+The current correction adds recommendation lifecycle state: current actions are
+`PROPOSED`, while projected payoff effects, released minimums, and the next plan
+remain `AWAITING_CONFIRMATION` until refreshed balances confirm them;
+`CONFIRMED` and `SUPERSEDED` are reserved lifecycle states. Eligible Cash
+Sources exposes every account's balance, Use Policy, minimum buffer, usable
+amount, Planning Role, and inclusion decision, and prominently warns when an
+eligible positive-balance account has a $0 protected buffer.
+The Part 1 freeze blocks rather than silently overrides a Samer
 Ally `DO_NOT_TOUCH` mismatch, keeps children-owned cash protected, explains the
-exact Robinhood safety trigger and reserve surplus, preserves critical-debt
-next-dollar ordering, keeps a 25% unknown-property-repair contingency floor,
+exact Robinhood policy-floor override and reserve surplus, removes behavioral APR
+thresholds, keeps a 25% unknown-property-repair contingency floor,
 requires visible stable identity for brokerage pools, and removes retirement or
 custodial assets from actionable Capital Source Ladder candidates.
 Local focused and full regressions pass;

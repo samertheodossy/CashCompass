@@ -804,6 +804,73 @@
     gap: 8px;
     margin: 0 0 16px;
   }
+  .capital-allocation-summary--simple { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .capital-allocation-decision-hero {
+    margin-bottom: 14px;
+    padding: 18px;
+    border: 1px solid #bcd7f1;
+    border-radius: 12px;
+    background: #f4f9ff;
+  }
+  .capital-allocation-deployment-pace {
+    margin-bottom: 14px;
+    padding: 16px;
+    border: 1px solid #dbe5ef;
+    border-radius: 12px;
+    background: #ffffff;
+  }
+  .capital-allocation-deployment-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .capital-allocation-decision-hero h3 {
+    margin: 0;
+    color: #0f172a;
+    font-size: 22px;
+    line-height: 1.25;
+  }
+  .capital-allocation-decision-hero > p {
+    margin: 8px 0 0;
+    color: #475569;
+    line-height: 1.5;
+  }
+  .capital-allocation-decision-hero-points {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .capital-allocation-decision-hero-points > div {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 10px;
+    border: 1px solid #dbe5ef;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+  .capital-allocation-decision-hero-points span {
+    color: #64748b;
+    font-size: 11px;
+  }
+  .capital-allocation-decision-hero-points strong { color: #0f172a; }
+  .capital-allocation-decision-next {
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #eaf3ff;
+    color: #1f4e78 !important;
+  }
+  .capital-allocation-policy-override {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border: 1px solid #f1c27d;
+    border-radius: 8px;
+    background: #fff8e8;
+    color: #704b12;
+  }
+  .capital-allocation-policy-override ul { margin: 6px 0 0; padding-left: 20px; }
   .capital-allocation-summary-card,
   .capital-allocation-card {
     border: 1px solid #dbe5ef;
@@ -929,6 +996,69 @@
   }
   .capital-allocation-forecast-total strong { font-size: 18px; }
   .capital-allocation-forecast > .muted { margin: 0; padding: 0 14px 13px; }
+  .capital-allocation-confirmation-note,
+  .capital-allocation-source-warning {
+    margin: 0 14px 12px;
+    padding: 11px 12px;
+    border: 1px solid #f1c27d;
+    border-radius: 8px;
+    background: #fff8e8;
+    color: #704b12;
+  }
+  .capital-allocation-source-audit > .capital-allocation-group-items {
+    padding-top: 0;
+  }
+  .capital-allocation-source-audit-row {
+    padding: 12px 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .capital-allocation-source-audit-row:last-child { border-bottom: 0; }
+  .capital-allocation-source-audit-row--warning {
+    margin: 0 -8px;
+    padding: 12px 8px;
+    border: 1px solid #f1c27d;
+    border-radius: 8px;
+    background: #fffdf7;
+  }
+  .capital-allocation-source-audit-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .capital-allocation-source-audit-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .capital-allocation-source-audit-grid > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px;
+    border-radius: 7px;
+    background: #f8fafc;
+  }
+  .capital-allocation-source-audit-grid span {
+    color: #64748b;
+    font-size: 10px;
+  }
+  .capital-allocation-source-audit-grid strong {
+    color: #0f172a;
+    font-size: 13px;
+  }
+  .capital-allocation-source-row-warning {
+    margin-top: 7px;
+    color: #92400e;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .capital-allocation-conditional-choices {
+    margin-top: 8px;
+    padding-top: 10px;
+    border-top: 1px solid #cbd5e1;
+  }
   .capital-allocation-property-detail {
     margin: 0 14px 12px;
     border: 1px solid #dbe5ef;
@@ -1030,6 +1160,9 @@
   .capital-allocation-waits-body,
   .capital-allocation-calculation-details[open] {
     padding-bottom: 14px;
+  }
+  .capital-allocation-decision-details > .capital-allocation-group-grid {
+    margin: 0 14px;
   }
   .capital-allocation-waits-body,
   .capital-allocation-calculation-details > .capital-allocation-section,
@@ -3027,9 +3160,13 @@
   }
 
   @media (max-width: 760px) {
-    .capital-allocation-summary { grid-template-columns: 1fr; }
+    .capital-allocation-summary,
+    .capital-allocation-summary--simple,
+    .capital-allocation-decision-hero-points { grid-template-columns: 1fr; }
+    .capital-allocation-deployment-grid { grid-template-columns: 1fr; }
     .capital-allocation-group-grid,
     .capital-allocation-forecast-grid { grid-template-columns: 1fr; }
+    .capital-allocation-source-audit-grid { grid-template-columns: 1fr; }
     .capital-allocation-preview-controls { grid-template-columns: 1fr; width: 100%; }
     .capital-allocation-preview-controls label { grid-column: auto; }
     .overview-section { margin-bottom: 20px; }

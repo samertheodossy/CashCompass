@@ -57,19 +57,26 @@ rent supplies the income side; scheduled mortgages and property costs remain
 owned once by Bills, debts, or Upcoming, while trailing house history contributes
 only Repair/Maintenance/Appliance/Other contingency net of matching Upcoming
 items. Recurring investment contributions are separated from mandatory Bills;
-a scheduled Robinhood contribution fulfills rather than duplicates the normal
-$500 weekly investment policy. A safety override may pause it when solvency,
-missed-payment, or critical revolving-debt rules apply; future policy payments
-remain disclosed outside the operating reserve. After protection and
-account-buffer restoration, highest-APR debt receives goal money before optional
-investment funding. Delivery 1 also exposes a Capital Source Ladder, separate
+a scheduled Robinhood contribution fulfills rather than duplicates the distinct
+$500 weekly `POLICY_FLOOR`. Higher APR alone cannot pause it; an override requires
+an exact required-payment, negative-cash, hard-operating-floor, or configured
+emergency constraint. Future policy payments remain disclosed outside the
+operating reserve. After protection and account-buffer restoration, every
+positive revolving balance receives goal money from highest APR to lowest with
+no rate cutoff. Term loans compare their effective avoided cost with the uncertain
+investment alternative. Delivery 1 also exposes a Capital Source Ladder, separate
 M1 stop-funding/in-kind/sell decisions, `TAX_DATA_REQUIRED` brokerage blocks,
 released-minimum snowballing, After Action → Next Dollar, and Why-not comparisons. The
-pre-commit correction pass adds an actionable Samer Ally policy-conflict gate,
-exact Robinhood safety-trigger and reserve-surplus disclosure, correct
-critical-debt next-dollar behavior, a 25% unknown-repair contingency floor,
+Part 1 freeze adds an actionable Samer Ally policy-conflict gate,
+exact Robinhood policy-floor override and reserve-surplus disclosure, generic
+revolving-debt and term-loan economics, a 25% unknown-repair contingency floor,
 stable brokerage-identity evidence, and retirement/custodial exclusion from
-actionable capital sources. The
+actionable capital sources. The follow-up state correction marks current
+recommendations `PROPOSED` and keeps projected payoff effects, released
+minimums, and the conditional next plan `AWAITING_CONFIRMATION` until refreshed
+balances support them. Eligible Cash Sources audits balance, Use Policy,
+minimum buffer, usable amount, Planning Role, and inclusion for each current
+account, with a visible zero-buffer warning. The
 reserve accepts explicit $0 estimates and episodic healthcare periods with no
 scheduled cost and deduplicates debt minimums through tracked Bill aliases. The
 customer view groups cash, commitments, protected balances, investment funding,
@@ -78,6 +85,22 @@ under What waits, while the full deterministic ledger remains available under
 View calculation details.
 Focused checks and the complete local regression suite pass. Isolated runtime
 proof and owner visual acceptance are not yet claimed.
+
+**RFP-3 Capital Deployment Pace correction (local candidate):** the read-only
+plan now answers **how much** before the unchanged ranker answers **where**.
+`BALANCED` is the default and is not a percentage: preferred liquidity equals
+the held 90-day hard floor plus the largest of normalized monthly forecast
+operating outflows, total monthly active-debt service, or normalized monthly
+property contingency, plus explicit configured income-stability,
+cash-flow-volatility, and known-event cushions. `LIQUIDITY_FIRST` retains an
+additional debt/property-risk layer; `AGGRESSIVE_DEBT_REDUCTION` retains the
+larger of the largest single debt minimum or property risk but never breaches
+the hard floor. Only capital above the resulting preferred target enters the
+existing reserve-restoration and debt-avalanche ranker. Period budget,
+confirmed deployment, awaiting-confirmation deployment, remaining capacity, a
+Monday-based weekly proposal ID, data freshness/confidence, and
+`CASH_YIELD_DATA_REQUIRED` are disclosed. No recommendation-history writer or
+authoritative cross-device period ledger is introduced in Part 1.
 
 **What remains before broad Beta:** close the separate `3j` accessibility task (with `3k` reserved for the frozen-candidate advocate rerun); return to deferred compound Activity correction (`5j`–`5m`); finish final financial/workbook/recovery proof (`5a`–`5f`); finish operations/support (`6a`–`6f`) and monetization-ready policy/architecture (`7a`–`7f`); then freeze and prove the exact candidate (`8a`–`8f`) before the supervised cohort and separately approved Beta promotion (`9a`–`9e`). If the frozen source/deployment differs from `8aa4bf5` / `@318`, `8b` must rerun the complete 20-pair Planner campaign. `FULL_BETA_REMAINING_PLAN.md` is the detailed open inventory and evidence authority.
 

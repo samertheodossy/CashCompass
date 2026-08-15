@@ -458,9 +458,10 @@ function getHarnessRfpCapitalAllocationScenario_() {
         ctx.first.discretionaryCandidates.some(function(row) {
           return row.actionType === 'RESTORE_RESERVE' && row.requestedAmount === 1000;
         }), true, { module: mod });
-      ctx.assert.equals('Samer Robinhood minimum is a required weekly commitment',
+      ctx.assert.equals('Samer Robinhood minimum is a distinct policy floor',
         ctx.first.hardConstraints.some(function(row) {
           return row.actionType === 'FUND_INCOME_PRODUCING_MINIMUM' &&
+            row.actionClass === 'POLICY_FLOOR' &&
             row.targetName === 'Samer Robinhood' && row.requestedAmount === 500;
         }), true, { module: mod });
       ctx.assert.equals('Holding cash remains an explicit candidate',
@@ -481,8 +482,8 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
     id: 'REGRESSION-RFP-CAPITAL-ALLOCATION-WEEKLY-PLAN',
     category: 'REGRESSION',
     executionLevel: 'PURE',
-    expectedAssertionCount: 33,
-    description: 'Prove deterministic weekly ranking, variable-bill estimate handling, 90-day cash protection, debt-before-investment allocation, exact reconciliation, explicit waits, and a monthly rollup derived from the same actions.',
+    expectedAssertionCount: 83,
+    description: 'Prove deterministic weekly ranking, recommendation lifecycle states, auditable eligible cash, variable-bill estimate handling, 90-day cash protection, debt-before-investment allocation, exact reconciliation, explicit waits, and a monthly rollup derived from the same actions.',
     requiresTrashCleanup: true,
     expectedSheets: ['SYS - Meta'],
     setup: function(ctx) {
@@ -511,9 +512,9 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
           expectedRentalIncome: 3000, requiredReserveAmount: 2000
         },
         debts: [
-          { name: 'High APR card', originalName: 'High APR card', active: true,
+          { name: 'High APR card', originalName: 'High APR card', type: 'Credit Card', active: true,
             balance: 10000, minimumPayment: 300, interestRate: 26.99 },
-          { name: 'Low mortgage', originalName: 'Low mortgage', active: true,
+          { name: 'Low mortgage', originalName: 'Low mortgage', type: 'Mortgage', active: true,
             balance: 100000, minimumPayment: 900, interestRate: 1.99 }
         ],
         obligations: [
@@ -566,7 +567,17 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
     expectedOutcome: function(ctx) {
       var mod = 'Capital Allocation Weekly Plan';
       ctx.assert.equals('Plan schema version is explicit', ctx.first.schemaVersion,
-        'RFP_3B_V1', { module: mod });
+        'RFP_3B_V2', { module: mod });
+      ctx.assert.equals('Current plan is explicitly proposed',
+        ctx.first.recommendationLifecycle.currentPlanState,
+        'PROPOSED', { module: mod });
+      ctx.assert.equals('Projected effects await authoritative confirmation',
+        ctx.first.recommendationLifecycle.downstreamEffectsState,
+        'AWAITING_CONFIRMATION', { module: mod });
+      ctx.assert.equals('Every current weekly action remains a proposal',
+        ctx.first.weeklyActions.every(function(row) {
+          return row.recommendationState === 'PROPOSED';
+        }), true, { module: mod });
       ctx.assert.equals('Identical facts produce identical plans', JSON.stringify(ctx.first),
         JSON.stringify(ctx.second), { module: mod });
       ctx.assert.equals('Complete facts allocate', ctx.first.allocationStatus,
@@ -581,10 +592,57 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
         5800, { module: mod });
       ctx.assert.equals('Protected balances remain visible', ctx.first.summary.protectedCash,
         15000, { module: mod });
+      var operatingAudit = ctx.first.capitalSourceLadder.cashAccounts.filter(function(row) {
+        return row.accountName === 'Operating';
+      })[0];
+      ctx.assert.equals('Eligible cash audit exposes balance, buffer, and usable amount',
+        operatingAudit.visibleBalance + ':' + operatingAudit.minimumBuffer + ':' +
+          operatingAudit.eligibleAmount,
+        '10000:2500:7500', { module: mod });
+      ctx.assert.equals('Configured buffers avoid silent zero-buffer warnings',
+        ctx.first.capitalSourceLadder.zeroBufferWarningCount, 0, { module: mod });
+      var protectedAudit = buildCapitalAllocationSourceLadder_({ liquidity: { accounts: [
+        { accountName: 'BofA protected', balance: 40000, minBuffer: 0, usable: 0,
+          included: false, usePolicy: 'do not touch', planningRole: 'DO_NOT_TOUCH',
+          excludedReason: 'hard_exclusion_role' },
+        { accountName: 'Child savings', balance: 12000, minBuffer: 0, usable: 0,
+          included: false, usePolicy: 'extra cash', planningRole: 'CHILD_CUSTODIAL',
+          excludedReason: 'hard_exclusion_role' },
+        { accountName: 'Samer Ally', balance: 30411.01, minBuffer: 10000,
+          usable: 20411.01, included: true, usePolicy: 'use with caution', planningRole: '' }
+      ] } }, ctx.first);
+      ctx.assert.equals('Samer Ally follows its configured buffer',
+        protectedAudit.totalEligibleCash, 20411.01, { module: mod });
+      ctx.assert.equals('BofA Do Not Touch remains excluded',
+        protectedAudit.cashAccounts.filter(function(row) {
+          return row.accountName === 'BofA protected';
+        })[0].status, 'EXCLUDED', { module: mod });
+      ctx.assert.equals('Child-owned cash remains excluded',
+        protectedAudit.cashAccounts.filter(function(row) {
+          return row.accountName === 'Child savings';
+        })[0].status, 'EXCLUDED', { module: mod });
       ctx.assert.equals('Ninety-day operating reserve is protected', ctx.first.summary.reserve90Days,
         2000, { module: mod });
       ctx.assert.equals('Goal money excludes the operating reserve', ctx.first.summary.availableForGoals,
-        3800, { module: mod });
+        2600, { module: mod });
+      ctx.assert.equals('Balanced liquidity preference is the default',
+        ctx.first.deploymentPace.liquidityPreference, 'BALANCED', { module: mod });
+      ctx.assert.equals('Preferred liquidity target stays separate from the hard floor',
+        ctx.first.deploymentPace.hardOperatingFloor + ':' +
+          ctx.first.deploymentPace.preferredLiquidityTarget,
+        '2000:3200', { module: mod });
+      ctx.assert.equals('Only capital above preferred liquidity enters the deployment budget',
+        ctx.first.deploymentPace.capitalAbovePreferredLiquidity + ':' +
+          ctx.first.deploymentPace.recommendedAcceleratedDeployment,
+        '2600:2600', { module: mod });
+      ctx.assert.equals('Balanced mode intentionally retains liquidity',
+        ctx.first.deploymentPace.intentionallyRetainedLiquidity, 3200, { module: mod });
+      ctx.assert.equals('Snapshot proposal is idempotent rather than additive',
+        ctx.first.deploymentPace.proposalSemantics,
+        'IDEMPOTENT_SNAPSHOT_NOT_ADDITIVE', { module: mod });
+      ctx.assert.equals('Missing cash APY remains an explicit Part 2 boundary',
+        ctx.first.deploymentPace.cashYieldDataStatus,
+        'CASH_YIELD_DATA_REQUIRED', { module: mod });
       ctx.assert.equals('Existing investment contribution stays separate from required bills',
         ctx.first.existingInvestmentContributions[0].amount, 500, { module: mod });
       var reserve = ctx.first.rankedCandidates.filter(function(row) {
@@ -610,16 +668,20 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
       ctx.assert.equals('Higher APR debt ranks before lower APR debt', high.rank < low.rank,
         true, { module: mod });
       ctx.assert.equals('Remaining cash goes to high APR debt', high.allocatedAmount,
-        2800, { module: mod });
+        1600, { module: mod });
       ctx.assert.equals('Lower APR debt stays visible with zero allocation', low.allocatedAmount,
         0, { module: mod });
       ctx.assert.equals('Hold cash remains explicit', hold.allocatedAmount, 0, { module: mod });
       ctx.assert.equals('Ending cash reconciles', ctx.first.reconciliation.endingCash,
-        2000, { module: mod });
+        3200, { module: mod });
       ctx.assert.equals('Reconciliation difference is zero', ctx.first.reconciliation.difference,
         0, { module: mod });
+      ctx.assert.equals('Proposed uses never exceed eligible current cash',
+        ctx.first.reconciliation.cashUses <=
+          ctx.first.reconciliation.openingCash + ctx.first.reconciliation.expectedInflows,
+        true, { module: mod });
       ctx.assert.equals('Debt benefit is deterministic and labeled', high.estimatedAnnualInterestAvoided,
-        755.72, { module: mod });
+        431.84, { module: mod });
       ctx.assert.equals('Monthly totals reuse weekly decisions',
         ctx.first.monthlyOutlook.totals.requiredActions +
           ctx.first.monthlyOutlook.totals.reserveRestoration +
@@ -631,6 +693,22 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
         ctx.first.contributionStrategy.recommendation + ':' +
           ctx.first.contributionStrategy.redirectedWeekly,
         'REDIRECT_OPTIONAL_CONTRIBUTIONS_TO_DEBT:600', { module: mod });
+      ctx.assert.equals('Contribution strategy remains a proposal',
+        ctx.first.contributionStrategy.recommendationState,
+        'PROPOSED', { module: mod });
+      ctx.assert.equals('Robinhood funding is modeled as a policy floor',
+        ctx.first.investmentPolicy.policyType, 'POLICY_FLOOR', { module: mod });
+      ctx.assert.equals('Robinhood policy floor remains $500',
+        ctx.first.investmentPolicy.policyFloor, 500, { module: mod });
+      ctx.assert.equals('Scheduled Robinhood amount remains auditable',
+        ctx.first.investmentPolicy.scheduledAmount, 500, { module: mod });
+      ctx.assert.equals('Recommended Robinhood total is separate from acceleration',
+        ctx.first.investmentPolicy.recommendedAmount + ':' +
+          ctx.first.investmentPolicy.optionalAcceleration,
+        '500:0', { module: mod });
+      ctx.assert.equals('Loan comparison assumption is explicit and auditable',
+        ctx.first.economicAssumptions.investmentComparison.source,
+        'DEFAULT_PLANNING_ASSUMPTION', { module: mod });
       ctx.assert.equals('M1 in-kind transfer remains a separate review decision',
         ctx.first.capitalSourceLadder.steps.some(function(row) {
           return row.sourceType === 'BROKERAGE_IN_KIND_TRANSFER_REVIEW' &&
@@ -650,19 +728,164 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
         ctx.first.nextDollar.destination, 'High APR card', { module: mod });
       ctx.assert.equals('Debt comparison explains why not invest',
         ctx.first.whyNot.winner, 'PAY_DEBT', { module: mod });
+      ctx.assert.equals('Balanced mode does not consume all cash above the hard floor',
+        ctx.first.summary.endingCash > ctx.first.summary.reserve90Days,
+        true, { module: mod });
+      ctx.assert.equals('Balanced reconciliation subtracts the Robinhood floor exactly once',
+        ctx.first.summary.householdRequiredThisWeek +
+          ctx.first.summary.standingInvestmentFunded +
+          ctx.first.deploymentPace.recommendedAcceleratedDeployment +
+          ctx.first.deploymentPace.intentionallyRetainedLiquidity,
+        ctx.first.summary.openingCash + ctx.first.summary.expectedIncomeThisWeek,
+        { module: mod });
+      var liquidityFirstFacts = JSON.parse(JSON.stringify(ctx.facts));
+      liquidityFirstFacts.liquidityPreference = 'LIQUIDITY_FIRST';
+      var liquidityFirst = buildCapitalAllocationPlan_(liquidityFirstFacts);
+      var aggressiveFacts = JSON.parse(JSON.stringify(ctx.facts));
+      aggressiveFacts.liquidityPreference = 'AGGRESSIVE_DEBT_REDUCTION';
+      var aggressive = buildCapitalAllocationPlan_(aggressiveFacts);
+      ctx.assert.equals('Liquidity First retains a higher preferred target',
+        liquidityFirst.deploymentPace.preferredLiquidityTarget >
+          ctx.first.deploymentPace.preferredLiquidityTarget, true, { module: mod });
+      ctx.assert.equals('Liquidity First deploys less accelerated capital',
+        liquidityFirst.deploymentPace.recommendedAcceleratedDeployment <
+          ctx.first.deploymentPace.recommendedAcceleratedDeployment, true, { module: mod });
+      ctx.assert.equals('Aggressive debt reduction uses a lower preferred target',
+        aggressive.deploymentPace.preferredLiquidityTarget <
+          ctx.first.deploymentPace.preferredLiquidityTarget, true, { module: mod });
+      ctx.assert.equals('Aggressive debt reduction can deploy more capital',
+        aggressive.deploymentPace.recommendedAcceleratedDeployment >
+          ctx.first.deploymentPace.recommendedAcceleratedDeployment, true, { module: mod });
+      ctx.assert.equals('Aggressive mode still preserves the hard floor',
+        aggressive.summary.endingCash >= aggressive.summary.reserve90Days,
+        true, { module: mod });
+      ctx.assert.equals('Liquidity First reconciliation subtracts the Robinhood floor exactly once',
+        liquidityFirst.summary.householdRequiredThisWeek +
+          liquidityFirst.summary.standingInvestmentFunded +
+          liquidityFirst.deploymentPace.recommendedAcceleratedDeployment +
+          liquidityFirst.deploymentPace.intentionallyRetainedLiquidity,
+        liquidityFirst.summary.openingCash + liquidityFirst.summary.expectedIncomeThisWeek,
+        { module: mod });
+      ctx.assert.equals('Aggressive reconciliation subtracts the Robinhood floor exactly once',
+        aggressive.summary.householdRequiredThisWeek +
+          aggressive.summary.standingInvestmentFunded +
+          aggressive.deploymentPace.recommendedAcceleratedDeployment +
+          aggressive.deploymentPace.intentionallyRetainedLiquidity,
+        aggressive.summary.openingCash + aggressive.summary.expectedIncomeThisWeek,
+        { module: mod });
+      var trackedFacts = JSON.parse(JSON.stringify(ctx.facts));
+      trackedFacts.liquidity.cashToUse = 100000;
+      trackedFacts.liquidity.accounts = [];
+      trackedFacts.deploymentTracking = { planningPeriod: 'MONTHLY',
+        deploymentBudget: 25000, alreadyDeployedThisPeriod: 20000,
+        awaitingConfirmationAmount: 0 };
+      var tracked = buildCapitalAllocationPlan_(trackedFacts);
+      ctx.assert.equals('Weekly refresh uses only remaining monthly deployment capacity',
+        tracked.deploymentPace.remainingDeploymentBudget, 5000, { module: mod });
+      var awaitingFacts = JSON.parse(JSON.stringify(trackedFacts));
+      awaitingFacts.deploymentTracking.alreadyDeployedThisPeriod = 0;
+      awaitingFacts.deploymentTracking.awaitingConfirmationAmount = 25000;
+      var awaiting = buildCapitalAllocationPlan_(awaitingFacts);
+      ctx.assert.equals('Awaiting deployment is not recommended again',
+        awaiting.deploymentPace.remainingDeploymentBudget, 0, { module: mod });
+      ctx.assert.equals('Unchanged awaiting facts preserve one proposal identity',
+        buildCapitalAllocationPlan_(awaitingFacts).deploymentPace.proposalId,
+        awaiting.deploymentPace.proposalId, { module: mod });
+      var nextDayFacts = JSON.parse(JSON.stringify(ctx.facts));
+      nextDayFacts.asOfDate = '2026-08-15';
+      ctx.assert.equals('Another refresh in the same week preserves one proposal identity',
+        buildCapitalAllocationPlan_(nextDayFacts).deploymentPace.proposalId,
+        ctx.first.deploymentPace.proposalId, { module: mod });
+      ctx.assert.equals('Confirmed deployment is disclosed and reduces period capacity',
+        tracked.deploymentPace.confirmedDeploymentAmount, 20000, { module: mod });
       var emergencyFacts = JSON.parse(JSON.stringify(ctx.facts));
       emergencyFacts.debts[0].type = 'Credit Card';
       var emergency = buildCapitalAllocationPlan_(emergencyFacts);
-      ctx.assert.equals('Emergency override pauses the normal $500 policy',
+      ctx.assert.equals('Critical debt preserves the normal $500 policy',
         emergency.summary.emergencyInvestmentOverride + ':' +
           emergency.summary.standingInvestmentFunded,
-        'true:0', { module: mod });
-      ctx.assert.equals('Critical-debt safety pause keeps next dollar on debt',
+        'false:500', { module: mod });
+      ctx.assert.equals('Critical debt receives goal money after the standing minimum',
         emergency.nextDollar.destination, 'High APR card', { module: mod });
-      ctx.assert.equals('Emergency override exposes its exact trigger',
-        emergency.summary.emergencyInvestmentOverrideReasons.some(function(row) {
-          return row.code === 'CRITICAL_REVOLVING_DEBT' && row.apr === 26.99;
-        }), true, { module: mod });
+      ctx.assert.equals('Critical debt creates no Robinhood override reason',
+        emergency.summary.emergencyInvestmentOverrideReasons.length, 0, { module: mod });
+      ctx.assert.equals('Standing Robinhood action remains proposed',
+        emergency.weeklyActions.filter(function(row) {
+          return row.actionType === 'FUND_INCOME_PRODUCING_MINIMUM';
+        })[0].recommendationState, 'PROPOSED', { module: mod });
+      ctx.assert.equals('After-action effects still await confirmation',
+        emergency.afterAction.state, 'AWAITING_CONFIRMATION', { module: mod });
+      var solvencyFacts = JSON.parse(JSON.stringify(ctx.facts));
+      solvencyFacts.liquidity.cashToUse = 3300;
+      var solvency = buildCapitalAllocationPlan_(solvencyFacts);
+      ctx.assert.equals('Hard operating-floor conflict overrides the Robinhood floor',
+        solvency.summary.emergencyInvestmentOverride + ':' +
+          solvency.summary.standingInvestmentFunded,
+        'true:0', { module: mod });
+      ctx.assert.equals('Override state is explicit on the Robinhood action',
+        solvency.weeklyActions.filter(function(row) {
+          return row.actionType === 'FUND_INCOME_PRODUCING_MINIMUM';
+        })[0].status, 'EMERGENCY_OVERRIDE', { module: mod });
+      ctx.assert.equals('Override records the exact violated constraint',
+        solvency.investmentPolicy.overrideReasons[0].code,
+        'OPERATING_FLOOR_CONFLICT', { module: mod });
+      ctx.assert.equals('Optional investment funding waits during a policy-floor override',
+        solvency.contributionStrategy.recommendation,
+        'HOLD_OPTIONAL_DURING_POLICY_OVERRIDE', { module: mod });
+      ctx.assert.equals('Emergency override reconciliation omits the unfunded Robinhood floor',
+        solvency.summary.householdRequiredThisWeek +
+          solvency.summary.standingInvestmentFunded +
+          solvency.deploymentPace.recommendedAcceleratedDeployment +
+          solvency.deploymentPace.intentionallyRetainedLiquidity,
+        solvency.summary.openingCash + solvency.summary.expectedIncomeThisWeek,
+        { module: mod });
+      ctx.assert.equals('Override explanation names the hard operating floor',
+        solvency.investmentPolicy.overrideReasons[0].message.indexOf('hard operating floor') !== -1,
+        true, { module: mod });
+      var revolvingFacts = JSON.parse(JSON.stringify(ctx.facts));
+      revolvingFacts.liquidity.cashToUse = 8500;
+      revolvingFacts.liquidity.accounts = [];
+      revolvingFacts.obligations = [];
+      revolvingFacts.debts = [
+        { name: 'Card 18', originalName: 'Card 18', type: 'Credit Card', active: true,
+          balance: 2000, minimumPayment: 50, interestRate: 18 },
+        { name: 'Card 12', originalName: 'Card 12', type: 'Revolving', active: true,
+          balance: 3000, minimumPayment: 75, interestRate: 12 },
+        { name: 'Card 8', originalName: 'Card 8', type: 'Credit Card', active: true,
+          balance: 4000, minimumPayment: 100, interestRate: 8 }
+      ];
+      var revolving = buildCapitalAllocationPlan_(revolvingFacts);
+      ctx.assert.equals('Approved debt budget is exhausted highest APR first without a cutoff',
+        revolving.rankedCandidates.filter(function(row) {
+          return row.actionType === 'PAY_EXTRA_DEBT';
+        }).map(function(row) {
+          return row.targetName + ':' + row.allocatedAmount;
+        }).join('|'), 'Card 18:2000|Card 12:3000|Card 8:775', { module: mod });
+      var transitionFacts = JSON.parse(JSON.stringify(ctx.facts));
+      transitionFacts.liquidity.cashToUse = 20000;
+      transitionFacts.liquidity.accounts = [{ accountName: 'Eligible cash', balance: 20000,
+        minBuffer: 0, usable: 20000, included: true, usePolicy: 'use with caution' }];
+      transitionFacts.debts[0].type = 'Credit Card';
+      transitionFacts.debts[1].interestRate = 7.875;
+      var transition = buildCapitalAllocationPlan_(transitionFacts);
+      ctx.assert.equals('Projected critical-card payoff keeps the standing $500 funded',
+        transition.summary.standingInvestmentFunded, 500, { module: mod });
+      ctx.assert.equals('Projected paid-off card remains awaiting confirmation',
+        transition.afterAction.debts.filter(function(row) {
+          return row.name === 'High APR card';
+        })[0].effectState, 'AWAITING_CONFIRMATION', { module: mod });
+      ctx.assert.equals('Projected released minimums are not confirmed cash flow',
+        transition.afterAction.confirmedReleasedMonthlyMinimums, 0, { module: mod });
+      ctx.assert.equals('Economically superior loan can rank after revolving debt',
+        transition.nextDollar.actionType + ':' + transition.nextDollar.recommendationState,
+        'PAY_EXTRA_DEBT:AWAITING_CONFIRMATION', { module: mod });
+      ctx.assert.equals('7.875% loan is chosen generically by economics',
+        transition.nextDollar.destination, 'Low mortgage', { module: mod });
+      var lowCostFacts = JSON.parse(JSON.stringify(ctx.facts));
+      lowCostFacts.debts = [lowCostFacts.debts[1]];
+      ctx.assert.equals('1.99% debt does not automatically outrank investing',
+        capitalAllocationDebtEconomics_(lowCostFacts.debts[0], lowCostFacts)
+          .debtOutranksInvestment, false, { module: mod });
       var blockedFacts = JSON.parse(JSON.stringify(ctx.facts));
       blockedFacts.dataQuality = [{ findingId: 'MISSING', severity: 'ERROR',
         blocksAllocation: true, message: 'Missing', provenance: 'Fixture' }];

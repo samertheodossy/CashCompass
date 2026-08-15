@@ -179,22 +179,38 @@ The default customer view uses grouped cash/plan cards, a collapsed What waits
 section, and separately disclosed calculation details instead of exposing the
 full internal ledger first.
 RFP-3b removes recurring investment contributions represented in Bills from the
-household-Bill total and shows them separately. Samer Robinhood normally receives
-the standing $500 weekly investment-policy minimum; a scheduled contribution
-fulfills rather than duplicates it. An explicit safety override pauses the
-minimum when the operating floor, a missed payment, or dangerous revolving debt
-makes funding unsafe. Normal future commitments remain disclosed but do not
-inflate the operating reserve. Highest-APR debt receives remaining goal money.
+household-Bill total and shows them separately. Samer Robinhood receives a distinct
+user-defined `$500/week` `POLICY_FLOOR`; a scheduled contribution fulfills rather
+than duplicates it, and acceleration above the floor remains optional. A higher
+APR alone never overrides the floor. An override is allowed only for an exact
+liquidity or solvency violation: uncovered required bills/debt minimums, negative
+projected cash, breach of the hard operating floor, or an explicitly configured
+emergency. Normal future commitments remain disclosed but do not inflate the
+operating reserve. Every positive revolving balance participates, highest APR
+to lowest, without a payoff cutoff. Term loans remain dynamically compared with
+the uncertain investment alternative using their economics.
 Delivery 1 now adds a Capital Source Ladder, separates stopping M1 funding from
 an in-kind transfer and from a taxable sale, blocks sales as `TAX_DATA_REQUIRED`,
 shows deterministic Why-not comparisons, recomputes After Action → Next Dollar,
 and releases a fully paid debt's former minimum into future cash flow. It never
 performs a transfer, payment, or trade.
-The pre-commit correction pass makes a Samer Ally `DO_NOT_TOUCH` mismatch a
+The current correction makes the transition explicit: weekly recommendations
+are `PROPOSED`; projected payoffs, released minimums, and the conditional next
+plan remain `AWAITING_CONFIRMATION` until refreshed authoritative balances
+confirm them. The supported lifecycle also reserves `CONFIRMED` and
+`SUPERSEDED` without adding a recommendation-history write. Eligible Cash
+Sources now audits each account's balance, Use Policy, minimum buffer, usable
+amount, Planning Role, and inclusion status, with a prominent warning whenever
+an eligible positive-balance account has a $0 protected buffer.
+The Part 1 freeze makes a Samer Ally `DO_NOT_TOUCH` mismatch a
 blocking, customer-actionable policy conflict instead of silently excluding or
-overriding it; children-owned accounts remain protected. Robinhood safety pauses
-show the exact trigger and reserve reconciliation, and critical revolving debt
-continues to receive the next dollar when the reserve is already protected.
+overriding it; children-owned accounts remain protected. Vague Robinhood safety
+pauses are replaced by exact policy-floor override constraints. Explanatory APR labels
+do not control behavior; all revolving debt remains in the serial payoff order.
+The policy output separates floor, optional acceleration, scheduled amount, and
+recommended amount. Proposed payoff effects and released minimums remain awaiting
+authoritative confirmation, and open-ended passive-income milestones never stop
+next-dollar optimization.
 Property contingency retains a 25% unknown-repair floor after Upcoming offsets.
 Brokerage rows expose stable identity status, while 401(k), retirement, and
 custodial assets are retained for household analysis but removed from actionable
@@ -202,6 +218,20 @@ capital-source candidates.
 No workbook recommendation write, transfer, payment, or trade was added.
 A complete future-week monthly forecast and tax-lot calculations remain later
 slices.
+
+The final Part 1 pacing correction inserts a deterministic Capital Deployment
+Pace between reserve protection and ranking. It preserves the $500/week Samer
+Robinhood `POLICY_FLOOR`, source protections, M1 stop/in-kind/sale separation,
+and the full highest-APR-first revolving avalanche. The default `BALANCED`
+preferred-liquidity cushion is the maximum of one normalized month of forecast
+operating outflows, current monthly active-debt service, or one normalized month
+of property contingency, plus explicitly configured stability/volatility/event
+cushions; it is not a fixed debt or cash percentage. `LIQUIDITY_FIRST` retains
+more and `AGGRESSIVE_DEBT_REDUCTION` may retain less without crossing the hard
+floor. Weekly proposal identity, confirmed/awaiting deployment deductions,
+scenario comparisons, and `CASH_YIELD_DATA_REQUIRED` are exposed. Part 1 is
+still snapshot-only when no authoritative deployment-period totals are supplied;
+persistent recommendation state and cash-yield economics remain later work.
 | RFP-4 | Complete **This Week** decision experience and **Why not?** comparisons | Mature the integrated This Week view with amount, source, destination, reason, required/recommended status, expected benefit, liquidity/tax/risk effects when supported, confidence, and remaining cash. Why not? compares backend-calculated alternatives such as debt payment, investment funding, or holding liquidity; an optional LLM may explain validated results but cannot change their numbers or order | 1.5–2.5 d |
 | RFP-5 | Disposable-workbook and isolated runtime proof | Marker-verified fixtures prove deterministic repeatability, exact reconciliation, reserve shortfall, mixed APRs, net rental income, multiple Income-Producing Accounts, missing metadata, zero-dollar investment recommendations, counterfactual comparisons, and legacy behavior; cleanup and environment boundaries verified | 1–2 d |
 | RFP-6a | Broker activity, holdings, and portfolio-intention foundation | Complete on isolated Central `@351` and owner-accepted on the bounded app: preview-first Robinhood CSV import on a selected Income-Producing account; server-side option/unrelated/admin exclusions; raw CSV is not retained; duplicate-safe normalized `SYS - Investment Activity`; derived `SYS - Investment Holdings`; opening capital, later contributions, purchases, quantities, dividends, and weekly recurring buys. `INPUT - Investments` remains the account-total authority. Robinhood's blank disclaimer footer is excluded and reported without weakening the fail-closed rule for transaction-bearing rows with no date. Run `20260814-070625-5dbc` passed both integration scenarios and 40/40 assertions in 136.0 s, with Restricted sharing, provisioning/drift PASS, verified Trash cleanup, and the runner OFF. The first owner-controlled bounded import saved 104 Samer Robinhood activities; JEPQ, QQQ, QQQI, and SPYI quantities reconciled to the later broker view after the next weekly buys and dividend reinvestment. Post-proof common-source commit `529ce88` adds an account-first Portfolio activity drawer, editable recurring plans kept separate from imported facts, and checkpointed ticker review that reopens after a later purchase without retroactively importing excluded history. The owner accepted the bounded presentation; this extension is not claimed as part of the earlier isolated `@351` evidence | Complete |

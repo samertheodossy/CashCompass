@@ -7,9 +7,14 @@
  */
 
 var CAPITAL_ALLOCATION_SCHEMA_VERSION_ = 'RFP_3A_V1';
-var CAPITAL_ALLOCATION_PLAN_SCHEMA_VERSION_ = 'RFP_3B_V1';
+var CAPITAL_ALLOCATION_PLAN_SCHEMA_VERSION_ = 'RFP_3B_V2';
+var CAPITAL_ALLOCATION_RECOMMENDATION_STATES_ = [
+  'PROPOSED', 'AWAITING_CONFIRMATION', 'CONFIRMED', 'SUPERSEDED'
+];
 var CAPITAL_ALLOCATION_PRIMARY_INCOME_ACCOUNT_NAME_ = 'Samer Robinhood';
 var CAPITAL_ALLOCATION_PRIMARY_INCOME_WEEKLY_MINIMUM_ = 500;
+var CAPITAL_ALLOCATION_DEFAULT_EXPECTED_INVESTMENT_RETURN_ = 7;
+// These bands are explanatory labels only. They never gate allocation behavior.
 var CAPITAL_ALLOCATION_CRITICAL_DEBT_APR_ = 20;
 var CAPITAL_ALLOCATION_HIGH_DEBT_APR_ = 10;
 var CAPITAL_ALLOCATION_MODERATE_DEBT_APR_ = 6;
@@ -61,18 +66,25 @@ function buildCapitalAllocationPlan_(facts) {
     asOfDate: queue.asOfDate,
     mode: 'READ_ONLY_WEEKLY_RECOMMENDATION',
     allocationStatus: blockers.length ? 'BLOCKED' : 'ALLOCATED',
+    recommendationLifecycle: {
+      currentPlanState: 'PROPOSED',
+      downstreamEffectsState: 'AWAITING_CONFIRMATION',
+      supportedStates: CAPITAL_ALLOCATION_RECOMMENDATION_STATES_.slice(),
+      confirmationAuthority: 'REFRESHED_WORKBOOK_FACTS',
+      note: 'Recommendations are proposals only. Projected debt reductions, released minimum payments, and the next plan remain awaiting confirmation until refreshed authoritative balances reflect the action.'
+    },
     policy: {
       version: 'RFP_3B_POLICY_V1',
       order: [
         'REQUIRED_HOUSEHOLD_ACTIONS',
         'PROTECT_90_DAY_OPERATING_RESERVE',
-        'FUND_SAMER_ROBINHOOD_WEEKLY_MINIMUM_UNLESS_EMERGENCY_OVERRIDE',
+        'FUND_SAMER_ROBINHOOD_WEEKLY_MINIMUM',
         'RESTORE_ACCOUNT_RESERVES',
         'PAY_EXTRA_DEBT_BY_APR',
         'FUND_CONFIRMED_INCOME_PRODUCING_PACE',
         'HOLD_REMAINING_CASH'
       ],
-      note: 'Samer Robinhood normally receives its $500 weekly policy minimum, but required payments, the operating floor, missed payments, and dangerous revolving debt can trigger a visible safety pause. Every active positive-balance debt remains visible; APR changes extra-principal order, not eligibility.'
+      note: 'Samer Robinhood receives its $500 weekly POLICY_FLOOR before optional allocation unless an explicit liquidity or solvency constraint is violated. Higher APR alone never overrides the floor. Revolving debts rank highest APR first without an APR cutoff; term loans are compared with investment alternatives using their economics.'
     },
     summary: {
       openingCash: openingCash,
@@ -90,6 +102,9 @@ function buildCapitalAllocationPlan_(facts) {
       emergencyInvestmentOverrideReasons: [],
       projectedProtectedCashAfterActions: 0,
       reserveSurplusAfterActions: 0,
+      preferredLiquidityTarget: 0,
+      intentionallyRetainedLiquidity: 0,
+      acceleratedDeploymentBudget: 0,
       deployableAfterRequired: 0,
       availableForGoals: 0,
       recommendedUses: 0,
@@ -126,7 +141,7 @@ function buildCapitalAllocationPlan_(facts) {
   remaining = capitalAllocationMoney_(remaining + expectedInflows);
 
   var requiredRows = queue.hardConstraints.filter(function(row) {
-    return row.actionClass === 'REQUIRED_ACTION';
+    return row.actionClass === 'REQUIRED_ACTION' || row.actionClass === 'POLICY_FLOOR';
   });
   var standingMinimumAmount = capitalAllocationMoney_(requiredRows.reduce(function(sum, row) {
     return sum + (row.actionType === 'FUND_INCOME_PRODUCING_MINIMUM'
@@ -134,10 +149,12 @@ function buildCapitalAllocationPlan_(facts) {
   }, 0));
   var householdRequiredAmount = capitalAllocationMoney_(
     queue.totals.requiredActionAmount - standingMinimumAmount);
-  var operatingReserveAmount = capitalAllocationMoney_(plan.summary.reserve90Days);
-  var emergencyOverrideReasons = capitalAllocationInvestmentOverrideReasons_(
-    openingCash + expectedInflows, householdRequiredAmount, standingMinimumAmount,
-    operatingReserveAmount, facts);
+  var emergencyOverrideReasons = capitalAllocationPolicyFloorOverrideReasons_(facts, {
+    cashAvailable: capitalAllocationMoney_(openingCash + expectedInflows),
+    householdRequired: householdRequiredAmount,
+    policyFloor: standingMinimumAmount,
+    operatingFloor: Number(plan.summary.reserve90Days || 0)
+  });
   var emergencyInvestmentOverride = emergencyOverrideReasons.length > 0;
   plan.summary.householdRequiredThisWeek = householdRequiredAmount;
   plan.summary.standingInvestmentMinimum = standingMinimumAmount;
@@ -154,31 +171,20 @@ function buildCapitalAllocationPlan_(facts) {
     return String(a.dueDate + ':' + a.candidateId).localeCompare(
       String(b.dueDate + ':' + b.candidateId));
   }).forEach(function(row) {
-    if (row.actionType === 'FUND_INCOME_PRODUCING_MINIMUM' && emergencyInvestmentOverride) {
-      var overrideRow = {};
-      Object.keys(row).forEach(function(key) { overrideRow[key] = row[key]; });
-      overrideRow.reason = 'Temporarily pause the standing investment minimum because an emergency-liquidity, missed-payment, or dangerous revolving-debt rule is active.';
-      plan.weeklyActions.push(capitalAllocationWeeklyAction_(++sequence, overrideRow,
-        0, remaining, 'EMERGENCY_OVERRIDE'));
-      return;
-    }
-    var amount = Math.min(remaining, capitalAllocationMoney_(row.requestedAmount));
+    var policyFloorOverridden = emergencyInvestmentOverride &&
+      row.actionType === 'FUND_INCOME_PRODUCING_MINIMUM';
+    var amount = policyFloorOverridden ? 0 :
+      Math.min(remaining, capitalAllocationMoney_(row.requestedAmount));
     remaining = capitalAllocationMoney_(remaining - amount);
     cashUses = capitalAllocationMoney_(cashUses + amount);
     requiredUses = capitalAllocationMoney_(requiredUses + amount);
     plan.weeklyActions.push(capitalAllocationWeeklyAction_(++sequence, row,
-      amount, remaining, amount + 0.005 >= Number(row.requestedAmount) ? 'REQUIRED' : 'PARTIAL'));
+      amount, remaining, policyFloorOverridden ? 'EMERGENCY_OVERRIDE' :
+        amount + 0.005 >= Number(row.requestedAmount) ? 'REQUIRED' : 'PARTIAL'));
     if (row.actionType === 'FUND_INCOME_PRODUCING_MINIMUM') {
       plan.summary.standingInvestmentFunded = amount;
     }
   });
-
-  if (emergencyInvestmentOverride) {
-    plan.dataQuality.push(capitalAllocationFinding_(
-      'STANDING_INVESTMENT_MINIMUM_EMERGENCY_OVERRIDE', 'WARNING', false,
-      'Samer Robinhood\'s $500 weekly minimum is temporarily paused by the emergency solvency policy; review liquidity, missed payments, and critical revolving debt.',
-      'Capital Allocation emergency-liquidity policy'));
-  }
 
   if (requiredUses + 0.005 < effectiveRequiredAmount) {
     plan.allocationStatus = 'INSUFFICIENT_CASH';
@@ -209,8 +215,20 @@ function buildCapitalAllocationPlan_(facts) {
 
   var requested90DayReserve = Math.max(0, capitalAllocationMoney_(plan.summary.reserve90Days));
   var held90DayReserve = Math.min(remaining, requested90DayReserve);
-  var allocatable = capitalAllocationMoney_(remaining - held90DayReserve);
-  plan.summary.availableForGoals = allocatable;
+  var capitalAboveHardFloor = capitalAllocationMoney_(remaining - held90DayReserve);
+  var deploymentPace = buildCapitalAllocationDeploymentPace_(facts, plan, {
+    cashAfterRequiredAndPolicyFloor: remaining,
+    hardOperatingFloorHeld: held90DayReserve,
+    capitalAboveHardFloor: capitalAboveHardFloor
+  });
+  plan.deploymentPace = deploymentPace;
+  var allocatable = capitalAllocationMoney_(deploymentPace.remainingDeploymentBudget);
+  var intentionallyRetainedAboveHardFloor = capitalAllocationMoney_(
+    capitalAboveHardFloor - allocatable);
+  plan.summary.availableForGoals = deploymentPace.capitalAbovePreferredLiquidity;
+  plan.summary.preferredLiquidityTarget = deploymentPace.preferredLiquidityTarget;
+  plan.summary.intentionallyRetainedLiquidity = intentionallyRetainedAboveHardFloor;
+  plan.summary.acceleratedDeploymentBudget = allocatable;
   if (requested90DayReserve > 0) {
     plan.weeklyActions.push(capitalAllocationWeeklyAction_(++sequence, {
       candidateId: 'PROTECT_90_DAY_OPERATING_RESERVE',
@@ -253,6 +271,7 @@ function buildCapitalAllocationPlan_(facts) {
     Object.keys(candidate).forEach(function(key) { copy[key] = candidate[key]; });
     copy.rank = i + 1;
     copy.status = 'WAIT';
+    copy.recommendationState = 'PROPOSED';
     copy.allocatedAmount = 0;
     copy.remainingCashAfter = allocatable;
     copy.confidence = capitalAllocationCandidateConfidence_(copy);
@@ -265,10 +284,13 @@ function buildCapitalAllocationPlan_(facts) {
         : 'No unallocated cash remains after this week\'s higher-priority actions.';
     } else {
       var requested = Math.max(0, capitalAllocationMoney_(copy.requestedAmount));
+      if (emergencyInvestmentOverride &&
+          copy.actionType === 'FUND_INCOME_PRODUCING_ACCOUNT') {
+        requested = 0;
+      }
       if (copy.actionType === 'PAY_EXTRA_DEBT') {
         var candidateDebt = capitalAllocationDebtForCandidate_(facts, copy);
-        if (!candidateDebt || Number(candidateDebt.interestRate || 0) <
-            CAPITAL_ALLOCATION_HIGH_DEBT_APR_) {
+        if (!candidateDebt || !capitalAllocationDebtCanReceiveOptionalCapital_(candidateDebt, facts)) {
           requested = 0;
         }
         var minimumAlreadyPlanned = plan.weeklyActions.reduce(function(sum, action) {
@@ -302,7 +324,8 @@ function buildCapitalAllocationPlan_(facts) {
   }
 
   plan.summary.recommendedUses = capitalAllocationMoney_(cashUses - requiredUses);
-  remaining = capitalAllocationMoney_(held90DayReserve + allocatable);
+  remaining = capitalAllocationMoney_(held90DayReserve +
+    intentionallyRetainedAboveHardFloor + allocatable);
   plan.summary.endingCash = remaining;
   plan.reconciliation = {
     openingCash: openingCash,
@@ -315,6 +338,216 @@ function buildCapitalAllocationPlan_(facts) {
   return finalizeCapitalAllocationDecisionViews_(facts, plan);
 }
 
+function buildCapitalAllocationDeploymentPace_(facts, plan, inputs) {
+  var preference = capitalAllocationLiquidityPreference_(facts);
+  var forecast = facts && facts.forecast90 || {};
+  var normalizedMonthlyOutflows = capitalAllocationMoney_(
+    Number(forecast.futureOperatingOutflowsAmount || 0) / 3);
+  var monthlyDebtService = capitalAllocationMoney_((facts && facts.debts || [])
+    .filter(function(row) { return row.active && Number(row.balance || 0) > 0; })
+    .reduce(function(sum, row) { return sum + Number(row.minimumPayment || 0); }, 0));
+  var largestDebtMinimum = capitalAllocationMoney_((facts && facts.debts || [])
+    .filter(function(row) { return row.active && Number(row.balance || 0) > 0; })
+    .reduce(function(maximum, row) {
+      return Math.max(maximum, Number(row.minimumPayment || 0));
+    }, 0));
+  var monthlyPropertyRisk = capitalAllocationMoney_(
+    Number(forecast.propertyContingencyAmount || 0) / 3);
+  var configured = facts && facts.liquidityPlanning || {};
+  var incomeStabilityCushion = Math.max(0, capitalAllocationMoney_(
+    configured.incomeStabilityCushionAmount || 0));
+  var cashFlowVolatilityCushion = Math.max(0, capitalAllocationMoney_(
+    configured.cashFlowVolatilityCushionAmount || 0));
+  var otherKnownCushion = Math.max(0, capitalAllocationMoney_(
+    configured.otherKnownCushionAmount || 0));
+  var derivedCushion = capitalAllocationDerivedPreferenceCushion_(preference, {
+    normalizedMonthlyOutflows: normalizedMonthlyOutflows,
+    monthlyDebtService: monthlyDebtService,
+    largestDebtMinimum: largestDebtMinimum,
+    monthlyPropertyRisk: monthlyPropertyRisk
+  });
+  var additionalConfiguredCushion = capitalAllocationMoney_(incomeStabilityCushion +
+    cashFlowVolatilityCushion + otherKnownCushion);
+  var hardFloor = capitalAllocationMoney_(inputs.hardOperatingFloorHeld || 0);
+  var preferredTarget = capitalAllocationMoney_(hardFloor + derivedCushion +
+    additionalConfiguredCushion);
+  var cashAfterRequired = capitalAllocationMoney_(inputs.cashAfterRequiredAndPolicyFloor || 0);
+  var capitalAbovePreferred = Math.max(0, capitalAllocationMoney_(cashAfterRequired - preferredTarget));
+  var tracking = facts && facts.deploymentTracking || {};
+  var planningPeriod = String(tracking.planningPeriod || 'WEEKLY').toUpperCase();
+  var periodBudget = Number(tracking.deploymentBudget);
+  var hasAuthoritativePeriodBudget = isFinite(periodBudget) && periodBudget >= 0;
+  if (!hasAuthoritativePeriodBudget) periodBudget = capitalAbovePreferred;
+  periodBudget = capitalAllocationMoney_(periodBudget);
+  var alreadyDeployed = Math.max(0, capitalAllocationMoney_(
+    tracking.alreadyDeployedThisPeriod || 0));
+  var awaitingConfirmation = Math.max(0, capitalAllocationMoney_(
+    tracking.awaitingConfirmationAmount || 0));
+  var remainingPeriodCapacity = Math.max(0, capitalAllocationMoney_(
+    periodBudget - alreadyDeployed - awaitingConfirmation));
+  var remainingBudget = Math.min(capitalAbovePreferred, remainingPeriodCapacity);
+  remainingBudget = capitalAllocationMoney_(remainingBudget);
+  var intentionallyRetained = capitalAllocationMoney_(cashAfterRequired - remainingBudget);
+  var periodKey = capitalAllocationPeriodKey_(plan.asOfDate, planningPeriod);
+  var proposalId = capitalAllocationProposalId_([
+    periodKey, preference, cashAfterRequired, hardFloor, preferredTarget,
+    capitalAbovePreferred, periodBudget, alreadyDeployed, awaitingConfirmation,
+    remainingBudget, (facts && facts.debts || []).map(function(row) {
+      return [row.originalName || row.name, row.balance, row.interestRate, row.active].join(':');
+    }).join('|')
+  ].join('||'));
+  var pace = {
+    planningPeriod: planningPeriod,
+    periodKey: periodKey,
+    liquidityPreference: preference,
+    availableEligibleCash: capitalAllocationMoney_(plan.summary.openingCash),
+    cashAfterRequiredAndPolicyFloor: cashAfterRequired,
+    hardOperatingFloor: hardFloor,
+    preferredLiquidityTarget: preferredTarget,
+    preferredLiquidityCushion: capitalAllocationMoney_(preferredTarget - hardFloor),
+    capitalAboveHardFloor: capitalAllocationMoney_(inputs.capitalAboveHardFloor || 0),
+    capitalAbovePreferredLiquidity: capitalAbovePreferred,
+    deploymentBudget: periodBudget,
+    alreadyDeployedThisPeriod: alreadyDeployed,
+    confirmedDeploymentAmount: alreadyDeployed,
+    awaitingConfirmationAmount: awaitingConfirmation,
+    remainingDeploymentBudget: remainingBudget,
+    recommendedAcceleratedDeployment: remainingBudget,
+    intentionallyRetainedLiquidity: intentionallyRetained,
+    proposalId: proposalId,
+    proposalSemantics: 'IDEMPOTENT_SNAPSHOT_NOT_ADDITIVE',
+    trackingStatus: hasAuthoritativePeriodBudget
+      ? 'AUTHORITATIVE_PERIOD_BUDGET_SUPPLIED' : 'SNAPSHOT_IDEMPOTENT_ONLY',
+    cashYieldDataStatus: 'CASH_YIELD_DATA_REQUIRED',
+    dataFreshness: facts && facts.dataFreshness || {
+      asOf: String(plan.asOfDate || ''), status: 'SOURCE_AS_OF_ONLY'
+    },
+    confidence: hasAuthoritativePeriodBudget ? 'HIGH' : 'MEDIUM',
+    cushionComponents: {
+      normalizedMonthlyOutflows: normalizedMonthlyOutflows,
+      monthlyDebtService: monthlyDebtService,
+      largestDebtMinimum: largestDebtMinimum,
+      monthlyPropertyRisk: monthlyPropertyRisk,
+      derivedPreferenceCushion: derivedCushion,
+      incomeStabilityCushion: incomeStabilityCushion,
+      cashFlowVolatilityCushion: cashFlowVolatilityCushion,
+      otherKnownCushion: otherKnownCushion
+    },
+    whyThisPace: 'The ' + preference.replace(/_/g, ' ').toLowerCase() +
+      ' strategy retains the preferred liquidity target before the existing optimizer ranks the remaining deployment budget.'
+  };
+  pace.scenarios = [
+    capitalAllocationDeploymentScenario_('Faster payoff', 'AGGRESSIVE_DEBT_REDUCTION',
+      facts, cashAfterRequired, hardFloor, additionalConfiguredCushion,
+      normalizedMonthlyOutflows, monthlyDebtService, monthlyPropertyRisk),
+    capitalAllocationDeploymentScenario_('Recommended', preference,
+      facts, cashAfterRequired, hardFloor, additionalConfiguredCushion,
+      normalizedMonthlyOutflows, monthlyDebtService, monthlyPropertyRisk),
+    capitalAllocationDeploymentScenario_('More liquidity', 'LIQUIDITY_FIRST',
+      facts, cashAfterRequired, hardFloor, additionalConfiguredCushion,
+      normalizedMonthlyOutflows, monthlyDebtService, monthlyPropertyRisk)
+  ];
+  return pace;
+}
+
+function capitalAllocationDerivedPreferenceCushion_(preference, components) {
+  var outflows = Number(components.normalizedMonthlyOutflows || 0);
+  var debtService = Number(components.monthlyDebtService || 0);
+  var largestDebtMinimum = Number(components.largestDebtMinimum || debtService);
+  var propertyRisk = Number(components.monthlyPropertyRisk || 0);
+  if (preference === 'LIQUIDITY_FIRST') {
+    return capitalAllocationMoney_(Math.max(outflows, debtService, propertyRisk) +
+      Math.max(debtService, propertyRisk));
+  }
+  if (preference === 'AGGRESSIVE_DEBT_REDUCTION') {
+    return capitalAllocationMoney_(Math.max(largestDebtMinimum, propertyRisk));
+  }
+  return capitalAllocationMoney_(Math.max(outflows, debtService, propertyRisk));
+}
+
+function capitalAllocationDeploymentScenario_(label, preference, facts, cashAfterRequired,
+    hardFloor, configuredCushion, normalizedMonthlyOutflows, monthlyDebtService,
+    monthlyPropertyRisk) {
+  var largestDebtMinimum = capitalAllocationMoney_((facts && facts.debts || [])
+    .filter(function(row) { return row.active && Number(row.balance || 0) > 0; })
+    .reduce(function(maximum, row) {
+      return Math.max(maximum, Number(row.minimumPayment || 0));
+    }, 0));
+  var derived = capitalAllocationDerivedPreferenceCushion_(preference, {
+    normalizedMonthlyOutflows: normalizedMonthlyOutflows,
+    monthlyDebtService: monthlyDebtService,
+    largestDebtMinimum: largestDebtMinimum,
+    monthlyPropertyRisk: monthlyPropertyRisk
+  });
+  var target = capitalAllocationMoney_(hardFloor + derived + configuredCushion);
+  var deployment = Math.max(0, capitalAllocationMoney_(cashAfterRequired - target));
+  var benefit = capitalAllocationDebtBenefitForBudget_(facts, deployment);
+  return {
+    label: label,
+    liquidityPreference: preference,
+    preferredLiquidityTarget: target,
+    acceleratedDeployment: deployment,
+    projectedLiquidCash: capitalAllocationMoney_(cashAfterRequired - deployment),
+    projectedRevolvingDebtPaid: benefit.revolvingDebtPaid,
+    estimatedFirstYearInterestAvoided: benefit.estimatedFirstYearInterestAvoided,
+    payoffRangeStatus: 'NORMALIZED_FUTURE_CASH_FLOW_REQUIRED'
+  };
+}
+
+function capitalAllocationDebtBenefitForBudget_(facts, budget) {
+  var reserveRestorationNeed = capitalAllocationMoney_((facts && facts.liquidity &&
+    facts.liquidity.accounts || []).reduce(function(sum, row) {
+    if (!row || row.included === false) return sum;
+    return sum + Math.max(0, Number(row.minBuffer || 0) - Number(row.balance || 0));
+  }, 0));
+  var remaining = Math.max(0, Number(budget || 0) - reserveRestorationNeed);
+  var revolvingPaid = 0;
+  var annualInterestAvoided = 0;
+  (facts && facts.debts || []).filter(function(row) {
+    return row.active && Number(row.balance || 0) > 0 && capitalAllocationIsRevolvingDebt_(row);
+  }).sort(function(a, b) {
+    return Number(b.interestRate || 0) - Number(a.interestRate || 0);
+  }).forEach(function(row) {
+    if (!(remaining > 0)) return;
+    var payment = Math.min(remaining, Number(row.balance || 0));
+    remaining = capitalAllocationMoney_(remaining - payment);
+    revolvingPaid = capitalAllocationMoney_(revolvingPaid + payment);
+    annualInterestAvoided = capitalAllocationMoney_(annualInterestAvoided +
+      payment * Number(row.interestRate || 0) / 100);
+  });
+  return { reserveRestorationNeed: reserveRestorationNeed,
+    revolvingDebtPaid: revolvingPaid,
+    estimatedFirstYearInterestAvoided: annualInterestAvoided };
+}
+
+function capitalAllocationLiquidityPreference_(facts) {
+  var raw = String(facts && (facts.liquidityPreference ||
+    facts.liquidityPlanning && facts.liquidityPlanning.preference) || 'BALANCED').toUpperCase();
+  return ['LIQUIDITY_FIRST', 'BALANCED', 'AGGRESSIVE_DEBT_REDUCTION'].indexOf(raw) >= 0
+    ? raw : 'BALANCED';
+}
+
+function capitalAllocationPeriodKey_(asOfDate, planningPeriod) {
+  var iso = String(asOfDate || '');
+  if (planningPeriod === 'MONTHLY') return iso.slice(0, 7);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso || 'CURRENT_WEEK';
+  var date = new Date(iso + 'T00:00:00Z');
+  if (isNaN(date.getTime())) return iso;
+  var daysSinceMonday = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - daysSinceMonday);
+  return date.toISOString().slice(0, 10);
+}
+
+function capitalAllocationProposalId_(value) {
+  var text = String(value || '');
+  var hash = 2166136261;
+  for (var i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return 'CAP-' + ('00000000' + (hash >>> 0).toString(16)).slice(-8).toUpperCase();
+}
+
 function finalizeCapitalAllocationDecisionViews_(facts, plan) {
   plan.summary.projectedProtectedCashAfterActions = Math.min(
     Number(plan.summary.endingCash || 0), Number(plan.summary.reserve90Days || 0));
@@ -323,62 +556,111 @@ function finalizeCapitalAllocationDecisionViews_(facts, plan) {
   plan.monthlyOutlook = capitalAllocationMonthlyOutlook_(plan);
   plan.capitalSourceLadder = buildCapitalAllocationSourceLadder_(facts, plan);
   plan.contributionStrategy = buildCapitalAllocationContributionStrategy_(facts, plan);
+  plan.investmentPolicy = buildCapitalAllocationInvestmentPolicy_(facts, plan);
+  plan.economicAssumptions = {
+    investmentComparison: capitalAllocationInvestmentComparison_(facts),
+    note: 'This configurable planning assumption ranks optional term-loan payoff versus uncertain investing. It never changes revolving-card inclusion or the Robinhood policy floor.'
+  };
   plan.afterAction = buildCapitalAllocationAfterAction_(facts, plan);
   plan.nextDollar = buildCapitalAllocationNextDollar_(facts, plan);
   plan.whyNot = buildCapitalAllocationWhyNot_(facts, plan);
   return plan;
 }
 
-function capitalAllocationShouldOverrideInvestmentMinimum_(availableCash, householdRequired,
-    standingMinimum, operatingReserve, facts) {
-  return capitalAllocationInvestmentOverrideReasons_(availableCash, householdRequired,
-    standingMinimum, operatingReserve, facts).length > 0;
-}
-
-function capitalAllocationInvestmentOverrideReasons_(availableCash, householdRequired,
-    standingMinimum, operatingReserve, facts) {
+function capitalAllocationPolicyFloorOverrideReasons_(facts, inputs) {
   var reasons = [];
-  if (!(Number(standingMinimum || 0) > 0)) return reasons;
-  (facts && facts.obligations || []).forEach(function(row) {
-    if (row.requiredThisWeek && /overdue|past due|missed/i.test(String(row.reason || ''))) {
-      reasons.push({ code: 'MISSED_OR_OVERDUE_REQUIRED_PAYMENT', targetName: row.name,
-        message: (row.name || 'A required payment') + ' is overdue or missed.' });
-    }
-  });
-  (facts && facts.debts || []).forEach(function(debt) {
-    if (debt.active && Number(debt.balance || 0) > 0 &&
-      Number(debt.interestRate || 0) >= CAPITAL_ALLOCATION_CRITICAL_DEBT_APR_ &&
-      /credit|card|revolving/i.test(String(debt.type || ''))) {
-      reasons.push({ code: 'CRITICAL_REVOLVING_DEBT', targetName: debt.name,
-        apr: Number(debt.interestRate || 0),
-        message: debt.name + ' is critical revolving debt at ' +
-          Number(debt.interestRate || 0).toFixed(2) + '% APR.' });
-    }
-  });
-  var afterHouseholdRequired = capitalAllocationMoney_(
-    Number(availableCash || 0) - Number(householdRequired || 0));
-  var requiredForPolicy = capitalAllocationMoney_(
-    Number(operatingReserve || 0) + Number(standingMinimum || 0));
-  if (afterHouseholdRequired + 0.005 < requiredForPolicy) {
+  var available = Number(inputs.cashAvailable || 0);
+  var required = Number(inputs.householdRequired || 0);
+  var policyFloor = Number(inputs.policyFloor || 0);
+  var operatingFloor = Number(inputs.operatingFloor || 0);
+  if (available + 0.005 < required) {
+    reasons.push({ code: 'REQUIRED_OBLIGATION_SHORTFALL',
+      message: 'Required bills and debt minimums exceed available cash by $' +
+        capitalAllocationMoney_(required - available).toFixed(2) + '.' });
+  } else if (available - required - policyFloor < -0.005) {
+    reasons.push({ code: 'PROJECTED_CASH_NEGATIVE',
+      message: 'Funding the Robinhood policy floor would make projected cash negative by $' +
+        capitalAllocationMoney_(required + policyFloor - available).toFixed(2) + '.' });
+  } else if (available - required - policyFloor + 0.005 < operatingFloor) {
     reasons.push({ code: 'OPERATING_FLOOR_CONFLICT',
-      availableAfterHouseholdRequired: afterHouseholdRequired,
-      requiredOperatingReserve: capitalAllocationMoney_(operatingReserve),
-      standingInvestmentMinimum: capitalAllocationMoney_(standingMinimum),
-      shortfall: capitalAllocationMoney_(requiredForPolicy - afterHouseholdRequired),
-      message: 'Funding the normal investment policy would leave cash below the operating floor by $' +
-        capitalAllocationMoney_(requiredForPolicy - afterHouseholdRequired).toFixed(2) + '.' });
+      message: 'Funding the Robinhood policy floor would leave $' +
+        capitalAllocationMoney_(available - required - policyFloor).toFixed(2) +
+        ', below the $' + capitalAllocationMoney_(operatingFloor).toFixed(2) +
+        ' hard operating floor.' });
+  }
+  var configured = facts && facts.emergencyConditions;
+  if (Array.isArray(configured)) {
+    configured.filter(function(row) { return row && row.active; }).forEach(function(row) {
+      reasons.push({ code: String(row.code || 'CONFIGURED_EMERGENCY'),
+        message: String(row.message || 'An explicitly configured emergency condition is active.') });
+    });
   }
   return reasons;
 }
 
+function buildCapitalAllocationInvestmentPolicy_(facts, plan) {
+  var policyFloor = Number(plan.summary.standingInvestmentMinimum || 0);
+  var recommended = capitalAllocationMoney_((plan.weeklyActions || []).reduce(function(sum, row) {
+    return sum + (/^FUND_INCOME_PRODUCING_/.test(String(row.actionType || '')) &&
+      capitalAllocationMatchText_(row.targetName) ===
+        capitalAllocationMatchText_(CAPITAL_ALLOCATION_PRIMARY_INCOME_ACCOUNT_NAME_)
+      ? Number(row.amount || 0) : 0);
+  }, 0));
+  var scheduled = capitalAllocationMoney_((facts && facts.existingInvestmentContributions || [])
+    .reduce(function(sum, row) {
+      return sum + (capitalAllocationMatchText_(row.matchedAccountName || row.name) ===
+        capitalAllocationMatchText_(CAPITAL_ALLOCATION_PRIMARY_INCOME_ACCOUNT_NAME_)
+        ? Number(row.amount || 0) : 0);
+    }, 0));
+  return {
+    accountName: CAPITAL_ALLOCATION_PRIMARY_INCOME_ACCOUNT_NAME_,
+    policyType: 'POLICY_FLOOR',
+    policyFloor: capitalAllocationMoney_(policyFloor),
+    optionalAcceleration: Math.max(0, capitalAllocationMoney_(recommended - policyFloor)),
+    scheduledAmount: scheduled,
+    recommendedAmount: recommended,
+    overrideApplied: !!plan.summary.emergencyInvestmentOverride,
+    overrideReasons: (plan.summary.emergencyInvestmentOverrideReasons || []).slice()
+  };
+}
+
 function buildCapitalAllocationSourceLadder_(facts, plan) {
   var steps = [];
+  var cashAccounts = [];
   (facts && facts.liquidity && facts.liquidity.accounts || []).forEach(function(account) {
+    var balance = capitalAllocationMoney_(account.balance);
+    var minimumBuffer = Math.max(0, capitalAllocationMoney_(account.minBuffer));
+    var eligibleAmount = account.included ? capitalAllocationMoney_(account.usable) : 0;
+    var zeroBufferWarning = !!(account.included && balance > 0 &&
+      minimumBuffer <= 0 && eligibleAmount > 0);
+    var audit = {
+      accountId: account.accountId || '',
+      accountName: account.accountName,
+      visibleBalance: balance,
+      usePolicy: account.usePolicy || '',
+      minimumBuffer: minimumBuffer,
+      protectedByBuffer: Math.min(balance, minimumBuffer),
+      eligibleAmount: eligibleAmount,
+      included: !!account.included,
+      status: account.included ? 'ELIGIBLE' : 'EXCLUDED',
+      planningRole: account.planningRole || '',
+      zeroBufferWarning: zeroBufferWarning,
+      warning: zeroBufferWarning
+        ? 'This eligible account has a $0 protected buffer, so CashCompass treats its full positive balance as deployable.'
+        : '',
+      reason: account.included
+        ? 'Eligible only above its minimum buffer and according to its Use Policy.'
+        : capitalAllocationSourceExclusionReason_(account)
+    };
+    cashAccounts.push(audit);
     steps.push({
       sourceType: account.included ? 'CURRENT_ELIGIBLE_CASH' : 'PROTECTED_OR_EXCLUDED_CASH',
       sourceName: account.accountName,
-      amount: account.included ? capitalAllocationMoney_(account.usable) : 0,
-      visibleBalance: capitalAllocationMoney_(account.balance),
+      amount: eligibleAmount,
+      visibleBalance: balance,
+      minimumBuffer: minimumBuffer,
+      protectedByBuffer: audit.protectedByBuffer,
+      zeroBufferWarning: zeroBufferWarning,
       status: account.included ? 'ELIGIBLE' : 'EXCLUDED',
       reason: account.included
         ? 'Eligible only above its minimum buffer and according to its Use Policy.'
@@ -426,8 +708,14 @@ function buildCapitalAllocationSourceLadder_(facts, plan) {
         : 'This account is not currently an eligible taxable-sale source.',
       investmentId: account.investmentId || '', sysAssetsRow: account.sysAssetsRow });
   });
-  return { steps: steps, estimatedMonthlyFreeCashFlow:
-    monthlyFreeCashFlow,
+  return { steps: steps, cashAccounts: cashAccounts,
+    totalEligibleCash: capitalAllocationMoney_(cashAccounts.reduce(function(sum, row) {
+      return sum + Number(row.eligibleAmount || 0);
+    }, 0)),
+    zeroBufferWarningCount: cashAccounts.filter(function(row) {
+      return row.zeroBufferWarning;
+    }).length,
+    estimatedMonthlyFreeCashFlow: monthlyFreeCashFlow,
     brokerageDataContract: {
       fields: ['security', 'account', 'quantity', 'marketValue', 'costBasis',
         'taxLots', 'holdingPeriod', 'unrealizedGainLoss', 'planningStatus'],
@@ -474,28 +762,29 @@ function buildCapitalAllocationContributionStrategy_(facts, plan) {
   var debts = (facts && facts.debts || []).filter(function(row) {
     return row.active && Number(row.balance || 0) > 0;
   }).sort(function(a, b) { return Number(b.interestRate || 0) - Number(a.interestRate || 0); });
-  var highest = debts[0] || null;
+  var revolving = debts.filter(capitalAllocationIsRevolvingDebt_);
+  var highest = (revolving.length ? revolving : debts)[0] || null;
   var result = { currentOptionalWeekly: optionalWeekly,
     standingRobinhoodMinimum: Number(plan.summary.standingInvestmentMinimum || 0),
     standingRobinhoodFunded: Number(plan.summary.standingInvestmentFunded || 0),
+    recommendationState: 'PROPOSED',
     recommendation: 'KEEP_CURRENT', destination: '', redirectedWeekly: 0,
     reason: optionalWeekly > 0 ? 'No higher-value redirect has been proven.' : 'No optional recurring contribution is scheduled.',
     sourceContributions: optionalRows };
   if (plan.summary.emergencyInvestmentOverride) {
-    result.recommendation = 'PAUSE_OPTIONAL_AND_MINIMUM_FOR_EMERGENCY_LIQUIDITY';
-    result.destination = 'Operating reserve and required payments';
-    result.redirectedWeekly = optionalWeekly;
-    result.reason = 'Required payments and the operating floor take precedence over every investment contribution.';
-  } else if (highest && Number(highest.interestRate || 0) >= CAPITAL_ALLOCATION_HIGH_DEBT_APR_) {
+    result.recommendation = 'HOLD_OPTIONAL_DURING_POLICY_OVERRIDE';
+    result.reason = 'Optional investing waits while the recorded liquidity or solvency constraint remains active.';
+  } else if (highest && (capitalAllocationIsRevolvingDebt_(highest) ||
+      capitalAllocationDebtEconomics_(highest, facts).debtOutranksInvestment)) {
     result.recommendation = 'REDIRECT_OPTIONAL_CONTRIBUTIONS_TO_DEBT';
     result.destination = highest.name;
     result.redirectedWeekly = optionalWeekly;
     result.reason = 'The guaranteed avoided cost at ' + Number(highest.interestRate).toFixed(2) +
       '% APR outranks optional investment funding.';
-  } else if (highest && Number(highest.interestRate || 0) >= CAPITAL_ALLOCATION_MODERATE_DEBT_APR_) {
+  } else if (highest) {
     result.recommendation = 'REVIEW_DEBT_VS_INVESTMENT_SPLIT';
     result.destination = highest.name + ' or ' + CAPITAL_ALLOCATION_PRIMARY_INCOME_ACCOUNT_NAME_;
-    result.reason = 'Moderate-cost debt requires an explicit risk/return comparison before redirecting optional contributions.';
+    result.reason = capitalAllocationDebtEconomics_(highest, facts).reason;
   } else if (optionalWeekly > 0) {
     result.recommendation = 'REDIRECT_OPTIONAL_CONTRIBUTIONS_TO_PASSIVE_INCOME';
     result.destination = CAPITAL_ALLOCATION_PRIMARY_INCOME_ACCOUNT_NAME_;
@@ -519,16 +808,19 @@ function buildCapitalAllocationAfterAction_(facts, plan) {
     var ending = capitalAllocationMoney_(Number(debt.balance || 0) - payment);
     var annualBefore = capitalAllocationMoney_(Number(debt.balance || 0) * Number(debt.interestRate || 0) / 100);
     var annualAfter = capitalAllocationMoney_(ending * Number(debt.interestRate || 0) / 100);
-    return { name: debt.name, apr: Number(debt.interestRate || 0),
+    return { name: debt.name, debtType: debt.type || '',
+      isRevolving: capitalAllocationIsRevolvingDebt_(debt), apr: Number(debt.interestRate || 0),
       priorityClass: capitalAllocationDebtPriorityClass_(debt.interestRate),
-      startingBalance: capitalAllocationMoney_(debt.balance), payment: payment,
-      endingBalance: ending, estimatedAnnualInterestBefore: annualBefore,
-      estimatedAnnualInterestAfter: annualAfter,
-      estimatedAnnualInterestAvoided: capitalAllocationMoney_(annualBefore - annualAfter),
-      monthlyMinimumReleased: ending <= 0.005 ? capitalAllocationMoney_(debt.minimumPayment) : 0 };
+      startingBalance: capitalAllocationMoney_(debt.balance), proposedPayment: payment,
+      projectedEndingBalance: ending, estimatedAnnualInterestBefore: annualBefore,
+      projectedAnnualInterestAfter: annualAfter,
+      projectedAnnualInterestAvoided: capitalAllocationMoney_(annualBefore - annualAfter),
+      projectedMonthlyMinimumReleased: ending <= 0.005 ? capitalAllocationMoney_(debt.minimumPayment) : 0,
+      recommendationState: 'PROPOSED',
+      effectState: payment > 0 ? 'AWAITING_CONFIRMATION' : 'CONFIRMED' };
   });
   var releasedMonthly = capitalAllocationMoney_(debtRows.reduce(function(sum, row) {
-    return sum + Number(row.monthlyMinimumReleased || 0);
+    return sum + Number(row.projectedMonthlyMinimumReleased || 0);
   }, 0));
   var robinhood = (facts && facts.incomeProducingAccounts || []).filter(function(account) {
     return capitalAllocationMinimumWeeklyCommitment_(account) > 0;
@@ -537,18 +829,23 @@ function buildCapitalAllocationAfterAction_(facts, plan) {
     return sum + (/^FUND_INCOME_PRODUCING_/.test(String(row.actionType || ''))
       ? Number(row.amount || 0) : 0);
   }, 0));
-  return { cashBefore: capitalAllocationMoney_(plan.summary.openingCash),
-    cashAfter: capitalAllocationMoney_(plan.summary.endingCash),
-    reserveAfter: capitalAllocationMoney_(plan.summary.reserve90Days),
+  return { state: 'AWAITING_CONFIRMATION',
+    confirmationAuthority: 'REFRESHED_WORKBOOK_FACTS',
+    confirmationMessage: 'These effects are conditional. Refresh the financial plan after the proposed payments appear in the recorded balances.',
+    cashBefore: capitalAllocationMoney_(plan.summary.openingCash),
+    projectedCashAfter: capitalAllocationMoney_(plan.summary.endingCash),
+    projectedReserveAfter: capitalAllocationMoney_(plan.summary.reserve90Days),
     debts: debtRows,
     debtBefore: capitalAllocationMoney_(debtRows.reduce(function(sum, row) { return sum + row.startingBalance; }, 0)),
-    debtAfter: capitalAllocationMoney_(debtRows.reduce(function(sum, row) { return sum + row.endingBalance; }, 0)),
-    estimatedAnnualInterestAvoided: capitalAllocationMoney_(debtRows.reduce(function(sum, row) { return sum + row.estimatedAnnualInterestAvoided; }, 0)),
-    releasedMonthlyMinimums: releasedMonthly,
-    releasedWeeklyEquivalent: capitalAllocationMoney_(releasedMonthly * 12 / 52),
+    projectedDebtAfter: capitalAllocationMoney_(debtRows.reduce(function(sum, row) { return sum + row.projectedEndingBalance; }, 0)),
+    projectedAnnualInterestAvoided: capitalAllocationMoney_(debtRows.reduce(function(sum, row) { return sum + row.projectedAnnualInterestAvoided; }, 0)),
+    projectedReleasedMonthlyMinimums: releasedMonthly,
+    projectedReleasedWeeklyEquivalent: capitalAllocationMoney_(releasedMonthly * 12 / 52),
+    confirmedReleasedMonthlyMinimums: 0,
+    confirmedReleasedWeeklyEquivalent: 0,
     robinhoodBalanceBefore: capitalAllocationMoney_(robinhood.currentBalance || 0),
-    robinhoodFundingThisWeek: robinhoodFunding,
-    robinhoodBalanceAfterContributions: capitalAllocationMoney_(Number(robinhood.currentBalance || 0) + robinhoodFunding),
+    proposedRobinhoodFundingThisWeek: robinhoodFunding,
+    projectedRobinhoodBalanceAfterContributions: capitalAllocationMoney_(Number(robinhood.currentBalance || 0) + robinhoodFunding),
     passiveIncomeImpact: null,
     passiveIncomeImpactStatus: 'YIELD_DATA_REQUIRED' };
 }
@@ -561,39 +858,128 @@ function capitalAllocationDebtPriorityClass_(apr) {
   return 'LOW_COST';
 }
 
+function capitalAllocationIsRevolvingDebt_(debt) {
+  var type = capitalAllocationMatchText_(debt && (debt.type || debt.debtType));
+  return /credit card|creditcard|revolving|charge card/.test(type);
+}
+
+function capitalAllocationInvestmentComparison_(facts) {
+  var configured = facts && facts.investmentComparison || {};
+  var expected = Number(configured.expectedAfterTaxReturn);
+  if (!isFinite(expected)) expected = Number(configured.expectedReturnBase);
+  if (!isFinite(expected)) expected = CAPITAL_ALLOCATION_DEFAULT_EXPECTED_INVESTMENT_RETURN_;
+  var low = Number(configured.expectedReturnLow);
+  var high = Number(configured.expectedReturnHigh);
+  if (!isFinite(low)) low = Math.max(0, expected - 3);
+  if (!isFinite(high)) high = expected + 3;
+  return {
+    expectedReturn: expected,
+    expectedReturnLow: low,
+    expectedReturnHigh: high,
+    source: isFinite(Number(configured.expectedAfterTaxReturn)) ||
+      isFinite(Number(configured.expectedReturnBase)) ? 'CONFIGURED_FACT' : 'DEFAULT_PLANNING_ASSUMPTION',
+    volatility: configured.volatility || 'UNCERTAIN',
+    liquidity: configured.liquidity || 'MARKET_DEPENDENT'
+  };
+}
+
+function capitalAllocationDebtEconomics_(debt, facts) {
+  var apr = Number(debt && debt.interestRate || 0);
+  var comparison = capitalAllocationInvestmentComparison_(facts);
+  var deductible = debt && debt.taxDeductible === true;
+  var taxRate = deductible ? Math.max(0, Math.min(1, Number(debt.marginalTaxRate || 0))) : 0;
+  var effectiveDebtCost = apr * (1 - taxRate);
+  var prepaymentPenalty = Math.max(0, Number(debt && debt.prepaymentPenalty || 0));
+  var debtOutranksInvestment = prepaymentPenalty <= 0 &&
+    effectiveDebtCost > Number(comparison.expectedReturn || 0);
+  return {
+    effectiveDebtCost: effectiveDebtCost,
+    expectedInvestmentReturn: Number(comparison.expectedReturn || 0),
+    expectedInvestmentReturnLow: Number(comparison.expectedReturnLow || 0),
+    expectedInvestmentReturnHigh: Number(comparison.expectedReturnHigh || 0),
+    investmentVolatility: comparison.volatility,
+    investmentLiquidity: comparison.liquidity,
+    investmentAssumptionSource: comparison.source,
+    debtOutranksInvestment: debtOutranksInvestment,
+    reason: 'Compare the near-guaranteed ' + effectiveDebtCost.toFixed(2) +
+      '% effective avoided debt cost with the uncertain ' +
+      Number(comparison.expectedReturn || 0).toFixed(2) + '% base investment-return assumption (' +
+      Number(comparison.expectedReturnLow || 0).toFixed(2) + '%–' +
+      Number(comparison.expectedReturnHigh || 0).toFixed(2) + '% range; market outcome uncertain).'
+  };
+}
+
+function capitalAllocationDebtCanReceiveOptionalCapital_(debt, facts) {
+  if (!debt || !(Number(debt.balance || 0) > 0)) return false;
+  if (capitalAllocationIsRevolvingDebt_(debt)) return true;
+  return capitalAllocationDebtEconomics_(debt, facts).debtOutranksInvestment;
+}
+
 function buildCapitalAllocationNextDollar_(facts, plan) {
   var after = plan.afterAction || buildCapitalAllocationAfterAction_(facts, plan);
+  var state = 'AWAITING_CONFIRMATION';
+  var confirmationCondition = 'Refresh the financial plan after proposed payments are reflected in authoritative account and debt balances.';
   if (Number(plan.summary.endingCash || 0) + 0.005 < Number(plan.summary.reserve90Days || 0)) {
     return { amount: 1000, actionType: 'HOLD_OR_RESTORE_OPERATING_RESERVE',
       destination: 'Household operating reserve',
-      reason: 'The next dollar must restore liquidity before optional debt or investment use.', confidence: 'HIGH' };
+      reason: 'The next dollar must restore liquidity before optional debt or investment use.', confidence: 'HIGH',
+      recommendationState: state, conditionalOn: confirmationCondition, alternatives: [] };
   }
   var debts = (after.debts || []).filter(function(row) {
-    return row.endingBalance > 0 && row.apr >= CAPITAL_ALLOCATION_HIGH_DEBT_APR_;
+    return row.projectedEndingBalance > 0 && row.isRevolving;
   }).sort(function(a, b) { return b.apr - a.apr; });
   if (debts.length) {
-    return { amount: Math.min(1000, debts[0].endingBalance), actionType: 'PAY_EXTRA_DEBT',
+    return { amount: Math.min(1000, debts[0].projectedEndingBalance), actionType: 'PAY_EXTRA_DEBT',
       destination: debts[0].name, guaranteedReturnRate: debts[0].apr,
-      newlyReleasedWeeklyCashFlow: Number(after.releasedWeeklyEquivalent || 0),
-      reason: 'This is the highest remaining guaranteed economic cost.' +
-        (Number(after.releasedWeeklyEquivalent || 0) > 0
-          ? ' Redirect the newly released ' +
-            '$' + Number(after.releasedWeeklyEquivalent).toFixed(2) +
-            ' per week from completed debts here in the next planning period.' : ''),
-      confidence: 'HIGH' };
+      projectedReleasedWeeklyCashFlow: Number(after.projectedReleasedWeeklyEquivalent || 0),
+      reason: 'This is the highest-APR remaining revolving balance; no APR cutoff stops the sequence.' +
+        (Number(after.projectedReleasedWeeklyEquivalent || 0) > 0
+          ? ' After payoff confirmation, the projected ' +
+            '$' + Number(after.projectedReleasedWeeklyEquivalent).toFixed(2) +
+            ' per week of released minimums can be reconsidered here.' : ''),
+      confidence: 'HIGH', recommendationState: state,
+      conditionalOn: confirmationCondition, alternatives: [] };
   }
-  var strategy = plan.contributionStrategy || buildCapitalAllocationContributionStrategy_(facts, plan);
-  if (strategy.recommendation === 'REDIRECT_OPTIONAL_CONTRIBUTIONS_TO_PASSIVE_INCOME') {
-    return { amount: 1000, actionType: 'FUND_INCOME_PRODUCING_ACCOUNT',
-      destination: CAPITAL_ALLOCATION_PRIMARY_INCOME_ACCOUNT_NAME_,
-      newlyReleasedWeeklyCashFlow: Number(after.releasedWeeklyEquivalent || 0),
-      reason: 'Required reserves and high-cost debt no longer outrank the passive-income strategy.' +
-        (Number(after.releasedWeeklyEquivalent || 0) > 0
-          ? ' The next planning period can add the released debt minimum to this funding pace.' : ''),
-      confidence: 'MEDIUM' };
+  var remainingDebts = (after.debts || []).filter(function(row) {
+    return row.projectedEndingBalance > 0;
+  }).sort(function(a, b) { return b.apr - a.apr; });
+  var highestRemaining = remainingDebts[0] || null;
+  var highestRemainingFact = highestRemaining ? capitalAllocationDebtForName_(facts, highestRemaining.name) : null;
+  if (highestRemaining && capitalAllocationDebtCanReceiveOptionalCapital_(highestRemainingFact, facts)) {
+    var economics = capitalAllocationDebtEconomics_(highestRemainingFact, facts);
+    return { amount: Math.min(1000, highestRemaining.projectedEndingBalance),
+      actionType: 'PAY_EXTRA_DEBT', destination: highestRemaining.name,
+      guaranteedReturnRate: economics.effectiveDebtCost,
+      reason: economics.reason + ' The debt currently ranks ahead of optional acceleration.',
+      confidence: 'MEDIUM', recommendationState: state,
+      conditionalOn: confirmationCondition, alternatives: [] };
   }
-  return { amount: 1000, actionType: 'HOLD_FOR_REVIEW', destination: 'Household liquidity',
-    reason: 'The next decision requires a debt-versus-investment scenario or missing tax data.', confidence: 'MEDIUM' };
+  var reserveSurplus = Math.max(0, capitalAllocationMoney_(
+    Number(plan.summary.endingCash || 0) - Number(plan.summary.reserve90Days || 0)));
+  var alternatives = [{ candidateId: 'CONDITIONAL_ROBINHOOD_MINIMUM',
+    actionType: 'FUND_INCOME_PRODUCING_MINIMUM',
+    destination: CAPITAL_ALLOCATION_PRIMARY_INCOME_ACCOUNT_NAME_,
+    amount: Number(plan.summary.standingInvestmentMinimum ||
+      CAPITAL_ALLOCATION_PRIMARY_INCOME_WEEKLY_MINIMUM_),
+    recommendationState: state,
+    reason: 'The standing policy floor is reevaluated from refreshed facts every week; it is not optional acceleration.' }];
+  if (highestRemaining) {
+    alternatives.push({ candidateId: 'CONDITIONAL_NEXT_DEBT', actionType: 'PAY_EXTRA_DEBT',
+      destination: highestRemaining.name, amount: Math.min(1000, highestRemaining.projectedEndingBalance),
+      apr: highestRemaining.apr, recommendationState: state,
+      reason: 'Compare the guaranteed ' + Number(highestRemaining.apr || 0).toFixed(2) +
+        '% avoided interest with additional investing after confirmation.' });
+  }
+  alternatives.push({ candidateId: 'CONDITIONAL_HOLD_LIQUIDITY', actionType: 'HOLD_FOR_REVIEW',
+    destination: 'Additional household liquidity', amount: reserveSurplus,
+    recommendationState: state,
+    reason: 'Keep any confirmed reserve surplus available until the refreshed plan chooses its best use.' });
+  return { amount: 0, actionType: 'COMPARE_AFTER_CONFIRMATION',
+    destination: 'Refresh balances, then compare',
+    projectedReleasedWeeklyCashFlow: Number(after.projectedReleasedWeeklyEquivalent || 0),
+    reason: 'The proposed payoffs are not treated as completed. After refreshed balances confirm them, rerun the optimizer across Robinhood, the highest remaining debt, and additional liquidity.',
+    confidence: 'HIGH', recommendationState: state,
+    conditionalOn: confirmationCondition, alternatives: alternatives };
 }
 
 function buildCapitalAllocationWhyNot_(facts, plan) {
@@ -611,6 +997,13 @@ function buildCapitalAllocationWhyNot_(facts, plan) {
       comparison: 'High-cost debt and required reserves are satisfied; low-cost debt remains visible but does not automatically outrank long-term investing.',
       winner: 'FUND_PASSIVE_INCOME', confidence: 'MEDIUM' };
   }
+  if (next.actionType === 'COMPARE_AFTER_CONFIRMATION') {
+    return { recommended: 'Refresh balances before the next allocation',
+      alternative: 'Act on projected released cash flow now',
+      comparison: 'Proposed payoffs and released minimums are conditional until authoritative balances confirm them.',
+      winner: 'WAIT_FOR_CONFIRMATION', confidence: 'HIGH',
+      recommendationState: 'AWAITING_CONFIRMATION' };
+  }
   return { recommended: 'Hold or review', alternative: 'Sell taxable investments',
     comparison: 'A sale is not ranked until basis, tax lots, holding period, and wash-sale inputs are available.',
     winner: 'WAIT_FOR_DATA', confidence: 'HIGH' };
@@ -620,7 +1013,10 @@ function capitalAllocationCandidatePriority_(candidate, facts) {
   if (candidate.actionType === 'RESTORE_RESERVE') return 100;
   if (candidate.actionType === 'PAY_EXTRA_DEBT') {
     var debt = capitalAllocationDebtForCandidate_(facts, candidate);
-    return 300 - Math.max(0, Number(debt && debt.interestRate || 0));
+    var apr = Math.max(0, Number(debt && debt.interestRate || 0));
+    if (capitalAllocationIsRevolvingDebt_(debt)) return 200 - apr;
+    return capitalAllocationDebtEconomics_(debt, facts).debtOutranksInvestment
+      ? 350 - apr : 500 - apr;
   }
   if (candidate.actionType === 'FUND_INCOME_PRODUCING_ACCOUNT') return 400;
   if (candidate.actionType === 'HOLD_CASH') return 1000;
@@ -635,6 +1031,10 @@ function capitalAllocationDebtForCandidate_(facts, candidate) {
   return null;
 }
 
+function capitalAllocationDebtForName_(facts, name) {
+  return capitalAllocationDebtForCandidate_(facts, { targetName: name });
+}
+
 function capitalAllocationCandidateConfidence_(candidate) {
   if (candidate.actionType === 'FUND_INCOME_PRODUCING_ACCOUNT') return 'MEDIUM';
   return 'HIGH';
@@ -647,14 +1047,7 @@ function capitalAllocationWaitReason_(candidate, facts) {
   }
   if (candidate.actionType === 'PAY_EXTRA_DEBT') {
     var debt = capitalAllocationDebtForCandidate_(facts, candidate);
-    var apr = Number(debt && debt.interestRate || 0);
-    if (apr >= CAPITAL_ALLOCATION_MODERATE_DEBT_APR_ &&
-        apr < CAPITAL_ALLOCATION_HIGH_DEBT_APR_) {
-      return 'This moderate-cost debt waits for an explicit debt-versus-investment scenario comparison.';
-    }
-    if (apr < CAPITAL_ALLOCATION_MODERATE_DEBT_APR_) {
-      return 'This lower-cost debt stays visible, but does not receive extra principal while higher-value uses rank ahead of it.';
-    }
+    if (!capitalAllocationIsRevolvingDebt_(debt)) return capitalAllocationDebtEconomics_(debt, facts).reason;
   }
   return 'This waits because higher-priority actions use all deployable cash this week.';
 }
@@ -668,6 +1061,7 @@ function capitalAllocationWeeklyAction_(sequence, row, amount, remaining, status
     targetName: row.targetName,
     amount: capitalAllocationMoney_(amount),
     status: status,
+    recommendationState: 'PROPOSED',
     reason: row.reason,
     provenance: row.provenance,
     remainingCashAfter: capitalAllocationMoney_(remaining)
@@ -757,9 +1151,9 @@ function buildCapitalAllocationQueue_(facts) {
     primaryIncomeAccountFound = true;
     var commitment = capitalAllocationAction_(
       'REQUIRED_INCOME_COMMITMENT:' + capitalAllocationKey_(account.investmentId || account.accountName),
-      'REQUIRED_ACTION', 'FUND_INCOME_PRODUCING_MINIMUM', account.accountName,
-      minimumCommitment, 'STANDING_WEEKLY_MINIMUM',
-      '$500 is the standing weekly Samer Robinhood commitment and is not optional.',
+      'POLICY_FLOOR', 'FUND_INCOME_PRODUCING_MINIMUM', account.accountName,
+      minimumCommitment, 'POLICY_FLOOR',
+      '$500 is the user-defined weekly Samer Robinhood POLICY_FLOOR. It is overridden only by an explicit liquidity or solvency constraint.',
       'SYS - Assets / Capital Allocation policy');
     commitment.dueDate = String(facts.asOfDate || '');
     commitment.investmentId = account.investmentId || '';
@@ -828,7 +1222,8 @@ function buildCapitalAllocationQueue_(facts) {
   candidates.sort(capitalAllocationActionSort_);
   findings.sort(function(a, b) { return String(a.findingId).localeCompare(String(b.findingId)); });
   var requiredActionAmount = capitalAllocationMoney_(required.reduce(function(sum, row) {
-    return sum + (row.actionClass === 'REQUIRED_ACTION' ? Number(row.requestedAmount || 0) : 0);
+    return sum + (row.actionClass === 'REQUIRED_ACTION' || row.actionClass === 'POLICY_FLOOR'
+      ? Number(row.requestedAmount || 0) : 0);
   }, 0));
   var protectedCashAmount = capitalAllocationMoney_(required.reduce(function(sum, row) {
     return sum + (row.actionClass === 'HARD_CONSTRAINT' ? Number(row.requestedAmount || 0) : 0);
@@ -865,11 +1260,11 @@ function buildCapitalAllocationQueue_(facts) {
 }
 
 function capitalAllocationOptionalRedirectToIncomeAmount_(facts) {
-  var hasModerateOrHigherDebt = (facts && facts.debts || []).some(function(debt) {
+  var debtOutranks = (facts && facts.debts || []).some(function(debt) {
     return debt.active && Number(debt.balance || 0) > 0 &&
-      Number(debt.interestRate || 0) >= CAPITAL_ALLOCATION_MODERATE_DEBT_APR_;
+      capitalAllocationDebtCanReceiveOptionalCapital_(debt, facts);
   });
-  if (hasModerateOrHigherDebt) return 0;
+  if (debtOutranks) return 0;
   return capitalAllocationMoney_(capitalAllocationOptionalContributionRows_(facts)
     .reduce(function(sum, row) { return sum + Number(row.amount || 0); }, 0));
 }
@@ -888,37 +1283,50 @@ function capitalAllocationMinimumWeeklyCommitment_(account) {
 }
 
 function readCapitalAllocationFacts_(ss, asOfDate) {
-  var findings = [];
-  var property = readCapitalAllocationProperty_(ss, asOfDate, findings);
-  var income = readCapitalAllocationIncome_(ss, findings, property);
-  var debts = readCapitalAllocationDebts_(ss, findings);
-  var assetFoundation = readCapitalAllocationAssetFoundation_(ss);
-  var incomeProducingAccounts = readCapitalAllocationInvestments_(ss, assetFoundation);
-  var obligationResult = readCapitalAllocationObligations_(
-    ss, asOfDate, findings, incomeProducingAccounts);
-  var recurringInvestmentContributions = readCapitalAllocationRecurringInvestmentContributions_(
-    ss, incomeProducingAccounts);
-  var forecast90 = readCapitalAllocationForecast90_(ss, asOfDate, findings, {
-    currentRequired: obligationResult.required,
-    debts: debts,
-    income: income,
-    property: property,
-    incomeProducingAccounts: incomeProducingAccounts
-  });
-  return {
-    asOfDate: capitalAllocationIso_(asOfDate),
-    liquidity: readCapitalAllocationLiquidity_(ss, findings),
-    income: income,
-    debts: debts,
-    obligations: obligationResult.required,
-    existingInvestmentContributions: obligationResult.investmentContributions,
-    recurringInvestmentContributions: recurringInvestmentContributions,
-    property: property,
-    incomeProducingAccounts: incomeProducingAccounts,
-    brokerageFoundation: readCapitalAllocationBrokerageFoundation_(assetFoundation),
-    forecast90: forecast90,
-    dataQuality: findings
-  };
+  // The established Bills occurrence reader checks durable bill_paid,
+  // bill_skip, and bill_autopay keys for every candidate occurrence. Its normal
+  // dashboard wrapper activates a one-read Activity Log key index, but this
+  // Planning RPC calls the reader through the explicit-workbook seam. Activate
+  // the same request-scoped index here so a plan never rereads the complete
+  // dedupe-key column once per occurrence. This caches only immutable keys for
+  // this server execution; no financial result or workbook value is cached.
+  var ownsDedupeCache = !__billsDueDedupeCache_;
+  if (ownsDedupeCache) __billsDueDedupeCache_ = { keys: null };
+  try {
+    var findings = [];
+    var property = readCapitalAllocationProperty_(ss, asOfDate, findings);
+    var income = readCapitalAllocationIncome_(ss, findings, property);
+    var debts = readCapitalAllocationDebts_(ss, findings);
+    var assetFoundation = readCapitalAllocationAssetFoundation_(ss);
+    var incomeProducingAccounts = readCapitalAllocationInvestments_(ss, assetFoundation);
+    var obligationResult = readCapitalAllocationObligations_(
+      ss, asOfDate, findings, incomeProducingAccounts);
+    var recurringInvestmentContributions = readCapitalAllocationRecurringInvestmentContributions_(
+      ss, incomeProducingAccounts);
+    var forecast90 = readCapitalAllocationForecast90_(ss, asOfDate, findings, {
+      currentRequired: obligationResult.required,
+      debts: debts,
+      income: income,
+      property: property,
+      incomeProducingAccounts: incomeProducingAccounts
+    });
+    return {
+      asOfDate: capitalAllocationIso_(asOfDate),
+      liquidity: readCapitalAllocationLiquidity_(ss, findings),
+      income: income,
+      debts: debts,
+      obligations: obligationResult.required,
+      existingInvestmentContributions: obligationResult.investmentContributions,
+      recurringInvestmentContributions: recurringInvestmentContributions,
+      property: property,
+      incomeProducingAccounts: incomeProducingAccounts,
+      brokerageFoundation: readCapitalAllocationBrokerageFoundation_(assetFoundation),
+      forecast90: forecast90,
+      dataQuality: findings
+    };
+  } finally {
+    if (ownsDedupeCache) __billsDueDedupeCache_ = null;
+  }
 }
 
 function readCapitalAllocationRecurringInvestmentContributions_(ss, incomeProducingAccounts) {

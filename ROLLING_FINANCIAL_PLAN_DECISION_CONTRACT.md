@@ -67,9 +67,9 @@ RFP-3b adds a deterministic weekly allocation kernel and an integrated,
 read-only **This Week** experience under Planning. This Week is the default
 Start Here view, with Next Actions retained under Do now beside Rolling Debt
 Payoff. Its visible V1 order is:
-required household actions; a rolling 90-day operating reserve; the normal
-$500 weekly Samer Robinhood investment policy unless an emergency override is
-active; account-buffer
+required household actions; a rolling 90-day operating reserve; the user-defined
+$500 weekly Samer Robinhood `POLICY_FLOOR` unless an explicit liquidity or
+solvency override is active; account-buffer
 restoration; serial extra principal by descending APR; confirmed account-scoped
 Income-Producing funding pace; then explicitly held cash. Every active positive-balance debt remains visible even
 when it receives $0 this week.
@@ -105,19 +105,33 @@ input.
 
 The twelve normal-policy Robinhood contributions remain disclosed separately
 in the forecast. They do not inflate the solvency floor and may be temporarily
-paused when the emergency-liquidity rule is active. The monthly card aggregates only the actions in the current weekly ledger and
+paused only when required bills/debt minimums cannot be covered, projected cash
+would be negative, the hard operating floor would be breached, or an explicitly
+configured emergency is active. Higher APR alone is not an override. The monthly
+card aggregates only the actions in the current weekly ledger and
 is labeled `CURRENT_WEEK_ONLY`; it does not fabricate future paydays or income.
 The plan writes no recommendation, transfer, payment, trade, Cash Flow value,
 or Activity row. It is part of the same common dashboard source and requires no
 alternate URL or feature-specific deployment.
 
+Every current action carries recommendation state `PROPOSED`. Any calculated
+debt reduction, released minimum payment, interest benefit, or next-period
+allocation remains `AWAITING_CONFIRMATION` until refreshed authoritative
+workbook balances reflect the action. `CONFIRMED` is reserved for observed
+facts, and `SUPERSEDED` for an older proposal replaced by a newer plan. The
+read-only V1 does not persist a recommendation history or infer completion from
+the proposal itself. Its conditional next plan reranks Robinhood, the highest
+remaining debt, and additional liquidity only after the refresh boundary.
+
 Recurring investment contributions are not household Bills. Samer Robinhood's
-$500 weekly amount is a normal standing investment-policy minimum, not a
-solvency obligation. A scheduled Robinhood contribution fulfills it rather than
-creating a duplicate. The safety override may recommend a temporary $0 when
-funding would violate the operating floor, a required payment is missed, or a
-critical revolving-debt rule is active. Every override remains visible with its
-reason. Policy precedence is ownership/hard exclusion, then Use Policy, account
+$500 weekly amount is a distinct user-defined `POLICY_FLOOR`, not an ordinary
+bill or optional acceleration. A scheduled Robinhood contribution fulfills it
+rather than creating a duplicate. The optimizer compares only amounts above the
+floor against optional uses unless the explicit liquidity/solvency override
+applies. Every override remains visible with the exact violated constraint.
+Policy output separates `policy_floor`, `optional_acceleration`,
+`scheduled_amount`, and `recommended_amount`. Policy precedence is
+ownership/hard exclusion, then Use Policy, account
 buffer, Planning Role, and finally optimizer recommendation.
 
 Delivery 1 also distinguishes three M1 decisions: stop or redirect future
@@ -127,21 +141,26 @@ recommendations return `TAX_DATA_REQUIRED` until security, account, quantity,
 market value, basis, tax lots, holding period, unrealized gain/loss, and planning
 status are available. No transfer, sale, or funding change is executed.
 
-The Capital Source Ladder lists current eligible cash, forecast free cash flow,
-optional contribution redirects, and blocked brokerage sources. The optimizer
+Eligible Cash Sources audits every current account's recorded balance, Use
+Policy, minimum protected buffer, optimizer-eligible amount, Planning Role, and
+inclusion status. An eligible positive-balance account with a $0 buffer is
+prominently warned because its full balance is otherwise deployable; it is not
+silently protected or reclassified from its name. Other capital decisions list
+forecast free cash flow, optional contribution redirects, and blocked brokerage sources. The optimizer
 maximizes sustainable household after-tax net worth, free cash flow, and passive
-income rather than a brokerage balance. After every action, it recomputes the
-next dollar; a fully paid debt releases its former monthly minimum into future
-allocatable cash.
+income rather than a brokerage balance. A proposed full payoff projects its
+former monthly minimum into future allocatable cash, but that release remains
+awaiting confirmation until refreshed balances show the debt at $0.
 
-Pre-commit correction contract: Samer Ally is eligible only after its recorded
+Part 1 freeze contract: Samer Ally is eligible only after its recorded
 Use Policy permits use above its minimum buffer; a conflicting `DO_NOT_TOUCH`
 value blocks discretionary allocation and directs the user to the Bank Manage
 screen rather than being silently overridden. Children-owned Ally accounts stay
-hard-excluded. The emergency-override result exposes its exact trigger, required
-reserve, projected protected cash, and reserve surplus; a critical-debt trigger
-does not masquerade as a reserve shortfall, so the next dollar still targets the
-highest critical APR when the reserve is fully protected. Planned property
+hard-excluded. The policy-floor override exposes its exact liquidity or solvency
+constraint, required reserve, projected protected cash, and reserve surplus.
+APR by itself is never an override; after the floor and reserve are protected,
+all revolving balances rank from highest APR to lowest without a rate cutoff.
+Planned property
 repairs may offset overlapping history but cannot reduce unknown-property
 contingency below 25% of the trailing 90-day irregular allowance. Brokerage
 source rows carry their SYS - Assets row and stable-ID status; retirement and
@@ -259,10 +278,12 @@ amount carries its source, as-of month, coverage, and actual/forecast label.
    required cash out.
 3. **Protected cash** — apply ownership/hard exclusions, `DO_NOT_TOUCH`, account
    minimum buffers, and the 90-day operating floor before optimizer choices.
-4. **Normal Samer Robinhood policy** — allocate $500 every week when the safety
-   override is inactive. A scheduled contribution satisfies this action once;
-   it is never also counted as a Bill. When the override is active, show a
-   visible $0 safety pause and its exact reason.
+4. **Samer Robinhood policy floor** — allocate $500 every week unless an exact
+   liquidity or solvency constraint requires an override. Higher APR alone does
+   not qualify. Record the floor, scheduled amount, recommended amount, and any
+   optional acceleration separately. A scheduled contribution satisfies this
+   action once; it is never also counted as a Bill. When the override is active,
+   show the recommended $0 and the exact violated constraint.
 5. **Complete debt plan** — include every active debt with a remaining balance,
    preserve its required minimum/scheduled payment, and reuse Rolling Debt
    Payoff's serial extra-payment ordering. Higher APR generally ranks before
@@ -283,6 +304,34 @@ amount carries its source, as-of month, coverage, and actual/forecast label.
    timeline for every remaining debt alongside Samer Robinhood funding. Lower
    rates may receive extra principal later than higher rates, but they remain in
    the plan until their balances reach zero.
+
+Term-loan comparisons use a disclosed, configurable expected investment-return
+range and base assumption. Revolving debt inclusion never depends on that
+assumption. Debt payoff is represented as near-guaranteed avoided cost subject
+to actual terms; investment return remains uncertain. The assumption is an
+auditable input, not a hidden APR classification or terminal target.
+
+### Capital Deployment Pace
+
+The hard operating floor and preferred liquidity target are distinct. Under the
+default `BALANCED` preference, the preferred target is the held hard floor plus
+the maximum of: one normalized month of 90-day forecast operating outflows,
+total monthly minimum payments for active positive-balance debts, or one
+normalized month of property contingency. Explicit configured cushions for
+income stability, cash-flow volatility, and other known events are then added.
+No fixed share of debt or cash is used. `LIQUIDITY_FIRST` adds the larger of
+monthly debt service or property risk to the Balanced derived cushion.
+`AGGRESSIVE_DEBT_REDUCTION` uses the larger of the largest single debt minimum
+or property risk, but the hard floor remains inviolable.
+
+Only capital above the preferred target, further capped by remaining period
+capacity after confirmed and awaiting-confirmation deployment, enters the
+existing ranked waterfall. Unchanged facts in the same Monday-based week retain
+one deterministic proposal identity. This Part 1 contract carries state and
+tracking seams but does not add a persistent recommendation ledger; without
+authoritative period totals the result is explicitly snapshot-idempotent rather
+than proof of cross-device completion. Cash-source yield comparison remains
+`CASH_YIELD_DATA_REQUIRED`.
 
 This is advice only. No step initiates a transfer, security trade, sale, debt
 payment, or Cash Flow posting.
