@@ -74,11 +74,17 @@ assert.match(client, /episodic bill/);
 assert.match(client, /Scheduled categories[\s\S]*?are excluded here because Bills, debt minimums, or Upcoming expenses already own them/);
 assert.match(client, /Cash available now[\s\S]*?Cash remaining after this plan[\s\S]*?Reserved for the next 90 days[\s\S]*?Liquidity above the hard floor/);
 assert.match(client, /Recommended deployment this period[\s\S]*?Preferred liquidity target[\s\S]*?Accelerated deployment[\s\S]*?Intentionally retained liquidity/);
-assert.match(client, /Your decision this week/);
-assert.match(client, /Robinhood policy floor/);
-assert.match(client, /Recommended Robinhood funding/);
-assert.match(client, /Optional Robinhood acceleration/);
-assert.match(client, /Why aren&rsquo;t we investing more this week/);
+assert.match(client, /Your plan this week/);
+assert.match(client, /Pay down debt/);
+assert.match(client, /Keep in cash/);
+assert.match(client, /Pause for now/);
+assert.match(client, /Why this plan\?/);
+assert.match(client, /scheduledAmount/);
+assert.match(client, /capitalAllocationContributionPeriodLabel_/);
+const primaryRenderer = client.slice(client.indexOf('function capitalAllocationPrimaryDecisionHtml_'),
+  client.indexOf('function capitalAllocationDecisionHtml_'));
+assert.doesNotMatch(primaryRenderer, /Robinhood policy floor|Scheduled Robinhood amount|Recommended Robinhood funding|Optional Robinhood acceleration|Optional investing redirected|Why aren&rsquo;t we investing more/,
+  'implementation concepts must stay out of the primary customer card');
 assert.match(client, /Plan at a glance/);
 assert.match(client, /Bills & scheduled commitments/);
 assert.match(client, /Extra debt payments/);
@@ -274,8 +280,12 @@ planFacts.forecast90 = {
   requiredReserveAmount: 2000
 };
 planFacts.existingInvestmentContributions = [{ name: 'Robinhood', amount: 500,
+  scheduledAmount: 500, frequency: 'weekly',
   matchedInvestmentId: 'INV-1', matchedAccountName: 'Samer Robinhood' },
-  { name: 'M1 Investment', amount: 600, matchedInvestmentId: '', matchedAccountName: '' }];
+  { name: 'M1 Investment', amount: 600, scheduledAmount: 600, frequency: 'weekly',
+    matchedInvestmentId: '', matchedAccountName: '' },
+  { name: 'Stash', amount: 3.46, scheduledAmount: 15, frequency: 'monthly',
+    matchedInvestmentId: '', matchedAccountName: '' }];
 planFacts.brokerageFoundation = [{ investmentId: 'INV-M1', accountName: 'M1 Account',
   currentBalance: 50000, inKindTransferStatus: 'REVIEW_COMPATIBILITY',
   salePlanningStatus: 'TAX_DATA_REQUIRED', actionableSource: true,
@@ -321,12 +331,38 @@ assert.equal(plan.monthlyOutlook.totals.incomeProducingFunding, 500);
 assert.equal(plan.existingInvestmentContributions[0].amount, 500);
 assert.equal(plan.contributionStrategy.recommendation, 'REDIRECT_OPTIONAL_CONTRIBUTIONS_TO_DEBT');
 assert.equal(plan.contributionStrategy.recommendationState, 'PROPOSED');
-assert.equal(plan.contributionStrategy.redirectedWeekly, 600);
+assert.equal(plan.contributionStrategy.redirectedWeekly, 603.46);
 assert.equal(plan.investmentPolicy.policyType, 'POLICY_FLOOR');
 assert.equal(plan.investmentPolicy.policyFloor, 500);
 assert.equal(plan.investmentPolicy.scheduledAmount, 500);
 assert.equal(plan.investmentPolicy.recommendedAmount, 500);
 assert.equal(plan.investmentPolicy.optionalAcceleration, 0);
+
+const clientContext = { console, document: { getElementById() { return null; } } };
+vm.createContext(clientContext);
+vm.runInContext(client, clientContext, { filename: 'Dashboard_Script_PlanningCapitalAllocation.html' });
+const primaryDecision = clientContext.capitalAllocationPrimaryDecisionModel_(plan);
+const detailedRevolvingPayment = plan.afterAction.debts
+  .filter(row => row.isRevolving && Number(row.proposedPayment || 0) > 0)
+  .reduce((sum, row) => sum + Number(row.proposedPayment || 0), 0);
+assert.equal(primaryDecision.investAmount, plan.investmentPolicy.recommendedAmount,
+  'the simplified Invest value must use the approved detailed recommendation');
+assert.equal(primaryDecision.debtAmount, detailedRevolvingPayment,
+  'the simplified debt value must reconcile to the detailed revolving actions');
+assert.equal(primaryDecision.cashAmount, plan.summary.endingCash,
+  'the simplified cash value must use the detailed ending-cash result');
+assert.deepEqual(Array.from(primaryDecision.pausedContributions, row =>
+  [row.displayName, row.scheduledAmount, row.frequency]), [
+  ['M1', 600, 'weekly'], ['Stash', 15, 'monthly']
+], 'paused schedules must remain separate and use their native units');
+const primaryHtml = clientContext.capitalAllocationPrimaryDecisionHtml_(plan);
+assert.match(primaryHtml, /<span>Invest<\/span><strong>\$500\.00<\/strong>/);
+assert.match(primaryHtml, /<span>Pay down debt<\/span><strong>\$1,900\.00<\/strong>/);
+assert.match(primaryHtml, /<span>Keep in cash<\/span><strong>\$3,200\.00<\/strong>/);
+assert.match(primaryHtml, />M1<[\s\S]*?Pause \$600\.00\/week/);
+assert.match(primaryHtml, /Stash[\s\S]*?Pause \$15\.00\/month/);
+assert.doesNotMatch(primaryHtml, /\$603\.46 per week|policy floor|optional acceleration|normalized contribution|deployment budget|economic comparator|AWAITING_CONFIRMATION/i,
+  'the primary card must not expose normalized or internal allocation terminology');
 assert.equal(plan.economicAssumptions.investmentComparison.source, 'DEFAULT_PLANNING_ASSUMPTION');
 assert.equal(plan.capitalSourceLadder.steps.some(row =>
   row.sourceType === 'PAUSE_OR_REDIRECT_FUTURE_CONTRIBUTION' && row.sourceName === 'M1 Investment'), true);

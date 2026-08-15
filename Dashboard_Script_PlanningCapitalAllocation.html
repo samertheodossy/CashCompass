@@ -129,61 +129,108 @@ function capitalAllocationDeploymentPaceHtml_(pace) {
 }
 
 function capitalAllocationPrimaryDecisionHtml_(plan) {
-  var summary = plan.summary || {};
-  var after = plan.afterAction || {};
-  var strategy = plan.contributionStrategy || {};
+  var decision = capitalAllocationPrimaryDecisionModel_(plan);
   var investmentPolicy = plan.investmentPolicy || {};
-  var revolving = (after.debts || []).filter(function(row) {
-    return row.isRevolving && Number(row.proposedPayment || 0) > 0;
-  });
-  var revolvingPayment = revolving.reduce(function(sum, row) {
-    return sum + Number(row.proposedPayment || 0);
-  }, 0);
-  var allRevolvingCleared = revolving.length && revolving.every(function(row) {
-    return Number(row.projectedEndingBalance || 0) <= 0.005;
-  });
-  var cardRows = revolving.map(function(row) {
+  var debtRows = decision.debtActions.map(function(row) {
     return '<div class="capital-allocation-compact-action"><div><strong>' +
-      escapeCapitalAllocationHtml_(row.name) + '</strong><div class="capital-allocation-card-reason">Avoid ' +
+      escapeCapitalAllocationHtml_(row.displayName) + '</strong><div class="capital-allocation-card-reason">Avoid ' +
       escapeCapitalAllocationHtml_(Number(row.apr || 0).toFixed(2)) + '% interest</div></div><strong>' +
-      formatCapitalAllocationMoney_(row.proposedPayment) + '</strong></div>';
+      formatCapitalAllocationMoney_(row.amount) + '</strong></div>';
   }).join('');
-  var headline = revolvingPayment > 0
-    ? (allRevolvingCleared ? 'Pay off ' : 'Pay ') + formatCapitalAllocationMoney_(revolvingPayment) +
-      ' of credit-card debt this week.'
+  var actionDebtRows = decision.debtActions.map(function(row) {
+    return '<div class="capital-allocation-primary-action-row"><span>' +
+      escapeCapitalAllocationHtml_(row.displayName) + '</span><strong>' +
+      formatCapitalAllocationMoney_(row.amount) + '</strong></div>';
+  }).join('');
+  var pausedRows = decision.pausedContributions.map(function(row) {
+    return '<div class="capital-allocation-primary-action-row"><span>' +
+      escapeCapitalAllocationHtml_(row.displayName) + '</span><strong>Pause ' +
+      formatCapitalAllocationMoney_(row.scheduledAmount) + '/' +
+      escapeCapitalAllocationHtml_(capitalAllocationContributionPeriodLabel_(row.frequency)) +
+      '</strong></div>';
+  }).join('');
+  var headline = decision.debtAmount > 0
+    ? 'Pay ' + formatCapitalAllocationMoney_(decision.debtAmount) +
+      ' toward your credit cards'
     : 'Follow this week&rsquo;s required payments and cash protections.';
   var overrideReasons = (investmentPolicy.overrideReasons || []).map(function(row) {
     return '<li>' + escapeCapitalAllocationHtml_(row.message || String(row)) + '</li>';
   }).join('');
-  var robinhoodSentence = investmentPolicy.overrideApplied
-    ? 'The Robinhood base contribution is temporarily overridden because a specific liquidity constraint is violated.'
-    : Number(investmentPolicy.optionalAcceleration || 0) > 0
-      ? 'The Robinhood base contribution continues, with additional acceleration recommended this week.'
-      : 'The Robinhood base contribution continues. No additional investment funding is recommended this week.';
-  return '<section class="capital-allocation-decision-hero"><div class="capital-allocation-preview-kicker">Your decision this week</div>' +
+  var robinhoodSentence = decision.investmentPaused
+    ? 'Pause your regular Robinhood investment this week while the highlighted cash constraint is active.'
+    : 'Keep your regular ' + formatCapitalAllocationMoney_(decision.investAmount) +
+      ' Robinhood investment this week.';
+  return '<section class="capital-allocation-decision-hero"><div class="capital-allocation-preview-kicker">Your plan this week</div>' +
     '<h3>' + headline + '</h3><p>' + robinhoodSentence + '</p>' +
-    (overrideReasons ? '<div class="capital-allocation-policy-override"><strong>Why the policy floor is overridden</strong><ul>' +
+    (overrideReasons ? '<div class="capital-allocation-policy-override"><strong>Why Robinhood is paused this week</strong><ul>' +
       overrideReasons + '</ul></div>' : '') +
     '<div class="capital-allocation-decision-hero-points">' +
-    '<div><span>Robinhood policy floor</span><strong>' +
-    formatCapitalAllocationMoney_(investmentPolicy.policyFloor) + ' per week</strong></div>' +
-    '<div><span>Scheduled Robinhood amount</span><strong>' +
-    formatCapitalAllocationMoney_(investmentPolicy.scheduledAmount) + ' this week</strong></div>' +
-    '<div><span>Recommended Robinhood funding</span><strong>' +
-    formatCapitalAllocationMoney_(investmentPolicy.recommendedAmount) + ' this week</strong></div>' +
-    '<div><span>Optional Robinhood acceleration</span><strong>' +
-    formatCapitalAllocationMoney_(investmentPolicy.optionalAcceleration) + ' this week</strong></div>' +
-    '<div><span>Optional investing redirected</span><strong>' +
-    formatCapitalAllocationMoney_(strategy.redirectedWeekly || 0) + ' per week</strong></div>' +
-    '<div><span>Projected cash still remaining</span><strong>' +
-    formatCapitalAllocationMoney_(summary.endingCash) + '</strong></div></div>' +
-    '<p class="capital-allocation-decision-next"><strong>After the proposed payments clear:</strong> Refresh CashCompass. It will confirm the balances, release minimum payments only when recorded at $0, and rerank the next dollar.</p>' +
-    (cardRows ? '<details class="capital-allocation-property-detail"><summary><strong>Why aren&rsquo;t we investing more this week?</strong>' +
+    '<div><span>Invest</span><strong>' + formatCapitalAllocationMoney_(decision.investAmount) + '</strong></div>' +
+    '<div><span>Pay down debt</span><strong>' + formatCapitalAllocationMoney_(decision.debtAmount) + '</strong></div>' +
+    '<div><span>Keep in cash</span><strong>' + formatCapitalAllocationMoney_(decision.cashAmount) + '</strong></div></div>' +
+    '<div class="capital-allocation-primary-actions">' +
+    '<section><div class="capital-allocation-preview-kicker">1. Invest</div>' +
+    '<div class="capital-allocation-primary-action-row"><span>Robinhood</span><strong>' +
+    (decision.investPaused ? 'Pause this week' : formatCapitalAllocationMoney_(decision.investAmount)) +
+    '</strong></div></section>' +
+    '<section><div class="capital-allocation-preview-kicker">2. Pay debt</div>' +
+    (actionDebtRows || '<p class="muted">No extra credit-card payment is recommended this week.</p>') + '</section>' +
+    '<section><div class="capital-allocation-preview-kicker">3. Keep in cash</div>' +
+    '<div class="capital-allocation-primary-action-row"><span>Available after this plan</span><strong>' +
+    formatCapitalAllocationMoney_(decision.cashAmount) + '</strong></div>' +
+    '<p>Cash Compass is intentionally keeping this money available instead of using all available cash for debt.</p></section>' +
+    (pausedRows ? '<section class="capital-allocation-primary-pause"><div class="capital-allocation-preview-kicker">Pause for now</div>' +
+      pausedRows + '</section>' : '') + '</div>' +
+    '<p class="capital-allocation-decision-next"><strong>After these payments clear:</strong> Refresh Cash Compass. We&rsquo;ll use the updated balances to decide what your next available dollar should do.</p>' +
+    '<details class="capital-allocation-property-detail"><summary><strong>Why this plan?</strong>' +
       '<span class="capital-allocation-expand-label">Compare choices</span></summary>' +
-      '<div class="capital-allocation-group-items">' + cardRows +
+      '<div class="capital-allocation-group-items">' + debtRows +
       '<div class="capital-allocation-compact-action"><div><strong>Additional investing</strong>' +
-      '<div class="capital-allocation-card-reason">Future investment returns are uncertain; the listed revolving APRs are costs CashCompass can avoid. APR labels do not control the sequence.</div></div><strong>Wait</strong></div></div></details>' : '') +
+      '<div class="capital-allocation-card-reason">Future investment returns are uncertain; the listed revolving APRs are costs CashCompass can avoid. APR labels do not control the sequence.</div></div><strong>Wait</strong></div>' +
+      '<div class="capital-allocation-compact-action"><div><strong>Cash kept available</strong>' +
+      '<div class="capital-allocation-card-reason">Your Balanced cash strategy intentionally preserves liquidity above the hard operating floor.</div></div><strong>' +
+      formatCapitalAllocationMoney_(decision.cashAmount) + '</strong></div></div></details>' +
     '</section>';
+}
+
+function capitalAllocationPrimaryDecisionModel_(plan) {
+  var summary = plan && plan.summary || {};
+  var after = plan && plan.afterAction || {};
+  var strategy = plan && plan.contributionStrategy || {};
+  var investmentPolicy = plan && plan.investmentPolicy || {};
+  var debtActions = (after.debts || []).filter(function(row) {
+    return row.isRevolving && Number(row.proposedPayment || 0) > 0;
+  }).map(function(row) {
+    return { name: row.name, displayName: capitalAllocationCustomerActionName_(row.name),
+      amount: Number(row.proposedPayment || 0), apr: Number(row.apr || 0) };
+  });
+  var pauseOptional = strategy.recommendation === 'REDIRECT_OPTIONAL_CONTRIBUTIONS_TO_DEBT' ||
+    strategy.recommendation === 'HOLD_OPTIONAL_DURING_POLICY_OVERRIDE';
+  var pausedContributions = pauseOptional ? (strategy.sourceContributions || []).map(function(row) {
+    return { name: row.name, displayName: capitalAllocationCustomerActionName_(row.name),
+      scheduledAmount: Number(row.scheduledAmount || row.amount || 0),
+      frequency: row.frequency || 'monthly' };
+  }) : [];
+  return {
+    investAmount: Number(investmentPolicy.recommendedAmount != null
+      ? investmentPolicy.recommendedAmount : summary.standingInvestmentFunded || 0),
+    debtAmount: debtActions.reduce(function(sum, row) { return sum + row.amount; }, 0),
+    cashAmount: Number(summary.endingCash || 0),
+    debtActions: debtActions,
+    pausedContributions: pausedContributions,
+    investmentPaused: !!investmentPolicy.overrideApplied
+  };
+}
+
+function capitalAllocationCustomerActionName_(name) {
+  var value = String(name || '').trim().replace(/^Credit Card\s*-\s*/i, '');
+  return /^M1 Investment$/i.test(value) ? 'M1' : value;
+}
+
+function capitalAllocationContributionPeriodLabel_(frequency) {
+  var labels = { weekly: 'week', biweekly: 'two weeks', monthly: 'month',
+    bimonthly: 'two months', quarterly: 'quarter', semi_annually: 'six months', yearly: 'year' };
+  return labels[String(frequency || '').toLowerCase()] || 'month';
 }
 
 function capitalAllocationDecisionHtml_(plan) {
