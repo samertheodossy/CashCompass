@@ -3682,7 +3682,7 @@ function renderBankImportCsvPasteTable_(parseResult) {
     '<th style="text-align:right;padding:4px 6px;">balance</th>' +
     '<th style="text-align:left;padding:4px 6px;">balanceAsOf</th>' +
     '<th style="text-align:left;padding:4px 6px;">currency</th>' +
-    '<th style="text-align:left;padding:4px 6px;">externalAccountId</th>' +
+    '<th style="text-align:left;padding:4px 6px;">account identifier</th>' +
     '<th style="text-align:left;padding:4px 6px;">notes</th>' +
     '</tr></thead><tbody>';
   for (let i = 0; i < allRows.length; i++) {
@@ -3692,7 +3692,8 @@ function renderBankImportCsvPasteTable_(parseResult) {
       ? escapeHtml(fmtCurrency(r.raw.balance))
       : (r.raw && r.raw.balanceRaw != null ? escapeHtml(String(r.raw.balanceRaw)) : '');
     const ext = r.raw && r.raw.externalAccountId ? String(r.raw.externalAccountId) : '';
-    const extDisplay = ext.length > 14 ? escapeHtml(ext.slice(0, 12)) + '…' : escapeHtml(ext);
+    const suppliedLast4 = r.raw && r.raw.last4 ? String(r.raw.last4).replace(/\D/g, '').slice(-4) : '';
+    const extDisplay = ext ? (suppliedLast4 ? '••••' + escapeHtml(suppliedLast4) : 'Provided') : '';
     const currencyDisplay = r.raw && r.raw.currency
       ? escapeHtml(r.raw.currency)
       : '<span class="muted">(blank)</span>';

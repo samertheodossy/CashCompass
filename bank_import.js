@@ -406,7 +406,8 @@ function bankImportProcessSingleRow_(ss, rawRow, rowIndex, ignoredEntries, sourc
   }
 
   // 3) Lookup against SYS - Accounts.External Account Id.
-  var lookup = bankImportLookupAccountByExternalId_(ss, normalized.externalAccountId);
+  var lookup = bankImportLookupAccountByExternalId_(
+    ss, normalized.externalAccountId, normalized.institution);
   if (lookup.matches.length === 0) {
     return bankImportRouteToPending_(
       ss, normalized, BANK_IMPORT_PENDING_REASONS.NO_EXACT_ID_MATCH, rowIndex, source
@@ -441,7 +442,8 @@ function bankImportProcessSingleRow_(ss, rawRow, rowIndex, ignoredEntries, sourc
   var fingerprint = bankImportFingerprint_(
     normalized.externalAccountId,
     normalized.balance,
-    normalized.balanceAsOf
+    normalized.balanceAsOf,
+    normalized.institution
   );
   if (activityLogDedupeKeyExists_(ss, fingerprint)) {
     return {
@@ -565,12 +567,12 @@ function bankImportLoadIgnoredEntries_(ss) {
     // not consulted yet, even though the column exists for future use.
     if (scope !== 'permanent') continue;
 
+    var inst = idxInst === -1 ? '' : row[idxInst];
     var extId = idxExtId === -1 ? '' : String(row[idxExtId] || '').trim();
     if (extId) {
-      byExternalId[extId] = { scope: scope };
+      byExternalId[bankImportProtectedExternalId_(extId, inst)] = { scope: scope };
     }
 
-    var inst = idxInst === -1 ? '' : row[idxInst];
     var disp = idxDisplay === -1 ? '' : row[idxDisplay];
     var last4 = idxLast4 === -1 ? '' : row[idxLast4];
     var composite = bankImportCompositeIgnoredKey_(inst, disp, last4);
@@ -583,11 +585,34 @@ function bankImportLoadIgnoredEntries_(ss) {
   return { byExternalId: byExternalId, byComposite: byComposite };
 }
 
+function bankImportProtectedExternalId_(externalAccountId, sourceSystem) {
+  var raw = String(externalAccountId || '').trim();
+  if (!raw) return '';
+  return financialIdentitySourceAccountKey_(sourceSystem || 'BANK_IMPORT', raw);
+}
+
+function bankImportExternalIdsEqual_(left, right, sourceSystem) {
+  if (!left || !right) return false;
+  return bankImportProtectedExternalId_(left, sourceSystem) ===
+    bankImportProtectedExternalId_(right, sourceSystem);
+}
+
+function bankImportProtectedRecord_(normalized) {
+  var copy = {};
+  Object.keys(normalized || {}).forEach(function(key) { copy[key] = normalized[key]; });
+  copy.externalAccountId = bankImportProtectedExternalId_(
+    normalized && normalized.externalAccountId,
+    normalized && normalized.institution
+  );
+  return copy;
+}
+
 function bankImportMatchIgnored_(ignoredEntries, normalized) {
-  if (normalized.externalAccountId && ignoredEntries.byExternalId[normalized.externalAccountId]) {
+  var protectedId = bankImportProtectedExternalId_(normalized.externalAccountId, normalized.institution);
+  if (protectedId && ignoredEntries.byExternalId[protectedId]) {
     return {
       matchType: 'external_id',
-      scope: ignoredEntries.byExternalId[normalized.externalAccountId].scope
+      scope: ignoredEntries.byExternalId[protectedId].scope
     };
   }
   var composite = bankImportCompositeIgnoredKey_(
@@ -610,7 +635,7 @@ function bankImportMatchIgnored_(ignoredEntries, normalized) {
  * so the caller can distinguish ambiguous / inactive / single-match
  * cases. Blank cells never match.
  */
-function bankImportLookupAccountByExternalId_(ss, externalAccountId) {
+function bankImportLookupAccountByExternalId_(ss, externalAccountId, sourceSystem) {
   var sheet = ss.getSheetByName(getSheetNames_().ACCOUNTS);
   if (!sheet) return { matches: [] };
 
@@ -629,7 +654,7 @@ function bankImportLookupAccountByExternalId_(ss, externalAccountId) {
   for (var r = 1; r < display.length; r++) {
     var rowExt = String(display[r][idxExt] || '').trim();
     if (!rowExt) continue;
-    if (rowExt !== externalAccountId) continue;
+    if (!bankImportExternalIdsEqual_(rowExt, externalAccountId, sourceSystem)) continue;
 
     var name = String(display[r][idxName] || '').trim();
     if (!name) continue;
@@ -683,12 +708,12 @@ function bankImportIsStaleBalance_(balanceAsOfDate) {
   return ageDays > BANK_IMPORT_STALE_BALANCE_DAYS;
 }
 
-function bankImportFingerprint_(externalAccountId, balance, balanceAsOf) {
+function bankImportFingerprint_(externalAccountId, balance, balanceAsOf, sourceSystem) {
   var ym = String(balanceAsOf || '').slice(0, 7); // YYYY-MM
   var balStr = round2_(toNumber_(balance)).toFixed(2);
   return (
     'bank_import::' +
-    String(externalAccountId || '').trim() + '::' +
+    bankImportProtectedExternalId_(externalAccountId, sourceSystem) + '::' +
     ym + '::' +
     balStr + '::' +
     String(balanceAsOf || '').trim()
@@ -704,7 +729,8 @@ function bankImportFingerprint_(externalAccountId, balance, balanceAsOf) {
  */
 function bankImportStagingId_(normalized) {
   if (normalized.externalAccountId) {
-    return normalized.externalAccountId + '::' + normalized.balanceAsOf;
+    return bankImportProtectedExternalId_(normalized.externalAccountId, normalized.institution) +
+      '::' + normalized.balanceAsOf;
   }
   return (
     'composite::' +
@@ -722,8 +748,9 @@ function bankImportStagingId_(normalized) {
  */
 function bankImportRouteToPending_(ss, normalized, reason, rowIndex, source) {
   var stagingId = bankImportStagingId_(normalized);
-  var upsert = bankImportUpsertPendingStagingRow_(ss, normalized, reason, stagingId);
-  bankImportLogActivity_(ss, BANK_IMPORT_EVENT_PENDING, normalized, '', {
+  var protectedRecord = bankImportProtectedRecord_(normalized);
+  var upsert = bankImportUpsertPendingStagingRow_(ss, protectedRecord, reason, stagingId);
+  bankImportLogActivity_(ss, BANK_IMPORT_EVENT_PENDING, protectedRecord, '', {
     rowIndex: rowIndex,
     pendingReason: reason,
     stagingId: stagingId,
@@ -836,7 +863,10 @@ function bankImportLogActivity_(ss, eventType, normalized, dedupeKey, extraDetai
       bankImportStep: '2a'
     };
     if (normalized) {
-      details.externalAccountId = normalized.externalAccountId || '';
+      details.externalAccountKey = bankImportProtectedExternalId_(
+        normalized.externalAccountId, normalized.institution);
+      details.maskedIdentifier = financialIdentityMaskIdentifier_(
+        normalized.externalAccountId, normalized.last4);
       details.institution = normalized.institution || '';
       details.displayName = normalized.displayName || '';
       details.last4 = normalized.last4 || '';
@@ -1078,7 +1108,8 @@ function addStagedBankAccountAsNew(payload) {
     // knows the link did not happen.
     var linkErr = null;
     try {
-      bankImportSetAccountExternalId_(accountsSheet, createdName, stagedRow.externalAccountId, false);
+      bankImportSetAccountExternalId_(accountsSheet, createdName, stagedRow.externalAccountId,
+        false, stagedRow.institution);
     } catch (e) {
       linkErr = e;
     }
@@ -1157,7 +1188,8 @@ function matchStagedBankAccountToExisting(payload) {
       throw new Error('Staged row has no external id; cannot match. Use Add as new instead.');
     }
 
-    bankImportSetAccountExternalId_(accountsSheet, accountName, stagedRow.externalAccountId, true);
+    bankImportSetAccountExternalId_(accountsSheet, accountName, stagedRow.externalAccountId,
+      true, stagedRow.institution);
 
     // Step 2d: link-only. Status flips to linked_matched (still
     // visible in Review imports) and the user must click Apply balance
@@ -1237,13 +1269,15 @@ function unlinkMatchedStagedBankAccount(payload) {
       throw new Error(BANK_IMPORT_UNMATCH_FRIENDLY_NO_TARGET_);
     }
 
-    var linkedAccount = bankImportFindAccountByExternalId_(accountsSheet, externalId);
+    var linkedAccount = bankImportFindAccountByExternalId_(
+      accountsSheet, externalId, stagedRow.institution);
     if (!linkedAccount) {
       throw new Error(BANK_IMPORT_UNMATCH_FRIENDLY_NO_TARGET_);
     }
 
     var clearedAccountName = linkedAccount.accountName;
-    bankImportClearAccountExternalId_(accountsSheet, clearedAccountName, externalId);
+    bankImportClearAccountExternalId_(
+      accountsSheet, clearedAccountName, externalId, stagedRow.institution);
 
     // Flip staging row back to pending with the canonical "no match"
     // reason. The row will re-render in Review imports as a vanilla
@@ -1421,7 +1455,8 @@ function applyStagedBankAccountBalance(payload) {
     if (!externalId) {
       throw new Error(BANK_IMPORT_APPLY_FRIENDLY_NOT_LINKED_);
     }
-    var linkedAccount = bankImportFindAccountByExternalId_(accountsSheet, externalId);
+    var linkedAccount = bankImportFindAccountByExternalId_(
+      accountsSheet, externalId, stagedRow.institution);
     if (!linkedAccount) {
       throw new Error(BANK_IMPORT_APPLY_FRIENDLY_LINK_LOST_);
     }
@@ -1469,7 +1504,8 @@ function applyStagedBankAccountBalance(payload) {
     }
 
     var newRaw = round2_(toNumber_(stagedRow.balance));
-    var fingerprint = bankImportFingerprint_(externalId, newRaw, balanceAsOfRaw);
+    var fingerprint = bankImportFingerprint_(
+      externalId, newRaw, balanceAsOfRaw, stagedRow.institution);
 
     // Actual write — same path Bank → Update uses, minus runDebtPlanner.
     bankImportApplyAutoMatchWrite_(linkedAccount.accountName, balanceAsOfDate, newRaw);
@@ -1627,7 +1663,7 @@ function bankImportEnsureInputRowForApply_(bankSheet, accountName, year) {
  * matches are inactive, the first inactive row is returned so the
  * caller can produce a precise inactive refusal.
  */
-function bankImportFindAccountByExternalId_(accountsSheet, externalAccountId) {
+function bankImportFindAccountByExternalId_(accountsSheet, externalAccountId, sourceSystem) {
   if (!accountsSheet) return null;
   var ext = String(externalAccountId || '').trim();
   if (!ext) return null;
@@ -1644,7 +1680,7 @@ function bankImportFindAccountByExternalId_(accountsSheet, externalAccountId) {
   var firstInactive = null;
   for (var r = 1; r < display.length; r++) {
     var rowExt = String(display[r][idxExt] || '').trim();
-    if (!rowExt || rowExt !== ext) continue;
+    if (!rowExt || !bankImportExternalIdsEqual_(rowExt, ext, sourceSystem)) continue;
     var name = String(display[r][idxName] || '').trim();
     if (!name) continue;
 
@@ -1681,7 +1717,10 @@ function bankImportLogApplyBalanceActivity_(ss, stagedRow, accountName, applyDet
       detailsVersion: 1,
       bankImportStep: '2d',
       stagingId: stagedRow.stagingId || '',
-      externalAccountId: stagedRow.externalAccountId || '',
+      externalAccountKey: bankImportProtectedExternalId_(
+        stagedRow.externalAccountId, stagedRow.institution),
+      maskedIdentifier: financialIdentityMaskIdentifier_(
+        stagedRow.externalAccountId, stagedRow.last4),
       institution: stagedRow.institution || '',
       displayName: stagedRow.displayName || '',
       last4: stagedRow.last4 || '',
@@ -1785,7 +1824,9 @@ function bankImportListPendingStagedRows_(ss, accountsSheetOpt) {
     var stagingId = String(row[idCol] || '').trim();
     if (!stagingId) continue;
 
-    var externalAccountId = extCol === -1 ? '' : String(row[extCol] || '').trim();
+    var institution = instCol === -1 ? '' : String(row[instCol] || '').trim();
+    var externalAccountId = extCol === -1 ? '' : bankImportProtectedExternalId_(
+      String(row[extCol] || '').trim(), institution);
     var pendingReason = reasonCol === -1 ? '' : String(row[reasonCol] || '').trim();
 
     // Resolve link state. Pending rows with an external id may already
@@ -1796,7 +1837,7 @@ function bankImportListPendingStagedRows_(ss, accountsSheetOpt) {
     var linked = null;
     if (externalAccountId && accountsSheet) {
       try {
-        linked = bankImportFindAccountByExternalId_(accountsSheet, externalAccountId);
+        linked = bankImportFindAccountByExternalId_(accountsSheet, externalAccountId, institution);
       } catch (_lookupErr) {
         linked = null;
       }
@@ -1836,7 +1877,7 @@ function bankImportListPendingStagedRows_(ss, accountsSheetOpt) {
       firstSeen: firstCol === -1 ? '' : String(row[firstCol] || '').trim(),
       lastSeen: lastSeenCol === -1 ? '' : String(row[lastSeenCol] || '').trim(),
       externalAccountId: externalAccountId,
-      institution: instCol === -1 ? '' : String(row[instCol] || '').trim(),
+      institution: institution,
       displayName: dispCol === -1 ? '' : String(row[dispCol] || '').trim(),
       last4: last4Col === -1 ? '' : String(row[last4Col] || '').trim(),
       type: typeCol === -1 ? '' : String(row[typeCol] || '').trim(),
@@ -1898,7 +1939,9 @@ function bankImportFindStagingRowByStagingId_(sheet, stagingId, headerMap) {
       stagingId: stagingId,
       firstSeen: firstCol === -1 ? '' : String(row[firstCol] || '').trim(),
       lastSeen: lastSeenCol === -1 ? '' : String(row[lastSeenCol] || '').trim(),
-      externalAccountId: extCol === -1 ? '' : String(row[extCol] || '').trim(),
+      externalAccountId: extCol === -1 ? '' : bankImportProtectedExternalId_(
+        String(row[extCol] || '').trim(),
+        instCol === -1 ? '' : String(row[instCol] || '').trim()),
       institution: instCol === -1 ? '' : String(row[instCol] || '').trim(),
       displayName: dispCol === -1 ? '' : String(row[dispCol] || '').trim(),
       last4: last4Col === -1 ? '' : String(row[last4Col] || '').trim(),
@@ -1947,7 +1990,7 @@ function bankImportListExistingAccountSummaries_(accountsSheet) {
       accountName: name,
       type: idxType === -1 ? '' : String(display[r][idxType] || '').trim(),
       hasExternalId: !!existingExt,
-      externalAccountId: existingExt
+      externalAccountId: existingExt ? '[linked]' : ''
     });
   }
   out.sort(function(a, b) { return a.accountName.localeCompare(b.accountName); });
@@ -1961,11 +2004,12 @@ function bankImportListExistingAccountSummaries_(accountsSheet) {
  * BANK_IMPORT_REVIEW_FRIENDLY_DIFFERENT_EXT_ID_ rather than overwriting.
  * Skips writing when the cell already holds the same value (idempotent).
  */
-function bankImportSetAccountExternalId_(accountsSheet, accountName, externalId, refuseIfDifferent) {
+function bankImportSetAccountExternalId_(accountsSheet, accountName, externalId,
+    refuseIfDifferent, sourceSystem) {
   if (!accountsSheet) throw new Error('Missing SYS - Accounts.');
   var nameTrim = String(accountName || '').trim();
   if (!nameTrim) throw new Error('Account name is required.');
-  var extTrim = String(externalId || '').trim();
+  var extTrim = bankImportProtectedExternalId_(externalId, sourceSystem);
   if (!extTrim) throw new Error('External Account Id is required.');
 
   var display = accountsSheet.getDataRange().getDisplayValues();
@@ -1978,7 +2022,7 @@ function bankImportSetAccountExternalId_(accountsSheet, accountName, externalId,
   for (var r = 1; r < display.length; r++) {
     if (String(display[r][idxName] || '').trim() !== nameTrim) continue;
     var existing = String(display[r][idxExt] || '').trim();
-    if (existing === extTrim) return; // already linked, no-op
+    if (existing && bankImportExternalIdsEqual_(existing, extTrim, sourceSystem)) return;
     if (existing && refuseIfDifferent) {
       throw new Error(BANK_IMPORT_REVIEW_FRIENDLY_DIFFERENT_EXT_ID_);
     }
@@ -1996,7 +2040,8 @@ function bankImportSetAccountExternalId_(accountsSheet, accountName, externalId,
  * stale Unlink click after the user manually re-linked the row to a
  * different external id can never blow that re-link away.
  */
-function bankImportClearAccountExternalId_(accountsSheet, accountName, expectedExternalId) {
+function bankImportClearAccountExternalId_(accountsSheet, accountName, expectedExternalId,
+    sourceSystem) {
   if (!accountsSheet) throw new Error('Missing SYS - Accounts.');
   var nameTrim = String(accountName || '').trim();
   if (!nameTrim) throw new Error('Account name is required.');
@@ -2013,7 +2058,7 @@ function bankImportClearAccountExternalId_(accountsSheet, accountName, expectedE
     if (String(display[r][idxName] || '').trim() !== nameTrim) continue;
     var existing = String(display[r][idxExt] || '').trim();
     if (!existing) return; // already blank, no-op
-    if (expected && existing !== expected) {
+    if (expected && !bankImportExternalIdsEqual_(existing, expected, sourceSystem)) {
       throw new Error(BANK_IMPORT_UNMATCH_FRIENDLY_NO_TARGET_);
     }
     accountsSheet.getRange(r + 1, idxExt + 1).setValue('');
@@ -2036,7 +2081,8 @@ function bankImportIgnoredEntryExists_(ignoredSheet, stagedRow) {
     var ext = idxExt === -1 ? '' : String(values[r][idxExt] || '').trim();
     var scope = idxScope === -1 ? '' : String(values[r][idxScope] || '').trim().toLowerCase();
     if (scope && scope !== 'permanent') continue;
-    if (stagedRow.externalAccountId && ext === stagedRow.externalAccountId) return true;
+    if (stagedRow.externalAccountId && bankImportExternalIdsEqual_(
+        ext, stagedRow.externalAccountId, stagedRow.institution)) return true;
   }
   return false;
 }
@@ -2075,7 +2121,10 @@ function bankImportLogReviewActivity_(ss, eventType, stagedRow, extraDetails) {
       detailsVersion: 1,
       bankImportStep: '2b',
       stagingId: stagedRow.stagingId || '',
-      externalAccountId: stagedRow.externalAccountId || '',
+      externalAccountKey: bankImportProtectedExternalId_(
+        stagedRow.externalAccountId, stagedRow.institution),
+      maskedIdentifier: financialIdentityMaskIdentifier_(
+        stagedRow.externalAccountId, stagedRow.last4),
       institution: stagedRow.institution || '',
       displayName: stagedRow.displayName || '',
       last4: stagedRow.last4 || '',

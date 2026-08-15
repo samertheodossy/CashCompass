@@ -85,6 +85,12 @@ function harnessSuiteScenarioTrash_(scenario, mode) {
 function getHarnessSuites_() {
   return [
     {
+      id: 'SUITE-PART-2A-STABLE-IDENTITY',
+      label: 'Part 2A Stable Financial Identity',
+      description: 'Validate the pure source-scoped identity matcher, rename survival, ambiguity refusal, owner separation, and masked identifiers on a marker-verified disposable workbook.',
+      scenarioIds: ['REGRESSION-PART-2A-FINANCIAL-IDENTITY']
+    },
+    {
       id: 'SUITE-RFP-CAPITAL-ALLOCATION-FOUNDATION',
       label: 'Capital Allocation Foundation',
       description: 'Validate deterministic read-only household facts, required constraints, and the unranked in-memory candidate queue before recommendation policy is enabled.',

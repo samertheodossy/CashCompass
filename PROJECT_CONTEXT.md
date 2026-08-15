@@ -26,6 +26,14 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
 
 **Current implementation priority (2026-08-14):** complete the core Rolling Financial Plan sequence, then resume `3o`, the product-consistency/shared-lifecycle wave. Debt, Bank Account, and Investment convergence are complete through isolated `@343`; shared changed-column fit `3p` is complete through `@341`. Houses, Income Sources, and Bills remain as separate guarded migrations. Each must expose counted inactive inventory and explicit Reactivate of the preserved existing identity; Houses and Income retain pending Edit/Rename convergence, and Bills must replace re-add-as-recovery with duplicate-safe reactivation. `5n` audits and reconciles latest-known Dashboard totals with exact-month ledger totals before any calculation-basis change. The broad `3j` accessibility closeout and operations/support/privacy `6a`–`6f` are deferred until this internal product pass is complete, not waived. Bill occurrence correction (`5j`) remains a separate later redesign. This priority change does not reopen the completed `5h`/`5i` foundations.
 
+**Part 2A candidate (2026-08-15):** 2A-0 contracts and 2A-1 stable financial
+identity are implemented for review. The candidate adds identity-only account
+and source-link registries, adopts existing Investment IDs, fails closed on
+ambiguous/owner/registration conflicts, and protects external identifiers in
+new bank-import staging and diagnostics. Existing domain sheets remain
+authoritative and Planning has not switched readers. Work intentionally stops
+before financial facts or the joint cash/revolving-debt freshness milestone.
+
 **RFP-3a foundation (2026-08-14):** `capital_allocation.js` adds a
 spreadsheet-scoped, read-only household-fact seam and a pure deterministic
 Capital Allocation Queue kernel. The slice separates required constraints from

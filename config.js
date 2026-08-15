@@ -13,6 +13,8 @@ function getSheetNames_() {
     INVESTMENT_ACTIVITY: 'SYS - Investment Activity',
     INVESTMENT_HOLDINGS: 'SYS - Investment Holdings',
     INVESTMENT_PLANS: 'SYS - Investment Plans',
+    FINANCIAL_ACCOUNTS: 'SYS - Financial Accounts',
+    ACCOUNT_SOURCE_LINKS: 'SYS - Account Source Links',
 
     // Bank Import scaffold (Step 1). Both sheets are created lazily by
     // ensure helpers in bank_import.js and are not read by any existing

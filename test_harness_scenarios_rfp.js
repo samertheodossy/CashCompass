@@ -146,6 +146,64 @@ function getHarnessRfpInvestmentMetadataScenario_() {
   };
 }
 
+/** Part 2A-1 identity matching is fail-closed and independent of mutable names. */
+function getHarnessPart2aFinancialIdentityScenario_() {
+  return {
+    id: 'REGRESSION-PART-2A-FINANCIAL-IDENTITY',
+    category: 'REGRESSION',
+    executionLevel: 'PURE',
+    expectedAssertionCount: 7,
+    description: 'Prove the pure identity matcher preserves exact source links, refuses ambiguity, separates owners and registrations, and masks identifiers.',
+    requiresTrashCleanup: true,
+    expectedSheets: ['SYS - Meta'],
+    setup: function(ctx) {
+      ctx.account = { stableAccountId: 'CASH-test', domain: 'CASH',
+        displayName: 'Old name', institution: 'Fixture Bank', last4: '1234',
+        ownerId: 'SAMER', registrationType: 'INDIVIDUAL' };
+      ctx.raw = { sourceType: 'OFX', sourceSystem: 'Fixture Bank',
+        externalAccountId: 'FIXTURE-RAW-1234', institution: 'Fixture Bank',
+        displayName: 'Renamed account', last4: '1234', domain: 'CASH',
+        accountType: 'Checking', ownerId: 'SAMER', registrationType: 'INDIVIDUAL',
+        currency: 'USD' };
+    },
+    actions: function(ctx) {
+      ctx.normalized = normalizeFinancialIdentityAdapterRecord_(ctx.raw);
+      ctx.link = { stableAccountId: ctx.account.stableAccountId,
+        sourceSystem: ctx.raw.sourceSystem,
+        sourceAccountKey: ctx.normalized.sourceAccountKey, linkStatus: 'VERIFIED' };
+      ctx.exact = matchFinancialIdentityAdapterRecord_(ctx.raw, [ctx.account], [ctx.link]);
+      ctx.ambiguous = matchFinancialIdentityAdapterRecord_(ctx.raw,
+        [ctx.account, { stableAccountId: 'CASH-other', domain: 'CASH',
+          institution: 'Fixture Bank', last4: '1234', ownerId: 'SAMER',
+          registrationType: 'INDIVIDUAL' }], []);
+      var child = JSON.parse(JSON.stringify(ctx.raw));
+      child.ownerId = 'LAITH';
+      child.registrationType = 'CUSTODIAL';
+      ctx.ownerConflict = matchFinancialIdentityAdapterRecord_(child, [ctx.account], [ctx.link]);
+      ctx.linkAmbiguous = matchFinancialIdentityAdapterRecord_(ctx.raw, [ctx.account],
+        [ctx.link, JSON.parse(JSON.stringify(ctx.link))]);
+    },
+    expectedOutcome: function(ctx) {
+      var mod = 'Part 2A Financial Identity';
+      ctx.assert.equals('Rename preserves exact linked identity', ctx.exact.outcome,
+        'EXACT_LINK', { module: mod });
+      ctx.assert.equals('Duplicate institution and last4 fail ambiguous', ctx.ambiguous.outcome,
+        'AMBIGUOUS', { module: mod });
+      ctx.assert.equals('Child and adult identities fail closed', ctx.ownerConflict.outcome,
+        'CONFLICT', { module: mod });
+      ctx.assert.equals('Duplicate verified source links fail ambiguous', ctx.linkAmbiguous.outcome,
+        'AMBIGUOUS', { module: mod });
+      ctx.assert.equals('Raw source identifier is replaced by a protected key',
+        /^sha256:[a-f0-9]{64}$/.test(ctx.normalized.sourceAccountKey), true, { module: mod });
+      ctx.assert.equals('Masked identifier exposes only last four',
+        ctx.normalized.maskedIdentifier, '••••1234', { module: mod });
+      ctx.assert.equals('Investment stable IDs retain the adopted INV prefix',
+        financialIdentityGenerateStableAccountId_('INVESTMENT').indexOf('INV-'), 0,
+        { module: mod });
+    }
+  };
+}
+
 function harnessRfpAddInvestment_(ctx, year, today, name, balance, active) {
   var input = ctx.ss.getSheetByName(getSheetNames_().INVESTMENTS);
   var block = getInvestmentsYearBlock_(input, year);

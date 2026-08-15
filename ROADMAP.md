@@ -442,6 +442,19 @@ read-only security, consent, token-storage, privacy, and support review. This
 work does not block the base household plan or expand the current `RFP-6a`
 runtime-validation boundary.
 
+### Part 2A normalized financial data foundation
+
+- **2A-0 — Contracts:** implemented for review in
+  `PART_2A_IDENTITY_CONTRACT.md`. Authority and freshness are fact-level;
+  Effective As Of and Observed At remain distinct; adapters never overwrite
+  household policy.
+- **2A-1 — Stable identity:** implemented for review with additive
+  `SYS - Financial Accounts` and `SYS - Account Source Links` registries,
+  adoption of existing Investment IDs, fail-closed owner/registration matching,
+  source-scoped protected identifiers, and no Planning authority switch.
+- **Stop after 2A-1:** cash/revolving-debt facts, Planning shadow reads, and the
+  first operational freshness milestone remain later reviewed slices.
+
 **Remaining broad-Beta sequence:** close the core `RFP-1`–`RFP-5` program;
 resume and close `3o` Houses, Income, and Bills; close the separate `3j` task; return to
 the deferred `5j`–`5m` correction families; finish `5a`–`5f`
