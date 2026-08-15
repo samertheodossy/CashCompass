@@ -132,10 +132,31 @@ function capitalAllocationPrimaryDecisionHtml_(plan) {
   var decision = capitalAllocationPrimaryDecisionModel_(plan);
   var investmentPolicy = plan.investmentPolicy || {};
   var debtRows = decision.debtActions.map(function(row) {
-    return '<div class="capital-allocation-compact-action"><div><strong>' +
-      escapeCapitalAllocationHtml_(row.displayName) + '</strong><div class="capital-allocation-card-reason">Avoid ' +
-      escapeCapitalAllocationHtml_(Number(row.apr || 0).toFixed(2)) + '% interest</div></div><strong>' +
-      formatCapitalAllocationMoney_(row.amount) + '</strong></div>';
+    var outcomeLabel = row.outcome === 'PAID_OFF' ? 'Paid off' :
+      row.outcome === 'REQUIRED_PAYMENT' ? 'Required payment' : 'Paid down';
+    var paymentLabel = row.outcome === 'PAID_OFF' ? 'Pay off ' :
+      row.outcome === 'REQUIRED_PAYMENT' ? 'Pay ' : 'Pay down ';
+    var aprLine = row.outcome === 'PAID_OFF'
+      ? 'APR eliminated if confirmed: ' + Number(row.apr || 0).toFixed(2) + '%'
+      : 'APR remains: ' + Number(row.apr || 0).toFixed(2) + '%';
+    var interestLine = row.outcome === 'PAID_OFF'
+      ? 'Estimated first-year interest avoided: '
+      : 'Estimated first-year interest reduction: ';
+    return '<div class="capital-allocation-debt-outcome"><div class="capital-allocation-debt-outcome-head">' +
+      '<div><span class="capital-allocation-badge">' +
+      escapeCapitalAllocationHtml_(outcomeLabel) +
+      '</span><strong>' + escapeCapitalAllocationHtml_(row.displayName) + '</strong></div>' +
+      '<strong>' + escapeCapitalAllocationHtml_(paymentLabel) +
+      formatCapitalAllocationMoney_(row.amount) + '</strong></div>' +
+      '<div class="capital-allocation-debt-outcome-grid">' +
+      '<div><span>Required payment</span><strong>' + formatCapitalAllocationMoney_(row.requiredPayment) + '</strong></div>' +
+      '<div><span>Extra debt payment</span><strong>' + formatCapitalAllocationMoney_(row.extraPayment) + '</strong></div>' +
+      '<div><span>Total this week</span><strong>' + formatCapitalAllocationMoney_(row.amount) + '</strong></div>' +
+      '<div><span>Current balance</span><strong>' + formatCapitalAllocationMoney_(row.startingBalance) + '</strong></div>' +
+      '<div><span>Balance after plan</span><strong>' + formatCapitalAllocationMoney_(row.endingBalance) + '</strong></div>' +
+      '<div><span>' + escapeCapitalAllocationHtml_(aprLine) + '</span></div>' +
+      '<div><span>' + escapeCapitalAllocationHtml_(interestLine) + '</span><strong>' +
+      formatCapitalAllocationMoney_(row.annualInterestReduction) + '</strong></div></div></div>';
   }).join('');
   var actionDebtRows = decision.debtActions.map(function(row) {
     return '<div class="capital-allocation-primary-action-row"><span>' +
@@ -182,13 +203,13 @@ function capitalAllocationPrimaryDecisionHtml_(plan) {
     (pausedRows ? '<section class="capital-allocation-primary-pause"><div class="capital-allocation-preview-kicker">Pause for now</div>' +
       pausedRows + '</section>' : '') + '</div>' +
     '<p class="capital-allocation-decision-next"><strong>After these payments clear:</strong> Refresh Cash Compass. We&rsquo;ll use the updated balances to decide what your next available dollar should do.</p>' +
-    '<details class="capital-allocation-property-detail"><summary><strong>Why this plan?</strong>' +
-      '<span class="capital-allocation-expand-label">Compare choices</span></summary>' +
+    '<details class="capital-allocation-property-detail"><summary><strong>What this plan accomplishes</strong>' +
+      '<span class="capital-allocation-expand-label">View outcomes</span></summary>' +
       '<div class="capital-allocation-group-items">' + debtRows +
       '<div class="capital-allocation-compact-action"><div><strong>Additional investing</strong>' +
-      '<div class="capital-allocation-card-reason">Future investment returns are uncertain; the listed revolving APRs are costs CashCompass can avoid. APR labels do not control the sequence.</div></div><strong>Wait</strong></div>' +
+      '<div class="capital-allocation-card-reason">Your regular Robinhood investment continues. Additional investing waits while the current debt-paydown plan has higher priority.</div></div><strong>Wait</strong></div>' +
       '<div class="capital-allocation-compact-action"><div><strong>Cash kept available</strong>' +
-      '<div class="capital-allocation-card-reason">Your Balanced cash strategy intentionally preserves liquidity above the hard operating floor.</div></div><strong>' +
+      '<div class="capital-allocation-card-reason">Cash Compass intentionally keeps this liquidity available rather than using every available dollar for debt.</div></div><strong>' +
       formatCapitalAllocationMoney_(decision.cashAmount) + '</strong></div></div></details>' +
     '</section>';
 }
@@ -198,11 +219,34 @@ function capitalAllocationPrimaryDecisionModel_(plan) {
   var after = plan && plan.afterAction || {};
   var strategy = plan && plan.contributionStrategy || {};
   var investmentPolicy = plan && plan.investmentPolicy || {};
+  var debtPaymentComponents = {};
+  (plan && plan.weeklyActions || []).forEach(function(action) {
+    if (action.actionType !== 'PAY_DEBT_MINIMUM' && action.actionType !== 'PAY_EXTRA_DEBT') return;
+    var key = capitalAllocationCustomerActionKey_(action.targetName);
+    if (!debtPaymentComponents[key]) debtPaymentComponents[key] = { required: 0, extra: 0 };
+    if (action.actionType === 'PAY_DEBT_MINIMUM') {
+      debtPaymentComponents[key].required += Number(action.amount || 0);
+    } else {
+      debtPaymentComponents[key].extra += Number(action.amount || 0);
+    }
+  });
   var debtActions = (after.debts || []).filter(function(row) {
     return row.isRevolving && Number(row.proposedPayment || 0) > 0;
   }).map(function(row) {
+    var endingBalance = Number(row.projectedEndingBalance || 0);
+    var components = debtPaymentComponents[capitalAllocationCustomerActionKey_(row.name)] ||
+      { required: 0, extra: 0 };
+    var requiredPayment = Number(components.required || 0);
+    var extraPayment = Number(components.extra || 0);
+    var hasComponentDetail = requiredPayment + extraPayment > 0.005;
+    if (!hasComponentDetail) extraPayment = Number(row.proposedPayment || 0);
+    var outcome = endingBalance <= 0.005 ? 'PAID_OFF' :
+      extraPayment > 0.005 ? 'PAID_DOWN' : 'REQUIRED_PAYMENT';
     return { name: row.name, displayName: capitalAllocationCustomerActionName_(row.name),
-      amount: Number(row.proposedPayment || 0), apr: Number(row.apr || 0) };
+      amount: Number(row.proposedPayment || 0), apr: Number(row.apr || 0),
+      startingBalance: Number(row.startingBalance || 0), endingBalance: endingBalance,
+      annualInterestReduction: Number(row.projectedAnnualInterestAvoided || 0),
+      requiredPayment: requiredPayment, extraPayment: extraPayment, outcome: outcome };
   });
   var pauseOptional = strategy.recommendation === 'REDIRECT_OPTIONAL_CONTRIBUTIONS_TO_DEBT' ||
     strategy.recommendation === 'HOLD_OPTIONAL_DURING_POLICY_OVERRIDE';
@@ -220,6 +264,10 @@ function capitalAllocationPrimaryDecisionModel_(plan) {
     pausedContributions: pausedContributions,
     investmentPaused: !!investmentPolicy.overrideApplied
   };
+}
+
+function capitalAllocationCustomerActionKey_(name) {
+  return String(name || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
 function capitalAllocationCustomerActionName_(name) {

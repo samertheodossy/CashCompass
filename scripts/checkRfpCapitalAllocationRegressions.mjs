@@ -78,11 +78,14 @@ assert.match(client, /Your plan this week/);
 assert.match(client, /Pay down debt/);
 assert.match(client, /Keep in cash/);
 assert.match(client, /Pause for now/);
-assert.match(client, /Why this plan\?/);
+assert.match(client, /What this plan accomplishes/);
 assert.match(client, /scheduledAmount/);
 assert.match(client, /capitalAllocationContributionPeriodLabel_/);
 const primaryRenderer = client.slice(client.indexOf('function capitalAllocationPrimaryDecisionHtml_'),
   client.indexOf('function capitalAllocationDecisionHtml_'));
+assert.match(primaryRenderer, /What this plan accomplishes[\s\S]*?View outcomes/);
+assert.doesNotMatch(primaryRenderer, /Compare choices/,
+  'the outcome section heading must not imply a comparison action');
 assert.doesNotMatch(primaryRenderer, /Robinhood policy floor|Scheduled Robinhood amount|Recommended Robinhood funding|Optional Robinhood acceleration|Optional investing redirected|Why aren&rsquo;t we investing more/,
   'implementation concepts must stay out of the primary customer card');
 assert.match(client, /Plan at a glance/);
@@ -363,6 +366,48 @@ assert.match(primaryHtml, />M1<[\s\S]*?Pause \$600\.00\/week/);
 assert.match(primaryHtml, /Stash[\s\S]*?Pause \$15\.00\/month/);
 assert.doesNotMatch(primaryHtml, /\$603\.46 per week|policy floor|optional acceleration|normalized contribution|deployment budget|economic comparator|AWAITING_CONFIRMATION/i,
   'the primary card must not expose normalized or internal allocation terminology');
+
+const outcomePlan = JSON.parse(JSON.stringify(plan));
+outcomePlan.afterAction.debts = [
+  { name: 'Credit Card - American Express', isRevolving: true, startingBalance: 39790.53,
+    proposedPayment: 39790.53, projectedEndingBalance: 0, apr: 26.99,
+    projectedAnnualInterestAvoided: 10739.46 },
+  { name: 'Credit Card - CitiAA', isRevolving: true, startingBalance: 9000,
+    proposedPayment: 2238.60, projectedEndingBalance: 6761.40, apr: 23.49,
+    projectedAnnualInterestAvoided: 525.82 },
+  { name: 'Credit Card - Southwest', isRevolving: true, startingBalance: 32947.12,
+    proposedPayment: 988.41, projectedEndingBalance: 31958.71, apr: 20.24,
+    projectedAnnualInterestAvoided: 200.06 }
+];
+outcomePlan.weeklyActions = [
+  { actionType: 'PAY_DEBT_MINIMUM', targetName: 'Credit Card - American Express', amount: 1000 },
+  { actionType: 'PAY_EXTRA_DEBT', targetName: 'Credit Card - American Express', amount: 38790.53 },
+  { actionType: 'PAY_DEBT_MINIMUM', targetName: 'Credit Card - CitiAA', amount: 270 },
+  { actionType: 'PAY_EXTRA_DEBT', targetName: 'Credit Card - CitiAA', amount: 1968.60 },
+  { actionType: 'PAY_DEBT_MINIMUM', targetName: 'Credit Card - Southwest', amount: 988.41 }
+];
+const outcomeDecision = clientContext.capitalAllocationPrimaryDecisionModel_(outcomePlan);
+assert.equal(outcomeDecision.debtActions[0].outcome, 'PAID_OFF');
+assert.equal(outcomeDecision.debtActions[1].outcome, 'PAID_DOWN');
+assert.equal(outcomeDecision.debtActions[2].outcome, 'REQUIRED_PAYMENT');
+assert.equal(outcomeDecision.debtActions[1].endingBalance, 6761.40);
+assert.equal(outcomeDecision.debtActions[1].requiredPayment, 270);
+assert.equal(outcomeDecision.debtActions[1].extraPayment, 1968.60);
+assert.equal(outcomeDecision.debtActions[2].requiredPayment, 988.41);
+assert.equal(outcomeDecision.debtActions[2].extraPayment, 0);
+assert.equal(outcomeDecision.debtActions[1].annualInterestReduction,
+  outcomePlan.afterAction.debts[1].projectedAnnualInterestAvoided,
+  'the customer outcome must use the existing deterministic interest result');
+const outcomeHtml = clientContext.capitalAllocationPrimaryDecisionHtml_(outcomePlan);
+assert.match(outcomeHtml, /Paid off[\s\S]*?American Express[\s\S]*?Pay off \$39,790\.53[\s\S]*?Balance after plan[\s\S]*?\$0\.00[\s\S]*?APR eliminated if confirmed: 26\.99%[\s\S]*?Estimated first-year interest avoided:[\s\S]*?\$10,739\.46/);
+assert.match(outcomeHtml, /Paid down[\s\S]*?CitiAA[\s\S]*?Pay down \$2,238\.60[\s\S]*?Required payment[\s\S]*?\$270\.00[\s\S]*?Extra debt payment[\s\S]*?\$1,968\.60[\s\S]*?Total this week[\s\S]*?\$2,238\.60[\s\S]*?Balance after plan[\s\S]*?\$6,761\.40[\s\S]*?APR remains: 23\.49%[\s\S]*?Estimated first-year interest reduction:[\s\S]*?\$525\.82/);
+assert.match(outcomeHtml, /Required payment[\s\S]*?Southwest[\s\S]*?Pay \$988\.41[\s\S]*?Required payment[\s\S]*?\$988\.41[\s\S]*?Extra debt payment[\s\S]*?\$0\.00[\s\S]*?Total this week[\s\S]*?\$988\.41/);
+const partialOutcome = outcomeHtml.slice(outcomeHtml.lastIndexOf('CitiAA'),
+  outcomeHtml.indexOf('Additional investing'));
+assert.doesNotMatch(partialOutcome, /APR eliminated|Avoid 23\.49% interest/,
+  'a partial payoff must never imply that its APR was eliminated or avoided');
+assert.equal(outcomeDecision.debtAmount, 43017.54,
+  'presentation classification must not alter the underlying proposed payments');
 assert.equal(plan.economicAssumptions.investmentComparison.source, 'DEFAULT_PLANNING_ASSUMPTION');
 assert.equal(plan.capitalSourceLadder.steps.some(row =>
   row.sourceType === 'PAUSE_OR_REDIRECT_FUTURE_CONTRIBUTION' && row.sourceName === 'M1 Investment'), true);
@@ -375,6 +420,54 @@ assert.equal(plan.whyNot.winner, 'PAY_DEBT');
 assert.equal(plan.weeklyActions.every(row => row.recommendationState === 'PROPOSED'), true);
 assert.equal(plan.summary.endingCash > plan.summary.reserve90Days, true,
   'Balanced mode must intentionally retain cash above the hard floor');
+const robinhoodFloorIndex = plan.weeklyActions.findIndex(row =>
+  row.actionType === 'FUND_INCOME_PRODUCING_MINIMUM');
+const firstExtraDebtIndex = plan.weeklyActions.findIndex(row => row.actionType === 'PAY_EXTRA_DEBT');
+assert.equal(plan.weeklyActions.every((row, index) =>
+  (row.actionType !== 'PAY_DEBT_MINIMUM' && row.actionType !== 'PAY_TRACKED_BILL') ||
+    index < robinhoodFloorIndex), true,
+  'required payments must be planned before the Robinhood policy floor');
+assert.equal(robinhoodFloorIndex < firstExtraDebtIndex, true,
+  'the Robinhood policy floor must be funded before accelerated debt payments');
+assert.equal(plan.weeklyActions.filter(row => row.actionType === 'PAY_EXTRA_DEBT')
+  .reduce((sum, row) => sum + Number(row.amount || 0), 0) <=
+    plan.deploymentPace.recommendedAcceleratedDeployment, true,
+  'accelerated debt must remain within the approved deployment budget');
+
+const payoffFacts = JSON.parse(JSON.stringify(planFacts));
+payoffFacts.debts = [
+  { name: 'Amex', originalName: 'Amex', active: true, balance: 1000,
+    minimumPayment: 300, interestRate: 26.99, type: 'Credit Card' },
+  { name: 'Second Card', originalName: 'Second Card', active: true, balance: 10000,
+    minimumPayment: 200, interestRate: 20, type: 'Credit Card' }
+];
+payoffFacts.obligations = [
+  { sourceType: 'debt_minimum', sourceId: 'Amex', name: 'Amex',
+    actionType: 'PAY_DEBT_MINIMUM', amount: 300, requiredThisWeek: true,
+    amountBasis: 'MINIMUM_PAYMENT', reason: 'Due', provenance: 'INPUT - Debts' },
+  { sourceType: 'tracked_bill', sourceId: 'Tax:2026-08-20', name: 'Property tax',
+    actionType: 'PAY_TRACKED_BILL', amount: 850, requiredThisWeek: true,
+    amountBasis: 'DEFAULT_AMOUNT', reason: 'Due', provenance: 'INPUT - Bills' }
+];
+const payoffPlan = context.buildCapitalAllocationPlan_(payoffFacts);
+const payoffExtraActions = payoffPlan.weeklyActions.filter(row =>
+  row.actionType === 'PAY_EXTRA_DEBT');
+assert.deepEqual(Array.from(payoffExtraActions, row => row.targetName),
+  ['Amex', 'Second Card'],
+  'accelerated revolving debt must remain highest-APR-first');
+assert.equal(payoffExtraActions[0].amount, 700,
+  'the highest-APR card receives only the amount remaining after its required minimum');
+const paidOffDebt = payoffPlan.afterAction.debts.find(row => row.name === 'Amex');
+const remainingDebt = payoffPlan.afterAction.debts.find(row => row.name === 'Second Card');
+assert.equal(paidOffDebt.projectedEndingBalance, 0);
+assert.equal(paidOffDebt.projectedMonthlyMinimumReleased, 300,
+  'a proposed full payoff may project its minimum as a future release');
+assert.equal(remainingDebt.projectedEndingBalance > 0, true);
+assert.equal(remainingDebt.projectedMonthlyMinimumReleased, 0,
+  'a positive projected balance must retain its minimum-payment obligation');
+assert.equal(payoffPlan.afterAction.confirmedReleasedMonthlyMinimums, 0,
+  'no proposed payoff releases a minimum before authoritative refreshed confirmation');
+assert.equal(payoffPlan.recommendationLifecycle.downstreamEffectsState, 'AWAITING_CONFIRMATION');
 const assertDeploymentReconciliation = (candidate, label) => {
   assert.equal(candidate.summary.openingCash + candidate.summary.expectedIncomeThisWeek,
     candidate.summary.householdRequiredThisWeek + candidate.summary.standingInvestmentFunded +

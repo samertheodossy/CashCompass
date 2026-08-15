@@ -888,6 +888,36 @@
     text-align: right;
   }
   .capital-allocation-primary-pause { background: #fffaf0 !important; }
+  .capital-allocation-debt-outcome {
+    padding: 12px 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .capital-allocation-debt-outcome:last-child { border-bottom: 0; }
+  .capital-allocation-debt-outcome-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .capital-allocation-debt-outcome-head > div {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .capital-allocation-debt-outcome-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px 18px;
+    margin-top: 9px;
+  }
+  .capital-allocation-debt-outcome-grid > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    color: #64748b;
+    font-size: 12px;
+  }
+  .capital-allocation-debt-outcome-grid strong { color: #0f172a; }
   .capital-allocation-decision-next {
     padding: 10px 12px;
     border-radius: 8px;
@@ -3195,6 +3225,7 @@
     .capital-allocation-summary,
     .capital-allocation-summary--simple,
     .capital-allocation-decision-hero-points { grid-template-columns: 1fr; }
+    .capital-allocation-debt-outcome-grid { grid-template-columns: 1fr; }
     .capital-allocation-deployment-grid { grid-template-columns: 1fr; }
     .capital-allocation-group-grid,
     .capital-allocation-forecast-grid { grid-template-columns: 1fr; }
