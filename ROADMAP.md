@@ -444,16 +444,27 @@ runtime-validation boundary.
 
 ### Part 2A normalized financial data foundation
 
-- **2A-0 — Contracts:** implemented for review in
+- **2A-0 — Contracts:** complete in
   `PART_2A_IDENTITY_CONTRACT.md`. Authority and freshness are fact-level;
   Effective As Of and Observed At remain distinct; adapters never overwrite
   household policy.
-- **2A-1 — Stable identity:** implemented for review with additive
+- **2A-1 — Stable identity:** complete in commit `9dc7c5a`, with additive
   `SYS - Financial Accounts` and `SYS - Account Source Links` registries,
   adoption of existing Investment IDs, fail-closed owner/registration matching,
-  source-scoped protected identifiers, and no Planning authority switch.
-- **Stop after 2A-1:** cash/revolving-debt facts, Planning shadow reads, and the
-  first operational freshness milestone remain later reviewed slices.
+  source-scoped protected identifiers, and no Planning authority switch. Isolated
+  Central `@356` run `20260815-115249-7301` passed 7/7 with verified cleanup.
+- **2A-2 — Financial Facts Foundation:** complete on isolated Central `@357`. Adds
+  lazy append-only `SYS - Financial Facts`, 14 typed value contracts, versioned
+  provenance/freshness/selection policy, conflict-preserving current selection,
+  decision-specific model/action confidence, legacy UNKNOWN-date representation,
+  idempotent supersession, and an in-memory rebuildable projection. Part 1
+  Planning remains authoritative; no persisted Current Facts sheet or production
+  import is introduced. Two scenarios passed 25/25 assertions in 18.8 seconds
+  with Provisioning/Drift PASS, both marker-verified fixtures verified TRASHED,
+  and the disposable runner OFF. Contract: `PART_2A_FINANCIAL_FACTS_CONTRACT.md`.
+- **Stop after 2A-2:** production cash/revolving-debt facts, legacy-vs-normalized
+  shadow comparison, and the first operational freshness milestone remain later
+  reviewed slices.
 
 **Remaining broad-Beta sequence:** close the core `RFP-1`–`RFP-5` program;
 resume and close `3o` Houses, Income, and Bills; close the separate `3j` task; return to

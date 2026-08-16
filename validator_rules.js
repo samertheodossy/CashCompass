@@ -100,6 +100,7 @@ function getValidatorCanonicalModel_() {
   var investmentActivityHeaders = (typeof INVESTMENT_ACTIVITY_HEADERS_ !== 'undefined') ? INVESTMENT_ACTIVITY_HEADERS_ : null;
   var investmentHoldingsHeaders = (typeof INVESTMENT_HOLDINGS_HEADERS_ !== 'undefined') ? INVESTMENT_HOLDINGS_HEADERS_ : null;
   var investmentPlanHeaders = (typeof INVESTMENT_PLAN_HEADERS_ !== 'undefined') ? INVESTMENT_PLAN_HEADERS_ : null;
+  var financialFactHeaders = (typeof FINANCIAL_FACT_HEADERS_ !== 'undefined') ? FINANCIAL_FACT_HEADERS_ : null;
   var upcomingHeaders = (typeof UPCOMING_EXPENSES_REQUIRED_HEADERS_ !== 'undefined') ? UPCOMING_EXPENSES_REQUIRED_HEADERS_ : null;
   var bankAccountsHeaders = (typeof BANK_ACCOUNTS_REQUIRED_HEADERS_ !== 'undefined') ? BANK_ACCOUNTS_REQUIRED_HEADERS_ : null;
   var debtsHeaders = (typeof DEBTS_REQUIRED_HEADERS_ !== 'undefined') ? DEBTS_REQUIRED_HEADERS_ : null;
@@ -129,6 +130,7 @@ function getValidatorCanonicalModel_() {
   var investmentActivityWidths = (typeof INVESTMENT_ACTIVITY_CANONICAL_WIDTHS_ !== 'undefined') ? INVESTMENT_ACTIVITY_CANONICAL_WIDTHS_ : null;
   var investmentHoldingsWidths = (typeof INVESTMENT_HOLDINGS_CANONICAL_WIDTHS_ !== 'undefined') ? INVESTMENT_HOLDINGS_CANONICAL_WIDTHS_ : null;
   var investmentPlanWidths = (typeof INVESTMENT_PLAN_CANONICAL_WIDTHS_ !== 'undefined') ? INVESTMENT_PLAN_CANONICAL_WIDTHS_ : null;
+  var financialFactWidths = (typeof FINANCIAL_FACT_CANONICAL_WIDTHS_ !== 'undefined') ? FINANCIAL_FACT_CANONICAL_WIDTHS_ : null;
   var donationWidths = (typeof DONATION_CANONICAL_WIDTHS_ !== 'undefined') ? DONATION_CANONICAL_WIDTHS_ : null;
   var activityWidths = (typeof ACTIVITY_LOG_CANONICAL_WIDTHS_ !== 'undefined') ? ACTIVITY_LOG_CANONICAL_WIDTHS_ : null;
 
@@ -208,6 +210,16 @@ function getValidatorCanonicalModel_() {
       headerRow: 1,
       headers: investmentPlanHeaders,
       widths: investmentPlanWidths,
+      frozenRows: 1,
+      frozenColumns: 1
+    },
+    {
+      name: (names && names.FINANCIAL_FACTS)
+        ? names.FINANCIAL_FACTS : 'SYS - Financial Facts',
+      presence: VALIDATOR_PRESENCE_OPTIONAL_,
+      headerRow: 1,
+      headers: financialFactHeaders,
+      widths: financialFactWidths,
       frozenRows: 1,
       frozenColumns: 1
     },

@@ -91,6 +91,15 @@ function getHarnessSuites_() {
       scenarioIds: ['REGRESSION-PART-2A-FINANCIAL-IDENTITY']
     },
     {
+      id: 'SUITE-PART-2A-FINANCIAL-FACTS',
+      label: 'Part 2A Financial Facts Foundation',
+      description: 'Validate the 14 typed fact contracts, provenance, Effective-As-Of freshness, policy-owned current selection, decision-specific actionability, append-only evidence, idempotency, and rebuildable shadow projection.',
+      scenarioIds: [
+        'REGRESSION-PART-2A-FINANCIAL-FACTS',
+        'REGRESSION-PART-2A-FINANCIAL-FACTS-INTEGRATION'
+      ]
+    },
+    {
       id: 'SUITE-RFP-CAPITAL-ALLOCATION-FOUNDATION',
       label: 'Capital Allocation Foundation',
       description: 'Validate deterministic read-only household facts, required constraints, and the unranked in-memory candidate queue before recommendation policy is enabled.',

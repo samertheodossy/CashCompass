@@ -52,6 +52,8 @@ Overall Architecture
 
 - PROJECT_CONTEXT.md
 - SystemArch.md
+- PART_2A_IDENTITY_CONTRACT.md
+- PART_2A_FINANCIAL_FACTS_CONTRACT.md
 
 Functional Assertions
 

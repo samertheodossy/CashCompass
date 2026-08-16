@@ -204,6 +204,237 @@ function getHarnessPart2aFinancialIdentityScenario_() {
   };
 }
 
+/** Part 2A-2 pure provenance, freshness, selection, and actionability contract. */
+function getHarnessPart2aFinancialFactsScenario_() {
+  return {
+    id: 'REGRESSION-PART-2A-FINANCIAL-FACTS',
+    category: 'REGRESSION',
+    executionLevel: 'PURE',
+    expectedAssertionCount: 15,
+    description: 'Prove all 14 fact contracts, Effective As Of freshness, policy-owned precedence, conflict retention, value typing, and decision-specific actionability.',
+    requiresTrashCleanup: true,
+    expectedSheets: ['SYS - Meta'],
+    setup: function(ctx) {
+      ctx.asOf = '2026-08-15T12:00:00.000Z';
+      ctx.currentInstitution = normalizeFinancialFact_(harnessFinancialFactFixture_({
+        factId: 'FACT-current-institution'
+      }), { asOf: ctx.asOf });
+      ctx.staleInstitution = normalizeFinancialFact_(harnessFinancialFactFixture_({
+        factId: 'FACT-stale-institution', numericValue: 1100,
+        effectiveAsOf: '2026-07-01T00:00:00.000Z'
+      }), { asOf: ctx.asOf });
+      ctx.currentManual = normalizeFinancialFact_(harnessFinancialFactFixture_({
+        factId: 'FACT-current-manual', sourceType: 'MANUAL', sourceSystem: 'USER',
+        authorityClass: 'USER_VERIFIED_MANUAL'
+      }), { asOf: ctx.asOf });
+      ctx.recentInstitution = normalizeFinancialFact_(harnessFinancialFactFixture_({
+        factId: 'FACT-recent-institution', effectiveAsOf: '2026-08-10T00:00:00.000Z'
+      }), { asOf: ctx.asOf });
+      ctx.currentEstimate = normalizeFinancialFact_(harnessFinancialFactFixture_({
+        factId: 'FACT-current-estimate', numericValue: 995,
+        sourceType: 'ESTIMATED', sourceSystem: 'USER_ESTIMATE',
+        authorityClass: 'ESTIMATED', verificationStatus: 'UNVERIFIED',
+        reconciliationStatus: 'UNVERIFIED'
+      }), { asOf: ctx.asOf });
+    },
+    actions: function(ctx) {
+      ctx.unknown = financialFactFromLegacyValue_({
+        stableInternalAccountId: 'DEBT-LEGACY', factType: 'CURRENT_BALANCE',
+        numericValue: 400, currencyOrUnit: 'USD', asOf: ctx.asOf
+      });
+      ctx.observedOld = normalizeFinancialFact_(harnessFinancialFactFixture_({
+        factId: 'FACT-old-observed-now', effectiveAsOf: '2026-07-31T00:00:00.000Z',
+        observedAt: '2026-08-15T11:59:00.000Z', sourceType: 'STATEMENT',
+        authorityClass: 'STATEMENT_DERIVED'
+      }), { asOf: ctx.asOf });
+      ctx.manualWinner = selectCurrentFinancialFact_([
+        ctx.staleInstitution, ctx.currentManual
+      ], 'DEBT-AMEX', 'CURRENT_BALANCE', ctx.asOf);
+      ctx.authorityWinner = selectCurrentFinancialFact_([
+        ctx.recentInstitution, ctx.currentEstimate
+      ], 'DEBT-AMEX', 'CURRENT_BALANCE', ctx.asOf);
+      try {
+        normalizeFinancialFact_(harnessFinancialFactFixture_({
+          effectiveAsOf: '2026-08-16T00:00:00.000Z'
+        }), { asOf: ctx.asOf });
+      } catch (e) { ctx.futureError = String(e && e.message || e); }
+      try {
+        normalizeFinancialFact_(harnessFinancialFactFixture_({ factType: 'USE_POLICY' }),
+          { asOf: ctx.asOf });
+      } catch (e2) { ctx.policyError = String(e2 && e2.message || e2); }
+      ctx.stalePayoff = evaluateDecisionDataQuality_('PAY_DEBT', [
+        selectCurrentFinancialFact_([ctx.staleInstitution], 'DEBT-AMEX',
+          'CURRENT_BALANCE', ctx.asOf)
+      ]);
+      ctx.staleQuantity = normalizeFinancialFact_(harnessFinancialFactFixture_({
+        factId: 'FACT-stale-quantity', stableInternalAccountId: 'INV-TAXABLE',
+        factType: 'POSITION_QUANTITY', numericValue: 12, currencyOrUnit: 'SHARES',
+        effectiveAsOf: '2026-07-01T00:00:00.000Z'
+      }), { asOf: ctx.asOf });
+      ctx.staleSale = evaluateDecisionDataQuality_('SELL_SECURITY', [
+        selectCurrentFinancialFact_([ctx.staleQuantity], 'INV-TAXABLE',
+          'POSITION_QUANTITY', ctx.asOf)
+      ]);
+      ctx.fixedApr = normalizeFinancialFact_(harnessFinancialFactFixture_({
+        factId: 'FACT-fixed-apr', stableInternalAccountId: 'DEBT-MORTGAGE',
+        factType: 'APR', numericValue: 2.75, currencyOrUnit: 'PERCENT_FIXED',
+        effectiveAsOf: '2026-01-01T00:00:00.000Z'
+      }), { asOf: ctx.asOf });
+      ctx.fixedAprSelection = selectCurrentFinancialFact_([ctx.fixedApr],
+        'DEBT-MORTGAGE', 'APR', ctx.asOf);
+      ctx.conflict = selectCurrentFinancialFact_([
+        normalizeFinancialFact_(harnessFinancialFactFixture_({
+          factId: 'FACT-conflict-a', numericValue: 1000,
+          sourceRecordKey: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        }), { asOf: ctx.asOf }),
+        normalizeFinancialFact_(harnessFinancialFactFixture_({
+          factId: 'FACT-conflict-b', numericValue: 1001,
+          sourceRecordKey: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+        }), { asOf: ctx.asOf })
+      ], 'DEBT-AMEX', 'CURRENT_BALANCE', ctx.asOf);
+      ctx.dateFact = normalizeFinancialFact_(harnessFinancialFactFixture_({
+        factId: 'FACT-payment-date', factType: 'NEXT_PAYMENT_DATE',
+        numericValue: '', textValue: '2026-08-30', currencyOrUnit: 'DATE'
+      }), { asOf: ctx.asOf });
+      try {
+        normalizeFinancialFact_(harnessFinancialFactFixture_({
+          factType: 'NEXT_PAYMENT_DATE', numericValue: '', textValue: '2026-02-31',
+          currencyOrUnit: 'DATE'
+        }), { asOf: ctx.asOf });
+      } catch (e3) { ctx.dateError = String(e3 && e3.message || e3); }
+      ctx.debtOnlyQuality = evaluateDecisionDataQuality_('PAY_DEBT', [
+        selectCurrentFinancialFact_([ctx.currentInstitution], 'DEBT-AMEX',
+          'CURRENT_BALANCE', ctx.asOf)
+      ]);
+      ctx.projection = buildCurrentFinancialFactsProjection_([
+        ctx.currentEstimate, ctx.recentInstitution, ctx.fixedApr
+      ], ctx.asOf);
+    },
+    expectedOutcome: function(ctx) {
+      var mod = 'Part 2A Financial Facts';
+      ctx.assert.equals('All fourteen approved fact types are present',
+        Object.keys(FINANCIAL_FACT_TYPES_).length, 14, { module: mod });
+      ctx.assert.equals('Missing legacy timestamp remains UNKNOWN',
+        evaluateFinancialFactFreshness_(ctx.unknown, ctx.asOf).status, 'UNKNOWN', { module: mod });
+      ctx.assert.equals('Observed today does not refresh old evidence',
+        evaluateFinancialFactFreshness_(ctx.observedOld, ctx.asOf).status, 'STALE', { module: mod });
+      ctx.assert.equals('Current verified manual beats stale institution',
+        ctx.manualWinner.fact.factId, 'FACT-current-manual', { module: mod });
+      ctx.assert.equals('Recent institution beats current unverified estimate',
+        ctx.authorityWinner.fact.factId, 'FACT-recent-institution', { module: mod });
+      ctx.assert.equals('Future Effective As Of is rejected',
+        ctx.futureError.indexOf('cannot be in the future') !== -1, true, { module: mod });
+      ctx.assert.equals('Policy fields cannot enter Financial Facts',
+        ctx.policyError.indexOf('Household policy') !== -1, true, { module: mod });
+      ctx.assert.equals('Stale card balance blocks payoff action',
+        ctx.stalePayoff.safeToAct, false, { module: mod });
+      ctx.assert.equals('Stale quantity blocks security sale',
+        ctx.staleSale.safeToAct, false, { module: mod });
+      ctx.assert.equals('Verified fixed mortgage APR remains usable',
+        ctx.fixedAprSelection.freshness.safeToAct, true, { module: mod });
+      ctx.assert.equals('Equal quality disagreement remains a conflict',
+        ctx.conflict.reconciliationStatus, 'CONFLICT', { module: mod });
+      ctx.assert.equals('Conflict is not actionable', ctx.conflict.freshness.safeToAct,
+        false, { module: mod });
+      ctx.assert.equals('Date fact is canonical', ctx.dateFact.textValue,
+        '2026-08-30', { module: mod });
+      ctx.assert.equals('Malformed date is rejected',
+        ctx.dateError.indexOf('invalid calendar date') !== -1, true, { module: mod });
+      ctx.assert.equals('Unrelated stale brokerage does not lower debt confidence',
+        ctx.debtOnlyQuality.confidence, 'HIGH', { module: mod });
+    }
+  };
+}
+
+/** Part 2A-2 additive sheet, append-only supersession, and idempotency proof. */
+function getHarnessPart2aFinancialFactsIntegrationScenario_() {
+  var names = getSheetNames_();
+  return {
+    id: 'REGRESSION-PART-2A-FINANCIAL-FACTS-INTEGRATION',
+    category: 'REGRESSION',
+    executionLevel: 'INTEGRATION',
+    expectedAssertionCount: 10,
+    description: 'Create only the additive Financial Facts sheet and prove exact headers, idempotent evidence, append-only supersession, and rebuildable current projection.',
+    requiresTrashCleanup: true,
+    expectedSheets: [names.FINANCIAL_FACTS, 'SYS - Meta'],
+    setup: function(ctx) {
+      ctx.beforeNames = ctx.ss.getSheets().map(function(sheet) { return sheet.getName(); });
+      ctx.assertWritable();
+      ctx.factSheet = ensureFinancialFactsSheet_(ctx.ss);
+      ctx.actions.push('Create only SYS - Financial Facts on the explicit disposable target');
+    },
+    actions: function(ctx) {
+      var now = new Date();
+      var older = new Date(now.getTime() - 86400000);
+      ctx.firstRaw = harnessFinancialFactFixture_({
+        factId: '', stableInternalAccountId: 'DEBT-FIXTURE', numericValue: 1000,
+        effectiveAsOf: older.toISOString(), observedAt: older.toISOString(),
+        createdAt: older.toISOString(),
+        sourceRecordKey: 'sha256:1111111111111111111111111111111111111111111111111111111111111111'
+      });
+      ctx.assertWritable();
+      ctx.firstAppend = appendFinancialFacts_(ctx.ss, [ctx.firstRaw], { asOf: now });
+      ctx.assertWritable();
+      ctx.duplicateAppend = appendFinancialFacts_(ctx.ss, [ctx.firstRaw], { asOf: now });
+      ctx.secondRaw = harnessFinancialFactFixture_({
+        factId: '', stableInternalAccountId: 'DEBT-FIXTURE', numericValue: 900,
+        effectiveAsOf: now.toISOString(), observedAt: now.toISOString(),
+        createdAt: now.toISOString(),
+        sourceRecordKey: 'sha256:2222222222222222222222222222222222222222222222222222222222222222'
+      });
+      ctx.assertWritable();
+      ctx.secondAppend = appendFinancialFacts_(ctx.ss, [ctx.secondRaw], { asOf: now });
+      ctx.facts = readFinancialFacts_(ctx.ss);
+      ctx.projection = buildCurrentFinancialFactsProjection_(ctx.facts, now);
+      ctx.finalNames = ctx.ss.getSheets().map(function(sheet) { return sheet.getName(); });
+      ctx.headers = ctx.factSheet.getRange(1, 1, 1, FINANCIAL_FACT_HEADERS_.length)
+        .getDisplayValues()[0];
+    },
+    expectedOutcome: function(ctx) {
+      var mod = 'Part 2A Financial Facts';
+      ctx.assert.equals('Financial Facts sheet uses exact contract headers',
+        JSON.stringify(ctx.headers), JSON.stringify(FINANCIAL_FACT_HEADERS_), { module: mod });
+      ctx.assert.equals('First evidence appends once', ctx.firstAppend.appended, 1, { module: mod });
+      ctx.assert.equals('Repeated evidence does not append', ctx.duplicateAppend.appended, 0,
+        { module: mod });
+      ctx.assert.equals('Repeated evidence is reported duplicate', ctx.duplicateAppend.duplicates, 1,
+        { module: mod });
+      ctx.assert.equals('Newer evidence appends once', ctx.secondAppend.appended, 1, { module: mod });
+      ctx.assert.equals('History retains exactly two versions', ctx.facts.length, 2, { module: mod });
+      ctx.assert.equals('New fact supersedes prior fact', ctx.facts[1].supersedesFactId,
+        ctx.facts[0].factId, { module: mod });
+      ctx.assert.equals('Rebuildable projection selects latest fact',
+        ctx.projection[0].selection.fact.factId, ctx.facts[1].factId, { module: mod });
+      ctx.assert.equals('No persisted Current Facts sheet is created',
+        ctx.finalNames.indexOf('SYS - Current Facts'), -1, { module: mod });
+      var addedNames = ctx.finalNames.filter(function(name) {
+        return ctx.beforeNames.indexOf(name) === -1;
+      });
+      ctx.assert.equals('Fact foundation creates no legacy authority or policy sheets',
+        JSON.stringify(addedNames), JSON.stringify([getSheetNames_().FINANCIAL_FACTS]),
+        { module: mod });
+    }
+  };
+}
+
+function harnessFinancialFactFixture_(overrides) {
+  var base = {
+    factId: '', stableInternalAccountId: 'DEBT-AMEX', factType: 'CURRENT_BALANCE',
+    numericValue: 1000, textValue: '', currencyOrUnit: 'USD',
+    effectiveAsOf: '2026-08-15T00:00:00.000Z',
+    observedAt: '2026-08-15T01:00:00.000Z', sourceType: 'INSTITUTION',
+    sourceSystem: 'Fixture Institution', importRunId: 'RUN-FIXTURE',
+    sourceRecordKey: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    authorityClass: 'INSTITUTION_AUTHORITATIVE', verificationStatus: 'VERIFIED',
+    verifiedAt: '2026-08-15T01:00:00.000Z', manualOverride: false,
+    supersedesFactId: '', reconciliationStatus: 'MATCHED',
+    createdAt: '2026-08-15T01:00:00.000Z'
+  };
+  var input = overrides || {};
+  Object.keys(input).forEach(function(key) { base[key] = input[key]; });
+  return base;
+}
+
 function harnessRfpAddInvestment_(ctx, year, today, name, balance, active) {
   var input = ctx.ss.getSheetByName(getSheetNames_().INVESTMENTS);
   var block = getInvestmentsYearBlock_(input, year);

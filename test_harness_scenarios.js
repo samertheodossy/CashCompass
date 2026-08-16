@@ -162,6 +162,12 @@ function getHarnessScenarios_() {
   if (typeof getHarnessPart2aFinancialIdentityScenario_ === 'function') {
     list.push(getHarnessPart2aFinancialIdentityScenario_());
   }
+  if (typeof getHarnessPart2aFinancialFactsScenario_ === 'function') {
+    list.push(getHarnessPart2aFinancialFactsScenario_());
+  }
+  if (typeof getHarnessPart2aFinancialFactsIntegrationScenario_ === 'function') {
+    list.push(getHarnessPart2aFinancialFactsIntegrationScenario_());
+  }
   if (typeof getHarnessRfpInvestmentActivityScenario_ === 'function') {
     list.push(getHarnessRfpInvestmentActivityScenario_());
   }

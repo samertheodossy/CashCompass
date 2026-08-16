@@ -1,6 +1,6 @@
 # CashCompass Part 2A — Identity and Data Contracts
 
-**Status:** Approved implementation contract for Part 2A-0 and Part 2A-1
+**Status:** Complete checkpoint for Part 2A-0 and Part 2A-1
 **Scope:** Contracts and stable identity only. Financial facts, Planning authority changes, OAuth, production connectors, tax lots, and portfolio recommendations are out of scope.
 
 ## 1. Architectural boundaries
@@ -124,3 +124,6 @@ Part 2A-1 provides read-only preview plus explicit digest-guarded apply. It crea
 - Persisted source identity uses a deterministic source-scoped SHA-256 key and masked identifier.
 - Activity and customer-facing diagnostics must not include raw external identifiers.
 - OAuth tokens, credentials, and raw account numbers never enter workbook cells, logs, recommendation objects, or browser responses.
+
+Part 2A-2 financial-fact semantics are defined separately in
+`PART_2A_FINANCIAL_FACTS_CONTRACT.md`; this identity contract remains frozen.
