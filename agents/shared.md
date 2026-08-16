@@ -45,6 +45,7 @@ These rules apply to every AI agent working in this repository.
 
 ## Git and Deploy Safety
 
+- Do not ask repeatedly for permission. Ordinary in-scope inspection, file edits, tests, and self-review never require approval. Once the user authorizes an otherwise gated action such as isolated deployment, commit, or push, execute it without seeking the same approval again. Stop only at a genuinely new, still-unauthorized boundary or material product decision.
 - Do not commit unless explicitly approved.
 - Do not push unless explicitly approved.
 - Do not deploy unless explicitly approved.

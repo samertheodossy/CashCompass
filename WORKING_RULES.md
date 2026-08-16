@@ -12,6 +12,8 @@ The Central App architecture is **live** and **family-beta capable**. Recovery V
 
 The change discipline below (carried from V1.2) still governs **every** edit. For Central App work, the **`## Central App Transition Rules`** section is now the **active** governing policy (it is no longer conditional / future).
 
+**No repeated permission rule:** Codex must not ask for approval to inspect, edit, test, self-review, or otherwise complete ordinary in-scope repository work. If the user has already authorized an action in the current task—including isolated-Central deployment, disposable validation, commit, or push—execute it without asking again. Stop only for a genuinely new product decision or an authorization boundary that the user has not already crossed. A tool permission dialog is not a reason to leave the task waiting when the action is already user-authorized and covered by an approved command scope.
+
 Every new change must follow these rules unless the user explicitly approves otherwise:
 
 - **One issue at a time.** Pick the single highest-value issue, ship it, lock it, then pick the next.
