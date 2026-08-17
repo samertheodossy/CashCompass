@@ -100,6 +100,12 @@ function getHarnessSuites_() {
       ]
     },
     {
+      id: 'SUITE-PART-2A-AUTHORITATIVE-CASH-IMPORT',
+      label: 'Part 2A Authoritative Cash Import',
+      description: 'Validate source-neutral OFX/QFX cash evidence, protected identity matching, exact provenance and freshness, partial safe apply, duplicate no-op, shadow reconciliation, Planning isolation, and disposable cleanup.',
+      scenarioIds: ['REGRESSION-PART-2A-AUTHORITATIVE-CASH-IMPORT']
+    },
+    {
       id: 'SUITE-RFP-CAPITAL-ALLOCATION-FOUNDATION',
       label: 'Capital Allocation Foundation',
       description: 'Validate deterministic read-only household facts, required constraints, and the unranked in-memory candidate queue before recommendation policy is enabled.',

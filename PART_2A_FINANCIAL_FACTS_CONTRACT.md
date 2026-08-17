@@ -1,6 +1,6 @@
 # CashCompass Part 2A-2 — Financial Facts Foundation
 
-**Status:** Implementation candidate; local and isolated-runtime evidence pending.
+**Status:** Complete on isolated Central `@357` (25/25 assertions, Provisioning/Drift PASS, verified Trash cleanup).
 **Authority boundary:** Existing Part 1 domain readers remain authoritative. The normalized fact reader is shadow-only.
 
 ## 1. Purpose
@@ -138,20 +138,20 @@ protected hashes, fact types, status, and reason codes only.
 
 ## 9. Current authority and deferred work
 
-Authoritative today:
+Authoritative evidence today:
 
 - Existing Part 1 domain sheets and Planning readers.
 - `SYS - Financial Accounts` and `SYS - Account Source Links` for normalized identity only.
-- `SYS - Financial Facts` as versioned normalized evidence when explicitly written by a reviewed future adapter or guarded test.
+- `SYS - Financial Facts` as versioned normalized evidence written by guarded tests and the reviewed Part 2A-3 cash adapter.
 
 Shadow-only today:
 
 - `readPlanningFinancialFacts_` and the in-memory current-fact projection.
 - Freshness, selection, diagnostics, and decision-quality evaluation over normalized facts.
 
-Not imported or switched in this slice:
+Not switched in this slice:
 
-- Cash or revolving-debt production facts.
+- Revolving-debt production facts.
 - Plaid, OAuth, direct connectors, statement pipelines, or broad legacy migration.
 - Brokerage tax lots, position reconciliation, or sell recommendations.
 - Any Planning or Capital Allocation authority change.
@@ -162,5 +162,6 @@ Not safe to act upon:
   evidence when the decision policy requires a current verified fact.
 - Cost basis that has not reconciled to the current position quantity.
 
-The next reviewed slice may shadow-compare equivalent legacy and normalized
-outputs. No authority switch is implied by this foundation.
+Part 2A-3 adds cash evidence and shadow comparison under
+`PART_2A_AUTHORITATIVE_CASH_IMPORT_CONTRACT.md`. No Planning authority switch is
+implied by either foundation.

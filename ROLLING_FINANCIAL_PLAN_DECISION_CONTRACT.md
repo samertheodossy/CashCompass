@@ -465,6 +465,14 @@ independently approved as read-only and must define consent, least-privilege
 scopes, token handling, revocation, retention, privacy, support, and failure
 behavior before implementation.
 
+Part 2A-3 implements the first cash evidence slice behind that direction. OFX/QFX
+adapts only explicit ledger/available balances and source-effective timestamps
+into protected, append-only Financial Facts after deterministic Preview. It does
+not import transaction rows as income or transfers, retain the raw file, write
+legacy bank balances/policies, or change Planning authority. The weekly plan
+cannot claim operational currentness until revolving-debt freshness joins cash
+and the combined reader switch is separately approved.
+
 The holdings layer should accept one current row per account/position containing
 at least Account stable ID, account name, account/registration type, ticker,
 security name/type, quantity, price/as-of date, market value, cash, annual

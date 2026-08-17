@@ -435,6 +435,133 @@ function harnessFinancialFactFixture_(overrides) {
   return base;
 }
 
+/** Part 2A-3 source evidence -> identity -> facts, without Planning authority. */
+function getHarnessPart2aAuthoritativeCashImportScenario_() {
+  var names = getSheetNames_();
+  return {
+    id: 'REGRESSION-PART-2A-AUTHORITATIVE-CASH-IMPORT',
+    category: 'REGRESSION', executionLevel: 'INTEGRATION',
+    expectedAssertionCount: 24,
+    description: 'Import authoritative cash evidence into append-only facts with protected identity, partial safe apply, duplicate no-op, exact timestamps, and no legacy Planning writes.',
+    requiresTrashCleanup: true,
+    expectedSheets: [names.ACCOUNTS, names.FINANCIAL_ACCOUNTS, names.ACCOUNT_SOURCE_LINKS,
+      names.FINANCIAL_FACTS, names.IMPORT_RUNS, 'SYS - Meta'],
+    setup: function(ctx) {
+      ctx.beforeNames = ctx.ss.getSheets().map(function(sheet) { return sheet.getName(); });
+      ctx.assertWritable();
+      var accounts = ensureFinancialAccountsSheet_(ctx.ss);
+      ctx.assertWritable();
+      var links = ensureAccountSourceLinksSheet_(ctx.ss);
+      var now = '2026-08-15T13:00:00.000Z';
+      ctx.assertWritable();
+      var legacy = ensureSysAccountsSheet_(ctx.ss);
+      harnessPart2aCashImportFixture_(legacy, accounts, links, now);
+      ctx.legacyPolicyBefore = legacy.getRange(2, 1, 1, legacy.getLastColumn())
+        .getDisplayValues()[0];
+      ctx.identityRowsBefore = accounts.getLastRow();
+      ctx.linkRowsBefore = links.getLastRow();
+      ctx.planningBefore = JSON.stringify(getCapitalAllocationPlanForSpreadsheet_(ctx.ss,
+        { asOfDate: '2026-08-15' }));
+      ctx.actions.push('Create protected identity and source link on explicit disposable target');
+    },
+    actions: function(ctx) {
+      ctx.rawIdentifier = 'FIXTURE-RAW-9012';
+      ctx.ofx = [
+        'OFXHEADER:100', 'DATA:OFXSGML', 'VERSION:102', '', '<OFX>',
+        '<SIGNONMSGSRSV1><SONRS><FI><ORG>Fixture Bank</ORG><FID>99999</FID></FI></SONRS></SIGNONMSGSRSV1>',
+        '<BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>USD',
+        '<BANKACCTFROM><BANKID>000000000<ACCTID>' + ctx.rawIdentifier + '<ACCTTYPE>SAVINGS</BANKACCTFROM>',
+        '<LEDGERBAL><BALAMT>29850.00<DTASOF>20260815080000[-5:EST]</LEDGERBAL>',
+        '<AVAILBAL><BALAMT>29700.00<DTASOF>20260815080000[-5:EST]</AVAILBAL>',
+        '</STMTRS></STMTTRNRS><STMTTRNRS><STMTRS><CURDEF>USD',
+        '<BANKACCTFROM><BANKID>000000000<ACCTID>UNLINKED-2222<ACCTTYPE>CHECKING</BANKACCTFROM>',
+        '<LEDGERBAL><BALAMT>125.00<DTASOF>20260815080000[-5:EST]</LEDGERBAL>',
+        '</STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>'
+      ].join('\n');
+      ctx.adapter = adaptOfxCashEvidence_(ctx.ofx, { institution: 'Fixture Bank',
+        ownerId: 'SAMER', registrationType: 'INDIVIDUAL',
+        observedAt: '2026-08-15T14:00:00.000Z' });
+      ctx.preview = previewAuthoritativeCashImport_(ctx.ss, ctx.adapter, {},
+        '2026-08-15T15:00:00.000Z');
+      ctx.assertWritable();
+      ctx.first = applyAuthoritativeCashImport_(ctx.ss, ctx.adapter, {},
+        ctx.preview.previewDigest, '2026-08-15T15:00:00.000Z');
+      ctx.assertWritable();
+      ctx.duplicate = applyAuthoritativeCashImport_(ctx.ss, ctx.adapter, {},
+        ctx.preview.previewDigest, '2026-08-15T15:00:00.000Z');
+      ctx.facts = readFinancialFacts_(ctx.ss);
+      ctx.selection = selectCurrentFinancialFact_(ctx.facts, 'CASH-FIXTURE-ALLY',
+        'CURRENT_BALANCE', '2026-08-15T15:00:00.000Z');
+      ctx.factRows = ctx.ss.getSheetByName(names.FINANCIAL_FACTS).getDataRange().getDisplayValues();
+      ctx.runRows = ctx.ss.getSheetByName(names.IMPORT_RUNS).getDataRange().getDisplayValues();
+      ctx.shadow = getCashImportShadowComparison_(ctx.ss, [], '2026-08-15T15:00:00.000Z');
+      ctx.planningAfter = JSON.stringify(getCapitalAllocationPlanForSpreadsheet_(ctx.ss,
+        { asOfDate: '2026-08-15' }));
+      ctx.legacyPolicyAfter = ctx.ss.getSheetByName(names.ACCOUNTS)
+        .getRange(2, 1, 1, ctx.ss.getSheetByName(names.ACCOUNTS).getLastColumn())
+        .getDisplayValues()[0];
+      ctx.finalNames = ctx.ss.getSheets().map(function(sheet) { return sheet.getName(); });
+      ctx.actions.push('Preview and apply two-account evidence, safely retain one review row, then replay identical evidence');
+    },
+    expectedOutcome: function(ctx) {
+      var mod = 'Part 2A Authoritative Cash Import';
+      ctx.assert.equals('Two source accounts preview independently', ctx.preview.summary.accounts, 2,
+        { module: mod });
+      ctx.assert.equals('Verified source link matches one account', ctx.preview.summary.matched, 1,
+        { module: mod });
+      ctx.assert.equals('Unlinked account remains review required', ctx.preview.summary.reviewRequired, 1,
+        { module: mod });
+      ctx.assert.equals('Partial safe apply reports review state', ctx.first.status,
+        'PARTIAL_REVIEW_REQUIRED', { module: mod });
+      ctx.assert.equals('Matched account appends current and available facts', ctx.first.appendedFacts, 2,
+        { module: mod });
+      ctx.assert.equals('Unresolved account creates no identity',
+        ctx.ss.getSheetByName(names.FINANCIAL_ACCOUNTS).getLastRow(), ctx.identityRowsBefore,
+        { module: mod });
+      ctx.assert.equals('Unresolved account creates no source link',
+        ctx.ss.getSheetByName(names.ACCOUNT_SOURCE_LINKS).getLastRow(), ctx.linkRowsBefore,
+        { module: mod });
+      ctx.assert.equals('Exact source effective instant is retained',
+        ctx.selection.fact.effectiveAsOf, '2026-08-15T13:00:00.000Z', { module: mod });
+      ctx.assert.equals('Exact observed instant is retained',
+        ctx.selection.fact.observedAt, '2026-08-15T14:00:00.000Z', { module: mod });
+      ctx.assert.equals('Current authoritative cash is actionable',
+        ctx.selection.freshness.safeToAct, true, { module: mod });
+      ctx.assert.equals('Missing APY is explicit in preview',
+        ctx.preview.accounts[0].diagnostics.indexOf('CASH_YIELD_DATA_REQUIRED') !== -1,
+        true, { module: mod });
+      ctx.assert.equals('Shadow report selects imported balance',
+        ctx.shadow[0].normalizedValue, 29850, { module: mod });
+      ctx.assert.equals('Shadow report retains legacy balance',
+        ctx.shadow[0].legacyValue, 30411, { module: mod });
+      ctx.assert.equals('Shadow difference is retained exactly',
+        ctx.shadow[0].difference, -561, { module: mod });
+      ctx.assert.equals('Exact reconciliation is separate from undecided planning materiality',
+        JSON.stringify([ctx.shadow[0].reconciliationStatus, ctx.shadow[0].materialityStatus]),
+        JSON.stringify(['DIFFERENCE_DETECTED', 'NOT_YET_DECIDED']), { module: mod });
+      ctx.assert.equals('Identical evidence replay is a no-op', ctx.duplicate.status,
+        'DUPLICATE_NOOP', { module: mod });
+      ctx.assert.equals('Duplicate replay appends no facts', ctx.duplicate.appendedFacts, 0,
+        { module: mod });
+      ctx.assert.equals('Manifest records one applied attempt', ctx.runRows.length, 2,
+        { module: mod });
+      ctx.assert.equals('Facts retain no raw account identifier',
+        JSON.stringify(ctx.factRows).indexOf(ctx.rawIdentifier), -1, { module: mod });
+      ctx.assert.equals('Manifest retains no raw account identifier',
+        JSON.stringify(ctx.runRows).indexOf(ctx.rawIdentifier), -1, { module: mod });
+      ctx.assert.equals('Legacy bank authority is not created',
+        ctx.finalNames.indexOf(names.BANK_ACCOUNTS), -1, { module: mod });
+      ctx.assert.equals('Do Not Touch and Min Buffer policy row remains byte-equivalent',
+        JSON.stringify(ctx.legacyPolicyAfter), JSON.stringify(ctx.legacyPolicyBefore),
+        { module: mod });
+      ctx.assert.equals('Planning output remains byte-equivalent',
+        ctx.planningAfter, ctx.planningBefore, { module: mod });
+      ctx.assert.equals('No persisted Current Facts sheet is created',
+        ctx.finalNames.indexOf('SYS - Current Facts'), -1, { module: mod });
+    }
+  };
+}
+
 function harnessRfpAddInvestment_(ctx, year, today, name, balance, active) {
   var input = ctx.ss.getSheetByName(getSheetNames_().INVESTMENTS);
   var block = getInvestmentsYearBlock_(input, year);

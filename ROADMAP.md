@@ -462,9 +462,21 @@ runtime-validation boundary.
   import is introduced. Two scenarios passed 25/25 assertions in 18.8 seconds
   with Provisioning/Drift PASS, both marker-verified fixtures verified TRASHED,
   and the disposable runner OFF. Contract: `PART_2A_FINANCIAL_FACTS_CONTRACT.md`.
-- **Stop after 2A-2:** production cash/revolving-debt facts, legacy-vs-normalized
-  shadow comparison, and the first operational freshness milestone remain later
-  reviewed slices.
+- **2A-3 — First Authoritative Cash Import:** runtime-proven on isolated Central
+  `@358`. Adds the
+  source-neutral `CASH_EVIDENCE_V1` boundary, first OFX/QFX statement adapter,
+  fail-closed account matching, deterministic Preview/Apply, append-only cash
+  facts, sanitized `SYS - Import Runs`, exact timestamps, duplicate no-op,
+  verified-manual fallback, exact currency-minor-unit shadow reconciliation
+  separated from not-yet-decided planning materiality, and
+  explicit cash-yield diagnostics. Planning remains on its existing reader.
+  Run `20260816-200938-c001` passed the registered scenario and 24/24 assertions
+  in 23.8 seconds with Provisioning/Drift PASS, verified Trash cleanup, and the
+  disposable runner OFF. Real Ally/Bank of America exports remain unproven; no
+  bounded evidence is claimed.
+- **Stop after 2A-3:** revolving-debt authoritative import and the combined
+  cash-plus-revolving-debt operational freshness milestone remain later reviewed
+  slices. Planning authority has not switched.
 
 **Remaining broad-Beta sequence:** close the core `RFP-1`–`RFP-5` program;
 resume and close `3o` Houses, Income, and Bills; close the separate `3j` task; return to

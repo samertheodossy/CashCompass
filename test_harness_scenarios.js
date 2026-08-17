@@ -168,6 +168,9 @@ function getHarnessScenarios_() {
   if (typeof getHarnessPart2aFinancialFactsIntegrationScenario_ === 'function') {
     list.push(getHarnessPart2aFinancialFactsIntegrationScenario_());
   }
+  if (typeof getHarnessPart2aAuthoritativeCashImportScenario_ === 'function') {
+    list.push(getHarnessPart2aAuthoritativeCashImportScenario_());
+  }
   if (typeof getHarnessRfpInvestmentActivityScenario_ === 'function') {
     list.push(getHarnessRfpInvestmentActivityScenario_());
   }

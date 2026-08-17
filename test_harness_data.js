@@ -360,3 +360,17 @@ function harnessSetRetirementScenarioValues_(sheet, label, values) {
   }
   sheet.getRange(harnessFindLabelRow_(sheet, label), 2, 1, 3).setValues([values]);
 }
+/** Deterministic Part 2A-3 identity/legacy fixture. Disposable targets only. */
+function harnessPart2aCashImportFixture_(legacySheet, accountSheet, linkSheet, now) {
+  appendAccountsRowForNewBank_(legacySheet, 'Fixture Ally Savings', 'Savings',
+    'Do Not Touch', 1);
+  legacySheet.getRange(legacySheet.getLastRow(), 2, 1, 3)
+    .setValues([[30411, 30411, 1000]]);
+  accountSheet.appendRow(['CASH-FIXTURE-ALLY', 'CASH', 'Fixture Ally Savings',
+    'Fixture Bank', 'SAVINGS', '', 'SAMER', 'INDIVIDUAL', 'USD', '9012',
+    'Yes', 'VERIFIED', 'SYS_ACCOUNTS', 'Fixture Ally Savings', now, now]);
+  var key = financialIdentitySourceAccountKey_('OFX_FID_99999', 'FIXTURE-RAW-9012');
+  linkSheet.appendRow(['LINK-FIXTURE-ALLY', 'CASH-FIXTURE-ALLY', 'FILE_IMPORT',
+    'OFX_FID_99999', key, '••••9012', 'Fixture Bank', 'SAVINGS',
+    'VERIFIED', now, now]);
+}
