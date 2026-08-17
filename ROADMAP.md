@@ -474,9 +474,19 @@ runtime-validation boundary.
   in 23.8 seconds with Provisioning/Drift PASS, verified Trash cleanup, and the
   disposable runner OFF. Real Ally/Bank of America exports remain unproven; no
   bounded evidence is claimed.
-- **Stop after 2A-3:** revolving-debt authoritative import and the combined
-  cash-plus-revolving-debt operational freshness milestone remain later reviewed
-  slices. Planning authority has not switched.
+- **2A-4 — Authoritative Revolving Debt Import:** runtime-proven on isolated
+  Central `@363`. Adds `DEBT_EVIDENCE_V1`, OFX/QFX and
+  structured/manual adapters, separate debt/APR component facts, deterministic
+  Preview/Apply, protected identity, granular balance/ranking/payment/payoff
+  readiness, and shadow reconciliation. Planning APR is selected only when the
+  source proves economic applicability to the carried balance; ambiguity stays
+  Review Required. Current zero balances do not release minimums. Planning
+  remains on `INPUT - Debts` and no authority switch is included. Run
+  `20260817-074631-0fb6` passed 1/1 scenario and 33/33 assertions in 44.7 seconds
+  with restricted sharing, Provisioning/Drift PASS, verified Trash cleanup, and
+  the disposable runner OFF.
+- **Stop after 2A-4:** the combined cash-plus-revolving-debt authority switch,
+  persisted Current Facts, and customer import UI require separate review.
 
 **Remaining broad-Beta sequence:** close the core `RFP-1`–`RFP-5` program;
 resume and close `3o` Houses, Income, and Bills; close the separate `3j` task; return to

@@ -4,7 +4,7 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
 
 ## Current Product Status (August 2026)
 
-- **Stage:** **Stage 3 — Beta Readiness (current).** **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** The capability estimate remains **Family Beta Readiness ~97–98% · External / Public Beta Readiness ~92%**. The last formal independent advocate score is **8.3/10** on isolated Central `@180`; it remains official because the isolated `@196` **7.2/10** run was read-only and evidence-limited, not a comparable writer-inclusive rescore. Isolated Central is `@358`; RFP-3a provides the runtime-proven deterministic household-fact and unranked Capital Allocation Queue foundation, Part 2A-1 stable financial identity passed at `@356`, Part 2A-2 Financial Facts passed at `@357`, and Part 2A-3 authoritative cash import passed at `@358`. RFP-2 provides optional multi-account **Income-Producing Accounts** designations with stable investment identity and no `INPUT - Investments` schema change. `RFP-6a` remains runtime-proven: preview-first Robinhood activity import writes only normalized, deduplicated system activity and derived holdings, while `INPUT - Investments` remains the balance authority and raw CSV is not retained. The owner-controlled bounded import saved 104 Samer Robinhood activities and reconciled JEPQ/QQQ/QQQI/SPYI holdings; later duplicate-safe acceptance confirmed shared content fitting. Central Beta remains `@106`; no bounded deployment or bounded-workbook write occurred for Part 2A. Customer-facing operations and the broad `3j` audit are deferred, not waived. `BETA_10_OUT_OF_10_PLAN.md` defines the ≥95/100 release standard and monetization foundations; `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered open inventory with estimates, regression homes, and the optimized execution model.
+- **Stage:** **Stage 3 — Beta Readiness (current).** **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** The capability estimate remains **Family Beta Readiness ~97–98% · External / Public Beta Readiness ~92%**. The last formal independent advocate score is **8.3/10** on isolated Central `@180`; it remains official because the isolated `@196` **7.2/10** run was read-only and evidence-limited, not a comparable writer-inclusive rescore. Isolated Central is `@363`; RFP-3a provides the runtime-proven deterministic household-fact and unranked Capital Allocation Queue foundation, Part 2A-1 stable financial identity passed at `@356`, Part 2A-2 Financial Facts passed at `@357`, Part 2A-3 authoritative cash import passed at `@358`, and Part 2A-4 authoritative revolving-debt import passed at `@363`. RFP-2 provides optional multi-account **Income-Producing Accounts** designations with stable investment identity and no `INPUT - Investments` schema change. `RFP-6a` remains runtime-proven: preview-first Robinhood activity import writes only normalized, deduplicated system activity and derived holdings, while `INPUT - Investments` remains the balance authority and raw CSV is not retained. The owner-controlled bounded import saved 104 Samer Robinhood activities and reconciled JEPQ/QQQ/QQQI/SPYI holdings; later duplicate-safe acceptance confirmed shared content fitting. Central Beta remains `@106`; no bounded deployment or bounded-workbook write occurred for Part 2A. Customer-facing operations and the broad `3j` audit are deferred, not waived. `BETA_10_OUT_OF_10_PLAN.md` defines the ≥95/100 release standard and monetization foundations; `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered open inventory with estimates, regression homes, and the optimized execution model.
 - **Architecture:** Central App operational — **stable, family-beta capable**. The production / bound workbook remains protected (bound mode unchanged); the central architecture is operational and runtime-validated.
 - **Completed (working in central mode):** Provisioning, Workbook Mapping, Dashboard, Planner, Assets, Properties, Cash Flow, Bills, Debts, Income, Activity, Email.
 - **Current Debt navigation (2026-07-31):** Debt maintenance lives under **Assets & Liabilities → Debt accounts**. **Planning → Debt Overview** is read-only comparison, and **Planning → Rolling Debt Payoff** is the actionable month-by-month plan. Older historical notes that say `Planning → Debts` describe the former navigation label only.
@@ -33,7 +33,7 @@ PASS, verified Trash cleanup). Part 2A-2 passed isolated Central `@357`: two
 registered scenarios passed 25/25 assertions in 18.8 seconds, Provisioning and
 Drift passed, both marker-verified fixtures were verified TRASHED, and the
 disposable runner returned OFF. The implementation adds lazy, append-only
-`SYS - Financial Facts`, all 14 typed fact contracts, exact Effective-As-Of vs
+`SYS - Financial Facts`, all 23 typed fact contracts, exact Effective-As-Of vs
 Observed-At provenance, centralized `DATA_QUALITY_POLICY_V1`, policy-owned
 current selection, decision-specific confidence/actionability, idempotent
 evidence, and an in-memory rebuildable current projection. Existing domain
@@ -58,6 +58,21 @@ passed its registered scenario and 24/24 assertions in 23.8 seconds with
 Provisioning/Drift PASS, verified Trash cleanup, and the disposable runner OFF.
 Review of real Ally/Bank of America exports remains pending; no bounded evidence
 is claimed.
+
+**Part 2A-4 runtime-proven candidate (2026-08-17):** `debt_import.js` adds the
+source-neutral `DEBT_EVIDENCE_V1` boundary with OFX/QFX, structured snapshot,
+and verified-manual adapters. It preserves balance, minimum, next-payment,
+credit, and separately typed APR evidence behind deterministic Preview/Apply.
+Planning APR is selected only when source semantics prove applicability to the
+carried balance; ambiguity remains Review Required. Balance, interest-ranking,
+payment-obligation, and exact-payoff readiness remain distinct. Current zero
+balances do not release minimums, `INPUT - Debts` remains authoritative, and
+Planning is unchanged. Isolated Central `@363` suite run
+`20260817-074631-0fb6` passed 1/1 scenario and 33/33 assertions in 44.7 seconds
+with restricted sharing, Provisioning, Drift, and verified Trash cleanup all
+PASS; the disposable runner returned OFF. A runtime-only Sheets coercion of the
+exact due-date fact was corrected at the read boundary so date facts remain
+canonical `YYYY-MM-DD`. No bounded workbook or Central Beta deployment was used.
 
 **RFP-3a foundation (2026-08-14):** `capital_allocation.js` adds a
 spreadsheet-scoped, read-only household-fact seam and a pure deterministic

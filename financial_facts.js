@@ -28,6 +28,10 @@ var FINANCIAL_FACT_TYPES_ = {
   CURRENT_BALANCE: true, AVAILABLE_BALANCE: true, ACCOUNT_VALUE: true,
   APR: true, APY: true, CREDIT_LIMIT: true, MINIMUM_PAYMENT: true,
   NEXT_PAYMENT_AMOUNT: true, NEXT_PAYMENT_DATE: true,
+  AVAILABLE_CREDIT: true, DISCLOSED_APR: true, PURCHASE_APR: true, CASH_ADVANCE_APR: true,
+  BALANCE_TRANSFER_APR: true, PROMOTIONAL_APR: true,
+  PROMOTIONAL_APR_EXPIRATION: true, DEFERRED_INTEREST_STATUS: true,
+  DEFERRED_INTEREST_EXPIRATION: true,
   POSITION_QUANTITY: true, POSITION_MARKET_VALUE: true,
   SECURITY_PRICE: true, COST_BASIS: true, CASH_SWEEP_YIELD: true
 };
@@ -50,6 +54,24 @@ var FINANCIAL_FACT_TYPE_METADATA_ = {
   NEXT_PAYMENT_AMOUNT: { valueKind: 'NUMERIC', unitKind: 'CURRENCY',
     freshnessCategory: 'MODERATELY_TIME_SENSITIVE', selectionPolicy: 'DEFAULT' },
   NEXT_PAYMENT_DATE: { valueKind: 'DATE', unitKind: 'DATE',
+    freshnessCategory: 'MODERATELY_TIME_SENSITIVE', selectionPolicy: 'DEFAULT' },
+  AVAILABLE_CREDIT: { valueKind: 'NUMERIC', unitKind: 'CURRENCY',
+    freshnessCategory: 'HIGHLY_TIME_SENSITIVE', selectionPolicy: 'BALANCE_VALUE' },
+  DISCLOSED_APR: { valueKind: 'NUMERIC', unitKind: 'PERCENT',
+    freshnessCategory: 'MODERATELY_TIME_SENSITIVE', selectionPolicy: 'DEFAULT' },
+  PURCHASE_APR: { valueKind: 'NUMERIC', unitKind: 'PERCENT',
+    freshnessCategory: 'MODERATELY_TIME_SENSITIVE', selectionPolicy: 'DEFAULT' },
+  CASH_ADVANCE_APR: { valueKind: 'NUMERIC', unitKind: 'PERCENT',
+    freshnessCategory: 'MODERATELY_TIME_SENSITIVE', selectionPolicy: 'DEFAULT' },
+  BALANCE_TRANSFER_APR: { valueKind: 'NUMERIC', unitKind: 'PERCENT',
+    freshnessCategory: 'MODERATELY_TIME_SENSITIVE', selectionPolicy: 'DEFAULT' },
+  PROMOTIONAL_APR: { valueKind: 'NUMERIC', unitKind: 'PERCENT',
+    freshnessCategory: 'MODERATELY_TIME_SENSITIVE', selectionPolicy: 'DEFAULT' },
+  PROMOTIONAL_APR_EXPIRATION: { valueKind: 'DATE', unitKind: 'DATE',
+    freshnessCategory: 'MODERATELY_TIME_SENSITIVE', selectionPolicy: 'DEFAULT' },
+  DEFERRED_INTEREST_STATUS: { valueKind: 'TEXT', unitKind: 'STATUS',
+    freshnessCategory: 'MODERATELY_TIME_SENSITIVE', selectionPolicy: 'DEFAULT' },
+  DEFERRED_INTEREST_EXPIRATION: { valueKind: 'DATE', unitKind: 'DATE',
     freshnessCategory: 'MODERATELY_TIME_SENSITIVE', selectionPolicy: 'DEFAULT' },
   POSITION_QUANTITY: { valueKind: 'NUMERIC', unitKind: 'QUANTITY',
     freshnessCategory: 'HIGHLY_TIME_SENSITIVE', selectionPolicy: 'DEFAULT' },
@@ -110,6 +132,10 @@ var DATA_QUALITY_POLICY_V1_ = {
     ACCOUNT_VALUE: 'BALANCE_VALUE', APR: 'DEFAULT', APY: 'DEFAULT',
     CREDIT_LIMIT: 'DEFAULT', MINIMUM_PAYMENT: 'DEFAULT',
     NEXT_PAYMENT_AMOUNT: 'DEFAULT', NEXT_PAYMENT_DATE: 'DEFAULT',
+    AVAILABLE_CREDIT: 'BALANCE_VALUE', DISCLOSED_APR: 'DEFAULT', PURCHASE_APR: 'DEFAULT',
+    CASH_ADVANCE_APR: 'DEFAULT', BALANCE_TRANSFER_APR: 'DEFAULT',
+    PROMOTIONAL_APR: 'DEFAULT', PROMOTIONAL_APR_EXPIRATION: 'DEFAULT',
+    DEFERRED_INTEREST_STATUS: 'DEFAULT', DEFERRED_INTEREST_EXPIRATION: 'DEFAULT',
     POSITION_QUANTITY: 'DEFAULT', POSITION_MARKET_VALUE: 'DEFAULT',
     SECURITY_PRICE: 'DEFAULT', COST_BASIS: 'RECONCILIATION',
     CASH_SWEEP_YIELD: 'DEFAULT'
@@ -284,6 +310,14 @@ function financialFactValidateValueContract_(factType, numeric, text, unit) {
       throw new Error(factType + ' requires Currency Or Unit = DATE.');
     }
     return { numericValue: '', textValue: text, currencyOrUnit: 'DATE' };
+  }
+  if (metadata.valueKind === 'TEXT') {
+    if (numeric !== '') throw new Error(factType + ' does not permit Numeric Value.');
+    if (!text) throw new Error(factType + ' requires Text Value.');
+    if (metadata.unitKind === 'STATUS' && normalizedUnit !== 'STATUS') {
+      throw new Error(factType + ' requires Currency Or Unit = STATUS.');
+    }
+    return { numericValue: '', textValue: text.toUpperCase(), currencyOrUnit: normalizedUnit };
   }
   if (numeric === '') throw new Error(factType + ' requires Numeric Value.');
   if (text) throw new Error(factType + ' does not permit Text Value with Numeric Value.');
@@ -757,13 +791,31 @@ function financialFactToRow_(fact) {
     fact.reconciliationStatus, fact.createdAt];
 }
 
+function financialFactTextValueFromCell_(value, factType) {
+  if (FINANCIAL_FACT_TYPE_METADATA_[factType] &&
+      FINANCIAL_FACT_TYPE_METADATA_[factType].valueKind === 'DATE' &&
+      Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    if (typeof Utilities !== 'undefined' && Utilities &&
+        typeof Utilities.formatDate === 'function' && typeof Session !== 'undefined' &&
+        Session && typeof Session.getScriptTimeZone === 'function') {
+      return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    }
+    var year = value.getFullYear();
+    var month = String(value.getMonth() + 1).padStart(2, '0');
+    var day = String(value.getDate()).padStart(2, '0');
+    return year + '-' + month + '-' + day;
+  }
+  return String(value || '').trim();
+}
+
 function financialFactFromRow_(row) {
+  var factType = String(row[2] || '').trim();
   return {
     factId: String(row[0] || '').trim(),
     stableInternalAccountId: String(row[1] || '').trim(),
-    factType: String(row[2] || '').trim(),
+    factType: factType,
     numericValue: row[3] === '' ? '' : Number(row[3]),
-    textValue: String(row[4] || '').trim(),
+    textValue: financialFactTextValueFromCell_(row[4], factType),
     currencyOrUnit: String(row[5] || '').trim(),
     effectiveAsOf: financialFactIso_(row[6], 'Effective As Of'),
     observedAt: financialFactIso_(row[7], 'Observed At'),

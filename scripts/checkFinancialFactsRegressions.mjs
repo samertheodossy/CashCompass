@@ -60,11 +60,14 @@ const expectedTypes = [
   'CURRENT_BALANCE', 'AVAILABLE_BALANCE', 'ACCOUNT_VALUE', 'APR', 'APY',
   'CREDIT_LIMIT', 'MINIMUM_PAYMENT', 'NEXT_PAYMENT_AMOUNT', 'NEXT_PAYMENT_DATE',
   'POSITION_QUANTITY', 'POSITION_MARKET_VALUE', 'SECURITY_PRICE', 'COST_BASIS',
-  'CASH_SWEEP_YIELD'
+  'CASH_SWEEP_YIELD', 'AVAILABLE_CREDIT', 'DISCLOSED_APR', 'PURCHASE_APR',
+  'CASH_ADVANCE_APR', 'BALANCE_TRANSFER_APR', 'PROMOTIONAL_APR',
+  'PROMOTIONAL_APR_EXPIRATION', 'DEFERRED_INTEREST_STATUS',
+  'DEFERRED_INTEREST_EXPIRATION'
 ];
 assert.deepEqual(Object.keys(context.FINANCIAL_FACT_TYPES_).sort(), expectedTypes.sort(),
-  'the initial Financial Facts contract must contain all 14 approved types');
-assert.equal(Object.keys(context.FINANCIAL_FACT_TYPE_METADATA_).length, 14,
+  'the Financial Facts contract must contain all approved foundation and debt types');
+assert.equal(Object.keys(context.FINANCIAL_FACT_TYPE_METADATA_).length, 23,
   'every fact type must have value metadata');
 
 const unknownLegacy = context.financialFactFromLegacyValue_({

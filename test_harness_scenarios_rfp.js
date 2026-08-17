@@ -211,7 +211,7 @@ function getHarnessPart2aFinancialFactsScenario_() {
     category: 'REGRESSION',
     executionLevel: 'PURE',
     expectedAssertionCount: 15,
-    description: 'Prove all 14 fact contracts, Effective As Of freshness, policy-owned precedence, conflict retention, value typing, and decision-specific actionability.',
+    description: 'Prove all 23 foundation and debt fact contracts, Effective As Of freshness, policy-owned precedence, conflict retention, value typing, and decision-specific actionability.',
     requiresTrashCleanup: true,
     expectedSheets: ['SYS - Meta'],
     setup: function(ctx) {
@@ -312,8 +312,8 @@ function getHarnessPart2aFinancialFactsScenario_() {
     },
     expectedOutcome: function(ctx) {
       var mod = 'Part 2A Financial Facts';
-      ctx.assert.equals('All fourteen approved fact types are present',
-        Object.keys(FINANCIAL_FACT_TYPES_).length, 14, { module: mod });
+      ctx.assert.equals('All approved foundation and debt fact types are present',
+        Object.keys(FINANCIAL_FACT_TYPES_).length, 23, { module: mod });
       ctx.assert.equals('Missing legacy timestamp remains UNKNOWN',
         evaluateFinancialFactFreshness_(ctx.unknown, ctx.asOf).status, 'UNKNOWN', { module: mod });
       ctx.assert.equals('Observed today does not refresh old evidence',
@@ -558,6 +558,213 @@ function getHarnessPart2aAuthoritativeCashImportScenario_() {
         ctx.planningAfter, ctx.planningBefore, { module: mod });
       ctx.assert.equals('No persisted Current Facts sheet is created',
         ctx.finalNames.indexOf('SYS - Current Facts'), -1, { module: mod });
+    }
+  };
+}
+
+/** Part 2A-4 revolving debt evidence -> facts/readiness, without Planning authority. */
+function getHarnessPart2aAuthoritativeDebtImportScenario_() {
+  var names = getSheetNames_();
+  return {
+    id: 'REGRESSION-PART-2A-AUTHORITATIVE-REVOLVING-DEBT',
+    category: 'REGRESSION', executionLevel: 'INTEGRATION',
+    expectedAssertionCount: 33,
+    description: 'Import authoritative revolving-debt evidence with protected identity, partial safe apply, manual APR supplement, granular readiness, ambiguity refusal, privacy, duplicate no-op, and no Planning authority change.',
+    requiresTrashCleanup: true,
+    expectedSheets: [names.ACCOUNTS, names.DEBTS, names.FINANCIAL_ACCOUNTS,
+      names.ACCOUNT_SOURCE_LINKS, names.FINANCIAL_FACTS, names.IMPORT_RUNS, 'SYS - Meta'],
+    setup: function(ctx) {
+      ctx.asOf = '2026-08-16T20:00:00.000Z';
+      ctx.rawIdentifier = '4111111111110393';
+      ctx.assertWritable();
+      var sysAccounts = ensureSysAccountsSheet_(ctx.ss);
+      harnessAppendByHeader_(sysAccounts, { 'Account Name': 'Fixture Cash',
+        'Current Balance': 20000, 'Available Now': 20000, 'Min Buffer': 1000,
+        'Type': 'Checking', 'Use Policy': 'USE_WITH_CAUTION', 'Priority': 1, 'Active': 'Yes' });
+      ctx.assertWritable();
+      ensureOnboardingDebtsSheetFromDashboard('normal', ctx.ss);
+      var debts = ctx.ss.getSheetByName(names.DEBTS);
+      var hm = getDebtsHeaderMap_(debts);
+      var totalRow = findDebtTotalRow_(debts, hm);
+      harnessInsertBeforeByHeader_(debts, totalRow, { 'Account Name': 'Fixture CitiAA',
+        'Type': 'Credit Card', 'Account Balance': 9500, 'Due Date': 25,
+        'Credit Limit': 15000, 'Minimum Payment': 270, 'Credit Left': 5500,
+        'Int Rate': 22.99, 'Acct PCT Avail': 36.67, 'Active': 'Yes',
+        'Linked Property': '' });
+      refreshDebtsTotalRow_(debts, hm, findDebtTotalRow_(debts, hm));
+      ctx.assertWritable();
+      var accounts = ensureFinancialAccountsSheet_(ctx.ss);
+      ctx.assertWritable();
+      var links = ensureAccountSourceLinksSheet_(ctx.ss);
+      ctx.sourceSystem = 'OFX_FID_4242';
+      ctx.sourceKey = financialIdentitySourceAccountKey_(ctx.sourceSystem, ctx.rawIdentifier);
+      harnessPart2aDebtImportIdentityFixture_(accounts, links, ctx.sourceSystem,
+        ctx.sourceKey, ctx.asOf);
+      ctx.assertWritable();
+      appendFinancialFacts_(ctx.ss, [{ stableInternalAccountId: 'CASH-FIXTURE',
+        factType: 'CURRENT_BALANCE', numericValue: 20000, currencyOrUnit: 'USD',
+        effectiveAsOf: ctx.asOf, observedAt: ctx.asOf, sourceType: 'MANUAL',
+        sourceSystem: 'HARNESS_VERIFIED',
+        sourceRecordKey: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+        authorityClass: 'USER_VERIFIED_MANUAL', verificationStatus: 'VERIFIED',
+        verifiedAt: ctx.asOf, manualOverride: true, reconciliationStatus: 'MATCHED' }],
+      { asOf: ctx.asOf, defaultCreatedAt: ctx.asOf });
+      ctx.debtRowBefore = debts.getDataRange().getDisplayValues()[1];
+      ctx.planningBefore = JSON.stringify(getCapitalAllocationPlanForSpreadsheet_(ctx.ss,
+        { asOfDate: '2026-08-16' }));
+      ctx.actions.push('Seed synthetic legacy debt, protected stable identities, one verified source link, and current cash on the disposable target');
+    },
+    actions: function(ctx) {
+      ctx.ofx = [
+        'OFXHEADER:100', 'DATA:OFXSGML', 'VERSION:102', '', '<OFX>',
+        '<SIGNONMSGSRSV1><SONRS><FI><ORG>Fixture Card Bank</ORG><FID>4242</FID></FI></SONRS></SIGNONMSGSRSV1>',
+        '<CREDITCARDMSGSRSV1><CCSTMTTRNRS><CCSTMTRS><CURDEF>USD',
+        '<CCACCTFROM><ACCTID>' + ctx.rawIdentifier + '</CCACCTFROM>',
+        '<LEDGERBAL><BALAMT>9000.00<DTASOF>20260816090000[-5:EST]</LEDGERBAL>',
+        '<MINPMTDUE>270.00<NEXTPMTAMT>500.00<DTPMTDUE>20260825000000[-5:EST]',
+        '<CREDITLIMIT>15000.00</CCSTMTRS></CCSTMTTRNRS>',
+        '<CCSTMTTRNRS><CCSTMTRS><CURDEF>USD',
+        '<CCACCTFROM><ACCTID>UNLINKED-2222</CCACCTFROM>',
+        '<LEDGERBAL><BALAMT>125.00<DTASOF>20260816090000[-5:EST]</LEDGERBAL>',
+        '</CCSTMTRS></CCSTMTTRNRS></CREDITCARDMSGSRSV1></OFX>'
+      ].join('\n');
+      ctx.adapter = adaptOfxRevolvingDebtEvidence_(ctx.ofx, { institution: 'Fixture Card Bank',
+        ownerId: 'SAMER', registrationType: 'INDIVIDUAL', observedAt: ctx.asOf });
+      ctx.preview = previewAuthoritativeDebtImport_(ctx.ss, ctx.adapter, {}, ctx.asOf);
+      ctx.assertWritable();
+      ctx.first = applyAuthoritativeDebtImport_(ctx.ss, ctx.adapter, {},
+        ctx.preview.previewDigest, ctx.asOf);
+      ctx.assertWritable();
+      ctx.duplicate = applyAuthoritativeDebtImport_(ctx.ss, ctx.adapter, {},
+        ctx.preview.previewDigest, ctx.asOf);
+      ctx.manualAdapter = adaptVerifiedManualDebtEvidence_({ stableAccountId: 'DEBT-FIXTURE-CITIAA',
+        apr: 23.49, rateType: 'PERCENT_VARIABLE', effectiveAsOf: ctx.asOf,
+        ownerId: 'SAMER', registrationType: 'INDIVIDUAL' }, { observedAt: ctx.asOf });
+      var manualDecisions = {};
+      manualDecisions[ctx.manualAdapter.accounts[0].sourceAccountKey] = {
+        action: 'MATCH', stableAccountId: 'DEBT-FIXTURE-CITIAA' };
+      ctx.manualPreview = previewAuthoritativeDebtImport_(ctx.ss, ctx.manualAdapter,
+        manualDecisions, ctx.asOf);
+      ctx.assertWritable();
+      ctx.manualApply = applyAuthoritativeDebtImport_(ctx.ss, ctx.manualAdapter,
+        manualDecisions, ctx.manualPreview.previewDigest, ctx.asOf);
+      ctx.shadow = getDebtImportShadowComparison_(ctx.ss, [], ctx.asOf)[0];
+      ctx.readiness = evaluateWeeklyPlanDataReadiness_(ctx.ss, ctx.asOf);
+      ctx.missingDueQuality = evaluateRevolvingDebtActionabilityFromComparisons_({
+        CURRENT_BALANCE: ctx.shadow.facts.CURRENT_BALANCE,
+        APR: ctx.shadow.facts.APR,
+        MINIMUM_PAYMENT: ctx.shadow.facts.MINIMUM_PAYMENT,
+        NEXT_PAYMENT_DATE: { selection: { fact: null,
+          freshness: evaluateFinancialFactFreshness_(null, ctx.asOf) } }
+      }, [], []);
+      ctx.multiple = adaptStructuredDebtEvidence_({ sourceSystem: 'HARNESS_MULTI',
+        observedAt: ctx.asOf, accounts: [{ externalAccountId: 'MULTI-0393',
+          currentBalance: 1000, minimumPayment: 50, nextPaymentDate: '2026-08-25',
+          effectiveAsOf: ctx.asOf, ownerId: 'SAMER', registrationType: 'INDIVIDUAL',
+          rates: [{ type: 'PURCHASE', apr: 19.99 },
+            { type: 'CASH_ADVANCE', apr: 29.99 }] }] });
+      ctx.zero = adaptStructuredDebtEvidence_({ sourceSystem: 'HARNESS_ZERO',
+        observedAt: ctx.asOf, accounts: [{ externalAccountId: 'ZERO-0000',
+          currentBalance: 0, effectiveAsOf: ctx.asOf, ownerId: 'SAMER',
+          registrationType: 'INDIVIDUAL', rates: [] }] });
+      ctx.assertWritable();
+      appendFinancialFacts_(ctx.ss, [
+        { stableInternalAccountId: 'DEBT-CONFLICT', factType: 'APR', numericValue: 20,
+          currencyOrUnit: 'PERCENT', effectiveAsOf: ctx.asOf, observedAt: ctx.asOf,
+          sourceType: 'INSTITUTION', sourceSystem: 'SOURCE-A',
+          sourceRecordKey: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          authorityClass: 'INSTITUTION_AUTHORITATIVE', verificationStatus: 'VERIFIED',
+          verifiedAt: ctx.asOf, reconciliationStatus: 'MATCHED' },
+        { stableInternalAccountId: 'DEBT-CONFLICT', factType: 'APR', numericValue: 21,
+          currencyOrUnit: 'PERCENT', effectiveAsOf: ctx.asOf, observedAt: ctx.asOf,
+          sourceType: 'INSTITUTION', sourceSystem: 'SOURCE-B',
+          sourceRecordKey: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          authorityClass: 'INSTITUTION_AUTHORITATIVE', verificationStatus: 'VERIFIED',
+          verifiedAt: ctx.asOf, reconciliationStatus: 'MATCHED' }
+      ], { asOf: ctx.asOf, defaultCreatedAt: ctx.asOf });
+      ctx.conflict = selectCurrentFinancialFact_(readFinancialFacts_(ctx.ss),
+        'DEBT-CONFLICT', 'APR', ctx.asOf);
+      ctx.factRows = ctx.ss.getSheetByName(names.FINANCIAL_FACTS).getDataRange().getDisplayValues();
+      ctx.runRows = ctx.ss.getSheetByName(names.IMPORT_RUNS).getDataRange().getDisplayValues();
+      ctx.debtRowAfter = ctx.ss.getSheetByName(names.DEBTS).getDataRange().getDisplayValues()[1];
+      ctx.planningAfter = JSON.stringify(getCapitalAllocationPlanForSpreadsheet_(ctx.ss,
+        { asOfDate: '2026-08-16' }));
+      ctx.finalNames = ctx.ss.getSheets().map(function(sheet) { return sheet.getName(); });
+      ctx.actions.push('Preview/apply partial QFX evidence, supplement APR manually, evaluate granular readiness, retain APR conflict, and replay duplicate evidence');
+    },
+    expectedOutcome: function(ctx) {
+      var mod = 'Part 2A Authoritative Revolving Debt';
+      ctx.assert.equals('Two source accounts preview independently', ctx.preview.summary.accounts, 2,
+        { module: mod });
+      ctx.assert.equals('Verified debt source link matches one account', ctx.preview.summary.matched, 1,
+        { module: mod });
+      ctx.assert.equals('Unlinked debt remains review required', ctx.preview.summary.reviewRequired, 1,
+        { module: mod });
+      ctx.assert.equals('Balance-only source reports APR required',
+        ctx.preview.accounts[0].diagnostics.indexOf('APR_DATA_REQUIRED') !== -1, true,
+        { module: mod });
+      ctx.assert.equals('Partial safe apply preserves review state', ctx.first.status,
+        'PARTIAL_REVIEW_REQUIRED', { module: mod });
+      ctx.assert.equals('Matched QFX appends only supplied debt facts', ctx.first.appendedFacts, 5,
+        { module: mod });
+      ctx.assert.equals('Manual APR supplement appends separately', ctx.manualApply.appendedFacts, 1,
+        { module: mod });
+      ctx.assert.equals('Manual APR keeps manual authority', ctx.shadow.facts.APR.normalizedAuthority,
+        'USER_VERIFIED_MANUAL', { module: mod });
+      ctx.assert.equals('Balance is selected independently', ctx.shadow.facts.CURRENT_BALANCE.normalizedValue,
+        9000, { module: mod });
+      ctx.assert.equals('APR is selected independently', ctx.shadow.facts.APR.normalizedValue,
+        23.49, { module: mod });
+      ctx.assert.equals('Minimum is selected independently', ctx.shadow.facts.MINIMUM_PAYMENT.normalizedValue,
+        270, { module: mod });
+      ctx.assert.equals('Exact due date is selected independently',
+        ctx.shadow.facts.NEXT_PAYMENT_DATE.normalizedValue, '2026-08-25', { module: mod });
+      ctx.assert.equals('Legacy balance difference remains exact',
+        ctx.shadow.facts.CURRENT_BALANCE.difference, -500, { module: mod });
+      ctx.assert.equals('Exact debt reconciliation is separate from materiality',
+        JSON.stringify([ctx.shadow.facts.CURRENT_BALANCE.reconciliationStatus,
+          ctx.shadow.facts.CURRENT_BALANCE.materialityStatus]),
+        JSON.stringify(['DIFFERENCE_DETECTED', 'NOT_YET_DECIDED']), { module: mod });
+      ctx.assert.equals('Legacy due day is not falsely equal to full date',
+        ctx.shadow.facts.NEXT_PAYMENT_DATE.reconciliationStatus, 'UNAVAILABLE', { module: mod });
+      ctx.assert.equals('Balance visibility readiness is explicit',
+        ctx.readiness.dimensions.balanceReadiness.status, 'READY', { module: mod });
+      ctx.assert.equals('Interest ranking readiness is explicit',
+        ctx.readiness.dimensions.interestRankingReadiness.status, 'READY', { module: mod });
+      ctx.assert.equals('Payment obligation readiness is explicit',
+        ctx.readiness.dimensions.paymentObligationReadiness.status, 'READY', { module: mod });
+      ctx.assert.equals('Missing exact due date blocks payment obligation readiness',
+        ctx.missingDueQuality.paymentObligationReadiness, 'NOT_READY', { module: mod });
+      ctx.assert.equals('Exact payoff readiness includes current cash',
+        ctx.readiness.dimensions.exactPayoffReadiness.status, 'READY', { module: mod });
+      ctx.assert.equals('Weekly milestone reaches review, not authority switch', ctx.readiness.overall,
+        'READY_FOR_AUTHORITY_SWITCH_REVIEW', { module: mod });
+      ctx.assert.equals('Readiness never switches authority', ctx.readiness.authoritySwitched,
+        false, { module: mod });
+      ctx.assert.equals('Multiple APRs require review', ctx.multiple.accounts[0].aprReviewStatus,
+        'MULTIPLE_APR_REVIEW_REQUIRED', { module: mod });
+      ctx.assert.equals('Ambiguous rates produce no planning APR',
+        ctx.multiple.accounts[0].facts.some(function(fact) { return fact.factType === 'APR'; }),
+        false, { module: mod });
+      ctx.assert.equals('Current zero balance is preserved as evidence',
+        ctx.zero.accounts[0].facts[0].numericValue, 0, { module: mod });
+      ctx.assert.equals('Equal-quality conflicting APRs remain conflict',
+        ctx.conflict.reconciliationStatus, 'CONFLICT', { module: mod });
+      ctx.assert.equals('Identical QFX replay is a no-op', ctx.duplicate.status,
+        'DUPLICATE_NOOP', { module: mod });
+      ctx.assert.equals('Facts retain no full card number',
+        JSON.stringify(ctx.factRows).indexOf(ctx.rawIdentifier), -1, { module: mod });
+      ctx.assert.equals('Import Runs retain no full card number',
+        JSON.stringify(ctx.runRows).indexOf(ctx.rawIdentifier), -1, { module: mod });
+      ctx.assert.equals('Part 1 debt row remains byte-equivalent',
+        JSON.stringify(ctx.debtRowAfter), JSON.stringify(ctx.debtRowBefore), { module: mod });
+      ctx.assert.equals('Planning remains byte-equivalent', ctx.planningAfter,
+        ctx.planningBefore, { module: mod });
+      ctx.assert.equals('No persisted Current Facts sheet is created',
+        ctx.finalNames.indexOf('SYS - Current Facts'), -1, { module: mod });
+      ctx.assert.equals('Import manifest is shared rather than duplicated',
+        ctx.finalNames.filter(function(name) { return name === names.IMPORT_RUNS; }).length,
+        1, { module: mod });
     }
   };
 }

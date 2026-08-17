@@ -473,6 +473,12 @@ legacy bank balances/policies, or change Planning authority. The weekly plan
 cannot claim operational currentness until revolving-debt freshness joins cash
 and the combined reader switch is separately approved.
 
+Part 2A-4 adds revolving-debt evidence behind the same boundary. Planning APR
+is usable only when the source establishes that it applies economically to the
+carried balance; component ambiguity remains review-required. Balance visibility,
+interest ranking, payment-obligation, and exact-payoff readiness are evaluated
+separately. `INPUT - Debts` and Part 1 released-minimum behavior remain unchanged.
+
 The holdings layer should accept one current row per account/position containing
 at least Account stable ID, account name, account/registration type, ticker,
 security name/type, quantity, price/as-of date, market value, cash, annual

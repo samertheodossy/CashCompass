@@ -56,6 +56,15 @@ The projection contains no policy and is not an independent authority.
 | SECURITY_PRICE | Numeric | ISO currency | Highly time-sensitive |
 | COST_BASIS | Numeric | ISO currency | Reconciliation-dependent |
 | CASH_SWEEP_YIELD | Numeric | PERCENT | Moderate |
+| AVAILABLE_CREDIT | Numeric | ISO currency | Highly time-sensitive |
+| DISCLOSED_APR | Numeric | PERCENT, PERCENT_FIXED, or PERCENT_VARIABLE | Moderate |
+| PURCHASE_APR | Numeric | PERCENT, PERCENT_FIXED, or PERCENT_VARIABLE | Moderate |
+| CASH_ADVANCE_APR | Numeric | PERCENT, PERCENT_FIXED, or PERCENT_VARIABLE | Moderate |
+| BALANCE_TRANSFER_APR | Numeric | PERCENT, PERCENT_FIXED, or PERCENT_VARIABLE | Moderate |
+| PROMOTIONAL_APR | Numeric | PERCENT, PERCENT_FIXED, or PERCENT_VARIABLE | Moderate |
+| PROMOTIONAL_APR_EXPIRATION | Canonical date text | DATE / YYYY-MM-DD | Moderate |
+| DEFERRED_INTEREST_STATUS | Text | STATUS | Moderate |
+| DEFERRED_INTEREST_EXPIRATION | Canonical date text | DATE / YYYY-MM-DD | Moderate |
 
 A fact type permits exactly its declared value representation. Malformed dates,
 ambiguous percentage units, and simultaneous numeric/text values fail closed.
@@ -151,7 +160,8 @@ Shadow-only today:
 
 Not switched in this slice:
 
-- Revolving-debt production facts.
+- Revolving-debt evidence is accepted by the reviewed Part 2A-4 adapter, but
+  remains shadow-only and does not replace the Part 1 debt reader.
 - Plaid, OAuth, direct connectors, statement pipelines, or broad legacy migration.
 - Brokerage tax lots, position reconciliation, or sell recommendations.
 - Any Planning or Capital Allocation authority change.
@@ -165,3 +175,7 @@ Not safe to act upon:
 Part 2A-3 adds cash evidence and shadow comparison under
 `PART_2A_AUTHORITATIVE_CASH_IMPORT_CONTRACT.md`. No Planning authority switch is
 implied by either foundation.
+
+Part 2A-4 adds revolving-debt evidence and granular readiness under
+`PART_2A_AUTHORITATIVE_REVOLVING_DEBT_CONTRACT.md`. Its selected facts remain a
+shadow comparison until a later, separately approved combined authority switch.

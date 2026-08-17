@@ -374,3 +374,17 @@ function harnessPart2aCashImportFixture_(legacySheet, accountSheet, linkSheet, n
     'OFX_FID_99999', key, '••••9012', 'Fixture Bank', 'SAVINGS',
     'VERIFIED', now, now]);
 }
+
+/** Deterministic Part 2A-4 financial-identity fixture. Disposable targets only. */
+function harnessPart2aDebtImportIdentityFixture_(accountSheet, linkSheet,
+  sourceSystem, sourceKey, now) {
+  accountSheet.appendRow(['DEBT-FIXTURE-CITIAA', 'DEBT', 'Fixture CitiAA',
+    'Fixture Card Bank', 'Credit Card', 'REVOLVING', 'SAMER', 'INDIVIDUAL',
+    'USD', '0393', 'Yes', 'VERIFIED', 'INPUT_DEBTS', 'Fixture CitiAA', now, now]);
+  accountSheet.appendRow(['CASH-FIXTURE', 'CASH', 'Fixture Cash', 'Fixture Bank',
+    'Checking', '', 'SAMER', 'INDIVIDUAL', 'USD', '1111', 'Yes', 'VERIFIED',
+    'SYS_ACCOUNTS', 'Fixture Cash', now, now]);
+  linkSheet.appendRow(['LINK-DEBT-FIXTURE', 'DEBT-FIXTURE-CITIAA', 'FILE_IMPORT',
+    sourceSystem, sourceKey, '••••0393', 'Fixture Card Bank', 'Credit Card',
+    'VERIFIED', now, now]);
+}

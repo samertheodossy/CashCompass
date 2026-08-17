@@ -93,7 +93,7 @@ function getHarnessSuites_() {
     {
       id: 'SUITE-PART-2A-FINANCIAL-FACTS',
       label: 'Part 2A Financial Facts Foundation',
-      description: 'Validate the 14 typed fact contracts, provenance, Effective-As-Of freshness, policy-owned current selection, decision-specific actionability, append-only evidence, idempotency, and rebuildable shadow projection.',
+      description: 'Validate the typed fact contracts, provenance, Effective-As-Of freshness, policy-owned current selection, decision-specific actionability, append-only evidence, idempotency, and rebuildable shadow projection.',
       scenarioIds: [
         'REGRESSION-PART-2A-FINANCIAL-FACTS',
         'REGRESSION-PART-2A-FINANCIAL-FACTS-INTEGRATION'
@@ -104,6 +104,12 @@ function getHarnessSuites_() {
       label: 'Part 2A Authoritative Cash Import',
       description: 'Validate source-neutral OFX/QFX cash evidence, protected identity matching, exact provenance and freshness, partial safe apply, duplicate no-op, shadow reconciliation, Planning isolation, and disposable cleanup.',
       scenarioIds: ['REGRESSION-PART-2A-AUTHORITATIVE-CASH-IMPORT']
+    },
+    {
+      id: 'SUITE-PART-2A-AUTHORITATIVE-REVOLVING-DEBT',
+      label: 'Part 2A Authoritative Revolving Debt Import',
+      description: 'Validate source-neutral revolving-debt evidence, stable protected identity, fact-level freshness, manual supplements, APR ambiguity refusal, sanitized duplicate-safe apply, shadow reconciliation, weekly cash/debt readiness, and Planning isolation.',
+      scenarioIds: ['REGRESSION-PART-2A-AUTHORITATIVE-REVOLVING-DEBT']
     },
     {
       id: 'SUITE-RFP-CAPITAL-ALLOCATION-FOUNDATION',
@@ -473,6 +479,19 @@ function testRunQuickAddReliabilitySuite(options) {
   return testRunSuiteById_('SUITE-QUICK-ADD-RELIABILITY', options || {});
 }
 
+/**
+ * PUBLIC (guarded) EDITOR RUNNER — Part 2A authoritative revolving-debt import.
+ * Defaults to verified Trash cleanup so an argument-free isolated-Central run
+ * cannot leave its disposable fixture behind.
+ * @param {Object=} options optional suite options
+ * @returns {Object} aggregate suite report
+ */
+function testRunPart2aAuthoritativeDebtSuite(options) {
+  var requested = options || {};
+  if (!requested.dispositionMode) requested.dispositionMode = 'trash';
+  return testRunSuiteById_('SUITE-PART-2A-AUTHORITATIVE-REVOLVING-DEBT', requested);
+}
+
 /** Run the representative populated fixture; the scenario always verifies Trash. */
 function testRunPopulatedFixtureSuite(options) {
   return testRunSuiteById_('SUITE-POPULATED-FIXTURE', options || {});
@@ -622,9 +641,30 @@ function formatHarnessSuiteReport_(report) {
   return lines.join('\n');
 }
 
-/** Log a suite report: human summary + chunked JSON (full detail). */
+/** Log a suite report: human summary + compact failures + chunked JSON (full detail). */
 function harnessLogSuiteReport_(report) {
   Logger.log(formatHarnessSuiteReport_(report));
+  var failures = [];
+  var reports = report && report.reports ? report.reports : [];
+  for (var r = 0; r < reports.length; r++) {
+    var results = reports[r] && reports[r].functional && reports[r].functional.results
+      ? reports[r].functional.results : [];
+    for (var i = 0; i < results.length; i++) {
+      if (results[i] && !results[i].pass) {
+        failures.push({
+          scenarioId: reports[r].scenario ? reports[r].scenario.id : null,
+          assertionId: results[i].id,
+          label: results[i].label,
+          expected: results[i].expected,
+          actual: results[i].actual,
+          reason: results[i].reason
+        });
+      }
+    }
+  }
+  if (failures.length) {
+    Logger.log('FAILED ASSERTIONS (COMPACT): ' + JSON.stringify(failures));
+  }
   try {
     if (typeof validatorLogChunked_ === 'function') {
       validatorLogChunked_('TEST HARNESS SUITE (JSON)', JSON.stringify(report, null, 2));

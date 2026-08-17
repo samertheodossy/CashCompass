@@ -386,8 +386,10 @@ function financialIdentityReadRegistry_(ss) {
         stableAccountId: String(display[r][0] || '').trim(),
         domain: String(display[r][1] || '').trim(), displayName: String(display[r][2] || '').trim(),
         institution: String(display[r][3] || '').trim(), accountType: String(display[r][4] || '').trim(),
+        accountSubtype: String(display[r][5] || '').trim(),
         ownerId: String(display[r][6] || '').trim(), registrationType: String(display[r][7] || '').trim(),
-        last4: String(display[r][9] || '').trim(), legacyDomain: String(display[r][12] || '').trim(),
+        last4: String(display[r][9] || '').trim(), active: String(display[r][10] || '').trim(),
+        legacyDomain: String(display[r][12] || '').trim(),
         legacyKey: String(display[r][13] || '').trim()
       });
     }
