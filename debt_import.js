@@ -432,10 +432,15 @@ function evaluateWeeklyPlanDataReadiness_(ss, asOf) {
   var registry = financialIdentityReadRegistry_(ss);
   var facts = readFinancialFacts_(ss);
   var index = indexFinancialFacts_(facts);
-  var cashAccounts = registry.accounts.filter(function(row) {
+  return evaluateWeeklyPlanDataReadinessFromState_(registry.accounts, index, comparisonAt);
+}
+
+/** Shared evaluator for callers that already bulk-read identity and facts. */
+function evaluateWeeklyPlanDataReadinessFromState_(accounts, index, comparisonAt) {
+  var cashAccounts = (accounts || []).filter(function(row) {
     return String(row.domain || '').toUpperCase() === 'CASH' && debtImportAccountActive_(row);
   });
-  var debtAccounts = registry.accounts.filter(function(row) {
+  var debtAccounts = (accounts || []).filter(function(row) {
     return String(row.domain || '').toUpperCase() === 'DEBT' && debtImportAccountActive_(row) &&
       debtImportIsRevolvingType_(row.accountType);
   });
@@ -465,6 +470,19 @@ function evaluateWeeklyPlanDataReadiness_(ss, asOf) {
     exactPayoff.status = exactPayoff.status === 'READY' ? 'NOT_READY' : exactPayoff.status;
     exactPayoff.reasons = exactPayoff.reasons.concat(['CASH_DATA_REQUIRED']);
   }
+  if (!cashAccounts.length) {
+    cash = debtImportNotConnectedDimension_('CASH_DATA_NOT_CONNECTED');
+    if (debtAccounts.length) {
+      exactPayoff.status = 'NOT_READY';
+      exactPayoff.reasons = financialFactUnique_(exactPayoff.reasons.concat(['CASH_DATA_REQUIRED']));
+    }
+  }
+  if (!debtAccounts.length) {
+    balances = debtImportNotConnectedDimension_('DEBT_DATA_NOT_CONNECTED');
+    interestRanking = debtImportNotConnectedDimension_('DEBT_DATA_NOT_CONNECTED');
+    paymentObligation = debtImportNotConnectedDimension_('DEBT_DATA_NOT_CONNECTED');
+    exactPayoff = debtImportNotConnectedDimension_('DEBT_DATA_NOT_CONNECTED');
+  }
   var dimensions = { cash: cash, balanceReadiness: balances,
     interestRankingReadiness: interestRanking,
     paymentObligationReadiness: paymentObligation,
@@ -478,6 +496,11 @@ function evaluateWeeklyPlanDataReadiness_(ss, asOf) {
     scope: 'CURRENT_CASH_AND_REVOLVING_DEBT_ONLY', dimensions: dimensions,
     overall: ready ? 'READY_FOR_AUTHORITY_SWITCH_REVIEW' : 'NOT_READY_FOR_AUTHORITY_SWITCH',
     authoritySwitched: false, reasons: financialFactUnique_(reasons) };
+}
+
+function debtImportNotConnectedDimension_(reason) {
+  return { status: 'NOT_CONNECTED', readyCount: 0, accountCount: 0,
+    reasons: [reason] };
 }
 
 function getWeeklyPlanDataReadinessFromDashboard(payload) {

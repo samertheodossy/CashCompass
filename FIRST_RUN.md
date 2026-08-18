@@ -75,7 +75,7 @@ If that property is not set, **Open CashCompass Web** will error until you save 
 1. Open the **Web app URL** in a browser (same Google account as **Only myself**, if applicable).
 2. Approve **spreadsheet access** if Google prompts you.
 3. Confirm **Overview** loads without a red error banner. On a blank / fresh workbook you will see calm empty states and a visible **Setup / Review** entry in the header — that is expected.
-4. Click through a few **top-nav** areas (e.g. **Activity**, **Cash Flow → Bills**, **Cash Flow → Quick add**, **Planning → Next Actions**) to ensure panels render. Blank workbooks should degrade to `No <things> yet.` / `Add your <things> in Setup / Review …`, never to a red exception.
+4. Click through a few **top-nav** areas (e.g. **Activity**, **Cash Flow → Bills**, **Cash Flow → Quick add**, **Planning → This week → Overview**) to ensure panels render. Blank workbooks should degrade to `No <things> yet.` / `Add your <things> in Setup / Review …`, never to a red exception.
 5. Open **Setup / Review** from the header — Welcome renders for a completely empty workbook, the status grid renders as soon as any input area has data.
 
 A slightly longer **manual checklist** after risky changes lives in **`TESTING_PLAN.md`** → **Blank + populated two-track manual checks** (canonical) and **Light safety net** (legacy).

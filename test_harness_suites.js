@@ -112,6 +112,12 @@ function getHarnessSuites_() {
       scenarioIds: ['REGRESSION-PART-2A-AUTHORITATIVE-REVOLVING-DEBT']
     },
     {
+      id: 'SUITE-PART-2A-DATA-READINESS',
+      label: 'Part 2A Data Refresh and Plan Readiness',
+      description: 'Validate the shadow-only cash and credit-card readiness model, concise customer presentation, exact reconciliation, APR-review routing, Planning isolation, and disposable cleanup.',
+      scenarioIds: ['REGRESSION-PART-2A-DATA-READINESS']
+    },
+    {
       id: 'SUITE-RFP-CAPITAL-ALLOCATION-FOUNDATION',
       label: 'Capital Allocation Foundation',
       description: 'Validate deterministic read-only household facts, required constraints, and the unranked in-memory candidate queue before recommendation policy is enabled.',
@@ -490,6 +496,13 @@ function testRunPart2aAuthoritativeDebtSuite(options) {
   var requested = options || {};
   if (!requested.dispositionMode) requested.dispositionMode = 'trash';
   return testRunSuiteById_('SUITE-PART-2A-AUTHORITATIVE-REVOLVING-DEBT', requested);
+}
+
+/** Guarded disposable runner for the Part 2A-5 customer-facing readiness slice. */
+function testRunPart2aDataReadinessSuite(options) {
+  var requested = options || {};
+  if (!requested.dispositionMode) requested.dispositionMode = 'trash';
+  return testRunSuiteById_('SUITE-PART-2A-DATA-READINESS', requested);
 }
 
 /** Run the representative populated fixture; the scenario always verifies Trash. */

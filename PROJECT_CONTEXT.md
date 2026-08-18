@@ -4,7 +4,7 @@ We are building **CashCompass** — a Google Apps Script web dashboard (and spre
 
 ## Current Product Status (August 2026)
 
-- **Stage:** **Stage 3 — Beta Readiness (current).** **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** The capability estimate remains **Family Beta Readiness ~97–98% · External / Public Beta Readiness ~92%**. The last formal independent advocate score is **8.3/10** on isolated Central `@180`; it remains official because the isolated `@196` **7.2/10** run was read-only and evidence-limited, not a comparable writer-inclusive rescore. Isolated Central is `@363`; RFP-3a provides the runtime-proven deterministic household-fact and unranked Capital Allocation Queue foundation, Part 2A-1 stable financial identity passed at `@356`, Part 2A-2 Financial Facts passed at `@357`, Part 2A-3 authoritative cash import passed at `@358`, and Part 2A-4 authoritative revolving-debt import passed at `@363`. RFP-2 provides optional multi-account **Income-Producing Accounts** designations with stable investment identity and no `INPUT - Investments` schema change. `RFP-6a` remains runtime-proven: preview-first Robinhood activity import writes only normalized, deduplicated system activity and derived holdings, while `INPUT - Investments` remains the balance authority and raw CSV is not retained. The owner-controlled bounded import saved 104 Samer Robinhood activities and reconciled JEPQ/QQQ/QQQI/SPYI holdings; later duplicate-safe acceptance confirmed shared content fitting. Central Beta remains `@106`; no bounded deployment or bounded-workbook write occurred for Part 2A. Customer-facing operations and the broad `3j` audit are deferred, not waived. `BETA_10_OUT_OF_10_PLAN.md` defines the ≥95/100 release standard and monetization foundations; `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered open inventory with estimates, regression homes, and the optimized execution model.
+- **Stage:** **Stage 3 — Beta Readiness (current).** **Stage 1 (Core Platform), Stage 2 (Product Hardening), P0 Project Stabilization, House Financial Accuracy V1, and Financial Integrity Phase 3 are complete**, and **Recurrence Engine V2 (Weekday & Biweekly scheduling) shipped 2026-07-09.** The capability estimate remains **Family Beta Readiness ~97–98% · External / Public Beta Readiness ~92%**. The last formal independent advocate score is **8.3/10** on isolated Central `@180`; it remains official because the isolated `@196` **7.2/10** run was read-only and evidence-limited, not a comparable writer-inclusive rescore. Isolated Central is `@369`; RFP-3a provides the runtime-proven deterministic household-fact and unranked Capital Allocation Queue foundation, Part 2A-1 stable financial identity passed at `@356`, Part 2A-2 Financial Facts passed at `@357`, Part 2A-3 authoritative cash import passed at `@358`, Part 2A-4 authoritative revolving-debt import passed at `@363`, and Part 2A-5 shadow-only Data Refresh / Plan Readiness passed at `@369`. RFP-2 provides optional multi-account **Income-Producing Accounts** designations with stable investment identity and no `INPUT - Investments` schema change. `RFP-6a` remains runtime-proven: preview-first Robinhood activity import writes only normalized, deduplicated system activity and derived holdings, while `INPUT - Investments` remains the balance authority and raw CSV is not retained. The owner-controlled bounded import saved 104 Samer Robinhood activities and reconciled JEPQ/QQQ/QQQI/SPYI holdings; later duplicate-safe acceptance confirmed shared content fitting. Central Beta remains `@106`; no bounded deployment or bounded-workbook write occurred for Part 2A. Customer-facing operations and the broad `3j` audit are deferred, not waived. `BETA_10_OUT_OF_10_PLAN.md` defines the ≥95/100 release standard and monetization foundations; `FULL_BETA_REMAINING_PLAN.md` is the authoritative numbered open inventory with estimates, regression homes, and the optimized execution model.
 - **Architecture:** Central App operational — **stable, family-beta capable**. The production / bound workbook remains protected (bound mode unchanged); the central architecture is operational and runtime-validated.
 - **Completed (working in central mode):** Provisioning, Workbook Mapping, Dashboard, Planner, Assets, Properties, Cash Flow, Bills, Debts, Income, Activity, Email.
 - **Current Debt navigation (2026-07-31):** Debt maintenance lives under **Assets & Liabilities → Debt accounts**. **Planning → Debt Overview** is read-only comparison, and **Planning → Rolling Debt Payoff** is the actionable month-by-month plan. Older historical notes that say `Planning → Debts` describe the former navigation label only.
@@ -74,6 +74,66 @@ PASS; the disposable runner returned OFF. A runtime-only Sheets coercion of the
 exact due-date fact was corrected at the read boundary so date facts remain
 canonical `YYYY-MM-DD`. No bounded workbook or Central Beta deployment was used.
 
+**Part 2A-5 runtime-proven candidate (2026-08-17):** Planning gains a compact Data Status
+summary and a dedicated **This Week → Data** review surface. The view reads stable
+identity, source links, append-only Financial Facts, and legacy cash/debt values
+in one server projection; shows effective dates, freshness, exact differences,
+and only actionable/blocking review items; and reuses the preview/confirm verified
+manual debt seam when the APR applying to a carried balance must be supplied.
+Imported facts remain shadow-only and the page permanently states that the weekly
+plan still uses existing Planning values. No Part 1 calculation, authority switch,
+schema rewrite, persisted Current Facts surface, or bounded workbook mutation is
+part of this slice.
+The customer presentation contract distinguishes **Not connected**, **More data
+needed**, **Needs review**, and **Ready for review**. Empty cash/card domains and
+their readiness dimensions are explicitly Not connected and can never pass by
+vacuous `0 / 0` readiness. Isolated Central `@369` run
+`20260817-102843-e241` passed 1/1 scenario and 35/35 assertions in 29.8 seconds
+with Restricted sharing, Provisioning and Drift PASS, verified Trash cleanup,
+and the disposable runner OFF. No bounded workbook or Central Beta deployment
+was used. Companion Capital Allocation run `20260817-102943-17fd` passed 2/2
+scenarios and 99/99 assertions, preserving the approved financial mathematics
+while the Planning debt view adopted exact Proposed, Awaiting confirmation, and
+Confirmed customer language.
+
+## Deferred Future Phase — Credit Card Rewards & Spend Optimization
+
+After debt-data authority and debt optimization are complete, Cash Compass may
+answer which card is financially best for a purchase/category at that moment.
+Future evidence can include reward rates and point multipliers, rotating
+categories, merchant restrictions, promotion dates, spending caps, annual fees,
+statement credits, foreign-transaction fees, point/cash-back valuation, current
+revolving balance, expected payoff behavior, and whether new spend could accrue
+interest. **Rewards never override debt or interest risk.** The decision flow must
+first identify cards safe for new spend, exclude or penalize cards likely to
+revolve at expensive APR, then rank expected net reward among safe cards and
+explain the winner. Valid outputs include “Use Costco for gas this quarter,”
+“Use Amex for dining,” and “Do not use Southwest for new spend while its balance
+is revolving.” This is documentation-only future scope; Part 2A adds no rewards
+schema, UI, or card-use recommendation behavior.
+
+## Deferred Future Phase — Recurring Bill Schedule & Gap Modeling
+
+After the current Part 2A data-authority and debt work, Cash Compass may derive
+monthly expectations for bills and expenses that do not occur every month. The
+future capability must support monthly, every-other-month, every-N-month,
+quarterly, semiannual, annual, seasonal/custom-month, irregular-but-known, and
+one-time schedules. It should model recurrence frequency and interval, specific
+due months, due day/date, expected and actual amounts, next occurrence,
+schedule start/end dates, exceptions and skipped occurrences, and amount changes,
+with optional sinking-fund/accrual planning for larger periodic expenses.
+
+The semantic contract is essential: `0.00` means the schedule explicitly proves
+that no bill or payment occurs in that period; an amount means an actual or
+expected bill belongs in the period; blank or Unknown means there is not enough
+information and must never be silently interpreted as zero. Historical actuals
+and future expectations remain distinct, so displaying a derived known-zero for
+a future or non-due month must not fabricate a historical transaction. Prefer
+deriving and rendering known-zero values from the recurrence rule instead of
+physically writing thousands of artificial zero entries into workbook cells.
+This is documentation-only future scope: Part 2A adds no recurrence schema,
+zero-fill behavior, sinking-fund logic, or related UI change.
+
 **RFP-3a foundation (2026-08-14):** `capital_allocation.js` adds a
 spreadsheet-scoped, read-only household-fact seam and a pure deterministic
 Capital Allocation Queue kernel. The slice separates required constraints from
@@ -90,9 +150,11 @@ weekly ranking/allocation kernel with an exact cash ledger and a monthly rollup
 derived only from the current week. `dashboard_data.js` exposes the established
 tracked-Bill recurrence/handled-state reader through an explicit `readOnly`
 option; normal Bills Due callers retain AutoPay behavior, while the planner
-cannot acquire the writer lock or apply AutoPay. **This Week** is integrated as
-the default Start Here experience in the existing Planning workspace; Next
-Actions remains available under Do now beside Rolling Debt Payoff. The plan is
+cannot acquire the writer lock or apply AutoPay. **This Week** is the default
+tool in the existing Planning workspace. The customer-facing selector contains
+This week, Rolling debt payoff, Debt overview, Retirement, and Purchase
+simulator. The legacy Next Actions reader/panel remains for compatibility,
+while old Next Actions routes resolve to This week → Overview. The plan is
 read-only and displays blockers and zero-dollar waits without moving money or
 writing workbook recommendations. There is no alternate URL or parallel app.
 Variable Bills use their saved estimates as protected required amounts and
@@ -538,39 +600,39 @@ The app has two layers. Do not conflate them:
 - **Input / execution layer** — source-of-truth editors and ledgers. Bills, Upcoming, Debts, Bank Accounts, Investments, House Values / Expenses, Donations, Cash Flow (Quick Add), LOG - Activity. These own the data; they are the only places that write canonical rows.
 - **Decision layer (Planning tab)** — answers *"what should I do next?"* by interpreting data from Bills, Upcoming, Debts, Bank Accounts, and Cash Flow. It is **not** a source-of-truth editor and **not** a ledger; it reads existing sources and does not create new data.
 
-### Next Actions (primary entry point, v1 delivered)
+### Next Actions (v1 delivered; customer route now consolidated)
 
-- **"Next Actions"** is the featured sub-tab inside Planning and the primary entry point for users. It is the default landing view inside Planning.
+- **"Next Actions"** remains a delivered read-only backend/panel for compatibility and historical audit. It is no longer a visible primary Planning tool. Legacy routes and Setup completion resolve to **Planning → This week → Overview**, the default Planning entry point.
 - Action-first (no editing), short lists (3–5 items per section). Urgent is uncapped in the backend so `urgentTotal` always reconciles with the visible list; the UI groups the tail into a single "Other bills due soon" row for readability.
 - The single payment path remains **Cash Flow → Quick Add**; Next Actions routes the user there (and to source pages) rather than duplicating detail.
 
 ### Relationship to existing Planning tabs
 
-All current Planning sub-tabs stay as they are and are re-framed as **tools / deep dives**:
+Planning exposes five primary **tools / deep dives**:
 
-- **Debts**, **Retirement**, **Purchase Sim**, **Debt Overview**, **Rolling Debt Payoff**
+- **This week**, **Rolling Debt Payoff**, **Debt Overview**, **Retirement**, **Purchase Simulator**
 
-Intended flow: **Next Actions → drill into these tabs**. No new top-level tabs; no new dashboards stacked on top of Planning.
+Current flow: choose one primary tool. This week then exposes Overview, Debt, Cash, Investments, Properties, Forecast, and Data as its single secondary level.
 
 ### Design principles
 
 - Do not add multiple new top-level tabs.
 - Do not overload Planning with dashboards.
-- Keep Next Actions simple (3–5 items per section).
+- Preserve the legacy Next Actions reader for compatible callers; do not restore a duplicate customer navigation layer.
 - Single payment path remains Quick Add.
 - Decision layer does not create new data; it reads existing sources.
 
 ### Roadmap
 
-- **Phase 1 — Next Actions (v1)** ✅ Delivered as the featured Planning entry point.
+- **Phase 1 — Next Actions (v1)** ✅ Delivered; its customer entry point is consolidated into This week Overview while backend compatibility remains.
 - **Phase 2 — Cash Strategy** (later).
 - **Phase 3 — HELOC Advisor refinement** (later).
 
-See `ENHANCEMENTS.md` for the backlog entry and `SESSION_NOTES.md` for the shift summary. End-user documentation lives in the in-app Help page under **Planning → Next Actions** (`#help-next-actions`).
+See `ENHANCEMENTS.md` for the historical backlog entry and `SESSION_NOTES.md` for the shift summary. Current end-user documentation lives under **Planning** and **This Week** in Help.
 
 ### Setup / Review (Onboarding Phase 1, delivered)
 
-- **"Setup / Review"** is the top-right entry in the dashboard header. It opens a focused, **read-only** walkthrough of the five input areas Next Actions reads: Bank Accounts, Debts, Bills, Upcoming Expenses, Income — plus a Finish summary.
+- **"Setup / Review"** is the top-right entry in the dashboard header. It opens a focused, **read-only** walkthrough of Bank Accounts, Debts, Bills, Upcoming Expenses, and Income, plus a Finish summary. Completion routes to **Planning → This week → Overview**.
 - Flow: **Welcome → status grid → per-step detail screen → (optional) editor in Setup mode**. Each step has a status badge (*Setup complete* / *Not set up*), a short product-language summary, and a primary action.
 - **Setup-mode editor handoff** — detail CTAs open the existing editor in a simplified shell: main top nav, page sub-tabs, *Setup / Review*, and *Run Planner + Refresh Snapshot* are hidden; a **Back to Setup** bar appears. Normal navigation to the same editor is unchanged.
 - **Income** is derived from the latest `INPUT - Cash Flow <year>` — there is **no** `INPUT - Income Sources` sheet. Recurring income is grouped conservatively (e.g. *Cisco Pay 1/2/3 → Cisco Salary*); excluded categories (Bonus, RSU, ESPP, Refund, …) are surfaced separately as "Other detected income".

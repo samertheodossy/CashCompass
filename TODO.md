@@ -446,7 +446,7 @@ part of the final release evidence wave rather than an open implementation item.
 
 ##### UX-04 — Planning hierarchy and progressive disclosure
 
-- Keep Next Actions as the default and clearly separate **Do now** tools from **Explore / model** tools.
+- Keep one five-choice primary Planning selector with **This week** as the default; legacy Next Actions routes resolve to **This week → Overview** without restoring duplicate navigation.
 - Improve cross-links between Debts, Debt Overview, and Rolling Debt Payoff so their distinct purposes are clear.
 - Keep automation presentation, raw JSON, and advanced assumptions visually secondary or collapsed.
 - Condense dense Retirement and Purchase result panels into headline outputs with optional supporting detail.

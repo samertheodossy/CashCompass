@@ -645,132 +645,40 @@
     border-color: #1f4e78;
   }
   .tabs.properties-tabs { grid-template-columns: repeat(2, 1fr); }
-  /*
-    Planning hierarchy:
-      1) `.planning-next-actions-feature` = featured This Week entry point.
-         Larger, filled-in, reads as "start here" even at rest.
-      2) `.planning-tools-wrap`           = quieter task groups for
-         immediate maintenance/action and optional exploration/modeling.
-  */
-  .planning-next-actions-feature { margin: 0 0 12px 0; }
-  .planning-next-actions-feature .tab-btn {
-    width: 100%;
-    min-height: 56px;
-    padding: 12px 16px;
-    border-radius: 12px;
-    background: #eef5ff;
-    color: #1f4e78;
-    border: 1px solid #bcd7f1;
-    box-shadow: 0 1px 3px rgba(31, 78, 120, 0.12);
-    text-align: left;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-  }
-  .planning-next-actions-feature .tab-btn:hover {
-    background: #e0edfb;
-    border-color: #a7caea;
-  }
-  .planning-next-actions-feature .tab-btn.active {
-    background: #1f4e78;
-    color: #ffffff;
-    border-color: #1f4e78;
-  }
-  .planning-next-actions-feature .featured-kicker {
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    font-weight: 600;
-    opacity: 0.75;
-  }
-  .planning-next-actions-feature .featured-title {
-    font-size: 16px;
-    font-weight: 700;
-  }
-
-  .planning-tools-wrap {
+  /* Planning follows the Cash Flow model: one primary selector, then the
+     selected tool. This Week alone exposes its focused secondary selector. */
+  .tabs.planning-primary-tools {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
-    gap: 12px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
     margin: 0 0 16px 0;
   }
-  .planning-tool-group {
-    min-width: 0;
-    padding: 12px;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    background: #ffffff;
-  }
-  .planning-tool-group--do-now {
-    border-color: #cbdced;
-    background: #f8fbff;
-  }
-  .planning-tools-label {
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #64748b;
-    font-weight: 600;
-    margin: 0 0 6px 2px;
-  }
-  .tabs.planning-tools {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
-    margin-bottom: 0;
-  }
-  .planning-tool-group--do-now .planning-tools {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .planning-tool-group--explore .planning-tools {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .planning-tools .tab-btn {
+  .planning-primary-tools .tab-btn {
     width: 100%;
     min-width: 0;
-    min-height: 72px;
-    padding: 10px;
-    font-size: 12px;
-    font-weight: 500;
+    min-height: 48px;
+    padding: 10px 8px;
+    font-size: 13px;
+    font-weight: 700;
+    border: 1px solid #e2e8f0;
     border-radius: 8px;
     background: #f8fafc;
     color: #475569;
-    border: 1px solid #e2e8f0;
-    text-align: left;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: flex-start;
-    gap: 4px;
-  }
-  .planning-tools .planning-tool-title {
-    color: #1f2937;
-    font-size: 13px;
-    font-weight: 700;
+    text-align: center;
     line-height: 1.25;
   }
-  .planning-tools .planning-tool-description {
-    color: #64748b;
-    font-size: 11px;
-    font-weight: 500;
-    line-height: 1.35;
-  }
-  .planning-tools .tab-btn:hover {
+  .planning-primary-tools .tab-btn:hover {
     background: #eef2f7;
     color: #1f2937;
   }
-  .planning-tools .tab-btn.active {
+  .planning-primary-tools .tab-btn:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.35);
+    outline-offset: 2px;
+  }
+  .planning-primary-tools .tab-btn.active {
     background: #1f4e78;
     color: #ffffff;
     border-color: #1f4e78;
-  }
-  .planning-tools .tab-btn.active .planning-tool-title,
-  .planning-tools .tab-btn.active .planning-tool-description {
-    color: #ffffff;
-  }
-  .planning-tools .tab-btn.active .planning-tool-description {
-    opacity: 0.82;
   }
   .planning-panel-purpose {
     margin: 4px 0 0;
@@ -781,7 +689,7 @@
   .capital-allocation-preview-head { align-items: flex-end; }
   .capital-allocation-view-tabs {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     margin: 0 0 14px;
   }
   .capital-allocation-view-tabs .segment-btn {
@@ -825,14 +733,46 @@
     background: #f8fafc;
   }
   .capital-allocation-overview-status {
+    display: block;
+  }
+  .capital-allocation-attention-heading { margin-bottom: 10px; }
+  .capital-allocation-attention-list {
+    display: grid;
+    gap: 8px;
+  }
+  .capital-allocation-attention-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
     flex-wrap: wrap;
+    gap: 14px;
+    padding: 11px 12px;
+    border: 1px solid #dbe5ef;
+    border-radius: 9px;
+    background: #ffffff;
   }
-  .capital-allocation-overview-status details { flex: 1 0 100%; }
-  .capital-allocation-overview-status details ul { margin-bottom: 0; }
+  .capital-allocation-attention-item p {
+    margin: 4px 0 0;
+    color: #475569;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .capital-allocation-attention-item .small-btn { flex: 0 0 auto; }
+  .capital-allocation-attention-more { margin-top: 8px; }
+  .capital-allocation-attention-more > summary {
+    color: #1f4e78;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .capital-allocation-attention-more > .capital-allocation-attention-list { margin-top: 8px; }
+  .capital-allocation-information-note {
+    margin: 10px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .capital-allocation-information-note strong { color: #475569; }
   .capital-allocation-status-chips {
     display: flex;
     flex-wrap: wrap;
@@ -3308,13 +3248,6 @@
     .overview-runway-card { grid-column: span 6; }
     .tabs.assets-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .tabs.properties-tabs { grid-template-columns: 1fr 1fr; }
-    .planning-tools-wrap { grid-template-columns: 1fr; }
-    .planning-tool-group--do-now .planning-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .planning-tool-group--explore .planning-tools {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-    .planning-next-actions-feature .tab-btn { min-height: 52px; padding: 10px 12px; }
-    .planning-next-actions-feature .featured-title { font-size: 15px; }
     .grid-2, .grid-3, .health-row, .mini-grid, .sim-grid { grid-template-columns: 1fr; }
     .property-performance-overview { grid-template-columns: 1fr; }
     .property-performance-controls-wrap { max-width: 360px; }
@@ -3325,6 +3258,182 @@
     .onboarding-steps-grid { grid-template-columns: 1fr !important; }
   }
 
+  /* Part 2A-5 data readiness: calm summaries with expandable account audit. */
+  .data-readiness-overview-card { padding: 11px 13px; }
+  .data-readiness-overview-copy {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .data-readiness-overview-copy p { margin: 3px 0 0; color: #64748b; font-size: 12px; }
+  .data-readiness-overview-action { display: flex; align-items: center; gap: 8px; }
+  .data-readiness-overview-action .small-btn { width: auto; margin: 0; }
+  .data-readiness-authority-banner {
+    margin: 0 0 14px;
+    padding: 13px 14px;
+    border: 1px solid #bcd7f1;
+    border-radius: 10px;
+    background: #eef5ff;
+    color: #1f4e78;
+  }
+  .data-readiness-authority-banner p { margin: 4px 0; }
+  .data-readiness-authority-banner small { color: #475569; }
+  .data-readiness-summary,
+  .data-readiness-section { margin-bottom: 16px; }
+  .data-readiness-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .data-readiness-metric {
+    display: grid;
+    gap: 3px;
+    padding: 11px 12px;
+    border: 1px solid #dbe5ef;
+    border-radius: 9px;
+    background: #fff;
+  }
+  .data-readiness-metric span,
+  .data-readiness-metric small { color: #64748b; font-size: 11px; }
+  .data-readiness-metric strong { color: #0f172a; font-size: 16px; }
+  .data-readiness-section-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 0 0 16px;
+    border: 1px solid #cbd5e1;
+    border-radius: 9px;
+    overflow: hidden;
+    background: #f8fafc;
+  }
+  .data-readiness-section-tabs .segment-btn { border-radius: 0; }
+  .data-readiness-section-tabs .segment-btn + .segment-btn { border-left: 1px solid #cbd5e1; }
+  .data-readiness-section-panel[hidden] { display: none; }
+  .data-readiness-status-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 3px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    color: #475569;
+    background: #f8fafc;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .data-readiness-status--current { color: #166534; border-color: #bbf7d0; background: #f0fdf4; }
+  .data-readiness-status--refresh,
+  .data-readiness-status--review { color: #854d0e; border-color: #fde68a; background: #fffbeb; }
+  .data-readiness-status--incomplete { color: #991b1b; border-color: #fecaca; background: #fff1f2; }
+  .data-readiness-attention-list,
+  .data-readiness-account-list,
+  .data-readiness-readiness-list { display: grid; gap: 8px; }
+  .data-readiness-attention-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 9px;
+    background: #fff;
+  }
+  .data-readiness-attention-row div { display: grid; gap: 2px; }
+  .data-readiness-attention-row span:not(.data-readiness-status-chip) { color: #475569; font-size: 12px; }
+  .data-readiness-attention-row p { margin: 2px 0 0; color: #64748b; font-size: 12px; }
+  .data-readiness-account-row {
+    border: 1px solid #dbe5ef;
+    border-radius: 10px;
+    background: #fff;
+    overflow: hidden;
+  }
+  .data-readiness-account-row > summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 58px;
+    padding: 11px 13px;
+    cursor: pointer;
+  }
+  .data-readiness-account-row > summary:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.35);
+    outline-offset: -3px;
+  }
+  .data-readiness-account-name,
+  .data-readiness-primary-value { display: grid; gap: 2px; min-width: 0; }
+  .data-readiness-account-name small,
+  .data-readiness-primary-value small { color: #64748b; font-size: 11px; }
+  .data-readiness-primary-value { text-align: right; }
+  .data-readiness-account-body { padding: 13px; border-top: 1px solid #e2e8f0; background: #fbfdff; }
+  .data-readiness-comparison,
+  .data-readiness-fact-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .data-readiness-comparison > div,
+  .data-readiness-fact-card {
+    display: grid;
+    gap: 3px;
+    padding: 9px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+  }
+  .data-readiness-comparison span,
+  .data-readiness-comparison small { color: #64748b; font-size: 10px; }
+  .data-readiness-asof { margin: 8px 0 0; color: #475569; font-size: 12px; }
+  .data-readiness-fact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .data-readiness-fact-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .data-readiness-metadata { margin-top: 10px; }
+  .data-readiness-meta-line,
+  .data-readiness-readiness-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .data-readiness-meta-line:last-child,
+  .data-readiness-readiness-row:last-child { border-bottom: 0; }
+  .data-readiness-readiness-row small { color: #64748b; }
+  .data-readiness-manual-form {
+    margin-top: 10px;
+    padding: 10px;
+    border: 1px solid #bcd7f1;
+    border-radius: 8px;
+    background: #eef5ff;
+  }
+  .data-readiness-manual-form p { margin: 3px 0 8px; color: #475569; font-size: 12px; }
+  .data-readiness-manual-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .data-readiness-manual-actions { display: flex; gap: 8px; }
+  .data-readiness-manual-actions .small-btn { width: auto; }
+  .data-readiness-advanced,
+  .data-readiness-unsupported { margin-top: 10px; }
+  .data-readiness-advanced summary,
+  .data-readiness-unsupported summary { color: #475569; cursor: pointer; font-weight: 700; }
+  .data-readiness-advanced dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 10px; }
+  .data-readiness-advanced dt { color: #64748b; }
+  .data-readiness-advanced dd { margin: 0; overflow-wrap: anywhere; }
+  .data-readiness-advanced-fact {
+    display: grid;
+    gap: 3px;
+    margin-top: 8px;
+    padding: 8px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+  .data-readiness-advanced-fact span { color: #64748b; font-size: 11px; overflow-wrap: anywhere; }
+  .data-readiness-unsupported-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+  .data-readiness-unsupported-grid > div { display: grid; gap: 3px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; }
+  .data-readiness-unsupported-grid span { color: #64748b; font-size: 12px; }
+
   @media (max-width: 760px) {
     .capital-allocation-view-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .capital-allocation-view-tabs .segment-btn,
@@ -3332,6 +3441,7 @@
     .capital-allocation-view-tabs .segment-btn:last-child {
       border: 1px solid #cbd5e1;
       border-radius: 7px;
+      min-height: 44px;
     }
     .capital-allocation-progress-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .capital-allocation-summary,
@@ -3344,6 +3454,14 @@
     .capital-allocation-source-audit-grid { grid-template-columns: 1fr; }
     .capital-allocation-preview-controls { grid-template-columns: 1fr; width: 100%; }
     .capital-allocation-preview-controls label { grid-column: auto; }
+    .data-readiness-summary-grid,
+    .data-readiness-fact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .data-readiness-account-row > summary { grid-template-columns: minmax(0, 1fr) auto; }
+    .data-readiness-primary-value { grid-column: 1; text-align: left; }
+    .data-readiness-account-row > summary .data-readiness-status-chip {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+    }
     .capital-allocation-compact-outcome { align-items: flex-start; }
     .overview-section { margin-bottom: 20px; }
     .overview-kpi-grid,
@@ -3363,8 +3481,15 @@
     .overview-allocation-card,
     .overview-operations-card { grid-column: span 12; }
     .overview-section-secondary { padding: 14px 0 0; }
-    .planning-tool-group--explore .planning-tools {
-      grid-template-columns: 1fr;
+    .tabs.planning-primary-tools {
+      display: flex;
+      overflow-x: auto;
+      overscroll-behavior-inline: contain;
+      scrollbar-width: thin;
+      padding: 0 0 6px;
+    }
+    .planning-primary-tools .tab-btn {
+      flex: 0 0 min(210px, 72vw);
     }
     .property-performance-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
@@ -3451,6 +3576,24 @@
       margin-top: 7px;
     }
     .capital-allocation-compact-outcome-impact span { text-align: left; }
+    .data-readiness-overview-copy,
+    .data-readiness-overview-action,
+    .data-readiness-attention-row { align-items: stretch; flex-direction: column; }
+    .data-readiness-overview-action .small-btn { width: 100%; }
+    .data-readiness-section-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); border: 0; gap: 6px; }
+    .data-readiness-section-tabs .segment-btn,
+    .data-readiness-section-tabs .segment-btn + .segment-btn {
+      border: 1px solid #cbd5e1;
+      border-radius: 7px;
+      min-height: 44px;
+    }
+    .data-readiness-summary-grid,
+    .data-readiness-comparison,
+    .data-readiness-fact-grid,
+    .data-readiness-manual-grid,
+    .data-readiness-unsupported-grid { grid-template-columns: 1fr; }
+    .data-readiness-meta-line,
+    .data-readiness-readiness-row { grid-template-columns: 1fr auto; }
   }
 
   @media (max-width: 460px) {
@@ -3533,9 +3676,6 @@
     .snapshot-card-primary .snapshot-value { font-size: 28px; }
     .tabs.assets-tabs { grid-template-columns: 1fr; }
     .tabs.cashflow-tabs { grid-template-columns: 1fr 1fr; }
-    .planning-tool-group--do-now .planning-tools {
-      grid-template-columns: 1fr;
-    }
     .bills-grid { grid-template-columns: 1fr; }
     .bills-grid .bill-card-compact { height: auto; min-height: 132px; }
     .bill-pay-drawer {
@@ -3598,16 +3738,11 @@
    *
    *   .assets-tabs             — Bank Accounts (Assets page)
    *   .cashflow-tabs           — Bills / Upcoming / Income (Cash Flow page)
-   *   .planning-tools          — Debts (Planning page)
-   *   .planning-tools-wrap     — wrapper + "Planning tools" label
-   *   .planning-next-actions-feature
-   *                            — featured Next Actions entry tile on Planning
+   *   .planning-primary-tools  — Planning tool selector
    */
   body.setup-editor-mode .assets-tabs,
   body.setup-editor-mode .cashflow-tabs,
-  body.setup-editor-mode .planning-tools,
-  body.setup-editor-mode .planning-tools-wrap,
-  body.setup-editor-mode .planning-next-actions-feature { display: none !important; }
+  body.setup-editor-mode .planning-primary-tools { display: none !important; }
 
   .setup-editor-bar {
     display: none;
@@ -4327,7 +4462,7 @@
   /*
    * Completion panel. Sits below both grids (required + optional) and
    * replaces the old "Finish" step card. Full-width, distinct from a
-   * step card, with the primary "Go to Next Actions" CTA. No step
+   * step card, with the primary "Go to This week" CTA. No step
    * number, no status badge — intentionally not step-shaped so users
    * read it as a readiness summary rather than as another checklist
    * item.
@@ -4374,7 +4509,7 @@
   }
   /*
    * Secondary link sits quietly next to the primary CTA so the
-   * "Go to Next Actions" button clearly leads.
+   * "Go to This week" button clearly leads.
    */
   .onboarding-finish-panel-actions .btn-link-inline {
     padding: 0;
@@ -4409,5 +4544,94 @@
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+  }
+
+  /* This Week customer layer: concise groups first, audit detail on demand. */
+  .capital-allocation-attention-group {
+    margin-top: 10px;
+  }
+  .capital-allocation-attention-group > span:first-child {
+    display: block;
+    margin-bottom: 6px;
+    color: #475569;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .capital-allocation-property-total {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin: 12px 0;
+  }
+  .capital-allocation-property-total strong {
+    color: #0f172a;
+    font-size: 24px;
+  }
+  .capital-allocation-property-total span { color: #475569; }
+  .capital-allocation-property-row,
+  .capital-allocation-investment-account,
+  .capital-allocation-source-customer-row {
+    border: 1px solid #dbe4ef;
+    border-radius: 10px;
+    background: #fff;
+    padding: 13px 15px;
+  }
+  .capital-allocation-property-row,
+  .capital-allocation-source-customer-row {
+    display: grid;
+    grid-template-columns: minmax(180px, 1.4fr) repeat(3, minmax(110px, .7fr));
+    align-items: center;
+    gap: 12px;
+  }
+  .capital-allocation-property-row { grid-template-columns: minmax(180px, 1.4fr) repeat(2, minmax(130px, .8fr)); }
+  .capital-allocation-property-row > div,
+  .capital-allocation-source-customer-row > div,
+  .capital-allocation-investment-account > div:not(.capital-allocation-investment-account-head) {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .capital-allocation-property-row span,
+  .capital-allocation-source-customer-row span,
+  .capital-allocation-investment-account span { color: #64748b; font-size: 12px; }
+  .capital-allocation-source-customer-list,
+  .capital-allocation-investment-account-list,
+  .capital-allocation-investment-groups,
+  .capital-allocation-cash-groups {
+    display: grid;
+    gap: 10px;
+  }
+  .capital-allocation-cash-groups,
+  .capital-allocation-investment-groups,
+  .capital-allocation-pace-choice,
+  .capital-allocation-forecast-decision {
+    margin-top: 14px;
+    padding: 16px;
+    border: 1px solid #dbe4ef;
+    border-radius: 12px;
+    background: #fff;
+  }
+  .capital-allocation-investment-account-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #edf2f7;
+  }
+  .capital-allocation-investment-account > div:not(:last-child) { margin-bottom: 6px; }
+  .capital-allocation-audit-details { margin-top: 10px; }
+  .capital-allocation-audit-details > summary,
+  .capital-allocation-cash-groups > details > summary,
+  .capital-allocation-investment-groups > details > summary {
+    min-height: 44px;
+    cursor: pointer;
+  }
+  @media (max-width: 760px) {
+    .capital-allocation-property-row,
+    .capital-allocation-source-customer-row { grid-template-columns: 1fr; }
+    .capital-allocation-property-total { align-items: flex-start; flex-direction: column; gap: 3px; }
   }
 </style>

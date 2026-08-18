@@ -1,0 +1,466 @@
+/* Planning → This week → Data (Part 2A-5). */
+
+var __planningDataReadinessModel = null;
+var __planningDataReadinessLoading = false;
+var __planningDataReadinessPreview = Object.create(null);
+var __planningDataReadinessActiveSection = 'attention';
+
+function loadPlanningDataReadiness_(options) {
+  var opts = options || {};
+  if (__planningDataReadinessLoading) return;
+  if (__planningDataReadinessModel && !opts.force) {
+    renderPlanningDataReadiness_(__planningDataReadinessModel);
+    return;
+  }
+  __planningDataReadinessLoading = true;
+  var root = document.getElementById('capital_allocation_data_content');
+  if (root && !__planningDataReadinessModel) {
+    root.innerHTML = typeof loadingIndicatorHtml === 'function'
+      ? loadingIndicatorHtml('Reviewing cash and credit-card data…')
+      : '<p class="muted">Reviewing cash and credit-card data…</p>';
+  }
+  var date = document.getElementById('capital_allocation_as_of');
+  google.script.run
+    .withSuccessHandler(function(model) {
+      __planningDataReadinessLoading = false;
+      __planningDataReadinessModel = model || null;
+      renderPlanningDataReadiness_(model);
+    })
+    .withFailureHandler(function(err) {
+      __planningDataReadinessLoading = false;
+      var message = err && err.message ? err.message : String(err || 'Unknown error');
+      var overview = document.getElementById('capital_allocation_data_status_card');
+      if (overview) overview.innerHTML = planningDataReadinessUnavailableHtml_();
+      if (root) root.innerHTML = '<div class="surface-state surface-state--error" role="alert">' +
+        '<strong>Couldn&rsquo;t review data readiness.</strong><p>' +
+        escapeCapitalAllocationHtml_(message) + '</p></div>';
+    })
+    .getPlanningDataReadinessFromDashboard({ asOf: date ? date.value : '' });
+}
+
+function renderPlanningDataReadiness_(model) {
+  var overview = document.getElementById('capital_allocation_data_status_card');
+  var root = document.getElementById('capital_allocation_data_content');
+  if (!model || typeof model !== 'object') {
+    if (overview) overview.innerHTML = planningDataReadinessUnavailableHtml_();
+    if (root) root.innerHTML = planningDataReadinessUnavailableHtml_();
+    return;
+  }
+  if (overview) overview.innerHTML = planningDataReadinessOverviewHtml_(model);
+  if (root) {
+    root.innerHTML = planningDataReadinessDetailHtml_(model);
+    setPlanningDataReadinessSection_(__planningDataReadinessActiveSection);
+  }
+}
+
+function planningDataReadinessOverviewShellHtml_() {
+  return '<section class="capital-allocation-overview-status data-readiness-overview-card" ' +
+    'id="capital_allocation_data_status_card" aria-live="polite">' +
+    '<div><div class="capital-allocation-preview-kicker">Data status</div>' +
+    '<strong>Checking imported data…</strong></div></section>';
+}
+
+function planningDataReadinessOverviewHtml_(model) {
+  var summary = model.summary || {};
+  return '<div class="data-readiness-overview-copy"><div>' +
+    '<div class="capital-allocation-preview-kicker">Data status</div><strong>' +
+    escapeCapitalAllocationHtml_(summary.overviewHeadline || summary.label || 'Review data') + '</strong>' +
+    '<p>' + escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(
+      summary.overviewMessage || summary.message || '')) + '</p></div>' +
+    '<div class="data-readiness-overview-action"><span class="data-readiness-status-chip data-readiness-status--' +
+    planningDataReadinessStatusClass_(summary.status) + '">' +
+    escapeCapitalAllocationHtml_(summary.label || 'Needs review') + '</span>' +
+    '<button type="button" class="small-btn" onclick="setCapitalAllocationView_(\'data\')">Review data</button>' +
+    '</div></div>';
+}
+
+function planningDataReadinessUnavailableHtml_() {
+  return '<div class="surface-state surface-state--error"><strong>Data status is unavailable.</strong>' +
+    '<p>Refresh the page and try again.</p></div>';
+}
+
+function planningDataReadinessDetailHtml_(model) {
+  var sectionTabs = planningDataReadinessSectionTabsHtml_(model);
+  return '<section class="data-readiness-view" aria-labelledby="data_readiness_title">' +
+    '<div class="capital-allocation-section-head"><div>' +
+    '<div class="capital-allocation-preview-kicker">Data</div><h3 id="data_readiness_title">Data refresh and readiness</h3>' +
+    '<p class="muted">See what Cash Compass knows, when it was true, and what needs attention.</p></div>' +
+    '<button type="button" class="small-btn" onclick="loadPlanningDataReadiness_({force:true})">Refresh status</button></div>' +
+    planningDataReadinessAuthorityHtml_(model.authority || {}) +
+    planningDataReadinessSummaryHtml_(model) + sectionTabs +
+    '<div id="data_readiness_section_attention" class="data-readiness-section-panel" role="tabpanel">' +
+      planningDataReadinessAttentionHtml_(model.attention || [],
+        (model.summary || {}).attentionEmptyMessage) + '</div>' +
+    '<div id="data_readiness_section_cash" class="data-readiness-section-panel" role="tabpanel" hidden>' +
+      planningDataReadinessAccountSectionHtml_('Cash data', model.cash || [], 'cash',
+        (model.summary || {}).cashPresentation || {}) + '</div>' +
+    '<div id="data_readiness_section_debt" class="data-readiness-section-panel" role="tabpanel" hidden>' +
+      planningDataReadinessAccountSectionHtml_('Credit-card data', model.debts || [], 'debt',
+        (model.summary || {}).cardPresentation || {}) + '</div>' +
+    '<div id="data_readiness_section_readiness" class="data-readiness-section-panel" role="tabpanel" hidden>' +
+      planningDataReadinessWeeklyHtml_(model.weeklyPlanReadiness || {}) + '</div>' +
+    planningDataReadinessUnsupportedHtml_(model.unsupportedDomains || []) + '</section>';
+}
+
+function planningDataReadinessSectionTabsHtml_(model) {
+  var tabs = [
+    ['attention', 'Needs attention', Number((model.attention || []).length)],
+    ['cash', 'Cash data', Number((model.cash || []).length)],
+    ['debt', 'Credit-card data', Number((model.debts || []).length)],
+    ['readiness', 'Readiness', null]
+  ];
+  return '<div class="data-readiness-section-tabs" role="tablist" aria-label="Data readiness sections">' +
+    tabs.map(function(tab) {
+      var active = tab[0] === __planningDataReadinessActiveSection;
+      return '<button type="button" id="data_readiness_section_tab_' + tab[0] +
+        '" class="segment-btn' + (active ? ' active' : '') + '" role="tab" aria-selected="' +
+        (active ? 'true' : 'false') + '" aria-controls="data_readiness_section_' + tab[0] +
+        '" onclick="setPlanningDataReadinessSection_(\'' + tab[0] + '\')">' + tab[1] +
+        (tab[2] === null ? '' : ' (' + tab[2] + ')') + '</button>';
+    }).join('') + '</div>';
+}
+
+function setPlanningDataReadinessSection_(section) {
+  var allowed = ['attention', 'cash', 'debt', 'readiness'];
+  var selected = allowed.indexOf(section) >= 0 ? section : 'attention';
+  __planningDataReadinessActiveSection = selected;
+  allowed.forEach(function(name) {
+    var panel = document.getElementById('data_readiness_section_' + name);
+    var tab = document.getElementById('data_readiness_section_tab_' + name);
+    if (panel) panel.hidden = name !== selected;
+    if (tab) {
+      tab.classList.toggle('active', name === selected);
+      tab.setAttribute('aria-selected', name === selected ? 'true' : 'false');
+    }
+  });
+}
+
+function planningDataReadinessAuthorityHtml_(authority) {
+  return '<div class="data-readiness-authority-banner" role="note"><strong>' +
+    escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(
+      authority.headline || 'Imported data is being reviewed.')) + '</strong>' +
+    '<p>' + escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(authority.supporting ||
+      'Your current weekly plan still uses the existing Planning values.')) + '</p>' +
+    '<small>' + escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(
+      authority.customerMessage || '')) + '</small></div>';
+}
+
+function planningDataReadinessSummaryHtml_(model) {
+  var summary = model.summary || {};
+  var weekly = model.weeklyPlanReadiness || {};
+  return '<section class="data-readiness-summary" aria-labelledby="data_readiness_summary_title">' +
+    '<div class="capital-allocation-section-head"><h3 id="data_readiness_summary_title">At a glance</h3>' +
+    '<span class="data-readiness-status-chip data-readiness-status--' +
+    planningDataReadinessStatusClass_(summary.status) + '">' +
+    escapeCapitalAllocationHtml_(summary.label || 'Needs review') + '</span></div>' +
+    '<div class="data-readiness-summary-grid">' +
+    planningDataReadinessDomainMetricHtml_('Cash', summary.cashPresentation || {}) +
+    planningDataReadinessDomainMetricHtml_('Credit cards', summary.cardPresentation || {}) +
+    planningDataReadinessMetricHtml_('Needs attention', summary.attentionCount, null, 'items') +
+    '<div class="data-readiness-metric"><span>Plan data readiness</span><strong>' +
+    escapeCapitalAllocationHtml_(weekly.statusLabel || 'Needs updates') +
+    '</strong><small>Planning still uses existing values</small></div>' +
+    '</div></section>';
+}
+
+function planningDataReadinessDomainMetricHtml_(label, presentation) {
+  return '<div class="data-readiness-metric"><span>' + escapeCapitalAllocationHtml_(label) +
+    '</span><strong>' + escapeCapitalAllocationHtml_(presentation.label || 'Not connected') +
+    '</strong><small>' + escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(
+      presentation.note || '')) + '</small></div>';
+}
+
+function planningDataReadinessMetricHtml_(label, value, total, note) {
+  var display = total === null || typeof total === 'undefined'
+    ? String(Number(value || 0)) : Number(value || 0) + ' / ' + Number(total || 0);
+  return '<div class="data-readiness-metric"><span>' + escapeCapitalAllocationHtml_(label) +
+    '</span><strong>' + escapeCapitalAllocationHtml_(display) + '</strong><small>' +
+    escapeCapitalAllocationHtml_(note) + '</small></div>';
+}
+
+function planningDataReadinessAttentionHtml_(issues, emptyMessage) {
+  var html = '<section class="data-readiness-section" aria-labelledby="data_readiness_attention_title">' +
+    '<div class="capital-allocation-section-head"><h3 id="data_readiness_attention_title">Needs attention</h3>' +
+    '<span class="capital-allocation-badge">' + Number(issues.length || 0) + '</span></div>';
+  if (!issues.length) return html + '<p class="muted">' +
+    escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(
+      emptyMessage || 'No imported items currently require review.')) +
+    '</p></section>';
+  html += '<div class="data-readiness-attention-list">';
+  issues.forEach(function(issue) {
+    html += '<div class="data-readiness-attention-row"><div><strong>' +
+      escapeCapitalAllocationHtml_(issue.accountName || 'Account') + '</strong><span>' +
+      escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(issue.title || 'Review data')) + '</span><p>' +
+      escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(issue.message || '')) +
+      '</p></div><span class="data-readiness-status-chip ' +
+      (issue.blocksReadiness ? 'data-readiness-status--incomplete' : 'data-readiness-status--review') + '">' +
+      (issue.blocksReadiness ? 'Blocks readiness' : 'Review') + '</span></div>';
+  });
+  return html + '</div></section>';
+}
+
+function planningDataReadinessAccountSectionHtml_(title, rows, kind, presentation) {
+  var id = 'data_readiness_' + kind + '_title';
+  var html = '<section class="data-readiness-section" aria-labelledby="' + id + '">' +
+    '<div class="capital-allocation-section-head"><h3 id="' + id + '">' +
+    escapeCapitalAllocationHtml_(title) + '</h3><span class="muted">' +
+    escapeCapitalAllocationHtml_(rows.length ? rows.length + ' account' +
+      (rows.length === 1 ? '' : 's') : (presentation.label || 'Not connected')) +
+    '</span></div><div class="data-readiness-account-list">';
+  if (!rows.length) {
+    return html + '<div class="surface-state"><strong>Not connected</strong>' +
+      '<p>' + escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(
+        presentation.emptyMessage || '')) +
+      '</p></div></div></section>';
+  }
+  rows.forEach(function(row) {
+    html += kind === 'cash' ? planningDataReadinessCashRowHtml_(row) :
+      planningDataReadinessDebtRowHtml_(row);
+  });
+  return html + '</div></section>';
+}
+
+function planningDataReadinessCashRowHtml_(row) {
+  return '<details class="data-readiness-account-row"><summary><span class="data-readiness-account-name"><strong>' +
+    escapeCapitalAllocationHtml_(row.displayName) + '</strong><small>' +
+    escapeCapitalAllocationHtml_(planningDataReadinessAccountMeta_(row)) + '</small></span>' +
+    planningDataReadinessPrimaryValueHtml_(row.normalizedValue, 'Balance', row.fact,
+      row.difference, row.differenceStatus) + planningDataReadinessFactStatusChip_(row.fact) +
+    '</summary><div class="data-readiness-account-body">' +
+    planningDataReadinessComparisonHtml_(row.planningValue, row.normalizedValue, row.difference,
+      row.differenceStatus, 'Balance', row.fact) +
+    planningDataReadinessMetadataHtml_(row.fact, row.source, row.identity, row.refreshMethod) +
+    planningDataReadinessAdvancedHtml_(row.advanced) + '</div></details>';
+}
+
+function planningDataReadinessDebtRowHtml_(row) {
+  var facts = (row.facts || []).map(function(fact) {
+    var verification = fact.canVerifyManually
+      ? planningDataReadinessManualAprHtml_(row, fact) : '';
+    return '<div class="data-readiness-fact-card"><div class="data-readiness-fact-head"><strong>' +
+      escapeCapitalAllocationHtml_(fact.label) + '</strong>' + planningDataReadinessFactStatusChip_(fact) +
+      '</div>' + planningDataReadinessComparisonHtml_(fact.planningValue, fact.normalizedValue,
+        fact.difference, fact.differenceStatus, fact.label, fact) + verification + '</div>';
+  }).join('');
+  var balance = (row.facts || []).filter(function(fact) { return fact.factType === 'CURRENT_BALANCE'; })[0] || {};
+  return '<details class="data-readiness-account-row"><summary><span class="data-readiness-account-name"><strong>' +
+    escapeCapitalAllocationHtml_(row.displayName) + '</strong><small>' +
+    escapeCapitalAllocationHtml_(planningDataReadinessAccountMeta_(row)) + '</small></span>' +
+    planningDataReadinessPrimaryValueHtml_(balance.normalizedValue, 'Balance', balance,
+      balance.difference, balance.differenceStatus) +
+    '<span class="data-readiness-status-chip data-readiness-status--' + (row.ready ? 'current' : 'incomplete') + '">' +
+    escapeCapitalAllocationHtml_(row.reviewStatus) + '</span></summary><div class="data-readiness-account-body">' +
+    '<div class="data-readiness-fact-grid">' + facts + '</div>' +
+    '<div class="data-readiness-meta-line"><span>Identity</span><strong>' +
+    escapeCapitalAllocationHtml_(row.identity.label) + '</strong></div>' +
+    planningDataReadinessAdvancedHtml_(row.advanced) + '</div></details>';
+}
+
+function planningDataReadinessComparisonHtml_(planningValue, normalizedValue, difference,
+    differenceStatus, label, fact) {
+  return '<div class="data-readiness-comparison">' +
+    planningDataReadinessValueHtml_('Planning currently uses', planningValue, label) +
+    planningDataReadinessValueHtml_('Latest imported value', normalizedValue, label) +
+    planningDataReadinessDifferenceHtml_(difference, differenceStatus, label) + '</div>' +
+    '<div class="data-readiness-asof"><strong>' + escapeCapitalAllocationHtml_(fact.statusLabel) + '</strong>' +
+    (fact.effectiveAsOf ? ' · As of ' + escapeCapitalAllocationHtml_(planningDataReadinessDate_(fact.effectiveAsOf)) :
+      ' · Date not verified') + '</div>';
+}
+
+function planningDataReadinessPrimaryValueHtml_(value, label, fact, difference, differenceStatus) {
+  var asOf = fact && fact.effectiveAsOf
+    ? planningDataReadinessDate_(fact.effectiveAsOf) : 'Date not verified';
+  var differenceText = differenceStatus === 'DIFFERENCE_DETECTED'
+    ? ' · differs ' + planningDataReadinessSignedValue_(difference, label) : '';
+  return '<span class="data-readiness-primary-value"><strong>' +
+    escapeCapitalAllocationHtml_(planningDataReadinessValue_(value, label)) + '</strong><small>As of ' +
+    escapeCapitalAllocationHtml_(asOf + differenceText) + '</small></span>';
+}
+
+function planningDataReadinessValueHtml_(label, value, factLabel) {
+  return '<div><span>' + escapeCapitalAllocationHtml_(label) + '</span><strong>' +
+    escapeCapitalAllocationHtml_(planningDataReadinessValue_(value, factLabel)) + '</strong></div>';
+}
+
+function planningDataReadinessDifferenceHtml_(difference, status, factLabel) {
+  var value = status === 'UNAVAILABLE' || difference === null || typeof difference === 'undefined'
+    ? 'Unavailable' : status === 'MATCHED' ? 'Exact match' :
+      planningDataReadinessSignedValue_(difference, factLabel);
+  return '<div><span>Difference</span><strong>' + escapeCapitalAllocationHtml_(value) + '</strong>' +
+    (status === 'DIFFERENCE_DETECTED' ? '<small>Difference detected</small>' : '') + '</div>';
+}
+
+function planningDataReadinessMetadataHtml_(fact, source, identity, refreshMethod) {
+  return '<div class="data-readiness-metadata">' +
+    '<div class="data-readiness-meta-line"><span>Source</span><strong>' +
+    escapeCapitalAllocationHtml_(source || fact.source) + '</strong></div>' +
+    '<div class="data-readiness-meta-line"><span>Can support planning</span><strong>' +
+    (fact.safeToModel ? 'Yes' : 'Not yet') + '</strong></div>' +
+    '<div class="data-readiness-meta-line"><span>Ready to use</span><strong>' +
+    (fact.safeToAct ? 'Yes' : 'Needs refresh') + '</strong></div>' +
+    '<div class="data-readiness-meta-line"><span>Account match</span><strong>' +
+    escapeCapitalAllocationHtml_(identity.label) + '</strong></div>' +
+    '<div class="data-readiness-meta-line"><span>How to refresh</span><strong>' +
+    escapeCapitalAllocationHtml_(refreshMethod) + '</strong></div></div>';
+}
+
+function planningDataReadinessManualAprHtml_(row) {
+  var token = planningDataReadinessDomToken_(row.stableAccountId);
+  return '<div class="data-readiness-manual-form"><strong>Verify APR for ' +
+    escapeCapitalAllocationHtml_(row.displayName) + '</strong>' +
+    '<p>Enter the APR that applies to the carried balance.</p>' +
+    '<div class="data-readiness-manual-grid"><label for="data_apr_' + token + '">APR %' +
+    '<input id="data_apr_' + token + '" type="number" min="0" step="0.01" inputmode="decimal"></label>' +
+    '<label for="data_apr_date_' + token + '">Effective as of' +
+    '<input id="data_apr_date_' + token + '" type="date"></label></div>' +
+    '<div class="data-readiness-manual-actions"><button type="button" class="small-btn" ' +
+    'onclick="previewPlanningManualApr_(\'' + escapeCapitalAllocationHtml_(row.stableAccountId) + '\')">Preview</button>' +
+    '<button type="button" class="small-btn" id="data_apr_confirm_' + token + '" disabled ' +
+    'onclick="confirmPlanningManualApr_(\'' + escapeCapitalAllocationHtml_(row.stableAccountId) + '\')">Confirm</button></div>' +
+    '<div id="data_apr_status_' + token + '" class="status" aria-live="polite"></div></div>';
+}
+
+function previewPlanningManualApr_(stableAccountId) {
+  var token = planningDataReadinessDomToken_(stableAccountId);
+  var apr = document.getElementById('data_apr_' + token);
+  var date = document.getElementById('data_apr_date_' + token);
+  var status = document.getElementById('data_apr_status_' + token);
+  var confirm = document.getElementById('data_apr_confirm_' + token);
+  var value = apr ? Number(apr.value) : NaN;
+  if (!isFinite(value) || value < 0 || !date || !date.value) {
+    if (status) { status.textContent = 'Enter the applicable APR and its effective date.'; status.className = 'status error'; }
+    if (confirm) confirm.disabled = true;
+    return;
+  }
+  if (status) { status.textContent = 'Building preview…'; status.className = 'status'; }
+  google.script.run.withSuccessHandler(function(preview) {
+    __planningDataReadinessPreview[stableAccountId] = {
+      previewDigest: preview.previewDigest,
+      record: { stableAccountId: stableAccountId, apr: value,
+        rateType: 'PERCENT_VARIABLE', effectiveAsOf: date.value }
+    };
+    if (status) { status.textContent = 'Preview ready. Confirm to save verified evidence.'; status.className = 'status status-success'; }
+    if (confirm) confirm.disabled = false;
+  }).withFailureHandler(function(err) {
+    if (status) { status.textContent = err && err.message ? err.message : String(err || 'Preview failed.'); status.className = 'status error'; }
+    if (confirm) confirm.disabled = true;
+  }).previewVerifiedManualDebtImportFromDashboard({ record: {
+    stableAccountId: stableAccountId, apr: value,
+    rateType: 'PERCENT_VARIABLE', effectiveAsOf: date.value
+  }});
+}
+
+function confirmPlanningManualApr_(stableAccountId) {
+  var pending = __planningDataReadinessPreview[stableAccountId];
+  var token = planningDataReadinessDomToken_(stableAccountId);
+  var status = document.getElementById('data_apr_status_' + token);
+  var confirm = document.getElementById('data_apr_confirm_' + token);
+  if (!pending) return;
+  if (confirm) confirm.disabled = true;
+  if (status) { status.textContent = 'Saving verified evidence…'; status.className = 'status'; }
+  google.script.run.withSuccessHandler(function() {
+    delete __planningDataReadinessPreview[stableAccountId];
+    if (status) { status.textContent = 'Verified evidence saved. Refreshing status…'; status.className = 'status status-success'; }
+    __planningDataReadinessModel = null;
+    loadPlanningDataReadiness_({ force: true });
+  }).withFailureHandler(function(err) {
+    if (status) { status.textContent = err && err.message ? err.message : String(err || 'Save failed.'); status.className = 'status error'; }
+    if (confirm) confirm.disabled = false;
+  }).applyVerifiedManualDebtImportFromDashboard({ record: pending.record,
+    previewDigest: pending.previewDigest });
+}
+
+function planningDataReadinessWeeklyHtml_(weekly) {
+  var rows = (weekly.dimensions || []).map(function(row) {
+    return '<div class="data-readiness-readiness-row"><span>' +
+      escapeCapitalAllocationHtml_(row.label) + '</span><strong>' +
+      escapeCapitalAllocationHtml_(row.statusLabel) + '</strong>' +
+      (row.countLabel ? '<small>' + escapeCapitalAllocationHtml_(row.countLabel) + '</small>' : '') +
+      '</div>';
+  }).join('');
+  return '<section class="data-readiness-section" aria-labelledby="data_readiness_weekly_title">' +
+    '<div class="capital-allocation-section-head"><h3 id="data_readiness_weekly_title">Weekly plan readiness</h3>' +
+    '<span class="data-readiness-status-chip data-readiness-status--' +
+    (weekly.status === 'READY_FOR_REVIEW' ? 'current' : 'incomplete') + '">' +
+    escapeCapitalAllocationHtml_(weekly.statusLabel || 'Needs updates') + '</span></div>' +
+    '<p class="muted">' + escapeCapitalAllocationHtml_(planningDataReadinessCustomerText_(
+      weekly.message || '')) + '</p>' +
+    '<div class="data-readiness-readiness-list">' + rows + '</div></section>';
+}
+
+function planningDataReadinessCustomerText_(value) {
+  return String(value || '')
+    .replace(/\bnormalized\b/gi, 'imported')
+    .replace(/\bauthority has not switched\b/gi, 'Planning still uses existing values');
+}
+
+function planningDataReadinessUnsupportedHtml_(rows) {
+  return '<details class="data-readiness-unsupported"><summary>Other data areas</summary>' +
+    '<div class="data-readiness-unsupported-grid">' + (rows || []).map(function(row) {
+      return '<div><strong>' + escapeCapitalAllocationHtml_(row.domain) + '</strong><span>' +
+        escapeCapitalAllocationHtml_(row.status) + '</span></div>';
+    }).join('') + '</div></details>';
+}
+
+function planningDataReadinessAdvancedHtml_(advanced) {
+  var reasons = advanced && advanced.reasonCodes ? advanced.reasonCodes.join(', ') : '';
+  var facts = advanced && advanced.facts ? advanced.facts : [];
+  var factAudit = facts.map(function(fact) {
+    return '<div class="data-readiness-advanced-fact"><strong>' +
+      escapeCapitalAllocationHtml_(fact.factType || 'Fact') + '</strong><span>Fact ID: ' +
+      escapeCapitalAllocationHtml_(fact.factId || 'Unavailable') + '</span><span>Authority: ' +
+      escapeCapitalAllocationHtml_(fact.authorityClass || 'Unavailable') + '</span><span>Verification: ' +
+      escapeCapitalAllocationHtml_(fact.verificationStatus || 'Unavailable') + '</span><span>Reconciliation: ' +
+      escapeCapitalAllocationHtml_(fact.reconciliationStatus || 'Unavailable') + '</span></div>';
+  }).join('');
+  return '<details class="data-readiness-advanced"><summary>Advanced audit details</summary>' +
+    '<dl><dt>Stable account ID</dt><dd>' + escapeCapitalAllocationHtml_(advanced && advanced.stableAccountId || 'Unavailable') +
+    '</dd>' + (!facts.length && advanced && advanced.factId ? '<dt>Fact ID</dt><dd>' +
+      escapeCapitalAllocationHtml_(advanced.factId) + '</dd><dt>Authority</dt><dd>' +
+      escapeCapitalAllocationHtml_(advanced.authorityClass || 'Unavailable') + '</dd><dt>Verification</dt><dd>' +
+      escapeCapitalAllocationHtml_(advanced.verificationStatus || 'Unavailable') + '</dd><dt>Reconciliation</dt><dd>' +
+      escapeCapitalAllocationHtml_(advanced.reconciliationStatus || 'Unavailable') + '</dd>' : '') +
+    (reasons ? '<dt>Internal review codes</dt><dd>' + escapeCapitalAllocationHtml_(reasons) + '</dd>' : '') +
+    '</dl>' + factAudit + '</details>';
+}
+
+function planningDataReadinessFactStatusChip_(fact) {
+  return '<span class="data-readiness-status-chip data-readiness-status--' +
+    planningDataReadinessStatusClass_(fact.status) + '">' +
+    escapeCapitalAllocationHtml_(fact.statusLabel || 'Missing') + '</span>';
+}
+
+function planningDataReadinessStatusClass_(status) {
+  var value = String(status || '').toLowerCase();
+  if (value === 'ready' || value === 'ready_for_review' || value === 'current') return 'current';
+  if (value === 'needs_refresh') return 'refresh';
+  if (value === 'needs_review') return 'review';
+  return 'incomplete';
+}
+
+function planningDataReadinessAccountMeta_(row) {
+  return [row.institution, row.maskedIdentifier].filter(Boolean).join(' · ');
+}
+
+function planningDataReadinessDate_(value) {
+  var date = new Date(value);
+  if (isNaN(date.getTime())) return 'Date not verified';
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function planningDataReadinessValue_(value, label) {
+  if (value === null || typeof value === 'undefined' || value === '') return 'Unavailable';
+  if (label === 'APR') return Number(value).toFixed(2) + '%';
+  if (label === 'Due date') return planningDataReadinessDate_(value);
+  return formatCapitalAllocationMoney_(Number(value));
+}
+
+function planningDataReadinessSignedValue_(value, label) {
+  if (label === 'APR') return (Number(value) > 0 ? '+' : '') + Number(value).toFixed(2) + ' points';
+  if (label === 'Due date') return 'Difference detected';
+  return (Number(value) > 0 ? '+' : '') + formatCapitalAllocationMoney_(Number(value));
+}
+
+function planningDataReadinessDomToken_(value) {
+  return String(value || '').replace(/[^A-Za-z0-9_-]/g, '_');
+}

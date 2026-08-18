@@ -174,6 +174,9 @@ function getHarnessScenarios_() {
   if (typeof getHarnessPart2aAuthoritativeDebtImportScenario_ === 'function') {
     list.push(getHarnessPart2aAuthoritativeDebtImportScenario_());
   }
+  if (typeof getHarnessPart2aDataReadinessScenario_ === 'function') {
+    list.push(getHarnessPart2aDataReadinessScenario_());
+  }
   if (typeof getHarnessRfpInvestmentActivityScenario_ === 'function') {
     list.push(getHarnessRfpInvestmentActivityScenario_());
   }

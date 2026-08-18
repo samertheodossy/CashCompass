@@ -513,6 +513,18 @@ function openHelpToSection(anchorId) {
 
 function showTab(name) {
   mountDebtPanelInAssets_();
+  // Next Actions is no longer a customer-visible Planning tool. Preserve old
+  // Setup links, bookmarks, and callers by resolving the legacy route to the
+  // current daily decision surface instead of exposing a dead or duplicate
+  // screen. Only the legacy route forces Overview; normal This Week navigation
+  // preserves the customer's selected This Week subview.
+  var legacyNextActionsRoute = name === 'nextActions';
+  if (legacyNextActionsRoute) {
+    name = 'capitalAllocationPreview';
+    if (typeof __capitalAllocationActiveView !== 'undefined') {
+      __capitalAllocationActiveView = 'overview';
+    }
+  }
   var ownerPage = dashboardPageForTab_(name);
   if (ownerPage) DASHBOARD_LAST_TAB_BY_PAGE_[ownerPage] = name;
 
@@ -521,13 +533,17 @@ function showTab(name) {
   });
   document.querySelectorAll('.tab-btn').forEach(function(el) {
     el.classList.remove('active');
+    if (el.getAttribute('role') === 'tab') el.setAttribute('aria-selected', 'false');
   });
 
   const panel = document.getElementById(name);
   if (panel) panel.classList.add('active');
 
   const tabBtn = document.querySelector('.tab-btn[data-tab="' + name + '"]');
-  if (tabBtn) tabBtn.classList.add('active');
+  if (tabBtn) {
+    tabBtn.classList.add('active');
+    if (tabBtn.getAttribute('role') === 'tab') tabBtn.setAttribute('aria-selected', 'true');
+  }
 
   if (name === 'houses' || name === 'bank' || name === 'investments' || name === 'debts') {
     showPage('assets');
@@ -593,6 +609,10 @@ function showTab(name) {
   if (name === 'capitalAllocationPreview' &&
       typeof loadCapitalAllocationPreview_ === 'function') {
     loadCapitalAllocationPreview_();
+  }
+
+  if (legacyNextActionsRoute && typeof setCapitalAllocationView_ === 'function') {
+    setCapitalAllocationView_('overview');
   }
 
   // Re-pull Bills Due / Upcoming / Manage bills on every navigation to the

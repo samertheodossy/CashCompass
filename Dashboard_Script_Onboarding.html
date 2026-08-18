@@ -388,10 +388,10 @@ function onboardingApplyProgressRecommendation_(steps, complete, total) {
   })[0] || null;
 
   if (!next) {
-    nextEl.textContent = 'Recommended next: review your prioritized Next Actions.';
-    action.textContent = 'Go to Next Actions';
+    nextEl.textContent = 'Recommended next: review this week\'s plan.';
+    action.textContent = 'Go to This week';
     action.hidden = false;
-    action.onclick = onboardingGoToNextActions;
+    action.onclick = onboardingGoToThisWeek;
     return;
   }
 
@@ -675,7 +675,7 @@ function onboardingSaveIncomeProducingAccounts_() {
 // Render the readiness / completion panel shown below the step grid.
 // The panel replaces the old "Finish" step card and is intentionally
 // not styled as a step: no number, no status badge, just a readiness
-// message plus the primary "Go to Next Actions" CTA.
+// message plus the primary "Go to This week" CTA.
 function onboardingApplyFinishPanel_(complete, total) {
   var titleEl = document.getElementById('onboarding_finish_panel_title');
   var subEl = document.getElementById('onboarding_finish_panel_sub');
@@ -2195,9 +2195,10 @@ function onboardingRenderFinishDetail_(data) {
     '<div class="onboarding-account-list" role="list">' + rows + '</div>';
 }
 
-function onboardingGoToNextActions() {
+function onboardingGoToThisWeek() {
   // Leave Setup cleanly: drop setup-mode / setup-editor-mode if active,
-  // then hand off to Planning → Next Actions. Reusing showPage / showTab
+  // then hand off to Planning → This week → Overview. Reusing showPage /
+  // showTab
   // keeps the navigation identical to a normal tab click — no special
   // onboarding plumbing in the planning surface.
   try {
@@ -2209,10 +2210,23 @@ function onboardingGoToNextActions() {
     if (bar) bar.hidden = true;
 
     if (typeof showPage === 'function') showPage('planning');
-    if (typeof showTab === 'function') showTab('nextActions');
+    if (typeof __capitalAllocationActiveView !== 'undefined') {
+      __capitalAllocationActiveView = 'overview';
+    }
+    if (typeof showTab === 'function') showTab('capitalAllocationPreview');
+    if (typeof setCapitalAllocationView_ === 'function') {
+      setCapitalAllocationView_('overview');
+    }
   } catch (_e) {
     // Fall back to staying on Setup if navigation helpers are missing.
   }
+}
+
+// Compatibility for older inline callers and cached dashboard markup. The
+// historical function name intentionally survives, but its destination is the
+// current Planning entry point.
+function onboardingGoToNextActions() {
+  onboardingGoToThisWeek();
 }
 
 // --------------------------------------------------------------------------

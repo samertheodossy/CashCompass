@@ -1407,23 +1407,22 @@ const planning = body.slice(
   body.indexOf('<div id="page_planning"'),
   body.indexOf('<!--\n    Onboarding Phase 1')
 );
-assert.ok(
-  planning.indexOf('planning-tool-group--do-now') < planning.indexOf('planning-tool-group--explore'),
-  'Planning must present immediate tasks before optional modeling tools'
-);
 assert.match(planning,
-  /planning-next-actions-feature[\s\S]*?data-tab="capitalAllocationPreview"[\s\S]*?Start here[\s\S]*?This week/,
-  'Planning must feature This Week as the Start Here experience');
+  /class="tabs planning-primary-tools"[\s\S]*?data-tab="capitalAllocationPreview"[\s\S]*?This week[\s\S]*?data-tab="rollingDebtPayoff"[\s\S]*?Rolling debt payoff[\s\S]*?data-tab="debtPayoff"[\s\S]*?Debt overview[\s\S]*?data-tab="retirement"[\s\S]*?Retirement[\s\S]*?data-tab="purchase"[\s\S]*?Purchase simulator/,
+  'Planning must expose one five-tool primary selector with This Week first');
 assert.match(planning,
-  /planning-tool-group--do-now[\s\S]*?data-tab="nextActions"[\s\S]*?data-tab="rollingDebtPayoff"/,
-  'Do now must preserve immediate priorities and the actionable payoff plan');
-assert.match(planning,
-  /planning-tool-group--explore[\s\S]*?data-tab="debtPayoff"[\s\S]*?data-tab="retirement"[\s\S]*?data-tab="purchase"/,
-  'Explore / model must group the read-only overview and scenario tools');
-for (const tab of ['capitalAllocationPreview', 'nextActions', 'rollingDebtPayoff', 'debtPayoff', 'retirement', 'purchase']) {
+  /role="tablist" aria-label="Planning tools"[\s\S]*?role="tab" aria-selected="true"[\s\S]*?aria-controls="capitalAllocationPreview"[\s\S]*?role="tabpanel" aria-labelledby="planning_tool_this_week"/,
+  'Planning primary navigation must expose selected state and tab-to-panel relationships');
+for (const tab of ['capitalAllocationPreview', 'rollingDebtPayoff', 'debtPayoff', 'retirement', 'purchase']) {
   assert.equal((planning.match(new RegExp(`data-tab=["']${tab}["']`, 'g')) || []).length, 1,
     `Planning must preserve exactly one navigation route for ${tab}`);
 }
+assert.doesNotMatch(planning, /planning-next-actions-feature|planning-tools-wrap|planning-tool-group--do-now|planning-tool-group--explore|data-tab="nextActions"/,
+  'Planning must not expose the retired Start Here, grouped tool cards, or Next Actions navigation');
+assert.doesNotMatch(planning, />\s*(?:Start here|Do now|Explore \/ model)\s*</i,
+  'Planning must not retain obsolete grouping labels');
+assert.match(planning, /id="nextActions" class="panel"/,
+  'The legacy Next Actions panel must remain available for backend compatibility');
 assert.doesNotMatch(planning,
   /data-tab="debts"/,
   'Planning navigation must not retain the balance-maintenance Debt accounts editor');
@@ -1439,14 +1438,22 @@ assert.match(planning,
   /<details class="rolling-dp-json-wrap">[\s\S]*?Advanced: Raw JSON export/,
   'Rolling debt raw output must remain inside an explicitly advanced disclosure');
 assert.match(styles,
-  /\.planning-tools-wrap\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(0,\s*3fr\)/,
-  'Planning task groups must use an intentional desktop hierarchy');
+  /\.tabs\.planning-primary-tools\s*\{[\s\S]*?grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/,
+  'Planning primary tools must share one five-choice desktop selector');
 assert.match(styles,
-  /@media \(max-width:\s*1180px\)[\s\S]*?\.planning-tools-wrap\s*\{\s*grid-template-columns:\s*1fr;/,
-  'Planning task groups must stack cleanly at medium widths');
-assert.match(styles,
-  /@media \(max-width:\s*460px\)[\s\S]*?\.planning-tool-group--do-now \.planning-tools\s*\{\s*grid-template-columns:\s*1fr;/,
-  'Immediate Planning tools must stack at the narrowest width');
+  /@media \(max-width:\s*760px\)[\s\S]*?\.tabs\.planning-primary-tools\s*\{[\s\S]*?overflow-x:\s*auto[\s\S]*?\.planning-primary-tools \.tab-btn\s*\{[\s\S]*?flex:\s*0 0 min\(210px,\s*72vw\)/,
+  'Planning primary tools must remain readable in an accessible mobile scroll strip');
+assert.match(render,
+  /var legacyNextActionsRoute = name === 'nextActions'[\s\S]*?name = 'capitalAllocationPreview'[\s\S]*?__capitalAllocationActiveView = 'overview'/,
+  'Legacy Next Actions routes must resolve to This Week Overview');
+assert.match(render,
+  /document\.querySelectorAll\('\.tab-btn'\)[\s\S]*?const tabBtn = document\.querySelector\('\.tab-btn\[data-tab="' \+ name \+ '\"\]'/,
+  'Primary Planning selection must update the primary tab buttons without replacing This Week subview state');
+assert.match(files['Dashboard_Script_Onboarding.html'],
+  /function onboardingGoToThisWeek\(\)[\s\S]*?showTab\('capitalAllocationPreview'\)[\s\S]*?setCapitalAllocationView_\('overview'\)/,
+  'Setup completion must route to This Week Overview');
+assert.doesNotMatch(planning, /Go to Next Actions/,
+  'Setup customer copy must not point to the retired Next Actions experience');
 
 const assetsAndLiabilities = body.slice(
   body.indexOf('<div id="page_assets"'),

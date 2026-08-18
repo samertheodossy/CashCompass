@@ -48,6 +48,8 @@ function renderCapitalAllocationPreview_(plan) {
       capitalAllocationPrimaryDecisionHtml_(plan) +
       capitalAllocationProgressHtml_(plan) +
       capitalAllocationOverviewWarningsHtml_(plan, blockers, variableEstimates) +
+      (typeof planningDataReadinessOverviewShellHtml_ === 'function'
+        ? planningDataReadinessOverviewShellHtml_() : '') +
       capitalAllocationOverviewNextStepHtml_(plan) +
     '</div>' +
     '<div id="capital_allocation_view_debt" class="capital-allocation-view" role="tabpanel" hidden>' +
@@ -64,16 +66,27 @@ function renderCapitalAllocationPreview_(plan) {
     '</div>' +
     '<div id="capital_allocation_view_forecast" class="capital-allocation-view" role="tabpanel" hidden>' +
       capitalAllocationForecastViewHtml_(plan, variableEstimates) +
+    '</div>' +
+    '<div id="capital_allocation_view_data" class="capital-allocation-view" role="tabpanel" hidden>' +
+      '<div id="capital_allocation_data_content" aria-live="polite">' +
+        (typeof loadingIndicatorHtml === 'function'
+          ? loadingIndicatorHtml('Reviewing cash and credit-card data…')
+          : '<p class="muted">Reviewing cash and credit-card data…</p>') +
+      '</div>' +
     '</div>';
   output.innerHTML = html;
   setCapitalAllocationView_(__capitalAllocationActiveView);
+  if (typeof loadPlanningDataReadiness_ === 'function') {
+    window.setTimeout(function() { loadPlanningDataReadiness_(); }, 0);
+  }
 }
 
 function capitalAllocationViewTabsHtml_() {
   var views = [
     { id: 'overview', label: 'Overview' }, { id: 'debt', label: 'Debt' },
     { id: 'cash', label: 'Cash' }, { id: 'investments', label: 'Investments' },
-    { id: 'properties', label: 'Properties' }, { id: 'forecast', label: 'Forecast' }
+    { id: 'properties', label: 'Properties' }, { id: 'forecast', label: 'Forecast' },
+    { id: 'data', label: 'Data' }
   ];
   return '<div class="capital-allocation-view-tabs" role="tablist" aria-label="This Week details">' +
     views.map(function(view) {
@@ -86,7 +99,7 @@ function capitalAllocationViewTabsHtml_() {
 }
 
 function setCapitalAllocationView_(view) {
-  var allowed = ['overview', 'debt', 'cash', 'investments', 'properties', 'forecast'];
+  var allowed = ['overview', 'debt', 'cash', 'investments', 'properties', 'forecast', 'data'];
   var selected = allowed.indexOf(view) >= 0 ? view : 'overview';
   __capitalAllocationActiveView = selected;
   allowed.forEach(function(name) {
@@ -98,6 +111,9 @@ function setCapitalAllocationView_(view) {
       button.setAttribute('aria-selected', name === selected ? 'true' : 'false');
     }
   });
+  if (selected === 'data' && typeof loadPlanningDataReadiness_ === 'function') {
+    loadPlanningDataReadiness_();
+  }
 }
 
 function capitalAllocationProgressHtml_(plan) {
@@ -112,17 +128,19 @@ function capitalAllocationProgressHtml_(plan) {
   var reserveCovered = Number(summary.endingCash || 0) + 0.005 >= Number(summary.reserve90Days || 0);
   var robinhoodValue = Number(after.robinhoodBalanceBefore || 0);
   return '<section class="capital-allocation-progress"><div class="capital-allocation-section-head">' +
-    '<h3>Progress</h3><span class="capital-allocation-badge">At a glance</span></div>' +
+    '<h3>Your progress</h3><span class="capital-allocation-badge">At a glance</span></div>' +
     '<div class="capital-allocation-progress-grid">' +
-    capitalAllocationProgressCardHtml_('Debt', formatCapitalAllocationMoney_(revolvingRemaining),
-      'Projected revolving balance after this plan', next.destination ? 'Next: ' + next.destination : '') +
+    capitalAllocationProgressCardHtml_('Credit-card debt remaining', formatCapitalAllocationMoney_(revolvingRemaining),
+      'After this week\'s recommended payments',
+      next.destination ? 'Next target: ' + capitalAllocationCustomerActionName_(next.destination) : '') +
     capitalAllocationProgressCardHtml_('Cash reserve', reserveCovered ? 'Covered' : 'Needs review',
-      '90-day target ' + formatCapitalAllocationMoney_(summary.reserve90Days), '') +
+      formatCapitalAllocationMoney_(summary.reserve90Days) + ' target', '') +
     capitalAllocationProgressCardHtml_('Income portfolio', formatCapitalAllocationMoney_(robinhoodValue),
-      'Samer Robinhood current value', '+' + formatCapitalAllocationMoney_(after.proposedRobinhoodFundingThisWeek) + ' this week') +
-    capitalAllocationProgressCardHtml_('Monthly cash flow',
-      formatCapitalAllocationMoney_(after.confirmedReleasedMonthlyMinimums) + ' confirmed',
-      formatCapitalAllocationMoney_(after.projectedReleasedMonthlyMinimums) + ' projected after confirmation', '') +
+      'Current value', '+' + formatCapitalAllocationMoney_(after.proposedRobinhoodFundingThisWeek) + ' this week') +
+    capitalAllocationProgressCardHtml_('Monthly cash freed',
+      formatCapitalAllocationMoney_(after.projectedReleasedMonthlyMinimums) + '/month expected',
+      'After the recommended payoff is confirmed',
+      'Currently confirmed: ' + formatCapitalAllocationMoney_(after.confirmedReleasedMonthlyMinimums) + '/month') +
     '</div></section>';
 }
 
@@ -137,43 +155,124 @@ function capitalAllocationProgressCardHtml_(title, value, note, meta) {
 
 function capitalAllocationOverviewWarningsHtml_(plan, blockers, variableEstimates) {
   var ladder = plan.capitalSourceLadder || {};
-  var zeroBuffers = Number(ladder.zeroBufferWarningCount || 0);
+  var zeroBufferAccounts = capitalAllocationZeroBufferAccounts_(ladder);
   var taxData = (ladder.steps || []).filter(function(row) {
     return String(row.status || '') === 'TAX_DATA_REQUIRED';
   }).length;
-  var warningCount = blockers.length + zeroBuffers + taxData;
-  var status = warningCount ? warningCount + ' item' + (warningCount === 1 ? '' : 's') + ' need review' :
-    'No blocking issues';
-  var details = blockers.map(function(row) {
-    return '<li>' + escapeCapitalAllocationHtml_(row.message || 'Review required.') + '</li>';
-  }).join('');
-  return '<section class="capital-allocation-overview-status"><div><div class="capital-allocation-preview-kicker">Data status</div>' +
-    '<strong>' + escapeCapitalAllocationHtml_(status) + '</strong></div><div class="capital-allocation-status-chips">' +
-    (zeroBuffers ? '<button type="button" class="small-btn" onclick="setCapitalAllocationView_(\'cash\')">' +
-      zeroBuffers + ' cash buffer' + (zeroBuffers === 1 ? '' : 's') + '</button>' : '') +
-    (taxData ? '<button type="button" class="small-btn" onclick="setCapitalAllocationView_(\'investments\')">' +
-      taxData + ' tax-data review</button>' : '') +
-    (variableEstimates.length ? '<button type="button" class="small-btn" onclick="setCapitalAllocationView_(\'forecast\')">' +
-      variableEstimates.length + ' bill estimate' + (variableEstimates.length === 1 ? '' : 's') + '</button>' : '') +
-    '</div>' +
-    (details ? '<details><summary>Review blocking information</summary><ul>' + details + '</ul></details>' : '') +
+  var actions = zeroBufferAccounts.map(function(accountName) {
+    return {
+      title: 'Set a cash buffer for ' + accountName,
+      explanation: 'Cash Compass currently considers the full eligible balance available to use. ' +
+        'Set a protected amount if some of this money should remain untouched.',
+      button: '<button type="button" class="small-btn" onclick="openCapitalAllocationCashBufferReview_()">' +
+        'Review cash buffer</button>'
+    };
+  }).concat((blockers || []).map(capitalAllocationBlockingAttentionModel_));
+  var actionCount = actions.length;
+  var visibleActions = actions.slice(0, 3).map(capitalAllocationAttentionActionHtml_).join('');
+  var additionalActions = actions.slice(3).map(capitalAllocationAttentionActionHtml_).join('');
+  var information = [];
+  if (taxData) {
+    information.push(taxData + ' investment' + (taxData === 1 ? ' needs' : 's need') + ' tax information');
+  }
+  if (variableEstimates.length) {
+    information.push(variableEstimates.length + ' bill' +
+      (variableEstimates.length === 1 ? ' is' : 's are') + ' using estimates');
+  }
+  return '<section class="capital-allocation-overview-status"><div class="capital-allocation-attention-heading">' +
+    '<div class="capital-allocation-preview-kicker">' +
+      (actionCount ? 'Needs your attention' : 'Plan notes') + '</div>' +
+    '<strong>' + (actionCount ? actionCount + ' action' + (actionCount === 1 ? '' : 's') + ' needed' :
+      'No action needed right now') + '</strong></div>' +
+    (visibleActions ? '<div class="capital-allocation-attention-list">' + visibleActions + '</div>' : '') +
+    (additionalActions ? '<details class="capital-allocation-attention-more"><summary>Review ' +
+      (actions.length - 3) + ' more action' + (actions.length - 3 === 1 ? '' : 's') + '</summary>' +
+      '<div class="capital-allocation-attention-list">' + additionalActions + '</div></details>' : '') +
+    (information.length ? '<p class="capital-allocation-information-note"><strong>Also:</strong> ' +
+      information.map(escapeCapitalAllocationHtml_).join(' &middot; ') + '</p>' : '') +
     '</section>';
 }
 
+function capitalAllocationZeroBufferAccounts_(ladder) {
+  var rows = Array.isArray(ladder.cashAccounts) ? ladder.cashAccounts : (ladder.steps || []);
+  var seen = Object.create(null);
+  return rows.filter(function(row) { return row && row.zeroBufferWarning; }).map(function(row) {
+    return String(row.accountName || row.sourceName || 'Eligible cash account').trim();
+  }).filter(function(name) {
+    var key = name.toLowerCase();
+    if (!name || seen[key]) return false;
+    seen[key] = true;
+    return true;
+  });
+}
+
+function capitalAllocationBlockingAttentionModel_(row) {
+  var findingId = String(row && row.findingId || '');
+  var message = String(row && row.message || '');
+  var accountMatch = message.match(/^(.+?) has no usable APR\b/i);
+  var billMatch = message.match(/^(.+?) has no saved estimate\b/i);
+  if (accountMatch) {
+    return {
+      title: 'Verify the APR for ' + accountMatch[1],
+      explanation: 'Cash Compass needs the rate that applies to the carried balance before it can reliably order extra debt payments.'
+    };
+  }
+  if (billMatch) {
+    return {
+      title: 'Set an estimate for ' + billMatch[1],
+      explanation: 'Cash Compass needs a planning estimate before it can safely include this bill in the reserve.'
+    };
+  }
+  if (findingId === 'PRIMARY_INCOME_ACCOUNT_UNAVAILABLE') {
+    return {
+      title: 'Review the Samer Robinhood setup',
+      explanation: 'Cash Compass needs the account active and marked as Income-Producing before it can include the weekly contribution.'
+    };
+  }
+  if (findingId === 'SAMER_ALLY_USE_POLICY_CONFLICT') {
+    var allyMatch = message.match(/^(.+?) is intended\b/i);
+    return {
+      title: 'Review cash settings' + (allyMatch ? ' for ' + allyMatch[1] : ''),
+      explanation: 'This account\'s current settings prevent Cash Compass from safely treating it as available household cash.'
+    };
+  }
+  return {
+    title: 'Review information needed for this week\'s plan',
+    explanation: 'Cash Compass needs additional information before it can safely complete the recommendation.'
+  };
+}
+
+function capitalAllocationAttentionActionHtml_(action) {
+  return '<div class="capital-allocation-attention-item"><div><strong>' +
+    escapeCapitalAllocationHtml_(action.title || 'Review required information') + '</strong><p>' +
+    escapeCapitalAllocationHtml_(action.explanation || '') + '</p></div>' +
+    (action.button || '') + '</div>';
+}
+
+function openCapitalAllocationCashBufferReview_() {
+  if (typeof showTab === 'function') showTab('bank');
+  if (typeof setBankPanelMode === 'function') setBankPanelMode('manage');
+}
+
 function capitalAllocationOverviewNextStepHtml_(plan) {
-  var after = plan.afterAction || {};
   return '<section class="capital-allocation-overview-next"><div class="capital-allocation-preview-kicker">Next step</div>' +
-    '<strong>Complete the proposed actions, then refresh Cash Compass.</strong>' +
-    '<p>' + escapeCapitalAllocationHtml_(after.confirmationMessage ||
-      'Updated balances will determine what your next available dollar should do.') + '</p></section>';
+    '<strong>Make the recommended payments, then refresh Cash Compass after the new balances appear.</strong>' +
+    '<p>We\'ll confirm what changed and calculate your next recommendation.</p></section>';
 }
 
 function capitalAllocationDebtViewHtml_(plan) {
   var decision = capitalAllocationPrimaryDecisionModel_(plan);
-  var rows = capitalAllocationDetailedDebtOutcomesHtml_(decision.debtActions);
+  var lifecycleState = capitalAllocationLifecycleState_(plan);
+  var rows = capitalAllocationDetailedDebtOutcomesHtml_(decision.debtActions, lifecycleState);
+  var heading = lifecycleState === 'CONFIRMED' ? 'Confirmed debt payments' :
+    lifecycleState === 'AWAITING_CONFIRMATION' ? 'Debt payments awaiting confirmation' :
+      'Recommended debt payments';
+  var badge = lifecycleState === 'CONFIRMED' ? 'Confirmed' :
+    lifecycleState === 'AWAITING_CONFIRMATION' ? 'Waiting for confirmation' : 'Proposed';
   return '<section class="capital-allocation-focused-view"><div class="capital-allocation-section-head">' +
-    '<div><div class="capital-allocation-preview-kicker">Debt</div><h3>Planned debt payments</h3></div>' +
-    '<span class="capital-allocation-badge">Proposed</span></div>' +
+    '<div><div class="capital-allocation-preview-kicker">Debt</div><h3>' +
+    escapeCapitalAllocationHtml_(heading) + '</h3></div>' +
+    '<span class="capital-allocation-badge">' + escapeCapitalAllocationHtml_(badge) + '</span></div>' +
     (rows || '<p class="muted">No debt payment is proposed this week.</p>') + '</section>' +
     capitalAllocationAfterActionHtml_(plan.afterAction || {}, plan.nextDollar || {});
 }
@@ -184,11 +283,11 @@ function capitalAllocationCashViewHtml_(plan) {
   var additionalCushion = Math.max(0, Number(pace.preferredLiquidityTarget || 0) -
     Number(pace.hardOperatingFloor || 0));
   return '<section class="capital-allocation-focused-view"><div class="capital-allocation-section-head">' +
-    '<div><div class="capital-allocation-preview-kicker">Cash</div><h3>Liquidity and protections</h3></div></div>' +
+    '<div><div class="capital-allocation-preview-kicker">Cash</div><h3>How much to keep and what can fund the plan</h3></div></div>' +
     '<div class="capital-allocation-summary">' +
-    capitalAllocationSummaryCardHtml_('Cash retained', summary.endingCash, 'After this proposed plan') +
-    capitalAllocationSummaryCardHtml_('Hard reserve', pace.hardOperatingFloor, 'Cannot normally be breached') +
-    capitalAllocationSummaryCardHtml_('Additional preferred cushion', additionalCushion, 'Retained above the hard floor') +
+    capitalAllocationSummaryCardHtml_('Keep available', summary.endingCash, 'Recommended under your Balanced cash strategy') +
+    capitalAllocationSummaryCardHtml_('Hard reserve', pace.hardOperatingFloor, 'Protected operating floor') +
+    capitalAllocationSummaryCardHtml_('Extra cushion', additionalCushion, 'Kept above the hard reserve') +
     '</div></section>' +
     capitalAllocationEligibleCashSourcesHtml_(plan.capitalSourceLadder || {}) +
     capitalAllocationDeploymentPaceHtml_(pace);
@@ -201,7 +300,7 @@ function capitalAllocationInvestmentsViewHtml_(plan) {
       row.actionType === 'FUND_INCOME_PRODUCING_ACCOUNT';
   });
   return '<section class="capital-allocation-focused-view"><div class="capital-allocation-section-head">' +
-    '<div><div class="capital-allocation-preview-kicker">Investments</div><h3>Contribution strategy</h3></div></div>' +
+    '<div><div class="capital-allocation-preview-kicker">Investments</div><h3>Investment plan this week</h3></div></div>' +
     '<div class="capital-allocation-group-grid">' +
     capitalAllocationInvestmentFundingCardHtml_(investments, plan.existingInvestmentContributions || []) +
     '</div></section>' + capitalAllocationOtherCapitalDecisionsHtml_(plan.capitalSourceLadder || {});
@@ -209,22 +308,77 @@ function capitalAllocationInvestmentsViewHtml_(plan) {
 
 function capitalAllocationPropertiesViewHtml_(forecast) {
   var detail = capitalAllocationPropertyContingencyHtml_(forecast || {});
+  var total = Number(forecast && forecast.propertyContingencyAmount || 0);
   return '<section class="capital-allocation-focused-view"><div class="capital-allocation-section-head">' +
-    '<div><div class="capital-allocation-preview-kicker">Properties</div><h3>Property reserve planning</h3></div></div>' +
-    '<p class="muted">Scheduled mortgages and property expenses are counted through Bills, debt minimums, or Upcoming expenses. This view adds only the available irregular-cost contingency detail.</p>' +
+    '<div><div class="capital-allocation-preview-kicker">Properties</div><h3>Property reserve</h3></div></div>' +
+    '<div class="capital-allocation-property-total"><strong>' + formatCapitalAllocationMoney_(total) +
+    '</strong><span>reserved for irregular or unexpected property costs over the next 90 days</span></div>' +
+    '<p class="muted">Scheduled property bills are already counted elsewhere. This reserve covers only irregular or unexpected property costs.</p>' +
     (detail || '<p class="muted">No separate property contingency detail is available for this plan.</p>') + '</section>';
 }
 
 function capitalAllocationForecastViewHtml_(plan, variableEstimates) {
   return '<section class="capital-allocation-focused-view"><div class="capital-allocation-section-head">' +
-    '<div><div class="capital-allocation-preview-kicker">Forecast</div><h3>Upcoming cash requirements</h3></div></div></section>' +
+    '<div><div class="capital-allocation-preview-kicker">Forecast</div><h3>Next 90 days</h3></div></div></section>' +
+    capitalAllocationForecastSummaryHtml_(plan) +
     capitalAllocationVariableEstimatesHtml_(variableEstimates) +
-    capitalAllocationForecast90Html_(plan.forecast90 || {}) +
-    capitalAllocationPlanGroupsHtml_(plan, variableEstimates.length) +
+    capitalAllocationForecastRequirementsHtml_(plan, variableEstimates.length) +
     capitalAllocationWaitingHtml_(plan.rankedCandidates || [], plan) +
-    capitalAllocationMonthlyHtml_(plan.monthlyOutlook || {}) +
-    capitalAllocationDecisionHtml_(plan) +
+    capitalAllocationForecastContributionHtml_(plan) +
+    capitalAllocationForecastAfterConfirmationHtml_(plan) +
     capitalAllocationCalculationDetailsHtml_(plan);
+}
+
+function capitalAllocationForecastSummaryHtml_(plan) {
+  var forecast = plan.forecast90 || {};
+  var pace = plan.deploymentPace || {};
+  var investmentPolicy = plan.investmentPolicy || {};
+  return '<section class="capital-allocation-forecast-summary"><div class="capital-allocation-summary">' +
+    capitalAllocationSummaryCardHtml_('Required commitments', forecast.totalOutflows,
+      'Scheduled through ' + (forecast.endDate || 'the next 90 days')) +
+    capitalAllocationSummaryCardHtml_('Protected reserve', forecast.requiredReserveAmount,
+      'Cash kept for the next 90 days') +
+    capitalAllocationSummaryCardHtml_('Preferred extra cushion',
+      Math.max(0, Number(pace.preferredLiquidityTarget || 0) - Number(pace.hardOperatingFloor || 0)),
+      'Kept above the hard reserve') +
+    capitalAllocationSummaryCardHtml_('Investment commitment', investmentPolicy.recommendedAmount,
+      'Regular Robinhood investment this week') +
+    capitalAllocationSummaryCardHtml_('Extra debt planned this week', pace.recommendedAcceleratedDeployment,
+      'Recommended above required payments') +
+    '</div></section>';
+}
+
+function capitalAllocationForecastRequirementsHtml_(plan, estimatedBillCount) {
+  var actions = (plan.weeklyActions || []).filter(function(row) {
+    return row.actionClass === 'REQUIRED_ACTION' &&
+      row.actionType !== 'FUND_INCOME_PRODUCING_MINIMUM';
+  });
+  var total = actions.reduce(function(sum, row) { return sum + Number(row.amount || 0); }, 0);
+  return '<details class="capital-allocation-forecast capital-allocation-upcoming-requirements"><summary><span>' +
+    '<strong>Upcoming requirements</strong><span class="capital-allocation-waits-summary">' +
+    actions.length + ' scheduled item' + (actions.length === 1 ? '' : 's') + ' this week' +
+    (estimatedBillCount ? ' · ' + estimatedBillCount + ' using estimates' : '') + '</span></span>' +
+    '<span class="capital-allocation-expand-label">' + formatCapitalAllocationMoney_(total) +
+    ' · View items</span></summary><div class="capital-allocation-group-items">' +
+    actions.map(capitalAllocationCompactActionHtml_).join('') + '</div></details>';
+}
+
+function capitalAllocationForecastContributionHtml_(plan) {
+  var strategy = plan.contributionStrategy || {};
+  if (!(Number(strategy.redirectedWeekly || 0) > 0)) return '';
+  return '<section class="capital-allocation-forecast-decision"><div class="capital-allocation-preview-kicker">Contribution strategy</div>' +
+    '<h3>Redirect optional investing toward debt</h3><div class="capital-allocation-property-total"><strong>' +
+    formatCapitalAllocationMoney_(strategy.redirectedWeekly) + '/week</strong><span>Destination: ' +
+    escapeCapitalAllocationHtml_(capitalAllocationCustomerActionName_(strategy.destination || 'Highest-priority debt')) +
+    '</span></div><p class="muted">Paying the current high-interest debt has a more certain near-term benefit than optional investing.</p></section>';
+}
+
+function capitalAllocationForecastAfterConfirmationHtml_(plan) {
+  var next = plan.nextDollar || {};
+  return '<section class="capital-allocation-forecast-decision"><div class="capital-allocation-preview-kicker">After confirmation</div>' +
+    '<h3>Next likely target: ' + escapeCapitalAllocationHtml_(capitalAllocationCustomerActionName_(
+      next.destination || 'Household liquidity')) + '</h3>' +
+    '<p class="muted">After balances refresh, Cash Compass will reorder the next available dollar using the confirmed results.</p></section>';
 }
 
 function capitalAllocationVariableEstimatesHtml_(variableEstimates) {
@@ -246,17 +400,20 @@ function capitalAllocationVariableEstimatesHtml_(variableEstimates) {
 function capitalAllocationDeploymentPaceHtml_(pace) {
   if (!pace || !pace.planningPeriod) return '';
   var scenarios = (pace.scenarios || []).map(function(row) {
+    var scenarioLabel = String(row.liquidityPreference || row.id || row.name || row.label || '').toUpperCase();
+    var friendly = scenarioLabel.indexOf('AGGRESSIVE') >= 0 ? 'Pay debt faster' :
+      scenarioLabel.indexOf('LIQUIDITY') >= 0 ? 'Keep more cash' : 'Balanced — Recommended';
     return '<div class="capital-allocation-compact-action"><div><strong>' +
-      escapeCapitalAllocationHtml_(row.label) + '</strong><div class="capital-allocation-card-reason">Retain ' +
-      formatCapitalAllocationMoney_(row.projectedLiquidCash) +
-      ' · estimated first-year revolving interest avoided ' +
-      formatCapitalAllocationMoney_(row.estimatedFirstYearInterestAvoided) +
-      ' · payoff timing needs normalized future cash flow</div></div><strong>' +
+      escapeCapitalAllocationHtml_(friendly) + '</strong><div class="capital-allocation-card-reason">Keep ' +
+      formatCapitalAllocationMoney_(row.projectedLiquidCash) + '</div></div><strong>Use ' +
       formatCapitalAllocationMoney_(row.acceleratedDeployment) + '</strong></div>';
   }).join('');
-  return '<details class="capital-allocation-deployment-pace"><summary><span><strong>How the cash target is calculated</strong>' +
-    '<span class="capital-allocation-waits-summary">Review the deployment budget, liquidity preference, and proposal identity</span></span>' +
-    '<span class="capital-allocation-expand-label">View calculation</span></summary>' +
+  return '<section class="capital-allocation-pace-choice"><div class="capital-allocation-section-head"><h3>Choose your pace</h3>' +
+    '<span class="capital-allocation-badge">Balanced recommended</span></div>' +
+    '<div class="capital-allocation-group-items">' + scenarios + '</div>' +
+    '<details class="capital-allocation-deployment-pace"><summary><span><strong>Advanced calculation details</strong>' +
+    '<span class="capital-allocation-waits-summary">Deployment budget, liquidity preference, and audit identity</span></span>' +
+    '<span class="capital-allocation-expand-label">How this is calculated</span></summary>' +
     '<div class="capital-allocation-deployment-pace-body"><div class="capital-allocation-preview-kicker">Recommended deployment this period</div>' +
     '<div class="capital-allocation-deployment-grid">' +
     capitalAllocationDecisionCardHtml_('Available eligible cash',
@@ -274,21 +431,23 @@ function capitalAllocationDeploymentPaceHtml_(pace) {
     capitalAllocationDecisionCardHtml_('Intentionally retained liquidity',
       formatCapitalAllocationMoney_(pace.intentionallyRetainedLiquidity), '', 'Cash remaining after the recommended pace') +
     '</div><p class="capital-allocation-decision-next"><strong>Why this pace?</strong> ' +
-    escapeCapitalAllocationHtml_(pace.whyThisPace || '') +
-    ' Cash-yield comparison: ' + escapeCapitalAllocationHtml_(pace.cashYieldDataStatus || '') + '.</p>' +
-    '<details class="capital-allocation-property-detail"><summary><strong>Compare deployment pace</strong>' +
-    '<span class="capital-allocation-expand-label">Faster or more liquid</span></summary>' +
-    '<div class="capital-allocation-group-items">' + scenarios + '</div></details>' +
+    escapeCapitalAllocationHtml_(pace.whyThisPace || '') + '</p>' +
+    '<div class="capital-allocation-card-reason">Cash yield comparison: ' +
+    escapeCapitalAllocationHtml_(pace.cashYieldDataStatus || '') + '</div>' +
     '<div class="capital-allocation-card-reason">Proposal ' +
     escapeCapitalAllocationHtml_(pace.proposalId || '') + ' · ' +
     escapeCapitalAllocationHtml_(pace.proposalSemantics || '') + ' · ' +
-    escapeCapitalAllocationHtml_(pace.trackingStatus || '') + '</div></div></details>';
+    escapeCapitalAllocationHtml_(pace.trackingStatus || '') + '</div></div></details></section>';
 }
 
 function capitalAllocationPrimaryDecisionHtml_(plan) {
   var decision = capitalAllocationPrimaryDecisionModel_(plan);
   var investmentPolicy = plan.investmentPolicy || {};
-  var debtRows = capitalAllocationCompactDebtOutcomesHtml_(decision.debtActions);
+  var lifecycleState = capitalAllocationLifecycleState_(plan);
+  var debtRows = capitalAllocationCompactDebtOutcomesHtml_(decision.debtActions, lifecycleState);
+  var outcomeHeading = lifecycleState === 'CONFIRMED' ? 'Confirmed results' :
+    lifecycleState === 'AWAITING_CONFIRMATION' ? 'Payments awaiting confirmation' :
+      'Expected results';
   var actionDebtRows = decision.debtActions.map(function(row) {
     return '<div class="capital-allocation-primary-action-row"><span>' +
       escapeCapitalAllocationHtml_(row.displayName) + '</span><strong>' +
@@ -312,14 +471,14 @@ function capitalAllocationPrimaryDecisionHtml_(plan) {
     ? 'Pause your regular Robinhood investment this week while the highlighted cash constraint is active.'
     : 'Keep your regular ' + formatCapitalAllocationMoney_(decision.investAmount) +
       ' Robinhood investment this week.';
-  return '<section class="capital-allocation-decision-hero"><div class="capital-allocation-preview-kicker">Your plan this week</div>' +
+  return '<section class="capital-allocation-decision-hero"><div class="capital-allocation-preview-kicker">This week\'s recommendation</div>' +
     '<h3>' + headline + '</h3><p>' + robinhoodSentence + '</p>' +
     (overrideReasons ? '<div class="capital-allocation-policy-override"><strong>Why Robinhood is paused this week</strong><ul>' +
       overrideReasons + '</ul></div>' : '') +
     '<div class="capital-allocation-decision-hero-points">' +
     '<div><span>Invest</span><strong>' + formatCapitalAllocationMoney_(decision.investAmount) + '</strong></div>' +
-    '<div><span>Pay down debt</span><strong>' + formatCapitalAllocationMoney_(decision.debtAmount) + '</strong></div>' +
-    '<div><span>Keep in cash</span><strong>' + formatCapitalAllocationMoney_(decision.cashAmount) + '</strong></div></div>' +
+    '<div><span>Pay debt</span><strong>' + formatCapitalAllocationMoney_(decision.debtAmount) + '</strong></div>' +
+    '<div><span>Keep available</span><strong>' + formatCapitalAllocationMoney_(decision.cashAmount) + '</strong></div></div>' +
     '<div class="capital-allocation-primary-actions">' +
     '<section><div class="capital-allocation-preview-kicker">1. Invest</div>' +
     '<div class="capital-allocation-primary-action-row"><span>Robinhood</span><strong>' +
@@ -327,14 +486,15 @@ function capitalAllocationPrimaryDecisionHtml_(plan) {
     '</strong></div></section>' +
     '<section><div class="capital-allocation-preview-kicker">2. Pay debt</div>' +
     (actionDebtRows || '<p class="muted">No extra credit-card payment is recommended this week.</p>') + '</section>' +
-    '<section><div class="capital-allocation-preview-kicker">3. Keep in cash</div>' +
-    '<div class="capital-allocation-primary-action-row"><span>Available after this plan</span><strong>' +
+    '<section><div class="capital-allocation-preview-kicker">3. Keep available</div>' +
+    '<div class="capital-allocation-primary-action-row"><span>Expected cash remaining</span><strong>' +
     formatCapitalAllocationMoney_(decision.cashAmount) + '</strong></div>' +
     '<p>Cash Compass is intentionally keeping this money available instead of using all available cash for debt.</p></section>' +
     (pausedRows ? '<section class="capital-allocation-primary-pause"><div class="capital-allocation-preview-kicker">Pause for now</div>' +
       pausedRows + '</section>' : '') + '</div>' +
-    '<p class="capital-allocation-decision-next"><strong>After these payments clear:</strong> Refresh Cash Compass. We&rsquo;ll use the updated balances to decide what your next available dollar should do.</p>' +
-    '<details class="capital-allocation-property-detail"><summary><strong>What this plan accomplishes</strong>' +
+    '<p class="capital-allocation-decision-next"><strong>After you make these payments:</strong> Refresh Cash Compass once the new balances appear. We\'ll confirm the results and calculate your next recommendation.</p>' +
+    '<details class="capital-allocation-property-detail"><summary><strong>' +
+      escapeCapitalAllocationHtml_(outcomeHeading) + '</strong>' +
       '<span class="capital-allocation-expand-label">View outcomes</span></summary>' +
       '<div class="capital-allocation-group-items">' + debtRows +
       '<div class="capital-allocation-compact-action"><div><strong>Additional investing</strong>' +
@@ -345,46 +505,115 @@ function capitalAllocationPrimaryDecisionHtml_(plan) {
     '</section>';
 }
 
-function capitalAllocationDetailedDebtOutcomesHtml_(rows) {
+function capitalAllocationLifecycleState_(plan) {
+  var state = String(plan && plan.recommendationLifecycle &&
+    plan.recommendationLifecycle.currentPlanState || 'PROPOSED').toUpperCase();
+  return state === 'CONFIRMED' || state === 'AWAITING_CONFIRMATION' ? state : 'PROPOSED';
+}
+
+function capitalAllocationDebtPresentation_(row, lifecycleState) {
+  var state = lifecycleState || 'PROPOSED';
+  if (state === 'CONFIRMED') {
+    return {
+      outcomeLabel: row.outcome === 'PAID_OFF' ? 'Paid off' :
+        row.outcome === 'REQUIRED_PAYMENT' ? 'Required payment completed' : 'Payment completed',
+      paymentLabel: 'Confirmed payment ',
+      startingBalanceLabel: 'Previous balance',
+      endingBalanceLabel: 'Confirmed balance',
+      aprLine: row.outcome === 'PAID_OFF'
+        ? 'APR eliminated after confirmed payoff: ' + Number(row.apr || 0).toFixed(2) + '%'
+        : 'APR remains: ' + Number(row.apr || 0).toFixed(2) + '%',
+      interestLine: row.outcome === 'PAID_OFF'
+        ? 'Estimated first-year interest avoided: '
+        : 'Estimated first-year interest reduction: ',
+      confirmationNote: ''
+    };
+  }
+  if (state === 'AWAITING_CONFIRMATION') {
+    return {
+      outcomeLabel: 'Waiting for confirmation',
+      paymentLabel: 'Payment reported ',
+      startingBalanceLabel: 'Current recorded balance',
+      endingBalanceLabel: 'Expected balance after payment',
+      aprLine: row.outcome === 'PAID_OFF'
+        ? 'APR elimination awaits a confirmed $0 balance: ' + Number(row.apr || 0).toFixed(2) + '%'
+        : 'APR remains until refreshed data confirms otherwise: ' + Number(row.apr || 0).toFixed(2) + '%',
+      interestLine: row.outcome === 'PAID_OFF'
+        ? 'Projected first-year interest avoided: '
+        : 'Projected first-year interest reduction: ',
+      confirmationNote: 'Refresh account data to confirm the payment and resulting balance.'
+    };
+  }
+  return {
+    outcomeLabel: row.outcome === 'PAID_OFF' ? 'Recommended payoff' :
+      row.outcome === 'REQUIRED_PAYMENT' ? 'Required payment' : 'Recommended extra payment',
+    paymentLabel: 'Pay ',
+    startingBalanceLabel: 'Current balance',
+    endingBalanceLabel: 'Expected balance after payment',
+    aprLine: row.outcome === 'PAID_OFF'
+      ? 'APR eliminated after payoff is confirmed: ' + Number(row.apr || 0).toFixed(2) + '%'
+      : 'APR remains: ' + Number(row.apr || 0).toFixed(2) + '%',
+    interestLine: row.outcome === 'PAID_OFF'
+      ? 'Projected first-year interest avoided: '
+      : 'Projected first-year interest reduction: ',
+    confirmationNote: ''
+  };
+}
+
+function capitalAllocationDetailedDebtOutcomesHtml_(rows, lifecycleState) {
   return (rows || []).map(function(row) {
-    var outcomeLabel = row.outcome === 'PAID_OFF' ? 'Paid off' :
-      row.outcome === 'REQUIRED_PAYMENT' ? 'Required payment' : 'Paid down';
-    var paymentLabel = row.outcome === 'PAID_OFF' ? 'Pay off ' :
-      row.outcome === 'REQUIRED_PAYMENT' ? 'Pay ' : 'Pay down ';
-    var aprLine = row.outcome === 'PAID_OFF'
-      ? 'APR eliminated if confirmed: ' + Number(row.apr || 0).toFixed(2) + '%'
-      : 'APR remains: ' + Number(row.apr || 0).toFixed(2) + '%';
-    var interestLine = row.outcome === 'PAID_OFF'
-      ? 'Estimated first-year interest avoided: '
-      : 'Estimated first-year interest reduction: ';
+    var presentation = capitalAllocationDebtPresentation_(row, lifecycleState);
     return '<div class="capital-allocation-debt-outcome"><div class="capital-allocation-debt-outcome-head">' +
       '<div><span class="capital-allocation-badge">' +
-      escapeCapitalAllocationHtml_(outcomeLabel) +
+      escapeCapitalAllocationHtml_(presentation.outcomeLabel) +
       '</span><strong>' + escapeCapitalAllocationHtml_(row.displayName) + '</strong></div>' +
-      '<strong>' + escapeCapitalAllocationHtml_(paymentLabel) +
+      '<strong>' + escapeCapitalAllocationHtml_(presentation.paymentLabel) +
       formatCapitalAllocationMoney_(row.amount) + '</strong></div>' +
       '<div class="capital-allocation-debt-outcome-grid">' +
       '<div><span>Required payment</span><strong>' + formatCapitalAllocationMoney_(row.requiredPayment) + '</strong></div>' +
       '<div><span>Extra debt payment</span><strong>' + formatCapitalAllocationMoney_(row.extraPayment) + '</strong></div>' +
       '<div><span>Total this week</span><strong>' + formatCapitalAllocationMoney_(row.amount) + '</strong></div>' +
-      '<div><span>Current balance</span><strong>' + formatCapitalAllocationMoney_(row.startingBalance) + '</strong></div>' +
-      '<div><span>Balance after plan</span><strong>' + formatCapitalAllocationMoney_(row.endingBalance) + '</strong></div>' +
-      '<div><span>' + escapeCapitalAllocationHtml_(aprLine) + '</span></div>' +
-      '<div><span>' + escapeCapitalAllocationHtml_(interestLine) + '</span><strong>' +
-      formatCapitalAllocationMoney_(row.annualInterestReduction) + '</strong></div></div></div>';
+      '<div><span>' + escapeCapitalAllocationHtml_(presentation.startingBalanceLabel) + '</span><strong>' +
+      formatCapitalAllocationMoney_(row.startingBalance) + '</strong></div>' +
+      '<div><span>' + escapeCapitalAllocationHtml_(presentation.endingBalanceLabel) + '</span><strong>' +
+      formatCapitalAllocationMoney_(row.endingBalance) + '</strong></div>' +
+      '<div><span>' + escapeCapitalAllocationHtml_(presentation.aprLine) + '</span></div>' +
+      '<div><span>' + escapeCapitalAllocationHtml_(presentation.interestLine) + '</span><strong>' +
+      formatCapitalAllocationMoney_(row.annualInterestReduction) + '</strong></div></div>' +
+      (presentation.confirmationNote ? '<p class="capital-allocation-card-reason">' +
+        escapeCapitalAllocationHtml_(presentation.confirmationNote) + '</p>' : '') + '</div>';
   }).join('');
 }
 
-function capitalAllocationCompactDebtOutcomesHtml_(rows) {
+function capitalAllocationCompactDebtOutcomesHtml_(rows, lifecycleState) {
   return (rows || []).map(function(row) {
-    var label = row.outcome === 'PAID_OFF' ? 'Paid off' :
-      row.outcome === 'REQUIRED_PAYMENT' ? 'Required payment' : 'Paid down';
-    var balanceLine = row.outcome === 'REQUIRED_PAYMENT'
-      ? formatCapitalAllocationMoney_(row.requiredPayment) + ' due · No extra payment'
-      : formatCapitalAllocationMoney_(row.startingBalance) + ' → ' +
-        formatCapitalAllocationMoney_(row.endingBalance);
-    var interestLine = row.outcome === 'PAID_OFF' ? ' projected interest avoided' :
-      ' projected interest reduction';
+    var state = lifecycleState || 'PROPOSED';
+    var label;
+    var balanceLine;
+    var interestLine;
+    if (state === 'CONFIRMED') {
+      label = row.outcome === 'PAID_OFF' ? 'Paid off' :
+        row.outcome === 'REQUIRED_PAYMENT' ? 'Required payment completed' : 'Payment completed';
+      balanceLine = 'Confirmed balance ' + formatCapitalAllocationMoney_(row.endingBalance);
+      interestLine = row.outcome === 'PAID_OFF' ? ' estimated interest avoided' :
+        ' estimated interest reduction';
+    } else if (state === 'AWAITING_CONFIRMATION') {
+      label = 'Waiting for confirmation';
+      balanceLine = 'Expected balance after payment ' + formatCapitalAllocationMoney_(row.endingBalance) +
+        ' · Refresh data to confirm';
+      interestLine = row.outcome === 'PAID_OFF' ? ' projected interest avoided' :
+        ' projected interest reduction';
+    } else {
+      label = row.outcome === 'PAID_OFF' ? 'Expected to be paid off' :
+        row.outcome === 'REQUIRED_PAYMENT' ? 'Required payment covered' :
+          'Recommended extra payment';
+      balanceLine = row.outcome === 'REQUIRED_PAYMENT'
+        ? formatCapitalAllocationMoney_(row.requiredPayment) + ' required · No extra payment'
+        : 'Expected balance ' + formatCapitalAllocationMoney_(row.startingBalance) + ' → ' +
+          formatCapitalAllocationMoney_(row.endingBalance);
+      interestLine = row.outcome === 'PAID_OFF' ? ' projected interest avoided' :
+        ' projected interest reduction';
+    }
     return '<div class="capital-allocation-compact-outcome"><div><strong>' +
       escapeCapitalAllocationHtml_(row.displayName) + ' — ' + escapeCapitalAllocationHtml_(label) +
       '</strong><div class="capital-allocation-card-reason">' +
@@ -542,8 +771,8 @@ function capitalAllocationAfterActionHtml_(after, next) {
       formatCapitalAllocationMoney_(row.amount) + '</strong></div>';
   }).join('');
   return '<details class="capital-allocation-forecast"><summary><span><strong>What happens next?</strong>' +
-    '<span class="capital-allocation-waits-summary">First complete the proposed payments, then refresh CashCompass</span></span>' +
-    '<span class="capital-allocation-expand-label">See next choices</span></summary>' +
+    '<span class="capital-allocation-waits-summary">After you make these payments, refresh Cash Compass once updated balances appear</span></span>' +
+    '<span class="capital-allocation-expand-label">Advanced details</span></summary>' +
     '<div class="capital-allocation-confirmation-note"><strong>These card payments are not marked complete yet.</strong>' +
     '<div class="capital-allocation-card-reason">' + escapeCapitalAllocationHtml_(after.confirmationMessage || '') + '</div></div>' +
     '<div class="capital-allocation-group-items">' + details +
@@ -570,28 +799,64 @@ function capitalAllocationOtherCapitalDecisionsHtml_(ladder) {
     return row.sourceType !== 'CURRENT_ELIGIBLE_CASH' &&
       row.sourceType !== 'PROTECTED_OR_EXCLUDED_CASH';
   });
-  var details = nonCashRows.map(function(row) {
-    var amount = row.amount == null ? '' : formatCapitalAllocationMoney_(row.amount);
+  var futureRows = nonCashRows.filter(function(row) {
+    return row.sourceType === 'WEEKLY_FREE_CASH_FLOW' ||
+      row.sourceType === 'PAUSE_OR_REDIRECT_FUTURE_CONTRIBUTION';
+  });
+  var brokerageMap = {};
+  nonCashRows.filter(function(row) {
+    return row.sourceType === 'BROKERAGE_IN_KIND_TRANSFER_REVIEW' ||
+      row.sourceType === 'BROKERAGE_SELL_OR_TRIM_REVIEW';
+  }).forEach(function(row) {
+    var key = String(row.sourceName || 'Brokerage account');
+    if (!brokerageMap[key]) brokerageMap[key] = { name: key, amount: row.amount, transfer: null, sale: null };
+    if (row.sourceType === 'BROKERAGE_IN_KIND_TRANSFER_REVIEW') brokerageMap[key].transfer = row;
+    if (row.sourceType === 'BROKERAGE_SELL_OR_TRIM_REVIEW') brokerageMap[key].sale = row;
+  });
+  var contributionHtml = futureRows.map(function(row) {
     return '<div class="capital-allocation-compact-action"><div><strong>' +
-      escapeCapitalAllocationHtml_(row.sourceName || 'Capital source') + '</strong>' +
+      escapeCapitalAllocationHtml_(row.sourceName || 'Future cash flow') + '</strong>' +
       '<div class="capital-allocation-card-reason">' +
-      escapeCapitalAllocationHtml_(capitalAllocationSourceTypeLabel_(row.sourceType) + ' · ' +
-        (row.status || 'REVIEW') + ' · ' + (row.reason || '')) + '</div></div><strong>' + amount + '</strong></div>';
+      escapeCapitalAllocationHtml_(capitalAllocationCustomerStatusText_(row.status, row.sourceType)) +
+      '</div></div><strong>' + formatCapitalAllocationMoney_(row.amount) +
+      (row.sourceType === 'WEEKLY_FREE_CASH_FLOW' ? '/week' : '') + '</strong></div>';
   }).join('');
-  var excludedHtml = excluded.length
-    ? '<div class="capital-allocation-group-items"><strong>Retained for household analysis — not funding sources</strong>' +
-      excluded.map(function(row) {
-        return '<div class="capital-allocation-compact-action"><div><strong>' +
-          escapeCapitalAllocationHtml_(row.accountName) + '</strong><div class="capital-allocation-card-reason">' +
-          escapeCapitalAllocationHtml_((row.assetClass || 'Restricted asset') + ' · ' +
-            (row.reason || 'Excluded from actionable capital sources.')) +
-          '</div></div><strong>' + formatCapitalAllocationMoney_(row.currentBalance) + '</strong></div>';
-      }).join('') + '</div>' : '';
-  return '<details class="capital-allocation-forecast"><summary><span><strong>Other capital decisions</strong>' +
-    '<span class="capital-allocation-waits-summary">Future cash flow, contribution redirects, in-kind transfers, and taxable sales remain separate decisions</span></span>' +
-    '<span class="capital-allocation-expand-label">Review sources</span></summary>' +
-    '<div class="capital-allocation-group-items">' + details + '</div>' + excludedHtml +
-    '<p class="muted">Brokerage sales remain blocked as TAX_DATA_REQUIRED until positions, cost basis, tax lots, holding period, gains or losses, and wash-sale inputs are available.</p></details>';
+  var brokerageHtml = Object.keys(brokerageMap).map(function(key) {
+    var item = brokerageMap[key];
+    return '<div class="capital-allocation-investment-account"><div class="capital-allocation-investment-account-head"><strong>' +
+      escapeCapitalAllocationHtml_(item.name) + '</strong><strong>' +
+      formatCapitalAllocationMoney_(item.amount) + '</strong></div>' +
+      '<div><span>Transfer analysis</span><strong>' +
+      escapeCapitalAllocationHtml_(capitalAllocationCustomerStatusText_(item.transfer && item.transfer.status,
+        'BROKERAGE_IN_KIND_TRANSFER_REVIEW')) + '</strong></div>' +
+      '<div><span>Sale analysis</span><strong>' +
+      escapeCapitalAllocationHtml_(capitalAllocationCustomerStatusText_(item.sale && item.sale.status,
+        'BROKERAGE_SELL_OR_TRIM_REVIEW')) + '</strong></div></div>';
+  }).join('');
+  var excludedHtml = excluded.map(function(row) {
+    return '<div class="capital-allocation-compact-action"><div><strong>' +
+      escapeCapitalAllocationHtml_(row.accountName) + '</strong><div class="capital-allocation-card-reason">' +
+      escapeCapitalAllocationHtml_(capitalAllocationCustomerStatusText_(row.assetClass, 'PROTECTED_ASSET')) +
+      '</div></div><strong>' + formatCapitalAllocationMoney_(row.currentBalance) + '</strong></div>';
+  }).join('');
+  var auditRows = nonCashRows.map(function(row) {
+    return '<div class="capital-allocation-card-reason"><strong>' +
+      escapeCapitalAllocationHtml_(row.sourceName || 'Capital source') + ':</strong> ' +
+      escapeCapitalAllocationHtml_((row.sourceType || '') + ' · ' + (row.status || '') + ' · ' +
+        (row.reason || '')) + '</div>';
+  }).join('');
+  return '<section class="capital-allocation-investment-groups">' +
+    (contributionHtml ? '<div><h3>Current contribution decisions</h3><div class="capital-allocation-group-items">' +
+      contributionHtml + '</div></div>' : '') +
+    (brokerageHtml ? '<div><h3>Brokerage accounts to review later</h3>' +
+      '<p class="muted">Transfers move investments without selling. Sales may create taxes, so Cash Compass needs positions, cost basis, tax lots, holding periods, and wash-sale information first.</p>' +
+      '<div class="capital-allocation-investment-account-list">' + brokerageHtml + '</div></div>' : '') +
+    (excludedHtml ? '<details><summary><strong>Protected and household-analysis accounts</strong>' +
+      '<span class="capital-allocation-expand-label">' + excluded.length + ' accounts</span></summary>' +
+      '<p class="muted">These accounts remain visible for household analysis but are protected from current funding decisions.</p>' +
+      '<div class="capital-allocation-group-items">' + excludedHtml + '</div></details>' : '') +
+    '<details class="capital-allocation-audit-details"><summary>Advanced details</summary>' +
+      auditRows + '</details></section>';
 }
 
 function capitalAllocationEligibleCashSourcesHtml_(ladder) {
@@ -599,35 +864,65 @@ function capitalAllocationEligibleCashSourcesHtml_(ladder) {
   if (!rows.length) return '';
   var warnings = rows.filter(function(row) { return row.zeroBufferWarning; });
   var warningHtml = warnings.length
-    ? '<div class="capital-allocation-source-warning"><strong>Review ' + warnings.length +
-      ' eligible account' + (warnings.length === 1 ? '' : 's') + ' with a $0 protected buffer</strong>' +
-      '<div class="capital-allocation-card-reason">CashCompass currently treats the full positive balance in ' +
+    ? '<div class="capital-allocation-source-warning"><strong>' + warnings.length +
+      ' eligible account' + (warnings.length === 1 ? ' has' : 's have') + ' no protected buffer</strong>' +
+      '<div class="capital-allocation-card-reason">' +
       escapeCapitalAllocationHtml_(warnings.map(function(row) { return row.accountName; }).join(', ')) +
-      ' as deployable. Set a minimum buffer if any of that money has another purpose.</div></div>' : '';
-  var details = rows.map(function(row) {
-    var policy = row.usePolicy || 'Not configured';
-    var role = row.planningRole || 'No special role';
-    return '<div class="capital-allocation-source-audit-row' +
-      (row.zeroBufferWarning ? ' capital-allocation-source-audit-row--warning' : '') + '">' +
-      '<div class="capital-allocation-source-audit-head"><strong>' +
+      ' has a $0 protected buffer, so Cash Compass currently treats the full eligible balance as available to use.</div>' +
+      '<button type="button" class="small-btn">Review buffer</button></div>' : '';
+  var eligible = rows.filter(function(row) { return row.included; });
+  var protectedRows = rows.filter(function(row) { return !row.included; });
+  var customerRow = function(row) {
+    return '<div class="capital-allocation-source-customer-row' +
+      (row.zeroBufferWarning ? ' capital-allocation-source-audit-row--warning' : '') + '"><strong>' +
       escapeCapitalAllocationHtml_(row.accountName || 'Cash account') + '</strong>' +
-      '<span class="capital-allocation-badge">' + escapeCapitalAllocationHtml_(row.status || 'REVIEW') + '</span></div>' +
-      '<div class="capital-allocation-source-audit-grid">' +
-      capitalAllocationSourceAuditMetricHtml_('Current balance', row.visibleBalance) +
-      capitalAllocationSourceAuditMetricHtml_('Protected buffer', row.minimumBuffer) +
-      capitalAllocationSourceAuditMetricHtml_('Eligible now', row.eligibleAmount) +
-      '</div><div class="capital-allocation-card-reason">Use Policy: ' +
-      escapeCapitalAllocationHtml_(policy) + ' · Planning role: ' + escapeCapitalAllocationHtml_(role) +
-      ' · ' + escapeCapitalAllocationHtml_(row.reason || '') + '</div>' +
-      (row.warning ? '<div class="capital-allocation-source-row-warning">' +
-        escapeCapitalAllocationHtml_(row.warning) + '</div>' : '') + '</div>';
+      capitalAllocationSourceAuditMetricHtml_('Balance', row.visibleBalance) +
+      capitalAllocationSourceAuditMetricHtml_('Protected', row.minimumBuffer) +
+      capitalAllocationSourceAuditMetricHtml_('Available', row.eligibleAmount) + '</div>';
+  };
+  var auditRows = rows.map(function(row) {
+    return '<div class="capital-allocation-card-reason"><strong>' +
+      escapeCapitalAllocationHtml_(row.accountName || 'Cash account') + ':</strong> status ' +
+      escapeCapitalAllocationHtml_(row.status || '') + ' · use policy ' +
+      escapeCapitalAllocationHtml_(row.usePolicy || '') + ' · planning role ' +
+      escapeCapitalAllocationHtml_(row.planningRole || '') + ' · ' +
+      escapeCapitalAllocationHtml_(row.reason || '') + '</div>';
   }).join('');
-  return warningHtml + '<details class="capital-allocation-forecast capital-allocation-source-audit">' +
-    '<summary><span><strong>Eligible Cash Sources</strong>' +
-    '<span class="capital-allocation-waits-summary">Audit why each current account is included or protected before moving money</span></span>' +
-    '<span class="capital-allocation-expand-label">' + formatCapitalAllocationMoney_(ladder.totalEligibleCash) +
-    ' eligible</span></summary><div class="capital-allocation-group-items">' +
-    details + '</div></details>';
+  return warningHtml + '<section class="capital-allocation-cash-groups"><div class="capital-allocation-section-head">' +
+    '<h3>Available to use</h3><span class="capital-allocation-badge">' +
+    formatCapitalAllocationMoney_(ladder.totalEligibleCash) + '</span></div>' +
+    '<div class="capital-allocation-source-customer-list">' + eligible.map(customerRow).join('') + '</div>' +
+    '<details><summary><strong>Protected accounts</strong><span class="capital-allocation-expand-label">' +
+    protectedRows.length + ' protected account' + (protectedRows.length === 1 ? '' : 's') + '</span></summary>' +
+    '<p class="muted">Protected accounts remain visible but cannot fund this week\'s recommendation.</p>' +
+    '<div class="capital-allocation-source-customer-list">' + protectedRows.map(customerRow).join('') + '</div></details>' +
+    '<details class="capital-allocation-audit-details"><summary>Advanced account-policy details</summary>' +
+    auditRows + '</details></section>';
+}
+
+function capitalAllocationCustomerStatusText_(status, context) {
+  var value = String(status || '').toUpperCase();
+  var labels = {
+    TAX_DATA_REQUIRED: 'Tax information needed before recommending a sale',
+    STABLE_ID_REQUIRED: 'Account setup needs review before transfer analysis',
+    ELIGIBLE_FUTURE_CASH_FLOW: 'Available in future cash flow, not as cash today',
+    NO_SURPLUS_ESTABLISHED: '$0/week currently established',
+    RETIREMENT_OR_RESTRICTED: 'Protected from current funding decisions',
+    STRATEGIC_DESTINATION: 'Income-building destination',
+    TRANSFER_REVIEW_REQUIRED: 'Review needed before transfer analysis',
+    TRANSFER_ELIGIBLE: 'Eligible for transfer review',
+    NOT_APPLICABLE: 'Not applicable',
+    REVIEW_REQUIRED: 'Needs review',
+    ELIGIBLE: 'Available',
+    EXCLUDED: 'Protected'
+  };
+  if (labels[value]) return labels[value];
+  if (context === 'BROKERAGE_SELL_OR_TRIM_REVIEW') return 'Sale review is not available yet';
+  if (context === 'BROKERAGE_IN_KIND_TRANSFER_REVIEW') return 'Transfer review is not available yet';
+  if (context === 'PROTECTED_ASSET') return 'Protected from current funding decisions';
+  return value ? value.replace(/_/g, ' ').toLowerCase().replace(/^./, function(letter) {
+    return letter.toUpperCase();
+  }) : 'Needs review';
 }
 
 function capitalAllocationSourceAuditMetricHtml_(label, amount) {
@@ -679,16 +974,16 @@ function capitalAllocationPropertyContingencyHtml_(forecast) {
   var excluded = forecast.propertyScheduledTypesExcluded || [];
   if (!rows.length && !excluded.length) return '';
   var details = rows.map(function(row) {
-    return '<div class="capital-allocation-compact-action"><div><strong>' +
-      escapeCapitalAllocationHtml_(row.house || 'Property') +
-      '</strong><div class="capital-allocation-card-reason">Trailing 12-month irregular costs ' +
-      formatCapitalAllocationMoney_(row.trailing12MonthActual) +
-      ' · 90-day allowance</div></div><strong>' +
-      formatCapitalAllocationMoney_(row.historical90DayAllowance) + '</strong></div>';
+    return '<div class="capital-allocation-property-row"><strong>' +
+      escapeCapitalAllocationHtml_(row.house || 'Property') + '</strong>' +
+      '<div><span>Recent irregular costs</span><strong>' +
+      formatCapitalAllocationMoney_(row.trailing12MonthActual) + '</strong></div>' +
+      '<div><span>90-day reserve</span><strong>' +
+      formatCapitalAllocationMoney_(row.historical90DayAllowance) + '</strong></div></div>';
   }).join('');
-  return '<details class="capital-allocation-property-detail"><summary><strong>Review property contingency</strong>' +
-    '<span class="capital-allocation-expand-label">View properties</span></summary>' +
-    '<div class="capital-allocation-group-items">' + details + '</div>' +
+  return '<div class="capital-allocation-group-items">' + details + '</div>' +
+    '<details class="capital-allocation-property-detail"><summary><strong>How property reserves are calculated</strong>' +
+    '<span class="capital-allocation-expand-label">Advanced details</span></summary>' +
     '<p class="muted">Historical allowance ' +
     formatCapitalAllocationMoney_(forecast.propertyHistoricalAllowanceAmount) +
     ' minus planned irregular Upcoming expenses ' +
@@ -771,13 +1066,15 @@ function capitalAllocationInvestmentFundingCardHtml_(recommended, existing) {
       escapeCapitalAllocationHtml_(row.name || row.matchedAccountName || 'Investment contribution') +
       '</strong><div class="capital-allocation-card-reason">' +
       escapeCapitalAllocationHtml_(primary
-        ? 'Scheduled contribution toward the normal weekly Robinhood policy'
-        : 'Optional future contribution that can be kept, paused, or redirected without moving existing securities') + ' · ' +
+        ? 'Continue this regular contribution'
+        : 'Pause this optional contribution while higher-priority debt is addressed') + ' · ' +
       escapeCapitalAllocationHtml_(row.matchedAccountName || row.name || 'Destination needs review') +
-      '</div></div><strong>' + formatCapitalAllocationMoney_(row.amount) + '</strong></div>';
+      '</div></div><strong>' + (primary ? 'Continue ' : 'Pause ') +
+      formatCapitalAllocationMoney_(row.scheduledAmount || row.amount) + '/' +
+      escapeCapitalAllocationHtml_(capitalAllocationContributionPeriodLabel_(row.frequency)) + '</strong></div>';
   }).join('');
   var note = recommendedTotal > 0
-    ? 'Required $500 weekly commitment, plus any separately confirmed additional pace'
+    ? 'Continue the regular Robinhood contribution this week'
     : existingTotal > 0
       ? 'Current contributions need review because higher-priority debt uses this week&rsquo;s goal money'
       : 'No investment funding planned this week';
@@ -788,9 +1085,8 @@ function capitalAllocationInvestmentFundingCardHtml_(recommended, existing) {
     '</div></div>';
   if (!detailRows) return '<div class="capital-allocation-group-card capital-allocation-group-card--empty">' +
     summary + '</div>';
-  return '<details class="capital-allocation-group-card"><summary>' + summary +
-    '<span class="capital-allocation-expand-label">Review current contributions</span></summary>' +
-    '<div class="capital-allocation-group-items">' + detailRows + '</div></details>';
+  return '<div class="capital-allocation-group-card">' + summary +
+    '<div class="capital-allocation-group-items">' + detailRows + '</div></div>';
 }
 
 function capitalAllocationGroupCardHtml_(title, actions, note) {
@@ -863,9 +1159,12 @@ function capitalAllocationCalculationDetailsHtml_(plan) {
       Number(comparison.expectedReturn || 0).toFixed(2) + '% base; ' +
       String(comparison.source || 'review required').replace(/_/g, ' ').toLowerCase()) +
     '. Debt payoff is treated as near-guaranteed avoided cost; investment returns remain uncertain.</div>';
-  return '<details class="capital-allocation-calculation-details"><summary>View calculation details</summary>' +
-    '<p class="muted">Audit the ordered cash ledger, protected accounts, and every eligible choice.</p>' +
+  return '<details class="capital-allocation-calculation-details"><summary>Audit details</summary>' +
+    '<p class="muted">Review the full allocation sequence, protected accounts, assumptions, and recommended order.</p>' +
     assumption +
+    capitalAllocationForecast90Html_(plan.forecast90 || {}) +
+    capitalAllocationMonthlyHtml_(plan.monthlyOutlook || {}) +
+    capitalAllocationDecisionHtml_(plan) +
     capitalAllocationWeeklyActionsHtml_(plan.weeklyActions || [], plan.allocationStatus) +
     capitalAllocationRankedChoicesHtml_(plan.rankedCandidates || []) + '</details>';
 }

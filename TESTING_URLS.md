@@ -12,7 +12,7 @@ operator destinations.
 | --- | --- | --- |
 | Personal bounded dashboard | https://script.google.com/macros/s/AKfycby9dt2uLRkaCwtTn9-SI2PnHKYmsSRWfqnSCmxaNt_qY1hTP2daoTWyL0LpUgwF4d08ew/exec | Owner-only daily workbook, user-pushed and user-deployed on 2026-08-14 for RFP-6a bounded acceptance. Never use for Harness or destructive validation. The owner previewed and saved the supplied Robinhood export: 104 activities were imported for Samer Robinhood and the resulting four-holding reconciliation matched the broker's later displayed quantities after accounting for the next weekly buys and dividend reinvestment. In a later owner-controlled bounded redeploy, the same CSV was previewed and saved again to exercise the duplicate-safe path; the owner confirmed that both `SYS - Investment Activity` and `SYS - Investment Holdings` then content-fitted their columns correctly. |
 | Central Beta | https://script.google.com/macros/s/AKfycbyq_OGiupdGO79GMOImkIgYv19hqlN1JuJfieuDlkXH6Rp637MhZc6jz9uRW2ZxANBlPA/exec | Family-beta deployment, currently pinned at version 106. Do not update during isolated validation. |
-| Isolated Central validation | https://script.google.com/macros/s/AKfycbzMaD3Ur0H3VmatL4W2vVHlYhFOXF4cZSSjIcn3SwggbTCs9Q9F1_PH74F16lAFkUlWZQ/exec | Disposable runtime-validation deployment, currently version 363. Part 2A-4 run `20260817-074631-0fb6` passed 1/1 scenario and 33/33 assertions in 44.7 s with Restricted sharing, Provisioning PASS, Drift PASS, the marker-verified fixture verified TRASHED, and the disposable runner returned OFF. Central Beta remains version 106. |
+| Isolated Central validation | https://script.google.com/macros/s/AKfycbzMaD3Ur0H3VmatL4W2vVHlYhFOXF4cZSSjIcn3SwggbTCs9Q9F1_PH74F16lAFkUlWZQ/exec | Disposable runtime-validation deployment, currently version 369. Part 2A-5 run `20260817-102843-e241` passed 1/1 scenario and 35/35 assertions in 29.8 s; companion Capital Allocation run `20260817-102943-17fd` passed 2/2 scenarios and 99/99 assertions in 17.3 s. Both had Restricted sharing, Provisioning/Drift PASS, all marker-verified fixtures verified TRASHED, and the disposable runner returned OFF. Central Beta remains version 106. |
 
 Part 2A-3 suite `SUITE-PART-2A-AUTHORITATIVE-CASH-IMPORT` is runtime-proven on
 isolated Central `@358` by run `20260816-200938-c001`. Its only fixture was
@@ -22,6 +22,18 @@ Part 2A-4 suite `SUITE-PART-2A-AUTHORITATIVE-REVOLVING-DEBT` is runtime-proven
 on isolated Central `@363` by run `20260817-074631-0fb6`. Its only fixture was
 marker-verified and verified TRASHED; no bounded workbook was used. The suite
 passed 33/33 functional assertions, including exact Planning byte-equivalence.
+
+Part 2A-5 suite `SUITE-PART-2A-DATA-READINESS` is runtime-proven on isolated
+Central `@369` by run `20260817-102843-e241`. Its only Restricted, marker-verified
+fixture passed 35/35 functional assertions with Provisioning and Drift PASS and
+was verified TRASHED. The expanded suite proves that zero connected cash/card
+domains are **Not connected**, partial domain coverage is **More data needed**,
+complete but actionable data is **Needs review**, and complete clean data is
+**Ready for review**; no `Ready 0 / 0` state remains. The disposable runner was
+returned OFF. No bounded workbook was used and Central Beta remained `@106`.
+Companion run `20260817-102943-17fd` passed both Capital Allocation scenarios
+and 99/99 assertions, proving that the presentation cleanup did not change the
+approved reserve, Robinhood floor, or debt-allocation mathematics.
 
 ## Validation entry point
 

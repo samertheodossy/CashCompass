@@ -138,7 +138,7 @@
 
       var customerLeaks = customerLanguageLeaks('Overview');
 
-      var defaults = { assets:'houses', cashflow:'payments', properties:'houseExpenses', planning:'nextActions' };
+      var defaults = { assets:'houses', cashflow:'payments', properties:'houseExpenses', planning:'capitalAllocationPreview' };
       var defaultFailures = [];
       Object.keys(defaults).forEach(function(pageName) {
         click('.page-btn[data-page="' + pageName + '"]');

@@ -65,8 +65,9 @@ counterfactuals, and the This Week UI remain later reviewed increments.
 
 RFP-3b adds a deterministic weekly allocation kernel and an integrated,
 read-only **This Week** experience under Planning. This Week is the default
-Start Here view, with Next Actions retained under Do now beside Rolling Debt
-Payoff. Its visible V1 order is:
+tool in a single selector beside Rolling Debt Payoff, Debt Overview,
+Retirement, and Purchase Simulator. Legacy Next Actions routes resolve to This
+week → Overview while its backend remains compatible. Its visible V1 order is:
 required household actions; a rolling 90-day operating reserve; the user-defined
 $500 weekly Samer Robinhood `POLICY_FLOOR` unless an explicit liquidity or
 solvency override is active; account-buffer

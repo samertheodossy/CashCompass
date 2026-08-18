@@ -26,6 +26,19 @@ const context = {
 vm.createContext(context);
 for (const [name, source] of sources) vm.runInContext(source, context, { filename: name });
 
+const noDomainReadiness = context.evaluateWeeklyPlanDataReadinessFromState_([], {},
+  '2026-08-16T20:00:00.000Z');
+assert.equal(noDomainReadiness.dimensions.cash.status, 'NOT_CONNECTED',
+  'zero normalized cash accounts must not be vacuously ready');
+assert.equal(noDomainReadiness.dimensions.balanceReadiness.status, 'NOT_CONNECTED');
+assert.equal(noDomainReadiness.dimensions.interestRankingReadiness.status, 'NOT_CONNECTED',
+  'interest readiness cannot be READY with zero revolving cards');
+assert.equal(noDomainReadiness.dimensions.paymentObligationReadiness.status, 'NOT_CONNECTED',
+  'minimum and due-date readiness cannot be READY with zero revolving cards');
+assert.equal(noDomainReadiness.dimensions.exactPayoffReadiness.status, 'NOT_CONNECTED',
+  'exact payoff cannot be READY with zero revolving cards');
+assert.equal(noDomainReadiness.overall, 'NOT_READY_FOR_AUTHORITY_SWITCH');
+
 class FakeRange {
   constructor(sheet, row, col, numRows = 1, numCols = 1) {
     this.sheet = sheet; this.row = row; this.col = col;

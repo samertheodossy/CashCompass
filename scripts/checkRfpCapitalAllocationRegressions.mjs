@@ -64,8 +64,8 @@ assert.match(source, /futureOperatingOutflows = capitalAllocationMoney_\([\s\S]*
 assert.doesNotMatch(source, /futureOperatingOutflows = capitalAllocationMoney_\([\s\S]{0,180}futureInvestmentCommitments\.total/);
 assert.match(source, /PROTECT_90_DAY_OPERATING_RESERVE[\s\S]*?FUND_SAMER_ROBINHOOD_WEEKLY_MINIMUM[\s\S]*?PAY_EXTRA_DEBT_BY_APR/);
 assert.match(dashboardData, /function generateOccurrences_\(rule, todayOnly, effectiveDate, horizonEnd\)/);
-assert.match(body, /planning-next-actions-feature[\s\S]*?class="tab-btn active"[\s\S]*?data-tab="capitalAllocationPreview"[\s\S]*?Start here[\s\S]*?This week/);
-assert.match(body, /planning-tool-group--do-now[\s\S]*?data-tab="nextActions"[\s\S]*?data-tab="rollingDebtPayoff"/);
+assert.match(body, /planning-primary-tools[\s\S]*?class="tab-btn active"[\s\S]*?data-tab="capitalAllocationPreview"[\s\S]*?This week[\s\S]*?data-tab="rollingDebtPayoff"[\s\S]*?data-tab="debtPayoff"[\s\S]*?data-tab="retirement"[\s\S]*?data-tab="purchase"/);
+assert.doesNotMatch(body, /planning-next-actions-feature|planning-tool-group--do-now|planning-tool-group--explore|data-tab="nextActions"/);
 assert.match(body, /id="nextActions" class="panel"/);
 assert.match(body, /id="capitalAllocationPreview" class="panel active"/);
 assert.match(client, /getCapitalAllocationPlanFromDashboard/);
@@ -73,50 +73,54 @@ assert.match(client, /Variable bills use planning estimates/);
 assert.match(client, /estimatedAmount/);
 assert.match(client, /episodic bill/);
 assert.match(client, /Scheduled categories[\s\S]*?are excluded here because Bills, debt minimums, or Upcoming expenses already own them/);
-assert.match(client, /Cash retained[\s\S]*?Hard reserve[\s\S]*?Additional preferred cushion/);
+assert.match(client, /Keep available[\s\S]*?Hard reserve[\s\S]*?Extra cushion/);
 assert.match(client, /Recommended deployment this period[\s\S]*?Preferred liquidity target[\s\S]*?Accelerated deployment[\s\S]*?Intentionally retained liquidity/);
-assert.match(client, /Your plan this week/);
+assert.match(client, /This week\\'s recommendation/);
 assert.match(client, /capitalAllocationViewTabsHtml_/);
-for (const view of ['Overview', 'Debt', 'Cash', 'Investments', 'Properties', 'Forecast']) {
+for (const view of ['Overview', 'Debt', 'Cash', 'Investments', 'Properties', 'Forecast', 'Data']) {
   assert.match(client, new RegExp(`label: '${view}'`), `This Week must expose the ${view} subview`);
 }
+assert.match(client, /var allowed = \['overview', 'debt', 'cash', 'investments', 'properties', 'forecast', 'data'\]/,
+  'This Week must retain exactly seven independent subviews');
 assert.match(client, /var __capitalAllocationActiveView = 'overview'/,
   'This Week must open on the concise Overview cockpit');
-assert.match(client, /Pay down debt/);
-assert.match(client, /Keep in cash/);
+assert.match(client, /Pay debt/);
+assert.match(client, /Keep available/);
 assert.match(client, /Pause for now/);
-assert.match(client, /What this plan accomplishes/);
+assert.match(client, /Expected results/);
+assert.match(client, /Recommended debt payments/);
 assert.match(client, /scheduledAmount/);
 assert.match(client, /capitalAllocationContributionPeriodLabel_/);
 const primaryRenderer = client.slice(client.indexOf('function capitalAllocationPrimaryDecisionHtml_'),
   client.indexOf('function capitalAllocationDecisionHtml_'));
-assert.match(primaryRenderer, /What this plan accomplishes[\s\S]*?View outcomes/);
+assert.match(primaryRenderer, /Expected results[\s\S]*?View outcomes/);
 assert.doesNotMatch(primaryRenderer, /Compare choices/,
   'the outcome section heading must not imply a comparison action');
 assert.doesNotMatch(primaryRenderer, /Robinhood policy floor|Scheduled Robinhood amount|Recommended Robinhood funding|Optional Robinhood acceleration|Optional investing redirected|Why aren&rsquo;t we investing more/,
   'implementation concepts must stay out of the primary customer card');
-assert.match(client, /Plan at a glance/);
-assert.match(client, /Bills & scheduled commitments/);
-assert.match(client, /Extra debt payments/);
+assert.match(client, /Next 90 days/);
+assert.match(client, /Upcoming requirements/);
+assert.match(client, /Extra debt planned this week/);
 assert.match(client, /Investment funding/);
-assert.match(client, /Protected for the next 90 days/);
-assert.match(client, /Preferred liquidity retained/);
+assert.match(client, /Protected reserve/);
+assert.match(client, /Preferred extra cushion/);
 assert.doesNotMatch(client, /Unassigned cash/);
 assert.match(client, /How the 90-day reserve is calculated/);
 assert.match(client, /Expected gross rental income/);
 assert.match(client, /Normal Robinhood policy commitments/);
 assert.match(client, /View allocation logic/);
 assert.match(client, /What happens next/);
-assert.match(client, /Eligible Cash Sources/);
+assert.match(client, /Available to use/);
+assert.match(client, /Protected accounts/);
 assert.match(client, /eligible account/);
 assert.match(client, /Awaiting confirmation/);
-assert.match(client, /TAX_DATA_REQUIRED/);
+assert.match(client, /Tax information needed before recommending a sale/);
 assert.doesNotMatch(client, /Robinhood is safety-paused/);
 assert.doesNotMatch(client, /Safety paused this week/);
-assert.match(client, /Retained for household analysis — not funding sources/);
+assert.match(client, /Protected and household-analysis accounts/);
 assert.match(client, /unknown-repair floor of 25%/);
 assert.match(client, /What waits[\s\S]*?No current contribution plan/);
-assert.match(client, /View calculation details/);
+assert.match(client, /Audit details/);
 assert.match(template, /Dashboard_Script_PlanningCapitalAllocation/);
 assert.doesNotMatch(client, /__cashCompassPlanningPreviewEnabled/);
 assert.doesNotMatch(template, /planningPreviewEnabledJson/);
@@ -124,6 +128,8 @@ assert.doesNotMatch(webapp, /planningPreview/);
 assert.match(styles, /\.capital-allocation-view-tabs\s*\{[\s\S]*?repeat\(6,/);
 assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.capital-allocation-view-tabs\s*\{[^}]*repeat\(3,/);
 assert.match(styles, /@media \(max-width: 480px\)[\s\S]*?\.capital-allocation-view-tabs\s*\{[^}]*repeat\(2,/);
+assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.capital-allocation-view-tabs[\s\S]*?min-height:\s*44px/,
+  'the seven-screen navigation must keep touch-friendly targets on narrow screens');
 
 const context = { console };
 vm.createContext(context);
@@ -354,6 +360,17 @@ assert.equal(plan.investmentPolicy.optionalAcceleration, 0);
 const clientContext = { console, document: { getElementById() { return null; } } };
 vm.createContext(clientContext);
 vm.runInContext(client, clientContext, { filename: 'Dashboard_Script_PlanningCapitalAllocation.html' });
+const financialOutputBeforePresentation = JSON.stringify({
+  summary: plan.summary,
+  weeklyActions: plan.weeklyActions,
+  rankedCandidates: plan.rankedCandidates,
+  investmentPolicy: plan.investmentPolicy,
+  contributionStrategy: plan.contributionStrategy,
+  deploymentPace: plan.deploymentPace,
+  forecast90: plan.forecast90,
+  afterAction: plan.afterAction,
+  recommendationLifecycle: plan.recommendationLifecycle
+});
 const primaryDecision = clientContext.capitalAllocationPrimaryDecisionModel_(plan);
 const detailedRevolvingPayment = plan.afterAction.debts
   .filter(row => row.isRevolving && Number(row.proposedPayment || 0) > 0)
@@ -370,8 +387,8 @@ assert.deepEqual(Array.from(primaryDecision.pausedContributions, row =>
 ], 'paused schedules must remain separate and use their native units');
 const primaryHtml = clientContext.capitalAllocationPrimaryDecisionHtml_(plan);
 assert.match(primaryHtml, /<span>Invest<\/span><strong>\$500\.00<\/strong>/);
-assert.match(primaryHtml, /<span>Pay down debt<\/span><strong>\$1,900\.00<\/strong>/);
-assert.match(primaryHtml, /<span>Keep in cash<\/span><strong>\$3,200\.00<\/strong>/);
+assert.match(primaryHtml, /<span>Pay debt<\/span><strong>\$1,900\.00<\/strong>/);
+assert.match(primaryHtml, /<span>Keep available<\/span><strong>\$3,200\.00<\/strong>/);
 assert.match(primaryHtml, />M1<[\s\S]*?Pause \$600\.00\/week/);
 assert.match(primaryHtml, /Stash[\s\S]*?Pause \$15\.00\/month/);
 assert.doesNotMatch(primaryHtml, /\$603\.46 per week|policy floor|optional acceleration|normalized contribution|deployment budget|economic comparator|AWAITING_CONFIRMATION/i,
@@ -409,9 +426,12 @@ assert.equal(outcomeDecision.debtActions[1].annualInterestReduction,
   outcomePlan.afterAction.debts[1].projectedAnnualInterestAvoided,
   'the customer outcome must use the existing deterministic interest result');
 const outcomeHtml = clientContext.capitalAllocationPrimaryDecisionHtml_(outcomePlan);
-assert.match(outcomeHtml, /American Express — Paid off[\s\S]*?\$39,790\.53 → \$0\.00[\s\S]*?~\$10,739\.46\/yr[\s\S]*?projected interest avoided/);
-assert.match(outcomeHtml, /CitiAA — Paid down[\s\S]*?\$9,000\.00 → \$6,761\.40[\s\S]*?~\$525\.82\/yr[\s\S]*?projected interest reduction/);
-assert.match(outcomeHtml, /Southwest — Required payment[\s\S]*?\$988\.41 due · No extra payment/);
+assert.match(outcomeHtml, /Expected results/);
+assert.match(outcomeHtml, /American Express — Expected to be paid off[\s\S]*?Expected balance \$39,790\.53 → \$0\.00[\s\S]*?~\$10,739\.46\/yr[\s\S]*?projected interest avoided/);
+assert.match(outcomeHtml, /CitiAA — Recommended extra payment[\s\S]*?Expected balance \$9,000\.00 → \$6,761\.40[\s\S]*?~\$525\.82\/yr[\s\S]*?projected interest reduction/);
+assert.match(outcomeHtml, /Southwest — Required payment covered[\s\S]*?\$988\.41 required · No extra payment/);
+assert.doesNotMatch(outcomeHtml, /capital-allocation-badge">(?:Paid off|Paid down)/,
+  'a proposed outcome must never use a completed-state badge');
 const partialOutcome = outcomeHtml.slice(outcomeHtml.lastIndexOf('CitiAA'),
   outcomeHtml.indexOf('Additional investing'));
 assert.doesNotMatch(partialOutcome, /APR eliminated|Avoid 23\.49% interest/,
@@ -419,25 +439,158 @@ assert.doesNotMatch(partialOutcome, /APR eliminated|Avoid 23\.49% interest/,
 assert.doesNotMatch(outcomeHtml, /Extra debt payment|Total this week|Current balance|APR remains/,
   'the Overview outcome drill-down must remain compact');
 const debtViewHtml = clientContext.capitalAllocationDebtViewHtml_(outcomePlan);
-assert.match(debtViewHtml, /Paid off[\s\S]*?American Express[\s\S]*?Pay off \$39,790\.53[\s\S]*?Balance after plan[\s\S]*?\$0\.00[\s\S]*?APR eliminated if confirmed: 26\.99%[\s\S]*?Estimated first-year interest avoided:[\s\S]*?\$10,739\.46/);
-assert.match(debtViewHtml, /Paid down[\s\S]*?CitiAA[\s\S]*?Pay down \$2,238\.60[\s\S]*?Required payment[\s\S]*?\$270\.00[\s\S]*?Extra debt payment[\s\S]*?\$1,968\.60[\s\S]*?Total this week[\s\S]*?\$2,238\.60[\s\S]*?Balance after plan[\s\S]*?\$6,761\.40[\s\S]*?APR remains: 23\.49%[\s\S]*?Estimated first-year interest reduction:[\s\S]*?\$525\.82/);
+assert.match(debtViewHtml, /Recommended debt payments[\s\S]*?Recommended payoff[\s\S]*?American Express[\s\S]*?Pay \$39,790\.53[\s\S]*?Expected balance after payment[\s\S]*?\$0\.00[\s\S]*?APR eliminated after payoff is confirmed: 26\.99%[\s\S]*?Projected first-year interest avoided:[\s\S]*?\$10,739\.46/);
+assert.match(debtViewHtml, /Recommended extra payment[\s\S]*?CitiAA[\s\S]*?Pay \$2,238\.60[\s\S]*?Required payment[\s\S]*?\$270\.00[\s\S]*?Extra debt payment[\s\S]*?\$1,968\.60[\s\S]*?Total this week[\s\S]*?\$2,238\.60[\s\S]*?Expected balance after payment[\s\S]*?\$6,761\.40[\s\S]*?APR remains: 23\.49%[\s\S]*?Projected first-year interest reduction:[\s\S]*?\$525\.82/);
 assert.match(debtViewHtml, /Required payment[\s\S]*?Southwest[\s\S]*?Pay \$988\.41[\s\S]*?Required payment[\s\S]*?\$988\.41[\s\S]*?Extra debt payment[\s\S]*?\$0\.00[\s\S]*?Total this week[\s\S]*?\$988\.41/);
+assert.doesNotMatch(debtViewHtml, /Balance after plan|capital-allocation-badge">Paid off|capital-allocation-badge">Paid down/,
+  'proposed debt actions must remain prospective throughout the detailed view');
+
+const awaitingOutcomePlan = JSON.parse(JSON.stringify(outcomePlan));
+awaitingOutcomePlan.recommendationLifecycle.currentPlanState = 'AWAITING_CONFIRMATION';
+const awaitingDebtHtml = clientContext.capitalAllocationDebtViewHtml_(awaitingOutcomePlan);
+assert.match(awaitingDebtHtml, /Debt payments awaiting confirmation[\s\S]*?Waiting for confirmation[\s\S]*?Payment reported \$39,790\.53[\s\S]*?Expected balance after payment[\s\S]*?Refresh account data to confirm/);
+assert.doesNotMatch(awaitingDebtHtml, /capital-allocation-badge">Paid off|Confirmed balance/,
+  'awaiting-confirmation actions must not render a confirmed payoff or balance');
+
+const confirmedOutcomePlan = JSON.parse(JSON.stringify(outcomePlan));
+confirmedOutcomePlan.recommendationLifecycle.currentPlanState = 'CONFIRMED';
+const confirmedDebtHtml = clientContext.capitalAllocationDebtViewHtml_(confirmedOutcomePlan);
+assert.match(confirmedDebtHtml, /Confirmed debt payments[\s\S]*?Paid off[\s\S]*?American Express[\s\S]*?Confirmed payment \$39,790\.53[\s\S]*?Confirmed balance[\s\S]*?\$0\.00/);
+assert.match(confirmedDebtHtml, /Payment completed[\s\S]*?CitiAA/);
+assert.equal(Number(outcomePlan.afterAction.confirmedReleasedMonthlyMinimums || 0), 0,
+  'presentation must not release a minimum before refreshed confirmation');
 
 const overviewHtml = clientContext.capitalAllocationPrimaryDecisionHtml_(plan) +
   clientContext.capitalAllocationProgressHtml_(plan) +
   clientContext.capitalAllocationOverviewWarningsHtml_(plan, [], plan.dataQuality || []) +
   clientContext.capitalAllocationOverviewNextStepHtml_(plan);
-assert.match(overviewHtml, /Your plan this week[\s\S]*?Progress[\s\S]*?Data status[\s\S]*?Next step/);
+assert.match(overviewHtml,
+  /This week's recommendation[\s\S]*?Your progress[\s\S]*?(?:Needs your attention|Plan notes)[\s\S]*?Next step/);
+assert.match(overviewHtml,
+  /Credit-card debt remaining[\s\S]*?After this week(?:'|&#39;)s recommended payments[\s\S]*?Next target:/,
+  'the revolving-debt progress card must identify the prospective amount remaining and its next target');
+assert.doesNotMatch(overviewHtml, /Credit-card debt<\/div>[\s\S]*?expected/,
+  'the revolving-debt value must not rely on a vague expected suffix');
+assert.match(overviewHtml,
+  /Income portfolio[\s\S]*?Current value[\s\S]*?\+\$500\.00 this week/,
+  'the income-portfolio card must distinguish current value from this week\'s contribution');
+const progressExamplePlan = JSON.parse(JSON.stringify(plan));
+progressExamplePlan.afterAction.projectedReleasedMonthlyMinimums = 1193.72;
+progressExamplePlan.afterAction.confirmedReleasedMonthlyMinimums = 0;
+const progressExampleHtml = clientContext.capitalAllocationProgressHtml_(progressExamplePlan);
+assert.match(progressExampleHtml,
+  /Monthly cash freed[\s\S]*?\$1,193\.72\/month expected[\s\S]*?After the recommended payoff is confirmed[\s\S]*?Currently confirmed: \$0\.00\/month/,
+  'the freed-cash card must lead with the prospective benefit while preserving the confirmed current state');
+assert.doesNotMatch(overviewHtml, /Monthly payments freed|\$0\.00 confirmed[\s\S]*?projected after confirmation/,
+  'the primary progress card must not lead with lifecycle-oriented wording');
+const attentionPlan = JSON.parse(JSON.stringify(plan));
+attentionPlan.capitalSourceLadder.cashAccounts = [
+  { accountName: 'Ally - Samer Savings', zeroBufferWarning: true },
+  { accountName: 'Household Checking', zeroBufferWarning: false }
+];
+attentionPlan.capitalSourceLadder.steps = (attentionPlan.capitalSourceLadder.steps || []).filter(row =>
+  String(row.status || '') !== 'TAX_DATA_REQUIRED').concat([
+  { sourceName: 'Brokerage One', status: 'TAX_DATA_REQUIRED' },
+  { sourceName: 'Brokerage Two', status: 'TAX_DATA_REQUIRED' }
+]);
+attentionPlan.capitalSourceLadder.zeroBufferWarningCount = 1;
+const attentionHtml = clientContext.capitalAllocationOverviewWarningsHtml_(attentionPlan, [],
+  [{}, {}, {}, {}]);
+assert.match(attentionHtml,
+  /Needs your attention[\s\S]*?1 action needed[\s\S]*?Set a cash buffer for Ally - Samer Savings/,
+  'the immediate action must name the affected cash account from plan data');
+assert.match(attentionHtml,
+  /Cash Compass currently considers the full eligible balance available to use[\s\S]*?Set a protected amount if some of this money should remain untouched/,
+  'the cash-buffer action must explain why the customer should review the account');
+assert.match(attentionHtml,
+  /openCapitalAllocationCashBufferReview_[\s\S]*?Review cash buffer/,
+  'the customer action must route to the real bank-account management experience');
+assert.match(attentionHtml,
+  /Also:[\s\S]*?2 investments need tax information[\s\S]*?4 bills are using estimates/,
+  'tax requirements and bill estimates must remain visible as secondary information');
+assert.doesNotMatch(attentionHtml,
+  /1 cash buffer|Information still needed|TAX_DATA_REQUIRED|POLICY_FLOOR|blocking item|Action needed now/,
+  'the primary attention layer must not expose diagnostic counts or internal states');
+const zeroActionHtml = clientContext.capitalAllocationOverviewWarningsHtml_(
+  { capitalSourceLadder: { cashAccounts: [], steps: attentionPlan.capitalSourceLadder.steps } }, [], [{}]);
+assert.match(zeroActionHtml,
+  /Plan notes[\s\S]*?No action needed right now[\s\S]*?2 investments need tax information[\s\S]*?1 bill is using estimates/,
+  'informational limitations must remain calm when no immediate action exists');
+assert.doesNotMatch(zeroActionHtml, /Needs your attention[\s\S]*?0|0 actions needed/);
+const multipleActionPlan = JSON.parse(JSON.stringify(attentionPlan));
+multipleActionPlan.capitalSourceLadder.cashAccounts = [
+  { accountName: 'Ally - Samer Savings', zeroBufferWarning: true },
+  { accountName: 'Rental Reserve', zeroBufferWarning: true },
+  { accountName: 'Tax Reserve', zeroBufferWarning: true },
+  { accountName: 'Household Checking', zeroBufferWarning: true }
+];
+const multipleActionHtml = clientContext.capitalAllocationOverviewWarningsHtml_(multipleActionPlan,
+  [{ findingId: 'MISSING_DEBT_APR:CITIAA', message: 'CitiAA has no usable APR. Ranking must wait.' }], []);
+assert.match(multipleActionHtml,
+  /5 actions needed[\s\S]*?Set a cash buffer for Ally - Samer Savings[\s\S]*?Set a cash buffer for Rental Reserve[\s\S]*?Set a cash buffer for Tax Reserve[\s\S]*?Review 2 more actions/,
+  'multiple immediate actions must stay concise and expose the remainder on demand');
+assert.match(multipleActionHtml, /Verify the APR for CitiAA/,
+  'known blocking information must translate into a customer action without exposing its reason code');
+assert.doesNotMatch(multipleActionHtml, /MISSING_DEBT_APR|TAX_DATA_REQUIRED/);
+assert.match(client, /function openCapitalAllocationCashBufferReview_\(\)[\s\S]*?showTab\('bank'\)[\s\S]*?setBankPanelMode\('manage'\)/,
+  'Review cash buffer must open the existing Bank accounts management flow');
+assert.doesNotMatch(client, /openCapitalAllocationCashBufferReview_[\s\S]{0,300}(?:google\.script\.run|setValue|save|submit)/,
+  'the review route must not write or change a buffer automatically');
 assert.doesNotMatch(overviewHtml, /Proposal [A-Z0-9-]+|Eligible Cash Sources|How the 90-day reserve is calculated|View allocation logic/,
   'Overview must keep audit and formula detail out of the daily cockpit');
 const cashViewHtml = clientContext.capitalAllocationCashViewHtml_(plan);
 const investmentsViewHtml = clientContext.capitalAllocationInvestmentsViewHtml_(plan);
 const propertiesViewHtml = clientContext.capitalAllocationPropertiesViewHtml_(plan.forecast90);
 const forecastViewHtml = clientContext.capitalAllocationForecastViewHtml_(plan, plan.dataQuality || []);
-assert.match(cashViewHtml, /Eligible Cash Sources[\s\S]*?How the cash target is calculated/);
-assert.match(investmentsViewHtml, /Contribution strategy[\s\S]*?Other capital decisions[\s\S]*?TAX_DATA_REQUIRED/);
-assert.match(propertiesViewHtml, /Property reserve planning/);
-assert.match(forecastViewHtml, /Upcoming cash requirements[\s\S]*?How the 90-day reserve is calculated[\s\S]*?View calculation details/);
+assert.match(cashViewHtml, /Keep available[\s\S]*?Available to use[\s\S]*?Protected accounts[\s\S]*?Choose your pace[\s\S]*?Advanced calculation details/);
+assert.match(investmentsViewHtml, /Investment plan this week[\s\S]*?Current contribution decisions[\s\S]*?Brokerage accounts to review later[\s\S]*?Tax information needed before recommending a sale/);
+assert.match(propertiesViewHtml, /Property reserve[\s\S]*?scheduled property bills are already counted elsewhere/i);
+assert.match(forecastViewHtml, /Next 90 days[\s\S]*?Upcoming requirements[\s\S]*?What waits[\s\S]*?After confirmation[\s\S]*?Audit details/);
+assert.doesNotMatch(cashViewHtml.replace(/<details class="capital-allocation-(?:deployment-pace|audit-details)"[\s\S]*?<\/details>/g, ''),
+  /CAP-[A-Z0-9-]+|IDEMPOTENT_SNAPSHOT_NOT_ADDITIVE|SNAPSHOT_IDEMPOTENT_ONLY|CASH_YIELD_DATA_REQUIRED/,
+  'normal Cash content must not expose proposal or implementation codes');
+assert.doesNotMatch(investmentsViewHtml.replace(/<details class="capital-allocation-audit-details"[\s\S]*?<\/details>/g, ''),
+  /TAX_DATA_REQUIRED|STABLE_ID_REQUIRED|RETIREMENT_OR_RESTRICTED|STRATEGIC_DESTINATION|NO_SURPLUS_ESTABLISHED|ELIGIBLE_FUTURE_CASH_FLOW/,
+  'normal Investments content must translate backend states');
+assert.doesNotMatch(forecastViewHtml.split('<details class="capital-allocation-calculation-details">')[0],
+  /optimizer|deployment budget|ranked candidates|idempotent|source ladder|normalized weekly value|CAP-[A-Z0-9-]+|[A-Z][A-Z0-9_]{3,}/,
+  'normal Forecast content must use customer financial language');
+const normalCustomerLayer = [overviewHtml, debtViewHtml,
+  cashViewHtml.split('<details class="capital-allocation-deployment-pace">')[0],
+  investmentsViewHtml.split('<details class="capital-allocation-audit-details">')[0],
+  propertiesViewHtml.split('<details class="capital-allocation-property-detail">')[0],
+  forecastViewHtml.split('<details class="capital-allocation-calculation-details">')[0]
+].join('\n');
+for (const internalTerm of [
+  'CASH_YIELD_DATA_REQUIRED', 'TAX_DATA_REQUIRED', 'STABLE_ID_REQUIRED',
+  'ELIGIBLE_FUTURE_CASH_FLOW', 'NO_SURPLUS_ESTABLISHED',
+  'RETIREMENT_OR_RESTRICTED', 'STRATEGIC_DESTINATION', 'POLICY_FLOOR',
+  'IDEMPOTENT_SNAPSHOT_NOT_ADDITIVE', 'SNAPSHOT_IDEMPOTENT_ONLY'
+]) {
+  assert.doesNotMatch(normalCustomerLayer, new RegExp(internalTerm),
+    `${internalTerm} must not appear in the normal customer layer`);
+}
+assert.doesNotMatch(normalCustomerLayer,
+  /\b(?:optimizer|deployment budget|ranked candidates|source ladder|normalized weekly value|idempotent|authority class|reconciliation mechanics)\b/i,
+  'normal Planning content must avoid implementation-oriented English');
+assert.match(cashViewHtml, /CASH_YIELD_DATA_REQUIRED[\s\S]*?Proposal CAP-/,
+  'cash audit details must retain the raw yield and proposal evidence');
+assert.match(investmentsViewHtml, /Advanced details[\s\S]*?TAX_DATA_REQUIRED/,
+  'investment audit details must retain the raw status evidence');
+assert.match(forecastViewHtml, /Audit details[\s\S]*?Ranked choices/,
+  'Forecast must retain the full recommended order under Audit details');
+assert.equal(JSON.stringify({
+  summary: plan.summary,
+  weeklyActions: plan.weeklyActions,
+  rankedCandidates: plan.rankedCandidates,
+  investmentPolicy: plan.investmentPolicy,
+  contributionStrategy: plan.contributionStrategy,
+  deploymentPace: plan.deploymentPace,
+  forecast90: plan.forecast90,
+  afterAction: plan.afterAction,
+  recommendationLifecycle: plan.recommendationLifecycle
+}), financialOutputBeforePresentation,
+  'presentation rendering must leave every financial output byte-equivalent');
 assert.equal(overviewHtml.length < debtViewHtml.length + cashViewHtml.length +
   investmentsViewHtml.length + propertiesViewHtml.length + forecastViewHtml.length, true,
   'the default cockpit must be materially shorter than the reachable domain detail');

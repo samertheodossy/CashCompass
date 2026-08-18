@@ -24,7 +24,6 @@
         <a href="#help-planning">Planning</a>
         <a href="#help-this-week-preview">This Week</a>
         <a href="#help-advanced">Advanced planning</a>
-        <a href="#help-next-actions">Next Actions</a>
         <a href="#help-payoff-path">Debt Overview</a>
         <a href="#help-rolling-debt-payoff">Rolling Debt Payoff</a>
         <a href="#help-debt-email">Financial Plan email</a>
@@ -38,7 +37,7 @@
           <li>Open <strong>Setup / Review</strong> from the top-right.</li>
           <li>Add your bank accounts, debts, bills, income, and profile information.</li>
           <li>Choose <strong>Refresh Financial Plan</strong> after your starting information is ready.</li>
-          <li>Open <strong>Planning → Next Actions</strong> for a short, prioritized list.</li>
+          <li>Open <strong>Planning → This week → Overview</strong> for your current priorities.</li>
         </ol>
         <p class="muted">Upcoming expenses and properties are optional. Add them when they are useful to your household plan.</p>
       </section>
@@ -52,7 +51,7 @@
           <li><strong>Income-Producing Accounts</strong> is optional. Select any investment accounts intended to grow and produce long-term income; CashCompass never guesses from a name or account type. Designation does not override retirement access, tax, liquidity, or withdrawal constraints.</li>
           <li>Open a card to review its summary and continue to the matching editor.</li>
           <li>Your profile supplies the name and email used for Financial Plan messages. Date of birth supports retirement calculations.</li>
-          <li>When all required areas are complete, use <strong>Go to Next Actions</strong> to continue.</li>
+          <li>When all required areas are complete, use <strong>Go to This week</strong> to continue.</li>
         </ul>
         <p class="muted"><strong>Safety:</strong> Setup / Review never changes your data on its own. An editor saves only after you choose its Save or Add action.</p>
       </section>
@@ -185,10 +184,17 @@
 
       <section id="help-planning" class="help-section">
         <h3>Planning</h3>
-        <p>Planning turns your current financial information into decisions. Start with This Week, then open immediate priorities or deeper views when you need them.</p>
+        <p>Planning turns your current financial information into decisions. Choose <strong>This week</strong>, <strong>Rolling debt payoff</strong>, <strong>Debt overview</strong>, <strong>Retirement</strong>, or <strong>Purchase simulator</strong> from one tool selector. Planning opens on This week by default.</p>
+        <h4>Data refresh and readiness</h4>
+        <ul>
+          <li><strong>Data status</strong> summarizes whether normalized cash and credit-card evidence needs attention. Open <strong>Planning → This week → Data</strong> for account-level details.</li>
+          <li>Imported evidence is currently a <strong>review layer</strong>. The weekly plan still uses the existing Planning values until a later, separately reviewed authority change.</li>
+          <li>Each account shows the normalized value, its effective date, freshness, and any exact difference from the value Planning currently uses. A difference is shown for review; it is not automatically treated as material.</li>
+          <li>If a card has multiple possible rates, Cash Compass does not guess. You may verify the APR that applies to the carried balance through the preview-and-confirm review flow.</li>
+          <li><strong>Authoritative data not connected yet</strong> means that data area is planned but has no reviewed import connection; it is not an error.</li>
+        </ul>
         <ul class="help-list">
           <li><strong>This Week</strong> is the primary read-only plan that reconciles current available cash across required payments, the 90-day operating floor, Samer Robinhood&rsquo;s normal $500 weekly policy, account-buffer restoration, highest-APR debt, and money that should wait.</li>
-          <li><strong>Next Actions</strong> prioritizes immediate work across bills, upcoming items, and debts.</li>
           <li><strong>Debt Overview</strong> is a read-only comparison of current balances, minimums, and payoff outlook.</li>
           <li><strong>Rolling Debt Payoff</strong> turns those current balances into a month-by-month action plan.</li>
           <li>To change a balance, rate, minimum, due date, tracking status, or optional Loan/HELOC property link, use <strong>Assets &amp; Liabilities → Debt accounts</strong>.</li>
@@ -202,21 +208,11 @@
         <p>Use these deeper views after your everyday accounts, bills, and income are current.</p>
       </section>
 
-      <section id="help-next-actions" class="help-section">
-        <h3>Next actions</h3>
-        <p>Next Actions collects immediate priorities across bills, upcoming items, and debts. Use it when you want to review the underlying work behind This Week&rsquo;s plan.</p>
-        <ul class="help-list">
-          <li>Address overdue or urgent items first.</li>
-          <li>Review the reason shown before acting on a suggested payment.</li>
-          <li>Use the linked workspace button to inspect or update the underlying information.</li>
-        </ul>
-      </section>
-
       <section id="help-this-week-preview" class="help-section">
         <h3>This Week</h3>
         <p>This Week shows what CashCompass can recommend from current recorded information. It does not transfer money, pay bills, change balances, place trades, or mark an action completed.</p>
         <ul class="help-list">
-          <li><strong>Your plan this week</strong> leads with three customer actions: how much to invest, how much credit-card debt to pay down, and how much cash to keep available. Expand <strong>What this plan accomplishes</strong> to see which cards are paid off, which are only paid down, their projected balances, and the estimated first-year interest effect. Calculation details retain the deeper reasoning and audit trail.</li>
+          <li><strong>Your plan this week</strong> leads with three customer actions: how much to invest, how much credit-card debt to pay, and how much cash to keep available. Expand <strong>If you follow this plan</strong> to see recommended payoffs, recommended extra payments, required payments, expected balances, and projected first-year interest effects. CashCompass uses <strong>Paid off</strong>, <strong>Payment completed</strong>, and <strong>Confirmed balance</strong> only after refreshed authoritative data confirms the result. Calculation details retain the deeper reasoning and audit trail.</li>
           <li>The default <strong>Overview</strong> is the daily cockpit: this week&rsquo;s actions, compact progress, important warnings, and the next step. Use <strong>Debt</strong>, <strong>Cash</strong>, <strong>Investments</strong>, <strong>Properties</strong>, and <strong>Forecast</strong> for the detailed inputs, outcomes, and calculations behind each area.</li>
           <li><strong>Robinhood policy floor</strong> is the user-defined $500 weekly base contribution. It is shown separately from bills and optional acceleration. A higher APR alone never pauses it; an override is allowed only when required bills or debt minimums cannot be covered, projected cash would be negative, the hard operating floor would be breached, or an explicitly configured emergency is active. CashCompass names the exact constraint.</li>
           <li><strong>Protected cash</strong> remains outside deployable cash through your account policies and minimum buffers.</li>
@@ -232,7 +228,7 @@
           <li><strong>Eligible Cash Sources</strong> shows each current account&rsquo;s balance, Use Policy, minimum protected buffer, amount eligible now, Planning Role, and inclusion status. An eligible positive-balance account with a $0 buffer is prominently flagged because CashCompass otherwise treats its full balance as deployable.</li>
           <li><strong>Other capital decisions</strong> keeps expected future free cash flow, optional contribution redirects, in-kind transfer reviews, and taxable sale reviews separate from cash available today.</li>
           <li>Each brokerage source shows whether a separate stable Investment Id verifies its identity. Retirement and custodial assets such as a 401(k) are retained for household analysis but excluded from actionable funding-source candidates.</li>
-          <li><strong>Recommendation state</strong> keeps the plan honest: current actions are <strong>Proposed</strong>; projected payoffs, released minimums, and the conditional next plan remain <strong>Awaiting confirmation</strong> until refreshed balances show the action occurred. Confirmed and superseded states are reserved for observed or replaced recommendations.</li>
+          <li><strong>Recommendation state</strong> keeps the plan honest: <strong>Proposed</strong> uses recommended, expected, and projected wording; <strong>Awaiting confirmation</strong> means a payment was reported but refreshed authoritative data has not confirmed its result; and only <strong>Confirmed</strong> may use completed, paid off, or confirmed-balance wording. Projected released minimums and the conditional next plan remain unavailable until refreshed balances show the action occurred. Superseded is reserved for replaced recommendations.</li>
           <li><strong>What happens next</strong> shows what will be reranked after confirmation—remaining revolving debt, Robinhood acceleration, economically competitive loans, and additional liquidity—without treating proposed payments or released minimums as completed facts.</li>
           <li><strong>Why not the alternative?</strong> compares the recommended action with a competing use, such as paying guaranteed high APR versus an uncertain investment return.</li>
           <li><strong>Plan at a glance</strong> groups bills and commitments, reserve protection, account-buffer restoration, highest-APR extra debt, investment funding, and the preferred liquidity intentionally retained.</li>

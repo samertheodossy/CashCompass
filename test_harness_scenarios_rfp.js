@@ -441,7 +441,7 @@ function getHarnessPart2aAuthoritativeCashImportScenario_() {
   return {
     id: 'REGRESSION-PART-2A-AUTHORITATIVE-CASH-IMPORT',
     category: 'REGRESSION', executionLevel: 'INTEGRATION',
-    expectedAssertionCount: 24,
+    expectedAssertionCount: 35,
     description: 'Import authoritative cash evidence into append-only facts with protected identity, partial safe apply, duplicate no-op, exact timestamps, and no legacy Planning writes.',
     requiresTrashCleanup: true,
     expectedSheets: [names.ACCOUNTS, names.FINANCIAL_ACCOUNTS, names.ACCOUNT_SOURCE_LINKS,
@@ -765,6 +765,186 @@ function getHarnessPart2aAuthoritativeDebtImportScenario_() {
       ctx.assert.equals('Import manifest is shared rather than duplicated',
         ctx.finalNames.filter(function(name) { return name === names.IMPORT_RUNS; }).length,
         1, { module: mod });
+    }
+  };
+}
+
+/** Part 2A-5 customer-facing readiness projection, still shadow-only. */
+function getHarnessPart2aDataReadinessScenario_() {
+  var names = getSheetNames_();
+  return {
+    id: 'REGRESSION-PART-2A-DATA-READINESS',
+    category: 'REGRESSION', executionLevel: 'INTEGRATION',
+    expectedAssertionCount: 24,
+    description: 'Project current, stale, missing, conflicting, and differing normalized cash/card facts into a concise customer view without changing Planning authority.',
+    requiresTrashCleanup: true,
+    expectedSheets: [names.ACCOUNTS, names.DEBTS, names.FINANCIAL_ACCOUNTS,
+      names.ACCOUNT_SOURCE_LINKS, names.FINANCIAL_FACTS, 'SYS - Meta'],
+    setup: function(ctx) {
+      ctx.asOf = '2026-08-17T16:00:00.000Z';
+      ctx.assertWritable();
+      var legacy = ensureSysAccountsSheet_(ctx.ss);
+      ctx.assertWritable();
+      var accounts = ensureFinancialAccountsSheet_(ctx.ss);
+      ctx.assertWritable();
+      var links = ensureAccountSourceLinksSheet_(ctx.ss);
+      harnessPart2aCashImportFixture_(legacy, accounts, links, ctx.asOf);
+      ctx.assertWritable();
+      ensureOnboardingDebtsSheetFromDashboard('normal', ctx.ss);
+      var debts = ctx.ss.getSheetByName(names.DEBTS);
+      var hm = getDebtsHeaderMap_(debts);
+      var totalRow = findDebtTotalRow_(debts, hm);
+      harnessInsertBeforeByHeader_(debts, totalRow, { 'Account Name': 'Fixture CitiAA',
+        'Type': 'Credit Card', 'Account Balance': 9500, 'Due Date': 25,
+        'Credit Limit': 15000, 'Minimum Payment': 270, 'Credit Left': 5500,
+        'Int Rate': 22.99, 'Acct PCT Avail': 36.67, 'Active': 'Yes' });
+      refreshDebtsTotalRow_(debts, hm, findDebtTotalRow_(debts, hm));
+      ctx.sourceSystem = 'OFX_FID_4242';
+      ctx.sourceKey = financialIdentitySourceAccountKey_(ctx.sourceSystem, '4111111111110393');
+      harnessPart2aDebtImportIdentityFixture_(accounts, links, ctx.sourceSystem,
+        ctx.sourceKey, ctx.asOf);
+      ctx.identityBefore = JSON.stringify(accounts.getDataRange().getDisplayValues());
+      ctx.planningBefore = JSON.stringify(getCapitalAllocationPlanForSpreadsheet_(ctx.ss,
+        { asOfDate: '2026-08-17' }));
+      ctx.actions.push('Seed one cash account and one revolving debt identity with legacy Planning values on a disposable workbook');
+    },
+    actions: function(ctx) {
+      ctx.assertWritable();
+      appendFinancialFacts_(ctx.ss, [
+        { stableInternalAccountId: 'CASH-FIXTURE-ALLY', factType: 'CURRENT_BALANCE',
+          numericValue: 29850, currencyOrUnit: 'USD', effectiveAsOf: ctx.asOf,
+          observedAt: ctx.asOf, sourceType: 'FILE_IMPORT', sourceSystem: 'OFX_FID_99999',
+          sourceRecordKey: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          authorityClass: 'INSTITUTION_AUTHORITATIVE', verificationStatus: 'VERIFIED',
+          verifiedAt: ctx.asOf, reconciliationStatus: 'MATCHED' },
+        { stableInternalAccountId: 'DEBT-FIXTURE-CITIAA', factType: 'CURRENT_BALANCE',
+          numericValue: 9000, currencyOrUnit: 'USD', effectiveAsOf: ctx.asOf,
+          observedAt: ctx.asOf, sourceType: 'FILE_IMPORT', sourceSystem: ctx.sourceSystem,
+          sourceRecordKey: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          authorityClass: 'INSTITUTION_AUTHORITATIVE', verificationStatus: 'VERIFIED',
+          verifiedAt: ctx.asOf, reconciliationStatus: 'MATCHED' },
+        { stableInternalAccountId: 'DEBT-FIXTURE-CITIAA', factType: 'MINIMUM_PAYMENT',
+          numericValue: 270, currencyOrUnit: 'USD', effectiveAsOf: ctx.asOf,
+          observedAt: ctx.asOf, sourceType: 'FILE_IMPORT', sourceSystem: ctx.sourceSystem,
+          sourceRecordKey: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+          authorityClass: 'INSTITUTION_AUTHORITATIVE', verificationStatus: 'VERIFIED',
+          verifiedAt: ctx.asOf, reconciliationStatus: 'MATCHED' },
+        { stableInternalAccountId: 'DEBT-FIXTURE-CITIAA', factType: 'NEXT_PAYMENT_DATE',
+          textValue: '2026-08-25', currencyOrUnit: 'DATE', effectiveAsOf: ctx.asOf,
+          observedAt: ctx.asOf, sourceType: 'FILE_IMPORT', sourceSystem: ctx.sourceSystem,
+          sourceRecordKey: 'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+          authorityClass: 'INSTITUTION_AUTHORITATIVE', verificationStatus: 'VERIFIED',
+          verifiedAt: ctx.asOf, reconciliationStatus: 'MATCHED' },
+        { stableInternalAccountId: 'DEBT-FIXTURE-CITIAA', factType: 'PURCHASE_APR',
+          numericValue: 23.49, currencyOrUnit: 'PERCENT', effectiveAsOf: ctx.asOf,
+          observedAt: ctx.asOf, sourceType: 'STATEMENT', sourceSystem: ctx.sourceSystem,
+          sourceRecordKey: 'sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+          authorityClass: 'STATEMENT_DERIVED', verificationStatus: 'VERIFIED',
+          verifiedAt: ctx.asOf, reconciliationStatus: 'MATCHED' },
+        { stableInternalAccountId: 'DEBT-FIXTURE-CITIAA', factType: 'CASH_ADVANCE_APR',
+          numericValue: 29.99, currencyOrUnit: 'PERCENT', effectiveAsOf: ctx.asOf,
+          observedAt: ctx.asOf, sourceType: 'STATEMENT', sourceSystem: ctx.sourceSystem,
+          sourceRecordKey: 'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+          authorityClass: 'STATEMENT_DERIVED', verificationStatus: 'VERIFIED',
+          verifiedAt: ctx.asOf, reconciliationStatus: 'MATCHED' }
+      ], { asOf: ctx.asOf, defaultCreatedAt: ctx.asOf });
+      ctx.model = buildPlanningDataReadinessModel_(ctx.ss, ctx.asOf);
+      ctx.noDataReadiness = evaluateWeeklyPlanDataReadinessFromState_([], {}, ctx.asOf);
+      ctx.noDataState = dataReadinessCustomerState_(0, 0, ctx.noDataReadiness, []);
+      ctx.noDataWeekly = dataReadinessWeeklyPresentation_(ctx.noDataReadiness,
+        0, 0, ctx.noDataState);
+      ctx.cashOnlyState = dataReadinessCustomerState_(1, 0,
+        { overall: 'NOT_READY_FOR_AUTHORITY_SWITCH' }, []);
+      ctx.cardsOnlyState = dataReadinessCustomerState_(0, 1,
+        { overall: 'NOT_READY_FOR_AUTHORITY_SWITCH' }, []);
+      ctx.readyState = dataReadinessCustomerState_(1, 1,
+        { overall: 'READY_FOR_AUTHORITY_SWITCH_REVIEW' }, []);
+      ctx.planningAfter = JSON.stringify(getCapitalAllocationPlanForSpreadsheet_(ctx.ss,
+        { asOfDate: '2026-08-17' }));
+      ctx.identityAfter = JSON.stringify(ctx.ss.getSheetByName(names.FINANCIAL_ACCOUNTS)
+        .getDataRange().getDisplayValues());
+      ctx.finalNames = ctx.ss.getSheets().map(function(sheet) { return sheet.getName(); });
+      ctx.actions.push('Build the read-only Data view model from one bulk identity/link/fact read');
+    },
+    expectedOutcome: function(ctx) {
+      var mod = 'Part 2A Data Readiness';
+      var cash = ctx.model.cash.filter(function(row) {
+        return row.stableAccountId === 'CASH-FIXTURE-ALLY';
+      })[0];
+      var debt = ctx.model.debts[0];
+      var apr = debt.facts.filter(function(fact) { return fact.factType === 'APR'; })[0];
+      ctx.assert.equals('View contract is versioned', ctx.model.version,
+        'DATA_READINESS_VIEW_V1', { module: mod });
+      ctx.assert.equals('Planning authority remains shadow-only',
+        ctx.model.authority.planningUsesNormalizedData, false, { module: mod });
+      ctx.assert.equals('Authority banner is customer explicit',
+        ctx.model.authority.status, 'SHADOW_ONLY', { module: mod });
+      ctx.assert.equals('Every active cash identity is projected once', ctx.model.cash.length, 2, { module: mod });
+      ctx.assert.equals('Credit card is projected once', ctx.model.debts.length, 1, { module: mod });
+      ctx.assert.equals('Normalized cash value is shown', cash.normalizedValue, 29850, { module: mod });
+      ctx.assert.equals('Legacy Planning cash value remains visible', cash.planningValue, 30411,
+        { module: mod });
+      ctx.assert.equals('Cash difference is exact', cash.difference, -561, { module: mod });
+      ctx.assert.equals('Cash difference is review-only', cash.differenceStatus,
+        'DIFFERENCE_DETECTED', { module: mod });
+      ctx.assert.equals('Cash effective date is retained', cash.fact.effectiveAsOf,
+        ctx.asOf, { module: mod });
+      ctx.assert.equals('Debt balance is normalized independently', debt.facts[0].normalizedValue,
+        9000, { module: mod });
+      ctx.assert.equals('Debt balance difference is exact', debt.facts[0].difference, -500,
+        { module: mod });
+      ctx.assert.equals('Multiple APR components remain review required',
+        debt.diagnostics.indexOf('MULTIPLE_APR_REVIEW_REQUIRED') !== -1, true, { module: mod });
+      ctx.assert.equals('Ambiguous APR has no selected planning value', apr.normalizedValue,
+        null, { module: mod });
+      ctx.assert.equals('Ambiguous APR exposes verified-manual review', apr.canVerifyManually,
+        true, { module: mod });
+      ctx.assert.equals('APR ambiguity blocks readiness', debt.ready, false, { module: mod });
+      ctx.assert.equals('Needs Attention contains actionable APR review',
+        ctx.model.attention.some(function(issue) { return issue.title === 'APR needs review'; }),
+        true, { module: mod });
+      ctx.assert.equals('Weekly readiness remains review-required', ctx.model.weeklyPlanReadiness.status,
+        'NEEDS_REVIEW', { module: mod });
+      ctx.assert.equals('Unsupported domains use calm placeholder language',
+        ctx.model.unsupportedDomains[0].status, 'Authoritative data not connected yet',
+        { module: mod });
+      ctx.assert.equals('Customer model contains no protected source key',
+        JSON.stringify(ctx.model).indexOf(ctx.sourceKey), -1, { module: mod });
+      ctx.assert.equals('Identity registry remains byte-equivalent', ctx.identityAfter,
+        ctx.identityBefore, { module: mod });
+      ctx.assert.equals('Planning remains byte-equivalent', ctx.planningAfter,
+        ctx.planningBefore, { module: mod });
+      ctx.assert.equals('No persisted Current Facts sheet is created',
+        ctx.finalNames.indexOf('SYS - Current Facts'), -1, { module: mod });
+      ctx.assert.equals('Only the intended additive facts sheet is present once',
+        ctx.finalNames.filter(function(name) { return name === names.FINANCIAL_FACTS; }).length,
+        1, { module: mod });
+      ctx.assert.equals('Zero cash identities are not connected, never vacuously ready',
+        ctx.noDataReadiness.dimensions.cash.status, 'NOT_CONNECTED', { module: mod });
+      ctx.assert.equals('Zero card identities make balances not connected',
+        ctx.noDataReadiness.dimensions.balanceReadiness.status, 'NOT_CONNECTED', { module: mod });
+      ctx.assert.equals('Zero card identities make interest rates not connected',
+        ctx.noDataReadiness.dimensions.interestRankingReadiness.status, 'NOT_CONNECTED', { module: mod });
+      ctx.assert.equals('Zero card identities make minimums and due dates not connected',
+        ctx.noDataReadiness.dimensions.paymentObligationReadiness.status, 'NOT_CONNECTED', { module: mod });
+      ctx.assert.equals('Zero card identities make exact payoff not connected',
+        ctx.noDataReadiness.dimensions.exactPayoffReadiness.status, 'NOT_CONNECTED', { module: mod });
+      ctx.assert.equals('No normalized domains produce the explicit customer state',
+        ctx.noDataState.code, 'NOT_CONNECTED', { module: mod });
+      ctx.assert.equals('Every no-data customer dimension says Not connected',
+        ctx.noDataWeekly.dimensions.every(function(row) {
+          return row.statusLabel === 'Not connected';
+        }), true, { module: mod });
+      ctx.assert.equals('No no-data customer dimension says Ready',
+        ctx.noDataWeekly.dimensions.some(function(row) {
+          return row.statusLabel === 'Ready';
+        }), false, { module: mod });
+      ctx.assert.equals('Cash-only normalized data produces More data needed',
+        ctx.cashOnlyState.code, 'MORE_DATA_NEEDED', { module: mod });
+      ctx.assert.equals('Card-only normalized data produces More data needed',
+        ctx.cardsOnlyState.code, 'MORE_DATA_NEEDED', { module: mod });
+      ctx.assert.equals('Complete normalized domains produce Ready for review only',
+        ctx.readyState.code, 'READY_FOR_REVIEW', { module: mod });
     }
   };
 }
@@ -1247,19 +1427,19 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
       ctx.assert.equals('Ninety-day operating reserve is protected', ctx.first.summary.reserve90Days,
         2000, { module: mod });
       ctx.assert.equals('Goal money excludes the operating reserve', ctx.first.summary.availableForGoals,
-        2600, { module: mod });
+        133.33, { module: mod });
       ctx.assert.equals('Balanced liquidity preference is the default',
         ctx.first.deploymentPace.liquidityPreference, 'BALANCED', { module: mod });
       ctx.assert.equals('Preferred liquidity target stays separate from the hard floor',
         ctx.first.deploymentPace.hardOperatingFloor + ':' +
           ctx.first.deploymentPace.preferredLiquidityTarget,
-        '2000:3200', { module: mod });
+        '2000:5666.67', { module: mod });
       ctx.assert.equals('Only capital above preferred liquidity enters the deployment budget',
         ctx.first.deploymentPace.capitalAbovePreferredLiquidity + ':' +
           ctx.first.deploymentPace.recommendedAcceleratedDeployment,
-        '2600:2600', { module: mod });
+        '133.33:133.33', { module: mod });
       ctx.assert.equals('Balanced mode intentionally retains liquidity',
-        ctx.first.deploymentPace.intentionallyRetainedLiquidity, 3200, { module: mod });
+        ctx.first.deploymentPace.intentionallyRetainedLiquidity, 5666.67, { module: mod });
       ctx.assert.equals('Snapshot proposal is idempotent rather than additive',
         ctx.first.deploymentPace.proposalSemantics,
         'IDEMPOTENT_SNAPSHOT_NOT_ADDITIVE', { module: mod });
@@ -1284,27 +1464,28 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
         return row.actionType === 'HOLD_CASH';
       })[0];
       ctx.assert.equals('Reserve restoration ranks first', reserve.rank, 1, { module: mod });
-      ctx.assert.equals('Reserve receives its full shortfall', reserve.allocatedAmount, 1000, { module: mod });
+      ctx.assert.equals('Reserve receives the available deployment budget first',
+        reserve.allocatedAmount, 133.33, { module: mod });
       ctx.assert.equals('Confirmed investment pace ranks after higher-priority debt', high.rank < funding.rank,
         true, { module: mod });
       ctx.assert.equals('Investment funding waits while higher-priority debt uses goal money', funding.allocatedAmount, 0, { module: mod });
       ctx.assert.equals('Higher APR debt ranks before lower APR debt', high.rank < low.rank,
         true, { module: mod });
       ctx.assert.equals('Remaining cash goes to high APR debt', high.allocatedAmount,
-        1600, { module: mod });
+        0, { module: mod });
       ctx.assert.equals('Lower APR debt stays visible with zero allocation', low.allocatedAmount,
         0, { module: mod });
       ctx.assert.equals('Hold cash remains explicit', hold.allocatedAmount, 0, { module: mod });
       ctx.assert.equals('Ending cash reconciles', ctx.first.reconciliation.endingCash,
-        3200, { module: mod });
+        5666.67, { module: mod });
       ctx.assert.equals('Reconciliation difference is zero', ctx.first.reconciliation.difference,
         0, { module: mod });
       ctx.assert.equals('Proposed uses never exceed eligible current cash',
         ctx.first.reconciliation.cashUses <=
           ctx.first.reconciliation.openingCash + ctx.first.reconciliation.expectedInflows,
         true, { module: mod });
-      ctx.assert.equals('Debt benefit is deterministic and labeled', high.estimatedAnnualInterestAvoided,
-        431.84, { module: mod });
+      ctx.assert.equals('No debt benefit is claimed when reserve restoration uses the budget',
+        Number(high.estimatedAnnualInterestAvoided || 0), 0, { module: mod });
       ctx.assert.equals('Monthly totals reuse weekly decisions',
         ctx.first.monthlyOutlook.totals.requiredActions +
           ctx.first.monthlyOutlook.totals.reserveRestoration +
@@ -1466,7 +1647,7 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
         solvency.investmentPolicy.overrideReasons[0].message.indexOf('hard operating floor') !== -1,
         true, { module: mod });
       var revolvingFacts = JSON.parse(JSON.stringify(ctx.facts));
-      revolvingFacts.liquidity.cashToUse = 8500;
+      revolvingFacts.liquidity.cashToUse = 14000;
       revolvingFacts.liquidity.accounts = [];
       revolvingFacts.obligations = [];
       revolvingFacts.debts = [
@@ -1483,7 +1664,7 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
           return row.actionType === 'PAY_EXTRA_DEBT';
         }).map(function(row) {
           return row.targetName + ':' + row.allocatedAmount;
-        }).join('|'), 'Card 18:2000|Card 12:3000|Card 8:775', { module: mod });
+        }).join('|'), 'Card 18:2000|Card 12:3000|Card 8:2833.33', { module: mod });
       var transitionFacts = JSON.parse(JSON.stringify(ctx.facts));
       transitionFacts.liquidity.cashToUse = 20000;
       transitionFacts.liquidity.accounts = [{ accountName: 'Eligible cash', balance: 20000,

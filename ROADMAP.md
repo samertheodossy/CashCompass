@@ -365,8 +365,11 @@ restoration, extra debt by APR, confirmed Income-Producing funding pace, and exp
 after same-week minimums; and reconciles every cash use to ending cash. A
 read-only **This Week** experience renders the weekly ledger, ranked choices,
 blockers, protected cash, and a current-week-only monthly rollup as Planning's
-default Start Here view. Next Actions remains under Do now beside Rolling Debt
-Payoff; the common app has no alternate Planning URL. The Bills occurrence
+default tool. Planning now uses one five-choice selector: This week, Rolling
+debt payoff, Debt overview, Retirement, and Purchase simulator. The legacy Next
+Actions reader/panel remains compatible, while its routes and Setup completion
+resolve to This week → Overview; the common app has no alternate Planning URL.
+The Bills occurrence
 reader has an explicit no-write mode, so plan reads cannot trigger AutoPay.
 Variable Bills use their saved estimates as protected required amounts with one
 visible estimate warning; a genuinely missing estimate still fails closed. The
@@ -485,7 +488,25 @@ runtime-validation boundary.
   `20260817-074631-0fb6` passed 1/1 scenario and 33/33 assertions in 44.7 seconds
   with restricted sharing, Provisioning/Drift PASS, verified Trash cleanup, and
   the disposable runner OFF.
-- **Stop after 2A-4:** the combined cash-plus-revolving-debt authority switch,
+- **2A-5 — Data Refresh & Plan Readiness UI:** runtime-proven on isolated Central
+  `@369`. Adds one compact
+  Planning Overview status and a dedicated This Week → Data subview for cash and
+  revolving-debt freshness, exact differences, actionable review items, and
+  verified-manual carried-balance APR review. This is a shadow-only customer
+  review surface; it does not change Part 1 calculations or Planning authority.
+  The customer-state contract now distinguishes **Not connected**, **More data
+  needed**, **Needs review**, and **Ready for review**; empty domains never render
+  as `Ready 0 / 0`. Run `20260817-100909-59f7` passed 1/1 scenario and 35/35
+  assertions in 29.8 seconds with Restricted sharing, Provisioning/Drift PASS, verified Trash
+  cleanup, and the disposable runner OFF. Central Beta and the bounded workbook
+  were untouched. Companion Capital Allocation run `20260817-102943-17fd`
+  passed 2/2 scenarios and 99/99 assertions after the proposed/awaiting/confirmed
+  customer-language correction, with both fixtures verified TRASHED.
+  Deferred UX follow-up: bounded testing showed that top-level **Planning → Cash**
+  can be confused with the internal **Data → Cash** section. After Part 2A-5 is
+  frozen, evaluate a small internal label clarification such as **Cash data**;
+  do not redesign or casually rename the major Planning navigation.
+- **Stop after 2A-5:** the combined cash-plus-revolving-debt authority switch,
   persisted Current Facts, and customer import UI require separate review.
 
 **Remaining broad-Beta sequence:** close the core `RFP-1`–`RFP-5` program;
@@ -524,6 +545,31 @@ Performance under `8b`. Preserve Beta `@106` plus the user-controlled bounded de
 
 ### Priority 4 — Future features
 
+- **Credit Card Rewards & Spend Optimization** *(later phase, only after debt-data
+  authority and debt optimization are complete)* — answer “Which credit card
+  should I use for this purchase/category right now?” from reward multipliers,
+  rotating categories, merchant restrictions, promo dates, caps, annual fees and
+  statement credits, foreign-transaction fees, point valuation, revolving
+  balances, expected payoff behavior, and interest risk. Safety is authoritative:
+  rewards never override debt or interest risk. First exclude or penalize cards
+  whose new spend is likely to revolve at expensive APR; only then rank net reward
+  among financially safe cards and explain the winner. The future surface may say
+  “Use Costco for gas this quarter” or “Do not use Southwest while its balance is
+  revolving.” No schema, UI, or reward recommendation logic belongs in Part 2A.
+- **Recurring Bill Schedule & Gap Modeling** *(later phase, only after current
+  Part 2A data-authority and debt work)* — model bills and expenses that are
+  monthly, every other month, every N months, quarterly, semiannual, annual,
+  seasonal/custom-month, irregular-but-known, or one-time. Preserve three
+  different meanings in every period: `0.00` means the schedule proves nothing
+  is due; an amount means an actual or expected bill belongs in the period; blank
+  or Unknown means Cash Compass lacks enough evidence and must not silently infer
+  zero. Future rules should cover frequency/interval, due months and dates,
+  expected versus actual amounts, start/end dates, next occurrence, exceptions,
+  skips, and amount changes, with optional sinking-fund/accrual planning for large
+  periodic costs. Historical actuals and future expectations remain separate.
+  Prefer rendering derived zero values from the recurrence rule instead of
+  physically filling workbook cells with artificial zero records. No recurrence
+  schema, zero-fill behavior, sinking-fund logic, or UI change belongs in Part 2A.
 - **AutoPay Pending Confirmation UX** *(future product enhancement — after Test Harness / Release Readiness)* — visually distinguish AutoPay bills that are **awaiting payment confirmation** from bills that **require manual action**, without hiding them or inferring payment from the due date. Keeps current behavior; adds an "AutoPay Pending" state/badge and a future auto-transition **Pending → Confirmed → Completed** once a matching payment is detected via manual entry / bank import / future bank sync (then removed from the Bills Due attention queue). Never auto-complete AutoPay bills without payment evidence. Full spec: `ENHANCEMENTS.md → Future — AutoPay Pending Confirmation UX`.
 - Money Plan Phase 2, Account Aggregation & Transaction Import, Chat / Assistant, Paid Product framework, and other post-beta product direction (`PRODUCT_VISION.md`, `ENHANCEMENTS.md`).
 - **Monetization preparation begins before billing:** define customer/value proposition, packaging hypotheses, entitlement seams, owned-data guarantees, privacy/terms/support posture, cost metrics, and billing architecture during beta hardening. Actual payment collection remains gated on demonstrated trust, repeated use, supportability, and the 10/10 release standard.

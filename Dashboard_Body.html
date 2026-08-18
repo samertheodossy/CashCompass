@@ -1836,58 +1836,37 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
   <div id="page_planning" class="workspace-page">
     <!--
       Planning hierarchy:
-        1) Featured This Week entry point — visually prominent,
-           primary household capital-allocation surface and default landing view.
-        2) Quieter task groups — "Do now" for immediate priorities and
-           payoff action, then "Explore / model" for read-only analysis
-           and scenarios. Existing routes remain unchanged.
-      Next Actions remains available under Do now and continues to route to
-      deeper tools via `targetTab`; see PROJECT_CONTEXT.md → Decision Layer.
+        1) One primary tool selector, matching the Cash Flow interaction model.
+        2) This Week owns its focused seven-view selector inside the selected
+           tool. No third customer-visible navigation level is introduced.
+      The legacy Next Actions panel remains in the DOM for compatibility, but
+      customer and deep-link navigation routes to This Week → Overview.
     -->
     <div class="workspace-page-intro">
       <h2>Planning</h2>
-      <p>Start with this week&rsquo;s plan, then open a focused tool when you need more detail.</p>
+      <p>Choose a planning tool, then review the decisions and details you need.</p>
     </div>
-    <div class="planning-next-actions-feature">
-      <button class="tab-btn active"
-              data-tab="capitalAllocationPreview"
-              onclick="showTab('capitalAllocationPreview')"
-              title="See what this week&rsquo;s available cash should do next">
-        <span class="featured-kicker">Start here</span>
-        <span class="featured-title">This week</span>
+    <div class="tabs planning-primary-tools" role="tablist" aria-label="Planning tools">
+      <button id="planning_tool_this_week" class="tab-btn active" role="tab" aria-selected="true"
+              aria-controls="capitalAllocationPreview" data-tab="capitalAllocationPreview" onclick="showTab('capitalAllocationPreview')">
+        This week
       </button>
-    </div>
-    <div class="planning-tools-wrap">
-      <div class="planning-tool-group planning-tool-group--do-now">
-        <div class="planning-tools-label">Do now</div>
-        <div class="tabs planning-tools">
-          <button class="tab-btn" data-tab="nextActions" onclick="showTab('nextActions')">
-            <span class="planning-tool-title">Next actions</span>
-            <span class="planning-tool-description">Review immediate priorities across bills, upcoming items, and debts</span>
-          </button>
-          <button class="tab-btn" data-tab="rollingDebtPayoff" onclick="showTab('rollingDebtPayoff')">
-            <span class="planning-tool-title">Rolling debt payoff</span>
-            <span class="planning-tool-description">Choose what to pay next from current balances</span>
-          </button>
-        </div>
-      </div>
-      <div class="planning-tool-group planning-tool-group--explore">
-        <div class="planning-tools-label">Explore / model</div>
-        <div class="tabs planning-tools">
-          <button class="tab-btn" data-tab="debtPayoff" onclick="showTab('debtPayoff')">
-            <span class="planning-tool-title">Debt overview</span>
-            <span class="planning-tool-description">Compare balances and payoff outlook</span>
-          </button>
-          <button class="tab-btn" data-tab="retirement" onclick="showTab('retirement')">
-            <span class="planning-tool-title">Retirement</span>
-            <span class="planning-tool-description">Test retirement goals and assumptions</span>
-          </button>
-          <button class="tab-btn" data-tab="purchase" onclick="showTab('purchase')">
-            <span class="planning-tool-title">Purchase simulator</span>
-            <span class="planning-tool-description">Model the impact of a large purchase</span>
-          </button>
-        </div>
-      </div>
+      <button id="planning_tool_rolling_payoff" class="tab-btn" role="tab" aria-selected="false"
+              aria-controls="rollingDebtPayoff" data-tab="rollingDebtPayoff" onclick="showTab('rollingDebtPayoff')">
+        Rolling debt payoff
+      </button>
+      <button id="planning_tool_debt_overview" class="tab-btn" role="tab" aria-selected="false"
+              aria-controls="debtPayoff" data-tab="debtPayoff" onclick="showTab('debtPayoff')">
+        Debt overview
+      </button>
+      <button id="planning_tool_retirement" class="tab-btn" role="tab" aria-selected="false"
+              aria-controls="retirement" data-tab="retirement" onclick="showTab('retirement')">
+        Retirement
+      </button>
+      <button id="planning_tool_purchase" class="tab-btn" role="tab" aria-selected="false"
+              aria-controls="purchase" data-tab="purchase" onclick="showTab('purchase')">
+        Purchase simulator
+      </button>
     </div>
 
     <div id="debts" class="panel">
@@ -2040,7 +2019,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <div id="debt_status" class="status"></div>
     </div>
 
-    <div id="retirement" class="panel">
+    <div id="retirement" class="panel" role="tabpanel" aria-labelledby="planning_tool_retirement">
       <div class="panel-head">
         <div>
           <h2>Retirement planner</h2>
@@ -2136,7 +2115,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       </div>
     </div>
 
-    <div id="purchase" class="panel">
+    <div id="purchase" class="panel" role="tabpanel" aria-labelledby="planning_tool_purchase">
       <div class="panel-head">
         <div>
           <h2>Big purchase simulator</h2>
@@ -2212,7 +2191,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       </div>
     </div>
 
-    <div id="debtPayoff" class="panel">
+    <div id="debtPayoff" class="panel" role="tabpanel" aria-labelledby="planning_tool_debt_overview">
       <div class="panel-head">
         <div>
           <h2>
@@ -2256,14 +2235,14 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       <!--
         Decision-layer "Notes / recommendations" block intentionally removed.
         Cash snapshot, safe-to-use vs minimums, projected cash flow, highest-APR
-        callouts and longest-payoff guidance now live on Next Actions (for
+        callouts and longest-payoff guidance now live on This Week (for
         prioritized steps) and Rolling Debt Payoff (for the monthly plan).
         The render function (renderDebtPayoffReadData_) still clears
         #debt_payoff_read_recommendations defensively if it were re-added.
       -->
     </div>
 
-    <div id="rollingDebtPayoff" class="panel">
+    <div id="rollingDebtPayoff" class="panel" role="tabpanel" aria-labelledby="planning_tool_rolling_payoff">
       <div class="panel-head">
         <div>
           <h2>Rolling debt payoff</h2>
@@ -2319,9 +2298,11 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
     </div>
 
     <!--
-      Planning → Next Actions panel.
+      Legacy Planning → Next Actions panel.
 
-      Immediate-priorities Planning tool. Renders `getNextActionsData()` as a
+      Retained for route compatibility and internal diagnostics. Customer
+      navigation now resolves Next Actions to This Week → Overview. This panel
+      still renders `getNextActionsData()` as a
       compact summary plus Urgent / Recommended / Optimize buckets, and
       routes into the deeper tools via `targetTab`. The
       `#next_actions_liquidity_details` slot below is a *debug-only*
@@ -2353,7 +2334,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       the current week's available cash and returns recommendations without
       writing a workbook recommendation or moving money.
     -->
-    <div id="capitalAllocationPreview" class="panel active">
+    <div id="capitalAllocationPreview" class="panel active" role="tabpanel" aria-labelledby="planning_tool_this_week">
       <div class="panel-head capital-allocation-preview-head">
         <div>
           <div class="capital-allocation-preview-kicker">Your household plan · read only</div>
@@ -2609,7 +2590,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
           <button type="button" class="btn-link-inline"
                   onclick="onboardingShowView('finish')">See setup summary</button>
           <button type="button" class="btn-primary"
-                  onclick="onboardingGoToNextActions()">Go to Next Actions</button>
+                  onclick="onboardingGoToThisWeek()">Go to This week</button>
         </div>
       </div>
 
@@ -2936,7 +2917,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
       View 8: Finish. Summary of overall setup state across all five
       areas. Does not write anything; reuses the same status probes that
       power the grid so the summary is always in sync. CTAs route the
-      user back to Setup or into Planning → Next Actions.
+      user back to Setup or into Planning → This week → Overview.
     -->
     <div id="onboarding_view_finish" class="onboarding-view onboarding-view-detail onboarding-view-finish" style="display:none;">
       <div class="onboarding-detail-header">
@@ -2955,7 +2936,7 @@ Chase Total Checking ••0123,1234.56,2026-05-06,CHASE-EXT-9876,Chase Bank,012
 
       <div class="onboarding-actions">
         <button type="button" onclick="onboardingShowView('grid')">Back to Setup</button>
-        <button type="button" class="btn-primary" onclick="onboardingGoToNextActions()">Go to Next Actions</button>
+        <button type="button" class="btn-primary" onclick="onboardingGoToThisWeek()">Go to This week</button>
       </div>
     </div>
   </div>
