@@ -3314,6 +3314,20 @@ function isBillAutopayOccurrenceScheduleSafe_(frequency, rawWeekday, occurrenceD
  */
 function generateOccurrences_(rule, todayOnly, effectiveDate, horizonEnd) {
   const candidates = [];
+  // Unknown or unsupported recurrence labels are incomplete financial data.
+  // Fail closed instead of silently treating them as monthly obligations.
+  // This preserves the distinction between a known non-due month and a month
+  // whose schedule cannot yet be determined.
+  const supportedFrequencies = {
+    monthly: true,
+    weekly: true,
+    biweekly: true,
+    bimonthly: true,
+    quarterly: true,
+    semi_annually: true,
+    yearly: true
+  };
+  if (!rule || !supportedFrequencies[rule.frequency]) return candidates;
   // Prior-month look-back (-1) keeps an UNRESOLVED recurring occurrence visible
   // after the calendar rolls into a new month. The window used to be only
   // [current, next]; on the 1st of a month the just-passed prior-month
@@ -3754,7 +3768,8 @@ function normalizeFrequency_(value) {
     return 'semi_annually';
   }
   if (v === 'bimonthly' || v === 'bi-monthly' || v === 'bi monthly') return 'bimonthly';
-  return 'monthly';
+  if (v === 'monthly') return 'monthly';
+  return 'unknown';
 }
 
 function billAppliesInMonth_(frequency, startMonth, monthNumber1to12) {
@@ -3778,7 +3793,7 @@ function billAppliesInMonth_(frequency, startMonth, monthNumber1to12) {
     const diff = (monthNumber1to12 - start + 12) % 12;
     return diff % 3 === 0;
   }
-  return true;
+  return false;
 }
 
 function writeDashboardBillValuePreserveFormat_(sheet, row, col, value) {

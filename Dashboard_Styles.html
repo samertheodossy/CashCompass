@@ -913,6 +913,118 @@
     padding: 12px 0;
     border-bottom: 1px solid #e2e8f0;
   }
+
+  .capital-allocation-debt-month-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .capital-allocation-debt-month-summary > div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px;
+    border: 1px solid #dbe4ef;
+    border-radius: 12px;
+    background: #fff;
+  }
+  .capital-allocation-debt-month-summary span { color: #64748b; font-size: 12px; }
+  .capital-allocation-debt-month-summary strong { color: #0f172a; font-size: 20px; }
+  .capital-allocation-debt-month,
+  .capital-allocation-next-debt-target,
+  .capital-allocation-debt-freed-section {
+    margin-top: 14px;
+    padding: 18px;
+    border: 1px solid #dbe4ef;
+    border-radius: 14px;
+    background: #fff;
+  }
+  .capital-allocation-debt-month-card {
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid #dbe4ef;
+    border-top-width: 3px;
+    border-radius: 12px;
+    background: #fff;
+  }
+  .capital-allocation-debt-card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .capital-allocation-debt-month-card--recommended-payoff { border-top-color: #2f855a; }
+  .capital-allocation-debt-month-card--confirmed { border-top-color: #237a45; }
+  .capital-allocation-debt-month-card--awaiting { border-top-color: #64748b; }
+  .capital-allocation-debt-month-card--required-extra,
+  .capital-allocation-debt-month-card--recommended { border-top-color: #2563eb; }
+  .capital-allocation-debt-month-card--required { border-top-color: #7aa7d6; }
+  .capital-allocation-debt-month-card--needs-update { border-top-color: #d69e2e; }
+  .capital-allocation-debt-month-card--past-due { border-top-color: #dc2626; }
+  .capital-allocation-debt-month-card--waiting { border-top-color: #cbd5e1; }
+  .capital-allocation-debt-status {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .capital-allocation-debt-status--recommended-payoff { background: #e7f6ec; color: #23633f; }
+  .capital-allocation-debt-status--confirmed { background: #d9f2e2; color: #185a34; }
+  .capital-allocation-debt-status--awaiting { background: #eef2f7; color: #475569; }
+  .capital-allocation-debt-status--required-extra,
+  .capital-allocation-debt-status--recommended { background: #e8f1ff; color: #174f91; }
+  .capital-allocation-debt-status--required { background: #edf5fc; color: #285d8f; }
+  .capital-allocation-debt-status--needs-update { background: #fff6d8; color: #7a5200; }
+  .capital-allocation-debt-status--past-due { background: #feecec; color: #a61b1b; }
+  .capital-allocation-debt-status--waiting { background: #f1f5f9; color: #475569; }
+  .capital-allocation-debt-card-lead {
+    grid-column: 1 / -1;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .capital-allocation-debt-card-lead strong { font-size: 18px; }
+  .capital-allocation-debt-update-count {
+    margin: 10px 0 0;
+    color: #8a5b00;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .capital-allocation-debt-card-note {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: #64748b;
+  }
+  .capital-allocation-debt-freed-section > h3,
+  .capital-allocation-next-debt-target h3,
+  .capital-allocation-debt-month h3 { margin: 0; color: #0f172a; }
+  .capital-allocation-debt-covered,
+  .capital-allocation-debt-other-loans {
+    margin-top: 14px;
+    border: 1px solid #dbe4ef;
+    border-radius: 12px;
+    background: #fff;
+  }
+  .capital-allocation-debt-covered > summary,
+  .capital-allocation-debt-other-loans > summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px;
+    cursor: pointer;
+    list-style: none;
+  }
+  .capital-allocation-debt-covered > summary::-webkit-details-marker,
+  .capital-allocation-debt-other-loans > summary::-webkit-details-marker { display: none; }
+  .capital-allocation-debt-covered > .capital-allocation-debt-card-grid {
+    padding: 0 14px 14px;
+  }
+  .capital-allocation-debt-loan-list { padding: 0 14px 14px; }
   .capital-allocation-debt-outcome:last-child { border-bottom: 0; }
   .capital-allocation-compact-outcome {
     display: flex;
@@ -962,6 +1074,129 @@
     font-size: 12px;
   }
   .capital-allocation-debt-outcome-grid strong { color: #0f172a; }
+  .capital-allocation-debt-apr-note {
+    grid-column: 1 / -1;
+    margin: -2px 0 0;
+    color: #64748b;
+    font-size: 11px;
+  }
+  .capital-allocation-debt-lifecycle {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #eaf3ff;
+    color: #1f4e78;
+  }
+  .capital-allocation-debt-lifecycle h4 { margin: 0 0 4px; color: #1f4e78; }
+  .capital-allocation-debt-lifecycle p { margin: 4px 0 0; line-height: 1.45; }
+  .capital-allocation-debt-advanced {
+    margin-bottom: 14px;
+    padding: 14px 16px;
+    border: 1px solid #dbe5ef;
+    border-radius: 12px;
+    background: #fff;
+  }
+  .capital-allocation-debt-advanced > summary,
+  .capital-allocation-debt-audit > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    list-style: none;
+    cursor: pointer;
+  }
+  .capital-allocation-debt-advanced > summary::-webkit-details-marker,
+  .capital-allocation-debt-audit > summary::-webkit-details-marker { display: none; }
+  .capital-allocation-debt-advanced-body {
+    display: grid;
+    gap: 14px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0;
+  }
+  .capital-allocation-debt-advanced-body > section {
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+  .capital-allocation-debt-advanced-body h4 { margin: 0 0 6px; color: #0f172a; }
+  .capital-allocation-debt-advanced-body section > p { margin: 0 0 8px; color: #475569; }
+  .capital-allocation-debt-priority-row,
+  .capital-allocation-debt-loan-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .capital-allocation-debt-priority-row:last-child,
+  .capital-allocation-debt-loan-row:last-of-type { border-bottom: 0; }
+  .capital-allocation-debt-priority-row > div { display: flex; flex-direction: column; }
+  .capital-allocation-debt-priority-status { align-items: flex-end; }
+  .capital-allocation-debt-priority-row span,
+  .capital-allocation-debt-loan-row span { color: #64748b; font-size: 12px; }
+  .capital-allocation-debt-priority-sequence {
+    margin: 10px 0 0;
+    color: #475569;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+  .capital-allocation-debt-later {
+    margin-bottom: 14px;
+    padding: 14px 16px;
+    border: 1px solid #dbe5ef;
+    border-radius: 12px;
+    background: #fff;
+  }
+  .capital-allocation-debt-later h3 { margin: 0; color: #0f172a; }
+  .capital-allocation-debt-later p { margin: 4px 0 0; color: #64748b; }
+  .capital-allocation-debt-later--collapsed > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    list-style: none;
+    cursor: pointer;
+  }
+  .capital-allocation-debt-later--collapsed > summary::-webkit-details-marker { display: none; }
+  .capital-allocation-debt-later--collapsed[open] > summary {
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .capital-allocation-debt-later-list { display: grid; }
+  .capital-allocation-debt-later-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .capital-allocation-debt-later-row:last-child { border-bottom: 0; }
+  .capital-allocation-debt-later-row > div { display: flex; flex-direction: column; }
+  .capital-allocation-debt-later-row > div:last-child { align-items: flex-end; }
+  .capital-allocation-debt-later-row span { color: #64748b; font-size: 12px; }
+  .capital-allocation-debt-wait-row {
+    padding: 8px 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .capital-allocation-debt-wait-row:last-child { border-bottom: 0; }
+  .capital-allocation-debt-wait-row > div { display: flex; justify-content: space-between; gap: 10px; }
+  .capital-allocation-debt-wait-row span,
+  .capital-allocation-debt-wait-row p { color: #64748b; font-size: 12px; }
+  .capital-allocation-debt-wait-row p { margin: 3px 0 0; }
+  .capital-allocation-debt-freed > strong { display: block; color: #0f172a; font-size: 18px; }
+  .capital-allocation-debt-freed > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-top: 1px solid #e2e8f0;
+  }
+  .capital-allocation-debt-freed p { margin: 6px 0 8px !important; }
+  .capital-allocation-debt-audit { margin-top: 2px; padding: 10px 12px; border: 1px dashed #cbd5e1; border-radius: 8px; }
+  .capital-allocation-debt-audit > .capital-allocation-group-items { margin-top: 10px; }
   .capital-allocation-decision-next {
     padding: 10px 12px;
     border-radius: 8px;
@@ -3435,6 +3670,11 @@
   .data-readiness-unsupported-grid span { color: #64748b; font-size: 12px; }
 
   @media (max-width: 760px) {
+    .capital-allocation-debt-month-summary { grid-template-columns: 1fr; }
+    .capital-allocation-debt-card-grid { grid-template-columns: 1fr; }
+    .capital-allocation-debt-month,
+    .capital-allocation-next-debt-target,
+    .capital-allocation-debt-freed-section { padding: 14px; }
     .capital-allocation-view-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .capital-allocation-view-tabs .segment-btn,
     .capital-allocation-view-tabs .segment-btn:first-child,
@@ -3448,6 +3688,16 @@
     .capital-allocation-summary--simple,
     .capital-allocation-decision-hero-points { grid-template-columns: 1fr; }
     .capital-allocation-debt-outcome-grid { grid-template-columns: 1fr; }
+    .capital-allocation-debt-outcome-head { flex-direction: column; }
+    .capital-allocation-debt-priority-row,
+    .capital-allocation-debt-loan-row,
+    .capital-allocation-debt-later-row { grid-template-columns: 1fr; gap: 3px; }
+    .capital-allocation-debt-priority-row > strong,
+    .capital-allocation-debt-priority-status { text-align: left; align-items: flex-start; }
+    .capital-allocation-debt-later-row > div:last-child { align-items: flex-start; }
+    .capital-allocation-debt-advanced > summary,
+    .capital-allocation-debt-audit > summary,
+    .capital-allocation-debt-later--collapsed > summary { align-items: flex-start; }
     .capital-allocation-deployment-grid { grid-template-columns: 1fr; }
     .capital-allocation-group-grid,
     .capital-allocation-forecast-grid { grid-template-columns: 1fr; }

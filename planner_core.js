@@ -270,7 +270,17 @@ function normalizeDebts_(rows, aliasMap) {
     .map(function(r) {
       const balance = toNumber_(r['Account Balance']);
       const minPayment = round2_(toNumber_(r['Minimum Payment']));
-      const dueDay = parseInt(String(r['Due Date'] || '').trim(), 10) || 1;
+      // INPUT - Debts stores a day-of-month under the legacy "Due Date"
+      // header. Prefer the displayed day so a number-formatted cell does not
+      // arrive here as a Date object, and accept "Due Day" as the additive
+      // header alias used by newer/read-model fixtures.
+      const dueDayRaw = String(
+        r['__display__Due Date'] || r['Due Date'] ||
+        r['__display__Due Day'] || r['Due Day'] || ''
+      ).trim();
+      const dueDayParsed = parseInt(dueDayRaw, 10);
+      const dueDayKnown = /^\d+$/.test(dueDayRaw) && dueDayParsed >= 1 && dueDayParsed <= 31;
+      const dueDay = dueDayKnown ? dueDayParsed : 1;
       const creditLimit = toNumber_(r['Credit Limit']);
       const creditLeft = toNumber_(r['Credit Left']);
       const rate = toNumber_(r['Int Rate']);
@@ -300,6 +310,7 @@ function normalizeDebts_(rows, aliasMap) {
         type: type,
         balance: round2_(balance),
         dueDay: dueDay,
+        dueDayKnown: dueDayKnown,
         creditLimit: round2_(creditLimit),
         creditLeft: round2_(creditLeft),
         minimumPayment: minPayment,

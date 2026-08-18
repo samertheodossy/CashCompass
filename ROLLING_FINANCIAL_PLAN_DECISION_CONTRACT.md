@@ -1,6 +1,6 @@
 # Rolling Financial Plan — RFP-1 Decision Contract
 
-**Status:** RFP-1/RFP-2 decisions complete; RFP-3 architecture approved; RFP-3b preview policy implemented for review
+**Status:** RFP-1/RFP-2 decisions complete; RFP-3 Overview/Debt UX accepted at a stable checkpoint; financial safety certification pending the post-decision 30/90-day proof
 
 **Date:** 2026-08-14
 
@@ -325,17 +325,56 @@ monthly debt service or property risk to the Balanced derived cushion.
 `AGGRESSIVE_DEBT_REDUCTION` uses the larger of the largest single debt minimum
 or property risk, but the hard floor remains inviolable.
 
-Only capital above the preferred target, further capped by remaining period
-capacity after confirmed and awaiting-confirmation deployment, enters the
-existing ranked waterfall. Unchanged facts in the same Monday-based week retain
-one deterministic proposal identity. This Part 1 contract carries state and
-tracking seams but does not add a persistent recommendation ledger; without
-authoritative period totals the result is explicitly snapshot-idempotent rather
-than proof of cross-device completion. Cash-source yield comparison remains
+Capital above the preferred target is potential capacity, not authorization to
+spend it. Under the approved Balanced Monthly Risk Tranche V1, the calendar-month
+maximum is the lesser of potential excess capital and the calculated Balanced
+liquidity cushion. This is a maximum, not a target, a fixed percentage, or a
+fixed dollar allowance. Confirmed optional deployment and optional deployment
+awaiting confirmation reduce the remaining monthly capacity; required payments
+do not consume it. Missing cushion inputs fail closed with
+`PACING_DATA_REQUIRED`.
+
+The monthly tranche is not sufficient authority by itself. Every optional use
+must also preserve required obligations, account protections, the hard reserve,
+preferred liquidity, and post-decision resilience. Current cash after the
+decision must cover the next 30 and 90 days of gross modeled obligations without
+depending on unreceived future income. The lower of these safety limits controls.
+Required obligations, the Robinhood policy commitment, the reserve, staged
+capital, and retained liquidity must reconcile exactly. Unchanged facts in the
+same calendar month retain one deterministic proposal identity. This Part 1
+contract carries state and tracking seams but does not add a persistent
+recommendation ledger. Cash-source yield comparison remains
 `CASH_YIELD_DATA_REQUIRED`.
 
 This is advice only. No step initiates a transfer, security trade, sale, debt
 payment, or Cash Flow posting.
+
+### 2026-08-18 accepted checkpoint and remaining certification
+
+The owner completed bounded visual testing and accepted the current Overview
+and Debt customer presentation. The financial result is not frozen until a
+separate post-decision safety proof confirms that the proposed decision leaves
+account minimum buffers, current-month required obligations, the next 30 and 90
+days of gross obligations, the hard reserve, preferred liquidity, and staged
+capital intact using current cash only. The proof must not depend on future
+income, must count every obligation exactly once, must preserve corrected
+recurrence, and must reconcile Overview and Debt to the same canonical plan.
+
+Checkpoint evidence is `$21,980.49` required this month, `$20,322.08` already
+covered, `$1,658.41` still to cover, `$41,895.78` extra payoff, `$43,554.19`
+remaining monthly debt payments, `$98,712.16` current card debt, and
+`$55,827.97` expected after the recommendation. The plan distinguishes
+`$90,117.54` potentially available over time, `$41,895.78` recommended now,
+and `$48,221.76` staged for future decisions. Southwest `$988.41` is due Aug 22,
+CitiAA `$270.00` and Meriwest `$400.00` are due Aug 28; optional payoff is
+Amex `$39,790.53` and CitiAA `$2,105.25`. The `$1,193.72/month` release is
+expected only after refreshed evidence confirms the Amex payoff. These values
+document the accepted checkpoint and are not hard-coded policy inputs.
+
+After certification, the next milestone is real customer Import / Refresh for
+cash balances, credit-card balances, minimum payments, due dates, APRs, and
+effective/observed timestamps, with freshness and shadow comparison before any
+Planning-authority switch.
 
 ## Approved weekly and monthly action-plan contract
 

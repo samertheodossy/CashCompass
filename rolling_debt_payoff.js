@@ -6218,7 +6218,7 @@ function buildHelocBillsCardObligationModel_(ss, anchorDate) {
     const startMonthRaw = startMonthCol === -1 ? 1 : Number(row[startMonthCol]) || 1;
     const startMonth = Math.max(1, Math.min(12, Math.round(startMonthRaw)));
     const frequency = frequencyCol === -1
-      ? 'monthly'
+      ? 'unknown'
       : normalizeFrequency_(displayRow[frequencyCol]);
     const category = categoryCol === -1
       ? ''
@@ -6248,8 +6248,10 @@ function buildHelocBillsCardObligationModel_(ss, anchorDate) {
         monthlyEquivalent = defaultAmt / 12;
         break;
       case 'monthly':
-      default:
         monthlyEquivalent = defaultAmt;
+        break;
+      default:
+        monthlyEquivalent = 0;
         break;
     }
     monthlyEquivalent = round2_(monthlyEquivalent);

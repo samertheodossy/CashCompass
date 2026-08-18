@@ -356,8 +356,44 @@ stability/volatility/event cushions; `LIQUIDITY_FIRST` retains more and
 The existing Robinhood policy floor, reserve restoration, source protection,
 and serial APR avalanche are unchanged. Same-week proposal identity and
 confirmed/awaiting period deductions prevent additive refreshes when tracking
-inputs are supplied. Cash-yield ordering remains explicitly deferred as
-`CASH_YIELD_DATA_REQUIRED`.
+inputs are supplied. Capital above preferred liquidity is only potential
+capacity. The approved calendar-month Balanced tranche is the lesser of that
+potential excess and the calculated Balanced liquidity cushion, reduced by
+confirmed and awaiting-confirmation optional deployment. It is a maximum, never
+a target or fixed percentage. The final recommendation is constrained again by
+required uses, account protections, the hard reserve, preferred liquidity, and
+post-decision 30/90-day coverage using current cash only. Missing cushion inputs
+fail closed as `PACING_DATA_REQUIRED`; cash-yield ordering remains explicitly
+deferred as `CASH_YIELD_DATA_REQUIRED`.
+
+**Pre-travel Planning checkpoint — 2026-08-18:** Overview and Debt have reached
+an owner-accepted, stable customer-facing checkpoint. The user performed bounded
+visual testing and confirmed the current presentation looked correct. This is
+visual acceptance, not Codex writer evidence and not final financial
+certification. Current checkpoint evidence is: required payments this month
+`$21,980.49`; already covered `$20,322.08`; still to cover `$1,658.41`; extra
+payoff `$41,895.78`; remaining debt payments this month `$43,554.19`; current
+credit-card debt `$98,712.16`; expected card debt after the recommendation
+`$55,827.97`; potentially available over time `$90,117.54`; recommended extra
+now `$41,895.78`; and `$48,221.76` staged for future decisions. The actionable
+required items shown were Southwest `$988.41` due Aug 22, CitiAA `$270.00` due
+Aug 28, and Meriwest `$400.00` due Aug 28. The recommendation applies
+`$39,790.53` to pay off Amex and `$2,105.25` as extra CitiAA payoff, with
+`$1,193.72/month` expected to be freed only after the Amex payoff is confirmed.
+These figures are checkpoint evidence, never hard-coded future expectations.
+
+Checkpoint status is **Overview UX: ACCEPTED / STABLE CHECKPOINT** and **Debt
+UX: ACCEPTED / STABLE CHECKPOINT**. **Financial safety certification remains
+PENDING** the post-decision 30/90-day validation. That validation is the next
+task and must prove account buffers, current-month obligations, next-30-day and
+next-90-day gross obligations, hard reserve, preferred liquidity, staged
+capital, current-cash-only coverage, recurrence correctness, exact-once
+obligation counting, and canonical Overview/Debt reconciliation. A genuine
+financial defect may be corrected later without reopening the accepted UX
+unnecessarily. After the proof passes, freeze Overview/Debt, commit and push the
+checkpoint, then begin the real customer Import / Refresh milestone for cash
+balances, card balances, minimums, due dates, APRs, timestamps/freshness, and
+shadow comparison before any Planning-authority switch.
 
 **RFP-3b local candidate ready for visual review:** the deterministic kernel
 now orders required actions, a rolling 90-day operating reserve, account-buffer

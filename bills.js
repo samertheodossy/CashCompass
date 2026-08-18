@@ -35,8 +35,8 @@ var BILLS_SUPPORTED_FREQUENCY_LABELS_ = {
 
 /**
  * Accept only frequency inputs that map unambiguously to a supported value.
- * `normalizeFrequency_` defaults unknown input to 'monthly', so we can't rely
- * on it alone — we cross-check against this allow-list of accepted raw forms.
+ * `normalizeFrequency_` returns `unknown` for unsupported input. Keep this raw
+ * allow-list as the customer-facing validation contract and alias inventory.
  */
 var BILLS_ACCEPTED_FREQUENCY_RAW_ = {
   monthly: true,

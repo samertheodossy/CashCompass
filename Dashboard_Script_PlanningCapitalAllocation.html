@@ -127,6 +127,8 @@ function capitalAllocationProgressHtml_(plan) {
   }, 0);
   var reserveCovered = Number(summary.endingCash || 0) + 0.005 >= Number(summary.reserve90Days || 0);
   var robinhoodValue = Number(after.robinhoodBalanceBefore || 0);
+  var projectedFreed = Number(after.projectedReleasedMonthlyMinimums || 0);
+  var confirmedFreed = Number(after.confirmedReleasedMonthlyMinimums || 0);
   return '<section class="capital-allocation-progress"><div class="capital-allocation-section-head">' +
     '<h3>Your progress</h3><span class="capital-allocation-badge">At a glance</span></div>' +
     '<div class="capital-allocation-progress-grid">' +
@@ -138,9 +140,11 @@ function capitalAllocationProgressHtml_(plan) {
     capitalAllocationProgressCardHtml_('Income portfolio', formatCapitalAllocationMoney_(robinhoodValue),
       'Current value', '+' + formatCapitalAllocationMoney_(after.proposedRobinhoodFundingThisWeek) + ' this week') +
     capitalAllocationProgressCardHtml_('Monthly cash freed',
-      formatCapitalAllocationMoney_(after.projectedReleasedMonthlyMinimums) + '/month expected',
-      'After the recommended payoff is confirmed',
-      'Currently confirmed: ' + formatCapitalAllocationMoney_(after.confirmedReleasedMonthlyMinimums) + '/month') +
+      projectedFreed > 0 ? formatCapitalAllocationMoney_(projectedFreed) + '/month expected' : 'None yet',
+      projectedFreed > 0 ? 'After the recommended payoff is confirmed' :
+        'No recommended payoff reaches a $0 balance yet',
+      projectedFreed > 0 ? 'Currently confirmed: ' +
+        formatCapitalAllocationMoney_(confirmedFreed) + '/month' : '') +
     '</div></section>';
 }
 
@@ -255,6 +259,11 @@ function openCapitalAllocationCashBufferReview_() {
 }
 
 function capitalAllocationOverviewNextStepHtml_(plan) {
+  if (capitalAllocationPacingAuthorityMissing_(plan && plan.deploymentPace)) {
+    return '<section class="capital-allocation-overview-next"><div class="capital-allocation-preview-kicker">Next step</div>' +
+      '<strong>More planning data is needed before calculating an extra payoff.</strong>' +
+      '<p>Required payments, Robinhood, and protected cash remain accounted for.</p></section>';
+  }
   return '<section class="capital-allocation-overview-next"><div class="capital-allocation-preview-kicker">Next step</div>' +
     '<strong>Make the recommended payments, then refresh Cash Compass after the new balances appear.</strong>' +
     '<p>We\'ll confirm what changed and calculate your next recommendation.</p></section>';
@@ -263,18 +272,426 @@ function capitalAllocationOverviewNextStepHtml_(plan) {
 function capitalAllocationDebtViewHtml_(plan) {
   var decision = capitalAllocationPrimaryDecisionModel_(plan);
   var lifecycleState = capitalAllocationLifecycleState_(plan);
-  var rows = capitalAllocationDetailedDebtOutcomesHtml_(decision.debtActions, lifecycleState);
-  var heading = lifecycleState === 'CONFIRMED' ? 'Confirmed debt payments' :
-    lifecycleState === 'AWAITING_CONFIRMATION' ? 'Debt payments awaiting confirmation' :
-      'Recommended debt payments';
+  var monthly = capitalAllocationMonthlyDebtPlanModel_(plan, decision);
   var badge = lifecycleState === 'CONFIRMED' ? 'Confirmed' :
     lifecycleState === 'AWAITING_CONFIRMATION' ? 'Waiting for confirmation' : 'Proposed';
   return '<section class="capital-allocation-focused-view"><div class="capital-allocation-section-head">' +
-    '<div><div class="capital-allocation-preview-kicker">Debt</div><h3>' +
-    escapeCapitalAllocationHtml_(heading) + '</h3></div>' +
+    '<div><div class="capital-allocation-preview-kicker">Debt</div><h3>Debt plan this month</h3>' +
+    '<p>See every required debt payment due this month, plus extra payoff when the current-period spending limit is available.</p></div>' +
     '<span class="capital-allocation-badge">' + escapeCapitalAllocationHtml_(badge) + '</span></div>' +
-    (rows || '<p class="muted">No debt payment is proposed this week.</p>') + '</section>' +
-    capitalAllocationAfterActionHtml_(plan.afterAction || {}, plan.nextDollar || {});
+    capitalAllocationMonthlyDebtSummaryHtml_(monthly) + '</section>' +
+    capitalAllocationMonthlyDebtCardsHtml_(monthly, lifecycleState) +
+    capitalAllocationNextDebtTargetHtml_(monthly) +
+    capitalAllocationDebtFreedCashSectionHtml_(plan.afterAction || {}, lifecycleState) +
+    capitalAllocationDebtLifecycleHtml_(lifecycleState) +
+    capitalAllocationDebtAdvancedHtml_(plan, decision, lifecycleState, monthly);
+}
+
+function capitalAllocationMonthlyDebtPlanModel_(plan, decision) {
+  var after = plan && plan.afterAction || {};
+  var facts = plan && plan.queue && plan.queue.facts || {};
+  var start = capitalAllocationDebtIsoDate_(plan && plan.asOfDate ||
+    plan && plan.forecast90 && plan.forecast90.startDate);
+  var monthEnd = start ? new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)) : null;
+  var factByName = {};
+  (facts.debts || []).forEach(function(row) {
+    factByName[capitalAllocationDebtMatchKey_(row.name)] = row;
+    factByName[capitalAllocationDebtMatchKey_(row.originalName)] = row;
+  });
+  var requiredByName = {};
+  function addRequired_(row, sourcePriority) {
+    var key = capitalAllocationDebtMatchKey_(row && (row.targetName || row.name));
+    if (!key || !(Number(row && row.amount || 0) > 0)) return;
+    var due = capitalAllocationDebtIsoDate_(row.dueDate);
+    if (due && monthEnd && due.getTime() > monthEnd.getTime()) return;
+    var existing = requiredByName[key];
+    var candidate = { amount: Number(row.amount || 0), dueDate: String(row.dueDate || ''),
+      sourcePriority: sourcePriority || 0, overdue: !!(due && start && due.getTime() < start.getTime()) };
+    if (!existing || candidate.sourcePriority > existing.sourcePriority ||
+        (!existing.dueDate && candidate.dueDate) ||
+        (candidate.dueDate && existing.dueDate && candidate.dueDate < existing.dueDate)) {
+      requiredByName[key] = candidate;
+    } else if (candidate.amount > existing.amount) {
+      existing.amount = candidate.amount;
+    }
+  }
+  (plan && plan.weeklyActions || []).filter(function(row) {
+    return row.actionType === 'PAY_DEBT_MINIMUM';
+  }).forEach(function(row) { addRequired_(row, 3); });
+  var forecast = plan && plan.forecast90 || {};
+  (forecast.futureDebtMinimums || []).forEach(function(row) { addRequired_(row, 2); });
+  (forecast.futureBills || []).forEach(function(row) { addRequired_(row, 1); });
+
+  function currentMonthDueDate_(fact, evidence) {
+    var explicitDate = String(evidence && evidence.dueDate || '');
+    if (explicitDate) return explicitDate;
+    var dueDay = Number(fact && fact.dueDay || 0);
+    var dueDayKnown = fact && fact.dueDayKnown;
+    if (!start || dueDayKnown === false || !(dueDay >= 1 && dueDay <= 31)) return '';
+    var lastDay = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).getUTCDate();
+    var resolved = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(),
+      Math.min(dueDay, lastDay)));
+    return resolved.getUTCFullYear() + '-' + String(resolved.getUTCMonth() + 1).padStart(2, '0') + '-' +
+      String(resolved.getUTCDate()).padStart(2, '0');
+  }
+
+  var extraByName = {};
+  (plan && plan.weeklyActions || []).filter(function(row) {
+    return row.actionType === 'PAY_EXTRA_DEBT';
+  }).forEach(function(row) {
+    var key = capitalAllocationDebtMatchKey_(row.targetName);
+    extraByName[key] = Number(extraByName[key] || 0) + Number(row.amount || 0);
+  });
+  var explicitEvidence = {};
+  (plan && plan.monthlyDebtEvidence || []).forEach(function(row) {
+    explicitEvidence[capitalAllocationDebtMatchKey_(row.name)] = row;
+    explicitEvidence[capitalAllocationDebtMatchKey_(row.originalName)] = row;
+  });
+  var rows = (after.debts || []).filter(function(debt) {
+    var key = capitalAllocationDebtMatchKey_(debt.name);
+    return debt.isRevolving || !!factByName[key] || !!requiredByName[key] ||
+      !!explicitEvidence[key] || Number(extraByName[key] || 0) > 0;
+  }).map(function(debt) {
+    var key = capitalAllocationDebtMatchKey_(debt.name);
+    var required = requiredByName[key] || null;
+    var evidence = explicitEvidence[key] || {};
+    var fact = factByName[key] || {};
+    var extra = Number(extraByName[key] || 0);
+    var evidenceStatus = String(evidence.status || '').toUpperCase();
+    var knownNoPayment = evidenceStatus === 'SATISFIED' || evidenceStatus === 'NO_PAYMENT_DUE' ||
+      evidenceStatus === 'RECORDED_PAID' || evidenceStatus === 'CONFIRMED_PAID';
+    var minimumPayment = Number(fact.minimumPayment || evidence.minimumPayment || 0);
+    // A required action can legitimately omit the calendar date even when the
+    // normalized debt fact still carries a trustworthy due day. Preserve that
+    // source evidence instead of turning a known date into an update request.
+    var dueDate = required && required.dueDate
+      ? required.dueDate : currentMonthDueDate_(fact, evidence);
+    var hasReconciledAmount = Object.prototype.hasOwnProperty.call(evidence,
+      'remainingRequiredAmount');
+    var requiredAmount = hasReconciledAmount ? Number(evidence.remainingRequiredAmount || 0) :
+      knownNoPayment ? 0 : required ? Number(required.amount || 0) : minimumPayment;
+    var status = /^(RECORDED_PAID|CONFIRMED_PAID|PARTIALLY_PAID|PAST_DUE_UNPAID|PAYMENT_STATUS_UNKNOWN|UPCOMING)$/.test(evidenceStatus)
+      ? evidenceStatus : evidenceStatus === 'SATISFIED' ? 'SATISFIED' :
+      evidenceStatus === 'NO_PAYMENT_DUE' ? 'NO_PAYMENT_DUE' :
+      required && required.overdue ? 'PAST_DUE' :
+      requiredAmount > 0 && dueDate ? 'REQUIRED_DUE' :
+      requiredAmount > 0 ? 'MISSING_DATE' :
+      dueDate ? 'MISSING_AMOUNT' : 'MISSING_DETAILS';
+    var proposedPayment = Number(debt.proposedPayment || 0);
+    var fullPayoff = proposedPayment > 0.005 && Number(debt.projectedEndingBalance || 0) <= 0.005;
+    var plannedPayment = fullPayoff ? proposedPayment : requiredAmount + extra;
+    // A full-payoff recommendation can already contain part (or all) of the
+    // month's required payment. Keep that overlap explicit so the monthly
+    // summary reconciles without presenting the same dollars twice.
+    var requiredIncludedInRecommendation = Math.max(0,
+      requiredAmount + extra - plannedPayment);
+    return { name: debt.name, displayName: capitalAllocationCustomerActionName_(debt.name),
+      isRevolving: !!debt.isRevolving, debtType: String(debt.debtType || ''),
+      startingBalance: Number(debt.startingBalance || 0),
+      endingBalance: Number(debt.projectedEndingBalance == null
+        ? debt.startingBalance || 0 : debt.projectedEndingBalance),
+      apr: Number(debt.apr || 0), requiredPayment: requiredAmount,
+      minimumPayment: minimumPayment, dueDate: dueDate,
+      obligationAmount: hasReconciledAmount ? Number(evidence.obligationAmount || minimumPayment) : minimumPayment,
+      recordedPaymentAmount: Number(evidence.recordedPaymentAmount || 0),
+      paymentDate: String(evidence.paymentDate || ''),
+      extraPayment: extra, proposedPayment: proposedPayment, plannedPayment: plannedPayment,
+      requiredIncludedInRecommendation: requiredIncludedInRecommendation,
+      fullPayoff: fullPayoff, status: status,
+      annualInterestReduction: Number(debt.projectedAnnualInterestAvoided || 0),
+      projectedMonthlyMinimumReleased: Number(debt.projectedMonthlyMinimumReleased || 0) };
+  });
+  rows.sort(function(a, b) {
+    function group_(row) {
+      if (row.status === 'PAST_DUE') return 0;
+      if (row.status === 'REQUIRED_DUE') return 1;
+      if (row.extraPayment > 0) return 2;
+      if (/^MISSING_/.test(row.status)) return 4;
+      return 3;
+    }
+    return group_(a) - group_(b) || String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999')) ||
+      Number(b.apr || 0) - Number(a.apr || 0);
+  });
+  function money_(value) { return Math.round(Number(value || 0) * 100) / 100; }
+  var requiredTotal = money_(rows.reduce(function(sum, row) { return sum + row.requiredPayment; }, 0));
+  var obligationTotal = money_(rows.reduce(function(sum, row) { return sum + row.obligationAmount; }, 0));
+  var recordedTotal = money_(rows.reduce(function(sum, row) {
+    return sum + Math.min(row.obligationAmount, row.recordedPaymentAmount);
+  }, 0));
+  var extraTotal = money_(rows.reduce(function(sum, row) { return sum + row.extraPayment; }, 0));
+  var requiredIncludedTotal = money_(rows.reduce(function(sum, row) {
+    return sum + row.requiredIncludedInRecommendation;
+  }, 0));
+  var unresolvedCount = rows.filter(function(row) { return /^MISSING_/.test(row.status); }).length;
+  var currentDebt = rows.filter(function(row) { return row.isRevolving; })
+    .reduce(function(sum, row) { return sum + row.startingBalance; }, 0);
+  var expectedDebt = rows.filter(function(row) { return row.isRevolving; })
+    .reduce(function(sum, row) { return sum + row.endingBalance; }, 0);
+  var nextTargets = rows.filter(function(row) {
+    return row.isRevolving && row.endingBalance > 0.005;
+  })
+    .sort(function(a, b) { return b.apr - a.apr; });
+  var pace = plan && plan.deploymentPace || {};
+  return { rows: rows, obligationTotal: obligationTotal, recordedTotal: recordedTotal,
+    requiredTotal: requiredTotal, extraTotal: extraTotal,
+    requiredIncludedTotal: requiredIncludedTotal,
+    totalPlanned: money_(rows.reduce(function(sum, row) { return sum + row.plannedPayment; }, 0)),
+    unresolvedCount: unresolvedCount, currentDebt: currentDebt,
+    pacingRequired: capitalAllocationPacingAuthorityMissing_(pace),
+    potentialExcessCapital: Number(pace.potentialExcessCapital == null
+      ? pace.capitalAbovePreferredLiquidity || 0 : pace.potentialExcessCapital),
+    recommendedAcceleratedDeployment: Number(pace.recommendedAcceleratedDeployment || 0),
+    intentionallyStagedCapital: Number(pace.intentionallyStagedCapital || 0),
+    expectedDebt: expectedDebt, nextTargets: nextTargets, planDate: plan && plan.asOfDate || '' };
+}
+
+function capitalAllocationMonthlyDebtSummaryHtml_(monthly) {
+  var unresolved = Number(monthly.unresolvedCount || 0);
+  var coveredByPayoff = Number(monthly.requiredIncludedTotal || 0) > 0.005
+    ? '<div><span>Required amount already covered by payoff recommendations</span><strong>−' +
+      formatCapitalAllocationMoney_(monthly.requiredIncludedTotal) + '</strong></div>'
+    : '';
+  var recorded = Number(monthly.recordedTotal || 0) > 0.005
+    ? '<div><span>Required payments already covered</span><strong>−' +
+      formatCapitalAllocationMoney_(monthly.recordedTotal) + '</strong></div>' : '';
+  var pacingRequired = !!monthly.pacingRequired;
+  return '<div class="capital-allocation-debt-month-summary"><div><span>Required payments this month</span><strong>' +
+    formatCapitalAllocationMoney_(monthly.obligationTotal) + '</strong></div>' + recorded +
+    '<div><span>Required payments still to cover</span><strong>' +
+    formatCapitalAllocationMoney_(monthly.requiredTotal) + '</strong></div><div><span>Extra payoff</span><strong>' +
+    (pacingRequired ? 'Not calculated yet' : formatCapitalAllocationMoney_(monthly.extraTotal)) + '</strong></div>' + coveredByPayoff +
+    '<div><span>Remaining debt payments this month</span><strong>' +
+    formatCapitalAllocationMoney_(monthly.totalPlanned) + '</strong></div><div><span>Credit-card debt now</span><strong>' +
+    formatCapitalAllocationMoney_(monthly.currentDebt) + '</strong></div><div><span>Expected credit-card debt after current recommendations</span><strong>' +
+    formatCapitalAllocationMoney_(monthly.expectedDebt) + '</strong></div></div>' +
+    (unresolved ? '<p class="capital-allocation-debt-update-count">' + unresolved + ' card' +
+      (unresolved === 1 ? '' : 's') + ' need' + (unresolved === 1 ? 's' : '') +
+      ' payment information updated.</p>' : '');
+}
+
+function capitalAllocationMonthlyDebtCardHtml_(row, lifecycleState, mode) {
+    var statusLabel = row.status === 'PAST_DUE' ? 'Past due' :
+      row.status === 'PAST_DUE_UNPAID' ? 'Past due · no payment recorded' :
+      row.fullPayoff && lifecycleState === 'CONFIRMED' ? 'Confirmed payoff' :
+      row.fullPayoff && lifecycleState === 'AWAITING_CONFIRMATION' ? 'Waiting for confirmation' :
+      row.fullPayoff ? 'Recommended payoff' :
+      row.status === 'RECORDED_PAID' ? 'Monthly payment covered' :
+      row.status === 'CONFIRMED_PAID' ? 'Monthly payment confirmed' :
+      row.status === 'PARTIALLY_PAID' ? 'Partially paid' :
+      row.status === 'PAYMENT_STATUS_UNKNOWN' ? 'Payment status needs review' :
+      row.status === 'MISSING_DATE' ? 'Due date needs updating' :
+      row.status === 'MISSING_AMOUNT' ? 'Payment amount needs updating' :
+      row.status === 'MISSING_DETAILS' ? 'Payment details need updating' :
+      row.requiredPayment > 0 && row.extraPayment > 0 ? 'Required + extra' :
+      row.requiredPayment > 0 ? 'Required payment' :
+      row.extraPayment > 0 ? 'Recommended extra payment' :
+      row.status === 'SATISFIED' ? 'Required payment satisfied' :
+      row.status === 'NO_PAYMENT_DUE' ? 'No required payment due this month' :
+      'Waiting for extra payoff';
+    var statusClass = row.status === 'PAST_DUE' || row.status === 'PAST_DUE_UNPAID' ? 'past-due' :
+      row.fullPayoff && lifecycleState === 'CONFIRMED' ? 'confirmed' :
+      row.fullPayoff && lifecycleState === 'AWAITING_CONFIRMATION' ? 'awaiting' :
+      row.fullPayoff ? 'recommended-payoff' :
+      row.status === 'RECORDED_PAID' || row.status === 'CONFIRMED_PAID' ? 'confirmed' :
+      row.status === 'PARTIALLY_PAID' ? 'required-extra' :
+      row.status === 'PAYMENT_STATUS_UNKNOWN' ? 'needs-update' :
+      /^MISSING_/.test(row.status) ? 'needs-update' :
+      row.requiredPayment > 0 && row.extraPayment > 0 ? 'required-extra' :
+      row.requiredPayment > 0 ? 'required' :
+      row.extraPayment > 0 ? 'recommended' :
+      'waiting';
+    var paymentLead = row.fullPayoff ? '<div class="capital-allocation-debt-card-lead"><span>Total proposed payment</span><strong>' +
+      formatCapitalAllocationMoney_(row.proposedPayment) + '</strong></div>' :
+      row.plannedPayment > 0 ? '<div class="capital-allocation-debt-card-lead"><span>Planned this month</span><strong>' +
+        formatCapitalAllocationMoney_(row.plannedPayment) + '</strong></div>' : '';
+    var requiredLine = row.requiredPayment > 0 ? '<div><span>' +
+      (row.fullPayoff ? 'Monthly minimum' : 'Required payment') + '</span><strong>' +
+      formatCapitalAllocationMoney_(row.requiredPayment) + '</strong></div>' : '';
+    var recordedLine = row.recordedPaymentAmount > 0 ? '<div><span>Recorded payment</span><strong>' +
+      formatCapitalAllocationMoney_(row.recordedPaymentAmount) +
+      (row.paymentDate ? ' on ' + escapeCapitalAllocationHtml_(capitalAllocationDebtDueDateLabel_(row.paymentDate)) :
+        ' this month') + '</strong></div>' : '';
+    var dueLine = row.dueDate ? '<div><span>Due</span><strong>' +
+      escapeCapitalAllocationHtml_(capitalAllocationDebtDueDateLabel_(row.dueDate)) + '</strong></div>' :
+      (/^MISSING_/.test(row.status) ? '<div><span>Due</span><strong>Due date needs updating</strong></div>' : '');
+    var missingAmountLine = row.status === 'MISSING_AMOUNT' || row.status === 'MISSING_DETAILS' ?
+      '<div><span>Required payment</span><strong>Not recorded</strong></div>' : '';
+    var extraLine = row.extraPayment > 0 && !row.fullPayoff ? '<div><span>Extra payoff</span><strong>' +
+      formatCapitalAllocationMoney_(row.extraPayment) + '</strong></div>' :
+      row.endingBalance > 0.005 ? '<p class="capital-allocation-debt-card-note">Extra payoff waits while higher-APR credit-card debt is paid first.</p>' : '';
+    var balanceLine = row.extraPayment > 0 || row.fullPayoff ?
+      formatCapitalAllocationMoney_(row.startingBalance) + ' → ' + formatCapitalAllocationMoney_(row.endingBalance) + ' expected' :
+      formatCapitalAllocationMoney_(row.startingBalance);
+    if (mode === 'required') {
+      paymentLead = row.requiredPayment > 0
+        ? '<div class="capital-allocation-debt-card-lead"><span>Still to pay this month</span><strong>' +
+          formatCapitalAllocationMoney_(row.requiredPayment) + '</strong></div>' : '';
+      extraLine = row.extraPayment > 0
+        ? '<p class="capital-allocation-debt-card-note">An additional payoff is recommended separately below.</p>'
+        : extraLine;
+    } else if (mode === 'extra') {
+      paymentLead = row.fullPayoff
+        ? '<div class="capital-allocation-debt-card-lead"><span>Pay off</span><strong>' +
+          formatCapitalAllocationMoney_(row.proposedPayment) + '</strong></div>'
+        : '<div class="capital-allocation-debt-card-lead"><span>Extra payoff</span><strong>' +
+          formatCapitalAllocationMoney_(row.extraPayment) + '</strong></div>';
+      var monthlyCovered = /^(RECORDED_PAID|CONFIRMED_PAID|SATISFIED)$/.test(row.status);
+      requiredLine = monthlyCovered
+        ? '<div><span>Monthly requirement</span><strong>Already covered</strong></div>'
+        : row.requiredPayment > 0
+          ? '<div><span>' + (row.dueDate ? 'Required ' +
+            escapeCapitalAllocationHtml_(capitalAllocationDebtDueDateLabel_(row.dueDate)) :
+            'Required this month') + '</span><strong>' +
+            formatCapitalAllocationMoney_(row.requiredPayment) + '</strong></div>' : '';
+      recordedLine = monthlyCovered && row.recordedPaymentAmount > 0
+        ? '<div><span>Recorded this month</span><strong>' +
+          formatCapitalAllocationMoney_(row.recordedPaymentAmount) + '</strong></div>' : '';
+      dueLine = '';
+      missingAmountLine = '';
+      extraLine = '';
+    } else if (mode === 'covered') {
+      paymentLead = row.status === 'NO_PAYMENT_DUE'
+        ? '<p class="capital-allocation-debt-card-note">No payment is scheduled for this monthly cycle.</p>'
+        : '<div class="capital-allocation-debt-card-lead"><span>Monthly requirement covered</span><strong>' +
+          formatCapitalAllocationMoney_(Math.min(row.obligationAmount, row.recordedPaymentAmount)) + '</strong></div>';
+      requiredLine = '';
+      extraLine = '';
+    }
+    return '<article class="capital-allocation-debt-month-card capital-allocation-debt-month-card--' + statusClass + '"><div class="capital-allocation-debt-outcome-head"><div>' +
+      '<span class="capital-allocation-debt-status capital-allocation-debt-status--' + statusClass + '">' + escapeCapitalAllocationHtml_(statusLabel) + '</span><strong>' +
+      escapeCapitalAllocationHtml_(row.displayName) + '</strong></div></div><div class="capital-allocation-debt-outcome-grid">' +
+      paymentLead + recordedLine + requiredLine + dueLine + missingAmountLine + extraLine +
+      '<div><span>Balance</span><strong>' + balanceLine + '</strong></div>' +
+      '<div><span>APR</span><strong>' + Number(row.apr || 0).toFixed(2) + '%</strong></div>' +
+      (row.extraPayment > 0 ? '<div><span>' + (row.fullPayoff ? 'Projected first-year interest avoided' :
+        'Projected first-year interest reduction') + '</span><strong>~' +
+        formatCapitalAllocationMoney_(row.annualInterestReduction) + '</strong></div>' : '') +
+      '</div></article>';
+}
+
+function capitalAllocationMonthlyDebtCardsHtml_(monthly, lifecycleState) {
+  var rows = monthly.rows || [];
+  var requiredRows = rows.filter(function(row) {
+    return !row.fullPayoff && (row.requiredPayment > 0 || /^MISSING_/.test(row.status) ||
+      row.status === 'PAYMENT_STATUS_UNKNOWN');
+  }).sort(function(a, b) {
+    return String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999')) || b.apr - a.apr;
+  });
+  var extraRows = rows.filter(function(row) {
+    return row.fullPayoff || row.extraPayment > 0;
+  }).sort(function(a, b) { return b.apr - a.apr; });
+  var coveredRows = rows.filter(function(row) {
+    return (/^(RECORDED_PAID|CONFIRMED_PAID|SATISFIED)$/.test(row.status) ||
+      (row.isRevolving && row.status === 'NO_PAYMENT_DUE'));
+  }).sort(function(a, b) {
+    return String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999'));
+  });
+  var coveredPaymentCount = coveredRows.filter(function(row) {
+    return row.status !== 'NO_PAYMENT_DUE';
+  }).length;
+  function cards_(items, mode, emptyText) {
+    var html = items.map(function(row) {
+      return capitalAllocationMonthlyDebtCardHtml_(row, lifecycleState, mode);
+    }).join('');
+    return html || '<p class="muted">' + emptyText + '</p>';
+  }
+  var pacing = monthly.pacingRequired
+    ? '<p class="muted">Extra payoff is not calculated until the current-period spending limit is available.</p>'
+    : '<div class="capital-allocation-debt-pacing capital-allocation-debt-month-summary"><div><span>Potentially available over time</span><strong>' +
+      formatCapitalAllocationMoney_(monthly.potentialExcessCapital) + '</strong></div>' +
+      '<div><span>Recommended extra now</span><strong>' +
+      formatCapitalAllocationMoney_(monthly.recommendedAcceleratedDeployment) + '</strong></div>' +
+      '<div><span>Staged for future decisions</span><strong>' +
+      formatCapitalAllocationMoney_(monthly.intentionallyStagedCapital) + '</strong></div>' +
+      '<p>This amount remains available for future planning, subject to refreshed balances and upcoming obligations.</p></div>';
+  return '<section class="capital-allocation-debt-month"><div class="capital-allocation-section-head"><div><h3>Still to pay this month</h3>' +
+    '<p>Required debt payments that remain in the current month.</p></div></div>' +
+    '<div class="capital-allocation-debt-card-grid">' +
+    cards_(requiredRows, 'required', 'No required debt payments remain this month.') + '</div></section>' +
+    '<section class="capital-allocation-debt-month"><div class="capital-allocation-section-head"><div><h3>Extra payoff recommendation</h3>' +
+    '<p>Extra money follows the highest-APR revolving balance first.</p></div></div>' + pacing +
+    '<div class="capital-allocation-debt-card-grid">' +
+    cards_(extraRows, 'extra', 'No extra payoff is calculated for this period.') + '</div></section>' +
+    (coveredRows.length
+      ? '<details class="capital-allocation-debt-covered"><summary><span><strong>Already covered this month</strong>' +
+        '<span class="capital-allocation-waits-summary">' + coveredPaymentCount + ' payment' +
+        (coveredPaymentCount === 1 ? '' : 's') + ' · ' +
+        formatCapitalAllocationMoney_(monthly.recordedTotal) +
+        ' of required payments covered</span></span>' +
+        '<span class="capital-allocation-expand-label">View covered payments</span></summary>' +
+        '<div class="capital-allocation-debt-card-grid">' +
+        cards_(coveredRows, 'covered', '') + '</div></details>'
+      : '');
+}
+
+function capitalAllocationNextDebtTargetHtml_(monthly) {
+  var rows = monthly.nextTargets || [];
+  if (!rows.length) return '';
+  var first = rows[0];
+  return '<section class="capital-allocation-next-debt-target"><div class="capital-allocation-section-head"><div>' +
+    '<h3>' + (monthly.pacingRequired ? 'Potential next extra-payoff target' : 'Next extra-payoff target') +
+    '</h3><p><strong>' + escapeCapitalAllocationHtml_(first.displayName) +
+    ' — ' + Number(first.apr || 0).toFixed(2) + '% APR</strong></p><p>' +
+    (monthly.pacingRequired
+      ? 'This is the highest-APR revolving balance, but an extra-payoff amount has not been calculated yet.'
+      : 'After the current recommendation, this remains the next target for additional payoff money.') +
+    '</p></div></div>' +
+    '<p class="muted">Required monthly payments are paid by their due dates. Extra payoff money goes to the highest-APR revolving balance first.</p>' +
+    (rows.length > 1 ? '<p class="capital-allocation-debt-priority-sequence">Next: ' + rows.slice(1).map(function(row) {
+      return escapeCapitalAllocationHtml_(row.displayName) + ' ' + Number(row.apr || 0).toFixed(2) + '%';
+    }).join(' → ') + '</p>' : '') + '</section>';
+}
+
+function capitalAllocationDebtFreedCashSectionHtml_(after, lifecycleState) {
+  var revolving = (after.debts || []).filter(function(row) {
+    return row.isRevolving;
+  });
+  var paidOff = revolving.filter(function(row) {
+    return row.isRevolving && Number(row.projectedEndingBalance || 0) <= 0.005 &&
+      Number(row.projectedMonthlyMinimumReleased || 0) > 0;
+  });
+  var projected = Number(after.projectedReleasedMonthlyMinimums || 0);
+  var confirmed = Number(after.confirmedReleasedMonthlyMinimums || 0);
+  if (!(projected > 0) || !paidOff.length) {
+    var partialTarget = revolving.filter(function(row) {
+      return Number(row.proposedPayment || 0) > 0.005 &&
+        Number(row.projectedEndingBalance || 0) > 0.005;
+    }).sort(function(a, b) {
+      return Number(b.apr || 0) - Number(a.apr || 0);
+    })[0] || null;
+    var targetName = partialTarget
+      ? capitalAllocationCustomerActionName_(partialTarget.name) : 'The current extra-payoff target';
+    var balanceText = partialTarget
+      ? ' is expected to retain a ' + formatCapitalAllocationMoney_(partialTarget.projectedEndingBalance) +
+        ' balance after the current recommendation.' : ' is not projected to be paid off by the current recommendation.';
+    return '<section class="capital-allocation-debt-freed-section"><h3>Monthly cash freed</h3>' +
+      '<div class="capital-allocation-debt-freed"><strong>None yet</strong><p>' +
+      escapeCapitalAllocationHtml_(targetName) + balanceText +
+      ' Its monthly payment will not be considered freed until a refreshed balance confirms the account has been paid off.</p>' +
+      '</div></section>';
+  }
+  var names = paidOff.map(function(row) {
+    return capitalAllocationCustomerActionName_(row.name);
+  });
+  var subject = names.length === 1 ? names[0] : names.join(', ');
+  if (lifecycleState === 'CONFIRMED') {
+    return '<section class="capital-allocation-debt-freed-section"><h3>Monthly cash freed</h3>' +
+      '<div class="capital-allocation-debt-freed"><strong>' +
+      formatCapitalAllocationMoney_(confirmed || projected) + '/month confirmed</strong><p>' +
+      escapeCapitalAllocationHtml_(subject) + (names.length === 1 ? ' has' : ' have') +
+      ' been confirmed paid off. This monthly amount is now available for the next priority under the current plan.</p>' +
+      '</div></section>';
+  }
+  var payoffText = names.length === 1
+    ? 'Paying off ' + subject + ' is expected to free its current monthly payment.'
+    : 'These recommended payoffs are expected to free their current monthly payments.';
+  return '<section class="capital-allocation-debt-freed-section"><h3>Monthly cash freed after payoff</h3>' +
+    '<div class="capital-allocation-debt-freed"><strong>' +
+    formatCapitalAllocationMoney_(projected) + '/month expected</strong><p>' +
+    escapeCapitalAllocationHtml_(payoffText) + '</p><div><span>Available today</span><strong>' +
+    formatCapitalAllocationMoney_(confirmed) + '/month</strong></div>' +
+    '<p>Cash Compass will only redirect this amount after refreshed balances confirm the payoff' +
+    (names.length === 1 ? '' : 's') + ' at $0.</p></div></section>';
 }
 
 function capitalAllocationCashViewHtml_(plan) {
@@ -333,6 +750,11 @@ function capitalAllocationForecastSummaryHtml_(plan) {
   var forecast = plan.forecast90 || {};
   var pace = plan.deploymentPace || {};
   var investmentPolicy = plan.investmentPolicy || {};
+  var extraDebtCard = capitalAllocationPacingAuthorityMissing_(pace)
+    ? capitalAllocationSummaryTextCardHtml_('Extra payoff', 'Not calculated yet',
+      'A current-period spending limit is still needed')
+    : capitalAllocationSummaryCardHtml_('Extra debt planned this week', pace.recommendedAcceleratedDeployment,
+      'Recommended above required payments');
   return '<section class="capital-allocation-forecast-summary"><div class="capital-allocation-summary">' +
     capitalAllocationSummaryCardHtml_('Required commitments', forecast.totalOutflows,
       'Scheduled through ' + (forecast.endDate || 'the next 90 days')) +
@@ -343,8 +765,7 @@ function capitalAllocationForecastSummaryHtml_(plan) {
       'Kept above the hard reserve') +
     capitalAllocationSummaryCardHtml_('Investment commitment', investmentPolicy.recommendedAmount,
       'Regular Robinhood investment this week') +
-    capitalAllocationSummaryCardHtml_('Extra debt planned this week', pace.recommendedAcceleratedDeployment,
-      'Recommended above required payments') +
+    extraDebtCard +
     '</div></section>';
 }
 
@@ -399,14 +820,16 @@ function capitalAllocationVariableEstimatesHtml_(variableEstimates) {
 
 function capitalAllocationDeploymentPaceHtml_(pace) {
   if (!pace || !pace.planningPeriod) return '';
+  var pacingRequired = capitalAllocationPacingAuthorityMissing_(pace);
   var scenarios = (pace.scenarios || []).map(function(row) {
     var scenarioLabel = String(row.liquidityPreference || row.id || row.name || row.label || '').toUpperCase();
     var friendly = scenarioLabel.indexOf('AGGRESSIVE') >= 0 ? 'Pay debt faster' :
       scenarioLabel.indexOf('LIQUIDITY') >= 0 ? 'Keep more cash' : 'Balanced — Recommended';
     return '<div class="capital-allocation-compact-action"><div><strong>' +
       escapeCapitalAllocationHtml_(friendly) + '</strong><div class="capital-allocation-card-reason">Keep ' +
-      formatCapitalAllocationMoney_(row.projectedLiquidCash) + '</div></div><strong>Use ' +
-      formatCapitalAllocationMoney_(row.acceleratedDeployment) + '</strong></div>';
+      formatCapitalAllocationMoney_(row.projectedLiquidCash) + '</div></div><strong>' +
+      (pacingRequired ? 'Extra payoff not calculated' : 'Use ' +
+        formatCapitalAllocationMoney_(row.acceleratedDeployment)) + '</strong></div>';
   }).join('');
   return '<section class="capital-allocation-pace-choice"><div class="capital-allocation-section-head"><h3>Choose your pace</h3>' +
     '<span class="capital-allocation-badge">Balanced recommended</span></div>' +
@@ -423,15 +846,30 @@ function capitalAllocationDeploymentPaceHtml_(pace) {
     capitalAllocationDecisionCardHtml_('Preferred liquidity target',
       formatCapitalAllocationMoney_(pace.preferredLiquidityTarget), '',
       String(pace.liquidityPreference || 'BALANCED').replace(/_/g, ' ')) +
-    capitalAllocationDecisionCardHtml_('Capital above preferred liquidity',
-      formatCapitalAllocationMoney_(pace.capitalAbovePreferredLiquidity), '', 'Eligible for accelerated optimization') +
-    capitalAllocationDecisionCardHtml_('Accelerated deployment',
-      formatCapitalAllocationMoney_(pace.recommendedAcceleratedDeployment), '',
-      'Remaining ' + String(pace.planningPeriod || '').toLowerCase() + ' budget') +
-    capitalAllocationDecisionCardHtml_('Intentionally retained liquidity',
-      formatCapitalAllocationMoney_(pace.intentionallyRetainedLiquidity), '', 'Cash remaining after the recommended pace') +
-    '</div><p class="capital-allocation-decision-next"><strong>Why this pace?</strong> ' +
-    escapeCapitalAllocationHtml_(pace.whyThisPace || '') + '</p>' +
+    capitalAllocationDecisionCardHtml_('Potential excess cash',
+      formatCapitalAllocationMoney_(pace.capitalAbovePreferredLiquidity), '',
+      'Available above the preferred cash target') +
+    capitalAllocationDecisionCardHtml_('Recommended to deploy this month',
+      pacingRequired ? 'Not calculated yet' :
+        formatCapitalAllocationMoney_(pace.recommendedAcceleratedDeployment), '',
+      pacingRequired ? 'A current-period spending limit is still needed' :
+        'Optional use after required payments and protections') +
+    capitalAllocationDecisionCardHtml_('Intentionally held for future decisions',
+      formatCapitalAllocationMoney_(pace.intentionallyStagedCapital), '',
+      'Excess cash staged for a later refresh') +
+    capitalAllocationDecisionCardHtml_('Next 30 days covered',
+      Number(pace.coverage30Days || 0).toFixed(2) + '×', '',
+      formatCapitalAllocationMoney_(pace.gross30DayObligations) +
+        ' covered by current cash after the plan') +
+    capitalAllocationDecisionCardHtml_('Next 90 days covered',
+      Number(pace.coverage90Days || 0).toFixed(2) + '×', '',
+      formatCapitalAllocationMoney_(pace.gross90DayObligations) +
+        ' covered by current cash after the plan') +
+    '</div><p class="capital-allocation-decision-next"><strong>' +
+    (pacingRequired ? 'More planning data needed.' : 'Why this amount?') + '</strong> ' +
+    (pacingRequired
+      ? 'Cash Compass has protected required obligations and liquidity, but the monthly pacing inputs are incomplete.'
+      : escapeCapitalAllocationHtml_(pace.whyThisPace || '')) + '</p>' +
     '<div class="capital-allocation-card-reason">Cash yield comparison: ' +
     escapeCapitalAllocationHtml_(pace.cashYieldDataStatus || '') + '</div>' +
     '<div class="capital-allocation-card-reason">Proposal ' +
@@ -442,6 +880,8 @@ function capitalAllocationDeploymentPaceHtml_(pace) {
 
 function capitalAllocationPrimaryDecisionHtml_(plan) {
   var decision = capitalAllocationPrimaryDecisionModel_(plan);
+  var monthlyDebt = capitalAllocationMonthlyDebtPlanModel_(plan, decision);
+  var laterRequiredDebt = capitalAllocationLaterRequiredDebtAmount_(monthlyDebt);
   var investmentPolicy = plan.investmentPolicy || {};
   var lifecycleState = capitalAllocationLifecycleState_(plan);
   var debtRows = capitalAllocationCompactDebtOutcomesHtml_(decision.debtActions, lifecycleState);
@@ -460,9 +900,11 @@ function capitalAllocationPrimaryDecisionHtml_(plan) {
       escapeCapitalAllocationHtml_(capitalAllocationContributionPeriodLabel_(row.frequency)) +
       '</strong></div>';
   }).join('');
-  var headline = decision.debtAmount > 0
+  var headline = decision.pacingRequired
+    ? 'Extra payoff not calculated yet'
+    : decision.debtAmount > 0
     ? 'Pay ' + formatCapitalAllocationMoney_(decision.debtAmount) +
-      ' toward your credit cards'
+      ' toward debt now'
     : 'Follow this week&rsquo;s required payments and cash protections.';
   var overrideReasons = (investmentPolicy.overrideReasons || []).map(function(row) {
     return '<li>' + escapeCapitalAllocationHtml_(row.message || String(row)) + '</li>';
@@ -472,12 +914,21 @@ function capitalAllocationPrimaryDecisionHtml_(plan) {
     : 'Keep your regular ' + formatCapitalAllocationMoney_(decision.investAmount) +
       ' Robinhood investment this week.';
   return '<section class="capital-allocation-decision-hero"><div class="capital-allocation-preview-kicker">This week\'s recommendation</div>' +
-    '<h3>' + headline + '</h3><p>' + robinhoodSentence + '</p>' +
+    '<h3>' + headline + '</h3>' +
+    (laterRequiredDebt > 0.005
+      ? '<p><strong>' + formatCapitalAllocationMoney_(laterRequiredDebt) +
+        ' of additional required debt payments remain later this month.</strong></p>'
+      : '') + '<p>' +
+    (decision.pacingRequired
+      ? 'Cash Compass has protected required obligations and liquidity, but the current-period spending limit still needs to be established. ' : '') +
+    robinhoodSentence + '</p>' +
     (overrideReasons ? '<div class="capital-allocation-policy-override"><strong>Why Robinhood is paused this week</strong><ul>' +
       overrideReasons + '</ul></div>' : '') +
     '<div class="capital-allocation-decision-hero-points">' +
     '<div><span>Invest</span><strong>' + formatCapitalAllocationMoney_(decision.investAmount) + '</strong></div>' +
-    '<div><span>Pay debt</span><strong>' + formatCapitalAllocationMoney_(decision.debtAmount) + '</strong></div>' +
+    '<div><span>' + (decision.pacingRequired ? 'Required debt payments' : 'Pay debt') +
+    '</span><strong>' + formatCapitalAllocationMoney_(decision.pacingRequired
+      ? decision.requiredDebtAmount : decision.debtAmount) + '</strong></div>' +
     '<div><span>Keep available</span><strong>' + formatCapitalAllocationMoney_(decision.cashAmount) + '</strong></div></div>' +
     '<div class="capital-allocation-primary-actions">' +
     '<section><div class="capital-allocation-preview-kicker">1. Invest</div>' +
@@ -485,7 +936,9 @@ function capitalAllocationPrimaryDecisionHtml_(plan) {
     (decision.investPaused ? 'Pause this week' : formatCapitalAllocationMoney_(decision.investAmount)) +
     '</strong></div></section>' +
     '<section><div class="capital-allocation-preview-kicker">2. Pay debt</div>' +
-    (actionDebtRows || '<p class="muted">No extra credit-card payment is recommended this week.</p>') + '</section>' +
+    (actionDebtRows || (decision.pacingRequired
+      ? '<p class="muted">No required credit-card payment is due this week. Extra payoff has not been calculated.</p>'
+      : '<p class="muted">No extra credit-card payment is recommended this week.</p>')) + '</section>' +
     '<section><div class="capital-allocation-preview-kicker">3. Keep available</div>' +
     '<div class="capital-allocation-primary-action-row"><span>Expected cash remaining</span><strong>' +
     formatCapitalAllocationMoney_(decision.cashAmount) + '</strong></div>' +
@@ -520,13 +973,12 @@ function capitalAllocationDebtPresentation_(row, lifecycleState) {
       paymentLabel: 'Confirmed payment ',
       startingBalanceLabel: 'Previous balance',
       endingBalanceLabel: 'Confirmed balance',
-      aprLine: row.outcome === 'PAID_OFF'
-        ? 'APR eliminated after confirmed payoff: ' + Number(row.apr || 0).toFixed(2) + '%'
-        : 'APR remains: ' + Number(row.apr || 0).toFixed(2) + '%',
+      aprLabel: row.outcome === 'PAID_OFF' ? 'APR after confirmed payoff' : 'APR remains',
+      aprValue: row.outcome === 'PAID_OFF' ? 'Eliminated' : Number(row.apr || 0).toFixed(2) + '%',
+      aprNote: row.outcome === 'PAID_OFF' ? Number(row.apr || 0).toFixed(2) + '% before payoff' : '',
       interestLine: row.outcome === 'PAID_OFF'
-        ? 'Estimated first-year interest avoided: '
-        : 'Estimated first-year interest reduction: ',
-      confirmationNote: ''
+        ? 'Estimated first-year interest avoided'
+        : 'Estimated first-year interest reduction'
     };
   }
   if (state === 'AWAITING_CONFIRMATION') {
@@ -535,13 +987,12 @@ function capitalAllocationDebtPresentation_(row, lifecycleState) {
       paymentLabel: 'Payment reported ',
       startingBalanceLabel: 'Current recorded balance',
       endingBalanceLabel: 'Expected balance after payment',
-      aprLine: row.outcome === 'PAID_OFF'
-        ? 'APR elimination awaits a confirmed $0 balance: ' + Number(row.apr || 0).toFixed(2) + '%'
-        : 'APR remains until refreshed data confirms otherwise: ' + Number(row.apr || 0).toFixed(2) + '%',
+      aprLabel: row.outcome === 'PAID_OFF' ? 'APR' : 'APR remains',
+      aprValue: Number(row.apr || 0).toFixed(2) + '%',
+      aprNote: row.outcome === 'PAID_OFF' ? 'Would be eliminated after the payoff is confirmed' : '',
       interestLine: row.outcome === 'PAID_OFF'
-        ? 'Projected first-year interest avoided: '
-        : 'Projected first-year interest reduction: ',
-      confirmationNote: 'Refresh account data to confirm the payment and resulting balance.'
+        ? 'Projected first-year interest avoided'
+        : 'Projected first-year interest reduction'
     };
   }
   return {
@@ -550,19 +1001,29 @@ function capitalAllocationDebtPresentation_(row, lifecycleState) {
     paymentLabel: 'Pay ',
     startingBalanceLabel: 'Current balance',
     endingBalanceLabel: 'Expected balance after payment',
-    aprLine: row.outcome === 'PAID_OFF'
-      ? 'APR eliminated after payoff is confirmed: ' + Number(row.apr || 0).toFixed(2) + '%'
-      : 'APR remains: ' + Number(row.apr || 0).toFixed(2) + '%',
+    aprLabel: row.outcome === 'PAID_OFF' ? 'APR' : 'APR remains',
+    aprValue: Number(row.apr || 0).toFixed(2) + '%',
+    aprNote: row.outcome === 'PAID_OFF' ? 'Would be eliminated after the payoff is confirmed' : '',
     interestLine: row.outcome === 'PAID_OFF'
-      ? 'Projected first-year interest avoided: '
-      : 'Projected first-year interest reduction: ',
-    confirmationNote: ''
+      ? 'Projected first-year interest avoided'
+      : 'Projected first-year interest reduction'
   };
 }
 
 function capitalAllocationDetailedDebtOutcomesHtml_(rows, lifecycleState) {
   return (rows || []).map(function(row) {
     var presentation = capitalAllocationDebtPresentation_(row, lifecycleState);
+    var required = Number(row.requiredPayment || 0);
+    var extra = Number(row.extraPayment || 0);
+    var componentRows = '';
+    if (required > 0.005 && extra > 0.005) {
+      componentRows = '<div><span>Required payment</span><strong>' +
+        formatCapitalAllocationMoney_(required) + '</strong></div>' +
+        '<div><span>Extra payment</span><strong>' +
+        formatCapitalAllocationMoney_(extra) + '</strong></div>' +
+        '<div><span>Total this week</span><strong>' +
+        formatCapitalAllocationMoney_(row.amount) + '</strong></div>';
+    }
     return '<div class="capital-allocation-debt-outcome"><div class="capital-allocation-debt-outcome-head">' +
       '<div><span class="capital-allocation-badge">' +
       escapeCapitalAllocationHtml_(presentation.outcomeLabel) +
@@ -570,19 +1031,266 @@ function capitalAllocationDetailedDebtOutcomesHtml_(rows, lifecycleState) {
       '<strong>' + escapeCapitalAllocationHtml_(presentation.paymentLabel) +
       formatCapitalAllocationMoney_(row.amount) + '</strong></div>' +
       '<div class="capital-allocation-debt-outcome-grid">' +
-      '<div><span>Required payment</span><strong>' + formatCapitalAllocationMoney_(row.requiredPayment) + '</strong></div>' +
-      '<div><span>Extra debt payment</span><strong>' + formatCapitalAllocationMoney_(row.extraPayment) + '</strong></div>' +
-      '<div><span>Total this week</span><strong>' + formatCapitalAllocationMoney_(row.amount) + '</strong></div>' +
+      componentRows +
       '<div><span>' + escapeCapitalAllocationHtml_(presentation.startingBalanceLabel) + '</span><strong>' +
       formatCapitalAllocationMoney_(row.startingBalance) + '</strong></div>' +
       '<div><span>' + escapeCapitalAllocationHtml_(presentation.endingBalanceLabel) + '</span><strong>' +
       formatCapitalAllocationMoney_(row.endingBalance) + '</strong></div>' +
-      '<div><span>' + escapeCapitalAllocationHtml_(presentation.aprLine) + '</span></div>' +
-      '<div><span>' + escapeCapitalAllocationHtml_(presentation.interestLine) + '</span><strong>' +
-      formatCapitalAllocationMoney_(row.annualInterestReduction) + '</strong></div></div>' +
-      (presentation.confirmationNote ? '<p class="capital-allocation-card-reason">' +
-        escapeCapitalAllocationHtml_(presentation.confirmationNote) + '</p>' : '') + '</div>';
+      '<div><span>' + escapeCapitalAllocationHtml_(presentation.aprLabel) + '</span><strong>' +
+      escapeCapitalAllocationHtml_(presentation.aprValue) + '</strong></div>' +
+      (presentation.aprNote ? '<p class="capital-allocation-debt-apr-note">' +
+        escapeCapitalAllocationHtml_(presentation.aprNote) + '.</p>' : '') +
+      '<div><span>' + escapeCapitalAllocationHtml_(presentation.interestLine) + '</span><strong>~' +
+      formatCapitalAllocationMoney_(row.annualInterestReduction) + '</strong></div></div></div>';
   }).join('');
+}
+
+function capitalAllocationDebtLifecycleHtml_(lifecycleState) {
+  var state = lifecycleState || 'PROPOSED';
+  if (state === 'CONFIRMED') {
+    return '<div class="capital-allocation-debt-lifecycle"><h4>What happens next?</h4>' +
+      '<strong>These payments have been confirmed.</strong>' +
+      '<p>Cash Compass used the refreshed balances to calculate the current result and next recommendation.</p></div>';
+  }
+  if (state === 'AWAITING_CONFIRMATION') {
+    return '<div class="capital-allocation-debt-lifecycle"><h4>What happens next?</h4>' +
+      '<strong>These payments are waiting for confirmation.</strong>' +
+      '<p>Refresh Cash Compass once the updated balances appear. We\'ll confirm the results and calculate the next recommendation.</p></div>';
+  }
+  return '<div class="capital-allocation-debt-lifecycle"><h4>What happens next?</h4>' +
+    '<strong>These payments are not complete yet.</strong>' +
+    '<p>After you make the recommended payments, refresh Cash Compass once the updated balances appear. We\'ll confirm the results and calculate the next recommendation.</p></div>';
+}
+
+function capitalAllocationDebtStatusLabel_(row, decisionByName, laterByName, lifecycleState) {
+  var action = decisionByName[capitalAllocationCustomerActionKey_(row.name)];
+  var later = laterByName[capitalAllocationDebtMatchKey_(row.name)];
+  if (!action) return later ? 'Required payment later this month' : 'No current payment due';
+  if (lifecycleState === 'CONFIRMED') {
+    return action.outcome === 'PAID_OFF' ? 'Paid off' :
+      action.outcome === 'REQUIRED_PAYMENT' ? 'Required payment completed' : 'Payment completed';
+  }
+  if (lifecycleState === 'AWAITING_CONFIRMATION') return 'Waiting for confirmation';
+  return action.outcome === 'PAID_OFF' ? 'Recommended payoff' :
+    action.outcome === 'REQUIRED_PAYMENT' ? 'Required payment this week' : 'Recommended extra payment';
+}
+
+function capitalAllocationDebtPriorityRowsHtml_(rows, decision, laterRows, lifecycleState) {
+  var decisionByName = {};
+  var laterByName = {};
+  (decision.debtActions || []).forEach(function(row) {
+    decisionByName[capitalAllocationCustomerActionKey_(row.name)] = row;
+  });
+  (laterRows || []).forEach(function(row) {
+    laterByName[capitalAllocationDebtMatchKey_(row.name)] = row;
+  });
+  return (rows || []).filter(function(row) { return row.isRevolving; })
+    .map(function(row, index) { return { row: row, index: index }; })
+    .sort(function(a, b) {
+      return Number(b.row.apr || 0) - Number(a.row.apr || 0) || a.index - b.index;
+    }).map(function(item) {
+      var row = item.row;
+      return '<div class="capital-allocation-debt-priority-row"><div><strong>' +
+        escapeCapitalAllocationHtml_(capitalAllocationCustomerActionName_(row.name)) + '</strong>' +
+        '<span>' + Number(row.apr || 0).toFixed(2) + '% APR</span></div><div class="capital-allocation-debt-priority-status"><strong>' +
+        escapeCapitalAllocationHtml_(capitalAllocationDebtStatusLabel_(row, decisionByName, laterByName, lifecycleState)) +
+        '</strong>' + (laterByName[capitalAllocationDebtMatchKey_(row.name)] &&
+          !decisionByName[capitalAllocationCustomerActionKey_(row.name)]
+          ? '<span>Waiting for extra payoff</span>' : '') + '</div></div>';
+    }).join('');
+}
+
+function capitalAllocationDebtWaitingHtml_(rows, decision, laterRows) {
+  var actionByName = {};
+  var laterByName = {};
+  (decision.debtActions || []).forEach(function(row) {
+    actionByName[capitalAllocationCustomerActionKey_(row.name)] = row;
+  });
+  (laterRows || []).forEach(function(row) {
+    laterByName[capitalAllocationDebtMatchKey_(row.name)] = row;
+  });
+  var waiting = (rows || []).filter(function(row) {
+    return row.isRevolving && !actionByName[capitalAllocationCustomerActionKey_(row.name)];
+  }).sort(function(a, b) { return Number(b.apr || 0) - Number(a.apr || 0); });
+  if (!waiting.length) return '<p class="muted">No revolving credit-card balance is waiting this week.</p>';
+  return waiting.map(function(row) {
+    var later = laterByName[capitalAllocationDebtMatchKey_(row.name)];
+    return '<div class="capital-allocation-debt-wait-row"><div><strong>' +
+      escapeCapitalAllocationHtml_(capitalAllocationCustomerActionName_(row.name)) + '</strong>' +
+      '<span>Waiting for extra payoff</span></div>' +
+      '<p>' + (later
+        ? 'Its required payment remains scheduled later this month. Extra payoff waits while higher-APR credit-card debt is paid first.'
+        : 'No required payment is currently due. Extra payoff waits while higher-APR credit-card debt is paid first.') +
+      '</p></div>';
+  }).join('');
+}
+
+function capitalAllocationDebtMatchKey_(name) {
+  var customerName = capitalAllocationCustomerActionName_(name);
+  var aliasKey = capitalAllocationCustomerActionKey_(customerName);
+  var aliases = {
+    aa: 'CitiAA',
+    sw: 'Southwest',
+    swcc: 'Southwest',
+    americanexpresscc: 'American Express'
+  };
+  return capitalAllocationCustomerActionKey_(aliases[aliasKey] || customerName);
+}
+
+function capitalAllocationDebtIsoDate_(value) {
+  var match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  var date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return isNaN(date.getTime()) ? null : date;
+}
+
+function capitalAllocationDebtDueDateLabel_(value) {
+  var date = capitalAllocationDebtIsoDate_(value);
+  return date ? date.toLocaleDateString('en-US', {
+    timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric'
+  }) : String(value || '');
+}
+
+function capitalAllocationDebtLaterThisMonthRows_(plan, decision) {
+  var forecast = plan && plan.forecast90 || {};
+  var after = plan && plan.afterAction || {};
+  var start = capitalAllocationDebtIsoDate_(forecast.startDate);
+  if (!start) return [];
+  var weekEnd = new Date(start.getTime());
+  weekEnd.setUTCDate(weekEnd.getUTCDate() + 7);
+  var monthEnd = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0));
+  var debtByName = {};
+  (after.debts || []).filter(function(row) { return row.isRevolving; }).forEach(function(row) {
+    debtByName[capitalAllocationDebtMatchKey_(row.name)] = row;
+  });
+  var actionByName = {};
+  (decision.debtActions || []).forEach(function(row) {
+    actionByName[capitalAllocationDebtMatchKey_(row.name)] = row;
+  });
+  var seen = {};
+  return (forecast.futureDebtMinimums || []).concat(forecast.futureBills || [])
+    .map(function(row) {
+      var key = capitalAllocationDebtMatchKey_(row.name);
+      var debt = debtByName[key];
+      var due = capitalAllocationDebtIsoDate_(row.dueDate);
+      if (!debt || !due || due.getTime() <= weekEnd.getTime() ||
+          due.getTime() > monthEnd.getTime() || !(Number(row.amount || 0) > 0)) return null;
+      var dedupeKey = key + ':' + String(row.dueDate || '');
+      if (seen[dedupeKey]) return null;
+      seen[dedupeKey] = true;
+      var action = actionByName[key];
+      return { name: debt.name, displayName: capitalAllocationCustomerActionName_(debt.name),
+        requiredPayment: Number(row.amount || 0), dueDate: String(row.dueDate || ''),
+        currentBalance: Number(debt.startingBalance || 0), apr: Number(debt.apr || 0),
+        extraPayoffWaiting: !(action && Number(action.extraPayment || 0) > 0.005) };
+    }).filter(Boolean).sort(function(a, b) {
+      return String(a.dueDate + ':' + a.displayName).localeCompare(String(b.dueDate + ':' + b.displayName));
+    });
+}
+
+function capitalAllocationDebtLaterThisMonthHtml_(plan, decision) {
+  var rows = capitalAllocationDebtLaterThisMonthRows_(plan, decision);
+  var content = rows.length ? rows.map(function(row) {
+    return '<div class="capital-allocation-debt-later-row"><div><strong>' +
+      escapeCapitalAllocationHtml_(row.displayName) + '</strong><span>' +
+      Number(row.apr || 0).toFixed(2) + '% APR</span></div><div><strong>' +
+      formatCapitalAllocationMoney_(row.requiredPayment) + ' due ' +
+      escapeCapitalAllocationHtml_(capitalAllocationDebtDueDateLabel_(row.dueDate)) + '</strong><span>' +
+      formatCapitalAllocationMoney_(row.currentBalance) + ' current balance</span><span>' +
+      (row.extraPayoffWaiting ? 'Waiting for extra payoff' : 'Extra payoff proposed this week') +
+      '</span></div></div>';
+  }).join('') : '<p class="muted">No required credit-card payments are recorded for later this month.</p>';
+  var heading = '<div><h3>Required later this month</h3>' +
+    '<p>Scheduled credit-card payments after this week and before month end.</p></div>';
+  if (rows.length > 3) {
+    return '<details class="capital-allocation-debt-later capital-allocation-debt-later--collapsed"><summary>' +
+      heading + '<span class="capital-allocation-expand-label">' + rows.length + ' payments</span></summary>' +
+      '<div class="capital-allocation-debt-later-list">' + content + '</div></details>';
+  }
+  return '<section class="capital-allocation-debt-later"><div class="capital-allocation-section-head">' +
+    heading + '</div><div class="capital-allocation-debt-later-list">' + content + '</div></section>';
+}
+
+function capitalAllocationDebtOtherLoanRows_(rows, monthlyRows) {
+  var monthlyByName = {};
+  (monthlyRows || []).forEach(function(row) {
+    monthlyByName[capitalAllocationDebtMatchKey_(row.name)] = row;
+  });
+  return (rows || []).filter(function(row) {
+    if (row.isRevolving) return false;
+    var monthly = monthlyByName[capitalAllocationDebtMatchKey_(row.name)];
+    return !monthly || (monthly.status === 'NO_PAYMENT_DUE' &&
+      !(Number(monthly.requiredPayment || 0) > 0) && !(Number(monthly.extraPayment || 0) > 0));
+  });
+}
+
+function capitalAllocationDebtOtherLoansHtml_(rows, monthlyRows) {
+  var loans = capitalAllocationDebtOtherLoanRows_(rows, monthlyRows);
+  if (!loans.length) return '<p class="muted">No other active loans are included in this plan.</p>';
+  return loans.map(function(row) {
+    return '<div class="capital-allocation-debt-loan-row"><strong>' +
+      escapeCapitalAllocationHtml_(capitalAllocationCustomerActionName_(row.name)) + '</strong><span>' +
+      Number(row.apr || 0).toFixed(2) + '% APR</span><span>' +
+      formatCapitalAllocationMoney_(row.startingBalance) + ' current balance</span></div>';
+  }).join('') + '<p class="muted">No extra payments are recommended to these loans under the current plan.</p>';
+}
+
+function capitalAllocationDebtFreedCashHtml_(after, lifecycleState) {
+  var projected = Number(after.projectedReleasedMonthlyMinimums || 0);
+  var confirmed = Number(after.confirmedReleasedMonthlyMinimums || 0);
+  var currentLabel = lifecycleState === 'CONFIRMED' ? 'Confirmed available now' : 'Available today';
+  return '<div class="capital-allocation-debt-freed"><strong>' +
+    formatCapitalAllocationMoney_(projected) + '/month expected to be freed</strong>' +
+    '<p>The debts expected to be paid off by this plan would free this total after confirmation. It is money currently required for debt payments that could become available for your next priority.</p>' +
+    '<div><span>' + escapeCapitalAllocationHtml_(currentLabel) + '</span><strong>' +
+    formatCapitalAllocationMoney_(confirmed) + '/month</strong></div>' +
+    (lifecycleState === 'CONFIRMED' ? '' :
+      '<p>Cash Compass will not use the expected amount until refreshed balances confirm the payoff.</p>') +
+    '</div>';
+}
+
+function capitalAllocationDebtAuditHtml_(rows, next) {
+  var debtRows = (rows || []).map(function(row) {
+    return '<div class="capital-allocation-compact-action"><div><strong>' +
+      escapeCapitalAllocationHtml_(row.name) + '</strong><div class="capital-allocation-card-reason">' +
+      escapeCapitalAllocationHtml_(row.priorityClass + ' · ' + Number(row.apr || 0).toFixed(2) +
+        '% APR · proposed payment ' + formatCapitalAllocationMoney_(row.proposedPayment) +
+        ' · projected interest avoided about ' +
+        formatCapitalAllocationMoney_(row.projectedAnnualInterestAvoided) + '/year') +
+      '</div></div><strong>' + formatCapitalAllocationMoney_(row.projectedEndingBalance) +
+      ' projected</strong></div>';
+  }).join('');
+  var alternatives = (next && next.alternatives || []).map(function(row) {
+    return '<div class="capital-allocation-compact-action"><div><strong>' +
+      escapeCapitalAllocationHtml_(row.destination || 'Review') + '</strong>' +
+      '<div class="capital-allocation-card-reason">' + escapeCapitalAllocationHtml_(row.reason || '') +
+      '</div></div><strong>' + formatCapitalAllocationMoney_(row.amount) + '</strong></div>';
+  }).join('');
+  return '<details class="capital-allocation-debt-audit"><summary><strong>Audit details</strong>' +
+    '<span class="capital-allocation-expand-label">Technical details</span></summary>' +
+    '<div class="capital-allocation-group-items">' + debtRows + alternatives + '</div></details>';
+}
+
+function capitalAllocationDebtAdvancedHtml_(plan, decision, lifecycleState, monthly) {
+  var after = plan.afterAction || {};
+  var debts = after.debts || [];
+  var otherLoans = capitalAllocationDebtOtherLoanRows_(debts, monthly.rows || []);
+  if (!debts.length) return '';
+  var otherLoansHtml = otherLoans.length
+    ? '<details class="capital-allocation-debt-other-loans"><summary><span><strong>Other loans</strong><span class="capital-allocation-waits-summary">' +
+      otherLoans.length +
+      ' loans · no extra payment recommended this month</span></span><span class="capital-allocation-expand-label">View loans</span></summary>' +
+      '<div class="capital-allocation-debt-loan-list">' + capitalAllocationDebtOtherLoansHtml_(debts, monthly.rows || []) + '</div></details>'
+    : '';
+  return '<details class="capital-allocation-debt-advanced"><summary><span><strong>Advanced details</strong>' +
+    '<span class="capital-allocation-waits-summary">Monthly payment reconciliation, other loans, and support details</span></span>' +
+    '<span class="capital-allocation-expand-label">View details</span></summary>' +
+    '<div class="capital-allocation-debt-advanced-body">' +
+    '<section><h4>How monthly payments were reconciled</h4><p>Cash Compass combines the current required-payment list with current-month debt and Bill schedule occurrences. Matching account and due-date evidence renders once; missing details stay identified for a specific update rather than being treated as no payment due.</p>' +
+    '<p><strong>Required payments:</strong> ' + formatCapitalAllocationMoney_(monthly.requiredTotal) +
+    ' · <strong>Extra payoff:</strong> ' + formatCapitalAllocationMoney_(monthly.extraTotal) + '</p></section>' +
+    otherLoansHtml +
+    capitalAllocationDebtAuditHtml_(debts, plan.nextDollar || {}) + '</div></details>';
 }
 
 function capitalAllocationCompactDebtOutcomesHtml_(rows, lifecycleState) {
@@ -669,11 +1377,37 @@ function capitalAllocationPrimaryDecisionModel_(plan) {
     investAmount: Number(investmentPolicy.recommendedAmount != null
       ? investmentPolicy.recommendedAmount : summary.standingInvestmentFunded || 0),
     debtAmount: debtActions.reduce(function(sum, row) { return sum + row.amount; }, 0),
+    requiredDebtAmount: debtActions.reduce(function(sum, row) {
+      return sum + row.requiredPayment;
+    }, 0),
+    extraDebtAmount: debtActions.reduce(function(sum, row) {
+      return sum + row.extraPayment;
+    }, 0),
     cashAmount: Number(summary.endingCash || 0),
     debtActions: debtActions,
     pausedContributions: pausedContributions,
-    investmentPaused: !!investmentPolicy.overrideApplied
+    investmentPaused: !!investmentPolicy.overrideApplied,
+    pacingRequired: capitalAllocationPacingAuthorityMissing_(plan && plan.deploymentPace)
   };
+}
+
+function capitalAllocationLaterRequiredDebtAmount_(monthly) {
+  var start = capitalAllocationDebtIsoDate_(monthly && monthly.planDate);
+  if (!start) return 0;
+  var endOfWeek = new Date(start.getTime());
+  endOfWeek.setUTCDate(endOfWeek.getUTCDate() + 6);
+  var amount = (monthly.rows || []).reduce(function(sum, row) {
+    var due = capitalAllocationDebtIsoDate_(row.dueDate);
+    if (!due || due.getTime() <= endOfWeek.getTime() || !(Number(row.requiredPayment || 0) > 0)) {
+      return sum;
+    }
+    return sum + Number(row.requiredPayment || 0);
+  }, 0);
+  return Math.round(amount * 100) / 100;
+}
+
+function capitalAllocationPacingAuthorityMissing_(pace) {
+  return !!pace && pace.acceleratedDeploymentStatus === 'PACING_DATA_REQUIRED';
 }
 
 function capitalAllocationCustomerActionKey_(name) {
@@ -749,41 +1483,6 @@ function capitalAllocationDecisionLabel_(actionType) {
     HOLD_FOR_REVIEW: 'Hold for review',
     COMPARE_AFTER_CONFIRMATION: 'Compare after confirmation' };
   return labels[String(actionType || '')] || 'Review';
-}
-
-function capitalAllocationAfterActionHtml_(after, next) {
-  var rows = after.debts || [];
-  if (!rows.length) return '';
-  var details = rows.map(function(row) {
-    return '<div class="capital-allocation-compact-action"><div><strong>' +
-      escapeCapitalAllocationHtml_(row.name) + '</strong><div class="capital-allocation-card-reason">' +
-      escapeCapitalAllocationHtml_(row.priorityClass + ' · ' + Number(row.apr || 0).toFixed(2) +
-        '% APR · proposed payment ' + formatCapitalAllocationMoney_(row.proposedPayment) +
-        ' · projected interest avoided about ' + formatCapitalAllocationMoney_(row.projectedAnnualInterestAvoided) + '/year') +
-      '</div></div><strong>' + formatCapitalAllocationMoney_(row.projectedEndingBalance) + ' projected</strong></div>';
-  }).join('');
-  var alternatives = (next && next.alternatives || []).map(function(row) {
-    var apr = Number(row.apr || 0) > 0 ? ' · ' + Number(row.apr).toFixed(2) + '% APR' : '';
-    return '<div class="capital-allocation-compact-action"><div><strong>' +
-      escapeCapitalAllocationHtml_(row.destination || 'Review') + '</strong>' +
-      '<div class="capital-allocation-card-reason">' +
-      escapeCapitalAllocationHtml_((row.reason || '') + apr) + '</div></div><strong>' +
-      formatCapitalAllocationMoney_(row.amount) + '</strong></div>';
-  }).join('');
-  return '<details class="capital-allocation-forecast"><summary><span><strong>What happens next?</strong>' +
-    '<span class="capital-allocation-waits-summary">After you make these payments, refresh Cash Compass once updated balances appear</span></span>' +
-    '<span class="capital-allocation-expand-label">Advanced details</span></summary>' +
-    '<div class="capital-allocation-confirmation-note"><strong>These card payments are not marked complete yet.</strong>' +
-    '<div class="capital-allocation-card-reason">' + escapeCapitalAllocationHtml_(after.confirmationMessage || '') + '</div></div>' +
-    '<div class="capital-allocation-group-items">' + details +
-    '<div class="capital-allocation-compact-action"><div><strong>Samer Robinhood</strong>' +
-    '<div class="capital-allocation-card-reason">Projected value after proposed funding; distribution impact waits for yield data</div></div>' +
-    '<strong>' + formatCapitalAllocationMoney_(after.projectedRobinhoodBalanceAfterContributions) + '</strong></div>' +
-    '<div class="capital-allocation-compact-action"><div><strong>Projected released minimums</strong>' +
-    '<div class="capital-allocation-card-reason">Available only after refreshed balances confirm the related debts reached $0</div></div>' +
-    '<strong>' + formatCapitalAllocationMoney_(after.projectedReleasedMonthlyMinimums) + '/month</strong></div>' +
-    (alternatives ? '<div class="capital-allocation-conditional-choices"><strong>Choices to rerank after confirmation</strong>' +
-      alternatives + '</div>' : '') + '</div></details>';
 }
 
 function capitalAllocationSourceLadderHtml_(ladder) {
@@ -1009,6 +1708,14 @@ function capitalAllocationSummaryCardHtml_(label, amount, note) {
     '<div class="capital-allocation-summary-label">' + escapeCapitalAllocationHtml_(label) + '</div>' +
     '<div class="capital-allocation-summary-value">' + formatCapitalAllocationMoney_(amount) + '</div>' +
     (note ? '<div class="capital-allocation-summary-note">' + note + '</div>' : '') +
+    '</div>';
+}
+
+function capitalAllocationSummaryTextCardHtml_(label, value, note) {
+  return '<div class="capital-allocation-summary-card">' +
+    '<div class="capital-allocation-summary-label">' + escapeCapitalAllocationHtml_(label) + '</div>' +
+    '<div class="capital-allocation-summary-value">' + escapeCapitalAllocationHtml_(value) + '</div>' +
+    (note ? '<div class="capital-allocation-summary-note">' + escapeCapitalAllocationHtml_(note) + '</div>' : '') +
     '</div>';
 }
 

@@ -1285,7 +1285,7 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
     id: 'REGRESSION-RFP-CAPITAL-ALLOCATION-WEEKLY-PLAN',
     category: 'REGRESSION',
     executionLevel: 'PURE',
-    expectedAssertionCount: 83,
+    expectedAssertionCount: 94,
     description: 'Prove deterministic weekly ranking, recommendation lifecycle states, auditable eligible cash, variable-bill estimate handling, 90-day cash protection, debt-before-investment allocation, exact reconciliation, explicit waits, and a monthly rollup derived from the same actions.',
     requiresTrashCleanup: true,
     expectedSheets: ['SYS - Meta'],
@@ -1307,9 +1307,9 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
         income: { expectedThisWeek: null, normalizedWeeklyPace: 2000 },
         forecast90: {
           horizonDays: 90, startDate: '2026-08-14', endDate: '2026-11-11',
-          futureBillsAmount: 7000, futureDebtMinimumsAmount: 3000,
-          futureUpcomingAmount: 1000, futureInvestmentCommitmentsAmount: 6000,
-          futureOperatingOutflowsAmount: 11000,
+          futureBillsAmount: 1200, futureDebtMinimumsAmount: 1800,
+          futureUpcomingAmount: 600, futureInvestmentCommitmentsAmount: 6000,
+          futureOperatingOutflowsAmount: 3600,
           propertyContingencyAmount: 0,
           expectedIncome: 9000, expectedNonRentalIncome: 6000,
           expectedRentalIncome: 3000, requiredReserveAmount: 2000
@@ -1361,7 +1361,11 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
           severity: 'WARNING', blocksAllocation: false,
           message: 'Property tax uses its saved estimate of $850.00 for this plan.',
           provenance: 'INPUT - Bills', estimatedAmount: 850
-        }]
+        }],
+        // Explicit synthetic authority for allocation tests. This fixture value
+        // is not a product default or a percentage-based pacing policy.
+        deploymentTracking: { planningPeriod: 'WEEKLY', deploymentBudget: 10000,
+          alreadyDeployedThisPeriod: 0, awaitingConfirmationAmount: 0 }
       };
       ctx.first = buildCapitalAllocationPlan_(ctx.facts);
       ctx.second = buildCapitalAllocationPlan_(ctx.facts);
@@ -1427,19 +1431,31 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
       ctx.assert.equals('Ninety-day operating reserve is protected', ctx.first.summary.reserve90Days,
         2000, { module: mod });
       ctx.assert.equals('Goal money excludes the operating reserve', ctx.first.summary.availableForGoals,
-        133.33, { module: mod });
+        2600, { module: mod });
       ctx.assert.equals('Balanced liquidity preference is the default',
         ctx.first.deploymentPace.liquidityPreference, 'BALANCED', { module: mod });
       ctx.assert.equals('Preferred liquidity target stays separate from the hard floor',
         ctx.first.deploymentPace.hardOperatingFloor + ':' +
           ctx.first.deploymentPace.preferredLiquidityTarget,
-        '2000:5666.67', { module: mod });
-      ctx.assert.equals('Only capital above preferred liquidity enters the deployment budget',
+        '2000:3200', { module: mod });
+      ctx.assert.equals('Balanced monthly deployment is capped by the calculated cushion',
         ctx.first.deploymentPace.capitalAbovePreferredLiquidity + ':' +
           ctx.first.deploymentPace.recommendedAcceleratedDeployment,
-        '133.33:133.33', { module: mod });
+        '2600:1200', { module: mod });
+      ctx.assert.equals('Balanced monthly tranche equals the calculated liquidity cushion',
+        ctx.first.deploymentPace.balancedMonthlyDeploymentCap + ':' +
+          ctx.first.deploymentPace.balancedLiquidityCushion,
+        '1200:1200', { module: mod });
+      ctx.assert.equals('Capital above the monthly tranche remains staged for a future decision',
+        ctx.first.deploymentPace.intentionallyStagedCapital,
+        1400, { module: mod });
+      ctx.assert.equals('Post-decision cash covers both 30 and 90 days without future income',
+        ctx.first.deploymentPace.coverage30Days + ':' +
+          ctx.first.deploymentPace.coverage90Days + ':' +
+          ctx.first.deploymentPace.futureIncomeReliedUponForOptionalDeployment,
+        '3.83:1.28:false', { module: mod });
       ctx.assert.equals('Balanced mode intentionally retains liquidity',
-        ctx.first.deploymentPace.intentionallyRetainedLiquidity, 5666.67, { module: mod });
+        ctx.first.deploymentPace.intentionallyRetainedLiquidity, 4600, { module: mod });
       ctx.assert.equals('Snapshot proposal is idempotent rather than additive',
         ctx.first.deploymentPace.proposalSemantics,
         'IDEMPOTENT_SNAPSHOT_NOT_ADDITIVE', { module: mod });
@@ -1465,27 +1481,27 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
       })[0];
       ctx.assert.equals('Reserve restoration ranks first', reserve.rank, 1, { module: mod });
       ctx.assert.equals('Reserve receives the available deployment budget first',
-        reserve.allocatedAmount, 133.33, { module: mod });
+        reserve.allocatedAmount, 1000, { module: mod });
       ctx.assert.equals('Confirmed investment pace ranks after higher-priority debt', high.rank < funding.rank,
         true, { module: mod });
       ctx.assert.equals('Investment funding waits while higher-priority debt uses goal money', funding.allocatedAmount, 0, { module: mod });
       ctx.assert.equals('Higher APR debt ranks before lower APR debt', high.rank < low.rank,
         true, { module: mod });
       ctx.assert.equals('Remaining cash goes to high APR debt', high.allocatedAmount,
-        0, { module: mod });
+        200, { module: mod });
       ctx.assert.equals('Lower APR debt stays visible with zero allocation', low.allocatedAmount,
         0, { module: mod });
       ctx.assert.equals('Hold cash remains explicit', hold.allocatedAmount, 0, { module: mod });
       ctx.assert.equals('Ending cash reconciles', ctx.first.reconciliation.endingCash,
-        5666.67, { module: mod });
+        4600, { module: mod });
       ctx.assert.equals('Reconciliation difference is zero', ctx.first.reconciliation.difference,
         0, { module: mod });
       ctx.assert.equals('Proposed uses never exceed eligible current cash',
         ctx.first.reconciliation.cashUses <=
           ctx.first.reconciliation.openingCash + ctx.first.reconciliation.expectedInflows,
         true, { module: mod });
-      ctx.assert.equals('No debt benefit is claimed when reserve restoration uses the budget',
-        Number(high.estimatedAnnualInterestAvoided || 0), 0, { module: mod });
+      ctx.assert.equals('Only the staged amount remaining after reserve restoration reduces debt',
+        Number(high.estimatedAnnualInterestAvoided || 0), 53.98, { module: mod });
       ctx.assert.equals('Monthly totals reuse weekly decisions',
         ctx.first.monthlyOutlook.totals.requiredActions +
           ctx.first.monthlyOutlook.totals.reserveRestoration +
@@ -1577,9 +1593,50 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
           aggressive.deploymentPace.intentionallyRetainedLiquidity,
         aggressive.summary.openingCash + aggressive.summary.expectedIncomeThisWeek,
         { module: mod });
+      var missingPacingFacts = JSON.parse(JSON.stringify(ctx.facts));
+      delete missingPacingFacts.forecast90.futureOperatingOutflowsAmount;
+      delete missingPacingFacts.forecast90.futureBillsAmount;
+      delete missingPacingFacts.forecast90.futureDebtMinimumsAmount;
+      delete missingPacingFacts.forecast90.futureUpcomingAmount;
+      delete missingPacingFacts.forecast90.propertyContingencyAmount;
+      var missingPacing = buildCapitalAllocationPlan_(missingPacingFacts);
+      ctx.assert.equals('Missing cushion inputs fail closed explicitly',
+        missingPacing.deploymentPace.acceleratedDeploymentStatus,
+        'PACING_DATA_REQUIRED', { module: mod });
+      ctx.assert.equals('Missing cushion inputs authorize no accelerated deployment',
+        missingPacing.deploymentPace.recommendedAcceleratedDeployment, 0, { module: mod });
+      ctx.assert.equals('Missing cushion inputs never default any comparison mode to unlimited',
+        missingPacing.deploymentPace.scenarios.every(function(row) {
+          return row.acceleratedDeployment === 0 &&
+            row.acceleratedDeploymentStatus === 'PACING_DATA_REQUIRED';
+        }), true, { module: mod });
+      ctx.assert.equals('Blocked accelerated deployment retains all post-required cash',
+        missingPacing.deploymentPace.intentionallyRetainedLiquidity,
+        missingPacing.deploymentPace.cashAfterRequiredAndPolicyFloor, { module: mod });
+      ctx.assert.equals('Blocked pacing remains exactly reconciled',
+        missingPacing.summary.householdRequiredThisWeek +
+          missingPacing.summary.standingInvestmentFunded +
+          missingPacing.deploymentPace.recommendedAcceleratedDeployment +
+          missingPacing.deploymentPace.intentionallyRetainedLiquidity,
+        missingPacing.summary.openingCash + missingPacing.summary.expectedIncomeThisWeek,
+        { module: mod });
+      ctx.assert.equals('Blocked pacing creates no extra debt action',
+        missingPacing.weeklyActions.some(function(row) {
+          return row.actionType === 'PAY_EXTRA_DEBT';
+        }), false, { module: mod });
+      ctx.assert.equals('Liquidity modes retain distinct preferred targets while pacing is blocked',
+        missingPacing.deploymentPace.scenarios[0].preferredLiquidityTarget !==
+          missingPacing.deploymentPace.scenarios[1].preferredLiquidityTarget &&
+          missingPacing.deploymentPace.scenarios[1].preferredLiquidityTarget !==
+            missingPacing.deploymentPace.scenarios[2].preferredLiquidityTarget,
+        true, { module: mod });
+      ctx.assert.equals('Plan summary preserves the pacing-data state',
+        missingPacing.summary.acceleratedDeploymentStatus,
+        'PACING_DATA_REQUIRED', { module: mod });
       var trackedFacts = JSON.parse(JSON.stringify(ctx.facts));
       trackedFacts.liquidity.cashToUse = 100000;
       trackedFacts.liquidity.accounts = [];
+      trackedFacts.liquidityPlanning = { otherKnownCushionAmount: 25000 };
       trackedFacts.deploymentTracking = { planningPeriod: 'MONTHLY',
         deploymentBudget: 25000, alreadyDeployedThisPeriod: 20000,
         awaitingConfirmationAmount: 0 };
@@ -1597,7 +1654,7 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
         awaiting.deploymentPace.proposalId, { module: mod });
       var nextDayFacts = JSON.parse(JSON.stringify(ctx.facts));
       nextDayFacts.asOfDate = '2026-08-15';
-      ctx.assert.equals('Another refresh in the same week preserves one proposal identity',
+      ctx.assert.equals('Another refresh in the same month preserves one proposal identity',
         buildCapitalAllocationPlan_(nextDayFacts).deploymentPace.proposalId,
         ctx.first.deploymentPace.proposalId, { module: mod });
       ctx.assert.equals('Confirmed deployment is disclosed and reduces period capacity',
@@ -1659,17 +1716,18 @@ function getHarnessRfpCapitalAllocationWeeklyPlanScenario_() {
           balance: 4000, minimumPayment: 100, interestRate: 8 }
       ];
       var revolving = buildCapitalAllocationPlan_(revolvingFacts);
-      ctx.assert.equals('Approved debt budget is exhausted highest APR first without a cutoff',
+      ctx.assert.equals('Approved monthly tranche is exhausted highest APR first without a cutoff',
         revolving.rankedCandidates.filter(function(row) {
           return row.actionType === 'PAY_EXTRA_DEBT';
         }).map(function(row) {
           return row.targetName + ':' + row.allocatedAmount;
-        }).join('|'), 'Card 18:2000|Card 12:3000|Card 8:2833.33', { module: mod });
+        }).join('|'), 'Card 18:1200|Card 12:0|Card 8:0', { module: mod });
       var transitionFacts = JSON.parse(JSON.stringify(ctx.facts));
       transitionFacts.liquidity.cashToUse = 20000;
       transitionFacts.liquidity.accounts = [{ accountName: 'Eligible cash', balance: 20000,
         minBuffer: 0, usable: 20000, included: true, usePolicy: 'use with caution' }];
       transitionFacts.debts[0].type = 'Credit Card';
+      transitionFacts.debts[0].balance = 1000;
       transitionFacts.debts[1].interestRate = 7.875;
       var transition = buildCapitalAllocationPlan_(transitionFacts);
       ctx.assert.equals('Projected critical-card payoff keeps the standing $500 funded',

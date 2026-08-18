@@ -231,9 +231,51 @@ of property contingency, plus explicitly configured stability/volatility/event
 cushions; it is not a fixed debt or cash percentage. `LIQUIDITY_FIRST` retains
 more and `AGGRESSIVE_DEBT_REDUCTION` may retain less without crossing the hard
 floor. Weekly proposal identity, confirmed/awaiting deployment deductions,
-scenario comparisons, and `CASH_YIELD_DATA_REQUIRED` are exposed. Part 1 is
-still snapshot-only when no authoritative deployment-period totals are supplied;
-persistent recommendation state and cash-yield economics remain later work.
+scenario comparisons, and `CASH_YIELD_DATA_REQUIRED` are exposed. Capital above
+preferred liquidity does not authorize deployment by itself. The approved
+calendar-month Balanced tranche is the lesser of potential excess capital and
+the calculated Balanced liquidity cushion. It is a maximum, not a target,
+percentage, or fixed dollar allowance, and confirmed or awaiting optional
+deployment reduces its remaining capacity. Required payments do not consume the
+tranche. The actual optional recommendation must also preserve required uses,
+account protections, the hard reserve, preferred liquidity, and explicit
+30/90-day coverage from current cash without depending on unreceived future
+income. Missing cushion inputs fail closed as `PACING_DATA_REQUIRED`. Persistent
+cross-device recommendation state and cash-yield economics remain later work.
+
+**Pre-travel RFP-3 checkpoint — 2026-08-18:** the user completed bounded visual
+testing and accepted the Overview and Debt presentation. Record **Overview UX:
+ACCEPTED / STABLE CHECKPOINT**, **Debt UX: ACCEPTED / STABLE CHECKPOINT**, and
+**Financial safety certification: PENDING 30/90-day post-decision validation**.
+The accepted evidence is `$21,980.49` required this month, `$20,322.08` covered,
+`$1,658.41` still to cover, `$41,895.78` extra payoff, `$43,554.19` remaining
+monthly debt payments, `$98,712.16` current card debt, and `$55,827.97`
+expected after the recommendation. The plan distinguishes `$90,117.54`
+potentially available over time, `$41,895.78` recommended now, and `$48,221.76`
+staged for future decisions. Required items are Southwest `$988.41` due Aug 22,
+CitiAA `$270.00` due Aug 28, and Meriwest `$400.00` due Aug 28; recommended
+extra payoff is Amex `$39,790.53` plus CitiAA `$2,105.25`; the projected
+`$1,193.72/month` release remains conditional on confirmed Amex payoff. Treat
+all values as evidence, not future constants.
+
+**Next open task — post-decision 30/90-day safety proof:** verify buffers,
+current-month requirements, next-30-day and next-90-day gross obligations, hard
+reserve, preferred liquidity, staged capital, and current-cash-only coverage;
+prove no reliance on unreceived income, no duplicate obligation, correct
+recurrence, and one canonical Overview/Debt plan. Do not call the financial
+checkpoint frozen until this passes. Then freeze/commit/push the checkpoint and
+start the customer Import / Refresh milestone: current cash/card balances,
+minimums, due dates, APRs, timestamps/freshness, and shadow comparison before
+any Planning-authority migration.
+
+The controlling invariants are required obligations first and exactly once;
+Unknown is not zero; future income is not current cash; optional investing is
+not an operating obligation; account buffers and Do Not Touch cash remain
+protected; reserve and pacing are independent; Balanced preserves future
+optionality and never deploys all potential excess automatically; the debt
+avalanche receives only the approved paced amount; recorded payment and
+institution-confirmed payment remain distinct; recommendation and confirmation
+remain distinct; and every result remains explainable and source-reconciled.
 | RFP-4 | Complete **This Week** decision experience and **Why not?** comparisons | Mature the integrated This Week view with amount, source, destination, reason, required/recommended status, expected benefit, liquidity/tax/risk effects when supported, confidence, and remaining cash. Why not? compares backend-calculated alternatives such as debt payment, investment funding, or holding liquidity; an optional LLM may explain validated results but cannot change their numbers or order | 1.5–2.5 d |
 | RFP-5 | Disposable-workbook and isolated runtime proof | Marker-verified fixtures prove deterministic repeatability, exact reconciliation, reserve shortfall, mixed APRs, net rental income, multiple Income-Producing Accounts, missing metadata, zero-dollar investment recommendations, counterfactual comparisons, and legacy behavior; cleanup and environment boundaries verified | 1–2 d |
 | RFP-6a | Broker activity, holdings, and portfolio-intention foundation | Complete on isolated Central `@351` and owner-accepted on the bounded app: preview-first Robinhood CSV import on a selected Income-Producing account; server-side option/unrelated/admin exclusions; raw CSV is not retained; duplicate-safe normalized `SYS - Investment Activity`; derived `SYS - Investment Holdings`; opening capital, later contributions, purchases, quantities, dividends, and weekly recurring buys. `INPUT - Investments` remains the account-total authority. Robinhood's blank disclaimer footer is excluded and reported without weakening the fail-closed rule for transaction-bearing rows with no date. Run `20260814-070625-5dbc` passed both integration scenarios and 40/40 assertions in 136.0 s, with Restricted sharing, provisioning/drift PASS, verified Trash cleanup, and the runner OFF. The first owner-controlled bounded import saved 104 Samer Robinhood activities; JEPQ, QQQ, QQQI, and SPYI quantities reconciled to the later broker view after the next weekly buys and dividend reinvestment. Post-proof common-source commit `529ce88` adds an account-first Portfolio activity drawer, editable recurring plans kept separate from imported facts, and checkpointed ticker review that reopens after a later purchase without retroactively importing excluded history. The owner accepted the bounded presentation; this extension is not claimed as part of the earlier isolated `@351` evidence | Complete |
